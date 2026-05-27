@@ -23,9 +23,10 @@ O sistema existe para:
 Todo agente deve ler nesta ordem:
 
 1. `00_orientacao_agentes.md`
-2. `09_glossario_dominio.md`
-3. arquivos específicos da tarefa atual
-4. 08_log_de_evolucao.md` (últimas entradas relevantes)
+2. `01_visao_geral.md`
+3. `09_glossario_dominio.md`
+4. `08_log_de_evolucao.md` (últimas entradas relevantes)
+5. arquivos específicos da tarefa atual
 
 Nenhum agente pode atuar sem contexto suficiente.
 
@@ -49,6 +50,7 @@ Nenhum agente pode:
 * assumir comportamento
 * alterar contrato implicitamente
 * criar funcionalidade não solicitada
+* expandir escopo sem autorização
 
 Em caso de dúvida:
 
@@ -85,6 +87,7 @@ Toda decisão técnica deve:
 * ser objetiva
 * possuir justificativa curta
 * respeitar os artefatos aprovados
+* priorizar simplicidade operacional
 
 ---
 
@@ -97,6 +100,7 @@ Os agentes devem:
 * evitar linguagem emocional
 * evitar marketing
 * evitar redundância
+* evitar ambiguidade
 
 ---
 
@@ -106,6 +110,18 @@ Os agentes devem utilizar apenas termos definidos em:
 `09_glossario_dominio.md`
 
 Novo termo exige proposta de adição ao glossário.
+
+---
+
+### 3.8 Controle de escopo
+
+Nenhum agente pode:
+
+* adicionar funcionalidades não aprovadas
+* assumir futuras funcionalidades como existentes
+* criar arquitetura baseada em hipóteses futuras sem necessidade atual
+
+Funcionalidades futuras devem permanecer desacopladas da versão inicial sempre que possível.
 
 ---
 
@@ -121,6 +137,7 @@ Os documentos do projeto são organizados em camadas:
 * implementação
 * testes
 * evolução
+* segurança
 * glossário
 
 Cada arquivo possui responsabilidade única.
@@ -133,13 +150,14 @@ O fluxo obrigatório do sistema é:
 
 1. Definição de visão e escopo
 2. Definição de requisitos
-3. Modelagem técnica
-4. Contratos de API
-5. Desenvolvimento por módulos
-6. Testes
-7. Registro de evolução
-8. Validação humana
-9. Próximo ciclo
+3. Definição de regras de negócio
+4. Modelagem técnica
+5. Contratos de API
+6. Desenvolvimento por módulos
+7. Testes
+8. Registro de evolução
+9. Validação humana
+10. Próximo ciclo
 
 Nenhum agente pode inverter esta ordem sem autorização humana.
 
@@ -154,6 +172,7 @@ Quando um agente identificar:
 * inconsistência
 * impossibilidade técnica
 * ausência de informação
+* expansão excessiva de escopo
 
 o agente deve interromper a tarefa imediatamente.
 
@@ -177,6 +196,10 @@ Contradição entre artefatos aprovados.
 
 Impossibilidade técnica de execução.
 
+#### `[ESCOPO]`
+
+Possível crescimento desnecessário de complexidade.
+
 ---
 
 ### 6.2 Procedimento obrigatório
@@ -197,7 +220,7 @@ Improvisar é proibido.
 
 ### 7.1 Estrutura dos treinos
 
-O sistema não gera treinos livres.
+O sistema não gera treinos livres na versão inicial.
 
 Os treinos são pré-definidos e armazenados no banco de dados.
 
@@ -205,17 +228,60 @@ A lógica do sistema seleciona treinos existentes com base no questionário do u
 
 ---
 
-### 7.2 Alterações de treino
+### 7.2 Estrutura das fases
+
+Cada tipo de treino possui:
+
+* uma fase adaptativa
+* uma fase avançada
+
+O treino adaptativo é destinado a iniciantes.
+
+O treino avançado é destinado aos demais usuários.
+
+---
+
+### 7.3 Atualização de treinos
+
+Os treinos são atualizados aproximadamente a cada 60 dias.
+
+A atualização ocorre através de variação controlada.
+
+A variação pode:
+
+* alterar ordem dos exercícios
+* trocar exercícios por substituições válidas
+
+A atualização não representa geração livre de novo treino.
+
+---
+
+### 7.4 Substituições de exercícios
+
+Cada exercício pode possuir substituições pré-definidas.
+
+As substituições devem:
+
+* preservar o grupo muscular
+* manter estímulo semelhante
+* preservar coerência do treino
+
+Nenhum agente pode tratar substituições como troca livre irrestrita.
+
+---
+
+### 7.5 Alterações de treino
 
 Nenhum agente pode:
 
 * inventar treino
 * alterar exercícios sem autorização
 * modificar lógica de seleção sem documentação aprovada
+* criar progressão dinâmica não documentada
 
 ---
 
-### 7.3 Experiência do usuário
+### 7.6 Experiência do usuário
 
 Toda implementação deve priorizar:
 
@@ -225,9 +291,11 @@ Toda implementação deve priorizar:
 * consistência
 * baixa fricção
 
+O sistema deve minimizar excesso de decisões do usuário.
+
 ---
 
-### 7.4 Offline first
+### 7.7 Offline first
 
 O sistema deve funcionar offline.
 
@@ -237,13 +305,40 @@ Nenhum agente pode propor solução dependente de internet constante sem justifi
 
 ---
 
-### 7.5 Progressão contínua
+### 7.8 Evolução contínua
 
 O sistema trabalha com evolução contínua.
 
 O usuário não reinicia sua jornada.
 
-Mudanças de treino ocorrem por fases.
+---
+
+### 7.9 Controle de carga
+
+O sistema não define cargas automaticamente.
+
+O usuário registra cargas manualmente apenas para acompanhamento.
+
+---
+
+### 7.10 Dados físicos e corporais
+
+O sistema pode armazenar:
+
+* medidas corporais
+* fotos de progresso
+* percentual de gordura estimado
+* dados de evolução física
+
+Nenhum agente pode tratar dados corporais como diagnóstico médico.
+
+---
+
+### 7.11 Calculadora corporal
+
+O sistema possui cálculo estimado de percentual de gordura através de dobras subcutâneas.
+
+Os resultados devem ser tratados como estimativas.
 
 ---
 
@@ -272,9 +367,10 @@ Em caso de conflito entre documentos:
 1. `00_orientacao_agentes.md`
 2. `01_visao_geral.md`
 3. `02_requisitos_e_regras_de_negocio.md`
-4. `04_contratos_de_api.md`
-5. documentos de módulo
-6. tarefas temporárias
+4. `12_seguranca_geral_do_app.md`
+5. `04_contratos_de_api.md`
+6. documentos de módulo
+7. tarefas temporárias
 
 ---
 
