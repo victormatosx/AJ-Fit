@@ -1,0 +1,338 @@
+# Modelagem de Banco e Dados
+
+## 1. Objetivo deste documento
+
+Definir:
+
+* tecnologias de persistência
+* responsabilidades de armazenamento
+* entidades principais do sistema
+* diretrizes de modelagem
+* regras de sincronização
+
+Este documento não define o schema final.
+
+O schema detalhado será definido posteriormente.
+
+---
+
+# 2. Stack de persistência
+
+## Firestore
+
+Responsável por:
+
+* usuários
+* templates de treino
+* treinos dos usuários
+* exercícios
+* histórico
+* progresso
+* medidas corporais
+* configurações
+* assinaturas
+* sincronização
+
+O Firestore é a fonte principal de dados do sistema.
+
+---
+
+## Cloud Functions
+
+Responsável por:
+
+* automações
+* processamento de eventos
+* atualizações periódicas
+* notificações
+* integrações externas
+* regras de negócio sensíveis
+
+Toda lógica crítica deve permanecer no backend.
+
+---
+
+## Firebase Storage
+
+Responsável por:
+
+* fotos de progresso
+* imagens do sistema
+* vídeos de exercícios
+* arquivos estáticos
+
+Arquivos não devem ser armazenados diretamente no Firestore.
+
+---
+
+# 3. Princípios de modelagem
+
+A modelagem deve priorizar:
+
+* simplicidade
+* escalabilidade
+* baixa quantidade de consultas
+* compatibilidade com funcionamento offline
+
+---
+
+## 3.1 Firestore não é relacional
+
+Evitar:
+
+* joins complexos
+* múltiplas consultas encadeadas
+* dependências excessivas entre coleções
+
+---
+
+## 3.2 Leitura rápida
+
+Os dados mais utilizados pelo aplicativo devem exigir o menor número possível de consultas.
+
+---
+
+## 3.3 Offline first
+
+Toda modelagem deve considerar:
+
+* cache local
+* sincronização posterior
+* funcionamento sem internet
+
+---
+
+# 4. Entidades principais
+
+## Usuário
+
+Representa a conta do usuário.
+
+Exemplos de dados:
+
+* identificação
+* assinatura
+* respostas do questionário
+* configurações
+* treino ativo
+
+---
+
+## Template de treino
+
+Representa um treino oficial do sistema.
+
+Os templates são cadastrados previamente.
+
+O sistema não gera treinos livres na versão inicial.
+
+---
+
+## Treino do usuário
+
+Representa uma instância personalizada de um template.
+
+É a versão efetivamente executada pelo usuário.
+
+Cada atualização periódica pode gerar uma nova versão.
+
+---
+
+## Exercício
+
+Representa um exercício individual.
+
+Cada exercício pode possuir:
+
+* vídeo
+* instruções
+* substituições válidas
+
+---
+
+## Sessão de treino
+
+Representa uma execução realizada pelo usuário.
+
+---
+
+## Histórico
+
+Representa os registros acumulados do usuário.
+
+---
+
+## Medidas corporais
+
+Representa:
+
+* peso
+* medidas
+* percentual de gordura estimado
+
+---
+
+## Fotos de progresso
+
+Representa imagens enviadas pelo usuário para acompanhamento visual.
+
+---
+
+# 5. Estrutura dos treinos
+
+Os templates de treino são armazenados como modelos pré-definidos.
+
+Cada template possui:
+
+* nome
+* categoria
+* fase
+* frequência semanal
+* lista de exercícios
+
+---
+
+## Fases disponíveis
+
+Inicialmente existem apenas:
+
+* adaptativo
+* avançado
+
+---
+
+# 6. Estrutura dos exercícios
+
+Cada exercício deve possuir:
+
+* identificação
+* nome
+* grupo muscular principal
+* vídeo
+* instruções
+
+Opcionalmente:
+
+* substituições válidas
+
+---
+
+# 7. Estrutura das substituições
+
+Cada exercício pode possuir até duas substituições pré-definidas.
+
+As substituições devem:
+
+* preservar grupo muscular
+* preservar objetivo do exercício
+* manter estímulo semelhante
+
+---
+
+# 8. Histórico do usuário
+
+O histórico deve permitir armazenar:
+
+* treinos executados
+* frequência
+* cargas registradas
+* evolução física
+* medidas corporais
+* percentual de gordura estimado
+
+---
+
+# 9. Fotos de progresso
+
+As imagens devem ser armazenadas no Firebase Storage.
+
+O Firestore deve armazenar apenas:
+
+* referência da imagem
+* metadados
+* data de envio
+
+---
+
+# 10. Vídeos dos exercícios
+
+Os vídeos devem ser armazenados no Firebase Storage.
+
+O Firestore deve armazenar apenas:
+
+* referência do vídeo
+* metadados necessários
+
+---
+
+# 11. Instâncias de treino do usuário
+
+Os templates de treino servem apenas como modelos.
+
+Quando um treino é atribuído ao usuário, uma cópia deve ser criada dentro da área do usuário.
+
+Essa cópia representa o treino efetivamente executado.
+
+As atualizações periódicas criam novas versões dessa instância.
+
+Exemplos:
+
+* workout_001
+* workout_002
+* workout_003
+
+Cada nova versão pode:
+
+* alterar a ordem dos exercícios
+* utilizar substituições válidas
+* preservar a lógica original do treino
+
+O sistema não gera novos treinos livremente.
+
+Versões anteriores devem permanecer armazenadas para histórico e rastreabilidade.
+
+O usuário deve possuir um identificador de treino ativo.
+
+---
+
+# 12. Estrutura inicial esperada
+
+A modelagem deve considerar inicialmente:
+
+```txt
+exercises
+workout_templates
+users
+```
+
+Os templates de treino referenciam exercícios.
+
+Os usuários referenciam seus treinos ativos.
+
+Os treinos dos usuários devem ser armazenados dentro da estrutura do próprio usuário.
+
+---
+
+# 13. Segurança dos dados
+
+As regras de segurança não devem ser definidas neste documento.
+
+Consultar:
+
+`12_seguranca_geral_do_app.md`
+
+---
+
+# 14. Pedido para o Agente Arquiteto
+
+Defina:
+
+* coleções
+* subcoleções
+* documentos
+* índices necessários
+* estratégia de sincronização
+* estratégia offline
+* regras de versionamento dos dados
+
+Respeitando as diretrizes deste documento.
