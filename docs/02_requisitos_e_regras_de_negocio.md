@@ -550,3 +550,20 @@ Identifique:
 * possíveis simplificações
 
 Aponte requisitos que precisam de definição adicional antes da implementação.
+
+---
+
+## 11. Solicitação de novo treino
+
+O usuário pode solicitar um novo treino após 30 dias do início do treino ativo.
+
+A solicitação pode ocorrer de duas formas:
+
+- utilizando as respostas atuais do questionário
+- refazendo o questionário
+
+O limite é de uma solicitação a cada 30 dias.
+
+O sistema deve apresentar uma tela de geração simulada antes da entrega do novo treino.
+
+O tempo de geração percebido deve ser de aproximadamente 10 segundos.

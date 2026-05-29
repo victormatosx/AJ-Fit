@@ -336,3 +336,13 @@ Defina:
 * regras de versionamento dos dados
 
 Respeitando as diretrizes deste documento.
+
+---
+
+## 15. Controle de origem do usuário
+
+O sistema deve permitir armazenar o cupom promocional utilizado no cadastro.
+
+O objetivo é rastrear a origem do usuário para fins de comissão e análise interna.
+
+O cupom não influencia a lógica de treino.
