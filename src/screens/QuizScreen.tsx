@@ -197,7 +197,7 @@ export function QuizScreen({ onDone }: { onDone: () => void }) {
           on-screen at roughly half the previous size */}
       <View
         pointerEvents="none"
-        style={{ position: 'absolute', top: 12, right: 10 }}
+        style={{ position: 'absolute', top: -28, right: 10 }}
       >
         <Svg width={outlineSvgW} height={outlineSvgH}>
           <SvgText
@@ -275,7 +275,7 @@ export function QuizScreen({ onDone }: { onDone: () => void }) {
             )}
           </View>
 
-          <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+          <ScrollView style={{ flex: 1, marginTop: 16 }} showsVerticalScrollIndicator={false}>
             {q.kind === 'choice' && (
               <ChoiceGrid options={q.options} value={value as string} onChange={setVal} />
             )}

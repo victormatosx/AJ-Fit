@@ -1,8 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text } from 'react-native';
-import Svg, { Circle, Defs, LinearGradient as SvgLG, Stop } from 'react-native-svg';
+import Svg, {
+  Circle,
+  Defs,
+  LinearGradient as SvgLG,
+  RadialGradient,
+  Rect,
+  Stop,
+} from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ScreenBg } from '../components/ui/ScreenBg';
 import { AJMark } from '../components/ui/AJMark';
 import { Display, Slash, MonoLabel } from '../components/ui/Display';
 import { HudCorners } from '../components/ui/Card';
@@ -48,7 +54,30 @@ export function AnalyzingScreen({ onDone }: { onDone: () => void }) {
   const offset = C * (1 - progress / 100);
 
   return (
-    <ScreenBg>
+    <View style={{ flex: 1, backgroundColor: '#000000', overflow: 'hidden' }}>
+      {/* Bottom-left blue radial glow — same style as OnboardingScreen */}
+      <View
+        pointerEvents="none"
+        style={{
+          position: 'absolute',
+          left: -260,
+          bottom: -280,
+          width: 560,
+          height: 560,
+        }}
+      >
+        <Svg width={560} height={560}>
+          <Defs>
+            <RadialGradient id="blueGlow" cx="50%" cy="50%" r="50%">
+              <Stop offset="0%" stopColor="#0b70f9" stopOpacity="0.55" />
+              <Stop offset="45%" stopColor="#0b70f9" stopOpacity="0.18" />
+              <Stop offset="100%" stopColor="#0b70f9" stopOpacity="0" />
+            </RadialGradient>
+          </Defs>
+          <Rect x="0" y="0" width="560" height="560" fill="url(#blueGlow)" />
+        </Svg>
+      </View>
+
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
         <View style={{ flex: 1, paddingHorizontal: 24, paddingTop: 12, paddingBottom: 36 }}>
           <View style={{ alignItems: 'center', marginBottom: 18 }}>
@@ -199,6 +228,6 @@ export function AnalyzingScreen({ onDone }: { onDone: () => void }) {
           </View>
         </View>
       </SafeAreaView>
-    </ScreenBg>
+    </View>
   );
 }
