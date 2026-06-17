@@ -1,12 +1,18 @@
 import React, { useState, useRef } from 'react';
-import { View, Text, Pressable, ScrollView, PanResponder } from 'react-native';
+import {
+  View,
+  Text,
+  Pressable,
+  ScrollView,
+  PanResponder,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ScreenBg } from '../components/ui/ScreenBg';
-import { Display, Slash } from '../components/ui/Display';
+import Svg, { Text as SvgText } from 'react-native-svg';
+import { Display } from '../components/ui/Display';
 import { SegBar } from '../components/ui/SegBar';
 import { CtaButton } from '../components/ui/CtaButton';
 import { Icon, IconName } from '../components/ui/Icon';
-import { OutlineNumber } from '../components/ui/OutlineNumber';
+import { HudCorners } from '../components/ui/Card';
 import { colors, fonts } from '../theme/tokens';
 import { useAppState, Quiz } from '../state/AppState';
 
@@ -180,14 +186,34 @@ export function QuizScreen({ onDone }: { onDone: () => void }) {
         ? true
         : value != null;
 
+  const outlineFontSize = 240;
+  const outlineSvgW = 280;
+  const outlineSvgH = 220;
+  const outlineN = String(idx + 1).padStart(2, '0');
+
   return (
-    <ScreenBg>
-      <OutlineNumber
-        size={200}
-        style={{ position: 'absolute', top: 60, right: -10, opacity: 0.4 }}
+    <View style={{ flex: 1, backgroundColor: '#000000', overflow: 'hidden' }}>
+      {/* Outlined "01" tucked into the top-right corner — both digits fully
+          on-screen at roughly half the previous size */}
+      <View
+        pointerEvents="none"
+        style={{ position: 'absolute', top: 12, right: 10 }}
       >
-        {String(idx + 1).padStart(2, '0')}
-      </OutlineNumber>
+        <Svg width={outlineSvgW} height={outlineSvgH}>
+          <SvgText
+            x={outlineSvgW}
+            y={outlineSvgH * 0.85}
+            fontFamily={fonts.display}
+            fontSize={outlineFontSize}
+            textAnchor="end"
+            stroke="rgba(255,255,255,0.18)"
+            strokeWidth={1.4}
+            fill="none"
+          >
+            {outlineN}
+          </SvgText>
+        </Svg>
+      </View>
 
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
         <View
@@ -284,7 +310,7 @@ export function QuizScreen({ onDone }: { onDone: () => void }) {
           </CtaButton>
         </View>
       </SafeAreaView>
-    </ScreenBg>
+    </View>
   );
 }
 
@@ -303,13 +329,7 @@ function ChoiceGrid({
   onChange: (v: string) => void;
 }) {
   return (
-    <View
-      style={{
-        flexDirection: options.length > 3 ? 'row' : 'column',
-        flexWrap: 'wrap',
-        gap: 10,
-      }}
-    >
+    <View style={{ flexDirection: 'column', gap: 10 }}>
       {options.map((o) => {
         const sel = value === o.v;
         return (
@@ -317,7 +337,7 @@ function ChoiceGrid({
             key={o.v}
             onPress={() => onChange(o.v)}
             style={{
-              flexBasis: options.length > 3 ? '48%' : '100%',
+              width: '100%',
               padding: 20,
               borderRadius: 14,
               flexDirection: 'row',
@@ -326,8 +346,15 @@ function ChoiceGrid({
               backgroundColor: selBg(sel),
               borderWidth: 1,
               borderColor: selBorder(sel),
+              shadowColor: sel ? colors.accent : 'transparent',
+              shadowOpacity: sel ? 0.45 : 0,
+              shadowRadius: sel ? 18 : 0,
+              shadowOffset: { width: 0, height: 0 },
+              position: 'relative',
+              overflow: 'hidden',
             }}
           >
+            {sel && <HudCorners />}
             <Text
               style={{
                 fontFamily: fonts.display,
@@ -383,8 +410,15 @@ function ChoiceList({
               backgroundColor: selBg(sel),
               borderWidth: 1,
               borderColor: selBorder(sel),
+              shadowColor: sel ? colors.accent : 'transparent',
+              shadowOpacity: sel ? 0.4 : 0,
+              shadowRadius: sel ? 16 : 0,
+              shadowOffset: { width: 0, height: 0 },
+              position: 'relative',
+              overflow: 'hidden',
             }}
           >
+            {sel && <HudCorners />}
             {o.icon && (
               <View
                 style={{
@@ -469,6 +503,10 @@ function MultiList({
               backgroundColor: selBg(sel),
               borderWidth: 1,
               borderColor: selBorder(sel),
+              shadowColor: sel ? colors.accent : 'transparent',
+              shadowOpacity: sel ? 0.35 : 0,
+              shadowRadius: sel ? 12 : 0,
+              shadowOffset: { width: 0, height: 0 },
             }}
           >
             {sel && <Icon name="check" size={14} color={colors.accentHi} />}

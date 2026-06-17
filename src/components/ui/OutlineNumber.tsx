@@ -33,7 +33,6 @@ export function OutlineNumber({
         },
         style,
       ]}
-      // @ts-ignore stroke props are RN-iOS friendly
       selectable={false}
     >
       {children}

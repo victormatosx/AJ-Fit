@@ -1,12 +1,17 @@
 import React, { useState } from 'react';
 import { View, Text, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ScreenBg } from '../components/ui/ScreenBg';
+import Svg, {
+  Text as SvgText,
+  Defs,
+  RadialGradient,
+  Stop,
+  Rect,
+} from 'react-native-svg';
 import { Display, Slash } from '../components/ui/Display';
 import { SegBar } from '../components/ui/SegBar';
 import { CtaButton } from '../components/ui/CtaButton';
 import { Icon } from '../components/ui/Icon';
-import { OutlineNumber } from '../components/ui/OutlineNumber';
 import { colors, fonts } from '../theme/tokens';
 
 const ONBOARD = [
@@ -35,26 +40,57 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
   const d = ONBOARD[step];
   const next = () => (step < 2 ? setStep(step + 1) : onDone());
 
+  // Outlined number anchored to the top-right corner — sized so both digits
+  // are visible and only a small slice of the second digit is cropped by
+  // the right edge of the screen.
+  const outlineFontSize = 380;
+  const outlineSvgW = 440;
+  const outlineSvgH = 340;
+
   return (
-    <ScreenBg>
-      <OutlineNumber
-        size={320}
-        style={{ position: 'absolute', top: -30, right: -34, opacity: 0.55 }}
-      >
-        {d.n}
-      </OutlineNumber>
+    <View style={{ flex: 1, backgroundColor: '#000000', overflow: 'hidden' }}>
+      {/* Bottom-left blue radial glow */}
       <View
         pointerEvents="none"
         style={{
           position: 'absolute',
-          bottom: -120,
-          left: -200,
-          width: 380,
-          height: 380,
-          borderRadius: 190,
-          backgroundColor: 'rgba(11,112,249,0.18)',
+          left: -260,
+          bottom: -280,
+          width: 560,
+          height: 560,
         }}
-      />
+      >
+        <Svg width={560} height={560}>
+          <Defs>
+            <RadialGradient id="blueGlow" cx="50%" cy="50%" r="50%">
+              <Stop offset="0%" stopColor="#0b70f9" stopOpacity="0.55" />
+              <Stop offset="45%" stopColor="#0b70f9" stopOpacity="0.18" />
+              <Stop offset="100%" stopColor="#0b70f9" stopOpacity="0" />
+            </RadialGradient>
+          </Defs>
+          <Rect x="0" y="0" width="560" height="560" fill="url(#blueGlow)" />
+        </Svg>
+      </View>
+
+      <View
+        pointerEvents="none"
+        style={{ position: 'absolute', top: 14, right: -36 }}
+      >
+        <Svg width={outlineSvgW} height={outlineSvgH}>
+          <SvgText
+            x={outlineSvgW}
+            y={outlineSvgH * 0.85}
+            fontFamily={fonts.display}
+            fontSize={outlineFontSize}
+            textAnchor="end"
+            stroke="rgba(255,255,255,0.18)"
+            strokeWidth={1.4}
+            fill="none"
+          >
+            {d.n}
+          </SvgText>
+        </Svg>
+      </View>
 
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
         <View
@@ -131,6 +167,6 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
           </CtaButton>
         </View>
       </SafeAreaView>
-    </ScreenBg>
+    </View>
   );
 }
