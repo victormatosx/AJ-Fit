@@ -5,6 +5,7 @@ import {
   Pressable,
   ScrollView,
   PanResponder,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Text as SvgText } from 'react-native-svg';
@@ -30,6 +31,8 @@ type Question =
       min: number;
       max: number;
       default: number;
+      // Allowed digit count when typing a value directly (minDigits === maxDigits means an exact length is required).
+      digits: { min: number; max: number };
     };
 
 const QUESTIONS: Question[] = [
@@ -52,8 +55,18 @@ const QUESTIONS: Question[] = [
     min: 16,
     max: 75,
     default: 28,
+    digits: { min: 2, max: 3 },
   },
-  { id: 'height', kind: 'wheel', title: 'SUA ALTURA?', unit: 'cm', min: 140, max: 220, default: 178 },
+  {
+    id: 'height',
+    kind: 'wheel',
+    title: 'SUA ALTURA?',
+    unit: 'cm',
+    min: 140,
+    max: 220,
+    default: 178,
+    digits: { min: 3, max: 3 },
+  },
   {
     id: 'weight',
     kind: 'wheel',
@@ -63,6 +76,7 @@ const QUESTIONS: Question[] = [
     min: 40,
     max: 180,
     default: 78,
+    digits: { min: 2, max: 3 },
   },
   {
     id: 'goal',
@@ -98,6 +112,7 @@ const QUESTIONS: Question[] = [
     min: 2,
     max: 7,
     default: 4,
+    digits: { min: 1, max: 1 },
   },
   {
     id: 'duration',
@@ -192,7 +207,7 @@ export function QuizScreen({ onDone }: { onDone: () => void }) {
   const outlineN = String(idx + 1).padStart(2, '0');
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#000000', overflow: 'hidden' }}>
+    <View style={{ flex: 1, backgroundColor: '#030118', overflow: 'hidden' }}>
       {/* Outlined "01" tucked into the top-right corner — both digits fully
           on-screen at roughly half the previous size */}
       <View
@@ -528,48 +543,126 @@ function NumberWheel({
   onChange: (v: number) => void;
 }) {
   const range = q.max - q.min;
+  // Width of the editable number box. Seeded from a digit-count estimate,
+  // then replaced with the exact pixel width measured off the static
+  // <Text> (which sizes to its content) so the digits land in the same
+  // spot in both modes and the unit label ("kg", "cm"...) doesn't shift.
+  const [numWidth, setNumWidth] = useState(q.digits.max * 64);
   const trackWidth = useRef(0);
+  const trackPageX = useRef(0);
+  const trackRef = useRef<View>(null);
   const pct = ((value - q.min) / range) * 100;
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(String(value));
+  const inputRef = useRef<TextInput>(null);
 
-  const updateFromX = (x: number) => {
+  // The PanResponder below is created once (via useRef) and reused across
+  // every question, since switching questions re-renders this same
+  // component instance rather than remounting it. Reading `q`/`onChange`
+  // directly in its captured callbacks would freeze them to whichever
+  // question first created the responder. Routing through refs keeps the
+  // callbacks reading the current question/value on every touch event.
+  const qRef = useRef(q);
+  qRef.current = q;
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+
+  const updateFromPageX = (pageX: number) => {
     if (!trackWidth.current) return;
-    const p = Math.max(0, Math.min(1, x / trackWidth.current));
-    onChange(Math.round(q.min + p * range));
+    const cq = qRef.current;
+    const p = Math.max(0, Math.min(1, (pageX - trackPageX.current) / trackWidth.current));
+    onChangeRef.current(Math.round(cq.min + p * (cq.max - cq.min)));
+  };
+
+  const measureTrack = () => {
+    trackRef.current?.measureInWindow((x, _y, width) => {
+      trackPageX.current = x;
+      trackWidth.current = width;
+    });
   };
 
   const responder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: (e) => updateFromX(e.nativeEvent.locationX),
-      onPanResponderMove: (e) => updateFromX(e.nativeEvent.locationX),
+      onPanResponderGrant: (e) => {
+        measureTrack();
+        updateFromPageX(e.nativeEvent.pageX);
+      },
+      onPanResponderMove: (e) => updateFromPageX(e.nativeEvent.pageX),
     })
   ).current;
 
+  const openEditor = () => {
+    setDraft(String(value));
+    setEditing(true);
+    requestAnimationFrame(() => inputRef.current?.focus());
+  };
+
+  const commitEditor = () => {
+    const n = parseInt(draft, 10);
+    if (!Number.isNaN(n) && draft.length >= q.digits.min) {
+      onChange(Math.max(q.min, Math.min(q.max, n)));
+    }
+    // Invalid or short input (e.g. height requires exactly 3 digits) is
+    // discarded — the previous value is kept instead of half-typed input.
+    setEditing(false);
+  };
+
   return (
     <View style={{ alignItems: 'center', gap: 30, paddingTop: 14 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 10 }}>
-        <Text
-          style={{
-            fontFamily: fonts.display,
-            fontSize: 120,
-            color: '#fff',
-            transform: [{ skewX: '-8deg' }],
-            textShadowColor: 'rgba(11,112,249,0.55)',
-            textShadowRadius: 30,
-            textShadowOffset: { width: 0, height: 0 },
-          }}
-        >
-          {value}
-        </Text>
+      <Pressable
+        onPress={openEditor}
+        style={{ flexDirection: 'row', alignItems: 'baseline', gap: 10 }}
+      >
+        {editing ? (
+          <TextInput
+            ref={inputRef}
+            value={draft}
+            onChangeText={(t) => setDraft(t.replace(/[^0-9]/g, '').slice(0, q.digits.max))}
+            onBlur={commitEditor}
+            onSubmitEditing={commitEditor}
+            keyboardType="number-pad"
+            maxLength={q.digits.max}
+            returnKeyType="done"
+            autoFocus
+            selectTextOnFocus
+            style={{
+              fontFamily: fonts.display,
+              fontSize: 120,
+              color: '#fff',
+              textAlign: 'right',
+              transform: [{ skewX: '-8deg' }],
+              width: numWidth,
+              padding: 0,
+              outlineStyle: 'none',
+            }}
+          />
+        ) : (
+          <Text
+            onLayout={(e) => setNumWidth(e.nativeEvent.layout.width)}
+            style={{
+              fontFamily: fonts.display,
+              fontSize: 120,
+              color: '#fff',
+              transform: [{ skewX: '-8deg' }],
+              textShadowColor: 'rgba(11,112,249,0.55)',
+              textShadowRadius: 30,
+              textShadowOffset: { width: 0, height: 0 },
+            }}
+          >
+            {value}
+          </Text>
+        )}
         <Text style={{ fontFamily: fonts.mono, fontSize: 13, letterSpacing: 2, color: colors.faint }}>
           {q.unit}
         </Text>
-      </View>
+      </Pressable>
 
       <View
+        ref={trackRef}
         {...responder.panHandlers}
-        onLayout={(e) => (trackWidth.current = e.nativeEvent.layout.width)}
+        onLayout={measureTrack}
         style={{ width: '100%', height: 72, justifyContent: 'center' }}
       >
         <View style={{ flexDirection: 'row', alignItems: 'center', height: 30 }}>
@@ -611,7 +704,7 @@ function NumberWheel({
           {q.min}
         </Text>
         <Text style={{ fontFamily: fonts.mono, fontSize: 10, letterSpacing: 2, color: colors.faint }}>
-          ARRASTE PARA AJUSTAR
+          ARRASTE OU TOQUE NO NÚMERO
         </Text>
         <Text style={{ fontFamily: fonts.mono, fontSize: 10, letterSpacing: 2, color: colors.faint }}>
           {q.max}

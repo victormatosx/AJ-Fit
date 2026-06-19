@@ -48,7 +48,7 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
   const outlineSvgH = 340;
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#000000', overflow: 'hidden' }}>
+    <View style={{ flex: 1, backgroundColor: '#030118', overflow: 'hidden' }}>
       {/* Bottom-left blue radial glow */}
       <View
         pointerEvents="none"

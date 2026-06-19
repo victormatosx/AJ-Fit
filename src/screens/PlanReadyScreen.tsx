@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ScreenBg } from '../components/ui/ScreenBg';
+import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { AJMark } from '../components/ui/AJMark';
 import { Display, Slash, MonoLabel } from '../components/ui/Display';
 import { Card, HudCorners } from '../components/ui/Card';
@@ -34,12 +34,39 @@ export function PlanReadyScreen({ onContinue }: { onContinue: () => void }) {
   const days = quiz.days || 4;
 
   return (
-    <ScreenBg>
+    <View style={{ flex: 1, backgroundColor: '#000000', overflow: 'hidden' }}>
+      {/* Bottom-left blue radial glow — same treatment as Quiz/Analyzing */}
+      <View
+        pointerEvents="none"
+        style={{
+          position: 'absolute',
+          left: -260,
+          bottom: -280,
+          width: 560,
+          height: 560,
+        }}
+      >
+        <Svg width={560} height={560}>
+          <Defs>
+            <RadialGradient id="blueGlow" cx="50%" cy="50%" r="50%">
+              <Stop offset="0%" stopColor="#0b70f9" stopOpacity="0.55" />
+              <Stop offset="45%" stopColor="#0b70f9" stopOpacity="0.18" />
+              <Stop offset="100%" stopColor="#0b70f9" stopOpacity="0" />
+            </RadialGradient>
+          </Defs>
+          <Rect x="0" y="0" width="560" height="560" fill="url(#blueGlow)" />
+        </Svg>
+      </View>
+
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
         <ScrollView
           contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 12, paddingBottom: 30 }}
           showsVerticalScrollIndicator={false}
         >
+          <View style={{ alignItems: 'center', marginBottom: 18 }}>
+            <AJMark size={48} glow={false} />
+          </View>
+
           <View style={{ alignItems: 'center', marginBottom: 24 }}>
             <Slash style={{ marginBottom: 12 }}>PLANO COMPILADO</Slash>
             <Display size={40}>SEU PLANO</Display>
@@ -48,7 +75,7 @@ export function PlanReadyScreen({ onContinue }: { onContinue: () => void }) {
 
           {/* Athlete card */}
           <LinearGradient
-            colors={['#081240', '#04021c']}
+            colors={[colors.bgGradTop, '#04021c']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={{
@@ -99,9 +126,9 @@ export function PlanReadyScreen({ onContinue }: { onContinue: () => void }) {
                       paddingVertical: 12,
                       borderRadius: 10,
                       alignItems: 'center',
-                      backgroundColor: 'rgba(255,255,255,0.045)',
+                      backgroundColor: colors.cardBgHi,
                       borderWidth: 1,
-                      borderColor: 'rgba(255,255,255,0.07)',
+                      borderColor: colors.cardBorder,
                     }}
                   >
                     <Text style={{ fontFamily: fonts.display, fontSize: 20, color: '#fff' }}>
@@ -151,7 +178,8 @@ export function PlanReadyScreen({ onContinue }: { onContinue: () => void }) {
           </LinearGradient>
 
           {/* Projection */}
-          <Card style={{ padding: 18, marginTop: 14 }}>
+          <Card style={{ padding: 18, marginTop: 14, position: 'relative', overflow: 'hidden' }}>
+            <HudCorners />
             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
               <View>
                 <MonoLabel>PROJEÇÃO · 12 SEMANAS</MonoLabel>
@@ -207,6 +235,6 @@ export function PlanReadyScreen({ onContinue }: { onContinue: () => void }) {
           </Text>
         </ScrollView>
       </SafeAreaView>
-    </ScreenBg>
+    </View>
   );
 }

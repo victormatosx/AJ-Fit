@@ -66,9 +66,9 @@ export function CtaButton({ children, onPress, ghost, disabled, style }: Props) 
           gap: 10,
           shadowColor: colors.accent,
           shadowOffset: { width: 0, height: 10 },
-          shadowOpacity: 0.45,
-          shadowRadius: 20,
-          elevation: 8,
+          shadowOpacity: disabled ? 0 : 0.45,
+          shadowRadius: disabled ? 0 : 20,
+          elevation: disabled ? 0 : 8,
         }}
       >
         {typeof children === 'string' ? (
