@@ -1,0 +1,97 @@
+rules_version = '2';
+
+// AJ Fit — Firestore Security Rules (SUGESTÃO / pendente de validação humana).
+//
+// Baseado em:
+//   - docs/12_seguranca_geral_do_app.md (cliente não é fonte de verdade;
+//     acesso apenas aos próprios dados; RevenueCat é dono da assinatura)
+//   - docs/04_contratos_de_api.md §5 (contrato do documento users/{userId})
+//
+// Princípio: o app só escreve campos client-owned no documento principal
+// (userId, role, name, email, createdAt, updatedAt), com role fixo em "user".
+// As respostas do questionário ficam na subcoleção `questionnaires`. Campos de
+// assinatura e treino são gravados apenas pelo backend (Cloud Functions /
+// webhook RevenueCat via Admin SDK, que ignora estas regras).
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Campos que o cliente NUNCA pode criar ou alterar (backend-owned).
+    function protectedFields() {
+      return [
+        'activeWorkoutId',
+        'subscriptionStatus',
+        'subscriptionProvider',
+        'trialEndsAt',
+        'subscriptionEndsAt',
+        'role'
+      ];
+    }
+
+    match /users/{userId} {
+      // Leitura: apenas o dono do documento.
+      allow read: if isOwner(userId);
+
+      // Criação: apenas o próprio usuário, contendo somente os campos
+      // client-owned do documento principal (sem respostas de questionário),
+      // com role fixo em "user" e userId/email coerentes com o token.
+      allow create: if isOwner(userId)
+        && request.resource.data.keys().hasOnly(
+             ['userId', 'role', 'name', 'email', 'createdAt', 'updatedAt'])
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.role == 'user'
+        && request.resource.data.name is string
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.updatedAt is timestamp;
+
+      // Atualização: apenas o dono. Campos imutáveis inalterados, nenhum campo
+      // sensível/backend-owned tocado. Editável: name (+ o próprio updatedAt).
+      allow update: if isOwner(userId)
+        && request.resource.data.userId == resource.data.userId
+        && request.resource.data.email == resource.data.email
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.createdAt == resource.data.createdAt
+        && !request.resource.data.diff(resource.data)
+              .affectedKeys().hasAny(protectedFields());
+
+      // Exclusão: negada ao cliente (remoção é processo de backend — 90 dias,
+      // docs/12 §10). Somente o Admin SDK pode excluir.
+      allow delete: if false;
+
+      // Questionários do usuário (inicial + reavaliações futuras).
+      // Cada documento é um snapshot imutável.
+      match /questionnaires/{questionnaireId} {
+        // Leitura: apenas o dono do usuário pai.
+        allow read: if isOwner(userId);
+
+        // Criação: apenas o dono, com os campos esperados e válidos.
+        allow create: if isOwner(userId)
+          && request.resource.data.keys().hasOnly(
+               ['answers', 'version', 'createdAt'])
+          && request.resource.data.answers is map
+          && request.resource.data.version is int
+          && request.resource.data.version >= 1
+          && request.resource.data.createdAt is timestamp;
+
+        // Histórico imutável: sem edição nem exclusão pelo cliente.
+        allow update, delete: if false;
+      }
+    }
+
+    // Coleções de sistema (exercises, workout_templates, treinos do usuário,
+    // etc.) ainda não têm contrato de regras aprovado — negar por padrão até
+    // definição do Agente de Segurança/Arquiteto.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

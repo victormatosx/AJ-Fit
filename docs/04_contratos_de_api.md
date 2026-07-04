@@ -24,20 +24,100 @@ Documento:
 users/{userId}
 ```
 
-Campos mínimos:
+Estrutura (revisada em 2026-07-04b — ver 08_log_de_evolucao.md). O documento
+principal NÃO contém respostas de questionário; elas ficam na subcoleção
+`questionnaires`.
 
 ```json
 {
-  "userId": "uuid",
+  "userId": "string",
+  "role": "user",
+  "name": "string",
   "email": "string",
+  "createdAt": "serverTimestamp",
+  "updatedAt": "serverTimestamp",
+
   "activeWorkoutId": "string",
-  "subscriptionStatus": "TRIAL",
+  "subscriptionStatus": "TRIAL | ACTIVE | CANCELED | BILLING_ISSUE | EXPIRED",
   "subscriptionProvider": "REVENUECAT",
   "trialEndsAt": "datetime",
-  "subscriptionEndsAt": "datetime",
-  "createdAt": "datetime"
+  "subscriptionEndsAt": "datetime"
 }
 ```
+
+## Subcoleção de questionários
+
+Documento:
+
+```txt
+users/{userId}/questionnaires/{questionnaireId}
+```
+
+`questionnaireId` é um id gerado (auto id do Firestore ou UUID). O documento é
+um snapshot imutável:
+
+```json
+{
+  "answers": {
+    "sex": "m | f | null",
+    "age": "number",
+    "height": "number",
+    "weight": "number",
+    "goal": "string | null",
+    "frequency": "string | null",
+    "level": "string | null",
+    "limits": "string[]",
+    "duration": "string | null",
+    "days": "number",
+    "place": "string | null",
+    "equipment": "string[]",
+    "style": "string[]"
+  },
+  "version": "number (>= 1)",
+  "createdAt": "serverTimestamp"
+}
+```
+
+Regras de criação:
+
+- No cadastro é criado o primeiro questionário com `version = 1`.
+- Reavaliações/novos questionários criam **novos** documentos (nunca
+  sobrescrevem os anteriores) com `version` incremental.
+- O "questionário atual" é o documento com `createdAt` mais recente.
+- Documentos são imutáveis (sem update/delete pelo cliente).
+
+## Propriedade dos campos
+
+Client-owned no documento principal (gravados pelo app):
+
+```txt
+userId, role, name, email, createdAt, updatedAt
+```
+
+- `role` só pode ser `"user"` no cadastro pelo cliente. Promoção a admin é
+  exclusiva do backend.
+- `name` é editável pelo próprio usuário.
+
+Client-owned na subcoleção (gravados pelo app, imutáveis após criação):
+
+```txt
+questionnaires/{id}: answers, version, createdAt
+```
+
+Backend-owned (RevenueCat / Cloud Functions — nunca escritos pelo app,
+12_seguranca §3–§11):
+
+```txt
+activeWorkoutId, subscriptionStatus, subscriptionProvider,
+trialEndsAt, subscriptionEndsAt
+```
+
+## Criação do usuário (fluxo único)
+
+O documento `users/{userId}` e o questionário inicial são criados **uma única
+vez**, de forma atômica (batch), no fluxo de cadastro (`signUp`). O listener de
+autenticação apenas **lê** o estado; nunca cria documentos. Documentos em
+`users` são sempre chaveados por uid (`setDoc`) — nunca `addDoc`/auto-id.
 
 ---
 

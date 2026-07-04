@@ -8,11 +8,20 @@ type Props = {
   color?: string;
   style?: StyleProp<TextStyle>;
   skew?: boolean;
+  numberOfLines?: number;
 };
 
-export function Display({ children, size = 34, color = colors.text, style, skew = true }: Props) {
+export function Display({
+  children,
+  size = 34,
+  color = colors.text,
+  style,
+  skew = true,
+  numberOfLines,
+}: Props) {
   const inner = (
     <Text
+      numberOfLines={numberOfLines}
       style={[
         {
           fontFamily: fonts.display,

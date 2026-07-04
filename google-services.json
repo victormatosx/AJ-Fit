@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "753375043967",
+    "project_id": "ajfit-2f321",
+    "storage_bucket": "ajfit-2f321.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:753375043967:android:c5a0b460f0b8f5037afa4a",
+        "android_client_info": {
+          "package_name": "com.ajfit.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "753375043967-oldj9c61p82vni4s1n5fjkks3gueh4se.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBO83MnLt4Lphsh4buGoyOxMVACHdwqKyc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "753375043967-oldj9c61p82vni4s1n5fjkks3gueh4se.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

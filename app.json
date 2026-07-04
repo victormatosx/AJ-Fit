@@ -1,15 +1,17 @@
 {
   "expo": {
-    "name": "AJ-Fit",
-    "slug": "AJ-Fit",
+    "name": "AJ Fit",
+    "slug": "aj-fit",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.ajfit.app"
     },
     "android": {
+      "package": "com.ajfit.app",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -20,6 +22,11 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "ac6b8f54-5fef-4e2d-9904-0a2a863b805a"
+      }
     }
   }
 }

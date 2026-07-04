@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, ScrollView } from 'react-native';
+import { View, Text, ScrollView, Pressable, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ScreenBg } from '../components/ui/ScreenBg';
@@ -9,8 +9,49 @@ import { SegBar } from '../components/ui/SegBar';
 import { Icon, IconName } from '../components/ui/Icon';
 import { OutlineNumber } from '../components/ui/OutlineNumber';
 import { colors, fonts } from '../theme/tokens';
+import { useAuth } from '../state/AuthContext';
+
+const SUBSCRIPTION_LABEL: Record<string, string> = {
+  TRIAL: 'AJ PREMIUM · TESTE GRÁTIS',
+  ACTIVE: 'AJ PREMIUM · ATIVO',
+  CANCELED: 'AJ PREMIUM · CANCELADO',
+  BILLING_ISSUE: 'AJ PREMIUM · PAGAMENTO PENDENTE',
+  EXPIRED: 'AJ PREMIUM · EXPIRADO',
+};
 
 export function ProfileScreen() {
+  const { user, profile, logout } = useAuth();
+
+  const email = profile?.email ?? user?.email ?? '';
+  const displayName =
+    profile?.name?.trim() ||
+    user?.displayName?.trim() ||
+    (email ? email.split('@')[0] : 'Atleta');
+  const sinceYear = profile?.createdAt
+    ? String(profile.createdAt.toDate().getFullYear())
+    : '—';
+  const subscriptionLabel = profile?.subscriptionStatus
+    ? SUBSCRIPTION_LABEL[profile.subscriptionStatus] ?? 'AJ PREMIUM'
+    : 'SEM ASSINATURA ATIVA';
+  const subscriptionSub = profile?.subscriptionStatus
+    ? 'Gerenciado pela loja (RevenueCat)'
+    : 'Ative seu teste grátis de 7 dias';
+
+  function confirmLogout() {
+    Alert.alert('Sair da conta', 'Deseja realmente sair?', [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Sair',
+        style: 'destructive',
+        onPress: () => {
+          logout().catch(() =>
+            Alert.alert('Erro', 'Não foi possível sair. Tente novamente.'),
+          );
+        },
+      },
+    ]);
+  }
+
   return (
     <ScreenBg>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
@@ -38,12 +79,24 @@ export function ProfileScreen() {
               >
                 <Icon name="user" size={32} color="rgba(255,255,255,0.35)" />
               </View>
-              <View>
-                <MonoLabel>MEMBRO Nº 0001 · DESDE 2026</MonoLabel>
-                <Display size={26} style={{ marginTop: 6 }}>
-                  ARNALDO
+              <View style={{ flex: 1 }}>
+                <MonoLabel>MEMBRO · DESDE {sinceYear}</MonoLabel>
+                <Display size={26} style={{ marginTop: 6 }} numberOfLines={1}>
+                  {displayName.toUpperCase()}
                 </Display>
-                <Display size={26}>JUNIOR</Display>
+                {email ? (
+                  <Text
+                    style={{
+                      fontFamily: fonts.ui,
+                      fontSize: 12.5,
+                      color: colors.mute,
+                      marginTop: 4,
+                    }}
+                    numberOfLines={1}
+                  >
+                    {email}
+                  </Text>
+                ) : null}
               </View>
             </View>
           </View>
@@ -92,7 +145,7 @@ export function ProfileScreen() {
                     textTransform: 'uppercase',
                   }}
                 >
-                  MEMBRO AJ · ANUAL
+                  {subscriptionLabel}
                 </Text>
                 <Text
                   style={{
@@ -103,7 +156,7 @@ export function ProfileScreen() {
                     marginTop: 3,
                   }}
                 >
-                  RENOVA EM 14 MAR 2027
+                  {subscriptionSub}
                 </Text>
               </View>
               <Icon name="chevron-right" size={15} color="rgba(255,255,255,0.5)" />
@@ -133,6 +186,10 @@ export function ProfileScreen() {
               { i: 'timer', l: 'Timers e sons' },
             ]}
           />
+          <ProfileGroup
+            title="SESSÃO"
+            items={[{ i: 'arrow-left', l: 'Sair da conta', danger: true, onPress: confirmLogout }]}
+          />
         </ScrollView>
       </SafeAreaView>
     </ScreenBg>
@@ -144,7 +201,7 @@ function ProfileGroup({
   items,
 }: {
   title: string;
-  items: { i: IconName; l: string; d?: string }[];
+  items: { i: IconName; l: string; d?: string; danger?: boolean; onPress?: () => void }[];
 }) {
   return (
     <View style={{ paddingHorizontal: 22, paddingBottom: 16 }}>
@@ -158,40 +215,51 @@ function ProfileGroup({
           borderColor: 'rgba(255,255,255,0.06)',
         }}
       >
-        {items.map((it, i) => (
-          <View
-            key={i}
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 14,
-              paddingVertical: 14,
-              paddingHorizontal: 16,
-              borderTopWidth: i ? 1 : 0,
-              borderTopColor: 'rgba(255,255,255,0.05)',
-            }}
-          >
-            <Icon name={it.i} size={16} color={colors.accentHi} />
-            <Text
-              style={{ flex: 1, fontFamily: fonts.uiSemi, fontSize: 14, color: '#fff' }}
+        {items.map((it, i) => {
+          const accent = it.danger ? '#ff7676' : colors.accentHi;
+          return (
+            <Pressable
+              key={i}
+              onPress={it.onPress}
+              disabled={!it.onPress}
+              style={({ pressed }) => ({
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 14,
+                paddingVertical: 14,
+                paddingHorizontal: 16,
+                borderTopWidth: i ? 1 : 0,
+                borderTopColor: 'rgba(255,255,255,0.05)',
+                backgroundColor: pressed && it.onPress ? 'rgba(255,255,255,0.04)' : 'transparent',
+              })}
             >
-              {it.l}
-            </Text>
-            {it.d && (
+              <Icon name={it.i} size={16} color={accent} />
               <Text
                 style={{
-                  fontFamily: fonts.mono,
-                  fontSize: 10.5,
-                  color: colors.mute,
-                  letterSpacing: 0.5,
+                  flex: 1,
+                  fontFamily: fonts.uiSemi,
+                  fontSize: 14,
+                  color: it.danger ? '#ff9a9a' : '#fff',
                 }}
               >
-                {it.d}
+                {it.l}
               </Text>
-            )}
-            <Icon name="chevron-right" size={14} color="rgba(255,255,255,0.3)" />
-          </View>
-        ))}
+              {it.d && (
+                <Text
+                  style={{
+                    fontFamily: fonts.mono,
+                    fontSize: 10.5,
+                    color: colors.mute,
+                    letterSpacing: 0.5,
+                  }}
+                >
+                  {it.d}
+                </Text>
+              )}
+              <Icon name="chevron-right" size={14} color="rgba(255,255,255,0.3)" />
+            </Pressable>
+          );
+        })}
       </View>
     </View>
   );

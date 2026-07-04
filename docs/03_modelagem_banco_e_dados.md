@@ -112,9 +112,12 @@ Exemplos de dados:
 
 * identificação
 * assinatura
-* respostas do questionário
 * configurações
 * treino ativo
+
+As respostas do questionário NÃO ficam no documento principal do usuário; são
+armazenadas na subcoleção `users/{userId}/questionnaires` (ver §12 e
+04_contratos_de_api.md §5).
 
 ---
 
@@ -303,7 +306,22 @@ A modelagem deve considerar inicialmente:
 exercises
 workout_templates
 users
+users/{userId}/questionnaires
 ```
+
+## Subcoleção de questionários
+
+```txt
+users/{userId}/questionnaires/{questionnaireId}
+  answers      // respostas do questionário (snapshot)
+  version      // inteiro >= 1, incremental entre questionários
+  createdAt    // serverTimestamp
+```
+
+O documento principal do usuário não guarda respostas de questionário. O
+questionário inicial é criado no cadastro (version 1). Reavaliações/novos
+questionários criam novos documentos imutáveis; o atual é o de `createdAt` mais
+recente. Isso preserva o histórico de evolução do perfil do usuário.
 
 Os templates de treino referenciam exercícios.
 
