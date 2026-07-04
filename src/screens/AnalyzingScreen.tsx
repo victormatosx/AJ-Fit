@@ -1,26 +1,25 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, Text, Animated, Easing } from 'react-native';
 import Svg, {
   Circle,
   Defs,
   LinearGradient as SvgLG,
+  Path,
   RadialGradient,
   Rect,
   Stop,
 } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { AJMark } from '../components/ui/AJMark';
-import { Display, Slash, MonoLabel } from '../components/ui/Display';
-import { HudCorners } from '../components/ui/Card';
+import { Icon } from '../components/ui/Icon';
+import { MonoLabel } from '../components/ui/Display';
 import { colors, fonts } from '../theme/tokens';
 
-const LOG_LINES = [
-  { t: 'perfil biomecânico lido', d: 'idade · altura · peso' },
-  { t: 'volume semanal calibrado', d: 'nível × frequência' },
-  { t: 'padrões de movimento definidos', d: 'compostos + acessórios' },
-  { t: 'split otimizado p/ recuperação', d: 'push · pull · legs · upper' },
-  { t: 'cargas iniciais estimadas', d: 'progressão linear 12 sem' },
-  { t: 'plano AJ compilado', d: 'pronto para execução' },
+const STEPS = [
+  'Lendo seu perfil físico',
+  'Calculando volume e intensidade',
+  'Selecionando exercícios ideais',
+  'Periodizando suas semanas',
+  'Montando seu plano premium',
 ];
 
 export function AnalyzingScreen({ onDone }: { onDone: () => void }) {
@@ -46,94 +45,137 @@ export function AnalyzingScreen({ onDone }: { onDone: () => void }) {
     }
   }, [progress]);
 
-  const visible = Math.floor((progress / 100) * LOG_LINES.length);
+  // Active step index: 0..STEPS.length-1. Clamped so the final step stays
+  // "active" until onDone fires (never enters the "done" state itself).
+  const stepFloat = (progress / 100) * STEPS.length;
+  const activeIdx = Math.min(STEPS.length - 1, Math.floor(stepFloat));
 
+  // Pulsing ambient glow inside the ring — mirrors @keyframes aj2-pulse.
+  const pulse = useRef(new Animated.Value(0.55)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, {
+          toValue: 1,
+          duration: 1100,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulse, {
+          toValue: 0.55,
+          duration: 1100,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse]);
+
+  // Ring geometry
   const R = 76;
   const STROKE = 9;
   const C = 2 * Math.PI * R;
   const offset = C * (1 - progress / 100);
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#000000', overflow: 'hidden' }}>
-      {/* Bottom-left blue radial glow — same style as OnboardingScreen */}
-      <View
-        pointerEvents="none"
-        style={{
-          position: 'absolute',
-          left: -260,
-          bottom: -280,
-          width: 560,
-          height: 560,
-        }}
-      >
-        <Svg width={560} height={560}>
-          <Defs>
-            <RadialGradient id="blueGlow" cx="50%" cy="50%" r="50%">
-              <Stop offset="0%" stopColor="#0b70f9" stopOpacity="0.55" />
-              <Stop offset="45%" stopColor="#0b70f9" stopOpacity="0.18" />
-              <Stop offset="100%" stopColor="#0b70f9" stopOpacity="0" />
-            </RadialGradient>
-          </Defs>
-          <Rect x="0" y="0" width="560" height="560" fill="url(#blueGlow)" />
-        </Svg>
-      </View>
-
+    <View style={{ flex: 1, backgroundColor: '#020010' }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
-        <View style={{ flex: 1, paddingHorizontal: 24, paddingTop: 12, paddingBottom: 36 }}>
-          <View style={{ alignItems: 'center', marginBottom: 18 }}>
-            <AJMark size={52} glow={false} />
-          </View>
-
-          <View style={{ alignItems: 'center', marginBottom: 22 }}>
-            <View style={{ width: 184, height: 184 }}>
-              <Svg
-                width={184}
-                height={184}
-                viewBox="0 0 184 184"
-                style={{ transform: [{ rotate: '-90deg' }] }}
-              >
+        <View
+          style={{
+            flex: 1,
+            paddingHorizontal: 24,
+            paddingTop: 40,
+            paddingBottom: 36,
+          }}
+        >
+          {/* ── Ring wrap ── */}
+          <View
+            style={{
+              width: 184,
+              height: 184,
+              alignSelf: 'center',
+              marginBottom: 26,
+            }}
+          >
+            {/* Ambient glow — inset 18px, radial blue, pulsing */}
+            <Animated.View
+              pointerEvents="none"
+              style={{
+                position: 'absolute',
+                top: 18,
+                left: 18,
+                right: 18,
+                bottom: 18,
+                opacity: pulse,
+              }}
+            >
+              <Svg width={148} height={148}>
                 <Defs>
-                  <SvgLG id="ringGrad" x1="0" y1="0" x2="1" y2="1">
-                    <Stop offset="0%" stopColor={colors.accentHi} />
-                    <Stop offset="100%" stopColor={colors.accent} />
-                  </SvgLG>
+                  <RadialGradient id="ringGlow" cx="50%" cy="50%" r="50%">
+                    <Stop offset="0%" stopColor="#0b70f9" stopOpacity="0.4" />
+                    <Stop offset="70%" stopColor="#0b70f9" stopOpacity="0" />
+                    <Stop offset="100%" stopColor="#0b70f9" stopOpacity="0" />
+                  </RadialGradient>
                 </Defs>
-                <Circle
-                  cx="92"
-                  cy="92"
-                  r={R}
-                  fill="none"
-                  stroke="rgba(255,255,255,0.07)"
-                  strokeWidth={STROKE}
-                />
-                <Circle
-                  cx="92"
-                  cy="92"
-                  r={R}
-                  fill="none"
-                  stroke="url(#ringGrad)"
-                  strokeWidth={STROKE}
-                  strokeLinecap="round"
-                  strokeDasharray={`${C}`}
-                  strokeDashoffset={offset}
-                />
+                <Rect x="0" y="0" width="148" height="148" fill="url(#ringGlow)" />
               </Svg>
-              <View
-                pointerEvents="none"
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
+            </Animated.View>
+
+            {/* Progress ring — rotated -90° so it starts at 12 o'clock */}
+            <Svg
+              width={184}
+              height={184}
+              viewBox="0 0 184 184"
+              style={{ transform: [{ rotate: '-90deg' }] }}
+            >
+              <Defs>
+                <SvgLG id="ringGrad" x1="0" y1="0" x2="1" y2="1">
+                  <Stop offset="0%" stopColor={colors.accentHi} />
+                  <Stop offset="100%" stopColor={colors.accent} />
+                </SvgLG>
+              </Defs>
+              <Circle
+                cx="92"
+                cy="92"
+                r={R}
+                fill="none"
+                stroke="rgba(255,255,255,0.07)"
+                strokeWidth={STROKE}
+              />
+              <Circle
+                cx="92"
+                cy="92"
+                r={R}
+                fill="none"
+                stroke="url(#ringGrad)"
+                strokeWidth={STROKE}
+                strokeLinecap="round"
+                strokeDasharray={`${C}`}
+                strokeDashoffset={offset}
+              />
+            </Svg>
+
+            {/* Centered %  +  COMPILANDO label */}
+            <View
+              pointerEvents="none"
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
                 <Text
                   style={{
                     fontFamily: fonts.display,
                     fontSize: 52,
+                    lineHeight: 52,
                     color: '#fff',
                     transform: [{ skewX: '-8deg' }],
                     textShadowColor: 'rgba(11,112,249,0.6)',
@@ -142,92 +184,197 @@ export function AnalyzingScreen({ onDone }: { onDone: () => void }) {
                   }}
                 >
                   {progress}
-                  <Text style={{ fontSize: 22, color: colors.accentHi }}>%</Text>
                 </Text>
-                <MonoLabel style={{ marginTop: 6 }}>COMPILANDO</MonoLabel>
-              </View>
-            </View>
-          </View>
-
-          <View style={{ alignItems: 'center', marginBottom: 22 }}>
-            <Display size={32}>MONTANDO</Display>
-            <Display size={32}>SEU PLANO</Display>
-          </View>
-
-          <View
-            style={{
-              flex: 1,
-              borderRadius: 14,
-              padding: 16,
-              backgroundColor: '#05031e',
-              borderWidth: 1,
-              borderColor: 'rgba(255,255,255,0.09)',
-            }}
-          >
-            <HudCorners />
-            <View
-              style={{
-                flexDirection: 'row',
-                justifyContent: 'space-between',
-                paddingBottom: 12,
-                borderBottomWidth: 1,
-                borderBottomColor: 'rgba(255,255,255,0.07)',
-                marginBottom: 12,
-              }}
-            >
-              <MonoLabel>AJ.ENGINE v2.0</MonoLabel>
-              <MonoLabel color={colors.accentHi}>RUNNING</MonoLabel>
-            </View>
-            {LOG_LINES.map((l, i) => {
-              const done = i < visible;
-              const active = i === visible;
-              if (!done && !active) {
-                return (
-                  <Text
-                    key={i}
-                    style={{
-                      paddingVertical: 7,
-                      fontFamily: fonts.mono,
-                      fontSize: 12,
-                      color: 'rgba(255,255,255,0.18)',
-                    }}
-                  >
-                    · aguardando…
-                  </Text>
-                );
-              }
-              return (
-                <View
-                  key={i}
+                <Text
                   style={{
-                    paddingVertical: 7,
-                    flexDirection: 'row',
-                    alignItems: 'baseline',
-                    gap: 10,
+                    fontFamily: fonts.display,
+                    fontSize: 22,
+                    color: colors.accentHi,
+                    transform: [{ skewX: '-8deg' }],
+                    marginLeft: 2,
                   }}
                 >
-                  <Text
-                    style={{
-                      color: done ? colors.accentHi : '#fff',
-                      fontFamily: fonts.mono,
-                      fontSize: 12,
-                      minWidth: 14,
-                    }}
-                  >
-                    {done ? '✓' : '▌'}
-                  </Text>
-                  <View style={{ flex: 1, flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
-                    <Text style={{ fontFamily: fonts.mono, fontSize: 12.5, color: '#fff' }}>{l.t}</Text>
-                    <Text style={{ fontFamily: fonts.mono, fontSize: 10.5, color: colors.faint }}>
-                      {l.d}
-                    </Text>
-                  </View>
-                </View>
+                  %
+                </Text>
+              </View>
+              <MonoLabel style={{ marginTop: 6 }}>COMPILANDO</MonoLabel>
+            </View>
+          </View>
+
+          {/* ── Title ── */}
+          <View style={{ alignItems: 'center', marginBottom: 24 }}>
+            <Text
+              style={{
+                fontFamily: fonts.display,
+                fontSize: 32,
+                lineHeight: 32 * 0.95,
+                letterSpacing: 0.5,
+                textTransform: 'uppercase',
+                color: '#fff',
+                textAlign: 'center',
+              }}
+            >
+              MONTANDO{'\n'}SEU PLANO
+            </Text>
+          </View>
+
+          {/* ── Synced checklist ── */}
+          <View style={{ gap: 10 }}>
+            {STEPS.map((label, i) => {
+              const done = i < activeIdx;
+              const active = i === activeIdx;
+              return (
+                <StepPill
+                  key={i}
+                  label={label}
+                  state={done ? 'done' : active ? 'active' : 'pending'}
+                />
               );
             })}
           </View>
         </View>
       </SafeAreaView>
+    </View>
+  );
+}
+
+type StepState = 'pending' | 'active' | 'done';
+
+function StepPill({ label, state }: { label: string; state: StepState }) {
+  const isActive = state === 'active';
+  const isDone = state === 'done';
+  const opacity = state === 'pending' ? 0.5 : 1;
+
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 14,
+        paddingVertical: 15,
+        paddingHorizontal: 18,
+        borderRadius: 16,
+        backgroundColor: isActive ? 'rgba(11,112,249,0.16)' : 'rgba(255,255,255,0.025)',
+        borderWidth: 1,
+        borderColor: isActive ? 'rgba(11,112,249,0.55)' : 'rgba(255,255,255,0.07)',
+        shadowColor: isActive ? colors.accent : 'transparent',
+        shadowOpacity: isActive ? 0.35 : 0,
+        shadowRadius: isActive ? 22 : 0,
+        shadowOffset: { width: 0, height: 0 },
+        opacity,
+      }}
+    >
+      <StepIndicator state={state} />
+      <Text
+        style={{
+          fontFamily: fonts.uiSemi,
+          fontSize: 14.5,
+          color: state === 'pending' ? 'rgba(255,255,255,0.5)' : '#fff',
+          flex: 1,
+        }}
+      >
+        {label}
+      </Text>
+    </View>
+  );
+}
+
+function StepIndicator({ state }: { state: StepState }) {
+  // Active step spins — mirrors @keyframes aj2-spin-slow (0.9s linear).
+  const spin = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (state !== 'active') return;
+    const loop = Animated.loop(
+      Animated.timing(spin, {
+        toValue: 1,
+        duration: 900,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      }),
+    );
+    loop.start();
+    return () => {
+      loop.stop();
+      spin.setValue(0);
+    };
+  }, [state, spin]);
+
+  if (state === 'done') {
+    return (
+      <View
+        style={{
+          width: 26,
+          height: 26,
+          borderRadius: 13,
+          backgroundColor: colors.accent,
+          alignItems: 'center',
+          justifyContent: 'center',
+          shadowColor: colors.accent,
+          shadowOpacity: 0.6,
+          shadowRadius: 12,
+          shadowOffset: { width: 0, height: 0 },
+        }}
+      >
+        <Icon name="check" size={14} color="#fff" stroke={2.6} />
+      </View>
+    );
+  }
+
+  if (state === 'active') {
+    const rotate = spin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+    return (
+      <Animated.View
+        style={{
+          width: 26,
+          height: 26,
+          alignItems: 'center',
+          justifyContent: 'center',
+          transform: [{ rotate }],
+        }}
+      >
+        <Svg width={26} height={26} viewBox="0 0 26 26">
+          <Circle
+            cx="13"
+            cy="13"
+            r="10"
+            fill="none"
+            stroke="rgba(11,112,249,0.25)"
+            strokeWidth={2.5}
+          />
+          {/* Quarter-arc head from top (13,3) around to right (23,13) */}
+          <Path
+            d="M13 3 a10 10 0 0 1 10 10"
+            fill="none"
+            stroke={colors.accentHi}
+            strokeWidth={2.5}
+            strokeLinecap="round"
+          />
+        </Svg>
+      </Animated.View>
+    );
+  }
+
+  // Pending — small 5px dot inside a subtle 26px ring.
+  return (
+    <View
+      style={{
+        width: 26,
+        height: 26,
+        borderRadius: 13,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.12)',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      <View
+        style={{
+          width: 5,
+          height: 5,
+          borderRadius: 2.5,
+          backgroundColor: 'rgba(255,255,255,0.3)',
+        }}
+      />
     </View>
   );
 }

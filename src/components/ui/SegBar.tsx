@@ -45,6 +45,10 @@ export function SegBar({ value, segs = 14, style }: Props) {
                 height: 7,
                 borderRadius: 1,
                 transform: [{ skewX: '-22deg' }],
+                shadowColor: colors.accent,
+                shadowOpacity: 0.7,
+                shadowRadius: 4,
+                shadowOffset: { width: 0, height: 0 },
               }}
             />
           );

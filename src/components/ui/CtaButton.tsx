@@ -20,7 +20,7 @@ export function CtaButton({ children, onPress, ghost, disabled, style }: Props) 
         style={[
           {
             width: '100%',
-            height: 56,
+            height: 58,
             borderRadius: 14,
             backgroundColor: 'rgba(255,255,255,0.05)',
             borderWidth: 1,
@@ -67,10 +67,25 @@ export function CtaButton({ children, onPress, ghost, disabled, style }: Props) 
           shadowColor: colors.accent,
           shadowOffset: { width: 0, height: 10 },
           shadowOpacity: disabled ? 0 : 0.45,
-          shadowRadius: disabled ? 0 : 20,
-          elevation: disabled ? 0 : 8,
+          shadowRadius: disabled ? 0 : 30,
+          elevation: disabled ? 0 : 12,
         }}
       >
+        {/* Top inner highlight: CSS uses inset 0 1px 0 rgba(255,255,255,0.35).
+            RN has no inset shadow, so we overlay a 1px bright edge. */}
+        <View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 1,
+            backgroundColor: 'rgba(255,255,255,0.35)',
+            borderTopLeftRadius: 12,
+            borderTopRightRadius: 12,
+          }}
+        />
         {typeof children === 'string' ? (
           <Text
             style={{

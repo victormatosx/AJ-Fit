@@ -14,6 +14,7 @@ import { SegBar } from '../components/ui/SegBar';
 import { CtaButton } from '../components/ui/CtaButton';
 import { Icon, IconName } from '../components/ui/Icon';
 import { HudCorners } from '../components/ui/Card';
+import { EquipmentPicker } from '../components/fitness/EquipmentPicker';
 import { colors, fonts } from '../theme/tokens';
 import { useAppState, Quiz } from '../state/AppState';
 
@@ -167,20 +168,6 @@ const QUESTIONS: Question[] = [
       { v: 'hip', l: 'Quadril' },
     ],
   },
-  {
-    id: 'style',
-    kind: 'multi',
-    title: 'PREFERÊNCIAS DE TREINO?',
-    sub: 'Você muda quando quiser.',
-    options: [
-      { v: 'compound', l: 'Compostos pesados' },
-      { v: 'isolation', l: 'Isoladores' },
-      { v: 'super', l: 'Super-séries' },
-      { v: 'circuit', l: 'Circuitos' },
-      { v: 'hiit', l: 'HIIT' },
-      { v: 'strength', l: 'Força máxima' },
-    ],
-  },
 ];
 
 export function QuizScreen({ onDone }: { onDone: () => void }) {
@@ -206,8 +193,21 @@ export function QuizScreen({ onDone }: { onDone: () => void }) {
   const outlineSvgH = 220;
   const outlineN = String(idx + 1).padStart(2, '0');
 
+  if (q.id === 'equipment') {
+    const stepLabel = `EQUIPAMENTO · ${String(idx + 1).padStart(2, '0')} / ${String(total).padStart(2, '0')}`;
+    return (
+      <EquipmentPicker
+        value={(value as string[]) || []}
+        onChange={(v) => setVal(v)}
+        onDone={advance}
+        onBack={back}
+        stepLabel={stepLabel}
+      />
+    );
+  }
+
   return (
-    <View style={{ flex: 1, backgroundColor: '#030118', overflow: 'hidden' }}>
+    <View style={{ flex: 1, backgroundColor: colors.bg, overflow: 'hidden' }}>
       {/* Outlined "01" tucked into the top-right corner — both digits fully
           on-screen at roughly half the previous size */}
       <View
@@ -221,8 +221,8 @@ export function QuizScreen({ onDone }: { onDone: () => void }) {
             fontFamily={fonts.display}
             fontSize={outlineFontSize}
             textAnchor="end"
-            stroke="rgba(255,255,255,0.18)"
-            strokeWidth={1.4}
+            stroke="rgba(255,255,255,0.22)"
+            strokeWidth={1.5}
             fill="none"
           >
             {outlineN}
@@ -500,8 +500,9 @@ function MultiList({
 }) {
   const toggle = (v: string) =>
     value.includes(v) ? onChange(value.filter((x) => x !== v)) : onChange([...value, v]);
+  const GAP = 10;
   return (
-    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: GAP }}>
       {options.map((o) => {
         const sel = value.includes(o.v);
         return (
@@ -509,23 +510,49 @@ function MultiList({
             key={o.v}
             onPress={() => toggle(o.v)}
             style={{
-              paddingVertical: 13,
-              paddingHorizontal: 18,
-              borderRadius: 10,
+              // Two columns with a 10px gap: 48% width leaves ~4% of row
+              // width for the gap, which is comfortable across screen sizes.
+              flexBasis: '48%',
+              flexGrow: 1,
+              paddingVertical: 16,
+              paddingHorizontal: 14,
+              borderRadius: 14,
               flexDirection: 'row',
               alignItems: 'center',
-              gap: 8,
+              gap: 12,
               backgroundColor: selBg(sel),
               borderWidth: 1,
               borderColor: selBorder(sel),
               shadowColor: sel ? colors.accent : 'transparent',
-              shadowOpacity: sel ? 0.35 : 0,
-              shadowRadius: sel ? 12 : 0,
+              shadowOpacity: sel ? 0.45 : 0,
+              shadowRadius: sel ? 22 : 0,
               shadowOffset: { width: 0, height: 0 },
             }}
           >
-            {sel && <Icon name="check" size={14} color={colors.accentHi} />}
-            <Text style={{ fontFamily: fonts.uiSemi, fontSize: 14, color: '#fff' }}>{o.l}</Text>
+            <View
+              style={{
+                width: 18,
+                height: 18,
+                borderRadius: 4,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: sel ? colors.accent : 'transparent',
+                borderWidth: sel ? 0 : 1.5,
+                borderColor: 'rgba(255,255,255,0.22)',
+              }}
+            >
+              {sel && <Icon name="check" size={11} color="#fff" stroke={2.6} />}
+            </View>
+            <Text
+              style={{
+                fontFamily: fonts.uiSemi,
+                fontSize: 14.5,
+                color: '#fff',
+                flexShrink: 1,
+              }}
+            >
+              {o.l}
+            </Text>
           </Pressable>
         );
       })}

@@ -83,8 +83,8 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
             fontFamily={fonts.display}
             fontSize={outlineFontSize}
             textAnchor="end"
-            stroke="rgba(255,255,255,0.18)"
-            strokeWidth={1.4}
+            stroke="rgba(255,255,255,0.22)"
+            strokeWidth={1.5}
             fill="none"
           >
             {d.n}
