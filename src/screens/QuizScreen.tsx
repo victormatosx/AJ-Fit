@@ -193,16 +193,27 @@ export function QuizScreen({ onDone }: { onDone: () => void }) {
   const outlineSvgH = 220;
   const outlineN = String(idx + 1).padStart(2, '0');
 
+  const devNav = (
+    <DevQuizNav
+      questions={QUESTIONS}
+      idx={idx}
+      onJump={(i) => setIdx(i)}
+    />
+  );
+
   if (q.id === 'equipment') {
     const stepLabel = `EQUIPAMENTO · ${String(idx + 1).padStart(2, '0')} / ${String(total).padStart(2, '0')}`;
     return (
-      <EquipmentPicker
-        value={(value as string[]) || []}
-        onChange={(v) => setVal(v)}
-        onDone={advance}
-        onBack={back}
-        stepLabel={stepLabel}
-      />
+      <View style={{ flex: 1 }}>
+        <EquipmentPicker
+          value={(value as string[]) || []}
+          onChange={(v) => setVal(v)}
+          onDone={advance}
+          onBack={back}
+          stepLabel={stepLabel}
+        />
+        {devNav}
+      </View>
     );
   }
 
@@ -325,6 +336,134 @@ export function QuizScreen({ onDone }: { onDone: () => void }) {
           </CtaButton>
         </View>
       </SafeAreaView>
+      {devNav}
+    </View>
+  );
+}
+
+// ─── Dev-only quiz navigator ─────────────────────────────
+// Small floating pill in the top-right that expands into a list of every
+// question. Lets you jump straight to whichever step you're working on
+// instead of re-answering the whole quiz. Remove when the app ships.
+function DevQuizNav({
+  questions,
+  idx,
+  onJump,
+}: {
+  questions: Question[];
+  idx: number;
+  onJump: (i: number) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <View
+      pointerEvents="box-none"
+      style={{ position: 'absolute', top: 54, right: 12, zIndex: 999 }}
+    >
+      {!open && (
+        <Pressable
+          onPress={() => setOpen(true)}
+          style={{
+            paddingHorizontal: 10,
+            paddingVertical: 5,
+            borderRadius: 6,
+            backgroundColor: 'rgba(255,168,64,0.18)',
+            borderWidth: 1,
+            borderColor: 'rgba(255,168,64,0.55)',
+          }}
+        >
+          <Text
+            style={{
+              fontFamily: fonts.mono,
+              fontSize: 9,
+              letterSpacing: 1.5,
+              color: '#ffa840',
+            }}
+          >
+            DEV · {String(idx + 1).padStart(2, '0')}
+          </Text>
+        </Pressable>
+      )}
+      {open && (
+        <View
+          style={{
+            width: 240,
+            padding: 8,
+            borderRadius: 12,
+            backgroundColor: 'rgba(6,2,32,0.96)',
+            borderWidth: 1,
+            borderColor: 'rgba(255,168,64,0.4)',
+          }}
+        >
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              paddingHorizontal: 6,
+              paddingVertical: 4,
+              marginBottom: 4,
+            }}
+          >
+            <Text
+              style={{
+                fontFamily: fonts.mono,
+                fontSize: 9,
+                letterSpacing: 1.5,
+                color: '#ffa840',
+              }}
+            >
+              DEV · JUMP TO
+            </Text>
+            <Pressable onPress={() => setOpen(false)} hitSlop={8}>
+              <Icon name="x" size={14} color="rgba(255,255,255,0.5)" />
+            </Pressable>
+          </View>
+          {questions.map((qq, i) => {
+            const current = i === idx;
+            return (
+              <Pressable
+                key={String(qq.id)}
+                onPress={() => {
+                  onJump(i);
+                  setOpen(false);
+                }}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 8,
+                  paddingVertical: 7,
+                  paddingHorizontal: 6,
+                  borderRadius: 6,
+                  backgroundColor: current ? 'rgba(11,112,249,0.18)' : 'transparent',
+                }}
+              >
+                <Text
+                  style={{
+                    fontFamily: fonts.mono,
+                    fontSize: 10,
+                    color: current ? colors.accentHi : 'rgba(255,255,255,0.35)',
+                    minWidth: 20,
+                  }}
+                >
+                  {String(i + 1).padStart(2, '0')}
+                </Text>
+                <Text
+                  style={{
+                    flex: 1,
+                    fontFamily: fonts.ui,
+                    fontSize: 11.5,
+                    color: current ? '#fff' : 'rgba(255,255,255,0.75)',
+                  }}
+                  numberOfLines={1}
+                >
+                  {qq.title}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      )}
     </View>
   );
 }

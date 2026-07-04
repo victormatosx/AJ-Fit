@@ -1,15 +1,15 @@
-import React from 'react';
-import { View, Text, ScrollView } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { View, Text, ScrollView, Animated, Easing, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
-import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
-import { AJMark } from '../components/ui/AJMark';
-import { Display, Slash, MonoLabel } from '../components/ui/Display';
-import { Card, HudCorners } from '../components/ui/Card';
-import { SegBar } from '../components/ui/SegBar';
-import { CtaButton } from '../components/ui/CtaButton';
+import Svg, {
+  Circle,
+  Defs,
+  LinearGradient as SvgLG,
+  Path,
+  Stop,
+} from 'react-native-svg';
+import { Slash, MonoLabel } from '../components/ui/Display';
 import { Icon } from '../components/ui/Icon';
-import { OutlineNumber } from '../components/ui/OutlineNumber';
 import { colors, fonts } from '../theme/tokens';
 import { useAppState } from '../state/AppState';
 
@@ -26,215 +26,373 @@ const LEVEL_LABELS: Record<string, string> = {
   adv: 'AVANÇADO',
   elite: 'ELITE',
 };
+const PROGRAM_NAMES: Record<string, string> = {
+  hyper: 'AJ HYPER',
+  cut: 'AJ SHRED',
+  perf: 'AJ POWER',
+  def: 'AJ SHAPE',
+  recon: 'AJ RESET',
+};
+
+const SPLIT = ['PUSH', 'PULL', 'LEGS', 'OFF', 'UPPER', 'LOWER', 'OFF'] as const;
+const DAY_LETTERS = ['S', 'T', 'Q', 'Q', 'S', 'S', 'D'] as const;
+
+// Capitalize first letter, rest lowercase — matches the mock's subtitle format.
+const cap = (s: string) => (s ? s.charAt(0) + s.slice(1).toLowerCase() : '');
 
 export function PlanReadyScreen({ onContinue }: { onContinue: () => void }) {
   const { quiz } = useAppState();
-  const goalLabel = GOAL_LABELS[quiz.goal || ''] || 'HIPERTROFIA';
-  const levelLabel = LEVEL_LABELS[quiz.level || ''] || 'INTERMEDIÁRIO';
+  const goalKey = quiz.goal || 'hyper';
+  const levelKey = quiz.level || 'int';
   const days = quiz.days || 4;
 
-  return (
-    <View style={{ flex: 1, backgroundColor: '#000000', overflow: 'hidden' }}>
-      {/* Bottom-left blue radial glow — same treatment as Quiz/Analyzing */}
-      <View
-        pointerEvents="none"
-        style={{
-          position: 'absolute',
-          left: -260,
-          bottom: -280,
-          width: 560,
-          height: 560,
-        }}
-      >
-        <Svg width={560} height={560}>
-          <Defs>
-            <RadialGradient id="blueGlow" cx="50%" cy="50%" r="50%">
-              <Stop offset="0%" stopColor="#0b70f9" stopOpacity="0.55" />
-              <Stop offset="45%" stopColor="#0b70f9" stopOpacity="0.18" />
-              <Stop offset="100%" stopColor="#0b70f9" stopOpacity="0" />
-            </RadialGradient>
-          </Defs>
-          <Rect x="0" y="0" width="560" height="560" fill="url(#blueGlow)" />
-        </Svg>
-      </View>
+  const programName = PROGRAM_NAMES[goalKey] || 'AJ HYPER';
+  const goalLabel = GOAL_LABELS[goalKey] || 'HIPERTROFIA';
+  const levelLabel = LEVEL_LABELS[levelKey] || 'INTERMEDIÁRIO';
 
+  return (
+    <View style={{ flex: 1, backgroundColor: '#020010' }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
         <ScrollView
-          contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 12, paddingBottom: 30 }}
+          contentContainerStyle={{
+            paddingHorizontal: 26,
+            paddingTop: 40,
+            paddingBottom: 30,
+            flexGrow: 1,
+          }}
           showsVerticalScrollIndicator={false}
         >
-          <View style={{ alignItems: 'center', marginBottom: 18 }}>
-            <AJMark size={48} glow={false} />
-          </View>
-
-          <View style={{ alignItems: 'center', marginBottom: 24 }}>
-            <Slash style={{ marginBottom: 12 }}>PLANO COMPILADO</Slash>
-            <Display size={40}>SEU PLANO</Display>
-            <Display size={40}>ESTÁ PRONTO.</Display>
-          </View>
-
-          {/* Athlete card */}
-          <LinearGradient
-            colors={[colors.bgGradTop, '#04021c']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={{
-              borderRadius: 18,
-              overflow: 'hidden',
-              borderWidth: 1,
-              borderColor: 'rgba(11,112,249,0.35)',
-              shadowColor: colors.accent,
-              shadowOpacity: 0.2,
-              shadowRadius: 20,
-            }}
-          >
-            <HudCorners />
-            <OutlineNumber
-              size={190}
+          {/* ── 1. HEADER ── */}
+          <RiseIn delay={0}>
+            <Slash style={{ marginBottom: 14 }}>SEU PLANO ESTÁ PRONTO</Slash>
+            <Text
               style={{
-                position: 'absolute',
-                bottom: -50,
-                right: -16,
-                opacity: 0.45,
+                fontFamily: fonts.display,
+                fontSize: 44,
+                lineHeight: 44 * 0.95,
+                letterSpacing: 0.5,
+                color: '#fff',
+                textTransform: 'uppercase',
+                transform: [{ skewX: '-8deg' }],
               }}
             >
-              AJ
-            </OutlineNumber>
+              {programName}
+            </Text>
+            <Text
+              style={{
+                marginTop: 12,
+                fontFamily: fonts.ui,
+                fontSize: 14.5,
+                lineHeight: 21,
+                color: colors.mute,
+              }}
+            >
+              {cap(goalLabel)} · {cap(levelLabel)} · {days}x por semana
+            </Text>
+          </RiseIn>
 
-            <View style={{ padding: 20 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                <View>
-                  <MonoLabel>FICHA AJ · Nº 0001</MonoLabel>
-                  <Display size={26} style={{ marginTop: 8 }}>
-                    PROGRAMA
-                  </Display>
-                  <Display size={26}>{goalLabel}</Display>
-                </View>
-                <AJMark size={42} glow={false} />
-              </View>
-
-              <View style={{ flexDirection: 'row', gap: 8, marginVertical: 20 }}>
-                {[
-                  { l: 'DIAS/SEM', v: String(days) },
-                  { l: 'CICLO', v: '12 SEM' },
-                  { l: 'NÍVEL', v: levelLabel.slice(0, 5) },
-                ].map((s) => (
+          {/* ── 2. WEEKLY SPLIT ── */}
+          <RiseIn delay={80} style={{ marginTop: 30 }}>
+            <Slash style={{ marginBottom: 14 }}>DIVISÃO SEMANAL</Slash>
+            <View style={{ flexDirection: 'row', gap: 6 }}>
+              {SPLIT.map((s, i) => {
+                const on = s !== 'OFF';
+                return (
                   <View
-                    key={s.l}
+                    key={i}
                     style={{
                       flex: 1,
                       paddingVertical: 12,
-                      borderRadius: 10,
+                      paddingHorizontal: 2,
                       alignItems: 'center',
-                      backgroundColor: colors.cardBgHi,
+                      borderRadius: 10,
+                      backgroundColor: on ? 'rgba(11,112,249,0.14)' : 'transparent',
                       borderWidth: 1,
-                      borderColor: colors.cardBorder,
+                      borderColor: on ? 'rgba(11,112,249,0.4)' : 'rgba(255,255,255,0.07)',
                     }}
                   >
-                    <Text style={{ fontFamily: fonts.display, fontSize: 20, color: '#fff' }}>
-                      {s.v}
-                    </Text>
-                    <MonoLabel style={{ marginTop: 4, fontSize: 8.5 }}>{s.l}</MonoLabel>
-                  </View>
-                ))}
-              </View>
-
-              <MonoLabel style={{ marginBottom: 8 }}>SPLIT SEMANAL</MonoLabel>
-              <View style={{ flexDirection: 'row', gap: 5 }}>
-                {['PUSH', 'PULL', 'LEGS', 'OFF', 'UPPER', 'LOWER', 'OFF'].map((s, i) => {
-                  const on = s !== 'OFF';
-                  return (
-                    <View
-                      key={i}
+                    <Text
                       style={{
-                        flex: 1,
-                        paddingVertical: 9,
-                        alignItems: 'center',
-                        borderRadius: 7,
-                        backgroundColor: on ? 'rgba(11,112,249,0.22)' : 'rgba(255,255,255,0.03)',
-                        borderWidth: 1,
-                        borderColor: on ? 'rgba(11,112,249,0.5)' : 'rgba(255,255,255,0.05)',
+                        fontFamily: fonts.mono,
+                        fontSize: 8.5,
+                        letterSpacing: 1,
+                        color: colors.faint,
                       }}
                     >
-                      <Text style={{ fontFamily: fonts.mono, fontSize: 8, color: colors.faint }}>
-                        {['S', 'T', 'Q', 'Q', 'S', 'S', 'D'][i]}
-                      </Text>
-                      <Text
-                        style={{
-                          fontFamily: fonts.display,
-                          fontSize: 9.5,
-                          marginTop: 3,
-                          color: on ? colors.accentHi : 'rgba(255,255,255,0.25)',
-                          textTransform: 'uppercase',
-                        }}
-                      >
-                        {s}
-                      </Text>
-                    </View>
-                  );
-                })}
+                      {DAY_LETTERS[i]}
+                    </Text>
+                    <Text
+                      style={{
+                        marginTop: 5,
+                        fontFamily: fonts.display,
+                        fontSize: 11,
+                        letterSpacing: 0.5,
+                        textTransform: 'uppercase',
+                        color: on ? colors.accentHi : 'rgba(255,255,255,0.25)',
+                        transform: [{ skewX: '-8deg' }],
+                      }}
+                    >
+                      {on ? s : '·'}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+          </RiseIn>
+
+          {/* ── 3. PROJECTION LINE CHART ── */}
+          <RiseIn delay={160} style={{ marginTop: 30 }}>
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'flex-end',
+                justifyContent: 'space-between',
+                marginBottom: 16,
+              }}
+            >
+              <Slash>PROJEÇÃO · 12 SEMANAS</Slash>
+              <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 5 }}>
+                <Text
+                  style={{
+                    fontFamily: fonts.display,
+                    fontSize: 30,
+                    color: colors.accentHi,
+                    transform: [{ skewX: '-8deg' }],
+                  }}
+                >
+                  +6,2
+                </Text>
+                <MonoLabel>KG MAGRA</MonoLabel>
               </View>
             </View>
-          </LinearGradient>
+            <ProjectionChart />
+            <View
+              style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                marginTop: 8,
+              }}
+            >
+              <MonoLabel>SEM 01</MonoLabel>
+              <MonoLabel>SEM 12</MonoLabel>
+            </View>
+          </RiseIn>
 
-          {/* Projection */}
-          <Card style={{ padding: 18, marginTop: 14, position: 'relative', overflow: 'hidden' }}>
-            <HudCorners />
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-              <View>
-                <MonoLabel>PROJEÇÃO · 12 SEMANAS</MonoLabel>
-                <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6, marginTop: 8 }}>
+          <View style={{ flex: 1, minHeight: 20 }} />
+
+          {/* ── 4. KEY METRICS ── */}
+          <RiseIn delay={200} style={{ marginTop: 30 }}>
+            <View
+              style={{
+                flexDirection: 'row',
+                borderTopWidth: 1,
+                borderBottomWidth: 1,
+                borderColor: 'rgba(255,255,255,0.08)',
+              }}
+            >
+              {[
+                { v: String(days), l: 'DIAS/SEM' },
+                { v: '12', l: 'SEMANAS' },
+                { v: '48', l: 'TREINOS' },
+              ].map((s, i) => (
+                <View
+                  key={s.l}
+                  style={{
+                    flex: 1,
+                    paddingVertical: 18,
+                    paddingHorizontal: 4,
+                    alignItems: 'center',
+                    borderLeftWidth: i ? 1 : 0,
+                    borderLeftColor: 'rgba(255,255,255,0.08)',
+                  }}
+                >
                   <Text
                     style={{
                       fontFamily: fonts.display,
-                      fontSize: 36,
-                      color: colors.accentHi,
+                      fontSize: 30,
+                      color: '#fff',
                       transform: [{ skewX: '-8deg' }],
                     }}
                   >
-                    +6,2
+                    {s.v}
                   </Text>
-                  <Text style={{ fontFamily: fonts.ui, fontSize: 13, color: colors.mute }}>
-                    kg de massa magra estimada
-                  </Text>
+                  <MonoLabel style={{ marginTop: 6 }}>{s.l}</MonoLabel>
                 </View>
-              </View>
+              ))}
             </View>
-            <SegBar value={0.78} segs={16} style={{ marginTop: 14 }} />
-            <MonoLabel style={{ marginTop: 8 }}>
-              POTENCIAL DE EVOLUÇÃO: <Text style={{ color: colors.accentHi }}>ALTO</Text>
-            </MonoLabel>
-          </Card>
+          </RiseIn>
 
-          <CtaButton onPress={onContinue} style={{ marginTop: 22 }}>
-            <Text
+          {/* ── 5. STRONG CTA ── */}
+          <RiseIn delay={280} style={{ marginTop: 24 }}>
+            <Pressable
+              onPress={onContinue}
               style={{
-                color: '#fff',
-                fontFamily: fonts.display,
-                fontSize: 17,
-                letterSpacing: 1.5,
-                textTransform: 'uppercase',
+                position: 'relative',
+                width: '100%',
+                overflow: 'hidden',
+                paddingVertical: 20,
+                paddingHorizontal: 22,
+                borderRadius: 16,
+                backgroundColor: colors.accent,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 14,
+                shadowColor: colors.accent,
+                shadowOpacity: 0.55,
+                shadowRadius: 44,
+                shadowOffset: { width: 0, height: 14 },
+                elevation: 16,
               }}
             >
-              Criar minha conta
-            </Text>
-            <Icon name="arrow-right" size={18} color="#fff" />
-          </CtaButton>
-
-          <Text
-            style={{
-              fontFamily: fonts.mono,
-              fontSize: 10,
-              letterSpacing: 2,
-              color: colors.faint,
-              textAlign: 'center',
-              marginTop: 12,
-            }}
-          >
-            7 DIAS GRÁTIS · CANCELE QUANDO QUISER
-          </Text>
+              {/* Inset top highlight — mirrors inset 0 1px 0 rgba(255,255,255,0.4) */}
+              <View
+                pointerEvents="none"
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: 1,
+                  backgroundColor: 'rgba(255,255,255,0.4)',
+                }}
+              />
+              <View style={{ flex: 1 }}>
+                <Text
+                  style={{
+                    fontFamily: fonts.display,
+                    fontSize: 24,
+                    letterSpacing: 1,
+                    color: '#fff',
+                    textTransform: 'uppercase',
+                    transform: [{ skewX: '-8deg' }],
+                  }}
+                >
+                  CRIAR MINHA CONTA
+                </Text>
+                <Text
+                  style={{
+                    marginTop: 5,
+                    fontFamily: fonts.mono,
+                    fontSize: 10.5,
+                    letterSpacing: 1,
+                    color: 'rgba(255,255,255,0.85)',
+                  }}
+                >
+                  COMECE GRÁTIS POR 7 DIAS
+                </Text>
+              </View>
+              <View
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 22,
+                  backgroundColor: 'rgba(255,255,255,0.18)',
+                  borderWidth: 1,
+                  borderColor: 'rgba(255,255,255,0.35)',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Icon name="arrow-right" size={20} color="#fff" stroke={2.2} />
+              </View>
+            </Pressable>
+            <MonoLabel style={{ textAlign: 'center', marginTop: 14 }}>
+              SEM COBRANÇA AGORA · CANCELE QUANDO QUISER
+            </MonoLabel>
+          </RiseIn>
         </ScrollView>
       </SafeAreaView>
     </View>
+  );
+}
+
+// ── Line chart mirroring the SVG in the mock ─────────────────
+function ProjectionChart() {
+  const W = 300;
+  const H = 96;
+  const PAD = 6;
+  const pts = [0, 0.8, 1.7, 2.4, 3.3, 4.1, 4.7, 5.4, 6.2];
+  const maxV = 6.2;
+  const coords = pts.map((v, i) => {
+    const x = PAD + (i / (pts.length - 1)) * (W - 2 * PAD);
+    const y = H - PAD - (v / maxV) * (H - 2 * PAD);
+    return [x, y] as const;
+  });
+  const line = coords
+    .map((c, i) => `${i === 0 ? 'M' : 'L'} ${c[0].toFixed(1)} ${c[1].toFixed(1)}`)
+    .join(' ');
+  const first = coords[0];
+  const last = coords[coords.length - 1];
+  const area = `${line} L ${last[0].toFixed(1)} ${H} L ${first[0].toFixed(1)} ${H} Z`;
+
+  return (
+    <Svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`}>
+      <Defs>
+        <SvgLG id="planFill" x1="0" y1="0" x2="0" y2="1">
+          <Stop offset="0%" stopColor={colors.accent} stopOpacity="0.32" />
+          <Stop offset="100%" stopColor={colors.accent} stopOpacity="0" />
+        </SvgLG>
+        <SvgLG id="planLine" x1="0" y1="0" x2="1" y2="0">
+          <Stop offset="0%" stopColor={colors.accent} />
+          <Stop offset="100%" stopColor={colors.accentHi} />
+        </SvgLG>
+      </Defs>
+      <Path d={area} fill="url(#planFill)" />
+      {/* Fake drop-shadow: wider low-opacity twin underneath the line */}
+      <Path
+        d={line}
+        fill="none"
+        stroke={colors.accent}
+        strokeWidth={6}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        opacity={0.45}
+      />
+      <Path
+        d={line}
+        fill="none"
+        stroke="url(#planLine)"
+        strokeWidth={2.5}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Circle
+        cx={last[0]}
+        cy={last[1]}
+        r={4.5}
+        fill="#fff"
+        stroke={colors.accent}
+        strokeWidth={2.5}
+      />
+    </Svg>
+  );
+}
+
+// ── Cascading rise-in wrapper ──────────────────────────────
+function RiseIn({
+  children,
+  delay = 0,
+  style,
+}: {
+  children: React.ReactNode;
+  delay?: number;
+  style?: any;
+}) {
+  const anim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(anim, {
+      toValue: 1,
+      duration: 600,
+      delay,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [anim, delay]);
+
+  const translateY = anim.interpolate({ inputRange: [0, 1], outputRange: [14, 0] });
+  return (
+    <Animated.View style={[style, { opacity: anim, transform: [{ translateY }] }]}>
+      {children}
+    </Animated.View>
   );
 }

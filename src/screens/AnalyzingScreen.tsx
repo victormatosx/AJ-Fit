@@ -51,7 +51,8 @@ export function AnalyzingScreen({ onDone }: { onDone: () => void }) {
   const activeIdx = Math.min(STEPS.length - 1, Math.floor(stepFloat));
 
   // Pulsing ambient glow inside the ring — mirrors @keyframes aj2-pulse.
-  const pulse = useRef(new Animated.Value(0.55)).current;
+  // Range boosted from 0.55↔1 to 0.75↔1 so the LED never dims to a faint blur.
+  const pulse = useRef(new Animated.Value(0.75)).current;
   useEffect(() => {
     const loop = Animated.loop(
       Animated.sequence([
@@ -62,7 +63,7 @@ export function AnalyzingScreen({ onDone }: { onDone: () => void }) {
           useNativeDriver: true,
         }),
         Animated.timing(pulse, {
-          toValue: 0.55,
+          toValue: 0.75,
           duration: 1100,
           easing: Easing.inOut(Easing.ease),
           useNativeDriver: true,
@@ -73,11 +74,16 @@ export function AnalyzingScreen({ onDone }: { onDone: () => void }) {
     return () => loop.stop();
   }, [pulse]);
 
-  // Ring geometry
-  const R = 76;
-  const STROKE = 9;
+  // Ring geometry — bumped up ~20% from the CSS mock (184 → 224) per user feedback.
+  const RING_SIZE = 224;
+  const R = 96;
+  const STROKE = 11;
+  const CX = RING_SIZE / 2;
   const C = 2 * Math.PI * R;
   const offset = C * (1 - progress / 100);
+  // LED glow fills nearly the entire interior of the ring.
+  const GLOW_INSET = 14;
+  const GLOW_SIZE = RING_SIZE - GLOW_INSET * 2;
 
   return (
     <View style={{ flex: 1, backgroundColor: '#020010' }}>
@@ -93,41 +99,44 @@ export function AnalyzingScreen({ onDone }: { onDone: () => void }) {
           {/* ── Ring wrap ── */}
           <View
             style={{
-              width: 184,
-              height: 184,
+              width: RING_SIZE,
+              height: RING_SIZE,
               alignSelf: 'center',
               marginBottom: 26,
             }}
           >
-            {/* Ambient glow — inset 18px, radial blue, pulsing */}
+            {/* Ambient LED — fills nearly the ring interior; layered radial
+                gradient with a much hotter core than the mock (0.75 vs 0.4)
+                so it reads as a real light source, not a subtle wash. */}
             <Animated.View
               pointerEvents="none"
               style={{
                 position: 'absolute',
-                top: 18,
-                left: 18,
-                right: 18,
-                bottom: 18,
+                top: GLOW_INSET,
+                left: GLOW_INSET,
+                right: GLOW_INSET,
+                bottom: GLOW_INSET,
                 opacity: pulse,
               }}
             >
-              <Svg width={148} height={148}>
+              <Svg width={GLOW_SIZE} height={GLOW_SIZE}>
                 <Defs>
                   <RadialGradient id="ringGlow" cx="50%" cy="50%" r="50%">
-                    <Stop offset="0%" stopColor="#0b70f9" stopOpacity="0.4" />
-                    <Stop offset="70%" stopColor="#0b70f9" stopOpacity="0" />
+                    <Stop offset="0%" stopColor="#4da3ff" stopOpacity="0.85" />
+                    <Stop offset="35%" stopColor="#0b70f9" stopOpacity="0.55" />
+                    <Stop offset="75%" stopColor="#0b70f9" stopOpacity="0.18" />
                     <Stop offset="100%" stopColor="#0b70f9" stopOpacity="0" />
                   </RadialGradient>
                 </Defs>
-                <Rect x="0" y="0" width="148" height="148" fill="url(#ringGlow)" />
+                <Rect x="0" y="0" width={GLOW_SIZE} height={GLOW_SIZE} fill="url(#ringGlow)" />
               </Svg>
             </Animated.View>
 
             {/* Progress ring — rotated -90° so it starts at 12 o'clock */}
             <Svg
-              width={184}
-              height={184}
-              viewBox="0 0 184 184"
+              width={RING_SIZE}
+              height={RING_SIZE}
+              viewBox={`0 0 ${RING_SIZE} ${RING_SIZE}`}
               style={{ transform: [{ rotate: '-90deg' }] }}
             >
               <Defs>
@@ -137,16 +146,30 @@ export function AnalyzingScreen({ onDone }: { onDone: () => void }) {
                 </SvgLG>
               </Defs>
               <Circle
-                cx="92"
-                cy="92"
+                cx={CX}
+                cy={CX}
                 r={R}
                 fill="none"
                 stroke="rgba(255,255,255,0.07)"
                 strokeWidth={STROKE}
               />
+              {/* Fake drop-shadow: a wider low-opacity twin sits under the
+                  real arc — RN-SVG has no filter="drop-shadow" support. */}
               <Circle
-                cx="92"
-                cy="92"
+                cx={CX}
+                cy={CX}
+                r={R}
+                fill="none"
+                stroke={colors.accent}
+                strokeWidth={STROKE + 8}
+                strokeLinecap="round"
+                strokeDasharray={`${C}`}
+                strokeDashoffset={offset}
+                opacity={0.35}
+              />
+              <Circle
+                cx={CX}
+                cy={CX}
                 r={R}
                 fill="none"
                 stroke="url(#ringGrad)"
@@ -174,12 +197,12 @@ export function AnalyzingScreen({ onDone }: { onDone: () => void }) {
                 <Text
                   style={{
                     fontFamily: fonts.display,
-                    fontSize: 52,
-                    lineHeight: 52,
+                    fontSize: 56,
+                    lineHeight: 56,
                     color: '#fff',
                     transform: [{ skewX: '-8deg' }],
-                    textShadowColor: 'rgba(11,112,249,0.6)',
-                    textShadowRadius: 15,
+                    textShadowColor: 'rgba(77,163,255,0.95)',
+                    textShadowRadius: 28,
                     textShadowOffset: { width: 0, height: 0 },
                   }}
                 >
@@ -188,10 +211,13 @@ export function AnalyzingScreen({ onDone }: { onDone: () => void }) {
                 <Text
                   style={{
                     fontFamily: fonts.display,
-                    fontSize: 22,
+                    fontSize: 24,
                     color: colors.accentHi,
                     transform: [{ skewX: '-8deg' }],
                     marginLeft: 2,
+                    textShadowColor: 'rgba(77,163,255,0.9)',
+                    textShadowRadius: 20,
+                    textShadowOffset: { width: 0, height: 0 },
                   }}
                 >
                   %
@@ -254,13 +280,14 @@ function StepPill({ label, state }: { label: string; state: StepState }) {
         paddingVertical: 15,
         paddingHorizontal: 18,
         borderRadius: 16,
-        backgroundColor: isActive ? 'rgba(11,112,249,0.16)' : 'rgba(255,255,255,0.025)',
+        backgroundColor: isActive ? 'rgba(11,112,249,0.2)' : 'rgba(255,255,255,0.025)',
         borderWidth: 1,
-        borderColor: isActive ? 'rgba(11,112,249,0.55)' : 'rgba(255,255,255,0.07)',
-        shadowColor: isActive ? colors.accent : 'transparent',
-        shadowOpacity: isActive ? 0.35 : 0,
-        shadowRadius: isActive ? 22 : 0,
+        borderColor: isActive ? 'rgba(77,163,255,0.75)' : 'rgba(255,255,255,0.07)',
+        shadowColor: isActive ? colors.accentHi : 'transparent',
+        shadowOpacity: isActive ? 0.75 : 0,
+        shadowRadius: isActive ? 28 : 0,
         shadowOffset: { width: 0, height: 0 },
+        elevation: isActive ? 10 : 0,
         opacity,
       }}
     >
@@ -300,6 +327,8 @@ function StepIndicator({ state }: { state: StepState }) {
   }, [state, spin]);
 
   if (state === 'done') {
+    // Flat solid-blue disc + white check. No halo — the item has already
+    // finished; the LED bloom lives on the active step only.
     return (
       <View
         style={{
@@ -309,10 +338,6 @@ function StepIndicator({ state }: { state: StepState }) {
           backgroundColor: colors.accent,
           alignItems: 'center',
           justifyContent: 'center',
-          shadowColor: colors.accent,
-          shadowOpacity: 0.6,
-          shadowRadius: 12,
-          shadowOffset: { width: 0, height: 0 },
         }}
       >
         <Icon name="check" size={14} color="#fff" stroke={2.6} />
@@ -333,20 +358,32 @@ function StepIndicator({ state }: { state: StepState }) {
         }}
       >
         <Svg width={26} height={26} viewBox="0 0 26 26">
+          {/* Track — dim ring for the unfilled portion */}
           <Circle
             cx="13"
             cy="13"
             r="10"
             fill="none"
-            stroke="rgba(11,112,249,0.25)"
+            stroke="rgba(255,255,255,0.12)"
             strokeWidth={2.5}
           />
-          {/* Quarter-arc head from top (13,3) around to right (23,13) */}
+          {/* Fake drop-shadow: a wider, softer twin sits beneath the arc so
+              the moving head reads as a lit-up LED (RN-SVG can't do a real
+              filter="drop-shadow"). */}
+          <Path
+            d="M13 3 a10 10 0 0 1 10 10"
+            fill="none"
+            stroke={colors.accent}
+            strokeWidth={6}
+            strokeLinecap="round"
+            opacity={0.55}
+          />
+          {/* Bright blue arc on top */}
           <Path
             d="M13 3 a10 10 0 0 1 10 10"
             fill="none"
             stroke={colors.accentHi}
-            strokeWidth={2.5}
+            strokeWidth={2.8}
             strokeLinecap="round"
           />
         </Svg>
