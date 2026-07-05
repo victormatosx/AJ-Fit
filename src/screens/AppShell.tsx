@@ -1,4 +1,4 @@
-import React from 'react';
+import { useState } from 'react';
 import { View, Text, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Icon, IconName } from '../components/ui/Icon';
@@ -8,19 +8,41 @@ import { HomeScreen } from './HomeScreen';
 import { WorkoutScreen } from './WorkoutScreen';
 import { ProgressScreen } from './ProgressScreen';
 import { ProfileScreen } from './ProfileScreen';
+import { ConsistencyScreen } from './ConsistencyScreen';
+import { AssessmentScreen } from './AssessmentScreen';
 
 export function AppShell() {
   const { tab, setTab } = useAppState();
+  const [showCal, setShowCal] = useState(false);
+  const [showAssessment, setShowAssessment] = useState(false);
+  const overlayOpen = showCal || showAssessment;
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <View style={{ flex: 1 }}>
-        {tab === 'home' && <HomeScreen onStart={() => setTab('workout')} />}
+        {tab === 'home' && (
+          <HomeScreen
+            onStart={() => setTab('workout')}
+            onOpenConsistency={() => setShowCal(true)}
+          />
+        )}
         {tab === 'workout' && <WorkoutScreen onDone={() => setTab('home')} />}
         {tab === 'progress' && <ProgressScreen />}
-        {tab === 'profile' && <ProfileScreen />}
+        {tab === 'profile' && (
+          <ProfileScreen onOpenAssessment={() => setShowAssessment(true)} />
+        )}
       </View>
-      {tab !== 'workout' && <TabBar tab={tab} setTab={setTab} />}
+      {tab !== 'workout' && !overlayOpen && <TabBar tab={tab} setTab={setTab} />}
+      {showCal && (
+        <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 40 }}>
+          <ConsistencyScreen onBack={() => setShowCal(false)} />
+        </View>
+      )}
+      {showAssessment && (
+        <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 40 }}>
+          <AssessmentScreen onBack={() => setShowAssessment(false)} />
+        </View>
+      )}
     </View>
   );
 }

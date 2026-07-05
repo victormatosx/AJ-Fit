@@ -6,7 +6,7 @@ export type IconName =
   | 'arrow-right' | 'arrow-left' | 'check' | 'plus' | 'minus'
   | 'calendar' | 'sparkles' | 'target' | 'flame' | 'timer'
   | 'heart' | 'apple' | 'lock' | 'mail' | 'eye' | 'settings'
-  | 'crown' | 'chevron-right' | 'x' | 'swap' | 'list' | 'shield'
+  | 'crown' | 'chevron-right' | 'chevron-down' | 'x' | 'swap' | 'list' | 'shield'
   | 'trophy' | 'camera' | 'google';
 
 type Props = {
@@ -88,6 +88,8 @@ export function Icon({ name, size = 22, color = '#ffffff', stroke = 1.7 }: Props
       return <Svg {...common}><Path {...p} d="M3 8l4 4 5-7 5 7 4-4-2 11H5L3 8z" /></Svg>;
     case 'chevron-right':
       return <Svg {...common}><Path {...p} d="M9 6l6 6-6 6" /></Svg>;
+    case 'chevron-down':
+      return <Svg {...common}><Path {...p} d="M6 9l6 6 6-6" /></Svg>;
     case 'x':
       return <Svg {...common}><Path {...p} d="M6 6l12 12M18 6L6 18" /></Svg>;
     case 'swap':

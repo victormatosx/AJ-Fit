@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, ScrollView, Pressable } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { View, Text, ScrollView, Pressable, Animated, Easing } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ScreenBg } from '../components/ui/ScreenBg';
@@ -10,7 +10,91 @@ import { Icon, IconName } from '../components/ui/Icon';
 import { OutlineNumber } from '../components/ui/OutlineNumber';
 import { colors, fonts } from '../theme/tokens';
 
-export function HomeScreen({ onStart }: { onStart: () => void }) {
+const TICKER_ITEMS: [string, string][] = [
+  ['SEQUÊNCIA', '14 DIAS'],
+  ['VOLUME SEMANA', '12.4T'],
+  ['PR SUPINO', '82.5KG'],
+  ['CONSISTÊNCIA', '92%'],
+  ['PRÓXIMO NÍVEL', '—12 DIAS'],
+];
+
+function Ticker() {
+  const [width, setWidth] = useState(0);
+  const x = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (width === 0) return;
+    x.setValue(0);
+    const loop = Animated.loop(
+      Animated.timing(x, {
+        toValue: -width,
+        duration: 18000,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      })
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [width, x]);
+
+  const row = (onLayout?: (w: number) => void) => (
+    <View
+      onLayout={
+        onLayout
+          ? (e) => onLayout(e.nativeEvent.layout.width)
+          : undefined
+      }
+      style={{ flexDirection: 'row', gap: 36, paddingRight: 36 }}
+    >
+      {TICKER_ITEMS.map(([l, v], i) => (
+        <Text
+          key={i}
+          style={{
+            fontFamily: fonts.mono,
+            fontSize: 10,
+            letterSpacing: 2,
+            color: colors.faint,
+          }}
+        >
+          {l}{' '}
+          <Text style={{ color: colors.accentHi, fontFamily: fonts.monoBold }}>{v}</Text>
+        </Text>
+      ))}
+    </View>
+  );
+
+  return (
+    <View
+      style={{
+        borderTopWidth: 1,
+        borderBottomWidth: 1,
+        borderColor: 'rgba(255,255,255,0.06)',
+        paddingVertical: 8,
+        marginBottom: 18,
+        overflow: 'hidden',
+      }}
+    >
+      <Animated.View
+        style={{
+          flexDirection: 'row',
+          transform: [{ translateX: x }],
+          paddingLeft: 22,
+        }}
+      >
+        {row((w) => setWidth(w))}
+        {row()}
+      </Animated.View>
+    </View>
+  );
+}
+
+export function HomeScreen({
+  onStart,
+  onOpenConsistency,
+}: {
+  onStart: () => void;
+  onOpenConsistency: () => void;
+}) {
   return (
     <ScreenBg>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
@@ -43,54 +127,25 @@ export function HomeScreen({ onStart }: { onStart: () => void }) {
                 borderRadius: 12,
                 alignItems: 'center',
                 justifyContent: 'center',
+                shadowColor: colors.accent,
+                shadowOpacity: 0.45,
+                shadowRadius: 12,
+                shadowOffset: { width: 0, height: 0 },
+                elevation: 6,
               }}
             >
               <Text style={{ fontFamily: fonts.display, fontSize: 16, color: '#fff' }}>AJ</Text>
             </LinearGradient>
           </View>
 
-          {/* ticker (static row in RN — animation costs little here) */}
-          <View
-            style={{
-              borderTopWidth: 1,
-              borderBottomWidth: 1,
-              borderColor: 'rgba(255,255,255,0.06)',
-              paddingVertical: 8,
-              marginBottom: 18,
-            }}
-          >
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ gap: 36, paddingHorizontal: 22 }}
-            >
-              {[
-                ['STREAK', '14 DIAS'],
-                ['VOLUME SEMANA', '12.4T'],
-                ['PR SUPINO', '82.5KG'],
-                ['CONSISTÊNCIA', '92%'],
-                ['PRÓX NÍVEL', '—12 DIAS'],
-              ].map(([l, v], i) => (
-                <Text
-                  key={i}
-                  style={{
-                    fontFamily: fonts.mono,
-                    fontSize: 10,
-                    letterSpacing: 2,
-                    color: colors.faint,
-                  }}
-                >
-                  {l}{' '}
-                  <Text style={{ color: colors.accentHi, fontFamily: fonts.monoBold }}>{v}</Text>
-                </Text>
-              ))}
-            </ScrollView>
-          </View>
+          {/* ticker */}
+          <Ticker />
 
           {/* TODAY POSTER */}
           <View style={{ paddingHorizontal: 22, paddingBottom: 16 }}>
             <LinearGradient
-              colors={['#0a1a55', '#04021c']}
+              colors={['#0a1a55', '#051042', '#04021c']}
+              locations={[0, 0.45, 1]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={{
@@ -146,6 +201,11 @@ export function HomeScreen({ onStart }: { onStart: () => void }) {
                   flexDirection: 'row',
                   alignItems: 'center',
                   gap: 10,
+                  shadowColor: '#fff',
+                  shadowOpacity: 0.16,
+                  shadowRadius: 20,
+                  shadowOffset: { width: 0, height: 10 },
+                  elevation: 8,
                 }}
               >
                 <Icon name="play" size={13} color="#020010" />
@@ -164,78 +224,88 @@ export function HomeScreen({ onStart }: { onStart: () => void }) {
             </LinearGradient>
           </View>
 
-          {/* consistency bar */}
+          {/* consistency card (tap → monthly calendar) */}
           <View style={{ paddingHorizontal: 22, paddingBottom: 16 }}>
-            <Card style={{ padding: 18 }}>
-              <View
-                style={{
-                  flexDirection: 'row',
-                  justifyContent: 'space-between',
-                  alignItems: 'baseline',
-                  marginBottom: 12,
-                }}
-              >
-                <Slash>CONSISTÊNCIA · SEMANA</Slash>
-                <Text
+            <Pressable onPress={onOpenConsistency}>
+              <Card style={{ padding: 18 }}>
+                <View
                   style={{
-                    fontFamily: fonts.display,
-                    fontSize: 22,
-                    color: '#fff',
-                    textTransform: 'uppercase',
+                    flexDirection: 'row',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    marginBottom: 12,
                   }}
                 >
-                  4<Text style={{ color: colors.faint, fontSize: 15 }}>/5</Text>
-                </Text>
-              </View>
-              <SegBar value={0.8} segs={15} />
-              <View style={{ flexDirection: 'row', gap: 6, marginTop: 14 }}>
-                {['S', 'T', 'Q', 'Q', 'S', 'S', 'D'].map((d, i) => {
-                  const states = ['done', 'done', 'done', 'rest', 'done', 'today', 'future'];
-                  const s = states[i];
-                  const bg =
-                    s === 'done'
-                      ? 'rgba(11,112,249,0.3)'
-                      : s === 'today'
-                        ? colors.accent
-                        : 'rgba(255,255,255,0.04)';
-                  return (
-                    <View key={i} style={{ flex: 1, alignItems: 'center' }}>
-                      <View
-                        style={{
-                          height: 34,
-                          width: '100%',
-                          borderRadius: 8,
-                          marginBottom: 5,
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          backgroundColor: bg,
-                          borderWidth: 1,
-                          borderColor:
-                            s === 'today' ? colors.accentHi : 'rgba(255,255,255,0.06)',
-                        }}
-                      >
-                        {s === 'done' && <Icon name="check" size={13} color="#fff" />}
-                        {s === 'today' && <Icon name="bolt" size={13} color="#fff" />}
-                        {s === 'rest' && (
-                          <Text style={{ fontFamily: fonts.mono, fontSize: 8, color: colors.faint }}>
-                            OFF
-                          </Text>
-                        )}
+                  <Slash>CONSISTÊNCIA · SEMANA</Slash>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Text
+                      style={{
+                        fontFamily: fonts.display,
+                        fontSize: 22,
+                        color: '#fff',
+                        textTransform: 'uppercase',
+                      }}
+                    >
+                      4<Text style={{ color: colors.faint, fontSize: 15 }}>/5</Text>
+                    </Text>
+                    <Icon name="chevron-right" size={16} color="rgba(255,255,255,0.4)" />
+                  </View>
+                </View>
+                <SegBar value={0.8} segs={15} />
+                <View style={{ flexDirection: 'row', gap: 6, marginTop: 14 }}>
+                  {['S', 'T', 'Q', 'Q', 'S', 'S', 'D'].map((d, i) => {
+                    const states = ['done', 'done', 'done', 'rest', 'done', 'today', 'future'];
+                    const s = states[i];
+                    const bg =
+                      s === 'done'
+                        ? 'rgba(11,112,249,0.3)'
+                        : s === 'today'
+                          ? colors.accent
+                          : 'rgba(255,255,255,0.04)';
+                    return (
+                      <View key={i} style={{ flex: 1, alignItems: 'center' }}>
+                        <View
+                          style={{
+                            height: 34,
+                            width: '100%',
+                            borderRadius: 8,
+                            marginBottom: 5,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            backgroundColor: bg,
+                            borderWidth: 1,
+                            borderColor:
+                              s === 'today' ? colors.accentHi : 'rgba(255,255,255,0.06)',
+                            shadowColor: s === 'today' ? colors.accent : 'transparent',
+                            shadowOpacity: s === 'today' ? 0.6 : 0,
+                            shadowRadius: 8,
+                            shadowOffset: { width: 0, height: 0 },
+                            elevation: s === 'today' ? 4 : 0,
+                          }}
+                        >
+                          {s === 'done' && <Icon name="check" size={13} color="#fff" />}
+                          {s === 'today' && <Icon name="bolt" size={13} color="#fff" />}
+                          {s === 'rest' && (
+                            <Text style={{ fontFamily: fonts.mono, fontSize: 8, color: colors.faint }}>
+                              OFF
+                            </Text>
+                          )}
+                        </View>
+                        <Text style={{ fontFamily: fonts.mono, fontSize: 9, color: colors.faint }}>
+                          {d}
+                        </Text>
                       </View>
-                      <Text style={{ fontFamily: fonts.mono, fontSize: 9, color: colors.faint }}>
-                        {d}
-                      </Text>
-                    </View>
-                  );
-                })}
-              </View>
-            </Card>
+                    );
+                  })}
+                </View>
+              </Card>
+            </Pressable>
           </View>
 
           {/* twin stats */}
           <View style={{ paddingHorizontal: 22, paddingBottom: 16, flexDirection: 'row', gap: 12 }}>
             {[
-              { l: 'STREAK', v: '14', u: 'DIAS', icon: 'flame', note: 'recorde pessoal: 21' },
+              { l: 'SEQUÊNCIA', v: '14', u: 'DIAS', icon: 'flame', note: 'recorde pessoal: 21' },
               { l: 'VOLUME', v: '12.4', u: 'TON', icon: 'dumbbell', note: '+8% vs semana passada' },
             ].map((s) => (
               <Card key={s.l} style={{ flex: 1, padding: 16 }}>

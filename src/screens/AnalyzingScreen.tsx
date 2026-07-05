@@ -86,7 +86,7 @@ export function AnalyzingScreen({ onDone }: { onDone: () => void }) {
   const GLOW_SIZE = RING_SIZE - GLOW_INSET * 2;
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#020010' }}>
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
         <View
           style={{

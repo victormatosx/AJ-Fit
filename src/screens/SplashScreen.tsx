@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { View, Animated } from 'react-native';
 import { AJMark } from '../components/ui/AJMark';
 
-const BG = '#030118';
+const BG = '#000000';
 
 export function SplashScreen({ onDone }: { onDone: () => void }) {
   const opacity = useRef(new Animated.Value(0)).current;

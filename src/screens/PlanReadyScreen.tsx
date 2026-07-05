@@ -51,7 +51,7 @@ export function PlanReadyScreen({ onContinue }: { onContinue: () => void }) {
   const levelLabel = LEVEL_LABELS[levelKey] || 'INTERMEDIÁRIO';
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#020010' }}>
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
         <ScrollView
           contentContainerStyle={{

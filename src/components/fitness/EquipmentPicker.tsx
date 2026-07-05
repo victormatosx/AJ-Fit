@@ -243,7 +243,7 @@ export function EquipmentPicker({ value, onChange, onDone, onBack, stepLabel }: 
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#020010' }}>
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
         {/* Header */}
         <View

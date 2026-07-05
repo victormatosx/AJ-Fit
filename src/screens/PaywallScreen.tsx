@@ -50,13 +50,8 @@ export function PaywallScreen({ onDone }: { onDone: () => void }) {
 
   return (
     <View style={{ flex: 1 }}>
-      {/* Bottom-up navy → deeper blue gradient — the only strong bg gradient in the app. */}
-      <LinearGradient
-        colors={['#020010', '#03061a', '#05122e', '#071f4d']}
-        locations={[0, 0.55, 0.82, 1]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 0, y: 1 }}
-        style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+      <View
+        style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.bg }}
       />
 
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>

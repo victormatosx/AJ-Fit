@@ -19,7 +19,7 @@ const SUBSCRIPTION_LABEL: Record<string, string> = {
   EXPIRED: 'AJ PREMIUM · EXPIRADO',
 };
 
-export function ProfileScreen() {
+export function ProfileScreen({ onOpenAssessment }: { onOpenAssessment?: () => void }) {
   const { user, profile, logout } = useAuth();
 
   const email = profile?.email ?? user?.email ?? '';
@@ -162,6 +162,59 @@ export function ProfileScreen() {
               <Icon name="chevron-right" size={15} color="rgba(255,255,255,0.5)" />
             </LinearGradient>
           </View>
+
+          {/* assessment entry */}
+          {onOpenAssessment && (
+            <View style={{ paddingHorizontal: 22, paddingBottom: 16 }}>
+              <Pressable onPress={onOpenAssessment}>
+                <LinearGradient
+                  colors={['rgba(11,112,249,0.2)', 'rgba(11,112,249,0.03)']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={{
+                    padding: 18,
+                    borderRadius: 16,
+                    borderWidth: 1,
+                    borderColor: 'rgba(11,112,249,0.35)',
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 14,
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 42,
+                      height: 42,
+                      borderRadius: 12,
+                      backgroundColor: 'rgba(11,112,249,0.18)',
+                      borderWidth: 1,
+                      borderColor: 'rgba(11,112,249,0.4)',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Icon name="chart" size={19} color={colors.accentHi} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontFamily: fonts.uiBold, fontSize: 15, color: '#fff' }}>
+                      Avaliação Física
+                    </Text>
+                    <Text
+                      style={{
+                        fontFamily: fonts.ui,
+                        fontSize: 12,
+                        color: colors.mute,
+                        marginTop: 2,
+                      }}
+                    >
+                      Medidas, dobras cutâneas e evolução
+                    </Text>
+                  </View>
+                  <Icon name="chevron-right" size={16} color="rgba(255,255,255,0.5)" />
+                </LinearGradient>
+              </Pressable>
+            </View>
+          )}
 
           <ProfileGroup
             title="OBJETIVOS & PLANO"

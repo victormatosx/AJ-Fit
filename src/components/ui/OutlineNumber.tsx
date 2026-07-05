@@ -1,41 +1,56 @@
-import React from 'react';
-import { Text, StyleProp, TextStyle } from 'react-native';
+import { StyleProp, ViewStyle } from 'react-native';
+import Svg, { Text as SvgText } from 'react-native-svg';
 import { fonts } from '../../theme/tokens';
 
 /**
- * Faux outline text — RN doesn't support text-stroke. We fake it with a
- * very transparent fill and tight letter spacing. Works for the background
- * giant numbers/letters on splash, onboarding, plan card, etc.
+ * Real hollow outline text using SVG (RN's <Text> can't stroke). The interior
+ * is transparent — only the thin stroke traces the number/letter shape.
  */
 export function OutlineNumber({
   children,
   size = 200,
-  color = 'rgba(255,255,255,0.22)',
+  color = 'rgba(255,255,255,0.28)',
+  strokeWidth = 1.5,
   style,
 }: {
   children: React.ReactNode;
   size?: number;
   color?: string;
-  style?: StyleProp<TextStyle>;
+  strokeWidth?: number;
+  style?: StyleProp<ViewStyle>;
 }) {
+  const text = String(children);
+  // Anton is a very condensed display face — width ≈ 0.55 × size per glyph.
+  // Vertical box needs headroom for the full ascender + strokeWidth on both sides,
+  // otherwise the top of the glyph gets clipped by the SVG viewBox.
+  const ascender = size * 0.92;
+  const descender = size * 0.22;
+  const height = ascender + descender + strokeWidth * 2;
+  const width = Math.max(size * 0.6 * text.length, size * 0.6) + strokeWidth * 2;
+  const baseline = ascender + strokeWidth;
+
   return (
-    <Text
-      style={[
-        {
-          fontFamily: fonts.display,
-          fontSize: size,
-          lineHeight: size * 0.9,
-          letterSpacing: 0.5,
-          color: 'transparent',
-          textShadowColor: color,
-          textShadowOffset: { width: 0, height: 0 },
-          textShadowRadius: 1.2,
-        },
-        style,
-      ]}
-      selectable={false}
+    <Svg
+      width={width}
+      height={height}
+      viewBox={`0 0 ${width} ${height}`}
+      style={style}
+      pointerEvents="none"
     >
-      {children}
-    </Text>
+      <SvgText
+        x={width / 2}
+        y={baseline}
+        fill="none"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeLinejoin="round"
+        fontFamily={fonts.display}
+        fontSize={size}
+        textAnchor="middle"
+        letterSpacing={0.5}
+      >
+        {text}
+      </SvgText>
+    </Svg>
   );
 }
