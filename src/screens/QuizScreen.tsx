@@ -801,7 +801,6 @@ function NumberWheel({
               transform: [{ skewX: '-8deg' }],
               width: numWidth,
               padding: 0,
-              outlineStyle: 'none',
             }}
           />
         ) : (

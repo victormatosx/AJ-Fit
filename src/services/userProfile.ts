@@ -90,6 +90,22 @@ function deriveName(user: User, name?: string): string {
 }
 
 /**
+ * Whether the onboarding answers are real (the user actually completed the
+ * questionnaire) vs. untouched defaults. Prevents creating an empty
+ * questionnaire on a social first-login that skipped onboarding.
+ */
+export function hasMeaningfulAnswers(answers?: QuestionnaireAnswers | null): boolean {
+  return !!(
+    answers &&
+    (answers.sex !== null ||
+      answers.goal !== null ||
+      answers.level !== null ||
+      answers.frequency !== null ||
+      answers.place !== null)
+  );
+}
+
+/**
  * Creates a brand-new user: the main `users/{uid}` document plus the initial
  * questionnaire, atomically, in a single batch. This is the ONLY place that
  * creates the user document, and it runs exactly once per account (from
@@ -100,8 +116,8 @@ function deriveName(user: User, name?: string): string {
  */
 export async function provisionNewUser(
   user: User,
-  input: { name?: string; answers: QuestionnaireAnswers },
-): Promise<{ questionnaireId: string }> {
+  input: { name?: string; answers?: QuestionnaireAnswers | null },
+): Promise<void> {
   const batch = writeBatch(db);
 
   batch.set(
@@ -117,15 +133,34 @@ export async function provisionNewUser(
     { merge: true },
   );
 
-  const qDoc = doc(questionnairesRef(user.uid));
-  batch.set(qDoc, {
-    answers: input.answers,
-    version: 1,
-    createdAt: serverTimestamp(),
-  });
+  // Create the first questionnaire only when we actually have answers — never
+  // an empty questionnaire (e.g. a social login that skipped onboarding).
+  if (hasMeaningfulAnswers(input.answers)) {
+    const qDoc = doc(questionnairesRef(user.uid));
+    batch.set(qDoc, {
+      answers: input.answers,
+      version: 1,
+      createdAt: serverTimestamp(),
+    });
+  }
 
   await batch.commit();
-  return { questionnaireId: qDoc.id };
+}
+
+/**
+ * Provisions the user document (+ first questionnaire) ONLY when it does not
+ * exist yet. Used by every sign-in path that may be a first login (social,
+ * or account creation). Never recreates or overwrites an existing user.
+ * Returns true when a new user was created.
+ */
+export async function ensureUserProvisioned(
+  user: User,
+  input: { name?: string; answers?: QuestionnaireAnswers | null } = {},
+): Promise<boolean> {
+  const existing = await getUserProfile(user.uid);
+  if (existing) return false;
+  await provisionNewUser(user, input);
+  return true;
 }
 
 /** Reads the main user document, or null when it does not exist. */

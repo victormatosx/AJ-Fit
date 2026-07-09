@@ -78,7 +78,7 @@ function RootNavigator() {
       {screen === 'quiz' && <QuizScreen onDone={() => setScreen('analyzing')} />}
       {screen === 'analyzing' && <AnalyzingScreen onDone={() => setScreen('plan')} />}
       {screen === 'plan' && <PlanReadyScreen onContinue={() => setScreen('auth')} />}
-      {screen === 'auth' && <AuthScreen onDone={() => setScreen('paywall')} />}
+      {screen === 'auth' && <AuthScreen onDone={() => setScreen('app')} />}
       {screen === 'paywall' && <PaywallScreen onDone={() => setScreen('app')} />}
       {screen === 'app' && <AppShell />}
     </View>

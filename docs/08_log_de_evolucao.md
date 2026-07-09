@@ -256,6 +256,79 @@ Criar documentação específica de billing.
 
 Data: 2026-07-04
 Responsável: Agente Backend + Agente Frontend
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Autenticação social (Google e Apple) para produção (dev/EAS build).
+- Firebase JS SDK mantido; login social via `signInWithCredential` (Google:
+  @react-native-google-signin/google-signin; Apple: expo-apple-authentication
+  + nonce SHA-256 com expo-crypto).
+- Camada centralizada e agnóstica de provedor: `src/services/socialAuth.ts` +
+  `src/services/providers/{google,apple}.{native,web}.ts` (split de plataforma;
+  web fica sem imports nativos). Telas chamam `signInWithProvider(provider)`,
+  sem ifs por provedor.
+- Primeiro login social provisiona `users/{uid}` (e questionário só se houver
+  respostas reais). Reuso de `ensureUserProvisioned` (checa existência —
+  nunca duplica/sobrescreve). Listener continua somente-leitura.
+- Account Linking: `auth/account-exists-with-different-credential` →
+  `fetchSignInMethodsForEmail` → reautenticação + `linkWithCredential`
+  (mesmo UID, dados preservados). Cobre Email↔Google↔Apple.
+- AuthContext expõe `linkedProviders`; ProfileScreen lista métodos vinculados.
+- app.json: plugins google-signin (iosUrlScheme) + expo-apple-authentication,
+  `ios.usesAppleSignIn`, `googleServicesFile` (iOS/Android), client IDs em
+  `extra`.
+
+Impacto:
+Login Google/Apple funcional em build nativa, sem duplicação de usuários.
+Nenhum `addDoc` em `users`. Web permanece compilável (stubs de plataforma).
+
+Próxima ação:
+Ver [PENDENTE] de configuração de console/credenciais abaixo.
+
+---
+
+Data: 2026-07-04
+Responsável: Agente Arquiteto
+Categoria: [DECISÃO]
+
+Descrição:
+Mantido o Firebase JS SDK (sem migrar para @react-native-firebase). Login social
+usa credenciais nativas + `signInWithCredential`, padrão suportado do JS SDK em
+React Native. Arquivos de plataforma (.native/.web) evitam imports nativos no
+bundle web; tipos resolvidos por `.d.ts` (Metro resolve o arquivo de plataforma).
+
+Impacto:
+Menor disrupção. A pendência de offline-first do Firestore em RN permanece
+independente desta decisão.
+
+Próxima ação:
+Nenhuma imediata.
+
+---
+
+Data: 2026-07-04
+Responsável: Agente Backend
+Categoria: [PENDENTE]
+
+Descrição:
+Configuração externa necessária (não código) para o login social funcionar:
+- Firebase Console → habilitar provedores Google e Apple; manter "uma conta por
+  e-mail"; avaliar proteção de enumeração de e-mail (afeta
+  `fetchSignInMethodsForEmail` usado no account linking).
+- Apple Developer: Sign In with Apple, Service ID; credenciais no EAS.
+- Build: requer dev/EAS build (não Expo Go) para validar em dispositivo.
+
+Impacto:
+Sem essa configuração o fluxo social não completa em runtime. Verificação em
+dispositivo real fica pendente.
+
+Próxima ação:
+Humano coordenador configurar console/credenciais e rodar em dev build.
+
+---
+
+Data: 2026-07-04
+Responsável: Agente Backend + Agente Frontend
 Categoria: [CORREÇÃO]
 
 Descrição:

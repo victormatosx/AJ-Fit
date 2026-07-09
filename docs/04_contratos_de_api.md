@@ -115,9 +115,57 @@ trialEndsAt, subscriptionEndsAt
 ## Criação do usuário (fluxo único)
 
 O documento `users/{userId}` e o questionário inicial são criados **uma única
-vez**, de forma atômica (batch), no fluxo de cadastro (`signUp`). O listener de
-autenticação apenas **lê** o estado; nunca cria documentos. Documentos em
-`users` são sempre chaveados por uid (`setDoc`) — nunca `addDoc`/auto-id.
+vez**, de forma atômica (batch), no fluxo de cadastro (`signUp`) ou no primeiro
+login social (`ensureUserProvisioned`). O listener de autenticação apenas **lê**
+o estado; nunca cria documentos. Documentos em `users` são sempre chaveados por
+uid (`setDoc`) — nunca `addDoc`/auto-id.
+
+## Autenticação e provedores
+
+Métodos suportados (12_seguranca §5): **e-mail/senha, Google, Apple**.
+
+Implementação (Firebase JS SDK, apps nativos iOS/Android via dev/EAS build):
+
+- Google: `@react-native-google-signin/google-signin` → `idToken` →
+  `GoogleAuthProvider.credential` → `signInWithCredential`.
+- Apple: `expo-apple-authentication` (+ nonce SHA-256 via `expo-crypto`) →
+  `OAuthProvider('apple.com')` → `signInWithCredential`.
+
+Provisionamento no primeiro login social:
+
+- Se `users/{uid}` não existe → cria o documento principal.
+- O primeiro questionário só é criado se houver respostas reais do onboarding
+  (nunca questionário vazio).
+- Se `users/{uid}` já existe → nunca recria/sobrescreve.
+
+## Account Linking (mesmo UID)
+
+Com "uma conta por e-mail" (padrão do Firebase), tentar entrar com um provedor
+diferente para um e-mail já existente lança
+`auth/account-exists-with-different-credential`. O fluxo de vinculação:
+
+1. guarda a credencial pendente;
+2. `fetchSignInMethodsForEmail(email)` → método existente;
+3. reautentica com o método existente (senha ou outro provedor social) e
+   `linkWithCredential(user, credencialPendente)`.
+
+Resultado: **mesmo UID**, todos os dados preservados, provedor adicional
+vinculado. Cobre todas as direções (Email↔Google↔Apple). Nunca cria usuário,
+documento ou questionário duplicado.
+
+Provedores vinculados vêm de `user.providerData` (Firebase Auth), expostos no
+estado global como `linkedProviders`.
+
+### Configuração necessária (Firebase Console / credenciais)
+
+- Authentication → Sign-in method: habilitar **Google** e **Apple**.
+- Manter "uma conta por e-mail" (account linking depende disso).
+- A proteção contra enumeração de e-mail pode zerar
+  `fetchSignInMethodsForEmail`; nesse caso a UI orienta o usuário de forma
+  genérica.
+- Apple: Apple Developer (Sign In with Apple), Service ID e credenciais no EAS.
+- Google: OAuth client IDs (iOS/Web) já presentes em `GoogleService-Info.plist`
+  e `google-services.json`.
 
 ---
 

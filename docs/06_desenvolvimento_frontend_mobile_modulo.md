@@ -169,6 +169,8 @@ Responsável por:
 * cadastro
 * login
 * recuperação de senha
+* login social (Google e Apple)
+* vinculação de provedores (account linking)
 
 ---
 
@@ -177,6 +179,22 @@ Responsável por:
 * email e senha
 * Google
 * Apple
+
+## Regras de implementação
+
+* Lógica de autenticação centralizada em serviços (`socialAuth`,
+  `providers/*`), nunca espalhada nas telas. As telas chamam
+  `signInWithProvider(provider)` — sem `if` específico por provedor.
+* Estados obrigatórios em toda ação: loading, sucesso, erro e cancelamento
+  (o cancelamento do sheet nativo não exibe erro).
+* Botões sociais respeitam a plataforma: Apple apenas em iOS (quando
+  disponível); Google em iOS/Android. Não aparecem na web.
+* Account linking: ao detectar e-mail já usado por outro método, exibir painel
+  orientando o usuário a entrar com o método existente para vincular — mantendo
+  o mesmo UID e todos os dados.
+* Perfil exibe os métodos de login vinculados (Google / Apple / E-mail-Senha),
+  a partir de `linkedProviders`. Estrutura preparada para desvincular no futuro.
+* Social auth exige dev/EAS build (não funciona no Expo Go).
 
 ---
 

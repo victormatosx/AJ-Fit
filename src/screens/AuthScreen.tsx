@@ -1,11 +1,10 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
   TextInput,
   Pressable,
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -19,8 +18,19 @@ import { OutlineNumber } from '../components/ui/OutlineNumber';
 import { colors, fonts } from '../theme/tokens';
 import { useAuth } from '../state/AuthContext';
 import { useAppState } from '../state/AppState';
+import {
+  AccountLinkingRequiredError,
+  SocialAuthCancelledError,
+  isAppleAuthAvailable,
+  isGoogleSigninAvailable,
+  socialProviderFromMethods,
+  PROVIDER_LABELS,
+  type SocialProvider,
+} from '../services/socialAuth';
 
 type Mode = 'signup' | 'login' | 'reset';
+
+type LinkingState = { email: string; methods: string[]; attempted: SocialProvider };
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -43,7 +53,14 @@ const COPY: Record<Mode, { kicker: string; title: [string, string]; sub: string 
 };
 
 export function AuthScreen({ onDone }: { onDone: () => void }) {
-  const { signUp, signIn, reset } = useAuth();
+  const {
+    signUp,
+    signIn,
+    reset,
+    signInWithProvider,
+    completeLinkingWithPassword,
+    completeLinkingWithProvider,
+  } = useAuth();
   const { quiz } = useAppState();
 
   const [mode, setMode] = useState<Mode>('signup');
@@ -57,6 +74,33 @@ export function AuthScreen({ onDone }: { onDone: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
 
+  // Social auth
+  const [socialBusy, setSocialBusy] = useState<SocialProvider | null>(null);
+  const [linking, setLinking] = useState<LinkingState | null>(null);
+  const [linkPassword, setLinkPassword] = useState('');
+  const [appleAvailable, setAppleAvailable] = useState(Platform.OS === 'ios');
+  // Starts false and is enabled only if the native Google module is present in
+  // the binary (absent in Expo Go / a build made before the package was added).
+  const [googleAvailable, setGoogleAvailable] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    if (Platform.OS === 'ios') {
+      isAppleAuthAvailable().then((ok: boolean) => active && setAppleAvailable(ok));
+    }
+    if (Platform.OS !== 'web') {
+      isGoogleSigninAvailable().then((ok: boolean) => active && setGoogleAvailable(ok));
+    }
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const showGoogle = Platform.OS !== 'web' && googleAvailable;
+  const showApple = Platform.OS === 'ios' && appleAvailable;
+  const showSocial = showGoogle || showApple;
+  const busy = loading || socialBusy !== null;
+
   const copy = COPY[mode];
 
   function switchMode(next: Mode) {
@@ -64,6 +108,64 @@ export function AuthScreen({ onDone }: { onDone: () => void }) {
     setError(null);
     setInfo(null);
     setConfirm('');
+    setLinking(null);
+    setLinkPassword('');
+  }
+
+  async function handleSocial(provider: SocialProvider) {
+    if (busy) return;
+    setError(null);
+    setInfo(null);
+    setLinking(null);
+    setSocialBusy(provider);
+    try {
+      await signInWithProvider(provider, quiz);
+      onDone();
+    } catch (err) {
+      if (err instanceof SocialAuthCancelledError) {
+        // user dismissed the native sheet — no error message
+      } else if (err instanceof AccountLinkingRequiredError) {
+        setLinking({ email: err.email, methods: err.methods, attempted: err.attempted });
+      } else {
+        setError(err instanceof Error ? err.message : 'Não foi possível entrar.');
+      }
+    } finally {
+      setSocialBusy(null);
+    }
+  }
+
+  async function handleLinkWithPassword() {
+    if (!linking || busy) return;
+    if (!linkPassword) {
+      setError('Informe sua senha para vincular.');
+      return;
+    }
+    setError(null);
+    setSocialBusy(linking.attempted);
+    try {
+      await completeLinkingWithPassword(linking.email, linkPassword, quiz);
+      onDone();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Não foi possível vincular.');
+    } finally {
+      setSocialBusy(null);
+    }
+  }
+
+  async function handleLinkWithProvider(existing: SocialProvider) {
+    if (!linking || busy) return;
+    setError(null);
+    setSocialBusy(existing);
+    try {
+      await completeLinkingWithProvider(existing, quiz);
+      onDone();
+    } catch (err) {
+      if (!(err instanceof SocialAuthCancelledError)) {
+        setError(err instanceof Error ? err.message : 'Não foi possível vincular.');
+      }
+    } finally {
+      setSocialBusy(null);
+    }
   }
 
   function validate(): string | null {
@@ -80,7 +182,7 @@ export function AuthScreen({ onDone }: { onDone: () => void }) {
   }
 
   async function handleSubmit() {
-    if (loading) return;
+    if (busy) return;
     setError(null);
     setInfo(null);
 
@@ -229,7 +331,7 @@ export function AuthScreen({ onDone }: { onDone: () => void }) {
               <View style={{ flex: 1, minHeight: 24 }} />
 
               <View style={{ gap: 11 }}>
-                <CtaButton onPress={handleSubmit} disabled={loading}>
+                <CtaButton onPress={handleSubmit} disabled={busy}>
                   {loading ? (
                     <ActivityIndicator color="#fff" />
                   ) : (
@@ -250,7 +352,22 @@ export function AuthScreen({ onDone }: { onDone: () => void }) {
                   )}
                 </CtaButton>
 
-                {mode !== 'reset' && (
+                {linking && (
+                  <LinkingPanel
+                    linking={linking}
+                    busy={busy}
+                    password={linkPassword}
+                    onChangePassword={setLinkPassword}
+                    onLinkPassword={handleLinkWithPassword}
+                    onLinkProvider={handleLinkWithProvider}
+                    onCancel={() => {
+                      setLinking(null);
+                      setLinkPassword('');
+                    }}
+                  />
+                )}
+
+                {mode !== 'reset' && showSocial && !linking && (
                   <>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                       <View style={{ flex: 1, height: 1, backgroundColor: colors.hair }} />
@@ -267,19 +384,35 @@ export function AuthScreen({ onDone }: { onDone: () => void }) {
                       <View style={{ flex: 1, height: 1, backgroundColor: colors.hair }} />
                     </View>
 
-                    <CtaButton ghost onPress={comingSoon} disabled={loading}>
-                      <Icon name="apple" size={19} color="#fff" />
-                      <Text style={{ color: '#fff', fontFamily: fonts.uiSemi, fontSize: 14 }}>
-                        Continuar com Apple
-                      </Text>
-                    </CtaButton>
+                    {showApple && (
+                      <CtaButton ghost onPress={() => handleSocial('apple')} disabled={busy}>
+                        {socialBusy === 'apple' ? (
+                          <ActivityIndicator color="#fff" />
+                        ) : (
+                          <>
+                            <Icon name="apple" size={19} color="#fff" />
+                            <Text style={{ color: '#fff', fontFamily: fonts.uiSemi, fontSize: 14 }}>
+                              Continuar com Apple
+                            </Text>
+                          </>
+                        )}
+                      </CtaButton>
+                    )}
 
-                    <CtaButton ghost onPress={comingSoon} disabled={loading}>
-                      <Icon name="google" size={17} color="#fff" />
-                      <Text style={{ color: '#fff', fontFamily: fonts.uiSemi, fontSize: 14 }}>
-                        Continuar com Google
-                      </Text>
-                    </CtaButton>
+                    {showGoogle && (
+                      <CtaButton ghost onPress={() => handleSocial('google')} disabled={busy}>
+                        {socialBusy === 'google' ? (
+                          <ActivityIndicator color="#fff" />
+                        ) : (
+                          <>
+                            <Icon name="google" size={17} color="#fff" />
+                            <Text style={{ color: '#fff', fontFamily: fonts.uiSemi, fontSize: 14 }}>
+                              Continuar com Google
+                            </Text>
+                          </>
+                        )}
+                      </CtaButton>
+                    )}
                   </>
                 )}
 
@@ -314,8 +447,122 @@ export function AuthScreen({ onDone }: { onDone: () => void }) {
   );
 }
 
-function comingSoon() {
-  Alert.alert('Em breve', 'Login social estará disponível em breve.');
+/**
+ * Guides the user when the social email already belongs to another provider.
+ * If the email uses a password, we ask for it inline; if it uses another social
+ * provider, we offer to sign in with that one. Both paths link to the SAME UID.
+ */
+function LinkingPanel({
+  linking,
+  busy,
+  password,
+  onChangePassword,
+  onLinkPassword,
+  onLinkProvider,
+  onCancel,
+}: {
+  linking: LinkingState;
+  busy: boolean;
+  password: string;
+  onChangePassword: (t: string) => void;
+  onLinkPassword: () => void;
+  onLinkProvider: (p: SocialProvider) => void;
+  onCancel: () => void;
+}) {
+  const hasPassword = linking.methods.includes('password');
+  const existingSocial = socialProviderFromMethods(linking.methods);
+  const attemptedLabel = PROVIDER_LABELS[`${linking.attempted}.com`] ?? 'social';
+
+  return (
+    <View
+      style={{
+        gap: 12,
+        padding: 16,
+        borderRadius: 14,
+        backgroundColor: 'rgba(11,112,249,0.10)',
+        borderWidth: 1,
+        borderColor: 'rgba(77,163,255,0.32)',
+      }}
+    >
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+        <Icon name="shield" size={16} color={colors.accentHi} />
+        <Text style={{ flex: 1, color: '#fff', fontFamily: fonts.uiSemi, fontSize: 13.5 }}>
+          Conta já existente
+        </Text>
+      </View>
+
+      {hasPassword ? (
+        <>
+          <Text style={{ color: colors.mute, fontFamily: fonts.ui, fontSize: 13, lineHeight: 18 }}>
+            O e-mail {linking.email} já usa e-mail/senha. Entre com sua senha para
+            vincular o {attemptedLabel}.
+          </Text>
+          <AuthInput
+            icon="lock"
+            placeholder="Sua senha"
+            value={password}
+            onChangeText={onChangePassword}
+            secure
+            editable={!busy}
+          />
+          <CtaButton onPress={onLinkPassword} disabled={busy}>
+            {busy ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text
+                style={{
+                  color: '#fff',
+                  fontFamily: fonts.display,
+                  fontSize: 16,
+                  letterSpacing: 1.2,
+                  textTransform: 'uppercase',
+                }}
+              >
+                Entrar e vincular
+              </Text>
+            )}
+          </CtaButton>
+        </>
+      ) : existingSocial ? (
+        <>
+          <Text style={{ color: colors.mute, fontFamily: fonts.ui, fontSize: 13, lineHeight: 18 }}>
+            O e-mail {linking.email} já usa {PROVIDER_LABELS[`${existingSocial}.com`]}. Entre
+            com {PROVIDER_LABELS[`${existingSocial}.com`]} para vincular o {attemptedLabel}.
+          </Text>
+          <CtaButton ghost onPress={() => onLinkProvider(existingSocial)} disabled={busy}>
+            {busy ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <>
+                <Icon name={existingSocial === 'apple' ? 'apple' : 'google'} size={18} color="#fff" />
+                <Text style={{ color: '#fff', fontFamily: fonts.uiSemi, fontSize: 14 }}>
+                  Continuar com {PROVIDER_LABELS[`${existingSocial}.com`]}
+                </Text>
+              </>
+            )}
+          </CtaButton>
+        </>
+      ) : (
+        <Text style={{ color: colors.mute, fontFamily: fonts.ui, fontSize: 13, lineHeight: 18 }}>
+          Este e-mail já está em uso por outro método de login. Entre com o método
+          original para continuar.
+        </Text>
+      )}
+
+      <Pressable onPress={onCancel} disabled={busy} hitSlop={8}>
+        <Text
+          style={{
+            textAlign: 'center',
+            color: colors.mute,
+            fontFamily: fonts.uiMed,
+            fontSize: 13,
+          }}
+        >
+          Cancelar
+        </Text>
+      </Pressable>
+    </View>
+  );
 }
 
 function Feedback({ tone, text }: { tone: 'error' | 'info'; text: string }) {

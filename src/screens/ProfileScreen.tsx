@@ -19,8 +19,14 @@ const SUBSCRIPTION_LABEL: Record<string, string> = {
   EXPIRED: 'AJ PREMIUM · EXPIRADO',
 };
 
+const PROVIDER_META: { id: string; label: string; icon: IconName }[] = [
+  { id: 'google.com', label: 'Google', icon: 'google' },
+  { id: 'apple.com', label: 'Apple', icon: 'apple' },
+  { id: 'password', label: 'E-mail/Senha', icon: 'mail' },
+];
+
 export function ProfileScreen({ onOpenAssessment }: { onOpenAssessment?: () => void }) {
-  const { user, profile, logout } = useAuth();
+  const { user, profile, linkedProviders, logout } = useAuth();
 
   const email = profile?.email ?? user?.email ?? '';
   const displayName =
@@ -239,6 +245,55 @@ export function ProfileScreen({ onOpenAssessment }: { onOpenAssessment?: () => v
               { i: 'timer', l: 'Timers e sons' },
             ]}
           />
+          {/* linked login methods */}
+          <View style={{ paddingHorizontal: 22, paddingBottom: 16 }}>
+            <Slash style={{ marginBottom: 10 }}>MÉTODOS DE LOGIN</Slash>
+            <View
+              style={{
+                borderRadius: 14,
+                overflow: 'hidden',
+                backgroundColor: 'rgba(255,255,255,0.03)',
+                borderWidth: 1,
+                borderColor: 'rgba(255,255,255,0.06)',
+              }}
+            >
+              {PROVIDER_META.map((p, i) => {
+                const linked = linkedProviders.includes(p.id);
+                return (
+                  <View
+                    key={p.id}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 14,
+                      paddingVertical: 14,
+                      paddingHorizontal: 16,
+                      borderTopWidth: i ? 1 : 0,
+                      borderTopColor: 'rgba(255,255,255,0.05)',
+                      opacity: linked ? 1 : 0.45,
+                    }}
+                  >
+                    <Icon name={p.icon} size={16} color="#fff" />
+                    <Text
+                      style={{ flex: 1, fontFamily: fonts.uiSemi, fontSize: 14, color: '#fff' }}
+                    >
+                      {p.label}
+                    </Text>
+                    {linked ? (
+                      <Icon name="check" size={16} color={colors.accentHi} />
+                    ) : (
+                      <Text
+                        style={{ fontFamily: fonts.mono, fontSize: 10, color: colors.faint, letterSpacing: 1 }}
+                      >
+                        NÃO VINCULADO
+                      </Text>
+                    )}
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+
           <ProfileGroup
             title="SESSÃO"
             items={[{ i: 'arrow-left', l: 'Sair da conta', danger: true, onPress: confirmLogout }]}
