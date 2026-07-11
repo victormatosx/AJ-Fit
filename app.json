@@ -43,7 +43,8 @@
           "iosUrlScheme": "com.googleusercontent.apps.753375043967-sfm41c00upk4u0nbee451d3cs9bsbe1s"
         }
       ],
-      "expo-apple-authentication"
+      "expo-apple-authentication",
+      "expo-secure-store"
     ]
   }
 }

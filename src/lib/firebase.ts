@@ -8,7 +8,7 @@ import {
 } from 'firebase/auth';
 import * as firebaseAuth from 'firebase/auth';
 import { getFirestore, type Firestore } from 'firebase/firestore';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { secureAuthStorage } from './secureAuthStorage';
 
 /**
  * Centralized Firebase setup for AJ Fit.
@@ -57,14 +57,20 @@ function createAuth(): Auth {
     return getAuth(app);
   }
 
-  // On native, persist the session in AsyncStorage so users stay logged in.
+  // On native, persist the session in AsyncStorage (via secureAuthStorage,
+  // which encrypts every value with AES-256-GCM — see
+  // docs/12_seguranca_geral_do_app.md §16) so users stay logged in.
   // initializeAuth throws if auth was already initialized (Fast Refresh);
   // fall back to the existing instance in that case.
   try {
     return initializeAuth(app, {
-      persistence: getReactNativePersistence(AsyncStorage),
+      persistence: getReactNativePersistence(secureAuthStorage),
     });
-  } catch {
+  } catch (err) {
+    // Expected on Fast Refresh (auth already initialized). Logged because the
+    // fallback `getAuth(app)` below does NOT persist sessions across
+    // restarts — if this fires on a cold start, persistence silently breaks.
+    console.error('[firebase] initializeAuth fallback to getAuth(app):', err);
     return getAuth(app);
   }
 }

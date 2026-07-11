@@ -16,6 +16,7 @@
     "expo-crypto": "~56.0.4",
     "expo-font": "~56.0.7",
     "expo-linear-gradient": "~56.0.4",
+    "expo-secure-store": "~56.0.4",
     "expo-status-bar": "~56.0.4",
     "firebase": "^12.15.0",
     "react": "19.2.3",

@@ -8,6 +8,7 @@ import {
   type User,
 } from 'firebase/auth';
 import { auth } from '../lib/firebase';
+import { clearSecureAuthSession } from '../lib/secureAuthStorage';
 
 /**
  * Reusable, typed authentication service.
@@ -130,6 +131,9 @@ export async function signOutUser(): Promise<void> {
   } catch (err) {
     throw toAuthError(err);
   }
+  // Rotates out the encryption key so no encrypted session blob survives
+  // logout, on top of Firebase's own persistence cleanup.
+  await clearSecureAuthSession();
 }
 
 /**

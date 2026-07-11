@@ -254,6 +254,163 @@ Criar documentação específica de billing.
 
 # 18. Primeiras entradas do projeto
 
+Data: 2026-07-11
+Responsável: Agente Segurança + Agente Arquiteto + Agente Frontend + Agente QA
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Auditoria completa de encerramento da persistência de login (arquitetura,
+segurança, limpeza de código, performance, memory leaks, fluxo de
+autenticação, conformidade com 12_seguranca_geral_do_app.md). Ver relatório
+completo entregue ao humano coordenador na mesma data.
+
+Ações concretas desta entrada:
+- Removidos todos os logs de depuração temporários (`[BOOT]`, `[AUTH]`,
+  `[ROUTER]`) de `App.tsx`, `src/state/AuthContext.tsx` e
+  `src/screens/SplashScreen.tsx`, junto dos comentários "TEMPORARY
+  DIAGNOSTIC" associados.
+- Mantida a correção comportamental encontrada na entrada anterior
+  (2026-07-11, splash animation sem cleanup): `sequence.stop()` no cleanup do
+  `useEffect` de `SplashScreen.tsx`, e a guarda `screenRef.current ===
+  'splash'` em `App.tsx` antes de aplicar o `onDone` do splash.
+- Nenhuma mudança na criptografia, no `secureAuthStorage.ts` ou no
+  `firebase.ts` — auditoria de segurança não encontrou desvio de boas
+  práticas que justificasse alteração (AES-256-GCM, IV aleatório por
+  operação, chave em Keychain/Keystore via expo-secure-store, limpeza no
+  logout já cobertos pela implementação de 2026-07-09).
+
+Impacto:
+Código de produção sem logs de depuração. Nenhuma dívida técnica nova
+identificada nesta auditoria além das já registradas (offline-first do
+Firestore, pendente desde 2026-07-04).
+
+Próxima ação:
+Nenhuma ação de código pendente. Validação manual do humano coordenador
+(cold start Android/iOS, e-mail/senha e Google) permanece recomendada antes
+de publicação.
+
+---
+
+Data: 2026-07-11
+Responsável: Agente Frontend
+Categoria: [CORREÇÃO]
+
+Descrição:
+Correção da auditoria anterior (2026-07-09, entrada abaixo): a conclusão de
+que a persistência do Firebase era a causa raiz estava incompleta. A
+persistência de fato funciona (confirmado por log real: sessão restaurada,
+decriptada, `onAuthStateChanged` com uid correto). O defeito real estava no
+roteamento inicial em `App.tsx`.
+
+Causa raiz:
+`SplashScreen` (`src/screens/SplashScreen.tsx`) inicia uma animação de
+1.8s (`Animated.sequence`, `useNativeDriver: true`) que chama `onDone` ao
+terminar, mas o `useEffect` que a inicia não tinha função de limpeza — a
+animação nativa continuava rodando mesmo após o componente desmontar. Em
+cold start autenticado: `RootNavigator` (`App.tsx`) renderiza `SplashScreen`
+assim que `initializing` vira `false` (tela ainda é `'splash'`, valor
+inicial); no mesmo ciclo de efeitos, o bootstrap de `App.tsx` (linha ~62,
+versão anterior) já troca a tela para `'app'` porque o usuário existe,
+desmontando o `SplashScreen`. Sem cleanup, a animação iniciada nesse
+`SplashScreen` já desmontado continua e, ~1.8s depois, chama o `onDone`
+antigo (`() => setScreen('onboarding')`), sobrescrevendo `'app'` por
+`'onboarding'` — o usuário via a Home por um instante e depois "voltava"
+para o onboarding público, mesmo autenticado.
+
+Solução aplicada:
+- `src/screens/SplashScreen.tsx`: a sequência de animação agora é capturada
+  em variável; o `useEffect` retorna um cleanup que chama `.stop()`,
+  impedindo que `onDone` dispare após o unmount.
+- `App.tsx`: reforço defensivo no roteador — o `onDone` do `SplashScreen`
+  agora consulta uma `ref` (`screenRef`) com a tela atual e ignora a
+  transição para `'onboarding'` se a tela já não for mais `'splash'` (guarda
+  contra qualquer race futura do mesmo tipo, sem uso de timeout artificial).
+- Logs temporários `[BOOT]`/`[AUTH]`/`[ROUTER]` com timestamp adicionados em
+  `App.tsx`, `AuthContext.tsx` e `SplashScreen.tsx` para validação manual.
+  Mantidos até validação humana (não remover nesta entrada).
+
+Impacto:
+Nenhuma mudança na criptografia/persistência (fora de escopo desta correção,
+confirmada funcional na entrada anterior). Usuário autenticado em cold start
+não deve mais "saltar" de volta para o onboarding público.
+
+Testes feitos:
+- `npx tsc --noEmit` sem erros.
+- Aguardando validação manual do humano coordenador: fechar o app
+  completamente, reabrir, e confirmar que a Home permanece estável (sem
+  voltar para onboarding) mesmo após os ~1.8s da janela de risco.
+
+Próxima ação:
+Humano coordenador validar manualmente em dispositivo (Android e iOS) e
+confirmar remoção dos logs temporários.
+
+---
+
+Data: 2026-07-09
+Responsável: Agente Segurança
+Categoria: [CORREÇÃO]
+
+Descrição:
+Auditoria da persistência de login (relato: usuário deslogava ao fechar e
+reabrir o app, tanto por e-mail/senha quanto por Google).
+
+Problema encontrado:
+A implementação de persistência criptografada registrada na entrada abaixo
+(2026-07-09, "Persistência de login criptografada em repouso") havia sido
+adicionada ao `package.json`/`app.json` (`expo-secure-store`) sem que os
+projetos nativos `android/`/`ios/` (gerados localmente, fora do controle de
+versão) fossem reconstruídos. O dev client instalado no dispositivo não
+possuía o módulo nativo `expo-secure-store` compilado. Toda vez que
+`initializeAuth` tentava usar a persistência criptografada, a checagem
+interna `_isAvailable()` do Firebase Auth (que grava/lê um valor de teste via
+`secureAuthStorage`) falhava silenciosamente, e o Firebase caía para
+persistência em memória sem lançar nenhum erro visível — a sessão nunca
+sobrevivia ao fechamento completo do app. Isso não é um bug de lógica: o
+código de `src/lib/secureAuthStorage.ts` e `src/lib/firebase.ts` está correto
+(API do `expo-crypto` AES e do `expo-secure-store` conferida contra o código
+nativo instalado).
+
+Causa raiz:
+Build nativo desatualizado — dependência nova adicionada sem `expo prebuild`/
+rebuild do dev client.
+
+Diagnóstico:
+Instrumentação temporária (logs `[authDiag]`) foi adicionada em
+`secureAuthStorage.ts`, `firebase.ts` e `AuthContext.tsx`, além de um módulo
+de auto-teste isolado (`authPersistenceDiagnostics.ts`, removido após a
+confirmação) que exercitava SecureStore, o roundtrip AES e o contrato
+`_isAvailable()`/`_set`/`_get` do Firebase de forma independente. Após rodar
+`npx expo run:android` (reconstrução completa do dev client), dois cold
+starts reais (fechar totalmente o app e reabrir) mostraram a sessão sendo
+lida do `AsyncStorage`, decriptada com sucesso e `onAuthStateChanged`
+disparando com o `uid` correto — sem nenhum erro na cadeia.
+
+Solução aplicada:
+Nenhuma alteração de código foi necessária. A instrumentação temporária foi
+revertida (código voltou ao estado da entrada de implementação anterior).
+Rollback da camada de criptografia foi avaliado e descartado — não há
+evidência de defeito nela.
+
+Impacto:
+Nenhuma pendência de código aberta. Este documento agora registra
+explicitamente que **qualquer nova dependência nativa (SDK Expo) exige rebuild
+do dev client (`npx expo run:android` / `npx expo run:ios`, ou novo build
+EAS) antes de validar em dispositivo** — `android/`/`ios/` são gerados e não
+acompanham automaticamente mudanças em `package.json`/`app.json`.
+
+Testes feitos:
+- `npx tsc --noEmit` sem erros após reverter a instrumentação.
+- Cold start real (app fechado via app switcher e reaberto) validado 2x após
+  `npx expo run:android`, com sessão de e-mail/senha persistindo.
+- Logout (`signOutUser`) não foi alterado nesta entrada; segue limpando a
+  sessão via `clearSecureAuthSession` (ver entrada anterior).
+
+Próxima ação:
+Humano coordenador validar também o cold start com login Google (mesma
+camada de persistência, risco residual baixo) e num build iOS.
+
+---
+
 Data: 2026-07-04
 Responsável: Agente Backend + Agente Frontend
 Categoria: [IMPLEMENTAÇÃO]
@@ -634,6 +791,48 @@ Todas as decisões de arquitetura devem considerar sincronização posterior.
 
 Próxima ação:
 Definir estratégia de sincronização.
+
+---
+
+Data: 2026-07-09
+Responsável: Agente Segurança + Agente Frontend
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Persistência de login criptografada em repouso (12 §16.1).
+- `src/lib/secureAuthStorage.ts` (novo): backend compatível com
+  `AsyncStorage` para `getReactNativePersistence` do Firebase JS SDK. Cada
+  valor é cifrado com AES-256-GCM (`expo-crypto`, `AESEncryptionKey` /
+  `aesEncryptAsync` / `aesDecryptAsync`) antes de gravar no `AsyncStorage`;
+  falha de descriptografia (chave corrompida/ausente) descarta o item em vez
+  de derrubar o app.
+- A chave de criptografia é gerada uma vez por dispositivo e armazenada só
+  no Keychain/Keystore via `expo-secure-store` (nova dependência, plugin
+  registrado em `app.json`), nunca no `AsyncStorage`.
+- `src/lib/firebase.ts`: `initializeAuth` passa a usar `secureAuthStorage` no
+  lugar do `AsyncStorage` puro.
+- `src/services/auth.ts`: `signOutUser` chama `clearSecureAuthSession` após
+  `signOut`, descartando a chave de criptografia no logout (defesa em
+  profundidade além da limpeza própria do Firebase).
+- `docs/12_seguranca_geral_do_app.md`: adicionada seção 16.1 documentando a
+  decisão (Firebase JS SDK mantido — sem Keychain nativo — logo a
+  criptografia é aplicada na camada de storage).
+
+Motivo:
+12 §16 exige mecanismo seguro de armazenamento local; o `AsyncStorage` puro
+usado antes é texto plano, expondo tokens de sessão em caso de acesso ao
+dispositivo. Migrar para `@react-native-firebase/auth` (Keychain/Keystore
+nativo) foi avaliado e descartado por ora (maior escopo/risco de regressão
+no login social) — decisão validada com o humano coordenador.
+
+Impacto:
+Nenhuma mudança de comportamento para o usuário (login continua persistindo
+entre reinícios). Requer novo build nativo/dev client (plugin
+`expo-secure-store` adicionado ao `app.json`), mesmo fluxo já necessário por
+`expo-apple-authentication`.
+
+Próxima ação:
+Humano coordenador validar em dev build. Nenhuma pendência de código aberta.
 
 ```
 ```

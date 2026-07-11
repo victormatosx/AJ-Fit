@@ -35,7 +35,13 @@ const ONBOARD = [
   },
 ];
 
-export function OnboardingScreen({ onDone }: { onDone: () => void }) {
+export function OnboardingScreen({
+  onDone,
+  onLogin,
+}: {
+  onDone: () => void;
+  onLogin: () => void;
+}) {
   const [step, setStep] = useState(0);
   const d = ONBOARD[step];
   const next = () => (step < 2 ? setStep(step + 1) : onDone());
@@ -165,6 +171,24 @@ export function OnboardingScreen({ onDone }: { onDone: () => void }) {
             </Text>
             <Icon name="arrow-right" size={18} color="#fff" />
           </CtaButton>
+
+          <Pressable
+            onPress={onLogin}
+            style={{ alignSelf: 'center', marginTop: 20 }}
+          >
+            <Text
+              style={{
+                fontFamily: fonts.ui,
+                fontSize: 14,
+                color: colors.mute,
+              }}
+            >
+              Já tem conta?{' '}
+              <Text style={{ color: colors.accentHi, fontFamily: fonts.ui }}>
+                Entrar
+              </Text>
+            </Text>
+          </Pressable>
         </View>
       </SafeAreaView>
     </View>

@@ -51,8 +51,17 @@ function Loading() {
 
 function RootNavigator() {
   const { user, initializing } = useAuth();
-  const [screen, setScreen] = useState<ScreenId>('splash');
+  const [screen, setScreenState] = useState<ScreenId>('splash');
+  // Mirrors `screen` synchronously so late/stale callbacks (e.g. the splash
+  // timer firing after the router already moved on) can check the current
+  // route without depending on a stale closure over the state value.
+  const screenRef = useRef<ScreenId>('splash');
   const bootstrapped = useRef(false);
+
+  const setScreen = (next: ScreenId) => {
+    screenRef.current = next;
+    setScreenState(next);
+  };
 
   // On cold start, once auth state resolves, send already-authenticated users
   // straight into the app instead of through the onboarding funnel.
@@ -73,8 +82,23 @@ function RootNavigator() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
-      {screen === 'splash' && <SplashScreen onDone={() => setScreen('onboarding')} />}
-      {screen === 'onboarding' && <OnboardingScreen onDone={() => setScreen('quiz')} />}
+      {screen === 'splash' && (
+        <SplashScreen
+          onDone={() => {
+            // Guard against the splash's own timer firing after the router
+            // already moved on (e.g. an authenticated cold start bootstraps
+            // straight to 'app' before this fires) — only advance to
+            // onboarding if we're still actually showing the splash.
+            if (screenRef.current === 'splash') setScreen('onboarding');
+          }}
+        />
+      )}
+      {screen === 'onboarding' && (
+        <OnboardingScreen
+          onDone={() => setScreen('quiz')}
+          onLogin={() => setScreen('auth')}
+        />
+      )}
       {screen === 'quiz' && <QuizScreen onDone={() => setScreen('analyzing')} />}
       {screen === 'analyzing' && <AnalyzingScreen onDone={() => setScreen('plan')} />}
       {screen === 'plan' && <PlanReadyScreen onContinue={() => setScreen('auth')} />}

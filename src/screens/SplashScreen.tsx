@@ -8,11 +8,16 @@ export function SplashScreen({ onDone }: { onDone: () => void }) {
   const opacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    Animated.sequence([
+    const sequence = Animated.sequence([
       Animated.timing(opacity, { toValue: 1, duration: 450, useNativeDriver: true }),
       Animated.timing(opacity, { toValue: 1, duration: 900, useNativeDriver: true }),
       Animated.timing(opacity, { toValue: 0, duration: 450, useNativeDriver: true }),
-    ]).start(onDone);
+    ]);
+    sequence.start(onDone);
+    // Stop the (native-driven) animation on unmount — otherwise it keeps
+    // running after the screen changes and calls `onDone` late, on a stale
+    // closure, clobbering whatever screen the router already moved to.
+    return () => sequence.stop();
   }, []);
 
   return (

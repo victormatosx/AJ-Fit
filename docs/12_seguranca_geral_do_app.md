@@ -294,6 +294,26 @@ Reduzir exposição de dados em caso de acesso indevido ao dispositivo.
 
 ---
 
+## 16.1 Persistência de sessão (Firebase Auth)
+
+O Firebase JS SDK (mantido — ver decisão de 2026-07-04 no log de evolução)
+não oferece persistência nativa via Keychain/Keystore em React Native; sua
+única opção de persistência local é um backend do tipo `AsyncStorage`, que
+não é criptografado.
+
+Para cumprir esta seção sem migrar para `@react-native-firebase/auth`, a
+sessão persistida (tokens e perfil do usuário) é criptografada com
+AES-256-GCM (`expo-crypto`) antes de ser gravada no `AsyncStorage`. A chave
+de criptografia é gerada uma vez por dispositivo e armazenada exclusivamente
+no Keychain/Keystore via `expo-secure-store` — nunca em `AsyncStorage`.
+
+Implementação: `src/lib/secureAuthStorage.ts`, usado por
+`src/lib/firebase.ts`. Logout (`signOutUser` em `src/services/auth.ts`)
+descarta a chave de criptografia, invalidando permanentemente qualquer
+sessão cifrada residual.
+
+---
+
 # 17. Sincronização
 
 Toda sincronização deve preservar:
