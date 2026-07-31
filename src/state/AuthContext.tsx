@@ -45,6 +45,8 @@ type AuthCtx = {
   linkedProviders: string[];
   /** True while the initial auth state is being resolved on startup. */
   initializing: boolean;
+  /** True while `profile`/`questionnaire` are catching up to a just-set `user`. */
+  profileLoading: boolean;
   signUp: (
     email: string,
     password: string,
@@ -81,6 +83,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [questionnaire, setQuestionnaire] = useState<QuestionnaireDoc | null>(null);
   const [initializing, setInitializing] = useState(true);
+  // True while `user` may already be set but `profile`/`questionnaire` have not
+  // caught up yet (the gap between `setUser` and `loadUserState` resolving in
+  // signIn/signUp/social flows). Consumers that route navigation off
+  // `questionnaire` must wait this out, or they'd briefly see a stale
+  // "no questionnaire" state and bounce to the questionnaire screen.
+  const [profileLoading, setProfileLoading] = useState(false);
 
   // Monotonic token so a slower/older load can never overwrite a newer one
   // (e.g. the listener's pre-write read racing signUp's post-write read).
@@ -89,19 +97,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   /** Loads the user document + latest questionnaire. Read-only. */
   const loadUserState = useCallback(async (uid: string) => {
     const seq = ++loadSeq.current;
-    const [nextProfile, nextQuestionnaire] = await Promise.all([
-      getUserProfile(uid),
-      getLatestQuestionnaire(uid),
-    ]);
-    if (seq !== loadSeq.current) return; // superseded by a newer load
-    setProfile(nextProfile);
-    setQuestionnaire(nextQuestionnaire);
+    setProfileLoading(true);
+    try {
+      const [nextProfile, nextQuestionnaire] = await Promise.all([
+        getUserProfile(uid),
+        getLatestQuestionnaire(uid),
+      ]);
+      if (seq !== loadSeq.current) return; // superseded by a newer load
+      setProfile(nextProfile);
+      setQuestionnaire(nextQuestionnaire);
+    } finally {
+      if (seq === loadSeq.current) setProfileLoading(false);
+    }
   }, []);
 
   const clearUserState = useCallback(() => {
     loadSeq.current += 1; // cancel any in-flight load
     setProfile(null);
     setQuestionnaire(null);
+    setProfileLoading(false);
   }, []);
 
   // The auth listener ONLY reads — it never creates documents. This removes the
@@ -129,6 +143,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       questionnaire,
       linkedProviders: user ? getLinkedProviders(user) : [],
       initializing,
+      profileLoading,
       signUp: async (email, password, name, answers) => {
         // Single, authoritative creation flow — runs exactly once per account.
         const newUser = await signUpWithEmail(email, password, name);
@@ -196,7 +211,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (user) await loadUserState(user.uid);
       },
     }),
-    [user, profile, questionnaire, initializing, loadUserState],
+    [user, profile, questionnaire, initializing, profileLoading, loadUserState],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

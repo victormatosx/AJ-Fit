@@ -52,7 +52,7 @@ const COPY: Record<Mode, { kicker: string; title: [string, string]; sub: string 
   },
 };
 
-export function AuthScreen({ onDone }: { onDone: () => void }) {
+export function AuthScreen() {
   const {
     signUp,
     signIn,
@@ -120,7 +120,8 @@ export function AuthScreen({ onDone }: { onDone: () => void }) {
     setSocialBusy(provider);
     try {
       await signInWithProvider(provider, quiz);
-      onDone();
+      // Navigation is decided centrally by RootNavigator from the resulting
+      // auth/questionnaire state — this screen doesn't pick a destination.
     } catch (err) {
       if (err instanceof SocialAuthCancelledError) {
         // user dismissed the native sheet — no error message
@@ -144,7 +145,6 @@ export function AuthScreen({ onDone }: { onDone: () => void }) {
     setSocialBusy(linking.attempted);
     try {
       await completeLinkingWithPassword(linking.email, linkPassword, quiz);
-      onDone();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Não foi possível vincular.');
     } finally {
@@ -158,7 +158,6 @@ export function AuthScreen({ onDone }: { onDone: () => void }) {
     setSocialBusy(existing);
     try {
       await completeLinkingWithProvider(existing, quiz);
-      onDone();
     } catch (err) {
       if (!(err instanceof SocialAuthCancelledError)) {
         setError(err instanceof Error ? err.message : 'Não foi possível vincular.');
@@ -196,10 +195,8 @@ export function AuthScreen({ onDone }: { onDone: () => void }) {
     try {
       if (mode === 'signup') {
         await signUp(email, password, name, quiz);
-        onDone();
       } else if (mode === 'login') {
         await signIn(email, password);
-        onDone();
       } else {
         await reset(email);
         setInfo('Enviamos um link de recuperação para o seu e-mail.');
