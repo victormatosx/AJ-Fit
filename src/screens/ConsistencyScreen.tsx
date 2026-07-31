@@ -6,7 +6,7 @@ import { Display, MonoLabel } from '../components/ui/Display';
 import { Card } from '../components/ui/Card';
 import { SegBar } from '../components/ui/SegBar';
 import { Icon } from '../components/ui/Icon';
-import { colors, fonts } from '../theme/tokens';
+import { colors, fonts, displayLineHeight } from '../theme/tokens';
 
 type Status = 'done' | 'today' | 'missed' | 'pending' | 'rest' | 'restFuture';
 
@@ -257,7 +257,7 @@ export function ConsistencyScreen({ onBack }: { onBack: () => void }) {
                     fontFamily: fonts.display,
                     fontSize: 46,
                     color: '#fff',
-                    lineHeight: 46,
+                    lineHeight: displayLineHeight(46),
                     transform: [{ skewX: '-8deg' }],
                   }}
                 >
@@ -278,7 +278,7 @@ export function ConsistencyScreen({ onBack }: { onBack: () => void }) {
                     fontFamily: fonts.display,
                     fontSize: 30,
                     color: '#7db4ff',
-                    lineHeight: 30,
+                    lineHeight: displayLineHeight(30),
                     transform: [{ skewX: '-8deg' }],
                   }}
                 >

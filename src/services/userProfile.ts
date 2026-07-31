@@ -10,11 +10,17 @@ import {
   limit,
   writeBatch,
   serverTimestamp,
-  type Timestamp,
+  Timestamp,
 } from 'firebase/firestore';
 import type { User } from 'firebase/auth';
 import { db } from '../lib/firebase';
 import type { Quiz } from '../state/AppState';
+import {
+  toPersistedAnswers,
+  fromPersistedAnswers,
+  type PersistedQuizAnswers,
+} from '../lib/questionnaireAnswers';
+import { logError } from '../lib/logError';
 
 /**
  * User repository — the only place that touches `users/{userId}` and its
@@ -70,6 +76,11 @@ export type QuestionnaireDoc = {
   version: number;
   createdAt: Timestamp | null;
 };
+
+// birthDate ⇄ Timestamp conversion (`toPersistedAnswers`/`fromPersistedAnswers`,
+// including legacy-`age` compat) lives in src/lib/questionnaireAnswers.ts —
+// it's pure Firestore-Timestamp logic with no app-initialization dependency,
+// which is also what makes it unit-testable in isolation.
 
 const USERS = 'users';
 const QUESTIONNAIRES = 'questionnaires';
@@ -138,7 +149,7 @@ export async function provisionNewUser(
   if (hasMeaningfulAnswers(input.answers)) {
     const qDoc = doc(questionnairesRef(user.uid));
     batch.set(qDoc, {
-      answers: input.answers,
+      answers: toPersistedAnswers(input.answers as Quiz),
       version: 1,
       createdAt: serverTimestamp(),
     });
@@ -177,7 +188,24 @@ export async function getLatestQuestionnaire(
   const snap = await getDocs(q);
   if (snap.empty) return null;
   const d = snap.docs[0];
-  return { id: d.id, ...(d.data() as Omit<QuestionnaireDoc, 'id'>) };
+  const raw = d.data() as {
+    answers?: Partial<PersistedQuizAnswers>;
+    version: number;
+    createdAt: Timestamp | null;
+  };
+  if (!raw.answers) {
+    // Never thrown (fromPersistedAnswers tolerates this), but worth a signal
+    // — a questionnaire doc with no `answers` map shouldn't normally exist.
+    logError('questionnaire:malformed', new Error('questionnaire doc missing answers'), {
+      questionnaireId: d.id,
+    });
+  }
+  return {
+    id: d.id,
+    answers: fromPersistedAnswers(raw.answers, raw.createdAt),
+    version: raw.version,
+    createdAt: raw.createdAt,
+  };
 }
 
 /**
@@ -191,7 +219,7 @@ export async function addQuestionnaire(
   version: number,
 ): Promise<string> {
   const qDoc = doc(questionnairesRef(uid));
-  await setDoc(qDoc, { answers, version, createdAt: serverTimestamp() });
+  await setDoc(qDoc, { answers: toPersistedAnswers(answers), version, createdAt: serverTimestamp() });
   await updateUserProfile(uid, {});
   return qDoc.id;
 }

@@ -20,7 +20,7 @@ import { SegBar } from '../components/ui/SegBar';
 import { Icon } from '../components/ui/Icon';
 import { OutlineNumber } from '../components/ui/OutlineNumber';
 import { ExerciseGif } from '../components/fitness/ExerciseGif';
-import { colors, fonts } from '../theme/tokens';
+import { colors, fonts, displayLineHeight } from '../theme/tokens';
 
 const SUBS_KEY = 'ajfit-subs';
 
@@ -522,7 +522,7 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                   fontFamily: fonts.display,
                   fontSize: 40,
                   color: '#fff',
-                  lineHeight: 40,
+                  lineHeight: displayLineHeight(40),
                   transform: [{ skewX: '-8deg' }],
                 }}
               >
@@ -538,7 +538,7 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                     fontFamily: fonts.display,
                     fontSize: 28,
                     color: '#fff',
-                    lineHeight: 28,
+                    lineHeight: displayLineHeight(28),
                     transform: [{ skewX: '-8deg' }],
                   }}
                 >
@@ -1214,7 +1214,7 @@ function RestOverlay({
           fontFamily: fonts.display,
           fontSize: 104,
           color: '#fff',
-          lineHeight: 104,
+          lineHeight: displayLineHeight(104),
           transform: [{ skewX: '-8deg' }],
           textShadowColor: 'rgba(11,112,249,0.7)',
           textShadowRadius: 40,
@@ -1290,7 +1290,7 @@ function RestOverlay({
                 fontFamily: fonts.display,
                 transform: [{ skewX: '-8deg' }],
                 fontSize: 46,
-                lineHeight: 52,
+                lineHeight: displayLineHeight(46),
                 color: '#fff',
                 padding: 0,
               }}

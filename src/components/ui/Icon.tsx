@@ -7,7 +7,9 @@ export type IconName =
   | 'calendar' | 'sparkles' | 'target' | 'flame' | 'timer'
   | 'heart' | 'apple' | 'lock' | 'mail' | 'eye' | 'settings'
   | 'crown' | 'chevron-right' | 'chevron-down' | 'x' | 'swap' | 'list' | 'shield'
-  | 'trophy' | 'camera' | 'google';
+  | 'trophy' | 'camera' | 'google'
+  | 'bell' | 'moon' | 'globe' | 'ruler' | 'download' | 'trash' | 'help-circle'
+  | 'message' | 'alert-triangle' | 'info' | 'file-text' | 'key';
 
 type Props = {
   name: IconName;
@@ -102,6 +104,30 @@ export function Icon({ name, size = 22, color = '#ffffff', stroke = 1.7 }: Props
       return <Svg {...common}><Path {...p} d="M7 4h10v4a5 5 0 01-10 0V4zM5 4H3v2a3 3 0 003 3M19 4h2v2a3 3 0 01-3 3M9 20h6M12 14v6" /></Svg>;
     case 'camera':
       return <Svg {...common}><Path {...p} d="M3 8a2 2 0 012-2h2l2-3h6l2 3h2a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" /><Circle {...p} cx="12" cy="13" r="4" /></Svg>;
+    case 'bell':
+      return <Svg {...common}><Path {...p} d="M6 10a6 6 0 0112 0c0 5 2 6 2 6H4s2-1 2-6z" /><Path {...p} d="M10 20a2 2 0 004 0" /></Svg>;
+    case 'moon':
+      return <Svg {...common}><Path {...p} d="M20 14.5A8.5 8.5 0 019.5 4 8.5 8.5 0 1020 14.5z" /></Svg>;
+    case 'globe':
+      return <Svg {...common}><Circle {...p} cx="12" cy="12" r="9" /><Path {...p} d="M3 12h18M12 3c2.5 2.5 3.8 5.7 3.8 9s-1.3 6.5-3.8 9c-2.5-2.5-3.8-5.7-3.8-9s1.3-6.5 3.8-9z" /></Svg>;
+    case 'ruler':
+      return <Svg {...common}><Rect {...p} x="3" y="7" width="18" height="10" rx="1.5" /><Path {...p} d="M7 7v3M11 7v3M15 7v3M19 7v3" /></Svg>;
+    case 'download':
+      return <Svg {...common}><Path {...p} d="M12 3v12m0 0l-4-4m4 4l4-4M4 19h16" /></Svg>;
+    case 'trash':
+      return <Svg {...common}><Path {...p} d="M4 7h16M9 7V4h6v3M6 7l1 13a2 2 0 002 2h6a2 2 0 002-2l1-13M10 11v6M14 11v6" /></Svg>;
+    case 'help-circle':
+      return <Svg {...common}><Circle {...p} cx="12" cy="12" r="9" /><Path {...p} d="M9.5 9a2.5 2.5 0 013.7-2.2c.9.5 1.3 1.7.7 2.6-.6.9-1.9 1.1-1.9 2.6" /><Circle cx="12" cy="17" r="1" fill={color} /></Svg>;
+    case 'message':
+      return <Svg {...common}><Path {...p} d="M4 5h16v11H9l-5 4V5z" /></Svg>;
+    case 'alert-triangle':
+      return <Svg {...common}><Path {...p} d="M12 3l10 18H2L12 3z" /><Path {...p} d="M12 10v4" /><Circle cx="12" cy="17.5" r="1" fill={color} /></Svg>;
+    case 'info':
+      return <Svg {...common}><Circle {...p} cx="12" cy="12" r="9" /><Path {...p} d="M12 11v6" /><Circle cx="12" cy="7.5" r="1" fill={color} /></Svg>;
+    case 'file-text':
+      return <Svg {...common}><Path {...p} d="M6 2h9l5 5v15H6V2z" /><Path {...p} d="M15 2v5h5M9 12h6M9 16h6" /></Svg>;
+    case 'key':
+      return <Svg {...common}><Circle {...p} cx="8" cy="14" r="4" /><Path {...p} d="M11 11l9-9M17 5l3 3M14 8l2 2" /></Svg>;
     default:
       return null;
   }

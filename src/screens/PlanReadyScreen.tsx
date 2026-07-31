@@ -10,7 +10,7 @@ import Svg, {
 } from 'react-native-svg';
 import { Slash, MonoLabel } from '../components/ui/Display';
 import { Icon } from '../components/ui/Icon';
-import { colors, fonts } from '../theme/tokens';
+import { colors, fonts, displayLineHeight } from '../theme/tokens';
 import { useAppState } from '../state/AppState';
 
 const GOAL_LABELS: Record<string, string> = {
@@ -69,7 +69,7 @@ export function PlanReadyScreen({ onContinue }: { onContinue: () => void }) {
               style={{
                 fontFamily: fonts.display,
                 fontSize: 44,
-                lineHeight: 44 * 0.95,
+                lineHeight: displayLineHeight(44),
                 letterSpacing: 0.5,
                 color: '#fff',
                 textTransform: 'uppercase',

@@ -36,6 +36,55 @@ service cloud.firestore {
       ];
     }
 
+    // Avaliações físicas (docs/03 §4/§8, docs/15 §10/§11/§18). `source` é um
+    // discriminador: guided exige os campos da calculadora (protocol, sex,
+    // age, folds, bodyFat, calculatorVersion); imported não exige nenhum
+    // deles e pode não ter bodyFat (campo simplesmente ausente — nunca 0).
+    // Campos derivados (bmi, leanMass, fatMass, sumFolds, bodyDensity) e o
+    // rótulo do protocolo nunca são aceitos: são resolvidos em tempo de
+    // leitura no app (src/lib/skinfoldCalculator.ts), nunca persistidos.
+    function assessmentCommonValid() {
+      let d = request.resource.data;
+      return d.source in ['guided', 'imported']
+        && d.measuredAt is timestamp
+        && d.measuredAt <= request.time
+        // `== request.time` (not just `is timestamp`) forces the client to
+        // have actually used serverTimestamp() — a client can't fabricate an
+        // arbitrary createdAt to game the measuredAt/createdAt tie-break sort.
+        && d.createdAt == request.time
+        && d.weight is number && d.weight > 0
+        && d.height is number && d.height > 0
+        && (!('notes' in d) || d.notes is string);
+    }
+
+    function guidedAssessmentValid() {
+      let d = request.resource.data;
+      return d.source == 'guided'
+        && d.keys().hasOnly([
+             'source', 'measuredAt', 'createdAt', 'weight', 'height', 'bodyFat',
+             'calculatorVersion', 'notes', 'protocol', 'sex', 'age', 'folds'
+           ])
+        && d.calculatorVersion == 1
+        && d.protocol in ['jp3', 'jp7']
+        && d.sex in ['m', 'f']
+        && d.age is number && d.age > 0
+        && d.bodyFat is number && d.bodyFat > 0
+        && d.folds is map && d.folds.size() > 0;
+    }
+
+    function importedAssessmentValid() {
+      let d = request.resource.data;
+      return d.source == 'imported'
+        && d.keys().hasOnly([
+             'source', 'measuredAt', 'createdAt', 'weight', 'height', 'bodyFat',
+             'notes', 'bodyWater', 'basalMetabolism', 'visceralFat'
+           ])
+        && (!('bodyFat' in d) || (d.bodyFat is number && d.bodyFat > 0))
+        && (!('bodyWater' in d) || (d.bodyWater is number && d.bodyWater > 0))
+        && (!('basalMetabolism' in d) || (d.basalMetabolism is number && d.basalMetabolism > 0))
+        && (!('visceralFat' in d) || (d.visceralFat is number && d.visceralFat > 0));
+    }
+
     match /users/{userId} {
       // Leitura: apenas o dono do documento.
       allow read: if isOwner(userId);
@@ -83,6 +132,18 @@ service cloud.firestore {
           && request.resource.data.createdAt is timestamp;
 
         // Histórico imutável: sem edição nem exclusão pelo cliente.
+        allow update, delete: if false;
+      }
+
+      // Avaliações físicas do usuário (guiadas ou importadas). Cada documento
+      // é um snapshot imutável — nunca sobrescrever ou apagar (docs/15 §11).
+      match /assessments/{assessmentId} {
+        allow read: if isOwner(userId);
+
+        allow create: if isOwner(userId)
+          && assessmentCommonValid()
+          && (guidedAssessmentValid() || importedAssessmentValid());
+
         allow update, delete: if false;
       }
     }

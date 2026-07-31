@@ -12,7 +12,7 @@ import Svg, {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Icon } from '../components/ui/Icon';
 import { MonoLabel } from '../components/ui/Display';
-import { colors, fonts } from '../theme/tokens';
+import { colors, fonts, displayLineHeight } from '../theme/tokens';
 
 const STEPS = [
   'Lendo seu perfil físico',
@@ -198,7 +198,7 @@ export function AnalyzingScreen({ onDone }: { onDone: () => void }) {
                   style={{
                     fontFamily: fonts.display,
                     fontSize: 56,
-                    lineHeight: 56,
+                    lineHeight: displayLineHeight(56),
                     color: '#fff',
                     transform: [{ skewX: '-8deg' }],
                     textShadowColor: 'rgba(77,163,255,0.95)',
@@ -233,7 +233,7 @@ export function AnalyzingScreen({ onDone }: { onDone: () => void }) {
               style={{
                 fontFamily: fonts.display,
                 fontSize: 32,
-                lineHeight: 32 * 0.95,
+                lineHeight: displayLineHeight(32),
                 letterSpacing: 0.5,
                 textTransform: 'uppercase',
                 color: '#fff',

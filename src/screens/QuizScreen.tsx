@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -14,15 +14,20 @@ import { SegBar } from '../components/ui/SegBar';
 import { CtaButton } from '../components/ui/CtaButton';
 import { Icon, IconName } from '../components/ui/Icon';
 import { HudCorners } from '../components/ui/Card';
+import { DateFieldsInput } from '../components/ui/DateFieldsInput';
 import { EquipmentPicker } from '../components/fitness/EquipmentPicker';
 import { colors, fonts } from '../theme/tokens';
 import { useAppState, Quiz } from '../state/AppState';
+import { useDateParts } from '../hooks/useDateParts';
+import { computeAge } from '../lib/ageCalculator';
+import { isFutureDate } from '../lib/dateUtils';
 
 type Option = { v: string; l: string; i?: string; d?: string; icon?: IconName };
 type Question =
   | { id: keyof Quiz; kind: 'choice'; title: string; sub?: string; options: Option[] }
   | { id: keyof Quiz; kind: 'choice-large'; title: string; sub?: string; options: Option[] }
   | { id: keyof Quiz; kind: 'multi'; title: string; sub?: string; options: Option[] }
+  | { id: keyof Quiz; kind: 'date'; title: string; sub?: string; minAge: number; maxAge: number }
   | {
       id: keyof Quiz;
       kind: 'wheel';
@@ -48,15 +53,12 @@ const QUESTIONS: Question[] = [
     ],
   },
   {
-    id: 'age',
-    kind: 'wheel',
-    title: 'SUA IDADE?',
-    sub: 'Afeta intensidade e descanso.',
-    unit: 'anos',
-    min: 16,
-    max: 75,
-    default: 28,
-    digits: { min: 2, max: 3 },
+    id: 'birthDate',
+    kind: 'date',
+    title: 'QUANDO VOCÊ NASCEU?',
+    sub: 'Afeta intensidade e descanso — sua idade é recalculada sempre a partir daqui.',
+    minAge: 16,
+    maxAge: 75,
   },
   {
     id: 'height',
@@ -186,7 +188,12 @@ export function QuizScreen({ onDone }: { onDone: () => void }) {
       ? Array.isArray(value) && value.length > 0
       : q.kind === 'wheel'
         ? true
-        : value != null;
+        : q.kind === 'date'
+          ? value instanceof Date && !isFutureDate(value) && (() => {
+              const age = computeAge(value);
+              return age >= q.minAge && age <= q.maxAge;
+            })()
+          : value != null;
 
   const outlineFontSize = 240;
   const outlineSvgW = 280;
@@ -315,6 +322,13 @@ export function QuizScreen({ onDone }: { onDone: () => void }) {
               <MultiList
                 options={q.options}
                 value={(value as string[]) || []}
+                onChange={setVal}
+              />
+            )}
+            {q.kind === 'date' && (
+              <BirthDateWheel
+                q={q}
+                value={value as Date | null}
                 onChange={setVal}
               />
             )}
@@ -875,6 +889,77 @@ function NumberWheel({
           {q.max}
         </Text>
       </View>
+    </View>
+  );
+}
+
+function BirthDateWheel({
+  q,
+  value,
+  onChange,
+}: {
+  q: Extract<Question, { kind: 'date' }>;
+  value: Date | null;
+  onChange: (d: Date) => void;
+}) {
+  // Starting position for the fields only (React only reads this on first
+  // render) — nothing is written to the quiz until it parses into a real,
+  // in-range date (see the effect below).
+  const initial = value ?? new Date(new Date().setFullYear(new Date().getFullYear() - 25));
+  const fields = useDateParts(initial);
+
+  const age = fields.date ? computeAge(fields.date) : null;
+  const future = fields.date ? isFutureDate(fields.date) : false;
+  const outOfRange = age != null && (age < q.minAge || age > q.maxAge);
+  const valid = fields.date != null && !future && !outOfRange;
+
+  // Commits to the quiz only while the fields resolve to a real, plausible
+  // date — a half-typed year never gets written as a fake birth date.
+  useEffect(() => {
+    if (valid && fields.date) onChange(fields.date);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fields.day, fields.month, fields.year]);
+
+  return (
+    <View style={{ alignItems: 'center', gap: 24, paddingTop: 14 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 10 }}>
+        <Text
+          style={{
+            fontFamily: fonts.display,
+            fontSize: 100,
+            color: '#fff',
+            transform: [{ skewX: '-8deg' }],
+            textShadowColor: 'rgba(11,112,249,0.55)',
+            textShadowRadius: 30,
+            textShadowOffset: { width: 0, height: 0 },
+          }}
+        >
+          {age != null ? age : '—'}
+        </Text>
+        <Text style={{ fontFamily: fonts.mono, fontSize: 13, letterSpacing: 2, color: colors.faint }}>
+          anos
+        </Text>
+      </View>
+
+      <View style={{ width: '100%' }}>
+        <DateFieldsInput
+          day={fields.day}
+          month={fields.month}
+          year={fields.year}
+          onDay={fields.setDay}
+          onMonth={fields.setMonth}
+          onYear={fields.setYear}
+          error={fields.date != null && !valid}
+        />
+      </View>
+
+      {fields.date != null && !valid && (
+        <Text style={{ fontFamily: fonts.mono, fontSize: 10, letterSpacing: 1, color: '#f0563f', textAlign: 'center' }}>
+          {future
+            ? 'DATA NO FUTURO'
+            : `INFORME UMA DATA ENTRE ${q.minAge} E ${q.maxAge} ANOS ATRÁS`}
+        </Text>
+      )}
     </View>
   );
 }

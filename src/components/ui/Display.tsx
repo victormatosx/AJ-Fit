@@ -1,6 +1,6 @@
 import React from 'react';
 import { Text, TextStyle, StyleProp, View, ViewStyle } from 'react-native';
-import { colors, fonts } from '../../theme/tokens';
+import { colors, fonts, displayLineHeight } from '../../theme/tokens';
 
 type Props = {
   children: React.ReactNode;
@@ -28,7 +28,7 @@ export function Display({
           textTransform: 'uppercase',
           letterSpacing: 0.5,
           fontSize: size,
-          lineHeight: size * 0.95,
+          lineHeight: displayLineHeight(size),
           color,
           transform: skew ? [{ skewX: '-8deg' }] : undefined,
         },

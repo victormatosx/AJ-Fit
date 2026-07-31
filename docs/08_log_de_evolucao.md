@@ -254,6 +254,313 @@ Criar documentação específica de billing.
 
 # 18. Primeiras entradas do projeto
 
+Data: 2026-07-30
+Responsável: Agente QA
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Preparação operacional para release da Avaliação Física (revisão de
+infraestrutura, UX de falha pós-salvamento, observabilidade, checklist de
+staging). Não houve deploy — nem de rules/indexes, nem de app.
+
+- `firebase.json` (novo): não existia no repositório; sem ele os comandos
+  `firebase deploy --only firestore:*` não têm como saber quais arquivos
+  publicar. Aponta para `firestore.rules`/`firestore.indexes.json`.
+  `.firebaserc` NÃO foi criado — não existe projeto de staging separado do
+  único projeto Firebase configurado (`ajfit-2f321`, via `.env`), e não
+  cabe a este agente escolher um projeto arbitrariamente. Registrado como
+  risco (ver `16_checklist_staging_avaliacao_fisica.md` §2).
+- `firestore.rules`: `assessments.createdAt` passou de `is timestamp` para
+  `== request.time` — a checagem anterior aceitava qualquer timestamp
+  fabricado pelo cliente; a nova força o uso real de `serverTimestamp()`,
+  fechando uma lacuna que já existia (de forma idêntica, não corrigida
+  aqui) em `questionnaires.createdAt`. Demais pontos do checklist de
+  revisão (índice composto batendo com a query, direção dos campos,
+  isolamento por `uid`, `update`/`delete` proibidos, `keys().hasOnly`,
+  `measuredAt` não-futuro) já estavam corretos.
+- `useAssessments.ts`/`AssessmentScreen.tsx`: `saveGuided`/`saveImported`
+  agora retornam `{ refreshFailed }`. A UI mostra três mensagens distintas
+  e sempre em português simples, sem detalhe técnico: sucesso normal,
+  "Avaliação salva, mas não foi possível atualizar os dados agora" (escrita
+  OK, só a releitura falhou — antes essa distinção não existia: o comitê
+  anterior só evitava reportar como erro, mas mostrava a mesma mensagem de
+  sucesso normal, sem avisar que a tela podia estar desatualizada), e
+  "Falha ao salvar" (antes deste ajuste, uma falha real de escrita não
+  mostrava NENHUM texto ao usuário, só a animação de shake). O toast virou
+  um componente genérico com 3 tons (`success`/`warning`/`error`) em vez de
+  um componente fixo só de sucesso.
+- Observabilidade: confirmado que o projeto não tem Sentry, Crashlytics
+  nem serviço próprio de logs — só `console.error` avulso, mais o padrão
+  `logAuthError` já existente em `services/auth.ts`. Generalizado em
+  `src/lib/logError.ts` (mesmo formato `[scope] {code, message}`, sem PII)
+  e aplicado em: falha ao carregar avaliações, falha no refresh pós-escrita,
+  falha ao salvar (guiada/importada), questionário sem campo `answers`.
+  Nenhuma dependência nova foi instalada — ausência de observabilidade
+  remota permanece registrada como pendência de produção.
+- Novo `docs/16_checklist_staging_avaliacao_fisica.md`: roteiro manual para
+  Android/iOS (usuário novo, usuário legado, ordenação/evolução, erros e
+  rede, UI), com dados de teste concretos e resultados esperados batendo
+  com `src/lib/__tests__/skinfoldCalculator.test.ts`, e critérios de
+  aprovação (bloqueadores vs. não-bloqueadores).
+
+Impacto:
+Nenhuma mudança de arquitetura. Mensagens de erro/sucesso mais honestas;
+lacuna de segurança fechada nas rules; observabilidade mínima sem nova
+dependência; existe agora um roteiro executável antes do release.
+
+Testes: `npm test` (49 testes) e `npx tsc --noEmit` limpos após todas as
+alterações desta entrada.
+
+Próxima ação:
+Humano coordenador decide sobre projeto de staging (§2 do checklist),
+publica `firestore.rules`/`firestore.indexes.json`, e executa o roteiro
+manual em dispositivo real antes do release.
+
+---
+
+Data: 2026-07-30
+Responsável: Agente QA
+Categoria: [CORREÇÃO]
+
+Descrição:
+Auditoria final de produção da Avaliação Física (onboarding, autenticação,
+questionário, idade, avaliação física, Firestore, regras, testes,
+componentes, hooks, services). Bugs corrigidos:
+- `useAssessments.ts`: `saveGuided`/`saveImported` propagavam falha de
+  `refresh()` pós-escrita como se a própria gravação tivesse falhado — a
+  avaliação já estava salva no Firestore, mas a UI mostrava erro,
+  arriscando duplicata em um retry. Agora a falha do refresh só é logada.
+- `useAssessments.ts`: sem guarda de sequência em `refresh()` — respostas
+  fora de ordem (troca rápida de `uid`, duplo clique em "tentar novamente")
+  podiam sobrescrever dados mais novos com uma resposta mais antiga.
+  Adicionado `fetchSeq` (mesmo padrão do `loadSeq` de `AuthContext.tsx`).
+- `userProfile.ts`/novo `src/lib/questionnaireAnswers.ts`: `fromPersistedAnswers`
+  quebrava (`TypeError`) se o documento de questionário estivesse sem o
+  campo `answers` (documento corrompido). Agora nunca lança — usa
+  `defaultQuiz` como base segura. As funções de conversão foram extraídas
+  para `src/lib/questionnaireAnswers.ts` (sem o efeito colateral de
+  inicializar o app Firebase), o que também as tornou testáveis.
+- `AssessmentScreen.tsx` (`GuidedAssessmentModal`): idade automática podia
+  exibir um valor negativo/absurdo ("-3 anos") se `birthDate` estivesse
+  corrompido para o futuro; salvar já era bloqueado, mas o número exibido
+  era enganoso. Agora cai para "—" nesse caso.
+- `AssessmentScreen.tsx` (`GuidedAssessmentModal`): IMC/massa magra/massa
+  gorda eram recalculados inline em vez de reusar `computeBmi`/
+  `computeLeanMass`/`computeFatMass` de `skinfoldCalculator.ts` (duplicação
+  de lógica de negócio já existente e testada).
+- `DateFieldsInput.tsx`: `maxLength` era 4 para todos os campos (dia/mês
+  aceitavam até 4 dígitos); ajustado para 2/2/4.
+
+Testes: `src/lib/__tests__/questionnaireAnswers.test.ts` (6 casos novos —
+round-trip, compat de `age` legado ancorado em `createdAt`, documento
+ausente/corrompido nunca lança). Suíte completa: 49 testes, `npx tsc --noEmit`
+limpo.
+
+Riscos residuais documentados (não corrigidos nesta auditoria — fora do
+escopo "sem mudanças grandes de arquitetura"): regras do Firestore não
+validam a lista completa de dobras exigidas por protocolo+sexo (só exigem
+`folds` não vazio); `useAssessments` refaz a consulta completa toda vez que
+a tela de Avaliação Física é montada (sem cache entre aberturas); corrida em
+`saveGuided`/`saveImported`/`fetchSeq` não tem cobertura de teste automatizado
+(exigiria mock de Firestore/React Testing Library, não configurado no projeto).
+
+Impacto:
+Nenhuma mudança de arquitetura ou de schema. Cinco correções pontuais de
+robustez, sem alteração de comportamento visível no caminho feliz.
+
+Próxima ação:
+Nenhuma pendência de código aberta nesta auditoria.
+
+---
+
+Data: 2026-07-30
+Responsável: Agente Arquiteto + Agente Backend + Agente Frontend + Agente QA
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Migração `age` → `birthDate` no onboarding, e suíte de testes unitários da
+calculadora de dobras cutâneas.
+
+**Migração de idade:**
+- `Quiz.birthDate: Date | null` substitui `Quiz.age: number`
+  (`src/state/AppState.tsx`). Motivo: `age` capturado uma única vez no
+  onboarding nunca era recalculado — o usuário "parava de envelhecer" no
+  app.
+- Novo `src/lib/ageCalculator.ts`: `computeAge(birthDate, referenceDate)`
+  é agora a ÚNICA função que calcula idade em todo o projeto (Avaliação
+  Física, calculadoras JP3/JP7). `birthDateFromLegacyAge(age, referenceDate)`
+  existe só para compatibilidade retroativa (ver abaixo).
+- `QuizScreen.tsx`: pergunta "SUA IDADE?" (wheel numérico) substituída por
+  "QUANDO VOCÊ NASCEU?" (`kind: 'date'`, novo `BirthDateWheel`), usando os
+  novos `src/hooks/useDateParts.ts` e `src/components/ui/DateFieldsInput.tsx`
+  (compartilhados com `AssessmentScreen.tsx`, que já tinha um seletor de
+  data equivalente para `measuredAt` — extraído para evitar duplicação).
+- `userProfile.ts`: `answers.birthDate` persistido como `Timestamp`
+  (`toPersistedAnswers`/`fromPersistedAnswers`). Contrato atualizado em
+  `04_contratos_de_api.md §5`.
+- **Compatibilidade com usuários antigos**: documentos de questionário
+  gravados antes desta migração têm `age: number`, sem `birthDate`. Nunca
+  são reescritos. Na leitura (`getLatestQuestionnaire`), se `birthDate`
+  estiver ausente, é aproximado a partir de `age` ANCORADO no `createdAt`
+  do próprio questionário (não em "hoje") — isso faz a idade derivada
+  continuar avançando corretamente nos anos seguintes, em vez de ficar
+  congelada no valor original. Nenhuma escrita nova usa `age`.
+- `AssessmentScreen.tsx` (`GuidedAssessmentModal`): quando existe
+  `birthDate`, a idade na data da avaliação é sempre calculada
+  automaticamente (inclusive para avaliações retroativas) — o campo manual
+  de idade só aparece quando não há `birthDate` disponível (fallback).
+
+**Suíte de testes:**
+- Vitest escolhido (não Jest/jest-expo): os alvos de teste
+  (`skinfoldCalculator.ts`, `ageCalculator.ts`) são TypeScript puro, sem
+  nenhuma dependência de React Native/Expo — Vitest evita o overhead do
+  pipeline de transformação RN do jest-expo para testar funções puras.
+  `vitest.config.mts` + scripts `npm test`/`npm run test:watch`.
+- `src/lib/__tests__/skinfoldCalculator.test.ts` (43 casos, com
+  `ageCalculator.test.ts`): JP3/JP7 masculino/feminino com valores de
+  referência calculados independentemente das fórmulas documentadas em
+  `15_calculadora_de_dobras_subcutaneas.md` §6–§8, soma de dobras, IMC,
+  massa magra/gorda, arredondamento (§14), validações de entrada (peso,
+  altura, idade, dobras, protocolo inválido, BF fora da faixa plausível).
+- `src/lib/__tests__/ageCalculator.test.ts`: aniversário ainda não
+  ocorrido/já ocorrido, dia 29/02, avaliação retroativa, round-trip de
+  `birthDateFromLegacyAge`.
+
+Impacto:
+Idade nunca mais fica congelada. Toda a base de usuários existente
+continua funcionando sem migração manual de dados. Regra de negócio
+crítica (cálculo de % de gordura) agora protegida por testes automatizados.
+
+Próxima ação:
+Nenhuma pendência de código aberta. `npx tsc --noEmit` e `npm test` limpos.
+Validação humana recomendada do novo seletor de data de nascimento no
+onboarding (dispositivo real).
+
+---
+
+Data: 2026-07-13
+Responsável: Agente Arquiteto Frontend + Agente UI/UX + Agente React Native + Agente Revisor
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Refatoração completa de UI/UX da tela Avaliação Física (`AssessmentScreen.tsx`).
+A tela era um formulário linear único (peso/altura, dobras, resultados,
+histórico e CTA de salvar todos no mesmo nível). Reorganizada em blocos
+hierárquicos conforme especificação do humano coordenador:
+
+- `PhysicalAssessmentSummaryCard` (novo, `components/fitness/`): card de
+  destaque no topo com peso, % gordura, massa magra, IMC e data da última
+  avaliação.
+- `AssessmentEvolutionCard` (novo): deltas desde a avaliação anterior +
+  espaço reservado para gráfico futuro + CTA "Ver histórico completo".
+- `AssessmentSection` (novo): wrapper genérico título+conteúdo, substitui os
+  blocos `Slash` soltos repetidos na tela antiga.
+- `AssessmentMetricCard` (novo): tile de métrica reutilizável (substitui
+  `ResultCard`/`MiniStat` duplicados).
+- `FoldableSection` (novo, `components/ui/`, genérico/reutilizável): usado
+  para colapsar "Dobras Cutâneas" — só expande sob demanda, não fica visível
+  por padrão.
+- `AssessmentActionCard` (novo): bloco "Adicionar Avaliação" com duas opções
+  — Avaliação Guiada (fluxo existente) e Importar Avaliação Profissional
+  (novo).
+- `AssessmentHistoryCard` (novo): histórico compacto (data/peso/BF%/chevron),
+  com tag "IMPORTADO" para entradas vindas do fluxo profissional.
+
+Lógica preservada integralmente: cálculo de IMC, estimativa de % de gordura
+via Jackson & Pollock 7 dobras (fórmula e fallback 18,2% inalterados,
+conforme 15_calculadora_de_dobras_subcutaneas.md), validação de peso/altura,
+animação de shake/toast, dropdown de protocolo, todos os 4 protocolos de
+dobras. O formulário original (Avaliação Guiada) foi movido para dentro de um
+modal full-screen (`GuidedAssessmentModal`), aberto a partir do novo card de
+ação — não fica mais exposto por padrão na tela principal.
+
+Novo (UI + registro local, sem cálculo): `ImportAssessmentModal` — formulário
+para registrar avaliação profissional já calculada (peso, BF%, massa magra,
+massa gorda, água corporal, IMC, metabolismo basal, gordura visceral). O app
+apenas grava os valores informados, sem recalcular nada, conforme pedido.
+
+Fora de escopo (decisão registrada): fotos de evolução já existem em
+`ProgressScreen.tsx` (aba Evolução, fora desta tela) — não foram duplicadas
+nem movidas para Avaliação Física, para não expandir escopo sobre outra tela
+sem solicitação explícita.
+
+Verificação: app rodado localmente via `expo start` (porta 8081 já ativa),
+navegado com Playwright headless até Perfil → Avaliação Física, com
+screenshots confirmando resumo/evolução/informações básicas/dobras/ação/
+histórico, e abertura de ambos os modais (Guiada e Importar) sem erros de
+console. `App.tsx` foi temporariamente alterado para pular o gate de login
+durante o teste e revertido ao estado original antes de finalizar (`git diff`
+confirmado limpo).
+
+Impacto:
+Nenhuma regressão de comportamento identificada. Tela reorganizada, com menos
+informação visível de início e aparência mais premium, mantendo toda a lógica
+de cálculo e validação original.
+
+Próxima ação:
+Humano coordenador validar visualmente em dispositivo. Ciclo futuro: gráfico
+real de evolução (placeholder reservado em `AssessmentEvolutionCard`);
+avaliar se `ImportAssessmentModal` deve gravar em backend real (hoje é
+somente estado local, igual ao fluxo guiado).
+
+---
+
+Data: 2026-07-13
+Responsável: Agente Frontend
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Navegação funcional conectando `ProfileScreen` → `SettingsScreen` (solicitação
+pontual do humano coordenador, fora do escopo original "apenas frontend" da
+entrada anterior desta mesma data).
+- `ProfileScreen.tsx`: item "Configurações" (grupo PREFERÊNCIAS) recebe
+  `onPress={onOpenSettings}`, nova prop opcional `onOpenSettings`.
+- `AppShell.tsx`: novo estado `showSettings`, renderizado como overlay
+  absoluto (mesmo padrão de `ConsistencyScreen`/`AssessmentScreen`), incluso
+  em `overlayOpen` para ocultar a tab bar.
+
+Impacto:
+Botão "Configurações" no Perfil agora abre a tela real. Demais itens da tela
+de Configurações continuam com `onPress={() => {}}` (sem lógica).
+
+Próxima ação:
+Nenhuma pendência de código aberta. Lógica individual de cada item de
+Configurações permanece para ciclo futuro.
+
+---
+
+Data: 2026-07-13
+Responsável: Agente Frontend
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Criada do zero a tela Configurações (frontend, sem lógica). Componentes novos
+em `src/components/ui/SettingsSection.tsx` (`SettingsSection`, `SettingsItem`,
+`SettingsValue`, `SettingsDivider`, `SettingsHeader`), reutilizando o padrão
+visual já existente em `ProfileScreen.tsx` (agrupamento tipo `ProfileGroup`,
+`Slash`, cores e tipografia de `theme/tokens.ts`). Tela em
+`src/screens/SettingsScreen.tsx` com as seções: Conta, Treino, Notificações,
+Preferências, Privacidade, Suporte e Sobre. Ícones novos adicionados a
+`src/components/ui/Icon.tsx`: `bell`, `moon`, `globe`, `ruler`, `download`,
+`trash`, `help-circle`, `message`, `alert-triangle`, `info`, `file-text`,
+`key`.
+
+Todos os itens usam `onPress={() => {}}` (exceto "Versão", sem ação). Sem
+navegação funcional, sem integração com backend/Firebase/RevenueCat, sem
+estados ou persistência — conforme escopo solicitado. `ProfileScreen.tsx` não
+foi alterado.
+
+Impacto:
+Nenhum. Tela isolada, não registrada em `AppShell.tsx` nem em nenhum fluxo de
+navegação existente.
+
+Próxima ação:
+Humano coordenador validar visualmente a tela. Em ciclo futuro: conectar
+navegação real a partir do item "Configurações" já existente em
+`ProfileScreen.tsx` (grupo PREFERÊNCIAS) e implementar lógica de cada item.
+
+---
+
 Data: 2026-07-11
 Responsável: Agente Segurança + Agente Arquiteto + Agente Frontend + Agente QA
 Categoria: [IMPLEMENTAÇÃO]

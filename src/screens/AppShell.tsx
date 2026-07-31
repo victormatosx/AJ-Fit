@@ -10,12 +10,14 @@ import { ProgressScreen } from './ProgressScreen';
 import { ProfileScreen } from './ProfileScreen';
 import { ConsistencyScreen } from './ConsistencyScreen';
 import { AssessmentScreen } from './AssessmentScreen';
+import { SettingsScreen } from './SettingsScreen';
 
 export function AppShell() {
   const { tab, setTab } = useAppState();
   const [showCal, setShowCal] = useState(false);
   const [showAssessment, setShowAssessment] = useState(false);
-  const overlayOpen = showCal || showAssessment;
+  const [showSettings, setShowSettings] = useState(false);
+  const overlayOpen = showCal || showAssessment || showSettings;
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
@@ -29,7 +31,10 @@ export function AppShell() {
         {tab === 'workout' && <WorkoutScreen onDone={() => setTab('home')} />}
         {tab === 'progress' && <ProgressScreen />}
         {tab === 'profile' && (
-          <ProfileScreen onOpenAssessment={() => setShowAssessment(true)} />
+          <ProfileScreen
+            onOpenAssessment={() => setShowAssessment(true)}
+            onOpenSettings={() => setShowSettings(true)}
+          />
         )}
       </View>
       {tab !== 'workout' && !overlayOpen && <TabBar tab={tab} setTab={setTab} />}
@@ -41,6 +46,11 @@ export function AppShell() {
       {showAssessment && (
         <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 40 }}>
           <AssessmentScreen onBack={() => setShowAssessment(false)} />
+        </View>
+      )}
+      {showSettings && (
+        <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 40 }}>
+          <SettingsScreen onBack={() => setShowSettings(false)} />
         </View>
       )}
     </View>

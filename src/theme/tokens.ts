@@ -24,6 +24,14 @@ export const fonts = {
   monoBold: 'JetBrainsMono_700Bold',
 };
 
+// Anton (fonts.display) has tall glyph metrics that iOS clips whenever
+// `lineHeight` is set to less than ~1.1x the font size (Android's
+// includeFontPadding hides the same issue, which is why this only shows up
+// on physical iOS devices, not the Android emulator). Always derive
+// lineHeight for fonts.display text from this helper instead of a raw
+// fontSize-based value.
+export const displayLineHeight = (size: number) => Math.round(size * 1.15);
+
 export const radii = {
   sm: 8,
   md: 12,

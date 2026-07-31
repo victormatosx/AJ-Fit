@@ -2,7 +2,13 @@ import React, { createContext, useContext, useState, useMemo } from 'react';
 
 export type Quiz = {
   sex: 'm' | 'f' | null;
-  age: number;
+  /**
+   * Replaces the old `age: number` field (see ageCalculator.ts /
+   * docs/08_log_de_evolucao.md, migração birthDate). A stored age goes stale
+   * the moment time passes; a birth date doesn't. Age is always derived via
+   * `computeAge(birthDate, referenceDate)`, never stored directly again.
+   */
+  birthDate: Date | null;
   height: number;
   weight: number;
   goal: 'hyper' | 'cut' | 'perf' | 'def' | 'recon' | null;
@@ -25,9 +31,10 @@ type Ctx = {
   setTab: (t: TabId) => void;
 };
 
-const defaultQuiz: Quiz = {
+/** Exported so userProfile.ts can fall back to it when normalizing a sparse/corrupted questionnaire doc. */
+export const defaultQuiz: Quiz = {
   sex: null,
-  age: 28,
+  birthDate: null,
   height: 178,
   weight: 78,
   goal: null,

@@ -60,7 +60,7 @@ um snapshot imutável:
 {
   "answers": {
     "sex": "m | f | null",
-    "age": "number",
+    "birthDate": "timestamp | null",
     "height": "number",
     "weight": "number",
     "goal": "string | null",
@@ -77,6 +77,13 @@ um snapshot imutável:
   "createdAt": "serverTimestamp"
 }
 ```
+
+Migração `age` → `birthDate` (2026-07-30, ver 08_log_de_evolucao.md): novas
+escritas gravam somente `birthDate`. Documentos anteriores à migração ainda
+têm `age: number` no lugar de `birthDate` — são lidos normalmente (compat
+somente leitura em `userProfile.ts`, `birthDateFromLegacyAge`), nunca
+reescritos com `age`. A idade nunca é persistida diretamente: é sempre
+recalculada a partir de `birthDate` via `computeAge` (`src/lib/ageCalculator.ts`).
 
 Regras de criação:
 

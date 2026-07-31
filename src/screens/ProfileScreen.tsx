@@ -25,7 +25,13 @@ const PROVIDER_META: { id: string; label: string; icon: IconName }[] = [
   { id: 'password', label: 'E-mail/Senha', icon: 'mail' },
 ];
 
-export function ProfileScreen({ onOpenAssessment }: { onOpenAssessment?: () => void }) {
+export function ProfileScreen({
+  onOpenAssessment,
+  onOpenSettings,
+}: {
+  onOpenAssessment?: () => void;
+  onOpenSettings?: () => void;
+}) {
   const { user, profile, linkedProviders, logout } = useAuth();
 
   const email = profile?.email ?? user?.email ?? '';
@@ -241,7 +247,7 @@ export function ProfileScreen({ onOpenAssessment }: { onOpenAssessment?: () => v
           <ProfileGroup
             title="PREFERÊNCIAS"
             items={[
-              { i: 'settings', l: 'Configurações' },
+              { i: 'settings', l: 'Configurações', onPress: onOpenSettings },
               { i: 'timer', l: 'Timers e sons' },
             ]}
           />
