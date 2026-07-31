@@ -9,6 +9,8 @@ import { SegBar } from '../components/ui/SegBar';
 import { Icon, IconName } from '../components/ui/Icon';
 import { OutlineNumber } from '../components/ui/OutlineNumber';
 import { colors, fonts } from '../theme/tokens';
+import { useAuth } from '../state/AuthContext';
+import { getDisplayFirstName } from '../lib/userName';
 
 const TICKER_ITEMS: [string, string][] = [
   ['SEQUÊNCIA', '14 DIAS'],
@@ -95,6 +97,13 @@ export function HomeScreen({
   onStart: () => void;
   onOpenConsistency: () => void;
 }) {
+  const { user, profile } = useAuth();
+  const firstName = getDisplayFirstName({
+    profileName: profile?.name,
+    authDisplayName: user?.displayName,
+    email: user?.email ?? profile?.email,
+  }).toUpperCase();
+
   return (
     <ScreenBg>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
@@ -115,7 +124,7 @@ export function HomeScreen({
               <Display size={34} style={{ marginTop: 8 }}>
                 E AÍ,
               </Display>
-              <Display size={34}>ARNALDO.</Display>
+              <Display size={34}>{firstName}.</Display>
             </View>
             <LinearGradient
               colors={['#1f82ff', colors.accent]}
