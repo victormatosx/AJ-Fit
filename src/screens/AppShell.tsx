@@ -1,9 +1,14 @@
 import { useState } from 'react';
-import { View, Text, Pressable } from 'react-native';
+import { View, Text, Pressable, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Icon, IconName } from '../components/ui/Icon';
+import { HudCorners } from '../components/ui/Card';
+import { Display, Slash } from '../components/ui/Display';
+import { OutlineNumber } from '../components/ui/OutlineNumber';
 import { colors, fonts } from '../theme/tokens';
 import { useAppState, TabId } from '../state/AppState';
+import { TODAY_WORKOUT } from '../lib/todayWorkout';
 import { HomeScreen } from './HomeScreen';
 import { WorkoutScreen } from './WorkoutScreen';
 import { ProgressScreen } from './ProgressScreen';
@@ -17,14 +22,29 @@ export function AppShell() {
   const [showCal, setShowCal] = useState(false);
   const [showAssessment, setShowAssessment] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showWorkoutConfirmation, setShowWorkoutConfirmation] = useState(false);
   const overlayOpen = showCal || showAssessment || showSettings;
+
+  const selectTab = (nextTab: TabId) => {
+    if (nextTab === 'workout' && tab !== 'workout') {
+      setShowWorkoutConfirmation(true);
+      return;
+    }
+
+    setTab(nextTab);
+  };
+
+  const startWorkout = () => {
+    setShowWorkoutConfirmation(false);
+    setTab('workout');
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <View style={{ flex: 1 }}>
         {tab === 'home' && (
           <HomeScreen
-            onStart={() => setTab('workout')}
+            onStart={() => setShowWorkoutConfirmation(true)}
             onOpenConsistency={() => setShowCal(true)}
           />
         )}
@@ -37,7 +57,12 @@ export function AppShell() {
           />
         )}
       </View>
-      {tab !== 'workout' && !overlayOpen && <TabBar tab={tab} setTab={setTab} />}
+      {tab !== 'workout' && !overlayOpen && <TabBar tab={tab} setTab={selectTab} />}
+      <StartWorkoutConfirmation
+        visible={showWorkoutConfirmation}
+        onCancel={() => setShowWorkoutConfirmation(false)}
+        onConfirm={startWorkout}
+      />
       {showCal && (
         <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 40 }}>
           <ConsistencyScreen onBack={() => setShowCal(false)} />
@@ -54,6 +79,146 @@ export function AppShell() {
         </View>
       )}
     </View>
+  );
+}
+
+function StartWorkoutConfirmation({
+  visible,
+  onCancel,
+  onConfirm,
+}: {
+  visible: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onCancel}
+      statusBarTranslucent
+    >
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Fechar confirmação de treino"
+        onPress={onCancel}
+        style={{
+          flex: 1,
+          backgroundColor: 'rgba(0,0,0,0.84)',
+          justifyContent: 'center',
+          paddingHorizontal: 34,
+        }}
+      >
+        <Pressable
+          accessibilityRole="none"
+          onPress={(event) => event.stopPropagation()}
+          style={{
+            width: '100%',
+            maxWidth: 340,
+            alignSelf: 'center',
+            borderRadius: 16,
+            borderBottomRightRadius: 0,
+            overflow: 'hidden',
+            borderWidth: 1,
+            borderColor: 'rgba(11,112,249,0.3)',
+            backgroundColor: colors.bg,
+            shadowColor: colors.accent,
+            shadowOpacity: 0.18,
+            shadowRadius: 20,
+            shadowOffset: { width: 0, height: 10 },
+            elevation: 10,
+          }}
+        >
+          <LinearGradient
+            colors={['#0a1a55', '#051042', '#04021c']}
+            locations={[0, 0.45, 1]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={{ padding: 18 }}
+          >
+            <HudCorners />
+            <OutlineNumber
+              size={118}
+              style={{
+                position: 'absolute',
+                top: -28,
+                right: -8,
+                opacity: 0.28,
+              }}
+            >
+              04
+            </OutlineNumber>
+
+            <Slash>TREINO DE HOJE</Slash>
+            <Display size={26} style={{ marginTop: 9 }}>
+              INICIAR TREINO?
+            </Display>
+            <Text
+              style={{
+                color: 'rgba(255,255,255,0.62)',
+                fontFamily: fonts.ui,
+                fontSize: 13,
+                lineHeight: 19,
+                marginTop: 8,
+              }}
+            >
+              Deseja iniciar agora
+            </Text>
+            <Text
+              style={{
+                color: '#fff',
+                fontFamily: fonts.uiBold,
+                fontSize: 14,
+                lineHeight: 20,
+                marginTop: 1,
+              }}
+            >
+              {TODAY_WORKOUT.name}?
+            </Text>
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Confirmar início do treino"
+              onPress={onConfirm}
+              style={{
+                height: 48,
+                marginTop: 18,
+                borderRadius: 10,
+                borderBottomRightRadius: 0,
+                backgroundColor: '#fff',
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 9,
+              }}
+            >
+              <Icon name="play" size={12} color="#020010" />
+              <Text
+                style={{
+                  color: '#020010',
+                  fontFamily: fonts.display,
+                  fontSize: 15,
+                  letterSpacing: 1.4,
+                  textTransform: 'uppercase',
+                }}
+              >
+                Sim, iniciar
+              </Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              onPress={onCancel}
+              style={{ alignSelf: 'center', paddingHorizontal: 18, paddingTop: 13, paddingBottom: 2 }}
+            >
+              <Text style={{ color: colors.mute, fontFamily: fonts.ui, fontSize: 13 }}>
+                Agora não
+              </Text>
+            </Pressable>
+          </LinearGradient>
+        </Pressable>
+      </Pressable>
+    </Modal>
   );
 }
 

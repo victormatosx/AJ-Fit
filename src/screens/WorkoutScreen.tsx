@@ -21,6 +21,7 @@ import { Icon } from '../components/ui/Icon';
 import { OutlineNumber } from '../components/ui/OutlineNumber';
 import { ExerciseGif } from '../components/fitness/ExerciseGif';
 import { colors, fonts, displayLineHeight } from '../theme/tokens';
+import { TODAY_WORKOUT } from '../lib/todayWorkout';
 
 const SUBS_KEY = 'ajfit-subs';
 
@@ -354,7 +355,7 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                 marginTop: 7,
               }}
             >
-              <MonoLabel>PUSH · DIA 04</MonoLabel>
+              <MonoLabel>{TODAY_WORKOUT.dayLabel}</MonoLabel>
               <MonoLabel color={colors.accentHi}>{fmt(elapsed)}</MonoLabel>
               <MonoLabel>
                 {doneSets}/{totalSets} SÉRIES

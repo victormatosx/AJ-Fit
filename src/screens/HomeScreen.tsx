@@ -11,6 +11,7 @@ import { OutlineNumber } from '../components/ui/OutlineNumber';
 import { colors, fonts } from '../theme/tokens';
 import { useAuth } from '../state/AuthContext';
 import { getDisplayFirstName } from '../lib/userName';
+import { TODAY_WORKOUT } from '../lib/todayWorkout';
 
 const TICKER_ITEMS: [string, string][] = [
   ['SEQUÊNCIA', '14 DIAS'],
@@ -178,9 +179,9 @@ export function HomeScreen({
               <View>
                 <Slash>TREINO DE HOJE</Slash>
                 <Display size={38} style={{ marginTop: 12 }}>
-                  PUSH —
+                  {TODAY_WORKOUT.type} —
                 </Display>
-                <Display size={38}>PEITO &amp; OMBRO</Display>
+                <Display size={38}>{TODAY_WORKOUT.focus}</Display>
                 <View style={{ flexDirection: 'row', gap: 12, marginTop: 14 }}>
                   <Text
                     style={{
