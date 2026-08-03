@@ -12,6 +12,7 @@ import { colors, fonts } from '../theme/tokens';
 import { useAuth } from '../state/AuthContext';
 import { getDisplayFirstName } from '../lib/userName';
 import { TODAY_WORKOUT } from '../lib/todayWorkout';
+import { ProfileAvatar } from '../components/ui/ProfileAvatar';
 
 const TICKER_ITEMS: [string, string][] = [
   ['SEQUÊNCIA', '14 DIAS'],
@@ -100,9 +101,9 @@ export function HomeScreen({
 }) {
   const { user, profile } = useAuth();
   const firstName = getDisplayFirstName({
-    profileName: profile?.name,
+    profileName: profile?.profile.name,
     authDisplayName: user?.displayName,
-    email: user?.email ?? profile?.email,
+    email: user?.email ?? profile?.profile.email,
   }).toUpperCase();
 
   return (
@@ -127,25 +128,12 @@ export function HomeScreen({
               </Display>
               <Display size={34}>{firstName}.</Display>
             </View>
-            <LinearGradient
-              colors={['#1f82ff', colors.accent]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={{
-                width: 46,
-                height: 46,
-                borderRadius: 12,
-                alignItems: 'center',
-                justifyContent: 'center',
-                shadowColor: colors.accent,
-                shadowOpacity: 0.45,
-                shadowRadius: 12,
-                shadowOffset: { width: 0, height: 0 },
-                elevation: 6,
-              }}
-            >
-              <Text style={{ fontFamily: fonts.display, fontSize: 16, color: '#fff' }}>AJ</Text>
-            </LinearGradient>
+            <ProfileAvatar
+              displayName={profile?.profile.name || firstName}
+              photoURL={profile?.profile.photoURL}
+              photoVersion={profile?.profile.photoVersion}
+              size={46}
+            />
           </View>
 
           {/* ticker */}

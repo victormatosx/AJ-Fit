@@ -94,7 +94,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // (e.g. the listener's pre-write read racing signUp's post-write read).
   const loadSeq = useRef(0);
 
-  /** Loads the user document + latest questionnaire. Read-only. */
+  /** Loads the user document (+ one-time schema migration) and questionnaire. */
   const loadUserState = useCallback(async (uid: string) => {
     const seq = ++loadSeq.current;
     setProfileLoading(true);
@@ -118,8 +118,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setProfileLoading(false);
   }, []);
 
-  // The auth listener ONLY reads — it never creates documents. This removes the
-  // creation race entirely (creation lives solely in signUp).
+  // The auth listener never creates documents. The repository may atomically
+  // migrate an existing legacy document; account creation stays in signUp.
   useEffect(() => {
     const unsubscribe = subscribeToAuthState(async (nextUser) => {
       setUser(nextUser);
@@ -167,7 +167,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       },
       signInWithProvider: async (provider, answers) => {
-        // The credential sign-in triggers the read-only listener; provisioning
+        // The credential sign-in triggers the auth-state listener; provisioning
         // stays here (explicit flow) and only creates the doc on first login.
         const authedUser = await socialSignIn(provider);
         try {

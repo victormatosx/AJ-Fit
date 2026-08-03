@@ -16,14 +16,16 @@ import { ProfileScreen } from './ProfileScreen';
 import { ConsistencyScreen } from './ConsistencyScreen';
 import { AssessmentScreen } from './AssessmentScreen';
 import { SettingsScreen } from './SettingsScreen';
+import { EditProfileScreen } from './EditProfileScreen';
 
 export function AppShell() {
   const { tab, setTab } = useAppState();
   const [showCal, setShowCal] = useState(false);
   const [showAssessment, setShowAssessment] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showEditProfile, setShowEditProfile] = useState(false);
   const [showWorkoutConfirmation, setShowWorkoutConfirmation] = useState(false);
-  const overlayOpen = showCal || showAssessment || showSettings;
+  const overlayOpen = showCal || showAssessment || showSettings || showEditProfile;
 
   const selectTab = (nextTab: TabId) => {
     if (nextTab === 'workout' && tab !== 'workout') {
@@ -53,6 +55,7 @@ export function AppShell() {
         {tab === 'profile' && (
           <ProfileScreen
             onOpenAssessment={() => setShowAssessment(true)}
+            onOpenEditProfile={() => setShowEditProfile(true)}
             onOpenSettings={() => setShowSettings(true)}
           />
         )}
@@ -75,7 +78,15 @@ export function AppShell() {
       )}
       {showSettings && (
         <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 40 }}>
-          <SettingsScreen onBack={() => setShowSettings(false)} />
+          <SettingsScreen
+            onBack={() => setShowSettings(false)}
+            onOpenEditProfile={() => setShowEditProfile(true)}
+          />
+        </View>
+      )}
+      {showEditProfile && (
+        <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 50 }}>
+          <EditProfileScreen onBack={() => setShowEditProfile(false)} />
         </View>
       )}
     </View>

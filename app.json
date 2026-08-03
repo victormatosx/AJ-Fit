@@ -46,6 +46,14 @@
       "expo-apple-authentication",
       "expo-secure-store",
       [
+        "expo-image-picker",
+        {
+          "photosPermission": "O AJ Fit acessa suas fotos para você escolher uma imagem de perfil.",
+          "cameraPermission": "O AJ Fit acessa sua câmera para você tirar uma foto de perfil.",
+          "microphonePermission": false
+        }
+      ],
+      [
         "expo-build-properties",
         {
           "ios": {
@@ -61,7 +69,8 @@
             ]
           }
         }
-      ]
+      ],
+      "expo-image"
     ]
   }
 }

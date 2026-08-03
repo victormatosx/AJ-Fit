@@ -149,6 +149,13 @@ As imagens devem ser armazenadas no Firebase Storage.
 
 O acesso deve ser protegido por regras de segurança.
 
+Fotos de perfil seguem o mesmo princípio: ficam em
+`users/{userId}/profile/avatar`, aceitam apenas `image/*` até 5 MB e somente o
+proprietário autenticado pode ler ou escrever pelo SDK. O Firestore armazena
+a URL em `profile.photoURL` e o timestamp servidor de cache em
+`profile.photoVersion`, que só pode mudar junto com a URL. A regra aceita exclusivamente o objeto
+`avatar` nesse diretório, inclusive para exclusão física.
+
 ---
 
 # 10. Exclusão de conta

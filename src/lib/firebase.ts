@@ -8,6 +8,7 @@ import {
 } from 'firebase/auth';
 import * as firebaseAuth from 'firebase/auth';
 import { getFirestore, type Firestore } from 'firebase/firestore';
+import { getStorage, type FirebaseStorage } from 'firebase/storage';
 import { secureAuthStorage } from './secureAuthStorage';
 
 /**
@@ -88,5 +89,6 @@ export const auth = createAuth();
  * architecture decision (e.g. @react-native-firebase native SDK).
  */
 export const db: Firestore = getFirestore(app);
+export const storage: FirebaseStorage = getStorage(app);
 
 export { app };

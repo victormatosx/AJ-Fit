@@ -56,7 +56,7 @@ function formatAssessmentDate(ts: Timestamp | null | undefined): string {
 }
 
 export function AssessmentScreen({ onBack }: { onBack: () => void }) {
-  const { user, questionnaire } = useAuth();
+  const { user, profile, questionnaire } = useAuth();
   const {
     assessments,
     loading,
@@ -96,7 +96,8 @@ export function AssessmentScreen({ onBack }: { onBack: () => void }) {
   // past assessment's own `age` field is intentionally NOT reused as a
   // fallback here: it was the user's age at that specific measuredAt, not a
   // birth date, and can't be projected forward.
-  const birthDate = onboardingAnswers?.birthDate ?? null;
+  const birthDate =
+    profile?.profile.birthDate?.toDate() ?? onboardingAnswers?.birthDate ?? null;
 
   const latestWithFolds =
     assessments.find(

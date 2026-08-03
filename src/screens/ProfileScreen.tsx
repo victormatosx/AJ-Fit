@@ -8,6 +8,7 @@ import { Card } from '../components/ui/Card';
 import { SegBar } from '../components/ui/SegBar';
 import { Icon, IconName } from '../components/ui/Icon';
 import { OutlineNumber } from '../components/ui/OutlineNumber';
+import { ProfileAvatar } from '../components/ui/ProfileAvatar';
 import { colors, fonts } from '../theme/tokens';
 import { useAuth } from '../state/AuthContext';
 
@@ -27,25 +28,27 @@ const PROVIDER_META: { id: string; label: string; icon: IconName }[] = [
 
 export function ProfileScreen({
   onOpenAssessment,
+  onOpenEditProfile,
   onOpenSettings,
 }: {
   onOpenAssessment?: () => void;
+  onOpenEditProfile?: () => void;
   onOpenSettings?: () => void;
 }) {
   const { user, profile, linkedProviders, logout } = useAuth();
 
-  const email = profile?.email ?? user?.email ?? '';
+  const email = profile?.profile.email ?? user?.email ?? '';
   const displayName =
-    profile?.name?.trim() ||
+    profile?.profile.name?.trim() ||
     user?.displayName?.trim() ||
     (email ? email.split('@')[0] : 'Atleta');
-  const sinceYear = profile?.createdAt
-    ? String(profile.createdAt.toDate().getFullYear())
+  const sinceYear = profile?.metadata.createdAt
+    ? String(profile.metadata.createdAt.toDate().getFullYear())
     : '—';
-  const subscriptionLabel = profile?.subscriptionStatus
-    ? SUBSCRIPTION_LABEL[profile.subscriptionStatus] ?? 'AJ PREMIUM'
+  const subscriptionLabel = profile?.subscription.status
+    ? SUBSCRIPTION_LABEL[profile.subscription.status] ?? 'AJ PREMIUM'
     : 'SEM ASSINATURA ATIVA';
-  const subscriptionSub = profile?.subscriptionStatus
+  const subscriptionSub = profile?.subscription.status
     ? 'Gerenciado pela loja (RevenueCat)'
     : 'Ative seu teste grátis de 7 dias';
 
@@ -77,20 +80,12 @@ export function ProfileScreen({
               AJ
             </OutlineNumber>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
-              <View
-                style={{
-                  width: 86,
-                  height: 86,
-                  borderRadius: 16,
-                  backgroundColor: 'rgba(255,255,255,0.04)',
-                  borderWidth: 1,
-                  borderColor: 'rgba(255,255,255,0.08)',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <Icon name="user" size={32} color="rgba(255,255,255,0.35)" />
-              </View>
+              <ProfileAvatar
+                displayName={displayName}
+                photoURL={profile?.profile.photoURL}
+                photoVersion={profile?.profile.photoVersion}
+                size={86}
+              />
               <View style={{ flex: 1 }}>
                 <MonoLabel>MEMBRO · DESDE {sinceYear}</MonoLabel>
                 <Display size={26} style={{ marginTop: 6 }} numberOfLines={1}>
@@ -239,7 +234,7 @@ export function ProfileScreen({
           <ProfileGroup
             title="CONTA"
             items={[
-              { i: 'user', l: 'Editar perfil' },
+              { i: 'user', l: 'Editar perfil', onPress: onOpenEditProfile },
               { i: 'crown', l: 'Assinatura' },
               { i: 'shield', l: 'Privacidade' },
             ]}

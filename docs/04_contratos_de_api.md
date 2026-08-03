@@ -24,24 +24,36 @@ Documento:
 users/{userId}
 ```
 
-Estrutura (revisada em 2026-07-04b — ver 08_log_de_evolucao.md). O documento
+Estrutura (revisada em 2026-08-01). O documento
 principal NÃO contém respostas de questionário; elas ficam na subcoleção
 `questionnaires`.
 
 ```json
 {
-  "userId": "string",
-  "role": "user",
-  "name": "string",
-  "email": "string",
-  "createdAt": "serverTimestamp",
-  "updatedAt": "serverTimestamp",
-
-  "activeWorkoutId": "string",
-  "subscriptionStatus": "TRIAL | ACTIVE | CANCELED | BILLING_ISSUE | EXPIRED",
-  "subscriptionProvider": "REVENUECAT",
-  "trialEndsAt": "datetime",
-  "subscriptionEndsAt": "datetime"
+  "profile": {
+    "name": "string",
+    "email": "string",
+    "birthDate": "timestamp (opcional)",
+    "photoURL": "string (opcional)",
+    "photoVersion": "timestamp (opcional)"
+  },
+  "preferences": {
+    "language": "pt-BR",
+    "units": "metric | imperial",
+    "theme": "dark | light | system"
+  },
+  "subscription": {
+    "status": "TRIAL | ACTIVE | CANCELED | BILLING_ISSUE | EXPIRED (opcional)",
+    "provider": "REVENUECAT (opcional)",
+    "trialEndsAt": "datetime (opcional)",
+    "endsAt": "datetime (opcional)"
+  },
+  "metadata": {
+    "role": "user",
+    "activeWorkoutId": "string (opcional)",
+    "createdAt": "serverTimestamp",
+    "updatedAt": "serverTimestamp"
+  }
 }
 ```
 
@@ -98,12 +110,23 @@ Regras de criação:
 Client-owned no documento principal (gravados pelo app):
 
 ```txt
-userId, role, name, email, createdAt, updatedAt
+profile.name, profile.email, profile.birthDate, profile.photoURL, profile.photoVersion,
+preferences.*, metadata.role, metadata.createdAt, metadata.updatedAt
 ```
 
-- `role` só pode ser `"user"` no cadastro pelo cliente. Promoção a admin é
+- `metadata.role` só pode ser `"user"` no cadastro pelo cliente. Promoção a admin é
   exclusiva do backend.
-- `name` é editável pelo próprio usuário.
+- `profile.name` e `profile.birthDate` são editáveis pelo próprio usuário.
+- `profile.photoURL` e `profile.photoVersion` mudam juntas em uploads,
+  substituições ou remoções; `photoVersion` usa o timestamp do servidor e nunca
+  é alterada por outras atualizações do perfil.
+- `birthDate` no documento principal representa o valor atual do perfil. A
+  resposta equivalente em cada questionário permanece imutável como snapshot
+  histórico; consumidores recorrem ao último questionário apenas como fallback
+  para documentos anteriores à migração.
+- `profile.photoURL` aponta para a foto persistida no Storage e pode ser removido.
+- Documentos no formato plano anterior são convertidos integralmente, em uma
+  transação única, no primeiro carregamento autenticado.
 
 Client-owned na subcoleção (gravados pelo app, imutáveis após criação):
 
@@ -115,8 +138,8 @@ Backend-owned (RevenueCat / Cloud Functions — nunca escritos pelo app,
 12_seguranca §3–§11):
 
 ```txt
-activeWorkoutId, subscriptionStatus, subscriptionProvider,
-trialEndsAt, subscriptionEndsAt
+metadata.activeWorkoutId, subscription.status, subscription.provider,
+subscription.trialEndsAt, subscription.endsAt
 ```
 
 ## Criação do usuário (fluxo único)
@@ -255,7 +278,7 @@ Saída:
 
 ```json
 {
-  "subscriptionStatus": "ACTIVE"
+  "subscription": { "status": "ACTIVE" }
 }
 ```
 
@@ -372,6 +395,23 @@ Os webhooks devem atualizar automaticamente o documento do usuário no Firestore
 ---
 
 # 17. Firebase Storage
+
+## Foto de perfil
+
+```txt
+users/{userId}/profile/avatar
+```
+
+- leitura, criação, substituição e exclusão: somente o próprio usuário;
+- tamanho máximo: 5 MB;
+- tipos aceitos: `image/*`;
+- a URL atual fica em `users/{userId}.profile.photoURL`;
+- a identidade imutável do cache usa `users/{userId}.profile.photoVersion`;
+- o app recorta, comprime e valida antes do upload;
+- PNG permanece PNG para preservar transparência quando possível;
+- a remoção exclui fisicamente o objeto antes de apagar a referência;
+- a URL exibida é versionada por `metadata.updatedAt` e o objeto exige
+  revalidação HTTP, evitando avatares antigos em cache.
 
 ## Fotos de progresso
 

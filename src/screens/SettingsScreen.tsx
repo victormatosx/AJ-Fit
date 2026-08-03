@@ -4,8 +4,24 @@ import { ScreenBg } from '../components/ui/ScreenBg';
 import { MonoLabel } from '../components/ui/Display';
 import { Icon } from '../components/ui/Icon';
 import { SettingsSection } from '../components/ui/SettingsSection';
+import { useAuth } from '../state/AuthContext';
 
-export function SettingsScreen({ onBack }: { onBack?: () => void }) {
+export function SettingsScreen({
+  onBack,
+  onOpenEditProfile,
+}: {
+  onBack?: () => void;
+  onOpenEditProfile?: () => void;
+}) {
+  const { profile } = useAuth();
+  const languageLabel =
+    profile?.preferences.language === 'pt-BR' ? 'Português (Brasil)' : '—';
+  const themeLabel =
+    profile?.preferences.theme === 'dark'
+      ? 'Escuro'
+      : profile?.preferences.theme ?? '—';
+  const unitsLabel = profile?.preferences.units === 'metric' ? 'kg • cm' : 'lb • in';
+
   return (
     <ScreenBg>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
@@ -47,7 +63,7 @@ export function SettingsScreen({ onBack }: { onBack?: () => void }) {
           <SettingsSection
             title="CONTA"
             items={[
-              { icon: 'user', label: 'Editar perfil', onPress: () => {} },
+              { icon: 'user', label: 'Editar perfil', onPress: onOpenEditProfile },
               { icon: 'crown', label: 'Assinatura', onPress: () => {} },
               { icon: 'key', label: 'Métodos de Login', onPress: () => {} },
               { icon: 'shield', label: 'Segurança', onPress: () => {} },
@@ -70,9 +86,9 @@ export function SettingsScreen({ onBack }: { onBack?: () => void }) {
           <SettingsSection
             title="PREFERÊNCIAS"
             items={[
-              { icon: 'moon', label: 'Tema', value: 'Escuro', onPress: () => {} },
-              { icon: 'globe', label: 'Idioma', value: 'Português (Brasil)', onPress: () => {} },
-              { icon: 'ruler', label: 'Unidades', value: 'kg • cm', onPress: () => {} },
+              { icon: 'moon', label: 'Tema', value: themeLabel, onPress: () => {} },
+              { icon: 'globe', label: 'Idioma', value: languageLabel, onPress: () => {} },
+              { icon: 'ruler', label: 'Unidades', value: unitsLabel, onPress: () => {} },
             ]}
           />
 

@@ -7,8 +7,8 @@ rules_version = '2';
 //     acesso apenas aos próprios dados; RevenueCat é dono da assinatura)
 //   - docs/04_contratos_de_api.md §5 (contrato do documento users/{userId})
 //
-// Princípio: o app só escreve campos client-owned no documento principal
-// (userId, role, name, email, createdAt, updatedAt), com role fixo em "user".
+// Princípio: o app só escreve profile e metadata.updatedAt. Preferências,
+// assinatura e metadados internos têm mapas próprios e validação independente.
 // As respostas do questionário ficam na subcoleção `questionnaires`. Campos de
 // assinatura e treino são gravados apenas pelo backend (Cloud Functions /
 // webhook RevenueCat via Admin SDK, que ignora estas regras).
@@ -24,16 +24,92 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    // Campos que o cliente NUNCA pode criar ou alterar (backend-owned).
-    function protectedFields() {
-      return [
-        'activeWorkoutId',
-        'subscriptionStatus',
-        'subscriptionProvider',
-        'trialEndsAt',
-        'subscriptionEndsAt',
-        'role'
-      ];
+    function profileValid(data) {
+      return data is map
+        && data.keys().hasAll(['name', 'email'])
+        && data.keys().hasOnly(['name', 'email', 'birthDate', 'photoURL', 'photoVersion'])
+        && data.name is string
+        && data.name.size() >= 2
+        && data.name.size() <= 50
+        && data.email is string
+        && (!('birthDate' in data)
+             || (data.birthDate is timestamp && data.birthDate <= request.time))
+        && (!('photoURL' in data)
+             || (data.photoURL is string && data.photoURL.size() <= 2048))
+        && (!('photoVersion' in data) || data.photoVersion is timestamp);
+    }
+
+    function preferencesValid(data) {
+      return data is map
+        && data.keys().hasAll(['language', 'units', 'theme'])
+        && data.keys().hasOnly(['language', 'units', 'theme'])
+        && data.language in ['pt-BR']
+        && data.units in ['metric', 'imperial']
+        && data.theme in ['dark', 'light', 'system'];
+    }
+
+    function subscriptionValid(data) {
+      return data is map
+        && data.keys().hasOnly(['status', 'provider', 'trialEndsAt', 'endsAt'])
+        && (!('status' in data)
+             || data.status in ['TRIAL', 'ACTIVE', 'CANCELED', 'BILLING_ISSUE', 'EXPIRED'])
+        && (!('provider' in data) || data.provider == 'REVENUECAT')
+        && (!('trialEndsAt' in data)
+             || data.trialEndsAt == null || data.trialEndsAt is timestamp)
+        && (!('endsAt' in data)
+             || data.endsAt == null || data.endsAt is timestamp);
+    }
+
+    function metadataValid(data) {
+      return data is map
+        && data.keys().hasAll(['role', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['role', 'activeWorkoutId', 'createdAt', 'updatedAt'])
+        && data.role == 'user'
+        && (!('activeWorkoutId' in data) || data.activeWorkoutId is string)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function nestedUserValid(data) {
+      return data.keys().hasAll(['profile', 'preferences', 'subscription', 'metadata'])
+        && data.keys().hasOnly(['profile', 'preferences', 'subscription', 'metadata'])
+        && profileValid(data.profile)
+        && preferencesValid(data.preferences)
+        && subscriptionValid(data.subscription)
+        && metadataValid(data.metadata);
+    }
+
+    function profilePhotoUpdateValid(before, after) {
+      let changed = after.diff(before).affectedKeys();
+      return (!changed.hasAny(['photoVersion']) || changed.hasAny(['photoURL']))
+        && (!changed.hasAny(['photoURL'])
+             || (changed.hasAny(['photoVersion']) && after.photoVersion == request.time));
+    }
+
+    // One-time, complete conversion of the former flat document. Every
+    // backend-owned value must be preserved exactly; after conversion the
+    // regular nested update rule applies and this branch becomes unreachable.
+    function legacyMigrationValid() {
+      let before = resource.data;
+      let after = request.resource.data;
+      return !('profile' in before)
+        && nestedUserValid(after)
+        && before.get('role', 'user') == 'user'
+        && after.profile.name == before.name
+        && after.profile.email == before.email
+        && after.profile.get('birthDate', null) == before.get('birthDate', null)
+        && after.profile.get('photoURL', null) == before.get('photoURL', null)
+        && after.preferences.language == before.get('language', 'pt-BR')
+        && after.preferences.units == 'metric'
+        && after.preferences.theme == 'dark'
+        && after.subscription.get('status', null) == before.get('subscriptionStatus', null)
+        && after.subscription.get('provider', null) == before.get('subscriptionProvider', null)
+        && after.subscription.get('trialEndsAt', null) == before.get('trialEndsAt', null)
+        && after.subscription.get('endsAt', null) == before.get('subscriptionEndsAt', null)
+        && after.metadata.role == before.get('role', 'user')
+        && after.metadata.get('activeWorkoutId', null) == before.get('activeWorkoutId', null)
+        && after.metadata.createdAt == before.createdAt
+        && after.metadata.updatedAt == request.time;
     }
 
     // Avaliações físicas (docs/03 §4/§8, docs/15 §10/§11/§18). `source` é um
@@ -89,28 +165,34 @@ service cloud.firestore {
       // Leitura: apenas o dono do documento.
       allow read: if isOwner(userId);
 
-      // Criação: apenas o próprio usuário, contendo somente os campos
-      // client-owned do documento principal (sem respostas de questionário),
-      // com role fixo em "user" e userId/email coerentes com o token.
+      // Criação: documento integralmente aninhado, com identidade coerente com
+      // o token e sem campos de assinatura/internos definidos pelo cliente.
       allow create: if isOwner(userId)
-        && request.resource.data.keys().hasOnly(
-             ['userId', 'role', 'name', 'email', 'createdAt', 'updatedAt'])
-        && request.resource.data.userId == request.auth.uid
-        && request.resource.data.email == request.auth.token.email
-        && request.resource.data.role == 'user'
-        && request.resource.data.name is string
-        && request.resource.data.createdAt is timestamp
-        && request.resource.data.updatedAt is timestamp;
+        && nestedUserValid(request.resource.data)
+        && request.resource.data.profile.email == request.auth.token.email
+        && request.resource.data.subscription.size() == 0
+        && !('activeWorkoutId' in request.resource.data.metadata)
+        && request.resource.data.metadata.createdAt == request.time
+        && request.resource.data.metadata.updatedAt == request.time;
 
-      // Atualização: apenas o dono. Campos imutáveis inalterados, nenhum campo
-      // sensível/backend-owned tocado. Editável: name (+ o próprio updatedAt).
-      allow update: if isOwner(userId)
-        && request.resource.data.userId == resource.data.userId
-        && request.resource.data.email == resource.data.email
-        && request.resource.data.role == resource.data.role
-        && request.resource.data.createdAt == resource.data.createdAt
-        && !request.resource.data.diff(resource.data)
-              .affectedKeys().hasAny(protectedFields());
+      // Atualização: apenas o dono e somente os campos editáveis do perfil.
+      // `diff().affectedKeys().hasOnly` impede alterações em campos de conta,
+      // assinatura, treino ou privilégios mesmo que novos campos sejam
+      // adicionados ao documento no futuro.
+      allow update: if isOwner(userId) && (
+        legacyMigrationValid()
+        || (
+          nestedUserValid(request.resource.data)
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['profile', 'metadata'])
+          && request.resource.data.profile.diff(resource.data.profile).affectedKeys()
+               .hasOnly(['name', 'birthDate', 'photoURL', 'photoVersion'])
+          && profilePhotoUpdateValid(resource.data.profile, request.resource.data.profile)
+          && request.resource.data.metadata.diff(resource.data.metadata).affectedKeys()
+               .hasOnly(['updatedAt'])
+          && request.resource.data.metadata.updatedAt == request.time
+        )
+      );
 
       // Exclusão: negada ao cliente (remoção é processo de backend — 90 dias,
       // docs/12 §10). Somente o Admin SDK pode excluir.

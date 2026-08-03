@@ -9,8 +9,10 @@ import {
   orderBy,
   limit,
   writeBatch,
+  runTransaction,
   serverTimestamp,
   Timestamp,
+  deleteField,
 } from 'firebase/firestore';
 import type { User } from 'firebase/auth';
 import { db } from '../lib/firebase';
@@ -21,6 +23,11 @@ import {
   type PersistedQuizAnswers,
 } from '../lib/questionnaireAnswers';
 import { logError } from '../lib/logError';
+import {
+  normalizeDisplayName,
+  validateDisplayName,
+  validateProfileBirthDate,
+} from '../lib/userProfileValidation';
 
 /**
  * User repository — the only place that touches `users/{userId}` and its
@@ -29,9 +36,10 @@ import { logError } from '../lib/logError';
  * Data model (docs/03_modelagem_banco_e_dados.md, docs/04_contratos_de_api.md §5):
  *
  *   users/{userId}
- *     userId, role, name, email, createdAt, updatedAt          (client-owned)
- *     activeWorkoutId, subscriptionStatus, subscriptionProvider,
- *     trialEndsAt, subscriptionEndsAt                          (backend-owned)
+ *     profile { name, email, birthDate, photoURL, photoVersion }
+ *     preferences { language, units, theme }
+ *     subscription { status, provider, trialEndsAt, endsAt }
+ *     metadata { role, activeWorkoutId, createdAt, updatedAt }
  *
  *   users/{userId}/questionnaires/{questionnaireId}
  *     answers, version, createdAt
@@ -53,18 +61,33 @@ export type SubscriptionStatus =
   | 'EXPIRED';
 
 export type UserProfile = {
-  userId: string;
-  role: 'user';
-  name: string;
-  email: string;
-  createdAt: Timestamp | null;
-  updatedAt: Timestamp | null;
-  // Backend-owned, optional until populated by the backend:
-  activeWorkoutId?: string;
-  subscriptionStatus?: SubscriptionStatus;
-  subscriptionProvider?: 'REVENUECAT';
-  trialEndsAt?: Timestamp | null;
-  subscriptionEndsAt?: Timestamp | null;
+  profile: {
+    name: string;
+    email: string;
+    /** Mutable value; the onboarding snapshot remains immutable. */
+    birthDate?: Timestamp | null;
+    /** Download URL for `users/{uid}/profile/avatar` in Firebase Storage. */
+    photoURL?: string;
+    /** Server timestamp changed exclusively with photoURL. */
+    photoVersion?: Timestamp;
+  };
+  preferences: {
+    language: 'pt-BR';
+    units: 'metric' | 'imperial';
+    theme: 'dark' | 'light' | 'system';
+  };
+  subscription: {
+    status?: SubscriptionStatus;
+    provider?: 'REVENUECAT';
+    trialEndsAt?: Timestamp | null;
+    endsAt?: Timestamp | null;
+  };
+  metadata: {
+    role: 'user';
+    activeWorkoutId?: string;
+    createdAt: Timestamp | null;
+    updatedAt: Timestamp | null;
+  };
 };
 
 /** Questionnaire answers (the initial onboarding quiz shape). */
@@ -98,6 +121,49 @@ function deriveName(user: User, name?: string): string {
   if (explicit) return explicit;
   const local = user.email?.split('@')[0];
   return local || 'Atleta';
+}
+
+function migratedUserDocument(data: Record<string, unknown>): Record<string, unknown> {
+  const profile: Record<string, unknown> = {
+    name: typeof data.name === 'string' ? data.name : 'Atleta',
+    email: typeof data.email === 'string' ? data.email : '',
+  };
+  if (data.birthDate instanceof Timestamp) profile.birthDate = data.birthDate;
+  if (typeof data.photoURL === 'string') profile.photoURL = data.photoURL;
+
+  const subscription: Record<string, unknown> = {};
+  if (typeof data.subscriptionStatus === 'string') {
+    subscription.status = data.subscriptionStatus;
+  }
+  if (typeof data.subscriptionProvider === 'string') {
+    subscription.provider = data.subscriptionProvider;
+  }
+  if (data.trialEndsAt instanceof Timestamp || data.trialEndsAt === null) {
+    subscription.trialEndsAt = data.trialEndsAt;
+  }
+  if (data.subscriptionEndsAt instanceof Timestamp || data.subscriptionEndsAt === null) {
+    subscription.endsAt = data.subscriptionEndsAt;
+  }
+
+  const metadata: Record<string, unknown> = {
+    role: 'user',
+    createdAt: data.createdAt instanceof Timestamp ? data.createdAt : serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  };
+  if (typeof data.activeWorkoutId === 'string') {
+    metadata.activeWorkoutId = data.activeWorkoutId;
+  }
+
+  return {
+    profile,
+    preferences: {
+      language: 'pt-BR',
+      units: 'metric',
+      theme: 'dark',
+    },
+    subscription,
+    metadata,
+  };
 }
 
 /**
@@ -134,14 +200,21 @@ export async function provisionNewUser(
   batch.set(
     userRef(user.uid),
     {
-      userId: user.uid,
-      role: 'user',
-      name: deriveName(user, input.name),
-      email: user.email ?? '',
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
+      profile: {
+        name: deriveName(user, input.name),
+        email: user.email ?? '',
+        ...(input.answers?.birthDate
+          ? { birthDate: Timestamp.fromDate(input.answers.birthDate) }
+          : {}),
+      },
+      preferences: { language: 'pt-BR', units: 'metric', theme: 'dark' },
+      subscription: {},
+      metadata: {
+        role: 'user',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      },
     },
-    { merge: true },
   );
 
   // Create the first questionnaire only when we actually have answers — never
@@ -174,10 +247,27 @@ export async function ensureUserProvisioned(
   return true;
 }
 
-/** Reads the main user document, or null when it does not exist. */
+/** Reads the main user document and atomically upgrades the former flat schema. */
 export async function getUserProfile(uid: string): Promise<UserProfile | null> {
-  const snap = await getDoc(userRef(uid));
-  return snap.exists() ? (snap.data() as UserProfile) : null;
+  const ref = userRef(uid);
+  let migrated = false;
+
+  const current = await runTransaction(db, async (transaction) => {
+    const snap = await transaction.get(ref);
+    if (!snap.exists()) return null;
+    const data = snap.data();
+    if (data.profile && data.preferences && data.subscription && data.metadata) {
+      return data as UserProfile;
+    }
+
+    transaction.set(ref, migratedUserDocument(data));
+    migrated = true;
+    return null;
+  });
+
+  if (current || !migrated) return current;
+  const migratedSnap = await getDoc(ref);
+  return migratedSnap.exists() ? (migratedSnap.data() as UserProfile) : null;
 }
 
 /** Reads the most recent questionnaire, or null when there is none. */
@@ -225,17 +315,38 @@ export async function addQuestionnaire(
 }
 
 /**
- * Updates non-sensitive, client-editable fields (currently `name`) and always
+ * Updates non-sensitive, client-editable profile fields and always
  * refreshes `updatedAt`. Sensitive/backend-owned fields are impossible to pass
  * (type) and are also rejected by Firestore rules.
  */
 export async function updateUserProfile(
   uid: string,
-  data: Partial<Pick<UserProfile, 'name'>> = {},
+  data: {
+    name?: string;
+    birthDate?: Date | null;
+    photoURL?: string | null;
+  } = {},
 ): Promise<void> {
-  const allowed = new Set(['name']);
-  const safe = Object.fromEntries(
-    Object.entries(data).filter(([key]) => allowed.has(key)),
-  );
-  await updateDoc(userRef(uid), { ...safe, updatedAt: serverTimestamp() });
+  const update: Record<string, unknown> = { 'metadata.updatedAt': serverTimestamp() };
+
+  if (data.name !== undefined) {
+    const error = validateDisplayName(data.name);
+    if (error) throw new Error(error);
+    update['profile.name'] = normalizeDisplayName(data.name);
+  }
+  if (data.birthDate !== undefined) {
+    if (data.birthDate) {
+      const error = validateProfileBirthDate(data.birthDate);
+      if (error) throw new Error(error);
+    }
+    update['profile.birthDate'] = data.birthDate
+      ? Timestamp.fromDate(data.birthDate)
+      : deleteField();
+  }
+  if (data.photoURL !== undefined) {
+    update['profile.photoURL'] = data.photoURL || deleteField();
+    update['profile.photoVersion'] = serverTimestamp();
+  }
+
+  await updateDoc(userRef(uid), update);
 }

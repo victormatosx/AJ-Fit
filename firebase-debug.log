@@ -1,0 +1,479 @@
+[debug] [2026-08-01T20:22:49.293Z] ----------------------------------------------------------------------
+[debug] [2026-08-01T20:22:49.294Z] Command:       /Users/victor/.nvm/versions/node/v20.20.2/bin/node /Users/victor/.nvm/versions/node/v20.20.2/bin/firebase projects:list --json
+[debug] [2026-08-01T20:22:49.294Z] CLI Version:   15.25.1
+[debug] [2026-08-01T20:22:49.294Z] Platform:      darwin
+[debug] [2026-08-01T20:22:49.294Z] Node Version:  v20.20.2
+[debug] [2026-08-01T20:22:49.295Z] Detected Agent: codex_cli
+[debug] [2026-08-01T20:22:49.295Z] Time:          Sat Aug 01 2026 17:22:49 GMT-0300 (Brasilia Standard Time)
+[debug] [2026-08-01T20:22:49.295Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-08-01T20:22:49.365Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-08-01T20:22:49.365Z] > authorizing via signed-in user (victor.matos3112@gmail.com)
+[debug] [2026-08-01T20:22:49.370Z] Checked if tokens are valid: false, expires at: 1785465470655
+[debug] [2026-08-01T20:22:49.370Z] Checked if tokens are valid: false, expires at: 1785465470655
+[debug] [2026-08-01T20:22:49.370Z] > refreshing access token with scopes: []
+[debug] [2026-08-01T20:22:49.371Z] >>> [apiv2][query] POST https://www.googleapis.com/oauth2/v3/token [none]
+[debug] [2026-08-01T20:22:49.371Z] >>> [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-08-01T20:22:49.625Z] <<< [apiv2][status] POST https://www.googleapis.com/oauth2/v3/token 200
+[debug] [2026-08-01T20:22:49.625Z] <<< [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-08-01T20:22:49.635Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects pageSize=1000
+[debug] [2026-08-01T20:22:50.458Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects 200
+[debug] [2026-08-01T20:22:50.458Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects [omitted]
+[info] ┌──────────────────────┬───────────────────────┬────────────────┬──────────────────────┐
+│ Project Display Name │ Project ID            │ Project Number │ Resource Location ID │
+├──────────────────────┼───────────────────────┼────────────────┼──────────────────────┤
+│ aj-fit               │ aj-fit-42b17          │ 750755923716   │ [Not specified]      │
+├──────────────────────┼───────────────────────┼────────────────┼──────────────────────┤
+│ ajfit                │ ajfit-2f321 (current) │ 753375043967   │ [Not specified]      │
+├──────────────────────┼───────────────────────┼────────────────┼──────────────────────┤
+│ bodylog              │ bodylog-fa440         │ 661378117572   │ [Not specified]      │
+├──────────────────────┼───────────────────────┼────────────────┼──────────────────────┤
+│ paulinho-motos       │ paulinho-motos-96a01  │ 615412077337   │ [Not specified]      │
+├──────────────────────┼───────────────────────┼────────────────┼──────────────────────┤
+│ HortiCore            │ stark-jr              │ 749629612439   │ [Not specified]      │
+├──────────────────────┼───────────────────────┼────────────────┼──────────────────────┤
+│ teste                │ teste-c8aa3           │ 358418809419   │ [Not specified]      │
+└──────────────────────┴───────────────────────┴────────────────┴──────────────────────┘
+[info] 
+[info] 6 project(s) total.
+[debug] [2026-08-01T20:22:50.913Z] ----------------------------------------------------------------------
+[debug] [2026-08-01T20:22:50.914Z] Command:       /Users/victor/.nvm/versions/node/v20.20.2/bin/node /Users/victor/.nvm/versions/node/v20.20.2/bin/firebase use --json
+[debug] [2026-08-01T20:22:50.914Z] CLI Version:   15.25.1
+[debug] [2026-08-01T20:22:50.914Z] Platform:      darwin
+[debug] [2026-08-01T20:22:50.914Z] Node Version:  v20.20.2
+[debug] [2026-08-01T20:22:50.915Z] Detected Agent: codex_cli
+[debug] [2026-08-01T20:22:50.915Z] Time:          Sat Aug 01 2026 17:22:50 GMT-0300 (Brasilia Standard Time)
+[debug] [2026-08-01T20:22:50.915Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-08-01T20:22:50.989Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-08-01T20:22:50.989Z] > authorizing via signed-in user (victor.matos3112@gmail.com)
+[info] ajfit-2f321
+[debug] [2026-08-01T20:22:58.575Z] ----------------------------------------------------------------------
+[debug] [2026-08-01T20:22:58.577Z] Command:       /Users/victor/.nvm/versions/node/v20.20.2/bin/node /Users/victor/.nvm/versions/node/v20.20.2/bin/firebase deploy --only firestore:rules,storage --project ajfit-2f321
+[debug] [2026-08-01T20:22:58.577Z] CLI Version:   15.25.1
+[debug] [2026-08-01T20:22:58.577Z] Platform:      darwin
+[debug] [2026-08-01T20:22:58.577Z] Node Version:  v20.20.2
+[debug] [2026-08-01T20:22:58.577Z] Detected Agent: codex_cli
+[debug] [2026-08-01T20:22:58.577Z] Time:          Sat Aug 01 2026 17:22:58 GMT-0300 (Brasilia Standard Time)
+[debug] [2026-08-01T20:22:58.578Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-08-01T20:22:59.082Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-08-01T20:22:59.082Z] > authorizing via signed-in user (victor.matos3112@gmail.com)
+[debug] [2026-08-01T20:22:59.082Z] [iam] checking project ajfit-2f321 for permissions ["datastore.indexes.create","datastore.indexes.delete","datastore.indexes.list","datastore.indexes.update","firebase.projects.get","firebaserules.releases.create","firebaserules.releases.update","firebaserules.rulesets.create"]
+[debug] [2026-08-01T20:22:59.083Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:22:59.083Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:22:59.084Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/ajfit-2f321:testIamPermissions [none]
+[debug] [2026-08-01T20:22:59.084Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/ajfit-2f321:testIamPermissions  x-goog-user-project=ajfit-2f321
+[debug] [2026-08-01T20:22:59.084Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/ajfit-2f321:testIamPermissions {"permissions":["datastore.indexes.create","datastore.indexes.delete","datastore.indexes.list","datastore.indexes.update","firebase.projects.get","firebaserules.releases.create","firebaserules.releases.update","firebaserules.rulesets.create"]}
+[debug] [2026-08-01T20:23:03.215Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/ajfit-2f321:testIamPermissions 200
+[debug] [2026-08-01T20:23:03.216Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/ajfit-2f321:testIamPermissions {"permissions":["datastore.indexes.create","datastore.indexes.delete","datastore.indexes.list","datastore.indexes.update","firebase.projects.get","firebaserules.releases.create","firebaserules.releases.update","firebaserules.rulesets.create"]}
+[info] 
+[info] === Deploying to 'ajfit-2f321'...
+[info] 
+[info] i  deploying storage, firestore 
+[info] i  storage: ensuring required API firebasestorage.googleapis.com is enabled... 
+[debug] [2026-08-01T20:23:03.218Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:23:03.218Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:23:03.218Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/ajfit-2f321/services/firebasestorage.googleapis.com [none]
+[debug] [2026-08-01T20:23:03.219Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/ajfit-2f321/services/firebasestorage.googleapis.com  x-goog-user-project=ajfit-2f321
+[debug] [2026-08-01T20:23:04.361Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/ajfit-2f321/services/firebasestorage.googleapis.com 200
+[debug] [2026-08-01T20:23:04.361Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/ajfit-2f321/services/firebasestorage.googleapis.com [omitted]
+[info] ✔  storage: required API firebasestorage.googleapis.com is enabled 
+[debug] [2026-08-01T20:23:04.374Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:23:04.374Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:23:04.374Z] >>> [apiv2][query] GET https://firebasestorage.googleapis.com/v1alpha/projects/ajfit-2f321/defaultBucket [none]
+[debug] [2026-08-01T20:23:04.949Z] <<< [apiv2][status] GET https://firebasestorage.googleapis.com/v1alpha/projects/ajfit-2f321/defaultBucket 200
+[debug] [2026-08-01T20:23:04.949Z] <<< [apiv2][body] GET https://firebasestorage.googleapis.com/v1alpha/projects/ajfit-2f321/defaultBucket {"name":"projects/ajfit-2f321/defaultBucket","location":"US-EAST1","bucket":{"name":"projects/ajfit-2f321/buckets/ajfit-2f321.firebasestorage.app"},"storageClass":"REGIONAL"}
+[info] i  firebase.storage: checking storage.rules for compilation errors... 
+[debug] [2026-08-01T20:23:04.953Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:23:04.953Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:23:04.953Z] >>> [apiv2][query] POST https://firebaserules.googleapis.com/v1/projects/ajfit-2f321:test [none]
+[debug] [2026-08-01T20:23:04.953Z] >>> [apiv2][body] POST https://firebaserules.googleapis.com/v1/projects/ajfit-2f321:test [omitted]
+[debug] [2026-08-01T20:23:06.279Z] <<< [apiv2][status] POST https://firebaserules.googleapis.com/v1/projects/ajfit-2f321:test 200
+[debug] [2026-08-01T20:23:06.279Z] <<< [apiv2][body] POST https://firebaserules.googleapis.com/v1/projects/ajfit-2f321:test {}
+[info] ✔  firebase.storage: rules file storage.rules compiled successfully 
+[info] i  firestore: ensuring required API firestore.googleapis.com is enabled... 
+[info] i  firestore: ensuring required API firestore.googleapis.com is enabled... 
+[debug] [2026-08-01T20:23:06.280Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:23:06.281Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:23:06.281Z] >>> [apiv2][query] GET https://firestore.googleapis.com/v1/projects/ajfit-2f321/databases/(default) [none]
+[debug] [2026-08-01T20:23:08.601Z] <<< [apiv2][status] GET https://firestore.googleapis.com/v1/projects/ajfit-2f321/databases/(default) 200
+[debug] [2026-08-01T20:23:08.602Z] <<< [apiv2][body] GET https://firestore.googleapis.com/v1/projects/ajfit-2f321/databases/(default) {"name":"projects/ajfit-2f321/databases/(default)","uid":"a2d96f09-c212-43e2-a89b-1dfb60629a72","createTime":"2026-07-04T15:26:39.059977Z","updateTime":"2026-07-04T15:26:39.059977Z","locationId":"nam5","type":"FIRESTORE_NATIVE","concurrencyMode":"PESSIMISTIC","versionRetentionPeriod":"3600s","earliestVersionTime":"2026-08-01T19:23:08.403540Z","appEngineIntegrationMode":"DISABLED","keyPrefix":"s","pointInTimeRecoveryEnablement":"POINT_IN_TIME_RECOVERY_DISABLED","deleteProtectionState":"DELETE_PROTECTION_DISABLED","databaseEdition":"STANDARD","freeTier":true,"realtimeUpdatesMode":"REALTIME_UPDATES_MODE_ENABLED","etag":"IJzRl5ahgJYDMNb+56+suZUD"}
+[info] i  firestore: reading indexes from firestore.indexes.json... 
+[info] i  cloud.firestore: checking firestore.rules for compilation errors... 
+[debug] [2026-08-01T20:23:08.607Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:23:08.608Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:23:08.608Z] >>> [apiv2][query] POST https://firebaserules.googleapis.com/v1/projects/ajfit-2f321:test [none]
+[debug] [2026-08-01T20:23:08.608Z] >>> [apiv2][body] POST https://firebaserules.googleapis.com/v1/projects/ajfit-2f321:test [omitted]
+[debug] [2026-08-01T20:23:09.834Z] <<< [apiv2][status] POST https://firebaserules.googleapis.com/v1/projects/ajfit-2f321:test 200
+[debug] [2026-08-01T20:23:09.834Z] <<< [apiv2][body] POST https://firebaserules.googleapis.com/v1/projects/ajfit-2f321:test {}
+[info] ✔  cloud.firestore: rules file firestore.rules compiled successfully 
+[debug] [2026-08-01T20:23:09.835Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:23:09.835Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:23:09.836Z] >>> [apiv2][query] GET https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/releases pageSize=10&pageToken=
+[debug] [2026-08-01T20:23:11.091Z] <<< [apiv2][status] GET https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/releases 200
+[debug] [2026-08-01T20:23:11.091Z] <<< [apiv2][body] GET https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/releases {"releases":[{"name":"projects/ajfit-2f321/releases/cloud.firestore","rulesetName":"projects/ajfit-2f321/rulesets/c66f9a4b-c69f-475e-bfc9-62645a407ff6","createTime":"2026-07-04T15:26:43.657270Z","updateTime":"2026-07-31T01:38:37.536633Z"},{"name":"projects/ajfit-2f321/releases/firebase.storage/ajfit-2f321.firebasestorage.app","rulesetName":"projects/ajfit-2f321/rulesets/8420e73c-21b6-44c1-970e-3b8c883db4df","createTime":"2026-07-28T12:38:32.107163Z","updateTime":"2026-07-28T12:38:32.107163Z"}]}
+[debug] [2026-08-01T20:23:11.102Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:23:11.102Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:23:11.102Z] >>> [apiv2][query] GET https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/rulesets/8420e73c-21b6-44c1-970e-3b8c883db4df [none]
+[debug] [2026-08-01T20:23:11.500Z] <<< [apiv2][status] GET https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/rulesets/8420e73c-21b6-44c1-970e-3b8c883db4df 200
+[debug] [2026-08-01T20:23:11.500Z] <<< [apiv2][body] GET https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/rulesets/8420e73c-21b6-44c1-970e-3b8c883db4df [omitted]
+[info] i  storage: uploading rules storage.rules... 
+[debug] [2026-08-01T20:23:11.502Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:23:11.502Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:23:11.502Z] >>> [apiv2][query] POST https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/rulesets [none]
+[debug] [2026-08-01T20:23:11.503Z] >>> [apiv2][body] POST https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/rulesets [omitted]
+[debug] [2026-08-01T20:23:12.737Z] <<< [apiv2][status] POST https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/rulesets 200
+[debug] [2026-08-01T20:23:12.738Z] <<< [apiv2][body] POST https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/rulesets {"name":"projects/ajfit-2f321/rulesets/9573edca-7667-4a19-b599-a2ff3366c9df","source":{"files":[{"content":"rules_version = '2';\n\nservice firebase.storage {\n  match /b/{bucket}/o {\n    match /users/{userId}/profile/{fileName} {\n      allow read: if request.auth != null && request.auth.uid == userId;\n      allow create, update: if request.auth != null\n        && request.auth.uid == userId\n        && request.resource.size <= 5 * 1024 * 1024\n        && request.resource.contentType.matches('image/.*');\n      allow delete: if request.auth != null && request.auth.uid == userId;\n    }\n  }\n}\n","name":"storage.rules"}]},"createTime":"2026-08-01T20:23:12.610623Z","metadata":{"services":["firebase.storage"]}}
+[debug] [2026-08-01T20:23:12.738Z] [rules] created ruleset projects/ajfit-2f321/rulesets/9573edca-7667-4a19-b599-a2ff3366c9df
+[debug] [2026-08-01T20:23:12.738Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:23:12.739Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:23:12.739Z] >>> [apiv2][query] GET https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/releases pageSize=10&pageToken=
+[debug] [2026-08-01T20:23:13.901Z] <<< [apiv2][status] GET https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/releases 200
+[debug] [2026-08-01T20:23:13.901Z] <<< [apiv2][body] GET https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/releases {"releases":[{"name":"projects/ajfit-2f321/releases/cloud.firestore","rulesetName":"projects/ajfit-2f321/rulesets/c66f9a4b-c69f-475e-bfc9-62645a407ff6","createTime":"2026-07-04T15:26:43.657270Z","updateTime":"2026-07-31T01:38:37.536633Z"},{"name":"projects/ajfit-2f321/releases/firebase.storage/ajfit-2f321.firebasestorage.app","rulesetName":"projects/ajfit-2f321/rulesets/8420e73c-21b6-44c1-970e-3b8c883db4df","createTime":"2026-07-28T12:38:32.107163Z","updateTime":"2026-07-28T12:38:32.107163Z"}]}
+[debug] [2026-08-01T20:23:13.902Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:23:13.902Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:23:13.902Z] >>> [apiv2][query] GET https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/rulesets/c66f9a4b-c69f-475e-bfc9-62645a407ff6 [none]
+[debug] [2026-08-01T20:23:15.011Z] <<< [apiv2][status] GET https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/rulesets/c66f9a4b-c69f-475e-bfc9-62645a407ff6 200
+[debug] [2026-08-01T20:23:15.011Z] <<< [apiv2][body] GET https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/rulesets/c66f9a4b-c69f-475e-bfc9-62645a407ff6 [omitted]
+[info] i  firestore: uploading rules firestore.rules... 
+[debug] [2026-08-01T20:23:15.012Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:23:15.012Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:23:15.012Z] >>> [apiv2][query] POST https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/rulesets [none]
+[debug] [2026-08-01T20:23:15.012Z] >>> [apiv2][body] POST https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/rulesets [omitted]
+[debug] [2026-08-01T20:23:16.345Z] <<< [apiv2][status] POST https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/rulesets 200
+[debug] [2026-08-01T20:23:16.346Z] <<< [apiv2][body] POST https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/rulesets {"name":"projects/ajfit-2f321/rulesets/c1f470fd-c0d0-4d69-aafa-22a741fd9e69","source":{"files":[{"content":"rules_version = '2';\n\n// AJ Fit — Firestore Security Rules (SUGESTÃO / pendente de validação humana).\n//\n// Baseado em:\n//   - docs/12_seguranca_geral_do_app.md (cliente não é fonte de verdade;\n//     acesso apenas aos próprios dados; RevenueCat é dono da assinatura)\n//   - docs/04_contratos_de_api.md §5 (contrato do documento users/{userId})\n//\n// Princípio: o app só escreve campos client-owned no documento principal\n// (userId, role, name, email, birthDate, photoURL, createdAt, updatedAt), com\n// role fixo em \"user\".\n// As respostas do questionário ficam na subcoleção `questionnaires`. Campos de\n// assinatura e treino são gravados apenas pelo backend (Cloud Functions /\n// webhook RevenueCat via Admin SDK, que ignora estas regras).\n\nservice cloud.firestore {\n  match /databases/{database}/documents {\n\n    function isSignedIn() {\n      return request.auth != null;\n    }\n\n    function isOwner(userId) {\n      return isSignedIn() && request.auth.uid == userId;\n    }\n\n    // Avaliações físicas (docs/03 §4/§8, docs/15 §10/§11/§18). `source` é um\n    // discriminador: guided exige os campos da calculadora (protocol, sex,\n    // age, folds, bodyFat, calculatorVersion); imported não exige nenhum\n    // deles e pode não ter bodyFat (campo simplesmente ausente — nunca 0).\n    // Campos derivados (bmi, leanMass, fatMass, sumFolds, bodyDensity) e o\n    // rótulo do protocolo nunca são aceitos: são resolvidos em tempo de\n    // leitura no app (src/lib/skinfoldCalculator.ts), nunca persistidos.\n    function assessmentCommonValid() {\n      let d = request.resource.data;\n      return d.source in ['guided', 'imported']\n        && d.measuredAt is timestamp\n        && d.measuredAt <= request.time\n        // `== request.time` (not just `is timestamp`) forces the client to\n        // have actually used serverTimestamp() — a client can't fabricate an\n        // arbitrary createdAt to game the measuredAt/createdAt tie-break sort.\n        && d.createdAt == request.time\n        && d.weight is number && d.weight > 0\n        && d.height is number && d.height > 0\n        && (!('notes' in d) || d.notes is string);\n    }\n\n    function guidedAssessmentValid() {\n      let d = request.resource.data;\n      return d.source == 'guided'\n        && d.keys().hasOnly([\n             'source', 'measuredAt', 'createdAt', 'weight', 'height', 'bodyFat',\n             'calculatorVersion', 'notes', 'protocol', 'sex', 'age', 'folds'\n           ])\n        && d.calculatorVersion == 1\n        && d.protocol in ['jp3', 'jp7']\n        && d.sex in ['m', 'f']\n        && d.age is number && d.age > 0\n        && d.bodyFat is number && d.bodyFat > 0\n        && d.folds is map && d.folds.size() > 0;\n    }\n\n    function importedAssessmentValid() {\n      let d = request.resource.data;\n      return d.source == 'imported'\n        && d.keys().hasOnly([\n             'source', 'measuredAt', 'createdAt', 'weight', 'height', 'bodyFat',\n             'notes', 'bodyWater', 'basalMetabolism', 'visceralFat'\n           ])\n        && (!('bodyFat' in d) || (d.bodyFat is number && d.bodyFat > 0))\n        && (!('bodyWater' in d) || (d.bodyWater is number && d.bodyWater > 0))\n        && (!('basalMetabolism' in d) || (d.basalMetabolism is number && d.basalMetabolism > 0))\n        && (!('visceralFat' in d) || (d.visceralFat is number && d.visceralFat > 0));\n    }\n\n    match /users/{userId} {\n      // Leitura: apenas o dono do documento.\n      allow read: if isOwner(userId);\n\n      // Criação: apenas o próprio usuário, contendo somente os campos\n      // client-owned do documento principal (sem respostas de questionário),\n      // com role fixo em \"user\" e userId/email coerentes com o token.\n      allow create: if isOwner(userId)\n        && request.resource.data.keys().hasOnly([\n             'userId', 'role', 'name', 'email', 'birthDate', 'photoURL',\n             'createdAt', 'updatedAt'\n           ])\n        && request.resource.data.userId == request.auth.uid\n        && request.resource.data.email == request.auth.token.email\n        && request.resource.data.role == 'user'\n        && request.resource.data.name is string\n        && request.resource.data.name.size() >= 2\n        && request.resource.data.name.size() <= 50\n        && (!('birthDate' in request.resource.data)\n             || (request.resource.data.birthDate is timestamp\n                 && request.resource.data.birthDate <= request.time))\n        && (!('photoURL' in request.resource.data)\n             || (request.resource.data.photoURL is string\n                 && request.resource.data.photoURL.size() <= 2048))\n        && request.resource.data.createdAt is timestamp\n        && request.resource.data.updatedAt is timestamp;\n\n      // Atualização: apenas o dono e somente os campos editáveis do perfil.\n      // `diff().affectedKeys().hasOnly` impede alterações em campos de conta,\n      // assinatura, treino ou privilégios mesmo que novos campos sejam\n      // adicionados ao documento no futuro.\n      allow update: if isOwner(userId)\n        && request.resource.data.diff(resource.data).affectedKeys()\n             .hasOnly(['name', 'birthDate', 'photoURL', 'updatedAt'])\n        && request.resource.data.name is string\n        && request.resource.data.name.size() >= 2\n        && request.resource.data.name.size() <= 50\n        && (!('birthDate' in request.resource.data)\n             || (request.resource.data.birthDate is timestamp\n                 && request.resource.data.birthDate <= request.time))\n        && (!('photoURL' in request.resource.data)\n             || (request.resource.data.photoURL is string\n                 && request.resource.data.photoURL.size() <= 2048))\n        && request.resource.data.updatedAt == request.time;\n\n      // Exclusão: negada ao cliente (remoção é processo de backend — 90 dias,\n      // docs/12 §10). Somente o Admin SDK pode excluir.\n      allow delete: if false;\n\n      // Questionários do usuário (inicial + reavaliações futuras).\n      // Cada documento é um snapshot imutável.\n      match /questionnaires/{questionnaireId} {\n        // Leitura: apenas o dono do usuário pai.\n        allow read: if isOwner(userId);\n\n        // Criação: apenas o dono, com os campos esperados e válidos.\n        allow create: if isOwner(userId)\n          && request.resource.data.keys().hasOnly(\n               ['answers', 'version', 'createdAt'])\n          && request.resource.data.answers is map\n          && request.resource.data.version is int\n          && request.resource.data.version >= 1\n          && request.resource.data.createdAt is timestamp;\n\n        // Histórico imutável: sem edição nem exclusão pelo cliente.\n        allow update, delete: if false;\n      }\n\n      // Avaliações físicas do usuário (guiadas ou importadas). Cada documento\n      // é um snapshot imutável — nunca sobrescrever ou apagar (docs/15 §11).\n      match /assessments/{assessmentId} {\n        allow read: if isOwner(userId);\n\n        allow create: if isOwner(userId)\n          && assessmentCommonValid()\n          && (guidedAssessmentValid() || importedAssessmentValid());\n\n        allow update, delete: if false;\n      }\n    }\n\n    // Coleções de sistema (exercises, workout_templates, treinos do usuário,\n    // etc.) ainda não têm contrato de regras aprovado — negar por padrão até\n    // definição do Agente de Segurança/Arquiteto.\n    match /{document=**} {\n      allow read, write: if false;\n    }\n  }\n}\n","name":"firestore.rules"}]},"createTime":"2026-08-01T20:23:16.208031Z","metadata":{"services":["cloud.firestore"]}}
+[debug] [2026-08-01T20:23:16.346Z] [rules] created ruleset projects/ajfit-2f321/rulesets/c1f470fd-c0d0-4d69-aafa-22a741fd9e69
+[debug] [2026-08-01T20:23:16.346Z] [rules] releasing firebase.storage/ajfit-2f321.firebasestorage.app with ruleset projects/ajfit-2f321/rulesets/9573edca-7667-4a19-b599-a2ff3366c9df
+[debug] [2026-08-01T20:23:16.347Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:23:16.347Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:23:16.347Z] >>> [apiv2][query] PATCH https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/releases/firebase.storage/ajfit-2f321.firebasestorage.app [none]
+[debug] [2026-08-01T20:23:16.347Z] >>> [apiv2][body] PATCH https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/releases/firebase.storage/ajfit-2f321.firebasestorage.app {"release":{"name":"projects/ajfit-2f321/releases/firebase.storage/ajfit-2f321.firebasestorage.app","rulesetName":"projects/ajfit-2f321/rulesets/9573edca-7667-4a19-b599-a2ff3366c9df"}}
+[debug] [2026-08-01T20:23:17.676Z] <<< [apiv2][status] PATCH https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/releases/firebase.storage/ajfit-2f321.firebasestorage.app 200
+[debug] [2026-08-01T20:23:17.676Z] <<< [apiv2][body] PATCH https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/releases/firebase.storage/ajfit-2f321.firebasestorage.app {"name":"projects/ajfit-2f321/releases/firebase.storage/ajfit-2f321.firebasestorage.app","rulesetName":"projects/ajfit-2f321/rulesets/9573edca-7667-4a19-b599-a2ff3366c9df","createTime":"2026-07-28T12:38:32.107163Z","updateTime":"2026-08-01T20:23:17.549232Z"}
+[debug] [2026-08-01T20:23:17.676Z] [rules] updated release projects/ajfit-2f321/releases/firebase.storage/ajfit-2f321.firebasestorage.app
+[info] ✔  storage: released rules storage.rules to firebase.storage 
+[debug] [2026-08-01T20:23:17.677Z] [rules] releasing cloud.firestore with ruleset projects/ajfit-2f321/rulesets/c1f470fd-c0d0-4d69-aafa-22a741fd9e69
+[debug] [2026-08-01T20:23:17.677Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:23:17.677Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:23:17.677Z] >>> [apiv2][query] PATCH https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/releases/cloud.firestore [none]
+[debug] [2026-08-01T20:23:17.677Z] >>> [apiv2][body] PATCH https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/releases/cloud.firestore {"release":{"name":"projects/ajfit-2f321/releases/cloud.firestore","rulesetName":"projects/ajfit-2f321/rulesets/c1f470fd-c0d0-4d69-aafa-22a741fd9e69"}}
+[debug] [2026-08-01T20:23:19.079Z] <<< [apiv2][status] PATCH https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/releases/cloud.firestore 200
+[debug] [2026-08-01T20:23:19.080Z] <<< [apiv2][body] PATCH https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/releases/cloud.firestore {"name":"projects/ajfit-2f321/releases/cloud.firestore","rulesetName":"projects/ajfit-2f321/rulesets/c1f470fd-c0d0-4d69-aafa-22a741fd9e69","createTime":"2026-07-04T15:26:43.657270Z","updateTime":"2026-08-01T20:23:18.907346Z"}
+[debug] [2026-08-01T20:23:19.080Z] [rules] updated release projects/ajfit-2f321/releases/cloud.firestore
+[info] ✔  firestore: released rules firestore.rules to cloud.firestore 
+[info] 
+[info] ✔  Deploy complete! 
+[info] 
+[info] Project Console: https://console.firebase.google.com/project/ajfit-2f321/overview
+[debug] [2026-08-01T20:48:18.189Z] ----------------------------------------------------------------------
+[debug] [2026-08-01T20:48:18.190Z] Command:       /Users/victor/.nvm/versions/node/v20.20.2/bin/node /Users/victor/.nvm/versions/node/v20.20.2/bin/firebase deploy --only firestore:rules,storage --project ajfit-2f321 --dry-run
+[debug] [2026-08-01T20:48:18.190Z] CLI Version:   15.25.1
+[debug] [2026-08-01T20:48:18.190Z] Platform:      darwin
+[debug] [2026-08-01T20:48:18.190Z] Node Version:  v20.20.2
+[debug] [2026-08-01T20:48:18.190Z] Detected Agent: codex_cli
+[debug] [2026-08-01T20:48:18.190Z] Time:          Sat Aug 01 2026 17:48:18 GMT-0300 (Brasilia Standard Time)
+[debug] [2026-08-01T20:48:18.191Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-08-01T20:48:18.657Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-08-01T20:48:18.658Z] > authorizing via signed-in user (victor.matos3112@gmail.com)
+[debug] [2026-08-01T20:48:18.658Z] [iam] checking project ajfit-2f321 for permissions ["datastore.indexes.create","datastore.indexes.delete","datastore.indexes.list","datastore.indexes.update","firebase.projects.get","firebaserules.releases.create","firebaserules.releases.update","firebaserules.rulesets.create"]
+[debug] [2026-08-01T20:48:18.658Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:48:18.658Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:48:18.659Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/ajfit-2f321:testIamPermissions [none]
+[debug] [2026-08-01T20:48:18.659Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/ajfit-2f321:testIamPermissions  x-goog-user-project=ajfit-2f321
+[debug] [2026-08-01T20:48:18.659Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/ajfit-2f321:testIamPermissions {"permissions":["datastore.indexes.create","datastore.indexes.delete","datastore.indexes.list","datastore.indexes.update","firebase.projects.get","firebaserules.releases.create","firebaserules.releases.update","firebaserules.rulesets.create"]}
+[debug] [2026-08-01T20:48:22.809Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/ajfit-2f321:testIamPermissions 200
+[debug] [2026-08-01T20:48:22.809Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/ajfit-2f321:testIamPermissions {"permissions":["datastore.indexes.create","datastore.indexes.delete","datastore.indexes.list","datastore.indexes.update","firebase.projects.get","firebaserules.releases.create","firebaserules.releases.update","firebaserules.rulesets.create"]}
+[info] 
+[info] === Deploying to 'ajfit-2f321'...
+[info] 
+[info] i  deploying storage, firestore 
+[info] i  storage: ensuring required API firebasestorage.googleapis.com is enabled... 
+[debug] [2026-08-01T20:48:22.818Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:48:22.819Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:48:22.821Z] >>> [apiv2][query] GET https://firebasestorage.googleapis.com/v1alpha/projects/ajfit-2f321/defaultBucket [none]
+[debug] [2026-08-01T20:48:24.070Z] <<< [apiv2][status] GET https://firebasestorage.googleapis.com/v1alpha/projects/ajfit-2f321/defaultBucket 200
+[debug] [2026-08-01T20:48:24.070Z] <<< [apiv2][body] GET https://firebasestorage.googleapis.com/v1alpha/projects/ajfit-2f321/defaultBucket {"name":"projects/ajfit-2f321/defaultBucket","location":"US-EAST1","bucket":{"name":"projects/ajfit-2f321/buckets/ajfit-2f321.firebasestorage.app"},"storageClass":"REGIONAL"}
+[info] i  firebase.storage: checking storage.rules for compilation errors... 
+[debug] [2026-08-01T20:48:24.074Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:48:24.074Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:48:24.074Z] >>> [apiv2][query] POST https://firebaserules.googleapis.com/v1/projects/ajfit-2f321:test [none]
+[debug] [2026-08-01T20:48:24.074Z] >>> [apiv2][body] POST https://firebaserules.googleapis.com/v1/projects/ajfit-2f321:test [omitted]
+[debug] [2026-08-01T20:48:25.421Z] <<< [apiv2][status] POST https://firebaserules.googleapis.com/v1/projects/ajfit-2f321:test 200
+[debug] [2026-08-01T20:48:25.421Z] <<< [apiv2][body] POST https://firebaserules.googleapis.com/v1/projects/ajfit-2f321:test {}
+[info] ✔  firebase.storage: rules file storage.rules compiled successfully 
+[info] i  firestore: ensuring required API firestore.googleapis.com is enabled... 
+[info] i  firestore: ensuring required API firestore.googleapis.com is enabled... 
+[debug] [2026-08-01T20:48:25.423Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:48:25.423Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:48:25.423Z] >>> [apiv2][query] GET https://firestore.googleapis.com/v1/projects/ajfit-2f321/databases/(default) [none]
+[debug] [2026-08-01T20:48:27.533Z] <<< [apiv2][status] GET https://firestore.googleapis.com/v1/projects/ajfit-2f321/databases/(default) 200
+[debug] [2026-08-01T20:48:27.533Z] <<< [apiv2][body] GET https://firestore.googleapis.com/v1/projects/ajfit-2f321/databases/(default) {"name":"projects/ajfit-2f321/databases/(default)","uid":"a2d96f09-c212-43e2-a89b-1dfb60629a72","createTime":"2026-07-04T15:26:39.059977Z","updateTime":"2026-07-04T15:26:39.059977Z","locationId":"nam5","type":"FIRESTORE_NATIVE","concurrencyMode":"PESSIMISTIC","versionRetentionPeriod":"3600s","earliestVersionTime":"2026-08-01T19:48:27.325581Z","appEngineIntegrationMode":"DISABLED","keyPrefix":"s","pointInTimeRecoveryEnablement":"POINT_IN_TIME_RECOVERY_DISABLED","deleteProtectionState":"DELETE_PROTECTION_DISABLED","databaseEdition":"STANDARD","freeTier":true,"realtimeUpdatesMode":"REALTIME_UPDATES_MODE_ENABLED","etag":"IICju+qmgJYDMNb+56+suZUD"}
+[info] i  firestore: reading indexes from firestore.indexes.json... 
+[info] i  cloud.firestore: checking firestore.rules for compilation errors... 
+[debug] [2026-08-01T20:48:27.538Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:48:27.538Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:48:27.539Z] >>> [apiv2][query] POST https://firebaserules.googleapis.com/v1/projects/ajfit-2f321:test [none]
+[debug] [2026-08-01T20:48:27.539Z] >>> [apiv2][body] POST https://firebaserules.googleapis.com/v1/projects/ajfit-2f321:test [omitted]
+[debug] [2026-08-01T20:48:27.837Z] <<< [apiv2][status] POST https://firebaserules.googleapis.com/v1/projects/ajfit-2f321:test 200
+[debug] [2026-08-01T20:48:27.837Z] <<< [apiv2][body] POST https://firebaserules.googleapis.com/v1/projects/ajfit-2f321:test {}
+[info] ✔  cloud.firestore: rules file firestore.rules compiled successfully 
+[info] 
+[info] ✔  Dry run complete! 
+[info] 
+[info] Project Console: https://console.firebase.google.com/project/ajfit-2f321/overview
+[debug] [2026-08-01T20:55:22.174Z] ----------------------------------------------------------------------
+[debug] [2026-08-01T20:55:22.176Z] Command:       /Users/victor/.nvm/versions/node/v20.20.2/bin/node /Users/victor/.nvm/versions/node/v20.20.2/bin/firebase deploy --only firestore:rules,storage --project ajfit-2f321
+[debug] [2026-08-01T20:55:22.176Z] CLI Version:   15.25.1
+[debug] [2026-08-01T20:55:22.176Z] Platform:      darwin
+[debug] [2026-08-01T20:55:22.176Z] Node Version:  v20.20.2
+[debug] [2026-08-01T20:55:22.176Z] Detected Agent: codex_cli
+[debug] [2026-08-01T20:55:22.176Z] Time:          Sat Aug 01 2026 17:55:22 GMT-0300 (Brasilia Standard Time)
+[debug] [2026-08-01T20:55:22.177Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-08-01T20:55:22.695Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-08-01T20:55:22.695Z] > authorizing via signed-in user (victor.matos3112@gmail.com)
+[debug] [2026-08-01T20:55:22.695Z] [iam] checking project ajfit-2f321 for permissions ["datastore.indexes.create","datastore.indexes.delete","datastore.indexes.list","datastore.indexes.update","firebase.projects.get","firebaserules.releases.create","firebaserules.releases.update","firebaserules.rulesets.create"]
+[debug] [2026-08-01T20:55:22.696Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:55:22.696Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:55:22.697Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/ajfit-2f321:testIamPermissions [none]
+[debug] [2026-08-01T20:55:22.697Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/ajfit-2f321:testIamPermissions  x-goog-user-project=ajfit-2f321
+[debug] [2026-08-01T20:55:22.697Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/ajfit-2f321:testIamPermissions {"permissions":["datastore.indexes.create","datastore.indexes.delete","datastore.indexes.list","datastore.indexes.update","firebase.projects.get","firebaserules.releases.create","firebaserules.releases.update","firebaserules.rulesets.create"]}
+[debug] [2026-08-01T20:55:26.156Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/ajfit-2f321:testIamPermissions 200
+[debug] [2026-08-01T20:55:26.156Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/ajfit-2f321:testIamPermissions {"permissions":["datastore.indexes.create","datastore.indexes.delete","datastore.indexes.list","datastore.indexes.update","firebase.projects.get","firebaserules.releases.create","firebaserules.releases.update","firebaserules.rulesets.create"]}
+[info] 
+[info] === Deploying to 'ajfit-2f321'...
+[info] 
+[info] i  deploying storage, firestore 
+[info] i  storage: ensuring required API firebasestorage.googleapis.com is enabled... 
+[debug] [2026-08-01T20:55:26.158Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:55:26.158Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:55:26.158Z] >>> [apiv2][query] GET https://firebasestorage.googleapis.com/v1alpha/projects/ajfit-2f321/defaultBucket [none]
+[debug] [2026-08-01T20:55:26.760Z] <<< [apiv2][status] GET https://firebasestorage.googleapis.com/v1alpha/projects/ajfit-2f321/defaultBucket 200
+[debug] [2026-08-01T20:55:26.760Z] <<< [apiv2][body] GET https://firebasestorage.googleapis.com/v1alpha/projects/ajfit-2f321/defaultBucket {"name":"projects/ajfit-2f321/defaultBucket","location":"US-EAST1","bucket":{"name":"projects/ajfit-2f321/buckets/ajfit-2f321.firebasestorage.app"},"storageClass":"REGIONAL"}
+[info] i  firebase.storage: checking storage.rules for compilation errors... 
+[debug] [2026-08-01T20:55:26.764Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:55:26.764Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:55:26.764Z] >>> [apiv2][query] POST https://firebaserules.googleapis.com/v1/projects/ajfit-2f321:test [none]
+[debug] [2026-08-01T20:55:26.764Z] >>> [apiv2][body] POST https://firebaserules.googleapis.com/v1/projects/ajfit-2f321:test [omitted]
+[debug] [2026-08-01T20:55:27.987Z] <<< [apiv2][status] POST https://firebaserules.googleapis.com/v1/projects/ajfit-2f321:test 200
+[debug] [2026-08-01T20:55:27.988Z] <<< [apiv2][body] POST https://firebaserules.googleapis.com/v1/projects/ajfit-2f321:test {}
+[info] ✔  firebase.storage: rules file storage.rules compiled successfully 
+[info] i  firestore: ensuring required API firestore.googleapis.com is enabled... 
+[info] i  firestore: ensuring required API firestore.googleapis.com is enabled... 
+[debug] [2026-08-01T20:55:27.990Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:55:27.990Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:55:27.990Z] >>> [apiv2][query] GET https://firestore.googleapis.com/v1/projects/ajfit-2f321/databases/(default) [none]
+[debug] [2026-08-01T20:55:30.168Z] <<< [apiv2][status] GET https://firestore.googleapis.com/v1/projects/ajfit-2f321/databases/(default) 200
+[debug] [2026-08-01T20:55:30.168Z] <<< [apiv2][body] GET https://firestore.googleapis.com/v1/projects/ajfit-2f321/databases/(default) {"name":"projects/ajfit-2f321/databases/(default)","uid":"a2d96f09-c212-43e2-a89b-1dfb60629a72","createTime":"2026-07-04T15:26:39.059977Z","updateTime":"2026-07-04T15:26:39.059977Z","locationId":"nam5","type":"FIRESTORE_NATIVE","concurrencyMode":"PESSIMISTIC","versionRetentionPeriod":"3600s","earliestVersionTime":"2026-08-01T19:55:29.957796Z","appEngineIntegrationMode":"DISABLED","keyPrefix":"s","pointInTimeRecoveryEnablement":"POINT_IN_TIME_RECOVERY_DISABLED","deleteProtectionState":"DELETE_PROTECTION_DISABLED","databaseEdition":"STANDARD","freeTier":true,"realtimeUpdatesMode":"REALTIME_UPDATES_MODE_ENABLED","etag":"INvW/rOogJYDMNb+56+suZUD"}
+[info] i  firestore: reading indexes from firestore.indexes.json... 
+[info] i  cloud.firestore: checking firestore.rules for compilation errors... 
+[debug] [2026-08-01T20:55:30.170Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:55:30.170Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:55:30.170Z] >>> [apiv2][query] POST https://firebaserules.googleapis.com/v1/projects/ajfit-2f321:test [none]
+[debug] [2026-08-01T20:55:30.170Z] >>> [apiv2][body] POST https://firebaserules.googleapis.com/v1/projects/ajfit-2f321:test [omitted]
+[debug] [2026-08-01T20:55:31.358Z] <<< [apiv2][status] POST https://firebaserules.googleapis.com/v1/projects/ajfit-2f321:test 200
+[debug] [2026-08-01T20:55:31.358Z] <<< [apiv2][body] POST https://firebaserules.googleapis.com/v1/projects/ajfit-2f321:test {}
+[info] ✔  cloud.firestore: rules file firestore.rules compiled successfully 
+[debug] [2026-08-01T20:55:31.359Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:55:31.359Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:55:31.360Z] >>> [apiv2][query] GET https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/releases pageSize=10&pageToken=
+[debug] [2026-08-01T20:55:32.561Z] <<< [apiv2][status] GET https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/releases 200
+[debug] [2026-08-01T20:55:32.562Z] <<< [apiv2][body] GET https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/releases {"releases":[{"name":"projects/ajfit-2f321/releases/cloud.firestore","rulesetName":"projects/ajfit-2f321/rulesets/c1f470fd-c0d0-4d69-aafa-22a741fd9e69","createTime":"2026-07-04T15:26:43.657270Z","updateTime":"2026-08-01T20:23:18.907346Z"},{"name":"projects/ajfit-2f321/releases/firebase.storage/ajfit-2f321.firebasestorage.app","rulesetName":"projects/ajfit-2f321/rulesets/9573edca-7667-4a19-b599-a2ff3366c9df","createTime":"2026-07-28T12:38:32.107163Z","updateTime":"2026-08-01T20:23:17.549232Z"}]}
+[debug] [2026-08-01T20:55:32.572Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:55:32.572Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:55:32.573Z] >>> [apiv2][query] GET https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/rulesets/9573edca-7667-4a19-b599-a2ff3366c9df [none]
+[debug] [2026-08-01T20:55:33.846Z] <<< [apiv2][status] GET https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/rulesets/9573edca-7667-4a19-b599-a2ff3366c9df 200
+[debug] [2026-08-01T20:55:33.846Z] <<< [apiv2][body] GET https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/rulesets/9573edca-7667-4a19-b599-a2ff3366c9df [omitted]
+[info] i  storage: uploading rules storage.rules... 
+[debug] [2026-08-01T20:55:33.848Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:55:33.848Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:55:33.848Z] >>> [apiv2][query] POST https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/rulesets [none]
+[debug] [2026-08-01T20:55:33.848Z] >>> [apiv2][body] POST https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/rulesets [omitted]
+[debug] [2026-08-01T20:55:35.061Z] <<< [apiv2][status] POST https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/rulesets 200
+[debug] [2026-08-01T20:55:35.061Z] <<< [apiv2][body] POST https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/rulesets {"name":"projects/ajfit-2f321/rulesets/11998c0b-f13b-4f99-89bc-3192a867c49a","source":{"files":[{"content":"rules_version = '2';\n\nservice firebase.storage {\n  match /b/{bucket}/o {\n    match /users/{userId}/profile/avatar {\n      allow read: if request.auth != null && request.auth.uid == userId;\n      allow create, update: if request.auth != null\n        && request.auth.uid == userId\n        && request.resource.size <= 5 * 1024 * 1024\n        && request.resource.contentType.matches('image/.*');\n      allow delete: if request.auth != null && request.auth.uid == userId;\n    }\n  }\n}\n","name":"storage.rules"}]},"createTime":"2026-08-01T20:55:34.909103Z","metadata":{"services":["firebase.storage"]}}
+[debug] [2026-08-01T20:55:35.061Z] [rules] created ruleset projects/ajfit-2f321/rulesets/11998c0b-f13b-4f99-89bc-3192a867c49a
+[debug] [2026-08-01T20:55:35.062Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:55:35.062Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:55:35.062Z] >>> [apiv2][query] GET https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/releases pageSize=10&pageToken=
+[debug] [2026-08-01T20:55:36.097Z] <<< [apiv2][status] GET https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/releases 200
+[debug] [2026-08-01T20:55:36.097Z] <<< [apiv2][body] GET https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/releases {"releases":[{"name":"projects/ajfit-2f321/releases/cloud.firestore","rulesetName":"projects/ajfit-2f321/rulesets/c1f470fd-c0d0-4d69-aafa-22a741fd9e69","createTime":"2026-07-04T15:26:43.657270Z","updateTime":"2026-08-01T20:23:18.907346Z"},{"name":"projects/ajfit-2f321/releases/firebase.storage/ajfit-2f321.firebasestorage.app","rulesetName":"projects/ajfit-2f321/rulesets/9573edca-7667-4a19-b599-a2ff3366c9df","createTime":"2026-07-28T12:38:32.107163Z","updateTime":"2026-08-01T20:23:17.549232Z"}]}
+[debug] [2026-08-01T20:55:36.098Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:55:36.098Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:55:36.098Z] >>> [apiv2][query] GET https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/rulesets/c1f470fd-c0d0-4d69-aafa-22a741fd9e69 [none]
+[debug] [2026-08-01T20:55:37.248Z] <<< [apiv2][status] GET https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/rulesets/c1f470fd-c0d0-4d69-aafa-22a741fd9e69 200
+[debug] [2026-08-01T20:55:37.248Z] <<< [apiv2][body] GET https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/rulesets/c1f470fd-c0d0-4d69-aafa-22a741fd9e69 [omitted]
+[info] i  firestore: uploading rules firestore.rules... 
+[debug] [2026-08-01T20:55:37.248Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:55:37.248Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:55:37.249Z] >>> [apiv2][query] POST https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/rulesets [none]
+[debug] [2026-08-01T20:55:37.249Z] >>> [apiv2][body] POST https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/rulesets [omitted]
+[debug] [2026-08-01T20:55:38.353Z] <<< [apiv2][status] POST https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/rulesets 200
+[debug] [2026-08-01T20:55:38.353Z] <<< [apiv2][body] POST https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/rulesets {"name":"projects/ajfit-2f321/rulesets/9387d68c-75f1-4c3a-82a0-6f06ee2d07ba","source":{"files":[{"content":"rules_version = '2';\n\n// AJ Fit — Firestore Security Rules (SUGESTÃO / pendente de validação humana).\n//\n// Baseado em:\n//   - docs/12_seguranca_geral_do_app.md (cliente não é fonte de verdade;\n//     acesso apenas aos próprios dados; RevenueCat é dono da assinatura)\n//   - docs/04_contratos_de_api.md §5 (contrato do documento users/{userId})\n//\n// Princípio: o app só escreve profile e metadata.updatedAt. Preferências,\n// assinatura e metadados internos têm mapas próprios e validação independente.\n// As respostas do questionário ficam na subcoleção `questionnaires`. Campos de\n// assinatura e treino são gravados apenas pelo backend (Cloud Functions /\n// webhook RevenueCat via Admin SDK, que ignora estas regras).\n\nservice cloud.firestore {\n  match /databases/{database}/documents {\n\n    function isSignedIn() {\n      return request.auth != null;\n    }\n\n    function isOwner(userId) {\n      return isSignedIn() && request.auth.uid == userId;\n    }\n\n    function profileValid(data) {\n      return data is map\n        && data.keys().hasAll(['name', 'email'])\n        && data.keys().hasOnly(['name', 'email', 'birthDate', 'photoURL'])\n        && data.name is string\n        && data.name.size() >= 2\n        && data.name.size() <= 50\n        && data.email is string\n        && (!('birthDate' in data)\n             || (data.birthDate is timestamp && data.birthDate <= request.time))\n        && (!('photoURL' in data)\n             || (data.photoURL is string && data.photoURL.size() <= 2048));\n    }\n\n    function preferencesValid(data) {\n      return data is map\n        && data.keys().hasAll(['language', 'units', 'theme'])\n        && data.keys().hasOnly(['language', 'units', 'theme'])\n        && data.language in ['pt-BR']\n        && data.units in ['metric', 'imperial']\n        && data.theme in ['dark', 'light', 'system'];\n    }\n\n    function subscriptionValid(data) {\n      return data is map\n        && data.keys().hasOnly(['status', 'provider', 'trialEndsAt', 'endsAt'])\n        && (!('status' in data)\n             || data.status in ['TRIAL', 'ACTIVE', 'CANCELED', 'BILLING_ISSUE', 'EXPIRED'])\n        && (!('provider' in data) || data.provider == 'REVENUECAT')\n        && (!('trialEndsAt' in data)\n             || data.trialEndsAt == null || data.trialEndsAt is timestamp)\n        && (!('endsAt' in data)\n             || data.endsAt == null || data.endsAt is timestamp);\n    }\n\n    function metadataValid(data) {\n      return data is map\n        && data.keys().hasAll(['role', 'createdAt', 'updatedAt'])\n        && data.keys().hasOnly(['role', 'activeWorkoutId', 'createdAt', 'updatedAt'])\n        && data.role == 'user'\n        && (!('activeWorkoutId' in data) || data.activeWorkoutId is string)\n        && data.createdAt is timestamp\n        && data.updatedAt is timestamp;\n    }\n\n    function nestedUserValid(data) {\n      return data.keys().hasAll(['profile', 'preferences', 'subscription', 'metadata'])\n        && data.keys().hasOnly(['profile', 'preferences', 'subscription', 'metadata'])\n        && profileValid(data.profile)\n        && preferencesValid(data.preferences)\n        && subscriptionValid(data.subscription)\n        && metadataValid(data.metadata);\n    }\n\n    // One-time, complete conversion of the former flat document. Every\n    // backend-owned value must be preserved exactly; after conversion the\n    // regular nested update rule applies and this branch becomes unreachable.\n    function legacyMigrationValid() {\n      let before = resource.data;\n      let after = request.resource.data;\n      return !('profile' in before)\n        && nestedUserValid(after)\n        && before.get('role', 'user') == 'user'\n        && after.profile.name == before.name\n        && after.profile.email == before.email\n        && after.profile.get('birthDate', null) == before.get('birthDate', null)\n        && after.profile.get('photoURL', null) == before.get('photoURL', null)\n        && after.preferences.language == before.get('language', 'pt-BR')\n        && after.preferences.units == 'metric'\n        && after.preferences.theme == 'dark'\n        && after.subscription.get('status', null) == before.get('subscriptionStatus', null)\n        && after.subscription.get('provider', null) == before.get('subscriptionProvider', null)\n        && after.subscription.get('trialEndsAt', null) == before.get('trialEndsAt', null)\n        && after.subscription.get('endsAt', null) == before.get('subscriptionEndsAt', null)\n        && after.metadata.role == before.get('role', 'user')\n        && after.metadata.get('activeWorkoutId', null) == before.get('activeWorkoutId', null)\n        && after.metadata.createdAt == before.createdAt\n        && after.metadata.updatedAt == request.time;\n    }\n\n    // Avaliações físicas (docs/03 §4/§8, docs/15 §10/§11/§18). `source` é um\n    // discriminador: guided exige os campos da calculadora (protocol, sex,\n    // age, folds, bodyFat, calculatorVersion); imported não exige nenhum\n    // deles e pode não ter bodyFat (campo simplesmente ausente — nunca 0).\n    // Campos derivados (bmi, leanMass, fatMass, sumFolds, bodyDensity) e o\n    // rótulo do protocolo nunca são aceitos: são resolvidos em tempo de\n    // leitura no app (src/lib/skinfoldCalculator.ts), nunca persistidos.\n    function assessmentCommonValid() {\n      let d = request.resource.data;\n      return d.source in ['guided', 'imported']\n        && d.measuredAt is timestamp\n        && d.measuredAt <= request.time\n        // `== request.time` (not just `is timestamp`) forces the client to\n        // have actually used serverTimestamp() — a client can't fabricate an\n        // arbitrary createdAt to game the measuredAt/createdAt tie-break sort.\n        && d.createdAt == request.time\n        && d.weight is number && d.weight > 0\n        && d.height is number && d.height > 0\n        && (!('notes' in d) || d.notes is string);\n    }\n\n    function guidedAssessmentValid() {\n      let d = request.resource.data;\n      return d.source == 'guided'\n        && d.keys().hasOnly([\n             'source', 'measuredAt', 'createdAt', 'weight', 'height', 'bodyFat',\n             'calculatorVersion', 'notes', 'protocol', 'sex', 'age', 'folds'\n           ])\n        && d.calculatorVersion == 1\n        && d.protocol in ['jp3', 'jp7']\n        && d.sex in ['m', 'f']\n        && d.age is number && d.age > 0\n        && d.bodyFat is number && d.bodyFat > 0\n        && d.folds is map && d.folds.size() > 0;\n    }\n\n    function importedAssessmentValid() {\n      let d = request.resource.data;\n      return d.source == 'imported'\n        && d.keys().hasOnly([\n             'source', 'measuredAt', 'createdAt', 'weight', 'height', 'bodyFat',\n             'notes', 'bodyWater', 'basalMetabolism', 'visceralFat'\n           ])\n        && (!('bodyFat' in d) || (d.bodyFat is number && d.bodyFat > 0))\n        && (!('bodyWater' in d) || (d.bodyWater is number && d.bodyWater > 0))\n        && (!('basalMetabolism' in d) || (d.basalMetabolism is number && d.basalMetabolism > 0))\n        && (!('visceralFat' in d) || (d.visceralFat is number && d.visceralFat > 0));\n    }\n\n    match /users/{userId} {\n      // Leitura: apenas o dono do documento.\n      allow read: if isOwner(userId);\n\n      // Criação: documento integralmente aninhado, com identidade coerente com\n      // o token e sem campos de assinatura/internos definidos pelo cliente.\n      allow create: if isOwner(userId)\n        && nestedUserValid(request.resource.data)\n        && request.resource.data.profile.email == request.auth.token.email\n        && request.resource.data.subscription.size() == 0\n        && !('activeWorkoutId' in request.resource.data.metadata)\n        && request.resource.data.metadata.createdAt == request.time\n        && request.resource.data.metadata.updatedAt == request.time;\n\n      // Atualização: apenas o dono e somente os campos editáveis do perfil.\n      // `diff().affectedKeys().hasOnly` impede alterações em campos de conta,\n      // assinatura, treino ou privilégios mesmo que novos campos sejam\n      // adicionados ao documento no futuro.\n      allow update: if isOwner(userId) && (\n        legacyMigrationValid()\n        || (\n          nestedUserValid(request.resource.data)\n          && request.resource.data.diff(resource.data).affectedKeys()\n               .hasOnly(['profile', 'metadata'])\n          && request.resource.data.profile.diff(resource.data.profile).affectedKeys()\n               .hasOnly(['name', 'birthDate', 'photoURL'])\n          && request.resource.data.metadata.diff(resource.data.metadata).affectedKeys()\n               .hasOnly(['updatedAt'])\n          && request.resource.data.metadata.updatedAt == request.time\n        )\n      );\n\n      // Exclusão: negada ao cliente (remoção é processo de backend — 90 dias,\n      // docs/12 §10). Somente o Admin SDK pode excluir.\n      allow delete: if false;\n\n      // Questionários do usuário (inicial + reavaliações futuras).\n      // Cada documento é um snapshot imutável.\n      match /questionnaires/{questionnaireId} {\n        // Leitura: apenas o dono do usuário pai.\n        allow read: if isOwner(userId);\n\n        // Criação: apenas o dono, com os campos esperados e válidos.\n        allow create: if isOwner(userId)\n          && request.resource.data.keys().hasOnly(\n               ['answers', 'version', 'createdAt'])\n          && request.resource.data.answers is map\n          && request.resource.data.version is int\n          && request.resource.data.version >= 1\n          && request.resource.data.createdAt is timestamp;\n\n        // Histórico imutável: sem edição nem exclusão pelo cliente.\n        allow update, delete: if false;\n      }\n\n      // Avaliações físicas do usuário (guiadas ou importadas). Cada documento\n      // é um snapshot imutável — nunca sobrescrever ou apagar (docs/15 §11).\n      match /assessments/{assessmentId} {\n        allow read: if isOwner(userId);\n\n        allow create: if isOwner(userId)\n          && assessmentCommonValid()\n          && (guidedAssessmentValid() || importedAssessmentValid());\n\n        allow update, delete: if false;\n      }\n    }\n\n    // Coleções de sistema (exercises, workout_templates, treinos do usuário,\n    // etc.) ainda não têm contrato de regras aprovado — negar por padrão até\n    // definição do Agente de Segurança/Arquiteto.\n    match /{document=**} {\n      allow read, write: if false;\n    }\n  }\n}\n","name":"firestore.rules"}]},"createTime":"2026-08-01T20:55:38.220271Z","metadata":{"services":["cloud.firestore"]}}
+[debug] [2026-08-01T20:55:38.353Z] [rules] created ruleset projects/ajfit-2f321/rulesets/9387d68c-75f1-4c3a-82a0-6f06ee2d07ba
+[debug] [2026-08-01T20:55:38.354Z] [rules] releasing firebase.storage/ajfit-2f321.firebasestorage.app with ruleset projects/ajfit-2f321/rulesets/11998c0b-f13b-4f99-89bc-3192a867c49a
+[debug] [2026-08-01T20:55:38.355Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:55:38.355Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:55:38.355Z] >>> [apiv2][query] PATCH https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/releases/firebase.storage/ajfit-2f321.firebasestorage.app [none]
+[debug] [2026-08-01T20:55:38.355Z] >>> [apiv2][body] PATCH https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/releases/firebase.storage/ajfit-2f321.firebasestorage.app {"release":{"name":"projects/ajfit-2f321/releases/firebase.storage/ajfit-2f321.firebasestorage.app","rulesetName":"projects/ajfit-2f321/rulesets/11998c0b-f13b-4f99-89bc-3192a867c49a"}}
+[debug] [2026-08-01T20:55:39.682Z] <<< [apiv2][status] PATCH https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/releases/firebase.storage/ajfit-2f321.firebasestorage.app 200
+[debug] [2026-08-01T20:55:39.682Z] <<< [apiv2][body] PATCH https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/releases/firebase.storage/ajfit-2f321.firebasestorage.app {"name":"projects/ajfit-2f321/releases/firebase.storage/ajfit-2f321.firebasestorage.app","rulesetName":"projects/ajfit-2f321/rulesets/11998c0b-f13b-4f99-89bc-3192a867c49a","createTime":"2026-07-28T12:38:32.107163Z","updateTime":"2026-08-01T20:55:39.501915Z"}
+[debug] [2026-08-01T20:55:39.682Z] [rules] updated release projects/ajfit-2f321/releases/firebase.storage/ajfit-2f321.firebasestorage.app
+[info] ✔  storage: released rules storage.rules to firebase.storage 
+[debug] [2026-08-01T20:55:39.682Z] [rules] releasing cloud.firestore with ruleset projects/ajfit-2f321/rulesets/9387d68c-75f1-4c3a-82a0-6f06ee2d07ba
+[debug] [2026-08-01T20:55:39.682Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:55:39.683Z] Checked if tokens are valid: true, expires at: 1785619368625
+[debug] [2026-08-01T20:55:39.683Z] >>> [apiv2][query] PATCH https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/releases/cloud.firestore [none]
+[debug] [2026-08-01T20:55:39.683Z] >>> [apiv2][body] PATCH https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/releases/cloud.firestore {"release":{"name":"projects/ajfit-2f321/releases/cloud.firestore","rulesetName":"projects/ajfit-2f321/rulesets/9387d68c-75f1-4c3a-82a0-6f06ee2d07ba"}}
+[debug] [2026-08-01T20:55:40.806Z] <<< [apiv2][status] PATCH https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/releases/cloud.firestore 200
+[debug] [2026-08-01T20:55:40.806Z] <<< [apiv2][body] PATCH https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/releases/cloud.firestore {"name":"projects/ajfit-2f321/releases/cloud.firestore","rulesetName":"projects/ajfit-2f321/rulesets/9387d68c-75f1-4c3a-82a0-6f06ee2d07ba","createTime":"2026-07-04T15:26:43.657270Z","updateTime":"2026-08-01T20:55:40.644020Z"}
+[debug] [2026-08-01T20:55:40.806Z] [rules] updated release projects/ajfit-2f321/releases/cloud.firestore
+[info] ✔  firestore: released rules firestore.rules to cloud.firestore 
+[info] 
+[info] ✔  Deploy complete! 
+[info] 
+[info] Project Console: https://console.firebase.google.com/project/ajfit-2f321/overview
+[debug] [2026-08-03T00:00:23.183Z] ----------------------------------------------------------------------
+[debug] [2026-08-03T00:00:23.185Z] Command:       /Users/victor/.nvm/versions/node/v20.20.2/bin/node /Users/victor/.nvm/versions/node/v20.20.2/bin/firebase emulators:exec --only firestore --project ajfit-2f321 true
+[debug] [2026-08-03T00:00:23.185Z] CLI Version:   15.25.1
+[debug] [2026-08-03T00:00:23.185Z] Platform:      darwin
+[debug] [2026-08-03T00:00:23.185Z] Node Version:  v20.20.2
+[debug] [2026-08-03T00:00:23.185Z] Detected Agent: codex_cli
+[debug] [2026-08-03T00:00:23.185Z] Time:          Sun Aug 02 2026 21:00:23 GMT-0300 (Brasilia Standard Time)
+[debug] [2026-08-03T00:00:23.185Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-08-03T00:00:23.190Z] >>> [apiv2][query] GET https://firebase-public.firebaseio.com/cli.json [none]
+[debug] [2026-08-03T00:00:23.477Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-08-03T00:00:23.477Z] > authorizing via signed-in user (victor.matos3112@gmail.com)
+[debug] [2026-08-03T00:00:23.500Z] openjdk version "17.0.19" 2026-04-21
+
+[debug] [2026-08-03T00:00:23.500Z] OpenJDK Runtime Environment Homebrew (build 17.0.19+0)
+OpenJDK 64-Bit Server VM Homebrew (build 17.0.19+0, mixed mode, sharing)
+
+[debug] [2026-08-03T00:00:23.502Z] Parsed Java major version: 17
+[debug] [2026-08-03T00:00:23.505Z] Could not find VSCode notification endpoint: TypeError: fetch failed. If you are not running the Firebase SQL Connect VSCode extension, this is expected and not an issue.
+[info] i  emulators: Shutting down emulators. {"metadata":{"emulator":{"name":"hub"},"message":"Shutting down emulators."}}
+[debug] [2026-08-03T00:00:23.506Z] Could not find VSCode notification endpoint: TypeError: fetch failed. If you are not running the Firebase SQL Connect VSCode extension, this is expected and not an issue.
+[debug] [2026-08-03T00:00:23.836Z] <<< [apiv2][status] GET https://firebase-public.firebaseio.com/cli.json 200
+[debug] [2026-08-03T00:00:23.836Z] <<< [apiv2][body] GET https://firebase-public.firebaseio.com/cli.json {"cloudBuildErrorAfter":1594252800000,"cloudBuildWarnAfter":1590019200000,"defaultNode10After":1594252800000,"minVersion":"3.0.5","node8DeploysDisabledAfter":1613390400000,"node8RuntimeDisabledAfter":1615809600000,"node8WarnAfter":1600128000000}
+[error] 
+[error] Error: firebase-tools no longer supports Java version before 21. Please install a JDK at version 21 or above to get a compatible runtime.
+[debug] [2026-08-03T00:00:30.504Z] ----------------------------------------------------------------------
+[debug] [2026-08-03T00:00:30.505Z] Command:       /Users/victor/.nvm/versions/node/v20.20.2/bin/node /Users/victor/.nvm/versions/node/v20.20.2/bin/firebase deploy --only firestore:rules --project ajfit-2f321 --dry-run
+[debug] [2026-08-03T00:00:30.505Z] CLI Version:   15.25.1
+[debug] [2026-08-03T00:00:30.505Z] Platform:      darwin
+[debug] [2026-08-03T00:00:30.505Z] Node Version:  v20.20.2
+[debug] [2026-08-03T00:00:30.506Z] Detected Agent: codex_cli
+[debug] [2026-08-03T00:00:30.506Z] Time:          Sun Aug 02 2026 21:00:30 GMT-0300 (Brasilia Standard Time)
+[debug] [2026-08-03T00:00:30.506Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-08-03T00:00:30.828Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-08-03T00:00:30.828Z] > authorizing via signed-in user (victor.matos3112@gmail.com)
+[debug] [2026-08-03T00:00:30.828Z] [iam] checking project ajfit-2f321 for permissions ["datastore.indexes.create","datastore.indexes.delete","datastore.indexes.list","datastore.indexes.update","firebase.projects.get"]
+[debug] [2026-08-03T00:00:30.829Z] Checked if tokens are valid: false, expires at: 1785619368625
+[debug] [2026-08-03T00:00:30.829Z] Checked if tokens are valid: false, expires at: 1785619368625
+[debug] [2026-08-03T00:00:30.829Z] > refreshing access token with scopes: []
+[debug] [2026-08-03T00:00:30.831Z] >>> [apiv2][query] POST https://www.googleapis.com/oauth2/v3/token [none]
+[debug] [2026-08-03T00:00:30.831Z] >>> [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-08-03T00:00:31.199Z] <<< [apiv2][status] POST https://www.googleapis.com/oauth2/v3/token 200
+[debug] [2026-08-03T00:00:31.200Z] <<< [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-08-03T00:00:31.210Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/ajfit-2f321:testIamPermissions [none]
+[debug] [2026-08-03T00:00:31.211Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/ajfit-2f321:testIamPermissions  x-goog-user-project=ajfit-2f321
+[debug] [2026-08-03T00:00:31.211Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/ajfit-2f321:testIamPermissions {"permissions":["datastore.indexes.create","datastore.indexes.delete","datastore.indexes.list","datastore.indexes.update","firebase.projects.get"]}
+[debug] [2026-08-03T00:00:35.503Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/ajfit-2f321:testIamPermissions 200
+[debug] [2026-08-03T00:00:35.504Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/ajfit-2f321:testIamPermissions {"permissions":["datastore.indexes.create","datastore.indexes.delete","datastore.indexes.list","datastore.indexes.update","firebase.projects.get"]}
+[info] 
+[info] === Deploying to 'ajfit-2f321'...
+[info] 
+[info] i  deploying firestore 
+[info] i  firestore: ensuring required API firestore.googleapis.com is enabled... 
+[info] i  firestore: ensuring required API firestore.googleapis.com is enabled... 
+[debug] [2026-08-03T00:00:35.507Z] Checked if tokens are valid: true, expires at: 1785718830200
+[debug] [2026-08-03T00:00:35.507Z] Checked if tokens are valid: true, expires at: 1785718830200
+[debug] [2026-08-03T00:00:35.508Z] >>> [apiv2][query] GET https://firestore.googleapis.com/v1/projects/ajfit-2f321/databases/(default) [none]
+[debug] [2026-08-03T00:00:37.653Z] <<< [apiv2][status] GET https://firestore.googleapis.com/v1/projects/ajfit-2f321/databases/(default) 200
+[debug] [2026-08-03T00:00:37.653Z] <<< [apiv2][body] GET https://firestore.googleapis.com/v1/projects/ajfit-2f321/databases/(default) {"name":"projects/ajfit-2f321/databases/(default)","uid":"a2d96f09-c212-43e2-a89b-1dfb60629a72","createTime":"2026-07-04T15:26:39.059977Z","updateTime":"2026-07-04T15:26:39.059977Z","locationId":"nam5","type":"FIRESTORE_NATIVE","concurrencyMode":"PESSIMISTIC","versionRetentionPeriod":"3600s","earliestVersionTime":"2026-08-02T23:00:37.797975Z","appEngineIntegrationMode":"DISABLED","keyPrefix":"s","pointInTimeRecoveryEnablement":"POINT_IN_TIME_RECOVERY_DISABLED","deleteProtectionState":"DELETE_PROTECTION_DISABLED","databaseEdition":"STANDARD","freeTier":true,"realtimeUpdatesMode":"REALTIME_UPDATES_MODE_ENABLED","etag":"IMXbrNOTg5YDMNb+56+suZUD"}
+[info] i  firestore: reading indexes from firestore.indexes.json... 
+[info] i  cloud.firestore: checking firestore.rules for compilation errors... 
+[debug] [2026-08-03T00:00:37.657Z] Checked if tokens are valid: true, expires at: 1785718830200
+[debug] [2026-08-03T00:00:37.657Z] Checked if tokens are valid: true, expires at: 1785718830200
+[debug] [2026-08-03T00:00:37.657Z] >>> [apiv2][query] POST https://firebaserules.googleapis.com/v1/projects/ajfit-2f321:test [none]
+[debug] [2026-08-03T00:00:37.658Z] >>> [apiv2][body] POST https://firebaserules.googleapis.com/v1/projects/ajfit-2f321:test [omitted]
+[debug] [2026-08-03T00:00:39.186Z] <<< [apiv2][status] POST https://firebaserules.googleapis.com/v1/projects/ajfit-2f321:test 200
+[debug] [2026-08-03T00:00:39.187Z] <<< [apiv2][body] POST https://firebaserules.googleapis.com/v1/projects/ajfit-2f321:test {}
+[info] ✔  cloud.firestore: rules file firestore.rules compiled successfully 
+[info] 
+[info] ✔  Dry run complete! 
+[info] 
+[info] Project Console: https://console.firebase.google.com/project/ajfit-2f321/overview
+[debug] [2026-08-03T00:01:26.316Z] ----------------------------------------------------------------------
+[debug] [2026-08-03T00:01:26.318Z] Command:       /Users/victor/.nvm/versions/node/v20.20.2/bin/node /Users/victor/.nvm/versions/node/v20.20.2/bin/firebase deploy --only firestore:rules --project ajfit-2f321
+[debug] [2026-08-03T00:01:26.318Z] CLI Version:   15.25.1
+[debug] [2026-08-03T00:01:26.318Z] Platform:      darwin
+[debug] [2026-08-03T00:01:26.319Z] Node Version:  v20.20.2
+[debug] [2026-08-03T00:01:26.319Z] Detected Agent: codex_cli
+[debug] [2026-08-03T00:01:26.319Z] Time:          Sun Aug 02 2026 21:01:26 GMT-0300 (Brasilia Standard Time)
+[debug] [2026-08-03T00:01:26.319Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-08-03T00:01:26.838Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-08-03T00:01:26.838Z] > authorizing via signed-in user (victor.matos3112@gmail.com)
+[debug] [2026-08-03T00:01:26.838Z] [iam] checking project ajfit-2f321 for permissions ["datastore.indexes.create","datastore.indexes.delete","datastore.indexes.list","datastore.indexes.update","firebase.projects.get"]
+[debug] [2026-08-03T00:01:26.839Z] Checked if tokens are valid: true, expires at: 1785718830200
+[debug] [2026-08-03T00:01:26.839Z] Checked if tokens are valid: true, expires at: 1785718830200
+[debug] [2026-08-03T00:01:26.840Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/ajfit-2f321:testIamPermissions [none]
+[debug] [2026-08-03T00:01:26.840Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/ajfit-2f321:testIamPermissions  x-goog-user-project=ajfit-2f321
+[debug] [2026-08-03T00:01:26.840Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/ajfit-2f321:testIamPermissions {"permissions":["datastore.indexes.create","datastore.indexes.delete","datastore.indexes.list","datastore.indexes.update","firebase.projects.get"]}
+[debug] [2026-08-03T00:01:31.001Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/ajfit-2f321:testIamPermissions 200
+[debug] [2026-08-03T00:01:31.001Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/ajfit-2f321:testIamPermissions {"permissions":["datastore.indexes.create","datastore.indexes.delete","datastore.indexes.list","datastore.indexes.update","firebase.projects.get"]}
+[info] 
+[info] === Deploying to 'ajfit-2f321'...
+[info] 
+[info] i  deploying firestore 
+[info] i  firestore: ensuring required API firestore.googleapis.com is enabled... 
+[info] i  firestore: ensuring required API firestore.googleapis.com is enabled... 
+[debug] [2026-08-03T00:01:31.004Z] Checked if tokens are valid: true, expires at: 1785718830200
+[debug] [2026-08-03T00:01:31.004Z] Checked if tokens are valid: true, expires at: 1785718830200
+[debug] [2026-08-03T00:01:31.005Z] >>> [apiv2][query] GET https://firestore.googleapis.com/v1/projects/ajfit-2f321/databases/(default) [none]
+[debug] [2026-08-03T00:01:33.129Z] <<< [apiv2][status] GET https://firestore.googleapis.com/v1/projects/ajfit-2f321/databases/(default) 200
+[debug] [2026-08-03T00:01:33.130Z] <<< [apiv2][body] GET https://firestore.googleapis.com/v1/projects/ajfit-2f321/databases/(default) {"name":"projects/ajfit-2f321/databases/(default)","uid":"a2d96f09-c212-43e2-a89b-1dfb60629a72","createTime":"2026-07-04T15:26:39.059977Z","updateTime":"2026-07-04T15:26:39.059977Z","locationId":"nam5","type":"FIRESTORE_NATIVE","concurrencyMode":"PESSIMISTIC","versionRetentionPeriod":"3600s","earliestVersionTime":"2026-08-02T23:01:33.081442Z","appEngineIntegrationMode":"DISABLED","keyPrefix":"s","pointInTimeRecoveryEnablement":"POINT_IN_TIME_RECOVERY_DISABLED","deleteProtectionState":"DELETE_PROTECTION_DISABLED","databaseEdition":"STANDARD","freeTier":true,"realtimeUpdatesMode":"REALTIME_UPDATES_MODE_ENABLED","etag":"II+Z2+2Tg5YDMNb+56+suZUD"}
+[info] i  firestore: reading indexes from firestore.indexes.json... 
+[info] i  cloud.firestore: checking firestore.rules for compilation errors... 
+[debug] [2026-08-03T00:01:33.134Z] Checked if tokens are valid: true, expires at: 1785718830200
+[debug] [2026-08-03T00:01:33.134Z] Checked if tokens are valid: true, expires at: 1785718830200
+[debug] [2026-08-03T00:01:33.135Z] >>> [apiv2][query] POST https://firebaserules.googleapis.com/v1/projects/ajfit-2f321:test [none]
+[debug] [2026-08-03T00:01:33.135Z] >>> [apiv2][body] POST https://firebaserules.googleapis.com/v1/projects/ajfit-2f321:test [omitted]
+[debug] [2026-08-03T00:01:34.373Z] <<< [apiv2][status] POST https://firebaserules.googleapis.com/v1/projects/ajfit-2f321:test 200
+[debug] [2026-08-03T00:01:34.374Z] <<< [apiv2][body] POST https://firebaserules.googleapis.com/v1/projects/ajfit-2f321:test {}
+[info] ✔  cloud.firestore: rules file firestore.rules compiled successfully 
+[debug] [2026-08-03T00:01:34.375Z] Checked if tokens are valid: true, expires at: 1785718830200
+[debug] [2026-08-03T00:01:34.375Z] Checked if tokens are valid: true, expires at: 1785718830200
+[debug] [2026-08-03T00:01:34.376Z] >>> [apiv2][query] GET https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/releases pageSize=10&pageToken=
+[debug] [2026-08-03T00:01:35.498Z] <<< [apiv2][status] GET https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/releases 200
+[debug] [2026-08-03T00:01:35.499Z] <<< [apiv2][body] GET https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/releases {"releases":[{"name":"projects/ajfit-2f321/releases/cloud.firestore","rulesetName":"projects/ajfit-2f321/rulesets/9387d68c-75f1-4c3a-82a0-6f06ee2d07ba","createTime":"2026-07-04T15:26:43.657270Z","updateTime":"2026-08-01T20:55:40.644020Z"},{"name":"projects/ajfit-2f321/releases/firebase.storage/ajfit-2f321.firebasestorage.app","rulesetName":"projects/ajfit-2f321/rulesets/11998c0b-f13b-4f99-89bc-3192a867c49a","createTime":"2026-07-28T12:38:32.107163Z","updateTime":"2026-08-01T20:55:39.501915Z"}]}
+[debug] [2026-08-03T00:01:35.509Z] Checked if tokens are valid: true, expires at: 1785718830200
+[debug] [2026-08-03T00:01:35.509Z] Checked if tokens are valid: true, expires at: 1785718830200
+[debug] [2026-08-03T00:01:35.510Z] >>> [apiv2][query] GET https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/rulesets/9387d68c-75f1-4c3a-82a0-6f06ee2d07ba [none]
+[debug] [2026-08-03T00:01:36.747Z] <<< [apiv2][status] GET https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/rulesets/9387d68c-75f1-4c3a-82a0-6f06ee2d07ba 200
+[debug] [2026-08-03T00:01:36.748Z] <<< [apiv2][body] GET https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/rulesets/9387d68c-75f1-4c3a-82a0-6f06ee2d07ba [omitted]
+[info] i  firestore: uploading rules firestore.rules... 
+[debug] [2026-08-03T00:01:36.750Z] Checked if tokens are valid: true, expires at: 1785718830200
+[debug] [2026-08-03T00:01:36.750Z] Checked if tokens are valid: true, expires at: 1785718830200
+[debug] [2026-08-03T00:01:36.750Z] >>> [apiv2][query] POST https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/rulesets [none]
+[debug] [2026-08-03T00:01:36.751Z] >>> [apiv2][body] POST https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/rulesets [omitted]
+[debug] [2026-08-03T00:01:37.872Z] <<< [apiv2][status] POST https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/rulesets 200
+[debug] [2026-08-03T00:01:37.872Z] <<< [apiv2][body] POST https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/rulesets {"name":"projects/ajfit-2f321/rulesets/3a4392fa-6880-4a4e-94b0-b735379b395b","source":{"files":[{"content":"rules_version = '2';\n\n// AJ Fit — Firestore Security Rules (SUGESTÃO / pendente de validação humana).\n//\n// Baseado em:\n//   - docs/12_seguranca_geral_do_app.md (cliente não é fonte de verdade;\n//     acesso apenas aos próprios dados; RevenueCat é dono da assinatura)\n//   - docs/04_contratos_de_api.md §5 (contrato do documento users/{userId})\n//\n// Princípio: o app só escreve profile e metadata.updatedAt. Preferências,\n// assinatura e metadados internos têm mapas próprios e validação independente.\n// As respostas do questionário ficam na subcoleção `questionnaires`. Campos de\n// assinatura e treino são gravados apenas pelo backend (Cloud Functions /\n// webhook RevenueCat via Admin SDK, que ignora estas regras).\n\nservice cloud.firestore {\n  match /databases/{database}/documents {\n\n    function isSignedIn() {\n      return request.auth != null;\n    }\n\n    function isOwner(userId) {\n      return isSignedIn() && request.auth.uid == userId;\n    }\n\n    function profileValid(data) {\n      return data is map\n        && data.keys().hasAll(['name', 'email'])\n        && data.keys().hasOnly(['name', 'email', 'birthDate', 'photoURL', 'photoVersion'])\n        && data.name is string\n        && data.name.size() >= 2\n        && data.name.size() <= 50\n        && data.email is string\n        && (!('birthDate' in data)\n             || (data.birthDate is timestamp && data.birthDate <= request.time))\n        && (!('photoURL' in data)\n             || (data.photoURL is string && data.photoURL.size() <= 2048))\n        && (!('photoVersion' in data) || data.photoVersion is timestamp);\n    }\n\n    function preferencesValid(data) {\n      return data is map\n        && data.keys().hasAll(['language', 'units', 'theme'])\n        && data.keys().hasOnly(['language', 'units', 'theme'])\n        && data.language in ['pt-BR']\n        && data.units in ['metric', 'imperial']\n        && data.theme in ['dark', 'light', 'system'];\n    }\n\n    function subscriptionValid(data) {\n      return data is map\n        && data.keys().hasOnly(['status', 'provider', 'trialEndsAt', 'endsAt'])\n        && (!('status' in data)\n             || data.status in ['TRIAL', 'ACTIVE', 'CANCELED', 'BILLING_ISSUE', 'EXPIRED'])\n        && (!('provider' in data) || data.provider == 'REVENUECAT')\n        && (!('trialEndsAt' in data)\n             || data.trialEndsAt == null || data.trialEndsAt is timestamp)\n        && (!('endsAt' in data)\n             || data.endsAt == null || data.endsAt is timestamp);\n    }\n\n    function metadataValid(data) {\n      return data is map\n        && data.keys().hasAll(['role', 'createdAt', 'updatedAt'])\n        && data.keys().hasOnly(['role', 'activeWorkoutId', 'createdAt', 'updatedAt'])\n        && data.role == 'user'\n        && (!('activeWorkoutId' in data) || data.activeWorkoutId is string)\n        && data.createdAt is timestamp\n        && data.updatedAt is timestamp;\n    }\n\n    function nestedUserValid(data) {\n      return data.keys().hasAll(['profile', 'preferences', 'subscription', 'metadata'])\n        && data.keys().hasOnly(['profile', 'preferences', 'subscription', 'metadata'])\n        && profileValid(data.profile)\n        && preferencesValid(data.preferences)\n        && subscriptionValid(data.subscription)\n        && metadataValid(data.metadata);\n    }\n\n    function profilePhotoUpdateValid(before, after) {\n      let changed = after.diff(before).affectedKeys();\n      return (!changed.hasAny(['photoVersion']) || changed.hasAny(['photoURL']))\n        && (!changed.hasAny(['photoURL'])\n             || (changed.hasAny(['photoVersion']) && after.photoVersion == request.time));\n    }\n\n    // One-time, complete conversion of the former flat document. Every\n    // backend-owned value must be preserved exactly; after conversion the\n    // regular nested update rule applies and this branch becomes unreachable.\n    function legacyMigrationValid() {\n      let before = resource.data;\n      let after = request.resource.data;\n      return !('profile' in before)\n        && nestedUserValid(after)\n        && before.get('role', 'user') == 'user'\n        && after.profile.name == before.name\n        && after.profile.email == before.email\n        && after.profile.get('birthDate', null) == before.get('birthDate', null)\n        && after.profile.get('photoURL', null) == before.get('photoURL', null)\n        && after.preferences.language == before.get('language', 'pt-BR')\n        && after.preferences.units == 'metric'\n        && after.preferences.theme == 'dark'\n        && after.subscription.get('status', null) == before.get('subscriptionStatus', null)\n        && after.subscription.get('provider', null) == before.get('subscriptionProvider', null)\n        && after.subscription.get('trialEndsAt', null) == before.get('trialEndsAt', null)\n        && after.subscription.get('endsAt', null) == before.get('subscriptionEndsAt', null)\n        && after.metadata.role == before.get('role', 'user')\n        && after.metadata.get('activeWorkoutId', null) == before.get('activeWorkoutId', null)\n        && after.metadata.createdAt == before.createdAt\n        && after.metadata.updatedAt == request.time;\n    }\n\n    // Avaliações físicas (docs/03 §4/§8, docs/15 §10/§11/§18). `source` é um\n    // discriminador: guided exige os campos da calculadora (protocol, sex,\n    // age, folds, bodyFat, calculatorVersion); imported não exige nenhum\n    // deles e pode não ter bodyFat (campo simplesmente ausente — nunca 0).\n    // Campos derivados (bmi, leanMass, fatMass, sumFolds, bodyDensity) e o\n    // rótulo do protocolo nunca são aceitos: são resolvidos em tempo de\n    // leitura no app (src/lib/skinfoldCalculator.ts), nunca persistidos.\n    function assessmentCommonValid() {\n      let d = request.resource.data;\n      return d.source in ['guided', 'imported']\n        && d.measuredAt is timestamp\n        && d.measuredAt <= request.time\n        // `== request.time` (not just `is timestamp`) forces the client to\n        // have actually used serverTimestamp() — a client can't fabricate an\n        // arbitrary createdAt to game the measuredAt/createdAt tie-break sort.\n        && d.createdAt == request.time\n        && d.weight is number && d.weight > 0\n        && d.height is number && d.height > 0\n        && (!('notes' in d) || d.notes is string);\n    }\n\n    function guidedAssessmentValid() {\n      let d = request.resource.data;\n      return d.source == 'guided'\n        && d.keys().hasOnly([\n             'source', 'measuredAt', 'createdAt', 'weight', 'height', 'bodyFat',\n             'calculatorVersion', 'notes', 'protocol', 'sex', 'age', 'folds'\n           ])\n        && d.calculatorVersion == 1\n        && d.protocol in ['jp3', 'jp7']\n        && d.sex in ['m', 'f']\n        && d.age is number && d.age > 0\n        && d.bodyFat is number && d.bodyFat > 0\n        && d.folds is map && d.folds.size() > 0;\n    }\n\n    function importedAssessmentValid() {\n      let d = request.resource.data;\n      return d.source == 'imported'\n        && d.keys().hasOnly([\n             'source', 'measuredAt', 'createdAt', 'weight', 'height', 'bodyFat',\n             'notes', 'bodyWater', 'basalMetabolism', 'visceralFat'\n           ])\n        && (!('bodyFat' in d) || (d.bodyFat is number && d.bodyFat > 0))\n        && (!('bodyWater' in d) || (d.bodyWater is number && d.bodyWater > 0))\n        && (!('basalMetabolism' in d) || (d.basalMetabolism is number && d.basalMetabolism > 0))\n        && (!('visceralFat' in d) || (d.visceralFat is number && d.visceralFat > 0));\n    }\n\n    match /users/{userId} {\n      // Leitura: apenas o dono do documento.\n      allow read: if isOwner(userId);\n\n      // Criação: documento integralmente aninhado, com identidade coerente com\n      // o token e sem campos de assinatura/internos definidos pelo cliente.\n      allow create: if isOwner(userId)\n        && nestedUserValid(request.resource.data)\n        && request.resource.data.profile.email == request.auth.token.email\n        && request.resource.data.subscription.size() == 0\n        && !('activeWorkoutId' in request.resource.data.metadata)\n        && request.resource.data.metadata.createdAt == request.time\n        && request.resource.data.metadata.updatedAt == request.time;\n\n      // Atualização: apenas o dono e somente os campos editáveis do perfil.\n      // `diff().affectedKeys().hasOnly` impede alterações em campos de conta,\n      // assinatura, treino ou privilégios mesmo que novos campos sejam\n      // adicionados ao documento no futuro.\n      allow update: if isOwner(userId) && (\n        legacyMigrationValid()\n        || (\n          nestedUserValid(request.resource.data)\n          && request.resource.data.diff(resource.data).affectedKeys()\n               .hasOnly(['profile', 'metadata'])\n          && request.resource.data.profile.diff(resource.data.profile).affectedKeys()\n               .hasOnly(['name', 'birthDate', 'photoURL', 'photoVersion'])\n          && profilePhotoUpdateValid(resource.data.profile, request.resource.data.profile)\n          && request.resource.data.metadata.diff(resource.data.metadata).affectedKeys()\n               .hasOnly(['updatedAt'])\n          && request.resource.data.metadata.updatedAt == request.time\n        )\n      );\n\n      // Exclusão: negada ao cliente (remoção é processo de backend — 90 dias,\n      // docs/12 §10). Somente o Admin SDK pode excluir.\n      allow delete: if false;\n\n      // Questionários do usuário (inicial + reavaliações futuras).\n      // Cada documento é um snapshot imutável.\n      match /questionnaires/{questionnaireId} {\n        // Leitura: apenas o dono do usuário pai.\n        allow read: if isOwner(userId);\n\n        // Criação: apenas o dono, com os campos esperados e válidos.\n        allow create: if isOwner(userId)\n          && request.resource.data.keys().hasOnly(\n               ['answers', 'version', 'createdAt'])\n          && request.resource.data.answers is map\n          && request.resource.data.version is int\n          && request.resource.data.version >= 1\n          && request.resource.data.createdAt is timestamp;\n\n        // Histórico imutável: sem edição nem exclusão pelo cliente.\n        allow update, delete: if false;\n      }\n\n      // Avaliações físicas do usuário (guiadas ou importadas). Cada documento\n      // é um snapshot imutável — nunca sobrescrever ou apagar (docs/15 §11).\n      match /assessments/{assessmentId} {\n        allow read: if isOwner(userId);\n\n        allow create: if isOwner(userId)\n          && assessmentCommonValid()\n          && (guidedAssessmentValid() || importedAssessmentValid());\n\n        allow update, delete: if false;\n      }\n    }\n\n    // Coleções de sistema (exercises, workout_templates, treinos do usuário,\n    // etc.) ainda não têm contrato de regras aprovado — negar por padrão até\n    // definição do Agente de Segurança/Arquiteto.\n    match /{document=**} {\n      allow read, write: if false;\n    }\n  }\n}\n","name":"firestore.rules"}]},"createTime":"2026-08-03T00:01:37.906015Z","metadata":{"services":["cloud.firestore"]}}
+[debug] [2026-08-03T00:01:37.872Z] [rules] created ruleset projects/ajfit-2f321/rulesets/3a4392fa-6880-4a4e-94b0-b735379b395b
+[debug] [2026-08-03T00:01:37.873Z] [rules] releasing cloud.firestore with ruleset projects/ajfit-2f321/rulesets/3a4392fa-6880-4a4e-94b0-b735379b395b
+[debug] [2026-08-03T00:01:37.873Z] Checked if tokens are valid: true, expires at: 1785718830200
+[debug] [2026-08-03T00:01:37.874Z] Checked if tokens are valid: true, expires at: 1785718830200
+[debug] [2026-08-03T00:01:37.874Z] >>> [apiv2][query] PATCH https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/releases/cloud.firestore [none]
+[debug] [2026-08-03T00:01:37.874Z] >>> [apiv2][body] PATCH https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/releases/cloud.firestore {"release":{"name":"projects/ajfit-2f321/releases/cloud.firestore","rulesetName":"projects/ajfit-2f321/rulesets/3a4392fa-6880-4a4e-94b0-b735379b395b"}}
+[debug] [2026-08-03T00:01:38.276Z] <<< [apiv2][status] PATCH https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/releases/cloud.firestore 200
+[debug] [2026-08-03T00:01:38.276Z] <<< [apiv2][body] PATCH https://firebaserules.googleapis.com/v1/projects/ajfit-2f321/releases/cloud.firestore {"name":"projects/ajfit-2f321/releases/cloud.firestore","rulesetName":"projects/ajfit-2f321/rulesets/3a4392fa-6880-4a4e-94b0-b735379b395b","createTime":"2026-07-04T15:26:43.657270Z","updateTime":"2026-08-03T00:01:38.313232Z"}
+[debug] [2026-08-03T00:01:38.277Z] [rules] updated release projects/ajfit-2f321/releases/cloud.firestore
+[info] ✔  firestore: released rules firestore.rules to cloud.firestore 
+[info] 
+[info] ✔  Deploy complete! 
+[info] 
+[info] Project Console: https://console.firebase.google.com/project/ajfit-2f321/overview

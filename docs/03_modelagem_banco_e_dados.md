@@ -255,6 +255,22 @@ O Firestore deve armazenar apenas:
 * metadados
 * data de envio
 
+## 9.1 Foto de perfil do usuário
+
+A foto atual do usuário é armazenada no Firebase Storage em:
+
+```txt
+users/{userId}/profile/avatar
+```
+
+O documento `users/{userId}` mantém a URL de download em `profile.photoURL` e
+um timestamp exclusivo de cache em `profile.photoVersion`, atualizado pelo
+servidor somente quando a foto muda. O arquivo é substituído no mesmo caminho e removido
+fisicamente quando a foto é excluída, evitando objetos órfãos.
+O acesso e a escrita são restritos ao proprietário, com limite de 5 MB e
+conteúdo obrigatoriamente do tipo `image/*`. Antes do upload, o app recorta,
+comprime progressivamente e reduz a resolução somente quando necessário.
+
 ---
 
 # 10. Vídeos dos exercícios
