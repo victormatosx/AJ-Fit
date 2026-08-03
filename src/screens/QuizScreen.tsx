@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,19 +6,21 @@ import {
   ScrollView,
   PanResponder,
   TextInput,
+  Modal,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Text as SvgText } from 'react-native-svg';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { Display } from '../components/ui/Display';
 import { SegBar } from '../components/ui/SegBar';
 import { CtaButton } from '../components/ui/CtaButton';
 import { Icon, IconName } from '../components/ui/Icon';
 import { HudCorners } from '../components/ui/Card';
-import { DateFieldsInput } from '../components/ui/DateFieldsInput';
+import { AndroidDateSpinner } from '../components/ui/AndroidDateSpinner';
 import { EquipmentPicker } from '../components/fitness/EquipmentPicker';
 import { colors, fonts } from '../theme/tokens';
 import { useAppState, Quiz } from '../state/AppState';
-import { useDateParts } from '../hooks/useDateParts';
 import { computeAge } from '../lib/ageCalculator';
 import { isFutureDate } from '../lib/dateUtils';
 
@@ -902,26 +904,37 @@ function BirthDateWheel({
   value: Date | null;
   onChange: (d: Date) => void;
 }) {
-  // Starting position for the fields only (React only reads this on first
-  // render) — nothing is written to the quiz until it parses into a real,
-  // in-range date (see the effect below).
-  const initial = value ?? new Date(new Date().setFullYear(new Date().getFullYear() - 25));
-  const fields = useDateParts(initial);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  // Same modal shell on both platforms — the sheet holds either the iOS
+  // native spinner or the custom AndroidDateSpinner, and both write into
+  // this temp buffer. Cancel discards; Confirm commits.
+  const [temp, setTemp] = useState<Date | null>(null);
 
-  const age = fields.date ? computeAge(fields.date) : null;
-  const future = fields.date ? isFutureDate(fields.date) : false;
-  const outOfRange = age != null && (age < q.minAge || age > q.maxAge);
-  const valid = fields.date != null && !future && !outOfRange;
+  const age = value ? computeAge(value) : null;
+  const label = value
+    ? value.toLocaleDateString('pt-BR', {
+        day: '2-digit',
+        month: 'long',
+        year: 'numeric',
+      })
+    : 'Toque para selecionar';
 
-  // Commits to the quiz only while the fields resolve to a real, plausible
-  // date — a half-typed year never gets written as a fake birth date.
-  useEffect(() => {
-    if (valid && fields.date) onChange(fields.date);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fields.day, fields.month, fields.year]);
+  const openPicker = () => {
+    // Seed with the current value or today when none. No commit happens
+    // until the user confirms — age validation lives in `canContinue`.
+    setTemp(value ?? new Date());
+    setPickerOpen(true);
+  };
+
+  const confirm = () => {
+    if (temp) onChange(temp);
+    setPickerOpen(false);
+  };
+
+  const cancel = () => setPickerOpen(false);
 
   return (
-    <View style={{ alignItems: 'center', gap: 24, paddingTop: 14 }}>
+    <View style={{ alignItems: 'center', gap: 28, paddingTop: 14 }}>
       <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 10 }}>
         <Text
           style={{
@@ -934,32 +947,120 @@ function BirthDateWheel({
             textShadowOffset: { width: 0, height: 0 },
           }}
         >
-          {age != null ? age : '—'}
+          {age != null ? age : 0}
         </Text>
         <Text style={{ fontFamily: fonts.mono, fontSize: 13, letterSpacing: 2, color: colors.faint }}>
           anos
         </Text>
       </View>
 
-      <View style={{ width: '100%' }}>
-        <DateFieldsInput
-          day={fields.day}
-          month={fields.month}
-          year={fields.year}
-          onDay={fields.setDay}
-          onMonth={fields.setMonth}
-          onYear={fields.setYear}
-          error={fields.date != null && !valid}
-        />
-      </View>
-
-      {fields.date != null && !valid && (
-        <Text style={{ fontFamily: fonts.mono, fontSize: 10, letterSpacing: 1, color: '#f0563f', textAlign: 'center' }}>
-          {future
-            ? 'DATA NO FUTURO'
-            : `INFORME UMA DATA ENTRE ${q.minAge} E ${q.maxAge} ANOS ATRÁS`}
+      <Pressable
+        onPress={openPicker}
+        style={{
+          width: '100%',
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 14,
+          paddingVertical: 18,
+          paddingHorizontal: 18,
+          borderRadius: 14,
+          backgroundColor: value ? 'rgba(11,112,249,0.16)' : 'rgba(255,255,255,0.04)',
+          borderWidth: 1,
+          borderColor: value ? '#0b70f9' : 'rgba(255,255,255,0.09)',
+        }}
+      >
+        <Icon name="calendar" size={20} color={value ? colors.accentHi : colors.faint} />
+        <Text
+          style={{
+            flex: 1,
+            fontFamily: fonts.uiSemi,
+            fontSize: 16,
+            color: value ? '#fff' : colors.mute,
+            textTransform: value ? 'none' : 'none',
+          }}
+        >
+          {label}
         </Text>
-      )}
+        <Icon name="chevron-down" size={16} color={colors.faint} />
+      </Pressable>
+
+      <Modal
+        transparent
+        visible={pickerOpen}
+        animationType="slide"
+        onRequestClose={cancel}
+      >
+        <Pressable
+          onPress={cancel}
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' }}
+        >
+          <Pressable
+            onPress={() => {}}
+            style={{
+              backgroundColor: '#0a0620',
+              borderTopLeftRadius: 20,
+              borderTopRightRadius: 20,
+              borderTopWidth: 1,
+              borderColor: 'rgba(255,255,255,0.09)',
+              paddingBottom: 24,
+            }}
+          >
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                paddingHorizontal: 18,
+                paddingVertical: 12,
+                borderBottomWidth: 1,
+                borderColor: 'rgba(255,255,255,0.06)',
+              }}
+            >
+              <Pressable onPress={cancel} hitSlop={10}>
+                <Text
+                  style={{
+                    fontFamily: fonts.mono,
+                    fontSize: 12,
+                    letterSpacing: 1.5,
+                    color: colors.faint,
+                  }}
+                >
+                  CANCELAR
+                </Text>
+              </Pressable>
+              <Pressable onPress={confirm} hitSlop={10}>
+                <Text
+                  style={{
+                    fontFamily: fonts.mono,
+                    fontSize: 12,
+                    letterSpacing: 1.5,
+                    color: colors.accentHi,
+                  }}
+                >
+                  CONFIRMAR
+                </Text>
+              </Pressable>
+            </View>
+            {Platform.OS === 'ios' ? (
+              <DateTimePicker
+                value={temp ?? new Date()}
+                mode="date"
+                display="spinner"
+                onValueChange={(_, d) => setTemp(d)}
+                locale="pt-BR"
+                themeVariant="dark"
+                textColor="#fff"
+              />
+            ) : (
+              <AndroidDateSpinner
+                value={temp ?? new Date()}
+                locale="pt-BR"
+                onChange={setTemp}
+              />
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
