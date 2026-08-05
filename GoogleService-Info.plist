@@ -3,11 +3,11 @@
 <plist version="1.0">
 <dict>
 	<key>CLIENT_ID</key>
-	<string>753375043967-sfm41c00upk4u0nbee451d3cs9bsbe1s.apps.googleusercontent.com</string>
+	<string>753375043967-siop689dt3f7njn4kjtlq6hd1ev9lun2.apps.googleusercontent.com</string>
 	<key>REVERSED_CLIENT_ID</key>
-	<string>com.googleusercontent.apps.753375043967-sfm41c00upk4u0nbee451d3cs9bsbe1s</string>
+	<string>com.googleusercontent.apps.753375043967-siop689dt3f7njn4kjtlq6hd1ev9lun2</string>
 	<key>ANDROID_CLIENT_ID</key>
-	<string>753375043967-pu63pv2bnvl3hpshq2t9nb7doo27ij82.apps.googleusercontent.com</string>
+	<string>753375043967-jaae877ejdvh70s9tl3kgm1f691e3oj0.apps.googleusercontent.com</string>
 	<key>API_KEY</key>
 	<string>AIzaSyB9Lyfmo3CM26Ms9VSEjY80deNKub7p-Zc</string>
 	<key>GCM_SENDER_ID</key>
@@ -15,7 +15,7 @@
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
-	<string>com.ajfit.mobile</string>
+	<string>com.ajfit.app</string>
 	<key>PROJECT_ID</key>
 	<string>ajfit-2f321</string>
 	<key>STORAGE_BUCKET</key>
@@ -31,6 +31,6 @@
 	<key>IS_SIGNIN_ENABLED</key>
 	<true></true>
 	<key>GOOGLE_APP_ID</key>
-	<string>1:753375043967:ios:5ae297cf534029b87afa4a</string>
+	<string>1:753375043967:ios:83422e963f7a1fd97afa4a</string>
 </dict>
 </plist>
