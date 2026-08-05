@@ -1,0 +1,14 @@
+{
+  "generic": {
+    "title": "Algo salió mal",
+    "message": "No pudimos completar la operación. Inténtalo de nuevo."
+  },
+  "network": {
+    "unavailable": "Sin conexión. Revisa tu internet e inténtalo de nuevo.",
+    "timeout": "La operación tardó demasiado en responder."
+  },
+  "operation": {
+    "failed": "No se pudo completar la operación.",
+    "tryAgain": "Vuelve a intentarlo en un momento."
+  }
+}

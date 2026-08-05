@@ -27,6 +27,8 @@ import { AuthScreen } from './src/screens/AuthScreen';
 import { PaywallScreen } from './src/screens/PaywallScreen';
 import { AppShell } from './src/screens/AppShell';
 import { colors } from './src/theme/tokens';
+import { initI18n } from './src/i18n';
+import { reconcileLanguageOnLoad } from './src/i18n/syncLanguage';
 
 type ScreenId =
   | 'splash'
@@ -64,7 +66,7 @@ function Loading() {
 }
 
 function RootNavigator() {
-  const { user, questionnaire, initializing, profileLoading, refreshProfile } = useAuth();
+  const { user, profile, questionnaire, initializing, profileLoading, refreshProfile } = useAuth();
   const { quiz } = useAppState();
   const [screen, setScreenState] = useState<ScreenId>('splash');
   // Mirrors `screen` synchronously so late/stale callbacks (e.g. the splash
@@ -74,11 +76,30 @@ function RootNavigator() {
   // Guards the forced-questionnaire save below against double submission
   // (e.g. a fast double-tap on the last quiz question).
   const [savingQuestionnaire, setSavingQuestionnaire] = useState(false);
+  // Language reconciliation runs at every profileLoading→false transition.
+  // While it runs, we hold the routing gate closed so the first authed screen
+  // renders already in the reconciled language (no flicker between remote
+  // and locally-cached values). Fires exactly once per profile-load cycle
+  // — no polling, no timers.
+  const [langReconciling, setLangReconciling] = useState(false);
+  const prevProfileLoadingRef = useRef(true);
 
   const setScreen = (next: ScreenId) => {
     screenRef.current = next;
     setScreenState(next);
   };
+
+  useEffect(() => {
+    const wasLoading = prevProfileLoadingRef.current;
+    prevProfileLoadingRef.current = profileLoading;
+    if (initializing || profileLoading || !wasLoading) return;
+    if (!user) return;
+    setLangReconciling(true);
+    reconcileLanguageOnLoad({
+      uid: user.uid,
+      remoteLanguage: profile?.preferences.language ?? null,
+    }).finally(() => setLangReconciling(false));
+  }, [initializing, profileLoading, user, profile]);
 
   // Single source of truth for navigation: authenticated users are routed
   // purely from their current state — never from the screen they happen to
@@ -91,8 +112,10 @@ function RootNavigator() {
     // `profileLoading` covers the gap between a sign-in/sign-up call setting
     // `user` and its matching Firestore read landing in `questionnaire` —
     // without this, a fully-onboarded user would flash through 'quiz' on
-    // every login while that read is still in flight.
-    if (initializing || profileLoading) return;
+    // every login while that read is still in flight. `langReconciling`
+    // holds the gate for the extra beat needed to apply the remote/pending
+    // language before the first authed screen renders.
+    if (initializing || profileLoading || langReconciling) return;
 
     if (!user) {
       // Unauthenticated: keep out of screens that require a session (also
@@ -111,7 +134,7 @@ function RootNavigator() {
 
     // Authenticated + has a questionnaire: never show the signup funnel.
     if (FUNNEL_ONLY.includes(screen)) setScreen('app');
-  }, [initializing, profileLoading, user, questionnaire, screen]);
+  }, [initializing, profileLoading, langReconciling, user, questionnaire, screen]);
 
   if (initializing) return <Loading />;
 
@@ -198,7 +221,17 @@ export default function App() {
     JetBrainsMono_700Bold,
   });
 
-  if (!fontsLoaded) {
+  // i18n bootstrap runs in parallel with `useFonts` — same `<Loading/>`
+  // covers both. `initI18n()` is idempotent (module-level memoization), so
+  // Fast Refresh cannot re-init. `.finally` ensures the gate opens even if
+  // resolution fails (a broken AsyncStorage read still falls through to the
+  // system locale + English fallback inside initI18n).
+  const [i18nReady, setI18nReady] = useState(false);
+  useEffect(() => {
+    initI18n().finally(() => setI18nReady(true));
+  }, []);
+
+  if (!fontsLoaded || !i18nReady) {
     return <Loading />;
   }
 

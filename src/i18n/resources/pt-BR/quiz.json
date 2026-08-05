@@ -1,0 +1,166 @@
+{
+  "progress": {
+    "wheelHint": "Arraste ou toque no número"
+  },
+  "actions": {
+    "generatePlan": "Gerar meu plano"
+  },
+  "sex": {
+    "title": "Qual seu sexo?",
+    "sub": "Calibra volume e recuperação.",
+    "options": {
+      "m": { "label": "Masculino", "short": "M" },
+      "f": { "label": "Feminino", "short": "F" }
+    }
+  },
+  "birthDate": {
+    "title": "Quando você nasceu?",
+    "sub": "Afeta intensidade e descanso — sua idade é recalculada sempre a partir daqui.",
+    "age_one": "{{count}} ano",
+    "age_other": "{{count}} anos"
+  },
+  "height": {
+    "title": "Sua altura?",
+    "unit": "cm"
+  },
+  "weight": {
+    "title": "Seu peso atual?",
+    "sub": "Base do cálculo de carga inicial.",
+    "unit": "kg"
+  },
+  "goal": {
+    "title": "Objetivo principal?",
+    "sub": "Define o foco do programa.",
+    "options": {
+      "hyper": { "label": "Hipertrofia", "description": "Ganhar massa muscular" },
+      "cut": { "label": "Emagrecimento", "description": "Queimar gordura" },
+      "perf": { "label": "Performance", "description": "Força e potência" },
+      "def": { "label": "Definição", "description": "Cortar e secar" },
+      "recon": { "label": "Recondicionamento", "description": "Voltar à forma" }
+    }
+  },
+  "level": {
+    "title": "Seu nível?",
+    "sub": "O programa começa exatamente do seu ponto.",
+    "options": {
+      "beg": { "label": "Iniciante", "description": "Menos de 6 meses" },
+      "int": { "label": "Intermediário", "description": "6 meses a 2 anos" },
+      "adv": { "label": "Avançado", "description": "Mais de 2 anos" },
+      "elite": { "label": "Elite", "description": "Atleta / 5+ anos" }
+    }
+  },
+  "days": {
+    "title": "Dias por semana?",
+    "sub": "Vamos cobrar exatamente esse compromisso.",
+    "unit": "dias/sem"
+  },
+  "duration": {
+    "title": "Tempo por treino?",
+    "options": {
+      "30": { "label": "30 min", "short": "30" },
+      "45": { "label": "45 min", "short": "45" },
+      "60": { "label": "60 min", "short": "60" },
+      "90": { "label": "90+ min", "short": "90" }
+    }
+  },
+  "place": {
+    "title": "Onde você treina?",
+    "sub": "O treino usa só o que você tem.",
+    "options": {
+      "gym": { "label": "Academia", "short": "GYM" },
+      "home": { "label": "Casa", "short": "CASA" },
+      "both": { "label": "Os dois", "short": "2X" }
+    }
+  },
+  "equipment": {
+    "title": "Onde você se exercita?",
+    "sub": "Selecione os equipamentos aos quais você tem acesso. Pode alterar depois.",
+    "stepLabel": "Equipamento · {{current}} / {{total}}",
+    "search": "Buscar equipamento",
+    "quickPickAllGym": "Tenho academia completa",
+    "empty": "Nenhum equipamento encontrado.",
+    "seeAll": "Ver todos {{category}}",
+    "collapse": "Recolher",
+    "skip": "Pular",
+    "connection": {
+      "prefix": "ExerciseDB",
+      "live": "Ao vivo",
+      "loading": "Conectando",
+      "offline": "Taxonomia local"
+    },
+    "categories": {
+      "freeWeights": "Peso livre",
+      "benchesAndRacks": "Bancos e racks",
+      "machines": "Máquinas",
+      "functional": "Funcional e acessórios",
+      "cardio": "Cardio",
+      "bodyweight": "Sem equipamento",
+      "other": "Outros"
+    },
+    "items": {
+      "barbell": "Barra",
+      "olympic barbell": "Barra olímpica",
+      "ez barbell": "Barra W",
+      "trap bar": "Barra hexagonal",
+      "dumbbell": "Halteres",
+      "kettlebell": "Kettlebell",
+      "weighted": "Peso adicional",
+      "hammer": "Martelo",
+      "smith machine": "Smith machine",
+      "leverage machine": "Máquina articulada",
+      "cable": "Polia / Cabo",
+      "assisted": "Máquina assistida",
+      "sled machine": "Leg press / Sled",
+      "band": "Elástico",
+      "resistance band": "Faixa de resistência",
+      "rope": "Corda",
+      "medicine ball": "Medicine ball",
+      "stability ball": "Bola de estabilidade",
+      "bosu ball": "Bosu",
+      "roller": "Rolo de liberação",
+      "wheel roller": "Roda abdominal",
+      "tire": "Pneu",
+      "body weight": "Peso corporal",
+      "stationary bike": "Bike ergométrica",
+      "elliptical machine": "Elíptico",
+      "stepmill machine": "Simulador de escada",
+      "skierg machine": "SkiErg",
+      "upper body ergometer": "Ergômetro de braço",
+      "bench": "Banco",
+      "abdominal bench": "Banco abdominal",
+      "preacher curl": "Banco Scott",
+      "leg raise tower": "Torre de abdominal",
+      "functional trainer": "Estação funcional",
+      "lat pull down machine": "Puxador (pulley)",
+      "seated row machine": "Remada sentada",
+      "chest press machine": "Supino máquina",
+      "chest fly machine": "Voador (peck deck)",
+      "shoulder press machine": "Desenvolvimento máquina",
+      "lateral raises machine": "Elevação lateral máquina",
+      "seated dip machine": "Tríceps máquina",
+      "leg press machine": "Leg press",
+      "hack squat machine": "Hack squat",
+      "leg extension machine": "Cadeira extensora",
+      "leg curl machine": "Mesa flexora",
+      "back extension machine": "Extensão lombar",
+      "ab crunch machine": "Abdominal máquina",
+      "ghd machine": "Cadeira GHD",
+      "ab roller": "Roda abdominal",
+      "elliptical": "Elíptico",
+      "stepmill": "Simulador de escada",
+      "treadmill": "Esteira"
+    }
+  },
+  "limits": {
+    "title": "Alguma limitação?",
+    "sub": "Vamos proteger o que precisa de cuidado.",
+    "options": {
+      "none": "Nenhuma",
+      "knee": "Joelho",
+      "back": "Coluna",
+      "shoulder": "Ombro",
+      "wrist": "Punho",
+      "hip": "Quadril"
+    }
+  }
+}

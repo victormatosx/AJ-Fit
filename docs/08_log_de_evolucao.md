@@ -254,6 +254,36 @@ Criar documentação específica de billing.
 
 # 18. Primeiras entradas do projeto
 
+Data: 2026-08-04
+Responsável: Agente Frontend + QA
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Consolidada a infraestrutura final de internacionalização para `pt-BR`, `en`
+e `es`. O registro de resources e namespaces passou a ter fonte única em
+`src/i18n/resourceCatalog.ts`; o helper global de paridade agora detecta
+chaves ausentes/extras, folhas vazias e valores não-string. Foram adicionados
+os comandos `i18n:check`, `i18n:audit` e `quality`, além da documentação
+permanente em `docs/17_internacionalizacao.md`.
+
+O baseline contém 9 namespaces, 582 folhas por idioma e 1.746 traduções. O
+auditor registra 33 hardcodes visuais suspeitos existentes e seis números de
+mock legados em `home`, mantidos em allowlist explícita. Os guards de Assessment
+foram classificados como regressões permanentes de payload, fórmulas,
+protocolos e queries, apesar dos nomes históricos dos arquivos.
+
+Impacto:
+Novos namespaces entram automaticamente na paridade ao serem registrados no
+catálogo. Erros estruturais encerram a auditoria com falha; hardcodes suspeitos
+são reportados para triagem humana. Nenhuma lógica funcional, autenticação,
+sincronização, persistência, fórmula ou protocolo foi alterado.
+
+Próxima ação:
+Revisão editorial contínua e tratamento autorizado dos hardcodes registrados
+no baseline. Não houve deploy.
+
+---
+
 Data: 2026-07-30
 Responsável: Agente QA
 Categoria: [IMPLEMENTAÇÃO]

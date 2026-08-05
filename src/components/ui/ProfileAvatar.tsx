@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useTranslation } from 'react-i18next';
 import { Display } from './Display';
 import { Icon } from './Icon';
 import { colors } from '../../theme/tokens';
@@ -33,11 +34,16 @@ export function ProfileAvatar({
   editable?: boolean;
   onPress?: () => void;
 }) {
+  const { t } = useTranslation('profile');
   const radius = Math.round(size * 0.22);
   return (
     <Pressable
       accessibilityRole={onPress ? 'button' : 'image'}
-      accessibilityLabel={editable ? 'Alterar foto de perfil' : 'Foto de perfil'}
+      accessibilityLabel={
+        editable
+          ? t('photo.accessibility.editable')
+          : t('photo.accessibility.avatar')
+      }
       disabled={!onPress}
       onPress={onPress}
       style={({ pressed }) => ({ width: size, height: size, opacity: pressed ? 0.78 : 1 })}

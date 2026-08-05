@@ -1,0 +1,48 @@
+{
+  "slides": {
+    "step1": {
+      "tag": "Physical progress",
+      "line1": "Your body",
+      "line2": "is your",
+      "line3": "project.",
+      "body": "Every workout logged. Every load calculated. Progress you can see — and feel."
+    },
+    "step2": {
+      "tag": "Performance",
+      "line1": "Athlete-grade",
+      "line2": "data.",
+      "line3": "No guesswork.",
+      "body": "Volume, intensity and recovery tracked like a high-performance center."
+    },
+    "step3": {
+      "tag": "Consistency",
+      "line1": "No",
+      "line2": "excuses.",
+      "line3": "Only results.",
+      "body": "The AJ method adapts to your routine — and doesn't let you quit."
+    }
+  },
+  "actions": {
+    "skip": "Skip",
+    "buildPlan": "Build my plan"
+  },
+  "footer": {
+    "hasAccount": "Already have an account?",
+    "login": "Sign in"
+  },
+  "analyzing": {
+    "compiling": "Compiling",
+    "titleLine1": "Building",
+    "titleLine2": "your plan",
+    "steps": {
+      "profile": "Reading your physical profile",
+      "volume": "Calculating volume and intensity",
+      "exercises": "Selecting the ideal exercises",
+      "periodization": "Periodizing your weeks",
+      "plan": "Building your premium plan"
+    },
+    "accessibility": {
+      "progress": "Building your plan: {{progress}} percent"
+    }
+  }
+}

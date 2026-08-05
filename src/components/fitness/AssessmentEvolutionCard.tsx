@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, Pressable } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { Card } from '../ui/Card';
 import { Icon } from '../ui/Icon';
 import { MonoLabel } from '../ui/Display';
@@ -69,30 +70,46 @@ export function AssessmentEvolutionCard({
   leanMassDelta: number | null;
   onViewHistory: () => void;
 }) {
+  const { t } = useTranslation('assessment');
   return (
     <Card style={{ padding: 16 }}>
+      <View accessible accessibilityLabel={t('accessibility.evolutionCard')}>
       <View style={{ flexDirection: 'row', gap: 18, marginBottom: 16 }}>
         <EvolutionLineChart
-          label="PESO"
-          unit="kg"
+          label={t('metrics.weight').toUpperCase()}
+          unit={t('units.kg')}
           color={WEIGHT_COLOR}
           points={weightPoints}
-          emptyHint="Registre 2+ avaliações para ver o gráfico."
+          emptyHint={t('charts.weightEmpty')}
         />
         <EvolutionLineChart
-          label="% GORDURA"
-          unit="%"
+          label={t('metrics.bodyFat').toUpperCase()}
+          unit={t('units.percent')}
           color={BODY_FAT_COLOR}
           points={bodyFatPoints}
-          emptyHint="Sem avaliações com % de gordura suficientes."
+          emptyHint={t('charts.bodyFatEmpty')}
         />
       </View>
 
       {hasPrevious ? (
         <View style={{ flexDirection: 'row' }}>
-          <DeltaChip label="PESO" value={weightDelta} unit="kg" goodWhenNegative />
-          <DeltaChip label="% GORDURA" value={bodyFatDelta} unit="%" goodWhenNegative />
-          <DeltaChip label="MASSA MAGRA" value={leanMassDelta} unit="kg" />
+          <DeltaChip
+            label={t('metrics.weight').toUpperCase()}
+            value={weightDelta}
+            unit={t('units.kg')}
+            goodWhenNegative
+          />
+          <DeltaChip
+            label={t('metrics.bodyFat').toUpperCase()}
+            value={bodyFatDelta}
+            unit={t('units.percent')}
+            goodWhenNegative
+          />
+          <DeltaChip
+            label={t('metrics.leanMass').toUpperCase()}
+            value={leanMassDelta}
+            unit={t('units.kg')}
+          />
         </View>
       ) : (
         <Text
@@ -103,12 +120,14 @@ export function AssessmentEvolutionCard({
             textAlign: 'center',
           }}
         >
-          Registre uma nova avaliação para começar a acompanhar sua evolução.
+          {t('evolution.noPreviousMessage')}
         </Text>
       )}
 
       <Pressable
         onPress={onViewHistory}
+        accessibilityRole="button"
+        accessibilityLabel={t('accessibility.viewHistory')}
         style={{
           flexDirection: 'row',
           alignItems: 'center',
@@ -128,10 +147,11 @@ export function AssessmentEvolutionCard({
             color: colors.accentHi,
           }}
         >
-          VER HISTÓRICO COMPLETO
+          {t('evolution.viewHistoryCta').toUpperCase()}
         </Text>
         <Icon name="chevron-right" size={12} color={colors.accentHi} />
       </Pressable>
+      </View>
     </Card>
   );
 }

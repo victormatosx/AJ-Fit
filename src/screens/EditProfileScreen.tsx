@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
+import { useTranslation } from 'react-i18next';
 import { ScreenBg } from '../components/ui/ScreenBg';
 import { ProfileAvatar } from '../components/ui/ProfileAvatar';
 import { Display, MonoLabel, Slash } from '../components/ui/Display';
@@ -33,6 +34,8 @@ import {
   normalizeDisplayName,
   validateDisplayName,
   validateProfileBirthDate,
+  type BirthDateError,
+  type DisplayNameError,
 } from '../lib/userProfileValidation';
 import { logError } from '../lib/logError';
 
@@ -65,7 +68,9 @@ function selectedAsset(result: ImagePicker.ImagePickerResult): LocalProfilePhoto
 }
 
 export function EditProfileScreen({ onBack }: { onBack: () => void }) {
+  const { t } = useTranslation(['profile', 'common']);
   const { user, profile, questionnaire, refreshProfile } = useAuth();
+  const athleteFallback = t('profile:fallback.athlete');
   const savedName =
     profile?.profile.name?.trim() ||
     user?.displayName?.trim() ||
@@ -110,6 +115,27 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
     [parsedBirthDate],
   );
 
+  const renderNameError = (err: DisplayNameError): string => {
+    switch (err.code) {
+      case 'nameRequired':
+        return t('profile:edit.validation.nameRequired');
+      case 'nameTooShort':
+        return t('profile:edit.validation.nameTooShort', err.params);
+      case 'nameTooLong':
+        return t('profile:edit.validation.nameTooLong', err.params);
+    }
+  };
+  const renderBirthDateError = (err: BirthDateError): string => {
+    switch (err.code) {
+      case 'birthDateRequired':
+        return t('profile:edit.validation.birthDateRequired');
+      case 'birthDateFuture':
+        return t('profile:edit.validation.birthDateFuture');
+      case 'birthDateAgeRange':
+        return t('profile:edit.validation.birthDateAgeRange', err.params);
+    }
+  };
+
   const hasNameChanges = normalizedName !== normalizeDisplayName(savedName);
   const hasBirthDateChanges = calendarKey(parsedBirthDate) !== calendarKey(savedBirthDate);
   const hasPhotoChanges = pendingPhoto !== undefined;
@@ -130,10 +156,14 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
       return;
     }
 
-    Alert.alert('Descartar alterações?', 'As mudanças feitas no perfil não serão salvas.', [
-      { text: 'Continuar editando', style: 'cancel' },
-      { text: 'Descartar', style: 'destructive', onPress: onBack },
-    ]);
+    Alert.alert(
+      t('profile:edit.discard.title'),
+      t('profile:edit.discard.message'),
+      [
+        { text: t('profile:edit.discard.cancel'), style: 'cancel' },
+        { text: t('profile:edit.discard.confirm'), style: 'destructive', onPress: onBack },
+      ],
+    );
   }
 
   async function acceptPhoto(photo: LocalProfilePhoto | null) {
@@ -146,10 +176,10 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
       logError('profile:compress-photo', err);
       const message = err instanceof Error ? err.message : '';
       Alert.alert(
-        'Não foi possível preparar a foto',
+        t('profile:photo.errors.compressTitle'),
         message === 'profile-photo-too-large'
-          ? 'Mesmo após a compressão, a imagem ultrapassou 5 MB.'
-          : 'Escolha outra imagem e tente novamente.',
+          ? t('profile:photo.errors.tooLarge')
+          : t('profile:photo.errors.compressGeneric'),
       );
     } finally {
       setProcessingPhoto(false);
@@ -169,7 +199,10 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
       await acceptPhoto(selectedAsset(result));
     } catch (err) {
       logError('profile:pick-photo', err);
-      Alert.alert('Não foi possível abrir suas fotos', 'Tente novamente em instantes.');
+      Alert.alert(
+        t('profile:photo.errors.libraryTitle'),
+        t('profile:photo.errors.genericRetry'),
+      );
     } finally {
       photoSelectionLock.current = false;
     }
@@ -182,8 +215,8 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
       const permission = await ImagePicker.requestCameraPermissionsAsync();
       if (!permission.granted) {
         Alert.alert(
-          'Acesso à câmera necessário',
-          'Permita o acesso à câmera nos Ajustes para tirar uma foto de perfil.',
+          t('profile:photo.errors.cameraPermissionTitle'),
+          t('profile:photo.errors.cameraPermissionMessage'),
         );
         return;
       }
@@ -198,7 +231,10 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
       await acceptPhoto(selectedAsset(result));
     } catch (err) {
       logError('profile:take-photo', err);
-      Alert.alert('Não foi possível abrir a câmera', 'Tente novamente em instantes.');
+      Alert.alert(
+        t('profile:photo.errors.cameraTitle'),
+        t('profile:photo.errors.genericRetry'),
+      );
     } finally {
       photoSelectionLock.current = false;
     }
@@ -206,19 +242,19 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
 
   function openPhotoMenu() {
     if (busy) return;
-    Alert.alert('Foto de perfil', 'Escolha uma opção', [
-      { text: 'Tirar foto', onPress: () => void takePhoto() },
-      { text: 'Escolher da biblioteca', onPress: () => void chooseFromLibrary() },
+    Alert.alert(t('profile:photo.menu.title'), t('profile:photo.menu.message'), [
+      { text: t('profile:photo.menu.takePhoto'), onPress: () => void takePhoto() },
+      { text: t('profile:photo.menu.chooseFromLibrary'), onPress: () => void chooseFromLibrary() },
       ...(currentPhotoURL
         ? [
             {
-              text: 'Remover foto',
+              text: t('profile:photo.menu.removePhoto'),
               style: 'destructive' as const,
               onPress: () => setPendingPhoto(null),
             },
           ]
         : []),
-      { text: 'Cancelar', style: 'cancel' },
+      { text: t('profile:photo.menu.cancel'), style: 'cancel' as const },
     ]);
   }
 
@@ -251,8 +287,8 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
       const message = err instanceof Error ? err.message : '';
       setSubmitError(
         message === 'profile-photo-too-large'
-          ? 'A foto deve ter no máximo 5 MB.'
-          : 'Não foi possível salvar. Verifique sua conexão e tente novamente.',
+          ? t('profile:edit.errors.photoTooLarge')
+          : t('profile:edit.errors.saveFailed'),
       );
     } finally {
       setSaving(false);
@@ -270,6 +306,9 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
     setSubmitError(null);
   };
 
+  const emptyNameFallback = athleteFallback.toUpperCase();
+  const identityDisplayName = normalizedName.toUpperCase() || emptyNameFallback;
+
   return (
     <ScreenBg>
       <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
@@ -280,7 +319,7 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
           <View style={styles.header}>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Voltar para o perfil"
+              accessibilityLabel={t('profile:edit.accessibility.back')}
               onPress={handleBack}
               disabled={busy}
               style={({ pressed }) => [
@@ -292,7 +331,7 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
               <Icon name="arrow-left" size={17} color="#fff" />
             </Pressable>
             <View style={styles.headerTitle}>
-              <MonoLabel>EDITAR PERFIL</MonoLabel>
+              <MonoLabel>{t('profile:edit.title').toUpperCase()}</MonoLabel>
             </View>
             <View style={styles.headerSpacer} />
           </View>
@@ -304,7 +343,7 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
           >
             <View style={styles.identityCard}>
               <ProfileAvatar
-                displayName={normalizedName}
+                displayName={normalizedName || athleteFallback}
                 photoURL={currentPhotoURL}
                 photoVersion={pendingPhoto === undefined ? profile?.profile.photoVersion : undefined}
                 size={58}
@@ -313,9 +352,11 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
               />
 
               <View style={styles.identityCopy}>
-                <MonoLabel color={colors.accentHi}>MEMBRO DESDE {sinceYear}</MonoLabel>
+                <MonoLabel color={colors.accentHi}>
+                  {t('profile:header.memberSinceInline', { year: sinceYear }).toUpperCase()}
+                </MonoLabel>
                 <Display size={22} style={styles.identityName} numberOfLines={1}>
-                  {normalizedName.toUpperCase() || 'SEU NOME'}
+                  {identityDisplayName}
                 </Display>
                 <Pressable
                   onPress={openPhotoMenu}
@@ -324,11 +365,12 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
                   style={[styles.photoAction, busy && styles.disabled]}
                 >
                   <Text style={styles.photoActionText}>
-                    {processingPhoto
-                      ? 'OTIMIZANDO FOTO...'
+                    {(processingPhoto
+                      ? t('profile:photo.actions.optimizing')
                       : currentPhotoURL
-                        ? 'ALTERAR FOTO'
-                        : 'ADICIONAR FOTO'}
+                        ? t('profile:photo.actions.change')
+                        : t('profile:photo.actions.add')
+                    ).toUpperCase()}
                   </Text>
                 </Pressable>
               </View>
@@ -336,11 +378,15 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
             </View>
 
             <View style={styles.formSection}>
-              <Slash style={styles.sectionTitle}>DADOS PESSOAIS</Slash>
+              <Slash style={styles.sectionTitle}>
+                {t('profile:edit.sections.personalData').toUpperCase()}
+              </Slash>
               <View style={styles.formCard}>
                 <View style={styles.fieldBlock}>
                   <View style={styles.fieldLabelRow}>
-                    <Text style={styles.fieldLabel}>NOME DE EXIBIÇÃO</Text>
+                    <Text style={styles.fieldLabel}>
+                      {t('profile:edit.fields.displayName').toUpperCase()}
+                    </Text>
                     {nameFocused ? (
                       <Text style={styles.counter}>
                         {name.length}/{DISPLAY_NAME_MAX_LENGTH}
@@ -360,7 +406,7 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
                       color={nameFocused ? colors.accentHi : colors.faint}
                     />
                     <TextInput
-                      accessibilityLabel="Nome de exibição"
+                      accessibilityLabel={t('profile:edit.fields.displayName')}
                       value={name}
                       onChangeText={(value) => {
                         setName(value);
@@ -377,24 +423,26 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
                       autoCorrect={false}
                       autoComplete="name"
                       returnKeyType="done"
-                      placeholder="Seu nome"
+                      placeholder={t('profile:edit.identity.namePlaceholder')}
                       placeholderTextColor={colors.faint}
                       selectionColor={colors.accentHi}
                       style={styles.input}
                     />
                   </View>
                   {nameTouched && nameError ? (
-                    <Text style={styles.validationText}>{nameError}</Text>
+                    <Text style={styles.validationText}>{renderNameError(nameError)}</Text>
                   ) : null}
                 </View>
 
                 <View style={styles.divider} />
 
                 <View style={styles.fieldBlock}>
-                  <Text style={styles.fieldLabel}>DATA DE NASCIMENTO</Text>
+                  <Text style={styles.fieldLabel}>
+                    {t('profile:edit.fields.birthDate').toUpperCase()}
+                  </Text>
                   <View style={styles.dateRow}>
                     <DatePartInput
-                      label="DIA"
+                      part="day"
                       value={birthDay}
                       maxLength={2}
                       onChangeText={changeDatePart(setBirthDay, 2)}
@@ -402,7 +450,7 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
                     />
                     <Text style={styles.dateSeparator}>/</Text>
                     <DatePartInput
-                      label="MÊS"
+                      part="month"
                       value={birthMonth}
                       maxLength={2}
                       onChangeText={changeDatePart(setBirthMonth, 2)}
@@ -410,7 +458,7 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
                     />
                     <Text style={styles.dateSeparator}>/</Text>
                     <DatePartInput
-                      label="ANO"
+                      part="year"
                       value={birthYear}
                       maxLength={4}
                       wide
@@ -419,21 +467,25 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
                     />
                   </View>
                   {birthTouched && birthDateError ? (
-                    <Text style={styles.validationText}>{birthDateError}</Text>
+                    <Text style={styles.validationText}>{renderBirthDateError(birthDateError)}</Text>
                   ) : null}
                 </View>
               </View>
             </View>
 
             <View style={styles.accountSection}>
-              <Slash style={styles.sectionTitle}>CONTA</Slash>
+              <Slash style={styles.sectionTitle}>
+                {t('profile:edit.sections.account').toUpperCase()}
+              </Slash>
               <View style={styles.formCard}>
                 <View style={styles.fieldBlock}>
-                  <Text style={styles.fieldLabel}>E-MAIL</Text>
+                  <Text style={styles.fieldLabel}>
+                    {t('profile:edit.fields.email').toUpperCase()}
+                  </Text>
                   <View style={[styles.inputShell, styles.inputShellReadOnly]}>
                     <Icon name="mail" size={16} color={colors.faint} />
                     <Text numberOfLines={1} style={styles.readOnlyValue}>
-                      {email || 'E-mail não disponível'}
+                      {email || t('profile:edit.fields.emailUnavailable')}
                     </Text>
                     <Icon name="lock" size={13} color={colors.faint} />
                   </View>
@@ -442,7 +494,7 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
               <View style={styles.securityNote}>
                 <Icon name="shield" size={14} color={colors.accentHi} />
                 <Text style={styles.securityText}>
-                  O e-mail é protegido pelos seus métodos de login.
+                  {t('profile:edit.fields.emailSecurityNote')}
                 </Text>
               </View>
             </View>
@@ -456,7 +508,7 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
               ) : null}
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Salvar alterações"
+                accessibilityLabel={t('profile:edit.accessibility.save')}
                 onPress={handleSave}
                 disabled={!canSave}
                 style={({ pressed }) => [
@@ -475,14 +527,19 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
                     <>
                       <ActivityIndicator color="#fff" size="small" />
                       <Text style={styles.saveButtonText}>
-                        {uploadProgress === null
-                          ? 'SALVANDO...'
-                          : `ENVIANDO FOTO ${Math.round(uploadProgress * 100)}%`}
+                        {(uploadProgress === null
+                          ? t('profile:edit.actions.saving')
+                          : t('profile:edit.actions.uploadingPhoto', {
+                              percent: Math.round(uploadProgress * 100),
+                            })
+                        ).toUpperCase()}
                       </Text>
                     </>
                   ) : (
                     <>
-                      <Text style={styles.saveButtonText}>SALVAR ALTERAÇÕES</Text>
+                      <Text style={styles.saveButtonText}>
+                        {t('profile:edit.actions.save').toUpperCase()}
+                      </Text>
                       <Icon name="arrow-right" size={16} color="#fff" stroke={2} />
                     </>
                   )}
@@ -496,36 +553,53 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
   );
 }
 
+type DatePart = 'day' | 'month' | 'year';
+
 function DatePartInput({
-  label,
+  part,
   value,
   maxLength,
   wide,
   onChangeText,
   editable,
 }: {
-  label: string;
+  part: DatePart;
   value: string;
   maxLength: number;
   wide?: boolean;
   onChangeText: (value: string) => void;
   editable: boolean;
 }) {
+  const { t } = useTranslation('profile');
+  // Accessibility uses the natural-case translation; visible micro-label
+  // (`DIA/DAY/DÍA`) uppercases the same string at render — same pattern as
+  // DateFieldsInput (Phase 4). Placeholder is intentionally NOT localized
+  // for month/year: DD/MM/YYYY is a locale-neutral date-format hint most
+  // users recognize regardless of language. This matches the input mask
+  // (numeric only, exact digit count).
+  const accessibleLabel = t(`edit.datePart.${part}`);
+  const displayLabel = accessibleLabel.toUpperCase();
+  const placeholder =
+    part === 'year'
+      ? t('edit.datePart.placeholderYear')
+      : part === 'month'
+        ? t('edit.datePart.placeholderMonth')
+        : t('edit.datePart.placeholderDay');
   return (
     <View style={[styles.datePart, wide && styles.datePartWide]}>
       <TextInput
-        accessibilityLabel={label}
+        accessibilityLabel={accessibleLabel}
         value={value}
         onChangeText={onChangeText}
         editable={editable}
         keyboardType="number-pad"
         maxLength={maxLength}
-        placeholder={label === 'ANO' ? 'AAAA' : label === 'MÊS' ? 'MM' : 'DD'}
+        placeholder={placeholder}
         placeholderTextColor={colors.faint}
         selectionColor={colors.accentHi}
         style={styles.dateInput}
       />
-      <Text style={styles.datePartLabel}>{label}</Text>
+      <Text style={styles.datePartLabel}>{displayLabel}</Text>
     </View>
   );
 }

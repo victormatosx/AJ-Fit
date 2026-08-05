@@ -1,0 +1,157 @@
+{
+  "header": {
+    "exercisePrefix": "Ex",
+    "accessibility": {
+      "close": "Exit workout",
+      "openQueue": "Open exercise queue"
+    }
+  },
+  "actions": {
+    "viewExecution": "See how to",
+    "swap": "Swap",
+    "finishWorkout": "Finish workout",
+    "skipBusy": "Skip · machine in use",
+    "completeSet": "Complete set {{number}}"
+  },
+  "badges": {
+    "resumed": "Resumed"
+  },
+  "video": {
+    "execution": "Execution",
+    "keyPoints": "Key points",
+    "accessibility": {
+      "close": "Close video"
+    }
+  },
+  "queue": {
+    "title": "Workout queue · {{count}} exercises",
+    "states": {
+      "now": "Now",
+      "skipped": "Skipped",
+      "completed": "Done"
+    },
+    "activeItem_one": "{{target}} · {{done}}/{{total}} set",
+    "activeItem_other": "{{target}} · {{done}}/{{total}} sets",
+    "completedItem_one": "Done · {{done}}/{{total}} set",
+    "completedItem_other": "Done · {{done}}/{{total}} sets"
+  },
+  "exerciseDone": {
+    "completed": "Exercise complete",
+    "nextLabel": "Next"
+  },
+  "sets": {
+    "next": "Next set",
+    "number": "Set {{number}}",
+    "progress_one": "{{done}}/{{total}} set",
+    "progress_other": "{{done}}/{{total}} sets",
+    "current": "Now",
+    "registered": "Logged",
+    "lastTime": "Last time",
+    "summaryWeighted_one": "{{count}} rep × {{weight}} kg",
+    "summaryWeighted_other": "{{count}} reps × {{weight}} kg",
+    "summaryBodyweight_one": "{{count}} rep × bodyweight",
+    "summaryBodyweight_other": "{{count}} reps × bodyweight"
+  },
+  "reps": {
+    "label": "Reps"
+  },
+  "load": {
+    "unitKg": "kg",
+    "bodyweight": "Bodyweight"
+  },
+  "rest": {
+    "title": "Rest",
+    "minimize": "Minimize",
+    "minimizeAccessibility": "Minimize rest",
+    "logLoad": "Log load · Set {{setNumber}}",
+    "optional": "optional",
+    "inputHint": "Tap the number to type",
+    "addSecondsAccessibility": "Add {{seconds}} seconds",
+    "nextSet": "Next set"
+  },
+  "record": {
+    "new": "New record",
+    "previousContext": "{{exName}} · previous {{previous}} kg",
+    "gain": "+{{delta}} kg"
+  },
+  "done": {
+    "kicker": "Workout complete",
+    "titleLine1": "Done.",
+    "titleLine2": "Stronger.",
+    "backHome": "Back to home",
+    "metrics": {
+      "time": "Time",
+      "volume": "Volume",
+      "sets": "Sets",
+      "newPr": "New PR"
+    },
+    "streak": {
+      "updated": "Streak updated",
+      "days_one": "{{count}} day",
+      "days_other": "{{count}} days",
+      "untilRecord_one": "· {{count}} to your record",
+      "untilRecord_other": "· {{count}} to your record"
+    }
+  },
+  "substitution": {
+    "sheetTitle": "Swap exercise",
+    "sheetSubtitle": "Same muscle group · pick a variation",
+    "labels": {
+      "original": "Original",
+      "replacement": "Substitution",
+      "current": "Current"
+    },
+    "confirmTitle": "Apply swap",
+    "replaceQuestion": "{{replacement}} instead of {{original}}.",
+    "actions": {
+      "once": "Swap just this time",
+      "permanent": "Swap for the whole plan",
+      "cancel": "Cancel"
+    },
+    "badges": {
+      "today": "Swapped today",
+      "permanent": "Swap saved"
+    }
+  },
+  "muscleGroups": {
+    "chest": "Chest",
+    "upperChest": "Upper chest",
+    "shoulders": "Shoulder",
+    "sideDelt": "Side delt",
+    "frontDelt": "Front delt",
+    "triceps": "Triceps",
+    "tricepsChest": "Triceps & chest"
+  },
+  "exercises": {
+    "Barbell_Bench_Press_-_Medium_Grip": "Barbell bench press",
+    "Dumbbell_Bench_Press": "Dumbbell bench press",
+    "Machine_Bench_Press": "Machine bench press",
+    "Incline_Dumbbell_Bench_With_Palms_Facing_In": "Incline dumbbell press",
+    "Barbell_Incline_Bench_Press_Medium-Grip": "Incline barbell press",
+    "Low_Cable_Crossover": "Low cable crossover",
+    "Cable_Crossover": "Cable crossover",
+    "Dumbbell_Flyes": "Dumbbell fly",
+    "Butterfly": "Peck deck",
+    "Standing_Military_Press": "Military press",
+    "Dumbbell_Shoulder_Press": "Dumbbell shoulder press",
+    "Arnold_Dumbbell_Press": "Arnold press",
+    "Side_Lateral_Raise": "Lateral raise",
+    "Cable_Shoulder_Press": "Cable lateral raise",
+    "Front_Dumbbell_Raise": "Front raise",
+    "Triceps_Pushdown": "Triceps pushdown",
+    "Tricep_Dumbbell_Kickback": "Dumbbell triceps kickback",
+    "Barbell_Skullcrusher_Extension": "Skullcrusher",
+    "EZ-Bar_Skullcrusher": "French press (EZ bar)",
+    "Seated_Dumbbell_Tricep_Press": "Dumbbell overhead extension",
+    "Dips_-_Triceps_Version": "Parallel bar dips",
+    "Weighted_Bench_Dip": "Weighted bench dip",
+    "Close-Grip_Push-Up_off_of_a_Wall": "Close-grip push-up"
+  },
+  "instructions": {
+    "default": {
+      "keyPoint1": "Keep your shoulder blades retracted",
+      "keyPoint2": "Lower under control (eccentric)",
+      "keyPoint3": "Don't lock your elbows at the top"
+    }
+  }
+}

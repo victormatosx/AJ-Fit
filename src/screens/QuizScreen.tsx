@@ -6,36 +6,38 @@ import {
   ScrollView,
   PanResponder,
   TextInput,
-  Modal,
-  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Text as SvgText } from 'react-native-svg';
-import DateTimePicker from '@react-native-community/datetimepicker';
+import { useTranslation } from 'react-i18next';
 import { Display } from '../components/ui/Display';
 import { SegBar } from '../components/ui/SegBar';
 import { CtaButton } from '../components/ui/CtaButton';
 import { Icon, IconName } from '../components/ui/Icon';
 import { HudCorners } from '../components/ui/Card';
-import { AndroidDateSpinner } from '../components/ui/AndroidDateSpinner';
+import { DateWheelPicker } from '../components/ui/DateWheelPicker';
 import { EquipmentPicker } from '../components/fitness/EquipmentPicker';
 import { colors, fonts } from '../theme/tokens';
 import { useAppState, Quiz } from '../state/AppState';
 import { computeAge } from '../lib/ageCalculator';
 import { isFutureDate } from '../lib/dateUtils';
 
-type Option = { v: string; l: string; i?: string; d?: string; icon?: IconName };
+/**
+ * QUESTIONS holds ONLY structure and stable IDs — every user-visible string
+ * lives under `quiz:<questionId>.*` in the i18n resources. The `v` field of
+ * each option is the persisted identifier and MUST NOT be renamed without
+ * an authorized migration (see Phase 5 spec §4). Icons stay here because
+ * they're an asset reference, not text.
+ */
+type OptionDef = { v: string; icon?: IconName };
 type Question =
-  | { id: keyof Quiz; kind: 'choice'; title: string; sub?: string; options: Option[] }
-  | { id: keyof Quiz; kind: 'choice-large'; title: string; sub?: string; options: Option[] }
-  | { id: keyof Quiz; kind: 'multi'; title: string; sub?: string; options: Option[] }
-  | { id: keyof Quiz; kind: 'date'; title: string; sub?: string; minAge: number; maxAge: number }
+  | { id: keyof Quiz; kind: 'choice'; options: OptionDef[] }
+  | { id: keyof Quiz; kind: 'choice-large'; options: OptionDef[] }
+  | { id: keyof Quiz; kind: 'multi'; options: OptionDef[] }
+  | { id: keyof Quiz; kind: 'date'; minAge: number; maxAge: number }
   | {
       id: keyof Quiz;
       kind: 'wheel';
-      title: string;
-      sub?: string;
-      unit: string;
       min: number;
       max: number;
       default: number;
@@ -44,29 +46,11 @@ type Question =
     };
 
 const QUESTIONS: Question[] = [
-  {
-    id: 'sex',
-    kind: 'choice',
-    title: 'QUAL SEU SEXO?',
-    sub: 'Calibra volume e recuperação.',
-    options: [
-      { v: 'm', l: 'Masculino', i: 'M' },
-      { v: 'f', l: 'Feminino', i: 'F' },
-    ],
-  },
-  {
-    id: 'birthDate',
-    kind: 'date',
-    title: 'QUANDO VOCÊ NASCEU?',
-    sub: 'Afeta intensidade e descanso — sua idade é recalculada sempre a partir daqui.',
-    minAge: 16,
-    maxAge: 75,
-  },
+  { id: 'sex', kind: 'choice', options: [{ v: 'm' }, { v: 'f' }] },
+  { id: 'birthDate', kind: 'date', minAge: 16, maxAge: 75 },
   {
     id: 'height',
     kind: 'wheel',
-    title: 'SUA ALTURA?',
-    unit: 'cm',
     min: 140,
     max: 220,
     default: 178,
@@ -75,9 +59,6 @@ const QUESTIONS: Question[] = [
   {
     id: 'weight',
     kind: 'wheel',
-    title: 'SEU PESO ATUAL?',
-    sub: 'Base do cálculo de carga inicial.',
-    unit: 'kg',
     min: 40,
     max: 180,
     default: 78,
@@ -86,95 +67,61 @@ const QUESTIONS: Question[] = [
   {
     id: 'goal',
     kind: 'choice-large',
-    title: 'OBJETIVO PRINCIPAL?',
-    sub: 'Define o foco do programa.',
     options: [
-      { v: 'hyper', l: 'Hipertrofia', d: 'Ganhar massa muscular', icon: 'dumbbell' },
-      { v: 'cut', l: 'Emagrecimento', d: 'Queimar gordura', icon: 'flame' },
-      { v: 'perf', l: 'Performance', d: 'Força e potência', icon: 'bolt' },
-      { v: 'def', l: 'Definição', d: 'Cortar e secar', icon: 'target' },
-      { v: 'recon', l: 'Recondicionamento', d: 'Voltar à forma', icon: 'heart' },
+      { v: 'hyper', icon: 'dumbbell' },
+      { v: 'cut', icon: 'flame' },
+      { v: 'perf', icon: 'bolt' },
+      { v: 'def', icon: 'target' },
+      { v: 'recon', icon: 'heart' },
     ],
   },
   {
     id: 'level',
     kind: 'choice-large',
-    title: 'SEU NÍVEL?',
-    sub: 'O programa começa exatamente do seu ponto.',
-    options: [
-      { v: 'beg', l: 'Iniciante', d: 'Menos de 6 meses' },
-      { v: 'int', l: 'Intermediário', d: '6 meses a 2 anos' },
-      { v: 'adv', l: 'Avançado', d: 'Mais de 2 anos' },
-      { v: 'elite', l: 'Elite', d: 'Atleta / 5+ anos' },
-    ],
+    options: [{ v: 'beg' }, { v: 'int' }, { v: 'adv' }, { v: 'elite' }],
   },
-  {
-    id: 'days',
-    kind: 'wheel',
-    title: 'DIAS POR SEMANA?',
-    sub: 'Vamos cobrar exatamente esse compromisso.',
-    unit: 'dias/sem',
-    min: 2,
-    max: 7,
-    default: 4,
-    digits: { min: 1, max: 1 },
-  },
+  { id: 'days', kind: 'wheel', min: 2, max: 7, default: 4, digits: { min: 1, max: 1 } },
   {
     id: 'duration',
     kind: 'choice',
-    title: 'TEMPO POR TREINO?',
-    options: [
-      { v: '30', l: '30 min', i: '30' },
-      { v: '45', l: '45 min', i: '45' },
-      { v: '60', l: '60 min', i: '60' },
-      { v: '90', l: '90+ min', i: '90' },
-    ],
+    options: [{ v: '30' }, { v: '45' }, { v: '60' }, { v: '90' }],
   },
   {
     id: 'place',
     kind: 'choice',
-    title: 'ONDE VOCÊ TREINA?',
-    sub: 'O treino usa só o que você tem.',
-    options: [
-      { v: 'gym', l: 'Academia', i: 'GYM' },
-      { v: 'home', l: 'Casa', i: 'CASA' },
-      { v: 'both', l: 'Os dois', i: '2X' },
-    ],
+    options: [{ v: 'gym' }, { v: 'home' }, { v: 'both' }],
   },
   {
+    // Options here are dead code — `q.id === 'equipment'` short-circuits to
+    // EquipmentPicker below, which has its own catalog. Kept only because
+    // the Question type requires `options` on `kind: 'multi'`. Not rendered
+    // and not translated (they'd never be shown).
     id: 'equipment',
     kind: 'multi',
-    title: 'EQUIPAMENTOS?',
-    sub: 'Selecione todos disponíveis.',
-    options: [
-      { v: 'dumbbell', l: 'Halteres' },
-      { v: 'barbell', l: 'Barra' },
-      { v: 'rack', l: 'Rack' },
-      { v: 'bench', l: 'Banco' },
-      { v: 'cable', l: 'Polia' },
-      { v: 'machines', l: 'Máquinas' },
-      { v: 'kettle', l: 'Kettlebell' },
-      { v: 'band', l: 'Elásticos' },
-      { v: 'bw', l: 'Só peso corporal' },
-    ],
+    options: [],
   },
   {
     id: 'limits',
     kind: 'multi',
-    title: 'ALGUMA LIMITAÇÃO?',
-    sub: 'Vamos proteger o que precisa de cuidado.',
     options: [
-      { v: 'none', l: 'Nenhuma' },
-      { v: 'knee', l: 'Joelho' },
-      { v: 'back', l: 'Coluna' },
-      { v: 'shoulder', l: 'Ombro' },
-      { v: 'wrist', l: 'Punho' },
-      { v: 'hip', l: 'Quadril' },
+      { v: 'none' },
+      { v: 'knee' },
+      { v: 'back' },
+      { v: 'shoulder' },
+      { v: 'wrist' },
+      { v: 'hip' },
     ],
   },
 ];
 
+/** Loose t signature for dynamic key lookups (path is composed from IDs).
+ *  Narrower than `any` — bounded by string in/out — preserves the strict
+ *  augmented `t` everywhere the path is a literal. */
+type LooseT = (key: string, options?: Record<string, unknown>) => string;
+
 export function QuizScreen({ onDone }: { onDone: () => void }) {
+  const { t, i18n } = useTranslation(['quiz', 'common']);
+  const tLoose = t as unknown as LooseT;
   const { quiz, setQuiz } = useAppState();
   const [idx, setIdx] = useState(0);
   const q = QUESTIONS[idx];
@@ -183,7 +130,7 @@ export function QuizScreen({ onDone }: { onDone: () => void }) {
   const back = () => idx > 0 && setIdx(idx - 1);
   const advance = () => (idx < total - 1 ? setIdx(idx + 1) : onDone());
   const value = quiz[q.id];
-  const setVal = (v: any) => setQuiz({ ...quiz, [q.id]: v });
+  const setVal = (v: unknown) => setQuiz({ ...quiz, [q.id]: v } as Quiz);
 
   const canContinue =
     q.kind === 'multi'
@@ -202,16 +149,17 @@ export function QuizScreen({ onDone }: { onDone: () => void }) {
   const outlineSvgH = 220;
   const outlineN = String(idx + 1).padStart(2, '0');
 
-  const devNav = (
-    <DevQuizNav
-      questions={QUESTIONS}
-      idx={idx}
-      onJump={(i) => setIdx(i)}
-    />
-  );
+  const questionTitle = tLoose(`quiz:${q.id}.title`).toUpperCase();
+  const questionSubKey = `quiz:${q.id}.sub`;
+  const questionSub = i18n.exists(questionSubKey) ? tLoose(questionSubKey) : null;
+
+  const devNav = <DevQuizNav questions={QUESTIONS} idx={idx} onJump={(i) => setIdx(i)} />;
 
   if (q.id === 'equipment') {
-    const stepLabel = `EQUIPAMENTO · ${String(idx + 1).padStart(2, '0')} / ${String(total).padStart(2, '0')}`;
+    const stepLabel = tLoose('quiz:equipment.stepLabel', {
+      current: String(idx + 1).padStart(2, '0'),
+      total: String(total).padStart(2, '0'),
+    }).toUpperCase();
     return (
       <View style={{ flex: 1 }}>
         <EquipmentPicker
@@ -302,39 +250,56 @@ export function QuizScreen({ onDone }: { onDone: () => void }) {
           }}
         >
           <View style={{ marginBottom: 24 }}>
-            <Display size={32}>{q.title}</Display>
-            {q.sub && (
+            <Display size={32}>{questionTitle}</Display>
+            {questionSub && (
               <Text style={{ marginTop: 10, color: colors.mute, fontSize: 14, fontFamily: fonts.ui }}>
-                {q.sub}
+                {questionSub}
               </Text>
             )}
           </View>
 
-          <ScrollView style={{ flex: 1, marginTop: 16 }} showsVerticalScrollIndicator={false}>
-            {q.kind === 'choice' && (
-              <ChoiceGrid options={q.options} value={value as string} onChange={setVal} />
-            )}
-            {q.kind === 'choice-large' && (
-              <ChoiceList options={q.options} value={value as string} onChange={setVal} />
-            )}
-            {q.kind === 'wheel' && (
-              <NumberWheel q={q} value={(value as number) ?? q.default} onChange={setVal} />
-            )}
-            {q.kind === 'multi' && (
-              <MultiList
-                options={q.options}
-                value={(value as string[]) || []}
-                onChange={setVal}
-              />
-            )}
-            {q.kind === 'date' && (
+          {/* The `date` kind hosts a vertical FlatList (DateWheelPicker), which
+              React Native won't let us nest inside a same-orientation ScrollView.
+              Every other kind is short-list content that benefits from scroll. */}
+          {q.kind === 'date' ? (
+            <View style={{ flex: 1, marginTop: 16 }}>
               <BirthDateWheel
                 q={q}
                 value={value as Date | null}
                 onChange={setVal}
               />
-            )}
-          </ScrollView>
+            </View>
+          ) : (
+            <ScrollView style={{ flex: 1, marginTop: 16 }} showsVerticalScrollIndicator={false}>
+              {q.kind === 'choice' && (
+                <ChoiceGrid
+                  questionId={q.id}
+                  options={q.options}
+                  value={value as string}
+                  onChange={setVal}
+                />
+              )}
+              {q.kind === 'choice-large' && (
+                <ChoiceList
+                  questionId={q.id}
+                  options={q.options}
+                  value={value as string}
+                  onChange={setVal}
+                />
+              )}
+              {q.kind === 'wheel' && (
+                <NumberWheel q={q} value={(value as number) ?? q.default} onChange={setVal} />
+              )}
+              {q.kind === 'multi' && (
+                <MultiList
+                  questionId={q.id}
+                  options={q.options}
+                  value={(value as string[]) || []}
+                  onChange={setVal}
+                />
+              )}
+            </ScrollView>
+          )}
 
           <CtaButton onPress={advance} disabled={!canContinue} style={{ marginTop: 14 }}>
             <Text
@@ -346,7 +311,9 @@ export function QuizScreen({ onDone }: { onDone: () => void }) {
                 textTransform: 'uppercase',
               }}
             >
-              {idx < total - 1 ? 'Continuar' : 'Gerar meu plano'}
+              {idx < total - 1
+                ? t('common:actions.continue')
+                : t('quiz:actions.generatePlan')}
             </Text>
             <Icon name="arrow-right" size={18} color="#fff" />
           </CtaButton>
@@ -370,6 +337,8 @@ function DevQuizNav({
   idx: number;
   onJump: (i: number) => void;
 }) {
+  const { t } = useTranslation('quiz');
+  const tLoose = t as unknown as LooseT;
   const [open, setOpen] = useState(false);
   return (
     <View
@@ -473,7 +442,7 @@ function DevQuizNav({
                   }}
                   numberOfLines={1}
                 >
-                  {qq.title}
+                  {tLoose(`${String(qq.id)}.title`)}
                 </Text>
               </Pressable>
             );
@@ -490,18 +459,24 @@ const selBorder = (sel: boolean) =>
   sel ? '#0b70f9' : 'rgba(255,255,255,0.07)';
 
 function ChoiceGrid({
+  questionId,
   options,
   value,
   onChange,
 }: {
-  options: Option[];
+  questionId: keyof Quiz;
+  options: OptionDef[];
   value: string | null;
   onChange: (v: string) => void;
 }) {
+  const { t } = useTranslation('quiz');
+  const tLoose = t as unknown as LooseT;
   return (
     <View style={{ flexDirection: 'column', gap: 10 }}>
       {options.map((o) => {
         const sel = value === o.v;
+        const label = tLoose(`${String(questionId)}.options.${o.v}.label`);
+        const short = tLoose(`${String(questionId)}.options.${o.v}.short`);
         return (
           <Pressable
             key={o.v}
@@ -534,7 +509,7 @@ function ChoiceGrid({
                 textTransform: 'uppercase',
               }}
             >
-              {o.i}
+              {short}
             </Text>
             <Text
               style={{
@@ -544,7 +519,7 @@ function ChoiceGrid({
                 flex: 1,
               }}
             >
-              {o.l}
+              {label}
             </Text>
             {sel && <Icon name="check" size={18} color={colors.accentHi} />}
           </Pressable>
@@ -555,18 +530,24 @@ function ChoiceGrid({
 }
 
 function ChoiceList({
+  questionId,
   options,
   value,
   onChange,
 }: {
-  options: Option[];
+  questionId: keyof Quiz;
+  options: OptionDef[];
   value: string | null;
   onChange: (v: string) => void;
 }) {
+  const { t } = useTranslation('quiz');
+  const tLoose = t as unknown as LooseT;
   return (
     <View style={{ gap: 10 }}>
       {options.map((o) => {
         const sel = value === o.v;
+        const label = tLoose(`${String(questionId)}.options.${o.v}.label`);
+        const description = tLoose(`${String(questionId)}.options.${o.v}.description`);
         return (
           <Pressable
             key={o.v}
@@ -604,19 +585,17 @@ function ChoiceList({
               </View>
             )}
             <View style={{ flex: 1 }}>
-              <Text style={{ fontFamily: fonts.uiBold, fontSize: 16, color: '#fff' }}>{o.l}</Text>
-              {o.d && (
-                <Text
-                  style={{
-                    fontFamily: fonts.ui,
-                    fontSize: 13,
-                    color: colors.mute,
-                    marginTop: 2,
-                  }}
-                >
-                  {o.d}
-                </Text>
-              )}
+              <Text style={{ fontFamily: fonts.uiBold, fontSize: 16, color: '#fff' }}>{label}</Text>
+              <Text
+                style={{
+                  fontFamily: fonts.ui,
+                  fontSize: 13,
+                  color: colors.mute,
+                  marginTop: 2,
+                }}
+              >
+                {description}
+              </Text>
             </View>
             <View
               style={{
@@ -645,14 +624,18 @@ function ChoiceList({
 }
 
 function MultiList({
+  questionId,
   options,
   value,
   onChange,
 }: {
-  options: Option[];
+  questionId: keyof Quiz;
+  options: OptionDef[];
   value: string[];
   onChange: (v: string[]) => void;
 }) {
+  const { t } = useTranslation('quiz');
+  const tLoose = t as unknown as LooseT;
   const toggle = (v: string) =>
     value.includes(v) ? onChange(value.filter((x) => x !== v)) : onChange([...value, v]);
   const GAP = 10;
@@ -660,6 +643,7 @@ function MultiList({
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: GAP }}>
       {options.map((o) => {
         const sel = value.includes(o.v);
+        const label = tLoose(`${String(questionId)}.options.${o.v}`);
         return (
           <Pressable
             key={o.v}
@@ -706,7 +690,7 @@ function MultiList({
                 flexShrink: 1,
               }}
             >
-              {o.l}
+              {label}
             </Text>
           </Pressable>
         );
@@ -724,6 +708,9 @@ function NumberWheel({
   value: number;
   onChange: (v: number) => void;
 }) {
+  const { t } = useTranslation('quiz');
+  const tLoose = t as unknown as LooseT;
+  const unit = tLoose(`${String(q.id)}.unit`);
   const range = q.max - q.min;
   // Width of the editable number box. Seeded from a digit-count estimate,
   // then replaced with the exact pixel width measured off the static
@@ -801,7 +788,7 @@ function NumberWheel({
           <TextInput
             ref={inputRef}
             value={draft}
-            onChangeText={(t) => setDraft(t.replace(/[^0-9]/g, '').slice(0, q.digits.max))}
+            onChangeText={(txt) => setDraft(txt.replace(/[^0-9]/g, '').slice(0, q.digits.max))}
             onBlur={commitEditor}
             onSubmitEditing={commitEditor}
             keyboardType="number-pad"
@@ -836,7 +823,7 @@ function NumberWheel({
           </Text>
         )}
         <Text style={{ fontFamily: fonts.mono, fontSize: 13, letterSpacing: 2, color: colors.faint }}>
-          {q.unit}
+          {unit}
         </Text>
       </Pressable>
 
@@ -885,7 +872,7 @@ function NumberWheel({
           {q.min}
         </Text>
         <Text style={{ fontFamily: fonts.mono, fontSize: 10, letterSpacing: 2, color: colors.faint }}>
-          ARRASTE OU TOQUE NO NÚMERO
+          {t('progress.wheelHint').toUpperCase()}
         </Text>
         <Text style={{ fontFamily: fonts.mono, fontSize: 10, letterSpacing: 2, color: colors.faint }}>
           {q.max}
@@ -904,37 +891,28 @@ function BirthDateWheel({
   value: Date | null;
   onChange: (d: Date) => void;
 }) {
-  const [pickerOpen, setPickerOpen] = useState(false);
-  // Same modal shell on both platforms — the sheet holds either the iOS
-  // native spinner or the custom AndroidDateSpinner, and both write into
-  // this temp buffer. Cancel discards; Confirm commits.
-  const [temp, setTemp] = useState<Date | null>(null);
+  const { t, i18n } = useTranslation('quiz');
+  // Seed the spinner with a date that lands inside the accepted [minAge, maxAge]
+  // window so first paint doesn't look like an error state. We DON'T commit
+  // this seed to parent state — parent value stays null until the user
+  // actually interacts with the wheel (any scroll fires DateWheelPicker's
+  // onChange with the current snapped date).
+  const seed = useRef<Date>(
+    value ??
+      (() => {
+        const now = new Date();
+        return new Date(now.getFullYear() - q.minAge, now.getMonth(), now.getDate());
+      })(),
+  ).current;
 
-  const age = value ? computeAge(value) : null;
-  const label = value
-    ? value.toLocaleDateString('pt-BR', {
-        day: '2-digit',
-        month: 'long',
-        year: 'numeric',
-      })
-    : 'Toque para selecionar';
-
-  const openPicker = () => {
-    // Seed with the current value or today when none. No commit happens
-    // until the user confirms — age validation lives in `canContinue`.
-    setTemp(value ?? new Date());
-    setPickerOpen(true);
-  };
-
-  const confirm = () => {
-    if (temp) onChange(temp);
-    setPickerOpen(false);
-  };
-
-  const cancel = () => setPickerOpen(false);
+  const displayed = value ?? seed;
+  const age = computeAge(displayed);
+  // Pluralization via i18next: the `count` option triggers `_one` vs
+  // `_other` lookup and interpolates the number into `{{count}}`.
+  const ageLabel = t('birthDate.age', { count: age });
 
   return (
-    <View style={{ alignItems: 'center', gap: 28, paddingTop: 14 }}>
+    <View style={{ alignItems: 'center', gap: 18, paddingTop: 6 }}>
       <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 10 }}>
         <Text
           style={{
@@ -947,120 +925,22 @@ function BirthDateWheel({
             textShadowOffset: { width: 0, height: 0 },
           }}
         >
-          {age != null ? age : 0}
+          {age}
         </Text>
         <Text style={{ fontFamily: fonts.mono, fontSize: 13, letterSpacing: 2, color: colors.faint }}>
-          anos
+          {/* `ageLabel` already includes the number; slice it off so the mono
+              label reads e.g. "ANOS" / "YEARS" / "AÑOS" next to the big skewed
+              number that renders separately above. Guarantees the count and
+              the noun always agree in plural form. */}
+          {ageLabel.replace(/^\s*\d+\s*/, '').toUpperCase()}
         </Text>
       </View>
 
-      <Pressable
-        onPress={openPicker}
-        style={{
-          width: '100%',
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 14,
-          paddingVertical: 18,
-          paddingHorizontal: 18,
-          borderRadius: 14,
-          backgroundColor: value ? 'rgba(11,112,249,0.16)' : 'rgba(255,255,255,0.04)',
-          borderWidth: 1,
-          borderColor: value ? '#0b70f9' : 'rgba(255,255,255,0.09)',
-        }}
-      >
-        <Icon name="calendar" size={20} color={value ? colors.accentHi : colors.faint} />
-        <Text
-          style={{
-            flex: 1,
-            fontFamily: fonts.uiSemi,
-            fontSize: 16,
-            color: value ? '#fff' : colors.mute,
-            textTransform: value ? 'none' : 'none',
-          }}
-        >
-          {label}
-        </Text>
-        <Icon name="chevron-down" size={16} color={colors.faint} />
-      </Pressable>
-
-      <Modal
-        transparent
-        visible={pickerOpen}
-        animationType="slide"
-        onRequestClose={cancel}
-      >
-        <Pressable
-          onPress={cancel}
-          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' }}
-        >
-          <Pressable
-            onPress={() => {}}
-            style={{
-              backgroundColor: '#0a0620',
-              borderTopLeftRadius: 20,
-              borderTopRightRadius: 20,
-              borderTopWidth: 1,
-              borderColor: 'rgba(255,255,255,0.09)',
-              paddingBottom: 24,
-            }}
-          >
-            <View
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                paddingHorizontal: 18,
-                paddingVertical: 12,
-                borderBottomWidth: 1,
-                borderColor: 'rgba(255,255,255,0.06)',
-              }}
-            >
-              <Pressable onPress={cancel} hitSlop={10}>
-                <Text
-                  style={{
-                    fontFamily: fonts.mono,
-                    fontSize: 12,
-                    letterSpacing: 1.5,
-                    color: colors.faint,
-                  }}
-                >
-                  CANCELAR
-                </Text>
-              </Pressable>
-              <Pressable onPress={confirm} hitSlop={10}>
-                <Text
-                  style={{
-                    fontFamily: fonts.mono,
-                    fontSize: 12,
-                    letterSpacing: 1.5,
-                    color: colors.accentHi,
-                  }}
-                >
-                  CONFIRMAR
-                </Text>
-              </Pressable>
-            </View>
-            {Platform.OS === 'ios' ? (
-              <DateTimePicker
-                value={temp ?? new Date()}
-                mode="date"
-                display="spinner"
-                onValueChange={(_, d) => setTemp(d)}
-                locale="pt-BR"
-                themeVariant="dark"
-                textColor="#fff"
-              />
-            ) : (
-              <AndroidDateSpinner
-                value={temp ?? new Date()}
-                locale="pt-BR"
-                onChange={setTemp}
-              />
-            )}
-          </Pressable>
-        </Pressable>
-      </Modal>
+      <View style={{ width: '100%' }}>
+        {/* Locale drives Intl.DateTimeFormat inside DateWheelPicker — month
+            names must render in the active language. */}
+        <DateWheelPicker value={displayed} locale={i18n.language} onChange={onChange} />
+      </View>
     </View>
   );
 }

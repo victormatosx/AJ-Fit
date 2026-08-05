@@ -1,0 +1,166 @@
+{
+  "progress": {
+    "wheelHint": "Drag or tap the number"
+  },
+  "actions": {
+    "generatePlan": "Generate my plan"
+  },
+  "sex": {
+    "title": "What's your sex?",
+    "sub": "Calibrates volume and recovery.",
+    "options": {
+      "m": { "label": "Male", "short": "M" },
+      "f": { "label": "Female", "short": "F" }
+    }
+  },
+  "birthDate": {
+    "title": "When were you born?",
+    "sub": "Affects intensity and rest — your age is always recalculated from here.",
+    "age_one": "{{count}} year",
+    "age_other": "{{count}} years"
+  },
+  "height": {
+    "title": "Your height?",
+    "unit": "cm"
+  },
+  "weight": {
+    "title": "Your current weight?",
+    "sub": "Base for the initial load calculation.",
+    "unit": "kg"
+  },
+  "goal": {
+    "title": "Main goal?",
+    "sub": "Sets the program's focus.",
+    "options": {
+      "hyper": { "label": "Hypertrophy", "description": "Build muscle mass" },
+      "cut": { "label": "Fat loss", "description": "Burn fat" },
+      "perf": { "label": "Performance", "description": "Strength & power" },
+      "def": { "label": "Definition", "description": "Cut and lean out" },
+      "recon": { "label": "Reconditioning", "description": "Get back in shape" }
+    }
+  },
+  "level": {
+    "title": "Your level?",
+    "sub": "The program starts exactly where you are.",
+    "options": {
+      "beg": { "label": "Beginner", "description": "Less than 6 months" },
+      "int": { "label": "Intermediate", "description": "6 months to 2 years" },
+      "adv": { "label": "Advanced", "description": "More than 2 years" },
+      "elite": { "label": "Elite", "description": "Athlete / 5+ years" }
+    }
+  },
+  "days": {
+    "title": "Days per week?",
+    "sub": "We'll hold you to exactly that commitment.",
+    "unit": "days/wk"
+  },
+  "duration": {
+    "title": "Time per workout?",
+    "options": {
+      "30": { "label": "30 min", "short": "30" },
+      "45": { "label": "45 min", "short": "45" },
+      "60": { "label": "60 min", "short": "60" },
+      "90": { "label": "90+ min", "short": "90" }
+    }
+  },
+  "place": {
+    "title": "Where do you train?",
+    "sub": "The workout uses only what you have.",
+    "options": {
+      "gym": { "label": "Gym", "short": "GYM" },
+      "home": { "label": "Home", "short": "HOME" },
+      "both": { "label": "Both", "short": "2X" }
+    }
+  },
+  "equipment": {
+    "title": "Where do you exercise?",
+    "sub": "Select the equipment you have access to. You can change this later.",
+    "stepLabel": "Equipment · {{current}} / {{total}}",
+    "search": "Search equipment",
+    "quickPickAllGym": "I have a full gym",
+    "empty": "No equipment found.",
+    "seeAll": "See all {{category}}",
+    "collapse": "Collapse",
+    "skip": "Skip",
+    "connection": {
+      "prefix": "ExerciseDB",
+      "live": "Live",
+      "loading": "Connecting",
+      "offline": "Local taxonomy"
+    },
+    "categories": {
+      "freeWeights": "Free weights",
+      "benchesAndRacks": "Benches & racks",
+      "machines": "Machines",
+      "functional": "Functional & accessories",
+      "cardio": "Cardio",
+      "bodyweight": "No equipment",
+      "other": "Other"
+    },
+    "items": {
+      "barbell": "Barbell",
+      "olympic barbell": "Olympic barbell",
+      "ez barbell": "EZ bar",
+      "trap bar": "Trap bar",
+      "dumbbell": "Dumbbells",
+      "kettlebell": "Kettlebell",
+      "weighted": "Added weight",
+      "hammer": "Hammer",
+      "smith machine": "Smith machine",
+      "leverage machine": "Leverage machine",
+      "cable": "Cable / Pulley",
+      "assisted": "Assisted machine",
+      "sled machine": "Leg press / Sled",
+      "band": "Band",
+      "resistance band": "Resistance band",
+      "rope": "Rope",
+      "medicine ball": "Medicine ball",
+      "stability ball": "Stability ball",
+      "bosu ball": "Bosu",
+      "roller": "Foam roller",
+      "wheel roller": "Ab wheel",
+      "tire": "Tire",
+      "body weight": "Body weight",
+      "stationary bike": "Stationary bike",
+      "elliptical machine": "Elliptical",
+      "stepmill machine": "Stair climber",
+      "skierg machine": "SkiErg",
+      "upper body ergometer": "Arm ergometer",
+      "bench": "Bench",
+      "abdominal bench": "Abdominal bench",
+      "preacher curl": "Preacher bench",
+      "leg raise tower": "Leg raise tower",
+      "functional trainer": "Functional trainer",
+      "lat pull down machine": "Lat pulldown",
+      "seated row machine": "Seated row",
+      "chest press machine": "Chest press machine",
+      "chest fly machine": "Pec deck / Chest fly",
+      "shoulder press machine": "Shoulder press machine",
+      "lateral raises machine": "Lateral raise machine",
+      "seated dip machine": "Triceps machine",
+      "leg press machine": "Leg press",
+      "hack squat machine": "Hack squat",
+      "leg extension machine": "Leg extension",
+      "leg curl machine": "Leg curl",
+      "back extension machine": "Back extension",
+      "ab crunch machine": "Ab crunch machine",
+      "ghd machine": "GHD",
+      "ab roller": "Ab wheel",
+      "elliptical": "Elliptical",
+      "stepmill": "Stair climber",
+      "treadmill": "Treadmill"
+    }
+  },
+  "limits": {
+    "title": "Any limitations?",
+    "sub": "We'll protect what needs care.",
+    "options": {
+      "none": "None",
+      "knee": "Knee",
+      "back": "Back",
+      "shoulder": "Shoulder",
+      "wrist": "Wrist",
+      "hip": "Hip"
+    }
+  }
+}

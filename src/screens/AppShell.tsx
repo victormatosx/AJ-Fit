@@ -2,13 +2,13 @@ import { useState } from 'react';
 import { View, Text, Pressable, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useTranslation } from 'react-i18next';
 import { Icon, IconName } from '../components/ui/Icon';
 import { HudCorners } from '../components/ui/Card';
 import { Display, Slash } from '../components/ui/Display';
 import { OutlineNumber } from '../components/ui/OutlineNumber';
 import { colors, fonts } from '../theme/tokens';
 import { useAppState, TabId } from '../state/AppState';
-import { TODAY_WORKOUT } from '../lib/todayWorkout';
 import { HomeScreen } from './HomeScreen';
 import { WorkoutScreen } from './WorkoutScreen';
 import { ProgressScreen } from './ProgressScreen';
@@ -102,6 +102,7 @@ function StartWorkoutConfirmation({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  const { t } = useTranslation('home');
   return (
     <Modal
       visible={visible}
@@ -112,7 +113,9 @@ function StartWorkoutConfirmation({
     >
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Fechar confirmação de treino"
+        accessibilityLabel={t('todayCard.confirm.accessibilityClose', {
+          defaultValue: t('todayCard.confirm.dismiss'),
+        })}
         onPress={onCancel}
         style={{
           flex: 1,
@@ -161,9 +164,9 @@ function StartWorkoutConfirmation({
               04
             </OutlineNumber>
 
-            <Slash>TREINO DE HOJE</Slash>
+            <Slash>{t('todayCard.kicker').toUpperCase()}</Slash>
             <Display size={26} style={{ marginTop: 9 }}>
-              INICIAR TREINO?
+              {t('todayCard.confirm.title').toUpperCase()}
             </Display>
             <Text
               style={{
@@ -174,7 +177,7 @@ function StartWorkoutConfirmation({
                 marginTop: 8,
               }}
             >
-              Deseja iniciar agora
+              {t('todayCard.confirm.question')}
             </Text>
             <Text
               style={{
@@ -185,12 +188,12 @@ function StartWorkoutConfirmation({
                 marginTop: 1,
               }}
             >
-              {TODAY_WORKOUT.name}?
+              {t('mock.today.name')}?
             </Text>
 
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Confirmar início do treino"
+              accessibilityLabel={t('todayCard.confirm.accessibilityConfirm')}
               onPress={onConfirm}
               style={{
                 height: 48,
@@ -214,7 +217,7 @@ function StartWorkoutConfirmation({
                   textTransform: 'uppercase',
                 }}
               >
-                Sim, iniciar
+                {t('todayCard.confirm.startNow')}
               </Text>
             </Pressable>
             <Pressable
@@ -223,7 +226,7 @@ function StartWorkoutConfirmation({
               style={{ alignSelf: 'center', paddingHorizontal: 18, paddingTop: 13, paddingBottom: 2 }}
             >
               <Text style={{ color: colors.mute, fontFamily: fonts.ui, fontSize: 13 }}>
-                Agora não
+                {t('todayCard.confirm.notNow')}
               </Text>
             </Pressable>
           </LinearGradient>
@@ -234,11 +237,12 @@ function StartWorkoutConfirmation({
 }
 
 function TabBar({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => void }) {
-  const items: { id: TabId; icon: IconName; label: string }[] = [
-    { id: 'home', icon: 'home', label: 'HOME' },
-    { id: 'workout', icon: 'dumbbell', label: 'TREINO' },
-    { id: 'progress', icon: 'chart', label: 'EVOLUÇÃO' },
-    { id: 'profile', icon: 'user', label: 'PERFIL' },
+  const { t } = useTranslation('common');
+  const items: { id: TabId; icon: IconName; labelKey: 'home' | 'workout' | 'progress' | 'profile' }[] = [
+    { id: 'home', icon: 'home', labelKey: 'home' },
+    { id: 'workout', icon: 'dumbbell', labelKey: 'workout' },
+    { id: 'progress', icon: 'chart', labelKey: 'progress' },
+    { id: 'profile', icon: 'user', labelKey: 'profile' },
   ];
   return (
     <SafeAreaView edges={['bottom']} style={{ backgroundColor: 'transparent' }}>
@@ -301,7 +305,7 @@ function TabBar({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => void }) {
                     color: active ? colors.accentHi : 'rgba(255,255,255,0.4)',
                   }}
                 >
-                  {it.label}
+                  {t(`navigation.${it.labelKey}`).toUpperCase()}
                 </Text>
               </Pressable>
             );

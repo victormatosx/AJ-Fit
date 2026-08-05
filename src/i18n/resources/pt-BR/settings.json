@@ -1,0 +1,48 @@
+{
+  "screenTitle": "Configurações",
+  "sections": {
+    "account": "Conta",
+    "workout": "Treino",
+    "notifications": "Notificações",
+    "preferences": "Preferências",
+    "privacy": "Privacidade",
+    "support": "Suporte",
+    "about": "Sobre"
+  },
+  "items": {
+    "editProfile": "Editar perfil",
+    "subscription": "Assinatura",
+    "loginMethods": "Métodos de login",
+    "security": "Segurança",
+    "workoutPreferences": "Preferências de treino",
+    "timersAndSounds": "Timers e sons",
+    "notifications": "Notificações",
+    "theme": "Tema",
+    "units": "Unidades",
+    "privacy": "Privacidade",
+    "exportData": "Exportar dados",
+    "deleteAccount": "Excluir conta",
+    "helpCenter": "Central de ajuda",
+    "sendFeedback": "Enviar feedback",
+    "reportProblem": "Reportar problema",
+    "version": "Versão",
+    "licenses": "Licenças"
+  },
+  "values": {
+    "darkTheme": "Escuro"
+  },
+  "language": {
+    "title": "Idioma",
+    "description": "Escolha o idioma do aplicativo.",
+    "current": "Idioma atual",
+    "chooseTitle": "Selecionar idioma",
+    "options": {
+      "pt-BR": "Português",
+      "en": "English",
+      "es": "Español"
+    },
+    "errors": {
+      "changeFailed": "Não foi possível salvar o idioma. Tente novamente."
+    }
+  }
+}

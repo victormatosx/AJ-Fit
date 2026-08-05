@@ -1,0 +1,172 @@
+{
+  "header": {
+    "title": "Evaluación física"
+  },
+  "errors": {
+    "loadFailedTitle": "No pudimos cargar tus evaluaciones",
+    "loadFailedMessage": "Revisa tu conexión e inténtalo de nuevo.",
+    "retry": "Reintentar",
+    "saveFailedTitle": "Error al guardar",
+    "saveFailedMessage": "Revisa tu conexión e inténtalo de nuevo."
+  },
+  "loading": { "title": "Cargando evaluaciones" },
+  "sections": {
+    "evolution": "Evolución",
+    "basicInfo": "Información básica",
+    "skinfolds": "Pliegues cutáneos",
+    "add": "Añadir evaluación",
+    "history": "Historial"
+  },
+  "summary": {
+    "noRecords": "Sin registros",
+    "lastAssessmentLabel": "Última evaluación · {{date}}",
+    "emptyCta": "Aún no tienes ninguna evaluación registrada · toca para registrar la primera"
+  },
+  "basicInfo": {
+    "initialDataFallback": "Datos del registro inicial · aún no es una evaluación",
+    "noInitialDataFallback": "Sin datos del registro · registra tu primera evaluación"
+  },
+  "skinfoldsHint": {
+    "noneRegistered": "Ningún pliegue registrado",
+    "registerGuidedCta": "Inicia una evaluación guiada",
+    "description": "Los pliegues cutáneos se registran durante la Evaluación Guiada y se usan para estimar tu porcentaje de grasa.",
+    "measurementsSummary": "{{count}} medidas · {{date}}"
+  },
+  "actions": {
+    "guided": {
+      "title": "Evaluación guiada",
+      "description": "Peso, medidas y pliegues — la app calcula todo"
+    },
+    "import": {
+      "title": "Importar evaluación",
+      "description": "¿Ya tienes los resultados? Regístralos directamente"
+    },
+    "saveGuided": "Guardar evaluación",
+    "registerImported": "Registrar evaluación"
+  },
+  "guided": {
+    "title": "Nuevo registro",
+    "basicInfoSection": "Información básica",
+    "sexLabel": "Sexo",
+    "male": "Masculino",
+    "female": "Femenino",
+    "missingBirthDateHint": "Sin fecha de nacimiento registrada · indica la edad que tenías en esta fecha",
+    "protocolLabel": "Protocolo",
+    "selectSexHint": "Selecciona el sexo arriba para ver los pliegues requeridos por este protocolo.",
+    "saving": "Guardando…"
+  },
+  "import": {
+    "title": "Evaluación importada",
+    "description": "¿Te evaluaste con un nutricionista, médico, clínica, bioimpedancia o DEXA? Registra abajo los resultados ya calculados: la app solo guarda esta información y no vuelve a calcularla.",
+    "resultsSection": "Resultados de la evaluación",
+    "saving": "Guardando…"
+  },
+  "fields": {
+    "measurementDate": { "label": "Fecha de la evaluación" },
+    "weight": { "label": "Peso" },
+    "height": { "label": "Altura" },
+    "ageAtAssessment": { "label": "Edad en la fecha de evaluación" },
+    "bodyFat": { "label": "GC" },
+    "bodyWater": { "label": "Agua corporal" },
+    "basalMetabolism": { "label": "Metabolismo basal" },
+    "visceralFat": { "label": "Grasa visceral" },
+    "notes": { "label": "Observaciones (opcional)", "placeholder": "Ej.: bioimpedancia en la Clínica X" }
+  },
+  "form": { "numericPlaceholder": "0" },
+  "units": { "kg": "kg", "cm": "cm", "mm": "mm", "percent": "%", "years": "años", "kcal": "kcal" },
+  "validation": {
+    "guidedRequired": "Completa fecha, peso, altura, sexo, edad y todos los pliegues para guardar",
+    "importRequired": "Completa fecha, peso y altura para registrar"
+  },
+  "success": {
+    "guidedTitle": "Evaluación guardada correctamente",
+    "importedTitle": "Evaluación importada correctamente",
+    "historyMessage": "Añadida a tu historial de evolución.",
+    "guidedRefreshTitle": "Evaluación guardada",
+    "importedRefreshTitle": "Evaluación importada",
+    "refreshMessage": "No se pudo actualizar la pantalla ahora. Vuelve a abrir Evaluación física para verla en el historial."
+  },
+  "metrics": {
+    "weight": "Peso",
+    "height": "Altura",
+    "bodyFat": "% grasa",
+    "leanMass": "Masa magra",
+    "fatMass": "Masa grasa",
+    "bmi": "IMC"
+  },
+  "protocols": {
+    "jp3": "Jackson & Pollock · 3 pliegues",
+    "jp7": "Jackson & Pollock · 7 pliegues"
+  },
+  "skinfolds": {
+    "chest": "Pectoral",
+    "axilla": "Axilar media",
+    "tricep": "Tricipital",
+    "subscap": "Subescapular",
+    "abdom": "Abdominal",
+    "supra": "Suprailíaco",
+    "thigh": "Muslo"
+  },
+  "results": {
+    "title": "Resultados",
+    "automaticBmi": "IMC automático"
+  },
+  "classifications": {
+    "bmi": {
+      "underweight": "Bajo peso",
+      "normal": "Peso normal",
+      "overweight": "Sobrepeso",
+      "obesity": "Obesidad"
+    }
+  },
+  "charts": {
+    "weightEmpty": "Registra 2+ evaluaciones para ver el gráfico.",
+    "bodyFatEmpty": "Sin suficientes evaluaciones con % de grasa."
+  },
+  "evolution": {
+    "noPreviousMessage": "Registra una nueva evaluación para empezar a seguir tu evolución.",
+    "viewHistoryCta": "Ver historial completo"
+  },
+  "history": {
+    "records_one": "{{count}} registro",
+    "records_other": "{{count}} registros",
+    "empty": {
+      "title": "Ninguna evaluación registrada",
+      "message": "Guarda tu primera evaluación para iniciar la línea de tiempo."
+    },
+    "toggle": {
+      "showLess": "Ver menos",
+      "showAll": "Ver historial completo"
+    },
+    "labels": {
+      "importedBadge": "Importado",
+      "viewDetails": "Ver detalles"
+    },
+    "details": {
+      "available": "Masa magra estimada {{lean}} kg · masa grasa {{fat}} kg.",
+      "availableProtocol": "Masa magra estimada {{lean}} kg · masa grasa {{fat}} kg · protocolo {{protocol}}.",
+      "availableImported": "Masa magra estimada {{lean}} kg · masa grasa {{fat}} kg · registrado desde una evaluación profesional.",
+      "availableProtocolImported": "Masa magra estimada {{lean}} kg · masa grasa {{fat}} kg · protocolo {{protocol}} · registrado desde una evaluación profesional.",
+      "unavailable": "Masa magra y grasa no disponibles — esta evaluación no tiene porcentaje de grasa.",
+      "unavailableProtocol": "Masa magra y grasa no disponibles — esta evaluación no tiene porcentaje de grasa · protocolo {{protocol}}.",
+      "unavailableImported": "Masa magra y grasa no disponibles — esta evaluación no tiene porcentaje de grasa · registrado desde una evaluación profesional.",
+      "unavailableProtocolImported": "Masa magra y grasa no disponibles — esta evaluación no tiene porcentaje de grasa · protocolo {{protocol}} · registrado desde una evaluación profesional."
+    }
+  },
+  "date": {
+    "today": "Hoy"
+  },
+  "accessibility": {
+    "openGuided": "Abrir evaluación guiada",
+    "openImport": "Abrir importación de evaluación",
+    "evolutionCard": "Gráficos y métricas de evolución de las evaluaciones",
+    "viewHistory": "Ver historial completo de evaluaciones",
+    "openAssessment": "Ver detalles de la evaluación del {{date}}",
+    "chart": "Gráfico de {{label}}. {{description}}",
+    "formField": "Campo {{label}}",
+    "selectProtocol": "Seleccionar protocolo",
+    "selectSex": "Seleccionar sexo: {{sex}}",
+    "saveGuided": "Guardar evaluación guiada",
+    "saveImported": "Registrar evaluación importada"
+  }
+}

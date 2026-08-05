@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { View, Text } from 'react-native';
 import Svg, { Circle, Line, Polyline } from 'react-native-svg';
+import { useTranslation } from 'react-i18next';
 import { MonoLabel } from '../ui/Display';
 import { colors, fonts } from '../../theme/tokens';
 
@@ -35,12 +36,17 @@ export function EvolutionLineChart({
   points: EvolutionPoint[];
   emptyHint: string;
 }) {
+  const { t } = useTranslation('assessment');
   const [width, setWidth] = useState(0);
 
   const last = points[points.length - 1] ?? null;
 
   return (
-    <View style={{ flex: 1 }}>
+    <View
+      style={{ flex: 1 }}
+      accessible
+      accessibilityLabel={t('accessibility.chart', { label, description: emptyHint })}
+    >
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
         <MonoLabel>{label}</MonoLabel>
         {last && (

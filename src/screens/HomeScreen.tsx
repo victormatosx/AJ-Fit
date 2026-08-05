@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, ScrollView, Pressable, Animated, Easing } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useTranslation } from 'react-i18next';
 import { ScreenBg } from '../components/ui/ScreenBg';
 import { Display, Slash, MonoLabel } from '../components/ui/Display';
 import { Card, HudCorners } from '../components/ui/Card';
@@ -11,18 +12,24 @@ import { OutlineNumber } from '../components/ui/OutlineNumber';
 import { colors, fonts } from '../theme/tokens';
 import { useAuth } from '../state/AuthContext';
 import { getDisplayFirstName } from '../lib/userName';
-import { TODAY_WORKOUT } from '../lib/todayWorkout';
 import { ProfileAvatar } from '../components/ui/ProfileAvatar';
 
-const TICKER_ITEMS: [string, string][] = [
-  ['SEQUÊNCIA', '14 DIAS'],
-  ['VOLUME SEMANA', '12.4T'],
-  ['PR SUPINO', '82.5KG'],
-  ['CONSISTÊNCIA', '92%'],
-  ['PRÓXIMO NÍVEL', '—12 DIAS'],
+/**
+ * Ticker rows read from i18n keys. The values themselves are placeholder
+ * mock stats until the analytics pipeline lands; when it does, replace this
+ * static list with derived data. The i18n structure (label + value) stays.
+ */
+type TickerKey = 'streak' | 'weekVolume' | 'benchPr' | 'consistency' | 'nextLevel';
+const TICKER_KEYS: Array<{ key: TickerKey; value: string }> = [
+  { key: 'streak', value: '14' },
+  { key: 'weekVolume', value: '12.4T' },
+  { key: 'benchPr', value: '82.5KG' },
+  { key: 'consistency', value: '92%' },
+  { key: 'nextLevel', value: '12' },
 ];
 
 function Ticker() {
+  const { t } = useTranslation('home');
   const [width, setWidth] = useState(0);
   const x = useRef(new Animated.Value(0)).current;
 
@@ -41,6 +48,21 @@ function Ticker() {
     return () => loop.stop();
   }, [width, x]);
 
+  const items = useMemo(
+    () =>
+      TICKER_KEYS.map(({ key, value }) => {
+        const label = t(`ticker.${key}` as 'ticker.streak').toUpperCase();
+        // `nextLevel` interpolates a day count; other tickers show the raw
+        // mock number as-is until real analytics wire in.
+        const display =
+          key === 'nextLevel'
+            ? t('ticker.nextLevelValue', { days: value })
+            : value;
+        return { label, value: display };
+      }),
+    [t],
+  );
+
   const row = (onLayout?: (w: number) => void) => (
     <View
       onLayout={
@@ -50,7 +72,7 @@ function Ticker() {
       }
       style={{ flexDirection: 'row', gap: 36, paddingRight: 36 }}
     >
-      {TICKER_ITEMS.map(([l, v], i) => (
+      {items.map(({ label, value }, i) => (
         <Text
           key={i}
           style={{
@@ -60,8 +82,8 @@ function Ticker() {
             color: colors.faint,
           }}
         >
-          {l}{' '}
-          <Text style={{ color: colors.accentHi, fontFamily: fonts.monoBold }}>{v}</Text>
+          {label}{' '}
+          <Text style={{ color: colors.accentHi, fontFamily: fonts.monoBold }}>{value}</Text>
         </Text>
       ))}
     </View>
@@ -91,6 +113,21 @@ function Ticker() {
     </View>
   );
 }
+const UPCOMING_KEYS = ['pull', 'legs', 'upper'] as const;
+const CONSISTENCY_MOCK_STATES = ['done', 'done', 'done', 'rest', 'done', 'today', 'future'];
+
+/** Mock date placeholder — will be derived from real state once the plan
+ *  timeline pipeline is wired. Kept here so tokens are single-sourced. */
+const MOCK_DATE = {
+  weekday: 'Seg',
+  day: '03',
+  month: 'Jun',
+  currentWeek: '04',
+  totalWeeks: '12',
+};
+
+const TODAY_MOCK_META = { duration: 58, exercises: 8, kcal: 420 };
+const CONSISTENCY_MOCK = { done: 4, total: 5 };
 
 export function HomeScreen({
   onStart,
@@ -99,12 +136,23 @@ export function HomeScreen({
   onStart: () => void;
   onOpenConsistency: () => void;
 }) {
+  const { t } = useTranslation(['home', 'profile']);
   const { user, profile } = useAuth();
   const firstName = getDisplayFirstName({
     profileName: profile?.profile.name,
     authDisplayName: user?.displayName,
     email: user?.email ?? profile?.profile.email,
-  }).toUpperCase();
+    // Visual-only fallback: never persisted, always resolves in the active
+    // locale. `getDisplayFirstName` returns 'Atleta' as its literal last
+    // resort — we replace that here so it becomes "Athlete" / "Atleta" in en/es.
+  });
+  const localizedFirstName = (
+    firstName === 'Atleta' ? t('profile:fallback.athlete') : firstName
+  ).toUpperCase();
+
+  const dayInitials = t('consistency.dayInitials', {
+    returnObjects: true,
+  }) as string[];
 
   return (
     <ScreenBg>
@@ -122,11 +170,13 @@ export function HomeScreen({
             }}
           >
             <View>
-              <MonoLabel>SEG · 03 JUN · SEMANA 04/12</MonoLabel>
+              <MonoLabel>
+                {t('home:meta.todayLine', MOCK_DATE).toUpperCase()}
+              </MonoLabel>
               <Display size={34} style={{ marginTop: 8 }}>
-                E AÍ,
+                {t('home:greeting.casual').toUpperCase()}
               </Display>
-              <Display size={34}>{firstName}.</Display>
+              <Display size={34}>{localizedFirstName}.</Display>
             </View>
             <ProfileAvatar
               displayName={profile?.profile.name || firstName}
@@ -165,11 +215,11 @@ export function HomeScreen({
                 04
               </OutlineNumber>
               <View>
-                <Slash>TREINO DE HOJE</Slash>
+                <Slash>{t('home:todayCard.kicker').toUpperCase()}</Slash>
                 <Display size={38} style={{ marginTop: 12 }}>
-                  {TODAY_WORKOUT.type} —
+                  {t('home:mock.today.type').toUpperCase()} —
                 </Display>
-                <Display size={38}>{TODAY_WORKOUT.focus}</Display>
+                <Display size={38}>{t('home:mock.today.focus').toUpperCase()}</Display>
                 <View style={{ flexDirection: 'row', gap: 12, marginTop: 14 }}>
                   <Text
                     style={{
@@ -179,7 +229,7 @@ export function HomeScreen({
                       letterSpacing: 1,
                     }}
                   >
-                    58 MIN · 8 EXERCÍCIOS · ~420 KCAL
+                    {t('home:todayCard.meta', TODAY_MOCK_META).toUpperCase()}
                   </Text>
                 </View>
               </View>
@@ -216,7 +266,7 @@ export function HomeScreen({
                     textTransform: 'uppercase',
                   }}
                 >
-                  Iniciar treino
+                  {t('home:todayCard.start')}
                 </Text>
               </Pressable>
             </LinearGradient>
@@ -234,7 +284,7 @@ export function HomeScreen({
                     marginBottom: 12,
                   }}
                 >
-                  <Slash>CONSISTÊNCIA · SEMANA</Slash>
+                  <Slash>{t('home:consistency.title').toUpperCase()}</Slash>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                     <Text
                       style={{
@@ -244,16 +294,18 @@ export function HomeScreen({
                         textTransform: 'uppercase',
                       }}
                     >
-                      4<Text style={{ color: colors.faint, fontSize: 15 }}>/5</Text>
+                      {CONSISTENCY_MOCK.done}
+                      <Text style={{ color: colors.faint, fontSize: 15 }}>
+                        /{CONSISTENCY_MOCK.total}
+                      </Text>
                     </Text>
                     <Icon name="chevron-right" size={16} color="rgba(255,255,255,0.4)" />
                   </View>
                 </View>
                 <SegBar value={0.8} segs={15} />
                 <View style={{ flexDirection: 'row', gap: 6, marginTop: 14 }}>
-                  {['S', 'T', 'Q', 'Q', 'S', 'S', 'D'].map((d, i) => {
-                    const states = ['done', 'done', 'done', 'rest', 'done', 'today', 'future'];
-                    const s = states[i];
+                  {dayInitials.map((d, i) => {
+                    const s = CONSISTENCY_MOCK_STATES[i];
                     const bg =
                       s === 'done'
                         ? 'rgba(11,112,249,0.3)'
@@ -285,7 +337,7 @@ export function HomeScreen({
                           {s === 'today' && <Icon name="bolt" size={13} color="#fff" />}
                           {s === 'rest' && (
                             <Text style={{ fontFamily: fonts.mono, fontSize: 8, color: colors.faint }}>
-                              OFF
+                              {t('home:consistency.restLabel').toUpperCase()}
                             </Text>
                           )}
                         </View>
@@ -302,90 +354,101 @@ export function HomeScreen({
 
           {/* twin stats */}
           <View style={{ paddingHorizontal: 22, paddingBottom: 16, flexDirection: 'row', gap: 12 }}>
-            {[
-              { l: 'SEQUÊNCIA', v: '14', u: 'DIAS', icon: 'flame', note: 'recorde pessoal: 21' },
-              { l: 'VOLUME', v: '12.4', u: 'TON', icon: 'dumbbell', note: '+8% vs semana passada' },
-            ].map((s) => (
-              <Card key={s.l} style={{ flex: 1, padding: 16 }}>
-                <View
-                  style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}
-                >
-                  <MonoLabel>{s.l}</MonoLabel>
-                  <Icon name={s.icon as IconName} size={14} color={colors.accentHi} />
-                </View>
-                <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 5 }}>
-                  <Text
-                    style={{
-                      fontFamily: fonts.display,
-                      fontSize: 34,
-                      color: '#fff',
-                      transform: [{ skewX: '-8deg' }],
-                    }}
+            {([
+              { key: 'streak', icon: 'flame', value: '14' },
+              { key: 'volume', icon: 'dumbbell', value: '12.4' },
+            ] as const).map((s) => {
+              const label = t(`home:stats.${s.key}.label`).toUpperCase();
+              const unit = t(`home:stats.${s.key}.unit`).toUpperCase();
+              const note = t(`home:stats.${s.key}.note`);
+              return (
+                <Card key={s.key} style={{ flex: 1, padding: 16 }}>
+                  <View
+                    style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}
                   >
-                    {s.v}
+                    <MonoLabel>{label}</MonoLabel>
+                    <Icon name={s.icon as IconName} size={14} color={colors.accentHi} />
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 5 }}>
+                    <Text
+                      style={{
+                        fontFamily: fonts.display,
+                        fontSize: 34,
+                        color: '#fff',
+                        transform: [{ skewX: '-8deg' }],
+                      }}
+                    >
+                      {s.value}
+                    </Text>
+                    <MonoLabel>{unit}</MonoLabel>
+                  </View>
+                  <Text style={{ fontFamily: fonts.ui, fontSize: 11, color: colors.mute, marginTop: 6 }}>
+                    {note}
                   </Text>
-                  <MonoLabel>{s.u}</MonoLabel>
-                </View>
-                <Text style={{ fontFamily: fonts.ui, fontSize: 11, color: colors.mute, marginTop: 6 }}>
-                  {s.note}
-                </Text>
-              </Card>
-            ))}
+                </Card>
+              );
+            })}
           </View>
 
           {/* up next */}
           <View style={{ paddingHorizontal: 22, paddingBottom: 18 }}>
-            <Slash style={{ marginBottom: 12 }}>PRÓXIMOS TREINOS</Slash>
-            {[
-              { d: 'QUA', n: 'PULL — Costas & Bíceps', t: '54 min · 7 exercícios' },
-              { d: 'SEX', n: 'LEGS — Quadríceps & Glúteos', t: '62 min · 9 exercícios' },
-              { d: 'SÁB', n: 'UPPER — Empurrar leve', t: '45 min · 6 exercícios' },
-            ].map((w, i) => (
-              <View
-                key={i}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 14,
-                  paddingVertical: 13,
-                  paddingHorizontal: 14,
-                  borderRadius: 12,
-                  marginBottom: 8,
-                  backgroundColor: 'rgba(255,255,255,0.03)',
-                  borderWidth: 1,
-                  borderColor: 'rgba(255,255,255,0.06)',
-                }}
-              >
-                <Text
+            <Slash style={{ marginBottom: 12 }}>
+              {t('home:upcoming.title').toUpperCase()}
+            </Slash>
+            {UPCOMING_KEYS.map((k) => {
+              const item = t(`home:upcoming.items.${k}`, {
+                returnObjects: true,
+              }) as { day: string; name: string; duration: number; exercises: number };
+              return (
+                <View
+                  key={k}
                   style={{
-                    fontFamily: fonts.display,
-                    fontSize: 15,
-                    color: 'rgba(255,255,255,0.3)',
-                    width: 38,
-                    textTransform: 'uppercase',
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 14,
+                    paddingVertical: 13,
+                    paddingHorizontal: 14,
+                    borderRadius: 12,
+                    marginBottom: 8,
+                    backgroundColor: 'rgba(255,255,255,0.03)',
+                    borderWidth: 1,
+                    borderColor: 'rgba(255,255,255,0.06)',
                   }}
                 >
-                  {w.d}
-                </Text>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontFamily: fonts.uiBold, fontSize: 14, color: '#fff' }}>
-                    {w.n}
-                  </Text>
                   <Text
                     style={{
-                      fontFamily: fonts.mono,
-                      fontSize: 10,
-                      color: colors.faint,
-                      marginTop: 3,
-                      letterSpacing: 1,
+                      fontFamily: fonts.display,
+                      fontSize: 15,
+                      color: 'rgba(255,255,255,0.3)',
+                      width: 38,
+                      textTransform: 'uppercase',
                     }}
                   >
-                    {w.t}
+                    {item.day}
                   </Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontFamily: fonts.uiBold, fontSize: 14, color: '#fff' }}>
+                      {item.name}
+                    </Text>
+                    <Text
+                      style={{
+                        fontFamily: fonts.mono,
+                        fontSize: 10,
+                        color: colors.faint,
+                        marginTop: 3,
+                        letterSpacing: 1,
+                      }}
+                    >
+                      {t('home:upcoming.meta', {
+                        duration: item.duration,
+                        exercises: item.exercises,
+                      })}
+                    </Text>
+                  </View>
+                  <Icon name="chevron-right" size={15} color="rgba(255,255,255,0.35)" />
                 </View>
-                <Icon name="chevron-right" size={15} color="rgba(255,255,255,0.35)" />
-              </View>
-            ))}
+              );
+            })}
           </View>
         </ScrollView>
       </SafeAreaView>

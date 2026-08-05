@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, Pressable } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { Icon, IconName } from '../ui/Icon';
 import { colors, fonts } from '../../theme/tokens';
 
@@ -8,15 +9,19 @@ function ActionOption({
   title,
   subtitle,
   onPress,
+  accessibilityLabel,
 }: {
   icon: IconName;
   title: string;
   subtitle: string;
   onPress: () => void;
+  accessibilityLabel: string;
 }) {
   return (
     <Pressable
       onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
       style={({ pressed }) => ({
         flex: 1,
         padding: 16,
@@ -54,19 +59,22 @@ export function AssessmentActionCard({
   onGuided: () => void;
   onImport: () => void;
 }) {
+  const { t } = useTranslation('assessment');
   return (
     <View style={{ flexDirection: 'row', gap: 10 }}>
       <ActionOption
         icon="dumbbell"
-        title="Avaliação Guiada"
-        subtitle="Peso, medidas e dobras — o app calcula tudo"
+        title={t('actions.guided.title')}
+        subtitle={t('actions.guided.description')}
         onPress={onGuided}
+        accessibilityLabel={t('accessibility.openGuided')}
       />
       <ActionOption
         icon="download"
-        title="Importar Avaliação"
-        subtitle="Já tem os resultados? Registre direto"
+        title={t('actions.import.title')}
+        subtitle={t('actions.import.description')}
         onPress={onImport}
+        accessibilityLabel={t('accessibility.openImport')}
       />
     </View>
   );

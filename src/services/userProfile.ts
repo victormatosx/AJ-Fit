@@ -28,6 +28,7 @@ import {
   validateDisplayName,
   validateProfileBirthDate,
 } from '../lib/userProfileValidation';
+import { DEFAULT_LANGUAGE, type SupportedLanguage } from '../types/language';
 
 /**
  * User repository — the only place that touches `users/{userId}` and its
@@ -72,7 +73,7 @@ export type UserProfile = {
     photoVersion?: Timestamp;
   };
   preferences: {
-    language: 'pt-BR';
+    language: SupportedLanguage;
     units: 'metric' | 'imperial';
     theme: 'dark' | 'light' | 'system';
   };
@@ -157,7 +158,7 @@ function migratedUserDocument(data: Record<string, unknown>): Record<string, unk
   return {
     profile,
     preferences: {
-      language: 'pt-BR',
+      language: DEFAULT_LANGUAGE,
       units: 'metric',
       theme: 'dark',
     },
@@ -207,7 +208,7 @@ export async function provisionNewUser(
           ? { birthDate: Timestamp.fromDate(input.answers.birthDate) }
           : {}),
       },
-      preferences: { language: 'pt-BR', units: 'metric', theme: 'dark' },
+      preferences: { language: DEFAULT_LANGUAGE, units: 'metric', theme: 'dark' },
       subscription: {},
       metadata: {
         role: 'user',
@@ -331,13 +332,18 @@ export async function updateUserProfile(
 
   if (data.name !== undefined) {
     const error = validateDisplayName(data.name);
-    if (error) throw new Error(error);
+    // Validators returned locale-free string messages in the past. They now
+    // return `{ code, params }`; we rethrow the code as the Error message so
+    // this service stays locale-free and the caller (EditProfileScreen)
+    // decides how to display it. Callers that don't recognize the code fall
+    // back to a generic "couldn't save" toast.
+    if (error) throw new Error(error.code);
     update['profile.name'] = normalizeDisplayName(data.name);
   }
   if (data.birthDate !== undefined) {
     if (data.birthDate) {
       const error = validateProfileBirthDate(data.birthDate);
-      if (error) throw new Error(error);
+      if (error) throw new Error(error.code);
     }
     update['profile.birthDate'] = data.birthDate
       ? Timestamp.fromDate(data.birthDate)

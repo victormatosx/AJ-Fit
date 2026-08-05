@@ -1,0 +1,41 @@
+/**
+ * Module augmentation for i18next — pt-BR is the reference locale.
+ *
+ * Every language must ship the same key set; TypeScript picks pt-BR as the
+ * shape source so calling `t('common:foo.bar')` with a nonexistent key
+ * fails at compile time and IDE autocomplete surfaces the tree.
+ *
+ * If en or es diverge from pt-BR in shape, the runtime falls back to the
+ * missing key emitting the key string — the structural test suite in
+ * `src/lib/__tests__/i18n.test.ts` catches that so it never ships.
+ */
+import 'i18next';
+import type ptBRCommon from './resources/pt-BR/common.json';
+import type ptBRSettings from './resources/pt-BR/settings.json';
+import type ptBRErrors from './resources/pt-BR/errors.json';
+import type ptBROnboarding from './resources/pt-BR/onboarding.json';
+import type ptBRQuiz from './resources/pt-BR/quiz.json';
+import type ptBRHome from './resources/pt-BR/home.json';
+import type ptBRProfile from './resources/pt-BR/profile.json';
+import type ptBRWorkout from './resources/pt-BR/workout.json';
+import type ptBRAssessment from './resources/pt-BR/assessment.json';
+import type ptBRAuth from './resources/pt-BR/auth.json';
+
+declare module 'i18next' {
+  interface CustomTypeOptions {
+    defaultNS: 'common';
+    resources: {
+      common: typeof ptBRCommon;
+      settings: typeof ptBRSettings;
+      errors: typeof ptBRErrors;
+      onboarding: typeof ptBROnboarding;
+      quiz: typeof ptBRQuiz;
+      home: typeof ptBRHome;
+      profile: typeof ptBRProfile;
+      workout: typeof ptBRWorkout;
+      assessment: typeof ptBRAssessment;
+      auth: typeof ptBRAuth;
+    };
+    returnNull: false;
+  }
+}

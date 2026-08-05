@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, ScrollView, Pressable, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useTranslation } from 'react-i18next';
 import { ScreenBg } from '../components/ui/ScreenBg';
 import { Display, Slash, MonoLabel } from '../components/ui/Display';
 import { Card } from '../components/ui/Card';
@@ -12,18 +13,12 @@ import { ProfileAvatar } from '../components/ui/ProfileAvatar';
 import { colors, fonts } from '../theme/tokens';
 import { useAuth } from '../state/AuthContext';
 
-const SUBSCRIPTION_LABEL: Record<string, string> = {
-  TRIAL: 'AJ PREMIUM · TESTE GRÁTIS',
-  ACTIVE: 'AJ PREMIUM · ATIVO',
-  CANCELED: 'AJ PREMIUM · CANCELADO',
-  BILLING_ISSUE: 'AJ PREMIUM · PAGAMENTO PENDENTE',
-  EXPIRED: 'AJ PREMIUM · EXPIRADO',
-};
-
-const PROVIDER_META: { id: string; label: string; icon: IconName }[] = [
-  { id: 'google.com', label: 'Google', icon: 'google' },
-  { id: 'apple.com', label: 'Apple', icon: 'apple' },
-  { id: 'password', label: 'E-mail/Senha', icon: 'mail' },
+/** Provider ids come from Firebase Auth and MUST NOT be renamed here —
+ *  translation happens at the label lookup, never on the id. */
+const PROVIDER_META: { id: 'google.com' | 'apple.com' | 'password'; icon: IconName }[] = [
+  { id: 'google.com', icon: 'google' },
+  { id: 'apple.com', icon: 'apple' },
+  { id: 'password', icon: 'mail' },
 ];
 
 export function ProfileScreen({
@@ -35,32 +30,38 @@ export function ProfileScreen({
   onOpenEditProfile?: () => void;
   onOpenSettings?: () => void;
 }) {
+  const { t } = useTranslation('profile');
   const { user, profile, linkedProviders, logout } = useAuth();
 
   const email = profile?.profile.email ?? user?.email ?? '';
+  const athleteFallback = t('fallback.athlete');
   const displayName =
     profile?.profile.name?.trim() ||
     user?.displayName?.trim() ||
-    (email ? email.split('@')[0] : 'Atleta');
+    (email ? email.split('@')[0] : athleteFallback);
   const sinceYear = profile?.metadata.createdAt
     ? String(profile.metadata.createdAt.toDate().getFullYear())
     : '—';
-  const subscriptionLabel = profile?.subscription.status
-    ? SUBSCRIPTION_LABEL[profile.subscription.status] ?? 'AJ PREMIUM'
-    : 'SEM ASSINATURA ATIVA';
-  const subscriptionSub = profile?.subscription.status
-    ? 'Gerenciado pela loja (RevenueCat)'
-    : 'Ative seu teste grátis de 7 dias';
+
+  const subscriptionStatus = profile?.subscription.status;
+  const subscriptionLabel = subscriptionStatus
+    ? t(`subscription.labels.${subscriptionStatus}`, {
+        defaultValue: t('subscription.labels.unknown'),
+      })
+    : t('subscription.labels.none');
+  const subscriptionSub = subscriptionStatus
+    ? t('subscription.descriptions.managed')
+    : t('subscription.descriptions.trialCta');
 
   function confirmLogout() {
-    Alert.alert('Sair da conta', 'Deseja realmente sair?', [
-      { text: 'Cancelar', style: 'cancel' },
+    Alert.alert(t('logout.confirmTitle'), t('logout.confirmMessage'), [
+      { text: t('logout.cancel'), style: 'cancel' },
       {
-        text: 'Sair',
+        text: t('logout.confirm'),
         style: 'destructive',
         onPress: () => {
           logout().catch(() =>
-            Alert.alert('Erro', 'Não foi possível sair. Tente novamente.'),
+            Alert.alert(t('logout.errorTitle'), t('logout.errorMessage')),
           );
         },
       },
@@ -87,7 +88,9 @@ export function ProfileScreen({
                 size={86}
               />
               <View style={{ flex: 1 }}>
-                <MonoLabel>MEMBRO · DESDE {sinceYear}</MonoLabel>
+                <MonoLabel>
+                  {t('header.memberSince', { year: sinceYear }).toUpperCase()}
+                </MonoLabel>
                 <Display size={26} style={{ marginTop: 6 }} numberOfLines={1}>
                   {displayName.toUpperCase()}
                 </Display>
@@ -114,13 +117,17 @@ export function ProfileScreen({
               <View
                 style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}
               >
-                <Slash>NÍVEL AJ · INTERMEDIÁRIO</Slash>
-                <MonoLabel color={colors.accentHi}>2.450 XP</MonoLabel>
+                <Slash>{t('level.title').toUpperCase()}</Slash>
+                <MonoLabel color={colors.accentHi}>
+                  {t('level.xp', { xp: '2.450' }).toUpperCase()}
+                </MonoLabel>
               </View>
               <SegBar value={0.62} segs={16} />
               <MonoLabel style={{ marginTop: 8 }}>
-                FALTAM 950 XP PARA{' '}
-                <Text style={{ color: colors.accentHi, fontFamily: fonts.monoBold }}>AVANÇADO</Text>
+                {t('level.toNext', {
+                  amount: '950',
+                  nextLevel: t('level.nextLevel'),
+                }).toUpperCase()}
               </MonoLabel>
             </Card>
           </View>
@@ -204,7 +211,7 @@ export function ProfileScreen({
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={{ fontFamily: fonts.uiBold, fontSize: 15, color: '#fff' }}>
-                      Avaliação Física
+                      {t('assessment.title')}
                     </Text>
                     <Text
                       style={{
@@ -214,7 +221,7 @@ export function ProfileScreen({
                         marginTop: 2,
                       }}
                     >
-                      Medidas, dobras cutâneas e evolução
+                      {t('assessment.subtitle')}
                     </Text>
                   </View>
                   <Icon name="chevron-right" size={16} color="rgba(255,255,255,0.5)" />
@@ -224,31 +231,53 @@ export function ProfileScreen({
           )}
 
           <ProfileGroup
-            title="OBJETIVOS & PLANO"
+            title={t('groups.goalsPlan.title').toUpperCase()}
             items={[
-              { i: 'target', l: 'Meu objetivo', d: 'Hipertrofia' },
-              { i: 'dumbbell', l: 'Plano atual', d: 'AJ Apex · 12 sem' },
-              { i: 'calendar', l: 'Frequência', d: '4 dias/sem' },
+              {
+                i: 'target',
+                l: t('groups.goalsPlan.items.goal.label'),
+                d: t('groups.goalsPlan.items.goal.value'),
+              },
+              {
+                i: 'dumbbell',
+                l: t('groups.goalsPlan.items.plan.label'),
+                d: t('groups.goalsPlan.items.plan.value'),
+              },
+              {
+                i: 'calendar',
+                l: t('groups.goalsPlan.items.frequency.label'),
+                d: t('groups.goalsPlan.items.frequency.value'),
+              },
             ]}
           />
           <ProfileGroup
-            title="CONTA"
+            title={t('groups.account.title').toUpperCase()}
             items={[
-              { i: 'user', l: 'Editar perfil', onPress: onOpenEditProfile },
-              { i: 'crown', l: 'Assinatura' },
-              { i: 'shield', l: 'Privacidade' },
+              {
+                i: 'user',
+                l: t('groups.account.items.editProfile'),
+                onPress: onOpenEditProfile,
+              },
+              { i: 'crown', l: t('groups.account.items.subscription') },
+              { i: 'shield', l: t('groups.account.items.privacy') },
             ]}
           />
           <ProfileGroup
-            title="PREFERÊNCIAS"
+            title={t('groups.preferences.title').toUpperCase()}
             items={[
-              { i: 'settings', l: 'Configurações', onPress: onOpenSettings },
-              { i: 'timer', l: 'Timers e sons' },
+              {
+                i: 'settings',
+                l: t('groups.preferences.items.settings'),
+                onPress: onOpenSettings,
+              },
+              { i: 'timer', l: t('groups.preferences.items.timers') },
             ]}
           />
           {/* linked login methods */}
           <View style={{ paddingHorizontal: 22, paddingBottom: 16 }}>
-            <Slash style={{ marginBottom: 10 }}>MÉTODOS DE LOGIN</Slash>
+            <Slash style={{ marginBottom: 10 }}>
+              {t('linkedProviders.title').toUpperCase()}
+            </Slash>
             <View
               style={{
                 borderRadius: 14,
@@ -260,6 +289,7 @@ export function ProfileScreen({
             >
               {PROVIDER_META.map((p, i) => {
                 const linked = linkedProviders.includes(p.id);
+                const providerLabel = t(`linkedProviders.labels.${p.id}`);
                 return (
                   <View
                     key={p.id}
@@ -278,7 +308,7 @@ export function ProfileScreen({
                     <Text
                       style={{ flex: 1, fontFamily: fonts.uiSemi, fontSize: 14, color: '#fff' }}
                     >
-                      {p.label}
+                      {providerLabel}
                     </Text>
                     {linked ? (
                       <Icon name="check" size={16} color={colors.accentHi} />
@@ -286,7 +316,7 @@ export function ProfileScreen({
                       <Text
                         style={{ fontFamily: fonts.mono, fontSize: 10, color: colors.faint, letterSpacing: 1 }}
                       >
-                        NÃO VINCULADO
+                        {t('linkedProviders.notLinked').toUpperCase()}
                       </Text>
                     )}
                   </View>
@@ -296,8 +326,15 @@ export function ProfileScreen({
           </View>
 
           <ProfileGroup
-            title="SESSÃO"
-            items={[{ i: 'arrow-left', l: 'Sair da conta', danger: true, onPress: confirmLogout }]}
+            title={t('groups.session.title').toUpperCase()}
+            items={[
+              {
+                i: 'arrow-left',
+                l: t('groups.session.items.logout'),
+                danger: true,
+                onPress: confirmLogout,
+              },
+            ]}
           />
         </ScrollView>
       </SafeAreaView>

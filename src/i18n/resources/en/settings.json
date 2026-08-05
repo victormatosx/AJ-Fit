@@ -1,0 +1,48 @@
+{
+  "screenTitle": "Settings",
+  "sections": {
+    "account": "Account",
+    "workout": "Workout",
+    "notifications": "Notifications",
+    "preferences": "Preferences",
+    "privacy": "Privacy",
+    "support": "Support",
+    "about": "About"
+  },
+  "items": {
+    "editProfile": "Edit profile",
+    "subscription": "Subscription",
+    "loginMethods": "Login methods",
+    "security": "Security",
+    "workoutPreferences": "Workout preferences",
+    "timersAndSounds": "Timers and sounds",
+    "notifications": "Notifications",
+    "theme": "Theme",
+    "units": "Units",
+    "privacy": "Privacy",
+    "exportData": "Export data",
+    "deleteAccount": "Delete account",
+    "helpCenter": "Help center",
+    "sendFeedback": "Send feedback",
+    "reportProblem": "Report a problem",
+    "version": "Version",
+    "licenses": "Licenses"
+  },
+  "values": {
+    "darkTheme": "Dark"
+  },
+  "language": {
+    "title": "Language",
+    "description": "Choose the app language.",
+    "current": "Current language",
+    "chooseTitle": "Select language",
+    "options": {
+      "pt-BR": "Português",
+      "en": "English",
+      "es": "Español"
+    },
+    "errors": {
+      "changeFailed": "Couldn't save the language. Please try again."
+    }
+  }
+}

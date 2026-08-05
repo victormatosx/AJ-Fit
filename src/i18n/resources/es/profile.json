@@ -1,0 +1,163 @@
+{
+  "fallback": {
+    "athlete": "Atleta"
+  },
+  "header": {
+    "memberSince": "Miembro · desde {{year}}",
+    "memberSinceInline": "Miembro desde {{year}}"
+  },
+  "level": {
+    "title": "Nivel AJ · Intermedio",
+    "xp": "{{xp}} XP",
+    "toNext": "Faltan {{amount}} XP para {{nextLevel}}",
+    "nextLevel": "Avanzado"
+  },
+  "subscription": {
+    "labels": {
+      "TRIAL": "AJ Premium · Prueba gratis",
+      "ACTIVE": "AJ Premium · Activo",
+      "CANCELED": "AJ Premium · Cancelado",
+      "BILLING_ISSUE": "AJ Premium · Pago pendiente",
+      "EXPIRED": "AJ Premium · Expirado",
+      "unknown": "AJ Premium",
+      "none": "Sin suscripción activa"
+    },
+    "descriptions": {
+      "managed": "Gestionado por la tienda (RevenueCat)",
+      "trialCta": "Activa tu prueba gratis de 7 días"
+    }
+  },
+  "assessment": {
+    "title": "Evaluación física",
+    "subtitle": "Medidas, pliegues cutáneos y evolución"
+  },
+  "groups": {
+    "goalsPlan": {
+      "title": "Objetivos y plan",
+      "items": {
+        "goal": { "label": "Mi objetivo", "value": "Hipertrofia" },
+        "plan": { "label": "Plan actual", "value": "AJ Apex · 12 sem" },
+        "frequency": { "label": "Frecuencia", "value": "4 días/sem" }
+      }
+    },
+    "account": {
+      "title": "Cuenta",
+      "items": {
+        "editProfile": "Editar perfil",
+        "subscription": "Suscripción",
+        "privacy": "Privacidad"
+      }
+    },
+    "preferences": {
+      "title": "Preferencias",
+      "items": {
+        "settings": "Ajustes",
+        "timers": "Temporizadores y sonidos"
+      }
+    },
+    "session": {
+      "title": "Sesión",
+      "items": {
+        "logout": "Cerrar sesión"
+      }
+    }
+  },
+  "linkedProviders": {
+    "title": "Métodos de acceso",
+    "notLinked": "No vinculado",
+    "labels": {
+      "google.com": "Google",
+      "apple.com": "Apple",
+      "password": "Correo / Contraseña"
+    }
+  },
+  "logout": {
+    "confirmTitle": "Cerrar sesión",
+    "confirmMessage": "¿Seguro que quieres cerrar sesión?",
+    "cancel": "Cancelar",
+    "confirm": "Cerrar sesión",
+    "errorTitle": "Error",
+    "errorMessage": "No se pudo cerrar sesión. Inténtalo de nuevo."
+  },
+  "photo": {
+    "accessibility": {
+      "avatar": "Foto de perfil",
+      "editable": "Cambiar foto de perfil"
+    },
+    "menu": {
+      "title": "Foto de perfil",
+      "message": "Elige una opción",
+      "takePhoto": "Tomar foto",
+      "chooseFromLibrary": "Elegir de la biblioteca",
+      "removePhoto": "Quitar foto",
+      "cancel": "Cancelar"
+    },
+    "actions": {
+      "add": "Añadir foto",
+      "change": "Cambiar foto",
+      "optimizing": "Optimizando foto..."
+    },
+    "errors": {
+      "compressTitle": "No se pudo preparar la foto",
+      "compressGeneric": "Elige otra imagen e inténtalo de nuevo.",
+      "tooLarge": "Incluso tras la compresión, la imagen supera los 5 MB.",
+      "libraryTitle": "No se pudo abrir tus fotos",
+      "cameraTitle": "No se pudo abrir la cámara",
+      "cameraPermissionTitle": "Acceso a la cámara necesario",
+      "cameraPermissionMessage": "Permite el acceso a la cámara en Ajustes para tomar una foto de perfil.",
+      "genericRetry": "Inténtalo de nuevo en unos instantes."
+    }
+  },
+  "edit": {
+    "title": "Editar perfil",
+    "accessibility": {
+      "back": "Volver al perfil",
+      "save": "Guardar cambios"
+    },
+    "identity": {
+      "namePlaceholder": "Tu nombre"
+    },
+    "sections": {
+      "personalData": "Datos personales",
+      "account": "Cuenta"
+    },
+    "fields": {
+      "displayName": "Nombre visible",
+      "birthDate": "Fecha de nacimiento",
+      "email": "Correo",
+      "emailUnavailable": "Correo no disponible",
+      "emailSecurityNote": "El correo está protegido por tus métodos de acceso."
+    },
+    "datePart": {
+      "day": "Día",
+      "month": "Mes",
+      "year": "Año",
+      "placeholderDay": "DD",
+      "placeholderMonth": "MM",
+      "placeholderYear": "AAAA"
+    },
+    "actions": {
+      "save": "Guardar cambios",
+      "saving": "Guardando...",
+      "uploadingPhoto": "Subiendo foto {{percent}}%"
+    },
+    "discard": {
+      "title": "¿Descartar cambios?",
+      "message": "Los cambios del perfil no se guardarán.",
+      "cancel": "Seguir editando",
+      "confirm": "Descartar"
+    },
+    "validation": {
+      "nameRequired": "Escribe tu nombre.",
+      "nameTooShort": "Usa al menos {{min}} caracteres.",
+      "nameTooLong": "Usa como máximo {{max}} caracteres.",
+      "birthDateRequired": "Escribe una fecha válida.",
+      "birthDateFuture": "La fecha no puede estar en el futuro.",
+      "birthDateAgeRange": "La edad debe estar entre {{min}} y {{max}} años."
+    },
+    "errors": {
+      "photoTooLarge": "La foto debe tener como máximo 5 MB.",
+      "saveFailed": "No se pudo guardar. Revisa tu conexión e inténtalo de nuevo."
+    }
+  }
+}

@@ -40,10 +40,18 @@ service cloud.firestore {
     }
 
     function preferencesValid(data) {
+      // `hasAll` + `hasOnly` das mesmas 3 chaves impede mapas incompletos e
+      // impede escritas do cliente que substituiriam o mapa inteiro por
+      // { language } (o padrão perigoso do JS SDK, que apagaria theme/units
+      // silenciosamente). O update legítimo usa caminho pontuado —
+      // `preferences.language` — e nunca reescreve o mapa.
+      //
+      // O conjunto de idiomas DEVE bater exatamente com SUPPORTED_LANGUAGES
+      // em src/types/language.ts.
       return data is map
         && data.keys().hasAll(['language', 'units', 'theme'])
         && data.keys().hasOnly(['language', 'units', 'theme'])
-        && data.language in ['pt-BR']
+        && data.language in ['pt-BR', 'en', 'es']
         && data.units in ['metric', 'imperial']
         && data.theme in ['dark', 'light', 'system'];
     }
@@ -179,15 +187,26 @@ service cloud.firestore {
       // `diff().affectedKeys().hasOnly` impede alterações em campos de conta,
       // assinatura, treino ou privilégios mesmo que novos campos sejam
       // adicionados ao documento no futuro.
+      //
+      // `preferences` é aceito no conjunto top-level mudável, mas dentro dele
+      // apenas `preferences.language` pode variar — `theme` e `units` seguem
+      // protegidos porque `preferencesValid` (via `nestedUserValid`) já exige
+      // que ambos existam e sejam válidos, e o `.hasOnly(['language'])` abaixo
+      // impede que estejam entre as chaves alteradas.
       allow update: if isOwner(userId) && (
         legacyMigrationValid()
         || (
           nestedUserValid(request.resource.data)
           && request.resource.data.diff(resource.data).affectedKeys()
-               .hasOnly(['profile', 'metadata'])
+               .hasOnly(['profile', 'preferences', 'metadata'])
           && request.resource.data.profile.diff(resource.data.profile).affectedKeys()
                .hasOnly(['name', 'birthDate', 'photoURL', 'photoVersion'])
           && profilePhotoUpdateValid(resource.data.profile, request.resource.data.profile)
+          && (
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny(['preferences'])
+            || request.resource.data.preferences.diff(resource.data.preferences).affectedKeys()
+                 .hasOnly(['language'])
+          )
           && request.resource.data.metadata.diff(resource.data.metadata).affectedKeys()
                .hasOnly(['updatedAt'])
           && request.resource.data.metadata.updatedAt == request.time

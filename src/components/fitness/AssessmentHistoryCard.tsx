@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, Pressable, Animated } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { Card } from '../ui/Card';
 import { Icon } from '../ui/Icon';
 import { MonoLabel } from '../ui/Display';
@@ -72,6 +73,7 @@ function HistoryRow({
   expanded: boolean;
   onToggle: () => void;
 }) {
+  const { t } = useTranslation('assessment');
   const chevronRot = useRef(new Animated.Value(expanded ? 1 : 0)).current;
   useEffect(() => {
     Animated.timing(chevronRot, {
@@ -80,6 +82,25 @@ function HistoryRow({
       useNativeDriver: true,
     }).start();
   }, [expanded, chevronRot]);
+
+  const hasComposition = entry.leanMass != null && entry.fatMass != null;
+  const hasProtocol = entry.protocolLabel != null;
+  const isImported = entry.source === 'imported';
+  const detailKey = hasComposition
+    ? hasProtocol
+      ? isImported
+        ? 'history.details.availableProtocolImported'
+        : 'history.details.availableProtocol'
+      : isImported
+        ? 'history.details.availableImported'
+        : 'history.details.available'
+    : hasProtocol
+      ? isImported
+        ? 'history.details.unavailableProtocolImported'
+        : 'history.details.unavailableProtocol'
+      : isImported
+        ? 'history.details.unavailableImported'
+        : 'history.details.unavailable';
 
   return (
     <View style={{ position: 'relative', paddingLeft: 34, marginBottom: 12 }}>
@@ -116,11 +137,18 @@ function HistoryRow({
                   backgroundColor: 'rgba(255,255,255,0.07)',
                 }}
               >
-                <MonoLabel size={8}>IMPORTADO</MonoLabel>
+                <MonoLabel size={8}>
+                  {t('history.labels.importedBadge').toUpperCase()}
+                </MonoLabel>
               </View>
             )}
           </View>
-          <Pressable onPress={onToggle} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          <Pressable
+            onPress={onToggle}
+            accessibilityRole="button"
+            accessibilityLabel={t('accessibility.openAssessment', { date: entry.date })}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+          >
             <Text
               style={{
                 fontFamily: fonts.mono,
@@ -129,7 +157,7 @@ function HistoryRow({
                 color: 'rgba(255,255,255,0.6)',
               }}
             >
-              VER DETALHES
+              {t('history.labels.viewDetails').toUpperCase()}
             </Text>
             <Animated.View
               style={{
@@ -148,9 +176,21 @@ function HistoryRow({
           </Pressable>
         </View>
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
-          <MiniStat l="PESO" v={entry.weight.toFixed(1)} u="kg" />
-          <MiniStat l="IMC" v={entry.bmi != null ? entry.bmi.toFixed(1) : '—'} u="" />
-          <MiniStat l="% GORDURA" v={entry.bodyFat != null ? entry.bodyFat.toFixed(1) : '—'} u="%" />
+          <MiniStat
+            l={t('metrics.weight').toUpperCase()}
+            v={entry.weight.toFixed(1)}
+            u={t('units.kg')}
+          />
+          <MiniStat
+            l={t('metrics.bmi').toUpperCase()}
+            v={entry.bmi != null ? entry.bmi.toFixed(1) : '—'}
+            u=""
+          />
+          <MiniStat
+            l={t('metrics.bodyFat').toUpperCase()}
+            v={entry.bodyFat != null ? entry.bodyFat.toFixed(1) : '—'}
+            u={t('units.percent')}
+          />
         </View>
         {expanded && (
           <View
@@ -162,11 +202,11 @@ function HistoryRow({
             }}
           >
             <Text style={{ fontFamily: fonts.ui, fontSize: 12.5, color: colors.mute, lineHeight: 20 }}>
-              {entry.leanMass != null && entry.fatMass != null
-                ? `Massa magra estimada ${entry.leanMass.toFixed(1)}kg · massa gorda ${entry.fatMass.toFixed(1)}kg`
-                : 'Massa magra e massa gorda indisponíveis — esta avaliação não possui percentual de gordura'}
-              {entry.protocolLabel ? ` · protocolo ${entry.protocolLabel}` : ''}
-              {entry.source === 'imported' ? ' · registrado a partir de avaliação profissional' : ''}.
+              {t(detailKey, {
+                lean: entry.leanMass?.toFixed(1),
+                fat: entry.fatMass?.toFixed(1),
+                protocol: entry.protocolLabel,
+              })}
             </Text>
           </View>
         )}

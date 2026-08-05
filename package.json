@@ -23,11 +23,14 @@
     "expo-image-manipulator": "~56.0.23",
     "expo-image-picker": "~56.0.22",
     "expo-linear-gradient": "~56.0.4",
+    "expo-localization": "~56.0.6",
     "expo-secure-store": "~56.0.4",
     "expo-status-bar": "~56.0.4",
     "firebase": "^12.15.0",
+    "i18next": "^26.3.6",
     "react": "19.2.3",
     "react-dom": "19.2.3",
+    "react-i18next": "^17.0.11",
     "react-native": "0.85.3",
     "react-native-purchases": "^10.6.0",
     "react-native-safe-area-context": "~5.7.0",
@@ -36,6 +39,7 @@
     "react-native-web": "^0.21.2"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.1",
     "@types/react": "~19.2.2",
     "typescript": "~6.0.3",
     "vitest": "^4.1.10"
@@ -46,7 +50,12 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:rules": "firebase emulators:exec --only firestore --project ajfit-rules-test 'vitest run --config vitest.firestore.config.mts'",
+    "typecheck": "tsc --noEmit",
+    "i18n:check": "vitest run src/i18n/__tests__",
+    "i18n:audit": "node scripts/audit-i18n.mjs",
+    "quality": "npm run typecheck && npm run test && npm run test:rules && npm run i18n:audit"
   },
   "private": true
 }

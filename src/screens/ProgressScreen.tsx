@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, Pressable, ScrollView } from 'react-native';
 import Svg, { Path, Line, Defs, LinearGradient as SvgLG, Stop, Circle } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { ScreenBg } from '../components/ui/ScreenBg';
 import { Display, Slash, MonoLabel } from '../components/ui/Display';
 import { Card, HudCorners } from '../components/ui/Card';
@@ -11,31 +12,55 @@ import { colors, fonts } from '../theme/tokens';
 type ProgressView = 'chart' | 'weight' | 'photos';
 
 export function ProgressScreen() {
+  const { t } = useTranslation('home');
   const [view, setView] = useState<ProgressView>('chart');
+  const tabs: Array<[ProgressView, string]> = [
+    ['chart', t('progress.tabs.loads')],
+    ['weight', t('progress.tabs.weight')],
+    ['photos', t('progress.tabs.photos')],
+  ];
+  const unitKg = t('progress.units.kg');
+  const records = [
+    {
+      exercise: t('progress.records.benchPress'),
+      value: t('progress.records.value', { value: '82.5', unit: unitKg }),
+      date: t('progress.records.daysAgo', { count: 3 }),
+      gain: t('progress.records.gain', { value: '5', unit: unitKg }),
+    },
+    {
+      exercise: t('progress.records.squat'),
+      value: t('progress.records.value', { value: '110', unit: unitKg }),
+      date: t('progress.records.weekAgo', { count: 1 }),
+      gain: t('progress.records.gain', { value: '7.5', unit: unitKg }),
+    },
+    {
+      exercise: t('progress.records.deadlift'),
+      value: t('progress.records.value', { value: '140', unit: unitKg }),
+      date: t('progress.records.weekAgo', { count: 2 }),
+      gain: t('progress.records.gain', { value: '10', unit: unitKg }),
+    },
+  ];
 
   return (
     <ScreenBg>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <ScrollView contentContainerStyle={{ paddingBottom: 12 }} showsVerticalScrollIndicator={false}>
           <View style={{ paddingHorizontal: 22, paddingTop: 12, paddingBottom: 16 }}>
-            <Slash style={{ marginBottom: 10 }}>EVOLUÇÃO · ÚLTIMOS 90 DIAS</Slash>
-            <Display size={34}>+12% MAIS</Display>
-            <Display size={34}>FORTE.</Display>
+            <Slash style={{ marginBottom: 10 }}>{t('progress.header.period').toUpperCase()}</Slash>
+            <Display size={34}>{t('progress.header.highlightLine1').toUpperCase()}</Display>
+            <Display size={34}>{t('progress.header.highlightLine2').toUpperCase()}</Display>
           </View>
 
           <View style={{ paddingHorizontal: 22, paddingBottom: 16, flexDirection: 'row', gap: 8 }}>
-            {(
-              [
-                ['chart', 'CARGAS'],
-                ['weight', 'PESO'],
-                ['photos', 'FOTOS'],
-              ] as const
-            ).map(([k, l]) => {
+            {tabs.map(([k, l]) => {
               const sel = view === k;
               return (
                 <Pressable
                   key={k}
                   onPress={() => setView(k)}
+                  accessibilityRole="tab"
+                  accessibilityLabel={t('progress.accessibility.selectTab', { tab: l })}
+                  accessibilityState={{ selected: sel }}
                   style={{
                     paddingVertical: 9,
                     paddingHorizontal: 16,
@@ -70,7 +95,7 @@ export function ProgressScreen() {
               <View
                 style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 }}
               >
-                <Slash>CALENDÁRIO DE CONSISTÊNCIA</Slash>
+                <Slash>{t('progress.heatmap.title').toUpperCase()}</Slash>
                 <MonoLabel color={colors.accentHi}>92%</MonoLabel>
               </View>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
@@ -102,20 +127,16 @@ export function ProgressScreen() {
                 })}
               </View>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 }}>
-                <MonoLabel>6 SEMANAS</MonoLabel>
-                <MonoLabel>HOJE</MonoLabel>
+                <MonoLabel>{t('progress.heatmap.period').toUpperCase()}</MonoLabel>
+                <MonoLabel>{t('progress.heatmap.today').toUpperCase()}</MonoLabel>
               </View>
             </Card>
           </View>
 
           {/* PRs */}
           <View style={{ paddingHorizontal: 22, paddingTop: 16, paddingBottom: 18 }}>
-            <Slash style={{ marginBottom: 12 }}>RECORDES RECENTES</Slash>
-            {[
-              { e: 'Supino Reto', v: '82.5 KG', d: 'há 3 dias', up: '+5kg' },
-              { e: 'Agachamento', v: '110 KG', d: 'há 1 semana', up: '+7.5kg' },
-              { e: 'Levantamento Terra', v: '140 KG', d: 'há 2 semanas', up: '+10kg' },
-            ].map((r, i) => (
+            <Slash style={{ marginBottom: 12 }}>{t('progress.records.title').toUpperCase()}</Slash>
+            {records.map((record, i) => (
               <View
                 key={i}
                 style={{
@@ -133,7 +154,7 @@ export function ProgressScreen() {
               >
                 <Icon name="trophy" size={18} color={colors.accentHi} />
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontFamily: fonts.uiBold, fontSize: 14, color: '#fff' }}>{r.e}</Text>
+                  <Text style={{ fontFamily: fonts.uiBold, fontSize: 14, color: '#fff' }}>{record.exercise}</Text>
                   <Text
                     style={{
                       fontFamily: fonts.mono,
@@ -143,7 +164,7 @@ export function ProgressScreen() {
                       marginTop: 2,
                     }}
                   >
-                    {r.d.toUpperCase()}
+                    {record.date.toUpperCase()}
                   </Text>
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>
@@ -155,7 +176,7 @@ export function ProgressScreen() {
                       textTransform: 'uppercase',
                     }}
                   >
-                    {r.v}
+                    {record.value}
                   </Text>
                   <Text
                     style={{
@@ -164,7 +185,7 @@ export function ProgressScreen() {
                       color: colors.accentHi,
                     }}
                   >
-                    {r.up}
+                    {record.gain}
                   </Text>
                 </View>
               </View>
@@ -199,6 +220,7 @@ function ChartFrame({
   delta: string;
   children: React.ReactNode;
 }) {
+  const { t } = useTranslation('home');
   return (
     <View style={{ paddingHorizontal: 22 }}>
       <Card style={{ padding: 18 }}>
@@ -238,7 +260,7 @@ function ChartFrame({
               </Text>
             </View>
           </View>
-          <MonoLabel>12 SEM</MonoLabel>
+          <MonoLabel>{t('progress.charts.period').toUpperCase()}</MonoLabel>
         </View>
         {children}
       </Card>
@@ -247,13 +269,23 @@ function ChartFrame({
 }
 
 function LoadChart() {
+  const { t } = useTranslation('home');
   const pts = [40, 45, 42, 50, 55, 53, 60, 65, 63, 70, 75, 82];
   const w = 320,
     h = 160,
     pad = 18;
   const path = chartPath(pts, 30, 90, w, h, pad);
   return (
-    <ChartFrame label="SUPINO RETO · CARGA MÁX" big="82.5" unit="KG" delta="↑ +25KG">
+    <ChartFrame
+      label={t('progress.charts.loadTitle').toUpperCase()}
+      big="82.5"
+      unit={t('progress.units.kg').toUpperCase()}
+      delta={t('progress.charts.delta', {
+        direction: '↑',
+        value: '+25',
+        unit: t('progress.units.kg'),
+      })}
+    >
       <Svg width="100%" height={160} viewBox={`0 0 ${w} ${h}`}>
         <Defs>
           <SvgLG id="lcFill" x1="0" y1="0" x2="0" y2="1">
@@ -287,13 +319,23 @@ function LoadChart() {
 }
 
 function WeightChart() {
+  const { t } = useTranslation('home');
   const pts = [82, 81.6, 81.2, 80.8, 80.3, 79.9, 79.5, 79.0, 78.6, 78.2, 78.0, 77.6];
   const w = 320,
     h = 160,
     pad = 18;
   const path = chartPath(pts, 77, 83, w, h, pad);
   return (
-    <ChartFrame label="PESO CORPORAL" big="77.6" unit="KG" delta="↓ -4.4KG">
+    <ChartFrame
+      label={t('progress.charts.weightTitle').toUpperCase()}
+      big="77.6"
+      unit={t('progress.units.kg').toUpperCase()}
+      delta={t('progress.charts.delta', {
+        direction: '↓',
+        value: '-4.4',
+        unit: t('progress.units.kg'),
+      })}
+    >
       <Svg width="100%" height={160} viewBox={`0 0 ${w} ${h}`}>
         <Path d={path} stroke={colors.accentHi} strokeWidth={2.5} fill="none" strokeLinecap="round" />
         <Circle
@@ -310,10 +352,12 @@ function WeightChart() {
 }
 
 function ProgressPhotos() {
+  const { t } = useTranslation('home');
+  const weeks = ['01', '04', '08', '12'];
   return (
     <View style={{ paddingHorizontal: 22 }}>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
-        {['SEM 01', 'SEM 04', 'SEM 08', 'SEM 12'].map((l, i) => (
+        {weeks.map((week, i) => (
           <View
             key={i}
             style={{
@@ -341,7 +385,7 @@ function ProgressPhotos() {
                 borderRadius: 5,
               }}
             >
-              <MonoLabel color="#fff">{l}</MonoLabel>
+              <MonoLabel color="#fff">{t('progress.photos.week', { week }).toUpperCase()}</MonoLabel>
             </View>
           </View>
         ))}
@@ -356,7 +400,7 @@ function ProgressPhotos() {
         }}
       >
         <Icon name="camera" size={11} color={colors.faint} />
-        <MonoLabel>ARRASTE SUAS FOTOS DE PROGRESSO PARA OS QUADROS</MonoLabel>
+        <MonoLabel>{t('progress.photos.hint').toUpperCase()}</MonoLabel>
       </View>
     </View>
   );
