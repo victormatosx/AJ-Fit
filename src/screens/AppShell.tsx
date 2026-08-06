@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { View, Text, Pressable, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
 import { Icon, IconName } from '../components/ui/Icon';
@@ -9,6 +10,8 @@ import { Display, Slash } from '../components/ui/Display';
 import { OutlineNumber } from '../components/ui/OutlineNumber';
 import { colors, fonts } from '../theme/tokens';
 import { useAppState, TabId } from '../state/AppState';
+import { useAuth } from '../state/AuthContext';
+import { versionedPhotoURL } from '../lib/profilePhotoUrl';
 import { HomeScreen } from './HomeScreen';
 import { WorkoutScreen } from './WorkoutScreen';
 import { ProgressScreen } from './ProgressScreen';
@@ -238,6 +241,8 @@ function StartWorkoutConfirmation({
 
 function TabBar({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => void }) {
   const { t } = useTranslation('common');
+  const { profile } = useAuth();
+  const profilePhotoURL = profile?.profile.photoURL;
   const items: { id: TabId; icon: IconName; labelKey: 'home' | 'workout' | 'progress' | 'profile' }[] = [
     { id: 'home', icon: 'home', labelKey: 'home' },
     { id: 'workout', icon: 'dumbbell', labelKey: 'workout' },
@@ -291,12 +296,31 @@ function TabBar({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => void }) {
                     }}
                   />
                 )}
-                <Icon
-                  name={it.icon}
-                  size={20}
-                  color={active ? colors.accentHi : 'rgba(255,255,255,0.45)'}
-                  stroke={active ? 2.1 : 1.7}
-                />
+                {it.id === 'profile' && profilePhotoURL ? (
+                  <Image
+                    source={versionedPhotoURL(
+                      profilePhotoURL,
+                      profile?.profile.photoVersion,
+                    )}
+                    cachePolicy="memory-disk"
+                    contentFit="cover"
+                    transition={120}
+                    priority="high"
+                    accessible={false}
+                    style={{
+                      width: 22,
+                      height: 22,
+                      borderRadius: 11,
+                    }}
+                  />
+                ) : (
+                  <Icon
+                    name={it.icon}
+                    size={20}
+                    color={active ? colors.accentHi : 'rgba(255,255,255,0.45)'}
+                    stroke={active ? 2.1 : 1.7}
+                  />
+                )}
                 <Text
                   style={{
                     fontFamily: fonts.mono,
