@@ -5,7 +5,11 @@ rules_version = '2';
 // Baseado em:
 //   - docs/12_seguranca_geral_do_app.md (cliente não é fonte de verdade;
 //     acesso apenas aos próprios dados; RevenueCat é dono da assinatura)
-//   - docs/04_contratos_de_api.md §5 (contrato do documento users/{userId})
+//   - docs/04_contratos_de_api.md §5 (contrato do documento users/{userId} —
+//     profile/preferences/metadata)
+//   - docs/13_assinaturas_e_billing.md §26 (schema de `subscription` —
+//     referência única, consolidada na Sprint 3.5; espelhada em
+//     functions/src/billing/{types,constants}.ts)
 //
 // Princípio: o app só escreve profile e metadata.updatedAt. Preferências,
 // assinatura e metadados internos têm mapas próprios e validação independente.
@@ -48,16 +52,57 @@ service cloud.firestore {
         && data.theme in ['dark', 'light', 'system'];
     }
 
+    // Shape of `users/{userId}.subscription` — consolidated in Sprint 3.5 to
+    // match docs/13_assinaturas_e_billing.md §26 exactly (the sole schema
+    // reference; functions/src/billing/{types,constants}.ts mirror the same
+    // field list byte-for-byte). Only the backend (Admin SDK, which bypasses
+    // these rules) ever writes real values here — this function exists only
+    // to keep the CLIENT from ever writing an unexpected shape into this
+    // block via `create`/the legacy migration path, per docs §25/§27.
+    //
+    // `endsAt` (the pre-3.5 field name, still referenced by
+    // `legacyMigrationValid()` below for one-time migrations of the old flat
+    // document) was renamed to `currentPeriodEndsAt` to match docs §26.
+    // `lastEventAt` from the original docs §26 draft was dropped as
+    // redundant with `updatedAt` for this project's scale — see
+    // functions/src/billing/types.ts's `SubscriptionMirror` comment.
+    //
+    // Sprint 4.1 robustness fix (see the Sprint 4 audit report): adds
+    // `lastEventTimestampMs`, RevenueCat's own event clock (Unix ms,
+    // `event_timestamp_ms`), reintroducing the ordering protection that
+    // `lastEventAt`'s Sprint 3.5 removal had eliminated. NOT a Firestore
+    // `timestamp` type — a plain non-negative integer, matching its wire
+    // format. Optional, exactly like every other field here: documents
+    // written before this Sprint won't have it, and
+    // `applySubscriptionEventAtomically` (functions/src/billing/subscriptionSync.ts)
+    // treats that as "first event of the new mechanism" — no backfill
+    // required, no rules exception needed for older documents.
     function subscriptionValid(data) {
       return data is map
-        && data.keys().hasOnly(['status', 'provider', 'trialEndsAt', 'endsAt'])
+        && data.keys().hasOnly([
+             'status', 'entitlementActive', 'provider', 'productId', 'store',
+             'startedAt', 'trialEndsAt', 'currentPeriodEndsAt', 'canceledAt',
+             'lastRenewedAt', 'lastEventId', 'lastEventTimestampMs', 'updatedAt'
+           ])
         && (!('status' in data)
              || data.status in ['TRIAL', 'ACTIVE', 'CANCELED', 'BILLING_ISSUE', 'EXPIRED'])
+        && (!('entitlementActive' in data) || data.entitlementActive is bool)
         && (!('provider' in data) || data.provider == 'REVENUECAT')
+        && (!('productId' in data) || data.productId is string)
+        && (!('store' in data) || data.store in ['APP_STORE', 'PLAY_STORE'])
+        && (!('startedAt' in data) || data.startedAt is timestamp)
         && (!('trialEndsAt' in data)
              || data.trialEndsAt == null || data.trialEndsAt is timestamp)
-        && (!('endsAt' in data)
-             || data.endsAt == null || data.endsAt is timestamp);
+        && (!('currentPeriodEndsAt' in data)
+             || data.currentPeriodEndsAt == null || data.currentPeriodEndsAt is timestamp)
+        && (!('canceledAt' in data)
+             || data.canceledAt == null || data.canceledAt is timestamp)
+        && (!('lastRenewedAt' in data)
+             || data.lastRenewedAt == null || data.lastRenewedAt is timestamp)
+        && (!('lastEventId' in data) || data.lastEventId is string)
+        && (!('lastEventTimestampMs' in data)
+             || (data.lastEventTimestampMs is int && data.lastEventTimestampMs >= 0))
+        && (!('updatedAt' in data) || data.updatedAt is timestamp);
     }
 
     function metadataValid(data) {
@@ -105,7 +150,11 @@ service cloud.firestore {
         && after.subscription.get('status', null) == before.get('subscriptionStatus', null)
         && after.subscription.get('provider', null) == before.get('subscriptionProvider', null)
         && after.subscription.get('trialEndsAt', null) == before.get('trialEndsAt', null)
-        && after.subscription.get('endsAt', null) == before.get('subscriptionEndsAt', null)
+        // Field renamed `endsAt` → `currentPeriodEndsAt` in Sprint 3.5 to
+        // match docs/13 §26; the OLD flat field name (`subscriptionEndsAt`)
+        // is unaffected — it's a one-time read of the legacy document, not
+        // part of the new schema.
+        && after.subscription.get('currentPeriodEndsAt', null) == before.get('subscriptionEndsAt', null)
         && after.metadata.role == before.get('role', 'user')
         && after.metadata.get('activeWorkoutId', null) == before.get('activeWorkoutId', null)
         && after.metadata.createdAt == before.createdAt

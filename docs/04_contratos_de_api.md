@@ -46,7 +46,7 @@ principal NÃO contém respostas de questionário; elas ficam na subcoleção
     "status": "TRIAL | ACTIVE | CANCELED | BILLING_ISSUE | EXPIRED (opcional)",
     "provider": "REVENUECAT (opcional)",
     "trialEndsAt": "datetime (opcional)",
-    "endsAt": "datetime (opcional)"
+    "currentPeriodEndsAt": "datetime (opcional)"
   },
   "metadata": {
     "role": "user",
@@ -56,6 +56,11 @@ principal NÃO contém respostas de questionário; elas ficam na subcoleção
   }
 }
 ```
+
+`subscription` acima mostra só os 4 campos que a migração legada do cliente
+(`src/services/userProfile.ts`) sabe popular. O schema completo — escrito
+apenas pelo backend via Admin SDK — é definido em
+`docs/13_assinaturas_e_billing.md` §26, referência única para esse bloco.
 
 ## Subcoleção de questionários
 
@@ -139,8 +144,10 @@ Backend-owned (RevenueCat / Cloud Functions — nunca escritos pelo app,
 
 ```txt
 metadata.activeWorkoutId, subscription.status, subscription.provider,
-subscription.trialEndsAt, subscription.endsAt
+subscription.trialEndsAt, subscription.currentPeriodEndsAt
 ```
+
+(schema completo do bloco `subscription`: docs/13_assinaturas_e_billing.md §26)
 
 ## Criação do usuário (fluxo único)
 

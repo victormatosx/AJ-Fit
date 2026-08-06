@@ -30,10 +30,12 @@ export function ProfileScreen({
   onOpenAssessment,
   onOpenEditProfile,
   onOpenSettings,
+  onOpenPremium,
 }: {
   onOpenAssessment?: () => void;
   onOpenEditProfile?: () => void;
   onOpenSettings?: () => void;
+  onOpenPremium?: () => void;
 }) {
   const { user, profile, linkedProviders, logout } = useAuth();
 
@@ -127,47 +129,49 @@ export function ProfileScreen({
 
           {/* subscription */}
           <View style={{ paddingHorizontal: 22, paddingBottom: 16 }}>
-            <LinearGradient
-              colors={['rgba(11,112,249,0.28)', 'rgba(11,112,249,0.05)']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={{
-                padding: 18,
-                borderRadius: 14,
-                borderBottomRightRadius: 0,
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 14,
-                borderWidth: 1,
-                borderColor: 'rgba(11,112,249,0.4)',
-              }}
-            >
-              <Icon name="crown" size={22} color={colors.accentHi} />
-              <View style={{ flex: 1 }}>
-                <Text
-                  style={{
-                    fontFamily: fonts.display,
-                    fontSize: 15,
-                    color: '#fff',
-                    textTransform: 'uppercase',
-                  }}
-                >
-                  {subscriptionLabel}
-                </Text>
-                <Text
-                  style={{
-                    fontFamily: fonts.mono,
-                    fontSize: 10,
-                    color: colors.mute,
-                    letterSpacing: 1,
-                    marginTop: 3,
-                  }}
-                >
-                  {subscriptionSub}
-                </Text>
-              </View>
-              <Icon name="chevron-right" size={15} color="rgba(255,255,255,0.5)" />
-            </LinearGradient>
+            <Pressable onPress={onOpenPremium} disabled={!onOpenPremium}>
+              <LinearGradient
+                colors={['rgba(11,112,249,0.28)', 'rgba(11,112,249,0.05)']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={{
+                  padding: 18,
+                  borderRadius: 14,
+                  borderBottomRightRadius: 0,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 14,
+                  borderWidth: 1,
+                  borderColor: 'rgba(11,112,249,0.4)',
+                }}
+              >
+                <Icon name="crown" size={22} color={colors.accentHi} />
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={{
+                      fontFamily: fonts.display,
+                      fontSize: 15,
+                      color: '#fff',
+                      textTransform: 'uppercase',
+                    }}
+                  >
+                    {subscriptionLabel}
+                  </Text>
+                  <Text
+                    style={{
+                      fontFamily: fonts.mono,
+                      fontSize: 10,
+                      color: colors.mute,
+                      letterSpacing: 1,
+                      marginTop: 3,
+                    }}
+                  >
+                    {subscriptionSub}
+                  </Text>
+                </View>
+                <Icon name="chevron-right" size={15} color="rgba(255,255,255,0.5)" />
+              </LinearGradient>
+            </Pressable>
           </View>
 
           {/* assessment entry */}
@@ -235,7 +239,7 @@ export function ProfileScreen({
             title="CONTA"
             items={[
               { i: 'user', l: 'Editar perfil', onPress: onOpenEditProfile },
-              { i: 'crown', l: 'Assinatura' },
+              { i: 'crown', l: 'Assinatura', onPress: onOpenPremium },
               { i: 'shield', l: 'Privacidade' },
             ]}
           />

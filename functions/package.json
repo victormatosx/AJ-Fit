@@ -1,0 +1,26 @@
+{
+  "name": "aj-fit-functions",
+  "private": true,
+  "description": "AJ Fit — Cloud Functions (Firebase Admin SDK). Backend-owned logic that must never run on the client: billing sync, RevenueCat webhook, and future workout/account automations (docs/05_desenvolvimento_backend_modulo.md).",
+  "engines": {
+    "node": "20"
+  },
+  "main": "lib/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "build:watch": "tsc -p tsconfig.build.json --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "serve": "npm run build && firebase emulators:start --only functions",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.7.0",
+    "firebase-functions": "^5.1.1"
+  },
+  "devDependencies": {
+    "typescript": "~5.6.3",
+    "vitest": "^4.1.10"
+  }
+}

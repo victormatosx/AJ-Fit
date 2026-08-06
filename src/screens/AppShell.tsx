@@ -17,6 +17,7 @@ import { ConsistencyScreen } from './ConsistencyScreen';
 import { AssessmentScreen } from './AssessmentScreen';
 import { SettingsScreen } from './SettingsScreen';
 import { EditProfileScreen } from './EditProfileScreen';
+import { PremiumScreen } from './PremiumScreen';
 
 export function AppShell() {
   const { tab, setTab } = useAppState();
@@ -24,8 +25,9 @@ export function AppShell() {
   const [showAssessment, setShowAssessment] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
+  const [showPremium, setShowPremium] = useState(false);
   const [showWorkoutConfirmation, setShowWorkoutConfirmation] = useState(false);
-  const overlayOpen = showCal || showAssessment || showSettings || showEditProfile;
+  const overlayOpen = showCal || showAssessment || showSettings || showEditProfile || showPremium;
 
   const selectTab = (nextTab: TabId) => {
     if (nextTab === 'workout' && tab !== 'workout') {
@@ -57,6 +59,7 @@ export function AppShell() {
             onOpenAssessment={() => setShowAssessment(true)}
             onOpenEditProfile={() => setShowEditProfile(true)}
             onOpenSettings={() => setShowSettings(true)}
+            onOpenPremium={() => setShowPremium(true)}
           />
         )}
       </View>
@@ -87,6 +90,11 @@ export function AppShell() {
       {showEditProfile && (
         <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 50 }}>
           <EditProfileScreen onBack={() => setShowEditProfile(false)} />
+        </View>
+      )}
+      {showPremium && (
+        <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 50 }}>
+          <PremiumScreen onDone={() => setShowPremium(false)} />
         </View>
       )}
     </View>

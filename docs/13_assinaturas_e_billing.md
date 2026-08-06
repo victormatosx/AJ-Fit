@@ -13,6 +13,8 @@ Definir:
 * cancelamento
 * reembolso
 * restauração de compra
+* modelo de acesso (entitlement)
+* sincronização com Firestore
 
 Este documento é a referência oficial para toda lógica de billing do projeto.
 
@@ -25,15 +27,22 @@ O gerenciamento de assinaturas utiliza:
 * RevenueCat
 * Apple App Store
 * Google Play Store
+* Firebase Authentication (identidade do usuário / UID)
 
 ---
 
 ## Fonte oficial de verdade
 
-A fonte oficial para assinaturas é:
+A fonte oficial para liberar ou bloquear acesso Premium é:
 
 ```txt
-RevenueCat
+RevenueCat CustomerInfo
+```
+
+Mais especificamente, o estado do:
+
+```txt
+entitlement premium
 ```
 
 ---
@@ -50,7 +59,7 @@ RevenueCat vence.
 
 # 3. Produto
 
-Produto inicial:
+Produto único da V1:
 
 ```txt
 AJ Fit Premium
@@ -66,21 +75,69 @@ Liberar acesso completo ao aplicativo.
 
 # 4. Planos disponíveis
 
-Planos iniciais:
+Os únicos planos da V1 são:
 
-* Trimestral
-* Semestral
+* Mensal
 * Anual
 
 ---
 
 ## Observação
 
+Referências a planos trimestral, semestral ou semanal estão descontinuadas e não fazem parte da V1.
+
 Novos planos exigem atualização deste documento.
 
 ---
 
-# 5. Teste gratuito
+# 5. Identificadores oficiais
+
+## Google Play
+
+Produto:
+
+```txt
+ajfit_premium
+```
+
+Planos básicos:
+
+```txt
+monthly
+annual
+```
+
+## App Store
+
+```txt
+ajfit_premium_monthly
+ajfit_premium_annual
+```
+
+## RevenueCat
+
+Entitlement:
+
+```txt
+premium
+```
+
+Offering:
+
+```txt
+default
+```
+
+Packages:
+
+```txt
+$rc_monthly
+$rc_annual
+```
+
+---
+
+# 6. Teste gratuito
 
 Todos os planos possuem:
 
@@ -92,21 +149,29 @@ Todos os planos possuem:
 
 ## Regras
 
-O usuário deve cadastrar uma forma de pagamento antes de iniciar o teste.
+O usuário deve confirmar uma assinatura e ter uma forma de pagamento válida cadastrada na loja antes de iniciar o teste.
 
-Nenhuma cobrança ocorre durante o período de teste.
+Nenhuma cobrança ocorre no momento do início do teste.
 
-A cobrança acontece apenas após o término do período gratuito.
+A cobrança acontece automaticamente ao final dos 7 dias, caso o usuário não cancele antes.
+
+A elegibilidade final para o trial é controlada pela Apple App Store ou pela Google Play Store, não pelo aplicativo.
+
+O aplicativo não deve prometer trial quando a loja informar que o usuário não é elegível.
+
+O trial pode ser utilizado apenas conforme as regras da conta e do produto definidas pela loja.
 
 ---
 
-# 6. Limite do teste gratuito
+# 7. Limite do teste gratuito
 
 O teste gratuito pode ser utilizado:
 
 ```txt
 apenas uma vez por conta
 ```
+
+conforme a elegibilidade retornada pela loja.
 
 ---
 
@@ -116,20 +181,180 @@ Evitar abuso do período gratuito.
 
 ---
 
-# 7. Fluxo de ativação
+# 8. Cupons de influenciadores e promocionais
 
-Fluxo esperado:
+Na V1, cupons servem para:
 
-1. usuário conclui questionário
-2. usuário recebe recomendação de treino
-3. usuário cria conta
-4. usuário escolhe plano
-5. usuário inicia teste gratuito
-6. acesso premium é liberado
+* rastrear origem do usuário
+* identificar influenciador
+* analytics
+* campanhas promocionais futuras
+* aplicar desconto quando configurado na loja/RevenueCat
 
 ---
 
-# 8. Acesso durante o teste gratuito
+## Regras
+
+O cupom não concede Premium diretamente.
+
+O cupom não substitui a validação da loja.
+
+O cupom não é tratado como fonte oficial de elegibilidade do trial.
+
+O cupom deve ser registrado por UID do Firebase, não apenas por email.
+
+---
+
+## Visibilidade
+
+O cupom é utilizado apenas internamente.
+
+Não precisa permanecer visível ao usuário após o cadastro.
+
+---
+
+# 9. Fluxo oficial de ativação
+
+Fluxo esperado da V1:
+
+1. usuário conclui questionário
+2. usuário recebe recomendação de treino
+3. usuário cria conta ou faz login
+4. Firebase Authentication retorna o UID
+5. aplicativo identifica o usuário no RevenueCat usando o UID
+6. usuário visualiza o paywall
+7. usuário escolhe o plano mensal ou anual
+8. a loja informa o preço e a elegibilidade real do trial
+9. usuário confirma a assinatura
+10. RevenueCat retorna o CustomerInfo
+11. o entitlement premium ativo libera acesso completo
+12. o webhook sincroniza o espelho no Firestore
+
+---
+
+# 10. Regra de acesso
+
+O acesso Premium deve ser liberado sempre que:
+
+```txt
+entitlement premium estiver ativo
+```
+
+Não usar apenas o status textual para definir acesso.
+
+---
+
+## Exemplo válido
+
+```txt
+status = CANCELED
+entitlementActive = true
+expiresAt = data futura
+```
+
+Nesse caso, o usuário continua com acesso até o fim do período já pago.
+
+---
+
+## Separação obrigatória
+
+Separar claramente:
+
+* status comercial
+* direito de acesso atual (entitlement)
+
+---
+
+# 11. Regra obrigatória de autorização
+
+Esta seção existe para eliminar qualquer ambiguidade sobre o que autoriza acesso Premium no aplicativo.
+
+---
+
+## Status x Entitlement
+
+`status` é uma informação de negócio. Ele descreve o momento comercial da assinatura (em teste, ativa, cancelada, com problema de cobrança, expirada).
+
+`entitlement` é uma informação de autorização. Ele descreve se o usuário tem, agora, o direito de usar os recursos Premium.
+
+O aplicativo nunca deve liberar recursos Premium utilizando apenas o `status`.
+
+---
+
+## Critério único
+
+```txt
+O único critério utilizado pelo aplicativo para liberar ou bloquear
+funcionalidades Premium é o entitlement premium retornado pelo RevenueCat.
+```
+
+---
+
+## Exemplo correto
+
+```txt
+status = CANCELED
+entitlementActive = true
+```
+
+Resultado:
+
+```txt
+Premium continua liberado.
+```
+
+---
+
+## Exemplo de bloqueio
+
+```txt
+status = ACTIVE
+entitlementActive = false
+```
+
+Resultado:
+
+```txt
+Premium bloqueado.
+```
+
+---
+
+## Regra de divergência
+
+Em qualquer caso de divergência entre `status` e `entitlement`, ou entre qualquer outra fonte de dado e o RevenueCat:
+
+```txt
+O CustomerInfo do RevenueCat sempre vence.
+```
+
+---
+
+# 12. Status oficiais do sistema
+
+Status permitidos:
+
+```txt
+TRIAL
+ACTIVE
+CANCELED
+BILLING_ISSUE
+EXPIRED
+```
+
+---
+
+## Relação com o entitlement
+
+* `TRIAL` pode ter entitlement ativo
+* `ACTIVE` tem entitlement ativo
+* `CANCELED` pode continuar com entitlement ativo até `expiresAt`
+* `BILLING_ISSUE` depende do período de carência configurado pela loja
+* `EXPIRED` não possui entitlement ativo
+
+---
+
+# 13. Acesso durante o teste gratuito
 
 Status:
 
@@ -141,11 +366,11 @@ TRIAL
 
 ## Permissões
 
-O usuário possui acesso completo ao aplicativo.
+Enquanto o entitlement premium estiver ativo, o usuário possui acesso completo ao aplicativo.
 
 ---
 
-# 9. Assinatura ativa
+# 14. Assinatura ativa
 
 Status:
 
@@ -157,39 +382,37 @@ ACTIVE
 
 ## Permissões
 
-O usuário possui acesso completo ao aplicativo.
+O usuário possui acesso completo ao aplicativo enquanto o entitlement premium estiver ativo.
 
 ---
 
-# 10. Cancelamento durante o teste gratuito
+# 15. Cancelamento durante o teste gratuito
 
 Se o usuário cancelar durante o período de teste:
 
-O acesso permanece ativo até o final dos 7 dias.
+O acesso permanece ativo até o final dos 7 dias, enquanto o entitlement permanecer ativo.
+
+Não há cobrança se o cancelamento ocorrer antes do término.
 
 ---
 
 ## Após o término
 
-O acesso é removido.
+O acesso é removido quando o entitlement deixa de estar ativo.
 
 ---
 
-# 11. Cancelamento de assinatura paga
+# 16. Cancelamento de assinatura paga
 
 Se o usuário cancelar uma assinatura ativa:
 
-O acesso permanece disponível até o final do período já pago.
+* a renovação automática é interrompida
+* o acesso continua até o fim do período já pago
+* o status pode ser `CANCELED` com entitlement ainda ativo
 
 ---
 
-## Renovação
-
-A renovação automática deixa de ocorrer.
-
----
-
-# 12. Falha de cobrança
+# 17. Falha de cobrança
 
 Exemplo:
 
@@ -206,25 +429,31 @@ BILLING_ISSUE
 
 ---
 
-## Tolerância
+## Período de carência
 
-O sistema deve conceder:
+O Google Play está configurado com período de carência de:
 
 ```txt
 7 dias
 ```
 
-de tolerância.
+Durante o período de carência, o usuário pode continuar com acesso, conforme o status retornado pela loja e pelo RevenueCat.
+
+Depois da carência, o acesso deve seguir estritamente o entitlement retornado pelo RevenueCat.
 
 ---
 
-## Objetivo
+## Regra obrigatória
 
-Permitir regularização do pagamento.
+Não implementar uma contagem paralela independente no cliente.
+
+Apple e Google podem ter comportamentos diferentes de billing retry, grace period e account hold.
+
+O RevenueCat deve normalizar esses estados.
 
 ---
 
-# 13. Expiração
+# 18. Expiração
 
 Status:
 
@@ -236,7 +465,7 @@ EXPIRED
 
 ## Permissões
 
-O acesso premium é removido.
+O entitlement premium não está mais ativo. O acesso premium é removido.
 
 ---
 
@@ -259,7 +488,7 @@ O usuário pode visualizar:
 
 ---
 
-# 14. Conteúdo bloqueado
+# 19. Conteúdo bloqueado
 
 Dados bloqueados não devem ser removidos.
 
@@ -269,19 +498,19 @@ Devem permanecer armazenados.
 
 ## Fotos de evolução
 
-Devem permanecer visíveis porém censuradas.
+Devem permanecer armazenadas, apresentadas de forma censurada ou bloqueada.
 
 ---
 
 ## Medidas corporais
 
-Devem permanecer visíveis porém censuradas.
+Devem permanecer armazenadas, apresentadas de forma censurada ou bloqueada.
 
 ---
 
 ## Percentual de gordura
 
-Deve permanecer visível porém censurado.
+Deve permanecer armazenado, apresentado de forma censurada ou bloqueada.
 
 ---
 
@@ -291,40 +520,49 @@ Demonstrar valor acumulado e incentivar reativação.
 
 ---
 
-# 15. Restauração de compra
+# 20. Restauração de compras
 
-O sistema deve permitir:
+O aplicativo deve oferecer:
 
 ```txt
-Restore Purchase
+Restore Purchases
 ```
 
 ---
 
 ## Fluxo
 
-1. usuário realiza restauração
-2. RevenueCat valida assinatura
-3. acesso é restaurado
-4. dados são sincronizados
+1. usuário solicita a restauração
+2. RevenueCat consulta as lojas
+3. o CustomerInfo é atualizado
+4. o entitlement premium é reavaliado
+5. o acesso é restaurado quando aplicável
+6. o Firestore é sincronizado posteriormente pelo backend/webhook
 
 ---
 
-# 16. Troca de plano
+# 21. Troca de plano
 
-O sistema deve permitir:
+Permitir:
 
-* trimestral → semestral
-* trimestral → anual
-* semestral → anual
-* anual → semestral
-* anual → trimestral
-
-conforme regras da Apple, Google e RevenueCat.
+* mensal → anual
+* anual → mensal
 
 ---
 
-# 17. Reembolsos
+## Regras
+
+A execução deve respeitar as regras de:
+
+* Apple
+* Google
+* RevenueCat
+
+Não implementar prorrateio manualmente no aplicativo.
+
+---
+
+# 22. Reembolsos
 
 O sistema não possui processo próprio de reembolso na versão inicial.
 
@@ -345,13 +583,24 @@ Eventos de reembolso recebidos pelo RevenueCat devem atualizar automaticamente o
 
 ---
 
-# 18. Exclusão de conta
+# 23. Exclusão de conta
 
-Ao excluir a conta:
+Excluir a conta AJ Fit não significa que a assinatura da loja será cancelada automaticamente.
 
-* assinatura deve ser cancelada
-* acesso deve ser removido
-* conta entra em processo de exclusão
+---
+
+## Regras obrigatórias
+
+O aplicativo deve:
+
+* avisar claramente que a exclusão da conta não necessariamente cancela cobranças futuras
+* orientar o usuário a gerenciar ou cancelar a assinatura na App Store ou na Google Play
+* remover o acesso ao conteúdo da conta conforme o processo de exclusão
+* iniciar retenção de dados por 90 dias, se essa ainda for a política oficial do projeto
+
+Eventos futuros de assinatura podem continuar chegando pelo RevenueCat enquanto a assinatura existir na loja.
+
+Não afirmar que o aplicativo cancela automaticamente a assinatura sem suporte técnico comprovado.
 
 ---
 
@@ -367,38 +616,32 @@ Após este período ocorre remoção definitiva.
 
 ---
 
-# 19. Cupons promocionais
-
-O sistema permite utilização de cupons.
-
----
-
-## Objetivos
-
-* rastrear origem do usuário
-* identificar influenciador
-* aplicar desconto quando configurado
-
----
-
-## Visibilidade
-
-O cupom é utilizado apenas internamente.
-
-Não precisa permanecer visível ao usuário após o cadastro.
-
----
-
-# 20. Analytics de billing
+# 24. Analytics de billing
 
 O sistema deve armazenar:
 
 * data da primeira assinatura
 * data da última renovação
-* plano contratado
+* produto contratado
+* plano mensal ou anual
 * status atual
+* entitlement ativo
 * cupom utilizado
+* influenciador
 * origem do usuário
+* loja
+* trial iniciado
+* trial convertido
+* cancelamento
+* expiração
+* reembolso
+* mudança de plano
+
+---
+
+## Regra obrigatória
+
+Não armazenar dados de cartão ou informações financeiras sensíveis.
 
 ---
 
@@ -408,39 +651,316 @@ Relatórios internos e métricas de negócio.
 
 ---
 
-# 21. Eventos mínimos do RevenueCat
+# 25. Webhooks e sincronização com Firestore
 
-Monitorar:
+Os eventos do RevenueCat devem ser processados por um backend seguro.
+
+O cliente não deve escrever diretamente no bloco `subscription` do Firestore.
+
+O backend deve utilizar o Firebase Admin SDK.
+
+---
+
+## Eventos mínimos
 
 * INITIAL_PURCHASE
 * RENEWAL
 * CANCELLATION
 * EXPIRATION
 * BILLING_ISSUE
-* REFUND
 * PRODUCT_CHANGE
+* UNCANCELLATION, se aplicável
+* TRANSFER, se aplicável
 
 ---
 
-# 22. Status oficiais do sistema
+## Correção (Sprint 4): não existe evento `REFUND`
 
-Status permitidos:
+Versões anteriores deste documento listavam `REFUND` como um evento próprio.
+Confirmado contra a documentação oficial do RevenueCat
+(revenuecat.com/docs/integrations/webhooks/event-types-and-fields) durante a
+implementação do webhook: **não existe** um evento webhook chamado `REFUND`.
+
+Reembolsos chegam como um evento `CANCELLATION`, com o campo `cancel_reason`
+indicando o motivo (`UNSUBSCRIBE`, `BILLING_ERROR`, `DEVELOPER_INITIATED`,
+`PRICE_INCREASE`, `CUSTOMER_SUPPORT`, `UNKNOWN`). O processamento de
+reembolso é feito dentro do mesmo caso `CANCELLATION` — nunca um evento
+separado. Qualquer necessidade futura de distinguir "cancelado" de
+"reembolsado" deve derivar isso de `CANCELLATION` + `cancel_reason`.
+
+Isso não altera a regra central de autorização (§10/§11):
+`CANCELLATION` não revoga acesso imediatamente — o `entitlementActive`
+continua sendo calculado a partir da data de expiração efetiva retornada
+pelo RevenueCat (`expiration_at_ms`, ou o fim do período de carência quando
+aplicável), nunca do tipo de evento isoladamente. Um reembolso imediato
+tipicamente já vem com `expiration_at_ms` no passado/presente, o que resulta
+em `entitlementActive = false` mesmo sendo o mesmo tipo de evento
+(`CANCELLATION`) de um cancelamento voluntário comum.
+
+---
+
+## Regra obrigatória
+
+O backend deve ser idempotente.
+
+Registrar o `event id` para evitar processamento duplicado.
+
+**Implementação original (Sprint 4) e por que foi substituída:** a primeira
+versão comparava apenas o `event.id` recebido contra o `lastEventId`
+armazenado, em duas operações separadas (ler, depois escrever). A auditoria
+de robustez da Sprint 4 encontrou dois problemas reais nesse desenho:
+
+1. **Condição de corrida (TOCTOU):** duas requisições concorrentes para o
+   mesmo `uid` podiam ambas ler o mesmo `lastEventId` antigo antes de
+   qualquer uma escrever, e ambas passar na checagem de duplicidade.
+2. **Eventos fora de ordem:** a checagem só sabia responder "este `id`
+   específico já foi aplicado?", nunca "este evento é mais antigo que o que
+   já apliquei?". O RevenueCat garante entrega *at-least-once*, nunca em
+   ordem — um evento atrasado (retry, latência de rede) podia chegar depois
+   de um evento mais novo já ter sido processado e sobrescrever o estado
+   mais recente com dados antigos.
+
+**Implementação corrigida (Sprint 4.1):** ver §26 para o campo
+`lastEventTimestampMs` (o mecanismo de ordenação) e a função
+`applySubscriptionEventAtomically` (`functions/src/billing/subscriptionSync.ts`)
+para os detalhes técnicos completos. Resumo:
+
+* leitura, decisão e escrita acontecem dentro de **uma única transação do
+  Firestore** — elimina a condição de corrida, porque o próprio Firestore
+  serializa transações conflitantes sobre o mesmo documento;
+* a decisão compara tanto o `event.id` quanto o `event_timestamp_ms` (o
+  relógio do próprio RevenueCat) contra o que já está armazenado, antes de
+  decidir se escreve.
+
+### Política de resultado: `processed` / `duplicate` / `stale` / `conflict`
+
+| Resultado | Quando ocorre | Escreve no Firestore? | Resposta HTTP |
+|---|---|---|---|
+| `processed` | Evento novo, mais recente que o último aplicado (ou o primeiro evento do documento) | Sim | 200 |
+| `duplicate` | Mesmo `event.id` já aplicado | Não | 200 (reprocessar não mudaria nada) |
+| `stale` | Evento diferente, porém com `event_timestamp_ms` **menor** que o já aplicado — entregue fora de ordem | Não | 200 (reprocessar não mudaria a decisão) |
+| `conflict` | Evento diferente com `event_timestamp_ms` **igual** ao já aplicado — ambiguidade que a documentação do RevenueCat não resolve | Não | 200, com log de erro estruturado para investigação manual |
+
+Em nenhum desses quatro casos uma exceção é lançada ao RevenueCat — todos
+retornam sucesso (200), porque em nenhum deles um reenvio mudaria o
+resultado. Apenas falhas genuinamente transitórias (ex.: indisponibilidade
+momentânea do Firestore) retornam 5xx, para que o RevenueCat tente
+novamente.
+
+**Nada disso muda quem é a fonte de autorização.** Toda essa transação
+existe para manter o *espelho* do Firestore correto e consistente — o
+aplicativo continua, sempre, lendo `CustomerInfo` diretamente do SDK do
+RevenueCat para decidir acesso Premium (§10/§11/§27), nunca este documento.
+
+---
+
+# 26. Modelo do Firestore
+
+`users/{uid}.subscription` é um espelho assíncrono do RevenueCat.
+
+---
+
+## Schema oficial (consolidado na Sprint 3.5, atualizado na Sprint 4.1)
+
+Este é o schema único e definitivo — a mesma lista de campos é usada por
+`firestore.rules` (`subscriptionValid()`) e por
+`functions/src/billing/{types.ts,constants.ts}`. Qualquer alteração futura de
+campo deve ser aplicada nos três lugares na mesma mudança.
 
 ```txt
-TRIAL
-ACTIVE
-CANCELED
-BILLING_ISSUE
-EXPIRED
+status
+entitlementActive
+provider
+productId
+store
+startedAt
+trialEndsAt
+currentPeriodEndsAt
+canceledAt
+lastRenewedAt
+lastEventId
+lastEventTimestampMs
+updatedAt
+```
+
+Não é exigido que todos os campos existam em todos os estados.
+
+O campo `provider` deve usar:
+
+```txt
+REVENUECAT
+```
+
+### Adicionado na Sprint 4.1: `lastEventTimestampMs`
+
+Tipo: **`number`** — inteiro, milissegundos Unix (`event_timestamp_ms` do
+próprio RevenueCat). **Não** é um Firestore `timestamp`.
+
+Guardado sempre junto com `lastEventId`, escrito exclusivamente por
+`applySubscriptionEventAtomically`
+(`functions/src/billing/subscriptionSync.ts`) — nunca fornecido pelo
+chamador (excluído da lista de campos aceitos por `validateSubscriptionPayload`,
+mesmo tratamento de `updatedAt`).
+
+**Por que não usar apenas `updatedAt`:**
+
+* `updatedAt` responde "quando o Firestore foi escrito" — o relógio do
+  *nosso* backend, no momento em que processamos o evento.
+* `lastEventTimestampMs` responde "quando o evento aconteceu no
+  RevenueCat" — o relógio do RevenueCat, no momento em que o evento em si
+  ocorreu (ex.: quando a renovação foi cobrada).
+
+Esses dois momentos **não são equivalentes**. O RevenueCat garante entrega
+*at-least-once*, nunca em ordem — um evento pode chegar atrasado (retry,
+latência de rede, fila) e ser processado por nós *depois* de um evento
+cronologicamente mais novo já ter sido aplicado. Se usássemos apenas
+`updatedAt` para decidir "isso é mais novo?", a resposta seria sempre "sim,
+porque agora é sempre depois de antes" — `updatedAt` não carrega nenhuma
+informação sobre a ordem real dos eventos no RevenueCat, só sobre a ordem em
+que *nós* os recebemos. `lastEventTimestampMs` é o único campo que permite
+comparar corretamente "este evento é mais recente que o que já apliquei,
+segundo o RevenueCat" — ver §25 para a política completa de
+`processed`/`duplicate`/`stale`/`conflict` que depende dele.
+
+Campo opcional, sem exigência de backfill: documentos gravados antes da
+Sprint 4.1 simplesmente não o têm, e são tratados como "primeiro evento do
+novo mecanismo" na primeira vez que um webhook for processado para aquele
+usuário.
+
+### Removido na Sprint 3.5, reintroduzido em espírito na Sprint 4.1: `lastEventAt`
+
+O rascunho original desta seção incluía também `lastEventAt`. Foi removido do
+schema oficial por redundância: no volume de eventos esperado para a V1, toda
+escrita em `subscription` já é a própria escrita de processamento do evento —
+`lastEventAt` e `updatedAt` seriam, na prática, sempre iguais. A garantia de
+idempotência (§25) na época dependia apenas de `lastEventId`.
+
+**Essa decisão se mostrou incompleta.** A auditoria de robustez da Sprint 4
+identificou que, sem nenhum timestamp do RevenueCat armazenado, o backend não
+tinha como detectar um evento entregue fora de ordem (§25) — só sabia
+comparar `event.id`, nunca "isso é mais antigo que o que já tenho". A Sprint
+4.1 resolveu isso com `lastEventTimestampMs` (acima) — tecnicamente um campo
+novo, não um "desfazer" literal do que foi removido (tipo `number` em vez de
+`timestamp`, semântica de comparação em vez de auditoria/log), mas cumprindo
+exatamente o papel que `lastEventAt` deixou de existir para cumprir.
+
+### Mantido apesar de ser um valor constante: `provider`
+
+Em um sistema com um único provedor, `provider` carrega pouca informação por
+si só. Foi mantido porque `firestore.rules` já depende dele em
+`legacyMigrationValid()` (migração única de documentos no formato antigo) —
+removê-lo exigiria alterar essa função de migração para um ganho mínimo, risco
+não justificado nesta consolidação.
+
+---
+
+## Regra obrigatória
+
+O Firestore funciona apenas como espelho assíncrono para:
+
+* analytics
+* suporte
+* relatórios
+* histórico
+* uso administrativo
+
+O Firestore não deve ser usado como fonte imediata de autorização para liberar recursos Premium.
+
+---
+
+# 27. Regra obrigatória do Firestore
+
+Esta seção existe para eliminar qualquer ambiguidade sobre o papel do Firestore no billing.
+
+---
+
+## Papel do Firestore
+
+```txt
+users/{uid}.subscription é apenas um espelho do RevenueCat.
+```
+
+```txt
+O Firestore nunca deve ser utilizado como fonte oficial para decidir
+se um usuário possui acesso Premium.
+```
+
+O Firestore existe exclusivamente para:
+
+* analytics
+* histórico
+* suporte
+* consultas administrativas
+* relatórios
+* sincronização por backend
+
+---
+
+## Regra obrigatória para o aplicativo
+
+```txt
+O aplicativo não deve utilizar subscription do Firestore para
+liberar ou bloquear funcionalidades Premium.
+```
+
+A única fonte utilizada pelo aplicativo para decidir acesso Premium é:
+
+```txt
+RevenueCat → CustomerInfo
 ```
 
 ---
 
-# 23. Funcionamento offline
+# 28. Fluxo oficial de sincronização
 
-Quando não for possível validar a assinatura:
+Diagrama oficial:
 
-O sistema pode utilizar a última validação positiva por até:
+```txt
+Apple App Store / Google Play
+            │
+            ▼
+       RevenueCat
+            │
+      ┌─────┴────────────┐
+      │                  │
+      ▼                  ▼
+Aplicativo          Webhook
+      │                  │
+      ▼                  ▼
+CustomerInfo      Cloud Function
+                         │
+                         ▼
+                    Firestore
+```
+
+---
+
+## Fluxo detalhado
+
+1. Apple ou Google processam o pagamento.
+2. RevenueCat recebe e normaliza os eventos.
+3. O aplicativo consulta o CustomerInfo para decidir o acesso Premium.
+4. RevenueCat envia o Webhook.
+5. A Cloud Function processa o evento.
+6. A Cloud Function atualiza o Firestore.
+7. O Firestore torna-se um espelho atualizado para analytics e administração.
+
+---
+
+## Regra obrigatória
+
+```txt
+O aplicativo nunca deve aguardar a sincronização do Firestore para
+conceder ou remover acesso Premium.
+```
+
+O acesso deve ocorrer imediatamente, utilizando o CustomerInfo retornado pelo RevenueCat.
+
+---
+
+# 29. Funcionamento offline
+
+Se houver uma última validação positiva recente, o aplicativo pode manter acesso por até:
 
 ```txt
 24 horas
@@ -448,13 +968,63 @@ O sistema pode utilizar a última validação positiva por até:
 
 ---
 
-## Após 24 horas
+## Regras
 
-O aplicativo deve exigir nova validação online.
+Armazenar localmente `lastVerifiedPremiumAt`.
+
+Armazenar localmente `lastKnownEntitlementActive`.
+
+Após 24 horas sem nova validação, exigir conexão para validar novamente.
+
+Não usar o Firestore como fallback de autorização em tempo real.
+
+Aproveitar o cache oficial do RevenueCat SDK, sem criar lógica paralela conflitante.
 
 ---
 
-# 24. Evoluções futuras
+# 30. Arquitetura oficial de responsabilidades
+
+## Apple / Google
+
+* pagamento
+* renovação
+* elegibilidade do trial
+* cancelamento
+* reembolso
+
+## RevenueCat
+
+* fonte oficial de assinatura
+* CustomerInfo
+* entitlement
+* offerings
+* normalização entre lojas
+* webhooks
+
+## Firebase Auth
+
+* identidade do usuário
+* UID usado como App User ID no RevenueCat
+
+## Firestore
+
+* espelho assíncrono
+* analytics
+* suporte
+* histórico administrativo
+
+## Aplicativo
+
+* paywall
+* compra
+* restauração
+* leitura do CustomerInfo
+* gate de acesso
+* cache offline limitado
+
+---
+
+# 31. Evoluções futuras
 
 Possíveis expansões:
 
@@ -466,7 +1036,7 @@ Esses recursos não fazem parte da V1.
 
 ---
 
-# 25. Pedido para o Agente Billing
+# 32. Pedido para o Agente Billing
 
 Definir:
 
@@ -478,3 +1048,194 @@ Definir:
 * estratégia de restauração
 
 Respeitando todas as regras deste documento.
+
+---
+
+# 33. Arquitetura de Atribuição de Usuários
+
+Seção adicionada na Sprint 3.6 (consolidação arquitetural). Define **apenas
+a arquitetura de dados** para cupons/atribuição — o sistema em si (captura de
+cupom, aplicação, telas) não está implementado e não faz parte desta seção.
+
+---
+
+## Billing e Marketing são responsabilidades diferentes
+
+`users/{uid}.subscription` (§26) representa exclusivamente o estado da
+assinatura, espelhado do RevenueCat.
+
+```txt
+subscription NUNCA deve armazenar couponCode, campaignId, influencerId,
+source ou qualquer outro dado de marketing/atribuição.
+```
+
+Um cupom pode, no futuro, influenciar QUAL Offering é apresentado ao usuário
+(§34), mas isso é uma decisão tomada a partir dos dados de atribuição — o
+resultado dessa decisão (a assinatura em si) continua vivendo inteiramente em
+`subscription`, sem nenhum campo de marketing misturado.
+
+Esta separação existe porque billing e marketing têm:
+
+* donos diferentes (financeiro/produto vs. growth/marketing);
+* ciclos de vida diferentes (assinatura muda com eventos de loja; atribuição
+  é praticamente estática após o cadastro);
+* requisitos de auditoria diferentes (billing precisa refletir exatamente o
+  RevenueCat; atribuição precisa de um histórico de eventos para
+  detecção de fraude e performance de campanha).
+
+---
+
+## Opções avaliadas
+
+**Opção A — `users/{uid}.attribution` (campo aninhado, só o snapshot atual)**
+
+* Escalabilidade: boa (O(1) por usuário).
+* Auditoria: fraca — sobrescrever o campo perde o histórico; sem trilha
+  imutável.
+* Prevenção de fraude: fraca — detectar abuso de um `couponCode` específico
+  exigiria varrer toda a coleção `users` (coleção sensível, com PII).
+* Consultas: ótimas para "qual a atribuição deste usuário", ruins para "quantos
+  usuários usaram o cupom X".
+* Analytics: ok para exports por usuário, ruim para funis por evento
+  (§24 pede "trial iniciado", "trial convertido" — conceitos de evento, não
+  de snapshot).
+* Campanhas futuras: fraca — sem timestamp de evento, sem trilha por
+  campanha.
+
+**Opção B — `couponRedemptions/{id}` (coleção própria, um documento imutável por resgate)**
+
+* Escalabilidade: boa — mesmo padrão já usado em `questionnaires` e
+  `assessments` (docs/03), coleção append-only.
+* Auditoria: forte — documento imutável por evento, nunca sobrescrito.
+* Prevenção de fraude: forte — consulta direta por `couponCode` sem tocar na
+  coleção `users`.
+* Consultas: ótimas para "quem usou o cupom X"/"quantos resgates hoje";
+  exige uma consulta extra (por `uid`) para saber a atribuição atual de um
+  usuário específico.
+* Analytics: forte — formato de evento, ideal para funis e exports.
+* Campanhas futuras: forte — `campaignId` como chave natural de agregação.
+
+**Opção C — combinação: `couponRedemptions/{id}` como fonte de verdade + `users/{uid}.attribution` como espelho de leitura**
+
+Todas as forças da Opção B, mais uma leitura O(1) da atribuição atual de um
+usuário (útil para painel administrativo/suporte) sem precisar de uma
+consulta extra. Custo: dois lugares para manter sincronizados — mitigado por
+seguir exatamente o mesmo padrão que este documento já define para billing
+(`subscription` como espelho, RevenueCat como fonte de verdade — §26/§27).
+
+---
+
+## Arquitetura escolhida: Opção C
+
+```txt
+couponRedemptions/{id}   → fonte de verdade (log de eventos, imutável)
+users/{uid}.attribution  → espelho de leitura (desnormalizado, só o
+                            resgate mais recente)
+```
+
+### Justificativa técnica
+
+1. Reaproveita um padrão arquitetural que este projeto já usa e já
+   entende (mirror assíncrono + fonte de verdade separada) — menor custo
+   cognitivo do que introduzir um padrão novo só para atribuição.
+2. `couponRedemptions` segue exatamente a mesma forma de
+   `questionnaires`/`assessments` (docs/03): coleção própria, documentos
+   imutáveis, nunca sobrescritos — consistente com o resto do schema do
+   projeto.
+3. Mantém dados de marketing fisicamente fora da coleção `users` (que tem
+   PII e é lida pelo próprio dono via regras de segurança) — reduz a
+   superfície de dados expostos e facilita dar acesso de leitura a
+   `couponRedemptions` para ferramentas de marketing/fraude sem tocar em
+   dados de conta.
+4. Escreve apenas pelo backend (Admin SDK) — mesma regra de "cliente nunca
+   escreve" já aplicada a `subscription` (§25/§27).
+
+### Regra obrigatória
+
+```txt
+O cupom nunca concede Premium diretamente (§8) — apenas registra atribuição.
+A decisão de acesso continua sendo exclusivamente do entitlement do
+RevenueCat (§10/§11), nunca de `couponRedemptions` nem de `attribution`.
+```
+
+---
+
+## Preparação de código (Sprint 3.6)
+
+Criados apenas tipos e constantes, sem nenhuma lógica de leitura/escrita:
+
+```txt
+functions/src/attribution/types.ts       — CouponRedemption, AttributionSnapshot
+functions/src/attribution/constants.ts   — nomes de coleção/campo
+```
+
+Este módulo é deliberadamente independente de `functions/src/billing/*` (sem
+imports cruzados) — reforça, também no código, que são responsabilidades
+diferentes. Nenhuma função de leitura, escrita ou validação foi criada; isso
+fica para a sprint em que o sistema de cupons for de fato implementado.
+
+---
+
+# 34. Elegibilidade de Trial via Cupom de Campanha
+
+Seção adicionada na Sprint 3.6, a pedido de negócio: usuários que utilizarem
+um cupom de influenciador devem receber acesso a uma campanha promocional de
+7 dias.
+
+---
+
+## Regra obrigatória — quem decide o quê
+
+```txt
+1. O cupom identifica a campanha.
+2. O backend decide qual Offering do RevenueCat apresentar para essa campanha.
+3. A loja (Apple App Store / Google Play), através do RevenueCat, continua
+   sendo quem decide se o usuário PODE de fato usar a oferta/trial.
+4. O aplicativo nunca promete o trial antes da loja confirmar a elegibilidade.
+```
+
+Esta regra não cria exceção às regras já definidas em §6/§7: o cupom só
+influencia QUAL oferta é mostrada (roteamento de Offering); ele nunca
+substitui, antecipa ou garante a elegibilidade real de trial, que continua
+sendo — como em qualquer fluxo sem cupom — determinada pela loja e refletida
+pelo RevenueCat.
+
+---
+
+## Fluxo esperado (arquitetura, não implementação)
+
+1. Usuário chega ao app através de um link/código de um influenciador.
+2. O cupom é registrado por UID (§8), associado a uma campanha
+   (`campaignId`).
+3. Ao exibir o paywall, o backend consulta a atribuição do usuário e decide
+   qual Offering do RevenueCat corresponde a essa campanha.
+4. O RevenueCat/SDK solicita a compra usando essa Offering.
+5. A loja informa o preço real e se o usuário É elegível para o trial
+   daquela oferta (mesma regra de §6: elegibilidade final é da loja).
+6. Se a loja indicar que o usuário NÃO é elegível, o aplicativo não deve
+   afirmar ou insinuar que o trial de 7 dias está garantido — deve refletir
+   exatamente o que a loja retornar.
+7. RevenueCat retorna o CustomerInfo real; o acesso segue as mesmas regras de
+   sempre (§10/§11) — entitlement ativo, nunca a existência do cupom.
+
+---
+
+## Regra explícita de comunicação com o usuário
+
+```txt
+Nenhuma tela, texto ou notificação pode prometer "7 dias grátis garantidos"
+por ter usado um cupom antes da confirmação real da elegibilidade pela loja.
+```
+
+O cupom pode, no máximo, comunicar "campanha com possibilidade de teste
+gratuito estendido, sujeita à elegibilidade da loja" — a redação final do
+Paywall é responsabilidade de uma sprint futura (fora do escopo desta
+consolidação), mas deve respeitar esta regra.
+
+---
+
+## Fora do escopo desta seção
+
+Qual Offering/pacote específico do RevenueCat corresponde a cada campanha,
+como o backend resolve `campaignId → Offering`, e a implementação do próprio
+Paywall — tudo isso é decisão de uma sprint de Offerings ainda não iniciada.

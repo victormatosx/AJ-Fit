@@ -16,8 +16,10 @@ import {
 
 import { AppStateProvider, useAppState } from './src/state/AppState';
 import { AuthProvider, useAuth } from './src/state/AuthContext';
+import { SubscriptionProvider } from './src/state/SubscriptionContext';
 import { addQuestionnaire } from './src/services/userProfile';
 import { logAuthError } from './src/services/auth';
+import { configureRevenueCat, logRevenueCatError } from './src/services/revenueCatService';
 import { SplashScreen } from './src/screens/SplashScreen';
 import { OnboardingScreen } from './src/screens/OnboardingScreen';
 import { QuizScreen } from './src/screens/QuizScreen';
@@ -27,6 +29,20 @@ import { AuthScreen } from './src/screens/AuthScreen';
 import { PaywallScreen } from './src/screens/PaywallScreen';
 import { AppShell } from './src/screens/AppShell';
 import { colors } from './src/theme/tokens';
+
+/**
+ * Configures the RevenueCat SDK at module evaluation time — the same
+ * singleton-bootstrap pattern src/lib/firebase.ts already uses for
+ * `auth`/`db`. Never called from a screen or from SubscriptionContext
+ * (docs/13_assinaturas_e_billing.md): SubscriptionProvider assumes the SDK is
+ * already configured by the time it mounts and only reads/syncs CustomerInfo.
+ * `Purchases.configure` itself is synchronous, so this doesn't block the
+ * first render — a missing/invalid key is only logged, never thrown into the
+ * app tree. `configureRevenueCat` is idempotent (see revenueCatService.ts),
+ * so this line re-running under Fast Refresh (editing this file re-executes
+ * its top-level code) is harmless.
+ */
+configureRevenueCat().catch((err) => logRevenueCatError('bootstrap', err));
 
 type ScreenId =
   | 'splash'
@@ -205,10 +221,17 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <AuthProvider>
-        <AppStateProvider>
-          <StatusBar style="light" />
-          <RootNavigator />
-        </AppStateProvider>
+        {/* Nested inside AuthProvider so SubscriptionProvider can read
+            useAuth()'s `user`/`initializing` and react to it (calling
+            loginRevenueCat/logoutRevenueCat internally). AuthContext itself
+            is untouched — it stays the sole owner of identity and knows
+            nothing about RevenueCat; SubscriptionContext just watches it. */}
+        <SubscriptionProvider>
+          <AppStateProvider>
+            <StatusBar style="light" />
+            <RootNavigator />
+          </AppStateProvider>
+        </SubscriptionProvider>
       </AuthProvider>
     </SafeAreaProvider>
   );

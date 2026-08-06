@@ -38,7 +38,11 @@ import {
  *   users/{userId}
  *     profile { name, email, birthDate, photoURL, photoVersion }
  *     preferences { language, units, theme }
- *     subscription { status, provider, trialEndsAt, endsAt }
+ *     subscription { status, provider, trialEndsAt, currentPeriodEndsAt, ... }
+ *       (full schema: docs/13_assinaturas_e_billing.md §26 — only the 4
+ *       fields the legacy migration below can populate are typed here; the
+ *       rest are backend-only, written exclusively via
+ *       functions/src/billing/subscriptionSync.ts)
  *     metadata { role, activeWorkoutId, createdAt, updatedAt }
  *
  *   users/{userId}/questionnaires/{questionnaireId}
@@ -80,7 +84,8 @@ export type UserProfile = {
     status?: SubscriptionStatus;
     provider?: 'REVENUECAT';
     trialEndsAt?: Timestamp | null;
-    endsAt?: Timestamp | null;
+    /** Renamed from `endsAt` in Sprint 3.5 — docs/13_assinaturas_e_billing.md §26. */
+    currentPeriodEndsAt?: Timestamp | null;
   };
   metadata: {
     role: 'user';
@@ -142,7 +147,11 @@ function migratedUserDocument(data: Record<string, unknown>): Record<string, unk
     subscription.trialEndsAt = data.trialEndsAt;
   }
   if (data.subscriptionEndsAt instanceof Timestamp || data.subscriptionEndsAt === null) {
-    subscription.endsAt = data.subscriptionEndsAt;
+    // Old flat field was `subscriptionEndsAt`; the nested field it maps to
+    // was renamed `endsAt` → `currentPeriodEndsAt` in Sprint 3.5 (must match
+    // firestore.rules' `legacyMigrationValid()`, which reads this same old
+    // flat field into the new nested name).
+    subscription.currentPeriodEndsAt = data.subscriptionEndsAt;
   }
 
   const metadata: Record<string, unknown> = {

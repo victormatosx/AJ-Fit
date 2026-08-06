@@ -7,7 +7,7 @@
     "icon": "./assets/aj-logo.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true,
+      "supportsTablet": false,
       "bundleIdentifier": "com.ajfit.app",
       "buildNumber": "1",
       "usesAppleSignIn": true,
