@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { View, ScrollView, Pressable, Modal, Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -13,6 +13,24 @@ import { normalizeLanguage } from '../i18n/normalizeLanguage';
 import { changeLocalLanguage } from '../i18n/changeLocalLanguage';
 import { changeLanguageForUser } from '../i18n/syncLanguage';
 import { logError } from '../lib/logError';
+import {
+  DEFAULT_UNITS_PREFERENCE,
+  isUnitsPreference,
+  UNITS_PREFERENCES,
+  type UnitsPreference,
+} from '../types/units';
+import { resolveCurrentUnits } from '../units/resolveCurrentUnits';
+import {
+  readStoredUnitsPreference,
+  writeStoredUnitsPreference,
+} from '../units/unitsStorage';
+import { changeUnitsForUser } from '../units/syncUnits';
+import { getUnitsSummaryKey } from '../units/unitsPresentation';
+
+type UnitsOptionCopy = {
+  label: string;
+  description: string;
+};
 
 export function SettingsScreen({
   onBack,
@@ -32,6 +50,15 @@ export function SettingsScreen({
   const [langPickerOpen, setLangPickerOpen] = useState(false);
   const [langError, setLangError] = useState<string | null>(null);
   const [savingLang, setSavingLang] = useState<SupportedLanguage | null>(null);
+  const [unitsPickerOpen, setUnitsPickerOpen] = useState(false);
+  const [unitsError, setUnitsError] = useState<string | null>(null);
+  const [savingUnits, setSavingUnits] = useState<UnitsPreference | null>(null);
+  const [currentUnits, setCurrentUnits] = useState<UnitsPreference>(() =>
+    isUnitsPreference(profile?.preferences.units)
+      ? profile.preferences.units
+      : DEFAULT_UNITS_PREFERENCE,
+  );
+  const unitsLoadSequence = useRef(0);
 
   // `i18n.language` is the runtime source of truth — DO NOT read
   // `profile.preferences.language` here. That field will diverge from the
@@ -53,11 +80,42 @@ export function SettingsScreen({
     [t],
   );
 
+  const unitsOptions = useMemo(
+    () =>
+      t('settings:units.options', { returnObjects: true }) as Record<
+        UnitsPreference,
+        UnitsOptionCopy
+      >,
+    [t],
+  );
+
+  // Reconciliation on login writes the authoritative preference locally
+  // before the app gate opens. Reading that cache here also preserves a
+  // same-account offline choice whose Firestore write is still pending.
+  useEffect(() => {
+    const sequence = ++unitsLoadSequence.current;
+    const profilePreference = isUnitsPreference(profile?.preferences.units)
+      ? profile.preferences.units
+      : DEFAULT_UNITS_PREFERENCE;
+    setCurrentUnits(profilePreference);
+
+    readStoredUnitsPreference().then((stored) => {
+      if (sequence === unitsLoadSequence.current) {
+        setCurrentUnits(stored ?? profilePreference);
+      }
+    });
+
+    return () => {
+      unitsLoadSequence.current += 1;
+    };
+  }, [user?.uid, profile?.preferences.units]);
+
   const themeLabel =
     profile?.preferences.theme === 'dark'
       ? t('settings:values.darkTheme')
       : profile?.preferences.theme ?? '—';
-  const unitsLabel = profile?.preferences.units === 'metric' ? 'kg • cm' : 'lb • in';
+  const resolvedUnits = resolveCurrentUnits(currentUnits);
+  const unitsLabel = t(getUnitsSummaryKey(currentUnits, resolvedUnits));
 
   const handleSelectLanguage = async (next: SupportedLanguage) => {
     setLangError(null);
@@ -102,6 +160,49 @@ export function SettingsScreen({
       setLangError(t('settings:language.errors.changeFailed'));
     } finally {
       setSavingLang(null);
+    }
+  };
+
+  const handleSelectUnits = async (next: UnitsPreference) => {
+    setUnitsError(null);
+    if (next === currentUnits) {
+      setUnitsPickerOpen(false);
+      return;
+    }
+
+    const previous = currentUnits;
+    unitsLoadSequence.current += 1;
+    setCurrentUnits(next);
+    setSavingUnits(next);
+
+    try {
+      if (user) {
+        const { remote } = await changeUnitsForUser({ uid: user.uid, next });
+        setUnitsPickerOpen(false);
+        remote.then((outcome) => {
+          if (outcome.status === 'rolled-back') {
+            setCurrentUnits(previous);
+            logError('settings:remote-units-rolled-back', outcome.error, {
+              uid: user.uid,
+              attempted: next,
+              previous,
+            });
+          }
+        });
+      } else {
+        await writeStoredUnitsPreference(next);
+        setUnitsPickerOpen(false);
+      }
+    } catch (err) {
+      setCurrentUnits(previous);
+      logError('settings:change-units', err, {
+        next,
+        previous,
+        authenticated: !!user,
+      });
+      setUnitsError(t('settings:units.errors.changeFailed'));
+    } finally {
+      setSavingUnits(null);
     }
   };
 
@@ -181,7 +282,15 @@ export function SettingsScreen({
                   setLangPickerOpen(true);
                 },
               },
-              { icon: 'ruler', label: t('settings:items.units'), value: unitsLabel, onPress: () => {} },
+              {
+                icon: 'ruler',
+                label: t('settings:units.title'),
+                value: unitsLabel,
+                onPress: () => {
+                  setUnitsError(null);
+                  setUnitsPickerOpen(true);
+                },
+              },
             ]}
           />
 
@@ -223,6 +332,17 @@ export function SettingsScreen({
         onDismiss={() => setLangPickerOpen(false)}
         cancelLabel={t('common:actions.cancel')}
         title={t('settings:language.chooseTitle')}
+      />
+      <UnitsPickerSheet
+        visible={unitsPickerOpen}
+        current={currentUnits}
+        options={unitsOptions}
+        savingUnits={savingUnits}
+        error={unitsError}
+        onSelect={handleSelectUnits}
+        onDismiss={() => setUnitsPickerOpen(false)}
+        cancelLabel={t('common:actions.cancel')}
+        title={t('settings:units.chooseTitle')}
       />
     </ScreenBg>
   );
@@ -386,6 +506,171 @@ function LanguagePickerSheet({
                   color: '#ffb3b3',
                 }}
               >
+                {error}
+              </Text>
+            </View>
+          ) : null}
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+function UnitsPickerSheet({
+  visible,
+  current,
+  options,
+  savingUnits,
+  error,
+  onSelect,
+  onDismiss,
+  cancelLabel,
+  title,
+}: {
+  visible: boolean;
+  current: UnitsPreference;
+  options: Record<UnitsPreference, UnitsOptionCopy>;
+  savingUnits: UnitsPreference | null;
+  error: string | null;
+  onSelect: (next: UnitsPreference) => void;
+  onDismiss: () => void;
+  cancelLabel: string;
+  title: string;
+}) {
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onDismiss}
+    >
+      <Pressable
+        onPress={onDismiss}
+        style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' }}
+      >
+        <Pressable
+          onPress={() => {}}
+          style={{
+            backgroundColor: '#0a0620',
+            borderTopLeftRadius: 20,
+            borderTopRightRadius: 20,
+            borderTopWidth: 1,
+            borderColor: 'rgba(255,255,255,0.09)',
+            paddingBottom: 24,
+          }}
+        >
+          <View
+            style={{
+              paddingHorizontal: 22,
+              paddingTop: 18,
+              paddingBottom: 14,
+              borderBottomWidth: 1,
+              borderColor: 'rgba(255,255,255,0.06)',
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
+            <Text
+              style={{
+                fontFamily: fonts.mono,
+                fontSize: 11,
+                letterSpacing: 1.8,
+                color: colors.faint,
+              }}
+            >
+              {title.toUpperCase()}
+            </Text>
+            <Pressable onPress={onDismiss} hitSlop={10}>
+              <Text
+                style={{
+                  fontFamily: fonts.mono,
+                  fontSize: 11,
+                  letterSpacing: 1.5,
+                  color: colors.faint,
+                }}
+              >
+                {cancelLabel.toUpperCase()}
+              </Text>
+            </Pressable>
+          </View>
+
+          <View style={{ paddingHorizontal: 12, paddingTop: 6 }}>
+            {UNITS_PREFERENCES.map((preference) => {
+              const active = preference === current;
+              const busy = savingUnits === preference;
+              const option = options[preference];
+
+              return (
+                <Pressable
+                  key={preference}
+                  onPress={() => onSelect(preference)}
+                  disabled={savingUnits !== null}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${option.label}. ${option.description}`}
+                  accessibilityState={{ selected: active, busy }}
+                  style={({ pressed }) => ({
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 14,
+                    paddingVertical: 14,
+                    paddingHorizontal: 14,
+                    marginVertical: 3,
+                    borderRadius: 12,
+                    backgroundColor: active
+                      ? 'rgba(11,112,249,0.16)'
+                      : pressed
+                        ? 'rgba(255,255,255,0.04)'
+                        : 'transparent',
+                    borderWidth: 1,
+                    borderColor: active ? '#0b70f9' : 'rgba(255,255,255,0.06)',
+                    opacity: savingUnits !== null && !busy ? 0.4 : 1,
+                  })}
+                >
+                  <View style={{ width: 22, alignItems: 'center' }}>
+                    {active ? (
+                      <Icon name="check" size={16} color={colors.accentHi} />
+                    ) : null}
+                  </View>
+                  <View style={{ flex: 1, gap: 3 }}>
+                    <Text
+                      style={{
+                        fontFamily: fonts.uiSemi,
+                        fontSize: 15,
+                        color: active ? '#fff' : 'rgba(255,255,255,0.85)',
+                      }}
+                    >
+                      {option.label}
+                    </Text>
+                    <Text
+                      style={{
+                        fontFamily: fonts.ui,
+                        fontSize: 12,
+                        color: colors.faint,
+                      }}
+                    >
+                      {option.description}
+                    </Text>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          {error ? (
+            <View
+              style={{
+                marginTop: 6,
+                marginHorizontal: 14,
+                paddingVertical: 10,
+                paddingHorizontal: 14,
+                borderRadius: 10,
+                backgroundColor: 'rgba(255,86,86,0.10)',
+                borderWidth: 1,
+                borderColor: 'rgba(255,86,86,0.32)',
+              }}
+            >
+              <Text style={{ fontFamily: fonts.ui, fontSize: 13, color: '#ffb3b3' }}>
                 {error}
               </Text>
             </View>

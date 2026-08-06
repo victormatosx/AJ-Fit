@@ -7,8 +7,8 @@ rules_version = '2';
 //     acesso apenas aos próprios dados; RevenueCat é dono da assinatura)
 //   - docs/04_contratos_de_api.md §5 (contrato do documento users/{userId})
 //
-// Princípio: o app só escreve profile e metadata.updatedAt. Preferências,
-// assinatura e metadados internos têm mapas próprios e validação independente.
+// Princípio: o app só escreve profile, language/units e metadata.updatedAt.
+// Assinatura e metadados internos têm mapas próprios e validação independente.
 // As respostas do questionário ficam na subcoleção `questionnaires`. Campos de
 // assinatura e treino são gravados apenas pelo backend (Cloud Functions /
 // webhook RevenueCat via Admin SDK, que ignora estas regras).
@@ -52,7 +52,7 @@ service cloud.firestore {
         && data.keys().hasAll(['language', 'units', 'theme'])
         && data.keys().hasOnly(['language', 'units', 'theme'])
         && data.language in ['pt-BR', 'en', 'es']
-        && data.units in ['metric', 'imperial']
+        && data.units in ['system', 'metric', 'imperial']
         && data.theme in ['dark', 'light', 'system'];
     }
 
@@ -108,7 +108,7 @@ service cloud.firestore {
         && after.profile.get('birthDate', null) == before.get('birthDate', null)
         && after.profile.get('photoURL', null) == before.get('photoURL', null)
         && after.preferences.language == before.get('language', 'pt-BR')
-        && after.preferences.units == 'metric'
+        && after.preferences.units == 'system'
         && after.preferences.theme == 'dark'
         && after.subscription.get('status', null) == before.get('subscriptionStatus', null)
         && after.subscription.get('provider', null) == before.get('subscriptionProvider', null)
@@ -238,10 +238,9 @@ service cloud.firestore {
       // adicionados ao documento no futuro.
       //
       // `preferences` é aceito no conjunto top-level mudável, mas dentro dele
-      // apenas `preferences.language` pode variar — `theme` e `units` seguem
-      // protegidos porque `preferencesValid` (via `nestedUserValid`) já exige
-      // que ambos existam e sejam válidos, e o `.hasOnly(['language'])` abaixo
-      // impede que estejam entre as chaves alteradas.
+      // apenas `preferences.language` e `preferences.units` podem variar;
+      // `theme` segue protegido. Escritas legítimas usam caminhos pontuados,
+      // preservando todas as preferências irmãs.
       allow update: if isOwner(userId) && (
         legacyMigrationValid()
         || (
@@ -254,7 +253,7 @@ service cloud.firestore {
           && (
             !request.resource.data.diff(resource.data).affectedKeys().hasAny(['preferences'])
             || request.resource.data.preferences.diff(resource.data.preferences).affectedKeys()
-                 .hasOnly(['language'])
+                 .hasOnly(['language', 'units'])
           )
           && request.resource.data.metadata.diff(resource.data.metadata).affectedKeys()
                .hasOnly(['updatedAt'])

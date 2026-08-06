@@ -29,6 +29,7 @@ import { AppShell } from './src/screens/AppShell';
 import { colors } from './src/theme/tokens';
 import { initI18n } from './src/i18n';
 import { reconcileLanguageOnLoad } from './src/i18n/syncLanguage';
+import { reconcileUnitsOnLoad } from './src/units/syncUnits';
 
 type ScreenId =
   | 'splash'
@@ -76,12 +77,11 @@ function RootNavigator() {
   // Guards the forced-questionnaire save below against double submission
   // (e.g. a fast double-tap on the last quiz question).
   const [savingQuestionnaire, setSavingQuestionnaire] = useState(false);
-  // Language reconciliation runs at every profileLoading→false transition.
+  // Account-preference reconciliation runs at every profileLoading→false transition.
   // While it runs, we hold the routing gate closed so the first authed screen
-  // renders already in the reconciled language (no flicker between remote
-  // and locally-cached values). Fires exactly once per profile-load cycle
+  // renders with reconciled language and units. Fires once per profile-load cycle
   // — no polling, no timers.
-  const [langReconciling, setLangReconciling] = useState(false);
+  const [preferencesReconciling, setPreferencesReconciling] = useState(false);
   const prevProfileLoadingRef = useRef(true);
 
   const setScreen = (next: ScreenId) => {
@@ -94,11 +94,17 @@ function RootNavigator() {
     prevProfileLoadingRef.current = profileLoading;
     if (initializing || profileLoading || !wasLoading) return;
     if (!user) return;
-    setLangReconciling(true);
-    reconcileLanguageOnLoad({
-      uid: user.uid,
-      remoteLanguage: profile?.preferences.language ?? null,
-    }).finally(() => setLangReconciling(false));
+    setPreferencesReconciling(true);
+    Promise.all([
+      reconcileLanguageOnLoad({
+        uid: user.uid,
+        remoteLanguage: profile?.preferences.language ?? null,
+      }),
+      reconcileUnitsOnLoad({
+        uid: user.uid,
+        remoteUnits: profile?.preferences.units ?? null,
+      }),
+    ]).finally(() => setPreferencesReconciling(false));
   }, [initializing, profileLoading, user, profile]);
 
   // Single source of truth for navigation: authenticated users are routed
@@ -112,10 +118,10 @@ function RootNavigator() {
     // `profileLoading` covers the gap between a sign-in/sign-up call setting
     // `user` and its matching Firestore read landing in `questionnaire` —
     // without this, a fully-onboarded user would flash through 'quiz' on
-    // every login while that read is still in flight. `langReconciling`
+    // every login while that read is still in flight. Preference reconciliation
     // holds the gate for the extra beat needed to apply the remote/pending
-    // language before the first authed screen renders.
-    if (initializing || profileLoading || langReconciling) return;
+    // account preferences before the first authed screen renders.
+    if (initializing || profileLoading || preferencesReconciling) return;
 
     if (!user) {
       // Unauthenticated: keep out of screens that require a session (also
@@ -134,7 +140,7 @@ function RootNavigator() {
 
     // Authenticated + has a questionnaire: never show the signup funnel.
     if (FUNNEL_ONLY.includes(screen)) setScreen('app');
-  }, [initializing, profileLoading, langReconciling, user, questionnaire, screen]);
+  }, [initializing, profileLoading, preferencesReconciling, user, questionnaire, screen]);
 
   if (initializing) return <Loading />;
 

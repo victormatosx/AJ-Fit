@@ -45,5 +45,32 @@
     "errors": {
       "changeFailed": "Não foi possível salvar o idioma. Tente novamente."
     }
+  },
+  "units": {
+    "title": "Sistema de medidas",
+    "chooseTitle": "Selecionar sistema de medidas",
+    "summary": {
+      "systemMetric": "Automático — Métrico",
+      "systemImperial": "Automático — Imperial",
+      "metric": "Métrico",
+      "imperial": "Imperial"
+    },
+    "options": {
+      "system": {
+        "label": "Automático",
+        "description": "Usa o sistema da região do dispositivo"
+      },
+      "metric": {
+        "label": "Métrico",
+        "description": "kg • cm"
+      },
+      "imperial": {
+        "label": "Imperial",
+        "description": "lb • ft/in"
+      }
+    },
+    "errors": {
+      "changeFailed": "Não foi possível salvar o sistema de medidas. Tente novamente."
+    }
   }
 }

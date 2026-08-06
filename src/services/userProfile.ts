@@ -29,6 +29,10 @@ import {
   validateProfileBirthDate,
 } from '../lib/userProfileValidation';
 import { DEFAULT_LANGUAGE, type SupportedLanguage } from '../types/language';
+import {
+  DEFAULT_UNITS_PREFERENCE,
+  type UnitsPreference,
+} from '../types/units';
 
 /**
  * User repository — the only place that touches `users/{userId}` and its
@@ -74,7 +78,7 @@ export type UserProfile = {
   };
   preferences: {
     language: SupportedLanguage;
-    units: 'metric' | 'imperial';
+    units: UnitsPreference;
     theme: 'dark' | 'light' | 'system';
   };
   subscription: {
@@ -159,7 +163,7 @@ function migratedUserDocument(data: Record<string, unknown>): Record<string, unk
     profile,
     preferences: {
       language: DEFAULT_LANGUAGE,
-      units: 'metric',
+      units: DEFAULT_UNITS_PREFERENCE,
       theme: 'dark',
     },
     subscription,
@@ -208,7 +212,11 @@ export async function provisionNewUser(
           ? { birthDate: Timestamp.fromDate(input.answers.birthDate) }
           : {}),
       },
-      preferences: { language: DEFAULT_LANGUAGE, units: 'metric', theme: 'dark' },
+      preferences: {
+        language: DEFAULT_LANGUAGE,
+        units: DEFAULT_UNITS_PREFERENCE,
+        theme: 'dark',
+      },
       subscription: {},
       metadata: {
         role: 'user',

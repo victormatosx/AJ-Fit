@@ -25,6 +25,7 @@ import {
   deleteField,
 } from 'firebase/firestore';
 import { SUPPORTED_LANGUAGES } from '../src/types/language';
+import { UNITS_PREFERENCES } from '../src/types/units';
 
 const PROJECT_ID = 'ajfit-rules-test';
 const UID = 'alice';
@@ -44,13 +45,15 @@ function otherDb() {
 }
 
 /** Seeds a valid nested user document bypassing rules (baseline for updates). */
-async function seedUser(overrides: Partial<{ language: string }> = {}) {
+async function seedUser(
+  overrides: Partial<{ language: string; units: string }> = {},
+) {
   await testEnv.withSecurityRulesDisabled(async (ctx) => {
     await setDoc(doc(ctx.firestore(), 'users', UID), {
       profile: { name: 'Alice', email: 'alice@example.com' },
       preferences: {
         language: overrides.language ?? 'pt-BR',
-        units: 'metric',
+        units: overrides.units ?? 'system',
         theme: 'dark',
       },
       subscription: {},
@@ -151,7 +154,7 @@ describe('legacy migration branch remains valid', () => {
     await assertSucceeds(
       setDoc(doc(ownerDb(), 'users', UID), {
         profile: { name: 'Alice', email: 'alice@example.com' },
-        preferences: { language: 'pt-BR', units: 'metric', theme: 'dark' },
+        preferences: { language: 'pt-BR', units: 'system', theme: 'dark' },
         subscription: {},
         metadata: {
           role: 'user',
@@ -226,15 +229,6 @@ describe('preferences — protected sibling fields', () => {
     );
   });
 
-  it('rejects changing preferences.units', async () => {
-    await assertFails(
-      updateDoc(doc(ownerDb(), 'users', UID), {
-        'preferences.units': 'imperial',
-        'metadata.updatedAt': serverTimestamp(),
-      }),
-    );
-  });
-
   it('rejects a simultaneous update to language and theme', async () => {
     await assertFails(
       updateDoc(doc(ownerDb(), 'users', UID), {
@@ -245,14 +239,53 @@ describe('preferences — protected sibling fields', () => {
     );
   });
 
-  it('rejects a simultaneous update to language and units', async () => {
-    await assertFails(
+  it('allows a simultaneous valid update to language and units', async () => {
+    await assertSucceeds(
       updateDoc(doc(ownerDb(), 'users', UID), {
         'preferences.language': 'en',
         'preferences.units': 'imperial',
         'metadata.updatedAt': serverTimestamp(),
       }),
     );
+  });
+});
+
+describe('preferences.units', () => {
+  beforeEach(seedUser);
+
+  for (const units of UNITS_PREFERENCES) {
+    it(`allows owner to set units to '${units}'`, async () => {
+      await assertSucceeds(
+        updateDoc(doc(ownerDb(), 'users', UID), {
+          'preferences.units': units,
+          'metadata.updatedAt': serverTimestamp(),
+        }),
+      );
+    });
+  }
+
+  it.each(['uk', '', 'SI', null, 42])('rejects invalid units value: %s', async (units) => {
+    await assertFails(
+      updateDoc(doc(ownerDb(), 'users', UID), {
+        'preferences.units': units,
+        'metadata.updatedAt': serverTimestamp(),
+      }),
+    );
+  });
+
+  it('updates units without erasing language or theme', async () => {
+    await assertSucceeds(
+      updateDoc(doc(ownerDb(), 'users', UID), {
+        'preferences.units': 'imperial',
+        'metadata.updatedAt': serverTimestamp(),
+      }),
+    );
+    const preferences = (await getDoc(doc(ownerDb(), 'users', UID))).data()?.preferences;
+    expect(preferences).toEqual({
+      language: 'pt-BR',
+      units: 'imperial',
+      theme: 'dark',
+    });
   });
 });
 

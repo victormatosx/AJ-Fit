@@ -37,7 +37,7 @@ import { logError } from '../lib/logError';
  * Firestore writes are ALWAYS via dotted-path `preferences.language` so
  * `preferences.theme` / `preferences.units` are structurally impossible to
  * touch. Combined with the Phase 0 rules, a bug that tries to write the
- * whole preferences map would be rejected by the server with
+ * whole preferences map would still be rejected by the server with
  * `permission-denied` and rolled back below.
  *
  * Zero coupling to AuthContext: callers pass `uid` explicitly.

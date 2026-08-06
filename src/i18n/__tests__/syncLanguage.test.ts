@@ -298,7 +298,7 @@ describe('changeLanguageForUser — payload shape (rules-driven)', () => {
       new Set(['preferences.language', 'metadata.updatedAt']),
     );
     // Never send the whole preferences map (would trip preferencesValid.hasAll
-    // if theme/units missing, or the inner .hasOnly(['language']) if not).
+    // if theme/units are missing, regardless of the allowed dotted paths).
     expect(payload).not.toHaveProperty('preferences');
     expect(payload).not.toHaveProperty('preferences.theme');
     expect(payload).not.toHaveProperty('preferences.units');
