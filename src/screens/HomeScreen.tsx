@@ -13,6 +13,8 @@ import { colors, fonts } from '../theme/tokens';
 import { useAuth } from '../state/AuthContext';
 import { getDisplayFirstName } from '../lib/userName';
 import { ProfileAvatar } from '../components/ui/ProfileAvatar';
+import { useUnits } from '../state/UnitsContext';
+import { formatWorkoutLoadFromKg, workoutLoadUnit } from '../units/workoutLoadConversions';
 
 /**
  * Ticker rows read from i18n keys. The values themselves are placeholder
@@ -23,13 +25,14 @@ type TickerKey = 'streak' | 'weekVolume' | 'benchPr' | 'consistency' | 'nextLeve
 const TICKER_KEYS: Array<{ key: TickerKey; value: string }> = [
   { key: 'streak', value: '14' },
   { key: 'weekVolume', value: '12.4T' },
-  { key: 'benchPr', value: '82.5KG' },
+  { key: 'benchPr', value: '82.5' },
   { key: 'consistency', value: '92%' },
   { key: 'nextLevel', value: '12' },
 ];
 
 function Ticker() {
   const { t } = useTranslation('home');
+  const { resolvedUnits } = useUnits();
   const [width, setWidth] = useState(0);
   const x = useRef(new Animated.Value(0)).current;
 
@@ -54,13 +57,14 @@ function Ticker() {
         const label = t(`ticker.${key}` as 'ticker.streak').toUpperCase();
         // `nextLevel` interpolates a day count; other tickers show the raw
         // mock number as-is until real analytics wire in.
-        const display =
-          key === 'nextLevel'
+        const display = key === 'benchPr'
+          ? `${formatWorkoutLoadFromKg(Number(value), resolvedUnits)}${workoutLoadUnit(resolvedUnits).toUpperCase()}`
+          : key === 'nextLevel'
             ? t('ticker.nextLevelValue', { days: value })
             : value;
         return { label, value: display };
       }),
-    [t],
+    [resolvedUnits, t],
   );
 
   const row = (onLayout?: (w: number) => void) => (

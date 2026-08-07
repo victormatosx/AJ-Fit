@@ -21,7 +21,9 @@
   },
   "height": {
     "title": "Sua altura?",
-    "unit": "cm"
+    "unit": "cm",
+    "feet": "Pés",
+    "inches": "Polegadas"
   },
   "weight": {
     "title": "Seu peso atual?",

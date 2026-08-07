@@ -30,6 +30,7 @@ import { colors } from './src/theme/tokens';
 import { initI18n } from './src/i18n';
 import { reconcileLanguageOnLoad } from './src/i18n/syncLanguage';
 import { reconcileUnitsOnLoad } from './src/units/syncUnits';
+import { UnitsProvider } from './src/state/UnitsContext';
 
 type ScreenId =
   | 'splash'
@@ -244,10 +245,12 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <AuthProvider>
-        <AppStateProvider>
-          <StatusBar style="light" />
-          <RootNavigator />
-        </AppStateProvider>
+        <UnitsProvider>
+          <AppStateProvider>
+            <StatusBar style="light" />
+            <RootNavigator />
+          </AppStateProvider>
+        </UnitsProvider>
       </AuthProvider>
     </SafeAreaProvider>
   );

@@ -46,6 +46,18 @@ import { computeAge } from '../lib/ageCalculator';
 import { logError } from '../lib/logError';
 import { useDateParts } from '../hooks/useDateParts';
 import { DateFieldsInput } from '../components/ui/DateFieldsInput';
+import { ImperialHeightInput } from '../components/ui/ImperialHeightInput';
+import { useUnits } from '../state/UnitsContext';
+import {
+  formatWeightFromKg,
+  formatWeightInputFromKg,
+  weightToKg,
+  weightUnit,
+} from '../units/weightConversions';
+import { formatHeightFromCm, heightUnit } from '../units/heightConversions';
+
+const MIN_HEIGHT_CM = 140;
+const MAX_HEIGHT_CM = 220;
 
 const SITE_TRANSLATION_KEYS: Record<SiteKey, `skinfolds.${SiteKey}`> = {
   chest: 'skinfolds.chest',
@@ -81,6 +93,8 @@ function formatAssessmentDate(
 
 export function AssessmentScreen({ onBack }: { onBack: () => void }) {
   const { t, i18n } = useTranslation(['assessment', 'common']);
+  const { resolvedUnits } = useUnits();
+  const massUnit = weightUnit(resolvedUnits);
   // Translated label for the empty-timestamp fallback shown by
   // `formatAssessmentDate`. Passed explicitly rather than accessed via t()
   // inside the helper — keeps the formatter pure and unit-testable.
@@ -292,14 +306,22 @@ export function AssessmentScreen({ onBack }: { onBack: () => void }) {
             <View style={{ flexDirection: 'row', gap: 10 }}>
               <AssessmentMetricCard
                 label={t('assessment:metrics.weight').toUpperCase()}
-                value={displayWeight != null ? displayWeight.toFixed(1) : '—'}
-                unit={t('assessment:units.kg')}
+                value={
+                  displayWeight != null
+                    ? formatWeightFromKg(displayWeight, resolvedUnits)
+                    : '—'
+                }
+                unit={massUnit}
                 style={{ flex: 1 }}
               />
               <AssessmentMetricCard
                 label={t('assessment:metrics.height').toUpperCase()}
-                value={displayHeight != null ? String(displayHeight) : '—'}
-                unit={t('assessment:units.cm')}
+                value={
+                  displayHeight != null
+                    ? formatHeightFromCm(displayHeight, resolvedUnits)
+                    : '—'
+                }
+                unit={heightUnit(resolvedUnits)}
                 style={{ flex: 1 }}
               />
             </View>
@@ -745,8 +767,15 @@ function GuidedAssessmentModal({
   birthDate: Date | null;
 }) {
   const { t } = useTranslation('assessment');
-  const [weight, setWeight] = useState(defaultWeight ? String(defaultWeight) : '');
+  const { resolvedUnits } = useUnits();
+  const massUnit = weightUnit(resolvedUnits);
+  const [weight, setWeight] = useState(
+    defaultWeight != null
+      ? formatWeightInputFromKg(defaultWeight, resolvedUnits)
+      : '',
+  );
   const [height, setHeight] = useState(defaultHeight ? String(defaultHeight) : '');
+  const [imperialHeightCm, setImperialHeightCm] = useState<number | null>(defaultHeight);
   const [sex, setSex] = useState<Sex | null>(defaultSex);
   const measuredAtFields = useMeasuredAtFields();
   // Manual fallback — only reachable when there is truly no birth date on
@@ -776,9 +805,10 @@ function GuidedAssessmentModal({
 
   const proto = protocolById(protocolId);
   const sites = sex ? proto.sitesFor(sex) : [];
-  const w = parseFloat(weight);
-  const heightCm = parseFloat(height);
-  const bmi = computeBmi(w, heightCm);
+  const displayedWeight = parseFloat(weight);
+  const weightKg = weightToKg(displayedWeight, resolvedUnits);
+  const heightCm = resolvedUnits === 'imperial' ? imperialHeightCm ?? NaN : parseFloat(height);
+  const bmi = computeBmi(weightKg, heightCm);
   const band =
     bmi != null ? BMI_BANDS.find((b) => bmi < b.max) ?? BMI_BANDS[BMI_BANDS.length - 1] : null;
   const bmiPct = bmi != null ? Math.max(3, Math.min(100, ((bmi - 14) / (38 - 14)) * 100)) : 0;
@@ -796,11 +826,11 @@ function GuidedAssessmentModal({
 
   const bodyFat =
     sex != null ? computeGuidedBodyFat(protocolId, numericFolds, sites, a, sex) : null;
-  const leanMass = computeLeanMass(w, bodyFat);
-  const fatMass = computeFatMass(w, bodyFat);
+  const leanMass = computeLeanMass(weightKg, bodyFat);
+  const fatMass = computeFatMass(weightKg, bodyFat);
 
   const canSave =
-    w > 0 && heightCm > 0 && a > 0 && sex != null && bodyFat != null && measuredAtFields.isValid;
+    weightKg > 0 && heightCm > 0 && a > 0 && sex != null && bodyFat != null && measuredAtFields.isValid;
 
   const shakeX = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -826,7 +856,7 @@ function GuidedAssessmentModal({
     try {
       const { refreshFailed } = await onSave({
         measuredAt: measuredAtFields.date,
-        weight: w,
+        weight: weightKg,
         height: heightCm,
         bodyFat,
         protocol: protocolId,
@@ -894,23 +924,38 @@ function GuidedAssessmentModal({
             <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
               <MeasureField
                 label={t('fields.weight.label').toUpperCase()}
-                unit={t('units.kg')}
+                unit={massUnit}
                 placeholder={t('form.numericPlaceholder')}
                 value={weight}
                 onChange={setWeight}
-                error={shake && w <= 0}
+                error={shake && !(displayedWeight > 0)}
                 shakeX={shakeX}
               />
-              <MeasureField
-                label={t('fields.height.label').toUpperCase()}
-                unit={t('units.cm')}
-                placeholder={t('form.numericPlaceholder')}
-                value={height}
-                onChange={setHeight}
-                error={shake && heightCm <= 0}
-                shakeX={shakeX}
-              />
+              {resolvedUnits === 'metric' && (
+                <MeasureField
+                  label={t('fields.height.label').toUpperCase()}
+                  unit={t('units.cm')}
+                  placeholder={t('form.numericPlaceholder')}
+                  value={height}
+                  onChange={setHeight}
+                  error={shake && heightCm <= 0}
+                  shakeX={shakeX}
+                />
+              )}
             </View>
+            {resolvedUnits === 'imperial' && (
+              <View style={{ marginBottom: 10 }}>
+                <ImperialHeightInput
+                  valueCm={imperialHeightCm ?? 178}
+                  minCm={MIN_HEIGHT_CM}
+                  maxCm={MAX_HEIGHT_CM}
+                  onChangeCm={setImperialHeightCm}
+                  feetLabel={t('heightParts.feet')}
+                  inchesLabel={t('heightParts.inches')}
+                  error={shake && !(heightCm > 0)}
+                />
+              </View>
+            )}
             <View style={{ flexDirection: 'row', gap: 10 }}>
               {birthDate != null ? (
                 <View style={{ flex: 1 }}>
@@ -1190,15 +1235,23 @@ function GuidedAssessmentModal({
               />
               <AssessmentMetricCard
                 label={t('metrics.leanMass').toUpperCase()}
-                value={leanMass != null ? leanMass.toFixed(1).replace('.', ',') : '—'}
-                unit={t('units.kg')}
+                value={
+                  leanMass != null
+                    ? formatWeightFromKg(leanMass, resolvedUnits).replace('.', ',')
+                    : '—'
+                }
+                unit={massUnit}
                 icon="dumbbell"
                 style={{ width: '48.5%' }}
               />
               <AssessmentMetricCard
                 label={t('metrics.fatMass').toUpperCase()}
-                value={fatMass != null ? fatMass.toFixed(1).replace('.', ',') : '—'}
-                unit={t('units.kg')}
+                value={
+                  fatMass != null
+                    ? formatWeightFromKg(fatMass, resolvedUnits).replace('.', ',')
+                    : '—'
+                }
+                unit={massUnit}
                 icon="target"
                 style={{ width: '48.5%' }}
               />
@@ -1306,8 +1359,15 @@ function ImportAssessmentModal({
   defaultHeight: number | null;
 }) {
   const { t } = useTranslation('assessment');
-  const [weight, setWeight] = useState(defaultWeight ? String(defaultWeight) : '');
+  const { resolvedUnits } = useUnits();
+  const massUnit = weightUnit(resolvedUnits);
+  const [weight, setWeight] = useState(
+    defaultWeight != null
+      ? formatWeightInputFromKg(defaultWeight, resolvedUnits)
+      : '',
+  );
   const [height, setHeight] = useState(defaultHeight ? String(defaultHeight) : '');
+  const [imperialHeightCm, setImperialHeightCm] = useState<number | null>(defaultHeight);
   const measuredAtFields = useMeasuredAtFields();
   const [bodyFat, setBodyFat] = useState('');
   const [bodyWater, setBodyWater] = useState('');
@@ -1322,9 +1382,10 @@ function ImportAssessmentModal({
     if (closeTimer.current) clearTimeout(closeTimer.current);
   }, []);
 
-  const w = parseFloat(weight);
-  const h = parseFloat(height);
-  const canSave = w > 0 && h > 0 && measuredAtFields.isValid;
+  const displayedWeight = parseFloat(weight);
+  const weightKg = weightToKg(displayedWeight, resolvedUnits);
+  const heightCm = resolvedUnits === 'imperial' ? imperialHeightCm ?? NaN : parseFloat(height);
+  const canSave = weightKg > 0 && heightCm > 0 && measuredAtFields.isValid;
 
   const shakeX = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -1353,8 +1414,8 @@ function ImportAssessmentModal({
     try {
       const { refreshFailed } = await onSave({
         measuredAt: measuredAtFields.date,
-        weight: w,
-        height: h,
+        weight: weightKg,
+        height: heightCm,
         bodyFat: parsePositive(bodyFat) ?? null,
         bodyWater: parsePositive(bodyWater),
         basalMetabolism: parsePositive(basalMetabolism),
@@ -1423,23 +1484,38 @@ function ImportAssessmentModal({
             <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
               <MeasureField
                 label={t('fields.weight.label').toUpperCase()}
-                unit={t('units.kg')}
+                unit={massUnit}
                 placeholder={t('form.numericPlaceholder')}
                 value={weight}
                 onChange={setWeight}
-                error={shake && w <= 0}
+                error={shake && !(displayedWeight > 0)}
                 shakeX={shakeX}
               />
-              <MeasureField
-                label={t('fields.height.label').toUpperCase()}
-                unit={t('units.cm')}
-                placeholder={t('form.numericPlaceholder')}
-                value={height}
-                onChange={setHeight}
-                error={shake && h <= 0}
-                shakeX={shakeX}
-              />
+              {resolvedUnits === 'metric' && (
+                <MeasureField
+                  label={t('fields.height.label').toUpperCase()}
+                  unit={t('units.cm')}
+                  placeholder={t('form.numericPlaceholder')}
+                  value={height}
+                  onChange={setHeight}
+                  error={shake && heightCm <= 0}
+                  shakeX={shakeX}
+                />
+              )}
             </View>
+            {resolvedUnits === 'imperial' && (
+              <View style={{ marginBottom: 10 }}>
+                <ImperialHeightInput
+                  valueCm={imperialHeightCm ?? 178}
+                  minCm={MIN_HEIGHT_CM}
+                  maxCm={MAX_HEIGHT_CM}
+                  onChangeCm={setImperialHeightCm}
+                  feetLabel={t('heightParts.feet')}
+                  inchesLabel={t('heightParts.inches')}
+                  error={shake && !(heightCm > 0)}
+                />
+              </View>
+            )}
             <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
               <MeasureField label={t('fields.bodyFat.label').toUpperCase()} unit={t('units.percent')} placeholder={t('form.numericPlaceholder')} value={bodyFat} onChange={setBodyFat} />
               <MeasureField label={t('fields.bodyWater.label').toUpperCase()} unit={t('units.percent')} placeholder={t('form.numericPlaceholder')} value={bodyWater} onChange={setBodyWater} />

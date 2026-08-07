@@ -14,6 +14,7 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   readStoredUnitsPreference,
+  subscribeStoredUnitsPreference,
   UNITS_PREFERENCE_STORAGE_KEY,
   writeStoredUnitsPreference,
 } from '../unitsStorage';
@@ -56,5 +57,17 @@ describe('unitsStorage', () => {
       writeStoredUnitsPreference('invalid' as never),
     ).rejects.toThrow(/refuse to persist invalid preference/);
     expect(AsyncStorage.setItem).not.toHaveBeenCalled();
+  });
+
+  it('notifies mounted consumers after local preference changes', async () => {
+    const listener = vi.fn();
+    const unsubscribe = subscribeStoredUnitsPreference(listener);
+
+    await writeStoredUnitsPreference('imperial');
+    expect(listener).toHaveBeenCalledWith('imperial');
+
+    unsubscribe();
+    await writeStoredUnitsPreference('metric');
+    expect(listener).toHaveBeenCalledTimes(1);
   });
 });

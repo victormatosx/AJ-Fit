@@ -21,7 +21,9 @@
   },
   "height": {
     "title": "¿Tu altura?",
-    "unit": "cm"
+    "unit": "cm",
+    "feet": "Pies",
+    "inches": "Pulgadas"
   },
   "weight": {
     "title": "¿Tu peso actual?",

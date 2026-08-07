@@ -23,6 +23,14 @@ import { OutlineNumber } from '../components/ui/OutlineNumber';
 import { ExerciseGif } from '../components/fitness/ExerciseGif';
 import { colors, fonts, displayLineHeight } from '../theme/tokens';
 import { TODAY_WORKOUT } from '../lib/todayWorkout';
+import { useUnits } from '../state/UnitsContext';
+import {
+  adjustWorkoutLoadKg,
+  formatWorkoutLoadFromKg,
+  workoutLoadFromKg,
+  workoutLoadToKg,
+  workoutLoadUnit,
+} from '../units/workoutLoadConversions';
 
 const SUBS_KEY = 'ajfit-subs';
 
@@ -187,6 +195,8 @@ function translateMuscleGroup(tLoose: LooseT, target: string): string {
 
 export function WorkoutScreen({ onDone, onMinimize }: Props) {
   const { t } = useTranslation('workout');
+  const { resolvedUnits } = useUnits();
+  const loadUnit = workoutLoadUnit(resolvedUnits);
   const tLoose = t as unknown as LooseT;
   // Queue of exercise indices in current order (head = current)
   const [order, setOrder] = useState<number[]>(() => EXERCISES.map((_, i) => i));
@@ -629,11 +639,11 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                     transform: [{ skewX: '-8deg' }],
                   }}
                 >
-                  {curLast > 0 ? curLast : '—'}
+                  {curLast > 0 ? formatWorkoutLoadFromKg(curLast, resolvedUnits) : '—'}
                 </Text>
                 {curLast > 0 && (
                   <Text style={{ fontFamily: fonts.mono, fontSize: 12, color: colors.faint, marginLeft: 2 }}>
-                    {t('load.unitKg')}
+                    {loadUnit}
                   </Text>
                 )}
               </View>
@@ -685,7 +695,11 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                 </Text>
                 <Text style={{ fontFamily: fonts.mono, fontSize: 12, flex: 1, color: '#fff' }}>
                   {w > 0
-                    ? t('sets.summaryWeighted', { count: s0.r, weight: w })
+                    ? t('sets.summaryWeighted', {
+                        count: s0.r,
+                        weight: formatWorkoutLoadFromKg(w, resolvedUnits),
+                        unit: loadUnit,
+                      })
                     : t('sets.summaryBodyweight', { count: s0.r })}
                 </Text>
                 {justLogged && (
@@ -1327,6 +1341,8 @@ function RestOverlay({
   onMinimize?: () => void;
 }) {
   const { t } = useTranslation('workout');
+  const { resolvedUnits } = useUnits();
+  const loadUnit = workoutLoadUnit(resolvedUnits);
   return (
     <View
       style={{
@@ -1424,9 +1440,7 @@ function RestOverlay({
           }}
         >
           <Pressable
-            onPress={() =>
-              setRegWeight((w: number) => Math.max(0, Math.round((w - 2.5) * 10) / 10))
-            }
+            onPress={() => setRegWeight((kg: number) => adjustWorkoutLoadKg(kg, -1, resolvedUnits))}
             style={regBtnStyle}
           >
             <Icon name="minus" size={16} color={colors.accentHi} />
@@ -1440,13 +1454,13 @@ function RestOverlay({
             }}
           >
             <TextInput
-              value={regWeight > 0 ? String(regWeight) : ''}
+              value={regWeight > 0 ? formatWorkoutLoadFromKg(regWeight, resolvedUnits) : ''}
               placeholder="—"
               placeholderTextColor={colors.faint}
               keyboardType="decimal-pad"
               onChangeText={(t) => {
                 const v = t.replace(',', '.').replace(/[^0-9.]/g, '');
-                setRegWeight(v === '' ? 0 : parseFloat(v) || 0);
+                setRegWeight(v === '' ? 0 : workoutLoadToKg(parseFloat(v) || 0, resolvedUnits));
               }}
               style={{
                 width: 96,
@@ -1460,11 +1474,11 @@ function RestOverlay({
               }}
             />
             <Text style={{ fontSize: 14, color: colors.faint, marginLeft: 2 }}>
-              {t('load.unitKg')}
+              {loadUnit}
             </Text>
           </View>
           <Pressable
-            onPress={() => setRegWeight((w: number) => Math.round((w + 2.5) * 10) / 10)}
+            onPress={() => setRegWeight((kg: number) => adjustWorkoutLoadKg(kg, 1, resolvedUnits))}
             style={regBtnStyle}
           >
             <Icon name="plus" size={16} color={colors.accentHi} />
@@ -1559,7 +1573,11 @@ function PROverlay({
   prev: number;
 }) {
   const { t } = useTranslation('workout');
-  const delta = Math.round((weight - prev) * 10) / 10;
+  const { resolvedUnits } = useUnits();
+  const loadUnit = workoutLoadUnit(resolvedUnits);
+  const displayedWeight = formatWorkoutLoadFromKg(weight, resolvedUnits);
+  const displayedPrevious = formatWorkoutLoadFromKg(prev, resolvedUnits);
+  const displayedDelta = Math.round(workoutLoadFromKg(weight - prev, resolvedUnits) * 10) / 10;
   return (
     <View
       style={{
@@ -1593,7 +1611,7 @@ function PROverlay({
       </View>
       <Slash style={{ marginBottom: 12 }}>{t('record.new').toUpperCase()}</Slash>
       <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
-        <Display size={46}>{String(weight)}</Display>
+        <Display size={46}>{displayedWeight}</Display>
         <Text
           style={{
             fontFamily: fonts.display,
@@ -1603,7 +1621,7 @@ function PROverlay({
             transform: [{ skewX: '-8deg' }],
           }}
         >
-          {t('load.unitKg').toUpperCase()}
+          {loadUnit.toUpperCase()}
         </Text>
       </View>
       <Text
@@ -1615,9 +1633,9 @@ function PROverlay({
           fontFamily: fonts.ui,
         }}
       >
-        {t('record.previousContext', { exName, previous: prev })}{' '}
+        {t('record.previousContext', { exName, previous: displayedPrevious, unit: loadUnit })}{' '}
         <Text style={{ color: colors.accentHi, fontFamily: fonts.uiBold }}>
-          {t('record.gain', { delta })}
+          {t('record.gain', { delta: displayedDelta, unit: loadUnit })}
         </Text>
       </Text>
     </View>

@@ -60,8 +60,9 @@ describe('Progress and monthly consistency i18n', () => {
   });
 
   it('preserves chart and calendar data mechanics', () => {
-    expect(progress).toContain('const pts = [40, 45, 42, 50, 55, 53, 60, 65, 63, 70, 75, 82]');
-    expect(progress).toContain('const pts = [82, 81.6, 81.2, 80.8, 80.3, 79.9, 79.5, 79.0, 78.6, 78.2, 78.0, 77.6]');
+    expect(progress).toContain('const pointsKg = [40, 45, 42, 50, 55, 53, 60, 65, 63, 70, 75, 82]');
+    expect(progress).toContain('const pointsKg = [82, 81.6, 81.2, 80.8, 80.3, 79.9, 79.5, 79.0, 78.6, 78.2, 78.0, 77.6]');
+    expect(progress).toContain('pointsKg.map((value) => weightFromKg(value, resolvedUnits))');
     expect(consistency).toContain('const DAYS = 31');
     expect(consistency).toContain('const FIRST_WD = 2');
     expect(consistency).toContain('const TODAY = 16');

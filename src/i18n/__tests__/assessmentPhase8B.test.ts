@@ -20,6 +20,7 @@ describe('Assessment form resources', () => {
       expect(resource.fields.measurementDate.label).toBeTruthy();
       expect(resource.fields.notes.placeholder).toBeTruthy();
       expect(Object.values(resource.units).every(Boolean)).toBe(true);
+      expect(resource.result).toBe('{{value}} {{unit}}');
       expect(resource.validation.guidedRequired).toBeTruthy();
       expect(resource.validation.importRequired).toBeTruthy();
       expect(resource.actions.saveGuided).toBeTruthy();
@@ -28,6 +29,14 @@ describe('Assessment form resources', () => {
       expect(resource.errors.saveFailedMessage).toBeTruthy();
       expect(resource.accessibility.saveGuided).toBeTruthy();
       expect(resource.accessibility.saveImported).toBeTruthy();
+    }
+  });
+
+  it('keeps mass units interpolated instead of embedding kg in result copy', () => {
+    for (const resource of [ptBR, en, es]) {
+      const details = Object.values(resource.history.details).join(' ');
+      expect(details).not.toMatch(/\bkg\b/);
+      expect(details).not.toContain('{{unit}}');
     }
   });
 
@@ -50,7 +59,7 @@ describe('Assessment form resources', () => {
       'fields.measurementDate.label', 'fields.weight.label', 'fields.height.label',
       'fields.bodyFat.label', 'fields.bodyWater.label', 'fields.basalMetabolism.label',
       'fields.visceralFat.label', 'fields.notes.label', 'fields.notes.placeholder',
-      'units.kg', 'units.cm', 'units.percent', 'units.kcal',
+      'massUnit', 'units.cm', 'units.percent', 'units.kcal',
       'validation.importRequired', 'actions.registerImported', 'import.saving',
       'success.importedTitle', 'errors.saveFailedMessage', 'accessibility.saveImported',
     ]) expect(imported).toContain(key);
@@ -71,7 +80,7 @@ describe('Assessment permanent form contract guard', () => {
     expect(screen.match(/if \(saving\) return/g)).toHaveLength(2);
     expect(screen.match(/await onSave\(\{/g)).toHaveLength(2);
     for (const token of [
-      'measuredAt: measuredAtFields.date', 'weight: w', 'bodyFat,',
+      'measuredAt: measuredAtFields.date', 'weight: weightKg', 'bodyFat,',
       'protocol: protocolId', 'sex,', 'age: a', 'folds: numericFolds',
       'bodyFat: parsePositive(bodyFat) ?? null', 'bodyWater: parsePositive(bodyWater)',
       'basalMetabolism: parsePositive(basalMetabolism)',

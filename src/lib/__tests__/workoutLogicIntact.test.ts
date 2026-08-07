@@ -187,7 +187,7 @@ describe('WorkoutScreen source — 7B + 7C migrations use i18n keys', () => {
     "t('sets.summaryWeighted'",
     "t('sets.summaryBodyweight'",
     "t('reps.label')",
-    "t('load.unitKg')",
+    'workoutLoadUnit(resolvedUnits)',
     "t('actions.completeSet'",
     "t('rest.title')",
     "t('rest.minimize')",

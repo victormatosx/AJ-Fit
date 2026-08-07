@@ -73,6 +73,8 @@
     "notes": { "label": "Notes (optional)", "placeholder": "E.g. bioimpedance at Clinic X" }
   },
   "form": { "numericPlaceholder": "0" },
+  "result": "{{value}} {{unit}}",
+  "heightParts": { "feet": "Feet", "inches": "Inches" },
   "units": { "kg": "kg", "cm": "cm", "mm": "mm", "percent": "%", "years": "years", "kcal": "kcal" },
   "validation": {
     "guidedRequired": "Enter the date, weight, height, sex, age, and every skinfold to save",
@@ -143,10 +145,10 @@
       "viewDetails": "View details"
     },
     "details": {
-      "available": "Estimated lean mass {{lean}} kg · fat mass {{fat}} kg.",
-      "availableProtocol": "Estimated lean mass {{lean}} kg · fat mass {{fat}} kg · protocol {{protocol}}.",
-      "availableImported": "Estimated lean mass {{lean}} kg · fat mass {{fat}} kg · recorded from a professional assessment.",
-      "availableProtocolImported": "Estimated lean mass {{lean}} kg · fat mass {{fat}} kg · protocol {{protocol}} · recorded from a professional assessment.",
+      "available": "Estimated lean mass {{lean}} · fat mass {{fat}}.",
+      "availableProtocol": "Estimated lean mass {{lean}} · fat mass {{fat}} · protocol {{protocol}}.",
+      "availableImported": "Estimated lean mass {{lean}} · fat mass {{fat}} · recorded from a professional assessment.",
+      "availableProtocolImported": "Estimated lean mass {{lean}} · fat mass {{fat}} · protocol {{protocol}} · recorded from a professional assessment.",
       "unavailable": "Lean and fat mass unavailable — this assessment has no body-fat percentage.",
       "unavailableProtocol": "Lean and fat mass unavailable — this assessment has no body-fat percentage · protocol {{protocol}}.",
       "unavailableImported": "Lean and fat mass unavailable — this assessment has no body-fat percentage · recorded from a professional assessment.",

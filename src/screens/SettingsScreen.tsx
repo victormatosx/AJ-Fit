@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { View, ScrollView, Pressable, Modal, Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -14,18 +14,13 @@ import { changeLocalLanguage } from '../i18n/changeLocalLanguage';
 import { changeLanguageForUser } from '../i18n/syncLanguage';
 import { logError } from '../lib/logError';
 import {
-  DEFAULT_UNITS_PREFERENCE,
-  isUnitsPreference,
   UNITS_PREFERENCES,
   type UnitsPreference,
 } from '../types/units';
-import { resolveCurrentUnits } from '../units/resolveCurrentUnits';
-import {
-  readStoredUnitsPreference,
-  writeStoredUnitsPreference,
-} from '../units/unitsStorage';
+import { writeStoredUnitsPreference } from '../units/unitsStorage';
 import { changeUnitsForUser } from '../units/syncUnits';
 import { getUnitsSummaryKey } from '../units/unitsPresentation';
+import { useUnits } from '../state/UnitsContext';
 
 type UnitsOptionCopy = {
   label: string;
@@ -53,12 +48,7 @@ export function SettingsScreen({
   const [unitsPickerOpen, setUnitsPickerOpen] = useState(false);
   const [unitsError, setUnitsError] = useState<string | null>(null);
   const [savingUnits, setSavingUnits] = useState<UnitsPreference | null>(null);
-  const [currentUnits, setCurrentUnits] = useState<UnitsPreference>(() =>
-    isUnitsPreference(profile?.preferences.units)
-      ? profile.preferences.units
-      : DEFAULT_UNITS_PREFERENCE,
-  );
-  const unitsLoadSequence = useRef(0);
+  const { preference: currentUnits, resolvedUnits } = useUnits();
 
   // `i18n.language` is the runtime source of truth — DO NOT read
   // `profile.preferences.language` here. That field will diverge from the
@@ -89,32 +79,10 @@ export function SettingsScreen({
     [t],
   );
 
-  // Reconciliation on login writes the authoritative preference locally
-  // before the app gate opens. Reading that cache here also preserves a
-  // same-account offline choice whose Firestore write is still pending.
-  useEffect(() => {
-    const sequence = ++unitsLoadSequence.current;
-    const profilePreference = isUnitsPreference(profile?.preferences.units)
-      ? profile.preferences.units
-      : DEFAULT_UNITS_PREFERENCE;
-    setCurrentUnits(profilePreference);
-
-    readStoredUnitsPreference().then((stored) => {
-      if (sequence === unitsLoadSequence.current) {
-        setCurrentUnits(stored ?? profilePreference);
-      }
-    });
-
-    return () => {
-      unitsLoadSequence.current += 1;
-    };
-  }, [user?.uid, profile?.preferences.units]);
-
   const themeLabel =
     profile?.preferences.theme === 'dark'
       ? t('settings:values.darkTheme')
       : profile?.preferences.theme ?? '—';
-  const resolvedUnits = resolveCurrentUnits(currentUnits);
   const unitsLabel = t(getUnitsSummaryKey(currentUnits, resolvedUnits));
 
   const handleSelectLanguage = async (next: SupportedLanguage) => {
@@ -171,8 +139,6 @@ export function SettingsScreen({
     }
 
     const previous = currentUnits;
-    unitsLoadSequence.current += 1;
-    setCurrentUnits(next);
     setSavingUnits(next);
 
     try {
@@ -181,7 +147,6 @@ export function SettingsScreen({
         setUnitsPickerOpen(false);
         remote.then((outcome) => {
           if (outcome.status === 'rolled-back') {
-            setCurrentUnits(previous);
             logError('settings:remote-units-rolled-back', outcome.error, {
               uid: user.uid,
               attempted: next,
@@ -194,7 +159,6 @@ export function SettingsScreen({
         setUnitsPickerOpen(false);
       }
     } catch (err) {
-      setCurrentUnits(previous);
       logError('settings:change-units', err, {
         next,
         previous,

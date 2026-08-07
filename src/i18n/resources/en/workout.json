@@ -47,8 +47,8 @@
     "current": "Now",
     "registered": "Logged",
     "lastTime": "Last time",
-    "summaryWeighted_one": "{{count}} rep × {{weight}} kg",
-    "summaryWeighted_other": "{{count}} reps × {{weight}} kg",
+    "summaryWeighted_one": "{{count}} rep × {{weight}} {{unit}}",
+    "summaryWeighted_other": "{{count}} reps × {{weight}} {{unit}}",
     "summaryBodyweight_one": "{{count}} rep × bodyweight",
     "summaryBodyweight_other": "{{count}} reps × bodyweight"
   },
@@ -56,7 +56,6 @@
     "label": "Reps"
   },
   "load": {
-    "unitKg": "kg",
     "bodyweight": "Bodyweight"
   },
   "rest": {
@@ -71,8 +70,8 @@
   },
   "record": {
     "new": "New record",
-    "previousContext": "{{exName}} · previous {{previous}} kg",
-    "gain": "+{{delta}} kg"
+    "previousContext": "{{exName}} · previous {{previous}} {{unit}}",
+    "gain": "+{{delta}} {{unit}}"
   },
   "done": {
     "kicker": "Workout complete",

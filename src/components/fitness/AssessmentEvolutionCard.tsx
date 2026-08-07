@@ -6,9 +6,11 @@ import { Icon } from '../ui/Icon';
 import { MonoLabel } from '../ui/Display';
 import { colors, fonts } from '../../theme/tokens';
 import { EvolutionLineChart, type EvolutionPoint } from './EvolutionLineChart';
+import { useUnits } from '../../state/UnitsContext';
+import { weightFromKg, weightUnit } from '../../units/weightConversions';
 
 // Fixed categorical slots — weight and body fat live on incomparable scales
-// (kg vs %), so they're two single-series charts, never one dual-axis chart.
+// (mass vs %), so they're two single-series charts, never one dual-axis chart.
 // Validated: node scripts/validate_palette.js "#3987e5,#d95926" --mode dark
 // --surface "#020010" (dataviz skill) — passes lightness/chroma/CVD/contrast.
 const WEIGHT_COLOR = '#3987e5';
@@ -25,6 +27,7 @@ function DeltaChip({
   unit: string;
   goodWhenNegative?: boolean;
 }) {
+  const { t } = useTranslation('assessment');
   if (value == null) {
     return (
       <View style={{ flex: 1, alignItems: 'center' }}>
@@ -45,9 +48,7 @@ function DeltaChip({
           color: positive ? '#22c55e' : '#f0563f',
         }}
       >
-        {sign}
-        {value.toFixed(1)}
-        {unit}
+        {t('result', { value: `${sign}${value.toFixed(1)}`, unit })}
       </Text>
     </View>
   );
@@ -71,15 +72,21 @@ export function AssessmentEvolutionCard({
   onViewHistory: () => void;
 }) {
   const { t } = useTranslation('assessment');
+  const { resolvedUnits } = useUnits();
+  const massUnit = weightUnit(resolvedUnits);
+  const displayedWeightPoints = weightPoints.map((point) => ({
+    ...point,
+    value: weightFromKg(point.value, resolvedUnits),
+  }));
   return (
     <Card style={{ padding: 16 }}>
       <View accessible accessibilityLabel={t('accessibility.evolutionCard')}>
       <View style={{ flexDirection: 'row', gap: 18, marginBottom: 16 }}>
         <EvolutionLineChart
           label={t('metrics.weight').toUpperCase()}
-          unit={t('units.kg')}
+          unit={massUnit}
           color={WEIGHT_COLOR}
-          points={weightPoints}
+          points={displayedWeightPoints}
           emptyHint={t('charts.weightEmpty')}
         />
         <EvolutionLineChart
@@ -95,8 +102,8 @@ export function AssessmentEvolutionCard({
         <View style={{ flexDirection: 'row' }}>
           <DeltaChip
             label={t('metrics.weight').toUpperCase()}
-            value={weightDelta}
-            unit={t('units.kg')}
+            value={weightFromKg(weightDelta, resolvedUnits)}
+            unit={massUnit}
             goodWhenNegative
           />
           <DeltaChip
@@ -107,8 +114,12 @@ export function AssessmentEvolutionCard({
           />
           <DeltaChip
             label={t('metrics.leanMass').toUpperCase()}
-            value={leanMassDelta}
-            unit={t('units.kg')}
+            value={
+              leanMassDelta != null
+                ? weightFromKg(leanMassDelta, resolvedUnits)
+                : null
+            }
+            unit={massUnit}
           />
         </View>
       ) : (

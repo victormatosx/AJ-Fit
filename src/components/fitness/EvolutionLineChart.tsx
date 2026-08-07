@@ -13,7 +13,7 @@ const V_PADDING = 10;
 
 /**
  * Small single-series line chart (one metric over time). Two of these are
- * used side by side instead of one dual-axis chart — weight (kg) and body
+ * used side by side instead of one dual-axis chart — body mass and body
  * fat (%) live on incomparable scales, and a shared axis would misrepresent
  * one of them (dataviz skill: "never a dual-axis chart").
  *
@@ -51,8 +51,7 @@ export function EvolutionLineChart({
         <MonoLabel>{label}</MonoLabel>
         {last && (
           <Text style={{ fontFamily: fonts.uiBold, fontSize: 13, color: '#fff' }}>
-            {last.value.toFixed(1)}
-            <Text style={{ fontFamily: fonts.mono, fontSize: 10, color: colors.faint }}>{unit}</Text>
+            {t('result', { value: last.value.toFixed(1), unit })}
           </Text>
         )}
       </View>

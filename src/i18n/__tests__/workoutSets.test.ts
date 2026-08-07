@@ -85,7 +85,7 @@ describe('workout — summary (weighted vs bodyweight) with reps plural', () => 
     async (lang, reps, weight, expected) => {
       const i18n = await freshI18nAt(lang);
       const t = i18n.getFixedT(lang, 'workout' as 'workout') as unknown as LooseT;
-      expect(t('sets.summaryWeighted', { count: reps, weight })).toBe(expected);
+      expect(t('sets.summaryWeighted', { count: reps, weight, unit: 'kg' })).toBe(expected);
     },
   );
 
@@ -183,6 +183,7 @@ describe('workout — PR overlay: previous context + gain per locale', () => {
       const out = t('record.previousContext', {
         exName: 'Supino Reto',
         previous,
+        unit: 'kg',
       });
       expect(out).toContain('Supino Reto');
       expect(out).toMatch(re);
@@ -198,7 +199,7 @@ describe('workout — PR overlay: previous context + gain per locale', () => {
     async (lang, delta, expected) => {
       const i18n = await freshI18nAt(lang);
       const t = i18n.getFixedT(lang, 'workout' as 'workout') as unknown as LooseT;
-      expect(t('record.gain', { delta })).toBe(expected);
+      expect(t('record.gain', { delta, unit: 'kg' })).toBe(expected);
     },
   );
 });

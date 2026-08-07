@@ -8,36 +8,65 @@ import { Display, Slash, MonoLabel } from '../components/ui/Display';
 import { Card, HudCorners } from '../components/ui/Card';
 import { Icon } from '../components/ui/Icon';
 import { colors, fonts } from '../theme/tokens';
+import { useUnits } from '../state/UnitsContext';
+import {
+  formatWeightFromKg,
+  weightFromKg,
+  weightUnit,
+} from '../units/weightConversions';
+import {
+  formatWorkoutLoadFromKg,
+  workoutLoadUnit,
+} from '../units/workoutLoadConversions';
 
 type ProgressView = 'chart' | 'weight' | 'photos';
 
 export function ProgressScreen() {
   const { t } = useTranslation('home');
+  const { resolvedUnits } = useUnits();
   const [view, setView] = useState<ProgressView>('chart');
   const tabs: Array<[ProgressView, string]> = [
     ['chart', t('progress.tabs.loads')],
     ['weight', t('progress.tabs.weight')],
     ['photos', t('progress.tabs.photos')],
   ];
-  const unitKg = t('progress.units.kg');
+  const loadUnit = workoutLoadUnit(resolvedUnits);
   const records = [
     {
       exercise: t('progress.records.benchPress'),
-      value: t('progress.records.value', { value: '82.5', unit: unitKg }),
+      value: t('progress.records.value', {
+        value: formatWorkoutLoadFromKg(82.5, resolvedUnits),
+        unit: loadUnit,
+      }),
       date: t('progress.records.daysAgo', { count: 3 }),
-      gain: t('progress.records.gain', { value: '5', unit: unitKg }),
+      gain: t('progress.records.gain', {
+        value: formatWorkoutLoadFromKg(5, resolvedUnits),
+        unit: loadUnit,
+      }),
     },
     {
       exercise: t('progress.records.squat'),
-      value: t('progress.records.value', { value: '110', unit: unitKg }),
+      value: t('progress.records.value', {
+        value: formatWorkoutLoadFromKg(110, resolvedUnits),
+        unit: loadUnit,
+      }),
       date: t('progress.records.weekAgo', { count: 1 }),
-      gain: t('progress.records.gain', { value: '7.5', unit: unitKg }),
+      gain: t('progress.records.gain', {
+        value: formatWorkoutLoadFromKg(7.5, resolvedUnits),
+        unit: loadUnit,
+      }),
     },
     {
       exercise: t('progress.records.deadlift'),
-      value: t('progress.records.value', { value: '140', unit: unitKg }),
+      value: t('progress.records.value', {
+        value: formatWorkoutLoadFromKg(140, resolvedUnits),
+        unit: loadUnit,
+      }),
       date: t('progress.records.weekAgo', { count: 2 }),
-      gain: t('progress.records.gain', { value: '10', unit: unitKg }),
+      gain: t('progress.records.gain', {
+        value: formatWorkoutLoadFromKg(10, resolvedUnits),
+        unit: loadUnit,
+      }),
     },
   ];
 
@@ -270,20 +299,25 @@ function ChartFrame({
 
 function LoadChart() {
   const { t } = useTranslation('home');
-  const pts = [40, 45, 42, 50, 55, 53, 60, 65, 63, 70, 75, 82];
+  const { resolvedUnits } = useUnits();
+  const pointsKg = [40, 45, 42, 50, 55, 53, 60, 65, 63, 70, 75, 82];
+  const pts = pointsKg.map((value) => weightFromKg(value, resolvedUnits));
+  const min = weightFromKg(30, resolvedUnits);
+  const max = weightFromKg(90, resolvedUnits);
+  const unit = workoutLoadUnit(resolvedUnits);
   const w = 320,
     h = 160,
     pad = 18;
-  const path = chartPath(pts, 30, 90, w, h, pad);
+  const path = chartPath(pts, min, max, w, h, pad);
   return (
     <ChartFrame
       label={t('progress.charts.loadTitle').toUpperCase()}
-      big="82.5"
-      unit={t('progress.units.kg').toUpperCase()}
+      big={formatWorkoutLoadFromKg(82.5, resolvedUnits)}
+      unit={unit.toUpperCase()}
       delta={t('progress.charts.delta', {
         direction: '↑',
-        value: '+25',
-        unit: t('progress.units.kg'),
+        value: `+${formatWorkoutLoadFromKg(25, resolvedUnits)}`,
+        unit,
       })}
     >
       <Svg width="100%" height={160} viewBox={`0 0 ${w} ${h}`}>
@@ -307,7 +341,7 @@ function LoadChart() {
         <Path d={path} stroke={colors.accentHi} strokeWidth={2.5} fill="none" strokeLinecap="round" />
         <Circle
           cx={w - pad}
-          cy={pad + (1 - (82 - 30) / 60) * (h - 2 * pad)}
+          cy={pad + (1 - (pts[pts.length - 1] - min) / (max - min)) * (h - 2 * pad)}
           r="5"
           fill="#fff"
           stroke={colors.accent}
@@ -320,27 +354,33 @@ function LoadChart() {
 
 function WeightChart() {
   const { t } = useTranslation('home');
-  const pts = [82, 81.6, 81.2, 80.8, 80.3, 79.9, 79.5, 79.0, 78.6, 78.2, 78.0, 77.6];
+  const { resolvedUnits } = useUnits();
+  const pointsKg = [82, 81.6, 81.2, 80.8, 80.3, 79.9, 79.5, 79.0, 78.6, 78.2, 78.0, 77.6];
+  const pts = pointsKg.map((value) => weightFromKg(value, resolvedUnits));
   const w = 320,
     h = 160,
     pad = 18;
-  const path = chartPath(pts, 77, 83, w, h, pad);
+  const min = weightFromKg(77, resolvedUnits);
+  const max = weightFromKg(83, resolvedUnits);
+  const latest = pts[pts.length - 1];
+  const unit = weightUnit(resolvedUnits);
+  const path = chartPath(pts, min, max, w, h, pad);
   return (
     <ChartFrame
       label={t('progress.charts.weightTitle').toUpperCase()}
-      big="77.6"
-      unit={t('progress.units.kg').toUpperCase()}
+      big={formatWeightFromKg(77.6, resolvedUnits)}
+      unit={unit.toUpperCase()}
       delta={t('progress.charts.delta', {
         direction: '↓',
-        value: '-4.4',
-        unit: t('progress.units.kg'),
+        value: formatWeightFromKg(-4.4, resolvedUnits),
+        unit,
       })}
     >
       <Svg width="100%" height={160} viewBox={`0 0 ${w} ${h}`}>
         <Path d={path} stroke={colors.accentHi} strokeWidth={2.5} fill="none" strokeLinecap="round" />
         <Circle
           cx={w - pad}
-          cy={pad + (1 - (77.6 - 77) / 6) * (h - 2 * pad)}
+          cy={pad + (1 - (latest - min) / (max - min)) * (h - 2 * pad)}
           r="5"
           fill="#fff"
           stroke={colors.accent}

@@ -47,8 +47,8 @@
     "current": "Agora",
     "registered": "Registrado",
     "lastTime": "Última vez",
-    "summaryWeighted_one": "{{count}} rep × {{weight}} kg",
-    "summaryWeighted_other": "{{count}} reps × {{weight}} kg",
+    "summaryWeighted_one": "{{count}} rep × {{weight}} {{unit}}",
+    "summaryWeighted_other": "{{count}} reps × {{weight}} {{unit}}",
     "summaryBodyweight_one": "{{count}} rep × peso corporal",
     "summaryBodyweight_other": "{{count}} reps × peso corporal"
   },
@@ -56,7 +56,6 @@
     "label": "Reps"
   },
   "load": {
-    "unitKg": "kg",
     "bodyweight": "Peso corporal"
   },
   "rest": {
@@ -71,8 +70,8 @@
   },
   "record": {
     "new": "Novo recorde",
-    "previousContext": "{{exName}} · anterior {{previous}} kg",
-    "gain": "+{{delta}} kg"
+    "previousContext": "{{exName}} · anterior {{previous}} {{unit}}",
+    "gain": "+{{delta}} {{unit}}"
   },
   "done": {
     "kicker": "Treino concluído",

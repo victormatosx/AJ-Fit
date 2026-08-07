@@ -73,6 +73,8 @@
     "notes": { "label": "Observações (opcional)", "placeholder": "Ex.: bioimpedância na Clínica X" }
   },
   "form": { "numericPlaceholder": "0" },
+  "result": "{{value}} {{unit}}",
+  "heightParts": { "feet": "Pés", "inches": "Polegadas" },
   "units": { "kg": "kg", "cm": "cm", "mm": "mm", "percent": "%", "years": "anos", "kcal": "kcal" },
   "validation": {
     "guidedRequired": "Preencha data, peso, altura, sexo, idade e todas as dobras para salvar",
@@ -143,10 +145,10 @@
       "viewDetails": "Ver detalhes"
     },
     "details": {
-      "available": "Massa magra estimada {{lean}} kg · massa gorda {{fat}} kg.",
-      "availableProtocol": "Massa magra estimada {{lean}} kg · massa gorda {{fat}} kg · protocolo {{protocol}}.",
-      "availableImported": "Massa magra estimada {{lean}} kg · massa gorda {{fat}} kg · registrado a partir de avaliação profissional.",
-      "availableProtocolImported": "Massa magra estimada {{lean}} kg · massa gorda {{fat}} kg · protocolo {{protocol}} · registrado a partir de avaliação profissional.",
+      "available": "Massa magra estimada {{lean}} · massa gorda {{fat}}.",
+      "availableProtocol": "Massa magra estimada {{lean}} · massa gorda {{fat}} · protocolo {{protocol}}.",
+      "availableImported": "Massa magra estimada {{lean}} · massa gorda {{fat}} · registrado a partir de avaliação profissional.",
+      "availableProtocolImported": "Massa magra estimada {{lean}} · massa gorda {{fat}} · protocolo {{protocol}} · registrado a partir de avaliação profissional.",
       "unavailable": "Massa magra e massa gorda indisponíveis — esta avaliação não possui percentual de gordura.",
       "unavailableProtocol": "Massa magra e massa gorda indisponíveis — esta avaliação não possui percentual de gordura · protocolo {{protocol}}.",
       "unavailableImported": "Massa magra e massa gorda indisponíveis — esta avaliação não possui percentual de gordura · registrado a partir de avaliação profissional.",

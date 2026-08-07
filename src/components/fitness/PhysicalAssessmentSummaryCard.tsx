@@ -5,6 +5,11 @@ import { useTranslation } from 'react-i18next';
 import { Icon } from '../ui/Icon';
 import { MonoLabel } from '../ui/Display';
 import { colors, fonts } from '../../theme/tokens';
+import { useUnits } from '../../state/UnitsContext';
+import {
+  formatWeightFromKg,
+  weightUnit,
+} from '../../units/weightConversions';
 
 function Metric({ label, value, unit }: { label: string; value: string; unit: string }) {
   return (
@@ -41,6 +46,8 @@ export function PhysicalAssessmentSummaryCard({
   lastDateLabel: string;
 }) {
   const { t } = useTranslation('assessment');
+  const { resolvedUnits } = useUnits();
+  const massUnit = weightUnit(resolvedUnits);
   return (
     <LinearGradient
       colors={['rgba(11,112,249,0.24)', 'rgba(11,112,249,0.04)']}
@@ -57,8 +64,8 @@ export function PhysicalAssessmentSummaryCard({
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
         <Metric
           label={t('metrics.weight').toUpperCase()}
-          value={weight != null ? weight.toFixed(1) : '—'}
-          unit={t('units.kg')}
+          value={weight != null ? formatWeightFromKg(weight, resolvedUnits) : '—'}
+          unit={massUnit}
         />
         <Metric
           label={t('metrics.bodyFat').toUpperCase()}
@@ -67,8 +74,8 @@ export function PhysicalAssessmentSummaryCard({
         />
         <Metric
           label={t('metrics.leanMass').toUpperCase()}
-          value={leanMass != null ? leanMass.toFixed(1) : '—'}
-          unit={t('units.kg')}
+          value={leanMass != null ? formatWeightFromKg(leanMass, resolvedUnits) : '—'}
+          unit={massUnit}
         />
         <Metric
           label={t('metrics.bmi').toUpperCase()}

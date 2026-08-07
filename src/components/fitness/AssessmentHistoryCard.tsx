@@ -5,6 +5,11 @@ import { Card } from '../ui/Card';
 import { Icon } from '../ui/Icon';
 import { MonoLabel } from '../ui/Display';
 import { colors, fonts } from '../../theme/tokens';
+import { useUnits } from '../../state/UnitsContext';
+import {
+  formatWeightFromKg,
+  weightUnit,
+} from '../../units/weightConversions';
 
 export type AssessmentHistoryRow = {
   id: string;
@@ -74,6 +79,8 @@ function HistoryRow({
   onToggle: () => void;
 }) {
   const { t } = useTranslation('assessment');
+  const { resolvedUnits } = useUnits();
+  const massUnit = weightUnit(resolvedUnits);
   const chevronRot = useRef(new Animated.Value(expanded ? 1 : 0)).current;
   useEffect(() => {
     Animated.timing(chevronRot, {
@@ -178,8 +185,8 @@ function HistoryRow({
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
           <MiniStat
             l={t('metrics.weight').toUpperCase()}
-            v={entry.weight.toFixed(1)}
-            u={t('units.kg')}
+            v={formatWeightFromKg(entry.weight, resolvedUnits)}
+            u={massUnit}
           />
           <MiniStat
             l={t('metrics.bmi').toUpperCase()}
@@ -203,8 +210,20 @@ function HistoryRow({
           >
             <Text style={{ fontFamily: fonts.ui, fontSize: 12.5, color: colors.mute, lineHeight: 20 }}>
               {t(detailKey, {
-                lean: entry.leanMass?.toFixed(1),
-                fat: entry.fatMass?.toFixed(1),
+                lean:
+                  entry.leanMass != null
+                    ? t('result', {
+                        value: formatWeightFromKg(entry.leanMass, resolvedUnits),
+                        unit: massUnit,
+                      })
+                    : undefined,
+                fat:
+                  entry.fatMass != null
+                    ? t('result', {
+                        value: formatWeightFromKg(entry.fatMass, resolvedUnits),
+                        unit: massUnit,
+                      })
+                    : undefined,
                 protocol: entry.protocolLabel,
               })}
             </Text>

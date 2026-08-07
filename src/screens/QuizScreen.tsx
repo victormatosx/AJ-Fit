@@ -16,11 +16,14 @@ import { CtaButton } from '../components/ui/CtaButton';
 import { Icon, IconName } from '../components/ui/Icon';
 import { HudCorners } from '../components/ui/Card';
 import { DateWheelPicker } from '../components/ui/DateWheelPicker';
+import { ImperialHeightInput } from '../components/ui/ImperialHeightInput';
 import { EquipmentPicker } from '../components/fitness/EquipmentPicker';
 import { colors, fonts } from '../theme/tokens';
 import { useAppState, Quiz } from '../state/AppState';
 import { computeAge } from '../lib/ageCalculator';
 import { isFutureDate } from '../lib/dateUtils';
+import { useUnits } from '../state/UnitsContext';
+import { kgToLb, lbToKg, weightUnit } from '../units/weightConversions';
 
 /**
  * QUESTIONS holds ONLY structure and stable IDs — every user-visible string
@@ -123,6 +126,7 @@ export function QuizScreen({ onDone }: { onDone: () => void }) {
   const { t, i18n } = useTranslation(['quiz', 'common']);
   const tLoose = t as unknown as LooseT;
   const { quiz, setQuiz } = useAppState();
+  const { resolvedUnits } = useUnits();
   const [idx, setIdx] = useState(0);
   const q = QUESTIONS[idx];
   const total = QUESTIONS.length;
@@ -287,7 +291,17 @@ export function QuizScreen({ onDone }: { onDone: () => void }) {
                   onChange={setVal}
                 />
               )}
-              {q.kind === 'wheel' && (
+              {q.kind === 'wheel' && q.id === 'height' && resolvedUnits === 'imperial' && (
+                <ImperialHeightInput
+                  valueCm={(value as number) ?? q.default}
+                  minCm={q.min}
+                  maxCm={q.max}
+                  onChangeCm={setVal}
+                  feetLabel={t('quiz:height.feet')}
+                  inchesLabel={t('quiz:height.inches')}
+                />
+              )}
+              {q.kind === 'wheel' && !(q.id === 'height' && resolvedUnits === 'imperial') && (
                 <NumberWheel q={q} value={(value as number) ?? q.default} onChange={setVal} />
               )}
               {q.kind === 'multi' && (
@@ -709,9 +723,22 @@ function NumberWheel({
   onChange: (v: number) => void;
 }) {
   const { t } = useTranslation('quiz');
+  const { resolvedUnits } = useUnits();
   const tLoose = t as unknown as LooseT;
-  const unit = tLoose(`${String(q.id)}.unit`);
-  const range = q.max - q.min;
+  const isBodyWeight = q.id === 'weight';
+  const unit = isBodyWeight
+    ? weightUnit(resolvedUnits)
+    : tLoose(`${String(q.id)}.unit`);
+  const displayMin = isBodyWeight && resolvedUnits === 'imperial'
+    ? Math.round(kgToLb(q.min))
+    : q.min;
+  const displayMax = isBodyWeight && resolvedUnits === 'imperial'
+    ? Math.round(kgToLb(q.max))
+    : q.max;
+  const displayValue = isBodyWeight && resolvedUnits === 'imperial'
+    ? Math.round(kgToLb(value))
+    : Math.round(value);
+  const range = displayMax - displayMin;
   // Width of the editable number box. Seeded from a digit-count estimate,
   // then replaced with the exact pixel width measured off the static
   // <Text> (which sizes to its content) so the digits land in the same
@@ -720,7 +747,7 @@ function NumberWheel({
   const trackWidth = useRef(0);
   const trackPageX = useRef(0);
   const trackRef = useRef<View>(null);
-  const pct = ((value - q.min) / range) * 100;
+  const pct = ((displayValue - displayMin) / range) * 100;
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(String(value));
   const inputRef = useRef<TextInput>(null);
@@ -731,16 +758,22 @@ function NumberWheel({
   // directly in its captured callbacks would freeze them to whichever
   // question first created the responder. Routing through refs keeps the
   // callbacks reading the current question/value on every touch event.
-  const qRef = useRef(q);
-  qRef.current = q;
-  const onChangeRef = useRef(onChange);
-  onChangeRef.current = onChange;
+  const displayRangeRef = useRef({ min: displayMin, max: displayMax });
+  displayRangeRef.current = { min: displayMin, max: displayMax };
+  const onDisplayChangeRef = useRef<(next: number) => void>(() => {});
+  onDisplayChangeRef.current = (next) => {
+    onChange(
+      isBodyWeight && resolvedUnits === 'imperial' ? lbToKg(next) : next,
+    );
+  };
 
   const updateFromPageX = (pageX: number) => {
     if (!trackWidth.current) return;
-    const cq = qRef.current;
+    const currentRange = displayRangeRef.current;
     const p = Math.max(0, Math.min(1, (pageX - trackPageX.current) / trackWidth.current));
-    onChangeRef.current(Math.round(cq.min + p * (cq.max - cq.min)));
+    onDisplayChangeRef.current(
+      Math.round(currentRange.min + p * (currentRange.max - currentRange.min)),
+    );
   };
 
   const measureTrack = () => {
@@ -763,7 +796,7 @@ function NumberWheel({
   ).current;
 
   const openEditor = () => {
-    setDraft(String(value));
+    setDraft(String(displayValue));
     setEditing(true);
     requestAnimationFrame(() => inputRef.current?.focus());
   };
@@ -771,7 +804,9 @@ function NumberWheel({
   const commitEditor = () => {
     const n = parseInt(draft, 10);
     if (!Number.isNaN(n) && draft.length >= q.digits.min) {
-      onChange(Math.max(q.min, Math.min(q.max, n)));
+      onDisplayChangeRef.current(
+        Math.max(displayMin, Math.min(displayMax, n)),
+      );
     }
     // Invalid or short input (e.g. height requires exactly 3 digits) is
     // discarded — the previous value is kept instead of half-typed input.
@@ -819,7 +854,7 @@ function NumberWheel({
               textShadowOffset: { width: 0, height: 0 },
             }}
           >
-            {value}
+            {displayValue}
           </Text>
         )}
         <Text style={{ fontFamily: fonts.mono, fontSize: 13, letterSpacing: 2, color: colors.faint }}>
@@ -869,13 +904,13 @@ function NumberWheel({
 
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%' }}>
         <Text style={{ fontFamily: fonts.mono, fontSize: 10, letterSpacing: 2, color: colors.faint }}>
-          {q.min}
+          {displayMin}
         </Text>
         <Text style={{ fontFamily: fonts.mono, fontSize: 10, letterSpacing: 2, color: colors.faint }}>
           {t('progress.wheelHint').toUpperCase()}
         </Text>
         <Text style={{ fontFamily: fonts.mono, fontSize: 10, letterSpacing: 2, color: colors.faint }}>
-          {q.max}
+          {displayMax}
         </Text>
       </View>
     </View>

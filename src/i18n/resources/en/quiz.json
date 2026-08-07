@@ -21,7 +21,9 @@
   },
   "height": {
     "title": "Your height?",
-    "unit": "cm"
+    "unit": "cm",
+    "feet": "Feet",
+    "inches": "Inches"
   },
   "weight": {
     "title": "Your current weight?",
