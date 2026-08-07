@@ -1196,3 +1196,30 @@ estrutura já suporta histórico de mensagens e evolução por backend.
 Próxima ação:
 Publicar `firestore.rules` e `storage.rules` no ambiente alvo; em fase futura,
 implementar painel administrativo, respostas, push e limpeza de anexos órfãos.
+
+---
+
+Data: 2026-08-07
+Responsável: Agente Frontend + Agente QA
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Reorganizadas exclusivamente as telas de Perfil e Configurações. Perfil
+passou a concentrar evolução, plano, conta, métodos de login e sessão; a área
+de Avisos Inteligentes foi preparada como componente apresentacional que não
+renderiza quando vazia. Configurações passou a concentrar somente preferências
+do aplicativo, notificações, privacidade e dados, suporte e informações sobre
+o app. Os fluxos existentes de Avaliação Física, Editar Perfil, idioma,
+unidades e Suporte foram preservados. Itens sem tela permanecem placeholders
+visuais, sem novas rotas ou lógica.
+
+Impacto:
+Nenhuma alteração em serviços, providers, hooks, contexts, Firebase,
+RevenueCat, modelos ou regras de negócio. A estrutura neutra de listas foi
+unificada em `SettingsSection`; adicionada cobertura estrutural contra itens
+duplicados ou removidos acidentalmente.
+
+Próxima ação:
+Validar comparação visual em iOS e Android antes do merge.
+
+---

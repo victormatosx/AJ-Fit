@@ -214,23 +214,16 @@ export function SettingsScreen({
             title={t('settings:sections.account').toUpperCase()}
             items={[
               { icon: 'user', label: t('settings:items.editProfile'), onPress: onOpenEditProfile },
-              { icon: 'crown', label: t('settings:items.subscription'), onPress: () => {} },
-              { icon: 'key', label: t('settings:items.loginMethods'), onPress: () => {} },
               { icon: 'shield', label: t('settings:items.security'), onPress: () => {} },
             ]}
           />
 
           <SettingsSection
-            title={t('settings:sections.workout').toUpperCase()}
+            title={t('settings:sections.notifications').toUpperCase()}
             items={[
-              { icon: 'dumbbell', label: t('settings:items.workoutPreferences'), onPress: () => {} },
+              { icon: 'bell', label: t('settings:items.notifications'), onPress: () => {} },
               { icon: 'timer', label: t('settings:items.timersAndSounds'), onPress: () => {} },
             ]}
-          />
-
-          <SettingsSection
-            title={t('settings:sections.notifications').toUpperCase()}
-            items={[{ icon: 'bell', label: t('settings:items.notifications'), onPress: () => {} }]}
           />
 
           <SettingsSection
@@ -259,9 +252,11 @@ export function SettingsScreen({
           />
 
           <SettingsSection
-            title={t('settings:sections.privacy').toUpperCase()}
+            title={t('settings:sections.privacyAndData').toUpperCase()}
             items={[
-              { icon: 'shield', label: t('settings:items.privacy'), onPress: () => {} },
+              { icon: 'shield', label: t('settings:items.privacyPolicy'), onPress: () => {} },
+              { icon: 'file-text', label: t('settings:items.termsOfUse'), onPress: () => {} },
+              { icon: 'check', label: t('settings:items.acceptedConsents'), onPress: () => {} },
               { icon: 'download', label: t('settings:items.exportData'), onPress: () => {} },
               { icon: 'trash', label: t('settings:items.deleteAccount'), danger: true, onPress: () => {} },
             ]}

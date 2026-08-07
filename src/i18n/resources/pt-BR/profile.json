@@ -31,13 +31,17 @@
     "title": "Avaliação física",
     "subtitle": "Medidas, dobras cutâneas e evolução"
   },
+  "smartAlerts": {
+    "title": "Avisos inteligentes"
+  },
   "groups": {
+    "evolution": {
+      "title": "Evolução"
+    },
     "goalsPlan": {
       "title": "Objetivos & plano",
       "items": {
-        "goal": { "label": "Meu objetivo", "value": "Hipertrofia" },
-        "plan": { "label": "Plano atual", "value": "AJ Apex · 12 sem" },
-        "frequency": { "label": "Frequência", "value": "4 dias/sem" }
+        "viewPlan": "Ver meu plano"
       }
     },
     "account": {
@@ -45,14 +49,7 @@
       "items": {
         "editProfile": "Editar perfil",
         "subscription": "Assinatura",
-        "privacy": "Privacidade"
-      }
-    },
-    "preferences": {
-      "title": "Preferências",
-      "items": {
-        "settings": "Configurações",
-        "timers": "Timers e sons"
+        "settings": "Configurações"
       }
     },
     "session": {

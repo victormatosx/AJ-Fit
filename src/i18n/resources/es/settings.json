@@ -5,7 +5,7 @@
     "workout": "Entrenamiento",
     "notifications": "Notificaciones",
     "preferences": "Preferencias",
-    "privacy": "Privacidad",
+    "privacyAndData": "Privacidad y datos",
     "support": "Soporte",
     "about": "Acerca de"
   },
@@ -19,7 +19,9 @@
     "notifications": "Notificaciones",
     "theme": "Tema",
     "units": "Unidades",
-    "privacy": "Privacidad",
+    "privacyPolicy": "Política de Privacidad",
+    "termsOfUse": "Términos de Uso",
+    "acceptedConsents": "Consentimientos Aceptados",
     "exportData": "Exportar datos",
     "deleteAccount": "Eliminar cuenta",
     "helpCenter": "Centro de ayuda",
@@ -27,7 +29,7 @@
     "sendSuggestion": "Enviar sugerencia",
     "reportProblem": "Informar de un problema",
     "version": "Versión",
-    "licenses": "Licencias"
+    "licenses": "Licencias Open Source"
   },
   "values": {
     "darkTheme": "Oscuro"

@@ -40,18 +40,18 @@ válida quando disponível. A implementação e seus testes ficam em
 | Namespace | Chaves | Responsabilidade | Consumidores principais | Avaliação |
 |---|---:|---|---|---|
 | `common` | 21 | ações, estados, navegação e acessibilidade compartilhados | AppShell, formulários e componentes de data | tamanho adequado |
-| `settings` | 34 | tela e seletor de idioma | SettingsScreen | coeso |
+| `settings` | 50 | configurações do aplicativo e seletores de idioma/unidades | SettingsScreen | coeso |
 | `errors` | 6 | erros genéricos controlados | sem consumidor de produção no baseline | pequeno; manter até decisão editorial |
 | `onboarding` | 28 | apresentação inicial e montagem visual do plano | OnboardingScreen, AnalyzingScreen | coeso |
-| `quiz` | 138 | questionário e catálogo visual de equipamentos | QuizScreen, EquipmentPicker | grande por catálogo, mas ainda coeso |
+| `quiz` | 140 | questionário e catálogo visual de equipamentos | QuizScreen, EquipmentPicker | grande por catálogo, mas ainda coeso |
 | `home` | 86 | dashboard, progresso e consistência mensal | HomeScreen, ProgressScreen, ConsistencyScreen, AppShell | contém seis números de mock allowlisted |
-| `profile` | 96 | perfil, edição, foto e sessão | ProfileScreen, EditProfileScreen, ProfileAvatar | amplo, porém dentro do domínio |
-| `workout` | 105 | execução, séries, substituições e catálogo de exercícios | WorkoutScreen | grande por catálogo, sem ganho claro em dividir agora |
-| `assessment` | 118 | estrutura, formulários, resultados e histórico | AssessmentScreen e cards | grande, mas a divisão aumentaria risco sem reduzir acoplamento atual |
+| `profile` | 90 | perfil, edição, foto e sessão | ProfileScreen, EditProfileScreen, ProfileAvatar | amplo, porém dentro do domínio |
+| `workout` | 104 | execução, séries, substituições e catálogo de exercícios | WorkoutScreen | grande por catálogo, sem ganho claro em dividir agora |
+| `assessment` | 121 | estrutura, formulários, resultados e histórico | AssessmentScreen e cards | grande, mas a divisão aumentaria risco sem reduzir acoplamento atual |
 | `auth` | 67 | cadastro, login, recuperação, erros visuais e vinculação | AuthScreen | coeso; não contém lógica dos providers |
 | `support` | 63 | central de ajuda, tickets, sugestões e sucesso | telas e componentes de Support | coeso |
 
-Total: 11 namespaces, 763 folhas por idioma e 2.289 traduções carregadas. Não há
+Total: 11 namespaces, 776 folhas por idioma e 2.328 traduções carregadas. Não há
 namespace `paywall` ou `navigation` separado; navegação compartilhada
 está em `common`.
 

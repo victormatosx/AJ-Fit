@@ -31,13 +31,17 @@
     "title": "Physical assessment",
     "subtitle": "Measurements, skinfolds and progress"
   },
+  "smartAlerts": {
+    "title": "Smart alerts"
+  },
   "groups": {
+    "evolution": {
+      "title": "Progress"
+    },
     "goalsPlan": {
       "title": "Goals & plan",
       "items": {
-        "goal": { "label": "My goal", "value": "Hypertrophy" },
-        "plan": { "label": "Current plan", "value": "AJ Apex · 12 wk" },
-        "frequency": { "label": "Frequency", "value": "4 days/wk" }
+        "viewPlan": "View my plan"
       }
     },
     "account": {
@@ -45,14 +49,7 @@
       "items": {
         "editProfile": "Edit profile",
         "subscription": "Subscription",
-        "privacy": "Privacy"
-      }
-    },
-    "preferences": {
-      "title": "Preferences",
-      "items": {
-        "settings": "Settings",
-        "timers": "Timers and sounds"
+        "settings": "Settings"
       }
     },
     "session": {

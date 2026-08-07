@@ -31,13 +31,17 @@
     "title": "Evaluación física",
     "subtitle": "Medidas, pliegues cutáneos y evolución"
   },
+  "smartAlerts": {
+    "title": "Avisos inteligentes"
+  },
   "groups": {
+    "evolution": {
+      "title": "Evolución"
+    },
     "goalsPlan": {
       "title": "Objetivos y plan",
       "items": {
-        "goal": { "label": "Mi objetivo", "value": "Hipertrofia" },
-        "plan": { "label": "Plan actual", "value": "AJ Apex · 12 sem" },
-        "frequency": { "label": "Frecuencia", "value": "4 días/sem" }
+        "viewPlan": "Ver mi plan"
       }
     },
     "account": {
@@ -45,14 +49,7 @@
       "items": {
         "editProfile": "Editar perfil",
         "subscription": "Suscripción",
-        "privacy": "Privacidad"
-      }
-    },
-    "preferences": {
-      "title": "Preferencias",
-      "items": {
-        "settings": "Ajustes",
-        "timers": "Temporizadores y sonidos"
+        "settings": "Configuración"
       }
     },
     "session": {
