@@ -67,6 +67,13 @@ describe('Profile and Settings organization', () => {
     expect(settingsSource).toContain('changeUnitsForUser({ uid: user.uid, next })');
   });
 
+  it('reads the displayed app version from the Expo app config', () => {
+    expect(settingsSource).toContain("import Constants from 'expo-constants'");
+    expect(settingsSource).toContain('const appVersion = Constants.expoConfig?.version;');
+    expect(settingsSource).toContain('value: appVersionLabel');
+    expect(settingsSource).not.toContain("value: 'v1.0.0'");
+  });
+
   it('exposes the complete Privacy and Data structure and preserves Support', () => {
     for (const key of [
       'privacyPolicy',

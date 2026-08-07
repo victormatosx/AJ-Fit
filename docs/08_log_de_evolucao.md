@@ -1217,9 +1217,60 @@ Impacto:
 Nenhuma alteração em serviços, providers, hooks, contexts, Firebase,
 RevenueCat, modelos ou regras de negócio. A estrutura neutra de listas foi
 unificada em `SettingsSection`; adicionada cobertura estrutural contra itens
-duplicados ou removidos acidentalmente.
+duplicados ou removidos acidentalmente. A entrada Versão passou a ler
+`expo.version` do `app.json` por `Constants.expoConfig`, sem valor fixo na tela.
 
 Próxima ação:
 Validar comparação visual em iOS e Android antes do merge.
+
+---
+
+Data: 2026-08-07
+Responsável: Agente Frontend + Agente QA
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Implementado exclusivamente o front-end da tela Segurança, acessível por
+Configurações. A tela possui as seções Segurança da conta, Sessões,
+Atividade e Zona de segurança, com textos estáticos e itens visuais sem ação.
+O componente compartilhado `SettingsSection` passou a aceitar descrição de
+item, descrição de seção e estado desabilitado.
+
+Impacto:
+Adicionado somente um overlay de navegação local entre Configurações e
+Segurança. Nenhuma autenticação, biometria, validação, persistência,
+integração, serviço, provider, hook ou regra de negócio foi implementada.
+
+Próxima ação:
+Validar a composição visual em iOS e Android antes do merge. As futuras ações
+de segurança dependem de requisitos e contratos próprios antes da implementação.
+
+---
+
+Data: 2026-08-07
+Responsável: Agente Segurança + Agente Frontend + Agente QA
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Implementado o fluxo de alteração de senha para contas que possuem o provider
+Firebase `password`. A tela solicita senha atual, nova senha e confirmação; o
+hook aplica as validações locais e o serviço executa obrigatoriamente
+`reauthenticateWithCredential` antes de `updatePassword`. O item fica oculto
+para contas exclusivamente Google/Apple e há proteções adicionais na
+navegação, na tela, no hook e no serviço. Estados de carregamento, sucesso e
+erros controlados foram traduzidos em pt-BR, inglês e espanhol.
+
+Impacto:
+Somente a ação Alterar senha passou a ter lógica. Biometria, verificação em
+duas etapas, sessões, histórico e exclusão de conta permanecem estritamente
+visuais. Nenhuma senha é persistida ou enviada a serviços próprios; as
+credenciais são usadas apenas pela API oficial do Firebase Auth durante a
+reautenticação. Adicionados testes de validação, mapeamento de erro, elegibilidade
+por provider, ordem das chamadas e interrupção do fluxo em falhas.
+
+Próxima ação:
+Validar o fluxo com uma conta de teste e-mail/senha em dev build. O repositório
+não possui emulador de Firebase Auth configurado, portanto a suíte automatizada
+cobre o contrato com mocks, não uma autenticação real.
 
 ---

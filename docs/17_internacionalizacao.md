@@ -40,7 +40,7 @@ válida quando disponível. A implementação e seus testes ficam em
 | Namespace | Chaves | Responsabilidade | Consumidores principais | Avaliação |
 |---|---:|---|---|---|
 | `common` | 21 | ações, estados, navegação e acessibilidade compartilhados | AppShell, formulários e componentes de data | tamanho adequado |
-| `settings` | 50 | configurações do aplicativo e seletores de idioma/unidades | SettingsScreen | coeso |
+| `settings` | 91 | configurações do aplicativo, segurança, alteração de senha e seletores de idioma/unidades | SettingsScreen, SecurityScreen, ChangePasswordScreen | coeso |
 | `errors` | 6 | erros genéricos controlados | sem consumidor de produção no baseline | pequeno; manter até decisão editorial |
 | `onboarding` | 28 | apresentação inicial e montagem visual do plano | OnboardingScreen, AnalyzingScreen | coeso |
 | `quiz` | 140 | questionário e catálogo visual de equipamentos | QuizScreen, EquipmentPicker | grande por catálogo, mas ainda coeso |
@@ -51,7 +51,7 @@ válida quando disponível. A implementação e seus testes ficam em
 | `auth` | 67 | cadastro, login, recuperação, erros visuais e vinculação | AuthScreen | coeso; não contém lógica dos providers |
 | `support` | 63 | central de ajuda, tickets, sugestões e sucesso | telas e componentes de Support | coeso |
 
-Total: 11 namespaces, 776 folhas por idioma e 2.328 traduções carregadas. Não há
+Total: 11 namespaces, 817 folhas por idioma e 2.451 traduções carregadas. Não há
 namespace `paywall` ou `navigation` separado; navegação compartilhada
 está em `common`.
 
@@ -192,19 +192,20 @@ pending sync, sincronização remota e contratos persistidos têm testes própri
 
 ## 13. Baseline e limitações conhecidas
 
-Baseline de 2026-08-04:
+Auditoria atualizada em 2026-08-07:
 
 - 11 namespaces;
-- 763 folhas por idioma;
-- 2.289 valores traduzidos;
-- 7 hardcodes suspeitos detectados em produção;
+- 817 folhas por idioma;
+- 2.451 valores traduzidos;
+- 6 hardcodes suspeitos detectados em produção;
 - 6 valores numéricos legados de mock explicitamente allowlisted em `home`;
 - 0 erro estrutural de resource ou consumidor literal;
 - dependências i18n presentes e usadas: `i18next`, `react-i18next`,
   `expo-localization` e AsyncStorage; uma única versão de i18next instalada.
 
-Telas/componentes com consumidores i18n: AppShell, Auth, Settings, Onboarding, Analyzing, Quiz,
-Home, Progress, Consistency, Profile, EditProfile, Workout, Assessment,
+Telas/componentes com consumidores i18n: AppShell, Auth, Settings, Security,
+ChangePassword, Onboarding, Analyzing, Quiz, Home, Progress, Consistency,
+Profile, EditProfile, Workout, Assessment,
 EquipmentPicker, componentes de data, avatar e cards de Assessment.
 
 Hardcodes conhecidos estão concentrados em PaywallScreen e PlanReadyScreen.

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { View, Text, Pressable, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
@@ -12,6 +12,7 @@ import { colors, fonts } from '../theme/tokens';
 import { useAppState, TabId } from '../state/AppState';
 import { useAuth } from '../state/AuthContext';
 import { versionedPhotoURL } from '../lib/profilePhotoUrl';
+import { PASSWORD_PROVIDER_ID } from '../lib/authProviders';
 import { HomeScreen } from './HomeScreen';
 import { WorkoutScreen } from './WorkoutScreen';
 import { ProgressScreen } from './ProgressScreen';
@@ -19,6 +20,8 @@ import { ProfileScreen } from './ProfileScreen';
 import { ConsistencyScreen } from './ConsistencyScreen';
 import { AssessmentScreen } from './AssessmentScreen';
 import { SettingsScreen } from './SettingsScreen';
+import { SecurityScreen } from './SecurityScreen';
+import { ChangePasswordScreen } from './ChangePasswordScreen';
 import { EditProfileScreen } from './EditProfileScreen';
 import { HelpCenterScreen } from './HelpCenterScreen';
 import { HelpArticleScreen } from './HelpArticleScreen';
@@ -34,13 +37,21 @@ type SupportRoute =
 
 export function AppShell() {
   const { tab, setTab } = useAppState();
+  const { linkedProviders } = useAuth();
   const [showCal, setShowCal] = useState(false);
   const [showAssessment, setShowAssessment] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showSecurity, setShowSecurity] = useState(false);
+  const [showChangePassword, setShowChangePassword] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showWorkoutConfirmation, setShowWorkoutConfirmation] = useState(false);
   const [supportRoute, setSupportRoute] = useState<SupportRoute | null>(null);
-  const overlayOpen = showCal || showAssessment || showSettings || showEditProfile || !!supportRoute;
+  const canChangePassword = linkedProviders.includes(PASSWORD_PROVIDER_ID);
+  const overlayOpen = showCal || showAssessment || showSettings || showSecurity || showChangePassword || showEditProfile || !!supportRoute;
+
+  useEffect(() => {
+    if (!canChangePassword) setShowChangePassword(false);
+  }, [canChangePassword]);
 
   const selectTab = (nextTab: TabId) => {
     if (nextTab === 'workout' && tab !== 'workout') {
@@ -96,10 +107,24 @@ export function AppShell() {
           <SettingsScreen
             onBack={() => setShowSettings(false)}
             onOpenEditProfile={() => setShowEditProfile(true)}
+            onOpenSecurity={() => setShowSecurity(true)}
             onOpenHelpCenter={() => setSupportRoute({ name: 'help' })}
             onReportProblem={() => setSupportRoute({ name: 'form', type: 'BUG' })}
             onSendSuggestion={() => setSupportRoute({ name: 'form', type: 'FEEDBACK' })}
           />
+        </View>
+      )}
+      {showSecurity && (
+        <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 50 }}>
+          <SecurityScreen
+            onBack={() => setShowSecurity(false)}
+            onOpenChangePassword={canChangePassword ? () => setShowChangePassword(true) : undefined}
+          />
+        </View>
+      )}
+      {showChangePassword && canChangePassword && (
+        <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 60 }}>
+          <ChangePasswordScreen onBack={() => setShowChangePassword(false)} />
         </View>
       )}
       {showEditProfile && (

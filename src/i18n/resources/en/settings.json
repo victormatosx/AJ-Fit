@@ -34,6 +34,65 @@
   "values": {
     "darkTheme": "Dark"
   },
+  "security": {
+    "screenTitle": "Security",
+    "sections": {
+      "account": "Account security",
+      "sessions": "Sessions",
+      "activity": "Activity",
+      "safetyZone": "Security zone"
+    },
+    "items": {
+      "changePassword": "Change password",
+      "biometrics": "Biometrics",
+      "twoFactor": "Two-step verification",
+      "currentDevice": "Current device",
+      "currentDeviceDescription": "This device is connected.",
+      "manageDevices": "Manage devices",
+      "lastLogin": "Last login",
+      "lastLoginDescription": "Today at 9:42 AM",
+      "securityHistory": "Security history",
+      "deleteAccount": "Delete account"
+    },
+    "safetyZoneDescription": "Keep your account protected by regularly reviewing your security settings.",
+    "changePassword": {
+      "screenTitle": "Change password",
+      "description": "Confirm your current password before setting a new password for your account.",
+      "fields": {
+        "current": "Current password",
+        "new": "New password",
+        "confirmation": "Confirm new password"
+      },
+      "placeholders": {
+        "current": "Enter your current password",
+        "new": "Enter your new password",
+        "confirmation": "Enter your new password again"
+      },
+      "minimumLength": "Use at least {{count}} characters.",
+      "actions": {
+        "submit": "Change password"
+      },
+      "feedback": {
+        "success": "Password changed successfully.",
+        "currentPasswordRequired": "Enter your current password.",
+        "newPasswordRequired": "Enter a new password.",
+        "confirmationRequired": "Confirm your new password.",
+        "passwordMismatch": "The new passwords do not match.",
+        "passwordUnchanged": "Your new password must be different from your current password.",
+        "passwordTooShort": "Your new password must have at least {{count}} characters.",
+        "currentPasswordIncorrect": "Your current password is incorrect. Check it and try again.",
+        "weakPassword": "That password is too weak. Choose a more secure password.",
+        "sessionExpired": "Your session expired. Sign in again and retry.",
+        "providerRequired": "Password changes are only available for accounts with email and password sign-in.",
+        "tooManyRequests": "Too many attempts were made. Wait a moment and try again.",
+        "networkFailed": "Unable to connect. Check your internet connection and try again.",
+        "changeFailed": "Unable to change your password. Try again."
+      },
+      "accessibility": {
+        "toggleVisibility": "Show or hide {{field}}"
+      }
+    }
+  },
   "language": {
     "title": "Language",
     "description": "Choose the app language.",

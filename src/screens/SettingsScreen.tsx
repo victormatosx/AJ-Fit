@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { View, ScrollView, Pressable, Modal, Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Constants from 'expo-constants';
 import { useTranslation } from 'react-i18next';
 import { ScreenBg } from '../components/ui/ScreenBg';
 import { MonoLabel } from '../components/ui/Display';
@@ -30,12 +31,14 @@ type UnitsOptionCopy = {
 export function SettingsScreen({
   onBack,
   onOpenEditProfile,
+  onOpenSecurity,
   onOpenHelpCenter,
   onReportProblem,
   onSendSuggestion,
 }: {
   onBack?: () => void;
   onOpenEditProfile?: () => void;
+  onOpenSecurity?: () => void;
   onOpenHelpCenter?: () => void;
   onReportProblem?: () => void;
   onSendSuggestion?: () => void;
@@ -84,6 +87,8 @@ export function SettingsScreen({
       ? t('settings:values.darkTheme')
       : profile?.preferences.theme ?? '—';
   const unitsLabel = t(getUnitsSummaryKey(currentUnits, resolvedUnits));
+  const appVersion = Constants.expoConfig?.version;
+  const appVersionLabel = appVersion ? `v${appVersion}` : '—';
 
   const handleSelectLanguage = async (next: SupportedLanguage) => {
     setLangError(null);
@@ -214,7 +219,7 @@ export function SettingsScreen({
             title={t('settings:sections.account').toUpperCase()}
             items={[
               { icon: 'user', label: t('settings:items.editProfile'), onPress: onOpenEditProfile },
-              { icon: 'shield', label: t('settings:items.security'), onPress: () => {} },
+              { icon: 'shield', label: t('settings:items.security'), onPress: onOpenSecurity },
             ]}
           />
 
@@ -274,7 +279,7 @@ export function SettingsScreen({
           <SettingsSection
             title={t('settings:sections.about').toUpperCase()}
             items={[
-              { icon: 'info', label: t('settings:items.version'), value: 'v1.0.0' },
+              { icon: 'info', label: t('settings:items.version'), value: appVersionLabel },
               { icon: 'file-text', label: t('settings:items.licenses'), onPress: () => {} },
             ]}
           />

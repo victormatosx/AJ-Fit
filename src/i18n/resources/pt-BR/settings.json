@@ -34,6 +34,65 @@
   "values": {
     "darkTheme": "Escuro"
   },
+  "security": {
+    "screenTitle": "Segurança",
+    "sections": {
+      "account": "Segurança da conta",
+      "sessions": "Sessões",
+      "activity": "Atividade",
+      "safetyZone": "Zona de segurança"
+    },
+    "items": {
+      "changePassword": "Alterar senha",
+      "biometrics": "Biometria",
+      "twoFactor": "Verificação em duas etapas",
+      "currentDevice": "Dispositivo atual",
+      "currentDeviceDescription": "Este dispositivo está conectado.",
+      "manageDevices": "Gerenciar dispositivos",
+      "lastLogin": "Último login",
+      "lastLoginDescription": "Hoje às 09:42",
+      "securityHistory": "Histórico de segurança",
+      "deleteAccount": "Excluir conta"
+    },
+    "safetyZoneDescription": "Mantenha sua conta protegida revisando regularmente suas configurações de segurança.",
+    "changePassword": {
+      "screenTitle": "Alterar senha",
+      "description": "Confirme sua senha atual antes de definir uma nova senha para sua conta.",
+      "fields": {
+        "current": "Senha atual",
+        "new": "Nova senha",
+        "confirmation": "Confirmar nova senha"
+      },
+      "placeholders": {
+        "current": "Digite sua senha atual",
+        "new": "Digite a nova senha",
+        "confirmation": "Digite a nova senha novamente"
+      },
+      "minimumLength": "Use pelo menos {{count}} caracteres.",
+      "actions": {
+        "submit": "Alterar senha"
+      },
+      "feedback": {
+        "success": "Senha alterada com sucesso.",
+        "currentPasswordRequired": "Digite sua senha atual.",
+        "newPasswordRequired": "Digite uma nova senha.",
+        "confirmationRequired": "Confirme sua nova senha.",
+        "passwordMismatch": "As novas senhas não coincidem.",
+        "passwordUnchanged": "A nova senha deve ser diferente da senha atual.",
+        "passwordTooShort": "A nova senha deve ter pelo menos {{count}} caracteres.",
+        "currentPasswordIncorrect": "A senha atual está incorreta. Verifique e tente novamente.",
+        "weakPassword": "Essa senha é muito fraca. Escolha uma senha mais segura.",
+        "sessionExpired": "Sua sessão expirou. Entre novamente na conta e tente outra vez.",
+        "providerRequired": "A alteração de senha está disponível apenas para contas com acesso por e-mail e senha.",
+        "tooManyRequests": "Muitas tentativas foram feitas. Aguarde um pouco e tente novamente.",
+        "networkFailed": "Não foi possível conectar. Verifique sua internet e tente novamente.",
+        "changeFailed": "Não foi possível alterar sua senha. Tente novamente."
+      },
+      "accessibility": {
+        "toggleVisibility": "Mostrar ou ocultar {{field}}"
+      }
+    }
+  },
   "language": {
     "title": "Idioma",
     "description": "Escolha o idioma do aplicativo.",
