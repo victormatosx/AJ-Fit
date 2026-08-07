@@ -20,6 +20,17 @@ import { ConsistencyScreen } from './ConsistencyScreen';
 import { AssessmentScreen } from './AssessmentScreen';
 import { SettingsScreen } from './SettingsScreen';
 import { EditProfileScreen } from './EditProfileScreen';
+import { HelpCenterScreen } from './HelpCenterScreen';
+import { HelpArticleScreen } from './HelpArticleScreen';
+import { SupportFormScreen } from './SupportFormScreen';
+import { SupportSuccessScreen } from './SupportSuccessScreen';
+import type { HelpArticle, SupportTicketType } from '../types/support';
+
+type SupportRoute =
+  | { name: 'help' }
+  | { name: 'article'; article: HelpArticle }
+  | { name: 'form'; type: SupportTicketType; subject?: string }
+  | { name: 'success' };
 
 export function AppShell() {
   const { tab, setTab } = useAppState();
@@ -28,7 +39,8 @@ export function AppShell() {
   const [showSettings, setShowSettings] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showWorkoutConfirmation, setShowWorkoutConfirmation] = useState(false);
-  const overlayOpen = showCal || showAssessment || showSettings || showEditProfile;
+  const [supportRoute, setSupportRoute] = useState<SupportRoute | null>(null);
+  const overlayOpen = showCal || showAssessment || showSettings || showEditProfile || !!supportRoute;
 
   const selectTab = (nextTab: TabId) => {
     if (nextTab === 'workout' && tab !== 'workout') {
@@ -84,12 +96,29 @@ export function AppShell() {
           <SettingsScreen
             onBack={() => setShowSettings(false)}
             onOpenEditProfile={() => setShowEditProfile(true)}
+            onOpenHelpCenter={() => setSupportRoute({ name: 'help' })}
+            onReportProblem={() => setSupportRoute({ name: 'form', type: 'BUG' })}
+            onSendSuggestion={() => setSupportRoute({ name: 'form', type: 'FEEDBACK' })}
           />
         </View>
       )}
       {showEditProfile && (
         <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 50 }}>
           <EditProfileScreen onBack={() => setShowEditProfile(false)} />
+        </View>
+      )}
+      {supportRoute && (
+        <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 60 }}>
+          {supportRoute.name === 'help' && (
+            <HelpCenterScreen onBack={() => setSupportRoute(null)} onOpenArticle={(article) => setSupportRoute({ name: 'article', article })} />
+          )}
+          {supportRoute.name === 'article' && (
+            <HelpArticleScreen article={supportRoute.article} onBack={() => setSupportRoute({ name: 'help' })} onOpenTicket={(subject) => setSupportRoute({ name: 'form', type: 'SUPPORT', subject })} />
+          )}
+          {supportRoute.name === 'form' && (
+            <SupportFormScreen type={supportRoute.type} initialSubject={supportRoute.subject} onBack={() => setSupportRoute(null)} onSuccess={() => setSupportRoute({ name: 'success' })} />
+          )}
+          {supportRoute.name === 'success' && <SupportSuccessScreen onBack={() => setSupportRoute(null)} />}
         </View>
       )}
     </View>

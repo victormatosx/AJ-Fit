@@ -1,0 +1,19 @@
+{
+  "help": { "title": "Help Center", "search": "Search for a question", "all": "All", "faq": "Frequently asked questions", "empty": "No articles found.", "categories": { "ACCOUNT": "Account", "SUBSCRIPTION": "Subscription", "ASSESSMENTS": "Assessments", "WORKOUTS": "Workouts", "SETTINGS": "Settings", "TECHNICAL": "Technical issues", "OTHER": "Other" } },
+  "article": { "header": "Help", "solved": "Did this solve your problem?", "yes": "Yes", "no": "No", "glad": "We're glad we could help!", "stillNeedHelp": "Still need help?", "openTicket": "Open ticket" },
+  "bug": { "title": "Report a problem", "subjectPlaceholder": "E.g. Error when starting workout", "descriptionPlaceholder": "Tell us what happened and how we can reproduce the issue." },
+  "feedback": { "title": "Send suggestion", "intro": "Your opinion helps us build an increasingly better app.", "category": "Category", "categories": { "SUGGESTION": "Suggestion", "IDEA": "Idea", "COMPLIMENT": "Compliment", "OTHER": "Other" }, "subjects": { "SUGGESTION": "Suggestion", "IDEA": "Idea", "COMPLIMENT": "Compliment", "OTHER": "Other feedback" }, "messagePlaceholder": "Share your idea with us." },
+  "support": { "title": "Open ticket", "subjectPlaceholder": "How can we help?", "messagePlaceholder": "Describe your question." },
+  "form": { "subject": "Subject", "description": "Problem description", "message": "Message", "addImage": "Add image", "optional": "Optional", "send": "Send", "errors": { "sendFailed": "We couldn't send this right now. Check your connection and try again." } },
+  "success": { "title": "We received your request.", "subtitle": "It will be reviewed by our team as soon as possible.", "back": "Back" },
+  "articles": {
+    "changeProfile": { "title": "How do I change my profile details?", "content": "Open Profile, tap the settings icon and choose Edit profile. Update the details you want and save your changes." },
+    "resetPassword": { "title": "How do I reset my password?", "content": "On the login screen, use the password recovery option. Instructions will be sent to your registered email." },
+    "manageSubscription": { "title": "How do I manage my subscription?", "content": "Subscriptions are managed by the store used for purchase. Open App Store or Google Play subscription settings to view or cancel it." },
+    "assessmentEstimate": { "title": "Is body fat percentage a diagnosis?", "content": "No. The assessment result is an estimate for tracking progress and does not replace an assessment or diagnosis by a health professional." },
+    "changeWorkout": { "title": "Can I replace an exercise?", "content": "When alternatives are available, use the replace option in the exercise. The options preserve the muscle group and workout purpose." },
+    "changeLanguage": { "title": "How do I change the app language?", "content": "Open Profile, Settings, then Language. Choose Português, English or Español; the change is applied immediately." },
+    "appNotLoading": { "title": "The app won't load. What should I do?", "content": "Check your connection, close and reopen the app, and check for an available update. If it continues, open a ticket and describe when it happens." },
+    "contactSupport": { "title": "How do I contact support?", "content": "At the end of any article, say it did not solve your issue and tap Open ticket. You can also use Report a problem in Settings." }
+  }
+}

@@ -169,6 +169,55 @@ service cloud.firestore {
         && (!('visceralFat' in d) || (d.visceralFat is number && d.visceralFat > 0));
     }
 
+    function supportTicketValid(ticketId) {
+      let d = request.resource.data;
+      return d.keys().hasAll([
+          'id', 'userId', 'userName', 'userEmail', 'type', 'subject', 'status',
+          'priority', 'lastMessage', 'createdAt', 'updatedAt', 'appVersion',
+          'platform', 'osVersion', 'deviceModel', 'language', 'attachmentsCount'
+        ])
+        && d.keys().hasOnly([
+          'id', 'userId', 'userName', 'userEmail', 'type', 'subject', 'status',
+          'priority', 'lastMessage', 'createdAt', 'updatedAt', 'appVersion',
+          'platform', 'osVersion', 'deviceModel', 'language', 'attachmentsCount'
+        ])
+        && d.id == ticketId
+        && d.userId == request.auth.uid
+        && d.userName is string && d.userName.size() >= 2 && d.userName.size() <= 50
+        && d.userEmail is string && d.userEmail.size() <= 254
+        && d.type in ['BUG', 'FEEDBACK', 'SUPPORT']
+        && d.subject is string && d.subject.size() >= 3 && d.subject.size() <= 100
+        && d.status == 'OPEN'
+        && d.priority == 'NORMAL'
+        && d.lastMessage is string && d.lastMessage.size() >= 10 && d.lastMessage.size() <= 5000
+        && d.createdAt == request.time && d.updatedAt == request.time
+        && d.appVersion is string && d.platform in ['ios', 'android', 'web', 'windows', 'macos']
+        && d.osVersion is string && d.deviceModel is string && d.language is string
+        && d.attachmentsCount is int && d.attachmentsCount >= 0 && d.attachmentsCount <= 1;
+    }
+
+    function supportMessageValid(ticketId) {
+      let d = request.resource.data;
+      let ticket = getAfter(/databases/$(database)/documents/supportTickets/$(ticketId));
+      return ticket.data.userId == request.auth.uid
+        && d.keys().hasAll(['senderType', 'senderId', 'message', 'attachments', 'createdAt', 'readAt'])
+        && d.keys().hasOnly(['senderType', 'senderId', 'message', 'attachments', 'createdAt', 'readAt'])
+        && d.senderType == 'USER' && d.senderId == request.auth.uid
+        && d.message is string && d.message.size() >= 1 && d.message.size() <= 5000
+        && d.attachments is list && d.attachments.size() <= 1
+        && ticket.data.attachmentsCount == d.attachments.size()
+        && (d.attachments.size() == 0 || (
+          d.attachments[0] is map
+          && d.attachments[0].keys().hasAll(['url', 'path', 'type'])
+          && d.attachments[0].keys().hasOnly(['url', 'path', 'type'])
+          && d.attachments[0].url is string && d.attachments[0].url.size() <= 2048
+          && d.attachments[0].path is string
+          && d.attachments[0].path.matches('users/' + request.auth.uid + '/support/' + ticketId + '/attachments/.*')
+          && d.attachments[0].type == 'IMAGE'
+        ))
+        && d.createdAt == request.time && d.readAt == null;
+    }
+
     match /users/{userId} {
       // Leitura: apenas o dono do documento.
       allow read: if isOwner(userId);
@@ -245,6 +294,19 @@ service cloud.firestore {
           && assessmentCommonValid()
           && (guidedAssessmentValid() || importedAssessmentValid());
 
+        allow update, delete: if false;
+      }
+    }
+
+    match /supportTickets/{ticketId} {
+      allow get, list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && supportTicketValid(ticketId);
+      allow update, delete: if false;
+
+      match /messages/{messageId} {
+        allow get, list: if isSignedIn()
+          && get(/databases/$(database)/documents/supportTickets/$(ticketId)).data.userId == request.auth.uid;
+        allow create: if isSignedIn() && supportMessageValid(ticketId);
         allow update, delete: if false;
       }
     }

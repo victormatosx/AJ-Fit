@@ -20,6 +20,7 @@ import type ptBRProfile from './resources/pt-BR/profile.json';
 import type ptBRWorkout from './resources/pt-BR/workout.json';
 import type ptBRAssessment from './resources/pt-BR/assessment.json';
 import type ptBRAuth from './resources/pt-BR/auth.json';
+import type ptBRSupport from './resources/pt-BR/support.json';
 
 declare module 'i18next' {
   interface CustomTypeOptions {
@@ -35,6 +36,7 @@ declare module 'i18next' {
       workout: typeof ptBRWorkout;
       assessment: typeof ptBRAssessment;
       auth: typeof ptBRAuth;
+      support: typeof ptBRSupport;
     };
     returnNull: false;
   }

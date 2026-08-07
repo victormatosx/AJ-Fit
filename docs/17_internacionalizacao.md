@@ -7,7 +7,7 @@ O AJ Fit suporta `pt-BR`, `en` e `es`. O contrato está em
 
 O catálogo runtime único fica em `src/i18n/resourceCatalog.ts`. Os namespaces
 registrados são: `common`, `settings`, `errors`, `onboarding`, `quiz`, `home`,
-`profile`, `workout`, `assessment` e `auth`.
+`profile`, `workout`, `assessment`, `auth` e `support`.
 
 ## 2. Fonte de verdade e bootstrap
 
@@ -49,8 +49,9 @@ válida quando disponível. A implementação e seus testes ficam em
 | `workout` | 105 | execução, séries, substituições e catálogo de exercícios | WorkoutScreen | grande por catálogo, sem ganho claro em dividir agora |
 | `assessment` | 118 | estrutura, formulários, resultados e histórico | AssessmentScreen e cards | grande, mas a divisão aumentaria risco sem reduzir acoplamento atual |
 | `auth` | 67 | cadastro, login, recuperação, erros visuais e vinculação | AuthScreen | coeso; não contém lógica dos providers |
+| `support` | 63 | central de ajuda, tickets, sugestões e sucesso | telas e componentes de Support | coeso |
 
-Total: 10 namespaces, 699 folhas por idioma e 2.097 traduções carregadas. Não há
+Total: 11 namespaces, 763 folhas por idioma e 2.289 traduções carregadas. Não há
 namespace `paywall` ou `navigation` separado; navegação compartilhada
 está em `common`.
 
@@ -193,9 +194,9 @@ pending sync, sincronização remota e contratos persistidos têm testes própri
 
 Baseline de 2026-08-04:
 
-- 10 namespaces;
-- 699 folhas por idioma;
-- 2.097 valores traduzidos;
+- 11 namespaces;
+- 763 folhas por idioma;
+- 2.289 valores traduzidos;
 - 7 hardcodes suspeitos detectados em produção;
 - 6 valores numéricos legados de mock explicitamente allowlisted em `home`;
 - 0 erro estrutural de resource ou consumidor literal;

@@ -28,6 +28,9 @@ import esAssessment from './resources/es/assessment.json';
 import ptBRAuth from './resources/pt-BR/auth.json';
 import enAuth from './resources/en/auth.json';
 import esAuth from './resources/es/auth.json';
+import ptBRSupport from './resources/pt-BR/support.json';
+import enSupport from './resources/en/support.json';
+import esSupport from './resources/es/support.json';
 
 /** Single runtime registry used by bootstrap, parity tests and audits. */
 export const resources = {
@@ -42,6 +45,7 @@ export const resources = {
     workout: ptBRWorkout,
     assessment: ptBRAssessment,
     auth: ptBRAuth,
+    support: ptBRSupport,
   },
   en: {
     common: enCommon,
@@ -54,6 +58,7 @@ export const resources = {
     workout: enWorkout,
     assessment: enAssessment,
     auth: enAuth,
+    support: enSupport,
   },
   es: {
     common: esCommon,
@@ -66,6 +71,7 @@ export const resources = {
     workout: esWorkout,
     assessment: esAssessment,
     auth: esAuth,
+    support: esSupport,
   },
 } as const;
 

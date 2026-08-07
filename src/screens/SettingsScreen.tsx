@@ -17,9 +17,15 @@ import { logError } from '../lib/logError';
 export function SettingsScreen({
   onBack,
   onOpenEditProfile,
+  onOpenHelpCenter,
+  onReportProblem,
+  onSendSuggestion,
 }: {
   onBack?: () => void;
   onOpenEditProfile?: () => void;
+  onOpenHelpCenter?: () => void;
+  onReportProblem?: () => void;
+  onSendSuggestion?: () => void;
 }) {
   const { user, profile } = useAuth();
   const { t, i18n } = useTranslation(['common', 'settings']);
@@ -191,9 +197,9 @@ export function SettingsScreen({
           <SettingsSection
             title={t('settings:sections.support').toUpperCase()}
             items={[
-              { icon: 'help-circle', label: t('settings:items.helpCenter'), onPress: () => {} },
-              { icon: 'message', label: t('settings:items.sendFeedback'), onPress: () => {} },
-              { icon: 'alert-triangle', label: t('settings:items.reportProblem'), onPress: () => {} },
+              { icon: 'help-circle', label: t('settings:items.helpCenter'), onPress: onOpenHelpCenter },
+              { icon: 'alert-triangle', label: t('settings:items.reportProblem'), onPress: onReportProblem },
+              { icon: 'message', label: t('settings:items.sendSuggestion'), onPress: onSendSuggestion },
             ]}
           />
 

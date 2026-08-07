@@ -1173,3 +1173,26 @@ Humano coordenador validar em dev build. Nenhuma pendência de código aberta.
 
 ```
 ```
+
+---
+
+Data: 2026-08-06
+Responsável: Agente Frontend
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Implementado o módulo de Suporte do aplicativo: Central de Ajuda pesquisável e
+categorizada, artigos locais por repositório substituível, formulários de bug,
+sugestão e chamado, anexo opcional no Firebase Storage, criação atômica do
+ticket e primeira mensagem, tela de sucesso, i18n em pt-BR/en/es e regras de
+segurança testadas no emulador. Contrato detalhado em
+`docs/18_modulo_suporte.md`.
+
+Impacto:
+Usuários autenticados podem criar e ler somente os próprios tickets. O cliente
+não pode alterar status/prioridade nem criar mensagens administrativas. A
+estrutura já suporta histórico de mensagens e evolução por backend.
+
+Próxima ação:
+Publicar `firestore.rules` e `storage.rules` no ambiente alvo; em fase futura,
+implementar painel administrativo, respostas, push e limpeza de anexos órfãos.
