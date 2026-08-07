@@ -88,7 +88,7 @@ export type UserProfile = {
     endsAt?: Timestamp | null;
   };
   metadata: {
-    role: 'user';
+    role: 'user' | 'admin';
     activeWorkoutId?: string;
     createdAt: Timestamp | null;
     updatedAt: Timestamp | null;

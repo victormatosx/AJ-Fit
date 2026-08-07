@@ -18,6 +18,14 @@ import {
  * suite fails immediately instead of drifting silently until QA.
  */
 const RULES = readFileSync(resolve(__dirname, '../../../firestore.rules'), 'utf8');
+const INDEXES = JSON.parse(
+  readFileSync(resolve(__dirname, '../../../firestore.indexes.json'), 'utf8'),
+) as {
+  indexes: Array<{
+    collectionGroup: string;
+    fields: Array<{ fieldPath: string; order: string }>;
+  }>;
+};
 
 describe('firestore.rules — structural contract', () => {
   it('accepts exactly the languages listed in SUPPORTED_LANGUAGES', () => {
@@ -88,5 +96,27 @@ describe('firestore.rules — structural contract', () => {
   it('preserves the legacy migration branch', () => {
     expect(RULES).toMatch(/function legacyMigrationValid\(\)/);
     expect(RULES).toMatch(/legacyMigrationValid\(\)/);
+  });
+
+  it('accepts provisioned admin documents without allowing client promotion', () => {
+    expect(RULES).toMatch(/data\.role in \['user', 'admin'\]/);
+    expect(RULES).toMatch(/allow create:[\s\S]*metadata\.role == 'user'/);
+    expect(RULES).toMatch(
+      /metadata\.diff\(resource\.data\.metadata\)\.affectedKeys\(\)\s*\.hasOnly\(\['updatedAt'\]\)/,
+    );
+  });
+
+  it('keeps only the nine mergeable support-ticket indexes used by the panel', () => {
+    const signatures = INDEXES.indexes
+      .filter((index) => index.collectionGroup === 'supportTickets')
+      .map((index) => index.fields.map((field) => `${field.fieldPath}:${field.order}`).join(','))
+      .sort();
+    const expected = ['status', 'type', 'priority'].flatMap((filter) => [
+      `${filter}:ASCENDING,updatedAt:DESCENDING`,
+      `${filter}:ASCENDING,createdAt:DESCENDING`,
+      `${filter}:ASCENDING,createdAt:ASCENDING`,
+    ]).sort();
+    expect(signatures).toEqual(expected);
+    expect(new Set(signatures).size).toBe(signatures.length);
   });
 });

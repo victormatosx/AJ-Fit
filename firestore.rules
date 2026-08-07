@@ -24,6 +24,15 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
+    // O painel autentica com Firebase Auth e o backend promove previamente o
+    // documento do operador. Escritas do app nunca podem alterar metadata.role.
+    function isAdmin() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid))
+             .data.metadata.role == 'admin';
+    }
+
     function profileValid(data) {
       return data is map
         && data.keys().hasAll(['name', 'email'])
@@ -72,7 +81,7 @@ service cloud.firestore {
       return data is map
         && data.keys().hasAll(['role', 'createdAt', 'updatedAt'])
         && data.keys().hasOnly(['role', 'activeWorkoutId', 'createdAt', 'updatedAt'])
-        && data.role == 'user'
+        && data.role in ['user', 'admin']
         && (!('activeWorkoutId' in data) || data.activeWorkoutId is string)
         && data.createdAt is timestamp
         && data.updatedAt is timestamp;
@@ -218,6 +227,59 @@ service cloud.firestore {
         && d.createdAt == request.time && d.readAt == null;
     }
 
+    function adminSupportTicketUpdateValid() {
+      let before = resource.data;
+      let after = request.resource.data;
+      let changed = after.diff(before).affectedKeys();
+      return changed.hasAll(['updatedAt'])
+        && changed.hasOnly([
+          'status', 'priority', 'assignedTo', 'lastMessage', 'updatedAt',
+          'lastReplyAt', 'closedAt'
+        ])
+        && after.status in ['OPEN', 'IN_PROGRESS', 'WAITING_USER', 'RESOLVED', 'CLOSED']
+        && after.priority in ['LOW', 'NORMAL', 'HIGH', 'CRITICAL']
+        && after.updatedAt == request.time
+        // O painel atual atribui somente ao próprio operador autenticado.
+        && (!changed.hasAny(['assignedTo']) || after.assignedTo == request.auth.uid)
+        // Fechar grava o timestamp do servidor; qualquer outro status limpa-o.
+        && (!changed.hasAny(['status']) || (
+          changed.hasAny(['closedAt'])
+          && (after.status == 'CLOSED'
+              ? after.closedAt == request.time
+              : after.closedAt == null)
+        ))
+        && (!changed.hasAny(['closedAt']) || changed.hasAny(['status']))
+        // Uma resposta atualiza preview e metadados em conjunto.
+        && (!changed.hasAny(['lastMessage', 'lastReplyAt']) || (
+          changed.hasAll(['lastMessage', 'lastReplyAt'])
+          && after.lastMessage is string
+          && after.lastMessage.size() >= 1
+          && after.lastMessage.size() <= 5000
+          && after.lastReplyAt == request.time
+        ));
+    }
+
+    function adminSupportMessageValid(ticketId) {
+      let d = request.resource.data;
+      let ticket = getAfter(/databases/$(database)/documents/supportTickets/$(ticketId));
+      return d.keys().hasAll([
+          'senderType', 'senderId', 'message', 'attachments', 'createdAt', 'readAt'
+        ])
+        && d.keys().hasOnly([
+          'senderType', 'senderId', 'message', 'attachments', 'createdAt', 'readAt'
+        ])
+        && d.senderType == 'ADMIN'
+        && d.senderId == request.auth.uid
+        && d.message is string && d.message.size() >= 1 && d.message.size() <= 5000
+        && d.attachments is list && d.attachments.size() == 0
+        && d.createdAt == request.time && d.readAt == null
+        // Mantém mensagem e preview do ticket consistentes no mesmo batch.
+        && ticket.data.lastMessage == d.message
+        && ticket.data.updatedAt == request.time
+        && ticket.data.lastReplyAt == request.time;
+    }
+
+    // ── Users, questionnaires and assessments ─────────────────────────────
     match /users/{userId} {
       // Leitura: apenas o dono do documento.
       allow read: if isOwner(userId);
@@ -226,6 +288,7 @@ service cloud.firestore {
       // o token e sem campos de assinatura/internos definidos pelo cliente.
       allow create: if isOwner(userId)
         && nestedUserValid(request.resource.data)
+        && request.resource.data.metadata.role == 'user'
         && request.resource.data.profile.email == request.auth.token.email
         && request.resource.data.subscription.size() == 0
         && !('activeWorkoutId' in request.resource.data.metadata)
@@ -297,19 +360,26 @@ service cloud.firestore {
       }
     }
 
+    // ── Support tickets and messages ──────────────────────────────────────
     match /supportTickets/{ticketId} {
-      allow get, list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow get, list: if isAdmin()
+        || (isSignedIn() && resource.data.userId == request.auth.uid);
       allow create: if isSignedIn() && supportTicketValid(ticketId);
-      allow update, delete: if false;
+      allow update: if isAdmin() && adminSupportTicketUpdateValid();
+      allow delete: if false;
 
       match /messages/{messageId} {
-        allow get, list: if isSignedIn()
-          && get(/databases/$(database)/documents/supportTickets/$(ticketId)).data.userId == request.auth.uid;
-        allow create: if isSignedIn() && supportMessageValid(ticketId);
+        allow get, list: if isAdmin()
+          || (isSignedIn()
+              && get(/databases/$(database)/documents/supportTickets/$(ticketId))
+                   .data.userId == request.auth.uid);
+        allow create: if (isSignedIn() && supportMessageValid(ticketId))
+          || (isAdmin() && adminSupportMessageValid(ticketId));
         allow update, delete: if false;
       }
     }
 
+    // ── Deny all undocumented collections ─────────────────────────────────
     // Coleções de sistema (exercises, workout_templates, treinos do usuário,
     // etc.) ainda não têm contrato de regras aprovado — negar por padrão até
     // definição do Agente de Segurança/Arquiteto.
