@@ -26,12 +26,6 @@
     "initialDataFallback": "Datos del registro inicial · aún no es una evaluación",
     "noInitialDataFallback": "Sin datos del registro · registra tu primera evaluación"
   },
-  "skinfoldsHint": {
-    "noneRegistered": "Ningún pliegue registrado",
-    "registerGuidedCta": "Inicia una evaluación guiada",
-    "description": "Los pliegues cutáneos se registran durante la Evaluación Guiada y se usan para estimar tu porcentaje de grasa.",
-    "measurementsSummary": "{{count}} medidas · {{date}}"
-  },
   "actions": {
     "guided": {
       "title": "Evaluación guiada",
@@ -58,6 +52,7 @@
   "import": {
     "title": "Evaluación importada",
     "description": "¿Te evaluaste con un nutricionista, médico, clínica, bioimpedancia o DEXA? Registra abajo los resultados ya calculados: la app solo guarda esta información y no vuelve a calcularla.",
+    "basicInfoSection": "Información básica",
     "resultsSection": "Resultados de la evaluación",
     "saving": "Guardando…"
   },
@@ -77,8 +72,10 @@
   "heightParts": { "feet": "Pies", "inches": "Pulgadas" },
   "units": { "kg": "kg", "cm": "cm", "mm": "mm", "percent": "%", "years": "años", "kcal": "kcal" },
   "validation": {
-    "guidedRequired": "Completa fecha, peso, altura, sexo, edad y todos los pliegues para guardar",
-    "importRequired": "Completa fecha, peso y altura para registrar"
+    "guidedRequired": "Completa fecha, peso y todos los pliegues para guardar",
+    "profileRequired": "El sexo, la fecha de nacimiento y la altura deben estar completos en tu perfil",
+    "importRequired": "Completa fecha y peso para registrar",
+    "heightRequired": "La altura debe estar completa en tu perfil"
   },
   "success": {
     "guidedTitle": "Evaluación guardada correctamente",

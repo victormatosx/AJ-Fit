@@ -26,12 +26,6 @@
     "initialDataFallback": "From initial onboarding · not an assessment yet",
     "noInitialDataFallback": "No onboarding data · record your first assessment"
   },
-  "skinfoldsHint": {
-    "noneRegistered": "No skinfold recorded",
-    "registerGuidedCta": "Start a guided assessment",
-    "description": "Skinfolds are captured during a Guided Assessment and used to estimate your body-fat percentage.",
-    "measurementsSummary": "{{count}} measurements · {{date}}"
-  },
   "actions": {
     "guided": {
       "title": "Guided assessment",
@@ -58,6 +52,7 @@
   "import": {
     "title": "Imported assessment",
     "description": "Had an assessment with a dietitian, doctor, clinic, bioimpedance device, or DEXA? Record the calculated results below — the app only stores this information and does not recalculate it.",
+    "basicInfoSection": "Basic information",
     "resultsSection": "Assessment results",
     "saving": "Saving…"
   },
@@ -77,8 +72,10 @@
   "heightParts": { "feet": "Feet", "inches": "Inches" },
   "units": { "kg": "kg", "cm": "cm", "mm": "mm", "percent": "%", "years": "years", "kcal": "kcal" },
   "validation": {
-    "guidedRequired": "Enter the date, weight, height, sex, age, and every skinfold to save",
-    "importRequired": "Enter the date, weight, and height to record"
+    "guidedRequired": "Enter the date, weight, and every skinfold to save",
+    "profileRequired": "Sex, birth date, and height must be completed in your profile",
+    "importRequired": "Enter the date and weight to record",
+    "heightRequired": "Height must be completed in your profile"
   },
   "success": {
     "guidedTitle": "Assessment saved successfully",

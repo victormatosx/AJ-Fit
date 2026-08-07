@@ -9,7 +9,6 @@ import { Slash, MonoLabel } from '../components/ui/Display';
 import { Card } from '../components/ui/Card';
 import { SegBar } from '../components/ui/SegBar';
 import { Icon } from '../components/ui/Icon';
-import { FoldableSection } from '../components/ui/FoldableSection';
 import { AssessmentSection } from '../components/fitness/AssessmentSection';
 import { AssessmentMetricCard } from '../components/fitness/AssessmentMetricCard';
 import { PhysicalAssessmentSummaryCard } from '../components/fitness/PhysicalAssessmentSummaryCard';
@@ -45,8 +44,7 @@ import {
 import { computeAge } from '../lib/ageCalculator';
 import { logError } from '../lib/logError';
 import { useDateParts } from '../hooks/useDateParts';
-import { DateFieldsInput } from '../components/ui/DateFieldsInput';
-import { ImperialHeightInput } from '../components/ui/ImperialHeightInput';
+import { NativeDatePickerField } from '../components/ui/NativeDatePickerField';
 import { useUnits } from '../state/UnitsContext';
 import {
   formatWeightFromKg,
@@ -54,10 +52,7 @@ import {
   weightToKg,
   weightUnit,
 } from '../units/weightConversions';
-import { formatHeightFromCm, heightUnit } from '../units/heightConversions';
 
-const MIN_HEIGHT_CM = 140;
-const MAX_HEIGHT_CM = 220;
 
 const SITE_TRANSLATION_KEYS: Record<SiteKey, `skinfolds.${SiteKey}`> = {
   chest: 'skinfolds.chest',
@@ -94,7 +89,6 @@ function formatAssessmentDate(
 export function AssessmentScreen({ onBack }: { onBack: () => void }) {
   const { t, i18n } = useTranslation(['assessment', 'common']);
   const { resolvedUnits } = useUnits();
-  const massUnit = weightUnit(resolvedUnits);
   // Translated label for the empty-timestamp fallback shown by
   // `formatAssessmentDate`. Passed explicitly rather than accessed via t()
   // inside the helper — keeps the formatter pure and unit-testable.
@@ -125,14 +119,16 @@ export function AssessmentScreen({ onBack }: { onBack: () => void }) {
   // questionnaire has loaded (or when it genuinely doesn't exist, e.g. a
   // social login that skipped onboarding).
   const onboardingAnswers = questionnaire?.answers ?? null;
-  const hasOnboardingData = !!onboardingAnswers;
-
   const displayWeight = hasAssessments ? latest!.weight : onboardingAnswers?.weight ?? null;
-  const displayHeight = hasAssessments ? latest!.height : onboardingAnswers?.height ?? null;
-  // Sex is looked up from the most recent GUIDED assessment (imported ones
-  // never carry it), falling back to the questionnaire — never invented.
+  // Height is profile data, not an assessment input. The persisted onboarding
+  // questionnaire is authoritative; the latest assessment is only a legacy
+  // fallback for accounts created before that field was available.
+  const registeredHeight = onboardingAnswers?.height ?? latest?.height ?? null;
+  // Sex comes from the persisted onboarding questionnaire. A previous guided
+  // assessment is only a compatibility fallback for older accounts whose
+  // questionnaire is incomplete; the new form never asks for it again.
   const lastGuidedSex = assessments.find((a) => a.source === 'guided')?.sex ?? null;
-  const defaultSex: Sex | null = lastGuidedSex ?? onboardingAnswers?.sex ?? null;
+  const defaultSex: Sex | null = onboardingAnswers?.sex ?? lastGuidedSex;
   // Birth date is the only source of truth for age — resolved once in
   // userProfile.ts (with legacy-`age` compat baked in there), so by the time
   // it reaches this screen it's always a real Date or genuinely unknown. A
@@ -141,12 +137,6 @@ export function AssessmentScreen({ onBack }: { onBack: () => void }) {
   // birth date, and can't be projected forward.
   const birthDate =
     profile?.profile.birthDate?.toDate() ?? onboardingAnswers?.birthDate ?? null;
-
-  const latestWithFolds =
-    assessments.find(
-      (a): a is Extract<typeof assessments[number], { source: 'guided' }> =>
-        a.source === 'guided' && Object.keys(a.folds).length > 0,
-    ) ?? null;
 
   // Charts read chronologically (oldest → newest); `assessments` is sorted
   // measuredAt desc for the history list, so reverse just for this. Body fat
@@ -272,20 +262,6 @@ export function AssessmentScreen({ onBack }: { onBack: () => void }) {
                   : t('assessment:summary.noRecords')
               }
             />
-            {!hasAssessments && (
-              <Pressable onPress={() => setShowGuided(true)} style={{ marginTop: 10 }}>
-                <Text
-                  style={{
-                    fontFamily: fonts.ui,
-                    fontSize: 12.5,
-                    color: colors.accentHi,
-                    textAlign: 'center',
-                  }}
-                >
-                  {t('assessment:summary.emptyCta')}
-                </Text>
-              </Pressable>
-            )}
           </View>
 
           {/* EVOLUÇÃO */}
@@ -301,80 +277,11 @@ export function AssessmentScreen({ onBack }: { onBack: () => void }) {
             />
           </AssessmentSection>
 
-          {/* INFORMAÇÕES BÁSICAS */}
-          <AssessmentSection title={t('assessment:sections.basicInfo').toUpperCase()}>
-            <View style={{ flexDirection: 'row', gap: 10 }}>
-              <AssessmentMetricCard
-                label={t('assessment:metrics.weight').toUpperCase()}
-                value={
-                  displayWeight != null
-                    ? formatWeightFromKg(displayWeight, resolvedUnits)
-                    : '—'
-                }
-                unit={massUnit}
-                style={{ flex: 1 }}
-              />
-              <AssessmentMetricCard
-                label={t('assessment:metrics.height').toUpperCase()}
-                value={
-                  displayHeight != null
-                    ? formatHeightFromCm(displayHeight, resolvedUnits)
-                    : '—'
-                }
-                unit={heightUnit(resolvedUnits)}
-                style={{ flex: 1 }}
-              />
-            </View>
-            {!hasAssessments && (
-              <MonoLabel color={colors.faint} style={{ marginTop: 8 }}>
-                {hasOnboardingData
-                  ? t('assessment:basicInfo.initialDataFallback').toUpperCase()
-                  : t('assessment:basicInfo.noInitialDataFallback').toUpperCase()}
-              </MonoLabel>
-            )}
-          </AssessmentSection>
-
-          {/* DOBRAS CUTÂNEAS */}
-          <AssessmentSection title={t('assessment:sections.skinfolds').toUpperCase()}>
-            <FoldableSection
-              icon="list"
-              title={
-                latestWithFolds
-                  ? t(`assessment:${PROTOCOL_TRANSLATION_KEYS[latestWithFolds.protocol]}`)
-                  : t('assessment:skinfoldsHint.noneRegistered')
-              }
-              summary={
-                latestWithFolds
-                  ? t('assessment:skinfoldsHint.measurementsSummary', {
-                      count: Object.keys(latestWithFolds.folds).length,
-                      date: formatAssessmentDate(latestWithFolds.measuredAt, todayLabel, i18n.language),
-                    }).toUpperCase()
-                  : t('assessment:skinfoldsHint.registerGuidedCta').toUpperCase()
-              }
-            >
-              {latestWithFolds ? (
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-                  {Object.entries(latestWithFolds.folds).map(([k, v]) => (
-                    <View key={k} style={{ width: '48%' }}>
-                      <MonoLabel style={{ marginBottom: 4 }}>
-                        {t(`assessment:${SITE_TRANSLATION_KEYS[k as SiteKey]}`).toUpperCase()}
-                      </MonoLabel>
-                      <Text style={{ fontFamily: fonts.uiBold, fontSize: 14, color: '#fff' }}>
-                        {v} {t('assessment:units.mm')}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
-              ) : (
-                <Text style={{ fontFamily: fonts.ui, fontSize: 12.5, color: colors.mute }}>
-                  {t('assessment:skinfoldsHint.description')}
-                </Text>
-              )}
-            </FoldableSection>
-          </AssessmentSection>
-
           {/* ADICIONAR AVALIAÇÃO */}
-          <AssessmentSection title={t('assessment:sections.add').toUpperCase()}>
+          <AssessmentSection
+            title={t('assessment:sections.add').toUpperCase()}
+            style={{ paddingTop: 22 }}
+          >
             <AssessmentActionCard
               onGuided={() => setShowGuided(true)}
               onImport={() => setShowImport(true)}
@@ -444,7 +351,7 @@ export function AssessmentScreen({ onBack }: { onBack: () => void }) {
             onBack={() => setShowGuided(false)}
             onSave={saveGuided}
             defaultWeight={displayWeight}
-            defaultHeight={displayHeight}
+            defaultHeight={registeredHeight}
             defaultSex={defaultSex}
             birthDate={birthDate}
           />
@@ -457,7 +364,7 @@ export function AssessmentScreen({ onBack }: { onBack: () => void }) {
             onBack={() => setShowImport(false)}
             onSave={saveImported}
             defaultWeight={displayWeight}
-            defaultHeight={displayHeight}
+            defaultHeight={registeredHeight}
           />
         </View>
       )}
@@ -555,43 +462,6 @@ function useMeasuredAtFields() {
   const isToday = fields.date != null && isSameCalendarDay(fields.date, today);
 
   return { ...fields, date: isValid ? fields.date : null, isValid, isToday };
-}
-
-function SexToggle({ value, onChange }: { value: Sex | null; onChange: (s: Sex) => void }) {
-  const { t } = useTranslation('assessment');
-  return (
-    <View>
-      <MonoLabel color={colors.faint} style={{ marginBottom: 6 }}>
-        {t('guided.sexLabel').toUpperCase()}
-      </MonoLabel>
-      <View style={{ flexDirection: 'row', gap: 8 }}>
-        {(['m', 'f'] as Sex[]).map((s) => (
-          <Pressable
-            key={s}
-            onPress={() => onChange(s)}
-            accessibilityRole="button"
-            accessibilityState={{ selected: value === s }}
-            accessibilityLabel={t('accessibility.selectSex', {
-              sex: s === 'm' ? t('guided.male') : t('guided.female'),
-            })}
-            style={{
-              flex: 1,
-              paddingVertical: 12,
-              borderRadius: 12,
-              alignItems: 'center',
-              backgroundColor: value === s ? 'rgba(11,112,249,0.16)' : 'rgba(255,255,255,0.04)',
-              borderWidth: 1,
-              borderColor: value === s ? 'rgba(11,112,249,0.4)' : 'rgba(255,255,255,0.09)',
-            }}
-          >
-            <Text style={{ fontFamily: fonts.uiBold, fontSize: 13, color: '#fff' }}>
-              {(s === 'm' ? t('guided.male') : t('guided.female')).toUpperCase()}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
-    </View>
-  );
 }
 
 function Spinner() {
@@ -750,6 +620,116 @@ function ModalHeader({ onBack, title }: { onBack: () => void; title: string }) {
   );
 }
 
+function AssessmentSaveFooter({
+  onPress,
+  saving,
+  canSave,
+  shake,
+  shakeX,
+  accessibilityLabel,
+  savingLabel,
+  actionLabel,
+  validationLabel,
+}: {
+  onPress: () => void;
+  saving: boolean;
+  canSave: boolean;
+  shake: boolean;
+  shakeX: Animated.Value;
+  accessibilityLabel: string;
+  savingLabel: string;
+  actionLabel: string;
+  validationLabel: string;
+}) {
+  return (
+    <SafeAreaView
+      edges={['bottom']}
+      style={{
+        paddingHorizontal: 22,
+        paddingTop: 12,
+        backgroundColor: colors.bg,
+        borderTopWidth: 1,
+        borderTopColor: colors.border,
+      }}
+    >
+      <Animated.View style={{ transform: [{ translateX: shakeX }] }}>
+        <Pressable
+          onPress={onPress}
+          disabled={saving}
+          accessibilityRole="button"
+          accessibilityLabel={accessibilityLabel}
+          accessibilityState={{ disabled: saving }}
+          style={{ opacity: saving ? 0.75 : 1 }}
+        >
+          <LinearGradient
+            colors={['#1f82ff', colors.accent]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0, y: 1 }}
+            style={{
+              height: 58,
+              borderTopLeftRadius: 12,
+              borderTopRightRadius: 12,
+              borderBottomLeftRadius: 12,
+              borderBottomRightRadius: 0,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 10,
+              shadowColor: colors.accent,
+              shadowOpacity: 0.45,
+              shadowRadius: 24,
+              shadowOffset: { width: 0, height: 8 },
+              elevation: 8,
+            }}
+          >
+            {saving ? (
+              <>
+                <Spinner />
+                <Text
+                  style={{
+                    fontFamily: fonts.display,
+                    fontSize: 17,
+                    letterSpacing: 1.5,
+                    color: '#fff',
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  {savingLabel}
+                </Text>
+              </>
+            ) : (
+              <>
+                <Text
+                  style={{
+                    fontFamily: fonts.display,
+                    fontSize: 17,
+                    letterSpacing: 1.5,
+                    color: '#fff',
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  {actionLabel}
+                </Text>
+                <Icon name="arrow-right" size={18} color="#fff" />
+              </>
+            )}
+          </LinearGradient>
+        </Pressable>
+      </Animated.View>
+      <View style={{ minHeight: 26, justifyContent: 'center' }}>
+        {!canSave && (
+          <MonoLabel
+            color={shake ? colors.danger : colors.faint}
+            style={{ textAlign: 'center', marginTop: 8 }}
+          >
+            {validationLabel.toUpperCase()}
+          </MonoLabel>
+        )}
+      </View>
+    </SafeAreaView>
+  );
+}
+
 function GuidedAssessmentModal({
   onBack,
   onSave,
@@ -774,14 +754,8 @@ function GuidedAssessmentModal({
       ? formatWeightInputFromKg(defaultWeight, resolvedUnits)
       : '',
   );
-  const [height, setHeight] = useState(defaultHeight ? String(defaultHeight) : '');
-  const [imperialHeightCm, setImperialHeightCm] = useState<number | null>(defaultHeight);
-  const [sex, setSex] = useState<Sex | null>(defaultSex);
+  const sex = defaultSex;
   const measuredAtFields = useMeasuredAtFields();
-  // Manual fallback — only reachable when there is truly no birth date on
-  // file (e.g. a social login that skipped onboarding). Once every account
-  // has a birthDate this branch becomes dead code (see migration notes).
-  const [manualAge, setManualAge] = useState('');
   const [protocolId, setProtocolId] = useState<SkinfoldProtocolId>('jp7');
   const [protocolOpen, setProtocolOpen] = useState(false);
   const [folds, setFolds] = useState<Partial<Record<SiteKey, string>>>({});
@@ -801,13 +775,13 @@ function GuidedAssessmentModal({
   // the missing-birthDate case, instead of confusing the user.
   const rawAutoAge = birthDate && measuredAtFields.date ? computeAge(birthDate, measuredAtFields.date) : null;
   const autoAge = rawAutoAge != null && isValidAge(rawAutoAge) ? rawAutoAge : null;
-  const a = birthDate != null ? autoAge ?? NaN : parseFloat(manualAge);
+  const a = autoAge ?? NaN;
 
   const proto = protocolById(protocolId);
   const sites = sex ? proto.sitesFor(sex) : [];
   const displayedWeight = parseFloat(weight);
   const weightKg = weightToKg(displayedWeight, resolvedUnits);
-  const heightCm = resolvedUnits === 'imperial' ? imperialHeightCm ?? NaN : parseFloat(height);
+  const heightCm = defaultHeight ?? NaN;
   const bmi = computeBmi(weightKg, heightCm);
   const band =
     bmi != null ? BMI_BANDS.find((b) => bmi < b.max) ?? BMI_BANDS[BMI_BANDS.length - 1] : null;
@@ -906,22 +880,17 @@ function GuidedAssessmentModal({
           <View style={{ paddingHorizontal: 22, paddingTop: 22 }}>
             <Slash style={{ marginBottom: 12 }}>{t('guided.basicInfoSection').toUpperCase()}</Slash>
 
-            <View style={{ marginBottom: 14 }}>
-              <DateFieldsInput
+            <View style={{ marginBottom: 16 }}>
+              <NativeDatePickerField
                 label={t('fields.measurementDate.label').toUpperCase()}
-                day={measuredAtFields.day}
-                month={measuredAtFields.month}
-                year={measuredAtFields.year}
-                onDay={measuredAtFields.setDay}
-                onMonth={measuredAtFields.setMonth}
-                onYear={measuredAtFields.setYear}
+                value={measuredAtFields.date ?? new Date()}
+                onChange={measuredAtFields.setDate}
+                maximumDate={new Date()}
                 error={shake && !measuredAtFields.isValid}
-                shakeX={shakeX}
-                placeholder={t('form.numericPlaceholder')}
               />
             </View>
 
-            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
+            <View style={{ marginBottom: 10 }}>
               <MeasureField
                 label={t('fields.weight.label').toUpperCase()}
                 unit={massUnit}
@@ -931,77 +900,7 @@ function GuidedAssessmentModal({
                 error={shake && !(displayedWeight > 0)}
                 shakeX={shakeX}
               />
-              {resolvedUnits === 'metric' && (
-                <MeasureField
-                  label={t('fields.height.label').toUpperCase()}
-                  unit={t('units.cm')}
-                  placeholder={t('form.numericPlaceholder')}
-                  value={height}
-                  onChange={setHeight}
-                  error={shake && heightCm <= 0}
-                  shakeX={shakeX}
-                />
-              )}
             </View>
-            {resolvedUnits === 'imperial' && (
-              <View style={{ marginBottom: 10 }}>
-                <ImperialHeightInput
-                  valueCm={imperialHeightCm ?? 178}
-                  minCm={MIN_HEIGHT_CM}
-                  maxCm={MAX_HEIGHT_CM}
-                  onChangeCm={setImperialHeightCm}
-                  feetLabel={t('heightParts.feet')}
-                  inchesLabel={t('heightParts.inches')}
-                  error={shake && !(heightCm > 0)}
-                />
-              </View>
-            )}
-            <View style={{ flexDirection: 'row', gap: 10 }}>
-              {birthDate != null ? (
-                <View style={{ flex: 1 }}>
-                  <MonoLabel color={colors.faint} style={{ marginBottom: 6 }}>
-                    {t('fields.ageAtAssessment.label').toUpperCase()}
-                  </MonoLabel>
-                  <View
-                    style={{
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      gap: 6,
-                      paddingVertical: 13,
-                      paddingHorizontal: 14,
-                      borderRadius: 12,
-                      backgroundColor: 'rgba(255,255,255,0.04)',
-                      borderWidth: 1,
-                      borderColor: 'rgba(255,255,255,0.09)',
-                    }}
-                  >
-                    <Text style={{ flex: 1, color: '#fff', fontFamily: fonts.display, fontSize: 22 }}>
-                      {autoAge != null ? autoAge : '—'}
-                    </Text>
-                    <Text style={{ fontFamily: fonts.mono, fontSize: 11, color: colors.faint }}>{t('units.years')}</Text>
-                  </View>
-                </View>
-              ) : (
-                <MeasureField
-                  label={t('fields.ageAtAssessment.label').toUpperCase()}
-                  unit={t('units.years')}
-                  placeholder={t('form.numericPlaceholder')}
-                  value={manualAge}
-                  onChange={setManualAge}
-                  error={shake && !(a > 0)}
-                  shakeX={shakeX}
-                />
-              )}
-              <View style={{ flex: 1 }}>
-                <SexToggle value={sex} onChange={setSex} />
-              </View>
-            </View>
-            {birthDate == null && (
-              <MonoLabel color={colors.faint} style={{ marginTop: 8 }}>
-                {t('guided.missingBirthDateHint').toUpperCase()}
-              </MonoLabel>
-            )}
-
             <Card style={{ padding: 16, marginTop: 12 }}>
               <View
                 style={{
@@ -1110,22 +1009,38 @@ function GuidedAssessmentModal({
                 accessibilityLabel={t('accessibility.selectProtocol')}
                 accessibilityState={{ expanded: protocolOpen }}
                 style={{
-                  paddingVertical: 15,
+                  paddingVertical: 16,
                   paddingHorizontal: 16,
                   borderRadius: 14,
-                  backgroundColor: 'rgba(255,255,255,0.04)',
+                  backgroundColor: colors.surfaceSelected,
                   borderWidth: 1,
-                  borderColor: 'rgba(255,255,255,0.09)',
+                  borderColor: 'rgba(11,112,249,0.40)',
                   flexDirection: 'row',
                   alignItems: 'center',
                   justifyContent: 'space-between',
                 }}
               >
-                <View style={{ flex: 1 }}>
-                  <MonoLabel style={{ marginBottom: 4 }}>{t('guided.protocolLabel').toUpperCase()}</MonoLabel>
-                  <Text style={{ fontSize: 15, fontFamily: fonts.uiBold, color: '#fff' }}>
-                    {t(PROTOCOL_TRANSLATION_KEYS[proto.id])}
-                  </Text>
+                <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                  <View
+                    style={{
+                      width: 38,
+                      height: 38,
+                      borderRadius: 10,
+                      backgroundColor: 'rgba(11,112,249,0.22)',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Icon name="target" size={18} color={colors.accentHi} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <MonoLabel style={{ marginBottom: 4 }}>
+                      {t('guided.protocolLabel').toUpperCase()}
+                    </MonoLabel>
+                    <Text style={{ fontSize: 15, fontFamily: fonts.uiBold, color: '#fff' }}>
+                      {t(PROTOCOL_TRANSLATION_KEYS[proto.id])}
+                    </Text>
+                  </View>
                 </View>
                 <View style={{ transform: [{ rotate: protocolOpen ? '180deg' : '0deg' }] }}>
                   <Icon name="chevron-down" size={18} color={colors.accentHi} stroke={2} />
@@ -1181,11 +1096,7 @@ function GuidedAssessmentModal({
               )}
             </View>
 
-            {sex == null ? (
-              <Text style={{ fontFamily: fonts.ui, fontSize: 12.5, color: colors.mute, marginTop: 14 }}>
-                {t('guided.selectSexHint')}
-              </Text>
-            ) : (
+            {sex != null && (
               <>
                 <View
                   style={{
@@ -1265,79 +1176,23 @@ function GuidedAssessmentModal({
             </View>
           </View>
 
-          {/* SAVE CTA */}
-          <View style={{ paddingHorizontal: 22, paddingTop: 26 }}>
-            <Animated.View style={{ transform: [{ translateX: shakeX }] }}>
-              <Pressable
-                onPress={handleSave}
-                disabled={saving}
-                accessibilityRole="button"
-                accessibilityLabel={t('accessibility.saveGuided')}
-                accessibilityState={{ disabled: saving }}
-                style={{ opacity: saving ? 0.75 : 1 }}
-              >
-                <LinearGradient
-                  colors={['#1f82ff', colors.accent]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 0, y: 1 }}
-                  style={{
-                    height: 58,
-                    borderTopLeftRadius: 12,
-                    borderTopRightRadius: 12,
-                    borderBottomLeftRadius: 12,
-                    borderBottomRightRadius: 0,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 10,
-                    shadowColor: colors.accent,
-                    shadowOpacity: 0.45,
-                    shadowRadius: 24,
-                    shadowOffset: { width: 0, height: 8 },
-                    elevation: 8,
-                  }}
-                >
-                  {saving ? (
-                    <>
-                      <Spinner />
-                      <Text
-                        style={{
-                          fontFamily: fonts.display,
-                          fontSize: 17,
-                          letterSpacing: 1.5,
-                          color: '#fff',
-                          textTransform: 'uppercase',
-                        }}
-                      >
-                        {t('guided.saving')}
-                      </Text>
-                    </>
-                  ) : (
-                    <>
-                      <Text
-                        style={{
-                          fontFamily: fonts.display,
-                          fontSize: 17,
-                          letterSpacing: 1.5,
-                          color: '#fff',
-                          textTransform: 'uppercase',
-                        }}
-                      >
-                        {t('actions.saveGuided')}
-                      </Text>
-                      <Icon name="arrow-right" size={18} color="#fff" />
-                    </>
-                  )}
-                </LinearGradient>
-              </Pressable>
-            </Animated.View>
-            {!canSave && (
-              <MonoLabel color={shake ? '#f0563f' : colors.faint} style={{ textAlign: 'center', marginTop: 10 }}>
-                {t('validation.guidedRequired').toUpperCase()}
-              </MonoLabel>
-            )}
-          </View>
         </ScrollView>
+
+        <AssessmentSaveFooter
+          onPress={handleSave}
+          saving={saving}
+          canSave={canSave}
+          shake={shake}
+          shakeX={shakeX}
+          accessibilityLabel={t('accessibility.saveGuided')}
+          savingLabel={t('guided.saving')}
+          actionLabel={t('actions.saveGuided')}
+          validationLabel={t(
+            sex == null || birthDate == null || !(heightCm > 0)
+              ? 'validation.profileRequired'
+              : 'validation.guidedRequired',
+          )}
+        />
 
         {toast.content && (
           <Toast opacity={toast.opacity} y={toast.y} tone={toast.content.tone} title={toast.content.title} subtitle={toast.content.subtitle} />
@@ -1366,8 +1221,6 @@ function ImportAssessmentModal({
       ? formatWeightInputFromKg(defaultWeight, resolvedUnits)
       : '',
   );
-  const [height, setHeight] = useState(defaultHeight ? String(defaultHeight) : '');
-  const [imperialHeightCm, setImperialHeightCm] = useState<number | null>(defaultHeight);
   const measuredAtFields = useMeasuredAtFields();
   const [bodyFat, setBodyFat] = useState('');
   const [bodyWater, setBodyWater] = useState('');
@@ -1384,7 +1237,7 @@ function ImportAssessmentModal({
 
   const displayedWeight = parseFloat(weight);
   const weightKg = weightToKg(displayedWeight, resolvedUnits);
-  const heightCm = resolvedUnits === 'imperial' ? imperialHeightCm ?? NaN : parseFloat(height);
+  const heightCm = defaultHeight ?? NaN;
   const canSave = weightKg > 0 && heightCm > 0 && measuredAtFields.isValid;
 
   const shakeX = useRef(new Animated.Value(0)).current;
@@ -1464,24 +1317,19 @@ function ImportAssessmentModal({
           </View>
 
           <View style={{ paddingHorizontal: 22, paddingTop: 22 }}>
-            <Slash style={{ marginBottom: 12 }}>{t('import.resultsSection').toUpperCase()}</Slash>
+            <Slash style={{ marginBottom: 12 }}>{t('import.basicInfoSection').toUpperCase()}</Slash>
 
-            <View style={{ marginBottom: 14 }}>
-              <DateFieldsInput
+            <View style={{ marginBottom: 16 }}>
+              <NativeDatePickerField
                 label={t('fields.measurementDate.label').toUpperCase()}
-                day={measuredAtFields.day}
-                month={measuredAtFields.month}
-                year={measuredAtFields.year}
-                onDay={measuredAtFields.setDay}
-                onMonth={measuredAtFields.setMonth}
-                onYear={measuredAtFields.setYear}
+                value={measuredAtFields.date ?? new Date()}
+                onChange={measuredAtFields.setDate}
+                maximumDate={new Date()}
                 error={shake && !measuredAtFields.isValid}
-                shakeX={shakeX}
-                placeholder={t('form.numericPlaceholder')}
               />
             </View>
 
-            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
+            <View style={{ marginBottom: 10 }}>
               <MeasureField
                 label={t('fields.weight.label').toUpperCase()}
                 unit={massUnit}
@@ -1491,31 +1339,12 @@ function ImportAssessmentModal({
                 error={shake && !(displayedWeight > 0)}
                 shakeX={shakeX}
               />
-              {resolvedUnits === 'metric' && (
-                <MeasureField
-                  label={t('fields.height.label').toUpperCase()}
-                  unit={t('units.cm')}
-                  placeholder={t('form.numericPlaceholder')}
-                  value={height}
-                  onChange={setHeight}
-                  error={shake && heightCm <= 0}
-                  shakeX={shakeX}
-                />
-              )}
             </View>
-            {resolvedUnits === 'imperial' && (
-              <View style={{ marginBottom: 10 }}>
-                <ImperialHeightInput
-                  valueCm={imperialHeightCm ?? 178}
-                  minCm={MIN_HEIGHT_CM}
-                  maxCm={MAX_HEIGHT_CM}
-                  onChangeCm={setImperialHeightCm}
-                  feetLabel={t('heightParts.feet')}
-                  inchesLabel={t('heightParts.inches')}
-                  error={shake && !(heightCm > 0)}
-                />
-              </View>
-            )}
+          </View>
+
+          <View style={{ paddingHorizontal: 22, paddingTop: 22 }}>
+            <Slash style={{ marginBottom: 12 }}>{t('import.resultsSection').toUpperCase()}</Slash>
+
             <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
               <MeasureField label={t('fields.bodyFat.label').toUpperCase()} unit={t('units.percent')} placeholder={t('form.numericPlaceholder')} value={bodyFat} onChange={setBodyFat} />
               <MeasureField label={t('fields.bodyWater.label').toUpperCase()} unit={t('units.percent')} placeholder={t('form.numericPlaceholder')} value={bodyWater} onChange={setBodyWater} />
@@ -1555,78 +1384,21 @@ function ImportAssessmentModal({
             </View>
           </View>
 
-          <View style={{ paddingHorizontal: 22, paddingTop: 26 }}>
-            <Animated.View style={{ transform: [{ translateX: shakeX }] }}>
-              <Pressable
-                onPress={handleSave}
-                disabled={saving}
-                accessibilityRole="button"
-                accessibilityLabel={t('accessibility.saveImported')}
-                accessibilityState={{ disabled: saving }}
-                style={{ opacity: saving ? 0.75 : 1 }}
-              >
-                <LinearGradient
-                  colors={['#1f82ff', colors.accent]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 0, y: 1 }}
-                  style={{
-                    height: 58,
-                    borderTopLeftRadius: 12,
-                    borderTopRightRadius: 12,
-                    borderBottomLeftRadius: 12,
-                    borderBottomRightRadius: 0,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 10,
-                    shadowColor: colors.accent,
-                    shadowOpacity: 0.45,
-                    shadowRadius: 24,
-                    shadowOffset: { width: 0, height: 8 },
-                    elevation: 8,
-                  }}
-                >
-                  {saving ? (
-                    <>
-                      <Spinner />
-                      <Text
-                        style={{
-                          fontFamily: fonts.display,
-                          fontSize: 17,
-                          letterSpacing: 1.5,
-                          color: '#fff',
-                          textTransform: 'uppercase',
-                        }}
-                      >
-                        {t('import.saving')}
-                      </Text>
-                    </>
-                  ) : (
-                    <>
-                      <Text
-                        style={{
-                          fontFamily: fonts.display,
-                          fontSize: 17,
-                          letterSpacing: 1.5,
-                          color: '#fff',
-                          textTransform: 'uppercase',
-                        }}
-                      >
-                        {t('actions.registerImported')}
-                      </Text>
-                      <Icon name="arrow-right" size={18} color="#fff" />
-                    </>
-                  )}
-                </LinearGradient>
-              </Pressable>
-            </Animated.View>
-            {!canSave && (
-              <MonoLabel color={shake ? '#f0563f' : colors.faint} style={{ textAlign: 'center', marginTop: 10 }}>
-                {t('validation.importRequired').toUpperCase()}
-              </MonoLabel>
-            )}
-          </View>
         </ScrollView>
+
+        <AssessmentSaveFooter
+          onPress={handleSave}
+          saving={saving}
+          canSave={canSave}
+          shake={shake}
+          shakeX={shakeX}
+          accessibilityLabel={t('accessibility.saveImported')}
+          savingLabel={t('import.saving')}
+          actionLabel={t('actions.registerImported')}
+          validationLabel={t(
+            heightCm > 0 ? 'validation.importRequired' : 'validation.heightRequired',
+          )}
+        />
 
         {toast.content && (
           <Toast opacity={toast.opacity} y={toast.y} tone={toast.content.tone} title={toast.content.title} subtitle={toast.content.subtitle} />

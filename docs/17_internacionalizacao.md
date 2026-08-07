@@ -47,11 +47,11 @@ válida quando disponível. A implementação e seus testes ficam em
 | `home` | 86 | dashboard, progresso e consistência mensal | HomeScreen, ProgressScreen, ConsistencyScreen, AppShell | contém seis números de mock allowlisted |
 | `profile` | 90 | perfil, edição, foto e sessão | ProfileScreen, EditProfileScreen, ProfileAvatar | amplo, porém dentro do domínio |
 | `workout` | 104 | execução, séries, substituições e catálogo de exercícios | WorkoutScreen | grande por catálogo, sem ganho claro em dividir agora |
-| `assessment` | 121 | estrutura, formulários, resultados e histórico | AssessmentScreen e cards | grande, mas a divisão aumentaria risco sem reduzir acoplamento atual |
+| `assessment` | 120 | estrutura, formulários, resultados e histórico | AssessmentScreen e cards | grande, mas a divisão aumentaria risco sem reduzir acoplamento atual |
 | `auth` | 67 | cadastro, login, recuperação, erros visuais e vinculação | AuthScreen | coeso; não contém lógica dos providers |
 | `support` | 63 | central de ajuda, tickets, sugestões e sucesso | telas e componentes de Support | coeso |
 
-Total: 11 namespaces, 817 folhas por idioma e 2.451 traduções carregadas. Não há
+Total: 11 namespaces, 816 folhas por idioma e 2.448 traduções carregadas. Não há
 namespace `paywall` ou `navigation` separado; navegação compartilhada
 está em `common`.
 
@@ -195,8 +195,8 @@ pending sync, sincronização remota e contratos persistidos têm testes própri
 Auditoria atualizada em 2026-08-07:
 
 - 11 namespaces;
-- 817 folhas por idioma;
-- 2.451 valores traduzidos;
+- 816 folhas por idioma;
+- 2.448 valores traduzidos;
 - 6 hardcodes suspeitos detectados em produção;
 - 6 valores numéricos legados de mock explicitamente allowlisted em `home`;
 - 0 erro estrutural de resource ou consumidor literal;

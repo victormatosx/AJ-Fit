@@ -9,6 +9,7 @@ const screen = read('screens/AssessmentScreen.tsx');
 const guided = screen.slice(screen.indexOf('function GuidedAssessmentModal'), screen.indexOf('function ImportAssessmentModal'));
 const imported = screen.slice(screen.indexOf('function ImportAssessmentModal'));
 const dateFields = read('components/ui/DateFieldsInput.tsx');
+const nativeDatePicker = read('components/ui/NativeDatePickerField.tsx');
 const service = read('services/assessments.ts');
 const calculator = read('lib/skinfoldCalculator.ts');
 
@@ -22,7 +23,9 @@ describe('Assessment form resources', () => {
       expect(Object.values(resource.units).every(Boolean)).toBe(true);
       expect(resource.result).toBe('{{value}} {{unit}}');
       expect(resource.validation.guidedRequired).toBeTruthy();
+      expect(resource.validation.profileRequired).toBeTruthy();
       expect(resource.validation.importRequired).toBeTruthy();
+      expect(resource.validation.heightRequired).toBeTruthy();
       expect(resource.actions.saveGuided).toBeTruthy();
       expect(resource.actions.registerImported).toBeTruthy();
       expect(resource.success.refreshMessage).toBeTruthy();
@@ -43,11 +46,17 @@ describe('Assessment form resources', () => {
   it('migrates the guided form copy without changing protocol mechanics', () => {
     for (const key of [
       'guided.title', 'guided.basicInfoSection', 'fields.measurementDate.label',
-      'fields.weight.label', 'fields.height.label', 'fields.ageAtAssessment.label',
-      'guided.sexLabel', 'guided.protocolLabel', 'guided.selectSexHint',
+      'fields.weight.label', 'guided.protocolLabel',
       'validation.guidedRequired', 'actions.saveGuided', 'guided.saving',
       'success.guidedTitle', 'errors.saveFailedTitle', 'accessibility.saveGuided',
     ]) expect(screen).toContain(key);
+    expect(guided).toContain('<NativeDatePickerField');
+    expect(guided).not.toContain('manualAge');
+    expect(guided).not.toContain('setSex');
+    expect(guided).not.toContain('fields.ageAtAssessment.label');
+    expect(guided).not.toContain('fields.height.label');
+    expect(guided).not.toContain('ImperialHeightInput');
+    expect(guided).toContain('const heightCm = defaultHeight ?? NaN');
     expect(guided).toContain('SKINFOLD_PROTOCOLS.map');
     expect(guided).toContain('SITE_TRANSLATION_KEYS[s]');
     expect(guided).toContain('PROTOCOL_TRANSLATION_KEYS[p.id]');
@@ -55,14 +64,19 @@ describe('Assessment form resources', () => {
 
   it('migrates every imported form label, placeholder, unit and controlled message', () => {
     for (const key of [
-      'import.title', 'import.description', 'import.resultsSection',
-      'fields.measurementDate.label', 'fields.weight.label', 'fields.height.label',
+      'import.title', 'import.description', 'import.basicInfoSection', 'import.resultsSection',
+      'fields.measurementDate.label', 'fields.weight.label',
       'fields.bodyFat.label', 'fields.bodyWater.label', 'fields.basalMetabolism.label',
       'fields.visceralFat.label', 'fields.notes.label', 'fields.notes.placeholder',
-      'massUnit', 'units.cm', 'units.percent', 'units.kcal',
+      'massUnit', 'units.percent', 'units.kcal',
       'validation.importRequired', 'actions.registerImported', 'import.saving',
       'success.importedTitle', 'errors.saveFailedMessage', 'accessibility.saveImported',
     ]) expect(imported).toContain(key);
+    expect(imported).toContain('<NativeDatePickerField');
+    expect(imported).not.toContain('fields.height.label');
+    expect(imported).not.toContain('ImperialHeightInput');
+    expect(imported).not.toContain('<DateFieldsInput');
+    expect(imported).toContain('const heightCm = defaultHeight ?? NaN');
     expect(imported).not.toMatch(/Avaliação importada com sucesso|Falha ao salvar|OBSERVAÇÕES \(OPCIONAL\)|Registrar Avaliação/);
   });
 
@@ -73,6 +87,16 @@ describe('Assessment form resources', () => {
     expect(guided).toContain("placeholder={t('form.numericPlaceholder')}");
     expect(imported).toContain("placeholder={t('form.numericPlaceholder')}");
   });
+
+  it('uses the native date picker on iOS and Android with future dates blocked', () => {
+    expect(nativeDatePicker).toContain("Platform.OS === 'android'");
+    expect(nativeDatePicker).toContain('DateTimePickerAndroid.open');
+    expect(nativeDatePicker).toContain("Platform.OS === 'ios'");
+    expect(nativeDatePicker).toContain('<DateTimePicker');
+    expect(nativeDatePicker).toContain('maximumDate={maximumDate}');
+    expect(guided).toContain('onChange={measuredAtFields.setDate}');
+    expect(imported).toContain('onChange={measuredAtFields.setDate}');
+  });
 });
 
 describe('Assessment permanent form contract guard', () => {
@@ -80,7 +104,7 @@ describe('Assessment permanent form contract guard', () => {
     expect(screen.match(/if \(saving\) return/g)).toHaveLength(2);
     expect(screen.match(/await onSave\(\{/g)).toHaveLength(2);
     for (const token of [
-      'measuredAt: measuredAtFields.date', 'weight: weightKg', 'bodyFat,',
+      'measuredAt: measuredAtFields.date', 'weight: weightKg', 'height: heightCm', 'bodyFat,',
       'protocol: protocolId', 'sex,', 'age: a', 'folds: numericFolds',
       'bodyFat: parsePositive(bodyFat) ?? null', 'bodyWater: parsePositive(bodyWater)',
       'basalMetabolism: parsePositive(basalMetabolism)',

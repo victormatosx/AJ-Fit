@@ -110,7 +110,13 @@ function HistoryRow({
         : 'history.details.unavailable';
 
   return (
-    <View style={{ position: 'relative', paddingLeft: 34, marginBottom: 12 }}>
+    <View
+      style={{
+        position: 'relative',
+        paddingLeft: 34,
+        marginBottom: highlight ? 18 : 14,
+      }}
+    >
       <View
         style={{
           position: 'absolute',
@@ -129,7 +135,17 @@ function HistoryRow({
           elevation: highlight ? 4 : 0,
         }}
       />
-      <Card style={{ padding: 15 }}>
+      <Card
+        style={{
+          padding: highlight ? 17 : 15,
+          borderColor: highlight ? 'rgba(11,112,249,0.42)' : colors.cardBorder,
+          shadowColor: highlight ? colors.accent : 'transparent',
+          shadowOpacity: highlight ? 0.16 : 0,
+          shadowRadius: highlight ? 14 : 0,
+          shadowOffset: { width: 0, height: 6 },
+          elevation: highlight ? 3 : 0,
+        }}
+      >
         <View
           style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}
         >

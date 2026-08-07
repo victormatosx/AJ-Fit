@@ -31,8 +31,8 @@ describe('Assessment structure resources and consumers', () => {
 
   it('uses translations for every structural screen section and visible state', () => {
     for (const key of [
-      'header.title', 'sections.evolution', 'sections.basicInfo', 'sections.skinfolds',
-      'sections.add', 'sections.history', 'summary.emptyCta', 'loading.title',
+      'header.title', 'sections.evolution',
+      'sections.add', 'sections.history', 'loading.title',
       'errors.loadFailedTitle', 'history.empty.title',
     ]) expect(screen).toContain(key);
 
@@ -41,6 +41,23 @@ describe('Assessment structure resources and consumers', () => {
       'title="ADICIONAR AVALIAÇÃO"', 'title="HISTÓRICO"', 'label="PESO"', 'label="ALTURA"',
       'Nenhuma avaliação registrada', 'TENTAR NOVAMENTE',
     ]) expect(structuralScreen).not.toContain(hardcode);
+  });
+
+  it('keeps the simplified visual hierarchy without duplicate overview blocks', () => {
+    const order = [
+      'sections.evolution',
+      'sections.add',
+      'sections.history',
+    ].map((key) => structuralScreen.indexOf(key));
+
+    expect(order.every((position) => position >= 0)).toBe(true);
+    expect(order).toEqual([...order].sort((a, b) => a - b));
+    expect(structuralScreen).not.toContain('sections.basicInfo');
+    expect(structuralScreen).not.toContain('summary.emptyCta');
+    expect(structuralScreen).not.toContain('sections.skinfolds');
+    expect(structuralScreen).not.toContain('skinfoldsHint');
+    expect(structuralScreen).not.toContain('latestWithFolds');
+    expect(structuralScreen).not.toContain('<FoldableSection');
   });
 
   it('connects cards and chart accessibility to assessment keys without raw-key UI', () => {
@@ -72,5 +89,11 @@ describe('Assessment permanent structure regression guard', () => {
       'SKINFOLD_PROTOCOLS', 'isValidAge', 'isFutureDate',
       'SITE_TRANSLATION_KEYS', 'PROTOCOL_TRANSLATION_KEYS', 'classifications.bmi',
     ]) expect(screen).toContain(token);
+  });
+
+  it('keeps both save actions in a fixed shared footer outside form content', () => {
+    expect(screen.match(/<AssessmentSaveFooter/g)).toHaveLength(2);
+    expect(screen).toContain("accessibilityLabel={t('accessibility.saveGuided')}");
+    expect(screen).toContain("accessibilityLabel={t('accessibility.saveImported')}");
   });
 });

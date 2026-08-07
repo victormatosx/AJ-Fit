@@ -81,13 +81,14 @@ export function AssessmentEvolutionCard({
   return (
     <Card style={{ padding: 16 }}>
       <View accessible accessibilityLabel={t('accessibility.evolutionCard')}>
-      <View style={{ flexDirection: 'row', gap: 18, marginBottom: 16 }}>
+      <View style={{ flexDirection: 'row', gap: 16, marginBottom: 12 }}>
         <EvolutionLineChart
           label={t('metrics.weight').toUpperCase()}
           unit={massUnit}
           color={WEIGHT_COLOR}
           points={displayedWeightPoints}
           emptyHint={t('charts.weightEmpty')}
+          showEmptyHint={hasPrevious}
         />
         <EvolutionLineChart
           label={t('metrics.bodyFat').toUpperCase()}
@@ -95,6 +96,7 @@ export function AssessmentEvolutionCard({
           color={BODY_FAT_COLOR}
           points={bodyFatPoints}
           emptyHint={t('charts.bodyFatEmpty')}
+          showEmptyHint={hasPrevious}
         />
       </View>
 

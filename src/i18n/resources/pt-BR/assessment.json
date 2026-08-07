@@ -26,16 +26,10 @@
     "initialDataFallback": "Dados do cadastro inicial · ainda não é uma avaliação",
     "noInitialDataFallback": "Sem dados de cadastro · registre sua primeira avaliação"
   },
-  "skinfoldsHint": {
-    "noneRegistered": "Nenhuma dobra registrada",
-    "registerGuidedCta": "Registre uma avaliação guiada",
-    "description": "As dobras cutâneas são preenchidas durante a Avaliação Guiada e usadas para estimar seu percentual de gordura.",
-    "measurementsSummary": "{{count}} medidas · {{date}}"
-  },
   "actions": {
     "guided": {
       "title": "Avaliação guiada",
-      "description": "Peso, medidas e dobras — o app calcula tudo"
+      "description": "Peso, medidas e dobras, o app calcula tudo"
     },
     "import": {
       "title": "Importar avaliação",
@@ -58,6 +52,7 @@
   "import": {
     "title": "Avaliação importada",
     "description": "Fez uma avaliação com nutricionista, médico, clínica, bioimpedância ou DEXA? Registre os resultados já calculados abaixo — o app apenas guarda essas informações, sem refazer nenhum cálculo.",
+    "basicInfoSection": "Informações básicas",
     "resultsSection": "Resultados da avaliação",
     "saving": "Salvando…"
   },
@@ -77,8 +72,10 @@
   "heightParts": { "feet": "Pés", "inches": "Polegadas" },
   "units": { "kg": "kg", "cm": "cm", "mm": "mm", "percent": "%", "years": "anos", "kcal": "kcal" },
   "validation": {
-    "guidedRequired": "Preencha data, peso, altura, sexo, idade e todas as dobras para salvar",
-    "importRequired": "Preencha data, peso e altura para registrar"
+    "guidedRequired": "Preencha data, peso e todas as dobras para salvar",
+    "profileRequired": "Sexo, nascimento e altura precisam estar preenchidos no cadastro",
+    "importRequired": "Preencha data e peso para registrar",
+    "heightRequired": "A altura precisa estar preenchida no cadastro"
   },
   "success": {
     "guidedTitle": "Avaliação salva com sucesso",

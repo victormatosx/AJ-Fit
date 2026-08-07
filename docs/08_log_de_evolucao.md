@@ -1274,3 +1274,98 @@ não possui emulador de Firebase Auth configurado, portanto a suíte automatizad
 cobre o contrato com mocks, não uma autenticação real.
 
 ---
+
+Data: 2026-08-07
+Responsável: Codex — Agente Frontend
+Categoria: [REFATORAÇÃO]
+
+Descrição:
+Reorganizada exclusivamente a apresentação da Avaliação Física. A tela
+principal passou a seguir Resumo, Evolução, Adicionar avaliação, Dobras
+cutâneas e Histórico. Removidos o aviso azul do estado vazio e a seção visual
+duplicada de Informações básicas; seus valores continuam disponíveis
+internamente como preenchimento inicial dos formulários. Dobras cutâneas virou
+um resumo compacto. O protocolo ganhou ênfase visual nos formulários e as
+ações de salvar das avaliações guiada e importada passaram para um rodapé fixo
+compartilhado. A avaliação mais recente recebeu maior destaque na timeline.
+No estado sem evolução, dicas repetidas dentro dos dois gráficos foram
+suprimidas e permaneceu apenas a mensagem central já traduzida.
+
+Impacto:
+Nenhum cálculo, validação, protocolo, gráfico, callback, payload, consulta,
+persistência, serviço, hook, provider, navegação ou resource de i18n foi
+alterado. A mudança se limita a `AssessmentScreen`, apresentação da timeline,
+testes estruturais e documentação de staging.
+
+Próxima ação:
+Humano coordenador validar hierarquia, rodapé fixo e comportamento do teclado
+em iOS e Android, incluindo telas compactas.
+
+---
+
+Data: 2026-08-07
+Responsável: Codex — Agente Frontend
+Categoria: [REFATORAÇÃO]
+
+Descrição:
+Simplificado o formulário de Avaliação Guiada (“Novo registro”). Os campos
+visuais de sexo e idade foram removidos; sexo passa a priorizar o questionário
+persistido do cadastro e idade continua calculada internamente pela data de
+nascimento, considerando a data da avaliação. O campo de data foi substituído
+por `NativeDatePickerField`: diálogo nativo no Android, picker nativo em modal
+no iOS e fallback textual ISO na web. Datas futuras permanecem bloqueadas.
+
+Impacto:
+O payload guiado continua enviando `measuredAt`, `sex` e `age` exatamente como
+antes. Fórmulas, protocolos, validação do serviço, Firestore, hooks e navegação
+não foram alterados. Adicionada mensagem localizada para cadastros legados sem
+sexo/data de nascimento e cobertura estrutural do picker nas duas plataformas.
+
+Próxima ação:
+Validar o seletor nativo em dispositivo iOS e Android e confirmar a seleção de
+datas retroativas em ambos.
+
+---
+
+Data: 2026-08-07
+Responsável: Codex — Agente Frontend
+Categoria: [REFATORAÇÃO]
+
+Descrição:
+Altura removida dos formulários de Avaliação Guiada e Avaliação Importada. O
+valor agora vem do questionário persistido do cadastro, com a avaliação mais
+recente usada apenas como compatibilidade para contas legadas. A tela de
+importação foi alinhada ao Novo registro: datepicker nativo, bloco separado de
+informações básicas e resultados, e peso em campo de largura integral.
+
+Impacto:
+Altura continua sendo usada internamente no IMC e persistida no payload das
+duas avaliações, sem alteração de contrato ou fórmulas. Cadastros sem altura
+válida recebem uma mensagem localizada e não salvam dados inconsistentes.
+
+Próxima ação:
+Validar em iOS e Android o layout dos dois formulários, incluindo datepicker,
+teclado e rodapé fixo em telas compactas.
+
+---
+
+Data: 2026-08-07
+Responsável: Codex — Agente Frontend
+Categoria: [REFATORAÇÃO]
+
+Descrição:
+Removida da página principal de Avaliação Física a seção visual de Dobras
+cutâneas. A hierarquia agora segue diretamente de Adicionar avaliação para
+Histórico. Também foram removidos o resumo derivado da última avaliação guiada
+e as quatro traduções que existiam exclusivamente para esse bloco.
+
+Impacto:
+As dobras continuam disponíveis no formulário de Novo registro, permanecem
+nos cálculos e seguem sendo persistidas normalmente. Nenhum contrato, fórmula,
+serviço, consulta, payload ou registro histórico foi alterado.
+
+Próxima ação:
+Validar visualmente a transição entre Adicionar avaliação e Histórico em telas
+iOS e Android.
+
+---

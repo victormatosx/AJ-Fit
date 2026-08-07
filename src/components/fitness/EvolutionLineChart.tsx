@@ -29,12 +29,14 @@ export function EvolutionLineChart({
   color,
   points,
   emptyHint,
+  showEmptyHint = true,
 }: {
   label: string;
   unit: string;
   color: string;
   points: EvolutionPoint[];
   emptyHint: string;
+  showEmptyHint?: boolean;
 }) {
   const { t } = useTranslation('assessment');
   const [width, setWidth] = useState(0);
@@ -61,7 +63,11 @@ export function EvolutionLineChart({
         style={{ height: HEIGHT, justifyContent: 'center' }}
       >
         {points.length < 2 || width === 0 ? (
-          <Text style={{ fontFamily: fonts.ui, fontSize: 11, color: colors.faint }}>{emptyHint}</Text>
+          showEmptyHint ? (
+            <Text style={{ fontFamily: fonts.ui, fontSize: 11, color: colors.faint }}>
+              {emptyHint}
+            </Text>
+          ) : null
         ) : (
           <ChartBody width={width} color={color} points={points} />
         )}
