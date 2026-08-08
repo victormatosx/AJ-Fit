@@ -50,49 +50,102 @@ export function logRevenueCatError(scope: string, err: unknown): void {
   console.error(`[revenueCat:${scope}]`, { code, message });
 }
 
-// Module-scoped guard against re-configuring the SDK. App.tsx calls
-// `configureRevenueCat()` exactly once at module-evaluation time, but that
-// call site itself can re-run more than expected under Fast Refresh/Hot
-// Reload (editing App.tsx re-executes its top-level code without restarting
-// the whole bundle). The guard lives here, not in App.tsx, so it protects
-// every current and future call site — a screen calling this by mistake
-// would also be a no-op instead of a duplicate `Purchases.configure`.
-let hasConfigured = false;
+// Shared, module-scoped "configuration ready" promise. This is the single
+// choke point every other function in this file goes through (via
+// `ensureConfigured()` below) before touching any other `Purchases.*` method
+// — see that function's doc comment for the full race-condition rationale
+// (forensic audit: "There is no singleton instance" reported by Apple
+// review). `null` means "not configured (yet)"; a resolved promise means
+// `Purchases.configure()` has already been called; a call in flight is
+// represented by the pending promise itself, so concurrent callers all await
+// the exact same configuration attempt instead of racing separate ones.
+let configurationPromise: Promise<void> | null = null;
 
 /**
  * Initializes the RevenueCat SDK for the current platform. Idempotent: a
- * second call is a no-op as long as the first one succeeded. If the first
- * call failed (e.g. missing API key), a later call can still succeed once
- * the misconfiguration is fixed.
+ * second call while already configured just returns the same resolved
+ * promise. If a previous call failed (e.g. missing API key), the failure is
+ * NOT cached — a later call can still succeed once the misconfiguration is
+ * fixed.
  *
  * Does NOT log the user in — the SDK starts with an anonymous RevenueCat
  * App User ID until `loginRevenueCat(uid)` is called.
+ *
+ * STRUCTURAL GUARANTEE (root-cause fix for the "There is no singleton
+ * instance" race — see the forensic audit): `Purchases.configure()` below is
+ * called synchronously, as the very first statement of this function body,
+ * with NO `await`/microtask boundary preceding it. That is deliberate and
+ * load-bearing:
+ *
+ * React Native serializes calls to the same native module in the order they
+ * are dispatched from JS — this is the exact guarantee every RevenueCat
+ * integration (including this SDK's own official quickstart) relies on when
+ * it calls `Purchases.configure()` once at startup and then uses the SDK
+ * freely afterward with no manual "wait until ready" step. That guarantee
+ * only holds if `configure()` is truly the FIRST `Purchases.*`/`RNPurchases.*`
+ * call this app makes. The previous implementation broke it by `await`-ing
+ * `Purchases.setLogLevel(...)` (an unrelated, unnecessary wait — `setLogLevel`
+ * does not require prior configuration) before calling `configure()`, which
+ * yielded the JS thread and let React mount + fire
+ * `SubscriptionContext`'s identity-sync effect (calling `Purchases.logIn`/
+ * `logOut`/`getCustomerInfo`) BEFORE `configure()`'s JS call had even
+ * happened. This function no longer awaits anything before `configure()`.
+ *
+ * This alone is enough (App.tsx's module-scope bootstrap call runs before
+ * React ever mounts), but every other exported function below ALSO awaits
+ * `ensureConfigured()` as its first step, so readiness is guaranteed by
+ * construction — not by call order alone — for every current and future
+ * call site, not only the one in App.tsx.
  */
-export async function configureRevenueCat(): Promise<void> {
-  if (hasConfigured) return;
+export function configureRevenueCat(): Promise<void> {
+  if (configurationPromise) return configurationPromise;
 
   const apiKey = currentApiKey();
   if (!apiKey) {
-    throw new Error(
+    const err = new Error(
       'RevenueCat não configurado: defina EXPO_PUBLIC_REVENUECAT_IOS_API_KEY / ' +
         'EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY no arquivo .env (veja .env.example) ' +
         'e reinicie o servidor com `npx expo start -c`.',
     );
+    logRevenueCatError('configure', err);
+    return Promise.reject(err); // not cached — a later call can retry
   }
 
   try {
-    // SDK-internal log verbosity only — never touches our own console.log/
-    // console.error calls below (those stay in every build). DEBUG floods
-    // the console with per-request SDK internals; ERROR keeps Release quiet
-    // while still surfacing anything the SDK itself considers a failure.
-    await Purchases.setLogLevel(__DEV__ ? LOG_LEVEL.DEBUG : LOG_LEVEL.ERROR);
+    // Must stay the first statement in this try — no `await` above it.
     Purchases.configure({ apiKey });
-    hasConfigured = true;
     console.log('[revenueCat:configure] SDK configurado', { platform: Platform.OS });
   } catch (err) {
     logRevenueCatError('configure', err);
-    throw err;
+    return Promise.reject(err); // not cached — a later call can retry
   }
+
+  // SDK-internal log verbosity only — never touches our own console.log/
+  // console.error calls elsewhere in this file (those stay in every build).
+  // Deliberately fire-and-forget and AFTER `configure()`: it doesn't require
+  // prior configuration and must never delay or fail the shared
+  // configuration promise other functions depend on.
+  Purchases.setLogLevel(__DEV__ ? LOG_LEVEL.DEBUG : LOG_LEVEL.ERROR).catch((err) =>
+    logRevenueCatError('configure:setLogLevel', err),
+  );
+
+  configurationPromise = Promise.resolve();
+  return configurationPromise;
+}
+
+/**
+ * Every other function in this file awaits this before calling any other
+ * `Purchases.*` method — the structural guarantee described in
+ * `configureRevenueCat()`'s doc comment. Not a timing/delay mechanism: this
+ * either returns an already-resolved promise (the overwhelmingly common
+ * case — App.tsx's module-scope bootstrap call has already run by the time
+ * React mounts and any of these functions can be invoked) or, defensively,
+ * triggers configuration itself if some future call site is ever reached
+ * without that bootstrap having run — never allowing an unconfigured call to
+ * reach the native SDK either way.
+ */
+function ensureConfigured(): Promise<void> {
+  return configureRevenueCat();
 }
 
 /**
@@ -105,6 +158,7 @@ export async function configureRevenueCat(): Promise<void> {
  */
 export async function loginRevenueCat(uid: string): Promise<void> {
   try {
+    await ensureConfigured();
     await Purchases.logIn(uid);
     console.log('[revenueCat:login] identificado', { uid });
   } catch (err) {
@@ -121,6 +175,7 @@ export async function loginRevenueCat(uid: string): Promise<void> {
  */
 export async function logoutRevenueCat(): Promise<void> {
   try {
+    await ensureConfigured();
     await Purchases.logOut();
     console.log('[revenueCat:logout] usuário deslogado (App User ID anônimo)');
   } catch (err) {
@@ -137,6 +192,7 @@ export async function logoutRevenueCat(): Promise<void> {
  */
 export async function getCustomerInfo(): Promise<CustomerInfo> {
   try {
+    await ensureConfigured();
     const info = await Purchases.getCustomerInfo();
     console.log('[revenueCat:customerInfo]', {
       activeEntitlements: Object.keys(info.entitlements.active),
@@ -166,6 +222,7 @@ export async function refreshCustomerInfo(): Promise<CustomerInfo> {
  */
 export async function getOfferings(): Promise<PurchasesOfferings> {
   try {
+    await ensureConfigured();
     const offerings = await Purchases.getOfferings();
     console.log('[revenueCat:offerings]', {
       current: offerings.current?.identifier ?? null,
@@ -243,6 +300,7 @@ export type PurchaseOutcome =
  */
 export async function purchasePackage(pkg: PurchasesPackage): Promise<PurchaseOutcome> {
   try {
+    await ensureConfigured();
     const { customerInfo } = await Purchases.purchasePackage(pkg);
     console.log('[revenueCat:purchase] concluída', {
       product: pkg.product.identifier,
@@ -277,6 +335,7 @@ export type RestoreOutcome =
  */
 export async function restorePurchases(): Promise<RestoreOutcome> {
   try {
+    await ensureConfigured();
     const customerInfo = await Purchases.restorePurchases();
     const hasPremium = Boolean(customerInfo.entitlements.active[PREMIUM_ENTITLEMENT_ID]);
     console.log('[revenueCat:restore] concluída', { hasPremium });

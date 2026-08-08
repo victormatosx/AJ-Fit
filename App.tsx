@@ -33,14 +33,23 @@ import { colors } from './src/theme/tokens';
 /**
  * Configures the RevenueCat SDK at module evaluation time — the same
  * singleton-bootstrap pattern src/lib/firebase.ts already uses for
- * `auth`/`db`. Never called from a screen or from SubscriptionContext
- * (docs/13_assinaturas_e_billing.md): SubscriptionProvider assumes the SDK is
- * already configured by the time it mounts and only reads/syncs CustomerInfo.
- * `Purchases.configure` itself is synchronous, so this doesn't block the
- * first render — a missing/invalid key is only logged, never thrown into the
- * app tree. `configureRevenueCat` is idempotent (see revenueCatService.ts),
- * so this line re-running under Fast Refresh (editing this file re-executes
- * its top-level code) is harmless.
+ * `auth`/`db`. Never called from a screen: SubscriptionProvider and every
+ * other SDK-touching function in revenueCatService.ts independently await
+ * configuration readiness themselves (see `ensureConfigured()` there) — this
+ * call is only what triggers configuration as early as possible, not what
+ * makes later calls safe.
+ *
+ * This line running before `registerRootComponent(App)` (index.ts) — i.e.
+ * before React mounts anything or fires a single effect — is what guarantees
+ * `Purchases.configure()`'s synchronous JS call (see
+ * `configureRevenueCat()`'s doc comment for why it must stay synchronous,
+ * with no `await` preceding it) always happens first, deterministically,
+ * regardless of how fast Firebase auth or any other effect resolves. Not
+ * awaited here on purpose: a missing/invalid key must only be logged, never
+ * thrown into the app tree at bootstrap — every real caller downstream still
+ * gets that same rejection via `ensureConfigured()`. `configureRevenueCat`
+ * is idempotent, so this line re-running under Fast Refresh (editing this
+ * file re-executes its top-level code) is harmless.
  */
 configureRevenueCat().catch((err) => logRevenueCatError('bootstrap', err));
 
