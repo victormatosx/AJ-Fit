@@ -113,7 +113,6 @@ export function PremiumScreen({ onDone }: { onDone: () => void }) {
   const [restoreState, setRestoreState] = useState<RestoreUiState>({ kind: 'idle' });
 
   useEffect(() => {
-    console.log('[premiumScreen] aberta — carregando offerings');
     loadOfferings();
   }, [loadOfferings]);
 
@@ -124,16 +123,6 @@ export function PremiumScreen({ onDone }: { onDone: () => void }) {
     // hidden by mistake: this list is exhaustive for what this screen shows.
     return all.filter((p) => p.packageType === 'ANNUAL' || p.packageType === 'MONTHLY');
   }, [offerings]);
-
-  // [premium] tagged logs per the fallback spec: exactly one of these fires
-  // whenever Offerings settle into a real state (loaded vs. fallback).
-  useEffect(() => {
-    if (offeringsUnavailable) {
-      console.log('[premium] Fallback ativado', { motivo: 'Offerings indisponíveis na App Store' });
-    } else if (offerings && packages.length > 0) {
-      console.log('[premium] Offerings carregados', { pacotes: packages.map((p) => p.identifier) });
-    }
-  }, [offeringsUnavailable, offerings, packages]);
 
   useEffect(() => {
     if (offeringsUnavailable) {
@@ -154,12 +143,10 @@ export function PremiumScreen({ onDone }: { onDone: () => void }) {
 
   const handlePurchase = useCallback(async () => {
     if (offeringsUnavailable) {
-      console.log('[premium] Purchase bloqueado', { motivo: 'Offerings ainda indisponíveis' });
       Alert.alert(OFFERINGS_UNAVAILABLE_ALERT_TITLE, OFFERINGS_UNAVAILABLE_MESSAGE, [{ text: 'Entendi' }]);
       return;
     }
     if (!selectedPackage || purchaseState.kind === 'purchasing') return;
-    console.log('[premiumScreen] iniciando compra', { product: selectedPackage.product.identifier });
     setPurchaseState({ kind: 'purchasing' });
     const outcome = await purchase(selectedPackage);
     if (outcome.status === 'purchased') {
@@ -178,7 +165,6 @@ export function PremiumScreen({ onDone }: { onDone: () => void }) {
 
   const handleRestore = useCallback(async () => {
     if (restoreState.kind === 'restoring') return;
-    console.log('[premiumScreen] iniciando restauração de compras');
     setRestoreState({ kind: 'restoring' });
     const outcome = await restore();
     if (outcome.status === 'restored') {
@@ -194,9 +180,8 @@ export function PremiumScreen({ onDone }: { onDone: () => void }) {
     }
     if (outcome.offeringsUnavailable) {
       // Expected while Apple hasn't approved the subscriptions yet — not a
-      // real failure, so no red/error UI and no console.error (the SDK-level
-      // classification + suppression lives in revenueCatService.ts).
-      console.log('[premium] Offerings ainda indisponíveis (Apple em aprovação)');
+      // real failure, so no red/error UI (the SDK-level classification +
+      // suppression lives in revenueCatService.ts).
       setRestoreState({ kind: 'notice', message: OFFERINGS_UNAVAILABLE_RESTORE_NOTICE });
       return;
     }

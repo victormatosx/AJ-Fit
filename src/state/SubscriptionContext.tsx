@@ -10,6 +10,8 @@ import React, {
 import type { CustomerInfo, PurchasesOfferings, PurchasesPackage } from 'react-native-purchases';
 import { useAuth } from './AuthContext';
 import {
+  addCustomerInfoListener,
+  removeCustomerInfoListener,
   loginRevenueCat,
   logoutRevenueCat,
   refreshCustomerInfo as fetchCustomerInfo,
@@ -142,6 +144,20 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
         }
       });
   }, [uid, initializing]);
+
+  // Keeps `customerInfo` live for changes the SDK becomes aware of on its
+  // own (renewals, cancellations, promotional grants, cross-device changes)
+  // — not just the sync points this Provider triggers itself above. Runs for
+  // the Provider's whole lifetime; RevenueCat's recommended pattern for
+  // React Native.
+  useEffect(() => {
+    const listener = (info: CustomerInfo) => {
+      setCustomerInfo(info);
+      setConfigured(true);
+    };
+    addCustomerInfoListener(listener);
+    return () => removeCustomerInfoListener(listener);
+  }, []);
 
   const refreshCustomerInfo = useCallback(async () => {
     const seq = ++syncSeq.current;

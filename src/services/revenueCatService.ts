@@ -3,6 +3,7 @@ import Purchases, {
   LOG_LEVEL,
   PURCHASES_ERROR_CODE,
   type CustomerInfo,
+  type CustomerInfoUpdateListener,
   type PurchasesError,
   type PurchasesOfferings,
   type PurchasesPackage,
@@ -101,6 +102,7 @@ export function configureRevenueCat(): Promise<void> {
   if (configurationPromise) return configurationPromise;
 
   const apiKey = currentApiKey();
+
   if (!apiKey) {
     const err = new Error(
       'RevenueCat não configurado: defina EXPO_PUBLIC_REVENUECAT_IOS_API_KEY / ' +
@@ -114,17 +116,14 @@ export function configureRevenueCat(): Promise<void> {
   try {
     // Must stay the first statement in this try — no `await` above it.
     Purchases.configure({ apiKey });
-    console.log('[revenueCat:configure] SDK configurado', { platform: Platform.OS });
   } catch (err) {
     logRevenueCatError('configure', err);
     return Promise.reject(err); // not cached — a later call can retry
   }
 
-  // SDK-internal log verbosity only — never touches our own console.log/
-  // console.error calls elsewhere in this file (those stay in every build).
-  // Deliberately fire-and-forget and AFTER `configure()`: it doesn't require
-  // prior configuration and must never delay or fail the shared
-  // configuration promise other functions depend on.
+  // SDK-internal log verbosity only. Deliberately fire-and-forget and AFTER
+  // `configure()`: it doesn't require prior configuration and must never
+  // delay or fail the shared configuration promise other functions depend on.
   Purchases.setLogLevel(__DEV__ ? LOG_LEVEL.DEBUG : LOG_LEVEL.ERROR).catch((err) =>
     logRevenueCatError('configure:setLogLevel', err),
   );
@@ -160,7 +159,6 @@ export async function loginRevenueCat(uid: string): Promise<void> {
   try {
     await ensureConfigured();
     await Purchases.logIn(uid);
-    console.log('[revenueCat:login] identificado', { uid });
   } catch (err) {
     logRevenueCatError('login', err);
     throw err;
@@ -177,7 +175,6 @@ export async function logoutRevenueCat(): Promise<void> {
   try {
     await ensureConfigured();
     await Purchases.logOut();
-    console.log('[revenueCat:logout] usuário deslogado (App User ID anônimo)');
   } catch (err) {
     logRevenueCatError('logout', err);
     throw err;
@@ -194,9 +191,6 @@ export async function getCustomerInfo(): Promise<CustomerInfo> {
   try {
     await ensureConfigured();
     const info = await Purchases.getCustomerInfo();
-    console.log('[revenueCat:customerInfo]', {
-      activeEntitlements: Object.keys(info.entitlements.active),
-    });
     return info;
   } catch (err) {
     logRevenueCatError('getCustomerInfo', err);
@@ -216,6 +210,22 @@ export async function refreshCustomerInfo(): Promise<CustomerInfo> {
 }
 
 /**
+ * Subscribes to CustomerInfo pushed by the SDK outside of an explicit call
+ * in this file (renewals, cancellations, promotional grants, cross-device
+ * changes) — RevenueCat's documented pattern for React Native so entitlement
+ * state stays live without requiring an app restart or a manual refresh.
+ * Callers must hold onto `listener` and pass the same reference to
+ * `removeCustomerInfoListener` on cleanup.
+ */
+export function addCustomerInfoListener(listener: CustomerInfoUpdateListener): void {
+  Purchases.addCustomerInfoUpdateListener(listener);
+}
+
+export function removeCustomerInfoListener(listener: CustomerInfoUpdateListener): void {
+  Purchases.removeCustomerInfoUpdateListener(listener);
+}
+
+/**
  * Fetches the Offerings configured in the RevenueCat dashboard (docs
  * §5/§9: offering `default`, packages `$rc_monthly`/`$rc_annual`). Always
  * live data from the SDK — never mocked, never hardcoded plan/price data.
@@ -224,19 +234,13 @@ export async function getOfferings(): Promise<PurchasesOfferings> {
   try {
     await ensureConfigured();
     const offerings = await Purchases.getOfferings();
-    console.log('[revenueCat:offerings]', {
-      current: offerings.current?.identifier ?? null,
-      packages: offerings.current?.availablePackages.map((p) => p.identifier) ?? [],
-    });
     return offerings;
   } catch (err) {
-    if (isOfferingsUnavailableError(err)) {
-      // Expected while the store hasn't made the products resolvable yet
-      // (see isOfferingsUnavailableError's doc comment) — not a real failure,
-      // so no console.error. The caller (SubscriptionContext) still throws
-      // this through to the screen's fallback state.
-      console.log('[revenueCat:offerings] indisponíveis (produtos ainda não resolvidos pela loja)');
-    } else {
+    // isOfferingsUnavailableError: expected while the store hasn't made the
+    // products resolvable yet (see that function's doc comment) — not a real
+    // failure, so no console.error. The caller (SubscriptionContext) still
+    // throws this through to the screen's fallback state.
+    if (!isOfferingsUnavailableError(err)) {
       logRevenueCatError('offerings', err);
     }
     throw err;
@@ -302,16 +306,9 @@ export async function purchasePackage(pkg: PurchasesPackage): Promise<PurchaseOu
   try {
     await ensureConfigured();
     const { customerInfo } = await Purchases.purchasePackage(pkg);
-    console.log('[revenueCat:purchase] concluída', {
-      product: pkg.product.identifier,
-      activeEntitlements: Object.keys(customerInfo.entitlements.active),
-    });
     return { status: 'purchased', customerInfo };
   } catch (err) {
     if (isCancelledError(err)) {
-      console.log('[revenueCat:purchase] cancelada pelo usuário', {
-        product: pkg.product.identifier,
-      });
       return { status: 'cancelled' };
     }
     logRevenueCatError('purchase', err);
@@ -338,16 +335,12 @@ export async function restorePurchases(): Promise<RestoreOutcome> {
     await ensureConfigured();
     const customerInfo = await Purchases.restorePurchases();
     const hasPremium = Boolean(customerInfo.entitlements.active[PREMIUM_ENTITLEMENT_ID]);
-    console.log('[revenueCat:restore] concluída', { hasPremium });
     return { status: 'restored', customerInfo, hasPremium };
   } catch (err) {
     const offeringsUnavailable = isOfferingsUnavailableError(err);
-    if (offeringsUnavailable) {
-      // Same expected/known scenario as getOfferings() above — informative
-      // log only, no console.error. The caller (PremiumScreen) also logs its
-      // own "[premium] Offerings ainda indisponíveis" line for this case.
-      console.log('[revenueCat:restore] offerings indisponíveis (produtos ainda não resolvidos pela loja)');
-    } else {
+    // Same expected/known scenario as getOfferings() above — not a real
+    // failure, so no console.error in that case.
+    if (!offeringsUnavailable) {
       logRevenueCatError('restore', err);
     }
     return {
