@@ -24,8 +24,10 @@ import { QuizScreen } from './src/screens/QuizScreen';
 import { AnalyzingScreen } from './src/screens/AnalyzingScreen';
 import { PlanReadyScreen } from './src/screens/PlanReadyScreen';
 import { AuthScreen } from './src/screens/AuthScreen';
+import { EmailVerificationScreen } from './src/screens/EmailVerificationScreen';
 import { PaywallScreen } from './src/screens/PaywallScreen';
 import { AppShell } from './src/screens/AppShell';
+import { requiresEmailVerification } from './src/lib/emailVerification';
 import { colors } from './src/theme/tokens';
 import { initI18n } from './src/i18n';
 import { reconcileLanguageOnLoad } from './src/i18n/syncLanguage';
@@ -39,11 +41,12 @@ type ScreenId =
   | 'analyzing'
   | 'plan'
   | 'auth'
+  | 'emailVerification'
   | 'paywall'
   | 'app';
 
 // Screens that require an authenticated user.
-const PROTECTED: ScreenId[] = ['paywall', 'app'];
+const PROTECTED: ScreenId[] = ['emailVerification', 'paywall', 'app'];
 
 // Pre-app funnel screens. An authenticated user who already satisfies every
 // access requirement (currently: has a questionnaire) should never be shown
@@ -55,6 +58,7 @@ const FUNNEL_ONLY: ScreenId[] = [
   'analyzing',
   'plan',
   'auth',
+  'emailVerification',
 ];
 
 function Loading() {
@@ -69,6 +73,7 @@ function Loading() {
 
 function RootNavigator() {
   const { user, profile, questionnaire, initializing, profileLoading, refreshProfile } = useAuth();
+  const emailVerificationRequired = requiresEmailVerification(user);
   const { quiz } = useAppState();
   const [screen, setScreenState] = useState<ScreenId>('splash');
   // Mirrors `screen` synchronously so late/stale callbacks (e.g. the splash
@@ -110,11 +115,9 @@ function RootNavigator() {
 
   // Single source of truth for navigation: authenticated users are routed
   // purely from their current state — never from the screen they happen to
-  // be on — so the rule "no questionnaire ⇒ no app" holds no matter how the
-  // user got authenticated (email, Google, Apple, a restored session) or
-  // which screen was showing when auth state changed. Runs on cold start and
-  // on every subsequent auth/questionnaire change (login, logout, forced
-  // questionnaire completion).
+  // be on — so email verification and questionnaire requirements hold no
+  // matter how the user got authenticated or which screen was showing. Runs
+  // on cold start and every later auth/profile/verification change.
   useEffect(() => {
     // `profileLoading` covers the gap between a sign-in/sign-up call setting
     // `user` and its matching Firestore read landing in `questionnaire` —
@@ -131,6 +134,14 @@ function RootNavigator() {
       return;
     }
 
+    if (emailVerificationRequired) {
+      // Firebase Authentication is authoritative. A linked or restored user
+      // with the password provider cannot reach any other screen while the
+      // server-backed `emailVerified` flag remains false.
+      if (screen !== 'emailVerification') setScreen('emailVerification');
+      return;
+    }
+
     if (!questionnaire) {
       // Authenticated but without a questionnaire — mandatory detour,
       // regardless of screen (covers social-login first-timers and any
@@ -141,7 +152,15 @@ function RootNavigator() {
 
     // Authenticated + has a questionnaire: never show the signup funnel.
     if (FUNNEL_ONLY.includes(screen)) setScreen('app');
-  }, [initializing, profileLoading, preferencesReconciling, user, questionnaire, screen]);
+  }, [
+    initializing,
+    profileLoading,
+    preferencesReconciling,
+    user,
+    emailVerificationRequired,
+    questionnaire,
+    screen,
+  ]);
 
   if (initializing) return <Loading />;
 
@@ -194,6 +213,7 @@ function RootNavigator() {
       {screen === 'analyzing' && <AnalyzingScreen onDone={() => setScreen('plan')} />}
       {screen === 'plan' && <PlanReadyScreen onContinue={() => setScreen('auth')} />}
       {screen === 'auth' && <AuthScreen />}
+      {screen === 'emailVerification' && <EmailVerificationScreen />}
       {screen === 'paywall' && <PaywallScreen onDone={() => setScreen('app')} />}
       {screen === 'app' && <AppShell />}
       {savingQuestionnaire && (

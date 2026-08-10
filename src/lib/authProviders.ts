@@ -1,8 +1,8 @@
-import type { User } from 'firebase/auth';
-
 export const PASSWORD_PROVIDER_ID = 'password';
 
-type ProviderUser = Pick<User, 'providerData'>;
+type ProviderUser = {
+  providerData: ReadonlyArray<{ providerId: string }>;
+};
 
 export function hasPasswordProvider(
   user: ProviderUser | null | undefined,

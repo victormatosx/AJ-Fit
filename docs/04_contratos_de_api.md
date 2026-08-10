@@ -154,6 +154,30 @@ uid (`setDoc`) — nunca `addDoc`/auto-id.
 
 Métodos suportados (12_seguranca §5): **e-mail/senha, Google, Apple**.
 
+### Verificação de e-mail para contas com senha
+
+Contas que possuam o provider Firebase `password` precisam ter
+`User.emailVerified === true` antes de acessar o fluxo principal. A fonte de
+verdade é exclusivamente o usuário retornado pelo Firebase Authentication;
+nenhum campo equivalente é gravado no Firestore ou na persistência local.
+
+Fluxo de cadastro por e-mail/senha:
+
+1. `createUserWithEmailAndPassword` cria o usuário;
+2. `sendEmailVerification(user)` é iniciado uma única vez automaticamente;
+3. o provisionamento normal de perfil/questionário é preservado;
+4. o guard central mantém o usuário em `EmailVerificationScreen` enquanto
+   houver provider `password` e `emailVerified === false`;
+5. a ação de confirmação executa `user.reload()` e relê
+   `auth.currentUser.emailVerified` antes de liberar o fluxo;
+6. reenvios posteriores usam `sendEmailVerification` somente após ação
+   explícita, com bloqueio de submissão simultânea e tratamento de rate limit.
+
+Google e Apple não são marcados localmente como verificados. Contas sem o
+provider `password` não entram nesse bloqueio; contas vinculadas que incluam
+`password` seguem o valor real de `emailVerified` retornado/atualizado pelo
+Firebase após o linking.
+
 Implementação (Firebase JS SDK, apps nativos iOS/Android via dev/EAS build):
 
 - Google: `@react-native-google-signin/google-signin` → `idToken` →

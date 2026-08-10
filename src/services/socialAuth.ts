@@ -123,8 +123,9 @@ export async function completeLinkingWithPassword(
   try {
     const { user } = await signInWithEmailAndPassword(auth, email.trim(), password);
     if (pendingCredential) {
-      await linkWithCredential(user, pendingCredential);
+      const { user: linkedUser } = await linkWithCredential(user, pendingCredential);
       pendingCredential = null;
+      return linkedUser;
     }
     return user;
   } catch (err) {
@@ -152,8 +153,9 @@ export async function completeLinkingWithProvider(
     const { user } = await signInWithCredential(auth, result.credential);
     await applyDisplayName(user, result.displayName);
     if (pendingCredential) {
-      await linkWithCredential(user, pendingCredential);
+      const { user: linkedUser } = await linkWithCredential(user, pendingCredential);
       pendingCredential = null;
+      return linkedUser;
     }
     return user;
   } catch (err) {

@@ -1369,3 +1369,50 @@ Validar visualmente a transição entre Adicionar avaliação e Histórico em te
 iOS e Android.
 
 ---
+
+Data: 2026-08-10
+Responsável: Codex — Agente Frontend + Segurança + QA
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Implementada a verificação obrigatória de e-mail exclusivamente para contas
+que possuam o provider Firebase `password`. O cadastro inicia um único
+`sendEmailVerification` assim que o usuário é criado, preservando em paralelo
+o provisionamento existente. A nova `EmailVerificationScreen`, o hook e o
+serviço dedicado oferecem confirmação explícita via `User.reload()`, reenvio
+manual com loading/rate limit, feedback localizado e logout pelo fluxo já
+existente.
+
+O guard central de `App.tsx` passou a priorizar a condição `password` +
+`emailVerified === false` antes do questionário e do aplicativo, inclusive em
+sessões restauradas. Firebase Authentication permanece como única fonte de
+verdade; nenhum campo foi adicionado ao Firestore ou à persistência local.
+Google e Apple foram preservados sem regra de verificação inferida por
+provider. O linking continua no mesmo UID e agora devolve explicitamente o
+`User` atualizado retornado por `linkWithCredential`, incluindo o valor real
+de `emailVerified` após a operação.
+
+Impacto:
+Usuários de e-mail/senha não acessam o fluxo principal até a confirmação real
+no Firebase. Contas exclusivamente Google/Apple não são bloqueadas. Não houve
+migração do Firebase Auth, dependência nova, alteração de Rules, deep linking,
+polling ou implementação de MFA.
+
+Testes feitos:
+- serviço de envio/recarga, sessão nula/trocada e
+  `auth/too-many-requests` com mocks;
+- regra do guard para password verificado/não verificado, Google, Apple,
+  providers vinculados e ausência de sessão;
+- contrato estrutural do guard, cadastro, logout e account linking;
+- paridade e cobertura de textos em pt-BR, inglês e espanhol;
+- suíte completa e TypeScript.
+
+Próxima ação:
+Humano coordenador validar o fluxo real em development build com contas de
+teste e-mail/senha, Google e Apple. O repositório não possui emulador de
+Firebase Auth; os testes automatizados cobrem o contrato com mocks.
+
+Assinatura:
+Codex — 2026-08-10 — prompt da tarefa de verificação de e-mail (versão 1).
+
+---

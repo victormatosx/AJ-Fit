@@ -87,6 +87,32 @@ Toda operação autenticada exige usuário válido.
 
 O sistema não deve permitir acesso anônimo.
 
+### Verificação de e-mail
+
+Para usuários que possuam o provider `password`, o acesso ao aplicativo
+principal exige que o Firebase Authentication informe
+`User.emailVerified === true`.
+
+O guard central aplica a regra em toda mudança/restauração de sessão:
+
+```txt
+usuário autenticado
++ provider password
++ emailVerified false
+→ fluxo obrigatório de verificação de e-mail
+```
+
+A confirmação no cliente sempre executa `User.reload()` antes de reler o
+estado. A interface, o Firestore, o AsyncStorage e o armazenamento seguro não
+podem criar ou persistir uma confirmação paralela. Google/Apple não recebem
+exceção baseada no nome do provider: o valor de `emailVerified` continua vindo
+do Firebase, e o bloqueio obrigatório se aplica apenas quando `password` está
+entre os providers vinculados.
+
+O primeiro e-mail é enviado uma vez após o cadastro por e-mail/senha. Novos
+envios dependem de ação explícita do usuário, sem polling ou envio automático
+no mount, e respeitam o rate limit do Firebase (`auth/too-many-requests`).
+
 ---
 
 # 6. Sessões
