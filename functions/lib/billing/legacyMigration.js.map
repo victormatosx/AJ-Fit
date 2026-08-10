@@ -1,0 +1,1 @@
+{"version":3,"file":"legacyMigration.js","sourceRoot":"","sources":["../../src/billing/legacyMigration.ts"],"names":[],"mappings":";;AAqEA,gDAOC;AA5ED,2CAA+C;AAE/C;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;GA0DG;AAEH;;;;;;GAMG;AACI,KAAK,UAAU,kBAAkB,CAAC,OAAgB;IACvD,MAAM,IAAI,KAAK,CACb,uEAAuE;QACrE,4EAA4E;QAC5E,WAAW,4BAAgB,uDAAuD;QAClF,gDAAgD,CACnD,CAAC;AACJ,CAAC"}
