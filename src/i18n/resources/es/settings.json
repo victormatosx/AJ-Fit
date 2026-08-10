@@ -7,7 +7,8 @@
     "preferences": "Preferencias",
     "privacyAndData": "Privacidad y datos",
     "support": "Soporte",
-    "about": "Acerca de"
+    "about": "Acerca de",
+    "development": "Desarrollo"
   },
   "items": {
     "editProfile": "Editar perfil",
@@ -29,10 +30,15 @@
     "sendSuggestion": "Enviar sugerencia",
     "reportProblem": "Informar de un problema",
     "version": "Versión",
-    "licenses": "Licencias Open Source"
+    "licenses": "Licencias Open Source",
+    "totpMfaPoc": "POC TOTP MFA"
   },
   "values": {
     "darkTheme": "Oscuro"
+  },
+  "development": {
+    "description": "Herramientas temporales disponibles solo en builds de desarrollo.",
+    "totpMfaPocDescription": "Registro y challenge TOTP experimentales; no es la experiencia final de 2FA."
   },
   "security": {
     "screenTitle": "Seguridad",

@@ -29,6 +29,13 @@ import {
   PROVIDER_LABELS,
   type SocialProvider,
 } from '../services/socialAuth';
+import { isMultiFactorAuthRequired, totpMfaIssueFromError } from '../lib/totpMfaPoc';
+import {
+  captureTotpMfaSignInPoc,
+  clearPendingTotpMfaSignInPoc,
+  type TotpSignInChallenge,
+} from '../services/totpMfaPoc';
+import { TotpMfaPocChallengeScreen } from './TotpMfaPocChallengeScreen';
 
 type Mode = 'signup' | 'login' | 'reset';
 
@@ -95,6 +102,7 @@ export function AuthScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const [totpChallenge, setTotpChallenge] = useState<TotpSignInChallenge | null>(null);
 
   // Social auth
   const [socialBusy, setSocialBusy] = useState<SocialProvider | null>(null);
@@ -143,6 +151,8 @@ export function AuthScreen() {
           };
 
   function switchMode(next: Mode) {
+    clearPendingTotpMfaSignInPoc();
+    setTotpChallenge(null);
     setMode(next);
     setError(null);
     setInfo(null);
@@ -241,6 +251,17 @@ export function AuthScreen() {
         setInfo(t('reset.success'));
       }
     } catch (err) {
+      if (__DEV__ && mode === 'login' && isMultiFactorAuthRequired(err)) {
+        try {
+          setTotpChallenge(captureTotpMfaSignInPoc(err));
+          return;
+        } catch (resolverError) {
+          setError(
+            t(`totpMfaPoc.errors.${totpMfaIssueFromError(resolverError)}`),
+          );
+          return;
+        }
+      }
       setError(localizedAuthError(err, t, 'errors.generic'));
     } finally {
       setLoading(false);
@@ -253,6 +274,19 @@ export function AuthScreen() {
       : mode === 'login'
         ? t('actions.signIn')
         : t('actions.sendLink');
+
+  if (__DEV__ && totpChallenge) {
+    return (
+      <TotpMfaPocChallengeScreen
+        challenge={totpChallenge}
+        onCancel={() => {
+          clearPendingTotpMfaSignInPoc();
+          setTotpChallenge(null);
+          setPassword('');
+        }}
+      />
+    );
+  }
 
   return (
     <ScreenBg>

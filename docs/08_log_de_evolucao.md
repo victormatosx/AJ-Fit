@@ -1416,3 +1416,41 @@ Assinatura:
 Codex — 2026-08-10 — prompt da tarefa de verificação de e-mail (versão 1).
 
 ---
+
+Data: 2026-08-10
+Responsável: Codex — Agente Frontend + Segurança + QA
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+POC técnica isolada de TOTP MFA preparada na branch
+`feature/totp-mfa-poc`, mantendo Firebase Authentication no JS SDK. A POC
+temporária e exclusiva de development cobre geração do segredo, URI
+`otpauth://`, assertion/enrollment, leitura de `enrolledFactors`, captura de
+`auth/multi-factor-auth-required`, seleção do hint TOTP e resolução do login.
+O fluxo concluído por `resolveSignIn` não navega manualmente: permanece sob o
+listener do `AuthContext` e o guard central já existente.
+
+Resultado:
+TypeScript, 870 testes da suíte completa, 548 testes de i18n, auditoria i18n e
+21 verificações do Expo Doctor foram aprovados. A execução real do ciclo com o
+backend Firebase e autenticador ainda não foi realizada em development builds
+Android e iOS; portanto, o resultado desta fase permanece **NO-GO** até a
+validação obrigatória nos dois sistemas.
+
+Impacto:
+Não houve implementação de MFA de produção, migração de SDK, dependência nova,
+mudança de persistência, Firestore/Storage Rules, claims, SMS, reCAPTCHA ou
+alteração da `SecurityScreen`. O segredo e o OTP não são persistidos nem
+logados. O acesso à POC e a captura experimental no login são condicionados a
+`__DEV__`.
+
+Próxima ação:
+Executar enrollment, código incorreto e novo login com TOTP em Android e iOS,
+confirmando que um usuário com questionário existente retorna ao Dashboard e
+não ao Quiz. Somente após os dois resultados reais a POC poderá ser marcada
+como GO.
+
+Assinatura:
+Codex — 2026-08-10 — Fase 1 da POC TOTP MFA.
+
+---

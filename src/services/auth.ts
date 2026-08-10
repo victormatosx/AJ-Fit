@@ -9,6 +9,7 @@ import {
 } from 'firebase/auth';
 import { auth } from '../lib/firebase';
 import { clearSecureAuthSession } from '../lib/secureAuthStorage';
+import { isMultiFactorAuthRequired } from '../lib/totpMfaPoc';
 
 /**
  * Reusable, typed authentication service.
@@ -119,6 +120,10 @@ export async function signInWithEmail(
     );
     return user;
   } catch (err) {
+    // POC-only exception: getMultiFactorResolver requires the original
+    // MultiFactorError (including customData). Production error normalization
+    // remains unchanged for every other error and for non-development builds.
+    if (__DEV__ && isMultiFactorAuthRequired(err)) throw err;
     throw toAuthError(err);
   }
 }

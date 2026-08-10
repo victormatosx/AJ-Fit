@@ -7,7 +7,8 @@
     "preferences": "Preferences",
     "privacyAndData": "Privacy & data",
     "support": "Support",
-    "about": "About"
+    "about": "About",
+    "development": "Development"
   },
   "items": {
     "editProfile": "Edit profile",
@@ -29,10 +30,15 @@
     "sendSuggestion": "Send suggestion",
     "reportProblem": "Report a problem",
     "version": "Version",
-    "licenses": "Open Source Licenses"
+    "licenses": "Open Source Licenses",
+    "totpMfaPoc": "TOTP MFA POC"
   },
   "values": {
     "darkTheme": "Dark"
+  },
+  "development": {
+    "description": "Temporary tools available only in development builds.",
+    "totpMfaPocDescription": "Experimental TOTP enrollment and challenge; this is not the final 2FA experience."
   },
   "security": {
     "screenTitle": "Security",
