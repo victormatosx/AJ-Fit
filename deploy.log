@@ -1,0 +1,104 @@
+[2026-08-09T11:56:59.809Z] ----------------------------------------------------------------------
+[2026-08-09T11:56:59.812Z] Command:       /Users/victor/.nvm/versions/node/v20.20.2/bin/node /Users/victor/.nvm/versions/node/v20.20.2/bin/firebase deploy --only functions --debug
+[2026-08-09T11:56:59.812Z] CLI Version:   15.25.1
+[2026-08-09T11:56:59.812Z] Platform:      darwin
+[2026-08-09T11:56:59.812Z] Node Version:  v20.20.2
+[2026-08-09T11:56:59.812Z] Detected Agent: unknown
+[2026-08-09T11:56:59.812Z] Time:          Sun Aug 09 2026 08:56:59 GMT-0300 (Brasilia Standard Time)
+[2026-08-09T11:56:59.813Z] ----------------------------------------------------------------------
+
+[2026-08-09T11:57:00.315Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[2026-08-09T11:57:00.315Z] > authorizing via signed-in user (victor.matos3112@gmail.com)
+[2026-08-09T11:57:00.315Z] [iam] checking project ajfit-2f321 for permissions ["cloudfunctions.functions.create","cloudfunctions.functions.delete","cloudfunctions.functions.get","cloudfunctions.functions.list","cloudfunctions.functions.update","cloudfunctions.operations.get","firebase.projects.get"]
+[2026-08-09T11:57:00.316Z] Checked if tokens are valid: true, expires at: 1786279210352
+[2026-08-09T11:57:00.316Z] Checked if tokens are valid: true, expires at: 1786279210352
+[2026-08-09T11:57:00.316Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/ajfit-2f321:testIamPermissions [none]
+[2026-08-09T11:57:00.317Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/ajfit-2f321:testIamPermissions  x-goog-user-project=ajfit-2f321
+[2026-08-09T11:57:00.317Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/ajfit-2f321:testIamPermissions {"permissions":["cloudfunctions.functions.create","cloudfunctions.functions.delete","cloudfunctions.functions.get","cloudfunctions.functions.list","cloudfunctions.functions.update","cloudfunctions.operations.get","firebase.projects.get"]}
+[2026-08-09T11:57:03.723Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/ajfit-2f321:testIamPermissions 200
+[2026-08-09T11:57:03.723Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/ajfit-2f321:testIamPermissions {"permissions":["cloudfunctions.functions.create","cloudfunctions.functions.delete","cloudfunctions.functions.get","cloudfunctions.functions.list","cloudfunctions.functions.update","cloudfunctions.operations.get","firebase.projects.get"]}
+[2026-08-09T11:57:03.724Z] Checked if tokens are valid: true, expires at: 1786279210352
+[2026-08-09T11:57:03.724Z] Checked if tokens are valid: true, expires at: 1786279210352
+[2026-08-09T11:57:03.724Z] >>> [apiv2][query] POST https://iam.googleapis.com/v1/projects/ajfit-2f321/serviceAccounts/ajfit-2f321@appspot.gserviceaccount.com:testIamPermissions [none]
+[2026-08-09T11:57:03.724Z] >>> [apiv2][body] POST https://iam.googleapis.com/v1/projects/ajfit-2f321/serviceAccounts/ajfit-2f321@appspot.gserviceaccount.com:testIamPermissions {"permissions":["iam.serviceAccounts.actAs"]}
+[2026-08-09T11:57:04.612Z] <<< [apiv2][status] POST https://iam.googleapis.com/v1/projects/ajfit-2f321/serviceAccounts/ajfit-2f321@appspot.gserviceaccount.com:testIamPermissions 200
+[2026-08-09T11:57:04.613Z] <<< [apiv2][body] POST https://iam.googleapis.com/v1/projects/ajfit-2f321/serviceAccounts/ajfit-2f321@appspot.gserviceaccount.com:testIamPermissions {"permissions":["iam.serviceAccounts.actAs"]}
+
+=== Deploying to 'ajfit-2f321'...
+
+i  deploying functions 
+Running command: npm --prefix "$RESOURCE_DIR" run build
+
+> build
+> tsc -p tsconfig.build.json
+
+✔  functions: Finished running predeploy script. 
+[2026-08-09T11:57:05.407Z] Checked if tokens are valid: true, expires at: 1786279210352
+[2026-08-09T11:57:05.407Z] Checked if tokens are valid: true, expires at: 1786279210352
+[2026-08-09T11:57:05.407Z] >>> [apiv2][query] GET https://cloudresourcemanager.googleapis.com/v1/projects/ajfit-2f321 [none]
+[2026-08-09T11:57:05.896Z] <<< [apiv2][status] GET https://cloudresourcemanager.googleapis.com/v1/projects/ajfit-2f321 200
+[2026-08-09T11:57:05.896Z] <<< [apiv2][body] GET https://cloudresourcemanager.googleapis.com/v1/projects/ajfit-2f321 {"projectNumber":"753375043967","projectId":"ajfit-2f321","lifecycleState":"ACTIVE","name":"ajfit","labels":{"firebase":"enabled","firebase-core":"disabled"},"createTime":"2026-07-04T14:53:26.755Z"}
+i  functions: preparing codebase default for deployment 
+i  functions: ensuring required API cloudfunctions.googleapis.com is enabled... 
+i  functions: ensuring required API cloudbuild.googleapis.com is enabled... 
+i  artifactregistry: ensuring required API artifactregistry.googleapis.com is enabled... 
+[2026-08-09T11:57:05.898Z] Checked if tokens are valid: true, expires at: 1786279210352
+[2026-08-09T11:57:05.898Z] Checked if tokens are valid: true, expires at: 1786279210352
+[2026-08-09T11:57:05.898Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/ajfit-2f321/adminSdkConfig [none]
+[2026-08-09T11:57:06.447Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/ajfit-2f321/adminSdkConfig 200
+[2026-08-09T11:57:06.447Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/ajfit-2f321/adminSdkConfig {"projectId":"ajfit-2f321","storageBucket":"ajfit-2f321.firebasestorage.app"}
+[2026-08-09T11:57:06.448Z] Checked if tokens are valid: true, expires at: 1786279210352
+[2026-08-09T11:57:06.448Z] Checked if tokens are valid: true, expires at: 1786279210352
+[2026-08-09T11:57:06.448Z] >>> [apiv2][query] GET https://runtimeconfig.googleapis.com/v1beta1/projects/ajfit-2f321/configs [none]
+[2026-08-09T11:57:06.931Z] <<< [apiv2][status] GET https://runtimeconfig.googleapis.com/v1beta1/projects/ajfit-2f321/configs 200
+[2026-08-09T11:57:06.931Z] <<< [apiv2][body] GET https://runtimeconfig.googleapis.com/v1beta1/projects/ajfit-2f321/configs {}
+[2026-08-09T11:57:06.933Z] Validating nodejs source
+⚠  functions: Runtime Node.js 20 was deprecated on 2026-04-30 and will be decommissioned on 2026-10-30, after which you will not be able to deploy without upgrading. Consider upgrading now to avoid disruption. See https://cloud.google.com/functions/docs/runtime-support for full details on the lifecycle policy 
+⚠  functions: package.json indicates an outdated version of firebase-functions. Please upgrade using npm install --save firebase-functions@latest in your functions directory. 
+⚠  functions: Please note that there will be breaking changes when you upgrade. 
+[2026-08-09T11:57:07.293Z] > [functions] package.json contents: {
+  "name": "aj-fit-functions",
+  "private": true,
+  "description": "AJ Fit — Cloud Functions (Firebase Admin SDK). Backend-owned logic that must never run on the client: billing sync, RevenueCat webhook, and future workout/account automations (docs/05_desenvolvimento_backend_modulo.md).",
+  "engines": {
+    "node": "20"
+  },
+  "main": "lib/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "build:watch": "tsc -p tsconfig.build.json --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "serve": "npm run build && firebase emulators:start --only functions",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.7.0",
+    "firebase-functions": "^5.1.1"
+  },
+  "devDependencies": {
+    "typescript": "~5.6.3",
+    "vitest": "^4.1.10"
+  }
+}
+[2026-08-09T11:57:07.293Z] Building nodejs source
+i  functions: Loading and analyzing source code for codebase default to determine what to deploy 
+[2026-08-09T11:57:07.293Z] Could not find functions.yaml. Must use http discovery
+[2026-08-09T11:57:07.297Z] Found firebase-functions binary at '/Users/victor/CropSight-Solutions/AJ-Fit/functions/node_modules/.bin/firebase-functions'
+Serving at port 8660
+
+[2026-08-09T11:57:07.479Z] Got response from /__/functions.yaml {"endpoints":{"revenueCatWebhook":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","secretEnvironmentVariables":[{"key":"REVENUECAT_WEBHOOK_SECRET"}],"labels":{},"httpsTrigger":{},"entryPoint":"revenueCatWebhook"}},"specVersion":"v1alpha1","requiredAPIs":[],"extensions":{},"params":[{"type":"secret","name":"REVENUECAT_WEBHOOK_SECRET"}]}
+[2026-08-09T11:57:10.497Z] Checked if tokens are valid: true, expires at: 1786279210352
+[2026-08-09T11:57:10.498Z] Checked if tokens are valid: true, expires at: 1786279210352
+[2026-08-09T11:57:10.498Z] >>> [apiv2][query] GET https://cloudfunctions.googleapis.com/v1/projects/ajfit-2f321/locations/-/functions [none]
+[2026-08-09T11:57:13.769Z] <<< [apiv2][status] GET https://cloudfunctions.googleapis.com/v1/projects/ajfit-2f321/locations/-/functions 403
+[2026-08-09T11:57:13.769Z] <<< [apiv2][body] GET https://cloudfunctions.googleapis.com/v1/projects/ajfit-2f321/locations/-/functions {"error":{"code":403,"message":"Cloud Functions API has not been used in project ajfit-2f321 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/cloudfunctions.googleapis.com/overview?project=ajfit-2f321 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry.","status":"PERMISSION_DENIED","details":[{"@type":"type.googleapis.com/google.rpc.ErrorInfo","reason":"SERVICE_DISABLED","domain":"googleapis.com","metadata":{"activationUrl":"https://console.developers.google.com/apis/api/cloudfunctions.googleapis.com/overview?project=ajfit-2f321","serviceTitle":"Cloud Functions API","consumer":"projects/ajfit-2f321","containerInfo":"ajfit-2f321","service":"cloudfunctions.googleapis.com"}},{"@type":"type.googleapis.com/google.rpc.LocalizedMessage","locale":"en-US","message":"Cloud Functions API has not been used in project ajfit-2f321 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/cloudfunctions.googleapis.com/overview?project=ajfit-2f321 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry."},{"@type":"type.googleapis.com/google.rpc.Help","links":[{"description":"Google developers console API activation","url":"https://console.developers.google.com/apis/api/cloudfunctions.googleapis.com/overview?project=ajfit-2f321"}]}]}}
+[2026-08-09T11:57:13.770Z] [functions] failed to list functions for ajfit-2f321
+[2026-08-09T11:57:13.770Z] [functions] Request to https://cloudfunctions.googleapis.com/v1/projects/ajfit-2f321/locations/-/functions had HTTP Error: 403, Cloud Functions API has not been used in project ajfit-2f321 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/cloudfunctions.googleapis.com/overview?project=ajfit-2f321 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry.
+[2026-08-09T11:57:13.992Z] FirebaseError: Request to https://cloudfunctions.googleapis.com/v1/projects/ajfit-2f321/locations/-/functions had HTTP Error: 403, Cloud Functions API has not been used in project ajfit-2f321 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/cloudfunctions.googleapis.com/overview?project=ajfit-2f321 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry.
+    at responseToError (/Users/victor/.nvm/versions/node/v20.20.2/lib/node_modules/firebase-tools/lib/responseToError.js:53:12)
+    at RetryOperation._fn (/Users/victor/.nvm/versions/node/v20.20.2/lib/node_modules/firebase-tools/lib/apiv2.js:415:77)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+
+Error: Failed to list functions for ajfit-2f321
