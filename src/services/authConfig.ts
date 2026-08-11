@@ -33,7 +33,7 @@ export const GOOGLE_WEB_CLIENT_ID =
 
 export const GOOGLE_IOS_CLIENT_ID =
   extra.googleIosClientId ??
-  '753375043967-sfm41c00upk4u0nbee451d3cs9bsbe1s.apps.googleusercontent.com';
+  '753375043967-siop689dt3f7njn4kjtlq6hd1ev9lun2.apps.googleusercontent.com';
 
 /**
  * Throws a clear, actionable error when the Google web client id is not
