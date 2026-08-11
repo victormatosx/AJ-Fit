@@ -1585,3 +1585,48 @@ Assinatura:
 Codex — 2026-08-10 — Fase 4 de reautenticação federada TOTP.
 
 ---
+
+Data: 2026-08-11
+Responsável: Codex — Agente Backend + Segurança
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Implementada a Fase 3 (preparação segura da infraestrutura) do backend do Photo
+Vault. Removido `functions/lib`, código JavaScript compilado e órfão (de uma
+integração RevenueCat desenvolvida em branches remotas separadas, commitado por
+engano no commit `12991ba`), sem `functions/src` correspondente e incompatível
+com o `firestore.rules` atual. Em seu lugar, criada uma estrutura real de Firebase
+Functions v2 em TypeScript (`functions/src`, `functions/package.json`,
+`functions/tsconfig.json`), com `firebase-admin` inicializado via Application
+Default Credentials (sem service account JSON), um logger estruturado com
+política explícita de nunca logar segredos/tokens/chaves, um guard `requireAuth`
+reutilizável para futuras callable functions autenticadas, e uma única function
+real hoje: `backendHealth` (callable pública, retorna apenas `ok`/versão/hora do
+servidor). `firebase.json` passou a declarar a pasta `functions`; criado
+`.firebaserc` com apenas o alias `production` (`ajfit-2f321`), sem `default`, para
+que nenhum deploy aconteça implicitamente. Documentado em
+`docs/20_backend_functions_photo_vault.md`, incluindo o passo a passo manual
+necessário para criar o projeto de staging (ainda inexistente).
+
+Segurança:
+Nenhum Cloud KMS, Vault Key, `createVault`/`recoverVaultKey`, criptografia de
+fotos ou App Check foram implementados nesta fase — travado por teste estrutural
+(`foundationStructure.test.ts`) que falha se qualquer um desses termos aparecer no
+código-fonte do backend. Nenhuma credencial privilegiada foi adicionada ao
+repositório; nenhum deploy (produção ou staging) foi executado.
+
+Validação automática:
+`npm run typecheck`, `npm run build` e `npm run test` (13 testes) aprovados em
+`functions/`. Suíte completa do mobile (`npm run typecheck` + `npm run test`, 945
+testes em 60 arquivos) aprovada sem regressão após as alterações em
+`firebase.json`.
+
+Pendência:
+Criar o projeto Firebase de staging (ação manual, ver
+`docs/20_backend_functions_photo_vault.md` §7) antes de qualquer deploy de
+staging real. Próxima fase: modelagem Firestore/Storage + Rules do Photo Vault.
+
+Assinatura:
+Codex — 2026-08-11 — Fase 3 de preparação segura da infraestrutura backend.
+
+---
