@@ -1454,3 +1454,44 @@ Assinatura:
 Codex — 2026-08-10 — Fase 1 da POC TOTP MFA.
 
 ---
+
+Data: 2026-08-10
+Responsável: Codex — Agente Frontend + Segurança + QA
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Substituído o enrollment experimental da POC por gerenciamento TOTP de
+produção em Configurações → Segurança → Verificação em duas etapas. O status
+é relido de `multiFactor(user).enrolledFactors`; ativação e desativação exigem
+reauth de senha, operam sobre fatores TOTP explícitos e não criam flags no
+Firestore ou na persistência local. O enrollment oferece QR Code, chave
+manual, cópia explícita e abertura segura da URI `otpauth://`.
+
+Segurança:
+O segredo permanece somente na memória do hook e é limpo após sucesso,
+cancelamento, troca de usuário e unmount. Nenhum segredo, OTP ou token é
+logado. Contas somente Google/Apple ficam bloqueadas até a reautenticação
+federada da Fase 3. Na desativação de contas já protegidas, o fluxo também
+resolve o challenge TOTP se o Firebase o exigir durante a reautenticação.
+
+Resultado automático:
+TypeScript, 879 testes da suíte completa, 548 testes de i18n, auditoria i18n,
+21 verificações do Expo Doctor e `git diff --check` aprovados. A validação
+manual desta implementação em development builds Android/iOS permanece
+pendente antes da aprovação humana da fase.
+
+Limites:
+O enrollment DEV da POC e seu acesso em Configurações foram removidos. A ponte
+DEV de challenge por e-mail/senha permanece temporariamente para preservar a
+prova da Fase 1. O challenge definitivo de login para e-mail/senha, Google e
+Apple, recovery e revogação de sessões não foram implementados.
+
+Próxima ação:
+Executar o roteiro manual de ativação, configuração com um celular, código
+incorreto, cancelamento e desativação em Android e iOS. Depois da revisão
+humana, iniciar a Fase 3 para o challenge de login de produção.
+
+Assinatura:
+Codex — 2026-08-10 — Fase 2 de enrollment/gerenciamento TOTP.
+
+---

@@ -7,8 +7,7 @@
     "preferences": "Preferências",
     "privacyAndData": "Privacidade e dados",
     "support": "Suporte",
-    "about": "Sobre",
-    "development": "Desenvolvimento"
+    "about": "Sobre"
   },
   "items": {
     "editProfile": "Editar perfil",
@@ -30,15 +29,10 @@
     "sendSuggestion": "Enviar sugestão",
     "reportProblem": "Reportar problema",
     "version": "Versão",
-    "licenses": "Licenças Open Source",
-    "totpMfaPoc": "POC TOTP MFA"
+    "licenses": "Licenças Open Source"
   },
   "values": {
     "darkTheme": "Escuro"
-  },
-  "development": {
-    "description": "Ferramentas temporárias disponíveis somente no development build.",
-    "totpMfaPocDescription": "Enrollment e challenge TOTP experimentais; não é a experiência final de 2FA."
   },
   "security": {
     "screenTitle": "Segurança",
@@ -61,6 +55,77 @@
       "deleteAccount": "Excluir conta"
     },
     "safetyZoneDescription": "Mantenha sua conta protegida revisando regularmente suas configurações de segurança.",
+    "twoFactor": {
+      "title": "Verificação em duas etapas",
+      "description": "Adicione uma segunda etapa de segurança à sua conta usando um aplicativo autenticador.",
+      "status": { "label": "Status", "loading": "Verificando...", "enabled": "Ativada", "disabled": "Desativada", "unavailable": "Indisponível" },
+      "method": { "authenticator": "Aplicativo autenticador" },
+      "enrolledAt": "Configurado em {{date}}",
+      "benefits": {
+        "authenticator": { "title": "Códigos no autenticador", "description": "Use seu aplicativo autenticador preferido para confirmar o acesso." },
+        "offline": { "title": "Funciona offline", "description": "Os códigos são gerados no aparelho e não dependem de SMS." }
+      },
+      "actions": { "enable": "Ativar verificação em duas etapas", "disable": "Desativar verificação", "continue": "Continuar", "cancel": "Cancelar", "retry": "Tentar novamente" },
+      "disableConfirmation": { "title": "Desativar verificação?", "message": "Desativar a verificação em duas etapas reduzirá a segurança da sua conta." },
+      "reauth": {
+        "title": "Confirme sua identidade",
+        "enableDescription": "Digite sua senha atual antes de configurar o autenticador.",
+        "disableDescription": "Digite sua senha atual para desativar esta proteção.",
+        "codeDescription": "Agora informe o código atual do aplicativo autenticador para concluir a desativação.",
+        "passwordLabel": "Senha atual",
+        "passwordPlaceholder": "Digite sua senha atual",
+        "togglePassword": "Mostrar ou ocultar senha atual",
+        "unavailableTitle": "Confirmação indisponível"
+      },
+      "enrollment": {
+        "title": "Configure seu autenticador",
+        "description": "Escaneie o QR Code ou use a chave abaixo.",
+        "scanQr": "Escaneie com seu aplicativo autenticador.",
+        "qrAccessibility": "QR Code para configurar a verificação em duas etapas",
+        "manualKey": "Chave de configuração",
+        "copyKey": "Copiar chave",
+        "keyCopied": "Chave copiada",
+        "openAuthenticator": "Abrir aplicativo autenticador",
+        "codeLabel": "Código de verificação",
+        "codePlaceholder": "000000",
+        "confirm": "Confirmar e ativar",
+        "successTitle": "Verificação ativada",
+        "successDescription": "Sua conta agora está protegida com um aplicativo autenticador.",
+        "done": "Concluir"
+      },
+      "feedback": {
+        "disabled": "Verificação em duas etapas desativada.",
+        "multipleFactors": "Há mais de um autenticador cadastrado. Escolha explicitamente qual deseja desativar.",
+        "federatedReauthPending": "A confirmação de identidade para contas somente Google ou Apple será disponibilizada na próxima etapa. Por segurança, esta ação está bloqueada agora."
+      },
+      "errors": {
+        "userMissing": "Sua sessão não está disponível. Entre novamente e tente outra vez.",
+        "emailUnverified": "Confirme seu e-mail antes de ativar a verificação em duas etapas.",
+        "passwordRequired": "Digite sua senha atual.",
+        "currentPasswordIncorrect": "A senha atual está incorreta. Verifique e tente novamente.",
+        "reauthProviderUnsupported": "A confirmação de identidade desta conta ainda não está disponível.",
+        "codeRequired": "Digite o código do aplicativo autenticador.",
+        "codeNonNumeric": "O código deve conter apenas números.",
+        "codeLength": "Digite os 6 dígitos do código.",
+        "invalidCode": "Código incorreto. Use o código atual do autenticador e tente novamente.",
+        "expiredCode": "Esse código expirou. Use o novo código exibido no autenticador.",
+        "flowExpired": "Esta configuração expirou. Cancele e inicie novamente.",
+        "recentLoginRequired": "Confirme sua identidade novamente para continuar.",
+        "sessionExpired": "Sua sessão expirou. Entre novamente e tente outra vez.",
+        "network": "Não foi possível conectar. Verifique sua internet e tente novamente.",
+        "factorNotFound": "Este autenticador não foi encontrado. Atualize a tela e tente novamente.",
+        "factorAlreadyEnrolled": "Este autenticador já está cadastrado.",
+        "factorLimit": "Sua conta atingiu o limite de autenticadores cadastrados.",
+        "unsupportedFirstFactor": "Este método de acesso ainda não permite configurar o autenticador aqui.",
+        "alreadyEnabled": "A verificação em duas etapas já está ativada nesta conta.",
+        "multipleFactors": "Há mais de um autenticador cadastrado. Selecione um fator específico.",
+        "operationNotAllowed": "TOTP MFA não está habilitado na configuração deste projeto Firebase.",
+        "authenticatorUnavailable": "Não foi possível abrir um aplicativo autenticador. Copie a chave e configure manualmente.",
+        "clipboardFailed": "Não foi possível copiar a chave. Selecione e copie manualmente.",
+        "resolverWithoutHints": "Nenhum autenticador cadastrado foi encontrado para este acesso.",
+        "generic": "Não foi possível concluir agora. Tente novamente."
+      }
+    },
     "changePassword": {
       "screenTitle": "Alterar senha",
       "description": "Confirme sua senha atual antes de definir uma nova senha para sua conta.",

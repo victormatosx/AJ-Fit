@@ -178,6 +178,35 @@ provider `password` não entram nesse bloqueio; contas vinculadas que incluam
 `password` seguem o valor real de `emailVerified` retornado/atualizado pelo
 Firebase após o linking.
 
+### TOTP — enrollment e gerenciamento
+
+O Firebase Authentication é também a única fonte de verdade para o status do
+segundo fator TOTP. A aplicação relê `multiFactor(user).enrolledFactors` e
+considera somente fatores cujo `factorId` seja
+`TotpMultiFactorGenerator.FACTOR_ID`. Não existe flag de MFA no Firestore ou
+na persistência local.
+
+O contrato de enrollment para contas que possuam provider `password` é:
+
+1. reautenticar com a senha atual por `reauthenticateWithCredential`;
+2. exigir `User.emailVerified === true` e ausência de TOTP já cadastrado;
+3. obter `multiFactor(user).getSession()` e gerar `TotpSecret`;
+4. gerar a URI oficial com `TotpSecret.generateQrCodeUrl()`;
+5. manter segredo, URI e OTP exclusivamente em memória durante o fluxo;
+6. criar `assertionForEnrollment` e executar `multiFactor(user).enroll()`;
+7. eliminar o segredo da tela e reler `enrolledFactors`.
+
+O unenrollment sempre opera sobre o UID explicitamente selecionado, após
+confirmação e reautenticação. Se o Firebase exigir o TOTP durante a própria
+reautenticação, a operação resolve o `MultiFactorResolver` antes de chamar
+`unenroll`. Contas somente Google/Apple permanecem bloqueadas para ativação e
+desativação até a reautenticação federada da Fase 3; não há atalho baseado em
+uma sessão antiga.
+
+Esta etapa não completa o challenge de login de produção para todos os
+provedores. A ponte DEV validada na POC permanece temporariamente para o login
+por e-mail/senha e será substituída pela arquitetura definitiva na Fase 3.
+
 Implementação (Firebase JS SDK, apps nativos iOS/Android via dev/EAS build):
 
 - Google: `@react-native-google-signin/google-signin` → `idToken` →

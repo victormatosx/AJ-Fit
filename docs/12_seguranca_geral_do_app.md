@@ -115,6 +115,34 @@ no mount, e respeitam o rate limit do Firebase (`auth/too-many-requests`).
 
 ---
 
+### TOTP MFA — enrollment e gerenciamento
+
+A ativação e a desativação do TOTP usam o Firebase Authentication como fonte
+de verdade. O status é derivado de `multiFactor(user).enrolledFactors`,
+filtrado pelo `factorId` oficial de TOTP. É proibido criar flags equivalentes
+no Firestore, AsyncStorage, SecureStore, custom claims ou estado persistente.
+
+Para contas com provider `password`, ativação e desativação exigem senha atual
+e `reauthenticateWithCredential`. Se a reautenticação de uma conta já
+protegida retornar `auth/multi-factor-auth-required`, o código atual do fator
+TOTP selecionado também deve ser validado pelo `MultiFactorResolver` antes do
+`unenroll`. Contas somente Google/Apple não podem usar essas operações até que
+a reautenticação federada seja implementada na Fase 3.
+
+O `TotpSecret`, a URI `otpauth://` e os códigos de seis dígitos existem apenas
+na memória do fluxo de enrollment. O segredo é limpo ao concluir, cancelar,
+trocar de usuário ou desmontar a tela. Nenhum desses valores pode ser logado,
+enviado a analytics/crash reports ou gravado em armazenamento local/remoto.
+
+O QR Code representa exclusivamente a URI produzida por
+`TotpSecret.generateQrCodeUrl()`. A chave manual continua disponível por ação
+explícita de cópia para permitir configuração com um único aparelho.
+
+Enrollment/gerenciamento não significa MFA completo no login. O challenge
+definitivo de e-mail/senha, Google e Apple permanece escopo da Fase 3.
+
+---
+
 # 6. Sessões
 
 O usuário pode permanecer autenticado em múltiplos dispositivos.

@@ -22,7 +22,8 @@ import { AssessmentScreen } from './AssessmentScreen';
 import { SettingsScreen } from './SettingsScreen';
 import { SecurityScreen } from './SecurityScreen';
 import { ChangePasswordScreen } from './ChangePasswordScreen';
-import { TotpMfaPocScreen } from './TotpMfaPocScreen';
+import { TotpEnrollmentScreen } from './TotpEnrollmentScreen';
+import { TwoFactorSettingsScreen } from './TwoFactorSettingsScreen';
 import { EditProfileScreen } from './EditProfileScreen';
 import { HelpCenterScreen } from './HelpCenterScreen';
 import { HelpArticleScreen } from './HelpArticleScreen';
@@ -44,12 +45,14 @@ export function AppShell() {
   const [showSettings, setShowSettings] = useState(false);
   const [showSecurity, setShowSecurity] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
-  const [showTotpMfaPoc, setShowTotpMfaPoc] = useState(false);
+  const [showTwoFactor, setShowTwoFactor] = useState(false);
+  const [showTotpEnrollment, setShowTotpEnrollment] = useState(false);
+  const [totpRefreshToken, setTotpRefreshToken] = useState(0);
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showWorkoutConfirmation, setShowWorkoutConfirmation] = useState(false);
   const [supportRoute, setSupportRoute] = useState<SupportRoute | null>(null);
   const canChangePassword = linkedProviders.includes(PASSWORD_PROVIDER_ID);
-  const overlayOpen = showCal || showAssessment || showSettings || showSecurity || showChangePassword || (__DEV__ && showTotpMfaPoc) || showEditProfile || !!supportRoute;
+  const overlayOpen = showCal || showAssessment || showSettings || showSecurity || showChangePassword || showTwoFactor || showTotpEnrollment || showEditProfile || !!supportRoute;
 
   useEffect(() => {
     if (!canChangePassword) setShowChangePassword(false);
@@ -110,7 +113,6 @@ export function AppShell() {
             onBack={() => setShowSettings(false)}
             onOpenEditProfile={() => setShowEditProfile(true)}
             onOpenSecurity={() => setShowSecurity(true)}
-            onOpenTotpMfaPoc={__DEV__ ? () => setShowTotpMfaPoc(true) : undefined}
             onOpenHelpCenter={() => setSupportRoute({ name: 'help' })}
             onReportProblem={() => setSupportRoute({ name: 'form', type: 'BUG' })}
             onSendSuggestion={() => setSupportRoute({ name: 'form', type: 'FEEDBACK' })}
@@ -122,6 +124,7 @@ export function AppShell() {
           <SecurityScreen
             onBack={() => setShowSecurity(false)}
             onOpenChangePassword={canChangePassword ? () => setShowChangePassword(true) : undefined}
+            onOpenTwoFactor={() => setShowTwoFactor(true)}
           />
         </View>
       )}
@@ -130,9 +133,24 @@ export function AppShell() {
           <ChangePasswordScreen onBack={() => setShowChangePassword(false)} />
         </View>
       )}
-      {__DEV__ && showTotpMfaPoc && (
+      {showTwoFactor && (
         <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 60 }}>
-          <TotpMfaPocScreen onBack={() => setShowTotpMfaPoc(false)} />
+          <TwoFactorSettingsScreen
+            onBack={() => setShowTwoFactor(false)}
+            onOpenEnrollment={() => setShowTotpEnrollment(true)}
+            refreshToken={totpRefreshToken}
+          />
+        </View>
+      )}
+      {showTotpEnrollment && (
+        <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 70 }}>
+          <TotpEnrollmentScreen
+            onBack={() => setShowTotpEnrollment(false)}
+            onCompleted={() => {
+              setShowTotpEnrollment(false);
+              setTotpRefreshToken((value) => value + 1);
+            }}
+          />
         </View>
       )}
       {showEditProfile && (

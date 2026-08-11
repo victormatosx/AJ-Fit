@@ -1,47 +1,35 @@
 import {
   getMultiFactorResolver,
-  multiFactor,
   TotpMultiFactorGenerator,
   type MultiFactorError,
   type MultiFactorInfo,
   type MultiFactorResolver,
-  type TotpSecret,
   type UserCredential,
 } from 'firebase/auth';
 import { auth } from '../lib/firebase';
 import {
-  selectTotpHints,
+  selectTotpFactors,
   validateTotpCode,
-  type TotpHintLike,
-  type TotpMfaPocIssue,
-} from '../lib/totpMfaPoc';
+  type MfaTotpIssue,
+} from '../lib/mfaTotp';
 
-const POC_FACTOR_DISPLAY_NAME = 'AJ Fit Authenticator';
-const POC_ISSUER = 'AJ Fit';
-
+// Temporary Phase 1 challenge bridge. Phase 3 will replace it with the
+// provider-complete production sign-in architecture.
 export class TotpMfaPocServiceError extends Error {
-  readonly issue: TotpMfaPocIssue;
+  readonly issue: MfaTotpIssue;
 
-  constructor(issue: TotpMfaPocIssue) {
+  constructor(issue: MfaTotpIssue) {
     super(issue);
     this.name = 'TotpMfaPocServiceError';
     this.issue = issue;
   }
 }
 
-export type TotpFactorSummary = TotpHintLike & {
+export type TotpFactorSummary = {
+  uid: string;
+  factorId: string;
+  displayName: string | null;
   enrollmentTime: string;
-};
-
-export type TotpEnrollmentDraft = {
-  readonly userUid: string;
-  readonly secret: TotpSecret;
-  readonly secretKey: string;
-  readonly otpAuthUri: string;
-  readonly hashingAlgorithm: string;
-  readonly codeLength: number;
-  readonly codeIntervalSeconds: number;
-  readonly enrollmentCompletionDeadline: string;
 };
 
 export type TotpSignInChallenge = {
@@ -51,12 +39,6 @@ export type TotpSignInChallenge = {
 // Deliberately process-memory only. A resolver represents a short-lived MFA
 // sign-in transaction and must never be serialized to app storage.
 let pendingSignInResolver: MultiFactorResolver | null = null;
-
-function requireCurrentUser() {
-  const user = auth.currentUser;
-  if (!user) throw new TotpMfaPocServiceError('userMissing');
-  return user;
-}
 
 function requireValidCode(code: string): string {
   const normalized = code.trim();
@@ -69,53 +51,9 @@ function summarizeFactor(factor: MultiFactorInfo): TotpFactorSummary {
   return {
     uid: factor.uid,
     factorId: factor.factorId,
-    displayName: factor.displayName,
+    displayName: factor.displayName ?? null,
     enrollmentTime: factor.enrollmentTime,
   };
-}
-
-export function getEnrolledTotpFactorsPoc(): TotpFactorSummary[] {
-  const user = requireCurrentUser();
-  return selectTotpHints(multiFactor(user).enrolledFactors).map(summarizeFactor);
-}
-
-export async function startTotpEnrollmentPoc(): Promise<TotpEnrollmentDraft> {
-  const user = requireCurrentUser();
-  if (!user.emailVerified) {
-    throw new TotpMfaPocServiceError('emailUnverified');
-  }
-
-  const session = await multiFactor(user).getSession();
-  const secret = await TotpMultiFactorGenerator.generateSecret(session);
-  const accountName = user.email ?? user.uid;
-
-  return {
-    userUid: user.uid,
-    secret,
-    secretKey: secret.secretKey,
-    otpAuthUri: secret.generateQrCodeUrl(accountName, POC_ISSUER),
-    hashingAlgorithm: secret.hashingAlgorithm,
-    codeLength: secret.codeLength,
-    codeIntervalSeconds: secret.codeIntervalSeconds,
-    enrollmentCompletionDeadline: secret.enrollmentCompletionDeadline,
-  };
-}
-
-export async function finishTotpEnrollmentPoc(
-  draft: TotpEnrollmentDraft,
-  code: string,
-): Promise<TotpFactorSummary[]> {
-  const user = requireCurrentUser();
-  if (user.uid !== draft.userUid) {
-    throw new TotpMfaPocServiceError('invalidSession');
-  }
-
-  const assertion = TotpMultiFactorGenerator.assertionForEnrollment(
-    draft.secret,
-    requireValidCode(code),
-  );
-  await multiFactor(user).enroll(assertion, POC_FACTOR_DISPLAY_NAME);
-  return getEnrolledTotpFactorsPoc();
 }
 
 export function captureTotpMfaSignInPoc(error: unknown): TotpSignInChallenge {
@@ -125,9 +63,9 @@ export function captureTotpMfaSignInPoc(error: unknown): TotpSignInChallenge {
     throw new TotpMfaPocServiceError('resolverWithoutHints');
   }
 
-  const hints = selectTotpHints(resolver.hints);
+  const hints = selectTotpFactors(resolver.hints);
   if (hints.length === 0) {
-    throw new TotpMfaPocServiceError('totpFactorMissing');
+    throw new TotpMfaPocServiceError('factorNotFound');
   }
 
   pendingSignInResolver = resolver;
@@ -139,12 +77,12 @@ export async function resolveTotpMfaSignInPoc(
   code: string,
 ): Promise<UserCredential> {
   const resolver = pendingSignInResolver;
-  if (!resolver) throw new TotpMfaPocServiceError('invalidSession');
+  if (!resolver) throw new TotpMfaPocServiceError('sessionExpired');
 
-  const hint = selectTotpHints(resolver.hints).find(
+  const hint = selectTotpFactors(resolver.hints).find(
     (candidate) => candidate.uid === hintUid,
   );
-  if (!hint) throw new TotpMfaPocServiceError('totpFactorMissing');
+  if (!hint) throw new TotpMfaPocServiceError('factorNotFound');
 
   const assertion = TotpMultiFactorGenerator.assertionForSignIn(
     hint.uid,

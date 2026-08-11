@@ -11,9 +11,11 @@ import { spacing } from '../theme/tokens';
 export function SecurityScreen({
   onBack,
   onOpenChangePassword,
+  onOpenTwoFactor,
 }: {
   onBack: () => void;
   onOpenChangePassword?: () => void;
+  onOpenTwoFactor: () => void;
 }) {
   const { t } = useTranslation('settings');
   const { linkedProviders } = useAuth();
@@ -38,7 +40,11 @@ export function SecurityScreen({
                   }]
                 : []),
               { icon: 'eye', label: t('security.items.biometrics'), onPress: () => {} },
-              { icon: 'shield', label: t('security.items.twoFactor'), onPress: () => {} },
+              {
+                icon: 'shield',
+                label: t('security.items.twoFactor'),
+                onPress: onOpenTwoFactor,
+              },
             ]}
           />
 

@@ -32,7 +32,6 @@ export function SettingsScreen({
   onBack,
   onOpenEditProfile,
   onOpenSecurity,
-  onOpenTotpMfaPoc,
   onOpenHelpCenter,
   onReportProblem,
   onSendSuggestion,
@@ -40,7 +39,6 @@ export function SettingsScreen({
   onBack?: () => void;
   onOpenEditProfile?: () => void;
   onOpenSecurity?: () => void;
-  onOpenTotpMfaPoc?: () => void;
   onOpenHelpCenter?: () => void;
   onReportProblem?: () => void;
   onSendSuggestion?: () => void;
@@ -224,21 +222,6 @@ export function SettingsScreen({
               { icon: 'shield', label: t('settings:items.security'), onPress: onOpenSecurity },
             ]}
           />
-
-          {__DEV__ && onOpenTotpMfaPoc ? (
-            <SettingsSection
-              title={t('settings:sections.development').toUpperCase()}
-              description={t('settings:development.description')}
-              items={[
-                {
-                  icon: 'key',
-                  label: t('settings:items.totpMfaPoc'),
-                  description: t('settings:development.totpMfaPocDescription'),
-                  onPress: onOpenTotpMfaPoc,
-                },
-              ]}
-            />
-          ) : null}
 
           <SettingsSection
             title={t('settings:sections.notifications').toUpperCase()}

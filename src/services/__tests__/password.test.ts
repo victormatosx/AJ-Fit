@@ -48,7 +48,9 @@ describe('changePasswordWithReauthentication', () => {
     vi.clearAllMocks();
     mocks.auth.currentUser = user();
     mocks.credential.mockReturnValue({ credential: true });
-    mocks.reauthenticate.mockResolvedValue(undefined);
+    mocks.reauthenticate.mockImplementation(async () => ({
+      user: mocks.auth.currentUser,
+    }));
     mocks.update.mockResolvedValue(undefined);
   });
 
@@ -92,7 +94,7 @@ describe('changePasswordWithReauthentication', () => {
     await expect(changePasswordWithReauthentication(input)).rejects.toBe(error);
 
     expect(mocks.update).not.toHaveBeenCalled();
-    expect(mocks.log).toHaveBeenCalledWith('change-password', error);
+    expect(mocks.log).toHaveBeenCalledWith('reauthenticate-password', error);
   });
 
   it('rechecks the authenticated user after reauthentication', async () => {
@@ -101,7 +103,7 @@ describe('changePasswordWithReauthentication', () => {
     });
 
     await expect(changePasswordWithReauthentication(input)).rejects.toMatchObject({
-      code: 'auth/password-provider-required',
+      code: 'auth/no-current-user',
     });
     expect(mocks.update).not.toHaveBeenCalled();
   });

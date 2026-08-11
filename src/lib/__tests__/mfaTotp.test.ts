@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  formatTotpSecret,
   isMultiFactorAuthRequired,
-  selectTotpHints,
-  totpMfaIssueFromError,
+  mfaTotpIssueFromError,
+  selectTotpFactors,
   validateTotpCode,
-} from '../totpMfaPoc';
+} from '../mfaTotp';
 
-describe('TOTP MFA POC helpers', () => {
+describe('TOTP MFA domain helpers', () => {
   it.each([
     ['', 'codeRequired'],
     ['12a456', 'codeNonNumeric'],
@@ -18,45 +19,44 @@ describe('TOTP MFA POC helpers', () => {
   });
 
   it('recognizes only the installed SDK MFA-required error code', () => {
-    expect(
-      isMultiFactorAuthRequired({ code: 'auth/multi-factor-auth-required' }),
-    ).toBe(true);
-    expect(isMultiFactorAuthRequired({ code: 'auth/invalid-credential' })).toBe(
-      false,
-    );
-    expect(isMultiFactorAuthRequired(new Error('multi-factor-auth-required'))).toBe(
-      false,
-    );
+    expect(isMultiFactorAuthRequired({ code: 'auth/multi-factor-auth-required' })).toBe(true);
+    expect(isMultiFactorAuthRequired({ code: 'auth/invalid-credential' })).toBe(false);
+    expect(isMultiFactorAuthRequired(new Error('multi-factor-auth-required'))).toBe(false);
   });
 
-  it('selects TOTP hints without assuming social providers are verified', () => {
-    const hints = [
+  it('selects every TOTP factor without assuming array position', () => {
+    const factors = [
       { uid: 'totp-1', factorId: 'totp' },
       { uid: 'other-1', factorId: 'phone' },
       { uid: 'totp-2', factorId: 'totp' },
     ];
-
-    expect(selectTotpHints(hints).map((hint) => hint.uid)).toEqual([
+    expect(selectTotpFactors(factors).map((factor) => factor.uid)).toEqual([
       'totp-1',
       'totp-2',
     ]);
   });
 
+  it('formats a manual secret without changing its value', () => {
+    expect(formatTotpSecret('ABCDEFGHIJKLMNOP')).toBe('ABCD EFGH IJKL MNOP');
+  });
+
   it.each([
     ['auth/missing-verification-code', 'codeRequired'],
     ['auth/invalid-verification-code', 'invalidCode'],
-    ['auth/invalid-multi-factor-session', 'invalidSession'],
-    ['auth/missing-multi-factor-session', 'invalidSession'],
-    ['auth/multi-factor-info-not-found', 'totpFactorMissing'],
+    ['auth/code-expired', 'expiredCode'],
+    ['auth/invalid-multi-factor-session', 'sessionExpired'],
+    ['auth/missing-multi-factor-session', 'sessionExpired'],
+    ['auth/multi-factor-info-not-found', 'factorNotFound'],
     ['auth/second-factor-already-in-use', 'factorAlreadyEnrolled'],
     ['auth/maximum-second-factor-count-exceeded', 'factorLimit'],
+    ['auth/unsupported-first-factor', 'unsupportedFirstFactor'],
     ['auth/operation-not-allowed', 'operationNotAllowed'],
     ['auth/unverified-email', 'emailUnverified'],
-    ['auth/requires-recent-login', 'sessionExpired'],
+    ['auth/requires-recent-login', 'recentLoginRequired'],
     ['auth/user-token-expired', 'sessionExpired'],
     ['auth/network-request-failed', 'network'],
-    ['auth/not-a-real-code', 'unknown'],
+    ['auth/not-a-real-code', 'generic'],
   ])('maps real Firebase code %s to domain feedback', (code, issue) => {
-    expect(totpMfaIssueFromError({ code })).toBe(issue);
+    expect(mfaTotpIssueFromError({ code })).toBe(issue);
   });
 });

@@ -98,17 +98,20 @@ function RootNavigator() {
   useEffect(() => {
     const wasLoading = prevProfileLoadingRef.current;
     prevProfileLoadingRef.current = profileLoading;
-    if (initializing || profileLoading || !wasLoading) return;
-    if (!user) return;
+    // Account creation can briefly finish the auth listener's pre-provision
+    // profile read with `profile === null`. That is not a malformed profile:
+    // provisionNewUser is still creating it. Wait for the authoritative
+    // post-provision load instead of reporting missing preferences as errors.
+    if (initializing || profileLoading || !wasLoading || !user || !profile) return;
     setPreferencesReconciling(true);
     Promise.all([
       reconcileLanguageOnLoad({
         uid: user.uid,
-        remoteLanguage: profile?.preferences.language ?? null,
+        remoteLanguage: profile.preferences.language,
       }),
       reconcileUnitsOnLoad({
         uid: user.uid,
-        remoteUnits: profile?.preferences.units ?? null,
+        remoteUnits: profile.preferences.units,
       }),
     ]).finally(() => setPreferencesReconciling(false));
   }, [initializing, profileLoading, user, profile]);

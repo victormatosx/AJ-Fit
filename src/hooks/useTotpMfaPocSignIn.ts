@@ -5,10 +5,10 @@ import {
   type TotpSignInChallenge,
 } from '../services/totpMfaPoc';
 import {
-  totpMfaIssueFromError,
+  mfaTotpIssueFromError,
   validateTotpCode,
-  type TotpMfaPocIssue,
-} from '../lib/totpMfaPoc';
+  type MfaTotpIssue,
+} from '../lib/mfaTotp';
 
 export function useTotpMfaPocSignIn(
   challenge: TotpSignInChallenge,
@@ -18,7 +18,7 @@ export function useTotpMfaPocSignIn(
     challenge.hints[0]?.uid ?? '',
   );
   const [code, setCode] = useState('');
-  const [issue, setIssue] = useState<TotpMfaPocIssue | null>(null);
+  const [issue, setIssue] = useState<MfaTotpIssue | null>(null);
   const [resolving, setResolving] = useState(false);
   const operationLock = useRef(false);
 
@@ -46,7 +46,7 @@ export function useTotpMfaPocSignIn(
       // the central guard own the next destination; this hook never navigates.
       return true;
     } catch (error) {
-      setIssue(totpMfaIssueFromError(error));
+      setIssue(mfaTotpIssueFromError(error));
       return false;
     } finally {
       operationLock.current = false;
@@ -72,4 +72,3 @@ export function useTotpMfaPocSignIn(
     setSelectedHintUid,
   };
 }
-

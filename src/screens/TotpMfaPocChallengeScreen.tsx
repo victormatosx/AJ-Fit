@@ -13,7 +13,7 @@ import { CtaButton, CtaText } from '../components/ui/CtaButton';
 import { Display, Slash } from '../components/ui/Display';
 import { Icon } from '../components/ui/Icon';
 import { useTotpMfaPocSignIn } from '../hooks/useTotpMfaPocSignIn';
-import type { TotpMfaPocIssue } from '../lib/totpMfaPoc';
+import type { MfaTotpIssue } from '../lib/mfaTotp';
 import type { TotpSignInChallenge } from '../services/totpMfaPoc';
 import { colors, fonts, radii, sizes, spacing, typography } from '../theme/tokens';
 
@@ -115,10 +115,33 @@ export function TotpMfaPocChallengeScreen({
 }
 
 function issueText(
-  issue: TotpMfaPocIssue,
+  issue: MfaTotpIssue,
   t: ReturnType<typeof useTranslation<'auth'>>['t'],
 ) {
-  return t(`totpMfaPoc.errors.${issue}`);
+  switch (issue) {
+    case 'codeRequired':
+      return t('totpMfaPoc.errors.codeRequired');
+    case 'codeNonNumeric':
+      return t('totpMfaPoc.errors.codeNonNumeric');
+    case 'codeLength':
+      return t('totpMfaPoc.errors.codeLength');
+    case 'invalidCode':
+    case 'expiredCode':
+      return t('totpMfaPoc.errors.invalidCode');
+    case 'network':
+      return t('totpMfaPoc.errors.network');
+    case 'factorNotFound':
+      return t('totpMfaPoc.errors.totpFactorMissing');
+    case 'resolverWithoutHints':
+      return t('totpMfaPoc.errors.resolverWithoutHints');
+    case 'flowExpired':
+    case 'recentLoginRequired':
+      return t('totpMfaPoc.errors.invalidSession');
+    case 'sessionExpired':
+      return t('totpMfaPoc.errors.sessionExpired');
+    default:
+      return t('totpMfaPoc.errors.unknown');
+  }
 }
 
 const styles = {

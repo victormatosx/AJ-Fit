@@ -29,7 +29,7 @@ import {
   PROVIDER_LABELS,
   type SocialProvider,
 } from '../services/socialAuth';
-import { isMultiFactorAuthRequired, totpMfaIssueFromError } from '../lib/totpMfaPoc';
+import { isMultiFactorAuthRequired } from '../lib/mfaTotp';
 import {
   captureTotpMfaSignInPoc,
   clearPendingTotpMfaSignInPoc,
@@ -256,9 +256,7 @@ export function AuthScreen() {
           setTotpChallenge(captureTotpMfaSignInPoc(err));
           return;
         } catch (resolverError) {
-          setError(
-            t(`totpMfaPoc.errors.${totpMfaIssueFromError(resolverError)}`),
-          );
+          setError(t('totpMfaPoc.errors.unknown'));
           return;
         }
       }

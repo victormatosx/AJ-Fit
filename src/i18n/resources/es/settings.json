@@ -7,8 +7,7 @@
     "preferences": "Preferencias",
     "privacyAndData": "Privacidad y datos",
     "support": "Soporte",
-    "about": "Acerca de",
-    "development": "Desarrollo"
+    "about": "Acerca de"
   },
   "items": {
     "editProfile": "Editar perfil",
@@ -30,15 +29,10 @@
     "sendSuggestion": "Enviar sugerencia",
     "reportProblem": "Informar de un problema",
     "version": "Versión",
-    "licenses": "Licencias Open Source",
-    "totpMfaPoc": "POC TOTP MFA"
+    "licenses": "Licencias Open Source"
   },
   "values": {
     "darkTheme": "Oscuro"
-  },
-  "development": {
-    "description": "Herramientas temporales disponibles solo en builds de desarrollo.",
-    "totpMfaPocDescription": "Registro y challenge TOTP experimentales; no es la experiencia final de 2FA."
   },
   "security": {
     "screenTitle": "Seguridad",
@@ -61,6 +55,77 @@
       "deleteAccount": "Eliminar cuenta"
     },
     "safetyZoneDescription": "Mantén tu cuenta protegida revisando regularmente la configuración de seguridad.",
+    "twoFactor": {
+      "title": "Verificación en dos pasos",
+      "description": "Añade una segunda capa de seguridad a tu cuenta con una aplicación de autenticación.",
+      "status": { "label": "Estado", "loading": "Comprobando...", "enabled": "Activada", "disabled": "Desactivada", "unavailable": "No disponible" },
+      "method": { "authenticator": "Aplicación de autenticación" },
+      "enrolledAt": "Configurado el {{date}}",
+      "benefits": {
+        "authenticator": { "title": "Códigos del autenticador", "description": "Usa tu aplicación de autenticación preferida para confirmar el acceso." },
+        "offline": { "title": "Funciona sin conexión", "description": "Los códigos se generan en el dispositivo y no dependen de SMS." }
+      },
+      "actions": { "enable": "Activar verificación en dos pasos", "disable": "Desactivar verificación", "continue": "Continuar", "cancel": "Cancelar", "retry": "Intentar de nuevo" },
+      "disableConfirmation": { "title": "¿Desactivar la verificación?", "message": "Desactivar la verificación en dos pasos reducirá la seguridad de tu cuenta." },
+      "reauth": {
+        "title": "Confirma tu identidad",
+        "enableDescription": "Introduce tu contraseña actual antes de configurar el autenticador.",
+        "disableDescription": "Introduce tu contraseña actual para desactivar esta protección.",
+        "codeDescription": "Ahora introduce el código actual de tu aplicación de autenticación para finalizar la desactivación.",
+        "passwordLabel": "Contraseña actual",
+        "passwordPlaceholder": "Introduce tu contraseña actual",
+        "togglePassword": "Mostrar u ocultar la contraseña actual",
+        "unavailableTitle": "Confirmación no disponible"
+      },
+      "enrollment": {
+        "title": "Configura tu autenticador",
+        "description": "Escanea el código QR o usa la clave de abajo.",
+        "scanQr": "Escanea con tu aplicación de autenticación.",
+        "qrAccessibility": "Código QR para configurar la verificación en dos pasos",
+        "manualKey": "Clave de configuración",
+        "copyKey": "Copiar clave",
+        "keyCopied": "Clave copiada",
+        "openAuthenticator": "Abrir aplicación de autenticación",
+        "codeLabel": "Código de verificación",
+        "codePlaceholder": "000000",
+        "confirm": "Confirmar y activar",
+        "successTitle": "Verificación activada",
+        "successDescription": "Tu cuenta ahora está protegida con una aplicación de autenticación.",
+        "done": "Finalizar"
+      },
+      "feedback": {
+        "disabled": "Verificación en dos pasos desactivada.",
+        "multipleFactors": "Hay más de un autenticador registrado. Elige cuál quieres desactivar.",
+        "federatedReauthPending": "La confirmación de identidad para cuentas solo de Google o Apple estará disponible en la próxima fase. Por seguridad, esta acción está bloqueada actualmente."
+      },
+      "errors": {
+        "userMissing": "Tu sesión no está disponible. Inicia sesión de nuevo e inténtalo otra vez.",
+        "emailUnverified": "Verifica tu correo antes de activar la verificación en dos pasos.",
+        "passwordRequired": "Introduce tu contraseña actual.",
+        "currentPasswordIncorrect": "La contraseña actual es incorrecta. Compruébala e inténtalo otra vez.",
+        "reauthProviderUnsupported": "La confirmación de identidad aún no está disponible para esta cuenta.",
+        "codeRequired": "Introduce el código de la aplicación de autenticación.",
+        "codeNonNumeric": "El código solo puede contener números.",
+        "codeLength": "Introduce los 6 dígitos del código.",
+        "invalidCode": "Código incorrecto. Usa el código actual del autenticador e inténtalo otra vez.",
+        "expiredCode": "Ese código ha caducado. Usa el nuevo código mostrado en el autenticador.",
+        "flowExpired": "Esta configuración ha caducado. Cancela y empieza de nuevo.",
+        "recentLoginRequired": "Confirma tu identidad de nuevo para continuar.",
+        "sessionExpired": "Tu sesión ha caducado. Inicia sesión de nuevo e inténtalo otra vez.",
+        "network": "No se pudo conectar. Comprueba tu conexión a internet e inténtalo otra vez.",
+        "factorNotFound": "No se encontró este autenticador. Actualiza la pantalla e inténtalo otra vez.",
+        "factorAlreadyEnrolled": "Este autenticador ya está registrado.",
+        "factorLimit": "Tu cuenta alcanzó el límite de autenticadores registrados.",
+        "unsupportedFirstFactor": "Este método de acceso aún no permite configurar el autenticador aquí.",
+        "alreadyEnabled": "La verificación en dos pasos ya está activada en esta cuenta.",
+        "multipleFactors": "Hay más de un autenticador registrado. Selecciona un factor específico.",
+        "operationNotAllowed": "TOTP MFA no está habilitado en la configuración de este proyecto Firebase.",
+        "authenticatorUnavailable": "No se pudo abrir una aplicación de autenticación. Copia la clave y configúrala manualmente.",
+        "clipboardFailed": "No se pudo copiar la clave. Selecciónala y cópiala manualmente.",
+        "resolverWithoutHints": "No se encontró ningún autenticador registrado para este acceso.",
+        "generic": "No se pudo completar ahora. Inténtalo de nuevo."
+      }
+    },
     "changePassword": {
       "screenTitle": "Cambiar contraseña",
       "description": "Confirma tu contraseña actual antes de definir una nueva contraseña para tu cuenta.",

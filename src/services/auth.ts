@@ -9,7 +9,7 @@ import {
 } from 'firebase/auth';
 import { auth } from '../lib/firebase';
 import { clearSecureAuthSession } from '../lib/secureAuthStorage';
-import { isMultiFactorAuthRequired } from '../lib/totpMfaPoc';
+import { isMultiFactorAuthRequired } from '../lib/mfaTotp';
 
 /**
  * Reusable, typed authentication service.

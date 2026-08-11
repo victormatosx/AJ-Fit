@@ -84,6 +84,10 @@ describe('SecurityScreen structure', () => {
     expect(appShellSource).toContain('onOpenSecurity={() => setShowSecurity(true)}');
     expect(appShellSource).toContain('<SecurityScreen');
     expect(appShellSource).toContain('onBack={() => setShowSecurity(false)}');
+    expect(securitySource).toContain('onOpenTwoFactor: () => void;');
+    expect(securitySource).toContain('onPress: onOpenTwoFactor');
+    expect(appShellSource).toContain('onOpenTwoFactor={() => setShowTwoFactor(true)}');
+    expect(appShellSource).toContain('<TwoFactorSettingsScreen');
   });
 
   it('guards password navigation for every linked-provider shape', () => {

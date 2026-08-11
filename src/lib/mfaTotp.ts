@@ -1,24 +1,34 @@
 export const TOTP_FACTOR_ID = 'totp' as const;
 export const TOTP_CODE_LENGTH = 6;
 
-export type TotpMfaPocIssue =
+export type MfaTotpIssue =
   | 'userMissing'
   | 'emailUnverified'
+  | 'passwordRequired'
+  | 'currentPasswordIncorrect'
+  | 'reauthProviderUnsupported'
   | 'codeRequired'
   | 'codeNonNumeric'
   | 'codeLength'
   | 'invalidCode'
-  | 'invalidSession'
-  | 'factorAlreadyEnrolled'
-  | 'factorLimit'
-  | 'operationNotAllowed'
-  | 'resolverWithoutHints'
-  | 'totpFactorMissing'
+  | 'expiredCode'
+  | 'flowExpired'
+  | 'recentLoginRequired'
   | 'sessionExpired'
   | 'network'
-  | 'unknown';
+  | 'factorNotFound'
+  | 'factorAlreadyEnrolled'
+  | 'factorLimit'
+  | 'unsupportedFirstFactor'
+  | 'alreadyEnabled'
+  | 'multipleFactors'
+  | 'operationNotAllowed'
+  | 'authenticatorUnavailable'
+  | 'clipboardFailed'
+  | 'resolverWithoutHints'
+  | 'generic';
 
-export type TotpHintLike = {
+export type MfaFactorLike = {
   uid: string;
   factorId: string;
   displayName?: string | null;
@@ -35,55 +45,74 @@ export function isMultiFactorAuthRequired(error: unknown): boolean {
   return getFirebaseErrorCode(error) === 'auth/multi-factor-auth-required';
 }
 
-export function validateTotpCode(code: string): TotpMfaPocIssue | null {
+export function validateTotpCode(code: string): MfaTotpIssue | null {
   if (code.length === 0) return 'codeRequired';
   if (!/^\d+$/.test(code)) return 'codeNonNumeric';
   if (code.length !== TOTP_CODE_LENGTH) return 'codeLength';
   return null;
 }
 
-export function selectTotpHints<T extends TotpHintLike>(hints: readonly T[]): T[] {
-  return hints.filter((hint) => hint.factorId === TOTP_FACTOR_ID);
+export function selectTotpFactors<T extends MfaFactorLike>(
+  factors: readonly T[],
+): T[] {
+  return factors.filter((factor) => factor.factorId === TOTP_FACTOR_ID);
 }
 
-export function totpMfaIssueFromError(error: unknown): TotpMfaPocIssue {
+export function formatTotpSecret(secretKey: string): string {
+  return secretKey.replace(/\s/g, '').match(/.{1,4}/g)?.join(' ') ?? secretKey;
+}
+
+export function mfaTotpIssueFromError(error: unknown): MfaTotpIssue {
   if (
     typeof error === 'object' &&
     error !== null &&
     'issue' in error &&
     typeof (error as { issue?: unknown }).issue === 'string'
   ) {
-    return (error as { issue: TotpMfaPocIssue }).issue;
+    return (error as { issue: MfaTotpIssue }).issue;
   }
 
   switch (getFirebaseErrorCode(error)) {
+    case 'auth/missing-password':
+      return 'passwordRequired';
+    case 'auth/wrong-password':
+    case 'auth/invalid-credential':
+    case 'auth/user-mismatch':
+      return 'currentPasswordIncorrect';
+    case 'auth/password-provider-required':
+    case 'auth/missing-email':
+      return 'reauthProviderUnsupported';
     case 'auth/missing-verification-code':
       return 'codeRequired';
     case 'auth/invalid-verification-code':
-      // The installed SDK uses the same code for a wrong or expired TOTP.
       return 'invalidCode';
+    case 'auth/code-expired':
+      return 'expiredCode';
+    case 'auth/requires-recent-login':
+      return 'recentLoginRequired';
     case 'auth/invalid-multi-factor-session':
     case 'auth/missing-multi-factor-session':
-      return 'invalidSession';
-    case 'auth/multi-factor-info-not-found':
-    case 'auth/missing-multi-factor-info':
-      return 'totpFactorMissing';
-    case 'auth/second-factor-already-in-use':
-      return 'factorAlreadyEnrolled';
-    case 'auth/maximum-second-factor-count-exceeded':
-      return 'factorLimit';
-    case 'auth/operation-not-allowed':
-      return 'operationNotAllowed';
-    case 'auth/unverified-email':
-      return 'emailUnverified';
-    case 'auth/requires-recent-login':
     case 'auth/user-token-expired':
     case 'auth/invalid-user-token':
     case 'auth/no-current-user':
       return 'sessionExpired';
+    case 'auth/multi-factor-info-not-found':
+    case 'auth/missing-multi-factor-info':
+      return 'factorNotFound';
+    case 'auth/second-factor-already-in-use':
+      return 'factorAlreadyEnrolled';
+    case 'auth/maximum-second-factor-count-exceeded':
+      return 'factorLimit';
+    case 'auth/unsupported-first-factor':
+      return 'unsupportedFirstFactor';
+    case 'auth/unverified-email':
+      return 'emailUnverified';
+    case 'auth/operation-not-allowed':
+      return 'operationNotAllowed';
     case 'auth/network-request-failed':
       return 'network';
     default:
-      return 'unknown';
+      return 'generic';
   }
 }
+
