@@ -254,6 +254,288 @@ Criar documentação específica de billing.
 
 # 18. Primeiras entradas do projeto
 
+Data: 2026-08-10
+Responsável: Agente Backend + Agente QA
+Categoria: [CORREÇÃO]
+
+Descrição:
+Concluída localmente a reconciliação comercial de `TRANSFER` após a ampliação
+manual da mesma `REVENUECAT_API_SECRET_KEY` para leitura de Subscriptions. Um
+TRANSFER resolvido agora obtém o customer V2 comprovado pela resolução de
+identidade e consulta
+`GET /v2/projects/{project_id}/customers/{customer_id}/subscriptions`, com
+paginação e validação integral das subscriptions e de seus entitlements.
+
+A subscription relevante é localizada pela relação real com o entitlement
+cujo `lookup_key` é `premium`; nunca pelo primeiro item. `gives_access` define
+`entitlementActive`. Uma única Premium ativa é normalizada para o schema já
+existente. Mais de uma Premium ativa é ambígua e não escreve. Uma resposta
+completa sem Premium ativa substitui o mapa por estado inativo, evitando que
+um espelho antigo continue marcando acesso; quando não há uma única
+subscription inativa cujos detalhes possam ser copiados sem arbitrariedade,
+somente `provider` e `entitlementActive:false` são persistidos.
+
+A escrita reutiliza `applySubscriptionEventAtomically` com o `event.id` e
+`event_timestamp_ms` do TRANSFER. Foi adicionado um modo explícito de
+substituição do mapa aninhado somente para snapshots completos; eventos
+comerciais normais preservam o merge anterior. A transação continua barrando
+duplicados, stale, conflitos e a recriação de `users/{uid}` excluído. Timeout,
+429, 5xx, resposta inválida e 404 na leitura de subscriptions retornam 503 sem
+escrita; 401/403 retornam 500 operacional. Secrets, headers e payloads não são
+registrados.
+
+Impacto:
+`users/{uid}.subscription` passa a refletir imediatamente o estado atual
+consultado no RevenueCat depois de um TRANSFER inequivocamente resolvido. O
+Firestore continua sendo apenas espelho administrativo: o aplicativo e o Gate
+Premium continuam autorizando exclusivamente por
+`CustomerInfo.entitlements.active['premium']`. Nenhum arquivo cliente, regra do
+Gate, Paywall, schema Firestore, secret ou configuração externa foi alterado.
+Não houve deploy, commit, push, retry manual nem acesso a dados reais.
+
+Testes:
+- API V2 mockada: schema real, paginação de subscriptions/entitlements, 404,
+  timeout, 429, 5xx, 401/403 e resposta inválida.
+- Matriz A–O do handler: ativo, inativo, identidade unresolved/ambiguous,
+  múltiplas subscriptions inequívocas/ambíguas, stale, duplicate, usuário
+  removido durante a transação e regressão dos eventos comerciais.
+- Normalização pura de `gives_access`, entitlement Premium, status, produto,
+  store e datas; substituição transacional do mapa testada sem Firestore real.
+
+Próxima ação:
+Após revisão e autorização humana, fazer deploy controlado da Function e testar
+em sandbox um TRANSFER novo ativo e outro inequivocamente inativo, verificando
+resposta, logs sanitizados e o espelho Firestore sem usar esse espelho para
+autorizar acesso.
+
+---
+
+Data: 2026-08-10
+Responsável: Agente Backend + Agente QA
+Categoria: [CORREÇÃO]
+
+Descrição:
+Corrigida a resolução RevenueCat → Firebase para eventos comerciais ligados a
+identidades históricas. A causa raiz era a equivalência 1:1 entre
+`app_user_id` e Firebase UID: quando o RevenueCat entregava um UID antigo já
+excluído, `userExists()` falhava e o evento era reconhecido com HTTP 200 sem
+atualizar `users/{uid}.subscription`.
+
+A nova estratégia mantém o fast path sem rede para um `app_user_id` que exista
+simultaneamente no Firebase Authentication e em `users/{uid}`. Se esse caminho
+falhar, um cliente server-side mínimo consulta a RevenueCat REST API V2 por
+`GET /v2/projects/{project_id}/customers?search=...` e
+`GET /v2/projects/{project_id}/customers/{customer_id}/aliases`. Os candidatos
+do evento (`app_user_id`, `original_app_user_id`, `aliases`) e do grafo V2 são
+filtrados contra Auth + Firestore. Exatamente um usuário válido resulta em
+`resolved`; zero em `unresolved`; mais de um em `ambiguous`. Os dois últimos
+resultados não escrevem e ambiguidade nunca é resolvida escolhendo o primeiro
+alias. IDs `$RCAnonymousID` nunca são usados como Firebase UID.
+
+A Function passou a vincular também `REVENUECAT_API_SECRET_KEY`, além de manter
+`REVENUECAT_WEBHOOK_SECRET`. O Project ID público fica centralizado no backend.
+Nenhum valor de secret é registrado ou enviado ao cliente.
+
+`TRANSFER` agora é tratado como sinal de identidade: `transferred_to` é
+resolvido com a mesma política fail-closed e o evento nunca volta a exigir
+`app_user_id`. Não há escrita direta de `subscription`, pois o payload não
+contém estado comercial completo e a chave atual tem somente
+`customer_information:customers:read`. Uma reconciliação comercial completa
+exigiria adicionalmente `customer_information:subscriptions:read`; essa
+permissão não foi ampliada nesta tarefa e nenhum campo foi fabricado.
+
+Impacto:
+Novos eventos comerciais associados inequivocamente a um alias histórico podem
+atualizar o documento do usuário atual pela transação existente. Normalização,
+HMAC, deduplicação, ordenação, schema, Premium Gate e Paywall não foram
+alterados. O webhook não cria usuários, não faz backfill e não corrige eventos
+históricos automaticamente. Timeout/429/5xx/JSON V2 inválido retornam 503 para
+retry limitado do provedor; 401/403 retornam erro operacional 500 sanitizado;
+`unresolved` e `ambiguous` são reconhecidos com HTTP 200 sem escrita.
+
+Testes:
+- Cliente V2 totalmente mockado: busca, aliases, timeout, 401/403, 429/5xx e
+  schema inválido, sem acesso à RevenueCat real.
+- Resolução direta, alias histórico único, zero/dois candidatos, anonymous ID,
+  `original_app_user_id` e destinos TRANSFER único/ambíguo.
+- Handler: HMAC e ordem de validação preservados, escrita no UID resolvido,
+  falhas V2, TRANSFER sem `app_user_id` e ausência de escrita em ambiguidade.
+- Typecheck, build, suíte Functions e `git diff --check` executados localmente.
+
+Próxima ação:
+Após revisão humana, realizar deploy controlado somente da Function e validar
+em sandbox um novo evento comercial com alias histórico. Se for desejada
+reconciliação imediata no próprio `TRANSFER`, aprovar separadamente a permissão
+read-only de Subscriptions e projetar a conversão do estado V2 sem alterar o
+Premium Gate.
+
+---
+
+Data: 2026-08-10
+Responsável: Agente Backend + Agente QA
+Categoria: [CORREÇÃO]
+
+Descrição:
+Correção mínima da ordem de validação do `revenueCatWebhook`. Após HMAC,
+envelope, `event.id` e `event.type`, o handler agora descarta tipos não
+processados com HTTP 200 antes de exigir `app_user_id`. Assim, `TRANSFER`
+(que usa `transferred_from`/`transferred_to`) continua fora do escopo
+comercial e não acessa Firestore, mas deixa de receber HTTP 400 e gerar retry.
+Eventos processáveis continuam exigindo `app_user_id` e seguindo o pipeline
+existente, inclusive `userExists()` e a transação de `subscription`.
+
+Impacto:
+Nenhuma mudança em HMAC, schema, regras, cliente, Gate Premium, Paywall ou no
+tratamento `user_not_found`. Os logs temporários `diag:*` encontrados apenas
+na revisão deployada não existiam no código local e não foram reintroduzidos.
+Nenhum deploy foi realizado nesta correção.
+
+Testes:
+- 7 testes novos do handler: `TRANSFER` sem `app_user_id`, evento suportado
+  sem `app_user_id`, pipeline suportado completo, ausência de ID, ausência de
+  tipo, HMAC inválido e outro tipo não suportado.
+- Typecheck e build das Functions limpos.
+- Suíte Functions: 5 arquivos, 54 testes aprovados.
+- `git diff --check` limpo.
+
+Próxima ação:
+Realizar, quando autorizado, deploy exclusivo de `revenueCatWebhook` e
+confirmar nos logs que novos eventos `TRANSFER` recebem HTTP 200. Investigar
+`user_not_found` separadamente, sem mascará-lo nesta correção.
+
+---
+
+Data: 2026-08-10
+Responsável: Agente Frontend + Agente QA
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Implementada a Fase 2 — Paywall real — consolidando a experiência de
+assinatura em uma única `PaywallScreen`.
+- A tela usa exclusivamente `useSubscription()` para carregar
+  `offerings.current.availablePackages`, comprar o próprio objeto
+  `PurchasesPackage` selecionado e restaurar compras.
+- Todos os packages retornados pelo Offering atual são renderizados na ordem
+  recebida. O preço exibido vem de `product.priceString`; não existem preços,
+  IDs de produto ou planos de fallback hardcoded na UI.
+- A seleção inicial respeita o primeiro package na ordem do Offering e passa
+  exatamente esse objeto para `purchasePackage`. Compra/restore apenas
+  atualizam `CustomerInfo` no `SubscriptionContext`; nenhum callback navega
+  para `app`.
+- Estados cobertos: loading, Offering indisponível, Offering sem packages,
+  offline, erro genérico, compra em andamento/cancelada/com erro/sem
+  entitlement e restore em andamento/com Premium/sem Premium/com erro. Ações
+  concorrentes são bloqueadas por ref.
+- Removidas todas as promessas de trial da Paywall. A CTA é neutra
+  (`Continuar`), pois a elegibilidade individual não é determinada por esta
+  infraestrutura.
+- Os links existentes de Privacidade e Termos foram preservados.
+- `PremiumScreen` foi removida após auditoria dos chamadores. `AppShell` passou
+  a reutilizar `PaywallScreen` no overlay de assinatura, eliminando a segunda
+  implementação de Offerings/compra/restore.
+- O X da rota obrigatória continua chamando o logout Firebase; o mesmo
+  componente, quando aberto pelo Perfil, recebe apenas o callback de fechar o
+  overlay. O botão agora fica em um header dentro do fluxo e da Safe Area.
+
+Impacto:
+RevenueCat `CustomerInfo.entitlements.active['premium']` permanece como única
+fonte de autorização. `resolvePremiumGate` não foi alterado: somente ele pode
+montar `AppShell`. Nenhuma alteração em backend, webhook, Cloud Functions,
+Firestore, autenticação, questionário, cupom, referral, offer codes ou trial.
+
+Testes:
+- 11 testes novos em `subscriptionOffer.test.ts`: estados do Offering,
+  packages dinâmicos, seleção do objeto, preço localizado, compra e restore
+  com/sem entitlement, cancelamento e erro.
+- `npx tsc --noEmit` limpo.
+- `npm test`: 8 arquivos, 82 testes aprovados.
+- `git diff --check` limpo.
+- Lint não está configurado no projeto.
+
+Pendência preservada da Fase 1:
+Ainda exige validação manual em dispositivo com compra sandbox: confirmar o
+entitlement `premium`, fazer cold start e login posterior com a mesma conta,
+verificando `Loading → AppShell` sem flash de Paywall. Testes unitários não
+encerram essa pendência.
+
+Próxima ação:
+Humano coordenador executar compra/restore sandbox e a validação definitiva de
+cold start/login Premium em dev build Android e iOS.
+
+---
+
+Data: 2026-08-10
+Responsável: Agente Frontend + Agente QA
+Categoria: [CORREÇÃO]
+
+Descrição:
+Correção mínima do botão X da rota `PaywallScreen` na Fase 1 do Gate
+Premium. O X deixou de compartilhar o callback legado do CTA, que solicitava
+`app`, e agora chama `useAuth().logout()`. Esse fluxo reutiliza
+`signOutUser()` (Firebase `signOut` + limpeza da sessão criptografada); a
+mudança reativa do Firebase UID continua sendo processada pelo
+`SubscriptionContext`, inclusive `Purchases.logOut()` e invalidação do
+snapshot anterior. Uma guarda por ref impede logouts concorrentes em toques
+repetidos. Após validação manual, o X foi deslocado 40 pontos para baixo
+(`top: 12` → `top: 52`) para ficar fora da área superior de difícil toque.
+
+Impacto:
+`Paywall → X → logout → Auth`. Nenhuma mudança no Gate Premium,
+entitlement, compra, preços, planos, layout, `PremiumScreen`, Firestore,
+webhook ou Cloud Functions.
+
+Testes:
+`npx tsc --noEmit` limpo; `npm test` com 71 testes aprovados;
+`git diff --check` limpo. Lint não está configurado no projeto.
+
+Próxima ação:
+Humano coordenador validar logout e login sequencial de contas distintas em
+dev build Android/iOS antes de concluir a Fase 1.
+
+---
+
+Data: 2026-08-10
+Responsável: Agente Frontend + Agente QA
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Implementada a Fase 1 do controle de acesso Premium no roteador raiz.
+- `App.tsx` passou a resolver autenticação, carregamento do perfil,
+  questionário e assinatura em um único gate antes de renderizar qualquer
+  tela. Usuário autenticado com questionário só chega ao `AppShell` quando o
+  `CustomerInfo.entitlements.active['premium']` está ativo; caso contrário,
+  chega à rota `paywall`. Enquanto o RevenueCat não resolveu o usuário atual,
+  o roteador exibe o estado neutro de carregamento.
+- `SubscriptionContext.tsx` passou a vincular cada snapshot de `CustomerInfo`
+  ao Firebase UID para o qual `Purchases.logIn`/`logOut` terminou. Em logout ou
+  troca de UID, o snapshot anterior deixa de ser exposto imediatamente;
+  respostas antigas de sync, refresh, compra, restauração e listener não podem
+  ser aplicadas a outra identidade.
+- `src/lib/premiumGate.ts` concentra a decisão pura de rota. O callback legado
+  do `PaywallScreen` ainda pode solicitar `app`, mas o gate recusa a transição
+  sem entitlement; `PaywallScreen`/`PremiumScreen` e a lógica de compra não
+  foram refatorados nesta fase.
+- Adicionados 9 testes unitários cobrindo os cenários A-H e o pedido direto de
+  `app` sem Premium.
+
+Impacto:
+O Firestore permanece fora da autorização Premium. RevenueCat `CustomerInfo`
+e o entitlement `premium` continuam sendo a única fonte de verdade no cliente.
+Nenhuma alteração em webhook, Cloud Function, preços, cupom ou trial.
+
+Testes:
+- App: `npx tsc --noEmit` limpo; `npm test` com 71 testes aprovados.
+- Functions (não alteradas): `npm run typecheck` limpo; `npm test` com 47
+  testes aprovados.
+- Lint não está configurado no projeto.
+
+Próxima ação:
+Humano coordenador validar cold start, logout e troca de conta em dev build
+Android/iOS. A unificação das responsabilidades de `PaywallScreen` e
+`PremiumScreen` permanece para a Fase 2.
+
+---
+
 Data: 2026-07-30
 Responsável: Agente QA
 Categoria: [IMPLEMENTAÇÃO]

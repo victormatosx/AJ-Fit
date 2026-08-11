@@ -17,6 +17,8 @@ import {
 import { AppStateProvider, useAppState } from './src/state/AppState';
 import { AuthProvider, useAuth } from './src/state/AuthContext';
 import { SubscriptionProvider } from './src/state/SubscriptionContext';
+import { useSubscription } from './src/hooks/useSubscription';
+import { resolvePremiumGate, type RootScreenId } from './src/lib/premiumGate';
 import { addQuestionnaire } from './src/services/userProfile';
 import { logAuthError } from './src/services/auth';
 import { configureRevenueCat, logRevenueCatError } from './src/services/revenueCatService';
@@ -53,31 +55,6 @@ import { colors } from './src/theme/tokens';
  */
 configureRevenueCat().catch((err) => logRevenueCatError('bootstrap', err));
 
-type ScreenId =
-  | 'splash'
-  | 'onboarding'
-  | 'quiz'
-  | 'analyzing'
-  | 'plan'
-  | 'auth'
-  | 'paywall'
-  | 'app';
-
-// Screens that require an authenticated user.
-const PROTECTED: ScreenId[] = ['paywall', 'app'];
-
-// Pre-app funnel screens. An authenticated user who already satisfies every
-// access requirement (currently: has a questionnaire) should never be shown
-// these — they belong to users who are still signing up.
-const FUNNEL_ONLY: ScreenId[] = [
-  'splash',
-  'onboarding',
-  'quiz',
-  'analyzing',
-  'plan',
-  'auth',
-];
-
 function Loading() {
   return (
     <View
@@ -89,60 +66,56 @@ function Loading() {
 }
 
 function RootNavigator() {
-  const { user, questionnaire, initializing, profileLoading, refreshProfile } = useAuth();
+  const { user, questionnaire, initializing, profileLoading, refreshProfile, logout } = useAuth();
+  const {
+    loading: subscriptionLoading,
+    configured: subscriptionConfigured,
+    isPremium,
+  } = useSubscription();
   const { quiz } = useAppState();
-  const [screen, setScreenState] = useState<ScreenId>('splash');
+  const [screen, setScreenState] = useState<RootScreenId>('splash');
   // Mirrors `screen` synchronously so late/stale callbacks (e.g. the splash
   // timer firing after the router already moved on) can check the current
   // route without depending on a stale closure over the state value.
-  const screenRef = useRef<ScreenId>('splash');
+  const screenRef = useRef<RootScreenId | null>('splash');
   // Guards the forced-questionnaire save below against double submission
   // (e.g. a fast double-tap on the last quiz question).
   const [savingQuestionnaire, setSavingQuestionnaire] = useState(false);
 
-  const setScreen = (next: ScreenId) => {
+  const setScreen = (next: RootScreenId) => {
     screenRef.current = next;
     setScreenState(next);
   };
 
-  // Single source of truth for navigation: authenticated users are routed
-  // purely from their current state — never from the screen they happen to
-  // be on — so the rule "no questionnaire ⇒ no app" holds no matter how the
-  // user got authenticated (email, Google, Apple, a restored session) or
-  // which screen was showing when auth state changed. Runs on cold start and
-  // on every subsequent auth/questionnaire change (login, logout, forced
-  // questionnaire completion).
+  // This pure decision is also the render guard: AppShell is never mounted
+  // from a stale/requested route while auth, questionnaire, or the CustomerInfo
+  // for the current Firebase UID is unresolved. Once all three are known,
+  // RevenueCat's `premium` entitlement exclusively chooses app vs. paywall.
+  const resolvedScreen = resolvePremiumGate({
+    requestedScreen: screen,
+    authInitializing: initializing,
+    profileLoading,
+    authenticated: Boolean(user),
+    hasQuestionnaire: Boolean(questionnaire),
+    subscriptionLoading,
+    subscriptionConfigured,
+    isPremium,
+  });
+
+  // Keep the requested screen aligned with the centrally resolved route so
+  // logout/account switches continue from the effective screen, while still
+  // rendering `resolvedScreen` immediately (before this effect can run).
   useEffect(() => {
-    // `profileLoading` covers the gap between a sign-in/sign-up call setting
-    // `user` and its matching Firestore read landing in `questionnaire` —
-    // without this, a fully-onboarded user would flash through 'quiz' on
-    // every login while that read is still in flight.
-    if (initializing || profileLoading) return;
+    if (resolvedScreen && resolvedScreen !== screen) setScreen(resolvedScreen);
+  }, [resolvedScreen, screen]);
 
-    if (!user) {
-      // Unauthenticated: keep out of screens that require a session (also
-      // handles logout, which clears `user` while inside the app).
-      if (PROTECTED.includes(screen)) setScreen('auth');
-      return;
-    }
+  screenRef.current = resolvedScreen;
 
-    if (!questionnaire) {
-      // Authenticated but without a questionnaire — mandatory detour,
-      // regardless of screen (covers social-login first-timers and any
-      // restored session that was left in this state).
-      if (screen !== 'quiz') setScreen('quiz');
-      return;
-    }
-
-    // Authenticated + has a questionnaire: never show the signup funnel.
-    if (FUNNEL_ONLY.includes(screen)) setScreen('app');
-  }, [initializing, profileLoading, user, questionnaire, screen]);
-
-  if (initializing) return <Loading />;
+  if (!resolvedScreen) return <Loading />;
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
-      {screen === 'splash' && (
+      {resolvedScreen === 'splash' && (
         <SplashScreen
           onDone={() => {
             // Guard against the splash's own timer firing after the router
@@ -153,20 +126,20 @@ function RootNavigator() {
           }}
         />
       )}
-      {screen === 'onboarding' && (
+      {resolvedScreen === 'onboarding' && (
         <OnboardingScreen
           onDone={() => setScreen('quiz')}
           onLogin={() => setScreen('auth')}
         />
       )}
-      {screen === 'quiz' && (
+      {resolvedScreen === 'quiz' && (
         <QuizScreen
           onDone={async () => {
             if (user) {
               // Forced questionnaire for an already-authenticated user (e.g. a
               // social login that never had one). Persist it and let the
-              // effect above route to 'app' once `questionnaire` reloads —
-              // this screen never navigates itself in that case.
+              // central gate above choose app/paywall once `questionnaire`
+              // reloads — this screen never navigates itself in that case.
               if (savingQuestionnaire) return;
               setSavingQuestionnaire(true);
               try {
@@ -174,7 +147,7 @@ function RootNavigator() {
                 await refreshProfile();
               } catch (err) {
                 logAuthError('quiz:save-questionnaire', err);
-                // Stays on 'quiz' — the effect above keeps it there until a
+                // Stays on 'quiz' — the gate keeps it there until a
                 // questionnaire actually exists, so the user can just retry.
               } finally {
                 setSavingQuestionnaire(false);
@@ -186,11 +159,21 @@ function RootNavigator() {
           }}
         />
       )}
-      {screen === 'analyzing' && <AnalyzingScreen onDone={() => setScreen('plan')} />}
-      {screen === 'plan' && <PlanReadyScreen onContinue={() => setScreen('auth')} />}
-      {screen === 'auth' && <AuthScreen />}
-      {screen === 'paywall' && <PaywallScreen onDone={() => setScreen('app')} />}
-      {screen === 'app' && <AppShell />}
+      {resolvedScreen === 'analyzing' && <AnalyzingScreen onDone={() => setScreen('plan')} />}
+      {resolvedScreen === 'plan' && <PlanReadyScreen onContinue={() => setScreen('auth')} />}
+      {resolvedScreen === 'auth' && <AuthScreen />}
+      {resolvedScreen === 'paywall' && (
+        <PaywallScreen
+          onClose={async () => {
+            try {
+              await logout();
+            } catch (err) {
+              logAuthError('paywall:logout', err);
+            }
+          }}
+        />
+      )}
+      {resolvedScreen === 'app' && <AppShell />}
       {savingQuestionnaire && (
         <View
           pointerEvents="none"

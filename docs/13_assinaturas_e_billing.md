@@ -674,6 +674,108 @@ O backend deve utilizar o Firebase Admin SDK.
 
 ---
 
+## Correção de identidade por aliases (2026-08-10)
+
+O Firebase UID continua sendo o App User ID identificado enviado pelo cliente
+ao `Purchases.logIn(uid)`, mas o `app_user_id` de um webhook não é tratado como
+prova suficiente de que esse mesmo UID ainda é o proprietário Firebase atual.
+Restore, logout/login e transferências podem fazer o RevenueCat entregar um ID
+histórico pertencente ao mesmo Customer.
+
+O backend aplica a seguinte política:
+
+1. **Fast path:** se `app_user_id` existe no Firebase Authentication **e** em
+   `users/{uid}`, resolve diretamente e não chama a API V2.
+2. **Fallback V2:** se o fast path falha, busca o customer pelo App User ID em
+   `GET /v2/projects/{project_id}/customers?search=...` e lê seus aliases em
+   `GET /v2/projects/{project_id}/customers/{customer_id}/aliases`.
+3. Combina `app_user_id`, `original_app_user_id`, `aliases`, customer IDs e
+   aliases V2 apenas como candidatos autenticados/consultados — nenhum deles
+   recebe acesso automaticamente.
+4. IDs técnicos `$RCAnonymousID` são excluídos da avaliação como Firebase UID.
+5. Exatamente um candidato existente em Auth + Firestore é `resolved`; nenhum
+   é `unresolved`; mais de um é `ambiguous`.
+
+`unresolved` e `ambiguous` são fail-closed: HTTP 200 para evitar retry inútil de
+uma condição estrutural, nenhuma escrita e nenhuma escolha arbitrária. Falha
+temporária da API V2 (timeout, 423, 429, 5xx ou resposta inválida) retorna 503;
+401/403 ou outra configuração 4xx retorna 500 operacional sanitizado. Nenhuma
+falha da API é convertida silenciosamente em usuário inexistente.
+
+A API key V2 fica exclusivamente no Firebase Secret Manager como
+`REVENUECAT_API_SECRET_KEY` e é vinculada à Function junto do secret HMAC
+`REVENUECAT_WEBHOOK_SECRET`. O Project ID é configuração pública centralizada
+no backend, nunca credencial. O cliente server-side usa somente endpoints GET
+com `customer_information:customers:read` e
+`customer_information:subscriptions:read`.
+
+### TRANSFER
+
+`TRANSFER` é recebido sem exigir `app_user_id`. `transferred_to` resolve o
+destino e `transferred_from` resolve separadamente a origem, sempre pela mesma
+política fail-closed de unicidade. O payload continua não sendo usado como
+estado comercial, pois não contém produto, status, expiração nem entitlement
+suficientes. Para cada lado que resolve exatamente um Firebase UID vivo e
+exatamente um RevenueCat Customer, o backend consulta o estado atual por:
+
+`GET /v2/projects/{project_id}/customers/{customer_id}/subscriptions`
+
+A resposta é validada e paginada por completo, inclusive as páginas de
+entitlements de cada subscription. A subscription do AJ Fit é localizada pela
+relação cujo `entitlements.items[].lookup_key` seja `premium`; a ordem do array
+nunca decide. `gives_access` é o sinal oficial usado para
+`entitlementActive`. Se exatamente uma subscription Premium der acesso, ela é
+normalizada. Se mais de uma der acesso, o resultado é ambíguo e nenhuma escrita
+ocorre.
+
+O destino é reconciliado primeiro. Uma origem inexistente, ambígua ou composta
+somente por `$RCAnonymousID:*` não é escolhida nem escrita e não impede o
+destino inequívoco de ser atualizado. A origem que resolve de forma única é
+consultada na V2 como qualquer outro snapshot: ela pode permanecer ativa se a
+RevenueCat ainda confirmar outra Premium, ou tornar-se inativa quando a
+resposta completa confirmar ausência de Premium ativa. Portanto o handler não
+revoga a origem por inferência a partir do evento.
+
+Quando o TRANSFER informa `environment`, a consulta usa o filtro oficial
+`sandbox`/`production` correspondente à transferência. Como esse campo é apenas
+opcional em TRANSFER, sua ausência faz a consulta omitir o filtro e avaliar os
+dois ambientes; duas Premium ativas nesse resultado continuam ambíguas.
+
+Uma resposta completa sem nenhuma Premium com `gives_access: true` substitui o
+mapa `subscription` por estado inativo, removendo campos ativos obsoletos. Se
+houver exatamente uma subscription Premium inativa, seus campos confiáveis
+podem ser espelhados; sem candidato único, grava-se somente `provider` e
+`entitlementActive: false`, sem escolher histórico arbitrariamente. Falha de
+schema/paginação não é confundida com ausência de assinatura.
+
+O mapeamento usa somente dados disponíveis: `status` oficial é convertido para
+os estados já existentes quando conhecido; App Store e Play Store são
+convertidas para os stores do schema; `current_period_ends_at`, `starts_at` e
+um início de período posterior confiável alimentam as datas correspondentes.
+`productId` só é persistido quando o produto da subscription coincide
+inequivocamente com um produto do entitlement e seu `store_identifier` está
+disponível. Não se inventa `canceledAt`, pois V2 não fornece um timestamp de
+cancelamento confiável nesse objeto.
+
+Cada lado usa independentemente `applySubscriptionEventAtomically`, com o
+mesmo `event.id` e `event_timestamp_ms` do TRANSFER. Assim, deduplicação,
+stale/conflict e concorrência permanecem protegidos por documento. Se o
+destino for gravado e a consulta de uma origem válida falhar temporariamente,
+o handler retorna 503: no retry o destino já aplicado resulta em `duplicate` e
+a origem pode ser tentada novamente sem reaplicar/corromper o destino. A
+transação de cada lado revalida a existência de `users/{uid}` antes de
+substituir somente o mapa aninhado, portanto nunca recria usuário excluído.
+
+HTTP 404 durante a leitura de subscriptions, timeout, 429, 5xx, JSON ou schema
+inválido retornam 503; 404 na própria busca de identidade permanece
+`unresolved` sem escrita; 401/403 retornam erro operacional 500. Uma falha no
+destino ocorre antes de qualquer escrita na origem; uma falha temporária na
+origem pode ocorrer depois da atualização idempotente do destino. RevenueCat
+continua sendo a fonte de verdade e o Gate Premium continua lendo apenas
+CustomerInfo (§10/§11/§27).
+
+---
+
 ## Correção (Sprint 4): não existe evento `REFUND`
 
 Versões anteriores deste documento listavam `REFUND` como um evento próprio.

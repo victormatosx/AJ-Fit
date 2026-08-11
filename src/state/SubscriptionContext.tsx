@@ -44,9 +44,8 @@ import {
  * sync with `customerInfo`.
  *
  * Sprint 3 (App Store rejection fix) adds Offerings/purchase/restore state,
- * as planned in useSubscription.ts's original comment. Still infrastructure
- * only — `isPremium` here is read-only telemetry for the screen; no gating
- * logic reads it yet.
+ * as planned in useSubscription.ts's original comment. The root router now
+ * consumes this identity-scoped state for the Premium gate.
  *
  * Mirrors the shape of AuthContext.tsx / AppState.tsx: createContext + a
  * Provider component + a `use*` accessor hook that throws outside it.
@@ -55,9 +54,9 @@ import {
 type SubscriptionCtx = {
   /** True while RevenueCat identity/CustomerInfo is being (re)synced. */
   loading: boolean;
-  /** True once CustomerInfo has been fetched at least once this session. */
+  /** True once CustomerInfo has been fetched for the current Firebase UID. */
   configured: boolean;
-  /** Last CustomerInfo fetched from RevenueCat, or null before the first sync. */
+  /** CustomerInfo for the current Firebase UID, or null while it is unresolved. */
   customerInfo: CustomerInfo | null;
   /** Derived from `customerInfo.entitlements.active[premium]` — never separate state. */
   isPremium: boolean;
@@ -89,6 +88,11 @@ type SubscriptionCtx = {
 
 const SubscriptionContext = createContext<SubscriptionCtx | null>(null);
 
+type IdentitySnapshot = {
+  uid: string | null;
+  customerInfo: CustomerInfo;
+};
+
 export function SubscriptionProvider({ children }: { children: React.ReactNode }) {
   // Nested inside AuthProvider (see App.tsx), so `user`/`initializing` here are
   // always the current Firebase Auth state — this is what drives RevenueCat
@@ -96,13 +100,23 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
   const { user, initializing } = useAuth();
   const uid = user?.uid ?? null;
 
-  const [loading, setLoading] = useState(true);
-  const [configured, setConfigured] = useState(false);
-  const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null);
+  const [syncing, setSyncing] = useState(true);
+  const [snapshot, setSnapshot] = useState<IdentitySnapshot | null>(null);
+
+  // Updated during render, before effects, so consumers cannot observe a new
+  // Firebase UID together with the previous UID's Premium authorization.
+  const currentUid = useRef<string | null>(uid);
+  currentUid.current = uid;
+
+  // Set only after logIn/logOut + CustomerInfo have completed for an identity.
+  // CustomerInfo listener events are ignored while this does not match the
+  // Firebase UID currently being rendered.
+  const syncedUid = useRef<string | null | undefined>(undefined);
 
   // Monotonic token so a slower/older sync can never overwrite a newer one —
   // same pattern as AuthContext's `loadSeq` (e.g. a fast logout/login).
   const syncSeq = useRef(0);
+  const refreshSeq = useRef(0);
 
   // Chains successive identity syncs so `loginRevenueCat`/`logoutRevenueCat`
   // for a fast account switch (A logs out, B logs in before A's call
@@ -119,7 +133,9 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
   useEffect(() => {
     if (initializing) return;
     const seq = ++syncSeq.current;
-    setLoading(true);
+    syncedUid.current = undefined;
+    setSnapshot(null);
+    setSyncing(true);
     pendingIdentitySync.current = pendingIdentitySync.current
       .catch(() => {}) // a previous sync's rejection must not block this one
       .then(async () => {
@@ -131,16 +147,15 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
           }
           const info = await fetchCustomerInfo();
           if (seq !== syncSeq.current) return; // superseded by a newer sync
-          setCustomerInfo(info);
-          setConfigured(true);
+          syncedUid.current = uid;
+          setSnapshot({ uid, customerInfo: info });
         } catch (err) {
-          // RevenueCat being unreachable/misconfigured must never crash the
-          // app or block Firebase-driven navigation — just log and keep
-          // whatever CustomerInfo we had (possibly null/stale).
+          // Fail closed: without CustomerInfo for this exact Firebase UID the
+          // gate remains unresolved. Never fall back to another UID's data.
           if (seq !== syncSeq.current) return;
           logRevenueCatError('context:sync', err);
         } finally {
-          if (seq === syncSeq.current) setLoading(false);
+          if (seq === syncSeq.current) setSyncing(false);
         }
       });
   }, [uid, initializing]);
@@ -152,28 +167,46 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
   // React Native.
   useEffect(() => {
     const listener = (info: CustomerInfo) => {
-      setCustomerInfo(info);
-      setConfigured(true);
+      const listenerUid = currentUid.current;
+      if (syncedUid.current !== listenerUid) return;
+      setSnapshot((current) =>
+        current?.uid === listenerUid ? { uid: listenerUid, customerInfo: info } : current,
+      );
     };
     addCustomerInfoListener(listener);
     return () => removeCustomerInfoListener(listener);
   }, []);
 
   const refreshCustomerInfo = useCallback(async () => {
-    const seq = ++syncSeq.current;
-    setLoading(true);
+    const refreshUid = currentUid.current;
+    const seq = ++refreshSeq.current;
+    setSyncing(true);
     try {
+      // Never read CustomerInfo in parallel with an identity switch: wait for
+      // the queued logIn/logOut operation that owns the SDK identity first.
+      await pendingIdentitySync.current;
+      if (
+        seq !== refreshSeq.current ||
+        refreshUid !== currentUid.current ||
+        syncedUid.current !== refreshUid
+      ) {
+        return;
+      }
       const info = await fetchCustomerInfo();
-      if (seq !== syncSeq.current) return;
-      setCustomerInfo(info);
-      setConfigured(true);
+      if (seq !== refreshSeq.current || refreshUid !== currentUid.current) return;
+      syncedUid.current = refreshUid;
+      setSnapshot({ uid: refreshUid, customerInfo: info });
     } catch (err) {
       logRevenueCatError('context:refresh', err);
       throw err;
     } finally {
-      if (seq === syncSeq.current) setLoading(false);
+      if (seq === refreshSeq.current && refreshUid === currentUid.current) setSyncing(false);
     }
   }, []);
+
+  const configured = !initializing && snapshot?.uid === uid;
+  const customerInfo = configured ? snapshot.customerInfo : null;
+  const loading = initializing || syncing || !configured;
 
   const isPremium = useMemo(
     () => Boolean(customerInfo?.entitlements.active[PREMIUM_ENTITLEMENT_ID]),
@@ -212,17 +245,31 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
   }, []);
 
   const purchase = useCallback(async (pkg: PurchasesPackage) => {
+    const purchaseUid = currentUid.current;
+    const startedForSyncedIdentity = syncedUid.current === purchaseUid;
     const outcome = await purchasePackageService(pkg);
-    if (outcome.status === 'purchased') {
-      setCustomerInfo(outcome.customerInfo);
+    if (
+      outcome.status === 'purchased' &&
+      startedForSyncedIdentity &&
+      currentUid.current === purchaseUid &&
+      syncedUid.current === purchaseUid
+    ) {
+      setSnapshot({ uid: purchaseUid, customerInfo: outcome.customerInfo });
     }
     return outcome;
   }, []);
 
   const restore = useCallback(async () => {
+    const restoreUid = currentUid.current;
+    const startedForSyncedIdentity = syncedUid.current === restoreUid;
     const outcome = await restorePurchasesService();
-    if (outcome.status === 'restored') {
-      setCustomerInfo(outcome.customerInfo);
+    if (
+      outcome.status === 'restored' &&
+      startedForSyncedIdentity &&
+      currentUid.current === restoreUid &&
+      syncedUid.current === restoreUid
+    ) {
+      setSnapshot({ uid: restoreUid, customerInfo: outcome.customerInfo });
     }
     return outcome;
   }, []);

@@ -17,7 +17,7 @@ import { ConsistencyScreen } from './ConsistencyScreen';
 import { AssessmentScreen } from './AssessmentScreen';
 import { SettingsScreen } from './SettingsScreen';
 import { EditProfileScreen } from './EditProfileScreen';
-import { PremiumScreen } from './PremiumScreen';
+import { PaywallScreen } from './PaywallScreen';
 
 export function AppShell() {
   const { tab, setTab } = useAppState();
@@ -94,7 +94,10 @@ export function AppShell() {
       )}
       {showPremium && (
         <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 50 }}>
-          <PremiumScreen onDone={() => setShowPremium(false)} />
+          <PaywallScreen
+            onClose={() => setShowPremium(false)}
+            closeAccessibilityLabel="Fechar assinatura"
+          />
         </View>
       )}
     </View>

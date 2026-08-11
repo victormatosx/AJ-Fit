@@ -18,6 +18,14 @@ export const PREMIUM_ENTITLEMENT_ID = 'premium';
 /** The only subscription provider this project integrates with (docs §26). */
 export const REVENUECAT_PROVIDER = 'REVENUECAT';
 
+/**
+ * Public RevenueCat project identifier used only by the server-side V2 API
+ * client. This is routing configuration, not a credential; keeping it as a
+ * centralized backend constant avoids introducing a second deploy-time
+ * parameter for a value that is fixed for this repository.
+ */
+export const REVENUECAT_PROJECT_ID = 'projde891e34';
+
 /** Official subscription statuses (docs §12) — a commercial signal, never an authorization one. */
 export const SUBSCRIPTION_STATUSES = [
   'TRIAL',
@@ -60,11 +68,10 @@ export const REVENUECAT_WEBHOOK_EVENT_TYPES = [
 export type RevenueCatWebhookEventType = (typeof REVENUECAT_WEBHOOK_EVENT_TYPES)[number];
 
 /**
- * The subset of `REVENUECAT_WEBHOOK_EVENT_TYPES` this backend actually
- * processes (docs §25, Sprint 4 scope). `UNCANCELLATION`/`TRANSFER` are
- * recognized RevenueCat event names but not acted on yet — they fall
- * through `handleRevenueCatWebhook`'s "recognized but unsupported" path
- * (logged, HTTP 200, no Firestore write), same as any truly unknown type.
+ * The subset of `REVENUECAT_WEBHOOK_EVENT_TYPES` whose payloads are
+ * normalized and written as commercial subscription events. `TRANSFER` is
+ * handled separately as an identity signal (never normalized directly),
+ * while `UNCANCELLATION` remains acknowledged as unsupported.
  */
 export const SUPPORTED_REVENUECAT_WEBHOOK_EVENT_TYPES = [
   'INITIAL_PURCHASE',

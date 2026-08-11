@@ -6,6 +6,7 @@ import { Timestamp } from 'firebase-admin/firestore';
 import { logFunctionError, logInfo, logWarn } from '../lib/logger';
 import {
   PREMIUM_ENTITLEMENT_ID,
+  RC_ANONYMOUS_ID_PREFIX,
   REVENUECAT_PROVIDER,
   SUBSCRIPTION_STORES,
   SUPPORTED_REVENUECAT_WEBHOOK_EVENT_TYPES,
@@ -13,11 +14,28 @@ import {
 } from './constants';
 import {
   applySubscriptionEventAtomically,
-  resolveUserIdFromAppUserId,
-  userExists,
+  validFirebaseUserExists,
   validateSubscriptionPayload,
 } from './subscriptionSync';
-import type { SubscriptionMirror, SubscriptionStatus, SubscriptionStore } from './types';
+import {
+  createRevenueCatV2Client,
+  RevenueCatApiError,
+  REVENUECAT_API_SECRET_KEY,
+  type RevenueCatIdentityApi,
+  type RevenueCatSubscriptionEnvironment,
+} from './revenueCatApi';
+import {
+  maskRevenueCatIdentifier,
+  resolveRevenueCatFirebaseUid,
+  type RevenueCatIdentityResolution,
+} from './revenueCatIdentity';
+import { reconcileRevenueCatPremiumSubscriptions } from './revenueCatSubscription';
+import type {
+  SubscriptionEventApplyResult,
+  SubscriptionMirror,
+  SubscriptionStatus,
+  SubscriptionStore,
+} from './types';
 
 /**
  * RevenueCat webhook processing — real implementation (Sprint 4;
@@ -54,11 +72,15 @@ const SCOPE = 'billing:revenuecat';
  * Per-integration HMAC signing secret (RevenueCat dashboard → Project
  * settings → Webhooks → Signing secret). Resolved from Secret Manager at
  * runtime via `firebase-functions/params` — bound to the `revenueCatWebhook`
- * function in index.ts (`{ secrets: [REVENUECAT_WEBHOOK_SECRET] }`). Never
+ * function in index.ts (alongside `REVENUECAT_API_SECRET_KEY`). Never
  * hardcoded, never committed. Set once with:
  *   firebase functions:secrets:set REVENUECAT_WEBHOOK_SECRET
  */
 export const REVENUECAT_WEBHOOK_SECRET = defineSecret('REVENUECAT_WEBHOOK_SECRET');
+
+// Re-exported so index.ts can bind both server-side secrets to the Gen2
+// function from the same billing entry module.
+export { REVENUECAT_API_SECRET_KEY };
 
 const SIGNATURE_HEADER = 'X-RevenueCat-Webhook-Signature';
 /** RevenueCat's own documented tolerance for signature timestamp drift (seconds). */
@@ -127,6 +149,10 @@ export interface RawRevenueCatEvent {
   type?: unknown;
   event_timestamp_ms?: unknown;
   app_user_id?: unknown;
+  original_app_user_id?: unknown;
+  aliases?: unknown;
+  transferred_from?: unknown;
+  transferred_to?: unknown;
   product_id?: unknown;
   new_product_id?: unknown;
   period_type?: unknown;
@@ -134,6 +160,419 @@ export interface RawRevenueCatEvent {
   grace_period_expiration_at_ms?: unknown;
   store?: unknown;
   entitlement_ids?: unknown;
+  environment?: unknown;
+}
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    : [];
+}
+
+type TransferSide = 'source' | 'destination';
+
+type TransferSideOutcome =
+  | {
+      status: SubscriptionEventApplyResult['status'];
+      reconciliation: 'active' | 'inactive';
+    }
+  | { status: 'identity_unresolved' }
+  | { status: 'identity_ambiguous' }
+  | { status: 'reconciliation_ambiguous' }
+  | { status: 'normalization_failed' };
+
+function respondToRevenueCatApiFailure(
+  error: unknown,
+  res: Response,
+  context: { eventId: string; eventType: string; transferSide?: TransferSide },
+): boolean {
+  if (!(error instanceof RevenueCatApiError)) return false;
+
+  if (
+    error.kind === 'temporary' ||
+    error.kind === 'invalid_response' ||
+    error.kind === 'not_found'
+  ) {
+    logWarn(SCOPE, 'revenuecat_api_temporary_failure', {
+      ...context,
+      failureKind: error.kind,
+      upstreamStatus: error.statusCode,
+    });
+    res.status(503).json({ error: 'revenuecat_api_temporary_failure' });
+    return true;
+  }
+
+  logFunctionError(SCOPE, new Error('RevenueCat API operational configuration failure'), {
+    ...context,
+    failureKind: error.kind,
+    upstreamStatus: error.statusCode,
+  });
+  res.status(500).json({ error: 'revenuecat_api_configuration_error' });
+  return true;
+}
+
+async function resolveWebhookIdentity(
+  input: {
+    directAppUserId?: string | null;
+    originalAppUserId?: string | null;
+    aliases?: readonly string[];
+    lookupIds?: readonly string[];
+    allowPayloadFastPath?: boolean;
+  },
+  identityApi?: RevenueCatIdentityApi,
+): Promise<RevenueCatIdentityResolution> {
+  return resolveRevenueCatFirebaseUid(input, {
+    validFirebaseUserExists,
+    // Lazy by design: the resolver never constructs the V2 client (or reads
+    // its secret) when the direct Firebase UID fast path succeeds.
+    getRevenueCatIdentityApi: identityApi ? () => identityApi : createRevenueCatV2Client,
+  });
+}
+
+function transferEnvironment(value: unknown): RevenueCatSubscriptionEnvironment | undefined {
+  if (value === 'PRODUCTION') return 'production';
+  if (value === 'SANDBOX') return 'sandbox';
+  return undefined;
+}
+
+function isRevenueCatAnonymousIdentifier(value: string): boolean {
+  return value.trim().startsWith(RC_ANONYMOUS_ID_PREFIX);
+}
+
+async function reconcileTransferSide(
+  side: TransferSide,
+  identifiers: readonly string[],
+  event: RawRevenueCatEvent,
+  eventId: string,
+  eventTimestampMs: number,
+  revenueCatApi: ReturnType<typeof createRevenueCatV2Client>,
+): Promise<TransferSideOutcome> {
+  const eventType = 'TRANSFER';
+
+  if (identifiers.length === 0) {
+    logWarn(SCOPE, `transfer_${side}_unresolved`, {
+      eventId,
+      eventType,
+      reason: side === 'source' ? 'missing_source' : 'missing_destination',
+    });
+    return { status: 'identity_unresolved' };
+  }
+
+  // A source containing only RevenueCat-generated anonymous IDs provides no
+  // Firebase identity evidence of its own. Do not expand that historical
+  // anonymous graph into a Firestore write target: `transferred_from` has no
+  // signed custom App User ID to anchor the source user safely.
+  if (side === 'source' && identifiers.every(isRevenueCatAnonymousIdentifier)) {
+    logWarn(SCOPE, 'transfer_source_unresolved', {
+      eventId,
+      eventType,
+      reason: 'anonymous_only',
+    });
+    return { status: 'identity_unresolved' };
+  }
+
+  const resolution = await resolveWebhookIdentity(
+    {
+      aliases: identifiers,
+      lookupIds: identifiers,
+      // Both sides need the exact RevenueCat customer resource. Always prove
+      // the relationship through V2; payload-only resolution cannot safely
+      // supply a customer_id for the subscriptions snapshot.
+      allowPayloadFastPath: false,
+    },
+    revenueCatApi,
+  );
+
+  if (resolution.status === 'ambiguous') {
+    logWarn(SCOPE, `transfer_${side}_ambiguous`, {
+      eventId,
+      eventType,
+      phase: 'identity_resolution',
+      candidateCount: resolution.candidateCount,
+    });
+    return { status: 'identity_ambiguous' };
+  }
+
+  if (resolution.status === 'unresolved') {
+    logWarn(SCOPE, `transfer_${side}_unresolved`, {
+      eventId,
+      eventType,
+      phase: 'identity_resolution',
+    });
+    return { status: 'identity_unresolved' };
+  }
+
+  const uid = resolution.uid;
+  const maskedUid = maskRevenueCatIdentifier(uid);
+  logInfo(SCOPE, `transfer_${side}_resolved`, {
+    eventId,
+    eventType,
+    uid: maskedUid,
+    identitySource: resolution.source,
+  });
+
+  if (resolution.customerIds.length !== 1) {
+    logWarn(SCOPE, `transfer_${side}_ambiguous`, {
+      eventId,
+      eventType,
+      phase: 'customer_resolution',
+      uid: maskedUid,
+      customerCandidateCount: resolution.customerIds.length,
+    });
+    return { status: 'reconciliation_ambiguous' };
+  }
+
+  logInfo(SCOPE, `transfer_${side}_reconciliation_started`, {
+    eventId,
+    eventType,
+    uid: maskedUid,
+  });
+
+  const subscriptions = await revenueCatApi.getCustomerSubscriptions(
+    resolution.customerIds[0],
+    transferEnvironment(event.environment),
+  );
+  const reconciliation = reconcileRevenueCatPremiumSubscriptions(subscriptions);
+
+  if (reconciliation.status === 'ambiguous') {
+    logWarn(SCOPE, `transfer_${side}_ambiguous`, {
+      eventId,
+      eventType,
+      phase: 'subscription_reconciliation',
+      uid: maskedUid,
+      activeCandidateCount: reconciliation.activeCandidateCount,
+    });
+    return { status: 'reconciliation_ambiguous' };
+  }
+
+  const validation = validateSubscriptionPayload(reconciliation.subscription);
+  if (!validation.ok) {
+    logFunctionError(SCOPE, new Error(validation.error), {
+      eventId,
+      eventType,
+      uid: maskedUid,
+      operation: `transfer_${side}_reconciliation_normalization`,
+    });
+    return { status: 'normalization_failed' };
+  }
+
+  const result = await applySubscriptionEventAtomically(
+    uid,
+    eventId,
+    eventTimestampMs,
+    validation.data,
+    { replaceSubscription: true },
+  );
+
+  switch (result.status) {
+    case 'processed':
+      logInfo(
+        SCOPE,
+        reconciliation.status === 'active'
+          ? `transfer_${side}_reconciliation_succeeded`
+          : `transfer_${side}_reconciliation_no_active_subscription`,
+        { eventId, eventType, uid: maskedUid, reconciliation: reconciliation.status },
+      );
+      break;
+    case 'duplicate':
+      logInfo(SCOPE, `transfer_${side}_reconciliation_duplicate`, {
+        eventId,
+        eventType,
+        uid: maskedUid,
+      });
+      break;
+    case 'stale':
+      logInfo(SCOPE, `transfer_${side}_reconciliation_stale`, {
+        eventId,
+        eventType,
+        uid: maskedUid,
+      });
+      break;
+    case 'conflict':
+      logInfo(SCOPE, `transfer_${side}_reconciliation_conflict`, {
+        eventId,
+        eventType,
+        uid: maskedUid,
+      });
+      break;
+    case 'user_not_found':
+      logWarn(SCOPE, `transfer_${side}_unresolved`, {
+        eventId,
+        eventType,
+        uid: maskedUid,
+        reason: 'user_deleted_before_transaction',
+      });
+      break;
+  }
+
+  return { status: result.status, reconciliation: reconciliation.status };
+}
+
+function respondWithTransferDestinationOutcome(
+  outcome: TransferSideOutcome,
+  res: Response,
+): void {
+  switch (outcome.status) {
+    case 'processed':
+      res.status(200).json({ status: 'processed', reconciliation: outcome.reconciliation });
+      return;
+    case 'duplicate':
+    case 'stale':
+    case 'conflict':
+      res.status(200).json({ status: outcome.status });
+      return;
+    case 'identity_unresolved':
+    case 'user_not_found':
+      res.status(200).json({ status: 'ignored', reason: 'identity_unresolved' });
+      return;
+    case 'identity_ambiguous':
+      res.status(200).json({ status: 'ignored', reason: 'identity_ambiguous' });
+      return;
+    case 'reconciliation_ambiguous':
+      res.status(200).json({ status: 'ignored', reason: 'transfer_reconciliation_ambiguous' });
+      return;
+    case 'normalization_failed':
+      res.status(500).json({ error: 'normalization_failed' });
+      return;
+  }
+}
+
+function destinationAllowsSourceReconciliation(outcome: TransferSideOutcome): boolean {
+  return (
+    outcome.status === 'processed' ||
+    outcome.status === 'duplicate' ||
+    outcome.status === 'stale' ||
+    outcome.status === 'conflict'
+  );
+}
+
+async function handleTransferEvent(
+  event: RawRevenueCatEvent,
+  eventId: string,
+  res: Response,
+): Promise<void> {
+  const eventType = 'TRANSFER';
+  const transferredFrom = stringArray(event.transferred_from);
+  const transferredTo = stringArray(event.transferred_to);
+  logInfo(SCOPE, 'transfer_received', {
+    eventId,
+    eventType,
+    transferredFromCount: transferredFrom.length,
+    transferredToCount: transferredTo.length,
+  });
+
+  if (transferredTo.length === 0) {
+    logWarn(SCOPE, 'transfer_reconciliation_unresolved', {
+      eventId,
+      eventType,
+      reason: 'missing_destination',
+    });
+    res.status(200).json({ status: 'ignored', reason: 'identity_unresolved' });
+    return;
+  }
+
+  const eventTimestampMs = extractEventTimestampMs(event);
+  if (eventTimestampMs === null) {
+    logWarn(SCOPE, 'rejected webhook: missing or invalid event_timestamp_ms', {
+      eventId,
+      eventType,
+    });
+    res.status(400).json({ error: 'invalid_payload' });
+    return;
+  }
+
+  let revenueCatApi: ReturnType<typeof createRevenueCatV2Client>;
+  try {
+    revenueCatApi = createRevenueCatV2Client();
+  } catch (err) {
+    if (respondToRevenueCatApiFailure(err, res, { eventId, eventType })) return;
+    logFunctionError(SCOPE, err, { eventId, eventType, operation: 'transfer_api_initialization' });
+    res.status(500).json({ error: 'internal_error' });
+    return;
+  }
+
+  let destinationOutcome: TransferSideOutcome;
+  try {
+    destinationOutcome = await reconcileTransferSide(
+      'destination',
+      transferredTo,
+      event,
+      eventId,
+      eventTimestampMs,
+      revenueCatApi,
+    );
+  } catch (err) {
+    if (err instanceof RevenueCatApiError) {
+      logWarn(SCOPE, 'transfer_destination_reconciliation_api_failure', {
+        eventId,
+        eventType,
+        failureKind: err.kind,
+        upstreamStatus: err.statusCode,
+      });
+    }
+    if (respondToRevenueCatApiFailure(err, res, { eventId, eventType, transferSide: 'destination' })) {
+      return;
+    }
+    logFunctionError(SCOPE, err, {
+      eventId,
+      eventType,
+      operation: 'transfer_destination_reconciliation',
+    });
+    res.status(500).json({ error: 'internal_error' });
+    return;
+  }
+
+  if (!destinationAllowsSourceReconciliation(destinationOutcome)) {
+    respondWithTransferDestinationOutcome(destinationOutcome, res);
+    return;
+  }
+
+  let sourceOutcome: TransferSideOutcome;
+  try {
+    sourceOutcome = await reconcileTransferSide(
+      'source',
+      transferredFrom,
+      event,
+      eventId,
+      eventTimestampMs,
+      revenueCatApi,
+    );
+  } catch (err) {
+    if (err instanceof RevenueCatApiError) {
+      logWarn(SCOPE, 'transfer_source_reconciliation_api_failure', {
+        eventId,
+        eventType,
+        failureKind: err.kind,
+        upstreamStatus: err.statusCode,
+      });
+    }
+    // Destination reconciliation already reached an idempotent terminal
+    // outcome. A retry safely observes it as duplicate/stale and gets another
+    // chance to complete a temporarily failing, but otherwise valid, source.
+    if (respondToRevenueCatApiFailure(err, res, { eventId, eventType, transferSide: 'source' })) {
+      return;
+    }
+    logFunctionError(SCOPE, err, {
+      eventId,
+      eventType,
+      operation: 'transfer_source_reconciliation',
+    });
+    res.status(500).json({ error: 'internal_error' });
+    return;
+  }
+
+  if (sourceOutcome.status === 'normalization_failed') {
+    res.status(500).json({ error: 'normalization_failed' });
+    return;
+  }
+
+  logInfo(SCOPE, 'transfer_reconciliation_completed', {
+    eventId,
+    eventType,
+    destinationStatus: destinationOutcome.status,
+    sourceStatus: sourceOutcome.status,
+  });
+  respondWithTransferDestinationOutcome(destinationOutcome, res);
 }
 
 function isSupportedEventType(type: string): type is SupportedRevenueCatWebhookEventType {
@@ -349,8 +788,9 @@ export function normalizeSubscription(
  * HTTP entry point for the RevenueCat webhook (docs §25/§28). Wired as the
  * `revenueCatWebhook` Cloud Function in index.ts.
  *
- * FULL FLOW: signature → payload shape → supported event type →
- * `event_timestamp_ms` → resolve uid → user exists → normalize → validate →
+ * FULL FLOW: signature → envelope/id/type → TRANSFER identity handling or
+ * supported commercial type → `app_user_id` → `event_timestamp_ms` →
+ * direct/alias-aware identity resolution → normalize → validate →
  * `applySubscriptionEventAtomically` (which itself does the
  * duplicate/stale/conflict decision, atomically, as one transaction — see
  * that function's doc comment, subscriptionSync.ts). Every early return is
@@ -386,14 +826,12 @@ export async function handleRevenueCatWebhook(req: Request, res: Response): Prom
   const event = envelope?.event as RawRevenueCatEvent | undefined;
   const eventId = typeof event?.id === 'string' ? event.id : null;
   const eventType = typeof event?.type === 'string' ? event.type : null;
-  const appUserId = typeof event?.app_user_id === 'string' ? event.app_user_id : null;
 
-  if (!event || !eventId || !eventType || !appUserId) {
+  if (!event || !eventId || !eventType) {
     logWarn(SCOPE, 'rejected webhook: invalid payload', {
       hasEvent: !!event,
       hasEventId: !!eventId,
       hasEventType: !!eventType,
-      hasAppUserId: !!appUserId,
     });
     res.status(400).json({ error: 'invalid_payload' });
     return;
@@ -401,13 +839,32 @@ export async function handleRevenueCatWebhook(req: Request, res: Response): Prom
 
   logInfo(SCOPE, 'webhook event received', { eventId, eventType });
 
+  if (eventType === 'TRANSFER') {
+    await handleTransferEvent(event, eventId, res);
+    return;
+  }
+
   if (!isSupportedEventType(eventType)) {
-    // Recognized-but-unhandled (UNCANCELLATION/TRANSFER) and truly unknown
-    // future event types both land here — same treatment either way (docs
-    // §25 processes a fixed list; anything else is logged and acknowledged,
-    // never an error).
+    // Recognized-but-unhandled (currently UNCANCELLATION) and truly unknown
+    // future event types both land here. TRANSFER is handled above as a
+    // separate identity-only signal.
     logInfo(SCOPE, 'event ignored: unsupported event type', { eventId, eventType });
     res.status(200).json({ status: 'ignored', reason: 'unsupported_event_type' });
+    return;
+  }
+
+  // Only commercial event types normalized by this backend require
+  // app_user_id. TRANSFER uses transferred_from/transferred_to and has
+  // already taken its separate path above.
+  const appUserId = typeof event.app_user_id === 'string' ? event.app_user_id : null;
+  if (!appUserId) {
+    logWarn(SCOPE, 'rejected webhook: invalid payload', {
+      hasEvent: true,
+      hasEventId: true,
+      hasEventType: true,
+      hasAppUserId: false,
+    });
+    res.status(400).json({ error: 'invalid_payload' });
     return;
   }
 
@@ -426,25 +883,51 @@ export async function handleRevenueCatWebhook(req: Request, res: Response): Prom
     return;
   }
 
-  const uid = resolveUserIdFromAppUserId(appUserId);
-  if (!uid) {
-    logWarn(SCOPE, 'event ignored: unresolvable App User ID', { eventId, eventType });
-    res.status(200).json({ status: 'ignored', reason: 'unresolvable_app_user_id' });
+  let identity: RevenueCatIdentityResolution;
+  try {
+    identity = await resolveWebhookIdentity({
+      directAppUserId: appUserId,
+      originalAppUserId:
+        typeof event.original_app_user_id === 'string' ? event.original_app_user_id : null,
+      aliases: stringArray(event.aliases),
+      lookupIds: [appUserId],
+    });
+  } catch (err) {
+    if (respondToRevenueCatApiFailure(err, res, { eventId, eventType })) return;
+    logFunctionError(SCOPE, err, { eventId, eventType, operation: 'identity_resolution' });
+    res.status(500).json({ error: 'internal_error' });
     return;
   }
 
-  try {
-    const exists = await userExists(uid);
-    if (!exists) {
-      // A permanently missing uid won't be fixed by a retry — ack with 200
-      // rather than spending RevenueCat's retry budget on it. Policy
-      // unchanged from Sprint 4 (documented in the Sprint 4 audit report as
-      // an accepted, currently-unreachable edge case).
-      logWarn(SCOPE, 'event ignored: user does not exist', { eventId, eventType, uid });
-      res.status(200).json({ status: 'ignored', reason: 'user_not_found' });
-      return;
-    }
+  if (identity.status === 'ambiguous') {
+    logWarn(SCOPE, 'identity_ambiguous', {
+      eventId,
+      eventType,
+      candidateCount: identity.candidateCount,
+    });
+    res.status(200).json({ status: 'ignored', reason: 'identity_ambiguous' });
+    return;
+  }
 
+  if (identity.status === 'unresolved') {
+    logWarn(SCOPE, 'identity_unresolved', {
+      eventId,
+      eventType,
+      appUserId: maskRevenueCatIdentifier(appUserId),
+    });
+    res.status(200).json({ status: 'ignored', reason: 'identity_unresolved' });
+    return;
+  }
+
+  const uid = identity.uid;
+  const maskedUid = maskRevenueCatIdentifier(uid);
+  logInfo(
+    SCOPE,
+    identity.source === 'direct' ? 'identity_direct_match' : 'identity_resolved_via_revenuecat',
+    { eventId, eventType, uid: maskedUid, identitySource: identity.source },
+  );
+
+  try {
     const partial = normalizeSubscription(event, eventType, eventTimestampMs);
     const validation = validateSubscriptionPayload(partial);
     if (!validation.ok) {
@@ -453,7 +936,7 @@ export async function handleRevenueCatWebhook(req: Request, res: Response): Prom
       // event fields were already read defensively above). 500 so it's
       // retried and surfaced, since retrying an identical bug won't help by
       // itself but silently dropping it would lose the event entirely.
-      logFunctionError(SCOPE, new Error(validation.error), { eventId, eventType, uid });
+      logFunctionError(SCOPE, new Error(validation.error), { eventId, eventType, uid: maskedUid });
       res.status(500).json({ error: 'normalization_failed' });
       return;
     }
@@ -467,20 +950,28 @@ export async function handleRevenueCatWebhook(req: Request, res: Response): Prom
 
     switch (result.status) {
       case 'processed':
-        logInfo(SCOPE, 'subscription updated from webhook event', { eventId, eventType, uid });
+        logInfo(SCOPE, 'subscription updated from webhook event', {
+          eventId,
+          eventType,
+          uid: maskedUid,
+        });
         res.status(200).json({ status: 'processed' });
         return;
       case 'duplicate':
         // Already logged (as a warning, with full context) inside the
         // transaction — no need to duplicate that here.
-        logInfo(SCOPE, 'event ignored: duplicate (already applied)', { eventId, eventType, uid });
+        logInfo(SCOPE, 'event ignored: duplicate (already applied)', {
+          eventId,
+          eventType,
+          uid: maskedUid,
+        });
         res.status(200).json({ status: 'duplicate' });
         return;
       case 'stale':
         logInfo(SCOPE, 'event ignored: stale (older than last applied event)', {
           eventId,
           eventType,
-          uid,
+          uid: maskedUid,
         });
         res.status(200).json({ status: 'stale' });
         return;
@@ -492,13 +983,22 @@ export async function handleRevenueCatWebhook(req: Request, res: Response): Prom
         logInfo(SCOPE, 'event ignored: conflict (see structured error log above)', {
           eventId,
           eventType,
-          uid,
+          uid: maskedUid,
         });
         res.status(200).json({ status: 'conflict' });
         return;
+      case 'user_not_found':
+        logWarn(SCOPE, 'identity_unresolved', {
+          eventId,
+          eventType,
+          uid: maskedUid,
+          reason: 'user_deleted_before_transaction',
+        });
+        res.status(200).json({ status: 'ignored', reason: 'identity_unresolved' });
+        return;
     }
   } catch (err) {
-    logFunctionError(SCOPE, err, { eventId, eventType, uid });
+    logFunctionError(SCOPE, err, { eventId, eventType, uid: maskedUid });
     res.status(500).json({ error: 'internal_error' });
   }
 }

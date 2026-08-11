@@ -146,9 +146,13 @@ export type SubscriptionValidationResult =
  * - `conflict` — a different event with the EXACT SAME `event_timestamp_ms`
  *   as what's stored; ambiguous which should win, so neither does — no
  *   write, logged as a structured error for investigation.
+ * - `user_not_found` — `users/{uid}` disappeared between identity validation
+ *   and the transaction read; no write, so the webhook can never recreate a
+ *   deleted user document through `set(..., {merge:true})`.
  */
 export type SubscriptionEventApplyResult =
   | { status: 'processed' }
   | { status: 'duplicate' }
   | { status: 'stale' }
-  | { status: 'conflict' };
+  | { status: 'conflict' }
+  | { status: 'user_not_found' };

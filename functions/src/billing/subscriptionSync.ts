@@ -1,8 +1,7 @@
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
-import { db } from '../lib/firebaseAdmin';
+import { auth, db } from '../lib/firebaseAdmin';
 import { logFunctionError, logInfo, logWarn } from '../lib/logger';
 import {
-  RC_ANONYMOUS_ID_PREFIX,
   REVENUECAT_PROVIDER,
   SUBSCRIPTION_FIELD,
   SUBSCRIPTION_LAST_EVENT_ID_FIELD,
@@ -46,34 +45,6 @@ import type {
 const SCOPE = 'billing:subscriptionSync';
 
 /**
- * Resolves the Firestore uid for a RevenueCat App User ID.
- *
- * Today this is a 1:1 identity mapping, not a lookup: `SubscriptionContext`
- * (src/state/SubscriptionContext.tsx, Sprint 2) always calls
- * `Purchases.logIn(firebaseUid)`, so the App User ID RevenueCat reports back
- * IS the Firebase uid.
- *
- * KNOWN LIMITATION: RevenueCat can also report its own anonymous IDs
- * (`$RCAnonymousID:...`) for activity that happened before any login (e.g. a
- * purchase made pre-signup). That scenario cannot occur in this app yet — no
- * Offerings/Purchase flow exists — so it is rejected here rather than
- * silently mishandled. Must be revisited if pre-login purchases are ever
- * supported.
- */
-export function resolveUserIdFromAppUserId(appUserId: string): string | null {
-  const trimmed = appUserId.trim();
-  if (!trimmed) {
-    logWarn(SCOPE, 'empty App User ID');
-    return null;
-  }
-  if (trimmed.startsWith(RC_ANONYMOUS_ID_PREFIX)) {
-    logWarn(SCOPE, 'anonymous App User ID is not supported yet', { appUserId: trimmed });
-    return null;
-  }
-  return trimmed;
-}
-
-/**
  * True if `users/{uid}` exists. Callers must check this before writing a
  * subscription mirror for a uid they haven't otherwise validated — RevenueCat
  * events are external input and a typo'd/deleted uid must never silently
@@ -90,7 +61,37 @@ export async function userExists(uid: string): Promise<boolean> {
     const snapshot = await db.doc(userDocPath(uid)).get();
     return snapshot.exists;
   } catch (err) {
-    logFunctionError(SCOPE, err, { uid });
+    logFunctionError(SCOPE, err, { operation: 'firestore_user_lookup' });
+    throw err;
+  }
+}
+
+/**
+ * True only when the uid still exists in both identity stores required by
+ * this app: Firebase Authentication and `users/{uid}` in Firestore. The
+ * Firestore document remains the write precondition, while the Auth lookup
+ * prevents a deleted account with a temporarily retained document from
+ * winning RevenueCat alias resolution.
+ *
+ * No document or Auth user is ever created here. Unexpected Admin SDK
+ * failures are rethrown so the webhook can retry instead of converting an
+ * infrastructure problem into a permanent "user not found" result.
+ */
+export async function validFirebaseUserExists(uid: string): Promise<boolean> {
+  const firestoreUserExists = await userExists(uid);
+  if (!firestoreUserExists) return false;
+
+  try {
+    await auth.getUser(uid);
+    return true;
+  } catch (err) {
+    const code =
+      typeof err === 'object' && err !== null && 'code' in err
+        ? (err as { code?: unknown }).code
+        : undefined;
+    if (code === 'auth/user-not-found') return false;
+
+    logFunctionError(SCOPE, err, { operation: 'firebase_auth_user_lookup' });
     throw err;
   }
 }
@@ -228,12 +229,12 @@ export function validateSubscriptionPayload(payload: unknown): SubscriptionValid
  * - Incoming `eventTimestampMs` > stored `lastEventTimestampMs` →
  *   `processed`. Applies the merge.
  *
- * On `processed`, writes `subscription` fields via the same safe partial
- * merge `applySubscriptionUpdate` always used (`set(..., {merge:true})` —
- * Firestore deep-merges nested maps, so any `subscription` sub-field not
- * included in `subscription` here is left untouched, never erased), plus
- * `lastEventId`, `lastEventTimestampMs`, and a fresh `updatedAt` — the last
- * three ALWAYS written together, only on `processed`.
+ * On `processed`, ordinary commercial events use the established partial
+ * merge. A caller may explicitly request replacement of the nested
+ * `subscription` map for a complete current-state snapshot (currently only
+ * TRANSFER reconciliation), which clears stale fields without changing the
+ * parent user document. Both modes always write `lastEventId`,
+ * `lastEventTimestampMs`, and a fresh `updatedAt` together.
  */
 /** What `decideSubscriptionEventOutcome` needs to know about the currently-stored mirror — nothing Firestore-specific. */
 export interface CurrentSubscriptionEventState {
@@ -312,24 +313,35 @@ export function decideSubscriptionEventOutcome(
  *    `event_timestamp_ms`) against the stored `lastEventTimestampMs` before
  *    ever writing — see `decideSubscriptionEventOutcome` for the exact rules.
  *
- * On `processed`, writes `subscription` fields via the same safe partial
- * merge `applySubscriptionUpdate` always used (`set(..., {merge:true})` —
- * Firestore deep-merges nested maps, so any `subscription` sub-field not
- * included in `subscription` here is left untouched, never erased), plus
- * `lastEventId`, `lastEventTimestampMs`, and a fresh `updatedAt` — the last
- * three ALWAYS written together, only on `processed`.
+ * On `processed`, the default remains the established partial merge for
+ * commercial event deltas. `replaceSubscription` is reserved for complete
+ * current-state snapshots (currently TRANSFER reconciliation), replacing
+ * only the nested map so obsolete active-state fields are removed. Both
+ * modes write `lastEventId`, `lastEventTimestampMs`, and `updatedAt`
+ * together, only after the ordering decision is `processed`.
  */
 export async function applySubscriptionEventAtomically(
   uid: string,
   eventId: string,
   eventTimestampMs: number,
   subscription: ValidatedSubscriptionMirror,
+  options: { replaceSubscription?: boolean } = {},
 ): Promise<SubscriptionEventApplyResult> {
   const ref = db.doc(userDocPath(uid));
 
   try {
     return await db.runTransaction(async (transaction) => {
       const snapshot = await transaction.get(ref);
+      if (!snapshot.exists) {
+        // Identity validation checks this before opening the transaction, but
+        // deletion can race that read. Guard again inside the transaction so
+        // the merge-set below can never recreate `users/{uid}`.
+        logWarn(SCOPE, 'user disappeared before subscription transaction', {
+          eventId,
+          eventTimestampMs,
+        });
+        return { status: 'user_not_found' };
+      }
       const current = snapshot.get(SUBSCRIPTION_FIELD) as Record<string, unknown> | undefined;
       const currentState: CurrentSubscriptionEventState = {
         lastEventId:
@@ -370,18 +382,25 @@ export async function applySubscriptionEventAtomically(
         return outcome;
       }
 
-      transaction.set(
-        ref,
-        {
-          [SUBSCRIPTION_FIELD]: {
-            ...subscription,
-            [SUBSCRIPTION_LAST_EVENT_ID_FIELD]: eventId,
-            [SUBSCRIPTION_LAST_EVENT_TIMESTAMP_MS_FIELD]: eventTimestampMs,
-            updatedAt: FieldValue.serverTimestamp(),
-          },
-        },
-        { merge: true },
-      );
+      const nextSubscription = {
+        ...subscription,
+        [SUBSCRIPTION_LAST_EVENT_ID_FIELD]: eventId,
+        [SUBSCRIPTION_LAST_EVENT_TIMESTAMP_MS_FIELD]: eventTimestampMs,
+        updatedAt: FieldValue.serverTimestamp(),
+      };
+
+      if (options.replaceSubscription) {
+        // A TRANSFER reconciliation is a complete current-state snapshot,
+        // not a partial event delta. Replace the nested map so stale fields
+        // such as an old active product/trial cannot survive an inactive
+        // RevenueCat response. `update` also preserves the no-create
+        // invariant already guarded by the transaction read above.
+        transaction.update(ref, { [SUBSCRIPTION_FIELD]: nextSubscription });
+      } else {
+        // Ordinary commercial webhooks remain partial deltas and retain the
+        // long-standing deep-merge behavior.
+        transaction.set(ref, { [SUBSCRIPTION_FIELD]: nextSubscription }, { merge: true });
+      }
 
       return outcome;
     });
