@@ -53,11 +53,21 @@ describe('TOTP MFA domain helpers', () => {
     ['auth/operation-not-allowed', 'operationNotAllowed'],
     ['auth/unverified-email', 'emailUnverified'],
     ['auth/requires-recent-login', 'recentLoginRequired'],
+    ['auth/user-mismatch', 'userMismatch'],
     ['auth/user-token-expired', 'sessionExpired'],
     ['auth/network-request-failed', 'network'],
     ['auth/too-many-requests', 'tooManyRequests'],
     ['auth/not-a-real-code', 'generic'],
   ])('maps real Firebase code %s to domain feedback', (code, issue) => {
     expect(mfaTotpIssueFromError({ code })).toBe(issue);
+  });
+
+  it('preserves safe provider and reauthentication domain issues', () => {
+    expect(mfaTotpIssueFromError({ issue: 'providerUnavailable' })).toBe(
+      'providerUnavailable',
+    );
+    expect(mfaTotpIssueFromError({ issue: 'reauthFailed' })).toBe(
+      'reauthFailed',
+    );
   });
 });

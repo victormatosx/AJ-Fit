@@ -15,6 +15,10 @@ const managementScreen = readFileSync(
   new URL('../../screens/TwoFactorSettingsScreen.tsx', import.meta.url),
   'utf8',
 );
+const reauthenticationMethods = readFileSync(
+  new URL('../../components/auth/ReauthenticationMethods.tsx', import.meta.url),
+  'utf8',
+);
 const challengeScreen = readFileSync(
   new URL('../../screens/TotpChallengeScreen.tsx', import.meta.url),
   'utf8',
@@ -38,7 +42,7 @@ describe('production TOTP MFA i18n', () => {
   });
 
   it('uses translation keys for all production enrollment and management copy', () => {
-    const screens = `${enrollmentScreen}\n${managementScreen}`;
+    const screens = `${enrollmentScreen}\n${managementScreen}\n${reauthenticationMethods}`;
     for (const key of [
       'security.twoFactor.title',
       'security.twoFactor.status.enabled',
@@ -50,9 +54,13 @@ describe('production TOTP MFA i18n', () => {
       'security.twoFactor.enrollment.openAuthenticator',
       'security.twoFactor.enrollment.confirm',
       'security.twoFactor.reauth.passwordLabel',
+      'security.twoFactor.reauth.continueWithPassword',
+      'security.twoFactor.reauth.continueWithGoogle',
+      'security.twoFactor.reauth.continueWithApple',
     ]) {
       expect(screens).toContain(key);
     }
+    expect(screens).not.toContain('federatedReauthPending');
   });
 
   it('ships equal production challenge copy in pt-BR, en and es', () => {

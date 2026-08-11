@@ -69,12 +69,15 @@
       "disableConfirmation": { "title": "¿Desactivar la verificación?", "message": "Desactivar la verificación en dos pasos reducirá la seguridad de tu cuenta." },
       "reauth": {
         "title": "Confirma tu identidad",
-        "enableDescription": "Introduce tu contraseña actual antes de configurar el autenticador.",
-        "disableDescription": "Introduce tu contraseña actual para desactivar esta protección.",
+        "enableDescription": "Elige un método vinculado a tu cuenta para confirmar tu identidad antes de configurar el autenticador.",
+        "disableDescription": "Elige un método vinculado a tu cuenta para confirmar tu identidad y desactivar esta protección.",
         "codeDescription": "Ahora introduce el código actual de tu aplicación de autenticación para finalizar la desactivación.",
         "passwordLabel": "Contraseña actual",
         "passwordPlaceholder": "Introduce tu contraseña actual",
         "togglePassword": "Mostrar u ocultar la contraseña actual",
+        "continueWithPassword": "Confirmar con contraseña",
+        "continueWithGoogle": "Continuar con Google",
+        "continueWithApple": "Continuar con Apple",
         "unavailableTitle": "Confirmación no disponible"
       },
       "enrollment": {
@@ -95,8 +98,7 @@
       },
       "feedback": {
         "disabled": "Verificación en dos pasos desactivada.",
-        "multipleFactors": "Hay más de un autenticador registrado. Elige cuál quieres desactivar.",
-        "federatedReauthPending": "La confirmación de identidad para cuentas solo de Google o Apple estará disponible en la próxima fase. Por seguridad, esta acción está bloqueada actualmente."
+        "multipleFactors": "Hay más de un autenticador registrado. Elige cuál quieres desactivar."
       },
       "errors": {
         "userMissing": "Tu sesión no está disponible. Inicia sesión de nuevo e inténtalo otra vez.",
@@ -104,6 +106,12 @@
         "passwordRequired": "Introduce tu contraseña actual.",
         "currentPasswordIncorrect": "La contraseña actual es incorrecta. Compruébala e inténtalo otra vez.",
         "reauthProviderUnsupported": "La confirmación de identidad aún no está disponible para esta cuenta.",
+        "reauthCancelled": "La confirmación se canceló. No se realizó ningún cambio.",
+        "reauthFailed": "No pudimos confirmar tu identidad. Inténtalo de nuevo con la misma cuenta.",
+        "userMismatch": "La cuenta elegida es diferente de la cuenta abierta en AJ Fit. No se realizó ningún cambio.",
+        "providerUnavailable": "Este método de confirmación no está disponible en este dispositivo.",
+        "providerBusy": "Ya hay una confirmación de identidad en curso.",
+        "identityTokenMissing": "El proveedor no completó la confirmación. Inténtalo de nuevo.",
         "codeRequired": "Introduce el código de la aplicación de autenticación.",
         "codeNonNumeric": "El código solo puede contener números.",
         "codeLength": "Introduce los 6 dígitos del código.",

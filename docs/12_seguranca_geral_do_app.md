@@ -122,17 +122,27 @@ de verdade. O status é derivado de `multiFactor(user).enrolledFactors`,
 filtrado pelo `factorId` oficial de TOTP. É proibido criar flags equivalentes
 no Firestore, AsyncStorage, SecureStore, custom claims ou estado persistente.
 
-Para contas com provider `password`, ativação e desativação exigem senha atual
-e `reauthenticateWithCredential`. Se a reautenticação de uma conta já
-protegida retornar `auth/multi-factor-auth-required`, o código atual do fator
-TOTP selecionado também deve ser validado pelo `MultiFactorResolver` antes do
-`unenroll`. Contas somente Google/Apple não podem usar essas operações até que
-a reautenticação federada seja implementada na Fase 3.
+Ativação e desativação exigem reautenticação apropriada a um provider realmente
+vinculado. Senha usa `EmailAuthProvider`; Google adquire novo id token pelo
+Google Sign-In nativo; Apple cria um raw nonce novo por tentativa, envia apenas
+seu SHA-256 à Apple e usa o raw nonce com o identity token na credencial
+Firebase. Todas terminam em `reauthenticateWithCredential`, nunca em sign-in ou
+linking. Contas multi-provider exibem todas as opções válidas, com senha como
+primeira alternativa, sem selecionar `providerData[0]` arbitrariamente.
+
+O UID anterior à abertura da folha federada é validado novamente antes e depois
+do Firebase. Troca de sessão, credencial de outra conta, cancelamento ou erro
+abortam sem tocar MFA. Se a reautenticação de uma conta já protegida retornar
+`auth/multi-factor-auth-required`, o código atual do fator TOTP selecionado
+também é validado pelo `MultiFactorResolver` antes do `unenroll`.
 
 O `TotpSecret`, a URI `otpauth://` e os códigos de seis dígitos existem apenas
 na memória do fluxo de enrollment. O segredo é limpo ao concluir, cancelar,
 trocar de usuário ou desmontar a tela. Nenhum desses valores pode ser logado,
 enviado a analytics/crash reports ou gravado em armazenamento local/remoto.
+Credenciais Google/Apple, identity/id tokens, raw nonce, senha e
+`MultiFactorSession` também permanecem apenas na pilha da operação e nunca são
+logados ou persistidos. Sair da tela não cria autorização recente reutilizável.
 
 O QR Code representa exclusivamente a URI produzida por
 `TotpSecret.generateQrCodeUrl()`. A chave manual continua disponível por ação

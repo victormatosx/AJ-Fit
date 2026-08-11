@@ -11,10 +11,10 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
+import { ReauthenticationMethods } from '../components/auth/ReauthenticationMethods';
 import { SupportScreenHeader } from '../components/support/SupportScreenHeader';
 import { CtaButton, CtaText } from '../components/ui/CtaButton';
 import { Icon } from '../components/ui/Icon';
-import { PasswordField } from '../components/ui/PasswordField';
 import { ScreenBg } from '../components/ui/ScreenBg';
 import { useTotpMfa } from '../hooks/useTotpMfa';
 import type { MfaTotpIssue } from '../lib/mfaTotp';
@@ -158,14 +158,14 @@ export function TwoFactorSettingsScreen({
                     <Pressable
                       accessibilityRole="button"
                       disabled={
-                        mfa.disabling || !mfa.canReauthenticateWithPassword
+                        mfa.disabling || !mfa.canReauthenticate
                       }
                       onPress={() => requestDisable(factor)}
                       style={({ pressed }) => [
                         styles.disableButton,
                         {
                           opacity:
-                            mfa.disabling || !mfa.canReauthenticateWithPassword
+                            mfa.disabling || !mfa.canReauthenticate
                               ? 0.35
                               : pressed
                                 ? 0.8
@@ -185,10 +185,10 @@ export function TwoFactorSettingsScreen({
             </View>
           ) : null}
 
-          {!mfa.canReauthenticateWithPassword && !mfa.loading ? (
+          {!mfa.canReauthenticate && !mfa.loading ? (
             <Feedback
               tone="warning"
-              message={t('security.twoFactor.feedback.federatedReauthPending')}
+              message={t('security.twoFactor.errors.reauthProviderUnsupported')}
             />
           ) : null}
           {mfa.issue ? (
@@ -213,7 +213,7 @@ export function TwoFactorSettingsScreen({
           {!mfa.enabled && !mfa.loading && !statusUnavailable ? (
             <CtaButton
               onPress={onOpenEnrollment}
-              disabled={!mfa.canReauthenticateWithPassword}
+              disabled={!mfa.canReauthenticate}
               style={{ marginTop: spacing[7] }}
             >
               <CtaText>{t('security.twoFactor.actions.enable')}</CtaText>
@@ -255,39 +255,35 @@ export function TwoFactorSettingsScreen({
                   onSubmitEditing={() => void mfa.confirmDisableCode()}
                 />
               ) : (
-                <PasswordField
-                  label={t('security.twoFactor.reauth.passwordLabel')}
-                  placeholder={t('security.twoFactor.reauth.passwordPlaceholder')}
-                  value={mfa.currentPassword}
-                  onChangeText={mfa.setCurrentPassword}
-                  visible={passwordVisible}
-                  onToggleVisibility={() => setPasswordVisible((value) => !value)}
-                  toggleAccessibilityLabel={t(
-                    'security.twoFactor.reauth.togglePassword',
-                  )}
-                  editable={!mfa.disabling}
-                  returnKeyType="done"
-                  onSubmitEditing={() => void mfa.confirmDisablePassword()}
+                <ReauthenticationMethods
+                  providers={mfa.reauthenticationProviders}
+                  password={mfa.currentPassword}
+                  passwordVisible={passwordVisible}
+                  busyProvider={mfa.disablingProvider}
+                  disabled={mfa.disabling}
+                  onChangePassword={mfa.setCurrentPassword}
+                  onTogglePassword={() =>
+                    setPasswordVisible((value) => !value)
+                  }
+                  onConfirm={(provider) => void mfa.confirmDisable(provider)}
                 />
               )}
               {mfa.issue ? (
                 <Feedback tone="error" message={issueMessage(mfa.issue, t)} />
               ) : null}
-              <CtaButton
-                onPress={() =>
-                  void (mfa.disableChallenge
-                    ? mfa.confirmDisableCode()
-                    : mfa.confirmDisablePassword())
-                }
-                disabled={mfa.disabling}
-                style={{ marginTop: spacing[5] }}
-              >
-                {mfa.disabling ? (
-                  <ActivityIndicator color={colors.text} />
-                ) : (
-                  <CtaText>{t('security.twoFactor.actions.continue')}</CtaText>
-                )}
-              </CtaButton>
+              {mfa.disableChallenge ? (
+                <CtaButton
+                  onPress={() => void mfa.confirmDisableCode()}
+                  disabled={mfa.disabling}
+                  style={{ marginTop: spacing[5] }}
+                >
+                  {mfa.disabling ? (
+                    <ActivityIndicator color={colors.text} />
+                  ) : (
+                    <CtaText>{t('security.twoFactor.actions.continue')}</CtaText>
+                  )}
+                </CtaButton>
+              ) : null}
               <Pressable
                 accessibilityRole="button"
                 onPress={mfa.cancelDisable}

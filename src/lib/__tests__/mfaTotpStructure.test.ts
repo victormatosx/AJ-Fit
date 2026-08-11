@@ -16,8 +16,14 @@ const enrollmentHook = source('src/hooks/useTotpEnrollment.ts');
 const enrollmentScreen = source('src/screens/TotpEnrollmentScreen.tsx');
 const managementHook = source('src/hooks/useTotpMfa.ts');
 const managementScreen = source('src/screens/TwoFactorSettingsScreen.tsx');
+const reauthenticationMethods = source(
+  'src/components/auth/ReauthenticationMethods.tsx',
+);
 const securityScreen = source('src/screens/SecurityScreen.tsx');
 const service = source('src/services/mfaTotp.ts');
+const reauthenticationService = source('src/services/reauthentication.ts');
+const googleProvider = source('src/services/providers/google.native.ts');
+const appleProvider = source('src/services/providers/apple.native.ts');
 const authService = source('src/services/auth.ts');
 const socialService = source('src/services/socialAuth.ts');
 
@@ -33,6 +39,8 @@ describe('production TOTP enrollment and management structure', () => {
     expect(challengeScreen).not.toContain("from 'firebase/auth'");
     expect(challengeHook).toContain('resolveTotpSignIn');
     expect(service).toContain("from 'firebase/auth'");
+    expect(reauthenticationMethods).not.toContain("from 'firebase/auth'");
+    expect(reauthenticationService).toContain('reauthenticateWithCredential');
   });
 
   it('uses production overlays and removes the DEV enrollment entry', () => {
@@ -65,12 +73,24 @@ describe('production TOTP enrollment and management structure', () => {
     expect(service).not.toContain('totpEnabled');
   });
 
-  it('requires password reauthentication for enrollment and unenrollment', () => {
-    expect(service).toContain('reauthenticatePasswordUser(currentPassword)');
+  it('supports explicit password, Google and Apple reauthentication choices', () => {
+    expect(service).toContain('reauthenticateCurrentUser(request)');
     expect(service).toContain('preserveMultiFactorError: true');
     expect(service).toContain('finishTotpUnenrollment');
-    expect(managementHook).toContain('startTotpUnenrollmentWithPassword');
-    expect(enrollmentHook).toContain('startTotpEnrollmentWithPassword');
+    expect(managementHook).toContain('startTotpUnenrollment');
+    expect(enrollmentHook).toContain('startTotpEnrollment');
+    expect(reauthenticationService).toContain('getGoogleCredential()');
+    expect(reauthenticationService).toContain(
+      'getAppleCredential({ requestProfile: false })',
+    );
+    expect(reauthenticationService).not.toContain('signInWithCredential');
+    expect(reauthenticationService).not.toContain('linkWithCredential');
+    expect(reauthenticationMethods).toContain("providers.includes('password')");
+    expect(reauthenticationMethods).toContain("providers.includes('google')");
+    expect(reauthenticationMethods).toContain("providers.includes('apple')");
+    expect(enrollmentHook).toContain('operationLock.current');
+    expect(managementHook).toContain('operationLock.current');
+    expect(managementScreen).not.toContain('federatedReauthPending');
   });
 
   it('keeps secret and OTP out of persistent stores, logs and Firebase data', () => {
@@ -82,6 +102,9 @@ describe('production TOTP enrollment and management structure', () => {
       managementScreen,
       challengeHook,
       challengeScreen,
+      reauthenticationService,
+      googleProvider,
+      appleProvider,
     ].join('\n');
     for (const forbidden of [
       "from '@react-native-async-storage/async-storage'",

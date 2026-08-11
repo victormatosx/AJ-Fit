@@ -48,8 +48,8 @@ vi.mock('firebase/auth', () => ({
   },
 }));
 vi.mock('../../lib/firebase', () => ({ auth: mocks.auth }));
-vi.mock('../password', () => ({
-  reauthenticatePasswordUser: mocks.reauthenticate,
+vi.mock('../reauthentication', () => ({
+  reauthenticateCurrentUser: mocks.reauthenticate,
 }));
 
 import {
@@ -58,8 +58,10 @@ import {
   finishTotpUnenrollment,
   refreshTotpFactors,
   resolveTotpSignIn,
+  startTotpEnrollment,
   startTotpEnrollmentWithPassword,
   startTotpSignInChallenge,
+  startTotpUnenrollment,
   startTotpUnenrollmentWithPassword,
 } from '../mfaTotp';
 
@@ -111,10 +113,55 @@ describe('production TOTP service', () => {
 
   it('reauthenticates before generating an in-memory secret and official URI', async () => {
     const draft = await startTotpEnrollmentWithPassword('current-password');
-    expect(mocks.reauthenticate).toHaveBeenCalledWith('current-password');
+    expect(mocks.reauthenticate).toHaveBeenCalledWith({
+      provider: 'password',
+      password: 'current-password',
+    });
     expect(mocks.mfa.getSession).toHaveBeenCalledOnce();
     expect(draft.secretKey).toBe('IN_MEMORY_TEST_SECRET');
     expect(draft.otpAuthUri).toMatch(/^otpauth:\/\//);
+  });
+
+  it.each(['google', 'apple'] as const)(
+    '%s-only enrollment reauthenticates before generating the same TOTP secret',
+    async (provider) => {
+      const draft = await startTotpEnrollment({ provider });
+      expect(mocks.reauthenticate).toHaveBeenCalledWith({ provider });
+      expect(mocks.mfa.getSession).toHaveBeenCalledOnce();
+      expect(mocks.generateSecret).toHaveBeenCalledOnce();
+      expect(draft.userUid).toBe('user-1');
+    },
+  );
+
+  it('does not return a secret if the current user changes during generation', async () => {
+    mocks.generateSecret.mockImplementationOnce(async () => {
+      mocks.auth.currentUser = {
+        uid: 'user-2',
+        email: 'other@example.com',
+        emailVerified: true,
+        reload: vi.fn(),
+      };
+      return {
+        secretKey: 'DO_NOT_EXPOSE',
+        enrollmentCompletionDeadline: '2999-08-10T12:05:00.000Z',
+        generateQrCodeUrl: vi.fn(() => 'otpauth://do-not-expose'),
+      };
+    });
+
+    await expect(
+      startTotpEnrollment({ provider: 'google' }),
+    ).rejects.toMatchObject({ issue: 'userMismatch' });
+  });
+
+  it('does not generate or enroll anything when federated reauth fails', async () => {
+    const error = { issue: 'reauthFailed' };
+    mocks.reauthenticate.mockRejectedValueOnce(error);
+    await expect(
+      startTotpEnrollment({ provider: 'google' }),
+    ).rejects.toBe(error);
+    expect(mocks.mfa.getSession).not.toHaveBeenCalled();
+    expect(mocks.generateSecret).not.toHaveBeenCalled();
+    expect(mocks.mfa.enroll).not.toHaveBeenCalled();
   });
 
   it('requires a verified email after reauthentication', async () => {
@@ -154,9 +201,57 @@ describe('production TOTP service', () => {
     const result = await startTotpUnenrollmentWithPassword('totp-2', 'password');
     expect(result).toEqual({ status: 'completed', factors: [totpFactor] });
     expect(mocks.mfa.unenroll).toHaveBeenCalledWith(second);
-    expect(mocks.reauthenticate).toHaveBeenCalledWith('password', {
+    expect(mocks.reauthenticate).toHaveBeenCalledWith(
+      { provider: 'password', password: 'password' },
+      {
       preserveMultiFactorError: true,
+      },
+    );
+  });
+
+  it.each(['google', 'apple'] as const)(
+    '%s unenrollment requires federated reauth before touching the factor',
+    async (provider) => {
+      mocks.mfa.enrolledFactors = [totpFactor];
+      await expect(
+        startTotpUnenrollment('totp-1', { provider }),
+      ).resolves.toEqual({ status: 'completed', factors: [] });
+      expect(mocks.reauthenticate).toHaveBeenCalledWith(
+        { provider },
+        { preserveMultiFactorError: true },
+      );
+      expect(mocks.mfa.unenroll).toHaveBeenCalledWith(totpFactor);
+    },
+  );
+
+  it('does not unenroll if the current user changes after reauthentication', async () => {
+    const original = mocks.auth.currentUser!;
+    mocks.mfa.enrolledFactors = [totpFactor];
+    mocks.reauthenticate.mockImplementationOnce(async () => {
+      mocks.auth.currentUser = {
+        uid: 'user-2',
+        email: 'other@example.com',
+        emailVerified: true,
+        reload: vi.fn(),
+      };
+      return original;
     });
+
+    await expect(
+      startTotpUnenrollment('totp-1', { provider: 'apple' }),
+    ).rejects.toMatchObject({ issue: 'userMismatch' });
+    expect(mocks.mfa.unenroll).not.toHaveBeenCalled();
+  });
+
+  it('does not alter enrolled factors when federated reauth fails', async () => {
+    mocks.mfa.enrolledFactors = [totpFactor];
+    const error = { issue: 'reauthFailed' };
+    mocks.reauthenticate.mockRejectedValueOnce(error);
+    await expect(
+      startTotpUnenrollment('totp-1', { provider: 'apple' }),
+    ).rejects.toBe(error);
+    expect(mocks.mfa.unenroll).not.toHaveBeenCalled();
+    expect(mocks.mfa.enrolledFactors).toEqual([totpFactor]);
   });
 
   it('resolves Firebase MFA reauthentication before unenrollment when required', async () => {
@@ -171,6 +266,30 @@ describe('production TOTP service', () => {
     expect(mocks.resolver.resolveSignIn).toHaveBeenCalledWith({ kind: 'sign-in' });
     expect(mocks.mfa.unenroll).toHaveBeenCalledWith(totpFactor);
   });
+
+  it.each(['google', 'apple'] as const)(
+    'resolves the existing TOTP after %s reauth before unenrollment',
+    async (provider) => {
+      mocks.mfa.enrolledFactors = [totpFactor];
+      mocks.reauthenticate.mockRejectedValue({
+        code: 'auth/multi-factor-auth-required',
+        customData: { opaque: true },
+      });
+      const start = await startTotpUnenrollment('totp-1', { provider });
+      expect(start.status).toBe('challenge');
+      if (start.status !== 'challenge') throw new Error('challenge expected');
+
+      await expect(
+        finishTotpUnenrollment(start.challenge, '654321'),
+      ).resolves.toEqual([]);
+      expect(mocks.reauthenticate).toHaveBeenCalledWith(
+        { provider },
+        { preserveMultiFactorError: true },
+      );
+      expect(mocks.resolver.resolveSignIn).toHaveBeenCalledOnce();
+      expect(mocks.mfa.unenroll).toHaveBeenCalledWith(totpFactor);
+    },
+  );
 
   it('rejects null users and missing explicit factors without destructive calls', async () => {
     mocks.auth.currentUser = null;

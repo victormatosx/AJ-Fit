@@ -186,22 +186,36 @@ considera somente fatores cujo `factorId` seja
 `TotpMultiFactorGenerator.FACTOR_ID`. Não existe flag de MFA no Firestore ou
 na persistência local.
 
-O contrato de enrollment para contas que possuam provider `password` é:
+O contrato de enrollment começa com uma reautenticação escolhida entre todos
+os providers vinculados, sem assumir a posição de `providerData`:
 
-1. reautenticar com a senha atual por `reauthenticateWithCredential`;
-2. exigir `User.emailVerified === true` e ausência de TOTP já cadastrado;
-3. obter `multiFactor(user).getSession()` e gerar `TotpSecret`;
-4. gerar a URI oficial com `TotpSecret.generateQrCodeUrl()`;
-5. manter segredo, URI e OTP exclusivamente em memória durante o fluxo;
-6. criar `assertionForEnrollment` e executar `multiFactor(user).enroll()`;
-7. eliminar o segredo da tela e reler `enrolledFactors`.
+- `password`: `EmailAuthProvider.credential` com a senha atual;
+- `google.com`: nova credencial obtida pelo Google Sign-In nativo;
+- `apple.com`: novo raw nonce aleatório, SHA-256 enviado ao Apple Sign-In e
+  raw nonce usado exclusivamente na criação da credencial Firebase.
+
+Em todos os casos a credencial é aplicada com
+`reauthenticateWithCredential(currentUser, credential)`, nunca com
+`signInWithCredential` ou `linkWithCredential`. O UID original é conferido
+antes e depois da reautenticação. Depois disso, o fluxo único:
+
+1. exige `User.emailVerified === true` e ausência de TOTP já cadastrado;
+2. obtém `multiFactor(user).getSession()` e gera `TotpSecret`;
+3. gera a URI oficial com `TotpSecret.generateQrCodeUrl()`;
+4. mantém segredo, URI e OTP exclusivamente em memória durante o fluxo;
+5. cria `assertionForEnrollment` e executa `multiFactor(user).enroll()`;
+6. elimina o segredo da tela e relê `enrolledFactors`.
 
 O unenrollment sempre opera sobre o UID explicitamente selecionado, após
 confirmação e reautenticação. Se o Firebase exigir o TOTP durante a própria
 reautenticação, a operação resolve o `MultiFactorResolver` antes de chamar
-`unenroll`. Contas somente Google/Apple permanecem bloqueadas para ativação e
-desativação enquanto a reautenticação federada de operações sensíveis não for
-implementada; não há atalho baseado em uma sessão antiga.
+`unenroll`. Contas Google-only e Apple-only usam o respectivo provider como
+primeiro fator dessa reautenticação; cancelamento, erro ou UID divergente
+interrompem a operação sem alterar fatores. Contas com múltiplos providers
+recebem todas as opções vinculadas, ordenadas como senha, Google e Apple.
+
+Credenciais Google/Apple, id tokens, raw nonce, senha e sessão MFA não são
+persistidos. Cada ação sensível exige uma nova reautenticação em memória.
 
 O challenge TOTP de login é parte interna do fluxo de autenticação para todos
 os primeiros fatores suportados:
@@ -231,6 +245,10 @@ Implementação (Firebase JS SDK, apps nativos iOS/Android via dev/EAS build):
   `GoogleAuthProvider.credential` → `signInWithCredential`.
 - Apple: `expo-apple-authentication` (+ nonce SHA-256 via `expo-crypto`) →
   `OAuthProvider('apple.com')` → `signInWithCredential`.
+
+Para enrollment/unenrollment, as mesmas aquisições geram credenciais novas,
+mas o consumidor obrigatório é `reauthenticateWithCredential`; elas nunca
+entram nos contratos de login, provisionamento ou account linking.
 
 Provisionamento no primeiro login social:
 

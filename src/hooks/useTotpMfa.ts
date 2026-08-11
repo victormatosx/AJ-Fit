@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { hasPasswordProvider } from '../lib/authProviders';
+import {
+  getReauthenticationProviders,
+  type ReauthenticationProvider,
+} from '../lib/authProviders';
 import {
   mfaTotpIssueFromError,
   validateTotpCode,
@@ -8,10 +11,11 @@ import {
 import {
   finishTotpUnenrollment,
   refreshTotpFactors,
-  startTotpUnenrollmentWithPassword,
+  startTotpUnenrollment,
   type TotpFactor,
   type TotpUnenrollmentChallenge,
 } from '../services/mfaTotp';
+import { ReauthenticationCancelledError } from '../services/reauthentication';
 import { useAuth } from '../state/AuthContext';
 
 export function useTotpMfa(refreshToken = 0) {
@@ -25,10 +29,15 @@ export function useTotpMfa(refreshToken = 0) {
   const [disableChallenge, setDisableChallenge] =
     useState<TotpUnenrollmentChallenge | null>(null);
   const [disabling, setDisabling] = useState(false);
+  const [disablingProvider, setDisablingProvider] =
+    useState<ReauthenticationProvider | null>(null);
   const [disabled, setDisabled] = useState(false);
   const operationLock = useRef(false);
   const loadSequence = useRef(0);
-  const canReauthenticateWithPassword = hasPasswordProvider(user);
+  const reauthenticationProviders = getReauthenticationProviders(user);
+  const canReauthenticateWithPassword =
+    reauthenticationProviders.includes('password');
+  const canReauthenticate = reauthenticationProviders.length > 0;
 
   const refresh = useCallback(async (): Promise<boolean> => {
     const sequence = ++loadSequence.current;
@@ -68,7 +77,7 @@ export function useTotpMfa(refreshToken = 0) {
     (factor: TotpFactor) => {
       setIssue(null);
       setDisabled(false);
-      if (!canReauthenticateWithPassword) {
+      if (!canReauthenticate) {
         setIssue('reauthProviderUnsupported');
         return;
       }
@@ -77,7 +86,7 @@ export function useTotpMfa(refreshToken = 0) {
       setDisableChallenge(null);
       setDisableTarget(factor);
     },
-    [canReauthenticateWithPassword],
+    [canReauthenticate],
   );
 
   const cancelDisable = useCallback(() => {
@@ -108,21 +117,30 @@ export function useTotpMfa(refreshToken = 0) {
     setDisabled(true);
   }, []);
 
-  const confirmDisablePassword = useCallback(async (): Promise<boolean> => {
+  const confirmDisable = useCallback(async (
+    provider: ReauthenticationProvider,
+  ): Promise<boolean> => {
     if (operationLock.current || !disableTarget) return false;
-    if (!currentPassword) {
+    if (!reauthenticationProviders.includes(provider)) {
+      setIssue('reauthProviderUnsupported');
+      return false;
+    }
+    if (provider === 'password' && !currentPassword) {
       setIssue('passwordRequired');
       return false;
     }
 
     operationLock.current = true;
     setDisabling(true);
+    setDisablingProvider(provider);
     setIssue(null);
     setDisabled(false);
     try {
-      const result = await startTotpUnenrollmentWithPassword(
+      const result = await startTotpUnenrollment(
         disableTarget.uid,
-        currentPassword,
+        provider === 'password'
+          ? { provider, password: currentPassword }
+          : { provider },
       );
       setCurrentPasswordState('');
       if (result.status === 'challenge') {
@@ -133,13 +151,28 @@ export function useTotpMfa(refreshToken = 0) {
       }
       return true;
     } catch (error) {
+      if (error instanceof ReauthenticationCancelledError) {
+        setDisableTarget(null);
+        setDisableChallenge(null);
+        setCurrentPasswordState('');
+        setReauthCodeState('');
+        setIssue('reauthCancelled');
+        return false;
+      }
+      if (provider !== 'password') setCurrentPasswordState('');
       setIssue(mfaTotpIssueFromError(error));
       return false;
     } finally {
       operationLock.current = false;
       setDisabling(false);
+      setDisablingProvider(null);
     }
-  }, [completeDisable, currentPassword, disableTarget]);
+  }, [completeDisable, currentPassword, disableTarget, reauthenticationProviders]);
+
+  const confirmDisablePassword = useCallback(
+    () => confirmDisable('password'),
+    [confirmDisable],
+  );
 
   const confirmDisableCode = useCallback(async (): Promise<boolean> => {
     if (operationLock.current || !disableChallenge) return false;
@@ -171,6 +204,8 @@ export function useTotpMfa(refreshToken = 0) {
   return {
     cancelDisable,
     canReauthenticateWithPassword,
+    canReauthenticate,
+    confirmDisable,
     confirmDisableCode,
     confirmDisablePassword,
     currentPassword,
@@ -178,12 +213,14 @@ export function useTotpMfa(refreshToken = 0) {
     disableChallenge,
     disabled,
     disabling,
+    disablingProvider,
     enabled: factors.length > 0,
     factors,
     issue,
     loading,
     multipleFactors: factors.length > 1,
     reauthCode,
+    reauthenticationProviders,
     refresh,
     requestDisable,
     setCurrentPassword,

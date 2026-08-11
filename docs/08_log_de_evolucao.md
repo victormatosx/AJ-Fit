@@ -1536,3 +1536,52 @@ Assinatura:
 Codex — 2026-08-10 — Fase 3 do challenge de login TOTP.
 
 ---
+
+Data: 2026-08-10
+Responsável: Codex — Agente Frontend + Segurança + QA
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Implementada a Fase 4 do TOTP MFA com reautenticação federada para enrollment e
+unenrollment. Contas Google-only e Apple-only deixaram de ser bloqueadas em
+Configurações → Segurança → Verificação em duas etapas. A nova camada
+`reauthentication.ts` reutiliza as aquisições nativas existentes e aplica a
+credencial exclusivamente com `reauthenticateWithCredential` ao usuário atual.
+Login, linking, provisionamento e navegação não fazem parte dessa operação.
+
+Google reutiliza configuração, Play Services, folha nativa, extração de idToken
+e `GoogleAuthProvider.credential` já existentes. Apple gera raw nonce novo em
+cada tentativa, envia SHA-256 à Apple, usa o raw nonce apenas na credencial
+Firebase e não solicita nem depende de nome/e-mail durante reauth. Senha mantém
+o serviço anterior e segue como primeira opção quando vinculada. Contas
+multi-provider exibem todas as alternativas reais na ordem senha, Google e
+Apple, sem inferência por `providerData[0]`.
+
+Segurança:
+O UID original é validado antes da chamada Firebase, depois do resultado e
+novamente nas fronteiras assíncronas de geração do segredo e unenrollment.
+Cancelamento, provider indisponível, credencial divergente ou troca de sessão
+abortam sem tocar os fatores. Credenciais, id/identity tokens, raw nonce, senha,
+OTP, segredo e MultiFactorSession permanecem somente em memória e não são
+logados nem persistidos. A desativação continua resolvendo o TOTP já cadastrado
+quando a reautenticação retorna `auth/multi-factor-auth-required`.
+
+Validação automática:
+TypeScript aprovado; 945 testes da suíte completa aprovados; 75 testes focados
+de providers/reauth/MFA/regressão aprovados; 550 testes de i18n aprovados;
+auditoria i18n sem bloqueios; Expo Doctor com 21/21 verificações aprovadas; e
+`git diff --check` aprovado. Os testes cobrem os sete conjuntos de providers,
+nonce Apple novo, hash/raw nonce, códigos reais instalados do Google,
+cancelamento, mismatch de UID, enrollment/unenrollment federado e regressão dos
+challenges de login e account linking.
+
+Pendência:
+Executar em development builds o ciclo real Google-only no Android/iOS e o
+ciclo Apple-only em dispositivo iOS real: ativar, cancelar, escolher conta
+divergente quando possível, sair, entrar com TOTP e desativar. O repositório não
+possui emulador Firebase Auth capaz de substituir essa validação nativa.
+
+Assinatura:
+Codex — 2026-08-10 — Fase 4 de reautenticação federada TOTP.
+
+---

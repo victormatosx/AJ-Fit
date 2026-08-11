@@ -12,12 +12,13 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import QRCode from 'react-native-qrcode-svg';
+import { ReauthenticationMethods } from '../components/auth/ReauthenticationMethods';
 import { SupportScreenHeader } from '../components/support/SupportScreenHeader';
 import { CtaButton, CtaText } from '../components/ui/CtaButton';
 import { Icon } from '../components/ui/Icon';
-import { PasswordField } from '../components/ui/PasswordField';
 import { ScreenBg } from '../components/ui/ScreenBg';
 import { useTotpEnrollment } from '../hooks/useTotpEnrollment';
+import type { ReauthenticationProvider } from '../lib/authProviders';
 import {
   formatTotpSecret,
   type MfaTotpIssue,
@@ -66,13 +67,15 @@ export function TotpEnrollmentScreen({
               <UnavailableState />
             ) : !enrollment.draft ? (
               <ReauthenticationStep
+                providers={enrollment.reauthenticationProviders}
                 password={enrollment.currentPassword}
                 passwordVisible={passwordVisible}
-                submitting={enrollment.reauthenticating}
+                busy={enrollment.busy}
+                busyProvider={enrollment.reauthenticatingProvider}
                 issue={enrollment.issue}
                 onChangePassword={enrollment.setCurrentPassword}
                 onTogglePassword={() => setPasswordVisible((value) => !value)}
-                onSubmit={() => void enrollment.beginEnrollment()}
+                onSubmit={(provider) => void enrollment.beginEnrollment(provider)}
               />
             ) : (
               <AuthenticatorSetupStep enrollment={enrollment} />
@@ -98,21 +101,25 @@ export function TotpEnrollmentScreen({
 }
 
 function ReauthenticationStep({
+  providers,
   password,
   passwordVisible,
-  submitting,
+  busy,
+  busyProvider,
   issue,
   onChangePassword,
   onTogglePassword,
   onSubmit,
 }: {
+  providers: ReturnType<typeof useTotpEnrollment>['reauthenticationProviders'];
   password: string;
   passwordVisible: boolean;
-  submitting: boolean;
+  busy: boolean;
+  busyProvider: ReturnType<typeof useTotpEnrollment>['reauthenticatingProvider'];
   issue: MfaTotpIssue | null;
   onChangePassword: (value: string) => void;
   onTogglePassword: () => void;
-  onSubmit: () => void;
+  onSubmit: (provider: ReauthenticationProvider) => void;
 }) {
   const { t } = useTranslation('settings');
   return (
@@ -129,31 +136,18 @@ function ReauthenticationStep({
         </View>
       </View>
       <View style={{ marginTop: spacing[6] }}>
-        <PasswordField
-          label={t('security.twoFactor.reauth.passwordLabel')}
-          placeholder={t('security.twoFactor.reauth.passwordPlaceholder')}
-          value={password}
-          onChangeText={onChangePassword}
-          visible={passwordVisible}
-          onToggleVisibility={onTogglePassword}
-          toggleAccessibilityLabel={t('security.twoFactor.reauth.togglePassword')}
-          editable={!submitting}
-          returnKeyType="done"
-          onSubmitEditing={onSubmit}
+        <ReauthenticationMethods
+          providers={providers}
+          password={password}
+          passwordVisible={passwordVisible}
+          busyProvider={busyProvider}
+          disabled={busy}
+          onChangePassword={onChangePassword}
+          onTogglePassword={onTogglePassword}
+          onConfirm={onSubmit}
         />
       </View>
       {issue ? <ErrorFeedback issue={issue} /> : null}
-      <CtaButton
-        onPress={onSubmit}
-        disabled={submitting}
-        style={{ marginTop: spacing[6] }}
-      >
-        {submitting ? (
-          <ActivityIndicator color={colors.text} />
-        ) : (
-          <CtaText>{t('security.twoFactor.actions.continue')}</CtaText>
-        )}
-      </CtaButton>
     </>
   );
 }
@@ -292,7 +286,7 @@ function UnavailableState() {
           {t('security.twoFactor.reauth.unavailableTitle')}
         </Text>
         <Text style={[typography.bodySmall, styles.secondaryText]}>
-          {t('security.twoFactor.feedback.federatedReauthPending')}
+          {t('security.twoFactor.errors.reauthProviderUnsupported')}
         </Text>
       </View>
     </View>

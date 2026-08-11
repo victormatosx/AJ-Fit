@@ -69,12 +69,15 @@
       "disableConfirmation": { "title": "Desativar verificação?", "message": "Desativar a verificação em duas etapas reduzirá a segurança da sua conta." },
       "reauth": {
         "title": "Confirme sua identidade",
-        "enableDescription": "Digite sua senha atual antes de configurar o autenticador.",
-        "disableDescription": "Digite sua senha atual para desativar esta proteção.",
+        "enableDescription": "Escolha uma forma vinculada à sua conta para confirmar sua identidade antes de configurar o autenticador.",
+        "disableDescription": "Escolha uma forma vinculada à sua conta para confirmar sua identidade e desativar esta proteção.",
         "codeDescription": "Agora informe o código atual do aplicativo autenticador para concluir a desativação.",
         "passwordLabel": "Senha atual",
         "passwordPlaceholder": "Digite sua senha atual",
         "togglePassword": "Mostrar ou ocultar senha atual",
+        "continueWithPassword": "Confirmar com senha",
+        "continueWithGoogle": "Continuar com Google",
+        "continueWithApple": "Continuar com Apple",
         "unavailableTitle": "Confirmação indisponível"
       },
       "enrollment": {
@@ -95,8 +98,7 @@
       },
       "feedback": {
         "disabled": "Verificação em duas etapas desativada.",
-        "multipleFactors": "Há mais de um autenticador cadastrado. Escolha explicitamente qual deseja desativar.",
-        "federatedReauthPending": "A confirmação de identidade para contas somente Google ou Apple será disponibilizada na próxima etapa. Por segurança, esta ação está bloqueada agora."
+        "multipleFactors": "Há mais de um autenticador cadastrado. Escolha explicitamente qual deseja desativar."
       },
       "errors": {
         "userMissing": "Sua sessão não está disponível. Entre novamente e tente outra vez.",
@@ -104,6 +106,12 @@
         "passwordRequired": "Digite sua senha atual.",
         "currentPasswordIncorrect": "A senha atual está incorreta. Verifique e tente novamente.",
         "reauthProviderUnsupported": "A confirmação de identidade desta conta ainda não está disponível.",
+        "reauthCancelled": "A confirmação foi cancelada. Nenhuma alteração foi feita.",
+        "reauthFailed": "Não foi possível confirmar sua identidade. Tente novamente com a mesma conta.",
+        "userMismatch": "A conta escolhida é diferente da conta aberta no AJ Fit. Nenhuma alteração foi feita.",
+        "providerUnavailable": "Este método de confirmação não está disponível neste aparelho.",
+        "providerBusy": "Já existe uma confirmação de identidade em andamento.",
+        "identityTokenMissing": "O provedor não concluiu a confirmação. Tente novamente.",
         "codeRequired": "Digite o código do aplicativo autenticador.",
         "codeNonNumeric": "O código deve conter apenas números.",
         "codeLength": "Digite os 6 dígitos do código.",

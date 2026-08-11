@@ -1,7 +1,12 @@
 import { OAuthProvider } from 'firebase/auth';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as Crypto from 'expo-crypto';
-import { SocialAuthCancelledError, type ProviderResult } from './types';
+import {
+  ProviderCredentialError,
+  SocialAuthCancelledError,
+  type AppleCredentialOptions,
+  type ProviderResult,
+} from './types';
 
 /** Whether Sign in with Apple is available on this device (iOS 13+). */
 export async function isAppleAuthAvailable(): Promise<boolean> {
@@ -25,7 +30,10 @@ function randomNonce(length = 32): string {
  * raw value is passed to Firebase, which binds the id token to this request
  * (prevents replay). Throws `SocialAuthCancelledError` when the user cancels.
  */
-export async function getAppleCredential(): Promise<ProviderResult> {
+export async function getAppleCredential(
+  options: AppleCredentialOptions = {},
+): Promise<ProviderResult> {
+  const requestProfile = options.requestProfile !== false;
   const rawNonce = randomNonce();
   const hashedNonce = await Crypto.digestStringAsync(
     Crypto.CryptoDigestAlgorithm.SHA256,
@@ -34,15 +42,17 @@ export async function getAppleCredential(): Promise<ProviderResult> {
 
   try {
     const credential = await AppleAuthentication.signInAsync({
-      requestedScopes: [
-        AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
-        AppleAuthentication.AppleAuthenticationScope.EMAIL,
-      ],
+      requestedScopes: requestProfile
+        ? [
+            AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+            AppleAuthentication.AppleAuthenticationScope.EMAIL,
+          ]
+        : [],
       nonce: hashedNonce,
     });
 
     if (!credential.identityToken) {
-      throw new Error('A Apple não retornou o token de identificação.');
+      throw new ProviderCredentialError('identityTokenMissing');
     }
 
     const provider = new OAuthProvider('apple.com');
@@ -52,7 +62,7 @@ export async function getAppleCredential(): Promise<ProviderResult> {
     });
 
     // Apple only returns the name on the FIRST authorization.
-    const fullName = credential.fullName;
+    const fullName = requestProfile ? credential.fullName : null;
     const displayName = fullName
       ? [fullName.givenName, fullName.familyName].filter(Boolean).join(' ').trim()
       : null;

@@ -7,6 +7,12 @@ export type MfaTotpIssue =
   | 'passwordRequired'
   | 'currentPasswordIncorrect'
   | 'reauthProviderUnsupported'
+  | 'reauthCancelled'
+  | 'reauthFailed'
+  | 'userMismatch'
+  | 'providerUnavailable'
+  | 'providerBusy'
+  | 'identityTokenMissing'
   | 'codeRequired'
   | 'codeNonNumeric'
   | 'codeLength'
@@ -78,8 +84,9 @@ export function mfaTotpIssueFromError(error: unknown): MfaTotpIssue {
       return 'passwordRequired';
     case 'auth/wrong-password':
     case 'auth/invalid-credential':
-    case 'auth/user-mismatch':
       return 'currentPasswordIncorrect';
+    case 'auth/user-mismatch':
+      return 'userMismatch';
     case 'auth/password-provider-required':
     case 'auth/missing-email':
       return 'reauthProviderUnsupported';

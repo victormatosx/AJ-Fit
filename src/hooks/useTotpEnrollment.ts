@@ -2,7 +2,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Linking } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
-import { hasPasswordProvider } from '../lib/authProviders';
+import {
+  getReauthenticationProviders,
+  type ReauthenticationProvider,
+} from '../lib/authProviders';
 import {
   mfaTotpIssueFromError,
   validateTotpCode,
@@ -10,10 +13,11 @@ import {
 } from '../lib/mfaTotp';
 import {
   finishTotpEnrollment,
-  startTotpEnrollmentWithPassword,
+  startTotpEnrollment,
   type TotpEnrollmentDraft,
   type TotpFactor,
 } from '../services/mfaTotp';
+import { ReauthenticationCancelledError } from '../services/reauthentication';
 import { useAuth } from '../state/AuthContext';
 
 type EnrollmentOperation = 'reauthenticating' | 'enrolling' | 'copying' | 'opening' | null;
@@ -35,11 +39,14 @@ export function useTotpEnrollment() {
   const [issue, setIssue] = useState<MfaTotpIssue | null>(null);
   const [copied, setCopied] = useState(false);
   const [activatedFactors, setActivatedFactors] = useState<TotpFactor[] | null>(null);
+  const [reauthenticatingProvider, setReauthenticatingProvider] =
+    useState<ReauthenticationProvider | null>(null);
   const operationLock = useRef(false);
   const mountedRef = useRef(true);
   const draftRef = useRef<TotpEnrollmentDraft | null>(null);
   const userUidRef = useRef(user?.uid ?? null);
-  const allowed = hasPasswordProvider(user);
+  const reauthenticationProviders = getReauthenticationProviders(user);
+  const allowed = reauthenticationProviders.length > 0;
 
   const replaceDraft = useCallback((next: TotpEnrollmentDraft | null) => {
     draftRef.current = next;
@@ -100,23 +107,30 @@ export function useTotpEnrollment() {
     setIssue(null);
   }, []);
 
-  const beginEnrollment = useCallback(async (): Promise<boolean> => {
+  const beginEnrollment = useCallback(async (
+    provider: ReauthenticationProvider,
+  ): Promise<boolean> => {
     if (operationLock.current) return false;
-    if (!allowed) {
+    if (!reauthenticationProviders.includes(provider)) {
       setIssue('reauthProviderUnsupported');
       return false;
     }
-    if (!currentPassword) {
+    if (provider === 'password' && !currentPassword) {
       setIssue('passwordRequired');
       return false;
     }
 
     operationLock.current = true;
     setOperation('reauthenticating');
+    setReauthenticatingProvider(provider);
     setIssue(null);
     setActivatedFactors(null);
     try {
-      const nextDraft = await startTotpEnrollmentWithPassword(currentPassword);
+      const nextDraft = await startTotpEnrollment(
+        provider === 'password'
+          ? { provider, password: currentPassword }
+          : { provider },
+      );
       if (
         !mountedRef.current ||
         userUidRef.current !== nextDraft.userUid
@@ -130,13 +144,20 @@ export function useTotpEnrollment() {
     } catch (error) {
       if (!mountedRef.current) return false;
       clearSensitiveState();
-      setIssue(mfaTotpIssueFromError(error));
+      setIssue(
+        error instanceof ReauthenticationCancelledError
+          ? 'reauthCancelled'
+          : mfaTotpIssueFromError(error),
+      );
       return false;
     } finally {
       operationLock.current = false;
-      if (mountedRef.current) setOperation(null);
+      if (mountedRef.current) {
+        setOperation(null);
+        setReauthenticatingProvider(null);
+      }
     }
-  }, [allowed, clearSensitiveState, currentPassword, replaceDraft]);
+  }, [clearSensitiveState, currentPassword, reauthenticationProviders, replaceDraft]);
 
   const confirmEnrollment = useCallback(async (): Promise<boolean> => {
     if (operationLock.current || !draftRef.current) return false;
@@ -233,6 +254,8 @@ export function useTotpEnrollment() {
     issue,
     openAuthenticator,
     opening: operation === 'opening',
+    reauthenticationProviders,
+    reauthenticatingProvider,
     reauthenticating: operation === 'reauthenticating',
     setCode,
     setCurrentPassword,

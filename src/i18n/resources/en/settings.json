@@ -69,12 +69,15 @@
       "disableConfirmation": { "title": "Disable verification?", "message": "Disabling two-step verification will reduce your account's security." },
       "reauth": {
         "title": "Confirm your identity",
-        "enableDescription": "Enter your current password before setting up the authenticator.",
-        "disableDescription": "Enter your current password to disable this protection.",
+        "enableDescription": "Choose a method linked to your account to confirm your identity before setting up the authenticator.",
+        "disableDescription": "Choose a method linked to your account to confirm your identity and disable this protection.",
         "codeDescription": "Now enter the current code from your authenticator app to finish disabling verification.",
         "passwordLabel": "Current password",
         "passwordPlaceholder": "Enter your current password",
         "togglePassword": "Show or hide current password",
+        "continueWithPassword": "Confirm with password",
+        "continueWithGoogle": "Continue with Google",
+        "continueWithApple": "Continue with Apple",
         "unavailableTitle": "Confirmation unavailable"
       },
       "enrollment": {
@@ -95,8 +98,7 @@
       },
       "feedback": {
         "disabled": "Two-step verification disabled.",
-        "multipleFactors": "More than one authenticator is enrolled. Choose the one you want to disable.",
-        "federatedReauthPending": "Identity confirmation for Google-only or Apple-only accounts will be available in the next phase. For security, this action is currently blocked."
+        "multipleFactors": "More than one authenticator is enrolled. Choose the one you want to disable."
       },
       "errors": {
         "userMissing": "Your session is unavailable. Sign in again and retry.",
@@ -104,6 +106,12 @@
         "passwordRequired": "Enter your current password.",
         "currentPasswordIncorrect": "Your current password is incorrect. Check it and try again.",
         "reauthProviderUnsupported": "Identity confirmation is not available for this account yet.",
+        "reauthCancelled": "Identity confirmation was cancelled. No changes were made.",
+        "reauthFailed": "We could not confirm your identity. Try again with the same account.",
+        "userMismatch": "The selected account is different from the account open in AJ Fit. No changes were made.",
+        "providerUnavailable": "This confirmation method is not available on this device.",
+        "providerBusy": "An identity confirmation is already in progress.",
+        "identityTokenMissing": "The provider did not complete confirmation. Try again.",
         "codeRequired": "Enter the code from your authenticator app.",
         "codeNonNumeric": "The code must contain numbers only.",
         "codeLength": "Enter all 6 digits of the code.",

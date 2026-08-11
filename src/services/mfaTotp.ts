@@ -15,7 +15,10 @@ import {
   validateTotpCode,
   type MfaTotpIssue,
 } from '../lib/mfaTotp';
-import { reauthenticatePasswordUser } from './password';
+import {
+  reauthenticateCurrentUser,
+  type ReauthenticationRequest,
+} from './reauthentication';
 
 const FACTOR_DISPLAY_NAME = 'AJ Fit Authenticator';
 const TOTP_ISSUER = 'AJ Fit';
@@ -181,13 +184,18 @@ export async function refreshTotpFactors(): Promise<TotpFactor[]> {
   return currentTotpFactors();
 }
 
-export async function startTotpEnrollmentWithPassword(
-  currentPassword: string,
+export async function startTotpEnrollment(
+  request: ReauthenticationRequest,
 ): Promise<TotpEnrollmentDraft> {
-  if (!currentPassword) throw new MfaTotpServiceError('passwordRequired');
-  const user = await reauthenticatePasswordUser(currentPassword);
+  if (request.provider === 'password' && !request.password) {
+    throw new MfaTotpServiceError('passwordRequired');
+  }
+  const original = currentUserOrThrow();
+  const user = await reauthenticateCurrentUser(request);
   const current = currentUserOrThrow();
-  if (current.uid !== user.uid) throw new MfaTotpServiceError('sessionExpired');
+  if (current.uid !== original.uid || user.uid !== original.uid) {
+    throw new MfaTotpServiceError('userMismatch');
+  }
   if (!current.emailVerified) throw new MfaTotpServiceError('emailUnverified');
   if (currentTotpFactors().length > 0) {
     throw new MfaTotpServiceError('alreadyEnabled');
@@ -195,6 +203,9 @@ export async function startTotpEnrollmentWithPassword(
 
   const session = await multiFactor(current).getSession();
   const secret = await TotpMultiFactorGenerator.generateSecret(session);
+  if (currentUserOrThrow().uid !== original.uid) {
+    throw new MfaTotpServiceError('userMismatch');
+  }
   return {
     userUid: current.uid,
     secret,
@@ -202,6 +213,13 @@ export async function startTotpEnrollmentWithPassword(
     otpAuthUri: secret.generateQrCodeUrl(current.email ?? current.uid, TOTP_ISSUER),
     enrollmentCompletionDeadline: secret.enrollmentCompletionDeadline,
   };
+}
+
+/** Compatibility wrapper retained for password settings and existing callers. */
+export function startTotpEnrollmentWithPassword(
+  currentPassword: string,
+): Promise<TotpEnrollmentDraft> {
+  return startTotpEnrollment({ provider: 'password', password: currentPassword });
 }
 
 export async function finishTotpEnrollment(
@@ -233,8 +251,12 @@ export async function finishTotpEnrollment(
 
 async function unenrollCurrentTotpFactor(
   factorUid: string,
+  expectedUserUid: string,
 ): Promise<TotpFactor[]> {
   const current = currentUserOrThrow();
+  if (current.uid !== expectedUserUid) {
+    throw new MfaTotpServiceError('userMismatch');
+  }
   const factor = selectTotpFactors(multiFactor(current).enrolledFactors).find(
     (candidate) => candidate.uid === factorUid,
   );
@@ -244,11 +266,13 @@ async function unenrollCurrentTotpFactor(
   return refreshTotpFactors();
 }
 
-export async function startTotpUnenrollmentWithPassword(
+export async function startTotpUnenrollment(
   factorUid: string,
-  currentPassword: string,
+  request: ReauthenticationRequest,
 ): Promise<TotpUnenrollmentStart> {
-  if (!currentPassword) throw new MfaTotpServiceError('passwordRequired');
+  if (request.provider === 'password' && !request.password) {
+    throw new MfaTotpServiceError('passwordRequired');
+  }
   const user = currentUserOrThrow();
   const target = selectTotpFactors(multiFactor(user).enrolledFactors).find(
     (candidate) => candidate.uid === factorUid,
@@ -256,7 +280,7 @@ export async function startTotpUnenrollmentWithPassword(
   if (!target) throw new MfaTotpServiceError('factorNotFound');
 
   try {
-    const reauthenticated = await reauthenticatePasswordUser(currentPassword, {
+    const reauthenticated = await reauthenticateCurrentUser(request, {
       preserveMultiFactorError: true,
     });
     if (reauthenticated.uid !== user.uid) {
@@ -264,7 +288,7 @@ export async function startTotpUnenrollmentWithPassword(
     }
     return {
       status: 'completed',
-      factors: await unenrollCurrentTotpFactor(factorUid),
+      factors: await unenrollCurrentTotpFactor(factorUid, user.uid),
     };
   } catch (error) {
     if (!isMultiFactorAuthRequired(error)) throw error;
@@ -283,6 +307,17 @@ export async function startTotpUnenrollmentWithPassword(
       },
     };
   }
+}
+
+/** Compatibility wrapper retained for the existing password reauth contract. */
+export function startTotpUnenrollmentWithPassword(
+  factorUid: string,
+  currentPassword: string,
+): Promise<TotpUnenrollmentStart> {
+  return startTotpUnenrollment(factorUid, {
+    provider: 'password',
+    password: currentPassword,
+  });
 }
 
 export async function finishTotpUnenrollment(
@@ -305,5 +340,8 @@ export async function finishTotpUnenrollment(
   if (credential.user.uid !== challenge.userUid) {
     throw new MfaTotpServiceError('sessionExpired');
   }
-  return unenrollCurrentTotpFactor(challenge.targetFactorUid);
+  return unenrollCurrentTotpFactor(
+    challenge.targetFactorUid,
+    challenge.userUid,
+  );
 }
