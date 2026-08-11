@@ -130,6 +130,11 @@ Validar:
 * recuperação de senha
 * login Google
 * login Apple
+* login com TOTP após e-mail/senha, Google e Apple
+* código TOTP incorreto com retry na mesma tentativa
+* cancelamento e expiração do challenge TOTP
+* múltiplos fatores TOTP e hints não suportados
+* retorno ao Dashboard (nunca Quiz) para usuário existente com questionário
 * persistência de sessão
 * troca de dispositivo
 

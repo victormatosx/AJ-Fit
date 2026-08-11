@@ -55,6 +55,7 @@ describe('TOTP MFA domain helpers', () => {
     ['auth/requires-recent-login', 'recentLoginRequired'],
     ['auth/user-token-expired', 'sessionExpired'],
     ['auth/network-request-failed', 'network'],
+    ['auth/too-many-requests', 'tooManyRequests'],
     ['auth/not-a-real-code', 'generic'],
   ])('maps real Firebase code %s to domain feedback', (code, issue) => {
     expect(mfaTotpIssueFromError({ code })).toBe(issue);

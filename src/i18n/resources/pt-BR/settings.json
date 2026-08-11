@@ -113,6 +113,7 @@
         "recentLoginRequired": "Confirme sua identidade novamente para continuar.",
         "sessionExpired": "Sua sessão expirou. Entre novamente e tente outra vez.",
         "network": "Não foi possível conectar. Verifique sua internet e tente novamente.",
+        "tooManyRequests": "Muitas tentativas foram feitas. Aguarde um pouco e tente novamente.",
         "factorNotFound": "Este autenticador não foi encontrado. Atualize a tela e tente novamente.",
         "factorAlreadyEnrolled": "Este autenticador já está cadastrado.",
         "factorLimit": "Sua conta atingiu o limite de autenticadores cadastrados.",

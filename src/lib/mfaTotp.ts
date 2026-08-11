@@ -16,6 +16,7 @@ export type MfaTotpIssue =
   | 'recentLoginRequired'
   | 'sessionExpired'
   | 'network'
+  | 'tooManyRequests'
   | 'factorNotFound'
   | 'factorAlreadyEnrolled'
   | 'factorLimit'
@@ -111,8 +112,9 @@ export function mfaTotpIssueFromError(error: unknown): MfaTotpIssue {
       return 'operationNotAllowed';
     case 'auth/network-request-failed':
       return 'network';
+    case 'auth/too-many-requests':
+      return 'tooManyRequests';
     default:
       return 'generic';
   }
 }
-

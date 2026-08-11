@@ -53,10 +53,13 @@ vi.mock('../password', () => ({
 }));
 
 import {
+  clearTotpSignInChallenge,
   finishTotpEnrollment,
   finishTotpUnenrollment,
   refreshTotpFactors,
+  resolveTotpSignIn,
   startTotpEnrollmentWithPassword,
+  startTotpSignInChallenge,
   startTotpUnenrollmentWithPassword,
 } from '../mfaTotp';
 
@@ -68,9 +71,10 @@ const totpFactor = {
 };
 const nonTotpFactor = { ...totpFactor, uid: 'phone-1', factorId: 'phone' };
 
-describe('production TOTP enrollment service', () => {
+describe('production TOTP service', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    clearTotpSignInChallenge();
     const user: TestUser = {
       uid: 'user-1',
       email: 'person@example.com',
@@ -181,5 +185,82 @@ describe('production TOTP enrollment service', () => {
       issue: 'factorNotFound',
     });
     expect(mocks.mfa.unenroll).not.toHaveBeenCalled();
+  });
+
+  it('captures the original MFA error and exposes only safe TOTP hints', () => {
+    mocks.resolver.hints = [
+      { ...nonTotpFactor, displayName: 'Unsupported' },
+      totpFactor,
+      { ...totpFactor, uid: 'totp-2', displayName: null },
+    ];
+    const originalError = {
+      code: 'auth/multi-factor-auth-required',
+      customData: { opaque: true },
+    };
+
+    expect(startTotpSignInChallenge(originalError, 'google')).toEqual({
+      origin: 'google',
+      hints: [
+        {
+          uid: 'totp-1',
+          displayName: 'AJ Fit Authenticator',
+          enrollmentTime: totpFactor.enrollmentTime,
+        },
+        {
+          uid: 'totp-2',
+          displayName: null,
+          enrollmentTime: totpFactor.enrollmentTime,
+        },
+      ],
+    });
+    expect(mocks.getResolver).toHaveBeenCalledWith(mocks.auth, originalError);
+  });
+
+  it('keeps the resolver after an incorrect OTP and clears it after success', async () => {
+    startTotpSignInChallenge(
+      { code: 'auth/multi-factor-auth-required' },
+      'password',
+    );
+    const incorrect = { code: 'auth/invalid-verification-code' };
+    mocks.resolver.resolveSignIn.mockRejectedValueOnce(incorrect);
+
+    await expect(resolveTotpSignIn('totp-1', '111111')).rejects.toBe(incorrect);
+    await expect(resolveTotpSignIn('totp-1', '222222')).resolves.toEqual({
+      user: mocks.auth.currentUser,
+    });
+    expect(mocks.assertionForSignIn).toHaveBeenLastCalledWith('totp-1', '222222');
+    await expect(resolveTotpSignIn('totp-1', '333333')).rejects.toMatchObject({
+      issue: 'sessionExpired',
+    });
+  });
+
+  it('clears the resolver on cancel', async () => {
+    startTotpSignInChallenge(
+      { code: 'auth/multi-factor-auth-required' },
+      'apple',
+    );
+    clearTotpSignInChallenge();
+    await expect(resolveTotpSignIn('totp-1', '123456')).rejects.toMatchObject({
+      issue: 'sessionExpired',
+    });
+    expect(mocks.resolver.resolveSignIn).not.toHaveBeenCalled();
+  });
+
+  it('ignores unsupported factors and rejects a resolver without TOTP', () => {
+    mocks.resolver.hints = [nonTotpFactor];
+    expect(() =>
+      startTotpSignInChallenge(
+        { code: 'auth/multi-factor-auth-required' },
+        'account-linking',
+      ),
+    ).toThrowError(expect.objectContaining({ issue: 'factorNotFound' }));
+
+    mocks.resolver.hints = [];
+    expect(() =>
+      startTotpSignInChallenge(
+        { code: 'auth/multi-factor-auth-required' },
+        'password',
+      ),
+    ).toThrowError(expect.objectContaining({ issue: 'resolverWithoutHints' }));
   });
 });

@@ -200,12 +200,30 @@ O unenrollment sempre opera sobre o UID explicitamente selecionado, após
 confirmação e reautenticação. Se o Firebase exigir o TOTP durante a própria
 reautenticação, a operação resolve o `MultiFactorResolver` antes de chamar
 `unenroll`. Contas somente Google/Apple permanecem bloqueadas para ativação e
-desativação até a reautenticação federada da Fase 3; não há atalho baseado em
-uma sessão antiga.
+desativação enquanto a reautenticação federada de operações sensíveis não for
+implementada; não há atalho baseado em uma sessão antiga.
 
-Esta etapa não completa o challenge de login de produção para todos os
-provedores. A ponte DEV validada na POC permanece temporariamente para o login
-por e-mail/senha e será substituída pela arquitetura definitiva na Fase 3.
+O challenge TOTP de login é parte interna do fluxo de autenticação para todos
+os primeiros fatores suportados:
+
+1. e-mail/senha ou `signInWithCredential` (Google/Apple) valida o primeiro
+   fator;
+2. `auth/multi-factor-auth-required` é preservado sem normalização;
+3. `getMultiFactorResolver` captura a transação e filtra todos os hints TOTP;
+4. resolver, hints internos e OTP permanecem somente em memória;
+5. o usuário escolhe explicitamente o fator quando houver mais de um e informa
+   o código de seis dígitos;
+6. `TotpMultiFactorGenerator.assertionForSignIn` + `resolver.resolveSignIn`
+   concluem a mesma tentativa, sem reabrir Google ou Apple;
+7. `onAuthStateChanged` publica o `User`, e o `AuthContext` carrega perfil e
+   questionário antes de o guard central decidir o destino.
+
+Código incorreto preserva o resolver para retry. Cancelamento, unmount ou
+sessão inválida eliminam resolver e OTP. Não existe rota MFA persistente no
+funil: usuário existente com questionário volta ao Dashboard após o segundo
+fator, nunca ao Quiz. Na versão instalada do SDK, o erro backend
+`SESSION_EXPIRED` é exposto como `auth/code-expired`; não existe código público
+`auth/session-expired`.
 
 Implementação (Firebase JS SDK, apps nativos iOS/Android via dev/EAS build):
 
@@ -231,6 +249,10 @@ diferente para um e-mail já existente lança
 2. `fetchSignInMethodsForEmail(email)` → método existente;
 3. reautentica com o método existente (senha ou outro provedor social) e
    `linkWithCredential(user, credencialPendente)`.
+
+Se a autenticação do método existente exigir MFA, a credencial de linking e o
+resolver ficam apenas em memória. Após `resolveSignIn`, o app executa
+`linkWithCredential` no usuário retornado, preservando o mesmo UID.
 
 Resultado: **mesmo UID**, todos os dados preservados, provedor adicional
 vinculado. Cobre todas as direções (Email↔Google↔Apple). Nunca cria usuário,

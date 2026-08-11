@@ -1495,3 +1495,44 @@ Assinatura:
 Codex — 2026-08-10 — Fase 2 de enrollment/gerenciamento TOTP.
 
 ---
+
+Data: 2026-08-10
+Responsável: Codex — Agente Frontend + Segurança + QA
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Implementado o challenge TOTP definitivo no login de produção para
+e-mail/senha, Google e Apple. Os services preservam o
+`auth/multi-factor-auth-required` original; `src/services/mfaTotp.ts` mantém o
+`MultiFactorResolver` somente em memória; `useTotpChallenge` controla seleção
+de fator, OTP, retry, expiração e cancelamento; `TotpChallengeScreen` fornece a
+UI única do fluxo. A ponte DEV da POC e seus três arquivos paralelos foram
+removidos.
+
+Integração:
+Após `resolveSignIn`, nenhum `User` é definido e nenhuma rota é aberta
+manualmente. `onAuthStateChanged` continua sendo a autoridade, carrega perfil
+e questionário e entrega o estado ao guard central. Assim, um usuário existente
+com questionário e TOTP retorna ao Dashboard, sem passar pelo Quiz. Linking
+continua separado de `account-exists-with-different-credential` e conclui a
+credencial pendente no mesmo UID depois do segundo fator.
+
+Segurança:
+Resolver, hints internos, credencial de linking e OTP não são persistidos nem
+logados. Cancelamento/unmount/erro terminal limpam a memória. Código incorreto,
+rede e rate limit permitem retry. Nenhuma alteração foi feita em
+`secureAuthStorage`, inicialização/persistência do Firebase, Firestore/Storage
+Rules, schemas ou custom claims. SMS, reCAPTCHA, recovery codes e revogação de
+outras sessões seguem fora do escopo.
+
+Validação:
+Testes automatizados cobrem primeiro fator com e sem MFA nos três provedores,
+resolução/retry/limpeza do resolver, linking, múltiplos hints, fator não TOTP,
+expiração, logout, verificação de e-mail, persistência segura, guard
+Quiz/Dashboard e paridade i18n. A validação runtime com contas reais e
+development builds Android/iOS continua obrigatoriamente manual.
+
+Assinatura:
+Codex — 2026-08-10 — Fase 3 do challenge de login TOTP.
+
+---

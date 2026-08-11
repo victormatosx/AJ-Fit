@@ -6,6 +6,7 @@ import {
   type MultiFactorInfo,
   type MultiFactorResolver,
   type TotpSecret,
+  type UserCredential,
 } from 'firebase/auth';
 import { auth } from '../lib/firebase';
 import {
@@ -55,6 +56,29 @@ export type TotpUnenrollmentStart =
   | { status: 'completed'; factors: TotpFactor[] }
   | { status: 'challenge'; challenge: TotpUnenrollmentChallenge };
 
+export type TotpSignInOrigin =
+  | 'password'
+  | 'google'
+  | 'apple'
+  | 'account-linking';
+
+export type TotpSignInHint = {
+  /** Internal selection key. It is never rendered or persisted. */
+  uid: string;
+  displayName: string | null;
+  enrollmentTime: string;
+};
+
+export type TotpSignInChallenge = {
+  origin: TotpSignInOrigin;
+  hints: TotpSignInHint[];
+};
+
+// A MultiFactorResolver represents a short-lived, first-factor-authenticated
+// sign-in transaction. It deliberately exists only in this JS process: never
+// in React state, AsyncStorage, SecureStore, Firestore, logs, or analytics.
+let pendingSignInResolver: MultiFactorResolver | null = null;
+
 function currentUserOrThrow() {
   const user = auth.currentUser;
   if (!user) throw new MfaTotpServiceError('userMissing');
@@ -68,6 +92,77 @@ function summarizeFactor(factor: MultiFactorInfo): TotpFactor {
     displayName: factor.displayName ?? null,
     enrollmentTime: factor.enrollmentTime,
   };
+}
+
+function summarizeSignInHint(factor: MultiFactorInfo): TotpSignInHint {
+  return {
+    uid: factor.uid,
+    displayName: factor.displayName ?? null,
+    enrollmentTime: factor.enrollmentTime,
+  };
+}
+
+/** Captures the original Firebase MFA error before any normalization occurs. */
+export function startTotpSignInChallenge(
+  error: unknown,
+  origin: TotpSignInOrigin,
+): TotpSignInChallenge {
+  pendingSignInResolver = null;
+  if (!isMultiFactorAuthRequired(error)) {
+    throw new MfaTotpServiceError('generic');
+  }
+
+  const resolver = getMultiFactorResolver(auth, error as MultiFactorError);
+  if (resolver.hints.length === 0) {
+    throw new MfaTotpServiceError('resolverWithoutHints');
+  }
+
+  // Unsupported factors are ignored. The app never starts SMS/reCAPTCHA and
+  // never assumes the first resolver hint is TOTP.
+  const totpHints = selectTotpFactors(resolver.hints);
+  if (totpHints.length === 0) {
+    throw new MfaTotpServiceError('factorNotFound');
+  }
+
+  pendingSignInResolver = resolver;
+  return {
+    origin,
+    hints: totpHints.map(summarizeSignInHint),
+  };
+}
+
+/**
+ * Completes the pending sign-in with the explicitly selected TOTP factor.
+ * Invalid/expired OTPs leave the resolver intact so the user can retry.
+ */
+export async function resolveTotpSignIn(
+  hintUid: string,
+  code: string,
+): Promise<UserCredential> {
+  const resolver = pendingSignInResolver;
+  if (!resolver) throw new MfaTotpServiceError('sessionExpired');
+
+  const normalizedCode = code.trim();
+  const validationIssue = validateTotpCode(normalizedCode);
+  if (validationIssue) throw new MfaTotpServiceError(validationIssue);
+
+  const hint = selectTotpFactors(resolver.hints).find(
+    (candidate) => candidate.uid === hintUid,
+  );
+  if (!hint) throw new MfaTotpServiceError('factorNotFound');
+
+  const assertion = TotpMultiFactorGenerator.assertionForSignIn(
+    hint.uid,
+    normalizedCode,
+  );
+  const credential = await resolver.resolveSignIn(assertion);
+  pendingSignInResolver = null;
+  return credential;
+}
+
+/** Clears the process-memory transaction on cancel, expiry, or unmount. */
+export function clearTotpSignInChallenge(): void {
+  pendingSignInResolver = null;
 }
 
 function currentTotpFactors(): TotpFactor[] {

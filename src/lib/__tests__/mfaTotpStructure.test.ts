@@ -10,14 +10,16 @@ const app = source('App.tsx');
 const appShell = source('src/screens/AppShell.tsx');
 const authContext = source('src/state/AuthContext.tsx');
 const authScreen = source('src/screens/AuthScreen.tsx');
-const challengeScreen = source('src/screens/TotpMfaPocChallengeScreen.tsx');
+const challengeHook = source('src/hooks/useTotpChallenge.ts');
+const challengeScreen = source('src/screens/TotpChallengeScreen.tsx');
 const enrollmentHook = source('src/hooks/useTotpEnrollment.ts');
 const enrollmentScreen = source('src/screens/TotpEnrollmentScreen.tsx');
 const managementHook = source('src/hooks/useTotpMfa.ts');
 const managementScreen = source('src/screens/TwoFactorSettingsScreen.tsx');
 const securityScreen = source('src/screens/SecurityScreen.tsx');
 const service = source('src/services/mfaTotp.ts');
-const signInPocService = source('src/services/totpMfaPoc.ts');
+const authService = source('src/services/auth.ts');
+const socialService = source('src/services/socialAuth.ts');
 
 describe('production TOTP enrollment and management structure', () => {
   it('keeps Screen -> Hook -> Service -> Firebase boundaries', () => {
@@ -27,27 +29,30 @@ describe('production TOTP enrollment and management structure', () => {
     expect(enrollmentScreen).toContain("from '../hooks/useTotpEnrollment'");
     expect(managementScreen).not.toContain("from 'firebase/auth'");
     expect(enrollmentScreen).not.toContain("from 'firebase/auth'");
+    expect(challengeScreen).toContain("from '../hooks/useTotpChallenge'");
+    expect(challengeScreen).not.toContain("from 'firebase/auth'");
+    expect(challengeHook).toContain('resolveTotpSignIn');
     expect(service).toContain("from 'firebase/auth'");
   });
 
   it('uses production overlays and removes the DEV enrollment entry', () => {
     expect(appShell).toContain('<TwoFactorSettingsScreen');
     expect(appShell).toContain('<TotpEnrollmentScreen');
-    expect(appShell).not.toContain('TotpMfaPocScreen');
-    expect(source('src/screens/SettingsScreen.tsx')).not.toContain('onOpenTotpMfaPoc');
     expect(securityScreen).toContain('onPress: onOpenTwoFactor');
   });
 
-  it('keeps only the sign-in challenge bridge DEV-only until Phase 3', () => {
-    expect(authScreen).toContain(
-      "if (__DEV__ && mode === 'login' && isMultiFactorAuthRequired(err))",
-    );
-    expect(challengeScreen).toContain('if (!__DEV__) return null;');
-    expect(signInPocService).toContain(
+  it('promotes one production sign-in challenge for every first factor', () => {
+    expect(authScreen).toContain("beginTotpChallenge(err, 'password')");
+    expect(authScreen).toContain('beginTotpChallenge(err, provider)');
+    expect(authScreen).toContain("beginTotpChallenge(err, 'account-linking')");
+    expect(authScreen).toContain('<TotpChallengeScreen');
+    expect(authScreen).not.toContain('__DEV__');
+    expect(challengeScreen).not.toContain('__DEV__');
+    expect(service).toContain(
       'let pendingSignInResolver: MultiFactorResolver | null = null',
     );
-    expect(signInPocService).not.toContain('generateSecret');
-    expect(signInPocService).not.toContain('enroll(');
+    expect(authService).toContain('if (isMultiFactorAuthRequired(err)) throw err;');
+    expect(socialService).toContain('if (isMultiFactorAuthRequired(err))');
   });
 
   it('derives status from Firebase factors and operates on explicit factor UIDs', () => {
@@ -75,10 +80,12 @@ describe('production TOTP enrollment and management structure', () => {
       enrollmentScreen,
       managementHook,
       managementScreen,
+      challengeHook,
+      challengeScreen,
     ].join('\n');
     for (const forbidden of [
-      'AsyncStorage',
-      'SecureStore',
+      "from '@react-native-async-storage/async-storage'",
+      "from 'expo-secure-store'",
       'setDoc(',
       'updateDoc(',
       '@react-native-firebase',
@@ -93,6 +100,7 @@ describe('production TOTP enrollment and management structure', () => {
     }
     expect(enrollmentHook).toContain('draftRef.current = null');
     expect(enrollmentHook).toContain('clearSensitiveState()');
+    expect(service).toContain('clearTotpSignInChallenge');
   });
 
   it('does not alter central Quiz/Dashboard navigation', () => {
@@ -103,5 +111,43 @@ describe('production TOTP enrollment and management structure', () => {
     expect(questionnaireGuard).toBeGreaterThan(-1);
     expect(funnelGuard).toBeGreaterThan(questionnaireGuard);
     expect(app).not.toContain('TotpEnrollment');
+    expect(app).not.toContain('TotpChallenge');
+    expect(challengeHook).not.toContain('setUser(');
+    expect(challengeHook).not.toContain('navigate(');
+    expect(challengeHook).not.toContain('setScreen(');
+  });
+
+  it('keeps OTP input accessible, numeric, bounded and retryable', () => {
+    expect(challengeScreen).toContain('keyboardType="number-pad"');
+    expect(challengeScreen).toContain('maxLength={6}');
+    expect(challengeScreen).toContain('textContentType="oneTimeCode"');
+    expect(challengeHook).toContain("value.replace(/\\D/g, '').slice(0, 6)");
+    expect(challengeHook).toContain('operationLock.current');
+    expect(challengeHook).toContain('setIssue(nextIssue)');
+  });
+
+  it('keeps resolver and OTP process-memory only', () => {
+    const signInImplementation = `${service}\n${challengeHook}\n${challengeScreen}`;
+    for (const forbidden of [
+      "from '@react-native-async-storage/async-storage'",
+      "from 'expo-secure-store'",
+      'setDoc(',
+      'updateDoc(',
+      'console.log',
+      'console.error',
+    ]) {
+      expect(signInImplementation).not.toContain(forbidden);
+    }
+    expect(challengeHook).toContain('clearTotpSignInChallenge()');
+    expect(challengeHook).toContain("setCodeState('')");
+  });
+
+  it('returns expired/invalid sessions to Login without adding MFA to the funnel', () => {
+    expect(challengeHook).toContain("'expiredCode'");
+    expect(challengeHook).toContain("'sessionExpired'");
+    expect(challengeHook).toContain('callbacks.onSessionExpired()');
+    expect(authScreen).toContain("setMode('login')");
+    expect(authScreen).toContain("setError(t('totpChallenge.errors.sessionExpired'))");
+    expect(app).not.toContain("| 'totpChallenge'");
   });
 });

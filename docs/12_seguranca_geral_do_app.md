@@ -138,8 +138,29 @@ O QR Code representa exclusivamente a URI produzida por
 `TotpSecret.generateQrCodeUrl()`. A chave manual continua disponível por ação
 explícita de cópia para permitir configuração com um único aparelho.
 
-Enrollment/gerenciamento não significa MFA completo no login. O challenge
-definitivo de e-mail/senha, Google e Apple permanece escopo da Fase 3.
+### TOTP MFA — challenge de login
+
+E-mail/senha, Google e Apple preservam o erro original
+`auth/multi-factor-auth-required` e continuam a mesma tentativa com
+`getMultiFactorResolver`, `assertionForSignIn` e `resolveSignIn`. O primeiro
+fator federado nunca é solicitado novamente depois que o resolver existe.
+
+O resolver, seus hints e o OTP são estado efêmero do processo JS. É proibido
+persisti-los em AsyncStorage, SecureStore, Firestore, Storage, analytics ou
+logs. O encerramento do app pode descartar a tentativa; nesse caso o usuário
+inicia um novo login. O cancelamento e erros terminais também limpam todo o
+estado pendente e retornam ao Login.
+
+Código incorreto, falha de rede e rate limit mantêm a tela e permitem retry sem
+recriar o primeiro fator. Sessão MFA inválida, fator removido ou
+`auth/code-expired` encerram a tentativa. Em `@firebase/auth` 1.13.3,
+`SESSION_EXPIRED` do backend é mapeado a `auth/code-expired`; o SDK não declara
+`auth/session-expired` como código público.
+
+`resolveSignIn` não navega nem publica `User` manualmente. O listener do
+`AuthContext` continua responsável por carregar perfil/questionário e o guard
+central preserva verificação de e-mail e a decisão Quiz/Dashboard. MFA é
+subestado de Auth e não uma rota permanente do funil.
 
 ---
 

@@ -61,8 +61,10 @@ describe('email verification integration structure', () => {
 
   it('preserves account linking and consumes the Firebase-linked user', () => {
     expect(socialAuth).toContain('await linkWithCredential(user, pendingCredential)');
-    expect(socialAuth.match(/const \{ user: linkedUser \}/g)).toHaveLength(2);
-    expect(socialAuth.match(/return linkedUser;/g)).toHaveLength(2);
+    // Password linking, provider linking, and the post-MFA continuation all
+    // consume Firebase's linked user for the same UID.
+    expect(socialAuth.match(/const \{ user: linkedUser \}/g)).toHaveLength(3);
+    expect(socialAuth.match(/return linkedUser;/g)).toHaveLength(3);
     expect(socialAuth).toContain('pendingCredential = null');
     expect(socialAuth).toContain('AccountLinkingRequiredError');
   });
