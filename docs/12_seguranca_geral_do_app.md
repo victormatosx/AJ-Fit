@@ -209,41 +209,26 @@ O Firestore armazena apenas uma cópia operacional do status da assinatura.
 
 # 12. Funcionamento offline da assinatura
 
-Esta regra se aplica apenas quando houver impossibilidade de validar a assinatura junto ao RevenueCat ou quando existir divergência temporária entre os dados do Firestore e do RevenueCat.
-
 A fonte oficial da assinatura continua sendo o RevenueCat.
 
-O objetivo desta regra é evitar bloqueios indevidos causados por falhas temporárias de sincronização ou ausência momentânea de conexão com a internet.
+O cliente utiliza somente o cache oficial de `CustomerInfo` do RevenueCat SDK.
+Não armazena entitlement em `AsyncStorage`, `SecureStore` ou Firestore para
+autorizar acesso.
 
----
+Se uma revalidação temporária falhar e já houver `CustomerInfo` confirmado para
+o mesmo Firebase UID e para a mesma geração de identidade, esse snapshot não é
+apagado nem convertido automaticamente em assinatura inativa. Se não houver
+snapshot confirmado para a identidade atual, o Gate permanece fail-closed e o
+AppShell não é montado.
 
-## Regra
+Logout e troca de conta invalidam o snapshot em memória imediatamente. O cache
+ou espelho de outro UID nunca pode ser usado como fallback.
 
-A última validação válida da assinatura pode ser utilizada por até:
-
-```txt
-24 horas
-```
-
-desde que a última confirmação recebida do RevenueCat indique uma assinatura ativa.
-
----
-
-## Aviso obrigatório
-
-Quando estiver offline:
-
-```txt
-Você está utilizando o aplicativo sem conexão.
-
-Conecte-se à internet até amanhã para continuar utilizando normalmente.
-```
-
----
-
-## Após 24 horas
-
-O aplicativo deve exigir conexão para validar novamente a assinatura junto ao RevenueCat.
+A janela própria de 24 horas e os campos locais de verificação descritos em
+versões anteriores foram substituídos na Fase 3 pela política do cache oficial
+do SDK, evitando uma segunda fonte de autorização. Uma eventual exigência
+futura de TTL estrito controlado pelo AJ Fit depende de decisão e implementação
+separadas.
 
 ---
 

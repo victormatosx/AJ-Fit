@@ -156,6 +156,11 @@ Nenhum usuário pode:
 * perder acesso indevidamente
 * receber acesso sem autorização válida
 
+Para persistência e revalidação client-side da assinatura, executar também a
+matriz automatizada A–AA em
+`src/lib/__tests__/subscriptionLifecycle.test.ts` e o roteiro nativo/sandbox
+de `docs/17_checklist_fase3_assinatura.md` em iOS e Android.
+
 ---
 
 # 9. Testes do questionário

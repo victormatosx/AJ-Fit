@@ -8,6 +8,10 @@ import Purchases, {
   type PurchasesOfferings,
   type PurchasesPackage,
 } from 'react-native-purchases';
+import type {
+  SubscriptionErrorKind,
+  SubscriptionFailure,
+} from '../lib/subscriptionLifecycle';
 
 /**
  * RevenueCat infrastructure (docs/13_assinaturas_e_billing.md).
@@ -42,13 +46,62 @@ function currentApiKey(): string | undefined {
   return Platform.OS === 'ios' ? REVENUECAT_IOS_API_KEY : REVENUECAT_ANDROID_API_KEY;
 }
 
+function sanitizedErrorMessage(err: unknown): string {
+  const raw = err instanceof Error ? err.message : String(err);
+  return raw
+    .replace(/[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/g, '[redacted-email]')
+    .replace(/\$RCAnonymousID:[\w-]+/g, '$RCAnonymousID:[redacted]')
+    .replace(/\b[A-Za-z0-9_-]{16,}\b/g, '[redacted-id]')
+    .slice(0, 240);
+}
+
+export function maskSubscriptionUid(uid: string | null | undefined): string | undefined {
+  if (!uid) return undefined;
+  if (uid.length <= 6) return '***';
+  return `${uid.slice(0, 3)}…${uid.slice(-3)}`;
+}
+
+export function logSubscriptionEvent(event: string, uid?: string | null): void {
+  console.info('[subscription]', {
+    event,
+    uid: maskSubscriptionUid(uid),
+  });
+}
+
 export function logRevenueCatError(scope: string, err: unknown): void {
   const code =
     typeof err === 'object' && err !== null && 'code' in err
       ? String((err as { code: unknown }).code)
       : undefined;
-  const message = err instanceof Error ? err.message : String(err);
-  console.error(`[revenueCat:${scope}]`, { code, message });
+  console.error(`[revenueCat:${scope}]`, { code, message: sanitizedErrorMessage(err) });
+}
+
+export function classifyRevenueCatFailure(err: unknown): SubscriptionFailure {
+  const code =
+    typeof err === 'object' && err !== null && 'code' in err
+      ? (err as PurchasesError).code
+      : undefined;
+
+  let kind: SubscriptionErrorKind = 'temporary';
+  if (isOfflineError(err)) kind = 'offline';
+  else if (code === PURCHASES_ERROR_CODE.CONFIGURATION_ERROR) kind = 'configuration';
+  else if (
+    code === PURCHASES_ERROR_CODE.INVALID_APP_USER_ID_ERROR ||
+    code === PURCHASES_ERROR_CODE.LOG_OUT_ANONYMOUS_USER_ERROR
+  ) {
+    kind = 'identity';
+  }
+
+  const message =
+    kind === 'configuration'
+      ? 'Não foi possível configurar a verificação da assinatura.'
+      : kind === 'identity'
+        ? 'Não foi possível confirmar a identidade da assinatura.'
+        : kind === 'offline'
+          ? 'Sem conexão para verificar a assinatura desta conta.'
+          : 'Não foi possível verificar a assinatura agora.';
+
+  return { kind, message };
 }
 
 // Shared, module-scoped "configuration ready" promise. This is the single
@@ -109,6 +162,8 @@ export function configureRevenueCat(): Promise<void> {
         'EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY no arquivo .env (veja .env.example) ' +
         'e reinicie o servidor com `npx expo start -c`.',
     );
+    (err as Error & { code?: PURCHASES_ERROR_CODE }).code =
+      PURCHASES_ERROR_CODE.CONFIGURATION_ERROR;
     logRevenueCatError('configure', err);
     return Promise.reject(err); // not cached — a later call can retry
   }
@@ -155,10 +210,11 @@ function ensureConfigured(): Promise<void> {
  * by a screen, and never by AuthContext itself (identity stays AuthContext's
  * job; RevenueCat sync is SubscriptionContext's).
  */
-export async function loginRevenueCat(uid: string): Promise<void> {
+export async function loginRevenueCat(uid: string): Promise<CustomerInfo> {
   try {
     await ensureConfigured();
-    await Purchases.logIn(uid);
+    const { customerInfo } = await Purchases.logIn(uid);
+    return customerInfo;
   } catch (err) {
     logRevenueCatError('login', err);
     throw err;
@@ -176,6 +232,16 @@ export async function logoutRevenueCat(): Promise<void> {
     await ensureConfigured();
     await Purchases.logOut();
   } catch (err) {
+    // Calling logOut while the persisted SDK identity is already anonymous is
+    // an idempotent signed-out state for this app, not a lifecycle failure.
+    if (
+      typeof err === 'object' &&
+      err !== null &&
+      'code' in err &&
+      (err as PurchasesError).code === PURCHASES_ERROR_CODE.LOG_OUT_ANONYMOUS_USER_ERROR
+    ) {
+      return;
+    }
     logRevenueCatError('logout', err);
     throw err;
   }

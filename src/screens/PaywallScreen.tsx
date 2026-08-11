@@ -6,6 +6,7 @@ import type { PurchasesPackage } from 'react-native-purchases';
 import { ScreenBg } from '../components/ui/ScreenBg';
 import { CtaButton, CtaText } from '../components/ui/CtaButton';
 import { Display, MonoLabel } from '../components/ui/Display';
+import { FullScreenLoading } from '../components/ui/FullScreenLoading';
 import { Icon } from '../components/ui/Icon';
 import { useSubscription } from '../hooks/useSubscription';
 import {
@@ -197,6 +198,11 @@ export function PaywallScreen({
   const centerState: CenteredStateKind | null =
     offeringViewState === 'ready' ? null : offeringViewState;
 
+  // Keep the visual surface continuous when the Premium gate resolves to the
+  // Paywall before its commercial Offerings request finishes. Offerings still
+  // start only inside the Paywall and never block a Premium user from AppShell.
+  if (centerState === 'loading') return <FullScreenLoading />;
+
   return (
     <ScreenBg>
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
@@ -211,7 +217,7 @@ export function PaywallScreen({
             <CenteredState
               kind={centerState}
               message={offeringsError}
-              onRetry={centerState === 'loading' ? undefined : loadOfferings}
+              onRetry={loadOfferings}
             />
             <View style={{ paddingHorizontal: 22, paddingBottom: 16 }}>
               <RestoreButton

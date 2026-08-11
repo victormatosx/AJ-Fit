@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator, Pressable, Text } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useFonts, Anton_400Regular } from '@expo-google-fonts/anton';
 import {
@@ -30,6 +30,7 @@ import { PlanReadyScreen } from './src/screens/PlanReadyScreen';
 import { AuthScreen } from './src/screens/AuthScreen';
 import { PaywallScreen } from './src/screens/PaywallScreen';
 import { AppShell } from './src/screens/AppShell';
+import { FullScreenLoading } from './src/components/ui/FullScreenLoading';
 import { colors } from './src/theme/tokens';
 
 /**
@@ -55,12 +56,69 @@ import { colors } from './src/theme/tokens';
  */
 configureRevenueCat().catch((err) => logRevenueCatError('bootstrap', err));
 
-function Loading() {
+function SubscriptionResolutionError({
+  message,
+  offline,
+  onRetry,
+}: {
+  message: string;
+  offline: boolean;
+  onRetry: () => Promise<void>;
+}) {
   return (
     <View
-      style={{ flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' }}
+      style={{
+        flex: 1,
+        backgroundColor: colors.bg,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 28,
+      }}
     >
-      <ActivityIndicator color={colors.accentHi} />
+      <Text
+        style={{
+          color: colors.text,
+          fontFamily: 'Archivo_700Bold',
+          fontSize: 18,
+          textAlign: 'center',
+        }}
+      >
+        {offline ? 'Conexão necessária' : 'Assinatura indisponível'}
+      </Text>
+      <Text
+        style={{
+          color: colors.mute,
+          fontFamily: 'Archivo_400Regular',
+          fontSize: 14,
+          lineHeight: 21,
+          textAlign: 'center',
+          marginTop: 10,
+        }}
+      >
+        {message}
+      </Text>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Tentar verificar assinatura novamente"
+        onPress={() => void onRetry()}
+        style={{
+          marginTop: 22,
+          borderWidth: 1,
+          borderColor: colors.accentHi,
+          paddingHorizontal: 22,
+          paddingVertical: 12,
+        }}
+      >
+        <Text
+          style={{
+            color: colors.text,
+            fontFamily: 'Archivo_700Bold',
+            fontSize: 13,
+          }}
+        >
+          TENTAR NOVAMENTE
+        </Text>
+      </Pressable>
     </View>
   );
 }
@@ -71,6 +129,10 @@ function RootNavigator() {
     loading: subscriptionLoading,
     configured: subscriptionConfigured,
     isPremium,
+    status: subscriptionStatus,
+    errorKind: subscriptionErrorKind,
+    error: subscriptionError,
+    retry: retrySubscription,
   } = useSubscription();
   const { quiz } = useAppState();
   const [screen, setScreenState] = useState<RootScreenId>('splash');
@@ -111,7 +173,25 @@ function RootNavigator() {
 
   screenRef.current = resolvedScreen;
 
-  if (!resolvedScreen) return <Loading />;
+  if (!resolvedScreen) {
+    if (
+      !initializing &&
+      !profileLoading &&
+      user &&
+      questionnaire &&
+      subscriptionStatus === 'error' &&
+      !subscriptionConfigured
+    ) {
+      return (
+        <SubscriptionResolutionError
+          message={subscriptionError ?? 'Não foi possível verificar a assinatura agora.'}
+          offline={subscriptionErrorKind === 'offline'}
+          onRetry={retrySubscription}
+        />
+      );
+    }
+    return <FullScreenLoading />;
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
@@ -206,10 +286,6 @@ export default function App() {
     JetBrainsMono_700Bold,
   });
 
-  if (!fontsLoaded) {
-    return <Loading />;
-  }
-
   return (
     <SafeAreaProvider>
       <AuthProvider>
@@ -221,7 +297,11 @@ export default function App() {
         <SubscriptionProvider>
           <AppStateProvider>
             <StatusBar style="light" />
-            <RootNavigator />
+            {/* Providers mount immediately so Firebase profile reads and
+                RevenueCat identity synchronization overlap font loading.
+                Navigation still waits for the fonts and therefore never
+                renders text with an unintended fallback face. */}
+            {fontsLoaded ? <RootNavigator /> : <FullScreenLoading />}
           </AppStateProvider>
         </SubscriptionProvider>
       </AuthProvider>

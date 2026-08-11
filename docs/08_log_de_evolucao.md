@@ -254,6 +254,63 @@ Criar documentação específica de billing.
 
 # 18. Primeiras entradas do projeto
 
+Data: 2026-08-11
+Responsável: Codex — Agente Frontend + Agente QA
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Implementada localmente a Fase 3 — persistência e revalidação do Premium — sem
+alterar a arquitetura de billing, o Paywall ou o backend.
+
+- `SubscriptionContext` passou a representar separadamente Auth pendente,
+  configuração do RevenueCat, sincronização de identidade, estado pronto,
+  refresh e erro. `unknown`/erro inicial não é tratado como não Premium.
+- Toda identidade possui Firebase UID + geração monotônica. Logout/troca de
+  conta invalida imediatamente CustomerInfo e Offerings anteriores; respostas
+  de sync, refresh, compra, restore e listener só são aplicadas se UID + geração
+  ainda corresponderem.
+- Operações do SDK dependentes de identidade são serializadas. O
+  `CustomerInfo` já retornado por `Purchases.logIn(uid)` é usado no cold start e
+  login, removendo o `getCustomerInfo()` duplicado da inicialização.
+- O CustomerInfo listener agora é registrado somente após a identidade ser
+  confirmada, captura UID + geração e é removido na troca/unmount. Callback
+  enfileirado de uma geração antiga é descartado.
+- Transições React Native `background|inactive → active` revalidam
+  `CustomerInfo`; refreshes concorrentes do mesmo UID + geração são
+  coalescidos. Não existe polling.
+- Erro de refresh preserva somente um snapshot já confirmado para o mesmo UID.
+  Erro sem snapshot seguro mantém o Gate fail-closed e apresenta retry neutro.
+- A política offline usa somente o cache oficial identity-scoped do RevenueCat
+  SDK. Nenhum cache Premium foi criado em AsyncStorage, SecureStore ou
+  Firestore. A antiga previsão documental de timestamps/TTL próprio de 24h foi
+  substituída e registrada em `docs/12` e `docs/13`.
+- Adicionado roteiro manual iOS/Android em
+  `docs/17_checklist_fase3_assinatura.md`.
+
+Impacto:
+`CustomerInfo.entitlements.active['premium']` continua sendo a única fonte de
+autorização e o Gate continua sendo a única porta para o AppShell. Compra e
+restore alimentam o estado central, sem navegação manual. Firestore permanece
+somente espelho administrativo. Nenhum arquivo de Function, webhook, HMAC,
+TRANSFER, rules, secret, produto, cupom ou trial foi alterado.
+
+Testes:
+- Nova matriz automatizada A–AA com 27 casos: cold start, Auth/sync pendentes,
+  login/logout/troca A↔B, requests/listeners obsoletos, compra, restore,
+  foreground, revogação/aquisição, offline/erros, single-flight e independência
+  do espelho Firestore.
+- `npx tsc --noEmit`: aprovado.
+- `npm test`: 9 arquivos e 109 testes aprovados.
+- `npx expo export --platform all`: bundles web, Android e iOS aprovados.
+- `git diff --check`: aprovado. Lint não está configurado no projeto.
+
+Próxima ação:
+Humano coordenador executar os 12 testes de dispositivo/sandbox descritos em
+`docs/17_checklist_fase3_assinatura.md` em iOS e Android antes de encerrar a
+Fase 3.
+
+---
+
 Data: 2026-08-10
 Responsável: Agente Backend + Agente QA
 Categoria: [CORREÇÃO]
@@ -1425,3 +1482,34 @@ Humano coordenador validar em dev build. Nenhuma pendência de código aberta.
 
 ```
 ```
+
+---
+
+Data: 2026-08-11
+Responsável: Agente Frontend + QA
+Categoria: [CORREÇÃO]
+
+Descrição:
+Auditoria pós-Fase 3 identificou duas esperas sequenciais artificiais no cold
+start: os providers só montavam após as fontes e o listener do Firebase Auth só
+liberava a sincronização RevenueCat depois das leituras de
+perfil/questionário. Os providers agora montam durante a hidratação de fontes;
+após o Auth fornecer o UID, Firestore e `Purchases.logIn(uid)` avançam em
+paralelo. O Gate continua fail-closed até todos os dados obrigatórios estarem
+resolvidos. O loading inicial e o loading comercial do Paywall passaram a usar
+a mesma superfície visual.
+
+Foi confirmado que não existe `getCustomerInfo()` redundante depois de
+`Purchases.logIn(uid)` e que Offerings só são carregados após o Gate escolher o
+Paywall. Foram adicionados sete testes de orquestração/loading; suíte total:
+116 testes aprovados e TypeScript sem erros.
+
+Impacto:
+Menor caminho crítico estrutural no cold start e transição visual contínua para
+usuário sem Premium, sem mudar a autoridade de
+`CustomerInfo.entitlements.active['premium']`, sem usar Firestore no Gate e sem
+permitir decisão enquanto assinatura é desconhecida.
+
+Próxima ação:
+Repetir os cold starts Premium e sem Premium no dispositivo e manter os testes
+offline da Fase 3 como pendentes até validação real.

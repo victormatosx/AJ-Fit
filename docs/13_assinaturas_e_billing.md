@@ -1062,25 +1062,28 @@ O acesso deve ocorrer imediatamente, utilizando o CustomerInfo retornado pelo Re
 
 # 29. Funcionamento offline
 
-Se houver uma última validação positiva recente, o aplicativo pode manter acesso por até:
+O aplicativo utiliza exclusivamente o cache oficial de `CustomerInfo` mantido
+pelo RevenueCat SDK. Não existe cache paralelo de autorização em
+`AsyncStorage`, `SecureStore` ou Firestore.
 
-```txt
-24 horas
-```
+Um `CustomerInfo` já confirmado para o Firebase UID atual pode continuar sendo
+usado quando uma revalidação falha por indisponibilidade temporária ou ausência
+de conexão. O erro não transforma automaticamente esse snapshot em
+`isPremium = false`.
 
----
+Na troca de Firebase UID, logout ou cold start em que a identidade RevenueCat
+ainda não foi confirmada, nenhum snapshot anterior é aceito. Sem
+`CustomerInfo` confirmado para o UID atual, o Gate permanece neutro/fail-closed
+e nunca monta o AppShell.
 
-## Regras
+Os campos locais `lastVerifiedPremiumAt` e `lastKnownEntitlementActive`
+previstos em uma versão anterior deste documento não são implementados. A Fase
+3 proibiu uma segunda fonte de autorização e consolidou a política no cache
+oficial do SDK. Se o produto exigir no futuro uma janela estrita própria de 24
+horas, isso precisará de decisão e arquitetura separadas; o cliente atual não
+promete nem calcula essa janela por conta própria.
 
-Armazenar localmente `lastVerifiedPremiumAt`.
-
-Armazenar localmente `lastKnownEntitlementActive`.
-
-Após 24 horas sem nova validação, exigir conexão para validar novamente.
-
-Não usar o Firestore como fallback de autorização em tempo real.
-
-Aproveitar o cache oficial do RevenueCat SDK, sem criar lógica paralela conflitante.
+O Firestore nunca é fallback de autorização offline.
 
 ---
 
@@ -1122,7 +1125,101 @@ Aproveitar o cache oficial do RevenueCat SDK, sem criar lógica paralela conflit
 * restauração
 * leitura do CustomerInfo
 * gate de acesso
-* cache offline limitado
+* uso identity-scoped do cache oficial de CustomerInfo do RevenueCat SDK
+
+---
+
+# 30.1 Lifecycle client-side da assinatura (Fase 3)
+
+## Máquina de estados
+
+Para um usuário autenticado, o fluxo é:
+
+```txt
+Firebase Auth inicializando
+→ RevenueCat configurando
+→ identidade RevenueCat sincronizando com Firebase UID
+→ CustomerInfo confirmado para UID + geração atuais
+→ Gate resolve AppShell ou Paywall
+```
+
+Os estados `waiting-auth`, `configuring`, `syncing-identity`, `ready` e
+`error` são distintos. `refreshing` é um estado paralelo que só existe quando
+já há um snapshot confirmado para o mesmo UID. `unknown` ou erro inicial nunca
+é convertido em “sem Premium”.
+
+## Orquestração do cold start
+
+O bootstrap do RevenueCat é disparado na avaliação do módulo, antes do mount do
+React. A hidratação de fontes, o observer do Firebase Auth e os providers
+começam sem uma barreira sequencial entre si. Quando o observer fornece um
+Firebase UID, as leituras paralelas de perfil/questionário no Firestore e o
+`Purchases.logIn(uid)` também avançam em paralelo.
+
+Essa concorrência reduz apenas espera artificial. O Gate continua aguardando
+obrigatoriamente Auth, perfil/questionário e um `CustomerInfo` associado ao UID
+e à geração atuais. A primeira dessas operações a terminar não autoriza nem
+classifica o usuário sozinha.
+
+Offerings comerciais não participam do Gate: são solicitados somente pelo
+Paywall, depois que `CustomerInfo` já confirmou ausência de Premium. Durante
+essa solicitação, o Paywall reutiliza a mesma superfície neutra de loading do
+bootstrap para evitar uma troca visual `loading A → loading B`. Usuário Premium
+nunca aguarda Offerings para entrar no AppShell.
+
+## Identidade e concorrência
+
+Cada mudança de Firebase UID incrementa uma geração monotônica e invalida
+imediatamente `CustomerInfo`, Premium, Offerings, erros e operações da geração
+anterior. Todo resultado assíncrono captura UID + geração. Resultado ou callback
+antigo é descartado se qualquer um deles deixar de corresponder à identidade
+atual.
+
+Operações do SDK que dependem de identidade são serializadas. Assim, uma compra
+em andamento seguida de logout e login B termina no SDK na ordem
+`compra → logout → login B`, enquanto a autorização React já é removida
+imediatamente no logout.
+
+## CustomerInfo listener
+
+Existe no máximo um listener ativo, registrado somente depois de
+`Purchases.logIn(uid)` concluir. O listener captura UID + geração; é removido
+antes da próxima sincronização e no unmount. Um callback já enfileirado da
+geração antiga continua sendo descartado pelas guardas de identidade.
+
+O listener reage apenas a informações que o SDK obteve localmente por suas
+operações; ele não é push direto do backend RevenueCat. Por isso a aplicação
+também revalida nos pontos explícitos abaixo.
+
+## Pontos de revalidação
+
+* cold start/login: o `CustomerInfo` retornado por `Purchases.logIn(uid)` é
+  aplicado ao estado central, sem uma chamada duplicada imediata;
+* compra: o `CustomerInfo` de `purchasePackage` é aplicado ao estado central;
+* restore: o `CustomerInfo` de `restorePurchases` é aplicado ao estado central;
+* foreground: uma transição React Native `background|inactive → active` chama
+  `getCustomerInfo()` uma vez por UID + geração; chamadas concorrentes são
+  coalescidas;
+* listener: cada atualização válida substitui o snapshot do UID atual.
+
+Não existe polling contínuo.
+
+## Erros
+
+Falha de configuração ou identidade sem snapshot confirmado deixa o Gate em
+estado neutro de erro com ação de tentar novamente. Falha temporária/offline
+durante refresh preserva o último `CustomerInfo` confirmado somente para o
+mesmo UID e expõe erro sanitizado; nunca recupera dados de outro UID.
+
+Compra cancelada, ausência de Offering, Offering indisponível, offline e
+restore sem Premium continuam estados distintos. Compra ou restore concluído
+sem `premium` ativo não libera AppShell.
+
+## Gate e Firestore
+
+`CustomerInfo.entitlements.active['premium']` permanece o único critério de
+autorização. `users/{uid}.subscription` não é lido pelo lifecycle, pelo Gate,
+pela compra nem pelo restore.
 
 ---
 
