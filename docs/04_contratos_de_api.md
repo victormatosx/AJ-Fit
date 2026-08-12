@@ -204,6 +204,22 @@ estado global como `linkedProviders`.
 - Google: OAuth client IDs (iOS/Web) já presentes em `GoogleService-Info.plist`
   e `google-services.json`.
 
+#### Android — SHA-1 obrigatórios para o OAuth Client (Google Sign-In)
+
+O OAuth Client Android do Firebase/Google Cloud para `com.ajfit.mobile` deve
+manter cadastrado **todo** SHA-1 de certificado que possa assinar uma versão
+do app capaz de chegar a um dispositivo: build de development/debug, e — no
+Google Play Console, em Assinatura de apps / Play App Signing — tanto a chave
+atual quanto qualquer chave anterior listada em "Chaves de assinatura do app
+anteriores" que ainda assine versões em distribuição. Ausência de um desses
+SHA-1 causa `DEVELOPER_ERROR` (code 10) apenas na versão instalada pela Play
+Store, mesmo com development build funcionando normalmente — incidente
+completo, diagnóstico e causa raiz em `08_log_de_evolucao.md` (entrada
+2026-08-12, categoria `[CORREÇÃO]`).
+
+Cadastrar um SHA-1 novo é configuração OAuth server-side: não exige gerar
+novo AAB nem reinstalar o app já publicado.
+
 ---
 
 # 11. Integração RevenueCat

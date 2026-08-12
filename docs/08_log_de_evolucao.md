@@ -1513,3 +1513,138 @@ permitir decisão enquanto assinatura é desconhecida.
 Próxima ação:
 Repetir os cold starts Premium e sem Premium no dispositivo e manter os testes
 offline da Fase 3 como pendentes até validação real.
+
+---
+
+Data: 2026-08-12
+Responsável: Agente Documentador (registro de descoberta técnica validada pelo
+Humano Coordenador)
+Categoria: [CORREÇÃO]
+
+Descrição:
+Google Sign-In funcionava no development build Android, mas retornava
+`DEVELOPER_ERROR` (code 10) no app instalado a partir da Google Play — log real
+capturado do build distribuído:
+
+```txt
+This android application is not registered to use OAuth2.0, please confirm
+the package name and SHA-1 certificate fingerprint match what you registered
+in Google Developer Console.
+```
+
+O Web Client ID em runtime (`753375043967-oldj9c61p82vni4s1n5fjkks3gueh4se.apps.googleusercontent.com`)
+foi confirmado correto, descartando-o como causa. O app Android
+(`com.ajfit.mobile`) já tinha cadastrado no Firebase o SHA-1 atual do Google
+Play App Signing. Foi criado o OAuth Client Android correspondente, o
+`google-services.json` foi atualizado, um novo AAB foi gerado, enviado,
+revisado e instalado via Play Store — o erro persistiu.
+
+Causa raiz:
+O Google Play Console (Assinatura de apps → Play App Signing → "Chaves de
+assinatura do app anteriores") expõe um SHA-1 de uma chave de assinatura
+anterior, além da chave atual. Esse SHA-1 anterior não estava cadastrado no
+app Android do Firebase. Após cadastrá-lo (mesmo `com.ajfit.mobile`), o app já
+instalado pela Play Store — sem nenhum rebuild — passou a autenticar com
+Google Sign-In com sucesso poucos minutos depois.
+
+Evidência de que não foi o `google-services.json`/rebuild que resolveu: a
+sequência atualizar `google-services.json` → gerar AAB → publicar → instalar
+via Play Store já tinha sido executada antes da inclusão do SHA-1 anterior e
+não corrigiu o erro. A correção só ocorreu quando o SHA-1 passou a existir no
+Firebase/Google OAuth — configuração server-side, não embarcada no binário já
+instalado.
+
+SHA-1 cadastrados no app Firebase Android `com.ajfit.mobile` (finalidade de
+cada um — nenhum é secreto, são fingerprints públicos de certificado):
+
+```txt
+1. Development/debug:
+   5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25
+
+2. Google Play App Signing — chave atual:
+   FB:50:07:DE:A3:15:4C:EF:B5:25:FF:21:08:1F:16:81:35:B5:D4:BF
+
+3. Google Play App Signing — chave anterior:
+   97:11:72:4E:30:C7:65:C3:E8:41:BB:0F:6F:D1:01:F9:7B:56:C0:04
+```
+
+Princípio para evitar regressão (não é lista fechada):
+Sempre que o Google Play App Signing possuir chave atual e chave(s)
+anterior(es) que ainda possam assinar/distribuir versões compatíveis do app
+para dispositivos já existentes, todos os SHA-1 relevantes — atual e
+anteriores — precisam estar cadastrados no app Firebase/Google OAuth do
+mesmo package. Um certificado antigo não deve ser removido do Firebase apenas
+por parecer obsoleto, sem antes verificar se ainda assina versões em
+distribuição.
+
+Diagnóstico:
+Reprodução confirmada via logs reais (adb/logcat) do app instalado pela
+própria Google Play, isolando a mensagem de erro do SDK do Google Sign-In
+(`DEVELOPER_ERROR` / code 10 e a mensagem de package+SHA-1 não registrados)
+antes de qualquer alteração de configuração.
+
+Impacto:
+Nenhuma alteração de código de autenticação foi necessária. A causa era
+puramente de configuração OAuth (SHA-1 ausente para uma chave de assinatura
+válida do Google Play). `google-services.json` não precisou de nova geração
+para esta correção específica — isso não deve ser generalizado como "nunca
+precisa atualizar `google-services.json`" para outras mudanças (ex.: novo
+OAuth Client, novo package, nova chave de assinatura futura ainda não
+cadastrada).
+
+Próxima ação:
+Nenhuma pendência de código. Ao rotacionar ou adicionar chave de assinatura no
+Google Play App Signing no futuro, cadastrar o novo SHA-1 no Firebase antes de
+assumir que o Google Sign-In continuará funcionando na versão distribuída.
+
+---
+
+Data: 2026-08-12
+Responsável: Agente Documentador (validação manual reportada pelo Humano
+Coordenador)
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Estado da validação Android das assinaturas (RevenueCat + sistema
+promocional), conforme validação manual em dispositivo/Google Play reportada
+pelo Humano Coordenador. Estas afirmações são registradas como "informação
+fornecida a partir da validação manual realizada" — não foram reverificadas
+automaticamente pelo agente documentador contra código ou logs nesta tarefa:
+
+* carregamento dos planos RevenueCat;
+* plano mensal e plano anual;
+* reconhecimento do cupom ARNALDO;
+* rejeição de cupom inexistente;
+* correlação do cupom com a oferta promocional correta;
+* matcher da `SubscriptionOption` corrigido (Android);
+* oferta promocional mensal correta: `monthly:influencer-trial-7d`;
+* oferta promocional anual correta: `annual:influencer-trial-7d-annual`;
+* RevenueCat expondo `freeTrialPeriodIso8601 = P1W`;
+* Google Play apresentando corretamente 7 dias grátis em teste válido;
+* compra/teste realizados, trial aparecendo na Google Play, próximo
+  pagamento agendado após os 7 dias;
+* entitlement `premium` ativo;
+* sincronização RevenueCat → backend/Firestore;
+* `subscription.status = TRIAL` durante o período gratuito;
+* `trialEndsAt` coerente com 7 dias e `currentPeriodEndsAt` coerente;
+* atribuição do cupom persistida;
+* acesso Premium liberado;
+* Google Sign-In funcionando na versão realmente distribuída pela Google
+  Play (causa raiz e correção registradas na entrada [CORREÇÃO] acima).
+
+Impacto:
+Nenhum item desta lista foi verificado por este agente via leitura de
+código/testes automatizados nesta tarefa — ver 13_assinaturas_e_billing.md
+para as regras de negócio correspondentes (§6–§11, §25–§30) e
+17_checklist_fase3_assinatura.md para o roteiro estrutural de lifecycle
+(cold start, background/foreground, restore, TRANSFER), que cobre um escopo
+diferente (lifecycle do Gate) do sistema de cupom/oferta promocional listado
+acima.
+
+Próxima ação:
+Nenhuma determinável apenas pelos documentos/evidências disponíveis nesta
+tarefa — os itens de sistema de cupom/oferta promocional (matcher de
+`SubscriptionOption`, roteamento `campaignId → Offering`) não possuem ainda
+um checklist formal equivalente ao 17_checklist_fase3_assinatura.md; se essa
+lacuna for confirmada como real, cabe ao Humano Coordenador decidir se cria
+um checklist dedicado ou expande o existente.
