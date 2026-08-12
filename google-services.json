@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "753375043967-ifiklpdo54vgipv1f8tt9sueu8b85c2g.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.ajfit.mobile",
+            "certificate_hash": "fb5007dea3154cefb525ff21081f168135b5d4bf"
+          }
+        },
+        {
           "client_id": "753375043967-jaae877ejdvh70s9tl3kgm1f691e3oj0.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
