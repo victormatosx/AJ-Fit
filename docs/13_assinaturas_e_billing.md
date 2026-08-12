@@ -1392,7 +1392,7 @@ fica para a sprint em que o sistema de cupons for de fato implementado.
 
 ---
 
-## Estado de implementação (atualizado na FASE iOS-1)
+## Estado de implementação (atualizado na FASE iOS-2)
 
 **Android — implementado e validado.** Fluxo completo: código digitado →
 `validatePromoCode` → `couponRedemptions/{uid}` → seleção explícita de
@@ -1430,11 +1430,31 @@ adicionou, sem tocar no Android nem no cliente:
   (timing, coincidência de string, etc.) — ver os testes de
   `appleOfferCorrelation.test.ts` e `revenueCatConfirmation.test.ts`.
 
-**Próxima fase (iOS-2, não iniciada):** decidir e implementar o mecanismo
-Apple real (Offer Codes/Promotional Offers), obter evidência de payload real
-de um evento RevenueCat de uma transação com Apple Offer Code, e só então
-implementar `correlateAppleOffer` de fato — nunca antes dessa evidência
-existir.
+**iOS — cliente preparado para distinguir ANDROID/IOS (FASE iOS-2), UI e
+resgate Apple ainda desligados.** Esta fase adicionou, sem alterar o backend
+nem o comportamento Android:
+
+* `src/lib/promoCodePlatform.ts` — `resolvePromoCodePlatform` mapeia o
+  `Platform.OS` real (`'android'`/`'ios'`) para o literal que o backend
+  espera (`'ANDROID'`/`'IOS'`); qualquer outra plataforma lança erro em vez
+  de assumir um valor por padrão (fail-closed). `promoCodeService.ts` não
+  envia mais `platform: 'ANDROID'` fixo — usa esse resolver.
+* `PromoCodeState`/`usePromoCode` agora transportam também
+  `appleStoreConfig` (`offerCodeMonthly`/`offerCodeAnnual`, mesma forma do
+  `storeConfig.ios` já retornado pelo backend desde a FASE iOS-1) ao lado de
+  `androidStoreConfig` — dois campos independentes, nunca um interpretado
+  como o outro. Essa configuração só é armazenada; nada neste código a usa
+  para iniciar uma compra.
+* `PROMO_CODE_SUPPORTED_PLATFORM` (`PaywallScreen.tsx`) continua
+  `Platform.OS === 'android'`, inalterado — a UI do cupom continua
+  invisível no iOS. Nenhum fluxo de resgate Apple (Offer Codes,
+  Promotional Offers, StoreKit redemption) foi implementado.
+
+**Próxima fase (iOS-3, não iniciada):** decidir e implementar o mecanismo
+Apple real (Offer Codes/Promotional Offers), habilitar a UI do cupom no
+iOS, obter evidência de payload real de um evento RevenueCat de uma
+transação com Apple Offer Code, e só então implementar
+`correlateAppleOffer` de fato — nunca antes dessa evidência existir.
 
 ---
 

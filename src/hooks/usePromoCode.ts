@@ -97,6 +97,7 @@ export function usePromoCode() {
           code: outcome.response.code,
           benefit: outcome.response.benefit,
           androidStoreConfig: outcome.response.storeConfig.android,
+          appleStoreConfig: outcome.response.storeConfig.ios,
         });
         return;
       }

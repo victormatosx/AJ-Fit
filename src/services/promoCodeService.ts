@@ -1,8 +1,11 @@
+import { Platform } from 'react-native';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '../lib/firebase';
 import { classifyPromoCodeError, type PromoCodeFailure } from '../lib/promoCodeErrors';
+import { resolvePromoCodePlatform, type PromoCodePlatform } from '../lib/promoCodePlatform';
 import type {
   PromoCodeAndroidStoreConfig,
+  PromoCodeAppleStoreConfig,
   PromoCodeBenefit,
 } from '../lib/promoCodeState';
 
@@ -27,12 +30,7 @@ import type {
 
 interface ValidatePromoCodeRequest {
   code: string;
-  platform: 'ANDROID';
-}
-
-interface ApplePromoCodePlatformStoreConfig {
-  offerCodeMonthly: string | null;
-  offerCodeAnnual: string | null;
+  platform: PromoCodePlatform;
 }
 
 export interface ValidatePromoCodeResponse {
@@ -41,7 +39,7 @@ export interface ValidatePromoCodeResponse {
   benefit: PromoCodeBenefit;
   storeConfig: {
     android: PromoCodeAndroidStoreConfig | null;
-    ios: ApplePromoCodePlatformStoreConfig | null;
+    ios: PromoCodeAppleStoreConfig | null;
   };
   eligibility: {
     determinedBy: 'store';
@@ -73,14 +71,22 @@ export function logPromoCodeError(scope: string, err: unknown): void {
 }
 
 /**
- * `code` — always `platform: 'ANDROID'` (this phase is Android-only, per
- * scope). Never sends a uid: the callable is authenticated via the Firebase
- * ID token attached automatically by the Functions SDK; `request.auth.uid`
- * server-side is the only identity ever used (docs §8, Fase 4C.2 §5).
+ * FASE iOS-2 — `platform` is now derived from the real `Platform.OS` via
+ * `resolvePromoCodePlatform` (src/lib/promoCodePlatform.ts) instead of an
+ * Android-only hardcode; Android's request shape/behavior is unchanged
+ * (`Platform.OS === 'android'` still resolves to the same `'ANDROID'`
+ * literal sent before). `resolvePromoCodePlatform` throwing (unsupported
+ * platform) is caught below like any other failure and classified as
+ * `'temporary'` by `classifyPromoCodeError` — never silently sent as
+ * `'ANDROID'`/`'IOS'` on a guess. Never sends a uid: the callable is
+ * authenticated via the Firebase ID token attached automatically by the
+ * Functions SDK; `request.auth.uid` server-side is the only identity ever
+ * used (docs §8, Fase 4C.2 §5).
  */
 export async function validatePromoCode(code: string): Promise<ValidatePromoCodeOutcome> {
   try {
-    const result = await validatePromoCodeCallable({ code, platform: 'ANDROID' });
+    const platform = resolvePromoCodePlatform(Platform.OS);
+    const result = await validatePromoCodeCallable({ code, platform });
     return { status: 'applied', response: result.data };
   } catch (err) {
     logPromoCodeError('validate', err);
