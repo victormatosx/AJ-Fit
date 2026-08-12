@@ -1252,9 +1252,26 @@ Respeitando todas as regras deste documento.
 
 # 33. Arquitetura de Atribuição de Usuários
 
-Seção adicionada na Sprint 3.6 (consolidação arquitetural). Define **apenas
-a arquitetura de dados** para cupons/atribuição — o sistema em si (captura de
-cupom, aplicação, telas) não está implementado e não faz parte desta seção.
+Seção adicionada na Sprint 3.6 (consolidação arquitetural). Define a
+arquitetura de dados para cupons/atribuição.
+
+> **Atualização (FASE iOS-1):** este texto originalmente dizia que "o sistema
+> em si (captura de cupom, aplicação, telas) não está implementado" — isso
+> ficou desatualizado a partir da Fase 4C (Android). Estado real atual:
+>
+> * **Android**: implementado e validado ponta a ponta (captura de código,
+>   validação no backend, `couponRedemptions/{uid}`, seleção de
+>   `SubscriptionOption` do Google Play, correlação via
+>   `googlePlayOfferCorrelation.ts`, confirmação/lock via
+>   `attributionSync.ts`) — testado em dispositivo real.
+> * **iOS**: a UI de cupom permanece deliberadamente desligada no cliente
+>   (`PROMO_CODE_SUPPORTED_PLATFORM`, `src/screens/PaywallScreen.tsx`) — fora
+>   do escopo desta seção. A FASE iOS-1 (`functions/src/attribution/
+>   appleOfferCorrelation.ts`, `types.ts`'s `PromoCodeAppleOfferSnapshot`)
+>   preparou apenas a fundação de backend: modelo de dados para o snapshot
+>   Apple, um caminho `APP_STORE` explícito em `attributionSync.ts`, e
+>   fail-closed garantido — ver "Estado de implementação" ao final desta
+>   seção para o detalhe completo.
 
 ---
 
@@ -1372,6 +1389,52 @@ Este módulo é deliberadamente independente de `functions/src/billing/*` (sem
 imports cruzados) — reforça, também no código, que são responsabilidades
 diferentes. Nenhuma função de leitura, escrita ou validação foi criada; isso
 fica para a sprint em que o sistema de cupons for de fato implementado.
+
+---
+
+## Estado de implementação (atualizado na FASE iOS-1)
+
+**Android — implementado e validado.** Fluxo completo: código digitado →
+`validatePromoCode` → `couponRedemptions/{uid}` → seleção explícita de
+`SubscriptionOption` (`basePlanId:offerId`) → compra → webhook RevenueCat →
+`googlePlayOfferCorrelation.ts` prova que a compra usou a oferta autorizada
+→ `attributionSync.ts` confirma/trava (`lockedAt`/`trialStartedAt`/
+`convertedAt`). Testado em dispositivo Android real.
+
+**iOS — fundação de backend (FASE iOS-1), UI ainda desligada.** Esta fase
+adicionou, sem tocar no Android nem no cliente:
+
+* `PromoCodeAppleOfferSnapshot` (`functions/src/attribution/types.ts`) — o
+  equivalente Apple de `PromoCodeAndroidOfferSnapshot`, com forma própria
+  (`offerCodeMonthly`/`offerCodeAnnual`, sem `basePlanId` — a App Store não
+  tem esse conceito). `CouponRedemption.appleOffer` agora grava esse
+  snapshot em TODA aplicação de código, incondicionalmente, exatamente como
+  `androidOffer` já fazia.
+* `functions/src/attribution/appleOfferCorrelation.ts` — caminho Apple
+  explícito em `attributionSync.ts` para eventos `store === 'APP_STORE'`
+  (antes, esses eventos apenas caíam no fallback genérico de "loja
+  desconhecida"). **Esta correlação está deliberadamente incompleta**:
+  `correlateAppleOffer` sempre retorna `unsupported`, nunca `matched` — ver o
+  doc comment do arquivo para a auditoria completa de evidência (o payload
+  de webhook do RevenueCat documentado publicamente não confirma, para
+  eventos `APP_STORE`, que `offer_code` carregue o identificador do Apple
+  Offer Code, ao contrário do que é documentado e confirmado para
+  `PLAY_STORE`). Consequência prática: **attribution promocional para
+  compras iOS não é confirmada/travada hoje, mesmo que a Apple aprove Offer
+  Codes e o app venha a usá-los** — billing/entitlement de uma compra iOS
+  continuam funcionando normalmente (responsabilidade de
+  `subscriptionSync.ts`, inalterada), apenas o crédito ao
+  influenciador/campanha não é.
+* Isso é fail-closed por construção, não uma lacuna de segurança: nenhum
+  caminho de código jamais confirma attribution Apple por heurística
+  (timing, coincidência de string, etc.) — ver os testes de
+  `appleOfferCorrelation.test.ts` e `revenueCatConfirmation.test.ts`.
+
+**Próxima fase (iOS-2, não iniciada):** decidir e implementar o mecanismo
+Apple real (Offer Codes/Promotional Offers), obter evidência de payload real
+de um evento RevenueCat de uma transação com Apple Offer Code, e só então
+implementar `correlateAppleOffer` de fato — nunca antes dessa evidência
+existir.
 
 ---
 

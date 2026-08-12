@@ -36,11 +36,14 @@ const HELLLEN_ANDROID_OFFER = {
   monthly: { basePlanId: 'monthly', offerId: 'helllen-trial-7d' },
   annual: null,
 };
+const ARNALDO_APPLE_OFFER = { offerCodeMonthly: null, offerCodeAnnual: null };
+const HELLLEN_APPLE_OFFER = { offerCodeMonthly: 'helllen-apple-monthly', offerCodeAnnual: null };
 const ATTRIBUTION = {
   couponCode: 'ARNALDO',
   campaignId: 'campaign-arnaldo',
   influencerId: 'ARNALDO',
   androidOffer: ARNALDO_ANDROID_OFFER,
+  appleOffer: ARNALDO_APPLE_OFFER,
 };
 
 function userSnapshot(exists: boolean) {
@@ -119,6 +122,7 @@ describe('applyPromoCodeAttributionTransactionally', () => {
       campaignId: 'campaign-arnaldo',
       influencerId: 'ARNALDO',
       androidOffer: ARNALDO_ANDROID_OFFER,
+      appleOffer: ARNALDO_APPLE_OFFER,
       trialStartedAt: null,
       convertedAt: null,
       lockedAt: null,
@@ -135,15 +139,16 @@ describe('applyPromoCodeAttributionTransactionally', () => {
         influencerId: 'ARNALDO',
       }),
     });
-    // Fase 4C.3A rule 6: the mirror is display-only — androidOffer (the
-    // correlation snapshot) must NEVER leak into it.
+    // Fase 4C.3A/iOS-1 rule 6: the mirror is display-only — androidOffer/
+    // appleOffer (the correlation snapshots) must NEVER leak into it.
     expect(userMirrorCall![1].attribution).not.toHaveProperty('androidOffer');
+    expect(userMirrorCall![1].attribution).not.toHaveProperty('appleOffer');
     expect(userMirrorCall![1]).not.toHaveProperty('subscription');
     // merge:true — the user mirror write must never replace the whole document.
     expect(userMirrorCall![2]).toEqual({ merge: true });
   });
 
-  it('Z: swap while pending: replaces couponCode/campaignId/influencerId/androidOffer atomically, but preserves createdAt', async () => {
+  it('Z: swap while pending: replaces couponCode/campaignId/influencerId/androidOffer/appleOffer atomically, but preserves createdAt', async () => {
     const originalCreatedAt = Timestamp.fromDate(new Date('2026-08-01T00:00:00.000Z'));
     mockGetImplementation(true, {
       exists: true,
@@ -153,6 +158,7 @@ describe('applyPromoCodeAttributionTransactionally', () => {
         campaignId: 'campaign-helllen',
         influencerId: 'HELLLEN',
         androidOffer: HELLLEN_ANDROID_OFFER,
+        appleOffer: HELLLEN_APPLE_OFFER,
         appliedAt: originalCreatedAt,
         createdAt: originalCreatedAt,
         updatedAt: originalCreatedAt,
@@ -171,11 +177,12 @@ describe('applyPromoCodeAttributionTransactionally', () => {
       campaignId: 'campaign-arnaldo',
       influencerId: 'ARNALDO',
       androidOffer: ARNALDO_ANDROID_OFFER,
+      appleOffer: ARNALDO_APPLE_OFFER,
       createdAt: originalCreatedAt,
     });
   });
 
-  it('AA: depois de locked, nada consegue substituir — nem código, nem campanha, nem influencer, nem androidOffer', async () => {
+  it('AA: depois de locked, nada consegue substituir — nem código, nem campanha, nem influencer, nem androidOffer, nem appleOffer', async () => {
     const lockedAt = Timestamp.fromDate(new Date('2026-08-05T00:00:00.000Z'));
     mockGetImplementation(true, {
       exists: true,
@@ -185,6 +192,7 @@ describe('applyPromoCodeAttributionTransactionally', () => {
         campaignId: 'campaign-helllen',
         influencerId: 'HELLLEN',
         androidOffer: HELLLEN_ANDROID_OFFER,
+        appleOffer: HELLLEN_APPLE_OFFER,
         appliedAt: lockedAt,
         createdAt: lockedAt,
         updatedAt: lockedAt,
@@ -233,9 +241,22 @@ describe('applyPromoCodeAttributionTransactionally', () => {
       campaignId: 'campaign-helllen',
       influencerId: 'HELLLEN',
       androidOffer: HELLLEN_ANDROID_OFFER,
+      appleOffer: HELLLEN_APPLE_OFFER,
     });
 
     expect(second).toEqual({ status: 'locked' });
     expect(transactionMocks.set).not.toHaveBeenCalled();
+  });
+
+  // FASE iOS-1 — regression: adding appleOffer must not change what/how
+  // androidOffer (or anything else Android-related) is written.
+  it('FASE iOS-1 regression: androidOffer snapshot is written identically to Fase 4C.3A regardless of appleOffer content', async () => {
+    mockGetImplementation(true, { exists: false });
+
+    await applyPromoCodeAttributionTransactionally(UID, ATTRIBUTION);
+
+    const redemptionCall = findSetCall(`couponRedemptions/${UID}`);
+    expect(redemptionCall![1].androidOffer).toEqual(ARNALDO_ANDROID_OFFER);
+    expect(redemptionCall![1].appleOffer).toEqual(ARNALDO_APPLE_OFFER);
   });
 });

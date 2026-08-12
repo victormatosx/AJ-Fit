@@ -7,6 +7,7 @@ import { normalizePromoCode } from './normalize';
 import { lookupPromoCode, resolveAndroidOfferPair } from './promoCodeCatalog';
 import type {
   PromoCodeAndroidOfferSnapshot,
+  PromoCodeAppleOfferSnapshot,
   ValidatePromoCodeRequestData,
   ValidatePromoCodeResponseData,
 } from './types';
@@ -97,6 +98,17 @@ export async function validatePromoCodeHandler(
     ),
   };
 
+  // FASE iOS-1: computed ONCE, unconditionally, mirroring
+  // `androidOfferSnapshot` above — snapshotted verbatim into
+  // `couponRedemptions/{uid}.appleOffer` regardless of the client's
+  // requested `platform`. No pairing/resolution step is needed (unlike
+  // Android's `resolveAndroidOfferPair`): an Apple offer code is already a
+  // single flat, complete value per plan on the catalog document.
+  const appleOfferSnapshot: PromoCodeAppleOfferSnapshot = {
+    offerCodeMonthly: promoCode.appleOfferCodeMonthly,
+    offerCodeAnnual: promoCode.appleOfferCodeAnnual,
+  };
+
   let outcome;
   try {
     outcome = await applyPromoCodeAttributionTransactionally(uid, {
@@ -104,6 +116,7 @@ export async function validatePromoCodeHandler(
       campaignId: promoCode.campaignId,
       influencerId: promoCode.influencerId,
       androidOffer: androidOfferSnapshot,
+      appleOffer: appleOfferSnapshot,
     });
   } catch (err) {
     logFunctionError(SCOPE, err, { uid, operation: 'apply_attribution' });
@@ -133,12 +146,7 @@ export async function validatePromoCodeHandler(
     requestedPlatform === undefined || requestedPlatform === 'ANDROID' ? androidOfferSnapshot : null;
 
   const iosConfig =
-    requestedPlatform === undefined || requestedPlatform === 'IOS'
-      ? {
-          offerCodeMonthly: promoCode.appleOfferCodeMonthly,
-          offerCodeAnnual: promoCode.appleOfferCodeAnnual,
-        }
-      : null;
+    requestedPlatform === undefined || requestedPlatform === 'IOS' ? appleOfferSnapshot : null;
 
   return {
     valid: true,

@@ -7,11 +7,15 @@ import {
   userDocPath,
 } from './constants';
 import {
+  correlateAppleOffer,
+  type AppleOfferCorrelationResult,
+} from './appleOfferCorrelation';
+import {
   correlateGooglePlayOffer,
   parseGooglePlayProductId,
   type GooglePlayOfferCorrelationResult,
 } from './googlePlayOfferCorrelation';
-import type { PromoCodeAndroidOfferSnapshot } from './types';
+import type { PromoCodeAndroidOfferSnapshot, PromoCodeAppleOfferSnapshot } from './types';
 
 /**
  * Firestore-facing half of the promo-code module: apply or swap a uid's
@@ -45,6 +49,14 @@ export interface PendingPromoCodeAttribution {
    * from the live catalog.
    */
   androidOffer: PromoCodeAndroidOfferSnapshot;
+  /**
+   * FASE iOS-1 — the Apple offer-code config authorized for this code AT
+   * THIS MOMENT, computed unconditionally by `validatePromoCode.ts` exactly
+   * like `androidOffer` (regardless of the client's requested `platform`).
+   * Snapshotted verbatim into `couponRedemptions/{uid}.appleOffer` — see
+   * that field's doc comment in `types.ts`.
+   */
+  appleOffer: PromoCodeAppleOfferSnapshot;
 }
 
 /** What `decidePromoCodeAttributionOutcome` needs to know about the currently-stored redemption record — nothing Firestore-specific. */
@@ -146,6 +158,7 @@ export async function applyPromoCodeAttributionTransactionally(
         campaignId: attribution.campaignId,
         influencerId: attribution.influencerId,
         androidOffer: attribution.androidOffer,
+        appleOffer: attribution.appleOffer,
         appliedAt: now,
         createdAt,
         updatedAt: now,
@@ -254,6 +267,21 @@ export type InitialPurchaseConfirmationDecision =
   | { action: 'skip_offer_not_matched' };
 
 /**
+ * FASE iOS-1 — the shape `decideInitialPurchaseAttributionConfirmation`
+ * actually needs from EITHER store's correlation result: only whether it is
+ * `matched` (with which plan) or anything else. Both
+ * `GooglePlayOfferCorrelationResult` and `AppleOfferCorrelationResult`
+ * satisfy this structurally — `AppleOfferCorrelationResult`'s extra
+ * `unsupported` variant is treated identically to `not_matched` here (never
+ * confirms), the distinction between the two existing only for
+ * logging/observability at the call site.
+ */
+export type OfferCorrelationInput =
+  | { status: 'matched'; plan: 'monthly' | 'annual' }
+  | { status: 'not_matched' }
+  | { status: 'unsupported' };
+
+/**
  * Pura — regra 1 da Fase 4B, **revisada pela Fase 4C.3A**.
  *
  * FASE 4C.3A (correção de bug de correlação — ver o relatório da auditoria
@@ -279,7 +307,7 @@ export type InitialPurchaseConfirmationDecision =
 export function decideInitialPurchaseAttributionConfirmation(
   current: StoredAttributionConfirmationState | undefined,
   classification: InitialPurchasePeriodClassification,
-  offerCorrelation: GooglePlayOfferCorrelationResult,
+  offerCorrelation: OfferCorrelationInput,
 ): InitialPurchaseConfirmationDecision {
   if (!current) return { action: 'skip_no_redemption' };
   if (isAttributionFieldSet(current.lockedAt)) return { action: 'skip_locked' };
@@ -381,6 +409,27 @@ export function parseStoredAndroidOfferSnapshot(value: unknown): PromoCodeAndroi
   };
 }
 
+function parseNullableAppleOfferCode(value: unknown): string | null {
+  return typeof value === 'string' ? value : null;
+}
+
+/**
+ * FASE iOS-1 — defensive read of `couponRedemptions/{uid}.appleOffer`,
+ * mirroring `parseStoredAndroidOfferSnapshot`'s policy: anything that isn't
+ * the exact `{offerCodeMonthly, offerCodeAnnual}` shape — including the
+ * field being entirely absent (every `couponRedemptions` document created
+ * before FASE iOS-1) — resolves each plan's code to `null` rather than being
+ * silently reconstructed from the live `promoCodes` catalog.
+ */
+export function parseStoredAppleOfferSnapshot(value: unknown): PromoCodeAppleOfferSnapshot | null {
+  if (value === null || typeof value !== 'object') return null;
+  const v = value as Record<string, unknown>;
+  return {
+    offerCodeMonthly: parseNullableAppleOfferCode(v.offerCodeMonthly),
+    offerCodeAnnual: parseNullableAppleOfferCode(v.offerCodeAnnual),
+  };
+}
+
 function mapInitialPurchaseSkipReason(
   action: Exclude<InitialPurchaseConfirmationDecision['action'], 'confirm'>,
 ): AttributionConfirmationSkipReason {
@@ -449,20 +498,41 @@ export async function applyAttributionRevenueCatEvent(
       if (input.eventType === 'INITIAL_PURCHASE') {
         const classification = classifyInitialPurchasePeriodType(input.periodType);
 
-        const isGooglePlay = input.store === 'PLAY_STORE';
-        const productIdentity = isGooglePlay ? parseGooglePlayProductId(input.productId) : null;
-        const offerCode = isGooglePlay && typeof input.offerCode === 'string' ? input.offerCode : null;
-        const androidOffer = parseStoredAndroidOfferSnapshot(stored.androidOffer);
-        const offerCorrelation: GooglePlayOfferCorrelationResult = isGooglePlay
-          ? correlateGooglePlayOffer(productIdentity?.basePlanId ?? null, offerCode, androidOffer)
-          : { status: 'not_matched' };
+        // FASE iOS-1 — explicit per-store dispatch (previously a binary
+        // "PLAY_STORE or nothing" check). PLAY_STORE behavior is byte-for-
+        // byte unchanged from Fase 4C.3A; APP_STORE now gets its OWN typed
+        // path through `appleOfferCorrelation.ts` instead of silently
+        // sharing the generic "unknown store" fallback — see that module's
+        // doc comment for why it still always resolves to `unsupported`
+        // (never `matched`) today. Any other/future store value keeps the
+        // pre-existing fail-closed fallback.
+        const rawOfferCode = typeof input.offerCode === 'string' ? input.offerCode : null;
+        let productIdentity: ReturnType<typeof parseGooglePlayProductId> = null;
+        let offerCorrelation: OfferCorrelationInput;
+
+        if (input.store === 'PLAY_STORE') {
+          productIdentity = parseGooglePlayProductId(input.productId);
+          const androidOffer = parseStoredAndroidOfferSnapshot(stored.androidOffer);
+          const googleResult: GooglePlayOfferCorrelationResult = correlateGooglePlayOffer(
+            productIdentity?.basePlanId ?? null,
+            rawOfferCode,
+            androidOffer,
+          );
+          offerCorrelation = googleResult;
+        } else if (input.store === 'APP_STORE') {
+          const appleOffer = parseStoredAppleOfferSnapshot(stored.appleOffer);
+          const appleResult: AppleOfferCorrelationResult = correlateAppleOffer(rawOfferCode, appleOffer);
+          offerCorrelation = appleResult;
+        } else {
+          offerCorrelation = { status: 'not_matched' };
+        }
 
         // FASE 4C.4C — TEMP LOG, remover após o smoke test.
         logInfo(CONFIRMATION_SCOPE, 'promo_attribution_debug_4c4c', {
           store: input.store ?? null,
           productId: input.productId ?? null,
-          offerCodePresent: offerCode !== null,
-          offerCode,
+          offerCodePresent: rawOfferCode !== null,
+          offerCode: rawOfferCode,
           periodType: input.periodType ?? null,
           correlationStatus: offerCorrelation.status,
           matchedPlan: offerCorrelation.status === 'matched' ? offerCorrelation.plan : null,
@@ -481,7 +551,8 @@ export async function applyAttributionRevenueCatEvent(
               uid,
               store: input.store,
               hasProductId: productIdentity !== null,
-              hasOfferCode: offerCode !== null,
+              hasOfferCode: rawOfferCode !== null,
+              correlationStatus: offerCorrelation.status,
             });
           }
           return { status: 'skipped', reason };

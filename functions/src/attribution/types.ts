@@ -41,6 +41,28 @@ export interface PromoCodeAndroidOfferSnapshot {
 }
 
 /**
+ * FASE iOS-1 — the Apple offer-code configuration authorized for one
+ * `couponRedemptions/{uid}` record AT THE MOMENT it was applied, mirroring
+ * `PromoCodeAndroidOfferSnapshot`'s snapshot rationale (see that type's doc
+ * comment) but with Apple's own, simpler shape: an App Store custom offer
+ * code is a single flat string per plan (`promoCodes/{code}.appleOfferCode*`
+ * in `types.ts`) — there is no Google-Play-style `basePlanId`/`offerId` pair
+ * to compose, so this is intentionally NOT `PromoCodeAndroidOfferSnapshot`
+ * with renamed fields. Never invent a `basePlanId` for iOS; never reuse an
+ * `androidOffer` value here.
+ *
+ * `null` per plan means no Apple offer code is configured for that plan on
+ * this catalog entry (expected today — Apple has not yet approved custom
+ * offer codes for this app, per the business context in
+ * `PromoCodeDocument.appleOfferCodeMonthly`/`appleOfferCodeAnnual`'s doc
+ * comment).
+ */
+export interface PromoCodeAppleOfferSnapshot {
+  offerCodeMonthly: string | null;
+  offerCodeAnnual: string | null;
+}
+
+/**
  * Server-managed lifecycle record for one Firebase uid's promo-code
  * attribution. Lives in `couponRedemptions/{uid}` (doc ID == uid — see
  * `COUPON_REDEMPTIONS_COLLECTION`/`couponRedemptionDocPath` in
@@ -75,6 +97,26 @@ export interface CouponRedemption {
    * silently reconstructed from the catalog).
    */
   androidOffer: PromoCodeAndroidOfferSnapshot;
+  /**
+   * FASE iOS-1 — the Apple offer-code configuration authorized for
+   * `couponCode` AT APPLICATION TIME, mirroring `androidOffer`'s snapshot
+   * rationale (see `PromoCodeAppleOfferSnapshot`'s doc comment). Always
+   * present going forward (written on every apply/swap, unconditionally —
+   * same as `androidOffer`, regardless of which `platform` the client
+   * requested); ABSENT on documents created before FASE iOS-1 —
+   * `attributionSync.ts`'s defensive reader treats that absence as `null`
+   * per plan (fail-closed, same policy as `androidOffer`'s legacy-schema
+   * handling).
+   *
+   * As of FASE iOS-1, NOTHING ever reads this field to confirm attribution
+   * — `attributionSync.ts`'s Apple correlation path
+   * (`appleOfferCorrelation.ts`) cannot yet prove a real RevenueCat/App
+   * Store event used a specific Apple offer code (see that module's doc
+   * comment for exactly what evidence is missing). This field exists so the
+   * snapshot is captured now and available once that correlation becomes
+   * possible — never re-derived from the live catalog later.
+   */
+  appleOffer: PromoCodeAppleOfferSnapshot;
   /** When the CURRENT `couponCode` was applied — reset on every swap while pending. */
   appliedAt: Timestamp;
   /** When this uid's first-ever promo code was applied — preserved across swaps, unlike `appliedAt`. */
@@ -191,10 +233,14 @@ export interface ValidatePromoCodeRequestData {
  */
 export type PromoCodePlatformStoreConfig = PromoCodeAndroidOfferSnapshot;
 
-export interface ApplePromoCodePlatformStoreConfig {
-  offerCodeMonthly: string | null;
-  offerCodeAnnual: string | null;
-}
+/**
+ * FASE iOS-1: this used to be its own duplicate-shape interface; now an
+ * alias of `PromoCodeAppleOfferSnapshot` — same rationale as
+ * `PromoCodePlatformStoreConfig` being an alias of
+ * `PromoCodeAndroidOfferSnapshot` (one shape, two audiences: wire response
+ * vs. Firestore snapshot field).
+ */
+export type ApplePromoCodePlatformStoreConfig = PromoCodeAppleOfferSnapshot;
 
 /**
  * Successful response contract for `validatePromoCode`. Deliberately does

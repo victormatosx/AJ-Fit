@@ -30,7 +30,8 @@ import {
   decideRenewalAttributionConfirmation,
   type AttributionConfirmationInput,
 } from '../attributionSync';
-import type { PromoCodeAndroidOfferSnapshot } from '../types';
+import { parseStoredAppleOfferSnapshot } from '../attributionSync';
+import type { PromoCodeAndroidOfferSnapshot, PromoCodeAppleOfferSnapshot } from '../types';
 
 const UID = 'firebase-uid-001';
 const REDEMPTION_PATH = `couponRedemptions/${UID}`;
@@ -41,6 +42,11 @@ const ARNALDO_ANDROID_OFFER: PromoCodeAndroidOfferSnapshot = {
   annual: { basePlanId: 'annual', offerId: 'influencer-trial-7d-annual' },
 };
 
+const ARNALDO_APPLE_OFFER: PromoCodeAppleOfferSnapshot = {
+  offerCodeMonthly: 'influencer-trial-7d',
+  offerCodeAnnual: 'influencer-trial-7d-annual',
+};
+
 function redemption(overrides: Record<string, unknown> = {}) {
   return {
     uid: UID,
@@ -48,6 +54,7 @@ function redemption(overrides: Record<string, unknown> = {}) {
     campaignId: 'campaign-arnaldo',
     influencerId: 'ARNALDO',
     androidOffer: ARNALDO_ANDROID_OFFER,
+    appleOffer: ARNALDO_APPLE_OFFER,
     appliedAt: Timestamp.fromMillis(T1 - 1000),
     createdAt: Timestamp.fromMillis(T1 - 1000),
     updatedAt: Timestamp.fromMillis(T1 - 1000),
@@ -385,6 +392,87 @@ describe('applyAttributionRevenueCatEvent — INITIAL_PURCHASE', () => {
     expect(transactionMocks.set).not.toHaveBeenCalled();
   });
 
+  // ===========================================================================
+  // FASE iOS-1 — APP_STORE now has its OWN explicit correlation path
+  // (appleOfferCorrelation.ts) instead of sharing the generic "not_matched"
+  // fallback. It must still never confirm — this suite proves that
+  // explicitly, including with a fully-configured appleOffer snapshot and an
+  // offer_code that coincidentally matches it (see appleOfferCorrelation.
+  // test.ts for the pure-function-level version of the same guarantee).
+  // ===========================================================================
+
+  it('iOS-1/D: APP_STORE + TRIAL + offer_code coincidentally equal to the configured monthly code → still never confirms', async () => {
+    mockRedemptionSnapshot(true, redemption());
+
+    const result = await applyAttributionRevenueCatEvent(
+      UID,
+      initialPurchaseInput({
+        store: 'APP_STORE',
+        productId: 'com.ajfit.premium.monthly',
+        offerCode: 'influencer-trial-7d', // == ARNALDO_APPLE_OFFER.offerCodeMonthly
+        periodType: 'TRIAL',
+      }),
+    );
+
+    expect(result).toEqual({ status: 'skipped', reason: 'offer_not_matched' });
+    expect(transactionMocks.set).not.toHaveBeenCalled();
+  });
+
+  it('iOS-1/D: APP_STORE + paid + no offer_code at all → never confirms', async () => {
+    mockRedemptionSnapshot(true, redemption());
+
+    const result = await applyAttributionRevenueCatEvent(
+      UID,
+      initialPurchaseInput({
+        store: 'APP_STORE',
+        productId: 'com.ajfit.premium.annual',
+        offerCode: null,
+        periodType: 'NORMAL',
+      }),
+    );
+
+    expect(result).toEqual({ status: 'skipped', reason: 'offer_not_matched' });
+    expect(transactionMocks.set).not.toHaveBeenCalled();
+  });
+
+  it('iOS-1/K: APP_STORE with no appleOffer ever configured on the redemption (legacy or Android-only code) → never confirms', async () => {
+    mockRedemptionSnapshot(true, redemption({ appleOffer: undefined }));
+
+    const result = await applyAttributionRevenueCatEvent(
+      UID,
+      initialPurchaseInput({ store: 'APP_STORE', offerCode: 'influencer-trial-7d' }),
+    );
+
+    expect(result).toEqual({ status: 'skipped', reason: 'offer_not_matched' });
+    expect(transactionMocks.set).not.toHaveBeenCalled();
+  });
+
+  it('iOS-1/L: monthly and annual Apple codes are never confused even though correlation is unsupported either way', async () => {
+    mockRedemptionSnapshot(true, redemption());
+
+    const monthlyOfferAsAnnual = await applyAttributionRevenueCatEvent(
+      UID,
+      initialPurchaseInput({ store: 'APP_STORE', offerCode: ARNALDO_APPLE_OFFER.offerCodeMonthly }),
+    );
+    const annualOfferAsMonthly = await applyAttributionRevenueCatEvent(
+      UID,
+      initialPurchaseInput({ store: 'APP_STORE', offerCode: ARNALDO_APPLE_OFFER.offerCodeAnnual }),
+    );
+
+    expect(monthlyOfferAsAnnual).toEqual({ status: 'skipped', reason: 'offer_not_matched' });
+    expect(annualOfferAsMonthly).toEqual({ status: 'skipped', reason: 'offer_not_matched' });
+  });
+
+  it('iOS-1/N: PLAY_STORE correlation is untouched by the presence of an appleOffer snapshot on the same redemption', async () => {
+    mockRedemptionSnapshot(true, redemption());
+
+    const result = await applyAttributionRevenueCatEvent(UID, initialPurchaseInput({ periodType: 'TRIAL' }));
+
+    expect(result).toEqual({ status: 'confirmed' });
+    const [, payload] = transactionMocks.set.mock.calls[0];
+    expect(payload).toMatchObject({ trialStartedAt: expect.any(Timestamp) });
+  });
+
   it('redemption legado sem androidOffer + compra normal → não confirma (AI)', async () => {
     mockRedemptionSnapshot(
       true,
@@ -537,5 +625,34 @@ describe('nenhum caminho escreve em users/{uid} ou subscription, e nenhum conced
     const result = await applyAttributionRevenueCatEvent(UID, initialPurchaseInput());
 
     expect(JSON.stringify(result)).not.toMatch(/entitlement|premium|subscription/i);
+  });
+});
+
+// FASE iOS-1 — defensive reader for the new `appleOffer` field, mirroring
+// the existing coverage `parseStoredAndroidOfferSnapshot` already has via
+// the "redemption legado" tests above.
+describe('parseStoredAppleOfferSnapshot (pure)', () => {
+  it('parses a well-formed snapshot', () => {
+    expect(parseStoredAppleOfferSnapshot(ARNALDO_APPLE_OFFER)).toEqual(ARNALDO_APPLE_OFFER);
+  });
+
+  it('resolves both plans to null when the field is entirely absent (pre-FASE iOS-1 document)', () => {
+    expect(parseStoredAppleOfferSnapshot(undefined)).toBeNull();
+    expect(parseStoredAppleOfferSnapshot(null)).toBeNull();
+  });
+
+  it('resolves a non-object value to null rather than throwing', () => {
+    expect(parseStoredAppleOfferSnapshot('not-an-object')).toBeNull();
+    expect(parseStoredAppleOfferSnapshot(42)).toBeNull();
+  });
+
+  it('resolves a plan to null when its field is present but not a string, never fabricating a value', () => {
+    expect(
+      parseStoredAppleOfferSnapshot({ offerCodeMonthly: 123, offerCodeAnnual: 'valid-code' }),
+    ).toEqual({ offerCodeMonthly: null, offerCodeAnnual: 'valid-code' });
+  });
+
+  it('treats missing plan keys as null per plan, not as a whole-object rejection', () => {
+    expect(parseStoredAppleOfferSnapshot({})).toEqual({ offerCodeMonthly: null, offerCodeAnnual: null });
   });
 });

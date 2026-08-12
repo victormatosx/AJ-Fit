@@ -61,6 +61,21 @@ describe('parsePromoCodeDocument', () => {
     expect(parsePromoCodeDocument(undefined)).toBeNull();
     expect(parsePromoCodeDocument([])).toBeNull();
   });
+
+  // FASE iOS-1, Passo 4 — confirms the existing appleOfferCodeMonthly/Annual
+  // fields (added before this phase) already round-trip real, non-null
+  // values correctly. No catalog schema change was needed for FASE iOS-1.
+  it('accepts a document with real (non-null) Apple offer codes configured', () => {
+    const doc = validRawDocument({
+      appleOfferCodeMonthly: 'ARNALDO7DMONTHLY',
+      appleOfferCodeAnnual: 'ARNALDO7DANNUAL',
+    });
+    expect(parsePromoCodeDocument(doc)).toEqual(doc);
+  });
+
+  it('rejects a non-string, non-null appleOfferCodeMonthly (wrong type)', () => {
+    expect(parsePromoCodeDocument(validRawDocument({ appleOfferCodeMonthly: 42 }))).toBeNull();
+  });
 });
 
 describe('lookupPromoCode', () => {

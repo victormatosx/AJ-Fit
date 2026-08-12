@@ -260,6 +260,58 @@ describe('validatePromoCodeHandler', () => {
     );
   });
 
+  it('FASE iOS-1: snapshots appleOffer into the transaction unconditionally, even when platform=ANDROID was requested', async () => {
+    catalogMocks.lookupPromoCode.mockResolvedValue({
+      status: 'found',
+      promoCode: promoCode({
+        appleOfferCodeMonthly: 'ARNALDO7DMONTHLY',
+        appleOfferCodeAnnual: 'ARNALDO7DANNUAL',
+      }),
+    });
+    syncMocks.applyPromoCodeAttributionTransactionally.mockResolvedValue({ status: 'applied' });
+
+    await validatePromoCodeHandler(request({ code: 'ARNALDO', platform: 'ANDROID' }));
+
+    expect(syncMocks.applyPromoCodeAttributionTransactionally).toHaveBeenCalledWith(
+      UID,
+      expect.objectContaining({
+        appleOffer: { offerCodeMonthly: 'ARNALDO7DMONTHLY', offerCodeAnnual: 'ARNALDO7DANNUAL' },
+      }),
+    );
+  });
+
+  it('FASE iOS-1: appleOffer snapshot is {null, null} when the catalog has no Apple codes configured — never fabricated', async () => {
+    catalogMocks.lookupPromoCode.mockResolvedValue({ status: 'found', promoCode: promoCode() });
+    syncMocks.applyPromoCodeAttributionTransactionally.mockResolvedValue({ status: 'applied' });
+
+    await validatePromoCodeHandler(request({ code: 'ARNALDO' }));
+
+    expect(syncMocks.applyPromoCodeAttributionTransactionally).toHaveBeenCalledWith(
+      UID,
+      expect.objectContaining({
+        appleOffer: { offerCodeMonthly: null, offerCodeAnnual: null },
+      }),
+    );
+  });
+
+  it('FASE iOS-1: platform=IOS returns the real configured Apple offer codes, monthly and annual never confused', async () => {
+    catalogMocks.lookupPromoCode.mockResolvedValue({
+      status: 'found',
+      promoCode: promoCode({
+        appleOfferCodeMonthly: 'ARNALDO7DMONTHLY',
+        appleOfferCodeAnnual: 'ARNALDO7DANNUAL',
+      }),
+    });
+    syncMocks.applyPromoCodeAttributionTransactionally.mockResolvedValue({ status: 'applied' });
+
+    const result = await validatePromoCodeHandler(request({ code: 'ARNALDO', platform: 'IOS' }));
+
+    expect(result.storeConfig.ios).toEqual({
+      offerCodeMonthly: 'ARNALDO7DMONTHLY',
+      offerCodeAnnual: 'ARNALDO7DANNUAL',
+    });
+  });
+
   it('never promises a trial and always states the store is the eligibility authority', async () => {
     catalogMocks.lookupPromoCode.mockResolvedValue({ status: 'found', promoCode: promoCode() });
     syncMocks.applyPromoCodeAttributionTransactionally.mockResolvedValue({ status: 'applied' });
