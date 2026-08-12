@@ -7,6 +7,7 @@ import Purchases, {
   type PurchasesError,
   type PurchasesOfferings,
   type PurchasesPackage,
+  type SubscriptionOption,
 } from 'react-native-purchases';
 import type {
   SubscriptionErrorKind,
@@ -378,6 +379,40 @@ export async function purchasePackage(pkg: PurchasesPackage): Promise<PurchaseOu
       return { status: 'cancelled' };
     }
     logRevenueCatError('purchase', err);
+    return {
+      status: 'error',
+      message: err instanceof Error ? err.message : 'Não foi possível concluir a compra.',
+      offline: isOfflineError(err),
+    };
+  }
+}
+
+/**
+ * Fase 4C.3 — buys a specific, backend-authorized `SubscriptionOption`
+ * (Android Google Play promotional offer, e.g.
+ * `monthly:influencer-trial-7d`) instead of letting RevenueCat pick a
+ * package's default option. `option` MUST already be the exact result of
+ * `findAuthorizedSubscriptionOption` (`lib/subscriptionOffer.ts`) — this
+ * function does no matching/validation of its own, mirroring
+ * `purchasePackage`'s own contract of trusting its caller for WHICH item to
+ * buy while owning only the SDK call + outcome classification.
+ *
+ * Deliberately returns the exact same `PurchaseOutcome` shape as
+ * `purchasePackage` — same cancellation/error/offline classification, same
+ * `CustomerInfo` on success — so `SubscriptionContext` can route either
+ * through one identical post-purchase pipeline (see `purchaseOption`
+ * there). Never called directly from a screen.
+ */
+export async function purchaseSubscriptionOption(option: SubscriptionOption): Promise<PurchaseOutcome> {
+  try {
+    await ensureConfigured();
+    const { customerInfo } = await Purchases.purchaseSubscriptionOption(option);
+    return { status: 'purchased', customerInfo };
+  } catch (err) {
+    if (isCancelledError(err)) {
+      return { status: 'cancelled' };
+    }
+    logRevenueCatError('purchaseSubscriptionOption', err);
     return {
       status: 'error',
       message: err instanceof Error ? err.message : 'Não foi possível concluir a compra.',

@@ -19,6 +19,24 @@ const revenueCatApiMocks = vi.hoisted(() => ({
   getCustomerSubscriptions: vi.fn(),
 }));
 
+// Fase 4B: `handleRevenueCatWebhook` now calls
+// `applyAttributionRevenueCatEvent` (attribution/attributionSync.ts) for
+// premium-concerning INITIAL_PURCHASE/RENEWAL events that reach `processed`.
+// That function uses the REAL `db` from `lib/firebaseAdmin` — mocked here
+// (default: no pending attribution for any uid, matching "seguir
+// normalmente sem criar atribuição") purely so this file's pre-existing
+// subscription-focused tests don't hit a real Firestore transaction.
+// Attribution's own behavior is covered by
+// `attribution/__tests__/attributionSync.test.ts` and
+// `attribution/__tests__/revenueCatConfirmation.test.ts` — not re-tested
+// here.
+const attributionSyncMocks = vi.hoisted(() => ({
+  applyAttributionRevenueCatEvent: vi.fn().mockResolvedValue({
+    status: 'skipped',
+    reason: 'no_redemption',
+  }),
+}));
+
 vi.mock('../subscriptionSync', () => subscriptionSyncMocks);
 vi.mock('../revenueCatIdentity', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../revenueCatIdentity')>();
@@ -31,6 +49,7 @@ vi.mock('../revenueCatApi', async (importOriginal) => {
     createRevenueCatV2Client: revenueCatApiMocks.createRevenueCatV2Client,
   };
 });
+vi.mock('../../attribution/attributionSync', () => attributionSyncMocks);
 
 import { handleRevenueCatWebhook } from '../revenuecat';
 import { RevenueCatApiError } from '../revenueCatApi';
@@ -863,5 +882,413 @@ describe('handleRevenueCatWebhook validation order', () => {
     expect(result.body()).toEqual({ error: 'invalid_payload' });
     expect(identityMocks.resolveRevenueCatFirebaseUid).not.toHaveBeenCalled();
     expect(subscriptionSyncMocks.applySubscriptionEventAtomically).not.toHaveBeenCalled();
+  });
+});
+
+// Fase 4B — integration-level tests for `confirmPromoCodeAttributionIfApplicable`
+// (billing/revenuecat.ts). Attribution's own decision/transaction logic is
+// tested in attribution/__tests__/revenueCatConfirmation.test.ts; these
+// tests only verify that the webhook handler calls (or correctly refrains
+// from calling) `applyAttributionRevenueCatEvent` with the right arguments,
+// at the right point in the flow.
+describe('handleRevenueCatWebhook — Fase 4B attribution confirmation wiring', () => {
+  const initialPurchaseEvent = {
+    id: 'evt_initial_purchase_attribution_001',
+    type: 'INITIAL_PURCHASE',
+    event_timestamp_ms: Date.parse('2026-08-11T12:00:00.000Z'),
+    app_user_id: 'firebase-uid-001',
+    product_id: 'ajfit_premium_monthly',
+    period_type: 'TRIAL',
+    expiration_at_ms: Date.parse('2026-08-18T12:00:00.000Z'),
+    store: 'APP_STORE',
+    entitlement_ids: ['premium'],
+  };
+
+  beforeEach(() => {
+    process.env.REVENUECAT_WEBHOOK_SECRET = SECRET;
+    vi.clearAllMocks();
+    identityMocks.resolveRevenueCatFirebaseUid.mockResolvedValue({
+      status: 'resolved',
+      uid: 'firebase-uid-001',
+      source: 'direct',
+      customerIds: [],
+    });
+    subscriptionSyncMocks.validateSubscriptionPayload.mockImplementation((payload: unknown) => ({
+      ok: true,
+      data: payload,
+    }));
+    subscriptionSyncMocks.applySubscriptionEventAtomically.mockResolvedValue({
+      status: 'processed',
+    });
+    attributionSyncMocks.applyAttributionRevenueCatEvent.mockResolvedValue({
+      status: 'skipped',
+      reason: 'no_redemption',
+    });
+  });
+
+  it('calls applyAttributionRevenueCatEvent for a processed, premium-concerning INITIAL_PURCHASE', async () => {
+    const result = await invoke({ api_version: '1.0', event: initialPurchaseEvent });
+
+    expect(result.statusCode()).toBe(200);
+    expect(attributionSyncMocks.applyAttributionRevenueCatEvent).toHaveBeenCalledWith(
+      'firebase-uid-001',
+      {
+        eventType: 'INITIAL_PURCHASE',
+        eventTimestampMs: initialPurchaseEvent.event_timestamp_ms,
+        periodType: 'TRIAL',
+        store: 'APP_STORE',
+        productId: 'ajfit_premium_monthly',
+        offerCode: undefined,
+      },
+    );
+  });
+
+  it('calls applyAttributionRevenueCatEvent for a processed, premium-concerning RENEWAL, passing is_trial_conversion through', async () => {
+    const result = await invoke({
+      api_version: '1.0',
+      event: { ...completeRenewalEvent, is_trial_conversion: true },
+    });
+
+    expect(result.statusCode()).toBe(200);
+    expect(attributionSyncMocks.applyAttributionRevenueCatEvent).toHaveBeenCalledWith(
+      completeRenewalEvent.app_user_id,
+      {
+        eventType: 'RENEWAL',
+        eventTimestampMs: completeRenewalEvent.event_timestamp_ms,
+        isTrialConversion: true,
+      },
+    );
+  });
+
+  it('treats a missing is_trial_conversion as false, never as a guess', async () => {
+    await invoke({ api_version: '1.0', event: completeRenewalEvent });
+
+    expect(attributionSyncMocks.applyAttributionRevenueCatEvent).toHaveBeenCalledWith(
+      completeRenewalEvent.app_user_id,
+      expect.objectContaining({ isTrialConversion: false }),
+    );
+  });
+
+  // FASE 4B.1: this is the exact bug this phase fixes — billing's own
+  // dedup/staleness must NOT, by itself, prevent attribution from being
+  // (re-)evaluated. See the "recovery" describe block below for the full
+  // two-delivery scenario this enables.
+  it('G/D: STILL calls attribution confirmation when the subscription event is a duplicate', async () => {
+    subscriptionSyncMocks.applySubscriptionEventAtomically.mockResolvedValue({ status: 'duplicate' });
+
+    const result = await invoke({ api_version: '1.0', event: initialPurchaseEvent });
+
+    expect(result.body()).toEqual({ status: 'duplicate' });
+    expect(attributionSyncMocks.applyAttributionRevenueCatEvent).toHaveBeenCalledWith(
+      'firebase-uid-001',
+      expect.objectContaining({ eventType: 'INITIAL_PURCHASE' }),
+    );
+  });
+
+  // FASE 4B.1 rule (Parte 5): a `stale` billing delivery can still be the
+  // only INITIAL_PURCHASE attribution has ever seen for this uid. It must
+  // be evaluated — the write-once fields inside `applyAttributionRevenueCatEvent`
+  // are what protect against unsafe overwrites, not billing's staleness flag.
+  it('G: STILL calls attribution confirmation when the subscription event is stale', async () => {
+    subscriptionSyncMocks.applySubscriptionEventAtomically.mockResolvedValue({ status: 'stale' });
+
+    const result = await invoke({ api_version: '1.0', event: initialPurchaseEvent });
+
+    expect(result.body()).toEqual({ status: 'stale' });
+    expect(attributionSyncMocks.applyAttributionRevenueCatEvent).toHaveBeenCalledWith(
+      'firebase-uid-001',
+      expect.objectContaining({ eventType: 'INITIAL_PURCHASE' }),
+    );
+  });
+
+  it('I: RENEWAL stale/duplicate never overwrites convertedAt — trusts applyAttributionRevenueCatEvent, still gets called', async () => {
+    subscriptionSyncMocks.applySubscriptionEventAtomically.mockResolvedValue({ status: 'stale' });
+    attributionSyncMocks.applyAttributionRevenueCatEvent.mockResolvedValue({
+      status: 'skipped',
+      reason: 'already_converted',
+    });
+
+    const result = await invoke({
+      api_version: '1.0',
+      event: { ...completeRenewalEvent, is_trial_conversion: true },
+    });
+
+    expect(result.body()).toEqual({ status: 'stale' });
+    expect(attributionSyncMocks.applyAttributionRevenueCatEvent).toHaveBeenCalledWith(
+      completeRenewalEvent.app_user_id,
+      expect.objectContaining({ eventType: 'RENEWAL', isTrialConversion: true }),
+    );
+  });
+
+  it('J: no couponRedemptions/{uid} — no-op, HTTP stays 200, no retry requested', async () => {
+    attributionSyncMocks.applyAttributionRevenueCatEvent.mockResolvedValue({
+      status: 'skipped',
+      reason: 'no_redemption',
+    });
+
+    const result = await invoke({ api_version: '1.0', event: initialPurchaseEvent });
+
+    expect(result.statusCode()).toBe(200);
+    expect(result.body()).toEqual({ status: 'processed' });
+  });
+
+  it('K: attribution locked — applyAttributionRevenueCatEvent is still called, but this handler never inspects/touches couponCode/campaignId/influencerId itself', async () => {
+    attributionSyncMocks.applyAttributionRevenueCatEvent.mockResolvedValue({
+      status: 'skipped',
+      reason: 'locked',
+    });
+
+    const result = await invoke({ api_version: '1.0', event: initialPurchaseEvent });
+
+    expect(result.statusCode()).toBe(200);
+    const [, input] = attributionSyncMocks.applyAttributionRevenueCatEvent.mock.calls[0];
+    expect(input).not.toHaveProperty('couponCode');
+    expect(input).not.toHaveProperty('campaignId');
+    expect(input).not.toHaveProperty('influencerId');
+  });
+
+  it('does NOT call attribution confirmation for CANCELLATION (rule 7: no additional metrics this phase)', async () => {
+    await invoke({
+      api_version: '1.0',
+      event: { ...initialPurchaseEvent, type: 'CANCELLATION', period_type: 'NORMAL' },
+    });
+
+    expect(attributionSyncMocks.applyAttributionRevenueCatEvent).not.toHaveBeenCalled();
+  });
+
+  it('does NOT call attribution confirmation for EXPIRATION', async () => {
+    await invoke({ api_version: '1.0', event: { ...initialPurchaseEvent, type: 'EXPIRATION' } });
+
+    expect(attributionSyncMocks.applyAttributionRevenueCatEvent).not.toHaveBeenCalled();
+  });
+
+  it('does NOT call attribution confirmation when the event does not concern the premium entitlement', async () => {
+    await invoke({
+      api_version: '1.0',
+      event: { ...initialPurchaseEvent, entitlement_ids: ['some_other_entitlement'] },
+    });
+
+    expect(attributionSyncMocks.applyAttributionRevenueCatEvent).not.toHaveBeenCalled();
+  });
+
+  it('does NOT call attribution confirmation for TRANSFER (rule 5: attribution is never moved/created/copied)', async () => {
+    identityMocks.resolveRevenueCatFirebaseUid
+      .mockResolvedValueOnce({
+        status: 'resolved',
+        uid: 'firebase-uid-002',
+        source: 'revenuecat_v2',
+        customerIds: ['rc-customer-dest'],
+      })
+      .mockResolvedValueOnce({
+        status: 'resolved',
+        uid: 'firebase-uid-001',
+        source: 'revenuecat_v2',
+        customerIds: ['rc-customer-src'],
+      });
+    revenueCatApiMocks.createRevenueCatV2Client.mockReturnValue({
+      getCustomerIdentityGraph: revenueCatApiMocks.getCustomerIdentityGraph,
+      getCustomerSubscriptions: revenueCatApiMocks.getCustomerSubscriptions,
+    });
+    revenueCatApiMocks.getCustomerSubscriptions.mockResolvedValue([subscription()]);
+
+    await invoke({
+      api_version: '1.0',
+      event: {
+        id: 'evt_transfer_attribution_check',
+        type: 'TRANSFER',
+        event_timestamp_ms: Date.parse('2026-08-11T12:00:00.000Z'),
+        transferred_from: ['firebase-uid-001'],
+        transferred_to: ['firebase-uid-002'],
+        environment: 'SANDBOX',
+      },
+    });
+
+    expect(attributionSyncMocks.applyAttributionRevenueCatEvent).not.toHaveBeenCalled();
+  });
+
+  // FASE 4B.1: this is the bug being fixed — a transient attribution
+  // failure must NEVER be silently swallowed into a 200. It must be
+  // retryable so RevenueCat gives attribution another chance.
+  it('B: billing processed + attribution temporary failure → HTTP retryable (503), never a silent 200', async () => {
+    attributionSyncMocks.applyAttributionRevenueCatEvent.mockRejectedValue(new Error('boom'));
+
+    const result = await invoke({ api_version: '1.0', event: initialPurchaseEvent });
+
+    expect(result.statusCode()).toBe(503);
+    expect(result.body()).toEqual({ error: 'attribution_temporary_failure' });
+  });
+
+  it('E: RENEWAL — billing processed + attribution temporary failure → HTTP retryable', async () => {
+    attributionSyncMocks.applyAttributionRevenueCatEvent.mockRejectedValue(new Error('boom'));
+
+    const result = await invoke({
+      api_version: '1.0',
+      event: { ...completeRenewalEvent, is_trial_conversion: true },
+    });
+
+    expect(result.statusCode()).toBe(503);
+    expect(result.body()).toEqual({ error: 'attribution_temporary_failure' });
+  });
+
+  it('A: billing processed + attribution success → HTTP 200', async () => {
+    attributionSyncMocks.applyAttributionRevenueCatEvent.mockResolvedValue({ status: 'confirmed' });
+
+    const result = await invoke({ api_version: '1.0', event: initialPurchaseEvent });
+
+    expect(result.statusCode()).toBe(200);
+    expect(result.body()).toEqual({ status: 'processed' });
+  });
+
+  it('N: does NOT call attribution confirmation for CANCELLATION/EXPIRATION even when billing is duplicate/stale', async () => {
+    subscriptionSyncMocks.applySubscriptionEventAtomically.mockResolvedValue({ status: 'duplicate' });
+
+    await invoke({
+      api_version: '1.0',
+      event: { ...initialPurchaseEvent, type: 'CANCELLATION', period_type: 'NORMAL' },
+    });
+
+    expect(attributionSyncMocks.applyAttributionRevenueCatEvent).not.toHaveBeenCalled();
+  });
+
+  it('M: non-premium event stays not_applicable even when billing is duplicate/stale', async () => {
+    subscriptionSyncMocks.applySubscriptionEventAtomically.mockResolvedValue({ status: 'stale' });
+
+    const result = await invoke({
+      api_version: '1.0',
+      event: { ...initialPurchaseEvent, entitlement_ids: ['some_other_entitlement'] },
+    });
+
+    expect(result.statusCode()).toBe(200);
+    expect(attributionSyncMocks.applyAttributionRevenueCatEvent).not.toHaveBeenCalled();
+  });
+
+  it('does NOT evaluate attribution for conflict or user_not_found (out of scope for this fix — anomalous states)', async () => {
+    subscriptionSyncMocks.applySubscriptionEventAtomically.mockResolvedValue({ status: 'conflict' });
+    await invoke({ api_version: '1.0', event: initialPurchaseEvent });
+    expect(attributionSyncMocks.applyAttributionRevenueCatEvent).not.toHaveBeenCalled();
+
+    vi.clearAllMocks();
+    subscriptionSyncMocks.applySubscriptionEventAtomically.mockResolvedValue({ status: 'user_not_found' });
+    await invoke({ api_version: '1.0', event: initialPurchaseEvent });
+    expect(attributionSyncMocks.applyAttributionRevenueCatEvent).not.toHaveBeenCalled();
+  });
+
+  it('O: a critical billing failure (thrown by applySubscriptionEventAtomically) preserves the existing 500 behavior — attribution is never reached', async () => {
+    subscriptionSyncMocks.applySubscriptionEventAtomically.mockRejectedValue(new Error('firestore down'));
+
+    const result = await invoke({ api_version: '1.0', event: initialPurchaseEvent });
+
+    expect(result.statusCode()).toBe(500);
+    expect(result.body()).toEqual({ error: 'internal_error' });
+    expect(attributionSyncMocks.applyAttributionRevenueCatEvent).not.toHaveBeenCalled();
+  });
+
+  it('P/Q: no response body from this handler ever mentions subscription/entitlement/premium, regardless of attribution outcome', async () => {
+    for (const attributionResult of [
+      { status: 'confirmed' as const },
+      { status: 'skipped' as const, reason: 'no_redemption' as const },
+    ]) {
+      attributionSyncMocks.applyAttributionRevenueCatEvent.mockResolvedValue(attributionResult);
+      const result = await invoke({ api_version: '1.0', event: initialPurchaseEvent });
+      expect(JSON.stringify(result.body())).not.toMatch(/entitlement|premium|subscription/i);
+    }
+  });
+
+  it('the attribution confirmation result never mentions subscription/entitlement/premium fields written by this handler', async () => {
+    const result = await invoke({ api_version: '1.0', event: initialPurchaseEvent });
+    expect(Object.keys(result.body() as object)).toEqual(['status']);
+  });
+});
+
+// FASE 4B.1 — TESTE-CHAVE: the exact two-delivery recovery scenario this
+// phase exists to fix. Billing succeeds on delivery 1 (and correctly
+// deduplicates on delivery 2); attribution fails transiently on delivery 1
+// and recovers on delivery 2 — driven entirely by the SAME event.id, exactly
+// as RevenueCat's own retry mechanism would redeliver it.
+describe('FASE 4B.1 — recovery: two consecutive deliveries of the SAME event.id', () => {
+  const recoveryEvent = {
+    id: 'evt_initial_purchase_recovery_001',
+    type: 'INITIAL_PURCHASE',
+    event_timestamp_ms: Date.parse('2026-08-11T12:00:00.000Z'),
+    app_user_id: 'firebase-uid-recovery',
+    product_id: 'ajfit_premium_monthly',
+    period_type: 'TRIAL',
+    expiration_at_ms: Date.parse('2026-08-18T12:00:00.000Z'),
+    store: 'APP_STORE',
+    entitlement_ids: ['premium'],
+  };
+
+  beforeEach(() => {
+    process.env.REVENUECAT_WEBHOOK_SECRET = SECRET;
+    vi.clearAllMocks();
+    identityMocks.resolveRevenueCatFirebaseUid.mockResolvedValue({
+      status: 'resolved',
+      uid: 'firebase-uid-recovery',
+      source: 'direct',
+      customerIds: [],
+    });
+    subscriptionSyncMocks.validateSubscriptionPayload.mockImplementation((payload: unknown) => ({
+      ok: true,
+      data: payload,
+    }));
+  });
+
+  it('C: delivery 1 (processed + attribution failure → 503) then delivery 2 (duplicate + attribution success → 200), confirming the timestamp exactly once', async () => {
+    // ENTREGA 1: billing writes successfully; attribution hits a transient failure.
+    subscriptionSyncMocks.applySubscriptionEventAtomically.mockResolvedValueOnce({
+      status: 'processed',
+    });
+    attributionSyncMocks.applyAttributionRevenueCatEvent.mockRejectedValueOnce(
+      new Error('transient firestore error'),
+    );
+
+    const firstDelivery = await invoke({ api_version: '1.0', event: recoveryEvent });
+
+    expect(firstDelivery.statusCode()).toBe(503);
+    expect(firstDelivery.body()).toEqual({ error: 'attribution_temporary_failure' });
+    expect(subscriptionSyncMocks.applySubscriptionEventAtomically).toHaveBeenCalledTimes(1);
+    expect(attributionSyncMocks.applyAttributionRevenueCatEvent).toHaveBeenCalledTimes(1);
+
+    // ENTREGA 2: RevenueCat retries the SAME event.id. Billing correctly
+    // recognizes it as already applied (duplicate — no second subscription
+    // write). Attribution, evaluated independently, succeeds this time.
+    subscriptionSyncMocks.applySubscriptionEventAtomically.mockResolvedValueOnce({
+      status: 'duplicate',
+    });
+    attributionSyncMocks.applyAttributionRevenueCatEvent.mockResolvedValueOnce({
+      status: 'confirmed',
+    });
+
+    const secondDelivery = await invoke({ api_version: '1.0', event: recoveryEvent });
+
+    expect(secondDelivery.statusCode()).toBe(200);
+    expect(secondDelivery.body()).toEqual({ status: 'duplicate' });
+
+    // D: a THIRD delivery (another duplicate + already-confirmed attribution)
+    // must not write anything new and must still resolve to 200.
+    subscriptionSyncMocks.applySubscriptionEventAtomically.mockResolvedValueOnce({
+      status: 'duplicate',
+    });
+    attributionSyncMocks.applyAttributionRevenueCatEvent.mockResolvedValueOnce({
+      status: 'skipped',
+      reason: 'locked',
+    });
+
+    const thirdDelivery = await invoke({ api_version: '1.0', event: recoveryEvent });
+
+    expect(thirdDelivery.statusCode()).toBe(200);
+    expect(thirdDelivery.body()).toEqual({ status: 'duplicate' });
+
+    // Across all three deliveries: billing was asked to write 3 times (its
+    // own idempotency — tested separately in subscriptionSync's suite —
+    // guarantees only the first actually persists); attribution was asked
+    // 3 times, and `applyAttributionRevenueCatEvent`'s own transaction
+    // (tested in attribution/__tests__/revenueCatConfirmation.test.ts) is
+    // what guarantees `lockedAt`/`trialStartedAt` are written exactly once
+    // — confirmed here by the fact each call received the SAME
+    // eventTimestampMs (the source event never changes across retries).
+    for (const call of attributionSyncMocks.applyAttributionRevenueCatEvent.mock.calls) {
+      expect(call[1]).toMatchObject({ eventTimestampMs: recoveryEvent.event_timestamp_ms });
+    }
   });
 });

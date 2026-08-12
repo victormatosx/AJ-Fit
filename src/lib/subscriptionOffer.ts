@@ -1,4 +1,9 @@
-import type { CustomerInfo, PurchasesOfferings, PurchasesPackage } from 'react-native-purchases';
+import type {
+  CustomerInfo,
+  PurchasesOfferings,
+  PurchasesPackage,
+  SubscriptionOption,
+} from 'react-native-purchases';
 
 export function getCurrentOfferingPackages(
   offerings: PurchasesOfferings | null,
@@ -121,4 +126,178 @@ export function classifyRestoreResult(
   return hasActiveEntitlement(result.customerInfo, entitlementId)
     ? 'premium'
     : 'missing-entitlement';
+}
+
+// ---------------------------------------------------------------------------
+// Fase 4C.2 — promo-code SubscriptionOption matching (Android only).
+//
+// react-native-purchases@10.6.0's `SubscriptionOption.id` is documented and
+// confirmed (Fase 4C audit) to be `basePlanId` alone (a base plan) or
+// `basePlanId:offerId` (an offer under that base plan) — never anything
+// else. This is the ONLY identity comparison used below; never `.includes`/
+// `.endsWith`/`.startsWith`, never `tags` as a primary identifier (tags are
+// exposed as a UX/analytics signal only — `rc-ignore-offer` in particular
+// must NOT be filtered out here, it only affects the SDK's own automatic
+// `defaultOption` selection, never explicit `subscriptionOptions` lookups),
+// never `defaultOption`, never array position.
+// ---------------------------------------------------------------------------
+
+/** The backend-authorized identity of one Google Play offer (functions/src/attribution/types.ts's `AndroidSubscriptionOfferConfig`, duplicated client-side — see `promoCodeService.ts`). */
+export interface AuthorizedAndroidOffer {
+  basePlanId: string;
+  offerId: string;
+}
+
+export type SubscriptionOptionMatchResult =
+  | { status: 'match'; option: SubscriptionOption }
+  | { status: 'not_found' }
+  | { status: 'ambiguous'; matchCount: number }
+  | { status: 'no_options' };
+
+/**
+ * Locates EXACTLY one `SubscriptionOption` matching a backend-authorized
+ * `(basePlanId, offerId)` pair inside `pkg.product.subscriptionOptions`.
+ * Fail-closed by construction: every outcome other than exactly one match
+ * is a distinct, non-`match` status — the caller decides what to do, but
+ * this function never picks a "best guess" among 0 or >1 candidates.
+ *
+ * `option.productId === pkg.product.identifier` is checked alongside `id`
+ * as defense-in-depth, NOT as the primary identity check (Fase 4C.2 §13):
+ * since `options` is read from `pkg.product.subscriptionOptions` itself,
+ * every option already structurally belongs to `pkg.product` — the SDK has
+ * no documented mechanism to put a foreign product's option in this array,
+ * so this check is redundant by construction today. It costs nothing and
+ * guards against a class of bug this audit cannot rule out for a future
+ * SDK version (or a caller upstream passing a mismatched
+ * `pkg`/`authorized` pair) — it is not treated as, and must never become,
+ * the actual authorization boundary. `id` equality against
+ * `` `${basePlanId}:${offerId}` `` remains the sole, sufficient identity
+ * check per the Fase 4C audit.
+ */
+export function findAuthorizedSubscriptionOption(
+  pkg: PurchasesPackage,
+  authorized: AuthorizedAndroidOffer | null,
+): SubscriptionOptionMatchResult {
+  if (!authorized) return { status: 'not_found' };
+
+  const options = pkg.product.subscriptionOptions;
+  if (!options || options.length === 0) return { status: 'no_options' };
+
+  const wantedId = `${authorized.basePlanId}:${authorized.offerId}`;
+  const matches = options.filter(
+    (option) => option.id === wantedId && option.productId === pkg.product.identifier,
+  );
+
+  if (matches.length === 0) return { status: 'not_found' };
+  if (matches.length > 1) return { status: 'ambiguous', matchCount: matches.length };
+  return { status: 'match', option: matches[0] };
+}
+
+/**
+ * UX-only signal (Fase 4C.2 §15) — NEVER used to authorize or reject a
+ * match. `findAuthorizedSubscriptionOption` alone decides whether an
+ * option is authorized; whether it happens to carry a free-trial pricing
+ * phase is a separate, informational fact a future screen may want to
+ * display ("Oferta promocional disponível"), not a gate.
+ */
+export function subscriptionOptionHasFreeTrial(option: SubscriptionOption): boolean {
+  return option.freePhase !== null;
+}
+
+export type AndroidPlanKind = 'monthly' | 'annual';
+
+/**
+ * Maps a selected `PurchasesPackage` to which half of
+ * `storeConfig.android` applies — fail-closed (§16): any `packageType`
+ * other than the two RevenueCat predefined identifiers this app actually
+ * sells (`MONTHLY`/`ANNUAL` — see `packageTitle` above) returns `null`,
+ * never a guess.
+ */
+export function resolveAndroidPlanKind(pkg: PurchasesPackage): AndroidPlanKind | null {
+  if (pkg.packageType === 'MONTHLY') return 'monthly';
+  if (pkg.packageType === 'ANNUAL') return 'annual';
+  return null;
+}
+
+/**
+ * Combines plan-kind resolution with the applied code's Android
+ * `storeConfig` to get the offer authorized FOR THIS SPECIFIC PACKAGE, or
+ * `null` if the package can't be safely mapped or no config exists for
+ * that plan (§16, fail-closed).
+ *
+ * Deliberately a pure, DERIVED computation rather than something stored in
+ * `PromoCodeState` — recomputed fresh from whatever `selectedPackage` is
+ * current on every render, so a package/plan switch (mensal ⇄ anual)
+ * invalidates itself automatically by never having cached a match to begin
+ * with (Fase 4C.2 §9's "Offering/package relevante mudar" requirement is
+ * satisfied by construction, not by an explicit invalidation step).
+ */
+export function resolveAuthorizedAndroidOffer(
+  pkg: PurchasesPackage,
+  androidStoreConfig: {
+    monthly: AuthorizedAndroidOffer | null;
+    annual: AuthorizedAndroidOffer | null;
+  } | null,
+): AuthorizedAndroidOffer | null {
+  if (!androidStoreConfig) return null;
+  const planKind = resolveAndroidPlanKind(pkg);
+  if (!planKind) return null;
+  return androidStoreConfig[planKind];
+}
+
+// ---------------------------------------------------------------------------
+// Fase 4C.3 — the purchase-routing decision. Two legitimate paths only
+// (§4): no promo code applied → the normal Package; a promo code applied →
+// the promotional SubscriptionOption, ONLY when it can be proven to exist
+// unambiguously. Never a third, silent path from "promotional but
+// unprovable" back down to "normal price" — see `PurchaseRoute`'s
+// `'blocked'` variant, which the caller must render as a stop, not as a
+// license to call `purchasePackage` instead (§5).
+// ---------------------------------------------------------------------------
+
+export type PurchaseRoute =
+  | { kind: 'package'; package: PurchasesPackage }
+  | { kind: 'subscription_option'; option: SubscriptionOption }
+  | {
+      kind: 'blocked';
+      reason: 'promo_not_found' | 'promo_ambiguous' | 'promo_no_options' | 'promo_plan_unavailable';
+    };
+
+/**
+ * Pure. `pkg` is the already-selected package (caller guards a null
+ * selection before invoking — same precondition `handlePurchase` already
+ * has today). `authorizedOffer` is `null` in exactly two situations that
+ * this function deliberately treats the same way (`'promo_plan_unavailable'`):
+ * no promo config exists for `pkg`'s plan at all, OR a plan/code mismatch
+ * (see `resolveAuthorizedAndroidOffer`) — both mean "no commercial
+ * authorization exists for this exact package", which is a DIFFERENT,
+ * earlier failure than `'promo_not_found'` (a real authorization exists,
+ * but the live RevenueCat catalog doesn't currently expose a matching
+ * `SubscriptionOption` for it — e.g. Store/RevenueCat sync lag).
+ *
+ * Reuses `findAuthorizedSubscriptionOption` verbatim — this function does
+ * no matching of its own, only routes based on its result.
+ */
+export function resolvePurchaseRoute(
+  pkg: PurchasesPackage,
+  promoApplied: boolean,
+  authorizedOffer: AuthorizedAndroidOffer | null,
+): PurchaseRoute {
+  if (!promoApplied) return { kind: 'package', package: pkg };
+
+  if (!authorizedOffer) {
+    return { kind: 'blocked', reason: 'promo_plan_unavailable' };
+  }
+
+  const match = findAuthorizedSubscriptionOption(pkg, authorizedOffer);
+  switch (match.status) {
+    case 'match':
+      return { kind: 'subscription_option', option: match.option };
+    case 'not_found':
+      return { kind: 'blocked', reason: 'promo_not_found' };
+    case 'ambiguous':
+      return { kind: 'blocked', reason: 'promo_ambiguous' };
+    case 'no_options':
+      return { kind: 'blocked', reason: 'promo_no_options' };
+  }
 }

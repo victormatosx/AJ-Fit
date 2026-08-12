@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Linking, Pressable, ScrollView, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Linking,
+  Platform,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import type { PurchasesPackage } from 'react-native-purchases';
@@ -9,6 +18,7 @@ import { Display, MonoLabel } from '../components/ui/Display';
 import { FullScreenLoading } from '../components/ui/FullScreenLoading';
 import { Icon } from '../components/ui/Icon';
 import { useSubscription } from '../hooks/useSubscription';
+import { usePromoCode } from '../hooks/usePromoCode';
 import {
   classifyPurchaseResult,
   classifyRestoreResult,
@@ -16,11 +26,23 @@ import {
   packagePeriodLabel,
   packagePriceString,
   packageTitle,
+  resolveAuthorizedAndroidOffer,
   resolveOfferingViewState,
+  resolvePurchaseRoute,
   resolveSelectedPackage,
+  type PurchaseRoute,
 } from '../lib/subscriptionOffer';
+import type { PromoCodeState } from '../lib/promoCodeState';
 import { PREMIUM_ENTITLEMENT_ID } from '../services/revenueCatService';
 import { colors, fonts } from '../theme/tokens';
+
+/**
+ * Fase 4C.3 §19 — Apple Offer Codes are not implemented yet. Showing the
+ * promo-code UI on iOS would let a user apply a code that can never
+ * actually be used for a purchase there — hidden entirely rather than
+ * shown-but-nonfunctional, so nothing implies the promotion will apply.
+ */
+const PROMO_CODE_SUPPORTED_PLATFORM = Platform.OS === 'android';
 
 // Existing legal destinations from the previous real RevenueCat screen.
 const PRIVACY_POLICY_URL = 'https://ajfit.com.br/privacidade';
@@ -54,6 +76,7 @@ export function PaywallScreen({
     offeringsUnavailable,
     loadOfferings,
     purchase,
+    purchaseOption,
     restore,
   } = useSubscription();
 
@@ -64,6 +87,13 @@ export function PaywallScreen({
   const actionInFlight = useRef(false);
   const closeInFlight = useRef(false);
   const mounted = useRef(true);
+
+  // Fase 4C.2: promo/influencer code. `promoState` is identity-scoped
+  // (uid + generation + per-attempt seq) entirely inside `usePromoCode` —
+  // see that hook's doc comment. `promoInput` is only the raw text field
+  // value; it never feeds authorization decisions on its own.
+  const { state: promoState, applyCode } = usePromoCode();
+  const [promoInput, setPromoInput] = useState('');
 
   useEffect(() => {
     loadOfferings();
@@ -87,6 +117,39 @@ export function PaywallScreen({
     if (nextId !== selectedId) setSelectedId(nextId);
   }, [selectedId, selectedPackage]);
 
+  // Fase 4C.3 §4/§6: the single source of truth for "what does the CTA
+  // actually do" — derived fresh from `selectedPackage`/`promoState.applied`
+  // on every render, never cached, so a plan switch (mensal ⇄ anual) or a
+  // code swap invalidates itself automatically (see
+  // `resolveAuthorizedAndroidOffer`'s/`resolvePurchaseRoute`'s doc
+  // comments, subscriptionOffer.ts). `null` only when there's no package
+  // selected yet (Offerings still loading/empty) — the CTA is already
+  // disabled in that state.
+  const promoApplied = PROMO_CODE_SUPPORTED_PLATFORM && promoState.phase === 'applied' && promoState.applied !== null;
+  const purchaseRoute: PurchaseRoute | null = useMemo(() => {
+    if (!selectedPackage) return null;
+    const authorizedOffer =
+      promoApplied && promoState.applied
+        ? resolveAuthorizedAndroidOffer(selectedPackage, promoState.applied.androidStoreConfig)
+        : null;
+    return resolvePurchaseRoute(selectedPackage, promoApplied, authorizedOffer);
+  }, [selectedPackage, promoApplied, promoState.applied]);
+
+  // Fase 4C.2/4C.3 §22: sanitized, state-only logs — never the full code,
+  // never SubscriptionOption/CustomerInfo contents.
+  useEffect(() => {
+    if (!purchaseRoute) return;
+    if (purchaseRoute.kind === 'subscription_option') {
+      console.info('[promoCode] promo_option_match');
+    } else if (purchaseRoute.kind === 'blocked') {
+      if (purchaseRoute.reason === 'promo_ambiguous') {
+        console.warn('[promoCode] promo_option_ambiguous');
+      } else {
+        console.info(`[promoCode] ${purchaseRoute.reason}`);
+      }
+    }
+  }, [purchaseRoute]);
+
   const handleClose = useCallback(async () => {
     if (closeInFlight.current || actionInFlight.current) return;
     closeInFlight.current = true;
@@ -100,13 +163,24 @@ export function PaywallScreen({
   }, [onClose]);
 
   const handlePurchase = useCallback(async () => {
-    if (!selectedPackage || actionInFlight.current) return;
+    // Fase 4C.3 §5/§13: `purchaseRoute` is captured here, at the moment the
+    // user taps — the exact same route (package OR SubscriptionOption)
+    // this closure captured is what gets bought, regardless of anything
+    // that happens to `promoState` while the purchase is in flight (which
+    // in practice can't change anyway: `busy` already disables the promo
+    // input/apply button and package selector below). A `'blocked'` route
+    // is never purchased — the CTA is already disabled for it, this is a
+    // second guard, never a silent fallback to `purchase(selectedPackage)`.
+    if (!purchaseRoute || purchaseRoute.kind === 'blocked' || actionInFlight.current) return;
     actionInFlight.current = true;
     setPurchaseState({ kind: 'purchasing' });
     setRestoreState({ kind: 'idle' });
 
     try {
-      const outcome = await purchase(selectedPackage);
+      const outcome =
+        purchaseRoute.kind === 'package'
+          ? await purchase(purchaseRoute.package)
+          : await purchaseOption(purchaseRoute.option);
       if (!mounted.current) return;
 
       switch (classifyPurchaseResult(outcome, PREMIUM_ENTITLEMENT_ID)) {
@@ -141,7 +215,7 @@ export function PaywallScreen({
     } finally {
       actionInFlight.current = false;
     }
-  }, [purchase, selectedPackage]);
+  }, [purchase, purchaseOption, purchaseRoute]);
 
   const handleRestore = useCallback(async () => {
     if (actionInFlight.current) return;
@@ -188,6 +262,17 @@ export function PaywallScreen({
   const isPurchasing = purchaseState.kind === 'purchasing';
   const isRestoring = restoreState.kind === 'restoring';
   const busy = isPurchasing || isRestoring || closing;
+
+  // Fase 4C.2 §21: no NEW guard needed — `busy` already reflects
+  // `isPurchasing`, so the promo input/button below (wired to
+  // `disabled={busy}`) is already blocked while a purchase is in flight.
+  // This is exactly where Fase 4C.3's future "block code changes during
+  // purchasing" requirement connects — nothing to change here later,
+  // `busy` already includes it.
+  const handleApplyPromoCode = useCallback(() => {
+    if (!promoInput.trim() || busy) return;
+    void applyCode(promoInput);
+  }, [applyCode, promoInput, busy]);
   const offeringViewState = resolveOfferingViewState({
     offerings,
     loading: offeringsLoading,
@@ -288,10 +373,24 @@ export function PaywallScreen({
               ))}
             </View>
 
+            {PROMO_CODE_SUPPORTED_PLATFORM && (
+              <PromoCodeCard
+                value={promoInput}
+                onChangeValue={setPromoInput}
+                onApply={handleApplyPromoCode}
+                promoState={promoState}
+                purchaseRoute={purchaseRoute}
+                disabled={busy}
+              />
+            )}
+
             <ActionNotices purchaseState={purchaseState} restoreState={restoreState} />
 
             <View style={{ marginTop: 'auto', paddingTop: 24 }}>
-              <CtaButton onPress={handlePurchase} disabled={busy || !selectedPackage}>
+              <CtaButton
+                onPress={handlePurchase}
+                disabled={busy || !purchaseRoute || purchaseRoute.kind === 'blocked'}
+              >
                 {isPurchasing ? (
                   <ActivityIndicator color="#fff" />
                 ) : (
@@ -439,6 +538,117 @@ function PackageCard({
         {packagePriceString(pkg)}
       </Text>
     </Pressable>
+  );
+}
+
+/**
+ * Fase 4C.2 §18 — minimal UX, existing visual language only (`InlineNotice`,
+ * `CtaButton`). Copy is deliberately non-committal per §18/§6 — never "você
+ * ganhou 7 dias", only "código aplicado" / "oferta promocional disponível"
+ * once a real `SubscriptionOption` is actually matched.
+ */
+function PromoCodeCard({
+  value,
+  onChangeValue,
+  onApply,
+  promoState,
+  purchaseRoute,
+  disabled,
+}: {
+  value: string;
+  onChangeValue: (next: string) => void;
+  onApply: () => void;
+  promoState: PromoCodeState;
+  purchaseRoute: PurchaseRoute | null;
+  disabled: boolean;
+}) {
+  const validating = promoState.phase === 'validating';
+  const applied = promoState.phase === 'applied' && promoState.applied;
+  const hasMatchedOption = purchaseRoute?.kind === 'subscription_option';
+  // Fase 4C.3 §15/§16: never says the code is invalid — it isn't; the
+  // catalog authorized it, but the live RevenueCat/Store catalog can't
+  // currently prove the exact promotional offer for the selected plan
+  // (sync lag, ambiguous config, or no config at all for that plan).
+  // Deliberately ONE generic message for every `'blocked'` reason — never
+  // reveals which internal condition applies, same anti-technical-leak
+  // principle already used for `validatePromoCode`'s own errors.
+  const promoBlockedMessage =
+    applied && purchaseRoute?.kind === 'blocked'
+      ? 'Não foi possível disponibilizar esta oferta promocional no momento para o plano selecionado. Tente novamente ou escolha outro plano.'
+      : null;
+
+  return (
+    <View style={{ marginTop: 18 }}>
+      <MonoLabel color={colors.mute}>CÓDIGO PROMOCIONAL</MonoLabel>
+      <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
+        <TextInput
+          value={value}
+          onChangeText={onChangeValue}
+          editable={!disabled && !validating}
+          placeholder="Ex.: ARNALDO"
+          placeholderTextColor={colors.faint}
+          autoCapitalize="characters"
+          autoCorrect={false}
+          accessibilityLabel="Código promocional"
+          style={{
+            flex: 1,
+            height: 46,
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: colors.cardBorder,
+            backgroundColor: colors.cardBg,
+            paddingHorizontal: 14,
+            fontFamily: fonts.uiMed,
+            fontSize: 14,
+            color: colors.text,
+          }}
+        />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Aplicar código promocional"
+          onPress={onApply}
+          disabled={disabled || validating || !value.trim()}
+          style={{
+            paddingHorizontal: 18,
+            height: 46,
+            borderRadius: 12,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: colors.cardBgHi,
+            borderWidth: 1,
+            borderColor: colors.hair,
+            opacity: disabled || validating || !value.trim() ? 0.5 : 1,
+          }}
+        >
+          {validating ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={{ fontFamily: fonts.uiSemi, fontSize: 13, color: '#fff' }}>Aplicar</Text>
+          )}
+        </Pressable>
+      </View>
+
+      {applied && (
+        <InlineNotice
+          tone="neutral"
+          text={
+            hasMatchedOption
+              ? 'Código aplicado. Oferta promocional disponível.'
+              : 'Código aplicado.'
+          }
+        />
+      )}
+      {promoBlockedMessage && <InlineNotice tone="error" text={promoBlockedMessage} />}
+      {promoState.phase === 'unavailable' && promoState.message && (
+        <InlineNotice tone="error" text={promoState.message} />
+      )}
+      {promoState.phase === 'locked' && promoState.message && (
+        <InlineNotice tone="error" text={promoState.message} />
+      )}
+      {promoState.phase === 'error' && promoState.message && (
+        <InlineNotice tone="error" text={promoState.message} />
+      )}
+    </View>
   );
 }
 

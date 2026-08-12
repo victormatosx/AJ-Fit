@@ -8,7 +8,12 @@ import React, {
   useState,
 } from 'react';
 import { AppState as NativeAppState, type AppStateStatus } from 'react-native';
-import type { CustomerInfo, PurchasesOfferings, PurchasesPackage } from 'react-native-purchases';
+import type {
+  CustomerInfo,
+  PurchasesOfferings,
+  PurchasesPackage,
+  SubscriptionOption,
+} from 'react-native-purchases';
 import { useAuth } from './AuthContext';
 import {
   addCustomerInfoListener,
@@ -19,6 +24,7 @@ import {
   refreshCustomerInfo as fetchCustomerInfo,
   getOfferings as fetchOfferings,
   purchasePackage as purchasePackageService,
+  purchaseSubscriptionOption as purchaseSubscriptionOptionService,
   restorePurchases as restorePurchasesService,
   logRevenueCatError,
   isOfflineError,
@@ -105,6 +111,13 @@ type SubscriptionCtx = {
   loadOfferings: () => Promise<void>;
   /** Buys a package; updates `customerInfo` in place on success. */
   purchase: (pkg: PurchasesPackage) => Promise<PurchaseOutcome>;
+  /**
+   * Fase 4C.3 — buys an already-resolved, backend-authorized promotional
+   * `SubscriptionOption` (Android only). Same identity guard/CustomerInfo
+   * pipeline as `purchase`; this Context has no concept of promo codes
+   * beyond "here is the exact commercial object to buy".
+   */
+  purchaseOption: (option: SubscriptionOption) => Promise<PurchaseOutcome>;
   /** Restores purchases from the store; updates `customerInfo` in place on success. */
   restore: () => Promise<RestoreOutcome>;
 };
@@ -507,37 +520,68 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     }
   }, []);
 
-  const purchase = useCallback(async (pkg: PurchasesPackage) => {
-    const purchaseUid = currentUid.current;
-    const generation = identityGeneration.current;
-    const startedForSyncedIdentity =
-      Boolean(purchaseUid) &&
-      syncedUid.current === purchaseUid &&
-      Boolean(selectIdentityCustomerInfo(lifecycleRef.current, purchaseUid));
-    if (!purchaseUid || !startedForSyncedIdentity) {
-      return {
-        status: 'error',
-        message: 'A identidade da assinatura ainda está sendo confirmada.',
-        offline: false,
-      } satisfies PurchaseOutcome;
-    }
-    refreshSeq.current += 1;
-    const outcome = await enqueueSdkOperation(() => purchasePackageService(pkg));
-    if (
-      outcome.status === 'purchased' &&
-      currentUid.current === purchaseUid &&
-      syncedUid.current === purchaseUid &&
-      identityGeneration.current === generation
-    ) {
-      applyLifecycleEvent({
-        type: 'customer-info-updated',
-        uid: purchaseUid,
-        generation,
-        customerInfo: outcome.customerInfo,
-      });
-    }
-    return outcome;
-  }, [applyLifecycleEvent, enqueueSdkOperation]);
+  // Fase 4C.3: shared identity-guarded purchase pipeline. `purchase`
+  // (normal Package) and `purchaseOption` (backend-authorized
+  // SubscriptionOption, Android promo — Fase 4C.1/4C.2/4C.3A) are the ONLY
+  // two entry points, and both funnel through this exact same guard +
+  // CustomerInfo-application logic — no divergent behavior between the two
+  // purchase paths beyond which RevenueCat SDK call is actually made.
+  // `sdkCall` never receives anything this function doesn't already trust:
+  // callers close over an already-resolved `PurchasesPackage`/
+  // `SubscriptionOption`, this function has no opinion on WHICH item is
+  // being bought, exactly like `purchasePackageService` itself.
+  const performPurchase = useCallback(
+    async (sdkCall: () => Promise<PurchaseOutcome>): Promise<PurchaseOutcome> => {
+      const purchaseUid = currentUid.current;
+      const generation = identityGeneration.current;
+      const startedForSyncedIdentity =
+        Boolean(purchaseUid) &&
+        syncedUid.current === purchaseUid &&
+        Boolean(selectIdentityCustomerInfo(lifecycleRef.current, purchaseUid));
+      if (!purchaseUid || !startedForSyncedIdentity) {
+        return {
+          status: 'error',
+          message: 'A identidade da assinatura ainda está sendo confirmada.',
+          offline: false,
+        } satisfies PurchaseOutcome;
+      }
+      refreshSeq.current += 1;
+      const outcome = await enqueueSdkOperation(sdkCall);
+      if (
+        outcome.status === 'purchased' &&
+        currentUid.current === purchaseUid &&
+        syncedUid.current === purchaseUid &&
+        identityGeneration.current === generation
+      ) {
+        applyLifecycleEvent({
+          type: 'customer-info-updated',
+          uid: purchaseUid,
+          generation,
+          customerInfo: outcome.customerInfo,
+        });
+      }
+      return outcome;
+    },
+    [applyLifecycleEvent, enqueueSdkOperation],
+  );
+
+  const purchase = useCallback(
+    (pkg: PurchasesPackage) => performPurchase(() => purchasePackageService(pkg)),
+    [performPurchase],
+  );
+
+  // Fase 4C.3: `option` MUST already be the exact, backend-authorized
+  // `SubscriptionOption` resolved by `findAuthorizedSubscriptionOption`/
+  // `resolvePurchaseRoute` (lib/subscriptionOffer.ts) — this Context has no
+  // knowledge of ARNALDO/HELLLEN/couponCode/campaignId/influencerId and
+  // never will; it only ever receives the already-resolved commercial
+  // object, same as `purchase` above receives an already-selected
+  // `PurchasesPackage`. Promo-code identity/state stays entirely inside
+  // `usePromoCode`/the Paywall.
+  const purchaseOption = useCallback(
+    (option: SubscriptionOption) => performPurchase(() => purchaseSubscriptionOptionService(option)),
+    [performPurchase],
+  );
 
   const restore = useCallback(async () => {
     const restoreUid = currentUid.current;
@@ -591,6 +635,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
       offeringsUnavailable,
       loadOfferings,
       purchase,
+      purchaseOption,
       restore,
     }),
     [
@@ -610,6 +655,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
       offeringsUnavailable,
       loadOfferings,
       purchase,
+      purchaseOption,
       restore,
     ],
   );

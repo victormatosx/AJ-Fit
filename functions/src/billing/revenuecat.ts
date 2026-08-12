@@ -36,6 +36,10 @@ import type {
   SubscriptionStatus,
   SubscriptionStore,
 } from './types';
+import {
+  applyAttributionRevenueCatEvent,
+  type AttributionConfirmationSkipReason,
+} from '../attribution/attributionSync';
 
 /**
  * RevenueCat webhook processing — real implementation (Sprint 4;
@@ -64,6 +68,43 @@ import type {
  * audit found). It also now requires a valid `event_timestamp_ms` on every
  * supported event before doing anything else with it — see
  * `extractEventTimestampMs`.
+ *
+ * FASE 4B: for an `INITIAL_PURCHASE`/`RENEWAL` concerning the premium
+ * entitlement, this file also calls `attribution/attributionSync.ts`'s
+ * `applyAttributionRevenueCatEvent` to confirm/lock a pending promo-code
+ * attribution — see `confirmPromoCodeAttributionIfApplicable`. That call
+ * NEVER writes `users/{uid}.subscription`/`SubscriptionMirror` (it only
+ * touches `couponRedemptions/{uid}`).
+ *
+ * FASE 4B.1 (robustness fix — see the Fase 4B.1 audit report): billing
+ * (`applySubscriptionEventAtomically`) and attribution
+ * (`applyAttributionRevenueCatEvent`) are two INDEPENDENT consumers of the
+ * same webhook event, each with its own idempotency. Gating attribution
+ * confirmation behind billing's `processed`-only result created a
+ * permanent-loss bug: if attribution failed transiently right after a
+ * successful billing write, the webhook still returned 200, RevenueCat
+ * never retried, and a retry that DID happen would see billing's own
+ * dedup return `duplicate` — which, under the old gating, meant
+ * attribution was never even attempted again.
+ *
+ * The fix: `confirmPromoCodeAttributionIfApplicable` is now called for
+ * billing outcomes `processed`, `duplicate`, AND `stale` (see
+ * `respondConsideringAttribution`) — never for `conflict`/`user_not_found`,
+ * which remain anomalous states requiring manual investigation, out of
+ * scope for this fix. This is safe specifically because
+ * `couponRedemptions/{uid}`'s `lockedAt`/`trialStartedAt`/`convertedAt`
+ * fields are write-once latches, re-checked fresh inside
+ * `applyAttributionRevenueCatEvent`'s own transaction on every call — so
+ * calling it redundantly (retries, or a `stale` billing delivery that is
+ * still the only evidence attribution has ever seen of a given
+ * INITIAL_PURCHASE) never overwrites an already-confirmed timestamp. If
+ * `applyAttributionRevenueCatEvent` throws (a real infrastructure/
+ * transaction failure, never a normal "nothing to do" outcome — see
+ * `AttributionConfirmationResult`), the webhook now responds `503` instead
+ * of silently swallowing it, so RevenueCat retries — a genuinely permanent
+ * attribution bug still stops retrying once RevenueCat's own retry budget
+ * (5 attempts, 5–80 min backoff) is exhausted, exactly like every other
+ * 5xx path in this file.
  */
 
 const SCOPE = 'billing:revenuecat';
@@ -161,6 +202,30 @@ export interface RawRevenueCatEvent {
   store?: unknown;
   entitlement_ids?: unknown;
   environment?: unknown;
+  /**
+   * RENEWAL-only field (confirmed against RevenueCat's official webhook
+   * docs for Fase 4B — revenuecat.com/docs/integrations/webhooks/
+   * event-types-and-fields): "Whether the previous period was a free
+   * trial." Absent on every other event type. Used exclusively by
+   * `confirmPromoCodeAttributionIfApplicable` to decide whether a RENEWAL
+   * represents the trial→paid conversion — never read by
+   * `normalizeSubscription`/`mapRevenueCatStatus`.
+   */
+  is_trial_conversion?: unknown;
+  /**
+   * FASE 4C.3A (confirmed against RevenueCat's official webhook docs —
+   * revenuecat.com/docs/integrations/webhooks/event-types-and-fields,
+   * re-audited for this task): "Offer or promotion code used for the
+   * transaction. This can be `null`." Listed as a Subscription lifecycle
+   * field, "Sometimes" included — NOT guaranteed present even on
+   * `INITIAL_PURCHASE`, and RevenueCat's docs give no guarantee it survives
+   * onto a `RENEWAL`. Used exclusively by
+   * `confirmPromoCodeAttributionIfApplicable`/`attribution/googlePlayOfferCorrelation.ts`
+   * to prove a Google Play `INITIAL_PURCHASE` used the specific promotional
+   * offer a pending attribution was authorized for — never read for
+   * `RENEWAL` (see that module's doc comment for why).
+   */
+  offer_code?: unknown;
 }
 
 function stringArray(value: unknown): string[] {
@@ -785,6 +850,173 @@ export function normalizeSubscription(
 }
 
 /**
+ * FASE 4B helpers — deliberately standalone, NOT extracted from/shared with
+ * `normalizeSubscription`'s own inline equivalents. `normalizeSubscription`
+ * is covered by an extensive existing test suite
+ * (`__tests__/normalizeSubscription.test.ts`); refactoring its internals to
+ * share code with a brand-new call site would risk that suite for a change
+ * that isn't otherwise necessary — a few duplicated lines is the smaller,
+ * safer diff here.
+ */
+function eventConcernsPremiumEntitlement(event: RawRevenueCatEvent): boolean {
+  const entitlementIds = Array.isArray(event.entitlement_ids)
+    ? event.entitlement_ids.filter((id): id is string => typeof id === 'string')
+    : [];
+  return entitlementIds.includes(PREMIUM_ENTITLEMENT_ID);
+}
+
+function extractPeriodType(event: RawRevenueCatEvent): string | undefined {
+  return typeof event.period_type === 'string' ? event.period_type : undefined;
+}
+
+/** FASE 4C.3A — same standalone-duplication rationale as the helpers above. */
+function extractStore(event: RawRevenueCatEvent): string | undefined {
+  return typeof event.store === 'string' ? event.store : undefined;
+}
+
+function extractProductId(event: RawRevenueCatEvent): string | undefined {
+  return typeof event.product_id === 'string' ? event.product_id : undefined;
+}
+
+/**
+ * `null` (the store explicitly reported no offer) and `undefined` (the
+ * field is absent/malformed) are BOTH valid, distinct raw outcomes here —
+ * `attribution/googlePlayOfferCorrelation.ts`'s `correlateGooglePlayOffer`
+ * treats them identically (no proof of an offer), but this function still
+ * reports what was actually on the wire rather than collapsing it early.
+ */
+function extractOfferCode(event: RawRevenueCatEvent): string | null | undefined {
+  if (event.offer_code === null) return null;
+  return typeof event.offer_code === 'string' ? event.offer_code : undefined;
+}
+
+/**
+ * FASE 4B.1 — typed, explicit outcome of one attribution-confirmation
+ * attempt from the webhook's point of view. `not_applicable`/`confirmed`/
+ * `skipped` are all NORMAL results (never represented as exceptions);
+ * `temporary_failure` is the only one that should make the webhook
+ * response retryable — see `respondConsideringAttribution`.
+ */
+type PromoCodeAttributionWebhookOutcome =
+  | { status: 'not_applicable' }
+  | { status: 'confirmed' }
+  | { status: 'skipped'; reason: AttributionConfirmationSkipReason }
+  | { status: 'temporary_failure' };
+
+/**
+ * FASE 4B entry point. Called by `respondConsideringAttribution` for
+ * billing outcomes `processed`, `duplicate`, and `stale` (FASE 4B.1 — see
+ * this file's top doc comment for why `duplicate`/`stale` were added and
+ * why that's safe).
+ *
+ * Scope, per the Fase 4B rules:
+ * - Only `INITIAL_PURCHASE`/`RENEWAL` — never `CANCELLATION`/`EXPIRATION`/
+ *   `BILLING_ISSUE`/`PRODUCT_CHANGE` (rule 7: no additional metrics yet)
+ *   and never `TRANSFER` (handled entirely separately by
+ *   `handleTransferEvent`, which never calls this — rule 5: attribution is
+ *   never moved/created/copied on transfer).
+ * - Only when the event concerns the `premium` entitlement — an event for
+ *   an unrelated product/entitlement must never lock/confirm a promo-code
+ *   attribution.
+ *
+ * FASE 4B.1: a thrown error from `applyAttributionRevenueCatEvent` (a real
+ * infrastructure/transaction failure) is caught here and turned into
+ * `{ status: 'temporary_failure' }` — no longer swallowed. It is the
+ * CALLER's (`respondConsideringAttribution`'s) job to turn that into a
+ * retryable HTTP response; this function never touches `res` itself.
+ */
+async function confirmPromoCodeAttributionIfApplicable(
+  event: RawRevenueCatEvent,
+  eventType: SupportedRevenueCatWebhookEventType,
+  eventId: string,
+  uid: string,
+  maskedUid: string,
+  eventTimestampMs: number,
+): Promise<PromoCodeAttributionWebhookOutcome> {
+  if (eventType !== 'INITIAL_PURCHASE' && eventType !== 'RENEWAL') {
+    return { status: 'not_applicable' };
+  }
+  if (!eventConcernsPremiumEntitlement(event)) {
+    return { status: 'not_applicable' };
+  }
+
+  try {
+    const result =
+      eventType === 'INITIAL_PURCHASE'
+        ? await applyAttributionRevenueCatEvent(uid, {
+            eventType: 'INITIAL_PURCHASE',
+            eventTimestampMs,
+            periodType: extractPeriodType(event),
+            store: extractStore(event),
+            productId: extractProductId(event),
+            offerCode: extractOfferCode(event),
+          })
+        : await applyAttributionRevenueCatEvent(uid, {
+            eventType: 'RENEWAL',
+            eventTimestampMs,
+            isTrialConversion: event.is_trial_conversion === true,
+          });
+
+    if (result.status === 'confirmed') {
+      logInfo(SCOPE, 'attribution_confirmed', { eventId, eventType, uid: maskedUid });
+      return { status: 'confirmed' };
+    }
+
+    logInfo(SCOPE, 'attribution_confirmation_skipped', {
+      eventId,
+      eventType,
+      uid: maskedUid,
+      reason: result.reason,
+    });
+    return { status: 'skipped', reason: result.reason };
+  } catch (err) {
+    logFunctionError(SCOPE, err, {
+      eventId,
+      eventType,
+      uid: maskedUid,
+      operation: 'attribution_confirmation',
+    });
+    return { status: 'temporary_failure' };
+  }
+}
+
+/**
+ * FASE 4B.1 — shared response path for the three billing outcomes that now
+ * also evaluate attribution (`processed`/`duplicate`/`stale`). Attribution
+ * being `not_applicable`/`confirmed`/`skipped` (all normal) never changes
+ * the response the billing outcome alone would have produced. Only
+ * `temporary_failure` overrides it, with `503` — signaling RevenueCat to
+ * retry so attribution gets another chance, without re-litigating billing
+ * (which already reached a terminal, correct state for this delivery).
+ */
+async function respondConsideringAttribution(
+  res: Response,
+  billingStatus: 'processed' | 'duplicate' | 'stale',
+  event: RawRevenueCatEvent,
+  eventType: SupportedRevenueCatWebhookEventType,
+  eventId: string,
+  uid: string,
+  maskedUid: string,
+  eventTimestampMs: number,
+): Promise<void> {
+  const attribution = await confirmPromoCodeAttributionIfApplicable(
+    event,
+    eventType,
+    eventId,
+    uid,
+    maskedUid,
+    eventTimestampMs,
+  );
+
+  if (attribution.status === 'temporary_failure') {
+    res.status(503).json({ error: 'attribution_temporary_failure' });
+    return;
+  }
+
+  res.status(200).json({ status: billingStatus });
+}
+
+/**
  * HTTP entry point for the RevenueCat webhook (docs §25/§28). Wired as the
  * `revenueCatWebhook` Cloud Function in index.ts.
  *
@@ -955,17 +1187,37 @@ export async function handleRevenueCatWebhook(req: Request, res: Response): Prom
           eventType,
           uid: maskedUid,
         });
-        res.status(200).json({ status: 'processed' });
+        await respondConsideringAttribution(
+          res,
+          'processed',
+          event,
+          eventType,
+          eventId,
+          uid,
+          maskedUid,
+          eventTimestampMs,
+        );
         return;
       case 'duplicate':
         // Already logged (as a warning, with full context) inside the
-        // transaction — no need to duplicate that here.
+        // transaction — no need to duplicate that here. FASE 4B.1: billing
+        // being a duplicate does NOT mean attribution has already had its
+        // chance — see this file's top doc comment.
         logInfo(SCOPE, 'event ignored: duplicate (already applied)', {
           eventId,
           eventType,
           uid: maskedUid,
         });
-        res.status(200).json({ status: 'duplicate' });
+        await respondConsideringAttribution(
+          res,
+          'duplicate',
+          event,
+          eventType,
+          eventId,
+          uid,
+          maskedUid,
+          eventTimestampMs,
+        );
         return;
       case 'stale':
         logInfo(SCOPE, 'event ignored: stale (older than last applied event)', {
@@ -973,7 +1225,23 @@ export async function handleRevenueCatWebhook(req: Request, res: Response): Prom
           eventType,
           uid: maskedUid,
         });
-        res.status(200).json({ status: 'stale' });
+        // FASE 4B.1: a `stale` billing delivery can still be the ONLY
+        // INITIAL_PURCHASE/RENEWAL attribution has ever seen for this uid
+        // (e.g. it arrived after a chronologically later RENEWAL already
+        // won the billing mirror's ordering race) — attribution's own
+        // write-once fields make evaluating it here safe. See this file's
+        // top doc comment and `attributionSync.ts`'s doc comment on
+        // `applyAttributionRevenueCatEvent`.
+        await respondConsideringAttribution(
+          res,
+          'stale',
+          event,
+          eventType,
+          eventId,
+          uid,
+          maskedUid,
+          eventTimestampMs,
+        );
         return;
       case 'conflict':
         // Already logged as a structured error (with full context) inside

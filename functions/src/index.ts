@@ -1,9 +1,10 @@
-import { onRequest } from 'firebase-functions/v2/https';
+import { onCall, onRequest } from 'firebase-functions/v2/https';
 import {
   handleRevenueCatWebhook,
   REVENUECAT_API_SECRET_KEY,
   REVENUECAT_WEBHOOK_SECRET,
 } from './billing/revenuecat';
+import { validatePromoCodeHandler } from './attribution/validatePromoCode';
 
 /**
  * AJ Fit Cloud Functions entry point.
@@ -31,3 +32,17 @@ export const revenueCatWebhook = onRequest(
   { secrets: [REVENUECAT_WEBHOOK_SECRET, REVENUECAT_API_SECRET_KEY] },
   handleRevenueCatWebhook,
 );
+
+/**
+ * Validates a promo/influencer code and applies (or swaps, while pending)
+ * the calling user's attribution (docs/13_assinaturas_e_billing.md §8/§33/
+ * §34 — see `attribution/validatePromoCode.ts` for the full flow, and
+ * `attribution/constants.ts`'s doc comment on `COUPON_REDEMPTIONS_COLLECTION`
+ * for the one deviation from §33 this introduces).
+ *
+ * `enforceAppCheck` is left at its default (unset/false) for this phase —
+ * flipping it to `true` later is a pure function-options change here, with
+ * zero change to `validatePromoCodeHandler` or the request/response
+ * contract.
+ */
+export const validatePromoCode = onCall(validatePromoCodeHandler);

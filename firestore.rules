@@ -115,13 +115,37 @@ service cloud.firestore {
         && data.updatedAt is timestamp;
     }
 
+    // Shape of `users/{userId}.attribution` — the read-optimized mirror of
+    // a user's promo-code attribution (functions/src/attribution/types.ts's
+    // `AttributionSnapshot`; source of truth is `couponRedemptions/{userId}`,
+    // written only by the Admin SDK — see the `couponRedemptions` match
+    // block below). Only the backend ever writes real values here; this
+    // function exists so `nestedUserValid` can tolerate the field's
+    // presence (once the backend has written it) without letting the
+    // CLIENT ever populate or change it itself — see the `create`/`update`
+    // rules on `users/{userId}` for the actual write blocks.
+    function attributionValid(data) {
+      return data is map
+        && data.keys().hasOnly(['couponCode', 'campaignId', 'influencerId', 'appliedAt'])
+        && (!('couponCode' in data) || data.couponCode is string)
+        && (!('campaignId' in data) || data.campaignId is string)
+        && (!('influencerId' in data) || data.influencerId is string)
+        && (!('appliedAt' in data) || data.appliedAt is timestamp);
+    }
+
+    // `attribution` is OPTIONAL (absent on every document created before
+    // this field existed, and on brand-new documents until the backend
+    // applies a promo code) — `hasAll` only requires the original four
+    // fields; `hasOnly` allows the fifth without forcing every existing
+    // caller of this function to know about it.
     function nestedUserValid(data) {
       return data.keys().hasAll(['profile', 'preferences', 'subscription', 'metadata'])
-        && data.keys().hasOnly(['profile', 'preferences', 'subscription', 'metadata'])
+        && data.keys().hasOnly(['profile', 'preferences', 'subscription', 'metadata', 'attribution'])
         && profileValid(data.profile)
         && preferencesValid(data.preferences)
         && subscriptionValid(data.subscription)
-        && metadataValid(data.metadata);
+        && metadataValid(data.metadata)
+        && (!('attribution' in data) || attributionValid(data.attribution));
     }
 
     function profilePhotoUpdateValid(before, after) {
@@ -216,8 +240,16 @@ service cloud.firestore {
 
       // Criação: documento integralmente aninhado, com identidade coerente com
       // o token e sem campos de assinatura/internos definidos pelo cliente.
+      // `attribution` nunca pode ser definido pelo cliente na criação —
+      // `nestedUserValid` sozinho não bastaria aqui, porque ele aceita a
+      // AUSÊNCIA do campo, não a proíbe: sem esta checagem extra, um cliente
+      // malicioso poderia fabricar um `attribution` (com formato válido,
+      // porém com um couponCode/influencerId arbitrário) no momento da
+      // criação da conta, antes de qualquer validação server-side via
+      // `validatePromoCode`.
       allow create: if isOwner(userId)
         && nestedUserValid(request.resource.data)
+        && !('attribution' in request.resource.data)
         && request.resource.data.profile.email == request.auth.token.email
         && request.resource.data.subscription.size() == 0
         && !('activeWorkoutId' in request.resource.data.metadata)
@@ -277,6 +309,29 @@ service cloud.firestore {
 
         allow update, delete: if false;
       }
+    }
+
+    // Catálogo de códigos promocionais/influenciadores
+    // (functions/src/attribution/{constants,types,promoCodeCatalog}.ts).
+    // Nunca lido nem escrito pelo cliente — a validação server-side
+    // (`validatePromoCode`, onCall) faz o único `get()` direto por ID
+    // normalizado, via Admin SDK, que ignora estas regras. Bloco explícito
+    // (redundante com o catch-all abaixo, que já negaria por padrão) para
+    // documentar a intenção: nenhuma exceção de leitura deve ser adicionada
+    // aqui, nem mesmo para o dono de um documento — não existe "dono" para
+    // um código promocional.
+    match /promoCodes/{code} {
+      allow read, write: if false;
+    }
+
+    // Registro server-managed do ciclo de vida da atribuição de um uid a um
+    // código promocional (functions/src/attribution/{constants,types,
+    // attributionSync}.ts) — `couponRedemptions/{uid}`. Fonte de verdade;
+    // `users/{uid}.attribution` é apenas o espelho de leitura. Escrito
+    // exclusivamente por `applyPromoCodeAttributionTransactionally` via
+    // Admin SDK. Bloco explícito pelo mesmo motivo do `promoCodes` acima.
+    match /couponRedemptions/{uid} {
+      allow read, write: if false;
     }
 
     // Coleções de sistema (exercises, workout_templates, treinos do usuário,

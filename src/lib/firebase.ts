@@ -8,6 +8,7 @@ import {
 } from 'firebase/auth';
 import * as firebaseAuth from 'firebase/auth';
 import { getFirestore, type Firestore } from 'firebase/firestore';
+import { getFunctions, type Functions } from 'firebase/functions';
 import { getStorage, type FirebaseStorage } from 'firebase/storage';
 import { secureAuthStorage } from './secureAuthStorage';
 
@@ -90,5 +91,15 @@ export const auth = createAuth();
  */
 export const db: Firestore = getFirestore(app);
 export const storage: FirebaseStorage = getStorage(app);
+
+/**
+ * Cloud Functions client (Fase 4C.2 — first caller is
+ * `src/services/promoCodeService.ts`'s `validatePromoCode`). No region
+ * argument: every callable in `functions/src/index.ts` is deployed to the
+ * Gen2 default region (`us-central1`), which is also `getFunctions(app)`'s
+ * own default — so this stays a single source of truth instead of a region
+ * string duplicated on both sides that could silently drift.
+ */
+export const functions: Functions = getFunctions(app);
 
 export { app };
