@@ -28,23 +28,29 @@ import {
   packagePeriodLabel,
   packagePriceString,
   packageTitle,
+  resolveApplePurchaseRoute,
   resolveAuthorizedAndroidOffer,
+  resolveAuthorizedAppleOfferCode,
   resolveOfferingViewState,
   resolvePurchaseRoute,
   resolveSelectedPackage,
+  type ApplePurchaseRoute,
   type PurchaseRoute,
 } from '../lib/subscriptionOffer';
+import { isPromoCodeUiSupported } from '../lib/promoCodePlatform';
 import type { PromoCodeState } from '../lib/promoCodeState';
 import { PREMIUM_ENTITLEMENT_ID } from '../services/revenueCatService';
 import { colors, fonts } from '../theme/tokens';
 
 /**
- * Fase 4C.3 §19 — Apple Offer Codes are not implemented yet. Showing the
- * promo-code UI on iOS would let a user apply a code that can never
- * actually be used for a purchase there — hidden entirely rather than
- * shown-but-nonfunctional, so nothing implies the promotion will apply.
+ * FASE iOS-3 — derived from `isPromoCodeUiSupported` (see its doc comment,
+ * src/lib/promoCodePlatform.ts) instead of an inline `Platform.OS ===
+ * 'android'` check. iOS now renders the same "CÓDIGO PROMOCIONAL" input as
+ * Android (validating an AJ Fit code against the backend is already
+ * platform-agnostic since FASE iOS-2); what differs, once a code is applied,
+ * is what the CTA does — see `effectiveRoute`/`handlePurchase` below.
  */
-const PROMO_CODE_SUPPORTED_PLATFORM = Platform.OS === 'android';
+const PROMO_CODE_SUPPORTED_PLATFORM = isPromoCodeUiSupported(Platform.OS);
 
 // Existing legal destinations from the previous real RevenueCat screen.
 const PRIVACY_POLICY_URL = 'https://ajfit.com.br/privacidade';
@@ -79,6 +85,7 @@ export function PaywallScreen({
     loadOfferings,
     purchase,
     purchaseOption,
+    redeemAppleOfferCode,
     restore,
   } = useSubscription();
 
@@ -128,14 +135,35 @@ export function PaywallScreen({
   // selected yet (Offerings still loading/empty) — the CTA is already
   // disabled in that state.
   const promoApplied = PROMO_CODE_SUPPORTED_PLATFORM && promoState.phase === 'applied' && promoState.applied !== null;
+
+  // Android only — `null` on iOS (guarded so `promoState.applied.androidStoreConfig`,
+  // which is always `null` for an iOS-platform validation response per the
+  // backend contract, is never fed into Android's live-catalog matching).
   const purchaseRoute: PurchaseRoute | null = useMemo(() => {
-    if (!selectedPackage) return null;
+    if (!selectedPackage || Platform.OS !== 'android') return null;
     const authorizedOffer =
       promoApplied && promoState.applied
         ? resolveAuthorizedAndroidOffer(selectedPackage, promoState.applied.androidStoreConfig)
         : null;
     return resolvePurchaseRoute(selectedPackage, promoApplied, authorizedOffer);
   }, [selectedPackage, promoApplied, promoState.applied]);
+
+  // FASE iOS-3 — iOS only, `null` on Android (mirror-image guard of the
+  // above). See `resolveApplePurchaseRoute`'s doc comment
+  // (lib/subscriptionOffer.ts) for why this is a distinct function/type
+  // rather than a shared abstraction with the Android path.
+  const appleRoute: ApplePurchaseRoute | null = useMemo(() => {
+    if (!selectedPackage || Platform.OS !== 'ios') return null;
+    const authorizedOfferCode =
+      promoApplied && promoState.applied
+        ? resolveAuthorizedAppleOfferCode(selectedPackage, promoState.applied.appleStoreConfig)
+        : null;
+    return resolveApplePurchaseRoute(selectedPackage, promoApplied, authorizedOfferCode);
+  }, [selectedPackage, promoApplied, promoState.applied]);
+
+  /** The route that actually governs the CTA/`handlePurchase` on this platform. */
+  const effectiveRoute: PurchaseRoute | ApplePurchaseRoute | null =
+    Platform.OS === 'android' ? purchaseRoute : appleRoute;
 
   // Fase 4C.2/4C.3 §22: sanitized, state-only logs — never the full code,
   // never SubscriptionOption/CustomerInfo contents.
@@ -209,24 +237,28 @@ export function PaywallScreen({
   }, [onClose]);
 
   const handlePurchase = useCallback(async () => {
-    // Fase 4C.3 §5/§13: `purchaseRoute` is captured here, at the moment the
-    // user taps — the exact same route (package OR SubscriptionOption)
-    // this closure captured is what gets bought, regardless of anything
-    // that happens to `promoState` while the purchase is in flight (which
-    // in practice can't change anyway: `busy` already disables the promo
-    // input/apply button and package selector below). A `'blocked'` route
-    // is never purchased — the CTA is already disabled for it, this is a
-    // second guard, never a silent fallback to `purchase(selectedPackage)`.
-    if (!purchaseRoute || purchaseRoute.kind === 'blocked' || actionInFlight.current) return;
+    // Fase 4C.3 §5/§13, extended by FASE iOS-3: `effectiveRoute` is captured
+    // here, at the moment the user taps — the exact same route (package,
+    // Android SubscriptionOption, or Apple offer-code redemption) this
+    // closure captured is what runs, regardless of anything that happens to
+    // `promoState` while the action is in flight (`busy` already disables
+    // the promo input/apply button and package selector below). A
+    // `'blocked'` route is never acted on — the CTA is already disabled for
+    // it, this is a second guard, never a silent fallback to
+    // `purchase(selectedPackage)`.
+    if (!effectiveRoute || effectiveRoute.kind === 'blocked' || actionInFlight.current) return;
+    const isAppleRedemption = effectiveRoute.kind === 'offer_redemption';
     actionInFlight.current = true;
     setPurchaseState({ kind: 'purchasing' });
     setRestoreState({ kind: 'idle' });
 
     try {
       const outcome =
-        purchaseRoute.kind === 'package'
-          ? await purchase(purchaseRoute.package)
-          : await purchaseOption(purchaseRoute.option);
+        effectiveRoute.kind === 'package'
+          ? await purchase(effectiveRoute.package)
+          : effectiveRoute.kind === 'subscription_option'
+            ? await purchaseOption(effectiveRoute.option)
+            : await redeemAppleOfferCode();
       if (!mounted.current) return;
 
       switch (classifyPurchaseResult(outcome, PREMIUM_ENTITLEMENT_ID)) {
@@ -239,10 +271,17 @@ export function PaywallScreen({
           });
           break;
         case 'missing-entitlement':
+          // FASE iOS-3 §Etapa E: after `presentCodeRedemptionSheet()`
+          // resolves, StoreKit cannot tell us whether the user actually
+          // redeemed anything or just dismissed the sheet — both look
+          // identical here (no active entitlement yet). Neither is an error;
+          // this covers Etapa E's "dismissed" and "redeemed but CustomerInfo
+          // not yet updated" cases with the same honest, non-alarming copy.
           setPurchaseState({
             kind: 'notice',
-            message:
-              'A compra foi processada, mas o acesso Premium ainda não foi identificado. Tente restaurar as compras.',
+            message: isAppleRedemption
+              ? 'Ainda não identificamos a confirmação da App Store para este código. Se você concluiu o resgate, tente novamente em instantes ou restaure as compras.'
+              : 'A compra foi processada, mas o acesso Premium ainda não foi identificado. Tente restaurar as compras.',
           });
           break;
         case 'cancelled':
@@ -261,7 +300,7 @@ export function PaywallScreen({
     } finally {
       actionInFlight.current = false;
     }
-  }, [purchase, purchaseOption, purchaseRoute]);
+  }, [purchase, purchaseOption, redeemAppleOfferCode, effectiveRoute]);
 
   const handleRestore = useCallback(async () => {
     if (actionInFlight.current) return;
@@ -425,7 +464,7 @@ export function PaywallScreen({
                 onChangeValue={setPromoInput}
                 onApply={handleApplyPromoCode}
                 promoState={promoState}
-                purchaseRoute={purchaseRoute}
+                purchaseRoute={effectiveRoute}
                 disabled={busy}
               />
             )}
@@ -435,12 +474,14 @@ export function PaywallScreen({
             <View style={{ marginTop: 'auto', paddingTop: 24 }}>
               <CtaButton
                 onPress={handlePurchase}
-                disabled={busy || !purchaseRoute || purchaseRoute.kind === 'blocked'}
+                disabled={busy || !effectiveRoute || effectiveRoute.kind === 'blocked'}
               >
                 {isPurchasing ? (
                   <ActivityIndicator color="#fff" />
                 ) : (
-                  <CtaText>Continuar</CtaText>
+                  <CtaText>
+                    {effectiveRoute?.kind === 'offer_redemption' ? 'Resgatar na App Store' : 'Continuar'}
+                  </CtaText>
                 )}
               </CtaButton>
               <RestoreButton
@@ -605,19 +646,26 @@ function PromoCodeCard({
   onChangeValue: (next: string) => void;
   onApply: () => void;
   promoState: PromoCodeState;
-  purchaseRoute: PurchaseRoute | null;
+  purchaseRoute: PurchaseRoute | ApplePurchaseRoute | null;
   disabled: boolean;
 }) {
   const validating = promoState.phase === 'validating';
   const applied = promoState.phase === 'applied' && promoState.applied;
   const hasMatchedOption = purchaseRoute?.kind === 'subscription_option';
+  // FASE iOS-3 §Etapa D: the offer code itself is shown to the user because
+  // `presentCodeRedemptionSheet()` never receives it programmatically (see
+  // `revenueCatService.ts`'s `redeemOfferCode` doc comment) — the user must
+  // recognize/select this exact code inside Apple's own sheet.
+  const appleOfferCode = purchaseRoute?.kind === 'offer_redemption' ? purchaseRoute.offerCode : null;
   // Fase 4C.3 §15/§16: never says the code is invalid — it isn't; the
   // catalog authorized it, but the live RevenueCat/Store catalog can't
   // currently prove the exact promotional offer for the selected plan
-  // (sync lag, ambiguous config, or no config at all for that plan).
-  // Deliberately ONE generic message for every `'blocked'` reason — never
-  // reveals which internal condition applies, same anti-technical-leak
-  // principle already used for `validatePromoCode`'s own errors.
+  // (sync lag, ambiguous config, or no config at all for that plan). Same
+  // reasoning applies to the Apple `'blocked'` case (no offer code
+  // configured for the selected plan). Deliberately ONE generic message for
+  // every `'blocked'` reason on either platform — never reveals which
+  // internal condition applies, same anti-technical-leak principle already
+  // used for `validatePromoCode`'s own errors.
   const promoBlockedMessage =
     applied && purchaseRoute?.kind === 'blocked'
       ? 'Não foi possível disponibilizar esta oferta promocional no momento para o plano selecionado. Tente novamente ou escolha outro plano.'
@@ -678,9 +726,14 @@ function PromoCodeCard({
         <InlineNotice
           tone="neutral"
           text={
-            hasMatchedOption
-              ? 'Código aplicado. Oferta promocional disponível.'
-              : 'Código aplicado.'
+            appleOfferCode
+              ? // FASE iOS-3 §Etapa D: no "7 dias grátis" promise here — the
+                // App Store, not this app, confirms eligibility. Names the
+                // code so the user recognizes it inside Apple's own sheet.
+                `Código aplicado. Toque em "Resgatar na App Store" para abrir a tela oficial da Apple e usar o código ${appleOfferCode}. A elegibilidade é confirmada pela própria App Store.`
+              : hasMatchedOption
+                ? 'Código aplicado. Oferta promocional disponível.'
+                : 'Código aplicado.'
           }
         />
       )}

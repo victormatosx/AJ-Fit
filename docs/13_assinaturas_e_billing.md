@@ -1450,11 +1450,73 @@ nem o comportamento Android:
   invisível no iOS. Nenhum fluxo de resgate Apple (Offer Codes,
   Promotional Offers, StoreKit redemption) foi implementado.
 
-**Próxima fase (iOS-3, não iniciada):** decidir e implementar o mecanismo
-Apple real (Offer Codes/Promotional Offers), habilitar a UI do cupom no
-iOS, obter evidência de payload real de um evento RevenueCat de uma
-transação com Apple Offer Code, e só então implementar
-`correlateAppleOffer` de fato — nunca antes dessa evidência existir.
+**iOS — fluxo de resgate via Apple Offer Codes implementado (FASE iOS-3),
+attribution e webhook ainda pendentes de evidência real.** Esta fase
+habilitou a UI do cupom no iOS e implementou a compra promocional, sem
+alterar Android nem o backend:
+
+* **Mecanismo Apple escolhido: Offer Codes, via
+  `Purchases.presentCodeRedemptionSheet()`** (react-native-purchases@10.6.0,
+  a versão realmente instalada — confirmado nos typings reais em
+  `node_modules/react-native-purchases/dist/purchases.d.ts`). Diferença dos
+  três mecanismos Apple, para não confundir:
+  * **Offer Codes** — um código (`AJFIT7DTRIAL`) que o usuário resgata na
+    tela nativa da própria Apple. É o mecanismo correspondente aos campos já
+    existentes (`appleOfferCodeMonthly`/`appleOfferCodeAnnual`). É o único
+    dos três com suporte confirmado nesta versão do SDK.
+  * **Promotional Offers** — requer uma assinatura criptográfica gerada no
+    servidor por transação (`getPromotionalOffer`/`purchaseDiscountedPackage`
+    no SDK) e é pensado para retenção de assinantes existentes/ex-assinantes,
+    não para um código digitado por um novo usuário. Não implementado — não
+    é o mecanismo certo para este requisito de produto.
+  * **Introductory Offers** — automáticos, configurados no produto, sem
+    código nenhum. Não aplicável (o requisito é um código por
+    campanha/influenciador).
+* **Limitação confirmada e respeitada, não contornada:**
+  `presentCodeRedemptionSheet()` não recebe nenhum parâmetro — não existe,
+  nesta versão do SDK, nenhuma API que aceite um Offer Code específico e o
+  aplique programaticamente. A única forma oficial de resgatar é abrir a
+  folha nativa da Apple e o usuário selecionar/digitar o código lá dentro. O
+  app mostra o código (`offerCodeMonthly`/`offerCodeAnnual`) na tela antes de
+  abrir a folha — nunca tenta "passar" esse código para `purchasePackage`.
+* **Fluxo implementado:** usuário digita o código AJ Fit (ex.: `ARNALDO`) →
+  `validatePromoCode` → `storeConfig.ios` → `resolveApplePurchaseRoute`
+  (`src/lib/subscriptionOffer.ts`) prova que existe um Offer Code Apple para
+  o plano selecionado → CTA muda para "Resgatar na App Store" → toque abre
+  `presentCodeRedemptionSheet()` → ao fechar (por qualquer motivo — StoreKit
+  não informa se houve resgate ou apenas fechamento), `CustomerInfo` é
+  buscado de novo → **Premium só aparece se
+  `CustomerInfo.entitlements.active['premium']` estiver ativo** — nunca por
+  "o código foi aceito" ou "a folha foi aberta". Cancelamento/fechamento sem
+  resgatar e "resgatou mas o entitlement ainda não propagou" são
+  tratados da mesma forma não-alarmante (aviso neutro, nunca erro), porque
+  StoreKit não permite distinguir os dois casos.
+* **`PROMO_CODE_SUPPORTED_PLATFORM`** (`isPromoCodeUiSupported`,
+  `src/lib/promoCodePlatform.ts`) agora inclui iOS além de Android — Web e
+  qualquer outra plataforma continuam bloqueadas, fail-closed.
+* **Attribution Apple continua fail-closed, inalterada desde a FASE iOS-1.**
+  `appleOfferCorrelation.ts` não foi tocado — `correlateAppleOffer` continua
+  sempre `unsupported`. Ou seja: hoje, se um usuário iOS de fato resgatar um
+  Offer Code real e assinar, **billing/entitlement funcionam normalmente
+  (responsabilidade de `subscriptionSync.ts`, agnóstica de cupom), mas o
+  crédito ao influenciador/campanha ainda não é confirmado/travado** — essa
+  lacuna só pode ser fechada com evidência real de payload de webhook de uma
+  transação App Store com Offer Code, que só existirá após um teste
+  real em Sandbox/TestFlight ou produção (FASE iOS-4).
+* **Não implementado nesta fase, propositalmente:** nenhuma alteração em
+  `functions/**`, nenhuma geração de Sandbox Code, nenhuma alteração no App
+  Store Connect/RevenueCat Dashboard. O fluxo acima nunca foi exercitado
+  contra uma transação real — apenas contra os tipos/typings do SDK e testes
+  unitários das funções puras de roteamento
+  (`resolveAuthorizedAppleOfferCode`/`resolveApplePurchaseRoute`).
+
+**Próxima fase (iOS-4, não iniciada):** gerar um Sandbox Code no App Store
+Connect para `ajfit_premium_monthly`/`ajfit_premium_annual`, executar uma
+transação real de resgate em um build de desenvolvimento/TestFlight, e
+capturar o payload real do evento de webhook RevenueCat que essa transação
+gera. Só com esse payload em mãos é seguro decidir se
+`correlateAppleOffer` pode, de fato, sair do estado `unsupported` — nunca
+antes dessa evidência existir.
 
 ---
 

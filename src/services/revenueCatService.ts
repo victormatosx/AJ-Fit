@@ -421,6 +421,67 @@ export async function purchaseSubscriptionOption(option: SubscriptionOption): Pr
   }
 }
 
+/**
+ * FASE iOS-3 — iOS only. Presents Apple's native Offer Code redemption sheet
+ * via `Purchases.presentCodeRedemptionSheet()`.
+ *
+ * AUDIT (iOS-3 Etapa A/B): confirmed against
+ * `node_modules/react-native-purchases/dist/purchases.d.ts`
+ * (react-native-purchases@10.6.0, the version actually installed) that this
+ * method takes NO arguments and resolves `Promise<void>` — there is no
+ * parameter anywhere in the installed SDK's purchase surface
+ * (`purchasePackage`, `purchaseStoreProduct`, `purchaseSubscriptionOption`,
+ * `purchaseDiscountedPackage`/`purchaseDiscountedProduct`) that accepts an
+ * arbitrary Apple Offer Code string. `purchaseDiscountedPackage`/
+ * `getPromotionalOffer` are a DIFFERENT Apple mechanism (Promotional
+ * Offers — signed server-side, for offers tied to an existing/lapsed
+ * subscriber) and do not apply to a code a user types into this app.
+ * `presentCodeRedemptionSheet`'s own doc comment confirms it is "useful for
+ * redeeming offer codes" and points at
+ * https://docs.revenuecat.com/docs/ios-subscription-offers#offer-codes.
+ * So: Apple Offer Codes, this SDK version, this mechanism ONLY — there is no
+ * way to pre-fill or programmatically submit `appleStoreConfig`'s
+ * `offerCodeMonthly`/`offerCodeAnnual` string; the sheet is StoreKit's own
+ * native UI where the user selects/types the code themselves. Callers must
+ * still show that code to the user beforehand (`PaywallScreen.tsx`) so they
+ * know what to redeem — this function only opens Apple's UI, it never
+ * "applies" anything on its own.
+ *
+ * The sheet's promise resolves once dismissed, for ANY reason — StoreKit
+ * does not report whether the user actually completed a redemption or just
+ * closed it (confirmed by the typings: the doc comment only mentions
+ * rejection for "configure has not been called yet or there's an error
+ * presenting the sheet", never for a user-dismissed-without-redeeming case).
+ * So this function can never itself distinguish "redeemed" from
+ * "cancelled" — it always re-fetches `CustomerInfo` after the sheet closes
+ * and returns it as `status: 'purchased'`, mirroring `purchasePackage`'s
+ * shape exactly so the caller's existing `performPurchase` pipeline (and
+ * `classifyPurchaseResult`) makes the ONLY decision that matters: whether
+ * `entitlements.active[premium]` actually turned on. This is intentional,
+ * not a gap — docs/13_assinaturas_e_billing.md §2/§10/§27: entitlement state
+ * is never inferred from whether an SDK call "succeeded", only from
+ * CustomerInfo itself.
+ */
+export async function redeemOfferCode(): Promise<PurchaseOutcome> {
+  try {
+    await ensureConfigured();
+    await Purchases.presentCodeRedemptionSheet();
+    const customerInfo = await Purchases.getCustomerInfo();
+    return { status: 'purchased', customerInfo };
+  } catch (err) {
+    if (isCancelledError(err)) {
+      return { status: 'cancelled' };
+    }
+    logRevenueCatError('redeemOfferCode', err);
+    return {
+      status: 'error',
+      message:
+        err instanceof Error ? err.message : 'Não foi possível abrir o resgate de código da App Store.',
+      offline: isOfflineError(err),
+    };
+  }
+}
+
 export type RestoreOutcome =
   | { status: 'restored'; customerInfo: CustomerInfo; hasPremium: boolean }
   | { status: 'error'; message: string; offline: boolean; offeringsUnavailable: boolean };

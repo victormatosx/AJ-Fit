@@ -3,10 +3,13 @@ import type { PACKAGE_TYPE, PurchasesPackage, SubscriptionOption } from 'react-n
 import {
   findAuthorizedSubscriptionOption,
   resolveAndroidPlanKind,
+  resolveApplePurchaseRoute,
   resolveAuthorizedAndroidOffer,
+  resolveAuthorizedAppleOfferCode,
   resolvePurchaseRoute,
   subscriptionOptionHasFreeTrial,
   type AuthorizedAndroidOffer,
+  type AuthorizedAppleOfferCodes,
 } from '../subscriptionOffer';
 
 const PRODUCT_ID = 'ajfit_premium';
@@ -395,6 +398,109 @@ describe('resolvePurchaseRoute', () => {
     const route = resolvePurchaseRoute(pkg, true, MONTHLY_OFFER);
 
     expect(route).toEqual({ kind: 'subscription_option', option: taggedOption });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// FASE iOS-3 — Apple Offer Code routing. Structurally different fixtures
+// from the Android section above on purpose: `AuthorizedAppleOfferCodes` is
+// a flat string per plan, never a basePlanId/offerId pair, and there is no
+// SubscriptionOption catalog to match against.
+// ---------------------------------------------------------------------------
+
+const APPLE_OFFER_CODES: AuthorizedAppleOfferCodes = {
+  offerCodeMonthly: 'AJFIT7DTRIAL',
+  offerCodeAnnual: 'AJFIT7DTRIALANNUAL',
+};
+
+describe('resolveAuthorizedAppleOfferCode', () => {
+  it('F: selected monthly package resolves the monthly offer code', () => {
+    const pkg = makePackage({ packageType: 'MONTHLY' as PACKAGE_TYPE, subscriptionOptions: [] });
+    expect(resolveAuthorizedAppleOfferCode(pkg, APPLE_OFFER_CODES)).toBe('AJFIT7DTRIAL');
+  });
+
+  it('G: selected annual package resolves the annual offer code', () => {
+    const pkg = makePackage({ packageType: 'ANNUAL' as PACKAGE_TYPE, subscriptionOptions: [] });
+    expect(resolveAuthorizedAppleOfferCode(pkg, APPLE_OFFER_CODES)).toBe('AJFIT7DTRIALANNUAL');
+  });
+
+  it('L (mensal/anual never confused): mensal package never resolves the annual code and vice versa', () => {
+    const monthlyPkg = makePackage({ packageType: 'MONTHLY' as PACKAGE_TYPE, subscriptionOptions: [] });
+    const annualPkg = makePackage({ packageType: 'ANNUAL' as PACKAGE_TYPE, subscriptionOptions: [] });
+    expect(resolveAuthorizedAppleOfferCode(monthlyPkg, APPLE_OFFER_CODES)).not.toBe(
+      resolveAuthorizedAppleOfferCode(annualPkg, APPLE_OFFER_CODES),
+    );
+  });
+
+  it('an unrecognized package type never authorizes anything (fail-closed)', () => {
+    const pkg = makePackage({ packageType: 'WEEKLY' as PACKAGE_TYPE, subscriptionOptions: [] });
+    expect(resolveAuthorizedAppleOfferCode(pkg, APPLE_OFFER_CODES)).toBeNull();
+  });
+
+  it('K (catálogo sem config Apple falha de forma segura): returns null when there is no apple storeConfig at all', () => {
+    const pkg = makePackage({ packageType: 'MONTHLY' as PACKAGE_TYPE, subscriptionOptions: [] });
+    expect(resolveAuthorizedAppleOfferCode(pkg, null)).toBeNull();
+  });
+
+  it('returns null for the requested plan when only the other plan has a configured code', () => {
+    const pkg = makePackage({ packageType: 'ANNUAL' as PACKAGE_TYPE, subscriptionOptions: [] });
+    expect(
+      resolveAuthorizedAppleOfferCode(pkg, { offerCodeMonthly: 'AJFIT7DTRIAL', offerCodeAnnual: null }),
+    ).toBeNull();
+  });
+});
+
+describe('resolveApplePurchaseRoute', () => {
+  it('A: sem promo aplicado → route package (mesmo com código Apple configurado)', () => {
+    const pkg = makePackage({ packageType: 'MONTHLY' as PACKAGE_TYPE, subscriptionOptions: [] });
+    const route = resolveApplePurchaseRoute(pkg, false, 'AJFIT7DTRIAL');
+    expect(route).toEqual({ kind: 'package', package: pkg });
+  });
+
+  it('B: promo aplicado + código mensal disponível → offer_redemption com o código exato', () => {
+    const pkg = makePackage({ packageType: 'MONTHLY' as PACKAGE_TYPE, subscriptionOptions: [] });
+    const route = resolveApplePurchaseRoute(pkg, true, 'AJFIT7DTRIAL');
+    expect(route).toEqual({ kind: 'offer_redemption', offerCode: 'AJFIT7DTRIAL', package: pkg });
+  });
+
+  it('C: promo aplicado + código anual disponível → offer_redemption com o código exato', () => {
+    const pkg = makePackage({ packageType: 'ANNUAL' as PACKAGE_TYPE, subscriptionOptions: [] });
+    const route = resolveApplePurchaseRoute(pkg, true, 'AJFIT7DTRIALANNUAL');
+    expect(route).toEqual({ kind: 'offer_redemption', offerCode: 'AJFIT7DTRIALANNUAL', package: pkg });
+  });
+
+  it('G: promo aplicado + nenhum código autorizado para o plano → blocked (nunca cai para package)', () => {
+    const pkg = makePackage({ packageType: 'MONTHLY' as PACKAGE_TYPE, subscriptionOptions: [] });
+    const route = resolveApplePurchaseRoute(pkg, true, null);
+    expect(route).toEqual({ kind: 'blocked', reason: 'promo_plan_unavailable' });
+  });
+
+  it('H/I: trocar de mensal para anual recalcula a rota do zero, nunca reaproveita o código do outro plano', () => {
+    const monthlyPkg = makePackage({ packageType: 'MONTHLY' as PACKAGE_TYPE, subscriptionOptions: [] });
+    const annualPkg = makePackage({ packageType: 'ANNUAL' as PACKAGE_TYPE, subscriptionOptions: [] });
+
+    const monthlyRoute = resolveApplePurchaseRoute(
+      monthlyPkg,
+      true,
+      resolveAuthorizedAppleOfferCode(monthlyPkg, APPLE_OFFER_CODES),
+    );
+    const annualRoute = resolveApplePurchaseRoute(
+      annualPkg,
+      true,
+      resolveAuthorizedAppleOfferCode(annualPkg, APPLE_OFFER_CODES),
+    );
+
+    expect(monthlyRoute).toEqual({
+      kind: 'offer_redemption',
+      offerCode: 'AJFIT7DTRIAL',
+      package: monthlyPkg,
+    });
+    expect(annualRoute).toEqual({
+      kind: 'offer_redemption',
+      offerCode: 'AJFIT7DTRIALANNUAL',
+      package: annualPkg,
+    });
+    expect(monthlyRoute).not.toEqual(annualRoute);
   });
 });
 

@@ -404,6 +404,83 @@ export interface PackageCatalogDiagnostic {
   subscriptionOptions: SubscriptionOptionCatalogDiagnostic[];
 }
 
+// ---------------------------------------------------------------------------
+// FASE iOS-3 — Apple Offer Code routing. Structurally different from the
+// Android section above, not a port of it: an App Store custom offer code is
+// a single flat string per plan (`PromoCodeAppleStoreConfig` in
+// `promoCodeState.ts` — no `basePlanId`, the App Store has no equivalent
+// concept), and there is no live SDK catalog to match it against —
+// `SubscriptionOption`/`pkg.product.subscriptionOptions` is a Google
+// Play-only concept (confirmed in the installed
+// `@revenuecat/purchases-typescript-internal` typings, same audit trail
+// `findAuthorizedSubscriptionOption`'s doc comment above already
+// references). The only officially supported mechanism this SDK version
+// (react-native-purchases@10.6.0) exposes for redeeming an Apple Offer Code
+// is `Purchases.presentCodeRedemptionSheet()` — StoreKit's native sheet,
+// which the user completes themselves; there is no API to submit a specific
+// code string programmatically (see `revenueCatService.ts`'s
+// `redeemOfferCode` doc comment for the full audit). So, unlike the Android
+// path, resolving a route here never proves a live match — it only proves
+// the backend-authorized catalog has an offer code configured for the
+// selected plan, which is the one fact the client can know before handing
+// control to Apple's own UI.
+// ---------------------------------------------------------------------------
+
+/** Matches `PromoCodeAppleStoreConfig` (promoCodeState.ts) — duplicated field-for-field for the same reason `AuthorizedAndroidOffer` duplicates its backend counterpart above. */
+export interface AuthorizedAppleOfferCodes {
+  offerCodeMonthly: string | null;
+  offerCodeAnnual: string | null;
+}
+
+/**
+ * Mirrors `resolveAuthorizedAndroidOffer` for the Apple side. Reuses
+ * `resolveAndroidPlanKind` as-is — despite its name, that function only maps
+ * RevenueCat's own `packageType` (`MONTHLY`/`ANNUAL`) to a plan kind, which
+ * has nothing to do with which store sold the package; duplicating that
+ * three-line switch here would be the actual antipattern. Fail-closed the
+ * same way as the Android version: an unmappable `packageType` or no
+ * catalog entry for that plan both resolve to `null`, never a guess.
+ */
+export function resolveAuthorizedAppleOfferCode(
+  pkg: PurchasesPackage,
+  appleStoreConfig: AuthorizedAppleOfferCodes | null,
+): string | null {
+  if (!appleStoreConfig) return null;
+  const planKind = resolveAndroidPlanKind(pkg);
+  if (!planKind) return null;
+  return planKind === 'monthly' ? appleStoreConfig.offerCodeMonthly : appleStoreConfig.offerCodeAnnual;
+}
+
+export type ApplePurchaseRoute =
+  | { kind: 'package'; package: PurchasesPackage }
+  | { kind: 'offer_redemption'; offerCode: string; package: PurchasesPackage }
+  | { kind: 'blocked'; reason: 'promo_plan_unavailable' };
+
+/**
+ * Pure. Mirrors `resolvePurchaseRoute`'s two-legitimate-paths shape: no
+ * promo applied → normal package purchase; promo applied → Apple Offer Code
+ * redemption ONLY when the backend-authorized catalog proves a code exists
+ * for the selected plan. Never falls back to `'package'` once `promoApplied`
+ * is true and no code exists for that plan — that would silently sell the
+ * non-promotional price after a promo code was already confirmed valid by
+ * the backend, exactly the failure mode this routing exists to prevent.
+ * `'offer_redemption'` never means "redeemed" — it only means "there is a
+ * code to present via `presentCodeRedemptionSheet()`"; whether the user
+ * actually completes it in Apple's sheet is unknowable here and is decided
+ * later, exclusively by `CustomerInfo.entitlements.active` (see
+ * `classifyPurchaseResult` above — reused verbatim, never duplicated, for
+ * the Apple redemption outcome too).
+ */
+export function resolveApplePurchaseRoute(
+  pkg: PurchasesPackage,
+  promoApplied: boolean,
+  authorizedOfferCode: string | null,
+): ApplePurchaseRoute {
+  if (!promoApplied) return { kind: 'package', package: pkg };
+  if (!authorizedOfferCode) return { kind: 'blocked', reason: 'promo_plan_unavailable' };
+  return { kind: 'offer_redemption', offerCode: authorizedOfferCode, package: pkg };
+}
+
 /** Full, sanitized commercial catalog snapshot for ONE `PurchasesPackage` — logged once per Offerings load, for every package, regardless of promo-code state. */
 export function describePackageCatalogForDiagnostics(pkg: PurchasesPackage): PackageCatalogDiagnostic {
   const options = pkg.product.subscriptionOptions ?? [];

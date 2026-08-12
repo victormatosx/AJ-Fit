@@ -25,6 +25,7 @@ import {
   getOfferings as fetchOfferings,
   purchasePackage as purchasePackageService,
   purchaseSubscriptionOption as purchaseSubscriptionOptionService,
+  redeemOfferCode as redeemOfferCodeService,
   restorePurchases as restorePurchasesService,
   logRevenueCatError,
   isOfflineError,
@@ -118,6 +119,15 @@ type SubscriptionCtx = {
    * beyond "here is the exact commercial object to buy".
    */
   purchaseOption: (option: SubscriptionOption) => Promise<PurchaseOutcome>;
+  /**
+   * FASE iOS-3 — iOS only. Presents Apple's native Offer Code redemption
+   * sheet (`revenueCatService.ts`'s `redeemOfferCode` — see its doc comment
+   * for why there is no code parameter). Same identity guard/CustomerInfo
+   * pipeline as `purchase`/`purchaseOption` via `performPurchase`; this
+   * Context still has no concept of promo codes beyond "here is the exact
+   * SDK operation to run".
+   */
+  redeemAppleOfferCode: () => Promise<PurchaseOutcome>;
   /** Restores purchases from the store; updates `customerInfo` in place on success. */
   restore: () => Promise<RestoreOutcome>;
 };
@@ -583,6 +593,11 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     [performPurchase],
   );
 
+  const redeemAppleOfferCode = useCallback(
+    () => performPurchase(() => redeemOfferCodeService()),
+    [performPurchase],
+  );
+
   const restore = useCallback(async () => {
     const restoreUid = currentUid.current;
     const generation = identityGeneration.current;
@@ -636,6 +651,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
       loadOfferings,
       purchase,
       purchaseOption,
+      redeemAppleOfferCode,
       restore,
     }),
     [
@@ -656,6 +672,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
       loadOfferings,
       purchase,
       purchaseOption,
+      redeemAppleOfferCode,
       restore,
     ],
   );
