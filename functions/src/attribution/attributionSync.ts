@@ -457,6 +457,17 @@ export async function applyAttributionRevenueCatEvent(
           ? correlateGooglePlayOffer(productIdentity?.basePlanId ?? null, offerCode, androidOffer)
           : { status: 'not_matched' };
 
+        // FASE 4C.4C — TEMP LOG, remover após o smoke test.
+        logInfo(CONFIRMATION_SCOPE, 'promo_attribution_debug_4c4c', {
+          store: input.store ?? null,
+          productId: input.productId ?? null,
+          offerCodePresent: offerCode !== null,
+          offerCode,
+          periodType: input.periodType ?? null,
+          correlationStatus: offerCorrelation.status,
+          matchedPlan: offerCorrelation.status === 'matched' ? offerCorrelation.plan : null,
+        });
+
         const decision = decideInitialPurchaseAttributionConfirmation(
           state,
           classification,

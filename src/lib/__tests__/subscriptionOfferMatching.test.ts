@@ -17,20 +17,36 @@ const ANNUAL_OFFER: AuthorizedAndroidOffer = {
   offerId: 'influencer-trial-7d-annual',
 };
 
+/**
+ * FASE 4C.4E — `storeProductId` is `subId:basePlanId` per the installed SDK's
+ * typings, confirmed against a real Android device (Fase 4C.4D): candidates
+ * reported `productId: "ajfit_premium"` (the bare subId) while
+ * `pkg.product.identifier` for a Google Play base-plan product is
+ * `"ajfit_premium:monthly"`/`"ajfit_premium:annual"` (`subId:basePlanId`).
+ * `id` may itself be `basePlanId` or `basePlanId:offerId` — this only takes
+ * the basePlanId half, so a mocked offer option's `storeProductId` never
+ * accidentally includes the offerId segment (the real SDK never does either).
+ */
+function storeProductIdFor(productId: string, optionId: string): string {
+  return `${productId}:${optionId.split(':')[0]}`;
+}
+
 function makeOption({
   id,
   productId = PRODUCT_ID,
+  storeProductId,
   tags = [],
   freePhase = null,
 }: {
   id: string;
   productId?: string;
+  storeProductId?: string;
   tags?: string[];
   freePhase?: unknown;
 }): SubscriptionOption {
   return {
     id,
-    storeProductId: `${productId}:${id}`,
+    storeProductId: storeProductId ?? storeProductIdFor(productId, id),
     productId,
     tags,
     isBasePlan: !id.includes(':'),
@@ -45,20 +61,31 @@ function makeOption({
   } as unknown as SubscriptionOption;
 }
 
+/**
+ * FASE 4C.4E — `productIdentifier` now defaults to `subId:basePlanId`
+ * (`"ajfit_premium:monthly"`/`"ajfit_premium:annual"`), matching the real
+ * device value for `pkg.product.identifier`, instead of the bare `subId`
+ * constant used pre-4C.4E — that bare default was IDENTICAL on both the
+ * package and the option's `productId` in every pre-4C.4E test, which is
+ * exactly why the production bug (comparing `productId` against
+ * `pkg.product.identifier`) went undetected by the unit suite despite being
+ * wrong on a real device.
+ */
 function makePackage({
   packageType,
   subscriptionOptions,
-  productIdentifier = PRODUCT_ID,
+  productIdentifier,
 }: {
   packageType: PACKAGE_TYPE;
   subscriptionOptions: SubscriptionOption[] | null;
   productIdentifier?: string;
 }): PurchasesPackage {
+  const basePlanId = packageType === 'MONTHLY' ? 'monthly' : 'annual';
   return {
     identifier: packageType === 'MONTHLY' ? '$rc_monthly' : '$rc_annual',
     packageType,
     product: {
-      identifier: productIdentifier,
+      identifier: productIdentifier ?? `${PRODUCT_ID}:${basePlanId}`,
       subscriptionOptions,
     },
   } as unknown as PurchasesPackage;
@@ -162,10 +189,21 @@ describe('findAuthorizedSubscriptionOption', () => {
     expect(findAuthorizedSubscriptionOption(pkg, null)).toEqual({ status: 'not_found' });
   });
 
-  it('rejects an id match whose productId does not belong to this package (defense-in-depth)', () => {
+  it('FASE 4C.4E: rejects an id match whose storeProductId does not belong to this package (defense-in-depth, corrected field)', () => {
+    // Pre-4C.4E this compared `option.productId` (bare subId, e.g.
+    // "ajfit_premium" — never scoped to a base plan) against
+    // `pkg.product.identifier` ("ajfit_premium:monthly") — a comparison that
+    // could NEVER be true for a real device, which is the root cause fixed
+    // in this phase. This scenario itself (an option whose `storeProductId`
+    // belongs to a different product) is not something the SDK's own
+    // `subscriptionOptions` contract documents as achievable — every element
+    // already structurally belongs to `pkg.product` by construction — so
+    // this test exists purely to lock in the corrected defense-in-depth
+    // field, not because a real `pkg.product.subscriptionOptions` payload
+    // could plausibly contain this.
     const foreignProductOption = makeOption({
       id: 'monthly:influencer-trial-7d',
-      productId: 'some_other_product',
+      storeProductId: 'some_other_product:monthly',
     });
     const pkg = makePackage({
       packageType: 'MONTHLY' as PACKAGE_TYPE,
@@ -358,4 +396,124 @@ describe('resolvePurchaseRoute', () => {
 
     expect(route).toEqual({ kind: 'subscription_option', option: taggedOption });
   });
+});
+
+// ---------------------------------------------------------------------------
+// FASE 4C.4E — regression suite pinned to the exact candidate shape captured
+// from a real Android device via [RC_OFFER_DEBUG_4C4D] (Fase 4C.4D smoke
+// test): `productId: "ajfit_premium"` (bare subId), `tags: ["rc-ignore-offer"]`,
+// `id: "monthly:influencer-trial-7d"` / `"annual:influencer-trial-7d-annual"`.
+// Proves the fix to `findAuthorizedSubscriptionOption`'s defense-in-depth
+// check (`storeProductId` instead of `productId` — see that function's doc
+// comment in subscriptionOffer.ts for the full root-cause writeup).
+// ---------------------------------------------------------------------------
+describe('findAuthorizedSubscriptionOption — Fase 4C.4E device-proven fix', () => {
+  it('A: mensal — device-captured payload shape matches', () => {
+    const monthlyOffer = makeOption({
+      id: 'monthly:influencer-trial-7d',
+      tags: ['rc-ignore-offer'],
+      freePhase: { billingPeriod: { iso8601: 'P1W' } },
+    });
+    const monthlyBase = makeOption({ id: 'monthly' });
+    const pkg = makePackage({
+      packageType: 'MONTHLY' as PACKAGE_TYPE,
+      subscriptionOptions: [monthlyBase, monthlyOffer],
+    });
+
+    expect(findAuthorizedSubscriptionOption(pkg, MONTHLY_OFFER)).toEqual({
+      status: 'match',
+      option: monthlyOffer,
+    });
+  });
+
+  it('B: anual — device-captured payload shape matches', () => {
+    const annualOffer = makeOption({
+      id: 'annual:influencer-trial-7d-annual',
+      tags: ['rc-ignore-offer'],
+      freePhase: { billingPeriod: { iso8601: 'P1W' } },
+    });
+    const pkg = makePackage({
+      packageType: 'ANNUAL' as PACKAGE_TYPE,
+      subscriptionOptions: [makeOption({ id: 'annual' }), annualOffer],
+    });
+
+    expect(findAuthorizedSubscriptionOption(pkg, ANNUAL_OFFER)).toEqual({
+      status: 'match',
+      option: annualOffer,
+    });
+  });
+
+  it('C: offerId correto sob basePlan errado => not_found', () => {
+    const wrongBasePlan = makeOption({ id: 'some-other-plan:influencer-trial-7d' });
+    const pkg = makePackage({
+      packageType: 'MONTHLY' as PACKAGE_TYPE,
+      subscriptionOptions: [wrongBasePlan],
+    });
+
+    expect(findAuthorizedSubscriptionOption(pkg, MONTHLY_OFFER)).toEqual({ status: 'not_found' });
+  });
+
+  it('D: basePlan correto com offerId errado => not_found', () => {
+    const wrongOffer = makeOption({ id: 'monthly:some-other-offer' });
+    const pkg = makePackage({
+      packageType: 'MONTHLY' as PACKAGE_TYPE,
+      subscriptionOptions: [wrongOffer],
+    });
+
+    expect(findAuthorizedSubscriptionOption(pkg, MONTHLY_OFFER)).toEqual({ status: 'not_found' });
+  });
+
+  it('E: somente o base plan normal presente (sem oferta) => not_found', () => {
+    const pkg = makePackage({
+      packageType: 'MONTHLY' as PACKAGE_TYPE,
+      subscriptionOptions: [makeOption({ id: 'monthly' })],
+    });
+
+    expect(findAuthorizedSubscriptionOption(pkg, MONTHLY_OFFER)).toEqual({ status: 'not_found' });
+  });
+
+  it('F: subscriptionOptions null => no_options', () => {
+    const pkg = makePackage({ packageType: 'MONTHLY' as PACKAGE_TYPE, subscriptionOptions: null });
+    expect(findAuthorizedSubscriptionOption(pkg, MONTHLY_OFFER)).toEqual({ status: 'no_options' });
+  });
+
+  it('G: subscriptionOptions [] => no_options', () => {
+    const pkg = makePackage({ packageType: 'MONTHLY' as PACKAGE_TYPE, subscriptionOptions: [] });
+    expect(findAuthorizedSubscriptionOption(pkg, MONTHLY_OFFER)).toEqual({ status: 'no_options' });
+  });
+
+  it('H: duas options com a MESMA identidade autorizada => ambiguous, nunca escolhe a primeira', () => {
+    const first = makeOption({ id: 'monthly:influencer-trial-7d' });
+    const second = makeOption({ id: 'monthly:influencer-trial-7d' });
+    const pkg = makePackage({
+      packageType: 'MONTHLY' as PACKAGE_TYPE,
+      subscriptionOptions: [first, second],
+    });
+
+    const result = findAuthorizedSubscriptionOption(pkg, MONTHLY_OFFER);
+    expect(result).toEqual({ status: 'ambiguous', matchCount: 2 });
+    expect(result).not.toEqual({ status: 'match', option: first });
+  });
+
+  it('I: tags = ["rc-ignore-offer"] não impede o match explícito', () => {
+    const taggedOption = makeOption({
+      id: 'monthly:influencer-trial-7d',
+      tags: ['rc-ignore-offer'],
+    });
+    const pkg = makePackage({
+      packageType: 'MONTHLY' as PACKAGE_TYPE,
+      subscriptionOptions: [taggedOption],
+    });
+
+    expect(findAuthorizedSubscriptionOption(pkg, MONTHLY_OFFER)).toEqual({
+      status: 'match',
+      option: taggedOption,
+    });
+  });
+
+  // Item J (option de outro produto injetada artificialmente) é coberto pelo
+  // teste "FASE 4C.4E: rejects an id match whose storeProductId does not
+  // belong to this package" acima, no describe `findAuthorizedSubscriptionOption`
+  // — inclui a análise de por que esse cenário não é alcançável via o
+  // contrato real do SDK, mantido apenas como defesa em profundidade.
 });

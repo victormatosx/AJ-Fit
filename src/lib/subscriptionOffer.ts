@@ -132,14 +132,18 @@ export function classifyRestoreResult(
 // Fase 4C.2 — promo-code SubscriptionOption matching (Android only).
 //
 // react-native-purchases@10.6.0's `SubscriptionOption.id` is documented and
-// confirmed (Fase 4C audit) to be `basePlanId` alone (a base plan) or
-// `basePlanId:offerId` (an offer under that base plan) — never anything
-// else. This is the ONLY identity comparison used below; never `.includes`/
-// `.endsWith`/`.startsWith`, never `tags` as a primary identifier (tags are
-// exposed as a UX/analytics signal only — `rc-ignore-offer` in particular
-// must NOT be filtered out here, it only affects the SDK's own automatic
-// `defaultOption` selection, never explicit `subscriptionOptions` lookups),
-// never `defaultOption`, never array position.
+// confirmed (Fase 4C audit, and now proven on a real Android device — Fase
+// 4C.4D/4C.4E) to be `basePlanId` alone (a base plan) or `basePlanId:offerId`
+// (an offer under that base plan) — never anything else. This is the ONLY
+// identity comparison used below; never `.includes`/`.endsWith`/
+// `.startsWith`, never `tags` as a primary identifier (tags are exposed as a
+// UX/analytics signal only — `rc-ignore-offer` in particular must NOT be
+// filtered out here, it only affects the SDK's own automatic `defaultOption`
+// selection, never explicit `subscriptionOptions` lookups — confirmed both by
+// RevenueCat's docs and by the device catalog dump, which still listed the
+// tagged offer in `subscriptionOptions`), never `defaultOption`, never array
+// position. See `findAuthorizedSubscriptionOption`'s doc comment below for
+// the Fase 4C.4E fix to the (non-primary) `storeProductId` defense check.
 // ---------------------------------------------------------------------------
 
 /** The backend-authorized identity of one Google Play offer (functions/src/attribution/types.ts's `AndroidSubscriptionOfferConfig`, duplicated client-side — see `promoCodeService.ts`). */
@@ -161,16 +165,41 @@ export type SubscriptionOptionMatchResult =
  * is a distinct, non-`match` status — the caller decides what to do, but
  * this function never picks a "best guess" among 0 or >1 candidates.
  *
- * `option.productId === pkg.product.identifier` is checked alongside `id`
- * as defense-in-depth, NOT as the primary identity check (Fase 4C.2 §13):
+ * FASE 4C.4E — root-cause fix for a false `not_found` proven on a real
+ * Android device (Fase 4C.4D smoke test): the secondary defense-in-depth
+ * check used to be `option.productId === pkg.product.identifier`, which
+ * compares two DIFFERENT semantic levels and can never be true for a real
+ * Google Play base-plan product. Per the installed
+ * `@revenuecat/purchases-typescript-internal` typings (offerings.d.ts) —
+ * confirmed against the device log:
+ *   - `SubscriptionOption.productId` is documented, and was observed on
+ *     device, as the bare subscription id alone — `"ajfit_premium"`, never
+ *     scoped to a base plan.
+ *   - `SubscriptionOption.storeProductId` is documented as `subId:basePlanId`
+ *     — this is what actually equals `pkg.product.identifier` for a Google
+ *     Play base-plan product (RevenueCat's own Android product identifiers
+ *     are named this way — e.g. `"ajfit_premium:monthly"`,
+ *     `"ajfit_premium:annual"`, matching the dashboard/`revenueCatService.ts`
+ *     package→product mapping).
+ * So the old condition compared `"ajfit_premium"` against
+ * `"ajfit_premium:monthly"` — never equal — and silently rejected every
+ * correct match, even though `id` equality (the primary identity check) was
+ * already correct. The pre-4C.4E unit tests never caught this because their
+ * mocks defaulted BOTH sides to the same bare constant, which happens to be
+ * true for `productId` but was never actually what `pkg.product.identifier`
+ * looks like on a real Android base-plan device. Fixed to
+ * `option.storeProductId === pkg.product.identifier`, which compares the
+ * same semantic level on both sides.
+ *
+ * Still defense-in-depth, not the primary identity check (Fase 4C.2 §13):
  * since `options` is read from `pkg.product.subscriptionOptions` itself,
  * every option already structurally belongs to `pkg.product` — the SDK has
  * no documented mechanism to put a foreign product's option in this array,
  * so this check is redundant by construction today. It costs nothing and
- * guards against a class of bug this audit cannot rule out for a future
- * SDK version (or a caller upstream passing a mismatched
- * `pkg`/`authorized` pair) — it is not treated as, and must never become,
- * the actual authorization boundary. `id` equality against
+ * guards against a class of bug neither audit can rule out for a future SDK
+ * version (or a caller upstream passing a mismatched `pkg`/`authorized`
+ * pair) — it is not treated as, and must never become, the actual
+ * authorization boundary. `id` equality against
  * `` `${basePlanId}:${offerId}` `` remains the sole, sufficient identity
  * check per the Fase 4C audit.
  */
@@ -185,7 +214,7 @@ export function findAuthorizedSubscriptionOption(
 
   const wantedId = `${authorized.basePlanId}:${authorized.offerId}`;
   const matches = options.filter(
-    (option) => option.id === wantedId && option.productId === pkg.product.identifier,
+    (option) => option.id === wantedId && option.storeProductId === pkg.product.identifier,
   );
 
   if (matches.length === 0) return { status: 'not_found' };
@@ -300,4 +329,120 @@ export function resolvePurchaseRoute(
     case 'no_options':
       return { kind: 'blocked', reason: 'promo_no_options' };
   }
+}
+
+// ---------------------------------------------------------------------------
+// FASE 4C.4D — TEMPORARY diagnostic instrumentation. Remove once the Android
+// smoke test has captured [RC_OFFER_DEBUG_4C4D] logs and the real catalog
+// shape/`rc-ignore-offer` behavior is confirmed or refuted.
+//
+// Every function below only SHAPES sanitized, commercial-only data for
+// `console.info` in PaywallScreen.tsx — none of them feed a purchase/matching
+// decision. `findAuthorizedSubscriptionOption`/`resolvePurchaseRoute` above
+// are untouched and remain the only functions that decide anything.
+//
+// Field names below (`id`, `productId`, `tags`, `isBasePlan`, `freePhase`,
+// `productCategory`, `productType`, `defaultOption`) are copied verbatim from
+// the installed `@revenuecat/purchases-typescript-internal` typings
+// (`node_modules/@revenuecat/purchases-typescript-internal/dist/offerings.d.ts`,
+// audited for this task) — never assumed from memory/older SDK versions.
+// Never includes uid, CustomerInfo, receipts, tokens, or promo-code identity
+// (couponCode/campaignId/influencerId) — those aren't part of any input type
+// here.
+// ---------------------------------------------------------------------------
+
+/**
+ * `SubscriptionOption.id` is documented as `basePlanId` (a base plan) or
+ * `basePlanId:offerId` (an offer) — this ONLY splits that already-known
+ * format for readable logging, it is not a new identity rule and is never
+ * used by `findAuthorizedSubscriptionOption` itself.
+ */
+export function parseSubscriptionOptionIdForDiagnostics(id: string): {
+  basePlanId: string;
+  offerId: string | null;
+} {
+  const separatorIndex = id.indexOf(':');
+  if (separatorIndex === -1) return { basePlanId: id, offerId: null };
+  return { basePlanId: id.slice(0, separatorIndex), offerId: id.slice(separatorIndex + 1) };
+}
+
+export interface SubscriptionOptionCatalogDiagnostic {
+  id: string;
+  productId: string;
+  basePlanId: string;
+  offerId: string | null;
+  tags: string[];
+  isBasePlan: boolean;
+  hasFreeTrial: boolean;
+  freeTrialPeriodIso8601: string | null;
+}
+
+export function describeSubscriptionOptionForDiagnostics(
+  option: SubscriptionOption,
+): SubscriptionOptionCatalogDiagnostic {
+  const parsed = parseSubscriptionOptionIdForDiagnostics(option.id);
+  return {
+    id: option.id,
+    productId: option.productId,
+    basePlanId: parsed.basePlanId,
+    offerId: parsed.offerId,
+    tags: option.tags,
+    isBasePlan: option.isBasePlan,
+    hasFreeTrial: option.freePhase !== null,
+    freeTrialPeriodIso8601: option.freePhase?.billingPeriod?.iso8601 ?? null,
+  };
+}
+
+export interface PackageCatalogDiagnostic {
+  packageIdentifier: string;
+  packageType: string;
+  productIdentifier: string;
+  productCategory: string | null;
+  productType: string;
+  defaultOptionId: string | null;
+  subscriptionOptionCount: number;
+  subscriptionOptions: SubscriptionOptionCatalogDiagnostic[];
+}
+
+/** Full, sanitized commercial catalog snapshot for ONE `PurchasesPackage` — logged once per Offerings load, for every package, regardless of promo-code state. */
+export function describePackageCatalogForDiagnostics(pkg: PurchasesPackage): PackageCatalogDiagnostic {
+  const options = pkg.product.subscriptionOptions ?? [];
+  return {
+    packageIdentifier: pkg.identifier,
+    packageType: pkg.packageType,
+    productIdentifier: pkg.product.identifier,
+    productCategory: pkg.product.productCategory,
+    productType: pkg.product.productType,
+    defaultOptionId: pkg.product.defaultOption?.id ?? null,
+    subscriptionOptionCount: options.length,
+    subscriptionOptions: options.map(describeSubscriptionOptionForDiagnostics),
+  };
+}
+
+export interface OfferMatchDiagnostic {
+  expected: AuthorizedAndroidOffer;
+  candidates: SubscriptionOptionCatalogDiagnostic[];
+  matched: boolean;
+  status: SubscriptionOptionMatchResult['status'];
+}
+
+/**
+ * Diagnostic view of ONE matching attempt — reuses
+ * `findAuthorizedSubscriptionOption` verbatim for `status`/`matched` (no
+ * duplicated/divergent matching logic), and additionally lists every
+ * candidate option actually present on `pkg`, sanitized, so a `not_found`/
+ * `ambiguous` result can be inspected without guessing what the SDK returned.
+ */
+export function buildOfferMatchDiagnostic(
+  pkg: PurchasesPackage,
+  authorized: AuthorizedAndroidOffer,
+): OfferMatchDiagnostic {
+  const options = pkg.product.subscriptionOptions ?? [];
+  const match = findAuthorizedSubscriptionOption(pkg, authorized);
+  return {
+    expected: authorized,
+    candidates: options.map(describeSubscriptionOptionForDiagnostics),
+    matched: match.status === 'match',
+    status: match.status,
+  };
 }

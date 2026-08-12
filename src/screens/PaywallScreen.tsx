@@ -20,8 +20,10 @@ import { Icon } from '../components/ui/Icon';
 import { useSubscription } from '../hooks/useSubscription';
 import { usePromoCode } from '../hooks/usePromoCode';
 import {
+  buildOfferMatchDiagnostic,
   classifyPurchaseResult,
   classifyRestoreResult,
+  describePackageCatalogForDiagnostics,
   getCurrentOfferingPackages,
   packagePeriodLabel,
   packagePriceString,
@@ -149,6 +151,50 @@ export function PaywallScreen({
       }
     }
   }, [purchaseRoute]);
+
+  // FASE 4C.4D — TEMPORARY diagnostic instrumentation for the Android smoke
+  // test (remove once the real device catalog shape is confirmed). Dumps the
+  // sanitized, commercial-only SubscriptionOption catalog RevenueCat actually
+  // returned for every package in the current Offering — independent of
+  // whether a promo code was applied, so it captures the raw catalog even if
+  // matching never runs. Unconditional `console.info` (not gated on
+  // `__DEV__`) so it also surfaces via `adb logcat` on the Closed Testing
+  // build under test. See `describePackageCatalogForDiagnostics`'s doc
+  // comment (lib/subscriptionOffer.ts) for exactly which fields are included.
+  useEffect(() => {
+    if (packages.length === 0) return;
+    packages.forEach((pkg) => {
+      console.info('[RC_OFFER_DEBUG_4C4D] package_catalog', describePackageCatalogForDiagnostics(pkg));
+    });
+  }, [packages]);
+
+  // FASE 4C.4D — TEMPORARY. Logs the exact match attempt
+  // (`findAuthorizedSubscriptionOption`, reused verbatim, never reimplemented
+  // here) for the currently selected package once a promo code is applied —
+  // re-fires on every plan swap (mensal ⇄ anual) since `selectedPackage`
+  // changes. Never logs `couponCode`/`campaignId`/`influencerId` — only the
+  // backend-authorized `(basePlanId, offerId)` pair already present in
+  // `promoState.applied.androidStoreConfig` and the live SDK candidates.
+  useEffect(() => {
+    if (!selectedPackage || !promoApplied || !promoState.applied) return;
+    const authorizedOffer = resolveAuthorizedAndroidOffer(
+      selectedPackage,
+      promoState.applied.androidStoreConfig,
+    );
+    if (!authorizedOffer) {
+      console.info('[RC_OFFER_DEBUG_4C4D] no_authorized_offer_for_selected_plan', {
+        packageIdentifier: selectedPackage.identifier,
+      });
+      return;
+    }
+    const diagnostic = buildOfferMatchDiagnostic(selectedPackage, authorizedOffer);
+    console.info('[RC_OFFER_DEBUG_4C4D] expected', diagnostic.expected);
+    console.info('[RC_OFFER_DEBUG_4C4D] candidates', diagnostic.candidates);
+    console.info('[RC_OFFER_DEBUG_4C4D] result', {
+      matched: diagnostic.matched,
+      status: diagnostic.status,
+    });
+  }, [selectedPackage, promoApplied, promoState.applied]);
 
   const handleClose = useCallback(async () => {
     if (closeInFlight.current || actionInFlight.current) return;
