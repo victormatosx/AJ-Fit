@@ -4,13 +4,10 @@ import {
   classifyPurchaseResult,
   findAuthorizedSubscriptionOption,
   resolveAndroidPlanKind,
-  resolveApplePurchaseRoute,
   resolveAuthorizedAndroidOffer,
-  resolveAuthorizedAppleOfferCode,
   resolvePurchaseRoute,
   subscriptionOptionHasFreeTrial,
   type AuthorizedAndroidOffer,
-  type AuthorizedAppleOfferCodes,
 } from '../subscriptionOffer';
 
 const PRODUCT_ID = 'ajfit_premium';
@@ -403,175 +400,6 @@ describe('resolvePurchaseRoute', () => {
 });
 
 // ---------------------------------------------------------------------------
-// FASE iOS-3 — Apple Offer Code routing. Structurally different fixtures
-// from the Android section above on purpose: `AuthorizedAppleOfferCodes` is
-// a flat string per plan, never a basePlanId/offerId pair, and there is no
-// SubscriptionOption catalog to match against.
-// ---------------------------------------------------------------------------
-
-const APPLE_OFFER_CODES: AuthorizedAppleOfferCodes = {
-  offerCodeMonthly: 'AJFIT7DTRIAL',
-  offerCodeAnnual: 'AJFIT7DTRIALANNUAL',
-};
-
-describe('resolveAuthorizedAppleOfferCode', () => {
-  it('F: selected monthly package resolves the monthly offer code', () => {
-    const pkg = makePackage({ packageType: 'MONTHLY' as PACKAGE_TYPE, subscriptionOptions: [] });
-    expect(resolveAuthorizedAppleOfferCode(pkg, APPLE_OFFER_CODES)).toBe('AJFIT7DTRIAL');
-  });
-
-  it('G: selected annual package resolves the annual offer code', () => {
-    const pkg = makePackage({ packageType: 'ANNUAL' as PACKAGE_TYPE, subscriptionOptions: [] });
-    expect(resolveAuthorizedAppleOfferCode(pkg, APPLE_OFFER_CODES)).toBe('AJFIT7DTRIALANNUAL');
-  });
-
-  it('L (mensal/anual never confused): mensal package never resolves the annual code and vice versa', () => {
-    const monthlyPkg = makePackage({ packageType: 'MONTHLY' as PACKAGE_TYPE, subscriptionOptions: [] });
-    const annualPkg = makePackage({ packageType: 'ANNUAL' as PACKAGE_TYPE, subscriptionOptions: [] });
-    expect(resolveAuthorizedAppleOfferCode(monthlyPkg, APPLE_OFFER_CODES)).not.toBe(
-      resolveAuthorizedAppleOfferCode(annualPkg, APPLE_OFFER_CODES),
-    );
-  });
-
-  it('an unrecognized package type never authorizes anything (fail-closed)', () => {
-    const pkg = makePackage({ packageType: 'WEEKLY' as PACKAGE_TYPE, subscriptionOptions: [] });
-    expect(resolveAuthorizedAppleOfferCode(pkg, APPLE_OFFER_CODES)).toBeNull();
-  });
-
-  it('K (catálogo sem config Apple falha de forma segura): returns null when there is no apple storeConfig at all', () => {
-    const pkg = makePackage({ packageType: 'MONTHLY' as PACKAGE_TYPE, subscriptionOptions: [] });
-    expect(resolveAuthorizedAppleOfferCode(pkg, null)).toBeNull();
-  });
-
-  it('returns null for the requested plan when only the other plan has a configured code', () => {
-    const pkg = makePackage({ packageType: 'ANNUAL' as PACKAGE_TYPE, subscriptionOptions: [] });
-    expect(
-      resolveAuthorizedAppleOfferCode(pkg, { offerCodeMonthly: 'AJFIT7DTRIAL', offerCodeAnnual: null }),
-    ).toBeNull();
-  });
-});
-
-describe('resolveApplePurchaseRoute', () => {
-  it('A: sem promo aplicado → route package (mesmo com código Apple configurado)', () => {
-    const pkg = makePackage({ packageType: 'MONTHLY' as PACKAGE_TYPE, subscriptionOptions: [] });
-    const route = resolveApplePurchaseRoute(pkg, false, 'AJFIT7DTRIAL');
-    expect(route).toEqual({ kind: 'package', package: pkg });
-  });
-
-  it('B: promo aplicado + código mensal disponível → offer_redemption com o código exato', () => {
-    const pkg = makePackage({ packageType: 'MONTHLY' as PACKAGE_TYPE, subscriptionOptions: [] });
-    const route = resolveApplePurchaseRoute(pkg, true, 'AJFIT7DTRIAL');
-    expect(route).toEqual({ kind: 'offer_redemption', offerCode: 'AJFIT7DTRIAL', package: pkg });
-  });
-
-  it('C: promo aplicado + código anual disponível → offer_redemption com o código exato', () => {
-    const pkg = makePackage({ packageType: 'ANNUAL' as PACKAGE_TYPE, subscriptionOptions: [] });
-    const route = resolveApplePurchaseRoute(pkg, true, 'AJFIT7DTRIALANNUAL');
-    expect(route).toEqual({ kind: 'offer_redemption', offerCode: 'AJFIT7DTRIALANNUAL', package: pkg });
-  });
-
-  it('G: promo aplicado + nenhum código autorizado para o plano → blocked (nunca cai para package)', () => {
-    const pkg = makePackage({ packageType: 'MONTHLY' as PACKAGE_TYPE, subscriptionOptions: [] });
-    const route = resolveApplePurchaseRoute(pkg, true, null);
-    expect(route).toEqual({ kind: 'blocked', reason: 'promo_plan_unavailable' });
-  });
-
-  it('H/I: trocar de mensal para anual recalcula a rota do zero, nunca reaproveita o código do outro plano', () => {
-    const monthlyPkg = makePackage({ packageType: 'MONTHLY' as PACKAGE_TYPE, subscriptionOptions: [] });
-    const annualPkg = makePackage({ packageType: 'ANNUAL' as PACKAGE_TYPE, subscriptionOptions: [] });
-
-    const monthlyRoute = resolveApplePurchaseRoute(
-      monthlyPkg,
-      true,
-      resolveAuthorizedAppleOfferCode(monthlyPkg, APPLE_OFFER_CODES),
-    );
-    const annualRoute = resolveApplePurchaseRoute(
-      annualPkg,
-      true,
-      resolveAuthorizedAppleOfferCode(annualPkg, APPLE_OFFER_CODES),
-    );
-
-    expect(monthlyRoute).toEqual({
-      kind: 'offer_redemption',
-      offerCode: 'AJFIT7DTRIAL',
-      package: monthlyPkg,
-    });
-    expect(annualRoute).toEqual({
-      kind: 'offer_redemption',
-      offerCode: 'AJFIT7DTRIALANNUAL',
-      package: annualPkg,
-    });
-    expect(monthlyRoute).not.toEqual(annualRoute);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Real Apple Custom Offer Codes (ARNALDO/ARNALDOANUAL) — the codes actually
-// registered in App Store Connect and `promoCodes/ARNALDO` for this
-// influencer campaign. `resolveApplePurchaseRoute`/`resolveAuthorizedAppleOfferCode`
-// are pure/generic (proven above with AJFIT7DTRIAL* fixtures) — these tests
-// close the loop with the literal, real strings, and prove the client-side
-// Apple Offer Code Sandbox bypass (`lib/appleOfferCodeSandboxTest.ts`, FASE
-// iOS-4) has been fully removed now that both plans have real Custom Codes:
-// there is no `'sandbox_offer_redemption'` route kind anywhere in
-// `ApplePurchaseRoute` anymore, so the monthly plan can never resolve to it.
-// ---------------------------------------------------------------------------
-
-const REAL_APPLE_OFFER_CODES: AuthorizedAppleOfferCodes = {
-  offerCodeMonthly: 'ARNALDO',
-  offerCodeAnnual: 'ARNALDOANUAL',
-};
-
-describe('Real ARNALDO/ARNALDOANUAL Apple Custom Offer Codes', () => {
-  it('1/5: iOS monthly + ARNALDO configured → offer_redemption with the exact code, never a sandbox route', () => {
-    const pkg = makePackage({ packageType: 'MONTHLY' as PACKAGE_TYPE, subscriptionOptions: [] });
-    const authorized = resolveAuthorizedAppleOfferCode(pkg, REAL_APPLE_OFFER_CODES);
-    expect(authorized).toBe('ARNALDO');
-
-    const route = resolveApplePurchaseRoute(pkg, true, authorized);
-    expect(route).toEqual({ kind: 'offer_redemption', offerCode: 'ARNALDO', package: pkg });
-    expect(route.kind).not.toBe('sandbox_offer_redemption' as never);
-  });
-
-  it('3/6: iOS annual + ARNALDOANUAL configured → offer_redemption with the exact code', () => {
-    const pkg = makePackage({ packageType: 'ANNUAL' as PACKAGE_TYPE, subscriptionOptions: [] });
-    const authorized = resolveAuthorizedAppleOfferCode(pkg, REAL_APPLE_OFFER_CODES);
-    expect(authorized).toBe('ARNALDOANUAL');
-
-    const route = resolveApplePurchaseRoute(pkg, true, authorized);
-    expect(route).toEqual({ kind: 'offer_redemption', offerCode: 'ARNALDOANUAL', package: pkg });
-  });
-
-  it('4: annual can open redemption purely from the client-authorized offer code — resolveApplePurchaseRoute has no concept of a backend correlation/offerReference at all', () => {
-    // `resolveApplePurchaseRoute` takes only the already-resolved offer
-    // CODE (what the user redeems), never an offerReference/correlation
-    // config — so the annual plan opening redemption never depends on
-    // `appleOfferReferenceAnnual` being configured on the backend.
-    const pkg = makePackage({ packageType: 'ANNUAL' as PACKAGE_TYPE, subscriptionOptions: [] });
-    const route = resolveApplePurchaseRoute(pkg, true, 'ARNALDOANUAL');
-    expect(route).toEqual({ kind: 'offer_redemption', offerCode: 'ARNALDOANUAL', package: pkg });
-  });
-
-  it('7: the monthly plan never receives ARNALDOANUAL', () => {
-    const pkg = makePackage({ packageType: 'MONTHLY' as PACKAGE_TYPE, subscriptionOptions: [] });
-    expect(resolveAuthorizedAppleOfferCode(pkg, REAL_APPLE_OFFER_CODES)).not.toBe('ARNALDOANUAL');
-  });
-
-  it('8: the annual plan never receives ARNALDO', () => {
-    const pkg = makePackage({ packageType: 'ANNUAL' as PACKAGE_TYPE, subscriptionOptions: [] });
-    expect(resolveAuthorizedAppleOfferCode(pkg, REAL_APPLE_OFFER_CODES)).not.toBe('ARNALDO');
-  });
-
-  it('9: absence of the Apple code for the selected plan fails closed to blocked, never a guess/fallback', () => {
-    const pkg = makePackage({ packageType: 'MONTHLY' as PACKAGE_TYPE, subscriptionOptions: [] });
-    const authorized = resolveAuthorizedAppleOfferCode(pkg, { offerCodeMonthly: null, offerCodeAnnual: 'ARNALDOANUAL' });
-    expect(authorized).toBeNull();
-    expect(resolveApplePurchaseRoute(pkg, true, authorized)).toEqual({
-      kind: 'blocked',
-      reason: 'promo_plan_unavailable',
-    });
-  });
-});
 
 // ---------------------------------------------------------------------------
 // FASE 4C.4E — regression suite pinned to the exact candidate shape captured
@@ -694,16 +522,10 @@ describe('findAuthorizedSubscriptionOption — Fase 4C.4E device-proven fix', ()
 });
 
 /**
- * FASE iOS-4 — `classifyPurchaseResult` is the ONLY function that decides
- * whether a purchase/redemption outcome counts as Premium (docs/13 §2/§10/§27:
- * `CustomerInfo.entitlements.active[entitlementId]` is the sole authority).
- * These tests cover items 10-12 of the iOS Offer Code audit: presenting or
- * dismissing `Purchases.presentCodeRedemptionSheet()` never grants Premium
- * by itself — `revenueCatService.ts`'s `redeemOfferCode()` always resolves
- * `{status:'purchased', customerInfo}` once the sheet closes (StoreKit
- * cannot report redeemed-vs-dismissed), so this is the only remaining gate.
+ * `classifyPurchaseResult` is the shared purchase authority boundary:
+ * only `CustomerInfo.entitlements.active[entitlementId]` can grant Premium.
  */
-describe('classifyPurchaseResult — Apple Offer Code redemption never grants Premium on its own', () => {
+describe('classifyPurchaseResult — CustomerInfo remains the sole Premium authority', () => {
   const ENTITLEMENT_ID = 'premium';
 
   function makeCustomerInfo(activeEntitlementIds: string[]): CustomerInfo {
@@ -713,10 +535,7 @@ describe('classifyPurchaseResult — Apple Offer Code redemption never grants Pr
     } as unknown as CustomerInfo;
   }
 
-  it('10/11: presenting or dismissing the redemption sheet without an active entitlement never yields premium', () => {
-    // Mirrors exactly what `redeemOfferCode()` returns once the sheet closes
-    // for ANY reason (dismissed without redeeming, or redeemed but
-    // CustomerInfo not yet propagated) — see its doc comment.
+  it('a completed purchase without an active entitlement never yields premium', () => {
     const outcome = { status: 'purchased' as const, customerInfo: makeCustomerInfo([]) };
     expect(classifyPurchaseResult(outcome, ENTITLEMENT_ID)).toBe('missing-entitlement');
   });
@@ -731,7 +550,7 @@ describe('classifyPurchaseResult — Apple Offer Code redemption never grants Pr
     expect(classifyPurchaseResult(outcome, ENTITLEMENT_ID)).toBe('missing-entitlement');
   });
 
-  it('user cancelling the sheet is classified as cancelled, never premium', () => {
+  it('a cancelled purchase is classified as cancelled, never premium', () => {
     expect(classifyPurchaseResult({ status: 'cancelled' }, ENTITLEMENT_ID)).toBe('cancelled');
   });
 
@@ -741,23 +560,17 @@ describe('classifyPurchaseResult — Apple Offer Code redemption never grants Pr
 });
 
 /**
- * The Apple offer-code routing path (`resolveApplePurchaseRoute`/
- * `resolveAuthorizedAppleOfferCode`) is Apple-only by construction: it is
- * never imported by, called from, or referenced in the Android routing path
- * (`resolvePurchaseRoute`/`resolveAuthorizedAndroidOffer`/
- * `findAuthorizedSubscriptionOption`). This proves the Android functions'
- * behavior is identical with or without a promo code applied, which is the
- * only way an Apple-side change could regress Android (by accident coupling
- * two paths that must stay independent).
+ * FASE 6 keeps Android's authorized SubscriptionOption path unchanged while
+ * the retired Apple client route is removed.
  */
-describe('Android is structurally unaffected by Apple-only routing', () => {
+describe('Android routing remains isolated and fail-closed', () => {
   it('resolvePurchaseRoute for Android keeps failing closed on a missing offer, regardless of anything Apple-related', () => {
     const pkg = makePackage({ packageType: 'MONTHLY' as PACKAGE_TYPE, subscriptionOptions: [] });
     const result = resolvePurchaseRoute(pkg, true, null);
     expect(result).toEqual({ kind: 'blocked', reason: 'promo_plan_unavailable' });
   });
 
-  it('resolveAuthorizedAndroidOffer never reads anything Apple-shaped (no appleStoreConfig param exists on it)', () => {
+  it('resolveAuthorizedAndroidOffer still selects only the requested Android plan', () => {
     const pkg = makePackage({ packageType: 'MONTHLY' as PACKAGE_TYPE, subscriptionOptions: [] });
     expect(resolveAuthorizedAndroidOffer(pkg, { monthly: MONTHLY_OFFER, annual: ANNUAL_OFFER })).toEqual(
       MONTHLY_OFFER,

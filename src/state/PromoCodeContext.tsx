@@ -99,7 +99,6 @@ export function PromoCodeProvider({ children }: { children: React.ReactNode }) {
           code: outcome.response.code,
           benefit: outcome.response.benefit,
           androidStoreConfig: outcome.response.storeConfig.android,
-          appleStoreConfig: outcome.response.storeConfig.ios,
           iosPromotion: outcome.response.iosPromotion,
         });
         return;

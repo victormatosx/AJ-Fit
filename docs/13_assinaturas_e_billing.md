@@ -2129,3 +2129,65 @@ subscriptionSync.ts — inalterado
 polling de Offerings — NÃO
 deploy/configuração remota — NÃO
 ```
+
+---
+
+# 40. Migração Promo SKU + Introductory Offer — FASE 6 (remoção do Offer Code no cliente)
+
+A Fase 6 conclui a troca de arquitetura no cliente iOS. A rota antiga de
+Apple Offer Code foi removida do Paywall, do contexto de assinatura, do
+serviço RevenueCat e dos helpers temporários. O cliente não chama mais
+`presentCodeRedemptionSheet` e não transporta `storeConfig.ios` para o estado
+promocional.
+
+O cliente iOS possui agora exatamente dois caminhos comerciais:
+
+```txt
+sem promoção
+  → offerings.current
+  → package normal selecionado
+  → purchasePackage
+  → CustomerInfo
+
+com promoção autorizada
+  → validatePromoCode
+  → iosPromotion completa
+  → Offering e Promo SKU exatos
+  → Intro Eligibility real
+  → authorizePromoPurchase no toque
+  → purchasePackage do Promo SKU
+  → CustomerInfo
+```
+
+Um cupom aplicado sem `iosPromotion`, uma autorização malformada ou uma
+resolução divergente falham fechados. Não existe fallback Promo → Current,
+Promo → Apple Offer Code ou compra → redemption. O CTA único de compra volta
+a ser `Continuar`; a cópia e o estado específicos de “Resgatar na App Store”
+foram eliminados.
+
+## Compatibilidade deliberadamente preservada
+
+O backend permanece backward-compatible. `appleOfferCorrelation.ts`, os
+campos Apple históricos no Firestore, o webhook da Fase 3,
+`attributionSync.ts` e `subscriptionSync.ts` não foram alterados. O tipo da
+resposta de `validatePromoCode` ainda aceita `storeConfig.ios` como campo de
+wire legado, evitando ampliar o escopo para Functions; o app não o consome,
+não o armazena e não o usa para rotear compras.
+
+Também permanecem intactos:
+
+* Android com `SubscriptionOption`, `offerToken` e
+  `purchaseSubscriptionOption`;
+* Intro Eligibility com os quatro estados do SDK;
+* purchase intent tardia, TTL e validações da Fase 5;
+* listener global identity-scoped de `CustomerInfo`;
+* revalidação legítima no foreground por `AppState`;
+* `CustomerInfo.entitlements.active["premium"]` como única autoridade de
+  acesso Premium.
+
+O helper `awaitCustomerInfoUpdate` e sua suíte exclusiva foram removidos. Não
+existia `redemptionDiagnostics` nem listener de `AppState` exclusivo da sheet
+no baseline da Fase 5; portanto nenhum desses componentes compartilhados foi
+removido por associação nominal. A Fase 6 não faz deploy, push nem alteração
+de configuração remota. Ainda é obrigatória a validação E2E real da Fase 5 em
+Sandbox antes de qualquer declaração de prontidão para produção.

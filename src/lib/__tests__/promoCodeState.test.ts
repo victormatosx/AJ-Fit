@@ -3,7 +3,6 @@ import {
   createInitialPromoCodeState,
   reducePromoCodeState,
   type PromoCodeAndroidStoreConfig,
-  type PromoCodeAppleStoreConfig,
   type PromoCodeBenefit,
   type IOSPromotionAuthorization,
 } from '../promoCodeState';
@@ -23,11 +22,6 @@ const HELLLEN_BENEFIT: PromoCodeBenefit = {
 const STORE_CONFIG: PromoCodeAndroidStoreConfig = {
   monthly: { basePlanId: 'monthly', offerId: 'influencer-trial-7d' },
   annual: { basePlanId: 'annual', offerId: 'influencer-trial-7d-annual' },
-};
-
-const APPLE_STORE_CONFIG: PromoCodeAppleStoreConfig = {
-  offerCodeMonthly: 'INFLUENCER7D_MONTHLY',
-  offerCodeAnnual: 'INFLUENCER7D_ANNUAL',
 };
 
 const IOS_PROMOTION: IOSPromotionAuthorization = {
@@ -73,7 +67,6 @@ describe('promoCodeState — B/C: happy path validating → applied', () => {
       code: 'ARNALDO',
       benefit: BENEFIT,
       androidStoreConfig: STORE_CONFIG,
-      appleStoreConfig: null,
       iosPromotion: null,
     });
 
@@ -84,7 +77,6 @@ describe('promoCodeState — B/C: happy path validating → applied', () => {
       code: 'ARNALDO',
       benefit: BENEFIT,
       androidStoreConfig: STORE_CONFIG,
-      appleStoreConfig: null,
       iosPromotion: null,
     });
   });
@@ -213,7 +205,6 @@ describe('promoCodeState — F: response for A discarded after logout', () => {
       code: 'ARNALDO',
       benefit: BENEFIT,
       androidStoreConfig: STORE_CONFIG,
-      appleStoreConfig: null,
       iosPromotion: null,
     });
 
@@ -247,7 +238,6 @@ describe('promoCodeState — G: response for A discarded once B logs in', () => 
       code: 'ARNALDO',
       benefit: BENEFIT,
       androidStoreConfig: STORE_CONFIG,
-      appleStoreConfig: null,
       iosPromotion: null,
     });
 
@@ -275,7 +265,6 @@ describe('promoCodeState — H: ARNALDO → HELLLEN swap invalidates ARNALDO imm
       code: 'ARNALDO',
       benefit: BENEFIT,
       androidStoreConfig: STORE_CONFIG,
-      appleStoreConfig: null,
       iosPromotion: null,
     });
     expect(state.applied?.code).toBe('ARNALDO');
@@ -318,7 +307,6 @@ describe('promoCodeState — I: a late ARNALDO response never overwrites HELLLEN
       code: 'HELLLEN',
       benefit: HELLLEN_BENEFIT,
       androidStoreConfig: STORE_CONFIG,
-      appleStoreConfig: null,
       iosPromotion: null,
     });
     expect(state.applied?.code).toBe('HELLLEN');
@@ -333,7 +321,6 @@ describe('promoCodeState — I: a late ARNALDO response never overwrites HELLLEN
       code: 'ARNALDO',
       benefit: BENEFIT,
       androidStoreConfig: STORE_CONFIG,
-      appleStoreConfig: null,
       iosPromotion: null,
     });
 
@@ -360,7 +347,6 @@ describe('promoCodeState — Y: logout clears promo state', () => {
       code: 'ARNALDO',
       benefit: BENEFIT,
       androidStoreConfig: STORE_CONFIG,
-      appleStoreConfig: null,
       iosPromotion: null,
     });
     expect(state.phase).toBe('applied');
@@ -378,147 +364,8 @@ describe('promoCodeState — Y: logout clears promo state', () => {
   });
 });
 
-describe('promoCodeState — FASE iOS-2: Apple store config transport', () => {
-  it('F/G: an iOS validation-applied preserves monthly/annual Apple offer codes exactly, independent of Android config', () => {
-    let state = createInitialPromoCodeState();
-    state = reducePromoCodeState(state, { type: 'identity-changed', uid: UID_A, generation: 1 });
-    state = reducePromoCodeState(state, {
-      type: 'validation-started',
-      uid: UID_A,
-      generation: 1,
-      seq: 1,
-    });
-    state = reducePromoCodeState(state, {
-      type: 'validation-applied',
-      uid: UID_A,
-      generation: 1,
-      seq: 1,
-      code: 'ARNALDO',
-      benefit: BENEFIT,
-      androidStoreConfig: null,
-      appleStoreConfig: APPLE_STORE_CONFIG,
-      iosPromotion: null,
-    });
-
-    expect(state.applied?.appleStoreConfig).toEqual(APPLE_STORE_CONFIG);
-    expect(state.applied?.appleStoreConfig?.offerCodeMonthly).toBe('INFLUENCER7D_MONTHLY');
-    expect(state.applied?.appleStoreConfig?.offerCodeAnnual).toBe('INFLUENCER7D_ANNUAL');
-  });
-
-  it('I/J: Android and Apple configs are carried as two independent fields — neither is ever read as the other', () => {
-    let state = createInitialPromoCodeState();
-    state = reducePromoCodeState(state, { type: 'identity-changed', uid: UID_A, generation: 1 });
-    state = reducePromoCodeState(state, {
-      type: 'validation-started',
-      uid: UID_A,
-      generation: 1,
-      seq: 1,
-    });
-    state = reducePromoCodeState(state, {
-      type: 'validation-applied',
-      uid: UID_A,
-      generation: 1,
-      seq: 1,
-      code: 'ARNALDO',
-      benefit: BENEFIT,
-      androidStoreConfig: STORE_CONFIG,
-      appleStoreConfig: APPLE_STORE_CONFIG,
-      iosPromotion: null,
-    });
-
-    expect(state.applied?.androidStoreConfig).toEqual(STORE_CONFIG);
-    expect(state.applied?.appleStoreConfig).toEqual(APPLE_STORE_CONFIG);
-    // Structurally distinct shapes: the Android config has `monthly`/`annual`
-    // base-plan/offer pairs; the Apple config has flat `offerCodeMonthly`/
-    // `offerCodeAnnual` strings. Neither has a field the other has.
-    expect(state.applied?.androidStoreConfig).not.toHaveProperty('offerCodeMonthly');
-    expect(state.applied?.appleStoreConfig).not.toHaveProperty('monthly');
-  });
-
-  it('E: a platform requested without Apple config (Android-only response) carries appleStoreConfig: null, never a guessed value', () => {
-    let state = createInitialPromoCodeState();
-    state = reducePromoCodeState(state, { type: 'identity-changed', uid: UID_A, generation: 1 });
-    state = reducePromoCodeState(state, {
-      type: 'validation-started',
-      uid: UID_A,
-      generation: 1,
-      seq: 1,
-    });
-    state = reducePromoCodeState(state, {
-      type: 'validation-applied',
-      uid: UID_A,
-      generation: 1,
-      seq: 1,
-      code: 'ARNALDO',
-      benefit: BENEFIT,
-      androidStoreConfig: STORE_CONFIG,
-      appleStoreConfig: null,
-      iosPromotion: null,
-    });
-
-    expect(state.applied?.appleStoreConfig).toBeNull();
-  });
-
-  it('H: removing/resetting the coupon (identity-changed) clears the Apple config along with everything else', () => {
-    let state = createInitialPromoCodeState();
-    state = reducePromoCodeState(state, { type: 'identity-changed', uid: UID_A, generation: 1 });
-    state = reducePromoCodeState(state, {
-      type: 'validation-started',
-      uid: UID_A,
-      generation: 1,
-      seq: 1,
-    });
-    state = reducePromoCodeState(state, {
-      type: 'validation-applied',
-      uid: UID_A,
-      generation: 1,
-      seq: 1,
-      code: 'ARNALDO',
-      benefit: BENEFIT,
-      androidStoreConfig: STORE_CONFIG,
-      appleStoreConfig: APPLE_STORE_CONFIG,
-      iosPromotion: null,
-    });
-    expect(state.applied?.appleStoreConfig).toEqual(APPLE_STORE_CONFIG);
-
-    state = reducePromoCodeState(state, { type: 'identity-changed', uid: null, generation: 2 });
-
-    expect(state.applied).toBeNull();
-
-    // Also cleared by starting a fresh validation for the same identity
-    // (ARNALDO → HELLLEN swap), same as the existing Android-only H test.
-    state = reducePromoCodeState(state, { type: 'identity-changed', uid: UID_A, generation: 3 });
-    state = reducePromoCodeState(state, {
-      type: 'validation-started',
-      uid: UID_A,
-      generation: 3,
-      seq: 1,
-    });
-    state = reducePromoCodeState(state, {
-      type: 'validation-applied',
-      uid: UID_A,
-      generation: 3,
-      seq: 1,
-      code: 'ARNALDO',
-      benefit: BENEFIT,
-      androidStoreConfig: null,
-      appleStoreConfig: APPLE_STORE_CONFIG,
-      iosPromotion: null,
-    });
-    expect(state.applied?.appleStoreConfig).toEqual(APPLE_STORE_CONFIG);
-
-    state = reducePromoCodeState(state, {
-      type: 'validation-started',
-      uid: UID_A,
-      generation: 3,
-      seq: 2,
-    });
-    expect(state.applied).toBeNull();
-  });
-});
-
 describe('promoCodeState — FASE 4 iOS promotion authorization lifecycle', () => {
-  it('preserves the complete backend authorization independently from legacy Apple config', () => {
+  it('preserves the complete backend authorization', () => {
     let state = createInitialPromoCodeState();
     state = reducePromoCodeState(state, { type: 'identity-changed', uid: UID_A, generation: 1 });
     state = reducePromoCodeState(state, {
@@ -535,12 +382,10 @@ describe('promoCodeState — FASE 4 iOS promotion authorization lifecycle', () =
       code: 'ARNALDO',
       benefit: BENEFIT,
       androidStoreConfig: null,
-      appleStoreConfig: APPLE_STORE_CONFIG,
       iosPromotion: IOS_PROMOTION,
     });
 
     expect(state.applied?.iosPromotion).toEqual(IOS_PROMOTION);
-    expect(state.applied?.appleStoreConfig).toEqual(APPLE_STORE_CONFIG);
   });
 
   it('clears authorization on code swap, definitive failure, logout, and user switch', () => {
@@ -557,7 +402,6 @@ describe('promoCodeState — FASE 4 iOS promotion authorization lifecycle', () =
       code: 'ARNALDO',
       benefit: BENEFIT,
       androidStoreConfig: null,
-      appleStoreConfig: null,
       iosPromotion: IOS_PROMOTION,
     });
     expect(state.applied?.iosPromotion).toEqual(IOS_PROMOTION);

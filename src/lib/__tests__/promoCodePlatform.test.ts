@@ -22,12 +22,12 @@ describe('resolvePromoCodePlatform — FASE iOS-2', () => {
   });
 });
 
-describe('isPromoCodeUiSupported — FASE iOS-3', () => {
+describe('isPromoCodeUiSupported — FASE 6', () => {
   it('1: Android is supported', () => {
     expect(isPromoCodeUiSupported('android')).toBe(true);
   });
 
-  it('2: iOS is supported (as of FASE iOS-3, once presentCodeRedemptionSheet was confirmed)', () => {
+  it('2: iOS remains supported by the Promo SKU flow', () => {
     expect(isPromoCodeUiSupported('ios')).toBe(true);
   });
 

@@ -43,16 +43,7 @@ export interface PromoCodeAndroidStoreConfig {
   annual: AndroidSubscriptionOfferConfig | null;
 }
 
-/**
- * FASE iOS-2 — mirrors `functions/src/attribution/types.ts`'s
- * `ApplePromoCodePlatformStoreConfig`/`PromoCodeAppleOfferSnapshot`: an App
- * Store custom offer code is a single flat string per plan, never a
- * `basePlanId`/`offerId` pair (that's a Google Play concept only — see
- * `AndroidSubscriptionOfferConfig`). `null` per plan means no Apple offer
- * code is configured for that plan on this catalog entry. Carried through
- * client state ONLY — nothing in this module (or anywhere in Fase iOS-2)
- * uses this to start a purchase; that remains Fase iOS-3 scope.
- */
+/** Legacy wire-only shape retained by promoCodeService for backend compatibility. */
 export interface PromoCodeAppleStoreConfig {
   offerCodeMonthly: string | null;
   offerCodeAnnual: string | null;
@@ -123,23 +114,13 @@ export function parseIOSPromotionAuthorization(
   };
 }
 
-/**
- * `androidStoreConfig` and `appleStoreConfig` are two DISTINCT, independently
- * `null`-able fields — never a single "storeConfig" union — so neither can
- * ever be misread as the other's shape (Fase iOS-2 §5: Android config must
- * never be interpreted as Apple config, and vice versa). The backend already
- * enforces this at the wire level (`storeConfig.android`/`storeConfig.ios`,
- * only the requested platform populated); this mirrors that separation
- * instead of collapsing it.
- */
 export interface PromoCodeAppliedRecord {
   uid: string;
   generation: number;
   code: string;
   benefit: PromoCodeBenefit;
   androidStoreConfig: PromoCodeAndroidStoreConfig | null;
-  appleStoreConfig: PromoCodeAppleStoreConfig | null;
-  /** New Offering/SKU authorization; separate from the legacy Apple Offer Code config above. */
+  /** Offering/SKU authorization for the production iOS promo path. */
   iosPromotion: IOSPromotionAuthorization | null;
 }
 
@@ -173,7 +154,6 @@ export type PromoCodeEvent =
       code: string;
       benefit: PromoCodeBenefit;
       androidStoreConfig: PromoCodeAndroidStoreConfig | null;
-      appleStoreConfig: PromoCodeAppleStoreConfig | null;
       iosPromotion: IOSPromotionAuthorization | null;
     }
   | { type: 'validation-unavailable'; uid: string; generation: number; seq: number; message: string }
@@ -234,7 +214,6 @@ export function reducePromoCodeState(
           code: event.code,
           benefit: event.benefit,
           androidStoreConfig: event.androidStoreConfig,
-          appleStoreConfig: event.appleStoreConfig,
           iosPromotion: event.iosPromotion,
         },
         message: null,

@@ -29,14 +29,15 @@ describe('FASE 5 iOS promotional purchase boundaries', () => {
     );
   });
 
-  it('new iOS promo branch cannot reach Apple Offer Code redemption', () => {
+  it('new iOS promo branch is the only promotional iOS purchase path', () => {
     const promoBranch = purchaseHandler.slice(
       purchaseHandler.indexOf("effectiveRoute.kind === 'ios_promo_package'"),
       purchaseHandler.indexOf('} else {', purchaseHandler.indexOf("effectiveRoute.kind === 'ios_promo_package'")),
     );
     expect(promoBranch).toContain('executeIOSPromoPurchase');
     expect(promoBranch).not.toContain('redeemAppleOfferCode');
-    expect(paywall).toContain('redeemAppleOfferCode');
+    expect(paywall).not.toContain('offer_redemption');
+    expect(purchaseHandler).toContain('await purchase(effectiveRoute.package)');
   });
 
   it('uses scoped eligibility and never derives trial from names or authorization', () => {

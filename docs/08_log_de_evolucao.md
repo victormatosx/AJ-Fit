@@ -1980,3 +1980,35 @@ Executar a Fase 6 / E2E controlada no sandbox iOS, incluindo Apple IDs
 elegível e inelegível e validação visual da folha de pagamento Apple.
 
 ---
+
+Data: 2026-08-13
+Responsável: Codex — Agente App
+Categoria: [REFATORAÇÃO]
+
+Descrição:
+Implementada a Fase 6 da migração iOS Promo SKU + Introductory Offer. Foi
+removido exclusivamente do cliente o terceiro caminho Apple Offer Code:
+rota/tipos/resolvers, operação pública do `SubscriptionContext`, serviço de
+redemption, chamada `presentCodeRedemptionSheet`, helper temporário de espera,
+CTA e testes/mocks exclusivos. O campo `storeConfig.ios` permanece apenas no
+contrato de resposta client-side como wire legado não consumido, evitando
+alteração desnecessária de Functions.
+
+Impacto:
+O Paywall iOS agora compra somente o package normal de `offerings.current` ou
+o Promo SKU autorizado por `iosPromotion`, Intro Eligibility e
+`authorizePromoPurchase`. Um cupom legado sem a nova autorização falha
+fechado, sem fallback para preço standard ou redemption. CustomerInfo segue
+como autoridade Premium; listener global, refresh de foreground, Android,
+purchase intent, webhook, `subscriptionSync.ts` e compatibilidade histórica
+do backend foram preservados. Não houve push, deploy ou mutação remota.
+
+Próxima ação:
+Executar a Fase 7 / E2E Sandbox controlado em iOS para contas elegível e
+inelegível, verificando catálogo, termos exibidos, folha StoreKit, purchase
+intent e ativação exclusivamente por CustomerInfo.
+
+Assinatura:
+Codex — Agente App; 2026-08-13; prompt AJ FIT FASE 6.
+
+---

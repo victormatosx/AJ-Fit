@@ -35,9 +35,11 @@ describe('FASE 4 iOS promotional architecture boundaries', () => {
     expect(purchaseHandler).toContain('actionInFlight.current = true');
   });
 
-  it('preserves the legacy Apple Offer Code path', () => {
-    expect(paywall).toContain('redeemAppleOfferCode');
-    expect(revenueCatService).toContain('Purchases.presentCodeRedemptionSheet()');
+  it('FASE 6 removes the legacy Apple Offer Code path while preserving the global listener', () => {
+    expect(paywall).not.toContain('redeemAppleOfferCode');
+    expect(revenueCatService).not.toContain('presentCodeRedemptionSheet');
+    expect(subscriptionContext).toContain('attachCustomerInfoListener');
+    expect(subscriptionContext).toContain('NativeAppState.addEventListener');
   });
 
   it('keeps Premium authority exclusively on CustomerInfo entitlement', () => {

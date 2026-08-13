@@ -15,7 +15,6 @@ import type {
   SubscriptionErrorKind,
   SubscriptionFailure,
 } from '../lib/subscriptionLifecycle';
-import { awaitCustomerInfoUpdate } from '../lib/awaitCustomerInfoUpdate';
 
 /**
  * RevenueCat infrastructure (docs/13_assinaturas_e_billing.md).
@@ -461,110 +460,6 @@ export async function purchaseSubscriptionOption(option: SubscriptionOption): Pr
     return {
       status: 'error',
       message: err instanceof Error ? err.message : 'Não foi possível concluir a compra.',
-      offline: isOfflineError(err),
-    };
-  }
-}
-
-/**
- * FASE iOS-3 — iOS only. Presents Apple's native Offer Code redemption sheet
- * via `Purchases.presentCodeRedemptionSheet()`.
- *
- * AUDIT (iOS-3 Etapa A/B): confirmed against
- * `node_modules/react-native-purchases/dist/purchases.d.ts`
- * (react-native-purchases@10.6.0, the version actually installed) that this
- * method takes NO arguments and resolves `Promise<void>` — there is no
- * parameter anywhere in the installed SDK's purchase surface
- * (`purchasePackage`, `purchaseStoreProduct`, `purchaseSubscriptionOption`,
- * `purchaseDiscountedPackage`/`purchaseDiscountedProduct`) that accepts an
- * arbitrary Apple Offer Code string. `purchaseDiscountedPackage`/
- * `getPromotionalOffer` are a DIFFERENT Apple mechanism (Promotional
- * Offers — signed server-side, for offers tied to an existing/lapsed
- * subscriber) and do not apply to a code a user types into this app.
- * `presentCodeRedemptionSheet`'s own doc comment confirms it is "useful for
- * redeeming offer codes" and points at
- * https://docs.revenuecat.com/docs/ios-subscription-offers#offer-codes.
- * So: Apple Offer Codes, this SDK version, this mechanism ONLY — there is no
- * way to pre-fill or programmatically submit `appleStoreConfig`'s
- * `offerCodeMonthly`/`offerCodeAnnual` string; the sheet is StoreKit's own
- * native UI where the user selects/types the code themselves. Callers must
- * still show that code to the user beforehand (`PaywallScreen.tsx`) so they
- * know what to redeem — this function only opens Apple's UI, it never
- * "applies" anything on its own.
- *
- * CORRECTED AUDIT (post-iOS-3): the claim this doc comment used to make —
- * "the sheet's promise resolves once dismissed" — was WRONG for the
- * installed SDK and has been removed. Reading the actual installed
- * implementation (JS: `dist/purchases.js`; native bridge:
- * `ios/RNPurchases.m`'s `RCT_EXPORT_METHOD(presentCodeRedemptionSheet)`,
- * which has no resolver/rejecter at all, unlike e.g. `getPromotionalOffer`
- * right above it; RevenueCat core:
- * `PaymentQueueWrapper.swift`'s `presentCodeRedemptionSheetIfAvailable()`,
- * which calls Apple's own `SKPaymentQueue.presentCodeRedemptionSheet()` and
- * returns immediately) proves `Purchases.presentCodeRedemptionSheet()`'s
- * `Promise<void>` is fire-and-forget end to end: it resolves as soon as the
- * native call is DISPATCHED, not when Apple's sheet appears, closes, or a
- * redemption completes. There is no callback anywhere in this chain that
- * reports presented/dismissed/redeemed/cancelled.
- *
- * Consequently this function no longer calls `Purchases.getCustomerInfo()`
- * immediately after that Promise resolves (that read a stale cache — see
- * the git history of this function for the old, incorrect implementation).
- * It now calls `awaitCustomerInfoUpdate` (`lib/awaitCustomerInfoUpdate.ts`)
- * to wait for a REAL push from the SDK's own `CustomerInfoUpdateListener`
- * (the same mechanism `SubscriptionContext.tsx` already uses to keep global
- * state live), falling back to exactly ONE final explicit revalidation after
- * `REDEMPTION_CUSTOMER_INFO_WAIT_TIMEOUT_MS` if no push ever arrives. Either
- * way, whatever `CustomerInfo` this resolves with is returned as-is —
- * `classifyPurchaseResult` (subscriptionOffer.ts) remains the ONLY code that
- * decides Premium, by reading `entitlements.active[premium]`. A listener
- * firing, a timeout, or the final refresh succeeding are NEVER treated as
- * "redeemed" here — same fail-closed authority docs/13
- * §2/§10/§27 already required, just no longer undermined by a premature
- * cache read.
- */
-const REDEMPTION_CUSTOMER_INFO_WAIT_TIMEOUT_MS = 10_000;
-
-export async function redeemOfferCode(): Promise<PurchaseOutcome> {
-  try {
-    await ensureConfigured();
-
-    await Purchases.presentCodeRedemptionSheet();
-
-    const waitResult = await awaitCustomerInfoUpdate<CustomerInfo>({
-      addListener: addCustomerInfoListener,
-      removeListener: removeCustomerInfoListener,
-      refreshFinal: () => Purchases.getCustomerInfo(),
-      timeoutMs: REDEMPTION_CUSTOMER_INFO_WAIT_TIMEOUT_MS,
-    });
-
-    if (waitResult.status === 'listener-update') {
-      return { status: 'purchased', customerInfo: waitResult.customerInfo };
-    }
-
-    if (waitResult.status === 'timeout-refresh') {
-      return { status: 'purchased', customerInfo: waitResult.customerInfo };
-    }
-
-    // status === 'timeout-refresh-error': the final revalidation itself
-    // failed. Never granted Premium by timeout alone (Parte 6/7) — surfaced
-    // as the same sanitized error path every other SDK failure in this file
-    // uses, so `classifyPurchaseResult` never sees a fabricated `CustomerInfo`.
-    logRevenueCatError('redeemOfferCode:finalRefresh', waitResult.error);
-    return {
-      status: 'error',
-      message: 'Não foi possível confirmar o resgate do código. Tente novamente ou restaure as compras.',
-      offline: isOfflineError(waitResult.error),
-    };
-  } catch (err) {
-    if (isCancelledError(err)) {
-      return { status: 'cancelled' };
-    }
-    logRevenueCatError('redeemOfferCode', err);
-    return {
-      status: 'error',
-      message:
-        err instanceof Error ? err.message : 'Não foi possível abrir o resgate de código da App Store.',
       offline: isOfflineError(err),
     };
   }
