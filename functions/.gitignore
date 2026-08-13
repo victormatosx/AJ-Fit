@@ -1,3 +1,12 @@
+# Build output — never commit compiled Functions code, only source.
+# Anchored with a leading slash so it matches only functions/lib (tsc's
+# outDir) and never functions/src/lib, which is real source code.
+/lib/
+
 node_modules/
-lib/
+firestore-debug.log
+*.local
+.env
+.env.*
+!.env.example
 *.tsbuildinfo

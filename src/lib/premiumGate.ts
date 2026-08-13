@@ -5,6 +5,7 @@ export type RootScreenId =
   | 'analyzing'
   | 'plan'
   | 'auth'
+  | 'emailVerification'
   | 'paywall'
   | 'app';
 
@@ -13,6 +14,8 @@ type PremiumGateState = {
   authInitializing: boolean;
   profileLoading: boolean;
   authenticated: boolean;
+  /** Firebase requires a password user's verified server-backed e-mail. */
+  emailVerificationRequired: boolean;
   /**
    * True while account-preference reconciliation (language/units —
    * `src/i18n/syncLanguage.ts`, `src/units/syncUnits.ts`) is in flight for the
@@ -30,7 +33,7 @@ type PremiumGateState = {
   isPremium: boolean;
 };
 
-const AUTH_REQUIRED_SCREENS: RootScreenId[] = ['paywall', 'app'];
+const AUTH_REQUIRED_SCREENS: RootScreenId[] = ['emailVerification', 'paywall', 'app'];
 
 /**
  * Resolves the only screen the root router is allowed to render.
@@ -48,6 +51,8 @@ export function resolvePremiumGate(state: PremiumGateState): RootScreenId | null
       ? 'auth'
       : state.requestedScreen;
   }
+
+  if (state.emailVerificationRequired) return 'emailVerification';
 
   if (state.preferencesReconciling) return null;
 

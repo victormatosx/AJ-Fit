@@ -1,4 +1,8 @@
-import type { ProviderResult } from './types';
+import {
+  ProviderCredentialError,
+  type AppleCredentialOptions,
+  type ProviderResult,
+} from './types';
 
 /**
  * Web stub — native Sign in with Apple is not available in the web bundle.
@@ -8,6 +12,8 @@ export async function isAppleAuthAvailable(): Promise<boolean> {
   return false;
 }
 
-export async function getAppleCredential(): Promise<ProviderResult> {
-  throw new Error('Login com Apple está disponível apenas no app iOS.');
+export async function getAppleCredential(
+  _options: AppleCredentialOptions = {},
+): Promise<ProviderResult> {
+  throw new ProviderCredentialError('providerUnavailable');
 }

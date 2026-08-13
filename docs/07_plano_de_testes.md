@@ -130,8 +130,34 @@ Validar:
 * recuperação de senha
 * login Google
 * login Apple
+* enrollment e unenrollment TOTP com password-only
+* enrollment e unenrollment TOTP com Google-only
+* enrollment e unenrollment TOTP com Apple-only
+* escolha explícita em password + Google, password + Apple, Google + Apple e
+  password + Google + Apple
+* cancelamento federado sem alteração do status MFA
+* conta federada divergente sem alteração do usuário ou do MFA
+* novo nonce Apple e novo id token Google em cada tentativa de reautenticação
+* login com TOTP após e-mail/senha, Google e Apple
+* código TOTP incorreto com retry na mesma tentativa
+* cancelamento e expiração do challenge TOTP
+* múltiplos fatores TOTP e hints não suportados
+* retorno ao Dashboard (nunca Quiz) para usuário existente com questionário
 * persistência de sessão
 * troca de dispositivo
+
+Roteiro manual obrigatório em development build:
+
+1. com uma conta Google-only, ativar TOTP após confirmar com Google, sair,
+   entrar com Google + TOTP e depois desativar após nova confirmação Google;
+2. repetir o ciclo com uma conta Apple-only em dispositivo iOS real,
+   confirmando que nome/e-mail não são necessários na reautenticação;
+3. cancelar separadamente as folhas Google e Apple e confirmar status intacto;
+4. quando o seletor permitir, escolher uma conta federada diferente da sessão
+   atual e confirmar bloqueio por mismatch, sem troca de usuário;
+5. repetir enrollment/unenrollment password para garantir compatibilidade;
+6. confirmar que linking, verificação de e-mail e decisão Quiz/Dashboard não
+   mudaram.
 
 ---
 

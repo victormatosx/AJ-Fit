@@ -191,10 +191,10 @@ service cloud.firestore {
         && after.subscription.get('status', null) == before.get('subscriptionStatus', null)
         && after.subscription.get('provider', null) == before.get('subscriptionProvider', null)
         && after.subscription.get('trialEndsAt', null) == before.get('trialEndsAt', null)
-        // Field renamed `endsAt` → `currentPeriodEndsAt` in Sprint 3.5 to
-        // match docs/13 §26; the OLD flat field name (`subscriptionEndsAt`)
-        // is unaffected — it's a one-time read of the legacy document, not
-        // part of the new schema.
+        // Campo renomeado `endsAt` → `currentPeriodEndsAt` na Sprint 3.5 para
+        // casar com docs/13 §26; o nome plano ANTIGO (`subscriptionEndsAt`)
+        // não muda — é uma leitura única do documento legado, não parte do
+        // schema novo.
         && after.subscription.get('currentPeriodEndsAt', null) == before.get('subscriptionEndsAt', null)
         && after.metadata.role == before.get('role', 'user')
         && after.metadata.get('activeWorkoutId', null) == before.get('activeWorkoutId', null)
@@ -249,6 +249,74 @@ service cloud.firestore {
         && (!('bodyWater' in d) || (d.bodyWater is number && d.bodyWater > 0))
         && (!('basalMetabolism' in d) || (d.basalMetabolism is number && d.basalMetabolism > 0))
         && (!('visceralFat' in d) || (d.visceralFat is number && d.visceralFat > 0));
+    }
+
+    // ── Photo Vault (docs/20_backend_functions_photo_vault.md) ────────────
+    // Metadados das fotos privadas. A imagem NUNCA é gravada aqui: o binário
+    // vive criptografado no Storage e este documento guarda apenas o ponteiro
+    // e os parâmetros criptográficos necessários para decifrar. Não existe
+    // downloadURL nem signed URL persistida — o caminho é resolvido pelo SDK
+    // a partir de `storagePath`, sempre sujeito às Storage Rules.
+    function encryptionMetadataValid(e) {
+      return e is map
+        && e.keys().hasAll(['version', 'algorithm', 'iv', 'vaultKeyVersion'])
+        && e.keys().hasOnly(['version', 'algorithm', 'iv', 'vaultKeyVersion'])
+        && e.version is int && e.version >= 1
+        && e.algorithm == 'AES-256-GCM'
+        // IV/nonce em base64. Não é segredo (é público por design no GCM),
+        // mas precisa ser único por foto — a unicidade é responsabilidade do
+        // cliente, as regras só garantem forma e tamanho plausíveis.
+        && e.iv is string && e.iv.size() >= 16 && e.iv.size() <= 32
+        && e.vaultKeyVersion is int && e.vaultKeyVersion >= 1;
+    }
+
+    function progressPhotoValid(userId, photoId) {
+      let d = request.resource.data;
+      return d.keys().hasAll([
+          'storagePath', 'createdAt', 'takenAt', 'originalMimeType',
+          'encryptedSize', 'encryption'
+        ])
+        // Legacy photos keep the original six-field shape. Phase-13 photos
+        // add all three thumbnail fields atomically; partial thumbnail
+        // metadata and unknown fields remain rejected.
+        && (
+          d.keys().hasOnly([
+            'storagePath', 'createdAt', 'takenAt', 'originalMimeType',
+            'encryptedSize', 'encryption'
+          ])
+          || (
+            d.keys().hasAll([
+              'thumbnailStoragePath', 'thumbnailEncryptedSize',
+              'thumbnailEncryption'
+            ])
+            && d.keys().hasOnly([
+              'storagePath', 'thumbnailStoragePath', 'createdAt', 'takenAt',
+              'originalMimeType', 'encryptedSize', 'thumbnailEncryptedSize',
+              'encryption', 'thumbnailEncryption'
+            ])
+            && d.thumbnailStoragePath == 'users/' + userId + '/progressPhotos/' + photoId + '.thumb.enc'
+            && d.thumbnailEncryptedSize is int
+            && d.thumbnailEncryptedSize > 0
+            && d.thumbnailEncryptedSize <= 512 * 1024
+            && encryptionMetadataValid(d.thumbnailEncryption)
+            // Same Vault Key is intentional; nonce reuse under AES-GCM is not.
+            && d.thumbnailEncryption.iv != d.encryption.iv
+          )
+        )
+        // Igualdade exata de string (não regex): prende o metadado a um único
+        // objeto do Storage, no namespace do próprio dono e com o mesmo
+        // photoId do documento. Impede apontar para o arquivo de outro uid.
+        && d.storagePath == 'users/' + userId + '/progressPhotos/' + photoId + '.enc'
+        // `== request.time` (e não apenas `is timestamp`) força o uso de
+        // serverTimestamp() — o cliente não forja a data de criação.
+        && d.createdAt == request.time
+        && d.takenAt is timestamp
+        && d.takenAt <= request.time
+        && d.originalMimeType in ['image/jpeg', 'image/png', 'image/heic', 'image/heif', 'image/webp']
+        && d.encryptedSize is int
+        && d.encryptedSize > 0
+        && d.encryptedSize <= 10 * 1024 * 1024
+        && encryptionMetadataValid(d.encryption);
     }
 
     function supportTicketValid(ticketId) {
@@ -439,6 +507,50 @@ service cloud.firestore {
 
         allow update, delete: if false;
       }
+
+      // Metadados das fotos privadas de evolução (Photo Vault). O dono lê,
+      // cria e exclui; o documento é imutável após a criação — trocar uma
+      // foto significa excluir o par (documento + objeto no Storage) e criar
+      // um novo photoId, o que mantém a auditoria simples e sem ambiguidade.
+      match /progressPhotos/{photoId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && progressPhotoValid(userId, photoId);
+        allow update: if false;
+        allow delete: if isOwner(userId);
+      }
+
+      // Material criptográfico do Photo Vault (wrappedVaultKey e versões).
+      // Backend-only: escrito e lido exclusivamente pelo Admin SDK, que
+      // ignora estas regras. O cliente nunca precisa da chave embrulhada —
+      // ele recebe a Vault Key já desembrulhada pela Function autenticada e
+      // a guarda localmente no SecureStore. Negar leitura ao cliente remove
+      // a chave embrulhada da superfície de ataque do app por completo.
+      //
+      // Consequência: o schema deste documento NÃO é validável por estas
+      // regras (o Admin SDK as ignora). O contrato fechado e versionado vive
+      // em functions/src/photoVault/schema.ts, onde é de fato aplicado.
+      match /privateSecurity/{documentId} {
+        allow read, write: if false;
+      }
+    }
+
+    // ── Support tickets and messages ──────────────────────────────────────
+    match /supportTickets/{ticketId} {
+      allow get, list: if isAdmin()
+        || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow create: if isSignedIn() && supportTicketValid(ticketId);
+      allow update: if isAdmin() && adminSupportTicketUpdateValid();
+      allow delete: if false;
+
+      match /messages/{messageId} {
+        allow get, list: if isAdmin()
+          || (isSignedIn()
+              && get(/databases/$(database)/documents/supportTickets/$(ticketId))
+                   .data.userId == request.auth.uid);
+        allow create: if (isSignedIn() && supportMessageValid(ticketId))
+          || (isAdmin() && adminSupportMessageValid(ticketId));
+        allow update, delete: if false;
+      }
     }
 
     // Catálogo de códigos promocionais/influenciadores
@@ -462,25 +574,6 @@ service cloud.firestore {
     // Admin SDK. Bloco explícito pelo mesmo motivo do `promoCodes` acima.
     match /couponRedemptions/{uid} {
       allow read, write: if false;
-    }
-
-    // ── Support tickets and messages ──────────────────────────────────────
-    match /supportTickets/{ticketId} {
-      allow get, list: if isAdmin()
-        || (isSignedIn() && resource.data.userId == request.auth.uid);
-      allow create: if isSignedIn() && supportTicketValid(ticketId);
-      allow update: if isAdmin() && adminSupportTicketUpdateValid();
-      allow delete: if false;
-
-      match /messages/{messageId} {
-        allow get, list: if isAdmin()
-          || (isSignedIn()
-              && get(/databases/$(database)/documents/supportTickets/$(ticketId))
-                   .data.userId == request.auth.uid);
-        allow create: if (isSignedIn() && supportMessageValid(ticketId))
-          || (isAdmin() && adminSupportMessageValid(ticketId));
-        allow update, delete: if false;
-      }
     }
 
     // ── Deny all undocumented collections ─────────────────────────────────

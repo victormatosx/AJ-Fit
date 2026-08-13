@@ -40,6 +40,7 @@ function gate({
     authInitializing,
     profileLoading,
     authenticated: true,
+    emailVerificationRequired: false,
     preferencesReconciling: false,
     hasQuestionnaire: true,
     subscriptionLoading,

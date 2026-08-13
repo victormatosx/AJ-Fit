@@ -27,8 +27,21 @@ import {
   isGoogleSigninAvailable,
   socialProviderFromMethods,
   PROVIDER_LABELS,
+  clearPendingSocialAuthState,
   type SocialProvider,
 } from '../services/socialAuth';
+import {
+  clearTotpSignInChallenge,
+  startTotpSignInChallenge,
+  type TotpSignInChallenge,
+  type TotpSignInOrigin,
+} from '../services/mfaTotp';
+import {
+  isMultiFactorAuthRequired,
+  mfaTotpIssueFromError,
+  type MfaTotpIssue,
+} from '../lib/mfaTotp';
+import { TotpChallengeScreen } from './TotpChallengeScreen';
 
 type Mode = 'signup' | 'login' | 'reset';
 
@@ -73,6 +86,19 @@ function localizedAuthError(
   return code ? t('errors.genericWithCode', { code }) : t(fallbackKey);
 }
 
+function totpStartError(
+  issue: MfaTotpIssue,
+  t: TFunction<'auth'>,
+): string {
+  if (issue === 'resolverWithoutHints') {
+    return t('totpChallenge.errors.resolverWithoutHints');
+  }
+  if (issue === 'factorNotFound') {
+    return t('totpChallenge.errors.totpFactorMissing');
+  }
+  return t('totpChallenge.errors.generic');
+}
+
 export function AuthScreen() {
   const { t } = useTranslation('auth');
   const {
@@ -95,6 +121,7 @@ export function AuthScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const [totpChallenge, setTotpChallenge] = useState<TotpSignInChallenge | null>(null);
 
   // Social auth
   const [socialBusy, setSocialBusy] = useState<SocialProvider | null>(null);
@@ -143,6 +170,9 @@ export function AuthScreen() {
           };
 
   function switchMode(next: Mode) {
+    clearTotpSignInChallenge();
+    clearPendingSocialAuthState();
+    setTotpChallenge(null);
     setMode(next);
     setError(null);
     setInfo(null);
@@ -151,8 +181,25 @@ export function AuthScreen() {
     setLinkPassword('');
   }
 
+  function beginTotpChallenge(error: unknown, origin: TotpSignInOrigin): boolean {
+    if (!isMultiFactorAuthRequired(error)) return false;
+    try {
+      const challenge = startTotpSignInChallenge(error, origin);
+      setMode('login');
+      setError(null);
+      setInfo(null);
+      setTotpChallenge(challenge);
+    } catch (resolverError) {
+      clearTotpSignInChallenge();
+      clearPendingSocialAuthState();
+      setError(totpStartError(mfaTotpIssueFromError(resolverError), t));
+    }
+    return true;
+  }
+
   async function handleSocial(provider: SocialProvider) {
     if (busy) return;
+    clearPendingSocialAuthState();
     setError(null);
     setInfo(null);
     setLinking(null);
@@ -166,6 +213,9 @@ export function AuthScreen() {
         // user dismissed the native sheet — no error message
       } else if (err instanceof AccountLinkingRequiredError) {
         setLinking({ email: err.email, methods: err.methods, attempted: err.attempted });
+      } else if (beginTotpChallenge(err, provider)) {
+        // The provider sheet already completed the first factor. The in-memory
+        // resolver continues that same transaction without reopening it.
       } else {
         setError(localizedAuthError(err, t, 'errors.signInFailed'));
       }
@@ -185,7 +235,9 @@ export function AuthScreen() {
     try {
       await completeLinkingWithPassword(linking.email, linkPassword, quiz);
     } catch (err) {
-      setError(localizedAuthError(err, t, 'errors.linkFailed'));
+      if (!beginTotpChallenge(err, 'account-linking')) {
+        setError(localizedAuthError(err, t, 'errors.linkFailed'));
+      }
     } finally {
       setSocialBusy(null);
     }
@@ -198,7 +250,9 @@ export function AuthScreen() {
     try {
       await completeLinkingWithProvider(existing, quiz);
     } catch (err) {
-      if (!(err instanceof SocialAuthCancelledError)) {
+      if (err instanceof SocialAuthCancelledError) {
+        // user dismissed the native sheet
+      } else if (!beginTotpChallenge(err, 'account-linking')) {
         setError(localizedAuthError(err, t, 'errors.linkFailed'));
       }
     } finally {
@@ -235,12 +289,14 @@ export function AuthScreen() {
       if (mode === 'signup') {
         await signUp(email, password, name, quiz);
       } else if (mode === 'login') {
+        clearPendingSocialAuthState();
         await signIn(email, password);
       } else {
         await reset(email);
         setInfo(t('reset.success'));
       }
     } catch (err) {
+      if (mode === 'login' && beginTotpChallenge(err, 'password')) return;
       setError(localizedAuthError(err, t, 'errors.generic'));
     } finally {
       setLoading(false);
@@ -253,6 +309,36 @@ export function AuthScreen() {
       : mode === 'login'
         ? t('actions.signIn')
         : t('actions.sendLink');
+
+  if (totpChallenge) {
+    return (
+      <TotpChallengeScreen
+        challenge={totpChallenge}
+        onCancel={() => {
+          clearTotpSignInChallenge();
+          clearPendingSocialAuthState();
+          setTotpChallenge(null);
+          setMode('login');
+          setPassword('');
+          setLinkPassword('');
+          setLinking(null);
+          setError(null);
+          setInfo(null);
+        }}
+        onSessionExpired={() => {
+          clearTotpSignInChallenge();
+          clearPendingSocialAuthState();
+          setTotpChallenge(null);
+          setMode('login');
+          setPassword('');
+          setLinkPassword('');
+          setLinking(null);
+          setInfo(null);
+          setError(t('totpChallenge.errors.sessionExpired'));
+        }}
+      />
+    );
+  }
 
   return (
     <ScreenBg>
@@ -404,6 +490,7 @@ export function AuthScreen() {
                     onLinkPassword={handleLinkWithPassword}
                     onLinkProvider={handleLinkWithProvider}
                     onCancel={() => {
+                      clearPendingSocialAuthState();
                       setLinking(null);
                       setLinkPassword('');
                     }}

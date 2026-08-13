@@ -9,6 +9,7 @@ function resolve(overrides: GateOverrides = {}) {
     authInitializing: false,
     profileLoading: false,
     authenticated: true,
+    emailVerificationRequired: false,
     preferencesReconciling: false,
     hasQuestionnaire: true,
     subscriptionLoading: false,
@@ -40,6 +41,17 @@ describe('resolvePremiumGate', () => {
         subscriptionConfigured: false,
       }),
     ).toBe('quiz');
+  });
+
+  it('prioriza a verificação obrigatória de e-mail antes do questionário e da assinatura', () => {
+    expect(
+      resolve({
+        emailVerificationRequired: true,
+        hasQuestionnaire: false,
+        subscriptionLoading: true,
+        subscriptionConfigured: false,
+      }),
+    ).toBe('emailVerification');
   });
 
   it('E) remove o acesso ao AppShell após logout', () => {

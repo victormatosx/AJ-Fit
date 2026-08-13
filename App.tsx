@@ -20,6 +20,7 @@ import { SubscriptionProvider } from './src/state/SubscriptionContext';
 import { PromoCodeProvider } from './src/state/PromoCodeContext';
 import { useSubscription } from './src/hooks/useSubscription';
 import { resolvePremiumGate, type RootScreenId } from './src/lib/premiumGate';
+import { PhotoVaultProvider } from './src/state/PhotoVaultContext';
 import { addQuestionnaire } from './src/services/userProfile';
 import { logAuthError } from './src/services/auth';
 import { configureRevenueCat, logRevenueCatError } from './src/services/revenueCatService';
@@ -29,14 +30,18 @@ import { QuizScreen } from './src/screens/QuizScreen';
 import { AnalyzingScreen } from './src/screens/AnalyzingScreen';
 import { PlanReadyScreen } from './src/screens/PlanReadyScreen';
 import { AuthScreen } from './src/screens/AuthScreen';
+import { EmailVerificationScreen } from './src/screens/EmailVerificationScreen';
 import { PaywallScreen } from './src/screens/PaywallScreen';
 import { AppShell } from './src/screens/AppShell';
 import { FullScreenLoading } from './src/components/ui/FullScreenLoading';
+import { requiresEmailVerification } from './src/lib/emailVerification';
 import { colors } from './src/theme/tokens';
 import { initI18n } from './src/i18n';
 import { reconcileLanguageOnLoad } from './src/i18n/syncLanguage';
 import { reconcileUnitsOnLoad } from './src/units/syncUnits';
 import { UnitsProvider } from './src/state/UnitsContext';
+import { cleanupPhotoVaultTempFiles } from './src/services/photoVaultFileCrypto';
+import { logPhotoVaultIssue } from './src/lib/photoVaultErrors';
 
 /**
  * Configures the RevenueCat SDK at module evaluation time — the same
@@ -140,6 +145,7 @@ function RootNavigator() {
     error: subscriptionError,
     retry: retrySubscription,
   } = useSubscription();
+  const emailVerificationRequired = requiresEmailVerification(user);
   const { quiz } = useAppState();
   const [screen, setScreenState] = useState<RootScreenId>('splash');
   // Mirrors `screen` synchronously so late/stale callbacks (e.g. the splash
@@ -167,32 +173,35 @@ function RootNavigator() {
   useEffect(() => {
     const wasLoading = prevProfileLoadingRef.current;
     prevProfileLoadingRef.current = profileLoading;
-    if (initializing || profileLoading || !wasLoading) return;
-    if (!user) return;
+    // Account creation can briefly finish the auth listener's pre-provision
+    // profile read with `profile === null`. That is not a malformed profile:
+    // provisionNewUser is still creating it. Wait for the authoritative
+    // post-provision load instead of reporting missing preferences as errors.
+    if (initializing || profileLoading || !wasLoading || !user || !profile) return;
     setPreferencesReconciling(true);
     Promise.all([
       reconcileLanguageOnLoad({
         uid: user.uid,
-        remoteLanguage: profile?.preferences.language ?? null,
+        remoteLanguage: profile.preferences.language,
       }),
       reconcileUnitsOnLoad({
         uid: user.uid,
-        remoteUnits: profile?.preferences.units ?? null,
+        remoteUnits: profile.preferences.units,
       }),
     ]).finally(() => setPreferencesReconciling(false));
   }, [initializing, profileLoading, user, profile]);
 
   // This pure decision is also the render guard: AppShell is never mounted
-  // from a stale/requested route while auth, preference reconciliation,
-  // questionnaire, or the CustomerInfo for the current Firebase UID is
-  // unresolved. Once all of those are known, RevenueCat's `premium`
-  // entitlement exclusively chooses app vs. paywall — preferencesReconciling
-  // only ever delays that decision, never substitutes for it.
+  // from a stale/requested route while auth, email verification, preference
+  // reconciliation, questionnaire, or the CustomerInfo for the current
+  // Firebase UID is unresolved. Once all prerequisites are known,
+  // RevenueCat's `premium` entitlement exclusively chooses app vs. paywall.
   const resolvedScreen = resolvePremiumGate({
     requestedScreen: screen,
     authInitializing: initializing,
     profileLoading,
     authenticated: Boolean(user),
+    emailVerificationRequired,
     preferencesReconciling,
     hasQuestionnaire: Boolean(questionnaire),
     subscriptionLoading,
@@ -278,6 +287,7 @@ function RootNavigator() {
       {resolvedScreen === 'analyzing' && <AnalyzingScreen onDone={() => setScreen('plan')} />}
       {resolvedScreen === 'plan' && <PlanReadyScreen onContinue={() => setScreen('auth')} />}
       {resolvedScreen === 'auth' && <AuthScreen />}
+      {resolvedScreen === 'emailVerification' && <EmailVerificationScreen />}
       {resolvedScreen === 'paywall' && (
         <PaywallScreen
           onClose={async () => {
@@ -329,6 +339,20 @@ export default function App() {
   // system locale + English fallback inside initI18n).
   const [i18nReady, setI18nReady] = useState(false);
   useEffect(() => {
+    // A crash/force-kill bypasses every normal unmount/lock cleanup. Sweep
+    // the controlled plaintext directory on the next startup before any
+    // private screen can be unlocked. Failure is observable but never blocks
+    // the public app bootstrap.
+    try {
+      // A cold process has no resumable local upload queue. Both plaintext
+      // and abandoned ciphertext staging files are therefore safe to remove.
+      cleanupPhotoVaultTempFiles({ includeEncrypted: true });
+    } catch {
+      logPhotoVaultIssue('startupCleanup', 'vaultTempCleanupFailed');
+    }
+  }, []);
+
+  useEffect(() => {
     initI18n().finally(() => setI18nReady(true));
   }, []);
 
@@ -344,13 +368,16 @@ export default function App() {
           <PromoCodeProvider>
             <UnitsProvider>
               <AppStateProvider>
-                <StatusBar style="light" />
-                {/* Providers mount immediately so Firebase profile reads,
-                    RevenueCat identity synchronization, and units/language
-                    hydration overlap font/i18n loading. Navigation still waits
-                    for fonts and i18n and therefore never renders text with an
-                    unintended fallback face or the wrong locale. */}
-                {fontsLoaded && i18nReady ? <RootNavigator /> : <FullScreenLoading />}
+                {/* Inside AuthProvider so it can re-lock on logout and account
+                    switches; wraps the navigator so its AppState listener is
+                    mounted for the whole session. */}
+                <PhotoVaultProvider>
+                  <StatusBar style="light" />
+                  {/* Providers mount immediately so Firebase profile reads,
+                      RevenueCat identity synchronization, vault locking and
+                      preference hydration can overlap font/i18n loading. */}
+                  {fontsLoaded && i18nReady ? <RootNavigator /> : <FullScreenLoading />}
+                </PhotoVaultProvider>
               </AppStateProvider>
             </UnitsProvider>
           </PromoCodeProvider>

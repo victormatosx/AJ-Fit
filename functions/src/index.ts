@@ -12,13 +12,17 @@ import {
 } from './attribution/promoCodeAdmin';
 import { validatePromoCodeHandler } from './attribution/validatePromoCode';
 import { authorizePromoPurchaseHandler } from './attribution/authorizePromoPurchase';
+import { backendHealth } from './health/backendHealth';
+import { createVault } from './photoVault/createVault';
+import { recoverVaultKey } from './photoVault/recoverVaultKey';
+import { cleanupPhotoVaultOrphans } from './photoVault/cleanupOrphans';
 
 /**
  * AJ Fit Cloud Functions entry point.
  *
  * Every exported Cloud Function is wired here; the implementation itself
- * lives in its own module (docs/05_desenvolvimento_backend_modulo.md lists
- * the planned modules — billing is the first one implemented).
+ * lives in its own module. Billing/promotion handlers and Photo Vault/KMS
+ * callables intentionally share this single deployment entry point.
  */
 
 /**
@@ -80,3 +84,7 @@ export const adminListPromoCodes = onCall(adminListPromoCodesHandler);
 export const adminCreatePromoCode = onCall(adminCreatePromoCodeHandler);
 export const adminUpdatePromoCode = onCall(adminUpdatePromoCodeHandler);
 export const adminSetPromoCodeActive = onCall(adminSetPromoCodeActiveHandler);
+
+// Only authenticated, policy-enforcing Photo Vault callables are exported.
+// The KMS wrap/unwrap layer stays internal and has no endpoint of its own.
+export { backendHealth, cleanupPhotoVaultOrphans, createVault, recoverVaultKey };

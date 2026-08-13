@@ -1,4 +1,4 @@
-import { logger as functionsLogger } from 'firebase-functions/v2';
+import { logger } from 'firebase-functions/v2';
 
 /**
  * Structured logging for the Cloud Functions backend, mirroring the
@@ -8,37 +8,38 @@ import { logger as functionsLogger } from 'firebase-functions/v2';
  * logger instead of `console.*` so entries land in Cloud Logging with proper
  * severity levels.
  *
- * Never pass user-identifying data (email, name) as `context` — a `uid` is
- * fine (Cloud Functions logs are already ops-only, not user-facing), but
- * keep PII out per docs/12_seguranca_geral_do_app.md.
+ * Never pass email, name, tokens, credentials, secrets, vault keys, photo
+ * content, signed URLs or raw object paths as context. Photo Vault also avoids
+ * user IDs and photo IDs; billing uses only the already-established masked or
+ * operational identifiers documented in its handlers.
  */
 
-function errorCode(err: unknown): string | undefined {
-  return typeof err === 'object' && err !== null && 'code' in err
-    ? String((err as { code: unknown }).code)
-    : undefined;
+type LogValue = string | number | boolean | null | undefined;
+export type LogContext = Record<string, LogValue | readonly LogValue[]>;
+
+function errorCode(err: unknown): string {
+  const raw =
+    typeof err === 'object' && err !== null && 'code' in err
+      ? String((err as { code: unknown }).code)
+      : '';
+  return /^[a-z0-9/_-]{1,64}$/i.test(raw) ? raw : 'UNCLASSIFIED';
 }
 
-function errorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
+export function logInfo(scope: string, message: string, context?: LogContext): void {
+  logger.info(`[${scope}] ${message}`, context);
 }
 
-export function logInfo(scope: string, message: string, context?: Record<string, unknown>): void {
-  functionsLogger.info(`[${scope}] ${message}`, context);
-}
-
-export function logWarn(scope: string, message: string, context?: Record<string, unknown>): void {
-  functionsLogger.warn(`[${scope}] ${message}`, context);
+export function logWarn(scope: string, message: string, context?: LogContext): void {
+  logger.warn(`[${scope}] ${message}`, context);
 }
 
 export function logFunctionError(
   scope: string,
   err: unknown,
-  context?: Record<string, unknown>,
+  context?: LogContext,
 ): void {
-  functionsLogger.error(`[${scope}]`, {
+  logger.error(`[${scope}]`, {
     code: errorCode(err),
-    message: errorMessage(err),
     ...context,
   });
 }

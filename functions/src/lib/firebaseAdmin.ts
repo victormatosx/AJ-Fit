@@ -5,14 +5,16 @@ import { getFirestore, type Firestore } from 'firebase-admin/firestore';
 /**
  * Centralized Firebase Admin setup, mirroring src/lib/firebase.ts on the
  * client: a singleton initialized once at module load, reused everywhere
- * else. Cloud Functions run in a managed environment with implicit
- * credentials, so no config object is needed here (unlike the client's
- * `firebaseConfig`).
+ * else.
  *
- * This is the ONLY Firestore client billing code should use — the Admin SDK
- * bypasses Security Rules, which is exactly why writes to
- * `users/{uid}.subscription` (client-blocked, see firestore.rules) must go
- * through here and never through a client SDK call.
+ * `initializeApp()` is called with NO arguments and NO credential file.
+ * Cloud Functions run in a Google-managed environment that provides
+ * Application Default Credentials automatically — passing a service
+ * account JSON here would be both unnecessary and a security regression
+ * (see docs/12_seguranca_geral_do_app.md and the Photo Vault backend
+ * audit: this repo must never contain a downloaded service account key).
+ * This is the only Admin Firestore/Auth entry point used by billing,
+ * attribution and Photo Vault code.
  */
 if (getApps().length === 0) {
   initializeApp();

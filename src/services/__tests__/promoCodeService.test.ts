@@ -15,7 +15,7 @@ vi.mock('react-native', () => ({
   Platform: mockPlatform,
 }));
 
-vi.mock('../../lib/firebase', () => ({
+vi.mock('../../lib/firebaseFunctions', () => ({
   functions: {},
 }));
 

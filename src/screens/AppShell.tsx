@@ -22,6 +22,8 @@ import { AssessmentScreen } from './AssessmentScreen';
 import { SettingsScreen } from './SettingsScreen';
 import { SecurityScreen } from './SecurityScreen';
 import { ChangePasswordScreen } from './ChangePasswordScreen';
+import { TotpEnrollmentScreen } from './TotpEnrollmentScreen';
+import { TwoFactorSettingsScreen } from './TwoFactorSettingsScreen';
 import { EditProfileScreen } from './EditProfileScreen';
 import { PaywallScreen } from './PaywallScreen';
 import { HelpCenterScreen } from './HelpCenterScreen';
@@ -44,6 +46,9 @@ export function AppShell() {
   const [showSettings, setShowSettings] = useState(false);
   const [showSecurity, setShowSecurity] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
+  const [showTwoFactor, setShowTwoFactor] = useState(false);
+  const [showTotpEnrollment, setShowTotpEnrollment] = useState(false);
+  const [totpRefreshToken, setTotpRefreshToken] = useState(0);
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showPremium, setShowPremium] = useState(false);
   const [showWorkoutConfirmation, setShowWorkoutConfirmation] = useState(false);
@@ -55,6 +60,8 @@ export function AppShell() {
     showSettings ||
     showSecurity ||
     showChangePassword ||
+    showTwoFactor ||
+    showTotpEnrollment ||
     showEditProfile ||
     showPremium ||
     !!supportRoute;
@@ -130,12 +137,33 @@ export function AppShell() {
           <SecurityScreen
             onBack={() => setShowSecurity(false)}
             onOpenChangePassword={canChangePassword ? () => setShowChangePassword(true) : undefined}
+            onOpenTwoFactor={() => setShowTwoFactor(true)}
           />
         </View>
       )}
       {showChangePassword && canChangePassword && (
         <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 60 }}>
           <ChangePasswordScreen onBack={() => setShowChangePassword(false)} />
+        </View>
+      )}
+      {showTwoFactor && (
+        <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 60 }}>
+          <TwoFactorSettingsScreen
+            onBack={() => setShowTwoFactor(false)}
+            onOpenEnrollment={() => setShowTotpEnrollment(true)}
+            refreshToken={totpRefreshToken}
+          />
+        </View>
+      )}
+      {showTotpEnrollment && (
+        <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 70 }}>
+          <TotpEnrollmentScreen
+            onBack={() => setShowTotpEnrollment(false)}
+            onCompleted={() => {
+              setShowTotpEnrollment(false);
+              setTotpRefreshToken((value) => value + 1);
+            }}
+          />
         </View>
       )}
       {showEditProfile && (

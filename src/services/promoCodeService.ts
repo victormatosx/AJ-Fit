@@ -1,7 +1,7 @@
 import { Platform } from 'react-native';
 import { FirebaseError } from 'firebase/app';
 import { httpsCallable } from 'firebase/functions';
-import { functions } from '../lib/firebase';
+import { functions } from '../lib/firebaseFunctions';
 import { classifyPromoCodeError, type PromoCodeFailure } from '../lib/promoCodeErrors';
 import { resolvePromoCodePlatform, type PromoCodePlatform } from '../lib/promoCodePlatform';
 import type {

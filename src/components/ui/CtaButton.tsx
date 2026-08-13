@@ -8,7 +8,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { colors, fonts } from '../../theme/tokens';
+import { colors, displayLineHeight, fonts } from '../../theme/tokens';
 
 type Props = {
   children: React.ReactNode;
@@ -17,15 +17,39 @@ type Props = {
   disabled?: boolean;
   style?: StyleProp<ViewStyle>;
   accessibilityState?: AccessibilityState;
+  /**
+   * Screen-reader label. Useful when the visible text is truncated, or when
+   * the button renders an indicator instead of its label.
+   */
+  accessibilityLabel?: string;
+  accessibilityHint?: string;
 };
 
-export function CtaButton({ children, onPress, ghost, disabled, style, accessibilityState }: Props) {
+export function CtaButton({
+  children,
+  onPress,
+  ghost,
+  disabled,
+  style,
+  accessibilityState,
+  accessibilityLabel,
+  accessibilityHint,
+}: Props) {
+  const a11y = {
+    accessibilityRole: 'button' as const,
+    accessibilityLabel,
+    accessibilityHint,
+    accessibilityState: {
+      ...accessibilityState,
+      disabled: Boolean(disabled || accessibilityState?.disabled),
+    },
+  };
   if (ghost) {
     return (
       <Pressable
+        {...a11y}
         onPress={onPress}
         disabled={disabled}
-        accessibilityState={accessibilityState}
         style={[
           {
             width: '100%',
@@ -54,9 +78,9 @@ export function CtaButton({ children, onPress, ghost, disabled, style, accessibi
 
   return (
     <Pressable
+      {...a11y}
       onPress={onPress}
       disabled={disabled}
-      accessibilityState={accessibilityState}
       style={[{ opacity: disabled ? 0.35 : 1 }, style]}
     >
       <LinearGradient
@@ -102,8 +126,12 @@ export function CtaButton({ children, onPress, ghost, disabled, style, accessibi
               color: '#fff',
               fontFamily: fonts.display,
               fontSize: 17,
+              lineHeight: displayLineHeight(17),
               letterSpacing: 1.5,
               textTransform: 'uppercase',
+              textAlign: 'center',
+              textAlignVertical: 'center',
+              includeFontPadding: false,
             }}
           >
             {children}
@@ -123,8 +151,12 @@ export function CtaText({ children }: { children: React.ReactNode }) {
         color: '#fff',
         fontFamily: fonts.display,
         fontSize: 17,
+        lineHeight: displayLineHeight(17),
         letterSpacing: 1.5,
         textTransform: 'uppercase',
+        textAlign: 'center',
+        textAlignVertical: 'center',
+        includeFontPadding: false,
       }}
     >
       {children}
