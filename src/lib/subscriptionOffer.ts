@@ -1,9 +1,14 @@
 import type {
   CustomerInfo,
+  PurchasesOffering,
   PurchasesOfferings,
   PurchasesPackage,
   SubscriptionOption,
 } from 'react-native-purchases';
+import {
+  parseIOSPromotionAuthorization,
+  type IOSPromotionAuthorization,
+} from './promoCodeState';
 
 export function getCurrentOfferingPackages(
   offerings: PurchasesOfferings | null,
@@ -46,6 +51,154 @@ export function resolveSelectedPackage(
   selectedId: string | null,
 ): PurchasesPackage | null {
   return packages.find((pkg) => pkg.identifier === selectedId) ?? packages[0] ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// FASE 4 — explicit iOS Offering + promotional SKU resolution.
+//
+// This layer deliberately stops at returning a verified PurchasesPackage.
+// It never calls purchasePackage and never creates a purchase intent. The
+// legacy Apple Offer Code and Android SubscriptionOption routes below remain
+// independent and unchanged during this migration phase.
+// ---------------------------------------------------------------------------
+
+export type IOSSubscriptionPlan = 'monthly' | 'annual';
+
+export type IOSOfferingRoute =
+  | { kind: 'standard' }
+  | { kind: 'promotional'; authorization: IOSPromotionAuthorization }
+  | { kind: 'blocked'; reason: 'promo_authorization_invalid' };
+
+/**
+ * Builds the commercial route exclusively from the backend field. There is
+ * intentionally no `promoApplied`, coupon text, campaign name, or SKU
+ * heuristic parameter in this API, so those values cannot authorize a
+ * promotional Offering by accident.
+ */
+export function resolveIOSOfferingRoute(iosPromotion: unknown): IOSOfferingRoute {
+  const parsed = parseIOSPromotionAuthorization(iosPromotion);
+  if (parsed.status === 'absent') return { kind: 'standard' };
+  if (parsed.status === 'invalid') {
+    return { kind: 'blocked', reason: 'promo_authorization_invalid' };
+  }
+  return { kind: 'promotional', authorization: parsed.authorization };
+}
+
+export type IOSCatalogResolutionError =
+  | 'promo_authorization_invalid'
+  | 'promo_offering_missing'
+  | 'promo_package_missing'
+  | 'promo_package_type_mismatch'
+  | 'promo_product_mismatch'
+  | 'promo_package_ambiguous'
+  | 'standard_offering_missing'
+  | 'standard_package_missing';
+
+export type IOSOfferingResolution =
+  | {
+      status: 'resolved';
+      route: Exclude<IOSOfferingRoute, { kind: 'blocked' }>;
+      offering: PurchasesOffering;
+    }
+  | { status: 'error'; reason: IOSCatalogResolutionError };
+
+/** Selects Current for standard, or the exact backend-authorized key in `all` for promotion. */
+export function resolveIOSOffering(
+  offerings: PurchasesOfferings | null,
+  route: IOSOfferingRoute,
+): IOSOfferingResolution {
+  if (route.kind === 'blocked') return { status: 'error', reason: route.reason };
+  if (route.kind === 'standard') {
+    return offerings?.current
+      ? { status: 'resolved', route, offering: offerings.current }
+      : { status: 'error', reason: 'standard_offering_missing' };
+  }
+
+  const offering = offerings?.all?.[route.authorization.offeringIdentifier];
+  return offering
+    ? { status: 'resolved', route, offering }
+    : { status: 'error', reason: 'promo_offering_missing' };
+}
+
+export type IOSPackageResolution =
+  | {
+      status: 'resolved';
+      route: Exclude<IOSOfferingRoute, { kind: 'blocked' }>;
+      offering: PurchasesOffering;
+      package: PurchasesPackage;
+    }
+  | { status: 'error'; reason: IOSCatalogResolutionError };
+
+const PACKAGE_TYPE_BY_IOS_PLAN = {
+  monthly: 'MONTHLY',
+  annual: 'ANNUAL',
+} as const;
+
+/** Maps only the two plans this Paywall supports; every other package type is non-routable. */
+export function resolveIOSPlanKind(pkg: PurchasesPackage): IOSSubscriptionPlan | null {
+  if (pkg.packageType === 'MONTHLY') return 'monthly';
+  if (pkg.packageType === 'ANNUAL') return 'annual';
+  return null;
+}
+
+/**
+ * Resolves a package inside an already-resolved Offering. Promotional
+ * packages require BOTH the expected packageType and exact authorized
+ * product identifier; every inconsistency is a typed error with no fallback.
+ */
+export function resolveIOSPackage(
+  offeringResolution: IOSOfferingResolution,
+  plan: IOSSubscriptionPlan,
+): IOSPackageResolution {
+  if (offeringResolution.status === 'error') return offeringResolution;
+
+  const { route, offering } = offeringResolution;
+  const expectedPackageType = PACKAGE_TYPE_BY_IOS_PLAN[plan];
+  const packagesForType = offering.availablePackages.filter(
+    (pkg) => pkg.packageType === expectedPackageType,
+  );
+
+  if (route.kind === 'standard') {
+    const pkg = packagesForType[0];
+    return pkg
+      ? { status: 'resolved', route, offering, package: pkg }
+      : { status: 'error', reason: 'standard_package_missing' };
+  }
+
+  const expectedProductId =
+    plan === 'monthly'
+      ? route.authorization.monthlyProductId
+      : route.authorization.annualProductId;
+  const exactMatches = packagesForType.filter(
+    (pkg) => pkg.product.identifier === expectedProductId,
+  );
+
+  if (exactMatches.length === 1) {
+    return { status: 'resolved', route, offering, package: exactMatches[0] };
+  }
+  if (exactMatches.length > 1) {
+    return { status: 'error', reason: 'promo_package_ambiguous' };
+  }
+
+  const productExistsUnderWrongType = offering.availablePackages.some(
+    (pkg) =>
+      pkg.product.identifier === expectedProductId && pkg.packageType !== expectedPackageType,
+  );
+  if (productExistsUnderWrongType) {
+    return { status: 'error', reason: 'promo_package_type_mismatch' };
+  }
+  if (packagesForType.length === 0) {
+    return { status: 'error', reason: 'promo_package_missing' };
+  }
+  return { status: 'error', reason: 'promo_product_mismatch' };
+}
+
+export function resolveIOSSubscriptionPackage(
+  offerings: PurchasesOfferings | null,
+  route: IOSOfferingRoute,
+  plan: IOSSubscriptionPlan,
+): IOSPackageResolution {
+  return resolveIOSPackage(resolveIOSOffering(offerings, route), plan);
 }
 
 export function packageTitle(pkg: PurchasesPackage): string {

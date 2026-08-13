@@ -1930,3 +1930,100 @@ Android/Google Play correlation — preservados.
 subscriptionSync.ts — inalterado.
 Premium — exclusivamente CustomerInfo entitlement premium.
 ```
+
+---
+
+# 38. Migração Promo SKU + Introductory Offer — FASE 4 (resolução no app)
+
+A Fase 4 adiciona ao cliente a infraestrutura de resolução explícita da
+Offering/SKU promocional iOS, mas deliberadamente não executa a nova compra.
+O retorno `iosPromotion` de `validatePromoCode` agora é validado no limite da
+callable e preservado no estado aplicado como uma autorização indivisível:
+
+```ts
+interface IOSPromotionAuthorization {
+  offeringIdentifier: string;
+  monthlyProductId: string;
+  annualProductId: string;
+}
+```
+
+`null` significa que a campanha não autoriza o fluxo novo. Campo ausente,
+objeto parcial, chave extra, string vazia/com espaços externos ou tipo errado
+é resposta malformada: a validação falha de modo controlado e registra somente
+`promo_authorization_invalid`, sem payload, UID, cupom, Offering ou Product ID.
+
+## Autoridade e resolução comercial
+
+`subscriptionOffer.ts` separa explicitamente a rota iOS em `standard`,
+`promotional` ou `blocked`. A API que cria essa rota recebe somente
+`iosPromotion`; ela não recebe `promoApplied`, o texto digitado, código de
+cupom, campanha ou heurística de sufixo de SKU. Essa ausência é uma garantia
+estrutural de que estado visual não pode selecionar a Offering promocional.
+
+```txt
+standard
+  → offerings.current
+  → packageType MONTHLY ou ANNUAL
+
+promotional
+  → offerings.all[authorization.offeringIdentifier]
+  → packageType MONTHLY/ANNUAL correspondente ao plano
+  → package.product.identifier exatamente igual ao Product ID autorizado
+```
+
+No fluxo promocional, Offering ausente, package do plano ausente, Product ID
+divergente, Product ID sob `packageType` errado ou duplicidade exata resultam
+em erro tipado. Não há fallback para Current/default, para outro plano ou para
+um SKU semelhante. O identificador `promo_7d` não é regra no resolver; o teste
+`special_promo_test` prova que a chave sempre vem da autorização backend.
+
+O fluxo standard continua usando Current conforme a configuração externa do
+RevenueCat e não exige que seu identificador seja literalmente `default`.
+
+## Ciclo de vida no cliente
+
+O estado antes local ao hook do Paywall foi elevado para um
+`PromoCodeProvider` em memória, montado acima de `RootNavigator`. Isso preserva
+uma autorização válida durante um remount comum do Paywall, sem criar
+persistência permanente. Não há AsyncStorage/SecureStore para a autorização:
+um restart exige nova validação backend.
+
+O provider conserva os guards anteriores de UID, geração de identidade e
+sequência de tentativa. Logout, troca de usuário, início de validação de outro
+cupom, falha definitiva ou resposta assíncrona obsoleta não preservam a
+autorização anterior. Durante a janela render→effect de uma troca de UID, o
+estado da identidade anterior é ocultado sincronicamente e nenhuma validação
+é iniciada até o reset da nova identidade.
+
+## Integração deliberadamente incompleta nesta fase
+
+O Paywall calcula a resolução iOS e emite diagnósticos simbólicos para
+inconsistências do catálogo, porém esse resultado não participa de
+`effectiveRoute` nem de `handlePurchase`. Portanto:
+
+```txt
+Paywall chama authorizePromoPurchase — NÃO.
+Paywall compra o PurchasesPackage promocional — NÃO.
+purchaseIntent é criado ao aplicar cupom/trocar plano — NÃO.
+Apple Offer Code legado/presentCodeRedemptionSheet — preservado.
+Android SubscriptionOption/offerToken/purchaseSubscriptionOption — preservado.
+Webhook/correlação Apple/attributionSync/subscriptionSync — inalterados.
+Premium — exclusivamente CustomerInfo.entitlements.active["premium"].
+```
+
+A Fase 5 deve, no toque de compra, chamar `authorizePromoPurchase` para o plano
+escolhido, reconciliar sua resposta com a autorização/resolução já preparada e
+só então comprar o package promocional exato. Não deve criar intent antes do
+tap nem reutilizar uma resolução que tenha mudado.
+
+## Cobertura automatizada da Fase 4
+
+Os testes do app cobrem: standard mensal/anual; promoção mensal/anual;
+identificador dinâmico de Offering; Offering/package ausente por plano;
+Product ID divergente por plano; `packageType` errado mesmo com Product ID
+igual; autorização nula/parcial/vazia/tipo errado/chave extra; duplicidade;
+independência de `promoApplied`/ARNALDO; transporte e limpeza por identidade;
+provider acima do navegador; ausência de persistência; ausência de nova compra
+e de `authorizePromoPurchase`; preservação do Apple Offer Code; autoridade
+Premium; e toda a suíte Android preexistente.

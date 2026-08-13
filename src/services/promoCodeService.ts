@@ -5,10 +5,12 @@ import { functions } from '../lib/firebase';
 import { classifyPromoCodeError, type PromoCodeFailure } from '../lib/promoCodeErrors';
 import { resolvePromoCodePlatform, type PromoCodePlatform } from '../lib/promoCodePlatform';
 import type {
+  IOSPromotionAuthorization,
   PromoCodeAndroidStoreConfig,
   PromoCodeAppleStoreConfig,
   PromoCodeBenefit,
 } from '../lib/promoCodeState';
+import { parseIOSPromotionAuthorization } from '../lib/promoCodeState';
 
 /**
  * Client for the `validatePromoCode` Cloud Function (Fase 4C.2). Mirrors the
@@ -42,6 +44,8 @@ export interface ValidatePromoCodeResponse {
     android: PromoCodeAndroidStoreConfig | null;
     ios: PromoCodeAppleStoreConfig | null;
   };
+  /** Backend-authored iOS Offering/SKU authorization; null means the campaign has no new iOS route. */
+  iosPromotion: IOSPromotionAuthorization | null;
   eligibility: {
     determinedBy: 'store';
     guaranteed: false;
@@ -49,13 +53,18 @@ export interface ValidatePromoCodeResponse {
   };
 }
 
+type ValidatePromoCodeWireResponse = Omit<ValidatePromoCodeResponse, 'iosPromotion'> & {
+  /** Untrusted until parsed at the callable boundary. */
+  iosPromotion: unknown;
+};
+
 export type ValidatePromoCodeOutcome =
   | { status: 'applied'; response: ValidatePromoCodeResponse }
   | ({ status: 'failed' } & PromoCodeFailure);
 
 const validatePromoCodeCallable = httpsCallable<
   ValidatePromoCodeRequest,
-  ValidatePromoCodeResponse
+  ValidatePromoCodeWireResponse
 >(functions, 'validatePromoCode');
 
 function sanitizedErrorMessage(err: unknown): string {
@@ -153,15 +162,32 @@ export async function validatePromoCode(code: string): Promise<ValidatePromoCode
       normalizedCodePresent: code.length > 0,
     });
     const result = await validatePromoCodeCallable({ code, platform });
+    const parsedIOSPromotion = parseIOSPromotionAuthorization(result.data?.iosPromotion);
+    if (platform === 'IOS' && parsedIOSPromotion.status === 'invalid') {
+      // Symbolic diagnostic only: no coupon, uid, Offering identifier, SKU,
+      // or raw callable payload is emitted.
+      console.warn('[promoCode] promo_authorization_invalid');
+      throw new Error('promo_authorization_invalid');
+    }
     logPromoCodeDiagnostic('response', {
       valid: result.data?.valid ?? null,
       codePresent: typeof result.data?.code === 'string',
       benefitPresent: result.data?.benefit != null,
       androidConfigPresent: result.data?.storeConfig?.android != null,
       iosConfigPresent: result.data?.storeConfig?.ios != null,
+      iosPromotionStatus: parsedIOSPromotion.status,
       eligibilityPresent: result.data?.eligibility != null,
     });
-    return { status: 'applied', response: result.data };
+    return {
+      status: 'applied',
+      response: {
+        ...result.data,
+        iosPromotion:
+          parsedIOSPromotion.status === 'valid'
+            ? parsedIOSPromotion.authorization
+            : null,
+      },
+    };
   } catch (err) {
     logPromoCodeError('validate', err);
     logPromoCodeRawError(err);

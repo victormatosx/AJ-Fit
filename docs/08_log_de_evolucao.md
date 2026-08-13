@@ -1925,3 +1925,30 @@ Após validação humana, integrar o cliente ao Offering `promo_7d`, à callable
 à compra do SKU promocional na Fase 4.
 
 ---
+
+Data: 2026-08-13
+Responsável: Codex — Agente App
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Implementada a Fase 4 da migração iOS Promo SKU + Introductory Offer. O cliente
+agora tipa e valida em runtime o `iosPromotion` retornado por
+`validatePromoCode`, preserva a autorização em estado efêmero isolado por UID
+e resolve de forma pura a Offering standard (`offerings.current`) ou a
+Offering promocional indicada pelo backend (`offerings.all[offeringIdentifier]`).
+O package promocional só é aceito quando `packageType` e Product ID coincidem
+com a autorização; inconsistências falham sem fallback.
+
+Impacto:
+O estado promocional passou a viver em provider em memória acima do navegador,
+portanto sobrevive a remount do Paywall, mas não a restart, logout ou troca de
+usuário. O Paywall apenas prepara/diagnostica a resolução nesta fase: não chama
+`authorizePromoPurchase` e não compra Promo SKU. Android, Premium gate,
+Functions, webhook, `subscriptionSync.ts` e Apple Offer Code legado ficaram
+inalterados.
+
+Próxima ação:
+Na Fase 5, integrar no tap de compra a criação imediata da purchase intent e a
+compra do package promocional já validado, sem fallback comercial silencioso.
+
+---

@@ -52,6 +52,11 @@ describe('validatePromoCode', () => {
         code: 'ARNALDO',
         benefit: { campaignId: 'c1', influencerId: 'i1', kind: 'promotional_campaign' },
         storeConfig: { android: null, ios: { offerCodeMonthly: 'M', offerCodeAnnual: 'A' } },
+        iosPromotion: {
+          offeringIdentifier: 'promo_7d',
+          monthlyProductId: 'monthly_promo',
+          annualProductId: 'annual_promo',
+        },
         eligibility: { determinedBy: 'store', guaranteed: false, disclaimer: 'x' },
       },
     });
@@ -63,6 +68,11 @@ describe('validatePromoCode', () => {
     if (outcome.status === 'applied') {
       expect(outcome.response.storeConfig.ios).toEqual({ offerCodeMonthly: 'M', offerCodeAnnual: 'A' });
       expect(outcome.response.storeConfig.android).toBeNull();
+      expect(outcome.response.iosPromotion).toEqual({
+        offeringIdentifier: 'promo_7d',
+        monthlyProductId: 'monthly_promo',
+        annualProductId: 'annual_promo',
+      });
     }
   });
 
@@ -77,6 +87,7 @@ describe('validatePromoCode', () => {
           android: { monthly: { basePlanId: 'monthly', offerId: 'o1' }, annual: null },
           ios: null,
         },
+        iosPromotion: null,
         eligibility: { determinedBy: 'store', guaranteed: false, disclaimer: 'x' },
       },
     });
@@ -91,7 +102,47 @@ describe('validatePromoCode', () => {
         offerId: 'o1',
       });
       expect(outcome.response.storeConfig.ios).toBeNull();
+      expect(outcome.response.iosPromotion).toBeNull();
     }
+  });
+
+  it('accepts explicit iosPromotion: null on iOS for a valid legacy-only campaign', async () => {
+    mockCallable.mockResolvedValue({
+      data: {
+        valid: true,
+        code: 'LEGACY',
+        benefit: { campaignId: 'c1', influencerId: 'i1', kind: 'promotional_campaign' },
+        storeConfig: { android: null, ios: { offerCodeMonthly: 'M', offerCodeAnnual: null } },
+        iosPromotion: null,
+        eligibility: { determinedBy: 'store', guaranteed: false, disclaimer: 'x' },
+      },
+    });
+
+    const outcome = await validatePromoCode('LEGACY');
+    expect(outcome.status).toBe('applied');
+    if (outcome.status === 'applied') expect(outcome.response.iosPromotion).toBeNull();
+  });
+
+  it.each([
+    ['missing', undefined],
+    ['partial', { offeringIdentifier: 'promo_7d', monthlyProductId: 'monthly_promo' }],
+    ['blank', { offeringIdentifier: 'promo_7d', monthlyProductId: '', annualProductId: 'annual_promo' }],
+    ['wrong type', { offeringIdentifier: 'promo_7d', monthlyProductId: 7, annualProductId: 'annual_promo' }],
+  ])('fails the iOS validation safely for a %s authorization', async (_label, iosPromotion) => {
+    mockCallable.mockResolvedValue({
+      data: {
+        valid: true,
+        code: 'ARNALDO',
+        benefit: { campaignId: 'c1', influencerId: 'i1', kind: 'promotional_campaign' },
+        storeConfig: { android: null, ios: null },
+        ...(iosPromotion === undefined ? {} : { iosPromotion }),
+        eligibility: { determinedBy: 'store', guaranteed: false, disclaimer: 'x' },
+      },
+    });
+
+    const outcome = await validatePromoCode('ARNALDO');
+    expect(outcome.status).toBe('failed');
+    if (outcome.status === 'failed') expect(outcome.reason).toBe('temporary');
   });
 
   it('classifies a well-formed FirebaseFunctionsError (functions/not-found) as unavailable', async () => {

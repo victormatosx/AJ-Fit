@@ -17,6 +17,7 @@ import {
 import { AppStateProvider, useAppState } from './src/state/AppState';
 import { AuthProvider, useAuth } from './src/state/AuthContext';
 import { SubscriptionProvider } from './src/state/SubscriptionContext';
+import { PromoCodeProvider } from './src/state/PromoCodeContext';
 import { useSubscription } from './src/hooks/useSubscription';
 import { resolvePremiumGate, type RootScreenId } from './src/lib/premiumGate';
 import { addQuestionnaire } from './src/services/userProfile';
@@ -340,17 +341,19 @@ export default function App() {
             is untouched — it stays the sole owner of identity and knows
             nothing about RevenueCat; SubscriptionContext just watches it. */}
         <SubscriptionProvider>
-          <UnitsProvider>
-            <AppStateProvider>
-              <StatusBar style="light" />
-              {/* Providers mount immediately so Firebase profile reads,
-                  RevenueCat identity synchronization, and units/language
-                  hydration overlap font/i18n loading. Navigation still waits
-                  for fonts and i18n and therefore never renders text with an
-                  unintended fallback face or the wrong locale. */}
-              {fontsLoaded && i18nReady ? <RootNavigator /> : <FullScreenLoading />}
-            </AppStateProvider>
-          </UnitsProvider>
+          <PromoCodeProvider>
+            <UnitsProvider>
+              <AppStateProvider>
+                <StatusBar style="light" />
+                {/* Providers mount immediately so Firebase profile reads,
+                    RevenueCat identity synchronization, and units/language
+                    hydration overlap font/i18n loading. Navigation still waits
+                    for fonts and i18n and therefore never renders text with an
+                    unintended fallback face or the wrong locale. */}
+                {fontsLoaded && i18nReady ? <RootNavigator /> : <FullScreenLoading />}
+              </AppStateProvider>
+            </UnitsProvider>
+          </PromoCodeProvider>
         </SubscriptionProvider>
       </AuthProvider>
     </SafeAreaProvider>

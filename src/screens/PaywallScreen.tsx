@@ -29,6 +29,9 @@ import {
   resolveApplePurchaseRoute,
   resolveAuthorizedAndroidOffer,
   resolveAuthorizedAppleOfferCode,
+  resolveIOSOfferingRoute,
+  resolveIOSPlanKind,
+  resolveIOSSubscriptionPackage,
   resolveOfferingViewState,
   resolvePurchaseRoute,
   resolveSelectedPackage,
@@ -95,10 +98,10 @@ export function PaywallScreen({
   const closeInFlight = useRef(false);
   const mounted = useRef(true);
 
-  // Fase 4C.2: promo/influencer code. `promoState` is identity-scoped
-  // (uid + generation + per-attempt seq) entirely inside `usePromoCode` —
-  // see that hook's doc comment. `promoInput` is only the raw text field
-  // value; it never feeds authorization decisions on its own.
+  // FASE 4: promo/influencer state is identity-scoped by PromoCodeProvider
+  // (uid + generation + attempt seq) and survives an ordinary Paywall
+  // remount. `promoInput` remains display/input only and never authorizes a
+  // commercial route.
   const { state: promoState, applyCode } = usePromoCode();
   const [promoInput, setPromoInput] = useState('');
 
@@ -118,6 +121,38 @@ export function PaywallScreen({
     () => resolveSelectedPackage(packages, selectedId),
     [packages, selectedId],
   );
+
+  // FASE 4 — prepare and continuously verify the new iOS Offering/SKU route
+  // without connecting it to the CTA yet. Authorization comes ONLY from the
+  // typed backend `iosPromotion` snapshot. This resolution is deliberately
+  // not part of `effectiveRoute`/`handlePurchase`: FASE 5 will create the
+  // short-lived purchase intent immediately before buying this package.
+  const iosOfferingRoute = useMemo(
+    () =>
+      Platform.OS === 'ios'
+        ? resolveIOSOfferingRoute(promoState.applied?.iosPromotion ?? null)
+        : null,
+    [promoState.applied],
+  );
+  const iosCatalogResolution = useMemo(() => {
+    if (!selectedPackage || !iosOfferingRoute) return null;
+    const plan = resolveIOSPlanKind(selectedPackage);
+    if (!plan) return null;
+    return resolveIOSSubscriptionPackage(offerings, iosOfferingRoute, plan);
+  }, [iosOfferingRoute, offerings, selectedPackage]);
+
+  useEffect(() => {
+    if (
+      iosOfferingRoute?.kind !== 'promotional' ||
+      !iosCatalogResolution ||
+      iosCatalogResolution.status !== 'error'
+    ) {
+      return;
+    }
+    // Symbolic catalog diagnostics only: never logs UID, coupon, Offering,
+    // Product ID, or the authorization payload.
+    console.warn(`[promoCode] ${iosCatalogResolution.reason}`);
+  }, [iosCatalogResolution, iosOfferingRoute]);
 
   useEffect(() => {
     const nextId = selectedPackage?.identifier ?? null;

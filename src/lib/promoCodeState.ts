@@ -59,6 +59,71 @@ export interface PromoCodeAppleStoreConfig {
 }
 
 /**
+ * FASE 4 — client mirror of the backend-authored `IOSPromotionConfig`.
+ * These three values are one indivisible authorization: none is inferred
+ * from the coupon text, campaign name, Offering catalog, or SKU suffix.
+ */
+export interface IOSPromotionAuthorization {
+  offeringIdentifier: string;
+  monthlyProductId: string;
+  annualProductId: string;
+}
+
+export type IOSPromotionAuthorizationParseResult =
+  | { status: 'absent' }
+  | { status: 'valid'; authorization: IOSPromotionAuthorization }
+  | { status: 'invalid' };
+
+const IOS_PROMOTION_KEYS = [
+  'annualProductId',
+  'monthlyProductId',
+  'offeringIdentifier',
+] as const;
+
+/**
+ * Runtime boundary for the callable response. `null` is the backend's
+ * explicit "this campaign has no new iOS promotion" value; every other
+ * incomplete or unexpected shape is malformed and must fail closed.
+ */
+export function parseIOSPromotionAuthorization(
+  value: unknown,
+): IOSPromotionAuthorizationParseResult {
+  if (value === null) return { status: 'absent' };
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return { status: 'invalid' };
+  }
+
+  const record = value as Record<string, unknown>;
+  const keys = Object.keys(record).sort();
+  if (
+    keys.length !== IOS_PROMOTION_KEYS.length ||
+    keys.some((key, index) => key !== IOS_PROMOTION_KEYS[index])
+  ) {
+    return { status: 'invalid' };
+  }
+
+  const isExactNonEmptyString = (field: unknown): field is string =>
+    typeof field === 'string' && field.length > 0 && field.trim() === field;
+
+  if (
+    !isExactNonEmptyString(record.offeringIdentifier) ||
+    !isExactNonEmptyString(record.monthlyProductId) ||
+    !isExactNonEmptyString(record.annualProductId)
+  ) {
+    return { status: 'invalid' };
+  }
+
+  return {
+    status: 'valid',
+    authorization: {
+      offeringIdentifier: record.offeringIdentifier,
+      monthlyProductId: record.monthlyProductId,
+      annualProductId: record.annualProductId,
+    },
+  };
+}
+
+/**
  * `androidStoreConfig` and `appleStoreConfig` are two DISTINCT, independently
  * `null`-able fields — never a single "storeConfig" union — so neither can
  * ever be misread as the other's shape (Fase iOS-2 §5: Android config must
@@ -74,6 +139,8 @@ export interface PromoCodeAppliedRecord {
   benefit: PromoCodeBenefit;
   androidStoreConfig: PromoCodeAndroidStoreConfig | null;
   appleStoreConfig: PromoCodeAppleStoreConfig | null;
+  /** New Offering/SKU authorization; separate from the legacy Apple Offer Code config above. */
+  iosPromotion: IOSPromotionAuthorization | null;
 }
 
 export interface PromoCodeState {
@@ -107,6 +174,7 @@ export type PromoCodeEvent =
       benefit: PromoCodeBenefit;
       androidStoreConfig: PromoCodeAndroidStoreConfig | null;
       appleStoreConfig: PromoCodeAppleStoreConfig | null;
+      iosPromotion: IOSPromotionAuthorization | null;
     }
   | { type: 'validation-unavailable'; uid: string; generation: number; seq: number; message: string }
   | { type: 'validation-locked'; uid: string; generation: number; seq: number; message: string }
@@ -167,6 +235,7 @@ export function reducePromoCodeState(
           benefit: event.benefit,
           androidStoreConfig: event.androidStoreConfig,
           appleStoreConfig: event.appleStoreConfig,
+          iosPromotion: event.iosPromotion,
         },
         message: null,
       };
