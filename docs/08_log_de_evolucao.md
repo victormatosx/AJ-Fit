@@ -2271,3 +2271,82 @@ Assinatura:
 Codex — Agente Backend + QA; 2026-08-13; prompt AJ FIT FASE 11B.
 
 ---
+
+Data: 2026-08-13
+Responsável: Codex — Agente App + QA
+Categoria: [BLOQUEIO]
+
+Descrição:
+Durante a Fase 12A.1, foram neutralizadas as promessas prematuras de trial na
+`AuthScreen` e na `PlanReadyScreen`, com regressões focais aprovadas. A busca
+global posterior não encontrou outro caso runtime que prometesse benefício
+comercial antes da autoridade da loja.
+
+Bloqueio:
+O logging atual não identifica explicitamente todos os marcos exigidos para o
+E2E manual: rota standard/promocional, plano selecionado, compra iniciada,
+cancelamento/sucesso e estado Premium resultante. Como a tarefa determina
+parada antes de adicionar instrumentação quando houver essa lacuna, os gates,
+o build iOS e o commit final não foram executados.
+
+Próxima ação:
+Obter autorização explícita para acrescentar logging simbólico e sanitizado,
+sem UID completo, cupom, receipt, token, payload ou CustomerInfo. Depois,
+retomar os gates, o development build iOS e os roteiros E2E da mesma fase.
+
+Assinatura:
+Codex — Agente App + QA; 2026-08-13; prompt AJ FIT FASE 12A.1.
+
+---
+
+Data: 2026-08-13
+Responsável: Codex — Agente App + QA
+Categoria: [CORREÇÃO + PRÉ-FLIGHT]
+
+Descrição:
+Retomada autorizada da Fase 12A.1 e concluída a Fase 12A.2. As promessas de
+trial anteriores ao Paywall permaneceram neutralizadas na criação de conta e
+na tela de plano pronto. Foi adicionada observabilidade iOS estritamente
+allowlisted para rota standard/promo, plano mensal/anual, Intro Eligibility,
+autorização da purchase intent, início/cancelamento/conclusão/falha da compra e
+`premiumActive` derivado exclusivamente do CustomerInfo retornado pelo SDK.
+Os logs não transportam UID, email, cupom, Product ID, Offering, CustomerInfo,
+receipt, token, SubscriptionOption ou Offer Token.
+
+Validação:
+- App typecheck aprovado;
+- App: 61 arquivos / 1.055 testes aprovados;
+- Functions typecheck/build aprovados e 22 arquivos / 474 testes aprovados;
+- Firestore Emulator/Rules: 3 arquivos / 63 testes aprovados com Java 21;
+- i18n check: 22 arquivos / 545 testes aprovados;
+- i18n audit: 838 chaves, 14 suspeitas conhecidas e zero bloqueio;
+- `git diff --check` aprovado após a documentação final;
+- build iOS Debug para dispositivo genérico: `BUILD SUCCEEDED`, zero erros e
+  seis avisos não bloqueadores; artefato `AJFit.app` gerado para
+  `com.ajfit.app`.
+
+Arquitetura preservada:
+CustomerInfo continua sendo a única autoridade client-side de Premium. O
+listener global único e o refresh legítimo por AppState foram preservados. O
+fluxo standard não cria purchase intent; o fluxo promo mantém validação
+estrita, Intro Eligibility fail-closed, autorização antes da compra e ausência
+de fallback Promo → standard/Offer Code. Functions, webhook, billing, Android,
+RevenueCat e configurações remotas não foram alterados.
+
+Preparação manual:
+Foram finalizados no plano de testes o checklist humano de 13 pontos do App
+Store Connect, a separação das contas Sandbox A–D, os roteiros Standard
+Monthly, Promo Monthly elegível, Promo Annual elegível e Promo inelegível e a
+ficha sanitizada de evidências. O App Store Connect não foi verificado pelo
+agente; nenhuma compra, deploy, push ou mutação remota foi executada.
+
+Próxima ação:
+Victor deve confirmar o checklist do App Store Connect, instalar o build em
+iPhone físico e iniciar pelo cenário A — Standard Monthly. Só então executar
+os quatro cenários, preservando a independência de eligibility do Subscription
+Group.
+
+Assinatura:
+Codex — Agente App + QA; 2026-08-13; prompt AJ FIT FASE 12A.2.
+
+---

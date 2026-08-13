@@ -1,6 +1,7 @@
 import type { PurchasesPackage } from 'react-native-purchases';
 import type { IOSPromotionAuthorization } from './promoCodeState';
 import type { IOSSubscriptionPlan } from './subscriptionOffer';
+import { logSubscriptionDiagnostic } from './subscriptionDiagnostics';
 
 export interface PromoPurchaseIntentAuthorization {
   authorized: true;
@@ -182,5 +183,15 @@ export async function executeIOSPromoPurchase<P>({
   if (validation.expiresAtMs <= now()) {
     return { status: 'intent_invalid', reason: 'expired' };
   }
+  logSubscriptionDiagnostic({
+    event: 'promo_purchase_intent_authorized',
+    plan: attempt.plan,
+    authorized: true,
+  });
+  logSubscriptionDiagnostic({
+    event: 'subscription_purchase_started',
+    route: 'promo',
+    plan: attempt.plan,
+  });
   return { status: 'purchased', result: await purchase(attempt.package) };
 }

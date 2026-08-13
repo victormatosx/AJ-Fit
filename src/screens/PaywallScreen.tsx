@@ -51,6 +51,12 @@ import {
 import { isPromoCodeUiSupported } from '../lib/promoCodePlatform';
 import type { PromoCodeState } from '../lib/promoCodeState';
 import {
+  logSubscriptionDiagnostic,
+  logSubscriptionPurchaseOutcome,
+  normalizeIntroEligibilityForDiagnostic,
+  type SubscriptionPurchaseContext,
+} from '../lib/subscriptionDiagnostics';
+import {
   checkIOSIntroEligibility,
   PREMIUM_ENTITLEMENT_ID,
 } from '../services/revenueCatService';
@@ -207,9 +213,21 @@ export function PaywallScreen({
       .then((result) => {
         if (cancelled || !mounted.current || seq !== eligibilityRequestSeq.current) return;
         setIOSEligibilitySnapshot({ scopeKey: eligibilityScopeKey, byProductId: result });
-        Object.values(result).forEach((state) =>
-          console.info(`[promoCode] intro_${state.status}`),
-        );
+        [
+          iosCatalogResolution.monthlyPackage,
+          iosCatalogResolution.annualPackage,
+        ].forEach((pkg) => {
+          const plan = resolveIOSPlanKind(pkg);
+          if (!plan) return;
+          const state = result[pkg.product.identifier] ?? { status: 'unknown' as const };
+          const presentation = resolveIOSIntroOfferPresentation(pkg, state);
+          logSubscriptionDiagnostic({
+            event: 'subscription_intro_eligibility',
+            plan,
+            eligibility: normalizeIntroEligibilityForDiagnostic(state),
+            hasValidFreeIntro: presentation.kind === 'free_trial',
+          });
+        });
       })
       .catch(() => {
         if (cancelled || !mounted.current || seq !== eligibilityRequestSeq.current) return;
@@ -218,6 +236,19 @@ export function PaywallScreen({
           byProductId: Object.fromEntries(
             productIds.map((id) => [id, { status: 'error' } as const]),
           ),
+        });
+        [
+          iosCatalogResolution.monthlyPackage,
+          iosCatalogResolution.annualPackage,
+        ].forEach((pkg) => {
+          const plan = resolveIOSPlanKind(pkg);
+          if (!plan) return;
+          logSubscriptionDiagnostic({
+            event: 'subscription_intro_eligibility',
+            plan,
+            eligibility: 'error',
+            hasValidFreeIntro: false,
+          });
         });
       });
     return () => {
@@ -398,6 +429,24 @@ export function PaywallScreen({
     standardIOSRoute,
   ]);
 
+  const iosPurchaseDiagnosticContext = useMemo<SubscriptionPurchaseContext | null>(() => {
+    if (Platform.OS !== 'ios' || !effectiveRoute || effectiveRoute.kind === 'blocked') return null;
+    if (effectiveRoute.kind === 'ios_promo_package') {
+      return { route: 'promo', plan: effectiveRoute.attempt.plan };
+    }
+    if (effectiveRoute.kind !== 'package') return null;
+    const plan = resolveIOSPlanKind(effectiveRoute.package);
+    return plan ? { route: 'standard', plan } : null;
+  }, [effectiveRoute]);
+
+  useEffect(() => {
+    if (!iosPurchaseDiagnosticContext) return;
+    logSubscriptionDiagnostic({
+      event: 'subscription_purchase_route_resolved',
+      ...iosPurchaseDiagnosticContext,
+    });
+  }, [iosPurchaseDiagnosticContext?.plan, iosPurchaseDiagnosticContext?.route]);
+
   const currentPromoSnapshot = useMemo<IOSPromoPurchaseSnapshot | null>(() => {
     if (effectiveRoute?.kind !== 'ios_promo_package' || !promoState.applied) return null;
     return {
@@ -484,6 +533,11 @@ export function PaywallScreen({
               { reason: execution.reason },
             );
           }
+          logSubscriptionDiagnostic({
+            event: 'promo_purchase_intent_failed',
+            plan: currentPromoSnapshot.attempt.plan,
+            errorCategory: 'authorization_error',
+          });
           const message =
             execution.status === 'authorization_failed' &&
             execution.outcome.reason === 'conflict'
@@ -501,10 +555,22 @@ export function PaywallScreen({
         }
         outcome = execution.result;
       } else {
-        outcome =
-          effectiveRoute.kind === 'package'
-            ? await purchase(effectiveRoute.package)
-            : await purchaseOption(effectiveRoute.option);
+        if (effectiveRoute.kind === 'package' && iosPurchaseDiagnosticContext) {
+          logSubscriptionDiagnostic({
+            event: 'subscription_purchase_started',
+            ...iosPurchaseDiagnosticContext,
+          });
+        }
+        outcome = effectiveRoute.kind === 'package'
+          ? await purchase(effectiveRoute.package)
+          : await purchaseOption(effectiveRoute.option);
+      }
+      if (iosPurchaseDiagnosticContext) {
+        logSubscriptionPurchaseOutcome(
+          iosPurchaseDiagnosticContext,
+          outcome,
+          PREMIUM_ENTITLEMENT_ID,
+        );
       }
       if (!mounted.current) return;
 
@@ -542,6 +608,7 @@ export function PaywallScreen({
   }, [
     currentPromoSnapshot,
     effectiveRoute,
+    iosPurchaseDiagnosticContext,
     purchase,
     purchaseOption,
     selectedIntroReadiness.status,

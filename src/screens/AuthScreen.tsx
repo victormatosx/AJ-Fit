@@ -249,7 +249,7 @@ export function AuthScreen() {
 
   const submitLabel =
     mode === 'signup'
-      ? t('actions.startTrial')
+      ? t('actions.createAccount')
       : mode === 'login'
         ? t('actions.signIn')
         : t('actions.sendLink');

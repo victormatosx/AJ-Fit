@@ -281,7 +281,7 @@ export function PlanReadyScreen({ onContinue }: { onContinue: () => void }) {
                     color: 'rgba(255,255,255,0.85)',
                   }}
                 >
-                  COMECE GRÁTIS POR 7 DIAS
+                  CONTINUAR
                 </Text>
               </View>
               <View
@@ -300,7 +300,7 @@ export function PlanReadyScreen({ onContinue }: { onContinue: () => void }) {
               </View>
             </Pressable>
             <MonoLabel style={{ textAlign: 'center', marginTop: 14 }}>
-              SEM COBRANÇA AGORA · CANCELE QUANDO QUISER
+              VEJA AS OPÇÕES DISPONÍVEIS NA PRÓXIMA ETAPA
             </MonoLabel>
           </RiseIn>
         </ScrollView>

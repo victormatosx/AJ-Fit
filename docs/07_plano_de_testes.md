@@ -591,3 +591,119 @@ sem novo deploy e sem `INITIAL_PURCHASE` artificial.
 Este resultado libera somente a entrada na Fase 12. A validação ainda pendente
 é o circuito real App + RevenueCat SDK + StoreKit Sandbox + Apple ID Sandbox +
 Intro Eligibility + compra + CustomerInfo + webhook real.
+
+---
+
+# 29. Pré-flight final do E2E iOS Sandbox — Fase 12A.2
+
+O build Debug para dispositivo iOS genérico foi concluído sem erros. Os
+roteiros abaixo estão preparados, mas nenhuma compra foi executada. Cada rota
+deve usar uma conta AJ Fit nova e uma identidade Apple Sandbox independente;
+senhas, UID integral, receipt e tokens não pertencem às evidências.
+
+## Checklist humana do App Store Connect
+
+Antes do primeiro teste, Victor deve confirmar no App Store Connect:
+
+1. `ajfit_premium_monthly` existe;
+2. `ajfit_premium_annual` existe;
+3. `ajfit_premium_monthly_promo` existe;
+4. `ajfit_premium_annual_promo` existe;
+5. os quatro produtos pertencem ao Subscription Group esperado;
+6. `ajfit_premium_monthly_promo` possui Introductory Offer;
+7. `ajfit_premium_annual_promo` possui Introductory Offer;
+8. a modalidade das duas ofertas promocionais é Free Trial;
+9. a duração é de sete dias;
+10. os quatro produtos estão disponíveis para Sandbox;
+11. territórios e configuração comercial são compatíveis com o teste;
+12. a capability In-App Purchase está habilitada para `com.ajfit.app`;
+13. `ajfit_premium_monthly` e `ajfit_premium_annual` não possuem
+    Introductory Offer, caso o cenário standard deva ser definitivamente
+    “sem trial”.
+
+O item 13 não pode ser inferido pelo código. Até essa confirmação, a
+expectativa do cenário A é exibir os termos standard reais retornados pelo
+StoreKit, que podem ou não conter uma oferta introdutória.
+
+## Independência das contas Sandbox
+
+| Alias | Uso exclusivo | Estado necessário |
+|---|---|---|
+| A | Standard Monthly | identidade separada; não usar nos cenários promo |
+| B | Promo Monthly | elegível no Subscription Group antes da compra |
+| C | Promo Annual | elegível e nunca reutilizada de B |
+| D | Promo inelegível | inelegibilidade comprovada no mesmo Subscription Group |
+
+B e C devem permanecer novas até seus respectivos testes, pois consumir uma
+oferta introdutória em qualquer produto do grupo pode afetar a eligibility dos
+demais. Para preparar D, use uma conta dedicada que tenha consumido a
+eligibilidade do mesmo Subscription Group por uma operação Sandbox controlada;
+somente classifique D como inelegível quando a API da Apple retornar
+`INELIGIBLE` e a folha StoreKit não apresentar Introductory Offer.
+
+## Roteiro A — Standard Monthly
+
+Pré-condições: checklist Apple concluída; conta AJ Fit nova; Sandbox A; nenhum
+cupom aplicado. Selecionar mensal e confirmar nos diagnostics `route=standard`
+e `plan=monthly`. A compra deve usar `ajfit_premium_monthly`, sem chamar
+`authorizePromoPurchase` e sem criar purchase intent. Comparar o texto do
+Paywall com os termos reais da folha StoreKit e concluir ou cancelar somente
+na execução E2E autorizada. Se concluída, registrar `premiumActive` derivado do
+CustomerInfo e confirmar billing/webhook sem attribution promocional.
+
+PASS: rota, plano, produto e termos concordam; não existe intent/redemption
+promo; o resultado da compra coincide com CustomerInfo. FAIL: acesso a
+`promo_7d`, SKU `_promo`, criação de intent, promessa divergente da StoreKit ou
+Premium sem entitlement. Evidências: logs sanitizados de rota/início/resultado,
+capturas do Paywall e StoreKit e estado Firestore antes/depois.
+
+## Roteiro B — Promo Monthly elegível
+
+Pré-condições: conta AJ Fit nova; Sandbox B ainda elegível; cupom `ARNALDO`.
+Confirmar `route=promo`, `plan=monthly`, Offering `promo_7d`, produto
+`ajfit_premium_monthly_promo`, eligibility `ELIGIBLE` e trial derivado válido.
+Antes da chamada de compra deve existir autorização mensal e intent
+`purchase_pending`; Paywall e StoreKit devem mostrar os mesmos sete dias. Após
+uma compra concluída, CustomerInfo deve ativar Premium e o webhook real deve
+confirmar a intent e atribuir `ARNALDO`.
+
+PASS: sequência route → eligibility → intent → purchase → CustomerInfo →
+webhook/attribution concordante. FAIL: fallback standard, produto ou plano
+divergente, trial prometido sem StoreKit, Premium paralelo ou attribution sem
+match. Evidências: diagnostics sanitizados, telas, snapshot/estado da intent,
+redemption e evento real do webhook, sem payload sensível.
+
+## Roteiro C — Promo Annual elegível
+
+Pré-condições: conta AJ Fit nova; Sandbox C nunca reutilizada de B; cupom
+`ARNALDO`. Confirmar `route=promo`, `plan=annual`, `promo_7d`, produto
+`ajfit_premium_annual_promo`, eligibility `ELIGIBLE` e sete dias somente quando
+StoreKit confirmar. A autorização e a purchase intent devem ser anuais; a
+compra concluída deve produzir Premium via CustomerInfo e match anual no
+webhook com attribution `ARNALDO`.
+
+PASS: todos os marcos e termos são anuais e concordantes. FAIL: consumo prévio
+de eligibility, intent mensal, SKU mensal/standard, termos divergentes ou
+attribution sem match. Coletar as mesmas evidências de B com alias C.
+
+## Roteiro D — Promo inelegível
+
+Pré-condições: conta AJ Fit nova; Sandbox D com consumo anterior do benefício
+no mesmo Subscription Group comprovado; cupom `ARNALDO`. Confirmar
+`route=promo`, o plano escolhido e eligibility `INELIGIBLE`. O Paywall não deve
+prometer trial, deve mostrar o preço regular do Promo SKU e a compra continua
+permitida pela arquitetura atual. A folha StoreKit não pode apresentar
+Introductory Offer. A autorização/intent permanece exigida e Premium, se a
+compra for concluída, continua vindo somente do CustomerInfo.
+
+PASS: API Apple e StoreKit provam inelegibilidade, UI fica neutra e a compra
+regular segue a rota promo autorizada. FAIL: conta presumida inelegível sem
+prova, qualquer promessa de trial, Introductory Offer na StoreKit, bypass de
+intent ou Premium paralelo.
+
+## Ficha de evidência por cenário
+
+Registrar: data/hora, identificador do build, cenário, alias A/B/C/D, route,
+plan, eligibility, texto do Paywall, termos da StoreKit, resultado da compra,
+`premiumActive`, estado da redemption, recebimento do webhook, attribution e
+divergências. Nunca registrar senha Sandbox, UID integral, receipt ou token.
