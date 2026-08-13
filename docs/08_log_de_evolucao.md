@@ -2127,11 +2127,95 @@ Android e `subscriptionSync.ts` permanecem intactos. Nenhum arquivo de
 produção foi alterado e não houve compra real, push, deploy ou mutação remota.
 
 Próxima ação:
-Após validação humana dos gates, executar a Fase 11 / E2E iOS Sandbox real em
-roteiro próprio, observando Offering, termos StoreKit, purchase intent,
-webhook e CustomerInfo sem alterar a autoridade de billing.
+Após validação humana dos gates, executar a Fase 11 de deploy controlado do
+backend promocional antes de qualquer cliente novo ou E2E iOS Sandbox real.
 
 Assinatura:
 Codex — Agente QA; 2026-08-13; prompt AJ FIT FASE 10.
+
+---
+
+Data: 2026-08-13
+Responsável: Codex — Agente Backend + QA
+Categoria: [DEPLOY CONTROLADO]
+
+Descrição:
+Executada a Fase 11 da migração iOS Promo SKU + Introductory Offer com deploy
+seletivo no projeto Firebase confirmado `ajfit-2f321`. Foram publicados
+somente `validatePromoCode`, `authorizePromoPurchase` e
+`revenueCatWebhook`; Functions de vault, health e administração de catálogo
+ficaram fora do alvo e foram preservadas. `authorizePromoPurchase` foi criada
+e as outras duas Functions receberam novas revisões Gen2 ativas, todas em
+`us-central1`/Node.js 20. Os secrets `REVENUECAT_WEBHOOK_SECRET` e
+`REVENUECAT_API_SECRET_KEY` já existiam e permaneceram vinculados às versões
+habilitadas. Para um smoke HMAC sem efeito de negócio, o valor do secret do
+webhook foi acessado somente em memória; não foi exibido, persistido nem
+registrado. O secret da API RevenueCat não foi acessado.
+
+Validação:
+- pós-deploy: App typecheck e 59 arquivos / 1.038 testes aprovados;
+- pós-deploy: Functions typecheck/build e 22 arquivos / 474 testes aprovados;
+- pós-deploy: Firestore Emulator/Rules, 3 arquivos / 63 testes aprovados com
+  Java 21;
+- pós-deploy: i18n check, 22 arquivos / 544 testes; audit de 839 chaves, 14
+  suspeitas conhecidas e zero bloqueio; `git diff --check` aprovado;
+- regressão backend focalizada: iOS, 7 arquivos / 197 testes; Android, 3
+  arquivos / 93 testes;
+- chamadas sem autenticação a `validatePromoCode` e
+  `authorizePromoPurchase`: HTTP 401 `UNAUTHENTICATED`;
+- webhook sem assinatura: HTTP 401 `invalid_signature`;
+- webhook com HMAC válido e tipo deliberadamente não suportado: HTTP 200
+  `ignored/unsupported_event_type`, sem escrita;
+- identidade descartável autenticada: `ARNALDO` foi reconhecido e o espelho
+  `users/{uid}.attribution` foi gravado, provando Function + Firestore;
+- todos os documentos e a conta Auth temporários foram removidos após cada
+  tentativa, sem resíduo conhecido e sem apagar dados históricos.
+
+Auditoria de infraestrutura:
+- as Rules remotas não são byte a byte iguais às locais, porém protegem
+  `couponRedemptions` explicitamente e `purchaseIntent`, `lockedAt`,
+  `trialStartedAt` e `convertedAt` por deny-all/imutabilidade; diferenças
+  locais incluem áreas fora desta migração, portanto Rules não foram
+  publicadas;
+- os dez índices locais e remotos são equivalentes após normalização dos
+  campos implícitos; nenhum índice foi publicado;
+- Storage Rules, Hosting, Remote Config, RevenueCat Dashboard, App Store
+  Connect e Google Play Console não foram alterados.
+
+Bloqueio encontrado:
+O catálogo remoto de produção respondeu `iosPromotion: null` para `ARNALDO`.
+Por isso `authorizePromoPurchase` falhou fechado com
+`ios_promotion_unavailable` e não criou purchase intent. A correlação positiva
+Promo SKU → intent → webhook não pôde ser exercitada. Nenhuma configuração
+remota foi alterada para contornar o bloqueio.
+
+Conformidade do procedimento:
+Os gates de App, i18n e `git diff --check` não foram repetidos nesta Fase 11
+antes do comando de deploy. Eles estavam verdes na Fase 10 e ficaram verdes
+quando executados após o deploy, mas isso não satisfaz retroativamente o
+critério obrigatório de todos os gates pré-deploy. Assim, apesar das três
+Functions estarem `ACTIVE` e os smokes seguros terem o resultado esperado, a
+Fase 11 é registrada como **NÃO APROVADA**. Não foi feito novo deploy apenas
+para repetir uma operação remota já concluída.
+
+Impacto:
+O código backend novo está implantado antes do cliente e suas fronteiras de
+autenticação/HMAC estão operacionais, mas a cadeia promocional remota fica
+parcial enquanto o catálogo não fornecer `iosPromotion`. Não houve deploy do
+app, Rules, Storage, Hosting, Remote Config ou Functions fora do alvo; não
+houve push, compra Sandbox nem mutação RevenueCat/App Store/Google Play. O CLI
+alertou que Node.js 20 está deprecated e deixará de aceitar novos deploys em
+2026-10-30, e que `firebase-functions` está defasado; a migração deve ser
+planejada em tarefa separada, sem ampliar esta fase.
+
+Próxima ação:
+Obter autorização explícita para cadastrar no catálogo remoto a configuração
+iOS aprovada de `ARNALDO` (`promo_7d` + SKUs mensal/anual promocionais) por um
+canal administrativo controlado. Depois repetir a validação backend-only de
+purchase intent, com todos os gates executados antes de qualquer novo deploy,
+e só então avançar ao E2E iOS Sandbox real.
+
+Assinatura:
+Codex — Agente Backend + QA; 2026-08-13; prompt AJ FIT FASE 11.
 
 ---

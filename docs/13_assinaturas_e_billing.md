@@ -2377,3 +2377,96 @@ Cupom, `iosPromotion`, intent, timestamps e attribution não concedem Premium.
 A única autoridade client-side continua sendo
 `CustomerInfo.entitlements.active["premium"]`. Esta fase altera somente
 testes e documentação, sem Sandbox real, push, deploy ou mutação remota.
+
+---
+
+# 45. Migração Promo SKU + Introductory Offer — FASE 11 (deploy backend)
+
+Em 2026-08-13, o backend da nova arquitetura iOS foi publicado de forma
+controlada no único projeto Firebase documentado, `ajfit-2f321`, antes de
+qualquer distribuição do cliente novo. O deploy usou filtro explícito e
+afetou somente:
+
+```txt
+validatePromoCode
+authorizePromoPurchase
+revenueCatWebhook
+```
+
+`authorizePromoPurchase` passou a existir em produção. `validatePromoCode` e
+`revenueCatWebhook` receberam novas revisões Gen2. Functions existentes de
+health/vault e as quatro Functions administrativas de catálogo não foram
+incluídas; Rules, Storage, Remote Config e app também não foram publicados.
+
+O inventário final confirmou as três Functions em `ACTIVE`, região
+`us-central1` e runtime Node.js 20. `authorizePromoPurchase` e
+`validatePromoCode` compartilham o hash de fonte
+`d2f52faff88d557f1aa6589935accc377c90230d`; o webhook usa
+`3cae361d6353f27fc498511a133403c0489d7cf5`. `backendHealth`, `createVault` e
+`recoverVaultKey` mantiveram seus hashes anteriores, provando que ficaram fora
+do blast radius.
+
+Os smokes remotos confirmaram autenticação obrigatória nas callables, rejeição
+de webhook sem assinatura e aceitação de um HMAC válido. O evento assinado
+usado no smoke tinha tipo não suportado de propósito, retornou HTTP 200
+`ignored` e não percorreu billing nem attribution. Uma identidade descartável
+confirmou que `validatePromoCode` acessa o catálogo real e grava o espelho de
+attribution no Firestore; a conta e todos os documentos de teste foram
+removidos ao final. Essa limpeza atingiu apenas registros temporários criados
+pela própria validação; nenhum documento histórico foi apagado.
+
+As Rules remotas foram lidas pela API e comparadas com o arquivo local. Os
+hashes diferem porque há mudanças locais fora desta migração, mas o estado
+publicado nega explicitamente leitura/escrita de `couponRedemptions`, impede
+alteração client-side de `users.attribution` e deixa `purchaseIntent`,
+`lockedAt`, `trialStartedAt` e `convertedAt` protegidos pelo deny-all ou pela
+imutabilidade do documento. Por isso, e para não ampliar o escopo, nenhuma
+Rule foi publicada. Os dez índices locais/remotos são equivalentes após
+normalização; nenhum índice, Storage Rule ou Hosting foi publicado.
+
+## Estado do catálogo remoto após o deploy
+
+O código `ARNALDO` existe e está elegível, mas a resposta real retornou:
+
+```txt
+iosPromotion: null
+```
+
+Consequentemente, a redemption snapshot não contém a autorização iOS e
+`authorizePromoPurchase({ plan: "monthly" })` responde fail-closed com
+`ios_promotion_unavailable`, sem criar `purchaseIntent`. Isso é comportamento
+correto do código implantado, mas bloqueia a validação positiva da cadeia:
+
+```txt
+Promo SKU → purchase_pending → webhook APP_STORE → purchase_confirmed
+```
+
+O deploy não autoriza alterar o catálogo, portanto nenhum campo remoto foi
+criado automaticamente. Antes de distribuir o cliente novo, a configuração
+`iosPromotion` aprovada deve ser cadastrada por um canal administrativo
+controlado e a validação backend-only positiva deve ser repetida.
+
+Os secrets do webhook/API permanecem no Secret Manager e nenhum valor foi
+registrado. A autoridade Premium continua exclusivamente em
+`CustomerInfo.entitlements.active["premium"]`; o espelho Firestore, cupom,
+intent e attribution não autorizam acesso.
+
+## Resultado de conformidade
+
+O App typecheck, as 1.038 provas do App, os gates i18n e `git diff --check`
+não foram repetidos nesta fase **antes** do deploy. Eles estavam verdes na
+Fase 10 e todos passaram novamente após o deploy, junto com 474 testes de
+Functions, 63 testes de Rules e as matrizes focalizadas iOS (197) e Android
+(93), mas o resultado posterior não reescreve a ordem operacional exigida.
+
+Portanto, a Fase 11 fica **NÃO APROVADA**: o código backend está publicado e
+operacional nas fronteiras exercitadas, porém o critério de gates pré-deploy
+não foi integralmente satisfeito e o catálogo remoto ainda impede o smoke
+positivo de purchase intent. Não foi feito redeploy sem necessidade apenas
+para produzir uma nova execução.
+
+Riscos operacionais restantes: o E2E RevenueCat/StoreKit real não foi
+executado; o RevenueCat Dashboard não foi inspecionado ou alterado nesta fase;
+e o CLI alertou que Node.js 20 não aceitará novos deploys após 2026-10-30 e que
+`firebase-functions` está defasado. Essas correções pertencem a tarefas
+separadas e não foram misturadas ao deploy promocional.

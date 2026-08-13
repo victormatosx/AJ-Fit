@@ -468,3 +468,63 @@ Cupom, `iosPromotion`, `purchaseIntent`, `lockedAt`, `trialStartedAt` e
 attribution nunca entram como parâmetro de autoridade do Premium Gate. O
 único valor que chega como `isPremium` é derivado do entitlement ativo em
 CustomerInfo. `subscriptionSync.ts` permanece independente e inalterado.
+
+---
+
+# 27. Deploy controlado do backend promocional — Fase 11
+
+Esta fase publicou seletivamente `validatePromoCode`,
+`authorizePromoPurchase` e `revenueCatWebhook` no projeto `ajfit-2f321`. Ela
+não é um E2E StoreKit/RevenueCat e não distribui cliente novo.
+
+## Resultado dos gates
+
+| Gate executado após o deploy | Resultado |
+|---|---|
+| App typecheck | PASS |
+| App tests | 59 arquivos / 1.038 testes PASS |
+| Functions typecheck/build | PASS |
+| Functions tests | 22 arquivos / 474 testes PASS |
+| Firestore Rules | 3 arquivos / 63 testes PASS (Java 21) |
+| i18n check | 22 arquivos / 544 testes PASS |
+| i18n audit | 839 chaves; 14 suspeitas; 0 bloqueios |
+| iOS backend focalizado | 7 arquivos / 197 testes PASS |
+| Android backend focalizado | 3 arquivos / 93 testes PASS |
+| `git diff --check` | PASS |
+
+Os gates de App, i18n e `git diff --check` não foram repetidos nesta Fase 11
+antes do primeiro comando de deploy. O verde posterior confirma a regressão
+do estado publicado, mas não satisfaz retroativamente o gate operacional
+pré-deploy. Por isso a fase é classificada como **NÃO APROVADA**.
+
+## Smokes remotos seguros
+
+| Cenário | Resultado |
+|---|---|
+| `validatePromoCode` sem auth | HTTP 401 `UNAUTHENTICATED` |
+| `authorizePromoPurchase` sem auth | HTTP 401 `UNAUTHENTICATED` |
+| webhook sem assinatura | HTTP 401 `invalid_signature` |
+| webhook assinado, tipo não suportado e sem efeito | HTTP 200 `ignored` |
+| `validatePromoCode` autenticado com identidade descartável | `ARNALDO` válido; snapshot/espelho gravados |
+| `authorizePromoPurchase` autenticado | fail-closed `ios_promotion_unavailable` |
+| purchase intent remota | NÃO CRIADA |
+| webhook RevenueCat/StoreKit real | NÃO EXECUTADO |
+
+O catálogo remoto retornou `iosPromotion: null` para `ARNALDO`; portanto o
+smoke positivo de `purchase_pending` não pode ser executado sem uma alteração
+comercial remota fora do escopo. A identidade Auth e os documentos criados
+exclusivamente para o teste foram removidos, sem tocar dados históricos.
+
+## Infraestrutura preservada
+
+As Rules remotas não são byte a byte iguais às locais, mas o estado publicado
+nega escrita client-side em `couponRedemptions`, `purchaseIntent`, `lockedAt`,
+`trialStartedAt` e `convertedAt`. Como as diferenças não pertencem apenas à
+migração, não houve deploy de Rules. Índices locais/remotos são equivalentes e
+não foram publicados. Storage Rules, Hosting, Remote Config, RevenueCat,
+App Store Connect e Google Play também não foram alterados.
+
+Para liberar a Fase 12, é necessário cadastrar `iosPromotion` no catálogo por
+um canal administrativo explicitamente autorizado, repetir todos os gates na
+ordem correta caso um novo deploy seja necessário e validar o purchase intent
+backend-only antes do primeiro E2E iOS Sandbox real.
