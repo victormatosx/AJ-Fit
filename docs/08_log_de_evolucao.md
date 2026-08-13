@@ -2043,3 +2043,33 @@ Assinatura:
 Codex — Agente App; 2026-08-13; prompt AJ FIT FASE 7.
 
 ---
+
+Data: 2026-08-13
+Responsável: Codex — Agente Backend + QA
+Categoria: [REFATORAÇÃO]
+
+Descrição:
+Executada a Fase 8 da migração iOS Promo SKU + Introductory Offer. O modelo
+ativo Apple Offer Code foi removido do catálogo tipado, admin,
+`validatePromoCode`, novos `couponRedemptions` e correlação do webhook.
+`correlateAppleOffer` e sua suíte exclusiva foram removidos; `storeConfig.ios`
+e o tipo wire cliente correspondente também deixaram de existir.
+
+Impacto:
+O webhook `APP_STORE` correlaciona attribution apenas por
+`correlateApplePromoPurchaseIntent`; produto normal ou Promo SKU sem intent
+válida não recebe attribution, mesmo com `event.offer_code`. Dados Firestore
+históricos não foram apagados: campos Apple antigos são tolerados e ignorados,
+e o writer preserva extras existentes sem depender deles. Android,
+`subscriptionSync.ts`, Intro Eligibility, purchase intent, logs permanentes e
+autoridade Premium por CustomerInfo permaneceram intactos. Não houve E2E,
+push, deploy ou mutação remota.
+
+Próxima ação:
+Após validação humana, executar a Fase 9 / E2E Sandbox controlado para os
+cenários iOS standard e Promo SKU elegível/inelegível.
+
+Assinatura:
+Codex — Agente Backend + QA; 2026-08-13; prompt AJ FIT FASE 8.
+
+---

@@ -105,69 +105,6 @@ describe('validateAdminPromoCodeWrite', () => {
     });
   });
 
-  describe('apple correlation pair fail-closed rejection', () => {
-    it('rejects productId without offerReference', () => {
-      const result = validateAdminPromoCodeWrite(
-        { ...BASE, apple: { monthly: { productId: 'ajfit_premium_monthly' } } },
-        { requireCode: true },
-      );
-      expect(result).toEqual({ ok: false, error: 'apple_monthly_partial' });
-    });
-
-    it('rejects offerReference without productId', () => {
-      const result = validateAdminPromoCodeWrite(
-        { ...BASE, apple: { monthly: { offerReference: 'Influencer Trial 7D' } } },
-        { requireCode: true },
-      );
-      expect(result).toEqual({ ok: false, error: 'apple_monthly_partial' });
-    });
-
-    it('accepts a complete pair and never writes it into appleOfferCode*', () => {
-      const result = validateAdminPromoCodeWrite(
-        {
-          ...BASE,
-          apple: { monthly: { productId: 'ajfit_premium_monthly', offerReference: 'Influencer Trial 7D' } },
-        },
-        { requireCode: true },
-      );
-      expect(result.ok).toBe(true);
-      expect(result.ok && result.fields.appleProductIdMonthly).toBe('ajfit_premium_monthly');
-      expect(result.ok && result.fields.appleOfferReferenceMonthly).toBe('Influencer Trial 7D');
-      expect(result.ok && result.fields.appleOfferCodeMonthly).toBeNull();
-    });
-  });
-
-  describe('appleOfferCode (client-facing) never confused with offerReference', () => {
-    it('appleOfferCode.monthly is stored independently of apple.monthly.offerReference', () => {
-      const result = validateAdminPromoCodeWrite(
-        {
-          ...BASE,
-          apple: { monthly: { productId: 'ajfit_premium_monthly', offerReference: 'Influencer Trial 7D' } },
-          appleOfferCode: { monthly: 'ARNALDO7DMONTHLY' },
-        },
-        { requireCode: true },
-      );
-      expect(result.ok).toBe(true);
-      expect(result.ok && result.fields.appleOfferCodeMonthly).toBe('ARNALDO7DMONTHLY');
-      expect(result.ok && result.fields.appleOfferReferenceMonthly).toBe('Influencer Trial 7D');
-      expect(result.ok && result.fields.appleOfferCodeMonthly).not.toBe(
-        result.ok && result.fields.appleOfferReferenceMonthly,
-      );
-    });
-
-    it('appleOfferCode absent stays null — never fabricated from offerReference', () => {
-      const result = validateAdminPromoCodeWrite(
-        {
-          ...BASE,
-          apple: { monthly: { productId: 'ajfit_premium_monthly', offerReference: 'Influencer Trial 7D' } },
-        },
-        { requireCode: true },
-      );
-      expect(result.ok).toBe(true);
-      expect(result.ok && result.fields.appleOfferCodeMonthly).toBeNull();
-    });
-  });
-
   it('rejects notes exceeding the defensive length bound', () => {
     const result = validateAdminPromoCodeWrite({ ...BASE, notes: 'x'.repeat(2001) }, { requireCode: true });
     expect(result).toEqual({ ok: false, error: 'invalid_notes' });
@@ -178,13 +115,11 @@ describe('validateAdminPromoCodeWrite', () => {
       {
         ...BASE,
         android: { monthly: { basePlanId: 'monthly', offerId: 'influencer-trial-7d' } },
-        apple: { monthly: { productId: 'ajfit_premium_monthly', offerReference: 'Influencer Trial 7D' } },
       },
       { requireCode: true },
     );
     expect(result.ok).toBe(true);
     expect(result.ok && result.fields.androidBasePlanIdAnnual).toBeNull();
-    expect(result.ok && result.fields.appleProductIdAnnual).toBeNull();
   });
 
   // FASE 1 — iosPromotion admin write validation.
@@ -252,7 +187,7 @@ describe('validateAdminPromoCodeWrite', () => {
       expect(result.ok && result.fields.iosPromotion).toEqual(VALID_IOS_PROMOTION);
     });
 
-    it('is independent of android/apple legacy fields — configuring one never requires or affects the other', () => {
+    it('is independent of Android fields — configuring one never requires or affects the other', () => {
       const result = validateAdminPromoCodeWrite(
         {
           ...BASE,
@@ -263,7 +198,6 @@ describe('validateAdminPromoCodeWrite', () => {
       );
       expect(result.ok).toBe(true);
       expect(result.ok && result.fields.androidBasePlanIdMonthly).toBe('monthly');
-      expect(result.ok && result.fields.appleOfferCodeMonthly).toBeNull();
       expect(result.ok && result.fields.iosPromotion).toEqual(VALID_IOS_PROMOTION);
     });
   });

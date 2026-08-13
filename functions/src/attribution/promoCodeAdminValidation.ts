@@ -32,10 +32,6 @@ export type AdminPromoCodeValidationError =
   | 'invalid_notes'
   | 'android_monthly_partial'
   | 'android_annual_partial'
-  | 'apple_monthly_partial'
-  | 'apple_annual_partial'
-  | 'invalid_apple_offer_code_monthly'
-  | 'invalid_apple_offer_code_annual'
   | 'ios_promotion_invalid';
 
 export type AdminPromoCodeValidationResult =
@@ -44,8 +40,6 @@ export type AdminPromoCodeValidationResult =
 
 /** Defensive bound only — no business rule caps `campaignId`/`influencerId` length today. */
 const IDENTIFIER_MAX_LENGTH = 100;
-/** Defensive bound only — mirrors the order of magnitude of `PROMO_CODE_MAX_LENGTH` (`constants.ts`), never reused verbatim since these are free-form labels, not document IDs. */
-const APPLE_OFFER_CODE_MAX_LENGTH = 64;
 const NOTES_MAX_LENGTH = 2000;
 
 function trimmedNonEmpty(value: unknown, maxLength: number): string | null {
@@ -67,8 +61,8 @@ interface PairResult {
 
 /**
  * Fail-closed WRITE-time pair validation — the admin-facing counterpart of
- * `promoCodeCatalog.ts`'s `resolveAndroidOfferPair`/`resolveAppleOfferCorrelationPair`,
- * which fail closed to `null` on READ. Here a partial pair is a rejected
+ * `promoCodeCatalog.ts`'s `resolveAndroidOfferPair`, which fails closed to
+ * `null` on READ. Here a partial pair is a rejected
  * write (`ok: false`), never silently accepted as one field with the other
  * `null` — an admin submitting a half-filled platform config almost
  * certainly made a mistake, and the catalog document should never be
@@ -141,11 +135,6 @@ interface AndroidPlanInput {
   offerId?: unknown;
 }
 
-interface ApplePlanInput {
-  productId?: unknown;
-  offerReference?: unknown;
-}
-
 export interface AdminPromoCodeWriteInput {
   code?: unknown;
   campaignId?: unknown;
@@ -158,29 +147,11 @@ export interface AdminPromoCodeWriteInput {
     monthly?: AndroidPlanInput | null;
     annual?: AndroidPlanInput | null;
   } | null;
-  apple?: {
-    monthly?: ApplePlanInput | null;
-    annual?: ApplePlanInput | null;
-  } | null;
-  /**
-   * Client-facing Apple redemption-sheet codes (`appleOfferCodeMonthly`/
-   * `appleOfferCodeAnnual` on `PromoCodeDocument`) — DELIBERATELY separate
-   * from `apple.monthly.offerReference`/`apple.annual.offerReference` above.
-   * Never derived from one another (Parte 7/19 of the task spec) — a
-   * Sandbox Code or an App Store Connect offer reference is never valid
-   * input here, only whatever reusable string (if any) this app someday
-   * distributes for typing into Apple's native redemption sheet. `null`
-   * today for every real catalog entry.
-   */
-  appleOfferCode?: {
-    monthly?: unknown;
-    annual?: unknown;
-  } | null;
   /**
    * FASE 1 — the new iOS promotional (Offering/SKU) authorization. All
    * three sub-fields required together or the whole object must be
    * blank/absent — see `validateIOSPromotionInput`'s doc comment for why
-   * this has no partial state, unlike `android`/`apple` above.
+   * this has no partial state.
    */
   iosPromotion?: {
     offeringIdentifier?: unknown;
@@ -252,32 +223,6 @@ export function validateAdminPromoCodeWrite(
   );
   if (!androidAnnual.ok) return { ok: false, error: 'android_annual_partial' };
 
-  const appleMonthly = validatePair(
-    input.apple?.monthly?.productId,
-    input.apple?.monthly?.offerReference,
-    IDENTIFIER_MAX_LENGTH,
-  );
-  if (!appleMonthly.ok) return { ok: false, error: 'apple_monthly_partial' };
-
-  const appleAnnual = validatePair(
-    input.apple?.annual?.productId,
-    input.apple?.annual?.offerReference,
-    IDENTIFIER_MAX_LENGTH,
-  );
-  if (!appleAnnual.ok) return { ok: false, error: 'apple_annual_partial' };
-
-  let appleOfferCodeMonthly: string | null = null;
-  if (!isBlank(input.appleOfferCode?.monthly)) {
-    appleOfferCodeMonthly = trimmedNonEmpty(input.appleOfferCode?.monthly, APPLE_OFFER_CODE_MAX_LENGTH);
-    if (appleOfferCodeMonthly === null) return { ok: false, error: 'invalid_apple_offer_code_monthly' };
-  }
-
-  let appleOfferCodeAnnual: string | null = null;
-  if (!isBlank(input.appleOfferCode?.annual)) {
-    appleOfferCodeAnnual = trimmedNonEmpty(input.appleOfferCode?.annual, APPLE_OFFER_CODE_MAX_LENGTH);
-    if (appleOfferCodeAnnual === null) return { ok: false, error: 'invalid_apple_offer_code_annual' };
-  }
-
   const iosPromotion = validateIOSPromotionInput(input.iosPromotion);
   if (!iosPromotion.ok) return { ok: false, error: 'ios_promotion_invalid' };
 
@@ -294,12 +239,6 @@ export function validateAdminPromoCodeWrite(
       androidOfferIdMonthly: androidMonthly.value?.second ?? null,
       androidBasePlanIdAnnual: androidAnnual.value?.first ?? null,
       androidOfferIdAnnual: androidAnnual.value?.second ?? null,
-      appleOfferCodeMonthly,
-      appleOfferCodeAnnual,
-      appleProductIdMonthly: appleMonthly.value?.first ?? null,
-      appleOfferReferenceMonthly: appleMonthly.value?.second ?? null,
-      appleProductIdAnnual: appleAnnual.value?.first ?? null,
-      appleOfferReferenceAnnual: appleAnnual.value?.second ?? null,
       iosPromotion: iosPromotion.value,
       notes,
     },

@@ -43,12 +43,6 @@ export interface PromoCodeAndroidStoreConfig {
   annual: AndroidSubscriptionOfferConfig | null;
 }
 
-/** Legacy wire-only shape retained by promoCodeService for backend compatibility. */
-export interface PromoCodeAppleStoreConfig {
-  offerCodeMonthly: string | null;
-  offerCodeAnnual: string | null;
-}
-
 /**
  * FASE 4 — client mirror of the backend-authored `IOSPromotionConfig`.
  * These three values are one indivisible authorization: none is inferred

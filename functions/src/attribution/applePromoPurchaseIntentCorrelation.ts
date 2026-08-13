@@ -51,9 +51,9 @@ function isKnownPromotionalProduct(productId: unknown, iosPromotion: unknown): b
  * intent prove the campaign. `purchasedAtMs`, not webhook arrival time, is
  * compared inclusively against the backend-authored intent window.
  *
- * `not_promotional` is the only result for which the caller may consider
- * the legacy Apple Offer Code path. Every other failure is explicit evidence
- * that the new flow was applicable, so falling back would mask a conflict.
+ * `not_promotional` means the event is outside Promo SKU attribution; it is
+ * not permission to attempt another Apple correlation mechanism. Every
+ * failure remains explicit and fail-closed.
  */
 export function correlateApplePromoPurchaseIntent(
   input: ApplePromoPurchaseIntentCorrelationInput,

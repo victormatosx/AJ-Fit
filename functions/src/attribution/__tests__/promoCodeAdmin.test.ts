@@ -135,7 +135,7 @@ describe('admin auth enforcement (create/update/setActive/list)', () => {
 });
 
 describe('adminCreatePromoCodeHandler', () => {
-  it('creates with only basic info — android/apple fields default to null', async () => {
+  it('creates with only active fields and no Apple Offer Code fields', async () => {
     promoCreateMock.mockResolvedValue(undefined);
     await adminCreatePromoCodeHandler(request(BASE_CREATE_PAYLOAD, ADMIN_UID));
 
@@ -149,15 +149,12 @@ describe('adminCreatePromoCodeHandler', () => {
         androidOfferIdMonthly: null,
         androidBasePlanIdAnnual: null,
         androidOfferIdAnnual: null,
-        appleOfferCodeMonthly: null,
-        appleOfferCodeAnnual: null,
-        appleProductIdMonthly: null,
-        appleOfferReferenceMonthly: null,
-        appleProductIdAnnual: null,
-        appleOfferReferenceAnnual: null,
         notes: null,
       }),
     );
+    const written = promoCreateMock.mock.calls[0][0];
+    expect(written).not.toHaveProperty('appleOfferCodeMonthly');
+    expect(written).not.toHaveProperty('appleOfferCorrelation');
   });
 
   it('creates with Android monthly configured', async () => {
@@ -207,58 +204,7 @@ describe('adminCreatePromoCodeHandler', () => {
     );
   });
 
-  it('creates with Apple monthly configured (correlation fields, never appleOfferCode)', async () => {
-    promoCreateMock.mockResolvedValue(undefined);
-    await adminCreatePromoCodeHandler(
-      request(
-        {
-          ...BASE_CREATE_PAYLOAD,
-          apple: {
-            monthly: { productId: 'ajfit_premium_monthly', offerReference: 'Influencer Trial 7D' },
-          },
-        },
-        ADMIN_UID,
-      ),
-    );
-
-    expect(promoCreateMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        appleProductIdMonthly: 'ajfit_premium_monthly',
-        appleOfferReferenceMonthly: 'Influencer Trial 7D',
-        appleProductIdAnnual: null,
-        appleOfferReferenceAnnual: null,
-        appleOfferCodeMonthly: null,
-        appleOfferCodeAnnual: null,
-      }),
-    );
-  });
-
-  it('creates with Apple monthly + annual configured', async () => {
-    promoCreateMock.mockResolvedValue(undefined);
-    await adminCreatePromoCodeHandler(
-      request(
-        {
-          ...BASE_CREATE_PAYLOAD,
-          apple: {
-            monthly: { productId: 'ajfit_premium_monthly', offerReference: 'Influencer Trial 7D' },
-            annual: { productId: 'ajfit_premium_annual', offerReference: 'Influencer Trial 7D Annual' },
-          },
-        },
-        ADMIN_UID,
-      ),
-    );
-
-    expect(promoCreateMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        appleProductIdMonthly: 'ajfit_premium_monthly',
-        appleOfferReferenceMonthly: 'Influencer Trial 7D',
-        appleProductIdAnnual: 'ajfit_premium_annual',
-        appleOfferReferenceAnnual: 'Influencer Trial 7D Annual',
-      }),
-    );
-  });
-
-  it('creates a full multi-platform campaign (Android + Apple, both plans)', async () => {
+  it('creates a full active campaign (Android + iOS Promo SKU, both plans)', async () => {
     promoCreateMock.mockResolvedValue(undefined);
     await adminCreatePromoCodeHandler(
       request(
@@ -268,9 +214,10 @@ describe('adminCreatePromoCodeHandler', () => {
             monthly: { basePlanId: 'monthly', offerId: 'influencer-trial-7d' },
             annual: { basePlanId: 'annual', offerId: 'influencer-trial-7d-annual' },
           },
-          apple: {
-            monthly: { productId: 'ajfit_premium_monthly', offerReference: 'Influencer Trial 7D' },
-            annual: { productId: 'ajfit_premium_annual', offerReference: 'Influencer Trial 7D Annual' },
+          iosPromotion: {
+            offeringIdentifier: 'promo_7d',
+            monthlyProductId: 'ajfit_premium_monthly_promo',
+            annualProductId: 'ajfit_premium_annual_promo',
           },
         },
         ADMIN_UID,
@@ -281,8 +228,7 @@ describe('adminCreatePromoCodeHandler', () => {
       expect.objectContaining({
         androidBasePlanIdMonthly: 'monthly',
         androidBasePlanIdAnnual: 'annual',
-        appleProductIdMonthly: 'ajfit_premium_monthly',
-        appleProductIdAnnual: 'ajfit_premium_annual',
+        iosPromotion: expect.objectContaining({ offeringIdentifier: 'promo_7d' }),
       }),
     );
   });
@@ -297,20 +243,6 @@ describe('adminCreatePromoCodeHandler', () => {
       ),
       'invalid-argument',
       'android_monthly_partial',
-    );
-    expect(promoCreateMock).not.toHaveBeenCalled();
-  });
-
-  it('rejects a partial Apple annual pair (offerReference without productId)', async () => {
-    await expectHttpsError(
-      adminCreatePromoCodeHandler(
-        request(
-          { ...BASE_CREATE_PAYLOAD, apple: { annual: { offerReference: 'Influencer Trial 7D Annual' } } },
-          ADMIN_UID,
-        ),
-      ),
-      'invalid-argument',
-      'apple_annual_partial',
     );
     expect(promoCreateMock).not.toHaveBeenCalled();
   });
@@ -404,12 +336,6 @@ describe('adminCreatePromoCodeHandler', () => {
         'androidOfferIdMonthly',
         'androidBasePlanIdAnnual',
         'androidOfferIdAnnual',
-        'appleOfferCodeMonthly',
-        'appleOfferCodeAnnual',
-        'appleProductIdMonthly',
-        'appleOfferReferenceMonthly',
-        'appleProductIdAnnual',
-        'appleOfferReferenceAnnual',
         'iosPromotion',
         'createdAt',
         'updatedAt',
@@ -444,7 +370,7 @@ describe('adminUpdatePromoCodeHandler', () => {
     expect(written).toHaveProperty('updatedAt');
   });
 
-  it('rejects partial Android/Apple pairs on update exactly like create', async () => {
+  it('rejects partial Android pairs on update exactly like create', async () => {
     await expectHttpsError(
       adminUpdatePromoCodeHandler(
         request({ ...UPDATE_PAYLOAD, android: { monthly: { offerId: 'influencer-trial-7d' } } }, ADMIN_UID),
@@ -505,8 +431,12 @@ describe('adminListPromoCodesHandler', () => {
             androidOfferIdMonthly: null,
             androidBasePlanIdAnnual: null,
             androidOfferIdAnnual: null,
+            // Historical fields remain tolerated by the list parser but are
+            // not exposed in the active admin response.
             appleOfferCodeMonthly: null,
             appleOfferCodeAnnual: null,
+            appleProductIdMonthly: 'legacy-product',
+            appleOfferReferenceMonthly: 'Legacy Offer',
             createdAt: Timestamp.fromDate(new Date('2026-08-01T00:00:00.000Z')),
             updatedAt: Timestamp.fromDate(new Date('2026-08-01T00:00:00.000Z')),
             createdBy: ADMIN_UID,
@@ -520,6 +450,8 @@ describe('adminListPromoCodesHandler', () => {
     const result = await adminListPromoCodesHandler(request({}, ADMIN_UID));
     expect(result.promoCodes).toHaveLength(1);
     expect(result.promoCodes[0].id).toBe('ARNALDO');
+    expect(result.promoCodes[0]).not.toHaveProperty('appleOfferCodeMonthly');
+    expect(result.promoCodes[0]).not.toHaveProperty('appleProductIdMonthly');
   });
 });
 

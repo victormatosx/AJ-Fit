@@ -2230,3 +2230,46 @@ Android e `subscriptionSync.ts`, não sofreu alteração funcional.
 
 Esta fase não executa compra Sandbox, deploy, push nem mutação de configuração
 remota. O próximo passo continua sendo o E2E Sandbox controlado.
+
+---
+
+# 42. Migração Promo SKU + Introductory Offer — FASE 8 (backend ativo)
+
+A Fase 8 retirou do modelo ativo do backend a compatibilidade operacional com
+Apple Offer Code. O cliente já não produzia esse fluxo desde a Fase 6; agora o
+catálogo, o admin, `validatePromoCode`, os novos `couponRedemptions` e o webhook
+iOS também deixaram de ler, escrever ou correlacionar
+`appleOfferCode*`, `appleProductId*`, `appleOfferReference*`, `appleOffer` e
+`appleOfferCorrelation`. `storeConfig.ios` e seu tipo wire foram removidos.
+
+O caminho iOS atual é exclusivamente:
+
+```txt
+validatePromoCode
+  → iosPromotion
+  → Promo Offering/SKU exatos
+  → Intro Eligibility
+  → authorizePromoPurchase
+  → purchaseIntent
+  → purchasePackage
+  → CustomerInfo
+  → webhook por correlateApplePromoPurchaseIntent
+```
+
+`correlateAppleOffer` e seu fallback `product_id + offer_code` foram removidos.
+Um Promo SKU com intent ausente/inválida e um produto App Store normal sem
+intent permanecem sem attribution; `event.offer_code` não pode reativar o
+legado. O campo genérico de wire continua aceito porque a correlação Google
+Play usa `offer_code`; ele não possui dependência de negócio no caminho iOS.
+
+Dados Firestore antigos não foram apagados. O parser de `promoCodes` aceita os
+seis campos Apple históricos como extras conhecidos, mas não os expõe no tipo
+ativo. Escritas por merge em `couponRedemptions` preservam extras históricos
+existentes sem relê-los nem reescrevê-los. Admin create/update opera somente
+com Android e `iosPromotion`.
+
+Permanecem intactos: `correlateApplePromoPurchaseIntent`, purchase intent/TTL/
+idempotência, Intro Eligibility fail-closed, `purchasePackage`, logs permanentes
+de attribution, `subscriptionSync.ts`, `CustomerInfo` como única autoridade
+Premium e Android com `SubscriptionOption`, `offerToken`,
+`purchaseSubscriptionOption` e `googlePlayOfferCorrelation`.

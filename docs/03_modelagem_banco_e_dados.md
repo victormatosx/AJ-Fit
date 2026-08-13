@@ -398,8 +398,6 @@ couponRedemptions/{uid}
   campaignId
   influencerId
   androidOffer
-  appleOffer
-  appleOfferCorrelation
   iosPromotion
     offeringIdentifier
     monthlyProductId
@@ -443,3 +441,10 @@ permite reconhecer retry exato sem reescrita.
 
 Nenhum desses campos concede Premium. A autoridade de acesso continua sendo
 exclusivamente o `CustomerInfo.entitlements.active["premium"]` do RevenueCat.
+
+Desde a Fase 8 da migração iOS Promo SKU, `appleOffer` e
+`appleOfferCorrelation` não fazem parte do modelo ativo nem são escritos ou
+lidos por fluxos novos. Documentos históricos podem continuar contendo esses
+campos como evidência legítima; readers atuais toleram e ignoram os extras, e
+nenhuma migração destrutiva é executada. A atribuição iOS ativa depende de
+`iosPromotion`, `purchaseIntent`, `product_id` e `purchased_at_ms`.

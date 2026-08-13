@@ -7,7 +7,6 @@ import { resolvePromoCodePlatform, type PromoCodePlatform } from '../lib/promoCo
 import type {
   IOSPromotionAuthorization,
   PromoCodeAndroidStoreConfig,
-  PromoCodeAppleStoreConfig,
   PromoCodeBenefit,
 } from '../lib/promoCodeState';
 import { parseIOSPromotionAuthorization } from '../lib/promoCodeState';
@@ -48,7 +47,6 @@ export interface ValidatePromoCodeResponse {
   benefit: PromoCodeBenefit;
   storeConfig: {
     android: PromoCodeAndroidStoreConfig | null;
-    ios: PromoCodeAppleStoreConfig | null;
   };
   /** Backend-authored iOS Offering/SKU authorization; null means the campaign has no new iOS route. */
   iosPromotion: IOSPromotionAuthorization | null;
@@ -185,7 +183,6 @@ export async function validatePromoCode(code: string): Promise<ValidatePromoCode
       codePresent: typeof result.data?.code === 'string',
       benefitPresent: result.data?.benefit != null,
       androidConfigPresent: result.data?.storeConfig?.android != null,
-      iosConfigPresent: result.data?.storeConfig?.ios != null,
       iosPromotionStatus: parsedIOSPromotion.status,
       eligibilityPresent: result.data?.eligibility != null,
     });

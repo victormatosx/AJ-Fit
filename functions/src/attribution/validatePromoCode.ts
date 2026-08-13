@@ -4,16 +4,10 @@ import { applyPromoCodeAttributionTransactionally } from './attributionSync';
 import { PROMO_CODE_PLATFORMS, type PromoCodePlatform } from './constants';
 import { isPromoCodeCurrentlyEligible } from './eligibility';
 import { normalizePromoCode } from './normalize';
-import {
-  lookupPromoCode,
-  resolveAndroidOfferPair,
-  resolveAppleOfferCorrelationPair,
-} from './promoCodeCatalog';
+import { lookupPromoCode, resolveAndroidOfferPair } from './promoCodeCatalog';
 import type {
   IOSPromotionConfig,
   PromoCodeAndroidOfferSnapshot,
-  PromoCodeAppleCorrelationSnapshot,
-  PromoCodeAppleOfferSnapshot,
   ValidatePromoCodeRequestData,
   ValidatePromoCodeResponseData,
 } from './types';
@@ -104,44 +98,14 @@ export async function validatePromoCodeHandler(
     ),
   };
 
-  // FASE iOS-1: computed ONCE, unconditionally, mirroring
-  // `androidOfferSnapshot` above — snapshotted verbatim into
-  // `couponRedemptions/{uid}.appleOffer` regardless of the client's
-  // requested `platform`. No pairing/resolution step is needed (unlike
-  // Android's `resolveAndroidOfferPair`): an Apple offer code is already a
-  // single flat, complete value per plan on the catalog document.
-  const appleOfferSnapshot: PromoCodeAppleOfferSnapshot = {
-    offerCodeMonthly: promoCode.appleOfferCodeMonthly,
-    offerCodeAnnual: promoCode.appleOfferCodeAnnual,
-  };
-
-  // FASE iOS-6: computed ONCE, unconditionally, mirroring `androidOfferSnapshot`/
-  // `appleOfferSnapshot` above — snapshotted verbatim into
-  // `couponRedemptions/{uid}.appleOfferCorrelation`. Distinct from
-  // `appleOfferSnapshot` above (which the RESPONSE echoes to the client) —
-  // this one is NEVER returned to the client, only used later by
-  // `attribution/appleOfferCorrelation.ts` to compare a real webhook event
-  // against what was authorized at this exact moment.
-  const appleOfferCorrelationSnapshot: PromoCodeAppleCorrelationSnapshot = {
-    monthly: resolveAppleOfferCorrelationPair(
-      promoCode.appleProductIdMonthly,
-      promoCode.appleOfferReferenceMonthly,
-    ),
-    annual: resolveAppleOfferCorrelationPair(
-      promoCode.appleProductIdAnnual,
-      promoCode.appleOfferReferenceAnnual,
-    ),
-  };
-
   // FASE 1: computed ONCE, unconditionally, mirroring the snapshots above —
   // snapshotted verbatim into `couponRedemptions/{uid}.iosPromotion`
   // regardless of the client's requested `platform`, so a later edit to
   // `promoCodes/{code}` can never silently change an already-applied
   // redemption's authorization (`IOSPromotionConfig`'s doc comment). Already
   // fully validated (all-or-nothing) by `promoCodeCatalog.ts`'s parser — no
-  // separate pairing/resolution step needed here, unlike Android/legacy
-  // Apple, which store their fields flat and need `resolve*Pair` to combine
-  // them fail-closed.
+  // separate pairing/resolution step is needed here. Apple Offer Code fields
+  // are historical and deliberately ignored.
   const iosPromotionSnapshot: IOSPromotionConfig | null = promoCode.iosPromotion;
 
   let outcome;
@@ -151,8 +115,6 @@ export async function validatePromoCodeHandler(
       campaignId: promoCode.campaignId,
       influencerId: promoCode.influencerId,
       androidOffer: androidOfferSnapshot,
-      appleOffer: appleOfferSnapshot,
-      appleOfferCorrelation: appleOfferCorrelationSnapshot,
       iosPromotion: iosPromotionSnapshot,
     });
   } catch (err) {
@@ -187,11 +149,7 @@ export async function validatePromoCodeHandler(
   const androidConfig =
     requestedPlatform === undefined || requestedPlatform === 'ANDROID' ? androidOfferSnapshot : null;
 
-  const iosConfig =
-    requestedPlatform === undefined || requestedPlatform === 'IOS' ? appleOfferSnapshot : null;
-
-  // FASE 1 — gated by the exact same requested-`platform` rule as `iosConfig`
-  // above (never recomputed differently): an Android-only request never
+  // FASE 1 — an Android-only request never
   // receives the iOS promotional authorization, and vice versa is symmetric
   // with `androidConfig`.
   const iosPromotionConfig =
@@ -207,7 +165,6 @@ export async function validatePromoCodeHandler(
     },
     storeConfig: {
       android: androidConfig,
-      ios: iosConfig,
     },
     iosPromotion: iosPromotionConfig,
     eligibility: {

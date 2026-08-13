@@ -77,13 +77,13 @@ describe('validatePromoCode', () => {
     mockPlatform.OS = 'ios';
   });
 
-  it('returns an applied outcome for a valid iOS response (storeConfig.ios populated)', async () => {
+  it('returns an applied outcome for a valid iOS Promo SKU response', async () => {
     mockCallable.mockResolvedValue({
       data: {
         valid: true,
         code: 'ARNALDO',
         benefit: { campaignId: 'c1', influencerId: 'i1', kind: 'promotional_campaign' },
-        storeConfig: { android: null, ios: { offerCodeMonthly: 'M', offerCodeAnnual: 'A' } },
+        storeConfig: { android: null },
         iosPromotion: {
           offeringIdentifier: 'promo_7d',
           monthlyProductId: 'monthly_promo',
@@ -98,7 +98,6 @@ describe('validatePromoCode', () => {
     expect(mockCallable).toHaveBeenCalledWith({ code: 'ARNALDO', platform: 'IOS' });
     expect(outcome.status).toBe('applied');
     if (outcome.status === 'applied') {
-      expect(outcome.response.storeConfig.ios).toEqual({ offerCodeMonthly: 'M', offerCodeAnnual: 'A' });
       expect(outcome.response.storeConfig.android).toBeNull();
       expect(outcome.response.iosPromotion).toEqual({
         offeringIdentifier: 'promo_7d',
@@ -117,7 +116,6 @@ describe('validatePromoCode', () => {
         benefit: { campaignId: 'c2', influencerId: 'i2', kind: 'promotional_campaign' },
         storeConfig: {
           android: { monthly: { basePlanId: 'monthly', offerId: 'o1' }, annual: null },
-          ios: null,
         },
         iosPromotion: null,
         eligibility: { determinedBy: 'store', guaranteed: false, disclaimer: 'x' },
@@ -133,18 +131,17 @@ describe('validatePromoCode', () => {
         basePlanId: 'monthly',
         offerId: 'o1',
       });
-      expect(outcome.response.storeConfig.ios).toBeNull();
       expect(outcome.response.iosPromotion).toBeNull();
     }
   });
 
-  it('accepts explicit iosPromotion: null on iOS for a valid legacy-only campaign', async () => {
+  it('accepts explicit iosPromotion: null on iOS without fabricating a route', async () => {
     mockCallable.mockResolvedValue({
       data: {
         valid: true,
         code: 'LEGACY',
         benefit: { campaignId: 'c1', influencerId: 'i1', kind: 'promotional_campaign' },
-        storeConfig: { android: null, ios: { offerCodeMonthly: 'M', offerCodeAnnual: null } },
+        storeConfig: { android: null },
         iosPromotion: null,
         eligibility: { determinedBy: 'store', guaranteed: false, disclaimer: 'x' },
       },
@@ -166,7 +163,7 @@ describe('validatePromoCode', () => {
         valid: true,
         code: 'ARNALDO',
         benefit: { campaignId: 'c1', influencerId: 'i1', kind: 'promotional_campaign' },
-        storeConfig: { android: null, ios: null },
+        storeConfig: { android: null },
         ...(iosPromotion === undefined ? {} : { iosPromotion }),
         eligibility: { determinedBy: 'store', guaranteed: false, disclaimer: 'x' },
       },

@@ -7,10 +7,6 @@ import {
   userDocPath,
 } from './constants';
 import {
-  correlateAppleOffer,
-  type AppleOfferCorrelationResult,
-} from './appleOfferCorrelation';
-import {
   correlateApplePromoPurchaseIntent,
   type ApplePromoPurchaseIntentCorrelationResult,
 } from './applePromoPurchaseIntentCorrelation';
@@ -20,11 +16,8 @@ import {
   type GooglePlayOfferCorrelationResult,
 } from './googlePlayOfferCorrelation';
 import type {
-  AppleOfferCorrelationConfig,
   IOSPromotionConfig,
   PromoCodeAndroidOfferSnapshot,
-  PromoCodeAppleCorrelationSnapshot,
-  PromoCodeAppleOfferSnapshot,
 } from './types';
 import {
   isPromoPurchaseIntentActiveAt,
@@ -64,27 +57,9 @@ export interface PendingPromoCodeAttribution {
    */
   androidOffer: PromoCodeAndroidOfferSnapshot;
   /**
-   * FASE iOS-1 — the Apple offer-code config authorized for this code AT
-   * THIS MOMENT, computed unconditionally by `validatePromoCode.ts` exactly
-   * like `androidOffer` (regardless of the client's requested `platform`).
-   * Snapshotted verbatim into `couponRedemptions/{uid}.appleOffer` — see
-   * that field's doc comment in `types.ts`.
-   */
-  appleOffer: PromoCodeAppleOfferSnapshot;
-  /**
-   * FASE iOS-6 — the Apple correlation config authorized for this code AT
-   * THIS MOMENT, computed unconditionally by `validatePromoCode.ts` exactly
-   * like `androidOffer`/`appleOffer` (regardless of the client's requested
-   * `platform`). Snapshotted verbatim into
-   * `couponRedemptions/{uid}.appleOfferCorrelation` — see that field's doc
-   * comment in `types.ts`. This, not `appleOffer`, is what
-   * `correlateAppleOffer` compares a real webhook event against.
-   */
-  appleOfferCorrelation: PromoCodeAppleCorrelationSnapshot;
-  /**
    * FASE 1 — the iOS promotional (Offering/SKU) config authorized for this
    * code AT THIS MOMENT, computed unconditionally by `validatePromoCode.ts`
-   * exactly like `androidOffer`/`appleOffer`/`appleOfferCorrelation`.
+   * exactly like `androidOffer`.
    * Snapshotted verbatim into `couponRedemptions/{uid}.iosPromotion` — see
    * that field's doc comment in `types.ts`. Never written to
    * `users/{uid}.attribution` (the display-only mirror) — same exclusion as
@@ -143,11 +118,11 @@ export type ApplyPromoCodeAttributionResult =
  *    longer exists) and `couponRedemptions/{uid}` (current attribution
  *    state, if any).
  * 2. Decides via `decidePromoCodeAttributionOutcome` (pure, see above).
- * 3. On `apply`, writes BOTH `couponRedemptions/{uid}` (full overwrite —
- *    this is a lifecycle record, not an event log, so swapping the code
- *    replaces `couponCode`/`campaignId`/`influencerId`/`androidOffer`/
- *    `appliedAt` while preserving `createdAt` from the first-ever
- *    application) and `users/{uid}.attribution` (merge into the nested map
+ * 3. On `apply`, writes BOTH `couponRedemptions/{uid}` (explicit merge of
+ *    every active lifecycle field, so swapping replaces
+ *    `couponCode`/`campaignId`/`influencerId`/`androidOffer`/`iosPromotion`/
+ *    `appliedAt`, clears an obsolete intent and preserves `createdAt` plus
+ *    unknown historical fields) and `users/{uid}.attribution` (merge into the nested map
  *    field, same pattern `subscriptionSync.ts` uses for `subscription` —
  *    deliberately WITHOUT `androidOffer`, docs §33/Fase 4C.3A rule 6: the
  *    mirror stays a display-only snapshot, never a correlation source) in
@@ -206,14 +181,12 @@ export async function applyPromoCodeAttributionTransactionally(
       const now = FieldValue.serverTimestamp();
       const createdAt = existing?.createdAt ?? now;
 
-      transaction.set(redemptionRef, {
+      const redemptionWrite: Record<string, unknown> = {
         uid,
         couponCode: attribution.couponCode,
         campaignId: attribution.campaignId,
         influencerId: attribution.influencerId,
         androidOffer: attribution.androidOffer,
-        appleOffer: attribution.appleOffer,
-        appleOfferCorrelation: attribution.appleOfferCorrelation,
         iosPromotion: attribution.iosPromotion,
         appliedAt: now,
         createdAt,
@@ -221,7 +194,14 @@ export async function applyPromoCodeAttributionTransactionally(
         trialStartedAt: null,
         convertedAt: null,
         lockedAt: null,
-      });
+      };
+      if (existing && Object.prototype.hasOwnProperty.call(existing, 'purchaseIntent')) {
+        redemptionWrite.purchaseIntent = FieldValue.delete();
+      }
+      // Preserve unknown historical evidence without reading or rewriting
+      // it. Active fields are replaced explicitly and an obsolete intent is
+      // still cleared when a new application is allowed.
+      transaction.set(redemptionRef, redemptionWrite, { merge: true });
 
       transaction.set(
         userRef,
@@ -325,17 +305,13 @@ export type InitialPurchaseConfirmationDecision =
 /**
  * FASE iOS-1 — the shape `decideInitialPurchaseAttributionConfirmation`
  * actually needs from EITHER store's correlation result: only whether it is
- * `matched` (with which plan) or anything else. Both
- * `GooglePlayOfferCorrelationResult` and `AppleOfferCorrelationResult`
- * satisfy this structurally — `AppleOfferCorrelationResult`'s extra
- * `unsupported` variant is treated identically to `not_matched` here (never
- * confirms), the distinction between the two existing only for
- * logging/observability at the call site.
+ * `matched` (with which plan) or not. Both
+ * `GooglePlayOfferCorrelationResult` and the matched iOS purchase-intent
+ * result satisfy this structurally.
  */
 export type OfferCorrelationInput =
   | { status: 'matched'; plan: 'monthly' | 'annual' }
-  | { status: 'not_matched' }
-  | { status: 'unsupported' };
+  | { status: 'not_matched' };
 
 /**
  * Pura — regra 1 da Fase 4B, **revisada pela Fase 4C.3A**.
@@ -409,9 +385,8 @@ export type AttributionConfirmationInput =
       purchasedAtMs: number | null;
       periodType: string | undefined;
       /**
-       * Raw `event.store`: Google keeps its offer correlation; Apple routes
-       * deterministically between FASE 3 purchase-intent correlation and the
-       * legacy Offer Code correlation; unknown stores fail closed.
+       * Raw `event.store`: Google keeps its offer correlation; Apple uses
+       * only purchase-intent correlation; unknown stores fail closed.
        */
       store: string | undefined;
       /** Raw `event.product_id` — parsed by `parseGooglePlayProductId` (`googlePlayOfferCorrelation.ts`). */
@@ -478,55 +453,6 @@ export function parseStoredAndroidOfferSnapshot(value: unknown): PromoCodeAndroi
   };
 }
 
-function parseNullableAppleOfferCode(value: unknown): string | null {
-  return typeof value === 'string' ? value : null;
-}
-
-/**
- * FASE iOS-1 — defensive read of `couponRedemptions/{uid}.appleOffer`,
- * mirroring `parseStoredAndroidOfferSnapshot`'s policy: anything that isn't
- * the exact `{offerCodeMonthly, offerCodeAnnual}` shape — including the
- * field being entirely absent (every `couponRedemptions` document created
- * before FASE iOS-1) — resolves each plan's code to `null` rather than being
- * silently reconstructed from the live `promoCodes` catalog.
- */
-export function parseStoredAppleOfferSnapshot(value: unknown): PromoCodeAppleOfferSnapshot | null {
-  if (value === null || typeof value !== 'object') return null;
-  const v = value as Record<string, unknown>;
-  return {
-    offerCodeMonthly: parseNullableAppleOfferCode(v.offerCodeMonthly),
-    offerCodeAnnual: parseNullableAppleOfferCode(v.offerCodeAnnual),
-  };
-}
-
-function parseAppleOfferCorrelationConfig(value: unknown): AppleOfferCorrelationConfig | null {
-  if (value === null || typeof value !== 'object') return null;
-  const v = value as Record<string, unknown>;
-  if (typeof v.productId !== 'string' || typeof v.offerReference !== 'string') return null;
-  return { productId: v.productId, offerReference: v.offerReference };
-}
-
-/**
- * FASE iOS-6 — defensive read of `couponRedemptions/{uid}.appleOfferCorrelation`,
- * mirroring `parseStoredAndroidOfferSnapshot`'s policy: anything that isn't
- * the exact `{monthly, annual}` shape — including the field being entirely
- * absent (every `couponRedemptions` document created before FASE iOS-6) —
- * resolves each plan's config to `null` rather than being silently
- * reconstructed from the live `promoCodes` catalog. `correlateAppleOffer`
- * treats a `null` snapshot for either plan as unable to match that plan —
- * never a guess.
- */
-export function parseStoredAppleOfferCorrelationSnapshot(
-  value: unknown,
-): PromoCodeAppleCorrelationSnapshot | null {
-  if (value === null || typeof value !== 'object') return null;
-  const v = value as Record<string, unknown>;
-  return {
-    monthly: parseAppleOfferCorrelationConfig(v.monthly),
-    annual: parseAppleOfferCorrelationConfig(v.annual),
-  };
-}
-
 function mapInitialPurchaseSkipReason(
   action: Exclude<InitialPurchaseConfirmationDecision['action'], 'confirm'>,
 ): AttributionConfirmationSkipReason {
@@ -577,11 +503,9 @@ function mapApplePromoCorrelationSkipReason(
  * o catálogo `promoCodes` ao vivo, docs regra 4/6). Correlação só é
  * tentada quando `input.store === 'PLAY_STORE'`.
  *
- * FASE 3: `APP_STORE` primeiro avalia a correlação por purchase intent. Uma
- * intent presente, um SKU conhecido por `iosPromotion`, ou qualquer conflito
- * desse fluxo nunca cai para o legado. Somente `not_promotional` (sem intent e
- * sem SKU promocional conhecido) pode seguir para `appleOfferCorrelation.ts`.
- * Qualquer outra loja futura continua `not_matched` por construção.
+ * FASE 8: `APP_STORE` avalia somente a correlação por purchase intent. Intent
+ * ausente, produto normal ou qualquer conflito nunca cai para Apple Offer
+ * Code. Qualquer outra loja futura continua `not_matched` por construção.
  *
  * `RENEWAL` permanece EXATAMENTE como na Fase 4B — sem checagem de
  * correlação — porque `offer_code` não é garantido presente num RENEWAL de
@@ -620,15 +544,15 @@ export async function applyAttributionRevenueCatEvent(
         const classification = classifyInitialPurchasePeriodType(input.periodType);
 
         // Explicit per-store dispatch. PLAY_STORE behavior remains on the
-        // existing Google offer proof. APP_STORE prioritizes the FASE 3
-        // purchase-intent proof and only routes `not_promotional` to the
-        // legacy Apple Offer Code proof. Unknown stores fail closed.
-        const rawOfferCode = typeof input.offerCode === 'string' ? input.offerCode : null;
+        // existing Google offer proof. APP_STORE uses only the FASE 3
+        // purchase-intent proof; `not_promotional` remains unattributed.
+        // Unknown stores fail closed.
         let productIdentity: ReturnType<typeof parseGooglePlayProductId> = null;
         let offerCorrelation: OfferCorrelationInput;
         let applePromoCorrelation: ApplePromoPurchaseIntentCorrelationResult | undefined;
 
         if (input.store === 'PLAY_STORE') {
+          const rawOfferCode = typeof input.offerCode === 'string' ? input.offerCode : null;
           productIdentity = parseGooglePlayProductId(input.productId);
           const androidOffer = parseStoredAndroidOfferSnapshot(stored.androidOffer);
           const googleResult: GooglePlayOfferCorrelationResult = correlateGooglePlayOffer(
@@ -650,16 +574,7 @@ export async function applyAttributionRevenueCatEvent(
           });
 
           if (applePromoCorrelation.status === 'not_promotional') {
-            const appleOfferCorrelation = parseStoredAppleOfferCorrelationSnapshot(
-              stored.appleOfferCorrelation,
-            );
-            const appleProductId = typeof input.productId === 'string' ? input.productId : null;
-            const appleResult: AppleOfferCorrelationResult = correlateAppleOffer(
-              appleProductId,
-              rawOfferCode,
-              appleOfferCorrelation,
-            );
-            offerCorrelation = appleResult;
+            offerCorrelation = { status: 'not_matched' };
           } else if (applePromoCorrelation.status === 'matched') {
             offerCorrelation = applePromoCorrelation;
           } else {
@@ -694,7 +609,8 @@ export async function applyAttributionRevenueCatEvent(
               uid,
               store: input.store,
               hasProductId: productIdentity !== null,
-              hasOfferCode: rawOfferCode !== null,
+              hasOfferCode:
+                input.store === 'PLAY_STORE' && typeof input.offerCode === 'string',
               correlationStatus: offerCorrelation.status,
             });
           }

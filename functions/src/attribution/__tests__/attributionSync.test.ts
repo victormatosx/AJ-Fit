@@ -36,16 +36,6 @@ const HELLLEN_ANDROID_OFFER = {
   monthly: { basePlanId: 'monthly', offerId: 'helllen-trial-7d' },
   annual: null,
 };
-const ARNALDO_APPLE_OFFER = { offerCodeMonthly: null, offerCodeAnnual: null };
-const HELLLEN_APPLE_OFFER = { offerCodeMonthly: 'helllen-apple-monthly', offerCodeAnnual: null };
-// FASE iOS-6 — the NEW, separate correlation snapshot (distinct from
-// `*_APPLE_OFFER` above, which stays whatever it always was — see
-// `appleOfferCorrelation.ts`'s doc comment).
-const ARNALDO_APPLE_CORRELATION = {
-  monthly: { productId: 'ajfit_premium_monthly', offerReference: 'Influencer Trial 7D' },
-  annual: null,
-};
-const HELLLEN_APPLE_CORRELATION = { monthly: null, annual: null };
 // FASE 1 — the new Promo SKU authorization. ARNALDO is configured for it;
 // HELLLEN is deliberately NOT (`null`), proving a campaign can lack iOS
 // promotional config entirely (e.g. Android-only campaigns) without
@@ -61,8 +51,6 @@ const ATTRIBUTION = {
   campaignId: 'campaign-arnaldo',
   influencerId: 'ARNALDO',
   androidOffer: ARNALDO_ANDROID_OFFER,
-  appleOffer: ARNALDO_APPLE_OFFER,
-  appleOfferCorrelation: ARNALDO_APPLE_CORRELATION,
   iosPromotion: ARNALDO_IOS_PROMOTION,
 };
 
@@ -148,13 +136,16 @@ describe('applyPromoCodeAttributionTransactionally', () => {
       campaignId: 'campaign-arnaldo',
       influencerId: 'ARNALDO',
       androidOffer: ARNALDO_ANDROID_OFFER,
-      appleOffer: ARNALDO_APPLE_OFFER,
+      iosPromotion: ARNALDO_IOS_PROMOTION,
       trialStartedAt: null,
       convertedAt: null,
       lockedAt: null,
     });
     // Never present: this write must never touch `subscription`.
     expect(redemptionCall![1]).not.toHaveProperty('subscription');
+    expect(redemptionCall![1]).not.toHaveProperty('appleOffer');
+    expect(redemptionCall![1]).not.toHaveProperty('appleOfferCorrelation');
+    expect(redemptionCall![2]).toEqual({ merge: true });
 
     const userMirrorCall = findSetCall(`users/${UID}`);
     expect(userMirrorCall).toBeDefined();
@@ -165,8 +156,7 @@ describe('applyPromoCodeAttributionTransactionally', () => {
         influencerId: 'ARNALDO',
       }),
     });
-    // Fase 4C.3A/iOS-1 rule 6: the mirror is display-only — androidOffer/
-    // appleOffer (the correlation snapshots) must NEVER leak into it.
+    // The mirror is display-only — correlation snapshots never leak into it.
     expect(userMirrorCall![1].attribution).not.toHaveProperty('androidOffer');
     expect(userMirrorCall![1].attribution).not.toHaveProperty('appleOffer');
     expect(userMirrorCall![1]).not.toHaveProperty('subscription');
@@ -174,7 +164,7 @@ describe('applyPromoCodeAttributionTransactionally', () => {
     expect(userMirrorCall![2]).toEqual({ merge: true });
   });
 
-  it('Z: swap while pending: replaces couponCode/campaignId/influencerId/androidOffer/appleOffer atomically, but preserves createdAt', async () => {
+  it('Z: swap while pending replaces active snapshots, preserves createdAt and leaves historical extras untouched', async () => {
     const originalCreatedAt = Timestamp.fromDate(new Date('2026-08-01T00:00:00.000Z'));
     mockGetImplementation(true, {
       exists: true,
@@ -184,7 +174,11 @@ describe('applyPromoCodeAttributionTransactionally', () => {
         campaignId: 'campaign-helllen',
         influencerId: 'HELLLEN',
         androidOffer: HELLLEN_ANDROID_OFFER,
-        appleOffer: HELLLEN_APPLE_OFFER,
+        appleOffer: { offerCodeMonthly: 'historical-code', offerCodeAnnual: null },
+        appleOfferCorrelation: {
+          monthly: { productId: 'historical-product', offerReference: 'Historical Offer' },
+          annual: null,
+        },
         appliedAt: originalCreatedAt,
         createdAt: originalCreatedAt,
         updatedAt: originalCreatedAt,
@@ -203,12 +197,14 @@ describe('applyPromoCodeAttributionTransactionally', () => {
       campaignId: 'campaign-arnaldo',
       influencerId: 'ARNALDO',
       androidOffer: ARNALDO_ANDROID_OFFER,
-      appleOffer: ARNALDO_APPLE_OFFER,
       createdAt: originalCreatedAt,
     });
+    expect(redemptionCall![1]).not.toHaveProperty('appleOffer');
+    expect(redemptionCall![1]).not.toHaveProperty('appleOfferCorrelation');
+    expect(redemptionCall![2]).toEqual({ merge: true });
   });
 
-  it('AA: depois de locked, nada consegue substituir — nem código, nem campanha, nem influencer, nem androidOffer, nem appleOffer', async () => {
+  it('AA: depois de locked, nada consegue substituir os campos ativos', async () => {
     const lockedAt = Timestamp.fromDate(new Date('2026-08-05T00:00:00.000Z'));
     mockGetImplementation(true, {
       exists: true,
@@ -218,7 +214,6 @@ describe('applyPromoCodeAttributionTransactionally', () => {
         campaignId: 'campaign-helllen',
         influencerId: 'HELLLEN',
         androidOffer: HELLLEN_ANDROID_OFFER,
-        appleOffer: HELLLEN_APPLE_OFFER,
         appliedAt: lockedAt,
         createdAt: lockedAt,
         updatedAt: lockedAt,
@@ -267,8 +262,6 @@ describe('applyPromoCodeAttributionTransactionally', () => {
       campaignId: 'campaign-helllen',
       influencerId: 'HELLLEN',
       androidOffer: HELLLEN_ANDROID_OFFER,
-      appleOffer: HELLLEN_APPLE_OFFER,
-      appleOfferCorrelation: HELLLEN_APPLE_CORRELATION,
       iosPromotion: HELLLEN_IOS_PROMOTION,
     });
 
@@ -377,20 +370,17 @@ describe('applyPromoCodeAttributionTransactionally', () => {
     expect(transactionMocks.set).not.toHaveBeenCalled();
   });
 
-  // FASE iOS-1 — regression: adding appleOffer must not change what/how
-  // androidOffer (or anything else Android-related) is written.
-  it('FASE iOS-1 regression: androidOffer snapshot is written identically to Fase 4C.3A regardless of appleOffer content', async () => {
+  it('FASE 8 regression: Android snapshot remains unchanged', async () => {
     mockGetImplementation(true, { exists: false });
 
     await applyPromoCodeAttributionTransactionally(UID, ATTRIBUTION);
 
     const redemptionCall = findSetCall(`couponRedemptions/${UID}`);
     expect(redemptionCall![1].androidOffer).toEqual(ARNALDO_ANDROID_OFFER);
-    expect(redemptionCall![1].appleOffer).toEqual(ARNALDO_APPLE_OFFER);
   });
 
   // FASE 1 — the new iosPromotion snapshot follows the EXACT same pipeline
-  // as androidOffer/appleOffer/appleOfferCorrelation above: written
+  // as androidOffer: written
   // verbatim on first application, replaced on a swap-while-pending, and
   // frozen forever once lockedAt is set. These tests make that explicit for
   // the new field specifically (Fase 0C §16 requirement), rather than
@@ -417,8 +407,6 @@ describe('applyPromoCodeAttributionTransactionally', () => {
         campaignId: 'campaign-helllen',
         influencerId: 'HELLLEN',
         androidOffer: HELLLEN_ANDROID_OFFER,
-        appleOffer: HELLLEN_APPLE_OFFER,
-        appleOfferCorrelation: HELLLEN_APPLE_CORRELATION,
         iosPromotion: HELLLEN_IOS_PROMOTION,
         appliedAt: originalCreatedAt,
         createdAt: originalCreatedAt,
@@ -454,8 +442,6 @@ describe('applyPromoCodeAttributionTransactionally', () => {
         campaignId: 'campaign-arnaldo',
         influencerId: 'ARNALDO',
         androidOffer: ARNALDO_ANDROID_OFFER,
-        appleOffer: ARNALDO_APPLE_OFFER,
-        appleOfferCorrelation: ARNALDO_APPLE_CORRELATION,
         iosPromotion: { offeringIdentifier: 'promo_7d_old', monthlyProductId: 'old_monthly', annualProductId: 'old_annual' },
         appliedAt: originalCreatedAt,
         createdAt: originalCreatedAt,
@@ -482,8 +468,6 @@ describe('applyPromoCodeAttributionTransactionally', () => {
         campaignId: 'campaign-arnaldo',
         influencerId: 'ARNALDO',
         androidOffer: ARNALDO_ANDROID_OFFER,
-        appleOffer: ARNALDO_APPLE_OFFER,
-        appleOfferCorrelation: ARNALDO_APPLE_CORRELATION,
         iosPromotion: ARNALDO_IOS_PROMOTION,
         appliedAt: lockedAt,
         createdAt: lockedAt,

@@ -33,12 +33,6 @@ function promoCode(overrides: Partial<PromoCodeDocument> = {}): PromoCodeDocumen
     androidOfferIdMonthly: 'influencer-trial-7d',
     androidBasePlanIdAnnual: 'annual',
     androidOfferIdAnnual: 'influencer-trial-7d-annual',
-    appleOfferCodeMonthly: null,
-    appleOfferCodeAnnual: null,
-    appleProductIdMonthly: null,
-    appleOfferReferenceMonthly: null,
-    appleProductIdAnnual: null,
-    appleOfferReferenceAnnual: null,
     iosPromotion: null,
     createdAt: Timestamp.fromDate(new Date('2026-08-01T00:00:00.000Z')),
     updatedAt: Timestamp.fromDate(new Date('2026-08-01T00:00:00.000Z')),
@@ -230,24 +224,23 @@ describe('validatePromoCodeHandler', () => {
     );
   });
 
-  it('returns both android and ios store config when no platform is requested', async () => {
+  it('returns Android store config and no legacy iOS storeConfig field', async () => {
     catalogMocks.lookupPromoCode.mockResolvedValue({ status: 'found', promoCode: promoCode() });
     syncMocks.applyPromoCodeAttributionTransactionally.mockResolvedValue({ status: 'applied' });
 
     const result = await validatePromoCodeHandler(request({ code: 'ARNALDO' }));
 
     expect(result.storeConfig.android).not.toBeNull();
-    expect(result.storeConfig.ios).not.toBeNull();
+    expect(result.storeConfig).not.toHaveProperty('ios');
   });
 
-  it('returns only android store config when platform=ANDROID is requested', async () => {
+  it('returns Android store config when platform=ANDROID is requested', async () => {
     catalogMocks.lookupPromoCode.mockResolvedValue({ status: 'found', promoCode: promoCode() });
     syncMocks.applyPromoCodeAttributionTransactionally.mockResolvedValue({ status: 'applied' });
 
     const result = await validatePromoCodeHandler(request({ code: 'ARNALDO', platform: 'ANDROID' }));
 
     expect(result.storeConfig.android).not.toBeNull();
-    expect(result.storeConfig.ios).toBeNull();
   });
 
   it('never confides in a client-supplied offerId/productId — response is derived only from the catalog document', async () => {
@@ -286,153 +279,19 @@ describe('validatePromoCodeHandler', () => {
     );
   });
 
-  it('FASE iOS-1: snapshots appleOffer into the transaction unconditionally, even when platform=ANDROID was requested', async () => {
+  it('FASE 8: a new redemption writes iosPromotion but no Apple Offer Code snapshots', async () => {
     catalogMocks.lookupPromoCode.mockResolvedValue({
       status: 'found',
-      promoCode: promoCode({
-        appleOfferCodeMonthly: 'ARNALDO7DMONTHLY',
-        appleOfferCodeAnnual: 'ARNALDO7DANNUAL',
-      }),
-    });
-    syncMocks.applyPromoCodeAttributionTransactionally.mockResolvedValue({ status: 'applied' });
-
-    await validatePromoCodeHandler(request({ code: 'ARNALDO', platform: 'ANDROID' }));
-
-    expect(syncMocks.applyPromoCodeAttributionTransactionally).toHaveBeenCalledWith(
-      UID,
-      expect.objectContaining({
-        appleOffer: { offerCodeMonthly: 'ARNALDO7DMONTHLY', offerCodeAnnual: 'ARNALDO7DANNUAL' },
-      }),
-    );
-  });
-
-  it('FASE iOS-1: appleOffer snapshot is {null, null} when the catalog has no Apple codes configured — never fabricated', async () => {
-    catalogMocks.lookupPromoCode.mockResolvedValue({ status: 'found', promoCode: promoCode() });
-    syncMocks.applyPromoCodeAttributionTransactionally.mockResolvedValue({ status: 'applied' });
-
-    await validatePromoCodeHandler(request({ code: 'ARNALDO' }));
-
-    expect(syncMocks.applyPromoCodeAttributionTransactionally).toHaveBeenCalledWith(
-      UID,
-      expect.objectContaining({
-        appleOffer: { offerCodeMonthly: null, offerCodeAnnual: null },
-      }),
-    );
-  });
-
-  it('FASE iOS-1: platform=IOS returns the real configured Apple offer codes, monthly and annual never confused', async () => {
-    catalogMocks.lookupPromoCode.mockResolvedValue({
-      status: 'found',
-      promoCode: promoCode({
-        appleOfferCodeMonthly: 'ARNALDO7DMONTHLY',
-        appleOfferCodeAnnual: 'ARNALDO7DANNUAL',
-      }),
-    });
-    syncMocks.applyPromoCodeAttributionTransactionally.mockResolvedValue({ status: 'applied' });
-
-    const result = await validatePromoCodeHandler(request({ code: 'ARNALDO', platform: 'IOS' }));
-
-    expect(result.storeConfig.ios).toEqual({
-      offerCodeMonthly: 'ARNALDO7DMONTHLY',
-      offerCodeAnnual: 'ARNALDO7DANNUAL',
-    });
-  });
-
-  // ===========================================================================
-  // FASE iOS-6 — the NEW, separate correlation snapshot
-  // (`appleOfferCorrelation`), distinct from `appleOffer` above. Never
-  // returned in the response (it's backend-only, compared later against a
-  // real webhook event by `appleOfferCorrelation.ts`) — only ever passed to
-  // `applyPromoCodeAttributionTransactionally`.
-  // ===========================================================================
-
-  it('H: snapshots appleOfferCorrelation into the transaction unconditionally, from the new catalog fields', async () => {
-    catalogMocks.lookupPromoCode.mockResolvedValue({
-      status: 'found',
-      promoCode: promoCode({
-        appleProductIdMonthly: 'ajfit_premium_monthly',
-        appleOfferReferenceMonthly: 'Influencer Trial 7D',
-      }),
+      promoCode: promoCode({ iosPromotion: ARNALDO_IOS_PROMOTION }),
     });
     syncMocks.applyPromoCodeAttributionTransactionally.mockResolvedValue({ status: 'applied' });
 
     await validatePromoCodeHandler(request({ code: 'ARNALDO', platform: 'IOS' }));
 
-    expect(syncMocks.applyPromoCodeAttributionTransactionally).toHaveBeenCalledWith(
-      UID,
-      expect.objectContaining({
-        appleOfferCorrelation: {
-          monthly: { productId: 'ajfit_premium_monthly', offerReference: 'Influencer Trial 7D' },
-          annual: null,
-        },
-      }),
-    );
-  });
-
-  it('H: appleOfferCorrelation is {monthly: null, annual: null} when the catalog has no Apple correlation configured — never fabricated', async () => {
-    catalogMocks.lookupPromoCode.mockResolvedValue({ status: 'found', promoCode: promoCode() });
-    syncMocks.applyPromoCodeAttributionTransactionally.mockResolvedValue({ status: 'applied' });
-
-    await validatePromoCodeHandler(request({ code: 'ARNALDO', platform: 'IOS' }));
-
-    expect(syncMocks.applyPromoCodeAttributionTransactionally).toHaveBeenCalledWith(
-      UID,
-      expect.objectContaining({ appleOfferCorrelation: { monthly: null, annual: null } }),
-    );
-  });
-
-  it('H: a partial Apple correlation pair (only productId, no offerReference) fails closed to null for that plan — never half-configured', async () => {
-    catalogMocks.lookupPromoCode.mockResolvedValue({
-      status: 'found',
-      promoCode: promoCode({ appleProductIdMonthly: 'ajfit_premium_monthly' }),
-    });
-    syncMocks.applyPromoCodeAttributionTransactionally.mockResolvedValue({ status: 'applied' });
-
-    await validatePromoCodeHandler(request({ code: 'ARNALDO', platform: 'IOS' }));
-
-    expect(syncMocks.applyPromoCodeAttributionTransactionally).toHaveBeenCalledWith(
-      UID,
-      expect.objectContaining({ appleOfferCorrelation: { monthly: null, annual: null } }),
-    );
-  });
-
-  it('I: appleOfferCorrelation never appears in the client response — backend-only', async () => {
-    catalogMocks.lookupPromoCode.mockResolvedValue({
-      status: 'found',
-      promoCode: promoCode({
-        appleProductIdMonthly: 'ajfit_premium_monthly',
-        appleOfferReferenceMonthly: 'Influencer Trial 7D',
-      }),
-    });
-    syncMocks.applyPromoCodeAttributionTransactionally.mockResolvedValue({ status: 'applied' });
-
-    const result = await validatePromoCodeHandler(request({ code: 'ARNALDO', platform: 'IOS' }));
-
-    expect(JSON.stringify(result)).not.toContain('appleOfferCorrelation');
-    expect(JSON.stringify(result)).not.toContain('Influencer Trial 7D');
-  });
-
-  it('I: the Android snapshot passed to the transaction is byte-identical to before FASE iOS-6 (unaffected by Apple correlation fields)', async () => {
-    catalogMocks.lookupPromoCode.mockResolvedValue({
-      status: 'found',
-      promoCode: promoCode({
-        appleProductIdMonthly: 'ajfit_premium_monthly',
-        appleOfferReferenceMonthly: 'Influencer Trial 7D',
-      }),
-    });
-    syncMocks.applyPromoCodeAttributionTransactionally.mockResolvedValue({ status: 'applied' });
-
-    await validatePromoCodeHandler(request({ code: 'ARNALDO' }));
-
-    expect(syncMocks.applyPromoCodeAttributionTransactionally).toHaveBeenCalledWith(
-      UID,
-      expect.objectContaining({
-        androidOffer: {
-          monthly: { basePlanId: 'monthly', offerId: 'influencer-trial-7d' },
-          annual: { basePlanId: 'annual', offerId: 'influencer-trial-7d-annual' },
-        },
-      }),
-    );
+    const [, attribution] = syncMocks.applyPromoCodeAttributionTransactionally.mock.calls[0];
+    expect(attribution.iosPromotion).toEqual(ARNALDO_IOS_PROMOTION);
+    expect(attribution).not.toHaveProperty('appleOffer');
+    expect(attribution).not.toHaveProperty('appleOfferCorrelation');
   });
 
   it('never promises a trial and always states the store is the eligibility authority', async () => {
@@ -461,90 +320,6 @@ describe('validatePromoCodeHandler', () => {
   });
 });
 
-// Real ARNALDO/ARNALDOANUAL configuration — mirrors the actual
-// `promoCodes/ARNALDO` document once the real Apple Custom Offer Codes were
-// registered: monthly has both the client-facing code AND a proven backend
-// correlation pair; annual has the client-facing code but NO backend
-// correlation pair yet (appleOfferReferenceAnnual still unproven).
-describe('validatePromoCodeHandler — real ARNALDO/ARNALDOANUAL configuration', () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
-    vi.setSystemTime(NOW);
-    catalogMocks.lookupPromoCode.mockReset();
-    syncMocks.applyPromoCodeAttributionTransactionally.mockReset();
-    syncMocks.applyPromoCodeAttributionTransactionally.mockResolvedValue({ status: 'applied' });
-  });
-
-  afterEach(() => vi.useRealTimers());
-
-  function realArnaldoPromoCode(): PromoCodeDocument {
-    return promoCode({
-      appleOfferCodeMonthly: 'ARNALDO',
-      appleOfferCodeAnnual: 'ARNALDOANUAL',
-      appleProductIdMonthly: 'ajfit_premium_monthly',
-      appleOfferReferenceMonthly: 'Influencer Trial 7D',
-      appleProductIdAnnual: 'ajfit_premium_annual',
-      appleOfferReferenceAnnual: null,
-    });
-  }
-
-  it('returns ARNALDO/ARNALDOANUAL as the iOS store config, monthly and annual never confused', async () => {
-    catalogMocks.lookupPromoCode.mockResolvedValue({ status: 'found', promoCode: realArnaldoPromoCode() });
-
-    const result = await validatePromoCodeHandler(request({ code: 'ARNALDO', platform: 'IOS' }));
-
-    expect(result.storeConfig.ios).toEqual({
-      offerCodeMonthly: 'ARNALDO',
-      offerCodeAnnual: 'ARNALDOANUAL',
-    });
-  });
-
-  it('snapshots a matched monthly correlation but a null annual correlation into the transaction — appleProductIdAnnual alone (no offerReference) never fabricates a pair', async () => {
-    catalogMocks.lookupPromoCode.mockResolvedValue({ status: 'found', promoCode: realArnaldoPromoCode() });
-
-    await validatePromoCodeHandler(request({ code: 'ARNALDO', platform: 'IOS' }));
-
-    expect(syncMocks.applyPromoCodeAttributionTransactionally).toHaveBeenCalledWith(
-      UID,
-      expect.objectContaining({
-        appleOfferCorrelation: {
-          monthly: { productId: 'ajfit_premium_monthly', offerReference: 'Influencer Trial 7D' },
-          annual: null,
-        },
-      }),
-    );
-  });
-
-  it('the annual client offer code is still returned even though the backend correlation for annual is absent — client redemption never depends on backend correlation', async () => {
-    catalogMocks.lookupPromoCode.mockResolvedValue({ status: 'found', promoCode: realArnaldoPromoCode() });
-
-    const result = await validatePromoCodeHandler(request({ code: 'ARNALDO', platform: 'IOS' }));
-
-    expect(result.storeConfig.ios?.offerCodeAnnual).toBe('ARNALDOANUAL');
-  });
-
-  it('ARNALDOANUAL (the client-facing annual code) never appears anywhere as an offerReference/correlation value', async () => {
-    catalogMocks.lookupPromoCode.mockResolvedValue({ status: 'found', promoCode: realArnaldoPromoCode() });
-
-    await validatePromoCodeHandler(request({ code: 'ARNALDO', platform: 'IOS' }));
-
-    const call = syncMocks.applyPromoCodeAttributionTransactionally.mock.calls[0][1];
-    expect(JSON.stringify(call.appleOfferCorrelation)).not.toContain('ARNALDOANUAL');
-  });
-
-  it('Android storeConfig stays byte-identical to before ARNALDO/ARNALDOANUAL were configured', async () => {
-    catalogMocks.lookupPromoCode.mockResolvedValue({ status: 'found', promoCode: realArnaldoPromoCode() });
-
-    const result = await validatePromoCodeHandler(request({ code: 'ARNALDO' }));
-
-    expect(result.storeConfig.android).toEqual({
-      monthly: { basePlanId: 'monthly', offerId: 'influencer-trial-7d' },
-      annual: { basePlanId: 'annual', offerId: 'influencer-trial-7d-annual' },
-    });
-  });
-});
-
-// FASE 4C.1 — nested android storeConfig contract, fail-closed pairing, platform isolation.
 describe('validatePromoCodeHandler — Fase 4C.1 android storeConfig', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -661,19 +436,12 @@ describe('validatePromoCodeHandler — Fase 4C.1 android storeConfig', () => {
     expect(result.storeConfig.android?.annual).toBeNull();
   });
 
-  it('I: platform=android never leaks ios config', async () => {
-    catalogMocks.lookupPromoCode.mockResolvedValue({
-      status: 'found',
-      promoCode: promoCode({
-        appleOfferCodeMonthly: 'apple-monthly-code',
-        appleOfferCodeAnnual: 'apple-annual-code',
-      }),
-    });
+  it('I: platform=android never exposes a legacy iOS store config', async () => {
+    catalogMocks.lookupPromoCode.mockResolvedValue({ status: 'found', promoCode: promoCode() });
 
     const result = await validatePromoCodeHandler(request({ code: 'ARNALDO', platform: 'ANDROID' }));
 
-    expect(result.storeConfig.ios).toBeNull();
-    expect(JSON.stringify(result)).not.toMatch(/apple-(monthly|annual)-code/);
+    expect(result.storeConfig).not.toHaveProperty('ios');
   });
 
   it('J: platform=ios never leaks android config', async () => {
@@ -742,7 +510,7 @@ describe('validatePromoCodeHandler — FASE 1 iosPromotion contract', () => {
 
   afterEach(() => vi.useRealTimers());
 
-  it('a campaign configured for the new flow returns the exact iosPromotion the server derived from the catalog — never the legacy storeConfig.ios shape', async () => {
+  it('a campaign configured for the new flow returns the exact iosPromotion derived from the catalog', async () => {
     catalogMocks.lookupPromoCode.mockResolvedValue({
       status: 'found',
       promoCode: promoCode({ iosPromotion: ARNALDO_IOS_PROMOTION }),
@@ -776,7 +544,7 @@ describe('validatePromoCodeHandler — FASE 1 iosPromotion contract', () => {
     expect(JSON.stringify(result)).not.toMatch(/promo_7d|_promo/);
   });
 
-  it('platform omitted returns iosPromotion alongside both storeConfig entries — client decides, server never guesses', async () => {
+  it('platform omitted returns iosPromotion alongside Android config — server never guesses', async () => {
     catalogMocks.lookupPromoCode.mockResolvedValue({
       status: 'found',
       promoCode: promoCode({ iosPromotion: ARNALDO_IOS_PROMOTION }),

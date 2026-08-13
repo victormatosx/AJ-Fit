@@ -28,8 +28,9 @@ describe('FASE 6 — retired Apple Offer Code client path stays absent', () => {
     expect(paywall).not.toContain('appleStoreConfig');
   });
 
-  it('keeps the legacy response field wire-compatible but unconsumed', () => {
-    expect(promoService).toContain('ios: PromoCodeAppleStoreConfig | null');
+  it('keeps the retired iOS storeConfig field absent from the wire contract', () => {
+    expect(promoService).not.toContain('PromoCodeAppleStoreConfig');
+    expect(promoService).not.toContain('storeConfig?.ios');
   });
 
   it('preserves both legitimate CustomerInfo synchronization paths', () => {
