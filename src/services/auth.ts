@@ -9,6 +9,7 @@ import {
 } from 'firebase/auth';
 import { auth } from '../lib/firebase';
 import { clearSecureAuthSession } from '../lib/secureAuthStorage';
+import { isMultiFactorAuthRequired } from '../lib/mfaTotp';
 
 /**
  * Reusable, typed authentication service.
@@ -35,6 +36,12 @@ const ERROR_MESSAGES: Record<string, string> = {
   'auth/user-disabled': 'Esta conta foi desativada.',
   'auth/too-many-requests': 'Muitas tentativas. Tente novamente mais tarde.',
   'auth/network-request-failed': 'Falha de conexão. Verifique sua internet.',
+  'auth/requires-recent-login': 'Sua sessão expirou. Entre novamente para continuar.',
+  'auth/user-token-expired': 'Sua sessão expirou. Entre novamente para continuar.',
+  'auth/invalid-user-token': 'Sua sessão expirou. Entre novamente para continuar.',
+  'auth/no-current-user': 'Sua sessão expirou. Entre novamente para continuar.',
+  'auth/password-provider-required':
+    'A alteração de senha está disponível apenas para contas com e-mail e senha.',
   'auth/operation-not-allowed':
     'Este método de login não está habilitado no Firebase Auth.',
   // Social / account-linking:
@@ -113,6 +120,10 @@ export async function signInWithEmail(
     );
     return user;
   } catch (err) {
+    // getMultiFactorResolver requires the original MultiFactorError, including
+    // its opaque customData. Every non-MFA error keeps the existing friendly
+    // normalization contract.
+    if (isMultiFactorAuthRequired(err)) throw err;
     throw toAuthError(err);
   }
 }

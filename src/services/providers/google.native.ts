@@ -1,7 +1,11 @@
 import { NativeModules, Platform, TurboModuleRegistry } from 'react-native';
 import { GoogleAuthProvider } from 'firebase/auth';
 import { GOOGLE_WEB_CLIENT_ID, GOOGLE_IOS_CLIENT_ID, assertGoogleConfig } from '../authConfig';
-import { SocialAuthCancelledError, type ProviderResult } from './types';
+import {
+  ProviderCredentialError,
+  SocialAuthCancelledError,
+  type ProviderResult,
+} from './types';
 
 /**
  * The Google Sign-In native module is loaded LAZILY (dynamic import) instead of
@@ -46,12 +50,6 @@ async function loadGoogleSignin(): Promise<GoogleSigninModule | null> {
   }
 }
 
-function maskedClientId(clientId: string): string {
-  const [prefix, suffix] = clientId.split('.apps.googleusercontent.com');
-  if (!prefix || !suffix) return clientId;
-  return `${prefix.slice(0, 12)}...${prefix.slice(-8)}.apps.googleusercontent.com`;
-}
-
 function configure(g: GoogleSigninModule) {
   if (configured) return;
   assertGoogleConfig();
@@ -81,10 +79,7 @@ export async function isGoogleSigninAvailable(): Promise<boolean> {
 export async function getGoogleCredential(): Promise<ProviderResult> {
   const g = await loadGoogleSignin();
   if (!g) {
-    throw new Error(
-      'Login com Google indisponível neste app. Gere um development build ' +
-        '(npx expo run:ios / run:android) — não funciona no Expo Go.',
-    );
+    throw new ProviderCredentialError('providerUnavailable');
   }
   configure(g);
   try {
@@ -99,7 +94,7 @@ export async function getGoogleCredential(): Promise<ProviderResult> {
 
     const { idToken, user } = response.data;
     if (!idToken) {
-      throw new Error('Google não retornou o token de identificação.');
+      throw new ProviderCredentialError('identityTokenMissing');
     }
 
     return {
@@ -111,13 +106,15 @@ export async function getGoogleCredential(): Promise<ProviderResult> {
     if (g.isErrorWithCode(err) && err.code === g.statusCodes.SIGN_IN_CANCELLED) {
       throw new SocialAuthCancelledError();
     }
-    console.error('[auth:google:config]', {
-      platform: Platform.OS,
-      webClientId: maskedClientId(GOOGLE_WEB_CLIENT_ID),
-      ...(Platform.OS === 'ios'
-        ? { iosClientId: maskedClientId(GOOGLE_IOS_CLIENT_ID) }
-        : {}),
-    });
+    if (g.isErrorWithCode(err) && err.code === g.statusCodes.IN_PROGRESS) {
+      throw new ProviderCredentialError('providerBusy');
+    }
+    if (
+      g.isErrorWithCode(err) &&
+      err.code === g.statusCodes.PLAY_SERVICES_NOT_AVAILABLE
+    ) {
+      throw new ProviderCredentialError('providerUnavailable');
+    }
     throw err;
   }
 }

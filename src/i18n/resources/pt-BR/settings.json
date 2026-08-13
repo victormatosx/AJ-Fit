@@ -1,0 +1,217 @@
+{
+  "screenTitle": "Configurações",
+  "sections": {
+    "account": "Conta",
+    "workout": "Treino",
+    "notifications": "Notificações",
+    "preferences": "Preferências",
+    "privacyAndData": "Privacidade e dados",
+    "support": "Suporte",
+    "about": "Sobre"
+  },
+  "items": {
+    "editProfile": "Editar perfil",
+    "subscription": "Assinatura",
+    "loginMethods": "Métodos de login",
+    "security": "Segurança",
+    "workoutPreferences": "Preferências de treino",
+    "timersAndSounds": "Timers e sons",
+    "notifications": "Notificações",
+    "theme": "Tema",
+    "units": "Unidades",
+    "privacyPolicy": "Política de Privacidade",
+    "termsOfUse": "Termos de Uso",
+    "acceptedConsents": "Consentimentos Aceitos",
+    "exportData": "Exportar dados",
+    "deleteAccount": "Excluir conta",
+    "helpCenter": "Central de ajuda",
+    "sendFeedback": "Enviar feedback",
+    "sendSuggestion": "Enviar sugestão",
+    "reportProblem": "Reportar problema",
+    "version": "Versão",
+    "licenses": "Licenças Open Source"
+  },
+  "values": {
+    "darkTheme": "Escuro"
+  },
+  "security": {
+    "screenTitle": "Segurança",
+    "sections": {
+      "account": "Segurança da conta",
+      "sessions": "Sessões",
+      "activity": "Atividade",
+      "safetyZone": "Zona de segurança"
+    },
+    "items": {
+      "changePassword": "Alterar senha",
+      "biometrics": "Biometria",
+      "twoFactor": "Verificação em duas etapas",
+      "currentDevice": "Dispositivo atual",
+      "currentDeviceDescription": "Este dispositivo está conectado.",
+      "manageDevices": "Gerenciar dispositivos",
+      "lastLogin": "Último login",
+      "lastLoginDescription": "Hoje às 09:42",
+      "securityHistory": "Histórico de segurança",
+      "deleteAccount": "Excluir conta"
+    },
+    "safetyZoneDescription": "Mantenha sua conta protegida revisando regularmente suas configurações de segurança.",
+    "twoFactor": {
+      "title": "Verificação em duas etapas",
+      "description": "Adicione uma segunda etapa de segurança à sua conta usando um aplicativo autenticador.",
+      "status": { "label": "Status", "loading": "Verificando...", "enabled": "Ativada", "disabled": "Desativada", "unavailable": "Indisponível" },
+      "method": { "authenticator": "Aplicativo autenticador" },
+      "enrolledAt": "Configurado em {{date}}",
+      "benefits": {
+        "authenticator": { "title": "Códigos no autenticador", "description": "Use seu aplicativo autenticador preferido para confirmar o acesso." },
+        "offline": { "title": "Funciona offline", "description": "Os códigos são gerados no aparelho e não dependem de SMS." }
+      },
+      "actions": { "enable": "Ativar verificação em duas etapas", "disable": "Desativar verificação", "continue": "Continuar", "cancel": "Cancelar", "retry": "Tentar novamente" },
+      "disableConfirmation": { "title": "Desativar verificação?", "message": "Desativar a verificação em duas etapas reduzirá a segurança da sua conta." },
+      "reauth": {
+        "title": "Confirme sua identidade",
+        "enableDescription": "Escolha uma forma vinculada à sua conta para confirmar sua identidade antes de configurar o autenticador.",
+        "disableDescription": "Escolha uma forma vinculada à sua conta para confirmar sua identidade e desativar esta proteção.",
+        "codeDescription": "Agora informe o código atual do aplicativo autenticador para concluir a desativação.",
+        "passwordLabel": "Senha atual",
+        "passwordPlaceholder": "Digite sua senha atual",
+        "togglePassword": "Mostrar ou ocultar senha atual",
+        "continueWithPassword": "Confirmar com senha",
+        "continueWithGoogle": "Continuar com Google",
+        "continueWithApple": "Continuar com Apple",
+        "unavailableTitle": "Confirmação indisponível"
+      },
+      "enrollment": {
+        "title": "Configure seu autenticador",
+        "description": "Escaneie o QR Code ou use a chave abaixo.",
+        "scanQr": "Escaneie com seu aplicativo autenticador.",
+        "qrAccessibility": "QR Code para configurar a verificação em duas etapas",
+        "manualKey": "Chave de configuração",
+        "copyKey": "Copiar chave",
+        "keyCopied": "Chave copiada",
+        "openAuthenticator": "Abrir aplicativo autenticador",
+        "codeLabel": "Código de verificação",
+        "codePlaceholder": "000000",
+        "confirm": "Confirmar e ativar",
+        "successTitle": "Verificação ativada",
+        "successDescription": "Sua conta agora está protegida com um aplicativo autenticador.",
+        "done": "Concluir"
+      },
+      "feedback": {
+        "disabled": "Verificação em duas etapas desativada.",
+        "multipleFactors": "Há mais de um autenticador cadastrado. Escolha explicitamente qual deseja desativar."
+      },
+      "errors": {
+        "userMissing": "Sua sessão não está disponível. Entre novamente e tente outra vez.",
+        "emailUnverified": "Confirme seu e-mail antes de ativar a verificação em duas etapas.",
+        "passwordRequired": "Digite sua senha atual.",
+        "currentPasswordIncorrect": "A senha atual está incorreta. Verifique e tente novamente.",
+        "reauthProviderUnsupported": "A confirmação de identidade desta conta ainda não está disponível.",
+        "reauthCancelled": "A confirmação foi cancelada. Nenhuma alteração foi feita.",
+        "reauthFailed": "Não foi possível confirmar sua identidade. Tente novamente com a mesma conta.",
+        "userMismatch": "A conta escolhida é diferente da conta aberta no AJ Fit. Nenhuma alteração foi feita.",
+        "providerUnavailable": "Este método de confirmação não está disponível neste aparelho.",
+        "providerBusy": "Já existe uma confirmação de identidade em andamento.",
+        "identityTokenMissing": "O provedor não concluiu a confirmação. Tente novamente.",
+        "codeRequired": "Digite o código do aplicativo autenticador.",
+        "codeNonNumeric": "O código deve conter apenas números.",
+        "codeLength": "Digite os 6 dígitos do código.",
+        "invalidCode": "Código incorreto. Use o código atual do autenticador e tente novamente.",
+        "expiredCode": "Esse código expirou. Use o novo código exibido no autenticador.",
+        "flowExpired": "Esta configuração expirou. Cancele e inicie novamente.",
+        "recentLoginRequired": "Confirme sua identidade novamente para continuar.",
+        "sessionExpired": "Sua sessão expirou. Entre novamente e tente outra vez.",
+        "network": "Não foi possível conectar. Verifique sua internet e tente novamente.",
+        "tooManyRequests": "Muitas tentativas foram feitas. Aguarde um pouco e tente novamente.",
+        "factorNotFound": "Este autenticador não foi encontrado. Atualize a tela e tente novamente.",
+        "factorAlreadyEnrolled": "Este autenticador já está cadastrado.",
+        "factorLimit": "Sua conta atingiu o limite de autenticadores cadastrados.",
+        "unsupportedFirstFactor": "Este método de acesso ainda não permite configurar o autenticador aqui.",
+        "alreadyEnabled": "A verificação em duas etapas já está ativada nesta conta.",
+        "multipleFactors": "Há mais de um autenticador cadastrado. Selecione um fator específico.",
+        "operationNotAllowed": "TOTP MFA não está habilitado na configuração deste projeto Firebase.",
+        "authenticatorUnavailable": "Não foi possível abrir um aplicativo autenticador. Copie a chave e configure manualmente.",
+        "clipboardFailed": "Não foi possível copiar a chave. Selecione e copie manualmente.",
+        "resolverWithoutHints": "Nenhum autenticador cadastrado foi encontrado para este acesso.",
+        "generic": "Não foi possível concluir agora. Tente novamente."
+      }
+    },
+    "changePassword": {
+      "screenTitle": "Alterar senha",
+      "description": "Confirme sua senha atual antes de definir uma nova senha para sua conta.",
+      "fields": {
+        "current": "Senha atual",
+        "new": "Nova senha",
+        "confirmation": "Confirmar nova senha"
+      },
+      "placeholders": {
+        "current": "Digite sua senha atual",
+        "new": "Digite a nova senha",
+        "confirmation": "Digite a nova senha novamente"
+      },
+      "minimumLength": "Use pelo menos {{count}} caracteres.",
+      "actions": {
+        "submit": "Alterar senha"
+      },
+      "feedback": {
+        "success": "Senha alterada com sucesso.",
+        "currentPasswordRequired": "Digite sua senha atual.",
+        "newPasswordRequired": "Digite uma nova senha.",
+        "confirmationRequired": "Confirme sua nova senha.",
+        "passwordMismatch": "As novas senhas não coincidem.",
+        "passwordUnchanged": "A nova senha deve ser diferente da senha atual.",
+        "passwordTooShort": "A nova senha deve ter pelo menos {{count}} caracteres.",
+        "currentPasswordIncorrect": "A senha atual está incorreta. Verifique e tente novamente.",
+        "weakPassword": "Essa senha é muito fraca. Escolha uma senha mais segura.",
+        "sessionExpired": "Sua sessão expirou. Entre novamente na conta e tente outra vez.",
+        "providerRequired": "A alteração de senha está disponível apenas para contas com acesso por e-mail e senha.",
+        "tooManyRequests": "Muitas tentativas foram feitas. Aguarde um pouco e tente novamente.",
+        "networkFailed": "Não foi possível conectar. Verifique sua internet e tente novamente.",
+        "changeFailed": "Não foi possível alterar sua senha. Tente novamente."
+      },
+      "accessibility": {
+        "toggleVisibility": "Mostrar ou ocultar {{field}}"
+      }
+    }
+  },
+  "language": {
+    "title": "Idioma",
+    "description": "Escolha o idioma do aplicativo.",
+    "current": "Idioma atual",
+    "chooseTitle": "Selecionar idioma",
+    "options": {
+      "pt-BR": "Português",
+      "en": "English",
+      "es": "Español"
+    },
+    "errors": {
+      "changeFailed": "Não foi possível salvar o idioma. Tente novamente."
+    }
+  },
+  "units": {
+    "title": "Sistema de medidas",
+    "chooseTitle": "Selecionar sistema de medidas",
+    "summary": {
+      "systemMetric": "Automático — Métrico",
+      "systemImperial": "Automático — Imperial",
+      "metric": "Métrico",
+      "imperial": "Imperial"
+    },
+    "options": {
+      "system": {
+        "label": "Automático",
+        "description": "Usa o sistema da região do dispositivo"
+      },
+      "metric": {
+        "label": "Métrico",
+        "description": "kg • cm"
+      },
+      "imperial": {
+        "label": "Imperial",
+        "description": "lb • ft/in"
+      }
+    },
+    "errors": {
+      "changeFailed": "Não foi possível salvar o sistema de medidas. Tente novamente."
+    }
+  }
+}

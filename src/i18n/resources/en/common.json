@@ -1,0 +1,33 @@
+{
+  "app": {
+    "name": "AJ Fit"
+  },
+  "actions": {
+    "continue": "Continue",
+    "cancel": "Cancel",
+    "save": "Save",
+    "close": "Close",
+    "back": "Back",
+    "retry": "Try again",
+    "confirm": "Confirm",
+    "delete": "Delete",
+    "edit": "Edit"
+  },
+  "status": {
+    "loading": "Loading",
+    "saving": "Saving",
+    "success": "Done",
+    "empty": "Nothing here yet"
+  },
+  "accessibility": {
+    "day": "Day",
+    "month": "Month",
+    "year": "Year"
+  },
+  "navigation": {
+    "home": "Home",
+    "workout": "Workout",
+    "progress": "Progress",
+    "profile": "Profile"
+  }
+}

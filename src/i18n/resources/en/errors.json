@@ -1,0 +1,14 @@
+{
+  "generic": {
+    "title": "Something went wrong",
+    "message": "We couldn't finish that. Please try again."
+  },
+  "network": {
+    "unavailable": "No connection. Check your internet and try again.",
+    "timeout": "The operation took too long to respond."
+  },
+  "operation": {
+    "failed": "The operation couldn't be completed.",
+    "tryAgain": "Please try again in a moment."
+  }
+}

@@ -10,20 +10,21 @@ import Svg, {
   Stop,
 } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 import { Icon } from '../components/ui/Icon';
 import { MonoLabel } from '../components/ui/Display';
 import { colors, fonts, displayLineHeight } from '../theme/tokens';
 
-const STEPS = [
-  'Lendo seu perfil físico',
-  'Calculando volume e intensidade',
-  'Selecionando exercícios ideais',
-  'Periodizando suas semanas',
-  'Montando seu plano premium',
-];
-
 export function AnalyzingScreen({ onDone }: { onDone: () => void }) {
+  const { t } = useTranslation('onboarding');
   const [progress, setProgress] = useState(0);
+  const steps = [
+    t('analyzing.steps.profile'),
+    t('analyzing.steps.volume'),
+    t('analyzing.steps.exercises'),
+    t('analyzing.steps.periodization'),
+    t('analyzing.steps.plan'),
+  ];
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -45,10 +46,10 @@ export function AnalyzingScreen({ onDone }: { onDone: () => void }) {
     }
   }, [progress]);
 
-  // Active step index: 0..STEPS.length-1. Clamped so the final step stays
+  // Active step index: 0..steps.length-1. Clamped so the final step stays
   // "active" until onDone fires (never enters the "done" state itself).
-  const stepFloat = (progress / 100) * STEPS.length;
-  const activeIdx = Math.min(STEPS.length - 1, Math.floor(stepFloat));
+  const stepFloat = (progress / 100) * steps.length;
+  const activeIdx = Math.min(steps.length - 1, Math.floor(stepFloat));
 
   // Pulsing ambient glow inside the ring — mirrors @keyframes aj2-pulse.
   // Range boosted from 0.55↔1 to 0.75↔1 so the LED never dims to a faint blur.
@@ -183,6 +184,8 @@ export function AnalyzingScreen({ onDone }: { onDone: () => void }) {
             {/* Centered %  +  COMPILANDO label */}
             <View
               pointerEvents="none"
+              accessible
+              accessibilityLabel={t('analyzing.accessibility.progress', { progress })}
               style={{
                 position: 'absolute',
                 top: 0,
@@ -223,7 +226,9 @@ export function AnalyzingScreen({ onDone }: { onDone: () => void }) {
                   %
                 </Text>
               </View>
-              <MonoLabel style={{ marginTop: 6 }}>COMPILANDO</MonoLabel>
+              <MonoLabel style={{ marginTop: 6 }}>
+                {t('analyzing.compiling').toUpperCase()}
+              </MonoLabel>
             </View>
           </View>
 
@@ -240,13 +245,15 @@ export function AnalyzingScreen({ onDone }: { onDone: () => void }) {
                 textAlign: 'center',
               }}
             >
-              MONTANDO{'\n'}SEU PLANO
+              {t('analyzing.titleLine1').toUpperCase()}
+              {'\n'}
+              {t('analyzing.titleLine2').toUpperCase()}
             </Text>
           </View>
 
           {/* ── Synced checklist ── */}
           <View style={{ gap: 10 }}>
-            {STEPS.map((label, i) => {
+            {steps.map((label, i) => {
               const done = i < activeIdx;
               const active = i === activeIdx;
               return (

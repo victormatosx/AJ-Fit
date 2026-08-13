@@ -254,6 +254,36 @@ Criar documentação específica de billing.
 
 # 18. Primeiras entradas do projeto
 
+Data: 2026-08-04
+Responsável: Agente Frontend + QA
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Consolidada a infraestrutura final de internacionalização para `pt-BR`, `en`
+e `es`. O registro de resources e namespaces passou a ter fonte única em
+`src/i18n/resourceCatalog.ts`; o helper global de paridade agora detecta
+chaves ausentes/extras, folhas vazias e valores não-string. Foram adicionados
+os comandos `i18n:check`, `i18n:audit` e `quality`, além da documentação
+permanente em `docs/17_internacionalizacao.md`.
+
+O baseline contém 9 namespaces, 582 folhas por idioma e 1.746 traduções. O
+auditor registra 33 hardcodes visuais suspeitos existentes e seis números de
+mock legados em `home`, mantidos em allowlist explícita. Os guards de Assessment
+foram classificados como regressões permanentes de payload, fórmulas,
+protocolos e queries, apesar dos nomes históricos dos arquivos.
+
+Impacto:
+Novos namespaces entram automaticamente na paridade ao serem registrados no
+catálogo. Erros estruturais encerram a auditoria com falha; hardcodes suspeitos
+são reportados para triagem humana. Nenhuma lógica funcional, autenticação,
+sincronização, persistência, fórmula ou protocolo foi alterado.
+
+Próxima ação:
+Revisão editorial contínua e tratamento autorizado dos hardcodes registrados
+no baseline. Não houve deploy.
+
+---
+
 Data: 2026-07-30
 Responsável: Agente QA
 Categoria: [IMPLEMENTAÇÃO]
@@ -1143,3 +1173,460 @@ Humano coordenador validar em dev build. Nenhuma pendência de código aberta.
 
 ```
 ```
+
+---
+
+Data: 2026-08-06
+Responsável: Agente Frontend
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Implementado o módulo de Suporte do aplicativo: Central de Ajuda pesquisável e
+categorizada, artigos locais por repositório substituível, formulários de bug,
+sugestão e chamado, anexo opcional no Firebase Storage, criação atômica do
+ticket e primeira mensagem, tela de sucesso, i18n em pt-BR/en/es e regras de
+segurança testadas no emulador. Contrato detalhado em
+`docs/18_modulo_suporte.md`.
+
+Impacto:
+Usuários autenticados podem criar e ler somente os próprios tickets. O cliente
+não pode alterar status/prioridade nem criar mensagens administrativas. A
+estrutura já suporta histórico de mensagens e evolução por backend.
+
+Próxima ação:
+Publicar `firestore.rules` e `storage.rules` no ambiente alvo; em fase futura,
+implementar painel administrativo, respostas, push e limpeza de anexos órfãos.
+
+---
+
+Data: 2026-08-07
+Responsável: Agente Frontend + Agente QA
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Reorganizadas exclusivamente as telas de Perfil e Configurações. Perfil
+passou a concentrar evolução, plano, conta, métodos de login e sessão; a área
+de Avisos Inteligentes foi preparada como componente apresentacional que não
+renderiza quando vazia. Configurações passou a concentrar somente preferências
+do aplicativo, notificações, privacidade e dados, suporte e informações sobre
+o app. Os fluxos existentes de Avaliação Física, Editar Perfil, idioma,
+unidades e Suporte foram preservados. Itens sem tela permanecem placeholders
+visuais, sem novas rotas ou lógica.
+
+Impacto:
+Nenhuma alteração em serviços, providers, hooks, contexts, Firebase,
+RevenueCat, modelos ou regras de negócio. A estrutura neutra de listas foi
+unificada em `SettingsSection`; adicionada cobertura estrutural contra itens
+duplicados ou removidos acidentalmente. A entrada Versão passou a ler
+`expo.version` do `app.json` por `Constants.expoConfig`, sem valor fixo na tela.
+
+Próxima ação:
+Validar comparação visual em iOS e Android antes do merge.
+
+---
+
+Data: 2026-08-07
+Responsável: Agente Frontend + Agente QA
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Implementado exclusivamente o front-end da tela Segurança, acessível por
+Configurações. A tela possui as seções Segurança da conta, Sessões,
+Atividade e Zona de segurança, com textos estáticos e itens visuais sem ação.
+O componente compartilhado `SettingsSection` passou a aceitar descrição de
+item, descrição de seção e estado desabilitado.
+
+Impacto:
+Adicionado somente um overlay de navegação local entre Configurações e
+Segurança. Nenhuma autenticação, biometria, validação, persistência,
+integração, serviço, provider, hook ou regra de negócio foi implementada.
+
+Próxima ação:
+Validar a composição visual em iOS e Android antes do merge. As futuras ações
+de segurança dependem de requisitos e contratos próprios antes da implementação.
+
+---
+
+Data: 2026-08-07
+Responsável: Agente Segurança + Agente Frontend + Agente QA
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Implementado o fluxo de alteração de senha para contas que possuem o provider
+Firebase `password`. A tela solicita senha atual, nova senha e confirmação; o
+hook aplica as validações locais e o serviço executa obrigatoriamente
+`reauthenticateWithCredential` antes de `updatePassword`. O item fica oculto
+para contas exclusivamente Google/Apple e há proteções adicionais na
+navegação, na tela, no hook e no serviço. Estados de carregamento, sucesso e
+erros controlados foram traduzidos em pt-BR, inglês e espanhol.
+
+Impacto:
+Somente a ação Alterar senha passou a ter lógica. Biometria, verificação em
+duas etapas, sessões, histórico e exclusão de conta permanecem estritamente
+visuais. Nenhuma senha é persistida ou enviada a serviços próprios; as
+credenciais são usadas apenas pela API oficial do Firebase Auth durante a
+reautenticação. Adicionados testes de validação, mapeamento de erro, elegibilidade
+por provider, ordem das chamadas e interrupção do fluxo em falhas.
+
+Próxima ação:
+Validar o fluxo com uma conta de teste e-mail/senha em dev build. O repositório
+não possui emulador de Firebase Auth configurado, portanto a suíte automatizada
+cobre o contrato com mocks, não uma autenticação real.
+
+---
+
+Data: 2026-08-07
+Responsável: Codex — Agente Frontend
+Categoria: [REFATORAÇÃO]
+
+Descrição:
+Reorganizada exclusivamente a apresentação da Avaliação Física. A tela
+principal passou a seguir Resumo, Evolução, Adicionar avaliação, Dobras
+cutâneas e Histórico. Removidos o aviso azul do estado vazio e a seção visual
+duplicada de Informações básicas; seus valores continuam disponíveis
+internamente como preenchimento inicial dos formulários. Dobras cutâneas virou
+um resumo compacto. O protocolo ganhou ênfase visual nos formulários e as
+ações de salvar das avaliações guiada e importada passaram para um rodapé fixo
+compartilhado. A avaliação mais recente recebeu maior destaque na timeline.
+No estado sem evolução, dicas repetidas dentro dos dois gráficos foram
+suprimidas e permaneceu apenas a mensagem central já traduzida.
+
+Impacto:
+Nenhum cálculo, validação, protocolo, gráfico, callback, payload, consulta,
+persistência, serviço, hook, provider, navegação ou resource de i18n foi
+alterado. A mudança se limita a `AssessmentScreen`, apresentação da timeline,
+testes estruturais e documentação de staging.
+
+Próxima ação:
+Humano coordenador validar hierarquia, rodapé fixo e comportamento do teclado
+em iOS e Android, incluindo telas compactas.
+
+---
+
+Data: 2026-08-07
+Responsável: Codex — Agente Frontend
+Categoria: [REFATORAÇÃO]
+
+Descrição:
+Simplificado o formulário de Avaliação Guiada (“Novo registro”). Os campos
+visuais de sexo e idade foram removidos; sexo passa a priorizar o questionário
+persistido do cadastro e idade continua calculada internamente pela data de
+nascimento, considerando a data da avaliação. O campo de data foi substituído
+por `NativeDatePickerField`: diálogo nativo no Android, picker nativo em modal
+no iOS e fallback textual ISO na web. Datas futuras permanecem bloqueadas.
+
+Impacto:
+O payload guiado continua enviando `measuredAt`, `sex` e `age` exatamente como
+antes. Fórmulas, protocolos, validação do serviço, Firestore, hooks e navegação
+não foram alterados. Adicionada mensagem localizada para cadastros legados sem
+sexo/data de nascimento e cobertura estrutural do picker nas duas plataformas.
+
+Próxima ação:
+Validar o seletor nativo em dispositivo iOS e Android e confirmar a seleção de
+datas retroativas em ambos.
+
+---
+
+Data: 2026-08-07
+Responsável: Codex — Agente Frontend
+Categoria: [REFATORAÇÃO]
+
+Descrição:
+Altura removida dos formulários de Avaliação Guiada e Avaliação Importada. O
+valor agora vem do questionário persistido do cadastro, com a avaliação mais
+recente usada apenas como compatibilidade para contas legadas. A tela de
+importação foi alinhada ao Novo registro: datepicker nativo, bloco separado de
+informações básicas e resultados, e peso em campo de largura integral.
+
+Impacto:
+Altura continua sendo usada internamente no IMC e persistida no payload das
+duas avaliações, sem alteração de contrato ou fórmulas. Cadastros sem altura
+válida recebem uma mensagem localizada e não salvam dados inconsistentes.
+
+Próxima ação:
+Validar em iOS e Android o layout dos dois formulários, incluindo datepicker,
+teclado e rodapé fixo em telas compactas.
+
+---
+
+Data: 2026-08-07
+Responsável: Codex — Agente Frontend
+Categoria: [REFATORAÇÃO]
+
+Descrição:
+Removida da página principal de Avaliação Física a seção visual de Dobras
+cutâneas. A hierarquia agora segue diretamente de Adicionar avaliação para
+Histórico. Também foram removidos o resumo derivado da última avaliação guiada
+e as quatro traduções que existiam exclusivamente para esse bloco.
+
+Impacto:
+As dobras continuam disponíveis no formulário de Novo registro, permanecem
+nos cálculos e seguem sendo persistidas normalmente. Nenhum contrato, fórmula,
+serviço, consulta, payload ou registro histórico foi alterado.
+
+Próxima ação:
+Validar visualmente a transição entre Adicionar avaliação e Histórico em telas
+iOS e Android.
+
+---
+
+Data: 2026-08-10
+Responsável: Codex — Agente Frontend + Segurança + QA
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Implementada a verificação obrigatória de e-mail exclusivamente para contas
+que possuam o provider Firebase `password`. O cadastro inicia um único
+`sendEmailVerification` assim que o usuário é criado, preservando em paralelo
+o provisionamento existente. A nova `EmailVerificationScreen`, o hook e o
+serviço dedicado oferecem confirmação explícita via `User.reload()`, reenvio
+manual com loading/rate limit, feedback localizado e logout pelo fluxo já
+existente.
+
+O guard central de `App.tsx` passou a priorizar a condição `password` +
+`emailVerified === false` antes do questionário e do aplicativo, inclusive em
+sessões restauradas. Firebase Authentication permanece como única fonte de
+verdade; nenhum campo foi adicionado ao Firestore ou à persistência local.
+Google e Apple foram preservados sem regra de verificação inferida por
+provider. O linking continua no mesmo UID e agora devolve explicitamente o
+`User` atualizado retornado por `linkWithCredential`, incluindo o valor real
+de `emailVerified` após a operação.
+
+Impacto:
+Usuários de e-mail/senha não acessam o fluxo principal até a confirmação real
+no Firebase. Contas exclusivamente Google/Apple não são bloqueadas. Não houve
+migração do Firebase Auth, dependência nova, alteração de Rules, deep linking,
+polling ou implementação de MFA.
+
+Testes feitos:
+- serviço de envio/recarga, sessão nula/trocada e
+  `auth/too-many-requests` com mocks;
+- regra do guard para password verificado/não verificado, Google, Apple,
+  providers vinculados e ausência de sessão;
+- contrato estrutural do guard, cadastro, logout e account linking;
+- paridade e cobertura de textos em pt-BR, inglês e espanhol;
+- suíte completa e TypeScript.
+
+Próxima ação:
+Humano coordenador validar o fluxo real em development build com contas de
+teste e-mail/senha, Google e Apple. O repositório não possui emulador de
+Firebase Auth; os testes automatizados cobrem o contrato com mocks.
+
+Assinatura:
+Codex — 2026-08-10 — prompt da tarefa de verificação de e-mail (versão 1).
+
+---
+
+Data: 2026-08-10
+Responsável: Codex — Agente Frontend + Segurança + QA
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+POC técnica isolada de TOTP MFA preparada na branch
+`feature/totp-mfa-poc`, mantendo Firebase Authentication no JS SDK. A POC
+temporária e exclusiva de development cobre geração do segredo, URI
+`otpauth://`, assertion/enrollment, leitura de `enrolledFactors`, captura de
+`auth/multi-factor-auth-required`, seleção do hint TOTP e resolução do login.
+O fluxo concluído por `resolveSignIn` não navega manualmente: permanece sob o
+listener do `AuthContext` e o guard central já existente.
+
+Resultado:
+TypeScript, 870 testes da suíte completa, 548 testes de i18n, auditoria i18n e
+21 verificações do Expo Doctor foram aprovados. A execução real do ciclo com o
+backend Firebase e autenticador ainda não foi realizada em development builds
+Android e iOS; portanto, o resultado desta fase permanece **NO-GO** até a
+validação obrigatória nos dois sistemas.
+
+Impacto:
+Não houve implementação de MFA de produção, migração de SDK, dependência nova,
+mudança de persistência, Firestore/Storage Rules, claims, SMS, reCAPTCHA ou
+alteração da `SecurityScreen`. O segredo e o OTP não são persistidos nem
+logados. O acesso à POC e a captura experimental no login são condicionados a
+`__DEV__`.
+
+Próxima ação:
+Executar enrollment, código incorreto e novo login com TOTP em Android e iOS,
+confirmando que um usuário com questionário existente retorna ao Dashboard e
+não ao Quiz. Somente após os dois resultados reais a POC poderá ser marcada
+como GO.
+
+Assinatura:
+Codex — 2026-08-10 — Fase 1 da POC TOTP MFA.
+
+---
+
+Data: 2026-08-10
+Responsável: Codex — Agente Frontend + Segurança + QA
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Substituído o enrollment experimental da POC por gerenciamento TOTP de
+produção em Configurações → Segurança → Verificação em duas etapas. O status
+é relido de `multiFactor(user).enrolledFactors`; ativação e desativação exigem
+reauth de senha, operam sobre fatores TOTP explícitos e não criam flags no
+Firestore ou na persistência local. O enrollment oferece QR Code, chave
+manual, cópia explícita e abertura segura da URI `otpauth://`.
+
+Segurança:
+O segredo permanece somente na memória do hook e é limpo após sucesso,
+cancelamento, troca de usuário e unmount. Nenhum segredo, OTP ou token é
+logado. Contas somente Google/Apple ficam bloqueadas até a reautenticação
+federada da Fase 3. Na desativação de contas já protegidas, o fluxo também
+resolve o challenge TOTP se o Firebase o exigir durante a reautenticação.
+
+Resultado automático:
+TypeScript, 879 testes da suíte completa, 548 testes de i18n, auditoria i18n,
+21 verificações do Expo Doctor e `git diff --check` aprovados. A validação
+manual desta implementação em development builds Android/iOS permanece
+pendente antes da aprovação humana da fase.
+
+Limites:
+O enrollment DEV da POC e seu acesso em Configurações foram removidos. A ponte
+DEV de challenge por e-mail/senha permanece temporariamente para preservar a
+prova da Fase 1. O challenge definitivo de login para e-mail/senha, Google e
+Apple, recovery e revogação de sessões não foram implementados.
+
+Próxima ação:
+Executar o roteiro manual de ativação, configuração com um celular, código
+incorreto, cancelamento e desativação em Android e iOS. Depois da revisão
+humana, iniciar a Fase 3 para o challenge de login de produção.
+
+Assinatura:
+Codex — 2026-08-10 — Fase 2 de enrollment/gerenciamento TOTP.
+
+---
+
+Data: 2026-08-10
+Responsável: Codex — Agente Frontend + Segurança + QA
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Implementado o challenge TOTP definitivo no login de produção para
+e-mail/senha, Google e Apple. Os services preservam o
+`auth/multi-factor-auth-required` original; `src/services/mfaTotp.ts` mantém o
+`MultiFactorResolver` somente em memória; `useTotpChallenge` controla seleção
+de fator, OTP, retry, expiração e cancelamento; `TotpChallengeScreen` fornece a
+UI única do fluxo. A ponte DEV da POC e seus três arquivos paralelos foram
+removidos.
+
+Integração:
+Após `resolveSignIn`, nenhum `User` é definido e nenhuma rota é aberta
+manualmente. `onAuthStateChanged` continua sendo a autoridade, carrega perfil
+e questionário e entrega o estado ao guard central. Assim, um usuário existente
+com questionário e TOTP retorna ao Dashboard, sem passar pelo Quiz. Linking
+continua separado de `account-exists-with-different-credential` e conclui a
+credencial pendente no mesmo UID depois do segundo fator.
+
+Segurança:
+Resolver, hints internos, credencial de linking e OTP não são persistidos nem
+logados. Cancelamento/unmount/erro terminal limpam a memória. Código incorreto,
+rede e rate limit permitem retry. Nenhuma alteração foi feita em
+`secureAuthStorage`, inicialização/persistência do Firebase, Firestore/Storage
+Rules, schemas ou custom claims. SMS, reCAPTCHA, recovery codes e revogação de
+outras sessões seguem fora do escopo.
+
+Validação:
+Testes automatizados cobrem primeiro fator com e sem MFA nos três provedores,
+resolução/retry/limpeza do resolver, linking, múltiplos hints, fator não TOTP,
+expiração, logout, verificação de e-mail, persistência segura, guard
+Quiz/Dashboard e paridade i18n. A validação runtime com contas reais e
+development builds Android/iOS continua obrigatoriamente manual.
+
+Assinatura:
+Codex — 2026-08-10 — Fase 3 do challenge de login TOTP.
+
+---
+
+Data: 2026-08-10
+Responsável: Codex — Agente Frontend + Segurança + QA
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Implementada a Fase 4 do TOTP MFA com reautenticação federada para enrollment e
+unenrollment. Contas Google-only e Apple-only deixaram de ser bloqueadas em
+Configurações → Segurança → Verificação em duas etapas. A nova camada
+`reauthentication.ts` reutiliza as aquisições nativas existentes e aplica a
+credencial exclusivamente com `reauthenticateWithCredential` ao usuário atual.
+Login, linking, provisionamento e navegação não fazem parte dessa operação.
+
+Google reutiliza configuração, Play Services, folha nativa, extração de idToken
+e `GoogleAuthProvider.credential` já existentes. Apple gera raw nonce novo em
+cada tentativa, envia SHA-256 à Apple, usa o raw nonce apenas na credencial
+Firebase e não solicita nem depende de nome/e-mail durante reauth. Senha mantém
+o serviço anterior e segue como primeira opção quando vinculada. Contas
+multi-provider exibem todas as alternativas reais na ordem senha, Google e
+Apple, sem inferência por `providerData[0]`.
+
+Segurança:
+O UID original é validado antes da chamada Firebase, depois do resultado e
+novamente nas fronteiras assíncronas de geração do segredo e unenrollment.
+Cancelamento, provider indisponível, credencial divergente ou troca de sessão
+abortam sem tocar os fatores. Credenciais, id/identity tokens, raw nonce, senha,
+OTP, segredo e MultiFactorSession permanecem somente em memória e não são
+logados nem persistidos. A desativação continua resolvendo o TOTP já cadastrado
+quando a reautenticação retorna `auth/multi-factor-auth-required`.
+
+Validação automática:
+TypeScript aprovado; 945 testes da suíte completa aprovados; 75 testes focados
+de providers/reauth/MFA/regressão aprovados; 550 testes de i18n aprovados;
+auditoria i18n sem bloqueios; Expo Doctor com 21/21 verificações aprovadas; e
+`git diff --check` aprovado. Os testes cobrem os sete conjuntos de providers,
+nonce Apple novo, hash/raw nonce, códigos reais instalados do Google,
+cancelamento, mismatch de UID, enrollment/unenrollment federado e regressão dos
+challenges de login e account linking.
+
+Pendência:
+Executar em development builds o ciclo real Google-only no Android/iOS e o
+ciclo Apple-only em dispositivo iOS real: ativar, cancelar, escolher conta
+divergente quando possível, sair, entrar com TOTP e desativar. O repositório não
+possui emulador Firebase Auth capaz de substituir essa validação nativa.
+
+Assinatura:
+Codex — 2026-08-10 — Fase 4 de reautenticação federada TOTP.
+
+---
+
+Data: 2026-08-11
+Responsável: Codex — Agente Backend + Segurança
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Implementada a Fase 3 (preparação segura da infraestrutura) do backend do Photo
+Vault. Removido `functions/lib`, código JavaScript compilado e órfão (de uma
+integração RevenueCat desenvolvida em branches remotas separadas, commitado por
+engano no commit `12991ba`), sem `functions/src` correspondente e incompatível
+com o `firestore.rules` atual. Em seu lugar, criada uma estrutura real de Firebase
+Functions v2 em TypeScript (`functions/src`, `functions/package.json`,
+`functions/tsconfig.json`), com `firebase-admin` inicializado via Application
+Default Credentials (sem service account JSON), um logger estruturado com
+política explícita de nunca logar segredos/tokens/chaves, um guard `requireAuth`
+reutilizável para futuras callable functions autenticadas, e uma única function
+real hoje: `backendHealth` (callable pública, retorna apenas `ok`/versão/hora do
+servidor). `firebase.json` passou a declarar a pasta `functions`; criado
+`.firebaserc` com apenas o alias `production` (`ajfit-2f321`), sem `default`, para
+que nenhum deploy aconteça implicitamente. Documentado em
+`docs/20_backend_functions_photo_vault.md`, incluindo o passo a passo manual
+necessário para criar o projeto de staging (ainda inexistente).
+
+Segurança:
+Nenhum Cloud KMS, Vault Key, `createVault`/`recoverVaultKey`, criptografia de
+fotos ou App Check foram implementados nesta fase — travado por teste estrutural
+(`foundationStructure.test.ts`) que falha se qualquer um desses termos aparecer no
+código-fonte do backend. Nenhuma credencial privilegiada foi adicionada ao
+repositório; nenhum deploy (produção ou staging) foi executado.
+
+Validação automática:
+`npm run typecheck`, `npm run build` e `npm run test` (13 testes) aprovados em
+`functions/`. Suíte completa do mobile (`npm run typecheck` + `npm run test`, 945
+testes em 60 arquivos) aprovada sem regressão após as alterações em
+`firebase.json`.
+
+Pendência:
+Criar o projeto Firebase de staging (ação manual, ver
+`docs/20_backend_functions_photo_vault.md` §7) antes de qualquer deploy de
+staging real. Próxima fase: modelagem Firestore/Storage + Rules do Photo Vault.
+
+Assinatura:
+Codex — 2026-08-11 — Fase 3 de preparação segura da infraestrutura backend.
+
+---

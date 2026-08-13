@@ -2,6 +2,7 @@
   "expo": {
     "name": "AJ Fit",
     "slug": "aj-fit",
+    "scheme": "ajfit",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/aj-logo.png",
@@ -34,13 +35,13 @@
         "projectId": "ac6b8f54-5fef-4e2d-9904-0a2a863b805a"
       },
       "googleWebClientId": "753375043967-oldj9c61p82vni4s1n5fjkks3gueh4se.apps.googleusercontent.com",
-      "googleIosClientId": "753375043967-sfm41c00upk4u0nbee451d3cs9bsbe1s.apps.googleusercontent.com"
+      "googleIosClientId": "753375043967-siop689dt3f7njn4kjtlq6hd1ev9lun2.apps.googleusercontent.com"
     },
     "plugins": [
       [
         "@react-native-google-signin/google-signin",
         {
-          "iosUrlScheme": "com.googleusercontent.apps.753375043967-sfm41c00upk4u0nbee451d3cs9bsbe1s"
+          "iosUrlScheme": "com.googleusercontent.apps.753375043967-siop689dt3f7njn4kjtlq6hd1ev9lun2"
         }
       ],
       "expo-apple-authentication",
@@ -48,8 +49,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "O AJ Fit acessa suas fotos para você escolher uma imagem de perfil.",
-          "cameraPermission": "O AJ Fit acessa sua câmera para você tirar uma foto de perfil.",
+          "photosPermission": "O AJ Fit acessa suas fotos para você escolher imagens de perfil ou anexos de suporte.",
+          "cameraPermission": "O AJ Fit acessa sua câmera para você tirar fotos de perfil ou anexos de suporte.",
           "microphonePermission": false
         }
       ],
@@ -71,7 +72,8 @@
         }
       ],
       "expo-image",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      "expo-localization"
     ]
   }
 }

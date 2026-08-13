@@ -1,0 +1,14 @@
+{
+  "generic": {
+    "title": "Algo deu errado",
+    "message": "Não foi possível concluir. Tente novamente."
+  },
+  "network": {
+    "unavailable": "Sem conexão. Verifique sua internet e tente novamente.",
+    "timeout": "A operação demorou demais para responder."
+  },
+  "operation": {
+    "failed": "Não foi possível concluir a operação.",
+    "tryAgain": "Tente novamente em instantes."
+  }
+}

@@ -7,8 +7,8 @@ rules_version = '2';
 //     acesso apenas aos próprios dados; RevenueCat é dono da assinatura)
 //   - docs/04_contratos_de_api.md §5 (contrato do documento users/{userId})
 //
-// Princípio: o app só escreve profile e metadata.updatedAt. Preferências,
-// assinatura e metadados internos têm mapas próprios e validação independente.
+// Princípio: o app só escreve profile, language/units e metadata.updatedAt.
+// Assinatura e metadados internos têm mapas próprios e validação independente.
 // As respostas do questionário ficam na subcoleção `questionnaires`. Campos de
 // assinatura e treino são gravados apenas pelo backend (Cloud Functions /
 // webhook RevenueCat via Admin SDK, que ignora estas regras).
@@ -22,6 +22,15 @@ service cloud.firestore {
 
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // O painel autentica com Firebase Auth e o backend promove previamente o
+    // documento do operador. Escritas do app nunca podem alterar metadata.role.
+    function isAdmin() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid))
+             .data.metadata.role == 'admin';
     }
 
     function profileValid(data) {
@@ -40,11 +49,19 @@ service cloud.firestore {
     }
 
     function preferencesValid(data) {
+      // `hasAll` + `hasOnly` das mesmas 3 chaves impede mapas incompletos e
+      // impede escritas do cliente que substituiriam o mapa inteiro por
+      // { language } (o padrão perigoso do JS SDK, que apagaria theme/units
+      // silenciosamente). O update legítimo usa caminho pontuado —
+      // `preferences.language` — e nunca reescreve o mapa.
+      //
+      // O conjunto de idiomas DEVE bater exatamente com SUPPORTED_LANGUAGES
+      // em src/types/language.ts.
       return data is map
         && data.keys().hasAll(['language', 'units', 'theme'])
         && data.keys().hasOnly(['language', 'units', 'theme'])
-        && data.language in ['pt-BR']
-        && data.units in ['metric', 'imperial']
+        && data.language in ['pt-BR', 'en', 'es']
+        && data.units in ['system', 'metric', 'imperial']
         && data.theme in ['dark', 'light', 'system'];
     }
 
@@ -64,7 +81,7 @@ service cloud.firestore {
       return data is map
         && data.keys().hasAll(['role', 'createdAt', 'updatedAt'])
         && data.keys().hasOnly(['role', 'activeWorkoutId', 'createdAt', 'updatedAt'])
-        && data.role == 'user'
+        && data.role in ['user', 'admin']
         && (!('activeWorkoutId' in data) || data.activeWorkoutId is string)
         && data.createdAt is timestamp
         && data.updatedAt is timestamp;
@@ -100,7 +117,7 @@ service cloud.firestore {
         && after.profile.get('birthDate', null) == before.get('birthDate', null)
         && after.profile.get('photoURL', null) == before.get('photoURL', null)
         && after.preferences.language == before.get('language', 'pt-BR')
-        && after.preferences.units == 'metric'
+        && after.preferences.units == 'system'
         && after.preferences.theme == 'dark'
         && after.subscription.get('status', null) == before.get('subscriptionStatus', null)
         && after.subscription.get('provider', null) == before.get('subscriptionProvider', null)
@@ -161,6 +178,108 @@ service cloud.firestore {
         && (!('visceralFat' in d) || (d.visceralFat is number && d.visceralFat > 0));
     }
 
+    function supportTicketValid(ticketId) {
+      let d = request.resource.data;
+      return d.keys().hasAll([
+          'id', 'userId', 'userName', 'userEmail', 'type', 'subject', 'status',
+          'priority', 'lastMessage', 'createdAt', 'updatedAt', 'appVersion',
+          'platform', 'osVersion', 'deviceModel', 'language', 'attachmentsCount'
+        ])
+        && d.keys().hasOnly([
+          'id', 'userId', 'userName', 'userEmail', 'type', 'subject', 'status',
+          'priority', 'lastMessage', 'createdAt', 'updatedAt', 'appVersion',
+          'platform', 'osVersion', 'deviceModel', 'language', 'attachmentsCount'
+        ])
+        && d.id == ticketId
+        && d.userId == request.auth.uid
+        && d.userName is string && d.userName.size() >= 2 && d.userName.size() <= 50
+        && d.userEmail is string && d.userEmail.size() <= 254
+        && d.type in ['BUG', 'FEEDBACK', 'SUPPORT']
+        && d.subject is string && d.subject.size() >= 3 && d.subject.size() <= 100
+        && d.status == 'OPEN'
+        && d.priority == 'NORMAL'
+        && d.lastMessage is string && d.lastMessage.size() >= 10 && d.lastMessage.size() <= 5000
+        && d.createdAt == request.time && d.updatedAt == request.time
+        && d.appVersion is string && d.platform in ['ios', 'android', 'web', 'windows', 'macos']
+        && d.osVersion is string && d.deviceModel is string && d.language is string
+        && d.attachmentsCount is int && d.attachmentsCount >= 0 && d.attachmentsCount <= 1;
+    }
+
+    function supportMessageValid(ticketId) {
+      let d = request.resource.data;
+      let ticket = getAfter(/databases/$(database)/documents/supportTickets/$(ticketId));
+      return ticket.data.userId == request.auth.uid
+        && d.keys().hasAll(['senderType', 'senderId', 'message', 'attachments', 'createdAt', 'readAt'])
+        && d.keys().hasOnly(['senderType', 'senderId', 'message', 'attachments', 'createdAt', 'readAt'])
+        && d.senderType == 'USER' && d.senderId == request.auth.uid
+        && d.message is string && d.message.size() >= 1 && d.message.size() <= 5000
+        && d.attachments is list && d.attachments.size() <= 1
+        && ticket.data.attachmentsCount == d.attachments.size()
+        && (d.attachments.size() == 0 || (
+          d.attachments[0] is map
+          && d.attachments[0].keys().hasAll(['url', 'path', 'type'])
+          && d.attachments[0].keys().hasOnly(['url', 'path', 'type'])
+          && d.attachments[0].url is string && d.attachments[0].url.size() <= 2048
+          && d.attachments[0].path is string
+          && d.attachments[0].path.matches('users/' + request.auth.uid + '/support/' + ticketId + '/attachments/.*')
+          && d.attachments[0].type == 'IMAGE'
+        ))
+        && d.createdAt == request.time && d.readAt == null;
+    }
+
+    function adminSupportTicketUpdateValid() {
+      let before = resource.data;
+      let after = request.resource.data;
+      let changed = after.diff(before).affectedKeys();
+      return changed.hasAll(['updatedAt'])
+        && changed.hasOnly([
+          'status', 'priority', 'assignedTo', 'lastMessage', 'updatedAt',
+          'lastReplyAt', 'closedAt'
+        ])
+        && after.status in ['OPEN', 'IN_PROGRESS', 'WAITING_USER', 'RESOLVED', 'CLOSED']
+        && after.priority in ['LOW', 'NORMAL', 'HIGH', 'CRITICAL']
+        && after.updatedAt == request.time
+        // O painel atual atribui somente ao próprio operador autenticado.
+        && (!changed.hasAny(['assignedTo']) || after.assignedTo == request.auth.uid)
+        // Fechar grava o timestamp do servidor; qualquer outro status limpa-o.
+        && (!changed.hasAny(['status']) || (
+          changed.hasAny(['closedAt'])
+          && (after.status == 'CLOSED'
+              ? after.closedAt == request.time
+              : after.closedAt == null)
+        ))
+        && (!changed.hasAny(['closedAt']) || changed.hasAny(['status']))
+        // Uma resposta atualiza preview e metadados em conjunto.
+        && (!changed.hasAny(['lastMessage', 'lastReplyAt']) || (
+          changed.hasAll(['lastMessage', 'lastReplyAt'])
+          && after.lastMessage is string
+          && after.lastMessage.size() >= 1
+          && after.lastMessage.size() <= 5000
+          && after.lastReplyAt == request.time
+        ));
+    }
+
+    function adminSupportMessageValid(ticketId) {
+      let d = request.resource.data;
+      let ticket = getAfter(/databases/$(database)/documents/supportTickets/$(ticketId));
+      return d.keys().hasAll([
+          'senderType', 'senderId', 'message', 'attachments', 'createdAt', 'readAt'
+        ])
+        && d.keys().hasOnly([
+          'senderType', 'senderId', 'message', 'attachments', 'createdAt', 'readAt'
+        ])
+        && d.senderType == 'ADMIN'
+        && d.senderId == request.auth.uid
+        && d.message is string && d.message.size() >= 1 && d.message.size() <= 5000
+        && d.attachments is list && d.attachments.size() == 0
+        && d.createdAt == request.time && d.readAt == null
+        // Mantém mensagem e preview do ticket consistentes no mesmo batch.
+        && ticket.data.lastMessage == d.message
+        && ticket.data.updatedAt == request.time
+        && ticket.data.lastReplyAt == request.time;
+    }
+
+    // ── Users, questionnaires and assessments ─────────────────────────────
     match /users/{userId} {
       // Leitura: apenas o dono do documento.
       allow read: if isOwner(userId);
@@ -169,6 +288,7 @@ service cloud.firestore {
       // o token e sem campos de assinatura/internos definidos pelo cliente.
       allow create: if isOwner(userId)
         && nestedUserValid(request.resource.data)
+        && request.resource.data.metadata.role == 'user'
         && request.resource.data.profile.email == request.auth.token.email
         && request.resource.data.subscription.size() == 0
         && !('activeWorkoutId' in request.resource.data.metadata)
@@ -179,15 +299,25 @@ service cloud.firestore {
       // `diff().affectedKeys().hasOnly` impede alterações em campos de conta,
       // assinatura, treino ou privilégios mesmo que novos campos sejam
       // adicionados ao documento no futuro.
+      //
+      // `preferences` é aceito no conjunto top-level mudável, mas dentro dele
+      // apenas `preferences.language` e `preferences.units` podem variar;
+      // `theme` segue protegido. Escritas legítimas usam caminhos pontuados,
+      // preservando todas as preferências irmãs.
       allow update: if isOwner(userId) && (
         legacyMigrationValid()
         || (
           nestedUserValid(request.resource.data)
           && request.resource.data.diff(resource.data).affectedKeys()
-               .hasOnly(['profile', 'metadata'])
+               .hasOnly(['profile', 'preferences', 'metadata'])
           && request.resource.data.profile.diff(resource.data.profile).affectedKeys()
                .hasOnly(['name', 'birthDate', 'photoURL', 'photoVersion'])
           && profilePhotoUpdateValid(resource.data.profile, request.resource.data.profile)
+          && (
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny(['preferences'])
+            || request.resource.data.preferences.diff(resource.data.preferences).affectedKeys()
+                 .hasOnly(['language', 'units'])
+          )
           && request.resource.data.metadata.diff(resource.data.metadata).affectedKeys()
                .hasOnly(['updatedAt'])
           && request.resource.data.metadata.updatedAt == request.time
@@ -230,6 +360,26 @@ service cloud.firestore {
       }
     }
 
+    // ── Support tickets and messages ──────────────────────────────────────
+    match /supportTickets/{ticketId} {
+      allow get, list: if isAdmin()
+        || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow create: if isSignedIn() && supportTicketValid(ticketId);
+      allow update: if isAdmin() && adminSupportTicketUpdateValid();
+      allow delete: if false;
+
+      match /messages/{messageId} {
+        allow get, list: if isAdmin()
+          || (isSignedIn()
+              && get(/databases/$(database)/documents/supportTickets/$(ticketId))
+                   .data.userId == request.auth.uid);
+        allow create: if (isSignedIn() && supportMessageValid(ticketId))
+          || (isAdmin() && adminSupportMessageValid(ticketId));
+        allow update, delete: if false;
+      }
+    }
+
+    // ── Deny all undocumented collections ─────────────────────────────────
     // Coleções de sistema (exercises, workout_templates, treinos do usuário,
     // etc.) ainda não têm contrato de regras aprovado — negar por padrão até
     // definição do Agente de Segurança/Arquiteto.

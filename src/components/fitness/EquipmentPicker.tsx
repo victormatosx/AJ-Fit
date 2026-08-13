@@ -2,9 +2,14 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, Pressable, ScrollView, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path, Circle, Rect } from 'react-native-svg';
+import { useTranslation } from 'react-i18next';
 import { Display, Slash } from '../ui/Display';
 import { Icon } from '../ui/Icon';
 import { colors, fonts } from '../../theme/tokens';
+
+/** Loose t signature for dynamic key lookups (equipment ids as key
+ *  fragments). Bounded by string in/out — no `any`. */
+type LooseT = (key: string, options?: Record<string, unknown>) => string;
 
 // ── Equipment glyphs ────────────────────────────────────────
 type EqIconName =
@@ -81,62 +86,81 @@ function EqIcon({ name, size = 26, color = '#cfe0ff' }: { name: EqIconName; size
   }
 }
 
-// ── ExerciseDB taxonomy → PT label, icon, category ──────────
-type Meta = { l: string; i: EqIconName; cat: string };
+// ── ExerciseDB taxonomy → icon + stable category id ────────
+//
+// `cat` is a STABLE ID resolved at render time via
+// t(`quiz:equipment.categories.${cat}`). Do NOT store a translated string
+// here — categories drive grouping and ordering, so they must not change
+// with the active language.
+//
+// The literal keys of this map (`barbell`, `smith machine`, ...) are the
+// same IDs persisted in `quiz.equipment` (via `onChange(v)` → `Quiz`), so
+// renaming any of them requires a data migration. Labels are looked up in
+// `quiz:equipment.items.<key>` at render time.
+type CategoryId =
+  | 'freeWeights'
+  | 'benchesAndRacks'
+  | 'machines'
+  | 'functional'
+  | 'cardio'
+  | 'bodyweight'
+  | 'other';
+
+type Meta = { i: EqIconName; cat: CategoryId };
 const EXDB_EQUIP: Record<string, Meta> = {
-  barbell: { l: 'Barra', i: 'barbell', cat: 'Peso livre' },
-  'olympic barbell': { l: 'Barra olímpica', i: 'barbell', cat: 'Peso livre' },
-  'ez barbell': { l: 'Barra W', i: 'barbell', cat: 'Peso livre' },
-  'trap bar': { l: 'Barra hexagonal', i: 'barbell', cat: 'Peso livre' },
-  dumbbell: { l: 'Halteres', i: 'dumbbell', cat: 'Peso livre' },
-  kettlebell: { l: 'Kettlebell', i: 'kettlebell', cat: 'Peso livre' },
-  weighted: { l: 'Peso adicional', i: 'plate', cat: 'Peso livre' },
-  hammer: { l: 'Martelo', i: 'plate', cat: 'Peso livre' },
-  'smith machine': { l: 'Smith machine', i: 'smith', cat: 'Bancos e racks' },
-  'leverage machine': { l: 'Máquina articulada', i: 'machine', cat: 'Máquinas' },
-  cable: { l: 'Polia / Cabo', i: 'cable', cat: 'Máquinas' },
-  assisted: { l: 'Máquina assistida', i: 'machine', cat: 'Máquinas' },
-  'sled machine': { l: 'Leg press / Sled', i: 'legpress', cat: 'Máquinas' },
-  band: { l: 'Elástico', i: 'band', cat: 'Funcional e acessórios' },
-  'resistance band': { l: 'Faixa de resistência', i: 'band', cat: 'Funcional e acessórios' },
-  rope: { l: 'Corda', i: 'rope', cat: 'Funcional e acessórios' },
-  'medicine ball': { l: 'Medicine ball', i: 'medball', cat: 'Funcional e acessórios' },
-  'stability ball': { l: 'Bola de estabilidade', i: 'ball', cat: 'Funcional e acessórios' },
-  'bosu ball': { l: 'Bosu', i: 'ball', cat: 'Funcional e acessórios' },
-  roller: { l: 'Rolo de liberação', i: 'mat', cat: 'Funcional e acessórios' },
-  'wheel roller': { l: 'Roda abdominal', i: 'abwheel', cat: 'Funcional e acessórios' },
-  tire: { l: 'Pneu', i: 'plate', cat: 'Funcional e acessórios' },
-  'body weight': { l: 'Peso corporal', i: 'bodyweight', cat: 'Sem equipamento' },
-  'stationary bike': { l: 'Bike ergométrica', i: 'bike', cat: 'Cardio' },
-  'elliptical machine': { l: 'Elíptico', i: 'machine', cat: 'Cardio' },
-  'stepmill machine': { l: 'Simulador de escada', i: 'box', cat: 'Cardio' },
-  'skierg machine': { l: 'SkiErg', i: 'rower', cat: 'Cardio' },
-  'upper body ergometer': { l: 'Ergômetro de braço', i: 'rower', cat: 'Cardio' },
+  barbell: { i: 'barbell', cat: 'freeWeights' },
+  'olympic barbell': { i: 'barbell', cat: 'freeWeights' },
+  'ez barbell': { i: 'barbell', cat: 'freeWeights' },
+  'trap bar': { i: 'barbell', cat: 'freeWeights' },
+  dumbbell: { i: 'dumbbell', cat: 'freeWeights' },
+  kettlebell: { i: 'kettlebell', cat: 'freeWeights' },
+  weighted: { i: 'plate', cat: 'freeWeights' },
+  hammer: { i: 'plate', cat: 'freeWeights' },
+  'smith machine': { i: 'smith', cat: 'benchesAndRacks' },
+  'leverage machine': { i: 'machine', cat: 'machines' },
+  cable: { i: 'cable', cat: 'machines' },
+  assisted: { i: 'machine', cat: 'machines' },
+  'sled machine': { i: 'legpress', cat: 'machines' },
+  band: { i: 'band', cat: 'functional' },
+  'resistance band': { i: 'band', cat: 'functional' },
+  rope: { i: 'rope', cat: 'functional' },
+  'medicine ball': { i: 'medball', cat: 'functional' },
+  'stability ball': { i: 'ball', cat: 'functional' },
+  'bosu ball': { i: 'ball', cat: 'functional' },
+  roller: { i: 'mat', cat: 'functional' },
+  'wheel roller': { i: 'abwheel', cat: 'functional' },
+  tire: { i: 'plate', cat: 'functional' },
+  'body weight': { i: 'bodyweight', cat: 'bodyweight' },
+  'stationary bike': { i: 'bike', cat: 'cardio' },
+  'elliptical machine': { i: 'machine', cat: 'cardio' },
+  'stepmill machine': { i: 'box', cat: 'cardio' },
+  'skierg machine': { i: 'rower', cat: 'cardio' },
+  'upper body ergometer': { i: 'rower', cat: 'cardio' },
 
   // Roboflow "All Gym Equipment" — máquinas de academia de rede
-  bench: { l: 'Banco', i: 'bench', cat: 'Bancos e racks' },
-  'abdominal bench': { l: 'Banco abdominal', i: 'bench', cat: 'Bancos e racks' },
-  'preacher curl': { l: 'Banco Scott', i: 'incline', cat: 'Bancos e racks' },
-  'leg raise tower': { l: 'Torre de abdominal', i: 'pullup', cat: 'Bancos e racks' },
-  'functional trainer': { l: 'Estação funcional', i: 'cable', cat: 'Máquinas' },
-  'lat pull down machine': { l: 'Puxador (pulley)', i: 'pulldown', cat: 'Máquinas' },
-  'seated row machine': { l: 'Remada sentada', i: 'machine', cat: 'Máquinas' },
-  'chest press machine': { l: 'Supino máquina', i: 'machine', cat: 'Máquinas' },
-  'chest fly machine': { l: 'Voador (peck deck)', i: 'machine', cat: 'Máquinas' },
-  'shoulder press machine': { l: 'Desenvolvimento máquina', i: 'machine', cat: 'Máquinas' },
-  'lateral raises machine': { l: 'Elevação lateral máquina', i: 'machine', cat: 'Máquinas' },
-  'seated dip machine': { l: 'Tríceps máquina', i: 'machine', cat: 'Máquinas' },
-  'leg press machine': { l: 'Leg press', i: 'legpress', cat: 'Máquinas' },
-  'hack squat machine': { l: 'Hack squat', i: 'legpress', cat: 'Máquinas' },
-  'leg extension machine': { l: 'Cadeira extensora', i: 'machine', cat: 'Máquinas' },
-  'leg curl machine': { l: 'Mesa flexora', i: 'machine', cat: 'Máquinas' },
-  'back extension machine': { l: 'Extensão lombar', i: 'machine', cat: 'Máquinas' },
-  'ab crunch machine': { l: 'Abdominal máquina', i: 'machine', cat: 'Máquinas' },
-  'ghd machine': { l: 'Cadeira GHD', i: 'machine', cat: 'Máquinas' },
-  'ab roller': { l: 'Roda abdominal', i: 'abwheel', cat: 'Funcional e acessórios' },
-  elliptical: { l: 'Elíptico', i: 'machine', cat: 'Cardio' },
-  stepmill: { l: 'Simulador de escada', i: 'box', cat: 'Cardio' },
-  treadmill: { l: 'Esteira', i: 'treadmill', cat: 'Cardio' },
+  bench: { i: 'bench', cat: 'benchesAndRacks' },
+  'abdominal bench': { i: 'bench', cat: 'benchesAndRacks' },
+  'preacher curl': { i: 'incline', cat: 'benchesAndRacks' },
+  'leg raise tower': { i: 'pullup', cat: 'benchesAndRacks' },
+  'functional trainer': { i: 'cable', cat: 'machines' },
+  'lat pull down machine': { i: 'pulldown', cat: 'machines' },
+  'seated row machine': { i: 'machine', cat: 'machines' },
+  'chest press machine': { i: 'machine', cat: 'machines' },
+  'chest fly machine': { i: 'machine', cat: 'machines' },
+  'shoulder press machine': { i: 'machine', cat: 'machines' },
+  'lateral raises machine': { i: 'machine', cat: 'machines' },
+  'seated dip machine': { i: 'machine', cat: 'machines' },
+  'leg press machine': { i: 'legpress', cat: 'machines' },
+  'hack squat machine': { i: 'legpress', cat: 'machines' },
+  'leg extension machine': { i: 'machine', cat: 'machines' },
+  'leg curl machine': { i: 'machine', cat: 'machines' },
+  'back extension machine': { i: 'machine', cat: 'machines' },
+  'ab crunch machine': { i: 'machine', cat: 'machines' },
+  'ghd machine': { i: 'machine', cat: 'machines' },
+  'ab roller': { i: 'abwheel', cat: 'functional' },
+  elliptical: { i: 'machine', cat: 'cardio' },
+  stepmill: { i: 'box', cat: 'cardio' },
+  treadmill: { i: 'treadmill', cat: 'cardio' },
 };
 
 const ROBOFLOW_CLASSES = [
@@ -149,24 +173,32 @@ const ROBOFLOW_CLASSES = [
   'stationary bike', 'stepmill', 'treadmill',
 ];
 
-const EXDB_CAT_ORDER = ['Peso livre', 'Bancos e racks', 'Máquinas', 'Funcional e acessórios', 'Cardio', 'Sem equipamento', 'Outros'];
+const EXDB_CAT_ORDER: CategoryId[] = [
+  'freeWeights',
+  'benchesAndRacks',
+  'machines',
+  'functional',
+  'cardio',
+  'bodyweight',
+  'other',
+];
 const EXDB_FALLBACK = Array.from(new Set([...Object.keys(EXDB_EQUIP), ...ROBOFLOW_CLASSES]));
 
-type Item = { v: string; l: string; i: EqIconName };
-type Group = { cat: string; items: Item[] };
+/** `v` is the persisted id and the i18n lookup key (equipment.items.<v>). */
+type Item = { v: string; i: EqIconName };
+type Group = { cat: CategoryId; items: Item[] };
 
 function buildCatalog(names: string[]): Group[] {
-  const groups: Record<string, Item[]> = {};
+  const groups: Partial<Record<CategoryId, Item[]>> = {};
   names.forEach((n) => {
     const key = String(n).toLowerCase().trim();
-    const meta = EXDB_EQUIP[key] || {
-      l: key.replace(/\b\w/g, (c) => c.toUpperCase()),
-      i: 'machine' as EqIconName,
-      cat: 'Outros',
-    };
-    (groups[meta.cat] = groups[meta.cat] || []).push({ v: key, l: meta.l, i: meta.i });
+    const meta = EXDB_EQUIP[key] ?? { i: 'machine' as EqIconName, cat: 'other' as const };
+    (groups[meta.cat] = groups[meta.cat] ?? []).push({ v: key, i: meta.i });
   });
-  return EXDB_CAT_ORDER.filter((c) => groups[c]).map((c) => ({ cat: c, items: groups[c] }));
+  return EXDB_CAT_ORDER.filter((c) => groups[c]).map((c) => ({
+    cat: c,
+    items: groups[c]!,
+  }));
 }
 
 async function fetchExerciseDBEquipments(): Promise<{ names: string[]; live: boolean }> {
@@ -199,11 +231,25 @@ type Props = {
 };
 
 export function EquipmentPicker({ value, onChange, onDone, onBack, stepLabel }: Props) {
+  const { t } = useTranslation(['quiz', 'common']);
+  const tLoose = t as unknown as LooseT;
   const selected = value || [];
   const [query, setQuery] = useState('');
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [catalog, setCatalog] = useState<Group[]>(() => buildCatalog(EXDB_FALLBACK));
   const [conn, setConn] = useState<Conn>('loading');
+
+  /** Resolves an equipment id to its localized display label. Items in the
+   *  taxonomy that don't have a translation entry fall back to a title-cased
+   *  version of the id (same behavior as the old code, but now typed). */
+  const labelFor = (id: string): string => {
+    const key = `quiz:equipment.items.${id}`;
+    const translated = tLoose(key);
+    if (translated && translated !== `items.${id}` && translated !== key) return translated;
+    return id.replace(/\b\w/g, (c) => c.toUpperCase());
+  };
+  const categoryLabel = (cat: CategoryId): string =>
+    tLoose(`quiz:equipment.categories.${cat}`);
 
   useEffect(() => {
     let alive = true;
@@ -235,11 +281,25 @@ export function EquipmentPicker({ value, onChange, onDone, onBack, stepLabel }: 
   const connColor =
     conn === 'live' ? '#4da3ff' : conn === 'loading' ? '#caa84a' : 'rgba(255,255,255,0.4)';
   const connLabel =
-    conn === 'live' ? 'AO VIVO' : conn === 'loading' ? 'CONECTANDO' : 'TAXONOMIA LOCAL';
+    conn === 'live'
+      ? t('quiz:equipment.connection.live').toUpperCase()
+      : conn === 'loading'
+        ? t('quiz:equipment.connection.loading').toUpperCase()
+        : t('quiz:equipment.connection.offline').toUpperCase();
+  const connPrefix = t('quiz:equipment.connection.prefix').toUpperCase();
 
+  // Search matches on the localized label — swapping languages re-filters
+  // automatically because `catalog` is stable but `labelFor` reads from
+  // the current `t`.
   const emptyResults = useMemo(
-    () => q && catalog.every((g) => g.items.every((it) => !it.l.toLowerCase().includes(q))),
-    [q, catalog],
+    () =>
+      q &&
+      catalog.every((g) =>
+        g.items.every((it) => !labelFor(it.v).toLowerCase().includes(q)),
+      ),
+    // labelFor closes over `t`, so re-run when the language changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [q, catalog, t],
   );
 
   return (
@@ -306,7 +366,7 @@ export function EquipmentPicker({ value, onChange, onDone, onBack, stepLabel }: 
                   color: connColor,
                 }}
               >
-                EXERCISEDB · {connLabel}
+                {connPrefix} · {connLabel}
               </Text>
             </View>
           </View>
@@ -323,14 +383,14 @@ export function EquipmentPicker({ value, onChange, onDone, onBack, stepLabel }: 
             }}
           >
             <Text style={{ fontSize: 13, fontFamily: fonts.uiSemi, color: 'rgba(255,255,255,0.85)' }}>
-              Pular
+              {t('quiz:equipment.skip')}
             </Text>
           </Pressable>
         </View>
 
         {/* Title + quick pick */}
         <View style={{ paddingHorizontal: 22, paddingTop: 18, paddingBottom: 14 }}>
-          <Display size={30}>{'ONDE VOCÊ\nSE EXERCITA?'}</Display>
+          <Display size={30}>{t('quiz:equipment.title').toUpperCase()}</Display>
           <Text
             style={{
               marginTop: 12,
@@ -340,7 +400,7 @@ export function EquipmentPicker({ value, onChange, onDone, onBack, stepLabel }: 
               fontFamily: fonts.ui,
             }}
           >
-            Selecione os equipamentos aos quais você tem acesso. Pode alterar depois.
+            {t('quiz:equipment.sub')}
           </Text>
           <Pressable
             onPress={toggleAllGym}
@@ -360,7 +420,7 @@ export function EquipmentPicker({ value, onChange, onDone, onBack, stepLabel }: 
           >
             <Icon name="check" size={13} color="#4da3ff" />
             <Text style={{ color: '#4da3ff', fontSize: 12.5, fontFamily: fonts.uiSemi }}>
-              Tenho academia completa
+              {t('quiz:equipment.quickPickAllGym')}
             </Text>
           </Pressable>
         </View>
@@ -384,7 +444,7 @@ export function EquipmentPicker({ value, onChange, onDone, onBack, stepLabel }: 
             <TextInput
               value={query}
               onChangeText={setQuery}
-              placeholder="Buscar equipamento"
+              placeholder={t('quiz:equipment.search')}
               placeholderTextColor="rgba(255,255,255,0.3)"
               style={{
                 flex: 1,
@@ -409,14 +469,17 @@ export function EquipmentPicker({ value, onChange, onDone, onBack, stepLabel }: 
           showsVerticalScrollIndicator={false}
         >
           {catalog.map((group) => {
-            const matched = group.items.filter((it) => !q || it.l.toLowerCase().includes(q));
+            const matched = group.items.filter(
+              (it) => !q || labelFor(it.v).toLowerCase().includes(q),
+            );
             if (matched.length === 0) return null;
             const isOpen = Boolean(q) || Boolean(expanded[group.cat]);
             const shown = isOpen ? matched : matched.slice(0, COLLAPSE);
             const more = matched.length - shown.length;
+            const catLabel = categoryLabel(group.cat);
             return (
               <View key={group.cat} style={{ marginBottom: 22 }}>
-                <Slash style={{ marginBottom: 12 }}>{group.cat}</Slash>
+                <Slash style={{ marginBottom: 12 }}>{catLabel}</Slash>
                 <View style={{ gap: 8 }}>
                   {shown.map((it) => {
                     const on = selected.includes(it.v);
@@ -462,7 +525,7 @@ export function EquipmentPicker({ value, onChange, onDone, onBack, stepLabel }: 
                             fontFamily: fonts.uiSemi,
                           }}
                         >
-                          {it.l}
+                          {labelFor(it.v)}
                         </Text>
                         <View
                           style={{
@@ -500,7 +563,7 @@ export function EquipmentPicker({ value, onChange, onDone, onBack, stepLabel }: 
                         fontFamily: fonts.uiMed,
                       }}
                     >
-                      Ver todos {group.cat}{' '}
+                      {t('quiz:equipment.seeAll', { category: catLabel })}{' '}
                       <Text style={{ color: colors.faint }}>· +{more}</Text>
                     </Text>
                     <Icon name="chevron-right" size={15} color="rgba(255,255,255,0.4)" />
@@ -512,7 +575,7 @@ export function EquipmentPicker({ value, onChange, onDone, onBack, stepLabel }: 
                     style={{ paddingTop: 12, paddingBottom: 4 }}
                   >
                     <Text style={{ color: colors.faint, fontSize: 12.5, fontFamily: fonts.uiMed }}>
-                      Recolher
+                      {t('quiz:equipment.collapse')}
                     </Text>
                   </Pressable>
                 )}
@@ -523,7 +586,7 @@ export function EquipmentPicker({ value, onChange, onDone, onBack, stepLabel }: 
           {emptyResults && (
             <View style={{ alignItems: 'center', paddingVertical: 30 }}>
               <Text style={{ color: colors.faint, fontSize: 13, fontFamily: fonts.ui }}>
-                Nenhum equipamento encontrado.
+                {t('quiz:equipment.empty')}
               </Text>
             </View>
           )}
@@ -561,7 +624,7 @@ export function EquipmentPicker({ value, onChange, onDone, onBack, stepLabel }: 
                 textTransform: 'uppercase',
               }}
             >
-              Continuar
+              {t('common:actions.continue')}
             </Text>
             {selected.length > 0 && (
               <View
