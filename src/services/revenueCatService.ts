@@ -13,6 +13,7 @@ import type {
   SubscriptionErrorKind,
   SubscriptionFailure,
 } from '../lib/subscriptionLifecycle';
+import { awaitCustomerInfoUpdate } from '../lib/awaitCustomerInfoUpdate';
 
 /**
  * RevenueCat infrastructure (docs/13_assinaturas_e_billing.md).
@@ -447,27 +448,70 @@ export async function purchaseSubscriptionOption(option: SubscriptionOption): Pr
  * know what to redeem — this function only opens Apple's UI, it never
  * "applies" anything on its own.
  *
- * The sheet's promise resolves once dismissed, for ANY reason — StoreKit
- * does not report whether the user actually completed a redemption or just
- * closed it (confirmed by the typings: the doc comment only mentions
- * rejection for "configure has not been called yet or there's an error
- * presenting the sheet", never for a user-dismissed-without-redeeming case).
- * So this function can never itself distinguish "redeemed" from
- * "cancelled" — it always re-fetches `CustomerInfo` after the sheet closes
- * and returns it as `status: 'purchased'`, mirroring `purchasePackage`'s
- * shape exactly so the caller's existing `performPurchase` pipeline (and
- * `classifyPurchaseResult`) makes the ONLY decision that matters: whether
- * `entitlements.active[premium]` actually turned on. This is intentional,
- * not a gap — docs/13_assinaturas_e_billing.md §2/§10/§27: entitlement state
- * is never inferred from whether an SDK call "succeeded", only from
- * CustomerInfo itself.
+ * CORRECTED AUDIT (post-iOS-3): the claim this doc comment used to make —
+ * "the sheet's promise resolves once dismissed" — was WRONG for the
+ * installed SDK and has been removed. Reading the actual installed
+ * implementation (JS: `dist/purchases.js`; native bridge:
+ * `ios/RNPurchases.m`'s `RCT_EXPORT_METHOD(presentCodeRedemptionSheet)`,
+ * which has no resolver/rejecter at all, unlike e.g. `getPromotionalOffer`
+ * right above it; RevenueCat core:
+ * `PaymentQueueWrapper.swift`'s `presentCodeRedemptionSheetIfAvailable()`,
+ * which calls Apple's own `SKPaymentQueue.presentCodeRedemptionSheet()` and
+ * returns immediately) proves `Purchases.presentCodeRedemptionSheet()`'s
+ * `Promise<void>` is fire-and-forget end to end: it resolves as soon as the
+ * native call is DISPATCHED, not when Apple's sheet appears, closes, or a
+ * redemption completes. There is no callback anywhere in this chain that
+ * reports presented/dismissed/redeemed/cancelled.
+ *
+ * Consequently this function no longer calls `Purchases.getCustomerInfo()`
+ * immediately after that Promise resolves (that read a stale cache — see
+ * the git history of this function for the old, incorrect implementation).
+ * It now calls `awaitCustomerInfoUpdate` (`lib/awaitCustomerInfoUpdate.ts`)
+ * to wait for a REAL push from the SDK's own `CustomerInfoUpdateListener`
+ * (the same mechanism `SubscriptionContext.tsx` already uses to keep global
+ * state live), falling back to exactly ONE final explicit revalidation after
+ * `REDEMPTION_CUSTOMER_INFO_WAIT_TIMEOUT_MS` if no push ever arrives. Either
+ * way, whatever `CustomerInfo` this resolves with is returned as-is —
+ * `classifyPurchaseResult` (subscriptionOffer.ts) remains the ONLY code that
+ * decides Premium, by reading `entitlements.active[premium]`. A listener
+ * firing, a timeout, or the final refresh succeeding are NEVER treated as
+ * "redeemed" here — same fail-closed authority docs/13
+ * §2/§10/§27 already required, just no longer undermined by a premature
+ * cache read.
  */
+const REDEMPTION_CUSTOMER_INFO_WAIT_TIMEOUT_MS = 10_000;
+
 export async function redeemOfferCode(): Promise<PurchaseOutcome> {
   try {
     await ensureConfigured();
+
     await Purchases.presentCodeRedemptionSheet();
-    const customerInfo = await Purchases.getCustomerInfo();
-    return { status: 'purchased', customerInfo };
+
+    const waitResult = await awaitCustomerInfoUpdate<CustomerInfo>({
+      addListener: addCustomerInfoListener,
+      removeListener: removeCustomerInfoListener,
+      refreshFinal: () => Purchases.getCustomerInfo(),
+      timeoutMs: REDEMPTION_CUSTOMER_INFO_WAIT_TIMEOUT_MS,
+    });
+
+    if (waitResult.status === 'listener-update') {
+      return { status: 'purchased', customerInfo: waitResult.customerInfo };
+    }
+
+    if (waitResult.status === 'timeout-refresh') {
+      return { status: 'purchased', customerInfo: waitResult.customerInfo };
+    }
+
+    // status === 'timeout-refresh-error': the final revalidation itself
+    // failed. Never granted Premium by timeout alone (Parte 6/7) — surfaced
+    // as the same sanitized error path every other SDK failure in this file
+    // uses, so `classifyPurchaseResult` never sees a fabricated `CustomerInfo`.
+    logRevenueCatError('redeemOfferCode:finalRefresh', waitResult.error);
+    return {
+      status: 'error',
+      message: 'Não foi possível confirmar o resgate do código. Tente novamente ou restaure as compras.',
+      offline: isOfflineError(waitResult.error),
+    };
   } catch (err) {
     if (isCancelledError(err)) {
       return { status: 'cancelled' };

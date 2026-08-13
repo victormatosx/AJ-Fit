@@ -1482,15 +1482,28 @@ alterar Android nem o backend:
 * **Fluxo implementado:** usuário digita o código AJ Fit (ex.: `ARNALDO`) →
   `validatePromoCode` → `storeConfig.ios` → `resolveApplePurchaseRoute`
   (`src/lib/subscriptionOffer.ts`) prova que existe um Offer Code Apple para
-  o plano selecionado → CTA muda para "Resgatar na App Store" → toque abre
-  `presentCodeRedemptionSheet()` → ao fechar (por qualquer motivo — StoreKit
-  não informa se houve resgate ou apenas fechamento), `CustomerInfo` é
-  buscado de novo → **Premium só aparece se
-  `CustomerInfo.entitlements.active['premium']` estiver ativo** — nunca por
-  "o código foi aceito" ou "a folha foi aberta". Cancelamento/fechamento sem
-  resgatar e "resgatou mas o entitlement ainda não propagou" são
-  tratados da mesma forma não-alarmante (aviso neutro, nunca erro), porque
-  StoreKit não permite distinguir os dois casos.
+  o plano selecionado → CTA muda para "Resgatar na App Store" → toque chama
+  `presentCodeRedemptionSheet()`.
+  > **Correção (auditoria pós-iOS-3):** este trecho afirmava que a Promise de
+  > `presentCodeRedemptionSheet()` resolve "ao fechar" a folha — isso está
+  > **incorreto** para react-native-purchases@10.6.0 (a versão instalada).
+  > Leitura do JS/nativo instalado comprovou que essa chamada é
+  > fire-and-forget de ponta a ponta: a Promise resolve assim que a chamada
+  > nativa é *disparada*, não quando a folha aparece, fecha, ou um resgate se
+  > completa — não existe, nesta versão, nenhum callback nativo→JS para
+  > presented/dismissed/redeemed/cancelled. `redeemOfferCode()`
+  > (`src/services/revenueCatService.ts`) não confia mais nessa Promise para
+  > decidir quando reler `CustomerInfo`: agora aguarda um push real do
+  > `CustomerInfoUpdateListener` via `awaitCustomerInfoUpdate`
+  > (`src/lib/awaitCustomerInfoUpdate.ts`), com uma única revalidação final
+  > explícita após timeout se nenhum push chegar. Em qualquer caminho,
+  > **Premium continua fail-closed**: só
+  > `CustomerInfo.entitlements.active['premium']` decide — nunca "o código
+  > foi aceito", "a folha foi aberta", "o listener disparou" ou "o timeout
+  > ocorreu". Cancelamento/fechamento sem resgatar e "resgatou mas o
+  > entitlement ainda não propagou" continuam tratados da mesma forma
+  > não-alarmante (aviso neutro, nunca erro), porque a SDK não permite
+  > distinguir os dois casos.
 * **`PROMO_CODE_SUPPORTED_PLATFORM`** (`isPromoCodeUiSupported`,
   `src/lib/promoCodePlatform.ts`) agora inclui iOS além de Android — Web e
   qualquer outra plataforma continuam bloqueadas, fail-closed.
