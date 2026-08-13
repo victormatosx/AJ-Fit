@@ -32,13 +32,9 @@ import {
   resolveOfferingViewState,
   resolvePurchaseRoute,
   resolveSelectedPackage,
+  type ApplePurchaseRoute,
   type PurchaseRoute,
 } from '../lib/subscriptionOffer';
-import {
-  applyAppleOfferCodeSandboxOverride,
-  isAppleOfferCodeSandboxTestEnabled,
-  type AppleSandboxOverrideRoute,
-} from '../lib/appleOfferCodeSandboxTest';
 import { isPromoCodeUiSupported } from '../lib/promoCodePlatform';
 import type { PromoCodeState } from '../lib/promoCodeState';
 import { PREMIUM_ENTITLEMENT_ID } from '../services/revenueCatService';
@@ -53,16 +49,6 @@ import { colors, fonts } from '../theme/tokens';
  * is what the CTA does — see `effectiveRoute`/`handlePurchase` below.
  */
 const PROMO_CODE_SUPPORTED_PLATFORM = isPromoCodeUiSupported(Platform.OS);
-
-/**
- * FASE iOS-4 — computed once at module load (same convention as
- * `PROMO_CODE_SUPPORTED_PLATFORM` above): `__DEV__`/`process.env` don't
- * change at runtime, so there is no reactivity to lose by not recomputing
- * this per render. See `isAppleOfferCodeSandboxTestEnabled`'s doc comment
- * (`lib/appleOfferCodeSandboxTest.ts`) for the full fail-closed rationale —
- * `false` in every build this app could ever submit to the App Store.
- */
-const APPLE_OFFER_CODE_SANDBOX_TEST_ENABLED = isAppleOfferCodeSandboxTestEnabled();
 
 // Existing legal destinations from the previous real RevenueCat screen.
 const PRIVACY_POLICY_URL = 'https://ajfit.com.br/privacidade';
@@ -164,29 +150,17 @@ export function PaywallScreen({
   // above). See `resolveApplePurchaseRoute`'s doc comment
   // (lib/subscriptionOffer.ts) for why this is a distinct function/type
   // rather than a shared abstraction with the Android path.
-  //
-  // FASE iOS-4 — `resolveApplePurchaseRoute`'s own result is passed,
-  // UNMODIFIED, through `applyAppleOfferCodeSandboxOverride`
-  // (`lib/appleOfferCodeSandboxTest.ts`). That function is a pure no-op
-  // whenever `APPLE_OFFER_CODE_SANDBOX_TEST_ENABLED` is `false` (every
-  // build except a local `__DEV__` build with the explicit env flag set) —
-  // production behavior for `appleOfferCodeMonthly === null` is byte-for-byte
-  // what it was before this phase: `{kind:'blocked', reason:'promo_plan_unavailable'}`.
-  const appleRoute: AppleSandboxOverrideRoute | null = useMemo(() => {
+  const appleRoute: ApplePurchaseRoute | null = useMemo(() => {
     if (!selectedPackage || Platform.OS !== 'ios') return null;
     const authorizedOfferCode =
       promoApplied && promoState.applied
         ? resolveAuthorizedAppleOfferCode(selectedPackage, promoState.applied.appleStoreConfig)
         : null;
-    const route = resolveApplePurchaseRoute(selectedPackage, promoApplied, authorizedOfferCode);
-    return applyAppleOfferCodeSandboxOverride(selectedPackage, route, {
-      sandboxTestEnabled: APPLE_OFFER_CODE_SANDBOX_TEST_ENABLED,
-      promoApplied,
-    });
+    return resolveApplePurchaseRoute(selectedPackage, promoApplied, authorizedOfferCode);
   }, [selectedPackage, promoApplied, promoState.applied]);
 
   /** The route that actually governs the CTA/`handlePurchase` on this platform. */
-  const effectiveRoute: PurchaseRoute | AppleSandboxOverrideRoute | null =
+  const effectiveRoute: PurchaseRoute | ApplePurchaseRoute | null =
     Platform.OS === 'android' ? purchaseRoute : appleRoute;
 
   // Fase 4C.2/4C.3 §22: sanitized, state-only logs — never the full code,
@@ -227,15 +201,7 @@ export function PaywallScreen({
     // it, this is a second guard, never a silent fallback to
     // `purchase(selectedPackage)`.
     if (!effectiveRoute || effectiveRoute.kind === 'blocked' || actionInFlight.current) return;
-    // FASE iOS-4 — `'sandbox_offer_redemption'` reuses the exact same
-    // `redeemAppleOfferCode()` call as `'offer_redemption'` below: it is
-    // STILL `Purchases.presentCodeRedemptionSheet()`, with no code
-    // pre-filled either way (see that function's doc comment,
-    // revenueCatService.ts) — the only difference is which route got the
-    // user here (a real authorized `appleOfferCodeMonthly`, vs. the Sandbox
-    // test override). Both are "Apple redemption" for UI-copy purposes.
-    const isAppleRedemption =
-      effectiveRoute.kind === 'offer_redemption' || effectiveRoute.kind === 'sandbox_offer_redemption';
+    const isAppleRedemption = effectiveRoute.kind === 'offer_redemption';
     actionInFlight.current = true;
     setPurchaseState({ kind: 'purchasing' });
     setRestoreState({ kind: 'idle' });
@@ -468,10 +434,7 @@ export function PaywallScreen({
                   <ActivityIndicator color="#fff" />
                 ) : (
                   <CtaText>
-                    {effectiveRoute?.kind === 'offer_redemption' ||
-                    effectiveRoute?.kind === 'sandbox_offer_redemption'
-                      ? 'Resgatar na App Store'
-                      : 'Continuar'}
+                    {effectiveRoute?.kind === 'offer_redemption' ? 'Resgatar na App Store' : 'Continuar'}
                   </CtaText>
                 )}
               </CtaButton>
@@ -637,7 +600,7 @@ function PromoCodeCard({
   onChangeValue: (next: string) => void;
   onApply: () => void;
   promoState: PromoCodeState;
-  purchaseRoute: PurchaseRoute | AppleSandboxOverrideRoute | null;
+  purchaseRoute: PurchaseRoute | ApplePurchaseRoute | null;
   disabled: boolean;
 }) {
   const validating = promoState.phase === 'validating';

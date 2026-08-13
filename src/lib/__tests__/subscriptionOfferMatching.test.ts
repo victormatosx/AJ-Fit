@@ -673,18 +673,16 @@ describe('classifyPurchaseResult — Apple Offer Code redemption never grants Pr
 });
 
 /**
- * FASE iOS-4, item 8 — the Apple Offer Code Sandbox test bypass
- * (`lib/appleOfferCodeSandboxTest.ts`) is Apple-only by construction: it is
+ * The Apple offer-code routing path (`resolveApplePurchaseRoute`/
+ * `resolveAuthorizedAppleOfferCode`) is Apple-only by construction: it is
  * never imported by, called from, or referenced in the Android routing path
  * (`resolvePurchaseRoute`/`resolveAuthorizedAndroidOffer`/
- * `findAuthorizedSubscriptionOption`). This test doesn't need a "sandbox
- * flag on" parameter for Android at all — there ISN'T one — so it instead
- * proves the Android functions' behavior is identical with or without a
- * promo code applied, exactly as before this phase, which is the only way
- * FASE iOS-4 could regress Android (by accident coupling two paths that
- * must stay independent).
+ * `findAuthorizedSubscriptionOption`). This proves the Android functions'
+ * behavior is identical with or without a promo code applied, which is the
+ * only way an Apple-side change could regress Android (by accident coupling
+ * two paths that must stay independent).
  */
-describe('FASE iOS-4 — Android is structurally unaffected by the Apple Sandbox test bypass', () => {
+describe('Android is structurally unaffected by Apple-only routing', () => {
   it('resolvePurchaseRoute for Android keeps failing closed on a missing offer, regardless of anything Apple-related', () => {
     const pkg = makePackage({ packageType: 'MONTHLY' as PACKAGE_TYPE, subscriptionOptions: [] });
     const result = resolvePurchaseRoute(pkg, true, null);
