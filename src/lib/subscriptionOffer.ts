@@ -201,6 +201,44 @@ export function resolveIOSSubscriptionPackage(
   return resolveIOSPackage(resolveIOSOffering(offerings, route), plan);
 }
 
+export type IOSPromotionalCatalogResolution =
+  | {
+      status: 'resolved';
+      route: Extract<IOSOfferingRoute, { kind: 'promotional' }>;
+      offering: PurchasesOffering;
+      monthlyPackage: PurchasesPackage;
+      annualPackage: PurchasesPackage;
+    }
+  | { status: 'error'; reason: IOSCatalogResolutionError };
+
+/**
+ * FASE 5 requires the promotional Offering to be commercially coherent for
+ * both plans before replacing the visible Current catalog. A partial catalog
+ * never produces a one-plan Paywall and never falls back to standard SKUs.
+ */
+export function resolveIOSPromotionalCatalog(
+  offerings: PurchasesOfferings | null,
+  route: IOSOfferingRoute,
+): IOSPromotionalCatalogResolution {
+  if (route.kind === 'blocked') return { status: 'error', reason: route.reason };
+  if (route.kind !== 'promotional') {
+    return { status: 'error', reason: 'promo_authorization_invalid' };
+  }
+
+  const monthly = resolveIOSSubscriptionPackage(offerings, route, 'monthly');
+  if (monthly.status === 'error') return monthly;
+  const annual = resolveIOSSubscriptionPackage(offerings, route, 'annual');
+  if (annual.status === 'error') return annual;
+
+  return {
+    status: 'resolved',
+    route,
+    offering: monthly.offering,
+    monthlyPackage: monthly.package,
+    annualPackage: annual.package,
+  };
+}
+
 export function packageTitle(pkg: PurchasesPackage): string {
   switch (pkg.packageType) {
     case 'ANNUAL':

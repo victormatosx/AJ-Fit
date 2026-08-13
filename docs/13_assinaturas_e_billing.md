@@ -2027,3 +2027,105 @@ independência de `promoApplied`/ARNALDO; transporte e limpeza por identidade;
 provider acima do navegador; ausência de persistência; ausência de nova compra
 e de `authorizePromoPurchase`; preservação do Apple Offer Code; autoridade
 Premium; e toda a suíte Android preexistente.
+
+---
+
+# 39. Migração Promo SKU + Introductory Offer — FASE 5 (compra no Paywall)
+
+A Fase 5 conecta a resolução segura da Fase 4 à compra real no iOS. O fluxo
+standard continua em `offerings.current` e chama a compra normal, sem criar
+intent. Uma campanha iOS legada (`iosPromotion: null`) continua usando Apple
+Offer Code. Somente uma autorização `iosPromotion` completa troca a superfície
+para os dois packages da Offering backend:
+
+```txt
+iosPromotion válida
+  → offerings.all[offeringIdentifier]
+  → MONTHLY + Product ID mensal exato
+  → ANNUAL + Product ID anual exato
+  → Intro data real de cada StoreProduct
+  → eligibility real RevenueCat/StoreKit por Product ID
+  → authorizePromoPurchase({ plan }) somente no toque
+  → revalidar todos os campos da intent
+  → purchasePackage(package promocional exato)
+  → CustomerInfo entitlement premium
+```
+
+Se qualquer metade do catálogo promocional estiver ausente ou divergente, o
+catálogo inteiro falha sem fallback para Current/default.
+
+## SDK instalado e elegibilidade
+
+O app usa `react-native-purchases@10.6.0`, bridge
+`PurchasesHybridCommon@18.28.0` e `RevenueCat/purchases-ios@5.83.0`. A API JS
+instalada é:
+
+```ts
+Purchases.checkTrialOrIntroductoryPriceEligibility(productIdentifiers)
+// Promise<Record<string, IntroEligibility>>
+```
+
+`IntroEligibility.status` preserva `UNKNOWN`, `INELIGIBLE`, `ELIGIBLE` e
+`NO_INTRO_OFFER_EXISTS`. É iOS-only; Android retorna `UNKNOWN`. A própria
+documentação instalada classifica a resposta como best effort quando faltam
+informações do subscription group e recomenda preço não introdutório para
+`UNKNOWN`. Neste Paywall promocional, `UNKNOWN`/erro bloqueiam a compra porque
+a UI não consegue garantir antecipadamente quais termos a folha Apple
+aplicará; nunca viram `eligible`.
+
+`PurchasesStoreProduct.introPrice` expõe preço, `priceString`, ciclos, período,
+unidade e número de unidades. O bridge RN desta versão não serializa o
+`paymentMode` que existe no SDK Swift nativo. Assim, “grátis” somente aparece
+quando o preço introdutório real é numericamente zero, duração/ciclos/unidade
+são válidos e a eligibility é `ELIGIBLE`. Intro ausente, paga ou malformada é
+inconsistência de configuração e bloqueia o fluxo novo. Nenhum termo nasce de
+cupom, nome da Offering, sufixo do SKU ou Product ID.
+
+Para `INELIGIBLE`, não há promessa de trial: a tela mostra o preço regular do
+próprio Promo SKU. A compra pode continuar, pois StoreKit aplica a Introductory
+Offer automaticamente apenas ao cliente elegível; o cliente inelegível compra
+pelas condições regulares do produto, confirmadas na folha nativa.
+
+Fontes oficiais consultadas:
+
+* RevenueCat — Subscription Offers:
+  https://www.revenuecat.com/docs/subscription-guidance/subscription-offers
+* RevenueCat — iOS Subscription Offers:
+  https://www.revenuecat.com/docs/subscription-guidance/subscription-offers/ios-subscription-offers
+* RevenueCat — Intro eligibility codelab:
+  https://revenuecat.github.io/codelabs/guides/check-intro-eligibility.html
+* Apple — Set up introductory offers:
+  https://developer.apple.com/help/app-store-connect/manage-subscriptions/set-up-introductory-offers-for-auto-renewable-subscriptions
+* Apple — Implementing introductory offers:
+  https://developer.apple.com/documentation/storekit/implementing-introductory-offers-in-your-app
+
+## Intent tardia, snapshot e races
+
+`authorizePromoPurchase` recebe exatamente `{ plan }`. O wrapper valida em
+runtime uma resposta fechada contendo `authorized: true`, plano, Offering,
+Product ID esperado, `purchase_pending` e `expiresAt`. Imediatamente antes da
+compra, todos esses campos são comparados ao package capturado no toque e a
+expiração é verificada duas vezes. Erro, conflito, payload extra/malformado,
+mismatch ou intent expirada nunca chamam StoreKit e nunca caem no standard.
+
+O snapshot local inclui UID, geração de identidade, cupom aplicado, plano,
+autorização e package. Sua chave é reavaliada a cada render; logout, troca de
+UID/cupom/plano/package ou resposta atrasada invalida a tentativa antes da
+compra. `actionInFlight` é adquirido sincronicamente antes do primeiro
+`await`, impedindo double tap. Cancelamento/erro StoreKit não concede Premium
+nem escreve consumo da intent no cliente; a correlação continua exclusiva do
+webhook. Sucesso libera acesso apenas quando o `CustomerInfo` retornado contém
+`entitlements.active["premium"]`.
+
+## Limites preservados
+
+```txt
+presentCodeRedemptionSheet no novo fluxo — NÃO
+Apple Promotional Offer assinada/getPromotionalOffer — NÃO
+Apple Offer Code legado no código/rota sem iosPromotion — SIM
+Android SubscriptionOption/purchaseSubscriptionOption — inalterado
+webhook/attributionSync — inalterado
+subscriptionSync.ts — inalterado
+polling de Offerings — NÃO
+deploy/configuração remota — NÃO
+```

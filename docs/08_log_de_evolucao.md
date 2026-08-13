@@ -1952,3 +1952,31 @@ Na Fase 5, integrar no tap de compra a criação imediata da purchase intent e a
 compra do package promocional já validado, sem fallback comercial silencioso.
 
 ---
+
+Data: 2026-08-13
+Responsável: Codex — Agente App
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Implementada a Fase 5 da migração iOS Promo SKU + Introductory Offer. O
+Paywall passa a exibir os packages promocionais estritamente resolvidos pela
+autorização backend, consulta a elegibilidade introdutória real do
+RevenueCat/StoreKit por Product ID e deriva trial somente do `introPrice` real
+com preço zero, duração válida e status `ELIGIBLE`. `INELIGIBLE` mostra o preço
+regular do Promo SKU; `UNKNOWN`, erro e configuração introdutória inconsistente
+falham de modo seguro sem prometer trial.
+
+Impacto:
+No toque em Continuar, o app chama `authorizePromoPurchase` enviando somente o
+plano, revalida a intent contra o snapshot de UID/cupom/plano/Offering/Product
+ID/package/TTL e só então compra o package promocional exato. Double tap,
+resposta obsoleta, mismatch, expiração, conflito e falha de autorização não
+chegam ao StoreKit e não fazem fallback. O fluxo standard, Apple Offer Code
+legado, Android, webhook, `subscriptionSync.ts` e autoridade Premium por
+CustomerInfo foram preservados. Não houve deploy nem alteração remota.
+
+Próxima ação:
+Executar a Fase 6 / E2E controlada no sandbox iOS, incluindo Apple IDs
+elegível e inelegível e validação visual da folha de pagamento Apple.
+
+---

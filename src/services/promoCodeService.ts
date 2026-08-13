@@ -11,6 +11,12 @@ import type {
   PromoCodeBenefit,
 } from '../lib/promoCodeState';
 import { parseIOSPromotionAuthorization } from '../lib/promoCodeState';
+import {
+  classifyPromoPurchaseAuthorizationError,
+  parsePromoPurchaseIntentAuthorization,
+  type PromoPurchaseAuthorizationOutcome,
+} from '../lib/iosPromoPurchase';
+import type { IOSSubscriptionPlan } from '../lib/subscriptionOffer';
 
 /**
  * Client for the `validatePromoCode` Cloud Function (Fase 4C.2). Mirrors the
@@ -66,6 +72,11 @@ const validatePromoCodeCallable = httpsCallable<
   ValidatePromoCodeRequest,
   ValidatePromoCodeWireResponse
 >(functions, 'validatePromoCode');
+
+const authorizePromoPurchaseCallable = httpsCallable<
+  { plan: IOSSubscriptionPlan },
+  unknown
+>(functions, 'authorizePromoPurchase');
 
 function sanitizedErrorMessage(err: unknown): string {
   const raw = err instanceof Error ? err.message : String(err);
@@ -197,5 +208,27 @@ export async function validatePromoCode(code: string): Promise<ValidatePromoCode
       messageKey: failure.message,
     });
     return { status: 'failed', ...failure };
+  }
+}
+
+/** Late purchase authorization. The wire request intentionally contains only `plan`. */
+export async function authorizePromoPurchase(
+  plan: IOSSubscriptionPlan,
+): Promise<PromoPurchaseAuthorizationOutcome> {
+  try {
+    const result = await authorizePromoPurchaseCallable({ plan });
+    const response = parsePromoPurchaseIntentAuthorization(result.data);
+    if (!response) {
+      console.warn('[promoCode] promo_purchase_intent_mismatch');
+      return { status: 'failed', reason: 'invalid_response' };
+    }
+    console.info('[promoCode] promo_purchase_authorized');
+    return { status: 'authorized', response };
+  } catch (err) {
+    const reason = classifyPromoPurchaseAuthorizationError(err);
+    // Expected callable denials are logged symbolically; never emit the
+    // response payload, UID, coupon, Offering, product or Firebase token.
+    console.warn('[promoCode] promo_purchase_authorization_failed', { reason });
+    return { status: 'failed', reason };
   }
 }

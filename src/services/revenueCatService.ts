@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import Purchases, {
+  INTRO_ELIGIBILITY_STATUS,
   LOG_LEVEL,
   PURCHASES_ERROR_CODE,
   type CustomerInfo,
@@ -9,6 +10,7 @@ import Purchases, {
   type PurchasesPackage,
   type SubscriptionOption,
 } from 'react-native-purchases';
+import type { IOSIntroEligibilityState } from '../lib/iosIntroOffer';
 import type {
   SubscriptionErrorKind,
   SubscriptionFailure,
@@ -311,6 +313,48 @@ export async function getOfferings(): Promise<PurchasesOfferings> {
     if (!isOfferingsUnavailableError(err)) {
       logRevenueCatError('offerings', err);
     }
+    throw err;
+  }
+}
+
+/**
+ * iOS-only StoreKit/RevenueCat introductory eligibility. Missing products are
+ * preserved as UNKNOWN; the caller decides the fail-closed UI policy.
+ */
+export async function checkIOSIntroEligibility(
+  productIdentifiers: string[],
+): Promise<Record<string, IOSIntroEligibilityState>> {
+  if (Platform.OS !== 'ios') {
+    return Object.fromEntries(
+      productIdentifiers.map((id) => [id, { status: 'unknown' } as const]),
+    );
+  }
+  try {
+    await ensureConfigured();
+    const result = await Purchases.checkTrialOrIntroductoryPriceEligibility(productIdentifiers);
+    const mapped = Object.fromEntries(
+      productIdentifiers.map((id) => {
+        const status = result[id]?.status;
+        const state: IOSIntroEligibilityState =
+          status === INTRO_ELIGIBILITY_STATUS.INTRO_ELIGIBILITY_STATUS_ELIGIBLE
+            ? { status: 'eligible' }
+            : status === INTRO_ELIGIBILITY_STATUS.INTRO_ELIGIBILITY_STATUS_INELIGIBLE
+              ? { status: 'ineligible' }
+              : status ===
+                    INTRO_ELIGIBILITY_STATUS.INTRO_ELIGIBILITY_STATUS_NO_INTRO_OFFER_EXISTS
+                ? { status: 'no_intro_offer' }
+                : { status: 'unknown' };
+        return [id, state];
+      }),
+    );
+    const counts = Object.values(mapped).reduce<Record<string, number>>((acc, state) => {
+      acc[state.status] = (acc[state.status] ?? 0) + 1;
+      return acc;
+    }, {});
+    console.info('[subscription]', { event: 'intro_eligibility_checked', counts });
+    return mapped;
+  } catch (err) {
+    logRevenueCatError('introEligibility', err);
     throw err;
   }
 }

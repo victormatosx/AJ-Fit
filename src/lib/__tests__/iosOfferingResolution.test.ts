@@ -7,6 +7,7 @@ import type {
 } from 'react-native-purchases';
 import {
   resolveIOSOfferingRoute,
+  resolveIOSPromotionalCatalog,
   resolveIOSSubscriptionPackage,
   type IOSSubscriptionPlan,
 } from '../subscriptionOffer';
@@ -117,6 +118,25 @@ describe('standard iOS package resolution', () => {
 });
 
 describe('promotional iOS package resolution', () => {
+  it('resolves monthly and annual as one coherent promotional catalog', () => {
+    expect(resolveIOSPromotionalCatalog(offerings, resolveIOSOfferingRoute(authorization))).toEqual({
+      status: 'resolved',
+      route: { kind: 'promotional', authorization },
+      offering: promo,
+      monthlyPackage: promoMonthly,
+      annualPackage: promoAnnual,
+    });
+  });
+
+  it('rejects the entire promotional catalog when either plan is missing', () => {
+    expect(
+      resolveIOSPromotionalCatalog(
+        makeOfferings({ current, others: [makeOffering('promo_7d', [promoMonthly])] }),
+        resolveIOSOfferingRoute(authorization),
+      ),
+    ).toEqual({ status: 'error', reason: 'promo_package_missing' });
+  });
+
   it.each([
     ['monthly', promoMonthly],
     ['annual', promoAnnual],

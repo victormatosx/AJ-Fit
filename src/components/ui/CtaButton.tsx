@@ -1,5 +1,12 @@
 import React from 'react';
-import { Pressable, View, Text, StyleProp, ViewStyle } from 'react-native';
+import {
+  Pressable,
+  View,
+  Text,
+  type AccessibilityState,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, fonts } from '../../theme/tokens';
 
@@ -9,14 +16,16 @@ type Props = {
   ghost?: boolean;
   disabled?: boolean;
   style?: StyleProp<ViewStyle>;
+  accessibilityState?: AccessibilityState;
 };
 
-export function CtaButton({ children, onPress, ghost, disabled, style }: Props) {
+export function CtaButton({ children, onPress, ghost, disabled, style, accessibilityState }: Props) {
   if (ghost) {
     return (
       <Pressable
         onPress={onPress}
         disabled={disabled}
+        accessibilityState={accessibilityState}
         style={[
           {
             width: '100%',
@@ -47,6 +56,7 @@ export function CtaButton({ children, onPress, ghost, disabled, style }: Props) 
     <Pressable
       onPress={onPress}
       disabled={disabled}
+      accessibilityState={accessibilityState}
       style={[{ opacity: disabled ? 0.35 : 1 }, style]}
     >
       <LinearGradient

@@ -29,5 +29,38 @@
     "workout": "Workout",
     "progress": "Progress",
     "profile": "Profile"
+  },
+  "paywall": {
+    "promo": {
+      "applied": "Code applied. Checking App Store terms.",
+      "checking": "Checking your eligibility and the actual App Store terms…",
+      "freeTrial": "Code applied. {{duration}} free, then {{price}} {{period}}.",
+      "ineligible": "Code applied. This Apple account is not eligible for the free period; the plan costs {{price}} {{period}}.",
+      "eligibilityUnavailable": "We couldn't confirm the App Store terms. Please try again before continuing.",
+      "configurationUnavailable": "The promotional offer is not available with verifiable terms right now. Please try again.",
+      "catalogUnavailable": "We couldn't safely load the promotional plans. Please try again.",
+      "trialBadge": "{{duration}} free, then {{price}} {{period}}",
+      "duration": {
+        "day_one": "{{count}} day",
+        "day_other": "{{count}} days",
+        "week_one": "{{count}} week",
+        "week_other": "{{count}} weeks",
+        "month_one": "{{count}} month",
+        "month_other": "{{count}} months",
+        "year_one": "{{count}} year",
+        "year_other": "{{count}} years"
+      },
+      "period": {
+        "monthly": "per month",
+        "annual": "per year"
+      },
+      "errors": {
+        "authorization": "We couldn't authorize the promotional purchase. Please try again.",
+        "authorizationConflict": "Another promotional attempt is already in progress. Wait and try again.",
+        "unauthenticated": "Your session expired. Sign in again before purchasing.",
+        "intentMismatch": "The purchase authorization no longer matches the selected plan. Please try again.",
+        "intentExpired": "The promotional authorization expired. Tap Continue to request a new one."
+      }
+    }
   }
 }

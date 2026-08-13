@@ -37,7 +37,39 @@ vi.mock('firebase/app', () => ({
   FirebaseError: FakeFirebaseError,
 }));
 
-const { validatePromoCode } = await import('../promoCodeService');
+const { authorizePromoPurchase, validatePromoCode } = await import('../promoCodeService');
+
+describe('authorizePromoPurchase', () => {
+  beforeEach(() => mockCallable.mockReset());
+
+  it.each(['monthly', 'annual'] as const)('sends only plan for %s', async (plan) => {
+    mockCallable.mockResolvedValue({
+      data: {
+        authorized: true,
+        purchaseIntent: {
+          plan,
+          offeringIdentifier: 'promo_7d',
+          expectedProductId: `${plan}_promo`,
+          status: 'purchase_pending',
+          expiresAt: '2030-01-01T00:00:00.000Z',
+        },
+      },
+    });
+    const result = await authorizePromoPurchase(plan);
+    expect(mockCallable).toHaveBeenCalledWith({ plan });
+    expect(Object.keys(mockCallable.mock.calls[0][0])).toEqual(['plan']);
+    expect(result.status).toBe('authorized');
+  });
+
+  it('fails closed on an invalid response', async () => {
+    mockCallable.mockResolvedValue({ data: { authorized: true } });
+    expect(await authorizePromoPurchase('monthly')).toEqual({
+      status: 'failed',
+      reason: 'invalid_response',
+    });
+  });
+
+});
 
 describe('validatePromoCode', () => {
   beforeEach(() => {

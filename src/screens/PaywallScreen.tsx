@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useTranslation } from 'react-i18next';
 import type { PurchasesPackage } from 'react-native-purchases';
 import { ScreenBg } from '../components/ui/ScreenBg';
 import { CtaButton, CtaText } from '../components/ui/CtaButton';
@@ -31,16 +32,32 @@ import {
   resolveAuthorizedAppleOfferCode,
   resolveIOSOfferingRoute,
   resolveIOSPlanKind,
-  resolveIOSSubscriptionPackage,
+  resolveIOSPromotionalCatalog,
   resolveOfferingViewState,
   resolvePurchaseRoute,
   resolveSelectedPackage,
   type ApplePurchaseRoute,
   type PurchaseRoute,
 } from '../lib/subscriptionOffer';
+import {
+  resolveIOSIntroOfferPresentation,
+  resolveIOSPromoPurchaseReadiness,
+  type IOSIntroEligibilityState,
+  type IOSIntroOfferPresentation,
+} from '../lib/iosIntroOffer';
+import {
+  executeIOSPromoPurchase,
+  iosPromoPurchaseSnapshotKey,
+  type IOSPromoPurchaseAttempt,
+  type IOSPromoPurchaseSnapshot,
+} from '../lib/iosPromoPurchase';
 import { isPromoCodeUiSupported } from '../lib/promoCodePlatform';
 import type { PromoCodeState } from '../lib/promoCodeState';
-import { PREMIUM_ENTITLEMENT_ID } from '../services/revenueCatService';
+import {
+  checkIOSIntroEligibility,
+  PREMIUM_ENTITLEMENT_ID,
+} from '../services/revenueCatService';
+import { authorizePromoPurchase } from '../services/promoCodeService';
 import { colors, fonts } from '../theme/tokens';
 
 /**
@@ -70,6 +87,13 @@ type RestoreUiState =
   | { kind: 'notice'; message: string }
   | { kind: 'error'; message: string; offline: boolean };
 
+type IOSPromoRoute = { kind: 'ios_promo_package'; attempt: IOSPromoPurchaseAttempt };
+type EffectivePurchaseRoute =
+  | PurchaseRoute
+  | ApplePurchaseRoute
+  | IOSPromoRoute
+  | { kind: 'blocked'; reason: string };
+
 export function PaywallScreen({
   onClose,
   closeAccessibilityLabel = 'Sair desta conta',
@@ -77,6 +101,7 @@ export function PaywallScreen({
   onClose: () => void | Promise<void>;
   closeAccessibilityLabel?: string;
 }) {
+  const { t } = useTranslation('common');
   const {
     offerings,
     offeringsLoading,
@@ -97,6 +122,8 @@ export function PaywallScreen({
   const actionInFlight = useRef(false);
   const closeInFlight = useRef(false);
   const mounted = useRef(true);
+  const eligibilityRequestSeq = useRef(0);
+  const promoSnapshotKeyRef = useRef<string | null>(null);
 
   // FASE 4: promo/influencer state is identity-scoped by PromoCodeProvider
   // (uid + generation + attempt seq) and survives an ordinary Paywall
@@ -116,17 +143,10 @@ export function PaywallScreen({
     };
   }, []);
 
-  const packages = useMemo(() => getCurrentOfferingPackages(offerings), [offerings]);
-  const selectedPackage = useMemo(
-    () => resolveSelectedPackage(packages, selectedId),
-    [packages, selectedId],
-  );
+  const standardPackages = useMemo(() => getCurrentOfferingPackages(offerings), [offerings]);
 
-  // FASE 4 — prepare and continuously verify the new iOS Offering/SKU route
-  // without connecting it to the CTA yet. Authorization comes ONLY from the
-  // typed backend `iosPromotion` snapshot. This resolution is deliberately
-  // not part of `effectiveRoute`/`handlePurchase`: FASE 5 will create the
-  // short-lived purchase intent immediately before buying this package.
+  // FASE 5 — authorization still comes ONLY from the typed backend snapshot;
+  // the Fase 4 resolver remains the sole Offering/package authority.
   const iosOfferingRoute = useMemo(
     () =>
       Platform.OS === 'ios'
@@ -135,11 +155,79 @@ export function PaywallScreen({
     [promoState.applied],
   );
   const iosCatalogResolution = useMemo(() => {
-    if (!selectedPackage || !iosOfferingRoute) return null;
-    const plan = resolveIOSPlanKind(selectedPackage);
-    if (!plan) return null;
-    return resolveIOSSubscriptionPackage(offerings, iosOfferingRoute, plan);
-  }, [iosOfferingRoute, offerings, selectedPackage]);
+    if (!iosOfferingRoute || iosOfferingRoute.kind !== 'promotional') return null;
+    return resolveIOSPromotionalCatalog(offerings, iosOfferingRoute);
+  }, [iosOfferingRoute, offerings]);
+  const packages = useMemo(() => {
+    if (iosOfferingRoute?.kind !== 'promotional') return standardPackages;
+    if (iosCatalogResolution?.status !== 'resolved') return [];
+    return [iosCatalogResolution.monthlyPackage, iosCatalogResolution.annualPackage];
+  }, [iosCatalogResolution, iosOfferingRoute, standardPackages]);
+  const selectedPackage = useMemo(
+    () => resolveSelectedPackage(packages, selectedId),
+    [packages, selectedId],
+  );
+
+  const eligibilityScopeKey = useMemo(() => {
+    if (
+      iosCatalogResolution?.status !== 'resolved' ||
+      !promoState.applied
+    ) {
+      return null;
+    }
+    return [
+      promoState.applied.uid,
+      promoState.applied.generation,
+      promoState.applied.code,
+      iosCatalogResolution.route.authorization.offeringIdentifier,
+      iosCatalogResolution.monthlyPackage.product.identifier,
+      iosCatalogResolution.annualPackage.product.identifier,
+    ].join('\u001f');
+  }, [iosCatalogResolution, promoState.applied]);
+
+  const [iosEligibilitySnapshot, setIOSEligibilitySnapshot] = useState<{
+    scopeKey: string | null;
+    byProductId: Record<string, IOSIntroEligibilityState>;
+  }>({ scopeKey: null, byProductId: {} });
+
+  useEffect(() => {
+    const seq = ++eligibilityRequestSeq.current;
+    if (!eligibilityScopeKey || iosCatalogResolution?.status !== 'resolved') {
+      setIOSEligibilitySnapshot({ scopeKey: null, byProductId: {} });
+      return;
+    }
+    const productIds = [
+      iosCatalogResolution.monthlyPackage.product.identifier,
+      iosCatalogResolution.annualPackage.product.identifier,
+    ];
+    setIOSEligibilitySnapshot({
+      scopeKey: eligibilityScopeKey,
+      byProductId: Object.fromEntries(
+        productIds.map((id) => [id, { status: 'checking' } as const]),
+      ),
+    });
+    let cancelled = false;
+    void checkIOSIntroEligibility(productIds)
+      .then((result) => {
+        if (cancelled || !mounted.current || seq !== eligibilityRequestSeq.current) return;
+        setIOSEligibilitySnapshot({ scopeKey: eligibilityScopeKey, byProductId: result });
+        Object.values(result).forEach((state) =>
+          console.info(`[promoCode] intro_${state.status}`),
+        );
+      })
+      .catch(() => {
+        if (cancelled || !mounted.current || seq !== eligibilityRequestSeq.current) return;
+        setIOSEligibilitySnapshot({
+          scopeKey: eligibilityScopeKey,
+          byProductId: Object.fromEntries(
+            productIds.map((id) => [id, { status: 'error' } as const]),
+          ),
+        });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [eligibilityScopeKey, iosCatalogResolution]);
 
   useEffect(() => {
     if (
@@ -158,6 +246,91 @@ export function PaywallScreen({
     const nextId = selectedPackage?.identifier ?? null;
     if (nextId !== selectedId) setSelectedId(nextId);
   }, [selectedId, selectedPackage]);
+
+  const introPresentations = useMemo<Record<string, IOSIntroOfferPresentation>>(
+    () =>
+      Object.fromEntries(
+        packages.map((pkg) => [
+          pkg.product.identifier,
+          resolveIOSIntroOfferPresentation(
+            pkg,
+            eligibilityScopeKey && iosEligibilitySnapshot.scopeKey === eligibilityScopeKey
+              ? iosEligibilitySnapshot.byProductId[pkg.product.identifier] ?? { status: 'unknown' }
+              : iosOfferingRoute?.kind === 'promotional'
+                ? { status: 'checking' }
+                : { status: 'idle' },
+          ),
+        ]),
+      ),
+    [eligibilityScopeKey, iosEligibilitySnapshot, iosOfferingRoute, packages],
+  );
+  const selectedIntroPresentation = selectedPackage
+    ? introPresentations[selectedPackage.product.identifier] ?? null
+    : null;
+  const selectedIntroReadiness = selectedIntroPresentation
+    ? resolveIOSPromoPurchaseReadiness(selectedIntroPresentation)
+    : { status: 'blocked' as const, reason: 'checking' as const };
+  const introText = useCallback(
+    (presentation: IOSIntroOfferPresentation | null, pkg: PurchasesPackage | null) => {
+      if (!presentation || !pkg) return null;
+      const plan = resolveIOSPlanKind(pkg);
+      const period = plan ? t(`paywall.promo.period.${plan}`) : '';
+      if (presentation.kind === 'free_trial') {
+        const keyByUnit = {
+          day: 'paywall.promo.duration.day',
+          week: 'paywall.promo.duration.week',
+          month: 'paywall.promo.duration.month',
+          year: 'paywall.promo.duration.year',
+        } as const;
+        const duration = t(keyByUnit[presentation.terms.duration.unit], {
+          count: presentation.terms.duration.count,
+        });
+        return {
+          tone: 'neutral' as const,
+          message: t('paywall.promo.freeTrial', {
+            duration,
+            price: presentation.terms.renewalPriceString,
+            period,
+          }),
+          badge: t('paywall.promo.trialBadge', {
+            duration,
+            price: presentation.terms.renewalPriceString,
+            period,
+          }),
+        };
+      }
+      if (presentation.kind === 'standard' && presentation.reason === 'ineligible') {
+        return {
+          tone: 'neutral' as const,
+          message: t('paywall.promo.ineligible', {
+            price: pkg.product.priceString,
+            period,
+          }),
+          badge: null,
+        };
+      }
+      if (presentation.kind === 'checking' || presentation.kind === 'neutral') {
+        return { tone: 'neutral' as const, message: t('paywall.promo.checking'), badge: null };
+      }
+      if (
+        presentation.kind === 'configuration_error' ||
+        (presentation.kind === 'standard' && presentation.reason === 'no_intro_offer')
+      ) {
+        return {
+          tone: 'error' as const,
+          message: t('paywall.promo.configurationUnavailable'),
+          badge: null,
+        };
+      }
+      return {
+        tone: 'error' as const,
+        message: t('paywall.promo.eligibilityUnavailable'),
+        badge: null,
+      };
+    },
+    [t],
+  );
+  const selectedIntroText = introText(selectedIntroPresentation, selectedPackage);
 
   // Fase 4C.3 §4/§6: the single source of truth for "what does the CTA
   // actually do" — derived fresh from `selectedPackage`/`promoState.applied`
@@ -195,8 +368,47 @@ export function PaywallScreen({
   }, [selectedPackage, promoApplied, promoState.applied]);
 
   /** The route that actually governs the CTA/`handlePurchase` on this platform. */
-  const effectiveRoute: PurchaseRoute | ApplePurchaseRoute | null =
-    Platform.OS === 'android' ? purchaseRoute : appleRoute;
+  const effectiveRoute: EffectivePurchaseRoute | null = useMemo(() => {
+    if (Platform.OS === 'android') return purchaseRoute;
+    if (iosOfferingRoute?.kind !== 'promotional') return appleRoute;
+    if (
+      iosCatalogResolution?.status !== 'resolved' ||
+      !selectedPackage ||
+      !promoState.applied
+    ) {
+      return { kind: 'blocked', reason: 'promo_catalog_error' };
+    }
+    const plan = resolveIOSPlanKind(selectedPackage);
+    if (!plan) return { kind: 'blocked', reason: 'promo_catalog_error' };
+    return {
+      kind: 'ios_promo_package',
+      attempt: {
+        plan,
+        authorization: iosCatalogResolution.route.authorization,
+        package: selectedPackage,
+      },
+    };
+  }, [
+    appleRoute,
+    iosCatalogResolution,
+    iosOfferingRoute,
+    promoState.applied,
+    purchaseRoute,
+    selectedPackage,
+  ]);
+
+  const currentPromoSnapshot = useMemo<IOSPromoPurchaseSnapshot | null>(() => {
+    if (effectiveRoute?.kind !== 'ios_promo_package' || !promoState.applied) return null;
+    return {
+      uid: promoState.applied.uid,
+      generation: promoState.applied.generation,
+      code: promoState.applied.code,
+      attempt: effectiveRoute.attempt,
+    };
+  }, [effectiveRoute, promoState.applied]);
+  promoSnapshotKeyRef.current = currentPromoSnapshot
+    ? iosPromoPurchaseSnapshotKey(currentPromoSnapshot)
+    : null;
 
   // Fase 4C.2/4C.3 §22: sanitized, state-only logs — never the full code,
   // never SubscriptionOption/CustomerInfo contents.
@@ -235,19 +447,67 @@ export function PaywallScreen({
     // `'blocked'` route is never acted on — the CTA is already disabled for
     // it, this is a second guard, never a silent fallback to
     // `purchase(selectedPackage)`.
-    if (!effectiveRoute || effectiveRoute.kind === 'blocked' || actionInFlight.current) return;
+    if (
+      !effectiveRoute ||
+      effectiveRoute.kind === 'blocked' ||
+      actionInFlight.current ||
+      (effectiveRoute.kind === 'ios_promo_package' && selectedIntroReadiness.status !== 'ready')
+    ) return;
     const isAppleRedemption = effectiveRoute.kind === 'offer_redemption';
     actionInFlight.current = true;
     setPurchaseState({ kind: 'purchasing' });
     setRestoreState({ kind: 'idle' });
 
     try {
-      const outcome =
-        effectiveRoute.kind === 'package'
-          ? await purchase(effectiveRoute.package)
-          : effectiveRoute.kind === 'subscription_option'
-            ? await purchaseOption(effectiveRoute.option)
-            : await redeemAppleOfferCode();
+      let outcome;
+      if (effectiveRoute.kind === 'ios_promo_package') {
+        if (!currentPromoSnapshot) return;
+        const snapshotKey = iosPromoPurchaseSnapshotKey(currentPromoSnapshot);
+        const execution = await executeIOSPromoPurchase({
+          attempt: currentPromoSnapshot.attempt,
+          authorize: authorizePromoPurchase,
+          purchase,
+          isCurrent: () =>
+            mounted.current && promoSnapshotKeyRef.current === snapshotKey,
+        });
+        if (!mounted.current) return;
+        if (execution.status !== 'purchased') {
+          if (execution.status === 'stale') {
+            setPurchaseState({ kind: 'idle' });
+            return;
+          }
+          if (execution.status === 'intent_invalid') {
+            console.warn(
+              execution.reason === 'expired'
+                ? '[promoCode] promo_purchase_intent_expired'
+                : '[promoCode] promo_purchase_intent_mismatch',
+              { reason: execution.reason },
+            );
+          }
+          const message =
+            execution.status === 'authorization_failed' &&
+            execution.outcome.reason === 'conflict'
+              ? t('paywall.promo.errors.authorizationConflict')
+              : execution.status === 'authorization_failed' &&
+                  execution.outcome.reason === 'unauthenticated'
+                ? t('paywall.promo.errors.unauthenticated')
+                : execution.status === 'intent_invalid' && execution.reason === 'expired'
+                  ? t('paywall.promo.errors.intentExpired')
+                  : execution.status === 'intent_invalid'
+                    ? t('paywall.promo.errors.intentMismatch')
+                  : t('paywall.promo.errors.authorization');
+          setPurchaseState({ kind: 'error', message, offline: false });
+          return;
+        }
+        outcome = execution.result;
+      } else {
+        outcome =
+          effectiveRoute.kind === 'package'
+            ? await purchase(effectiveRoute.package)
+            : effectiveRoute.kind === 'subscription_option'
+              ? await purchaseOption(effectiveRoute.option)
+              : await redeemAppleOfferCode();
+      }
       if (!mounted.current) return;
 
       switch (classifyPurchaseResult(outcome, PREMIUM_ENTITLEMENT_ID)) {
@@ -289,7 +549,15 @@ export function PaywallScreen({
     } finally {
       actionInFlight.current = false;
     }
-  }, [purchase, purchaseOption, redeemAppleOfferCode, effectiveRoute]);
+  }, [
+    currentPromoSnapshot,
+    effectiveRoute,
+    purchase,
+    purchaseOption,
+    redeemAppleOfferCode,
+    selectedIntroReadiness.status,
+    t,
+  ]);
 
   const handleRestore = useCallback(async () => {
     if (actionInFlight.current) return;
@@ -442,6 +710,11 @@ export function PaywallScreen({
                   pkg={pkg}
                   selected={pkg.identifier === selectedPackage?.identifier}
                   disabled={busy}
+                  promotionalTerms={
+                    iosOfferingRoute?.kind === 'promotional'
+                      ? introText(introPresentations[pkg.product.identifier] ?? null, pkg)?.badge
+                      : null
+                  }
                   onSelect={() => setSelectedId(pkg.identifier)}
                 />
               ))}
@@ -454,6 +727,13 @@ export function PaywallScreen({
                 onApply={handleApplyPromoCode}
                 promoState={promoState}
                 purchaseRoute={effectiveRoute}
+                iosPromoNotice={
+                  iosOfferingRoute?.kind === 'promotional'
+                    ? iosCatalogResolution?.status === 'error'
+                      ? { tone: 'error' as const, message: t('paywall.promo.catalogUnavailable') }
+                      : selectedIntroText
+                    : null
+                }
                 disabled={busy}
               />
             )}
@@ -463,7 +743,22 @@ export function PaywallScreen({
             <View style={{ marginTop: 'auto', paddingTop: 24 }}>
               <CtaButton
                 onPress={handlePurchase}
-                disabled={busy || !effectiveRoute || effectiveRoute.kind === 'blocked'}
+                accessibilityState={{
+                  disabled:
+                    busy ||
+                    !effectiveRoute ||
+                    effectiveRoute.kind === 'blocked' ||
+                    (effectiveRoute.kind === 'ios_promo_package' &&
+                      selectedIntroReadiness.status !== 'ready'),
+                  busy: isPurchasing,
+                }}
+                disabled={
+                  busy ||
+                  !effectiveRoute ||
+                  effectiveRoute.kind === 'blocked' ||
+                  (effectiveRoute.kind === 'ios_promo_package' &&
+                    selectedIntroReadiness.status !== 'ready')
+                }
               >
                 {isPurchasing ? (
                   <ActivityIndicator color="#fff" />
@@ -538,11 +833,13 @@ function PackageCard({
   pkg,
   selected,
   disabled,
+  promotionalTerms,
   onSelect,
 }: {
   pkg: PurchasesPackage;
   selected: boolean;
   disabled: boolean;
+  promotionalTerms?: string | null;
   onSelect: () => void;
 }) {
   const period = packagePeriodLabel(pkg);
@@ -602,6 +899,19 @@ function PackageCard({
             {period}
           </Text>
         )}
+        {!!promotionalTerms && (
+          <Text
+            style={{
+              marginTop: 5,
+              fontFamily: fonts.uiSemi,
+              fontSize: 12,
+              lineHeight: 17,
+              color: colors.accentHi,
+            }}
+          >
+            {promotionalTerms}
+          </Text>
+        )}
       </View>
       <Text
         style={{
@@ -629,13 +939,15 @@ function PromoCodeCard({
   onApply,
   promoState,
   purchaseRoute,
+  iosPromoNotice,
   disabled,
 }: {
   value: string;
   onChangeValue: (next: string) => void;
   onApply: () => void;
   promoState: PromoCodeState;
-  purchaseRoute: PurchaseRoute | ApplePurchaseRoute | null;
+  purchaseRoute: EffectivePurchaseRoute | null;
+  iosPromoNotice: { tone: 'error' | 'neutral'; message: string; badge?: string | null } | null;
   disabled: boolean;
 }) {
   const validating = promoState.phase === 'validating';
@@ -656,7 +968,7 @@ function PromoCodeCard({
   // internal condition applies, same anti-technical-leak principle already
   // used for `validatePromoCode`'s own errors.
   const promoBlockedMessage =
-    applied && purchaseRoute?.kind === 'blocked'
+    applied && !iosPromoNotice && purchaseRoute?.kind === 'blocked'
       ? 'Não foi possível disponibilizar esta oferta promocional no momento para o plano selecionado. Tente novamente ou escolha outro plano.'
       : null;
 
@@ -711,7 +1023,7 @@ function PromoCodeCard({
         </Pressable>
       </View>
 
-      {applied && (
+      {applied && !iosPromoNotice && (
         <InlineNotice
           tone="neutral"
           text={
@@ -725,6 +1037,9 @@ function PromoCodeCard({
                 : 'Código aplicado.'
           }
         />
+      )}
+      {applied && iosPromoNotice && (
+        <InlineNotice tone={iosPromoNotice.tone} text={iosPromoNotice.message} />
       )}
       {promoBlockedMessage && <InlineNotice tone="error" text={promoBlockedMessage} />}
       {promoState.phase === 'unavailable' && promoState.message && (

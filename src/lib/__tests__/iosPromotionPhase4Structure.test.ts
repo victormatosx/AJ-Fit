@@ -24,15 +24,15 @@ describe('FASE 4 iOS promotional architecture boundaries', () => {
     expect(promoProvider).not.toMatch(/AsyncStorage|SecureStore|localStorage/);
   });
 
-  it('prepares catalog resolution but does not connect the promo SKU to purchase yet', () => {
-    expect(paywall).toContain('resolveIOSSubscriptionPackage');
-    expect(paywall).not.toContain('authorizePromoPurchase');
+  it('connects the Fase 4 catalog resolver to the late Fase 5 purchase intent', () => {
+    expect(paywall).toContain('resolveIOSPromotionalCatalog');
+    expect(paywall).toContain('authorizePromoPurchase');
     const purchaseHandler = paywall.slice(
       paywall.indexOf('const handlePurchase'),
       paywall.indexOf('const handleRestore'),
     );
-    expect(purchaseHandler).not.toContain('iosCatalogResolution');
-    expect(purchaseHandler).not.toContain('resolveIOSSubscriptionPackage');
+    expect(purchaseHandler).toContain('executeIOSPromoPurchase');
+    expect(purchaseHandler).toContain('actionInFlight.current = true');
   });
 
   it('preserves the legacy Apple Offer Code path', () => {
