@@ -4,6 +4,7 @@ import Svg, { Path, Line, Defs, LinearGradient as SvgLG, Stop, Circle } from 're
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { ScreenBg } from '../components/ui/ScreenBg';
+import { ProgressPhotosScreen } from './ProgressPhotosScreen';
 import { Display, Slash, MonoLabel } from '../components/ui/Display';
 import { Card, HudCorners } from '../components/ui/Card';
 import { Icon } from '../components/ui/Icon';
@@ -70,157 +71,167 @@ export function ProgressScreen() {
     },
   ];
 
-  return (
-    <ScreenBg>
-      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-        <ScrollView contentContainerStyle={{ paddingBottom: 12 }} showsVerticalScrollIndicator={false}>
-          <View style={{ paddingHorizontal: 22, paddingTop: 12, paddingBottom: 16 }}>
-            <Slash style={{ marginBottom: 10 }}>{t('progress.header.period').toUpperCase()}</Slash>
-            <Display size={34}>{t('progress.header.highlightLine1').toUpperCase()}</Display>
-            <Display size={34}>{t('progress.header.highlightLine2').toUpperCase()}</Display>
-          </View>
+  const pageHeader = (
+    <>
+      <View style={{ paddingHorizontal: 22, paddingTop: 12, paddingBottom: 16 }}>
+        <Slash style={{ marginBottom: 10 }}>{t('progress.header.period').toUpperCase()}</Slash>
+        <Display size={34}>{t('progress.header.highlightLine1').toUpperCase()}</Display>
+        <Display size={34}>{t('progress.header.highlightLine2').toUpperCase()}</Display>
+      </View>
 
-          <View style={{ paddingHorizontal: 22, paddingBottom: 16, flexDirection: 'row', gap: 8 }}>
-            {tabs.map(([k, l]) => {
-              const sel = view === k;
+      <View style={{ paddingHorizontal: 22, paddingBottom: 16, flexDirection: 'row', gap: 8 }}>
+        {tabs.map(([k, l]) => {
+          const sel = view === k;
+          return (
+            <Pressable
+              key={k}
+              onPress={() => setView(k)}
+              accessibilityRole="tab"
+              accessibilityLabel={t('progress.accessibility.selectTab', { tab: l })}
+              accessibilityState={{ selected: sel }}
+              style={{
+                paddingVertical: 9,
+                paddingHorizontal: 16,
+                borderRadius: 9,
+                backgroundColor: sel ? colors.accent : 'rgba(255,255,255,0.04)',
+                borderWidth: 1,
+                borderColor: sel ? colors.accentHi : 'rgba(255,255,255,0.07)',
+              }}
+            >
+              <Text
+                style={{
+                  fontFamily: fonts.mono,
+                  fontSize: 10,
+                  letterSpacing: 1.5,
+                  color: sel ? '#fff' : colors.mute,
+                }}
+              >
+                {l}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </>
+  );
+
+  const pageFooter = (
+    <>
+      {/* heatmap */}
+      <View style={{ paddingHorizontal: 22, paddingTop: 16 }}>
+        <Card style={{ padding: 18 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 }}>
+            <Slash>{t('progress.heatmap.title').toUpperCase()}</Slash>
+            <MonoLabel color={colors.accentHi}>92%</MonoLabel>
+          </View>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
+            {Array.from({ length: 42 }).map((_, i) => {
+              const lvl =
+                [
+                  3, 2, 3, 0, 3, 3, 1, 3, 3, 0, 3, 2, 3, 1, 3, 0, 3, 3, 3, 0, 2, 3, 3, 3, 0, 3,
+                  3, 1, 0, 3, 2, 3, 3, 0, 3, 3, 3, 0, 3, 3, 3, 2,
+                ][i] ?? 0;
+              const bg =
+                lvl === 0
+                  ? 'rgba(255,255,255,0.05)'
+                  : lvl === 1
+                    ? 'rgba(11,112,249,0.25)'
+                    : lvl === 2
+                      ? 'rgba(11,112,249,0.55)'
+                      : colors.accent;
               return (
-                <Pressable
-                  key={k}
-                  onPress={() => setView(k)}
-                  accessibilityRole="tab"
-                  accessibilityLabel={t('progress.accessibility.selectTab', { tab: l })}
-                  accessibilityState={{ selected: sel }}
+                <View
+                  key={i}
                   style={{
-                    paddingVertical: 9,
-                    paddingHorizontal: 16,
-                    borderRadius: 9,
-                    backgroundColor: sel ? colors.accent : 'rgba(255,255,255,0.04)',
-                    borderWidth: 1,
-                    borderColor: sel ? colors.accentHi : 'rgba(255,255,255,0.07)',
+                    width: `${100 / 14 - 1}%`,
+                    aspectRatio: 1,
+                    borderRadius: 3,
+                    backgroundColor: bg,
                   }}
-                >
-                  <Text
-                    style={{
-                      fontFamily: fonts.mono,
-                      fontSize: 10,
-                      letterSpacing: 1.5,
-                      color: sel ? '#fff' : colors.mute,
-                    }}
-                  >
-                    {l}
-                  </Text>
-                </Pressable>
+                />
               );
             })}
           </View>
-
-          {view === 'chart' && <LoadChart />}
-          {view === 'weight' && <WeightChart />}
-          {view === 'photos' && <ProgressPhotos />}
-
-          {/* heatmap */}
-          <View style={{ paddingHorizontal: 22, paddingTop: 16 }}>
-            <Card style={{ padding: 18 }}>
-              <View
-                style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 }}
-              >
-                <Slash>{t('progress.heatmap.title').toUpperCase()}</Slash>
-                <MonoLabel color={colors.accentHi}>92%</MonoLabel>
-              </View>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
-                {Array.from({ length: 42 }).map((_, i) => {
-                  const lvl =
-                    [
-                      3, 2, 3, 0, 3, 3, 1, 3, 3, 0, 3, 2, 3, 1, 3, 0, 3, 3, 3, 0, 2, 3, 3, 3, 0, 3,
-                      3, 1, 0, 3, 2, 3, 3, 0, 3, 3, 3, 0, 3, 3, 3, 2,
-                    ][i] ?? 0;
-                  const bg =
-                    lvl === 0
-                      ? 'rgba(255,255,255,0.05)'
-                      : lvl === 1
-                        ? 'rgba(11,112,249,0.25)'
-                        : lvl === 2
-                          ? 'rgba(11,112,249,0.55)'
-                          : colors.accent;
-                  return (
-                    <View
-                      key={i}
-                      style={{
-                        width: `${100 / 14 - 1}%`,
-                        aspectRatio: 1,
-                        borderRadius: 3,
-                        backgroundColor: bg,
-                      }}
-                    />
-                  );
-                })}
-              </View>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 }}>
-                <MonoLabel>{t('progress.heatmap.period').toUpperCase()}</MonoLabel>
-                <MonoLabel>{t('progress.heatmap.today').toUpperCase()}</MonoLabel>
-              </View>
-            </Card>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 }}>
+            <MonoLabel>{t('progress.heatmap.period').toUpperCase()}</MonoLabel>
+            <MonoLabel>{t('progress.heatmap.today').toUpperCase()}</MonoLabel>
           </View>
+        </Card>
+      </View>
 
-          {/* PRs */}
-          <View style={{ paddingHorizontal: 22, paddingTop: 16, paddingBottom: 18 }}>
-            <Slash style={{ marginBottom: 12 }}>{t('progress.records.title').toUpperCase()}</Slash>
-            {records.map((record, i) => (
-              <View
-                key={i}
+      {/* PRs */}
+      <View style={{ paddingHorizontal: 22, paddingTop: 16, paddingBottom: 18 }}>
+        <Slash style={{ marginBottom: 12 }}>{t('progress.records.title').toUpperCase()}</Slash>
+        {records.map((record, i) => (
+          <View
+            key={i}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 14,
+              paddingVertical: 13,
+              paddingHorizontal: 14,
+              borderRadius: 12,
+              marginBottom: 8,
+              backgroundColor: 'rgba(255,255,255,0.03)',
+              borderWidth: 1,
+              borderColor: 'rgba(255,255,255,0.06)',
+            }}
+          >
+            <Icon name="trophy" size={18} color={colors.accentHi} />
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontFamily: fonts.uiBold, fontSize: 14, color: '#fff' }}>
+                {record.exercise}
+              </Text>
+              <Text
                 style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 14,
-                  paddingVertical: 13,
-                  paddingHorizontal: 14,
-                  borderRadius: 12,
-                  marginBottom: 8,
-                  backgroundColor: 'rgba(255,255,255,0.03)',
-                  borderWidth: 1,
-                  borderColor: 'rgba(255,255,255,0.06)',
+                  fontFamily: fonts.mono,
+                  fontSize: 9.5,
+                  color: colors.faint,
+                  letterSpacing: 1,
+                  marginTop: 2,
                 }}
               >
-                <Icon name="trophy" size={18} color={colors.accentHi} />
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontFamily: fonts.uiBold, fontSize: 14, color: '#fff' }}>{record.exercise}</Text>
-                  <Text
-                    style={{
-                      fontFamily: fonts.mono,
-                      fontSize: 9.5,
-                      color: colors.faint,
-                      letterSpacing: 1,
-                      marginTop: 2,
-                    }}
-                  >
-                    {record.date.toUpperCase()}
-                  </Text>
-                </View>
-                <View style={{ alignItems: 'flex-end' }}>
-                  <Text
-                    style={{
-                      fontFamily: fonts.display,
-                      fontSize: 17,
-                      color: '#fff',
-                      textTransform: 'uppercase',
-                    }}
-                  >
-                    {record.value}
-                  </Text>
-                  <Text
-                    style={{
-                      fontFamily: fonts.mono,
-                      fontSize: 10,
-                      color: colors.accentHi,
-                    }}
-                  >
-                    {record.gain}
-                  </Text>
-                </View>
-              </View>
-            ))}
+                {record.date.toUpperCase()}
+              </Text>
+            </View>
+            <View style={{ alignItems: 'flex-end' }}>
+              <Text
+                style={{
+                  fontFamily: fonts.display,
+                  fontSize: 17,
+                  color: '#fff',
+                  textTransform: 'uppercase',
+                }}
+              >
+                {record.value}
+              </Text>
+              <Text style={{ fontFamily: fonts.mono, fontSize: 10, color: colors.accentHi }}>
+                {record.gain}
+              </Text>
+            </View>
           </View>
-        </ScrollView>
+        ))}
+      </View>
+    </>
+  );
+
+  return (
+    <ScreenBg>
+      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+        {view === 'photos' ? (
+          <ProgressPhotosScreen pageHeader={pageHeader} pageFooter={pageFooter} />
+        ) : (
+          <ScrollView
+            contentContainerStyle={{ paddingBottom: 12 }}
+            showsVerticalScrollIndicator={false}
+          >
+            {pageHeader}
+            {view === 'chart' && <LoadChart />}
+            {view === 'weight' && <WeightChart />}
+            {pageFooter}
+          </ScrollView>
+        )}
       </SafeAreaView>
     </ScreenBg>
   );
@@ -388,60 +399,5 @@ function WeightChart() {
         />
       </Svg>
     </ChartFrame>
-  );
-}
-
-function ProgressPhotos() {
-  const { t } = useTranslation('home');
-  const weeks = ['01', '04', '08', '12'];
-  return (
-    <View style={{ paddingHorizontal: 22 }}>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
-        {weeks.map((week, i) => (
-          <View
-            key={i}
-            style={{
-              width: '47%',
-              height: 190,
-              borderRadius: 14,
-              backgroundColor: 'rgba(255,255,255,0.03)',
-              borderWidth: 1,
-              borderColor: 'rgba(255,255,255,0.1)',
-              alignItems: 'center',
-              justifyContent: 'center',
-              overflow: 'hidden',
-            }}
-          >
-            <HudCorners />
-            <Icon name="camera" size={28} color="rgba(255,255,255,0.2)" />
-            <View
-              style={{
-                position: 'absolute',
-                top: 12,
-                left: 14,
-                backgroundColor: 'rgba(2,0,16,0.7)',
-                paddingHorizontal: 7,
-                paddingVertical: 3,
-                borderRadius: 5,
-              }}
-            >
-              <MonoLabel color="#fff">{t('progress.photos.week', { week }).toUpperCase()}</MonoLabel>
-            </View>
-          </View>
-        ))}
-      </View>
-      <View
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 6,
-          marginTop: 12,
-        }}
-      >
-        <Icon name="camera" size={11} color={colors.faint} />
-        <MonoLabel>{t('progress.photos.hint').toUpperCase()}</MonoLabel>
-      </View>
-    </View>
   );
 }

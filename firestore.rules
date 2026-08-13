@@ -67,14 +67,30 @@ service cloud.firestore {
 
     function subscriptionValid(data) {
       return data is map
-        && data.keys().hasOnly(['status', 'provider', 'trialEndsAt', 'endsAt'])
+        && data.keys().hasOnly([
+             'status', 'entitlementActive', 'provider', 'productId', 'store',
+             'startedAt', 'trialEndsAt', 'currentPeriodEndsAt', 'canceledAt',
+             'lastRenewedAt', 'lastEventId', 'lastEventTimestampMs', 'updatedAt'
+           ])
         && (!('status' in data)
              || data.status in ['TRIAL', 'ACTIVE', 'CANCELED', 'BILLING_ISSUE', 'EXPIRED'])
+        && (!('entitlementActive' in data) || data.entitlementActive is bool)
         && (!('provider' in data) || data.provider == 'REVENUECAT')
+        && (!('productId' in data) || data.productId is string)
+        && (!('store' in data) || data.store in ['APP_STORE', 'PLAY_STORE'])
+        && (!('startedAt' in data) || data.startedAt is timestamp)
         && (!('trialEndsAt' in data)
              || data.trialEndsAt == null || data.trialEndsAt is timestamp)
-        && (!('endsAt' in data)
-             || data.endsAt == null || data.endsAt is timestamp);
+        && (!('currentPeriodEndsAt' in data)
+             || data.currentPeriodEndsAt == null || data.currentPeriodEndsAt is timestamp)
+        && (!('canceledAt' in data)
+             || data.canceledAt == null || data.canceledAt is timestamp)
+        && (!('lastRenewedAt' in data)
+             || data.lastRenewedAt == null || data.lastRenewedAt is timestamp)
+        && (!('lastEventId' in data) || data.lastEventId is string)
+        && (!('lastEventTimestampMs' in data)
+             || (data.lastEventTimestampMs is int && data.lastEventTimestampMs >= 0))
+        && (!('updatedAt' in data) || data.updatedAt is timestamp);
     }
 
     function metadataValid(data) {
@@ -87,13 +103,37 @@ service cloud.firestore {
         && data.updatedAt is timestamp;
     }
 
+    // Shape of `users/{userId}.attribution` — the read-optimized mirror of
+    // a user's promo-code attribution (functions/src/attribution/types.ts's
+    // `AttributionSnapshot`; source of truth is `couponRedemptions/{userId}`,
+    // written only by the Admin SDK — see the `couponRedemptions` match
+    // block below). Only the backend ever writes real values here; this
+    // function exists so `nestedUserValid` can tolerate the field's
+    // presence (once the backend has written it) without letting the
+    // CLIENT ever populate or change it itself — see the `create`/`update`
+    // rules on `users/{userId}` for the actual write blocks.
+    function attributionValid(data) {
+      return data is map
+        && data.keys().hasOnly(['couponCode', 'campaignId', 'influencerId', 'appliedAt'])
+        && (!('couponCode' in data) || data.couponCode is string)
+        && (!('campaignId' in data) || data.campaignId is string)
+        && (!('influencerId' in data) || data.influencerId is string)
+        && (!('appliedAt' in data) || data.appliedAt is timestamp);
+    }
+
+    // `attribution` is OPTIONAL (absent on every document created before
+    // this field existed, and on brand-new documents until the backend
+    // applies a promo code) — `hasAll` only requires the original four
+    // fields; `hasOnly` allows the fifth without forcing every existing
+    // caller of this function to know about it.
     function nestedUserValid(data) {
       return data.keys().hasAll(['profile', 'preferences', 'subscription', 'metadata'])
-        && data.keys().hasOnly(['profile', 'preferences', 'subscription', 'metadata'])
+        && data.keys().hasOnly(['profile', 'preferences', 'subscription', 'metadata', 'attribution'])
         && profileValid(data.profile)
         && preferencesValid(data.preferences)
         && subscriptionValid(data.subscription)
-        && metadataValid(data.metadata);
+        && metadataValid(data.metadata)
+        && (!('attribution' in data) || attributionValid(data.attribution));
     }
 
     function profilePhotoUpdateValid(before, after) {
@@ -122,7 +162,11 @@ service cloud.firestore {
         && after.subscription.get('status', null) == before.get('subscriptionStatus', null)
         && after.subscription.get('provider', null) == before.get('subscriptionProvider', null)
         && after.subscription.get('trialEndsAt', null) == before.get('trialEndsAt', null)
-        && after.subscription.get('endsAt', null) == before.get('subscriptionEndsAt', null)
+        // Campo renomeado `endsAt` → `currentPeriodEndsAt` na Sprint 3.5 para
+        // casar com docs/13 §26; o nome plano ANTIGO (`subscriptionEndsAt`)
+        // não muda — é uma leitura única do documento legado, não parte do
+        // schema novo.
+        && after.subscription.get('currentPeriodEndsAt', null) == before.get('subscriptionEndsAt', null)
         && after.metadata.role == before.get('role', 'user')
         && after.metadata.get('activeWorkoutId', null) == before.get('activeWorkoutId', null)
         && after.metadata.createdAt == before.createdAt
@@ -176,6 +220,74 @@ service cloud.firestore {
         && (!('bodyWater' in d) || (d.bodyWater is number && d.bodyWater > 0))
         && (!('basalMetabolism' in d) || (d.basalMetabolism is number && d.basalMetabolism > 0))
         && (!('visceralFat' in d) || (d.visceralFat is number && d.visceralFat > 0));
+    }
+
+    // ── Photo Vault (docs/20_backend_functions_photo_vault.md) ────────────
+    // Metadados das fotos privadas. A imagem NUNCA é gravada aqui: o binário
+    // vive criptografado no Storage e este documento guarda apenas o ponteiro
+    // e os parâmetros criptográficos necessários para decifrar. Não existe
+    // downloadURL nem signed URL persistida — o caminho é resolvido pelo SDK
+    // a partir de `storagePath`, sempre sujeito às Storage Rules.
+    function encryptionMetadataValid(e) {
+      return e is map
+        && e.keys().hasAll(['version', 'algorithm', 'iv', 'vaultKeyVersion'])
+        && e.keys().hasOnly(['version', 'algorithm', 'iv', 'vaultKeyVersion'])
+        && e.version is int && e.version >= 1
+        && e.algorithm == 'AES-256-GCM'
+        // IV/nonce em base64. Não é segredo (é público por design no GCM),
+        // mas precisa ser único por foto — a unicidade é responsabilidade do
+        // cliente, as regras só garantem forma e tamanho plausíveis.
+        && e.iv is string && e.iv.size() >= 16 && e.iv.size() <= 32
+        && e.vaultKeyVersion is int && e.vaultKeyVersion >= 1;
+    }
+
+    function progressPhotoValid(userId, photoId) {
+      let d = request.resource.data;
+      return d.keys().hasAll([
+          'storagePath', 'createdAt', 'takenAt', 'originalMimeType',
+          'encryptedSize', 'encryption'
+        ])
+        // Legacy photos keep the original six-field shape. Phase-13 photos
+        // add all three thumbnail fields atomically; partial thumbnail
+        // metadata and unknown fields remain rejected.
+        && (
+          d.keys().hasOnly([
+            'storagePath', 'createdAt', 'takenAt', 'originalMimeType',
+            'encryptedSize', 'encryption'
+          ])
+          || (
+            d.keys().hasAll([
+              'thumbnailStoragePath', 'thumbnailEncryptedSize',
+              'thumbnailEncryption'
+            ])
+            && d.keys().hasOnly([
+              'storagePath', 'thumbnailStoragePath', 'createdAt', 'takenAt',
+              'originalMimeType', 'encryptedSize', 'thumbnailEncryptedSize',
+              'encryption', 'thumbnailEncryption'
+            ])
+            && d.thumbnailStoragePath == 'users/' + userId + '/progressPhotos/' + photoId + '.thumb.enc'
+            && d.thumbnailEncryptedSize is int
+            && d.thumbnailEncryptedSize > 0
+            && d.thumbnailEncryptedSize <= 512 * 1024
+            && encryptionMetadataValid(d.thumbnailEncryption)
+            // Same Vault Key is intentional; nonce reuse under AES-GCM is not.
+            && d.thumbnailEncryption.iv != d.encryption.iv
+          )
+        )
+        // Igualdade exata de string (não regex): prende o metadado a um único
+        // objeto do Storage, no namespace do próprio dono e com o mesmo
+        // photoId do documento. Impede apontar para o arquivo de outro uid.
+        && d.storagePath == 'users/' + userId + '/progressPhotos/' + photoId + '.enc'
+        // `== request.time` (e não apenas `is timestamp`) força o uso de
+        // serverTimestamp() — o cliente não forja a data de criação.
+        && d.createdAt == request.time
+        && d.takenAt is timestamp
+        && d.takenAt <= request.time
+        && d.originalMimeType in ['image/jpeg', 'image/png', 'image/heic', 'image/heif', 'image/webp']
+        && d.encryptedSize is int
+        && d.encryptedSize > 0
+        && d.encryptedSize <= 10 * 1024 * 1024
+        && encryptionMetadataValid(d.encryption);
     }
 
     function supportTicketValid(ticketId) {
@@ -291,6 +403,7 @@ service cloud.firestore {
         && request.resource.data.metadata.role == 'user'
         && request.resource.data.profile.email == request.auth.token.email
         && request.resource.data.subscription.size() == 0
+        && !('attribution' in request.resource.data)
         && !('activeWorkoutId' in request.resource.data.metadata)
         && request.resource.data.metadata.createdAt == request.time
         && request.resource.data.metadata.updatedAt == request.time;
@@ -358,6 +471,31 @@ service cloud.firestore {
 
         allow update, delete: if false;
       }
+
+      // Metadados das fotos privadas de evolução (Photo Vault). O dono lê,
+      // cria e exclui; o documento é imutável após a criação — trocar uma
+      // foto significa excluir o par (documento + objeto no Storage) e criar
+      // um novo photoId, o que mantém a auditoria simples e sem ambiguidade.
+      match /progressPhotos/{photoId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && progressPhotoValid(userId, photoId);
+        allow update: if false;
+        allow delete: if isOwner(userId);
+      }
+
+      // Material criptográfico do Photo Vault (wrappedVaultKey e versões).
+      // Backend-only: escrito e lido exclusivamente pelo Admin SDK, que
+      // ignora estas regras. O cliente nunca precisa da chave embrulhada —
+      // ele recebe a Vault Key já desembrulhada pela Function autenticada e
+      // a guarda localmente no SecureStore. Negar leitura ao cliente remove
+      // a chave embrulhada da superfície de ataque do app por completo.
+      //
+      // Consequência: o schema deste documento NÃO é validável por estas
+      // regras (o Admin SDK as ignora). O contrato fechado e versionado vive
+      // em functions/src/photoVault/schema.ts, onde é de fato aplicado.
+      match /privateSecurity/{documentId} {
+        allow read, write: if false;
+      }
     }
 
     // ── Support tickets and messages ──────────────────────────────────────
@@ -377,6 +515,29 @@ service cloud.firestore {
           || (isAdmin() && adminSupportMessageValid(ticketId));
         allow update, delete: if false;
       }
+    }
+
+    // Catálogo de códigos promocionais/influenciadores
+    // (functions/src/attribution/{constants,types,promoCodeCatalog}.ts).
+    // Nunca lido nem escrito pelo cliente — a validação server-side
+    // (`validatePromoCode`, onCall) faz o único `get()` direto por ID
+    // normalizado, via Admin SDK, que ignora estas regras. Bloco explícito
+    // (redundante com o catch-all abaixo, que já negaria por padrão) para
+    // documentar a intenção: nenhuma exceção de leitura deve ser adicionada
+    // aqui, nem mesmo para o dono de um documento — não existe "dono" para
+    // um código promocional.
+    match /promoCodes/{code} {
+      allow read, write: if false;
+    }
+
+    // Registro server-managed do ciclo de vida da atribuição de um uid a um
+    // código promocional (functions/src/attribution/{constants,types,
+    // attributionSync}.ts) — `couponRedemptions/{uid}`. Fonte de verdade;
+    // `users/{uid}.attribution` é apenas o espelho de leitura. Escrito
+    // exclusivamente por `applyPromoCodeAttributionTransactionally` via
+    // Admin SDK. Bloco explícito pelo mesmo motivo do `promoCodes` acima.
+    match /couponRedemptions/{uid} {
+      allow read, write: if false;
     }
 
     // ── Deny all undocumented collections ─────────────────────────────────

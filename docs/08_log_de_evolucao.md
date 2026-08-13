@@ -254,6 +254,55 @@ Criar documentação específica de billing.
 
 # 18. Primeiras entradas do projeto
 
+Data: 2026-08-12
+Responsável: Codex — Agente Frontend + Segurança + QA
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Implementado localmente o hardening pré-lançamento do Photo Vault (Fase 12).
+A proteção visual usa `expo-screen-capture` apenas enquanto a área privada está
+aberta, com bloqueio antes do render privado, overlay neutro no lifecycle,
+proteção do app switcher e retorno sempre travado. Sair da tela Fotos agora
+revoga a sessão e libera a proteção somente depois do frame seguro.
+
+O grid foi migrado para `FlatList`, mantendo duas colunas e limite global de
+três downloads. Célula e viewer compartilham uma única URI plaintext, removida
+quando o último owner sai. Resultados do manipulator são movidos para o cache
+controlado; cold start remove plaintext e staging cifrado sem retomada possível;
+buffers plaintext próprios são zerados após uso.
+
+Criado módulo Expo local `AJFitAppCheck`: Android usa Debug Provider em Debug e
+Play Integrity em Release; iOS usa Debug Provider em Debug e App Attest em
+Release, sem DeviceCheck. O token e a expiração oficiais alimentam um
+`CustomProvider` ligado à mesma Firebase JS App. Auth, Firestore, Storage e
+Functions permanecem no Firebase JS SDK. Enforcement não foi ativado porque a
+prova runtime real ainda é obrigatória.
+
+Criada scheduled Function local `cleanupPhotoVaultOrphans`, com idade mínima de
+7 dias, confirmação adicional de 24 horas, segunda leitura e precondições de
+generation/updateTime. Storage/Firestore são paginados; falhas individuais não
+abortam o lote; logs não contêm uid/path/photoId. A Function não foi publicada.
+
+Validação automática:
+1.423 testes mobile, 182 testes backend (2 KMS integration skips), 107 testes
+Firestore Rules, 33 Storage Rules, 550 i18n, typechecks, build backend,
+`expo-doctor` e `git diff --check` aprovados. Android Debug APK e iOS arm64
+sem assinatura compilaram; instalação/runtime físico da Fase 12 permanece
+pendente. `npm audit --omit=dev` registrou 21 alertas mobile e 9 backend;
+nenhum fix forçado/breaking foi aplicado. Runbook em
+`docs/21_photo_vault_pre_launch.md`.
+
+Impacto:
+Nenhum deploy, enforcement ou alteração de Console foi feito. RevenueCat e
+billing ficaram intocados; não houve merge nem deploy geral.
+
+Próxima ação:
+Registrar debug tokens manualmente, executar matriz física iOS/Android, validar
+App Check em Functions/Firestore/Storage sem enforcement e revisar o deploy
+seletivo de `cleanupPhotoVaultOrphans`. Só então decidir rollout progressivo.
+
+---
+
 Data: 2026-08-04
 Responsável: Agente Frontend + QA
 Categoria: [IMPLEMENTAÇÃO]
@@ -1628,5 +1677,482 @@ staging real. Próxima fase: modelagem Firestore/Storage + Rules do Photo Vault.
 
 Assinatura:
 Codex — 2026-08-11 — Fase 3 de preparação segura da infraestrutura backend.
+
+---
+
+Data: 2026-08-11
+Responsável: Codex — Agente Backend + Segurança + QA
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Implementada a Fase 4 (modelagem de dados + Security Rules) do Photo Vault.
+Criados três contratos amarrados ao mesmo uid/photoId: o objeto cifrado em
+`users/{uid}/progressPhotos/{photoId}.enc` no Storage (ciphertext opaco,
+`application/octet-stream`, nunca `image/*`), os metadados em
+`users/{uid}/progressPhotos/{photoId}` no Firestore (schema fechado com
+hasAll/hasOnly, sem downloadURL/signed URL/thumbnail), e o documento
+backend-only `users/{uid}/privateSecurity/photoVault`. O `storagePath` do
+metadado é preso por igualdade exata de string ao uid e ao photoId do próprio
+documento, impedindo apontar para o arquivo de outro usuário. Documentos e
+objetos são imutáveis: substituir uma foto exige excluir o par e criar um novo
+photoId. Criada a suíte de testes de Storage Rules, que não existia no projeto,
+cobrindo também por regressão os paths pré-existentes de avatar e de anexos de
+suporte. Adicionado o emulador de Storage ao `firebase.json` e os scripts
+`test:rules:firestore`/`test:rules:storage`, com `test:rules` passando a rodar
+as duas suítes.
+
+Segurança:
+O documento `photoVault` é negado ao cliente em leitura E escrita
+(`allow read, write: if false`) — o app nunca precisa da chave embrulhada, pois
+receberá a Vault Key já desembrulhada por Function autenticada. Como o Admin SDK
+ignora as regras, o schema fechado e versionado do vault vive em
+`functions/src/photoVault/schema.ts`, onde é de fato aplicável; uma validação em
+`firestore.rules` seria código morto e falsa sensação de segurança.
+
+Um teste falhou e revelou um erro real durante a implementação: no Cloud Storage
+um upload sobre caminho existente cria uma nova geração do objeto e é avaliado
+como `create`, não como `update` — logo `allow update: if false` sozinho NÃO
+impede sobrescrita. A regra passou a exigir `resource == null` no `create`.
+
+Validação automática:
+105 testes de Firestore Rules aprovados; 33 testes de Storage Rules aprovados;
+52 testes do backend Functions aprovados; suíte completa do mobile (945 testes)
+aprovada sem regressão; typecheck do mobile e do backend aprovados; build do
+backend aprovado. Todos os testes rodaram contra o Firebase Emulator Suite com o
+project id descartável `ajfit-rules-test` — nenhum dado foi escrito em
+`ajfit-2f321`.
+
+Pendência:
+As rules NÃO foram publicadas — deploy pendente de revisão humana. Achado
+pré-existente fora do escopo, apenas registrado: anexos de suporte
+(`users/{uid}/support/{ticketId}/attachments/{fileName}`) também podem ser
+sobrescritos pelo dono pelo mesmo motivo (ausência de `resource == null`),
+apesar do `allow update, delete: if false`; corrigir exige avaliar se o app
+depende desse comportamento.
+
+Assinatura:
+Codex — 2026-08-11 — Fase 4 de modelagem e Security Rules do Photo Vault.
+
+---
+
+Data: 2026-08-11
+Responsável: Codex — Agente Backend + Segurança + QA
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Implementada a Fase 5 (Cloud KMS + IAM + KEK) do Photo Vault. Integrado
+`@google-cloud/kms` ao backend e criada a camada de envelope encryption em
+`functions/src/photoVault/`: `kmsClient.ts` (cliente singleton, constantes de
+KeyRing/CryptoKey e construção controlada do resource name), `vaultKeyCrypto.ts`
+(`wrapVaultKey`/`unwrapVaultKey`) e `errors.ts` (taxonomia interna). Essas
+funções são internas: não são callable, não são HTTP, não recebem uid, não tocam
+o Firestore e o app não as alcança — travado por teste estrutural. Criado o
+script idempotente e versionado `scripts/setup-photo-vault-kms.sh`, que habilita
+a Cloud KMS API, cria o KeyRing `ajfit-photo-vault` e a CryptoKey
+`photo-vault-kek` (simétrica, rotação de 90 dias) em us-central1, e concede
+`roles/cloudkms.cryptoKeyEncrypterDecrypter` à service account de runtime das
+Functions escopado à CryptoKey — nunca ao KeyRing, nunca ao projeto.
+
+Região us-central1 escolhida por alinhamento com a Function já implantada
+(`revenueCatWebhook`), evitando espalhar infraestrutura entre regiões.
+
+Segurança:
+Nenhuma service account JSON foi criada ou adicionada; a autenticação é ADC,
+igual ao firebase-admin. O nome do KeyRing/CryptoKey é constante de backend e
+nunca vem de input — um cliente capaz de influenciá-lo poderia pedir decrypt
+contra uma chave sob seu controle. O project id vem do ambiente gerenciado, não
+hardcoded, para rodar em staging sem edição. Erros do Google Cloud são
+descartados deliberadamente (carregam projeto, chave e estado de IAM) e mapeados
+para códigos internos. Há teste que falha se material de chave aparecer em
+qualquer chamada ao logger.
+
+Recursos criados em ajfit-2f321 mediante autorização humana explícita, após
+dry run revisado: Cloud KMS API habilitada, KeyRing ajfit-photo-vault, CryptoKey
+photo-vault-kek e o binding de IAM. Registrado que KeyRings e CryptoKeys do
+Cloud KMS nunca podem ser excluídos no GCP — apenas versões de chave podem ser
+destruídas —, portanto esses nomes são permanentes no projeto.
+
+Validação automática:
+89 testes do backend aprovados (2 de integração pulados por serem opt-in);
+typecheck e build do backend aprovados; suíte completa do mobile (945 testes) e
+seu typecheck aprovados; 105 testes de Firestore Rules e 33 de Storage Rules
+aprovados; script validado por dry run, execução e reexecução (idempotência
+confirmada: "already exists" em todos os passos).
+
+Validação da KEK:
+Round trip real executado contra a chave com 32 bytes aleatórios descartáveis
+(32 → 112 bytes wrapped → 32 bytes restaurados, idênticos; ciphertext difere do
+plaintext). Material temporário sobrescrito e removido. Nenhuma chave de usuário
+real foi envolvida e nada foi persistido.
+
+Pendência:
+O teste de integração opt-in em vitest exige `gcloud auth application-default
+login` (ADC), ausente na máquina — a validação equivalente foi feita via gcloud
+CLI. Risco operacional pré-existente identificado e registrado: a Function
+`revenueCatWebhook` está ATIVA em produção (us-central1) mas seu código-fonte
+não existe nesta branch — um `firebase deploy --only functions` a partir daqui a
+removeria.
+
+Assinatura:
+Codex — 2026-08-11 — Fase 5 de Cloud KMS, IAM e KEK do Photo Vault.
+
+---
+
+Data: 2026-08-11
+Responsável: Codex — Agente Backend + Segurança + QA
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Implementada a Fase 6 do Photo Vault: as callables autenticadas `createVault` e
+`recoverVaultKey`, primeiras operações reais do vault. `createVault` gera a
+Vault Key com CSPRNG (randomBytes, 32 bytes), embrulha via KMS e persiste apenas
+a forma wrapped; recusa-se a agir se o usuário já tem vault, retornando
+`already-exists` — nunca gera segunda chave, o que órfãozaria permanentemente as
+fotos existentes. A atomicidade usa `DocumentReference.create()`, cuja
+pré-condição server-side de "não pode existir" garante que duas chamadas
+concorrentes nunca criem duas chaves. `recoverVaultKey` exige reautenticação
+recente, lê o próprio vault, valida o documento armazenado, desembrulha e
+devolve a chave; nunca cria vault implicitamente.
+
+Criados `vaultRepository.ts` (única fronteira Firestore, onde o schema fechado é
+de fato aplicado) e o guard `requireRecentAuth` em `lib/auth.ts`. A camada KMS
+foi evoluída para que `wrapVaultKey` devolva também o `kmsKeyVersion` extraído
+de `EncryptResponse.name` — a versão nunca é inventada, e uma resposta sem
+versão é rejeitada.
+
+Segurança:
+O uid vem exclusivamente de `request.auth.uid`. Testado explicitamente que
+`uid`, `userId`, `email`, `path` e `documentPath` no corpo são ignorados nas
+duas callables, e um teste estrutural falha se `request.data` for lido nesses
+arquivos. A janela de reautenticação é de 5 minutos, lida do claim `auth_time`
+do token verificado pelo Firebase; ausente, NaN, Infinity ou futuro anômalo
+falham fechado, e qualquer alegação de frescor vinda do corpo é ignorada.
+
+Erros de KMS e Firestore são achatados em HttpsError genéricos — testado que
+`photo-vault-kek`, `ajfit-2f321` e `PERMISSION_DENIED` não aparecem nas
+mensagens devolvidas. Nenhuma chave, corpo de requisição ou resposta é logado.
+A zeroização dos buffers é best effort e a limitação do runtime está
+documentada, sem prometer o que V8/GC não entregam.
+
+Validação automática:
+172 testes do backend aprovados (2 de integração pulados por serem opt-in),
+typecheck e build aprovados; 105 testes de Firestore Rules e 33 de Storage Rules
+aprovados; suíte completa do mobile (945 testes) e typecheck aprovados.
+
+Pendência:
+Nenhum deploy foi executado, conforme escopo. App Check e rate limiting de
+`recoverVaultKey` permanecem como hardening futuro, registrados na seção 20 do
+doc 20. Reiterado: o deploy destas Functions deve ser feito por nome
+(`--only functions:createVault,functions:recoverVaultKey`), nunca com
+`--only functions`, porque `revenueCatWebhook` está ativa em produção e seu
+código vive em branch paralela. Nenhum arquivo de RevenueCat foi tocado.
+
+Assinatura:
+Codex — 2026-08-11 — Fase 6 de createVault e recoverVaultKey.
+
+---
+
+Data: 2026-08-12
+Responsável: Codex — Agente Frontend + Segurança + QA
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Implementada a Fase 7 do Photo Vault: integração mobile da Vault Key. Criados
+`src/lib/firebaseFunctions.ts` (cliente Callable com região fixada em
+us-central1), `src/lib/photoVaultKeyStorage.ts` (chave no Keychain/Keystore via
+expo-secure-store, namespaced por uid), `src/lib/photoVaultErrors.ts`,
+`src/services/photoVault.ts` (ensure/create/recover com validação de resposta) e
+`src/services/photoVaultRecovery.ts` (composição reauth → recover, separada para
+não arrastar os providers nativos para dentro do service do vault). O logout
+passou a remover a chave local.
+
+A chave é guardada em arquivo separado do secureAuthStorage por terem ciclos de
+vida diferentes: a sessão rotaciona e morre no logout, a Vault Key é estável e
+recuperável do backend. A validação de 32 bytes é feita sem decodificar o
+base64, calculando o comprimento pela forma da string — Buffer e atob não são
+garantidos no runtime do React Native.
+
+Segurança:
+`already-exists` nunca gera segunda chave: não há limpeza do vault remoto, nem
+retry com chave nova, nem chave inventada localmente — o único caminho é reauth
+→ recover, sem loop automático. A checagem de frescor no cliente usa janela de 4
+minutos, menor que os 5 do backend, para preferir pedir reautenticação a
+disparar uma chamada que seria rejeitada na fronteira; o backend continua sendo
+a autoridade. O namespace por uid é a isolação primária (uid faz parte da chave
+do SecureStore); o uid no payload é conferido como defesa em profundidade. Um
+uid não namespaceável falha fechado. Logs registram apenas o `issue` — nunca
+chave, payload, resposta, senha ou token. Reautenticação reutiliza
+`reauthenticateCurrentUser`, cobrindo senha/Google/Apple sem criar login
+paralelo, e força `getIdToken(true)` para que o `auth_time` novo chegue à
+callable.
+
+Ajuste de camada durante a implementação: o logout passou a importar
+`deleteVaultKey` do storage, não do service, para não puxar o cliente de
+Functions para o grafo de módulos da autenticação.
+
+Validação automática:
+1058 testes do mobile aprovados (63 arquivos), typecheck aprovado; 172 testes do
+backend aprovados; 105 de Firestore Rules e 33 de Storage Rules aprovados.
+
+Pendência:
+Nenhum deploy foi executado — as Functions da Fase 6 seguem não publicadas,
+então o fluxo mobile ainda não pode ser exercitado ponta a ponta contra o
+ambiente real. Biometria (`requireAuthentication`) permanece fora, como fase
+própria. Nenhum arquivo de RevenueCat foi tocado.
+
+Assinatura:
+Codex — 2026-08-12 — Fase 7 de integração mobile da Vault Key.
+
+---
+
+Data: 2026-08-12
+Responsável: Codex — Agente Frontend + Segurança + QA
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Implementada a Fase 8 do Photo Vault: motor criptográfico AES-256-GCM
+client-side e pipeline de arquivos temporários. Criados
+`src/lib/photoVaultCrypto.ts` (cifra, decifra e enquadramento binário puros) e
+`src/services/photoVaultFileCrypto.ts` (leitura/escrita de arquivos, diretórios
+temporários e cleanup). Nenhuma dependência nova: o `expo-crypto` já presente
+expõe AES-GCM nativo real, e nenhum algoritmo foi implementado à mão.
+
+Formato de arquivo binário versionado de 36 bytes de header: MAGIC "AJFV",
+versão, comprimentos de IV e tag, IV de 12 bytes, tag de 16 bytes e ciphertext.
+Compacto por decisão — JSON+base64 inflaria uma foto de 10 MB em ~33% e exigiria
+uma string gigante em memória. As três partes GCM são sempre manipuladas como
+bytes crus via `fromParts`, porque o projeto já documentou que
+`combined()`/`fromCombined()` e os encodings base64 do `expo-crypto` não fazem
+round-trip corretamente no Android.
+
+Segurança:
+Nonce novo a cada operação (gerado pelo expo-crypto), verificado por teste que
+25 cifragens produzem 25 IVs distintos — detecta IV constante, IV derivado da
+chave e RNG mockado. A mesma foto cifrada duas vezes produz ciphertext
+diferente. A Vault Key é importada via `AESEncryptionKey.import(base64)`, o que
+mantém os bytes crus dentro do módulo nativo — não existe buffer de chave em
+claro no JavaScript. Duas validações independentes de tamanho, por defesa em
+profundidade.
+
+AAD não foi usado na V1, decisão explícita e registrada: todo campo do header já
+está coberto (parser estrito para magic/versão/comprimentos, GCM para
+IV/tag/ciphertext), só existe uma versão de formato, e o caminho de AAD desta
+biblioteca não pôde ser testado em dispositivo — dado o histórico de divergência
+Android/iOS no expo-crypto, adicionar um caminho não verificado seria o risco
+maior.
+
+Plaintext só é gravado em `<cache>/photo-vault/tmp/` com nome UUID, nunca no
+document directory. O cleanup preserva `.enc` por padrão (pode haver upload
+pendente) e tem escopo estrito ao subdiretório do vault — testado que não toca
+avatar, cache do expo-image, document nem a foto de origem.
+
+Dois bugs próprios foram encontrados pelos testes e corrigidos: `readBytes`
+usava try/catch síncrono em volta de função async, deixando a rejeição escapar;
+e `plaintext.fill(0)` zerava um buffer pertencente à camada de arquivos —
+mutação de buffer emprestado, removida com justificativa no código.
+
+Validação automática:
+1134 testes do mobile aprovados (65 arquivos), typecheck aprovado; 172 do
+backend; 105 de Firestore Rules e 33 de Storage Rules. Os testes criptográficos
+usam um duplo do expo-crypto respaldado pelo AES-256-GCM real do Node, de modo
+que adulteração e chave errada são falhas genuínas de cifra, não de mock.
+
+Pendência:
+O módulo nativo do expo-crypto não pôde ser exercitado em dispositivo — isso
+exige development build, especialmente dado o histórico Android citado. Nenhuma
+foto é enviada à nuvem nesta fase. Limitação registrada e não mascarada: quando
+o seletor de imagens existir, a foto original permanece na galeria do aparelho,
+intacta e não criptografada. Nenhum arquivo de RevenueCat foi tocado e nenhum
+deploy foi executado.
+
+Assinatura:
+Codex — 2026-08-12 — Fase 8 de criptografia AES-256-GCM das fotos.
+
+---
+
+Data: 2026-08-12
+Responsável: Codex — Agente Frontend + Segurança + QA
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Implementada a Fase 9 do Photo Vault: pipeline Firebase Storage + Firestore para
+os arquivos já criptografados. Criado `src/services/progressPhotos.ts` com
+upload, listagem, download e delete. A nuvem recebe apenas ciphertext: a foto é
+cifrada localmente antes de qualquer persistência, e a decifragem só acontece
+após o download, no dispositivo.
+
+O upload segue a ordem cifrar → Storage → Firestore, para que o documento nunca
+descreva um objeto que não chegou a existir. Isso inverte o risco para um objeto
+órfão, tratado por rollback: se o Firestore falha, o objeto é deletado
+imediatamente (`vaultMetadataCreateFailed`); se o próprio rollback falha, o erro
+é `vaultUploadRollbackFailed`, distinto de propósito porque nesse caso resta um
+órfão para limpeza futura. Nunca se reporta sucesso parcial, nunca se cria um
+segundo photoId e nunca se pede nova Vault Key.
+
+O delete inverte a ordem — Storage primeiro, Firestore depois — porque metadata
+apontando para arquivo inexistente quebra toda listagem, enquanto um objeto órfão
+é invisível e reclamável. Objeto já inexistente não interrompe a operação, o que
+torna o retry idempotente; falha no Firestore após o Storage vira
+`vaultPartialDelete`.
+
+Segurança:
+O uid vem sempre de `auth.currentUser` dentro da camada; nenhuma função pública
+aceita uid ou path — as assinaturas recebem no máximo um photoId, e o path do
+Storage é sempre derivado de uid + photoId. `getDownloadURL` não é chamado em
+lugar nenhum (travado por teste): a referência é o storagePath e o download usa
+`getBytes`, que respeita as Storage Rules, ao contrário de uma URL com token
+permanente.
+
+Antes de qualquer chave ser usada, o arquivo baixado é conferido contra o
+documento que diz descrevê-lo — tamanho, IV e versão precisam bater, via
+`describeEnvelope`, que lê o enquadramento sem decifrar. O `vaultKeyVersion` é
+honrado e não ignorado: versão que o dispositivo não pode suprir falha fechado.
+O `encryptedSize` é medido dos bytes efetivamente enviados, nunca vindo da UI.
+
+O limite de 10 MB é aplicado três vezes: antes do upload (evitando gastar rede
+com algo que as Rules rejeitariam), no teto do `getBytes`, e na validação da
+metadata.
+
+Validação automática:
+1191 testes do mobile aprovados (66 arquivos), typecheck aprovado; 172 do
+backend; 105 de Firestore Rules e 33 de Storage Rules. As Rules não precisaram
+de alteração — a implementação encaixou no contrato da Fase 4 sem divergência.
+
+Pendência:
+Nenhum deploy foi executado, então o pipeline ainda não foi exercitado contra o
+ambiente real: as Rules da Fase 4 e as Functions da Fase 6 seguem não publicadas.
+Não há sync offline nesta V1 — upload e primeiro download exigem rede. Nenhuma
+UI foi criada e nenhum arquivo de RevenueCat foi tocado.
+
+Assinatura:
+Codex — 2026-08-12 — Fase 9 do pipeline Storage + Firestore.
+
+---
+
+Data: 2026-08-12
+Responsável: Codex — Agente Frontend + Segurança + QA
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Implementada a Fase 10 do Photo Vault: a trava do cofre. Instalado
+`expo-local-authentication ~56.0.5` via `npx expo install`, com plugin e
+`faceIDPermission` em pt-BR no `app.json` — preservando as alterações em
+andamento de outro desenvolvedor naquele arquivo. Criados
+`src/services/localAuthentication.ts` (capabilities e prompt do SO),
+`src/lib/photoVaultSession.ts` (sessão em memória por uid),
+`src/lib/photoVaultLock.ts` (máquina de estados sem React) e
+`src/state/PhotoVaultContext.tsx` (AppState e troca de conta).
+
+A hierarquia face → digital → credencial do aparelho foi traduzida por uma única
+escolha: `disableDeviceFallback: false`. No iOS isso usa
+`LAPolicyDeviceOwnerAuthentication` (Face ID ou Touch ID, com queda nativa para
+o passcode); no Android o módulo passa `BIOMETRIC_STRONG | DEVICE_CREDENTIAL`
+para o `setAllowedAuthenticators`, verificado no código nativo do pacote. O app
+não sequencia prompts nem desenha seletor próprio — quem decide é o SO.
+
+No Android usamos `biometricsSecurityLevel: 'strong'` em vez do default
+`'weak'`, que aceitaria face unlock 2D Classe 2, derrotável por uma fotografia.
+Em aparelho cuja única biometria é fraca, a biometria não é oferecida, mas a
+credencial do aparelho permanece disponível — ninguém entra com biometria fraca
+e ninguém fica sem acesso.
+
+Segurança:
+Estado inicial é sempre `locked`, nunca inferido de login, existência de Vault
+Key ou abertura do app, e nunca persistido — travado por teste. `authenticating`
+nunca é terminal. Chamadas concorrentes compartilham a tentativa em voo em vez
+de abrir um segundo prompt. Sair do foreground (incluindo `inactive`, que no iOS
+é o preview do app switcher) bloqueia na hora; voltar não desbloqueia nem abre
+prompt automático.
+
+O gate é real, não estético: `progressPhotos.ts` roteia todas as operações por
+`currentUnlockedUid()`, que obtém o uid e exige a sessão no mesmo ponto — como
+toda operação precisa do uid, é impossível adicionar uma que esqueça o gate.
+Upload, listagem, download, decrypt e delete exigem `unlocked`. A sessão guarda
+qual uid autenticou e revalida a cada operação; ao detectar divergência, é
+destruída na hora.
+
+`requireAuthentication: true` no SecureStore foi avaliado e NÃO ativado:
+dispararia prompt a cada leitura da chave e, em ambas as plataformas, alterar a
+biometria cadastrada invalidaria os itens, forçando reautenticação Firebase
+completa a cada novo dedo ou rosto cadastrado. Decisão documentada.
+
+Nenhum PIN, senha ou padrão próprio foi criado — a autenticação é inteiramente
+delegada ao sistema operacional.
+
+Validação automática:
+1294 testes do mobile aprovados (70 arquivos), typecheck aprovado; 172 do
+backend; 105 de Firestore Rules e 33 de Storage Rules. Ao aplicar o gate, 49
+testes da Fase 9 passaram a falhar por falta de sessão — confirmação de que o
+gate funciona; foram atualizados e ganharam um bloco dedicado provando que, com
+o cofre travado, a Vault Key não é tocada e nenhum plaintext é produzido.
+
+Pendência:
+`expo-local-authentication` é módulo nativo — Expo Go não reproduz Face ID,
+BiometricPrompt nem credencial do aparelho. É obrigatório gerar development
+build e executar a matriz de teste físico documentada em `docs/20` §24, que
+inclui um cenário crítico: `BIOMETRIC_STRONG | DEVICE_CREDENTIAL` não é
+suportado no Android 9–10 (API 28–29) pelo androidx.biometric, e o minSdk do
+projeto é 24. Nenhum deploy Firebase foi executado e nenhum arquivo de
+RevenueCat foi tocado.
+
+Assinatura:
+Codex — 2026-08-12 — Fase 10 de autenticação local e trava do Photo Vault.
+
+---
+
+Data: 2026-08-12
+Responsável: Codex — Agente Frontend + Segurança + QA
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Implementada a Fase 11 do Photo Vault: a UI completa da área de fotos privadas.
+O placeholder de `ProgressScreen.tsx` foi trocado por `ProgressPhotosScreen`,
+sem reescrever o resto da tela. Criados os componentes em
+`src/components/photoVault/` (estado bloqueado, estado vazio, grid, viewer,
+bottom sheet), o controlador `src/lib/photoVaultGallery.ts` e o service
+`src/services/photoVaultPicker.ts`.
+
+A lógica da galeria vive num módulo puro, não em Context, pelo mesmo motivo da
+Fase 10: o projeto não tem renderizador de componentes, então lógica dentro de
+React seria intestável. A UI ficou uma casca fina.
+
+Entrar em Fotos não dispara prompt automático — o usuário vê o estado bloqueado e
+toca em "Desbloquear". Enquanto travado, nada do conteúdo é renderizado: sem
+fotos, contagem, datas ou preview. A cópia nunca nomeia "Face ID", porque o mesmo
+build roda em aparelhos que pedirão digital ou PIN.
+
+A lista carrega só metadata; cada célula pede sua imagem ao montar, com limite de
+3 downloads simultâneos. Usa o Image do React Native, não expo-image, porque o
+cache de disco deste copiaria fotos descriptografadas para fora do controle do
+vault. Fotos são normalizadas para 1600px/JPEG 0.85 antes de cifrar — suficiente
+para acompanhamento corporal e bem abaixo do teto de 10 MB. A extensão não é
+confiada: o arquivo é reencodado ou rejeitado.
+
+Segurança:
+O controlador assina o estado da trava, então ao fechar o cofre os arquivos
+temporários são apagados e todas as URIs zeradas no mesmo update — nada continua
+renderizado. Um download em voo que resolve depois do lock tem seu arquivo
+descartado em vez de pintado na tela; essa corrida está fechada e testada.
+Permissões de câmera e galeria só são pedidas depois que o usuário escolhe
+aquela fonte. A foto original nunca é apagada nem modificada, e a foto tirada
+pela câmera não é salva na galeria do aparelho. `vaultPartialDelete` não finge
+sucesso: mostra erro e refaz a listagem.
+
+Validação automática:
+1389 testes do mobile aprovados (73 arquivos), typecheck aprovado; 550 testes de
+i18n com paridade nos três idiomas e `i18n:audit` sem bloqueios. Testes
+estruturais impedem que a UI importe Firebase, use expo-image/cache de disco,
+persista URI de plaintext ou exponha detalhes de criptografia. Removidas as
+chaves `progress.photos.week` e `progress.photos.hint`, órfãs após a remoção do
+placeholder, com o teste de consistência atualizado.
+
+Pendência:
+Nada foi validado em dispositivo físico — nem esta fase, nem o expo-crypto
+nativo da Fase 8, nem a biometria da Fase 10. O roteiro ponta a ponta está em
+`docs/20` §25 e inclui o cenário crítico do Android 9–10. Nenhum deploy foi
+executado e nenhum arquivo de RevenueCat foi tocado.
+
+Assinatura:
+Codex — 2026-08-12 — Fase 11 da UI do Photo Vault.
 
 ---

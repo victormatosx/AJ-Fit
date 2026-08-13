@@ -10,11 +10,15 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.ajfit.app",
+      "appleTeamId": "TGYZB49RLA",
       "buildNumber": "1",
       "usesAppleSignIn": true,
       "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
+      },
+      "entitlements": {
+        "com.apple.developer.devicecheck.appattest-environment": "production"
       }
     },
     "android": {
@@ -47,10 +51,16 @@
       "expo-apple-authentication",
       "expo-secure-store",
       [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "O AJ Fit usa o Face ID para proteger o acesso às suas fotos privadas."
+        }
+      ],
+      [
         "expo-image-picker",
         {
-          "photosPermission": "O AJ Fit acessa suas fotos para você escolher imagens de perfil ou anexos de suporte.",
-          "cameraPermission": "O AJ Fit acessa sua câmera para você tirar fotos de perfil ou anexos de suporte.",
+          "photosPermission": "O AJ Fit acessa suas fotos para você escolher imagens de perfil, suporte ou do seu cofre privado.",
+          "cameraPermission": "O AJ Fit acessa sua câmera para você tirar fotos de perfil, suporte ou do seu cofre privado.",
           "microphonePermission": false
         }
       ],

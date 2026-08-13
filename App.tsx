@@ -16,6 +16,7 @@ import {
 
 import { AppStateProvider, useAppState } from './src/state/AppState';
 import { AuthProvider, useAuth } from './src/state/AuthContext';
+import { PhotoVaultProvider } from './src/state/PhotoVaultContext';
 import { addQuestionnaire } from './src/services/userProfile';
 import { logAuthError } from './src/services/auth';
 import { SplashScreen } from './src/screens/SplashScreen';
@@ -33,6 +34,8 @@ import { initI18n } from './src/i18n';
 import { reconcileLanguageOnLoad } from './src/i18n/syncLanguage';
 import { reconcileUnitsOnLoad } from './src/units/syncUnits';
 import { UnitsProvider } from './src/state/UnitsContext';
+import { cleanupPhotoVaultTempFiles } from './src/services/photoVaultFileCrypto';
+import { logPhotoVaultIssue } from './src/lib/photoVaultErrors';
 
 type ScreenId =
   | 'splash'
@@ -258,6 +261,20 @@ export default function App() {
   // system locale + English fallback inside initI18n).
   const [i18nReady, setI18nReady] = useState(false);
   useEffect(() => {
+    // A crash/force-kill bypasses every normal unmount/lock cleanup. Sweep
+    // the controlled plaintext directory on the next startup before any
+    // private screen can be unlocked. Failure is observable but never blocks
+    // the public app bootstrap.
+    try {
+      // A cold process has no resumable local upload queue. Both plaintext
+      // and abandoned ciphertext staging files are therefore safe to remove.
+      cleanupPhotoVaultTempFiles({ includeEncrypted: true });
+    } catch {
+      logPhotoVaultIssue('startupCleanup', 'vaultTempCleanupFailed');
+    }
+  }, []);
+
+  useEffect(() => {
     initI18n().finally(() => setI18nReady(true));
   }, []);
 
@@ -270,8 +287,13 @@ export default function App() {
       <AuthProvider>
         <UnitsProvider>
           <AppStateProvider>
-            <StatusBar style="light" />
-            <RootNavigator />
+            {/* Inside AuthProvider so it can re-lock on logout and account
+                switches; wraps the navigator so its AppState listener is
+                mounted for the whole session. */}
+            <PhotoVaultProvider>
+              <StatusBar style="light" />
+              <RootNavigator />
+            </PhotoVaultProvider>
           </AppStateProvider>
         </UnitsProvider>
       </AuthProvider>

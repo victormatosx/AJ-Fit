@@ -1,14 +1,22 @@
 import { backendHealth } from './health/backendHealth';
+import { createVault } from './photoVault/createVault';
+import { recoverVaultKey } from './photoVault/recoverVaultKey';
+import { cleanupPhotoVaultOrphans } from './photoVault/cleanupOrphans';
 
 /**
  * AJ Fit Cloud Functions entry point.
  *
  * Every exported Cloud Function is wired here; the implementation itself
- * lives in its own module. This is Phase 3 of the Photo Vault backend
- * (docs/20_backend_functions_photo_vault.md): infrastructure foundation
- * only. Vault key creation/recovery and any Cloud KMS usage are NOT part
- * of this phase — they will be added as their own modules (e.g.
- * `src/photoVault/...`) in a later phase, without needing to reorganize
- * this file.
+ * lives in its own module.
+ *
+ * Only authenticated, policy-enforcing callables are exported. The KMS
+ * wrap/unwrap layer stays internal — it is never given an endpoint of its
+ * own, so nothing can ask the backend to encrypt or decrypt arbitrary bytes.
+ *
+ * NOTE: this codebase does not contain the billing/RevenueCat functions,
+ * which are being developed in parallel on another branch. Deploy Photo
+ * Vault functions BY NAME (`--only functions:createVault,...`), never with a
+ * bare `--only functions`, which would try to remove functions that are live
+ * in production but absent here.
  */
-export { backendHealth };
+export { backendHealth, cleanupPhotoVaultOrphans, createVault, recoverVaultKey };

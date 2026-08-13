@@ -31,7 +31,15 @@
     "title": "Consistency · week",
     "progressLabel": "{{done}}/{{total}}",
     "restLabel": "Off",
-    "dayInitials": ["S", "M", "T", "W", "T", "F", "S"]
+    "dayInitials": [
+      "S",
+      "M",
+      "T",
+      "W",
+      "T",
+      "F",
+      "S"
+    ]
   },
   "progress": {
     "header": {
@@ -67,8 +75,73 @@
       "gain": "+{{value}} {{unit}}"
     },
     "photos": {
-      "week": "Wk {{week}}",
-      "hint": "Drag your progress photos to the frames"
+      "locked": {
+        "title": "Your photos are protected",
+        "description": "Use your device authentication to access your private photos.",
+        "cta": "Unlock",
+        "unlocking": "Unlocking…"
+      },
+      "notConfigured": {
+        "title": "Protection not set up",
+        "description": "Set up biometrics or a screen lock on your device to access your private photos.",
+        "openSettings": "Open settings"
+      },
+      "authError": {
+        "cancelled": "Authentication cancelled.",
+        "failed": "Could not authenticate. Please try again.",
+        "lockedOut": "Too many attempts. Use your device screen lock or try again later.",
+        "unavailable": "Authentication is not available on this device."
+      },
+      "empty": {
+        "title": "You haven't added any photos yet",
+        "description": "Track your progress to see changes over time.",
+        "cta": "Add photo"
+      },
+      "list": {
+        "loading": "Loading your photos…",
+        "error": "Could not load your photos.",
+        "retry": "Try again",
+        "offlinePhoto": "Connect to the internet to load this photo.",
+        "add": "Add photo"
+      },
+      "add": {
+        "title": "Add photo",
+        "camera": "Take photo",
+        "library": "Choose from library",
+        "cancel": "Cancel",
+        "uploading": "Uploading your photo…"
+      },
+      "permission": {
+        "cameraDenied": "Allow camera access in settings to take a photo.",
+        "libraryDenied": "Allow photo access in settings to choose an image."
+      },
+      "uploadError": {
+        "tooLarge": "This photo is too large. Try another image.",
+        "unsupported": "Unsupported image format.",
+        "network": "Connection failed. Check your internet and try again.",
+        "generic": "Could not upload your photo. Please try again."
+      },
+      "viewer": {
+        "close": "Close",
+        "delete": "Delete photo"
+      },
+      "delete": {
+        "title": "Delete this photo?",
+        "description": "This action cannot be undone.",
+        "cancel": "Cancel",
+        "confirm": "Delete",
+        "error": "Could not delete the photo. Please try again."
+      },
+      "a11y": {
+        "unlock": "Unlock private photos",
+        "photo": "Photo from {{date}}",
+        "openPhoto": "Open photo from {{date}} in full screen",
+        "addPhoto": "Add new photo",
+        "takePhoto": "Take a photo with the camera",
+        "chooseLibrary": "Choose a photo from the library",
+        "closeViewer": "Close viewer",
+        "deletePhoto": "Delete this photo"
+      }
     },
     "units": {
       "kg": "kg"
@@ -114,9 +187,24 @@
     "title": "Upcoming workouts",
     "meta": "{{duration}} min · {{exercises}} exercises",
     "items": {
-      "pull": { "day": "Wed", "name": "PULL — Back & Biceps", "duration": 54, "exercises": 7 },
-      "legs": { "day": "Fri", "name": "LEGS — Quads & Glutes", "duration": 62, "exercises": 9 },
-      "upper": { "day": "Sat", "name": "UPPER — Light push", "duration": 45, "exercises": 6 }
+      "pull": {
+        "day": "Wed",
+        "name": "PULL — Back & Biceps",
+        "duration": 54,
+        "exercises": 7
+      },
+      "legs": {
+        "day": "Fri",
+        "name": "LEGS — Quads & Glutes",
+        "duration": 62,
+        "exercises": 9
+      },
+      "upper": {
+        "day": "Sat",
+        "name": "UPPER — Light push",
+        "duration": 45,
+        "exercises": 6
+      }
     }
   },
   "mock": {

@@ -18,6 +18,10 @@ vi.mock('../../lib/secureAuthStorage', () => ({
   clearSecureAuthSession: vi.fn(),
 }));
 
+vi.mock('../../lib/photoVaultKeyStorage', () => ({
+  deleteVaultKey: vi.fn(),
+}));
+
 import { signInWithEmail } from '../auth';
 
 describe('email/password sign-in MFA boundary', () => {
