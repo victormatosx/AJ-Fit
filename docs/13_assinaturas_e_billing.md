@@ -2470,3 +2470,63 @@ executado; o RevenueCat Dashboard não foi inspecionado ou alterado nesta fase;
 e o CLI alertou que Node.js 20 não aceitará novos deploys após 2026-10-30 e que
 `firebase-functions` está defasado. Essas correções pertencem a tarefas
 separadas e não foram misturadas ao deploy promocional.
+
+---
+
+# 46. Migração Promo SKU + Introductory Offer — FASE 11B (catálogo remoto)
+
+A Fase 11B configurou o único dado comercial que bloqueava a validação
+backend-only. A API oficial do RevenueCat, consultada para o app iOS,
+confirmou que a Offering `promo_7d` existe e contém exatamente:
+
+```txt
+$rc_monthly → ajfit_premium_monthly_promo
+$rc_annual  → ajfit_premium_annual_promo
+```
+
+Não houve mutação no RevenueCat. O App Store Connect, Subscription Group e a
+Introductory Offer não foram verificados diretamente porque não havia acesso
+seguro não interativo disponível. Nenhum dado Apple foi criado por suposição;
+a autoridade final sobre elegibilidade introdutória continua sendo a resposta
+StoreKit/RevenueCat em runtime, com a política fail-closed da Fase 5.
+
+O canal administrativo oficial identificado foi `adminUpdatePromoCode`. Como
+essa callable não estava disponível remotamente e não existe UI de cupons no
+painel administrativo local, todos os gates foram executados antes de um
+deploy seletivo apenas dessa Function. A atualização de `ARNALDO` ocorreu pela
+API allowlisted completa, preservando Android e os campos históricos:
+
+```txt
+iosPromotion = {
+  offeringIdentifier: "promo_7d",
+  monthlyProductId: "ajfit_premium_monthly_promo",
+  annualProductId: "ajfit_premium_annual_promo"
+}
+```
+
+O read-back remoto confirmou a configuração exata, sem escrita manual no
+Firestore. O smoke backend autenticado comprovou:
+
+```txt
+validatePromoCode(IOS)
+→ iosPromotion exata + snapshot sem Apple Offer Code
+→ authorizePromoPurchase(monthly)
+→ purchase_pending, TTL 600 s
+→ retry idempotente, expiresAt inalterado
+```
+
+`lockedAt`, `trialStartedAt` e `convertedAt` permaneceram nulos/ausentes. Nem
+o cupom, nem `iosPromotion`, nem a intent concederam Premium. Não houve
+StoreKit, compra, webhook artificial ou cliente distribuído. A identidade e
+os documentos QA descartáveis foram removidos.
+
+Android foi validado separadamente: `storeConfig.android` continuou contendo
+os pares mensal/anual originais, a resposta Android não recebeu
+`iosPromotion`, e o app permanece baseado em `SubscriptionOption` +
+`purchaseSubscriptionOption`. O webhook permaneceu `ACTIVE` com o HMAC já
+vinculado e não recebeu novo deploy. A única autoridade client-side de Premium
+continua `CustomerInfo.entitlements.active["premium"]`.
+
+A etapa seguinte é exclusivamente o E2E iOS Sandbox real, que validará App,
+RevenueCat SDK, StoreKit, Apple ID Sandbox, Intro Eligibility,
+`purchasePackage`, CustomerInfo e webhook real no mesmo circuito.

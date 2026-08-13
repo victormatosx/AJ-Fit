@@ -528,3 +528,66 @@ Para liberar a Fase 12, é necessário cadastrar `iosPromotion` no catálogo por
 um canal administrativo explicitamente autorizado, repetir todos os gates na
 ordem correta caso um novo deploy seja necessário e validar o purchase intent
 backend-only antes do primeiro E2E iOS Sandbox real.
+
+---
+
+# 28. Liberação backend-only do catálogo iOS — Fase 11B
+
+A Fase 11B removeu o bloqueio encontrado na Fase 11 sem executar StoreKit,
+compra Sandbox ou webhook artificial. O catálogo do RevenueCat foi consultado
+pela API oficial, no contexto do app iOS, e confirmou sem ambiguidade:
+
+| Offering/package | Product ID remoto |
+|---|---|
+| `promo_7d` / `$rc_monthly` | `ajfit_premium_monthly_promo` |
+| `promo_7d` / `$rc_annual` | `ajfit_premium_annual_promo` |
+
+O App Store Connect e a oferta introdutória de sete dias não puderam ser
+inspecionados diretamente porque não havia sessão ou credencial segura não
+interativa disponível. Essa limitação permanece para o E2E da Fase 12; nenhum
+valor foi inferido ou criado no App Store Connect.
+
+Após todos os gates pré-deploy, somente `adminUpdatePromoCode` foi publicada.
+A callable administrativa oficial aplicou a configuração completa em
+`promoCodes/ARNALDO`, preservando os pares Android, status, campanha,
+influenciador, metadados de criação e campos históricos tolerados:
+
+```txt
+iosPromotion.offeringIdentifier = promo_7d
+iosPromotion.monthlyProductId = ajfit_premium_monthly_promo
+iosPromotion.annualProductId = ajfit_premium_annual_promo
+```
+
+Não houve escrita manual do documento. O read-back confirmou os três valores
+e a preservação de Android. Uma identidade QA descartável executou a cadeia
+remota real de backend:
+
+```txt
+validatePromoCode(platform=IOS)
+→ redemption com snapshot iosPromotion e sem appleOffer/appleOfferCorrelation
+→ authorizePromoPurchase(plan=monthly)
+→ purchase_pending por 600 segundos
+→ um retry idempotente sem renovar createdAt, updatedAt ou expiresAt
+```
+
+Um smoke `platform=ANDROID` confirmou os mesmos pares mensais/anuais já
+configurados e `iosPromotion: null` na resposta Android. A intent não criou
+`lockedAt`, `trialStartedAt` ou `convertedAt`, não concedeu Premium e não
+acionou StoreKit. A conta Auth e os documentos QA foram removidos e sua
+ausência foi confirmada. O webhook permaneceu `ACTIVE`, com HMAC vinculado,
+sem novo deploy e sem `INITIAL_PURCHASE` artificial.
+
+| Gate final | Resultado |
+|---|---|
+| App typecheck | PASS |
+| App tests | 59 arquivos / 1.038 testes PASS |
+| Functions typecheck/build | PASS |
+| Functions tests | 22 arquivos / 474 testes PASS |
+| Firestore Rules (Java 21) | 3 arquivos / 63 testes PASS |
+| i18n check | 22 arquivos / 544 testes PASS |
+| i18n audit | 839 chaves; 14 suspeitas conhecidas; 0 bloqueios |
+| `git diff --check` | PASS |
+
+Este resultado libera somente a entrada na Fase 12. A validação ainda pendente
+é o circuito real App + RevenueCat SDK + StoreKit Sandbox + Apple ID Sandbox +
+Intro Eligibility + compra + CustomerInfo + webhook real.

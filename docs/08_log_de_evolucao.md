@@ -2219,3 +2219,55 @@ Assinatura:
 Codex — Agente Backend + QA; 2026-08-13; prompt AJ FIT FASE 11.
 
 ---
+
+Data: 2026-08-13
+Responsável: Codex — Agente Backend + QA
+Categoria: [OPERAÇÃO CONTROLADA]
+
+Descrição:
+Executada a Fase 11B para resolver o bloqueio remoto registrado na Fase 11.
+O mecanismo oficial encontrado foi a callable administrativa
+`adminUpdatePromoCode`; não existe UI correspondente no painel administrativo
+local e a Function ainda não estava publicada. O catálogo RevenueCat do app
+iOS foi consultado pela API oficial e confirmou `promo_7d` com os packages
+mensal/anual apontando, respectivamente, para
+`ajfit_premium_monthly_promo` e `ajfit_premium_annual_promo`, sem ambiguidade.
+O App Store Connect não pôde ser auditado diretamente por ausência de acesso
+seguro não interativo; nenhuma configuração Apple foi criada ou alterada.
+
+Operação:
+Todos os gates obrigatórios passaram antes de qualquer deploy. Foi então
+publicada exclusivamente `adminUpdatePromoCode` no projeto `ajfit-2f321`.
+Por essa API allowlisted, e não por escrita manual, `ARNALDO.iosPromotion` foi
+configurado com a Offering e os dois Product IDs confirmados. O read-back
+preservou configuração Android, estado comercial, metadados de criação e
+campos Apple históricos tolerados. Nenhuma outra Function, Rule, índice,
+cliente, Remote Config, RevenueCat, App Store Connect ou Google Play recebeu
+mutação.
+
+Validação remota:
+Uma identidade QA descartável confirmou `validatePromoCode` no iOS, o snapshot
+de `iosPromotion` sem `appleOffer`/`appleOfferCorrelation` e
+`authorizePromoPurchase({ plan: "monthly" })` com Product ID correto, Offering
+correta, estado `purchase_pending` e TTL de 600 segundos. Um único retry
+reutilizou a intent sem renovar nenhum timestamp. Nenhum marcador de consumo
+ou campo de Premium foi criado. O smoke Android continuou retornando seus
+pares mensal/anual corretos e sem interferência de `iosPromotion`. StoreKit,
+compra e webhook artificial não foram executados. A conta Auth e os documentos
+QA foram removidos e confirmados como ausentes.
+
+Impacto:
+O backend agora alcança, remotamente, a fronteira prevista para esta fase:
+`validatePromoCode → iosPromotion → authorizePromoPurchase → purchase_pending`.
+O webhook continua `ACTIVE`, com HMAC preservado, e não foi redeployado.
+CustomerInfo continua sendo a única autoridade client-side de Premium.
+
+Próxima ação:
+Executar a Fase 12 / E2E iOS Sandbox real. Antes da compra, validar no circuito
+real do app o catálogo StoreKit e a Intro Eligibility; a configuração direta
+do App Store Connect permanece não verificada nesta fase.
+
+Assinatura:
+Codex — Agente Backend + QA; 2026-08-13; prompt AJ FIT FASE 11B.
+
+---
