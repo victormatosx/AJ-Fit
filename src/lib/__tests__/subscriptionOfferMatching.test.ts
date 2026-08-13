@@ -506,6 +506,74 @@ describe('resolveApplePurchaseRoute', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Real Apple Custom Offer Codes (ARNALDO/ARNALDOANUAL) — the codes actually
+// registered in App Store Connect and `promoCodes/ARNALDO` for this
+// influencer campaign. `resolveApplePurchaseRoute`/`resolveAuthorizedAppleOfferCode`
+// are pure/generic (proven above with AJFIT7DTRIAL* fixtures) — these tests
+// close the loop with the literal, real strings, and prove the client-side
+// Apple Offer Code Sandbox bypass (`lib/appleOfferCodeSandboxTest.ts`, FASE
+// iOS-4) has been fully removed now that both plans have real Custom Codes:
+// there is no `'sandbox_offer_redemption'` route kind anywhere in
+// `ApplePurchaseRoute` anymore, so the monthly plan can never resolve to it.
+// ---------------------------------------------------------------------------
+
+const REAL_APPLE_OFFER_CODES: AuthorizedAppleOfferCodes = {
+  offerCodeMonthly: 'ARNALDO',
+  offerCodeAnnual: 'ARNALDOANUAL',
+};
+
+describe('Real ARNALDO/ARNALDOANUAL Apple Custom Offer Codes', () => {
+  it('1/5: iOS monthly + ARNALDO configured → offer_redemption with the exact code, never a sandbox route', () => {
+    const pkg = makePackage({ packageType: 'MONTHLY' as PACKAGE_TYPE, subscriptionOptions: [] });
+    const authorized = resolveAuthorizedAppleOfferCode(pkg, REAL_APPLE_OFFER_CODES);
+    expect(authorized).toBe('ARNALDO');
+
+    const route = resolveApplePurchaseRoute(pkg, true, authorized);
+    expect(route).toEqual({ kind: 'offer_redemption', offerCode: 'ARNALDO', package: pkg });
+    expect(route.kind).not.toBe('sandbox_offer_redemption' as never);
+  });
+
+  it('3/6: iOS annual + ARNALDOANUAL configured → offer_redemption with the exact code', () => {
+    const pkg = makePackage({ packageType: 'ANNUAL' as PACKAGE_TYPE, subscriptionOptions: [] });
+    const authorized = resolveAuthorizedAppleOfferCode(pkg, REAL_APPLE_OFFER_CODES);
+    expect(authorized).toBe('ARNALDOANUAL');
+
+    const route = resolveApplePurchaseRoute(pkg, true, authorized);
+    expect(route).toEqual({ kind: 'offer_redemption', offerCode: 'ARNALDOANUAL', package: pkg });
+  });
+
+  it('4: annual can open redemption purely from the client-authorized offer code — resolveApplePurchaseRoute has no concept of a backend correlation/offerReference at all', () => {
+    // `resolveApplePurchaseRoute` takes only the already-resolved offer
+    // CODE (what the user redeems), never an offerReference/correlation
+    // config — so the annual plan opening redemption never depends on
+    // `appleOfferReferenceAnnual` being configured on the backend.
+    const pkg = makePackage({ packageType: 'ANNUAL' as PACKAGE_TYPE, subscriptionOptions: [] });
+    const route = resolveApplePurchaseRoute(pkg, true, 'ARNALDOANUAL');
+    expect(route).toEqual({ kind: 'offer_redemption', offerCode: 'ARNALDOANUAL', package: pkg });
+  });
+
+  it('7: the monthly plan never receives ARNALDOANUAL', () => {
+    const pkg = makePackage({ packageType: 'MONTHLY' as PACKAGE_TYPE, subscriptionOptions: [] });
+    expect(resolveAuthorizedAppleOfferCode(pkg, REAL_APPLE_OFFER_CODES)).not.toBe('ARNALDOANUAL');
+  });
+
+  it('8: the annual plan never receives ARNALDO', () => {
+    const pkg = makePackage({ packageType: 'ANNUAL' as PACKAGE_TYPE, subscriptionOptions: [] });
+    expect(resolveAuthorizedAppleOfferCode(pkg, REAL_APPLE_OFFER_CODES)).not.toBe('ARNALDO');
+  });
+
+  it('9: absence of the Apple code for the selected plan fails closed to blocked, never a guess/fallback', () => {
+    const pkg = makePackage({ packageType: 'MONTHLY' as PACKAGE_TYPE, subscriptionOptions: [] });
+    const authorized = resolveAuthorizedAppleOfferCode(pkg, { offerCodeMonthly: null, offerCodeAnnual: 'ARNALDOANUAL' });
+    expect(authorized).toBeNull();
+    expect(resolveApplePurchaseRoute(pkg, true, authorized)).toEqual({
+      kind: 'blocked',
+      reason: 'promo_plan_unavailable',
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
 // FASE 4C.4E — regression suite pinned to the exact candidate shape captured
 // from a real Android device via [RC_OFFER_DEBUG_4C4D] (Fase 4C.4D smoke
 // test): `productId: "ajfit_premium"` (bare subId), `tags: ["rc-ignore-offer"]`,

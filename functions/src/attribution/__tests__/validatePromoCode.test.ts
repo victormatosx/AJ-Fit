@@ -439,6 +439,89 @@ describe('validatePromoCodeHandler', () => {
   });
 });
 
+// Real ARNALDO/ARNALDOANUAL configuration — mirrors the actual
+// `promoCodes/ARNALDO` document once the real Apple Custom Offer Codes were
+// registered: monthly has both the client-facing code AND a proven backend
+// correlation pair; annual has the client-facing code but NO backend
+// correlation pair yet (appleOfferReferenceAnnual still unproven).
+describe('validatePromoCodeHandler — real ARNALDO/ARNALDOANUAL configuration', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    catalogMocks.lookupPromoCode.mockReset();
+    syncMocks.applyPromoCodeAttributionTransactionally.mockReset();
+    syncMocks.applyPromoCodeAttributionTransactionally.mockResolvedValue({ status: 'applied' });
+  });
+
+  afterEach(() => vi.useRealTimers());
+
+  function realArnaldoPromoCode(): PromoCodeDocument {
+    return promoCode({
+      appleOfferCodeMonthly: 'ARNALDO',
+      appleOfferCodeAnnual: 'ARNALDOANUAL',
+      appleProductIdMonthly: 'ajfit_premium_monthly',
+      appleOfferReferenceMonthly: 'Influencer Trial 7D',
+      appleProductIdAnnual: 'ajfit_premium_annual',
+      appleOfferReferenceAnnual: null,
+    });
+  }
+
+  it('returns ARNALDO/ARNALDOANUAL as the iOS store config, monthly and annual never confused', async () => {
+    catalogMocks.lookupPromoCode.mockResolvedValue({ status: 'found', promoCode: realArnaldoPromoCode() });
+
+    const result = await validatePromoCodeHandler(request({ code: 'ARNALDO', platform: 'IOS' }));
+
+    expect(result.storeConfig.ios).toEqual({
+      offerCodeMonthly: 'ARNALDO',
+      offerCodeAnnual: 'ARNALDOANUAL',
+    });
+  });
+
+  it('snapshots a matched monthly correlation but a null annual correlation into the transaction — appleProductIdAnnual alone (no offerReference) never fabricates a pair', async () => {
+    catalogMocks.lookupPromoCode.mockResolvedValue({ status: 'found', promoCode: realArnaldoPromoCode() });
+
+    await validatePromoCodeHandler(request({ code: 'ARNALDO', platform: 'IOS' }));
+
+    expect(syncMocks.applyPromoCodeAttributionTransactionally).toHaveBeenCalledWith(
+      UID,
+      expect.objectContaining({
+        appleOfferCorrelation: {
+          monthly: { productId: 'ajfit_premium_monthly', offerReference: 'Influencer Trial 7D' },
+          annual: null,
+        },
+      }),
+    );
+  });
+
+  it('the annual client offer code is still returned even though the backend correlation for annual is absent — client redemption never depends on backend correlation', async () => {
+    catalogMocks.lookupPromoCode.mockResolvedValue({ status: 'found', promoCode: realArnaldoPromoCode() });
+
+    const result = await validatePromoCodeHandler(request({ code: 'ARNALDO', platform: 'IOS' }));
+
+    expect(result.storeConfig.ios?.offerCodeAnnual).toBe('ARNALDOANUAL');
+  });
+
+  it('ARNALDOANUAL (the client-facing annual code) never appears anywhere as an offerReference/correlation value', async () => {
+    catalogMocks.lookupPromoCode.mockResolvedValue({ status: 'found', promoCode: realArnaldoPromoCode() });
+
+    await validatePromoCodeHandler(request({ code: 'ARNALDO', platform: 'IOS' }));
+
+    const call = syncMocks.applyPromoCodeAttributionTransactionally.mock.calls[0][1];
+    expect(JSON.stringify(call.appleOfferCorrelation)).not.toContain('ARNALDOANUAL');
+  });
+
+  it('Android storeConfig stays byte-identical to before ARNALDO/ARNALDOANUAL were configured', async () => {
+    catalogMocks.lookupPromoCode.mockResolvedValue({ status: 'found', promoCode: realArnaldoPromoCode() });
+
+    const result = await validatePromoCodeHandler(request({ code: 'ARNALDO' }));
+
+    expect(result.storeConfig.android).toEqual({
+      monthly: { basePlanId: 'monthly', offerId: 'influencer-trial-7d' },
+      annual: { basePlanId: 'annual', offerId: 'influencer-trial-7d-annual' },
+    });
+  });
+});
+
 // FASE 4C.1 — nested android storeConfig contract, fail-closed pairing, platform isolation.
 describe('validatePromoCodeHandler — Fase 4C.1 android storeConfig', () => {
   beforeEach(() => {

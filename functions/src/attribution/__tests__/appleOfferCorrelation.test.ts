@@ -105,6 +105,21 @@ describe('correlateAppleOffer', () => {
     ).toEqual({ status: 'not_matched' });
   });
 
+  it('real ARNALDO snapshot (annual correlation still null): productId alone (ajfit_premium_annual) never confirms attribution', () => {
+    expect(
+      correlateAppleOffer('ajfit_premium_annual', 'Influencer Trial 7D', ARNALDO_APPLE_CORRELATION),
+    ).toEqual({ status: 'not_matched' });
+    expect(
+      correlateAppleOffer('ajfit_premium_annual', null, ARNALDO_APPLE_CORRELATION),
+    ).toEqual({ status: 'not_matched' });
+  });
+
+  it('real ARNALDO snapshot: the client-facing code ARNALDOANUAL is never a valid offerReference to compare against — even if a webhook somehow sent it as offer_code, it never matches', () => {
+    expect(
+      correlateAppleOffer('ajfit_premium_annual', 'ARNALDOANUAL', ARNALDO_APPLE_CORRELATION),
+    ).toEqual({ status: 'not_matched' });
+  });
+
   it('never returns matched for any input when the stored config is null, no matter how compelling the input looks', () => {
     const allInputs: Array<[string | null, string | null]> = [
       [null, null],
