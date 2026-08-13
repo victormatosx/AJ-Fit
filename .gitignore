@@ -43,3 +43,7 @@ firestore-debug.log
 /ios
 /android
 modules/**/build/
+
+# Gradle caches de modulos nativos locais (build artifacts)
+modules/*/android/.gradle/
+modules/*/android/build/
