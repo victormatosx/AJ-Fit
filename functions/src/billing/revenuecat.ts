@@ -189,6 +189,7 @@ export interface RawRevenueCatEvent {
   id?: unknown;
   type?: unknown;
   event_timestamp_ms?: unknown;
+  purchased_at_ms?: unknown;
   app_user_id?: unknown;
   original_app_user_id?: unknown;
   aliases?: unknown;
@@ -667,6 +668,13 @@ export function extractEventTimestampMs(event: RawRevenueCatEvent): number | nul
   return value;
 }
 
+/** RevenueCat's transaction purchase time; never replaced with webhook arrival time. */
+export function extractPurchaseTimestampMs(event: RawRevenueCatEvent): number | null {
+  const value = event.purchased_at_ms;
+  if (typeof value !== 'number' || !Number.isInteger(value) || value <= 0) return null;
+  return value;
+}
+
 /**
  * Maps event type + period type into one of the 5 official statuses
  * (docs §12). A commercial/business signal only — never used for access
@@ -946,6 +954,8 @@ async function confirmPromoCodeAttributionIfApplicable(
         ? await applyAttributionRevenueCatEvent(uid, {
             eventType: 'INITIAL_PURCHASE',
             eventTimestampMs,
+            eventId,
+            purchasedAtMs: extractPurchaseTimestampMs(event),
             periodType: extractPeriodType(event),
             store: extractStore(event),
             productId: extractProductId(event),

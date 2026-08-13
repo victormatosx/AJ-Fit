@@ -14,6 +14,7 @@ import {
 import { doc, setDoc } from 'firebase/firestore';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '../functions/src/lib/firebaseAdmin';
+import { applyAttributionRevenueCatEvent } from '../functions/src/attribution/attributionSync';
 import { authorizePromoPurchaseTransactionally } from '../functions/src/attribution/promoPurchaseIntent';
 
 const PROJECT_ID = 'ajfit-rules-test';
@@ -81,5 +82,45 @@ describe('promo purchase intent — Firestore emulator', () => {
       expectedProductId:
         authorized[0].status === 'authorized' ? authorized[0].intent.expectedProductId : undefined,
     });
+  });
+
+  it('atomically lets only one distinct RevenueCat event consume the intent', async () => {
+    const authorization = await authorizePromoPurchaseTransactionally(UID, 'monthly');
+    expect(authorization.status).toBe('authorized');
+    if (authorization.status !== 'authorized') return;
+
+    const purchasedAtMs = authorization.intent.createdAt.toMillis() + 1;
+    const input = {
+      eventType: 'INITIAL_PURCHASE' as const,
+      eventTimestampMs: purchasedAtMs + 1000,
+      purchasedAtMs,
+      periodType: 'TRIAL',
+      store: 'APP_STORE',
+      productId: 'ajfit_premium_monthly_promo',
+      offerCode: undefined,
+    };
+    const results = await Promise.all([
+      applyAttributionRevenueCatEvent(UID, { ...input, eventId: 'evt-concurrent-a' }),
+      applyAttributionRevenueCatEvent(UID, { ...input, eventId: 'evt-concurrent-b' }),
+    ]);
+
+    expect(results.filter((result) => result.status === 'confirmed')).toHaveLength(1);
+    expect(
+      results.filter(
+        (result) => result.status === 'skipped' && result.reason === 'already_consumed',
+      ),
+    ).toHaveLength(1);
+
+    const stored = (await db.doc(REDEMPTION_PATH).get()).data();
+    expect(stored).toMatchObject({
+      lockedAt: expect.anything(),
+      trialStartedAt: expect.anything(),
+      purchaseIntent: {
+        status: 'purchase_confirmed',
+        revenueCatEventId: expect.stringMatching(/^evt-concurrent-[ab]$/),
+      },
+    });
+    expect(stored).not.toHaveProperty('subscription');
+    expect(stored).not.toHaveProperty('premium');
   });
 });

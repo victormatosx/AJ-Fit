@@ -1898,3 +1898,30 @@ Na Fase 3, após aprovação humana, correlacionar o webhook real com a intent
 pré-existente e o `product_id` esperado, sem inferir campanha pelo SKU.
 
 ---
+
+Data: 2026-08-13
+Responsável: Codex — Agente Backend
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Implementada a Fase 3 da migração iOS Promo SKU + Introductory Offer. O
+webhook RevenueCat passa a correlacionar `APP_STORE` `INITIAL_PURCHASE` com a
+`purchaseIntent` pré-existente usando campanha, Offering, plano, Product ID e
+`purchased_at_ms` dentro da janela autorizada. O match e o consumo auditável
+(`purchase_confirmed`, `confirmedAt`, `revenueCatEventId`) ocorrem na mesma
+transação que confirma attribution. Retry exato é reconhecido e eventos
+distintos não reutilizam a intent.
+
+Impacto:
+`subscriptionSync.ts`, Gate Premium, cliente e Android permaneceram
+inalterados. Apple Offer Code legado continua disponível somente quando não há
+evidência aplicável do novo fluxo; conflito no fluxo novo nunca cai para o
+legado. Falha de correlação continua um resultado normal e não bloqueia o
+billing. O cliente ainda não chama `authorizePromoPurchase` nem compra os SKUs
+promocionais.
+
+Próxima ação:
+Após validação humana, integrar o cliente ao Offering `promo_7d`, à callable e
+à compra do SKU promocional na Fase 4.
+
+---

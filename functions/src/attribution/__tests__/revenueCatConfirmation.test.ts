@@ -68,6 +68,30 @@ const ARNALDO_APPLE_CORRELATION: PromoCodeAppleCorrelationSnapshot = {
   annual: null,
 };
 
+const IOS_PROMOTION = {
+  offeringIdentifier: 'promo_7d',
+  monthlyProductId: 'ajfit_premium_monthly_promo',
+  annualProductId: 'ajfit_premium_annual_promo',
+};
+
+function promoIntent(
+  plan: 'monthly' | 'annual' = 'monthly',
+  overrides: Record<string, unknown> = {},
+) {
+  return {
+    campaignId: 'campaign-arnaldo',
+    plan,
+    expectedProductId:
+      plan === 'monthly' ? IOS_PROMOTION.monthlyProductId : IOS_PROMOTION.annualProductId,
+    offeringIdentifier: IOS_PROMOTION.offeringIdentifier,
+    status: 'purchase_pending',
+    createdAt: Timestamp.fromMillis(T1 - 5 * 60 * 1000),
+    updatedAt: Timestamp.fromMillis(T1 - 5 * 60 * 1000),
+    expiresAt: Timestamp.fromMillis(T1 + 5 * 60 * 1000),
+    ...overrides,
+  };
+}
+
 function redemption(overrides: Record<string, unknown> = {}) {
   return {
     uid: UID,
@@ -94,6 +118,8 @@ function initialPurchaseInput(
   return {
     eventType: 'INITIAL_PURCHASE',
     eventTimestampMs: T1,
+    eventId: 'evt-attribution-initial-001',
+    purchasedAtMs: T1,
     periodType: 'NORMAL',
     store: 'PLAY_STORE',
     productId: 'ajfit_premium:monthly',
@@ -608,6 +634,131 @@ describe('applyAttributionRevenueCatEvent — INITIAL_PURCHASE', () => {
   });
 });
 
+describe('applyAttributionRevenueCatEvent — Apple purchase intent FASE 3', () => {
+  beforeEach(() => {
+    transactionMocks.get.mockReset();
+    transactionMocks.set.mockReset();
+    docMock.mockClear();
+    runTransactionMock.mockClear();
+  });
+
+  it.each([
+    ['monthly', IOS_PROMOTION.monthlyProductId],
+    ['annual', IOS_PROMOTION.annualProductId],
+  ] as const)('confirms and atomically consumes a matching %s intent', async (plan, productId) => {
+    mockRedemptionSnapshot(
+      true,
+      redemption({ iosPromotion: IOS_PROMOTION, purchaseIntent: promoIntent(plan) }),
+    );
+
+    const result = await applyAttributionRevenueCatEvent(
+      UID,
+      initialPurchaseInput({
+        eventId: `evt-promo-${plan}`,
+        eventTimestampMs: T1 + 20 * 60 * 1000,
+        purchasedAtMs: T1,
+        store: 'APP_STORE',
+        productId,
+        offerCode: undefined,
+        periodType: 'TRIAL',
+      }),
+    );
+
+    expect(result).toEqual({ status: 'confirmed' });
+    const payload = transactionMocks.set.mock.calls[0][1] as Record<string, unknown>;
+    expect(payload).toMatchObject({
+      lockedAt: Timestamp.fromMillis(T1 + 20 * 60 * 1000),
+      trialStartedAt: Timestamp.fromMillis(T1 + 20 * 60 * 1000),
+      purchaseIntent: {
+        status: 'purchase_confirmed',
+        revenueCatEventId: `evt-promo-${plan}`,
+        confirmedAt: Timestamp.fromMillis(T1 + 20 * 60 * 1000),
+      },
+    });
+    expect(payload).not.toHaveProperty('subscription');
+    expect(payload).not.toHaveProperty('premium');
+  });
+
+  it('known promo SKU without intent is a normal no-match and does not fall back to legacy', async () => {
+    mockRedemptionSnapshot(true, redemption({ iosPromotion: IOS_PROMOTION }));
+
+    const result = await applyAttributionRevenueCatEvent(
+      UID,
+      initialPurchaseInput({
+        store: 'APP_STORE',
+        productId: IOS_PROMOTION.monthlyProductId,
+        offerCode: 'Influencer Trial 7D',
+      }),
+    );
+
+    expect(result).toEqual({ status: 'skipped', reason: 'no_intent' });
+    expect(transactionMocks.set).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['product_mismatch', { productId: IOS_PROMOTION.annualProductId }],
+    ['campaign_mismatch', { purchaseIntent: promoIntent('monthly', { campaignId: 'other' }) }],
+    ['offering_mismatch', { purchaseIntent: promoIntent('monthly', { offeringIdentifier: 'other' }) }],
+    ['expired', { purchasedAtMs: T1 + 6 * 60 * 1000 }],
+    ['purchase_before_intent', { purchasedAtMs: T1 - 6 * 60 * 1000 }],
+    ['malformed', { purchasedAtMs: null }],
+  ] as const)('returns %s without writing attribution', async (reason, scenario) => {
+    const purchaseIntent = 'purchaseIntent' in scenario ? scenario.purchaseIntent : promoIntent();
+    mockRedemptionSnapshot(
+      true,
+      redemption({ iosPromotion: IOS_PROMOTION, purchaseIntent }),
+    );
+
+    const result = await applyAttributionRevenueCatEvent(
+      UID,
+      initialPurchaseInput({
+        store: 'APP_STORE',
+        productId: IOS_PROMOTION.monthlyProductId,
+        ...scenario,
+      }),
+    );
+
+    expect(result).toEqual({ status: 'skipped', reason });
+    expect(transactionMocks.set).not.toHaveBeenCalled();
+  });
+
+  it('recognizes an exact retry and rejects a different event against consumed evidence', async () => {
+    const confirmedIntent = {
+      ...promoIntent(),
+      status: 'purchase_confirmed',
+      confirmedAt: Timestamp.fromMillis(T1),
+      revenueCatEventId: 'evt-attribution-initial-001',
+    };
+    mockRedemptionSnapshot(
+      true,
+      redemption({
+        iosPromotion: IOS_PROMOTION,
+        purchaseIntent: confirmedIntent,
+        lockedAt: Timestamp.fromMillis(T1),
+        trialStartedAt: Timestamp.fromMillis(T1),
+      }),
+    );
+
+    await expect(
+      applyAttributionRevenueCatEvent(
+        UID,
+        initialPurchaseInput({ store: 'APP_STORE', productId: IOS_PROMOTION.monthlyProductId }),
+      ),
+    ).resolves.toEqual({ status: 'skipped', reason: 'already_processed' });
+    await expect(
+      applyAttributionRevenueCatEvent(
+        UID,
+        initialPurchaseInput({
+          eventId: 'evt-another-purchase',
+          store: 'APP_STORE',
+          productId: IOS_PROMOTION.monthlyProductId,
+        }),
+      ),
+    ).resolves.toEqual({ status: 'skipped', reason: 'already_consumed' });
+    expect(transactionMocks.set).not.toHaveBeenCalled();
+  });
+});
+
 describe('applyAttributionRevenueCatEvent — RENEWAL (inalterado pela Fase 4C.3A)', () => {
   beforeEach(() => {
     transactionMocks.get.mockReset();
@@ -647,6 +798,22 @@ describe('applyAttributionRevenueCatEvent — RENEWAL (inalterado pela Fase 4C.3
 
   it('N: RENEWAL with no Apple trial ever confirmed (trialStartedAt still null) → convertedAt is never created', async () => {
     mockRedemptionSnapshot(true, redemption()); // trialStartedAt: null (default)
+
+    const result = await applyAttributionRevenueCatEvent(UID, {
+      eventType: 'RENEWAL',
+      eventTimestampMs: T1,
+      isTrialConversion: true,
+    });
+
+    expect(result).toEqual({ status: 'skipped', reason: 'not_trial_started' });
+    expect(transactionMocks.set).not.toHaveBeenCalled();
+  });
+
+  it('FASE 3: RENEWAL never consumes an old purchase_pending intent', async () => {
+    mockRedemptionSnapshot(
+      true,
+      redemption({ iosPromotion: IOS_PROMOTION, purchaseIntent: promoIntent() }),
+    );
 
     const result = await applyAttributionRevenueCatEvent(UID, {
       eventType: 'RENEWAL',

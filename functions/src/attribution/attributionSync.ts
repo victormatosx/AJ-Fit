@@ -11,6 +11,10 @@ import {
   type AppleOfferCorrelationResult,
 } from './appleOfferCorrelation';
 import {
+  correlateApplePromoPurchaseIntent,
+  type ApplePromoPurchaseIntentCorrelationResult,
+} from './applePromoPurchaseIntentCorrelation';
+import {
   correlateGooglePlayOffer,
   parseGooglePlayProductId,
   type GooglePlayOfferCorrelationResult,
@@ -181,7 +185,9 @@ export async function applyPromoCodeAttributionTransactionally(
         const intent = parseStoredPromoPurchaseIntent(existing.purchaseIntent);
         // A malformed server-owned intent is never erased by a coupon swap.
         hasBlockingPurchaseIntent =
-          intent === null || isPromoPurchaseIntentActiveAt(intent, Timestamp.now());
+          intent === null ||
+          intent.status === 'purchase_confirmed' ||
+          isPromoPurchaseIntentActiveAt(intent, Timestamp.now());
       }
 
       const decision = decidePromoCodeAttributionOutcome(
@@ -397,13 +403,15 @@ export type AttributionConfirmationInput =
   | {
       eventType: 'INITIAL_PURCHASE';
       eventTimestampMs: number;
+      /** Stable webhook ID, used to distinguish an exact retry from reuse. */
+      eventId: string;
+      /** Raw RevenueCat `purchased_at_ms`; null when absent/invalid. */
+      purchasedAtMs: number | null;
       periodType: string | undefined;
       /**
-       * FASE 4C.3A. Raw `event.store` — correlation is only ever attempted
-       * for `'PLAY_STORE'`; any other value (iOS, or an unrecognized future
-       * store) fails closed with `skip_offer_not_matched`, since no
-       * Apple-side correlation is implemented yet (see this file's report,
-       * rule 19).
+       * Raw `event.store`: Google keeps its offer correlation; Apple routes
+       * deterministically between FASE 3 purchase-intent correlation and the
+       * legacy Offer Code correlation; unknown stores fail closed.
        */
       store: string | undefined;
       /** Raw `event.product_id` — parsed by `parseGooglePlayProductId` (`googlePlayOfferCorrelation.ts`). */
@@ -427,7 +435,18 @@ export type AttributionConfirmationSkipReason =
   | 'already_converted'
   | 'not_paid_renewal'
   /** FASE 4C.3A — the store/offer correlation required for INITIAL_PURCHASE did not prove this purchase used the authorized promotional offer. */
-  | 'offer_not_matched';
+  | 'offer_not_matched'
+  | 'no_intent'
+  | 'product_mismatch'
+  | 'campaign_mismatch'
+  | 'offering_mismatch'
+  | 'snapshot_product_mismatch'
+  | 'expired'
+  | 'purchase_before_intent'
+  | 'malformed'
+  | 'unsupported_event'
+  | 'already_processed'
+  | 'already_consumed';
 
 export type AttributionConfirmationResult =
   | { status: 'confirmed' }
@@ -521,6 +540,28 @@ function mapInitialPurchaseSkipReason(
   }
 }
 
+function mapApplePromoCorrelationSkipReason(
+  result: Exclude<
+    ApplePromoPurchaseIntentCorrelationResult,
+    { status: 'matched' } | { status: 'not_promotional' }
+  >,
+): AttributionConfirmationSkipReason {
+  switch (result.status) {
+    case 'no_intent':
+    case 'product_mismatch':
+    case 'campaign_mismatch':
+    case 'offering_mismatch':
+    case 'snapshot_product_mismatch':
+    case 'expired':
+    case 'purchase_before_intent':
+    case 'malformed':
+    case 'unsupported_event':
+    case 'already_processed':
+    case 'already_consumed':
+      return result.status;
+  }
+}
+
 /**
  * THE caminho oficial de escrita para confirmar uma atribuição de
  * promo-code a partir de um evento RevenueCat (Fase 4B, correlação
@@ -536,11 +577,11 @@ function mapInitialPurchaseSkipReason(
  * o catálogo `promoCodes` ao vivo, docs regra 4/6). Correlação só é
  * tentada quando `input.store === 'PLAY_STORE'`.
  *
- * FASE iOS-6: `input.store === 'APP_STORE'` agora passa pela mesma ideia,
- * via `appleOfferCorrelation.ts`'s `correlateAppleOffer` — `productId` +
- * `offerCode` do evento real contra `stored.appleOfferCorrelation` (nunca o
- * catálogo `promoCodes` ao vivo). Qualquer outra loja (um valor futuro
- * desconhecido) continua resultando em `not_matched` por construção.
+ * FASE 3: `APP_STORE` primeiro avalia a correlação por purchase intent. Uma
+ * intent presente, um SKU conhecido por `iosPromotion`, ou qualquer conflito
+ * desse fluxo nunca cai para o legado. Somente `not_promotional` (sem intent e
+ * sem SKU promocional conhecido) pode seguir para `appleOfferCorrelation.ts`.
+ * Qualquer outra loja futura continua `not_matched` por construção.
  *
  * `RENEWAL` permanece EXATAMENTE como na Fase 4B — sem checagem de
  * correlação — porque `offer_code` não é garantido presente num RENEWAL de
@@ -578,18 +619,14 @@ export async function applyAttributionRevenueCatEvent(
       if (input.eventType === 'INITIAL_PURCHASE') {
         const classification = classifyInitialPurchasePeriodType(input.periodType);
 
-        // FASE iOS-1 — explicit per-store dispatch (previously a binary
-        // "PLAY_STORE or nothing" check). PLAY_STORE behavior is byte-for-
-        // byte unchanged from Fase 4C.3A; APP_STORE gets its OWN typed
-        // path through `appleOfferCorrelation.ts`, never sharing the generic
-        // "unknown store" fallback. FASE iOS-6: that path now performs a
-        // real, deterministic match (productId + offer reference) instead
-        // of always returning `unsupported` — see `correlateAppleOffer`'s
-        // doc comment. Any other/future store value keeps the pre-existing
-        // fail-closed fallback.
+        // Explicit per-store dispatch. PLAY_STORE behavior remains on the
+        // existing Google offer proof. APP_STORE prioritizes the FASE 3
+        // purchase-intent proof and only routes `not_promotional` to the
+        // legacy Apple Offer Code proof. Unknown stores fail closed.
         const rawOfferCode = typeof input.offerCode === 'string' ? input.offerCode : null;
         let productIdentity: ReturnType<typeof parseGooglePlayProductId> = null;
         let offerCorrelation: OfferCorrelationInput;
+        let applePromoCorrelation: ApplePromoPurchaseIntentCorrelationResult | undefined;
 
         if (input.store === 'PLAY_STORE') {
           productIdentity = parseGooglePlayProductId(input.productId);
@@ -601,16 +638,45 @@ export async function applyAttributionRevenueCatEvent(
           );
           offerCorrelation = googleResult;
         } else if (input.store === 'APP_STORE') {
-          const appleOfferCorrelation = parseStoredAppleOfferCorrelationSnapshot(
-            stored.appleOfferCorrelation,
-          );
-          const appleProductId = typeof input.productId === 'string' ? input.productId : null;
-          const appleResult: AppleOfferCorrelationResult = correlateAppleOffer(
-            appleProductId,
-            rawOfferCode,
-            appleOfferCorrelation,
-          );
-          offerCorrelation = appleResult;
+          applePromoCorrelation = correlateApplePromoPurchaseIntent({
+            eventType: input.eventType,
+            eventId: input.eventId,
+            productId: input.productId,
+            purchasedAtMs: input.purchasedAtMs,
+            redemptionCampaignId: stored.campaignId,
+            iosPromotion: stored.iosPromotion,
+            hasPurchaseIntent: Object.prototype.hasOwnProperty.call(stored, 'purchaseIntent'),
+            purchaseIntent: stored.purchaseIntent,
+          });
+
+          if (applePromoCorrelation.status === 'not_promotional') {
+            const appleOfferCorrelation = parseStoredAppleOfferCorrelationSnapshot(
+              stored.appleOfferCorrelation,
+            );
+            const appleProductId = typeof input.productId === 'string' ? input.productId : null;
+            const appleResult: AppleOfferCorrelationResult = correlateAppleOffer(
+              appleProductId,
+              rawOfferCode,
+              appleOfferCorrelation,
+            );
+            offerCorrelation = appleResult;
+          } else if (applePromoCorrelation.status === 'matched') {
+            offerCorrelation = applePromoCorrelation;
+          } else {
+            const reason = mapApplePromoCorrelationSkipReason(applePromoCorrelation);
+            const logContext = {
+              uid,
+              correlationStatus: applePromoCorrelation.status,
+              hasProductId: typeof input.productId === 'string',
+              hasPurchaseTimestamp: input.purchasedAtMs !== null,
+            };
+            if (reason === 'already_processed') {
+              logInfo(CONFIRMATION_SCOPE, 'apple_promo_purchase_intent_correlation', logContext);
+            } else {
+              logWarn(CONFIRMATION_SCOPE, 'apple_promo_purchase_intent_correlation', logContext);
+            }
+            return { status: 'skipped', reason };
+          }
         } else {
           offerCorrelation = { status: 'not_matched' };
         }
@@ -638,7 +704,16 @@ export async function applyAttributionRevenueCatEvent(
         logInfo(CONFIRMATION_SCOPE, 'promo_attribution_offer_matched', {
           uid,
           plan: offerCorrelation.status === 'matched' ? offerCorrelation.plan : undefined,
+          correlationMethod:
+            applePromoCorrelation?.status === 'matched' ? 'apple_purchase_intent' : 'store_offer',
         });
+        if (applePromoCorrelation?.status === 'matched') {
+          logInfo(CONFIRMATION_SCOPE, 'apple_promo_purchase_intent_correlation', {
+            uid,
+            correlationStatus: 'matched',
+            plan: applePromoCorrelation.plan,
+          });
+        }
 
         const eventTimestamp = Timestamp.fromMillis(input.eventTimestampMs);
         const update: Record<string, unknown> = {
@@ -647,6 +722,15 @@ export async function applyAttributionRevenueCatEvent(
         };
         if (decision.setTrialStartedAt) update.trialStartedAt = eventTimestamp;
         if (decision.setConvertedAt) update.convertedAt = eventTimestamp;
+        if (applePromoCorrelation?.status === 'matched') {
+          update.purchaseIntent = {
+            ...applePromoCorrelation.intent,
+            status: 'purchase_confirmed',
+            updatedAt: eventTimestamp,
+            confirmedAt: eventTimestamp,
+            revenueCatEventId: input.eventId,
+          };
+        }
 
         transaction.set(redemptionRef, update, { merge: true });
         return { status: 'confirmed' };

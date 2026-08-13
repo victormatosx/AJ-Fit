@@ -1630,16 +1630,13 @@ ignorando iosPromotion completamente — o campo existe na resposta de
 validatePromoCode, mas nenhum consumidor cliente o lê ainda.
 
 Webhook promo SKU:
-AINDA NÃO IMPLEMENTADO. functions/src/billing/revenuecat.ts e
-attribution/appleOfferCorrelation.ts continuam usando exclusivamente a
-correlação por Apple Offer Code (offer_code/offerReference). Nenhuma
-correlação por productId de SKU promocional existe ainda — lockedAt/
-trialStartedAt/convertedAt de uma redemption com iosPromotion configurado
-só serão preenchíveis a partir de uma fase futura.
+IMPLEMENTADO NA FASE 3 — ver §37. APP_STORE INITIAL_PURCHASE usa a intent,
+product_id e purchased_at_ms; o caminho Apple Offer Code continua disponível
+somente quando o evento não pertence ao fluxo Promo SKU conhecido.
 
 Purchase intent:
-IMPLEMENTADO NA FASE 2 — ver §36. O cliente ainda não chama a operação e o
-webhook ainda não consome a intent.
+IMPLEMENTADO NA FASE 2 e consumido pelo webhook desde a FASE 3 (§37). O
+cliente ainda não chama a operação.
 ```
 
 ## O novo contrato: `IOSPromotionConfig`
@@ -1835,16 +1832,101 @@ vencedora permanece no documento.
 ```txt
 Fase 1: iosPromotion snapshot — implementada.
 Fase 2: purchaseIntent pré-compra — implementada no backend.
-Fase 3: webhook correlacionar product_id + intent — NÃO implementada.
+Fase 3: webhook correlacionar product_id + intent — implementada (§37).
 
 Cliente chama authorizePromoPurchase — NÃO.
 Paywall usa promo_7d — NÃO.
 StoreKit compra SKU _promo pela nova arquitetura — NÃO.
 Offer Code legado/presentCodeRedemptionSheet — preservado.
-Webhook usa purchaseIntent — NÃO.
+Webhook usa purchaseIntent — SIM, somente APP_STORE INITIAL_PURCHASE.
 ```
 
 Criar `purchase_pending` não altera `lockedAt`, `trialStartedAt` ou
 `convertedAt`, não escreve em `users/{uid}.subscription` e não concede
 Premium. A autoridade final continua exclusivamente
 `CustomerInfo.entitlements.active["premium"]`.
+
+---
+
+# 37. Migração Promo SKU + Introductory Offer — FASE 3 (correlação no webhook)
+
+A Fase 3 conecta a evidência pré-compra da Fase 2 ao consumidor de attribution
+do webhook. Não altera `subscriptionSync.ts`, o Gate Premium ou o cliente.
+
+## Roteamento Apple durante a migração
+
+Para `APP_STORE` + `INITIAL_PURCHASE`,
+`correlateApplePromoPurchaseIntent` (`functions/src/attribution/
+applePromoPurchaseIntentCorrelation.ts`) recebe somente o evento real e o
+snapshot lido dentro da transação de `applyAttributionRevenueCatEvent`:
+
+```txt
+purchaseIntent presente
+  → sempre fluxo novo; qualquer conflito falha sem fallback legado
+
+purchaseIntent ausente + product_id igual a um SKU de iosPromotion
+  → fluxo novo responde no_intent; sem fallback legado
+
+purchaseIntent ausente + produto não reconhecido por iosPromotion
+  → not_promotional; somente então Apple Offer Code legado pode correlacionar
+```
+
+Não existe heurística por sufixo `_promo`, hardcode de campanha nem consulta ao
+catálogo vivo. O Product ID prova somente o produto; a campanha vem da
+redemption e precisa coincidir com a intent.
+
+## Match e relógio
+
+Um match exige, em conjunto: intent `purchase_pending` estritamente válida;
+campanha igual à redemption; `iosPromotion` completo; Offering igual ao
+snapshot; Product ID interno igual ao produto do plano no snapshot; Product
+ID do webhook igual a `expectedProductId`; e compra dentro da janela.
+
+O relógio da compra é exclusivamente `event.purchased_at_ms`, definido pela
+RevenueCat como o momento da compra da transação, em milissegundos Unix. A
+janela é inclusiva e sem tolerância artificial:
+
+```txt
+purchaseIntent.createdAt <= purchased_at_ms <= purchaseIntent.expiresAt
+```
+
+`event_timestamp_ms` continua com sua função anterior (ordenação do billing e
+timestamps de confirmação), mas não substitui o horário da compra. Portanto um
+webhook recebido depois da expiração ainda casa se `purchased_at_ms` estiver na
+janela; compra posterior à expiração, anterior à intent ou timestamp ausente/
+inválido não confirma attribution. Todos são resultados normais fail-closed e
+não desfazem nem bloqueiam o billing já processado.
+
+## Consumo atômico e idempotência
+
+No match, a mesma transação que grava `lockedAt` e, conforme o `period_type`,
+`trialStartedAt` ou `convertedAt`, preserva a intent como:
+
+```ts
+{
+  ...purchaseIntent,
+  status: "purchase_confirmed",
+  updatedAt: Timestamp,       // event_timestamp_ms
+  confirmedAt: Timestamp,     // event_timestamp_ms
+  revenueCatEventId: string
+}
+```
+
+Retry com o mesmo ID resulta em `already_processed` e não escreve novamente.
+Outro evento contra a evidência consumida resulta em `already_consumed`. Uma
+`RENEWAL` nunca avalia nem consome a intent; ela preserva a semântica anterior
+de conversão somente quando `trialStartedAt` já prova a correlação inicial.
+Concorrência entre dois eventos distintos é serializada pela transação do
+mesmo documento e coberta no Firestore Emulator.
+
+## Limites após a Fase 3
+
+```txt
+Cliente chama authorizePromoPurchase — NÃO.
+Paywall usa promo_7d — NÃO.
+StoreKit compra SKU _promo pela nova arquitetura — NÃO.
+Apple Offer Code legado — preservado.
+Android/Google Play correlation — preservados.
+subscriptionSync.ts — inalterado.
+Premium — exclusivamente CustomerInfo entitlement premium.
+```

@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { Timestamp } from 'firebase-admin/firestore';
-import { extractEventTimestampMs, normalizeSubscription } from '../revenuecat';
+import {
+  extractEventTimestampMs,
+  extractPurchaseTimestampMs,
+  normalizeSubscription,
+} from '../revenuecat';
 import {
   billingIssueEvent,
   cancellationDuringTrialEvent,
@@ -192,4 +196,19 @@ describe('extractEventTimestampMs', () => {
   it('returns null for zero', () => {
     expect(extractEventTimestampMs({ ...renewalEvent, event_timestamp_ms: 0 })).toBeNull();
   });
+});
+
+describe('extractPurchaseTimestampMs', () => {
+  it('returns the RevenueCat transaction purchase time unchanged', () => {
+    expect(extractPurchaseTimestampMs(initialPurchaseEvent)).toBe(
+      initialPurchaseEvent.purchased_at_ms,
+    );
+  });
+
+  it.each([undefined, null, 0, -1, 123.45, '123'])(
+    'returns null for missing/invalid purchased_at_ms %s',
+    (purchased_at_ms) => {
+      expect(extractPurchaseTimestampMs({ ...initialPurchaseEvent, purchased_at_ms })).toBeNull();
+    },
+  );
 });

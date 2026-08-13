@@ -147,7 +147,7 @@ export interface IOSPromotionConfig {
  * `couponRedemptions/{uid}` record, so there can be only one active intent per
  * uid and campaign attribution remains colocated with its authorization.
  */
-export interface PromoPurchaseIntent {
+interface PromoPurchaseIntentBase {
   /** Derived from the redemption snapshot; never accepted from the client. */
   campaignId: string;
   /** The only business choice accepted from the authenticated client. */
@@ -156,11 +156,25 @@ export interface PromoPurchaseIntent {
   expectedProductId: string;
   /** Derived from `iosPromotion.offeringIdentifier`. */
   offeringIdentifier: string;
-  status: 'purchase_pending';
   createdAt: Timestamp;
   updatedAt: Timestamp;
   expiresAt: Timestamp;
 }
+
+export interface PendingPromoPurchaseIntent extends PromoPurchaseIntentBase {
+  status: 'purchase_pending';
+}
+
+/** FASE 3 — immutable audit evidence left by the matching webhook transaction. */
+export interface ConfirmedPromoPurchaseIntent extends PromoPurchaseIntentBase {
+  status: 'purchase_confirmed';
+  /** RevenueCat's event clock for the webhook that confirmed this intent. */
+  confirmedAt: Timestamp;
+  /** Stable RevenueCat webhook event ID used to recognize an exact retry. */
+  revenueCatEventId: string;
+}
+
+export type PromoPurchaseIntent = PendingPromoPurchaseIntent | ConfirmedPromoPurchaseIntent;
 
 /**
  * Server-managed lifecycle record for one Firebase uid's promo-code
@@ -242,7 +256,7 @@ export interface CouponRedemption {
    * snapshot field — `applyAttributionRevenueCatEvent` never writes it.
    */
   iosPromotion: IOSPromotionConfig | null;
-  /** FASE 2 — absent until the user authorizes an immediate promo purchase attempt. */
+  /** FASE 2/3 — absent until authorization; preserved as confirmed audit evidence after match. */
   purchaseIntent?: PromoPurchaseIntent;
   /** When the CURRENT `couponCode` was applied — reset on every swap while pending. */
   appliedAt: Timestamp;

@@ -409,10 +409,12 @@ couponRedemptions/{uid}
     plan                  // monthly | annual
     expectedProductId
     offeringIdentifier
-    status                // purchase_pending
+    status                // purchase_pending | purchase_confirmed
     createdAt             // timestamp do backend
     updatedAt             // timestamp do backend
     expiresAt             // timestamp do backend
+    confirmedAt           // somente purchase_confirmed; relógio do evento RevenueCat
+    revenueCatEventId     // somente purchase_confirmed; idempotência/auditoria
   appliedAt
   createdAt
   updatedAt
@@ -431,5 +433,13 @@ de eventual limpeza futura por Firestore TTL. Uma intent expirada pode ser
 substituída transacionalmente; uma intent ativa conflitante não pode.
 
 `purchase_pending` não altera `lockedAt`, `trialStartedAt` ou `convertedAt` e
-não concede Premium. A autoridade de acesso continua sendo exclusivamente o
-`CustomerInfo.entitlements.active["premium"]` do RevenueCat.
+não concede Premium. Um `INITIAL_PURCHASE` App Store somente transiciona a
+intent para `purchase_confirmed` quando campanha, Offering, plano, Product ID
+e `purchased_at_ms` forem consistentes e a compra tiver ocorrido dentro da
+janela inclusiva `createdAt..expiresAt`. A transição, `lockedAt` e os demais
+timestamps de attribution são gravados na mesma transação. A intent confirmada
+preserva `confirmedAt` e `revenueCatEventId`, não pode ser reautorizada e
+permite reconhecer retry exato sem reescrita.
+
+Nenhum desses campos concede Premium. A autoridade de acesso continua sendo
+exclusivamente o `CustomerInfo.entitlements.active["premium"]` do RevenueCat.

@@ -21,7 +21,7 @@ import {
   authorizePromoPurchaseTransactionally,
   decidePromoPurchaseIntent,
 } from '../promoPurchaseIntent';
-import type { PromoPurchaseIntent } from '../types';
+import type { PendingPromoPurchaseIntent } from '../types';
 
 const UID = 'firebase-uid-promo-purchase';
 const NOW = new Date('2026-08-13T15:00:00.000Z');
@@ -46,7 +46,9 @@ function redemption(overrides: Record<string, unknown> = {}): Record<string, unk
   };
 }
 
-function intent(overrides: Partial<PromoPurchaseIntent> = {}): PromoPurchaseIntent {
+function intent(
+  overrides: Partial<PendingPromoPurchaseIntent> = {},
+): PendingPromoPurchaseIntent {
   return {
     campaignId: 'campaign-arnaldo',
     plan: 'monthly',
@@ -115,6 +117,27 @@ describe('decidePromoPurchaseIntent (pure)', () => {
         NOW_TIMESTAMP,
       ),
     ).toEqual({ action: 'create' });
+  });
+
+  it('never treats a confirmed intent as reusable authorization', () => {
+    const pending = intent();
+    expect(
+      decidePromoPurchaseIntent(
+        {
+          ...pending,
+          status: 'purchase_confirmed',
+          confirmedAt: NOW_TIMESTAMP,
+          revenueCatEventId: 'evt-confirmed',
+        },
+        {
+          campaignId: pending.campaignId,
+          plan: pending.plan,
+          expectedProductId: pending.expectedProductId,
+          offeringIdentifier: pending.offeringIdentifier,
+        },
+        NOW_TIMESTAMP,
+      ),
+    ).toEqual({ action: 'conflict' });
   });
 });
 

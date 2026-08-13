@@ -7,7 +7,11 @@ import {
   type PromoPurchasePlan,
 } from './constants';
 import { isValidIOSPromotionConfig } from './promoCodeCatalog';
-import type { IOSPromotionConfig, PromoPurchaseIntent } from './types';
+import type {
+  IOSPromotionConfig,
+  PendingPromoPurchaseIntent,
+  PromoPurchaseIntent,
+} from './types';
 
 const SCOPE = 'attribution:promoPurchaseIntent';
 
@@ -23,7 +27,7 @@ function isFieldSet(value: unknown): boolean {
 export function parseStoredPromoPurchaseIntent(value: unknown): PromoPurchaseIntent | null {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
   const v = value as Record<string, unknown>;
-  const expectedKeys = [
+  const baseKeys = [
     'campaignId',
     'plan',
     'expectedProductId',
@@ -33,6 +37,8 @@ export function parseStoredPromoPurchaseIntent(value: unknown): PromoPurchaseInt
     'updatedAt',
     'expiresAt',
   ];
+  const confirmedKeys = ['confirmedAt', 'revenueCatEventId'];
+  const expectedKeys = v.status === 'purchase_confirmed' ? [...baseKeys, ...confirmedKeys] : baseKeys;
   const keys = Object.keys(v);
   if (keys.length !== expectedKeys.length || !expectedKeys.every((key) => keys.includes(key))) {
     return null;
@@ -42,22 +48,29 @@ export function parseStoredPromoPurchaseIntent(value: unknown): PromoPurchaseInt
     (v.plan !== 'monthly' && v.plan !== 'annual') ||
     !isNonEmptyString(v.expectedProductId) ||
     !isNonEmptyString(v.offeringIdentifier) ||
-    v.status !== 'purchase_pending' ||
+    (v.status !== 'purchase_pending' && v.status !== 'purchase_confirmed') ||
     !(v.createdAt instanceof Timestamp) ||
     !(v.updatedAt instanceof Timestamp) ||
     !(v.expiresAt instanceof Timestamp)
   ) {
     return null;
   }
-  return {
-    campaignId: v.campaignId,
-    plan: v.plan,
-    expectedProductId: v.expectedProductId,
-    offeringIdentifier: v.offeringIdentifier,
-    status: v.status,
+  const base = {
+    campaignId: v.campaignId as string,
+    plan: v.plan as PromoPurchasePlan,
+    expectedProductId: v.expectedProductId as string,
+    offeringIdentifier: v.offeringIdentifier as string,
     createdAt: v.createdAt,
     updatedAt: v.updatedAt,
     expiresAt: v.expiresAt,
+  };
+  if (v.status === 'purchase_pending') return { ...base, status: v.status };
+  if (!(v.confirmedAt instanceof Timestamp) || !isNonEmptyString(v.revenueCatEventId)) return null;
+  return {
+    ...base,
+    status: v.status,
+    confirmedAt: v.confirmedAt,
+    revenueCatEventId: v.revenueCatEventId,
   };
 }
 
@@ -77,7 +90,7 @@ interface DesiredPromoPurchaseIntent {
 
 export type PromoPurchaseIntentDecision =
   | { action: 'create' }
-  | { action: 'reuse'; intent: PromoPurchaseIntent }
+  | { action: 'reuse'; intent: PendingPromoPurchaseIntent }
   | { action: 'conflict' };
 
 /** Pure idempotency/conflict decision, evaluated from one transactional read. */
@@ -86,7 +99,9 @@ export function decidePromoPurchaseIntent(
   desired: DesiredPromoPurchaseIntent,
   now: Timestamp,
 ): PromoPurchaseIntentDecision {
-  if (!existing || !isPromoPurchaseIntentActiveAt(existing, now)) return { action: 'create' };
+  if (!existing) return { action: 'create' };
+  if (existing.status === 'purchase_confirmed') return { action: 'conflict' };
+  if (!isPromoPurchaseIntentActiveAt(existing, now)) return { action: 'create' };
 
   if (
     existing.campaignId === desired.campaignId &&
@@ -101,7 +116,7 @@ export function decidePromoPurchaseIntent(
 }
 
 export type AuthorizePromoPurchaseTransactionResult =
-  | { status: 'authorized'; intent: PromoPurchaseIntent; reused: boolean }
+  | { status: 'authorized'; intent: PendingPromoPurchaseIntent; reused: boolean }
   | { status: 'no_redemption' }
   | { status: 'invalid_redemption' }
   | { status: 'ios_promotion_unavailable' }
@@ -168,7 +183,7 @@ export async function authorizePromoPurchaseTransactionally(
       }
       if (decision.action === 'conflict') return { status: 'intent_conflict' };
 
-      const intent: PromoPurchaseIntent = {
+      const intent: PendingPromoPurchaseIntent = {
         ...desired,
         status: 'purchase_pending',
         createdAt: now,

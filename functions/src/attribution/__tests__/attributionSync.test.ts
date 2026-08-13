@@ -344,6 +344,39 @@ describe('applyPromoCodeAttributionTransactionally', () => {
     expect(transactionMocks.set).toHaveBeenCalledTimes(2);
   });
 
+  it('FASE 3: confirmed evidence is never erased by a coupon swap, even if lockedAt is malformed/missing', async () => {
+    const now = Timestamp.now();
+    mockGetImplementation(true, {
+      exists: true,
+      data: {
+        ...ATTRIBUTION,
+        uid: UID,
+        lockedAt: null,
+        purchaseIntent: {
+          campaignId: 'campaign-arnaldo',
+          plan: 'monthly',
+          expectedProductId: 'ajfit_premium_monthly_promo',
+          offeringIdentifier: 'promo_7d',
+          status: 'purchase_confirmed',
+          createdAt: Timestamp.fromMillis(now.toMillis() - 60_000),
+          updatedAt: now,
+          expiresAt: Timestamp.fromMillis(now.toMillis() + 60_000),
+          confirmedAt: now,
+          revenueCatEventId: 'evt-confirmed',
+        },
+      },
+    });
+
+    const result = await applyPromoCodeAttributionTransactionally(UID, {
+      ...ATTRIBUTION,
+      couponCode: 'JOAO',
+      campaignId: 'campaign-joao',
+    });
+
+    expect(result).toEqual({ status: 'purchase_intent_active' });
+    expect(transactionMocks.set).not.toHaveBeenCalled();
+  });
+
   // FASE iOS-1 — regression: adding appleOffer must not change what/how
   // androidOffer (or anything else Android-related) is written.
   it('FASE iOS-1 regression: androidOffer snapshot is written identically to Fase 4C.3A regardless of appleOffer content', async () => {
