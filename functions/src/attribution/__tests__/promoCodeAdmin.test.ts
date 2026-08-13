@@ -410,6 +410,7 @@ describe('adminCreatePromoCodeHandler', () => {
         'appleOfferReferenceMonthly',
         'appleProductIdAnnual',
         'appleOfferReferenceAnnual',
+        'iosPromotion',
         'createdAt',
         'updatedAt',
         'createdBy',

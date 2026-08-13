@@ -39,6 +39,7 @@ function promoCode(overrides: Partial<PromoCodeDocument> = {}): PromoCodeDocumen
     appleOfferReferenceMonthly: null,
     appleProductIdAnnual: null,
     appleOfferReferenceAnnual: null,
+    iosPromotion: null,
     createdAt: Timestamp.fromDate(new Date('2026-08-01T00:00:00.000Z')),
     updatedAt: Timestamp.fromDate(new Date('2026-08-01T00:00:00.000Z')),
     createdBy: 'admin-uid',
@@ -46,6 +47,14 @@ function promoCode(overrides: Partial<PromoCodeDocument> = {}): PromoCodeDocumen
     ...overrides,
   };
 }
+
+// FASE 1 — the real ARNALDO iOS promotional config once the campaign is
+// migrated to the new Promo SKU + Introductory Offer architecture.
+const ARNALDO_IOS_PROMOTION = {
+  offeringIdentifier: 'promo_7d',
+  monthlyProductId: 'ajfit_premium_monthly_promo',
+  annualProductId: 'ajfit_premium_annual_promo',
+};
 
 // `authUid` defaults to the caller's uid when omitted. Deliberately typed as
 // `string | null` (not `| undefined`) so tests can force "no auth" via an
@@ -703,5 +712,159 @@ describe('validatePromoCodeHandler — Fase 4C.1 android storeConfig', () => {
     // attribution transaction — asserting on its mock proves no other
     // (subscription-writing) module was ever invoked from this handler.
     expect(syncMocks.applyPromoCodeAttributionTransactionally).toHaveBeenCalledTimes(1);
+  });
+});
+
+// FASE 1 — new iOS promotional (Offering/SKU) contract. Deliberately
+// UNRELATED to the legacy Apple Offer Code fields exercised above (which
+// stay byte-for-byte unchanged) — see `IOSPromotionConfig`'s doc comment.
+describe('validatePromoCodeHandler — FASE 1 iosPromotion contract', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    catalogMocks.lookupPromoCode.mockReset();
+    syncMocks.applyPromoCodeAttributionTransactionally.mockReset();
+    syncMocks.applyPromoCodeAttributionTransactionally.mockResolvedValue({ status: 'applied' });
+  });
+
+  afterEach(() => vi.useRealTimers());
+
+  it('a campaign configured for the new flow returns the exact iosPromotion the server derived from the catalog — never the legacy storeConfig.ios shape', async () => {
+    catalogMocks.lookupPromoCode.mockResolvedValue({
+      status: 'found',
+      promoCode: promoCode({ iosPromotion: ARNALDO_IOS_PROMOTION }),
+    });
+
+    const result = await validatePromoCodeHandler(request({ code: 'ARNALDO', platform: 'IOS' }));
+
+    expect(result.iosPromotion).toEqual(ARNALDO_IOS_PROMOTION);
+  });
+
+  it('a campaign with no iOS promotional configuration returns iosPromotion: null — never fabricated', async () => {
+    catalogMocks.lookupPromoCode.mockResolvedValue({
+      status: 'found',
+      promoCode: promoCode({ iosPromotion: null }),
+    });
+
+    const result = await validatePromoCodeHandler(request({ code: 'ARNALDO', platform: 'IOS' }));
+
+    expect(result.iosPromotion).toBeNull();
+  });
+
+  it('platform=android never receives iosPromotion, even when the campaign has one configured', async () => {
+    catalogMocks.lookupPromoCode.mockResolvedValue({
+      status: 'found',
+      promoCode: promoCode({ iosPromotion: ARNALDO_IOS_PROMOTION }),
+    });
+
+    const result = await validatePromoCodeHandler(request({ code: 'ARNALDO', platform: 'ANDROID' }));
+
+    expect(result.iosPromotion).toBeNull();
+    expect(JSON.stringify(result)).not.toMatch(/promo_7d|_promo/);
+  });
+
+  it('platform omitted returns iosPromotion alongside both storeConfig entries — client decides, server never guesses', async () => {
+    catalogMocks.lookupPromoCode.mockResolvedValue({
+      status: 'found',
+      promoCode: promoCode({ iosPromotion: ARNALDO_IOS_PROMOTION }),
+    });
+
+    const result = await validatePromoCodeHandler(request({ code: 'ARNALDO' }));
+
+    expect(result.iosPromotion).toEqual(ARNALDO_IOS_PROMOTION);
+    expect(result.storeConfig.android).not.toBeNull();
+  });
+
+  it('snapshots the campaign iosPromotion into couponRedemptions/{uid} verbatim, unconditionally regardless of requested platform', async () => {
+    catalogMocks.lookupPromoCode.mockResolvedValue({
+      status: 'found',
+      promoCode: promoCode({ iosPromotion: ARNALDO_IOS_PROMOTION }),
+    });
+
+    await validatePromoCodeHandler(request({ code: 'ARNALDO', platform: 'ANDROID' }));
+
+    expect(syncMocks.applyPromoCodeAttributionTransactionally).toHaveBeenCalledWith(
+      UID,
+      expect.objectContaining({ iosPromotion: ARNALDO_IOS_PROMOTION }),
+    );
+  });
+
+  it('the server NEVER trusts a client-supplied offeringIdentifier/productId — the request payload has no such fields to begin with, and the response is always derived from the catalog', async () => {
+    catalogMocks.lookupPromoCode.mockResolvedValue({
+      status: 'found',
+      promoCode: promoCode({ iosPromotion: ARNALDO_IOS_PROMOTION }),
+    });
+
+    // A malicious/confused client tries to smuggle its own offering choice
+    // into the request — `ValidatePromoCodeRequestData` has no field for
+    // this, so it is silently ignored by construction, never read anywhere.
+    const result = await validatePromoCodeHandler(
+      request({
+        code: 'ARNALDO',
+        platform: 'IOS',
+        offeringIdentifier: 'attacker_chosen_offering',
+        monthlyProductId: 'attacker_chosen_product',
+      } as unknown as ValidatePromoCodeRequestData),
+    );
+
+    expect(result.iosPromotion).toEqual(ARNALDO_IOS_PROMOTION);
+  });
+
+  it('applying a valid iOS promotional code never defines lockedAt/trialStartedAt/convertedAt — that remains applyAttributionRevenueCatEvent-only, never validatePromoCode', async () => {
+    catalogMocks.lookupPromoCode.mockResolvedValue({
+      status: 'found',
+      promoCode: promoCode({ iosPromotion: ARNALDO_IOS_PROMOTION }),
+    });
+
+    await validatePromoCodeHandler(request({ code: 'ARNALDO', platform: 'IOS' }));
+
+    const call = syncMocks.applyPromoCodeAttributionTransactionally.mock.calls[0][1];
+    // `applyPromoCodeAttributionTransactionally` (attributionSync.ts) is the
+    // one that actually writes `lockedAt`/`trialStartedAt`/`convertedAt: null`
+    // unconditionally on every apply — this handler never passes those
+    // fields into `PendingPromoCodeAttribution` at all, proving it has no
+    // way to influence them.
+    expect(call).not.toHaveProperty('lockedAt');
+    expect(call).not.toHaveProperty('trialStartedAt');
+    expect(call).not.toHaveProperty('convertedAt');
+  });
+
+  it('applying a valid iOS promotional code never claims Premium/entitlement was granted — no such field anywhere in the response shape', async () => {
+    catalogMocks.lookupPromoCode.mockResolvedValue({
+      status: 'found',
+      promoCode: promoCode({ iosPromotion: ARNALDO_IOS_PROMOTION }),
+    });
+
+    const result = await validatePromoCodeHandler(request({ code: 'ARNALDO', platform: 'IOS' }));
+
+    // Product identifiers legitimately contain the word "premium" (e.g.
+    // `ajfit_premium_monthly_promo`) — this checks for a GRANT claim
+    // (`entitlement`/`isPremium`/`premiumActive`-shaped field), never a
+    // naive substring match against product IDs.
+    expect(result).not.toHaveProperty('entitlement');
+    expect(result).not.toHaveProperty('isPremium');
+    expect(result).not.toHaveProperty('premiumActive');
+    expect(JSON.stringify(result).toLowerCase()).not.toMatch(/entitlement/);
+  });
+
+  it('does not hardcode ARNALDO — a second, differently-named campaign with its own iosPromotion is authorized identically', async () => {
+    const otherCampaignPromotion = {
+      offeringIdentifier: 'promo_14d',
+      monthlyProductId: 'ajfit_premium_monthly_promo_v2',
+      annualProductId: 'ajfit_premium_annual_promo_v2',
+    };
+    catalogMocks.lookupPromoCode.mockResolvedValue({
+      status: 'found',
+      promoCode: promoCode({
+        code: 'HELLLEN',
+        influencerId: 'HELLLEN',
+        campaignId: 'campaign-helllen',
+        iosPromotion: otherCampaignPromotion,
+      }),
+    });
+
+    const result = await validatePromoCodeHandler(request({ code: 'HELLLEN', platform: 'IOS' }));
+
+    expect(result.iosPromotion).toEqual(otherCampaignPromotion);
   });
 });

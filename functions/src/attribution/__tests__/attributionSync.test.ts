@@ -46,6 +46,16 @@ const ARNALDO_APPLE_CORRELATION = {
   annual: null,
 };
 const HELLLEN_APPLE_CORRELATION = { monthly: null, annual: null };
+// FASE 1 — the new Promo SKU authorization. ARNALDO is configured for it;
+// HELLLEN is deliberately NOT (`null`), proving a campaign can lack iOS
+// promotional config entirely (e.g. Android-only campaigns) without
+// affecting anything else.
+const ARNALDO_IOS_PROMOTION = {
+  offeringIdentifier: 'promo_7d',
+  monthlyProductId: 'ajfit_premium_monthly_promo',
+  annualProductId: 'ajfit_premium_annual_promo',
+};
+const HELLLEN_IOS_PROMOTION = null;
 const ATTRIBUTION = {
   couponCode: 'ARNALDO',
   campaignId: 'campaign-arnaldo',
@@ -53,6 +63,7 @@ const ATTRIBUTION = {
   androidOffer: ARNALDO_ANDROID_OFFER,
   appleOffer: ARNALDO_APPLE_OFFER,
   appleOfferCorrelation: ARNALDO_APPLE_CORRELATION,
+  iosPromotion: ARNALDO_IOS_PROMOTION,
 };
 
 function userSnapshot(exists: boolean) {
@@ -252,6 +263,7 @@ describe('applyPromoCodeAttributionTransactionally', () => {
       androidOffer: HELLLEN_ANDROID_OFFER,
       appleOffer: HELLLEN_APPLE_OFFER,
       appleOfferCorrelation: HELLLEN_APPLE_CORRELATION,
+      iosPromotion: HELLLEN_IOS_PROMOTION,
     });
 
     expect(second).toEqual({ status: 'locked' });
@@ -268,5 +280,137 @@ describe('applyPromoCodeAttributionTransactionally', () => {
     const redemptionCall = findSetCall(`couponRedemptions/${UID}`);
     expect(redemptionCall![1].androidOffer).toEqual(ARNALDO_ANDROID_OFFER);
     expect(redemptionCall![1].appleOffer).toEqual(ARNALDO_APPLE_OFFER);
+  });
+
+  // FASE 1 — the new iosPromotion snapshot follows the EXACT same pipeline
+  // as androidOffer/appleOffer/appleOfferCorrelation above: written
+  // verbatim on first application, replaced on a swap-while-pending, and
+  // frozen forever once lockedAt is set. These tests make that explicit for
+  // the new field specifically (Fase 0C §16 requirement), rather than
+  // assuming it inherits the guarantee silently.
+  it('FASE 1: first application snapshots iosPromotion verbatim, never into the users/{uid}.attribution mirror', async () => {
+    mockGetImplementation(true, { exists: false });
+
+    await applyPromoCodeAttributionTransactionally(UID, ATTRIBUTION);
+
+    const redemptionCall = findSetCall(`couponRedemptions/${UID}`);
+    expect(redemptionCall![1].iosPromotion).toEqual(ARNALDO_IOS_PROMOTION);
+
+    const userMirrorCall = findSetCall(`users/${UID}`);
+    expect(userMirrorCall![1].attribution).not.toHaveProperty('iosPromotion');
+  });
+
+  it('FASE 1: swap while pending replaces iosPromotion atomically along with the other snapshot fields', async () => {
+    const originalCreatedAt = Timestamp.fromDate(new Date('2026-08-01T00:00:00.000Z'));
+    mockGetImplementation(true, {
+      exists: true,
+      data: {
+        uid: UID,
+        couponCode: 'HELLLEN',
+        campaignId: 'campaign-helllen',
+        influencerId: 'HELLLEN',
+        androidOffer: HELLLEN_ANDROID_OFFER,
+        appleOffer: HELLLEN_APPLE_OFFER,
+        appleOfferCorrelation: HELLLEN_APPLE_CORRELATION,
+        iosPromotion: HELLLEN_IOS_PROMOTION,
+        appliedAt: originalCreatedAt,
+        createdAt: originalCreatedAt,
+        updatedAt: originalCreatedAt,
+        trialStartedAt: null,
+        convertedAt: null,
+        lockedAt: null,
+      },
+    });
+
+    const result = await applyPromoCodeAttributionTransactionally(UID, ATTRIBUTION);
+
+    expect(result).toEqual({ status: 'applied' });
+    const redemptionCall = findSetCall(`couponRedemptions/${UID}`);
+    expect(redemptionCall![1].iosPromotion).toEqual(ARNALDO_IOS_PROMOTION);
+  });
+
+  it('FASE 1: revalidating the SAME code while pending refreshes iosPromotion from the current catalog read — the campaign catalog, not this transaction, owns "current"', async () => {
+    // `validatePromoCode.ts` always computes the snapshot from a FRESH
+    // catalog read before calling this function — so if an admin edited
+    // `promoCodes/ARNALDO.iosPromotion` between two applications of the
+    // same code, the second application legitimately carries the NEW value
+    // here. This is the existing "swap" semantics (docs comment on
+    // `applyPromoCodeAttributionTransactionally`) applied unchanged to the
+    // new field — the real immutability guarantee is the one proven below:
+    // once lockedAt is set, no further read/apply can change it at all.
+    const originalCreatedAt = Timestamp.fromDate(new Date('2026-08-01T00:00:00.000Z'));
+    mockGetImplementation(true, {
+      exists: true,
+      data: {
+        uid: UID,
+        couponCode: 'ARNALDO',
+        campaignId: 'campaign-arnaldo',
+        influencerId: 'ARNALDO',
+        androidOffer: ARNALDO_ANDROID_OFFER,
+        appleOffer: ARNALDO_APPLE_OFFER,
+        appleOfferCorrelation: ARNALDO_APPLE_CORRELATION,
+        iosPromotion: { offeringIdentifier: 'promo_7d_old', monthlyProductId: 'old_monthly', annualProductId: 'old_annual' },
+        appliedAt: originalCreatedAt,
+        createdAt: originalCreatedAt,
+        updatedAt: originalCreatedAt,
+        trialStartedAt: null,
+        convertedAt: null,
+        lockedAt: null,
+      },
+    });
+
+    await applyPromoCodeAttributionTransactionally(UID, ATTRIBUTION);
+
+    const redemptionCall = findSetCall(`couponRedemptions/${UID}`);
+    expect(redemptionCall![1].iosPromotion).toEqual(ARNALDO_IOS_PROMOTION);
+  });
+
+  it('FASE 1: once locked, iosPromotion is frozen — a revalidation with a mutated catalog value never overwrites the stored snapshot', async () => {
+    const lockedAt = Timestamp.fromDate(new Date('2026-08-05T00:00:00.000Z'));
+    mockGetImplementation(true, {
+      exists: true,
+      data: {
+        uid: UID,
+        couponCode: 'ARNALDO',
+        campaignId: 'campaign-arnaldo',
+        influencerId: 'ARNALDO',
+        androidOffer: ARNALDO_ANDROID_OFFER,
+        appleOffer: ARNALDO_APPLE_OFFER,
+        appleOfferCorrelation: ARNALDO_APPLE_CORRELATION,
+        iosPromotion: ARNALDO_IOS_PROMOTION,
+        appliedAt: lockedAt,
+        createdAt: lockedAt,
+        updatedAt: lockedAt,
+        trialStartedAt: lockedAt,
+        convertedAt: null,
+        lockedAt,
+      },
+    });
+
+    // The catalog was edited AFTER locking — a differently-shaped
+    // `iosPromotion` is passed in, simulating validatePromoCode.ts reading
+    // the mutated `promoCodes/ARNALDO` document.
+    const mutatedAttribution = {
+      ...ATTRIBUTION,
+      iosPromotion: {
+        offeringIdentifier: 'promo_7d_mutated',
+        monthlyProductId: 'mutated_monthly',
+        annualProductId: 'mutated_annual',
+      },
+    };
+
+    const result = await applyPromoCodeAttributionTransactionally(UID, mutatedAttribution);
+
+    expect(result).toEqual({ status: 'locked' });
+    expect(transactionMocks.set).not.toHaveBeenCalled();
+  });
+
+  it('FASE 1: a campaign with no iOS promotional configuration snapshots iosPromotion: null — never fabricated', async () => {
+    mockGetImplementation(true, { exists: false });
+
+    await applyPromoCodeAttributionTransactionally(UID, { ...ATTRIBUTION, iosPromotion: null });
+
+    const redemptionCall = findSetCall(`couponRedemptions/${UID}`);
+    expect(redemptionCall![1].iosPromotion).toBeNull();
   });
 });

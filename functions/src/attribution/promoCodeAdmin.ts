@@ -154,6 +154,7 @@ export async function adminUpdatePromoCodeHandler(
     appleOfferReferenceMonthly: fields.appleOfferReferenceMonthly,
     appleProductIdAnnual: fields.appleProductIdAnnual,
     appleOfferReferenceAnnual: fields.appleOfferReferenceAnnual,
+    iosPromotion: fields.iosPromotion,
     notes: fields.notes,
     updatedAt: FieldValue.serverTimestamp(),
   };

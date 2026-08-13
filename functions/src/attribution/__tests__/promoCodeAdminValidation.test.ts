@@ -186,4 +186,85 @@ describe('validateAdminPromoCodeWrite', () => {
     expect(result.ok && result.fields.androidBasePlanIdAnnual).toBeNull();
     expect(result.ok && result.fields.appleProductIdAnnual).toBeNull();
   });
+
+  // FASE 1 — iosPromotion admin write validation.
+  const VALID_IOS_PROMOTION = {
+    offeringIdentifier: 'promo_7d',
+    monthlyProductId: 'ajfit_premium_monthly_promo',
+    annualProductId: 'ajfit_premium_annual_promo',
+  };
+
+  describe('iosPromotion (FASE 1) all-or-nothing validation', () => {
+    it('absent iosPromotion is valid — resolves to null', () => {
+      const result = validateAdminPromoCodeWrite(BASE, { requireCode: true });
+      expect(result.ok).toBe(true);
+      expect(result.ok && result.fields.iosPromotion).toBeNull();
+    });
+
+    it('explicit null iosPromotion is valid — resolves to null', () => {
+      const result = validateAdminPromoCodeWrite(
+        { ...BASE, iosPromotion: null },
+        { requireCode: true },
+      );
+      expect(result.ok).toBe(true);
+      expect(result.ok && result.fields.iosPromotion).toBeNull();
+    });
+
+    it('accepts a fully configured iosPromotion', () => {
+      const result = validateAdminPromoCodeWrite(
+        { ...BASE, iosPromotion: VALID_IOS_PROMOTION },
+        { requireCode: true },
+      );
+      expect(result.ok).toBe(true);
+      expect(result.ok && result.fields.iosPromotion).toEqual(VALID_IOS_PROMOTION);
+    });
+
+    it('rejects a partial iosPromotion (one field missing) — never a partial authorization', () => {
+      const { annualProductId: _annualProductId, ...partial } = VALID_IOS_PROMOTION;
+      const result = validateAdminPromoCodeWrite(
+        { ...BASE, iosPromotion: partial },
+        { requireCode: true },
+      );
+      expect(result).toEqual({ ok: false, error: 'ios_promotion_invalid' });
+    });
+
+    it('rejects a blank/whitespace-only field within iosPromotion', () => {
+      const result = validateAdminPromoCodeWrite(
+        { ...BASE, iosPromotion: { ...VALID_IOS_PROMOTION, offeringIdentifier: '   ' } },
+        { requireCode: true },
+      );
+      expect(result).toEqual({ ok: false, error: 'ios_promotion_invalid' });
+    });
+
+    it('trims each field', () => {
+      const result = validateAdminPromoCodeWrite(
+        {
+          ...BASE,
+          iosPromotion: {
+            offeringIdentifier: '  promo_7d  ',
+            monthlyProductId: '  ajfit_premium_monthly_promo  ',
+            annualProductId: '  ajfit_premium_annual_promo  ',
+          },
+        },
+        { requireCode: true },
+      );
+      expect(result.ok).toBe(true);
+      expect(result.ok && result.fields.iosPromotion).toEqual(VALID_IOS_PROMOTION);
+    });
+
+    it('is independent of android/apple legacy fields — configuring one never requires or affects the other', () => {
+      const result = validateAdminPromoCodeWrite(
+        {
+          ...BASE,
+          android: { monthly: { basePlanId: 'monthly', offerId: 'influencer-trial-7d' } },
+          iosPromotion: VALID_IOS_PROMOTION,
+        },
+        { requireCode: true },
+      );
+      expect(result.ok).toBe(true);
+      expect(result.ok && result.fields.androidBasePlanIdMonthly).toBe('monthly');
+      expect(result.ok && result.fields.appleOfferCodeMonthly).toBeNull();
+      expect(result.ok && result.fields.iosPromotion).toEqual(VALID_IOS_PROMOTION);
+    });
+  });
 });

@@ -10,6 +10,7 @@ import {
   resolveAppleOfferCorrelationPair,
 } from './promoCodeCatalog';
 import type {
+  IOSPromotionConfig,
   PromoCodeAndroidOfferSnapshot,
   PromoCodeAppleCorrelationSnapshot,
   PromoCodeAppleOfferSnapshot,
@@ -132,6 +133,17 @@ export async function validatePromoCodeHandler(
     ),
   };
 
+  // FASE 1: computed ONCE, unconditionally, mirroring the snapshots above —
+  // snapshotted verbatim into `couponRedemptions/{uid}.iosPromotion`
+  // regardless of the client's requested `platform`, so a later edit to
+  // `promoCodes/{code}` can never silently change an already-applied
+  // redemption's authorization (`IOSPromotionConfig`'s doc comment). Already
+  // fully validated (all-or-nothing) by `promoCodeCatalog.ts`'s parser — no
+  // separate pairing/resolution step needed here, unlike Android/legacy
+  // Apple, which store their fields flat and need `resolve*Pair` to combine
+  // them fail-closed.
+  const iosPromotionSnapshot: IOSPromotionConfig | null = promoCode.iosPromotion;
+
   let outcome;
   try {
     outcome = await applyPromoCodeAttributionTransactionally(uid, {
@@ -141,6 +153,7 @@ export async function validatePromoCodeHandler(
       androidOffer: androidOfferSnapshot,
       appleOffer: appleOfferSnapshot,
       appleOfferCorrelation: appleOfferCorrelationSnapshot,
+      iosPromotion: iosPromotionSnapshot,
     });
   } catch (err) {
     logFunctionError(SCOPE, err, { uid, operation: 'apply_attribution' });
@@ -172,6 +185,13 @@ export async function validatePromoCodeHandler(
   const iosConfig =
     requestedPlatform === undefined || requestedPlatform === 'IOS' ? appleOfferSnapshot : null;
 
+  // FASE 1 — gated by the exact same requested-`platform` rule as `iosConfig`
+  // above (never recomputed differently): an Android-only request never
+  // receives the iOS promotional authorization, and vice versa is symmetric
+  // with `androidConfig`.
+  const iosPromotionConfig =
+    requestedPlatform === undefined || requestedPlatform === 'IOS' ? iosPromotionSnapshot : null;
+
   return {
     valid: true,
     code: promoCode.code,
@@ -184,6 +204,7 @@ export async function validatePromoCodeHandler(
       android: androidConfig,
       ios: iosConfig,
     },
+    iosPromotion: iosPromotionConfig,
     eligibility: {
       determinedBy: 'store',
       guaranteed: false,

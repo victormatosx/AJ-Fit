@@ -1596,3 +1596,125 @@ consolidação), mas deve respeitar esta regra.
 Qual Offering/pacote específico do RevenueCat corresponde a cada campanha,
 como o backend resolve `campaignId → Offering`, e a implementação do próprio
 Paywall — tudo isso é decisão de uma sprint de Offerings ainda não iniciada.
+
+---
+
+# 35. Migração Promo SKU + Introductory Offer — FASE 1 (contrato de backend)
+
+Esta seção documenta a arquitetura EM TRANSIÇÃO, iniciada pela migração que
+substitui Apple Offer Codes por SKUs promocionais com Introductory Offer
+nativa da Apple. Documenta apenas o que está de fato implementado nesta
+fase — não antecipa fases futuras.
+
+## Estado por componente
+
+```txt
+Android:
+fluxo atual preservado, byte a byte. Nenhuma alteração nesta fase.
+
+iOS atual (Apple Offer Code):
+ainda temporariamente suportado — presentCodeRedemptionSheet(),
+redeemOfferCode(), appleOfferCorrelation.ts e os campos de catálogo
+appleOfferCode*/appleProductId*/appleOfferReference* continuam existindo
+e funcionando exatamente como antes. Nada foi removido.
+
+iOS novo — contrato de backend (iosPromotion):
+introduzido nesta fase. O backend agora entende e autoriza uma promoção
+iOS baseada em Offering/SKU (nunca mais em Offer Code), mas nada além do
+backend sabe disso ainda.
+
+Cliente promo_7d:
+AINDA NÃO IMPLEMENTADO. PaywallScreen.tsx, revenueCatService.ts e
+subscriptionOffer.ts não foram tocados por esta fase e continuam
+ignorando iosPromotion completamente — o campo existe na resposta de
+validatePromoCode, mas nenhum consumidor cliente o lê ainda.
+
+Webhook promo SKU:
+AINDA NÃO IMPLEMENTADO. functions/src/billing/revenuecat.ts e
+attribution/appleOfferCorrelation.ts continuam usando exclusivamente a
+correlação por Apple Offer Code (offer_code/offerReference). Nenhuma
+correlação por productId de SKU promocional existe ainda — lockedAt/
+trialStartedAt/convertedAt de uma redemption com iosPromotion configurado
+só serão preenchíveis a partir de uma fase futura.
+
+Purchase intent:
+AINDA NÃO IMPLEMENTADO.
+```
+
+## O novo contrato: `IOSPromotionConfig`
+
+`functions/src/attribution/types.ts` define:
+
+```ts
+interface IOSPromotionConfig {
+  offeringIdentifier: string; // RevenueCat Offering, nunca "default"/Current
+  monthlyProductId: string;   // App Store Connect product ID, plano mensal
+  annualProductId: string;    // App Store Connect product ID, plano anual
+}
+```
+
+Vive em três lugares, sempre com a mesma forma:
+
+```txt
+promoCodes/{code}.iosPromotion        — cadastro confiável da campanha
+                                         (null = campanha sem promoção iOS)
+
+couponRedemptions/{uid}.iosPromotion  — snapshot imutável, capturado no
+                                         momento em que o cupom foi
+                                         aplicado (nunca re-derivado do
+                                         catálogo depois)
+
+validatePromoCode response.iosPromotion — o que o cliente recebe,
+                                           gated pelo mesmo `platform`
+                                           que já governa storeConfig.ios
+```
+
+Deliberadamente sem parentesco com os campos Apple Offer Code legados —
+nenhum dos dois é derivado do outro, e ambos podem coexistir no mesmo
+documento `promoCodes/{code}` durante toda a migração.
+
+## Autoridade e responsabilidades
+
+```txt
+Servidor deriva iosPromotion do cadastro confiável da campanha
+(promoCodes/{code}) — o cliente nunca envia offeringIdentifier nem
+productId, apenas o código (ex.: "ARNALDO"). validatePromoCode nunca
+confia em nenhum campo desse tipo vindo do payload da requisição.
+
+Validação de iosPromotion é tudo-ou-nada: os três campos presentes e
+válidos, ou o campo inteiro é null. Uma configuração parcial no catálogo
+(um admin editou pela metade) reprova o documento inteiro na leitura —
+nunca autoriza parcialmente.
+
+Aplicar um cupom com iosPromotion configurado NÃO define lockedAt, NÃO
+define trialStartedAt, NÃO define convertedAt, e NÃO concede Premium.
+Esses três timestamps continuam exclusivos de
+applyAttributionRevenueCatEvent (o webhook), que nesta fase ainda não
+sabe correlacionar uma compra de SKU promocional — então, na prática,
+uma redemption com iosPromotion permanece indefinidamente "pendente" até
+uma fase futura implementar essa correlação.
+
+Premium continua exclusivamente:
+CustomerInfo.entitlements.active["premium"]
+```
+
+## Configuração administrativa
+
+O escritor confiável é `adminUpdatePromoCodeHandler`/
+`adminCreatePromoCodeHandler` (`functions/src/attribution/promoCodeAdmin.ts`),
+já validado por `validateAdminPromoCodeWrite`. Nenhuma escrita manual/direta
+no Firestore é necessária ou recomendada — o painel administrativo (quando
+existir) ou uma chamada autenticada de admin a `adminUpdatePromoCode` com
+`{ code: "ARNALDO", iosPromotion: { offeringIdentifier: "promo_7d",
+monthlyProductId: "ajfit_premium_monthly_promo", annualProductId:
+"ajfit_premium_annual_promo" } }` é o único caminho suportado. Esta fase
+NÃO executou essa chamada contra nenhum ambiente — `promoCodes/ARNALDO`
+permanece, até essa ação manual, sem `iosPromotion` configurado (campo
+ausente, que o parser trata como `null`).
+
+## Fora do escopo desta fase
+
+Seleção de SKU promocional pelo Paywall, purchase intent, nova correlação
+de webhook, remoção do fluxo Apple Offer Code, e qualquer alteração ao
+comportamento Android — tudo isso é decisão de fases futuras (Fase 2 em
+diante), fora do escopo desta seção.

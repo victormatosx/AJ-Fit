@@ -23,6 +23,7 @@ function promoCode(overrides: Partial<PromoCodeDocument> = {}): PromoCodeDocumen
     appleOfferReferenceMonthly: null,
     appleProductIdAnnual: null,
     appleOfferReferenceAnnual: null,
+    iosPromotion: null,
     createdAt: Timestamp.fromDate(new Date('2026-08-01T00:00:00.000Z')),
     updatedAt: Timestamp.fromDate(new Date('2026-08-01T00:00:00.000Z')),
     createdBy: 'admin-uid',

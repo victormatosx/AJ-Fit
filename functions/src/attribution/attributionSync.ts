@@ -17,6 +17,7 @@ import {
 } from './googlePlayOfferCorrelation';
 import type {
   AppleOfferCorrelationConfig,
+  IOSPromotionConfig,
   PromoCodeAndroidOfferSnapshot,
   PromoCodeAppleCorrelationSnapshot,
   PromoCodeAppleOfferSnapshot,
@@ -72,6 +73,16 @@ export interface PendingPromoCodeAttribution {
    * `correlateAppleOffer` compares a real webhook event against.
    */
   appleOfferCorrelation: PromoCodeAppleCorrelationSnapshot;
+  /**
+   * FASE 1 — the iOS promotional (Offering/SKU) config authorized for this
+   * code AT THIS MOMENT, computed unconditionally by `validatePromoCode.ts`
+   * exactly like `androidOffer`/`appleOffer`/`appleOfferCorrelation`.
+   * Snapshotted verbatim into `couponRedemptions/{uid}.iosPromotion` — see
+   * that field's doc comment in `types.ts`. Never written to
+   * `users/{uid}.attribution` (the display-only mirror) — same exclusion as
+   * every other snapshot field, docs §33 rule 6.
+   */
+  iosPromotion: IOSPromotionConfig | null;
 }
 
 /** What `decidePromoCodeAttributionOutcome` needs to know about the currently-stored redemption record — nothing Firestore-specific. */
@@ -175,6 +186,7 @@ export async function applyPromoCodeAttributionTransactionally(
         androidOffer: attribution.androidOffer,
         appleOffer: attribution.appleOffer,
         appleOfferCorrelation: attribution.appleOfferCorrelation,
+        iosPromotion: attribution.iosPromotion,
         appliedAt: now,
         createdAt,
         updatedAt: now,

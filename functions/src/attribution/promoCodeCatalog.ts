@@ -5,6 +5,7 @@ import { PROMO_CODES_COLLECTION } from './constants';
 import type {
   AndroidSubscriptionOfferConfig,
   AppleOfferCorrelationConfig,
+  IOSPromotionConfig,
   PromoCodeDocument,
 } from './types';
 
@@ -37,6 +38,9 @@ const PROMO_CODE_DOCUMENT_KEYS = [
   'appleOfferReferenceMonthly',
   'appleProductIdAnnual',
   'appleOfferReferenceAnnual',
+  // FASE 1 — same optional-on-read leniency as the four fields above (see
+  // `isOptionalNullableIOSPromotion`'s doc comment).
+  'iosPromotion',
   'createdAt',
   'updatedAt',
   'createdBy',
@@ -64,6 +68,49 @@ function isOptionalNullableString(value: unknown): value is string | null | unde
 
 function isNullableTimestamp(value: unknown): value is Timestamp | null {
   return value === null || value instanceof Timestamp;
+}
+
+/**
+ * FASE 1 — strict shape check for `IOSPromotionConfig`: exactly the three
+ * required keys, each a non-empty string. No partial-pair leniency like
+ * `resolveAndroidOfferPair`/`resolveAppleOfferCorrelationPair` (which
+ * fail-close a two-field pair to `null`) — this is a THREE-field config with
+ * no meaningful "some fields set" state (Parte 11 of the task spec:
+ * `offeringIdentifier` covers both plans), so anything short of the complete
+ * shape is treated as a malformed document, not a partial config.
+ */
+function isValidIOSPromotionShape(value: unknown): value is IOSPromotionConfig {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const v = value as Record<string, unknown>;
+  const keys = Object.keys(v);
+  const expectedKeys = ['offeringIdentifier', 'monthlyProductId', 'annualProductId'];
+  if (keys.length !== expectedKeys.length || !expectedKeys.every((k) => keys.includes(k))) {
+    return false;
+  }
+  return (
+    typeof v.offeringIdentifier === 'string' &&
+    v.offeringIdentifier.length > 0 &&
+    typeof v.monthlyProductId === 'string' &&
+    v.monthlyProductId.length > 0 &&
+    typeof v.annualProductId === 'string' &&
+    v.annualProductId.length > 0
+  );
+}
+
+/**
+ * FASE 1 — like `isOptionalNullableString`, but for the new `iosPromotion`
+ * object: `undefined` (field entirely absent — every `promoCodes` document
+ * written before this phase) and explicit `null` (campaign has no iOS
+ * promotional configuration) both parse successfully; anything else must be
+ * the exact `IOSPromotionConfig` shape or the WHOLE catalog document is
+ * rejected as malformed (same strict policy `parsePromoCodeDocument` already
+ * applies to every other required-shape field) — never a silently partial
+ * authorization (docs Fase 1 §35).
+ */
+function isOptionalNullableIOSPromotion(
+  value: unknown,
+): value is IOSPromotionConfig | null | undefined {
+  return value === undefined || value === null || isValidIOSPromotionShape(value);
 }
 
 /**
@@ -111,6 +158,7 @@ export function parsePromoCodeDocument(data: unknown): PromoCodeDocument | null 
     !isOptionalNullableString(d.appleOfferReferenceMonthly) ||
     !isOptionalNullableString(d.appleProductIdAnnual) ||
     !isOptionalNullableString(d.appleOfferReferenceAnnual) ||
+    !isOptionalNullableIOSPromotion(d.iosPromotion) ||
     !(d.createdAt instanceof Timestamp) ||
     !(d.updatedAt instanceof Timestamp) ||
     typeof d.createdBy !== 'string' ||
@@ -139,6 +187,7 @@ export function parsePromoCodeDocument(data: unknown): PromoCodeDocument | null 
     appleOfferReferenceMonthly: (d.appleOfferReferenceMonthly as string | null | undefined) ?? null,
     appleProductIdAnnual: (d.appleProductIdAnnual as string | null | undefined) ?? null,
     appleOfferReferenceAnnual: (d.appleOfferReferenceAnnual as string | null | undefined) ?? null,
+    iosPromotion: (d.iosPromotion as IOSPromotionConfig | null | undefined) ?? null,
     createdAt: d.createdAt,
     updatedAt: d.updatedAt,
     createdBy: d.createdBy,

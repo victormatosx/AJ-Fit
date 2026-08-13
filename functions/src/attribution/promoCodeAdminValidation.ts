@@ -35,7 +35,8 @@ export type AdminPromoCodeValidationError =
   | 'apple_monthly_partial'
   | 'apple_annual_partial'
   | 'invalid_apple_offer_code_monthly'
-  | 'invalid_apple_offer_code_annual';
+  | 'invalid_apple_offer_code_annual'
+  | 'ios_promotion_invalid';
 
 export type AdminPromoCodeValidationResult =
   | { ok: true; fields: PromoCodeWritableFields }
@@ -87,6 +88,44 @@ function validatePair(firstRaw: unknown, secondRaw: unknown, maxLength: number):
   return { ok: true, value: { first, second } };
 }
 
+interface IOSPromotionResult {
+  ok: boolean;
+  value: { offeringIdentifier: string; monthlyProductId: string; annualProductId: string } | null;
+}
+
+/**
+ * FASE 1 — write-time validation for `iosPromotion`, the admin-facing
+ * counterpart of `promoCodeCatalog.ts`'s `isValidIOSPromotionShape` (which
+ * validates on READ). Unlike `validatePair` (exactly 2 fields, `first`/
+ * `second`), this is a THREE-field all-or-nothing group: `offeringIdentifier`
+ * covers both plans, so there is no meaningful "two of three set" state —
+ * any input where the three fields aren't uniformly blank or uniformly
+ * present-and-valid is rejected as `ok: false`, never silently accepted with
+ * one field defaulted.
+ */
+function validateIOSPromotionInput(input: {
+  offeringIdentifier?: unknown;
+  monthlyProductId?: unknown;
+  annualProductId?: unknown;
+} | null | undefined): IOSPromotionResult {
+  const offeringIdentifierRaw = input?.offeringIdentifier;
+  const monthlyProductIdRaw = input?.monthlyProductId;
+  const annualProductIdRaw = input?.annualProductId;
+
+  const blanks = [offeringIdentifierRaw, monthlyProductIdRaw, annualProductIdRaw].map(isBlank);
+  if (blanks.every(Boolean)) return { ok: true, value: null };
+  if (blanks.some(Boolean)) return { ok: false, value: null };
+
+  const offeringIdentifier = trimmedNonEmpty(offeringIdentifierRaw, IDENTIFIER_MAX_LENGTH);
+  const monthlyProductId = trimmedNonEmpty(monthlyProductIdRaw, IDENTIFIER_MAX_LENGTH);
+  const annualProductId = trimmedNonEmpty(annualProductIdRaw, IDENTIFIER_MAX_LENGTH);
+  if (offeringIdentifier === null || monthlyProductId === null || annualProductId === null) {
+    return { ok: false, value: null };
+  }
+
+  return { ok: true, value: { offeringIdentifier, monthlyProductId, annualProductId } };
+}
+
 function parseNullableTimestamp(value: unknown): { ok: true; value: Timestamp | null } | { ok: false } {
   if (value === null || value === undefined || value === '') return { ok: true, value: null };
   if (typeof value !== 'string' && typeof value !== 'number') return { ok: false };
@@ -136,6 +175,17 @@ export interface AdminPromoCodeWriteInput {
   appleOfferCode?: {
     monthly?: unknown;
     annual?: unknown;
+  } | null;
+  /**
+   * FASE 1 — the new iOS promotional (Offering/SKU) authorization. All
+   * three sub-fields required together or the whole object must be
+   * blank/absent — see `validateIOSPromotionInput`'s doc comment for why
+   * this has no partial state, unlike `android`/`apple` above.
+   */
+  iosPromotion?: {
+    offeringIdentifier?: unknown;
+    monthlyProductId?: unknown;
+    annualProductId?: unknown;
   } | null;
 }
 
@@ -228,6 +278,9 @@ export function validateAdminPromoCodeWrite(
     if (appleOfferCodeAnnual === null) return { ok: false, error: 'invalid_apple_offer_code_annual' };
   }
 
+  const iosPromotion = validateIOSPromotionInput(input.iosPromotion);
+  if (!iosPromotion.ok) return { ok: false, error: 'ios_promotion_invalid' };
+
   return {
     ok: true,
     fields: {
@@ -247,6 +300,7 @@ export function validateAdminPromoCodeWrite(
       appleOfferReferenceMonthly: appleMonthly.value?.second ?? null,
       appleProductIdAnnual: appleAnnual.value?.first ?? null,
       appleOfferReferenceAnnual: appleAnnual.value?.second ?? null,
+      iosPromotion: iosPromotion.value,
       notes,
     },
   };

@@ -109,6 +109,39 @@ export interface PromoCodeAppleCorrelationSnapshot {
 }
 
 /**
+ * FASE 1 (migração Promo SKU + Introductory Offer) — the iOS promotional
+ * authorization for one campaign: which RevenueCat Offering (never Current)
+ * and which two App Store Connect promotional product identifiers (each
+ * carrying its own Apple Introductory Offer, configured externally in App
+ * Store Connect — this backend never grants a trial itself, docs §6/§34)
+ * this campaign is authorized to route a user through.
+ *
+ * Deliberately UNRELATED to the legacy Apple Offer Code fields
+ * (`appleOfferCode*`/`appleProductId*`/`appleOfferReference*` below) — those
+ * describe `Purchases.presentCodeRedemptionSheet()`, a mechanism this new
+ * contract does not use at all. Both may coexist on the same
+ * `PromoCodeDocument` during the migration (docs §13 transition section);
+ * neither is derived from the other.
+ *
+ * All three fields are required together — a campaign is either fully
+ * configured for the iOS promotional flow or not configured at all
+ * (`iosPromotion === null`). There is no "monthly only" partial state like
+ * the Android/legacy-Apple pairs: `offeringIdentifier` covers both plans,
+ * so a partial config (e.g. `monthlyProductId` set without `annualProductId`)
+ * is a data-integrity problem in the catalog document itself, not a valid
+ * campaign, and `promoCodeCatalog.ts`'s parser fails the WHOLE document
+ * rather than exposing part of it.
+ */
+export interface IOSPromotionConfig {
+  /** RevenueCat Offering identifier (e.g. `"promo_7d"`) — never `default`/Current; only ever what the backend derived from the catalog, never client-supplied (docs §12/§34). */
+  offeringIdentifier: string;
+  /** App Store Connect product identifier for the monthly promotional SKU (e.g. `"ajfit_premium_monthly_promo"`). */
+  monthlyProductId: string;
+  /** App Store Connect product identifier for the annual promotional SKU (e.g. `"ajfit_premium_annual_promo"`). */
+  annualProductId: string;
+}
+
+/**
  * Server-managed lifecycle record for one Firebase uid's promo-code
  * attribution. Lives in `couponRedemptions/{uid}` (doc ID == uid — see
  * `COUPON_REDEMPTIONS_COLLECTION`/`couponRedemptionDocPath` in
@@ -175,6 +208,19 @@ export interface CouponRedemption {
    * then returns `unsupported`, never `matched`, for a legacy record.
    */
   appleOfferCorrelation: PromoCodeAppleCorrelationSnapshot;
+  /**
+   * FASE 1 — the iOS promotional (Offering/SKU) authorization for
+   * `couponCode` AT APPLICATION TIME, snapshotted verbatim from the catalog
+   * exactly like `androidOffer`/`appleOffer`/`appleOfferCorrelation` above
+   * (see `IOSPromotionConfig`'s doc comment for why editing
+   * `promoCodes/{code}` later must never silently change an already-applied
+   * redemption). `null` when the campaign has no iOS promotional
+   * configuration (expected for a campaign that only targets Android, or
+   * during the migration before a campaign has been configured for the new
+   * flow). Frozen forever once `lockedAt` is set, same as every other
+   * snapshot field — `applyAttributionRevenueCatEvent` never writes it.
+   */
+  iosPromotion: IOSPromotionConfig | null;
   /** When the CURRENT `couponCode` was applied — reset on every swap while pending. */
   appliedAt: Timestamp;
   /** When this uid's first-ever promo code was applied — preserved across swaps, unlike `appliedAt`. */
@@ -283,6 +329,15 @@ export interface PromoCodeDocument {
   appleProductIdAnnual: string | null;
   /** Same as `appleOfferReferenceMonthly`, for the annual plan. */
   appleOfferReferenceAnnual: string | null;
+  /**
+   * FASE 1 — see `IOSPromotionConfig`'s doc comment. `null` until an admin
+   * configures the iOS promotional Offering/SKU for this campaign. NEW
+   * field — optional on read for backward compatibility (see
+   * `promoCodeCatalog.ts`'s `parsePromoCodeDocument`): every `promoCodes`
+   * document written before this phase lacks it entirely, and that absence
+   * must parse as `null`, never reject the whole document.
+   */
+  iosPromotion: IOSPromotionConfig | null;
   createdAt: Timestamp;
   updatedAt: Timestamp;
   /** uid of the admin who created this entry. */
@@ -345,6 +400,18 @@ export interface ValidatePromoCodeResponseData {
     android: PromoCodePlatformStoreConfig | null;
     ios: ApplePromoCodePlatformStoreConfig | null;
   };
+  /**
+   * FASE 1 — the new iOS promotional (Offering/SKU) authorization,
+   * deliberately a SIBLING of `storeConfig`, never nested inside it:
+   * `storeConfig.ios` describes the legacy Apple Offer Code redemption
+   * mechanism (still temporarily supported, docs §13 transition section);
+   * this field describes the new contract, which no client consumes yet
+   * (Fase 2+). Gated by the same requested-`platform` rule as
+   * `storeConfig.ios` — `null` when iOS wasn't requested, or when the
+   * campaign has no iOS promotional configuration at all. NEVER implies
+   * Premium, a purchase, or a granted trial — see `eligibility` below.
+   */
+  iosPromotion: IOSPromotionConfig | null;
   eligibility: {
     determinedBy: 'store';
     guaranteed: false;
