@@ -4,6 +4,12 @@ import {
   REVENUECAT_API_SECRET_KEY,
   REVENUECAT_WEBHOOK_SECRET,
 } from './billing/revenuecat';
+import {
+  adminCreatePromoCodeHandler,
+  adminListPromoCodesHandler,
+  adminSetPromoCodeActiveHandler,
+  adminUpdatePromoCodeHandler,
+} from './attribution/promoCodeAdmin';
 import { validatePromoCodeHandler } from './attribution/validatePromoCode';
 
 /**
@@ -46,3 +52,22 @@ export const revenueCatWebhook = onRequest(
  * contract.
  */
 export const validatePromoCode = onCall(validatePromoCodeHandler);
+
+/**
+ * Admin promo-code catalog surface (`ajfit-admin`'s "Cupons e Campanhas"
+ * page). `firestore.rules`'s `promoCodes` block stays `allow read, write:
+ * if false` for every client — these four callables are the ONLY way the
+ * catalog is ever read or written, mirroring `validatePromoCode` above:
+ * Admin SDK server-side, never a client-side Firestore read/write. Every
+ * handler independently re-verifies `users/{uid}.metadata.role === 'admin'`
+ * via `attribution/adminAuth.ts`'s `requireAdminUid` — the client's own
+ * route guard/UI state is never trusted.
+ *
+ * See `attribution/promoCodeAdmin.ts` for the full contract (allowlisted
+ * fields, create/update/activate split, and why `couponRedemptions` is
+ * never touched here).
+ */
+export const adminListPromoCodes = onCall(adminListPromoCodesHandler);
+export const adminCreatePromoCode = onCall(adminCreatePromoCodeHandler);
+export const adminUpdatePromoCode = onCall(adminUpdatePromoCodeHandler);
+export const adminSetPromoCodeActive = onCall(adminSetPromoCodeActiveHandler);
