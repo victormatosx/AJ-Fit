@@ -452,7 +452,53 @@ exercise-videos/{exerciseId}
 
 ---
 
-# 18. Controle de versão
+# 18. Cloud Function: Autorizar compra promocional iOS
+
+Função callable autenticada:
+
+```txt
+authorizePromoPurchase
+```
+
+Entrada estrita:
+
+```json
+{
+  "plan": "monthly | annual"
+}
+```
+
+O UID vem exclusivamente do token Firebase (`request.auth.uid`). Qualquer
+campo adicional é rejeitado; o cliente não envia campanha, Offering, Product
+ID, status ou timestamps.
+
+Saída:
+
+```json
+{
+  "authorized": true,
+  "purchaseIntent": {
+    "plan": "monthly",
+    "offeringIdentifier": "promo_7d",
+    "expectedProductId": "ajfit_premium_monthly_promo",
+    "status": "purchase_pending",
+    "expiresAt": "2026-08-13T15:10:00.000Z"
+  }
+}
+```
+
+O backend lê e atualiza `couponRedemptions/{uid}` dentro de uma única
+transação. A campanha, a Offering e o Product ID vêm do snapshot
+`iosPromotion` da redemption. A intent expira logicamente após 10 minutos.
+Retry idêntico reutiliza a intent ativa sem estender `expiresAt`; plano ou
+campanha conflitante retorna erro controlado.
+
+Esta operação não compra, não chama StoreKit, não confirma attribution e não
+concede Premium.
+
+---
+
+# 19. Controle de versão
 
 Mudanças em contratos exigem:
 

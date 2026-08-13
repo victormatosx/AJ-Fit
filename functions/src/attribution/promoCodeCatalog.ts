@@ -79,7 +79,7 @@ function isNullableTimestamp(value: unknown): value is Timestamp | null {
  * `offeringIdentifier` covers both plans), so anything short of the complete
  * shape is treated as a malformed document, not a partial config.
  */
-function isValidIOSPromotionShape(value: unknown): value is IOSPromotionConfig {
+export function isValidIOSPromotionConfig(value: unknown): value is IOSPromotionConfig {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
   const v = value as Record<string, unknown>;
   const keys = Object.keys(v);
@@ -89,11 +89,11 @@ function isValidIOSPromotionShape(value: unknown): value is IOSPromotionConfig {
   }
   return (
     typeof v.offeringIdentifier === 'string' &&
-    v.offeringIdentifier.length > 0 &&
+    v.offeringIdentifier.trim().length > 0 &&
     typeof v.monthlyProductId === 'string' &&
-    v.monthlyProductId.length > 0 &&
+    v.monthlyProductId.trim().length > 0 &&
     typeof v.annualProductId === 'string' &&
-    v.annualProductId.length > 0
+    v.annualProductId.trim().length > 0
   );
 }
 
@@ -105,12 +105,14 @@ function isValidIOSPromotionShape(value: unknown): value is IOSPromotionConfig {
  * the exact `IOSPromotionConfig` shape or the WHOLE catalog document is
  * rejected as malformed (same strict policy `parsePromoCodeDocument` already
  * applies to every other required-shape field) — never a silently partial
- * authorization (docs Fase 1 §35).
+ * authorization (docs Fase 1 §35). The exported
+ * `isValidIOSPromotionConfig` guard is reused by Fase 2 when reading the
+ * snapshotted config from `couponRedemptions/{uid}`.
  */
 function isOptionalNullableIOSPromotion(
   value: unknown,
 ): value is IOSPromotionConfig | null | undefined {
-  return value === undefined || value === null || isValidIOSPromotionShape(value);
+  return value === undefined || value === null || isValidIOSPromotionConfig(value);
 }
 
 /**

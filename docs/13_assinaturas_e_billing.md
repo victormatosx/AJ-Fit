@@ -1638,7 +1638,8 @@ trialStartedAt/convertedAt de uma redemption com iosPromotion configurado
 só serão preenchíveis a partir de uma fase futura.
 
 Purchase intent:
-AINDA NÃO IMPLEMENTADO.
+IMPLEMENTADO NA FASE 2 — ver §36. O cliente ainda não chama a operação e o
+webhook ainda não consome a intent.
 ```
 
 ## O novo contrato: `IOSPromotionConfig`
@@ -1714,7 +1715,136 @@ ausente, que o parser trata como `null`).
 
 ## Fora do escopo desta fase
 
-Seleção de SKU promocional pelo Paywall, purchase intent, nova correlação
-de webhook, remoção do fluxo Apple Offer Code, e qualquer alteração ao
-comportamento Android — tudo isso é decisão de fases futuras (Fase 2 em
-diante), fora do escopo desta seção.
+Na Fase 1 ficaram fora de escopo: seleção de SKU promocional pelo Paywall,
+criação da purchase intent, nova correlação de webhook, remoção do fluxo Apple
+Offer Code e qualquer alteração ao comportamento Android. A purchase intent
+foi implementada posteriormente na Fase 2 (§36); os demais itens continuam
+pendentes.
+
+---
+
+# 36. Migração Promo SKU + Introductory Offer — FASE 2 (purchase intent pré-compra)
+
+A Fase 2 adiciona somente a evidência backend criada imediatamente antes de
+uma futura compra StoreKit. Não integra o Paywall, não chama StoreKit e não
+altera o webhook.
+
+## Operação autenticada
+
+Callable:
+
+```txt
+authorizePromoPurchase
+```
+
+Implementação:
+
+```txt
+functions/src/attribution/authorizePromoPurchase.ts
+functions/src/attribution/promoPurchaseIntent.ts
+```
+
+O request aceita exatamente um campo:
+
+```ts
+interface AuthorizePromoPurchaseRequestData {
+  plan?: "monthly" | "annual";
+}
+```
+
+O UID vem exclusivamente de `request.auth.uid`. Campos adicionais — inclusive
+`uid`, `campaign`, `offeringIdentifier`, `expectedProductId`, `status` e
+timestamps — são rejeitados antes da transação.
+
+## Modelo persistido
+
+```ts
+interface PromoPurchaseIntent {
+  campaignId: string;
+  plan: "monthly" | "annual";
+  expectedProductId: string;
+  offeringIdentifier: string;
+  status: "purchase_pending";
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+  expiresAt: Timestamp;
+}
+```
+
+A intent vive em `couponRedemptions/{uid}.purchaseIntent`; não existe coleção
+paralela nem `intentId`. O documento por UID já fornece a unicidade necessária
+nesta fase, e ainda não existe um consumidor externo que precise de um token
+CAS opaco.
+
+## Derivação e transação
+
+Dentro de uma única transação Firestore, o backend:
+
+```txt
+request.auth.uid + plan
+→ lê couponRedemptions/{uid}
+→ valida uid/cupom/campaignId e estados de consumo
+→ valida o snapshot iosPromotion completo
+→ deriva offeringIdentifier e Product ID pelo plano
+→ avalia a purchaseIntent existente
+→ grava purchase_pending com timestamps do backend
+```
+
+`monthly` usa somente `iosPromotion.monthlyProductId`; `annual` usa somente
+`iosPromotion.annualProductId`. A Offering sempre vem de
+`iosPromotion.offeringIdentifier`. O catálogo `promoCodes/{code}` não é lido,
+portanto uma edição administrativa posterior não altera a autorização já
+capturada na redemption.
+
+`lockedAt`, `trialStartedAt` ou `convertedAt` não nulos tornam a redemption
+incompatível com uma nova intent. Ausência/má formação de `iosPromotion`, da
+redemption ou de uma intent server-owned existente falha de forma segura.
+
+## Expiração, idempotência e concorrência
+
+Constante backend:
+
+```txt
+PROMO_PURCHASE_INTENT_TTL_MS = 10 * 60 * 1000
+```
+
+A janela de 10 minutos é deliberadamente curta para uma operação executada
+imediatamente antes da loja, mas tolera autenticação e interação normal com a
+folha de compra. Não se usam horas ou dias. A validade é sempre comparada em
+código com `expiresAt`; Firestore TTL não é requisito nem defesa única.
+
+Retry da mesma campanha/plano/Offering/Product ID reutiliza a intent ativa sem
+escrita e sem prolongar `expiresAt`. Uma intent ativa diferente retorna
+`promo_purchase_intent_conflict`. Uma intent expirada pode ser substituída na
+mesma transação.
+
+Como todas as chamadas leem e escrevem o mesmo `couponRedemptions/{uid}`, o
+Firestore serializa conflitos e repete a transação perdedora sobre o estado
+já confirmado. O fluxo de aplicação de cupom também verifica a intent: uma
+intent ativa ou malformada impede a troca de campanha; uma expirada não
+bloqueia permanentemente.
+
+Essa garantia possui cobertura real no Firestore Emulator em
+`firestore-tests/promoPurchaseIntent.concurrent.test.ts`: chamadas `monthly`
+e `annual` são disparadas com `Promise.all` para o mesmo UID; exatamente uma
+retorna `authorized`, a outra retorna `intent_conflict`, e somente a intent
+vencedora permanece no documento.
+
+## Limites desta fase
+
+```txt
+Fase 1: iosPromotion snapshot — implementada.
+Fase 2: purchaseIntent pré-compra — implementada no backend.
+Fase 3: webhook correlacionar product_id + intent — NÃO implementada.
+
+Cliente chama authorizePromoPurchase — NÃO.
+Paywall usa promo_7d — NÃO.
+StoreKit compra SKU _promo pela nova arquitetura — NÃO.
+Offer Code legado/presentCodeRedemptionSheet — preservado.
+Webhook usa purchaseIntent — NÃO.
+```
+
+Criar `purchase_pending` não altera `lockedAt`, `trialStartedAt` ou
+`convertedAt`, não escreve em `users/{uid}.subscription` e não concede
+Premium. A autoridade final continua exclusivamente
+`CustomerInfo.entitlements.active["premium"]`.

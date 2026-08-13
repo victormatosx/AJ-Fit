@@ -107,6 +107,12 @@ describe('decidePromoCodeAttributionOutcome (pure)', () => {
     const lockedAt = Timestamp.fromDate(new Date('2026-08-11T00:00:00.000Z'));
     expect(decidePromoCodeAttributionOutcome({ lockedAt })).toEqual({ action: 'locked' });
   });
+
+  it('refuses to replace attribution while a purchase intent is active', () => {
+    expect(
+      decidePromoCodeAttributionOutcome({ lockedAt: null, hasBlockingPurchaseIntent: true }),
+    ).toEqual({ action: 'purchase_intent_active' });
+  });
 });
 
 describe('applyPromoCodeAttributionTransactionally', () => {
@@ -268,6 +274,74 @@ describe('applyPromoCodeAttributionTransactionally', () => {
 
     expect(second).toEqual({ status: 'locked' });
     expect(transactionMocks.set).not.toHaveBeenCalled();
+  });
+
+  it('FASE 2: an active purchase intent prevents a different campaign from replacing the redemption', async () => {
+    const now = Timestamp.now();
+    mockGetImplementation(true, {
+      exists: true,
+      data: {
+        ...ATTRIBUTION,
+        uid: UID,
+        appliedAt: now,
+        createdAt: now,
+        updatedAt: now,
+        trialStartedAt: null,
+        convertedAt: null,
+        lockedAt: null,
+        purchaseIntent: {
+          campaignId: 'campaign-arnaldo',
+          plan: 'monthly',
+          expectedProductId: 'ajfit_premium_monthly_promo',
+          offeringIdentifier: 'promo_7d',
+          status: 'purchase_pending',
+          createdAt: now,
+          updatedAt: now,
+          expiresAt: Timestamp.fromMillis(now.toMillis() + 60_000),
+        },
+      },
+    });
+
+    const result = await applyPromoCodeAttributionTransactionally(UID, {
+      ...ATTRIBUTION,
+      couponCode: 'JOAO',
+      campaignId: 'campaign-joao',
+    });
+
+    expect(result).toEqual({ status: 'purchase_intent_active' });
+    expect(transactionMocks.set).not.toHaveBeenCalled();
+  });
+
+  it('FASE 2: an expired purchase intent no longer blocks a legitimate coupon application', async () => {
+    const now = Timestamp.now();
+    mockGetImplementation(true, {
+      exists: true,
+      data: {
+        ...ATTRIBUTION,
+        uid: UID,
+        appliedAt: now,
+        createdAt: now,
+        updatedAt: now,
+        trialStartedAt: null,
+        convertedAt: null,
+        lockedAt: null,
+        purchaseIntent: {
+          campaignId: 'campaign-arnaldo',
+          plan: 'monthly',
+          expectedProductId: 'ajfit_premium_monthly_promo',
+          offeringIdentifier: 'promo_7d',
+          status: 'purchase_pending',
+          createdAt: now,
+          updatedAt: now,
+          expiresAt: Timestamp.fromMillis(now.toMillis() - 1),
+        },
+      },
+    });
+
+    const result = await applyPromoCodeAttributionTransactionally(UID, ATTRIBUTION);
+
+    expect(result).toEqual({ status: 'applied' });
+    expect(transactionMocks.set).toHaveBeenCalledTimes(2);
   });
 
   // FASE iOS-1 — regression: adding appleOffer must not change what/how

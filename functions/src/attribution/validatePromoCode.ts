@@ -174,6 +174,11 @@ export async function validatePromoCodeHandler(
     throw new HttpsError('failed-precondition', 'attribution_locked');
   }
 
+  if (outcome.status === 'purchase_intent_active') {
+    logInfo(SCOPE, 'promo code apply rejected: purchase intent active', { uid });
+    throw new HttpsError('failed-precondition', 'promo_purchase_intent_active');
+  }
+
   logInfo(SCOPE, 'promo code applied', { uid });
 
   // FASE 4C.1: each plan was already resolved independently and fail-closed

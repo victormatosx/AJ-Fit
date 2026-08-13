@@ -380,3 +380,56 @@ O sistema deve permitir armazenar o cupom promocional utilizado no cadastro.
 O objetivo é rastrear a origem do usuário para fins de comissão e análise interna.
 
 O cupom não influencia a lógica de treino.
+
+---
+
+# 16. Redemption promocional e intenção de compra iOS
+
+`couponRedemptions/{uid}` é o registro de ciclo de vida server-managed da
+atribuição promocional atual do UID. O ID do documento é o próprio Firebase
+UID; clientes não podem ler nem escrever essa coleção pelas Firestore Rules.
+
+Na migração iOS Promo SKU, o documento pode conter:
+
+```txt
+couponRedemptions/{uid}
+  uid
+  couponCode
+  campaignId
+  influencerId
+  androidOffer
+  appleOffer
+  appleOfferCorrelation
+  iosPromotion
+    offeringIdentifier
+    monthlyProductId
+    annualProductId
+  purchaseIntent (opcional)
+    campaignId
+    plan                  // monthly | annual
+    expectedProductId
+    offeringIdentifier
+    status                // purchase_pending
+    createdAt             // timestamp do backend
+    updatedAt             // timestamp do backend
+    expiresAt             // timestamp do backend
+  appliedAt
+  createdAt
+  updatedAt
+  trialStartedAt
+  convertedAt
+  lockedAt
+```
+
+`iosPromotion` é um snapshot capturado quando o cupom é aplicado. A intenção
+pré-compra deriva campanha, Offering e Product ID exclusivamente desse
+documento; não relê `promoCodes/{code}` e não aceita esses valores do cliente.
+
+Existe no máximo uma `purchaseIntent` aninhada por UID. A validade é lógica:
+o backend sempre compara `expiresAt` com seu próprio relógio, independentemente
+de eventual limpeza futura por Firestore TTL. Uma intent expirada pode ser
+substituída transacionalmente; uma intent ativa conflitante não pode.
+
+`purchase_pending` não altera `lockedAt`, `trialStartedAt` ou `convertedAt` e
+não concede Premium. A autoridade de acesso continua sendo exclusivamente o
+`CustomerInfo.entitlements.active["premium"]` do RevenueCat.

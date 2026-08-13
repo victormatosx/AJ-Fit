@@ -11,6 +11,7 @@ import {
   adminUpdatePromoCodeHandler,
 } from './attribution/promoCodeAdmin';
 import { validatePromoCodeHandler } from './attribution/validatePromoCode';
+import { authorizePromoPurchaseHandler } from './attribution/authorizePromoPurchase';
 
 /**
  * AJ Fit Cloud Functions entry point.
@@ -52,6 +53,14 @@ export const revenueCatWebhook = onRequest(
  * contract.
  */
 export const validatePromoCode = onCall(validatePromoCodeHandler);
+
+/**
+ * Creates or idempotently returns the calling uid's short-lived iOS promo
+ * purchase intent. The callable accepts only `monthly`/`annual`; campaign,
+ * Offering, product ID, status and timestamps are derived transactionally
+ * from `couponRedemptions/{uid}` by the backend.
+ */
+export const authorizePromoPurchase = onCall(authorizePromoPurchaseHandler);
 
 /**
  * Admin promo-code catalog surface (`ajfit-admin`'s "Cupons e Campanhas"

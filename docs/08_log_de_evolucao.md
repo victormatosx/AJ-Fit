@@ -1870,3 +1870,31 @@ tarefa — os itens de sistema de cupom/oferta promocional (matcher de
 um checklist formal equivalente ao 17_checklist_fase3_assinatura.md; se essa
 lacuna for confirmada como real, cabe ao Humano Coordenador decidir se cria
 um checklist dedicado ou expande o existente.
+Data: 2026-08-13
+Responsável: Codex — Agente Backend
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Implementada a Fase 2 da migração iOS Promo SKU + Introductory Offer. A nova
+callable autenticada `authorizePromoPurchase` aceita somente `monthly` ou
+`annual` e cria, dentro de transação Firestore, a intenção pré-compra aninhada
+em `couponRedemptions/{uid}.purchaseIntent`. Campanha, Offering e Product ID
+são derivados do snapshot `iosPromotion` da redemption; UID e timestamps são
+autoridade exclusiva do backend. A intent `purchase_pending` expira
+logicamente em 10 minutos, retry equivalente é idempotente sem renovar a
+janela, intent ativa conflitante é recusada e intent expirada pode ser
+substituída. O fluxo de aplicação de cupom também passou a impedir troca de
+campanha enquanto uma intent está ativa.
+
+Impacto:
+Somente backend, tipos, testes e documentação foram alterados. Paywall,
+StoreKit, correlação do webhook, Android e Apple Offer Code legado permanecem
+sem alteração. A intent não define `lockedAt`, `trialStartedAt` ou
+`convertedAt` e não concede Premium; `CustomerInfo.entitlements.active["premium"]`
+continua sendo a autoridade final.
+
+Próxima ação:
+Na Fase 3, após aprovação humana, correlacionar o webhook real com a intent
+pré-existente e o `product_id` esperado, sem inferir campanha pelo SKU.
+
+---

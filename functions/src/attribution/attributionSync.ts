@@ -22,6 +22,10 @@ import type {
   PromoCodeAppleCorrelationSnapshot,
   PromoCodeAppleOfferSnapshot,
 } from './types';
+import {
+  isPromoPurchaseIntentActiveAt,
+  parseStoredPromoPurchaseIntent,
+} from './promoPurchaseIntent';
 
 /**
  * Firestore-facing half of the promo-code module: apply or swap a uid's
@@ -89,11 +93,14 @@ export interface PendingPromoCodeAttribution {
 export interface CurrentAttributionState {
   /** `null`/`undefined` = not locked yet, i.e. still swappable. Any other value = locked. */
   lockedAt: unknown;
+  /** Active or malformed nested intents block replacement of the attribution snapshot. */
+  hasBlockingPurchaseIntent?: boolean;
 }
 
 export type PromoCodeAttributionDecision =
   | { action: 'apply' }
-  | { action: 'locked' };
+  | { action: 'locked' }
+  | { action: 'purchase_intent_active' };
 
 /**
  * Pure decision function — zero Firestore dependency. `current` is
@@ -111,12 +118,14 @@ export function decidePromoCodeAttributionOutcome(
   if (current && current.lockedAt !== null && current.lockedAt !== undefined) {
     return { action: 'locked' };
   }
+  if (current?.hasBlockingPurchaseIntent) return { action: 'purchase_intent_active' };
   return { action: 'apply' };
 }
 
 export type ApplyPromoCodeAttributionResult =
   | { status: 'applied' }
   | { status: 'locked' }
+  | { status: 'purchase_intent_active' }
   | { status: 'user_not_found' };
 
 /**
@@ -167,12 +176,25 @@ export async function applyPromoCodeAttributionTransactionally(
         ? (redemptionSnapshot.data() as Record<string, unknown> | undefined)
         : undefined;
 
+      let hasBlockingPurchaseIntent = false;
+      if (existing && Object.prototype.hasOwnProperty.call(existing, 'purchaseIntent')) {
+        const intent = parseStoredPromoPurchaseIntent(existing.purchaseIntent);
+        // A malformed server-owned intent is never erased by a coupon swap.
+        hasBlockingPurchaseIntent =
+          intent === null || isPromoPurchaseIntentActiveAt(intent, Timestamp.now());
+      }
+
       const decision = decidePromoCodeAttributionOutcome(
-        existing ? { lockedAt: existing.lockedAt } : undefined,
+        existing
+          ? { lockedAt: existing.lockedAt, hasBlockingPurchaseIntent }
+          : undefined,
       );
 
       if (decision.action === 'locked') {
         return { status: 'locked' };
+      }
+      if (decision.action === 'purchase_intent_active') {
+        return { status: 'purchase_intent_active' };
       }
 
       const now = FieldValue.serverTimestamp();

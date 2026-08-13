@@ -81,6 +81,18 @@ export const PROMO_CODE_PATTERN = /^[A-Z0-9_-]+$/;
 export const PROMO_CODE_PLATFORMS = ['ANDROID', 'IOS'] as const;
 export type PromoCodePlatform = (typeof PROMO_CODE_PLATFORMS)[number];
 
+/** Plans the caller may choose when authorizing an iOS promotional purchase. */
+export const PROMO_PURCHASE_PLANS = ['monthly', 'annual'] as const;
+export type PromoPurchasePlan = (typeof PROMO_PURCHASE_PLANS)[number];
+
+/**
+ * A purchase intent is created immediately before StoreKit. Ten minutes is
+ * long enough for a normal store confirmation flow while keeping abandoned
+ * evidence short-lived. Logical expiry is always checked in code; Firestore
+ * TTL cleanup, if added later, is not part of the authorization boundary.
+ */
+export const PROMO_PURCHASE_INTENT_TTL_MS = 10 * 60 * 1000;
+
 /** Path helper so no other module hand-builds `users/${uid}` template strings. */
 export function userDocPath(uid: string): string {
   return `${USERS_COLLECTION}/${uid}`;

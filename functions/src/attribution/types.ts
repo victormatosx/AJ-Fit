@@ -1,5 +1,5 @@
 import type { Timestamp } from 'firebase-admin/firestore';
-import type { PromoCodePlatform } from './constants';
+import type { PromoCodePlatform, PromoPurchasePlan } from './constants';
 
 /**
  * Types for the attribution/promo-code module. See
@@ -142,6 +142,27 @@ export interface IOSPromotionConfig {
 }
 
 /**
+ * FASE 2 — short-lived, backend-authored evidence that this uid was allowed
+ * to attempt one promotional iOS purchase. It is nested in the authoritative
+ * `couponRedemptions/{uid}` record, so there can be only one active intent per
+ * uid and campaign attribution remains colocated with its authorization.
+ */
+export interface PromoPurchaseIntent {
+  /** Derived from the redemption snapshot; never accepted from the client. */
+  campaignId: string;
+  /** The only business choice accepted from the authenticated client. */
+  plan: PromoPurchasePlan;
+  /** Derived from `iosPromotion.{monthly,annual}ProductId`. */
+  expectedProductId: string;
+  /** Derived from `iosPromotion.offeringIdentifier`. */
+  offeringIdentifier: string;
+  status: 'purchase_pending';
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+  expiresAt: Timestamp;
+}
+
+/**
  * Server-managed lifecycle record for one Firebase uid's promo-code
  * attribution. Lives in `couponRedemptions/{uid}` (doc ID == uid — see
  * `COUPON_REDEMPTIONS_COLLECTION`/`couponRedemptionDocPath` in
@@ -221,6 +242,8 @@ export interface CouponRedemption {
    * snapshot field — `applyAttributionRevenueCatEvent` never writes it.
    */
   iosPromotion: IOSPromotionConfig | null;
+  /** FASE 2 — absent until the user authorizes an immediate promo purchase attempt. */
+  purchaseIntent?: PromoPurchaseIntent;
   /** When the CURRENT `couponCode` was applied — reset on every swap while pending. */
   appliedAt: Timestamp;
   /** When this uid's first-ever promo code was applied — preserved across swaps, unlike `appliedAt`. */
@@ -419,4 +442,22 @@ export interface ValidatePromoCodeResponseData {
   };
 }
 
-export type { PromoCodePlatform };
+/** Strictly untrusted callable payload. Runtime validation accepts only `plan`. */
+export interface AuthorizePromoPurchaseRequestData {
+  plan?: unknown;
+}
+
+/** Minimal wire contract needed by the future client integration. */
+export interface AuthorizePromoPurchaseResponseData {
+  authorized: true;
+  purchaseIntent: {
+    plan: PromoPurchasePlan;
+    offeringIdentifier: string;
+    expectedProductId: string;
+    status: 'purchase_pending';
+    /** ISO-8601 representation of the backend-authored Firestore timestamp. */
+    expiresAt: string;
+  };
+}
+
+export type { PromoCodePlatform, PromoPurchasePlan };

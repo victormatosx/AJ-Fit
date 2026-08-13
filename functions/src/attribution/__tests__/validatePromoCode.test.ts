@@ -217,6 +217,19 @@ describe('validatePromoCodeHandler', () => {
     );
   });
 
+  it('maps an active purchase intent to a controlled error instead of overwriting it', async () => {
+    catalogMocks.lookupPromoCode.mockResolvedValue({ status: 'found', promoCode: promoCode() });
+    syncMocks.applyPromoCodeAttributionTransactionally.mockResolvedValue({
+      status: 'purchase_intent_active',
+    });
+
+    await expectHttpsError(
+      validatePromoCodeHandler(request({ code: 'ARNALDO' })),
+      'failed-precondition',
+      'promo_purchase_intent_active',
+    );
+  });
+
   it('returns both android and ios store config when no platform is requested', async () => {
     catalogMocks.lookupPromoCode.mockResolvedValue({ status: 'found', promoCode: promoCode() });
     syncMocks.applyPromoCodeAttributionTransactionally.mockResolvedValue({ status: 'applied' });
