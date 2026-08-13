@@ -28,6 +28,10 @@ vi.mock('../../lib/firebase', () => ({ auth: { currentUser: null } }));
 vi.mock('../../lib/secureAuthStorage', () => ({
   clearSecureAuthSession: vi.fn(),
 }));
+
+vi.mock('../../lib/photoVaultKeyStorage', () => ({
+  deleteVaultKey: vi.fn(),
+}));
 vi.mock('../providers/google.native', () => ({
   getGoogleCredential: mocks.getGoogleCredential,
   isGoogleSigninAvailable: vi.fn(),

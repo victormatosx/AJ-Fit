@@ -12,19 +12,18 @@ import { logger } from 'firebase-functions/v2';
  *   - full photo ciphertext or any photo content
  *   - signed/private Storage URLs
  *   - secrets or service credentials
- * A `uid` alone is fine (Cloud Functions logs are ops-only, not
- * user-facing) — see docs/12_seguranca_geral_do_app.md.
+ * Photo Vault logs also avoid user IDs, object paths and photo IDs. Aggregate
+ * counters, a fixed stage and a short provider code are sufficient for its
+ * operational diagnostics.
  */
 export type LogContext = Record<string, string | number | boolean | null | undefined>;
 
-function errorCode(err: unknown): string | undefined {
-  return typeof err === 'object' && err !== null && 'code' in err
-    ? String((err as { code: unknown }).code)
-    : undefined;
-}
-
-function errorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
+function errorCode(err: unknown): string {
+  const raw =
+    typeof err === 'object' && err !== null && 'code' in err
+      ? String((err as { code: unknown }).code)
+      : '';
+  return /^[a-z0-9/_-]{1,64}$/i.test(raw) ? raw : 'UNCLASSIFIED';
 }
 
 export function logInfo(scope: string, message: string, context?: LogContext): void {
@@ -38,7 +37,6 @@ export function logWarn(scope: string, message: string, context?: LogContext): v
 export function logFunctionError(scope: string, err: unknown, context?: LogContext): void {
   logger.error(`[${scope}]`, {
     code: errorCode(err),
-    message: errorMessage(err),
     ...context,
   });
 }

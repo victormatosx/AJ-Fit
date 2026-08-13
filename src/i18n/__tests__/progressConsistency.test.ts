@@ -27,7 +27,6 @@ describe('Progress and monthly consistency i18n', () => {
       'progress.charts.loadTitle',
       'progress.heatmap.title',
       'progress.records.title',
-      'progress.photos.hint',
       'progress.accessibility.selectTab',
     ]) expect(progress).toContain(key);
 

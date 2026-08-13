@@ -31,7 +31,15 @@
     "title": "Constancia · semana",
     "progressLabel": "{{done}}/{{total}}",
     "restLabel": "Off",
-    "dayInitials": ["D", "L", "M", "M", "J", "V", "S"]
+    "dayInitials": [
+      "D",
+      "L",
+      "M",
+      "M",
+      "J",
+      "V",
+      "S"
+    ]
   },
   "progress": {
     "header": {
@@ -67,8 +75,73 @@
       "gain": "+{{value}} {{unit}}"
     },
     "photos": {
-      "week": "Sem {{week}}",
-      "hint": "Arrastra tus fotos de progreso a los marcos"
+      "locked": {
+        "title": "Tus fotos están protegidas",
+        "description": "Usa la autenticación de tu dispositivo para acceder a tus fotos privadas.",
+        "cta": "Desbloquear",
+        "unlocking": "Desbloqueando…"
+      },
+      "notConfigured": {
+        "title": "Protección no configurada",
+        "description": "Configura biometría o bloqueo de pantalla en tu dispositivo para acceder a tus fotos privadas.",
+        "openSettings": "Abrir ajustes"
+      },
+      "authError": {
+        "cancelled": "Autenticación cancelada.",
+        "failed": "No se pudo autenticar. Inténtalo de nuevo.",
+        "lockedOut": "Demasiados intentos. Usa el bloqueo de pantalla de tu dispositivo o inténtalo más tarde.",
+        "unavailable": "La autenticación no está disponible en este dispositivo."
+      },
+      "empty": {
+        "title": "Aún no has añadido fotos",
+        "description": "Registra tu evolución para ver los cambios con el tiempo.",
+        "cta": "Añadir foto"
+      },
+      "list": {
+        "loading": "Cargando tus fotos…",
+        "error": "No se pudieron cargar tus fotos.",
+        "retry": "Intentar de nuevo",
+        "offlinePhoto": "Conéctate a internet para cargar esta foto.",
+        "add": "Añadir foto"
+      },
+      "add": {
+        "title": "Añadir foto",
+        "camera": "Tomar foto",
+        "library": "Elegir de la galería",
+        "cancel": "Cancelar",
+        "uploading": "Subiendo tu foto…"
+      },
+      "permission": {
+        "cameraDenied": "Permite el acceso a la cámara en los ajustes para tomar una foto.",
+        "libraryDenied": "Permite el acceso a las fotos en los ajustes para elegir una imagen."
+      },
+      "uploadError": {
+        "tooLarge": "Esta foto es demasiado grande. Prueba con otra imagen.",
+        "unsupported": "Formato de imagen no compatible.",
+        "network": "Error de conexión. Revisa tu internet e inténtalo de nuevo.",
+        "generic": "No se pudo subir tu foto. Inténtalo de nuevo."
+      },
+      "viewer": {
+        "close": "Cerrar",
+        "delete": "Eliminar foto"
+      },
+      "delete": {
+        "title": "¿Eliminar esta foto?",
+        "description": "Esta acción no se puede deshacer.",
+        "cancel": "Cancelar",
+        "confirm": "Eliminar",
+        "error": "No se pudo eliminar la foto. Inténtalo de nuevo."
+      },
+      "a11y": {
+        "unlock": "Desbloquear fotos privadas",
+        "photo": "Foto del {{date}}",
+        "openPhoto": "Abrir foto del {{date}} en pantalla completa",
+        "addPhoto": "Añadir nueva foto",
+        "takePhoto": "Tomar una foto con la cámara",
+        "chooseLibrary": "Elegir una foto de la galería",
+        "closeViewer": "Cerrar visor",
+        "deletePhoto": "Eliminar esta foto"
+      }
     },
     "units": {
       "kg": "kg"
@@ -114,9 +187,24 @@
     "title": "Próximos entrenos",
     "meta": "{{duration}} min · {{exercises}} ejercicios",
     "items": {
-      "pull": { "day": "Mié", "name": "PULL — Espalda y bíceps", "duration": 54, "exercises": 7 },
-      "legs": { "day": "Vie", "name": "LEGS — Cuádriceps y glúteos", "duration": 62, "exercises": 9 },
-      "upper": { "day": "Sáb", "name": "UPPER — Empuje ligero", "duration": 45, "exercises": 6 }
+      "pull": {
+        "day": "Mié",
+        "name": "PULL — Espalda y bíceps",
+        "duration": 54,
+        "exercises": 7
+      },
+      "legs": {
+        "day": "Vie",
+        "name": "LEGS — Cuádriceps y glúteos",
+        "duration": 62,
+        "exercises": 9
+      },
+      "upper": {
+        "day": "Sáb",
+        "name": "UPPER — Empuje ligero",
+        "duration": 45,
+        "exercises": 6
+      }
     }
   },
   "mock": {
