@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useTranslation } from 'react-i18next';
 import { ScreenBg } from '../components/ui/ScreenBg';
 import { Display, Slash, MonoLabel } from '../components/ui/Display';
 import { Card } from '../components/ui/Card';
@@ -22,6 +23,14 @@ import { OutlineNumber } from '../components/ui/OutlineNumber';
 import { ExerciseGif } from '../components/fitness/ExerciseGif';
 import { colors, fonts, displayLineHeight } from '../theme/tokens';
 import { TODAY_WORKOUT } from '../lib/todayWorkout';
+import { useUnits } from '../state/UnitsContext';
+import {
+  adjustWorkoutLoadKg,
+  formatWorkoutLoadFromKg,
+  workoutLoadFromKg,
+  workoutLoadToKg,
+  workoutLoadUnit,
+} from '../units/workoutLoadConversions';
 
 const SUBS_KEY = 'ajfit-subs';
 
@@ -138,7 +147,57 @@ const EXERCISES: Exercise[] = [
 
 type Props = { onDone: () => void; onMinimize?: () => void };
 
+/**
+ * Pure translation helpers — closed over the `t` returned by useTranslation.
+ * Exercise names look up by the ExerciseDB `db` field (stable identifier
+ * shared by base and substitution rows). Muscle groups look up via a static
+ * mapping from the catalog's PT target string to a stable key — the same
+ * mapping used for backward-compat with subs persisted before Phase 7C.
+ *
+ * When a translation is missing (new exercise not yet in the JSON, or a
+ * legacy persisted sub with an unmapped `db`), fall back to the catalog's
+ * original PT `name`/`target` so the UI never renders a raw i18n key.
+ */
+type LooseT = (key: string, opts?: Record<string, unknown>) => string;
+
+const MUSCLE_GROUP_KEY_BY_TARGET: Record<string, string> = {
+  Peitoral: 'chest',
+  'Peitoral Superior': 'upperChest',
+  Ombro: 'shoulders',
+  'Ombro Lateral': 'sideDelt',
+  'Ombro Frontal': 'frontDelt',
+  Tríceps: 'triceps',
+  'Tríceps & Peito': 'tricepsChest',
+};
+
+function translateExerciseName(tLoose: LooseT, db: string, fallbackName: string): string {
+  const key = `exercises.${db}`;
+  const value = tLoose(key, { defaultValue: '' });
+  if (value && value !== key) return value;
+  if (__DEV__) {
+    console.warn('[workout] missing exercise translation for db:', db);
+  }
+  return fallbackName;
+}
+
+function translateMuscleGroup(tLoose: LooseT, target: string): string {
+  const stableKey = MUSCLE_GROUP_KEY_BY_TARGET[target];
+  if (!stableKey) {
+    if (__DEV__) {
+      console.warn('[workout] missing muscleGroup key for target:', target);
+    }
+    return target;
+  }
+  const key = `muscleGroups.${stableKey}`;
+  const value = tLoose(key, { defaultValue: '' });
+  return value || target;
+}
+
 export function WorkoutScreen({ onDone, onMinimize }: Props) {
+  const { t } = useTranslation('workout');
+  const { resolvedUnits } = useUnits();
+  const loadUnit = workoutLoadUnit(resolvedUnits);
+  const tLoose = t as unknown as LooseT;
   // Queue of exercise indices in current order (head = current)
   const [order, setOrder] = useState<number[]>(() => EXERCISES.map((_, i) => i));
   // exIdx -> sets completed
@@ -229,7 +288,11 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
         0
       );
       if (regWeight > prevBest && prevBest > 0) {
-        setPr({ weight: regWeight, exName: ex.name, prev: prevBest });
+        setPr({
+          weight: regWeight,
+          exName: translateExerciseName(tLoose, ex.db, ex.name),
+          prev: prevBest,
+        });
         setTimeout(() => setPr(null), 2600);
       }
       nextLogged = { ...logged, [`${pending.exId}-${pending.setIdx}`]: regWeight };
@@ -243,7 +306,10 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
     setRegWeight(0);
 
     if (finishedSet >= ex.sets.length) {
-      const completedName = ex.name;
+      // Snapshot translated names AT TRANSITION TIME so the overlay always
+      // renders in the language active when the exercise ended, even if the
+      // user changes language during the 2s overlay window.
+      const completedName = translateExerciseName(tLoose, ex.db, ex.name);
       const nextOrder = order.slice(1);
       setOrder(nextOrder);
       setSkipped((s) => s.filter((x) => x !== exIdx));
@@ -251,9 +317,10 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
         setFinished(true);
         return;
       }
+      const nextEx = resolve(EXERCISES[nextOrder[0]]);
       setExComplete({
         name: completedName,
-        nextName: resolve(EXERCISES[nextOrder[0]]).name,
+        nextName: translateExerciseName(tLoose, nextEx.db, nextEx.name),
       });
       setTimeout(() => setExComplete(null), 2000);
     }
@@ -343,7 +410,12 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
             gap: 12,
           }}
         >
-          <Pressable onPress={onDone} style={hdrBtnStyle}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('header.accessibility.close')}
+            onPress={onDone}
+            style={hdrBtnStyle}
+          >
             <Icon name="x" size={15} color="rgba(255,255,255,0.7)" />
           </Pressable>
           <View style={{ flex: 1 }}>
@@ -358,11 +430,20 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
               <MonoLabel>{TODAY_WORKOUT.dayLabel}</MonoLabel>
               <MonoLabel color={colors.accentHi}>{fmt(elapsed)}</MonoLabel>
               <MonoLabel>
-                {doneSets}/{totalSets} SÉRIES
+                {t('sets.progress', {
+                  done: doneSets,
+                  total: totalSets,
+                  count: totalSets,
+                }).toUpperCase()}
               </MonoLabel>
             </View>
           </View>
-          <Pressable onPress={() => setQueueOpen(true)} style={hdrBtnStyle}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('header.accessibility.openQueue')}
+            onPress={() => setQueueOpen(true)}
+            style={hdrBtnStyle}
+          >
             <Icon name="list" size={15} color="rgba(255,255,255,0.7)" />
           </Pressable>
         </View>
@@ -370,7 +451,12 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
         {/* GIF banner */}
         <View style={{ paddingHorizontal: 20, paddingTop: 6 }}>
           <View style={{ position: 'relative', borderRadius: 20, overflow: 'hidden' }}>
-            <ExerciseGif id={ex.db} name={ex.name} height={224} radius={20} />
+            <ExerciseGif
+              id={ex.db}
+              name={translateExerciseName(tLoose, ex.db, ex.name)}
+              height={224}
+              radius={20}
+            />
             {/* gradient overlay for legibility */}
             <LinearGradient
               colors={[
@@ -395,7 +481,8 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
               }}
             >
               <MonoLabel color="#fff">
-                EX {String(exIdx + 1).padStart(2, '0')}
+                {t('header.exercisePrefix').toUpperCase()}{' '}
+                {String(exIdx + 1).padStart(2, '0')}
                 <Text style={{ opacity: 0.5 }}>
                   {' '}
                   / {String(EXERCISES.length).padStart(2, '0')}
@@ -424,7 +511,7 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
             >
               <Icon name="play" size={11} color="#fff" />
               <Text style={{ fontFamily: fonts.uiSemi, fontSize: 12, color: '#fff' }}>
-                Ver execução
+                {t('actions.viewExecution')}
               </Text>
             </Pressable>
           </View>
@@ -444,10 +531,10 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
             <View
               style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}
             >
-              <Slash>{ex.target.toUpperCase()}</Slash>
+              <Slash>{translateMuscleGroup(tLoose, ex.target).toUpperCase()}</Slash>
               {wasSkipped && (
                 <Badge bg="rgba(11,112,249,0.18)" border="rgba(11,112,249,0.45)" color={colors.accentHi}>
-                  RETOMADO
+                  {t('badges.resumed').toUpperCase()}
                 </Badge>
               )}
               {isSubbed && (
@@ -456,12 +543,15 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                   border="rgba(255,255,255,0.18)"
                   color="rgba(255,255,255,0.85)"
                 >
-                  {sessionSubs[baseEx.id] ? 'TROCADO HOJE' : 'TROCADO FIXO'}
+                  {(sessionSubs[baseEx.id]
+                    ? t('substitution.badges.today')
+                    : t('substitution.badges.permanent')
+                  ).toUpperCase()}
                 </Badge>
               )}
             </View>
             <Display size={26} style={{ marginTop: 8 }}>
-              {ex.name}
+              {translateExerciseName(tLoose, ex.db, ex.name)}
             </Display>
           </View>
           <Pressable
@@ -481,12 +571,12 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
           >
             <Icon name="swap" size={15} color={colors.accentHi} />
             <Text style={{ fontSize: 12, fontFamily: fonts.uiSemi, color: 'rgba(255,255,255,0.85)' }}>
-              Trocar
+              {t('actions.swap')}
             </Text>
           </Pressable>
         </View>
 
-        {/* PRÓXIMA SÉRIE card */}
+        {/* Next-set card */}
         <View style={{ paddingHorizontal: 20, paddingTop: 14 }}>
           <View
             style={{
@@ -501,9 +591,13 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
             }}
           >
             <View style={{ flex: 1 }}>
-              <MonoLabel color={colors.accentHi}>PRÓXIMA SÉRIE</MonoLabel>
+              <MonoLabel color={colors.accentHi}>
+                {t('sets.next').toUpperCase()}
+              </MonoLabel>
               <View style={{ flexDirection: 'row', alignItems: 'baseline', marginTop: 6 }}>
-                <Display size={28}>SÉRIE {setIdx + 1}</Display>
+                <Display size={28}>
+                  {t('sets.number', { number: setIdx + 1 }).toUpperCase()}
+                </Display>
                 <Text
                   style={{
                     fontFamily: fonts.display,
@@ -529,7 +623,9 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
               >
                 {curReps}
               </Text>
-              <MonoLabel style={{ marginTop: 4 }}>REPS</MonoLabel>
+              <MonoLabel style={{ marginTop: 4 }}>
+                {t('reps.label').toUpperCase()}
+              </MonoLabel>
             </View>
             <View style={{ width: 1, alignSelf: 'stretch', backgroundColor: 'rgba(255,255,255,0.1)' }} />
             <View style={{ alignItems: 'center', minWidth: 66 }}>
@@ -543,16 +639,16 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                     transform: [{ skewX: '-8deg' }],
                   }}
                 >
-                  {curLast > 0 ? curLast : '—'}
+                  {curLast > 0 ? formatWorkoutLoadFromKg(curLast, resolvedUnits) : '—'}
                 </Text>
                 {curLast > 0 && (
                   <Text style={{ fontFamily: fonts.mono, fontSize: 12, color: colors.faint, marginLeft: 2 }}>
-                    kg
+                    {loadUnit}
                   </Text>
                 )}
               </View>
               <MonoLabel size={8.5} style={{ marginTop: 6 }}>
-                ÚLTIMA VEZ
+                {t('sets.lastTime').toUpperCase()}
               </MonoLabel>
             </View>
           </View>
@@ -598,10 +694,24 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                   {done ? '✓' : String(i + 1).padStart(2, '0')}
                 </Text>
                 <Text style={{ fontFamily: fonts.mono, fontSize: 12, flex: 1, color: '#fff' }}>
-                  {s0.r} reps {w > 0 ? `× ${w}kg` : '× peso corporal'}
+                  {w > 0
+                    ? t('sets.summaryWeighted', {
+                        count: s0.r,
+                        weight: formatWorkoutLoadFromKg(w, resolvedUnits),
+                        unit: loadUnit,
+                      })
+                    : t('sets.summaryBodyweight', { count: s0.r })}
                 </Text>
-                {justLogged && <MonoLabel color={colors.accentHi}>REGISTRADO</MonoLabel>}
-                {now && <MonoLabel color={colors.accentHi}>AGORA</MonoLabel>}
+                {justLogged && (
+                  <MonoLabel color={colors.accentHi}>
+                    {t('sets.registered').toUpperCase()}
+                  </MonoLabel>
+                )}
+                {now && (
+                  <MonoLabel color={colors.accentHi}>
+                    {t('sets.current').toUpperCase()}
+                  </MonoLabel>
+                )}
               </View>
             );
           })}
@@ -620,7 +730,9 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                 textTransform: 'uppercase',
               }}
             >
-              {isLastOverall ? 'Finalizar treino' : `Concluir série ${setIdx + 1}`}
+              {isLastOverall
+                ? t('actions.finishWorkout')
+                : t('actions.completeSet', { number: setIdx + 1 })}
             </Text>
           </CtaButton>
           {order.length > 1 && (
@@ -642,7 +754,7 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
             >
               <Icon name="swap" size={15} color={colors.accentHi} />
               <Text style={{ fontSize: 13.5, fontFamily: fonts.uiSemi, color: 'rgba(255,255,255,0.82)' }}>
-                Pular · aparelho ocupado
+                {t('actions.skipBusy')}
               </Text>
             </Pressable>
           )}
@@ -679,7 +791,12 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
           <View style={{ flex: 1, backgroundColor: colors.bg }}>
             <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
               <View style={{ width: '92%', maxWidth: 380 }}>
-                <ExerciseGif id={ex.db} name={ex.name} aspectRatio={9 / 16} radius={20} />
+                <ExerciseGif
+                  id={ex.db}
+                  name={translateExerciseName(tLoose, ex.db, ex.name)}
+                  aspectRatio={9 / 16}
+                  radius={20}
+                />
               </View>
             </View>
             <SafeAreaView
@@ -695,7 +812,9 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                 }}
               >
                 <View style={{ flex: 1 }}>
-                  <MonoLabel color={colors.accentHi}>EXECUÇÃO</MonoLabel>
+                  <MonoLabel color={colors.accentHi}>
+                    {t('video.execution').toUpperCase()}
+                  </MonoLabel>
                   <Text
                     style={{
                       fontSize: 17,
@@ -704,10 +823,12 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                       marginTop: 3,
                     }}
                   >
-                    {ex.name}
+                    {translateExerciseName(tLoose, ex.db, ex.name)}
                   </Text>
                 </View>
                 <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={t('video.accessibility.close')}
                   onPress={() => setVideoOpen(false)}
                   style={{
                     width: 42,
@@ -736,13 +857,9 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
             >
               <View style={{ padding: 22 }}>
                 <MonoLabel color={colors.accentHi} style={{ marginBottom: 10 }}>
-                  PONTOS-CHAVE
+                  {t('video.keyPoints').toUpperCase()}
                 </MonoLabel>
-                {[
-                  'Mantenha a escápula retraída',
-                  'Desça controlando a fase excêntrica',
-                  'Não trave os cotovelos no topo',
-                ].map((c, i) => (
+                {(['keyPoint1', 'keyPoint2', 'keyPoint3'] as const).map((key, i) => (
                   <View
                     key={i}
                     style={{
@@ -760,7 +877,9 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                         backgroundColor: colors.accentHi,
                       }}
                     />
-                    <Text style={{ fontSize: 13.5, color: 'rgba(255,255,255,0.88)' }}>{c}</Text>
+                    <Text style={{ fontSize: 13.5, color: 'rgba(255,255,255,0.88)' }}>
+                      {t(`instructions.default.${key}`)}
+                    </Text>
                   </View>
                 ))}
               </View>
@@ -802,9 +921,11 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                   marginBottom: 16,
                 }}
               />
-              <Slash style={{ marginBottom: 6 }}>TROCAR EXERCÍCIO</Slash>
+              <Slash style={{ marginBottom: 6 }}>
+                {t('substitution.sheetTitle').toUpperCase()}
+              </Slash>
               <Text style={{ fontSize: 12.5, color: colors.mute, marginBottom: 16 }}>
-                Mesmo grupo muscular · escolha uma variação
+                {t('substitution.sheetSubtitle')}
               </Text>
               <ScrollView showsVerticalScrollIndicator={false}>
                 {subOptions.map((o) => {
@@ -832,11 +953,16 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                       }}
                     >
                       <View style={{ width: 76 }}>
-                        <ExerciseGif id={o.db} name={o.name} height={58} radius={10} />
+                        <ExerciseGif
+                          id={o.db}
+                          name={translateExerciseName(tLoose, o.db, o.name)}
+                          height={58}
+                          radius={10}
+                        />
                       </View>
                       <View style={{ flex: 1 }}>
                         <Text style={{ fontSize: 14.5, fontFamily: fonts.uiBold, color: '#fff' }}>
-                          {o.name}
+                          {translateExerciseName(tLoose, o.db, o.name)}
                         </Text>
                         <Text
                           style={{
@@ -847,11 +973,17 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                             marginTop: 3,
                           }}
                         >
-                          {o._base ? 'ORIGINAL' : 'SUBSTITUIÇÃO'} · {o.target.toUpperCase()}
+                          {(o._base
+                            ? t('substitution.labels.original')
+                            : t('substitution.labels.replacement')
+                          ).toUpperCase()}{' '}
+                          · {translateMuscleGroup(tLoose, o.target).toUpperCase()}
                         </Text>
                       </View>
                       {active ? (
-                        <MonoLabel color={colors.accentHi}>ATUAL</MonoLabel>
+                        <MonoLabel color={colors.accentHi}>
+                          {t('substitution.labels.current').toUpperCase()}
+                        </MonoLabel>
                       ) : (
                         <Icon name="chevron-right" size={16} color="rgba(255,255,255,0.4)" />
                       )}
@@ -896,13 +1028,27 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                 elevation: 12,
               }}
             >
-              <Slash style={{ marginBottom: 12 }}>APLICAR TROCA</Slash>
-              <Text style={{ fontSize: 15, lineHeight: 22, color: 'rgba(255,255,255,0.9)' }}>
-                <Text style={{ color: colors.accentHi, fontFamily: fonts.uiBold }}>
-                  {pendingSub?.name}
-                </Text>{' '}
-                no lugar de{' '}
-                <Text style={{ fontFamily: fonts.uiBold }}>{baseEx.name}</Text>.
+              <Slash style={{ marginBottom: 12 }}>
+                {t('substitution.confirmTitle').toUpperCase()}
+              </Slash>
+              {/* The full sentence lives in a single i18n key with two
+                  placeholders so word order matches each locale (e.g.
+                  "X in place of Y" in EN). Bold styling is applied via the
+                  outer Text style so it wraps around the interpolated names. */}
+              <Text
+                style={{
+                  fontSize: 15,
+                  lineHeight: 22,
+                  color: 'rgba(255,255,255,0.9)',
+                  fontFamily: fonts.uiBold,
+                }}
+              >
+                {t('substitution.replaceQuestion', {
+                  replacement: pendingSub
+                    ? translateExerciseName(tLoose, pendingSub.db, pendingSub.name)
+                    : '',
+                  original: translateExerciseName(tLoose, baseEx.db, baseEx.name),
+                })}
               </Text>
               <View style={{ marginTop: 22, gap: 10 }}>
                 <Pressable
@@ -917,7 +1063,7 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                   }}
                 >
                   <Text style={{ fontSize: 14.5, fontFamily: fonts.uiSemi, color: '#fff' }}>
-                    Trocar só dessa vez
+                    {t('substitution.actions.once')}
                   </Text>
                 </Pressable>
                 <Pressable
@@ -935,7 +1081,7 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                   }}
                 >
                   <Text style={{ fontSize: 14.5, fontFamily: fonts.uiBold, color: '#fff' }}>
-                    Trocar em todo o treino
+                    {t('substitution.actions.permanent')}
                   </Text>
                 </Pressable>
                 <Pressable
@@ -943,7 +1089,7 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                   style={{ paddingVertical: 11, alignItems: 'center' }}
                 >
                   <Text style={{ fontSize: 13, color: colors.mute, fontFamily: fonts.uiMed }}>
-                    Cancelar
+                    {t('substitution.actions.cancel')}
                   </Text>
                 </Pressable>
               </View>
@@ -986,7 +1132,7 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                 }}
               />
               <Slash style={{ marginBottom: 14 }}>
-                FILA DO TREINO · {EXERCISES.length} EXERCÍCIOS
+                {t('queue.title', { count: EXERCISES.length }).toUpperCase()}
               </Slash>
               <ScrollView showsVerticalScrollIndicator={false}>
                 {order.map((i, pos) => {
@@ -1023,7 +1169,11 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                       </Text>
                       <View style={{ flex: 1 }}>
                         <Text style={{ fontFamily: fonts.uiBold, fontSize: 14, color: '#fff' }}>
-                          {resolve(e).name}
+                          {translateExerciseName(
+                            tLoose,
+                            resolve(e).db,
+                            resolve(e).name,
+                          )}
                         </Text>
                         <Text
                           style={{
@@ -1034,12 +1184,24 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                             marginTop: 2,
                           }}
                         >
-                          {resolve(e).target.toUpperCase()} ·{' '}
-                          {Math.min(progress[i] || 0, e.sets.length)}/{e.sets.length} SÉRIES
+                          {t('queue.activeItem', {
+                            target: translateMuscleGroup(tLoose, resolve(e).target),
+                            done: Math.min(progress[i] || 0, e.sets.length),
+                            total: e.sets.length,
+                            count: e.sets.length,
+                          }).toUpperCase()}
                         </Text>
                       </View>
-                      {wasSkip && !now && <MonoLabel color={colors.accentHi}>PULADO</MonoLabel>}
-                      {now && <MonoLabel color={colors.accentHi}>AGORA</MonoLabel>}
+                      {wasSkip && !now && (
+                        <MonoLabel color={colors.accentHi}>
+                          {t('queue.states.skipped').toUpperCase()}
+                        </MonoLabel>
+                      )}
+                      {now && (
+                        <MonoLabel color={colors.accentHi}>
+                          {t('queue.states.now').toUpperCase()}
+                        </MonoLabel>
+                      )}
                     </Pressable>
                   );
                 })}
@@ -1074,7 +1236,11 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                       </Text>
                       <View style={{ flex: 1 }}>
                         <Text style={{ fontFamily: fonts.uiBold, fontSize: 14, color: '#fff' }}>
-                          {resolve(e).name}
+                          {translateExerciseName(
+                            tLoose,
+                            resolve(e).db,
+                            resolve(e).name,
+                          )}
                         </Text>
                         <Text
                           style={{
@@ -1085,7 +1251,11 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                             marginTop: 2,
                           }}
                         >
-                          CONCLUÍDO · {e.sets.length}/{e.sets.length} SÉRIES
+                          {t('queue.completedItem', {
+                            done: e.sets.length,
+                            total: e.sets.length,
+                            count: e.sets.length,
+                          }).toUpperCase()}
                         </Text>
                       </View>
                     </View>
@@ -1170,6 +1340,9 @@ function RestOverlay({
   onSkip: () => void;
   onMinimize?: () => void;
 }) {
+  const { t } = useTranslation('workout');
+  const { resolvedUnits } = useUnits();
+  const loadUnit = workoutLoadUnit(resolvedUnits);
   return (
     <View
       style={{
@@ -1187,6 +1360,8 @@ function RestOverlay({
     >
       {onMinimize && (
         <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t('rest.minimizeAccessibility')}
           onPress={onMinimize}
           style={{
             position: 'absolute',
@@ -1205,11 +1380,11 @@ function RestOverlay({
         >
           <Icon name="minus" size={13} color={colors.accentHi} />
           <Text style={{ fontFamily: fonts.mono, fontSize: 10, letterSpacing: 1, color: '#fff' }}>
-            MINIMIZAR
+            {t('rest.minimize').toUpperCase()}
           </Text>
         </Pressable>
       )}
-      <Slash style={{ marginBottom: 14 }}>DESCANSO</Slash>
+      <Slash style={{ marginBottom: 14 }}>{t('rest.title').toUpperCase()}</Slash>
       <Text
         style={{
           fontFamily: fonts.display,
@@ -1249,8 +1424,12 @@ function RestOverlay({
             marginBottom: 14,
           }}
         >
-          <MonoLabel>REGISTRAR CARGA · SÉRIE {setNumber}</MonoLabel>
-          <Text style={{ fontSize: 10.5, color: colors.faint, fontStyle: 'italic' }}>opcional</Text>
+          <MonoLabel>
+            {t('rest.logLoad', { setNumber }).toUpperCase()}
+          </MonoLabel>
+          <Text style={{ fontSize: 10.5, color: colors.faint, fontStyle: 'italic' }}>
+            {t('rest.optional')}
+          </Text>
         </View>
         <View
           style={{
@@ -1261,9 +1440,7 @@ function RestOverlay({
           }}
         >
           <Pressable
-            onPress={() =>
-              setRegWeight((w: number) => Math.max(0, Math.round((w - 2.5) * 10) / 10))
-            }
+            onPress={() => setRegWeight((kg: number) => adjustWorkoutLoadKg(kg, -1, resolvedUnits))}
             style={regBtnStyle}
           >
             <Icon name="minus" size={16} color={colors.accentHi} />
@@ -1277,13 +1454,13 @@ function RestOverlay({
             }}
           >
             <TextInput
-              value={regWeight > 0 ? String(regWeight) : ''}
+              value={regWeight > 0 ? formatWorkoutLoadFromKg(regWeight, resolvedUnits) : ''}
               placeholder="—"
               placeholderTextColor={colors.faint}
               keyboardType="decimal-pad"
               onChangeText={(t) => {
                 const v = t.replace(',', '.').replace(/[^0-9.]/g, '');
-                setRegWeight(v === '' ? 0 : parseFloat(v) || 0);
+                setRegWeight(v === '' ? 0 : workoutLoadToKg(parseFloat(v) || 0, resolvedUnits));
               }}
               style={{
                 width: 96,
@@ -1296,10 +1473,12 @@ function RestOverlay({
                 padding: 0,
               }}
             />
-            <Text style={{ fontSize: 14, color: colors.faint, marginLeft: 2 }}>kg</Text>
+            <Text style={{ fontSize: 14, color: colors.faint, marginLeft: 2 }}>
+              {loadUnit}
+            </Text>
           </View>
           <Pressable
-            onPress={() => setRegWeight((w: number) => Math.round((w + 2.5) * 10) / 10)}
+            onPress={() => setRegWeight((kg: number) => adjustWorkoutLoadKg(kg, 1, resolvedUnits))}
             style={regBtnStyle}
           >
             <Icon name="plus" size={16} color={colors.accentHi} />
@@ -1314,12 +1493,14 @@ function RestOverlay({
             fontFamily: fonts.mono,
           }}
         >
-          Toque no número para digitar
+          {t('rest.inputHint')}
         </Text>
       </View>
 
       <View style={{ flexDirection: 'row', gap: 10, marginTop: 28 }}>
         <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t('rest.addSecondsAccessibility', { seconds: 15 })}
           onPress={onAdd15}
           style={{
             paddingVertical: 14,
@@ -1330,6 +1511,10 @@ function RestOverlay({
             borderColor: 'rgba(255,255,255,0.12)',
           }}
         >
+          {/* "+15s" is a universal compact glyph — kept verbatim across
+              locales; the semantic label lives in `accessibilityLabel`
+              (rest.addSecondsAccessibility) so screen readers announce
+              "Add 15 seconds" in the active language. */}
           <Text style={{ fontFamily: fonts.mono, fontSize: 12, letterSpacing: 1, color: '#fff' }}>
             +15s
           </Text>
@@ -1357,7 +1542,7 @@ function RestOverlay({
               textTransform: 'uppercase',
             }}
           >
-            Próxima série
+            {t('rest.nextSet')}
           </Text>
         </Pressable>
       </View>
@@ -1387,6 +1572,12 @@ function PROverlay({
   exName: string;
   prev: number;
 }) {
+  const { t } = useTranslation('workout');
+  const { resolvedUnits } = useUnits();
+  const loadUnit = workoutLoadUnit(resolvedUnits);
+  const displayedWeight = formatWorkoutLoadFromKg(weight, resolvedUnits);
+  const displayedPrevious = formatWorkoutLoadFromKg(prev, resolvedUnits);
+  const displayedDelta = Math.round(workoutLoadFromKg(weight - prev, resolvedUnits) * 10) / 10;
   return (
     <View
       style={{
@@ -1418,9 +1609,9 @@ function PROverlay({
           <Icon name="trophy" size={46} color="#fff" stroke={2.2} />
         </PopBadge>
       </View>
-      <Slash style={{ marginBottom: 12 }}>NOVO RECORDE</Slash>
+      <Slash style={{ marginBottom: 12 }}>{t('record.new').toUpperCase()}</Slash>
       <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
-        <Display size={46}>{String(weight)}</Display>
+        <Display size={46}>{displayedWeight}</Display>
         <Text
           style={{
             fontFamily: fonts.display,
@@ -1430,7 +1621,7 @@ function PROverlay({
             transform: [{ skewX: '-8deg' }],
           }}
         >
-          KG
+          {loadUnit.toUpperCase()}
         </Text>
       </View>
       <Text
@@ -1442,9 +1633,9 @@ function PROverlay({
           fontFamily: fonts.ui,
         }}
       >
-        {exName} · anterior {prev}kg{' '}
+        {t('record.previousContext', { exName, previous: displayedPrevious, unit: loadUnit })}{' '}
         <Text style={{ color: colors.accentHi, fontFamily: fonts.uiBold }}>
-          +{Math.round((weight - prev) * 10) / 10}kg
+          {t('record.gain', { delta: displayedDelta, unit: loadUnit })}
         </Text>
       </Text>
     </View>
@@ -1606,6 +1797,7 @@ function PopBadge({ children }: { children: React.ReactNode }) {
 /* ─────────────────────── EXERCISE DONE TRANSITION ─────────────────────── */
 
 function ExerciseDoneOverlay({ name, nextName }: { name: string; nextName: string }) {
+  const { t } = useTranslation('workout');
   return (
     <View
       style={{
@@ -1635,7 +1827,9 @@ function ExerciseDoneOverlay({ name, nextName }: { name: string; nextName: strin
           <Icon name="check" size={48} color="#fff" stroke={3} />
         </PopBadge>
       </View>
-      <Slash style={{ marginBottom: 12 }}>EXERCÍCIO CONCLUÍDO</Slash>
+      <Slash style={{ marginBottom: 12 }}>
+        {t('exerciseDone.completed').toUpperCase()}
+      </Slash>
       <Display size={30} style={{ textAlign: 'center' }}>
         {name}
       </Display>
@@ -1653,7 +1847,9 @@ function ExerciseDoneOverlay({ name, nextName }: { name: string; nextName: strin
           borderColor: 'rgba(11,112,249,0.35)',
         }}
       >
-        <MonoLabel color={colors.accentHi}>PRÓXIMO</MonoLabel>
+        <MonoLabel color={colors.accentHi}>
+          {t('exerciseDone.nextLabel').toUpperCase()}
+        </MonoLabel>
         <Icon name="arrow-right" size={15} color={colors.accentHi} />
         <Text style={{ fontSize: 15, fontFamily: fonts.uiBold, color: '#fff' }}>{nextName}</Text>
       </View>
@@ -1664,6 +1860,7 @@ function ExerciseDoneOverlay({ name, nextName }: { name: string; nextName: strin
 /* ─────────────────────────── WORKOUT DONE ─────────────────────────── */
 
 function WorkoutDone({ elapsed, onDone }: { elapsed: number; onDone: () => void }) {
+  const { t } = useTranslation('workout');
   const fmt = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
   return (
     <ScreenBg>
@@ -1676,10 +1873,12 @@ function WorkoutDone({ elapsed, onDone }: { elapsed: number; onDone: () => void 
             ✓
           </OutlineNumber>
 
-          <Slash style={{ marginBottom: 14 }}>TREINO CONCLUÍDO</Slash>
-          <Display size={46}>FEITO.</Display>
+          <Slash style={{ marginBottom: 14 }}>
+            {t('done.kicker').toUpperCase()}
+          </Slash>
+          <Display size={46}>{t('done.titleLine1').toUpperCase()}</Display>
           <Display size={46} color={colors.accentHi}>
-            MAIS FORTE.
+            {t('done.titleLine2').toUpperCase()}
           </Display>
 
           <View
@@ -1690,14 +1889,16 @@ function WorkoutDone({ elapsed, onDone }: { elapsed: number; onDone: () => void 
               marginTop: 30,
             }}
           >
-            {[
-              { l: 'TEMPO', v: fmt(elapsed || 3480) },
-              { l: 'VOLUME', v: '8.2t' },
-              { l: 'SÉRIES', v: '25' },
-              { l: 'NOVO PR', v: '+1' },
-            ].map((s) => (
-              <Card key={s.l} style={{ width: '47%', padding: 16 }}>
-                <MonoLabel>{s.l}</MonoLabel>
+            {(
+              [
+                { key: 'time', v: fmt(elapsed || 3480) },
+                { key: 'volume', v: '8.2t' },
+                { key: 'sets', v: '25' },
+                { key: 'newPr', v: '+1' },
+              ] as const
+            ).map((s) => (
+              <Card key={s.key} style={{ width: '47%', padding: 16 }}>
+                <MonoLabel>{t(`done.metrics.${s.key}`).toUpperCase()}</MonoLabel>
                 <Text
                   style={{
                     fontFamily: fonts.display,
@@ -1715,7 +1916,9 @@ function WorkoutDone({ elapsed, onDone }: { elapsed: number; onDone: () => void 
           </View>
 
           <Card style={{ padding: 16, marginTop: 12 }}>
-            <MonoLabel style={{ marginBottom: 10 }}>SEQUÊNCIA ATUALIZADA</MonoLabel>
+            <MonoLabel style={{ marginBottom: 10 }}>
+              {t('done.streak.updated').toUpperCase()}
+            </MonoLabel>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
               <Icon name="flame" size={26} color={colors.accentHi} />
               <Text
@@ -1727,10 +1930,10 @@ function WorkoutDone({ elapsed, onDone }: { elapsed: number; onDone: () => void 
                   textTransform: 'uppercase',
                 }}
               >
-                15 DIAS
+                {t('done.streak.days', { count: 15 }).toUpperCase()}
               </Text>
               <Text style={{ fontFamily: fonts.ui, fontSize: 12, color: colors.mute }}>
-                · faltam 6 p/ seu recorde
+                {t('done.streak.untilRecord', { count: 6 })}
               </Text>
             </View>
           </Card>
@@ -1746,7 +1949,7 @@ function WorkoutDone({ elapsed, onDone }: { elapsed: number; onDone: () => void 
                 textTransform: 'uppercase',
               }}
             >
-              Voltar para home
+              {t('done.backHome')}
             </Text>
             <Icon name="arrow-right" size={18} color="#fff" />
           </CtaButton>

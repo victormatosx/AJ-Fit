@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { View, Text, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, {
@@ -8,32 +8,17 @@ import Svg, {
   Stop,
   Rect,
 } from 'react-native-svg';
+import { useTranslation } from 'react-i18next';
 import { Display, Slash } from '../components/ui/Display';
 import { SegBar } from '../components/ui/SegBar';
 import { CtaButton } from '../components/ui/CtaButton';
 import { Icon } from '../components/ui/Icon';
 import { colors, fonts } from '../theme/tokens';
 
-const ONBOARD = [
-  {
-    n: '01',
-    tag: 'EVOLUÇÃO FÍSICA',
-    lines: ['SEU CORPO', 'É O SEU', 'PROJETO.'],
-    body: 'Cada treino registrado. Cada carga calculada. Evolução que você vê — e sente.',
-  },
-  {
-    n: '02',
-    tag: 'PERFORMANCE',
-    lines: ['DADOS DE', 'ATLETA.', 'SEM ACHISMO.'],
-    body: 'Volume, intensidade e recuperação monitorados como num centro de alto rendimento.',
-  },
-  {
-    n: '03',
-    tag: 'CONSISTÊNCIA',
-    lines: ['SEM', 'DESCULPAS.', 'SÓ RESULTADO.'],
-    body: 'O método AJ se adapta à sua rotina — e não te deixa parar.',
-  },
-];
+// Fixed step contract — three slides, always in this order. Text comes from
+// `onboarding:slides.stepN.*` via i18n. Renaming a step here breaks its
+// translation lookup — keep in sync with resources/*/onboarding.json.
+const ONBOARD_STEPS = ['step1', 'step2', 'step3'] as const;
 
 export function OnboardingScreen({
   onDone,
@@ -42,9 +27,24 @@ export function OnboardingScreen({
   onDone: () => void;
   onLogin: () => void;
 }) {
+  const { t } = useTranslation(['onboarding', 'common']);
   const [step, setStep] = useState(0);
-  const d = ONBOARD[step];
   const next = () => (step < 2 ? setStep(step + 1) : onDone());
+
+  const stepKey = ONBOARD_STEPS[step];
+  const d = useMemo(
+    () => ({
+      n: String(step + 1).padStart(2, '0'),
+      tag: t(`onboarding:slides.${stepKey}.tag`).toUpperCase(),
+      lines: [
+        t(`onboarding:slides.${stepKey}.line1`).toUpperCase(),
+        t(`onboarding:slides.${stepKey}.line2`).toUpperCase(),
+        t(`onboarding:slides.${stepKey}.line3`).toUpperCase(),
+      ],
+      body: t(`onboarding:slides.${stepKey}.body`),
+    }),
+    [step, stepKey, t],
+  );
 
   // Outlined number anchored to the top-right corner — sized so both digits
   // are visible and only a small slice of the second digit is cropped by
@@ -120,7 +120,7 @@ export function OnboardingScreen({
                 color: 'rgba(255,255,255,0.5)',
               }}
             >
-              PULAR
+              {t('onboarding:actions.skip').toUpperCase()}
             </Text>
           </Pressable>
         </View>
@@ -167,7 +167,9 @@ export function OnboardingScreen({
                 textTransform: 'uppercase',
               }}
             >
-              {step < 2 ? 'Continuar' : 'Montar meu plano'}
+              {step < 2
+                ? t('common:actions.continue')
+                : t('onboarding:actions.buildPlan')}
             </Text>
             <Icon name="arrow-right" size={18} color="#fff" />
           </CtaButton>
@@ -183,9 +185,9 @@ export function OnboardingScreen({
                 color: colors.mute,
               }}
             >
-              Já tem conta?{' '}
+              {t('onboarding:footer.hasAccount')}{' '}
               <Text style={{ color: colors.accentHi, fontFamily: fonts.ui }}>
-                Entrar
+                {t('onboarding:footer.login')}
               </Text>
             </Text>
           </Pressable>

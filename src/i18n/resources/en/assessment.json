@@ -1,0 +1,171 @@
+{
+  "header": {
+    "title": "Physical assessment"
+  },
+  "errors": {
+    "loadFailedTitle": "We couldn't load your assessments",
+    "loadFailedMessage": "Check your connection and try again.",
+    "retry": "Try again",
+    "saveFailedTitle": "Couldn't save",
+    "saveFailedMessage": "Check your connection and try again."
+  },
+  "loading": { "title": "Loading assessments" },
+  "sections": {
+    "evolution": "Evolution",
+    "basicInfo": "Basic info",
+    "skinfolds": "Skinfolds",
+    "add": "Add assessment",
+    "history": "History"
+  },
+  "summary": {
+    "noRecords": "No records",
+    "lastAssessmentLabel": "Last assessment · {{date}}",
+    "emptyCta": "You don't have any assessments yet · tap to record your first"
+  },
+  "basicInfo": {
+    "initialDataFallback": "From initial onboarding · not an assessment yet",
+    "noInitialDataFallback": "No onboarding data · record your first assessment"
+  },
+  "actions": {
+    "guided": {
+      "title": "Guided assessment",
+      "description": "Weight, measurements and skinfolds — the app crunches everything"
+    },
+    "import": {
+      "title": "Import assessment",
+      "description": "Already have your results? Just record them"
+    },
+    "saveGuided": "Save assessment",
+    "registerImported": "Record assessment"
+  },
+  "guided": {
+    "title": "New record",
+    "basicInfoSection": "Basic information",
+    "sexLabel": "Sex",
+    "male": "Male",
+    "female": "Female",
+    "missingBirthDateHint": "No birth date on file · enter your age on this date",
+    "protocolLabel": "Protocol",
+    "selectSexHint": "Select your sex above to see the skinfolds required by this protocol.",
+    "saving": "Saving…"
+  },
+  "import": {
+    "title": "Imported assessment",
+    "description": "Had an assessment with a dietitian, doctor, clinic, bioimpedance device, or DEXA? Record the calculated results below — the app only stores this information and does not recalculate it.",
+    "basicInfoSection": "Basic information",
+    "resultsSection": "Assessment results",
+    "saving": "Saving…"
+  },
+  "fields": {
+    "measurementDate": { "label": "Assessment date" },
+    "weight": { "label": "Weight" },
+    "height": { "label": "Height" },
+    "ageAtAssessment": { "label": "Age on assessment date" },
+    "bodyFat": { "label": "BF" },
+    "bodyWater": { "label": "Body water" },
+    "basalMetabolism": { "label": "Basal metabolic rate" },
+    "visceralFat": { "label": "Visceral fat" },
+    "notes": { "label": "Notes (optional)", "placeholder": "E.g. bioimpedance at Clinic X" }
+  },
+  "form": { "numericPlaceholder": "0" },
+  "result": "{{value}} {{unit}}",
+  "heightParts": { "feet": "Feet", "inches": "Inches" },
+  "units": { "kg": "kg", "cm": "cm", "mm": "mm", "percent": "%", "years": "years", "kcal": "kcal" },
+  "validation": {
+    "guidedRequired": "Enter the date, weight, and every skinfold to save",
+    "profileRequired": "Sex, birth date, and height must be completed in your profile",
+    "importRequired": "Enter the date and weight to record",
+    "heightRequired": "Height must be completed in your profile"
+  },
+  "success": {
+    "guidedTitle": "Assessment saved successfully",
+    "importedTitle": "Assessment imported successfully",
+    "historyMessage": "Added to your progress history.",
+    "guidedRefreshTitle": "Assessment saved",
+    "importedRefreshTitle": "Assessment imported",
+    "refreshMessage": "The screen couldn't update right now. Reopen Physical Assessment to see it in your history."
+  },
+  "metrics": {
+    "weight": "Weight",
+    "height": "Height",
+    "bodyFat": "% body fat",
+    "leanMass": "Lean mass",
+    "fatMass": "Fat mass",
+    "bmi": "BMI"
+  },
+  "protocols": {
+    "jp3": "Jackson & Pollock · 3 skinfolds",
+    "jp7": "Jackson & Pollock · 7 skinfolds"
+  },
+  "skinfolds": {
+    "chest": "Chest",
+    "axilla": "Midaxillary",
+    "tricep": "Triceps",
+    "subscap": "Subscapular",
+    "abdom": "Abdominal",
+    "supra": "Suprailiac",
+    "thigh": "Thigh"
+  },
+  "results": {
+    "title": "Results",
+    "automaticBmi": "Automatic BMI"
+  },
+  "classifications": {
+    "bmi": {
+      "underweight": "Underweight",
+      "normal": "Normal weight",
+      "overweight": "Overweight",
+      "obesity": "Obesity"
+    }
+  },
+  "charts": {
+    "weightEmpty": "Log 2+ assessments to see the chart.",
+    "bodyFatEmpty": "Not enough assessments with body-fat data."
+  },
+  "evolution": {
+    "noPreviousMessage": "Record a new assessment to start tracking your evolution.",
+    "viewHistoryCta": "View full history"
+  },
+  "history": {
+    "records_one": "{{count}} record",
+    "records_other": "{{count}} records",
+    "empty": {
+      "title": "No assessment recorded",
+      "message": "Save your first assessment to start the timeline."
+    },
+    "toggle": {
+      "showLess": "Show less",
+      "showAll": "View full history"
+    },
+    "labels": {
+      "importedBadge": "Imported",
+      "viewDetails": "View details"
+    },
+    "details": {
+      "available": "Estimated lean mass {{lean}} · fat mass {{fat}}.",
+      "availableProtocol": "Estimated lean mass {{lean}} · fat mass {{fat}} · protocol {{protocol}}.",
+      "availableImported": "Estimated lean mass {{lean}} · fat mass {{fat}} · recorded from a professional assessment.",
+      "availableProtocolImported": "Estimated lean mass {{lean}} · fat mass {{fat}} · protocol {{protocol}} · recorded from a professional assessment.",
+      "unavailable": "Lean and fat mass unavailable — this assessment has no body-fat percentage.",
+      "unavailableProtocol": "Lean and fat mass unavailable — this assessment has no body-fat percentage · protocol {{protocol}}.",
+      "unavailableImported": "Lean and fat mass unavailable — this assessment has no body-fat percentage · recorded from a professional assessment.",
+      "unavailableProtocolImported": "Lean and fat mass unavailable — this assessment has no body-fat percentage · protocol {{protocol}} · recorded from a professional assessment."
+    }
+  },
+  "date": {
+    "today": "Today"
+  },
+  "accessibility": {
+    "openGuided": "Open guided assessment",
+    "openImport": "Open assessment import",
+    "evolutionCard": "Assessment evolution charts and metrics",
+    "viewHistory": "View full assessment history",
+    "openAssessment": "View details for the assessment from {{date}}",
+    "chart": "{{label}} chart. {{description}}",
+    "formField": "{{label}} field",
+    "selectProtocol": "Select protocol",
+    "selectSex": "Select sex: {{sex}}",
+    "saveGuided": "Save guided assessment",
+    "saveImported": "Record imported assessment"
+  }
+}

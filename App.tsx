@@ -16,6 +16,7 @@ import {
 
 import { AppStateProvider, useAppState } from './src/state/AppState';
 import { AuthProvider, useAuth } from './src/state/AuthContext';
+import { PhotoVaultProvider } from './src/state/PhotoVaultContext';
 import { addQuestionnaire } from './src/services/userProfile';
 import { logAuthError } from './src/services/auth';
 import { SplashScreen } from './src/screens/SplashScreen';
@@ -24,9 +25,17 @@ import { QuizScreen } from './src/screens/QuizScreen';
 import { AnalyzingScreen } from './src/screens/AnalyzingScreen';
 import { PlanReadyScreen } from './src/screens/PlanReadyScreen';
 import { AuthScreen } from './src/screens/AuthScreen';
+import { EmailVerificationScreen } from './src/screens/EmailVerificationScreen';
 import { PaywallScreen } from './src/screens/PaywallScreen';
 import { AppShell } from './src/screens/AppShell';
+import { requiresEmailVerification } from './src/lib/emailVerification';
 import { colors } from './src/theme/tokens';
+import { initI18n } from './src/i18n';
+import { reconcileLanguageOnLoad } from './src/i18n/syncLanguage';
+import { reconcileUnitsOnLoad } from './src/units/syncUnits';
+import { UnitsProvider } from './src/state/UnitsContext';
+import { cleanupPhotoVaultTempFiles } from './src/services/photoVaultFileCrypto';
+import { logPhotoVaultIssue } from './src/lib/photoVaultErrors';
 
 type ScreenId =
   | 'splash'
@@ -35,11 +44,12 @@ type ScreenId =
   | 'analyzing'
   | 'plan'
   | 'auth'
+  | 'emailVerification'
   | 'paywall'
   | 'app';
 
 // Screens that require an authenticated user.
-const PROTECTED: ScreenId[] = ['paywall', 'app'];
+const PROTECTED: ScreenId[] = ['emailVerification', 'paywall', 'app'];
 
 // Pre-app funnel screens. An authenticated user who already satisfies every
 // access requirement (currently: has a questionnaire) should never be shown
@@ -51,6 +61,7 @@ const FUNNEL_ONLY: ScreenId[] = [
   'analyzing',
   'plan',
   'auth',
+  'emailVerification',
 ];
 
 function Loading() {
@@ -64,7 +75,8 @@ function Loading() {
 }
 
 function RootNavigator() {
-  const { user, questionnaire, initializing, profileLoading, refreshProfile } = useAuth();
+  const { user, profile, questionnaire, initializing, profileLoading, refreshProfile } = useAuth();
+  const emailVerificationRequired = requiresEmailVerification(user);
   const { quiz } = useAppState();
   const [screen, setScreenState] = useState<ScreenId>('splash');
   // Mirrors `screen` synchronously so late/stale callbacks (e.g. the splash
@@ -74,30 +86,65 @@ function RootNavigator() {
   // Guards the forced-questionnaire save below against double submission
   // (e.g. a fast double-tap on the last quiz question).
   const [savingQuestionnaire, setSavingQuestionnaire] = useState(false);
+  // Account-preference reconciliation runs at every profileLoading→false transition.
+  // While it runs, we hold the routing gate closed so the first authed screen
+  // renders with reconciled language and units. Fires once per profile-load cycle
+  // — no polling, no timers.
+  const [preferencesReconciling, setPreferencesReconciling] = useState(false);
+  const prevProfileLoadingRef = useRef(true);
 
   const setScreen = (next: ScreenId) => {
     screenRef.current = next;
     setScreenState(next);
   };
 
+  useEffect(() => {
+    const wasLoading = prevProfileLoadingRef.current;
+    prevProfileLoadingRef.current = profileLoading;
+    // Account creation can briefly finish the auth listener's pre-provision
+    // profile read with `profile === null`. That is not a malformed profile:
+    // provisionNewUser is still creating it. Wait for the authoritative
+    // post-provision load instead of reporting missing preferences as errors.
+    if (initializing || profileLoading || !wasLoading || !user || !profile) return;
+    setPreferencesReconciling(true);
+    Promise.all([
+      reconcileLanguageOnLoad({
+        uid: user.uid,
+        remoteLanguage: profile.preferences.language,
+      }),
+      reconcileUnitsOnLoad({
+        uid: user.uid,
+        remoteUnits: profile.preferences.units,
+      }),
+    ]).finally(() => setPreferencesReconciling(false));
+  }, [initializing, profileLoading, user, profile]);
+
   // Single source of truth for navigation: authenticated users are routed
   // purely from their current state — never from the screen they happen to
-  // be on — so the rule "no questionnaire ⇒ no app" holds no matter how the
-  // user got authenticated (email, Google, Apple, a restored session) or
-  // which screen was showing when auth state changed. Runs on cold start and
-  // on every subsequent auth/questionnaire change (login, logout, forced
-  // questionnaire completion).
+  // be on — so email verification and questionnaire requirements hold no
+  // matter how the user got authenticated or which screen was showing. Runs
+  // on cold start and every later auth/profile/verification change.
   useEffect(() => {
     // `profileLoading` covers the gap between a sign-in/sign-up call setting
     // `user` and its matching Firestore read landing in `questionnaire` —
     // without this, a fully-onboarded user would flash through 'quiz' on
-    // every login while that read is still in flight.
-    if (initializing || profileLoading) return;
+    // every login while that read is still in flight. Preference reconciliation
+    // holds the gate for the extra beat needed to apply the remote/pending
+    // account preferences before the first authed screen renders.
+    if (initializing || profileLoading || preferencesReconciling) return;
 
     if (!user) {
       // Unauthenticated: keep out of screens that require a session (also
       // handles logout, which clears `user` while inside the app).
       if (PROTECTED.includes(screen)) setScreen('auth');
+      return;
+    }
+
+    if (emailVerificationRequired) {
+      // Firebase Authentication is authoritative. A linked or restored user
+      // with the password provider cannot reach any other screen while the
+      // server-backed `emailVerified` flag remains false.
+      if (screen !== 'emailVerification') setScreen('emailVerification');
       return;
     }
 
@@ -111,7 +158,15 @@ function RootNavigator() {
 
     // Authenticated + has a questionnaire: never show the signup funnel.
     if (FUNNEL_ONLY.includes(screen)) setScreen('app');
-  }, [initializing, profileLoading, user, questionnaire, screen]);
+  }, [
+    initializing,
+    profileLoading,
+    preferencesReconciling,
+    user,
+    emailVerificationRequired,
+    questionnaire,
+    screen,
+  ]);
 
   if (initializing) return <Loading />;
 
@@ -164,6 +219,7 @@ function RootNavigator() {
       {screen === 'analyzing' && <AnalyzingScreen onDone={() => setScreen('plan')} />}
       {screen === 'plan' && <PlanReadyScreen onContinue={() => setScreen('auth')} />}
       {screen === 'auth' && <AuthScreen />}
+      {screen === 'emailVerification' && <EmailVerificationScreen />}
       {screen === 'paywall' && <PaywallScreen onDone={() => setScreen('app')} />}
       {screen === 'app' && <AppShell />}
       {savingQuestionnaire && (
@@ -198,17 +254,48 @@ export default function App() {
     JetBrainsMono_700Bold,
   });
 
-  if (!fontsLoaded) {
+  // i18n bootstrap runs in parallel with `useFonts` — same `<Loading/>`
+  // covers both. `initI18n()` is idempotent (module-level memoization), so
+  // Fast Refresh cannot re-init. `.finally` ensures the gate opens even if
+  // resolution fails (a broken AsyncStorage read still falls through to the
+  // system locale + English fallback inside initI18n).
+  const [i18nReady, setI18nReady] = useState(false);
+  useEffect(() => {
+    // A crash/force-kill bypasses every normal unmount/lock cleanup. Sweep
+    // the controlled plaintext directory on the next startup before any
+    // private screen can be unlocked. Failure is observable but never blocks
+    // the public app bootstrap.
+    try {
+      // A cold process has no resumable local upload queue. Both plaintext
+      // and abandoned ciphertext staging files are therefore safe to remove.
+      cleanupPhotoVaultTempFiles({ includeEncrypted: true });
+    } catch {
+      logPhotoVaultIssue('startupCleanup', 'vaultTempCleanupFailed');
+    }
+  }, []);
+
+  useEffect(() => {
+    initI18n().finally(() => setI18nReady(true));
+  }, []);
+
+  if (!fontsLoaded || !i18nReady) {
     return <Loading />;
   }
 
   return (
     <SafeAreaProvider>
       <AuthProvider>
-        <AppStateProvider>
-          <StatusBar style="light" />
-          <RootNavigator />
-        </AppStateProvider>
+        <UnitsProvider>
+          <AppStateProvider>
+            {/* Inside AuthProvider so it can re-lock on logout and account
+                switches; wraps the navigator so its AppState listener is
+                mounted for the whole session. */}
+            <PhotoVaultProvider>
+              <StatusBar style="light" />
+              <RootNavigator />
+            </PhotoVaultProvider>
+          </AppStateProvider>
+        </UnitsProvider>
       </AuthProvider>
     </SafeAreaProvider>
   );

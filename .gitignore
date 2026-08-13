@@ -25,6 +25,8 @@ expo-env.d.ts
 npm-debug.*
 yarn-debug.*
 yarn-error.*
+firebase-debug.log
+firestore-debug.log
 
 # macOS
 .DS_Store
@@ -40,3 +42,8 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+modules/**/build/
+
+# Gradle caches de modulos nativos locais (build artifacts)
+modules/*/android/.gradle/
+modules/*/android/build/

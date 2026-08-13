@@ -10,6 +10,8 @@ import {
   ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { ScreenBg } from '../components/ui/ScreenBg';
 import { Display, Slash } from '../components/ui/Display';
 import { CtaButton } from '../components/ui/CtaButton';
@@ -25,8 +27,21 @@ import {
   isGoogleSigninAvailable,
   socialProviderFromMethods,
   PROVIDER_LABELS,
+  clearPendingSocialAuthState,
   type SocialProvider,
 } from '../services/socialAuth';
+import {
+  clearTotpSignInChallenge,
+  startTotpSignInChallenge,
+  type TotpSignInChallenge,
+  type TotpSignInOrigin,
+} from '../services/mfaTotp';
+import {
+  isMultiFactorAuthRequired,
+  mfaTotpIssueFromError,
+  type MfaTotpIssue,
+} from '../lib/mfaTotp';
+import { TotpChallengeScreen } from './TotpChallengeScreen';
 
 type Mode = 'signup' | 'login' | 'reset';
 
@@ -34,25 +49,58 @@ type LinkingState = { email: string; methods: string[]; attempted: SocialProvide
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-const COPY: Record<Mode, { kicker: string; title: [string, string]; sub: string }> = {
-  signup: {
-    kicker: 'ÚLTIMO PASSO',
-    title: ['GARANTA', 'SEU PLANO.'],
-    sub: 'Crie sua conta para salvar o plano e ativar os 7 dias grátis.',
-  },
-  login: {
-    kicker: 'BEM-VINDO DE VOLTA',
-    title: ['ENTRE NA', 'SUA CONTA.'],
-    sub: 'Acesse seu plano e continue de onde parou.',
-  },
-  reset: {
-    kicker: 'RECUPERAR ACESSO',
-    title: ['ESQUECEU', 'A SENHA?'],
-    sub: 'Informe seu e-mail e enviaremos um link para redefinir sua senha.',
-  },
-};
+const AUTH_ERROR_KEY_BY_CODE = {
+  '10': 'errors.googleConfig',
+  'auth/app-not-authorized': 'errors.appNotAuthorized',
+  'auth/email-already-in-use': 'errors.emailInUse',
+  'auth/invalid-email': 'errors.invalidEmail',
+  'auth/invalid-api-key': 'errors.invalidApiKey',
+  'auth/missing-email': 'errors.missingEmail',
+  'auth/weak-password': 'errors.weakPassword',
+  'auth/missing-password': 'errors.missingPassword',
+  'auth/user-not-found': 'errors.userNotFound',
+  'auth/wrong-password': 'errors.wrongPassword',
+  'auth/invalid-credential': 'errors.invalidCredential',
+  'auth/user-disabled': 'errors.userDisabled',
+  'auth/too-many-requests': 'errors.tooManyRequests',
+  'auth/network-request-failed': 'errors.networkFailed',
+  'auth/operation-not-allowed': 'errors.operationNotAllowed',
+  'auth/account-exists-with-different-credential': 'errors.accountExists',
+  'auth/credential-already-in-use': 'errors.credentialInUse',
+  'auth/provider-already-linked': 'errors.providerLinked',
+  'permission-denied': 'errors.permissionDenied',
+  unavailable: 'errors.unavailable',
+} as const;
+
+function localizedAuthError(
+  err: unknown,
+  t: TFunction<'auth'>,
+  fallbackKey: 'errors.signInFailed' | 'errors.linkFailed' | 'errors.generic',
+): string {
+  const code =
+    typeof err === 'object' && err !== null && 'code' in err
+      ? String((err as { code: unknown }).code)
+      : '';
+  const key = AUTH_ERROR_KEY_BY_CODE[code as keyof typeof AUTH_ERROR_KEY_BY_CODE];
+  if (key) return t(key);
+  return code ? t('errors.genericWithCode', { code }) : t(fallbackKey);
+}
+
+function totpStartError(
+  issue: MfaTotpIssue,
+  t: TFunction<'auth'>,
+): string {
+  if (issue === 'resolverWithoutHints') {
+    return t('totpChallenge.errors.resolverWithoutHints');
+  }
+  if (issue === 'factorNotFound') {
+    return t('totpChallenge.errors.totpFactorMissing');
+  }
+  return t('totpChallenge.errors.generic');
+}
 
 export function AuthScreen() {
+  const { t } = useTranslation('auth');
   const {
     signUp,
     signIn,
@@ -73,6 +121,7 @@ export function AuthScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const [totpChallenge, setTotpChallenge] = useState<TotpSignInChallenge | null>(null);
 
   // Social auth
   const [socialBusy, setSocialBusy] = useState<SocialProvider | null>(null);
@@ -101,9 +150,29 @@ export function AuthScreen() {
   const showSocial = showGoogle || showApple;
   const busy = loading || socialBusy !== null;
 
-  const copy = COPY[mode];
+  const copy =
+    mode === 'signup'
+      ? {
+          kicker: t('signup.kicker'),
+          title: [t('signup.titleLine1'), t('signup.titleLine2')],
+          sub: t('signup.subtitle'),
+        }
+      : mode === 'login'
+        ? {
+            kicker: t('login.kicker'),
+            title: [t('login.titleLine1'), t('login.titleLine2')],
+            sub: t('login.subtitle'),
+          }
+        : {
+            kicker: t('reset.kicker'),
+            title: [t('reset.titleLine1'), t('reset.titleLine2')],
+            sub: t('reset.subtitle'),
+          };
 
   function switchMode(next: Mode) {
+    clearTotpSignInChallenge();
+    clearPendingSocialAuthState();
+    setTotpChallenge(null);
     setMode(next);
     setError(null);
     setInfo(null);
@@ -112,8 +181,25 @@ export function AuthScreen() {
     setLinkPassword('');
   }
 
+  function beginTotpChallenge(error: unknown, origin: TotpSignInOrigin): boolean {
+    if (!isMultiFactorAuthRequired(error)) return false;
+    try {
+      const challenge = startTotpSignInChallenge(error, origin);
+      setMode('login');
+      setError(null);
+      setInfo(null);
+      setTotpChallenge(challenge);
+    } catch (resolverError) {
+      clearTotpSignInChallenge();
+      clearPendingSocialAuthState();
+      setError(totpStartError(mfaTotpIssueFromError(resolverError), t));
+    }
+    return true;
+  }
+
   async function handleSocial(provider: SocialProvider) {
     if (busy) return;
+    clearPendingSocialAuthState();
     setError(null);
     setInfo(null);
     setLinking(null);
@@ -127,8 +213,11 @@ export function AuthScreen() {
         // user dismissed the native sheet — no error message
       } else if (err instanceof AccountLinkingRequiredError) {
         setLinking({ email: err.email, methods: err.methods, attempted: err.attempted });
+      } else if (beginTotpChallenge(err, provider)) {
+        // The provider sheet already completed the first factor. The in-memory
+        // resolver continues that same transaction without reopening it.
       } else {
-        setError(err instanceof Error ? err.message : 'Não foi possível entrar.');
+        setError(localizedAuthError(err, t, 'errors.signInFailed'));
       }
     } finally {
       setSocialBusy(null);
@@ -138,7 +227,7 @@ export function AuthScreen() {
   async function handleLinkWithPassword() {
     if (!linking || busy) return;
     if (!linkPassword) {
-      setError('Informe sua senha para vincular.');
+      setError(t('validation.linkPasswordRequired'));
       return;
     }
     setError(null);
@@ -146,7 +235,9 @@ export function AuthScreen() {
     try {
       await completeLinkingWithPassword(linking.email, linkPassword, quiz);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Não foi possível vincular.');
+      if (!beginTotpChallenge(err, 'account-linking')) {
+        setError(localizedAuthError(err, t, 'errors.linkFailed'));
+      }
     } finally {
       setSocialBusy(null);
     }
@@ -159,8 +250,10 @@ export function AuthScreen() {
     try {
       await completeLinkingWithProvider(existing, quiz);
     } catch (err) {
-      if (!(err instanceof SocialAuthCancelledError)) {
-        setError(err instanceof Error ? err.message : 'Não foi possível vincular.');
+      if (err instanceof SocialAuthCancelledError) {
+        // user dismissed the native sheet
+      } else if (!beginTotpChallenge(err, 'account-linking')) {
+        setError(localizedAuthError(err, t, 'errors.linkFailed'));
       }
     } finally {
       setSocialBusy(null);
@@ -169,14 +262,14 @@ export function AuthScreen() {
 
   function validate(): string | null {
     if (mode === 'signup' && name.trim().length < 2)
-      return 'Informe seu nome.';
-    if (!email.trim()) return 'Informe seu e-mail.';
-    if (!EMAIL_RE.test(email.trim())) return 'E-mail inválido.';
+      return t('validation.nameRequired');
+    if (!email.trim()) return t('validation.emailRequired');
+    if (!EMAIL_RE.test(email.trim())) return t('validation.emailInvalid');
     if (mode === 'reset') return null;
-    if (!password) return 'Informe sua senha.';
-    if (password.length < 6) return 'A senha deve ter no mínimo 6 caracteres.';
+    if (!password) return t('validation.passwordRequired');
+    if (password.length < 6) return t('validation.passwordMinimum', { min: 6 });
     if (mode === 'signup' && password !== confirm)
-      return 'As senhas não coincidem.';
+      return t('validation.passwordMismatch');
     return null;
   }
 
@@ -196,20 +289,56 @@ export function AuthScreen() {
       if (mode === 'signup') {
         await signUp(email, password, name, quiz);
       } else if (mode === 'login') {
+        clearPendingSocialAuthState();
         await signIn(email, password);
       } else {
         await reset(email);
-        setInfo('Enviamos um link de recuperação para o seu e-mail.');
+        setInfo(t('reset.success'));
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Algo deu errado. Tente novamente.');
+      if (mode === 'login' && beginTotpChallenge(err, 'password')) return;
+      setError(localizedAuthError(err, t, 'errors.generic'));
     } finally {
       setLoading(false);
     }
   }
 
   const submitLabel =
-    mode === 'signup' ? 'Começar teste grátis' : mode === 'login' ? 'Entrar' : 'Enviar link';
+    mode === 'signup'
+      ? t('actions.startTrial')
+      : mode === 'login'
+        ? t('actions.signIn')
+        : t('actions.sendLink');
+
+  if (totpChallenge) {
+    return (
+      <TotpChallengeScreen
+        challenge={totpChallenge}
+        onCancel={() => {
+          clearTotpSignInChallenge();
+          clearPendingSocialAuthState();
+          setTotpChallenge(null);
+          setMode('login');
+          setPassword('');
+          setLinkPassword('');
+          setLinking(null);
+          setError(null);
+          setInfo(null);
+        }}
+        onSessionExpired={() => {
+          clearTotpSignInChallenge();
+          clearPendingSocialAuthState();
+          setTotpChallenge(null);
+          setMode('login');
+          setPassword('');
+          setLinkPassword('');
+          setLinking(null);
+          setInfo(null);
+          setError(t('totpChallenge.errors.sessionExpired'));
+        }}
+      />
+    );
+  }
 
   return (
     <ScreenBg>
@@ -237,18 +366,20 @@ export function AuthScreen() {
                 {mode !== 'signup' && (
                   <Pressable
                     onPress={() => switchMode(mode === 'reset' ? 'login' : 'signup')}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('actions.back')}
                     hitSlop={12}
                     style={{ marginBottom: 18, flexDirection: 'row', alignItems: 'center', gap: 8 }}
                   >
                     <Icon name="arrow-left" size={18} color="rgba(255,255,255,0.6)" />
                     <Text style={{ color: colors.mute, fontFamily: fonts.uiMed, fontSize: 13 }}>
-                      Voltar
+                      {t('actions.back')}
                     </Text>
                   </Pressable>
                 )}
-                <Slash style={{ marginBottom: 14 }}>{copy.kicker}</Slash>
-                <Display size={38}>{copy.title[0]}</Display>
-                <Display size={38}>{copy.title[1]}</Display>
+                <Slash style={{ marginBottom: 14 }}>{copy.kicker.toUpperCase()}</Slash>
+                <Display size={38}>{copy.title[0].toUpperCase()}</Display>
+                <Display size={38}>{copy.title[1].toUpperCase()}</Display>
                 <Text
                   style={{
                     marginTop: 14,
@@ -265,7 +396,7 @@ export function AuthScreen() {
                 {mode === 'signup' && (
                   <AuthInput
                     icon="user"
-                    placeholder="Seu nome"
+                    placeholder={t('fields.name')}
                     value={name}
                     onChangeText={setName}
                     keyboardType="default"
@@ -276,7 +407,7 @@ export function AuthScreen() {
 
                 <AuthInput
                   icon="mail"
-                  placeholder="seu@email.com"
+                  placeholder={t('fields.email')}
                   value={email}
                   onChangeText={setEmail}
                   keyboardType="email-address"
@@ -286,12 +417,13 @@ export function AuthScreen() {
                 {mode !== 'reset' && (
                   <AuthInput
                     icon="lock"
-                    placeholder="Senha"
+                    placeholder={t('fields.password')}
                     value={password}
                     onChangeText={setPassword}
                     secure={!showPass}
                     trailing="eye"
                     onTrailingPress={() => setShowPass((s) => !s)}
+                    trailingAccessibilityLabel={t('accessibility.togglePassword')}
                     editable={!loading}
                   />
                 )}
@@ -299,7 +431,7 @@ export function AuthScreen() {
                 {mode === 'signup' && (
                   <AuthInput
                     icon="lock"
-                    placeholder="Confirmar senha"
+                    placeholder={t('fields.confirmPassword')}
                     value={confirm}
                     onChangeText={setConfirm}
                     secure={!showPass}
@@ -316,7 +448,7 @@ export function AuthScreen() {
                     <Text
                       style={{ color: colors.accentHi, fontFamily: fonts.uiSemi, fontSize: 13 }}
                     >
-                      Esqueci minha senha
+                      {t('actions.forgotPassword')}
                     </Text>
                   </Pressable>
                 )}
@@ -358,6 +490,7 @@ export function AuthScreen() {
                     onLinkPassword={handleLinkWithPassword}
                     onLinkProvider={handleLinkWithProvider}
                     onCancel={() => {
+                      clearPendingSocialAuthState();
                       setLinking(null);
                       setLinkPassword('');
                     }}
@@ -376,7 +509,7 @@ export function AuthScreen() {
                           color: colors.faint,
                         }}
                       >
-                        OU
+                        {t('social.separator').toUpperCase()}
                       </Text>
                       <View style={{ flex: 1, height: 1, backgroundColor: colors.hair }} />
                     </View>
@@ -389,7 +522,7 @@ export function AuthScreen() {
                           <>
                             <Icon name="apple" size={19} color="#fff" />
                             <Text style={{ color: '#fff', fontFamily: fonts.uiSemi, fontSize: 14 }}>
-                              Continuar com Apple
+                              {t('social.continueWith', { provider: 'Apple' })}
                             </Text>
                           </>
                         )}
@@ -404,7 +537,7 @@ export function AuthScreen() {
                           <>
                             <Icon name="google" size={17} color="#fff" />
                             <Text style={{ color: '#fff', fontFamily: fonts.uiSemi, fontSize: 14 }}>
-                              Continuar com Google
+                              {t('social.continueWith', { provider: 'Google' })}
                             </Text>
                           </>
                         )}
@@ -428,9 +561,9 @@ export function AuthScreen() {
                         fontFamily: fonts.ui,
                       }}
                     >
-                      {mode === 'signup' ? 'Já é membro? ' : 'Ainda não tem conta? '}
+                      {mode === 'signup' ? t('switchMode.hasAccount') : t('switchMode.needsAccount')}{' '}
                       <Text style={{ color: colors.accentHi, fontFamily: fonts.uiSemi }}>
-                        {mode === 'signup' ? 'Entrar' : 'Criar conta'}
+                        {mode === 'signup' ? t('actions.signIn') : t('actions.createAccount')}
                       </Text>
                     </Text>
                   </Pressable>
@@ -466,9 +599,14 @@ function LinkingPanel({
   onLinkProvider: (p: SocialProvider) => void;
   onCancel: () => void;
 }) {
+  const { t } = useTranslation('auth');
   const hasPassword = linking.methods.includes('password');
   const existingSocial = socialProviderFromMethods(linking.methods);
-  const attemptedLabel = PROVIDER_LABELS[`${linking.attempted}.com`] ?? 'social';
+  const attemptedLabel =
+    PROVIDER_LABELS[`${linking.attempted}.com`] ?? t('social.genericProvider');
+  const existingProviderLabel = existingSocial
+    ? PROVIDER_LABELS[`${existingSocial}.com`] ?? t('social.genericProvider')
+    : t('social.genericProvider');
 
   return (
     <View
@@ -484,19 +622,21 @@ function LinkingPanel({
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
         <Icon name="shield" size={16} color={colors.accentHi} />
         <Text style={{ flex: 1, color: '#fff', fontFamily: fonts.uiSemi, fontSize: 13.5 }}>
-          Conta já existente
+          {t('linking.title')}
         </Text>
       </View>
 
       {hasPassword ? (
         <>
           <Text style={{ color: colors.mute, fontFamily: fonts.ui, fontSize: 13, lineHeight: 18 }}>
-            O e-mail {linking.email} já usa e-mail/senha. Entre com sua senha para
-            vincular o {attemptedLabel}.
+            {t('linking.passwordMessage', {
+              email: linking.email,
+              attemptedProvider: attemptedLabel,
+            })}
           </Text>
           <AuthInput
             icon="lock"
-            placeholder="Sua senha"
+            placeholder={t('fields.linkPassword')}
             value={password}
             onChangeText={onChangePassword}
             secure
@@ -515,7 +655,7 @@ function LinkingPanel({
                   textTransform: 'uppercase',
                 }}
               >
-                Entrar e vincular
+                {t('linking.signInAndLink')}
               </Text>
             )}
           </CtaButton>
@@ -523,8 +663,11 @@ function LinkingPanel({
       ) : existingSocial ? (
         <>
           <Text style={{ color: colors.mute, fontFamily: fonts.ui, fontSize: 13, lineHeight: 18 }}>
-            O e-mail {linking.email} já usa {PROVIDER_LABELS[`${existingSocial}.com`]}. Entre
-            com {PROVIDER_LABELS[`${existingSocial}.com`]} para vincular o {attemptedLabel}.
+            {t('linking.providerMessage', {
+              email: linking.email,
+              existingProvider: existingProviderLabel,
+              attemptedProvider: attemptedLabel,
+            })}
           </Text>
           <CtaButton ghost onPress={() => onLinkProvider(existingSocial)} disabled={busy}>
             {busy ? (
@@ -533,7 +676,7 @@ function LinkingPanel({
               <>
                 <Icon name={existingSocial === 'apple' ? 'apple' : 'google'} size={18} color="#fff" />
                 <Text style={{ color: '#fff', fontFamily: fonts.uiSemi, fontSize: 14 }}>
-                  Continuar com {PROVIDER_LABELS[`${existingSocial}.com`]}
+                  {t('social.continueWith', { provider: existingProviderLabel })}
                 </Text>
               </>
             )}
@@ -541,8 +684,7 @@ function LinkingPanel({
         </>
       ) : (
         <Text style={{ color: colors.mute, fontFamily: fonts.ui, fontSize: 13, lineHeight: 18 }}>
-          Este e-mail já está em uso por outro método de login. Entre com o método
-          original para continuar.
+          {t('linking.unknownMethodMessage')}
         </Text>
       )}
 
@@ -555,7 +697,7 @@ function LinkingPanel({
             fontSize: 13,
           }}
         >
-          Cancelar
+          {t('actions.cancel')}
         </Text>
       </Pressable>
     </View>
@@ -606,6 +748,7 @@ function AuthInput({
   secure,
   trailing,
   onTrailingPress,
+  trailingAccessibilityLabel,
   keyboardType,
   autoCapitalize = 'none',
   editable = true,
@@ -617,6 +760,7 @@ function AuthInput({
   secure?: boolean;
   trailing?: IconName;
   onTrailingPress?: () => void;
+  trailingAccessibilityLabel?: string;
   keyboardType?: 'email-address' | 'default';
   autoCapitalize?: 'none' | 'words';
   editable?: boolean;
@@ -655,7 +799,12 @@ function AuthInput({
         }}
       />
       {trailing && (
-        <Pressable onPress={onTrailingPress} hitSlop={10}>
+        <Pressable
+          onPress={onTrailingPress}
+          hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel={trailingAccessibilityLabel}
+        >
           <Icon name={trailing} size={18} color="rgba(255,255,255,0.45)" />
         </Pressable>
       )}

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Pressable, View, Text, StyleProp, ViewStyle } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { colors, fonts } from '../../theme/tokens';
+import { colors, displayLineHeight, fonts } from '../../theme/tokens';
 
 type Props = {
   children: React.ReactNode;
@@ -9,12 +9,34 @@ type Props = {
   ghost?: boolean;
   disabled?: boolean;
   style?: StyleProp<ViewStyle>;
+  /**
+   * Screen-reader label. Useful when the visible text is truncated, or when
+   * the button renders an indicator instead of its label.
+   */
+  accessibilityLabel?: string;
+  accessibilityHint?: string;
 };
 
-export function CtaButton({ children, onPress, ghost, disabled, style }: Props) {
+export function CtaButton({
+  children,
+  onPress,
+  ghost,
+  disabled,
+  style,
+  accessibilityLabel,
+  accessibilityHint,
+}: Props) {
+  const a11y = {
+    accessibilityRole: 'button' as const,
+    accessibilityLabel,
+    accessibilityHint,
+    accessibilityState: { disabled: Boolean(disabled) },
+  };
+
   if (ghost) {
     return (
       <Pressable
+        {...a11y}
         onPress={onPress}
         disabled={disabled}
         style={[
@@ -45,6 +67,7 @@ export function CtaButton({ children, onPress, ghost, disabled, style }: Props) 
 
   return (
     <Pressable
+      {...a11y}
       onPress={onPress}
       disabled={disabled}
       style={[{ opacity: disabled ? 0.35 : 1 }, style]}
@@ -92,8 +115,12 @@ export function CtaButton({ children, onPress, ghost, disabled, style }: Props) 
               color: '#fff',
               fontFamily: fonts.display,
               fontSize: 17,
+              lineHeight: displayLineHeight(17),
               letterSpacing: 1.5,
               textTransform: 'uppercase',
+              textAlign: 'center',
+              textAlignVertical: 'center',
+              includeFontPadding: false,
             }}
           >
             {children}
@@ -113,8 +140,12 @@ export function CtaText({ children }: { children: React.ReactNode }) {
         color: '#fff',
         fontFamily: fonts.display,
         fontSize: 17,
+        lineHeight: displayLineHeight(17),
         letterSpacing: 1.5,
         textTransform: 'uppercase',
+        textAlign: 'center',
+        textAlignVertical: 'center',
+        includeFontPadding: false,
       }}
     >
       {children}

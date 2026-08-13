@@ -1,6 +1,7 @@
 import { View, Text, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useTranslation } from 'react-i18next';
 import { ScreenBg } from '../components/ui/ScreenBg';
 import { Display, MonoLabel } from '../components/ui/Display';
 import { Card } from '../components/ui/Card';
@@ -10,7 +11,6 @@ import { colors, fonts, displayLineHeight } from '../theme/tokens';
 
 type Status = 'done' | 'today' | 'missed' | 'pending' | 'rest' | 'restFuture';
 
-const MONTH = 'JULHO';
 const YEAR = 2026;
 const DAYS = 31;
 const FIRST_WD = 2; // 0=Dom … mês começa numa terça
@@ -175,6 +175,7 @@ function LegendChip({ status, label }: { status: Status; label: string }) {
 }
 
 export function ConsistencyScreen({ onBack }: { onBack: () => void }) {
+  const { t } = useTranslation('home');
   const daysLeft = DAYS - TODAY;
   let doneCount = 0;
   let pendingCount = 0;
@@ -187,6 +188,7 @@ export function ConsistencyScreen({ onBack }: { onBack: () => void }) {
   const cells: (number | null)[] = [];
   for (let i = 0; i < FIRST_WD; i++) cells.push(null);
   for (let d = 1; d <= DAYS; d++) cells.push(d);
+  const dayInitials = t('consistency.dayInitials', { returnObjects: true }) as string[];
 
   return (
     <ScreenBg>
@@ -203,6 +205,8 @@ export function ConsistencyScreen({ onBack }: { onBack: () => void }) {
         >
           <Pressable
             onPress={onBack}
+            accessibilityRole="button"
+            accessibilityLabel={t('monthlyConsistency.accessibility.back')}
             style={{
               width: 38,
               height: 38,
@@ -217,7 +221,7 @@ export function ConsistencyScreen({ onBack }: { onBack: () => void }) {
             <Icon name="arrow-left" size={17} color="#fff" />
           </Pressable>
           <View style={{ flex: 1, alignItems: 'center' }}>
-            <MonoLabel>CONSISTÊNCIA MENSAL</MonoLabel>
+            <MonoLabel>{t('monthlyConsistency.title').toUpperCase()}</MonoLabel>
           </View>
           <View style={{ width: 38 }} />
         </View>
@@ -227,7 +231,10 @@ export function ConsistencyScreen({ onBack }: { onBack: () => void }) {
           showsVerticalScrollIndicator={false}
         >
           <Display size={34}>
-            {MONTH} {YEAR}
+            {t('monthlyConsistency.monthYear', {
+              month: t('monthlyConsistency.month'),
+              year: YEAR,
+            }).toUpperCase()}
           </Display>
 
           <LinearGradient
@@ -242,7 +249,7 @@ export function ConsistencyScreen({ onBack }: { onBack: () => void }) {
               borderColor: 'rgba(11,112,249,0.4)',
             }}
           >
-            <MonoLabel>FALTA PARA FECHAR O MÊS</MonoLabel>
+            <MonoLabel>{t('monthlyConsistency.remainingTitle').toUpperCase()}</MonoLabel>
             <View
               style={{
                 flexDirection: 'row',
@@ -263,7 +270,9 @@ export function ConsistencyScreen({ onBack }: { onBack: () => void }) {
                 >
                   {daysLeft}
                 </Text>
-                <MonoLabel>DIAS</MonoLabel>
+                <MonoLabel>
+                  {t('monthlyConsistency.daysRemaining', { count: daysLeft }).toUpperCase()}
+                </MonoLabel>
               </View>
               <View
                 style={{
@@ -284,14 +293,20 @@ export function ConsistencyScreen({ onBack }: { onBack: () => void }) {
                 >
                   {pendingCount}
                 </Text>
-                <MonoLabel>TREINOS</MonoLabel>
+                <MonoLabel>
+                  {t('monthlyConsistency.pendingWorkouts', { count: pendingCount }).toUpperCase()}
+                </MonoLabel>
               </View>
             </View>
             <View style={{ marginTop: 14 }}>
               <SegBar value={TODAY / DAYS} segs={DAYS} />
             </View>
             <MonoLabel style={{ marginTop: 8 }}>
-              DIA {TODAY} DE {DAYS} · {doneCount} TREINOS FEITOS
+              {t('monthlyConsistency.progress', {
+                current: TODAY,
+                total: DAYS,
+                done: doneCount,
+              }).toUpperCase()}
             </MonoLabel>
           </LinearGradient>
 
@@ -302,7 +317,7 @@ export function ConsistencyScreen({ onBack }: { onBack: () => void }) {
                 marginBottom: 8,
               }}
             >
-              {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((w, i) => (
+              {dayInitials.map((w, i) => (
                 <View key={i} style={{ flex: 1, alignItems: 'center' }}>
                   <Text
                     style={{
@@ -335,11 +350,11 @@ export function ConsistencyScreen({ onBack }: { onBack: () => void }) {
               paddingHorizontal: 4,
             }}
           >
-            <LegendChip status="done" label="Treino feito" />
-            <LegendChip status="today" label="Hoje" />
-            <LegendChip status="pending" label="A fazer" />
-            <LegendChip status="missed" label="Perdido" />
-            <LegendChip status="rest" label="Descanso" />
+            <LegendChip status="done" label={t('monthlyConsistency.legend.done')} />
+            <LegendChip status="today" label={t('monthlyConsistency.legend.today')} />
+            <LegendChip status="pending" label={t('monthlyConsistency.legend.pending')} />
+            <LegendChip status="missed" label={t('monthlyConsistency.legend.missed')} />
+            <LegendChip status="rest" label={t('monthlyConsistency.legend.rest')} />
           </View>
         </ScrollView>
       </SafeAreaView>

@@ -9,6 +9,10 @@ import {
 } from 'firebase/auth';
 import { auth } from '../lib/firebase';
 import { clearSecureAuthSession } from '../lib/secureAuthStorage';
+import { isMultiFactorAuthRequired } from '../lib/mfaTotp';
+// Imported from the storage layer, not from services/photoVault: logout has
+// no business pulling the callable-functions client into its module graph.
+import { deleteVaultKey } from '../lib/photoVaultKeyStorage';
 
 /**
  * Reusable, typed authentication service.
@@ -35,6 +39,12 @@ const ERROR_MESSAGES: Record<string, string> = {
   'auth/user-disabled': 'Esta conta foi desativada.',
   'auth/too-many-requests': 'Muitas tentativas. Tente novamente mais tarde.',
   'auth/network-request-failed': 'Falha de conexão. Verifique sua internet.',
+  'auth/requires-recent-login': 'Sua sessão expirou. Entre novamente para continuar.',
+  'auth/user-token-expired': 'Sua sessão expirou. Entre novamente para continuar.',
+  'auth/invalid-user-token': 'Sua sessão expirou. Entre novamente para continuar.',
+  'auth/no-current-user': 'Sua sessão expirou. Entre novamente para continuar.',
+  'auth/password-provider-required':
+    'A alteração de senha está disponível apenas para contas com e-mail e senha.',
   'auth/operation-not-allowed':
     'Este método de login não está habilitado no Firebase Auth.',
   // Social / account-linking:
@@ -113,6 +123,10 @@ export async function signInWithEmail(
     );
     return user;
   } catch (err) {
+    // getMultiFactorResolver requires the original MultiFactorError, including
+    // its opaque customData. Every non-MFA error keeps the existing friendly
+    // normalization contract.
+    if (isMultiFactorAuthRequired(err)) throw err;
     throw toAuthError(err);
   }
 }
@@ -126,6 +140,10 @@ export async function resetPassword(email: string): Promise<void> {
 }
 
 export async function signOutUser(): Promise<void> {
+  // Captured before signOut, which clears currentUser: the vault key is
+  // namespaced per uid and cannot be removed without it.
+  const uid = auth.currentUser?.uid;
+
   try {
     await signOut(auth);
   } catch (err) {
@@ -134,6 +152,17 @@ export async function signOutUser(): Promise<void> {
   // Rotates out the encryption key so no encrypted session blob survives
   // logout, on top of Firebase's own persistence cleanup.
   await clearSecureAuthSession();
+
+  // Logout ends the session explicitly, so the device should not keep the
+  // photo vault key: it stays recoverable from the backend after a fresh
+  // sign-in. Best effort — a storage failure must never block logout.
+  if (uid) {
+    try {
+      await deleteVaultKey(uid);
+    } catch {
+      // Intentionally ignored: the user is already signed out.
+    }
+  }
 }
 
 /**

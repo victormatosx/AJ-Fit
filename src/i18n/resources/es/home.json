@@ -1,0 +1,217 @@
+{
+  "meta": {
+    "todayLine": "{{weekday}} · {{day}} {{month}} · Semana {{currentWeek}}/{{totalWeeks}}"
+  },
+  "greeting": {
+    "casual": "Hola,"
+  },
+  "ticker": {
+    "streak": "Racha",
+    "weekVolume": "Volumen semana",
+    "benchPr": "PR press banca",
+    "consistency": "Constancia",
+    "nextLevel": "Próximo nivel",
+    "daysUnit": "días",
+    "nextLevelValue": "—{{days}} DÍAS"
+  },
+  "todayCard": {
+    "kicker": "Entreno de hoy",
+    "meta": "{{duration}} min · {{exercises}} ejercicios · ~{{kcal}} kcal",
+    "start": "Iniciar entreno",
+    "confirm": {
+      "title": "¿Iniciar entreno?",
+      "question": "¿Quieres iniciar ahora",
+      "startNow": "Sí, iniciar",
+      "notNow": "Ahora no",
+      "dismiss": "Cerrar confirmación de entreno",
+      "accessibilityConfirm": "Confirmar inicio del entreno"
+    }
+  },
+  "consistency": {
+    "title": "Constancia · semana",
+    "progressLabel": "{{done}}/{{total}}",
+    "restLabel": "Off",
+    "dayInitials": [
+      "D",
+      "L",
+      "M",
+      "M",
+      "J",
+      "V",
+      "S"
+    ]
+  },
+  "progress": {
+    "header": {
+      "period": "Progreso · últimos 90 días",
+      "highlightLine1": "+12% más",
+      "highlightLine2": "fuerte."
+    },
+    "tabs": {
+      "loads": "Cargas",
+      "weight": "Peso",
+      "photos": "Fotos"
+    },
+    "charts": {
+      "loadTitle": "Press de banca · carga máx.",
+      "weightTitle": "Peso corporal",
+      "period": "12 sem",
+      "delta": "{{direction}} {{value}} {{unit}}"
+    },
+    "heatmap": {
+      "title": "Calendario de constancia",
+      "period": "6 semanas",
+      "today": "Hoy"
+    },
+    "records": {
+      "title": "Récords recientes",
+      "benchPress": "Press de banca",
+      "squat": "Sentadilla",
+      "deadlift": "Peso muerto",
+      "daysAgo": "hace {{count}} días",
+      "weekAgo_one": "hace {{count}} semana",
+      "weekAgo_other": "hace {{count}} semanas",
+      "value": "{{value}} {{unit}}",
+      "gain": "+{{value}} {{unit}}"
+    },
+    "photos": {
+      "locked": {
+        "title": "Tus fotos están protegidas",
+        "description": "Usa la autenticación de tu dispositivo para acceder a tus fotos privadas.",
+        "cta": "Desbloquear",
+        "unlocking": "Desbloqueando…"
+      },
+      "notConfigured": {
+        "title": "Protección no configurada",
+        "description": "Configura biometría o bloqueo de pantalla en tu dispositivo para acceder a tus fotos privadas.",
+        "openSettings": "Abrir ajustes"
+      },
+      "authError": {
+        "cancelled": "Autenticación cancelada.",
+        "failed": "No se pudo autenticar. Inténtalo de nuevo.",
+        "lockedOut": "Demasiados intentos. Usa el bloqueo de pantalla de tu dispositivo o inténtalo más tarde.",
+        "unavailable": "La autenticación no está disponible en este dispositivo."
+      },
+      "empty": {
+        "title": "Aún no has añadido fotos",
+        "description": "Registra tu evolución para ver los cambios con el tiempo.",
+        "cta": "Añadir foto"
+      },
+      "list": {
+        "loading": "Cargando tus fotos…",
+        "error": "No se pudieron cargar tus fotos.",
+        "retry": "Intentar de nuevo",
+        "offlinePhoto": "Conéctate a internet para cargar esta foto.",
+        "add": "Añadir foto"
+      },
+      "add": {
+        "title": "Añadir foto",
+        "camera": "Tomar foto",
+        "library": "Elegir de la galería",
+        "cancel": "Cancelar",
+        "uploading": "Subiendo tu foto…"
+      },
+      "permission": {
+        "cameraDenied": "Permite el acceso a la cámara en los ajustes para tomar una foto.",
+        "libraryDenied": "Permite el acceso a las fotos en los ajustes para elegir una imagen."
+      },
+      "uploadError": {
+        "tooLarge": "Esta foto es demasiado grande. Prueba con otra imagen.",
+        "unsupported": "Formato de imagen no compatible.",
+        "network": "Error de conexión. Revisa tu internet e inténtalo de nuevo.",
+        "generic": "No se pudo subir tu foto. Inténtalo de nuevo."
+      },
+      "viewer": {
+        "close": "Cerrar",
+        "delete": "Eliminar foto"
+      },
+      "delete": {
+        "title": "¿Eliminar esta foto?",
+        "description": "Esta acción no se puede deshacer.",
+        "cancel": "Cancelar",
+        "confirm": "Eliminar",
+        "error": "No se pudo eliminar la foto. Inténtalo de nuevo."
+      },
+      "a11y": {
+        "unlock": "Desbloquear fotos privadas",
+        "photo": "Foto del {{date}}",
+        "openPhoto": "Abrir foto del {{date}} en pantalla completa",
+        "addPhoto": "Añadir nueva foto",
+        "takePhoto": "Tomar una foto con la cámara",
+        "chooseLibrary": "Elegir una foto de la galería",
+        "closeViewer": "Cerrar visor",
+        "deletePhoto": "Eliminar esta foto"
+      }
+    },
+    "units": {
+      "kg": "kg"
+    },
+    "accessibility": {
+      "selectTab": "Mostrar progreso de {{tab}}"
+    }
+  },
+  "monthlyConsistency": {
+    "title": "Constancia mensual",
+    "month": "Julio",
+    "monthYear": "{{month}} de {{year}}",
+    "remainingTitle": "Falta para completar el mes",
+    "daysRemaining_one": "día",
+    "daysRemaining_other": "días",
+    "pendingWorkouts_one": "entreno",
+    "pendingWorkouts_other": "entrenos",
+    "progress": "Día {{current}} de {{total}} · {{done}} entrenos completados",
+    "legend": {
+      "done": "Entreno hecho",
+      "today": "Hoy",
+      "pending": "Por hacer",
+      "missed": "Perdido",
+      "rest": "Descanso"
+    },
+    "accessibility": {
+      "back": "Volver de la constancia mensual"
+    }
+  },
+  "stats": {
+    "streak": {
+      "label": "Racha",
+      "unit": "días",
+      "note": "récord personal: 21"
+    },
+    "volume": {
+      "label": "Volumen",
+      "unit": "ton",
+      "note": "+8% vs semana pasada"
+    }
+  },
+  "upcoming": {
+    "title": "Próximos entrenos",
+    "meta": "{{duration}} min · {{exercises}} ejercicios",
+    "items": {
+      "pull": {
+        "day": "Mié",
+        "name": "PULL — Espalda y bíceps",
+        "duration": 54,
+        "exercises": 7
+      },
+      "legs": {
+        "day": "Vie",
+        "name": "LEGS — Cuádriceps y glúteos",
+        "duration": 62,
+        "exercises": 9
+      },
+      "upper": {
+        "day": "Sáb",
+        "name": "UPPER — Empuje ligero",
+        "duration": 45,
+        "exercises": 6
+      }
+    }
+  },
+  "mock": {
+    "today": {
+      "type": "Push",
+      "focus": "Pecho y hombro",
+      "name": "Push — Pecho y Hombro"
+    }
+  }
+}

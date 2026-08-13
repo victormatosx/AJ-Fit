@@ -1,0 +1,26 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'com.ajfit'
+version = '1.0.0'
+
+android {
+  namespace 'com.ajfit.appcheck'
+
+  defaultConfig {
+    versionCode 1
+    versionName '1.0.0'
+  }
+}
+
+dependencies {
+  implementation platform('com.google.firebase:firebase-bom:34.17.0')
+  implementation 'com.google.firebase:firebase-appcheck'
+
+  // The debug provider cannot be linked into a release artifact, and Play
+  // Integrity cannot replace it in a Debug variant.
+  debugImplementation 'com.google.firebase:firebase-appcheck-debug'
+  releaseImplementation 'com.google.firebase:firebase-appcheck-playintegrity'
+}

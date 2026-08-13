@@ -1,14 +1,18 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { View, Text, Pressable, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useTranslation } from 'react-i18next';
 import { Icon, IconName } from '../components/ui/Icon';
 import { HudCorners } from '../components/ui/Card';
 import { Display, Slash } from '../components/ui/Display';
 import { OutlineNumber } from '../components/ui/OutlineNumber';
 import { colors, fonts } from '../theme/tokens';
 import { useAppState, TabId } from '../state/AppState';
-import { TODAY_WORKOUT } from '../lib/todayWorkout';
+import { useAuth } from '../state/AuthContext';
+import { versionedPhotoURL } from '../lib/profilePhotoUrl';
+import { PASSWORD_PROVIDER_ID } from '../lib/authProviders';
 import { HomeScreen } from './HomeScreen';
 import { WorkoutScreen } from './WorkoutScreen';
 import { ProgressScreen } from './ProgressScreen';
@@ -16,16 +20,43 @@ import { ProfileScreen } from './ProfileScreen';
 import { ConsistencyScreen } from './ConsistencyScreen';
 import { AssessmentScreen } from './AssessmentScreen';
 import { SettingsScreen } from './SettingsScreen';
+import { SecurityScreen } from './SecurityScreen';
+import { ChangePasswordScreen } from './ChangePasswordScreen';
+import { TotpEnrollmentScreen } from './TotpEnrollmentScreen';
+import { TwoFactorSettingsScreen } from './TwoFactorSettingsScreen';
 import { EditProfileScreen } from './EditProfileScreen';
+import { HelpCenterScreen } from './HelpCenterScreen';
+import { HelpArticleScreen } from './HelpArticleScreen';
+import { SupportFormScreen } from './SupportFormScreen';
+import { SupportSuccessScreen } from './SupportSuccessScreen';
+import type { HelpArticle, SupportTicketType } from '../types/support';
+
+type SupportRoute =
+  | { name: 'help' }
+  | { name: 'article'; article: HelpArticle }
+  | { name: 'form'; type: SupportTicketType; subject?: string }
+  | { name: 'success' };
 
 export function AppShell() {
   const { tab, setTab } = useAppState();
+  const { linkedProviders } = useAuth();
   const [showCal, setShowCal] = useState(false);
   const [showAssessment, setShowAssessment] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showSecurity, setShowSecurity] = useState(false);
+  const [showChangePassword, setShowChangePassword] = useState(false);
+  const [showTwoFactor, setShowTwoFactor] = useState(false);
+  const [showTotpEnrollment, setShowTotpEnrollment] = useState(false);
+  const [totpRefreshToken, setTotpRefreshToken] = useState(0);
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showWorkoutConfirmation, setShowWorkoutConfirmation] = useState(false);
-  const overlayOpen = showCal || showAssessment || showSettings || showEditProfile;
+  const [supportRoute, setSupportRoute] = useState<SupportRoute | null>(null);
+  const canChangePassword = linkedProviders.includes(PASSWORD_PROVIDER_ID);
+  const overlayOpen = showCal || showAssessment || showSettings || showSecurity || showChangePassword || showTwoFactor || showTotpEnrollment || showEditProfile || !!supportRoute;
+
+  useEffect(() => {
+    if (!canChangePassword) setShowChangePassword(false);
+  }, [canChangePassword]);
 
   const selectTab = (nextTab: TabId) => {
     if (nextTab === 'workout' && tab !== 'workout') {
@@ -81,12 +112,64 @@ export function AppShell() {
           <SettingsScreen
             onBack={() => setShowSettings(false)}
             onOpenEditProfile={() => setShowEditProfile(true)}
+            onOpenSecurity={() => setShowSecurity(true)}
+            onOpenHelpCenter={() => setSupportRoute({ name: 'help' })}
+            onReportProblem={() => setSupportRoute({ name: 'form', type: 'BUG' })}
+            onSendSuggestion={() => setSupportRoute({ name: 'form', type: 'FEEDBACK' })}
+          />
+        </View>
+      )}
+      {showSecurity && (
+        <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 50 }}>
+          <SecurityScreen
+            onBack={() => setShowSecurity(false)}
+            onOpenChangePassword={canChangePassword ? () => setShowChangePassword(true) : undefined}
+            onOpenTwoFactor={() => setShowTwoFactor(true)}
+          />
+        </View>
+      )}
+      {showChangePassword && canChangePassword && (
+        <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 60 }}>
+          <ChangePasswordScreen onBack={() => setShowChangePassword(false)} />
+        </View>
+      )}
+      {showTwoFactor && (
+        <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 60 }}>
+          <TwoFactorSettingsScreen
+            onBack={() => setShowTwoFactor(false)}
+            onOpenEnrollment={() => setShowTotpEnrollment(true)}
+            refreshToken={totpRefreshToken}
+          />
+        </View>
+      )}
+      {showTotpEnrollment && (
+        <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 70 }}>
+          <TotpEnrollmentScreen
+            onBack={() => setShowTotpEnrollment(false)}
+            onCompleted={() => {
+              setShowTotpEnrollment(false);
+              setTotpRefreshToken((value) => value + 1);
+            }}
           />
         </View>
       )}
       {showEditProfile && (
         <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 50 }}>
           <EditProfileScreen onBack={() => setShowEditProfile(false)} />
+        </View>
+      )}
+      {supportRoute && (
+        <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 60 }}>
+          {supportRoute.name === 'help' && (
+            <HelpCenterScreen onBack={() => setSupportRoute(null)} onOpenArticle={(article) => setSupportRoute({ name: 'article', article })} />
+          )}
+          {supportRoute.name === 'article' && (
+            <HelpArticleScreen article={supportRoute.article} onBack={() => setSupportRoute({ name: 'help' })} onOpenTicket={(subject) => setSupportRoute({ name: 'form', type: 'SUPPORT', subject })} />
+          )}
+          {supportRoute.name === 'form' && (
+            <SupportFormScreen type={supportRoute.type} initialSubject={supportRoute.subject} onBack={() => setSupportRoute(null)} onSuccess={() => setSupportRoute({ name: 'success' })} />
+          )}
+          {supportRoute.name === 'success' && <SupportSuccessScreen onBack={() => setSupportRoute(null)} />}
         </View>
       )}
     </View>
@@ -102,6 +185,7 @@ function StartWorkoutConfirmation({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  const { t } = useTranslation('home');
   return (
     <Modal
       visible={visible}
@@ -112,7 +196,9 @@ function StartWorkoutConfirmation({
     >
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Fechar confirmação de treino"
+        accessibilityLabel={t('todayCard.confirm.accessibilityClose', {
+          defaultValue: t('todayCard.confirm.dismiss'),
+        })}
         onPress={onCancel}
         style={{
           flex: 1,
@@ -161,9 +247,9 @@ function StartWorkoutConfirmation({
               04
             </OutlineNumber>
 
-            <Slash>TREINO DE HOJE</Slash>
+            <Slash>{t('todayCard.kicker').toUpperCase()}</Slash>
             <Display size={26} style={{ marginTop: 9 }}>
-              INICIAR TREINO?
+              {t('todayCard.confirm.title').toUpperCase()}
             </Display>
             <Text
               style={{
@@ -174,7 +260,7 @@ function StartWorkoutConfirmation({
                 marginTop: 8,
               }}
             >
-              Deseja iniciar agora
+              {t('todayCard.confirm.question')}
             </Text>
             <Text
               style={{
@@ -185,12 +271,12 @@ function StartWorkoutConfirmation({
                 marginTop: 1,
               }}
             >
-              {TODAY_WORKOUT.name}?
+              {t('mock.today.name')}?
             </Text>
 
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Confirmar início do treino"
+              accessibilityLabel={t('todayCard.confirm.accessibilityConfirm')}
               onPress={onConfirm}
               style={{
                 height: 48,
@@ -214,7 +300,7 @@ function StartWorkoutConfirmation({
                   textTransform: 'uppercase',
                 }}
               >
-                Sim, iniciar
+                {t('todayCard.confirm.startNow')}
               </Text>
             </Pressable>
             <Pressable
@@ -223,7 +309,7 @@ function StartWorkoutConfirmation({
               style={{ alignSelf: 'center', paddingHorizontal: 18, paddingTop: 13, paddingBottom: 2 }}
             >
               <Text style={{ color: colors.mute, fontFamily: fonts.ui, fontSize: 13 }}>
-                Agora não
+                {t('todayCard.confirm.notNow')}
               </Text>
             </Pressable>
           </LinearGradient>
@@ -234,11 +320,14 @@ function StartWorkoutConfirmation({
 }
 
 function TabBar({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => void }) {
-  const items: { id: TabId; icon: IconName; label: string }[] = [
-    { id: 'home', icon: 'home', label: 'HOME' },
-    { id: 'workout', icon: 'dumbbell', label: 'TREINO' },
-    { id: 'progress', icon: 'chart', label: 'EVOLUÇÃO' },
-    { id: 'profile', icon: 'user', label: 'PERFIL' },
+  const { t } = useTranslation('common');
+  const { profile } = useAuth();
+  const profilePhotoURL = profile?.profile.photoURL;
+  const items: { id: TabId; icon: IconName; labelKey: 'home' | 'workout' | 'progress' | 'profile' }[] = [
+    { id: 'home', icon: 'home', labelKey: 'home' },
+    { id: 'workout', icon: 'dumbbell', labelKey: 'workout' },
+    { id: 'progress', icon: 'chart', labelKey: 'progress' },
+    { id: 'profile', icon: 'user', labelKey: 'profile' },
   ];
   return (
     <SafeAreaView edges={['bottom']} style={{ backgroundColor: 'transparent' }}>
@@ -287,12 +376,31 @@ function TabBar({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => void }) {
                     }}
                   />
                 )}
-                <Icon
-                  name={it.icon}
-                  size={20}
-                  color={active ? colors.accentHi : 'rgba(255,255,255,0.45)'}
-                  stroke={active ? 2.1 : 1.7}
-                />
+                {it.id === 'profile' && profilePhotoURL ? (
+                  <Image
+                    source={versionedPhotoURL(
+                      profilePhotoURL,
+                      profile?.profile.photoVersion,
+                    )}
+                    cachePolicy="memory-disk"
+                    contentFit="cover"
+                    transition={120}
+                    priority="high"
+                    accessible={false}
+                    style={{
+                      width: 22,
+                      height: 22,
+                      borderRadius: 11,
+                    }}
+                  />
+                ) : (
+                  <Icon
+                    name={it.icon}
+                    size={20}
+                    color={active ? colors.accentHi : 'rgba(255,255,255,0.45)'}
+                    stroke={active ? 2.1 : 1.7}
+                  />
+                )}
                 <Text
                   style={{
                     fontFamily: fonts.mono,
@@ -301,7 +409,7 @@ function TabBar({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => void }) {
                     color: active ? colors.accentHi : 'rgba(255,255,255,0.4)',
                   }}
                 >
-                  {it.label}
+                  {t(`navigation.${it.labelKey}`).toUpperCase()}
                 </Text>
               </Pressable>
             );

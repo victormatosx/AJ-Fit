@@ -1,0 +1,48 @@
+{
+  "slides": {
+    "step1": {
+      "tag": "Evolución física",
+      "line1": "Tu cuerpo",
+      "line2": "es tu",
+      "line3": "proyecto.",
+      "body": "Cada entreno registrado. Cada carga calculada. Progreso que ves — y sientes."
+    },
+    "step2": {
+      "tag": "Rendimiento",
+      "line1": "Datos de",
+      "line2": "atleta.",
+      "line3": "Sin suposiciones.",
+      "body": "Volumen, intensidad y recuperación monitoreados como en un centro de alto rendimiento."
+    },
+    "step3": {
+      "tag": "Constancia",
+      "line1": "Sin",
+      "line2": "excusas.",
+      "line3": "Solo resultados.",
+      "body": "El método AJ se adapta a tu rutina — y no te deja parar."
+    }
+  },
+  "actions": {
+    "skip": "Saltar",
+    "buildPlan": "Armar mi plan"
+  },
+  "footer": {
+    "hasAccount": "¿Ya tienes cuenta?",
+    "login": "Iniciar sesión"
+  },
+  "analyzing": {
+    "compiling": "Compilando",
+    "titleLine1": "Creando",
+    "titleLine2": "tu plan",
+    "steps": {
+      "profile": "Leyendo tu perfil físico",
+      "volume": "Calculando volumen e intensidad",
+      "exercises": "Seleccionando los ejercicios ideales",
+      "periodization": "Periodizando tus semanas",
+      "plan": "Creando tu plan premium"
+    },
+    "accessibility": {
+      "progress": "Creación de tu plan: {{progress}} por ciento"
+    }
+  }
+}

@@ -33,6 +33,10 @@ import {
   getLinkedProviders,
   type SocialProvider,
 } from '../services/socialAuth';
+import {
+  refreshEmailVerificationStatus,
+  sendVerificationEmail,
+} from '../services/emailVerification';
 
 type AuthCtx = {
   /** Current authenticated user (Firebase Auth), or null when signed out. */
@@ -72,6 +76,8 @@ type AuthCtx = {
   ) => Promise<void>;
   reset: (email: string) => Promise<void>;
   logout: () => Promise<void>;
+  /** Reloads Firebase Auth and returns its current `emailVerified` value. */
+  refreshEmailVerification: () => Promise<boolean>;
   /** Re-reads the user document and latest questionnaire into global state. */
   refreshProfile: () => Promise<void>;
 };
@@ -83,6 +89,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [questionnaire, setQuestionnaire] = useState<QuestionnaireDoc | null>(null);
   const [initializing, setInitializing] = useState(true);
+  // Firebase mutates the existing User instance during reload(). This revision
+  // forces context consumers to observe updated readonly fields such as
+  // `emailVerified` even when the object reference itself stays the same.
+  const [authRevision, setAuthRevision] = useState(0);
   // True while `user` may already be set but `profile`/`questionnaire` have not
   // caught up yet (the gap between `setUser` and `loadUserState` resolving in
   // signIn/signUp/social flows). Consumers that route navigation off
@@ -147,6 +157,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       signUp: async (email, password, name, answers) => {
         // Single, authoritative creation flow — runs exactly once per account.
         const newUser = await signUpWithEmail(email, password, name);
+        // Start delivery immediately after Firebase Auth creates the password
+        // user. Capture a failure as data so profile provisioning still
+        // completes and the account never ends up half-created in Firestore.
+        const verificationError = sendVerificationEmail(newUser)
+          .then(() => null)
+          .catch((error: unknown) => error);
         try {
           await provisionNewUser(newUser, { name, answers });
           setUser(newUser);
@@ -155,6 +171,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           logAuthError('signup:firestore-profile', err);
           throw toAuthError(err);
         }
+        // Automatic delivery happens exactly once. Every later send requires
+        // an explicit user tap on the verification screen.
+        const sendError = await verificationError;
+        if (sendError) throw sendError;
       },
       signIn: async (email, password) => {
         const authedUser = await signInWithEmail(email, password);
@@ -207,11 +227,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       logout: async () => {
         await signOutUser();
       },
+      refreshEmailVerification: async () => {
+        const refreshed = await refreshEmailVerificationStatus();
+        setUser(refreshed.user);
+        setAuthRevision((revision) => revision + 1);
+        return refreshed.emailVerified;
+      },
       refreshProfile: async () => {
         if (user) await loadUserState(user.uid);
       },
     }),
-    [user, profile, questionnaire, initializing, profileLoading, loadUserState],
+    [
+      user,
+      profile,
+      questionnaire,
+      initializing,
+      profileLoading,
+      loadUserState,
+      authRevision,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

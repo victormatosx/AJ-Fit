@@ -10,5 +10,69 @@ service firebase.storage {
         && request.resource.contentType.matches('image/.*');
       allow delete: if request.auth != null && request.auth.uid == userId;
     }
+
+    // Fotos privadas de evolução (Photo Vault, docs/20). O objeto é
+    // ciphertext opaco (AES-256-GCM produzido no dispositivo), por isso o
+    // contentType é application/octet-stream e NÃO image/* — o Storage
+    // nunca vê uma imagem aqui. O metadado correspondente vive em
+    // users/{userId}/progressPhotos/{photoId} no Firestore.
+    match /users/{userId}/progressPhotos/{fileName} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+
+      allow create: if request.auth != null
+        && request.auth.uid == userId
+        // Imutabilidade real: no Cloud Storage um upload sobre um caminho já
+        // existente cria uma nova GERAÇÃO do objeto e é avaliado como
+        // `create`, não como `update` — por isso `allow update: if false`
+        // sozinho NÃO impede sobrescrita. `resource == null` exige que nada
+        // exista no caminho. Substituir uma foto = excluir + novo photoId.
+        && resource == null
+        && request.resource.size > 0
+        && request.resource.contentType == 'application/octet-stream'
+        && request.resource.metadata.keys().hasAll(['ownerId', 'photoId'])
+        && request.resource.metadata.ownerId == userId
+        && (
+          // Full ciphertext. The two-key branch preserves rollout
+          // compatibility with pre-Phase-13 clients; the new client labels
+          // the asset explicitly.
+          (
+            fileName == request.resource.metadata.photoId + '.enc'
+            && request.resource.size <= 10 * 1024 * 1024
+            && (
+              request.resource.metadata.keys().hasOnly(['ownerId', 'photoId'])
+              || (
+                request.resource.metadata.keys().hasOnly(['ownerId', 'photoId', 'assetKind'])
+                && request.resource.metadata.assetKind == 'full'
+              )
+            )
+          )
+          ||
+          // Thumbnail is independently encrypted and receives a deliberately
+          // much smaller abuse ceiling. No plaintext image/* is accepted.
+          (
+            fileName == request.resource.metadata.photoId + '.thumb.enc'
+            && request.resource.size <= 512 * 1024
+            && request.resource.metadata.keys().hasOnly(['ownerId', 'photoId', 'assetKind'])
+            && request.resource.metadata.assetKind == 'thumbnail'
+          )
+        );
+
+      // Cobre updateMetadata(): os metadados de um objeto existente também
+      // não podem ser alterados.
+      allow update: if false;
+
+      allow delete: if request.auth != null && request.auth.uid == userId;
+    }
+
+    match /users/{userId}/support/{ticketId}/attachments/{fileName} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null
+        && request.auth.uid == userId
+        && request.resource.size <= 8 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*')
+        && request.resource.metadata.ownerId == userId
+        && request.resource.metadata.ticketId == ticketId;
+      allow update, delete: if false;
+    }
   }
 }

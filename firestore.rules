@@ -7,8 +7,8 @@ rules_version = '2';
 //     acesso apenas aos próprios dados; RevenueCat é dono da assinatura)
 //   - docs/04_contratos_de_api.md §5 (contrato do documento users/{userId})
 //
-// Princípio: o app só escreve profile e metadata.updatedAt. Preferências,
-// assinatura e metadados internos têm mapas próprios e validação independente.
+// Princípio: o app só escreve profile, language/units e metadata.updatedAt.
+// Assinatura e metadados internos têm mapas próprios e validação independente.
 // As respostas do questionário ficam na subcoleção `questionnaires`. Campos de
 // assinatura e treino são gravados apenas pelo backend (Cloud Functions /
 // webhook RevenueCat via Admin SDK, que ignora estas regras).
@@ -22,6 +22,15 @@ service cloud.firestore {
 
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // O painel autentica com Firebase Auth e o backend promove previamente o
+    // documento do operador. Escritas do app nunca podem alterar metadata.role.
+    function isAdmin() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid))
+             .data.metadata.role == 'admin';
     }
 
     function profileValid(data) {
@@ -40,43 +49,91 @@ service cloud.firestore {
     }
 
     function preferencesValid(data) {
+      // `hasAll` + `hasOnly` das mesmas 3 chaves impede mapas incompletos e
+      // impede escritas do cliente que substituiriam o mapa inteiro por
+      // { language } (o padrão perigoso do JS SDK, que apagaria theme/units
+      // silenciosamente). O update legítimo usa caminho pontuado —
+      // `preferences.language` — e nunca reescreve o mapa.
+      //
+      // O conjunto de idiomas DEVE bater exatamente com SUPPORTED_LANGUAGES
+      // em src/types/language.ts.
       return data is map
         && data.keys().hasAll(['language', 'units', 'theme'])
         && data.keys().hasOnly(['language', 'units', 'theme'])
-        && data.language in ['pt-BR']
-        && data.units in ['metric', 'imperial']
+        && data.language in ['pt-BR', 'en', 'es']
+        && data.units in ['system', 'metric', 'imperial']
         && data.theme in ['dark', 'light', 'system'];
     }
 
     function subscriptionValid(data) {
       return data is map
-        && data.keys().hasOnly(['status', 'provider', 'trialEndsAt', 'endsAt'])
+        && data.keys().hasOnly([
+             'status', 'entitlementActive', 'provider', 'productId', 'store',
+             'startedAt', 'trialEndsAt', 'currentPeriodEndsAt', 'canceledAt',
+             'lastRenewedAt', 'lastEventId', 'lastEventTimestampMs', 'updatedAt'
+           ])
         && (!('status' in data)
              || data.status in ['TRIAL', 'ACTIVE', 'CANCELED', 'BILLING_ISSUE', 'EXPIRED'])
+        && (!('entitlementActive' in data) || data.entitlementActive is bool)
         && (!('provider' in data) || data.provider == 'REVENUECAT')
+        && (!('productId' in data) || data.productId is string)
+        && (!('store' in data) || data.store in ['APP_STORE', 'PLAY_STORE'])
+        && (!('startedAt' in data) || data.startedAt is timestamp)
         && (!('trialEndsAt' in data)
              || data.trialEndsAt == null || data.trialEndsAt is timestamp)
-        && (!('endsAt' in data)
-             || data.endsAt == null || data.endsAt is timestamp);
+        && (!('currentPeriodEndsAt' in data)
+             || data.currentPeriodEndsAt == null || data.currentPeriodEndsAt is timestamp)
+        && (!('canceledAt' in data)
+             || data.canceledAt == null || data.canceledAt is timestamp)
+        && (!('lastRenewedAt' in data)
+             || data.lastRenewedAt == null || data.lastRenewedAt is timestamp)
+        && (!('lastEventId' in data) || data.lastEventId is string)
+        && (!('lastEventTimestampMs' in data)
+             || (data.lastEventTimestampMs is int && data.lastEventTimestampMs >= 0))
+        && (!('updatedAt' in data) || data.updatedAt is timestamp);
     }
 
     function metadataValid(data) {
       return data is map
         && data.keys().hasAll(['role', 'createdAt', 'updatedAt'])
         && data.keys().hasOnly(['role', 'activeWorkoutId', 'createdAt', 'updatedAt'])
-        && data.role == 'user'
+        && data.role in ['user', 'admin']
         && (!('activeWorkoutId' in data) || data.activeWorkoutId is string)
         && data.createdAt is timestamp
         && data.updatedAt is timestamp;
     }
 
+    // Shape of `users/{userId}.attribution` — the read-optimized mirror of
+    // a user's promo-code attribution (functions/src/attribution/types.ts's
+    // `AttributionSnapshot`; source of truth is `couponRedemptions/{userId}`,
+    // written only by the Admin SDK — see the `couponRedemptions` match
+    // block below). Only the backend ever writes real values here; this
+    // function exists so `nestedUserValid` can tolerate the field's
+    // presence (once the backend has written it) without letting the
+    // CLIENT ever populate or change it itself — see the `create`/`update`
+    // rules on `users/{userId}` for the actual write blocks.
+    function attributionValid(data) {
+      return data is map
+        && data.keys().hasOnly(['couponCode', 'campaignId', 'influencerId', 'appliedAt'])
+        && (!('couponCode' in data) || data.couponCode is string)
+        && (!('campaignId' in data) || data.campaignId is string)
+        && (!('influencerId' in data) || data.influencerId is string)
+        && (!('appliedAt' in data) || data.appliedAt is timestamp);
+    }
+
+    // `attribution` is OPTIONAL (absent on every document created before
+    // this field existed, and on brand-new documents until the backend
+    // applies a promo code) — `hasAll` only requires the original four
+    // fields; `hasOnly` allows the fifth without forcing every existing
+    // caller of this function to know about it.
     function nestedUserValid(data) {
       return data.keys().hasAll(['profile', 'preferences', 'subscription', 'metadata'])
-        && data.keys().hasOnly(['profile', 'preferences', 'subscription', 'metadata'])
+        && data.keys().hasOnly(['profile', 'preferences', 'subscription', 'metadata', 'attribution'])
         && profileValid(data.profile)
         && preferencesValid(data.preferences)
         && subscriptionValid(data.subscription)
-        && metadataValid(data.metadata);
+        && metadataValid(data.metadata)
+        && (!('attribution' in data) || attributionValid(data.attribution));
     }
 
     function profilePhotoUpdateValid(before, after) {
@@ -100,12 +157,16 @@ service cloud.firestore {
         && after.profile.get('birthDate', null) == before.get('birthDate', null)
         && after.profile.get('photoURL', null) == before.get('photoURL', null)
         && after.preferences.language == before.get('language', 'pt-BR')
-        && after.preferences.units == 'metric'
+        && after.preferences.units == 'system'
         && after.preferences.theme == 'dark'
         && after.subscription.get('status', null) == before.get('subscriptionStatus', null)
         && after.subscription.get('provider', null) == before.get('subscriptionProvider', null)
         && after.subscription.get('trialEndsAt', null) == before.get('trialEndsAt', null)
-        && after.subscription.get('endsAt', null) == before.get('subscriptionEndsAt', null)
+        // Campo renomeado `endsAt` → `currentPeriodEndsAt` na Sprint 3.5 para
+        // casar com docs/13 §26; o nome plano ANTIGO (`subscriptionEndsAt`)
+        // não muda — é uma leitura única do documento legado, não parte do
+        // schema novo.
+        && after.subscription.get('currentPeriodEndsAt', null) == before.get('subscriptionEndsAt', null)
         && after.metadata.role == before.get('role', 'user')
         && after.metadata.get('activeWorkoutId', null) == before.get('activeWorkoutId', null)
         && after.metadata.createdAt == before.createdAt
@@ -161,6 +222,176 @@ service cloud.firestore {
         && (!('visceralFat' in d) || (d.visceralFat is number && d.visceralFat > 0));
     }
 
+    // ── Photo Vault (docs/20_backend_functions_photo_vault.md) ────────────
+    // Metadados das fotos privadas. A imagem NUNCA é gravada aqui: o binário
+    // vive criptografado no Storage e este documento guarda apenas o ponteiro
+    // e os parâmetros criptográficos necessários para decifrar. Não existe
+    // downloadURL nem signed URL persistida — o caminho é resolvido pelo SDK
+    // a partir de `storagePath`, sempre sujeito às Storage Rules.
+    function encryptionMetadataValid(e) {
+      return e is map
+        && e.keys().hasAll(['version', 'algorithm', 'iv', 'vaultKeyVersion'])
+        && e.keys().hasOnly(['version', 'algorithm', 'iv', 'vaultKeyVersion'])
+        && e.version is int && e.version >= 1
+        && e.algorithm == 'AES-256-GCM'
+        // IV/nonce em base64. Não é segredo (é público por design no GCM),
+        // mas precisa ser único por foto — a unicidade é responsabilidade do
+        // cliente, as regras só garantem forma e tamanho plausíveis.
+        && e.iv is string && e.iv.size() >= 16 && e.iv.size() <= 32
+        && e.vaultKeyVersion is int && e.vaultKeyVersion >= 1;
+    }
+
+    function progressPhotoValid(userId, photoId) {
+      let d = request.resource.data;
+      return d.keys().hasAll([
+          'storagePath', 'createdAt', 'takenAt', 'originalMimeType',
+          'encryptedSize', 'encryption'
+        ])
+        // Legacy photos keep the original six-field shape. Phase-13 photos
+        // add all three thumbnail fields atomically; partial thumbnail
+        // metadata and unknown fields remain rejected.
+        && (
+          d.keys().hasOnly([
+            'storagePath', 'createdAt', 'takenAt', 'originalMimeType',
+            'encryptedSize', 'encryption'
+          ])
+          || (
+            d.keys().hasAll([
+              'thumbnailStoragePath', 'thumbnailEncryptedSize',
+              'thumbnailEncryption'
+            ])
+            && d.keys().hasOnly([
+              'storagePath', 'thumbnailStoragePath', 'createdAt', 'takenAt',
+              'originalMimeType', 'encryptedSize', 'thumbnailEncryptedSize',
+              'encryption', 'thumbnailEncryption'
+            ])
+            && d.thumbnailStoragePath == 'users/' + userId + '/progressPhotos/' + photoId + '.thumb.enc'
+            && d.thumbnailEncryptedSize is int
+            && d.thumbnailEncryptedSize > 0
+            && d.thumbnailEncryptedSize <= 512 * 1024
+            && encryptionMetadataValid(d.thumbnailEncryption)
+            // Same Vault Key is intentional; nonce reuse under AES-GCM is not.
+            && d.thumbnailEncryption.iv != d.encryption.iv
+          )
+        )
+        // Igualdade exata de string (não regex): prende o metadado a um único
+        // objeto do Storage, no namespace do próprio dono e com o mesmo
+        // photoId do documento. Impede apontar para o arquivo de outro uid.
+        && d.storagePath == 'users/' + userId + '/progressPhotos/' + photoId + '.enc'
+        // `== request.time` (e não apenas `is timestamp`) força o uso de
+        // serverTimestamp() — o cliente não forja a data de criação.
+        && d.createdAt == request.time
+        && d.takenAt is timestamp
+        && d.takenAt <= request.time
+        && d.originalMimeType in ['image/jpeg', 'image/png', 'image/heic', 'image/heif', 'image/webp']
+        && d.encryptedSize is int
+        && d.encryptedSize > 0
+        && d.encryptedSize <= 10 * 1024 * 1024
+        && encryptionMetadataValid(d.encryption);
+    }
+
+    function supportTicketValid(ticketId) {
+      let d = request.resource.data;
+      return d.keys().hasAll([
+          'id', 'userId', 'userName', 'userEmail', 'type', 'subject', 'status',
+          'priority', 'lastMessage', 'createdAt', 'updatedAt', 'appVersion',
+          'platform', 'osVersion', 'deviceModel', 'language', 'attachmentsCount'
+        ])
+        && d.keys().hasOnly([
+          'id', 'userId', 'userName', 'userEmail', 'type', 'subject', 'status',
+          'priority', 'lastMessage', 'createdAt', 'updatedAt', 'appVersion',
+          'platform', 'osVersion', 'deviceModel', 'language', 'attachmentsCount'
+        ])
+        && d.id == ticketId
+        && d.userId == request.auth.uid
+        && d.userName is string && d.userName.size() >= 2 && d.userName.size() <= 50
+        && d.userEmail is string && d.userEmail.size() <= 254
+        && d.type in ['BUG', 'FEEDBACK', 'SUPPORT']
+        && d.subject is string && d.subject.size() >= 3 && d.subject.size() <= 100
+        && d.status == 'OPEN'
+        && d.priority == 'NORMAL'
+        && d.lastMessage is string && d.lastMessage.size() >= 10 && d.lastMessage.size() <= 5000
+        && d.createdAt == request.time && d.updatedAt == request.time
+        && d.appVersion is string && d.platform in ['ios', 'android', 'web', 'windows', 'macos']
+        && d.osVersion is string && d.deviceModel is string && d.language is string
+        && d.attachmentsCount is int && d.attachmentsCount >= 0 && d.attachmentsCount <= 1;
+    }
+
+    function supportMessageValid(ticketId) {
+      let d = request.resource.data;
+      let ticket = getAfter(/databases/$(database)/documents/supportTickets/$(ticketId));
+      return ticket.data.userId == request.auth.uid
+        && d.keys().hasAll(['senderType', 'senderId', 'message', 'attachments', 'createdAt', 'readAt'])
+        && d.keys().hasOnly(['senderType', 'senderId', 'message', 'attachments', 'createdAt', 'readAt'])
+        && d.senderType == 'USER' && d.senderId == request.auth.uid
+        && d.message is string && d.message.size() >= 1 && d.message.size() <= 5000
+        && d.attachments is list && d.attachments.size() <= 1
+        && ticket.data.attachmentsCount == d.attachments.size()
+        && (d.attachments.size() == 0 || (
+          d.attachments[0] is map
+          && d.attachments[0].keys().hasAll(['url', 'path', 'type'])
+          && d.attachments[0].keys().hasOnly(['url', 'path', 'type'])
+          && d.attachments[0].url is string && d.attachments[0].url.size() <= 2048
+          && d.attachments[0].path is string
+          && d.attachments[0].path.matches('users/' + request.auth.uid + '/support/' + ticketId + '/attachments/.*')
+          && d.attachments[0].type == 'IMAGE'
+        ))
+        && d.createdAt == request.time && d.readAt == null;
+    }
+
+    function adminSupportTicketUpdateValid() {
+      let before = resource.data;
+      let after = request.resource.data;
+      let changed = after.diff(before).affectedKeys();
+      return changed.hasAll(['updatedAt'])
+        && changed.hasOnly([
+          'status', 'priority', 'assignedTo', 'lastMessage', 'updatedAt',
+          'lastReplyAt', 'closedAt'
+        ])
+        && after.status in ['OPEN', 'IN_PROGRESS', 'WAITING_USER', 'RESOLVED', 'CLOSED']
+        && after.priority in ['LOW', 'NORMAL', 'HIGH', 'CRITICAL']
+        && after.updatedAt == request.time
+        // O painel atual atribui somente ao próprio operador autenticado.
+        && (!changed.hasAny(['assignedTo']) || after.assignedTo == request.auth.uid)
+        // Fechar grava o timestamp do servidor; qualquer outro status limpa-o.
+        && (!changed.hasAny(['status']) || (
+          changed.hasAny(['closedAt'])
+          && (after.status == 'CLOSED'
+              ? after.closedAt == request.time
+              : after.closedAt == null)
+        ))
+        && (!changed.hasAny(['closedAt']) || changed.hasAny(['status']))
+        // Uma resposta atualiza preview e metadados em conjunto.
+        && (!changed.hasAny(['lastMessage', 'lastReplyAt']) || (
+          changed.hasAll(['lastMessage', 'lastReplyAt'])
+          && after.lastMessage is string
+          && after.lastMessage.size() >= 1
+          && after.lastMessage.size() <= 5000
+          && after.lastReplyAt == request.time
+        ));
+    }
+
+    function adminSupportMessageValid(ticketId) {
+      let d = request.resource.data;
+      let ticket = getAfter(/databases/$(database)/documents/supportTickets/$(ticketId));
+      return d.keys().hasAll([
+          'senderType', 'senderId', 'message', 'attachments', 'createdAt', 'readAt'
+        ])
+        && d.keys().hasOnly([
+          'senderType', 'senderId', 'message', 'attachments', 'createdAt', 'readAt'
+        ])
+        && d.senderType == 'ADMIN'
+        && d.senderId == request.auth.uid
+        && d.message is string && d.message.size() >= 1 && d.message.size() <= 5000
+        && d.attachments is list && d.attachments.size() == 0
+        && d.createdAt == request.time && d.readAt == null
+        // Mantém mensagem e preview do ticket consistentes no mesmo batch.
+        && ticket.data.lastMessage == d.message
+        && ticket.data.updatedAt == request.time
+        && ticket.data.lastReplyAt == request.time;
+    }
+
+    // ── Users, questionnaires and assessments ─────────────────────────────
     match /users/{userId} {
       // Leitura: apenas o dono do documento.
       allow read: if isOwner(userId);
@@ -169,8 +400,10 @@ service cloud.firestore {
       // o token e sem campos de assinatura/internos definidos pelo cliente.
       allow create: if isOwner(userId)
         && nestedUserValid(request.resource.data)
+        && request.resource.data.metadata.role == 'user'
         && request.resource.data.profile.email == request.auth.token.email
         && request.resource.data.subscription.size() == 0
+        && !('attribution' in request.resource.data)
         && !('activeWorkoutId' in request.resource.data.metadata)
         && request.resource.data.metadata.createdAt == request.time
         && request.resource.data.metadata.updatedAt == request.time;
@@ -179,15 +412,25 @@ service cloud.firestore {
       // `diff().affectedKeys().hasOnly` impede alterações em campos de conta,
       // assinatura, treino ou privilégios mesmo que novos campos sejam
       // adicionados ao documento no futuro.
+      //
+      // `preferences` é aceito no conjunto top-level mudável, mas dentro dele
+      // apenas `preferences.language` e `preferences.units` podem variar;
+      // `theme` segue protegido. Escritas legítimas usam caminhos pontuados,
+      // preservando todas as preferências irmãs.
       allow update: if isOwner(userId) && (
         legacyMigrationValid()
         || (
           nestedUserValid(request.resource.data)
           && request.resource.data.diff(resource.data).affectedKeys()
-               .hasOnly(['profile', 'metadata'])
+               .hasOnly(['profile', 'preferences', 'metadata'])
           && request.resource.data.profile.diff(resource.data.profile).affectedKeys()
                .hasOnly(['name', 'birthDate', 'photoURL', 'photoVersion'])
           && profilePhotoUpdateValid(resource.data.profile, request.resource.data.profile)
+          && (
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny(['preferences'])
+            || request.resource.data.preferences.diff(resource.data.preferences).affectedKeys()
+                 .hasOnly(['language', 'units'])
+          )
           && request.resource.data.metadata.diff(resource.data.metadata).affectedKeys()
                .hasOnly(['updatedAt'])
           && request.resource.data.metadata.updatedAt == request.time
@@ -228,8 +471,76 @@ service cloud.firestore {
 
         allow update, delete: if false;
       }
+
+      // Metadados das fotos privadas de evolução (Photo Vault). O dono lê,
+      // cria e exclui; o documento é imutável após a criação — trocar uma
+      // foto significa excluir o par (documento + objeto no Storage) e criar
+      // um novo photoId, o que mantém a auditoria simples e sem ambiguidade.
+      match /progressPhotos/{photoId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && progressPhotoValid(userId, photoId);
+        allow update: if false;
+        allow delete: if isOwner(userId);
+      }
+
+      // Material criptográfico do Photo Vault (wrappedVaultKey e versões).
+      // Backend-only: escrito e lido exclusivamente pelo Admin SDK, que
+      // ignora estas regras. O cliente nunca precisa da chave embrulhada —
+      // ele recebe a Vault Key já desembrulhada pela Function autenticada e
+      // a guarda localmente no SecureStore. Negar leitura ao cliente remove
+      // a chave embrulhada da superfície de ataque do app por completo.
+      //
+      // Consequência: o schema deste documento NÃO é validável por estas
+      // regras (o Admin SDK as ignora). O contrato fechado e versionado vive
+      // em functions/src/photoVault/schema.ts, onde é de fato aplicado.
+      match /privateSecurity/{documentId} {
+        allow read, write: if false;
+      }
     }
 
+    // ── Support tickets and messages ──────────────────────────────────────
+    match /supportTickets/{ticketId} {
+      allow get, list: if isAdmin()
+        || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow create: if isSignedIn() && supportTicketValid(ticketId);
+      allow update: if isAdmin() && adminSupportTicketUpdateValid();
+      allow delete: if false;
+
+      match /messages/{messageId} {
+        allow get, list: if isAdmin()
+          || (isSignedIn()
+              && get(/databases/$(database)/documents/supportTickets/$(ticketId))
+                   .data.userId == request.auth.uid);
+        allow create: if (isSignedIn() && supportMessageValid(ticketId))
+          || (isAdmin() && adminSupportMessageValid(ticketId));
+        allow update, delete: if false;
+      }
+    }
+
+    // Catálogo de códigos promocionais/influenciadores
+    // (functions/src/attribution/{constants,types,promoCodeCatalog}.ts).
+    // Nunca lido nem escrito pelo cliente — a validação server-side
+    // (`validatePromoCode`, onCall) faz o único `get()` direto por ID
+    // normalizado, via Admin SDK, que ignora estas regras. Bloco explícito
+    // (redundante com o catch-all abaixo, que já negaria por padrão) para
+    // documentar a intenção: nenhuma exceção de leitura deve ser adicionada
+    // aqui, nem mesmo para o dono de um documento — não existe "dono" para
+    // um código promocional.
+    match /promoCodes/{code} {
+      allow read, write: if false;
+    }
+
+    // Registro server-managed do ciclo de vida da atribuição de um uid a um
+    // código promocional (functions/src/attribution/{constants,types,
+    // attributionSync}.ts) — `couponRedemptions/{uid}`. Fonte de verdade;
+    // `users/{uid}.attribution` é apenas o espelho de leitura. Escrito
+    // exclusivamente por `applyPromoCodeAttributionTransactionally` via
+    // Admin SDK. Bloco explícito pelo mesmo motivo do `promoCodes` acima.
+    match /couponRedemptions/{uid} {
+      allow read, write: if false;
+    }
+
+    // ── Deny all undocumented collections ─────────────────────────────────
     // Coleções de sistema (exercises, workout_templates, treinos do usuário,
     // etc.) ainda não têm contrato de regras aprovado — negar por padrão até
     // definição do Agente de Segurança/Arquiteto.

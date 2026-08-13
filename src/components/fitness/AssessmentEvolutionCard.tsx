@@ -1,13 +1,16 @@
 import React from 'react';
 import { View, Text, Pressable } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { Card } from '../ui/Card';
 import { Icon } from '../ui/Icon';
 import { MonoLabel } from '../ui/Display';
 import { colors, fonts } from '../../theme/tokens';
 import { EvolutionLineChart, type EvolutionPoint } from './EvolutionLineChart';
+import { useUnits } from '../../state/UnitsContext';
+import { weightFromKg, weightUnit } from '../../units/weightConversions';
 
 // Fixed categorical slots — weight and body fat live on incomparable scales
-// (kg vs %), so they're two single-series charts, never one dual-axis chart.
+// (mass vs %), so they're two single-series charts, never one dual-axis chart.
 // Validated: node scripts/validate_palette.js "#3987e5,#d95926" --mode dark
 // --surface "#020010" (dataviz skill) — passes lightness/chroma/CVD/contrast.
 const WEIGHT_COLOR = '#3987e5';
@@ -24,6 +27,7 @@ function DeltaChip({
   unit: string;
   goodWhenNegative?: boolean;
 }) {
+  const { t } = useTranslation('assessment');
   if (value == null) {
     return (
       <View style={{ flex: 1, alignItems: 'center' }}>
@@ -44,9 +48,7 @@ function DeltaChip({
           color: positive ? '#22c55e' : '#f0563f',
         }}
       >
-        {sign}
-        {value.toFixed(1)}
-        {unit}
+        {t('result', { value: `${sign}${value.toFixed(1)}`, unit })}
       </Text>
     </View>
   );
@@ -69,30 +71,58 @@ export function AssessmentEvolutionCard({
   leanMassDelta: number | null;
   onViewHistory: () => void;
 }) {
+  const { t } = useTranslation('assessment');
+  const { resolvedUnits } = useUnits();
+  const massUnit = weightUnit(resolvedUnits);
+  const displayedWeightPoints = weightPoints.map((point) => ({
+    ...point,
+    value: weightFromKg(point.value, resolvedUnits),
+  }));
   return (
     <Card style={{ padding: 16 }}>
-      <View style={{ flexDirection: 'row', gap: 18, marginBottom: 16 }}>
+      <View accessible accessibilityLabel={t('accessibility.evolutionCard')}>
+      <View style={{ flexDirection: 'row', gap: 16, marginBottom: 12 }}>
         <EvolutionLineChart
-          label="PESO"
-          unit="kg"
+          label={t('metrics.weight').toUpperCase()}
+          unit={massUnit}
           color={WEIGHT_COLOR}
-          points={weightPoints}
-          emptyHint="Registre 2+ avaliações para ver o gráfico."
+          points={displayedWeightPoints}
+          emptyHint={t('charts.weightEmpty')}
+          showEmptyHint={hasPrevious}
         />
         <EvolutionLineChart
-          label="% GORDURA"
-          unit="%"
+          label={t('metrics.bodyFat').toUpperCase()}
+          unit={t('units.percent')}
           color={BODY_FAT_COLOR}
           points={bodyFatPoints}
-          emptyHint="Sem avaliações com % de gordura suficientes."
+          emptyHint={t('charts.bodyFatEmpty')}
+          showEmptyHint={hasPrevious}
         />
       </View>
 
       {hasPrevious ? (
         <View style={{ flexDirection: 'row' }}>
-          <DeltaChip label="PESO" value={weightDelta} unit="kg" goodWhenNegative />
-          <DeltaChip label="% GORDURA" value={bodyFatDelta} unit="%" goodWhenNegative />
-          <DeltaChip label="MASSA MAGRA" value={leanMassDelta} unit="kg" />
+          <DeltaChip
+            label={t('metrics.weight').toUpperCase()}
+            value={weightFromKg(weightDelta, resolvedUnits)}
+            unit={massUnit}
+            goodWhenNegative
+          />
+          <DeltaChip
+            label={t('metrics.bodyFat').toUpperCase()}
+            value={bodyFatDelta}
+            unit={t('units.percent')}
+            goodWhenNegative
+          />
+          <DeltaChip
+            label={t('metrics.leanMass').toUpperCase()}
+            value={
+              leanMassDelta != null
+                ? weightFromKg(leanMassDelta, resolvedUnits)
+                : null
+            }
+            unit={massUnit}
+          />
         </View>
       ) : (
         <Text
@@ -103,12 +133,14 @@ export function AssessmentEvolutionCard({
             textAlign: 'center',
           }}
         >
-          Registre uma nova avaliação para começar a acompanhar sua evolução.
+          {t('evolution.noPreviousMessage')}
         </Text>
       )}
 
       <Pressable
         onPress={onViewHistory}
+        accessibilityRole="button"
+        accessibilityLabel={t('accessibility.viewHistory')}
         style={{
           flexDirection: 'row',
           alignItems: 'center',
@@ -128,10 +160,11 @@ export function AssessmentEvolutionCard({
             color: colors.accentHi,
           }}
         >
-          VER HISTÓRICO COMPLETO
+          {t('evolution.viewHistoryCta').toUpperCase()}
         </Text>
         <Icon name="chevron-right" size={12} color={colors.accentHi} />
       </Pressable>
+      </View>
     </Card>
   );
 }

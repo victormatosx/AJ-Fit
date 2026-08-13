@@ -1,0 +1,160 @@
+{
+  "fallback": {
+    "athlete": "Atleta"
+  },
+  "header": {
+    "memberSince": "Membro · desde {{year}}",
+    "memberSinceInline": "Membro desde {{year}}"
+  },
+  "level": {
+    "title": "Nível AJ · Intermediário",
+    "xp": "{{xp}} XP",
+    "toNext": "Faltam {{amount}} XP para {{nextLevel}}",
+    "nextLevel": "Avançado"
+  },
+  "subscription": {
+    "labels": {
+      "TRIAL": "AJ Premium · Teste grátis",
+      "ACTIVE": "AJ Premium · Ativo",
+      "CANCELED": "AJ Premium · Cancelado",
+      "BILLING_ISSUE": "AJ Premium · Pagamento pendente",
+      "EXPIRED": "AJ Premium · Expirado",
+      "unknown": "AJ Premium",
+      "none": "Sem assinatura ativa"
+    },
+    "descriptions": {
+      "managed": "Gerenciado pela loja (RevenueCat)",
+      "trialCta": "Ative seu teste grátis de 7 dias"
+    }
+  },
+  "assessment": {
+    "title": "Avaliação física",
+    "subtitle": "Medidas, dobras cutâneas e evolução"
+  },
+  "smartAlerts": {
+    "title": "Avisos inteligentes"
+  },
+  "groups": {
+    "evolution": {
+      "title": "Evolução"
+    },
+    "goalsPlan": {
+      "title": "Objetivos & plano",
+      "items": {
+        "viewPlan": "Ver meu plano"
+      }
+    },
+    "account": {
+      "title": "Conta",
+      "items": {
+        "editProfile": "Editar perfil",
+        "subscription": "Assinatura",
+        "settings": "Configurações"
+      }
+    },
+    "session": {
+      "title": "Sessão",
+      "items": {
+        "logout": "Sair da conta"
+      }
+    }
+  },
+  "linkedProviders": {
+    "title": "Métodos de login",
+    "notLinked": "Não vinculado",
+    "labels": {
+      "google.com": "Google",
+      "apple.com": "Apple",
+      "password": "E-mail / Senha"
+    }
+  },
+  "logout": {
+    "confirmTitle": "Sair da conta",
+    "confirmMessage": "Deseja realmente sair?",
+    "cancel": "Cancelar",
+    "confirm": "Sair",
+    "errorTitle": "Erro",
+    "errorMessage": "Não foi possível sair. Tente novamente."
+  },
+  "photo": {
+    "accessibility": {
+      "avatar": "Foto de perfil",
+      "editable": "Alterar foto de perfil"
+    },
+    "menu": {
+      "title": "Foto de perfil",
+      "message": "Escolha uma opção",
+      "takePhoto": "Tirar foto",
+      "chooseFromLibrary": "Escolher da biblioteca",
+      "removePhoto": "Remover foto",
+      "cancel": "Cancelar"
+    },
+    "actions": {
+      "add": "Adicionar foto",
+      "change": "Alterar foto",
+      "optimizing": "Otimizando foto..."
+    },
+    "errors": {
+      "compressTitle": "Não foi possível preparar a foto",
+      "compressGeneric": "Escolha outra imagem e tente novamente.",
+      "tooLarge": "Mesmo após a compressão, a imagem ultrapassou 5 MB.",
+      "libraryTitle": "Não foi possível abrir suas fotos",
+      "cameraTitle": "Não foi possível abrir a câmera",
+      "cameraPermissionTitle": "Acesso à câmera necessário",
+      "cameraPermissionMessage": "Permita o acesso à câmera nos Ajustes para tirar uma foto de perfil.",
+      "genericRetry": "Tente novamente em instantes."
+    }
+  },
+  "edit": {
+    "title": "Editar perfil",
+    "accessibility": {
+      "back": "Voltar para o perfil",
+      "save": "Salvar alterações"
+    },
+    "identity": {
+      "namePlaceholder": "Seu nome"
+    },
+    "sections": {
+      "personalData": "Dados pessoais",
+      "account": "Conta"
+    },
+    "fields": {
+      "displayName": "Nome de exibição",
+      "birthDate": "Data de nascimento",
+      "email": "E-mail",
+      "emailUnavailable": "E-mail não disponível",
+      "emailSecurityNote": "O e-mail é protegido pelos seus métodos de login."
+    },
+    "datePart": {
+      "day": "Dia",
+      "month": "Mês",
+      "year": "Ano",
+      "placeholderDay": "DD",
+      "placeholderMonth": "MM",
+      "placeholderYear": "AAAA"
+    },
+    "actions": {
+      "save": "Salvar alterações",
+      "saving": "Salvando...",
+      "uploadingPhoto": "Enviando foto {{percent}}%"
+    },
+    "discard": {
+      "title": "Descartar alterações?",
+      "message": "As mudanças feitas no perfil não serão salvas.",
+      "cancel": "Continuar editando",
+      "confirm": "Descartar"
+    },
+    "validation": {
+      "nameRequired": "Informe seu nome.",
+      "nameTooShort": "Use pelo menos {{min}} caracteres.",
+      "nameTooLong": "Use no máximo {{max}} caracteres.",
+      "birthDateRequired": "Informe uma data válida.",
+      "birthDateFuture": "A data não pode estar no futuro.",
+      "birthDateAgeRange": "A idade deve estar entre {{min}} e {{max}} anos."
+    },
+    "errors": {
+      "photoTooLarge": "A foto deve ter no máximo 5 MB.",
+      "saveFailed": "Não foi possível salvar. Verifique sua conexão e tente novamente."
+    }
+  }
+}

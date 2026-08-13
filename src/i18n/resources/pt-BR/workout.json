@@ -1,0 +1,156 @@
+{
+  "header": {
+    "exercisePrefix": "Ex",
+    "accessibility": {
+      "close": "Sair do treino",
+      "openQueue": "Abrir fila de exercícios"
+    }
+  },
+  "actions": {
+    "viewExecution": "Ver execução",
+    "swap": "Trocar",
+    "finishWorkout": "Finalizar treino",
+    "skipBusy": "Pular · aparelho ocupado",
+    "completeSet": "Concluir série {{number}}"
+  },
+  "badges": {
+    "resumed": "Retomado"
+  },
+  "video": {
+    "execution": "Execução",
+    "keyPoints": "Pontos-chave",
+    "accessibility": {
+      "close": "Fechar vídeo"
+    }
+  },
+  "queue": {
+    "title": "Fila do treino · {{count}} exercícios",
+    "states": {
+      "now": "Agora",
+      "skipped": "Pulado",
+      "completed": "Concluído"
+    },
+    "activeItem_one": "{{target}} · {{done}}/{{total}} série",
+    "activeItem_other": "{{target}} · {{done}}/{{total}} séries",
+    "completedItem_one": "Concluído · {{done}}/{{total}} série",
+    "completedItem_other": "Concluído · {{done}}/{{total}} séries"
+  },
+  "exerciseDone": {
+    "completed": "Exercício concluído",
+    "nextLabel": "Próximo"
+  },
+  "sets": {
+    "next": "Próxima série",
+    "number": "Série {{number}}",
+    "progress_one": "{{done}}/{{total}} série",
+    "progress_other": "{{done}}/{{total}} séries",
+    "current": "Agora",
+    "registered": "Registrado",
+    "lastTime": "Última vez",
+    "summaryWeighted_one": "{{count}} rep × {{weight}} {{unit}}",
+    "summaryWeighted_other": "{{count}} reps × {{weight}} {{unit}}",
+    "summaryBodyweight_one": "{{count}} rep × peso corporal",
+    "summaryBodyweight_other": "{{count}} reps × peso corporal"
+  },
+  "reps": {
+    "label": "Reps"
+  },
+  "load": {
+    "bodyweight": "Peso corporal"
+  },
+  "rest": {
+    "title": "Descanso",
+    "minimize": "Minimizar",
+    "minimizeAccessibility": "Minimizar descanso",
+    "logLoad": "Registrar carga · Série {{setNumber}}",
+    "optional": "opcional",
+    "inputHint": "Toque no número para digitar",
+    "addSecondsAccessibility": "Adicionar {{seconds}} segundos",
+    "nextSet": "Próxima série"
+  },
+  "record": {
+    "new": "Novo recorde",
+    "previousContext": "{{exName}} · anterior {{previous}} {{unit}}",
+    "gain": "+{{delta}} {{unit}}"
+  },
+  "done": {
+    "kicker": "Treino concluído",
+    "titleLine1": "Feito.",
+    "titleLine2": "Mais forte.",
+    "backHome": "Voltar para home",
+    "metrics": {
+      "time": "Tempo",
+      "volume": "Volume",
+      "sets": "Séries",
+      "newPr": "Novo PR"
+    },
+    "streak": {
+      "updated": "Sequência atualizada",
+      "days_one": "{{count}} dia",
+      "days_other": "{{count}} dias",
+      "untilRecord_one": "· falta {{count}} p/ seu recorde",
+      "untilRecord_other": "· faltam {{count}} p/ seu recorde"
+    }
+  },
+  "substitution": {
+    "sheetTitle": "Trocar exercício",
+    "sheetSubtitle": "Mesmo grupo muscular · escolha uma variação",
+    "labels": {
+      "original": "Original",
+      "replacement": "Substituição",
+      "current": "Atual"
+    },
+    "confirmTitle": "Aplicar troca",
+    "replaceQuestion": "{{replacement}} no lugar de {{original}}.",
+    "actions": {
+      "once": "Trocar só dessa vez",
+      "permanent": "Trocar em todo o treino",
+      "cancel": "Cancelar"
+    },
+    "badges": {
+      "today": "Trocado hoje",
+      "permanent": "Trocado fixo"
+    }
+  },
+  "muscleGroups": {
+    "chest": "Peitoral",
+    "upperChest": "Peitoral superior",
+    "shoulders": "Ombro",
+    "sideDelt": "Ombro lateral",
+    "frontDelt": "Ombro frontal",
+    "triceps": "Tríceps",
+    "tricepsChest": "Tríceps e peito"
+  },
+  "exercises": {
+    "Barbell_Bench_Press_-_Medium_Grip": "Supino reto",
+    "Dumbbell_Bench_Press": "Supino reto com halteres",
+    "Machine_Bench_Press": "Supino máquina",
+    "Incline_Dumbbell_Bench_With_Palms_Facing_In": "Supino inclinado com halteres",
+    "Barbell_Incline_Bench_Press_Medium-Grip": "Supino inclinado com barra",
+    "Low_Cable_Crossover": "Crossover baixo",
+    "Cable_Crossover": "Crucifixo na polia",
+    "Dumbbell_Flyes": "Crucifixo com halteres",
+    "Butterfly": "Peck deck",
+    "Standing_Military_Press": "Desenvolvimento militar",
+    "Dumbbell_Shoulder_Press": "Desenvolvimento com halteres",
+    "Arnold_Dumbbell_Press": "Desenvolvimento Arnold",
+    "Side_Lateral_Raise": "Elevação lateral",
+    "Cable_Shoulder_Press": "Elevação lateral na polia",
+    "Front_Dumbbell_Raise": "Elevação frontal",
+    "Triceps_Pushdown": "Tríceps na polia",
+    "Tricep_Dumbbell_Kickback": "Tríceps coice com halter",
+    "Barbell_Skullcrusher_Extension": "Tríceps testa",
+    "EZ-Bar_Skullcrusher": "Tríceps francês",
+    "Seated_Dumbbell_Tricep_Press": "Tríceps testa com halter",
+    "Dips_-_Triceps_Version": "Mergulho em paralelas",
+    "Weighted_Bench_Dip": "Mergulho no banco com peso",
+    "Close-Grip_Push-Up_off_of_a_Wall": "Flexão fechada"
+  },
+  "instructions": {
+    "default": {
+      "keyPoint1": "Mantenha a escápula retraída",
+      "keyPoint2": "Desça controlando a fase excêntrica",
+      "keyPoint3": "Não trave os cotovelos no topo"
+    }
+  }
+}

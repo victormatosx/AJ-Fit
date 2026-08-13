@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, Pressable, StyleProp, ViewStyle } from 'react-native';
 import { Slash } from './Display';
 import { Icon, IconName } from './Icon';
-import { colors, fonts } from '../../theme/tokens';
+import { colors, fonts, opacity, spacing, typography } from '../../theme/tokens';
 
 export function SettingsHeader({
   children,
@@ -36,55 +36,100 @@ export function SettingsValue({ children }: { children: React.ReactNode }) {
 export type SettingsItemData = {
   icon: IconName;
   label: string;
+  description?: string;
   value?: string;
   danger?: boolean;
+  disabled?: boolean;
   onPress?: () => void;
 };
 
-export function SettingsItem({ icon, label, value, danger, onPress }: SettingsItemData) {
-  const accent = danger ? '#ff7676' : colors.accentHi;
+export function SettingsItem({
+  icon,
+  label,
+  description,
+  value,
+  danger,
+  disabled = false,
+  onPress,
+}: SettingsItemData) {
+  const accent = danger ? colors.danger : colors.accentHi;
+  const interactive = !!onPress && !disabled;
+
   return (
     <Pressable
-      onPress={onPress}
-      disabled={!onPress}
+      accessibilityRole={onPress ? 'button' : undefined}
+      accessibilityState={onPress ? { disabled } : undefined}
+      onPress={interactive ? onPress : undefined}
+      disabled={!interactive}
       style={({ pressed }) => ({
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 14,
-        paddingVertical: 14,
-        paddingHorizontal: 16,
-        backgroundColor: pressed && onPress ? 'rgba(255,255,255,0.04)' : 'transparent',
+        gap: spacing[3.5],
+        minHeight: 48,
+        paddingVertical: spacing[3.5],
+        paddingHorizontal: spacing[4],
+        opacity: disabled ? opacity.disabled : 1,
+        backgroundColor: pressed && interactive ? colors.surfacePressed : 'transparent',
       })}
     >
       <Icon name={icon} size={16} color={accent} />
-      <Text
-        style={{
-          flex: 1,
-          fontFamily: fonts.uiSemi,
-          fontSize: 14,
-          color: danger ? '#ff9a9a' : '#fff',
-        }}
-      >
-        {label}
-      </Text>
+      <View style={{ flex: 1 }}>
+        <Text
+          style={{
+            fontFamily: fonts.uiSemi,
+            fontSize: 14,
+            color: danger ? colors.dangerText : colors.text,
+          }}
+        >
+          {label}
+        </Text>
+        {description ? (
+          <Text
+            style={[
+              typography.bodySmall,
+              { color: colors.textSecondary, marginTop: spacing[1] },
+            ]}
+          >
+            {description}
+          </Text>
+        ) : null}
+      </View>
       {value ? <SettingsValue>{value}</SettingsValue> : null}
-      {onPress ? <Icon name="chevron-right" size={14} color="rgba(255,255,255,0.3)" /> : null}
+      {onPress ? <Icon name="chevron-right" size={14} color={colors.faint} /> : null}
     </Pressable>
   );
 }
 
 export function SettingsSection({
   title,
+  description,
   items,
   style,
 }: {
   title: string;
+  description?: string;
   items: SettingsItemData[];
   style?: StyleProp<ViewStyle>;
 }) {
   return (
     <View style={[{ paddingHorizontal: 22, paddingBottom: 16 }, style]}>
-      <SettingsHeader>{title}</SettingsHeader>
+      <SettingsHeader style={description ? { marginBottom: spacing[2] } : undefined}>
+        {title}
+      </SettingsHeader>
+      {description ? (
+        <Text
+          style={[
+            typography.bodySmall,
+            {
+              color: colors.textSecondary,
+              marginBottom: spacing[3],
+              maxWidth: 360,
+            },
+          ]}
+        >
+          {description}
+        </Text>
+      ) : null}
       <View
         style={{
           borderRadius: 14,

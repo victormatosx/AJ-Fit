@@ -7,6 +7,27 @@ export type ProviderResult = {
   displayName?: string | null;
 };
 
+export type AppleCredentialOptions = {
+  /** Login requests profile data; reauthentication deliberately does not. */
+  requestProfile?: boolean;
+};
+
+export type ProviderCredentialIssue =
+  | 'providerUnavailable'
+  | 'providerBusy'
+  | 'identityTokenMissing';
+
+/** Safe provider acquisition failure without exposing tokens or credentials. */
+export class ProviderCredentialError extends Error {
+  readonly issue: ProviderCredentialIssue;
+
+  constructor(issue: ProviderCredentialIssue) {
+    super(issue);
+    this.name = 'ProviderCredentialError';
+    this.issue = issue;
+  }
+}
+
 /** Thrown when the user cancels the native sign-in sheet. Handled silently. */
 export class SocialAuthCancelledError extends Error {
   constructor() {

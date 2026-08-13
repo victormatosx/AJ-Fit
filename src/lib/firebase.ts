@@ -9,6 +9,7 @@ import {
 import * as firebaseAuth from 'firebase/auth';
 import { getFirestore, type Firestore } from 'firebase/firestore';
 import { getStorage, type FirebaseStorage } from 'firebase/storage';
+import { initializeFirebaseAppCheck } from './firebaseAppCheck';
 import { secureAuthStorage } from './secureAuthStorage';
 
 /**
@@ -39,6 +40,12 @@ if (!firebaseConfig.apiKey) {
 
 // Reuse the existing app across Fast Refresh reloads to avoid duplicate-init errors.
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+
+// App Check is attached to this exact JS app before product instances are
+// created. It remains optional in Expo Go/web, where the local native module
+// is intentionally unavailable; enforcement stays disabled until both mobile
+// providers have passed real-device validation.
+export const appCheck = initializeFirebaseAppCheck(app);
 
 /**
  * `getReactNativePersistence` only exists in the React Native build of
