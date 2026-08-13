@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { PACKAGE_TYPE, PurchasesPackage, SubscriptionOption } from 'react-native-purchases';
+import type { CustomerInfo, PACKAGE_TYPE, PurchasesPackage, SubscriptionOption } from 'react-native-purchases';
 import {
+  classifyPurchaseResult,
   findAuthorizedSubscriptionOption,
   resolveAndroidPlanKind,
   resolveApplePurchaseRoute,
@@ -622,4 +623,78 @@ describe('findAuthorizedSubscriptionOption — Fase 4C.4E device-proven fix', ()
   // belong to this package" acima, no describe `findAuthorizedSubscriptionOption`
   // — inclui a análise de por que esse cenário não é alcançável via o
   // contrato real do SDK, mantido apenas como defesa em profundidade.
+});
+
+/**
+ * FASE iOS-4 — `classifyPurchaseResult` is the ONLY function that decides
+ * whether a purchase/redemption outcome counts as Premium (docs/13 §2/§10/§27:
+ * `CustomerInfo.entitlements.active[entitlementId]` is the sole authority).
+ * These tests cover items 10-12 of the iOS Offer Code audit: presenting or
+ * dismissing `Purchases.presentCodeRedemptionSheet()` never grants Premium
+ * by itself — `revenueCatService.ts`'s `redeemOfferCode()` always resolves
+ * `{status:'purchased', customerInfo}` once the sheet closes (StoreKit
+ * cannot report redeemed-vs-dismissed), so this is the only remaining gate.
+ */
+describe('classifyPurchaseResult — Apple Offer Code redemption never grants Premium on its own', () => {
+  const ENTITLEMENT_ID = 'premium';
+
+  function makeCustomerInfo(activeEntitlementIds: string[]): CustomerInfo {
+    const active = Object.fromEntries(activeEntitlementIds.map((id) => [id, {} as never]));
+    return {
+      entitlements: { active, all: active },
+    } as unknown as CustomerInfo;
+  }
+
+  it('10/11: presenting or dismissing the redemption sheet without an active entitlement never yields premium', () => {
+    // Mirrors exactly what `redeemOfferCode()` returns once the sheet closes
+    // for ANY reason (dismissed without redeeming, or redeemed but
+    // CustomerInfo not yet propagated) — see its doc comment.
+    const outcome = { status: 'purchased' as const, customerInfo: makeCustomerInfo([]) };
+    expect(classifyPurchaseResult(outcome, ENTITLEMENT_ID)).toBe('missing-entitlement');
+  });
+
+  it('12: only an active `premium` entitlement in CustomerInfo yields premium, regardless of how it was reached', () => {
+    const outcome = { status: 'purchased' as const, customerInfo: makeCustomerInfo([ENTITLEMENT_ID]) };
+    expect(classifyPurchaseResult(outcome, ENTITLEMENT_ID)).toBe('premium');
+  });
+
+  it('an active entitlement OTHER than `premium` never counts as premium', () => {
+    const outcome = { status: 'purchased' as const, customerInfo: makeCustomerInfo(['some_other_entitlement']) };
+    expect(classifyPurchaseResult(outcome, ENTITLEMENT_ID)).toBe('missing-entitlement');
+  });
+
+  it('user cancelling the sheet is classified as cancelled, never premium', () => {
+    expect(classifyPurchaseResult({ status: 'cancelled' }, ENTITLEMENT_ID)).toBe('cancelled');
+  });
+
+  it('14: a RevenueCat/SDK error is classified as error, never premium', () => {
+    expect(classifyPurchaseResult({ status: 'error' }, ENTITLEMENT_ID)).toBe('error');
+  });
+});
+
+/**
+ * FASE iOS-4, item 8 — the Apple Offer Code Sandbox test bypass
+ * (`lib/appleOfferCodeSandboxTest.ts`) is Apple-only by construction: it is
+ * never imported by, called from, or referenced in the Android routing path
+ * (`resolvePurchaseRoute`/`resolveAuthorizedAndroidOffer`/
+ * `findAuthorizedSubscriptionOption`). This test doesn't need a "sandbox
+ * flag on" parameter for Android at all — there ISN'T one — so it instead
+ * proves the Android functions' behavior is identical with or without a
+ * promo code applied, exactly as before this phase, which is the only way
+ * FASE iOS-4 could regress Android (by accident coupling two paths that
+ * must stay independent).
+ */
+describe('FASE iOS-4 — Android is structurally unaffected by the Apple Sandbox test bypass', () => {
+  it('resolvePurchaseRoute for Android keeps failing closed on a missing offer, regardless of anything Apple-related', () => {
+    const pkg = makePackage({ packageType: 'MONTHLY' as PACKAGE_TYPE, subscriptionOptions: [] });
+    const result = resolvePurchaseRoute(pkg, true, null);
+    expect(result).toEqual({ kind: 'blocked', reason: 'promo_plan_unavailable' });
+  });
+
+  it('resolveAuthorizedAndroidOffer never reads anything Apple-shaped (no appleStoreConfig param exists on it)', () => {
+    const pkg = makePackage({ packageType: 'MONTHLY' as PACKAGE_TYPE, subscriptionOptions: [] });
+    expect(resolveAuthorizedAndroidOffer(pkg, { monthly: MONTHLY_OFFER, annual: ANNUAL_OFFER })).toEqual(
+      MONTHLY_OFFER,
+    );
+  });
 });

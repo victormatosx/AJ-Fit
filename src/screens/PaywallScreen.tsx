@@ -20,10 +20,8 @@ import { Icon } from '../components/ui/Icon';
 import { useSubscription } from '../hooks/useSubscription';
 import { usePromoCode } from '../hooks/usePromoCode';
 import {
-  buildOfferMatchDiagnostic,
   classifyPurchaseResult,
   classifyRestoreResult,
-  describePackageCatalogForDiagnostics,
   getCurrentOfferingPackages,
   packagePeriodLabel,
   packagePriceString,
@@ -34,9 +32,13 @@ import {
   resolveOfferingViewState,
   resolvePurchaseRoute,
   resolveSelectedPackage,
-  type ApplePurchaseRoute,
   type PurchaseRoute,
 } from '../lib/subscriptionOffer';
+import {
+  applyAppleOfferCodeSandboxOverride,
+  isAppleOfferCodeSandboxTestEnabled,
+  type AppleSandboxOverrideRoute,
+} from '../lib/appleOfferCodeSandboxTest';
 import { isPromoCodeUiSupported } from '../lib/promoCodePlatform';
 import type { PromoCodeState } from '../lib/promoCodeState';
 import { PREMIUM_ENTITLEMENT_ID } from '../services/revenueCatService';
@@ -51,6 +53,16 @@ import { colors, fonts } from '../theme/tokens';
  * is what the CTA does — see `effectiveRoute`/`handlePurchase` below.
  */
 const PROMO_CODE_SUPPORTED_PLATFORM = isPromoCodeUiSupported(Platform.OS);
+
+/**
+ * FASE iOS-4 — computed once at module load (same convention as
+ * `PROMO_CODE_SUPPORTED_PLATFORM` above): `__DEV__`/`process.env` don't
+ * change at runtime, so there is no reactivity to lose by not recomputing
+ * this per render. See `isAppleOfferCodeSandboxTestEnabled`'s doc comment
+ * (`lib/appleOfferCodeSandboxTest.ts`) for the full fail-closed rationale —
+ * `false` in every build this app could ever submit to the App Store.
+ */
+const APPLE_OFFER_CODE_SANDBOX_TEST_ENABLED = isAppleOfferCodeSandboxTestEnabled();
 
 // Existing legal destinations from the previous real RevenueCat screen.
 const PRIVACY_POLICY_URL = 'https://ajfit.com.br/privacidade';
@@ -152,17 +164,29 @@ export function PaywallScreen({
   // above). See `resolveApplePurchaseRoute`'s doc comment
   // (lib/subscriptionOffer.ts) for why this is a distinct function/type
   // rather than a shared abstraction with the Android path.
-  const appleRoute: ApplePurchaseRoute | null = useMemo(() => {
+  //
+  // FASE iOS-4 — `resolveApplePurchaseRoute`'s own result is passed,
+  // UNMODIFIED, through `applyAppleOfferCodeSandboxOverride`
+  // (`lib/appleOfferCodeSandboxTest.ts`). That function is a pure no-op
+  // whenever `APPLE_OFFER_CODE_SANDBOX_TEST_ENABLED` is `false` (every
+  // build except a local `__DEV__` build with the explicit env flag set) —
+  // production behavior for `appleOfferCodeMonthly === null` is byte-for-byte
+  // what it was before this phase: `{kind:'blocked', reason:'promo_plan_unavailable'}`.
+  const appleRoute: AppleSandboxOverrideRoute | null = useMemo(() => {
     if (!selectedPackage || Platform.OS !== 'ios') return null;
     const authorizedOfferCode =
       promoApplied && promoState.applied
         ? resolveAuthorizedAppleOfferCode(selectedPackage, promoState.applied.appleStoreConfig)
         : null;
-    return resolveApplePurchaseRoute(selectedPackage, promoApplied, authorizedOfferCode);
+    const route = resolveApplePurchaseRoute(selectedPackage, promoApplied, authorizedOfferCode);
+    return applyAppleOfferCodeSandboxOverride(selectedPackage, route, {
+      sandboxTestEnabled: APPLE_OFFER_CODE_SANDBOX_TEST_ENABLED,
+      promoApplied,
+    });
   }, [selectedPackage, promoApplied, promoState.applied]);
 
   /** The route that actually governs the CTA/`handlePurchase` on this platform. */
-  const effectiveRoute: PurchaseRoute | ApplePurchaseRoute | null =
+  const effectiveRoute: PurchaseRoute | AppleSandboxOverrideRoute | null =
     Platform.OS === 'android' ? purchaseRoute : appleRoute;
 
   // Fase 4C.2/4C.3 §22: sanitized, state-only logs — never the full code,
@@ -179,50 +203,6 @@ export function PaywallScreen({
       }
     }
   }, [purchaseRoute]);
-
-  // FASE 4C.4D — TEMPORARY diagnostic instrumentation for the Android smoke
-  // test (remove once the real device catalog shape is confirmed). Dumps the
-  // sanitized, commercial-only SubscriptionOption catalog RevenueCat actually
-  // returned for every package in the current Offering — independent of
-  // whether a promo code was applied, so it captures the raw catalog even if
-  // matching never runs. Unconditional `console.info` (not gated on
-  // `__DEV__`) so it also surfaces via `adb logcat` on the Closed Testing
-  // build under test. See `describePackageCatalogForDiagnostics`'s doc
-  // comment (lib/subscriptionOffer.ts) for exactly which fields are included.
-  useEffect(() => {
-    if (packages.length === 0) return;
-    packages.forEach((pkg) => {
-      console.info('[RC_OFFER_DEBUG_4C4D] package_catalog', describePackageCatalogForDiagnostics(pkg));
-    });
-  }, [packages]);
-
-  // FASE 4C.4D — TEMPORARY. Logs the exact match attempt
-  // (`findAuthorizedSubscriptionOption`, reused verbatim, never reimplemented
-  // here) for the currently selected package once a promo code is applied —
-  // re-fires on every plan swap (mensal ⇄ anual) since `selectedPackage`
-  // changes. Never logs `couponCode`/`campaignId`/`influencerId` — only the
-  // backend-authorized `(basePlanId, offerId)` pair already present in
-  // `promoState.applied.androidStoreConfig` and the live SDK candidates.
-  useEffect(() => {
-    if (!selectedPackage || !promoApplied || !promoState.applied) return;
-    const authorizedOffer = resolveAuthorizedAndroidOffer(
-      selectedPackage,
-      promoState.applied.androidStoreConfig,
-    );
-    if (!authorizedOffer) {
-      console.info('[RC_OFFER_DEBUG_4C4D] no_authorized_offer_for_selected_plan', {
-        packageIdentifier: selectedPackage.identifier,
-      });
-      return;
-    }
-    const diagnostic = buildOfferMatchDiagnostic(selectedPackage, authorizedOffer);
-    console.info('[RC_OFFER_DEBUG_4C4D] expected', diagnostic.expected);
-    console.info('[RC_OFFER_DEBUG_4C4D] candidates', diagnostic.candidates);
-    console.info('[RC_OFFER_DEBUG_4C4D] result', {
-      matched: diagnostic.matched,
-      status: diagnostic.status,
-    });
-  }, [selectedPackage, promoApplied, promoState.applied]);
 
   const handleClose = useCallback(async () => {
     if (closeInFlight.current || actionInFlight.current) return;
@@ -247,7 +227,15 @@ export function PaywallScreen({
     // it, this is a second guard, never a silent fallback to
     // `purchase(selectedPackage)`.
     if (!effectiveRoute || effectiveRoute.kind === 'blocked' || actionInFlight.current) return;
-    const isAppleRedemption = effectiveRoute.kind === 'offer_redemption';
+    // FASE iOS-4 — `'sandbox_offer_redemption'` reuses the exact same
+    // `redeemAppleOfferCode()` call as `'offer_redemption'` below: it is
+    // STILL `Purchases.presentCodeRedemptionSheet()`, with no code
+    // pre-filled either way (see that function's doc comment,
+    // revenueCatService.ts) — the only difference is which route got the
+    // user here (a real authorized `appleOfferCodeMonthly`, vs. the Sandbox
+    // test override). Both are "Apple redemption" for UI-copy purposes.
+    const isAppleRedemption =
+      effectiveRoute.kind === 'offer_redemption' || effectiveRoute.kind === 'sandbox_offer_redemption';
     actionInFlight.current = true;
     setPurchaseState({ kind: 'purchasing' });
     setRestoreState({ kind: 'idle' });
@@ -480,7 +468,10 @@ export function PaywallScreen({
                   <ActivityIndicator color="#fff" />
                 ) : (
                   <CtaText>
-                    {effectiveRoute?.kind === 'offer_redemption' ? 'Resgatar na App Store' : 'Continuar'}
+                    {effectiveRoute?.kind === 'offer_redemption' ||
+                    effectiveRoute?.kind === 'sandbox_offer_redemption'
+                      ? 'Resgatar na App Store'
+                      : 'Continuar'}
                   </CtaText>
                 )}
               </CtaButton>
@@ -646,7 +637,7 @@ function PromoCodeCard({
   onChangeValue: (next: string) => void;
   onApply: () => void;
   promoState: PromoCodeState;
-  purchaseRoute: PurchaseRoute | ApplePurchaseRoute | null;
+  purchaseRoute: PurchaseRoute | AppleSandboxOverrideRoute | null;
   disabled: boolean;
 }) {
   const validating = promoState.phase === 'validating';

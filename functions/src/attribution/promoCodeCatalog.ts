@@ -2,7 +2,11 @@ import { Timestamp } from 'firebase-admin/firestore';
 import { db } from '../lib/firebaseAdmin';
 import { logFunctionError } from '../lib/logger';
 import { PROMO_CODES_COLLECTION } from './constants';
-import type { AndroidSubscriptionOfferConfig, PromoCodeDocument } from './types';
+import type {
+  AndroidSubscriptionOfferConfig,
+  AppleOfferCorrelationConfig,
+  PromoCodeDocument,
+} from './types';
 
 /**
  * Firestore-facing read path for the promo-code catalog
@@ -26,6 +30,13 @@ const PROMO_CODE_DOCUMENT_KEYS = [
   'androidOfferIdAnnual',
   'appleOfferCodeMonthly',
   'appleOfferCodeAnnual',
+  // FASE iOS-6 — see `parsePromoCodeDocument`'s doc comment for why these
+  // four are validated LENIENTLY (optional-on-read) unlike every other field
+  // above, which remains strictly required.
+  'appleProductIdMonthly',
+  'appleOfferReferenceMonthly',
+  'appleProductIdAnnual',
+  'appleOfferReferenceAnnual',
   'createdAt',
   'updatedAt',
   'createdBy',
@@ -34,6 +45,21 @@ const PROMO_CODE_DOCUMENT_KEYS = [
 
 function isNullableString(value: unknown): value is string | null {
   return value === null || typeof value === 'string';
+}
+
+/**
+ * FASE iOS-6 — like `isNullableString`, but also accepts `undefined` (the
+ * key being entirely absent from the document). Used ONLY for the four new
+ * `appleProductId*`/`appleOfferReference*` fields, so that every
+ * `promoCodes` document written before this phase — which lacks them
+ * entirely — keeps parsing successfully instead of being rejected as
+ * malformed (Parte 4 of the FASE iOS-6 audit: "não quebre leitura"). Every
+ * OTHER field on `PromoCodeDocument` stays strictly required via
+ * `isNullableString`/explicit type checks below — this leniency is
+ * deliberately scoped to just these four keys, never a blanket relaxation.
+ */
+function isOptionalNullableString(value: unknown): value is string | null | undefined {
+  return value === undefined || isNullableString(value);
 }
 
 function isNullableTimestamp(value: unknown): value is Timestamp | null {
@@ -48,6 +74,15 @@ function isNullableTimestamp(value: unknown): value is Timestamp | null {
  * malformed catalog document (e.g. hand-edited in the console with a typo)
  * must never be silently trusted; `lookupPromoCode` treats a parse failure
  * the same as "not found" and logs it for investigation.
+ *
+ * FASE iOS-6: `appleProductIdMonthly`/`appleOfferReferenceMonthly`/
+ * `appleProductIdAnnual`/`appleOfferReferenceAnnual` are validated via
+ * `isOptionalNullableString`, not `isNullableString` — every `promoCodes`
+ * document written before this phase lacks these four keys entirely
+ * (`undefined`, not `null`), and that MUST keep parsing successfully
+ * (Parte 4, "não quebre leitura") rather than making every pre-existing
+ * promo code (including `ARNALDO`'s already-working Android config) suddenly
+ * fail catalog lookup. Every other field remains strictly required.
  */
 export function parsePromoCodeDocument(data: unknown): PromoCodeDocument | null {
   if (typeof data !== 'object' || data === null || Array.isArray(data)) return null;
@@ -72,6 +107,10 @@ export function parsePromoCodeDocument(data: unknown): PromoCodeDocument | null 
     !isNullableString(d.androidOfferIdAnnual) ||
     !isNullableString(d.appleOfferCodeMonthly) ||
     !isNullableString(d.appleOfferCodeAnnual) ||
+    !isOptionalNullableString(d.appleProductIdMonthly) ||
+    !isOptionalNullableString(d.appleOfferReferenceMonthly) ||
+    !isOptionalNullableString(d.appleProductIdAnnual) ||
+    !isOptionalNullableString(d.appleOfferReferenceAnnual) ||
     !(d.createdAt instanceof Timestamp) ||
     !(d.updatedAt instanceof Timestamp) ||
     typeof d.createdBy !== 'string' ||
@@ -93,6 +132,13 @@ export function parsePromoCodeDocument(data: unknown): PromoCodeDocument | null 
     androidOfferIdAnnual: d.androidOfferIdAnnual,
     appleOfferCodeMonthly: d.appleOfferCodeMonthly,
     appleOfferCodeAnnual: d.appleOfferCodeAnnual,
+    // FASE iOS-6 — `?? null` normalizes the `undefined` (key absent, a
+    // pre-iOS-6 document) case to `null` for every consumer downstream;
+    // `PromoCodeDocument`'s type never has `undefined` as a valid value.
+    appleProductIdMonthly: (d.appleProductIdMonthly as string | null | undefined) ?? null,
+    appleOfferReferenceMonthly: (d.appleOfferReferenceMonthly as string | null | undefined) ?? null,
+    appleProductIdAnnual: (d.appleProductIdAnnual as string | null | undefined) ?? null,
+    appleOfferReferenceAnnual: (d.appleOfferReferenceAnnual as string | null | undefined) ?? null,
     createdAt: d.createdAt,
     updatedAt: d.updatedAt,
     createdBy: d.createdBy,
@@ -120,6 +166,24 @@ export function resolveAndroidOfferPair(
 ): AndroidSubscriptionOfferConfig | null {
   if (basePlanId === null || offerId === null) return null;
   return { basePlanId, offerId };
+}
+
+/**
+ * FASE iOS-6 — mirrors `resolveAndroidOfferPair`'s fail-closed partial-pair
+ * policy for Apple: if exactly one of `productId`/`offerReference` is set
+ * and the other is `null` (a data inconsistency — admin typo, or a
+ * half-finished catalog edit), this returns `null` for the WHOLE plan
+ * rather than exposing the one field that happens to be present.
+ * `validatePromoCode.ts` must never construct an `AppleOfferCorrelationConfig`
+ * from only half of the pair, and this function never guesses/infers the
+ * missing half.
+ */
+export function resolveAppleOfferCorrelationPair(
+  productId: string | null,
+  offerReference: string | null,
+): AppleOfferCorrelationConfig | null {
+  if (productId === null || offerReference === null) return null;
+  return { productId, offerReference };
 }
 
 export type PromoCodeLookupResult =

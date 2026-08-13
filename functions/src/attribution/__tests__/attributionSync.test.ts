@@ -38,12 +38,21 @@ const HELLLEN_ANDROID_OFFER = {
 };
 const ARNALDO_APPLE_OFFER = { offerCodeMonthly: null, offerCodeAnnual: null };
 const HELLLEN_APPLE_OFFER = { offerCodeMonthly: 'helllen-apple-monthly', offerCodeAnnual: null };
+// FASE iOS-6 — the NEW, separate correlation snapshot (distinct from
+// `*_APPLE_OFFER` above, which stays whatever it always was — see
+// `appleOfferCorrelation.ts`'s doc comment).
+const ARNALDO_APPLE_CORRELATION = {
+  monthly: { productId: 'ajfit_premium_monthly', offerReference: 'Influencer Trial 7D' },
+  annual: null,
+};
+const HELLLEN_APPLE_CORRELATION = { monthly: null, annual: null };
 const ATTRIBUTION = {
   couponCode: 'ARNALDO',
   campaignId: 'campaign-arnaldo',
   influencerId: 'ARNALDO',
   androidOffer: ARNALDO_ANDROID_OFFER,
   appleOffer: ARNALDO_APPLE_OFFER,
+  appleOfferCorrelation: ARNALDO_APPLE_CORRELATION,
 };
 
 function userSnapshot(exists: boolean) {
@@ -242,6 +251,7 @@ describe('applyPromoCodeAttributionTransactionally', () => {
       influencerId: 'HELLLEN',
       androidOffer: HELLLEN_ANDROID_OFFER,
       appleOffer: HELLLEN_APPLE_OFFER,
+      appleOfferCorrelation: HELLLEN_APPLE_CORRELATION,
     });
 
     expect(second).toEqual({ status: 'locked' });

@@ -35,6 +35,10 @@ function promoCode(overrides: Partial<PromoCodeDocument> = {}): PromoCodeDocumen
     androidOfferIdAnnual: 'influencer-trial-7d-annual',
     appleOfferCodeMonthly: null,
     appleOfferCodeAnnual: null,
+    appleProductIdMonthly: null,
+    appleOfferReferenceMonthly: null,
+    appleProductIdAnnual: null,
+    appleOfferReferenceAnnual: null,
     createdAt: Timestamp.fromDate(new Date('2026-08-01T00:00:00.000Z')),
     updatedAt: Timestamp.fromDate(new Date('2026-08-01T00:00:00.000Z')),
     createdBy: 'admin-uid',
@@ -310,6 +314,103 @@ describe('validatePromoCodeHandler', () => {
       offerCodeMonthly: 'ARNALDO7DMONTHLY',
       offerCodeAnnual: 'ARNALDO7DANNUAL',
     });
+  });
+
+  // ===========================================================================
+  // FASE iOS-6 — the NEW, separate correlation snapshot
+  // (`appleOfferCorrelation`), distinct from `appleOffer` above. Never
+  // returned in the response (it's backend-only, compared later against a
+  // real webhook event by `appleOfferCorrelation.ts`) — only ever passed to
+  // `applyPromoCodeAttributionTransactionally`.
+  // ===========================================================================
+
+  it('H: snapshots appleOfferCorrelation into the transaction unconditionally, from the new catalog fields', async () => {
+    catalogMocks.lookupPromoCode.mockResolvedValue({
+      status: 'found',
+      promoCode: promoCode({
+        appleProductIdMonthly: 'ajfit_premium_monthly',
+        appleOfferReferenceMonthly: 'Influencer Trial 7D',
+      }),
+    });
+    syncMocks.applyPromoCodeAttributionTransactionally.mockResolvedValue({ status: 'applied' });
+
+    await validatePromoCodeHandler(request({ code: 'ARNALDO', platform: 'IOS' }));
+
+    expect(syncMocks.applyPromoCodeAttributionTransactionally).toHaveBeenCalledWith(
+      UID,
+      expect.objectContaining({
+        appleOfferCorrelation: {
+          monthly: { productId: 'ajfit_premium_monthly', offerReference: 'Influencer Trial 7D' },
+          annual: null,
+        },
+      }),
+    );
+  });
+
+  it('H: appleOfferCorrelation is {monthly: null, annual: null} when the catalog has no Apple correlation configured — never fabricated', async () => {
+    catalogMocks.lookupPromoCode.mockResolvedValue({ status: 'found', promoCode: promoCode() });
+    syncMocks.applyPromoCodeAttributionTransactionally.mockResolvedValue({ status: 'applied' });
+
+    await validatePromoCodeHandler(request({ code: 'ARNALDO', platform: 'IOS' }));
+
+    expect(syncMocks.applyPromoCodeAttributionTransactionally).toHaveBeenCalledWith(
+      UID,
+      expect.objectContaining({ appleOfferCorrelation: { monthly: null, annual: null } }),
+    );
+  });
+
+  it('H: a partial Apple correlation pair (only productId, no offerReference) fails closed to null for that plan — never half-configured', async () => {
+    catalogMocks.lookupPromoCode.mockResolvedValue({
+      status: 'found',
+      promoCode: promoCode({ appleProductIdMonthly: 'ajfit_premium_monthly' }),
+    });
+    syncMocks.applyPromoCodeAttributionTransactionally.mockResolvedValue({ status: 'applied' });
+
+    await validatePromoCodeHandler(request({ code: 'ARNALDO', platform: 'IOS' }));
+
+    expect(syncMocks.applyPromoCodeAttributionTransactionally).toHaveBeenCalledWith(
+      UID,
+      expect.objectContaining({ appleOfferCorrelation: { monthly: null, annual: null } }),
+    );
+  });
+
+  it('I: appleOfferCorrelation never appears in the client response — backend-only', async () => {
+    catalogMocks.lookupPromoCode.mockResolvedValue({
+      status: 'found',
+      promoCode: promoCode({
+        appleProductIdMonthly: 'ajfit_premium_monthly',
+        appleOfferReferenceMonthly: 'Influencer Trial 7D',
+      }),
+    });
+    syncMocks.applyPromoCodeAttributionTransactionally.mockResolvedValue({ status: 'applied' });
+
+    const result = await validatePromoCodeHandler(request({ code: 'ARNALDO', platform: 'IOS' }));
+
+    expect(JSON.stringify(result)).not.toContain('appleOfferCorrelation');
+    expect(JSON.stringify(result)).not.toContain('Influencer Trial 7D');
+  });
+
+  it('I: the Android snapshot passed to the transaction is byte-identical to before FASE iOS-6 (unaffected by Apple correlation fields)', async () => {
+    catalogMocks.lookupPromoCode.mockResolvedValue({
+      status: 'found',
+      promoCode: promoCode({
+        appleProductIdMonthly: 'ajfit_premium_monthly',
+        appleOfferReferenceMonthly: 'Influencer Trial 7D',
+      }),
+    });
+    syncMocks.applyPromoCodeAttributionTransactionally.mockResolvedValue({ status: 'applied' });
+
+    await validatePromoCodeHandler(request({ code: 'ARNALDO' }));
+
+    expect(syncMocks.applyPromoCodeAttributionTransactionally).toHaveBeenCalledWith(
+      UID,
+      expect.objectContaining({
+        androidOffer: {
+          monthly: { basePlanId: 'monthly', offerId: 'influencer-trial-7d' },
+          annual: { basePlanId: 'annual', offerId: 'influencer-trial-7d-annual' },
+        },
+      }),
+    );
   });
 
   it('never promises a trial and always states the store is the eligibility authority', async () => {

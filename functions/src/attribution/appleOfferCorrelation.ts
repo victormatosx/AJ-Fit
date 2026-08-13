@@ -1,100 +1,107 @@
 /**
- * FASE iOS-1 — Apple/App Store equivalent of `googlePlayOfferCorrelation.ts`,
- * with a materially different outcome: this module does NOT implement a
- * working correlation. It exists so `attributionSync.ts` has an explicit,
- * typed APP_STORE code path (instead of silently falling into the generic
- * "unknown store" branch), and so a future phase has one exact place to add
- * the real algorithm once — and only once — the evidence below is resolved.
+ * FASE iOS-1 — Apple/App Store equivalent of `googlePlayOfferCorrelation.ts`.
+ * Originally a deliberate placeholder (`correlateAppleOffer` always returned
+ * `unsupported`) because no confirmed, deterministic mapping existed between
+ * a real `APP_STORE` webhook event and "this transaction used offer code X".
  *
  * ============================================================================
- * WHY THIS RETURNS `unsupported`, NEVER `matched` (Fase iOS-1 audit, Passo 2)
+ * FASE iOS-6 — REAL EVIDENCE OBTAINED, REAL CORRELATION IMPLEMENTED
  * ============================================================================
  *
- * `googlePlayOfferCorrelation.ts`'s correlation is possible because two
- * conditions both hold, confirmed against RevenueCat's own webhook docs
- * (event-types-and-fields):
+ * A real Apple Sandbox Offer Code redemption (docs/13_assinaturas_e_billing.md's
+ * FASE iOS-5 section: new Sandbox tester, new Sandbox Code, App Store Connect
+ * offer "Influencer Trial 7D") produced an `INITIAL_PURCHASE` webhook whose
+ * `event.offer_code` field was `"Influencer Trial 7D"` — the App Store
+ * Connect Offer's own reference/name, NOT the individual, single-use Sandbox
+ * Code the user typed into `Purchases.presentCodeRedemptionSheet()` (that
+ * code is never reported to this backend at all — StoreKit/RevenueCat only
+ * report which OFFER was used, never which of its many redemption codes).
  *
- * EVIDÊNCIA DA DOCUMENTAÇÃO EXTERNA (revenuecat.com/docs/integrations/
- * webhooks/event-types-and-fields, re-checked for this task):
- * - `product_id` has a DOCUMENTED, store-specific composed format for
- *   Google Play: "For Google Play products set up in RevenueCat after
- *   February 2023, this identifier has the format
- *   `<subscription_id>:<base_plan_id>`." No equivalent documented format
- *   exists for App Store `product_id` — it is just the App Store Connect
- *   product identifier (a flat SKU string), with no embedded offer/base-plan
- *   segment to parse.
- * - `offer_code` is documented as a store-agnostic field ("Sometimes"
- *   present, applicable to INITIAL_PURCHASE/RENEWAL/NON_RENEWING_PURCHASE),
- *   but the ONLY place RevenueCat's own docs give it concrete semantics is
- *   their Google Play Offers guide, where it is explicitly the Google Play
- *   Console "Offer ID". RevenueCat's docs do not confirm — anywhere found
- *   during this audit — that `offer_code` is populated with the App Store
- *   Connect "Offer Code" / Promotional Offer identifier when an iOS
- *   transaction redeems one, nor what exact string it would contain if it
- *   is (the offer code itself? a RevenueCat-internal offer identifier? the
- *   Promotional Offer's `offerIdentifier`?).
+ * This resolves the classification D ("impossible to prove deterministically
+ * with the currently available payload/evidence", FASE iOS-1's audit) that
+ * blocked this module: `event.offer_code` DOES carry a deterministic,
+ * store-confirmed identity for an Apple Offer Code redemption — the Offer's
+ * reference/name — exactly the evidence FASE iOS-1's doc comment said would
+ * unblock this.
  *
- * EVIDÊNCIA DO REPOSITÓRIO:
- * - No fixture, test, or webhook payload sample anywhere in this repo shows
- *   a real (or sandbox) APP_STORE event with `offer_code` populated from an
- *   Offer Code / Promotional Offer redemption. `functions/src/billing/
- *   revenuecat.ts`'s `extractOfferCode`/`extractStore`/`extractProductId`
- *   read the fields generically (not Google-specific) but nothing in this
- *   codebase has ever observed what an Apple offer-code transaction actually
- *   puts in them.
+ * `product_id` for App Store is a flat SKU string (e.g.
+ * `"ajfit_premium_monthly"`) with no embedded plan/offer segment (confirmed,
+ * same as FASE iOS-1's audit already established) — so, unlike Google Play
+ * (whose `product_id` alone encodes `basePlanId`), correlating Apple requires
+ * BOTH `product_id` AND `offer_code` to match the SAME plan's authorized
+ * pair. Matching on `offer_code` alone would risk a monthly offer reference
+ * colliding with an unrelated annual product (or vice versa) if two plans
+ * ever reused the same Offer reference string — never assumed impossible,
+ * always checked.
  *
- * Per the Fase iOS-1 task rules: without a confirmed, deterministic mapping
- * from a real APP_STORE webhook event to "this is exactly the offer code
- * config authorized for this uid", implementing a match here would be
- * FABRICATING a correlation — worse than having none, because a false
- * `matched` would lock a `couponRedemptions/{uid}` record and could credit
- * an influencer for a purchase that never actually used their offer. This is
- * classification **D** (impossible to prove deterministically with the
- * currently available payload/evidence) per the audit's A/B/C/D scale.
- *
- * WHAT WOULD UNBLOCK THIS: a captured real (sandbox is fine) RevenueCat
- * webhook payload for an INITIAL_PURCHASE that resulted from a customer
- * redeeming an actual App Store Offer Code, showing definitively what
- * `offer_code` (and/or any other field) contains in that case. Until that
- * evidence exists, `correlateAppleOffer` must keep returning `unsupported`.
+ * `appleOfferCorrelation` (the config compared against) is a SNAPSHOT taken
+ * when the promo code was applied (`validatePromoCode.ts` →
+ * `couponRedemptions/{uid}.appleOfferCorrelation`), never the live
+ * `promoCodes` catalog — same rationale as `googlePlayOfferCorrelation.ts`
+ * (docs regra 4/6: the catalog can change after application but before the
+ * store confirms purchase).
  */
 
-import type { PromoCodeAppleOfferSnapshot } from './types';
+import type { AppleOfferCorrelationConfig, PromoCodeAppleCorrelationSnapshot } from './types';
 
 export type AppleOfferCorrelationResult =
   | { status: 'matched'; plan: 'monthly' | 'annual' }
   | { status: 'not_matched' }
   /**
-   * Distinct from `not_matched`: this is not "we checked and it didn't
-   * match" but "we cannot check at all" — no confirmed field/format exists
-   * to compare against. Both are treated identically by
-   * `decideInitialPurchaseAttributionConfirmation` (neither is `matched`,
-   * so neither ever confirms/locks attribution) — the distinction exists
-   * purely for logging/observability, so `unsupported` is never confused
-   * with an actual mismatch during future debugging.
+   * Distinct from `not_matched`: this means no Apple correlation config was
+   * ever stored for this redemption at all (`appleOfferCorrelation` snapshot
+   * itself `null` — includes every `couponRedemptions` document created
+   * before FASE iOS-6, and any code whose catalog entry never configured a
+   * real Apple Offer). `not_matched` means a comparison WAS attempted and
+   * failed (wrong product, wrong offer reference, or matched a different
+   * plan). Both are treated identically by
+   * `decideInitialPurchaseAttributionConfirmation` (neither is `matched`, so
+   * neither ever confirms/locks attribution) — the distinction exists purely
+   * for logging/observability.
    */
   | { status: 'unsupported' };
 
 /**
- * Pure — zero Firestore/RevenueCat SDK dependency, same shape discipline as
- * `correlateGooglePlayOffer`. Deliberately accepts the same kind of inputs a
- * real correlation would need (the event's raw `offer_code`, and the
- * `appleOffer` snapshot authorized at application time) so the call site in
- * `attributionSync.ts` never needs to change when this becomes real — only
- * this function's body would.
+ * THE correlation algorithm (FASE iOS-6). Pure — zero Firestore/RevenueCat
+ * SDK dependency, same shape discipline as `correlateGooglePlayOffer`.
  *
- * ALWAYS returns `unsupported` today — see this file's top doc comment for
- * why. Never infers/guesses a match; never treats a coincidental string
- * equality as proof (even if `offerCode` happens to equal one of
- * `appleOffer`'s configured codes, that is NOT evidence the store attributes
- * it to an Apple Offer Code redemption on this specific transaction, per the
- * external-evidence gap above).
+ * Matches ONLY on exact equality of BOTH `productId` AND `offerReference`
+ * against the SAME plan's authorized `AppleOfferCorrelationConfig` — a
+ * monthly offer reference can never satisfy an annual product or vice versa.
+ * Returns `not_matched` (never guesses/picks a "closest" plan) whenever the
+ * event's `productId`/`offerCode` don't exactly match one plan's authorized
+ * pair — including a coincidental string match on only ONE of the two
+ * fields, which is never treated as proof.
+ *
+ * Returns `unsupported` (never `not_matched`) specifically when
+ * `appleOfferCorrelation` itself is `null` — no config was ever stored for
+ * this redemption, so no comparison was even attempted.
+ *
+ * `productId`/`offerCode` of `null` (event field absent/malformed) always
+ * results in `not_matched` — mirrors `correlateGooglePlayOffer`'s treatment
+ * of a missing `offerCode`, and is intentionally the SAME status as a real
+ * mismatch (both mean "this specific event proves nothing"), never
+ * `unsupported` (which is reserved for "nothing to compare against at all").
+ *
+ * Does not know anything about `store` — callers must only invoke this for a
+ * confirmed App Store (`APP_STORE`) event; a non-Apple event should never
+ * reach this function at all (see `applyAttributionRevenueCatEvent`).
  */
 export function correlateAppleOffer(
+  productId: string | null,
   offerCode: string | null,
-  appleOffer: PromoCodeAppleOfferSnapshot | null,
+  appleOfferCorrelation: PromoCodeAppleCorrelationSnapshot | null,
 ): AppleOfferCorrelationResult {
-  void offerCode;
-  void appleOffer;
-  return { status: 'unsupported' };
+  if (appleOfferCorrelation === null) return { status: 'unsupported' };
+  if (productId === null || offerCode === null) return { status: 'not_matched' };
+
+  const plans: Array<'monthly' | 'annual'> = ['monthly', 'annual'];
+  for (const plan of plans) {
+    const authorized: AppleOfferCorrelationConfig | null = appleOfferCorrelation[plan];
+    if (authorized && authorized.productId === productId && authorized.offerReference === offerCode) {
+      return { status: 'matched', plan };
+    }
+  }
+
+  return { status: 'not_matched' };
 }

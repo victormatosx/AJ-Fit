@@ -1,56 +1,121 @@
 import { describe, expect, it } from 'vitest';
 import { correlateAppleOffer } from '../appleOfferCorrelation';
-import type { PromoCodeAppleOfferSnapshot } from '../types';
+import type { PromoCodeAppleCorrelationSnapshot } from '../types';
 
-// FASE iOS-1 — `correlateAppleOffer` is deliberately a placeholder: no
-// confirmed, deterministic mapping exists yet between a real RevenueCat
-// APP_STORE webhook event and "this transaction used offer code X" (see the
-// module's doc comment for the full evidence trail). Every one of these
-// tests asserts the SAME thing from different angles: the function must
-// NEVER return `matched`, no matter how compelling the input looks —
-// including a coincidental exact string match, which would be the most
-// tempting case to "accidentally" treat as proof.
+// FASE iOS-6 — real evidence (a captured RevenueCat webhook for a real Apple
+// Sandbox Offer Code redemption, docs/13's FASE iOS-5 section) proved
+// `event.offer_code` carries the App Store Connect Offer's reference/name
+// (e.g. "Influencer Trial 7D"), and `product_id` is a flat SKU
+// (`ajfit_premium_monthly`) — so `correlateAppleOffer` now performs a real,
+// deterministic match on BOTH fields against the SAME plan's authorized
+// config, mirroring `googlePlayOfferCorrelation.test.ts`'s structure.
 
-const CONFIGURED_OFFER: PromoCodeAppleOfferSnapshot = {
-  offerCodeMonthly: 'ARNALDO7DMONTHLY',
-  offerCodeAnnual: 'ARNALDO7DANNUAL',
+const ARNALDO_APPLE_CORRELATION: PromoCodeAppleCorrelationSnapshot = {
+  monthly: { productId: 'ajfit_premium_monthly', offerReference: 'Influencer Trial 7D' },
+  annual: null,
 };
 
-describe('correlateAppleOffer (pure, FASE iOS-1 placeholder)', () => {
-  it('returns unsupported when appleOffer snapshot is null (no config ever stored for this redemption)', () => {
-    expect(correlateAppleOffer(null, null)).toEqual({ status: 'unsupported' });
-    expect(correlateAppleOffer('ARNALDO7DMONTHLY', null)).toEqual({ status: 'unsupported' });
+const ARNALDO_APPLE_CORRELATION_BOTH_PLANS: PromoCodeAppleCorrelationSnapshot = {
+  monthly: { productId: 'ajfit_premium_monthly', offerReference: 'Influencer Trial 7D' },
+  annual: { productId: 'ajfit_premium_annual', offerReference: 'Influencer Trial 7D Annual' },
+};
+
+describe('correlateAppleOffer', () => {
+  it('A: APP_STORE + monthly productId + exact offer reference → matched, monthly', () => {
+    expect(
+      correlateAppleOffer('ajfit_premium_monthly', 'Influencer Trial 7D', ARNALDO_APPLE_CORRELATION),
+    ).toEqual({ status: 'matched', plan: 'monthly' });
   });
 
-  it('returns unsupported when the event carries no offer_code at all', () => {
-    expect(correlateAppleOffer(null, CONFIGURED_OFFER)).toEqual({ status: 'unsupported' });
+  it('B: correct productId but a DIFFERENT offer reference → not_matched', () => {
+    expect(
+      correlateAppleOffer('ajfit_premium_monthly', 'Some Other Offer', ARNALDO_APPLE_CORRELATION),
+    ).toEqual({ status: 'not_matched' });
   });
 
-  it('returns unsupported even when offerCode EXACTLY equals the configured monthly code — coincidence is not proof', () => {
-    expect(correlateAppleOffer('ARNALDO7DMONTHLY', CONFIGURED_OFFER)).toEqual({ status: 'unsupported' });
+  it('C: offerCode null (event field absent) → not_matched (mirrors correlateGooglePlayOffer\'s treatment of a missing offer_code)', () => {
+    expect(correlateAppleOffer('ajfit_premium_monthly', null, ARNALDO_APPLE_CORRELATION)).toEqual({
+      status: 'not_matched',
+    });
   });
 
-  it('returns unsupported even when offerCode EXACTLY equals the configured annual code', () => {
-    expect(correlateAppleOffer('ARNALDO7DANNUAL', CONFIGURED_OFFER)).toEqual({ status: 'unsupported' });
+  it('D: correct offer reference but a DIFFERENT/wrong productId → not_matched', () => {
+    expect(
+      correlateAppleOffer('ajfit_premium_annual', 'Influencer Trial 7D', ARNALDO_APPLE_CORRELATION),
+    ).toEqual({ status: 'not_matched' });
   });
 
-  it('returns unsupported for a completely unrelated offerCode', () => {
-    expect(correlateAppleOffer('some-other-store-string', CONFIGURED_OFFER)).toEqual({
+  it('E: annual requested, but no annual Apple correlation configured (ARNALDO fixture) → fail-closed, never matched', () => {
+    const result = correlateAppleOffer(
+      'ajfit_premium_annual',
+      'Influencer Trial 7D Annual',
+      ARNALDO_APPLE_CORRELATION,
+    );
+    expect(result.status).not.toBe('matched');
+    expect(result).toEqual({ status: 'not_matched' });
+  });
+
+  it('F: annual WITH a real, correctly configured pair → matched, annual', () => {
+    expect(
+      correlateAppleOffer(
+        'ajfit_premium_annual',
+        'Influencer Trial 7D Annual',
+        ARNALDO_APPLE_CORRELATION_BOTH_PLANS,
+      ),
+    ).toEqual({ status: 'matched', plan: 'annual' });
+  });
+
+  it('monthly and annual are never confused: a monthly offer reference under the annual productId never matches', () => {
+    expect(
+      correlateAppleOffer(
+        'ajfit_premium_annual',
+        'Influencer Trial 7D', // this is the MONTHLY offer reference
+        ARNALDO_APPLE_CORRELATION_BOTH_PLANS,
+      ),
+    ).toEqual({ status: 'not_matched' });
+  });
+
+  it('the annual offer reference under the monthly productId never matches either', () => {
+    expect(
+      correlateAppleOffer(
+        'ajfit_premium_monthly',
+        'Influencer Trial 7D Annual', // this is the ANNUAL offer reference
+        ARNALDO_APPLE_CORRELATION_BOTH_PLANS,
+      ),
+    ).toEqual({ status: 'not_matched' });
+  });
+
+  it('returns unsupported (not not_matched) when no Apple correlation config was ever stored for this redemption at all', () => {
+    expect(correlateAppleOffer('ajfit_premium_monthly', 'Influencer Trial 7D', null)).toEqual({
       status: 'unsupported',
     });
   });
 
-  it('never returns matched — no input combination flips this function to matched (no time/order dependence: the signature itself carries no timestamp)', () => {
-    const allInputs: Array<[string | null, PromoCodeAppleOfferSnapshot | null]> = [
+  it('productId null (event field absent) → not_matched, same treatment as a missing offerCode', () => {
+    expect(correlateAppleOffer(null, 'Influencer Trial 7D', ARNALDO_APPLE_CORRELATION)).toEqual({
+      status: 'not_matched',
+    });
+  });
+
+  it('never treats a coincidental offer-reference-only match as proof without the matching productId', () => {
+    // Same offerReference as configured, but for a productId that belongs
+    // to no configured plan at all.
+    expect(
+      correlateAppleOffer('com.someother.app.monthly', 'Influencer Trial 7D', ARNALDO_APPLE_CORRELATION),
+    ).toEqual({ status: 'not_matched' });
+  });
+
+  it('never returns matched for any input when the stored config is null, no matter how compelling the input looks', () => {
+    const allInputs: Array<[string | null, string | null]> = [
       [null, null],
-      [null, CONFIGURED_OFFER],
-      ['ARNALDO7DMONTHLY', null],
-      ['ARNALDO7DMONTHLY', CONFIGURED_OFFER],
-      ['ARNALDO7DANNUAL', CONFIGURED_OFFER],
-      ['', CONFIGURED_OFFER],
+      [null, 'Influencer Trial 7D'],
+      ['ajfit_premium_monthly', null],
+      ['ajfit_premium_monthly', 'Influencer Trial 7D'],
+      ['ajfit_premium_annual', 'Influencer Trial 7D Annual'],
+      ['', ''],
     ];
-    for (const [offerCode, appleOffer] of allInputs) {
-      expect(correlateAppleOffer(offerCode, appleOffer).status).not.toBe('matched');
+    for (const [productId, offerCode] of allInputs) {
+      expect(correlateAppleOffer(productId, offerCode, null).status).toBe('unsupported');
     }
   });
 });

@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import { FirebaseError } from 'firebase/app';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '../lib/firebase';
 import { classifyPromoCodeError, type PromoCodeFailure } from '../lib/promoCodeErrors';
@@ -71,6 +72,65 @@ export function logPromoCodeError(scope: string, err: unknown): void {
 }
 
 /**
+ * TEMP DIAGNOSTIC LOGGING — investigação do erro `functions/internal` no iOS
+ * (não altera comportamento; remover após a causa raiz ser confirmada).
+ * Nunca loga: token, credencial de auth, receipt, CustomerInfo, email, uid
+ * completo, código do cupom completo.
+ */
+function logPromoCodeDiagnostic(stage: string, payload: Record<string, unknown>): void {
+  console.log(`[promoCode:diag:${stage}]`, payload);
+}
+
+function isPrimitive(value: unknown): value is string | number | boolean | null {
+  return value === null || ['string', 'number', 'boolean'].includes(typeof value);
+}
+
+function truncatedStack(err: unknown): string | undefined {
+  const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
+  if (!isDev) return undefined;
+  const stack = err instanceof Error ? err.stack : undefined;
+  if (!stack) return undefined;
+  return stack.slice(0, 500);
+}
+
+/**
+ * Sanitized snapshot of a raw, unclassified error thrown by the
+ * `validatePromoCode` callable — logged BEFORE `classifyPromoCodeError`
+ * collapses it into a generic reason, so we can see exactly what the SDK
+ * handed us (type, constructor, FirebaseError-ness, `customData`) without
+ * that information being lost.
+ */
+function logPromoCodeRawError(err: unknown): void {
+  const isFirebaseError = err instanceof FirebaseError;
+  const hasCustomData =
+    typeof err === 'object' && err !== null && 'customData' in err;
+  const rawDetails =
+    typeof err === 'object' && err !== null && 'details' in err
+      ? (err as { details: unknown }).details
+      : undefined;
+
+  logPromoCodeDiagnostic('raw_error', {
+    typeofError: typeof err,
+    constructorName:
+      typeof err === 'object' && err !== null
+        ? Object.getPrototypeOf(err)?.constructor?.name
+        : undefined,
+    isFirebaseError,
+    hasCustomData,
+    code:
+      typeof err === 'object' && err !== null && 'code' in err
+        ? String((err as { code: unknown }).code)
+        : undefined,
+    message:
+      typeof err === 'object' && err !== null && 'message' in err
+        ? sanitizedErrorMessage(err)
+        : undefined,
+    details: isPrimitive(rawDetails) ? rawDetails : rawDetails !== undefined ? '[non-primitive]' : undefined,
+    stack: truncatedStack(err),
+  });
+}
+
+/**
  * FASE iOS-2 — `platform` is now derived from the real `Platform.OS` via
  * `resolvePromoCodePlatform` (src/lib/promoCodePlatform.ts) instead of an
  * Android-only hardcode; Android's request shape/behavior is unchanged
@@ -86,11 +146,30 @@ export function logPromoCodeError(scope: string, err: unknown): void {
 export async function validatePromoCode(code: string): Promise<ValidatePromoCodeOutcome> {
   try {
     const platform = resolvePromoCodePlatform(Platform.OS);
+    logPromoCodeDiagnostic('request', {
+      platform,
+      functionName: 'validatePromoCode',
+      codeLength: code.length,
+      normalizedCodePresent: code.length > 0,
+    });
     const result = await validatePromoCodeCallable({ code, platform });
+    logPromoCodeDiagnostic('response', {
+      valid: result.data?.valid ?? null,
+      codePresent: typeof result.data?.code === 'string',
+      benefitPresent: result.data?.benefit != null,
+      androidConfigPresent: result.data?.storeConfig?.android != null,
+      iosConfigPresent: result.data?.storeConfig?.ios != null,
+      eligibilityPresent: result.data?.eligibility != null,
+    });
     return { status: 'applied', response: result.data };
   } catch (err) {
     logPromoCodeError('validate', err);
+    logPromoCodeRawError(err);
     const failure = classifyPromoCodeError(err);
+    logPromoCodeDiagnostic('classified', {
+      reason: failure.reason,
+      messageKey: failure.message,
+    });
     return { status: 'failed', ...failure };
   }
 }

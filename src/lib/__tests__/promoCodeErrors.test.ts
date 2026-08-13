@@ -53,6 +53,21 @@ describe('classifyPromoCodeError', () => {
     expect(result.reason).toBe('temporary');
   });
 
+  it('maps an unrecognized functions/* code (e.g. functions/unavailable) to temporary', () => {
+    const result = classifyPromoCodeError(fakeError('functions/unavailable', 'backend unreachable'));
+    expect(result.reason).toBe('temporary');
+  });
+
+  it('maps a thrown non-Error value (string) to temporary, without throwing', () => {
+    const result = classifyPromoCodeError('boom');
+    expect(result.reason).toBe('temporary');
+  });
+
+  it('maps a thrown plain object with no code/message to temporary, without throwing', () => {
+    const result = classifyPromoCodeError({ unexpected: 'shape' });
+    expect(result.reason).toBe('temporary');
+  });
+
   it('never leaks the raw backend message string into the L (never promises trial) surface', () => {
     const result = classifyPromoCodeError(fakeError('functions/not-found', 'promo_code_unavailable'));
     expect(result.message).not.toMatch(/trial|garantid/i);

@@ -4,9 +4,14 @@ import { applyPromoCodeAttributionTransactionally } from './attributionSync';
 import { PROMO_CODE_PLATFORMS, type PromoCodePlatform } from './constants';
 import { isPromoCodeCurrentlyEligible } from './eligibility';
 import { normalizePromoCode } from './normalize';
-import { lookupPromoCode, resolveAndroidOfferPair } from './promoCodeCatalog';
+import {
+  lookupPromoCode,
+  resolveAndroidOfferPair,
+  resolveAppleOfferCorrelationPair,
+} from './promoCodeCatalog';
 import type {
   PromoCodeAndroidOfferSnapshot,
+  PromoCodeAppleCorrelationSnapshot,
   PromoCodeAppleOfferSnapshot,
   ValidatePromoCodeRequestData,
   ValidatePromoCodeResponseData,
@@ -109,6 +114,24 @@ export async function validatePromoCodeHandler(
     offerCodeAnnual: promoCode.appleOfferCodeAnnual,
   };
 
+  // FASE iOS-6: computed ONCE, unconditionally, mirroring `androidOfferSnapshot`/
+  // `appleOfferSnapshot` above — snapshotted verbatim into
+  // `couponRedemptions/{uid}.appleOfferCorrelation`. Distinct from
+  // `appleOfferSnapshot` above (which the RESPONSE echoes to the client) —
+  // this one is NEVER returned to the client, only used later by
+  // `attribution/appleOfferCorrelation.ts` to compare a real webhook event
+  // against what was authorized at this exact moment.
+  const appleOfferCorrelationSnapshot: PromoCodeAppleCorrelationSnapshot = {
+    monthly: resolveAppleOfferCorrelationPair(
+      promoCode.appleProductIdMonthly,
+      promoCode.appleOfferReferenceMonthly,
+    ),
+    annual: resolveAppleOfferCorrelationPair(
+      promoCode.appleProductIdAnnual,
+      promoCode.appleOfferReferenceAnnual,
+    ),
+  };
+
   let outcome;
   try {
     outcome = await applyPromoCodeAttributionTransactionally(uid, {
@@ -117,6 +140,7 @@ export async function validatePromoCodeHandler(
       influencerId: promoCode.influencerId,
       androidOffer: androidOfferSnapshot,
       appleOffer: appleOfferSnapshot,
+      appleOfferCorrelation: appleOfferCorrelationSnapshot,
     });
   } catch (err) {
     logFunctionError(SCOPE, err, { uid, operation: 'apply_attribution' });
