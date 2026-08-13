@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { View, Text } from 'react-native';
 import Svg, { Circle, Line, Polyline } from 'react-native-svg';
+import { useTranslation } from 'react-i18next';
 import { MonoLabel } from '../ui/Display';
 import { colors, fonts } from '../../theme/tokens';
 
@@ -12,7 +13,7 @@ const V_PADDING = 10;
 
 /**
  * Small single-series line chart (one metric over time). Two of these are
- * used side by side instead of one dual-axis chart — weight (kg) and body
+ * used side by side instead of one dual-axis chart — body mass and body
  * fat (%) live on incomparable scales, and a shared axis would misrepresent
  * one of them (dataviz skill: "never a dual-axis chart").
  *
@@ -28,25 +29,31 @@ export function EvolutionLineChart({
   color,
   points,
   emptyHint,
+  showEmptyHint = true,
 }: {
   label: string;
   unit: string;
   color: string;
   points: EvolutionPoint[];
   emptyHint: string;
+  showEmptyHint?: boolean;
 }) {
+  const { t } = useTranslation('assessment');
   const [width, setWidth] = useState(0);
 
   const last = points[points.length - 1] ?? null;
 
   return (
-    <View style={{ flex: 1 }}>
+    <View
+      style={{ flex: 1 }}
+      accessible
+      accessibilityLabel={t('accessibility.chart', { label, description: emptyHint })}
+    >
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
         <MonoLabel>{label}</MonoLabel>
         {last && (
           <Text style={{ fontFamily: fonts.uiBold, fontSize: 13, color: '#fff' }}>
-            {last.value.toFixed(1)}
-            <Text style={{ fontFamily: fonts.mono, fontSize: 10, color: colors.faint }}>{unit}</Text>
+            {t('result', { value: last.value.toFixed(1), unit })}
           </Text>
         )}
       </View>
@@ -56,7 +63,11 @@ export function EvolutionLineChart({
         style={{ height: HEIGHT, justifyContent: 'center' }}
       >
         {points.length < 2 || width === 0 ? (
-          <Text style={{ fontFamily: fonts.ui, fontSize: 11, color: colors.faint }}>{emptyHint}</Text>
+          showEmptyHint ? (
+            <Text style={{ fontFamily: fonts.ui, fontSize: 11, color: colors.faint }}>
+              {emptyHint}
+            </Text>
+          ) : null
         ) : (
           <ChartBody width={width} color={color} points={points} />
         )}

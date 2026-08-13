@@ -32,6 +32,10 @@ import { PaywallScreen } from './src/screens/PaywallScreen';
 import { AppShell } from './src/screens/AppShell';
 import { FullScreenLoading } from './src/components/ui/FullScreenLoading';
 import { colors } from './src/theme/tokens';
+import { initI18n } from './src/i18n';
+import { reconcileLanguageOnLoad } from './src/i18n/syncLanguage';
+import { reconcileUnitsOnLoad } from './src/units/syncUnits';
+import { UnitsProvider } from './src/state/UnitsContext';
 
 /**
  * Configures the RevenueCat SDK at module evaluation time — the same
@@ -124,7 +128,8 @@ function SubscriptionResolutionError({
 }
 
 function RootNavigator() {
-  const { user, questionnaire, initializing, profileLoading, refreshProfile, logout } = useAuth();
+  const { user, profile, questionnaire, initializing, profileLoading, refreshProfile, logout } =
+    useAuth();
   const {
     loading: subscriptionLoading,
     configured: subscriptionConfigured,
@@ -143,21 +148,51 @@ function RootNavigator() {
   // Guards the forced-questionnaire save below against double submission
   // (e.g. a fast double-tap on the last quiz question).
   const [savingQuestionnaire, setSavingQuestionnaire] = useState(false);
+  // Account-preference reconciliation runs at every profileLoading→false transition.
+  // While it runs, resolvePremiumGate holds the routing gate closed (same as
+  // profileLoading) so the first authed screen renders with reconciled
+  // language and units already applied. Fires once per profile-load cycle —
+  // no polling, no timers. This NEVER influences the Premium decision below —
+  // it only delays which screen becomes visible, exactly like the other
+  // pre-Premium checks resolvePremiumGate already made (auth, questionnaire).
+  const [preferencesReconciling, setPreferencesReconciling] = useState(false);
+  const prevProfileLoadingRef = useRef(true);
 
   const setScreen = (next: RootScreenId) => {
     screenRef.current = next;
     setScreenState(next);
   };
 
+  useEffect(() => {
+    const wasLoading = prevProfileLoadingRef.current;
+    prevProfileLoadingRef.current = profileLoading;
+    if (initializing || profileLoading || !wasLoading) return;
+    if (!user) return;
+    setPreferencesReconciling(true);
+    Promise.all([
+      reconcileLanguageOnLoad({
+        uid: user.uid,
+        remoteLanguage: profile?.preferences.language ?? null,
+      }),
+      reconcileUnitsOnLoad({
+        uid: user.uid,
+        remoteUnits: profile?.preferences.units ?? null,
+      }),
+    ]).finally(() => setPreferencesReconciling(false));
+  }, [initializing, profileLoading, user, profile]);
+
   // This pure decision is also the render guard: AppShell is never mounted
-  // from a stale/requested route while auth, questionnaire, or the CustomerInfo
-  // for the current Firebase UID is unresolved. Once all three are known,
-  // RevenueCat's `premium` entitlement exclusively chooses app vs. paywall.
+  // from a stale/requested route while auth, preference reconciliation,
+  // questionnaire, or the CustomerInfo for the current Firebase UID is
+  // unresolved. Once all of those are known, RevenueCat's `premium`
+  // entitlement exclusively chooses app vs. paywall — preferencesReconciling
+  // only ever delays that decision, never substitutes for it.
   const resolvedScreen = resolvePremiumGate({
     requestedScreen: screen,
     authInitializing: initializing,
     profileLoading,
     authenticated: Boolean(user),
+    preferencesReconciling,
     hasQuestionnaire: Boolean(questionnaire),
     subscriptionLoading,
     subscriptionConfigured,
@@ -286,6 +321,16 @@ export default function App() {
     JetBrainsMono_700Bold,
   });
 
+  // i18n bootstrap runs in parallel with `useFonts` — same `<FullScreenLoading/>`
+  // covers both. `initI18n()` is idempotent (module-level memoization), so
+  // Fast Refresh cannot re-init. `.finally` ensures the gate opens even if
+  // resolution fails (a broken AsyncStorage read still falls through to the
+  // system locale + English fallback inside initI18n).
+  const [i18nReady, setI18nReady] = useState(false);
+  useEffect(() => {
+    initI18n().finally(() => setI18nReady(true));
+  }, []);
+
   return (
     <SafeAreaProvider>
       <AuthProvider>
@@ -295,14 +340,17 @@ export default function App() {
             is untouched — it stays the sole owner of identity and knows
             nothing about RevenueCat; SubscriptionContext just watches it. */}
         <SubscriptionProvider>
-          <AppStateProvider>
-            <StatusBar style="light" />
-            {/* Providers mount immediately so Firebase profile reads and
-                RevenueCat identity synchronization overlap font loading.
-                Navigation still waits for the fonts and therefore never
-                renders text with an unintended fallback face. */}
-            {fontsLoaded ? <RootNavigator /> : <FullScreenLoading />}
-          </AppStateProvider>
+          <UnitsProvider>
+            <AppStateProvider>
+              <StatusBar style="light" />
+              {/* Providers mount immediately so Firebase profile reads,
+                  RevenueCat identity synchronization, and units/language
+                  hydration overlap font/i18n loading. Navigation still waits
+                  for fonts and i18n and therefore never renders text with an
+                  unintended fallback face or the wrong locale. */}
+              {fontsLoaded && i18nReady ? <RootNavigator /> : <FullScreenLoading />}
+            </AppStateProvider>
+          </UnitsProvider>
         </SubscriptionProvider>
       </AuthProvider>
     </SafeAreaProvider>

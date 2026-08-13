@@ -15,5 +15,11 @@ export function useDateParts(initial?: Date) {
 
   const date = parseDateParts(parseInt(day, 10), parseInt(month, 10), parseInt(year, 10));
 
-  return { day, setDay, month, setMonth, year, setYear, date };
+  const setDate = (next: Date) => {
+    setDay(String(next.getDate()));
+    setMonth(String(next.getMonth() + 1));
+    setYear(String(next.getFullYear()));
+  };
+
+  return { day, setDay, month, setMonth, year, setYear, date, setDate };
 }

@@ -8,12 +8,13 @@ import {
   Text,
   View,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { fonts } from '../../theme/tokens';
 
 /**
- * iOS-style three-column date wheel for Android — day / month / year,
- * with a rounded pill selection band spanning the three columns and a
- * native-driver opacity fade for items above/below the center.
+ * Cross-platform three-column date wheel — day / month / year, with a rounded
+ * pill selection band spanning the three columns and a native-driver opacity
+ * fade for items above/below the center. Identical visuals on iOS and Android.
  *
  * Isolated from Firestore / questionnaire / auth: takes a `Date` and returns
  * a `Date`. All age/limit validation is the caller's responsibility.
@@ -28,12 +29,10 @@ const ITEM_HEIGHT = 40;
 const VISIBLE_ITEMS = 5;
 const CENTER_OFFSET = Math.floor(VISIBLE_ITEMS / 2);
 
-// Wide, sensible range for the year wheel — birthdates realistically fit
-// inside this without capping the top visibly at "today − minAge years".
 const DEFAULT_MIN_YEAR = 1900;
 const DEFAULT_MAX_YEAR = new Date().getFullYear();
 
-export type AndroidDateSpinnerProps = {
+export type DateWheelPickerProps = {
   value: Date;
   minYear?: number;
   maxYear?: number;
@@ -41,21 +40,20 @@ export type AndroidDateSpinnerProps = {
   onChange: (date: Date) => void;
 };
 
-export function AndroidDateSpinner({
+export function DateWheelPicker({
   value,
   minYear = DEFAULT_MIN_YEAR,
   maxYear = DEFAULT_MAX_YEAR,
   locale,
   onChange,
-}: AndroidDateSpinnerProps) {
+}: DateWheelPickerProps) {
+  const { t } = useTranslation('common');
   const [day, setDay] = useState(value.getDate());
   const [month, setMonth] = useState(value.getMonth());
   const [year, setYear] = useState(() =>
     Math.max(minYear, Math.min(maxYear, value.getFullYear())),
   );
 
-  // Latest onChange without a dep on identity — parent isn't required to
-  // memoize the callback for our composite effect below to stay stable.
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
 
@@ -77,8 +75,6 @@ export function AndroidDateSpinner({
     [daysInMonth],
   );
 
-  // Month labels via Intl — device/app language decides the wording,
-  // no hard-coded PT-BR strings.
   const monthNames = useMemo(() => {
     const fmt = new Intl.DateTimeFormat(locale, { month: 'short' });
     return Array.from({ length: 12 }, (_, i) =>
@@ -129,7 +125,7 @@ export function AndroidDateSpinner({
         onSelect={(i) => setDay(days[i])}
         widthPct={0.26}
         format={(d) => String(d).padStart(2, '0')}
-        accessibilityLabel="Dia"
+        accessibilityLabel={t('accessibility.day')}
       />
       <WheelColumn
         items={monthNames}
@@ -137,7 +133,7 @@ export function AndroidDateSpinner({
         onSelect={(i) => setMonth(i)}
         widthPct={0.38}
         format={(m) => String(m)}
-        accessibilityLabel="Mês"
+        accessibilityLabel={t('accessibility.month')}
       />
       <WheelColumn
         items={years}
@@ -145,7 +141,7 @@ export function AndroidDateSpinner({
         onSelect={(i) => setYear(years[i])}
         widthPct={0.36}
         format={(y) => String(y)}
-        accessibilityLabel="Ano"
+        accessibilityLabel={t('accessibility.year')}
       />
     </View>
   );
@@ -265,9 +261,9 @@ function WheelColumn({
         })}
         initialScrollIndex={Math.max(0, Math.min(selectedIndex, items.length - 1))}
         onScrollToIndexFailed={(info) => {
-          // FlatList sometimes reports the target row not measured yet on
-          // Android. Retry with the exact pixel offset once the frame has
-          // laid out — no animation, so it looks like initialScrollIndex.
+          // FlatList sometimes reports the target row not measured yet.
+          // Retry with the exact pixel offset once the frame has laid out
+          // — no animation, so it looks like initialScrollIndex.
           setTimeout(() => {
             listRef.current?.scrollToOffset({
               offset: info.index * ITEM_HEIGHT,

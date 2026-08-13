@@ -49,7 +49,7 @@ principal NÃO contém respostas de questionário; elas ficam na subcoleção
     "currentPeriodEndsAt": "datetime (opcional)"
   },
   "metadata": {
-    "role": "user",
+    "role": "user | admin",
     "activeWorkoutId": "string (opcional)",
     "createdAt": "serverTimestamp",
     "updatedAt": "serverTimestamp"
@@ -116,11 +116,11 @@ Client-owned no documento principal (gravados pelo app):
 
 ```txt
 profile.name, profile.email, profile.birthDate, profile.photoURL, profile.photoVersion,
-preferences.*, metadata.role, metadata.createdAt, metadata.updatedAt
+preferences.*, metadata.createdAt, metadata.updatedAt
 ```
 
 - `metadata.role` só pode ser `"user"` no cadastro pelo cliente. Promoção a admin é
-  exclusiva do backend.
+  exclusiva do backend e, depois de criado, nenhum cliente pode alterar o papel.
 - `profile.name` e `profile.birthDate` são editáveis pelo próprio usuário.
 - `profile.photoURL` e `profile.photoVersion` mudam juntas em uploads,
   substituições ou remoções; `photoVersion` usa o timestamp do servidor e nunca

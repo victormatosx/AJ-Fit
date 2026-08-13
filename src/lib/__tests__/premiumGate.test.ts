@@ -9,6 +9,7 @@ function resolve(overrides: GateOverrides = {}) {
     authInitializing: false,
     profileLoading: false,
     authenticated: true,
+    preferencesReconciling: false,
     hasQuestionnaire: true,
     subscriptionLoading: false,
     subscriptionConfigured: true,
@@ -76,5 +77,21 @@ describe('resolvePremiumGate', () => {
 
   it('bloqueia qualquer pedido direto de AppShell quando o entitlement está inativo', () => {
     expect(resolve({ requestedScreen: 'app' })).toBe('paywall');
+  });
+
+  it('I) preferencesReconciling segura o gate mesmo com Premium já ativo — nunca expõe AppShell antes da reconciliação terminar', () => {
+    expect(resolve({ preferencesReconciling: true, isPremium: true })).toBeNull();
+    expect(resolve({ preferencesReconciling: true })).toBeNull();
+  });
+
+  it('J) preferencesReconciling não afeta usuário não autenticado — segue direto para auth', () => {
+    expect(
+      resolve({ requestedScreen: 'app', authenticated: false, preferencesReconciling: true }),
+    ).toBe('auth');
+  });
+
+  it('K) uma vez reconciliado, o fluxo normal (questionário → assinatura) continua exatamente igual', () => {
+    expect(resolve({ preferencesReconciling: false, hasQuestionnaire: false })).toBe('quiz');
+    expect(resolve({ preferencesReconciling: false, isPremium: true })).toBe('app');
   });
 });

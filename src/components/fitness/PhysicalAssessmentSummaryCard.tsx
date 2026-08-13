@@ -1,9 +1,15 @@
 import React from 'react';
 import { View, Text } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useTranslation } from 'react-i18next';
 import { Icon } from '../ui/Icon';
 import { MonoLabel } from '../ui/Display';
 import { colors, fonts } from '../../theme/tokens';
+import { useUnits } from '../../state/UnitsContext';
+import {
+  formatWeightFromKg,
+  weightUnit,
+} from '../../units/weightConversions';
 
 function Metric({ label, value, unit }: { label: string; value: string; unit: string }) {
   return (
@@ -39,6 +45,9 @@ export function PhysicalAssessmentSummaryCard({
   bmi: number | null;
   lastDateLabel: string;
 }) {
+  const { t } = useTranslation('assessment');
+  const { resolvedUnits } = useUnits();
+  const massUnit = weightUnit(resolvedUnits);
   return (
     <LinearGradient
       colors={['rgba(11,112,249,0.24)', 'rgba(11,112,249,0.04)']}
@@ -53,14 +62,26 @@ export function PhysicalAssessmentSummaryCard({
       }}
     >
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
-        <Metric label="PESO" value={weight != null ? weight.toFixed(1) : '—'} unit="kg" />
         <Metric
-          label="% GORDURA"
-          value={bodyFat != null ? bodyFat.toFixed(1).replace('.', ',') : '—'}
-          unit="%"
+          label={t('metrics.weight').toUpperCase()}
+          value={weight != null ? formatWeightFromKg(weight, resolvedUnits) : '—'}
+          unit={massUnit}
         />
-        <Metric label="MASSA MAGRA" value={leanMass != null ? leanMass.toFixed(1) : '—'} unit="kg" />
-        <Metric label="IMC" value={bmi != null ? bmi.toFixed(1) : '—'} unit="" />
+        <Metric
+          label={t('metrics.bodyFat').toUpperCase()}
+          value={bodyFat != null ? bodyFat.toFixed(1).replace('.', ',') : '—'}
+          unit={t('units.percent')}
+        />
+        <Metric
+          label={t('metrics.leanMass').toUpperCase()}
+          value={leanMass != null ? formatWeightFromKg(leanMass, resolvedUnits) : '—'}
+          unit={massUnit}
+        />
+        <Metric
+          label={t('metrics.bmi').toUpperCase()}
+          value={bmi != null ? bmi.toFixed(1) : '—'}
+          unit=""
+        />
       </View>
       <View
         style={{
@@ -73,7 +94,9 @@ export function PhysicalAssessmentSummaryCard({
         }}
       >
         <Icon name="calendar" size={13} color={colors.mute} />
-        <MonoLabel>ÚLTIMA AVALIAÇÃO · {lastDateLabel}</MonoLabel>
+        <MonoLabel>
+          {t('summary.lastAssessmentLabel', { date: lastDateLabel }).toUpperCase()}
+        </MonoLabel>
       </View>
     </LinearGradient>
   );

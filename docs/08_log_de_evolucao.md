@@ -254,6 +254,34 @@ Criar documentação específica de billing.
 
 # 18. Primeiras entradas do projeto
 
+Data: 2026-08-04
+Responsável: Agente Frontend + QA
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Consolidada a infraestrutura final de internacionalização para `pt-BR`, `en`
+e `es`. O registro de resources e namespaces passou a ter fonte única em
+`src/i18n/resourceCatalog.ts`; o helper global de paridade agora detecta
+chaves ausentes/extras, folhas vazias e valores não-string. Foram adicionados
+os comandos `i18n:check`, `i18n:audit` e `quality`, além da documentação
+permanente em `docs/17_internacionalizacao.md`.
+
+O baseline contém 9 namespaces, 582 folhas por idioma e 1.746 traduções. O
+auditor registra 33 hardcodes visuais suspeitos existentes e seis números de
+mock legados em `home`, mantidos em allowlist explícita. Os guards de Assessment
+foram classificados como regressões permanentes de payload, fórmulas,
+protocolos e queries, apesar dos nomes históricos dos arquivos.
+
+Impacto:
+Novos namespaces entram automaticamente na paridade ao serem registrados no
+catálogo. Erros estruturais encerram a auditoria com falha; hardcodes suspeitos
+são reportados para triagem humana. Nenhuma lógica funcional, autenticação,
+sincronização, persistência, fórmula ou protocolo foi alterado.
+
+Próxima ação:
+Revisão editorial contínua e tratamento autorizado dos hardcodes registrados
+no baseline. Não houve deploy.
+
 Data: 2026-08-11
 Responsável: Codex — Agente Frontend + Agente QA
 Categoria: [IMPLEMENTAÇÃO]
@@ -1482,6 +1510,200 @@ Humano coordenador validar em dev build. Nenhuma pendência de código aberta.
 
 ```
 ```
+
+---
+
+Data: 2026-08-06
+Responsável: Agente Frontend
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Implementado o módulo de Suporte do aplicativo: Central de Ajuda pesquisável e
+categorizada, artigos locais por repositório substituível, formulários de bug,
+sugestão e chamado, anexo opcional no Firebase Storage, criação atômica do
+ticket e primeira mensagem, tela de sucesso, i18n em pt-BR/en/es e regras de
+segurança testadas no emulador. Contrato detalhado em
+`docs/18_modulo_suporte.md`.
+
+Impacto:
+Usuários autenticados podem criar e ler somente os próprios tickets. O cliente
+não pode alterar status/prioridade nem criar mensagens administrativas. A
+estrutura já suporta histórico de mensagens e evolução por backend.
+
+Próxima ação:
+Publicar `firestore.rules` e `storage.rules` no ambiente alvo; em fase futura,
+implementar painel administrativo, respostas, push e limpeza de anexos órfãos.
+
+---
+
+Data: 2026-08-07
+Responsável: Agente Frontend + Agente QA
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Reorganizadas exclusivamente as telas de Perfil e Configurações. Perfil
+passou a concentrar evolução, plano, conta, métodos de login e sessão; a área
+de Avisos Inteligentes foi preparada como componente apresentacional que não
+renderiza quando vazia. Configurações passou a concentrar somente preferências
+do aplicativo, notificações, privacidade e dados, suporte e informações sobre
+o app. Os fluxos existentes de Avaliação Física, Editar Perfil, idioma,
+unidades e Suporte foram preservados. Itens sem tela permanecem placeholders
+visuais, sem novas rotas ou lógica.
+
+Impacto:
+Nenhuma alteração em serviços, providers, hooks, contexts, Firebase,
+RevenueCat, modelos ou regras de negócio. A estrutura neutra de listas foi
+unificada em `SettingsSection`; adicionada cobertura estrutural contra itens
+duplicados ou removidos acidentalmente. A entrada Versão passou a ler
+`expo.version` do `app.json` por `Constants.expoConfig`, sem valor fixo na tela.
+
+Próxima ação:
+Validar comparação visual em iOS e Android antes do merge.
+
+---
+
+Data: 2026-08-07
+Responsável: Agente Frontend + Agente QA
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Implementado exclusivamente o front-end da tela Segurança, acessível por
+Configurações. A tela possui as seções Segurança da conta, Sessões,
+Atividade e Zona de segurança, com textos estáticos e itens visuais sem ação.
+O componente compartilhado `SettingsSection` passou a aceitar descrição de
+item, descrição de seção e estado desabilitado.
+
+Impacto:
+Adicionado somente um overlay de navegação local entre Configurações e
+Segurança. Nenhuma autenticação, biometria, validação, persistência,
+integração, serviço, provider, hook ou regra de negócio foi implementada.
+
+Próxima ação:
+Validar a composição visual em iOS e Android antes do merge. As futuras ações
+de segurança dependem de requisitos e contratos próprios antes da implementação.
+
+---
+
+Data: 2026-08-07
+Responsável: Agente Segurança + Agente Frontend + Agente QA
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Implementado o fluxo de alteração de senha para contas que possuem o provider
+Firebase `password`. A tela solicita senha atual, nova senha e confirmação; o
+hook aplica as validações locais e o serviço executa obrigatoriamente
+`reauthenticateWithCredential` antes de `updatePassword`. O item fica oculto
+para contas exclusivamente Google/Apple e há proteções adicionais na
+navegação, na tela, no hook e no serviço. Estados de carregamento, sucesso e
+erros controlados foram traduzidos em pt-BR, inglês e espanhol.
+
+Impacto:
+Somente a ação Alterar senha passou a ter lógica. Biometria, verificação em
+duas etapas, sessões, histórico e exclusão de conta permanecem estritamente
+visuais. Nenhuma senha é persistida ou enviada a serviços próprios; as
+credenciais são usadas apenas pela API oficial do Firebase Auth durante a
+reautenticação. Adicionados testes de validação, mapeamento de erro, elegibilidade
+por provider, ordem das chamadas e interrupção do fluxo em falhas.
+
+Próxima ação:
+Validar o fluxo com uma conta de teste e-mail/senha em dev build. O repositório
+não possui emulador de Firebase Auth configurado, portanto a suíte automatizada
+cobre o contrato com mocks, não uma autenticação real.
+
+---
+
+Data: 2026-08-07
+Responsável: Codex — Agente Frontend
+Categoria: [REFATORAÇÃO]
+
+Descrição:
+Reorganizada exclusivamente a apresentação da Avaliação Física. A tela
+principal passou a seguir Resumo, Evolução, Adicionar avaliação, Dobras
+cutâneas e Histórico. Removidos o aviso azul do estado vazio e a seção visual
+duplicada de Informações básicas; seus valores continuam disponíveis
+internamente como preenchimento inicial dos formulários. Dobras cutâneas virou
+um resumo compacto. O protocolo ganhou ênfase visual nos formulários e as
+ações de salvar das avaliações guiada e importada passaram para um rodapé fixo
+compartilhado. A avaliação mais recente recebeu maior destaque na timeline.
+No estado sem evolução, dicas repetidas dentro dos dois gráficos foram
+suprimidas e permaneceu apenas a mensagem central já traduzida.
+
+Impacto:
+Nenhum cálculo, validação, protocolo, gráfico, callback, payload, consulta,
+persistência, serviço, hook, provider, navegação ou resource de i18n foi
+alterado. A mudança se limita a `AssessmentScreen`, apresentação da timeline,
+testes estruturais e documentação de staging.
+
+Próxima ação:
+Humano coordenador validar hierarquia, rodapé fixo e comportamento do teclado
+em iOS e Android, incluindo telas compactas.
+
+---
+
+Data: 2026-08-07
+Responsável: Codex — Agente Frontend
+Categoria: [REFATORAÇÃO]
+
+Descrição:
+Simplificado o formulário de Avaliação Guiada (“Novo registro”). Os campos
+visuais de sexo e idade foram removidos; sexo passa a priorizar o questionário
+persistido do cadastro e idade continua calculada internamente pela data de
+nascimento, considerando a data da avaliação. O campo de data foi substituído
+por `NativeDatePickerField`: diálogo nativo no Android, picker nativo em modal
+no iOS e fallback textual ISO na web. Datas futuras permanecem bloqueadas.
+
+Impacto:
+O payload guiado continua enviando `measuredAt`, `sex` e `age` exatamente como
+antes. Fórmulas, protocolos, validação do serviço, Firestore, hooks e navegação
+não foram alterados. Adicionada mensagem localizada para cadastros legados sem
+sexo/data de nascimento e cobertura estrutural do picker nas duas plataformas.
+
+Próxima ação:
+Validar o seletor nativo em dispositivo iOS e Android e confirmar a seleção de
+datas retroativas em ambos.
+
+---
+
+Data: 2026-08-07
+Responsável: Codex — Agente Frontend
+Categoria: [REFATORAÇÃO]
+
+Descrição:
+Altura removida dos formulários de Avaliação Guiada e Avaliação Importada. O
+valor agora vem do questionário persistido do cadastro, com a avaliação mais
+recente usada apenas como compatibilidade para contas legadas. A tela de
+importação foi alinhada ao Novo registro: datepicker nativo, bloco separado de
+informações básicas e resultados, e peso em campo de largura integral.
+
+Impacto:
+Altura continua sendo usada internamente no IMC e persistida no payload das
+duas avaliações, sem alteração de contrato ou fórmulas. Cadastros sem altura
+válida recebem uma mensagem localizada e não salvam dados inconsistentes.
+
+Próxima ação:
+Validar em iOS e Android o layout dos dois formulários, incluindo datepicker,
+teclado e rodapé fixo em telas compactas.
+
+---
+
+Data: 2026-08-07
+Responsável: Codex — Agente Frontend
+Categoria: [REFATORAÇÃO]
+
+Descrição:
+Removida da página principal de Avaliação Física a seção visual de Dobras
+cutâneas. A hierarquia agora segue diretamente de Adicionar avaliação para
+Histórico. Também foram removidos o resumo derivado da última avaliação guiada
+e as quatro traduções que existiam exclusivamente para esse bloco.
+
+Impacto:
+As dobras continuam disponíveis no formulário de Novo registro, permanecem
+nos cálculos e seguem sendo persistidas normalmente. Nenhum contrato, fórmula,
+serviço, consulta, payload ou registro histórico foi alterado.
+
+Próxima ação:
+Validar visualmente a transição entre Adicionar avaliação e Histórico em telas
+iOS e Android.
 
 ---
 

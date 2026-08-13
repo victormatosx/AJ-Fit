@@ -2,6 +2,7 @@
   "expo": {
     "name": "AJ Fit",
     "slug": "aj-fit",
+    "scheme": "ajfit",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/aj-logo.png",
@@ -48,8 +49,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "O AJ Fit acessa suas fotos para você escolher uma imagem de perfil.",
-          "cameraPermission": "O AJ Fit acessa sua câmera para você tirar uma foto de perfil.",
+          "photosPermission": "O AJ Fit acessa suas fotos para você escolher imagens de perfil ou anexos de suporte.",
+          "cameraPermission": "O AJ Fit acessa sua câmera para você tirar fotos de perfil ou anexos de suporte.",
           "microphonePermission": false
         }
       ],
@@ -71,7 +72,8 @@
         }
       ],
       "expo-image",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      "expo-localization"
     ]
   }
 }

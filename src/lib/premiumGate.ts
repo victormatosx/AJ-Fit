@@ -13,6 +13,17 @@ type PremiumGateState = {
   authInitializing: boolean;
   profileLoading: boolean;
   authenticated: boolean;
+  /**
+   * True while account-preference reconciliation (language/units —
+   * `src/i18n/syncLanguage.ts`, `src/units/syncUnits.ts`) is in flight for the
+   * current profile-load cycle. Only ever `true` for an authenticated user
+   * (reconciliation never starts without one) — unauthenticated routing is
+   * unaffected. Held like `profileLoading`: the gate stays neutral so the
+   * first authed screen renders with reconciled preferences already applied.
+   * This never gates on Premium/entitlement — it only delays which screen
+   * becomes visible, same as the other pre-Premium checks below.
+   */
+  preferencesReconciling: boolean;
   hasQuestionnaire: boolean;
   subscriptionLoading: boolean;
   subscriptionConfigured: boolean;
@@ -37,6 +48,8 @@ export function resolvePremiumGate(state: PremiumGateState): RootScreenId | null
       ? 'auth'
       : state.requestedScreen;
   }
+
+  if (state.preferencesReconciling) return null;
 
   if (!state.hasQuestionnaire) return 'quiz';
 

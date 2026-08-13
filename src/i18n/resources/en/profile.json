@@ -1,0 +1,160 @@
+{
+  "fallback": {
+    "athlete": "Athlete"
+  },
+  "header": {
+    "memberSince": "Member · since {{year}}",
+    "memberSinceInline": "Member since {{year}}"
+  },
+  "level": {
+    "title": "AJ Level · Intermediate",
+    "xp": "{{xp}} XP",
+    "toNext": "{{amount}} XP to {{nextLevel}}",
+    "nextLevel": "Advanced"
+  },
+  "subscription": {
+    "labels": {
+      "TRIAL": "AJ Premium · Free trial",
+      "ACTIVE": "AJ Premium · Active",
+      "CANCELED": "AJ Premium · Canceled",
+      "BILLING_ISSUE": "AJ Premium · Payment pending",
+      "EXPIRED": "AJ Premium · Expired",
+      "unknown": "AJ Premium",
+      "none": "No active subscription"
+    },
+    "descriptions": {
+      "managed": "Managed by the store (RevenueCat)",
+      "trialCta": "Start your 7-day free trial"
+    }
+  },
+  "assessment": {
+    "title": "Physical assessment",
+    "subtitle": "Measurements, skinfolds and progress"
+  },
+  "smartAlerts": {
+    "title": "Smart alerts"
+  },
+  "groups": {
+    "evolution": {
+      "title": "Progress"
+    },
+    "goalsPlan": {
+      "title": "Goals & plan",
+      "items": {
+        "viewPlan": "View my plan"
+      }
+    },
+    "account": {
+      "title": "Account",
+      "items": {
+        "editProfile": "Edit profile",
+        "subscription": "Subscription",
+        "settings": "Settings"
+      }
+    },
+    "session": {
+      "title": "Session",
+      "items": {
+        "logout": "Sign out"
+      }
+    }
+  },
+  "linkedProviders": {
+    "title": "Login methods",
+    "notLinked": "Not linked",
+    "labels": {
+      "google.com": "Google",
+      "apple.com": "Apple",
+      "password": "Email / Password"
+    }
+  },
+  "logout": {
+    "confirmTitle": "Sign out",
+    "confirmMessage": "Are you sure you want to sign out?",
+    "cancel": "Cancel",
+    "confirm": "Sign out",
+    "errorTitle": "Error",
+    "errorMessage": "Couldn't sign out. Please try again."
+  },
+  "photo": {
+    "accessibility": {
+      "avatar": "Profile photo",
+      "editable": "Change profile photo"
+    },
+    "menu": {
+      "title": "Profile photo",
+      "message": "Choose an option",
+      "takePhoto": "Take photo",
+      "chooseFromLibrary": "Choose from library",
+      "removePhoto": "Remove photo",
+      "cancel": "Cancel"
+    },
+    "actions": {
+      "add": "Add photo",
+      "change": "Change photo",
+      "optimizing": "Optimizing photo..."
+    },
+    "errors": {
+      "compressTitle": "Couldn't prepare the photo",
+      "compressGeneric": "Choose another image and try again.",
+      "tooLarge": "Even after compression, the image is over 5 MB.",
+      "libraryTitle": "Couldn't open your photos",
+      "cameraTitle": "Couldn't open the camera",
+      "cameraPermissionTitle": "Camera access required",
+      "cameraPermissionMessage": "Allow camera access in Settings to take a profile photo.",
+      "genericRetry": "Please try again in a moment."
+    }
+  },
+  "edit": {
+    "title": "Edit profile",
+    "accessibility": {
+      "back": "Back to profile",
+      "save": "Save changes"
+    },
+    "identity": {
+      "namePlaceholder": "Your name"
+    },
+    "sections": {
+      "personalData": "Personal data",
+      "account": "Account"
+    },
+    "fields": {
+      "displayName": "Display name",
+      "birthDate": "Birth date",
+      "email": "Email",
+      "emailUnavailable": "Email unavailable",
+      "emailSecurityNote": "Your email is protected by your login methods."
+    },
+    "datePart": {
+      "day": "Day",
+      "month": "Month",
+      "year": "Year",
+      "placeholderDay": "DD",
+      "placeholderMonth": "MM",
+      "placeholderYear": "YYYY"
+    },
+    "actions": {
+      "save": "Save changes",
+      "saving": "Saving...",
+      "uploadingPhoto": "Uploading photo {{percent}}%"
+    },
+    "discard": {
+      "title": "Discard changes?",
+      "message": "Your profile edits will not be saved.",
+      "cancel": "Keep editing",
+      "confirm": "Discard"
+    },
+    "validation": {
+      "nameRequired": "Enter your name.",
+      "nameTooShort": "Use at least {{min}} characters.",
+      "nameTooLong": "Use at most {{max}} characters.",
+      "birthDateRequired": "Enter a valid date.",
+      "birthDateFuture": "The date can't be in the future.",
+      "birthDateAgeRange": "Age must be between {{min}} and {{max}} years."
+    },
+    "errors": {
+      "photoTooLarge": "The photo must be at most 5 MB.",
+      "saveFailed": "Couldn't save. Check your connection and try again."
+    }
+  }
+}

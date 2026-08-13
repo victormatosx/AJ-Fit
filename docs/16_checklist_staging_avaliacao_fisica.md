@@ -143,12 +143,12 @@ Peso 59,8 kg · altura 165 cm · demais campos em branco. `measuredAt` = hoje
 | 2 | Na pergunta de nascimento, tentar avançar com a data inválida (31/02) | Botão "Continuar" permanece desabilitado ou mensagem de erro; não avança | ☐ OK ☐ Falhou |
 | 3 | Tentar informar uma data no futuro | Bloqueado ("DATA NO FUTURO") | ☐ OK ☐ Falhou |
 | 4 | Criar a conta (e-mail/senha) | Conta criada, sem erro | ☐ OK ☐ Falhou |
-| 5 | Abrir Avaliação Física pela primeira vez (Perfil → Avaliação Física) | Card "SEM REGISTROS", CTA para registrar a primeira | ☐ OK ☐ Falhou |
-| 6 | Conferir "INFORMAÇÕES BÁSICAS" | Peso 60,0 kg / altura 165 cm, rotulado "DADOS DO CADASTRO INICIAL · AINDA NÃO É UMA AVALIAÇÃO" | ☐ OK ☐ Falhou |
+| 5 | Abrir Avaliação Física pela primeira vez (Perfil → Avaliação Física) | Um único card de resumo com placeholders; ações de avaliação logo após Evolução e Histórico imediatamente depois, sem seção visual de Dobras cutâneas | ☐ OK ☐ Falhou |
+| 6 | Abrir Avaliação Guiada pela primeira vez | Peso 60,0 kg aparece preenchido; altura, sexo e idade não são solicitados e continuam vindo internamente do cadastro | ☐ OK ☐ Falhou |
 | 7 | Avaliação Guiada JP7 (dados §4.2) | Resultados batem com §4.2; toast "Avaliação salva com sucesso" | ☐ OK ☐ Falhou |
-| 8 | Voltar para a tela e abrir Avaliação Guiada, protocolo JP3, sexo Feminino (dados §4.3) | Resultados batem com §4.3 | ☐ OK ☐ Falhou |
-| 9 | Avaliação Guiada, trocar sexo para Masculino, protocolo JP7 (dados §4.4) | Dobras exigidas mudam para o conjunto masculino; resultados batem com §4.4 | ☐ OK ☐ Falhou |
-| 10 | Avaliação Guiada, sexo Masculino, protocolo JP3 (dados §4.5) | Resultados batem com §4.5 | ☐ OK ☐ Falhou |
+| 8 | Voltar para a tela e abrir Avaliação Guiada, protocolo JP3, com cadastro Feminino (dados §4.3) | Resultados batem com §4.3 sem solicitar sexo, idade ou altura | ☐ OK ☐ Falhou |
+| 9 | Em uma conta de staging com cadastro Masculino, abrir Avaliação Guiada JP7 (dados §4.4) | Dobras exigidas usam automaticamente o conjunto masculino; resultados batem com §4.4 | ☐ OK ☐ Falhou |
+| 10 | Na conta com cadastro Masculino, usar protocolo JP3 (dados §4.5) | Resultados batem com §4.5 sem solicitar sexo, idade ou altura | ☐ OK ☐ Falhou |
 | 11 | Importar avaliação com percentual (dados §4.6) | Salva; card resumo mostra BF 22,0% | ☐ OK ☐ Falhou |
 | 12 | Importar avaliação sem percentual (dados §4.7) | Salva; no histórico, BF/massa magra/massa gorda aparecem como "—", nunca "0" | ☐ OK ☐ Falhou |
 | 13 | Fechar o app completamente e reabrir | Sessão mantida, sem voltar para onboarding, dados carregam | ☐ OK ☐ Falhou |
@@ -211,8 +211,9 @@ No Firestore do projeto de teste, criar manualmente um documento em
 | # | Passo | Resultado esperado | Status |
 |---|---|---|---|
 | 1 | Abrir teclado nos campos de peso/altura/dobras | Campo permanece visível, sem ficar coberto pelo teclado | ☐ OK ☐ Falhou |
-| 2 | Rolar os modais (Guiada e Importada) do topo ao fim | Rolagem suave, nenhum elemento cortado | ☐ OK ☐ Falhou |
-| 3 | Testar os campos DIA/MÊS/ANO em tela pequena (ex.: iPhone SE) e grande (ex.: tablet Android) | Campos legíveis, não sobrepostos | ☐ OK ☐ Falhou |
+| 2 | Rolar os modais (Guiada e Importada) do topo ao fim | Rolagem suave, nenhum elemento cortado e ação de salvar sempre fixa no rodapé | ☐ OK ☐ Falhou |
+| 3 | Abrir o seletor de data do Novo Registro em iOS e Android, inclusive em tela pequena | Picker nativo abre com a data atual, permite escolher datas anteriores, bloqueia datas futuras e atualiza o campo compacto | ☐ OK ☐ Falhou |
+| 3a | Testar os campos DIA/MÊS/ANO da Avaliação Importada em tela pequena e grande | Campos legíveis, não sobrepostos | ☐ OK ☐ Falhou |
 | 4 | Alternar modo claro/escuro do sistema, se o app já suportar | Layout permanece legível (ou confirmar que o app é fixo em modo escuro, sem quebra) | ☐ OK ☐ Falhou |
 | 5 | Preencher "Observações" da avaliação importada com um texto longo (200+ caracteres) | Campo aceita e não quebra o layout | ☐ OK ☐ Falhou |
 | 6 | Testar valor extremo válido de dobra (ex.: 60mm) e valor inválido (0 ou negativo) | Extremo válido aceito e calcula; inválido bloqueado com destaque visual (shake/borda vermelha) | ☐ OK ☐ Falhou |
@@ -247,8 +248,6 @@ No Firestore do projeto de teste, criar manualmente um documento em
   §12 do relatório final).
 * Idade aproximada (não exata) para usuários legados sem `birthDate` —
   comportamento documentado e esperado (`docs/08_log_de_evolucao.md`).
-* Ausência de gráfico de evolução (placeholder "EM BREVE" já é o
-  comportamento atual, fora de escopo).
 
 ---
 

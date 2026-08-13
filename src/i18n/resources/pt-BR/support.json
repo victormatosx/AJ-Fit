@@ -1,0 +1,19 @@
+{
+  "help": { "title": "Central de ajuda", "search": "Pesquisar uma dúvida", "all": "Todas", "faq": "Perguntas frequentes", "empty": "Nenhum artigo encontrado.", "categories": { "ACCOUNT": "Conta", "SUBSCRIPTION": "Assinatura", "ASSESSMENTS": "Avaliações", "WORKOUTS": "Treinos", "SETTINGS": "Configurações", "TECHNICAL": "Problemas técnicos", "OTHER": "Outros" } },
+  "article": { "header": "Ajuda", "solved": "Isso resolveu meu problema?", "yes": "Sim", "no": "Não", "glad": "Que bom que conseguimos ajudar!", "stillNeedHelp": "Ainda precisa de ajuda?", "openTicket": "Abrir chamado" },
+  "bug": { "title": "Reportar problema", "subjectPlaceholder": "Ex.: Erro ao iniciar treino", "descriptionPlaceholder": "Conte o que aconteceu e como podemos reproduzir o problema." },
+  "feedback": { "title": "Enviar sugestão", "intro": "Sua opinião nos ajuda a construir um aplicativo cada vez melhor.", "category": "Categoria", "categories": { "SUGGESTION": "Sugestão", "IDEA": "Ideia", "COMPLIMENT": "Elogio", "OTHER": "Outro" }, "subjects": { "SUGGESTION": "Sugestão", "IDEA": "Ideia", "COMPLIMENT": "Elogio", "OTHER": "Outro feedback" }, "messagePlaceholder": "Compartilhe sua ideia com a gente." },
+  "support": { "title": "Abrir chamado", "subjectPlaceholder": "Como podemos ajudar?", "messagePlaceholder": "Descreva sua dúvida." },
+  "form": { "subject": "Assunto", "description": "Descrição do problema", "message": "Mensagem", "addImage": "Adicionar imagem", "optional": "Opcional", "send": "Enviar", "errors": { "sendFailed": "Não foi possível enviar agora. Verifique sua conexão e tente novamente." } },
+  "success": { "title": "Recebemos sua solicitação.", "subtitle": "Ela será analisada pela nossa equipe o mais breve possível.", "back": "Voltar" },
+  "articles": {
+    "changeProfile": { "title": "Como altero meus dados de perfil?", "content": "Abra Perfil, toque no ícone de configurações e escolha Editar perfil. Atualize os dados desejados e salve as alterações." },
+    "resetPassword": { "title": "Como redefino minha senha?", "content": "Na tela de login, use a opção de recuperação de senha. Você receberá as instruções no e-mail cadastrado." },
+    "manageSubscription": { "title": "Como gerencio minha assinatura?", "content": "Assinaturas são gerenciadas pela loja usada na contratação. Abra as configurações de assinaturas da App Store ou Google Play para consultar ou cancelar." },
+    "assessmentEstimate": { "title": "O percentual de gordura é um diagnóstico?", "content": "Não. O resultado da avaliação é uma estimativa para acompanhamento de evolução e não substitui avaliação ou diagnóstico de um profissional de saúde." },
+    "changeWorkout": { "title": "Posso trocar um exercício?", "content": "Quando houver alternativas disponíveis, use a opção de substituição no exercício. As opções preservam o grupo muscular e a proposta do treino." },
+    "changeLanguage": { "title": "Como altero o idioma do aplicativo?", "content": "Abra Perfil, Configurações e depois Idioma. Escolha Português, English ou Español; a alteração é aplicada imediatamente." },
+    "appNotLoading": { "title": "O aplicativo não carrega. O que fazer?", "content": "Confirme sua conexão, feche e abra o aplicativo novamente e verifique se há uma atualização disponível. Se continuar, abra um chamado e descreva quando o problema ocorre." },
+    "contactSupport": { "title": "Como falo com a equipe de suporte?", "content": "Ao fim de qualquer artigo, responda que ele não resolveu seu problema e toque em Abrir chamado. Você também pode usar Reportar problema nas Configurações." }
+  }
+}

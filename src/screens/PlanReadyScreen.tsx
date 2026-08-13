@@ -12,6 +12,8 @@ import { Slash, MonoLabel } from '../components/ui/Display';
 import { Icon } from '../components/ui/Icon';
 import { colors, fonts, displayLineHeight } from '../theme/tokens';
 import { useAppState } from '../state/AppState';
+import { useUnits } from '../state/UnitsContext';
+import { formatWeightFromKg, weightUnit } from '../units/weightConversions';
 
 const GOAL_LABELS: Record<string, string> = {
   hyper: 'HIPERTROFIA',
@@ -42,6 +44,7 @@ const cap = (s: string) => (s ? s.charAt(0) + s.slice(1).toLowerCase() : '');
 
 export function PlanReadyScreen({ onContinue }: { onContinue: () => void }) {
   const { quiz } = useAppState();
+  const { resolvedUnits } = useUnits();
   const goalKey = quiz.goal || 'hyper';
   const levelKey = quiz.level || 'int';
   const days = quiz.days || 4;
@@ -160,9 +163,9 @@ export function PlanReadyScreen({ onContinue }: { onContinue: () => void }) {
                     transform: [{ skewX: '-8deg' }],
                   }}
                 >
-                  +6,2
+                  +{formatWeightFromKg(6.2, resolvedUnits).replace('.', ',')}
                 </Text>
-                <MonoLabel>KG MAGRA</MonoLabel>
+                <MonoLabel>{weightUnit(resolvedUnits).toUpperCase()} MAGRA</MonoLabel>
               </View>
             </View>
             <ProjectionChart />

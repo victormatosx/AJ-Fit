@@ -35,3 +35,17 @@ export function formatShortDatePt(d: Date): string {
   const month = String(d.getMonth() + 1).padStart(2, '0');
   return `${day}/${month}`;
 }
+
+/** Presentation-only localized assessment date; does not alter timezone or stored values. */
+export function formatAssessmentDateForLocale(d: Date, locale: string): string {
+  return new Intl.DateTimeFormat(locale, {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  }).format(d);
+}
+
+/** Compact localized chart label using the same calendar date and timezone semantics. */
+export function formatAssessmentShortDateForLocale(d: Date, locale: string): string {
+  return new Intl.DateTimeFormat(locale, { day: '2-digit', month: '2-digit' }).format(d);
+}

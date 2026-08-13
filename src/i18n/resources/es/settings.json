@@ -1,0 +1,137 @@
+{
+  "screenTitle": "Configuración",
+  "sections": {
+    "account": "Cuenta",
+    "workout": "Entrenamiento",
+    "notifications": "Notificaciones",
+    "preferences": "Preferencias",
+    "privacyAndData": "Privacidad y datos",
+    "support": "Soporte",
+    "about": "Acerca de"
+  },
+  "items": {
+    "editProfile": "Editar perfil",
+    "subscription": "Suscripción",
+    "loginMethods": "Métodos de inicio de sesión",
+    "security": "Seguridad",
+    "workoutPreferences": "Preferencias de entrenamiento",
+    "timersAndSounds": "Temporizadores y sonidos",
+    "notifications": "Notificaciones",
+    "theme": "Tema",
+    "units": "Unidades",
+    "privacyPolicy": "Política de Privacidad",
+    "termsOfUse": "Términos de Uso",
+    "acceptedConsents": "Consentimientos Aceptados",
+    "exportData": "Exportar datos",
+    "deleteAccount": "Eliminar cuenta",
+    "helpCenter": "Centro de ayuda",
+    "sendFeedback": "Enviar comentarios",
+    "sendSuggestion": "Enviar sugerencia",
+    "reportProblem": "Informar de un problema",
+    "version": "Versión",
+    "licenses": "Licencias Open Source"
+  },
+  "values": {
+    "darkTheme": "Oscuro"
+  },
+  "security": {
+    "screenTitle": "Seguridad",
+    "sections": {
+      "account": "Seguridad de la cuenta",
+      "sessions": "Sesiones",
+      "activity": "Actividad",
+      "safetyZone": "Zona de seguridad"
+    },
+    "items": {
+      "changePassword": "Cambiar contraseña",
+      "biometrics": "Biometría",
+      "twoFactor": "Verificación en dos pasos",
+      "currentDevice": "Dispositivo actual",
+      "currentDeviceDescription": "Este dispositivo está conectado.",
+      "manageDevices": "Gestionar dispositivos",
+      "lastLogin": "Último acceso",
+      "lastLoginDescription": "Hoy a las 09:42",
+      "securityHistory": "Historial de seguridad",
+      "deleteAccount": "Eliminar cuenta"
+    },
+    "safetyZoneDescription": "Mantén tu cuenta protegida revisando regularmente la configuración de seguridad.",
+    "changePassword": {
+      "screenTitle": "Cambiar contraseña",
+      "description": "Confirma tu contraseña actual antes de definir una nueva contraseña para tu cuenta.",
+      "fields": {
+        "current": "Contraseña actual",
+        "new": "Nueva contraseña",
+        "confirmation": "Confirmar nueva contraseña"
+      },
+      "placeholders": {
+        "current": "Escribe tu contraseña actual",
+        "new": "Escribe la nueva contraseña",
+        "confirmation": "Escribe la nueva contraseña otra vez"
+      },
+      "minimumLength": "Usa al menos {{count}} caracteres.",
+      "actions": {
+        "submit": "Cambiar contraseña"
+      },
+      "feedback": {
+        "success": "Contraseña cambiada correctamente.",
+        "currentPasswordRequired": "Escribe tu contraseña actual.",
+        "newPasswordRequired": "Escribe una nueva contraseña.",
+        "confirmationRequired": "Confirma tu nueva contraseña.",
+        "passwordMismatch": "Las nuevas contraseñas no coinciden.",
+        "passwordUnchanged": "La nueva contraseña debe ser diferente de la actual.",
+        "passwordTooShort": "La nueva contraseña debe tener al menos {{count}} caracteres.",
+        "currentPasswordIncorrect": "La contraseña actual es incorrecta. Revísala e inténtalo otra vez.",
+        "weakPassword": "Esta contraseña es demasiado débil. Elige una más segura.",
+        "sessionExpired": "Tu sesión caducó. Inicia sesión de nuevo e inténtalo otra vez.",
+        "providerRequired": "El cambio de contraseña solo está disponible para cuentas con acceso mediante correo y contraseña.",
+        "tooManyRequests": "Se hicieron demasiados intentos. Espera un momento e inténtalo otra vez.",
+        "networkFailed": "No se pudo conectar. Comprueba tu conexión a internet e inténtalo otra vez.",
+        "changeFailed": "No se pudo cambiar la contraseña. Inténtalo otra vez."
+      },
+      "accessibility": {
+        "toggleVisibility": "Mostrar u ocultar {{field}}"
+      }
+    }
+  },
+  "language": {
+    "title": "Idioma",
+    "description": "Elige el idioma de la aplicación.",
+    "current": "Idioma actual",
+    "chooseTitle": "Seleccionar idioma",
+    "options": {
+      "pt-BR": "Português",
+      "en": "English",
+      "es": "Español"
+    },
+    "errors": {
+      "changeFailed": "No se pudo guardar el idioma. Inténtalo de nuevo."
+    }
+  },
+  "units": {
+    "title": "Sistema de medidas",
+    "chooseTitle": "Seleccionar sistema de medidas",
+    "summary": {
+      "systemMetric": "Automático — Métrico",
+      "systemImperial": "Automático — Imperial",
+      "metric": "Métrico",
+      "imperial": "Imperial"
+    },
+    "options": {
+      "system": {
+        "label": "Automático",
+        "description": "Usa el sistema de la región del dispositivo"
+      },
+      "metric": {
+        "label": "Métrico",
+        "description": "kg • cm"
+      },
+      "imperial": {
+        "label": "Imperial",
+        "description": "lb • ft/in"
+      }
+    },
+    "errors": {
+      "changeFailed": "No se pudo guardar el sistema de medidas. Inténtalo de nuevo."
+    }
+  }
+}

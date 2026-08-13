@@ -1,0 +1,129 @@
+{
+  "meta": {
+    "todayLine": "{{weekday}} · {{month}} {{day}} · Week {{currentWeek}}/{{totalWeeks}}"
+  },
+  "greeting": {
+    "casual": "Hey,"
+  },
+  "ticker": {
+    "streak": "Streak",
+    "weekVolume": "Week volume",
+    "benchPr": "Bench PR",
+    "consistency": "Consistency",
+    "nextLevel": "Next level",
+    "daysUnit": "days",
+    "nextLevelValue": "—{{days}} DAYS"
+  },
+  "todayCard": {
+    "kicker": "Today's workout",
+    "meta": "{{duration}} min · {{exercises}} exercises · ~{{kcal}} kcal",
+    "start": "Start workout",
+    "confirm": {
+      "title": "Start workout?",
+      "question": "Do you want to start now",
+      "startNow": "Yes, start",
+      "notNow": "Not now",
+      "dismiss": "Close workout confirmation",
+      "accessibilityConfirm": "Confirm workout start"
+    }
+  },
+  "consistency": {
+    "title": "Consistency · week",
+    "progressLabel": "{{done}}/{{total}}",
+    "restLabel": "Off",
+    "dayInitials": ["S", "M", "T", "W", "T", "F", "S"]
+  },
+  "progress": {
+    "header": {
+      "period": "Progress · last 90 days",
+      "highlightLine1": "+12%",
+      "highlightLine2": "stronger."
+    },
+    "tabs": {
+      "loads": "Loads",
+      "weight": "Weight",
+      "photos": "Photos"
+    },
+    "charts": {
+      "loadTitle": "Bench press · max load",
+      "weightTitle": "Body weight",
+      "period": "12 wk",
+      "delta": "{{direction}} {{value}} {{unit}}"
+    },
+    "heatmap": {
+      "title": "Consistency calendar",
+      "period": "6 weeks",
+      "today": "Today"
+    },
+    "records": {
+      "title": "Recent records",
+      "benchPress": "Bench press",
+      "squat": "Squat",
+      "deadlift": "Deadlift",
+      "daysAgo": "{{count}} days ago",
+      "weekAgo_one": "{{count}} week ago",
+      "weekAgo_other": "{{count}} weeks ago",
+      "value": "{{value}} {{unit}}",
+      "gain": "+{{value}} {{unit}}"
+    },
+    "photos": {
+      "week": "Wk {{week}}",
+      "hint": "Drag your progress photos to the frames"
+    },
+    "units": {
+      "kg": "kg"
+    },
+    "accessibility": {
+      "selectTab": "Show {{tab}} progress"
+    }
+  },
+  "monthlyConsistency": {
+    "title": "Monthly consistency",
+    "month": "July",
+    "monthYear": "{{month}} {{year}}",
+    "remainingTitle": "Left to complete the month",
+    "daysRemaining_one": "day",
+    "daysRemaining_other": "days",
+    "pendingWorkouts_one": "workout",
+    "pendingWorkouts_other": "workouts",
+    "progress": "Day {{current}} of {{total}} · {{done}} workouts completed",
+    "legend": {
+      "done": "Workout done",
+      "today": "Today",
+      "pending": "To do",
+      "missed": "Missed",
+      "rest": "Rest"
+    },
+    "accessibility": {
+      "back": "Back from monthly consistency"
+    }
+  },
+  "stats": {
+    "streak": {
+      "label": "Streak",
+      "unit": "days",
+      "note": "personal record: 21"
+    },
+    "volume": {
+      "label": "Volume",
+      "unit": "ton",
+      "note": "+8% vs last week"
+    }
+  },
+  "upcoming": {
+    "title": "Upcoming workouts",
+    "meta": "{{duration}} min · {{exercises}} exercises",
+    "items": {
+      "pull": { "day": "Wed", "name": "PULL — Back & Biceps", "duration": 54, "exercises": 7 },
+      "legs": { "day": "Fri", "name": "LEGS — Quads & Glutes", "duration": 62, "exercises": 9 },
+      "upper": { "day": "Sat", "name": "UPPER — Light push", "duration": 45, "exercises": 6 }
+    }
+  },
+  "mock": {
+    "today": {
+      "type": "Push",
+      "focus": "Chest & shoulder",
+      "name": "Push — Chest & Shoulder"
+    }
+  }
+}
