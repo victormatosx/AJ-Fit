@@ -397,3 +397,74 @@ Definir:
 * plano de testes exploratórios
 
 Respeitando todas as regras deste documento.
+
+---
+
+# 26. Matriz automatizada iOS Promo SKU — Fase 10
+
+Esta matriz é exclusivamente **AUTOMATED / EMULATED**. Ela não representa
+compra Apple Sandbox, StoreKit real, webhook RevenueCat real nem validação de
+configuração remota.
+
+## Auditoria da cobertura anterior
+
+| Área | Estado anterior | Lacuna da Fase 10 | Ação |
+|---|---|---|---|
+| `validatePromoCode` | Existente e suficiente | Integração com Firestore real | Atravessado no Emulator |
+| `PromoCodeContext` | Existente e suficiente | Nenhuma | Preservado |
+| `subscriptionOffer` | Existente e suficiente | Identificadores atuais explícitos | Matriz reforçada |
+| Paywall/compra iOS | Existente, parcialmente estrutural | Ordem intent → compra e SKUs atuais | Asserções comportamentais reforçadas |
+| Intro Eligibility | Existente e suficiente | `NO_INTRO_OFFER_EXISTS` e duração explícitos | Regressões adicionadas |
+| `authorizePromoPurchase` | Existente e suficiente | Conexão com validação e webhook | Atravessado no Emulator |
+| `promoPurchaseIntent` | Existente, Emulator parcial | Reuso, intent expirada e ciclo completo | Emulator ampliado |
+| Webhook/attribution | Existente e suficiente | Produto normal com intent e mismatch inverso explícitos | Regressões adicionadas |
+| Subscription/Premium | Existente e suficiente | Estados de marketing explicitamente não autoritativos | Matriz do Premium Gate adicionada |
+| Firestore Rules | Existente, prova agregada | Campos sensíveis individualizados | Cinco writes diretos negados |
+| Android | Existente e suficiente na Fase 9 | Nenhuma | Suíte completa preservada |
+
+## Fluxos E2E-like no Emulator
+
+Para mensal e anual, a suíte executa:
+
+```txt
+promoCodes/ARNALDO
+→ validatePromoCodeHandler autenticado
+→ couponRedemptions/{uid}.iosPromotion snapshot
+→ authorizePromoPurchaseHandler({ plan })
+→ purchaseIntent purchase_pending
+→ INITIAL_PURCHASE sintético APP_STORE
+→ correlateApplePromoPurchaseIntent
+→ purchase_confirmed + lockedAt + trialStartedAt
+```
+
+O mesmo ambiente prova: mismatch mensal/anual sem consumo; retry do mesmo
+plano sem extensão do TTL; intent expirada substituível; intent ativa
+conflitante; dois dispositivos pelo mesmo UID; dois códigos concorrentes sem
+estado híbrido; catálogo vivo alterado sem modificar snapshot; revalidação do
+mesmo ou de outro cupom recusada após `lockedAt`; e consumo concorrente de um
+único intent por exatamente um evento.
+
+## Matriz geral
+
+| Cenário | validate | route | intent | purchase | webhook | attribution | Premium |
+|---|---|---|---|---|---|---|---|
+| iOS normal monthly | N/A | PASS | N/A | PASS | N/A | N/A | CustomerInfo |
+| iOS normal annual | N/A | PASS | N/A | PASS | N/A | N/A | CustomerInfo |
+| iOS promo monthly | PASS | PASS | PASS | PASS | PASS | PASS | CustomerInfo |
+| iOS promo annual | PASS | PASS | PASS | PASS | PASS | PASS | CustomerInfo |
+| cupom inválido | PASS | bloqueada | N/A | bloqueada | N/A | N/A | NÃO |
+| cupom consumido | bloqueada | N/A | bloqueada | bloqueada | N/A | preservada | CustomerInfo |
+| promo sem intent | N/A | N/A | ausente | N/A | PASS | `no_intent` | CustomerInfo |
+| monthly/annual mismatch | PASS | PASS | PASS | bloqueada/incorreta | PASS | `product_mismatch` | CustomerInfo |
+| normal com intent promo | N/A | standard | PASS | standard | PASS | `product_mismatch` | CustomerInfo |
+| intent expirada | N/A | promo | substituível | bloqueada no cliente | N/A | N/A | NÃO |
+| webhook duplicado | N/A | N/A | confirmada | N/A | PASS | `already_processed` | CustomerInfo |
+| CustomerInfo sem premium | N/A | qualquer | qualquer | processada | qualquer | qualquer | NÃO |
+| CustomerInfo com premium | N/A | qualquer | qualquer | processada | qualquer | qualquer | SIM |
+| Android promo monthly | PASS | PASS | N/A | `purchaseSubscriptionOption` | PASS | PASS | CustomerInfo |
+| Android promo annual | PASS | PASS | N/A | `purchaseSubscriptionOption` | PASS | PASS | CustomerInfo |
+
+Cupom, `iosPromotion`, `purchaseIntent`, `lockedAt`, `trialStartedAt` e
+attribution nunca entram como parâmetro de autoridade do Premium Gate. O
+único valor que chega como `isPremium` é derivado do entitlement ativo em
+CustomerInfo. `subscriptionSync.ts` permanece independente e inalterado.

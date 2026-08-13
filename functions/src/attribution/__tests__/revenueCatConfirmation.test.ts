@@ -576,6 +576,44 @@ describe('applyAttributionRevenueCatEvent — Apple purchase intent FASE 3', () 
     expect(transactionMocks.set).not.toHaveBeenCalled();
   });
 
+  it('a normal product with an active promo intent receives no campaign attribution', async () => {
+    mockRedemptionSnapshot(
+      true,
+      redemption({ iosPromotion: IOS_PROMOTION, purchaseIntent: promoIntent('monthly') }),
+    );
+
+    const result = await applyAttributionRevenueCatEvent(
+      UID,
+      initialPurchaseInput({
+        store: 'APP_STORE',
+        productId: 'ajfit_premium_monthly',
+        offerCode: undefined,
+      }),
+    );
+
+    expect(result).toEqual({ status: 'skipped', reason: 'product_mismatch' });
+    expect(transactionMocks.set).not.toHaveBeenCalled();
+  });
+
+  it('an annual intent cannot be consumed by the monthly promotional product', async () => {
+    mockRedemptionSnapshot(
+      true,
+      redemption({ iosPromotion: IOS_PROMOTION, purchaseIntent: promoIntent('annual') }),
+    );
+
+    const result = await applyAttributionRevenueCatEvent(
+      UID,
+      initialPurchaseInput({
+        store: 'APP_STORE',
+        productId: IOS_PROMOTION.monthlyProductId,
+        offerCode: undefined,
+      }),
+    );
+
+    expect(result).toEqual({ status: 'skipped', reason: 'product_mismatch' });
+    expect(transactionMocks.set).not.toHaveBeenCalled();
+  });
+
   it.each([
     ['product_mismatch', { productId: IOS_PROMOTION.annualProductId }],
     ['campaign_mismatch', { purchaseIntent: promoIntent('monthly', { campaignId: 'other' }) }],

@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type {
+  CustomerInfo,
   PACKAGE_TYPE,
   PurchasesOffering,
   PurchasesOfferings,
   PurchasesPackage,
 } from 'react-native-purchases';
 import {
+  classifyPurchaseResult,
   resolveIOSOfferingRoute,
   resolveIOSPromotionalCatalog,
   resolveIOSSubscriptionPackage,
@@ -214,5 +216,121 @@ describe('promotional iOS package resolution', () => {
     expect(
       resolvePromo(makeOfferings({ current, others: [makeOffering('promo_7d', [promoMonthly, duplicate])] }), 'monthly'),
     ).toEqual({ status: 'error', reason: 'promo_package_ambiguous' });
+  });
+});
+
+describe('FASE 10 — automated iOS architecture matrix', () => {
+  const defaultMonthly = makePackage(
+    'MONTHLY' as PACKAGE_TYPE,
+    'ajfit_premium_monthly',
+  );
+  const defaultAnnual = makePackage(
+    'ANNUAL' as PACKAGE_TYPE,
+    'ajfit_premium_annual',
+  );
+  const defaultOffering = makeOffering('default', [defaultMonthly, defaultAnnual]);
+  const phase10PromoMonthly = makePackage(
+    'MONTHLY' as PACKAGE_TYPE,
+    'ajfit_premium_monthly_promo',
+  );
+  const phase10PromoAnnual = makePackage(
+    'ANNUAL' as PACKAGE_TYPE,
+    'ajfit_premium_annual_promo',
+  );
+  const phase10PromoOffering = makeOffering('promo_7d', [
+    phase10PromoMonthly,
+    phase10PromoAnnual,
+  ]);
+  const phase10Authorization: IOSPromotionAuthorization = {
+    offeringIdentifier: 'promo_7d',
+    monthlyProductId: 'ajfit_premium_monthly_promo',
+    annualProductId: 'ajfit_premium_annual_promo',
+  };
+  const phase10Offerings = makeOfferings({
+    current: defaultOffering,
+    others: [phase10PromoOffering],
+  });
+
+  it.each([
+    ['monthly', defaultMonthly],
+    ['annual', defaultAnnual],
+  ] as const)(
+    'without a coupon, %s uses offerings.current (default fixture) and never a promotional SKU',
+    (plan, expected) => {
+      const result = resolveIOSSubscriptionPackage(
+        phase10Offerings,
+        resolveIOSOfferingRoute(null),
+        plan,
+      );
+
+      expect(result).toEqual({
+        status: 'resolved',
+        route: { kind: 'standard' },
+        offering: defaultOffering,
+        package: expected,
+      });
+      if (result.status === 'resolved') {
+        expect(result.offering.identifier).toBe('default');
+        expect(result.package.product.identifier).not.toContain('_promo');
+      }
+    },
+  );
+
+  it('a valid backend authorization selects promo_7d with the exact monthly and annual SKUs', () => {
+    expect(
+      resolveIOSPromotionalCatalog(
+        phase10Offerings,
+        resolveIOSOfferingRoute(phase10Authorization),
+      ),
+    ).toEqual({
+      status: 'resolved',
+      route: { kind: 'promotional', authorization: phase10Authorization },
+      offering: phase10PromoOffering,
+      monthlyPackage: phase10PromoMonthly,
+      annualPackage: phase10PromoAnnual,
+    });
+  });
+
+  it('an invalid coupon has no authorization and never accesses promo_7d', () => {
+    const routeFromPromoState = (state: { applied: { iosPromotion: unknown } | null }) =>
+      resolveIOSOfferingRoute(state.applied?.iosPromotion ?? null);
+    const route = routeFromPromoState({ applied: null });
+    const result = resolveIOSSubscriptionPackage(phase10Offerings, route, 'monthly');
+
+    expect(route).toEqual({ kind: 'standard' });
+    expect(result.status).toBe('resolved');
+    if (result.status === 'resolved') {
+      expect(result.offering).toBe(defaultOffering);
+      expect(result.offering).not.toBe(phase10PromoOffering);
+      expect(result.package.product.identifier).toBe('ajfit_premium_monthly');
+    }
+  });
+
+  it.each([
+    ['standard monthly', defaultMonthly],
+    ['standard annual', defaultAnnual],
+    ['promo monthly', phase10PromoMonthly],
+    ['promo annual', phase10PromoAnnual],
+  ] as const)('RevenueCat entitlement remains the only billing authority for %s', (_case, pkg) => {
+    const withoutPremium = {
+      entitlements: { active: {}, all: {} },
+    } as unknown as CustomerInfo;
+    const withPremium = {
+      entitlements: { active: { premium: {} }, all: { premium: {} } },
+    } as unknown as CustomerInfo;
+
+    expect(pkg.product.identifier).toBeTruthy();
+    expect(
+      classifyPurchaseResult(
+        { status: 'purchased', customerInfo: withoutPremium },
+        'premium',
+      ),
+    ).toBe('missing-entitlement');
+    expect(
+      classifyPurchaseResult(
+        { status: 'purchased', customerInfo: withPremium },
+        'premium',
+      ),
+    ).toBe('premium');
   });
 });

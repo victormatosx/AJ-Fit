@@ -67,6 +67,29 @@ describe('iOS Introductory Offer presentation', () => {
     });
   });
 
+  it('NO_INTRO_OFFER_EXISTS never promises trial and blocks a promo catalog that requires intro', () => {
+    const result = resolveIOSIntroOfferPresentation(pkg(freeTrial), {
+      status: 'no_intro_offer',
+    });
+    expect(result).toEqual({ kind: 'standard', reason: 'no_intro_offer' });
+    expect(resolveIOSPromoPurchaseReadiness(result)).toEqual({
+      status: 'blocked',
+      reason: 'intro_configuration',
+    });
+  });
+
+  it('derives duration from StoreKit cycles, periodNumberOfUnits and periodUnit', () => {
+    const result = resolveIOSIntroOfferPresentation(
+      pkg({ ...freeTrial, cycles: 2, periodNumberOfUnits: 3, periodUnit: 'WEEK' }),
+      { status: 'eligible' },
+    );
+
+    expect(result).toMatchObject({
+      kind: 'free_trial',
+      terms: { duration: { count: 6, unit: 'week' } },
+    });
+  });
+
   it('missing intro data is a blocked configuration inconsistency', () => {
     const result = resolveIOSIntroOfferPresentation(pkg(null), { status: 'eligible' });
     expect(result).toEqual({ kind: 'configuration_error', reason: 'intro_missing' });

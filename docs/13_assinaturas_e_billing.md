@@ -2315,3 +2315,65 @@ Product IDs Promo SKU não participam da seleção nem da correlação Android.
 intent. Cupom, option e attribution não concedem Premium; a autoridade
 client-side permanece `CustomerInfo.entitlements.active["premium"]`. Billing
 continua independente em `subscriptionSync.ts`.
+
+---
+
+# 44. Migração Promo SKU + Introductory Offer — FASE 10 (E2E-like automatizado)
+
+A Fase 10 é a barreira **AUTOMATED / EMULATED** anterior ao primeiro E2E
+Apple Sandbox. Nenhuma compra, folha StoreKit, webhook RevenueCat real ou
+configuração remota participa desta validação.
+
+No app, a matriz usa os identificadores atuais. Sem `iosPromotion`, mensal e
+anual resolvem exclusivamente de `offerings.current`, respectivamente para
+`ajfit_premium_monthly` e `ajfit_premium_annual`, mesmo quando
+`offerings.all["promo_7d"]` existe. O cliente não hardcoda o nome `default`:
+Current é a autoridade externa da rota standard. Com a autorização completa
+do backend, a rota usa somente `promo_7d`,
+`ajfit_premium_monthly_promo` e `ajfit_premium_annual_promo`, validando em
+conjunto Offering, `packageType` e Product ID, sem fallback.
+
+Intro Eligibility preserva os quatro estados reais. Trial gratuito só é
+comunicado para `ELIGIBLE` com `introPrice.price === 0` e duração válida
+derivada de `cycles × periodNumberOfUnits` e `periodUnit`. `INELIGIBLE` usa o
+preço regular do Promo SKU; `UNKNOWN`, erro, intro ausente/paga/malformada e
+`NO_INTRO_OFFER_EXISTS` não prometem trial e seguem a política fail-closed da
+Fase 5.
+
+Os testes do cliente provam a ordem obrigatória
+`authorizePromoPurchase({ plan })` → validação estrita da response/TTL →
+`purchasePackage(package promocional exato)`. UID, cupom, Offering, Product
+ID, campanha, status e timestamps nunca são enviados como autoridade. Mudança
+de UID, geração, cupom, plano ou package invalida o snapshot; o lock local é
+adquirido antes do primeiro `await`.
+
+No Firestore Emulator, os fluxos mensal e anual atravessam os módulos reais:
+
+```txt
+catálogo → validatePromoCodeHandler → redemption snapshot
+→ authorizePromoPurchaseHandler → purchase_pending
+→ webhook APP_STORE sintético → purchase_confirmed + attribution locked
+```
+
+Também ficam provados reuso bloqueado após `lockedAt` com o mesmo ou outro
+cupom, restart conceitual com estado client vazio, dois códigos concorrentes
+sem snapshot híbrido, dois dispositivos do mesmo UID, mensal/anual
+simultâneos, retry idempotente sem extensão, substituição de intent expirada,
+snapshot independente do catálogo vivo e consumo concorrente por exatamente
+um webhook.
+
+A matriz de webhook cobre mensal/mensal, anual/anual, os dois mismatches entre
+planos, Promo SKU sem intent, produto normal com intent promo, `offer_code`
+Apple sem fallback, timestamps anterior/expirado/ausente e limites inclusivos,
+evento duplicado e segundo evento contra intent consumida. Falha de attribution
+é resultado normal e não bloqueia billing.
+
+As Rules negam writes diretos do cliente em `couponRedemptions`,
+`purchaseIntent`, `lockedAt`, `trialStartedAt` e `convertedAt`. Android mantém
+`SubscriptionOption`/`purchaseSubscriptionOption` e correlação Google Play.
+`subscriptionSync.ts` não foi alterado.
+
+Cupom, `iosPromotion`, intent, timestamps e attribution não concedem Premium.
+A única autoridade client-side continua sendo
+`CustomerInfo.entitlements.active["premium"]`. Esta fase altera somente
+testes e documentação, sem Sandbox real, push, deploy ou mutação remota.

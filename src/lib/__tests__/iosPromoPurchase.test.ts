@@ -10,17 +10,19 @@ import {
 } from '../iosPromoPurchase';
 
 const expiresAt = '2030-01-01T00:10:00.000Z';
+const monthlyPromoProductId = 'ajfit_premium_monthly_promo';
+const annualPromoProductId = 'ajfit_premium_annual_promo';
 const attempt: IOSPromoPurchaseAttempt = {
   plan: 'monthly',
   authorization: {
     offeringIdentifier: 'promo_7d',
-    monthlyProductId: 'monthly_promo',
-    annualProductId: 'annual_promo',
+    monthlyProductId: monthlyPromoProductId,
+    annualProductId: annualPromoProductId,
   },
   package: {
     identifier: '$rc_monthly',
     packageType: 'MONTHLY',
-    product: { identifier: 'monthly_promo' },
+    product: { identifier: monthlyPromoProductId },
   } as PurchasesPackage,
 };
 const response = {
@@ -28,7 +30,7 @@ const response = {
   purchaseIntent: {
     plan: 'monthly' as const,
     offeringIdentifier: 'promo_7d',
-    expectedProductId: 'monthly_promo',
+    expectedProductId: monthlyPromoProductId,
     status: 'purchase_pending' as const,
     expiresAt,
   },
@@ -54,7 +56,7 @@ describe('iOS promotional purchase intent', () => {
     expect(
       parsePromoPurchaseIntentAuthorization({
         ...response,
-        purchaseIntent: { ...response.purchaseIntent, expectedProductId: ' monthly_promo' },
+        purchaseIntent: { ...response.purchaseIntent, expectedProductId: ` ${monthlyPromoProductId}` },
       }),
     ).toBeNull();
     expect(
@@ -63,12 +65,23 @@ describe('iOS promotional purchase intent', () => {
         purchaseIntent: { ...response.purchaseIntent, expiresAt: '2030-01-01' },
       }),
     ).toBeNull();
+    expect(parsePromoPurchaseIntentAuthorization({ ...response, authorized: false })).toBeNull();
+    const { expiresAt: _expiresAt, ...withoutExpiry } = response.purchaseIntent;
+    expect(
+      parsePromoPurchaseIntentAuthorization({ ...response, purchaseIntent: withoutExpiry }),
+    ).toBeNull();
+    expect(
+      parsePromoPurchaseIntentAuthorization({
+        ...response,
+        purchaseIntent: { ...response.purchaseIntent, unexpected: true },
+      }),
+    ).toBeNull();
   });
 
   it.each([
     ['plan_mismatch', { plan: 'annual' }],
     ['offering_mismatch', { offeringIdentifier: 'wrong' }],
-    ['product_mismatch', { expectedProductId: 'annual_promo' }],
+    ['product_mismatch', { expectedProductId: annualPromoProductId }],
     ['status_mismatch', { status: 'purchase_confirmed' }],
   ] as const)('fails closed on %s', (reason, overrides) => {
     const malformed = {
@@ -103,13 +116,15 @@ describe('iOS promotional purchase intent', () => {
   });
 
   it.each(['monthly', 'annual'] as const)('authorizes then purchases the exact %s promo package', async (plan) => {
+    const expectedProductId =
+      plan === 'monthly' ? monthlyPromoProductId : annualPromoProductId;
     const currentAttempt = {
       ...attempt,
       plan,
       package: {
         ...attempt.package,
         packageType: plan === 'monthly' ? 'MONTHLY' : 'ANNUAL',
-        product: { identifier: `${plan}_promo` },
+        product: { identifier: expectedProductId },
       } as PurchasesPackage,
     };
     const authorize = vi.fn().mockResolvedValue({
@@ -119,7 +134,7 @@ describe('iOS promotional purchase intent', () => {
         purchaseIntent: {
           ...response.purchaseIntent,
           plan,
-          expectedProductId: `${plan}_promo`,
+          expectedProductId,
         },
       },
     });
@@ -133,6 +148,9 @@ describe('iOS promotional purchase intent', () => {
     });
     expect(authorize).toHaveBeenCalledWith(plan);
     expect(purchase).toHaveBeenCalledWith(currentAttempt.package);
+    expect(authorize.mock.invocationCallOrder[0]).toBeLessThan(
+      purchase.mock.invocationCallOrder[0],
+    );
     expect(result).toEqual({ status: 'purchased', result: { status: 'cancelled' } });
   });
 

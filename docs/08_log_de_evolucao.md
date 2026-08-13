@@ -2103,3 +2103,35 @@ Assinatura:
 Codex — Agente QA; 2026-08-13; prompt AJ FIT FASE 9.
 
 ---
+
+Data: 2026-08-13
+Responsável: Codex — Agente QA
+Categoria: [TESTES]
+
+Descrição:
+Executada a Fase 10 da migração iOS Promo SKU + Introductory Offer como matriz
+E2E-like **AUTOMATED / EMULATED**, anterior ao E2E Sandbox real. A cobertura
+do app prova standard mensal/anual por `offerings.current` sem Promo SKU,
+autorização backend como única origem de `promo_7d`, Product IDs promocionais
+exatos, Intro Eligibility baseada em dados StoreKit/RevenueCat e ordem
+obrigatória de intent antes da compra simulada.
+
+Impacto:
+O Firestore Emulator atravessa catálogo, `validatePromoCode`, snapshot,
+`authorizePromoPurchase`, purchase intent e webhook sintético nos planos
+mensal e anual. Também cobre reuso após lock com mesmo/outro cupom, catálogo
+alterado após snapshot, intent expirada, dois códigos/dispositivos/planos
+concorrentes, mismatch e consumo atômico. Rules negam cada write sensível. A
+matriz do Premium Gate confirma que somente CustomerInfo concede acesso;
+Android e `subscriptionSync.ts` permanecem intactos. Nenhum arquivo de
+produção foi alterado e não houve compra real, push, deploy ou mutação remota.
+
+Próxima ação:
+Após validação humana dos gates, executar a Fase 11 / E2E iOS Sandbox real em
+roteiro próprio, observando Offering, termos StoreKit, purchase intent,
+webhook e CustomerInfo sem alterar a autoridade de billing.
+
+Assinatura:
+Codex — Agente QA; 2026-08-13; prompt AJ FIT FASE 10.
+
+---

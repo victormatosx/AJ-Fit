@@ -94,4 +94,17 @@ describe('resolvePremiumGate', () => {
     expect(resolve({ preferencesReconciling: false, hasQuestionnaire: false })).toBe('quiz');
     expect(resolve({ preferencesReconciling: false, isPremium: true })).toBe('app');
   });
+
+  it.each([
+    ['cupom válido', { couponCode: 'ARNALDO' }],
+    ['iosPromotion', { iosPromotion: { offeringIdentifier: 'promo_7d' } }],
+    ['purchase_pending', { purchaseIntent: { status: 'purchase_pending' } }],
+    ['lockedAt', { lockedAt: new Date() }],
+    ['trialStartedAt', { trialStartedAt: new Date() }],
+    ['attribution matched', { attribution: 'matched' }],
+    ['attribution no-match', { attribution: 'no_intent' }],
+  ])('FASE 10: %s não entra na autoridade do Premium Gate', (_label, marketingEvidence) => {
+    expect(resolve({ ...marketingEvidence, isPremium: false } as GateOverrides)).toBe('paywall');
+    expect(resolve({ ...marketingEvidence, isPremium: true } as GateOverrides)).toBe('app');
+  });
 });
