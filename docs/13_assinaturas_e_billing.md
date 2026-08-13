@@ -2191,3 +2191,42 @@ no baseline da Fase 5; portanto nenhum desses componentes compartilhados foi
 removido por associação nominal. A Fase 6 não faz deploy, push nem alteração
 de configuração remota. Ainda é obrigatória a validação E2E real da Fase 5 em
 Sandbox antes de qualquer declaração de prontidão para produção.
+
+---
+
+# 41. Migração Promo SKU + Introductory Offer — FASE 7 (auditoria residual)
+
+A Fase 7 auditou código, testes, configuração e documentação em busca de
+instrumentação criada para a antiga Redemption Sheet. A limpeza executável já
+estava quase integralmente concluída pela Fase 6:
+
+```txt
+appleOfferCodeSandboxTest — já ausente
+teste do sandbox override — já ausente
+presentCodeRedemptionSheet/redeemOfferCode — já ausentes em produção
+awaitCustomerInfoUpdate — já ausente em produção
+redemptionDiagnostics e eventos temporários — já ausentes
+AppState exclusivo da sheet — não existia no baseline
+```
+
+O único resíduo executável encontrado foi a flag local órfã
+`EXPO_PUBLIC_ENABLE_APPLE_OFFER_CODE_SANDBOX_TEST` no `.env`; ela foi removida.
+Não havia a flag em `.env.example`, `app.json`, `app.config.*`, `eas.json`,
+scripts ou código-fonte, e nenhum helper ainda a consumia.
+
+Os testes estruturais da Fase 6 que citam símbolos antigos como strings foram
+preservados: eles impedem a reintrodução da rota, não testam o comportamento
+morto. Também foram preservados o listener global identity-scoped de
+`CustomerInfo`, o refresh real de assinatura no foreground por `AppState` e
+os logs operacionais de billing, promo, purchase intent, attribution e
+webhook.
+
+O backend Apple histórico continua intencionalmente compatível, incluindo
+`appleOfferCorrelation`, snapshots/campos antigos e parsing do webhook.
+`storeConfig.ios` permanece como legado tipado sem consumo runtime no cliente.
+O novo caminho `iosPromotion` → Promo Offering/SKU → Intro Eligibility →
+`authorizePromoPurchase` → `purchasePackage` → `CustomerInfo`, assim como
+Android e `subscriptionSync.ts`, não sofreu alteração funcional.
+
+Esta fase não executa compra Sandbox, deploy, push nem mutação de configuração
+remota. O próximo passo continua sendo o E2E Sandbox controlado.

@@ -2012,3 +2012,34 @@ Assinatura:
 Codex — Agente App; 2026-08-13; prompt AJ FIT FASE 6.
 
 ---
+
+Data: 2026-08-13
+Responsável: Codex — Agente App
+Categoria: [AUDITORIA]
+
+Descrição:
+Executada a Fase 7 da migração iOS Promo SKU + Introductory Offer, dedicada à
+auditoria residual da antiga Redemption Sheet. Helpers, bypass de sandbox,
+testes comportamentais antigos, chamada da sheet, espera temporária de
+CustomerInfo e diagnostics específicos já estavam ausentes no baseline da
+Fase 6. A única ocorrência executável remanescente era a flag órfã
+`EXPO_PUBLIC_ENABLE_APPLE_OFFER_CODE_SANDBOX_TEST` no `.env` local; ela foi
+removida sem expor seu valor. A flag já estava ausente de `.env.example`,
+configuração Expo/EAS, scripts e código.
+
+Impacto:
+Nenhuma implementação de app ou Functions foi alterada. Foram preservados os
+testes estruturais de ausência da Fase 6, o listener global de CustomerInfo, o
+refresh legítimo por AppState, os logs permanentes de attribution/billing, o
+backend Apple legado, `storeConfig.ios` como wire tipado não consumido, o novo
+Promo SKU, Intro Eligibility, purchase intent, webhook, Android e
+`subscriptionSync.ts`. Não houve E2E, push, deploy nem mutação remota.
+
+Próxima ação:
+Executar a Fase 8 / E2E Sandbox controlado no iOS, sem declarar prontidão para
+produção antes da validação real de usuários elegível e inelegível.
+
+Assinatura:
+Codex — Agente App; 2026-08-13; prompt AJ FIT FASE 7.
+
+---
