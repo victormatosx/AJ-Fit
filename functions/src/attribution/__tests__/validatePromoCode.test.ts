@@ -370,6 +370,25 @@ describe('validatePromoCodeHandler — Fase 4C.1 android storeConfig', () => {
     });
   });
 
+  it('FASE 9: an Android-only campaign remains valid without iosPromotion or purchaseIntent', async () => {
+    catalogMocks.lookupPromoCode.mockResolvedValue({
+      status: 'found',
+      promoCode: promoCode({ iosPromotion: null }),
+    });
+
+    const result = await validatePromoCodeHandler(request({ code: 'ARNALDO', platform: 'ANDROID' }));
+
+    expect(result.storeConfig.android).toEqual({
+      monthly: { basePlanId: 'monthly', offerId: 'influencer-trial-7d' },
+      annual: { basePlanId: 'annual', offerId: 'influencer-trial-7d-annual' },
+    });
+    expect(result.iosPromotion).toBeNull();
+    const [, snapshot] = syncMocks.applyPromoCodeAttributionTransactionally.mock.calls[0];
+    expect(snapshot.androidOffer).toEqual(result.storeConfig.android);
+    expect(snapshot.iosPromotion).toBeNull();
+    expect(snapshot).not.toHaveProperty('purchaseIntent');
+  });
+
   it('D: monthly completely null → monthly null', async () => {
     catalogMocks.lookupPromoCode.mockResolvedValue({
       status: 'found',

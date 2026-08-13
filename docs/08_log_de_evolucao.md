@@ -2073,3 +2073,33 @@ Assinatura:
 Codex — Agente Backend + QA; 2026-08-13; prompt AJ FIT FASE 8.
 
 ---
+
+Data: 2026-08-13
+Responsável: Codex — Agente QA
+Categoria: [AUDITORIA]
+
+Descrição:
+Executada a Fase 9 da migração iOS Promo SKU + Introductory Offer como
+auditoria de regressão Android. O fluxo real permaneceu baseado em
+`validatePromoCode` → snapshot `androidOffer` → match exato de
+`SubscriptionOption` → `purchaseSubscriptionOption` → webhook `PLAY_STORE` →
+`correlateGooglePlayOffer`. Nenhum arquivo de produção foi alterado.
+
+Impacto:
+A cobertura passou a provar explicitamente Android standard e promocional
+mensal/anual, independência de `iosPromotion` e purchase intent, passagem da
+option exata ao SDK, campanha Android-only, roteamento por loja e fail-closed
+para loja desconhecida. Permaneceram intactos o uso Google Play de
+`offer_code`, admin Android, `subscriptionSync.ts`, Promo SKU iOS, Intro
+Eligibility e autoridade Premium exclusiva por CustomerInfo. Não houve E2E,
+push, deploy ou mutação remota.
+
+Próxima ação:
+Após validação humana, executar a Fase 10 / E2E Sandbox controlado conforme
+roteiro próprio, sem inferir equivalência entre as estratégias internas de
+iOS e Android.
+
+Assinatura:
+Codex — Agente QA; 2026-08-13; prompt AJ FIT FASE 9.
+
+---

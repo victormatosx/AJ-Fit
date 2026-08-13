@@ -2273,3 +2273,45 @@ idempotência, Intro Eligibility fail-closed, `purchasePackage`, logs permanente
 de attribution, `subscriptionSync.ts`, `CustomerInfo` como única autoridade
 Premium e Android com `SubscriptionOption`, `offerToken`,
 `purchaseSubscriptionOption` e `googlePlayOfferCorrelation`.
+
+---
+
+# 43. Migração Promo SKU + Introductory Offer — FASE 9 (preservação Android)
+
+A Fase 9 auditou o fluxo promocional Android como regressão, sem migrá-lo para
+a arquitetura criada para iOS e sem alterar código de produção. A separação
+atual é deliberada:
+
+```txt
+iOS
+validatePromoCode → iosPromotion → Promo SKU → Intro Eligibility
+→ authorizePromoPurchase → purchaseIntent → purchasePackage
+→ correlateApplePromoPurchaseIntent
+
+Android
+validatePromoCode → androidOffer → SubscriptionOption exata
+→ purchaseSubscriptionOption → Google Play/RevenueCat
+→ correlateGooglePlayOffer
+```
+
+No Android, o backend autoriza somente o par `basePlanId`/`offerId` de cada
+plano. O cliente compara a identidade exata
+`basePlanId:offerId` e o `storeProductId` contra as opções reais retornadas
+pelo RevenueCat. Zero match, mais de um match, oferta ausente ou plano
+incompatível bloqueiam a rota promocional sem escolher por posição, preço,
+trial ou tag. A `SubscriptionOption` resolvida é entregue inteira a
+`Purchases.purchaseSubscriptionOption`; o app não recebe nem fabrica um
+`offerToken` textual. A resolução final do token é responsabilidade da camada
+nativa RevenueCat/Google Play a partir da option real.
+
+O webhook roteia `PLAY_STORE` somente para `correlateGooglePlayOffer`, usando
+o `basePlanId` extraído de `product_id`, o `offer_code` real e o snapshot
+`androidOffer`. `APP_STORE` usa somente purchase intent; lojas desconhecidas
+falham fechadas. `iosPromotion`, purchase intent, Intro Eligibility e os
+Product IDs Promo SKU não participam da seleção nem da correlação Android.
+
+`validatePromoCode` continua aceitando campanha Android-only com
+`iosPromotion: null`, grava `androidOffer` no redemption e não exige purchase
+intent. Cupom, option e attribution não concedem Premium; a autoridade
+client-side permanece `CustomerInfo.entitlements.active["premium"]`. Billing
+continua independente em `subscriptionSync.ts`.

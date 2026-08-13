@@ -431,6 +431,47 @@ describe('applyAttributionRevenueCatEvent — INITIAL_PURCHASE', () => {
     expect(payload).toMatchObject({ trialStartedAt: expect.any(Timestamp) });
   });
 
+  it('FASE 9: PLAY_STORE ignores iOS purchase state and correlates only the Android snapshot', async () => {
+    mockRedemptionSnapshot(
+      true,
+      redemption({ iosPromotion: IOS_PROMOTION, purchaseIntent: promoIntent() }),
+    );
+
+    const result = await applyAttributionRevenueCatEvent(
+      UID,
+      initialPurchaseInput({
+        store: 'PLAY_STORE',
+        productId: 'ajfit_premium:monthly',
+        offerCode: 'influencer-trial-7d',
+        periodType: 'TRIAL',
+      }),
+    );
+
+    expect(result).toEqual({ status: 'confirmed' });
+    const [, payload] = transactionMocks.set.mock.calls[0];
+    expect(payload).toMatchObject({ trialStartedAt: expect.any(Timestamp) });
+    expect(payload).not.toHaveProperty('purchaseIntent');
+  });
+
+  it('FASE 9: an unsupported store cannot invoke either platform correlation', async () => {
+    mockRedemptionSnapshot(
+      true,
+      redemption({ iosPromotion: IOS_PROMOTION, purchaseIntent: promoIntent() }),
+    );
+
+    const result = await applyAttributionRevenueCatEvent(
+      UID,
+      initialPurchaseInput({
+        store: 'STRIPE',
+        productId: 'ajfit_premium:monthly',
+        offerCode: 'influencer-trial-7d',
+      }),
+    );
+
+    expect(result).toEqual({ status: 'skipped', reason: 'offer_not_matched' });
+    expect(transactionMocks.set).not.toHaveBeenCalled();
+  });
+
   it('redemption legado sem androidOffer + compra normal → não confirma (AI)', async () => {
     mockRedemptionSnapshot(
       true,

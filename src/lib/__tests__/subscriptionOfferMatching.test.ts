@@ -576,4 +576,61 @@ describe('Android routing remains isolated and fail-closed', () => {
       MONTHLY_OFFER,
     );
   });
+
+  it.each([
+    ['monthly', 'MONTHLY', MONTHLY_OFFER, 'monthly:influencer-trial-7d'],
+    ['annual', 'ANNUAL', ANNUAL_OFFER, 'annual:influencer-trial-7d-annual'],
+  ] as const)(
+    'FASE 9: %s keeps the same exact Android option with or without iOS-only state',
+    (_plan, packageType, authorizedOffer, optionId) => {
+      const option = makeOption({ id: optionId });
+      const pkg = makePackage({
+        packageType: packageType as PACKAGE_TYPE,
+        subscriptionOptions: [option],
+      });
+      const androidStoreConfig = { monthly: MONTHLY_OFFER, annual: ANNUAL_OFFER };
+      const mixedPlatformState = {
+        androidStoreConfig,
+        iosPromotion: {
+          offeringIdentifier: 'promo_7d',
+          monthlyProductId: 'ajfit_premium_monthly_promo',
+          annualProductId: 'ajfit_premium_annual_promo',
+        },
+        purchaseIntent: {
+          status: 'purchase_pending',
+          expectedProductId: 'ajfit_premium_monthly_promo',
+        },
+      };
+
+      const withoutIOSState = resolvePurchaseRoute(
+        pkg,
+        true,
+        resolveAuthorizedAndroidOffer(pkg, androidStoreConfig),
+      );
+      const withIOSState = resolvePurchaseRoute(
+        pkg,
+        true,
+        resolveAuthorizedAndroidOffer(pkg, mixedPlatformState.androidStoreConfig),
+      );
+
+      expect(resolveAuthorizedAndroidOffer(pkg, mixedPlatformState.androidStoreConfig)).toEqual(
+        authorizedOffer,
+      );
+      expect(withIOSState).toEqual(withoutIOSState);
+      expect(withIOSState).toEqual({ kind: 'subscription_option', option });
+      expect(JSON.stringify(withIOSState)).not.toContain('_promo');
+    },
+  );
+
+  it.each(['MONTHLY', 'ANNUAL'] as const)(
+    'FASE 9: standard Android %s remains a package purchase when no promo is applied',
+    (packageType) => {
+      const pkg = makePackage({
+        packageType: packageType as PACKAGE_TYPE,
+        subscriptionOptions: [makeOption({ id: packageType.toLowerCase() })],
+      });
+
+      expect(resolvePurchaseRoute(pkg, false, null)).toEqual({ kind: 'package', package: pkg });
+    },
+  );
 });
