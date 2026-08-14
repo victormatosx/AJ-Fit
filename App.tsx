@@ -23,7 +23,7 @@ import { resolvePremiumGate, type RootScreenId } from './src/lib/premiumGate';
 import { PhotoVaultProvider } from './src/state/PhotoVaultContext';
 import { addQuestionnaire } from './src/services/userProfile';
 import { logAuthError } from './src/services/auth';
-import { configureRevenueCat, logRevenueCatError } from './src/services/revenueCatService';
+import { configureRevenueCat } from './src/services/revenueCatService';
 import { SplashScreen } from './src/screens/SplashScreen';
 import { OnboardingScreen } from './src/screens/OnboardingScreen';
 import { QuizScreen } from './src/screens/QuizScreen';
@@ -42,6 +42,7 @@ import { reconcileUnitsOnLoad } from './src/units/syncUnits';
 import { UnitsProvider } from './src/state/UnitsContext';
 import { cleanupPhotoVaultTempFiles } from './src/services/photoVaultFileCrypto';
 import { logPhotoVaultIssue } from './src/lib/photoVaultErrors';
+import { logInfo } from './src/lib/logger';
 
 /**
  * Configures the RevenueCat SDK at module evaluation time — the same
@@ -64,7 +65,9 @@ import { logPhotoVaultIssue } from './src/lib/photoVaultErrors';
  * is idempotent, so this line re-running under Fast Refresh (editing this
  * file re-executes its top-level code) is harmless.
  */
-configureRevenueCat().catch((err) => logRevenueCatError('bootstrap', err));
+configureRevenueCat().catch(() => {
+  // configureRevenueCat already emitted the sanitized root-cause error.
+});
 
 function SubscriptionResolutionError({
   message,
@@ -208,6 +211,37 @@ function RootNavigator() {
     subscriptionConfigured,
     isPremium,
   });
+
+  useEffect(() => {
+    logInfo('subscription', 'navigation_gate_evaluated', {
+      uid: user?.uid,
+      requestedScreen: screen,
+      resolvedScreen: resolvedScreen ?? 'unresolved',
+      authInitializing: initializing,
+      profileLoading,
+      authenticated: Boolean(user),
+      emailVerificationRequired,
+      preferencesReconciling,
+      hasQuestionnaire: Boolean(questionnaire),
+      subscriptionLoading,
+      subscriptionConfigured,
+      subscriptionStatus,
+      isPremium,
+    });
+  }, [
+    user?.uid,
+    screen,
+    resolvedScreen,
+    initializing,
+    profileLoading,
+    emailVerificationRequired,
+    preferencesReconciling,
+    questionnaire,
+    subscriptionLoading,
+    subscriptionConfigured,
+    subscriptionStatus,
+    isPremium,
+  ]);
 
   // Keep the requested screen aligned with the centrally resolved route so
   // logout/account switches continue from the effective screen, while still

@@ -15,6 +15,7 @@ import type {
   SubscriptionErrorKind,
   SubscriptionFailure,
 } from '../lib/subscriptionLifecycle';
+import { logError, logInfo } from '../lib/logger';
 
 /**
  * RevenueCat infrastructure (docs/13_assinaturas_e_billing.md).
@@ -49,15 +50,6 @@ function currentApiKey(): string | undefined {
   return Platform.OS === 'ios' ? REVENUECAT_IOS_API_KEY : REVENUECAT_ANDROID_API_KEY;
 }
 
-function sanitizedErrorMessage(err: unknown): string {
-  const raw = err instanceof Error ? err.message : String(err);
-  return raw
-    .replace(/[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/g, '[redacted-email]')
-    .replace(/\$RCAnonymousID:[\w-]+/g, '$RCAnonymousID:[redacted]')
-    .replace(/\b[A-Za-z0-9_-]{16,}\b/g, '[redacted-id]')
-    .slice(0, 240);
-}
-
 export function maskSubscriptionUid(uid: string | null | undefined): string | undefined {
   if (!uid) return undefined;
   if (uid.length <= 6) return '***';
@@ -65,18 +57,11 @@ export function maskSubscriptionUid(uid: string | null | undefined): string | un
 }
 
 export function logSubscriptionEvent(event: string, uid?: string | null): void {
-  console.info('[subscription]', {
-    event,
-    uid: maskSubscriptionUid(uid),
-  });
+  logInfo('subscription', event, { uid: maskSubscriptionUid(uid) });
 }
 
 export function logRevenueCatError(scope: string, err: unknown): void {
-  const code =
-    typeof err === 'object' && err !== null && 'code' in err
-      ? String((err as { code: unknown }).code)
-      : undefined;
-  console.error(`[revenueCat:${scope}]`, { code, message: sanitizedErrorMessage(err) });
+  logError(`revenueCat:${scope}`, err);
 }
 
 export function classifyRevenueCatFailure(err: unknown): SubscriptionFailure {
@@ -182,12 +167,18 @@ export function configureRevenueCat(): Promise<void> {
   // SDK-internal log verbosity only. Deliberately fire-and-forget and AFTER
   // `configure()`: it doesn't require prior configuration and must never
   // delay or fail the shared configuration promise other functions depend on.
-  Purchases.setLogLevel(__DEV__ ? LOG_LEVEL.DEBUG : LOG_LEVEL.ERROR).catch((err) =>
+  Purchases.setLogLevel(revenueCatLogLevel()).catch((err) =>
     logRevenueCatError('configure:setLogLevel', err),
   );
 
   configurationPromise = Promise.resolve();
   return configurationPromise;
+}
+
+export function revenueCatLogLevel(): LOG_LEVEL {
+  const debugEnabled =
+    __DEV__ && process.env.EXPO_PUBLIC_REVENUECAT_DEBUG_LOGS === '1';
+  return debugEnabled ? LOG_LEVEL.DEBUG : LOG_LEVEL.WARN;
 }
 
 /**
@@ -216,7 +207,14 @@ function ensureConfigured(): Promise<void> {
 export async function loginRevenueCat(uid: string): Promise<CustomerInfo> {
   try {
     await ensureConfigured();
+    logInfo('subscription', 'revenuecat_login_requested', { uid });
     const { customerInfo } = await Purchases.logIn(uid);
+    logInfo('subscription', 'revenuecat_login_resolved', {
+      uid,
+      originalAppUserId: customerInfo.originalAppUserId,
+      premiumActive: Boolean(customerInfo.entitlements.active[PREMIUM_ENTITLEMENT_ID]),
+      requestDate: customerInfo.requestDate,
+    });
     return customerInfo;
   } catch (err) {
     logRevenueCatError('login', err);
@@ -233,10 +231,17 @@ export async function loginRevenueCat(uid: string): Promise<CustomerInfo> {
 export async function logoutRevenueCat(): Promise<void> {
   try {
     await ensureConfigured();
+    // Firebase resolving to `null` also happens on a signed-out cold start.
+    // In that case RevenueCat may already own an anonymous App User ID and
+    // `logOut()` would be both unnecessary and invalid. Read the SDK's actual
+    // identity state instead of inferring it from Firebase.
+    if (await Purchases.isAnonymous()) return;
+
     await Purchases.logOut();
   } catch (err) {
-    // Calling logOut while the persisted SDK identity is already anonymous is
-    // an idempotent signed-out state for this app, not a lifecycle failure.
+    // Defensive fallback for an identity change outside this app-owned queue
+    // between `isAnonymous()` and `logOut()`. The normal anonymous path is
+    // handled proactively above and never invokes `logOut()`.
     if (
       typeof err === 'object' &&
       err !== null &&
@@ -350,7 +355,7 @@ export async function checkIOSIntroEligibility(
       acc[state.status] = (acc[state.status] ?? 0) + 1;
       return acc;
     }, {});
-    console.info('[subscription]', { event: 'intro_eligibility_checked', counts });
+    logInfo('subscription', 'intro_eligibility_checked', { counts });
     return mapped;
   } catch (err) {
     logRevenueCatError('introEligibility', err);

@@ -37,6 +37,7 @@ import {
   refreshEmailVerificationStatus,
   sendVerificationEmail,
 } from '../services/emailVerification';
+import { logInfo } from '../lib/logger';
 
 type AuthCtx = {
   /** Current authenticated user (Firebase Auth), or null when signed out. */
@@ -137,6 +138,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const unsubscribe = subscribeToAuthState(async (nextUser) => {
       const authSeq = ++authStateSeq.current;
       setUser(nextUser);
+      logInfo('auth', 'auth_state_resolved', {
+        uid: nextUser?.uid,
+        authenticated: Boolean(nextUser),
+      });
 
       if (!nextUser) {
         clearUserState();

@@ -9,13 +9,16 @@ vi.mock('react-native', () => ({ Platform: mockPlatform }));
 const purchasesMocks = vi.hoisted(() => ({
   configure: vi.fn(),
   setLogLevel: vi.fn().mockResolvedValue(undefined),
+  isAnonymous: vi.fn(),
+  logOut: vi.fn(),
+  logIn: vi.fn(),
   checkTrialOrIntroductoryPriceEligibility: vi.fn(),
   purchaseSubscriptionOption: vi.fn(),
 }));
 
 vi.mock('react-native-purchases', () => ({
   default: purchasesMocks,
-  LOG_LEVEL: { DEBUG: 'DEBUG', ERROR: 'ERROR' },
+  LOG_LEVEL: { DEBUG: 'DEBUG', WARN: 'WARN', ERROR: 'ERROR' },
   PURCHASES_ERROR_CODE: {
     PURCHASE_CANCELLED_ERROR: 'PURCHASE_CANCELLED_ERROR',
     NETWORK_ERROR: 'NETWORK_ERROR',
@@ -35,9 +38,123 @@ vi.mock('react-native-purchases', () => ({
 process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY = 'test-ios-key';
 process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY = 'test-android-key';
 
-const { checkIOSIntroEligibility, purchaseSubscriptionOption } = await import(
-  '../revenueCatService'
-);
+const {
+  checkIOSIntroEligibility,
+  loginRevenueCat,
+  logoutRevenueCat,
+  purchaseSubscriptionOption,
+  revenueCatLogLevel,
+} = await import('../revenueCatService');
+
+describe('RevenueCat identity cleanup', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockPlatform.OS = 'ios';
+  });
+
+  it('does not call logOut when Firebase is signed out and RevenueCat is already anonymous', async () => {
+    purchasesMocks.isAnonymous.mockResolvedValue(true);
+
+    await expect(logoutRevenueCat()).resolves.toBeUndefined();
+
+    expect(purchasesMocks.isAnonymous).toHaveBeenCalledOnce();
+    expect(purchasesMocks.logOut).not.toHaveBeenCalled();
+  });
+
+  it('allows the next authenticated Firebase UID to log in after the anonymous no-op', async () => {
+    purchasesMocks.isAnonymous.mockResolvedValue(true);
+    purchasesMocks.logIn.mockResolvedValue({
+      customerInfo: {
+        originalAppUserId: 'firebase-user-a',
+        requestDate: '2026-08-13T12:00:00Z',
+        entitlements: { active: {}, all: {} },
+      },
+    });
+
+    await logoutRevenueCat();
+    await loginRevenueCat('firebase-user-a');
+
+    expect(purchasesMocks.logOut).not.toHaveBeenCalled();
+    expect(purchasesMocks.logIn).toHaveBeenCalledWith('firebase-user-a');
+  });
+
+  it('still logs out an identified RevenueCat user', async () => {
+    purchasesMocks.isAnonymous.mockResolvedValue(false);
+    purchasesMocks.logOut.mockResolvedValue({});
+
+    await expect(logoutRevenueCat()).resolves.toBeUndefined();
+
+    expect(purchasesMocks.isAnonymous).toHaveBeenCalledOnce();
+    expect(purchasesMocks.logOut).toHaveBeenCalledOnce();
+  });
+
+  it('keeps an account switch ordered: clears the identified user before logging in the next Firebase UID', async () => {
+    purchasesMocks.isAnonymous.mockResolvedValue(false);
+    purchasesMocks.logOut.mockResolvedValue({});
+    purchasesMocks.logIn.mockResolvedValue({
+      customerInfo: {
+        originalAppUserId: 'firebase-user-b',
+        requestDate: '2026-08-13T12:00:00Z',
+        entitlements: { active: {}, all: {} },
+      },
+    });
+
+    await logoutRevenueCat();
+    await loginRevenueCat('firebase-user-b');
+
+    expect(purchasesMocks.logOut).toHaveBeenCalledOnce();
+    expect(purchasesMocks.logIn).toHaveBeenCalledOnce();
+    expect(purchasesMocks.logIn).toHaveBeenCalledWith('firebase-user-b');
+    expect(purchasesMocks.logOut.mock.invocationCallOrder[0]).toBeLessThan(
+      purchasesMocks.logIn.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('forwards a direct identified-account switch to RevenueCat in UID order', async () => {
+    purchasesMocks.logIn
+      .mockResolvedValueOnce({
+        customerInfo: {
+          originalAppUserId: 'firebase-user-a',
+          requestDate: '2026-08-13T12:00:00Z',
+          entitlements: { active: {}, all: {} },
+        },
+      })
+      .mockResolvedValueOnce({
+        customerInfo: {
+          originalAppUserId: 'firebase-user-b',
+          requestDate: '2026-08-13T12:01:00Z',
+          entitlements: { active: {}, all: {} },
+        },
+      });
+
+    await loginRevenueCat('firebase-user-a');
+    await loginRevenueCat('firebase-user-b');
+
+    expect(purchasesMocks.logIn.mock.calls).toEqual([
+      ['firebase-user-a'],
+      ['firebase-user-b'],
+    ]);
+    expect(purchasesMocks.logOut).not.toHaveBeenCalled();
+  });
+});
+
+describe('RevenueCat logging policy', () => {
+  beforeEach(() => {
+    delete process.env.EXPO_PUBLIC_REVENUECAT_DEBUG_LOGS;
+    (globalThis as unknown as { __DEV__: boolean }).__DEV__ = false;
+  });
+
+  it('keeps production at WARN so warnings and errors remain observable', () => {
+    expect(revenueCatLogLevel()).toBe('WARN');
+  });
+
+  it('requires an explicit development opt-in for DEBUG', () => {
+    (globalThis as unknown as { __DEV__: boolean }).__DEV__ = true;
+    expect(revenueCatLogLevel()).toBe('WARN');
+    process.env.EXPO_PUBLIC_REVENUECAT_DEBUG_LOGS = '1';
+    expect(revenueCatLogLevel()).toBe('DEBUG');
+  });
+});
 
 describe('checkIOSIntroEligibility', () => {
   beforeEach(() => {

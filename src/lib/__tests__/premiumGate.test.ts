@@ -91,6 +91,31 @@ describe('resolvePremiumGate', () => {
     expect(resolve({ requestedScreen: 'app' })).toBe('paywall');
   });
 
+  it('mantém EXPIRED/inativo no Paywall independentemente do histórico da assinatura', () => {
+    const expiredMirror = {
+      status: 'EXPIRED',
+      entitlementActive: false,
+      currentPeriodEndsAt: new Date('2026-08-12T12:00:00Z'),
+    };
+
+    expect(resolve({ ...expiredMirror, isPremium: false } as GateOverrides)).toBe('paywall');
+  });
+
+  it('não usa canceledAt para antecipar a perda de acesso; o entitlement continua soberano', () => {
+    const canceledWithinActivePeriod = {
+      status: 'CANCELED',
+      canceledAt: new Date('2026-08-13T12:00:00Z'),
+      currentPeriodEndsAt: new Date('2026-08-20T12:00:00Z'),
+    };
+
+    expect(resolve({ ...canceledWithinActivePeriod, isPremium: true } as GateOverrides)).toBe(
+      'app',
+    );
+    expect(resolve({ ...canceledWithinActivePeriod, isPremium: false } as GateOverrides)).toBe(
+      'paywall',
+    );
+  });
+
   it('I) preferencesReconciling segura o gate mesmo com Premium já ativo — nunca expõe AppShell antes da reconciliação terminar', () => {
     expect(resolve({ preferencesReconciling: true, isPremium: true })).toBeNull();
     expect(resolve({ preferencesReconciling: true })).toBeNull();

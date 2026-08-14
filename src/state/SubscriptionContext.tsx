@@ -26,7 +26,6 @@ import {
   purchasePackage as purchasePackageService,
   purchaseSubscriptionOption as purchaseSubscriptionOptionService,
   restorePurchases as restorePurchasesService,
-  logRevenueCatError,
   isOfflineError,
   isOfferingsUnavailableError,
   classifyRevenueCatFailure,
@@ -45,6 +44,7 @@ import {
   type SubscriptionLifecycleEvent,
   type SubscriptionPhase,
 } from '../lib/subscriptionLifecycle';
+import { logInfo } from '../lib/logger';
 
 /**
  * RevenueCat state context (docs/13_assinaturas_e_billing.md).
@@ -203,6 +203,13 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
         }
         refreshSeq.current += 1;
         logSubscriptionEvent('customer_info_listener_update', listenerUid);
+        logInfo('subscription', 'customer_info_evaluated', {
+          uid: listenerUid,
+          originalAppUserId: info.originalAppUserId,
+          source: 'listener',
+          premiumActive: Boolean(info.entitlements.active[PREMIUM_ENTITLEMENT_ID]),
+          requestDate: info.requestDate,
+        });
         applyLifecycleEvent({
           type: 'customer-info-updated',
           uid: listenerUid,
@@ -262,6 +269,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
         ) {
           return;
         }
+        logInfo('subscription', 'revenuecat_configuration_ready', { uid: identityUid });
 
         applyLifecycleEvent({
           type: 'identity-sync-started',
@@ -284,6 +292,13 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
             );
             return;
           }
+          logInfo('subscription', 'customer_info_evaluated', {
+            uid: identityUid,
+            originalAppUserId: info.originalAppUserId,
+            source: 'login',
+            premiumActive: Boolean(info.entitlements.active[PREMIUM_ENTITLEMENT_ID]),
+            requestDate: info.requestDate,
+          });
           syncedUid.current = identityUid;
           applyLifecycleEvent({
             type: 'identity-resolved',
@@ -320,7 +335,6 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
         }
         // Without CustomerInfo confirmed for this exact Firebase UID, access
         // stays unresolved. No prior identity snapshot is retained.
-        logRevenueCatError('context:sync', err);
         applyLifecycleEvent({
           type: 'identity-failed',
           uid: identityUid,
@@ -386,6 +400,13 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
             logSubscriptionEvent('subscription_snapshot_discarded_stale_identity', refreshUid);
             return;
           }
+          logInfo('subscription', 'customer_info_evaluated', {
+            uid: refreshUid,
+            originalAppUserId: info.originalAppUserId,
+            source: 'refresh',
+            premiumActive: Boolean(info.entitlements.active[PREMIUM_ENTITLEMENT_ID]),
+            requestDate: info.requestDate,
+          });
           applyLifecycleEvent({
             type: 'customer-info-updated',
             uid: refreshUid,
@@ -401,7 +422,6 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
           ) {
             return;
           }
-          logRevenueCatError('context:refresh', err);
           logSubscriptionEvent('customer_info_refresh_failed', refreshUid);
           applyLifecycleEvent({
             type: 'refresh-failed',
