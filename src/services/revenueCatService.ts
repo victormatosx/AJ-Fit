@@ -15,6 +15,7 @@ import { PREMIUM_ENTITLEMENT_ID } from '../lib/subscriptionConstants';
 import type {
   SubscriptionErrorKind,
   SubscriptionFailure,
+  SubscriptionRevalidationSignal,
 } from '../lib/subscriptionLifecycle';
 import { logError, logInfo } from '../lib/logger';
 
@@ -282,6 +283,33 @@ export async function getCustomerInfo(): Promise<CustomerInfo> {
  */
 export async function refreshCustomerInfo(): Promise<CustomerInfo> {
   return getCustomerInfo();
+}
+
+export type SubscriptionSignal = SubscriptionRevalidationSignal & {
+  expirationDate: string | null;
+};
+
+/**
+ * Reduces a full `CustomerInfo` down to the fields the post-manage
+ * revalidation window (SubscriptionContext) and diagnostic logging actually
+ * need. Reads the premium entitlement the same way `resolveStatus`
+ * (lib/subscriptionCenter.ts) does — active entitlement first, falling back
+ * to the last-known one for `willRenew`/`unsubscribeDetectedAt` — but this
+ * function is deliberately kept independent of `resolveSubscriptionCenterModel`:
+ * it has no Offerings/mirror inputs and does not decide UI status, only
+ * extracts the raw signal used to detect "did anything renewal-relevant
+ * change" and to log it safely (never the full CustomerInfo/receipt data).
+ */
+export function extractSubscriptionSignal(info: CustomerInfo | null): SubscriptionSignal | null {
+  if (!info) return null;
+  const activeEntitlement = info.entitlements.active[PREMIUM_ENTITLEMENT_ID] ?? null;
+  const entitlement = activeEntitlement ?? info.entitlements.all[PREMIUM_ENTITLEMENT_ID] ?? null;
+  return {
+    premiumActive: Boolean(activeEntitlement),
+    willRenew: typeof entitlement?.willRenew === 'boolean' ? entitlement.willRenew : null,
+    unsubscribeDetected: Boolean(entitlement?.unsubscribeDetectedAt),
+    expirationDate: entitlement?.expirationDate ?? null,
+  };
 }
 
 /**

@@ -3,6 +3,8 @@ import { resolvePremiumGate } from '../premiumGate';
 import {
   createIdentityScopedSingleFlight,
   createInitialSubscriptionLifecycleState,
+  hasMeaningfulSubscriptionChange,
+  POST_MANAGE_REVALIDATION_DELAYS_MS,
   reduceSubscriptionLifecycle,
   selectIdentityCustomerInfo,
   shouldRevalidateOnAppStateChange,
@@ -372,5 +374,48 @@ describe('Fase 3 — persistência e revalidação Premium A–AA', () => {
     const firestoreMirror = { entitlementActive: false };
     expect(firestoreMirror.entitlementActive).toBe(false);
     expect(route(resolved('A', 1, premium('A')), 'A')).toBe('app');
+  });
+});
+
+describe('hasMeaningfulSubscriptionChange — post-manage revalidation window', () => {
+  const activeRenewing = { premiumActive: true, willRenew: true, unsubscribeDetected: false };
+  const activeCanceled = { premiumActive: true, willRenew: false, unsubscribeDetected: true };
+  const expired = { premiumActive: false, willRenew: null, unsubscribeDetected: false };
+
+  it('no baseline (identity not resolved yet) never reports a change — fail-safe', () => {
+    expect(hasMeaningfulSubscriptionChange(null, activeCanceled)).toBe(false);
+  });
+
+  it('identical signal is not a change', () => {
+    expect(hasMeaningfulSubscriptionChange(activeRenewing, { ...activeRenewing })).toBe(false);
+  });
+
+  it('willRenew flipping to false is the cancellation signal', () => {
+    expect(hasMeaningfulSubscriptionChange(activeRenewing, activeCanceled)).toBe(true);
+  });
+
+  it('entitlement going inactive (expiration) is a change', () => {
+    expect(hasMeaningfulSubscriptionChange(activeCanceled, expired)).toBe(true);
+  });
+
+  it('unsubscribeDetected flipping alone (willRenew unresolved) is still a change', () => {
+    const baseline = { premiumActive: true, willRenew: null, unsubscribeDetected: false };
+    const next = { premiumActive: true, willRenew: null, unsubscribeDetected: true };
+    expect(hasMeaningfulSubscriptionChange(baseline, next)).toBe(true);
+  });
+});
+
+describe('POST_MANAGE_REVALIDATION_DELAYS_MS — bounded, not polling', () => {
+  it('starts immediate and is strictly increasing (finite schedule)', () => {
+    expect(POST_MANAGE_REVALIDATION_DELAYS_MS[0]).toBe(0);
+    const delays = [...POST_MANAGE_REVALIDATION_DELAYS_MS];
+    const sorted = [...delays].sort((a, b) => a - b);
+    expect(delays).toEqual(sorted);
+    expect(new Set(delays).size).toBe(delays.length);
+  });
+
+  it('caps out well under the observed ~8min Sandbox propagation, at a fixed length', () => {
+    expect(POST_MANAGE_REVALIDATION_DELAYS_MS.length).toBeGreaterThan(1);
+    expect(Math.max(...POST_MANAGE_REVALIDATION_DELAYS_MS)).toBeLessThanOrEqual(15 * 60_000);
   });
 });

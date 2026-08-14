@@ -31,6 +31,8 @@ import {
   isOfferingsUnavailableError,
   classifyRevenueCatFailure,
   logSubscriptionEvent,
+  maskSubscriptionUid,
+  extractSubscriptionSignal,
   PREMIUM_ENTITLEMENT_ID,
   type PurchaseOutcome,
   type RestoreOutcome,
@@ -42,6 +44,8 @@ import {
   reduceSubscriptionLifecycle,
   selectIdentityCustomerInfo,
   shouldRevalidateOnAppStateChange,
+  hasMeaningfulSubscriptionChange,
+  POST_MANAGE_REVALIDATION_DELAYS_MS,
   type SubscriptionErrorKind,
   type SubscriptionLifecycleEvent,
   type SubscriptionPhase,
@@ -195,6 +199,18 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     activeListener.current = null;
   }, []);
 
+  // Pending timers for the bounded post-manage revalidation window (see
+  // `startPostManageRevalidation` below). Declared this early, alongside the
+  // listener cleanup, so the identity-sync effect and the unmount effect can
+  // both clear it deterministically — an identity change or unmount must
+  // never leave an orphaned `setTimeout` scheduled for a stale uid/generation.
+  const postManageWindowRef = useRef<{ timers: ReturnType<typeof setTimeout>[] }>({ timers: [] });
+
+  const clearPostManageWindow = useCallback(() => {
+    postManageWindowRef.current.timers.forEach((timer) => clearTimeout(timer));
+    postManageWindowRef.current.timers = [];
+  }, []);
+
   const attachCustomerInfoListener = useCallback(
     (listenerUid: string, generation: number) => {
       detachCustomerInfoListener();
@@ -214,8 +230,8 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
           uid: listenerUid,
           originalAppUserId: info.originalAppUserId,
           source: 'listener',
-          premiumActive: Boolean(info.entitlements.active[PREMIUM_ENTITLEMENT_ID]),
           requestDate: info.requestDate,
+          ...extractSubscriptionSignal(info),
         });
         applyLifecycleEvent({
           type: 'customer-info-updated',
@@ -241,6 +257,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
       syncedUid.current = undefined;
       refreshSeq.current += 1;
       detachCustomerInfoListener();
+      clearPostManageWindow();
       applyLifecycleEvent({ type: 'auth-waiting', generation });
       return;
     }
@@ -250,6 +267,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     syncedUid.current = undefined;
     refreshSeq.current += 1;
     detachCustomerInfoListener();
+    clearPostManageWindow();
     applyLifecycleEvent({ type: 'identity-changed', uid: identityUid, generation });
     logSubscriptionEvent('subscription_identity_sync_started', identityUid);
 
@@ -303,8 +321,8 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
             uid: identityUid,
             originalAppUserId: info.originalAppUserId,
             source: 'login',
-            premiumActive: Boolean(info.entitlements.active[PREMIUM_ENTITLEMENT_ID]),
             requestDate: info.requestDate,
+            ...extractSubscriptionSignal(info),
           });
           syncedUid.current = identityUid;
           applyLifecycleEvent({
@@ -357,6 +375,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     applyLifecycleEvent,
     attachCustomerInfoListener,
     detachCustomerInfoListener,
+    clearPostManageWindow,
     enqueueSdkOperation,
   ]);
 
@@ -367,80 +386,176 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
       identityGeneration.current += 1;
       refreshSeq.current += 1;
       detachCustomerInfoListener();
+      clearPostManageWindow();
     };
-  }, [detachCustomerInfoListener]);
+  }, [detachCustomerInfoListener, clearPostManageWindow]);
 
   const refreshSingleFlight = useRef(createIdentityScopedSingleFlight()).current;
 
-  const refreshCustomerInfo = useCallback(async () => {
-    const refreshUid = currentUid.current;
-    const generation = identityGeneration.current;
-    const confirmed = selectIdentityCustomerInfo(lifecycleRef.current, refreshUid);
-    if (!refreshUid || syncedUid.current !== refreshUid || !confirmed) {
-      throw new Error('CustomerInfo ainda não confirmado para a identidade atual.');
-    }
-
-    await refreshSingleFlight.run(`${refreshUid}:${generation}`, async () => {
-      const seq = ++refreshSeq.current;
-      applyLifecycleEvent({ type: 'refresh-started', uid: refreshUid, generation });
-      logSubscriptionEvent('customer_info_refresh_started', refreshUid);
-
-      await enqueueSdkOperation(async () => {
-        try {
-          if (
-            !mounted.current ||
-            seq !== refreshSeq.current ||
-            generation !== identityGeneration.current ||
-            refreshUid !== currentUid.current ||
-            syncedUid.current !== refreshUid
-          ) {
-            return;
-          }
-          const info = await fetchCustomerInfo();
-          if (
-            !mounted.current ||
-            seq !== refreshSeq.current ||
-            generation !== identityGeneration.current ||
-            refreshUid !== currentUid.current ||
-            syncedUid.current !== refreshUid
-          ) {
-            logSubscriptionEvent('subscription_snapshot_discarded_stale_identity', refreshUid);
-            return;
-          }
-          logInfo('subscription', 'customer_info_evaluated', {
-            uid: refreshUid,
-            originalAppUserId: info.originalAppUserId,
-            source: 'refresh',
-            premiumActive: Boolean(info.entitlements.active[PREMIUM_ENTITLEMENT_ID]),
-            requestDate: info.requestDate,
-          });
-          applyLifecycleEvent({
-            type: 'customer-info-updated',
-            uid: refreshUid,
-            generation,
-            customerInfo: info,
-          });
-          logSubscriptionEvent('customer_info_refresh_completed', refreshUid);
-        } catch (err) {
-          if (
-            !mounted.current ||
-            generation !== identityGeneration.current ||
-            refreshUid !== currentUid.current
-          ) {
-            return;
-          }
-          logSubscriptionEvent('customer_info_refresh_failed', refreshUid);
-          applyLifecycleEvent({
-            type: 'refresh-failed',
-            uid: refreshUid,
-            generation,
-            error: classifyRevenueCatFailure(err),
-          });
-          throw err;
+  /**
+   * Shared refresh core behind both the public `refreshCustomerInfo()` (pull
+   * to refresh, AppState foreground revalidation, retry) and the post-manage
+   * revalidation window below. `reason: 'manual'` preserves the exact
+   * pre-existing contract (throws so callers can show an error notice);
+   * `'post-manage'` is a silent, best-effort attempt — a bounded background
+   * revalidation must never surface an uncaught rejection or a jarring error
+   * state for something the user didn't explicitly ask for. Returns the
+   * fetched `CustomerInfo` (or `null` when the fetch didn't happen/apply) so
+   * the post-manage window can compare it against its baseline without
+   * depending on `lifecycleRef` having flushed by the time this resolves.
+   */
+  const doRefresh = useCallback(
+    async (reason: 'manual' | 'post-manage'): Promise<CustomerInfo | null> => {
+      const refreshUid = currentUid.current;
+      const generation = identityGeneration.current;
+      const confirmed = selectIdentityCustomerInfo(lifecycleRef.current, refreshUid);
+      if (!refreshUid || syncedUid.current !== refreshUid || !confirmed) {
+        if (reason === 'manual') {
+          throw new Error('CustomerInfo ainda não confirmado para a identidade atual.');
         }
+        return null;
+      }
+
+      return refreshSingleFlight.run(`${refreshUid}:${generation}`, async () => {
+        const seq = ++refreshSeq.current;
+        applyLifecycleEvent({ type: 'refresh-started', uid: refreshUid, generation });
+        logSubscriptionEvent('customer_info_refresh_started', refreshUid);
+
+        return enqueueSdkOperation(async () => {
+          try {
+            if (
+              !mounted.current ||
+              seq !== refreshSeq.current ||
+              generation !== identityGeneration.current ||
+              refreshUid !== currentUid.current ||
+              syncedUid.current !== refreshUid
+            ) {
+              return null;
+            }
+            const info = await fetchCustomerInfo();
+            if (
+              !mounted.current ||
+              seq !== refreshSeq.current ||
+              generation !== identityGeneration.current ||
+              refreshUid !== currentUid.current ||
+              syncedUid.current !== refreshUid
+            ) {
+              logSubscriptionEvent('subscription_snapshot_discarded_stale_identity', refreshUid);
+              return null;
+            }
+            logInfo('subscription', 'customer_info_evaluated', {
+              uid: refreshUid,
+              originalAppUserId: info.originalAppUserId,
+              source: reason === 'post-manage' ? 'post_manage_refresh' : 'refresh',
+              requestDate: info.requestDate,
+              ...extractSubscriptionSignal(info),
+            });
+            applyLifecycleEvent({
+              type: 'customer-info-updated',
+              uid: refreshUid,
+              generation,
+              customerInfo: info,
+            });
+            logSubscriptionEvent('customer_info_refresh_completed', refreshUid);
+            return info;
+          } catch (err) {
+            if (
+              !mounted.current ||
+              generation !== identityGeneration.current ||
+              refreshUid !== currentUid.current
+            ) {
+              return null;
+            }
+            logSubscriptionEvent('customer_info_refresh_failed', refreshUid);
+            applyLifecycleEvent({
+              type: 'refresh-failed',
+              uid: refreshUid,
+              generation,
+              error: classifyRevenueCatFailure(err),
+            });
+            if (reason === 'manual') throw err;
+            return null;
+          }
+        });
       });
-    });
-  }, [applyLifecycleEvent, enqueueSdkOperation, refreshSingleFlight]);
+    },
+    [applyLifecycleEvent, enqueueSdkOperation, refreshSingleFlight],
+  );
+
+  const refreshCustomerInfo = useCallback(async () => {
+    await doRefresh('manual');
+  }, [doRefresh]);
+
+  /**
+   * Bounded, self-terminating revalidation window for the comprehensive gap
+   * identified by the RevenueCat cancellation audit: `showManageSubscriptions()`
+   * resolving tells us only that the native Apple sheet closed, never what the
+   * user did in it, and Apple → RevenueCat propagation is async (observed
+   * ~8min in Sandbox). This is NOT permanent polling — see
+   * `POST_MANAGE_REVALIDATION_DELAYS_MS`'s doc comment for the schedule and
+   * the early-stop rule. Every attempt reuses `doRefresh('post-manage')`
+   * (same singleflight + identity guards as any other refresh), so a
+   * concurrent AppState-triggered refresh or listener push can never
+   * corrupt/duplicate work — they simply coalesce or race harmlessly to the
+   * same `applyLifecycleEvent`.
+   */
+  const runPostManageRefreshAttempt = useCallback(
+    async (attemptUid: string, generation: number, sheetClosedAt: number, attemptIndex: number) => {
+      if (
+        !mounted.current ||
+        generation !== identityGeneration.current ||
+        currentUid.current !== attemptUid ||
+        syncedUid.current !== attemptUid
+      ) {
+        return;
+      }
+      const maskedUid = maskSubscriptionUid(attemptUid);
+      logInfo('subscription', 'subscription_post_manage_refresh_started', {
+        uid: maskedUid,
+        attempt: attemptIndex,
+        elapsedMs: Date.now() - sheetClosedAt,
+      });
+      const baseline = extractSubscriptionSignal(
+        selectIdentityCustomerInfo(lifecycleRef.current, attemptUid),
+      );
+      const info = await doRefresh('post-manage');
+      if (
+        !mounted.current ||
+        generation !== identityGeneration.current ||
+        currentUid.current !== attemptUid ||
+        syncedUid.current !== attemptUid
+      ) {
+        return;
+      }
+      const nextSignal = extractSubscriptionSignal(info);
+      const changed = nextSignal ? hasMeaningfulSubscriptionChange(baseline, nextSignal) : false;
+      logInfo('subscription', 'subscription_post_manage_refresh_completed', {
+        uid: maskedUid,
+        attempt: attemptIndex,
+        elapsedMs: Date.now() - sheetClosedAt,
+        changed,
+      });
+      // Renewal status already changed — the remaining scheduled attempts in
+      // this window exist only to catch a still-pending Apple→RevenueCat
+      // update, so there is nothing left for them to find.
+      if (changed) clearPostManageWindow();
+    },
+    [clearPostManageWindow, doRefresh],
+  );
+
+  const startPostManageRevalidation = useCallback(
+    (manageUid: string | null, generation: number, sheetClosedAt: number) => {
+      clearPostManageWindow();
+      if (!manageUid) return;
+      POST_MANAGE_REVALIDATION_DELAYS_MS.forEach((delayMs, attemptIndex) => {
+        const timer = setTimeout(() => {
+          void runPostManageRefreshAttempt(manageUid, generation, sheetClosedAt, attemptIndex);
+        }, delayMs);
+        postManageWindowRef.current.timers.push(timer);
+      });
+    },
+    [clearPostManageWindow, runPostManageRefreshAttempt],
+  );
 
   const retry = useCallback(async () => {
     const retryUid = currentUid.current;
@@ -455,6 +570,16 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     let previousState: AppStateStatus | null = NativeAppState.currentState;
     const subscription = NativeAppState.addEventListener('change', (nextState) => {
       const shouldRefresh = shouldRevalidateOnAppStateChange(previousState, nextState);
+      // Diagnostic-only (dev-gated by `logInfo`): confirms whether
+      // `showManageSubscriptions()` actually drives AppState through
+      // inactive/background, which the RevenueCat cancellation audit left
+      // unverified on a real device.
+      logInfo('subscription', 'app_state_transition', {
+        uid: maskSubscriptionUid(currentUid.current),
+        previous: previousState,
+        next: nextState,
+        triggersRevalidation: shouldRefresh,
+      });
       previousState = nextState;
       if (!shouldRefresh) return;
 
@@ -643,10 +768,33 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     return outcome;
   }, [applyLifecycleEvent, enqueueSdkOperation]);
 
+  /**
+   * `manageSubscriptionService` (react-native-purchases `showManageSubscriptions()`)
+   * resolves as soon as the native Apple sheet closes — it carries no
+   * information about what the user did inside it. Bracketing the call with
+   * `subscription_manage_opened`/`_closed` and starting the bounded
+   * revalidation window here (rather than in the service or the screen) is
+   * deliberate: this is the one seam that already knows the current identity
+   * (`currentUid`/`identityGeneration`) and already owns `doRefresh` — the
+   * screen must keep calling this same abstraction, never the SDK directly.
+   */
   const manageSubscription = useCallback(
-    (input: { store: string | null; managementURL: string | null }) =>
-      manageSubscriptionService(input),
-    [],
+    async (input: { store: string | null; managementURL: string | null }) => {
+      const manageUid = currentUid.current;
+      const generation = identityGeneration.current;
+      logSubscriptionEvent('subscription_manage_opened', manageUid);
+      const outcome = await manageSubscriptionService(input);
+      const sheetClosedAt = Date.now();
+      logSubscriptionEvent('subscription_manage_closed', manageUid);
+      // Only a real store surface was presented (Apple sheet or an opened
+      // management URL) — 'unavailable'/'error' never left the app, so there
+      // is nothing to revalidate for.
+      if (outcome.status === 'opened') {
+        startPostManageRevalidation(manageUid, generation, sheetClosedAt);
+      }
+      return outcome;
+    },
+    [startPostManageRevalidation],
   );
 
   const value = useMemo<SubscriptionCtx>(

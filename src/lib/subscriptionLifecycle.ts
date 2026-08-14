@@ -196,6 +196,52 @@ export function shouldRevalidateOnAppStateChange(
   return next === 'active' && (previous === 'background' || previous === 'inactive');
 }
 
+/**
+ * The three CustomerInfo facts that matter for detecting a renewal-status
+ * change (docs: RevenueCat cancellation audit) — deliberately NOT the full
+ * CustomerInfo. `expirationDate` is excluded on purpose: it does not change
+ * just because auto-renewal was turned off, so comparing it would produce
+ * false negatives/positives unrelated to cancellation.
+ */
+export type SubscriptionRevalidationSignal = {
+  premiumActive: boolean;
+  willRenew: boolean | null;
+  unsubscribeDetected: boolean;
+};
+
+/**
+ * True when `next` represents a renewal-status change worth stopping the
+ * bounded post-manage revalidation window for (see
+ * `POST_MANAGE_REVALIDATION_DELAYS_MS`). `baseline: null` (identity not
+ * resolved yet) always returns false — fail-safe: let the bounded schedule
+ * run to completion rather than guessing.
+ */
+export function hasMeaningfulSubscriptionChange(
+  baseline: SubscriptionRevalidationSignal | null,
+  next: SubscriptionRevalidationSignal,
+): boolean {
+  if (!baseline) return false;
+  return (
+    baseline.premiumActive !== next.premiumActive ||
+    baseline.willRenew !== next.willRenew ||
+    baseline.unsubscribeDetected !== next.unsubscribeDetected
+  );
+}
+
+/**
+ * Delays (ms, relative to the manage-subscriptions sheet closing) for the
+ * bounded revalidation window (docs: RevenueCat cancellation audit §5/§7 —
+ * Option B, chosen over a permanent Firestore listener). Apple → RevenueCat
+ * propagation is async (App Store Server Notifications) and observed to take
+ * ~8 minutes in Sandbox; a single refresh right after the sheet closes is
+ * often not enough. Index 0 (`0`) is the immediate attempt fired as soon as
+ * the sheet closes. The window is intentionally FINITE — this is not
+ * polling: `hasMeaningfulSubscriptionChange` stops it early, identity
+ * changes/unmount clear it, and it always ends after the last entry either
+ * way.
+ */
+export const POST_MANAGE_REVALIDATION_DELAYS_MS = [0, 30_000, 120_000, 300_000, 600_000] as const;
+
 export type IdentityScopedSingleFlight = {
   run: <T>(key: string, operation: () => Promise<T>) => Promise<T>;
 };

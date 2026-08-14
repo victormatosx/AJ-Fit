@@ -42,6 +42,7 @@ process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY = 'test-android-key';
 
 const {
   checkIOSIntroEligibility,
+  extractSubscriptionSignal,
   loginRevenueCat,
   logoutRevenueCat,
   purchaseSubscriptionOption,
@@ -215,6 +216,73 @@ describe('purchaseSubscriptionOption — Android promotional purchase', () => {
     });
     expect(purchasesMocks.purchaseSubscriptionOption).toHaveBeenCalledOnce();
     expect(purchasesMocks.purchaseSubscriptionOption).toHaveBeenCalledWith(option);
+  });
+});
+
+describe('extractSubscriptionSignal — renewal-status fields, never the full CustomerInfo', () => {
+  it('returns null for null CustomerInfo', () => {
+    expect(extractSubscriptionSignal(null)).toBeNull();
+  });
+
+  it('reads an active, renewing entitlement', () => {
+    const info = {
+      entitlements: {
+        active: { premium: { willRenew: true, unsubscribeDetectedAt: null, expirationDate: '2027-08-14T00:00:00Z' } },
+        all: {},
+      },
+    } as never;
+    expect(extractSubscriptionSignal(info)).toEqual({
+      premiumActive: true,
+      willRenew: true,
+      unsubscribeDetected: false,
+      expirationDate: '2027-08-14T00:00:00Z',
+    });
+  });
+
+  it('reads a canceled-but-still-active entitlement (auto-renewal off, access not revoked)', () => {
+    const info = {
+      entitlements: {
+        active: {
+          premium: {
+            willRenew: false,
+            unsubscribeDetectedAt: '2026-08-14T00:00:00Z',
+            expirationDate: '2027-08-14T00:00:00Z',
+          },
+        },
+        all: {},
+      },
+    } as never;
+    expect(extractSubscriptionSignal(info)).toEqual({
+      premiumActive: true,
+      willRenew: false,
+      unsubscribeDetected: true,
+      expirationDate: '2027-08-14T00:00:00Z',
+    });
+  });
+
+  it('falls back to the last-known entitlement once it is no longer active (expired)', () => {
+    const info = {
+      entitlements: {
+        active: {},
+        all: { premium: { willRenew: false, unsubscribeDetectedAt: '2026-01-01T00:00:00Z', expirationDate: '2026-06-01T00:00:00Z' } },
+      },
+    } as never;
+    expect(extractSubscriptionSignal(info)).toEqual({
+      premiumActive: false,
+      willRenew: false,
+      unsubscribeDetected: true,
+      expirationDate: '2026-06-01T00:00:00Z',
+    });
+  });
+
+  it('has no history for the premium entitlement at all', () => {
+    const info = { entitlements: { active: {}, all: {} } } as never;
+    expect(extractSubscriptionSignal(info)).toEqual({
+      premiumActive: false,
+      willRenew: null,
+      unsubscribeDetected: false,
+      expirationDate: null,
+    });
   });
 });
 
