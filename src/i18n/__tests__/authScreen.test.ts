@@ -28,7 +28,7 @@ describe('Auth screen i18n', () => {
       'reset.kicker',
       'fields.name',
       'validation.passwordMinimum',
-      'actions.startTrial',
+      'actions.createAccount',
       'social.continueWith',
       'linking.passwordMessage',
       'linking.providerMessage',
@@ -47,6 +47,23 @@ describe('Auth screen i18n', () => {
       'Conta já existente',
       'Entrar e vincular',
     ]) expect(screen).not.toContain(hardcode);
+
+    expect(screen).not.toContain('actions.startTrial');
+    for (const resource of [ptBR, en, es]) {
+      expect(resource.actions).not.toHaveProperty('startTrial');
+      expect(resource.signup.subtitle).not.toMatch(
+        /trial|teste gr[aá]tis|prueba gratis|7\s*(dias|days|días)|sem cobran[cç]a|no charge|sin cargo/i,
+      );
+    }
+  });
+
+  it('keeps signup limited to authentication instead of commercial eligibility', () => {
+    for (const forbiddenDependency of [
+      'react-native-purchases',
+      'checkTrialOrIntroductoryPriceEligibility',
+      'iosPromotion',
+      'promoApplied',
+    ]) expect(screen).not.toContain(forbiddenDependency);
   });
 
   it('preserves email/password and Google/Apple authentication behavior', () => {

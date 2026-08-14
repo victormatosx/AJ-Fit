@@ -68,23 +68,33 @@ describe('Photo Vault backend foundation — Phase 3 structural guarantees', () 
     }
   });
 
-  it('publishes only the intended health and Photo Vault functions', () => {
+  it('publishes the intended billing, promotion, health and Photo Vault functions', () => {
     const source = read('src/index.ts');
 
     // Match the export statements themselves, not prose in the file's JSDoc.
-    const exported = [...source.matchAll(/export\s*\{([^}]*)\}/g)]
+    const groupedExports = [...source.matchAll(/export\s*\{([^}]*)\}/g)]
       .flatMap((match) => match[1].split(','))
       .map((name) => name.trim())
-      .filter(Boolean)
+      .filter(Boolean);
+    const constantExports = [...source.matchAll(/^export const (\w+)/gm)].map(
+      (match) => match[1],
+    );
+    const exported = [...groupedExports, ...constantExports]
       .sort();
 
     expect(exported).toEqual([
+      'adminCreatePromoCode',
+      'adminListPromoCodes',
+      'adminSetPromoCodeActive',
+      'adminUpdatePromoCode',
+      'authorizePromoPurchase',
       'backendHealth',
       'cleanupPhotoVaultOrphans',
       'createVault',
       'recoverVaultKey',
+      'revenueCatWebhook',
+      'validatePromoCode',
     ]);
-    expect(source).not.toMatch(/^\s*export\s+const/m);
   });
 
   it('never gives wrap/unwrap an endpoint of their own', () => {
@@ -178,11 +188,11 @@ describe('Photo Vault backend foundation — Phase 3 structural guarantees', () 
   });
 
   it('keeps App Check enforcement pending until real-device validation', () => {
-    for (const file of ['src/index.ts', 'src/health/backendHealth.ts', 'package.json']) {
-      const source = read(file);
-      expect(source).not.toContain('app-check');
-      expect(source).not.toContain('AppCheck');
-    }
+    const entrypoint = readCode('src/index.ts');
+    const health = readCode('src/health/backendHealth.ts');
+
+    expect(entrypoint).not.toMatch(/enforceAppCheck\s*:\s*true/);
+    expect(health).not.toMatch(/enforceAppCheck\s*:\s*true/);
   });
 
   it('exports backendHealth from the entrypoint', () => {

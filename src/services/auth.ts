@@ -13,6 +13,7 @@ import { isMultiFactorAuthRequired } from '../lib/mfaTotp';
 // Imported from the storage layer, not from services/photoVault: logout has
 // no business pulling the callable-functions client into its module graph.
 import { deleteVaultKey } from '../lib/photoVaultKeyStorage';
+import { logError } from '../lib/logger';
 
 /**
  * Reusable, typed authentication service.
@@ -65,16 +66,8 @@ export function getErrorCode(err: unknown): string {
     : '';
 }
 
-function getErrorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
-}
-
 export function logAuthError(scope: string, err: unknown): void {
-  const code = getErrorCode(err);
-  console.error(`[auth:${scope}]`, {
-    code: code || undefined,
-    message: getErrorMessage(err),
-  });
+  logError(`auth:${scope}`, err);
 }
 
 export function toAuthError(err: unknown): Error {

@@ -1,7 +1,5 @@
 import { onCall, type CallableRequest } from 'firebase-functions/v2/https';
 
-import { logInfo } from '../lib/logger';
-
 const backendVersion = (require('../../package.json') as { version: string }).version;
 
 interface BackendHealthResponse {
@@ -23,8 +21,6 @@ interface BackendHealthResponse {
  * service account info, secrets, tokens, headers, or IAM details.
  */
 export function handleBackendHealth(_request: CallableRequest): BackendHealthResponse {
-  logInfo('backendHealth', 'health check invoked');
-
   return {
     ok: true,
     backendVersion,

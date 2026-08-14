@@ -37,6 +37,7 @@ import {
   refreshEmailVerificationStatus,
   sendVerificationEmail,
 } from '../services/emailVerification';
+import { logInfo } from '../lib/logger';
 
 type AuthCtx = {
   /** Current authenticated user (Firebase Auth), or null when signed out. */
@@ -103,6 +104,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Monotonic token so a slower/older load can never overwrite a newer one
   // (e.g. the listener's pre-write read racing signUp's post-write read).
   const loadSeq = useRef(0);
+  // Separately scopes listener failures: an old rejected profile request must
+  // not clear the state established by a newer Firebase identity callback.
+  const authStateSeq = useRef(0);
 
   /** Loads the user document (+ one-time schema migration) and questionnaire. */
   const loadUserState = useCallback(async (uid: string) => {
@@ -132,15 +136,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // migrate an existing legacy document; account creation stays in signUp.
   useEffect(() => {
     const unsubscribe = subscribeToAuthState(async (nextUser) => {
+      const authSeq = ++authStateSeq.current;
       setUser(nextUser);
+      logInfo('auth', 'auth_state_resolved', {
+        uid: nextUser?.uid,
+        authenticated: Boolean(nextUser),
+      });
+
+      if (!nextUser) {
+        clearUserState();
+        setInitializing(false);
+        return;
+      }
+
+      // `loadUserState` marks profileLoading synchronously. Releasing
+      // `initializing` immediately after starting it lets SubscriptionContext
+      // synchronize the same UID with RevenueCat in parallel with the two
+      // Firestore reads. The central gate still waits for both independent
+      // states, so unknown subscription/profile data never becomes access.
+      const userStatePromise = loadUserState(nextUser.uid);
+      setInitializing(false);
       try {
-        if (nextUser) await loadUserState(nextUser.uid);
-        else clearUserState();
+        await userStatePromise;
       } catch (err) {
+        if (authSeq !== authStateSeq.current) return;
         logAuthError('listener:load-profile', err);
         clearUserState();
-      } finally {
-        setInitializing(false);
       }
     });
     return unsubscribe;

@@ -46,7 +46,7 @@ principal NÃO contém respostas de questionário; elas ficam na subcoleção
     "status": "TRIAL | ACTIVE | CANCELED | BILLING_ISSUE | EXPIRED (opcional)",
     "provider": "REVENUECAT (opcional)",
     "trialEndsAt": "datetime (opcional)",
-    "endsAt": "datetime (opcional)"
+    "currentPeriodEndsAt": "datetime (opcional)"
   },
   "metadata": {
     "role": "user | admin",
@@ -56,6 +56,11 @@ principal NÃO contém respostas de questionário; elas ficam na subcoleção
   }
 }
 ```
+
+`subscription` acima mostra só os 4 campos que a migração legada do cliente
+(`src/services/userProfile.ts`) sabe popular. O schema completo — escrito
+apenas pelo backend via Admin SDK — é definido em
+`docs/13_assinaturas_e_billing.md` §26, referência única para esse bloco.
 
 ## Subcoleção de questionários
 
@@ -139,8 +144,10 @@ Backend-owned (RevenueCat / Cloud Functions — nunca escritos pelo app,
 
 ```txt
 metadata.activeWorkoutId, subscription.status, subscription.provider,
-subscription.trialEndsAt, subscription.endsAt
+subscription.trialEndsAt, subscription.currentPeriodEndsAt
 ```
+
+(schema completo do bloco `subscription`: docs/13_assinaturas_e_billing.md §26)
 
 ## Criação do usuário (fluxo único)
 
@@ -289,6 +296,22 @@ estado global como `linkedProviders`.
 - Apple: Apple Developer (Sign In with Apple), Service ID e credenciais no EAS.
 - Google: OAuth client IDs (iOS/Web) já presentes em `GoogleService-Info.plist`
   e `google-services.json`.
+
+#### Android — SHA-1 obrigatórios para o OAuth Client (Google Sign-In)
+
+O OAuth Client Android do Firebase/Google Cloud para `com.ajfit.mobile` deve
+manter cadastrado **todo** SHA-1 de certificado que possa assinar uma versão
+do app capaz de chegar a um dispositivo: build de development/debug, e — no
+Google Play Console, em Assinatura de apps / Play App Signing — tanto a chave
+atual quanto qualquer chave anterior listada em "Chaves de assinatura do app
+anteriores" que ainda assine versões em distribuição. Ausência de um desses
+SHA-1 causa `DEVELOPER_ERROR` (code 10) apenas na versão instalada pela Play
+Store, mesmo com development build funcionando normalmente — incidente
+completo, diagnóstico e causa raiz em `08_log_de_evolucao.md` (entrada
+2026-08-12, categoria `[CORREÇÃO]`).
+
+Cadastrar um SHA-1 novo é configuração OAuth server-side: não exige gerar
+novo AAB nem reinstalar o app já publicado.
 
 ---
 
@@ -522,7 +545,53 @@ exercise-videos/{exerciseId}
 
 ---
 
-# 18. Controle de versão
+# 18. Cloud Function: Autorizar compra promocional iOS
+
+Função callable autenticada:
+
+```txt
+authorizePromoPurchase
+```
+
+Entrada estrita:
+
+```json
+{
+  "plan": "monthly | annual"
+}
+```
+
+O UID vem exclusivamente do token Firebase (`request.auth.uid`). Qualquer
+campo adicional é rejeitado; o cliente não envia campanha, Offering, Product
+ID, status ou timestamps.
+
+Saída:
+
+```json
+{
+  "authorized": true,
+  "purchaseIntent": {
+    "plan": "monthly",
+    "offeringIdentifier": "promo_7d",
+    "expectedProductId": "ajfit_premium_monthly_promo",
+    "status": "purchase_pending",
+    "expiresAt": "2026-08-13T15:10:00.000Z"
+  }
+}
+```
+
+O backend lê e atualiza `couponRedemptions/{uid}` dentro de uma única
+transação. A campanha, a Offering e o Product ID vêm do snapshot
+`iosPromotion` da redemption. A intent expira logicamente após 10 minutos.
+Retry idêntico reutiliza a intent ativa sem estender `expiresAt`; plano ou
+campanha conflitante retorna erro controlado.
+
+Esta operação não compra, não chama StoreKit, não confirma attribution e não
+concede Premium.
+
+---
+
+# 19. Controle de versão
 
 Mudanças em contratos exigem:
 

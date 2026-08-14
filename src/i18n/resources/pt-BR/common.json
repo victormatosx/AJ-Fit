@@ -29,5 +29,38 @@
     "workout": "Treino",
     "progress": "Evolução",
     "profile": "Perfil"
+  },
+  "paywall": {
+    "promo": {
+      "applied": "Código aplicado. Verificando as condições da App Store.",
+      "checking": "Verificando sua elegibilidade e as condições reais na App Store…",
+      "freeTrial": "Código aplicado. {{duration}} grátis; depois {{price}} {{period}}.",
+      "ineligible": "Código aplicado. Esta conta Apple não é elegível ao período grátis; o plano custa {{price}} {{period}}.",
+      "eligibilityUnavailable": "Não foi possível confirmar as condições da App Store. Tente novamente antes de continuar.",
+      "configurationUnavailable": "A oferta promocional não está disponível com condições verificáveis neste momento. Tente novamente.",
+      "catalogUnavailable": "Não foi possível carregar com segurança os planos promocionais. Tente novamente.",
+      "trialBadge": "{{duration}} grátis, depois {{price}} {{period}}",
+      "duration": {
+        "day_one": "{{count}} dia",
+        "day_other": "{{count}} dias",
+        "week_one": "{{count}} semana",
+        "week_other": "{{count}} semanas",
+        "month_one": "{{count}} mês",
+        "month_other": "{{count}} meses",
+        "year_one": "{{count}} ano",
+        "year_other": "{{count}} anos"
+      },
+      "period": {
+        "monthly": "por mês",
+        "annual": "por ano"
+      },
+      "errors": {
+        "authorization": "Não foi possível autorizar a compra promocional. Tente novamente.",
+        "authorizationConflict": "Já existe outra tentativa promocional em andamento. Aguarde e tente novamente.",
+        "unauthenticated": "Sua sessão expirou. Entre novamente antes de comprar.",
+        "intentMismatch": "A autorização de compra não corresponde mais ao plano selecionado. Tente novamente.",
+        "intentExpired": "A autorização promocional expirou. Toque em Continuar para solicitar uma nova."
+      }
+    }
   }
 }

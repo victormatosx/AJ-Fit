@@ -13,6 +13,8 @@ import { SettingsSection } from '../components/ui/SettingsSection';
 import { SmartAlertsSection } from '../components/ui/SmartAlertsSection';
 import { colors, fonts } from '../theme/tokens';
 import { useAuth } from '../state/AuthContext';
+import { useSubscription } from '../hooks/useSubscription';
+import { resolveSubscriptionCenterModel } from '../lib/subscriptionCenter';
 
 /** Provider ids come from Firebase Auth and MUST NOT be renamed here —
  *  translation happens at the label lookup, never on the id. */
@@ -26,13 +28,16 @@ export function ProfileScreen({
   onOpenAssessment,
   onOpenEditProfile,
   onOpenSettings,
+  onOpenSubscription,
 }: {
   onOpenAssessment?: () => void;
   onOpenEditProfile?: () => void;
   onOpenSettings?: () => void;
+  onOpenSubscription?: () => void;
 }) {
   const { t } = useTranslation('profile');
   const { user, profile, linkedProviders, logout } = useAuth();
+  const { customerInfo } = useSubscription();
 
   const email = profile?.profile.email ?? user?.email ?? '';
   const athleteFallback = t('fallback.athlete');
@@ -44,7 +49,20 @@ export function ProfileScreen({
     ? String(profile.metadata.createdAt.toDate().getFullYear())
     : '—';
 
-  const subscriptionStatus = profile?.subscription.status;
+  const subscriptionState = resolveSubscriptionCenterModel({
+    customerInfo,
+    offerings: null,
+    mirror: profile?.subscription ?? null,
+  }).status;
+  const subscriptionStatus = {
+    active: 'ACTIVE',
+    trial: 'TRIAL',
+    canceled: 'CANCELED',
+    billing_issue: 'BILLING_ISSUE',
+    grace_period: 'BILLING_ISSUE',
+    expired: 'EXPIRED',
+    unknown: null,
+  }[subscriptionState];
   const subscriptionLabel = subscriptionStatus
     ? t(`subscription.labels.${subscriptionStatus}`, {
         defaultValue: t('subscription.labels.unknown'),
@@ -165,7 +183,7 @@ export function ProfileScreen({
                 icon: 'crown',
                 label: t('groups.account.items.subscription'),
                 value: subscriptionLabel,
-                onPress: () => {},
+                onPress: onOpenSubscription,
               },
               {
                 icon: 'settings',

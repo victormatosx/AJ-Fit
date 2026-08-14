@@ -331,6 +331,343 @@ Próxima ação:
 Revisão editorial contínua e tratamento autorizado dos hardcodes registrados
 no baseline. Não houve deploy.
 
+Data: 2026-08-11
+Responsável: Codex — Agente Frontend + Agente QA
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Implementada localmente a Fase 3 — persistência e revalidação do Premium — sem
+alterar a arquitetura de billing, o Paywall ou o backend.
+
+- `SubscriptionContext` passou a representar separadamente Auth pendente,
+  configuração do RevenueCat, sincronização de identidade, estado pronto,
+  refresh e erro. `unknown`/erro inicial não é tratado como não Premium.
+- Toda identidade possui Firebase UID + geração monotônica. Logout/troca de
+  conta invalida imediatamente CustomerInfo e Offerings anteriores; respostas
+  de sync, refresh, compra, restore e listener só são aplicadas se UID + geração
+  ainda corresponderem.
+- Operações do SDK dependentes de identidade são serializadas. O
+  `CustomerInfo` já retornado por `Purchases.logIn(uid)` é usado no cold start e
+  login, removendo o `getCustomerInfo()` duplicado da inicialização.
+- O CustomerInfo listener agora é registrado somente após a identidade ser
+  confirmada, captura UID + geração e é removido na troca/unmount. Callback
+  enfileirado de uma geração antiga é descartado.
+- Transições React Native `background|inactive → active` revalidam
+  `CustomerInfo`; refreshes concorrentes do mesmo UID + geração são
+  coalescidos. Não existe polling.
+- Erro de refresh preserva somente um snapshot já confirmado para o mesmo UID.
+  Erro sem snapshot seguro mantém o Gate fail-closed e apresenta retry neutro.
+- A política offline usa somente o cache oficial identity-scoped do RevenueCat
+  SDK. Nenhum cache Premium foi criado em AsyncStorage, SecureStore ou
+  Firestore. A antiga previsão documental de timestamps/TTL próprio de 24h foi
+  substituída e registrada em `docs/12` e `docs/13`.
+- Adicionado roteiro manual iOS/Android em
+  `docs/17_checklist_fase3_assinatura.md`.
+
+Impacto:
+`CustomerInfo.entitlements.active['premium']` continua sendo a única fonte de
+autorização e o Gate continua sendo a única porta para o AppShell. Compra e
+restore alimentam o estado central, sem navegação manual. Firestore permanece
+somente espelho administrativo. Nenhum arquivo de Function, webhook, HMAC,
+TRANSFER, rules, secret, produto, cupom ou trial foi alterado.
+
+Testes:
+- Nova matriz automatizada A–AA com 27 casos: cold start, Auth/sync pendentes,
+  login/logout/troca A↔B, requests/listeners obsoletos, compra, restore,
+  foreground, revogação/aquisição, offline/erros, single-flight e independência
+  do espelho Firestore.
+- `npx tsc --noEmit`: aprovado.
+- `npm test`: 9 arquivos e 109 testes aprovados.
+- `npx expo export --platform all`: bundles web, Android e iOS aprovados.
+- `git diff --check`: aprovado. Lint não está configurado no projeto.
+
+Próxima ação:
+Humano coordenador executar os 12 testes de dispositivo/sandbox descritos em
+`docs/17_checklist_fase3_assinatura.md` em iOS e Android antes de encerrar a
+Fase 3.
+
+---
+
+Data: 2026-08-10
+Responsável: Agente Backend + Agente QA
+Categoria: [CORREÇÃO]
+
+Descrição:
+Concluída localmente a reconciliação comercial de `TRANSFER` após a ampliação
+manual da mesma `REVENUECAT_API_SECRET_KEY` para leitura de Subscriptions. Um
+TRANSFER resolvido agora obtém o customer V2 comprovado pela resolução de
+identidade e consulta
+`GET /v2/projects/{project_id}/customers/{customer_id}/subscriptions`, com
+paginação e validação integral das subscriptions e de seus entitlements.
+
+A subscription relevante é localizada pela relação real com o entitlement
+cujo `lookup_key` é `premium`; nunca pelo primeiro item. `gives_access` define
+`entitlementActive`. Uma única Premium ativa é normalizada para o schema já
+existente. Mais de uma Premium ativa é ambígua e não escreve. Uma resposta
+completa sem Premium ativa substitui o mapa por estado inativo, evitando que
+um espelho antigo continue marcando acesso; quando não há uma única
+subscription inativa cujos detalhes possam ser copiados sem arbitrariedade,
+somente `provider` e `entitlementActive:false` são persistidos.
+
+A escrita reutiliza `applySubscriptionEventAtomically` com o `event.id` e
+`event_timestamp_ms` do TRANSFER. Foi adicionado um modo explícito de
+substituição do mapa aninhado somente para snapshots completos; eventos
+comerciais normais preservam o merge anterior. A transação continua barrando
+duplicados, stale, conflitos e a recriação de `users/{uid}` excluído. Timeout,
+429, 5xx, resposta inválida e 404 na leitura de subscriptions retornam 503 sem
+escrita; 401/403 retornam 500 operacional. Secrets, headers e payloads não são
+registrados.
+
+Impacto:
+`users/{uid}.subscription` passa a refletir imediatamente o estado atual
+consultado no RevenueCat depois de um TRANSFER inequivocamente resolvido. O
+Firestore continua sendo apenas espelho administrativo: o aplicativo e o Gate
+Premium continuam autorizando exclusivamente por
+`CustomerInfo.entitlements.active['premium']`. Nenhum arquivo cliente, regra do
+Gate, Paywall, schema Firestore, secret ou configuração externa foi alterado.
+Não houve deploy, commit, push, retry manual nem acesso a dados reais.
+
+Testes:
+- API V2 mockada: schema real, paginação de subscriptions/entitlements, 404,
+  timeout, 429, 5xx, 401/403 e resposta inválida.
+- Matriz A–O do handler: ativo, inativo, identidade unresolved/ambiguous,
+  múltiplas subscriptions inequívocas/ambíguas, stale, duplicate, usuário
+  removido durante a transação e regressão dos eventos comerciais.
+- Normalização pura de `gives_access`, entitlement Premium, status, produto,
+  store e datas; substituição transacional do mapa testada sem Firestore real.
+
+Próxima ação:
+Após revisão e autorização humana, fazer deploy controlado da Function e testar
+em sandbox um TRANSFER novo ativo e outro inequivocamente inativo, verificando
+resposta, logs sanitizados e o espelho Firestore sem usar esse espelho para
+autorizar acesso.
+
+---
+
+Data: 2026-08-10
+Responsável: Agente Backend + Agente QA
+Categoria: [CORREÇÃO]
+
+Descrição:
+Corrigida a resolução RevenueCat → Firebase para eventos comerciais ligados a
+identidades históricas. A causa raiz era a equivalência 1:1 entre
+`app_user_id` e Firebase UID: quando o RevenueCat entregava um UID antigo já
+excluído, `userExists()` falhava e o evento era reconhecido com HTTP 200 sem
+atualizar `users/{uid}.subscription`.
+
+A nova estratégia mantém o fast path sem rede para um `app_user_id` que exista
+simultaneamente no Firebase Authentication e em `users/{uid}`. Se esse caminho
+falhar, um cliente server-side mínimo consulta a RevenueCat REST API V2 por
+`GET /v2/projects/{project_id}/customers?search=...` e
+`GET /v2/projects/{project_id}/customers/{customer_id}/aliases`. Os candidatos
+do evento (`app_user_id`, `original_app_user_id`, `aliases`) e do grafo V2 são
+filtrados contra Auth + Firestore. Exatamente um usuário válido resulta em
+`resolved`; zero em `unresolved`; mais de um em `ambiguous`. Os dois últimos
+resultados não escrevem e ambiguidade nunca é resolvida escolhendo o primeiro
+alias. IDs `$RCAnonymousID` nunca são usados como Firebase UID.
+
+A Function passou a vincular também `REVENUECAT_API_SECRET_KEY`, além de manter
+`REVENUECAT_WEBHOOK_SECRET`. O Project ID público fica centralizado no backend.
+Nenhum valor de secret é registrado ou enviado ao cliente.
+
+`TRANSFER` agora é tratado como sinal de identidade: `transferred_to` é
+resolvido com a mesma política fail-closed e o evento nunca volta a exigir
+`app_user_id`. Não há escrita direta de `subscription`, pois o payload não
+contém estado comercial completo e a chave atual tem somente
+`customer_information:customers:read`. Uma reconciliação comercial completa
+exigiria adicionalmente `customer_information:subscriptions:read`; essa
+permissão não foi ampliada nesta tarefa e nenhum campo foi fabricado.
+
+Impacto:
+Novos eventos comerciais associados inequivocamente a um alias histórico podem
+atualizar o documento do usuário atual pela transação existente. Normalização,
+HMAC, deduplicação, ordenação, schema, Premium Gate e Paywall não foram
+alterados. O webhook não cria usuários, não faz backfill e não corrige eventos
+históricos automaticamente. Timeout/429/5xx/JSON V2 inválido retornam 503 para
+retry limitado do provedor; 401/403 retornam erro operacional 500 sanitizado;
+`unresolved` e `ambiguous` são reconhecidos com HTTP 200 sem escrita.
+
+Testes:
+- Cliente V2 totalmente mockado: busca, aliases, timeout, 401/403, 429/5xx e
+  schema inválido, sem acesso à RevenueCat real.
+- Resolução direta, alias histórico único, zero/dois candidatos, anonymous ID,
+  `original_app_user_id` e destinos TRANSFER único/ambíguo.
+- Handler: HMAC e ordem de validação preservados, escrita no UID resolvido,
+  falhas V2, TRANSFER sem `app_user_id` e ausência de escrita em ambiguidade.
+- Typecheck, build, suíte Functions e `git diff --check` executados localmente.
+
+Próxima ação:
+Após revisão humana, realizar deploy controlado somente da Function e validar
+em sandbox um novo evento comercial com alias histórico. Se for desejada
+reconciliação imediata no próprio `TRANSFER`, aprovar separadamente a permissão
+read-only de Subscriptions e projetar a conversão do estado V2 sem alterar o
+Premium Gate.
+
+---
+
+Data: 2026-08-10
+Responsável: Agente Backend + Agente QA
+Categoria: [CORREÇÃO]
+
+Descrição:
+Correção mínima da ordem de validação do `revenueCatWebhook`. Após HMAC,
+envelope, `event.id` e `event.type`, o handler agora descarta tipos não
+processados com HTTP 200 antes de exigir `app_user_id`. Assim, `TRANSFER`
+(que usa `transferred_from`/`transferred_to`) continua fora do escopo
+comercial e não acessa Firestore, mas deixa de receber HTTP 400 e gerar retry.
+Eventos processáveis continuam exigindo `app_user_id` e seguindo o pipeline
+existente, inclusive `userExists()` e a transação de `subscription`.
+
+Impacto:
+Nenhuma mudança em HMAC, schema, regras, cliente, Gate Premium, Paywall ou no
+tratamento `user_not_found`. Os logs temporários `diag:*` encontrados apenas
+na revisão deployada não existiam no código local e não foram reintroduzidos.
+Nenhum deploy foi realizado nesta correção.
+
+Testes:
+- 7 testes novos do handler: `TRANSFER` sem `app_user_id`, evento suportado
+  sem `app_user_id`, pipeline suportado completo, ausência de ID, ausência de
+  tipo, HMAC inválido e outro tipo não suportado.
+- Typecheck e build das Functions limpos.
+- Suíte Functions: 5 arquivos, 54 testes aprovados.
+- `git diff --check` limpo.
+
+Próxima ação:
+Realizar, quando autorizado, deploy exclusivo de `revenueCatWebhook` e
+confirmar nos logs que novos eventos `TRANSFER` recebem HTTP 200. Investigar
+`user_not_found` separadamente, sem mascará-lo nesta correção.
+
+---
+
+Data: 2026-08-10
+Responsável: Agente Frontend + Agente QA
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Implementada a Fase 2 — Paywall real — consolidando a experiência de
+assinatura em uma única `PaywallScreen`.
+- A tela usa exclusivamente `useSubscription()` para carregar
+  `offerings.current.availablePackages`, comprar o próprio objeto
+  `PurchasesPackage` selecionado e restaurar compras.
+- Todos os packages retornados pelo Offering atual são renderizados na ordem
+  recebida. O preço exibido vem de `product.priceString`; não existem preços,
+  IDs de produto ou planos de fallback hardcoded na UI.
+- A seleção inicial respeita o primeiro package na ordem do Offering e passa
+  exatamente esse objeto para `purchasePackage`. Compra/restore apenas
+  atualizam `CustomerInfo` no `SubscriptionContext`; nenhum callback navega
+  para `app`.
+- Estados cobertos: loading, Offering indisponível, Offering sem packages,
+  offline, erro genérico, compra em andamento/cancelada/com erro/sem
+  entitlement e restore em andamento/com Premium/sem Premium/com erro. Ações
+  concorrentes são bloqueadas por ref.
+- Removidas todas as promessas de trial da Paywall. A CTA é neutra
+  (`Continuar`), pois a elegibilidade individual não é determinada por esta
+  infraestrutura.
+- Os links existentes de Privacidade e Termos foram preservados.
+- `PremiumScreen` foi removida após auditoria dos chamadores. `AppShell` passou
+  a reutilizar `PaywallScreen` no overlay de assinatura, eliminando a segunda
+  implementação de Offerings/compra/restore.
+- O X da rota obrigatória continua chamando o logout Firebase; o mesmo
+  componente, quando aberto pelo Perfil, recebe apenas o callback de fechar o
+  overlay. O botão agora fica em um header dentro do fluxo e da Safe Area.
+
+Impacto:
+RevenueCat `CustomerInfo.entitlements.active['premium']` permanece como única
+fonte de autorização. `resolvePremiumGate` não foi alterado: somente ele pode
+montar `AppShell`. Nenhuma alteração em backend, webhook, Cloud Functions,
+Firestore, autenticação, questionário, cupom, referral, offer codes ou trial.
+
+Testes:
+- 11 testes novos em `subscriptionOffer.test.ts`: estados do Offering,
+  packages dinâmicos, seleção do objeto, preço localizado, compra e restore
+  com/sem entitlement, cancelamento e erro.
+- `npx tsc --noEmit` limpo.
+- `npm test`: 8 arquivos, 82 testes aprovados.
+- `git diff --check` limpo.
+- Lint não está configurado no projeto.
+
+Pendência preservada da Fase 1:
+Ainda exige validação manual em dispositivo com compra sandbox: confirmar o
+entitlement `premium`, fazer cold start e login posterior com a mesma conta,
+verificando `Loading → AppShell` sem flash de Paywall. Testes unitários não
+encerram essa pendência.
+
+Próxima ação:
+Humano coordenador executar compra/restore sandbox e a validação definitiva de
+cold start/login Premium em dev build Android e iOS.
+
+---
+
+Data: 2026-08-10
+Responsável: Agente Frontend + Agente QA
+Categoria: [CORREÇÃO]
+
+Descrição:
+Correção mínima do botão X da rota `PaywallScreen` na Fase 1 do Gate
+Premium. O X deixou de compartilhar o callback legado do CTA, que solicitava
+`app`, e agora chama `useAuth().logout()`. Esse fluxo reutiliza
+`signOutUser()` (Firebase `signOut` + limpeza da sessão criptografada); a
+mudança reativa do Firebase UID continua sendo processada pelo
+`SubscriptionContext`, inclusive `Purchases.logOut()` e invalidação do
+snapshot anterior. Uma guarda por ref impede logouts concorrentes em toques
+repetidos. Após validação manual, o X foi deslocado 40 pontos para baixo
+(`top: 12` → `top: 52`) para ficar fora da área superior de difícil toque.
+
+Impacto:
+`Paywall → X → logout → Auth`. Nenhuma mudança no Gate Premium,
+entitlement, compra, preços, planos, layout, `PremiumScreen`, Firestore,
+webhook ou Cloud Functions.
+
+Testes:
+`npx tsc --noEmit` limpo; `npm test` com 71 testes aprovados;
+`git diff --check` limpo. Lint não está configurado no projeto.
+
+Próxima ação:
+Humano coordenador validar logout e login sequencial de contas distintas em
+dev build Android/iOS antes de concluir a Fase 1.
+
+---
+
+Data: 2026-08-10
+Responsável: Agente Frontend + Agente QA
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Implementada a Fase 1 do controle de acesso Premium no roteador raiz.
+- `App.tsx` passou a resolver autenticação, carregamento do perfil,
+  questionário e assinatura em um único gate antes de renderizar qualquer
+  tela. Usuário autenticado com questionário só chega ao `AppShell` quando o
+  `CustomerInfo.entitlements.active['premium']` está ativo; caso contrário,
+  chega à rota `paywall`. Enquanto o RevenueCat não resolveu o usuário atual,
+  o roteador exibe o estado neutro de carregamento.
+- `SubscriptionContext.tsx` passou a vincular cada snapshot de `CustomerInfo`
+  ao Firebase UID para o qual `Purchases.logIn`/`logOut` terminou. Em logout ou
+  troca de UID, o snapshot anterior deixa de ser exposto imediatamente;
+  respostas antigas de sync, refresh, compra, restauração e listener não podem
+  ser aplicadas a outra identidade.
+- `src/lib/premiumGate.ts` concentra a decisão pura de rota. O callback legado
+  do `PaywallScreen` ainda pode solicitar `app`, mas o gate recusa a transição
+  sem entitlement; `PaywallScreen`/`PremiumScreen` e a lógica de compra não
+  foram refatorados nesta fase.
+- Adicionados 9 testes unitários cobrindo os cenários A-H e o pedido direto de
+  `app` sem Premium.
+
+Impacto:
+O Firestore permanece fora da autorização Premium. RevenueCat `CustomerInfo`
+e o entitlement `premium` continuam sendo a única fonte de verdade no cliente.
+Nenhuma alteração em webhook, Cloud Function, preços, cupom ou trial.
+
+Testes:
+- App: `npx tsc --noEmit` limpo; `npm test` com 71 testes aprovados.
+- Functions (não alteradas): `npm run typecheck` limpo; `npm test` com 47
+  testes aprovados.
+- Lint não está configurado no projeto.
+
+Próxima ação:
+Humano coordenador validar cold start, logout e troca de conta em dev build
+Android/iOS. A unificação das responsabilidades de `PaywallScreen` e
+`PremiumScreen` permanece para a Fase 2.
+
 ---
 
 Data: 2026-07-30
@@ -1419,6 +1756,34 @@ iOS e Android.
 
 ---
 
+Data: 2026-08-11
+Responsável: Agente Frontend + QA
+Categoria: [CORREÇÃO]
+
+Descrição:
+Auditoria pós-Fase 3 identificou duas esperas sequenciais artificiais no cold
+start: os providers só montavam após as fontes e o listener do Firebase Auth só
+liberava a sincronização RevenueCat depois das leituras de
+perfil/questionário. Os providers agora montam durante a hidratação de fontes;
+após o Auth fornecer o UID, Firestore e `Purchases.logIn(uid)` avançam em
+paralelo. O Gate continua fail-closed até todos os dados obrigatórios estarem
+resolvidos. O loading inicial e o loading comercial do Paywall passaram a usar
+a mesma superfície visual.
+
+Foi confirmado que não existe `getCustomerInfo()` redundante depois de
+`Purchases.logIn(uid)` e que Offerings só são carregados após o Gate escolher o
+Paywall. Foram adicionados sete testes de orquestração/loading; suíte total:
+116 testes aprovados e TypeScript sem erros.
+
+Impacto:
+Menor caminho crítico estrutural no cold start e transição visual contínua para
+usuário sem Premium, sem mudar a autoridade de
+`CustomerInfo.entitlements.active['premium']`, sem usar Firestore no Gate e sem
+permitir decisão enquanto assinatura é desconhecida.
+
+Próxima ação:
+Repetir os cold starts Premium e sem Premium no dispositivo e manter os testes
+offline da Fase 3 como pendentes até validação real.
 Data: 2026-08-10
 Responsável: Codex — Agente Frontend + Segurança + QA
 Categoria: [IMPLEMENTAÇÃO]
@@ -1853,6 +2218,85 @@ Codex — 2026-08-11 — Fase 6 de createVault e recoverVaultKey.
 ---
 
 Data: 2026-08-12
+Responsável: Agente Documentador (registro de descoberta técnica validada pelo
+Humano Coordenador)
+Categoria: [CORREÇÃO]
+
+Descrição:
+Google Sign-In funcionava no development build Android, mas retornava
+`DEVELOPER_ERROR` (code 10) no app instalado a partir da Google Play — log real
+capturado do build distribuído:
+
+```txt
+This android application is not registered to use OAuth2.0, please confirm
+the package name and SHA-1 certificate fingerprint match what you registered
+in Google Developer Console.
+```
+
+O Web Client ID em runtime (`753375043967-oldj9c61p82vni4s1n5fjkks3gueh4se.apps.googleusercontent.com`)
+foi confirmado correto, descartando-o como causa. O app Android
+(`com.ajfit.mobile`) já tinha cadastrado no Firebase o SHA-1 atual do Google
+Play App Signing. Foi criado o OAuth Client Android correspondente, o
+`google-services.json` foi atualizado, um novo AAB foi gerado, enviado,
+revisado e instalado via Play Store — o erro persistiu.
+
+Causa raiz:
+O Google Play Console (Assinatura de apps → Play App Signing → "Chaves de
+assinatura do app anteriores") expõe um SHA-1 de uma chave de assinatura
+anterior, além da chave atual. Esse SHA-1 anterior não estava cadastrado no
+app Android do Firebase. Após cadastrá-lo (mesmo `com.ajfit.mobile`), o app já
+instalado pela Play Store — sem nenhum rebuild — passou a autenticar com
+Google Sign-In com sucesso poucos minutos depois.
+
+Evidência de que não foi o `google-services.json`/rebuild que resolveu: a
+sequência atualizar `google-services.json` → gerar AAB → publicar → instalar
+via Play Store já tinha sido executada antes da inclusão do SHA-1 anterior e
+não corrigiu o erro. A correção só ocorreu quando o SHA-1 passou a existir no
+Firebase/Google OAuth — configuração server-side, não embarcada no binário já
+instalado.
+
+SHA-1 cadastrados no app Firebase Android `com.ajfit.mobile` (finalidade de
+cada um — nenhum é secreto, são fingerprints públicos de certificado):
+
+```txt
+1. Development/debug:
+   5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25
+
+2. Google Play App Signing — chave atual:
+   FB:50:07:DE:A3:15:4C:EF:B5:25:FF:21:08:1F:16:81:35:B5:D4:BF
+
+3. Google Play App Signing — chave anterior:
+   97:11:72:4E:30:C7:65:C3:E8:41:BB:0F:6F:D1:01:F9:7B:56:C0:04
+```
+
+Princípio para evitar regressão (não é lista fechada):
+Sempre que o Google Play App Signing possuir chave atual e chave(s)
+anterior(es) que ainda possam assinar/distribuir versões compatíveis do app
+para dispositivos já existentes, todos os SHA-1 relevantes — atual e
+anteriores — precisam estar cadastrados no app Firebase/Google OAuth do
+mesmo package. Um certificado antigo não deve ser removido do Firebase apenas
+por parecer obsoleto, sem antes verificar se ainda assina versões em
+distribuição.
+
+Diagnóstico:
+Reprodução confirmada via logs reais (adb/logcat) do app instalado pela
+própria Google Play, isolando a mensagem de erro do SDK do Google Sign-In
+(`DEVELOPER_ERROR` / code 10 e a mensagem de package+SHA-1 não registrados)
+antes de qualquer alteração de configuração.
+
+Impacto:
+Nenhuma alteração de código de autenticação foi necessária. A causa era
+puramente de configuração OAuth (SHA-1 ausente para uma chave de assinatura
+válida do Google Play). `google-services.json` não precisou de nova geração
+para esta correção específica — isso não deve ser generalizado como "nunca
+precisa atualizar `google-services.json`" para outras mudanças (ex.: novo
+OAuth Client, novo package, nova chave de assinatura futura ainda não
+cadastrada).
+
+Próxima ação:
+Nenhuma pendência de código. Ao rotacionar ou adicionar chave de assinatura no
+Google Play App Signing no futuro, cadastrar o novo SHA-1 no Firebase antes de
+assumir que o Google Sign-In continuará funcionando na versão distribuída.
 Responsável: Codex — Agente Frontend + Segurança + QA
 Categoria: [IMPLEMENTAÇÃO]
 
@@ -1906,6 +2350,532 @@ Codex — 2026-08-12 — Fase 7 de integração mobile da Vault Key.
 ---
 
 Data: 2026-08-12
+Responsável: Agente Documentador (validação manual reportada pelo Humano
+Coordenador)
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Estado da validação Android das assinaturas (RevenueCat + sistema
+promocional), conforme validação manual em dispositivo/Google Play reportada
+pelo Humano Coordenador. Estas afirmações são registradas como "informação
+fornecida a partir da validação manual realizada" — não foram reverificadas
+automaticamente pelo agente documentador contra código ou logs nesta tarefa:
+
+* carregamento dos planos RevenueCat;
+* plano mensal e plano anual;
+* reconhecimento do cupom ARNALDO;
+* rejeição de cupom inexistente;
+* correlação do cupom com a oferta promocional correta;
+* matcher da `SubscriptionOption` corrigido (Android);
+* oferta promocional mensal correta: `monthly:influencer-trial-7d`;
+* oferta promocional anual correta: `annual:influencer-trial-7d-annual`;
+* RevenueCat expondo `freeTrialPeriodIso8601 = P1W`;
+* Google Play apresentando corretamente 7 dias grátis em teste válido;
+* compra/teste realizados, trial aparecendo na Google Play, próximo
+  pagamento agendado após os 7 dias;
+* entitlement `premium` ativo;
+* sincronização RevenueCat → backend/Firestore;
+* `subscription.status = TRIAL` durante o período gratuito;
+* `trialEndsAt` coerente com 7 dias e `currentPeriodEndsAt` coerente;
+* atribuição do cupom persistida;
+* acesso Premium liberado;
+* Google Sign-In funcionando na versão realmente distribuída pela Google
+  Play (causa raiz e correção registradas na entrada [CORREÇÃO] acima).
+
+Impacto:
+Nenhum item desta lista foi verificado por este agente via leitura de
+código/testes automatizados nesta tarefa — ver 13_assinaturas_e_billing.md
+para as regras de negócio correspondentes (§6–§11, §25–§30) e
+17_checklist_fase3_assinatura.md para o roteiro estrutural de lifecycle
+(cold start, background/foreground, restore, TRANSFER), que cobre um escopo
+diferente (lifecycle do Gate) do sistema de cupom/oferta promocional listado
+acima.
+
+Próxima ação:
+Nenhuma determinável apenas pelos documentos/evidências disponíveis nesta
+tarefa — os itens de sistema de cupom/oferta promocional (matcher de
+`SubscriptionOption`, roteamento `campaignId → Offering`) não possuem ainda
+um checklist formal equivalente ao 17_checklist_fase3_assinatura.md; se essa
+lacuna for confirmada como real, cabe ao Humano Coordenador decidir se cria
+um checklist dedicado ou expande o existente.
+Data: 2026-08-13
+Responsável: Codex — Agente Backend
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Implementada a Fase 2 da migração iOS Promo SKU + Introductory Offer. A nova
+callable autenticada `authorizePromoPurchase` aceita somente `monthly` ou
+`annual` e cria, dentro de transação Firestore, a intenção pré-compra aninhada
+em `couponRedemptions/{uid}.purchaseIntent`. Campanha, Offering e Product ID
+são derivados do snapshot `iosPromotion` da redemption; UID e timestamps são
+autoridade exclusiva do backend. A intent `purchase_pending` expira
+logicamente em 10 minutos, retry equivalente é idempotente sem renovar a
+janela, intent ativa conflitante é recusada e intent expirada pode ser
+substituída. O fluxo de aplicação de cupom também passou a impedir troca de
+campanha enquanto uma intent está ativa.
+
+Impacto:
+Somente backend, tipos, testes e documentação foram alterados. Paywall,
+StoreKit, correlação do webhook, Android e Apple Offer Code legado permanecem
+sem alteração. A intent não define `lockedAt`, `trialStartedAt` ou
+`convertedAt` e não concede Premium; `CustomerInfo.entitlements.active["premium"]`
+continua sendo a autoridade final.
+
+Próxima ação:
+Na Fase 3, após aprovação humana, correlacionar o webhook real com a intent
+pré-existente e o `product_id` esperado, sem inferir campanha pelo SKU.
+
+---
+
+Data: 2026-08-13
+Responsável: Codex — Agente Backend
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Implementada a Fase 3 da migração iOS Promo SKU + Introductory Offer. O
+webhook RevenueCat passa a correlacionar `APP_STORE` `INITIAL_PURCHASE` com a
+`purchaseIntent` pré-existente usando campanha, Offering, plano, Product ID e
+`purchased_at_ms` dentro da janela autorizada. O match e o consumo auditável
+(`purchase_confirmed`, `confirmedAt`, `revenueCatEventId`) ocorrem na mesma
+transação que confirma attribution. Retry exato é reconhecido e eventos
+distintos não reutilizam a intent.
+
+Impacto:
+`subscriptionSync.ts`, Gate Premium, cliente e Android permaneceram
+inalterados. Apple Offer Code legado continua disponível somente quando não há
+evidência aplicável do novo fluxo; conflito no fluxo novo nunca cai para o
+legado. Falha de correlação continua um resultado normal e não bloqueia o
+billing. O cliente ainda não chama `authorizePromoPurchase` nem compra os SKUs
+promocionais.
+
+Próxima ação:
+Após validação humana, integrar o cliente ao Offering `promo_7d`, à callable e
+à compra do SKU promocional na Fase 4.
+
+---
+
+Data: 2026-08-13
+Responsável: Codex — Agente App
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Implementada a Fase 4 da migração iOS Promo SKU + Introductory Offer. O cliente
+agora tipa e valida em runtime o `iosPromotion` retornado por
+`validatePromoCode`, preserva a autorização em estado efêmero isolado por UID
+e resolve de forma pura a Offering standard (`offerings.current`) ou a
+Offering promocional indicada pelo backend (`offerings.all[offeringIdentifier]`).
+O package promocional só é aceito quando `packageType` e Product ID coincidem
+com a autorização; inconsistências falham sem fallback.
+
+Impacto:
+O estado promocional passou a viver em provider em memória acima do navegador,
+portanto sobrevive a remount do Paywall, mas não a restart, logout ou troca de
+usuário. O Paywall apenas prepara/diagnostica a resolução nesta fase: não chama
+`authorizePromoPurchase` e não compra Promo SKU. Android, Premium gate,
+Functions, webhook, `subscriptionSync.ts` e Apple Offer Code legado ficaram
+inalterados.
+
+Próxima ação:
+Na Fase 5, integrar no tap de compra a criação imediata da purchase intent e a
+compra do package promocional já validado, sem fallback comercial silencioso.
+
+---
+
+Data: 2026-08-13
+Responsável: Codex — Agente App
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Implementada a Fase 5 da migração iOS Promo SKU + Introductory Offer. O
+Paywall passa a exibir os packages promocionais estritamente resolvidos pela
+autorização backend, consulta a elegibilidade introdutória real do
+RevenueCat/StoreKit por Product ID e deriva trial somente do `introPrice` real
+com preço zero, duração válida e status `ELIGIBLE`. `INELIGIBLE` mostra o preço
+regular do Promo SKU; `UNKNOWN`, erro e configuração introdutória inconsistente
+falham de modo seguro sem prometer trial.
+
+Impacto:
+No toque em Continuar, o app chama `authorizePromoPurchase` enviando somente o
+plano, revalida a intent contra o snapshot de UID/cupom/plano/Offering/Product
+ID/package/TTL e só então compra o package promocional exato. Double tap,
+resposta obsoleta, mismatch, expiração, conflito e falha de autorização não
+chegam ao StoreKit e não fazem fallback. O fluxo standard, Apple Offer Code
+legado, Android, webhook, `subscriptionSync.ts` e autoridade Premium por
+CustomerInfo foram preservados. Não houve deploy nem alteração remota.
+
+Próxima ação:
+Executar a Fase 6 / E2E controlada no sandbox iOS, incluindo Apple IDs
+elegível e inelegível e validação visual da folha de pagamento Apple.
+
+---
+
+Data: 2026-08-13
+Responsável: Codex — Agente App
+Categoria: [REFATORAÇÃO]
+
+Descrição:
+Implementada a Fase 6 da migração iOS Promo SKU + Introductory Offer. Foi
+removido exclusivamente do cliente o terceiro caminho Apple Offer Code:
+rota/tipos/resolvers, operação pública do `SubscriptionContext`, serviço de
+redemption, chamada `presentCodeRedemptionSheet`, helper temporário de espera,
+CTA e testes/mocks exclusivos. O campo `storeConfig.ios` permanece apenas no
+contrato de resposta client-side como wire legado não consumido, evitando
+alteração desnecessária de Functions.
+
+Impacto:
+O Paywall iOS agora compra somente o package normal de `offerings.current` ou
+o Promo SKU autorizado por `iosPromotion`, Intro Eligibility e
+`authorizePromoPurchase`. Um cupom legado sem a nova autorização falha
+fechado, sem fallback para preço standard ou redemption. CustomerInfo segue
+como autoridade Premium; listener global, refresh de foreground, Android,
+purchase intent, webhook, `subscriptionSync.ts` e compatibilidade histórica
+do backend foram preservados. Não houve push, deploy ou mutação remota.
+
+Próxima ação:
+Executar a Fase 7 / E2E Sandbox controlado em iOS para contas elegível e
+inelegível, verificando catálogo, termos exibidos, folha StoreKit, purchase
+intent e ativação exclusivamente por CustomerInfo.
+
+Assinatura:
+Codex — Agente App; 2026-08-13; prompt AJ FIT FASE 6.
+
+---
+
+Data: 2026-08-13
+Responsável: Codex — Agente App
+Categoria: [AUDITORIA]
+
+Descrição:
+Executada a Fase 7 da migração iOS Promo SKU + Introductory Offer, dedicada à
+auditoria residual da antiga Redemption Sheet. Helpers, bypass de sandbox,
+testes comportamentais antigos, chamada da sheet, espera temporária de
+CustomerInfo e diagnostics específicos já estavam ausentes no baseline da
+Fase 6. A única ocorrência executável remanescente era a flag órfã
+`EXPO_PUBLIC_ENABLE_APPLE_OFFER_CODE_SANDBOX_TEST` no `.env` local; ela foi
+removida sem expor seu valor. A flag já estava ausente de `.env.example`,
+configuração Expo/EAS, scripts e código.
+
+Impacto:
+Nenhuma implementação de app ou Functions foi alterada. Foram preservados os
+testes estruturais de ausência da Fase 6, o listener global de CustomerInfo, o
+refresh legítimo por AppState, os logs permanentes de attribution/billing, o
+backend Apple legado, `storeConfig.ios` como wire tipado não consumido, o novo
+Promo SKU, Intro Eligibility, purchase intent, webhook, Android e
+`subscriptionSync.ts`. Não houve E2E, push, deploy nem mutação remota.
+
+Próxima ação:
+Executar a Fase 8 / E2E Sandbox controlado no iOS, sem declarar prontidão para
+produção antes da validação real de usuários elegível e inelegível.
+
+Assinatura:
+Codex — Agente App; 2026-08-13; prompt AJ FIT FASE 7.
+
+---
+
+Data: 2026-08-13
+Responsável: Codex — Agente Backend + QA
+Categoria: [REFATORAÇÃO]
+
+Descrição:
+Executada a Fase 8 da migração iOS Promo SKU + Introductory Offer. O modelo
+ativo Apple Offer Code foi removido do catálogo tipado, admin,
+`validatePromoCode`, novos `couponRedemptions` e correlação do webhook.
+`correlateAppleOffer` e sua suíte exclusiva foram removidos; `storeConfig.ios`
+e o tipo wire cliente correspondente também deixaram de existir.
+
+Impacto:
+O webhook `APP_STORE` correlaciona attribution apenas por
+`correlateApplePromoPurchaseIntent`; produto normal ou Promo SKU sem intent
+válida não recebe attribution, mesmo com `event.offer_code`. Dados Firestore
+históricos não foram apagados: campos Apple antigos são tolerados e ignorados,
+e o writer preserva extras existentes sem depender deles. Android,
+`subscriptionSync.ts`, Intro Eligibility, purchase intent, logs permanentes e
+autoridade Premium por CustomerInfo permaneceram intactos. Não houve E2E,
+push, deploy ou mutação remota.
+
+Próxima ação:
+Após validação humana, executar a Fase 9 / E2E Sandbox controlado para os
+cenários iOS standard e Promo SKU elegível/inelegível.
+
+Assinatura:
+Codex — Agente Backend + QA; 2026-08-13; prompt AJ FIT FASE 8.
+
+---
+
+Data: 2026-08-13
+Responsável: Codex — Agente QA
+Categoria: [AUDITORIA]
+
+Descrição:
+Executada a Fase 9 da migração iOS Promo SKU + Introductory Offer como
+auditoria de regressão Android. O fluxo real permaneceu baseado em
+`validatePromoCode` → snapshot `androidOffer` → match exato de
+`SubscriptionOption` → `purchaseSubscriptionOption` → webhook `PLAY_STORE` →
+`correlateGooglePlayOffer`. Nenhum arquivo de produção foi alterado.
+
+Impacto:
+A cobertura passou a provar explicitamente Android standard e promocional
+mensal/anual, independência de `iosPromotion` e purchase intent, passagem da
+option exata ao SDK, campanha Android-only, roteamento por loja e fail-closed
+para loja desconhecida. Permaneceram intactos o uso Google Play de
+`offer_code`, admin Android, `subscriptionSync.ts`, Promo SKU iOS, Intro
+Eligibility e autoridade Premium exclusiva por CustomerInfo. Não houve E2E,
+push, deploy ou mutação remota.
+
+Próxima ação:
+Após validação humana, executar a Fase 10 / E2E Sandbox controlado conforme
+roteiro próprio, sem inferir equivalência entre as estratégias internas de
+iOS e Android.
+
+Assinatura:
+Codex — Agente QA; 2026-08-13; prompt AJ FIT FASE 9.
+
+---
+
+Data: 2026-08-13
+Responsável: Codex — Agente QA
+Categoria: [TESTES]
+
+Descrição:
+Executada a Fase 10 da migração iOS Promo SKU + Introductory Offer como matriz
+E2E-like **AUTOMATED / EMULATED**, anterior ao E2E Sandbox real. A cobertura
+do app prova standard mensal/anual por `offerings.current` sem Promo SKU,
+autorização backend como única origem de `promo_7d`, Product IDs promocionais
+exatos, Intro Eligibility baseada em dados StoreKit/RevenueCat e ordem
+obrigatória de intent antes da compra simulada.
+
+Impacto:
+O Firestore Emulator atravessa catálogo, `validatePromoCode`, snapshot,
+`authorizePromoPurchase`, purchase intent e webhook sintético nos planos
+mensal e anual. Também cobre reuso após lock com mesmo/outro cupom, catálogo
+alterado após snapshot, intent expirada, dois códigos/dispositivos/planos
+concorrentes, mismatch e consumo atômico. Rules negam cada write sensível. A
+matriz do Premium Gate confirma que somente CustomerInfo concede acesso;
+Android e `subscriptionSync.ts` permanecem intactos. Nenhum arquivo de
+produção foi alterado e não houve compra real, push, deploy ou mutação remota.
+
+Próxima ação:
+Após validação humana dos gates, executar a Fase 11 de deploy controlado do
+backend promocional antes de qualquer cliente novo ou E2E iOS Sandbox real.
+
+Assinatura:
+Codex — Agente QA; 2026-08-13; prompt AJ FIT FASE 10.
+
+---
+
+Data: 2026-08-13
+Responsável: Codex — Agente Backend + QA
+Categoria: [DEPLOY CONTROLADO]
+
+Descrição:
+Executada a Fase 11 da migração iOS Promo SKU + Introductory Offer com deploy
+seletivo no projeto Firebase confirmado `ajfit-2f321`. Foram publicados
+somente `validatePromoCode`, `authorizePromoPurchase` e
+`revenueCatWebhook`; Functions de vault, health e administração de catálogo
+ficaram fora do alvo e foram preservadas. `authorizePromoPurchase` foi criada
+e as outras duas Functions receberam novas revisões Gen2 ativas, todas em
+`us-central1`/Node.js 20. Os secrets `REVENUECAT_WEBHOOK_SECRET` e
+`REVENUECAT_API_SECRET_KEY` já existiam e permaneceram vinculados às versões
+habilitadas. Para um smoke HMAC sem efeito de negócio, o valor do secret do
+webhook foi acessado somente em memória; não foi exibido, persistido nem
+registrado. O secret da API RevenueCat não foi acessado.
+
+Validação:
+- pós-deploy: App typecheck e 59 arquivos / 1.038 testes aprovados;
+- pós-deploy: Functions typecheck/build e 22 arquivos / 474 testes aprovados;
+- pós-deploy: Firestore Emulator/Rules, 3 arquivos / 63 testes aprovados com
+  Java 21;
+- pós-deploy: i18n check, 22 arquivos / 544 testes; audit de 839 chaves, 14
+  suspeitas conhecidas e zero bloqueio; `git diff --check` aprovado;
+- regressão backend focalizada: iOS, 7 arquivos / 197 testes; Android, 3
+  arquivos / 93 testes;
+- chamadas sem autenticação a `validatePromoCode` e
+  `authorizePromoPurchase`: HTTP 401 `UNAUTHENTICATED`;
+- webhook sem assinatura: HTTP 401 `invalid_signature`;
+- webhook com HMAC válido e tipo deliberadamente não suportado: HTTP 200
+  `ignored/unsupported_event_type`, sem escrita;
+- identidade descartável autenticada: `ARNALDO` foi reconhecido e o espelho
+  `users/{uid}.attribution` foi gravado, provando Function + Firestore;
+- todos os documentos e a conta Auth temporários foram removidos após cada
+  tentativa, sem resíduo conhecido e sem apagar dados históricos.
+
+Auditoria de infraestrutura:
+- as Rules remotas não são byte a byte iguais às locais, porém protegem
+  `couponRedemptions` explicitamente e `purchaseIntent`, `lockedAt`,
+  `trialStartedAt` e `convertedAt` por deny-all/imutabilidade; diferenças
+  locais incluem áreas fora desta migração, portanto Rules não foram
+  publicadas;
+- os dez índices locais e remotos são equivalentes após normalização dos
+  campos implícitos; nenhum índice foi publicado;
+- Storage Rules, Hosting, Remote Config, RevenueCat Dashboard, App Store
+  Connect e Google Play Console não foram alterados.
+
+Bloqueio encontrado:
+O catálogo remoto de produção respondeu `iosPromotion: null` para `ARNALDO`.
+Por isso `authorizePromoPurchase` falhou fechado com
+`ios_promotion_unavailable` e não criou purchase intent. A correlação positiva
+Promo SKU → intent → webhook não pôde ser exercitada. Nenhuma configuração
+remota foi alterada para contornar o bloqueio.
+
+Conformidade do procedimento:
+Os gates de App, i18n e `git diff --check` não foram repetidos nesta Fase 11
+antes do comando de deploy. Eles estavam verdes na Fase 10 e ficaram verdes
+quando executados após o deploy, mas isso não satisfaz retroativamente o
+critério obrigatório de todos os gates pré-deploy. Assim, apesar das três
+Functions estarem `ACTIVE` e os smokes seguros terem o resultado esperado, a
+Fase 11 é registrada como **NÃO APROVADA**. Não foi feito novo deploy apenas
+para repetir uma operação remota já concluída.
+
+Impacto:
+O código backend novo está implantado antes do cliente e suas fronteiras de
+autenticação/HMAC estão operacionais, mas a cadeia promocional remota fica
+parcial enquanto o catálogo não fornecer `iosPromotion`. Não houve deploy do
+app, Rules, Storage, Hosting, Remote Config ou Functions fora do alvo; não
+houve push, compra Sandbox nem mutação RevenueCat/App Store/Google Play. O CLI
+alertou que Node.js 20 está deprecated e deixará de aceitar novos deploys em
+2026-10-30, e que `firebase-functions` está defasado; a migração deve ser
+planejada em tarefa separada, sem ampliar esta fase.
+
+Próxima ação:
+Obter autorização explícita para cadastrar no catálogo remoto a configuração
+iOS aprovada de `ARNALDO` (`promo_7d` + SKUs mensal/anual promocionais) por um
+canal administrativo controlado. Depois repetir a validação backend-only de
+purchase intent, com todos os gates executados antes de qualquer novo deploy,
+e só então avançar ao E2E iOS Sandbox real.
+
+Assinatura:
+Codex — Agente Backend + QA; 2026-08-13; prompt AJ FIT FASE 11.
+
+---
+
+Data: 2026-08-13
+Responsável: Codex — Agente Backend + QA
+Categoria: [OPERAÇÃO CONTROLADA]
+
+Descrição:
+Executada a Fase 11B para resolver o bloqueio remoto registrado na Fase 11.
+O mecanismo oficial encontrado foi a callable administrativa
+`adminUpdatePromoCode`; não existe UI correspondente no painel administrativo
+local e a Function ainda não estava publicada. O catálogo RevenueCat do app
+iOS foi consultado pela API oficial e confirmou `promo_7d` com os packages
+mensal/anual apontando, respectivamente, para
+`ajfit_premium_monthly_promo` e `ajfit_premium_annual_promo`, sem ambiguidade.
+O App Store Connect não pôde ser auditado diretamente por ausência de acesso
+seguro não interativo; nenhuma configuração Apple foi criada ou alterada.
+
+Operação:
+Todos os gates obrigatórios passaram antes de qualquer deploy. Foi então
+publicada exclusivamente `adminUpdatePromoCode` no projeto `ajfit-2f321`.
+Por essa API allowlisted, e não por escrita manual, `ARNALDO.iosPromotion` foi
+configurado com a Offering e os dois Product IDs confirmados. O read-back
+preservou configuração Android, estado comercial, metadados de criação e
+campos Apple históricos tolerados. Nenhuma outra Function, Rule, índice,
+cliente, Remote Config, RevenueCat, App Store Connect ou Google Play recebeu
+mutação.
+
+Validação remota:
+Uma identidade QA descartável confirmou `validatePromoCode` no iOS, o snapshot
+de `iosPromotion` sem `appleOffer`/`appleOfferCorrelation` e
+`authorizePromoPurchase({ plan: "monthly" })` com Product ID correto, Offering
+correta, estado `purchase_pending` e TTL de 600 segundos. Um único retry
+reutilizou a intent sem renovar nenhum timestamp. Nenhum marcador de consumo
+ou campo de Premium foi criado. O smoke Android continuou retornando seus
+pares mensal/anual corretos e sem interferência de `iosPromotion`. StoreKit,
+compra e webhook artificial não foram executados. A conta Auth e os documentos
+QA foram removidos e confirmados como ausentes.
+
+Impacto:
+O backend agora alcança, remotamente, a fronteira prevista para esta fase:
+`validatePromoCode → iosPromotion → authorizePromoPurchase → purchase_pending`.
+O webhook continua `ACTIVE`, com HMAC preservado, e não foi redeployado.
+CustomerInfo continua sendo a única autoridade client-side de Premium.
+
+Próxima ação:
+Executar a Fase 12 / E2E iOS Sandbox real. Antes da compra, validar no circuito
+real do app o catálogo StoreKit e a Intro Eligibility; a configuração direta
+do App Store Connect permanece não verificada nesta fase.
+
+Assinatura:
+Codex — Agente Backend + QA; 2026-08-13; prompt AJ FIT FASE 11B.
+
+---
+
+Data: 2026-08-13
+Responsável: Codex — Agente App + QA
+Categoria: [BLOQUEIO]
+
+Descrição:
+Durante a Fase 12A.1, foram neutralizadas as promessas prematuras de trial na
+`AuthScreen` e na `PlanReadyScreen`, com regressões focais aprovadas. A busca
+global posterior não encontrou outro caso runtime que prometesse benefício
+comercial antes da autoridade da loja.
+
+Bloqueio:
+O logging atual não identifica explicitamente todos os marcos exigidos para o
+E2E manual: rota standard/promocional, plano selecionado, compra iniciada,
+cancelamento/sucesso e estado Premium resultante. Como a tarefa determina
+parada antes de adicionar instrumentação quando houver essa lacuna, os gates,
+o build iOS e o commit final não foram executados.
+
+Próxima ação:
+Obter autorização explícita para acrescentar logging simbólico e sanitizado,
+sem UID completo, cupom, receipt, token, payload ou CustomerInfo. Depois,
+retomar os gates, o development build iOS e os roteiros E2E da mesma fase.
+
+Assinatura:
+Codex — Agente App + QA; 2026-08-13; prompt AJ FIT FASE 12A.1.
+
+---
+
+Data: 2026-08-13
+Responsável: Codex — Agente App + QA
+Categoria: [CORREÇÃO + PRÉ-FLIGHT]
+
+Descrição:
+Retomada autorizada da Fase 12A.1 e concluída a Fase 12A.2. As promessas de
+trial anteriores ao Paywall permaneceram neutralizadas na criação de conta e
+na tela de plano pronto. Foi adicionada observabilidade iOS estritamente
+allowlisted para rota standard/promo, plano mensal/anual, Intro Eligibility,
+autorização da purchase intent, início/cancelamento/conclusão/falha da compra e
+`premiumActive` derivado exclusivamente do CustomerInfo retornado pelo SDK.
+Os logs não transportam UID, email, cupom, Product ID, Offering, CustomerInfo,
+receipt, token, SubscriptionOption ou Offer Token.
+
+Validação:
+- App typecheck aprovado;
+- App: 61 arquivos / 1.055 testes aprovados;
+- Functions typecheck/build aprovados e 22 arquivos / 474 testes aprovados;
+- Firestore Emulator/Rules: 3 arquivos / 63 testes aprovados com Java 21;
+- i18n check: 22 arquivos / 545 testes aprovados;
+- i18n audit: 838 chaves, 14 suspeitas conhecidas e zero bloqueio;
+- `git diff --check` aprovado após a documentação final;
+- build iOS Debug para dispositivo genérico: `BUILD SUCCEEDED`, zero erros e
+  seis avisos não bloqueadores; artefato `AJFit.app` gerado para
+  `com.ajfit.app`.
+
+Arquitetura preservada:
+CustomerInfo continua sendo a única autoridade client-side de Premium. O
+listener global único e o refresh legítimo por AppState foram preservados. O
+fluxo standard não cria purchase intent; o fluxo promo mantém validação
+estrita, Intro Eligibility fail-closed, autorização antes da compra e ausência
+de fallback Promo → standard/Offer Code. Functions, webhook, billing, Android,
+RevenueCat e configurações remotas não foram alterados.
+
+Preparação manual:
+Foram finalizados no plano de testes o checklist humano de 13 pontos do App
+Store Connect, a separação das contas Sandbox A–D, os roteiros Standard
+Monthly, Promo Monthly elegível, Promo Annual elegível e Promo inelegível e a
+ficha sanitizada de evidências. O App Store Connect não foi verificado pelo
+agente; nenhuma compra, deploy, push ou mutação remota foi executada.
+
+Próxima ação:
+Victor deve confirmar o checklist do App Store Connect, instalar o build em
+iPhone físico e iniciar pelo cenário A — Standard Monthly. Só então executar
+os quatro cenários, preservando a independência de eligibility do Subscription
+Group.
+
+Assinatura:
+Codex — Agente App + QA; 2026-08-13; prompt AJ FIT FASE 12A.2.
 Responsável: Codex — Agente Frontend + Segurança + QA
 Categoria: [IMPLEMENTAÇÃO]
 

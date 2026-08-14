@@ -23,6 +23,7 @@ import { OutlineNumber } from '../components/ui/OutlineNumber';
 import { ExerciseGif } from '../components/fitness/ExerciseGif';
 import { colors, fonts, displayLineHeight } from '../theme/tokens';
 import { TODAY_WORKOUT } from '../lib/todayWorkout';
+import { logWarn } from '../lib/logger';
 import { useUnits } from '../state/UnitsContext';
 import {
   adjustWorkoutLoadKg,
@@ -175,7 +176,7 @@ function translateExerciseName(tLoose: LooseT, db: string, fallbackName: string)
   const value = tLoose(key, { defaultValue: '' });
   if (value && value !== key) return value;
   if (__DEV__) {
-    console.warn('[workout] missing exercise translation for db:', db);
+    logWarn('workout', 'missing_exercise_translation', { exercise: db });
   }
   return fallbackName;
 }
@@ -184,7 +185,7 @@ function translateMuscleGroup(tLoose: LooseT, target: string): string {
   const stableKey = MUSCLE_GROUP_KEY_BY_TARGET[target];
   if (!stableKey) {
     if (__DEV__) {
-      console.warn('[workout] missing muscleGroup key for target:', target);
+      logWarn('workout', 'missing_muscle_group_translation', { target });
     }
     return target;
   }

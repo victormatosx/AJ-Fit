@@ -380,3 +380,71 @@ O sistema deve permitir armazenar o cupom promocional utilizado no cadastro.
 O objetivo é rastrear a origem do usuário para fins de comissão e análise interna.
 
 O cupom não influencia a lógica de treino.
+
+---
+
+# 16. Redemption promocional e intenção de compra iOS
+
+`couponRedemptions/{uid}` é o registro de ciclo de vida server-managed da
+atribuição promocional atual do UID. O ID do documento é o próprio Firebase
+UID; clientes não podem ler nem escrever essa coleção pelas Firestore Rules.
+
+Na migração iOS Promo SKU, o documento pode conter:
+
+```txt
+couponRedemptions/{uid}
+  uid
+  couponCode
+  campaignId
+  influencerId
+  androidOffer
+  iosPromotion
+    offeringIdentifier
+    monthlyProductId
+    annualProductId
+  purchaseIntent (opcional)
+    campaignId
+    plan                  // monthly | annual
+    expectedProductId
+    offeringIdentifier
+    status                // purchase_pending | purchase_confirmed
+    createdAt             // timestamp do backend
+    updatedAt             // timestamp do backend
+    expiresAt             // timestamp do backend
+    confirmedAt           // somente purchase_confirmed; relógio do evento RevenueCat
+    revenueCatEventId     // somente purchase_confirmed; idempotência/auditoria
+  appliedAt
+  createdAt
+  updatedAt
+  trialStartedAt
+  convertedAt
+  lockedAt
+```
+
+`iosPromotion` é um snapshot capturado quando o cupom é aplicado. A intenção
+pré-compra deriva campanha, Offering e Product ID exclusivamente desse
+documento; não relê `promoCodes/{code}` e não aceita esses valores do cliente.
+
+Existe no máximo uma `purchaseIntent` aninhada por UID. A validade é lógica:
+o backend sempre compara `expiresAt` com seu próprio relógio, independentemente
+de eventual limpeza futura por Firestore TTL. Uma intent expirada pode ser
+substituída transacionalmente; uma intent ativa conflitante não pode.
+
+`purchase_pending` não altera `lockedAt`, `trialStartedAt` ou `convertedAt` e
+não concede Premium. Um `INITIAL_PURCHASE` App Store somente transiciona a
+intent para `purchase_confirmed` quando campanha, Offering, plano, Product ID
+e `purchased_at_ms` forem consistentes e a compra tiver ocorrido dentro da
+janela inclusiva `createdAt..expiresAt`. A transição, `lockedAt` e os demais
+timestamps de attribution são gravados na mesma transação. A intent confirmada
+preserva `confirmedAt` e `revenueCatEventId`, não pode ser reautorizada e
+permite reconhecer retry exato sem reescrita.
+
+Nenhum desses campos concede Premium. A autoridade de acesso continua sendo
+exclusivamente o `CustomerInfo.entitlements.active["premium"]` do RevenueCat.
+
+Desde a Fase 8 da migração iOS Promo SKU, `appleOffer` e
+`appleOfferCorrelation` não fazem parte do modelo ativo nem são escritos ou
+lidos por fluxos novos. Documentos históricos podem continuar contendo esses
+campos como evidência legítima; readers atuais toleram e ignoram os extras, e
+nenhuma migração destrutiva é executada. A atribuição iOS ativa depende de
+`iosPromotion`, `purchaseIntent`, `product_id` e `purchased_at_ms`.

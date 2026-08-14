@@ -2,18 +2,20 @@
   "name": "aj-fit-functions",
   "private": true,
   "version": "0.1.0",
-  "description": "AJ Fit backend — Firebase Cloud Functions (v2).",
+  "description": "AJ Fit backend — Firebase Cloud Functions v2 for billing, promotions, authentication and Photo Vault.",
   "engines": {
-    "node": "20"
+    "node": "22"
   },
   "main": "lib/index.js",
   "scripts": {
-    "build": "tsc",
-    "build:watch": "tsc --watch",
+    "build": "tsc -p tsconfig.build.json",
+    "build:watch": "tsc -p tsconfig.build.json --watch",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "serve": "npm run build && firebase emulators:start --only functions",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log",
     "logs:production": "firebase functions:log --project production",
     "deploy:production": "npm run build && firebase deploy --only functions --project production",
     "deploy:staging": "npm run build && firebase deploy --only functions --project staging"
@@ -24,7 +26,7 @@
     "firebase-functions": "^5.1.1"
   },
   "devDependencies": {
-    "@types/node": "^20.14.0",
+    "@types/node": "^22.0.0",
     "typescript": "~5.6.3",
     "vitest": "^4.1.10"
   }

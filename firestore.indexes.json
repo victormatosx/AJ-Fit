@@ -6,7 +6,6 @@
       "fields": [
         { "fieldPath": "measuredAt", "order": "DESCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
-        
       ]
     },
     {

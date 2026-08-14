@@ -287,8 +287,7 @@ describe('logging never receives key material', () => {
     expect(everythingLogged).not.toContain(wrapped);
     expect(everythingLogged).not.toContain(Buffer.from(key).toString('base64'));
     expect(everythingLogged).not.toContain(Buffer.from(key).toString('hex'));
-    // The logger is still used — this test would be vacuous otherwise.
-    expect((logger.info as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(0);
+    expect((logger.info as ReturnType<typeof vi.fn>)).not.toHaveBeenCalled();
   });
 
   it('logs nothing sensitive when KMS fails', async () => {

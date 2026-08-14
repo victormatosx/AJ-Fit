@@ -7,6 +7,7 @@ function source(relativePath: string): string {
 }
 
 const app = source('App.tsx');
+const premiumGate = source('src/lib/premiumGate.ts');
 const appShell = source('src/screens/AppShell.tsx');
 const authContext = source('src/state/AuthContext.tsx');
 const authScreen = source('src/screens/AuthScreen.tsx');
@@ -128,9 +129,10 @@ describe('production TOTP enrollment and management structure', () => {
 
   it('does not alter central Quiz/Dashboard navigation', () => {
     expect(authContext).toContain('subscribeToAuthState(async (nextUser) =>');
-    expect(authContext).toContain('await loadUserState(nextUser.uid)');
-    const questionnaireGuard = app.indexOf('if (!questionnaire)');
-    const funnelGuard = app.indexOf('if (FUNNEL_ONLY.includes(screen))');
+    expect(authContext).toContain('const userStatePromise = loadUserState(nextUser.uid)');
+    expect(authContext).toContain('await userStatePromise');
+    const questionnaireGuard = premiumGate.indexOf('if (!state.hasQuestionnaire)');
+    const funnelGuard = premiumGate.indexOf("return state.isPremium ? 'app' : 'paywall'");
     expect(questionnaireGuard).toBeGreaterThan(-1);
     expect(funnelGuard).toBeGreaterThan(questionnaireGuard);
     expect(app).not.toContain('TotpEnrollment');

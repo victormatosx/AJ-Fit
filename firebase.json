@@ -10,7 +10,7 @@
     {
       "source": "functions",
       "codebase": "default",
-      "ignore": ["node_modules", ".git", "*.local", "firestore-debug.log"],
+      "ignore": ["node_modules", ".git", "*.local", "firebase-debug.log", "firestore-debug.log"],
       "predeploy": ["npm --prefix \"$RESOURCE_DIR\" run build"]
     }
   ],

@@ -41,7 +41,6 @@ beforeEach(() => {
   mocks.enableSwitcher.mockResolvedValue(undefined);
   mocks.disableSwitcher.mockResolvedValue(undefined);
 });
-
 afterEach(async () => {
   await deactivatePhotoVaultScreenProtection();
 });
@@ -102,4 +101,3 @@ describe('Photo Vault screen protection', () => {
     expect(source).not.toContain('addScreenshotListener');
   });
 });
-

@@ -24,4 +24,3 @@ describe('Photo Vault performance instrumentation', () => {
     expect(source).not.toMatch(/uid|photoId|sourceUri|storagePath|vaultKey/);
   });
 });
-

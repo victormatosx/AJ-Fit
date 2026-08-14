@@ -1,5 +1,12 @@
 import React from 'react';
-import { Pressable, View, Text, StyleProp, ViewStyle } from 'react-native';
+import {
+  Pressable,
+  View,
+  Text,
+  type AccessibilityState,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, displayLineHeight, fonts } from '../../theme/tokens';
 
@@ -9,6 +16,7 @@ type Props = {
   ghost?: boolean;
   disabled?: boolean;
   style?: StyleProp<ViewStyle>;
+  accessibilityState?: AccessibilityState;
   /**
    * Screen-reader label. Useful when the visible text is truncated, or when
    * the button renders an indicator instead of its label.
@@ -23,6 +31,7 @@ export function CtaButton({
   ghost,
   disabled,
   style,
+  accessibilityState,
   accessibilityLabel,
   accessibilityHint,
 }: Props) {
@@ -30,9 +39,11 @@ export function CtaButton({
     accessibilityRole: 'button' as const,
     accessibilityLabel,
     accessibilityHint,
-    accessibilityState: { disabled: Boolean(disabled) },
+    accessibilityState: {
+      ...accessibilityState,
+      disabled: Boolean(disabled || accessibilityState?.disabled),
+    },
   };
-
   if (ghost) {
     return (
       <Pressable

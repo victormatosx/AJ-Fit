@@ -7,6 +7,7 @@ function source(relativePath: string): string {
 }
 
 const app = source('App.tsx');
+const premiumGate = source('src/lib/premiumGate.ts');
 const authContext = source('src/state/AuthContext.tsx');
 const authScreen = source('src/screens/AuthScreen.tsx');
 const authService = source('src/services/auth.ts');
@@ -27,26 +28,27 @@ describe('definitive TOTP sign-in flow contract', () => {
     expect(challengeHook).not.toContain('setUser(');
     expect(challengeHook).not.toContain('loadUserState(');
     expect(authContext).toContain('subscribeToAuthState(async (nextUser) =>');
-    expect(authContext).toContain('await loadUserState(nextUser.uid)');
+    expect(authContext).toContain('const userStatePromise = loadUserState(nextUser.uid)');
+    expect(authContext).toContain('await userStatePromise');
     expect(authContext).toContain('getUserProfile(uid)');
     expect(authContext).toContain('getLatestQuestionnaire(uid)');
   });
 
   it('routes an existing questionnaire to Dashboard only after authentication loads', () => {
-    const loadingGate = app.indexOf(
-      'if (initializing || profileLoading || preferencesReconciling) return;',
+    const loadingGate = premiumGate.indexOf(
+      'if (state.authInitializing || state.profileLoading) return null;',
     );
-    const questionnaireGuard = app.indexOf('if (!questionnaire)');
-    const dashboardGuard = app.indexOf('if (FUNNEL_ONLY.includes(screen))');
+    const questionnaireGuard = premiumGate.indexOf('if (!state.hasQuestionnaire)');
+    const dashboardGuard = premiumGate.indexOf("return state.isPremium ? 'app' : 'paywall'");
     expect(loadingGate).toBeGreaterThan(-1);
     expect(questionnaireGuard).toBeGreaterThan(loadingGate);
     expect(dashboardGuard).toBeGreaterThan(questionnaireGuard);
-    expect(app).toContain("setScreen('app')");
+    expect(app).toContain('const resolvedScreen = resolvePremiumGate({');
   });
 
   it('preserves email-verification priority over Quiz/Dashboard', () => {
-    const verificationGuard = app.indexOf('if (emailVerificationRequired)');
-    const questionnaireGuard = app.indexOf('if (!questionnaire)');
+    const verificationGuard = premiumGate.indexOf('if (state.emailVerificationRequired)');
+    const questionnaireGuard = premiumGate.indexOf('if (!state.hasQuestionnaire)');
     expect(verificationGuard).toBeGreaterThan(-1);
     expect(verificationGuard).toBeLessThan(questionnaireGuard);
   });

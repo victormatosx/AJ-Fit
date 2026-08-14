@@ -11,6 +11,7 @@ import { getFirestore, type Firestore } from 'firebase/firestore';
 import { getStorage, type FirebaseStorage } from 'firebase/storage';
 import { initializeFirebaseAppCheck } from './firebaseAppCheck';
 import { secureAuthStorage } from './secureAuthStorage';
+import { logError } from './logger';
 
 /**
  * Centralized Firebase setup for AJ Fit.
@@ -78,7 +79,7 @@ function createAuth(): Auth {
     // Expected on Fast Refresh (auth already initialized). Logged because the
     // fallback `getAuth(app)` below does NOT persist sessions across
     // restarts — if this fires on a cold start, persistence silently breaks.
-    console.error('[firebase] initializeAuth fallback to getAuth(app):', err);
+    logError('firebase:initializeAuth-fallback', err);
     return getAuth(app);
   }
 }

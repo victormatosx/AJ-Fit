@@ -1,6 +1,5 @@
 import { VaultCryptoError } from './errors';
 import { cryptoKeyName, getKmsClient } from './kmsClient';
-import { logInfo } from '../lib/logger';
 
 /**
  * Envelope encryption for the Photo Vault.
@@ -27,8 +26,6 @@ export const VAULT_KEY_BYTES = 32;
  * KMS.
  */
 const MAX_WRAPPED_KEY_BASE64_LENGTH = 4096;
-
-const SCOPE = 'photoVault.crypto';
 
 function assertValidVaultKey(vaultKey: Uint8Array): void {
   if (!(vaultKey instanceof Uint8Array)) {
@@ -103,8 +100,6 @@ export async function wrapVaultKey(vaultKey: Uint8Array): Promise<WrappedVaultKe
     throw new VaultCryptoError('KMS_ENCRYPT_FAILED', 'KMS response key mismatch');
   }
 
-  logInfo(SCOPE, 'vault key wrapped');
-
   return {
     wrappedVaultKey: Buffer.from(ciphertext).toString('base64'),
     kmsKeyVersion,
@@ -140,8 +135,6 @@ export async function unwrapVaultKey(wrappedVaultKey: string): Promise<Buffer> {
   if (vaultKey.length !== VAULT_KEY_BYTES) {
     throw new VaultCryptoError('KMS_DECRYPT_FAILED', 'unwrapped key has an unexpected length');
   }
-
-  logInfo(SCOPE, 'vault key unwrapped');
 
   return vaultKey;
 }

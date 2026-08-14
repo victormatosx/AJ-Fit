@@ -25,6 +25,8 @@ import { ChangePasswordScreen } from './ChangePasswordScreen';
 import { TotpEnrollmentScreen } from './TotpEnrollmentScreen';
 import { TwoFactorSettingsScreen } from './TwoFactorSettingsScreen';
 import { EditProfileScreen } from './EditProfileScreen';
+import { PaywallScreen } from './PaywallScreen';
+import { SubscriptionCenterScreen } from './SubscriptionCenterScreen';
 import { HelpCenterScreen } from './HelpCenterScreen';
 import { HelpArticleScreen } from './HelpArticleScreen';
 import { SupportFormScreen } from './SupportFormScreen';
@@ -49,10 +51,23 @@ export function AppShell() {
   const [showTotpEnrollment, setShowTotpEnrollment] = useState(false);
   const [totpRefreshToken, setTotpRefreshToken] = useState(0);
   const [showEditProfile, setShowEditProfile] = useState(false);
+  const [showSubscriptionCenter, setShowSubscriptionCenter] = useState(false);
+  const [showPremium, setShowPremium] = useState(false);
   const [showWorkoutConfirmation, setShowWorkoutConfirmation] = useState(false);
   const [supportRoute, setSupportRoute] = useState<SupportRoute | null>(null);
   const canChangePassword = linkedProviders.includes(PASSWORD_PROVIDER_ID);
-  const overlayOpen = showCal || showAssessment || showSettings || showSecurity || showChangePassword || showTwoFactor || showTotpEnrollment || showEditProfile || !!supportRoute;
+  const overlayOpen =
+    showCal ||
+    showAssessment ||
+    showSettings ||
+    showSecurity ||
+    showChangePassword ||
+    showTwoFactor ||
+    showTotpEnrollment ||
+    showEditProfile ||
+    showSubscriptionCenter ||
+    showPremium ||
+    !!supportRoute;
 
   useEffect(() => {
     if (!canChangePassword) setShowChangePassword(false);
@@ -88,6 +103,7 @@ export function AppShell() {
             onOpenAssessment={() => setShowAssessment(true)}
             onOpenEditProfile={() => setShowEditProfile(true)}
             onOpenSettings={() => setShowSettings(true)}
+            onOpenSubscription={() => setShowSubscriptionCenter(true)}
           />
         )}
       </View>
@@ -156,6 +172,25 @@ export function AppShell() {
       {showEditProfile && (
         <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 50 }}>
           <EditProfileScreen onBack={() => setShowEditProfile(false)} />
+        </View>
+      )}
+      {showSubscriptionCenter && (
+        <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 50 }}>
+          <SubscriptionCenterScreen
+            onBack={() => setShowSubscriptionCenter(false)}
+            onRenew={() => {
+              setShowSubscriptionCenter(false);
+              setShowPremium(true);
+            }}
+          />
+        </View>
+      )}
+      {showPremium && (
+        <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 50 }}>
+          <PaywallScreen
+            onClose={() => setShowPremium(false)}
+            closeAccessibilityLabel="Fechar assinatura"
+          />
         </View>
       )}
       {supportRoute && (

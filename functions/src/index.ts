@@ -1,3 +1,17 @@
+import { onCall, onRequest } from 'firebase-functions/v2/https';
+import {
+  handleRevenueCatWebhook,
+  REVENUECAT_API_SECRET_KEY,
+  REVENUECAT_WEBHOOK_SECRET,
+} from './billing/revenuecat';
+import {
+  adminCreatePromoCodeHandler,
+  adminListPromoCodesHandler,
+  adminSetPromoCodeActiveHandler,
+  adminUpdatePromoCodeHandler,
+} from './attribution/promoCodeAdmin';
+import { validatePromoCodeHandler } from './attribution/validatePromoCode';
+import { authorizePromoPurchaseHandler } from './attribution/authorizePromoPurchase';
 import { backendHealth } from './health/backendHealth';
 import { createVault } from './photoVault/createVault';
 import { recoverVaultKey } from './photoVault/recoverVaultKey';
@@ -7,16 +21,70 @@ import { cleanupPhotoVaultOrphans } from './photoVault/cleanupOrphans';
  * AJ Fit Cloud Functions entry point.
  *
  * Every exported Cloud Function is wired here; the implementation itself
- * lives in its own module.
- *
- * Only authenticated, policy-enforcing callables are exported. The KMS
- * wrap/unwrap layer stays internal — it is never given an endpoint of its
- * own, so nothing can ask the backend to encrypt or decrypt arbitrary bytes.
- *
- * NOTE: this codebase does not contain the billing/RevenueCat functions,
- * which are being developed in parallel on another branch. Deploy Photo
- * Vault functions BY NAME (`--only functions:createVault,...`), never with a
- * bare `--only functions`, which would try to remove functions that are live
- * in production but absent here.
+ * lives in its own module. Billing/promotion handlers and Photo Vault/KMS
+ * callables intentionally share this single deployment entry point.
  */
+
+/**
+ * RevenueCat webhook endpoint (docs/13_assinaturas_e_billing.md §25/§28).
+ * Real processing implemented in Sprint 4 — see handleRevenueCatWebhook's
+ * JSDoc (billing/revenuecat.ts) for the full flow.
+ *
+ * Both `REVENUECAT_WEBHOOK_SECRET` (HMAC verification) and
+ * `REVENUECAT_API_SECRET_KEY` (server-side V2 identity + TRANSFER
+ * reconciliation) are explicitly bound through Secret Manager. Their
+ * values never enter client code.
+ *
+ * NOT yet registered as a webhook URL in the RevenueCat dashboard — that
+ * activation step is deliberately manual/human, after this deploys and the
+ * secret is confirmed configured.
+ */
+export const revenueCatWebhook = onRequest(
+  { secrets: [REVENUECAT_WEBHOOK_SECRET, REVENUECAT_API_SECRET_KEY] },
+  handleRevenueCatWebhook,
+);
+
+/**
+ * Validates a promo/influencer code and applies (or swaps, while pending)
+ * the calling user's attribution (docs/13_assinaturas_e_billing.md §8/§33/
+ * §34 — see `attribution/validatePromoCode.ts` for the full flow, and
+ * `attribution/constants.ts`'s doc comment on `COUPON_REDEMPTIONS_COLLECTION`
+ * for the one deviation from §33 this introduces).
+ *
+ * `enforceAppCheck` is left at its default (unset/false) for this phase —
+ * flipping it to `true` later is a pure function-options change here, with
+ * zero change to `validatePromoCodeHandler` or the request/response
+ * contract.
+ */
+export const validatePromoCode = onCall(validatePromoCodeHandler);
+
+/**
+ * Creates or idempotently returns the calling uid's short-lived iOS promo
+ * purchase intent. The callable accepts only `monthly`/`annual`; campaign,
+ * Offering, product ID, status and timestamps are derived transactionally
+ * from `couponRedemptions/{uid}` by the backend.
+ */
+export const authorizePromoPurchase = onCall(authorizePromoPurchaseHandler);
+
+/**
+ * Admin promo-code catalog surface (`ajfit-admin`'s "Cupons e Campanhas"
+ * page). `firestore.rules`'s `promoCodes` block stays `allow read, write:
+ * if false` for every client — these four callables are the ONLY way the
+ * catalog is ever read or written, mirroring `validatePromoCode` above:
+ * Admin SDK server-side, never a client-side Firestore read/write. Every
+ * handler independently re-verifies `users/{uid}.metadata.role === 'admin'`
+ * via `attribution/adminAuth.ts`'s `requireAdminUid` — the client's own
+ * route guard/UI state is never trusted.
+ *
+ * See `attribution/promoCodeAdmin.ts` for the full contract (allowlisted
+ * fields, create/update/activate split, and why `couponRedemptions` is
+ * never touched here).
+ */
+export const adminListPromoCodes = onCall(adminListPromoCodesHandler);
+export const adminCreatePromoCode = onCall(adminCreatePromoCodeHandler);
+export const adminUpdatePromoCode = onCall(adminUpdatePromoCodeHandler);
+export const adminSetPromoCodeActive = onCall(adminSetPromoCodeActiveHandler);
+
+// Only authenticated, policy-enforcing Photo Vault callables are exported.
+// The KMS wrap/unwrap layer stays internal and has no endpoint of its own.
 export { backendHealth, cleanupPhotoVaultOrphans, createVault, recoverVaultKey };

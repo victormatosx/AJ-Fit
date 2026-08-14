@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { isSupportedLanguage, type SupportedLanguage } from '../types/language';
+import { logError } from '../lib/logger';
 
 /**
  * Local-only cache for the user's UI language.
@@ -29,7 +30,7 @@ export async function readStoredLanguage(): Promise<SupportedLanguage | null> {
     // Never fail bootstrap because the OS storage layer hiccuped — the app
     // must still start. Downstream detection will fall back to the system
     // locale, then to English.
-    console.error('[languageStorage] read failed, treating as unset', err);
+    logError('languageStorage:read', err);
     return null;
   }
   if (raw !== null && isSupportedLanguage(raw)) return raw;

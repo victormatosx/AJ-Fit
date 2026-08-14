@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const app = readFileSync(new URL('../../../App.tsx', import.meta.url), 'utf8');
+const premiumGate = readFileSync(new URL('../premiumGate.ts', import.meta.url), 'utf8');
 const context = readFileSync(
   new URL('../../state/AuthContext.tsx', import.meta.url),
   'utf8',
@@ -35,14 +36,14 @@ describe('email verification integration structure', () => {
   });
 
   it('gives the central guard priority over questionnaire and app routes', () => {
-    const verificationGuard = app.indexOf('if (emailVerificationRequired)');
-    const questionnaireGuard = app.indexOf('if (!questionnaire)');
+    const verificationGuard = premiumGate.indexOf('if (state.emailVerificationRequired)');
+    const questionnaireGuard = premiumGate.indexOf('if (!state.hasQuestionnaire)');
 
     expect(verificationGuard).toBeGreaterThan(-1);
     expect(verificationGuard).toBeLessThan(questionnaireGuard);
-    expect(app).toContain("if (screen !== 'emailVerification')");
-    expect(app).toContain("{screen === 'emailVerification' && <EmailVerificationScreen />}");
-    expect(app).toContain("'emailVerification', 'paywall', 'app'");
+    expect(app).toContain('emailVerificationRequired,');
+    expect(app).toContain("{resolvedScreen === 'emailVerification' && <EmailVerificationScreen />}");
+    expect(premiumGate).toContain("['emailVerification', 'paywall', 'app']");
   });
 
   it('reloads through AuthContext and lets the guard decide navigation', () => {

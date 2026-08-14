@@ -64,7 +64,6 @@ export async function activatePhotoVaultScreenProtection(): Promise<void> {
 
   return activation;
 }
-
 /**
  * Releases only the protection owned by the Photo Vault.
  *
@@ -100,4 +99,3 @@ export async function deactivatePhotoVaultScreenProtection(): Promise<void> {
 export function isPhotoVaultScreenProtectionActive(): boolean {
   return active;
 }
-

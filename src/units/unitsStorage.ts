@@ -3,6 +3,7 @@ import {
   isUnitsPreference,
   type UnitsPreference,
 } from '../types/units';
+import { logError } from '../lib/logger';
 
 export const UNITS_PREFERENCE_STORAGE_KEY = 'ajfit-units-preference';
 
@@ -27,7 +28,7 @@ export async function readStoredUnitsPreference(): Promise<UnitsPreference | nul
   try {
     raw = await AsyncStorage.getItem(UNITS_PREFERENCE_STORAGE_KEY);
   } catch (err) {
-    console.error('[unitsStorage] read failed, treating as unset', err);
+    logError('unitsStorage:read', err);
     return null;
   }
 

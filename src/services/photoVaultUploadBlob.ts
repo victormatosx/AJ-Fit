@@ -37,7 +37,6 @@ export function openEncryptedUploadBlob(uri: string): Promise<Blob> {
     }
   });
 }
-
 /** React Native Blobs expose explicit native-resource cleanup. */
 export function closeEncryptedUploadBlob(blob: Blob | null): void {
   if (!blob) return;
@@ -50,4 +49,3 @@ export function closeEncryptedUploadBlob(blob: Blob | null): void {
     }
   }
 }
-
