@@ -87,10 +87,20 @@ export type UserProfile = {
   };
   subscription: {
     status?: SubscriptionStatus;
+    /** Webhook mirror only; CustomerInfo remains authoritative for access. */
+    entitlementActive?: boolean;
     provider?: 'REVENUECAT';
+    productId?: string;
+    store?: 'APP_STORE' | 'PLAY_STORE';
+    startedAt?: Timestamp;
     trialEndsAt?: Timestamp | null;
     /** Renamed from `endsAt` in Sprint 3.5 — docs/13_assinaturas_e_billing.md §26. */
     currentPeriodEndsAt?: Timestamp | null;
+    canceledAt?: Timestamp | null;
+    lastRenewedAt?: Timestamp | null;
+    lastEventId?: string;
+    lastEventTimestampMs?: number;
+    updatedAt?: Timestamp;
   };
   metadata: {
     role: 'user' | 'admin';

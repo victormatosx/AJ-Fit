@@ -3,8 +3,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 (globalThis as unknown as { __DEV__: boolean }).__DEV__ = false;
 
 const mockPlatform: { OS: string } = { OS: 'ios' };
+const linkingMocks = vi.hoisted(() => ({ openURL: vi.fn() }));
 
-vi.mock('react-native', () => ({ Platform: mockPlatform }));
+vi.mock('react-native', () => ({ Platform: mockPlatform, Linking: linkingMocks }));
 
 const purchasesMocks = vi.hoisted(() => ({
   configure: vi.fn(),
@@ -14,6 +15,7 @@ const purchasesMocks = vi.hoisted(() => ({
   logIn: vi.fn(),
   checkTrialOrIntroductoryPriceEligibility: vi.fn(),
   purchaseSubscriptionOption: vi.fn(),
+  showManageSubscriptions: vi.fn(),
 }));
 
 vi.mock('react-native-purchases', () => ({
@@ -43,6 +45,7 @@ const {
   loginRevenueCat,
   logoutRevenueCat,
   purchaseSubscriptionOption,
+  manageSubscription,
   revenueCatLogLevel,
 } = await import('../revenueCatService');
 
@@ -212,5 +215,46 @@ describe('purchaseSubscriptionOption — Android promotional purchase', () => {
     });
     expect(purchasesMocks.purchaseSubscriptionOption).toHaveBeenCalledOnce();
     expect(purchasesMocks.purchaseSubscriptionOption).toHaveBeenCalledWith(option);
+  });
+});
+
+describe('manageSubscription — official Store destination', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    purchasesMocks.showManageSubscriptions.mockResolvedValue(undefined);
+    linkingMocks.openURL.mockResolvedValue(undefined);
+  });
+
+  it('uses RevenueCat native subscription management for an App Store purchase on iOS', async () => {
+    mockPlatform.OS = 'ios';
+
+    await expect(
+      manageSubscription({ store: 'APP_STORE', managementURL: 'https://store.example/subscription' }),
+    ).resolves.toEqual({ status: 'opened' });
+
+    expect(purchasesMocks.showManageSubscriptions).toHaveBeenCalledOnce();
+    expect(linkingMocks.openURL).not.toHaveBeenCalled();
+  });
+
+  it('opens the exact CustomerInfo managementURL for Google Play', async () => {
+    mockPlatform.OS = 'android';
+    const managementURL = 'https://play.example/from-revenuecat';
+
+    await expect(
+      manageSubscription({ store: 'PLAY_STORE', managementURL }),
+    ).resolves.toEqual({ status: 'opened' });
+
+    expect(linkingMocks.openURL).toHaveBeenCalledWith(managementURL);
+    expect(purchasesMocks.showManageSubscriptions).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when RevenueCat provides no management destination', async () => {
+    mockPlatform.OS = 'android';
+
+    await expect(
+      manageSubscription({ store: 'PLAY_STORE', managementURL: null }),
+    ).resolves.toEqual({ status: 'unavailable' });
+
+    expect(linkingMocks.openURL).not.toHaveBeenCalled();
   });
 });

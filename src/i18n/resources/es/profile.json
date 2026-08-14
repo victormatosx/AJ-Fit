@@ -27,6 +27,99 @@
       "trialCta": "Activa tu prueba gratis de 7 días"
     }
   },
+  "subscriptionCenter": {
+    "title": "Suscripción",
+    "brand": "AJ Fit Premium",
+    "accessibility": {
+      "back": "Volver al perfil"
+    },
+    "badge": {
+      "active": "Activa",
+      "trial": "Período gratuito",
+      "canceled": "Cancelada",
+      "billingIssue": "Problema de pago",
+      "gracePeriod": "Pago pendiente",
+      "expired": "Expirada",
+      "unknown": "No disponible"
+    },
+    "message": {
+      "active": "Tu acceso Premium está activo.",
+      "trial": "Tu período gratuito está activo.",
+      "canceled": "Tu acceso Premium sigue disponible hasta el {{date}}.",
+      "canceledNoDate": "La renovación fue cancelada, pero tu acceso Premium sigue disponible.",
+      "billingIssue": "No pudimos renovar tu suscripción. Premium seguirá disponible mientras el entitlement esté activo.",
+      "gracePeriod": "Premium sigue activo mientras la tienda intenta completar la renovación.",
+      "expired": "Tu acceso Premium ha terminado.",
+      "unknown": "No tenemos suficientes datos para describir esta suscripción."
+    },
+    "section": {
+      "details": "Detalles"
+    },
+    "field": {
+      "plan": "Plan",
+      "planPrice": "Precio del plan",
+      "nextRenewal": "Próxima renovación",
+      "freeUntil": "Período gratuito hasta",
+      "firstCharge": "Primer cobro",
+      "afterTrial": "Después del período gratuito",
+      "accessUntil": "Acceso hasta",
+      "expiredOn": "Expiró el",
+      "start": "Inicio de la suscripción",
+      "latestRenewal": "Última renovación",
+      "canceledOn": "Cancelación solicitada el",
+      "store": "Suscripción mediante",
+      "paymentIssueSince": "Problema detectado el",
+      "graceUntil": "Pago pendiente hasta"
+    },
+    "plan": {
+      "monthly": "Premium Mensual",
+      "annual": "Premium Anual",
+      "unknown": "AJ Fit Premium"
+    },
+    "period": {
+      "month": "mes",
+      "year": "año"
+    },
+    "priceWithPeriod": "{{price}} / {{period}}",
+    "store": {
+      "APP_STORE": "App Store",
+      "PLAY_STORE": "Google Play",
+      "PROMOTIONAL": "RevenueCat",
+      "MAC_APP_STORE": "Mac App Store",
+      "STRIPE": "Stripe",
+      "AMAZON": "Amazon Appstore",
+      "RC_BILLING": "RevenueCat",
+      "EXTERNAL": "Tienda externa",
+      "PADDLE": "Paddle",
+      "TEST_STORE": "Tienda de prueba",
+      "GALAXY": "Galaxy Store",
+      "UNKNOWN_STORE": "Tienda no identificada",
+      "unknown": "Tienda no identificada"
+    },
+    "actions": {
+      "manage": "Gestionar suscripción",
+      "managePayment": "Gestionar pago",
+      "restore": "Restaurar compras",
+      "restoring": "Restaurando...",
+      "renew": "Renovar suscripción",
+      "retry": "Reintentar"
+    },
+    "notice": {
+      "restored": "Compra restaurada. El estado de tu suscripción se ha actualizado.",
+      "nothingToRestore": "No encontramos una suscripción Premium activa para restaurar.",
+      "restoreError": "No pudimos restaurar tus compras.",
+      "manageUnavailable": "La tienda no proporcionó un destino de gestión para esta suscripción.",
+      "manageError": "No pudimos abrir la gestión de la suscripción.",
+      "catalogUnavailable": "El precio actual del plan no está disponible en este momento.",
+      "refreshError": "No pudimos actualizar los datos. La última información confirmada sigue visible."
+    },
+    "state": {
+      "loadingTitle": "Cargando suscripción",
+      "loadingBody": "Confirmando tus datos con RevenueCat...",
+      "errorTitle": "Suscripción no disponible",
+      "errorBody": "No pudimos cargar los detalles de tu suscripción."
+    }
+  },
   "assessment": {
     "title": "Evaluación física",
     "subtitle": "Medidas, pliegues cutáneos y evolución"

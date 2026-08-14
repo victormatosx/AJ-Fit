@@ -27,6 +27,99 @@
       "trialCta": "Ative seu teste grátis de 7 dias"
     }
   },
+  "subscriptionCenter": {
+    "title": "Assinatura",
+    "brand": "AJ Fit Premium",
+    "accessibility": {
+      "back": "Voltar para o perfil"
+    },
+    "badge": {
+      "active": "Ativa",
+      "trial": "Período gratuito",
+      "canceled": "Cancelada",
+      "billingIssue": "Problema no pagamento",
+      "gracePeriod": "Pagamento pendente",
+      "expired": "Expirada",
+      "unknown": "Indisponível"
+    },
+    "message": {
+      "active": "Seu acesso Premium está ativo.",
+      "trial": "Seu período gratuito está ativo.",
+      "canceled": "Seu Premium continua disponível até {{date}}.",
+      "canceledNoDate": "A renovação foi cancelada, mas seu Premium ainda está disponível.",
+      "billingIssue": "Não foi possível renovar sua assinatura. Seu Premium continua disponível enquanto o entitlement estiver ativo.",
+      "gracePeriod": "Seu Premium continua ativo enquanto a loja tenta concluir a renovação.",
+      "expired": "Seu acesso Premium terminou.",
+      "unknown": "Não encontramos detalhes suficientes para descrever esta assinatura."
+    },
+    "section": {
+      "details": "Detalhes"
+    },
+    "field": {
+      "plan": "Plano",
+      "planPrice": "Valor do plano",
+      "nextRenewal": "Próxima renovação",
+      "freeUntil": "Período gratuito até",
+      "firstCharge": "Primeira cobrança",
+      "afterTrial": "Depois do período gratuito",
+      "accessUntil": "Acesso até",
+      "expiredOn": "Expirou em",
+      "start": "Início da assinatura",
+      "latestRenewal": "Última renovação",
+      "canceledOn": "Cancelamento solicitado em",
+      "store": "Assinado pela",
+      "paymentIssueSince": "Problema identificado em",
+      "graceUntil": "Pagamento pendente até"
+    },
+    "plan": {
+      "monthly": "Premium Mensal",
+      "annual": "Premium Anual",
+      "unknown": "AJ Fit Premium"
+    },
+    "period": {
+      "month": "mês",
+      "year": "ano"
+    },
+    "priceWithPeriod": "{{price}} / {{period}}",
+    "store": {
+      "APP_STORE": "App Store",
+      "PLAY_STORE": "Google Play",
+      "PROMOTIONAL": "RevenueCat",
+      "MAC_APP_STORE": "Mac App Store",
+      "STRIPE": "Stripe",
+      "AMAZON": "Amazon Appstore",
+      "RC_BILLING": "RevenueCat",
+      "EXTERNAL": "Loja externa",
+      "PADDLE": "Paddle",
+      "TEST_STORE": "Loja de teste",
+      "GALAXY": "Galaxy Store",
+      "UNKNOWN_STORE": "Loja não identificada",
+      "unknown": "Loja não identificada"
+    },
+    "actions": {
+      "manage": "Gerenciar assinatura",
+      "managePayment": "Gerenciar pagamento",
+      "restore": "Restaurar compras",
+      "restoring": "Restaurando...",
+      "renew": "Renovar assinatura",
+      "retry": "Tentar novamente"
+    },
+    "notice": {
+      "restored": "Compra restaurada. O estado da assinatura foi atualizado.",
+      "nothingToRestore": "Não encontramos uma assinatura Premium ativa para restaurar.",
+      "restoreError": "Não foi possível restaurar suas compras.",
+      "manageUnavailable": "A loja não forneceu um destino de gerenciamento para esta assinatura.",
+      "manageError": "Não foi possível abrir o gerenciamento da assinatura.",
+      "catalogUnavailable": "O preço atual do plano não está disponível no momento.",
+      "refreshError": "Não foi possível atualizar os dados agora. As últimas informações confirmadas continuam visíveis."
+    },
+    "state": {
+      "loadingTitle": "Carregando assinatura",
+      "loadingBody": "Confirmando seus dados com o RevenueCat...",
+      "errorTitle": "Assinatura indisponível",
+      "errorBody": "Não foi possível carregar os detalhes da sua assinatura."
+    }
+  },
   "assessment": {
     "title": "Avaliação física",
     "subtitle": "Medidas, dobras cutâneas e evolução"

@@ -1,4 +1,4 @@
-import { Platform } from 'react-native';
+import { Linking, Platform } from 'react-native';
 import Purchases, {
   INTRO_ELIGIBILITY_STATUS,
   LOG_LEVEL,
@@ -11,6 +11,7 @@ import Purchases, {
   type SubscriptionOption,
 } from 'react-native-purchases';
 import type { IOSIntroEligibilityState } from '../lib/iosIntroOffer';
+import { PREMIUM_ENTITLEMENT_ID } from '../lib/subscriptionConstants';
 import type {
   SubscriptionErrorKind,
   SubscriptionFailure,
@@ -35,7 +36,7 @@ import { logError, logInfo } from '../lib/logger';
  * Presence in `CustomerInfo.entitlements.active` is the ONLY source of truth
  * for Premium access — never Firestore, never a commercial `status` string.
  */
-export const PREMIUM_ENTITLEMENT_ID = 'premium';
+export { PREMIUM_ENTITLEMENT_ID } from '../lib/subscriptionConstants';
 
 /**
  * Public RevenueCat SDK keys, one per store. These keys are safe to ship in
@@ -498,6 +499,44 @@ export async function restorePurchases(): Promise<RestoreOutcome> {
       message: err instanceof Error ? err.message : 'Não foi possível restaurar as compras.',
       offline: isOfflineError(err),
       offeringsUnavailable,
+    };
+  }
+}
+
+export type ManageSubscriptionOutcome =
+  | { status: 'opened' }
+  | { status: 'unavailable' }
+  | { status: 'error'; message: string };
+
+/**
+ * Opens the store-owned subscription management surface without inventing a
+ * destination. App Store purchases use RevenueCat's native iOS sheet; every
+ * other store uses the exact per-subscription `managementURL` returned in
+ * CustomerInfo. A missing URL is represented explicitly, never replaced by a
+ * hardcoded store URL.
+ */
+export async function manageSubscription({
+  store,
+  managementURL,
+}: {
+  store: string | null;
+  managementURL: string | null;
+}): Promise<ManageSubscriptionOutcome> {
+  try {
+    if (Platform.OS === 'ios' && store === 'APP_STORE') {
+      await ensureConfigured();
+      await Purchases.showManageSubscriptions();
+      return { status: 'opened' };
+    }
+
+    if (!managementURL) return { status: 'unavailable' };
+    await Linking.openURL(managementURL);
+    return { status: 'opened' };
+  } catch (err) {
+    logRevenueCatError('manageSubscription', err);
+    return {
+      status: 'error',
+      message: 'Não foi possível abrir o gerenciamento da assinatura.',
     };
   }
 }

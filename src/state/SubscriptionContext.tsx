@@ -26,6 +26,7 @@ import {
   purchasePackage as purchasePackageService,
   purchaseSubscriptionOption as purchaseSubscriptionOptionService,
   restorePurchases as restorePurchasesService,
+  manageSubscription as manageSubscriptionService,
   isOfflineError,
   isOfferingsUnavailableError,
   classifyRevenueCatFailure,
@@ -33,6 +34,7 @@ import {
   PREMIUM_ENTITLEMENT_ID,
   type PurchaseOutcome,
   type RestoreOutcome,
+  type ManageSubscriptionOutcome,
 } from '../services/revenueCatService';
 import {
   createInitialSubscriptionLifecycleState,
@@ -120,6 +122,11 @@ type SubscriptionCtx = {
   purchaseOption: (option: SubscriptionOption) => Promise<PurchaseOutcome>;
   /** Restores purchases from the store; updates `customerInfo` in place on success. */
   restore: () => Promise<RestoreOutcome>;
+  /** Opens the official Store management surface resolved from CustomerInfo. */
+  manageSubscription: (input: {
+    store: string | null;
+    managementURL: string | null;
+  }) => Promise<ManageSubscriptionOutcome>;
 };
 
 const SubscriptionContext = createContext<SubscriptionCtx | null>(null);
@@ -636,6 +643,12 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     return outcome;
   }, [applyLifecycleEvent, enqueueSdkOperation]);
 
+  const manageSubscription = useCallback(
+    (input: { store: string | null; managementURL: string | null }) =>
+      manageSubscriptionService(input),
+    [],
+  );
+
   const value = useMemo<SubscriptionCtx>(
     () => ({
       loading,
@@ -657,6 +670,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
       purchase,
       purchaseOption,
       restore,
+      manageSubscription,
     }),
     [
       loading,
@@ -677,6 +691,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
       purchase,
       purchaseOption,
       restore,
+      manageSubscription,
     ],
   );
 
