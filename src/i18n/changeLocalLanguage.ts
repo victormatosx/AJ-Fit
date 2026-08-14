@@ -2,6 +2,7 @@ import i18n from './index';
 import { writeStoredLanguage } from './languageStorage';
 import { normalizeLanguage } from './normalizeLanguage';
 import { isSupportedLanguage, type SupportedLanguage } from '../types/language';
+import { logError } from '../lib/logger';
 
 /**
  * Applies a language change locally: swaps i18next, persists to AsyncStorage,
@@ -47,10 +48,7 @@ export async function changeLocalLanguage(
     try {
       await i18n.changeLanguage(previous);
     } catch (rollbackErr) {
-      console.error(
-        '[changeLocalLanguage] rollback failed after storage error',
-        rollbackErr,
-      );
+      logError('changeLocalLanguage:rollback', rollbackErr);
     }
     throw storageErr;
   }

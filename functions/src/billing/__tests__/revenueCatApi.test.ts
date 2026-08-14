@@ -376,7 +376,7 @@ describe('RevenueCatV2Client', () => {
     expect(loggerMocks.logWarn).not.toHaveBeenCalled();
   });
 
-  it('logs only the sanitized response shape without changing a valid result', async () => {
+  it('does not log routine response shapes for a valid result', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse({
         ...subscriptionsPage(),
@@ -393,16 +393,7 @@ describe('RevenueCatV2Client', () => {
       1,
     );
 
-    expect(loggerMocks.logInfo).toHaveBeenCalledWith('billing:revenuecat-api', 'v2_response_shape', {
-      operation: 'customer_subscriptions',
-      pageIndex: 0,
-      httpStatus: 200,
-      responseObject: 'list',
-      itemsIsArray: true,
-      itemsCount: 1,
-      nextPagePresence: true,
-      nextPageType: 'null',
-    });
+    expect(loggerMocks.logInfo).not.toHaveBeenCalled();
     expect(loggerMocks.logWarn).not.toHaveBeenCalled();
 
     const serializedLogs = JSON.stringify([

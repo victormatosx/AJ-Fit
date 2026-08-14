@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { isSupportedLanguage, type SupportedLanguage } from '../types/language';
+import { logError } from '../lib/logger';
 
 /**
  * Local record of a language choice that hasn't been confirmed by Firestore
@@ -41,7 +42,7 @@ export async function readPendingLanguageSync(): Promise<PendingLanguageSync | n
   try {
     raw = await AsyncStorage.getItem(PENDING_LANGUAGE_STORAGE_KEY);
   } catch (err) {
-    console.error('[pendingLanguageSync] read failed, treating as absent', err);
+    logError('pendingLanguageSync:read', err);
     return null;
   }
   if (raw === null) return null;
@@ -80,6 +81,6 @@ export async function clearPendingLanguageSync(): Promise<void> {
     // Best-effort cleanup — never throw. If a stale pending survives, it
     // will be re-validated on the next read and dropped if the UID doesn't
     // match the current user.
-    console.error('[pendingLanguageSync] clear failed', err);
+    logError('pendingLanguageSync:clear', err);
   }
 }

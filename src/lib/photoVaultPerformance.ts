@@ -1,3 +1,5 @@
+import { logDebug } from './logger';
+
 /**
  * Development-only Photo Vault timings.
  *
@@ -52,7 +54,7 @@ export function startPhotoVaultPerf(stage: PhotoVaultPerfStage): () => number {
   const startedAt = now();
   return () => {
     const durationMs = Math.max(0, Math.round(now() - startedAt));
-    if (isEnabled()) console.info(`[photoVault:perf] ${stage} = ${durationMs}ms`);
+    if (isEnabled()) logDebug('photoVault:perf', stage, { durationMs });
     return durationMs;
   };
 }

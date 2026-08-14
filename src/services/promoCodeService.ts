@@ -16,6 +16,7 @@ import {
   type PromoPurchaseAuthorizationOutcome,
 } from '../lib/iosPromoPurchase';
 import type { IOSSubscriptionPlan } from '../lib/subscriptionOffer';
+import { logError, logInfo, logWarn } from '../lib/logger';
 
 /**
  * Client for the `validatePromoCode` Cloud Function (Fase 4C.2). Mirrors the
@@ -82,11 +83,7 @@ function sanitizedErrorMessage(err: unknown): string {
 }
 
 export function logPromoCodeError(scope: string, err: unknown): void {
-  const code =
-    typeof err === 'object' && err !== null && 'code' in err
-      ? String((err as { code: unknown }).code)
-      : undefined;
-  console.error(`[promoCode:${scope}]`, { code, message: sanitizedErrorMessage(err) });
+  logError(`promoCode:${scope}`, err);
 }
 
 /**
@@ -96,11 +93,7 @@ export function logPromoCodeError(scope: string, err: unknown): void {
  * completo, código do cupom completo.
  */
 function logPromoCodeDiagnostic(stage: string, payload: Record<string, unknown>): void {
-  console.log(`[promoCode:diag:${stage}]`, payload);
-}
-
-function isPrimitive(value: unknown): value is string | number | boolean | null {
-  return value === null || ['string', 'number', 'boolean'].includes(typeof value);
+  logInfo('promoCode:diagnostic', stage, payload);
 }
 
 function truncatedStack(err: unknown): string | undefined {
@@ -143,7 +136,15 @@ function logPromoCodeRawError(err: unknown): void {
       typeof err === 'object' && err !== null && 'message' in err
         ? sanitizedErrorMessage(err)
         : undefined,
-    details: isPrimitive(rawDetails) ? rawDetails : rawDetails !== undefined ? '[non-primitive]' : undefined,
+    detailsPresent: rawDetails !== undefined,
+    detailsType:
+      rawDetails === undefined
+        ? 'absent'
+        : rawDetails === null
+          ? 'null'
+          : Array.isArray(rawDetails)
+            ? 'array'
+            : typeof rawDetails,
     stack: truncatedStack(err),
   });
 }
@@ -175,7 +176,7 @@ export async function validatePromoCode(code: string): Promise<ValidatePromoCode
     if (platform === 'IOS' && parsedIOSPromotion.status === 'invalid') {
       // Symbolic diagnostic only: no coupon, uid, Offering identifier, SKU,
       // or raw callable payload is emitted.
-      console.warn('[promoCode] promo_authorization_invalid');
+      logWarn('promoCode', 'promo_authorization_invalid');
       throw new Error('promo_authorization_invalid');
     }
     logPromoCodeDiagnostic('response', {
@@ -216,16 +217,16 @@ export async function authorizePromoPurchase(
     const result = await authorizePromoPurchaseCallable({ plan });
     const response = parsePromoPurchaseIntentAuthorization(result.data);
     if (!response) {
-      console.warn('[promoCode] promo_purchase_intent_mismatch');
+      logWarn('promoCode', 'promo_purchase_intent_mismatch');
       return { status: 'failed', reason: 'invalid_response' };
     }
-    console.info('[promoCode] promo_purchase_authorized');
+    logInfo('promoCode', 'promo_purchase_authorized');
     return { status: 'authorized', response };
   } catch (err) {
     const reason = classifyPromoPurchaseAuthorizationError(err);
     // Expected callable denials are logged symbolically; never emit the
     // response payload, UID, coupon, Offering, product or Firebase token.
-    console.warn('[promoCode] promo_purchase_authorization_failed', { reason });
+    logWarn('promoCode', 'promo_purchase_authorization_failed', { reason });
     return { status: 'failed', reason };
   }
 }

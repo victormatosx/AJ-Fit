@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { isUnitsPreference, type UnitsPreference } from '../types/units';
+import { logError } from '../lib/logger';
 
 export type PendingUnitsSync = {
   uid: string;
@@ -31,7 +32,7 @@ export async function readPendingUnitsSync(): Promise<PendingUnitsSync | null> {
   try {
     raw = await AsyncStorage.getItem(PENDING_UNITS_STORAGE_KEY);
   } catch (err) {
-    console.error('[pendingUnitsSync] read failed, treating as absent', err);
+    logError('pendingUnitsSync:read', err);
     return null;
   }
 
@@ -66,6 +67,6 @@ export async function clearPendingUnitsSync(): Promise<void> {
   try {
     await AsyncStorage.removeItem(PENDING_UNITS_STORAGE_KEY);
   } catch (err) {
-    console.error('[pendingUnitsSync] clear failed', err);
+    logError('pendingUnitsSync:clear', err);
   }
 }

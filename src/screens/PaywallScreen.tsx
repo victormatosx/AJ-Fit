@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
 import type { PurchasesPackage } from 'react-native-purchases';
+import { logError, logInfo, logWarn } from '../lib/logger';
 import { ScreenBg } from '../components/ui/ScreenBg';
 import { CtaButton, CtaText } from '../components/ui/CtaButton';
 import { Display, MonoLabel } from '../components/ui/Display';
@@ -266,7 +267,7 @@ export function PaywallScreen({
     }
     // Symbolic catalog diagnostics only: never logs UID, coupon, Offering,
     // Product ID, or the authorization payload.
-    console.warn(`[promoCode] ${iosCatalogResolution.reason}`);
+    logWarn('promoCode', iosCatalogResolution.reason);
   }, [iosCatalogResolution, iosOfferingRoute]);
 
   useEffect(() => {
@@ -465,12 +466,12 @@ export function PaywallScreen({
   useEffect(() => {
     if (!purchaseRoute) return;
     if (purchaseRoute.kind === 'subscription_option') {
-      console.info('[promoCode] promo_option_match');
+      logInfo('promoCode', 'promo_option_match');
     } else if (purchaseRoute.kind === 'blocked') {
       if (purchaseRoute.reason === 'promo_ambiguous') {
-        console.warn('[promoCode] promo_option_ambiguous');
+        logWarn('promoCode', 'promo_option_ambiguous');
       } else {
-        console.info(`[promoCode] ${purchaseRoute.reason}`);
+        logInfo('promoCode', purchaseRoute.reason);
       }
     }
   }, [purchaseRoute]);
@@ -526,10 +527,11 @@ export function PaywallScreen({
             return;
           }
           if (execution.status === 'intent_invalid') {
-            console.warn(
+            logWarn(
+              'promoCode',
               execution.reason === 'expired'
-                ? '[promoCode] promo_purchase_intent_expired'
-                : '[promoCode] promo_purchase_intent_mismatch',
+                ? 'promo_purchase_intent_expired'
+                : 'promo_purchase_intent_mismatch',
               { reason: execution.reason },
             );
           }
@@ -652,9 +654,7 @@ export function PaywallScreen({
   }, [restore]);
 
   const openLink = useCallback((url: string) => {
-    Linking.openURL(url).catch((err) =>
-      console.error('[paywallScreen] falha ao abrir link', { url, err }),
-    );
+    Linking.openURL(url).catch((err) => logError('paywallScreen:open-link', err));
   }, []);
 
   const isPurchasing = purchaseState.kind === 'purchasing';

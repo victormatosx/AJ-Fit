@@ -1,6 +1,7 @@
 import type { CustomerInfo } from 'react-native-purchases';
 import type { IOSIntroEligibilityState } from './iosIntroOffer';
 import type { IOSSubscriptionPlan } from './subscriptionOffer';
+import { logInfo } from './logger';
 
 export type SubscriptionPurchaseRoute = 'standard' | 'promo';
 export type SubscriptionIntroEligibility =
@@ -55,7 +56,7 @@ type ObservablePurchaseOutcome =
  */
 export function logSubscriptionDiagnostic(event: SubscriptionDiagnosticEvent): void {
   try {
-    console.info('[subscription:diagnostic]', event);
+    logInfo('subscription:diagnostic', event.event, { ...event });
   } catch {
     // Observability must never alter subscription behavior.
   }

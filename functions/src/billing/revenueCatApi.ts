@@ -1,6 +1,6 @@
 import { defineSecret } from 'firebase-functions/params';
 import { REVENUECAT_PROJECT_ID } from './constants';
-import { logInfo, logWarn } from '../lib/logger';
+import { logWarn } from '../lib/logger';
 
 /** Server-only RevenueCat V2 secret. Bound to revenueCatWebhook in index.ts. */
 export const REVENUECAT_API_SECRET_KEY = defineSecret('REVENUECAT_API_SECRET_KEY');
@@ -168,35 +168,6 @@ function invalidResponse(
     validationFailureCode,
     expectedType,
     receivedType: receivedType(received),
-  });
-}
-
-function responseObjectForLog(value: unknown): string | undefined {
-  if (!isRecord(value) || !Object.prototype.hasOwnProperty.call(value, 'object')) {
-    return undefined;
-  }
-  if (value.object === 'list') return 'list';
-  return typeof value.object === 'string' ? 'unexpected_string' : receivedType(value.object);
-}
-
-function logResponseShape(
-  value: unknown,
-  httpStatus: number,
-  context: RevenueCatDiagnosticContext,
-): void {
-  const record = isRecord(value) ? value : undefined;
-  const items = record?.items;
-  const nextPagePresent =
-    record !== undefined && Object.prototype.hasOwnProperty.call(record, 'next_page');
-
-  logInfo(SCOPE, 'v2_response_shape', {
-    ...context,
-    httpStatus,
-    responseObject: responseObjectForLog(value),
-    itemsIsArray: Array.isArray(items),
-    itemsCount: Array.isArray(items) ? items.length : undefined,
-    nextPagePresence: nextPagePresent,
-    nextPageType: nextPagePresent ? receivedType(record?.next_page) : 'absent',
   });
 }
 
@@ -681,9 +652,6 @@ export class RevenueCatV2Client implements RevenueCatSubscriptionApi {
           logValidationFailure(error, diagnosticContext, response.status);
         }
         throw error;
-      }
-      if (diagnosticContext) {
-        logResponseShape(body, response.status, diagnosticContext);
       }
       try {
         return { ...parseListPage(body, validationCodes), httpStatus: response.status };

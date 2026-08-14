@@ -8,6 +8,8 @@ import {
   normalizeIntroEligibilityForDiagnostic,
 } from '../subscriptionDiagnostics';
 
+(globalThis as unknown as { __DEV__: boolean }).__DEV__ = true;
+
 const read = (path: string) => readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8');
 const paywallSource = read('screens/PaywallScreen.tsx');
 const promoPurchaseSource = read('lib/iosPromoPurchase.ts');
@@ -40,7 +42,10 @@ function promoAttempt(plan: 'monthly' | 'annual'): IOSPromoPurchaseAttempt {
 
 function diagnosticEvents(spy: { mock: { calls: unknown[][] } }): Array<{ event: string }> {
   return spy.mock.calls
-    .filter((call) => call[0] === '[subscription:diagnostic]')
+    .filter(
+      (call) =>
+        typeof call[0] === 'string' && call[0].startsWith('[subscription:diagnostic] '),
+    )
     .map((call) => call[1] as { event: string });
 }
 

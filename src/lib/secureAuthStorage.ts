@@ -6,6 +6,7 @@ import {
   aesEncryptAsync,
   aesDecryptAsync,
 } from 'expo-crypto';
+import { logError } from './logger';
 
 /**
  * AsyncStorage-compatible backend for Firebase's `getReactNativePersistence`
@@ -35,7 +36,7 @@ async function loadOrCreateKey(): Promise<AESEncryptionKey> {
     } catch (err) {
       // Key is corrupted/unreadable: any session encrypted with it is lost
       // anyway, so drop it and start fresh (equivalent to a forced logout).
-      console.error('[secureAuthStorage] stored encryption key unreadable, regenerating', err);
+      logError('secureAuthStorage:key-import', err);
       await SecureStore.deleteItemAsync(ENCRYPTION_KEY_ID);
     }
   }
@@ -91,7 +92,7 @@ export const secureAuthStorage = {
       };
       await AsyncStorage.setItem(key, JSON.stringify(envelope));
     } catch (err) {
-      console.error('[secureAuthStorage] setItem failed', key, err);
+      logError('secureAuthStorage:setItem', err);
       throw err;
     }
   },
@@ -104,12 +105,12 @@ export const secureAuthStorage = {
     try {
       envelope = JSON.parse(raw);
     } catch (err) {
-      console.error('[secureAuthStorage] stored value is not valid JSON, discarding', err);
+      logError('secureAuthStorage:parse', err);
       await AsyncStorage.removeItem(key);
       return null;
     }
     if (!isStoredEnvelope(envelope)) {
-      console.error('[secureAuthStorage] stored value has unexpected shape, discarding');
+      logError('secureAuthStorage:shape', new Error('stored value has unexpected shape'));
       await AsyncStorage.removeItem(key);
       return null;
     }
@@ -120,7 +121,7 @@ export const secureAuthStorage = {
     } catch (err) {
       // Key infra unavailable right now: don't touch the stored ciphertext,
       // it may still be readable on a later attempt.
-      console.error('[secureAuthStorage] encryption key unavailable, keeping stored data', err);
+      logError('secureAuthStorage:key-unavailable', err);
       return null;
     }
 
@@ -135,7 +136,7 @@ export const secureAuthStorage = {
     } catch (err) {
       // Ciphertext itself is unreadable (corrupted, or truly a different
       // key): treat as no session instead of crashing the app on startup.
-      console.error('[secureAuthStorage] failed to decrypt stored session, discarding', err);
+      logError('secureAuthStorage:decrypt', err);
       await AsyncStorage.removeItem(key);
       return null;
     }

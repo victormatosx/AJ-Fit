@@ -1,3 +1,5 @@
+import { logError } from './logger';
+
 /**
  * Controlled error model for the Photo Vault client
  * (docs/20_backend_functions_photo_vault.md).
@@ -96,5 +98,9 @@ export function logPhotoVaultIssue(
   issue: PhotoVaultIssue,
   code?: string,
 ): void {
-  console.error(`[photoVault:${scope}]`, code ? { issue, code } : { issue });
+  logError(
+    `photoVault:${scope}`,
+    new Error(issue),
+    code ? { issue, providerCode: code } : { issue },
+  );
 }
