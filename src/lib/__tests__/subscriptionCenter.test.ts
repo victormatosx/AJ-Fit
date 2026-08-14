@@ -8,8 +8,10 @@ import type {
 } from 'react-native-purchases';
 import {
   findSubscriptionPackage,
+  isRestoreVisible,
   resolveSubscriptionCenterModel,
   resolveSubscriptionCenterViewState,
+  type SubscriptionCenterStatus,
 } from '../subscriptionCenter';
 
 const NOW = new Date('2026-08-13T12:00:00.000Z');
@@ -370,6 +372,41 @@ describe('resolveSubscriptionCenterModel', () => {
 
     expect(active.status).toBe('active');
     expect(canceled.status).toBe('canceled');
+  });
+});
+
+describe('isRestoreVisible', () => {
+  it('hides restore for every status where RevenueCat already recognizes the entitlement', () => {
+    const recognized: SubscriptionCenterStatus[] = [
+      'active',
+      'trial',
+      'canceled',
+      'billing_issue',
+      'grace_period',
+    ];
+    for (const status of recognized) {
+      expect(isRestoreVisible(status)).toBe(false);
+    }
+  });
+
+  it('shows restore only where no entitlement is currently recognized', () => {
+    expect(isRestoreVisible('expired')).toBe(true);
+    expect(isRestoreVisible('unknown')).toBe(true);
+  });
+});
+
+describe('unknown status only resolves once CustomerInfo has actually loaded', () => {
+  it('never derives "unknown" while the screen is still in the loading view state', () => {
+    // Loading always resolves to the 'loading' view state before any
+    // CustomerInfo (and therefore any 'unknown' status) exists — 'unknown'
+    // is not a loading artifact, it means "we checked and found nothing",
+    // which is why isRestoreVisible offers restore for it.
+    expect(
+      resolveSubscriptionCenterViewState({ loading: true, customerInfo: null, error: null }),
+    ).toBe('loading');
+
+    const model = resolveSubscriptionCenterModel({ customerInfo: null, offerings: null });
+    expect(model.status).toBe('unknown');
   });
 });
 

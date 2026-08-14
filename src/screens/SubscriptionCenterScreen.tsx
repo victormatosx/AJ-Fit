@@ -12,13 +12,14 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
 import type { Store } from 'react-native-purchases';
 import { ScreenBg } from '../components/ui/ScreenBg';
-import { Card, HudCorners } from '../components/ui/Card';
 import { CtaButton, CtaText } from '../components/ui/CtaButton';
 import { Display, MonoLabel, Slash } from '../components/ui/Display';
-import { Icon } from '../components/ui/Icon';
+import { Icon, type IconName } from '../components/ui/Icon';
+import { SettingsSection, type SettingsItemData } from '../components/ui/SettingsSection';
 import { useAuth } from '../state/AuthContext';
 import { useSubscription } from '../hooks/useSubscription';
 import {
+  isRestoreVisible,
   resolveSubscriptionCenterModel,
   resolveSubscriptionCenterViewState,
   type SubscriptionCenterModel,
@@ -28,14 +29,41 @@ import { colors, fonts } from '../theme/tokens';
 
 type ActionNotice = { tone: 'neutral' | 'error'; text: string } | null;
 
-const BADGE_TONE: Record<SubscriptionCenterStatus, { color: string; bg: string }> = {
-  active: { color: '#60d99a', bg: 'rgba(34,197,94,0.12)' },
-  trial: { color: colors.accentHi, bg: 'rgba(11,112,249,0.16)' },
-  canceled: { color: '#ffa840', bg: 'rgba(255,168,64,0.12)' },
-  billing_issue: { color: '#ff9a9a', bg: 'rgba(240,86,63,0.12)' },
-  grace_period: { color: '#ffa840', bg: 'rgba(255,168,64,0.12)' },
-  expired: { color: '#ff9a9a', bg: 'rgba(240,86,63,0.12)' },
-  unknown: { color: colors.mute, bg: 'rgba(255,255,255,0.06)' },
+/**
+ * Six statuses map onto five semantic tiers, not one color each — this is
+ * what keeps `canceled` (still Premium, no action needed) visually distinct
+ * from `grace_period` (still Premium, but needs action), and keeps
+ * `billing_issue` (needs action) distinct from `expired` (no longer Premium)
+ * even though both used to render in the same red.
+ */
+type StatusTier = 'success' | 'info' | 'caution' | 'attention' | 'off';
+
+const STATUS_TIER: Record<SubscriptionCenterStatus, StatusTier> = {
+  active: 'success',
+  trial: 'info',
+  canceled: 'caution',
+  billing_issue: 'attention',
+  grace_period: 'attention',
+  expired: 'off',
+  unknown: 'off',
+};
+
+const TIER_TONE: Record<StatusTier, { color: string; bg: string }> = {
+  success: { color: '#60d99a', bg: 'rgba(34,197,94,0.12)' },
+  info: { color: colors.accentHi, bg: 'rgba(11,112,249,0.16)' },
+  caution: { color: '#ffa840', bg: 'rgba(255,168,64,0.12)' },
+  attention: { color: '#ff9a9a', bg: 'rgba(240,86,63,0.16)' },
+  off: { color: colors.mute, bg: 'rgba(255,255,255,0.06)' },
+};
+
+const STATUS_ICON: Record<SubscriptionCenterStatus, IconName> = {
+  active: 'crown',
+  trial: 'crown',
+  canceled: 'crown',
+  billing_issue: 'alert-triangle',
+  grace_period: 'alert-triangle',
+  expired: 'lock',
+  unknown: 'help-circle',
 };
 
 export function SubscriptionCenterScreen({
@@ -137,7 +165,7 @@ export function SubscriptionCenterScreen({
         <SubscriptionHeader onBack={onBack} />
         {viewState === 'ready' ? (
           <ScrollView
-            contentContainerStyle={{ paddingHorizontal: 22, paddingTop: 12, paddingBottom: 28 }}
+            contentContainerStyle={{ paddingTop: 8, paddingBottom: 28 }}
             showsVerticalScrollIndicator={false}
             refreshControl={
               <RefreshControl
@@ -147,34 +175,46 @@ export function SubscriptionCenterScreen({
               />
             }
           >
-            <StatusCard model={model} formatDate={formatDate} />
-            <DetailsCard model={model} formatDate={formatDate} />
+            <View style={{ paddingHorizontal: 22 }}>
+              <StatusCard model={model} formatDate={formatDate} />
+              <DetailsCard model={model} formatDate={formatDate} />
 
-            {(offeringsError || offeringsUnavailable) && !model.localizedPrice ? (
-              <InlineNotice
-                tone="neutral"
-                text={t('subscriptionCenter.notice.catalogUnavailable')}
+              {(offeringsError || offeringsUnavailable) && !model.localizedPrice ? (
+                <InlineNotice
+                  tone="neutral"
+                  text={t('subscriptionCenter.notice.catalogUnavailable')}
+                />
+              ) : null}
+              {error && customerInfo ? (
+                <InlineNotice tone="error" text={t('subscriptionCenter.notice.refreshError')} />
+              ) : null}
+              {notice ? <InlineNotice tone={notice.tone} text={notice.text} /> : null}
+
+              {model.status === 'expired' ? (
+                <ExpiredActions
+                  onRenew={onRenew}
+                  onRestore={() => void handleRestore()}
+                  restoring={action === 'restore'}
+                  busy={action !== null}
+                />
+              ) : null}
+
+              {offeringsLoading && !offerings ? (
+                <View style={{ alignItems: 'center', marginTop: 14 }}>
+                  <ActivityIndicator size="small" color={colors.accentHi} />
+                </View>
+              ) : null}
+            </View>
+
+            {model.status !== 'expired' ? (
+              <SubscriptionActions
+                model={model}
+                busy={action !== null}
+                restoring={action === 'restore'}
+                managing={action === 'manage'}
+                onManage={() => void handleManage()}
+                onRestore={() => void handleRestore()}
               />
-            ) : null}
-            {error && customerInfo ? (
-              <InlineNotice tone="error" text={t('subscriptionCenter.notice.refreshError')} />
-            ) : null}
-            {notice ? <InlineNotice tone={notice.tone} text={notice.text} /> : null}
-
-            <SubscriptionActions
-              model={model}
-              busy={action !== null}
-              restoring={action === 'restore'}
-              managing={action === 'manage'}
-              onManage={() => void handleManage()}
-              onRestore={() => void handleRestore()}
-              onRenew={onRenew}
-            />
-
-            {offeringsLoading && !offerings ? (
-              <View style={{ alignItems: 'center', marginTop: 14 }}>
-                <ActivityIndicator size="small" color={colors.accentHi} />
-              </View>
             ) : null}
           </ScrollView>
         ) : (
@@ -233,33 +273,42 @@ function StatusCard({
   formatDate: (date: Date) => string;
 }) {
   const { t } = useTranslation('profile');
-  const tone = BADGE_TONE[model.status];
+  const tier = STATUS_TIER[model.status];
+  const tone = TIER_TONE[tier];
+  const icon = STATUS_ICON[model.status];
+  // Icon glyph shifts to the tone color only for tiers that need urgency
+  // (attention) or that no longer carry Premium (off); "still fine" tiers
+  // (success/info/caution) keep the brand blue so the card doesn't turn
+  // into a mixed-color badge for states the user shouldn't worry about.
+  const iconColor = tier === 'attention' || tier === 'off' ? tone.color : colors.accentHi;
   const badge = statusBadge(model.status, t);
   const description = statusDescription(model, formatDate, t);
   const primary = primaryFact(model, formatDate, t);
+  const planLine = planPriceLine(model, t);
+  // "Active" is self-evident from the badge + next-renewal date, so the
+  // longer explanatory sentence is reserved for states that actually need
+  // context the user can't get from a glance (canceled, billing issues...).
+  const showDescription = model.status !== 'active';
 
   return (
     <LinearGradient
-      colors={['rgba(11,112,249,0.24)', 'rgba(11,112,249,0.05)', 'rgba(255,255,255,0.02)']}
-      locations={[0, 0.55, 1]}
+      colors={['rgba(11,112,249,0.18)', 'rgba(11,112,249,0.03)', 'rgba(255,255,255,0.015)']}
+      locations={[0, 0.6, 1]}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={{
         borderRadius: 18,
-        borderBottomRightRadius: 2,
         borderWidth: 1,
-        borderColor: 'rgba(77,163,255,0.28)',
-        padding: 20,
-        overflow: 'hidden',
+        borderColor: 'rgba(77,163,255,0.22)',
+        padding: 16,
       }}
     >
-      <HudCorners />
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
         <View
           style={{
-            width: 48,
-            height: 48,
-            borderRadius: 14,
+            width: 40,
+            height: 40,
+            borderRadius: 12,
             alignItems: 'center',
             justifyContent: 'center',
             backgroundColor: 'rgba(255,255,255,0.06)',
@@ -267,52 +316,66 @@ function StatusCard({
             borderColor: 'rgba(255,255,255,0.10)',
           }}
         >
-          <Icon name="crown" size={22} color={colors.accentHi} />
+          <Icon name={icon} size={19} color={iconColor} />
         </View>
         <View style={{ flex: 1 }}>
-          <Display size={25}>{t('subscriptionCenter.brand')}</Display>
-          <View
-            style={{
-              alignSelf: 'flex-start',
-              marginTop: 7,
-              paddingHorizontal: 9,
-              paddingVertical: 5,
-              borderRadius: 999,
-              backgroundColor: tone.bg,
-            }}
-          >
-            <Text
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Display size={18}>{t('subscriptionCenter.brand')}</Display>
+            <View
               style={{
-                color: tone.color,
-                fontFamily: fonts.monoBold,
-                fontSize: 9,
-                letterSpacing: 1.2,
-                textTransform: 'uppercase',
+                paddingHorizontal: 8,
+                paddingVertical: 3,
+                borderRadius: 999,
+                backgroundColor: tone.bg,
               }}
             >
-              {badge}
-            </Text>
+              <Text
+                style={{
+                  color: tone.color,
+                  fontFamily: fonts.monoBold,
+                  fontSize: 9,
+                  letterSpacing: 1.2,
+                  textTransform: 'uppercase',
+                }}
+              >
+                {badge}
+              </Text>
+            </View>
           </View>
+          {planLine ? (
+            <Text
+              style={{
+                marginTop: 4,
+                color: colors.textSecondary,
+                fontFamily: fonts.uiMed,
+                fontSize: 12.5,
+              }}
+            >
+              {planLine}
+            </Text>
+          ) : null}
         </View>
       </View>
 
-      <Text
-        style={{
-          marginTop: 18,
-          color: colors.textSecondary,
-          fontFamily: fonts.ui,
-          fontSize: 13.5,
-          lineHeight: 20,
-        }}
-      >
-        {description}
-      </Text>
+      {showDescription ? (
+        <Text
+          style={{
+            marginTop: 14,
+            color: colors.textSecondary,
+            fontFamily: fonts.ui,
+            fontSize: 13,
+            lineHeight: 19,
+          }}
+        >
+          {description}
+        </Text>
+      ) : null}
 
       {primary ? (
         <View
           style={{
-            marginTop: 18,
-            paddingTop: 16,
+            marginTop: 14,
+            paddingTop: 14,
             borderTopWidth: 1,
             borderTopColor: colors.hair,
           }}
@@ -320,10 +383,10 @@ function StatusCard({
           <MonoLabel>{primary.label}</MonoLabel>
           <Text
             style={{
-              marginTop: 7,
+              marginTop: 6,
               color: colors.text,
               fontFamily: fonts.uiBold,
-              fontSize: 20,
+              fontSize: 19,
             }}
           >
             {primary.value}
@@ -334,6 +397,12 @@ function StatusCard({
   );
 }
 
+/**
+ * High-priority facts (plan, price/period, status, next renewal) live in
+ * StatusCard. This card only holds médio/baixa metadata — start date,
+ * payment source, and lower-priority timestamps — so it never duplicates
+ * what the user already saw above.
+ */
 function DetailsCard({
   model,
   formatDate,
@@ -343,29 +412,7 @@ function DetailsCard({
 }) {
   const { t } = useTranslation('profile');
   const rows: Array<{ label: string; value: string }> = [];
-  const plan = planLabel(model, t);
-  rows.push({ label: t('subscriptionCenter.field.plan'), value: plan });
 
-  if (model.localizedPrice && model.status !== 'expired') {
-    const period =
-      model.planKind === 'monthly'
-        ? t('subscriptionCenter.period.month')
-        : model.planKind === 'annual'
-          ? t('subscriptionCenter.period.year')
-          : null;
-    rows.push({
-      label:
-        model.status === 'trial'
-          ? t('subscriptionCenter.field.afterTrial')
-          : t('subscriptionCenter.field.planPrice'),
-      value: period
-        ? t('subscriptionCenter.priceWithPeriod', {
-            price: model.localizedPrice,
-            period,
-          })
-        : model.localizedPrice,
-    });
-  }
   if (model.status === 'trial' && model.trialEndsAt) {
     rows.push({
       label: t('subscriptionCenter.field.firstCharge'),
@@ -376,6 +423,12 @@ function DetailsCard({
     rows.push({
       label: t('subscriptionCenter.field.start'),
       value: formatDate(model.startedAt),
+    });
+  }
+  if (model.store) {
+    rows.push({
+      label: t('subscriptionCenter.field.store'),
+      value: storeLabel(model.store, t),
     });
   }
   if (
@@ -400,55 +453,49 @@ function DetailsCard({
       value: formatDate(model.billingIssueDetectedAt),
     });
   }
-  if (model.store) {
-    rows.push({
-      label: t('subscriptionCenter.field.store'),
-      value: storeLabel(model.store, t),
-    });
-  }
+
+  if (rows.length === 0) return null;
 
   return (
-    <View style={{ marginTop: 22 }}>
+    <View style={{ marginTop: 24 }}>
       <Slash style={{ marginBottom: 10 }}>{t('subscriptionCenter.section.details')}</Slash>
-      <Card style={{ paddingHorizontal: 16 }}>
-        {rows.map((row, index) => (
-          <View
-            key={`${row.label}:${index}`}
+      {rows.map((row, index) => (
+        <View
+          key={`${row.label}:${index}`}
+          style={{
+            paddingVertical: 10,
+            borderTopWidth: index ? 1 : 0,
+            borderTopColor: colors.hair,
+            flexDirection: 'row',
+            alignItems: 'flex-start',
+            gap: 18,
+          }}
+        >
+          <Text
             style={{
-              paddingVertical: 14,
-              borderTopWidth: index ? 1 : 0,
-              borderTopColor: colors.hair,
-              flexDirection: 'row',
-              alignItems: 'flex-start',
-              gap: 18,
+              flex: 1,
+              color: colors.mute,
+              fontFamily: fonts.ui,
+              fontSize: 12,
+              lineHeight: 17,
             }}
           >
-            <Text
-              style={{
-                flex: 1,
-                color: colors.mute,
-                fontFamily: fonts.ui,
-                fontSize: 12.5,
-                lineHeight: 18,
-              }}
-            >
-              {row.label}
-            </Text>
-            <Text
-              style={{
-                flex: 1,
-                color: colors.text,
-                fontFamily: fonts.uiSemi,
-                fontSize: 13,
-                lineHeight: 18,
-                textAlign: 'right',
-              }}
-            >
-              {row.value}
-            </Text>
-          </View>
-        ))}
-      </Card>
+            {row.label}
+          </Text>
+          <Text
+            style={{
+              flex: 1,
+              color: colors.textSecondary,
+              fontFamily: fonts.uiMed,
+              fontSize: 12.5,
+              lineHeight: 17,
+              textAlign: 'right',
+            }}
+          >
+            {row.value}
+          </Text>
+        </View>
+      ))}
     </View>
   );
 }
@@ -460,7 +507,6 @@ function SubscriptionActions({
   managing,
   onManage,
   onRestore,
-  onRenew,
 }: {
   model: SubscriptionCenterModel;
   busy: boolean;
@@ -468,51 +514,110 @@ function SubscriptionActions({
   managing: boolean;
   onManage: () => void;
   onRestore: () => void;
-  onRenew: () => void;
 }) {
   const { t } = useTranslation('profile');
   const manageable = ['active', 'trial', 'canceled', 'billing_issue', 'grace_period'].includes(
     model.status,
   );
-  const restoreVisible = model.status === 'active' || model.status === 'trial' || model.status === 'unknown';
+  // This component never renders for 'expired' (see ExpiredActions below),
+  // so in practice isRestoreVisible only turns this on for 'unknown'.
+  const restoreVisible = isRestoreVisible(model.status);
 
-  if (model.status === 'expired') {
-    return (
-      <CtaButton onPress={onRenew} style={{ marginTop: 22 }}>
-        <CtaText>{t('subscriptionCenter.actions.renew')}</CtaText>
-      </CtaButton>
-    );
+  const items: SettingsItemData[] = [];
+  if (manageable) {
+    items.push({
+      icon: 'settings',
+      label:
+        model.status === 'billing_issue' || model.status === 'grace_period'
+          ? t('subscriptionCenter.actions.managePayment')
+          : t('subscriptionCenter.actions.manage'),
+      onPress: onManage,
+      disabled: busy,
+      loading: managing,
+    });
+  }
+  if (restoreVisible) {
+    items.push({
+      icon: 'swap',
+      label: t('subscriptionCenter.actions.restore'),
+      onPress: onRestore,
+      disabled: busy,
+      loading: restoring,
+    });
   }
 
+  if (items.length === 0) return null;
+
   return (
-    <View style={{ marginTop: 22 }}>
-      {manageable ? (
-        <CtaButton onPress={onManage} disabled={busy}>
-          {managing ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <CtaText>
-              {model.status === 'billing_issue' || model.status === 'grace_period'
-                ? t('subscriptionCenter.actions.managePayment')
-                : t('subscriptionCenter.actions.manage')}
-            </CtaText>
-          )}
-        </CtaButton>
-      ) : null}
-      {restoreVisible ? (
-        <CtaButton
-          ghost
-          onPress={onRestore}
-          disabled={busy}
-          style={{ marginTop: manageable ? 12 : 0 }}
-        >
-          {restoring ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            t('subscriptionCenter.actions.restore')
-          )}
-        </CtaButton>
-      ) : null}
+    <SettingsSection
+      title={t('subscriptionCenter.section.manage')}
+      items={items}
+      style={{ marginTop: 26, paddingBottom: 0 }}
+    />
+  );
+}
+
+/**
+ * Expired is the one status where "Renovar Premium" is a real conversion
+ * action, so it keeps the large CTA treatment. Restore is only a recovery
+ * path for someone who believes they already paid, so it renders as a
+ * subordinate text link underneath — never another full-size button.
+ */
+function ExpiredActions({
+  onRenew,
+  onRestore,
+  restoring,
+  busy,
+}: {
+  onRenew: () => void;
+  onRestore: () => void;
+  restoring: boolean;
+  busy: boolean;
+}) {
+  const { t } = useTranslation('profile');
+  return (
+    <View style={{ marginTop: 24, alignItems: 'center' }}>
+      <CtaButton onPress={onRenew} style={{ alignSelf: 'stretch' }}>
+        <CtaText>{t('subscriptionCenter.actions.renew')}</CtaText>
+      </CtaButton>
+      <Pressable
+        accessibilityRole="button"
+        onPress={onRestore}
+        disabled={busy}
+        hitSlop={8}
+        style={({ pressed }) => ({
+          marginTop: 16,
+          opacity: busy && !restoring ? 0.4 : pressed ? 0.6 : 1,
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 6,
+        })}
+      >
+        {restoring ? (
+          <ActivityIndicator size="small" color={colors.mute} />
+        ) : (
+          <>
+            <Text
+              style={{
+                color: colors.mute,
+                fontFamily: fonts.ui,
+                fontSize: 12.5,
+              }}
+            >
+              {t('subscriptionCenter.actions.restorePrompt')}
+            </Text>
+            <Text
+              style={{
+                color: colors.accentHi,
+                fontFamily: fonts.uiSemi,
+                fontSize: 12.5,
+              }}
+            >
+              {t('subscriptionCenter.actions.restore')}
+            </Text>
+          </>
+        )}
+      </Pressable>
     </View>
   );
 }
@@ -644,7 +749,7 @@ function primaryFact(
     };
   }
   if (model.status === 'canceled' && date) {
-    return { label: t('subscriptionCenter.field.accessUntil'), value: formatDate(date) };
+    return { label: t('subscriptionCenter.field.premiumUntil'), value: formatDate(date) };
   }
   if (model.status === 'grace_period' && model.gracePeriodEndsAt) {
     return {
@@ -674,6 +779,22 @@ function planLabel(model: SubscriptionCenterModel, t: Translate): string {
   if (model.planKind === 'monthly') return t('subscriptionCenter.plan.monthly');
   if (model.planKind === 'annual') return t('subscriptionCenter.plan.annual');
   return model.planDisplayName ?? t('subscriptionCenter.plan.unknown');
+}
+
+/** Plan name plus price/period, e.g. "Premium Anual · R$ 799,90 / ano". */
+function planPriceLine(model: SubscriptionCenterModel, t: Translate): string {
+  const plan = planLabel(model, t);
+  if (!model.localizedPrice || model.status === 'expired') return plan;
+  const period =
+    model.planKind === 'monthly'
+      ? t('subscriptionCenter.period.month')
+      : model.planKind === 'annual'
+        ? t('subscriptionCenter.period.year')
+        : null;
+  const price = period
+    ? t('subscriptionCenter.priceWithPeriod', { price: model.localizedPrice, period })
+    : model.localizedPrice;
+  return `${plan} · ${price}`;
 }
 
 function storeLabel(store: Store, t: Translate): string {

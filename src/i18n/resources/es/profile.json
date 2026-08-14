@@ -34,42 +34,44 @@
       "back": "Volver al perfil"
     },
     "badge": {
-      "active": "Activa",
-      "trial": "Período gratuito",
-      "canceled": "Cancelada",
+      "active": "Premium activo",
+      "trial": "Período de prueba",
+      "canceled": "Renovación cancelada",
       "billingIssue": "Problema de pago",
       "gracePeriod": "Pago pendiente",
-      "expired": "Expirada",
+      "expired": "Premium expirado",
       "unknown": "No disponible"
     },
     "message": {
       "active": "Tu acceso Premium está activo.",
-      "trial": "Tu período gratuito está activo.",
-      "canceled": "Tu acceso Premium sigue disponible hasta el {{date}}.",
-      "canceledNoDate": "La renovación fue cancelada, pero tu acceso Premium sigue disponible.",
-      "billingIssue": "No pudimos renovar tu suscripción. Premium seguirá disponible mientras el entitlement esté activo.",
-      "gracePeriod": "Premium sigue activo mientras la tienda intenta completar la renovación.",
-      "expired": "Tu acceso Premium ha terminado.",
+      "trial": "Tu Premium está activo durante el período de prueba.",
+      "canceled": "Tu Premium sigue activo hasta el {{date}}. La renovación automática está desactivada.",
+      "canceledNoDate": "La renovación automática está desactivada, pero tu Premium sigue activo.",
+      "billingIssue": "No pudimos completar tu renovación. Actualiza tu forma de pago para evitar la interrupción del Premium.",
+      "gracePeriod": "Tu Premium sigue activo temporalmente mientras se regulariza la renovación.",
+      "expired": "Tu suscripción ya no está activa. Renueva para seguir disfrutando del Premium.",
       "unknown": "No tenemos suficientes datos para describir esta suscripción."
     },
     "section": {
-      "details": "Detalles"
+      "details": "Detalles",
+      "manage": "Suscripción"
     },
     "field": {
       "plan": "Plan",
       "planPrice": "Precio del plan",
       "nextRenewal": "Próxima renovación",
-      "freeUntil": "Período gratuito hasta",
+      "freeUntil": "Período de prueba hasta",
       "firstCharge": "Primer cobro",
-      "afterTrial": "Después del período gratuito",
-      "accessUntil": "Acceso hasta",
-      "expiredOn": "Expiró el",
+      "afterTrial": "Después del período de prueba",
+      "accessUntil": "Acceso actual hasta",
+      "premiumUntil": "Premium activo hasta",
+      "expiredOn": "Suscripción finalizada el",
       "start": "Inicio de la suscripción",
       "latestRenewal": "Última renovación",
       "canceledOn": "Cancelación solicitada el",
       "store": "Suscripción mediante",
       "paymentIssueSince": "Problema detectado el",
-      "graceUntil": "Pago pendiente hasta"
+      "graceUntil": "Período de gracia hasta"
     },
     "plan": {
       "monthly": "Premium Mensual",
@@ -100,8 +102,9 @@
       "manage": "Gestionar suscripción",
       "managePayment": "Gestionar pago",
       "restore": "Restaurar compras",
+      "restorePrompt": "¿Ya tienes una suscripción?",
       "restoring": "Restaurando...",
-      "renew": "Renovar suscripción",
+      "renew": "Renovar Premium",
       "retry": "Reintentar"
     },
     "notice": {

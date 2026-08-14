@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, Pressable, StyleProp, ViewStyle } from 'react-native';
+import { ActivityIndicator, View, Text, Pressable, StyleProp, ViewStyle } from 'react-native';
 import { Slash } from './Display';
 import { Icon, IconName } from './Icon';
 import { colors, fonts, opacity, spacing, typography } from '../../theme/tokens';
@@ -40,6 +40,8 @@ export type SettingsItemData = {
   value?: string;
   danger?: boolean;
   disabled?: boolean;
+  /** Shows a small spinner in place of the chevron/value, e.g. while an async action is in flight. */
+  loading?: boolean;
   onPress?: () => void;
 };
 
@@ -50,10 +52,11 @@ export function SettingsItem({
   value,
   danger,
   disabled = false,
+  loading = false,
   onPress,
 }: SettingsItemData) {
   const accent = danger ? colors.danger : colors.accentHi;
-  const interactive = !!onPress && !disabled;
+  const interactive = !!onPress && !disabled && !loading;
 
   return (
     <Pressable
@@ -94,8 +97,14 @@ export function SettingsItem({
           </Text>
         ) : null}
       </View>
-      {value ? <SettingsValue>{value}</SettingsValue> : null}
-      {onPress ? <Icon name="chevron-right" size={14} color={colors.faint} /> : null}
+      {loading ? (
+        <ActivityIndicator size="small" color={colors.mute} />
+      ) : (
+        <>
+          {value ? <SettingsValue>{value}</SettingsValue> : null}
+          {onPress ? <Icon name="chevron-right" size={14} color={colors.faint} /> : null}
+        </>
+      )}
     </Pressable>
   );
 }

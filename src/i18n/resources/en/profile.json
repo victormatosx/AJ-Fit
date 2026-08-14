@@ -34,42 +34,44 @@
       "back": "Back to profile"
     },
     "badge": {
-      "active": "Active",
-      "trial": "Free period",
-      "canceled": "Canceled",
+      "active": "Premium active",
+      "trial": "Free trial",
+      "canceled": "Renewal canceled",
       "billingIssue": "Payment issue",
       "gracePeriod": "Payment pending",
-      "expired": "Expired",
+      "expired": "Premium expired",
       "unknown": "Unavailable"
     },
     "message": {
       "active": "Your Premium access is active.",
-      "trial": "Your free period is active.",
-      "canceled": "Your Premium access remains available until {{date}}.",
-      "canceledNoDate": "Renewal was canceled, but your Premium access is still available.",
-      "billingIssue": "We couldn't renew your subscription. Premium remains available while the entitlement is active.",
-      "gracePeriod": "Premium remains active while the store tries to complete the renewal.",
-      "expired": "Your Premium access has ended.",
+      "trial": "Your Premium is active through your free trial.",
+      "canceled": "Your Premium stays active until {{date}}. Auto-renewal is turned off.",
+      "canceledNoDate": "Auto-renewal is turned off, but your Premium is still active.",
+      "billingIssue": "We couldn't complete your renewal. Update your payment method to avoid losing Premium.",
+      "gracePeriod": "Your Premium stays active temporarily while the renewal is being sorted out.",
+      "expired": "Your subscription is no longer active. Renew to keep enjoying Premium.",
       "unknown": "We don't have enough details to describe this subscription."
     },
     "section": {
-      "details": "Details"
+      "details": "Details",
+      "manage": "Subscription"
     },
     "field": {
       "plan": "Plan",
       "planPrice": "Plan price",
       "nextRenewal": "Next renewal",
-      "freeUntil": "Free period until",
+      "freeUntil": "Free trial until",
       "firstCharge": "First charge",
-      "afterTrial": "After the free period",
-      "accessUntil": "Access until",
-      "expiredOn": "Expired on",
+      "afterTrial": "After the free trial",
+      "accessUntil": "Current access until",
+      "premiumUntil": "Premium active until",
+      "expiredOn": "Subscription ended on",
       "start": "Subscription started",
       "latestRenewal": "Latest renewal",
       "canceledOn": "Cancellation requested on",
       "store": "Subscribed through",
       "paymentIssueSince": "Issue detected on",
-      "graceUntil": "Payment pending until"
+      "graceUntil": "Grace period until"
     },
     "plan": {
       "monthly": "Premium Monthly",
@@ -100,8 +102,9 @@
       "manage": "Manage subscription",
       "managePayment": "Manage payment",
       "restore": "Restore purchases",
+      "restorePrompt": "Already subscribed?",
       "restoring": "Restoring...",
-      "renew": "Renew subscription",
+      "renew": "Renew Premium",
       "retry": "Try again"
     },
     "notice": {

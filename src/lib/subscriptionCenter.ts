@@ -60,6 +60,21 @@ export type SubscriptionCenterModel = {
 
 export type SubscriptionCenterViewState = 'loading' | 'error' | 'ready';
 
+/**
+ * Restore purchases only helps when RevenueCat hasn't linked an existing
+ * purchase to this account — every other status already has a recognized
+ * entitlement, so restoring can't change anything about it.
+ *
+ * - `expired` / `unknown`: no active entitlement is known here, so a prior
+ *   purchase may exist that RevenueCat just hasn't reattached yet.
+ * - Everything else (`active`, `trial`, `canceled`, `billing_issue`,
+ *   `grace_period`): the entitlement is already recognized and active;
+ *   showing restore there doesn't fix anything and only invites confusion.
+ */
+export function isRestoreVisible(status: SubscriptionCenterStatus): boolean {
+  return status === 'expired' || status === 'unknown';
+}
+
 export function resolveSubscriptionCenterViewState({
   loading,
   customerInfo,
