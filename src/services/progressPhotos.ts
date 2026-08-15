@@ -17,17 +17,35 @@ import { auth, db, storage } from '../lib/firebase';
 import {
   ENCRYPTION_ALGORITHM,
   ENCRYPTION_VERSION,
+  decryptBytesToBase64,
   describeEnvelope,
 } from '../lib/photoVaultCrypto';
 import {
   PhotoVaultError,
+  isPhotoVaultError,
   logPhotoVaultIssue,
   sanitizedErrorCode,
   type PhotoVaultIssue,
 } from '../lib/photoVaultErrors';
-import { startPhotoVaultPerf, type PhotoVaultPerfStage } from '../lib/photoVaultPerformance';
-import { requirePhotoVaultUnlocked } from '../lib/photoVaultSession';
+import {
+  recordPhotoVaultCacheOutcome,
+  startPhotoVaultPerf,
+  type PhotoVaultPerfStage,
+} from '../lib/photoVaultPerformance';
+import {
+  isPhotoVaultUnlockedFor,
+  photoVaultSessionGeneration,
+  requirePhotoVaultUnlocked,
+  requireSamePhotoVaultSession,
+} from '../lib/photoVaultSession';
 import { ensurePhotoVaultKey } from './photoVault';
+import {
+  currentPhotoVaultCacheEpoch,
+  readCachedThumbnail,
+  reconcileCachedThumbnails,
+  removeCachedThumbnail,
+  writeCachedThumbnail,
+} from './photoVaultEncryptedCache';
 import {
   decryptPhotoFile,
   discardDecryptedPhoto,
@@ -409,6 +427,27 @@ export async function listProgressPhotos(): Promise<ProgressPhoto[]> {
   return photos;
 }
 
+/**
+ * Drops cached ciphertext for photos that no longer exist remotely.
+ *
+ * Separate from `listProgressPhotos` so the caller decides when to pay for it:
+ * a refresh must render from metadata immediately and reconcile afterwards,
+ * never the other way round. Bounded per call, and silent — a cache that
+ * cannot be tidied is not a user-facing problem.
+ */
+export function reconcileProgressPhotoCache(photos: ProgressPhoto[]): number {
+  const uid = auth.currentUser?.uid;
+  if (!uid || !isPhotoVaultUnlockedFor(uid)) return 0;
+  try {
+    return reconcileCachedThumbnails(
+      uid,
+      photos.map((photo) => photo.photoId),
+    );
+  } catch {
+    return 0;
+  }
+}
+
 async function resolvePhoto(uid: string, photoOrId: ProgressPhoto | string): Promise<ProgressPhoto> {
   if (typeof photoOrId !== 'string') {
     // Re-derive every target path. Even a forged object cannot escape this uid.
@@ -431,40 +470,21 @@ async function resolvePhoto(uid: string, photoOrId: ProgressPhoto | string): Pro
   return parseStoredPhoto(uid, photoOrId, snapshot.data());
 }
 
-type DownloadAssetKind = 'thumbnail' | 'full' | 'legacy-full';
+type DownloadAssetKind = 'full' | 'legacy-full';
 
-async function downloadAsset(
-  photo: ProgressPhoto,
-  uid: string,
-  kind: DownloadAssetKind,
-): Promise<{ uri: string; size: number; photo: ProgressPhoto; isFullImage: boolean }> {
-  const isThumbnail = kind === 'thumbnail';
-  const encryption = isThumbnail ? photo.thumbnailEncryption! : photo.encryption;
-  const expectedSize = isThumbnail ? photo.thumbnailEncryptedSize! : photo.encryptedSize;
-  const objectPath = isThumbnail
-    ? thumbnailStoragePathFor(uid, photo.photoId)
-    : storagePathFor(uid, photo.photoId);
-  const maxBytes = isThumbnail ? MAX_THUMBNAIL_ENCRYPTED_BYTES : MAX_ENCRYPTED_BYTES;
-  const prefix = isThumbnail ? 'gallery.thumbnail' : kind === 'legacy-full' ? 'gallery.legacy-full' : 'viewer.full';
-  const { vaultKey, vaultKeyVersion } = await requireVaultKey();
-  if (encryption.vaultKeyVersion !== vaultKeyVersion) fail('vaultDownloadIntegrityFailed');
-
-  let bytes: Uint8Array;
-  try {
-    bytes = await timed(`${prefix}.download` as PhotoVaultPerfStage, async () => {
-      const buffer = await getBytes(ref(storage, objectPath), maxBytes);
-      return new Uint8Array(buffer);
-    });
-  } catch (error) {
-    // A rare partial delete may leave immutable metadata referring to a
-    // missing thumbnail while the primary full ciphertext still exists.
-    // Preserve access with the same controlled legacy fallback; never fall
-    // back on permission/integrity/network errors.
-    if (isThumbnail && isObjectNotFound(error)) {
-      return downloadAsset(photo, uid, 'legacy-full');
-    }
-    fail('vaultDownloadFailed', error);
-  }
+/**
+ * Cross-checks an envelope against the Firestore metadata that claims to
+ * describe it, before any key is involved.
+ *
+ * Shared by the network path and the local cache path on purpose: a file read
+ * from this device gets exactly the same scrutiny as one just downloaded.
+ * Trusting local bytes more would make the cache the weak link.
+ */
+function validateEncryptedAsset(
+  bytes: Uint8Array,
+  encryption: ProgressPhotoEncryption,
+  expectedSize: number,
+): void {
   if (bytes.length !== expectedSize) fail('vaultDownloadIntegrityFailed');
 
   let framing;
@@ -476,6 +496,35 @@ async function downloadAsset(
   if (framing.iv !== encryption.iv || framing.version !== encryption.version) {
     fail('vaultDownloadIntegrityFailed');
   }
+}
+
+/**
+ * Full-image pipeline. Unchanged by the encrypted thumbnail cache: fulls are
+ * still decrypted to a short-lived file under `<cache>/photo-vault/tmp` and
+ * are still destroyed by the lock. There is no persistent cache for `.enc`.
+ */
+async function downloadAsset(
+  photo: ProgressPhoto,
+  uid: string,
+  kind: DownloadAssetKind,
+): Promise<{ uri: string; size: number; photo: ProgressPhoto; isFullImage: true }> {
+  const encryption = photo.encryption;
+  const expectedSize = photo.encryptedSize;
+  const objectPath = storagePathFor(uid, photo.photoId);
+  const prefix = kind === 'legacy-full' ? 'gallery.legacy-full' : 'viewer.full';
+  const { vaultKey, vaultKeyVersion } = await requireVaultKey();
+  if (encryption.vaultKeyVersion !== vaultKeyVersion) fail('vaultDownloadIntegrityFailed');
+
+  let bytes: Uint8Array;
+  try {
+    bytes = await timed(`${prefix}.download` as PhotoVaultPerfStage, async () => {
+      const buffer = await getBytes(ref(storage, objectPath), MAX_ENCRYPTED_BYTES);
+      return new Uint8Array(buffer);
+    });
+  } catch (error) {
+    fail('vaultDownloadFailed', error);
+  }
+  validateEncryptedAsset(bytes, encryption, expectedSize);
 
   const { uri: encryptedUri } = writeEncryptedFile(bytes);
   try {
@@ -486,23 +535,131 @@ async function downloadAsset(
         extension: photo.originalMimeType === 'image/png' ? '.png' : '.jpg',
       }),
     );
-    return { ...plaintext, photo, isFullImage: !isThumbnail };
+    return { ...plaintext, photo, isFullImage: true };
   } finally {
     discardEncryptedPhoto(encryptedUri);
   }
 }
 
+/**
+ * Grid asset.
+ *
+ * `isFullImage: false` carries a `data:` URI that exists only in memory.
+ * `isFullImage: true` is the untouched legacy fallback for photos uploaded
+ * before thumbnails existed, and still carries a temporary file URI.
+ */
+export type ThumbnailAsset =
+  | { isFullImage: false; dataUri: string; photo: ProgressPhoto }
+  | { isFullImage: true; uri: string; size: number; photo: ProgressPhoto };
+
+/** The thumbnail is always written as JPEG by `createPhotoVaultThumbnail`. */
+function thumbnailDataUri(base64: string): string {
+  return `data:image/jpeg;base64,${base64}`;
+}
+
+/**
+ * Fetches the encrypted thumbnail, preferring the on-device ciphertext cache.
+ *
+ * Hierarchy owned here, never in the UI:
+ *
+ *   local `.thumb.enc` → decrypt → data URI      (no network at all)
+ *   Storage `getBytes` → cache it → decrypt      (network once)
+ *
+ * The bytes are decrypted from the copy already in memory in both branches, so
+ * a miss costs one write and a hit costs one read — the previous
+ * write/read/write/read round trip through two temporary files is gone.
+ */
+async function loadThumbnail(
+  photo: ProgressPhoto,
+  uid: string,
+  sessionGeneration: number,
+): Promise<string | null> {
+  const encryption = photo.thumbnailEncryption!;
+  const expectedSize = photo.thumbnailEncryptedSize!;
+  const { vaultKey, vaultKeyVersion } = await requireVaultKey();
+  if (encryption.vaultKeyVersion !== vaultKeyVersion) fail('vaultDownloadIntegrityFailed');
+
+  // Captured before any await. A logout or account switch bumps this, and the
+  // cache refuses a write carrying the stale value.
+  const epoch = currentPhotoVaultCacheEpoch();
+
+  const cached = await timed('gallery.thumbnail.cache-read', () =>
+    readCachedThumbnail({ uid, photoId: photo.photoId, expectedSize }),
+  );
+
+  if (cached) {
+    try {
+      validateEncryptedAsset(cached, encryption, expectedSize);
+      const base64 = await timed('gallery.thumbnail.decrypt', () =>
+        decryptBytesToBase64(cached, vaultKey),
+      );
+      requireSamePhotoVaultSession(uid, sessionGeneration);
+      recordPhotoVaultCacheOutcome('hit');
+      return thumbnailDataUri(base64);
+    } catch (error) {
+      // The session ended mid-flight: that is not corruption, and re-downloading
+      // would be work for a user who is no longer signed in.
+      if (isPhotoVaultError(error) && error.issue === 'vaultLocked') throw error;
+      // Anything else means these local bytes cannot be trusted. Drop them and
+      // fall through to exactly one network attempt — never a retry loop.
+      removeCachedThumbnail(uid, photo.photoId);
+    }
+  }
+
+  recordPhotoVaultCacheOutcome('miss');
+
+  let bytes: Uint8Array;
+  try {
+    bytes = await timed('gallery.thumbnail.download', async () => {
+      const buffer = await getBytes(
+        ref(storage, thumbnailStoragePathFor(uid, photo.photoId)),
+        MAX_THUMBNAIL_ENCRYPTED_BYTES,
+      );
+      return new Uint8Array(buffer);
+    });
+  } catch (error) {
+    // A rare partial delete may leave immutable metadata referring to a
+    // missing thumbnail while the primary full ciphertext still exists.
+    // Signalled here, where the raw Storage error is still available, so the
+    // caller can use the controlled legacy fallback. Never fall back on
+    // permission, integrity or network errors.
+    if (isObjectNotFound(error)) return null;
+    fail('vaultDownloadFailed', error);
+  }
+  validateEncryptedAsset(bytes, encryption, expectedSize);
+
+  // Storing before decrypting keeps the cache write out of the way of the
+  // pixels, and a failed write only costs a future re-download.
+  const finishWrite = startPhotoVaultPerf('gallery.thumbnail.cache-write');
+  writeCachedThumbnail({ uid, photoId: photo.photoId, bytes, epoch });
+  finishWrite();
+
+  const base64 = await timed('gallery.thumbnail.decrypt', () =>
+    decryptBytesToBase64(bytes, vaultKey),
+  );
+  requireSamePhotoVaultSession(uid, sessionGeneration);
+  return thumbnailDataUri(base64);
+}
+
 /** Grid asset: thumbnail for new photos; controlled full fallback for legacy photos. */
 export async function downloadProgressPhotoThumbnail(
   photo: ProgressPhoto,
-): Promise<{ uri: string; size: number; photo: ProgressPhoto; isFullImage: boolean }> {
+): Promise<ThumbnailAsset> {
   const uid = currentUnlockedUid();
+  const sessionGeneration = photoVaultSessionGeneration();
   const resolved = await resolvePhoto(uid, photo);
   const hasThumbnail =
     resolved.thumbnailStoragePath !== undefined &&
     resolved.thumbnailEncryptedSize !== undefined &&
     resolved.thumbnailEncryption !== undefined;
-  return downloadAsset(resolved, uid, hasThumbnail ? 'thumbnail' : 'legacy-full');
+
+  if (!hasThumbnail) {
+    return downloadAsset(resolved, uid, 'legacy-full');
+  }
+
+  const dataUri = await loadThumbnail(resolved, uid, sessionGeneration);
+  if (dataUri === null) return downloadAsset(resolved, uid, 'legacy-full');
+  return { isFullImage: false, dataUri, photo: resolved };
 }
 
 /** Viewer asset. Passing list metadata avoids a redundant Firestore read. */
@@ -531,6 +688,11 @@ export async function deleteProgressPhoto(photoOrId: ProgressPhoto | string): Pr
   const uid = currentUnlockedUid();
   try {
     const photo = await resolvePhoto(uid, photoOrId);
+    // Invalidated as the delete begins, not after it succeeds. A stale
+    // thumbnail surviving a partially failed delete would be worse than the
+    // re-download that dropping it costs, and a restored photo can always be
+    // fetched again.
+    removeCachedThumbnail(uid, photo.photoId);
     const deletions: Promise<void>[] = [
       deleteStorageObject(ref(storage, storagePathFor(uid, photo.photoId)), 'delete.full.storage'),
     ];

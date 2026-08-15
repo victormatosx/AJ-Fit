@@ -231,3 +231,33 @@ export async function decryptBytes(
     throw new PhotoVaultError('vaultCryptoIntegrityFailed');
   }
 }
+
+/**
+ * Decrypts an envelope straight to base64, for images that must never touch
+ * the filesystem.
+ *
+ * The encoding happens inside the native module, so the decrypted JPEG never
+ * exists as a JavaScript `Uint8Array` and is never written anywhere. The
+ * caller turns this into a `data:` URI that lives only in memory.
+ *
+ * Be precise about what this buys: base64 IS plaintext. It removes the
+ * decrypted file from disk and the decrypted byte array from the JS heap, but
+ * a plaintext string does remain in memory while the vault is unlocked. Unlike
+ * a `Uint8Array`, a JavaScript string is immutable and cannot be zeroed — its
+ * lifetime is bounded by the caller's LRU and by lock/logout dropping the
+ * reference, not by wiping it.
+ */
+export async function decryptBytesToBase64(
+  envelope: Uint8Array,
+  vaultKeyBase64: string,
+): Promise<string> {
+  const { iv, tag, ciphertext } = parseEnvelope(envelope);
+  const key = await importVaultKey(vaultKeyBase64);
+
+  try {
+    const sealed = AESSealedData.fromParts(iv, ciphertext, tag);
+    return await aesDecryptAsync(sealed, key, { output: 'base64' });
+  } catch {
+    throw new PhotoVaultError('vaultCryptoIntegrityFailed');
+  }
+}

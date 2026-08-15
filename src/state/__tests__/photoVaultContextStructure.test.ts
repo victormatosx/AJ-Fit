@@ -73,6 +73,24 @@ describe('identity changes', () => {
     expect(CONTEXT_CODE).toContain('useAuth()');
     expect(CONTEXT_CODE).toContain('user?.uid ?? null');
   });
+
+  it('clears every cached namespace that is not the signed-in one', () => {
+    // Keyed on who IS signed in, so a logout (null) keeps nothing and an
+    // account switch cannot leave the previous user's ciphertext behind —
+    // without having to remember who was signed in before.
+    expect(CONTEXT_CODE).toContain('pruneCachedThumbnailsExcept(uid)');
+  });
+
+  it('closes the session before clearing the cache', () => {
+    const effect = CONTEXT_CODE.slice(CONTEXT_CODE.indexOf('lockPhotoVault();'));
+    const lockAt = effect.indexOf('lockPhotoVault();');
+    const pruneAt = effect.indexOf('pruneCachedThumbnailsExcept(uid)');
+    // Ordering is the race guard: locking bumps the session generation and the
+    // prune bumps the cache epoch, so an in-flight download from the previous
+    // session fails both checks instead of recreating what was just removed.
+    expect(lockAt).toBeGreaterThanOrEqual(0);
+    expect(pruneAt).toBeGreaterThan(lockAt);
+  });
 });
 
 describe('no persistence and no bypass', () => {

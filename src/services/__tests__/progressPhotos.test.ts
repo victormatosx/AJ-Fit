@@ -16,6 +16,8 @@ const mocks = vi.hoisted(() => ({
   writeEncrypted: vi.fn(), discardEncrypted: vi.fn(), discardPlaintext: vi.fn(),
   describeEnvelope: vi.fn(), createThumbnail: vi.fn(),
   openUploadBlob: vi.fn(), closeUploadBlob: vi.fn(),
+  readCache: vi.fn(), writeCache: vi.fn(), removeCache: vi.fn(),
+  reconcileCache: vi.fn(), cacheEpoch: 7, decryptToBase64: vi.fn(),
   currentUser: { uid: 'alice' } as { uid: string } | null,
   uuid: 0,
 }));
@@ -47,6 +49,7 @@ vi.mock('../../lib/photoVaultCrypto', () => ({
   ENCRYPTION_VERSION: 1,
   ENCRYPTION_ALGORITHM: 'AES-256-GCM',
   describeEnvelope: (...args: unknown[]) => mocks.describeEnvelope(...args),
+  decryptBytesToBase64: (...args: unknown[]) => mocks.decryptToBase64(...args),
 }));
 vi.mock('../photoVault', () => ({ ensurePhotoVaultKey: mocks.ensureKey }));
 vi.mock('../photoVaultPicker', () => ({
@@ -62,6 +65,15 @@ vi.mock('../photoVaultFileCrypto', () => ({
 vi.mock('../photoVaultUploadBlob', () => ({
   openEncryptedUploadBlob: (...args: unknown[]) => mocks.openUploadBlob(...args),
   closeEncryptedUploadBlob: (...args: unknown[]) => mocks.closeUploadBlob(...args),
+}));
+// The cache's own filesystem behaviour is covered by its dedicated suite; here
+// it is a seam so these cases can assert cache hit/miss against Storage calls.
+vi.mock('../photoVaultEncryptedCache', () => ({
+  currentPhotoVaultCacheEpoch: () => mocks.cacheEpoch,
+  readCachedThumbnail: (...args: unknown[]) => mocks.readCache(...args),
+  writeCachedThumbnail: (...args: unknown[]) => mocks.writeCache(...args),
+  removeCachedThumbnail: (...args: unknown[]) => mocks.removeCache(...args),
+  reconcileCachedThumbnails: (...args: unknown[]) => mocks.reconcileCache(...args),
 }));
 
 import { PhotoVaultError } from '../../lib/photoVaultErrors';
@@ -190,6 +202,10 @@ beforeEach(() => {
   }));
   mocks.writeEncrypted.mockReturnValue({ uri: 'file:///cache/photo-vault/enc/download.enc' });
   mocks.decrypt.mockResolvedValue({ uri: 'file:///cache/photo-vault/tmp/output.jpg', size: 100 });
+  // Default: nothing cached, so each case opts in to a hit explicitly.
+  mocks.readCache.mockResolvedValue(null);
+  mocks.writeCache.mockReturnValue(true);
+  mocks.decryptToBase64.mockResolvedValue('QkFTRTY0');
 });
 
 describe('dual encrypted upload', () => {
@@ -462,6 +478,180 @@ describe('delete and gates', () => {
       expect(issueOf(error)).toBe('vaultLocked');
     }
     expect(mocks.upload).not.toHaveBeenCalled();
+    expect(mocks.getBytes).not.toHaveBeenCalled();
+  });
+});
+
+describe('encrypted thumbnail cache', () => {
+  function cachedEnvelope(): Uint8Array {
+    return new Uint8Array(THUMB_SIZE).fill(3);
+  }
+
+  it('serves a cache hit without touching Firebase Storage', async () => {
+    mocks.readCache.mockResolvedValue(cachedEnvelope());
+
+    const result = await downloadProgressPhotoThumbnail(metadata());
+
+    expect(result.isFullImage).toBe(false);
+    expect(mocks.getBytes).not.toHaveBeenCalled();
+    expect(mocks.writeCache).not.toHaveBeenCalled();
+    expect(mocks.decryptToBase64).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns a memory-only data URI and never a file path', async () => {
+    mocks.readCache.mockResolvedValue(cachedEnvelope());
+    mocks.decryptToBase64.mockResolvedValue('SU1BR0U=');
+
+    const result = await downloadProgressPhotoThumbnail(metadata());
+
+    expect(result).toEqual(
+      expect.objectContaining({ isFullImage: false, dataUri: 'data:image/jpeg;base64,SU1BR0U=' }),
+    );
+    // The plaintext pipeline that writes a decrypted file is not involved.
+    expect(mocks.decrypt).not.toHaveBeenCalled();
+    expect(mocks.writeEncrypted).not.toHaveBeenCalled();
+  });
+
+  it('downloads once on a miss and stores the ciphertext for next time', async () => {
+    const result = await downloadProgressPhotoThumbnail(metadata());
+
+    expect(result.isFullImage).toBe(false);
+    expect(mocks.getBytes).toHaveBeenCalledTimes(1);
+    expect(mocks.writeCache).toHaveBeenCalledWith(
+      expect.objectContaining({ uid: UID, photoId: 'photo-1', epoch: 7 }),
+    );
+  });
+
+  it('caches the exact bytes it validated', async () => {
+    await downloadProgressPhotoThumbnail(metadata());
+    const stored = mocks.writeCache.mock.calls[0]![0] as { bytes: Uint8Array };
+    expect(stored.bytes.length).toBe(THUMB_SIZE);
+  });
+
+  it('does not re-read the file it just wrote', async () => {
+    await downloadProgressPhotoThumbnail(metadata());
+    // One lookup at the start; the decrypt runs off the downloaded buffer.
+    expect(mocks.readCache).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders a photo whose cache write failed', async () => {
+    mocks.writeCache.mockReturnValue(false);
+    const result = await downloadProgressPhotoThumbnail(metadata());
+    expect(result.isFullImage).toBe(false);
+  });
+
+  it('drops a corrupted entry and redownloads exactly once', async () => {
+    mocks.readCache.mockResolvedValue(cachedEnvelope());
+    mocks.decryptToBase64
+      .mockRejectedValueOnce(new PhotoVaultError('vaultCryptoIntegrityFailed'))
+      .mockResolvedValueOnce('UkVDT1ZFUkVE');
+
+    const result = await downloadProgressPhotoThumbnail(metadata());
+
+    expect(mocks.removeCache).toHaveBeenCalledWith(UID, 'photo-1');
+    expect(mocks.getBytes).toHaveBeenCalledTimes(1);
+    expect(result).toEqual(
+      expect.objectContaining({ dataUri: 'data:image/jpeg;base64,UkVDT1ZFUkVE' }),
+    );
+  });
+
+  it('rejects a cached envelope whose framing disagrees with the metadata', async () => {
+    mocks.readCache.mockResolvedValue(cachedEnvelope());
+    mocks.describeEnvelope.mockReturnValueOnce({ version: 1, iv: 'tampered' });
+
+    await downloadProgressPhotoThumbnail(metadata());
+
+    // Never decrypted from the bad local copy; it was dropped and refetched.
+    expect(mocks.removeCache).toHaveBeenCalledWith(UID, 'photo-1');
+    expect(mocks.getBytes).toHaveBeenCalledTimes(1);
+  });
+
+  it('surfaces a real failure when the redownload also fails', async () => {
+    mocks.readCache.mockResolvedValue(cachedEnvelope());
+    mocks.decryptToBase64.mockRejectedValue(new PhotoVaultError('vaultCryptoIntegrityFailed'));
+
+    const error = await downloadProgressPhotoThumbnail(metadata()).catch((caught) => caught);
+
+    expect(issueOf(error)).toBe('vaultCryptoIntegrityFailed');
+    // Exactly one retry, never a loop.
+    expect(mocks.getBytes).toHaveBeenCalledTimes(1);
+  });
+
+  it('invalidates the cached thumbnail when the photo is deleted', async () => {
+    await deleteProgressPhoto(metadata());
+    expect(mocks.removeCache).toHaveBeenCalledWith(UID, 'photo-1');
+  });
+
+  it('does not cache the legacy full fallback', async () => {
+    await downloadProgressPhotoThumbnail(metadata('legacy', false));
+    expect(mocks.readCache).not.toHaveBeenCalled();
+    expect(mocks.writeCache).not.toHaveBeenCalled();
+  });
+
+  it('leaves the viewer full pipeline on its temporary-file path', async () => {
+    await downloadProgressPhoto(metadata());
+    expect(mocks.readCache).not.toHaveBeenCalled();
+    expect(mocks.writeCache).not.toHaveBeenCalled();
+    expect(mocks.decrypt).toHaveBeenCalledTimes(1);
+    expect(mocks.decryptToBase64).not.toHaveBeenCalled();
+  });
+});
+
+describe('session races', () => {
+  /**
+   * Suspends a mock at its call site so the test can act while the operation
+   * is genuinely mid-flight, rather than guessing at tick counts.
+   */
+  function suspend<T>(mock: { mockImplementation: (fn: () => Promise<T>) => unknown }) {
+    let release!: (value: T) => void;
+    let entered!: () => void;
+    const gate = new Promise<T>((resolve) => { release = resolve; });
+    const reached = new Promise<void>((resolve) => { entered = resolve; });
+    mock.mockImplementation(() => { entered(); return gate; });
+    return { reached, release: (value: T) => release(value) };
+  }
+
+  it('discards a download that completes after the session closed', async () => {
+    const download = suspend<ArrayBuffer>(mocks.getBytes);
+
+    const pending = downloadProgressPhotoThumbnail(metadata());
+    await download.reached;
+    // The user logs out while the download is still in flight.
+    closePhotoVaultSession();
+    download.release(new Uint8Array(THUMB_SIZE).buffer);
+
+    const error = await pending.catch((caught) => caught);
+    expect(issueOf(error)).toBe('vaultLocked');
+  });
+
+  it('discards a download that completes after a switch back to the same account', async () => {
+    const download = suspend<ArrayBuffer>(mocks.getBytes);
+
+    const pending = downloadProgressPhotoThumbnail(metadata());
+    await download.reached;
+    // A logout/login cycle of the SAME account: the uid matches again, so only
+    // the session generation can tell these apart.
+    closePhotoVaultSession();
+    openPhotoVaultSession(UID);
+    download.release(new Uint8Array(THUMB_SIZE).buffer);
+
+    const error = await pending.catch((caught) => caught);
+    expect(issueOf(error)).toBe('vaultLocked');
+  });
+
+  it('discards a cache hit that resolves after the session closed', async () => {
+    const read = suspend<Uint8Array>(mocks.readCache);
+
+    const pending = downloadProgressPhotoThumbnail(metadata());
+    await read.reached;
+    closePhotoVaultSession();
+    read.release(new Uint8Array(THUMB_SIZE).fill(3));
+
+    const error = await pending.catch((caught) => caught);
+    expect(issueOf(error)).toBe('vaultLocked');
+    // A closed session is not corruption: the entry must survive, and no
+    // pointless redownload may be attempted for a signed-out user.
+    expect(mocks.removeCache).not.toHaveBeenCalled();
     expect(mocks.getBytes).not.toHaveBeenCalled();
   });
 });

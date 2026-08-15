@@ -157,7 +157,7 @@ export function AppShell() {
           activeStyle={FULL_BLEED.tab}
           inactiveMode="materialized"
         >
-          <ProgressScreen />
+          <ProgressScreen onOpenAssessment={() => setShowAssessment(true)} />
         </PersistentScreen>
         <PersistentScreen
           active={tab === 'profile'}

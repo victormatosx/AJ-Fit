@@ -43,43 +43,51 @@
   },
   "progress": {
     "header": {
-      "period": "Progress · last 90 days",
-      "highlightLine1": "+12%",
-      "highlightLine2": "stronger."
+      "eyebrow": "Your progress",
+      "title": "Evolution"
     },
     "tabs": {
+      "body": "Body",
       "loads": "Loads",
-      "weight": "Weight",
       "photos": "Photos"
     },
-    "charts": {
-      "loadTitle": "Bench press · max load",
-      "weightTitle": "Body weight",
-      "period": "12 wk",
-      "delta": "{{direction}} {{value}} {{unit}}"
+    "body": {
+      "currentWeight": "Current weight",
+      "composition": "Composition",
+      "measuredAt": "Measured on {{date}}",
+      "delta": "{{direction}} {{value}} {{unit}}",
+      "singleEntry": "Log another assessment to see your evolution curve.",
+      "loading": "Loading your evolution…",
+      "error": "We couldn't load your evolution.",
+      "retry": "Try again",
+      "openAssessment": "View full assessment",
+      "metrics": {
+        "bodyFat": "Body fat",
+        "leanMass": "Lean mass",
+        "fatMass": "Fat mass",
+        "bmi": "BMI"
+      },
+      "empty": {
+        "title": "No assessment recorded",
+        "description": "Log your first physical assessment to track weight and body composition over time.",
+        "cta": "Take assessment"
+      }
     },
-    "heatmap": {
-      "title": "Consistency calendar",
-      "period": "6 weeks",
-      "today": "Today"
-    },
-    "records": {
-      "title": "Recent records",
-      "benchPress": "Bench press",
-      "squat": "Squat",
-      "deadlift": "Deadlift",
-      "daysAgo": "{{count}} days ago",
-      "weekAgo_one": "{{count}} week ago",
-      "weekAgo_other": "{{count}} weeks ago",
-      "value": "{{value}} {{unit}}",
-      "gain": "+{{value}} {{unit}}"
+    "loads": {
+      "eyebrow": "Loads",
+      "empty": {
+        "title": "No load history yet",
+        "description": "The weights you log during a workout apply to that session.",
+        "hint": "History across sessions not available yet"
+      }
     },
     "photos": {
       "locked": {
         "title": "Your photos are protected",
         "description": "Use your device authentication to access your private photos.",
         "cta": "Unlock",
-        "unlocking": "Unlocking…"
+        "unlocking": "Unlocking…",
+        "badge": "Private area"
       },
       "notConfigured": {
         "title": "Protection not set up",
@@ -95,7 +103,8 @@
       "empty": {
         "title": "You haven't added any photos yet",
         "description": "Track your progress to see changes over time.",
-        "cta": "Add photo"
+        "cta": "Add photo",
+        "badge": "Private area"
       },
       "list": {
         "loading": "Loading your photos…",
@@ -142,9 +151,6 @@
         "closeViewer": "Close viewer",
         "deletePhoto": "Delete this photo"
       }
-    },
-    "units": {
-      "kg": "kg"
     },
     "accessibility": {
       "selectTab": "Show {{tab}} progress"

@@ -3126,3 +3126,81 @@ Assinatura:
 Codex — 2026-08-12 — Fase 11 da UI do Photo Vault.
 
 ---
+
+Data: 2026-08-14
+Responsável: Claude — Agente Frontend + Segurança + QA
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Implementada a Fase 13B do Photo Vault: cache local criptografado das
+thumbnails. O cache em memória da Fase 13 morria no lock, então cada unlock
+repetia download + decrypt de tudo que estivesse visível. Agora o `.thumb.enc`
+baixado é persistido em
+`<cache>/photo-vault/encrypted-thumbnails/{uid}/{photoId}.thumb.enc` e
+sobrevive a lock, background e restart.
+
+Criado `src/services/photoVaultEncryptedCache.ts`, que nunca descriptografa,
+não conhece Firebase nem React e guarda somente ciphertext. Escrita atômica via
+temporário + `moveSync`, limites de 24 MB e 300 entradas, e eviction por
+recência. O diretório é irmão de `tmp` e `enc`, não filho, então a varredura
+agressiva de cold start da Fase 12 não o alcança — a persistência é garantida
+pelo layout, não por uma condicional.
+
+A auditoria inicial encontrou que a thumbnail em claro era escrita em disco
+(`<cache>/photo-vault/tmp/*.jpg`) e renderizada por URI de arquivo. Ela passou a
+existir somente em RAM: `aesDecryptAsync(..., { output: 'base64' })` produz a
+string dentro do módulo nativo e ela alimenta um `data:` URI. O JPEG nunca vira
+array de bytes no JS e nunca toca o disco.
+
+O ganho de IO é maior que só a rede. Antes: 3 escritas + 2 leituras + 1 request
+por thumbnail, porque o `.enc` baixado era escrito, relido e descartado. Agora:
+1 escrita + 1 request no miss, 1 leitura e zero requests no hit.
+
+Segurança:
+Base64 descriptografado É plaintext, e isso está documentado como tal em vez de
+arredondado. Ele vive no heap enquanto o Vault está unlocked, protegido pelo
+limite do LRU e pelo ciclo de vida — não pela ausência. Ao contrário de um
+`Uint8Array`, uma `String` não pode ser zerada; a limitação foi registrada.
+
+Logout e troca de usuário removem o cache via `pruneCachedThumbnailsExcept(uid)`
+("manter só quem está logado", em vez de "remover o anterior", o que dispensa
+rastrear o uid anterior). Duas condições de corrida foram fechadas: um epoch no
+próprio módulo de cache recusa write de sessão encerrada, e
+`photoVaultSessionGeneration` pega o caso que o uid sozinho não pega — um ciclo
+logout/login da mesma conta. Ambos os guardas foram verificados por mutação.
+
+Delete invalida a entrada; refresh reconcilia entradas órfãs de forma limitada e
+adiada, fora do caminho de render. Validação de ciphertext cacheado é a mesma do
+download, na mesma função: tamanho, envelope AJFV, IV, vaultKeyVersion e tag GCM.
+Corrupção remove a entrada e redownloada uma única vez.
+
+O pipeline das imagens completas não foi alterado e continua sem cache
+persistente. Rules, Functions, App Check e RevenueCat não foram tocados, e
+nenhum deploy foi executado.
+
+Validação automática:
+1744 testes do mobile aprovados (104 arquivos, +71 nesta fase), typecheck
+aprovado; typecheck do backend aprovado; 127 testes de Firestore Rules e 36 de
+Storage Rules aprovados sem alteração de Rules; 551 testes de i18n e
+`i18n:audit` sem bloqueios; `git diff --check` limpo. Novos arquivos de teste:
+`photoVaultEncryptedCache.test.ts`, `photoVaultCacheLifecycle.test.ts` e
+`photoVaultPlaintextAudit.test.ts` — este último uma auditoria estrutural de
+onde plaintext pode existir.
+
+Pendência:
+Os benchmarks físicos de cache hit vs. miss não foram medidos: exigem aparelho
+real. A instrumentação e o procedimento estão em
+`docs/23_photo_vault_encrypted_cache.md` §15, com a tabela marcada como
+pendente. Medir o tamanho real de um `.thumb.enc` é o que valida os limites de
+24 MB / 300 entradas escolhidos.
+
+Divergência registrada [PENDENTE]:
+`clearLocalPhotoVaultKey` e `resetGallery` não possuem call site — o logout não
+remove a Vault Key local do aparelho. É lacuna pré-existente, não regressão
+desta fase, e ficou fora do escopo por decisão humana registrada. Deve ser
+resolvida na auditoria final de release.
+
+Assinatura:
+Claude — 2026-08-14 — Fase 13B do cache criptografado do Photo Vault.
+
+---

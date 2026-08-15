@@ -183,6 +183,28 @@ local persistida capaz de retomar upload após a morte do processo. Durante um
 processo vivo, o lock remove plaintext agressivamente e preserva `.enc` que
 pode estar em upload.
 
+## 5.1 Cache cifrado de thumbnails (Fase 13B)
+
+`<cache>/photo-vault/encrypted-thumbnails/{uid}/{photoId}.thumb.enc` guarda
+ciphertext e sobrevive a lock, background e restart. É irmão de `tmp` e `enc`,
+então a varredura de cold start não o alcança. Limites: 24 MB e 300 entradas,
+com eviction por recência que sobrevive ao restart via touch throttled.
+
+A thumbnail em claro passou a existir **somente em RAM**, como Base64 num
+`data:` URI — não há mais `.jpg` de thumbnail em disco. Base64 descriptografado
+continua sendo plaintext e, ao contrário de um `Uint8Array`, uma `String` não
+pode ser zerada; a proteção é o limite do LRU e o ciclo de vida. Logout e troca
+de usuário removem o cache do uid anterior, e um epoch de cache mais a geração
+de sessão impedem que uma operação da sessão anterior o recrie.
+
+O pipeline das imagens completas não foi alterado e não possui cache
+persistente. Detalhes em `23_photo_vault_encrypted_cache.md`.
+
+**Lacuna pré-existente identificada nesta fase:** `clearLocalPhotoVaultKey` e
+`resetGallery` não possuem call site — o logout não remove a Vault Key local do
+aparelho. Não é regressão da Fase 13B (nunca existiu) e ficou fora do escopo por
+decisão registrada, mas **deve entrar na auditoria final de release**.
+
 Buffers plaintext próprios são preenchidos com zero assim que criptografia ou
 escrita termina. Continua válida a limitação do JavaScript/GC: cópias internas
 do runtime não oferecem garantia formal de zeroização.

@@ -58,7 +58,11 @@ vi.mock('expo-crypto', async () => {
       const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()]);
       return new AESSealedData(iv, ciphertext, cipher.getAuthTag());
     },
-    async aesDecryptAsync(sealed: AESSealedData, key: AESEncryptionKey) {
+    async aesDecryptAsync(
+      sealed: AESSealedData,
+      key: AESEncryptionKey,
+      options?: { output?: 'bytes' | 'base64' },
+    ) {
       const decipher = nodeCrypto.createDecipheriv(
         'aes-256-gcm',
         key.raw,
@@ -66,9 +70,14 @@ vi.mock('expo-crypto', async () => {
       );
       decipher.setAuthTag(Buffer.from(await sealed.tag()));
       // Throws on tag mismatch — the behaviour these tests rely on.
-      return new Uint8Array(
-        Buffer.concat([decipher.update(Buffer.from(await sealed.ciphertext())), decipher.final()]),
-      );
+      const plaintext = Buffer.concat([
+        decipher.update(Buffer.from(await sealed.ciphertext())),
+        decipher.final(),
+      ]);
+      // The native module encodes internally, so base64 output never produces
+      // a plaintext byte array on the JavaScript side.
+      if (options?.output === 'base64') return plaintext.toString('base64');
+      return new Uint8Array(plaintext);
     },
     randomUUID: () => nodeCrypto.randomUUID(),
     getRandomBytes: (n: number) => new Uint8Array(nodeCrypto.randomBytes(n)),
@@ -90,6 +99,7 @@ import {
   IV_BYTES,
   TAG_BYTES,
   decryptBytes,
+  decryptBytesToBase64,
   encryptBytes,
   parseEnvelope,
 } from '../photoVaultCrypto';
@@ -398,5 +408,55 @@ describe('errors carry no secrets', () => {
     expect(err.message).not.toContain(KEY);
     expect(err.message).not.toContain(Buffer.from(original).toString('base64'));
     expect(err.message).toBe('vaultCryptoIntegrityFailed');
+  });
+});
+
+// ── Memory-only decryption ─────────────────────────────────────────────────
+
+describe('decryptBytesToBase64', () => {
+  it('round-trips the exact plaintext as base64', async () => {
+    const original = photo(512);
+    const { bytes } = await encryptBytes(original, KEY);
+
+    const base64 = await decryptBytesToBase64(bytes, KEY);
+
+    expect(typeof base64).toBe('string');
+    expect([...Buffer.from(base64, 'base64')]).toEqual([...original]);
+  });
+
+  it('applies the same envelope parsing as the byte path', async () => {
+    const { bytes } = await encryptBytes(photo(64), KEY);
+    bytes[0] ^= 0xff;
+
+    const err = await decryptBytesToBase64(bytes, KEY).catch((e: unknown) => e);
+    expect(issueOf(err)).toBe('vaultCryptoInvalidFile');
+  });
+
+  it('fails closed on a tampered ciphertext instead of returning garbage', async () => {
+    const { bytes } = await encryptBytes(photo(64), KEY);
+    bytes[HEADER_BYTES] ^= 0xff;
+
+    const err = await decryptBytesToBase64(bytes, KEY).catch((e: unknown) => e);
+    expect(issueOf(err)).toBe('vaultCryptoIntegrityFailed');
+  });
+
+  it('fails closed on a wrong key', async () => {
+    const { bytes } = await encryptBytes(photo(64), KEY);
+    const otherKey = randomBytes(32).toString('base64');
+
+    const err = await decryptBytesToBase64(bytes, otherKey).catch((e: unknown) => e);
+    expect(issueOf(err)).toBe('vaultCryptoIntegrityFailed');
+  });
+
+  it('carries no secret in the failure message', async () => {
+    const original = photo(128);
+    const { bytes } = await encryptBytes(original, KEY);
+    bytes[HEADER_BYTES] ^= 0xff;
+
+    const err = (await decryptBytesToBase64(bytes, KEY).catch((e: unknown) => e)) as Error;
+
+    expect(err.message).toBe('vaultCryptoIntegrityFailed');
+    expect(err.message).not.toContain(KEY);
+    expect(err.message).not.toContain(Buffer.from(original).toString('base64'));
   });
 });

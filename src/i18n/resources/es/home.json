@@ -43,43 +43,51 @@
   },
   "progress": {
     "header": {
-      "period": "Progreso · últimos 90 días",
-      "highlightLine1": "+12% más",
-      "highlightLine2": "fuerte."
+      "eyebrow": "Tu progreso",
+      "title": "Evolución"
     },
     "tabs": {
+      "body": "Cuerpo",
       "loads": "Cargas",
-      "weight": "Peso",
       "photos": "Fotos"
     },
-    "charts": {
-      "loadTitle": "Press de banca · carga máx.",
-      "weightTitle": "Peso corporal",
-      "period": "12 sem",
-      "delta": "{{direction}} {{value}} {{unit}}"
+    "body": {
+      "currentWeight": "Peso actual",
+      "composition": "Composición",
+      "measuredAt": "Medido el {{date}}",
+      "delta": "{{direction}} {{value}} {{unit}}",
+      "singleEntry": "Registra otra evaluación para ver tu curva de evolución.",
+      "loading": "Cargando tu evolución…",
+      "error": "No pudimos cargar tu evolución.",
+      "retry": "Intentar de nuevo",
+      "openAssessment": "Ver evaluación completa",
+      "metrics": {
+        "bodyFat": "Grasa",
+        "leanMass": "Masa magra",
+        "fatMass": "Masa grasa",
+        "bmi": "IMC"
+      },
+      "empty": {
+        "title": "Ninguna evaluación registrada",
+        "description": "Registra tu primera evaluación física para seguir tu peso y composición corporal con el tiempo.",
+        "cta": "Hacer evaluación"
+      }
     },
-    "heatmap": {
-      "title": "Calendario de constancia",
-      "period": "6 semanas",
-      "today": "Hoy"
-    },
-    "records": {
-      "title": "Récords recientes",
-      "benchPress": "Press de banca",
-      "squat": "Sentadilla",
-      "deadlift": "Peso muerto",
-      "daysAgo": "hace {{count}} días",
-      "weekAgo_one": "hace {{count}} semana",
-      "weekAgo_other": "hace {{count}} semanas",
-      "value": "{{value}} {{unit}}",
-      "gain": "+{{value}} {{unit}}"
+    "loads": {
+      "eyebrow": "Cargas",
+      "empty": {
+        "title": "Aún sin historial de cargas",
+        "description": "Las cargas que registras durante el entrenamiento valen para esa sesión.",
+        "hint": "Historial entre sesiones aún no disponible"
+      }
     },
     "photos": {
       "locked": {
         "title": "Tus fotos están protegidas",
         "description": "Usa la autenticación de tu dispositivo para acceder a tus fotos privadas.",
         "cta": "Desbloquear",
-        "unlocking": "Desbloqueando…"
+        "unlocking": "Desbloqueando…",
+        "badge": "Área privada"
       },
       "notConfigured": {
         "title": "Protección no configurada",
@@ -95,7 +103,8 @@
       "empty": {
         "title": "Aún no has añadido fotos",
         "description": "Registra tu evolución para ver los cambios con el tiempo.",
-        "cta": "Añadir foto"
+        "cta": "Añadir foto",
+        "badge": "Área privada"
       },
       "list": {
         "loading": "Cargando tus fotos…",
@@ -142,9 +151,6 @@
         "closeViewer": "Cerrar visor",
         "deletePhoto": "Eliminar esta foto"
       }
-    },
-    "units": {
-      "kg": "kg"
     },
     "accessibility": {
       "selectTab": "Mostrar progreso de {{tab}}"

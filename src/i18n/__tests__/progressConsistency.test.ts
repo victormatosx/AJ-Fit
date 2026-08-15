@@ -8,12 +8,16 @@ const read = (path: string) => readFileSync(new URL(`../../${path}`, import.meta
 const progress = read('screens/ProgressScreen.tsx');
 const consistency = read('screens/ConsistencyScreen.tsx');
 
+const body = read('components/fitness/BodyEvolutionView.tsx');
+
 describe('Progress and monthly consistency i18n', () => {
   it('ships complete copy in every supported language', () => {
     for (const resource of [ptBR, en, es]) {
       expect(Object.values(resource.progress.tabs).every(Boolean)).toBe(true);
-      expect(Object.values(resource.progress.charts).every(Boolean)).toBe(true);
-      expect(Object.values(resource.progress.records).every(Boolean)).toBe(true);
+      expect(Object.values(resource.progress.body.metrics).every(Boolean)).toBe(true);
+      expect(Object.values(resource.progress.body.empty).every(Boolean)).toBe(true);
+      expect(Object.values(resource.progress.loads.empty).every(Boolean)).toBe(true);
+      expect(resource.progress.body.measuredAt).toContain('{{date}}');
       expect(Object.values(resource.monthlyConsistency.legend).every(Boolean)).toBe(true);
       expect(resource.monthlyConsistency.progress).toContain('{{done}}');
       expect(resource.monthlyConsistency.monthYear).toContain('{{year}}');
@@ -22,13 +26,22 @@ describe('Progress and monthly consistency i18n', () => {
 
   it('uses semantic translation keys instead of the former visible hardcodes', () => {
     for (const key of [
-      'progress.header.period',
+      'progress.header.title',
+      'progress.tabs.body',
       'progress.tabs.loads',
-      'progress.charts.loadTitle',
-      'progress.heatmap.title',
-      'progress.records.title',
+      'progress.tabs.photos',
+      'progress.loads.empty.title',
       'progress.accessibility.selectTab',
     ]) expect(progress).toContain(key);
+
+    for (const key of [
+      'progress.body.currentWeight',
+      'progress.body.composition',
+      'progress.body.measuredAt',
+      'progress.body.metrics.bodyFat',
+      'progress.body.empty.title',
+      'progress.body.openAssessment',
+    ]) expect(body).toContain(key);
 
     for (const hardcode of [
       'EVOLUÇÃO · ÚLTIMOS 90 DIAS',
@@ -58,10 +71,27 @@ describe('Progress and monthly consistency i18n', () => {
     ]) expect(consistency).not.toContain(hardcode);
   });
 
-  it('preserves chart and calendar data mechanics', () => {
-    expect(progress).toContain('const pointsKg = [40, 45, 42, 50, 55, 53, 60, 65, 63, 70, 75, 82]');
-    expect(progress).toContain('const pointsKg = [82, 81.6, 81.2, 80.8, 80.3, 79.9, 79.5, 79.0, 78.6, 78.2, 78.0, 77.6]');
-    expect(progress).toContain('pointsKg.map((value) => weightFromKg(value, resolvedUnits))');
+  it('derives the body panel from real assessments instead of fixed samples', () => {
+    // The screen used to ship hardcoded sample series. It now reads the same
+    // hook the assessment area uses, so every number belongs to the user.
+    expect(progress).toContain("from '../hooks/useAssessments'");
+    expect(progress).toContain('useAssessments(user?.uid ?? null)');
+    expect(progress).not.toMatch(/const pointsKg = \[/);
+    expect(body).not.toMatch(/const pointsKg = \[/);
+
+    // Weights are converted through the shared unit helpers, never printed raw.
+    expect(body).toContain('formatWeightFromKg(latest.weight, resolvedUnits)');
+    expect(body).toContain('weightFromKg(entry.weight, resolvedUnits)');
+  });
+
+  it('keeps the photos panel mounted exclusively, so leaving it locks the vault', () => {
+    // `ProgressPhotosScreen` locks the vault on unmount. Rendering it beside
+    // the other panels instead of instead of them would leave the vault open.
+    expect(progress).toContain("view === 'photos' ? (");
+    expect(progress).toContain('<ProgressPhotosScreen pageHeader={pageHeader} />');
+  });
+
+  it('preserves calendar data mechanics', () => {
     expect(consistency).toContain('const DAYS = 31');
     expect(consistency).toContain('const FIRST_WD = 2');
     expect(consistency).toContain('const TODAY = 16');

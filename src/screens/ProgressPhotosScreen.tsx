@@ -245,10 +245,15 @@ export function ProgressPhotosScreen({
           <>
             {pageHeader}
             {notice ? (
-              <View style={{ paddingHorizontal: 22, paddingBottom: 12 }}>
+              <View style={{ paddingHorizontal: 22, paddingBottom: 14 }}>
                 <Text
                   accessibilityLiveRegion="polite"
-                  style={{ color: colors.textSecondary, fontFamily: fonts.ui, fontSize: 13 }}
+                  style={{
+                    color: colors.mute,
+                    fontFamily: fonts.ui,
+                    fontSize: 13,
+                    lineHeight: 19,
+                  }}
                 >
                   {notice}
                 </Text>
@@ -256,18 +261,30 @@ export function ProgressPhotosScreen({
             ) : null}
 
             {gallery.status === 'loading' ? (
-              <View style={{ paddingVertical: 48, alignItems: 'center', gap: 12 }}>
+              <View style={{ paddingVertical: 56, alignItems: 'center', gap: 14 }}>
                 <ActivityIndicator color={colors.faint} />
                 <Text
-                  style={{ color: colors.textSecondary, fontFamily: fonts.ui, fontSize: 13 }}
+                  style={{
+                    color: colors.faint,
+                    fontFamily: fonts.mono,
+                    fontSize: 10,
+                    letterSpacing: 2,
+                    textTransform: 'uppercase',
+                  }}
                 >
                   {t('progress.photos.list.loading')}
                 </Text>
               </View>
             ) : gallery.status === 'error' ? (
-              <View style={{ paddingVertical: 48, alignItems: 'center', gap: 12 }}>
+              <View style={{ paddingVertical: 56, alignItems: 'center', gap: 14 }}>
                 <Text
-                  style={{ color: colors.textSecondary, fontFamily: fonts.ui, fontSize: 14 }}
+                  style={{
+                    color: colors.mute,
+                    fontFamily: fonts.ui,
+                    fontSize: 14,
+                    textAlign: 'center',
+                    paddingHorizontal: 22,
+                  }}
                 >
                   {t('progress.photos.list.error')}
                 </Text>
@@ -277,7 +294,15 @@ export function ProgressPhotosScreen({
                   accessibilityLabel={t('progress.photos.list.retry')}
                   style={{ paddingVertical: 10, paddingHorizontal: 18 }}
                 >
-                  <Text style={{ color: colors.text, fontFamily: fonts.uiSemi, fontSize: 14 }}>
+                  <Text
+                    style={{
+                      color: colors.accentHi,
+                      fontFamily: fonts.mono,
+                      fontSize: 10,
+                      letterSpacing: 2,
+                      textTransform: 'uppercase',
+                    }}
+                  >
                     {t('progress.photos.list.retry')}
                   </Text>
                 </Pressable>
@@ -290,31 +315,39 @@ export function ProgressPhotosScreen({
         listFooter={(
           <>
             {gallery.status === 'ready' && gallery.photos.length > 0 ? (
-              <View style={{ paddingHorizontal: 22, paddingTop: 6 }}>
-            <Pressable
-              onPress={() => setSheetOpen(true)}
-              disabled={gallery.uploading}
-              accessibilityRole="button"
-              accessibilityLabel={t('progress.photos.a11y.addPhoto')}
-              accessibilityState={{ disabled: gallery.uploading }}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 8,
-                paddingVertical: 16,
-                borderRadius: 14,
-                borderWidth: 1,
-                borderColor: 'rgba(255,255,255,0.12)',
-                backgroundColor: 'rgba(255,255,255,0.05)',
-                opacity: gallery.uploading ? 0.4 : 1,
-              }}
-            >
-              <Icon name="plus" size={16} color={colors.text} />
-              <Text style={{ color: colors.text, fontFamily: fonts.uiSemi, fontSize: 14 }}>
-                {t('progress.photos.list.add')}
-              </Text>
-            </Pressable>
+              <View style={{ paddingHorizontal: 22, paddingTop: 14 }}>
+                <Pressable
+                  onPress={() => setSheetOpen(true)}
+                  disabled={gallery.uploading}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('progress.photos.a11y.addPhoto')}
+                  accessibilityState={{ disabled: gallery.uploading }}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 10,
+                    paddingVertical: 15,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    backgroundColor: colors.surface,
+                    opacity: gallery.uploading ? 0.4 : 1,
+                  }}
+                >
+                  <Icon name="plus" size={14} color={colors.accentHi} />
+                  <Text
+                    style={{
+                      color: colors.text,
+                      fontFamily: fonts.mono,
+                      fontSize: 10,
+                      letterSpacing: 2,
+                      textTransform: 'uppercase',
+                    }}
+                  >
+                    {t('progress.photos.list.add')}
+                  </Text>
+                </Pressable>
               </View>
             ) : null}
             {pageFooter}

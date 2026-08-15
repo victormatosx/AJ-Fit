@@ -7,11 +7,11 @@ import {
   Text,
   View,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
 
 import { Icon } from '../ui/Icon';
-import { HudCorners } from '../ui/Card';
-import { colors, fonts } from '../../theme/tokens';
+import { colors, fonts, sizes, spacing } from '../../theme/tokens';
 import type { GalleryPhoto } from '../../lib/photoVaultGallery';
 
 /**
@@ -19,9 +19,18 @@ import type { GalleryPhoto } from '../../lib/photoVaultGallery';
  *
  * Uses React Native's own `Image` rather than `expo-image`: the latter's
  * disk cache would copy decrypted photos into a durable cache outside the
- * vault's control, which is exactly what the whole design avoids. These
- * images come from short-lived temporary files and must disappear with them.
+ * vault's control, which is exactly what the whole design avoids. The URI it
+ * receives is either an in-memory `data:` thumbnail or a short-lived file for
+ * the legacy full fallback — this component never inspects which, and never
+ * builds a path of its own.
+ *
+ * Presentation only. Every callback below belongs to the gallery controller:
+ * `onVisible`/`onHidden` drive the download queue and the session LRU, and
+ * `onRendered` closes the render-ready timing. Dropping any of them would
+ * silently break prefetching, eviction or telemetry.
  */
+
+const CELL_HEIGHT = 214;
 
 interface Props {
   photos: GalleryPhoto[];
@@ -55,6 +64,7 @@ function PhotoCell({
   const label = formatDate(photo.takenAt);
   const displayUri = photo.thumbnailUri ?? photo.previewUri;
   const canOpen = displayUri !== null && photo.uploadStatus === null;
+  const uploading = photo.uploadStatus === 'uploading';
 
   // FlatList's bounded render window doubles as controlled prefetch. Leaving
   // it cancels queued work; already-ready thumbnails enter the bounded
@@ -75,18 +85,16 @@ function PhotoCell({
       }
       style={{
         flex: 1,
-        height: 190,
-        borderRadius: 14,
-        backgroundColor: 'rgba(255,255,255,0.03)',
-        borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.1)',
+        height: CELL_HEIGHT,
+        borderRadius: 12,
+        backgroundColor: colors.surface,
+        borderWidth: sizes.hairline,
+        borderColor: colors.border,
         alignItems: 'center',
         justifyContent: 'center',
         overflow: 'hidden',
       }}
     >
-      <HudCorners />
-
       {displayUri ? (
         <Image
           source={{ uri: displayUri }}
@@ -103,16 +111,18 @@ function PhotoCell({
             left: 0,
             right: 0,
             bottom: 0,
-            backgroundColor: 'rgba(255,255,255,0.055)',
+            backgroundColor: colors.surfaceRaised,
           }}
         />
       ) : photo.failed ? (
-        <View style={{ paddingHorizontal: 12 }}>
+        <View style={{ paddingHorizontal: spacing[3], alignItems: 'center', gap: spacing[2] }}>
+          <Icon name="alert-triangle" size={16} color={colors.faint} />
           <Text
             style={{
               color: colors.faint,
               fontFamily: fonts.ui,
               fontSize: 11,
+              lineHeight: 15,
               textAlign: 'center',
             }}
           >
@@ -120,42 +130,70 @@ function PhotoCell({
           </Text>
         </View>
       ) : (
-        <Icon name="camera" size={28} color="rgba(255,255,255,0.2)" />
+        <Icon name="camera" size={24} color={colors.faint} />
       )}
 
-      {photo.uploadStatus === 'uploading' ? (
+      {/* Scrim so the date stays legible over any photo, without a pill. */}
+      {displayUri ? (
+        <LinearGradient
+          colors={['transparent', 'rgba(2,0,16,0.85)']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          pointerEvents="none"
+          style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 72 }}
+        />
+      ) : null}
+
+      {uploading ? (
         <View
           style={{
             position: 'absolute',
-            top: 10,
-            right: 10,
-            borderRadius: 8,
-            backgroundColor: 'rgba(2,0,16,0.8)',
-            paddingHorizontal: 8,
-            paddingVertical: 5,
+            top: spacing[2.5],
+            left: spacing[2.5],
+            right: spacing[2.5],
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
           }}
         >
-          <Text style={{ color: colors.text, fontFamily: fonts.uiSemi, fontSize: 11 }}>
+          <Text
+            style={{
+              color: colors.text,
+              fontFamily: fonts.mono,
+              fontSize: 9,
+              letterSpacing: 1.5,
+              textTransform: 'uppercase',
+            }}
+          >
             {photo.uploadProgress !== null && photo.uploadProgress > 0
               ? `${Math.round(photo.uploadProgress * 100)}%`
               : t('progress.photos.add.uploading')}
           </Text>
+          <View
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: 3,
+              backgroundColor: colors.accentHi,
+            }}
+          />
         </View>
       ) : null}
 
-      <View
+      <Text
         style={{
           position: 'absolute',
-          bottom: 10,
-          left: 10,
-          backgroundColor: 'rgba(2,0,16,0.75)',
-          paddingHorizontal: 8,
-          paddingVertical: 4,
-          borderRadius: 6,
+          bottom: spacing[3],
+          left: spacing[3],
+          color: colors.text,
+          fontFamily: fonts.mono,
+          fontSize: 9.5,
+          letterSpacing: 1.2,
+          textTransform: 'uppercase',
         }}
       >
-        <Text style={{ color: '#fff', fontFamily: fonts.ui, fontSize: 11 }}>{label}</Text>
-      </View>
+        {label}
+      </Text>
     </Pressable>
   );
 }
@@ -190,8 +228,8 @@ export function PhotoVaultGrid({
       )}
       ListHeaderComponent={listHeader}
       ListFooterComponent={listFooter}
-      columnWrapperStyle={{ paddingHorizontal: 22, gap: 12 }}
-      contentContainerStyle={{ paddingBottom: 12, gap: 12 }}
+      columnWrapperStyle={{ paddingHorizontal: sizes.screenGutter, gap: spacing[2.5] }}
+      contentContainerStyle={{ paddingBottom: spacing[3], gap: spacing[2.5] }}
       initialNumToRender={6}
       maxToRenderPerBatch={4}
       updateCellsBatchingPeriod={50}

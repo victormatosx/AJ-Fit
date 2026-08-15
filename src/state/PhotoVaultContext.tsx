@@ -24,6 +24,7 @@ import {
   getVaultAuthCapability,
   type VaultAuthCapability,
 } from '../services/localAuthentication';
+import { pruneCachedThumbnailsExcept } from '../services/photoVaultEncryptedCache';
 import { deactivatePhotoVaultScreenProtection } from '../services/photoVaultScreenProtection';
 import { useAuth } from './AuthContext';
 
@@ -159,9 +160,23 @@ export function PhotoVaultProvider({ children }: { children: React.ReactNode }) 
    * session at once. The session module also re-checks the uid on every
    * operation, so a stale grant could not authorize a new user even if this
    * effect had not run yet.
+   *
+   * The encrypted thumbnail cache is cleared here too. It survives a lock by
+   * design, but an identity change is different: leaving the previous account's
+   * ciphertext on a shared device buys nothing, and the next account must never
+   * inherit it. Expressed as "keep only the current uid" rather than "remove
+   * the previous uid", so it stays correct without tracking who was signed in
+   * before — including a logout (`null` keeps nothing) and namespaces left by
+   * an account this install never saw sign in.
+   *
+   * Ordering is deliberate: `lockPhotoVault` closes the session first, which
+   * bumps the session generation, and the prune then bumps the cache epoch.
+   * An in-flight download from the old session fails both checks and can
+   * neither repopulate React state nor recreate the namespace just removed.
    */
   useEffect(() => {
     lockPhotoVault();
+    pruneCachedThumbnailsExcept(uid);
     setCapability(null);
     setLastIssue(null);
   }, [uid]);

@@ -43,43 +43,51 @@
   },
   "progress": {
     "header": {
-      "period": "Evolução · últimos 90 dias",
-      "highlightLine1": "+12% mais",
-      "highlightLine2": "forte."
+      "eyebrow": "Seu progresso",
+      "title": "Evolução"
     },
     "tabs": {
+      "body": "Corpo",
       "loads": "Cargas",
-      "weight": "Peso",
       "photos": "Fotos"
     },
-    "charts": {
-      "loadTitle": "Supino reto · carga máx",
-      "weightTitle": "Peso corporal",
-      "period": "12 sem",
-      "delta": "{{direction}} {{value}} {{unit}}"
+    "body": {
+      "currentWeight": "Peso atual",
+      "composition": "Composição",
+      "measuredAt": "Medido em {{date}}",
+      "delta": "{{direction}} {{value}} {{unit}}",
+      "singleEntry": "Registre outra avaliação para ver a curva de evolução.",
+      "loading": "Carregando sua evolução…",
+      "error": "Não foi possível carregar sua evolução.",
+      "retry": "Tentar novamente",
+      "openAssessment": "Ver avaliação completa",
+      "metrics": {
+        "bodyFat": "Gordura",
+        "leanMass": "Massa magra",
+        "fatMass": "Massa gorda",
+        "bmi": "IMC"
+      },
+      "empty": {
+        "title": "Nenhuma avaliação registrada",
+        "description": "Registre sua primeira avaliação física para acompanhar peso e composição corporal ao longo do tempo.",
+        "cta": "Fazer avaliação"
+      }
     },
-    "heatmap": {
-      "title": "Calendário de consistência",
-      "period": "6 semanas",
-      "today": "Hoje"
-    },
-    "records": {
-      "title": "Recordes recentes",
-      "benchPress": "Supino reto",
-      "squat": "Agachamento",
-      "deadlift": "Levantamento terra",
-      "daysAgo": "há {{count}} dias",
-      "weekAgo_one": "há {{count}} semana",
-      "weekAgo_other": "há {{count}} semanas",
-      "value": "{{value}} {{unit}}",
-      "gain": "+{{value}} {{unit}}"
+    "loads": {
+      "eyebrow": "Cargas",
+      "empty": {
+        "title": "Ainda sem histórico de cargas",
+        "description": "As cargas que você registra durante o treino valem para a sessão atual.",
+        "hint": "Histórico entre sessões ainda não disponível"
+      }
     },
     "photos": {
       "locked": {
         "title": "Suas fotos estão protegidas",
         "description": "Use a autenticação do seu dispositivo para acessar suas fotos privadas.",
         "cta": "Desbloquear",
-        "unlocking": "Desbloqueando…"
+        "unlocking": "Desbloqueando…",
+        "badge": "Área privada"
       },
       "notConfigured": {
         "title": "Proteção não configurada",
@@ -95,7 +103,8 @@
       "empty": {
         "title": "Você ainda não adicionou fotos",
         "description": "Registre sua evolução para acompanhar mudanças ao longo do tempo.",
-        "cta": "Adicionar foto"
+        "cta": "Adicionar foto",
+        "badge": "Área privada"
       },
       "list": {
         "loading": "Carregando suas fotos…",
@@ -142,9 +151,6 @@
         "closeViewer": "Fechar visualização",
         "deletePhoto": "Excluir esta foto"
       }
-    },
-    "units": {
-      "kg": "kg"
     },
     "accessibility": {
       "selectTab": "Exibir progresso de {{tab}}"

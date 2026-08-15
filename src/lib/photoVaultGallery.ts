@@ -6,6 +6,7 @@ import {
   downloadProgressPhoto,
   downloadProgressPhotoThumbnail,
   listProgressPhotos,
+  reconcileProgressPhotoCache,
   uploadProgressPhoto,
   type ProgressPhoto,
   type ProgressPhotoMimeType,
@@ -15,11 +16,43 @@ import { discardDecryptedPhoto } from '../services/photoVaultFileCrypto';
 /**
  * Session-only private gallery controller.
  *
- * The maps below are only an in-memory LRU index over short-lived files in
- * `<cache>/photo-vault/tmp`; they are never a durable image cache. Lock,
- * logout and user switch synchronously remove every URI from React state and
- * then delete every owned file.
+ * Two kinds of value flow through the LRU maps below, and the difference
+ * matters:
+ *
+ *   - thumbnails are `data:image/jpeg;base64,…` strings that exist ONLY in
+ *     this process. Dropping the reference is the whole cleanup; there is no
+ *     file behind them.
+ *   - fulls (and the legacy full fallback) are `file://` URIs into
+ *     `<cache>/photo-vault/tmp`, and dropping them must also delete the file.
+ *
+ * `releasePlaintext` below is the single point that tells them apart, so no
+ * call site has to remember which kind it is holding.
+ *
+ * Neither kind is a durable cache. Lock, logout and user switch remove every
+ * URI from React state and then delete every owned file. The encrypted
+ * `.thumb.enc` cache is deliberately NOT touched by any of that: it is
+ * ciphertext, and re-downloading it after every lock was the problem this
+ * phase exists to remove.
  */
+
+/** Plaintext that lives only in memory; there is no file to delete. */
+function isInMemoryUri(uri: string): boolean {
+  return uri.startsWith('data:');
+}
+
+/**
+ * Releases one plaintext representation.
+ *
+ * The single place that decides which kind of cleanup a URI needs. An
+ * in-memory data URI is released by the caller dropping its reference, and
+ * must never be handed to the filesystem layer: it is decrypted image data,
+ * and passing it to a path-based API is both pointless and the wrong shape of
+ * thing to do with plaintext.
+ */
+function releasePlaintext(uri: string): void {
+  if (isInMemoryUri(uri)) return;
+  discardDecryptedPhoto(uri);
+}
 
 export interface GalleryPhoto {
   photoId: string;
@@ -48,7 +81,11 @@ const SCOPE = 'photoVault.gallery';
 /** Small ciphertexts can use more lanes without making full decrypts contend. */
 export const MAX_CONCURRENT_THUMBNAIL_DOWNLOADS = 5;
 export const MAX_CONCURRENT_FULL_DOWNLOADS = 2;
-/** 480*480*4 worst case ≈ 0.88 MiB decoded; 20 entries ≈ 17.6 MiB. */
+/**
+ * 480*480*4 worst case ≈ 0.88 MiB decoded; 20 entries ≈ 17.6 MiB. The base64
+ * strings themselves add roughly 53–80 KB each (≈ 1.1–1.6 MiB for 20), which
+ * is small next to the decoded bitmaps this bound already accounts for.
+ */
 export const MAX_THUMBNAIL_CACHE_ENTRIES = 20;
 /** A 1600px square can decode to ≈ 9.8 MiB; retain at most two. */
 export const MAX_FULL_CACHE_ENTRIES = 2;
@@ -151,7 +188,7 @@ function discardAllPrivateContent(preserveOwners = false): void {
       failed: false,
     })),
   });
-  for (const uri of uris) discardDecryptedPhoto(uri);
+  for (const uri of uris) releasePlaintext(uri);
 }
 
 export function discardDecryptedPhotos(): void {
@@ -202,6 +239,15 @@ export async function loadGallery(): Promise<void> {
     });
     for (const photoId of mounted) void ensurePhotoLoaded(photoId);
     if (viewerOwnerId) void ensureFullPhotoLoaded(viewerOwnerId);
+
+    // Deferred past this frame on purpose. Tidying the encrypted cache is
+    // bookkeeping; running it inline would put a directory listing between the
+    // state emit and the paint. It is also bounded per call, so a large
+    // gallery cannot turn a refresh into a full filesystem scan.
+    setTimeout(() => {
+      if (requestGeneration !== generation) return;
+      reconcileProgressPhotoCache(metadata);
+    }, 0);
   } catch (error) {
     if (requestGeneration !== generation) return;
     const issue = issueOf(error);
@@ -245,7 +291,7 @@ function evictLru(cache: Map<string, string>, limit: number, kind: 'thumbnail' |
         patchPhoto(photoId, patch);
       }
     }
-    if (!uriStillReferenced(uri)) discardDecryptedPhoto(uri);
+    if (!uriStillReferenced(uri)) releasePlaintext(uri);
   }
 }
 
@@ -270,35 +316,38 @@ async function runThumbnailDownload(photoId: string, requestGeneration: number):
 
   try {
     const result = await downloadProgressPhotoThumbnail(photo.metadata);
+    // A data URI needs no cleanup; a legacy full URI owns a file that must be
+    // deleted if this result arrives after the vault closed.
+    const resultUri = result.isFullImage ? result.uri : result.dataUri;
     const current = state.photos.find((entry) => entry.photoId === photoId);
     if (requestGeneration !== generation || !current) {
-      discardDecryptedPhoto(result.uri);
+      releasePlaintext(resultUri);
       return;
     }
 
     const oldPreview = current.previewUri;
     if (result.isFullImage) {
-      touchLru(fullLru, photoId, result.uri);
+      touchLru(fullLru, photoId, resultUri);
       patchPhoto(photoId, {
-        thumbnailUri: result.uri,
-        fullUri: result.uri,
+        thumbnailUri: resultUri,
+        fullUri: resultUri,
         previewUri: null,
         thumbnailLoading: false,
         failed: false,
       });
       evictLru(fullLru, MAX_FULL_CACHE_ENTRIES, 'full');
     } else {
-      touchLru(thumbnailLru, photoId, result.uri);
+      touchLru(thumbnailLru, photoId, resultUri);
       patchPhoto(photoId, {
-        thumbnailUri: result.uri,
+        thumbnailUri: resultUri,
         previewUri: null,
         thumbnailLoading: false,
         failed: false,
       });
       evictLru(thumbnailLru, MAX_THUMBNAIL_CACHE_ENTRIES, 'thumbnail');
     }
-    if (oldPreview && oldPreview !== result.uri && !uriStillReferenced(oldPreview)) {
-      discardDecryptedPhoto(oldPreview);
+    if (oldPreview && oldPreview !== resultUri && !uriStillReferenced(oldPreview)) {
+      releasePlaintext(oldPreview);
     }
     thumbnailRenderTimers.set(photoId, finishRender);
   } catch (error) {
@@ -359,7 +408,7 @@ async function runFullDownload(photoId: string, requestGeneration: number): Prom
     const result = await downloadProgressPhoto(photo.metadata);
     const current = state.photos.find((entry) => entry.photoId === photoId);
     if (requestGeneration !== generation || !current || viewerOwnerId !== photoId) {
-      discardDecryptedPhoto(result.uri);
+      releasePlaintext(result.uri);
       return;
     }
     touchLru(fullLru, photoId, result.uri);
@@ -523,7 +572,7 @@ export async function addGalleryPhoto(input: AddPhotoInput): Promise<boolean> {
       issue,
       photos: state.photos.filter((photo) => photo.photoId !== localId),
     });
-    if (preview) discardDecryptedPhoto(preview);
+    if (preview) releasePlaintext(preview);
     return false;
   }
 }
@@ -544,7 +593,7 @@ export async function removeGalleryPhoto(photoId: string): Promise<boolean> {
     thumbnailLru.delete(photoId);
     fullLru.delete(photoId);
     for (const uri of new Set([photo.thumbnailUri, photo.fullUri, photo.previewUri])) {
-      if (uri) discardDecryptedPhoto(uri);
+      if (uri) releasePlaintext(uri);
     }
     emit({ deletingId: null });
     return true;
@@ -556,7 +605,7 @@ export async function removeGalleryPhoto(photoId: string): Promise<boolean> {
       thumbnailLru.delete(photoId);
       fullLru.delete(photoId);
       for (const uri of new Set([photo.thumbnailUri, photo.fullUri, photo.previewUri])) {
-        if (uri) discardDecryptedPhoto(uri);
+        if (uri) releasePlaintext(uri);
       }
       await loadGallery();
     } else {

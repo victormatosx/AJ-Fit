@@ -51,10 +51,28 @@ mocks ou CI.
 | confirmar delete → card oculto | pendente | pendente | tempo percebido |
 | confirmar delete → backend confirmado | pendente | pendente | tempo total |
 
+## Fase 13B — cache cifrado
+
+A arquitetura acima descreve a Fase 13. A Fase 13B inseriu um nível entre o
+Firestore e o Storage:
+
+```text
+RAM plaintext (data URI base64) → disco ciphertext .thumb.enc → Storage
+```
+
+Para uma foto já conhecida, a rede sai do caminho crítico depois do primeiro
+download. A thumbnail em claro deixou de ser arquivo e passou a existir somente
+em memória. O pipeline da full continua exatamente como medido aqui.
+
+Benchmarks de cache hit vs. miss ficam em
+`23_photo_vault_encrypted_cache.md` §15 e continuam **pendentes** de aparelho
+físico.
+
 ## Segurança invariável
 
 * Firebase recebe apenas envelopes AJFV `application/octet-stream`.
-* Thumbnail plaintext existe somente como temporário controlado durante uso.
+* Thumbnail plaintext existe somente em RAM (Base64), nunca em disco. Full
+  plaintext existe somente como temporário controlado durante uso.
 * Não há `getDownloadURL`, cache `memory-disk`, AsyncStorage ou
   `documentDirectory` para fotos.
 * Lock invalida geração assíncrona e limpa thumbnail, full, preview e viewer.

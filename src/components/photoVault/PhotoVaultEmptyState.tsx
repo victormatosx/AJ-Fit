@@ -4,50 +4,35 @@ import { useTranslation } from 'react-i18next';
 
 import { CtaButton } from '../ui/CtaButton';
 import { Icon } from '../ui/Icon';
-import { colors, fonts } from '../../theme/tokens';
+import { Display, MonoLabel } from '../ui/Display';
+import { colors, fonts, sizes, spacing } from '../../theme/tokens';
+
+const GUTTER = sizes.screenGutter;
 
 export function PhotoVaultEmptyState({ onAdd }: { onAdd: () => void }) {
   const { t } = useTranslation('home');
 
   return (
-    <View style={{ paddingHorizontal: 22, paddingTop: 40, alignItems: 'center' }}>
-      <View
-        style={{
-          width: 72,
-          height: 72,
-          borderRadius: 36,
-          backgroundColor: 'rgba(255,255,255,0.05)',
-          borderWidth: 1,
-          borderColor: 'rgba(255,255,255,0.12)',
-          alignItems: 'center',
-          justifyContent: 'center',
-          marginBottom: 20,
-        }}
-      >
-        <Icon name="camera" size={28} color={colors.faint} />
+    <View style={{ paddingHorizontal: GUTTER, paddingTop: spacing[8] }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing[2.5] }}>
+        <Icon name="camera" size={16} color={colors.accentHi} />
+        <MonoLabel color={colors.faint}>
+          {t('progress.photos.empty.badge').toUpperCase()}
+        </MonoLabel>
+      </View>
+
+      <View accessibilityRole="header" style={{ marginTop: spacing[3] }}>
+        <Display size={26}>{t('progress.photos.empty.title').toUpperCase()}</Display>
       </View>
 
       <Text
-        accessibilityRole="header"
         style={{
-          color: colors.text,
-          fontFamily: fonts.uiSemi,
-          fontSize: 18,
-          textAlign: 'center',
-          marginBottom: 8,
-        }}
-      >
-        {t('progress.photos.empty.title')}
-      </Text>
-
-      <Text
-        style={{
-          color: colors.textSecondary,
+          color: colors.mute,
           fontFamily: fonts.ui,
           fontSize: 14,
-          lineHeight: 20,
-          textAlign: 'center',
-          marginBottom: 24,
+          lineHeight: 21,
+          marginTop: spacing[2.5],
+          marginBottom: spacing[6],
         }}
       >
         {t('progress.photos.empty.description')}

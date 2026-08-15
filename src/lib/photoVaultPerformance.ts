@@ -22,6 +22,10 @@ export type PhotoVaultPerfStage =
   | 'gallery.thumbnail.download'
   | 'gallery.thumbnail.decrypt'
   | 'gallery.thumbnail.render-ready'
+  | 'gallery.thumbnail.cache-read'
+  | 'gallery.thumbnail.cache-write'
+  | 'gallery.thumbnail.cache-hit.render-ready'
+  | 'gallery.thumbnail.cache-miss.render-ready'
   | 'gallery.legacy-full.download'
   | 'gallery.legacy-full.decrypt'
   | 'viewer.full.download'
@@ -57,4 +61,36 @@ export function startPhotoVaultPerf(stage: PhotoVaultPerfStage): () => number {
     if (isEnabled()) logDebug('photoVault:perf', stage, { durationMs });
     return durationMs;
   };
+}
+
+/**
+ * Running hit/miss tally for the encrypted thumbnail cache.
+ *
+ * Counters only: `avoidedRequests` is exactly how many Storage downloads the
+ * cache removed from the critical path since process start, which is the
+ * number this phase is judged on. Nothing identifying is recorded — an
+ * aggregate count cannot describe which images a person owns.
+ */
+const cacheOutcomes = { hits: 0, misses: 0 };
+
+export function recordPhotoVaultCacheOutcome(outcome: 'hit' | 'miss'): void {
+  if (outcome === 'hit') cacheOutcomes.hits += 1;
+  else cacheOutcomes.misses += 1;
+  if (isEnabled()) {
+    logDebug('photoVault:perf', 'gallery.thumbnail.cache', { ...cacheOutcomes });
+  }
+}
+
+export function photoVaultCacheCounters(): {
+  hits: number;
+  misses: number;
+  avoidedRequests: number;
+} {
+  return { ...cacheOutcomes, avoidedRequests: cacheOutcomes.hits };
+}
+
+/** Test seam. */
+export function resetPhotoVaultCacheCountersForTesting(): void {
+  cacheOutcomes.hits = 0;
+  cacheOutcomes.misses = 0;
 }

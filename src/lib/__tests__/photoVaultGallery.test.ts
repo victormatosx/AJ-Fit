@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   list: vi.fn(),
   downloadThumbnail: vi.fn(),
+  reconcile: vi.fn(),
   downloadFull: vi.fn(),
   upload: vi.fn(),
   remove: vi.fn(),
@@ -12,6 +13,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('../../services/progressPhotos', () => ({
   listProgressPhotos: mocks.list,
+  reconcileProgressPhotoCache: mocks.reconcile,
   downloadProgressPhotoThumbnail: mocks.downloadThumbnail,
   downloadProgressPhoto: mocks.downloadFull,
   uploadProgressPhoto: mocks.upload,
@@ -92,8 +94,7 @@ beforeEach(() => {
   resetGalleryForTesting();
   mocks.list.mockResolvedValue([photo('a'), photo('b', 1)]);
   mocks.downloadThumbnail.mockImplementation(async (metadata: ReturnType<typeof photo>) => ({
-    uri: `file:///cache/photo-vault/tmp/${metadata.photoId}.thumb.jpg`,
-    size: 120,
+    dataUri: `data:image/jpeg;base64,THUMB-${metadata.photoId}`,
     photo: metadata,
     isFullImage: false,
   }));
@@ -121,7 +122,7 @@ describe('metadata and thumbnail loading', () => {
     await mountGalleryPhoto('a');
 
     const loaded = getGalleryState().photos.find((entry) => entry.photoId === 'a');
-    expect(loaded?.thumbnailUri).toContain('.thumb.jpg');
+    expect(loaded?.thumbnailUri).toBe('data:image/jpeg;base64,THUMB-a');
     expect(loaded?.fullUri).toBeNull();
     expect(mocks.downloadThumbnail).toHaveBeenCalledWith(expect.objectContaining({ photoId: 'a' }));
     expect(mocks.downloadFull).not.toHaveBeenCalled();
@@ -154,8 +155,7 @@ describe('metadata and thumbnail loading', () => {
       await new Promise((resolve) => setTimeout(resolve, 4));
       active -= 1;
       return {
-        uri: `file:///cache/photo-vault/tmp/${metadata.photoId}.thumb.jpg`,
-        size: 100,
+        dataUri: `data:image/jpeg;base64,THUMB-${metadata.photoId}`,
         photo: metadata,
         isFullImage: false,
       };
@@ -180,7 +180,10 @@ describe('metadata and thumbnail loading', () => {
 
     const retained = getGalleryState().photos.filter((entry) => entry.thumbnailUri).length;
     expect(retained).toBe(MAX_THUMBNAIL_CACHE_ENTRIES);
-    expect(mocks.discard).toHaveBeenCalledTimes(2);
+    // The two evicted thumbnails are base64 strings, so eviction is simply the
+    // controller dropping them. There is no plaintext file to delete, which is
+    // exactly what moving thumbnails to memory bought.
+    expect(mocks.discard).not.toHaveBeenCalled();
   });
 });
 
@@ -319,6 +322,44 @@ describe('lock and structural security', () => {
     expect(entry.fullUri).toBeNull();
     expect(entry.previewUri).toBeNull();
     expect(mocks.discard).toHaveBeenCalled();
+  });
+
+  it('drops the in-memory thumbnail on lock without asking to delete a file', async () => {
+    await loadGallery();
+    await mountGalleryPhoto('a');
+    expect(getGalleryState().photos[0]?.thumbnailUri).toMatch(/^data:image\/jpeg;base64,/);
+
+    discardDecryptedPhotos();
+
+    // Dropping the reference IS the cleanup for a data URI; there is no file
+    // behind it, so nothing under the vault's plaintext directory is targeted.
+    expect(getGalleryState().photos[0]?.thumbnailUri).toBeNull();
+    for (const [uri] of mocks.discard.mock.calls) {
+      expect(String(uri)).not.toMatch(/^data:/);
+    }
+  });
+
+  it('re-requests a thumbnail after unlock so the encrypted cache can serve it', async () => {
+    await loadGallery();
+    await mountGalleryPhoto('a');
+    expect(mocks.downloadThumbnail).toHaveBeenCalledTimes(1);
+
+    discardDecryptedPhotos();
+    await mountGalleryPhoto('a');
+
+    // The controller asks again because RAM was cleared; whether that reaches
+    // the network is the cache layer's decision, not the controller's.
+    expect(mocks.downloadThumbnail).toHaveBeenCalledTimes(2);
+  });
+
+  it('reconciles the encrypted cache after a listing, not during it', async () => {
+    await loadGallery();
+    expect(mocks.reconcile).not.toHaveBeenCalled();
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(mocks.reconcile).toHaveBeenCalledWith(
+      expect.arrayContaining([expect.objectContaining({ photoId: 'a' })]),
+    );
   });
 
   it('notifies subscribers and preserves service layering', async () => {
