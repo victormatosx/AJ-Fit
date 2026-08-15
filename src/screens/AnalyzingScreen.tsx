@@ -15,7 +15,13 @@ import { Icon } from '../components/ui/Icon';
 import { MonoLabel } from '../components/ui/Display';
 import { colors, fonts, displayLineHeight } from '../theme/tokens';
 
-export function AnalyzingScreen({ onDone }: { onDone: () => void }) {
+export function AnalyzingScreen({
+  name,
+  onDone,
+}: {
+  name?: string | null;
+  onDone: () => void;
+}) {
   const { t } = useTranslation('onboarding');
   const [progress, setProgress] = useState(0);
   const steps = [
@@ -196,16 +202,26 @@ export function AnalyzingScreen({ onDone }: { onDone: () => void }) {
                 justifyContent: 'center',
               }}
             >
-              <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'baseline', paddingTop: 18 }}>
                 <Text
                   style={{
                     fontFamily: fonts.display,
                     fontSize: 56,
-                    lineHeight: displayLineHeight(56),
+                    // Extra headroom beyond the usual 1.15x Anton fix: a large
+                    // textShadowRadius needs room inside the line box too, or
+                    // iOS clips the top of both the glyph and the glow —
+                    // which reads as a flat-topped "selection highlight"
+                    // instead of a soft radial halo.
+                    lineHeight: displayLineHeight(56) + 18,
                     color: '#fff',
                     transform: [{ skewX: '-8deg' }],
-                    textShadowColor: 'rgba(77,163,255,0.95)',
-                    textShadowRadius: 28,
+                    // Tight rim-light instead of a blurred fill: a large
+                    // radius bled past each glyph's edge and merged the
+                    // gaps between digits into one solid blob that read as
+                    // a text-selection highlight. A few px keeps a subtle
+                    // glow without ever filling the space between digits.
+                    textShadowColor: 'rgba(77,163,255,0.5)',
+                    textShadowRadius: 3,
                     textShadowOffset: { width: 0, height: 0 },
                   }}
                 >
@@ -215,11 +231,12 @@ export function AnalyzingScreen({ onDone }: { onDone: () => void }) {
                   style={{
                     fontFamily: fonts.display,
                     fontSize: 24,
+                    lineHeight: displayLineHeight(24) + 18,
                     color: colors.accentHi,
                     transform: [{ skewX: '-8deg' }],
                     marginLeft: 2,
-                    textShadowColor: 'rgba(77,163,255,0.9)',
-                    textShadowRadius: 20,
+                    textShadowColor: 'rgba(77,163,255,0.45)',
+                    textShadowRadius: 3,
                     textShadowOffset: { width: 0, height: 0 },
                   }}
                 >
@@ -245,9 +262,9 @@ export function AnalyzingScreen({ onDone }: { onDone: () => void }) {
                 textAlign: 'center',
               }}
             >
-              {t('analyzing.titleLine1').toUpperCase()}
-              {'\n'}
-              {t('analyzing.titleLine2').toUpperCase()}
+              {name
+                ? `${t('analyzing.titleWithNameLine1').toUpperCase()}\n${t('analyzing.titleWithNameLine2', { name }).toUpperCase()}`
+                : `${t('analyzing.titleLine1').toUpperCase()}\n${t('analyzing.titleLine2').toUpperCase()}`}
             </Text>
           </View>
 

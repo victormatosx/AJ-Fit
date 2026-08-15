@@ -42,6 +42,7 @@ import {
   type MfaTotpIssue,
 } from '../lib/mfaTotp';
 import { TotpChallengeScreen } from './TotpChallengeScreen';
+import type { OnboardingAuthContext } from '../onboarding/authContext';
 
 type Mode = 'signup' | 'login' | 'reset';
 
@@ -99,7 +100,17 @@ function totpStartError(
   return t('totpChallenge.errors.generic');
 }
 
-export function AuthScreen() {
+export function AuthScreen({
+  entryContext,
+}: {
+  /**
+   * Copy-only context from the onboarding funnel — which screen sent the
+   * user here. Never read by any validation/provider/linking/error-handling
+   * logic below; it only picks the initial form mode and pre-fills the name
+   * field. See src/onboarding/authContext.ts.
+   */
+  entryContext?: OnboardingAuthContext | null;
+} = {}) {
   const { t } = useTranslation('auth');
   const {
     signUp,
@@ -111,8 +122,14 @@ export function AuthScreen() {
   } = useAuth();
   const { quiz } = useAppState();
 
-  const [mode, setMode] = useState<Mode>('signup');
-  const [name, setName] = useState('');
+  // A user who tapped "Entrar" directly should land on the login form, not
+  // the signup copy that references a plan they never built (see
+  // docs/onboarding_funnel_architecture.md §Auth). Any other/no origin
+  // preserves the previous always-signup default.
+  const [mode, setMode] = useState<Mode>(
+    entryContext?.origin === 'directLogin' ? 'login' : 'signup',
+  );
+  const [name, setName] = useState(entryContext?.name ?? '');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');

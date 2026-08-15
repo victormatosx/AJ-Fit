@@ -40,7 +40,7 @@ describe('resolvePremiumGate', () => {
         subscriptionLoading: true,
         subscriptionConfigured: false,
       }),
-    ).toBe('quiz');
+    ).toBe('onboardingFunnel');
   });
 
   it('prioriza a verificação obrigatória de e-mail antes do questionário e da assinatura', () => {
@@ -128,7 +128,7 @@ describe('resolvePremiumGate', () => {
   });
 
   it('K) uma vez reconciliado, o fluxo normal (questionário → assinatura) continua exatamente igual', () => {
-    expect(resolve({ preferencesReconciling: false, hasQuestionnaire: false })).toBe('quiz');
+    expect(resolve({ preferencesReconciling: false, hasQuestionnaire: false })).toBe('onboardingFunnel');
     expect(resolve({ preferencesReconciling: false, isPremium: true })).toBe('app');
   });
 

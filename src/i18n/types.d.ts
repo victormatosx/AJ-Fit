@@ -15,6 +15,7 @@ import type ptBRSettings from './resources/pt-BR/settings.json';
 import type ptBRErrors from './resources/pt-BR/errors.json';
 import type ptBROnboarding from './resources/pt-BR/onboarding.json';
 import type ptBRQuiz from './resources/pt-BR/quiz.json';
+import type ptBRPlan from './resources/pt-BR/plan.json';
 import type ptBRHome from './resources/pt-BR/home.json';
 import type ptBRProfile from './resources/pt-BR/profile.json';
 import type ptBRWorkout from './resources/pt-BR/workout.json';
@@ -31,6 +32,7 @@ declare module 'i18next' {
       errors: typeof ptBRErrors;
       onboarding: typeof ptBROnboarding;
       quiz: typeof ptBRQuiz;
+      plan: typeof ptBRPlan;
       home: typeof ptBRHome;
       profile: typeof ptBRProfile;
       workout: typeof ptBRWorkout;

@@ -20,6 +20,12 @@ export type Quiz = {
   place: 'gym' | 'home' | 'both' | null;
   equipment: string[];
   style: string[];
+  /** Etapa 4 do novo funil — distinto de `goal`: motivo emocional/contextual que trouxe o usuário, não o resultado técnico buscado. */
+  motivation: string | null;
+  /** Etapa 19 — até 2 grupos musculares prioritários (ver docs/onboarding_funnel_architecture.md para a justificativa do limite). */
+  muscleFocus: string[];
+  /** Etapa 22 — nível de compromisso declarado. Onboarding-only: não influencia nenhum algoritmo de treino hoje. */
+  commitment: string | null;
 };
 
 export type TabId = 'home' | 'workout' | 'progress' | 'profile';
@@ -46,6 +52,9 @@ export const defaultQuiz: Quiz = {
   place: null,
   equipment: [],
   style: [],
+  motivation: null,
+  muscleFocus: [],
+  commitment: null,
 };
 
 const AppStateContext = createContext<Ctx | null>(null);

@@ -30,6 +30,91 @@
     "hasAccount": "Already have an account?",
     "login": "Sign in"
   },
+  "name": {
+    "eyebrow": "About you",
+    "title": "What should we call you?",
+    "placeholder": "Your name",
+    "cta": "Continue",
+    "accessibility": {
+      "input": "Name field"
+    }
+  },
+  "welcome": {
+    "eyebrow": "Let's start",
+    "greeting": "Nice to meet you, {{name}}.",
+    "greetingNoName": "Nice to meet you.",
+    "body": "Let's figure out where you are today and where you want to go. It's quick.",
+    "cta": "Build my plan"
+  },
+  "interstitials": {
+    "evolution": {
+      "eyebrow": "Your journey",
+      "titleLine1": "Your program doesn't end",
+      "titleLine2": "when it's created.",
+      "phase1": "PHASE 01",
+      "phase2": "PHASE 02",
+      "phase3": "PHASE 03",
+      "body": "AJ Fit was built to follow your progress over time. As you advance, your training journey can evolve too.",
+      "highlight": "Your program evolves with you.",
+      "cta": "Continue"
+    },
+    "methodology": {
+      "eyebrow": "Methodology",
+      "titleLine1": "Training isn't",
+      "titleLine2": "random.",
+      "pillars": {
+        "volume": {
+          "title": "Right volume",
+          "body": "Workload matched to your goal and experience."
+        },
+        "progression": {
+          "title": "Progression",
+          "body": "Training should allow you to improve over time."
+        },
+        "recovery": {
+          "title": "Recovery",
+          "body": "More training doesn't always mean more results."
+        }
+      },
+      "body": "AJ Fit's structure is based on training principles and programming criteria.",
+      "cta": "Continue"
+    },
+    "guidedWorkout": {
+      "eyebrow": "Execution",
+      "titleLine1": "You don't have to",
+      "titleLine2": "guess what to do.",
+      "row": {
+        "exercise": "Bench press",
+        "sets": "Sets",
+        "reps": "Reps",
+        "load": "Load",
+        "rest": "Rest"
+      },
+      "highlight": "Train. Log. Evolve.",
+      "cta": "Continue"
+    },
+    "ajFitProgress": {
+      "eyebrow": "Progress",
+      "titleLine1": "{{name}}, creating your workout",
+      "titleLine1NoName": "Creating your workout",
+      "titleLine2": "is just the start.",
+      "features": {
+        "loads": {
+          "title": "Loads",
+          "body": "Track your progress exercise by exercise."
+        },
+        "body": {
+          "title": "Body",
+          "body": "Log weight and body data over time."
+        },
+        "photos": {
+          "title": "Photos",
+          "body": "Compare your visual progress."
+        }
+      },
+      "cta": "Continue"
+    }
+  },
   "analyzing": {
     "compiling": "Compiling",
     "titleLine1": "Building",
@@ -43,7 +128,9 @@
     },
     "accessibility": {
       "progress": "Building your plan: {{progress}} percent"
-    }
+    },
+    "titleWithNameLine1": "We're structuring",
+    "titleWithNameLine2": "your journey, {{name}}."
   },
   "socialProof": {
     "eyebrow": "Social proof",

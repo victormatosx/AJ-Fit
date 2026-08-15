@@ -30,6 +30,17 @@
     "sub": "Base for the initial load calculation.",
     "unit": "kg"
   },
+  "motivation": {
+    "title": "What brought you here?",
+    "options": {
+      "muscle": { "label": "I want to build muscle", "description": "Build muscle mass" },
+      "leanDown": { "label": "I want to lose fat and get lean", "description": "Lose fat and get defined" },
+      "strength": { "label": "I want to get stronger", "description": "Gain strength" },
+      "physique": { "label": "I want to improve my physique", "description": "Improve overall aesthetics" },
+      "comeback": { "label": "I want to get back into training", "description": "Restart the habit" },
+      "consistency": { "label": "I want to stop training without knowing if I'm progressing", "description": "Get clarity on my progress" }
+    }
+  },
   "goal": {
     "title": "Main goal?",
     "sub": "Sets the program's focus.",
@@ -163,6 +174,29 @@
       "shoulder": "Shoulder",
       "wrist": "Wrist",
       "hip": "Hip"
+    }
+  },
+  "muscleFocus": {
+    "title": "Any muscle group to prioritize?",
+    "sub": "Choose up to 2 — this helps steer your training.",
+    "options": {
+      "chest": "Chest",
+      "back": "Back",
+      "shoulders": "Shoulders",
+      "arms": "Arms",
+      "glutes": "Glutes",
+      "quads": "Quads",
+      "hamstrings": "Hamstrings",
+      "calves": "Calves",
+      "none": "None specific"
+    }
+  },
+  "commitment": {
+    "title": "How committed are you to your goal?",
+    "options": {
+      "ownPace": { "label": "I want to start at my own pace", "description": "No pressure, my own timing" },
+      "committed": { "label": "I'm committed", "description": "I'll follow the plan closely" },
+      "allIn": { "label": "I want to take this seriously", "description": "Maximum effort and consistency" }
     }
   }
 }

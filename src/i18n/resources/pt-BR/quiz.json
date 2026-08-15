@@ -30,6 +30,17 @@
     "sub": "Base do cálculo de carga inicial.",
     "unit": "kg"
   },
+  "motivation": {
+    "title": "O que mais te trouxe até aqui?",
+    "options": {
+      "muscle": { "label": "Quero ganhar massa muscular", "description": "Construir músculo" },
+      "leanDown": { "label": "Quero emagrecer e definir", "description": "Perder gordura e definir" },
+      "strength": { "label": "Quero ficar mais forte", "description": "Ganhar força" },
+      "physique": { "label": "Quero melhorar meu físico", "description": "Evoluir a estética geral" },
+      "comeback": { "label": "Quero voltar a treinar", "description": "Retomar o hábito" },
+      "consistency": { "label": "Quero parar de treinar sem saber se estou evoluindo", "description": "Ter clareza da evolução" }
+    }
+  },
   "goal": {
     "title": "Objetivo principal?",
     "sub": "Define o foco do programa.",
@@ -163,6 +174,29 @@
       "shoulder": "Ombro",
       "wrist": "Punho",
       "hip": "Quadril"
+    }
+  },
+  "muscleFocus": {
+    "title": "Algum grupo muscular para priorizar?",
+    "sub": "Escolha até 2 — isso ajuda a direcionar seu treino.",
+    "options": {
+      "chest": "Peitoral",
+      "back": "Costas",
+      "shoulders": "Ombros",
+      "arms": "Braços",
+      "glutes": "Glúteos",
+      "quads": "Quadríceps",
+      "hamstrings": "Posteriores",
+      "calves": "Panturrilhas",
+      "none": "Nenhum específico"
+    }
+  },
+  "commitment": {
+    "title": "Quanto você está disposto a se comprometer?",
+    "options": {
+      "ownPace": { "label": "Quero começar no meu ritmo", "description": "Sem pressão, no meu tempo" },
+      "committed": { "label": "Estou comprometido", "description": "Vou seguir o plano à risca" },
+      "allIn": { "label": "Quero levar isso realmente a sério", "description": "Máximo empenho e consistência" }
     }
   }
 }

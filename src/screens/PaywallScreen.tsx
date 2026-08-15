@@ -14,6 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
 import type { PurchasesPackage } from 'react-native-purchases';
 import { logError, logInfo, logWarn } from '../lib/logger';
+import type { OnboardingAuthContext } from '../onboarding/authContext';
 import { ScreenBg } from '../components/ui/ScreenBg';
 import { CtaButton, CtaText } from '../components/ui/CtaButton';
 import { Display, MonoLabel } from '../components/ui/Display';
@@ -101,9 +102,16 @@ type EffectivePurchaseRoute =
 export function PaywallScreen({
   onClose,
   closeAccessibilityLabel = 'Sair desta conta',
+  entryContext,
 }: {
   onClose: () => void | Promise<void>;
   closeAccessibilityLabel?: string;
+  /**
+   * Copy-only context from the onboarding funnel (see
+   * src/onboarding/authContext.ts) — narrative framing only. Never read by
+   * offerings/purchase/restore/promo-code/entitlement logic below.
+   */
+  entryContext?: OnboardingAuthContext | null;
 }) {
   const { t } = useTranslation('common');
   const {
@@ -756,7 +764,9 @@ export function PaywallScreen({
                 color: colors.mute,
               }}
             >
-              Selecione uma das opções disponíveis para liberar todos os recursos do AJ Fit.
+              {entryContext?.origin === 'planCompleted'
+                ? 'Seu plano está pronto. Agora é hora de colocá-lo em prática — selecione uma das opções abaixo.'
+                : 'Selecione uma das opções disponíveis para liberar todos os recursos do AJ Fit.'}
             </Text>
 
             <View style={{ gap: 10, marginTop: 24 }}>
