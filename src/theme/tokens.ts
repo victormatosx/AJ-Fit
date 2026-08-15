@@ -112,9 +112,15 @@ export const fonts = {
   monoBold: 'JetBrainsMono_700Bold',
 } as const;
 
-// Anton has tall glyph metrics that iOS clips whenever lineHeight is less
-// than ~1.1x fontSize. Always derive display line height with this helper.
-export const displayLineHeight = (size: number) => Math.round(size * 1.15);
+// Anton has tall glyph metrics that iOS (not Android — Android's
+// includeFontPadding already reserves this space by default) crops the top
+// of the glyph whenever lineHeight is too tight. 1.15x looked reasonable on
+// paper but still clipped real iPhones (confirmed on the Analyzing screen's
+// percentage digits and the Presentation screen's headline — see
+// docs/08_log_de_evolucao.md 2026-08-16); 1.45x is the smallest ratio that
+// held up. Always derive display line height with this helper — never
+// hardcode a lineHeight next to fonts.display.
+export const displayLineHeight = (size: number) => Math.round(size * 1.45);
 
 /** Canonical text roles. Values are React Native TextStyle-compatible. */
 export const typography = {

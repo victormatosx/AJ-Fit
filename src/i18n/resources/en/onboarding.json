@@ -31,7 +31,7 @@
     "login": "Sign in"
   },
   "name": {
-    "eyebrow": "About you",
+    "eyebrow": "Let's get started!",
     "title": "What should we call you?",
     "placeholder": "Your name",
     "cta": "Continue",
@@ -40,22 +40,29 @@
     }
   },
   "welcome": {
-    "eyebrow": "Let's start",
-    "greeting": "Nice to meet you, {{name}}.",
-    "greetingNoName": "Nice to meet you.",
-    "body": "Let's figure out where you are today and where you want to go. It's quick.",
-    "cta": "Build my plan"
+    "greeting": "Welcome, {{name}}.",
+    "greetingNoName": "Welcome!",
+    "body": "Let's figure out where you are today and where you want to go."
   },
   "interstitials": {
     "evolution": {
-      "eyebrow": "Your journey",
       "titleLine1": "Your program doesn't end",
       "titleLine2": "when it's created.",
-      "phase1": "PHASE 01",
-      "phase2": "PHASE 02",
-      "phase3": "PHASE 03",
-      "body": "AJ Fit was built to follow your progress over time. As you advance, your training journey can evolve too.",
-      "highlight": "Your program evolves with you.",
+      "intro": "AJ Fit was built to follow your progress over time.",
+      "cardsLabel": "How this works",
+      "cards": {
+        "progress": {
+          "title": "As you progress,",
+          "body": "your training journey can evolve too."
+        },
+        "adapt": {
+          "title": "Your program evolves with you."
+        }
+      },
+      "closing": {
+        "title": "This is just the beginning.",
+        "body": "Your journey continues as you evolve."
+      },
       "cta": "Continue"
     },
     "methodology": {

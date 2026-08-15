@@ -207,12 +207,7 @@ export function AnalyzingScreen({
                   style={{
                     fontFamily: fonts.display,
                     fontSize: 56,
-                    // Extra headroom beyond the usual 1.15x Anton fix: a large
-                    // textShadowRadius needs room inside the line box too, or
-                    // iOS clips the top of both the glyph and the glow —
-                    // which reads as a flat-topped "selection highlight"
-                    // instead of a soft radial halo.
-                    lineHeight: displayLineHeight(56) + 18,
+                    lineHeight: displayLineHeight(56),
                     color: '#fff',
                     transform: [{ skewX: '-8deg' }],
                     // Tight rim-light instead of a blurred fill: a large

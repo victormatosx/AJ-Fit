@@ -3211,3 +3211,46 @@ Assinatura:
 Claude — 2026-08-15 — Reconstrução do funil de aquisição/onboarding.
 
 ---
+
+Data: 2026-08-16
+Responsável: Claude — Agente Frontend
+Categoria: [CORREÇÃO]
+
+Descrição:
+Corrigido, em todo o app (não só no funil), o corte do topo dos textos em
+Anton (`fonts.display`) — reportado primeiro no número do Analyzing e depois
+no título da tela de Apresentação. Ocorre só em iPhone; Android nunca teve o
+problema porque `includeFontPadding` já reserva esse espaço por padrão ali.
+
+Auditoria: todo uso de `fonts.display` no app (23 arquivos, 53 ocorrências)
+foi mapeado em dois grupos. Grupo A/B — usa o componente `<Display>` ou chama
+`displayLineHeight(size)` explicitamente (`WorkoutScreen`, `ConsistencyScreen`,
+`PlanReadyScreen`, `AnalyzingScreen`, `CtaButton`, `Display.tsx`, mais o objeto
+`typography` em `tokens.ts`) — esse era o grupo afetado, porque o fator usado
+(1,15×) não deixava espaço suficiente dentro da caixa da linha para o
+ascendente do glifo no iOS. Grupo C — texto grande sem `lineHeight` nenhum
+(ex.: os dígitos gigantes do `NumberWheel`, a idade no `BirthDateWheel`) — sem
+uma altura de linha explícita constrangendo a caixa, o iOS usa a métrica
+natural da fonte e não corta; esse grupo não precisou de mudança.
+
+Correção centralizada em `displayLineHeight()` (`src/theme/tokens.ts`),
+único lugar que todo o Grupo A/B consome — fator ajustado de 1,15× para
+1,45×, valor confirmado em iPhone real a partir do ajuste já validado na tela
+de Analyzing. Removida a compensação manual (`+18`) que tinha sido aplicada
+ali antes da causa raiz ser isolada, já redundante com o novo fator central.
+Nenhum teste trava um valor numérico específico do multiplicador, então não
+houve necessidade de atualizar snapshot/assertion nenhuma — só
+`docs/19_design_system.md`, cuja tabela de `displayHero/Large/Medium/Small`
+documentava os valores antigos de `lineHeight`.
+
+Validação automática:
+1820 testes aprovados, typecheck aprovado.
+
+Pendência:
+Validação visual em dispositivo físico iOS ainda não feita por mim — depende
+de confirmação do usuário testando o app.
+
+Assinatura:
+Claude — 2026-08-16 — Correção do corte de glifos Anton no iOS (fix centralizado).
+
+---

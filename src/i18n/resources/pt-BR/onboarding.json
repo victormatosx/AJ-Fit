@@ -31,7 +31,7 @@
     "login": "Entrar"
   },
   "name": {
-    "eyebrow": "Sobre você",
+    "eyebrow": "Vamos começar!",
     "title": "Como podemos te chamar?",
     "placeholder": "Seu nome",
     "cta": "Continuar",
@@ -40,22 +40,29 @@
     }
   },
   "welcome": {
-    "eyebrow": "Vamos começar",
-    "greeting": "Prazer, {{name}}.",
-    "greetingNoName": "Prazer em te conhecer.",
-    "body": "Vamos entender onde você está hoje e onde quer chegar. É rápido.",
-    "cta": "Montar meu plano"
+    "greeting": "Bem-vindo, {{name}}.",
+    "greetingNoName": "Bem-vindo!",
+    "body": "Vamos entender onde você está hoje e onde quer chegar."
   },
   "interstitials": {
     "evolution": {
-      "eyebrow": "Sua jornada",
       "titleLine1": "Seu treino não termina",
       "titleLine2": "quando ele é criado.",
-      "phase1": "FASE 01",
-      "phase2": "FASE 02",
-      "phase3": "FASE 03",
-      "body": "O AJ Fit foi pensado para acompanhar sua evolução ao longo do tempo. Conforme você progride, sua jornada de treino também pode evoluir.",
-      "highlight": "Seu programa evolui com você.",
+      "intro": "O AJ Fit foi pensado para acompanhar sua evolução ao longo do tempo.",
+      "cardsLabel": "Como isso funciona",
+      "cards": {
+        "progress": {
+          "title": "Conforme você progride,",
+          "body": "sua jornada de treino também pode evoluir."
+        },
+        "adapt": {
+          "title": "Seu programa evolui com você."
+        }
+      },
+      "closing": {
+        "title": "Este é só o começo.",
+        "body": "Sua jornada continua conforme você evolui."
+      },
       "cta": "Continuar"
     },
     "methodology": {

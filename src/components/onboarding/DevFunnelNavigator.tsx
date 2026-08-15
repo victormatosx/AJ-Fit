@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, Pressable } from 'react-native';
+import { View, Text, Pressable, ScrollView } from 'react-native';
 import { ONBOARDING_STEPS, getStepIndex, type OnboardingStepId } from '../../onboarding/steps';
 import { Icon } from '../ui/Icon';
 import { fonts, colors } from '../../theme/tokens';
@@ -50,8 +50,13 @@ export function DevFunnelNavigator({
         <View
           style={{
             width: 260,
+            // Caps the whole popover's height; the list below scrolls
+            // internally instead of spilling content past this box. Without
+            // `overflow: 'hidden'` a maxHeight on a plain View only clips
+            // layout, not paint — rows past 480px kept rendering below the
+            // rounded border instead of being contained by it.
             maxHeight: 480,
-            padding: 8,
+            overflow: 'hidden',
             borderRadius: 12,
             backgroundColor: 'rgba(6,2,32,0.97)',
             borderWidth: 1,
@@ -63,9 +68,9 @@ export function DevFunnelNavigator({
               flexDirection: 'row',
               alignItems: 'center',
               justifyContent: 'space-between',
-              paddingHorizontal: 6,
-              paddingVertical: 4,
-              marginBottom: 4,
+              paddingHorizontal: 14,
+              paddingTop: 8,
+              paddingBottom: 4,
             }}
           >
             <Text style={{ fontFamily: fonts.mono, fontSize: 9, letterSpacing: 1.5, color: '#ffa840' }}>
@@ -75,53 +80,59 @@ export function DevFunnelNavigator({
               <Icon name="x" size={14} color="rgba(255,255,255,0.5)" />
             </Pressable>
           </View>
-          {ONBOARDING_STEPS.map((step, i) => {
-            const current = step.id === currentStepId;
-            const disabled = !step.devJumpable;
-            return (
-              <Pressable
-                key={step.id}
-                disabled={disabled}
-                onPress={() => {
-                  onJump(step.id);
-                  setOpen(false);
-                }}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 8,
-                  paddingVertical: 6,
-                  paddingHorizontal: 6,
-                  borderRadius: 6,
-                  opacity: disabled ? 0.35 : 1,
-                  backgroundColor: current ? 'rgba(11,112,249,0.18)' : 'transparent',
-                }}
-              >
-                <Text
+          <ScrollView
+            style={{ paddingHorizontal: 8 }}
+            contentContainerStyle={{ paddingBottom: 8 }}
+            showsVerticalScrollIndicator
+          >
+            {ONBOARDING_STEPS.map((step, i) => {
+              const current = step.id === currentStepId;
+              const disabled = !step.devJumpable;
+              return (
+                <Pressable
+                  key={step.id}
+                  disabled={disabled}
+                  onPress={() => {
+                    onJump(step.id);
+                    setOpen(false);
+                  }}
                   style={{
-                    fontFamily: fonts.mono,
-                    fontSize: 10,
-                    color: current ? colors.accentHi : 'rgba(255,255,255,0.35)',
-                    minWidth: 20,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 8,
+                    paddingVertical: 6,
+                    paddingHorizontal: 6,
+                    borderRadius: 6,
+                    opacity: disabled ? 0.35 : 1,
+                    backgroundColor: current ? 'rgba(11,112,249,0.18)' : 'transparent',
                   }}
                 >
-                  {String(i + 1).padStart(2, '0')}
-                </Text>
-                <Text
-                  style={{
-                    flex: 1,
-                    fontFamily: fonts.ui,
-                    fontSize: 11,
-                    color: current ? '#fff' : 'rgba(255,255,255,0.75)',
-                  }}
-                  numberOfLines={1}
-                >
-                  {step.id}
-                  {disabled ? ' · requer sessão real' : ''}
-                </Text>
-              </Pressable>
-            );
-          })}
+                  <Text
+                    style={{
+                      fontFamily: fonts.mono,
+                      fontSize: 10,
+                      color: current ? colors.accentHi : 'rgba(255,255,255,0.35)',
+                      minWidth: 20,
+                    }}
+                  >
+                    {String(i + 1).padStart(2, '0')}
+                  </Text>
+                  <Text
+                    style={{
+                      flex: 1,
+                      fontFamily: fonts.ui,
+                      fontSize: 11,
+                      color: current ? '#fff' : 'rgba(255,255,255,0.75)',
+                    }}
+                    numberOfLines={1}
+                  >
+                    {step.id}
+                    {disabled ? ' · requer sessão real' : ''}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
         </View>
       )}
     </View>

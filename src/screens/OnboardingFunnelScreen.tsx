@@ -81,7 +81,7 @@ export function OnboardingFunnelScreen({
       );
       break;
     case 'welcome':
-      content = <WelcomeInterstitialScreen name={name} progress={progress} onContinue={goNext} />;
+      content = <WelcomeInterstitialScreen name={name} onContinue={goNext} />;
       break;
     case 'motivation':
       content = renderQuestion('motivation');
