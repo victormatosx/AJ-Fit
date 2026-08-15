@@ -147,6 +147,7 @@ export function AppShell() {
           <HomeScreen
             onStart={() => setShowWorkoutConfirmation(true)}
             onOpenConsistency={() => setShowCal(true)}
+            onOpenProfile={() => setTab('profile')}
           />
         </PersistentScreen>
         {tab === 'workout' && <WorkoutScreen onDone={() => setTab('home')} />}

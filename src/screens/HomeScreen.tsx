@@ -141,9 +141,11 @@ const CONSISTENCY_MOCK = { done: 4, total: 5 };
 export function HomeScreen({
   onStart,
   onOpenConsistency,
+  onOpenProfile,
 }: {
   onStart: () => void;
   onOpenConsistency: () => void;
+  onOpenProfile: () => void;
 }) {
   const { t } = useTranslation(['home', 'profile']);
   const { user, profile } = useAuth();
@@ -187,12 +189,14 @@ export function HomeScreen({
               </Display>
               <Display size={34}>{localizedFirstName}.</Display>
             </View>
-            <ProfileAvatar
-              displayName={profile?.profile.name || firstName}
-              photoURL={profile?.profile.photoURL}
-              photoVersion={profile?.profile.photoVersion}
-              size={46}
-            />
+            <Pressable onPress={onOpenProfile} hitSlop={8}>
+              <ProfileAvatar
+                displayName={profile?.profile.name || firstName}
+                photoURL={profile?.profile.photoURL}
+                photoVersion={profile?.profile.photoVersion}
+                size={46}
+              />
+            </Pressable>
           </View>
 
           {/* ticker */}
