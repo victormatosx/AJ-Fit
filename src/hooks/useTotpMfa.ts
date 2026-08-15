@@ -4,6 +4,7 @@ import {
   type ReauthenticationProvider,
 } from '../lib/authProviders';
 import {
+  hasIdentityChanged,
   mfaTotpIssueFromError,
   validateTotpCode,
   type MfaTotpIssue,
@@ -21,7 +22,20 @@ import { useAuth } from '../state/AuthContext';
 export function useTotpMfa(refreshToken = 0) {
   const { user } = useAuth();
   const [factors, setFactors] = useState<TotpFactor[]>([]);
+  // `loading` means "we have never resolved a status for the CURRENT
+  // identity" — it starts `true` and, once the first `refresh()` call
+  // (success or failure) completes, becomes `false` and stays `false`
+  // forever after, even while a later background `refresh()` is in flight.
+  // This is the fix for a reactivation flash: TwoFactorSettingsScreen calls
+  // `refresh()` every time it becomes active (docs/23_navegacao_e_
+  // lifecycle.md §5/§10) to keep the factor list current, but that must
+  // never hide already-known-good content behind a full loading state
+  // again — only the true first resolution (or a genuine identity change,
+  // see the effect below) should ever do that. `refreshing` is the
+  // separate, always-accurate "a fetch is in flight right now" signal for
+  // a subtle indicator that doesn't gate content.
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(true);
   const [issue, setIssue] = useState<MfaTotpIssue | null>(null);
   const [disableTarget, setDisableTarget] = useState<TotpFactor | null>(null);
   const [currentPassword, setCurrentPasswordState] = useState('');
@@ -41,7 +55,7 @@ export function useTotpMfa(refreshToken = 0) {
 
   const refresh = useCallback(async (): Promise<boolean> => {
     const sequence = ++loadSequence.current;
-    setLoading(true);
+    setRefreshing(true);
     setIssue(null);
     try {
       const nextFactors = await refreshTotpFactors();
@@ -55,12 +69,38 @@ export function useTotpMfa(refreshToken = 0) {
       }
       return false;
     } finally {
-      if (sequence === loadSequence.current) setLoading(false);
+      if (sequence === loadSequence.current) {
+        setRefreshing(false);
+        // Exits the unresolved state on the first completion (success OR
+        // failure) and never re-enters it for this identity — a later
+        // failed refresh still leaves whatever was last known on screen
+        // instead of reverting to a full loading state.
+        setLoading(false);
+      }
     }
   }, []);
 
+  // `undefined` (never run yet) is a distinct sentinel from a real `null`
+  // uid, so the very first run always counts as an identity change below —
+  // without it, an unauthenticated `user` (`uid == null`) on mount would
+  // compare `null !== null` as false and skip the reset entirely.
+  const prevUidRef = useRef<string | null | undefined>(undefined);
+
   useEffect(() => {
-    setFactors([]);
+    const uid = user?.uid ?? null;
+    const identityChanged = hasIdentityChanged(prevUidRef.current, uid);
+    prevUidRef.current = uid;
+
+    if (identityChanged) {
+      // A brand-new identity (including the very first run) — nothing is
+      // known about this account's MFA status yet, so this is the only
+      // case that reverts to the full unresolved/loading state and clears
+      // the previous identity's factor list. A `refreshToken` bump alone
+      // (enrollment/disable completed elsewhere) must NOT do this — it
+      // only needs a background `refresh()`, handled identically below.
+      setLoading(true);
+      setFactors([]);
+    }
     setDisableTarget(null);
     setCurrentPasswordState('');
     setReauthCodeState('');
@@ -222,6 +262,7 @@ export function useTotpMfa(refreshToken = 0) {
     reauthCode,
     reauthenticationProviders,
     refresh,
+    refreshing,
     requestDisable,
     setCurrentPassword,
     setReauthCode,

@@ -155,6 +155,24 @@ describe('TwoFactorSettingsScreen — reauth state wiped on deactivation without
     const cleanupBlock = CODE.slice(cleanupStart, CODE.indexOf('};', cleanupStart) + 2);
     expect(cleanupBlock).not.toContain('setFactors');
   });
+
+  it('gates every definitive-content block on mfa.loading, never on mfa.refreshing', () => {
+    // The 2024-round fix (docs/23 §10): `loading` means "never resolved
+    // once" and must be the only gate for "Ativar"/enabled content;
+    // `refreshing` (background revalidation) must never hide content —
+    // it's only wired into the small activity indicator.
+    for (const gate of [
+      "!mfa.enabled && !mfa.loading && !statusUnavailable",
+      'mfa.enabled && !mfa.loading',
+    ]) {
+      expect(CODE).toContain(gate);
+    }
+    expect(CODE).not.toMatch(/!mfa\.refreshing/);
+  });
+
+  it('shows the activity indicator during both initial loading and background refresh', () => {
+    expect(CODE).toContain('(mfa.loading || mfa.refreshing)');
+  });
 });
 
 describe('TotpEnrollmentScreen — enrollment secret wiped on deactivation, never resumed stale (docs/23 §10)', () => {

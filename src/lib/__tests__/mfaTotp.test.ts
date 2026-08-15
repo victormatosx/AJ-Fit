@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   formatTotpSecret,
+  hasIdentityChanged,
   isMultiFactorAuthRequired,
   mfaTotpIssueFromError,
   selectTotpFactors,
@@ -69,5 +70,26 @@ describe('TOTP MFA domain helpers', () => {
     expect(mfaTotpIssueFromError({ issue: 'reauthFailed' })).toBe(
       'reauthFailed',
     );
+  });
+});
+
+describe('hasIdentityChanged — useTotpMfa reset-vs-refresh decision', () => {
+  it('treats the very first run as a change, even for an unauthenticated (null) uid', () => {
+    // `undefined` is the "never run yet" sentinel useTotpMfa seeds its ref
+    // with — this is the exact case that a naive `prevUid !== uid` using
+    // `null` as the initial value would get wrong (null !== null is false).
+    expect(hasIdentityChanged(undefined, null)).toBe(true);
+    expect(hasIdentityChanged(undefined, 'user-1')).toBe(true);
+  });
+
+  it('does not treat a stable identity as changed — a refreshToken bump alone must not reset to loading', () => {
+    expect(hasIdentityChanged('user-1', 'user-1')).toBe(false);
+    expect(hasIdentityChanged(null, null)).toBe(false);
+  });
+
+  it('treats a real account switch as a change, in both directions', () => {
+    expect(hasIdentityChanged('user-1', 'user-2')).toBe(true);
+    expect(hasIdentityChanged('user-1', null)).toBe(true); // logout
+    expect(hasIdentityChanged(null, 'user-1')).toBe(true); // login
   });
 });

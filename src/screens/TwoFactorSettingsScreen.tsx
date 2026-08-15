@@ -38,15 +38,19 @@ export function TwoFactorSettingsScreen({
     !mfa.loading && mfa.factors.length === 0 && mfa.issue !== null;
 
   // TwoFactorSettingsScreen is now persistent (docs/23_navegacao_e_
-  // lifecycle.md §10). On activation: refresh the enrolled-factor list —
-  // `refresh()` doesn't clear `factors` before the new list arrives, so
-  // there's no empty-list flash, just a stale-then-fresh update (same
-  // pattern as `useAssessments`/`loadOfferings` elsewhere in this doc). On
-  // deactivation: `cancelDisable()` wipes the reauthentication password/
-  // TOTP code/disable-challenge the moment the screen goes invisible —
-  // deliberately NOT resetting `factors`/`disabled` here, since that state
-  // isn't sensitive and clearing it would itself cause a visible flash the
-  // next time the screen activates.
+  // lifecycle.md §10). On activation: refresh the enrolled-factor list.
+  // `mfa.loading` (which every content gate below keys off) only means
+  // "never resolved a status for this identity" — it's already `false` by
+  // the time of a reactivation, so this `refresh()` call re-validates in
+  // the background (`mfa.refreshing`) WITHOUT tearing down the already-known
+  // content back to a full loading state (see useTotpMfa.ts — this used to
+  // be exactly backwards and caused a resolved→loading→resolved flash on
+  // every single reactivation). On deactivation: `cancelDisable()` wipes
+  // the reauthentication password/TOTP code/disable-challenge the moment
+  // the screen goes invisible — deliberately NOT resetting
+  // `factors`/`disabled` here, since that state isn't sensitive and
+  // clearing it would itself cause a visible flash the next time the
+  // screen activates.
   useScreenFocusEffect(() => {
     void mfa.refresh();
     return () => {
@@ -109,7 +113,9 @@ export function TwoFactorSettingsScreen({
                     : t('security.twoFactor.status.disabled')}
               </Text>
             </View>
-            {mfa.loading && <ActivityIndicator color={colors.accentHi} />}
+            {(mfa.loading || mfa.refreshing) && (
+              <ActivityIndicator color={colors.accentHi} />
+            )}
           </View>
 
           <Text style={[typography.body, styles.description]}>

@@ -59,6 +59,23 @@ export function validateTotpCode(code: string): MfaTotpIssue | null {
   return null;
 }
 
+/**
+ * Identity-change decision used by `useTotpMfa`'s reset effect
+ * (src/hooks/useTotpMfa.ts) to decide whether a previously-known MFA status
+ * can still be trusted. `undefined` is a distinct "never run yet" sentinel
+ * from a real `null` uid (unauthenticated) — without it, the very first run
+ * (`previousUid` unset) could compare `null !== null` as unchanged and skip
+ * resetting to the unresolved/loading state. Split out as a pure function
+ * so this exact decision is unit-testable without a React Native rendering
+ * environment (vitest.config.mts — this repo's unit suite is Node-only).
+ */
+export function hasIdentityChanged(
+  previousUid: string | null | undefined,
+  currentUid: string | null,
+): boolean {
+  return previousUid !== currentUid;
+}
+
 export function selectTotpFactors<T extends MfaFactorLike>(
   factors: readonly T[],
 ): T[] {
