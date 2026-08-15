@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View, type ImageSourcePropType } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
@@ -23,6 +23,9 @@ export function ProfileAvatar({
   displayName,
   photoURL,
   photoVersion,
+  /** Bundled local image (e.g. `require(...)`) — takes priority over `photoURL`
+   * and skips cache-busting, since a bundled asset has no remote version. */
+  photoSource,
   size,
   editable = false,
   onPress,
@@ -30,6 +33,7 @@ export function ProfileAvatar({
   displayName: string;
   photoURL?: string | null;
   photoVersion?: PhotoCacheVersion;
+  photoSource?: ImageSourcePropType;
   size: number;
   editable?: boolean;
   onPress?: () => void;
@@ -63,9 +67,9 @@ export function ProfileAvatar({
       >
         <Display size={Math.max(14, Math.round(size * 0.38))}>{initialsFor(displayName)}</Display>
       </LinearGradient>
-      {photoURL ? (
+      {photoSource || photoURL ? (
         <Image
-          source={versionedPhotoURL(photoURL, photoVersion)}
+          source={photoSource ?? versionedPhotoURL(photoURL as string, photoVersion)}
           cachePolicy="memory-disk"
           contentFit="cover"
           transition={120}

@@ -27,6 +27,7 @@ import { configureRevenueCat } from './src/services/revenueCatService';
 import { SplashScreen } from './src/screens/SplashScreen';
 import { OnboardingScreen } from './src/screens/OnboardingScreen';
 import { QuizScreen } from './src/screens/QuizScreen';
+import { SocialProofScreen } from './src/screens/SocialProofScreen';
 import { AnalyzingScreen } from './src/screens/AnalyzingScreen';
 import { PlanReadyScreen } from './src/screens/PlanReadyScreen';
 import { AuthScreen } from './src/screens/AuthScreen';
@@ -313,10 +314,14 @@ function RootNavigator() {
               }
               return;
             }
-            // Anonymous pre-signup funnel: unchanged.
-            setScreen('analyzing');
+            // Anonymous pre-signup funnel: unchanged, aside from the new
+            // Social Proof step inserted before Analyzing.
+            setScreen('socialProof');
           }}
         />
+      )}
+      {resolvedScreen === 'socialProof' && (
+        <SocialProofScreen onDone={() => setScreen('analyzing')} />
       )}
       {resolvedScreen === 'analyzing' && <AnalyzingScreen onDone={() => setScreen('plan')} />}
       {resolvedScreen === 'plan' && <PlanReadyScreen onContinue={() => setScreen('auth')} />}

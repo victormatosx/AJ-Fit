@@ -2,6 +2,7 @@ export type RootScreenId =
   | 'splash'
   | 'onboarding'
   | 'quiz'
+  | 'socialProof'
   | 'analyzing'
   | 'plan'
   | 'auth'

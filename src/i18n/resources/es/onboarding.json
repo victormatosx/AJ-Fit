@@ -44,5 +44,41 @@
     "accessibility": {
       "progress": "Creación de tu plan: {{progress}} por ciento"
     }
+  },
+  "socialProof": {
+    "eyebrow": "Prueba social",
+    "headlineLine1": "Resultados reales,",
+    "headlineLine2": "de personas reales.",
+    "subtitle": "Mira la transformación de quienes siguieron el plan y cambiaron de verdad.",
+    "before": "Antes",
+    "after": "Después",
+    "imagePlaceholder": "Foto próximamente",
+    "meta": "{{age}} años • {{months}} meses con AJ Fit",
+    "rating": "{{rating}} de 5 estrellas",
+    "carouselLabel": "Carrusel de testimonios",
+    "cta": "Continuar",
+    "privacy": "Tus datos están protegidos y seguros.",
+    "accessibility": {
+      "beforeImage": "Foto de antes de {{name}}",
+      "afterImage": "Foto de después de {{name}}",
+      "continue": "Continuar al análisis de tu plan"
+    },
+    "testimonials": {
+      "t1": {
+        "name": "Lucas R.",
+        "quote": "AJ Fit cambió por completo mi relación con el entrenamiento y la alimentación. En 4 meses gané más energía, definición y, sobre todo, disciplina.",
+        "highlight": "¡El plan funciona y el soporte marca toda la diferencia!"
+      },
+      "t2": {
+        "name": "Marina S.",
+        "quote": "Ya había probado otras apps y siempre abandonaba. Con AJ Fit los entrenos encajan en mi rutina y por fin veo progreso cada semana.",
+        "highlight": "¡Por primera vez logré mantener la constancia!"
+      },
+      "t3": {
+        "name": "Bruno A.",
+        "quote": "El seguimiento de carga y volumen me ayudó a superar un estancamiento. En 3 meses gané fuerza en todos los ejercicios principales.",
+        "highlight": "Resultado real, sin rodeos."
+      }
+    }
   }
 }
