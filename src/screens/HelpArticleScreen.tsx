@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -13,6 +13,15 @@ import { colors, fonts } from '../theme/tokens';
 export function HelpArticleScreen({ article, onBack, onOpenTicket }: { article: HelpArticle; onBack: () => void; onOpenTicket: (subject: string) => void }) {
   const { t } = useTranslation('support');
   const [resolved, setResolved] = useState<boolean | null>(null);
+  // Materialized + prewarmed (docs/23_navegacao_e_lifecycle.md §14) — this
+  // screen can go straight from one article to a different one without ever
+  // becoming inactive in between (both are the same `supportRoute.name ===
+  // 'article'`), so activation alone isn't a reliable "new session" signal
+  // here. `article` identity is: reset feedback whenever the article itself
+  // changes, regardless of whether the screen was ever deactivated.
+  useEffect(() => {
+    setResolved(null);
+  }, [article.id]);
   const title = t(article.titleKey as never);
   return <ScreenBg><SafeAreaView style={{ flex: 1 }} edges={['top']}><SupportScreenHeader title={t('article.header')} onBack={onBack} /><ScrollView contentContainerStyle={{ padding: 22, paddingBottom: 40 }}>
     <Slash>{t(`help.categories.${article.category}` as never)}</Slash><Display size={30} style={{ marginTop: 12 }}>{title}</Display>

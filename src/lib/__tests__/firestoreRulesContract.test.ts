@@ -81,9 +81,9 @@ describe('firestore.rules — structural contract', () => {
     );
   });
 
-  it('still restricts profile mutable subkeys to name/birthDate/photoURL/photoVersion', () => {
+  it('still restricts profile mutable subkeys to name/birthDate/photoURL/photoVersion/height', () => {
     expect(RULES).toMatch(
-      /profile\.diff\(resource\.data\.profile\)\.affectedKeys\(\)\s*\.hasOnly\(\[\s*'name'\s*,\s*'birthDate'\s*,\s*'photoURL'\s*,\s*'photoVersion'\s*\]\)/,
+      /profile\.diff\(resource\.data\.profile\)\.affectedKeys\(\)\s*\.hasOnly\(\[\s*'name'\s*,\s*'birthDate'\s*,\s*'photoURL'\s*,\s*'photoVersion'\s*,\s*'height'\s*\]\)/,
     );
   });
 

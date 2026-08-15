@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -8,13 +8,21 @@ import { Icon } from '../components/ui/Icon';
 import { HELP_CATEGORIES, localHelpArticleRepository } from '../data/helpArticles';
 import type { HelpArticle, HelpCategory } from '../types/support';
 import { colors, fonts } from '../theme/tokens';
+import { useScreenFocusEffect } from '../state/ScreenActivity';
 
 export function HelpCenterScreen({ onBack, onOpenArticle }: { onBack: () => void; onOpenArticle: (article: HelpArticle) => void }) {
   const { t } = useTranslation('support');
   const [articles, setArticles] = useState<HelpArticle[]>([]);
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<HelpCategory | null>(null);
-  useEffect(() => { localHelpArticleRepository.list().then(setArticles); }, []);
+  // Materialized + prewarmed (docs/23_navegacao_e_lifecycle.md §14) — reload
+  // on every activation instead of only once per mount, and start each
+  // visit with a clean search/filter instead of whatever was typed last time.
+  useScreenFocusEffect(() => {
+    localHelpArticleRepository.list().then(setArticles);
+    setQuery('');
+    setCategory(null);
+  });
   const filtered = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase();
     return articles.filter(article => (!category || article.category === category) && (!needle || `${t(article.titleKey as never)} ${t(article.contentKey as never)}`.toLocaleLowerCase().includes(needle)));

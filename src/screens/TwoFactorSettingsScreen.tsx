@@ -20,6 +20,7 @@ import { useTotpMfa } from '../hooks/useTotpMfa';
 import type { MfaTotpIssue } from '../lib/mfaTotp';
 import type { TotpFactor } from '../services/mfaTotp';
 import { colors, fonts, radii, sizes, spacing, typography } from '../theme/tokens';
+import { useScreenFocusEffect } from '../state/ScreenActivity';
 
 export function TwoFactorSettingsScreen({
   onBack,
@@ -35,6 +36,24 @@ export function TwoFactorSettingsScreen({
   const [passwordVisible, setPasswordVisible] = useState(false);
   const statusUnavailable =
     !mfa.loading && mfa.factors.length === 0 && mfa.issue !== null;
+
+  // TwoFactorSettingsScreen is now persistent (docs/23_navegacao_e_
+  // lifecycle.md §10). On activation: refresh the enrolled-factor list —
+  // `refresh()` doesn't clear `factors` before the new list arrives, so
+  // there's no empty-list flash, just a stale-then-fresh update (same
+  // pattern as `useAssessments`/`loadOfferings` elsewhere in this doc). On
+  // deactivation: `cancelDisable()` wipes the reauthentication password/
+  // TOTP code/disable-challenge the moment the screen goes invisible —
+  // deliberately NOT resetting `factors`/`disabled` here, since that state
+  // isn't sensitive and clearing it would itself cause a visible flash the
+  // next time the screen activates.
+  useScreenFocusEffect(() => {
+    void mfa.refresh();
+    return () => {
+      mfa.cancelDisable();
+      setPasswordVisible(false);
+    };
+  });
 
   const requestDisable = (factor: TotpFactor) => {
     Alert.alert(

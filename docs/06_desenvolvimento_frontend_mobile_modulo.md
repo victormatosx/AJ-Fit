@@ -267,6 +267,13 @@ Estrutura inicial prevista:
 
 A estrutura final poderá ser refinada posteriormente.
 
+A implementação real (roteador customizado em `AppShell.tsx`, sem React
+Navigation/Expo Router) e a política de lifecycle de cada tela — quando uma
+tela permanece montada entre trocas e quando ela deve ser desmontada — estão
+documentadas em `docs/23_navegacao_e_lifecycle.md`. Qualquer novo agente
+criando uma tela nova deve ler aquele documento antes de decidir como
+registrá-la no `AppShell`.
+
 ---
 
 # 13. Módulo de treino

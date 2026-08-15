@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -14,6 +14,7 @@ import { validateSupportTicket } from '../validators/support';
 import type { FeedbackCategory, SupportTicketType } from '../types/support';
 import { colors, fonts } from '../theme/tokens';
 import { logError } from '../lib/logError';
+import { useScreenFocusEffect } from '../state/ScreenActivity';
 
 export function SupportFormScreen({ type, initialSubject = '', onBack, onSuccess }: { type: SupportTicketType; initialSubject?: string; onBack: () => void; onSuccess: () => void }) {
   const { t } = useTranslation('support');
@@ -25,6 +26,37 @@ export function SupportFormScreen({ type, initialSubject = '', onBack, onSuccess
   const [error, setError] = useState<string | null>(null);
   const image = useSupportImagePicker();
   const feedback = type === 'FEEDBACK';
+
+  // Materialized + prewarmed (docs/23_navegacao_e_lifecycle.md §14). Two
+  // resets, for two different "new session" signals:
+  // - `type`/`initialSubject` identity: covers HelpArticle's "report a
+  //   problem about THIS article" opening the form with a different subject
+  //   while the form route itself might not toggle inactive->active (same
+  //   reasoning as HelpArticleScreen's `article`-keyed reset).
+  // - `useScreenFocusEffect`: covers the same type/subject being opened
+  //   twice with a real deactivation in between (draft from a cancelled
+  //   attempt must not reappear). `submitting` is deliberately left alone —
+  //   it already clears itself in `submit`'s `finally`, and forcing it back
+  //   to false here could hide a send that's genuinely still in flight.
+  useEffect(() => {
+    setSubject(initialSubject);
+    setMessage('');
+    setCategory('SUGGESTION');
+    setError(null);
+    image.removeImage();
+    // Only the identity of the ticket being composed matters here —
+    // `image` is a fresh object every render (from useSupportImagePicker)
+    // and would otherwise re-run this on every keystroke.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [type, initialSubject]);
+  useScreenFocusEffect(() => {
+    setSubject(initialSubject);
+    setMessage('');
+    setCategory('SUGGESTION');
+    setError(null);
+    image.removeImage();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  });
   const validation = useMemo(() => validateSupportTicket(feedback ? t(`feedback.subjects.${category}`) : subject, message), [category, feedback, message, subject, t]);
 
   const submit = async () => {

@@ -27,6 +27,7 @@ import {
   normalizeDisplayName,
   validateDisplayName,
   validateProfileBirthDate,
+  validateProfileHeight,
 } from '../lib/userProfileValidation';
 import { DEFAULT_LANGUAGE, type SupportedLanguage } from '../types/language';
 import {
@@ -41,7 +42,7 @@ import {
  * Data model (docs/03_modelagem_banco_e_dados.md, docs/04_contratos_de_api.md §5):
  *
  *   users/{userId}
- *     profile { name, email, birthDate, photoURL, photoVersion }
+ *     profile { name, email, birthDate, photoURL, photoVersion, height }
  *     preferences { language, units, theme }
  *     subscription { status, provider, trialEndsAt, currentPeriodEndsAt, ... }
  *       (full schema: docs/13_assinaturas_e_billing.md §26 — only the 4
@@ -79,6 +80,8 @@ export type UserProfile = {
     photoURL?: string;
     /** Server timestamp changed exclusively with photoURL. */
     photoVersion?: Timestamp;
+    /** Mutable value in cm; overrides the immutable onboarding questionnaire's height. */
+    height?: number;
   };
   preferences: {
     language: SupportedLanguage;
@@ -353,6 +356,7 @@ export async function updateUserProfile(
     name?: string;
     birthDate?: Date | null;
     photoURL?: string | null;
+    height?: number | null;
   } = {},
 ): Promise<void> {
   const update: Record<string, unknown> = { 'metadata.updatedAt': serverTimestamp() };
@@ -379,6 +383,13 @@ export async function updateUserProfile(
   if (data.photoURL !== undefined) {
     update['profile.photoURL'] = data.photoURL || deleteField();
     update['profile.photoVersion'] = serverTimestamp();
+  }
+  if (data.height !== undefined) {
+    if (data.height !== null) {
+      const error = validateProfileHeight(data.height);
+      if (error) throw new Error(error.code);
+    }
+    update['profile.height'] = data.height ?? deleteField();
   }
 
   await updateDoc(userRef(uid), update);

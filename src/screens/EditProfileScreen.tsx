@@ -21,7 +21,12 @@ import { Display, MonoLabel, Slash } from '../components/ui/Display';
 import { Icon } from '../components/ui/Icon';
 import { colors, fonts } from '../theme/tokens';
 import { useAuth } from '../state/AuthContext';
+import { useUnits } from '../state/UnitsContext';
 import { updateUserProfile } from '../services/userProfile';
+import {
+  cmToFeetInches,
+  feetInchesToCm,
+} from '../units/heightConversions';
 import {
   deleteProfilePhoto,
   compressProfilePhoto,
@@ -34,10 +39,13 @@ import {
   normalizeDisplayName,
   validateDisplayName,
   validateProfileBirthDate,
+  validateProfileHeight,
   type BirthDateError,
   type DisplayNameError,
+  type HeightError,
 } from '../lib/userProfileValidation';
 import { logError } from '../lib/logError';
+import { useScreenFocusEffect } from '../state/ScreenActivity';
 
 type PendingPhoto = LocalProfilePhoto | null | undefined;
 
@@ -70,6 +78,7 @@ function selectedAsset(result: ImagePicker.ImagePickerResult): LocalProfilePhoto
 export function EditProfileScreen({ onBack }: { onBack: () => void }) {
   const { t } = useTranslation(['profile', 'common']);
   const { user, profile, questionnaire, refreshProfile } = useAuth();
+  const { resolvedUnits } = useUnits();
   const athleteFallback = t('profile:fallback.athlete');
   const savedName =
     profile?.profile.name?.trim() ||
@@ -82,16 +91,26 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
   const sinceYear = profile?.metadata.createdAt
     ? String(profile.metadata.createdAt.toDate().getFullYear())
     : '—';
+  const savedHeight = profile?.profile.height ?? questionnaire?.answers.height ?? null;
 
   const initialDate = dateParts(savedBirthDate);
+  const initialHeightImperial = cmToFeetInches(savedHeight ?? 0);
   const [name, setName] = useState(savedName);
   const [pendingPhoto, setPendingPhoto] = useState<PendingPhoto>(undefined);
   const [birthDay, setBirthDay] = useState(initialDate.day);
   const [birthMonth, setBirthMonth] = useState(initialDate.month);
   const [birthYear, setBirthYear] = useState(initialDate.year);
+  const [heightCmText, setHeightCmText] = useState(savedHeight ? String(savedHeight) : '');
+  const [heightFeetText, setHeightFeetText] = useState(
+    savedHeight ? String(initialHeightImperial.feet) : '',
+  );
+  const [heightInchesText, setHeightInchesText] = useState(
+    savedHeight ? String(initialHeightImperial.inches) : '',
+  );
   const [nameFocused, setNameFocused] = useState(false);
   const [nameTouched, setNameTouched] = useState(false);
   const [birthTouched, setBirthTouched] = useState(false);
+  const [heightTouched, setHeightTouched] = useState(false);
   const [saving, setSaving] = useState(false);
   const [processingPhoto, setProcessingPhoto] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
@@ -102,6 +121,42 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
   useEffect(() => {
     setName(savedName);
   }, [savedName]);
+
+  // EditProfileScreen is prewarmed + kept materialized (docs/23_navegacao_e_
+  // lifecycle.md §14) — it no longer unmounts between openings, so nothing
+  // above can rely on remount to "start fresh" anymore. This is the explicit
+  // replacement: every field, draft and touched flag resets to the CURRENT
+  // saved profile at the start of every editing session (every `active`
+  // transition from false to true) — not just `name`, which is all the old
+  // per-field `useEffect` above ever covered. A discard ("descartar
+  // alterações") only clears the in-memory draft; the source of truth this
+  // reads from is untouched, so the next activation always shows exactly
+  // what's actually saved, never a value from an abandoned attempt.
+  //
+  // Deliberately NOT reset here: `saving`, `processingPhoto`,
+  // `uploadProgress`, `saveLock`, `photoSelectionLock`. Each already
+  // self-clears in a `finally` block the instant its async operation
+  // actually finishes (see `handleSave`/`acceptPhoto`/`chooseFromLibrary`/
+  // `takePhoto`) — so if one of them is still truthy at the moment of a new
+  // activation, an operation from a previous session is *genuinely* still
+  // in flight (e.g. the user backed out mid-upload). Forcing it back to
+  // false here would hide that real state and let a second save/upload
+  // start concurrently with the first.
+  useScreenFocusEffect(() => {
+    setName(savedName);
+    setPendingPhoto(undefined);
+    setBirthDay(initialDate.day);
+    setBirthMonth(initialDate.month);
+    setBirthYear(initialDate.year);
+    setHeightCmText(savedHeight ? String(savedHeight) : '');
+    setHeightFeetText(savedHeight ? String(initialHeightImperial.feet) : '');
+    setHeightInchesText(savedHeight ? String(initialHeightImperial.inches) : '');
+    setNameFocused(false);
+    setNameTouched(false);
+    setBirthTouched(false);
+    setHeightTouched(false);
+    setSubmitError(null);
+  });
 
   const normalizedName = normalizeDisplayName(name);
   const parsedBirthDate = parseDateParts(
@@ -114,6 +169,16 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
     () => validateProfileBirthDate(parsedBirthDate),
     [parsedBirthDate],
   );
+
+  const parsedHeight: number | null =
+    resolvedUnits === 'imperial'
+      ? heightFeetText && heightInchesText
+        ? feetInchesToCm(Number(heightFeetText), Number(heightInchesText))
+        : null
+      : heightCmText
+        ? Number(heightCmText)
+        : null;
+  const heightError = useMemo(() => validateProfileHeight(parsedHeight), [parsedHeight]);
 
   const renderNameError = (err: DisplayNameError): string => {
     switch (err.code) {
@@ -135,11 +200,20 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
         return t('profile:edit.validation.birthDateAgeRange', err.params);
     }
   };
+  const renderHeightError = (err: HeightError): string => {
+    switch (err.code) {
+      case 'heightRequired':
+        return t('profile:edit.validation.heightRequired');
+      case 'heightRange':
+        return t('profile:edit.validation.heightRange', err.params);
+    }
+  };
 
   const hasNameChanges = normalizedName !== normalizeDisplayName(savedName);
   const hasBirthDateChanges = calendarKey(parsedBirthDate) !== calendarKey(savedBirthDate);
+  const hasHeightChanges = parsedHeight !== savedHeight;
   const hasPhotoChanges = pendingPhoto !== undefined;
-  const hasChanges = hasNameChanges || hasBirthDateChanges || hasPhotoChanges;
+  const hasChanges = hasNameChanges || hasBirthDateChanges || hasHeightChanges || hasPhotoChanges;
   const currentPhotoURL =
     pendingPhoto === undefined ? profile?.profile.photoURL : pendingPhoto?.uri ?? null;
   const busy = saving || processingPhoto;
@@ -148,6 +222,7 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
     hasChanges &&
     !nameError &&
     (!hasBirthDateChanges || !birthDateError) &&
+    (!hasHeightChanges || !heightError) &&
     !busy;
 
   function handleBack() {
@@ -277,6 +352,7 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
       await updateUserProfile(user.uid, {
         ...(hasNameChanges ? { name: normalizedName } : {}),
         ...(hasBirthDateChanges ? { birthDate: parsedBirthDate } : {}),
+        ...(hasHeightChanges ? { height: parsedHeight } : {}),
         ...(hasPhotoChanges ? { photoURL: nextPhotoURL ?? null } : {}),
       });
 
@@ -305,6 +381,16 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
     setBirthTouched(true);
     setSubmitError(null);
   };
+
+  const changeHeightPart = (
+    setter: (value: string) => void,
+    maxLength: number,
+  ) => (value: string) => {
+    setter(value.replace(/\D/g, '').slice(0, maxLength));
+    setHeightTouched(true);
+    setSubmitError(null);
+  };
+  const heightUnitLabel = resolvedUnits === 'imperial' ? '' : 'cm';
 
   const emptyNameFallback = athleteFallback.toUpperCase();
   const identityDisplayName = normalizedName.toUpperCase() || emptyNameFallback;
@@ -470,6 +556,51 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
                     <Text style={styles.validationText}>{renderBirthDateError(birthDateError)}</Text>
                   ) : null}
                 </View>
+
+                <View style={styles.divider} />
+
+                <View style={styles.fieldBlock}>
+                  <View style={styles.fieldLabelRow}>
+                    <Text style={styles.fieldLabel}>
+                      {t('profile:edit.fields.height').toUpperCase()}
+                    </Text>
+                    {heightUnitLabel ? (
+                      <Text style={styles.counter}>{heightUnitLabel}</Text>
+                    ) : null}
+                  </View>
+                  {resolvedUnits === 'imperial' ? (
+                    <View style={styles.dateRow}>
+                      <DatePartInput
+                        part="heightFeet"
+                        value={heightFeetText}
+                        maxLength={1}
+                        onChangeText={changeHeightPart(setHeightFeetText, 1)}
+                        editable={!busy}
+                      />
+                      <DatePartInput
+                        part="heightInches"
+                        value={heightInchesText}
+                        maxLength={2}
+                        onChangeText={changeHeightPart(setHeightInchesText, 2)}
+                        editable={!busy}
+                      />
+                    </View>
+                  ) : (
+                    <View style={styles.dateRow}>
+                      <DatePartInput
+                        part="heightCm"
+                        value={heightCmText}
+                        maxLength={3}
+                        wide
+                        onChangeText={changeHeightPart(setHeightCmText, 3)}
+                        editable={!busy}
+                      />
+                    </View>
+                  )}
+                  {heightTouched && heightError ? (
+                    <Text style={styles.validationText}>{renderHeightError(heightError)}</Text>
+                  ) : null}
+                </View>
               </View>
             </View>
 
@@ -553,7 +684,7 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
   );
 }
 
-type DatePart = 'day' | 'month' | 'year';
+type DatePart = 'day' | 'month' | 'year' | 'heightFeet' | 'heightInches' | 'heightCm';
 
 function DatePartInput({
   part,
@@ -584,7 +715,13 @@ function DatePartInput({
       ? t('edit.datePart.placeholderYear')
       : part === 'month'
         ? t('edit.datePart.placeholderMonth')
-        : t('edit.datePart.placeholderDay');
+        : part === 'heightCm'
+          ? t('edit.datePart.placeholderHeightCm')
+          : part === 'heightFeet'
+            ? t('edit.datePart.placeholderHeightFeet')
+            : part === 'heightInches'
+              ? t('edit.datePart.placeholderHeightInches')
+              : t('edit.datePart.placeholderDay');
   return (
     <View style={[styles.datePart, wide && styles.datePartWide]}>
       <TextInput

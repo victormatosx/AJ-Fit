@@ -24,6 +24,7 @@ import {
   type MfaTotpIssue,
 } from '../lib/mfaTotp';
 import { colors, fonts, radii, sizes, spacing, typography } from '../theme/tokens';
+import { useScreenFocusEffect } from '../state/ScreenActivity';
 
 export function TotpEnrollmentScreen({
   onBack,
@@ -35,6 +36,24 @@ export function TotpEnrollmentScreen({
   const { t } = useTranslation('settings');
   const enrollment = useTotpEnrollment();
   const [passwordVisible, setPasswordVisible] = useState(false);
+
+  // TotpEnrollmentScreen is now persistent (docs/23_navegacao_e_lifecycle.md
+  // §10). `enrollment.cancel()` already exists exactly for "abandon this
+  // attempt" (see the `closeEnrollment` cancel-path below) — reusing it as
+  // the deactivation cleanup wipes `draft` (server-issued MFA secret +
+  // otpAuthUri), `currentPassword` and `code` the moment the screen goes
+  // invisible, so no enrollment secret is ever kept alive while the screen
+  // is materialized-but-inactive. The next activation always starts a fresh
+  // enrollment attempt from the reauthentication step — matching the
+  // server-side `enrollmentCompletionDeadline` design (a resumed stale
+  // draft isn't a goal here). No on-activate work is needed: there's no
+  // list to refresh, this is a wizard, not a data view.
+  useScreenFocusEffect(() => {
+    return () => {
+      enrollment.cancel();
+      setPasswordVisible(false);
+    };
+  });
 
   const closeEnrollment = () => {
     if (enrollment.activated) {

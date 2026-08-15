@@ -217,6 +217,7 @@
     "fields": {
       "displayName": "Nombre visible",
       "birthDate": "Fecha de nacimiento",
+      "height": "Altura",
       "email": "Correo",
       "emailUnavailable": "Correo no disponible",
       "emailSecurityNote": "El correo está protegido por tus métodos de acceso."
@@ -227,7 +228,13 @@
       "year": "Año",
       "placeholderDay": "DD",
       "placeholderMonth": "MM",
-      "placeholderYear": "AAAA"
+      "placeholderYear": "AAAA",
+      "heightFeet": "Pies",
+      "heightInches": "Pulgadas",
+      "heightCm": "cm",
+      "placeholderHeightFeet": "PIES",
+      "placeholderHeightInches": "PULG",
+      "placeholderHeightCm": "CM"
     },
     "actions": {
       "save": "Guardar cambios",
@@ -246,7 +253,9 @@
       "nameTooLong": "Usa como máximo {{max}} caracteres.",
       "birthDateRequired": "Escribe una fecha válida.",
       "birthDateFuture": "La fecha no puede estar en el futuro.",
-      "birthDateAgeRange": "La edad debe estar entre {{min}} y {{max}} años."
+      "birthDateAgeRange": "La edad debe estar entre {{min}} y {{max}} años.",
+      "heightRequired": "Escribe tu altura.",
+      "heightRange": "La altura debe estar entre {{min}} y {{max}} cm."
     },
     "errors": {
       "photoTooLarge": "La foto debe tener como máximo 5 MB.",

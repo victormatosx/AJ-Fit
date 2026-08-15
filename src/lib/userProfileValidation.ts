@@ -5,6 +5,9 @@ export const DISPLAY_NAME_MIN_LENGTH = 2;
 export const DISPLAY_NAME_MAX_LENGTH = 50;
 export const PROFILE_MIN_AGE = 16;
 export const PROFILE_MAX_AGE = 75;
+// Matches the onboarding height wheel's range (QuizScreen.tsx QUESTIONS).
+export const PROFILE_MIN_HEIGHT_CM = 140;
+export const PROFILE_MAX_HEIGHT_CM = 220;
 
 /**
  * Validators return a structured code (never a localized string). The UI
@@ -24,6 +27,10 @@ export type BirthDateError =
   | { code: 'birthDateFuture' }
   | { code: 'birthDateAgeRange'; params: { min: number; max: number } };
 
+export type HeightError =
+  | { code: 'heightRequired' }
+  | { code: 'heightRange'; params: { min: number; max: number } };
+
 export function normalizeDisplayName(value: string): string {
   return value.trim().replace(/\s+/g, ' ');
 }
@@ -36,6 +43,17 @@ export function validateDisplayName(value: string): DisplayNameError | null {
   }
   if (normalized.length > DISPLAY_NAME_MAX_LENGTH) {
     return { code: 'nameTooLong', params: { max: DISPLAY_NAME_MAX_LENGTH } };
+  }
+  return null;
+}
+
+export function validateProfileHeight(cm: number | null): HeightError | null {
+  if (cm == null || Number.isNaN(cm)) return { code: 'heightRequired' };
+  if (cm < PROFILE_MIN_HEIGHT_CM || cm > PROFILE_MAX_HEIGHT_CM) {
+    return {
+      code: 'heightRange',
+      params: { min: PROFILE_MIN_HEIGHT_CM, max: PROFILE_MAX_HEIGHT_CM },
+    };
   }
   return null;
 }

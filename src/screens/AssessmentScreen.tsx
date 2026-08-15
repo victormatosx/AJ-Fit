@@ -46,6 +46,7 @@ import { logError } from '../lib/logError';
 import { useDateParts } from '../hooks/useDateParts';
 import { NativeDatePickerField } from '../components/ui/NativeDatePickerField';
 import { useUnits } from '../state/UnitsContext';
+import { useScreenFocusEffect } from '../state/ScreenActivity';
 import {
   formatWeightFromKg,
   formatWeightInputFromKg,
@@ -106,6 +107,21 @@ export function AssessmentScreen({ onBack }: { onBack: () => void }) {
     refresh,
   } = useAssessments(user?.uid ?? null);
 
+  // AssessmentScreen is prewarmed + kept materialized (docs/23_navegacao_e_
+  // lifecycle.md §14) — `useAssessments`'s own `useEffect(refresh, [refresh])`
+  // still fires once per mount, but a persistent screen only mounts once
+  // per session, so a save made elsewhere (or on another device) wouldn't
+  // otherwise be reflected the next time the user actually looks at this
+  // screen. This re-fetches on every real activation instead. `refresh`
+  // already guards against out-of-order responses via its own monotonic
+  // sequence token, so firing it again here duplicates neither the listener
+  // nor the risk of stale data winning a race — worst case on the very
+  // first activation is one harmless extra read (the mount effect and this
+  // one both fire close together), not polling.
+  useScreenFocusEffect(() => {
+    refresh();
+  });
+
   const [showGuided, setShowGuided] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [showFullHistory, setShowFullHistory] = useState(false);
@@ -120,10 +136,13 @@ export function AssessmentScreen({ onBack }: { onBack: () => void }) {
   // social login that skipped onboarding).
   const onboardingAnswers = questionnaire?.answers ?? null;
   const displayWeight = hasAssessments ? latest!.weight : onboardingAnswers?.weight ?? null;
-  // Height is profile data, not an assessment input. The persisted onboarding
-  // questionnaire is authoritative; the latest assessment is only a legacy
-  // fallback for accounts created before that field was available.
-  const registeredHeight = onboardingAnswers?.height ?? latest?.height ?? null;
+  // Height is profile data, not an assessment input. `profile.profile.height`
+  // is the mutable value edited via EditProfileScreen and takes precedence;
+  // the persisted onboarding questionnaire is the next fallback, and the
+  // latest assessment is only a legacy fallback for accounts created before
+  // that field was available.
+  const registeredHeight =
+    profile?.profile.height ?? onboardingAnswers?.height ?? latest?.height ?? null;
   // Sex comes from the persisted onboarding questionnaire. A previous guided
   // assessment is only a compatibility fallback for older accounts whose
   // questionnaire is incomplete; the new form never asks for it again.

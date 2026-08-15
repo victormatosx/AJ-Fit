@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -26,6 +26,7 @@ import {
   type SubscriptionCenterStatus,
 } from '../lib/subscriptionCenter';
 import { colors, fonts } from '../theme/tokens';
+import { useScreenFocusEffect } from '../state/ScreenActivity';
 
 type ActionNotice = { tone: 'neutral' | 'error'; text: string } | null;
 
@@ -93,9 +94,22 @@ export function SubscriptionCenterScreen({
   const [action, setAction] = useState<'manage' | 'restore' | null>(null);
   const [notice, setNotice] = useState<ActionNotice>(null);
 
-  useEffect(() => {
+  // Materialized + prewarmed (docs/23_navegacao_e_lifecycle.md §14).
+  // `customerInfo` itself is global state from SubscriptionContext (lives
+  // above AppShell, always current — see the doc's §11), but `offerings`
+  // (available packages/promotions) is fetched by this screen specifically
+  // and would otherwise stay frozen at whatever it was during prewarm.
+  // Re-fetching per activation (not per mount) keeps it current without
+  // turning this into polling — it only runs when the user actually looks
+  // at this screen again. `action` is deliberately not reset here: it
+  // already clears at the end of `handleManage`/`handleRestore`, and this
+  // screen doesn't guard those with try/finally, so forcing it back to
+  // `null` on a fresh activation could paper over a real stuck state
+  // instead of surfacing it.
+  useScreenFocusEffect(() => {
     void loadOfferings();
-  }, [loadOfferings]);
+    setNotice(null);
+  });
 
   const model = useMemo(
     () =>

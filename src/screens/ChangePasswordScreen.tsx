@@ -17,6 +17,7 @@ import { ScreenBg } from '../components/ui/ScreenBg';
 import { useChangePassword } from '../hooks/useChangePassword';
 import { PASSWORD_MIN_LENGTH } from '../lib/passwordChange';
 import { colors, fonts, spacing, typography } from '../theme/tokens';
+import { useScreenFocusEffect } from '../state/ScreenActivity';
 
 export function ChangePasswordScreen({ onBack }: { onBack: () => void }) {
   const { t } = useTranslation('settings');
@@ -28,6 +29,24 @@ export function ChangePasswordScreen({ onBack }: { onBack: () => void }) {
   useEffect(() => {
     if (!change.allowed) onBack();
   }, [change.allowed, onBack]);
+
+  // ChangePasswordScreen is now persistent (docs/23_navegacao_e_
+  // lifecycle.md §10) — the three password fields must never survive past
+  // the moment the screen becomes inactive. This is the cleanup half of
+  // useScreenFocusEffect (fires on every active->inactive transition, not
+  // just unmount, which no longer happens for this screen); the three
+  // setters already clear `issue`/`succeeded` too (useChangePassword's
+  // internal `resetFeedback`), so nothing sensitive or stale is left behind.
+  useScreenFocusEffect(() => {
+    return () => {
+      change.setCurrentPassword('');
+      change.setNewPassword('');
+      change.setConfirmation('');
+      setCurrentVisible(false);
+      setNewVisible(false);
+      setConfirmationVisible(false);
+    };
+  });
 
   if (!change.allowed) return null;
 

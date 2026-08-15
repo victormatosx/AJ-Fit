@@ -15,6 +15,7 @@ import { getDisplayFirstName } from '../lib/userName';
 import { ProfileAvatar } from '../components/ui/ProfileAvatar';
 import { useUnits } from '../state/UnitsContext';
 import { formatWorkoutLoadFromKg, workoutLoadUnit } from '../units/workoutLoadConversions';
+import { useIsScreenActive } from '../state/ScreenActivity';
 
 /**
  * Ticker rows read from i18n keys. The values themselves are placeholder
@@ -35,9 +36,13 @@ function Ticker() {
   const { resolvedUnits } = useUnits();
   const [width, setWidth] = useState(0);
   const x = useRef(new Animated.Value(0)).current;
+  // Home is kept alive while inactive (docs/23_navegacao_e_lifecycle.md) —
+  // without this guard the marquee's native-driven loop would keep running
+  // forever on an invisible screen every time another tab is active.
+  const isActive = useIsScreenActive();
 
   useEffect(() => {
-    if (width === 0) return;
+    if (width === 0 || !isActive) return;
     x.setValue(0);
     const loop = Animated.loop(
       Animated.timing(x, {
@@ -49,7 +54,7 @@ function Ticker() {
     );
     loop.start();
     return () => loop.stop();
-  }, [width, x]);
+  }, [width, x, isActive]);
 
   const items = useMemo(
     () =>
