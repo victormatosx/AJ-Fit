@@ -6,54 +6,76 @@ import { Display, Slash } from '../../components/ui/Display';
 import { CtaButton, CtaText } from '../../components/ui/CtaButton';
 import { SegBar } from '../../components/ui/SegBar';
 import { Icon, type IconName } from '../../components/ui/Icon';
-import { colors, fonts, sizes, spacing } from '../../theme/tokens';
+import { colors, fonts, radii, sizes, spacing } from '../../theme/tokens';
 import type { OnboardingProgress } from '../../onboarding/useOnboardingFunnel';
 
+const JOURNEY_ICON_SIZE = 44;
+const JOURNEY_CARD_PADDING = spacing[4];
+
 /**
- * Editorial row instead of a bordered/surfaced "settings" card: icon marker
- * + a thin connector line to the next row (progress -> adaptation), text to
- * the right. `last` drops the connector at row 2, the timeline's endpoint.
+ * One step of the progress -> adaptation -> evolution journey. Slightly
+ * larger than a plain benefit row (bigger icon badge, more internal
+ * padding) so the three steps together carry the visual weight the center
+ * of the screen needs. `highlighted` marks the closing step — same card
+ * shape, inverted surface/badge colors — so it reads as the sequence's
+ * conclusion without introducing a new visual language.
  */
-function BenefitRow({
+function JourneyCard({
   icon,
   title,
   body,
-  last,
+  highlighted,
 }: {
   icon: IconName;
   title: string;
   body?: string;
-  last?: boolean;
+  highlighted?: boolean;
 }) {
   return (
-    <View style={{ flexDirection: 'row', gap: spacing[3] }}>
-      <View style={{ width: 36, alignItems: 'center' }}>
-        <View
-          style={{
-            width: 36,
-            height: 36,
-            borderRadius: 11,
-            backgroundColor: colors.accentSoft,
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <Icon name={icon} size={17} color={colors.accentHi} />
-        </View>
-        {!last && (
-          <View style={{ width: 1, flex: 1, minHeight: spacing[3], backgroundColor: colors.border, marginTop: spacing[1] }} />
-        )}
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: body ? 'flex-start' : 'center',
+        gap: spacing[3.5],
+        padding: JOURNEY_CARD_PADDING,
+        borderRadius: radii.lg,
+        backgroundColor: highlighted ? colors.accentSoft : colors.surface,
+        borderWidth: 1,
+        borderColor: colors.border,
+      }}
+    >
+      <View
+        style={{
+          width: JOURNEY_ICON_SIZE,
+          height: JOURNEY_ICON_SIZE,
+          borderRadius: 13,
+          backgroundColor: highlighted ? colors.bg : colors.accentSoft,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <Icon name={icon} size={19} color={colors.accentHi} />
       </View>
-      <View style={{ flex: 1, paddingBottom: last ? 0 : spacing[3.5] }}>
-        <Text style={{ fontFamily: fonts.uiBold, fontSize: 15.5, color: '#fff', lineHeight: 20 }}>
+      <View style={{ flex: 1 }}>
+        <Text style={{ fontFamily: fonts.uiBold, fontSize: 16, color: '#fff', lineHeight: 21 }}>
           {title}
         </Text>
         {body && (
-          <Text style={{ fontFamily: fonts.ui, fontSize: 13.5, lineHeight: 19, color: colors.mute, marginTop: 2 }}>
+          <Text style={{ fontFamily: fonts.ui, fontSize: 13.5, lineHeight: 19, color: colors.mute, marginTop: 3 }}>
             {body}
           </Text>
         )}
       </View>
+    </View>
+  );
+}
+
+/** Short connector segment between two journey cards, centered under the
+ * icon badge column so the three steps read as one continuous line. */
+function JourneyConnector() {
+  return (
+    <View style={{ paddingLeft: JOURNEY_CARD_PADDING + JOURNEY_ICON_SIZE / 2 - 0.5, height: spacing[3] }}>
+      <View style={{ flex: 1, width: 1, backgroundColor: colors.border }} />
     </View>
   );
 }
@@ -77,81 +99,80 @@ export function EvolutionInterstitialScreen({
           />
         </View>
 
-        {/* `flexGrow: 1` on the content container + `flex:1,
-            justifyContent:'center'` on the single wrapper below is what
-            moves the *whole* composition's center of gravity down when it's
-            shorter than the viewport — the four groups keep their own small,
-            fixed internal gaps (never flex-stretched), only the block as a
-            whole re-centers. On a short device/longer translation, content
-            overflows this centering has no effect and it just scrolls, so
-            nothing here depends on a specific screen height. */}
+        {/* The ScrollView needs its own `flex: 1` — without it, it sizes to
+            its content instead of filling the space left under the progress
+            bar, so `contentContainerStyle.flexGrow` below has nothing to
+            grow *within* and the CTA (and everything after it) just ends
+            wherever the content naturally stops, leaving dead space under
+            it. This was the actual cause of the CTA sitting high with a big
+            gap below it. With `flex: 1` in place, the single `flexGrow: 1`
+            spacer right before the CTA is the only element that absorbs
+            leftover height — everything above it (hero, journey) keeps its
+            own fixed rhythm, so extra room on tall screens goes into that
+            one spacer instead of stretching or re-centering the content. On
+            short screens the spacer collapses to its `minHeight` and the
+            ScrollView takes over. */}
         <ScrollView
+          style={{ flex: 1 }}
           contentContainerStyle={{
             flexGrow: 1,
             paddingHorizontal: sizes.screenGutter,
-            paddingTop: spacing[5],
-            paddingBottom: spacing[5],
+            paddingTop: spacing[16],
+            paddingBottom: spacing[3],
           }}
           showsVerticalScrollIndicator={false}
         >
-          <View style={{ flex: 1, justifyContent: 'center' }}>
-            {/* Grupo 2 — Headline + subheadline lêem como uma unidade só:
-                gap pequeno entre elas. */}
+          <View style={{ flexGrow: 1 }}>
+            {/* Hero — unchanged size/weight; the extra room this screen
+                needed belongs to the journey below, not the headline. */}
             <View>
-              <Display size={28}>{t('interstitials.evolution.titleLine1')}</Display>
-              <Display size={28} color={colors.accentHi}>
+              <Display size={32}>{t('interstitials.evolution.titleLine1')}</Display>
+              <Display size={32} color={colors.accentHi}>
                 {t('interstitials.evolution.titleLine2')}
               </Display>
               <Text
                 style={{
-                  marginTop: spacing[1.5],
+                  marginTop: spacing[2],
                   fontFamily: fonts.ui,
-                  fontSize: 15,
-                  lineHeight: 21,
+                  fontSize: 15.5,
+                  lineHeight: 22,
                   color: colors.mute,
-                  maxWidth: 320,
+                  maxWidth: 340,
                 }}
               >
                 {t('interstitials.evolution.intro')}
               </Text>
             </View>
 
-            {/* Grupo 3 — label + os dois benefícios, mantidos próximos entre
-                si; só o espaço ANTES do grupo aumentou. */}
-            <View style={{ marginTop: spacing[7] }}>
+            {/* Progresso -> adaptação -> evolução: the three concepts as one
+                connected journey (bigger cards + a connector line between
+                them) instead of two small benefit rows plus a separate
+                closing card. This is the screen's main visual anchor now. */}
+            <View style={{ marginTop: spacing[6] }}>
               <Slash>{t('interstitials.evolution.cardsLabel')}</Slash>
-              <View style={{ marginTop: spacing[3] }}>
-                <BenefitRow
+              <View style={{ marginTop: spacing[3.5] }}>
+                <JourneyCard
                   icon="chart"
                   title={t('interstitials.evolution.cards.progress.title')}
                   body={t('interstitials.evolution.cards.progress.body')}
                 />
-                <BenefitRow icon="swap" title={t('interstitials.evolution.cards.adapt.title')} last />
+                <JourneyConnector />
+                <JourneyCard icon="swap" title={t('interstitials.evolution.cards.adapt.title')} />
+                <JourneyConnector />
+                <JourneyCard
+                  icon="sparkles"
+                  title={t('interstitials.evolution.closing.title')}
+                  body={t('interstitials.evolution.closing.body')}
+                  highlighted
+                />
               </View>
             </View>
 
-            {/* Grupo 4 — fechamento + CTA, mesma lógica: mais espaço antes
-                do grupo, gap pequeno entre título/corpo/botão dentro dele. */}
-            <View style={{ marginTop: spacing[7] }}>
-              <Text style={{ fontFamily: fonts.uiBold, fontSize: 16.5, color: '#fff' }}>
-                {t('interstitials.evolution.closing.title')}
-              </Text>
-              <Text
-                style={{
-                  marginTop: spacing[1],
-                  fontFamily: fonts.ui,
-                  fontSize: 14,
-                  lineHeight: 20,
-                  color: colors.mute,
-                }}
-              >
-                {t('interstitials.evolution.closing.body')}
-              </Text>
+            <View style={{ minHeight: spacing[4], flexGrow: 1 }} />
 
-              <CtaButton onPress={onContinue} style={{ marginTop: spacing[4] }}>
-                <CtaText>{t('interstitials.evolution.cta')}</CtaText>
-              </CtaButton>
-            </View>
+            <CtaButton onPress={onContinue} style={{ marginBottom: spacing[2] }}>
+              <CtaText>{t('interstitials.evolution.cta')}</CtaText>
+            </CtaButton>
           </View>
         </ScrollView>
       </SafeAreaView>
