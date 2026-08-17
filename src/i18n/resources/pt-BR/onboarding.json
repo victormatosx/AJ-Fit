@@ -49,19 +49,21 @@
       "titleLine1": "Seu treino não termina",
       "titleLine2": "quando ele é criado.",
       "intro": "O AJ Fit foi pensado para acompanhar sua evolução ao longo do tempo.",
-      "cardsLabel": "Como isso funciona",
-      "cards": {
-        "progress": {
-          "title": "Conforme você progride,",
-          "body": "sua jornada de treino também pode evoluir."
+      "carouselLabel": "Carrossel de recursos de evolução do AJ Fit",
+      "screenshotPlaceholder": "Captura {{index}}",
+      "slides": {
+        "evolve": {
+          "title": "Seu treino evolui com você",
+          "body": "Conforme você progride, seu treino pode evoluir para continuar desafiando você."
         },
         "adapt": {
-          "title": "Seu programa evolui com você."
+          "title": "Um plano que se adapta à sua rotina",
+          "body": "Sua rotina e seus feedbacks ajudam o AJ Fit a ajustar sua jornada."
+        },
+        "objective": {
+          "title": "Tudo pensado para o seu objetivo",
+          "body": "Cada ajuste busca manter seu treino alinhado ao caminho mais eficiente para chegar onde você quer."
         }
-      },
-      "closing": {
-        "title": "Este é só o começo.",
-        "body": "Sua jornada continua conforme você evolui."
       },
       "cta": "Continuar"
     },

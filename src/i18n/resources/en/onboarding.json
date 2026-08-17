@@ -49,19 +49,21 @@
       "titleLine1": "Your program doesn't end",
       "titleLine2": "when it's created.",
       "intro": "AJ Fit was built to follow your progress over time.",
-      "cardsLabel": "How this works",
-      "cards": {
-        "progress": {
-          "title": "As you progress,",
-          "body": "your training journey can evolve too."
+      "carouselLabel": "Carousel of AJ Fit evolution features",
+      "screenshotPlaceholder": "Screenshot {{index}}",
+      "slides": {
+        "evolve": {
+          "title": "Your training evolves with you",
+          "body": "As you make progress, your training can evolve to keep challenging you."
         },
         "adapt": {
-          "title": "Your program evolves with you."
+          "title": "A plan that adapts to your routine",
+          "body": "Your routine and feedback help AJ Fit adjust your journey."
+        },
+        "objective": {
+          "title": "Everything built around your goal",
+          "body": "Every adjustment keeps your training aligned with the most efficient path to where you want to go."
         }
-      },
-      "closing": {
-        "title": "This is just the beginning.",
-        "body": "Your journey continues as you evolve."
       },
       "cta": "Continue"
     },
