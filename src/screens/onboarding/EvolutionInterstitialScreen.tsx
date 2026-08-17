@@ -5,6 +5,8 @@ import { useTranslation } from 'react-i18next';
 import { Display } from '../../components/ui/Display';
 import { CtaButton, CtaText } from '../../components/ui/CtaButton';
 import { SegBar } from '../../components/ui/SegBar';
+import { ScreenBg } from '../../components/ui/ScreenBg';
+import { OutlineNumber } from '../../components/ui/OutlineNumber';
 import { EvolutionCarousel } from '../../components/onboarding/EvolutionCarousel';
 import { colors, fonts, sizes, spacing } from '../../theme/tokens';
 import type { OnboardingProgress } from '../../onboarding/useOnboardingFunnel';
@@ -19,7 +21,14 @@ export function EvolutionInterstitialScreen({
   const { t } = useTranslation('onboarding');
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+    <ScreenBg>
+      <OutlineNumber
+        size={260}
+        style={{ position: 'absolute', top: -40, right: -50, opacity: 0.35 }}
+      >
+        AJ
+      </OutlineNumber>
+
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
         <View style={{ paddingHorizontal: sizes.screenGutter, paddingTop: spacing[3] }}>
           <SegBar
@@ -76,6 +85,6 @@ export function EvolutionInterstitialScreen({
           </View>
         </ScrollView>
       </SafeAreaView>
-    </View>
+    </ScreenBg>
   );
 }

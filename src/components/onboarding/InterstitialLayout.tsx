@@ -4,6 +4,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Display, Slash } from '../ui/Display';
 import { CtaButton, CtaText } from '../ui/CtaButton';
 import { SegBar } from '../ui/SegBar';
+import { ScreenBg } from '../ui/ScreenBg';
+import { OutlineNumber } from '../ui/OutlineNumber';
 import { colors, fonts, sizes, spacing } from '../../theme/tokens';
 
 /**
@@ -26,7 +28,14 @@ export function InterstitialLayout({
   onContinue: () => void;
 }) {
   return (
-    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+    <ScreenBg>
+      <OutlineNumber
+        size={260}
+        style={{ position: 'absolute', top: -40, right: -50, opacity: 0.35 }}
+      >
+        AJ
+      </OutlineNumber>
+
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
         <View style={{ paddingHorizontal: sizes.screenGutter, paddingTop: spacing[3] }}>
           <SegBar value={progress.total ? progress.current / progress.total : 0} segs={progress.total || 1} />
@@ -39,7 +48,7 @@ export function InterstitialLayout({
           </CtaButton>
         </View>
       </SafeAreaView>
-    </View>
+    </ScreenBg>
   );
 }
 

@@ -256,25 +256,6 @@ export function MultiList({
 const TICK_SPACING = 22;
 const RULER_HEIGHT = 72;
 
-// TEMP-DEBUG — ruler gesture-lifecycle instrumentation. Remove this whole
-// block (and every `rlog(...)` call it enables below) once the stuck-drag
-// bug is diagnosed. Grep for "TEMP-DEBUG" to find every touch point.
-const RULER_DEBUG = __DEV__;
-let rlogSeq = 0;
-function rlog(instanceId: string, ...args: unknown[]) {
-  if (!RULER_DEBUG) return;
-  rlogSeq += 1;
-  // eslint-disable-next-line no-console
-  console.log(`[RULER-DEBUG #${rlogSeq} t=${Date.now() % 1000000}][${instanceId}]`, ...args);
-}
-function touchPayload(e: { nativeEvent: { locationX: number; locationY: number; pageX: number; pageY: number } }) {
-  const { locationX, locationY, pageX, pageY } = e.nativeEvent;
-  return { locationX: round2(locationX), locationY: round2(locationY), pageX: round2(pageX), pageY: round2(pageY) };
-}
-function round2(n: number) {
-  return Math.round(n * 100) / 100;
-}
-
 export function NumberWheel({
   q,
   value,
@@ -298,17 +279,6 @@ export function NumberWheel({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(String(value));
   const inputRef = useRef<TextInput>(null);
-
-  // TEMP-DEBUG — stable per-mount id; kept low-volume now (mount/unmount
-  // only) so a long reproduction run doesn't flood the terminal. A new id
-  // appearing mid-session with no prior "UNMOUNT" from the old one is still
-  // evidence of an unexpected remount (H6).
-  const instanceId = useRef(`${q.id}-${Math.random().toString(36).slice(2, 7)}`).current;
-  useEffect(() => {
-    rlog(instanceId, 'MOUNT');
-    return () => rlog(instanceId, 'UNMOUNT');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   // Root cause of the correction loop (see commit message / investigation
   // notes): `onChange` used to fire unconditionally on every scroll frame
@@ -346,13 +316,19 @@ export function NumberWheel({
   const isDragging = useRef(false);
   const currentOffsetRef = useRef((displayValue - displayMin) * TICK_SPACING);
   const domainRef = useRef({ min: displayMin, max: displayMax });
+  // Set whenever we programmatically animate the ruler to a known-correct
+  // index (commitEditor, unit toggle, mount correction). An *animated*
+  // scrollTo still fires a real native `onMomentumScrollEnd` on completion,
+  // and native landing can be a few px off the JS-computed target — enough
+  // to round to the neighboring tick. Without this, `settle()` would
+  // re-derive the index from that imprecise landing offset and silently
+  // overwrite the value we already know is correct (e.g. what the user just
+  // typed) with value±1. Only real user drags/flings (no pending index)
+  // should have their resting tick decided by landing offset.
+  const pendingProgrammaticIndexRef = useRef<number | null>(null);
 
-  // TEMP-DEBUG — every write to isDragging goes through here so the log
-  // shows the exact before/after and call site (H4). Only logs actual
-  // transitions now, not no-ops, to keep the terminal readable.
   const setDragging = (next: boolean, source: string) => {
     if (isDragging.current === next) return;
-    rlog(instanceId, 'isDragging CHANGE', { from: isDragging.current, to: next, source });
     isDragging.current = next;
   };
 
@@ -371,8 +347,8 @@ export function NumberWheel({
   // for the correction loop: see the comment there.
   const snapTo = (index: number, animated: boolean, source: string) => {
     const offset = index * TICK_SPACING;
-    rlog(instanceId, 'scrollTo()', { index, offset, animated, source, prevOffsetRef: currentOffsetRef.current });
     currentOffsetRef.current = offset;
+    pendingProgrammaticIndexRef.current = animated ? index : null;
     scrollRef.current?.scrollTo({ x: offset, animated });
   };
 
@@ -420,9 +396,14 @@ export function NumberWheel({
   //     construction, not merely guarded against.
   const settle = (e: NativeSyntheticEvent<NativeScrollEvent>, source: string) => {
     const offsetX = e.nativeEvent.contentOffset.x;
-    rlog(instanceId, `settle() via ${source}`, { offsetX });
     setDragging(false, `settle:${source}`);
-    const index = Math.max(0, Math.min(tickCount - 1, Math.round(offsetX / TICK_SPACING)));
+    // If this momentum-end followed our own animated snapTo, trust the
+    // index we already know is correct rather than re-deriving it from the
+    // (possibly imprecise) native landing offset — see the ref comment.
+    const pendingIndex = pendingProgrammaticIndexRef.current;
+    pendingProgrammaticIndexRef.current = null;
+    const index =
+      pendingIndex ?? Math.max(0, Math.min(tickCount - 1, Math.round(offsetX / TICK_SPACING)));
     if (Math.abs(offsetX - index * TICK_SPACING) > 0.5) {
       snapTo(index, false, `settle:${source}:correction`);
     } else {
@@ -432,14 +413,12 @@ export function NumberWheel({
   };
 
   const openEditor = () => {
-    rlog(instanceId, 'openEditor()');
     setDraft(String(displayValue));
     setEditing(true);
     requestAnimationFrame(() => inputRef.current?.focus());
   };
 
   const commitEditor = () => {
-    rlog(instanceId, 'commitEditor()', { draft });
     const n = parseInt(draft, 10);
     if (!Number.isNaN(n) && draft.length >= q.digits.min) {
       const clamped = Math.max(displayMin, Math.min(displayMax, n));
@@ -497,17 +476,7 @@ export function NumberWheel({
       </Pressable>
 
       <View
-        onLayout={(e) => {
-          const { x, y, width, height } = e.nativeEvent.layout;
-          rlog(instanceId, 'wrapper onLayout', { x, y, width, height });
-          setViewportWidth(width);
-        }}
-        // TEMP-DEBUG — bubble-phase touch events on the wrapper. These fire
-        // regardless of who ultimately wins the responder, so comparing them
-        // against the ScrollView's own onTouchStart/onScrollBeginDrag below
-        // tells us whether a touch even reaches this subtree at all.
-        onTouchStart={(e) => rlog(instanceId, 'WRAPPER onTouchStart', touchPayload(e))}
-        onTouchEnd={(e) => rlog(instanceId, 'WRAPPER onTouchEnd', touchPayload(e))}
+        onLayout={(e) => setViewportWidth(e.nativeEvent.layout.width)}
         style={{ width: '100%', height: RULER_HEIGHT, justifyContent: 'center' }}
       >
         {viewportWidth > 0 && (
@@ -538,43 +507,18 @@ export function NumberWheel({
               alignItems: 'center',
               height: RULER_HEIGHT,
             }}
-            // TEMP-DEBUG — full touch + scroll lifecycle on the ScrollView
-            // itself. The key comparison: for the *second* gesture after
-            // touching outside, does "SCROLLVIEW onTouchStart" fire but
-            // "onScrollBeginDrag" NOT fire? That would mean the touch reaches
-            // this view but its native pan/scroll recognizer never arms —
-            // pointing at the ScrollView/native layer (H8), not JS state.
-            onTouchStart={(e) => rlog(instanceId, 'SCROLLVIEW onTouchStart', touchPayload(e))}
-            onTouchEndCapture={(e) => rlog(instanceId, 'SCROLLVIEW onTouchEndCapture', touchPayload(e))}
-            onScrollBeginDrag={(e) => {
-              rlog(instanceId, 'onScrollBeginDrag', { offsetX: e.nativeEvent.contentOffset.x });
-              setDragging(true, 'onScrollBeginDrag');
-            }}
-            // TEMP-DEBUG: onScroll itself is intentionally NOT logged — it
-            // fires up to ~60x/sec during a drag and was the single biggest
-            // source of terminal spam. `handleScroll` still runs silently
-            // on every frame; only the structural transitions above/below
-            // are logged.
+            onScrollBeginDrag={() => setDragging(true, 'onScrollBeginDrag')}
             onScroll={handleScroll}
             scrollEventThrottle={16}
             onScrollEndDrag={(e) => settle(e, 'onScrollEndDrag')}
-            onMomentumScrollBegin={(e) =>
-              rlog(instanceId, 'onMomentumScrollBegin', { offsetX: e.nativeEvent.contentOffset.x })
-            }
             onMomentumScrollEnd={(e) => settle(e, 'onMomentumScrollEnd')}
             // Defense in depth: guarantee `isDragging` can never stay stuck true.
             // It only gates the resync effect (never blocks native scrolling
             // itself), but a gesture that ends without a matching scroll-end
             // callback — e.g. terminated by an ancestor responder — must still
             // release it.
-            onTouchEnd={(e) => {
-              rlog(instanceId, 'SCROLLVIEW onTouchEnd', touchPayload(e));
-              setDragging(false, 'onTouchEnd');
-            }}
-            onTouchCancel={(e) => {
-              rlog(instanceId, 'SCROLLVIEW onTouchCancel', touchPayload(e));
-              setDragging(false, 'onTouchCancel');
-            }}
+            onTouchEnd={() => setDragging(false, 'onTouchEnd')}
+            onTouchCancel={() => setDragging(false, 'onTouchCancel')}
           >
             {ticks.map((tickValue) => (
               <View

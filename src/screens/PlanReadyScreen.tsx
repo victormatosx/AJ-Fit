@@ -5,6 +5,8 @@ import { useTranslation } from 'react-i18next';
 import { Slash, MonoLabel } from '../components/ui/Display';
 import { Icon } from '../components/ui/Icon';
 import { RiseIn } from '../components/ui/RiseIn';
+import { ScreenBg } from '../components/ui/ScreenBg';
+import { OutlineNumber } from '../components/ui/OutlineNumber';
 import { colors, fonts, displayLineHeight, spacing } from '../theme/tokens';
 import { useAppState } from '../state/AppState';
 import { deriveTrainingDaySlots } from '../lib/planDerivation';
@@ -39,7 +41,14 @@ export function PlanReadyScreen({
   const trainingSlots = deriveTrainingDaySlots(days);
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+    <ScreenBg>
+      <OutlineNumber
+        size={260}
+        style={{ position: 'absolute', top: -40, right: -50, opacity: 0.35 }}
+      >
+        AJ
+      </OutlineNumber>
+
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
         <ScrollView
           contentContainerStyle={{
@@ -238,7 +247,7 @@ export function PlanReadyScreen({
           </RiseIn>
         </ScrollView>
       </SafeAreaView>
-    </View>
+    </ScreenBg>
   );
 }
 
