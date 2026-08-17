@@ -1,5 +1,13 @@
-import React, { useRef, useState } from 'react';
-import { View, Text, Pressable, PanResponder, TextInput } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  View,
+  Text,
+  Pressable,
+  TextInput,
+  ScrollView,
+  type NativeSyntheticEvent,
+  type NativeScrollEvent,
+} from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { HudCorners } from '../ui/Card';
 import { Icon, type IconName } from '../ui/Icon';
@@ -243,6 +251,30 @@ export function MultiList({
   );
 }
 
+/** Horizontal spacing between adjacent ruler ticks, in px. Single source of
+ * truth for every index<->offset conversion in the ruler picker below. */
+const TICK_SPACING = 22;
+const RULER_HEIGHT = 72;
+
+// TEMP-DEBUG — ruler gesture-lifecycle instrumentation. Remove this whole
+// block (and every `rlog(...)` call it enables below) once the stuck-drag
+// bug is diagnosed. Grep for "TEMP-DEBUG" to find every touch point.
+const RULER_DEBUG = __DEV__;
+let rlogSeq = 0;
+function rlog(instanceId: string, ...args: unknown[]) {
+  if (!RULER_DEBUG) return;
+  rlogSeq += 1;
+  // eslint-disable-next-line no-console
+  console.log(`[RULER-DEBUG #${rlogSeq} t=${Date.now() % 1000000}][${instanceId}]`, ...args);
+}
+function touchPayload(e: { nativeEvent: { locationX: number; locationY: number; pageX: number; pageY: number } }) {
+  const { locationX, locationY, pageX, pageY } = e.nativeEvent;
+  return { locationX: round2(locationX), locationY: round2(locationY), pageX: round2(pageX), pageY: round2(pageY) };
+}
+function round2(n: number) {
+  return Math.round(n * 100) / 100;
+}
+
 export function NumberWheel({
   q,
   value,
@@ -261,62 +293,165 @@ export function NumberWheel({
   const displayMax = isBodyWeight && resolvedUnits === 'imperial' ? Math.round(kgToLb(q.max)) : q.max;
   const displayValue =
     isBodyWeight && resolvedUnits === 'imperial' ? Math.round(kgToLb(value)) : Math.round(value);
-  const range = displayMax - displayMin;
+  const tickCount = displayMax - displayMin + 1;
   const [numWidth, setNumWidth] = useState(q.digits.max * 64);
-  const trackWidth = useRef(0);
-  const trackPageX = useRef(0);
-  const trackRef = useRef<View>(null);
-  const pct = ((displayValue - displayMin) / range) * 100;
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(String(value));
   const inputRef = useRef<TextInput>(null);
 
-  const displayRangeRef = useRef({ min: displayMin, max: displayMax });
-  displayRangeRef.current = { min: displayMin, max: displayMax };
+  // TEMP-DEBUG — stable per-mount id; kept low-volume now (mount/unmount
+  // only) so a long reproduction run doesn't flood the terminal. A new id
+  // appearing mid-session with no prior "UNMOUNT" from the old one is still
+  // evidence of an unexpected remount (H6).
+  const instanceId = useRef(`${q.id}-${Math.random().toString(36).slice(2, 7)}`).current;
+  useEffect(() => {
+    rlog(instanceId, 'MOUNT');
+    return () => rlog(instanceId, 'UNMOUNT');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Root cause of the correction loop (see commit message / investigation
+  // notes): `onChange` used to fire unconditionally on every scroll frame
+  // and every settle, even when the resolved raw value was identical to
+  // what was last emitted. Once the loop below started re-entering `settle`
+  // with the same index over and over, that meant thousands of *upstream*
+  // `setQuiz({...quiz})` calls (new object identity every time) cascading
+  // into full re-renders of `QuestionStepScreen`/`NumberWheel` — the loop
+  // fired the state update, and the state update amplified the loop's cost.
+  // Deduping at this single choke point (every emission path funnels
+  // through here) fixes that independently of the geometry fix below.
+  const lastEmittedRef = useRef(value);
+  // Keep the dedupe baseline aligned with the prop whenever it changes for
+  // any reason (including our own onChange flowing back down) — otherwise a
+  // stale baseline could wrongly suppress a legitimate future emission.
+  useEffect(() => {
+    lastEmittedRef.current = value;
+  }, [value]);
   const onDisplayChangeRef = useRef<(next: number) => void>(() => {});
   onDisplayChangeRef.current = (next) => {
-    onChange(isBodyWeight && resolvedUnits === 'imperial' ? lbToKg(next) : next);
+    const raw = isBodyWeight && resolvedUnits === 'imperial' ? lbToKg(next) : next;
+    if (raw === lastEmittedRef.current) return;
+    lastEmittedRef.current = raw;
+    onChange(raw);
   };
 
-  const updateFromPageX = (pageX: number) => {
-    if (!trackWidth.current) return;
-    const currentRange = displayRangeRef.current;
-    const p = Math.max(0, Math.min(1, (pageX - trackPageX.current) / trackWidth.current));
-    onDisplayChangeRef.current(Math.round(currentRange.min + p * (currentRange.max - currentRange.min)));
+  // Ruler viewport/scroll plumbing. The selection indicator is a fixed,
+  // absolutely-positioned element outside the scroll content — it never
+  // moves. Instead the tick strip scrolls underneath it; `index * TICK_SPACING`
+  // is the single formula used for the initial position, live drag, and
+  // programmatic snap-back, so there is one source of truth for the
+  // index<->offset relationship (see AGENTS-provided ruler picker spec).
+  const [viewportWidth, setViewportWidth] = useState(0);
+  const scrollRef = useRef<ScrollView>(null);
+  const isDragging = useRef(false);
+  const currentOffsetRef = useRef((displayValue - displayMin) * TICK_SPACING);
+  const domainRef = useRef({ min: displayMin, max: displayMax });
+
+  // TEMP-DEBUG — every write to isDragging goes through here so the log
+  // shows the exact before/after and call site (H4). Only logs actual
+  // transitions now, not no-ops, to keep the terminal readable.
+  const setDragging = (next: boolean, source: string) => {
+    if (isDragging.current === next) return;
+    rlog(instanceId, 'isDragging CHANGE', { from: isDragging.current, to: next, source });
+    isDragging.current = next;
   };
 
-  const measureTrack = () => {
-    trackRef.current?.measureInWindow((x, _y, width) => {
-      trackPageX.current = x;
-      trackWidth.current = width;
-    });
+  const indexToDisplayValue = (index: number) =>
+    Math.max(displayMin, Math.min(displayMax, displayMin + index));
+
+  const commitOffset = (offsetX: number) => {
+    const index = Math.round(offsetX / TICK_SPACING);
+    const clampedIndex = Math.max(0, Math.min(tickCount - 1, index));
+    onDisplayChangeRef.current(indexToDisplayValue(clampedIndex));
   };
 
-  const responder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: (e) => {
-        measureTrack();
-        updateFromPageX(e.nativeEvent.pageX);
-      },
-      onPanResponderMove: (e) => updateFromPageX(e.nativeEvent.pageX),
-    }),
-  ).current;
+  // `animated` is only ever true here for externally-driven repositioning
+  // (unit toggle, text edit, initial-mount correction) — NEVER for the
+  // scroll-end correction in `settle` below. That distinction is the fix
+  // for the correction loop: see the comment there.
+  const snapTo = (index: number, animated: boolean, source: string) => {
+    const offset = index * TICK_SPACING;
+    rlog(instanceId, 'scrollTo()', { index, offset, animated, source, prevOffsetRef: currentOffsetRef.current });
+    currentOffsetRef.current = offset;
+    scrollRef.current?.scrollTo({ x: offset, animated });
+  };
+
+  // Keep the ruler in sync when the value changes for a reason other than
+  // the user's own drag (unit toggle switching kg<->lb, direct text entry,
+  // or the initial mount) — never fight an in-progress gesture.
+  useEffect(() => {
+    const domainChanged = domainRef.current.min !== displayMin || domainRef.current.max !== displayMax;
+    domainRef.current = { min: displayMin, max: displayMax };
+    if (isDragging.current) return;
+    const expectedIndex = displayValue - displayMin;
+    const actualIndex = currentOffsetRef.current / TICK_SPACING;
+    if (domainChanged || Math.abs(actualIndex - expectedIndex) > 0.5) {
+      snapTo(expectedIndex, !domainChanged, 'sync-effect');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [displayValue, displayMin, displayMax]);
+
+  const handleScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const offsetX = e.nativeEvent.contentOffset.x;
+    currentOffsetRef.current = offsetX;
+    commitOffset(offsetX);
+  };
+
+  // ROOT CAUSE FIX — this used to call `scrollTo({ animated: true })` to
+  // correct a misaligned landing offset. An *animated* scrollTo runs its
+  // own native deceleration animation, and finishing that animation fires
+  // `onMomentumScrollEnd` again (same as a user-driven fling) — which
+  // re-entered this exact function. Device logs showed the native scroll
+  // view consistently landing ~5.7px short of the JS-computed target
+  // (`index * TICK_SPACING`, assuming an idealized real-number geometry)
+  // instead of `snapToInterval`'s own native-rounded snap grid, and neither
+  // side had any tolerance for the other — so it corrected forever, calling
+  // `onChange` (and cascading a full re-render) on every iteration.
+  //
+  // Fix has two parts:
+  //  1. `snapToInterval` (a *second*, independently-computed native snap
+  //     system) is removed below — there is now exactly one system decid-
+  //     ing the final resting tick: this JS code, using the same
+  //     `index * TICK_SPACING` formula as the rest of the component.
+  //  2. The corrective snap here always uses `animated: false`. It is
+  //     therefore instantaneous and does not start a new deceleration
+  //     animation, so it cannot itself trigger another
+  //     `onMomentumScrollEnd` — the recursion is impossible by
+  //     construction, not merely guarded against.
+  const settle = (e: NativeSyntheticEvent<NativeScrollEvent>, source: string) => {
+    const offsetX = e.nativeEvent.contentOffset.x;
+    rlog(instanceId, `settle() via ${source}`, { offsetX });
+    setDragging(false, `settle:${source}`);
+    const index = Math.max(0, Math.min(tickCount - 1, Math.round(offsetX / TICK_SPACING)));
+    if (Math.abs(offsetX - index * TICK_SPACING) > 0.5) {
+      snapTo(index, false, `settle:${source}:correction`);
+    } else {
+      currentOffsetRef.current = offsetX;
+    }
+    onDisplayChangeRef.current(indexToDisplayValue(index));
+  };
 
   const openEditor = () => {
+    rlog(instanceId, 'openEditor()');
     setDraft(String(displayValue));
     setEditing(true);
     requestAnimationFrame(() => inputRef.current?.focus());
   };
 
   const commitEditor = () => {
+    rlog(instanceId, 'commitEditor()', { draft });
     const n = parseInt(draft, 10);
     if (!Number.isNaN(n) && draft.length >= q.digits.min) {
-      onDisplayChangeRef.current(Math.max(displayMin, Math.min(displayMax, n)));
+      const clamped = Math.max(displayMin, Math.min(displayMax, n));
+      onDisplayChangeRef.current(clamped);
+      snapTo(clamped - displayMin, true, 'commitEditor');
     }
     setEditing(false);
   };
+
+  const sidePadding = viewportWidth > 0 ? viewportWidth / 2 - TICK_SPACING / 2 : 0;
+  const ticks = Array.from({ length: tickCount }, (_, i) => displayMin + i);
+  const initialOffset = Math.max(0, Math.min(tickCount - 1, displayValue - displayMin)) * TICK_SPACING;
 
   return (
     <View style={{ alignItems: 'center', gap: 30, paddingTop: 14 }}>
@@ -351,9 +486,6 @@ export function NumberWheel({
               fontSize: 120,
               color: '#fff',
               transform: [{ skewX: '-8deg' }],
-              textShadowColor: 'rgba(11,112,249,0.55)',
-              textShadowRadius: 30,
-              textShadowOffset: { width: 0, height: 0 },
             }}
           >
             {displayValue}
@@ -365,35 +497,127 @@ export function NumberWheel({
       </Pressable>
 
       <View
-        ref={trackRef}
-        {...responder.panHandlers}
-        onLayout={measureTrack}
-        style={{ width: '100%', height: 72, justifyContent: 'center' }}
+        onLayout={(e) => {
+          const { x, y, width, height } = e.nativeEvent.layout;
+          rlog(instanceId, 'wrapper onLayout', { x, y, width, height });
+          setViewportWidth(width);
+        }}
+        // TEMP-DEBUG — bubble-phase touch events on the wrapper. These fire
+        // regardless of who ultimately wins the responder, so comparing them
+        // against the ScrollView's own onTouchStart/onScrollBeginDrag below
+        // tells us whether a touch even reaches this subtree at all.
+        onTouchStart={(e) => rlog(instanceId, 'WRAPPER onTouchStart', touchPayload(e))}
+        onTouchEnd={(e) => rlog(instanceId, 'WRAPPER onTouchEnd', touchPayload(e))}
+        style={{ width: '100%', height: RULER_HEIGHT, justifyContent: 'center' }}
       >
-        <View style={{ flexDirection: 'row', alignItems: 'center', height: 30 }}>
-          {Array.from({ length: 36 }).map((_, i) => {
-            const filled = (i / 36) * 100 <= pct;
-            return (
+        {viewportWidth > 0 && (
+          <ScrollView
+            ref={scrollRef}
+            // Explicit height so the ScrollView's own hit-testable native frame
+            // fills the whole touch target (previously it shrank to the ~30px
+            // tick row, since a horizontal ScrollView with no style.height sizes
+            // its main axis to content — leaving a dead zone above/below inside
+            // this wrapper that never reached the ScrollView at all).
+            style={{ height: RULER_HEIGHT, width: '100%' }}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            // No `snapToInterval` here on purpose — see the comment on
+            // `settle` above. It used to run as a second, independent snap
+            // system alongside our own JS correction; the two disagreed by
+            // a few px (native's own pixel-grid-rounded snap vs. our
+            // idealized `index * TICK_SPACING`), which combined with an
+            // *animated* correction caused an infinite `onMomentumScrollEnd`
+            // loop. `decelerationRate` alone still gives the natural fling
+            // feel; the exact resting tick is decided once, in JS, in
+            // `settle`.
+            decelerationRate="fast"
+            contentOffset={{ x: initialOffset, y: 0 }}
+            contentContainerStyle={{
+              paddingHorizontal: sidePadding,
+              flexDirection: 'row',
+              alignItems: 'center',
+              height: RULER_HEIGHT,
+            }}
+            // TEMP-DEBUG — full touch + scroll lifecycle on the ScrollView
+            // itself. The key comparison: for the *second* gesture after
+            // touching outside, does "SCROLLVIEW onTouchStart" fire but
+            // "onScrollBeginDrag" NOT fire? That would mean the touch reaches
+            // this view but its native pan/scroll recognizer never arms —
+            // pointing at the ScrollView/native layer (H8), not JS state.
+            onTouchStart={(e) => rlog(instanceId, 'SCROLLVIEW onTouchStart', touchPayload(e))}
+            onTouchEndCapture={(e) => rlog(instanceId, 'SCROLLVIEW onTouchEndCapture', touchPayload(e))}
+            onScrollBeginDrag={(e) => {
+              rlog(instanceId, 'onScrollBeginDrag', { offsetX: e.nativeEvent.contentOffset.x });
+              setDragging(true, 'onScrollBeginDrag');
+            }}
+            // TEMP-DEBUG: onScroll itself is intentionally NOT logged — it
+            // fires up to ~60x/sec during a drag and was the single biggest
+            // source of terminal spam. `handleScroll` still runs silently
+            // on every frame; only the structural transitions above/below
+            // are logged.
+            onScroll={handleScroll}
+            scrollEventThrottle={16}
+            onScrollEndDrag={(e) => settle(e, 'onScrollEndDrag')}
+            onMomentumScrollBegin={(e) =>
+              rlog(instanceId, 'onMomentumScrollBegin', { offsetX: e.nativeEvent.contentOffset.x })
+            }
+            onMomentumScrollEnd={(e) => settle(e, 'onMomentumScrollEnd')}
+            // Defense in depth: guarantee `isDragging` can never stay stuck true.
+            // It only gates the resync effect (never blocks native scrolling
+            // itself), but a gesture that ends without a matching scroll-end
+            // callback — e.g. terminated by an ancestor responder — must still
+            // release it.
+            onTouchEnd={(e) => {
+              rlog(instanceId, 'SCROLLVIEW onTouchEnd', touchPayload(e));
+              setDragging(false, 'onTouchEnd');
+            }}
+            onTouchCancel={(e) => {
+              rlog(instanceId, 'SCROLLVIEW onTouchCancel', touchPayload(e));
+              setDragging(false, 'onTouchCancel');
+            }}
+          >
+            {ticks.map((tickValue) => (
               <View
-                key={i}
-                style={{
-                  flex: 1,
-                  height: i % 5 === 0 ? 30 : 14,
-                  borderLeftWidth: 2,
-                  borderLeftColor: filled ? 'rgba(11,112,249,0.85)' : 'rgba(255,255,255,0.14)',
-                  transform: [{ skewX: '-16deg' }],
-                }}
-              />
-            );
-          })}
-        </View>
+                key={tickValue}
+                style={{ width: TICK_SPACING, alignItems: 'center', justifyContent: 'center', height: 30 }}
+              >
+                <View
+                  style={{
+                    width: 2,
+                    height: tickValue % 5 === 0 ? 30 : 14,
+                    backgroundColor: 'rgba(11,112,249,0.85)',
+                    transform: [{ skewX: '-16deg' }],
+                  }}
+                />
+              </View>
+            ))}
+          </ScrollView>
+        )}
+        {/* The tick under the fixed indicator is always the selected value by
+            construction (see the sync effect + settle above), so "already
+            passed" vs "upcoming" is always exactly the left/right half of
+            this viewport — a static dim overlay is enough, no per-frame
+            recoloring of the (up to ~300) tick views. */}
         <View
           pointerEvents="none"
           style={{
             position: 'absolute',
             top: 8,
             bottom: 8,
-            left: `${pct}%`,
+            left: '50%',
+            right: 0,
+            backgroundColor: colors.bg,
+            opacity: 0.6,
+          }}
+        />
+        <View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            top: 8,
+            bottom: 8,
+            left: '50%',
+            marginLeft: -1.5,
             width: 3,
             backgroundColor: '#fff',
             shadowColor: colors.accent,

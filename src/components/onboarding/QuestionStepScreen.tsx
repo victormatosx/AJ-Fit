@@ -71,6 +71,15 @@ export function QuestionStepScreen({
   const questionSubKey = `quiz:${question.id}.sub`;
   const questionSub = i18n.exists(questionSubKey) ? tLoose(questionSubKey) : null;
 
+  // TEMP-DEBUG — see the matching block in QuestionRenderer.tsx (grep
+  // "TEMP-DEBUG"). The per-render probe that used to live here is removed:
+  // it was the single biggest source of terminal spam once the correction
+  // loop started (the loop's redundant `onChange` calls cascaded into
+  // thousands of `setQuiz` calls, each re-rendering this component — see
+  // the `onDisplayChangeRef` dedupe fix in QuestionRenderer.tsx). Touch
+  // logging on the content column remains, to still catch "outside" touches
+  // reaching this ancestor.
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg, overflow: 'hidden' }}>
       <View pointerEvents="none" style={{ position: 'absolute', top: -28, right: 10 }}>
@@ -128,7 +137,23 @@ export function QuestionStepScreen({
           </Text>
         </View>
 
-        <View style={{ flex: 1, paddingHorizontal: 24, paddingTop: 28, paddingBottom: 24 }}>
+        <View
+          style={{ flex: 1, paddingHorizontal: 24, paddingTop: 28, paddingBottom: 24 }}
+          // TEMP-DEBUG — bubble-phase only, fires for any touch landing
+          // anywhere in the title/ruler/CTA column that no descendant claims
+          // as its own responder first.
+          onTouchStart={(e) => {
+            if (!__DEV__) return;
+            const { locationX, locationY, pageX, pageY } = e.nativeEvent;
+            // eslint-disable-next-line no-console
+            console.log('[RULER-DEBUG][QuestionStepScreen] CONTENT COLUMN onTouchStart', {
+              locationX,
+              locationY,
+              pageX,
+              pageY,
+            });
+          }}
+        >
           <View style={{ marginBottom: 24 }}>
             <Display size={32}>{questionTitle}</Display>
             {questionSub && (
@@ -141,6 +166,30 @@ export function QuestionStepScreen({
           {question.kind === 'date' ? (
             <View style={{ flex: 1, marginTop: 16 }}>
               <BirthDateWheel q={question} value={value as Date | null} onChange={onChange} />
+            </View>
+          ) : question.kind === 'wheel' ? (
+            // Rendered outside the vertical ScrollView below (same treatment as
+            // `date` above): the ruler picker's own horizontal ScrollView would
+            // otherwise be nested inside a vertical one, and RN's touch responder
+            // negotiation between nested opposite-axis ScrollViews is unreliable —
+            // a gesture starting outside the inner ScrollView's hit area can be
+            // claimed by the outer one and leave the inner one unresponsive to the
+            // next touch. The wheel's content is fixed-height and never needs to
+            // scroll, so isolating it structurally removes the conflict entirely
+            // instead of patching around it.
+            <View style={{ flex: 1, marginTop: 16 }}>
+              {question.id === 'height' && resolvedUnits === 'imperial' ? (
+                <ImperialHeightInput
+                  valueCm={(value as number) ?? question.default}
+                  minCm={question.min}
+                  maxCm={question.max}
+                  onChangeCm={onChange}
+                  feetLabel={t('quiz:height.feet')}
+                  inchesLabel={t('quiz:height.inches')}
+                />
+              ) : (
+                <NumberWheel q={question} value={(value as number) ?? question.default} onChange={onChange} />
+              )}
             </View>
           ) : (
             <ScrollView style={{ flex: 1, marginTop: 16 }} showsVerticalScrollIndicator={false}>
@@ -160,20 +209,6 @@ export function QuestionStepScreen({
                   onChange={onChange}
                 />
               )}
-              {question.kind === 'wheel' && question.id === 'height' && resolvedUnits === 'imperial' && (
-                <ImperialHeightInput
-                  valueCm={(value as number) ?? question.default}
-                  minCm={question.min}
-                  maxCm={question.max}
-                  onChangeCm={onChange}
-                  feetLabel={t('quiz:height.feet')}
-                  inchesLabel={t('quiz:height.inches')}
-                />
-              )}
-              {question.kind === 'wheel' &&
-                !(question.id === 'height' && resolvedUnits === 'imperial') && (
-                  <NumberWheel q={question} value={(value as number) ?? question.default} onChange={onChange} />
-                )}
               {question.kind === 'multi' && (
                 <MultiList
                   questionId={question.id}
