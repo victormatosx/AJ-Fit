@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useOnboardingFunnel, type OnboardingFunnelMode } from '../onboarding/useOnboardingFunnel';
@@ -6,6 +6,7 @@ import { FUNNEL_QUESTIONS } from '../onboarding/questionDefs';
 import { getNextStepId } from '../onboarding/steps';
 import type { OnboardingAuthContext } from '../onboarding/authContext';
 import { logOnboardingEvent } from '../onboarding/onboardingAnalytics';
+import { preloadMethodologyVideo, releaseMethodologyVideoPlayer } from '../onboarding/methodologyVideoPreload';
 import { QuestionStepScreen } from '../components/onboarding/QuestionStepScreen';
 import { DevFunnelNavigator } from '../components/onboarding/DevFunnelNavigator';
 import { AnimatedStepContainer } from '../components/onboarding/AnimatedStepContainer';
@@ -36,6 +37,18 @@ export function OnboardingFunnelScreen({
   const { currentStepId, name, setName, quiz, setQuiz, progress, goNext, goBack, canGoBack, jumpTo } = funnel;
 
   const setAnswer = (id: keyof Quiz, value: unknown) => setQuiz({ ...quiz, [id]: value } as Quiz);
+
+  // Two steps ahead of `interstitial_methodology` (height → weight →
+  // interstitial_methodology), warm up its video player so the native
+  // decoder has already opened the local asset by the time the user gets
+  // there — see methodologyVideoPreload.ts. Released only when the whole
+  // funnel unmounts, not when the interstitial itself is left, so a dev
+  // jump or revisit doesn't pay the decoder-init cost twice.
+  useEffect(() => {
+    if (currentStepId === 'height') preloadMethodologyVideo();
+  }, [currentStepId]);
+
+  useEffect(() => releaseMethodologyVideoPlayer, []);
 
   const handlePlanContinue = () => {
     logOnboardingEvent({ name: 'plan_ready_cta_pressed' });
