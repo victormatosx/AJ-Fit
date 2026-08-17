@@ -8,6 +8,7 @@ import {
   getDocs,
   orderBy,
   query,
+  runTransaction,
   serverTimestamp,
   setDoc,
 } from 'firebase/firestore';
@@ -27,6 +28,14 @@ import {
   sanitizedErrorCode,
   type PhotoVaultIssue,
 } from '../lib/photoVaultErrors';
+import {
+  isProgressPhotoPose,
+  isValidDateKey,
+  localDateKey,
+  progressPhotoDocumentId,
+  resolveProgressPhotoAssetId,
+  type ProgressPhotoPose,
+} from '../lib/photoVaultIdentity';
 import {
   recordPhotoVaultCacheOutcome,
   startPhotoVaultPerf,
@@ -85,7 +94,19 @@ export interface ProgressPhotoEncryption {
 }
 
 export interface ProgressPhoto {
+  /**
+   * The Firestore document id. For a posed photo this is `{dateKey}_{pose}`;
+   * for every earlier photo it is the asset's UUID. Kept under its original
+   * name so no caller has to change — but it is NOT what addresses the
+   * ciphertext. Use `assetId` for anything touching Storage or the cache.
+   */
   photoId: string;
+  /** Opaque UUID naming the ciphertext. Equals `photoId` on pre-pose photos. */
+  assetId: string;
+  /** Present only on posed photos; absent means "recorded before poses". */
+  pose?: ProgressPhotoPose;
+  /** Local calendar day, frozen at creation. Present only on posed photos. */
+  dateKey?: string;
   storagePath: string;
   /** Absent on pre-Phase-13 photos. */
   thumbnailStoragePath?: string;
@@ -143,13 +164,58 @@ function isValidEncryption(value: unknown): value is ProgressPhotoEncryption {
   );
 }
 
-/** Accepts the closed legacy schema and the closed Phase-13 thumbnail schema. */
+/**
+ * Parses one stored document into the closed set of shapes the vault accepts.
+ *
+ * Three generations coexist and none is migrated:
+ *
+ *   legacy  — six fields, no thumbnail, document named after the asset;
+ *   phase13 — adds the three thumbnail fields atomically;
+ *   posed   — adds assetId/dateKey/pose; the document is named
+ *             `{dateKey}_{pose}` and the asset is addressed by field.
+ *
+ * Fail-closed and shape-complete: a document carrying only SOME of the posed
+ * fields is rejected outright rather than downgraded to an earlier shape.
+ * Testing `'pose' in data` alone would accept exactly that half-written state.
+ */
 function parseStoredPhoto(uid: string, photoId: string, data: unknown): ProgressPhoto {
   const d = data as Record<string, unknown> | null;
   if (typeof d !== 'object' || d === null) fail('vaultMetadataInvalid');
 
-  const expectedPath = storagePathFor(uid, photoId);
-  const expectedThumbnailPath = thumbnailStoragePathFor(uid, photoId);
+  const posedFieldCount =
+    Number('assetId' in d) + Number('dateKey' in d) + Number('pose' in d);
+  // All three or none. A partial set means the document is not something this
+  // client wrote, and guessing which generation it belongs to would be wrong.
+  if (posedFieldCount !== 0 && posedFieldCount !== 3) fail('vaultMetadataInvalid');
+  const isPosed = posedFieldCount === 3;
+
+  let assetId: string;
+  try {
+    assetId = resolveProgressPhotoAssetId({
+      documentId: photoId,
+      assetId: isPosed ? d.assetId : undefined,
+    });
+  } catch {
+    fail('vaultMetadataInvalid');
+  }
+
+  if (isPosed) {
+    // The document id IS the uniqueness key; a mismatch means the metadata and
+    // its address disagree about which day/pose this is.
+    if (
+      !isValidDateKey(d.dateKey) ||
+      !isProgressPhotoPose(d.pose) ||
+      photoId !== progressPhotoDocumentId(d.dateKey, d.pose)
+    ) {
+      fail('vaultMetadataInvalid');
+    }
+    // A posed photo always carries a thumbnail; the Rules require it too.
+    if (!('thumbnailStoragePath' in d)) fail('vaultMetadataInvalid');
+  }
+
+  // Paths are re-derived from the ASSET, never from the document id.
+  const expectedPath = storagePathFor(uid, assetId);
+  const expectedThumbnailPath = thumbnailStoragePathFor(uid, assetId);
   const hasAnyThumbnailField =
     'thumbnailStoragePath' in d ||
     'thumbnailEncryptedSize' in d ||
@@ -181,6 +247,7 @@ function parseStoredPhoto(uid: string, photoId: string, data: unknown): Progress
 
   const result: ProgressPhoto = {
     photoId,
+    assetId,
     storagePath: expectedPath,
     takenAt: (d.takenAt as Timestamp).toDate(),
     createdAt: d.createdAt instanceof Timestamp ? d.createdAt.toDate() : null,
@@ -188,6 +255,10 @@ function parseStoredPhoto(uid: string, photoId: string, data: unknown): Progress
     encryptedSize: d.encryptedSize as number,
     encryption: d.encryption as ProgressPhotoEncryption,
   };
+  if (isPosed) {
+    result.pose = d.pose as ProgressPhotoPose;
+    result.dateKey = d.dateKey as string;
+  }
   if (hasCompleteThumbnail) {
     result.thumbnailStoragePath = expectedThumbnailPath;
     result.thumbnailEncryptedSize = d.thumbnailEncryptedSize as number;
@@ -250,25 +321,77 @@ function uploadCiphertext(
   });
 }
 
+/**
+ * Whether a document already occupies this slot.
+ *
+ * Used only to explain a failed write. An unreadable answer is reported as
+ * "not taken" so a network problem is never mislabelled as a duplicate.
+ */
+async function slotIsTaken(uid: string, documentId: string): Promise<boolean> {
+  try {
+    return (await getDoc(photoDoc(uid, documentId))).exists();
+  } catch {
+    return false;
+  }
+}
+
 export interface UploadProgressPhotoParams {
   sourceUri: string;
   takenAt: Date;
   originalMimeType: ProgressPhotoMimeType;
+  /**
+   * Which view of the body this photo is.
+   *
+   * Optional on purpose, and it is the ONLY new thing a caller may supply.
+   * Omitting it keeps the pre-pose behaviour byte for byte, which is what lets
+   * the current screens keep working before a pose picker exists. Supplying it
+   * selects the posed schema, and every other identifier — the day, the
+   * document id, the asset id, both Storage paths — is derived here rather
+   * than accepted from the caller.
+   */
+  pose?: ProgressPhotoPose;
   width?: number;
   height?: number;
   onProgress?: (progress: number) => void;
 }
 
-/** Creates two independently sealed assets, uploads both, then commits metadata. */
-export async function uploadProgressPhoto(
-  params: UploadProgressPhotoParams,
-): Promise<ProgressPhoto> {
-  const finishTotal = startPhotoVaultPerf('upload.total');
-  const uid = currentUnlockedUid();
-  const { vaultKey, vaultKeyVersion } = await requireVaultKey();
-  const photoId = randomUUID();
-  const storagePath = storagePathFor(uid, photoId);
-  const thumbnailStoragePath = thumbnailStoragePathFor(uid, photoId);
+interface UploadedAssets {
+  assetId: string;
+  storagePath: string;
+  thumbnailStoragePath: string;
+  encryptedSize: number;
+  thumbnailEncryptedSize: number;
+  encryption: ProgressPhotoEncryption;
+  thumbnailEncryption: ProgressPhotoEncryption;
+  /** Removes both objects. Idempotent; a missing object counts as removed. */
+  rollback: () => Promise<boolean>;
+}
+
+/**
+ * Seals a photo into two independent assets and uploads both.
+ *
+ * Everything up to (but not including) the metadata commit lives here, so the
+ * create and replace flows share one pipeline rather than drifting apart. The
+ * caller commits metadata and, on failure, calls `rollback`.
+ *
+ * The returned assets are addressed by a brand-new UUID every time. Storage
+ * objects are immutable by rule — `resource == null` on create — so an
+ * overwrite is impossible by construction, and a replacement necessarily
+ * produces a second object rather than mutating the first.
+ */
+async function uploadNewAssets(params: {
+  uid: string;
+  sourceUri: string;
+  width?: number;
+  height?: number;
+  vaultKey: string;
+  vaultKeyVersion: number;
+  onProgress?: (progress: number) => void;
+}): Promise<UploadedAssets> {
+  const { uid, vaultKey, vaultKeyVersion } = params;
+  const assetId = randomUUID();
+  const storagePath = storagePathFor(uid, assetId);
+  const thumbnailStoragePath = thumbnailStoragePathFor(uid, assetId);
   let thumbnailPlaintextUri: string | null = null;
   let fullEncrypted: EncryptedPhotoResult | null = null;
   let thumbnailEncrypted: EncryptedPhotoResult | null = null;
@@ -328,6 +451,7 @@ export async function uploadProgressPhoto(
 
     const fullRef = ref(storage, storagePath);
     const thumbnailRef = ref(storage, thumbnailStoragePath);
+    const rollback = () => deleteRefsForRollback([fullRef, thumbnailRef]);
     const transferred = [0, 0];
     const totalBytes = openedFullBlob.size + openedThumbnailBlob.size;
     const report = (index: number, bytes: number) => {
@@ -340,7 +464,7 @@ export async function uploadProgressPhoto(
         uploadCiphertext(
           fullRef,
           openedFullBlob,
-          { ownerId: uid, photoId, assetKind: 'full' },
+          { ownerId: uid, photoId: assetId, assetKind: 'full' },
           (bytes) => report(0, bytes),
         ),
       ),
@@ -348,61 +472,329 @@ export async function uploadProgressPhoto(
         uploadCiphertext(
           thumbnailRef,
           openedThumbnailBlob,
-          { ownerId: uid, photoId, assetKind: 'thumbnail' },
+          { ownerId: uid, photoId: assetId, assetKind: 'thumbnail' },
           (bytes) => report(1, bytes),
         ),
       ),
     ]);
     if (uploads.some((result) => result.status === 'rejected')) {
-      const rolledBack = await deleteRefsForRollback([fullRef, thumbnailRef]);
-      if (!rolledBack) fail('vaultUploadRollbackFailed');
+      if (!(await rollback())) fail('vaultUploadRollbackFailed');
       const rejected = uploads.find((result) => result.status === 'rejected');
       fail('vaultUploadFailed', rejected?.status === 'rejected' ? rejected.reason : undefined);
     }
 
-    try {
-      await timed('upload.firestore', () =>
-        setDoc(photoDoc(uid, photoId), {
-          storagePath,
-          thumbnailStoragePath,
-          createdAt: serverTimestamp(),
-          takenAt: Timestamp.fromDate(params.takenAt),
-          originalMimeType: params.originalMimeType,
-          encryptedSize: fullEncrypted!.encryptedSize,
-          thumbnailEncryptedSize: thumbnailEncrypted!.encryptedSize,
-          encryption: encryptionMetadata(fullEncrypted!),
-          thumbnailEncryption: encryptionMetadata(thumbnailEncrypted!),
-        }),
-      );
-    } catch (error) {
-      const rolledBack = await deleteRefsForRollback([fullRef, thumbnailRef]);
-      if (!rolledBack) fail('vaultUploadRollbackFailed');
-      fail('vaultMetadataCreateFailed', error);
-    }
-
     return {
-      photoId,
+      assetId,
       storagePath,
       thumbnailStoragePath,
-      takenAt: params.takenAt,
-      createdAt: null,
-      originalMimeType: params.originalMimeType,
       encryptedSize: fullEncrypted.encryptedSize,
       thumbnailEncryptedSize: thumbnailEncrypted.encryptedSize,
       encryption: encryptionMetadata(fullEncrypted),
       thumbnailEncryption: encryptionMetadata(thumbnailEncrypted),
+      rollback,
     };
-  } catch (error) {
-    if (error instanceof PhotoVaultError) throw error;
-    return fail('vaultUploadFailed', error);
   } finally {
     if (thumbnailPlaintextUri) discardDecryptedPhoto(thumbnailPlaintextUri);
     closeEncryptedUploadBlob(fullUploadBlob);
     closeEncryptedUploadBlob(thumbnailUploadBlob);
     if (fullEncrypted) discardEncryptedPhoto(fullEncrypted.encryptedUri);
     if (thumbnailEncrypted) discardEncryptedPhoto(thumbnailEncrypted.encryptedUri);
+  }
+}
+
+/** The document body for one photo, in the shape the rules accept. */
+function photoDocumentBody(params: {
+  assets: UploadedAssets;
+  takenAt: Date;
+  originalMimeType: ProgressPhotoMimeType;
+  pose?: ProgressPhotoPose;
+  dateKey?: string;
+}): Record<string, unknown> {
+  const { assets, pose, dateKey } = params;
+  return {
+    storagePath: assets.storagePath,
+    thumbnailStoragePath: assets.thumbnailStoragePath,
+    ...(pose !== undefined && dateKey !== undefined ? { assetId: assets.assetId, dateKey, pose } : {}),
+    createdAt: serverTimestamp(),
+    takenAt: Timestamp.fromDate(params.takenAt),
+    originalMimeType: params.originalMimeType,
+    encryptedSize: assets.encryptedSize,
+    thumbnailEncryptedSize: assets.thumbnailEncryptedSize,
+    encryption: assets.encryption,
+    thumbnailEncryption: assets.thumbnailEncryption,
+  };
+}
+
+/** Creates two independently sealed assets, uploads both, then commits metadata. */
+export async function uploadProgressPhoto(
+  params: UploadProgressPhotoParams,
+): Promise<ProgressPhoto> {
+  const finishTotal = startPhotoVaultPerf('upload.total');
+  const uid = currentUnlockedUid();
+  const { vaultKey, vaultKeyVersion } = await requireVaultKey();
+
+  const pose = params.pose;
+  if (pose !== undefined && !isProgressPhotoPose(pose)) fail('vaultMetadataInvalid');
+  // The day comes from the photo's own capture time, read in the LOCAL
+  // calendar — see `localDateKey`. Never from the clock and never from UTC.
+  const dateKey = pose === undefined ? undefined : localDateKey(params.takenAt);
+
+  try {
+    const assets = await uploadNewAssets({
+      uid,
+      sourceUri: params.sourceUri,
+      width: params.width,
+      height: params.height,
+      vaultKey,
+      vaultKeyVersion,
+      onProgress: params.onProgress,
+    });
+    // Storage always addresses an opaque UUID. Only the Firestore document id
+    // changes between the two shapes.
+    const photoId =
+      pose === undefined || dateKey === undefined
+        ? assets.assetId
+        : progressPhotoDocumentId(dateKey, pose);
+
+    try {
+      await timed('upload.firestore', () =>
+        setDoc(
+          photoDoc(uid, photoId),
+          photoDocumentBody({
+            assets,
+            takenAt: params.takenAt,
+            originalMimeType: params.originalMimeType,
+            pose,
+            dateKey,
+          }),
+        ),
+      );
+    } catch (error) {
+      // Both objects go, whatever the cause: no ciphertext is left behind
+      // outside the rollback policy.
+      if (!(await assets.rollback())) fail('vaultUploadRollbackFailed');
+      // A posed document is named after its (day, pose), so writing over an
+      // existing one is an update — which the rules deny. Rather than guess
+      // from the error code, ask whether the slot is actually taken: another
+      // device may have filled it while this upload was running. One extra
+      // read, only on the failure path, buys an honest message.
+      if (pose !== undefined && (await slotIsTaken(uid, photoId))) {
+        fail('vaultPhotoSlotTaken', error);
+      }
+      fail('vaultMetadataCreateFailed', error);
+    }
+
+    return {
+      photoId,
+      assetId: assets.assetId,
+      ...(pose !== undefined && dateKey !== undefined ? { pose, dateKey } : {}),
+      storagePath: assets.storagePath,
+      thumbnailStoragePath: assets.thumbnailStoragePath,
+      takenAt: params.takenAt,
+      createdAt: null,
+      originalMimeType: params.originalMimeType,
+      encryptedSize: assets.encryptedSize,
+      thumbnailEncryptedSize: assets.thumbnailEncryptedSize,
+      encryption: assets.encryption,
+      thumbnailEncryption: assets.thumbnailEncryption,
+    };
+  } catch (error) {
+    if (error instanceof PhotoVaultError) throw error;
+    return fail('vaultUploadFailed', error);
+  } finally {
     finishTotal();
   }
+}
+
+export interface ReplaceProgressPhotoParams {
+  /** The photo being replaced, as the client currently knows it. */
+  current: ProgressPhoto;
+  sourceUri: string;
+  takenAt: Date;
+  originalMimeType: ProgressPhotoMimeType;
+  width?: number;
+  height?: number;
+  onProgress?: (progress: number) => void;
+}
+
+/**
+ * Replaces the photo occupying one (day, pose) slot.
+ *
+ * The ordering is the whole point, and it is deliberate:
+ *
+ *   1. seal and upload the NEW ciphertext under a brand-new UUID;
+ *   2. only then remove the old metadata, under a compare-and-swap;
+ *   3. write the new metadata at the SAME document id;
+ *   4. only then delete the old ciphertext.
+ *
+ * Nothing the user owns is destroyed until its replacement is fully durable.
+ * A failure anywhere in 1–2 leaves the original photo completely intact.
+ *
+ * The document id is the (day, pose) pair and the rules forbid `update`, so a
+ * swap is necessarily delete-then-create. Firestore also refuses two writes to
+ * one document inside a single transaction, so these cannot be one atomic
+ * step. The window between them is real and is compensated for in step 3
+ * rather than hidden.
+ */
+export async function replaceProgressPhoto(
+  params: ReplaceProgressPhotoParams,
+): Promise<ProgressPhoto> {
+  const finishTotal = startPhotoVaultPerf('upload.total');
+  const uid = currentUnlockedUid();
+  const sessionGeneration = photoVaultSessionGeneration();
+
+  try {
+    const current = await resolvePhoto(uid, params.current);
+    const { pose, dateKey, assetId: expectedAssetId } = current;
+    // Replacement is defined only for a posed slot. A pre-pose photo has no
+    // (day, pose) identity to swap within, and inventing one would be wrong.
+    if (pose === undefined || dateKey === undefined) fail('vaultReplaceSlotMissing');
+
+    // The new picture carries its own capture time. If it belongs to another
+    // day it is a NEW photo for that day, not a swap of this one — filing it
+    // here would mean falsifying `takenAt`.
+    if (localDateKey(params.takenAt) !== dateKey) fail('vaultReplaceDateMismatch');
+
+    const documentId = progressPhotoDocumentId(dateKey, pose);
+    const { vaultKey, vaultKeyVersion } = await requireVaultKey();
+
+    // ── 1. New ciphertext first. The old photo is untouched throughout. ──
+    const assets = await uploadNewAssets({
+      uid,
+      sourceUri: params.sourceUri,
+      width: params.width,
+      height: params.height,
+      vaultKey,
+      vaultKeyVersion,
+      onProgress: params.onProgress,
+    });
+
+    requireSamePhotoVaultSession(uid, sessionGeneration);
+
+    // ── 2. Remove the old metadata, but only if the slot still holds the
+    // asset this replacement was built against. Another device may have
+    // replaced it meanwhile, and overwriting that would destroy their photo.
+    // The transaction covers metadata only; no Storage call happens inside.
+    let previousBody: Record<string, unknown> | null = null;
+    try {
+      previousBody = await runTransaction(db, async (tx) => {
+        const snapshot = await tx.get(photoDoc(uid, documentId));
+        if (!snapshot.exists()) throw new PhotoVaultError('vaultReplaceSlotMissing');
+        const data = snapshot.data() as { assetId?: unknown };
+        if (data.assetId !== expectedAssetId) {
+          throw new PhotoVaultError('vaultReplaceSlotChanged');
+        }
+        tx.delete(photoDoc(uid, documentId));
+        return data as Record<string, unknown>;
+      });
+    } catch (error) {
+      // The old photo is still the authority; take the new objects back out.
+      if (!(await assets.rollback())) fail('vaultUploadRollbackFailed');
+      if (isPhotoVaultError(error)) throw error;
+      fail('vaultDeleteFailed', error);
+    }
+
+    // ── 3. Claim the slot again with the new asset. ──
+    try {
+      await timed('upload.firestore', () =>
+        setDoc(
+          photoDoc(uid, documentId),
+          photoDocumentBody({
+            assets,
+            takenAt: params.takenAt,
+            originalMimeType: params.originalMimeType,
+            pose,
+            dateKey,
+          }),
+        ),
+      );
+    } catch (error) {
+      // The delicate window: the old metadata is gone and the new one did not
+      // land. Put the original back so the user keeps their photo.
+      //
+      // `createdAt` is re-stamped by the rules (`== request.time`), so the
+      // restored document has a new creation time. That is metadata drift, and
+      // it is the acceptable price for not losing a photo.
+      const restored = await restorePreviousMetadata(uid, documentId, previousBody!);
+      if (restored) {
+        if (!(await assets.rollback())) fail('vaultUploadRollbackFailed');
+        fail('vaultMetadataCreateFailed', error);
+      }
+      // Restoration failed too. Deliberately keep BOTH ciphertexts: the old
+      // one is the user's photo and the new one may still be committed by a
+      // retry. The conservative orphan sweep reclaims whichever loses.
+      fail('vaultReplaceRestoreFailed', error);
+    }
+
+    // ── 4. The new photo is now the authority. The old objects are safe to
+    // drop, and a failure here costs nothing: they are unreferenced, so the
+    // orphan sweep reclaims them after its grace period.
+    removeCachedThumbnail(uid, expectedAssetId);
+    void discardReplacedAssets(uid, expectedAssetId, current.thumbnailStoragePath !== undefined);
+
+    return {
+      photoId: documentId,
+      assetId: assets.assetId,
+      pose,
+      dateKey,
+      storagePath: assets.storagePath,
+      thumbnailStoragePath: assets.thumbnailStoragePath,
+      takenAt: params.takenAt,
+      createdAt: null,
+      originalMimeType: params.originalMimeType,
+      encryptedSize: assets.encryptedSize,
+      thumbnailEncryptedSize: assets.thumbnailEncryptedSize,
+      encryption: assets.encryption,
+      thumbnailEncryption: assets.thumbnailEncryption,
+    };
+  } catch (error) {
+    if (error instanceof PhotoVaultError) throw error;
+    return fail('vaultUploadFailed', error);
+  } finally {
+    finishTotal();
+  }
+}
+
+/**
+ * Rewrites the document that was just removed.
+ *
+ * Only the fields the rules accept are re-sent, and `createdAt` is re-stamped
+ * by the server. Returns whether the photo is addressable again.
+ */
+async function restorePreviousMetadata(
+  uid: string,
+  documentId: string,
+  body: Record<string, unknown>,
+): Promise<boolean> {
+  try {
+    const { createdAt: _stale, ...rest } = body;
+    await setDoc(photoDoc(uid, documentId), { ...rest, createdAt: serverTimestamp() });
+    return true;
+  } catch (error) {
+    logPhotoVaultIssue(SCOPE, 'vaultReplaceRestoreFailed', sanitizedErrorCode(error));
+    return false;
+  }
+}
+
+/**
+ * Removes the ciphertext the replacement superseded.
+ *
+ * Best effort by design: the new photo is already the authority, so undoing it
+ * because a stale object lingered would be worse than leaving an orphan the
+ * scheduled sweep will collect.
+ */
+async function discardReplacedAssets(
+  uid: string,
+  assetId: string,
+  hadThumbnail: boolean,
+): Promise<void> {
+  const targets = [ref(storage, storagePathFor(uid, assetId))];
+  if (hadThumbnail) targets.push(ref(storage, thumbnailStoragePathFor(uid, assetId)));
+  const results = await Promise.allSettled(targets.map((target) => deleteObject(target)));
+  const failed = results.some(
+    (result) => result.status === 'rejected' && !isObjectNotFound(result.reason),
+  );
+  if (failed) logPhotoVaultIssue(SCOPE, 'vaultDeleteFailed');
 }
 
 export async function listProgressPhotos(): Promise<ProgressPhoto[]> {
@@ -441,7 +833,7 @@ export function reconcileProgressPhotoCache(photos: ProgressPhoto[]): number {
   try {
     return reconcileCachedThumbnails(
       uid,
-      photos.map((photo) => photo.photoId),
+      photos.map((photo) => photo.assetId),
     );
   } catch {
     return 0;
@@ -452,9 +844,9 @@ async function resolvePhoto(uid: string, photoOrId: ProgressPhoto | string): Pro
   if (typeof photoOrId !== 'string') {
     // Re-derive every target path. Even a forged object cannot escape this uid.
     if (
-      photoOrId.storagePath !== storagePathFor(uid, photoOrId.photoId) ||
+      photoOrId.storagePath !== storagePathFor(uid, photoOrId.assetId) ||
       (photoOrId.thumbnailStoragePath !== undefined &&
-        photoOrId.thumbnailStoragePath !== thumbnailStoragePathFor(uid, photoOrId.photoId))
+        photoOrId.thumbnailStoragePath !== thumbnailStoragePathFor(uid, photoOrId.assetId))
     ) {
       fail('vaultMetadataInvalid');
     }
@@ -510,7 +902,7 @@ async function downloadAsset(
 ): Promise<{ uri: string; size: number; photo: ProgressPhoto; isFullImage: true }> {
   const encryption = photo.encryption;
   const expectedSize = photo.encryptedSize;
-  const objectPath = storagePathFor(uid, photo.photoId);
+  const objectPath = storagePathFor(uid, photo.assetId);
   const prefix = kind === 'legacy-full' ? 'gallery.legacy-full' : 'viewer.full';
   const { vaultKey, vaultKeyVersion } = await requireVaultKey();
   if (encryption.vaultKeyVersion !== vaultKeyVersion) fail('vaultDownloadIntegrityFailed');
@@ -584,7 +976,7 @@ async function loadThumbnail(
   const epoch = currentPhotoVaultCacheEpoch();
 
   const cached = await timed('gallery.thumbnail.cache-read', () =>
-    readCachedThumbnail({ uid, photoId: photo.photoId, expectedSize }),
+    readCachedThumbnail({ uid, photoId: photo.assetId, expectedSize }),
   );
 
   if (cached) {
@@ -602,7 +994,7 @@ async function loadThumbnail(
       if (isPhotoVaultError(error) && error.issue === 'vaultLocked') throw error;
       // Anything else means these local bytes cannot be trusted. Drop them and
       // fall through to exactly one network attempt — never a retry loop.
-      removeCachedThumbnail(uid, photo.photoId);
+      removeCachedThumbnail(uid, photo.assetId);
     }
   }
 
@@ -612,7 +1004,7 @@ async function loadThumbnail(
   try {
     bytes = await timed('gallery.thumbnail.download', async () => {
       const buffer = await getBytes(
-        ref(storage, thumbnailStoragePathFor(uid, photo.photoId)),
+        ref(storage, thumbnailStoragePathFor(uid, photo.assetId)),
         MAX_THUMBNAIL_ENCRYPTED_BYTES,
       );
       return new Uint8Array(buffer);
@@ -631,7 +1023,7 @@ async function loadThumbnail(
   // Storing before decrypting keeps the cache write out of the way of the
   // pixels, and a failed write only costs a future re-download.
   const finishWrite = startPhotoVaultPerf('gallery.thumbnail.cache-write');
-  writeCachedThumbnail({ uid, photoId: photo.photoId, bytes, epoch });
+  writeCachedThumbnail({ uid, photoId: photo.assetId, bytes, epoch });
   finishWrite();
 
   const base64 = await timed('gallery.thumbnail.decrypt', () =>
@@ -692,14 +1084,14 @@ export async function deleteProgressPhoto(photoOrId: ProgressPhoto | string): Pr
     // thumbnail surviving a partially failed delete would be worse than the
     // re-download that dropping it costs, and a restored photo can always be
     // fetched again.
-    removeCachedThumbnail(uid, photo.photoId);
+    removeCachedThumbnail(uid, photo.assetId);
     const deletions: Promise<void>[] = [
-      deleteStorageObject(ref(storage, storagePathFor(uid, photo.photoId)), 'delete.full.storage'),
+      deleteStorageObject(ref(storage, storagePathFor(uid, photo.assetId)), 'delete.full.storage'),
     ];
     if (photo.thumbnailStoragePath) {
       deletions.push(
         deleteStorageObject(
-          ref(storage, thumbnailStoragePathFor(uid, photo.photoId)),
+          ref(storage, thumbnailStoragePathFor(uid, photo.assetId)),
           'delete.thumbnail.storage',
         ),
       );

@@ -48,6 +48,8 @@ class FakePhotoDocument {
     readonly storagePath: string,
     readonly thumbnailStoragePath?: string,
     readonly updateTime = Timestamp.fromMillis(state.now - 1000),
+    /** Present only on posed documents, whose id is `{dateKey}_{pose}`. */
+    readonly assetId?: string,
   ) {}
 
   get ref() {
@@ -62,6 +64,7 @@ class FakePhotoDocument {
     return {
       storagePath: this.storagePath,
       ...(this.thumbnailStoragePath ? { thumbnailStoragePath: this.thumbnailStoragePath } : {}),
+      ...(this.assetId ? { assetId: this.assetId } : {}),
     };
   }
 
@@ -90,6 +93,32 @@ vi.mock('../lib/firebaseAdmin', () => {
         };
       },
       collection(name: string) {
+        // A posed document is not named after its asset, so the routine falls
+        // back to querying the owner's collection by `assetId`.
+        if (name.startsWith('users/')) {
+          const prefix = `${name}/`;
+          return {
+            where(field: string, op: string, value: unknown) {
+              if (field !== 'assetId' || op !== '==') {
+                throw new Error('unexpected query');
+              }
+              return {
+                limit() {
+                  return this;
+                },
+                async get() {
+                  const docs = [...state.photos.values()].filter(
+                    (photo) =>
+                      photo.exists &&
+                      photo.path.startsWith(prefix) &&
+                      photo.assetId === value,
+                  );
+                  return { docs, empty: docs.length === 0 };
+                },
+              };
+            },
+          };
+        }
         if (name !== '_photoVaultCleanupCandidates') throw new Error('wrong collection');
         return {
           doc(id: string) {
@@ -269,6 +298,134 @@ describe('scheduled Photo Vault reconciliation', () => {
 
     expect(second.deletedDocuments).toBe(1);
     expect(photo.deleted).toBe(true);
+  });
+
+  // ── Posed documents (phase 14) ─────────────────────────────────────────
+  //
+  // A posed document is named `{dateKey}_{pose}` so Firestore can enforce one
+  // photo per pose per day, while its ciphertext keeps an opaque UUID name.
+  // The routine must therefore resolve ownership through `assetId`, or it
+  // would treat a live photo as an orphan and delete it.
+
+  const POSED_ID = '2026-08-15_front';
+  const POSED_PATH = `users/alice/progressPhotos/${POSED_ID}`;
+
+  function posedDocument(assetId: string, withThumbnail = true): FakePhotoDocument {
+    return new FakePhotoDocument(
+      POSED_PATH,
+      storagePath(assetId),
+      withThumbnail ? thumbnailPath(assetId) : undefined,
+      Timestamp.fromMillis(state.now - 1000),
+      assetId,
+    );
+  }
+
+  it('preserves ciphertext owned by a posed document', async () => {
+    const full = new FakeFile(storagePath(ID_A), state.now - ORPHAN_MIN_AGE_MS);
+    state.files.set(full.name, full);
+    state.photos.set(POSED_PATH, posedDocument(ID_A));
+
+    const result = await runPhotoVaultOrphanCleanup(state.now);
+
+    // Without the assetId fallback this object looks unreferenced.
+    expect(full.deleted).toBe(false);
+    expect(state.markers.size).toBe(0);
+    expect(result.preserved).toBeGreaterThan(0);
+  });
+
+  it('preserves a thumbnail owned by a posed document', async () => {
+    // Both objects exist, so the pair is fully consistent and nothing at all
+    // should be marked on either side of the sweep.
+    const full = new FakeFile(storagePath(ID_A), state.now - ORPHAN_MIN_AGE_MS);
+    const thumbnail = new FakeFile(thumbnailPath(ID_A), state.now - ORPHAN_MIN_AGE_MS);
+    state.files.set(full.name, full);
+    state.files.set(thumbnail.name, thumbnail);
+    state.photos.set(POSED_PATH, posedDocument(ID_A));
+
+    await runPhotoVaultOrphanCleanup(state.now);
+
+    expect(thumbnail.deleted).toBe(false);
+    expect(state.markers.size).toBe(0);
+  });
+
+  it('never deletes a posed photo even after the confirmation window', async () => {
+    const full = new FakeFile(storagePath(ID_A), state.now - ORPHAN_MIN_AGE_MS);
+    const thumbnail = new FakeFile(thumbnailPath(ID_A), state.now - ORPHAN_MIN_AGE_MS);
+    state.files.set(full.name, full);
+    state.files.set(thumbnail.name, thumbnail);
+    state.photos.set(POSED_PATH, posedDocument(ID_A));
+
+    await runPhotoVaultOrphanCleanup(state.now);
+    state.now += ORPHAN_CONFIRMATION_MS;
+    await runPhotoVaultOrphanCleanup(state.now);
+
+    expect(full.deleted).toBe(false);
+    expect(thumbnail.deleted).toBe(false);
+  });
+
+  it('does not let a posed document vouch for a different asset', async () => {
+    // The document owns ID_A; ID_B's ciphertext is genuinely orphaned.
+    const orphan = new FakeFile(storagePath(ID_B), state.now - ORPHAN_MIN_AGE_MS);
+    state.files.set(orphan.name, orphan);
+    state.photos.set(POSED_PATH, posedDocument(ID_A));
+
+    await runPhotoVaultOrphanCleanup(state.now);
+    state.now += ORPHAN_CONFIRMATION_MS;
+    await runPhotoVaultOrphanCleanup(state.now);
+
+    expect(orphan.deleted).toBe(true);
+  });
+
+  it('does not let another user’s posed document vouch for this asset', async () => {
+    const orphan = new FakeFile(storagePath(ID_A), state.now - ORPHAN_MIN_AGE_MS);
+    state.files.set(orphan.name, orphan);
+    // Same assetId, different namespace: must not count as a reference.
+    state.photos.set(
+      `users/mallory/progressPhotos/${POSED_ID}`,
+      new FakePhotoDocument(
+        `users/mallory/progressPhotos/${POSED_ID}`,
+        `users/mallory/progressPhotos/${ID_A}.enc`,
+        `users/mallory/progressPhotos/${ID_A}.thumb.enc`,
+        Timestamp.fromMillis(state.now - 1000),
+        ID_A,
+      ),
+    );
+
+    await runPhotoVaultOrphanCleanup(state.now);
+    state.now += ORPHAN_CONFIRMATION_MS;
+    await runPhotoVaultOrphanCleanup(state.now);
+
+    expect(orphan.deleted).toBe(true);
+  });
+
+  it('keeps a posed document visible to the metadata side of the sweep', async () => {
+    // Its ciphertext is gone. The document must be reconciled like any other,
+    // not silently preserved forever because its id is not a UUID.
+    const photo = posedDocument(ID_A);
+    state.photos.set(POSED_PATH, photo);
+
+    const first = await runPhotoVaultOrphanCleanup(state.now);
+    expect(first.marked).toBe(1);
+    expect(photo.deleted).toBe(false);
+
+    state.now += ORPHAN_CONFIRMATION_MS;
+    const second = await runPhotoVaultOrphanCleanup(state.now);
+
+    expect(second.deletedDocuments).toBe(1);
+    expect(photo.deleted).toBe(true);
+  });
+
+  it('still preserves a posed document whose ciphertext exists', async () => {
+    const full = new FakeFile(storagePath(ID_A), state.now - ORPHAN_MIN_AGE_MS);
+    state.files.set(full.name, full);
+    const photo = posedDocument(ID_A, false);
+    state.photos.set(POSED_PATH, photo);
+
+    await runPhotoVaultOrphanCleanup(state.now);
+    state.now += ORPHAN_CONFIRMATION_MS;
+    await runPhotoVaultOrphanCleanup(state.now);
+
+    expect(photo.deleted).toBe(false);
   });
 
   it('continues the batch after one candidate fails', async () => {

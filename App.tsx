@@ -41,7 +41,10 @@ import { initI18n } from './src/i18n';
 import { reconcileLanguageOnLoad } from './src/i18n/syncLanguage';
 import { reconcileUnitsOnLoad } from './src/units/syncUnits';
 import { UnitsProvider } from './src/state/UnitsContext';
-import { cleanupPhotoVaultTempFiles } from './src/services/photoVaultFileCrypto';
+import {
+  cleanupPhotoVaultShareFiles,
+  cleanupPhotoVaultTempFiles,
+} from './src/services/photoVaultFileCrypto';
 import { logPhotoVaultIssue } from './src/lib/photoVaultErrors';
 import { logInfo } from './src/lib/logger';
 
@@ -388,6 +391,14 @@ export default function App() {
       cleanupPhotoVaultTempFiles({ includeEncrypted: true });
     } catch {
       logPhotoVaultIssue('startupCleanup', 'vaultTempCleanupFailed');
+    }
+    try {
+      // Crash recovery for the Comparator's export queue (docs on
+      // `cleanupPhotoVaultShareFiles`). Kept as its own try/catch so a
+      // failure sweeping one directory never skips sweeping the other.
+      cleanupPhotoVaultShareFiles();
+    } catch {
+      logPhotoVaultIssue('startupCleanup', 'vaultShareCleanupFailed');
     }
   }, []);
 

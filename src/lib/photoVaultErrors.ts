@@ -30,6 +30,13 @@ export type PhotoVaultIssue =
   | 'vaultFileReadFailed'
   | 'vaultFileWriteFailed'
   | 'vaultTempCleanupFailed'
+  /**
+   * Sweeping `photo-vault/share/` failed. Deliberately distinct from
+   * `vaultTempCleanupFailed`: the two directories have different retention
+   * rules (see photoVaultFileCrypto.ts), so a log should be able to tell
+   * which sweep failed without carrying anything private.
+   */
+  | 'vaultShareCleanupFailed'
   // Cloud pipeline (phase 9)
   | 'vaultPhotoTooLarge'
   | 'vaultUploadFailed'
@@ -41,6 +48,23 @@ export type PhotoVaultIssue =
   | 'vaultDownloadIntegrityFailed'
   | 'vaultDeleteFailed'
   | 'vaultPartialDelete'
+  /**
+   * A photo already occupies this (day, pose). The document id IS that pair,
+   * so Firestore refuses the write — the client check is only a courtesy.
+   */
+  | 'vaultPhotoSlotTaken'
+  // Replacing a persisted photo (phase 14F)
+  /** The slot no longer holds the photo the replacement expected. */
+  | 'vaultReplaceSlotChanged'
+  /** The slot is empty: there is nothing to replace. */
+  | 'vaultReplaceSlotMissing'
+  /** The chosen photo belongs to another day, so it is a new photo, not a swap. */
+  | 'vaultReplaceDateMismatch'
+  /**
+   * The old metadata was removed, the new one could not be written, and the
+   * old one could not be restored. The ciphertext is deliberately preserved.
+   */
+  | 'vaultReplaceRestoreFailed'
   // Local authentication and vault session (phase 10)
   | 'vaultAuthUnavailable'
   | 'vaultAuthNotEnrolled'
@@ -52,7 +76,25 @@ export type PhotoVaultIssue =
   | 'vaultUnlockFailed'
   // Visual privacy (phase 12)
   | 'vaultScreenProtectionUnavailable'
-  | 'vaultScreenProtectionFailed';
+  | 'vaultScreenProtectionFailed'
+  // Thumbnail visibility ownership (phase 15D-0)
+  /**
+   * A surface released thumbnail visibility it did not hold. The count is
+   * clamped at zero rather than going negative, so the symptom is a leaked
+   * reference somewhere else — never a corrupted map. Carries no photo id.
+   */
+  | 'vaultThumbnailOwnershipUnderflow'
+  // Progress comparison (phase 15D)
+  /** Either full image could not be loaded through the secure Vault pipeline. */
+  | 'compareFullLoadFailed'
+  /** An async result belonged to an older Vault session. */
+  | 'compareSessionInvalidated'
+  /** A branded comparison JPEG could not be captured or materialized. */
+  | 'compareCaptureFailed'
+  /** Native sharing is not supported in the current environment. */
+  | 'compareShareUnavailable'
+  /** The native share handoff could not be opened or completed. */
+  | 'compareShareFailed';
 
 export class PhotoVaultError extends Error {
   readonly issue: PhotoVaultIssue;

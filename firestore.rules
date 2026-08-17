@@ -274,20 +274,86 @@ service cloud.firestore {
         && e.vaultKeyVersion is int && e.vaultKeyVersion >= 1;
     }
 
+    // Caminho canônico de um objeto do Vault. `assetKey` identifica o ARQUIVO,
+    // que nem sempre é o id do documento — ver as três formas abaixo.
+    // Igualdade exata de string (não regex): prende o metadado a um único
+    // objeto do Storage, no namespace do próprio dono. Impede apontar para o
+    // arquivo de outro uid.
+    function vaultAssetPath(userId, assetKey, suffix) {
+      return 'users/' + userId + '/progressPhotos/' + assetKey + suffix;
+    }
+
+    function thumbnailFieldsValid(userId, assetKey) {
+      let d = request.resource.data;
+      return d.thumbnailStoragePath == vaultAssetPath(userId, assetKey, '.thumb.enc')
+        && d.thumbnailEncryptedSize is int
+        && d.thumbnailEncryptedSize > 0
+        && d.thumbnailEncryptedSize <= 512 * 1024
+        && encryptionMetadataValid(d.thumbnailEncryption)
+        // Same Vault Key is intentional; nonce reuse under AES-GCM is not.
+        && d.thumbnailEncryption.iv != d.encryption.iv;
+    }
+
+    function twoDigits(value) {
+      return value < 10 ? '0' + string(value) : string(value);
+    }
+
+    // Último dia de calendário que um cliente pode reivindicar.
+    //
+    // Um dia de folga cobre quem está num fuso à frente do UTC (até +14), já
+    // que `dateKey` é o dia LOCAL do usuário e as regras não têm como conhecer
+    // esse fuso. Como `YYYY-MM-DD` é zero-padded, a comparação lexicográfica
+    // equivale à cronológica.
+    //
+    // Deliberadamente NÃO existe limite inferior: `takenAt` pode vir do EXIF,
+    // então uma foto escolhida da galeria legitimamente pertence a qualquer dia
+    // passado. Uma janela simétrica rejeitaria upload legítimo de foto antiga.
+    function maxDateKey() {
+      let bound = request.time + duration.value(1, 'd');
+      return string(bound.year())
+        + '-' + twoDigits(bound.month())
+        + '-' + twoDigits(bound.day());
+    }
+
+    // Mesmo formato de UUID já aplicado pelo backend em
+    // functions/src/photoVault/orphanPolicy.ts. As Rules não importam código,
+    // então o padrão é espelhado de propósito; manter os dois em sincronia.
+    function isVaultUuid(value) {
+      return value is string
+        && value.matches('^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$');
+    }
+
     function progressPhotoValid(userId, photoId) {
       let d = request.resource.data;
       return d.keys().hasAll([
           'storagePath', 'createdAt', 'takenAt', 'originalMimeType',
           'encryptedSize', 'encryption'
         ])
-        // Legacy photos keep the original six-field shape. Phase-13 photos
-        // add all three thumbnail fields atomically; partial thumbnail
-        // metadata and unknown fields remain rejected.
+        // Três formas coexistem e NENHUMA é migrada:
+        //
+        //   A) legacy  — seis campos, sem thumbnail; documento nomeado pelo
+        //                próprio asset;
+        //   B) fase 13 — acrescenta os três campos de thumbnail atomicamente;
+        //                documento ainda nomeado pelo asset;
+        //   C) pose    — acrescenta assetId/dateKey/pose. O documento passa a
+        //                se chamar `{dateKey}_{pose}`, de modo que o próprio
+        //                Firestore garante no máximo uma foto por pose por dia
+        //                (create só dispara em documento inexistente, e update
+        //                está proibido). O ARQUIVO continua identificado por
+        //                UUID opaco em `assetId`, para não vazar dia/pose nos
+        //                nomes de objeto do Storage.
+        //
+        // As formas são mutuamente exclusivas por construção: cada `hasOnly`
+        // rejeita os campos exclusivos das outras. Metadata parcial de
+        // thumbnail e campos desconhecidos seguem rejeitados.
         && (
-          d.keys().hasOnly([
-            'storagePath', 'createdAt', 'takenAt', 'originalMimeType',
-            'encryptedSize', 'encryption'
-          ])
+          (
+            d.keys().hasOnly([
+              'storagePath', 'createdAt', 'takenAt', 'originalMimeType',
+              'encryptedSize', 'encryption'
+            ])
+            && d.storagePath == vaultAssetPath(userId, photoId, '.enc')
+          )
           || (
             d.keys().hasAll([
               'thumbnailStoragePath', 'thumbnailEncryptedSize',
@@ -298,22 +364,38 @@ service cloud.firestore {
               'originalMimeType', 'encryptedSize', 'thumbnailEncryptedSize',
               'encryption', 'thumbnailEncryption'
             ])
-            && d.thumbnailStoragePath == 'users/' + userId + '/progressPhotos/' + photoId + '.thumb.enc'
-            && d.thumbnailEncryptedSize is int
-            && d.thumbnailEncryptedSize > 0
-            && d.thumbnailEncryptedSize <= 512 * 1024
-            && encryptionMetadataValid(d.thumbnailEncryption)
-            // Same Vault Key is intentional; nonce reuse under AES-GCM is not.
-            && d.thumbnailEncryption.iv != d.encryption.iv
+            && d.storagePath == vaultAssetPath(userId, photoId, '.enc')
+            && thumbnailFieldsValid(userId, photoId)
+          )
+          || (
+            d.keys().hasAll([
+              'thumbnailStoragePath', 'thumbnailEncryptedSize',
+              'thumbnailEncryption', 'assetId', 'dateKey', 'pose'
+            ])
+            && d.keys().hasOnly([
+              'storagePath', 'thumbnailStoragePath', 'assetId', 'dateKey', 'pose',
+              'createdAt', 'takenAt', 'originalMimeType', 'encryptedSize',
+              'thumbnailEncryptedSize', 'encryption', 'thumbnailEncryption'
+            ])
+            && isVaultUuid(d.assetId)
+            // Enum fechado. Fotos antigas NÃO recebem pose: a ausência do
+            // campo é o que identifica um registro pré-pose, então não existe
+            // um quarto valor "unknown" persistido.
+            && d.pose in ['front', 'side', 'back']
+            && d.dateKey is string
+            && d.dateKey.matches('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$')
+            && d.dateKey <= maxDateKey()
+            // O id do documento É a chave de unicidade (dia + pose).
+            && photoId == d.dateKey + '_' + d.pose
+            // O arquivo é endereçado pelo assetId, não pelo id do documento.
+            && d.storagePath == vaultAssetPath(userId, d.assetId, '.enc')
+            && thumbnailFieldsValid(userId, d.assetId)
           )
         )
-        // Igualdade exata de string (não regex): prende o metadado a um único
-        // objeto do Storage, no namespace do próprio dono e com o mesmo
-        // photoId do documento. Impede apontar para o arquivo de outro uid.
-        && d.storagePath == 'users/' + userId + '/progressPhotos/' + photoId + '.enc'
         // `== request.time` (e não apenas `is timestamp`) força o uso de
         // serverTimestamp() — o cliente não forja a data de criação.
         && d.createdAt == request.time
+        // Sem piso: uma foto da galeria pode ser antiga por definição.
         && d.takenAt is timestamp
         && d.takenAt <= request.time
         && d.originalMimeType in ['image/jpeg', 'image/png', 'image/heic', 'image/heif', 'image/webp']

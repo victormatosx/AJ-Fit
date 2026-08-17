@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -30,6 +30,7 @@ import {
 import {
   deleteProfilePhoto,
   compressProfilePhoto,
+  discardProfilePhotoTemporary,
   uploadProfilePhoto,
   type LocalProfilePhoto,
 } from '../services/profilePhoto';
@@ -117,6 +118,25 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const saveLock = useRef(false);
   const photoSelectionLock = useRef(false);
+  const pendingPhotoRef = useRef<PendingPhoto>(undefined);
+
+  const replacePendingPhoto = useCallback((next: PendingPhoto) => {
+    const previous = pendingPhotoRef.current;
+    if (previous && typeof previous === 'object' && previous.uri !== next?.uri) {
+      discardProfilePhotoTemporary(previous);
+    }
+    pendingPhotoRef.current = next;
+    setPendingPhoto(next);
+  }, []);
+
+  useEffect(
+    () => () => {
+      const owned = pendingPhotoRef.current;
+      if (owned && typeof owned === 'object') discardProfilePhotoTemporary(owned);
+      pendingPhotoRef.current = undefined;
+    },
+    [],
+  );
 
   useEffect(() => {
     setName(savedName);
@@ -246,8 +266,11 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
     setProcessingPhoto(true);
     setSubmitError(null);
     try {
-      setPendingPhoto(await compressProfilePhoto(photo));
+      const optimized = await compressProfilePhoto(photo);
+      replacePendingPhoto(optimized);
+      if (optimized.uri !== photo.uri) discardProfilePhotoTemporary(photo);
     } catch (err) {
+      discardProfilePhotoTemporary(photo);
       logError('profile:compress-photo', err);
       const message = err instanceof Error ? err.message : '';
       Alert.alert(
@@ -325,7 +348,7 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
             {
               text: t('profile:photo.menu.removePhoto'),
               style: 'destructive' as const,
-              onPress: () => setPendingPhoto(null),
+              onPress: () => replacePendingPhoto(null),
             },
           ]
         : []),
@@ -357,7 +380,12 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
       });
 
       await refreshProfile();
+      const savedTemporary = pendingPhotoRef.current;
+      pendingPhotoRef.current = undefined;
       onBack();
+      if (savedTemporary && typeof savedTemporary === 'object') {
+        discardProfilePhotoTemporary(savedTemporary);
+      }
     } catch (err) {
       logError('profile:update', err);
       const message = err instanceof Error ? err.message : '';

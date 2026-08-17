@@ -6,8 +6,8 @@ import { logDebug } from './logger';
  * Enable in a development bundle with:
  *   EXPO_PUBLIC_PHOTO_VAULT_PERF=1 npx expo start --dev-client
  *
- * Labels are a closed, non-identifying vocabulary. Values are durations
- * only; paths, photo IDs, user IDs, keys and payloads never enter this API.
+ * Labels are a closed, non-identifying vocabulary. Values are durations or
+ * aggregate byte counts only; paths, IDs, keys and payloads never enter it.
  */
 
 export type PhotoVaultPerfStage =
@@ -32,6 +32,11 @@ export type PhotoVaultPerfStage =
   | 'viewer.full.decrypt'
   | 'viewer.placeholder.render-ready'
   | 'viewer.full.render-ready'
+  | 'compare.before.full-load'
+  | 'compare.after.full-load'
+  | 'compare.preview.ready'
+  | 'compare.capture.duration'
+  | 'compare.share.duration'
   | 'delete.full.storage'
   | 'delete.thumbnail.storage'
   | 'delete.firestore'
@@ -39,6 +44,14 @@ export type PhotoVaultPerfStage =
   | 'picker.library'
   | 'picker.camera'
   | 'picker.normalize';
+
+export type PhotoVaultPerfEvent =
+  | 'compare.capture.start'
+  | 'compare.capture.complete'
+  | 'compare.capture.failed'
+  | 'compare.share.start'
+  | 'compare.share.complete'
+  | 'compare.share.failed';
 
 function isEnabled(): boolean {
   return (
@@ -61,6 +74,15 @@ export function startPhotoVaultPerf(stage: PhotoVaultPerfStage): () => number {
     if (isEnabled()) logDebug('photoVault:perf', stage, { durationMs });
     return durationMs;
   };
+}
+
+/** Closed, non-identifying capture lifecycle events and aggregate byte size. */
+export function recordPhotoVaultPerfEvent(
+  event: PhotoVaultPerfEvent,
+  metrics?: { bytes: number },
+): void {
+  if (!isEnabled()) return;
+  logDebug('photoVault:perf', event, metrics ? { bytes: metrics.bytes } : undefined);
 }
 
 /**

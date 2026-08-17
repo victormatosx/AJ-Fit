@@ -58,6 +58,30 @@ describe('AppState wiring', () => {
     expect(handler).toContain('deactivatePhotoVaultScreenProtection');
   });
 
+  it('renders the locked tree before releasing the neutral overlay on foreground', () => {
+    const foreground = CONTEXT_CODE.slice(
+      CONTEXT_CODE.indexOf("if (next !== 'active')"),
+      CONTEXT_CODE.indexOf('const unsubscribeShareHandoff'),
+    );
+    expect(foreground).toContain('requestAnimationFrame');
+    expect(foreground.indexOf('setPrivacyOverlayVisible(false)')).toBeLessThan(
+      foreground.indexOf('deactivateScreenProtectionIfSafe()'),
+    );
+  });
+
+  it('defers only native release while the generic share handoff owns its window', () => {
+    expect(CONTEXT_CODE).toContain('isPhotoVaultComparisonShareInFlight()');
+    expect(CONTEXT_CODE).toContain('subscribeToPhotoVaultComparisonShareInFlight');
+    const guard = CONTEXT_CODE.slice(
+      CONTEXT_CODE.indexOf('const deactivateScreenProtectionIfSafe'),
+      CONTEXT_CODE.indexOf('useEffect(() => subscribeToPhotoVaultStatus'),
+    );
+    expect(guard).toContain('canReleasePhotoVaultScreenProtection');
+    expect(guard).toContain('appState: appStateRef.current');
+    expect(guard).toContain('vaultStatus: getPhotoVaultStatus()');
+    expect(guard).toContain('isPhotoVaultComparisonShareInFlight()');
+  });
+
   it('removes the listener on unmount', () => {
     expect(CONTEXT_CODE).toContain('subscription.remove()');
   });
@@ -90,6 +114,36 @@ describe('identity changes', () => {
     // session fails both checks instead of recreating what was just removed.
     expect(lockAt).toBeGreaterThanOrEqual(0);
     expect(pruneAt).toBeGreaterThan(lockAt);
+  });
+
+  /**
+   * Anchored on `pruneCachedThumbnailsExcept(uid)`, which appears exactly
+   * once in the file (unlike `lockPhotoVault();`, which also opens the
+   * unrelated `lock` callback higher up) — a reliable start-of-slice marker
+   * for the identity-change effect specifically.
+   */
+  function identityEffectFrom(code: string): string {
+    const start = code.indexOf('pruneCachedThumbnailsExcept(uid)');
+    return code.slice(start, code.indexOf('}, [uid]);', start));
+  }
+
+  it('also clears the Comparator export queue on identity change (phase 15B)', () => {
+    // Unlike a lock/background transition, an identity change is a real
+    // session boundary: no export queued by the previous account may reach
+    // the next one. See the doc comment on `cleanupPhotoVaultShareFiles`.
+    const effect = identityEffectFrom(CONTEXT_CODE);
+    expect(effect).toContain('cleanupPhotoVaultShareFiles()');
+  });
+
+  it('does not let a share-sweep failure skip resetting capability/lastIssue', () => {
+    // A filesystem error must not throw uncaught inside the identity effect.
+    const effect = identityEffectFrom(CONTEXT_CODE);
+    expect(effect).toContain('try {');
+    expect(effect).toContain('cleanupPhotoVaultShareFiles();');
+    expect(effect).toContain('} catch {');
+    expect(effect.indexOf('setCapability(null);')).toBeGreaterThan(
+      effect.indexOf('cleanupPhotoVaultShareFiles();'),
+    );
   });
 });
 

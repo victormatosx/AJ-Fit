@@ -143,11 +143,14 @@ import { randomBytes } from 'node:crypto';
 
 import { HEADER_BYTES } from '../../lib/photoVaultCrypto';
 import {
+  cleanupPhotoVaultShareFiles,
   cleanupPhotoVaultTempFiles,
+  createPhotoVaultShareFilePath,
   decryptPhotoFile,
   discardDecryptedPhoto,
   discardEncryptedPhoto,
   discardPhotoVaultPickerOutput,
+  discardPhotoVaultShareFile,
   encryptPhotoFile,
   stagePhotoVaultPlaintext,
 } from '../photoVaultFileCrypto';
@@ -531,6 +534,219 @@ describe('cleanupPhotoVaultTempFiles', () => {
   });
 });
 
+describe('the share/ export queue', () => {
+  describe('directory', () => {
+    it('lives as a sibling of tmp/ and enc/, not inside either', () => {
+      const { uri } = createPhotoVaultShareFilePath();
+
+      expect(uri).toMatch(/^file:\/\/\/cache\/photo-vault\/share\/[^/]+\.jpg$/);
+      expect(uri).not.toContain('/photo-vault/tmp/share/');
+      expect(uri).not.toContain('/photo-vault/enc/share/');
+    });
+
+    it('creates the directory idempotently across repeated calls', () => {
+      const first = createPhotoVaultShareFilePath();
+      const second = createPhotoVaultShareFilePath();
+
+      expect(first.uri).not.toBe(second.uri);
+      expect(() => createPhotoVaultShareFilePath()).not.toThrow();
+    });
+
+    it('a device that has never exported anything sweeps without error', () => {
+      expect(() => cleanupPhotoVaultShareFiles()).not.toThrow();
+    });
+  });
+
+  describe('filename', () => {
+    it('uses a random identifier and the requested extension', () => {
+      const { uri } = createPhotoVaultShareFilePath('.jpg');
+      const name = uri.split('/').pop()!;
+
+      expect(name).toMatch(/^[0-9a-f-]{36}\.jpg$/i);
+    });
+
+    it('defaults to .jpg when no extension is given', () => {
+      const { uri } = createPhotoVaultShareFilePath();
+      expect(uri.endsWith('.jpg')).toBe(true);
+    });
+
+    it('two exports in the same session never collide', () => {
+      const seen = new Set<string>();
+      for (let i = 0; i < 20; i += 1) seen.add(createPhotoVaultShareFilePath().uri);
+      expect(seen.size).toBe(20);
+    });
+
+    // The filename must carry no fact about which photos, day, pose or
+    // account produced it — the whole point of a neutral export name.
+    it.each([
+      ['a uid', 'alice-uid-12345'],
+      ['a photoId', '2026-08-15_front'],
+      ['a dateKey', '2026-08-15'],
+      ['a pose', 'front'],
+      ['a pose', 'side'],
+      ['a pose', 'back'],
+    ])('never embeds %s (%s) in the filename', (_label, forbidden) => {
+      const { uri } = createPhotoVaultShareFilePath();
+      expect(uri).not.toContain(forbidden);
+    });
+  });
+
+  describe('discard', () => {
+    it('removes a file that genuinely lives in share/', () => {
+      const { uri } = createPhotoVaultShareFilePath();
+      fs.files.set(uri, new Uint8Array([1, 2, 3]));
+
+      discardPhotoVaultShareFile(uri);
+
+      expect(fs.files.has(uri)).toBe(false);
+    });
+
+    it('is idempotent for a file that no longer exists', () => {
+      const { uri } = createPhotoVaultShareFilePath();
+      expect(() => discardPhotoVaultShareFile(uri)).not.toThrow();
+    });
+
+    it('refuses a path outside share/ entirely', () => {
+      const outside = 'file:///cache/photo-vault/tmp/innocent.jpg';
+      fs.files.set(outside, new Uint8Array([1]));
+
+      discardPhotoVaultShareFile(outside);
+
+      expect(fs.files.has(outside)).toBe(true);
+    });
+
+    it('refuses a path traversal attempt disguised with the right prefix', () => {
+      // Starts with the share/ prefix as a STRING even though `..` segments
+      // would make it resolve outside the directory on a real filesystem.
+      // The in-memory mock does not resolve `..`, so the meaningful assertion
+      // is the CONTRACT: this exact literal is never handed to `.delete()`,
+      // regardless of what an OS would later resolve it to.
+      const traversal = 'file:///cache/photo-vault/share/../../../secrets/x.jpg';
+      fs.files.set(traversal, new Uint8Array([9]));
+
+      discardPhotoVaultShareFile(traversal);
+
+      expect(fs.files.has(traversal)).toBe(true);
+    });
+
+    it('refuses any string containing a .. segment, independent of the rest', () => {
+      // Isolates the `..` guard from the nested-segment guard: this path has
+      // no extra `/` after a valid-looking remainder, only `..`.
+      const traversal = 'file:///cache/photo-vault/share/..evil.jpg';
+      fs.files.set(traversal, new Uint8Array([9]));
+
+      discardPhotoVaultShareFile(traversal);
+
+      expect(fs.files.has(traversal)).toBe(true);
+    });
+
+    it('refuses a nested path that merely starts with the share/ prefix', () => {
+      const nested = 'file:///cache/photo-vault/share/nested/x.jpg';
+      fs.files.set(nested, new Uint8Array([1]));
+
+      discardPhotoVaultShareFile(nested);
+
+      // share/ is flat by contract; a nested path is never legitimate.
+      expect(fs.files.has(nested)).toBe(true);
+    });
+
+    it('refuses a similarly-named sibling directory', () => {
+      const lookalike = 'file:///cache/photo-vault/share-other/x.jpg';
+      fs.files.set(lookalike, new Uint8Array([1]));
+
+      discardPhotoVaultShareFile(lookalike);
+
+      expect(fs.files.has(lookalike)).toBe(true);
+    });
+
+    it('refuses an empty or malformed string without throwing', () => {
+      expect(() => discardPhotoVaultShareFile('')).not.toThrow();
+      expect(() => discardPhotoVaultShareFile('not-a-uri')).not.toThrow();
+    });
+  });
+
+  describe('cleanupPhotoVaultShareFiles (startup / logout)', () => {
+    it('removes every export file', () => {
+      const a = createPhotoVaultShareFilePath();
+      const b = createPhotoVaultShareFilePath();
+      fs.files.set(a.uri, new Uint8Array([1]));
+      fs.files.set(b.uri, new Uint8Array([2]));
+
+      cleanupPhotoVaultShareFiles();
+
+      expect(fs.files.has(a.uri)).toBe(false);
+      expect(fs.files.has(b.uri)).toBe(false);
+    });
+
+    it('never touches tmp/, enc/, or files outside the vault', async () => {
+      seedPhoto();
+      const { encryptedUri } = await encryptPhotoFile({
+        sourceUri: SOURCE,
+        vaultKeyBase64: KEY,
+        vaultKeyVersion: 1,
+      });
+      const { uri: plaintextUri } = await decryptPhotoFile({
+        encryptedUri,
+        vaultKeyBase64: KEY,
+      });
+      fs.files.set('file:///cache/avatar.jpg', new Uint8Array([1]));
+      const { uri: shareUri } = createPhotoVaultShareFilePath();
+      fs.files.set(shareUri, new Uint8Array([3]));
+
+      cleanupPhotoVaultShareFiles();
+
+      expect(fs.files.has(shareUri)).toBe(false);
+      expect(fs.files.has(encryptedUri)).toBe(true);
+      expect(fs.files.has(plaintextUri)).toBe(true);
+      expect(fs.files.has('file:///cache/avatar.jpg')).toBe(true);
+    });
+
+    it('is idempotent and safe on a device that never exported anything', () => {
+      cleanupPhotoVaultShareFiles();
+      expect(() => cleanupPhotoVaultShareFiles()).not.toThrow();
+    });
+
+    it('tolerates a file vanishing mid-sweep', () => {
+      const { uri } = createPhotoVaultShareFilePath();
+      fs.files.set(uri, new Uint8Array([1]));
+      fs.files.delete(uri);
+
+      expect(() => cleanupPhotoVaultShareFiles()).not.toThrow();
+    });
+  });
+
+  describe('lock/background must NOT reach share/', () => {
+    it('cleanupPhotoVaultTempFiles never removes an export file, with or without includeEncrypted', () => {
+      const { uri } = createPhotoVaultShareFilePath();
+      fs.files.set(uri, new Uint8Array([1]));
+
+      // This is exactly what `lockPhotoVault()` calls on every lock/background
+      // transition (see photoVaultLock.ts). If this test ever fails, the OS
+      // share sheet can lose the file it is mid-read on.
+      cleanupPhotoVaultTempFiles();
+      expect(fs.files.has(uri)).toBe(true);
+
+      cleanupPhotoVaultTempFiles({ includeEncrypted: true });
+      expect(fs.files.has(uri)).toBe(true);
+    });
+
+    it('the temp sweep and the share sweep are two independently callable functions', () => {
+      // Structural guard against a future "simplification" that folds share/
+      // into the generic sweep — see the doc comment on
+      // `cleanupPhotoVaultShareFiles` for why that would reintroduce a race.
+      expect(cleanupPhotoVaultTempFiles).not.toBe(cleanupPhotoVaultShareFiles);
+      const { uri } = createPhotoVaultShareFilePath();
+      fs.files.set(uri, new Uint8Array([1]));
+
+      cleanupPhotoVaultTempFiles({ includeEncrypted: true });
+      expect(fs.files.has(uri)).toBe(true);
+
+      cleanupPhotoVaultShareFiles();
+      expect(fs.files.has(uri)).toBe(false);
+    });
+  });
+});
+
 // ── Structural guarantees ──────────────────────────────────────────────────
 
 describe('no cloud, no cache, no persistence', () => {
@@ -561,5 +777,23 @@ describe('no cloud, no cache, no persistence', () => {
     expect(source).not.toContain('expo-file-system');
     expect(source).not.toContain('expo-secure-store');
     expect(source).not.toContain('firebase');
+  });
+
+  it('does not import the Comparator dependencies yet (phase 15A infra only)', async () => {
+    const { readFileSync } = await import('node:fs');
+    for (const file of [
+      'src/services/photoVaultFileCrypto.ts',
+      'App.tsx',
+      'src/state/PhotoVaultContext.tsx',
+    ]) {
+      const source = readFileSync(file, 'utf8');
+      expect(source, `${file} must not import expo-sharing yet`).not.toContain(
+        'expo-sharing',
+      );
+      expect(
+        source,
+        `${file} must not import react-native-view-shot yet`,
+      ).not.toContain('react-native-view-shot');
+    }
   });
 });

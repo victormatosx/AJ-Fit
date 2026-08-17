@@ -26,6 +26,34 @@ export function parsePhotoObjectPath(path: string): ParsedPhotoObject | null {
     : null;
 }
 
+/**
+ * Whether a metadata document claims the asset stored under `assetIdFromPath`.
+ *
+ * Two document generations coexist and neither is migrated:
+ *
+ *   - pre-pose documents are named after the asset itself, so the document id
+ *     IS the asset id;
+ *   - posed documents are named `{dateKey}_{pose}`, so that Firestore itself
+ *     enforces one photo per pose per day, and reference the asset by field.
+ *
+ * Storage object names stay opaque UUIDs in both cases, which is why
+ * `PHOTO_OBJECT` above is unchanged.
+ *
+ * Deliberately generous — either form of proof is accepted. In this routine a
+ * false negative eventually deletes ciphertext, while a false positive only
+ * preserves an object that the next run re-examines. The asymmetry decides the
+ * direction to err in.
+ */
+export function documentClaimsAsset(params: {
+  documentId: string;
+  assetId: unknown;
+  assetIdFromPath: string;
+}): boolean {
+  const { documentId, assetId, assetIdFromPath } = params;
+  if (typeof assetId === 'string' && assetId === assetIdFromPath) return true;
+  return documentId === assetIdFromPath;
+}
+
 export function isOldEnough(createdAtMillis: number, nowMillis: number): boolean {
   return (
     Number.isFinite(createdAtMillis) &&

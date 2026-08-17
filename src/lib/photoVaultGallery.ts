@@ -7,11 +7,13 @@ import {
   downloadProgressPhotoThumbnail,
   listProgressPhotos,
   reconcileProgressPhotoCache,
+  replaceProgressPhoto,
   uploadProgressPhoto,
   type ProgressPhoto,
   type ProgressPhotoMimeType,
 } from '../services/progressPhotos';
 import { discardDecryptedPhoto } from '../services/photoVaultFileCrypto';
+import { localDateKey, type ProgressPhotoPose } from './photoVaultIdentity';
 
 /**
  * Session-only private gallery controller.
@@ -55,7 +57,17 @@ function releasePlaintext(uri: string): void {
 }
 
 export interface GalleryPhoto {
+  /** Firestore document id. `{dateKey}_{pose}` once posed, a UUID before. */
   photoId: string;
+  /**
+   * Opaque UUID addressing this photo's ciphertext. Null only while an
+   * optimistic upload has not produced remote metadata yet.
+   */
+  assetId: string | null;
+  /** Present once the photo carries a pose; absent on pre-pose photos. */
+  pose?: ProgressPhotoPose;
+  /** Local calendar day frozen at creation; absent on pre-pose photos. */
+  dateKey?: string;
   takenAt: Date;
   metadata: ProgressPhoto | null;
   thumbnailUri: string | null;
@@ -75,6 +87,19 @@ export interface GalleryState {
   uploading: boolean;
   deletingId: string | null;
   issue: PhotoVaultIssue | null;
+}
+
+/**
+ * One mounted thumbnail surface in one gallery generation.
+ *
+ * The opaque numeric key lets cleanup prove which acquire it balances. The
+ * generation prevents a React cleanup from an old locked/reset tree from
+ * decrementing a new session that happens to render the same photo id.
+ */
+export interface GalleryThumbnailOwner {
+  readonly ownerKey: number;
+  readonly generation: number;
+  readonly photoId: string;
 }
 
 const SCOPE = 'photoVault.gallery';
@@ -100,7 +125,36 @@ const INITIAL: GalleryState = {
 
 let state: GalleryState = INITIAL;
 const listeners = new Set<(next: GalleryState) => void>();
-const mounted = new Set<string>();
+/**
+ * How many surfaces are currently rendering each thumbnail.
+ *
+ * Was a plain `Set`, which silently assumed one surface. It is not: the
+ * comparator opens as a modal over the still-mounted gallery grid, so both
+ * can render the same photo at once. With a set, whichever surface unmounted
+ * first erased the other's claim — `drainThumbnailQueue` then skipped the
+ * photo, and the cell left on screen stayed blank until it scrolled out and
+ * back, because nothing re-announced it.
+ *
+ * Counting owners instead means a release only cancels work when the last
+ * surface lets go. Absent key and zero are the same state; a count is never
+ * stored as zero, so `size` stays proportional to what is on screen.
+ */
+const thumbnailOwners = new Map<string, number>();
+const activeThumbnailOwners = new Map<number, GalleryThumbnailOwner>();
+
+/**
+ * Redirects a release aimed at a photo id that no longer exists.
+ *
+ * An optimistic upload renders under a local id and then becomes a real one.
+ * The controller swaps the id in state, but the cell holding it re-runs its
+ * effect afterwards and cleans up with the *old* id it captured. Without this
+ * redirect that release would underflow while the real id kept a count no one
+ * would ever return — a leak that pins a thumbnail for the whole session.
+ *
+ * Bounded by the number of optimistic uploads in a session, and cleared with
+ * the counts on every reset.
+ */
+const thumbnailOwnerAliases = new Map<string, string>();
 const thumbnailInFlight = new Set<string>();
 const fullInFlight = new Set<string>();
 const thumbnailQueue = new Set<string>();
@@ -117,6 +171,7 @@ let activeThumbnailDownloads = 0;
 let activeFullDownloads = 0;
 let generation = 0;
 let localSequence = 0;
+let thumbnailOwnerSequence = 0;
 
 function emit(next: Partial<GalleryState>): void {
   state = { ...state, ...next };
@@ -152,6 +207,70 @@ function uniquePrivateUris(): string[] {
   ];
 }
 
+/** Whether any surface is still rendering this thumbnail. */
+function isThumbnailOwned(photoId: string): boolean {
+  return thumbnailOwners.has(photoId);
+}
+
+/**
+ * Registers one surface as rendering this thumbnail.
+ *
+ * O(1). Returns whether this was the first owner, which is the transition
+ * that used to be a bare `mounted.add`.
+ */
+function acquireThumbnailOwnership(photoId: string): boolean {
+  const next = (thumbnailOwners.get(photoId) ?? 0) + 1;
+  thumbnailOwners.set(photoId, next);
+  return next === 1;
+}
+
+/**
+ * Gives up one surface's claim.
+ *
+ * O(1). Returns whether the last owner let go — only then may queued work be
+ * cancelled. A release with no matching acquire clamps at zero and reports a
+ * sanitized issue: going negative would let a later acquire count up from
+ * below zero and leave a genuinely visible photo unowned.
+ */
+function releaseThumbnailOwnership(photoId: string): boolean {
+  const ownedId = thumbnailOwnerAliases.get(photoId) ?? photoId;
+  const current = thumbnailOwners.get(ownedId) ?? 0;
+
+  if (current === 0) {
+    logPhotoVaultIssue(SCOPE, 'vaultThumbnailOwnershipUnderflow');
+    return false;
+  }
+  if (current > 1) {
+    thumbnailOwners.set(ownedId, current - 1);
+    return false;
+  }
+
+  thumbnailOwners.delete(ownedId);
+  thumbnailOwnerAliases.delete(photoId);
+  return true;
+}
+
+/**
+ * Moves every claim from a local upload id to the real id that replaced it.
+ *
+ * The surfaces holding the old id have not re-rendered yet, so the alias
+ * keeps their eventual release pointed at the right counter.
+ */
+function transferThumbnailOwnership(fromId: string, toId: string): void {
+  const carried = thumbnailOwners.get(fromId) ?? 0;
+  thumbnailOwners.delete(fromId);
+  if (carried > 0) {
+    thumbnailOwners.set(toId, (thumbnailOwners.get(toId) ?? 0) + carried);
+    thumbnailOwnerAliases.set(fromId, toId);
+  }
+}
+
+function clearThumbnailOwnership(): void {
+  thumbnailOwners.clear();
+  thumbnailOwnerAliases.clear();
+  activeThumbnailOwners.clear();
+}
+
 function clearQueue(
   queue: Set<string>,
   waiters: Map<string, { promise: Promise<void>; resolve: () => void }>,
@@ -165,7 +284,7 @@ function discardAllPrivateContent(preserveOwners = false): void {
   generation += 1;
   const uris = uniquePrivateUris();
   if (!preserveOwners) {
-    mounted.clear();
+    clearThumbnailOwnership();
     viewerOwnerId = null;
   }
   clearQueue(thumbnailQueue, thumbnailWaiters);
@@ -208,6 +327,9 @@ subscribeToPhotoVaultStatus((status) => {
 function galleryPhotoFromMetadata(photo: ProgressPhoto, previous?: GalleryPhoto): GalleryPhoto {
   return {
     photoId: photo.photoId,
+    assetId: photo.assetId,
+    ...(photo.pose !== undefined ? { pose: photo.pose } : {}),
+    ...(photo.dateKey !== undefined ? { dateKey: photo.dateKey } : {}),
     takenAt: photo.takenAt,
     metadata: photo,
     thumbnailUri: previous?.thumbnailUri ?? thumbnailLru.get(photo.photoId) ?? null,
@@ -237,7 +359,7 @@ export async function loadGallery(): Promise<void> {
         ...metadata.map((photo) => galleryPhotoFromMetadata(photo, previousById.get(photo.photoId))),
       ],
     });
-    for (const photoId of mounted) void ensurePhotoLoaded(photoId);
+    for (const photoId of thumbnailOwners.keys()) void ensurePhotoLoaded(photoId);
     if (viewerOwnerId) void ensureFullPhotoLoaded(viewerOwnerId);
 
     // Deferred past this frame on purpose. Tidying the encrypted cache is
@@ -370,7 +492,7 @@ function drainThumbnailQueue(): void {
     const photoId = thumbnailQueue.values().next().value as string | undefined;
     if (!photoId) return;
     thumbnailQueue.delete(photoId);
-    if (!mounted.has(photoId) && viewerOwnerId !== photoId) {
+    if (!isThumbnailOwned(photoId) && viewerOwnerId !== photoId) {
       settleWaiter(photoId, thumbnailWaiters);
       continue;
     }
@@ -459,7 +581,7 @@ export function ensureFullPhotoLoaded(photoId: string): Promise<void> {
 }
 
 export function mountGalleryPhoto(photoId: string): Promise<void> {
-  mounted.add(photoId);
+  acquireThumbnailOwnership(photoId);
   const cachedThumbnail = thumbnailLru.get(photoId);
   const cachedFull = fullLru.get(photoId);
   if (cachedThumbnail) touchLru(thumbnailLru, photoId, cachedThumbnail);
@@ -468,8 +590,58 @@ export function mountGalleryPhoto(photoId: string): Promise<void> {
 }
 
 export function unmountGalleryPhoto(photoId: string): void {
-  mounted.delete(photoId);
+  // Only the last owner may cancel. A surface closing over another one that
+  // is still showing this photo must leave its queued decrypt alone.
+  if (!releaseThumbnailOwnership(photoId)) return;
   if (thumbnailQueue.delete(photoId)) settleWaiter(photoId, thumbnailWaiters);
+}
+
+/**
+ * Production UI ownership API. Unlike the legacy photo-id pair above, this
+ * returns a synchronous handle for the exact mounted effect that acquired the
+ * thumbnail. Download/decrypt still runs asynchronously through the existing
+ * queue and cache.
+ */
+export function claimGalleryThumbnail(photoId: string): GalleryThumbnailOwner {
+  const owner: GalleryThumbnailOwner = {
+    ownerKey: (thumbnailOwnerSequence += 1),
+    generation,
+    photoId,
+  };
+  activeThumbnailOwners.set(owner.ownerKey, owner);
+  acquireThumbnailOwnership(photoId);
+
+  const cachedThumbnail = thumbnailLru.get(photoId);
+  const cachedFull = fullLru.get(photoId);
+  if (cachedThumbnail) touchLru(thumbnailLru, photoId, cachedThumbnail);
+  if (cachedFull) touchLru(fullLru, photoId, cachedFull);
+  void ensurePhotoLoaded(photoId);
+  return owner;
+}
+
+/** Releases exactly one mounted effect without crossing a reset boundary. */
+export function releaseGalleryThumbnail(owner: GalleryThumbnailOwner): void {
+  // Reset/lock clears the owner registry after advancing generation. A cleanup
+  // from that old React tree is expected and must not touch the new session.
+  if (owner.generation !== generation) return;
+
+  const activeOwner = activeThumbnailOwners.get(owner.ownerKey);
+  if (
+    !activeOwner ||
+    activeOwner.generation !== owner.generation ||
+    activeOwner.photoId !== owner.photoId
+  ) {
+    // Same-generation duplicate/forged releases remain real programming
+    // errors; retain the sanitized underflow signal rather than hiding them.
+    logPhotoVaultIssue(SCOPE, 'vaultThumbnailOwnershipUnderflow');
+    return;
+  }
+
+  activeThumbnailOwners.delete(owner.ownerKey);
+  if (!releaseThumbnailOwnership(owner.photoId)) return;
+  if (thumbnailQueue.delete(owner.photoId)) {
+    settleWaiter(owner.photoId, thumbnailWaiters);
+  }
 }
 
 /** Viewer opens on the already-visible thumbnail, then requests full separately. */
@@ -510,16 +682,50 @@ export interface AddPhotoInput {
   sourceUri: string;
   takenAt: Date;
   originalMimeType: ProgressPhotoMimeType;
+  /**
+   * Which view of the body this is. Present for every photo added through the
+   * posed flow; absent only for the compatibility path kept for older callers
+   * and tests. The day is never passed in — the service derives it from
+   * `takenAt` so the UI cannot file a photo under a day it did not happen.
+   */
+  pose?: ProgressPhotoPose;
   width?: number;
   height?: number;
+}
+
+/**
+ * Releases a picked photo the user decided not to save.
+ *
+ * The picker stages its output inside the vault's plaintext directory, so an
+ * abandoned selection still has to be removed. Routed through the controller
+ * so the UI never touches the filesystem itself.
+ */
+export function discardGalleryPreview(uri: string | null): void {
+  if (uri) releasePlaintext(uri);
+}
+
+/** Whether this (day, pose) is already filled by a photo the client knows about. */
+export function isSlotTaken(dateKey: string, pose: ProgressPhotoPose): boolean {
+  return state.photos.some((photo) => photo.dateKey === dateKey && photo.pose === pose);
 }
 
 /** Adds an in-memory card immediately; no queue or plaintext state is persisted. */
 export async function addGalleryPhoto(input: AddPhotoInput): Promise<boolean> {
   const requestGeneration = generation;
   const localId = `local-upload-${(localSequence += 1)}`;
+  // The day is computed the same way the service will, so the optimistic card
+  // lands in the slot the finished photo will occupy — no jump from
+  // "unclassified" to a pose once the upload settles.
+  const optimisticDateKey =
+    input.pose === undefined ? undefined : localDateKey(input.takenAt);
   const optimistic: GalleryPhoto = {
     photoId: localId,
+    // No remote identity yet; both are filled in when the upload resolves.
+    // Deliberately null rather than a placeholder: a fake id could collide
+    // with a real UUID in the cache.
+    assetId: null,
+    ...(input.pose !== undefined ? { pose: input.pose } : {}),
+    ...(optimisticDateKey !== undefined ? { dateKey: optimisticDateKey } : {}),
     takenAt: input.takenAt,
     metadata: null,
     thumbnailUri: null,
@@ -559,8 +765,7 @@ export async function addGalleryPhoto(input: AddPhotoInput): Promise<boolean> {
       uploading: false,
       photos: state.photos.map((photo) => (photo.photoId === localId ? remote : photo)),
     });
-    if (mounted.delete(localId)) mounted.add(uploaded.photoId);
-    mounted.add(uploaded.photoId);
+    transferThumbnailOwnership(localId, uploaded.photoId);
     void ensurePhotoLoaded(uploaded.photoId);
     return true;
   } catch (error) {
@@ -573,6 +778,80 @@ export async function addGalleryPhoto(input: AddPhotoInput): Promise<boolean> {
       photos: state.photos.filter((photo) => photo.photoId !== localId),
     });
     if (preview) releasePlaintext(preview);
+    return false;
+  }
+}
+
+/**
+ * Swaps the photo occupying a slot.
+ *
+ * The old thumbnail stays on screen for the whole operation, with the card
+ * marked as uploading. That is not cosmetic: until the new metadata is
+ * committed the OLD photo really is still the authority, and clearing it early
+ * would show a state the vault is not in. Only a confirmed success swaps the
+ * card for the new photo.
+ */
+export async function replaceGalleryPhoto(
+  photoId: string,
+  input: AddPhotoInput,
+): Promise<boolean> {
+  const requestGeneration = generation;
+  const existing = state.photos.find((photo) => photo.photoId === photoId);
+  if (!existing?.metadata) {
+    // The slot is held by an upload that has not committed yet, so there is no
+    // persisted photo to swap. Reporting it explicitly matters: an untyped
+    // failure would surface as "your current photo was kept", which is false.
+    emit({ issue: 'vaultReplaceSlotMissing' });
+    return false;
+  }
+
+  patchPhoto(photoId, { uploadStatus: 'uploading', uploadProgress: 0, failed: false });
+  emit({ uploading: true, issue: null });
+
+  try {
+    const replaced = await replaceProgressPhoto({
+      current: existing.metadata,
+      sourceUri: input.sourceUri,
+      takenAt: input.takenAt,
+      originalMimeType: input.originalMimeType,
+      width: input.width,
+      height: input.height,
+      onProgress: (progress) => patchPhoto(photoId, { uploadProgress: progress }),
+    });
+    if (requestGeneration !== generation) {
+      // The vault closed mid-flight. The swap did commit remotely, so the next
+      // authenticated load will show it; nothing is repainted behind the lock.
+      emit({ uploading: false });
+      return true;
+    }
+
+    const previousThumbnail = existing.thumbnailUri;
+    const previousFull = existing.fullUri;
+    // Same document id, new asset: the card keeps its place in the day.
+    thumbnailLru.delete(photoId);
+    fullLru.delete(photoId);
+    emit({
+      uploading: false,
+      photos: state.photos.map((photo) =>
+        photo.photoId === photoId ? galleryPhotoFromMetadata(replaced) : photo,
+      ),
+    });
+    for (const uri of new Set([previousThumbnail, previousFull])) {
+      if (uri) releasePlaintext(uri);
+    }
+    void ensurePhotoLoaded(photoId);
+    return true;
+  } catch (error) {
+    const issue = issueOf(error);
+    logPhotoVaultIssue(SCOPE, issue);
+    if (requestGeneration === generation) {
+      // The old photo is still the authority; restore its card as it was.
+      patchPhoto(photoId, { uploadStatus: null, uploadProgress: null, failed: true });
+      emit({ uploading: false, issue });
+      // A changed slot means another device already replaced it: only a
+      // refetch can show what is actually there now.
+      if (issue === 'vaultReplaceSlotChanged') void loadGallery();
+    }
     return false;
   }
 }
@@ -617,11 +896,26 @@ export async function removeGalleryPhoto(photoId: string): Promise<boolean> {
   }
 }
 
+/**
+ * Test seam: how many surfaces currently claim each thumbnail.
+ *
+ * A snapshot, not the live map — a test that mutated it would silently
+ * corrupt the controller it is meant to be checking.
+ */
+export function thumbnailOwnershipForTesting(): Record<string, number> {
+  return Object.fromEntries(thumbnailOwners);
+}
+
+/** Test seam: stale ids still redirecting to the id that replaced them. */
+export function thumbnailOwnerAliasesForTesting(): Record<string, string> {
+  return Object.fromEntries(thumbnailOwnerAliases);
+}
+
 /** Test seam. */
 export function resetGalleryForTesting(): void {
   state = INITIAL;
   listeners.clear();
-  mounted.clear();
+  clearThumbnailOwnership();
   thumbnailInFlight.clear();
   fullInFlight.clear();
   clearQueue(thumbnailQueue, thumbnailWaiters);
@@ -634,6 +928,9 @@ export function resetGalleryForTesting(): void {
   viewerOwnerId = null;
   activeThumbnailDownloads = 0;
   activeFullDownloads = 0;
-  generation = 0;
+  // Advance rather than reset: a test can intentionally hold an old UI token
+  // across this seam and must get the same stale-cleanup semantics as runtime.
+  generation += 1;
   localSequence = 0;
+  thumbnailOwnerSequence = 0;
 }

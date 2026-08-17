@@ -8,24 +8,37 @@ import React, {
 import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
-import { AddPhotoSheet } from '../components/photoVault/AddPhotoSheet';
+import { AddPhotoSheet, type PickedPhoto } from '../components/photoVault/AddPhotoSheet';
 import { PhotoVaultEmptyState } from '../components/photoVault/PhotoVaultEmptyState';
+import { PhotoVaultFilterEmptyState } from '../components/photoVault/PhotoVaultFilterEmptyState';
 import { PhotoVaultGrid } from '../components/photoVault/PhotoVaultGrid';
 import { PhotoVaultLockedState } from '../components/photoVault/PhotoVaultLockedState';
 import { PhotoVaultViewer } from '../components/photoVault/PhotoVaultViewer';
+import { PhotoCompareScreen } from '../components/photoVault/PhotoCompareScreen';
+import { canCompareProgressPhotos } from '../lib/photoVaultCompare';
+import {
+  filterProgressDays,
+  groupProgressPhotosByDay,
+  type ProgressPhotoFilter,
+} from '../lib/photoVaultDayGrouping';
+import { PhotoVaultFilterBar } from '../components/photoVault/PhotoVaultFilterBar';
+import { localDateKey, type ProgressPhotoPose } from '../lib/photoVaultIdentity';
 import { Icon } from '../components/ui/Icon';
 import {
   addGalleryPhoto,
+  claimGalleryThumbnail,
   claimGalleryPhotoForViewer,
+  replaceGalleryPhoto,
+  discardGalleryPreview,
+  isSlotTaken,
   getGalleryState,
   loadGallery,
   markGalleryPhotoRendered,
   markViewerPhotoRendered,
-  mountGalleryPhoto,
+  releaseGalleryThumbnail,
   releaseGalleryPhotoFromViewer,
   removeGalleryPhoto,
   subscribeToGallery,
-  unmountGalleryPhoto,
   type GalleryState,
 } from '../lib/photoVaultGallery';
 import type { PhotoVaultIssue } from '../lib/photoVaultErrors';
@@ -62,6 +75,20 @@ export function ProgressPhotosScreen({
 
   const [gallery, setGallery] = useState<GalleryState>(getGalleryState);
   const [sheetOpen, setSheetOpen] = useState(false);
+  /** Pre-selected pose when the flow was opened from an empty slot. */
+  const [sheetPose, setSheetPose] = useState<ProgressPhotoPose | undefined>(undefined);
+  /**
+   * Which poses the gallery shows. Local presentation state only — never
+   * persisted, and it holds no private content, so it survives a lock
+   * harmlessly while the photos themselves are revoked by the controller.
+   */
+  const [filter, setFilter] = useState<ProgressPhotoFilter>('all');
+  /**
+   * The comparator owns its own selection; this only says whether it is
+   * open. Closing it (including when the vault locks, below) discards that
+   * selection with the unmount.
+   */
+  const [compareOpen, setCompareOpen] = useState(false);
   const [viewerId, setViewerId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -86,6 +113,7 @@ export function ProgressPhotosScreen({
       releaseGalleryPhotoFromViewer(viewerId);
       setViewerId(null);
       setSheetOpen(false);
+      setCompareOpen(false);
     }
   }, [unlocked, viewerId]);
 
@@ -97,6 +125,38 @@ export function ProgressPhotosScreen({
     (date: Date) => dateFormatter.format(date),
     [dateFormatter],
   );
+
+  const monthFormatter = useMemo(
+    () => new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' }),
+    [],
+  );
+  const formatMonth = useCallback(
+    (date: Date) => monthFormatter.format(date),
+    [monthFormatter],
+  );
+
+  // Derived projection, never persisted. Memoized on the photos array
+  // reference: the controller replaces it on every emit, so this recomputes
+  // exactly when the gallery actually changed and not on unrelated renders.
+  const days = useMemo(
+    () => groupProgressPhotosByDay(gallery.photos),
+    [gallery.photos],
+  );
+
+  // Narrowing is a second derived pass over the same in-memory projection:
+  // switching filters never refetches, redownloads or decrypts anything.
+  const visibleDays = useMemo(() => filterProgressDays(days, filter), [days, filter]);
+
+  // "No photos at all" and "no photos of this pose" are different situations
+  // and must not share an empty state.
+  const galleryEmpty = gallery.photos.length === 0;
+  // Not `length >= 2`: one front and one side is two photos and zero valid
+  // pairs, so the entry point would open onto a dead end.
+  const canCompare = useMemo(
+    () => canCompareProgressPhotos(gallery.photos),
+    [gallery.photos],
+  );
+  const filterEmpty = !galleryEmpty && visibleDays.length === 0;
 
   const viewerPhoto = viewerId
     ? (gallery.photos.find((p) => p.photoId === viewerId) ?? null)
@@ -131,6 +191,8 @@ export function ProgressPhotosScreen({
       switch (issue) {
         case 'vaultPhotoTooLarge':
           return t('progress.photos.uploadError.tooLarge');
+        case 'vaultPhotoSlotTaken':
+          return t('progress.photos.uploadError.slotTaken');
         case 'vaultUploadFailed':
         case 'vaultDownloadFailed':
         case 'vaultListFailed':
@@ -142,55 +204,117 @@ export function ProgressPhotosScreen({
     [t],
   );
 
-  const handlePicked = useCallback(
-    async (outcome: PickerOutcome) => {
-      setSheetOpen(false);
+  /** Picker outcomes the sheet cannot act on become a visible notice. */
+  /** Replacement failures need their own copy: the old photo usually survives. */
+  const replaceErrorMessage = useCallback(
+    (issue: PhotoVaultIssue | null): string => {
+      switch (issue) {
+        case 'vaultReplaceSlotChanged':
+          return t('progress.photos.replace.slotChanged');
+        case 'vaultReplaceRestoreFailed':
+          return t('progress.photos.replace.restoreFailed');
+        case 'vaultReplaceSlotMissing':
+          return t('progress.photos.replace.slotMissing');
+        default:
+          return t('progress.photos.replace.failed');
+      }
+    },
+    [t],
+  );
 
+  const handlePickerIssue = useCallback(
+    (outcome: PickerOutcome) => {
       switch (outcome.status) {
-        case 'cancelled':
-          return;
         case 'permissionDenied':
           setNotice(t('progress.photos.permission.libraryDenied'));
           return;
         case 'unsupported':
           setNotice(t('progress.photos.uploadError.unsupported'));
           return;
-        case 'failed':
-          setNotice(t('progress.photos.uploadError.generic'));
-          return;
         default:
-          break;
+          setNotice(t('progress.photos.uploadError.generic'));
       }
-
-      setNotice(null);
-      // The controller owns this vault-temp URI from this point onward. It
-      // keeps it only as an optimistic preview and removes it after the
-      // encrypted thumbnail arrives, or immediately on failure/lock/logout.
-      const ok = await addGalleryPhoto({
-        sourceUri: outcome.sourceUri,
-        takenAt: outcome.takenAt,
-        originalMimeType: outcome.mimeType,
-        width: outcome.width,
-        height: outcome.height,
-      });
-      if (!ok) setNotice(uploadErrorMessage(getGalleryState().issue));
     },
-    [t, uploadErrorMessage],
+    [t],
   );
 
   const handleCamera = useCallback(async () => {
     const outcome = await takePhotoWithCamera();
     if (outcome.status === 'permissionDenied') {
-      setSheetOpen(false);
       setNotice(t('progress.photos.permission.cameraDenied'));
-      return;
     }
-    await handlePicked(outcome);
-  }, [handlePicked, t]);
+    return outcome;
+  }, [t]);
 
-  const handleLibrary = useCallback(async () => {
-    await handlePicked(await pickPhotoFromLibrary());
-  }, [handlePicked]);
+  const handleLibrary = useCallback(() => pickPhotoFromLibrary(), []);
+
+  /**
+   * Saves one pose through the controller.
+   *
+   * Called once per filled draft, so a failure is reported for that pose
+   * alone and never cancels a sibling that already succeeded. Only the pose
+   * and the picked image cross this boundary — the day, the document id, the
+   * asset id and both Storage paths are derived by the service, so a photo can
+   * never be filed under a day it did not happen.
+   */
+  const handleSavePose = useCallback(
+    async (photo: PickedPhoto, pose: ProgressPhotoPose) => {
+      setNotice(null);
+      const ok = await addGalleryPhoto({
+        sourceUri: photo.sourceUri,
+        takenAt: photo.takenAt,
+        originalMimeType: photo.mimeType,
+        width: photo.width,
+        height: photo.height,
+        pose,
+      });
+      if (ok) return { ok: true };
+      // Read straight after the awaited call: uploads run one at a time, so
+      // this issue belongs to the pose that just failed.
+      const issue = getGalleryState().issue;
+      setNotice(uploadErrorMessage(issue));
+      return { ok: false, issue: issue ?? undefined };
+    },
+    [uploadErrorMessage],
+  );
+
+  /**
+   * Swaps the photo already occupying a slot.
+   *
+   * Finds the existing photo by (day, pose) from the same in-memory metadata
+   * the slot check uses, so the UI never supplies an identity of its own.
+   */
+  const handleReplacePose = useCallback(
+    async (photo: PickedPhoto, pose: ProgressPhotoPose) => {
+      setNotice(null);
+      const dateKey = localDateKey(photo.takenAt);
+      const existing = getGalleryState().photos.find(
+        (entry) => entry.dateKey === dateKey && entry.pose === pose,
+      );
+      if (!existing) {
+        // The slot emptied underneath: fall back to a plain create.
+        return handleSavePose(photo, pose);
+      }
+      const ok = await replaceGalleryPhoto(existing.photoId, {
+        sourceUri: photo.sourceUri,
+        takenAt: photo.takenAt,
+        originalMimeType: photo.mimeType,
+        width: photo.width,
+        height: photo.height,
+        pose,
+      });
+      if (ok) return { ok: true };
+      const issue = getGalleryState().issue;
+      setNotice(replaceErrorMessage(issue));
+      return { ok: false, issue: issue ?? undefined };
+    },
+    [handleSavePose, replaceErrorMessage],
+  );
+
+  const openSheet = useCallback((pose?: ProgressPhotoPose) => {
+    setSheetPose(pose);
+    setSheetOpen(true);
+  }, []);
 
   const confirmDelete = useCallback(
     (photoId: string) => {
@@ -235,15 +359,57 @@ export function ProgressPhotosScreen({
   return (
     <View style={{ flex: 1 }}>
       <PhotoVaultGrid
-        photos={gallery.status === 'ready' ? gallery.photos : []}
-        onVisible={mountGalleryPhoto}
-        onHidden={unmountGalleryPhoto}
+        days={gallery.status === 'ready' ? visibleDays : []}
+        filter={filter}
+        onVisible={claimGalleryThumbnail}
+        onHidden={releaseGalleryThumbnail}
         onOpen={handleOpenViewer}
+        onAddPose={openSheet}
         onRendered={markGalleryPhotoRendered}
         formatDate={formatDate}
+        formatMonth={formatMonth}
         listHeader={(
           <>
             {pageHeader}
+            {gallery.status === 'ready' && !galleryEmpty ? (
+              <>
+                <PhotoVaultFilterBar value={filter} onChange={setFilter} />
+                {canCompare ? (
+                  <View style={{ paddingHorizontal: 22, paddingBottom: 14 }}>
+                    <Pressable
+                      onPress={() => setCompareOpen(true)}
+                      accessibilityRole="button"
+                      accessibilityLabel={t('progress.photos.a11y.openCompare')}
+                      testID="photo-vault-compare-cta"
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 10,
+                        paddingVertical: 13,
+                        borderRadius: 12,
+                        borderWidth: 1,
+                        borderColor: colors.border,
+                        backgroundColor: colors.surface,
+                      }}
+                    >
+                      <Icon name="swap" size={14} color={colors.accentHi} />
+                      <Text
+                        style={{
+                          color: colors.text,
+                          fontFamily: fonts.mono,
+                          fontSize: 10,
+                          letterSpacing: 2,
+                          textTransform: 'uppercase',
+                        }}
+                      >
+                        {t('progress.photos.compare.cta')}
+                      </Text>
+                    </Pressable>
+                  </View>
+                ) : null}
+              </>
+            ) : null}
             {notice ? (
               <View style={{ paddingHorizontal: 22, paddingBottom: 14 }}>
                 <Text
@@ -307,17 +473,19 @@ export function ProgressPhotosScreen({
                   </Text>
                 </Pressable>
               </View>
-            ) : gallery.photos.length === 0 ? (
-              <PhotoVaultEmptyState onAdd={() => setSheetOpen(true)} />
+            ) : galleryEmpty ? (
+              <PhotoVaultEmptyState onAdd={() => openSheet()} />
+            ) : filterEmpty && filter !== 'all' ? (
+              <PhotoVaultFilterEmptyState pose={filter} onAdd={() => openSheet(filter)} />
             ) : null}
           </>
         )}
         listFooter={(
           <>
-            {gallery.status === 'ready' && gallery.photos.length > 0 ? (
+            {gallery.status === 'ready' && !galleryEmpty && !filterEmpty ? (
               <View style={{ paddingHorizontal: 22, paddingTop: 14 }}>
                 <Pressable
-                  onPress={() => setSheetOpen(true)}
+                  onPress={() => openSheet()}
                   disabled={gallery.uploading}
                   accessibilityRole="button"
                   accessibilityLabel={t('progress.photos.a11y.addPhoto')}
@@ -357,9 +525,25 @@ export function ProgressPhotosScreen({
 
       <AddPhotoSheet
         visible={sheetOpen}
+        initialPose={sheetPose}
         onClose={() => setSheetOpen(false)}
-        onCamera={() => void handleCamera()}
-        onLibrary={() => void handleLibrary()}
+        onPickCamera={handleCamera}
+        onPickLibrary={handleLibrary}
+        onPickerIssue={handlePickerIssue}
+        onDiscard={discardGalleryPreview}
+        onSavePose={handleSavePose}
+        isSlotTaken={isSlotTaken}
+        onReplacePose={handleReplacePose}
+        formatDate={formatDate}
+      />
+
+      <PhotoCompareScreen
+        visible={compareOpen}
+        photos={gallery.photos}
+        onVisible={claimGalleryThumbnail}
+        onHidden={releaseGalleryThumbnail}
+        onClose={() => setCompareOpen(false)}
+        formatDate={formatDate}
       />
 
       <PhotoVaultViewer

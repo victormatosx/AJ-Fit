@@ -111,6 +111,53 @@ describe('the memory-only representation is documented as plaintext', () => {
   });
 });
 
+describe('identity never leaks into object names or the UI', () => {
+  const IDENTITY = codeOf('src/lib/photoVaultIdentity.ts');
+
+  it('derives the day from the local calendar, never from UTC', () => {
+    expect(IDENTITY).not.toContain('toISOString');
+    expect(IDENTITY).not.toContain('getUTC');
+    expect(IDENTITY).toContain('date.getFullYear()');
+  });
+
+  it('addresses Storage and the cache by asset, never by document id', () => {
+    // A posed document is named `{dateKey}_{pose}`. Using it as an object name
+    // would publish the day and the pose into the bucket, and using it as a
+    // cache filename would do the same on disk.
+    for (const call of [
+      'storagePathFor(uid, photo.assetId)',
+      'thumbnailStoragePathFor(uid, photo.assetId)',
+      'readCachedThumbnail({ uid, photoId: photo.assetId',
+      'writeCachedThumbnail({ uid, photoId: photo.assetId',
+      'removeCachedThumbnail(uid, photo.assetId)',
+    ]) {
+      expect(SERVICE).toContain(call);
+    }
+    expect(SERVICE).not.toContain('storagePathFor(uid, photo.photoId)');
+    expect(SERVICE).not.toContain('thumbnailStoragePathFor(uid, photo.photoId)');
+    expect(SERVICE).not.toContain('photoId: photo.photoId');
+  });
+
+  it('lets the caller choose a pose and nothing else', () => {
+    // The UI must never supply an asset id, a document id, a storage path or
+    // a day: those are the service's authority.
+    // The interface body only — the shared upload helpers that follow it do
+    // legitimately mention paths and asset ids.
+    const start = SERVICE.indexOf('export interface UploadProgressPhotoParams');
+    const params = SERVICE.slice(start, SERVICE.indexOf('\n}', start));
+    expect(params).toContain('pose?: ProgressPhotoPose');
+    for (const forbidden of ['assetId', 'documentId', 'storagePath', 'dateKey']) {
+      expect(params).not.toContain(forbidden);
+    }
+  });
+
+  it('keeps pose out of the encryption layer', () => {
+    expect(CRYPTO).not.toContain('pose');
+    expect(CRYPTO).not.toContain('dateKey');
+    expect(CRYPTO).not.toContain('assetId');
+  });
+});
+
 describe('the UI renders without a second cache', () => {
   it('uses React Native Image, not a library with its own disk cache', () => {
     for (const source of [GRID, VIEWER]) {

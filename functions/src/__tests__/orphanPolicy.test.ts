@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  documentClaimsAsset,
   isConfirmedCandidate,
   isOldEnough,
   ORPHAN_CONFIRMATION_MS,
@@ -10,6 +11,7 @@ import {
 
 const NOW = Date.UTC(2026, 7, 12);
 const PHOTO_ID = '123e4567-e89b-42d3-a456-426614174000';
+const OTHER_ID = '123e4567-e89b-42d3-a456-426614174001';
 
 describe('Photo Vault orphan policy', () => {
   it('recognizes only the canonical ciphertext path', () => {
@@ -41,5 +43,67 @@ describe('Photo Vault orphan policy', () => {
     expect(isOldEnough(Number.NaN, NOW)).toBe(false);
     expect(isOldEnough(0, NOW)).toBe(false);
     expect(isConfirmedCandidate(Number.POSITIVE_INFINITY, NOW)).toBe(false);
+  });
+
+  it('keeps object names opaque regardless of how the document is named', () => {
+    // Phase 14 changes document ids, never Storage object ids. A dated object
+    // name must stay unparseable so nothing starts writing them.
+    expect(
+      parsePhotoObjectPath('users/alice/progressPhotos/2026-08-15_front.enc'),
+    ).toBeNull();
+  });
+});
+
+describe('document ownership of an asset', () => {
+  it('accepts a pre-pose document named after its asset', () => {
+    expect(
+      documentClaimsAsset({
+        documentId: PHOTO_ID,
+        assetId: undefined,
+        assetIdFromPath: PHOTO_ID,
+      }),
+    ).toBe(true);
+  });
+
+  it('accepts a posed document that references the asset by field', () => {
+    expect(
+      documentClaimsAsset({
+        documentId: '2026-08-15_front',
+        assetId: PHOTO_ID,
+        assetIdFromPath: PHOTO_ID,
+      }),
+    ).toBe(true);
+  });
+
+  it('rejects a posed document pointing at a different asset', () => {
+    expect(
+      documentClaimsAsset({
+        documentId: '2026-08-15_front',
+        assetId: OTHER_ID,
+        assetIdFromPath: PHOTO_ID,
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects an unrelated document id with no assetId', () => {
+    expect(
+      documentClaimsAsset({
+        documentId: '2026-08-15_front',
+        assetId: undefined,
+        assetIdFromPath: PHOTO_ID,
+      }),
+    ).toBe(false);
+  });
+
+  it('falls back to the document id when assetId is not a string', () => {
+    // A malformed field must not make a legacy document unrecognizable —
+    // failing to recognize it would eventually delete live ciphertext.
+    expect(
+      documentClaimsAsset({
+        documentId: PHOTO_ID,
+        assetId: 42,
+        assetIdFromPath: PHOTO_ID,
+      }),
+    ).toBe(true);
   });
 });

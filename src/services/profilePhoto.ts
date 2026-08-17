@@ -7,6 +7,10 @@ import {
   uploadBytesResumable,
 } from 'firebase/storage';
 import { storage } from '../lib/firebase';
+import {
+  closeProfilePhotoUploadBlob,
+  openProfilePhotoUploadBlob,
+} from './profilePhotoUploadBlob';
 
 export const PROFILE_PHOTO_MAX_BYTES = 5 * 1024 * 1024;
 
@@ -62,6 +66,18 @@ function fileSize(uri: string): number {
   return new File(uri).size ?? 0;
 }
 
+/** Deletes only a profile-photo temporary explicitly owned by its caller. */
+export function discardProfilePhotoTemporary(photo: LocalProfilePhoto | null): void {
+  if (!photo) return;
+  try {
+    const file = new File(photo.uri);
+    if (file.exists) file.delete();
+  } catch {
+    // Best effort cache cleanup; never hide a successful save or a useful
+    // compression/upload error behind deletion noise.
+  }
+}
+
 /**
  * Normalizes a cropped picker result before upload. PNG stays lossless so its
  * alpha channel is preserved; photos use progressively gentler JPEG passes.
@@ -96,6 +112,16 @@ export async function compressProfilePhoto(
         height: result.height,
       };
     }
+
+    // Every failed pass is a distinct manipulator cache file. It is no longer
+    // needed once the next pass starts and must not accumulate across retries.
+    discardProfilePhotoTemporary({
+      uri: result.uri,
+      mimeType,
+      fileSize: size,
+      width: result.width,
+      height: result.height,
+    });
   }
 
   throw new Error('profile-photo-too-large');
@@ -114,43 +140,53 @@ export async function uploadProfilePhoto(
   const file = new File(photo.uri);
   if (file.size > PROFILE_PHOTO_MAX_BYTES) throw new Error('profile-photo-too-large');
 
-  let bytes: Uint8Array<ArrayBuffer>;
-  try {
-    bytes = await file.bytes();
-  } catch {
-    throw new Error('profile-photo-read-failed');
-  }
-  if (bytes.byteLength > PROFILE_PHOTO_MAX_BYTES) {
-    throw new Error('profile-photo-too-large');
-  }
-
   const contentType = photo.mimeType || file.type || 'image/jpeg';
   if (!contentType.startsWith('image/')) throw new Error('profile-photo-invalid-type');
 
-  const target = avatarRef(uid);
-  const task = uploadBytesResumable(target, bytes, {
-    contentType,
-    // Each upload receives a new Firestore photoVersion, so this representation
-    // can remain immutable in the requesting device's memory and disk caches.
-    cacheControl: 'private,max-age=31536000,immutable',
-  });
+  let blob: Blob;
+  try {
+    blob = await openProfilePhotoUploadBlob(photo.uri);
+  } catch {
+    throw new Error('profile-photo-read-failed');
+  }
 
-  await new Promise<void>((resolve, reject) => {
-    task.on(
-      'state_changed',
-      (snapshot) => {
-        const progress = snapshot.totalBytes
-          ? snapshot.bytesTransferred / snapshot.totalBytes
-          : 0;
-        onProgress?.(progress);
-      },
-      reject,
-      resolve,
-    );
-  });
-  const downloadURL = await getDownloadURL(target);
-  const separator = downloadURL.includes('?') ? '&' : '?';
-  return `${downloadURL}${separator}g=${encodeURIComponent(task.snapshot.metadata.generation)}`;
+  try {
+    if (blob.size > PROFILE_PHOTO_MAX_BYTES) {
+      throw new Error('profile-photo-too-large');
+    }
+
+    const target = avatarRef(uid);
+    const task = uploadBytesResumable(target, blob, {
+      contentType,
+      // Each upload receives a new Firestore photoVersion, so this representation
+      // can remain immutable in the requesting device's memory and disk caches.
+      cacheControl: 'private,max-age=31536000,immutable',
+    });
+
+    await new Promise<void>((resolve, reject) => {
+      task.on(
+        'state_changed',
+        (snapshot) => {
+          const progress = snapshot.totalBytes
+            ? snapshot.bytesTransferred / snapshot.totalBytes
+            : 0;
+          onProgress?.(progress);
+        },
+        reject,
+        resolve,
+      );
+    });
+    const downloadURL = await getDownloadURL(target);
+    const separator = downloadURL.includes('?') ? '&' : '?';
+    return `${downloadURL}${separator}g=${encodeURIComponent(task.snapshot.metadata.generation)}`;
+  } catch (error) {
+    if (error instanceof Error && error.message === 'profile-photo-too-large') {
+      throw error;
+    }
+    throw new Error('profile-photo-upload-failed');
+  } finally {
+    closeProfilePhotoUploadBlob(blob);
+  }
 }
 
 export async function deleteProfilePhoto(uid: string): Promise<void> {

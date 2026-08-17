@@ -114,11 +114,21 @@
         "add": "Adicionar foto"
       },
       "add": {
-        "title": "Adicionar foto",
+        "title": "Nova foto",
         "camera": "Tirar foto",
         "library": "Escolher da galeria",
         "cancel": "Cancelar",
-        "uploading": "Enviando sua foto…"
+        "uploading": "Enviando sua foto…",
+        "poseSection": "Pose",
+        "photoSection": "Foto",
+        "previewSection": "Prévia",
+        "save": "Salvar foto",
+        "saving": "Salvando…",
+        "change": "Trocar foto",
+        "slotTaken": "Já existe uma foto de {{pose}} para esta data.",
+        "remove": "Remover",
+        "saveCount": "Salvar {{count}} fotos",
+        "poseFailed": "Não foi possível salvar a foto de {{pose}}."
       },
       "permission": {
         "cameraDenied": "Permita o acesso à câmera nas configurações para tirar uma foto.",
@@ -128,7 +138,8 @@
         "tooLarge": "Esta foto é muito grande. Tente outra imagem.",
         "unsupported": "Formato de imagem não suportado.",
         "network": "Falha de conexão. Verifique sua internet e tente novamente.",
-        "generic": "Não foi possível enviar sua foto. Tente novamente."
+        "generic": "Não foi possível enviar sua foto. Tente novamente.",
+        "slotTaken": "Já existe uma foto dessa pose para essa data."
       },
       "viewer": {
         "close": "Fechar",
@@ -149,7 +160,93 @@
         "takePhoto": "Tirar foto com a câmera",
         "chooseLibrary": "Escolher foto da galeria",
         "closeViewer": "Fechar visualização",
-        "deletePhoto": "Excluir esta foto"
+        "deletePhoto": "Excluir esta foto",
+        "posePhoto": "Foto de {{pose}} de {{date}}",
+        "selectPose": "Selecionar {{pose}}",
+        "savePhoto": "Salvar foto",
+        "addPose": "Adicionar foto de {{pose}} em {{date}}",
+        "poseFilled": "Esta pose já tem uma foto escolhida",
+        "posePreview": "Prévia da foto de {{pose}}",
+        "removePose": "Remover foto de {{pose}}",
+        "selectFilter": "Mostrar {{filter}}",
+        "openCompare": "Comparar progresso",
+        "selectComparePhoto": "Selecionar foto de {{pose}} de {{date}}",
+        "selectedAsBefore": "Selecionada como antes",
+        "selectedAsAfter": "Selecionada como depois",
+        "changeBefore": "Trocar a foto de antes",
+        "changeAfter": "Trocar a foto de depois"
+      },
+      "poses": {
+        "front": "Frente",
+        "side": "Lado",
+        "back": "Costas"
+      },
+      "day": {
+        "unclassified": "Sem classificação"
+      },
+      "filters": {
+        "all": "Todos"
+      },
+      "filterEmpty": {
+        "title": "Nenhuma foto de {{pose}}",
+        "description": "Você tem fotos de outras poses. Adicione uma para completar seu registro.",
+        "cta": "Adicionar foto de {{pose}}"
+      },
+      "replace": {
+        "cta": "Substituir foto",
+        "confirmTitle": "Substituir foto?",
+        "confirmBody": "Esta ação substituirá sua foto de {{pose}} de {{date}}. A foto atual será removida do seu cofre.",
+        "confirm": "Substituir",
+        "cancel": "Cancelar",
+        "replacing": "Substituindo…",
+        "dateMismatch": "A foto escolhida é de {{date}}. Ela será salva nesse dia, não como substituição.",
+        "slotChanged": "Esta foto foi alterada em outro aparelho. Atualizamos a galeria.",
+        "failed": "Não foi possível substituir a foto. A foto atual foi mantida.",
+        "restoreFailed": "Não foi possível concluir a substituição. Verifique suas fotos e tente novamente.",
+        "retry": "Tentar novamente",
+        "slotMissing": "Esta foto ainda está sendo enviada. Aguarde e tente novamente."
+      },
+      "compare": {
+        "title": "Comparar progresso",
+        "cta": "Comparar",
+        "stepBefore": "Passo 1 de 2",
+        "stepAfter": "Passo 2 de 2",
+        "chooseBefore": "Escolha a foto de antes",
+        "chooseAfter": "Escolha a foto de depois",
+        "before": "Antes",
+        "after": "Depois",
+        "loading": "Preparando suas fotos em alta qualidade…",
+        "preview": "Prévia do comparativo",
+        "generate": "Gerar comparativo",
+        "generating": "Gerando…",
+        "generated": "Comparativo pronto",
+        "captureFailed": "Não foi possível gerar o comparativo. Tente novamente.",
+        "share": "Compartilhar",
+        "sharing": "Compartilhando…",
+        "shareUnavailable": "O compartilhamento não está disponível neste dispositivo.",
+        "shareFailed": "Não foi possível compartilhar o comparativo. Tente novamente.",
+        "shareReady": "Compartilhamento encerrado",
+        "posterHeadlinePrimary": "Evolução",
+        "posterHeadlineAccent": "Real",
+        "posterSubheadline": "Disciplina • Método • Resultados",
+        "posterDaySingular": "Dia",
+        "posterDayPlural": "Dias",
+        "posterFooterMethod": "O método funciona.",
+        "posterFooterYou": "Você",
+        "posterFooterEvolve": "evolui.",
+        "posterHashtag": "#AJFIT",
+        "posterAccessibility_one": "Comparativo de evolução, {{pose}}. Antes: {{beforeDate}}. Depois: {{afterDate}}. Período: {{count}} dia.",
+        "posterAccessibility_other": "Comparativo de evolução, {{pose}}. Antes: {{beforeDate}}. Depois: {{afterDate}}. Período: {{count}} dias.",
+        "retry": "Tentar novamente",
+        "loadFailed": "Não foi possível carregar o comparativo. Suas fotos continuam protegidas.",
+        "review": "Revisar comparação",
+        "continue": "Continuar",
+        "change": "Trocar",
+        "cancel": "Cancelar",
+        "back": "Voltar",
+        "noCandidate": "Não há outra foto desta pose para comparar.",
+        "chooseAnother": "Escolher outra foto",
+        "unclassified": "Sem classificação"
       }
     },
     "accessibility": {

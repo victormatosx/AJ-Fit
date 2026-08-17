@@ -29,6 +29,14 @@ const VAULT_ROOT = 'photo-vault';
 const ENCRYPTED_DIR = 'enc';
 /** Decrypted images. Short-lived by contract — see `decryptPhotoFile`. */
 const PLAINTEXT_DIR = 'tmp';
+/**
+ * Composed exports (Comparator, future phases) waiting to be handed to the OS
+ * share sheet. Plaintext, exactly like `tmp/`, but deliberately a SEPARATE
+ * sibling directory rather than a child of `tmp/` — see the block comment
+ * above `cleanupPhotoVaultShareFiles` for why the two must never share a
+ * cleanup call site.
+ */
+const SHARE_DIR = 'share';
 
 /**
  * Everything lives under the cache directory, never the document directory:
@@ -236,6 +244,100 @@ export function writeEncryptedFile(bytes: Uint8Array): { uri: string } {
     throw new PhotoVaultError('vaultFileWriteFailed');
   }
   return { uri: target.uri };
+}
+
+/**
+ * Whether `uri` names a direct child of `share/`, and only that.
+ *
+ * Deliberately stricter than `belongsToVaultDirectory`'s plain prefix check
+ * above. Every other discard function in this module only ever receives a
+ * URI this module minted itself; `share/` is different — its whole purpose is
+ * to hand a path to code outside this module (a future composition step, the
+ * OS share sheet), so a caller could in principle pass back a crafted or
+ * malformed string. A prefix check alone does not close that gap:
+ * `.../photo-vault/share/../../../secrets/x` starts with the right prefix as
+ * a STRING even though it does not resolve inside the directory. Two
+ * independent conditions here do close it: no `..` segment anywhere, and
+ * nothing after the directory prefix but a single path segment — `share/` is
+ * flat by design (see `cleanupPhotoVaultShareFiles`), so a legitimate export
+ * can never be nested.
+ */
+function isSafeShareUri(uri: string): boolean {
+  if (typeof uri !== 'string' || uri.length === 0 || uri.includes('..')) {
+    return false;
+  }
+  const directoryUri = vaultDirectory(SHARE_DIR).uri.replace(/\/$/, '');
+  const prefix = `${directoryUri}/`;
+  if (!uri.startsWith(prefix)) return false;
+  const remainder = uri.slice(prefix.length);
+  return remainder.length > 0 && !remainder.includes('/');
+}
+
+/**
+ * Reserves a fresh, neutral path inside `share/` for a future export.
+ *
+ * Does not touch the filesystem — it only names a location. A later phase
+ * writes the composed image to this exact URI. The name is a random UUID
+ * from the same source `randomName` uses everywhere else in this module, so
+ * it carries no uid, assetId, photoId, pose or dateKey: the filename itself
+ * reveals nothing about which photos were involved.
+ */
+export function createPhotoVaultShareFilePath(extension = '.jpg'): { uri: string } {
+  const target = new File(vaultDirectory(SHARE_DIR), randomName(extension));
+  return { uri: target.uri };
+}
+
+/**
+ * Removes one export file once the caller is done with it — after a share
+ * completes, or when abandoning one that failed to build.
+ *
+ * Fails closed: a URI that is not a direct child of `share/` is never
+ * touched, silently. This is the only thing standing between a future
+ * caller's URI (view-shot output, a share-sheet callback) and deleting
+ * something outside the vault's own directory.
+ */
+export function discardPhotoVaultShareFile(uri: string): void {
+  if (isSafeShareUri(uri)) removeQuietly(uri);
+}
+
+/**
+ * Removes every file in `photo-vault/share/`.
+ *
+ * DELIBERATELY separate from `cleanupPhotoVaultTempFiles`, and DELIBERATELY
+ * never called by `lockPhotoVault()`. `share/` can hold a plaintext export
+ * the OS share sheet is still reading after this app goes
+ * `inactive`/`background` — `Sharing.shareAsync()` can outlive the frame in
+ * which the user tapped Share. Folding this into the Vault's normal
+ * lock-triggered sweep would delete that file out from under the OS the
+ * moment the app backgrounds, which is exactly the race this separation
+ * exists to avoid. The Vault's own lock/background handling
+ * (`photoVaultLock.ts`) is untouched by this module and stays exactly as
+ * strict as it is today — no exception was added there for sharing.
+ *
+ * `share/` is not a secure cache either: it is a plaintext export queue with
+ * one job, and it is emptied by three triggers only:
+ *   - explicitly, once a share completes (a later phase wires this call);
+ *   - on logout / account switch — a session ending is an explicit boundary
+ *     that a mere background transition is not;
+ *   - on the next cold start, as crash recovery for whatever a kill left
+ *     behind.
+ *
+ * A future "simplification" that merges this sweep into the Vault's temp
+ * cleanup, or calls it from the lock path, would reintroduce that race.
+ */
+export function cleanupPhotoVaultShareFiles(): void {
+  try {
+    for (const entry of vaultDirectory(SHARE_DIR).list()) {
+      try {
+        entry.delete();
+      } catch {
+        // Already gone, or held by the OS — not worth failing the sweep.
+      }
+    }
+  } catch (err) {
+    if (isPhotoVaultError(err)) throw err;
+    throw new PhotoVaultError('vaultShareCleanupFailed');
+  }
 }
 
 export interface CleanupOptions {

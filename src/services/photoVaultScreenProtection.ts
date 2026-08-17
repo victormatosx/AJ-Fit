@@ -17,6 +17,7 @@ const IOS_SWITCHER_BLUR_INTENSITY = 1;
 
 let active = false;
 let activation: Promise<void> | null = null;
+let deactivation: Promise<void> | null = null;
 
 /**
  * Enables screenshot/recording protection before private content is rendered.
@@ -26,27 +27,40 @@ let activation: Promise<void> | null = null;
  * prevention, so both official Expo APIs are enabled there.
  */
 export async function activatePhotoVaultScreenProtection(): Promise<void> {
+  if (deactivation) await deactivation;
   if (active) return;
   if (activation) return activation;
 
   activation = (async () => {
+    let stage = 'activate_available';
+    let capturePrevented = false;
+    let switcherAttempted = false;
     try {
       if (!(await ScreenCapture.isAvailableAsync())) {
         throw new PhotoVaultError('vaultScreenProtectionUnavailable');
       }
 
+      stage = 'activate_prevent';
       await ScreenCapture.preventScreenCaptureAsync(PHOTO_VAULT_SCREEN_CAPTURE_KEY);
+      capturePrevented = true;
 
       if (Platform.OS === 'ios') {
+        stage = 'activate_switcher';
+        switcherAttempted = true;
         await ScreenCapture.enableAppSwitcherProtectionAsync(IOS_SWITCHER_BLUR_INTENSITY);
       }
 
       active = true;
     } catch (error) {
       // If the iOS app-switcher step failed after capture prevention succeeded,
-      // release our keyed capture lock before failing the unlock attempt.
+      // release both native protections before failing the unlock attempt.
       try {
-        await ScreenCapture.allowScreenCaptureAsync(PHOTO_VAULT_SCREEN_CAPTURE_KEY);
+        if (Platform.OS === 'ios' && switcherAttempted) {
+          await ScreenCapture.disableAppSwitcherProtectionAsync();
+        }
+        if (capturePrevented) {
+          await ScreenCapture.allowScreenCaptureAsync(PHOTO_VAULT_SCREEN_CAPTURE_KEY);
+        }
       } catch {
         // Best effort. The app restart also clears Expo's capture locks.
       }
@@ -55,7 +69,7 @@ export async function activatePhotoVaultScreenProtection(): Promise<void> {
         error instanceof PhotoVaultError
           ? error.issue
           : 'vaultScreenProtectionFailed';
-      logPhotoVaultIssue(SCOPE, issue);
+      logPhotoVaultIssue(SCOPE, issue, stage);
       throw new PhotoVaultError(issue);
     } finally {
       activation = null;
@@ -72,26 +86,40 @@ export async function activatePhotoVaultScreenProtection(): Promise<void> {
  * the lock and the first safe foreground frame.
  */
 export async function deactivatePhotoVaultScreenProtection(): Promise<void> {
-  if (activation) {
-    try {
-      await activation;
-    } catch {
-      // Activation already logged and rolled itself back.
-    }
-  }
+  if (deactivation) return deactivation;
 
-  if (!active) return;
-  active = false;
+  deactivation = (async () => {
+    if (activation) {
+      try {
+        await activation;
+      } catch {
+        // Activation already logged and rolled itself back.
+      }
+    }
+
+    if (!active) return;
+    let stage = Platform.OS === 'ios' ? 'deactivate_switcher' : 'deactivate_allow';
+    try {
+      // Remove the app-switcher observer/overlay before restoring the keyed
+      // screenshot hierarchy. On iOS the latter reparents the current window.
+      if (Platform.OS === 'ios') {
+        await ScreenCapture.disableAppSwitcherProtectionAsync();
+      }
+      stage = 'deactivate_allow';
+      await ScreenCapture.allowScreenCaptureAsync(PHOTO_VAULT_SCREEN_CAPTURE_KEY);
+      active = false;
+    } catch {
+      // Keep `active` true so a later safe foreground frame can retry. Marking
+      // it false here used to strand a native overlay after one transient
+      // failure, because every subsequent cleanup returned early.
+      logPhotoVaultIssue(SCOPE, 'vaultScreenProtectionFailed', stage);
+    }
+  })();
 
   try {
-    await ScreenCapture.allowScreenCaptureAsync(PHOTO_VAULT_SCREEN_CAPTURE_KEY);
-    if (Platform.OS === 'ios') {
-      await ScreenCapture.disableAppSwitcherProtectionAsync();
-    }
-  } catch {
-    // Locking and hiding content have already happened. A failed release is
-    // privacy-safe (protection remains stricter), so log only a sanitized issue.
-    logPhotoVaultIssue(SCOPE, 'vaultScreenProtectionFailed');
+    await deactivation;
+  } finally {
+    deactivation = null;
   }
 }
 

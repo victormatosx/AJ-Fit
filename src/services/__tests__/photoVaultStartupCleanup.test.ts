@@ -38,4 +38,45 @@ describe('Photo Vault startup cleanup', () => {
     expect(cache).toContain("const CACHE_DIR = 'encrypted-thumbnails'");
     expect(cleanup).not.toContain('encrypted-thumbnails');
   });
+
+  it('also sweeps the Comparator export queue on cold start (phase 15B)', () => {
+    const source = readFileSync('App.tsx', 'utf8');
+
+    expect(source).toContain('cleanupPhotoVaultShareFiles()');
+    expect(source).toMatch(
+      /useEffect\(\(\) => \{[\s\S]*cleanupPhotoVaultShareFiles\(\)/,
+    );
+    expect(source).toContain("logPhotoVaultIssue('startupCleanup', 'vaultShareCleanupFailed')");
+  });
+
+  it('keeps the share sweep in its own try/catch, independent of the temp sweep', () => {
+    // A filesystem error sweeping one directory must never skip the other.
+    const source = readFileSync('App.tsx', 'utf8');
+    const bootstrapEffect = source.slice(
+      source.indexOf('useEffect(() => {', source.indexOf('cleanupPhotoVaultTempFiles')),
+      source.indexOf('}, []);', source.indexOf('cleanupPhotoVaultShareFiles')),
+    );
+    const tempTry = bootstrapEffect.indexOf('cleanupPhotoVaultTempFiles');
+    const shareTry = bootstrapEffect.indexOf('cleanupPhotoVaultShareFiles');
+    expect(tempTry).toBeGreaterThan(-1);
+    expect(shareTry).toBeGreaterThan(tempTry);
+    // Two separate `catch` blocks between the two calls, not one shared block.
+    const between = bootstrapEffect.slice(tempTry, shareTry);
+    expect(between).toContain('catch');
+  });
+
+  it('keeps the share sweep as its own function, never folded into the temp sweep', () => {
+    // Structural guard against a future "simplification" — see the doc
+    // comment on `cleanupPhotoVaultShareFiles` for why the two must stay
+    // separate: the Vault's lock calls only the temp sweep, and folding
+    // share/ into it would delete an export the OS share sheet is reading.
+    const cleanup = readFileSync('src/services/photoVaultFileCrypto.ts', 'utf8');
+    expect(cleanup).toContain("const SHARE_DIR = 'share'");
+    expect(cleanup).toContain('export function cleanupPhotoVaultShareFiles');
+    const tempSweep = cleanup.slice(
+      cleanup.indexOf('export function cleanupPhotoVaultTempFiles'),
+      cleanup.indexOf('export function cleanupPhotoVaultTempFiles') + 800,
+    );
+    expect(tempSweep).not.toContain('SHARE_DIR');
+  });
 });

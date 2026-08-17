@@ -28,6 +28,7 @@
     "expo-localization": "~56.0.6",
     "expo-screen-capture": "~56.0.4",
     "expo-secure-store": "~56.0.4",
+    "expo-sharing": "~56.0.25",
     "expo-status-bar": "~56.0.4",
     "firebase": "^12.15.0",
     "i18next": "^26.3.6",
@@ -40,6 +41,7 @@
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.0",
     "react-native-svg": "15.15.4",
+    "react-native-view-shot": "5.1.0",
     "react-native-web": "^0.21.2"
   },
   "devDependencies": {

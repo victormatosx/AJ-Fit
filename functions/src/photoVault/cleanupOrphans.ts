@@ -7,10 +7,12 @@ import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { db } from '../lib/firebaseAdmin';
 import { logFunctionError, logInfo } from '../lib/logger';
 import {
+  documentClaimsAsset,
   isConfirmedCandidate,
   isOldEnough,
   ORPHAN_MIN_AGE_MS,
   parsePhotoObjectPath,
+  type ParsedPhotoObject,
 } from './orphanPolicy';
 
 const SCOPE = 'photoVault.cleanupOrphans';
@@ -92,6 +94,51 @@ async function confirmOrMark(params: {
     : 'waiting';
 }
 
+interface AssetMetadata {
+  storagePath?: unknown;
+  thumbnailStoragePath?: unknown;
+  assetId?: unknown;
+}
+
+/**
+ * Finds the metadata document that owns a Storage asset.
+ *
+ * Pre-pose documents are named after the asset, so the direct read finds them
+ * and the common path stays at one lookup. Posed documents are named
+ * `{dateKey}_{pose}` and reference the asset by field, so they need a query —
+ * attempted only when the cheap read missed.
+ *
+ * Without this fallback a posed document's ciphertext would look unreferenced,
+ * and the routine would delete a photo the user still owns.
+ */
+async function findAssetMetadata(
+  uid: string,
+  assetId: string,
+): Promise<AssetMetadata | null> {
+  const direct = await db.doc(`users/${uid}/progressPhotos/${assetId}`).get();
+  if (direct.exists) return (direct.data() ?? null) as AssetMetadata | null;
+
+  const posed = await db
+    .collection(`users/${uid}/progressPhotos`)
+    .where('assetId', '==', assetId)
+    .limit(1)
+    .get();
+  const document = posed.docs[0];
+  return document ? (document.data() as AssetMetadata) : null;
+}
+
+/** Whether some document still points at this exact object. */
+async function assetIsReferenced(
+  parsed: ParsedPhotoObject,
+  objectName: string,
+): Promise<boolean> {
+  const data = await findAssetMetadata(parsed.uid, parsed.photoId);
+  if (!data) return false;
+  return parsed.assetKind === 'full'
+    ? data.storagePath === objectName
+    : data.thumbnailStoragePath === objectName;
+}
+
 async function reconcileStorageObjects(
   nowMillis: number,
   stats: CleanupStats,
@@ -122,18 +169,7 @@ async function reconcileStorageObjects(
           continue;
         }
 
-        const document = db.doc(
-          `users/${parsed.uid}/progressPhotos/${parsed.photoId}`,
-        );
-        const documentSnapshot = await document.get();
-        const documentData = documentSnapshot.data() as
-          | { storagePath?: unknown; thumbnailStoragePath?: unknown }
-          | undefined;
-        const linked =
-          documentSnapshot.exists &&
-          (parsed.assetKind === 'full'
-            ? documentData?.storagePath === file.name
-            : documentData?.thumbnailStoragePath === file.name);
+        const linked = await assetIsReferenced(parsed, file.name);
         if (linked) {
           await clearMarker('storage-without-firestore', file.name);
           stats.preserved += 1;
@@ -152,17 +188,12 @@ async function reconcileStorageObjects(
         if (decision === 'marked') stats.marked += 1;
         if (decision !== 'confirmed') continue;
 
-        // Final read closes the race after the confirmation window. A matching
-        // generation precondition also prevents deleting a newly replaced file.
-        const latestDocument = await document.get();
-        const latestData = latestDocument.data() as
-          | { storagePath?: unknown; thumbnailStoragePath?: unknown }
-          | undefined;
-        const nowLinked =
-          latestDocument.exists &&
-          (parsed.assetKind === 'full'
-            ? latestData?.storagePath === file.name
-            : latestData?.thumbnailStoragePath === file.name);
+        // Final read closes the race after the confirmation window. The whole
+        // search runs again, not just a re-read of one path: the owning
+        // document may have been created under either naming scheme meanwhile.
+        // A matching generation precondition also prevents deleting a newly
+        // replaced file.
+        const nowLinked = await assetIsReferenced(parsed, file.name);
         if (nowLinked) {
           await clearMarker('storage-without-firestore', file.name);
           stats.preserved += 1;
@@ -199,11 +230,15 @@ async function reconcileFirestoreDocuments(
       stats.scannedDocuments += 1;
 
       try {
-        const data = document.data() as { storagePath?: unknown };
+        const data = document.data() as AssetMetadata;
         const storagePath =
           typeof data.storagePath === 'string' ? data.storagePath : '';
         const parsed = parsePhotoObjectPath(storagePath);
         const pathParts = document.ref.path.split('/');
+        // A posed document is named `{dateKey}_{pose}`, so its id no longer
+        // equals the asset id. `documentClaimsAsset` accepts either proof of
+        // ownership, which keeps posed documents visible to this routine
+        // instead of silently preserved forever.
         const pathMatches =
           parsed !== null &&
           parsed.assetKind === 'full' &&
@@ -211,7 +246,11 @@ async function reconcileFirestoreDocuments(
           pathParts[0] === 'users' &&
           pathParts[1] === parsed.uid &&
           pathParts[2] === 'progressPhotos' &&
-          pathParts[3] === parsed.photoId;
+          documentClaimsAsset({
+            documentId: pathParts[3] ?? '',
+            assetId: data.assetId,
+            assetIdFromPath: parsed.photoId,
+          });
         if (!pathMatches || !document.updateTime) {
           stats.preserved += 1;
           continue;

@@ -19,13 +19,19 @@ import {
   type PhotoVaultStatus,
   type UnlockOutcome,
 } from '../lib/photoVaultLock';
-import type { PhotoVaultIssue } from '../lib/photoVaultErrors';
+import { logPhotoVaultIssue, type PhotoVaultIssue } from '../lib/photoVaultErrors';
 import {
   getVaultAuthCapability,
   type VaultAuthCapability,
 } from '../services/localAuthentication';
 import { pruneCachedThumbnailsExcept } from '../services/photoVaultEncryptedCache';
+import { cleanupPhotoVaultShareFiles } from '../services/photoVaultFileCrypto';
 import { deactivatePhotoVaultScreenProtection } from '../services/photoVaultScreenProtection';
+import {
+  isPhotoVaultComparisonShareInFlight,
+  subscribeToPhotoVaultComparisonShareInFlight,
+} from '../lib/photoVaultCompareShare';
+import { canReleasePhotoVaultScreenProtection } from '../lib/photoVaultPrivacyLifecycle';
 import { useAuth } from './AuthContext';
 
 /**
@@ -61,6 +67,22 @@ export function PhotoVaultProvider({ children }: { children: React.ReactNode }) 
   const [privacyOverlayVisible, setPrivacyOverlayVisible] = useState(false);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
   const sensitiveSnapshotRef = useRef(false);
+
+  /**
+   * Releasing iOS capture protection reparents the current key window. During
+   * a native share handoff the UIActivityViewController presentation/window
+   * hierarchy can still be dismissing, so wait until the handoff (including
+   * its file lease grace) has settled. The Vault remains locked and protected
+   * while deferred; this never creates an unlock exception.
+   */
+  const deactivateScreenProtectionIfSafe = useCallback(() => {
+    if (!canReleasePhotoVaultScreenProtection({
+      appState: appStateRef.current,
+      vaultStatus: getPhotoVaultStatus(),
+      shareInFlight: isPhotoVaultComparisonShareInFlight(),
+    })) return;
+    void deactivatePhotoVaultScreenProtection();
+  }, []);
 
   useEffect(() => subscribeToPhotoVaultStatus(setStatus), []);
 
@@ -122,17 +144,25 @@ export function PhotoVaultProvider({ children }: { children: React.ReactNode }) 
           if (appStateRef.current !== 'active') return;
           setPrivacyOverlayVisible(false);
           sensitiveSnapshotRef.current = false;
-          if (getPhotoVaultStatus() !== 'unlocked') {
-            void deactivatePhotoVaultScreenProtection();
-          }
+          deactivateScreenProtectionIfSafe();
         });
       });
     });
+    const unsubscribeShareHandoff = subscribeToPhotoVaultComparisonShareInFlight(
+      (inFlight) => {
+        if (inFlight) return;
+        // `shareAsync` has returned and the centralized handoff grace elapsed.
+        // Give React one more frame to keep the locked tree committed before
+        // asking the native module to restore the capture/window hierarchy.
+        requestAnimationFrame(deactivateScreenProtectionIfSafe);
+      },
+    );
     return () => {
       subscription.remove();
+      unsubscribeShareHandoff();
       void deactivatePhotoVaultScreenProtection();
     };
-  }, []);
+  }, [deactivateScreenProtectionIfSafe]);
 
   /**
    * An explicit lock/logout while foregrounded can release capture protection
@@ -150,10 +180,10 @@ export function PhotoVaultProvider({ children }: { children: React.ReactNode }) 
       if (appStateRef.current === 'active' && getPhotoVaultStatus() !== 'unlocked') {
         sensitiveSnapshotRef.current = false;
         setPrivacyOverlayVisible(false);
-        void deactivatePhotoVaultScreenProtection();
+        deactivateScreenProtectionIfSafe();
       }
     });
-  }, [status]);
+  }, [deactivateScreenProtectionIfSafe, status]);
 
   /**
    * Any identity change — logout, or a switch to another account — ends the
@@ -173,10 +203,23 @@ export function PhotoVaultProvider({ children }: { children: React.ReactNode }) 
    * bumps the session generation, and the prune then bumps the cache epoch.
    * An in-flight download from the old session fails both checks and can
    * neither repopulate React state nor recreate the namespace just removed.
+   *
+   * The Comparator's plaintext export queue (`photo-vault/share/`) is cleared
+   * here too, for the same reason as the encrypted cache: it survives a lock
+   * by design (the OS share sheet may still be reading a file), but an
+   * identity change is a real session boundary, and no export queued by the
+   * previous account may reach the next one. Wrapped in try/catch — unlike
+   * the lock/prune calls above, a filesystem sweep can throw on a genuine
+   * error, and that must not skip resetting `capability`/`lastIssue` below.
    */
   useEffect(() => {
     lockPhotoVault();
     pruneCachedThumbnailsExcept(uid);
+    try {
+      cleanupPhotoVaultShareFiles();
+    } catch {
+      logPhotoVaultIssue('identityChange', 'vaultShareCleanupFailed');
+    }
     setCapability(null);
     setLastIssue(null);
   }, [uid]);

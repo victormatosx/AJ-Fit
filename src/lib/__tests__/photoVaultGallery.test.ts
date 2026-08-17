@@ -46,8 +46,13 @@ import {
   removeGalleryPhoto,
   resetGalleryForTesting,
   subscribeToGallery,
+  resetGallery,
+  replaceGalleryPhoto,
+  discardGalleryPreview,
+  isSlotTaken,
   unmountGalleryPhoto,
 } from '../photoVaultGallery';
+import { groupProgressPhotosByDay } from '../photoVaultDayGrouping';
 
 const IV = 'YWJjZGVmZ2hpamts';
 const THUMB_IV = 'bW5vcHFyc3R1dnd4';
@@ -55,6 +60,7 @@ const THUMB_IV = 'bW5vcHFyc3R1dnd4';
 function photo(id: string, daysAgo = 0, withThumbnail = true) {
   const base = {
     photoId: id,
+    assetId: `asset-${id}`,
     takenAt: new Date(Date.now() - daysAgo * 86_400_000),
     storagePath: `users/alice/progressPhotos/${id}.enc`,
     createdAt: null,
@@ -75,6 +81,16 @@ function photo(id: string, daysAgo = 0, withThumbnail = true) {
         },
       }
     : base;
+}
+
+function posedPhoto(dateKey: string, pose: 'front' | 'side' | 'back') {
+  const [y, m, d] = dateKey.split('-').map(Number) as [number, number, number];
+  return {
+    ...photo(`${dateKey}_${pose}`),
+    takenAt: new Date(y, m - 1, d, 12, 0),
+    pose,
+    dateKey,
+  };
 }
 
 const UPLOAD = {
@@ -375,5 +391,306 @@ describe('lock and structural security', () => {
     expect(source).not.toContain('getDownloadURL');
     expect(source).not.toContain('AsyncStorage');
     expect(source).not.toContain('SecureStore');
+  });
+});
+
+
+// ── Day projection (phase 14C) ─────────────────────────────────────────────
+//
+// The projection is derived by the screen from `state.photos`, so these cases
+// assert the composition: what the controller leaves in state is what the
+// grouping can see.
+
+describe('day projection over controller state', () => {
+  it('drops a deleted pose and keeps the rest of the day', async () => {
+    mocks.list.mockResolvedValue([
+      posedPhoto('2026-08-15', 'front'),
+      posedPhoto('2026-08-15', 'side'),
+      posedPhoto('2026-08-15', 'back'),
+    ]);
+    await loadGallery();
+
+    expect(await removeGalleryPhoto('2026-08-15_side')).toBe(true);
+
+    const [day] = groupProgressPhotosByDay(getGalleryState().photos);
+    expect(day?.front).toBeDefined();
+    expect(day?.back).toBeDefined();
+    expect(day?.side).toBeUndefined();
+  });
+
+  it('removes the day once its last photo is gone', async () => {
+    mocks.list.mockResolvedValue([posedPhoto('2026-08-15', 'front')]);
+    await loadGallery();
+
+    expect(await removeGalleryPhoto('2026-08-15_front')).toBe(true);
+
+    expect(groupProgressPhotosByDay(getGalleryState().photos)).toEqual([]);
+  });
+
+  it('keeps a legacy photo of the same day visible after a posed delete', async () => {
+    mocks.list.mockResolvedValue([
+      posedPhoto('2026-08-15', 'front'),
+      { ...photo('legacy-a'), takenAt: new Date(2026, 7, 15, 9, 0) },
+    ]);
+    await loadGallery();
+
+    await removeGalleryPhoto('2026-08-15_front');
+
+    const [day] = groupProgressPhotosByDay(getGalleryState().photos);
+    expect(day?.dateKey).toBe('2026-08-15');
+    expect(day?.unclassified.map((entry) => entry.photoId)).toEqual(['legacy-a']);
+  });
+
+  it('leaves no projection behind when the vault locks', async () => {
+    mocks.list.mockResolvedValue([posedPhoto('2026-08-15', 'front')]);
+    await loadGallery();
+    await mountGalleryPhoto('2026-08-15_front');
+    expect(groupProgressPhotosByDay(getGalleryState().photos)).toHaveLength(1);
+
+    emitLock('locked');
+
+    // The day survives as a shell only while metadata is still in state; the
+    // decrypted representation is what must be gone.
+    const [day] = groupProgressPhotosByDay(getGalleryState().photos);
+    expect(day?.front?.thumbnailUri).toBeNull();
+    expect(day?.front?.previewUri).toBeNull();
+  });
+
+  it('carries no projection across a reset to another user', async () => {
+    mocks.list.mockResolvedValue([posedPhoto('2026-08-15', 'front')]);
+    await loadGallery();
+    expect(groupProgressPhotosByDay(getGalleryState().photos)).toHaveLength(1);
+
+    resetGallery();
+
+    expect(getGalleryState().photos).toEqual([]);
+    expect(groupProgressPhotosByDay(getGalleryState().photos)).toEqual([]);
+  });
+});
+
+
+// ── Posed uploads from the UI (phase 14D) ──────────────────────────────────
+
+describe('posed optimistic upload', () => {
+  const AUG_15 = new Date(2026, 7, 15, 12, 0);
+
+  function uploadedPosed(pose: 'front' | 'side' | 'back') {
+    return posedPhoto('2026-08-15', pose);
+  }
+
+  it('places the optimistic card straight into its slot', async () => {
+    mocks.list.mockResolvedValue([]);
+    await loadGallery();
+    mocks.upload.mockReturnValue(new Promise(() => {}));
+
+    void addGalleryPhoto({ ...UPLOAD, takenAt: AUG_15, pose: 'side' });
+    await vi.waitFor(() => expect(getGalleryState().photos).toHaveLength(1));
+
+    const [day] = groupProgressPhotosByDay(getGalleryState().photos);
+    // It must never appear as unclassified first and jump to a slot later.
+    expect(day?.dateKey).toBe('2026-08-15');
+    expect(day?.side?.uploadStatus).toBe('uploading');
+    expect(day?.unclassified).toEqual([]);
+  });
+
+  it('derives the optimistic day from the photo, not from today', async () => {
+    mocks.list.mockResolvedValue([]);
+    await loadGallery();
+    mocks.upload.mockReturnValue(new Promise(() => {}));
+
+    // A library photo from July, added today.
+    void addGalleryPhoto({ ...UPLOAD, takenAt: new Date(2026, 6, 2, 9, 0), pose: 'front' });
+    await vi.waitFor(() => expect(getGalleryState().photos).toHaveLength(1));
+
+    expect(groupProgressPhotosByDay(getGalleryState().photos)[0]?.dateKey).toBe('2026-07-02');
+  });
+
+  it('keeps a late evening photo on its local day', async () => {
+    mocks.list.mockResolvedValue([]);
+    await loadGallery();
+    mocks.upload.mockReturnValue(new Promise(() => {}));
+
+    void addGalleryPhoto({ ...UPLOAD, takenAt: new Date(2026, 7, 15, 23, 30), pose: 'front' });
+    await vi.waitFor(() => expect(getGalleryState().photos).toHaveLength(1));
+
+    expect(groupProgressPhotosByDay(getGalleryState().photos)[0]?.dateKey).toBe('2026-08-15');
+  });
+
+  it('carries no asset id while the upload is in flight', async () => {
+    mocks.list.mockResolvedValue([]);
+    await loadGallery();
+    mocks.upload.mockReturnValue(new Promise(() => {}));
+
+    void addGalleryPhoto({ ...UPLOAD, takenAt: AUG_15, pose: 'front' });
+    await vi.waitFor(() => expect(getGalleryState().photos).toHaveLength(1));
+
+    // A placeholder id could collide with a real UUID in the cache.
+    expect(getGalleryState().photos[0]!.assetId).toBeNull();
+  });
+
+  it('passes the pose to the service and nothing else', async () => {
+    mocks.list.mockResolvedValue([]);
+    await loadGallery();
+    mocks.upload.mockResolvedValue(uploadedPosed('back'));
+
+    await addGalleryPhoto({ ...UPLOAD, takenAt: AUG_15, pose: 'back' });
+
+    const [params] = mocks.upload.mock.calls[0] as [Record<string, unknown>];
+    expect(params.pose).toBe('back');
+    for (const derived of ['assetId', 'documentId', 'dateKey', 'storagePath']) {
+      expect(params[derived]).toBeUndefined();
+    }
+  });
+
+  it('reconciles into the same slot on success', async () => {
+    mocks.list.mockResolvedValue([]);
+    await loadGallery();
+    mocks.upload.mockResolvedValue(uploadedPosed('front'));
+
+    expect(await addGalleryPhoto({ ...UPLOAD, takenAt: AUG_15, pose: 'front' })).toBe(true);
+
+    const [day] = groupProgressPhotosByDay(getGalleryState().photos);
+    expect(day?.front?.photoId).toBe('2026-08-15_front');
+    expect(day?.front?.uploadStatus).toBeNull();
+    expect(day?.unclassified).toEqual([]);
+    // Exactly one card: the optimistic one was replaced, not duplicated.
+    expect(getGalleryState().photos).toHaveLength(1);
+  });
+
+  it('leaves the slot empty when the upload fails', async () => {
+    mocks.list.mockResolvedValue([]);
+    await loadGallery();
+    mocks.upload.mockRejectedValue(new PhotoVaultError('vaultUploadFailed'));
+
+    expect(await addGalleryPhoto({ ...UPLOAD, takenAt: AUG_15, pose: 'front' })).toBe(false);
+
+    expect(groupProgressPhotosByDay(getGalleryState().photos)).toEqual([]);
+    expect(getGalleryState().issue).toBe('vaultUploadFailed');
+  });
+
+  it('surfaces a taken slot as its own issue', async () => {
+    mocks.list.mockResolvedValue([]);
+    await loadGallery();
+    mocks.upload.mockRejectedValue(new PhotoVaultError('vaultPhotoSlotTaken'));
+
+    expect(await addGalleryPhoto({ ...UPLOAD, takenAt: AUG_15, pose: 'front' })).toBe(false);
+    expect(getGalleryState().issue).toBe('vaultPhotoSlotTaken');
+  });
+
+  it('discards a late upload that resolved after the vault locked', async () => {
+    mocks.list.mockResolvedValue([]);
+    await loadGallery();
+    let release: (value: unknown) => void = () => {};
+    mocks.upload.mockReturnValue(new Promise((resolve) => { release = resolve; }));
+
+    const pending = addGalleryPhoto({ ...UPLOAD, takenAt: AUG_15, pose: 'front' });
+    await vi.waitFor(() => expect(getGalleryState().photos).toHaveLength(1));
+
+    emitLock('locked');
+    release(uploadedPosed('front'));
+    await pending;
+
+    // The late result must not repopulate the gallery behind the lock.
+    expect(getGalleryState().photos.filter((p) => p.uploadStatus)).toEqual([]);
+    expect(groupProgressPhotosByDay(getGalleryState().photos)).toEqual([]);
+  });
+
+  it('still supports an upload with no pose for the compatibility path', async () => {
+    mocks.list.mockResolvedValue([]);
+    await loadGallery();
+    mocks.upload.mockReturnValue(new Promise(() => {}));
+
+    void addGalleryPhoto({ ...UPLOAD, takenAt: AUG_15 });
+    await vi.waitFor(() => expect(getGalleryState().photos).toHaveLength(1));
+
+    const [day] = groupProgressPhotosByDay(getGalleryState().photos);
+    expect(day?.unclassified).toHaveLength(1);
+    expect(day?.front).toBeUndefined();
+  });
+});
+
+describe('slot occupancy known to the client', () => {
+  it('reports a filled slot and leaves the others free', async () => {
+    mocks.list.mockResolvedValue([posedPhoto('2026-08-15', 'front')]);
+    await loadGallery();
+
+    expect(isSlotTaken('2026-08-15', 'front')).toBe(true);
+    expect(isSlotTaken('2026-08-15', 'side')).toBe(false);
+    expect(isSlotTaken('2026-08-15', 'back')).toBe(false);
+    expect(isSlotTaken('2026-08-14', 'front')).toBe(false);
+  });
+
+  it('does not treat a legacy photo as occupying any slot', async () => {
+    mocks.list.mockResolvedValue([
+      { ...photo('legacy-a'), takenAt: new Date(2026, 7, 15, 9, 0) },
+    ]);
+    await loadGallery();
+
+    expect(isSlotTaken('2026-08-15', 'front')).toBe(false);
+  });
+
+  it('counts an in-flight optimistic card as occupying its slot', async () => {
+    mocks.list.mockResolvedValue([]);
+    await loadGallery();
+    mocks.upload.mockReturnValue(new Promise(() => {}));
+
+    void addGalleryPhoto({ ...UPLOAD, takenAt: new Date(2026, 7, 15, 12, 0), pose: 'front' });
+    await vi.waitFor(() => expect(getGalleryState().photos).toHaveLength(1));
+
+    // Prevents a second upload racing into the same slot from this device.
+    expect(isSlotTaken('2026-08-15', 'front')).toBe(true);
+  });
+});
+
+describe('abandoned preview', () => {
+  it('releases a picked file the user did not save', () => {
+    discardGalleryPreview('file:///cache/photo-vault/tmp/picked.jpg');
+    expect(mocks.discard).toHaveBeenCalledWith('file:///cache/photo-vault/tmp/picked.jpg');
+  });
+
+  it('ignores an absent selection', () => {
+    discardGalleryPreview(null);
+    expect(mocks.discard).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('replacing a slot held by an upload still in flight', () => {
+  it('reports a typed issue instead of an untyped failure', async () => {
+    mocks.list.mockResolvedValue([]);
+    await loadGallery();
+    mocks.upload.mockReturnValue(new Promise(() => {}));
+
+    void addGalleryPhoto({ ...UPLOAD, takenAt: new Date(2026, 7, 15, 12, 0), pose: 'front' });
+    await vi.waitFor(() => expect(getGalleryState().photos).toHaveLength(1));
+    const optimistic = getGalleryState().photos[0]!;
+    expect(optimistic.metadata).toBeNull();
+
+    const ok = await replaceGalleryPhoto(optimistic.photoId, {
+      ...UPLOAD,
+      takenAt: new Date(2026, 7, 15, 12, 0),
+      pose: 'front',
+    });
+
+    expect(ok).toBe(false);
+    // Without this the screen falls back to "your current photo was kept",
+    // which is false: nothing was kept because nothing is persisted yet.
+    expect(getGalleryState().issue).toBe('vaultReplaceSlotMissing');
+  });
+
+  it('leaves the in-flight upload untouched', async () => {
+    mocks.list.mockResolvedValue([]);
+    await loadGallery();
+    mocks.upload.mockReturnValue(new Promise(() => {}));
+    void addGalleryPhoto({ ...UPLOAD, takenAt: new Date(2026, 7, 15, 12, 0), pose: 'front' });
+    await vi.waitFor(() => expect(getGalleryState().photos).toHaveLength(1));
+
+    await replaceGalleryPhoto(getGalleryState().photos[0]!.photoId, {
+      ...UPLOAD,
+      takenAt: new Date(2026, 7, 15, 12, 0),
+      pose: 'front',
+    });
+
+    expect(getGalleryState().photos[0]!.uploadStatus).toBe('uploading');
   });
 });

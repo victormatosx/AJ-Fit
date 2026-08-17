@@ -451,6 +451,338 @@ describe('progressPhotos — encryption metadata', () => {
   rejectsEncryption('rejects encryption as a non-map', 'AES-256-GCM');
 });
 
+// ── progressPhotos: posed schema (phase 14) ────────────────────────────────
+//
+// The third accepted shape adds assetId/dateKey/pose. Its document is named
+// `{dateKey}_{pose}` so Firestore itself enforces at most one photo per pose
+// per day — `create` only fires on a non-existent document and `update` is
+// denied outright. The ciphertext keeps an opaque UUID name so the Storage
+// object never reveals the day or the pose.
+
+const ASSET_ID = '550e8400-e29b-41d4-a716-446655440000';
+const OTHER_ASSET_ID = '550e8400-e29b-41d4-a716-446655440001';
+const DATE_KEY = '2026-08-01';
+const POSED_ID = `${DATE_KEY}_front`;
+
+function validPosedPhoto(
+  overrides: Record<string, unknown> = {},
+  uid = UID,
+  assetId = ASSET_ID,
+) {
+  return {
+    storagePath: `users/${uid}/progressPhotos/${assetId}.enc`,
+    thumbnailStoragePath: `users/${uid}/progressPhotos/${assetId}.thumb.enc`,
+    assetId,
+    dateKey: DATE_KEY,
+    pose: 'front',
+    createdAt: serverTimestamp(),
+    takenAt: Timestamp.fromDate(new Date('2026-08-01T10:00:00Z')),
+    originalMimeType: 'image/jpeg',
+    encryptedSize: 2_400_000,
+    thumbnailEncryptedSize: 120_000,
+    encryption: {
+      version: 1,
+      algorithm: 'AES-256-GCM',
+      iv: 'YWJjZGVmZ2hpamts',
+      vaultKeyVersion: 1,
+    },
+    thumbnailEncryption: {
+      version: 1,
+      algorithm: 'AES-256-GCM',
+      iv: 'bW5vcHFyc3R1dnd4',
+      vaultKeyVersion: 1,
+    },
+    ...overrides,
+  };
+}
+
+function createPosed(payload: Record<string, unknown>, documentId = POSED_ID, db = ownerDb()) {
+  return setDoc(doc(db, 'users', UID, 'progressPhotos', documentId), payload);
+}
+
+describe('progressPhotos — posed schema accepted', () => {
+  for (const pose of ['front', 'side', 'back']) {
+    it(`accepts the ${pose} pose with a matching document id`, async () => {
+      await assertSucceeds(
+        createPosed(validPosedPhoto({ pose }), `${DATE_KEY}_${pose}`),
+      );
+    });
+  }
+
+  it('accepts a photo whose day is far in the past', async () => {
+    // `takenAt` may come from EXIF, so a library photo legitimately belongs to
+    // any past day. There is deliberately no lower bound on dateKey.
+    await assertSucceeds(
+      createPosed(
+        validPosedPhoto({
+          dateKey: '2020-01-15',
+          takenAt: Timestamp.fromDate(new Date('2020-01-15T10:00:00Z')),
+        }),
+        '2020-01-15_front',
+      ),
+    );
+  });
+
+  it('stores the asset under an opaque uuid, not under the day or pose', async () => {
+    await assertSucceeds(createPosed(validPosedPhoto()));
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const snapshot = await getDoc(
+        doc(ctx.firestore(), 'users', UID, 'progressPhotos', POSED_ID),
+      );
+      expect(snapshot.data()?.storagePath).toBe(
+        `users/${UID}/progressPhotos/${ASSET_ID}.enc`,
+      );
+      expect(snapshot.data()?.storagePath).not.toContain(DATE_KEY);
+      expect(snapshot.data()?.storagePath).not.toContain('front');
+    });
+  });
+});
+
+describe('progressPhotos — posed uniqueness and document id', () => {
+  it('refuses a second photo for the same day and pose', async () => {
+    await assertSucceeds(createPosed(validPosedPhoto()));
+    // The id is the uniqueness key, so the second write is an update, and
+    // updates are denied. Firestore enforces this, not the client.
+    await assertFails(createPosed(validPosedPhoto({ assetId: OTHER_ASSET_ID })));
+  });
+
+  it('allows a different pose on the same day', async () => {
+    await assertSucceeds(createPosed(validPosedPhoto()));
+    await assertSucceeds(
+      createPosed(
+        validPosedPhoto({ pose: 'side', assetId: OTHER_ASSET_ID }, UID, OTHER_ASSET_ID),
+        `${DATE_KEY}_side`,
+      ),
+    );
+  });
+
+  it('rejects a document id that does not encode dateKey and pose', async () => {
+    await assertFails(createPosed(validPosedPhoto(), 'arbitrary-id'));
+  });
+
+  it('rejects the right day with the wrong pose in the id', async () => {
+    await assertFails(createPosed(validPosedPhoto({ pose: 'front' }), `${DATE_KEY}_side`));
+  });
+
+  it('rejects the right pose with the wrong day in the id', async () => {
+    await assertFails(createPosed(validPosedPhoto(), '2026-08-02_front'));
+  });
+});
+
+describe('progressPhotos — posed pose validation', () => {
+  const rejects = (name: string, pose: unknown) =>
+    it(name, async () => {
+      await assertFails(
+        createPosed(validPosedPhoto({ pose }), `${DATE_KEY}_${String(pose)}`),
+      );
+    });
+
+  rejects('rejects an uppercase pose', 'Front');
+  rejects('rejects a translated pose', 'frente');
+  rejects('rejects an unlisted pose', 'profile');
+  // "unknown" must never become a fourth persisted value: the ABSENCE of the
+  // field is what identifies a pre-pose photo.
+  rejects('rejects unknown as a pose', 'unknown');
+  rejects('rejects an empty pose', '');
+  rejects('rejects a null pose', null);
+  rejects('rejects a non-string pose', 3);
+});
+
+describe('progressPhotos — posed dateKey validation', () => {
+  const rejects = (name: string, dateKey: unknown) =>
+    it(name, async () => {
+      await assertFails(
+        createPosed(validPosedPhoto({ dateKey }), `${String(dateKey)}_front`),
+      );
+    });
+
+  rejects('rejects a non padded date', '2026-8-1');
+  rejects('rejects a reversed date', '15-08-2026');
+  rejects('rejects a slash separated date', '2026/08/15');
+  rejects('rejects an impossible month', '2026-13-01');
+  rejects('rejects an impossible day', '2026-08-32');
+  rejects('rejects a timestamp in place of the key', 1_755_000_000);
+  rejects('rejects an empty dateKey', '');
+
+  it('rejects a day far in the future', async () => {
+    await assertFails(
+      createPosed(validPosedPhoto({ dateKey: '2099-01-01' }), '2099-01-01_front'),
+    );
+  });
+
+  it('rejects a posed document with no dateKey', async () => {
+    const { dateKey: _omitted, ...withoutDateKey } = validPosedPhoto();
+    await assertFails(createPosed(withoutDateKey));
+  });
+});
+
+describe('progressPhotos — posed assetId validation', () => {
+  it('rejects an assetId that is not a uuid', async () => {
+    await assertFails(
+      createPosed(
+        validPosedPhoto({
+          assetId: 'not-a-uuid',
+          storagePath: `users/${UID}/progressPhotos/not-a-uuid.enc`,
+          thumbnailStoragePath: `users/${UID}/progressPhotos/not-a-uuid.thumb.enc`,
+        }),
+      ),
+    );
+  });
+
+  it('rejects a posed document with no assetId', async () => {
+    const { assetId: _omitted, ...withoutAssetId } = validPosedPhoto();
+    await assertFails(createPosed(withoutAssetId));
+  });
+
+  it('rejects a storagePath pointing at a different asset', async () => {
+    await assertFails(
+      createPosed(
+        validPosedPhoto({
+          storagePath: `users/${UID}/progressPhotos/${OTHER_ASSET_ID}.enc`,
+        }),
+      ),
+    );
+  });
+
+  it('rejects a thumbnailStoragePath pointing at a different asset', async () => {
+    await assertFails(
+      createPosed(
+        validPosedPhoto({
+          thumbnailStoragePath: `users/${UID}/progressPhotos/${OTHER_ASSET_ID}.thumb.enc`,
+        }),
+      ),
+    );
+  });
+
+  it('rejects a storagePath named after the document instead of the asset', async () => {
+    await assertFails(
+      createPosed(
+        validPosedPhoto({
+          storagePath: `users/${UID}/progressPhotos/${POSED_ID}.enc`,
+        }),
+      ),
+    );
+  });
+});
+
+describe('progressPhotos — posed schema is closed', () => {
+  it('rejects an unknown extra field', async () => {
+    await assertFails(createPosed(validPosedPhoto({ bodyPart: 'chest' })));
+  });
+
+  it('rejects a posed document missing its thumbnail fields', async () => {
+    const {
+      thumbnailStoragePath: _a,
+      thumbnailEncryptedSize: _b,
+      thumbnailEncryption: _c,
+      ...withoutThumbnail
+    } = validPosedPhoto();
+    await assertFails(createPosed(withoutThumbnail));
+  });
+
+  it('rejects a forged createdAt', async () => {
+    await assertFails(
+      createPosed(validPosedPhoto({ createdAt: Timestamp.fromDate(new Date('2020-01-01')) })),
+    );
+  });
+
+  it('rejects a takenAt in the future', async () => {
+    await assertFails(
+      createPosed(
+        validPosedPhoto({ takenAt: Timestamp.fromDate(new Date('2099-01-01')) }),
+      ),
+    );
+  });
+
+  it('rejects thumbnail nonce reuse', async () => {
+    await assertFails(
+      createPosed(
+        validPosedPhoto({
+          thumbnailEncryption: {
+            version: 1,
+            algorithm: 'AES-256-GCM',
+            iv: 'YWJjZGVmZ2hpamts',
+            vaultKeyVersion: 1,
+          },
+        }),
+      ),
+    );
+  });
+
+  it('keeps posed documents immutable', async () => {
+    await assertSucceeds(createPosed(validPosedPhoto()));
+    await assertFails(
+      updateDoc(doc(ownerDb(), 'users', UID, 'progressPhotos', POSED_ID), {
+        pose: 'side',
+      }),
+    );
+  });
+});
+
+describe('progressPhotos — posed cross-user isolation', () => {
+  it('refuses a posed document written into another user namespace', async () => {
+    await assertFails(
+      setDoc(
+        doc(otherDb(), 'users', UID, 'progressPhotos', POSED_ID),
+        validPosedPhoto(),
+      ),
+    );
+  });
+
+  it('refuses paths that point at another user asset', async () => {
+    await assertFails(
+      createPosed(
+        validPosedPhoto({
+          storagePath: `users/${OTHER_UID}/progressPhotos/${ASSET_ID}.enc`,
+          thumbnailStoragePath: `users/${OTHER_UID}/progressPhotos/${ASSET_ID}.thumb.enc`,
+        }),
+      ),
+    );
+  });
+
+  it('allows the owner to delete and read a posed document', async () => {
+    await assertSucceeds(createPosed(validPosedPhoto()));
+    await assertSucceeds(
+      getDoc(doc(ownerDb(), 'users', UID, 'progressPhotos', POSED_ID)),
+    );
+    await assertSucceeds(
+      deleteDoc(doc(ownerDb(), 'users', UID, 'progressPhotos', POSED_ID)),
+    );
+  });
+});
+
+describe('progressPhotos — earlier shapes still accepted', () => {
+  it('still accepts the six-field legacy shape', async () => {
+    await assertSucceeds(
+      setDoc(doc(ownerDb(), 'users', UID, 'progressPhotos', PHOTO_ID), validPhoto()),
+    );
+  });
+
+  it('still accepts the phase-13 thumbnail shape', async () => {
+    await assertSucceeds(
+      setDoc(
+        doc(ownerDb(), 'users', UID, 'progressPhotos', PHOTO_ID),
+        validPhotoWithThumbnail(),
+      ),
+    );
+  });
+
+  it('still rejects pose or dateKey grafted onto an earlier shape', async () => {
+    await assertFails(
+      setDoc(
+        doc(ownerDb(), 'users', UID, 'progressPhotos', PHOTO_ID),
+        validPhotoWithThumbnail({ pose: 'front' }),
+      ),
+    );
+    await assertFails(
+      setDoc(
+        doc(ownerDb(), 'users', UID, 'progressPhotos', PHOTO_ID),
+        validPhoto({ dateKey: DATE_KEY }),
+      ),
+    );
+  });
+});
+
 // ── privateSecurity: backend-only ──────────────────────────────────────────
 
 describe('privateSecurity/photoVault — backend-only', () => {
