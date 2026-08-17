@@ -79,6 +79,18 @@
       "titleLine1": "Solo tienes que",
       "titleLine2": "ejecutar.",
       "body": "Series, repeticiones, carga y descanso. Todo en el momento justo.",
+      "carouselLabel": "Carrusel de funciones de entreno guiado de AJ Fit",
+      "slides": {
+        "guide": {
+          "body": "Te guiamos en tus series"
+        },
+        "progress": {
+          "body": "Te incentivamos a progresar la carga"
+        },
+        "execution": {
+          "body": "Te ayudamos en la ejecución"
+        }
+      },
       "cta": "Continuar"
     },
     "ajFitProgress": {

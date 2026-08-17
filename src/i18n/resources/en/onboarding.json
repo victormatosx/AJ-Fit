@@ -79,6 +79,18 @@
       "titleLine1": "You just need to",
       "titleLine2": "execute.",
       "body": "Sets, reps, load, and rest. All at the right moment.",
+      "carouselLabel": "Carousel of AJ Fit guided workout features",
+      "slides": {
+        "guide": {
+          "body": "We guide you through your sets"
+        },
+        "progress": {
+          "body": "We push you to progress your load"
+        },
+        "execution": {
+          "body": "We help you with your execution"
+        }
+      },
       "cta": "Continue"
     },
     "ajFitProgress": {

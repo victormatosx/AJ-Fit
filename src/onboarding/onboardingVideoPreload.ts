@@ -1,9 +1,8 @@
 import { createVideoPlayer, type VideoPlayer } from 'expo-video';
+import { guidedWorkoutShowcaseSlides, type GuidedWorkoutSlideId } from '../data/guidedWorkoutShowcase';
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires -- static asset require, path fixed at build time
 const METHODOLOGY_VIDEO_SOURCE = require('../../assets/videos/methodology-workout.mp4');
-// eslint-disable-next-line @typescript-eslint/no-var-requires -- static asset require, path fixed at build time
-const GUIDED_WORKOUT_VIDEO_SOURCE = require('../../assets/videos/guided-workout.mp4');
 
 /**
  * Singleton-per-video registry backing the onboarding funnel's background
@@ -12,33 +11,36 @@ const GUIDED_WORKOUT_VIDEO_SOURCE = require('../../assets/videos/guided-workout.
  * so a player created here keeps opening/preparing its local asset across
  * several more funnel steps instead of starting from zero only once the
  * interstitial itself mounts.
- *
- * Two small named entries rather than a generic map: only two videos exist,
- * both wired into `OnboardingFunnelScreen` explicitly, so a registry
- * abstraction would add indirection without removing any real duplication.
  */
-const players: { methodology: VideoPlayer | null; guidedWorkout: VideoPlayer | null } = {
-  methodology: null,
-  guidedWorkout: null,
-};
+let methodologyPlayer: VideoPlayer | null = null;
+const guidedWorkoutPlayers: Partial<Record<GuidedWorkoutSlideId, VideoPlayer>> = {};
 
-function getOrCreatePlayer(key: keyof typeof players, source: number): VideoPlayer {
-  let player = players[key];
-  if (!player) {
-    player = createVideoPlayer(source);
-    player.loop = true;
-    player.muted = true;
-    players[key] = player;
-  }
+function createLoopingMutedPlayer(source: number): VideoPlayer {
+  const player = createVideoPlayer(source);
+  player.loop = true;
+  player.muted = true;
   return player;
 }
 
 export function getMethodologyVideoPlayer(): VideoPlayer {
-  return getOrCreatePlayer('methodology', METHODOLOGY_VIDEO_SOURCE);
+  if (!methodologyPlayer) {
+    methodologyPlayer = createLoopingMutedPlayer(METHODOLOGY_VIDEO_SOURCE);
+  }
+  return methodologyPlayer;
 }
 
-export function getGuidedWorkoutVideoPlayer(): VideoPlayer {
-  return getOrCreatePlayer('guidedWorkout', GUIDED_WORKOUT_VIDEO_SOURCE);
+/**
+ * The Guided Workout interstitial is a carousel of three short clips
+ * (`video-01/02/03.mp4`), each with its own singleton player so the
+ * carousel can pause the inactive two while the active one plays.
+ */
+export function getGuidedWorkoutVideoPlayers(): Record<GuidedWorkoutSlideId, VideoPlayer> {
+  for (const slide of guidedWorkoutShowcaseSlides) {
+    if (!guidedWorkoutPlayers[slide.id]) {
+      guidedWorkoutPlayers[slide.id] = createLoopingMutedPlayer(slide.source);
+    }
+  }
+  return guidedWorkoutPlayers as Record<GuidedWorkoutSlideId, VideoPlayer>;
 }
 
 /**
@@ -52,12 +54,12 @@ export function preloadMethodologyVideo(): void {
 }
 
 /**
- * Warms up the Guided Workout singleton two steps before the user can reach
+ * Warms up the Guided Workout singletons two steps before the user can reach
  * that interstitial (`duration` → `place` → `interstitial_guidedWorkout`).
  * Idempotent: safe to call on every render of the triggering step.
  */
 export function preloadGuidedWorkoutVideo(): void {
-  getGuidedWorkoutVideoPlayer();
+  getGuidedWorkoutVideoPlayers();
 }
 
 /**
@@ -68,17 +70,19 @@ export function preloadGuidedWorkoutVideo(): void {
  * dev jump or back-navigation revisit should still find it warm.
  */
 export function releaseMethodologyVideoPlayer(): void {
-  players.methodology?.release();
-  players.methodology = null;
+  methodologyPlayer?.release();
+  methodologyPlayer = null;
 }
 
 /**
- * Releases the Guided Workout player. Call when the whole funnel unmounts
- * (user leaves onboarding) — not on the interstitial screen's own unmount,
- * which only pauses it so revisiting (dev jump, or going back then forward
- * again) doesn't pay the decoder-init cost twice.
+ * Releases the three Guided Workout players. Call when the whole funnel
+ * unmounts (user leaves onboarding) — not on the interstitial screen's own
+ * unmount, which only pauses them so revisiting (dev jump, or going back
+ * then forward again) doesn't pay the decoder-init cost twice.
  */
 export function releaseGuidedWorkoutVideoPlayer(): void {
-  players.guidedWorkout?.release();
-  players.guidedWorkout = null;
+  for (const slide of guidedWorkoutShowcaseSlides) {
+    guidedWorkoutPlayers[slide.id]?.release();
+    delete guidedWorkoutPlayers[slide.id];
+  }
 }
