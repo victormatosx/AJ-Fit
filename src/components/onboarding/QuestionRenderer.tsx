@@ -155,45 +155,13 @@ export function ChoiceList({
             }}
           >
             {sel && <HudCorners />}
-            {o.icon && (
-              <View
-                style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: 10,
-                  backgroundColor: sel ? colors.accent : 'rgba(255,255,255,0.05)',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <Icon name={o.icon} size={20} color="#fff" />
-              </View>
-            )}
             <View style={{ flex: 1 }}>
               <Text style={{ fontFamily: fonts.uiBold, fontSize: 16, color: '#fff' }}>{label}</Text>
               <Text style={{ fontFamily: fonts.ui, fontSize: 13, color: colors.mute, marginTop: 2 }}>
                 {description}
               </Text>
             </View>
-            <View
-              style={{
-                width: 20,
-                height: 20,
-                borderRadius: 4,
-                transform: [{ rotate: '45deg' }],
-                borderWidth: sel ? 0 : 1.5,
-                borderColor: 'rgba(255,255,255,0.22)',
-                backgroundColor: sel ? colors.accent : 'transparent',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              {sel && (
-                <View style={{ transform: [{ rotate: '-45deg' }] }}>
-                  <Icon name="check" size={12} color="#fff" />
-                </View>
-              )}
-            </View>
+            {sel && <Icon name="check" size={20} color={colors.accentHi} stroke={2.8} />}
           </Pressable>
         );
       })}
@@ -256,23 +224,18 @@ export function MultiList({
               shadowOffset: { width: 0, height: 0 },
             }}
           >
-            <View
+            <Text
               style={{
-                width: 18,
-                height: 18,
-                borderRadius: 4,
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: sel ? colors.accent : 'transparent',
-                borderWidth: sel ? 0 : 1.5,
-                borderColor: 'rgba(255,255,255,0.22)',
+                fontFamily: fonts.uiSemi,
+                fontSize: 14.5,
+                color: '#fff',
+                flexShrink: 1,
+                flex: 1,
               }}
             >
-              {sel && <Icon name="check" size={11} color="#fff" stroke={2.6} />}
-            </View>
-            <Text style={{ fontFamily: fonts.uiSemi, fontSize: 14.5, color: '#fff', flexShrink: 1 }}>
               {label}
             </Text>
+            {sel && <Icon name="check" size={18} color={colors.accentHi} stroke={2.8} />}
           </Pressable>
         );
       })}
