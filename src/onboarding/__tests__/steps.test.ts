@@ -62,7 +62,8 @@ describe('getStepSequence / anonymous vs forcedQuestionnaire', () => {
 });
 
 describe('getNextStepId / getPreviousStepId', () => {
-  it('walks the anonymous sequence forward and back to the same place', () => {
+  it('walks the anonymous sequence forward, and back never lands on an auto-advancing kind', () => {
+    const skipKinds = ['interstitial', 'socialProof', 'processing'];
     let id: OnboardingStepId = 'presentation';
     const visited: OnboardingStepId[] = [id];
     for (let i = 0; i < 24; i++) {
@@ -72,9 +73,23 @@ describe('getNextStepId / getPreviousStepId', () => {
       visited.push(id);
     }
     expect(getNextStepId(id, 'anonymous')).toBeNull();
-    for (let i = visited.length - 1; i > 0; i--) {
-      expect(getPreviousStepId(visited[i], 'anonymous')).toBe(visited[i - 1]);
+    for (const stepId of visited) {
+      const prev = getPreviousStepId(stepId, 'anonymous');
+      if (prev) expect(skipKinds).not.toContain(getStepDef(prev).kind);
     }
+  });
+
+  it('back from a question after an interstitial skips straight to the prior question', () => {
+    // presentation -> name -> welcome(interstitial) -> motivation
+    expect(getPreviousStepId('motivation', 'anonymous')).toBe('name');
+    // level -> interstitial_evolution -> sex
+    expect(getPreviousStepId('sex', 'anonymous')).toBe('level');
+    // weight -> interstitial_methodology -> days
+    expect(getPreviousStepId('days', 'anonymous')).toBe('weight');
+    // place -> interstitial_guidedWorkout -> limits
+    expect(getPreviousStepId('limits', 'anonymous')).toBe('place');
+    // muscleFocus -> interstitial_ajFitProgress -> socialProof -> commitment
+    expect(getPreviousStepId('commitment', 'anonymous')).toBe('muscleFocus');
   });
 
   it('has no previous step before the first step of each mode', () => {

@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, TextInput, KeyboardAvoidingView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Svg, { Text as SvgText } from 'react-native-svg';
 import { useTranslation } from 'react-i18next';
 import { Display, Slash } from '../../components/ui/Display';
 import { CtaButton, CtaText } from '../../components/ui/CtaButton';
 import { SegBar } from '../../components/ui/SegBar';
-import { colors, fonts, sizes, spacing } from '../../theme/tokens';
+import { colors, fonts, radii, sizes, spacing } from '../../theme/tokens';
 import type { OnboardingProgress } from '../../onboarding/useOnboardingFunnel';
 
 const MAX_NAME_LENGTH = 40;
@@ -33,15 +34,29 @@ export function NameStepScreen({
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+    <View style={{ flex: 1, backgroundColor: colors.bg, overflow: 'hidden' }}>
+      <View pointerEvents="none" style={{ position: 'absolute', top: -28, right: 10 }}>
+        <Svg width={280} height={220}>
+          <SvgText
+            x={280}
+            y={220 * 0.85}
+            fontFamily={fonts.display}
+            fontSize={240}
+            textAnchor="end"
+            stroke="rgba(255,255,255,0.22)"
+            strokeWidth={1.5}
+            fill="none"
+          >
+            01
+          </SvgText>
+        </Svg>
+      </View>
+
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
         <View style={{ paddingHorizontal: sizes.screenGutter, paddingTop: spacing[3] }}>
           <SegBar value={progress.total ? progress.current / progress.total : 0} segs={progress.total || 1} />
         </View>
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        >
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={0}>
           <View style={{ flex: 1, paddingHorizontal: sizes.screenGutter, paddingTop: spacing[6] }}>
             <View style={{ flex: 1, justifyContent: 'center' }}>
               <Slash>{t('name.eyebrow')}</Slash>
@@ -52,8 +67,7 @@ export function NameStepScreen({
               <TextInput
                 value={draft}
                 onChangeText={(txt) => setDraft(txt.slice(0, MAX_NAME_LENGTH))}
-                placeholder={t('name.placeholder')}
-                placeholderTextColor={colors.faint}
+                autoFocus
                 autoCapitalize="words"
                 autoCorrect={false}
                 returnKeyType="done"
@@ -63,16 +77,19 @@ export function NameStepScreen({
                 style={{
                   marginTop: spacing[6],
                   fontFamily: fonts.display,
-                  fontSize: 34,
+                  fontSize: 22,
                   color: '#fff',
-                  borderBottomWidth: 2,
-                  borderBottomColor: canContinue ? colors.accentHi : 'rgba(255,255,255,0.15)',
-                  paddingBottom: spacing[2],
+                  backgroundColor: colors.surfaceRaised,
+                  borderRadius: radii.lg,
+                  borderWidth: 1,
+                  borderColor: canContinue ? colors.accentHi : colors.border,
+                  paddingHorizontal: spacing[4],
+                  paddingVertical: spacing[4],
                 }}
               />
             </View>
 
-            <CtaButton onPress={commitAndContinue} disabled={!canContinue} style={{ marginBottom: spacing[2] }}>
+            <CtaButton onPress={commitAndContinue} disabled={!canContinue} style={{ marginBottom: spacing[6] }}>
               <CtaText>{t('name.cta')}</CtaText>
             </CtaButton>
           </View>

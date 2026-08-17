@@ -149,14 +149,24 @@ export function getNextStepId(
   return seq[i + 1];
 }
 
+/**
+ * Kinds with no back button of their own — pure auto-advancing transitions
+ * (interstitials, social proof, the analyzing screen). Never a valid back
+ * target: landing on one would show a screen the user can't interact with
+ * or navigate further back from.
+ */
+const NON_BACK_TARGET_KINDS: readonly OnboardingStepKind[] = ['interstitial', 'socialProof', 'processing'];
+
 export function getPreviousStepId(
   current: OnboardingStepId,
   mode: 'anonymous' | 'forcedQuestionnaire',
 ): OnboardingStepId | null {
   const seq = getStepSequence(mode);
-  const i = seq.indexOf(current);
-  if (i <= 0) return null;
-  return seq[i - 1];
+  let i = seq.indexOf(current) - 1;
+  while (i >= 0 && NON_BACK_TARGET_KINDS.includes(getStepDef(seq[i]).kind)) {
+    i -= 1;
+  }
+  return i >= 0 ? seq[i] : null;
 }
 
 const QUESTION_STEP_IDS: readonly OnboardingStepId[] = ONBOARDING_STEPS.filter(
