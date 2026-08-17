@@ -80,9 +80,21 @@
     "title": "¿Dónde entrenas?",
     "sub": "El entreno usa solo lo que tienes.",
     "options": {
-      "gym": { "label": "Gimnasio", "short": "GYM" },
-      "home": { "label": "Casa", "short": "CASA" },
-      "both": { "label": "Ambos", "short": "2X" }
+      "gym": {
+        "label": "Gimnasio",
+        "short": "GYM",
+        "description": "Acceso completo a equipos — barras, máquinas, poleas."
+      },
+      "home": {
+        "label": "Casa",
+        "short": "CASA",
+        "description": "Peso corporal y lo que tengas disponible en casa."
+      },
+      "both": {
+        "label": "Ambos",
+        "short": "2X",
+        "description": "Alternas entre días de gimnasio y entrenos en casa."
+      }
     }
   },
   "equipment": {

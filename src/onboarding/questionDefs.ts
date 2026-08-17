@@ -47,8 +47,12 @@ export const FUNNEL_QUESTIONS: Partial<Record<OnboardingStepId, Question>> = {
   },
   place: {
     id: 'place',
-    kind: 'choice',
-    options: [{ v: 'gym' }, { v: 'home' }, { v: 'both' }],
+    kind: 'choice-large',
+    options: [
+      { v: 'gym', icon: 'dumbbell' },
+      { v: 'home', icon: 'heart' },
+      { v: 'both', icon: 'bolt' },
+    ],
   },
   limits: {
     id: 'limits',

@@ -80,9 +80,21 @@
     "title": "Where do you train?",
     "sub": "The workout uses only what you have.",
     "options": {
-      "gym": { "label": "Gym", "short": "GYM" },
-      "home": { "label": "Home", "short": "HOME" },
-      "both": { "label": "Both", "short": "2X" }
+      "gym": {
+        "label": "Gym",
+        "short": "GYM",
+        "description": "Full equipment access — barbells, machines, cables."
+      },
+      "home": {
+        "label": "Home",
+        "short": "HOME",
+        "description": "Bodyweight and whatever gear you've got at home."
+      },
+      "both": {
+        "label": "Both",
+        "short": "2X",
+        "description": "You switch between gym days and home workouts."
+      }
     }
   },
   "equipment": {

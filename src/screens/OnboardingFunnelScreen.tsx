@@ -18,7 +18,6 @@ import { EvolutionInterstitialScreen } from './onboarding/EvolutionInterstitialS
 import { MethodologyInterstitialScreen } from './onboarding/MethodologyInterstitialScreen';
 import { GuidedWorkoutInterstitialScreen } from './onboarding/GuidedWorkoutInterstitialScreen';
 import { AjFitProgressInterstitialScreen } from './onboarding/AjFitProgressInterstitialScreen';
-import { EquipmentPicker } from '../components/fitness/EquipmentPicker';
 import type { Quiz } from '../state/AppState';
 
 export function OnboardingFunnelScreen({
@@ -119,22 +118,6 @@ export function OnboardingFunnelScreen({
     case 'place':
       content = renderQuestion('place');
       break;
-    case 'equipment': {
-      const stepLabel = t('equipment.stepLabel', {
-        current: String(progress.current).padStart(2, '0'),
-        total: String(progress.total).padStart(2, '0'),
-      }).toUpperCase();
-      content = (
-        <EquipmentPicker
-          value={quiz.equipment}
-          onChange={(v) => setAnswer('equipment', v)}
-          onDone={goNext}
-          onBack={goBack}
-          stepLabel={stepLabel}
-        />
-      );
-      break;
-    }
     case 'interstitial_guidedWorkout':
       content = <GuidedWorkoutInterstitialScreen progress={progress} onContinue={goNext} />;
       break;

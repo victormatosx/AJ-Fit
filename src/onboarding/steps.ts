@@ -3,7 +3,7 @@
  * source of truth for "what comes after what". See
  * docs/onboarding_funnel_architecture.md for the full narrative rationale.
  *
- * `App.tsx`/`premiumGate.ts` know nothing about these 26 ids — they only see
+ * `App.tsx`/`premiumGate.ts` know nothing about these 25 ids — they only see
  * the single `RootScreenId` value `'onboardingFunnel'`. Everything below is
  * internal to `useOnboardingFunnel`/`OnboardingFunnelScreen`.
  */
@@ -34,7 +34,6 @@ export type OnboardingStepId =
   | 'days'
   | 'duration'
   | 'place'
-  | 'equipment'
   | 'interstitial_guidedWorkout'
   | 'limits'
   | 'muscleFocus'
@@ -76,7 +75,6 @@ export const ONBOARDING_STEPS: readonly OnboardingStepDef[] = [
   { id: 'days', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
   { id: 'duration', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
   { id: 'place', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
-  { id: 'equipment', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
   { id: 'interstitial_guidedWorkout', kind: 'interstitial', countsTowardProgress: false, persistsToDraft: false, devJumpable: true },
   { id: 'limits', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
   { id: 'muscleFocus', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
@@ -109,7 +107,6 @@ export const FORCED_QUESTIONNAIRE_STEP_IDS: readonly OnboardingStepId[] = [
   'days',
   'duration',
   'place',
-  'equipment',
   'interstitial_guidedWorkout',
   'limits',
   'muscleFocus',

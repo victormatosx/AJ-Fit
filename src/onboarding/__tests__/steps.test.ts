@@ -14,10 +14,10 @@ import {
 } from '../steps';
 
 describe('ONBOARDING_STEPS', () => {
-  it('has 26 unique step ids', () => {
+  it('has 25 unique step ids', () => {
     const ids = ONBOARDING_STEPS.map((s) => s.id);
-    expect(ids).toHaveLength(26);
-    expect(new Set(ids).size).toBe(26);
+    expect(ids).toHaveLength(25);
+    expect(new Set(ids).size).toBe(25);
   });
 
   it('never lets auth/paywall be dev-jumpable', () => {
@@ -46,7 +46,7 @@ describe('ONBOARDING_STEPS', () => {
 });
 
 describe('getStepSequence / anonymous vs forcedQuestionnaire', () => {
-  it('anonymous sequence includes all 26 steps in ONBOARDING_STEPS order', () => {
+  it('anonymous sequence includes all 25 steps in ONBOARDING_STEPS order', () => {
     expect(getStepSequence('anonymous')).toEqual(ONBOARDING_STEPS.map((s) => s.id));
   });
 
@@ -65,7 +65,7 @@ describe('getNextStepId / getPreviousStepId', () => {
   it('walks the anonymous sequence forward and back to the same place', () => {
     let id: OnboardingStepId = 'presentation';
     const visited: OnboardingStepId[] = [id];
-    for (let i = 0; i < 25; i++) {
+    for (let i = 0; i < 24; i++) {
       const next = getNextStepId(id, 'anonymous');
       expect(next).not.toBeNull();
       id = next!;
