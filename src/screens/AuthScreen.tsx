@@ -6,6 +6,7 @@ import {
   Pressable,
   ActivityIndicator,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   ScrollView,
 } from 'react-native';
@@ -17,7 +18,7 @@ import { Display, Slash } from '../components/ui/Display';
 import { CtaButton } from '../components/ui/CtaButton';
 import { Icon, IconName } from '../components/ui/Icon';
 import { OutlineNumber } from '../components/ui/OutlineNumber';
-import { colors, fonts } from '../theme/tokens';
+import { colors, fonts, radii, sizes, spacing } from '../theme/tokens';
 import { useAuth } from '../state/AuthContext';
 import { useAppState } from '../state/AppState';
 import {
@@ -147,7 +148,10 @@ export function AuthScreen({
   const [appleAvailable, setAppleAvailable] = useState(Platform.OS === 'ios');
   // Starts false and is enabled only if the native Google module is present in
   // the binary (absent in Expo Go / a build made before the package was added).
+  // The button itself is always rendered (see showGoogle below); this only
+  // gates whether tapping it opens the native sheet or the "unavailable" modal.
   const [googleAvailable, setGoogleAvailable] = useState(false);
+  const [googleUnavailableNotice, setGoogleUnavailableNotice] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -162,7 +166,10 @@ export function AuthScreen({
     };
   }, []);
 
-  const showGoogle = Platform.OS !== 'web' && googleAvailable;
+  // Google's button is always rendered; incompatible platforms/builds are
+  // handled by showing an "unavailable" modal on tap instead of hiding it.
+  const showGoogle = true;
+  const googleReallyAvailable = Platform.OS !== 'web' && googleAvailable;
   const showApple = Platform.OS === 'ios' && appleAvailable;
   const showSocial = showGoogle || showApple;
   const busy = loading || socialBusy !== null;
@@ -216,6 +223,10 @@ export function AuthScreen({
 
   async function handleSocial(provider: SocialProvider) {
     if (busy) return;
+    if (provider === 'google' && !googleReallyAvailable) {
+      setGoogleUnavailableNotice(true);
+      return;
+    }
     clearPendingSocialAuthState();
     setError(null);
     setInfo(null);
@@ -590,6 +601,60 @@ export function AuthScreen({
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
+
+      <Modal
+        visible={googleUnavailableNotice}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setGoogleUnavailableNotice(false)}
+        statusBarTranslucent
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: colors.overlayStrong,
+            justifyContent: 'center',
+            paddingHorizontal: spacing[6],
+          }}
+        >
+          <View
+            style={{
+              width: '100%',
+              maxWidth: sizes.modalMaxWidth,
+              alignSelf: 'center',
+              padding: spacing[5],
+              borderRadius: radii.xl,
+              borderWidth: 1,
+              borderColor: colors.borderStrong,
+              backgroundColor: '#0a0620',
+              gap: 12,
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <Icon name="google" size={18} color={colors.mute} />
+              <Text style={{ flex: 1, color: '#fff', fontFamily: fonts.uiSemi, fontSize: 15 }}>
+                {t('social.unavailable.title')}
+              </Text>
+            </View>
+            <Text style={{ color: colors.mute, fontFamily: fonts.ui, fontSize: 13.5, lineHeight: 19 }}>
+              {t('social.unavailable.message')}
+            </Text>
+            <CtaButton onPress={() => setGoogleUnavailableNotice(false)}>
+              <Text
+                style={{
+                  color: '#fff',
+                  fontFamily: fonts.display,
+                  fontSize: 15,
+                  letterSpacing: 1,
+                  textTransform: 'uppercase',
+                }}
+              >
+                {t('social.unavailable.dismiss')}
+              </Text>
+            </CtaButton>
+          </View>
+        </View>
+      </Modal>
     </ScreenBg>
   );
 }
