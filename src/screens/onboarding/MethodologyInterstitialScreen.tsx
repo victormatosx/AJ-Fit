@@ -10,7 +10,7 @@ import { CtaButton, CtaText } from '../../components/ui/CtaButton';
 import { SegBar } from '../../components/ui/SegBar';
 import { colors, fonts, motion, sizes, spacing } from '../../theme/tokens';
 import { useReducedMotionPreference } from '../../lib/reducedMotion';
-import { getMethodologyVideoPlayer } from '../../onboarding/methodologyVideoPreload';
+import { getMethodologyVideoPlayer } from '../../onboarding/onboardingVideoPreload';
 import type { OnboardingProgress } from '../../onboarding/useOnboardingFunnel';
 
 const METHODOLOGY_VIDEO_POSTER = require('../../../assets/onboarding/methodology-video-poster.jpg');
@@ -21,7 +21,7 @@ const METHODOLOGY_VIDEO_POSTER = require('../../../assets/onboarding/methodology
  * never gated on it. Unlike `InterstitialLayout`-based screens, this one
  * composes its own chrome so the video background stays local to this step.
  *
- * The player itself is a singleton owned by `methodologyVideoPreload`, not
+ * The player itself is a singleton owned by `onboardingVideoPreload`, not
  * created here — `OnboardingFunnelScreen` starts warming it up a couple of
  * steps before the user can reach this screen, so the native decoder has
  * already opened the local asset by the time `VideoView` mounts. A poster
@@ -48,7 +48,7 @@ export function MethodologyInterstitialScreen({
   const [firstFrameRendered, setFirstFrameRendered] = useState(false);
 
   // The player is a singleton that outlives this screen's mount (see
-  // methodologyVideoPreload), so pausing on cleanup is safe — unlike a
+  // onboardingVideoPreload), so pausing on cleanup is safe — unlike a
   // `useVideoPlayer()`-owned player, nothing releases it out from under us.
   useEffect(() => {
     if (reduceMotion) {

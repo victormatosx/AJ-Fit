@@ -6,7 +6,12 @@ import { FUNNEL_QUESTIONS } from '../onboarding/questionDefs';
 import { getNextStepId } from '../onboarding/steps';
 import type { OnboardingAuthContext } from '../onboarding/authContext';
 import { logOnboardingEvent } from '../onboarding/onboardingAnalytics';
-import { preloadMethodologyVideo, releaseMethodologyVideoPlayer } from '../onboarding/methodologyVideoPreload';
+import {
+  preloadMethodologyVideo,
+  preloadGuidedWorkoutVideo,
+  releaseMethodologyVideoPlayer,
+  releaseGuidedWorkoutVideoPlayer,
+} from '../onboarding/onboardingVideoPreload';
 import { QuestionStepScreen } from '../components/onboarding/QuestionStepScreen';
 import { DevFunnelNavigator } from '../components/onboarding/DevFunnelNavigator';
 import { AnimatedStepContainer } from '../components/onboarding/AnimatedStepContainer';
@@ -38,17 +43,35 @@ export function OnboardingFunnelScreen({
 
   const setAnswer = (id: keyof Quiz, value: unknown) => setQuiz({ ...quiz, [id]: value } as Quiz);
 
-  // Two steps ahead of `interstitial_methodology` (height → weight →
-  // interstitial_methodology), warm up its video player so the native
-  // decoder has already opened the local asset by the time the user gets
-  // there — see methodologyVideoPreload.ts. Released only when the whole
-  // funnel unmounts, not when the interstitial itself is left, so a dev
+  // Two steps ahead of each video interstitial, warm up its player so the
+  // native decoder has already opened the local asset by the time the user
+  // gets there — see onboardingVideoPreload.ts:
+  //   height → weight → interstitial_methodology
+  //   duration → place → interstitial_guidedWorkout
+  // Neither preload is tied to the interstitial's own unmount, so a dev
   // jump or revisit doesn't pay the decoder-init cost twice.
   useEffect(() => {
     if (currentStepId === 'height') preloadMethodologyVideo();
+    if (currentStepId === 'duration') preloadGuidedWorkoutVideo();
+    // Methodology is strictly before Guided Workout in every funnel
+    // sequence, so once the user reaches this interstitial its player is no
+    // longer needed for forward navigation — release it here instead of
+    // keeping both decoders warm at once. A back-navigation past `height`
+    // re-triggers the preload above (idempotent), paying the decoder cost
+    // again — an acceptable trade for not holding two live decoders
+    // simultaneously through most of the funnel's remaining length.
+    if (currentStepId === 'interstitial_guidedWorkout') releaseMethodologyVideoPlayer();
   }, [currentStepId]);
 
-  useEffect(() => releaseMethodologyVideoPlayer, []);
+  // Safety net for whichever player(s) never got released above — e.g. the
+  // user abandons the funnel before ever reaching interstitial_guidedWorkout.
+  useEffect(
+    () => () => {
+      releaseMethodologyVideoPlayer();
+      releaseGuidedWorkoutVideoPlayer();
+    },
+    [],
+  );
 
   const handlePlanContinue = () => {
     logOnboardingEvent({ name: 'plan_ready_cta_pressed' });

@@ -76,16 +76,9 @@
     },
     "guidedWorkout": {
       "eyebrow": "Ejecución",
-      "titleLine1": "No necesitas",
-      "titleLine2": "adivinar qué hacer.",
-      "row": {
-        "exercise": "Press de banca",
-        "sets": "Series",
-        "reps": "Reps",
-        "load": "Carga",
-        "rest": "Descanso"
-      },
-      "highlight": "Entrena. Registra. Evoluciona.",
+      "titleLine1": "Solo tienes que",
+      "titleLine2": "ejecutar.",
+      "body": "Series, repeticiones, carga y descanso. Todo en el momento justo.",
       "cta": "Continuar"
     },
     "ajFitProgress": {

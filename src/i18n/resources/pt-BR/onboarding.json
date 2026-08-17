@@ -76,16 +76,9 @@
     },
     "guidedWorkout": {
       "eyebrow": "Execução",
-      "titleLine1": "Você não precisa",
-      "titleLine2": "adivinhar o que fazer.",
-      "row": {
-        "exercise": "Supino reto",
-        "sets": "Séries",
-        "reps": "Reps",
-        "load": "Carga",
-        "rest": "Descanso"
-      },
-      "highlight": "Treine. Registre. Evolua.",
+      "titleLine1": "Você só precisa",
+      "titleLine2": "executar.",
+      "body": "Séries, repetições, carga e descanso. Tudo na hora certa.",
       "cta": "Continuar"
     },
     "ajFitProgress": {

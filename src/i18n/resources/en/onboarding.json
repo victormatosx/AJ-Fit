@@ -76,16 +76,9 @@
     },
     "guidedWorkout": {
       "eyebrow": "Execution",
-      "titleLine1": "You don't have to",
-      "titleLine2": "guess what to do.",
-      "row": {
-        "exercise": "Bench press",
-        "sets": "Sets",
-        "reps": "Reps",
-        "load": "Load",
-        "rest": "Rest"
-      },
-      "highlight": "Train. Log. Evolve.",
+      "titleLine1": "You just need to",
+      "titleLine2": "execute.",
+      "body": "Sets, reps, load, and rest. All at the right moment.",
       "cta": "Continue"
     },
     "ajFitProgress": {
