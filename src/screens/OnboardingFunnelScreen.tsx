@@ -8,6 +8,8 @@ import type { OnboardingAuthContext } from '../onboarding/authContext';
 import { logOnboardingEvent } from '../onboarding/onboardingAnalytics';
 import { QuestionStepScreen } from '../components/onboarding/QuestionStepScreen';
 import { DevFunnelNavigator } from '../components/onboarding/DevFunnelNavigator';
+import { AnimatedStepContainer } from '../components/onboarding/AnimatedStepContainer';
+import { colors } from '../theme/tokens';
 import { OnboardingScreen } from './OnboardingScreen';
 import { SocialProofScreen } from './SocialProofScreen';
 import { AnalyzingScreen } from './AnalyzingScreen';
@@ -51,6 +53,15 @@ export function OnboardingFunnelScreen({
     const isLastQuestion = nextId === 'analyzing';
     return (
       <QuestionStepScreen
+        // Forces a genuine remount between any two questions — without this,
+        // React reuses the same `QuestionStepScreen` instance (same type,
+        // same tree position) across question→question, which is what made
+        // it impossible for the outer step transition to apply to it like
+        // every other step. Safe: no answer state lives in this component or
+        // its answer-control children (ChoiceGrid/ChoiceList/MultiList/
+        // NumberWheel/BirthDateWheel) — everything real is `quiz[id]` in
+        // `AppState`, persisted independently of this component's lifecycle.
+        key={currentStepId}
         question={question}
         value={quiz[id]}
         onChange={(v) => setAnswer(id, v)}
@@ -150,8 +161,8 @@ export function OnboardingFunnelScreen({
   }
 
   return (
-    <View style={{ flex: 1 }}>
-      {content}
+    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+      <AnimatedStepContainer stepKey={currentStepId}>{content}</AnimatedStepContainer>
       {__DEV__ && <DevFunnelNavigator currentStepId={currentStepId} onJump={jumpTo} />}
     </View>
   );

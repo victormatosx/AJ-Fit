@@ -1,9 +1,10 @@
-import React, { useEffect, useRef } from 'react';
-import { View, Text, ScrollView, Animated, Easing, Pressable, type ViewStyle, type StyleProp } from 'react-native';
+import React from 'react';
+import { View, Text, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { Slash, MonoLabel } from '../components/ui/Display';
 import { Icon } from '../components/ui/Icon';
+import { RiseIn } from '../components/ui/RiseIn';
 import { colors, fonts, displayLineHeight, spacing } from '../theme/tokens';
 import { useAppState } from '../state/AppState';
 import { deriveTrainingDaySlots } from '../lib/planDerivation';
@@ -285,34 +286,5 @@ function LegendDot({ on, label }: { on: boolean; label: string }) {
         {label.toUpperCase()}
       </Text>
     </View>
-  );
-}
-
-// ── Cascading rise-in wrapper (unchanged from the previous implementation) ──
-function RiseIn({
-  children,
-  delay = 0,
-  style,
-}: {
-  children: React.ReactNode;
-  delay?: number;
-  style?: StyleProp<ViewStyle>;
-}) {
-  const anim = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    Animated.timing(anim, {
-      toValue: 1,
-      duration: 600,
-      delay,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    }).start();
-  }, [anim, delay]);
-
-  const translateY = anim.interpolate({ inputRange: [0, 1], outputRange: [14, 0] });
-  return (
-    <Animated.View style={[style, { opacity: anim, transform: [{ translateY }] }]}>
-      {children}
-    </Animated.View>
   );
 }

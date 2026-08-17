@@ -28,6 +28,15 @@ import {
  * see `computeOnboardingProgress`), title/sub, the answer control, and CTA.
  * Mirrors the legacy QuizScreen's per-question layout so existing questions
  * look unchanged to the user.
+ *
+ * `OnboardingFunnelScreen` renders every question through this exact same
+ * component (same type, same tree position), so without an explicit `key`
+ * React would reuse this instance across question→question transitions
+ * instead of unmounting it — it keys the element on `currentStepId`
+ * specifically so every question is its own visual identity, and the
+ * funnel's single step-transition mechanism (`AnimatedStepContainer`)
+ * applies uniformly to it like any other step. No motion lives in this
+ * component itself.
  */
 export function QuestionStepScreen({
   question,
