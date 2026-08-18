@@ -1,11 +1,9 @@
-import { logInfo } from '../lib/logger';
 import type { OnboardingStepId } from './steps';
 
 /**
  * Event surface for the onboarding funnel. No real analytics provider is
  * wired up in this codebase today (see docs/onboarding_funnel_architecture.md)
- * — `logOnboardingEvent` currently only mirrors into the structured app
- * logger (visible in dev/log tooling), never a third-party SDK. Swap
+ * — `logOnboardingEvent` is a no-op by default. Swap
  * `setOnboardingAnalyticsLogger` for a real implementation once a provider
  * is chosen; callers never need to change.
  *
@@ -41,14 +39,7 @@ export const noopOnboardingAnalyticsLogger: OnboardingAnalyticsLogger = {
   },
 };
 
-const structuredLoggerBridge: OnboardingAnalyticsLogger = {
-  log(event) {
-    const { name, ...rest } = event;
-    logInfo('onboardingAnalytics', name, rest);
-  },
-};
-
-let activeLogger: OnboardingAnalyticsLogger = structuredLoggerBridge;
+let activeLogger: OnboardingAnalyticsLogger = noopOnboardingAnalyticsLogger;
 
 export function setOnboardingAnalyticsLogger(logger: OnboardingAnalyticsLogger): void {
   activeLogger = logger;
