@@ -62,5 +62,48 @@
         "intentExpired": "La autorización promocional expiró. Pulsa Continuar para solicitar una nueva."
       }
     }
+  },
+  "premiumAction": {
+    "eyebrow": "AJ Fit Premium",
+    "workout": {
+      "subscribe": {
+        "title": "Desbloquea tus entrenamientos",
+        "description": "Suscríbete a AJ Fit para acceder a tus entrenamientos completos y seguir evolucionando."
+      },
+      "renew": {
+        "title": "Continúa tu evolución",
+        "description": "Renueva tu suscripción para volver a acceder a tus entrenamientos completos."
+      }
+    },
+    "photos": {
+      "subscribe": {
+        "title": "Registra tu evolución",
+        "description": "Suscríbete a AJ Fit para agregar nuevas fotos a tu evolución."
+      },
+      "renew": {
+        "title": "Sigue registrando tu evolución",
+        "description": "Tus fotos anteriores siguen disponibles para ver. Renueva para agregar nuevos registros."
+      }
+    },
+    "assessment": {
+      "subscribe": {
+        "title": "Sigue tu evolución",
+        "description": "Suscríbete a AJ Fit para registrar nuevas evaluaciones físicas."
+      },
+      "renew": {
+        "title": "Sigue registrando tu evolución",
+        "description": "Tus evaluaciones anteriores siguen disponibles. Renueva para registrar una nueva evaluación."
+      }
+    },
+    "generic": {
+      "title": "Función Premium",
+      "description": "Esta función forma parte de AJ Fit Premium."
+    },
+    "cta": {
+      "subscribe": "Suscribirme ahora",
+      "renew": "Renovar suscripción",
+      "unlock": "Ver planes",
+      "dismiss": "Ahora no"
+    }
   }
 }

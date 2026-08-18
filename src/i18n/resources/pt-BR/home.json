@@ -24,7 +24,8 @@
       "startNow": "Sim, iniciar",
       "notNow": "Agora não",
       "dismiss": "Fechar confirmação de treino",
-      "accessibilityConfirm": "Confirmar início do treino"
+      "accessibilityConfirm": "Confirmar início do treino",
+      "accessibilityConfirmLocked": "Confirmar início do treino, recurso Premium"
     }
   },
   "consistency": {
@@ -174,7 +175,8 @@
         "selectedAsBefore": "Selecionada como antes",
         "selectedAsAfter": "Selecionada como depois",
         "changeBefore": "Trocar a foto de antes",
-        "changeAfter": "Trocar a foto de depois"
+        "changeAfter": "Trocar a foto de depois",
+        "addPhotoLocked": "Adicionar nova foto, recurso Premium"
       },
       "poses": {
         "front": "Frente",

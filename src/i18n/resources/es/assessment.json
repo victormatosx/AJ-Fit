@@ -9,7 +9,9 @@
     "saveFailedTitle": "Error al guardar",
     "saveFailedMessage": "Revisa tu conexión e inténtalo de nuevo."
   },
-  "loading": { "title": "Cargando evaluaciones" },
+  "loading": {
+    "title": "Cargando evaluaciones"
+  },
   "sections": {
     "evolution": "Evolución",
     "basicInfo": "Información básica",
@@ -57,20 +59,51 @@
     "saving": "Guardando…"
   },
   "fields": {
-    "measurementDate": { "label": "Fecha de la evaluación" },
-    "weight": { "label": "Peso" },
-    "height": { "label": "Altura" },
-    "ageAtAssessment": { "label": "Edad en la fecha de evaluación" },
-    "bodyFat": { "label": "GC" },
-    "bodyWater": { "label": "Agua corporal" },
-    "basalMetabolism": { "label": "Metabolismo basal" },
-    "visceralFat": { "label": "Grasa visceral" },
-    "notes": { "label": "Observaciones (opcional)", "placeholder": "Ej.: bioimpedancia en la Clínica X" }
+    "measurementDate": {
+      "label": "Fecha de la evaluación"
+    },
+    "weight": {
+      "label": "Peso"
+    },
+    "height": {
+      "label": "Altura"
+    },
+    "ageAtAssessment": {
+      "label": "Edad en la fecha de evaluación"
+    },
+    "bodyFat": {
+      "label": "GC"
+    },
+    "bodyWater": {
+      "label": "Agua corporal"
+    },
+    "basalMetabolism": {
+      "label": "Metabolismo basal"
+    },
+    "visceralFat": {
+      "label": "Grasa visceral"
+    },
+    "notes": {
+      "label": "Observaciones (opcional)",
+      "placeholder": "Ej.: bioimpedancia en la Clínica X"
+    }
   },
-  "form": { "numericPlaceholder": "0" },
+  "form": {
+    "numericPlaceholder": "0"
+  },
   "result": "{{value}} {{unit}}",
-  "heightParts": { "feet": "Pies", "inches": "Pulgadas" },
-  "units": { "kg": "kg", "cm": "cm", "mm": "mm", "percent": "%", "years": "años", "kcal": "kcal" },
+  "heightParts": {
+    "feet": "Pies",
+    "inches": "Pulgadas"
+  },
+  "units": {
+    "kg": "kg",
+    "cm": "cm",
+    "mm": "mm",
+    "percent": "%",
+    "years": "años",
+    "kcal": "kcal"
+  },
   "validation": {
     "guidedRequired": "Completa fecha, peso y todos los pliegues para guardar",
     "profileRequired": "El sexo, la fecha de nacimiento y la altura deben estar completos en tu perfil",
@@ -166,6 +199,8 @@
     "selectProtocol": "Seleccionar protocolo",
     "selectSex": "Seleccionar sexo: {{sex}}",
     "saveGuided": "Guardar evaluación guiada",
-    "saveImported": "Registrar evaluación importada"
+    "saveImported": "Registrar evaluación importada",
+    "openGuidedLocked": "Abrir evaluación guiada, función Premium",
+    "openImportLocked": "Abrir importación de evaluación, función Premium"
   }
 }

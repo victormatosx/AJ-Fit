@@ -100,6 +100,37 @@ async function seedPhoto(uid = UID, photoId = PHOTO_ID) {
   });
 }
 
+/**
+ * FASE 7 (docs/13_assinaturas_e_billing.md §10/§11): seeds
+ * `users/{uid}.subscription.entitlementActive` — the ONLY field
+ * `hasServerPremium()` reads — bypassing rules, exactly the way
+ * `applySubscriptionEventAtomically` (Admin SDK) would write it. Every
+ * pre-existing test in this file exercises schema/ownership, not billing,
+ * so `beforeEach` seeds both UID and OTHER_UID as Premium by default —
+ * Premium is a given precondition for those, not what they're testing.
+ * Dedicated `describe` blocks below seed Free (or omit this call) instead.
+ */
+async function seedPremium(uid: string) {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(
+      doc(ctx.firestore(), 'users', uid),
+      { subscription: { entitlementActive: true } },
+      { merge: true },
+    );
+  });
+}
+
+/** Sets the mirror to explicitly Free — a real `entitlementActive: false`, not merely absent. */
+async function seedFree(uid: string) {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(
+      doc(ctx.firestore(), 'users', uid),
+      { subscription: { entitlementActive: false } },
+      { merge: true },
+    );
+  });
+}
+
 beforeAll(async () => {
   testEnv = await initializeTestEnvironment({
     projectId: PROJECT_ID,
@@ -115,6 +146,8 @@ afterAll(async () => {
 
 beforeEach(async () => {
   await testEnv.clearFirestore();
+  await seedPremium(UID);
+  await seedPremium(OTHER_UID);
 });
 
 // ── progressPhotos: owner happy path ───────────────────────────────────────
@@ -233,6 +266,118 @@ describe('progressPhotos — unauthenticated', () => {
   it('blocks unauthenticated deletes', async () => {
     await seedPhoto();
     await assertFails(deleteDoc(doc(anonDb(), 'users', UID, 'progressPhotos', PHOTO_ID)));
+  });
+});
+
+// ── progressPhotos: FASE 7 server-side Premium authorization ──────────────
+//
+// ADD_PROGRESS_PHOTO/DELETE_PROGRESS_PHOTO are Premium capabilities (Fase
+// 3). `hasServerPremium(userId)` in firestore.rules now gates create/delete
+// in addition to ownership — never instead of it. READ stays free for
+// everyone owning the doc (asserted above, still true with the default
+// Premium seed).
+
+describe('progressPhotos — FASE 7: Free is denied the Premium mutation', () => {
+  it('denies a Free owner creating photo metadata', async () => {
+    await seedFree(UID);
+    await assertFails(
+      setDoc(doc(ownerDb(), 'users', UID, 'progressPhotos', PHOTO_ID), validPhoto()),
+    );
+  });
+
+  it('denies a Free owner deleting their own existing photo metadata', async () => {
+    await seedFree(UID);
+    await seedPhoto();
+    await assertFails(deleteDoc(doc(ownerDb(), 'users', UID, 'progressPhotos', PHOTO_ID)));
+  });
+
+  it('fails closed when users/{uid} (and therefore its subscription map) does not exist at all', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc(`users/${UID}`).delete();
+    });
+    await assertFails(
+      setDoc(doc(ownerDb(), 'users', UID, 'progressPhotos', PHOTO_ID), validPhoto()),
+    );
+  });
+
+  it('fails closed when users/{uid} exists but has no subscription field at all', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc(`users/${UID}`).delete();
+      await ctx.firestore().doc(`users/${UID}`).set({ profile: { name: 'Alice', email: 'a@example.com' } });
+    });
+    await assertFails(
+      setDoc(doc(ownerDb(), 'users', UID, 'progressPhotos', PHOTO_ID), validPhoto()),
+    );
+  });
+
+  it('still allows a Free owner to READ their existing photo metadata (history is never blocked)', async () => {
+    await seedPhoto();
+    await seedFree(UID);
+    await assertSucceeds(getDoc(doc(ownerDb(), 'users', UID, 'progressPhotos', PHOTO_ID)));
+    await assertSucceeds(getDocs(collection(ownerDb(), 'users', UID, 'progressPhotos')));
+  });
+});
+
+describe('progressPhotos — FASE 7: Premium never overrides ownership', () => {
+  it('denies a Premium user creating metadata under someone else\'s uid', async () => {
+    // OTHER_UID is Premium (default seed) but does not own UID's namespace.
+    await assertFails(
+      setDoc(doc(otherDb(), 'users', UID, 'progressPhotos', PHOTO_ID), validPhoto()),
+    );
+  });
+
+  it("denies a Premium user deleting someone else's photo metadata", async () => {
+    await seedPhoto();
+    await assertFails(deleteDoc(doc(otherDb(), 'users', UID, 'progressPhotos', PHOTO_ID)));
+  });
+});
+
+describe('progressPhotos — FASE 7: privilege escalation', () => {
+  it("denies the owner writing subscription.entitlementActive = true on their own users/{uid} document, even from an otherwise complete/valid document", async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc(`users/${UID}`).set({
+        profile: { name: 'Alice', email: 'alice@example.com' },
+        preferences: { language: 'pt-BR', units: 'system', theme: 'dark' },
+        subscription: { entitlementActive: false },
+        metadata: { role: 'user', createdAt: Timestamp.now(), updatedAt: Timestamp.now() },
+      });
+    });
+    await assertFails(
+      updateDoc(doc(ownerDb(), 'users', UID), {
+        'subscription.entitlementActive': true,
+      }),
+    );
+  });
+
+  it('denies smuggling entitlementActive via a fresh account create() payload', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc(`users/${UID}`).delete();
+    });
+    await assertFails(
+      setDoc(doc(ownerDb(), 'users', UID), {
+        profile: { name: 'Alice', email: 'alice@example.com' },
+        preferences: { language: 'pt-BR', units: 'system', theme: 'dark' },
+        subscription: { entitlementActive: true },
+        metadata: { role: 'user', createdAt: serverTimestamp(), updatedAt: serverTimestamp() },
+      }),
+    );
+  });
+
+  it('still permits ordinary profile updates for a Free user — Premium enforcement never blocks account edits', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc(`users/${UID}`).set({
+        profile: { name: 'Alice', email: 'alice@example.com' },
+        preferences: { language: 'pt-BR', units: 'system', theme: 'dark' },
+        subscription: { entitlementActive: false },
+        metadata: { role: 'user', createdAt: Timestamp.now(), updatedAt: Timestamp.now() },
+      });
+    });
+    await assertSucceeds(
+      updateDoc(doc(ownerDb(), 'users', UID), {
+        'profile.name': 'Alice B.',
+        'metadata.updatedAt': serverTimestamp(),
+      }),
+    );
   });
 });
 

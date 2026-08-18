@@ -25,6 +25,7 @@ import { colors, fonts, displayLineHeight } from '../theme/tokens';
 import { TODAY_WORKOUT } from '../lib/todayWorkout';
 import { logWarn } from '../lib/logger';
 import { useUnits } from '../state/UnitsContext';
+import { usePremiumCapabilities } from '../hooks/usePremiumCapabilities';
 import {
   adjustWorkoutLoadKg,
   formatWorkoutLoadFromKg,
@@ -199,6 +200,19 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
   const { resolvedUnits } = useUnits();
   const loadUnit = workoutLoadUnit(resolvedUnits);
   const tLoose = t as unknown as LooseT;
+  const { canPerform } = usePremiumCapabilities();
+  // FASE 3: defense-in-depth, not the primary gate — AppShell's
+  // `startWorkout()` is the only place that sets `tab === 'workout'` today,
+  // and it already checks START_WORKOUT before doing so. This bounces back
+  // to Home if the screen is ever reached without that check having run
+  // (e.g. a future entry point), so the whole session — every set/load
+  // logged inside it (REGISTER_WORKOUT/REGISTER_LOAD) — never depends on
+  // remembering to gate somewhere else too.
+  useEffect(() => {
+    if (!canPerform('START_WORKOUT')) onDone();
+    // Intentionally mount-only: this is a one-time entry guard, not a
+    // continuous subscription to `canPerform`/`onDone`.
+  }, []);
   // Queue of exercise indices in current order (head = current)
   const [order, setOrder] = useState<number[]>(() => EXERCISES.map((_, i) => i));
   // exIdx -> sets completed

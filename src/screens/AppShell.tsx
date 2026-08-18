@@ -11,6 +11,8 @@ import { OutlineNumber } from '../components/ui/OutlineNumber';
 import { colors, fonts } from '../theme/tokens';
 import { useAppState, TabId } from '../state/AppState';
 import { useAuth } from '../state/AuthContext';
+import { PremiumActionProvider } from '../state/PremiumActionContext';
+import { PremiumAction } from '../components/premium/PremiumAction';
 import { versionedPhotoURL } from '../lib/profilePhotoUrl';
 import { PASSWORD_PROVIDER_ID } from '../lib/authProviders';
 import { HomeScreen } from './HomeScreen';
@@ -59,7 +61,32 @@ const FULL_BLEED = StyleSheet.create({
   overlayZ70: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 70 },
 });
 
+/**
+ * FASE 4 (docs/13_assinaturas_e_billing.md): `showPremium` — the on-demand
+ * Paywall mount this file already had (originally only reachable from the
+ * Subscription Center's "renovar") — now lives in this thin outer
+ * component so `PremiumActionProvider` can wire its `onRequestUpgrade` to
+ * the exact same trigger, instead of mounting a second `<PaywallScreen>`.
+ * Everything else about AppShell is unchanged and lives in
+ * `AppShellContent`, which reads `usePremiumAction()` from the provider
+ * this wraps it in.
+ */
 export function AppShell() {
+  const [showPremium, setShowPremium] = useState(false);
+  return (
+    <PremiumActionProvider onRequestUpgrade={() => setShowPremium(true)}>
+      <AppShellContent showPremium={showPremium} setShowPremium={setShowPremium} />
+    </PremiumActionProvider>
+  );
+}
+
+function AppShellContent({
+  showPremium,
+  setShowPremium,
+}: {
+  showPremium: boolean;
+  setShowPremium: (value: boolean) => void;
+}) {
   const { tab, setTab } = useAppState();
   const { linkedProviders } = useAuth();
   // Single centralized prewarm schedule (docs/23_navegacao_e_lifecycle.md
@@ -77,7 +104,6 @@ export function AppShell() {
   const [totpRefreshToken, setTotpRefreshToken] = useState(0);
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showSubscriptionCenter, setShowSubscriptionCenter] = useState(false);
-  const [showPremium, setShowPremium] = useState(false);
   const [showWorkoutConfirmation, setShowWorkoutConfirmation] = useState(false);
   const [supportRoute, setSupportRoute] = useState<SupportRoute | null>(null);
   // HelpArticleScreen/SupportFormScreen are persistent+materialized but
@@ -118,6 +144,16 @@ export function AppShell() {
     setTab(nextTab);
   };
 
+  // FASE 3→5 (docs/13_assinaturas_e_billing.md): START_WORKOUT is a Premium
+  // capability. `selectTab` below always routes a tap on the Workout icon
+  // through the same confirmation flow, so this is the single real entry
+  // point into the Workout tab — `<PremiumAction>` inside
+  // `StartWorkoutConfirmation` gates it (Fase 5), meaning this function
+  // itself now knows nothing about capabilities: it only runs at all when
+  // already allowed. REGISTER_WORKOUT/REGISTER_LOAD/"registrar série" have
+  // no independent entry point today — they only exist once inside the
+  // session this call opens — so that same gate is also what protects them
+  // (see Fase 3 report, "Decisão sobre REGISTER_SET").
   const startWorkout = () => {
     setShowWorkoutConfirmation(false);
     setTab('workout');
@@ -409,6 +445,9 @@ function StartWorkoutConfirmation({
 }: {
   visible: boolean;
   onCancel: () => void;
+  /** FASE 5: this is the pure "start the session" action — it runs only
+   *  when `<PremiumAction>` below has already allowed it. The caller no
+   *  longer needs to know START_WORKOUT is a Premium capability at all. */
   onConfirm: () => void;
 }) {
   const { t } = useTranslation('home');
@@ -500,35 +539,51 @@ function StartWorkoutConfirmation({
               {t('mock.today.name')}?
             </Text>
 
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={t('todayCard.confirm.accessibilityConfirm')}
-              onPress={onConfirm}
-              style={{
-                height: 48,
-                marginTop: 18,
-                borderRadius: 10,
-                borderBottomRightRadius: 0,
-                backgroundColor: '#fff',
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 9,
-              }}
-            >
-              <Icon name="play" size={12} color="#020010" />
-              <Text
-                style={{
-                  color: '#020010',
-                  fontFamily: fonts.display,
-                  fontSize: 15,
-                  letterSpacing: 1.4,
-                  textTransform: 'uppercase',
-                }}
-              >
-                {t('todayCard.confirm.startNow')}
-              </Text>
-            </Pressable>
+            {/* FASE 5: <PremiumAction> is the entry-point gate — locked stays
+                tappable (never `disabled`), and closes this confirmation
+                before either starting the session or opening
+                PremiumRequiredSheet, exactly like the Fase 4 behavior this
+                replaces. */}
+            <PremiumAction capability="START_WORKOUT" onAllowed={onConfirm}>
+              {({ locked, onPress }) => (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    locked
+                      ? t('todayCard.confirm.accessibilityConfirmLocked')
+                      : t('todayCard.confirm.accessibilityConfirm')
+                  }
+                  onPress={() => {
+                    onCancel();
+                    onPress();
+                  }}
+                  style={{
+                    height: 48,
+                    marginTop: 18,
+                    borderRadius: 10,
+                    borderBottomRightRadius: 0,
+                    backgroundColor: '#fff',
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 9,
+                  }}
+                >
+                  <Icon name={locked ? 'lock' : 'play'} size={12} color="#020010" />
+                  <Text
+                    style={{
+                      color: '#020010',
+                      fontFamily: fonts.display,
+                      fontSize: 15,
+                      letterSpacing: 1.4,
+                      textTransform: 'uppercase',
+                    }}
+                  >
+                    {t('todayCard.confirm.startNow')}
+                  </Text>
+                </Pressable>
+              )}
+            </PremiumAction>
             <Pressable
               accessibilityRole="button"
               onPress={onCancel}

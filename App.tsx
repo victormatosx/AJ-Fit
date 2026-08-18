@@ -30,7 +30,6 @@ import { clearOnboardingDraft } from './src/onboarding/draftStorage';
 import type { OnboardingAuthContext } from './src/onboarding/authContext';
 import { AuthScreen } from './src/screens/AuthScreen';
 import { EmailVerificationScreen } from './src/screens/EmailVerificationScreen';
-import { PaywallScreen } from './src/screens/PaywallScreen';
 import { AppShell } from './src/screens/AppShell';
 import { FullScreenLoading } from './src/components/ui/FullScreenLoading';
 import { requiresEmailVerification } from './src/lib/emailVerification';
@@ -139,7 +138,7 @@ function SubscriptionResolutionError({
 }
 
 function RootNavigator() {
-  const { user, profile, questionnaire, initializing, profileLoading, refreshProfile, logout } =
+  const { user, profile, questionnaire, initializing, profileLoading, refreshProfile } =
     useAuth();
   const {
     loading: subscriptionLoading,
@@ -213,8 +212,10 @@ function RootNavigator() {
   // This pure decision is also the render guard: AppShell is never mounted
   // from a stale/requested route while auth, email verification, preference
   // reconciliation, questionnaire, or the CustomerInfo for the current
-  // Firebase UID is unresolved. Once all prerequisites are known,
-  // RevenueCat's `premium` entitlement exclusively chooses app vs. paywall.
+  // Firebase UID is unresolved. Once all prerequisites are known, AppShell
+  // opens regardless of `isPremium` (Fase 1 limited-mode rollout) — the
+  // entitlement keeps flowing through `useSubscription()` for capability
+  // gating inside AppShell in later phases, it just no longer blocks entry.
   const resolvedScreen = resolvePremiumGate({
     requestedScreen: screen,
     authInitializing: initializing,
@@ -330,18 +331,6 @@ function RootNavigator() {
       )}
       {resolvedScreen === 'auth' && <AuthScreen entryContext={onboardingAuthContext} />}
       {resolvedScreen === 'emailVerification' && <EmailVerificationScreen />}
-      {resolvedScreen === 'paywall' && (
-        <PaywallScreen
-          entryContext={onboardingAuthContext}
-          onClose={async () => {
-            try {
-              await logout();
-            } catch (err) {
-              logAuthError('paywall:logout', err);
-            }
-          }}
-        />
-      )}
       {resolvedScreen === 'app' && <AppShell />}
       {savingQuestionnaire && (
         <View

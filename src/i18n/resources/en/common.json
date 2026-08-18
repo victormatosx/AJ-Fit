@@ -62,5 +62,48 @@
         "intentExpired": "The promotional authorization expired. Tap Continue to request a new one."
       }
     }
+  },
+  "premiumAction": {
+    "eyebrow": "AJ Fit Premium",
+    "workout": {
+      "subscribe": {
+        "title": "Unlock your workouts",
+        "description": "Subscribe to AJ Fit to access your full workouts and keep progressing."
+      },
+      "renew": {
+        "title": "Keep progressing",
+        "description": "Renew your subscription to get back access to your full workouts."
+      }
+    },
+    "photos": {
+      "subscribe": {
+        "title": "Track your progress",
+        "description": "Subscribe to AJ Fit to add new photos to your progress."
+      },
+      "renew": {
+        "title": "Keep tracking your progress",
+        "description": "Your existing photos are still available to view. Renew to add new ones."
+      }
+    },
+    "assessment": {
+      "subscribe": {
+        "title": "Track your progress",
+        "description": "Subscribe to AJ Fit to log new physical assessments."
+      },
+      "renew": {
+        "title": "Keep tracking your progress",
+        "description": "Your previous assessments are still available. Renew to log a new one."
+      }
+    },
+    "generic": {
+      "title": "Premium feature",
+      "description": "This feature is part of AJ Fit Premium."
+    },
+    "cta": {
+      "subscribe": "Subscribe now",
+      "renew": "Renew subscription",
+      "unlock": "View plans",
+      "dismiss": "Not now"
+    }
   }
 }
