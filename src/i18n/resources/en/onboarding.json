@@ -98,6 +98,8 @@
       "titleLine1": "{{name}}, creating your workout",
       "titleLine1NoName": "Creating your workout",
       "titleLine2": "is just the start.",
+      "carouselLabel": "Carousel of AJ Fit progress features",
+      "screenshotPlaceholder": "Screenshot {{index}}",
       "features": {
         "loads": {
           "title": "Loads",
@@ -105,11 +107,11 @@
         },
         "body": {
           "title": "Body",
-          "body": "Log weight and body data over time."
+          "body": "Track weight, measurements, and changes in your body."
         },
         "photos": {
           "title": "Photos",
-          "body": "Compare your visual progress."
+          "body": "Compare your visual progress over time."
         }
       },
       "cta": "Continue"

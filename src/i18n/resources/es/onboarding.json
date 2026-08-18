@@ -98,6 +98,8 @@
       "titleLine1": "{{name}}, crear tu entreno",
       "titleLine1NoName": "Crear tu entreno",
       "titleLine2": "es solo el comienzo.",
+      "carouselLabel": "Carrusel de funciones de progreso de AJ Fit",
+      "screenshotPlaceholder": "Captura {{index}}",
       "features": {
         "loads": {
           "title": "Cargas",
@@ -105,11 +107,11 @@
         },
         "body": {
           "title": "Cuerpo",
-          "body": "Registra tu peso y datos corporales con el tiempo."
+          "body": "Sigue tu peso, medidas y cambios en tu cuerpo."
         },
         "photos": {
           "title": "Fotos",
-          "body": "Compara tu evolución visual."
+          "body": "Compara tu evolución visual a lo largo del tiempo."
         }
       },
       "cta": "Continuar"

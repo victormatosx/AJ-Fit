@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, ScrollView, Pressable } from 'react-native';
+import { View, Text, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { Slash, MonoLabel } from '../components/ui/Display';
@@ -50,23 +50,23 @@ export function PlanReadyScreen({
       </OutlineNumber>
 
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
-        <ScrollView
-          contentContainerStyle={{
+        <View
+          style={{
+            flex: 1,
             paddingHorizontal: 26,
-            paddingTop: 40,
-            paddingBottom: 30,
-            flexGrow: 1,
+            paddingTop: 24,
+            paddingBottom: 24,
+            justifyContent: 'space-between',
           }}
-          showsVerticalScrollIndicator={false}
         >
           {/* ── 1. HEADER ── */}
           <RiseIn delay={0}>
-            <Slash style={{ marginBottom: 14 }}>{t('plan:header.eyebrow').toUpperCase()}</Slash>
+            <Slash style={{ marginBottom: 10 }}>{t('plan:header.eyebrow').toUpperCase()}</Slash>
             <Text
               style={{
                 fontFamily: fonts.display,
-                fontSize: 34,
-                lineHeight: displayLineHeight(34),
+                fontSize: 32,
+                lineHeight: displayLineHeight(32),
                 letterSpacing: 0.5,
                 color: '#fff',
                 textTransform: 'uppercase',
@@ -77,10 +77,10 @@ export function PlanReadyScreen({
             </Text>
             <Text
               style={{
-                marginTop: 12,
+                marginTop: 10,
                 fontFamily: fonts.ui,
-                fontSize: 14.5,
-                lineHeight: 21,
+                fontSize: 14,
+                lineHeight: 20,
                 color: colors.mute,
               }}
             >
@@ -89,8 +89,8 @@ export function PlanReadyScreen({
           </RiseIn>
 
           {/* ── 2. STRATEGY SUMMARY (all real answers) ── */}
-          <RiseIn delay={80} style={{ marginTop: 30 }}>
-            <Slash style={{ marginBottom: 14 }}>{t('plan:summary.title').toUpperCase()}</Slash>
+          <RiseIn delay={80}>
+            <Slash style={{ marginBottom: 12 }}>{t('plan:summary.title').toUpperCase()}</Slash>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
               <SummaryCard label={t('plan:summary.goal')} value={goalLabel} />
               <SummaryCard label={t('plan:summary.frequency')} value={t('plan:summary.frequencyValue', { days })} />
@@ -103,15 +103,15 @@ export function PlanReadyScreen({
           </RiseIn>
 
           {/* ── 3. WEEKLY TRAINING DAYS (derived from `days`, no invented split) ── */}
-          <RiseIn delay={160} style={{ marginTop: 30 }}>
-            <Slash style={{ marginBottom: 14 }}>{t('plan:schedule.title').toUpperCase()}</Slash>
+          <RiseIn delay={160}>
+            <Slash style={{ marginBottom: 12 }}>{t('plan:schedule.title').toUpperCase()}</Slash>
             <View style={{ flexDirection: 'row', gap: 6 }}>
               {trainingSlots.map((on, i) => (
                 <View
                   key={DAY_ORDER[i]}
                   style={{
                     flex: 1,
-                    paddingVertical: 12,
+                    paddingVertical: 14,
                     paddingHorizontal: 2,
                     alignItems: 'center',
                     borderRadius: 10,
@@ -120,7 +120,7 @@ export function PlanReadyScreen({
                     borderColor: on ? 'rgba(11,112,249,0.4)' : 'rgba(255,255,255,0.07)',
                   }}
                 >
-                  <Text style={{ fontFamily: fonts.mono, fontSize: 8.5, letterSpacing: 1, color: colors.faint }}>
+                  <Text style={{ fontFamily: fonts.mono, fontSize: 9, letterSpacing: 1, color: colors.faint }}>
                     {t(`plan:schedule.dayLabels.${DAY_ORDER[i]}` as 'plan:schedule.dayLabels.mon')}
                   </Text>
                   <View
@@ -141,10 +141,8 @@ export function PlanReadyScreen({
             </View>
           </RiseIn>
 
-          <View style={{ flex: 1, minHeight: 20 }} />
-
           {/* ── 4. JOURNEY MESSAGE — no fabricated numeric projection ── */}
-          <RiseIn delay={220} style={{ marginTop: 30 }}>
+          <RiseIn delay={220}>
             <View
               style={{
                 padding: 18,
@@ -168,7 +166,7 @@ export function PlanReadyScreen({
                   marginTop: 6,
                   fontFamily: fonts.ui,
                   fontSize: 13.5,
-                  lineHeight: 20,
+                  lineHeight: 19,
                   color: colors.mute,
                 }}
               >
@@ -178,7 +176,7 @@ export function PlanReadyScreen({
           </RiseIn>
 
           {/* ── 5. STRONG CTA ── */}
-          <RiseIn delay={280} style={{ marginTop: 24 }}>
+          <RiseIn delay={280}>
             <Pressable
               onPress={onContinue}
               accessibilityRole="button"
@@ -241,11 +239,11 @@ export function PlanReadyScreen({
                 <Icon name="arrow-right" size={20} color="#fff" stroke={2.2} />
               </View>
             </Pressable>
-            <MonoLabel style={{ textAlign: 'center', marginTop: 14 }}>
+            <MonoLabel style={{ textAlign: 'center', marginTop: 12 }}>
               {t('plan:cta.footer').toUpperCase()}
             </MonoLabel>
           </RiseIn>
-        </ScrollView>
+        </View>
       </SafeAreaView>
     </ScreenBg>
   );
@@ -269,7 +267,7 @@ function SummaryCard({ label, value }: { label: string; value: string }) {
         style={{
           marginTop: 6,
           fontFamily: fonts.uiBold,
-          fontSize: 15,
+          fontSize: 16,
           color: '#fff',
         }}
         numberOfLines={1}
