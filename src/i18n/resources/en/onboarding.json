@@ -41,8 +41,7 @@
   },
   "welcome": {
     "greeting": "Welcome, {{name}}.",
-    "greetingNoName": "Welcome!",
-    "body": "Let's figure out where you are today and where you want to go."
+    "greetingNoName": "Welcome!"
   },
   "interstitials": {
     "evolution": {

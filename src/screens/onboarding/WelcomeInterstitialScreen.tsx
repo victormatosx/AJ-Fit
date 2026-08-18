@@ -1,36 +1,25 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, Animated } from 'react-native';
+import { View, Animated } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { AJMark } from '../../components/ui/AJMark';
 import { Display } from '../../components/ui/Display';
-import { colors, fonts, spacing } from '../../theme/tokens';
+import { colors, spacing } from '../../theme/tokens';
 import { useReducedMotionPreference } from '../../lib/reducedMotion';
 
 // Typewriter timing — tuned to read as a small brand detail, not a "look, an
 // animation" moment. Interval scales down for longer strings (see
-// `charIntervalFor`) so a long line never runs on forever. Body is slower
-// per character than the heading — it's a full sentence, not a short greeting,
-// so it reads more comfortably at a more deliberate pace.
+// `charIntervalFor`) so a long line never runs on forever.
 const TYPE_INITIAL_DELAY_MS = 180;
 const HEADING_TYPE_CONFIG = { charInterval: 55, maxTotalMs: 1200, minCharInterval: 18 };
-const BODY_TYPE_CONFIG = { charInterval: 38, maxTotalMs: 2200, minCharInterval: 24 };
-// Heading cursor: near-instant handoff — it fades out right as the body
-// cursor appears, reading as one caret moving down a line ("Enter").
-const HEADING_CURSOR_HOLD_MS = 0;
-const HEADING_CURSOR_FADE_MS = 120;
-// Body cursor: lingers after the last line finishes, a small pause before
-// the screen advances.
-const BODY_CURSOR_HOLD_MS = 400;
-const BODY_CURSOR_FADE_MS = 220;
+// Heading cursor lingers after the line finishes, a small pause before the
+// screen advances.
+const HEADING_CURSOR_HOLD_MS = 400;
+const HEADING_CURSOR_FADE_MS = 220;
 const CURSOR_CHAR = '|';
 
-// The screen used to auto-advance on a fixed 2000ms timer regardless of the
-// typing animation. With two lines typing in sequence, that fixed window
-// could elapse before the body line even started (bug: screen changed
-// before the body text ever appeared). It now advances a fixed delay after
-// the body genuinely finishes typing, so it's tied to the real animation
-// instead of an estimate of it.
-const ADVANCE_DELAY_AFTER_BODY_MS = 1000;
+// Advances a fixed delay after the greeting genuinely finishes typing, so
+// it's tied to the real animation instead of an estimate of it.
+const ADVANCE_DELAY_AFTER_TYPING_MS = 500;
 
 type TypeConfig = { charInterval: number; maxTotalMs: number; minCharInterval: number };
 
@@ -143,7 +132,7 @@ function useTypewriterCursor(
 
 /**
  * Pure transition screen — no progress bar, no eyebrow, no CTA. Advances on
- * its own `ADVANCE_DELAY_AFTER_BODY_MS` after the body line finishes typing,
+ * its own `ADVANCE_DELAY_AFTER_TYPING_MS` after the greeting finishes typing,
  * same pattern as SplashScreen (timer owns the `onDone` call, cleaned up on
  * unmount so a stale timer can't fire onto whatever screen the funnel
  * already moved to).
@@ -160,7 +149,6 @@ export function WelcomeInterstitialScreen({
   const reduceMotion = useReducedMotionPreference();
 
   const greeting = name ? t('welcome.greeting', { name }) : t('welcome.greetingNoName');
-  const body = t('welcome.body');
 
   const greetingTyping = useTypewriter(greeting, reduceMotion, true, HEADING_TYPE_CONFIG);
   const greetingCursor = useTypewriterCursor(
@@ -171,29 +159,16 @@ export function WelcomeInterstitialScreen({
     HEADING_CURSOR_FADE_MS,
   );
 
-  // Body starts right as the heading finishes typing, and its cursor only
-  // appears once it starts — so there's never a cursor under an empty line
-  // while the heading is still being typed, and the handoff reads as one
-  // caret jumping from the end of line one to the start of line two.
-  const bodyTyping = useTypewriter(body, reduceMotion, greetingTyping.finished, BODY_TYPE_CONFIG);
-  const bodyCursor = useTypewriterCursor(
-    bodyTyping.started,
-    bodyTyping.finished,
-    reduceMotion,
-    BODY_CURSOR_HOLD_MS,
-    BODY_CURSOR_FADE_MS,
-  );
-
   useEffect(() => {
-    if (!bodyTyping.finished) return;
+    if (!greetingTyping.finished) return;
     const timer = setTimeout(() => {
       if (advancing.current) return;
       advancing.current = true;
       onContinue();
-    }, ADVANCE_DELAY_AFTER_BODY_MS);
+    }, ADVANCE_DELAY_AFTER_TYPING_MS);
     return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- fires once per mount when the body genuinely finishes, not on every onContinue identity change
-  }, [bodyTyping.finished]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fires once per mount when typing genuinely finishes, not on every onContinue identity change
+  }, [greetingTyping.finished]);
 
   return (
     <View
@@ -207,9 +182,9 @@ export function WelcomeInterstitialScreen({
       }}
     >
       <AJMark size={120} />
-      <View style={{ marginTop: spacing[2], alignSelf: 'stretch' }}>
+      <View style={{ marginTop: -spacing[4], alignSelf: 'stretch' }}>
         {/* Ghost reserves the final layout (text + cursor width) so the
-            revealed text never shifts the logo/body below it. */}
+            revealed text never shifts once typing finishes. */}
         <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
           <Display size={26} style={{ textAlign: 'center', opacity: 0 }}>
             {greeting}
@@ -231,48 +206,6 @@ export function WelcomeInterstitialScreen({
                 </Animated.Text>
               )}
             </Display>
-          </View>
-        </View>
-      </View>
-      <View style={{ marginTop: spacing[2], alignSelf: 'center', width: '100%', maxWidth: 300 }}>
-        <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-          <Text
-            style={{
-              fontFamily: fonts.ui,
-              fontSize: 14.5,
-              lineHeight: 21,
-              color: colors.mute,
-              textAlign: 'center',
-              opacity: 0,
-            }}
-          >
-            {body}
-            {CURSOR_CHAR}
-          </Text>
-        </View>
-        <View
-          style={{ position: 'absolute', top: 0, left: 0, right: 0 }}
-          accessible
-          accessibilityLabel={body}
-          importantForAccessibility="yes"
-        >
-          <View importantForAccessibility="no-hide-descendants">
-            <Text
-              style={{
-                fontFamily: fonts.ui,
-                fontSize: 14.5,
-                lineHeight: 21,
-                color: colors.mute,
-                textAlign: 'center',
-              }}
-            >
-              {bodyTyping.displayText}
-              {bodyCursor.showCursor && (
-                <Animated.Text style={{ opacity: bodyCursor.cursorOpacity, color: colors.mute }}>
-                  {CURSOR_CHAR}
-                </Animated.Text>
-              )}
-            </Text>
           </View>
         </View>
       </View>

@@ -41,8 +41,7 @@
   },
   "welcome": {
     "greeting": "Bem-vindo, {{name}}.",
-    "greetingNoName": "Bem-vindo!",
-    "body": "Vamos entender onde você está hoje e onde quer chegar."
+    "greetingNoName": "Bem-vindo!"
   },
   "interstitials": {
     "evolution": {
