@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
+  Animated,
   View,
   Text,
   TextInput,
@@ -152,6 +153,16 @@ export function AuthScreen({
   // gates whether tapping it opens the native sheet or the "unavailable" modal.
   const [googleAvailable, setGoogleAvailable] = useState(false);
   const [googleUnavailableNotice, setGoogleUnavailableNotice] = useState(false);
+
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    fadeAnim.setValue(0);
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 250,
+      useNativeDriver: true,
+    }).start();
+  }, [mode, fadeAnim]);
 
   useEffect(() => {
     let active = true;
@@ -322,6 +333,7 @@ export function AuthScreen({
       } else {
         await reset(email);
         setInfo(t('reset.success'));
+        setTimeout(() => switchMode('login'), 1000);
       }
     } catch (err) {
       if (mode === 'login' && beginTotpChallenge(err, 'password')) return;
@@ -387,8 +399,14 @@ export function AuthScreen({
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
-            <View
-              style={{ flex: 1, paddingHorizontal: 26, paddingTop: 20, paddingBottom: 36 }}
+            <Animated.View
+              style={{
+                flex: 1,
+                paddingHorizontal: 26,
+                paddingTop: 20,
+                paddingBottom: 36,
+                opacity: fadeAnim,
+              }}
             >
               <View>
                 {mode !== 'signup' && (
@@ -597,7 +615,7 @@ export function AuthScreen({
                   </Pressable>
                 )}
               </View>
-            </View>
+            </Animated.View>
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
