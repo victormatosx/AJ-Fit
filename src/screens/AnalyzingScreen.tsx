@@ -238,7 +238,7 @@ export function AnalyzingScreen({
                   %
                 </Text>
               </View>
-              <MonoLabel style={{ marginTop: 6 }}>
+              <MonoLabel style={{ marginTop: 2, textAlign: 'center' }}>
                 {t('analyzing.compiling').toUpperCase()}
               </MonoLabel>
             </View>
@@ -255,11 +255,14 @@ export function AnalyzingScreen({
                 textTransform: 'uppercase',
                 color: '#fff',
                 textAlign: 'center',
+                transform: [{ skewX: '-8deg' }],
               }}
             >
-              {name
-                ? `${t('analyzing.titleWithNameLine1').toUpperCase()}\n${t('analyzing.titleWithNameLine2', { name }).toUpperCase()}`
-                : `${t('analyzing.titleLine1').toUpperCase()}\n${t('analyzing.titleLine2').toUpperCase()}`}
+              {renderHighlightedTitle(
+                name
+                  ? `${t('analyzing.titleWithNameLine1').toUpperCase()}\n${t('analyzing.titleWithNameLine2', { name }).toUpperCase()}`
+                  : `${t('analyzing.titleLine1').toUpperCase()}\n${t('analyzing.titleLine2').toUpperCase()}`,
+              )}
             </Text>
           </View>
 
@@ -280,6 +283,22 @@ export function AnalyzingScreen({
         </View>
       </SafeAreaView>
     </View>
+  );
+}
+
+// Splits the title on "jornada" (any case) and paints that word in the
+// accent blue — the rest of the title stays white.
+function renderHighlightedTitle(text: string) {
+  const parts = text.split(/(jornada)/i);
+  if (parts.length === 1) return text;
+  return parts.map((part, i) =>
+    /^jornada$/i.test(part) ? (
+      <Text key={i} style={{ color: colors.accentHi }}>
+        {part}
+      </Text>
+    ) : (
+      part
+    ),
   );
 }
 
