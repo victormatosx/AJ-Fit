@@ -75,6 +75,22 @@
     },
     "loads": {
       "eyebrow": "Loads",
+      "maxLoad": "{{exercise}} · max load",
+      "delta": "{{direction}} +{{value}} {{unit}}",
+      "period_one": "Evolution · {{count}} week",
+      "period_other": "Evolution · {{count}} weeks",
+      "recordsTitle": "Recent records",
+      "recordedAt": "Recorded on {{date}}",
+      "gain": "+{{value}} {{unit}} since start",
+      "exercises": {
+        "benchPress": { "short": "Bench", "full": "Bench press" },
+        "squat": { "short": "Squat", "full": "Squat" },
+        "deadlift": { "short": "Deadlift", "full": "Deadlift" }
+      },
+      "accessibility": {
+        "selectExercise": "Show {{exercise}} evolution",
+        "chart": "{{exercise}} evolution chart. Current load: {{value}} {{unit}}"
+      },
       "empty": {
         "title": "No load history yet",
         "description": "The weights you log during a workout apply to that session.",
@@ -217,9 +233,6 @@
         "after": "After",
         "loading": "Preparing your photos in high quality…",
         "preview": "Comparison preview",
-        "generate": "Generate comparison",
-        "generating": "Generating…",
-        "generated": "Comparison ready",
         "captureFailed": "We couldn't generate the comparison. Try again.",
         "share": "Share",
         "sharing": "Sharing…",

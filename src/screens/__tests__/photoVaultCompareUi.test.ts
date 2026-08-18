@@ -550,10 +550,15 @@ describe('presentation', () => {
     }
   });
 
-  it('turns the ready export CTA into the generic share action', () => {
-    expect(COMPARE_CODE).toContain("exportState.status === 'ready'");
+  it('captures and shares from one generic share CTA', () => {
     expect(COMPARE_CODE).toContain("t('progress.photos.compare.share')");
-    expect(COMPARE_CODE).toContain('void sharePhotoVaultComparison()');
+    expect(COMPARE_CODE).not.toContain("t('progress.photos.compare.generate')");
+    expect(COMPARE_CODE).not.toContain("t('progress.photos.compare.generated')");
+    expect(COMPARE_CODE).toContain('await capturePhotoVaultComparison({');
+    expect(COMPARE_CODE).toContain('await sharePhotoVaultComparison()');
+    expect(COMPARE_CODE.indexOf('await capturePhotoVaultComparison({')).toBeLessThan(
+      COMPARE_CODE.indexOf('await sharePhotoVaultComparison()'),
+    );
     expect(COMPARE_CODE).not.toContain('Instagram');
     expect(COMPARE_CODE).not.toContain('WhatsApp');
   });

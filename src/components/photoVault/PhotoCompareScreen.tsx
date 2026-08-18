@@ -69,9 +69,10 @@ import {
  *
  * Selection uses only gallery-owned thumbnails. The review CTA then hands the
  * ordered pair to a dedicated full-image controller and renders its two
- * temporary URIs in a normal React Native View. Only an explicit generate
- * action captures the branded poster into this comparator session's share/
- * file; opening the preview itself creates no composed plaintext.
+ * temporary URIs in a normal React Native View. The explicit share action
+ * captures the branded poster into this comparator session's temporary file
+ * and immediately hands it to the native share sheet; opening the preview
+ * itself creates no composed plaintext.
  *
  * Owns its own selection state, so the host screen only has to open it, hand
  * over the photos it already has, and be told when it closes. The selection is
@@ -774,19 +775,22 @@ function ComparisonPreview({
     backgroundReady &&
     logoReady;
 
-  const handlePosterAction = useCallback(() => {
-    if (exportState.status === 'ready' && exportState.exportUri) {
-      void sharePhotoVaultComparison();
-      return;
-    }
+  const handlePosterAction = useCallback(async () => {
     discardPhotoVaultComparisonShare();
-    void capturePhotoVaultComparison({
-      posterRef,
-      posterReady,
-      logoReady,
-      beforeFullUri,
-      afterFullUri,
-    });
+    const nextExportState =
+      exportState.status === 'ready' && exportState.exportUri
+        ? exportState
+        : await capturePhotoVaultComparison({
+            posterRef,
+            posterReady,
+            logoReady,
+            beforeFullUri,
+            afterFullUri,
+          });
+
+    if (nextExportState.status === 'ready' && nextExportState.exportUri) {
+      await sharePhotoVaultComparison();
+    }
   }, [
     afterFullUri,
     beforeFullUri,
@@ -800,12 +804,10 @@ function ComparisonPreview({
     shareState.status === 'sharing'
       ? t('progress.photos.compare.sharing')
       : exportState.status === 'capturing'
-      ? t('progress.photos.compare.generating')
-      : exportState.status === 'ready'
-        ? t('progress.photos.compare.share')
+        ? t('progress.photos.compare.sharing')
         : exportState.status === 'error'
           ? t('progress.photos.compare.retry')
-          : t('progress.photos.compare.generate');
+          : t('progress.photos.compare.share');
 
   const actionBusy =
     exportState.status === 'capturing' || shareState.status === 'sharing';
@@ -918,7 +920,7 @@ function ComparisonPreview({
           >
             {shareErrorMessage ?? t('progress.photos.compare.captureFailed')}
           </Text>
-        ) : shareState.status === 'completed' || exportState.status === 'ready' ? (
+        ) : shareState.status === 'completed' ? (
           <Text
             accessibilityLiveRegion="polite"
             style={{
@@ -930,11 +932,7 @@ function ComparisonPreview({
               textTransform: 'uppercase',
             }}
           >
-            {t(
-              shareState.status === 'completed'
-                ? 'progress.photos.compare.shareReady'
-                : 'progress.photos.compare.generated',
-            )}
+            {t('progress.photos.compare.shareReady')}
           </Text>
         ) : null}
         <CtaButton

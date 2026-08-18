@@ -75,6 +75,22 @@
     },
     "loads": {
       "eyebrow": "Cargas",
+      "maxLoad": "{{exercise}} · carga máxima",
+      "delta": "{{direction}} +{{value}} {{unit}}",
+      "period_one": "Evolução · {{count}} semana",
+      "period_other": "Evolução · {{count}} semanas",
+      "recordsTitle": "Recordes recentes",
+      "recordedAt": "Registrado em {{date}}",
+      "gain": "+{{value}} {{unit}} desde o início",
+      "exercises": {
+        "benchPress": { "short": "Supino", "full": "Supino reto" },
+        "squat": { "short": "Agachamento", "full": "Agachamento" },
+        "deadlift": { "short": "Terra", "full": "Levantamento terra" }
+      },
+      "accessibility": {
+        "selectExercise": "Exibir evolução de {{exercise}}",
+        "chart": "Gráfico de evolução de {{exercise}}. Carga atual: {{value}} {{unit}}"
+      },
       "empty": {
         "title": "Ainda sem histórico de cargas",
         "description": "As cargas que você registra durante o treino valem para a sessão atual.",
@@ -217,9 +233,6 @@
         "after": "Depois",
         "loading": "Preparando suas fotos em alta qualidade…",
         "preview": "Prévia do comparativo",
-        "generate": "Gerar comparativo",
-        "generating": "Gerando…",
-        "generated": "Comparativo pronto",
         "captureFailed": "Não foi possível gerar o comparativo. Tente novamente.",
         "share": "Compartilhar",
         "sharing": "Compartilhando…",

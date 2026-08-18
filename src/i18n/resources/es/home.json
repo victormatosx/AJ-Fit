@@ -75,6 +75,22 @@
     },
     "loads": {
       "eyebrow": "Cargas",
+      "maxLoad": "{{exercise}} · carga máxima",
+      "delta": "{{direction}} +{{value}} {{unit}}",
+      "period_one": "Evolución · {{count}} semana",
+      "period_other": "Evolución · {{count}} semanas",
+      "recordsTitle": "Récords recientes",
+      "recordedAt": "Registrado el {{date}}",
+      "gain": "+{{value}} {{unit}} desde el inicio",
+      "exercises": {
+        "benchPress": { "short": "Banca", "full": "Press de banca" },
+        "squat": { "short": "Sentadilla", "full": "Sentadilla" },
+        "deadlift": { "short": "Peso muerto", "full": "Peso muerto" }
+      },
+      "accessibility": {
+        "selectExercise": "Mostrar evolución de {{exercise}}",
+        "chart": "Gráfico de evolución de {{exercise}}. Carga actual: {{value}} {{unit}}"
+      },
       "empty": {
         "title": "Aún sin historial de cargas",
         "description": "Las cargas que registras durante el entrenamiento valen para esa sesión.",
@@ -217,9 +233,6 @@
         "after": "Después",
         "loading": "Preparando tus fotos en alta calidad…",
         "preview": "Vista previa de la comparación",
-        "generate": "Generar comparación",
-        "generating": "Generando…",
-        "generated": "Comparación lista",
         "captureFailed": "No se pudo generar la comparación. Inténtalo de nuevo.",
         "share": "Compartir",
         "sharing": "Compartiendo…",

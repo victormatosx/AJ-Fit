@@ -6,11 +6,18 @@ import { useTranslation } from 'react-i18next';
 import { ScreenBg } from '../components/ui/ScreenBg';
 import { ProgressPhotosScreen } from './ProgressPhotosScreen';
 import { BodyEvolutionView } from '../components/fitness/BodyEvolutionView';
+import { LoadsEvolutionView } from '../components/fitness/LoadsEvolutionView';
 import { Display, MonoLabel, Slash } from '../components/ui/Display';
 import { Icon } from '../components/ui/Icon';
 import { colors, fonts, motion, sizes, spacing } from '../theme/tokens';
 import { useAuth } from '../state/AuthContext';
 import { useAssessments } from '../hooks/useAssessments';
+import {
+  PROGRESS_BODY_PREVIEW,
+  PROGRESS_BODY_PREVIEW_DELTA,
+  PROGRESS_LOADS_PREVIEW,
+  SHOW_PROGRESS_DESIGN_PREVIEW,
+} from '../data/progressDesignMocks';
 
 /**
  * The Evolution screen.
@@ -60,6 +67,12 @@ export function ProgressScreen({
   const handleRetry = useCallback(() => {
     void refresh();
   }, [refresh]);
+
+  const bodyAssessments = SHOW_PROGRESS_DESIGN_PREVIEW ? PROGRESS_BODY_PREVIEW : assessments;
+  const bodyLatest = SHOW_PROGRESS_DESIGN_PREVIEW ? PROGRESS_BODY_PREVIEW[0]! : latest;
+  const bodyEvolution = SHOW_PROGRESS_DESIGN_PREVIEW
+    ? PROGRESS_BODY_PREVIEW_DELTA
+    : evolutionSincePrevious;
 
   /**
    * Header lives here because the Photos panel renders it inside its list.
@@ -134,14 +147,16 @@ export function ProgressScreen({
             <PanelFade viewKey={view}>
               {view === 'body' ? (
                 <BodyEvolutionView
-                  assessments={assessments}
-                  loading={loading}
-                  error={error}
-                  latest={latest}
-                  evolutionSincePrevious={evolutionSincePrevious}
+                  assessments={bodyAssessments}
+                  loading={SHOW_PROGRESS_DESIGN_PREVIEW ? false : loading}
+                  error={SHOW_PROGRESS_DESIGN_PREVIEW ? null : error}
+                  latest={bodyLatest}
+                  evolutionSincePrevious={bodyEvolution}
                   onRetry={handleRetry}
                   onOpenAssessment={onOpenAssessment}
                 />
+              ) : SHOW_PROGRESS_DESIGN_PREVIEW ? (
+                <LoadsEvolutionView exercises={PROGRESS_LOADS_PREVIEW} />
               ) : (
                 <LoadsEmptyState />
               )}
