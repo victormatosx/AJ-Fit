@@ -15,7 +15,13 @@ import { Icon } from '../components/ui/Icon';
 import { MonoLabel } from '../components/ui/Display';
 import { colors, fonts, displayLineHeight } from '../theme/tokens';
 
-export function AnalyzingScreen({ onDone }: { onDone: () => void }) {
+export function AnalyzingScreen({
+  name,
+  onDone,
+}: {
+  name?: string | null;
+  onDone: () => void;
+}) {
   const { t } = useTranslation('onboarding');
   const [progress, setProgress] = useState(0);
   const steps = [
@@ -196,7 +202,7 @@ export function AnalyzingScreen({ onDone }: { onDone: () => void }) {
                 justifyContent: 'center',
               }}
             >
-              <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'baseline', paddingTop: 18 }}>
                 <Text
                   style={{
                     fontFamily: fonts.display,
@@ -204,8 +210,13 @@ export function AnalyzingScreen({ onDone }: { onDone: () => void }) {
                     lineHeight: displayLineHeight(56),
                     color: '#fff',
                     transform: [{ skewX: '-8deg' }],
-                    textShadowColor: 'rgba(77,163,255,0.95)',
-                    textShadowRadius: 28,
+                    // Tight rim-light instead of a blurred fill: a large
+                    // radius bled past each glyph's edge and merged the
+                    // gaps between digits into one solid blob that read as
+                    // a text-selection highlight. A few px keeps a subtle
+                    // glow without ever filling the space between digits.
+                    textShadowColor: 'rgba(77,163,255,0.5)',
+                    textShadowRadius: 3,
                     textShadowOffset: { width: 0, height: 0 },
                   }}
                 >
@@ -215,18 +226,19 @@ export function AnalyzingScreen({ onDone }: { onDone: () => void }) {
                   style={{
                     fontFamily: fonts.display,
                     fontSize: 24,
+                    lineHeight: displayLineHeight(24) + 18,
                     color: colors.accentHi,
                     transform: [{ skewX: '-8deg' }],
                     marginLeft: 2,
-                    textShadowColor: 'rgba(77,163,255,0.9)',
-                    textShadowRadius: 20,
+                    textShadowColor: 'rgba(77,163,255,0.45)',
+                    textShadowRadius: 3,
                     textShadowOffset: { width: 0, height: 0 },
                   }}
                 >
                   %
                 </Text>
               </View>
-              <MonoLabel style={{ marginTop: 6 }}>
+              <MonoLabel style={{ marginTop: 2, textAlign: 'center' }}>
                 {t('analyzing.compiling').toUpperCase()}
               </MonoLabel>
             </View>
@@ -243,11 +255,14 @@ export function AnalyzingScreen({ onDone }: { onDone: () => void }) {
                 textTransform: 'uppercase',
                 color: '#fff',
                 textAlign: 'center',
+                transform: [{ skewX: '-8deg' }],
               }}
             >
-              {t('analyzing.titleLine1').toUpperCase()}
-              {'\n'}
-              {t('analyzing.titleLine2').toUpperCase()}
+              {renderHighlightedTitle(
+                name
+                  ? `${t('analyzing.titleWithNameLine1').toUpperCase()}\n${t('analyzing.titleWithNameLine2', { name }).toUpperCase()}`
+                  : `${t('analyzing.titleLine1').toUpperCase()}\n${t('analyzing.titleLine2').toUpperCase()}`,
+              )}
             </Text>
           </View>
 
@@ -268,6 +283,22 @@ export function AnalyzingScreen({ onDone }: { onDone: () => void }) {
         </View>
       </SafeAreaView>
     </View>
+  );
+}
+
+// Splits the title on "jornada" (any case) and paints that word in the
+// accent blue — the rest of the title stays white.
+function renderHighlightedTitle(text: string) {
+  const parts = text.split(/(jornada)/i);
+  if (parts.length === 1) return text;
+  return parts.map((part, i) =>
+    /^jornada$/i.test(part) ? (
+      <Text key={i} style={{ color: colors.accentHi }}>
+        {part}
+      </Text>
+    ) : (
+      part
+    ),
   );
 }
 

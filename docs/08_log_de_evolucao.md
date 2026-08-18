@@ -3204,3 +3204,131 @@ Assinatura:
 Claude — 2026-08-14 — Fase 13B do cache criptografado do Photo Vault.
 
 ---
+
+Data: 2026-08-15
+Responsável: Claude — Agente Frontend + Navegação + i18n
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Reconstruído o funil de aquisição/onboarding (Splash → Onboarding → Quiz →
+Analyzing → Plan Ready → Auth → Paywall), de 3 telas de apresentação + 1 quiz
+monolítico para 26 etapas orquestradas por uma state machine central
+(`src/onboarding/steps.ts`, `useOnboardingFunnel.ts`, `OnboardingFunnelScreen.tsx`).
+Documentação completa em `docs/24_funil_onboarding_arquitetura.md`.
+
+`RootScreenId` (`premiumGate.ts`) colapsou os antigos `'onboarding'|'quiz'|
+'socialProof'|'analyzing'|'plan'` num único `'onboardingFunnel'` — sem
+nenhuma mudança de prioridade no gate, só renomeação de fixture nos testes.
+`QuizScreen.tsx` (monolítico, 11 perguntas + `DevQuizNav` sem guard `__DEV__`)
+foi removido; sua lógica de renderização (wheels, date picker, choice/multi
+lists) foi extraída verbatim para `src/components/onboarding/QuestionRenderer.tsx`
++ `QuestionStepScreen.tsx`, reutilizada pelas perguntas antigas e novas.
+
+Novas perguntas: nome (pré-auth, nunca duplicado com `profile.name`),
+motivação, foco muscular (máx. 2, campo novo `Quiz.muscleFocus`),
+compromisso. Cinco interstitials de valor novos (evolução, metodologia,
+treino guiado, evolução AJ Fit, boas-vindas) — nenhuma credencial
+profissional/CREF/estudo inventados; a tela de metodologia fica
+deliberadamente neutra até existir informação real. A tela de prova social
+(`SocialProofScreen`, com fotos reais em `assets/antes-depois/`) já existia de
+uma implementação recente e foi só reposicionada no funil, não recriada.
+
+`PlanReadyScreen` teve toda a "personalização falsa" removida: split semanal
+fixo (ignorava `days` real), "+6,2kg massa magra" e `ProjectionChart` com
+curva sempre igual, "12 semanas"/"48 treinos" hardcoded sem cálculo real. A
+tela também não usava i18n (pt-BR hardcoded no JSX inteiro) — migrada para o
+namespace novo `plan` nos 3 idiomas. O único valor derivado que ficou é
+`deriveTrainingDaySlots(days)` (`src/lib/planDerivation.ts`), que distribui os
+dias de treino reais na semana sem inventar nomes de split.
+
+`AuthScreen`/`PaywallScreen` receberam só um prop `entryContext` (copy-only):
+`AuthScreen` evita mostrar "salve seu plano" para quem clicou "Entrar" direto
+(antes sempre abria em modo signup, mesmo vindo do link de login); nenhuma
+função de signup/login/social/linking/reset foi tocada. `PaywallScreen` troca
+só o subtítulo quando vem de um plano concluído; nenhuma função de
+offerings/purchase/restore/promo/entitlement foi tocada. O botão X do
+Paywall continua fazendo `logout()` — decisão documentada, não alterada
+(não há destino de navegação alternativo sem estender `premiumGate`).
+
+Draft anônimo persistido em AsyncStorage (`src/onboarding/draftStorage.ts`),
+versionado (`ONBOARDING_DRAFT_SCHEMA_VERSION`), migração tolerante (nunca
+lança em draft corrompido/futuro), limpo só depois que
+`user && questionnaire` ficam ambos verdadeiros no `RootNavigator`. Antes
+desta mudança não existia nenhuma persistência do quiz — fechar o app
+perdia todo o progresso anônimo.
+
+`DevQuizNav` (sem guard `__DEV__`, potencialmente visível em produção) foi
+substituído por `DevFunnelNavigator`, cobrindo as 26 etapas, com guard duplo
+(componente + ponto de montagem) e `auth`/`paywall` desabilitados — nenhum
+atalho fabrica sessão/CustomerInfo/Premium.
+
+Segurança:
+Nenhuma chamada a RevenueCat foi movida para fora de `SubscriptionContext`/
+`revenueCatService.ts`. `provisionNewUser` continua sendo o único caminho de
+criação de `users/{uid}`. `resolvePremiumGate` não foi reordenado — só teve o
+literal de tela renomeado, com os mesmos casos de teste (A–K, FASE 10)
+passando sem alteração de asserção.
+
+Validação automática:
+1820 testes (115 arquivos) aprovados, typecheck aprovado, `i18n:audit` sem
+bloqueios (namespace `plan` novo, 24 chaves × 3 idiomas). Testes novos:
+`steps.test.ts`, `draftStorage.test.ts`, `onboardingFunnelWiring.test.ts`,
+`planDerivation.test.ts`, `authOnboardingContext.test.ts`,
+`paywallOnboardingContext.test.ts`.
+
+Pendência:
+Motor real de geração de split/periodização ainda não existe — `muscleFocus`/
+`limits` estão modelados para alimentá-lo no futuro, sem nenhuma lógica
+clínica implementada agora. i18n do `PaywallScreen` continua com débito
+pré-existente (fora de escopo). Nada foi validado em dispositivo físico —
+o teste manual dos casos A–I do funil (novo usuário, abandono/resume, login
+direto, social auth, email verification, usuário Premium/não-Premium,
+restore, Dev Navigator) segue pendente.
+
+Assinatura:
+Claude — 2026-08-15 — Reconstrução do funil de aquisição/onboarding.
+
+---
+
+Data: 2026-08-16
+Responsável: Claude — Agente Frontend
+Categoria: [CORREÇÃO]
+
+Descrição:
+Corrigido, em todo o app (não só no funil), o corte do topo dos textos em
+Anton (`fonts.display`) — reportado primeiro no número do Analyzing e depois
+no título da tela de Apresentação. Ocorre só em iPhone; Android nunca teve o
+problema porque `includeFontPadding` já reserva esse espaço por padrão ali.
+
+Auditoria: todo uso de `fonts.display` no app (23 arquivos, 53 ocorrências)
+foi mapeado em dois grupos. Grupo A/B — usa o componente `<Display>` ou chama
+`displayLineHeight(size)` explicitamente (`WorkoutScreen`, `ConsistencyScreen`,
+`PlanReadyScreen`, `AnalyzingScreen`, `CtaButton`, `Display.tsx`, mais o objeto
+`typography` em `tokens.ts`) — esse era o grupo afetado, porque o fator usado
+(1,15×) não deixava espaço suficiente dentro da caixa da linha para o
+ascendente do glifo no iOS. Grupo C — texto grande sem `lineHeight` nenhum
+(ex.: os dígitos gigantes do `NumberWheel`, a idade no `BirthDateWheel`) — sem
+uma altura de linha explícita constrangendo a caixa, o iOS usa a métrica
+natural da fonte e não corta; esse grupo não precisou de mudança.
+
+Correção centralizada em `displayLineHeight()` (`src/theme/tokens.ts`),
+único lugar que todo o Grupo A/B consome — fator ajustado de 1,15× para
+1,45×, valor confirmado em iPhone real a partir do ajuste já validado na tela
+de Analyzing. Removida a compensação manual (`+18`) que tinha sido aplicada
+ali antes da causa raiz ser isolada, já redundante com o novo fator central.
+Nenhum teste trava um valor numérico específico do multiplicador, então não
+houve necessidade de atualizar snapshot/assertion nenhuma — só
+`docs/19_design_system.md`, cuja tabela de `displayHero/Large/Medium/Small`
+documentava os valores antigos de `lineHeight`.
+
+Validação automática:
+1820 testes aprovados, typecheck aprovado.
+
+Pendência:
+Validação visual em dispositivo físico iOS ainda não feita por mim — depende
+de confirmação do usuário testando o app.
+
+Assinatura:
+Claude — 2026-08-16 — Correção do corte de glifos Anton no iOS (fix centralizado).
+
+---

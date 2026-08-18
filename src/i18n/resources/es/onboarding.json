@@ -30,6 +30,92 @@
     "hasAccount": "¿Ya tienes cuenta?",
     "login": "Iniciar sesión"
   },
+  "name": {
+    "eyebrow": "¡Empecemos!",
+    "title": "¿Cómo te llamamos?",
+    "placeholder": "Tu nombre",
+    "cta": "Continuar",
+    "accessibility": {
+      "input": "Campo de nombre"
+    }
+  },
+  "welcome": {
+    "greeting": "Bienvenido, {{name}}.",
+    "greetingNoName": "¡Bienvenido!"
+  },
+  "interstitials": {
+    "evolution": {
+      "titleLine1": "Tu entreno no termina",
+      "titleLine2": "cuando se crea.",
+      "intro": "AJ Fit fue pensado para acompañar tu evolución a lo largo del tiempo.",
+      "carouselLabel": "Carrusel de funciones de evolución de AJ Fit",
+      "screenshotPlaceholder": "Captura {{index}}",
+      "slides": {
+        "evolve": {
+          "title": "Tu entreno evoluciona contigo",
+          "body": "A medida que progresas, tu entreno puede evolucionar para seguir desafiándote."
+        },
+        "adapt": {
+          "title": "Un plan que se adapta a tu rutina",
+          "body": "Tu rutina y tus comentarios ayudan a AJ Fit a ajustar tu camino."
+        },
+        "objective": {
+          "title": "Todo pensado para tu objetivo",
+          "body": "Cada ajuste busca mantener tu entreno alineado con el camino más eficiente para llegar a donde quieres."
+        }
+      },
+      "cta": "Continuar"
+    },
+    "methodology": {
+      "eyebrow": "Metodología",
+      "titleLine1": "El entreno no",
+      "titleLine2": "es aleatorio.",
+      "body": "Tu entrenamiento sigue una metodología pensada para hacerte evolucionar.",
+      "cta": "Continuar"
+    },
+    "guidedWorkout": {
+      "eyebrow": "Ejecución",
+      "titleLine1": "Solo tienes que",
+      "titleLine2": "ejecutar.",
+      "body": "Series, repeticiones, carga y descanso. Todo en el momento justo.",
+      "carouselLabel": "Carrusel de funciones de entreno guiado de AJ Fit",
+      "slides": {
+        "guide": {
+          "body": "Te guiamos en tus series"
+        },
+        "progress": {
+          "body": "Te incentivamos a progresar la carga"
+        },
+        "execution": {
+          "body": "Te ayudamos en la ejecución"
+        }
+      },
+      "cta": "Continuar"
+    },
+    "ajFitProgress": {
+      "eyebrow": "Evolución",
+      "titleLine1": "{{name}}, crear tu entreno",
+      "titleLine1NoName": "Crear tu entreno",
+      "titleLine2": "es solo el comienzo.",
+      "carouselLabel": "Carrusel de funciones de progreso de AJ Fit",
+      "screenshotPlaceholder": "Captura {{index}}",
+      "features": {
+        "loads": {
+          "title": "Cargas",
+          "body": "Sigue tu evolución ejercicio por ejercicio."
+        },
+        "body": {
+          "title": "Cuerpo",
+          "body": "Sigue tu peso, medidas y cambios en tu cuerpo."
+        },
+        "photos": {
+          "title": "Fotos",
+          "body": "Compara tu evolución visual a lo largo del tiempo."
+        }
+      },
+      "cta": "Continuar"
+    }
+  },
   "analyzing": {
     "compiling": "Compilando",
     "titleLine1": "Creando",
@@ -43,7 +129,9 @@
     },
     "accessibility": {
       "progress": "Creación de tu plan: {{progress}} por ciento"
-    }
+    },
+    "titleWithNameLine1": "Estamos estructurando",
+    "titleWithNameLine2": "tu camino, {{name}}."
   },
   "socialProof": {
     "eyebrow": "Prueba social",

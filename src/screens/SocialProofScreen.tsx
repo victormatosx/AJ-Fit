@@ -7,6 +7,8 @@ import { Display, Slash } from '../components/ui/Display';
 import { CtaButton } from '../components/ui/CtaButton';
 import { Icon } from '../components/ui/Icon';
 import { SocialProofCarousel } from '../components/onboarding/SocialProofCarousel';
+import { ScreenBg } from '../components/ui/ScreenBg';
+import { OutlineNumber } from '../components/ui/OutlineNumber';
 import { colors, fonts, sizes, spacing } from '../theme/tokens';
 
 export function SocialProofScreen({ onDone }: { onDone: () => void }) {
@@ -21,7 +23,14 @@ export function SocialProofScreen({ onDone }: { onDone: () => void }) {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.bg, overflow: 'hidden' }}>
+    <ScreenBg>
+      <OutlineNumber
+        size={260}
+        style={{ position: 'absolute', top: -40, right: -50, opacity: 0.35 }}
+      >
+        AJ
+      </OutlineNumber>
+
       {/* Extremely subtle top glow — mirrors the faint radial wash already
           used on OnboardingScreen, toned down so it reads as texture, not glow. */}
       <View
@@ -103,6 +112,6 @@ export function SocialProofScreen({ onDone }: { onDone: () => void }) {
           </View>
         </View>
       </SafeAreaView>
-    </View>
+    </ScreenBg>
   );
 }

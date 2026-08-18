@@ -51,7 +51,7 @@ describe('body-weight integration contract', () => {
     'utf8',
   );
   const quizSource = readFileSync(
-    resolve(__dirname, '../../screens/QuizScreen.tsx'),
+    resolve(__dirname, '../../components/onboarding/QuestionRenderer.tsx'),
     'utf8',
   );
   const assessmentService = readFileSync(

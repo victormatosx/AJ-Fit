@@ -50,7 +50,7 @@ type Exercise = {
 const EXERCISES: Exercise[] = [
   {
     id: 'supino-reto',
-    name: 'Supino Reto',
+    name: 'Supino Reto Máquina',
     target: 'Peitoral',
     db: 'Barbell_Bench_Press_-_Medium_Grip',
     sets: [{ r: 10, w: 60 }, { r: 8, w: 70 }, { r: 8, w: 75 }, { r: 6, w: 80 }],
@@ -789,23 +789,33 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
           animationType="fade"
           onRequestClose={() => setVideoOpen(false)}
         >
-          <View style={{ flex: 1, backgroundColor: colors.bg }}>
-            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-              <View style={{ width: '92%', maxWidth: 380 }}>
-                <ExerciseGif
-                  id={ex.db}
-                  name={translateExerciseName(tLoose, ex.db, ex.name)}
-                  aspectRatio={9 / 16}
-                  radius={20}
-                />
-              </View>
-            </View>
-            <SafeAreaView
-              edges={['top']}
-              style={{ position: 'absolute', top: 0, left: 0, right: 0 }}
+          <SafeAreaView
+            edges={['top', 'bottom']}
+            style={{ flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' }}
+          >
+            <View
+              style={{
+                width: '92%',
+                maxWidth: 380,
+                aspectRatio: 9 / 16,
+                position: 'relative',
+                borderRadius: 20,
+                overflow: 'hidden',
+              }}
             >
+              <ExerciseGif
+                id={ex.db}
+                name={translateExerciseName(tLoose, ex.db, ex.name)}
+                aspectRatio={9 / 16}
+                radius={20}
+              />
+
               <View
                 style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
                   padding: 20,
                   flexDirection: 'row',
                   alignItems: 'flex-start',
@@ -845,18 +855,14 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                   <Icon name="x" size={20} color="#fff" />
                 </Pressable>
               </View>
-            </SafeAreaView>
-            <LinearGradient
-              colors={['transparent', 'rgba(2,0,16,0.5)', 'rgba(2,0,16,0.9)']}
-              locations={[0, 0.45, 1]}
-              pointerEvents="none"
-              style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 260 }}
-            />
-            <SafeAreaView
-              edges={['bottom']}
-              style={{ position: 'absolute', left: 0, right: 0, bottom: 0 }}
-            >
-              <View style={{ padding: 22 }}>
+
+              <LinearGradient
+                colors={['transparent', 'rgba(2,0,16,0.5)', 'rgba(2,0,16,0.9)']}
+                locations={[0, 0.45, 1]}
+                pointerEvents="none"
+                style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 260 }}
+              />
+              <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: 22 }}>
                 <MonoLabel color={colors.accentHi} style={{ marginBottom: 10 }}>
                   {t('video.keyPoints').toUpperCase()}
                 </MonoLabel>
@@ -884,8 +890,8 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                   </View>
                 ))}
               </View>
-            </SafeAreaView>
-          </View>
+            </View>
+          </SafeAreaView>
         </Modal>
 
         {/* SUB SHEET */}

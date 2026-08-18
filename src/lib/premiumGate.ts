@@ -1,10 +1,16 @@
+/**
+ * `'onboardingFunnel'` covers the entire pre-auth acquisition funnel — what
+ * used to be five separate root screens ('onboarding'|'quiz'|'socialProof'|
+ * 'analyzing'|'plan') collapsed into one. The gate treats all of it
+ * homogeneously (a single "not yet authenticated / no questionnaire yet"
+ * bucket), so this collapse changes no gate priority or test assertion —
+ * the internal 26-step sequence is owned entirely by
+ * `src/onboarding/steps.ts` + `OnboardingFunnelScreen`, which this module
+ * never needs to know about.
+ */
 export type RootScreenId =
   | 'splash'
-  | 'onboarding'
-  | 'quiz'
-  | 'socialProof'
-  | 'analyzing'
-  | 'plan'
+  | 'onboardingFunnel'
   | 'auth'
   | 'emailVerification'
   | 'paywall'
@@ -57,7 +63,7 @@ export function resolvePremiumGate(state: PremiumGateState): RootScreenId | null
 
   if (state.preferencesReconciling) return null;
 
-  if (!state.hasQuestionnaire) return 'quiz';
+  if (!state.hasQuestionnaire) return 'onboardingFunnel';
 
   if (state.subscriptionLoading || !state.subscriptionConfigured) return null;
 
