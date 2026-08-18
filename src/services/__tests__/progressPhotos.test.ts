@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   readCache: vi.fn(), writeCache: vi.fn(), removeCache: vi.fn(),
   reconcileCache: vi.fn(), cacheEpoch: 7, decryptToBase64: vi.fn(),
   runTransaction: vi.fn(), txGet: vi.fn(), txDelete: vi.fn(),
+  contentPresence: vi.fn(),
   currentUser: { uid: 'alice' } as { uid: string } | null,
   uuid: 0,
 }));
@@ -82,6 +83,12 @@ vi.mock('../photoVaultEncryptedCache', () => ({
   writeCachedThumbnail: (...args: unknown[]) => mocks.writeCache(...args),
   removeCachedThumbnail: (...args: unknown[]) => mocks.removeCache(...args),
   reconcileCachedThumbnails: (...args: unknown[]) => mocks.reconcileCache(...args),
+}));
+vi.mock('../photoVaultContentPresence', () => ({
+  reconcilePhotoVaultContentPresence: (...args: unknown[]) =>
+    mocks.contentPresence(...args),
+  setPhotoVaultContentPresence: (...args: unknown[]) =>
+    mocks.contentPresence(...args),
 }));
 
 import { PhotoVaultError } from '../../lib/photoVaultErrors';
@@ -232,6 +239,23 @@ beforeEach(() => {
 });
 
 describe('dual encrypted upload', () => {
+  it('marks content present only after the first photo is durably committed', async () => {
+    await uploadProgressPhoto(uploadInput);
+
+    expect(mocks.contentPresence).toHaveBeenCalledWith(UID, true);
+    expect(mocks.contentPresence.mock.invocationCallOrder[0]).toBeGreaterThan(
+      mocks.setDoc.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it('does not mark content present when the upload fails', async () => {
+    mocks.setDoc.mockRejectedValue(new Error('firestore'));
+
+    await uploadProgressPhoto(uploadInput).catch(() => undefined);
+
+    expect(mocks.contentPresence).not.toHaveBeenCalled();
+  });
+
   it('generates a grid thumbnail and encrypts full/thumb independently', async () => {
     await uploadProgressPhoto(uploadInput);
 
@@ -367,6 +391,24 @@ describe('listing compatibility', () => {
     return { docs: entries.map((entry) => ({ id: entry.id, data: () => entry.data })) };
   }
 
+  it('reconciles false from an authenticated empty listing', async () => {
+    mocks.getDocs.mockResolvedValue(snapshotOf([]));
+
+    await listProgressPhotos();
+
+    expect(mocks.contentPresence).toHaveBeenCalledWith(UID, false);
+  });
+
+  it('reconciles true from an authenticated non-empty listing', async () => {
+    mocks.getDocs.mockResolvedValue(snapshotOf([
+      { id: ASSET_1, data: storedDoc(ASSET_1, true) },
+    ]));
+
+    await listProgressPhotos();
+
+    expect(mocks.contentPresence).toHaveBeenCalledWith(UID, true);
+  });
+
   it('accepts both legacy and complete thumbnail schemas', async () => {
     mocks.getDocs.mockResolvedValue(snapshotOf([
       { id: '123e4567-e89b-42d3-a456-426614174011', data: storedDoc('123e4567-e89b-42d3-a456-426614174011', false) },
@@ -458,6 +500,9 @@ describe('delete and gates', () => {
     expect(mocks.deleteDoc.mock.invocationCallOrder[0]).toBeGreaterThan(
       Math.max(...mocks.deleteObject.mock.invocationCallOrder),
     );
+    // This layer cannot know whether another gallery item remains. The caller
+    // updates false only after the confirmed delete leaves its authority empty.
+    expect(mocks.contentPresence).not.toHaveBeenCalled();
   });
 
   it('keeps metadata and reports partial delete if thumbnail went but full remains', async () => {
@@ -504,6 +549,7 @@ describe('delete and gates', () => {
     }
     expect(mocks.upload).not.toHaveBeenCalled();
     expect(mocks.getBytes).not.toHaveBeenCalled();
+    expect(mocks.contentPresence).not.toHaveBeenCalled();
   });
 });
 
@@ -1095,6 +1141,7 @@ describe('replaceProgressPhoto', () => {
     // The old object is never overwritten.
     expect(result.storagePath).toContain(result.assetId);
     expect(result.storagePath).not.toContain(OLD_ASSET);
+    expect(mocks.contentPresence).not.toHaveBeenCalled();
   });
 
   it('drops the old ciphertext and its cache only after the commit', async () => {

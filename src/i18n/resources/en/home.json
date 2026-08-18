@@ -98,6 +98,14 @@
       }
     },
     "photos": {
+      "intro": {
+        "titlePrefix": "Track your",
+        "titleHighlight": "transformation",
+        "subtitle": "Capture your photos, compare the results, and see how far you've come.",
+        "beforePeriod": "MAR • 2026",
+        "afterPeriod": "AUG • 2026",
+        "illustrationAccessibility": "Illustrative example of two photos tracking physical progress over time."
+      },
       "locked": {
         "title": "Your photos are protected",
         "description": "Use your device authentication to access your private photos.",

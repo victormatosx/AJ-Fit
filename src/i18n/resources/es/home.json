@@ -98,6 +98,14 @@
       }
     },
     "photos": {
+      "intro": {
+        "titlePrefix": "Sigue tu",
+        "titleHighlight": "transformación",
+        "subtitle": "Registra tus fotos, compara los resultados y descubre cuánto has avanzado.",
+        "beforePeriod": "MAR • 2026",
+        "afterPeriod": "AGO • 2026",
+        "illustrationAccessibility": "Ejemplo ilustrativo de dos fotos que muestran el progreso físico a lo largo del tiempo."
+      },
       "locked": {
         "title": "Tus fotos están protegidas",
         "description": "Usa la autenticación de tu dispositivo para acceder a tus fotos privadas.",

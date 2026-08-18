@@ -28,6 +28,11 @@ import { pruneCachedThumbnailsExcept } from '../services/photoVaultEncryptedCach
 import { cleanupPhotoVaultShareFiles } from '../services/photoVaultFileCrypto';
 import { deactivatePhotoVaultScreenProtection } from '../services/photoVaultScreenProtection';
 import {
+  readPhotoVaultContentPresence,
+  setPhotoVaultContentPresence,
+  subscribeToPhotoVaultContentPresence,
+} from '../services/photoVaultContentPresence';
+import {
   isPhotoVaultComparisonShareInFlight,
   subscribeToPhotoVaultComparisonShareInFlight,
 } from '../lib/photoVaultCompareShare';
@@ -46,12 +51,17 @@ import { useAuth } from './AuthContext';
 
 interface PhotoVaultContextValue {
   status: PhotoVaultStatus;
+  /** Local, uid-scoped hint used only by the locked presentation. */
+  hasPhotoVaultContent: boolean;
+  /** False only while the current uid's cold-start hint is being read. */
+  hasPhotoVaultContentReady: boolean;
   /** What the device can authenticate with; null until first inspected. */
   capability: VaultAuthCapability | null;
   /** Why the last unlock attempt did not succeed. Cleared on a new attempt. */
   lastIssue: PhotoVaultIssue | null;
   unlock: () => Promise<UnlockOutcome>;
   lock: () => void;
+  setHasPhotoVaultContent: (hasContent: boolean) => Promise<void>;
   refreshCapability: () => Promise<VaultAuthCapability>;
 }
 
@@ -64,9 +74,16 @@ export function PhotoVaultProvider({ children }: { children: React.ReactNode }) 
   const [status, setStatus] = useState<PhotoVaultStatus>(getPhotoVaultStatus);
   const [capability, setCapability] = useState<VaultAuthCapability | null>(null);
   const [lastIssue, setLastIssue] = useState<PhotoVaultIssue | null>(null);
+  const [hasPhotoVaultContent, setHasPhotoVaultContentState] = useState(false);
+  const [hasPhotoVaultContentReady, setHasPhotoVaultContentReady] = useState(
+    uid === null,
+  );
   const [privacyOverlayVisible, setPrivacyOverlayVisible] = useState(false);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
   const sensitiveSnapshotRef = useRef(false);
+  const uidRef = useRef(uid);
+  const contentPresenceRevisionRef = useRef(0);
+  uidRef.current = uid;
 
   /**
    * Releasing iOS capture protection reparents the current key window. During
@@ -86,9 +103,58 @@ export function PhotoVaultProvider({ children }: { children: React.ReactNode }) 
 
   useEffect(() => subscribeToPhotoVaultStatus(setStatus), []);
 
+  /**
+   * Hydrates only the one-bit, uid-scoped locked-layout hint.
+   *
+   * A revision guard prevents a slow read for user A from painting user B.
+   * Confirmed writes publish synchronously through the service and advance the
+   * revision, so an older cold-start read cannot overwrite a newer upload or
+   * delete result for the same identity either.
+   */
+  useEffect(() => {
+    contentPresenceRevisionRef.current += 1;
+    const readRevision = contentPresenceRevisionRef.current;
+
+    if (uid === null) {
+      setHasPhotoVaultContentState(false);
+      setHasPhotoVaultContentReady(true);
+      return undefined;
+    }
+
+    setHasPhotoVaultContentReady(false);
+    const unsubscribe = subscribeToPhotoVaultContentPresence(
+      (changedUid, hasContent) => {
+        if (uidRef.current !== changedUid) return;
+        contentPresenceRevisionRef.current += 1;
+        setHasPhotoVaultContentState(hasContent);
+        setHasPhotoVaultContentReady(true);
+      },
+    );
+
+    void readPhotoVaultContentPresence(uid).then((hasContent) => {
+      if (
+        uidRef.current !== uid ||
+        contentPresenceRevisionRef.current !== readRevision
+      ) return;
+      setHasPhotoVaultContentState(hasContent);
+      setHasPhotoVaultContentReady(true);
+    });
+
+    return unsubscribe;
+  }, [uid]);
+
   const lock = useCallback(() => {
     lockPhotoVault();
   }, []);
+
+  const setHasPhotoVaultContent = useCallback(
+    (hasContent: boolean) => {
+      const scopedUid = uid;
+      if (scopedUid === null) return Promise.resolve();
+      return setPhotoVaultContentPresence(scopedUid, hasContent);
+    },
+    [uid],
+  );
 
   const unlock = useCallback(async () => {
     setLastIssue(null);
@@ -225,8 +291,28 @@ export function PhotoVaultProvider({ children }: { children: React.ReactNode }) 
   }, [uid]);
 
   const value = useMemo<PhotoVaultContextValue>(
-    () => ({ status, capability, lastIssue, unlock, lock, refreshCapability }),
-    [status, capability, lastIssue, unlock, lock, refreshCapability],
+    () => ({
+      status,
+      hasPhotoVaultContent,
+      hasPhotoVaultContentReady,
+      capability,
+      lastIssue,
+      unlock,
+      lock,
+      setHasPhotoVaultContent,
+      refreshCapability,
+    }),
+    [
+      status,
+      hasPhotoVaultContent,
+      hasPhotoVaultContentReady,
+      capability,
+      lastIssue,
+      unlock,
+      lock,
+      setHasPhotoVaultContent,
+      refreshCapability,
+    ],
   );
 
   return (

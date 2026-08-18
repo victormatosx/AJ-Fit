@@ -71,7 +71,15 @@ export function ProgressPhotosScreen({
   pageFooter = null,
 }: ProgressPhotosScreenProps = {}) {
   const { t } = useTranslation('home');
-  const { status, lastIssue, unlock, lock } = usePhotoVault();
+  const {
+    status,
+    lastIssue,
+    hasPhotoVaultContent,
+    hasPhotoVaultContentReady,
+    unlock,
+    lock,
+    setHasPhotoVaultContent,
+  } = usePhotoVault();
 
   const [gallery, setGallery] = useState<GalleryState>(getGalleryState);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -330,25 +338,38 @@ export function ProgressPhotosScreen({
               handleCloseViewer();
               void (async () => {
                 const ok = await removeGalleryPhoto(photoId);
-                if (!ok) setNotice(t('progress.photos.delete.error'));
+                if (!ok) {
+                  setNotice(t('progress.photos.delete.error'));
+                  return;
+                }
+                // The delete is now confirmed remotely. Only the transition
+                // to a truly empty authoritative gallery clears the hint.
+                if (getGalleryState().photos.length === 0) {
+                  await setHasPhotoVaultContent(false);
+                }
               })();
             },
           },
         ],
       );
     },
-    [handleCloseViewer, t],
+    [handleCloseViewer, setHasPhotoVaultContent, t],
   );
 
   // ── Locked ───────────────────────────────────────────────────────────────
   // Nothing about the vault's contents is rendered before this point.
   if (!unlocked) {
     return (
-      <ScrollView contentContainerStyle={{ paddingBottom: 12 }} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={{ flexGrow: 1, paddingBottom: 12 }}
+        showsVerticalScrollIndicator={false}
+      >
         {pageHeader}
         <PhotoVaultLockedState
           status={status === 'authenticating' ? 'authenticating' : 'locked'}
           issue={lastIssue}
+          hasContent={hasPhotoVaultContent}
+          contentPresenceReady={hasPhotoVaultContentReady}
           onUnlock={() => void unlock()}
         />
         {pageFooter}

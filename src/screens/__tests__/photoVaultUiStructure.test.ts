@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
 
 import { describe, expect, it } from 'vitest';
 
@@ -32,6 +32,11 @@ function readCode(path: string): string {
 }
 
 const SCREEN = read('src/screens/ProgressPhotosScreen.tsx');
+const LOCKED = read('src/components/photoVault/PhotoVaultLockedState.tsx');
+const INTRO = read('src/components/photoVault/PhotoProgressIntro.tsx');
+const PROTECTED_INTRO = readCode(
+  'src/components/photoVault/PhotoVaultProtectedIntro.tsx',
+);
 
 describe('the UI never talks to Firebase', () => {
   it.each(UI_FILES)('%s imports no Firebase module', (file) => {
@@ -89,7 +94,7 @@ describe('no durable cache of decrypted photos', () => {
   });
 });
 
-describe('locked state reveals nothing', () => {
+describe('locked state reveals no private photo data', () => {
   it('returns the locked component before rendering any content', () => {
     // The early return must come before the grid, the viewer and the sheet.
     const lockedReturn = SCREEN.indexOf('<PhotoVaultLockedState');
@@ -102,12 +107,90 @@ describe('locked state reveals nothing', () => {
     expect(SCREEN).toMatch(/if \(!unlocked\) \{/);
   });
 
-  it('shows no photo count, date or preview while locked', () => {
-    const locked = read('src/components/photoVault/PhotoVaultLockedState.tsx');
+  it('loads the gallery only after the vault reports unlocked', () => {
+    expect(SCREEN).toMatch(
+      /useEffect\(\(\) => \{\s*if \(unlocked\) void loadGallery\(\);\s*\}, \[unlocked\]\)/,
+    );
+  });
 
-    expect(locked).not.toContain('photos.length');
-    expect(locked).not.toContain('<Image');
-    expect(locked).not.toContain('formatDate');
+  it('uses the available locked height to keep the unlock action at the bottom', () => {
+    expect(SCREEN).toContain("contentContainerStyle={{ flexGrow: 1, paddingBottom: 12 }}");
+    expect(INTRO).toContain('flexGrow: 1');
+    expect(INTRO).toContain("justifyContent: 'center'");
+  });
+
+  it('selects the aspirational or generic protected composition from one boolean', () => {
+    expect(LOCKED).toContain('<PhotoProgressIntro />');
+    expect(LOCKED).toContain('<PhotoVaultProtectedIntro />');
+    expect(LOCKED).toMatch(
+      /hasContent \? <PhotoVaultProtectedIntro \/> : <PhotoProgressIntro \/>/,
+    );
+    expect(SCREEN).toContain('hasContent={hasPhotoVaultContent}');
+    expect(SCREEN).toContain('contentPresenceReady={hasPhotoVaultContentReady}');
+    expect(LOCKED).not.toContain('photos.length');
+    expect(LOCKED).not.toContain('<Image');
+    expect(LOCKED).not.toContain('formatDate');
+    expect(INTRO).toContain(
+      "require('../../../assets/antes-depois/1.jpg')",
+    );
+    expect(INTRO).toContain(
+      "require('../../../assets/antes-depois/2.jpg')",
+    );
+    expect(INTRO).not.toContain('photoVaultGallery');
+    expect(INTRO).not.toContain('usePhotoVault');
+    expect(INTRO).not.toContain('gallery.photos');
+    expect(INTRO).not.toContain('source={{ uri');
+  });
+
+  it('builds the protected composition from generic shapes and icons only', () => {
+    expect(PROTECTED_INTRO).toContain('testID="photo-vault-protected-intro"');
+    expect(PROTECTED_INTRO).toContain('<LinearGradient');
+    expect(PROTECTED_INTRO).toContain('name="lock"');
+    expect(PROTECTED_INTRO).not.toContain('<Image');
+    expect(PROTECTED_INTRO).not.toContain('source=');
+    expect(PROTECTED_INTRO).not.toContain(' uri');
+    expect(PROTECTED_INTRO).not.toContain('photoVaultGallery');
+    expect(PROTECTED_INTRO).not.toContain('progressPhotos');
+    expect(PROTECTED_INTRO).not.toContain('photoVaultCrypto');
+    expect(PROTECTED_INTRO).not.toContain('photoVaultKey');
+    expect(PROTECTED_INTRO).not.toContain('downloadProgressPhoto');
+    expect(PROTECTED_INTRO).not.toContain('decrypt');
+  });
+
+  it('does not overwrite a persisted true from the gallery initial empty array', () => {
+    expect(SCREEN).toMatch(
+      /useEffect\(\(\) => \{\s*if \(unlocked\) void loadGallery\(\);\s*\}, \[unlocked\]\)/,
+    );
+    const lockedBranch = SCREEN.slice(
+      SCREEN.indexOf('// ── Locked'),
+      SCREEN.indexOf("return (\n    <View style={{ flex: 1 }}>", SCREEN.indexOf('// ── Locked')),
+    );
+    expect(lockedBranch).not.toContain('setHasPhotoVaultContent(false)');
+  });
+
+  it('clears the hint only after a confirmed delete leaves no photos', () => {
+    const deleteFlow = SCREEN.slice(
+      SCREEN.indexOf('const ok = await removeGalleryPhoto(photoId);'),
+      SCREEN.indexOf('})();', SCREEN.indexOf('const ok = await removeGalleryPhoto(photoId);')),
+    );
+    expect(deleteFlow).toContain('if (!ok)');
+    expect(deleteFlow).toContain('return;');
+    expect(deleteFlow).toContain('getGalleryState().photos.length === 0');
+    expect(deleteFlow).toContain('setHasPhotoVaultContent(false)');
+  });
+
+  it('restores the protected title only for content or device setup errors', () => {
+    expect(LOCKED).toContain("t('progress.photos.locked.title')");
+    expect(LOCKED).toContain('hasContent');
+  });
+
+  it('keeps the bundled intro assets lightweight', () => {
+    for (const path of [
+      'assets/antes-depois/1.jpg',
+      'assets/antes-depois/2.jpg',
+    ]) {
+      expect(statSync(path).size).toBeLessThan(150_000);
+    }
   });
 
   it('never names a specific biometric mechanism', () => {
@@ -121,7 +204,9 @@ describe('locked state reveals nothing', () => {
 
 describe('viewer and sheet close with the vault', () => {
   it('locks the vault when the private screen unmounts', () => {
-    expect(SCREEN).toContain('const { status, lastIssue, unlock, lock } = usePhotoVault()');
+    expect(SCREEN).toContain('} = usePhotoVault();');
+    expect(SCREEN).toContain('status,');
+    expect(SCREEN).toContain('lock,');
     expect(SCREEN).toMatch(/useEffect\(\(\) => \(\) => lock\(\), \[lock\]\)/);
   });
 

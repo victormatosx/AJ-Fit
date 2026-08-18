@@ -68,6 +68,10 @@ import {
   closeEncryptedUploadBlob,
   openEncryptedUploadBlob,
 } from './photoVaultUploadBlob';
+import {
+  reconcilePhotoVaultContentPresence,
+  setPhotoVaultContentPresence,
+} from './photoVaultContentPresence';
 
 /** Cloud pipeline. Storage receives ciphertext only; all paths derive from the live uid. */
 const SCOPE = 'progressPhotos';
@@ -584,6 +588,11 @@ export async function uploadProgressPhoto(
       fail('vaultMetadataCreateFailed', error);
     }
 
+    // Firestore has confirmed the first durable authority for this asset.
+    // The one-bit locked-layout hint must never flip on the optimistic card or
+    // on Storage upload alone, both of which can still roll back.
+    await setPhotoVaultContentPresence(uid, true);
+
     return {
       photoId,
       assetId: assets.assetId,
@@ -816,6 +825,9 @@ export async function listProgressPhotos(): Promise<ProgressPhoto[]> {
       logPhotoVaultIssue(SCOPE, 'vaultMetadataInvalid');
     }
   }
+  // Every authenticated listing is authoritative and repairs a stale local
+  // hint in either direction. No metadata leaves this function.
+  await reconcilePhotoVaultContentPresence(uid, photos.length > 0);
   return photos;
 }
 

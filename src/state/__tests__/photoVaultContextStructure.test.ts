@@ -147,6 +147,41 @@ describe('identity changes', () => {
   });
 });
 
+describe('uid-scoped locked content hint', () => {
+  it('hydrates and subscribes through the isolated local-presence service', () => {
+    expect(CONTEXT_CODE).toContain('readPhotoVaultContentPresence(uid)');
+    expect(CONTEXT_CODE).toContain('subscribeToPhotoVaultContentPresence');
+    expect(CONTEXT_CODE).toContain('setPhotoVaultContentPresence(scopedUid, hasContent)');
+  });
+
+  it('rejects a late A update while B is current', () => {
+    expect(CONTEXT_CODE).toContain('if (uidRef.current !== changedUid) return;');
+    expect(CONTEXT_CODE).toContain('uidRef.current !== uid');
+    expect(CONTEXT_CODE).toContain('contentPresenceRevisionRef.current !== readRevision');
+  });
+
+  it('does not treat logout as evidence that A has no photos', () => {
+    const presenceEffect = CONTEXT_CODE.slice(
+      CONTEXT_CODE.indexOf('contentPresenceRevisionRef.current += 1;'),
+      CONTEXT_CODE.indexOf('const lock = useCallback'),
+    );
+    expect(presenceEffect).toContain('if (uid === null)');
+    expect(presenceEffect).toContain('setHasPhotoVaultContentState(false)');
+    expect(presenceEffect).not.toContain('setPhotoVaultContentPresence');
+    expect(presenceEffect).not.toContain('removeItem');
+  });
+
+  it('never imports gallery, crypto or image loaders for the hint', () => {
+    const presenceImports = CONTEXT_CODE.slice(
+      CONTEXT_CODE.indexOf('readPhotoVaultContentPresence'),
+      CONTEXT_CODE.indexOf("from '../services/photoVaultContentPresence'") + 50,
+    );
+    expect(presenceImports).not.toContain('photoVaultGallery');
+    expect(presenceImports).not.toContain('photoVaultCrypto');
+    expect(presenceImports).not.toContain('downloadProgressPhoto');
+  });
+});
+
 describe('no persistence and no bypass', () => {
   it('never persists the unlocked state', () => {
     expect(CONTEXT).not.toContain('AsyncStorage');
