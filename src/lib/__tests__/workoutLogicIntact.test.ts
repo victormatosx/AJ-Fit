@@ -230,6 +230,29 @@ describe('WorkoutScreen source — 7B + 7C migrations use i18n keys', () => {
   }
 });
 
+describe('WorkoutScreen source — sub-sheet and confirm modal are never both visible', () => {
+  // Regression guard: the sub-sheet ("Trocar exercício" list) and the
+  // scope-confirm modal ("Somente neste treino" / "Todos os treinos") are
+  // two separate native <Modal>s. Selecting a replacement used to only call
+  // `setPendingSub(o)`, leaving `subSheet` true — i.e. both Modals visible
+  // at once. Stacking two native Modals is what caused the confirm step to
+  // never surface reliably and left the screen unresponsive to touches
+  // after both were dismissed. Selecting an item must close the sub-sheet
+  // in the same handler that opens (or would open) the confirm dialog.
+  it('closes the sub-sheet before/alongside opening the confirm dialog on selection', () => {
+    const handlerMatch = WORKOUT_SRC.match(
+      /onPress=\{\(\) => \{\s*\/\/[^\n]*\n\s*\/\/[^\n]*\n\s*\/\/[^\n]*\n(\s*setSubSheet\(false\);\s*\n\s*if \(!active\) setPendingSub\(o\);\s*\n\s*)\}\}/,
+    );
+    expect(handlerMatch).not.toBeNull();
+  });
+
+  it('applySub still closes both modals together when a substitution is confirmed', () => {
+    expect(WORKOUT_SRC).toMatch(
+      /setPendingSub\(null\);\s*\n\s*setSubSheet\(false\);/,
+    );
+  });
+});
+
 describe('WorkoutScreen source — exercise name/target helpers do not persist translations', () => {
   it('applySub still receives the raw SubOption (with catalog PT name/target)', () => {
     // The persistence contract: sessionSubs / permSubs / AsyncStorage store

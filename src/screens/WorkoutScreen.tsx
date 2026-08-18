@@ -954,9 +954,13 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                   return (
                     <Pressable
                       key={o.db}
-                      onPress={() =>
-                        active ? setSubSheet(false) : setPendingSub(o)
-                      }
+                      onPress={() => {
+                        // Never leave two native <Modal>s visible at once:
+                        // stacking the sub-sheet and the confirm dialog is
+                        // what left the screen touch-dead after closing.
+                        setSubSheet(false);
+                        if (!active) setPendingSub(o);
+                      }}
                       style={{
                         flexDirection: 'row',
                         alignItems: 'center',
