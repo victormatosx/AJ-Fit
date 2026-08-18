@@ -396,6 +396,18 @@ function AppShellContent({
             setLastArticle(article);
             setSupportRoute({ name: 'article', article });
           }}
+          onOpenReportProblem={() => {
+            setLastFormRoute({ type: 'BUG' });
+            setSupportRoute({ name: 'form', type: 'BUG' });
+          }}
+          onOpenSuggestion={() => {
+            setLastFormRoute({ type: 'FEEDBACK' });
+            setSupportRoute({ name: 'form', type: 'FEEDBACK' });
+          }}
+          onOpenTalkToSupport={() => {
+            setLastFormRoute({ type: 'SUPPORT' });
+            setSupportRoute({ name: 'form', type: 'SUPPORT' });
+          }}
         />
       </PersistentScreen>
       {lastArticle && (
