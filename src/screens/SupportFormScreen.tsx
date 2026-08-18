@@ -1,20 +1,23 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { ScreenBg } from '../components/ui/ScreenBg';
 import { CtaButton, CtaText } from '../components/ui/CtaButton';
-import { Slash } from '../components/ui/Display';
+import { Display, Slash } from '../components/ui/Display';
 import { SupportScreenHeader } from '../components/support/SupportScreenHeader';
 import { SupportImageField } from '../components/support/SupportImageField';
+import { SupportChip } from '../components/support/SupportChip';
 import { useSupportImagePicker } from '../hooks/useSupportImagePicker';
 import { useAuth } from '../state/AuthContext';
 import { createSupportTicket } from '../services/supportTickets';
 import { validateSupportTicket } from '../validators/support';
 import type { FeedbackCategory, SupportTicketType } from '../types/support';
-import { colors, fonts } from '../theme/tokens';
+import { colors, fonts, radii, spacing } from '../theme/tokens';
 import { logError } from '../lib/logError';
 import { useScreenFocusEffect } from '../state/ScreenActivity';
+
+const FEEDBACK_CATEGORIES: FeedbackCategory[] = ['SUGGESTION', 'IDEA', 'COMPLIMENT', 'OTHER'];
 
 export function SupportFormScreen({ type, initialSubject = '', onBack, onSuccess }: { type: SupportTicketType; initialSubject?: string; onBack: () => void; onSuccess: () => void }) {
   const { t } = useTranslation('support');
@@ -26,6 +29,7 @@ export function SupportFormScreen({ type, initialSubject = '', onBack, onSuccess
   const [error, setError] = useState<string | null>(null);
   const image = useSupportImagePicker();
   const feedback = type === 'FEEDBACK';
+  const bug = type === 'BUG';
 
   // Materialized + prewarmed (docs/23_navegacao_e_lifecycle.md §14). Two
   // resets, for two different "new session" signals:
@@ -71,19 +75,115 @@ export function SupportFormScreen({ type, initialSubject = '', onBack, onSuccess
     } finally { setSubmitting(false); }
   };
 
-  return <ScreenBg><SafeAreaView style={{ flex: 1 }} edges={['top']}><SupportScreenHeader title={feedback ? t('feedback.title') : type === 'BUG' ? t('bug.title') : t('support.title')} onBack={onBack} />
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 22, paddingBottom: 40 }}>
-        {feedback && <Text style={{ color: colors.mute, fontFamily: fonts.ui, fontSize: 14, lineHeight: 21, marginBottom: 22 }}>{t('feedback.intro')}</Text>}
-        {feedback ? <><Slash>{t('feedback.category')}</Slash><View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10, marginBottom: 22 }}>{(['SUGGESTION','IDEA','COMPLIMENT','OTHER'] as FeedbackCategory[]).map(item => <Pressable key={item} onPress={() => setCategory(item)} style={{ paddingHorizontal: 14, paddingVertical: 10, borderRadius: 999, borderWidth: 1, borderColor: category === item ? colors.accentHi : colors.cardBorder, backgroundColor: category === item ? 'rgba(11,112,249,0.18)' : colors.cardBg }}><Text style={{ color: category === item ? '#fff' : colors.mute, fontFamily: fonts.uiSemi, fontSize: 12 }}>{t(`feedback.categories.${item}`)}</Text></Pressable>)}</View></> : <Field label={t('form.subject')} value={subject} onChangeText={setSubject} placeholder={type === 'BUG' ? t('bug.subjectPlaceholder') : t('support.subjectPlaceholder')} />}
-        <Field label={feedback ? t('form.message') : t('form.description')} value={message} onChangeText={setMessage} placeholder={feedback ? t('feedback.messagePlaceholder') : type === 'BUG' ? t('bug.descriptionPlaceholder') : t('support.messagePlaceholder')} multiline />
-        <SupportImageField attachment={image.attachment} onPick={image.pickImage} onRemove={image.removeImage} />
-        {error && <Text accessibilityRole="alert" style={{ color: '#ff8d8d', fontFamily: fonts.ui, fontSize: 13, marginTop: 14 }}>{error}</Text>}
-        <CtaButton onPress={submit} disabled={!validation.subjectValid || !validation.messageValid || submitting || !user || !profile} style={{ marginTop: 22 }}>{submitting ? <ActivityIndicator color="#fff" /> : <CtaText>{t('form.send')}</CtaText>}</CtaButton>
-      </ScrollView>
-    </KeyboardAvoidingView></SafeAreaView></ScreenBg>;
+  const intro = feedback ? t('feedback.intro') : bug ? t('bug.intro') : null;
+  const sendLabel = bug ? t('form.sendBug') : feedback ? t('form.sendFeedback') : t('form.send');
+
+  return (
+    <ScreenBg>
+      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+        <SupportScreenHeader title={feedback ? t('feedback.title') : type === 'BUG' ? t('bug.title') : t('support.title')} onBack={onBack} />
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: spacing[5.5], paddingBottom: 40 }}>
+            <View style={{ marginBottom: spacing[7] }}>
+              <Slash>{feedback ? t('feedback.eyebrow') : t('bug.eyebrow')}</Slash>
+              <Display size={28} style={{ marginTop: spacing[3] }}>
+                {feedback ? t('feedback.heroTitle') : bug ? t('bug.heroTitle') : t('support.title')}
+              </Display>
+              {intro && (
+                <Text style={{ color: colors.textSecondary, fontFamily: fonts.ui, fontSize: 14, lineHeight: 21, marginTop: spacing[3] }}>
+                  {intro}
+                </Text>
+              )}
+            </View>
+
+            {feedback ? (
+              <View style={{ marginBottom: spacing[5] }}>
+                <Slash>{t('feedback.category')}</Slash>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing[2], marginTop: spacing[2.5] }}>
+                  {FEEDBACK_CATEGORIES.map(item => (
+                    <SupportChip key={item} label={t(`feedback.categories.${item}`)} active={category === item} onPress={() => setCategory(item)} />
+                  ))}
+                </View>
+              </View>
+            ) : (
+              <Field
+                index={bug ? 1 : undefined}
+                label={t('form.subject')}
+                value={subject}
+                onChangeText={setSubject}
+                placeholder={type === 'BUG' ? t('bug.subjectPlaceholder') : t('support.subjectPlaceholder')}
+              />
+            )}
+
+            <Field
+              index={bug ? 2 : undefined}
+              label={feedback ? t('form.message') : t('form.description')}
+              value={message}
+              onChangeText={setMessage}
+              placeholder={feedback ? t('feedback.messagePlaceholder') : type === 'BUG' ? t('bug.descriptionPlaceholder') : t('support.messagePlaceholder')}
+              multiline
+            />
+
+            <View style={{ marginBottom: spacing[5] }}>
+              {bug && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing[2], marginBottom: spacing[2.5] }}>
+                  <Text style={{ fontFamily: fonts.monoBold, fontSize: 10, letterSpacing: 2, color: colors.accentHi }}>03</Text>
+                  <Slash>{t('form.attachment')}</Slash>
+                </View>
+              )}
+              <SupportImageField attachment={image.attachment} onPick={image.pickImage} onRemove={image.removeImage} />
+            </View>
+
+            {error && (
+              <Text accessibilityRole="alert" style={{ color: '#ff8d8d', fontFamily: fonts.ui, fontSize: 13, marginBottom: spacing[3] }}>
+                {error}
+              </Text>
+            )}
+
+            <CtaButton onPress={submit} disabled={!validation.subjectValid || !validation.messageValid || submitting || !user || !profile}>
+              {submitting ? <ActivityIndicator color="#fff" /> : <CtaText>{sendLabel}</CtaText>}
+            </CtaButton>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </ScreenBg>
+  );
 }
 
-function Field({ label, multiline, ...props }: { label: string; value: string; onChangeText: (v: string) => void; placeholder: string; multiline?: boolean }) {
-  return <View style={{ marginBottom: 20 }}><Slash>{label}</Slash><TextInput {...props} multiline={multiline} textAlignVertical={multiline ? 'top' : 'center'} placeholderTextColor={colors.faint} style={{ marginTop: 10, minHeight: multiline ? 150 : 52, borderRadius: 14, borderWidth: 1, borderColor: colors.cardBorder, backgroundColor: colors.cardBg, paddingHorizontal: 16, paddingVertical: multiline ? 14 : 0, color: '#fff', fontFamily: fonts.ui, fontSize: 14, lineHeight: 20 }} /></View>;
+function Field({ label, index, multiline, ...props }: { label: string; index?: number; value: string; onChangeText: (v: string) => void; placeholder: string; multiline?: boolean }) {
+  const [focused, setFocused] = useState(false);
+  return (
+    <View style={{ marginBottom: spacing[5] }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing[2] }}>
+        {index != null && (
+          <Text style={{ fontFamily: fonts.monoBold, fontSize: 10, letterSpacing: 2, color: colors.accentHi }}>
+            {String(index).padStart(2, '0')}
+          </Text>
+        )}
+        <Slash>{label}</Slash>
+      </View>
+      <TextInput
+        {...props}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        multiline={multiline}
+        textAlignVertical={multiline ? 'top' : 'center'}
+        placeholderTextColor={colors.faint}
+        style={{
+          marginTop: spacing[2.5],
+          minHeight: multiline ? 150 : 52,
+          borderRadius: radii.lg,
+          borderWidth: 1,
+          borderColor: focused ? colors.focus : colors.cardBorder,
+          backgroundColor: colors.cardBg,
+          paddingHorizontal: spacing[4],
+          paddingVertical: multiline ? spacing[3.5] : 0,
+          color: colors.text,
+          fontFamily: fonts.uiMed,
+          fontSize: 14,
+          lineHeight: 20,
+        }}
+      />
+    </View>
+  );
 }

@@ -71,8 +71,8 @@ describe('Fase 3 — persistência e revalidação Premium A–AA', () => {
     expect(route(resolved('A', 1, premium('A')), 'A')).toBe('app');
   });
 
-  it('B — cold start sem Premium: resolve Paywall', () => {
-    expect(route(resolved('A', 1, basic('A')), 'A')).toBe('paywall');
+  it('B — FASE 1: cold start sem Premium também libera AppShell, uma vez resolvida a assinatura', () => {
+    expect(route(resolved('A', 1, basic('A')), 'A')).toBe('app');
   });
 
   it('C — auth ainda carregando: não decide Premium', () => {
@@ -109,9 +109,9 @@ describe('Fase 3 — persistência e revalidação Premium A–AA', () => {
     );
   });
 
-  it('F — login não Premium: CustomerInfo confirmado mostra Paywall', () => {
+  it('F — FASE 1: login não Premium: CustomerInfo confirmado também libera AppShell', () => {
     expect(route(resolved('login-basic', 4, basic('login-basic')), 'login-basic')).toBe(
-      'paywall',
+      'app',
     );
   });
 
@@ -125,7 +125,7 @@ describe('Fase 3 — persistência e revalidação Premium A–AA', () => {
     expect(route(loggedOut, null, { requestedScreen: 'app' })).toBe('auth');
   });
 
-  it('H — A Premium → B sem Premium: B nunca herda Premium', () => {
+  it('H — A Premium → B sem Premium: B nunca herda Premium, mas FASE 1 ainda libera AppShell para B', () => {
     let state = resolved('A', 1, premium('A'));
     state = reduceSubscriptionLifecycle(state, {
       type: 'identity-changed',
@@ -139,7 +139,8 @@ describe('Fase 3 — persistência e revalidação Premium A–AA', () => {
       generation: 2,
       customerInfo: basic('B'),
     });
-    expect(route(state, 'B')).toBe('paywall');
+    expect(selectIdentityCustomerInfo(state, 'B')).toEqual(basic('B'));
+    expect(route(state, 'B')).toBe('app');
   });
 
   it('I — B sem Premium → A Premium: A recupera o próprio estado', () => {
@@ -184,7 +185,8 @@ describe('Fase 3 — persistência e revalidação Premium A–AA', () => {
       customerInfo: premium('A'),
     });
     expect(afterOldListener).toBe(stateB);
-    expect(route(afterOldListener, 'B')).toBe('paywall');
+    expect(selectIdentityCustomerInfo(afterOldListener, 'B')).toEqual(basic('B'));
+    expect(route(afterOldListener, 'B')).toBe('app');
   });
 
   it('L — listener atual recebe Premium: Gate abre', () => {
@@ -197,14 +199,18 @@ describe('Fase 3 — persistência e revalidação Premium A–AA', () => {
     expect(route(next, 'A')).toBe('app');
   });
 
-  it('M — listener atual remove Premium: Gate fecha AppShell', () => {
+  it('M — FASE 1: listener atual remove Premium: AppShell permanece aberto (a raiz não expulsa mais o usuário)', () => {
     const next = reduceSubscriptionLifecycle(resolved('A', 1, premium('A')), {
       type: 'customer-info-updated',
       uid: 'A',
       generation: 1,
       customerInfo: basic('A'),
     });
-    expect(route(next, 'A')).toBe('paywall');
+    // isPremium continues to reflect the loss accurately — it's the root
+    // gate's routing decision that stops depending on it, not the entitlement
+    // signal itself. Future phases read this same boolean for capabilities.
+    expect(selectIdentityCustomerInfo(next, 'A')).toEqual(basic('A'));
+    expect(route(next, 'A')).toBe('app');
   });
 
   it('N — purchase retorna Premium: estado central libera AppShell', () => {
@@ -217,14 +223,14 @@ describe('Fase 3 — persistência e revalidação Premium A–AA', () => {
     expect(route(purchaseResult, 'A')).toBe('app');
   });
 
-  it('O — purchase sem Premium: permanece Paywall', () => {
+  it('O — purchase sem Premium: FASE 1 permanece AppShell (não há mais Paywall raiz para "permanecer")', () => {
     const purchaseResult = reduceSubscriptionLifecycle(resolved('A', 1, basic('A')), {
       type: 'customer-info-updated',
       uid: 'A',
       generation: 1,
       customerInfo: basic('A'),
     });
-    expect(route(purchaseResult, 'A')).toBe('paywall');
+    expect(route(purchaseResult, 'A')).toBe('app');
   });
 
   it('P — restore retorna Premium: estado central libera AppShell', () => {
@@ -237,14 +243,14 @@ describe('Fase 3 — persistência e revalidação Premium A–AA', () => {
     expect(route(restoreResult, 'A')).toBe('app');
   });
 
-  it('Q — restore sem Premium: permanece Paywall', () => {
+  it('Q — restore sem Premium: FASE 1 permanece AppShell', () => {
     const restoreResult = reduceSubscriptionLifecycle(resolved('A', 1, basic('A')), {
       type: 'customer-info-updated',
       uid: 'A',
       generation: 1,
       customerInfo: basic('A'),
     });
-    expect(route(restoreResult, 'A')).toBe('paywall');
+    expect(route(restoreResult, 'A')).toBe('app');
   });
 
   it('R — foreground com Premium mantido: continua AppShell', () => {
@@ -258,14 +264,15 @@ describe('Fase 3 — persistência e revalidação Premium A–AA', () => {
     expect(route(refreshed, 'A')).toBe('app');
   });
 
-  it('S — foreground após perda do Premium: vai ao Paywall', () => {
+  it('S — FASE 1: foreground após perda do Premium NÃO expulsa do AppShell (regressão crítica desta fase)', () => {
     const refreshed = reduceSubscriptionLifecycle(resolved('A', 1, premium('A')), {
       type: 'customer-info-updated',
       uid: 'A',
       generation: 1,
       customerInfo: basic('A'),
     });
-    expect(route(refreshed, 'A')).toBe('paywall');
+    expect(selectIdentityCustomerInfo(refreshed, 'A')).toEqual(basic('A'));
+    expect(route(refreshed, 'A')).toBe('app');
   });
 
   it('T — foreground após aquisição externa: vai ao AppShell', () => {
@@ -364,10 +371,11 @@ describe('Fase 3 — persistência e revalidação Premium A–AA', () => {
     expect(route(afterPendingResponse, null, { requestedScreen: 'app' })).toBe('auth');
   });
 
-  it('Z — Firestore subscription=true não libera sem Premium no CustomerInfo', () => {
+  it('Z — Firestore subscription=true não afeta isPremium (CustomerInfo continua soberano); FASE 1 libera AppShell de qualquer forma', () => {
     const firestoreMirror = { entitlementActive: true };
     expect(firestoreMirror.entitlementActive).toBe(true);
-    expect(route(resolved('A', 1, basic('A')), 'A')).toBe('paywall');
+    expect(selectIdentityCustomerInfo(resolved('A', 1, basic('A')), 'A')).toEqual(basic('A'));
+    expect(route(resolved('A', 1, basic('A')), 'A')).toBe('app');
   });
 
   it('AA — Firestore subscription=false não bloqueia Premium do CustomerInfo', () => {

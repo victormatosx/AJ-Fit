@@ -1,9 +1,15 @@
 import { defineConfig } from 'vitest/config';
 
-// Scope: Storage Rules behavior tests. Requires the Storage emulator running
-// (see the `test:rules` script — it wraps this config with
-// `firebase emulators:exec --only firestore,storage`, which sets
-// FIREBASE_STORAGE_EMULATOR_HOST for us).
+// Scope: Storage Rules behavior tests. Requires BOTH the Storage and
+// Firestore emulators running (see `test:rules`/`test:rules:storage` —
+// both now wrap this config with `firebase emulators:exec --only
+// firestore,storage`). Firestore became required starting Fase 7
+// (docs/13_assinaturas_e_billing.md §10/§11): `storage.rules`'
+// `hasServerPremium()` reads `users/{uid}.subscription.entitlementActive`
+// via Cloud Storage for Firebase's cross-service Firestore access
+// (`firestore.get`/`firestore.exists`), so any test touching a
+// progressPhotos create/delete path needs a live Firestore emulator to
+// seed that document against, exactly like the Firestore rules tests do.
 //
 // Kept separate from vitest.firestore.config.mts because the Storage rules
 // tests drive the firebase compat API (the only surface

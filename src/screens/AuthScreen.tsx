@@ -1,11 +1,13 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
+  Animated,
   View,
   Text,
   TextInput,
   Pressable,
   ActivityIndicator,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   ScrollView,
 } from 'react-native';
@@ -17,7 +19,7 @@ import { Display, Slash } from '../components/ui/Display';
 import { CtaButton } from '../components/ui/CtaButton';
 import { Icon, IconName } from '../components/ui/Icon';
 import { OutlineNumber } from '../components/ui/OutlineNumber';
-import { colors, fonts } from '../theme/tokens';
+import { colors, fonts, radii, sizes, spacing } from '../theme/tokens';
 import { useAuth } from '../state/AuthContext';
 import { useAppState } from '../state/AppState';
 import {
@@ -42,6 +44,7 @@ import {
   type MfaTotpIssue,
 } from '../lib/mfaTotp';
 import { TotpChallengeScreen } from './TotpChallengeScreen';
+import type { OnboardingAuthContext } from '../onboarding/authContext';
 
 type Mode = 'signup' | 'login' | 'reset';
 
@@ -99,7 +102,17 @@ function totpStartError(
   return t('totpChallenge.errors.generic');
 }
 
-export function AuthScreen() {
+export function AuthScreen({
+  entryContext,
+}: {
+  /**
+   * Copy-only context from the onboarding funnel — which screen sent the
+   * user here. Never read by any validation/provider/linking/error-handling
+   * logic below; it only picks the initial form mode and pre-fills the name
+   * field. See src/onboarding/authContext.ts.
+   */
+  entryContext?: OnboardingAuthContext | null;
+} = {}) {
   const { t } = useTranslation('auth');
   const {
     signUp,
@@ -111,8 +124,14 @@ export function AuthScreen() {
   } = useAuth();
   const { quiz } = useAppState();
 
-  const [mode, setMode] = useState<Mode>('signup');
-  const [name, setName] = useState('');
+  // A user who tapped "Entrar" directly should land on the login form, not
+  // the signup copy that references a plan they never built (see
+  // docs/onboarding_funnel_architecture.md §Auth). Any other/no origin
+  // preserves the previous always-signup default.
+  const [mode, setMode] = useState<Mode>(
+    entryContext?.origin === 'directLogin' ? 'login' : 'signup',
+  );
+  const [name, setName] = useState(entryContext?.name ?? '');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -130,7 +149,20 @@ export function AuthScreen() {
   const [appleAvailable, setAppleAvailable] = useState(Platform.OS === 'ios');
   // Starts false and is enabled only if the native Google module is present in
   // the binary (absent in Expo Go / a build made before the package was added).
+  // The button itself is always rendered (see showGoogle below); this only
+  // gates whether tapping it opens the native sheet or the "unavailable" modal.
   const [googleAvailable, setGoogleAvailable] = useState(false);
+  const [googleUnavailableNotice, setGoogleUnavailableNotice] = useState(false);
+
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    fadeAnim.setValue(0);
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 250,
+      useNativeDriver: true,
+    }).start();
+  }, [mode, fadeAnim]);
 
   useEffect(() => {
     let active = true;
@@ -145,7 +177,10 @@ export function AuthScreen() {
     };
   }, []);
 
-  const showGoogle = Platform.OS !== 'web' && googleAvailable;
+  // Google's button is always rendered; incompatible platforms/builds are
+  // handled by showing an "unavailable" modal on tap instead of hiding it.
+  const showGoogle = true;
+  const googleReallyAvailable = Platform.OS !== 'web' && googleAvailable;
   const showApple = Platform.OS === 'ios' && appleAvailable;
   const showSocial = showGoogle || showApple;
   const busy = loading || socialBusy !== null;
@@ -199,6 +234,10 @@ export function AuthScreen() {
 
   async function handleSocial(provider: SocialProvider) {
     if (busy) return;
+    if (provider === 'google' && !googleReallyAvailable) {
+      setGoogleUnavailableNotice(true);
+      return;
+    }
     clearPendingSocialAuthState();
     setError(null);
     setInfo(null);
@@ -294,6 +333,7 @@ export function AuthScreen() {
       } else {
         await reset(email);
         setInfo(t('reset.success'));
+        setTimeout(() => switchMode('login'), 1000);
       }
     } catch (err) {
       if (mode === 'login' && beginTotpChallenge(err, 'password')) return;
@@ -359,8 +399,14 @@ export function AuthScreen() {
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
-            <View
-              style={{ flex: 1, paddingHorizontal: 26, paddingTop: 20, paddingBottom: 36 }}
+            <Animated.View
+              style={{
+                flex: 1,
+                paddingHorizontal: 26,
+                paddingTop: 20,
+                paddingBottom: 36,
+                opacity: fadeAnim,
+              }}
             >
               <View>
                 {mode !== 'signup' && (
@@ -569,10 +615,64 @@ export function AuthScreen() {
                   </Pressable>
                 )}
               </View>
-            </View>
+            </Animated.View>
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
+
+      <Modal
+        visible={googleUnavailableNotice}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setGoogleUnavailableNotice(false)}
+        statusBarTranslucent
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: colors.overlayStrong,
+            justifyContent: 'center',
+            paddingHorizontal: spacing[6],
+          }}
+        >
+          <View
+            style={{
+              width: '100%',
+              maxWidth: sizes.modalMaxWidth,
+              alignSelf: 'center',
+              padding: spacing[5],
+              borderRadius: radii.xl,
+              borderWidth: 1,
+              borderColor: colors.borderStrong,
+              backgroundColor: '#0a0620',
+              gap: 12,
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <Icon name="google" size={18} color={colors.mute} />
+              <Text style={{ flex: 1, color: '#fff', fontFamily: fonts.uiSemi, fontSize: 15 }}>
+                {t('social.unavailable.title')}
+              </Text>
+            </View>
+            <Text style={{ color: colors.mute, fontFamily: fonts.ui, fontSize: 13.5, lineHeight: 19 }}>
+              {t('social.unavailable.message')}
+            </Text>
+            <CtaButton onPress={() => setGoogleUnavailableNotice(false)}>
+              <Text
+                style={{
+                  color: '#fff',
+                  fontFamily: fonts.display,
+                  fontSize: 15,
+                  letterSpacing: 1,
+                  textTransform: 'uppercase',
+                }}
+              >
+                {t('social.unavailable.dismiss')}
+              </Text>
+            </CtaButton>
+          </View>
+        </View>
+      </Modal>
     </ScreenBg>
   );
 }

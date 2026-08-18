@@ -30,6 +30,92 @@
     "hasAccount": "Already have an account?",
     "login": "Sign in"
   },
+  "name": {
+    "eyebrow": "Let's get started!",
+    "title": "What should we call you?",
+    "placeholder": "Your name",
+    "cta": "Continue",
+    "accessibility": {
+      "input": "Name field"
+    }
+  },
+  "welcome": {
+    "greeting": "Welcome, {{name}}.",
+    "greetingNoName": "Welcome!"
+  },
+  "interstitials": {
+    "evolution": {
+      "titleLine1": "Your program doesn't end",
+      "titleLine2": "when it's created.",
+      "intro": "AJ Fit was built to follow your progress over time.",
+      "carouselLabel": "Carousel of AJ Fit evolution features",
+      "screenshotPlaceholder": "Screenshot {{index}}",
+      "slides": {
+        "evolve": {
+          "title": "Your training evolves with you",
+          "body": "As you make progress, your training can evolve to keep challenging you."
+        },
+        "adapt": {
+          "title": "A plan that adapts to your routine",
+          "body": "Your routine and feedback help AJ Fit adjust your journey."
+        },
+        "objective": {
+          "title": "Everything built around your goal",
+          "body": "Every adjustment keeps your training aligned with the most efficient path to where you want to go."
+        }
+      },
+      "cta": "Continue"
+    },
+    "methodology": {
+      "eyebrow": "Methodology",
+      "titleLine1": "Training isn't",
+      "titleLine2": "random.",
+      "body": "Your training follows a methodology designed to help you progress.",
+      "cta": "Continue"
+    },
+    "guidedWorkout": {
+      "eyebrow": "Execution",
+      "titleLine1": "You just need to",
+      "titleLine2": "execute.",
+      "body": "Sets, reps, load, and rest. All at the right moment.",
+      "carouselLabel": "Carousel of AJ Fit guided workout features",
+      "slides": {
+        "guide": {
+          "body": "We guide you through your sets"
+        },
+        "progress": {
+          "body": "We push you to progress your load"
+        },
+        "execution": {
+          "body": "We help you with your execution"
+        }
+      },
+      "cta": "Continue"
+    },
+    "ajFitProgress": {
+      "eyebrow": "Progress",
+      "titleLine1": "{{name}}, creating your workout",
+      "titleLine1NoName": "Creating your workout",
+      "titleLine2": "is just the start.",
+      "carouselLabel": "Carousel of AJ Fit progress features",
+      "screenshotPlaceholder": "Screenshot {{index}}",
+      "features": {
+        "loads": {
+          "title": "Loads",
+          "body": "Track your progress exercise by exercise."
+        },
+        "body": {
+          "title": "Body",
+          "body": "Track weight, measurements, and changes in your body."
+        },
+        "photos": {
+          "title": "Photos",
+          "body": "Compare your visual progress over time."
+        }
+      },
+      "cta": "Continue"
+    }
+  },
   "analyzing": {
     "compiling": "Compiling",
     "titleLine1": "Building",
@@ -43,7 +129,9 @@
     },
     "accessibility": {
       "progress": "Building your plan: {{progress}} percent"
-    }
+    },
+    "titleWithNameLine1": "We're structuring",
+    "titleWithNameLine2": "your journey, {{name}}."
   },
   "socialProof": {
     "eyebrow": "Social proof",

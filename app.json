@@ -84,7 +84,8 @@
       "expo-image",
       "@react-native-community/datetimepicker",
       "expo-localization",
-      "expo-sharing"
+      "expo-sharing",
+      "expo-video"
     ]
   }
 }

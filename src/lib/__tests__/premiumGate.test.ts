@@ -20,17 +20,19 @@ function resolve(overrides: GateOverrides = {}) {
 }
 
 describe('resolvePremiumGate', () => {
-  it('A) libera AppShell para usuário autenticado, com questionário e Premium ativo', () => {
+  it('A) libera AppShell para usuário autenticado, com questionário, assinatura resolvida e Premium ativo', () => {
     expect(resolve({ isPremium: true })).toBe('app');
   });
 
-  it('B) envia ao paywall usuário autenticado, com questionário e sem Premium', () => {
-    expect(resolve()).toBe('paywall');
+  it('B) FASE 1: libera AppShell também para usuário autenticado, com questionário, assinatura resolvida e SEM Premium', () => {
+    expect(resolve({ isPremium: false })).toBe('app');
   });
 
-  it('C) não decide acesso enquanto CustomerInfo ainda está carregando', () => {
+  it('C) não decide acesso enquanto CustomerInfo ainda está carregando, independentemente de isPremium', () => {
     expect(resolve({ subscriptionLoading: true, isPremium: true })).toBeNull();
-    expect(resolve({ subscriptionConfigured: false })).toBeNull();
+    expect(resolve({ subscriptionLoading: true, isPremium: false })).toBeNull();
+    expect(resolve({ subscriptionConfigured: false, isPremium: true })).toBeNull();
+    expect(resolve({ subscriptionConfigured: false, isPremium: false })).toBeNull();
   });
 
   it('D) prioriza o questionário antes do estado da assinatura', () => {
@@ -40,7 +42,7 @@ describe('resolvePremiumGate', () => {
         subscriptionLoading: true,
         subscriptionConfigured: false,
       }),
-    ).toBe('quiz');
+    ).toBe('onboardingFunnel');
   });
 
   it('prioriza a verificação obrigatória de e-mail antes do questionário e da assinatura', () => {
@@ -54,7 +56,7 @@ describe('resolvePremiumGate', () => {
     ).toBe('emailVerification');
   });
 
-  it('E) remove o acesso ao AppShell após logout', () => {
+  it('E) remove o acesso ao AppShell após logout, mesmo que a última sessão fosse Premium', () => {
     expect(
       resolve({
         requestedScreen: 'app',
@@ -65,7 +67,7 @@ describe('resolvePremiumGate', () => {
     ).toBe('auth');
   });
 
-  it('F) não reutiliza Premium enquanto a assinatura de outro usuário não foi resolvida', () => {
+  it('F) não abre AppShell com a assinatura de outro usuário ainda não resolvida — mesmo que isPremium venha true do estado anterior', () => {
     expect(
       resolve({
         requestedScreen: 'app',
@@ -74,34 +76,33 @@ describe('resolvePremiumGate', () => {
         isPremium: true,
       }),
     ).toBeNull();
-    expect(resolve({ requestedScreen: 'app', isPremium: false })).toBe('paywall');
   });
 
-  it('G) cold start Premium aguarda CustomerInfo e depois libera AppShell sem paywall', () => {
+  it('G) cold start Premium aguarda CustomerInfo e depois libera AppShell', () => {
     expect(resolve({ subscriptionLoading: true, subscriptionConfigured: false })).toBeNull();
     expect(resolve({ requestedScreen: 'splash', isPremium: true })).toBe('app');
   });
 
-  it('H) cold start sem Premium aguarda CustomerInfo e depois mostra paywall', () => {
+  it('H) cold start sem Premium aguarda CustomerInfo e, uma vez resolvida, também libera AppShell (FASE 1)', () => {
     expect(resolve({ subscriptionLoading: true, subscriptionConfigured: false })).toBeNull();
-    expect(resolve({ requestedScreen: 'splash' })).toBe('paywall');
+    expect(resolve({ requestedScreen: 'splash', isPremium: false })).toBe('app');
   });
 
-  it('bloqueia qualquer pedido direto de AppShell quando o entitlement está inativo', () => {
-    expect(resolve({ requestedScreen: 'app' })).toBe('paywall');
+  it('libera AppShell para pedido direto de "app" quando o entitlement está inativo, uma vez tudo resolvido (FASE 1)', () => {
+    expect(resolve({ requestedScreen: 'app', isPremium: false })).toBe('app');
   });
 
-  it('mantém EXPIRED/inativo no Paywall independentemente do histórico da assinatura', () => {
+  it('libera AppShell mesmo com histórico de assinatura EXPIRED — entitlement inativo deixou de bloquear a navegação raiz', () => {
     const expiredMirror = {
       status: 'EXPIRED',
       entitlementActive: false,
       currentPeriodEndsAt: new Date('2026-08-12T12:00:00Z'),
     };
 
-    expect(resolve({ ...expiredMirror, isPremium: false } as GateOverrides)).toBe('paywall');
+    expect(resolve({ ...expiredMirror, isPremium: false } as GateOverrides)).toBe('app');
   });
 
-  it('não usa canceledAt para antecipar a perda de acesso; o entitlement continua soberano', () => {
+  it('não usa canceledAt para antecipar nem para atrasar a decisão de navegação raiz — o gate raiz não lê mais isPremium', () => {
     const canceledWithinActivePeriod = {
       status: 'CANCELED',
       canceledAt: new Date('2026-08-13T12:00:00Z'),
@@ -112,13 +113,13 @@ describe('resolvePremiumGate', () => {
       'app',
     );
     expect(resolve({ ...canceledWithinActivePeriod, isPremium: false } as GateOverrides)).toBe(
-      'paywall',
+      'app',
     );
   });
 
-  it('I) preferencesReconciling segura o gate mesmo com Premium já ativo — nunca expõe AppShell antes da reconciliação terminar', () => {
+  it('I) preferencesReconciling segura o gate independentemente de isPremium — nunca expõe AppShell antes da reconciliação terminar', () => {
     expect(resolve({ preferencesReconciling: true, isPremium: true })).toBeNull();
-    expect(resolve({ preferencesReconciling: true })).toBeNull();
+    expect(resolve({ preferencesReconciling: true, isPremium: false })).toBeNull();
   });
 
   it('J) preferencesReconciling não afeta usuário não autenticado — segue direto para auth', () => {
@@ -127,9 +128,24 @@ describe('resolvePremiumGate', () => {
     ).toBe('auth');
   });
 
-  it('K) uma vez reconciliado, o fluxo normal (questionário → assinatura) continua exatamente igual', () => {
-    expect(resolve({ preferencesReconciling: false, hasQuestionnaire: false })).toBe('quiz');
+  it('K) uma vez reconciliado, o fluxo normal (questionário → assinatura → app) continua igual, com ou sem Premium', () => {
+    expect(resolve({ preferencesReconciling: false, hasQuestionnaire: false })).toBe(
+      'onboardingFunnel',
+    );
     expect(resolve({ preferencesReconciling: false, isPremium: true })).toBe('app');
+    expect(resolve({ preferencesReconciling: false, isPremium: false })).toBe('app');
+  });
+
+  it('L) resolvePremiumGate nunca mais retorna "paywall" — a rota deixou de ser uma decisão da navegação raiz', () => {
+    const outcomes = new Set<RootScreenId | null>();
+    for (const isPremium of [true, false]) {
+      for (const subscriptionLoading of [true, false]) {
+        for (const subscriptionConfigured of [true, false]) {
+          outcomes.add(resolve({ isPremium, subscriptionLoading, subscriptionConfigured }));
+        }
+      }
+    }
+    expect(outcomes.has('paywall')).toBe(false);
   });
 
   it.each([
@@ -140,8 +156,11 @@ describe('resolvePremiumGate', () => {
     ['trialStartedAt', { trialStartedAt: new Date() }],
     ['attribution matched', { attribution: 'matched' }],
     ['attribution no-match', { attribution: 'no_intent' }],
-  ])('FASE 10: %s não entra na autoridade do Premium Gate', (_label, marketingEvidence) => {
-    expect(resolve({ ...marketingEvidence, isPremium: false } as GateOverrides)).toBe('paywall');
-    expect(resolve({ ...marketingEvidence, isPremium: true } as GateOverrides)).toBe('app');
-  });
+  ])(
+    'FASE 10/FASE 1: %s não entra na autoridade do Premium Gate — resultado é sempre "app" uma vez resolvido',
+    (_label, marketingEvidence) => {
+      expect(resolve({ ...marketingEvidence, isPremium: false } as GateOverrides)).toBe('app');
+      expect(resolve({ ...marketingEvidence, isPremium: true } as GateOverrides)).toBe('app');
+    },
+  );
 });

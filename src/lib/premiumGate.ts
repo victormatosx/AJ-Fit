@@ -1,10 +1,16 @@
+/**
+ * `'onboardingFunnel'` covers the entire pre-auth acquisition funnel — what
+ * used to be five separate root screens ('onboarding'|'quiz'|'socialProof'|
+ * 'analyzing'|'plan') collapsed into one. The gate treats all of it
+ * homogeneously (a single "not yet authenticated / no questionnaire yet"
+ * bucket), so this collapse changes no gate priority or test assertion —
+ * the internal 26-step sequence is owned entirely by
+ * `src/onboarding/steps.ts` + `OnboardingFunnelScreen`, which this module
+ * never needs to know about.
+ */
 export type RootScreenId =
   | 'splash'
-  | 'onboarding'
-  | 'quiz'
-  | 'socialProof'
-  | 'analyzing'
-  | 'plan'
+  | 'onboardingFunnel'
   | 'auth'
   | 'emailVerification'
   | 'paywall'
@@ -40,9 +46,13 @@ const AUTH_REQUIRED_SCREENS: RootScreenId[] = ['emailVerification', 'paywall', '
  * Resolves the only screen the root router is allowed to render.
  *
  * `null` means that identity/profile/RevenueCat is still unresolved and the
- * router must render its neutral loading state. Once an authenticated user has
- * a questionnaire, the requested screen is intentionally ignored: RevenueCat's
- * current `premium` entitlement alone chooses between AppShell and the paywall.
+ * router must render its neutral loading state. Once an authenticated user
+ * has a questionnaire and the subscription state is resolved, AppShell opens
+ * unconditionally — Premium's `isPremium` entitlement is no longer a
+ * navigation requirement here (Fase 1 of the limited-mode rollout). It stays
+ * on the state and keeps flowing through `useSubscription()` for the
+ * per-capability gating that later phases add inside AppShell; this root
+ * gate simply stops reading it.
  */
 export function resolvePremiumGate(state: PremiumGateState): RootScreenId | null {
   if (state.authInitializing || state.profileLoading) return null;
@@ -57,9 +67,9 @@ export function resolvePremiumGate(state: PremiumGateState): RootScreenId | null
 
   if (state.preferencesReconciling) return null;
 
-  if (!state.hasQuestionnaire) return 'quiz';
+  if (!state.hasQuestionnaire) return 'onboardingFunnel';
 
   if (state.subscriptionLoading || !state.subscriptionConfigured) return null;
 
-  return state.isPremium ? 'app' : 'paywall';
+  return 'app';
 }

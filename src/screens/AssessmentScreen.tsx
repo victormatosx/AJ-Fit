@@ -22,6 +22,7 @@ import {
 import { colors, fonts } from '../theme/tokens';
 import { useAuth } from '../state/AuthContext';
 import { useAssessments, type SaveOutcome } from '../hooks/useAssessments';
+import { usePremiumCapabilities } from '../hooks/usePremiumCapabilities';
 import type { GuidedAssessmentInput, ImportedAssessmentInput } from '../services/assessments';
 import {
   SKINFOLD_PROTOCOLS,
@@ -122,6 +123,11 @@ export function AssessmentScreen({ onBack }: { onBack: () => void }) {
     refresh();
   });
 
+  // FASE 5: AssessmentActionCard gates CREATE_ASSESSMENT itself via
+  // <PremiumAction> — this screen hands over plain callbacks and no longer
+  // needs to know the capability exists for that. `usePremiumCapabilities`
+  // is still used further below, inside each modal's own `handleSave`
+  // (Fase 3 defense-in-depth, intentionally kept).
   const [showGuided, setShowGuided] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [showFullHistory, setShowFullHistory] = useState(false);
@@ -781,6 +787,7 @@ function GuidedAssessmentModal({
   const [saving, setSaving] = useState(false);
   const [shake, setShake] = useState(false);
   const toast = useToast();
+  const { canPerform } = usePremiumCapabilities();
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => {
     if (closeTimer.current) clearTimeout(closeTimer.current);
@@ -841,6 +848,13 @@ function GuidedAssessmentModal({
 
   const handleSave = async () => {
     if (saving) return; // guards against double-tap firing two writes
+    // FASE 3 (docs/13_assinaturas_e_billing.md): CREATE_ASSESSMENT is a
+    // Premium capability — this is the actual write boundary (not just the
+    // "Adicionar avaliação" entry point that opens this modal), so it's
+    // where the check has to live. Silent no-op on purpose: the definitive
+    // Premium UX (message, upsell) belongs to a later phase; this phase only
+    // has to stop the mutation from happening for a Free user.
+    if (!canPerform('CREATE_ASSESSMENT')) return;
     if (!canSave || bodyFat == null || sex == null || !measuredAtFields.date) {
       setShake(true);
       return;
@@ -1249,6 +1263,7 @@ function ImportAssessmentModal({
   const [saving, setSaving] = useState(false);
   const [shake, setShake] = useState(false);
   const toast = useToast();
+  const { canPerform } = usePremiumCapabilities();
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => {
     if (closeTimer.current) clearTimeout(closeTimer.current);
@@ -1278,6 +1293,10 @@ function ImportAssessmentModal({
 
   const handleSave = async () => {
     if (saving) return; // guards against double-tap firing two writes
+    // FASE 3: same CREATE_ASSESSMENT boundary as the guided flow above —
+    // imported and guided assessments are two entry points into the same
+    // capability, both gated at their actual write call.
+    if (!canPerform('CREATE_ASSESSMENT')) return;
     if (!canSave || !measuredAtFields.date) {
       setShake(true);
       return;

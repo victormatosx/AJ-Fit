@@ -5,6 +5,16 @@
  * had no Storage Rules tests at all until now.
  *
  * Executed against the Storage emulator. See the `test:rules` npm script.
+ * FASE 7 (docs/13_assinaturas_e_billing.md §10/§11): `storage.rules`'
+ * `hasServerPremium()` reads `users/{uid}.subscription.entitlementActive`
+ * via Cloud Storage for Firebase's cross-service Firestore access — this
+ * file now ALSO needs a live Firestore emulator (see
+ * `vitest.storage.config.mts`'s updated doc comment and the
+ * `test:rules`/`test:rules:storage` npm scripts, both of which start
+ * `--only firestore,storage` now) and a second, independent
+ * `RulesTestEnvironment` purely to seed that Firestore state — Storage's
+ * own `RulesTestEnvironment` has no `firestore()` accessor since its config
+ * below only declares `storage:`.
  *
  * Note: `@firebase/rules-unit-testing` exposes Storage only through the
  * firebase compat (v8-style) API, hence `ref().put()` instead of the modular
@@ -19,6 +29,7 @@ import {
   assertFails,
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing';
+import { doc, setDoc } from 'firebase/firestore';
 
 const PROJECT_ID = 'ajfit-rules-test';
 const UID = 'alice';
@@ -85,6 +96,30 @@ async function seedPhoto(path = PHOTO_PATH) {
   });
 }
 
+/** FASE 7: seeding-only Firestore environment — see this file's top comment. */
+let testEnvFirestore: RulesTestEnvironment;
+
+async function seedPremium(uid: string) {
+  await testEnvFirestore.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(
+      doc(ctx.firestore(), 'users', uid),
+      { subscription: { entitlementActive: true } },
+      { merge: true },
+    );
+  });
+}
+
+/** Sets the mirror to explicitly Free — a real `entitlementActive: false`, not merely absent. */
+async function seedFree(uid: string) {
+  await testEnvFirestore.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(
+      doc(ctx.firestore(), 'users', uid),
+      { subscription: { entitlementActive: false } },
+      { merge: true },
+    );
+  });
+}
+
 beforeAll(async () => {
   testEnv = await initializeTestEnvironment({
     projectId: PROJECT_ID,
@@ -92,14 +127,28 @@ beforeAll(async () => {
       rules: readFileSync(resolve(__dirname, '../storage.rules'), 'utf8'),
     },
   });
+  testEnvFirestore = await initializeTestEnvironment({
+    projectId: PROJECT_ID,
+    firestore: {
+      rules: readFileSync(resolve(__dirname, '../firestore.rules'), 'utf8'),
+    },
+  });
 });
 
 afterAll(async () => {
   await testEnv.cleanup();
+  await testEnvFirestore.cleanup();
 });
 
 beforeEach(async () => {
   await testEnv.clearStorage();
+  await testEnvFirestore.clearFirestore();
+  // Every pre-existing test in this file exercises Storage schema/
+  // ownership, not billing — Premium is a given precondition for those, not
+  // what they're testing. Dedicated FASE 7 describe blocks below call
+  // `seedFree` instead.
+  await seedPremium(UID);
+  await seedPremium(OTHER_UID);
 });
 
 // ── progressPhotos: owner happy path ───────────────────────────────────────
@@ -309,6 +358,57 @@ describe('progressPhotos storage — path confinement', () => {
   });
 });
 
+// ── progressPhotos: FASE 7 server-side Premium authorization ──────────────
+//
+// ADD_PROGRESS_PHOTO/DELETE_PROGRESS_PHOTO are Premium capabilities (Fase
+// 3). `hasServerPremium(userId)` now gates create/delete in addition to
+// ownership — never instead of it. READ stays free for everyone owning the
+// object (asserted in "progressPhotos storage — owner" above, still true
+// with the default Premium seed).
+
+describe('progressPhotos storage — FASE 7: Free is denied the Premium mutation', () => {
+  it('denies a Free owner uploading a new encrypted photo', async () => {
+    await seedFree(UID);
+    await assertFails(put(ownerStorage(), PHOTO_PATH, ciphertext(), photoMetadata()));
+  });
+
+  it('denies a Free owner uploading a thumbnail', async () => {
+    await seedFree(UID);
+    await assertFails(put(ownerStorage(), THUMBNAIL_PATH, ciphertext(120_000), thumbnailMetadata()));
+  });
+
+  it('denies a Free owner deleting their own existing encrypted photo', async () => {
+    await seedPhoto();
+    await seedFree(UID);
+    await assertFails(ownerStorage().ref(PHOTO_PATH).delete());
+  });
+
+  it('fails closed when users/{uid} has no subscription field at all', async () => {
+    await testEnvFirestore.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc(`users/${UID}`).delete();
+    });
+    await assertFails(put(ownerStorage(), PHOTO_PATH, ciphertext(), photoMetadata()));
+  });
+
+  it('still allows a Free owner to READ their existing encrypted photo (history is never blocked)', async () => {
+    await seedPhoto();
+    await seedFree(UID);
+    await assertSucceeds(ownerStorage().ref(PHOTO_PATH).getDownloadURL());
+  });
+});
+
+describe('progressPhotos storage — FASE 7: Premium never overrides ownership', () => {
+  it("denies a Premium user uploading into someone else's path", async () => {
+    // OTHER_UID is Premium (default seed) but does not own UID's namespace.
+    await assertFails(put(otherStorage(), PHOTO_PATH, ciphertext(), photoMetadata()));
+  });
+
+  it("denies a Premium user deleting someone else's encrypted photo", async () => {
+    await seedPhoto();
+    await assertFails(otherStorage().ref(PHOTO_PATH).delete());
+  });
+});
+
 // ── Regression: pre-existing paths keep their behavior ─────────────────────
 
 describe('existing storage paths — regression coverage', () => {
@@ -317,6 +417,19 @@ describe('existing storage paths — regression coverage', () => {
 
   it('allows the owner to upload their avatar', async () => {
     await assertSucceeds(put(ownerStorage(), AVATAR_PATH, ciphertext(), image));
+  });
+
+  it('FASE 7: still allows a Free owner to upload their avatar — Premium enforcement never reaches this path', async () => {
+    await seedFree(UID);
+    await assertSucceeds(put(ownerStorage(), AVATAR_PATH, ciphertext(), image));
+  });
+
+  it('FASE 7: still allows a Free owner to delete their avatar', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.storage().ref(AVATAR_PATH).put(ciphertext(), image);
+    });
+    await seedFree(UID);
+    await assertSucceeds(ownerStorage().ref(AVATAR_PATH).delete());
   });
 
   it("blocks another user from uploading someone else's avatar", async () => {
@@ -343,6 +456,16 @@ describe('existing storage paths — regression coverage', () => {
   });
 
   it('allows a support attachment with coherent metadata', async () => {
+    await assertSucceeds(
+      put(ownerStorage(), `users/${UID}/support/ticket-1/attachments/a.jpg`, ciphertext(), {
+          contentType: 'image/jpeg',
+          customMetadata: { ownerId: UID, ticketId: 'ticket-1' },
+        }),
+    );
+  });
+
+  it('FASE 7: still allows a Free owner to send a support attachment — Premium enforcement never reaches this path', async () => {
+    await seedFree(UID);
     await assertSucceeds(
       put(ownerStorage(), `users/${UID}/support/ticket-1/attachments/a.jpg`, ciphertext(), {
           contentType: 'image/jpeg',

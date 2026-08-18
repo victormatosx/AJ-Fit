@@ -64,11 +64,45 @@ describe('EditProfileScreen — draft resets explicitly per session, not via unm
 describe('HelpArticleScreen — feedback state keyed on article identity', () => {
   const CODE = code('src/screens/HelpArticleScreen.tsx');
 
-  it('resets `resolved` when the article prop changes, not only on (re)activation', () => {
+  it('resets `resolved` and `modalVisible` when the article prop changes, not only on (re)activation', () => {
     // This screen can go straight from one article to another without ever
     // becoming inactive in between (both route to supportRoute.name ===
     // 'article') — a useScreenFocusEffect alone would miss that transition.
-    expect(CODE).toMatch(/useEffect\(\(\) => \{\s*setResolved\(null\);\s*\}, \[article\.id\]\)/);
+    // Both feedback state AND the "still need help?" modal must reset here,
+    // so a "Não" tap on one article never leaves the modal open (or its
+    // backdrop capturing touches) over the next article.
+    const block = CODE.slice(
+      CODE.indexOf('useEffect(() => {'),
+      CODE.indexOf('}, [article.id]);') + '}, [article.id]);'.length,
+    );
+    expect(block).toContain('setResolved(null);');
+    expect(block).toContain('setModalVisible(false);');
+  });
+});
+
+describe('HelpArticleScreen — "still need help?" modal', () => {
+  const CODE = code('src/screens/HelpArticleScreen.tsx');
+
+  it('renders exactly one native <Modal> (no stacking with another native modal)', () => {
+    expect(CODE.match(/<Modal\b/g)?.length).toBe(1);
+  });
+
+  it('"Não" opens the modal alongside setting resolved(false)', () => {
+    expect(CODE).toMatch(/onPress=\{\(\) => \{ setResolved\(false\); setModalVisible\(true\); \}\}/);
+  });
+
+  it('backdrop press, the secondary action, and Android back all close the modal without navigating', () => {
+    expect(CODE).toMatch(/onRequestClose=\{\(\) => setModalVisible\(false\)\}/);
+    const modalBlock = CODE.slice(CODE.indexOf('<Modal'), CODE.lastIndexOf('</Modal>'));
+    const closeCalls = modalBlock.match(/setModalVisible\(false\)/g)?.length ?? 0;
+    // onRequestClose + backdrop Pressable + secondary "dismiss" Pressable.
+    expect(closeCalls).toBeGreaterThanOrEqual(3);
+  });
+
+  it('the primary CTA closes the modal and reuses the existing onOpenTicket callback (no new navigation)', () => {
+    const ctaBlock = CODE.slice(CODE.indexOf('<CtaButton'), CODE.indexOf('</CtaButton>'));
+    expect(ctaBlock).toContain('setModalVisible(false);');
+    expect(ctaBlock).toContain('onOpenTicket(title);');
   });
 });
 

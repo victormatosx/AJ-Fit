@@ -9,7 +9,9 @@
     "saveFailedTitle": "Couldn't save",
     "saveFailedMessage": "Check your connection and try again."
   },
-  "loading": { "title": "Loading assessments" },
+  "loading": {
+    "title": "Loading assessments"
+  },
   "sections": {
     "evolution": "Evolution",
     "basicInfo": "Basic info",
@@ -57,20 +59,51 @@
     "saving": "Saving…"
   },
   "fields": {
-    "measurementDate": { "label": "Assessment date" },
-    "weight": { "label": "Weight" },
-    "height": { "label": "Height" },
-    "ageAtAssessment": { "label": "Age on assessment date" },
-    "bodyFat": { "label": "BF" },
-    "bodyWater": { "label": "Body water" },
-    "basalMetabolism": { "label": "Basal metabolic rate" },
-    "visceralFat": { "label": "Visceral fat" },
-    "notes": { "label": "Notes (optional)", "placeholder": "E.g. bioimpedance at Clinic X" }
+    "measurementDate": {
+      "label": "Assessment date"
+    },
+    "weight": {
+      "label": "Weight"
+    },
+    "height": {
+      "label": "Height"
+    },
+    "ageAtAssessment": {
+      "label": "Age on assessment date"
+    },
+    "bodyFat": {
+      "label": "BF"
+    },
+    "bodyWater": {
+      "label": "Body water"
+    },
+    "basalMetabolism": {
+      "label": "Basal metabolic rate"
+    },
+    "visceralFat": {
+      "label": "Visceral fat"
+    },
+    "notes": {
+      "label": "Notes (optional)",
+      "placeholder": "E.g. bioimpedance at Clinic X"
+    }
   },
-  "form": { "numericPlaceholder": "0" },
+  "form": {
+    "numericPlaceholder": "0"
+  },
   "result": "{{value}} {{unit}}",
-  "heightParts": { "feet": "Feet", "inches": "Inches" },
-  "units": { "kg": "kg", "cm": "cm", "mm": "mm", "percent": "%", "years": "years", "kcal": "kcal" },
+  "heightParts": {
+    "feet": "Feet",
+    "inches": "Inches"
+  },
+  "units": {
+    "kg": "kg",
+    "cm": "cm",
+    "mm": "mm",
+    "percent": "%",
+    "years": "years",
+    "kcal": "kcal"
+  },
   "validation": {
     "guidedRequired": "Enter the date, weight, and every skinfold to save",
     "profileRequired": "Sex, birth date, and height must be completed in your profile",
@@ -166,6 +199,8 @@
     "selectProtocol": "Select protocol",
     "selectSex": "Select sex: {{sex}}",
     "saveGuided": "Save guided assessment",
-    "saveImported": "Record imported assessment"
+    "saveImported": "Record imported assessment",
+    "openGuidedLocked": "Open guided assessment, Premium feature",
+    "openImportLocked": "Open assessment import, Premium feature"
   }
 }

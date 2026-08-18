@@ -132,7 +132,7 @@ describe('production TOTP enrollment and management structure', () => {
     expect(authContext).toContain('const userStatePromise = loadUserState(nextUser.uid)');
     expect(authContext).toContain('await userStatePromise');
     const questionnaireGuard = premiumGate.indexOf('if (!state.hasQuestionnaire)');
-    const funnelGuard = premiumGate.indexOf("return state.isPremium ? 'app' : 'paywall'");
+    const funnelGuard = premiumGate.indexOf("return 'app';");
     expect(questionnaireGuard).toBeGreaterThan(-1);
     expect(funnelGuard).toBeGreaterThan(questionnaireGuard);
     expect(app).not.toContain('TotpEnrollment');

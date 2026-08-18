@@ -30,6 +30,17 @@
     "sub": "Base para el cálculo de carga inicial.",
     "unit": "kg"
   },
+  "motivation": {
+    "title": "¿Qué te trajo hasta aquí?",
+    "options": {
+      "muscle": { "label": "Quiero ganar masa muscular", "description": "Construir músculo" },
+      "leanDown": { "label": "Quiero perder grasa y definir", "description": "Perder grasa y definir" },
+      "strength": { "label": "Quiero ser más fuerte", "description": "Ganar fuerza" },
+      "physique": { "label": "Quiero mejorar mi físico", "description": "Mejorar la estética general" },
+      "comeback": { "label": "Quiero volver a entrenar", "description": "Retomar el hábito" },
+      "consistency": { "label": "Quiero dejar de entrenar sin saber si progreso", "description": "Tener claridad sobre mi progreso" }
+    }
+  },
   "goal": {
     "title": "¿Objetivo principal?",
     "sub": "Define el foco del programa.",
@@ -69,9 +80,21 @@
     "title": "¿Dónde entrenas?",
     "sub": "El entreno usa solo lo que tienes.",
     "options": {
-      "gym": { "label": "Gimnasio", "short": "GYM" },
-      "home": { "label": "Casa", "short": "CASA" },
-      "both": { "label": "Ambos", "short": "2X" }
+      "gym": {
+        "label": "Gimnasio",
+        "short": "GYM",
+        "description": "Acceso completo a equipos — barras, máquinas, poleas."
+      },
+      "home": {
+        "label": "Casa",
+        "short": "CASA",
+        "description": "Peso corporal y lo que tengas disponible en casa."
+      },
+      "both": {
+        "label": "Ambos",
+        "short": "2X",
+        "description": "Alternas entre días de gimnasio y entrenos en casa."
+      }
     }
   },
   "equipment": {
@@ -163,6 +186,29 @@
       "shoulder": "Hombro",
       "wrist": "Muñeca",
       "hip": "Cadera"
+    }
+  },
+  "muscleFocus": {
+    "title": "¿Algún grupo muscular para priorizar?",
+    "sub": "Elige hasta 2 — esto ayuda a orientar tu entreno.",
+    "options": {
+      "chest": "Pecho",
+      "back": "Espalda",
+      "shoulders": "Hombros",
+      "arms": "Brazos",
+      "glutes": "Glúteos",
+      "quads": "Cuádriceps",
+      "hamstrings": "Isquiotibiales",
+      "calves": "Pantorrillas",
+      "none": "Ninguno específico"
+    }
+  },
+  "commitment": {
+    "title": "¿Cuánto estás dispuesto a comprometerte?",
+    "options": {
+      "ownPace": { "label": "Quiero empezar a mi ritmo", "description": "Sin presión, a mi tiempo" },
+      "committed": { "label": "Estoy comprometido", "description": "Voy a seguir el plan al pie de la letra" },
+      "allIn": { "label": "Quiero tomarme esto muy en serio", "description": "Máximo esfuerzo y constancia" }
     }
   }
 }

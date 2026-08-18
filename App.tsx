@@ -25,14 +25,11 @@ import { addQuestionnaire } from './src/services/userProfile';
 import { logAuthError } from './src/services/auth';
 import { configureRevenueCat } from './src/services/revenueCatService';
 import { SplashScreen } from './src/screens/SplashScreen';
-import { OnboardingScreen } from './src/screens/OnboardingScreen';
-import { QuizScreen } from './src/screens/QuizScreen';
-import { SocialProofScreen } from './src/screens/SocialProofScreen';
-import { AnalyzingScreen } from './src/screens/AnalyzingScreen';
-import { PlanReadyScreen } from './src/screens/PlanReadyScreen';
+import { OnboardingFunnelScreen } from './src/screens/OnboardingFunnelScreen';
+import { clearOnboardingDraft } from './src/onboarding/draftStorage';
+import type { OnboardingAuthContext } from './src/onboarding/authContext';
 import { AuthScreen } from './src/screens/AuthScreen';
 import { EmailVerificationScreen } from './src/screens/EmailVerificationScreen';
-import { PaywallScreen } from './src/screens/PaywallScreen';
 import { AppShell } from './src/screens/AppShell';
 import { FullScreenLoading } from './src/components/ui/FullScreenLoading';
 import { requiresEmailVerification } from './src/lib/emailVerification';
@@ -141,7 +138,7 @@ function SubscriptionResolutionError({
 }
 
 function RootNavigator() {
-  const { user, profile, questionnaire, initializing, profileLoading, refreshProfile, logout } =
+  const { user, profile, questionnaire, initializing, profileLoading, refreshProfile } =
     useAuth();
   const {
     loading: subscriptionLoading,
@@ -171,6 +168,20 @@ function RootNavigator() {
   // pre-Premium checks resolvePremiumGate already made (auth, questionnaire).
   const [preferencesReconciling, setPreferencesReconciling] = useState(false);
   const prevProfileLoadingRef = useRef(true);
+  // Copy-only context for AuthScreen (which funnel step sent the user here).
+  // No auth/commerce logic reads this — see src/onboarding/authContext.ts.
+  const [onboardingAuthContext, setOnboardingAuthContext] = useState<OnboardingAuthContext | null>(
+    null,
+  );
+
+  // The anonymous draft is only useful before a questionnaire exists under
+  // the real UID. Once both are true, provisioning + addQuestionnaire have
+  // already durably written the data server-side — safe to drop the local
+  // copy. Idempotent (AsyncStorage removeItem on an absent key is a no-op),
+  // so this can fire on every render where the condition holds.
+  useEffect(() => {
+    if (user && questionnaire) void clearOnboardingDraft();
+  }, [user, questionnaire]);
 
   const setScreen = (next: RootScreenId) => {
     screenRef.current = next;
@@ -201,8 +212,10 @@ function RootNavigator() {
   // This pure decision is also the render guard: AppShell is never mounted
   // from a stale/requested route while auth, email verification, preference
   // reconciliation, questionnaire, or the CustomerInfo for the current
-  // Firebase UID is unresolved. Once all prerequisites are known,
-  // RevenueCat's `premium` entitlement exclusively chooses app vs. paywall.
+  // Firebase UID is unresolved. Once all prerequisites are known, AppShell
+  // opens regardless of `isPremium` (Fase 1 limited-mode rollout) — the
+  // entitlement keeps flowing through `useSubscription()` for capability
+  // gating inside AppShell in later phases, it just no longer blocks entry.
   const resolvedScreen = resolvePremiumGate({
     requestedScreen: screen,
     authInitializing: initializing,
@@ -285,62 +298,39 @@ function RootNavigator() {
             // already moved on (e.g. an authenticated cold start bootstraps
             // straight to 'app' before this fires) — only advance to
             // onboarding if we're still actually showing the splash.
-            if (screenRef.current === 'splash') setScreen('onboarding');
+            if (screenRef.current === 'splash') setScreen('onboardingFunnel');
           }}
         />
       )}
-      {resolvedScreen === 'onboarding' && (
-        <OnboardingScreen
-          onDone={() => setScreen('quiz')}
-          onLogin={() => setScreen('auth')}
-        />
-      )}
-      {resolvedScreen === 'quiz' && (
-        <QuizScreen
-          onDone={async () => {
-            if (user) {
-              // Forced questionnaire for an already-authenticated user (e.g. a
-              // social login that never had one). Persist it and let the
-              // central gate above choose app/paywall once `questionnaire`
-              // reloads — this screen never navigates itself in that case.
-              if (savingQuestionnaire) return;
-              setSavingQuestionnaire(true);
-              try {
-                await addQuestionnaire(user.uid, quiz, 1);
-                await refreshProfile();
-              } catch (err) {
-                logAuthError('quiz:save-questionnaire', err);
-                // Stays on 'quiz' — the gate keeps it there until a
-                // questionnaire actually exists, so the user can just retry.
-              } finally {
-                setSavingQuestionnaire(false);
-              }
-              return;
-            }
-            // Anonymous pre-signup funnel: unchanged, aside from the new
-            // Social Proof step inserted before Analyzing.
-            setScreen('socialProof');
+      {resolvedScreen === 'onboardingFunnel' && (
+        <OnboardingFunnelScreen
+          mode={user ? 'forcedQuestionnaire' : 'anonymous'}
+          onAuthRequested={(ctx) => {
+            setOnboardingAuthContext(ctx);
+            setScreen('auth');
           }}
-        />
-      )}
-      {resolvedScreen === 'socialProof' && (
-        <SocialProofScreen onDone={() => setScreen('analyzing')} />
-      )}
-      {resolvedScreen === 'analyzing' && <AnalyzingScreen onDone={() => setScreen('plan')} />}
-      {resolvedScreen === 'plan' && <PlanReadyScreen onContinue={() => setScreen('auth')} />}
-      {resolvedScreen === 'auth' && <AuthScreen />}
-      {resolvedScreen === 'emailVerification' && <EmailVerificationScreen />}
-      {resolvedScreen === 'paywall' && (
-        <PaywallScreen
-          onClose={async () => {
+          onForcedQuestionnaireDone={async () => {
+            // Forced questionnaire for an already-authenticated user (e.g. a
+            // social login that never had one). Persist it and let the
+            // central gate above choose app/paywall once `questionnaire`
+            // reloads — this screen never navigates itself in that case.
+            if (!user || savingQuestionnaire) return;
+            setSavingQuestionnaire(true);
             try {
-              await logout();
+              await addQuestionnaire(user.uid, quiz, 1);
+              await refreshProfile();
             } catch (err) {
-              logAuthError('paywall:logout', err);
+              logAuthError('quiz:save-questionnaire', err);
+              // Stays on 'onboardingFunnel' — the gate keeps it there until a
+              // questionnaire actually exists, so the user can just retry.
+            } finally {
+              setSavingQuestionnaire(false);
             }
           }}
         />
       )}
+      {resolvedScreen === 'auth' && <AuthScreen entryContext={onboardingAuthContext} />}
+      {resolvedScreen === 'emailVerification' && <EmailVerificationScreen />}
       {resolvedScreen === 'app' && <AppShell />}
       {savingQuestionnaire && (
         <View

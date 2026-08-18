@@ -9,7 +9,9 @@
     "saveFailedTitle": "Falha ao salvar",
     "saveFailedMessage": "Verifique sua conexão e tente novamente."
   },
-  "loading": { "title": "Carregando avaliações" },
+  "loading": {
+    "title": "Carregando avaliações"
+  },
   "sections": {
     "evolution": "Evolução",
     "basicInfo": "Informações básicas",
@@ -57,20 +59,51 @@
     "saving": "Salvando…"
   },
   "fields": {
-    "measurementDate": { "label": "Data da avaliação" },
-    "weight": { "label": "Peso" },
-    "height": { "label": "Altura" },
-    "ageAtAssessment": { "label": "Idade na data da avaliação" },
-    "bodyFat": { "label": "BF" },
-    "bodyWater": { "label": "Água corporal" },
-    "basalMetabolism": { "label": "Metabolismo basal" },
-    "visceralFat": { "label": "Gordura visceral" },
-    "notes": { "label": "Observações (opcional)", "placeholder": "Ex.: bioimpedância na Clínica X" }
+    "measurementDate": {
+      "label": "Data da avaliação"
+    },
+    "weight": {
+      "label": "Peso"
+    },
+    "height": {
+      "label": "Altura"
+    },
+    "ageAtAssessment": {
+      "label": "Idade na data da avaliação"
+    },
+    "bodyFat": {
+      "label": "BF"
+    },
+    "bodyWater": {
+      "label": "Água corporal"
+    },
+    "basalMetabolism": {
+      "label": "Metabolismo basal"
+    },
+    "visceralFat": {
+      "label": "Gordura visceral"
+    },
+    "notes": {
+      "label": "Observações (opcional)",
+      "placeholder": "Ex.: bioimpedância na Clínica X"
+    }
   },
-  "form": { "numericPlaceholder": "0" },
+  "form": {
+    "numericPlaceholder": "0"
+  },
   "result": "{{value}} {{unit}}",
-  "heightParts": { "feet": "Pés", "inches": "Polegadas" },
-  "units": { "kg": "kg", "cm": "cm", "mm": "mm", "percent": "%", "years": "anos", "kcal": "kcal" },
+  "heightParts": {
+    "feet": "Pés",
+    "inches": "Polegadas"
+  },
+  "units": {
+    "kg": "kg",
+    "cm": "cm",
+    "mm": "mm",
+    "percent": "%",
+    "years": "anos",
+    "kcal": "kcal"
+  },
   "validation": {
     "guidedRequired": "Preencha data, peso e todas as dobras para salvar",
     "profileRequired": "Sexo, nascimento e altura precisam estar preenchidos no cadastro",
@@ -166,6 +199,8 @@
     "selectProtocol": "Selecionar protocolo",
     "selectSex": "Selecionar sexo: {{sex}}",
     "saveGuided": "Salvar avaliação guiada",
-    "saveImported": "Registrar avaliação importada"
+    "saveImported": "Registrar avaliação importada",
+    "openGuidedLocked": "Abrir avaliação guiada, recurso Premium",
+    "openImportLocked": "Abrir importação de avaliação, recurso Premium"
   }
 }

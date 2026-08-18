@@ -39,7 +39,7 @@ describe('definitive TOTP sign-in flow contract', () => {
       'if (state.authInitializing || state.profileLoading) return null;',
     );
     const questionnaireGuard = premiumGate.indexOf('if (!state.hasQuestionnaire)');
-    const dashboardGuard = premiumGate.indexOf("return state.isPremium ? 'app' : 'paywall'");
+    const dashboardGuard = premiumGate.indexOf("return 'app';");
     expect(loadingGate).toBeGreaterThan(-1);
     expect(questionnaireGuard).toBeGreaterThan(loadingGate);
     expect(dashboardGuard).toBeGreaterThan(questionnaireGuard);

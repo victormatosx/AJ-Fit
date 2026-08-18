@@ -96,10 +96,10 @@ Nomes no código:
 
 | Estilo | Fonte | Tamanho / linha | Tracking | Uso |
 |---|---|---:|---:|---|
-| `displayHero` | Anton | 46 / 53 | 0,5 | onboarding e mensagem hero |
-| `displayLarge` | Anton | 38 / 44 | 0,5 | pôster principal |
-| `displayMedium` | Anton | 34 / 39 | 0,5 | título de tela |
-| `displaySmall` | Anton | 26 / 30 | 0,5 | título de card/modal |
+| `displayHero` | Anton | 46 / 67 | 0,5 | onboarding e mensagem hero |
+| `displayLarge` | Anton | 38 / 55 | 0,5 | pôster principal |
+| `displayMedium` | Anton | 34 / 49 | 0,5 | título de tela |
+| `displaySmall` | Anton | 26 / 38 | 0,5 | título de card/modal |
 | `title` | Archivo 700 | 17 / 22 | 0 | título funcional |
 | `subtitle` | Archivo 600 | 14,5 / 20 | 0 | título de item/card |
 | `body` | Archivo 400 | 14 / 21 | 0 | texto padrão e input |
@@ -112,7 +112,7 @@ Nomes no código:
 Regras:
 
 - Anton é sempre usado em caixa alta e pode receber inclinação horizontal de `-8deg` para títulos editoriais.
-- Anton deve usar `displayLineHeight(size)`. Uma altura de linha menor pode cortar glifos no iOS.
+- Anton deve usar `displayLineHeight(size)` (fator 1,45×, `src/theme/tokens.ts`) — nunca um valor de `lineHeight` hardcoded ao lado de `fonts.display`. Um fator menor corta o topo do glifo **só no iOS** (Android já reserva esse espaço via `includeFontPadding`); 1,15× ainda cortava em iPhone real — ver `docs/08_log_de_evolucao.md` 2026-08-16.
 - Textos corridos nunca usam Anton ou JetBrains Mono.
 - Labels Mono devem ser curtas; evitar parágrafos e traduções longas com tracking alto.
 - Não usar `fontWeight` para simular pesos. Selecionar a família carregada correspondente.

@@ -67,11 +67,11 @@ describe('auditoria pós-Fase 3 — orchestration/loading A–G', () => {
     expect(gate({ info: premium('A') })).toBe('app');
   });
 
-  it('B — não Premium cold start: não decide antes de CustomerInfo', () => {
+  it('B — não Premium cold start: não decide antes de CustomerInfo; FASE 1: uma vez resolvida, libera AppShell também', () => {
     expect(
       gate({ subscriptionLoading: true, subscriptionConfigured: false }),
     ).toBeNull();
-    expect(gate({ info: basic('A') })).toBe('paywall');
+    expect(gate({ info: basic('A') })).toBe('app');
   });
 
   it('C — Offerings lento não bloqueia Premium já confirmado', () => {
@@ -79,8 +79,8 @@ describe('auditoria pós-Fase 3 — orchestration/loading A–G', () => {
     expect(gate({ info: premium('A') })).toBe('app');
   });
 
-  it('D — não Premium chega ao Paywall enquanto ele carrega Offerings', () => {
-    expect(gate({ info: basic('A') })).toBe('paywall');
+  it('D — FASE 1: não Premium também chega ao AppShell enquanto Offerings ainda carrega (Offerings não é pré-requisito do gate raiz)', () => {
+    expect(gate({ info: basic('A') })).toBe('app');
     expect(slowOfferings()).toBe('loading');
   });
 

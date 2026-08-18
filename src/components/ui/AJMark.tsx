@@ -1,5 +1,6 @@
 import React from 'react';
-import { Image, View } from 'react-native';
+import { View } from 'react-native';
+import { Image } from 'expo-image';
 
 const LOGO = require('../../../assets/aj-logo.png');
 
@@ -25,7 +26,9 @@ export function AJMark({ size = 96, glow = true }: Props) {
       <Image
         source={LOGO}
         style={{ width: size, height: size }}
-        resizeMode="contain"
+        contentFit="contain"
+        cachePolicy="memory"
+        transition={0}
       />
     </View>
   );

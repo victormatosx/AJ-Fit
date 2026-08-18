@@ -13,6 +13,9 @@ import esOnboarding from './resources/es/onboarding.json';
 import ptBRQuiz from './resources/pt-BR/quiz.json';
 import enQuiz from './resources/en/quiz.json';
 import esQuiz from './resources/es/quiz.json';
+import ptBRPlan from './resources/pt-BR/plan.json';
+import enPlan from './resources/en/plan.json';
+import esPlan from './resources/es/plan.json';
 import ptBRHome from './resources/pt-BR/home.json';
 import enHome from './resources/en/home.json';
 import esHome from './resources/es/home.json';
@@ -40,6 +43,7 @@ export const resources = {
     errors: ptBRErrors,
     onboarding: ptBROnboarding,
     quiz: ptBRQuiz,
+    plan: ptBRPlan,
     home: ptBRHome,
     profile: ptBRProfile,
     workout: ptBRWorkout,
@@ -53,6 +57,7 @@ export const resources = {
     errors: enErrors,
     onboarding: enOnboarding,
     quiz: enQuiz,
+    plan: enPlan,
     home: enHome,
     profile: enProfile,
     workout: enWorkout,
@@ -66,6 +71,7 @@ export const resources = {
     errors: esErrors,
     onboarding: esOnboarding,
     quiz: esQuiz,
+    plan: esPlan,
     home: esHome,
     profile: esProfile,
     workout: esWorkout,

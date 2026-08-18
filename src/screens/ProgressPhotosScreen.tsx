@@ -48,6 +48,8 @@ import {
   type PickerOutcome,
 } from '../services/photoVaultPicker';
 import { usePhotoVault } from '../state/PhotoVaultContext';
+import { usePremiumAction } from '../state/PremiumActionContext';
+import { PremiumAction } from '../components/premium/PremiumAction';
 import { colors, fonts } from '../theme/tokens';
 
 /**
@@ -80,6 +82,15 @@ export function ProgressPhotosScreen({
     lock,
     setHasPhotoVaultContent,
   } = usePhotoVault();
+  // FASE 5: the primary "add photo" CTA (footer button) is wrapped in
+  // <PremiumAction> below, which derives its own `locked` display state —
+  // no `canPerform` needed directly in this screen anymore for that.
+  // `requestPremiumAction` (imperative) stays for confirmDelete (Fase 5
+  // §11: excluir foto happens inside a viewer/menu, not a natural fit for
+  // the declarative wrapper) and for the secondary "add" entry points
+  // (empty states, grid slots) that converge on the same protected
+  // `openSheet` handler instead of each mounting their own <PremiumAction>.
+  const { requestPremiumAction } = usePremiumAction();
 
   const [gallery, setGallery] = useState<GalleryState>(getGalleryState);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -319,41 +330,70 @@ export function ProgressPhotosScreen({
     [handleSavePose, replaceErrorMessage],
   );
 
-  const openSheet = useCallback((pose?: ProgressPhotoPose) => {
+  // FASE 3→5 (docs/13_assinaturas_e_billing.md): ADD_PROGRESS_PHOTO is a
+  // Premium capability. Reading the gallery stays free — only starting a
+  // new upload is gated, never the screen mount.
+  //
+  // `openSheetUnguarded` is the actual state change, with no capability
+  // knowledge at all — it's what `<PremiumAction>` calls as `onAllowed` for
+  // the primary CTA (see the footer button below). `openSheet` wraps the
+  // exact same `requestPremiumAction` call for the secondary entry points
+  // (empty states, grid slots — see FASE 3 report §"Entry points
+  // secundários de foto" for why those stay imperative instead of each
+  // mounting their own `<PremiumAction>`), so every path funnels through
+  // one authorization call either way.
+  const openSheetUnguarded = useCallback((pose?: ProgressPhotoPose) => {
     setSheetPose(pose);
     setSheetOpen(true);
   }, []);
 
+  const openSheet = useCallback(
+    (pose?: ProgressPhotoPose) => {
+      requestPremiumAction({
+        capability: 'ADD_PROGRESS_PHOTO',
+        onAllowed: () => openSheetUnguarded(pose),
+      });
+    },
+    [requestPremiumAction, openSheetUnguarded],
+  );
+
   const confirmDelete = useCallback(
     (photoId: string) => {
-      Alert.alert(
-        t('progress.photos.delete.title'),
-        t('progress.photos.delete.description'),
-        [
-          { text: t('progress.photos.delete.cancel'), style: 'cancel' },
-          {
-            text: t('progress.photos.delete.confirm'),
-            style: 'destructive',
-            onPress: () => {
-              handleCloseViewer();
-              void (async () => {
-                const ok = await removeGalleryPhoto(photoId);
-                if (!ok) {
-                  setNotice(t('progress.photos.delete.error'));
-                  return;
-                }
-                // The delete is now confirmed remotely. Only the transition
-                // to a truly empty authoritative gallery clears the hint.
-                if (getGalleryState().photos.length === 0) {
-                  await setHasPhotoVaultContent(false);
-                }
-              })();
-            },
-          },
-        ],
-      );
+      // DELETE_PROGRESS_PHOTO — same rationale as openSheet above; blocked
+      // before the native confirm dialog even opens.
+      requestPremiumAction({
+        capability: 'DELETE_PROGRESS_PHOTO',
+        onAllowed: () => {
+          Alert.alert(
+            t('progress.photos.delete.title'),
+            t('progress.photos.delete.description'),
+            [
+              { text: t('progress.photos.delete.cancel'), style: 'cancel' },
+              {
+                text: t('progress.photos.delete.confirm'),
+                style: 'destructive',
+                onPress: () => {
+                  handleCloseViewer();
+                  void (async () => {
+                    const ok = await removeGalleryPhoto(photoId);
+                    if (!ok) {
+                      setNotice(t('progress.photos.delete.error'));
+                      return;
+                    }
+                    // The delete is now confirmed remotely. Only the transition
+                    // to a truly empty authoritative gallery clears the hint.
+                    if (getGalleryState().photos.length === 0) {
+                      await setHasPhotoVaultContent(false);
+                    }
+                  })();
+                },
+              },
+            ],
+          );
+        },
+      });
     },
-    [handleCloseViewer, setHasPhotoVaultContent, t],
+    [requestPremiumAction, handleCloseViewer, setHasPhotoVaultContent, t],
   );
 
   // ── Locked ───────────────────────────────────────────────────────────────
@@ -505,38 +545,51 @@ export function ProgressPhotosScreen({
           <>
             {gallery.status === 'ready' && !galleryEmpty && !filterEmpty ? (
               <View style={{ paddingHorizontal: 22, paddingTop: 14 }}>
-                <Pressable
-                  onPress={() => openSheet()}
-                  disabled={gallery.uploading}
-                  accessibilityRole="button"
-                  accessibilityLabel={t('progress.photos.a11y.addPhoto')}
-                  accessibilityState={{ disabled: gallery.uploading }}
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 10,
-                    paddingVertical: 15,
-                    borderRadius: 12,
-                    borderWidth: 1,
-                    borderColor: colors.border,
-                    backgroundColor: colors.surface,
-                    opacity: gallery.uploading ? 0.4 : 1,
-                  }}
-                >
-                  <Icon name="plus" size={14} color={colors.accentHi} />
-                  <Text
-                    style={{
-                      color: colors.text,
-                      fontFamily: fonts.mono,
-                      fontSize: 10,
-                      letterSpacing: 2,
-                      textTransform: 'uppercase',
-                    }}
-                  >
-                    {t('progress.photos.list.add')}
-                  </Text>
-                </Pressable>
+                {/* FASE 5: the primary "add" CTA — single discreet lock
+                    indicator (empty states below keep their plain "+" icon,
+                    per Fase 3's "não espalhe cadeados" decision), now
+                    sourced from <PremiumAction> instead of a local
+                    canPerform() read. */}
+                <PremiumAction capability="ADD_PROGRESS_PHOTO" onAllowed={openSheetUnguarded}>
+                  {({ locked, onPress }) => (
+                    <Pressable
+                      onPress={onPress}
+                      disabled={gallery.uploading}
+                      accessibilityRole="button"
+                      accessibilityLabel={
+                        locked
+                          ? t('progress.photos.a11y.addPhotoLocked')
+                          : t('progress.photos.a11y.addPhoto')
+                      }
+                      accessibilityState={{ disabled: gallery.uploading }}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 10,
+                        paddingVertical: 15,
+                        borderRadius: 12,
+                        borderWidth: 1,
+                        borderColor: colors.border,
+                        backgroundColor: colors.surface,
+                        opacity: gallery.uploading ? 0.4 : 1,
+                      }}
+                    >
+                      <Icon name={locked ? 'lock' : 'plus'} size={14} color={colors.accentHi} />
+                      <Text
+                        style={{
+                          color: colors.text,
+                          fontFamily: fonts.mono,
+                          fontSize: 10,
+                          letterSpacing: 2,
+                          textTransform: 'uppercase',
+                        }}
+                      >
+                        {t('progress.photos.list.add')}
+                      </Text>
+                    </Pressable>
+                  )}
+                </PremiumAction>
               </View>
             ) : null}
             {pageFooter}

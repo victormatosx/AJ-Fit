@@ -1,0 +1,30 @@
+{
+  "header": {
+    "eyebrow": "Tu primera fase",
+    "titleWithName": "{{name}}, tu primera fase está lista.",
+    "titleNoName": "Tu primera fase está lista."
+  },
+  "summary": {
+    "title": "Tu estrategia",
+    "goal": "Objetivo",
+    "frequency": "Frecuencia",
+    "duration": "Duración",
+    "level": "Nivel",
+    "frequencyValue": "{{days}}x por semana",
+    "durationValue": "≈ {{minutes}} min"
+  },
+  "schedule": {
+    "title": "Semana",
+    "trainLabel": "Entreno",
+    "restLabel": "Descanso",
+    "dayLabels": { "mon": "L", "tue": "M", "wed": "X", "thu": "J", "fri": "V", "sat": "S", "sun": "D" }
+  },
+  "journey": {
+    "title": "Esta es tu primera fase.",
+    "body": "Tu camino continúa a medida que registras tus entrenos y evolucionas."
+  },
+  "cta": {
+    "label": "Quiero empezar",
+    "footer": "Mira las opciones disponibles en el siguiente paso."
+  }
+}

@@ -24,7 +24,8 @@
       "startNow": "Yes, start",
       "notNow": "Not now",
       "dismiss": "Close workout confirmation",
-      "accessibilityConfirm": "Confirm workout start"
+      "accessibilityConfirm": "Confirm workout start",
+      "accessibilityConfirmLocked": "Confirm workout start, Premium feature"
     }
   },
   "consistency": {
@@ -198,7 +199,8 @@
         "selectedAsBefore": "Selected as before",
         "selectedAsAfter": "Selected as after",
         "changeBefore": "Change the before photo",
-        "changeAfter": "Change the after photo"
+        "changeAfter": "Change the after photo",
+        "addPhotoLocked": "Add new photo, Premium feature"
       },
       "poses": {
         "front": "Front",

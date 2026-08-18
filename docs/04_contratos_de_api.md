@@ -88,12 +88,24 @@ um snapshot imutável:
     "days": "number",
     "place": "string | null",
     "equipment": "string[]",
-    "style": "string[]"
+    "style": "string[]",
+    "motivation": "string | null",
+    "muscleFocus": "string[]",
+    "commitment": "string | null"
   },
   "version": "number (>= 1)",
   "createdAt": "serverTimestamp"
 }
 ```
+
+Novos campos (2026-08-15, funil de onboarding — ver `docs/24_funil_onboarding_arquitetura.md`):
+`motivation`, `muscleFocus` (máx. 2 seleções, ver doc do funil), `commitment`.
+Extensão backward-compatible do tipo `Quiz` (`src/state/AppState.tsx`) — documentos
+gravados antes desta mudança não têm esses campos; `fromPersistedAnswers` os
+reidrata a partir de `defaultQuiz` (`null`/`[]`), nunca lança. Nenhuma migração de
+dado foi necessária. `motivation`/`commitment` são hoje consumidos apenas pelo
+onboarding (não alimentam nenhum algoritmo); `muscleFocus` é modelado para o
+futuro motor de geração de treino.
 
 Migração `age` → `birthDate` (2026-07-30, ver 08_log_de_evolucao.md): novas
 escritas gravam somente `birthDate`. Documentos anteriores à migração ainda

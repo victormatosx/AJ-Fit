@@ -36,7 +36,9 @@ describe('Subscription Center integration', () => {
     expect(gate).not.toContain('SubscriptionCenter');
     expect(gate).not.toContain('CANCELED');
     expect(gate).not.toContain('BILLING_ISSUE');
-    expect(gate).toContain("return state.isPremium ? 'app' : 'paywall'");
+    // FASE 1: the root gate no longer branches on isPremium — it opens
+    // AppShell unconditionally once the subscription state is resolved.
+    expect(gate).toContain("return 'app';");
   });
 
   it('does not turn attribution coupon text into a financial promotion claim', () => {
