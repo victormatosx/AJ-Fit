@@ -708,6 +708,23 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Ponteiro backend-only para o RecoverySet ativo de cada usuário
+    // (functions/src/mfaRecovery/{schema,recoverySetRepository}.ts) —
+    // `_mfaRecoveryUsers/{uid}`, contendo apenas `activeSetId`. Existe para
+    // que a invariante "no máximo um set ativo por uid" seja uma escrita
+    // contendida em UM documento, que a transação do Firestore serializa —
+    // uma query `where(status == active)` não daria essa garantia.
+    //
+    // Aqui o uid É o doc id, ao contrário de `_mfaRecovery`, porque este
+    // documento não guarda material secreto — só um selector, que já é a
+    // metade pública de todo código do set. Ainda assim negado a todo
+    // cliente: saber se/quando alguém possui recovery codes ativos já é
+    // informação de segurança da conta, e o app nunca precisa ler isto
+    // diretamente (a callable de geração devolve o que o cliente precisa).
+    match /_mfaRecoveryUsers/{document=**} {
+      allow read, write: if false;
+    }
+
     // ── Deny all undocumented collections ─────────────────────────────────
     // Coleções de sistema (exercises, workout_templates, treinos do usuário,
     // etc.) ainda não têm contrato de regras aprovado — negar por padrão até

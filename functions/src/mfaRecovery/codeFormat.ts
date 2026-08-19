@@ -42,9 +42,10 @@ import { RecoveryError } from './errors';
  * collides with `0`, and `U` because excluding it prevents accidental
  * obscenities in generated codes.
  *
- * 32 symbols is exactly 2^5, so every symbol carries exactly 5 bits with no
- * modulo bias when sampled from a CSPRNG (Phase 2 must sample by rejecting
- * out-of-range bytes, never by `% 32`).
+ * 32 symbols is exactly 2^5, so every symbol carries exactly 5 bits. Because
+ * 32 divides 256 evenly, a symbol can be drawn by taking the low 5 bits of a
+ * CSPRNG byte with no bias and no rejection sampling — see codeGenerator.ts,
+ * which is the only place symbols are ever produced.
  *
  *
  * ENTROPY CALCULATION

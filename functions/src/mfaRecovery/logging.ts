@@ -41,8 +41,12 @@ import type { RecoveryInternalCode } from './errors';
 
 export const RECOVERY_LOG_SCOPE = 'mfaRecovery';
 
-/** Stage of the (future) recovery pipeline that produced the event. */
+/** Stage of the recovery pipeline that produced the event. */
 export type RecoveryLogStage =
+  /** Phase 2 — minting a new set of codes. */
+  | 'generate'
+  /** Phase 2 — writing the set and repointing the active-set pointer. */
+  | 'persist'
   | 'parse'
   | 'lookup'
   | 'verify'

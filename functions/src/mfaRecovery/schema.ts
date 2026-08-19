@@ -70,6 +70,28 @@ export const RECOVERY_SCHEMA_VERSION = 1;
 export const MFA_RECOVERY_COLLECTION = '_mfaRecovery';
 
 /**
+ * Backend-only pointer collection: `_mfaRecoveryUsers/{uid}` -> active set id.
+ *
+ * WHY A POINTER INSTEAD OF A QUERY
+ * --------------------------------
+ * The invariant is "at most ONE active recovery set per uid". Enforcing that
+ * with `where('uid','==',uid).where('status','==','active')` would be a
+ * read-modify-write over a query result, and Firestore transactions give no
+ * serializability guarantee against documents a query did not return — two
+ * concurrent generations could each observe "no active set" and each create
+ * one. A single pointer document turns the invariant into a contended write
+ * on ONE key, which Firestore transactions do serialize.
+ *
+ * It also removes the need for a composite index and keeps every read on the
+ * hot path an O(1) document get.
+ *
+ * The uid IS the document id here, unlike `_mfaRecovery` — that is safe
+ * because this document holds no secret material, only a selector. Denied to
+ * every client all the same (firestore.rules).
+ */
+export const MFA_RECOVERY_POINTER_COLLECTION = '_mfaRecoveryUsers';
+
+/**
  * How many codes a set holds. Declared here so the exhaustion rule and the
  * Phase 3 reveal screen agree on one number.
  */
@@ -513,5 +535,64 @@ export function assertValidRecoverySet(
   const problems = validateRecoverySet(candidate);
   if (problems.length > 0) {
     throw new Error(`Invalid recovery set: ${problems.join('; ')}`);
+  }
+}
+
+/**
+ * `_mfaRecoveryUsers/{uid}` — which recovery set is currently active.
+ *
+ * Holds no digest and no secret: only the selector of the active set, which
+ * is already the public half of every code in that set.
+ */
+export interface RecoveryPointerDocument {
+  schemaVersion: number;
+  /** Mirrors the document id. Stored so a read is self-describing. */
+  uid: string;
+  /** `recoverySetId` of the one active set, or null when none exists. */
+  activeSetId: string | null;
+  updatedAt: Date;
+}
+
+const POINTER_KEYS: readonly (keyof RecoveryPointerDocument)[] = [
+  'schemaVersion',
+  'uid',
+  'activeSetId',
+  'updatedAt',
+];
+
+export function validateRecoveryPointer(candidate: unknown): string[] {
+  if (!isPlainObject(candidate)) {
+    return ['pointer must be an object'];
+  }
+
+  const problems: string[] = [];
+  checkKeys(candidate, POINTER_KEYS as readonly string[], 'pointer', problems);
+
+  if ('schemaVersion' in candidate && !isPositiveInteger(candidate.schemaVersion)) {
+    problems.push('pointer.schemaVersion must be an integer >= 1');
+  }
+  if ('uid' in candidate && !isNonEmptyString(candidate.uid)) {
+    problems.push('pointer.uid must be a non-empty string');
+  }
+  if (
+    'activeSetId' in candidate &&
+    candidate.activeSetId !== null &&
+    !isNonEmptyString(candidate.activeSetId)
+  ) {
+    problems.push('pointer.activeSetId must be a non-empty string or null');
+  }
+  if ('updatedAt' in candidate && !isDate(candidate.updatedAt)) {
+    problems.push('pointer.updatedAt must be a Date');
+  }
+
+  return problems;
+}
+
+export function assertValidRecoveryPointer(
+  candidate: unknown,
+): asserts candidate is RecoveryPointerDocument {
+  const problems = validateRecoveryPointer(candidate);
+  if (problems.length > 0) {
+    throw new Error(`Invalid recovery pointer: ${problems.join('; ')}`);
   }
 }

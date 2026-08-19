@@ -170,6 +170,57 @@ describe('_mfaRecovery — every client is denied', () => {
   });
 });
 
+describe('_mfaRecoveryUsers — the active-set pointer is equally unreachable', () => {
+  const POINTER_COLLECTION = '_mfaRecoveryUsers';
+
+  async function seedPointer() {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), POINTER_COLLECTION, OWNER_UID), {
+        schemaVersion: 1,
+        uid: OWNER_UID,
+        activeSetId: RECOVERY_SET_ID,
+        updatedAt: new Date('2026-08-19T10:00:00Z'),
+      });
+    });
+  }
+
+  describe.each(contexts)('%s', (_label, getDb) => {
+    it('cannot get the pointer', async () => {
+      await seedPointer();
+
+      await assertFails(getDoc(doc(getDb(), POINTER_COLLECTION, OWNER_UID)));
+    });
+
+    it('cannot list the pointer collection', async () => {
+      await seedPointer();
+
+      await assertFails(getDocs(collection(getDb(), POINTER_COLLECTION)));
+    });
+
+    it('cannot create, update or delete a pointer', async () => {
+      await seedPointer();
+
+      await assertFails(
+        setDoc(doc(getDb(), POINTER_COLLECTION, OWNER_UID), { activeSetId: 'X' }),
+      );
+      await assertFails(
+        updateDoc(doc(getDb(), POINTER_COLLECTION, OWNER_UID), { activeSetId: 'X' }),
+      );
+      await assertFails(deleteDoc(doc(getDb(), POINTER_COLLECTION, OWNER_UID)));
+    });
+  });
+
+  it('denies the owner even though the document id IS their uid', async () => {
+    // Unlike _mfaRecovery, this collection is keyed by uid — which is exactly
+    // the shape a rule author might be tempted to grant `isOwner` on. Whether
+    // a user has active recovery codes is itself account-security information,
+    // and the app never needs to read it directly.
+    await seedPointer();
+
+    await assertFails(getDoc(doc(ownerDb(), POINTER_COLLECTION, OWNER_UID)));
+  });
+});
+
 describe('_mfaRecovery — the owner has no privileged path', () => {
   it('denies the owner even when the document names them', async () => {
     await seedRecoverySet();
