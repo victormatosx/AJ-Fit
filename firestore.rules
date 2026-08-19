@@ -686,6 +686,28 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Conjuntos de códigos de recuperação de MFA
+    // (functions/src/mfaRecovery/schema.ts) — `_mfaRecovery/{recoverySetId}`,
+    // onde `recoverySetId` é o seletor embutido no próprio código. Guarda
+    // apenas digests HMAC-SHA-256 com pepper; o código em texto claro nunca é
+    // persistido (o schema fechado rejeita qualquer campo de plaintext).
+    //
+    // Negado a TODO cliente, sem exceção nem para o dono — e essa é a razão
+    // de a coleção ser de topo em vez de viver sob `users/{uid}`. O modelo de
+    // ameaça da recuperação inclui o primeiro fator comprometido: quem roubou
+    // a senha, o Google ou a Apple da vítima não pode conseguir ler o material
+    // que derruba o segundo fator. Sob `users/{uid}` esse material ficaria a
+    // uma regra distraída de distância de ser legível pela própria conta que
+    // ele protege.
+    //
+    // O `{document=**}` é recursivo de propósito: nega também qualquer
+    // subcoleção futura sem depender de alguém lembrar de adicioná-la aqui.
+    // O acesso é exclusivamente via Admin SDK (Cloud Functions), que ignora
+    // estas regras. Nenhuma exceção de leitura deve ser adicionada.
+    match /_mfaRecovery/{document=**} {
+      allow read, write: if false;
+    }
+
     // ── Deny all undocumented collections ─────────────────────────────────
     // Coleções de sistema (exercises, workout_templates, treinos do usuário,
     // etc.) ainda não têm contrato de regras aprovado — negar por padrão até
