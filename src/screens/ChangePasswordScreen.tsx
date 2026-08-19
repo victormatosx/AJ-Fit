@@ -16,11 +16,13 @@ import { PasswordField } from '../components/ui/PasswordField';
 import { ScreenBg } from '../components/ui/ScreenBg';
 import { useChangePassword } from '../hooks/useChangePassword';
 import { PASSWORD_MIN_LENGTH } from '../lib/passwordChange';
-import { colors, fonts, spacing, typography } from '../theme/tokens';
+import { spacing, typography } from '../theme/tokens';
+import { useTheme } from '../theme';
 import { useScreenFocusEffect } from '../state/ScreenActivity';
 
 export function ChangePasswordScreen({ onBack }: { onBack: () => void }) {
   const { t } = useTranslation('settings');
+  const { theme } = useTheme();
   const change = useChangePassword();
   const [currentVisible, setCurrentVisible] = useState(false);
   const [newVisible, setNewVisible] = useState(false);
@@ -79,15 +81,15 @@ export function ChangePasswordScreen({ onBack }: { onBack: () => void }) {
                 padding: spacing[4],
                 borderRadius: 14,
                 borderWidth: 1,
-                borderColor: colors.border,
-                backgroundColor: colors.cardBg,
+                borderColor: theme.colors.border,
+                backgroundColor: theme.colors.cardBackground,
                 flexDirection: 'row',
                 alignItems: 'flex-start',
                 gap: spacing[3],
               }}
             >
-              <Icon name="shield" size={19} color={colors.accentHi} />
-              <Text style={{ ...typography.body, color: colors.textSecondary, flex: 1 }}>
+              <Icon name="shield" size={19} color={theme.colors.primaryEmphasis} />
+              <Text style={{ ...typography.body, color: theme.colors.textSecondary, flex: 1 }}>
                 {t('security.changePassword.description')}
               </Text>
             </View>
@@ -139,8 +141,8 @@ export function ChangePasswordScreen({ onBack }: { onBack: () => void }) {
 
             <Text
               style={{
-                color: colors.faint,
-                fontFamily: fonts.ui,
+                color: theme.colors.textFaint,
+                fontFamily: theme.fonts.ui,
                 fontSize: 12.5,
                 lineHeight: 18,
                 marginTop: spacing[3],
@@ -172,7 +174,7 @@ export function ChangePasswordScreen({ onBack }: { onBack: () => void }) {
               style={{ marginTop: spacing[6] }}
             >
               {change.submitting ? (
-                <ActivityIndicator color={colors.text} />
+                <ActivityIndicator color={theme.colors.textPrimary} />
               ) : (
                 <CtaText>{t('security.changePassword.actions.submit')}</CtaText>
               )}
@@ -192,7 +194,8 @@ function Feedback({
   message: string;
 }) {
   const success = tone === 'success';
-  const color = success ? colors.success : colors.dangerText;
+  const { theme } = useTheme();
+  const color = success ? theme.colors.success : theme.colors.dangerText;
 
   return (
     <View
@@ -202,8 +205,12 @@ function Feedback({
         padding: spacing[3.5],
         borderRadius: 12,
         borderWidth: 1,
-        borderColor: success ? 'rgba(34,197,94,0.35)' : 'rgba(240,86,63,0.35)',
-        backgroundColor: success ? 'rgba(34,197,94,0.10)' : 'rgba(240,86,63,0.10)',
+        borderColor: success
+          ? theme.colors.feedbackSuccessBorder
+          : theme.colors.feedbackDangerBorder,
+        backgroundColor: success
+          ? theme.colors.feedbackSuccessBackground
+          : theme.colors.feedbackDangerBackground,
         flexDirection: 'row',
         alignItems: 'center',
         gap: spacing[2.5],

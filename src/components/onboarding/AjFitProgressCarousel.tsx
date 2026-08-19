@@ -3,7 +3,8 @@ import { View, Text, Animated, FlatList, useWindowDimensions, type ViewToken, ty
 import { useTranslation } from 'react-i18next';
 import { PhoneFrame } from '../ui/PhoneFrame';
 import { CarouselIndicators } from './CarouselIndicators';
-import { colors, fonts, motion, sizes, spacing } from '../../theme/tokens';
+import { motion, sizes, spacing } from '../../theme/tokens';
+import { useTheme } from '../../theme';
 import { useReducedMotionPreference } from '../../lib/reducedMotion';
 import { ajFitProgressFeatures, type AjFitProgressFeature, type AjFitProgressFeatureId } from '../../data/ajFitProgressShowcase';
 
@@ -45,6 +46,7 @@ const EDGE_LAP_BUFFER = 3; // laps of headroom kept on each side before recenter
 
 export function AjFitProgressCarousel() {
   const { t } = useTranslation('onboarding');
+  const { theme } = useTheme();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const reduceMotion = useReducedMotionPreference();
 
@@ -278,16 +280,16 @@ export function AjFitProgressCarousel() {
           paddingHorizontal: spacing[4],
         }}
       >
-        <Text style={{ fontFamily: fonts.uiBold, fontSize: 18, color: '#fff', textAlign: 'center' }}>
+        <Text style={{ fontFamily: theme.fonts.uiBold, fontSize: 18, color: theme.colors.textPrimary, textAlign: 'center' }}>
           {t(`interstitials.ajFitProgress.features.${activeId}.title`)}
         </Text>
         <Text
           style={{
             marginTop: spacing[1.5],
-            fontFamily: fonts.ui,
+            fontFamily: theme.fonts.ui,
             fontSize: 14,
             lineHeight: 20,
-            color: colors.mute,
+            color: theme.colors.textMuted,
             textAlign: 'center',
             maxWidth: 320,
           }}

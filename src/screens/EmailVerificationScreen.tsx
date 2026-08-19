@@ -8,17 +8,12 @@ import { OutlineNumber } from '../components/ui/OutlineNumber';
 import { ScreenBg } from '../components/ui/ScreenBg';
 import { useEmailVerification } from '../hooks/useEmailVerification';
 import type { EmailVerificationIssue } from '../lib/emailVerification';
-import {
-  colors,
-  fonts,
-  radii,
-  sizes,
-  spacing,
-  typography,
-} from '../theme/tokens';
+import { radii, sizes, spacing, typography } from '../theme/tokens';
+import { useTheme } from '../theme';
 
 export function EmailVerificationScreen() {
   const { t } = useTranslation('auth');
+  const { theme } = useTheme();
   const verification = useEmailVerification();
 
   const feedback = verification.issue
@@ -81,8 +76,8 @@ export function EmailVerificationScreen() {
                 padding: spacing[5],
                 borderRadius: radii.xl,
                 borderWidth: 1,
-                borderColor: colors.border,
-                backgroundColor: colors.surface,
+                borderColor: theme.colors.border,
+                backgroundColor: theme.colors.surface,
               }}
             >
               <View
@@ -92,17 +87,17 @@ export function EmailVerificationScreen() {
                   borderRadius: radii.md,
                   alignItems: 'center',
                   justifyContent: 'center',
-                  backgroundColor: colors.accentSoft,
+                  backgroundColor: theme.colors.primarySoft,
                   borderWidth: 1,
-                  borderColor: colors.borderStrong,
+                  borderColor: theme.colors.borderStrong,
                 }}
               >
-                <Icon name="mail" size={22} color={colors.accentHi} />
+                <Icon name="mail" size={22} color={theme.colors.primaryEmphasis} />
               </View>
               <Text
                 style={{
                   ...typography.body,
-                  color: colors.textSecondary,
+                  color: theme.colors.textSecondary,
                   marginTop: spacing[4],
                 }}
               >
@@ -111,8 +106,8 @@ export function EmailVerificationScreen() {
               <Text
                 selectable
                 style={{
-                  color: colors.text,
-                  fontFamily: fonts.uiSemi,
+                  color: theme.colors.textPrimary,
+                  fontFamily: theme.fonts.uiSemi,
                   fontSize: 15,
                   lineHeight: 22,
                   marginTop: spacing[1],
@@ -123,7 +118,7 @@ export function EmailVerificationScreen() {
               <Text
                 style={{
                   ...typography.body,
-                  color: colors.textSecondary,
+                  color: theme.colors.textSecondary,
                   marginTop: spacing[4],
                 }}
               >
@@ -142,7 +137,7 @@ export function EmailVerificationScreen() {
                 onPress={() => void verification.check()}
                 disabled={verification.busy}
               >
-                {verification.checking && <ActivityIndicator color={colors.text} />}
+                {verification.checking && <ActivityIndicator color={theme.colors.textPrimary} />}
                 <CtaText>
                   {verification.checking
                     ? t('emailVerification.actions.checking')
@@ -155,8 +150,8 @@ export function EmailVerificationScreen() {
                 onPress={() => void verification.resend()}
                 disabled={verification.busy}
               >
-                {verification.resending && <ActivityIndicator color={colors.text} />}
-                <Text style={{ ...typography.subtitle, color: colors.text }}>
+                {verification.resending && <ActivityIndicator color={theme.colors.textPrimary} />}
+                <Text style={{ ...typography.subtitle, color: theme.colors.textPrimary }}>
                   {verification.resending
                     ? t('emailVerification.actions.resending')
                     : t('emailVerification.actions.resend')}
@@ -177,11 +172,11 @@ export function EmailVerificationScreen() {
                 }}
               >
                 {verification.signingOut ? (
-                  <ActivityIndicator color={colors.mute} />
+                  <ActivityIndicator color={theme.colors.textMuted} />
                 ) : (
-                  <Icon name="arrow-left" size={17} color={colors.mute} />
+                  <Icon name="arrow-left" size={17} color={theme.colors.textMuted} />
                 )}
-                <Text style={{ ...typography.subtitle, color: colors.mute }}>
+                <Text style={{ ...typography.subtitle, color: theme.colors.textMuted }}>
                   {verification.signingOut
                     ? t('emailVerification.actions.signingOut')
                     : t('emailVerification.actions.signOut')}
@@ -210,7 +205,8 @@ function Feedback({
   message: string;
 }) {
   const success = tone === 'success';
-  const color = success ? colors.success : colors.dangerText;
+  const { theme } = useTheme();
+  const color = success ? theme.colors.success : theme.colors.dangerText;
 
   return (
     <View
@@ -220,8 +216,12 @@ function Feedback({
         padding: spacing[3.5],
         borderRadius: radii.md,
         borderWidth: 1,
-        borderColor: success ? 'rgba(34,197,94,0.35)' : 'rgba(240,86,63,0.35)',
-        backgroundColor: success ? 'rgba(34,197,94,0.10)' : 'rgba(240,86,63,0.10)',
+        borderColor: success
+          ? theme.colors.feedbackSuccessBorder
+          : theme.colors.feedbackDangerBorder,
+        backgroundColor: success
+          ? theme.colors.feedbackSuccessBackground
+          : theme.colors.feedbackDangerBackground,
         flexDirection: 'row',
         alignItems: 'center',
         gap: spacing[2.5],

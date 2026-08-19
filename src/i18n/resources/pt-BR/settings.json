@@ -173,6 +173,14 @@
       }
     }
   },
+  "theme": {
+    "title": "Tema",
+    "chooseTitle": "Selecionar tema",
+    "options": {
+      "dark": "Escuro",
+      "light": "Claro"
+    }
+  },
   "language": {
     "title": "Idioma",
     "description": "Escolha o idioma do aplicativo.",

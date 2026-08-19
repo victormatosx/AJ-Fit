@@ -2,7 +2,7 @@ import React from 'react';
 import { View } from 'react-native';
 import Svg, { Circle, Defs, LinearGradient as SvgLG, Line, Path, Stop } from 'react-native-svg';
 
-import { colors } from '../../theme/tokens';
+import { useTheme } from '../../theme';
 
 /**
  * Hero line chart for one metric over time.
@@ -31,6 +31,7 @@ export function EvolutionAreaChart({
   values: number[];
   height?: number;
 }) {
+  const { theme } = useTheme();
   if (values.length < 2) return null;
 
   const min = Math.min(...values);
@@ -57,8 +58,8 @@ export function EvolutionAreaChart({
       <Svg width="100%" height={height} viewBox={`0 0 ${VIEW_W} ${height}`}>
         <Defs>
           <SvgLG id="evolutionFill" x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0%" stopColor={colors.accentHi} stopOpacity="0.28" />
-            <Stop offset="100%" stopColor={colors.accent} stopOpacity="0" />
+            <Stop offset="0%" stopColor={theme.chart.primaryAreaStart} stopOpacity="0.28" />
+            <Stop offset="100%" stopColor={theme.chart.primaryAreaEnd} stopOpacity="0" />
           </SvgLG>
         </Defs>
 
@@ -69,7 +70,7 @@ export function EvolutionAreaChart({
             x2={VIEW_W}
             y1={PAD_Y + (i * usableH) / 2}
             y2={PAD_Y + (i * usableH) / 2}
-            stroke={colors.hair}
+            stroke={theme.chart.grid}
             strokeWidth={1}
           />
         ))}
@@ -77,13 +78,13 @@ export function EvolutionAreaChart({
         <Path d={area} fill="url(#evolutionFill)" />
         <Path
           d={line}
-          stroke={colors.accentHi}
+          stroke={theme.chart.primaryLine}
           strokeWidth={2}
           fill="none"
           strokeLinecap="round"
           strokeLinejoin="round"
         />
-        <Circle cx={last.x} cy={last.y} r={4.5} fill={colors.text} />
+        <Circle cx={last.x} cy={last.y} r={4.5} fill={theme.chart.endpoint} />
       </Svg>
     </View>
   );

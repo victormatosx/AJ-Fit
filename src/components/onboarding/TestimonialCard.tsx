@@ -4,11 +4,13 @@ import { useTranslation } from 'react-i18next';
 import { Card } from '../ui/Card';
 import { Icon } from '../ui/Icon';
 import { ProfileAvatar } from '../ui/ProfileAvatar';
-import { colors, fonts, spacing } from '../../theme/tokens';
+import { spacing } from '../../theme/tokens';
+import { useTheme } from '../../theme';
 import type { SocialProofTestimonial } from '../../types/socialProof';
 
 export function TestimonialCard({ testimonial }: { testimonial: SocialProofTestimonial }) {
   const { t } = useTranslation('onboarding');
+  const { theme } = useTheme();
   const name = t(`socialProof.testimonials.${testimonial.id}.name`);
   const quote = t(`socialProof.testimonials.${testimonial.id}.quote`);
   const highlight = t(`socialProof.testimonials.${testimonial.id}.highlight`);
@@ -23,12 +25,12 @@ export function TestimonialCard({ testimonial }: { testimonial: SocialProofTesti
           size={38}
         />
         <View style={{ flex: 1 }}>
-          <Text style={{ fontFamily: fonts.uiBold, fontSize: 13.5, color: colors.text }}>{name}</Text>
+          <Text style={{ fontFamily: theme.fonts.uiBold, fontSize: 13.5, color: theme.colors.textPrimary }}>{name}</Text>
           <Text
             style={{
-              fontFamily: fonts.ui,
+              fontFamily: theme.fonts.ui,
               fontSize: 11,
-              color: colors.mute,
+              color: theme.colors.textMuted,
               marginTop: 1,
             }}
             numberOfLines={1}
@@ -42,10 +44,10 @@ export function TestimonialCard({ testimonial }: { testimonial: SocialProofTesti
       <Text
         numberOfLines={2}
         style={{
-          fontFamily: fonts.ui,
+          fontFamily: theme.fonts.ui,
           fontSize: 12.5,
           lineHeight: 17,
-          color: colors.textSecondary,
+          color: theme.colors.textSecondary,
           marginTop: spacing[2],
         }}
       >
@@ -55,9 +57,9 @@ export function TestimonialCard({ testimonial }: { testimonial: SocialProofTesti
       <Text
         numberOfLines={1}
         style={{
-          fontFamily: fonts.uiSemi,
+          fontFamily: theme.fonts.uiSemi,
           fontSize: 12,
-          color: colors.accentHi,
+          color: theme.colors.primaryEmphasis,
           marginTop: spacing[1.5],
         }}
       >
@@ -69,6 +71,7 @@ export function TestimonialCard({ testimonial }: { testimonial: SocialProofTesti
 
 function RatingStars({ rating }: { rating: number }) {
   const { t } = useTranslation('onboarding');
+  const { theme } = useTheme();
   return (
     <View
       accessible
@@ -76,7 +79,7 @@ function RatingStars({ rating }: { rating: number }) {
       style={{ flexDirection: 'row', gap: 2 }}
     >
       {Array.from({ length: 5 }).map((_, i) => (
-        <Icon key={i} name="star" size={13} color={i < rating ? colors.accentHi : colors.border} />
+        <Icon key={i} name="star" size={13} color={i < rating ? theme.colors.primaryEmphasis : theme.colors.border} />
       ))}
     </View>
   );

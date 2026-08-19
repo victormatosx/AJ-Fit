@@ -23,7 +23,8 @@ import {
   formatTotpSecret,
   type MfaTotpIssue,
 } from '../lib/mfaTotp';
-import { colors, fonts, radii, sizes, spacing, typography } from '../theme/tokens';
+import { radii, sizes, spacing, typography } from '../theme/tokens';
+import { useTheme, type AppTheme } from '../theme';
 import { useScreenFocusEffect } from '../state/ScreenActivity';
 
 export function TotpEnrollmentScreen({
@@ -34,6 +35,9 @@ export function TotpEnrollmentScreen({
   onCompleted: () => void;
 }) {
   const { t } = useTranslation('settings');
+  const { theme } = useTheme();
+  const colors = theme.colors;
+  const styles = createStyles(theme);
   const enrollment = useTotpEnrollment();
   const [passwordVisible, setPasswordVisible] = useState(false);
 
@@ -141,6 +145,9 @@ function ReauthenticationStep({
   onSubmit: (provider: ReauthenticationProvider) => void;
 }) {
   const { t } = useTranslation('settings');
+  const { theme } = useTheme();
+  const colors = theme.colors;
+  const styles = createStyles(theme);
   return (
     <>
       <View style={styles.heroCard}>
@@ -177,6 +184,9 @@ function AuthenticatorSetupStep({
   enrollment: ReturnType<typeof useTotpEnrollment>;
 }) {
   const { t } = useTranslation('settings');
+  const { theme } = useTheme();
+  const colors = theme.colors;
+  const styles = createStyles(theme);
   const draft = enrollment.draft;
   if (!draft) return null;
 
@@ -277,6 +287,9 @@ function AuthenticatorSetupStep({
 
 function SuccessState({ onCompleted }: { onCompleted: () => void }) {
   const { t } = useTranslation('settings');
+  const { theme } = useTheme();
+  const colors = theme.colors;
+  const styles = createStyles(theme);
   return (
     <View style={{ flex: 1, justifyContent: 'center' }}>
       <View style={styles.successIcon}>
@@ -297,6 +310,9 @@ function SuccessState({ onCompleted }: { onCompleted: () => void }) {
 
 function UnavailableState() {
   const { t } = useTranslation('settings');
+  const { theme } = useTheme();
+  const colors = theme.colors;
+  const styles = createStyles(theme);
   return (
     <View style={styles.heroCard}>
       <Icon name="alert-triangle" size={22} color={colors.warning} />
@@ -314,6 +330,9 @@ function UnavailableState() {
 
 function ErrorFeedback({ issue }: { issue: MfaTotpIssue }) {
   const { t } = useTranslation('settings');
+  const { theme } = useTheme();
+  const colors = theme.colors;
+  const styles = createStyles(theme);
   return (
     <View accessibilityRole="alert" style={styles.feedback}>
       <Icon name="alert-triangle" size={17} color={colors.dangerText} />
@@ -324,7 +343,9 @@ function ErrorFeedback({ issue }: { issue: MfaTotpIssue }) {
   );
 }
 
-const styles = {
+function createStyles(theme: AppTheme) {
+  const colors = theme.colors;
+  return {
   content: {
     flexGrow: 1,
     width: '100%' as const,
@@ -374,7 +395,7 @@ const styles = {
   },
   secretText: {
     color: colors.text,
-    fontFamily: fonts.monoBold,
+    fontFamily: theme.fonts.monoBold,
     fontSize: 16,
     lineHeight: 25,
     letterSpacing: 1,
@@ -397,7 +418,7 @@ const styles = {
     borderColor: colors.borderStrong,
     backgroundColor: colors.surfaceRaised,
     color: colors.text,
-    fontFamily: fonts.monoBold,
+    fontFamily: theme.fonts.monoBold,
     fontSize: 24,
     letterSpacing: 7,
     textAlign: 'center' as const,
@@ -407,8 +428,8 @@ const styles = {
     padding: spacing[3.5],
     borderRadius: radii.md,
     borderWidth: 1,
-    borderColor: 'rgba(240,86,63,0.35)',
-    backgroundColor: 'rgba(240,86,63,0.10)',
+    borderColor: colors.feedbackDangerBorder,
+    backgroundColor: colors.feedbackDangerBackground,
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     gap: spacing[2.5],
@@ -426,13 +447,14 @@ const styles = {
     alignSelf: 'center' as const,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
-    backgroundColor: 'rgba(34,197,94,0.10)',
+    backgroundColor: colors.feedbackSuccessBackground,
     borderWidth: 1,
-    borderColor: 'rgba(34,197,94,0.35)',
+    borderColor: colors.feedbackSuccessBorder,
   },
   successTitle: {
     color: colors.text,
     textAlign: 'center' as const,
     marginTop: spacing[5],
   },
-};
+  };
+}

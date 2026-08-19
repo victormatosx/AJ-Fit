@@ -13,7 +13,8 @@ import { useAuth } from '../state/AuthContext';
 import { createSupportTicket } from '../services/supportTickets';
 import { validateSupportTicket } from '../validators/support';
 import type { FeedbackCategory, SupportTicketType } from '../types/support';
-import { colors, fonts, radii, spacing } from '../theme/tokens';
+import { radii, spacing } from '../theme/tokens';
+import { useTheme } from '../theme';
 import { logError } from '../lib/logError';
 import { useScreenFocusEffect } from '../state/ScreenActivity';
 
@@ -21,6 +22,7 @@ const FEEDBACK_CATEGORIES: FeedbackCategory[] = ['SUGGESTION', 'IDEA', 'COMPLIME
 
 export function SupportFormScreen({ type, initialSubject = '', onBack, onSuccess }: { type: SupportTicketType; initialSubject?: string; onBack: () => void; onSuccess: () => void }) {
   const { t } = useTranslation('support');
+  const { theme } = useTheme();
   const { user, profile } = useAuth();
   const [subject, setSubject] = useState(initialSubject);
   const [message, setMessage] = useState('');
@@ -90,7 +92,7 @@ export function SupportFormScreen({ type, initialSubject = '', onBack, onSuccess
                 {feedback ? t('feedback.heroTitle') : bug ? t('bug.heroTitle') : t('support.title')}
               </Display>
               {intro && (
-                <Text style={{ color: colors.textSecondary, fontFamily: fonts.ui, fontSize: 14, lineHeight: 21, marginTop: spacing[3] }}>
+                <Text style={{ color: theme.colors.textSecondary, fontFamily: theme.fonts.ui, fontSize: 14, lineHeight: 21, marginTop: spacing[3] }}>
                   {intro}
                 </Text>
               )}
@@ -127,7 +129,7 @@ export function SupportFormScreen({ type, initialSubject = '', onBack, onSuccess
             <View style={{ marginBottom: spacing[5] }}>
               {bug && (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing[2], marginBottom: spacing[2.5] }}>
-                  <Text style={{ fontFamily: fonts.monoBold, fontSize: 10, letterSpacing: 2, color: colors.accentHi }}>03</Text>
+                  <Text style={{ fontFamily: theme.fonts.monoBold, fontSize: 10, letterSpacing: 2, color: theme.colors.primaryEmphasis }}>03</Text>
                   <Slash>{t('form.attachment')}</Slash>
                 </View>
               )}
@@ -135,13 +137,13 @@ export function SupportFormScreen({ type, initialSubject = '', onBack, onSuccess
             </View>
 
             {error && (
-              <Text accessibilityRole="alert" style={{ color: '#ff8d8d', fontFamily: fonts.ui, fontSize: 13, marginBottom: spacing[3] }}>
+              <Text accessibilityRole="alert" style={{ color: theme.colors.formErrorText, fontFamily: theme.fonts.ui, fontSize: 13, marginBottom: spacing[3] }}>
                 {error}
               </Text>
             )}
 
             <CtaButton onPress={submit} disabled={!validation.subjectValid || !validation.messageValid || submitting || !user || !profile}>
-              {submitting ? <ActivityIndicator color="#fff" /> : <CtaText>{sendLabel}</CtaText>}
+              {submitting ? <ActivityIndicator color={theme.colors.primaryForeground} /> : <CtaText>{sendLabel}</CtaText>}
             </CtaButton>
           </ScrollView>
         </KeyboardAvoidingView>
@@ -152,11 +154,12 @@ export function SupportFormScreen({ type, initialSubject = '', onBack, onSuccess
 
 function Field({ label, index, multiline, ...props }: { label: string; index?: number; value: string; onChangeText: (v: string) => void; placeholder: string; multiline?: boolean }) {
   const [focused, setFocused] = useState(false);
+  const { theme } = useTheme();
   return (
     <View style={{ marginBottom: spacing[5] }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing[2] }}>
         {index != null && (
-          <Text style={{ fontFamily: fonts.monoBold, fontSize: 10, letterSpacing: 2, color: colors.accentHi }}>
+          <Text style={{ fontFamily: theme.fonts.monoBold, fontSize: 10, letterSpacing: 2, color: theme.colors.primaryEmphasis }}>
             {String(index).padStart(2, '0')}
           </Text>
         )}
@@ -168,18 +171,18 @@ function Field({ label, index, multiline, ...props }: { label: string; index?: n
         onBlur={() => setFocused(false)}
         multiline={multiline}
         textAlignVertical={multiline ? 'top' : 'center'}
-        placeholderTextColor={colors.faint}
+        placeholderTextColor={theme.colors.textFaint}
         style={{
           marginTop: spacing[2.5],
           minHeight: multiline ? 150 : 52,
           borderRadius: radii.lg,
           borderWidth: 1,
-          borderColor: focused ? colors.focus : colors.cardBorder,
-          backgroundColor: colors.cardBg,
+          borderColor: focused ? theme.colors.focus : theme.colors.cardBorder,
+          backgroundColor: theme.colors.cardBackground,
           paddingHorizontal: spacing[4],
           paddingVertical: multiline ? spacing[3.5] : 0,
-          color: colors.text,
-          fontFamily: fonts.uiMed,
+          color: theme.colors.textPrimary,
+          fontFamily: theme.fonts.uiMed,
           fontSize: 14,
           lineHeight: 20,
         }}

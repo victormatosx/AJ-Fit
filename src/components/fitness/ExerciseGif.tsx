@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleProp, ViewStyle, Animated, Image, ImageStyle, StyleSheet } from 'react-native';
 import { useVideoPlayer, VideoView } from 'expo-video';
-import { colors, fonts } from '../../theme/tokens';
+import { useTheme } from '../../theme';
 
 const DB_BASE = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises';
 
@@ -31,6 +31,7 @@ type Props = {
  * (start ↔ end), or a labeled placeholder on load error or missing id.
  */
 export function ExerciseGif({ id, name, height, aspectRatio, radius = 16, style }: Props) {
+  const { theme } = useTheme();
   const [failed, setFailed] = useState(false);
   const opacity = useRef(new Animated.Value(0)).current;
   const showingSecond = useRef(false);
@@ -104,10 +105,10 @@ export function ExerciseGif({ id, name, height, aspectRatio, radius = 16, style 
       <View style={[wrapper, { alignItems: 'center', justifyContent: 'center' }]}>
         <Text
           style={{
-            fontFamily: fonts.mono,
+            fontFamily: theme.fonts.mono,
             fontSize: 10.5,
             letterSpacing: 1.5,
-            color: 'rgba(255,255,255,0.4)',
+            color: theme.colors.iconMuted,
             textAlign: 'center',
             paddingHorizontal: 18,
           }}
@@ -139,7 +140,7 @@ export function ExerciseGif({ id, name, height, aspectRatio, radius = 16, style 
           left: 0,
           right: 0,
           bottom: 0,
-          backgroundColor: colors.bg,
+          backgroundColor: theme.colors.background,
         }}
       />
       <Image

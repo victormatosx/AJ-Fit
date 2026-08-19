@@ -177,3 +177,28 @@ export function filterProgressDays(
   }
   return narrowed;
 }
+
+/**
+ * The photos of `days`, in the exact order the grid paints them.
+ *
+ * The full-screen viewer pages through this sequence, so it has to agree with
+ * what the user just tapped on: day by day, poses in `POSE_SLOTS` order, then
+ * that day's unclassified photos — the same order `PhotoVaultDayRow` renders.
+ *
+ * Takes the ALREADY-FILTERED days, so an active pose filter narrows the swipe
+ * sequence for free and `all` spans the whole gallery. Pure projection over
+ * metadata already in memory: no query, download or decrypt.
+ */
+export function flattenProgressDayPhotos(days: ProgressDay[]): GalleryPhoto[] {
+  const ordered: GalleryPhoto[] = [];
+  for (const day of days) {
+    for (const pose of POSE_SLOTS) {
+      const photo = day[pose];
+      if (photo) ordered.push(photo);
+    }
+    // Empty on every filtered day (`filterProgressDays` drops them), so this
+    // only contributes under `all`.
+    ordered.push(...day.unclassified);
+  }
+  return ordered;
+}

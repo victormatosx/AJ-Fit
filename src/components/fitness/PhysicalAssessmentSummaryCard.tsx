@@ -4,7 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
 import { Icon } from '../ui/Icon';
 import { MonoLabel } from '../ui/Display';
-import { colors, fonts } from '../../theme/tokens';
+import { useTheme } from '../../theme';
 import { useUnits } from '../../state/UnitsContext';
 import {
   formatWeightFromKg,
@@ -12,15 +12,16 @@ import {
 } from '../../units/weightConversions';
 
 function Metric({ label, value, unit }: { label: string; value: string; unit: string }) {
+  const { theme } = useTheme();
   return (
     <View style={{ width: '48%', marginBottom: 16 }}>
       <MonoLabel style={{ marginBottom: 4 }}>{label}</MonoLabel>
       <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
         <Text
           style={{
-            fontFamily: fonts.display,
+            fontFamily: theme.fonts.display,
             fontSize: 28,
-            color: '#fff',
+            color: theme.colors.textPrimary,
             transform: [{ skewX: '-8deg' }],
           }}
         >
@@ -45,12 +46,13 @@ export function PhysicalAssessmentSummaryCard({
   bmi: number | null;
   lastDateLabel: string;
 }) {
+  const { theme } = useTheme();
   const { t } = useTranslation('assessment');
   const { resolvedUnits } = useUnits();
   const massUnit = weightUnit(resolvedUnits);
   return (
     <LinearGradient
-      colors={['rgba(11,112,249,0.24)', 'rgba(11,112,249,0.04)']}
+      colors={theme.gradients.accentWash}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={{
@@ -58,7 +60,7 @@ export function PhysicalAssessmentSummaryCard({
         borderRadius: 18,
         borderBottomRightRadius: 0,
         borderWidth: 1,
-        borderColor: 'rgba(11,112,249,0.4)',
+        borderColor: theme.colors.primaryBorderMuted,
       }}
     >
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
@@ -90,10 +92,10 @@ export function PhysicalAssessmentSummaryCard({
           gap: 8,
           paddingTop: 14,
           borderTopWidth: 1,
-          borderTopColor: 'rgba(255,255,255,0.08)',
+          borderTopColor: theme.colors.divider,
         }}
       >
-        <Icon name="calendar" size={13} color={colors.mute} />
+        <Icon name="calendar" size={13} color={theme.colors.textMuted} />
         <MonoLabel>
           {t('summary.lastAssessmentLabel', { date: lastDateLabel }).toUpperCase()}
         </MonoLabel>

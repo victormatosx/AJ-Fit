@@ -3,7 +3,7 @@ import { View, Text, Pressable, Animated } from 'react-native';
 import { Card } from './Card';
 import { Icon, IconName } from './Icon';
 import { MonoLabel } from './Display';
-import { colors, fonts } from '../../theme/tokens';
+import { useTheme } from '../../theme';
 
 export function FoldableSection({
   icon,
@@ -18,6 +18,7 @@ export function FoldableSection({
   defaultExpanded?: boolean;
   children: React.ReactNode;
 }) {
+  const { theme } = useTheme();
   const [open, setOpen] = useState(defaultExpanded);
   const chevronRot = useRef(new Animated.Value(defaultExpanded ? 1 : 0)).current;
 
@@ -38,7 +39,7 @@ export function FoldableSection({
           alignItems: 'center',
           gap: 12,
           padding: 16,
-          backgroundColor: pressed ? 'rgba(255,255,255,0.03)' : 'transparent',
+          backgroundColor: pressed ? theme.colors.surface : 'transparent',
         })}
       >
         {icon && (
@@ -47,16 +48,16 @@ export function FoldableSection({
               width: 34,
               height: 34,
               borderRadius: 10,
-              backgroundColor: 'rgba(11,112,249,0.14)',
+              backgroundColor: theme.colors.primarySurface,
               alignItems: 'center',
               justifyContent: 'center',
             }}
           >
-            <Icon name={icon} size={16} color={colors.accentHi} />
+            <Icon name={icon} size={16} color={theme.colors.primaryEmphasis} />
           </View>
         )}
         <View style={{ flex: 1 }}>
-          <Text style={{ fontFamily: fonts.uiBold, fontSize: 14.5, color: '#fff' }}>{title}</Text>
+          <Text style={{ fontFamily: theme.fonts.uiBold, fontSize: 14.5, color: theme.colors.textPrimary }}>{title}</Text>
           {summary ? <MonoLabel style={{ marginTop: 3 }}>{summary}</MonoLabel> : null}
         </View>
         <Animated.View
@@ -71,7 +72,7 @@ export function FoldableSection({
             ],
           }}
         >
-          <Icon name="chevron-right" size={15} color="rgba(255,255,255,0.4)" />
+          <Icon name="chevron-right" size={15} color={theme.colors.iconMuted} />
         </Animated.View>
       </Pressable>
       {open && <View style={{ paddingHorizontal: 16, paddingBottom: 16 }}>{children}</View>}

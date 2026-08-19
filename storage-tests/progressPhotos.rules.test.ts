@@ -140,8 +140,32 @@ afterAll(async () => {
   await testEnvFirestore.cleanup();
 });
 
+/**
+ * Deletes every object in the bucket, including nested ones.
+ *
+ * `testEnv.clearStorage()` cannot be used here: it calls `listAll()` once on
+ * the bucket root and deletes only the returned `items`, discarding the
+ * `prefixes`. Every object in this suite lives under `users/{uid}/…`, so that
+ * helper clears nothing and objects leak from one case into the next.
+ *
+ * That leak was invisible for as long as every case following an upload
+ * asserted a DENIAL — a leftover object denies the next create too (via
+ * `resource == null`), so those cases passed for the wrong reason. Any case
+ * asserting that an upload SUCCEEDS exposes it immediately.
+ */
+async function clearStorageRecursively() {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    const removeUnder = async (folder: ReturnType<Storage['ref']>): Promise<void> => {
+      const { items, prefixes } = await folder.listAll();
+      await Promise.all(items.map((item) => item.delete()));
+      await Promise.all(prefixes.map(removeUnder));
+    };
+    await removeUnder(ctx.storage().ref());
+  });
+}
+
 beforeEach(async () => {
-  await testEnv.clearStorage();
+  await clearStorageRecursively();
   await testEnvFirestore.clearFirestore();
   // Every pre-existing test in this file exercises Storage schema/
   // ownership, not billing — Premium is a given precondition for those, not
@@ -358,52 +382,63 @@ describe('progressPhotos storage — path confinement', () => {
   });
 });
 
-// ── progressPhotos: FASE 7 server-side Premium authorization ──────────────
+// ── progressPhotos: authorization is ownership, never subscription ─────────
 //
-// ADD_PROGRESS_PHOTO/DELETE_PROGRESS_PHOTO are Premium capabilities (Fase
-// 3). `hasServerPremium(userId)` now gates create/delete in addition to
-// ownership — never instead of it. READ stays free for everyone owning the
-// object (asserted in "progressPhotos storage — owner" above, still true
-// with the default Premium seed).
+// The whole app sits behind the paywall, so an authenticated user reaching
+// these paths is already a subscriber and the per-action check the FASE 7
+// rules carried (`hasServerPremium`) was removed from storage.rules.
+//
+// These cases are the regression guard for that decision: the subscription
+// mirror must have NO effect here. They fail the moment someone reintroduces
+// a subscription read into this path — which would silently break every
+// account whose mirror is stale or unwritten.
 
-describe('progressPhotos storage — FASE 7: Free is denied the Premium mutation', () => {
-  it('denies a Free owner uploading a new encrypted photo', async () => {
+describe('progressPhotos storage — the subscription mirror never gates these paths', () => {
+  it('allows an owner with an explicitly inactive mirror to upload a photo', async () => {
     await seedFree(UID);
-    await assertFails(put(ownerStorage(), PHOTO_PATH, ciphertext(), photoMetadata()));
+    await assertSucceeds(put(ownerStorage(), PHOTO_PATH, ciphertext(), photoMetadata()));
   });
 
-  it('denies a Free owner uploading a thumbnail', async () => {
+  it('allows an owner with an explicitly inactive mirror to upload a thumbnail', async () => {
     await seedFree(UID);
-    await assertFails(put(ownerStorage(), THUMBNAIL_PATH, ciphertext(120_000), thumbnailMetadata()));
+    await assertSucceeds(
+      put(ownerStorage(), THUMBNAIL_PATH, ciphertext(120_000), thumbnailMetadata()),
+    );
   });
 
-  it('denies a Free owner deleting their own existing encrypted photo', async () => {
+  it('allows an owner with an explicitly inactive mirror to delete their photo', async () => {
     await seedPhoto();
     await seedFree(UID);
-    await assertFails(ownerStorage().ref(PHOTO_PATH).delete());
+    await assertSucceeds(ownerStorage().ref(PHOTO_PATH).delete());
   });
 
-  it('fails closed when users/{uid} has no subscription field at all', async () => {
+  /**
+   * The exact production state that motivated the removal: the RevenueCat
+   * webhook had never been registered, so no `users/{uid}` document ever
+   * carried a subscription mirror at all. Under the old rules this denied
+   * every upload; ownership alone must not care.
+   */
+  it('allows the upload when users/{uid} has no subscription field at all', async () => {
     await testEnvFirestore.withSecurityRulesDisabled(async (ctx) => {
       await ctx.firestore().doc(`users/${UID}`).delete();
     });
-    await assertFails(put(ownerStorage(), PHOTO_PATH, ciphertext(), photoMetadata()));
+    await assertSucceeds(put(ownerStorage(), PHOTO_PATH, ciphertext(), photoMetadata()));
   });
 
-  it('still allows a Free owner to READ their existing encrypted photo (history is never blocked)', async () => {
+  it('still allows an owner to READ their existing encrypted photo', async () => {
     await seedPhoto();
     await seedFree(UID);
     await assertSucceeds(ownerStorage().ref(PHOTO_PATH).getDownloadURL());
   });
 });
 
-describe('progressPhotos storage — FASE 7: Premium never overrides ownership', () => {
-  it("denies a Premium user uploading into someone else's path", async () => {
-    // OTHER_UID is Premium (default seed) but does not own UID's namespace.
+describe('progressPhotos storage — ownership is the real boundary', () => {
+  it("denies a subscriber uploading into someone else's path", async () => {
+    // OTHER_UID has an active mirror but does not own UID's namespace.
     await assertFails(put(otherStorage(), PHOTO_PATH, ciphertext(), photoMetadata()));
   });
 
-  it("denies a Premium user deleting someone else's encrypted photo", async () => {
+  it("denies a subscriber deleting someone else's encrypted photo", async () => {
     await seedPhoto();
     await assertFails(otherStorage().ref(PHOTO_PATH).delete());
   });

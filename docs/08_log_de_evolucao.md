@@ -3332,3 +3332,101 @@ Assinatura:
 Claude — 2026-08-16 — Correção do corte de glifos Anton no iOS (fix centralizado).
 
 ---
+
+Data: 2026-08-18
+Responsável: Claude — Agente Frontend
+Categoria: [DECISÃO] [CORREÇÃO]
+
+Descrição:
+Feature Tema Claro/Escuro (branch `feature/light-dark-theme`), Fase 9 —
+fronteiras nativas. Fases 1–8 (runtime React, Settings, persistência,
+StatusBar, DatePicker) já estavam prontas e não foram alteradas.
+
+Decisões técnicas:
+
+1. `userInterfaceStyle`: "light" → "dark". Esse campo trava, em ambas as
+   plataformas, a aparência de qualquer superfície nativa que a Fase 1–8 não
+   estiliza explicitamente (Alert nativo, teclado, e — no Android, apenas
+   quando `expo-system-ui` está registrado — o `AppCompatDelegate` DayNight
+   que resolve os recursos `values-night/`). Como Dark é o default e a
+   maioria dos usuários parte dele, fixar em "dark" reduz a divergência de
+   chrome nativo para a baseline; usuários em Light aceitam essa mesma
+   divergência como limitação conhecida — não existe "automatic" possível
+   sem violar a regra de nunca seguir o tema do aparelho.
+
+2. Instaladas três dependências nativas via `npx expo install` (versões
+   resolvidas automaticamente para o SDK 56 instalado, nenhuma outra
+   dependência tocada): `expo-splash-screen` (~56.0.14), `expo-system-ui`
+   (~56.0.5), `expo-navigation-bar` (~56.0.3).
+
+3. Splash nativo (pré-JS) estava sem configuração alguma em app.json — o
+   fallback do template deixava fundo branco (`#FFFFFF`, confirmado em
+   `android/app/src/main/res/values/colors.xml` e no
+   `SplashScreen.storyboard` via `systemBackgroundColor`), diferente do
+   splash customizado em JS (`SplashScreen.tsx`, sempre preto). Isso já
+   causava um flash branco→preto em todo cold start, independente de tema.
+   Corrigido com plugin `expo-splash-screen` fixo em preto
+   (`backgroundColor: "#000000"`, mesma logo do app), sem a chave `dark`
+   (que o plugin usa para seguir a aparência do sistema — omitida de
+   propósito). `App.tsx` agora chama
+   `NativeSplashScreen.preventAutoHideAsync()` no escopo do módulo e
+   `hideAsync()` no primeiro efeito de `AppContent`, para o splash nativo só
+   sumir depois que a árvore JS já pintou o mesmo preto.
+
+4. Criado `src/theme/NativeThemeSync.tsx` (montado uma vez em `App.tsx`, ao
+   lado do `<StatusBar>`), único ponto que chama `expo-system-ui` e
+   `expo-navigation-bar`. A cada mudança de `theme` (após hidratação) ele
+   chama `SystemUI.setBackgroundColorAsync` (ambas as plataformas) e, só no
+   Android, `NavigationBar.setStyle`. O mapeamento tema→native é puro e
+   testável em `src/theme/nativeUiMapping.ts` — reaproveita exatamente a
+   convenção de `theme.statusBar.style` ('light'|'dark') em vez de criar uma
+   segunda tabela de cores.
+
+5. `expo-navigation-bar` nesta versão do SDK não tem mais
+   `setBackgroundColorAsync` (API antiga, pré edge-to-edge, removida) — só
+   `setStyle` (cor do ícone) e `setHidden`. Confirmado no autolinking
+   (`ExpoModulesPackageList.kt` já registra `EdgeToEdgePackage`) que o
+   projeto já roda edge-to-edge por padrão nesse SDK; não há mais opt-out via
+   app.json. O plugin do navigation bar tem `enforceContrast: true` por
+   padrão, e a própria documentação do pacote afirma que `setStyle` só tem
+   efeito com `enforceContrast: false` — por isso o plugin foi configurado
+   com `enforceContrast: false` (documentado como troca deliberada: perdemos
+   o scrim de contraste automático do Android, e passamos a depender do
+   `style` correto vindo do nosso próprio tema em todo momento).
+
+6. Adicionado `"backgroundColor": "#020010"` no topo do app.json (mesmo tom
+   de `colors.background` do Dark) — usado pelo plugin `expo-system-ui` para
+   gravar o background inicial estático do root nativo (Android
+   `windowBackground` / iOS `RCTRootViewBackgroundColor`), evitando qualquer
+   flash antes do primeiro `SystemUI.setBackgroundColorAsync` do runtime.
+
+Testes automatizados novos: `src/theme/__tests__/nativeUiMapping.test.ts`
+(mapeamento puro tema→native, ausência de leitura de aparência do sistema,
+NativeThemeSync montado uma única vez, app.json travado em Dark/sem
+"automatic"). Ajustado `sharedComponentsTheme.test.ts` (linha que travava
+`userInterfaceStyle: "light"`, decisão explicitamente adiada para esta
+fase) para o novo valor "dark".
+
+Validação automática:
+`npm run typecheck` ok. `npm test` (vitest) 2807 testes aprovados.
+`npm run test:rules` 242 testes aprovados (Firestore + Storage emulators,
+nenhuma regra alterada). `npm run i18n:check` 571 testes aprovados.
+`npm run i18n:audit` 0 problemas bloqueantes (9 hardcodes pré-existentes no
+Paywall, fora de escopo). `npx expo config --type prebuild` resolve sem
+erro (confirma que a cadeia de plugins — splash/system-ui/navigation-bar —
+é válida). `git diff --check` limpo.
+
+Pendência (real, não pode ser resolvida por este agente):
+QA físico completo (iOS e Android, cold start, troca de tema em runtime,
+background/foreground, Alert nativo, DatePicker, todas as telas críticas)
+não foi executado — este ambiente não tem simulador/dispositivo físico.
+`npx expo prebuild` não foi rodado (regeneraria `android/`/`ios/` locais,
+que não são versionados, para consumir os plugins novos) para não sobrescrever
+o workspace nativo local sem confirmação; é pré-requisito para o QA físico e
+para qualquer build de release — OTA isolado não é suficiente, exige rebuild
+nativo.
+
+Assinatura:
+Claude — 2026-08-18 — Tema Claro/Escuro, Fase 9 (fronteiras nativas).
+
+---

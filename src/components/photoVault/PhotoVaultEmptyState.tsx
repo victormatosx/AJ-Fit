@@ -5,18 +5,20 @@ import { useTranslation } from 'react-i18next';
 import { CtaButton } from '../ui/CtaButton';
 import { Icon } from '../ui/Icon';
 import { Display, MonoLabel } from '../ui/Display';
-import { colors, fonts, sizes, spacing } from '../../theme/tokens';
+import { sizes, spacing } from '../../theme/tokens';
+import { useTheme } from '../../theme';
 
 const GUTTER = sizes.screenGutter;
 
 export function PhotoVaultEmptyState({ onAdd }: { onAdd: () => void }) {
   const { t } = useTranslation('home');
+  const { theme } = useTheme();
 
   return (
     <View style={{ paddingHorizontal: GUTTER, paddingTop: spacing[8] }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing[2.5] }}>
-        <Icon name="camera" size={16} color={colors.accentHi} />
-        <MonoLabel color={colors.faint}>
+        <Icon name="camera" size={16} color={theme.colors.primaryEmphasis} />
+        <MonoLabel color={theme.colors.textFaint}>
           {t('progress.photos.empty.badge').toUpperCase()}
         </MonoLabel>
       </View>
@@ -27,8 +29,8 @@ export function PhotoVaultEmptyState({ onAdd }: { onAdd: () => void }) {
 
       <Text
         style={{
-          color: colors.mute,
-          fontFamily: fonts.ui,
+          color: theme.colors.textMuted,
+          fontFamily: theme.fonts.ui,
           fontSize: 14,
           lineHeight: 21,
           marginTop: spacing[2.5],

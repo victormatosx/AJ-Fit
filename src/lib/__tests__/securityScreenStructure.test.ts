@@ -110,7 +110,9 @@ describe('SecurityScreen structure', () => {
   it('prepares normal, pressed and disabled states in the shared item', () => {
     expect(settingsSectionSource).toContain('disabled?: boolean;');
     expect(settingsSectionSource).toContain('description?: string;');
-    expect(settingsSectionSource).toContain('backgroundColor: pressed && interactive ? colors.surfacePressed');
+    expect(settingsSectionSource).toContain(
+      'backgroundColor: pressed && interactive ? theme.colors.surfacePressed',
+    );
     expect(settingsSectionSource).toContain('opacity: disabled ? opacity.disabled : 1');
     expect(settingsSectionSource).toContain('accessibilityState={onPress ? { disabled } : undefined}');
   });

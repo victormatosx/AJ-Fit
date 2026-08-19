@@ -1,6 +1,6 @@
 import React from 'react';
-import { View, StyleProp, ViewStyle, StyleSheet } from 'react-native';
-import { colors } from '../../theme/tokens';
+import { View, StyleProp, ViewStyle } from 'react-native';
+import { useTheme } from '../../theme';
 
 export function ScreenBg({
   children,
@@ -9,9 +9,16 @@ export function ScreenBg({
   children: React.ReactNode;
   style?: StyleProp<ViewStyle>;
 }) {
-  return <View style={[styles.bg, style]}>{children}</View>;
-}
+  const { theme } = useTheme();
 
-const styles = StyleSheet.create({
-  bg: { flex: 1, backgroundColor: colors.bg, overflow: 'hidden' },
-});
+  return (
+    <View
+      style={[
+        { flex: 1, backgroundColor: theme.colors.background, overflow: 'hidden' },
+        style,
+      ]}
+    >
+      {children}
+    </View>
+  );
+}

@@ -6,7 +6,8 @@ import { useTranslation } from 'react-i18next';
 import { Icon } from '../ui/Icon';
 import { Display, MonoLabel } from '../ui/Display';
 import { CtaButton } from '../ui/CtaButton';
-import { colors, fonts, sizes, spacing } from '../../theme/tokens';
+import { sizes, spacing } from '../../theme/tokens';
+import { useTheme } from '../../theme';
 import { resolvePremiumActionCopy } from '../../lib/premiumCapabilityCopy';
 import type { PremiumUpgradeIntent } from '../../lib/premiumUpgradeIntent';
 import type { PremiumCapability } from '../../lib/premiumCapabilities';
@@ -44,6 +45,7 @@ export function PremiumRequiredSheet({
   onDismiss: () => void;
   onRequestUpgrade: () => void;
 }) {
+  const { theme } = useTheme();
   const { t } = useTranslation('common');
   // Keys are resolved dynamically per capability/intent (see
   // premiumCapabilityCopy.ts) — same escape hatch WorkoutScreen already uses
@@ -63,24 +65,28 @@ export function PremiumRequiredSheet({
         accessibilityRole="button"
         accessibilityLabel={t('premiumAction.cta.dismiss')}
         onPress={onDismiss}
-        style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'flex-end' }}
+        style={{
+          flex: 1,
+          backgroundColor: theme.colors.modalBackdrop,
+          justifyContent: 'flex-end',
+        }}
       >
         <Pressable
           accessibilityRole="none"
           onPress={(event) => event.stopPropagation()}
           style={{
-            backgroundColor: colors.bg2,
+            backgroundColor: theme.colors.backgroundSecondary,
             borderTopLeftRadius: 20,
             borderTopRightRadius: 20,
             borderTopWidth: 1,
-            borderColor: colors.borderStrong,
+            borderColor: theme.colors.borderStrong,
           }}
         >
           <SafeAreaView edges={['bottom']}>
             <View style={{ padding: sizes.screenGutter, paddingTop: spacing[6] }}>
               <View style={{ alignItems: 'center' }}>
                 <LinearGradient
-                  colors={['rgba(11,112,249,0.3)', 'rgba(11,112,249,0.08)']}
+                  colors={theme.gradients.sheetAccent}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                   style={{
@@ -88,15 +94,15 @@ export function PremiumRequiredSheet({
                     height: 52,
                     borderRadius: 16,
                     borderWidth: 1,
-                    borderColor: 'rgba(77,163,255,0.4)',
+                    borderColor: theme.colors.primaryBorder,
                     alignItems: 'center',
                     justifyContent: 'center',
                   }}
                 >
-                  <Icon name="lock" size={22} color={colors.accentHi} />
+                  <Icon name="lock" size={22} color={theme.colors.primaryEmphasis} />
                 </LinearGradient>
 
-                <MonoLabel color={colors.accentHi} style={{ marginTop: spacing[3] }}>
+                <MonoLabel color={theme.colors.primaryEmphasis} style={{ marginTop: spacing[3] }}>
                   {t('premiumAction.eyebrow').toUpperCase()}
                 </MonoLabel>
                 <Display
@@ -108,10 +114,10 @@ export function PremiumRequiredSheet({
                 <Text
                   style={{
                     marginTop: spacing[2.5],
-                    fontFamily: fonts.ui,
+                    fontFamily: theme.fonts.ui,
                     fontSize: 14,
                     lineHeight: 20,
-                    color: colors.mute,
+                    color: theme.colors.textMuted,
                     textAlign: 'center',
                   }}
                 >
@@ -133,7 +139,7 @@ export function PremiumRequiredSheet({
                   accessibilityLabel={t('premiumAction.cta.dismiss')}
                   style={{ alignItems: 'center', paddingVertical: spacing[2] }}
                 >
-                  <Text style={{ color: colors.mute, fontFamily: fonts.ui, fontSize: 13 }}>
+                  <Text style={{ color: theme.colors.textMuted, fontFamily: theme.fonts.ui, fontSize: 13 }}>
                     {t('premiumAction.cta.dismiss')}
                   </Text>
                 </Pressable>

@@ -28,35 +28,23 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    // FASE 7 (docs/13_assinaturas_e_billing.md §10/§11/§26): server-side
-    // authorization for Premium mutations. Reads the SAME field the client
-    // treats as "the authorization signal" (`entitlementActive` —
-    // types.ts's doc comment on `SubscriptionMirror.entitlementActive`),
-    // written exclusively by `applySubscriptionEventAtomically`
-    // (functions/src/billing/subscriptionSync.ts) via the Admin SDK, which
-    // bypasses these rules entirely — the client can never promote itself
-    // (see `subscription.size() == 0` on `create` and `subscription`'s
-    // absence from the allowed `update` key set below).
+    // Não existe checagem de assinatura por ação nestas regras.
     //
-    // Deliberately NOT `status == 'ACTIVE'`: per docs/13 §12 and Fase 6,
-    // `status` is a commercial signal, not an authorization one — a
-    // CANCELED-but-not-yet-expired or a BILLING_ISSUE/grace-period
-    // subscription can still have `entitlementActive: true`
-    // (`normalizeSubscription`'s doc comment, revenuecat.ts), and access
-    // must continue exactly as long as that stays true.
+    // O AJ Fit é inteiramente pago: o acesso ao app já é condicionado à
+    // mensalidade antes de qualquer tela funcional, então todo usuário
+    // autenticado que alcança estes documentos é, por definição, assinante.
+    // A antiga `hasServerPremium(userId)` (FASE 7) checava
+    // `users/{userId}.subscription.entitlementActive` no create/delete de
+    // progressPhotos e no create de assessments; virou redundante sob esse
+    // modelo de produto e foi removida — junto com a cópia equivalente em
+    // storage.rules.
     //
-    // Fail-closed by construction, not by a special case: `.get(..., false)`
-    // returns `false` for a missing `subscription` map, a `subscription` map
-    // without the field, or an explicit `false` — there is no code path here
-    // that defaults to `true`. `exists(...)` before `get(...)` avoids a rules
-    // evaluation error for a uid with no `users/{userId}` document (should
-    // never happen for a real authenticated write, but this function must
-    // never assume that).
-    function hasServerPremium(userId) {
-      return exists(/databases/$(database)/documents/users/$(userId))
-        && get(/databases/$(database)/documents/users/$(userId))
-             .data.subscription.get('entitlementActive', false) == true;
-    }
+    // O que protege dado continua intacto: `isOwner(userId)` em todas as
+    // operações, a imutabilidade dos snapshots (`allow update: if false`) e
+    // a proibição do cliente escrever `subscription` em si (`subscription.
+    // size() == 0` no create e a ausência de `subscription` do conjunto de
+    // chaves permitidas no update) — o espelho segue sendo exclusivamente
+    // do servidor, mesmo sem ninguém lendo `entitlementActive` aqui.
 
     // O painel autentica com Firebase Auth e o backend promove previamente o
     // documento do operador. Escritas do app nunca podem alterar metadata.role.
@@ -615,18 +603,13 @@ service cloud.firestore {
       // Avaliações físicas do usuário (guiadas ou importadas). Cada documento
       // é um snapshot imutável — nunca sobrescrever ou apagar (docs/15 §11).
       //
-      // FASE 7: CREATE_ASSESSMENT é uma capability Premium (Fase 3) —
-      // `hasServerPremium(userId)` é exigido ao lado de `isOwner(userId)`,
-      // nunca no lugar dele (Premium jamais substitui ownership). READ
-      // continua livre para Free (política das Fases 3–6: histórico
-      // continua do usuário mesmo sem assinatura ativa). UPDATE/DELETE
-      // permanecem `if false` para todos — a Fase 3 só exigiria proteção
-      // Premium aqui se essas ações existissem, e não existem.
+      // Autorização é ownership puro: o app inteiro é pago, então não há
+      // checagem de assinatura por ação aqui (ver o comentário no topo deste
+      // arquivo). UPDATE/DELETE permanecem `if false` para todos.
       match /assessments/{assessmentId} {
         allow read: if isOwner(userId);
 
         allow create: if isOwner(userId)
-          && hasServerPremium(userId)
           && assessmentCommonValid()
           && (guidedAssessmentValid() || importedAssessmentValid());
 
@@ -638,15 +621,12 @@ service cloud.firestore {
       // foto significa excluir o par (documento + objeto no Storage) e criar
       // um novo photoId, o que mantém a auditoria simples e sem ambiguidade.
       //
-      // FASE 7: ADD_PROGRESS_PHOTO/DELETE_PROGRESS_PHOTO são capabilities
-      // Premium (Fase 3). READ continua livre para Free — a galeria
-      // existente nunca fica bloqueada, só passa a exigir Premium para
-      // criar/excluir um registro, sempre em conjunto com `isOwner(userId)`.
+      // Autorização é ownership puro, pelo mesmo motivo das avaliações acima.
       match /progressPhotos/{photoId} {
         allow read: if isOwner(userId);
-        allow create: if isOwner(userId) && hasServerPremium(userId) && progressPhotoValid(userId, photoId);
+        allow create: if isOwner(userId) && progressPhotoValid(userId, photoId);
         allow update: if false;
-        allow delete: if isOwner(userId) && hasServerPremium(userId);
+        allow delete: if isOwner(userId);
       }
 
       // Material criptográfico do Photo Vault (wrappedVaultKey e versões).

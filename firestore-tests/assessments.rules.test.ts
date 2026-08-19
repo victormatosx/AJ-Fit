@@ -159,32 +159,42 @@ describe('assessments — immutability (unchanged by Fase 7)', () => {
   });
 });
 
-describe('assessments — FASE 7: Free is denied the Premium mutation', () => {
-  it('denies a Free owner creating a guided assessment', async () => {
+/**
+ * The whole app sits behind the paywall, so an authenticated user reaching
+ * these documents is already a subscriber and the per-action check the FASE 7
+ * rules carried (`hasServerPremium`) was removed from firestore.rules.
+ *
+ * These cases are the regression guard for that decision: the subscription
+ * mirror must have NO effect here. They fail the moment someone reintroduces
+ * a subscription read into this path — which would silently break every
+ * account whose mirror is stale or unwritten.
+ */
+describe('assessments — the subscription mirror never gates these documents', () => {
+  it('allows an owner with an explicitly inactive mirror to create a guided assessment', async () => {
     await seedFree(UID);
-    await assertFails(
+    await assertSucceeds(
       setDoc(doc(ownerDb(), 'users', UID, 'assessments', ASSESSMENT_ID), validGuided()),
     );
   });
 
-  it('denies a Free owner creating an imported assessment', async () => {
+  it('allows an owner with an explicitly inactive mirror to create an imported assessment', async () => {
     await seedFree(UID);
-    await assertFails(
+    await assertSucceeds(
       setDoc(doc(ownerDb(), 'users', UID, 'assessments', ASSESSMENT_ID), validImported()),
     );
   });
 
-  it('fails closed when users/{uid} has no subscription field at all', async () => {
+  it('allows the create when users/{uid} has no subscription field at all', async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       await ctx.firestore().doc(`users/${UID}`).delete();
       await ctx.firestore().doc(`users/${UID}`).set({ profile: { name: 'Alice', email: 'a@example.com' } });
     });
-    await assertFails(
+    await assertSucceeds(
       setDoc(doc(ownerDb(), 'users', UID, 'assessments', ASSESSMENT_ID), validImported()),
     );
   });
 
-  it("still allows a Free owner to READ their existing assessment history (history is never blocked)", async () => {
+  it('still allows an owner to READ their existing assessment history', async () => {
     await seedAssessment();
     await seedFree(UID);
     await assertSucceeds(getDoc(doc(ownerDb(), 'users', UID, 'assessments', ASSESSMENT_ID)));

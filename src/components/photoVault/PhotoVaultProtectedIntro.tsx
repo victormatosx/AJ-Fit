@@ -9,14 +9,8 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { Icon } from '../ui/Icon';
-import {
-  colors,
-  gradients,
-  radii,
-  shadows,
-  sizes,
-  spacing,
-} from '../../theme/tokens';
+import { radii, sizes, spacing } from '../../theme/tokens';
+import { useTheme, type AppTheme } from '../../theme';
 
 /**
  * A deliberately generic representation of protected content.
@@ -32,13 +26,15 @@ function ProtectedCard({
   emphasized?: boolean;
   style: StyleProp<ViewStyle>;
 }) {
+  const { theme } = useTheme();
+  const styles = createStyles(theme);
   return (
     <LinearGradient
-      colors={emphasized ? gradients.poster : gradients.glass}
+      colors={emphasized ? theme.gradients.poster : theme.gradients.glass}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={[
-        shadows.card,
+        theme.shadows.card,
         styles.card,
         emphasized && styles.cardEmphasized,
         style,
@@ -49,7 +45,7 @@ function ProtectedCard({
         <Icon
           name="camera"
           size={emphasized ? 25 : 21}
-          color={emphasized ? colors.accentHi : colors.faint}
+          color={emphasized ? theme.colors.primaryEmphasis : theme.colors.textFaint}
           stroke={1.4}
         />
       </View>
@@ -62,6 +58,8 @@ function ProtectedCard({
 
 export const PhotoVaultProtectedIntro = memo(
   function PhotoVaultProtectedIntro() {
+    const { theme } = useTheme();
+    const styles = createStyles(theme);
     const { width } = useWindowDimensions();
     const canvasWidth = Math.min(
       330,
@@ -128,7 +126,7 @@ export const PhotoVaultProtectedIntro = memo(
               },
             ]}
           >
-            <Icon name="lock" size={22} color={colors.text} stroke={1.8} />
+            <Icon name="lock" size={22} color={theme.colors.textPrimary} stroke={1.8} />
           </View>
         </View>
       </View>
@@ -136,7 +134,8 @@ export const PhotoVaultProtectedIntro = memo(
   },
 );
 
-const styles = StyleSheet.create({
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
   root: {
     flexGrow: 1,
     width: '100%',
@@ -150,13 +149,13 @@ const styles = StyleSheet.create({
     padding: spacing[3],
     borderRadius: radii.lg,
     borderWidth: sizes.hairline,
-    borderColor: colors.borderStrong,
-    backgroundColor: colors.bg2,
+    borderColor: theme.colors.borderStrong,
+    backgroundColor: theme.colors.backgroundSecondary,
   },
   cardEmphasized: {
     borderWidth: 1.5,
-    borderColor: colors.accentHi,
-    shadowColor: colors.accent,
+    borderColor: theme.colors.primaryEmphasis,
+    shadowColor: theme.colors.primary,
     shadowOpacity: 0.25,
     shadowRadius: 18,
     elevation: 9,
@@ -165,7 +164,7 @@ const styles = StyleSheet.create({
     width: '36%',
     height: 3,
     borderRadius: radii.pill,
-    backgroundColor: colors.faint,
+    backgroundColor: theme.colors.textFaint,
     opacity: 0.45,
   },
   genericFrame: {
@@ -175,14 +174,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: radii.md,
     borderWidth: sizes.hairline,
-    borderColor: colors.borderStrong,
-    backgroundColor: colors.overlay,
+    borderColor: theme.colors.borderStrong,
+    backgroundColor: theme.colors.overlay,
   },
   cardBottomLine: {
     width: '72%',
     height: 4,
     borderRadius: radii.pill,
-    backgroundColor: colors.textSecondary,
+    backgroundColor: theme.colors.textSecondary,
     opacity: 0.26,
   },
   cardBottomLineShort: {
@@ -190,7 +189,7 @@ const styles = StyleSheet.create({
     height: 4,
     marginTop: spacing[1.5],
     borderRadius: radii.pill,
-    backgroundColor: colors.textSecondary,
+    backgroundColor: theme.colors.textSecondary,
     opacity: 0.18,
   },
   cardScrim: {
@@ -199,7 +198,7 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     left: 0,
-    backgroundColor: colors.overlay,
+    backgroundColor: theme.colors.overlay,
     opacity: 0.2,
   },
   lockBadge: {
@@ -210,12 +209,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: radii.pill,
     borderWidth: 1.5,
-    borderColor: colors.accentHi,
-    backgroundColor: colors.bg2,
-    shadowColor: colors.accent,
+    borderColor: theme.colors.primaryEmphasis,
+    backgroundColor: theme.colors.backgroundSecondary,
+    shadowColor: theme.colors.primary,
     shadowOpacity: 0.3,
     shadowRadius: 16,
     elevation: 10,
     zIndex: 5,
   },
-});
+  });
+}

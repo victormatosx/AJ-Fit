@@ -5,7 +5,8 @@ import { useTranslation } from 'react-i18next';
 
 import { Icon } from '../ui/Icon';
 import { MonoLabel } from '../ui/Display';
-import { colors, fonts, sizes, spacing } from '../../theme/tokens';
+import { sizes, spacing } from '../../theme/tokens';
+import { useTheme } from '../../theme';
 import type {
   GalleryPhoto,
   GalleryThumbnailOwner,
@@ -62,6 +63,7 @@ function PhotoCell({
   label: string;
 }) {
   const { t } = useTranslation('home');
+  const { theme } = useTheme();
   const displayUri = photo.thumbnailUri ?? photo.previewUri;
   const canOpen = displayUri !== null && photo.uploadStatus === null;
   const uploading = photo.uploadStatus === 'uploading';
@@ -85,9 +87,9 @@ function PhotoCell({
         height: CELL_HEIGHT,
         borderRadius: 10,
         overflow: 'hidden',
-        backgroundColor: colors.surface,
+        backgroundColor: theme.colors.surface,
         borderWidth: sizes.hairline,
-        borderColor: colors.border,
+        borderColor: theme.colors.border,
         alignItems: 'center',
         justifyContent: 'center',
       }}
@@ -97,20 +99,20 @@ function PhotoCell({
       ) : photo.thumbnailLoading ? (
         <View
           testID="photo-vault-thumbnail-skeleton"
-          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.surfaceRaised }}
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: theme.colors.surfaceElevated }}
         />
       ) : photo.failed ? (
-        <Icon name="alert-triangle" size={15} color={colors.faint} />
+        <Icon name="alert-triangle" size={15} color={theme.colors.textFaint} />
       ) : (
-        <Icon name="camera" size={18} color={colors.faint} />
+        <Icon name="camera" size={18} color={theme.colors.textFaint} />
       )}
 
       {uploading ? (
         <View style={{ position: 'absolute', top: spacing[2], left: spacing[2] }}>
           <Text
             style={{
-              color: colors.text,
-              fontFamily: fonts.mono,
+              color: theme.colors.textPrimary,
+              fontFamily: theme.fonts.mono,
               fontSize: 8.5,
               letterSpacing: 1.2,
               textTransform: 'uppercase',
@@ -159,6 +161,7 @@ function EmptySlot({ label, onPress, accessibilityLabel }: {
   onPress: () => void;
   accessibilityLabel: string;
 }) {
+  const { theme } = useTheme();
   return (
     <Pressable
       onPress={onPress}
@@ -169,13 +172,13 @@ function EmptySlot({ label, onPress, accessibilityLabel }: {
         height: CELL_HEIGHT,
         borderRadius: 10,
         borderWidth: sizes.hairline,
-        borderColor: colors.border,
+        borderColor: theme.colors.border,
         borderStyle: 'dashed',
         alignItems: 'center',
         justifyContent: 'center',
       }}
     >
-      <Icon name="plus" size={13} color={colors.faint} />
+      <Icon name="plus" size={13} color={theme.colors.textFaint} />
       <MonoLabel size={8} style={{ marginTop: spacing[1] }}>{label}</MonoLabel>
     </Pressable>
   );
@@ -193,6 +196,7 @@ function PhotoVaultDayRowComponent({
   formatMonth,
 }: Props) {
   const { t } = useTranslation('home');
+  const { theme } = useTheme();
   // Static lookup rather than a template key: the translation keys are typed,
   // and a composed key would silently escape that check.
   const poseLabels: Record<ProgressPhotoPose, string> = {
@@ -211,7 +215,7 @@ function PhotoVaultDayRowComponent({
             paddingBottom: spacing[3],
           }}
         >
-          <MonoLabel color={colors.mute}>{formatMonth(day.date).toUpperCase()}</MonoLabel>
+          <MonoLabel color={theme.colors.textMuted}>{formatMonth(day.date).toUpperCase()}</MonoLabel>
         </View>
       ) : null}
 
@@ -224,7 +228,7 @@ function PhotoVaultDayRowComponent({
             marginBottom: spacing[2.5],
           }}
         >
-          <MonoLabel color={colors.text}>{formatDay(day.date).toUpperCase()}</MonoLabel>
+          <MonoLabel color={theme.colors.textPrimary}>{formatDay(day.date).toUpperCase()}</MonoLabel>
         </View>
 
         <View style={{ flexDirection: 'row', gap: spacing[2] }}>

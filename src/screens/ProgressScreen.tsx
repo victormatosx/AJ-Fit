@@ -9,7 +9,8 @@ import { BodyEvolutionView } from '../components/fitness/BodyEvolutionView';
 import { LoadsEvolutionView } from '../components/fitness/LoadsEvolutionView';
 import { Display, MonoLabel, Slash } from '../components/ui/Display';
 import { Icon } from '../components/ui/Icon';
-import { colors, fonts, motion, sizes, spacing } from '../theme/tokens';
+import { motion, sizes, spacing } from '../theme/tokens';
+import { useTheme } from '../theme';
 import { useAuth } from '../state/AuthContext';
 import { useAssessments } from '../hooks/useAssessments';
 import {
@@ -46,6 +47,7 @@ export function ProgressScreen({
   onOpenAssessment?: () => void;
 } = {}) {
   const { t } = useTranslation('home');
+  const { theme } = useTheme();
   const { user } = useAuth();
   const [view, setView] = useState<ProgressView>('body');
 
@@ -93,7 +95,7 @@ export function ProgressScreen({
           paddingHorizontal: GUTTER,
           marginBottom: spacing[5],
           borderBottomWidth: sizes.hairline,
-          borderBottomColor: colors.border,
+          borderBottomColor: theme.colors.border,
         }}
       >
         {tabs.map(([key, label]) => {
@@ -111,17 +113,17 @@ export function ProgressScreen({
                 borderBottomWidth: 2,
                 // The rule below the row is the baseline; the selected tab
                 // simply paints over it, so nothing shifts on selection.
-                borderBottomColor: selected ? colors.accent : 'transparent',
+                borderBottomColor: selected ? theme.colors.primary : 'transparent',
                 marginBottom: -sizes.hairline,
               }}
             >
               <Text
                 style={{
-                  fontFamily: fonts.mono,
+                  fontFamily: theme.fonts.mono,
                   fontSize: 10,
                   letterSpacing: 2,
                   textTransform: 'uppercase',
-                  color: selected ? colors.text : colors.faint,
+                  color: selected ? theme.colors.textPrimary : theme.colors.textFaint,
                 }}
               >
                 {label}
@@ -214,22 +216,23 @@ function PanelFade({ viewKey, children }: { viewKey: string; children: React.Rea
  */
 function LoadsEmptyState() {
   const { t } = useTranslation('home');
+  const { theme } = useTheme();
   return (
     <View style={{ paddingHorizontal: GUTTER, paddingTop: spacing[6] }}>
       <Slash style={{ marginBottom: spacing[5] }}>
         {t('progress.loads.eyebrow').toUpperCase()}
       </Slash>
       <View style={{ alignItems: 'center', paddingVertical: spacing[10], gap: spacing[3] }}>
-        <Icon name="dumbbell" size={26} color={colors.faint} />
+        <Icon name="dumbbell" size={26} color={theme.colors.textFaint} />
         <Display size={20} style={{ textAlign: 'center' }}>
           {t('progress.loads.empty.title')}
         </Display>
         <Text
           style={{
-            fontFamily: fonts.ui,
+            fontFamily: theme.fonts.ui,
             fontSize: 13,
             lineHeight: 19,
-            color: colors.mute,
+            color: theme.colors.textMuted,
             textAlign: 'center',
           }}
         >

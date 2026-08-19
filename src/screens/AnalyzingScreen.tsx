@@ -13,7 +13,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { Icon } from '../components/ui/Icon';
 import { MonoLabel } from '../components/ui/Display';
-import { colors, fonts, displayLineHeight } from '../theme/tokens';
+import { displayLineHeight } from '../theme/tokens';
+import { useTheme } from '../theme';
 
 export function AnalyzingScreen({
   name,
@@ -22,6 +23,7 @@ export function AnalyzingScreen({
   name?: string | null;
   onDone: () => void;
 }) {
+  const { theme } = useTheme();
   const { t } = useTranslation('onboarding');
   const [progress, setProgress] = useState(0);
   const steps = [
@@ -93,7 +95,7 @@ export function AnalyzingScreen({
   const GLOW_SIZE = RING_SIZE - GLOW_INSET * 2;
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+    <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
         <View
           style={{
@@ -129,10 +131,10 @@ export function AnalyzingScreen({
               <Svg width={GLOW_SIZE} height={GLOW_SIZE}>
                 <Defs>
                   <RadialGradient id="ringGlow" cx="50%" cy="50%" r="50%">
-                    <Stop offset="0%" stopColor="#4da3ff" stopOpacity="0.85" />
-                    <Stop offset="35%" stopColor="#0b70f9" stopOpacity="0.55" />
-                    <Stop offset="75%" stopColor="#0b70f9" stopOpacity="0.18" />
-                    <Stop offset="100%" stopColor="#0b70f9" stopOpacity="0" />
+                    <Stop offset="0%" stopColor={theme.colors.primaryEmphasis} stopOpacity="0.85" />
+                    <Stop offset="35%" stopColor={theme.colors.primary} stopOpacity="0.55" />
+                    <Stop offset="75%" stopColor={theme.colors.primary} stopOpacity="0.18" />
+                    <Stop offset="100%" stopColor={theme.colors.primary} stopOpacity="0" />
                   </RadialGradient>
                 </Defs>
                 <Rect x="0" y="0" width={GLOW_SIZE} height={GLOW_SIZE} fill="url(#ringGlow)" />
@@ -148,8 +150,8 @@ export function AnalyzingScreen({
             >
               <Defs>
                 <SvgLG id="ringGrad" x1="0" y1="0" x2="1" y2="1">
-                  <Stop offset="0%" stopColor={colors.accentHi} />
-                  <Stop offset="100%" stopColor={colors.accent} />
+                  <Stop offset="0%" stopColor={theme.colors.primaryEmphasis} />
+                  <Stop offset="100%" stopColor={theme.colors.primary} />
                 </SvgLG>
               </Defs>
               <Circle
@@ -157,7 +159,7 @@ export function AnalyzingScreen({
                 cy={CX}
                 r={R}
                 fill="none"
-                stroke="rgba(255,255,255,0.07)"
+                stroke={theme.colors.border}
                 strokeWidth={STROKE}
               />
               {/* Fake drop-shadow: a wider low-opacity twin sits under the
@@ -167,7 +169,7 @@ export function AnalyzingScreen({
                 cy={CX}
                 r={R}
                 fill="none"
-                stroke={colors.accent}
+                stroke={theme.colors.primary}
                 strokeWidth={STROKE + 8}
                 strokeLinecap="round"
                 strokeDasharray={`${C}`}
@@ -205,17 +207,17 @@ export function AnalyzingScreen({
               <View style={{ flexDirection: 'row', alignItems: 'baseline', paddingTop: 18 }}>
                 <Text
                   style={{
-                    fontFamily: fonts.display,
+                    fontFamily: theme.fonts.display,
                     fontSize: 56,
                     lineHeight: displayLineHeight(56),
-                    color: '#fff',
+                    color: theme.colors.textPrimary,
                     transform: [{ skewX: '-8deg' }],
                     // Tight rim-light instead of a blurred fill: a large
                     // radius bled past each glyph's edge and merged the
                     // gaps between digits into one solid blob that read as
                     // a text-selection highlight. A few px keeps a subtle
                     // glow without ever filling the space between digits.
-                    textShadowColor: 'rgba(77,163,255,0.5)',
+                    textShadowColor: theme.colors.primaryBorderFocus,
                     textShadowRadius: 3,
                     textShadowOffset: { width: 0, height: 0 },
                   }}
@@ -224,13 +226,13 @@ export function AnalyzingScreen({
                 </Text>
                 <Text
                   style={{
-                    fontFamily: fonts.display,
+                    fontFamily: theme.fonts.display,
                     fontSize: 24,
                     lineHeight: displayLineHeight(24) + 18,
-                    color: colors.accentHi,
+                    color: theme.colors.primaryEmphasis,
                     transform: [{ skewX: '-8deg' }],
                     marginLeft: 2,
-                    textShadowColor: 'rgba(77,163,255,0.45)',
+                    textShadowColor: theme.colors.uploadBorder,
                     textShadowRadius: 3,
                     textShadowOffset: { width: 0, height: 0 },
                   }}
@@ -248,12 +250,12 @@ export function AnalyzingScreen({
           <View style={{ alignItems: 'center', marginBottom: 24 }}>
             <Text
               style={{
-                fontFamily: fonts.display,
+                fontFamily: theme.fonts.display,
                 fontSize: 32,
                 lineHeight: displayLineHeight(32),
                 letterSpacing: 0.5,
                 textTransform: 'uppercase',
-                color: '#fff',
+                color: theme.colors.textPrimary,
                 textAlign: 'center',
                 transform: [{ skewX: '-8deg' }],
               }}
@@ -262,6 +264,7 @@ export function AnalyzingScreen({
                 name
                   ? `${t('analyzing.titleWithNameLine1').toUpperCase()}\n${t('analyzing.titleWithNameLine2', { name }).toUpperCase()}`
                   : `${t('analyzing.titleLine1').toUpperCase()}\n${t('analyzing.titleLine2').toUpperCase()}`,
+                theme.colors.primaryEmphasis,
               )}
             </Text>
           </View>
@@ -288,12 +291,12 @@ export function AnalyzingScreen({
 
 // Splits the title on "jornada" (any case) and paints that word in the
 // accent blue — the rest of the title stays white.
-function renderHighlightedTitle(text: string) {
+function renderHighlightedTitle(text: string, highlightColor: string) {
   const parts = text.split(/(jornada)/i);
   if (parts.length === 1) return text;
   return parts.map((part, i) =>
     /^jornada$/i.test(part) ? (
-      <Text key={i} style={{ color: colors.accentHi }}>
+      <Text key={i} style={{ color: highlightColor }}>
         {part}
       </Text>
     ) : (
@@ -305,6 +308,7 @@ function renderHighlightedTitle(text: string) {
 type StepState = 'pending' | 'active' | 'done';
 
 function StepPill({ label, state }: { label: string; state: StepState }) {
+  const { theme } = useTheme();
   const isActive = state === 'active';
   const isDone = state === 'done';
   const opacity = state === 'pending' ? 0.5 : 1;
@@ -318,10 +322,10 @@ function StepPill({ label, state }: { label: string; state: StepState }) {
         paddingVertical: 15,
         paddingHorizontal: 18,
         borderRadius: 16,
-        backgroundColor: isActive ? 'rgba(11,112,249,0.2)' : 'rgba(255,255,255,0.025)',
+        backgroundColor: isActive ? theme.colors.primarySurfaceActive : theme.colors.surfaceQuiet,
         borderWidth: 1,
-        borderColor: isActive ? 'rgba(77,163,255,0.75)' : 'rgba(255,255,255,0.07)',
-        shadowColor: isActive ? colors.accentHi : 'transparent',
+        borderColor: isActive ? theme.colors.primaryBorderActive : theme.colors.border,
+        shadowColor: isActive ? theme.colors.primaryEmphasis : 'transparent',
         shadowOpacity: isActive ? 0.75 : 0,
         shadowRadius: isActive ? 28 : 0,
         shadowOffset: { width: 0, height: 0 },
@@ -332,9 +336,9 @@ function StepPill({ label, state }: { label: string; state: StepState }) {
       <StepIndicator state={state} />
       <Text
         style={{
-          fontFamily: fonts.uiSemi,
+          fontFamily: theme.fonts.uiSemi,
           fontSize: 14.5,
-          color: state === 'pending' ? 'rgba(255,255,255,0.5)' : '#fff',
+          color: state === 'pending' ? theme.colors.textInactive : theme.colors.textPrimary,
           flex: 1,
         }}
       >
@@ -345,6 +349,7 @@ function StepPill({ label, state }: { label: string; state: StepState }) {
 }
 
 function StepIndicator({ state }: { state: StepState }) {
+  const { theme } = useTheme();
   // Active step spins — mirrors @keyframes aj2-spin-slow (0.9s linear).
   const spin = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -373,12 +378,12 @@ function StepIndicator({ state }: { state: StepState }) {
           width: 26,
           height: 26,
           borderRadius: 13,
-          backgroundColor: colors.accent,
+          backgroundColor: theme.colors.primary,
           alignItems: 'center',
           justifyContent: 'center',
         }}
       >
-        <Icon name="check" size={14} color="#fff" stroke={2.6} />
+        <Icon name="check" size={14} color={theme.colors.primaryForeground} stroke={2.6} />
       </View>
     );
   }
@@ -402,7 +407,7 @@ function StepIndicator({ state }: { state: StepState }) {
             cy="13"
             r="10"
             fill="none"
-            stroke="rgba(255,255,255,0.12)"
+            stroke={theme.colors.borderStrong}
             strokeWidth={2.5}
           />
           {/* Fake drop-shadow: a wider, softer twin sits beneath the arc so
@@ -411,7 +416,7 @@ function StepIndicator({ state }: { state: StepState }) {
           <Path
             d="M13 3 a10 10 0 0 1 10 10"
             fill="none"
-            stroke={colors.accent}
+            stroke={theme.colors.primary}
             strokeWidth={6}
             strokeLinecap="round"
             opacity={0.55}
@@ -420,7 +425,7 @@ function StepIndicator({ state }: { state: StepState }) {
           <Path
             d="M13 3 a10 10 0 0 1 10 10"
             fill="none"
-            stroke={colors.accentHi}
+            stroke={theme.colors.primaryEmphasis}
             strokeWidth={2.8}
             strokeLinecap="round"
           />
@@ -437,7 +442,7 @@ function StepIndicator({ state }: { state: StepState }) {
         height: 26,
         borderRadius: 13,
         borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.12)',
+        borderColor: theme.colors.borderStrong,
         alignItems: 'center',
         justifyContent: 'center',
       }}
@@ -447,7 +452,7 @@ function StepIndicator({ state }: { state: StepState }) {
           width: 5,
           height: 5,
           borderRadius: 2.5,
-          backgroundColor: 'rgba(255,255,255,0.3)',
+          backgroundColor: theme.colors.indicatorInactive,
         }}
       />
     </View>

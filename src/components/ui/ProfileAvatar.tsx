@@ -4,7 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
 import { Display } from './Display';
 import { Icon } from './Icon';
-import { colors } from '../../theme/tokens';
+import { useTheme } from '../../theme';
 import { versionedPhotoURL, type PhotoCacheVersion } from '../../lib/profilePhotoUrl';
 
 function initialsFor(name: string): string {
@@ -38,6 +38,7 @@ export function ProfileAvatar({
   editable?: boolean;
   onPress?: () => void;
 }) {
+  const { theme } = useTheme();
   const { t } = useTranslation('profile');
   const radius = Math.round(size * 0.22);
   return (
@@ -53,7 +54,7 @@ export function ProfileAvatar({
       style={({ pressed }) => ({ width: size, height: size, opacity: pressed ? 0.78 : 1 })}
     >
       <LinearGradient
-        colors={['#1f82ff', colors.accent]}
+        colors={theme.gradients.brand}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={{
@@ -82,26 +83,24 @@ export function ProfileAvatar({
         />
       ) : null}
       {editable ? (
-        <View style={styles.cameraBadge}>
-          <Icon name="camera" size={11} color="#fff" stroke={2} />
+        <View
+          style={{
+            position: 'absolute',
+            right: -3,
+            bottom: -3,
+            width: 22,
+            height: 22,
+            borderRadius: 7,
+            backgroundColor: theme.colors.background,
+            borderWidth: 2,
+            borderColor: theme.colors.primaryEmphasis,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Icon name="camera" size={11} color={theme.colors.textPrimary} stroke={2} />
         </View>
       ) : null}
     </Pressable>
   );
 }
-
-const styles = StyleSheet.create({
-  cameraBadge: {
-    position: 'absolute',
-    right: -3,
-    bottom: -3,
-    width: 22,
-    height: 22,
-    borderRadius: 7,
-    backgroundColor: '#020010',
-    borderWidth: 2,
-    borderColor: colors.accentHi,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});

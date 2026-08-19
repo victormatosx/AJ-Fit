@@ -15,7 +15,7 @@ import {
 import { QuestionStepScreen } from '../components/onboarding/QuestionStepScreen';
 import { DevFunnelNavigator } from '../components/onboarding/DevFunnelNavigator';
 import { AnimatedStepContainer } from '../components/onboarding/AnimatedStepContainer';
-import { colors } from '../theme/tokens';
+import { useTheme } from '../theme';
 import { OnboardingScreen } from './OnboardingScreen';
 import { SocialProofScreen } from './SocialProofScreen';
 import { AnalyzingScreen } from './AnalyzingScreen';
@@ -37,6 +37,7 @@ export function OnboardingFunnelScreen({
   onAuthRequested: (ctx: OnboardingAuthContext) => void;
   onForcedQuestionnaireDone: () => void | Promise<void>;
 }) {
+  const { theme } = useTheme();
   const { t } = useTranslation('quiz');
   const funnel = useOnboardingFunnel(mode);
   const { currentStepId, name, setName, quiz, setQuiz, progress, goNext, goBack, canGoBack, jumpTo } = funnel;
@@ -197,7 +198,7 @@ export function OnboardingFunnelScreen({
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+    <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
       <AnimatedStepContainer stepKey={currentStepId}>{content}</AnimatedStepContainer>
       {__DEV__ && <DevFunnelNavigator currentStepId={currentStepId} onJump={jumpTo} />}
     </View>

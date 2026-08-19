@@ -3,7 +3,7 @@ import { View, Text, Pressable } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Icon, IconName } from '../ui/Icon';
 import { PremiumAction } from '../premium/PremiumAction';
-import { colors, fonts } from '../../theme/tokens';
+import { useTheme } from '../../theme';
 
 function ActionOption({
   icon,
@@ -25,6 +25,7 @@ function ActionOption({
    *  option's own icon/title/subtitle stay as-is. */
   locked: boolean;
 }) {
+  const { theme } = useTheme();
   return (
     <Pressable
       onPress={onPress}
@@ -34,9 +35,9 @@ function ActionOption({
         flex: 1,
         padding: 16,
         borderRadius: 14,
-        backgroundColor: pressed ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.03)',
+        backgroundColor: pressed ? theme.colors.surfacePressed : theme.colors.surface,
         borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.08)',
+        borderColor: theme.colors.divider,
         gap: 10,
       })}
     >
@@ -45,12 +46,12 @@ function ActionOption({
           width: 36,
           height: 36,
           borderRadius: 10,
-          backgroundColor: 'rgba(11,112,249,0.16)',
+          backgroundColor: theme.colors.primarySoft,
           alignItems: 'center',
           justifyContent: 'center',
         }}
       >
-        <Icon name={icon} size={17} color={colors.accentHi} />
+        <Icon name={icon} size={17} color={theme.colors.primaryEmphasis} />
         {locked && (
           <View
             style={{
@@ -60,19 +61,19 @@ function ActionOption({
               width: 16,
               height: 16,
               borderRadius: 8,
-              backgroundColor: colors.bg2,
+              backgroundColor: theme.colors.backgroundSecondary,
               borderWidth: 1,
-              borderColor: 'rgba(255,255,255,0.08)',
+              borderColor: theme.colors.divider,
               alignItems: 'center',
               justifyContent: 'center',
             }}
           >
-            <Icon name="lock" size={9} color={colors.accentHi} />
+            <Icon name="lock" size={9} color={theme.colors.primaryEmphasis} />
           </View>
         )}
       </View>
-      <Text style={{ fontFamily: fonts.uiBold, fontSize: 13.5, color: '#fff' }}>{title}</Text>
-      <Text style={{ fontFamily: fonts.ui, fontSize: 11, lineHeight: 15, color: colors.mute }}>
+      <Text style={{ fontFamily: theme.fonts.uiBold, fontSize: 13.5, color: theme.colors.textPrimary }}>{title}</Text>
+      <Text style={{ fontFamily: theme.fonts.ui, fontSize: 11, lineHeight: 15, color: theme.colors.textMuted }}>
         {subtitle}
       </Text>
     </Pressable>

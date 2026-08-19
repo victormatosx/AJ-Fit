@@ -1,6 +1,6 @@
 import { StyleProp, ViewStyle } from 'react-native';
 import Svg, { Text as SvgText } from 'react-native-svg';
-import { fonts } from '../../theme/tokens';
+import { useTheme } from '../../theme';
 
 /**
  * Real hollow outline text using SVG (RN's <Text> can't stroke). The interior
@@ -9,7 +9,7 @@ import { fonts } from '../../theme/tokens';
 export function OutlineNumber({
   children,
   size = 200,
-  color = 'rgba(255,255,255,0.28)',
+  color,
   strokeWidth = 1.5,
   style,
 }: {
@@ -19,6 +19,7 @@ export function OutlineNumber({
   strokeWidth?: number;
   style?: StyleProp<ViewStyle>;
 }) {
+  const { theme } = useTheme();
   const text = String(children);
   // Anton is a very condensed display face — width ≈ 0.55 × size per glyph.
   // Vertical box needs headroom for the full ascender + strokeWidth on both sides,
@@ -41,10 +42,10 @@ export function OutlineNumber({
         x={width / 2}
         y={baseline}
         fill="none"
-        stroke={color}
+        stroke={color ?? theme.colors.decorativeOutline}
         strokeWidth={strokeWidth}
         strokeLinejoin="round"
-        fontFamily={fonts.display}
+        fontFamily={theme.fonts.display}
         fontSize={size}
         textAnchor="middle"
         letterSpacing={0.5}

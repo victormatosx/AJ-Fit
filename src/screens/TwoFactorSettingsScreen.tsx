@@ -19,7 +19,8 @@ import { ScreenBg } from '../components/ui/ScreenBg';
 import { useTotpMfa } from '../hooks/useTotpMfa';
 import type { MfaTotpIssue } from '../lib/mfaTotp';
 import type { TotpFactor } from '../services/mfaTotp';
-import { colors, fonts, radii, sizes, spacing, typography } from '../theme/tokens';
+import { radii, sizes, spacing, typography } from '../theme/tokens';
+import { useTheme, type AppTheme } from '../theme';
 import { useScreenFocusEffect } from '../state/ScreenActivity';
 
 export function TwoFactorSettingsScreen({
@@ -32,6 +33,9 @@ export function TwoFactorSettingsScreen({
   refreshToken?: number;
 }) {
   const { t, i18n } = useTranslation('settings');
+  const { theme } = useTheme();
+  const colors = theme.colors;
+  const styles = createStyles(theme);
   const mfa = useTotpMfa(refreshToken);
   const [passwordVisible, setPasswordVisible] = useState(false);
   const statusUnavailable =
@@ -353,6 +357,9 @@ function InfoItem({
   title: string;
   description: string;
 }) {
+  const { theme } = useTheme();
+  const colors = theme.colors;
+  const styles = createStyles(theme);
   return (
     <View style={styles.infoItem}>
       <Icon name={icon} size={18} color={colors.accentHi} />
@@ -378,6 +385,9 @@ function Feedback({
   tone: 'error' | 'warning' | 'success';
   message: string;
 }) {
+  const { theme } = useTheme();
+  const colors = theme.colors;
+  const styles = createStyles(theme);
   const color =
     tone === 'success'
       ? colors.success
@@ -405,7 +415,9 @@ function Feedback({
   );
 }
 
-const styles = {
+function createStyles(theme: AppTheme) {
+  const colors = theme.colors;
+  return {
   content: {
     width: '100%' as const,
     maxWidth: sizes.contentMaxWidth,
@@ -469,8 +481,8 @@ const styles = {
     minHeight: 46,
     borderRadius: radii.control,
     borderWidth: 1,
-    borderColor: 'rgba(240,86,63,0.3)',
-    backgroundColor: 'rgba(240,86,63,0.08)',
+    borderColor: colors.feedbackCriticalBorder,
+    backgroundColor: colors.feedbackCriticalBackgroundSoft,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
   },
@@ -497,7 +509,7 @@ const styles = {
     borderRadius: radii.xl,
     borderWidth: 1,
     borderColor: colors.borderStrong,
-    backgroundColor: '#0a0620',
+    backgroundColor: colors.sheetBackground,
   },
   modalDescription: {
     color: colors.textSecondary,
@@ -511,7 +523,7 @@ const styles = {
     borderColor: colors.borderStrong,
     backgroundColor: colors.surfaceRaised,
     color: colors.text,
-    fontFamily: fonts.monoBold,
+    fontFamily: theme.fonts.monoBold,
     fontSize: 26,
     letterSpacing: 8,
     textAlign: 'center' as const,
@@ -522,4 +534,5 @@ const styles = {
     justifyContent: 'center' as const,
     marginTop: spacing[2],
   },
-};
+  };
+}

@@ -8,7 +8,8 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { colors, displayLineHeight, fonts } from '../../theme/tokens';
+import { displayLineHeight } from '../../theme/tokens';
+import { useTheme } from '../../theme';
 
 type Props = {
   children: React.ReactNode;
@@ -35,6 +36,7 @@ export function CtaButton({
   accessibilityLabel,
   accessibilityHint,
 }: Props) {
+  const { theme } = useTheme();
   const a11y = {
     accessibilityRole: 'button' as const,
     accessibilityLabel,
@@ -55,9 +57,9 @@ export function CtaButton({
             width: '100%',
             height: 58,
             borderRadius: 14,
-            backgroundColor: 'rgba(255,255,255,0.05)',
+            backgroundColor: theme.colors.surfaceElevated,
             borderWidth: 1,
-            borderColor: 'rgba(255,255,255,0.12)',
+            borderColor: theme.colors.borderStrong,
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'center',
@@ -68,7 +70,15 @@ export function CtaButton({
         ]}
       >
         {typeof children === 'string' ? (
-          <Text style={{ color: '#fff', fontFamily: fonts.uiSemi, fontSize: 14 }}>{children}</Text>
+          <Text
+            style={{
+              color: theme.colors.textPrimary,
+              fontFamily: theme.fonts.uiSemi,
+              fontSize: 14,
+            }}
+          >
+            {children}
+          </Text>
         ) : (
           children
         )}
@@ -84,7 +94,7 @@ export function CtaButton({
       style={[{ opacity: disabled ? 0.35 : 1 }, style]}
     >
       <LinearGradient
-        colors={['#1f82ff', colors.accent]}
+        colors={theme.gradients.brand}
         start={{ x: 0, y: 0 }}
         end={{ x: 0, y: 1 }}
         style={{
@@ -98,11 +108,11 @@ export function CtaButton({
           alignItems: 'center',
           justifyContent: 'center',
           gap: 10,
-          shadowColor: colors.accent,
-          shadowOffset: { width: 0, height: 10 },
-          shadowOpacity: disabled ? 0 : 0.45,
-          shadowRadius: disabled ? 0 : 30,
-          elevation: disabled ? 0 : 12,
+          shadowColor: theme.shadows.accent.shadowColor,
+          shadowOffset: theme.shadows.accent.shadowOffset,
+          shadowOpacity: disabled ? 0 : theme.shadows.accent.shadowOpacity,
+          shadowRadius: disabled ? 0 : theme.shadows.accent.shadowRadius,
+          elevation: disabled ? 0 : theme.shadows.accent.elevation,
         }}
       >
         {/* Top inner highlight: CSS uses inset 0 1px 0 rgba(255,255,255,0.35).
@@ -115,7 +125,7 @@ export function CtaButton({
             left: 0,
             right: 0,
             height: 1,
-            backgroundColor: 'rgba(255,255,255,0.35)',
+            backgroundColor: theme.colors.controlHighlight,
             borderTopLeftRadius: 12,
             borderTopRightRadius: 12,
           }}
@@ -123,8 +133,8 @@ export function CtaButton({
         {typeof children === 'string' ? (
           <Text
             style={{
-              color: '#fff',
-              fontFamily: fonts.display,
+              color: theme.colors.primaryForeground,
+              fontFamily: theme.fonts.display,
               fontSize: 17,
               lineHeight: displayLineHeight(17),
               letterSpacing: 1.5,
@@ -145,11 +155,13 @@ export function CtaButton({
 }
 
 export function CtaText({ children }: { children: React.ReactNode }) {
+  const { theme } = useTheme();
+
   return (
     <Text
       style={{
-        color: '#fff',
-        fontFamily: fonts.display,
+        color: theme.colors.primaryForeground,
+        fontFamily: theme.fonts.display,
         fontSize: 17,
         lineHeight: displayLineHeight(17),
         letterSpacing: 1.5,

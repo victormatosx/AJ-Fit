@@ -6,7 +6,8 @@ import { useTranslation } from 'react-i18next';
 import { Display, Slash } from '../../components/ui/Display';
 import { CtaButton, CtaText } from '../../components/ui/CtaButton';
 import { SegBar } from '../../components/ui/SegBar';
-import { colors, fonts, radii, sizes, spacing } from '../../theme/tokens';
+import { radii, sizes, spacing } from '../../theme/tokens';
+import { useTheme } from '../../theme';
 import type { OnboardingProgress } from '../../onboarding/useOnboardingFunnel';
 
 const MAX_NAME_LENGTH = 40;
@@ -23,6 +24,7 @@ export function NameStepScreen({
   onNext: () => void;
 }) {
   const { t } = useTranslation('onboarding');
+  const { theme } = useTheme();
   const [draft, setDraft] = useState(name ?? '');
   const trimmed = draft.trim();
   const canContinue = trimmed.length > 0;
@@ -34,16 +36,16 @@ export function NameStepScreen({
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.bg, overflow: 'hidden' }}>
+    <View style={{ flex: 1, backgroundColor: theme.colors.background, overflow: 'hidden' }}>
       <View pointerEvents="none" style={{ position: 'absolute', top: -28, right: 10 }}>
         <Svg width={280} height={220}>
           <SvgText
             x={280}
             y={220 * 0.85}
-            fontFamily={fonts.display}
+            fontFamily={theme.fonts.display}
             fontSize={240}
             textAnchor="end"
-            stroke="rgba(255,255,255,0.22)"
+            stroke={theme.colors.decorativeOutlineSoft}
             strokeWidth={1.5}
             fill="none"
           >
@@ -76,13 +78,13 @@ export function NameStepScreen({
                 accessibilityLabel={t('name.accessibility.input')}
                 style={{
                   marginTop: spacing[6],
-                  fontFamily: fonts.display,
+                  fontFamily: theme.fonts.display,
                   fontSize: 22,
-                  color: '#fff',
-                  backgroundColor: colors.surfaceRaised,
+                  color: theme.colors.inputText,
+                  backgroundColor: theme.colors.surfaceElevated,
                   borderRadius: radii.lg,
                   borderWidth: 1,
-                  borderColor: canContinue ? colors.accentHi : colors.border,
+                  borderColor: canContinue ? theme.colors.primaryEmphasis : theme.colors.border,
                   paddingHorizontal: spacing[4],
                   paddingVertical: spacing[4],
                 }}

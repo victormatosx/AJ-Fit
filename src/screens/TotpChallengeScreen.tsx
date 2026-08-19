@@ -17,14 +17,8 @@ import { ScreenBg } from '../components/ui/ScreenBg';
 import { useTotpChallenge } from '../hooks/useTotpChallenge';
 import type { MfaTotpIssue } from '../lib/mfaTotp';
 import type { TotpSignInChallenge } from '../services/mfaTotp';
-import {
-  colors,
-  fonts,
-  radii,
-  sizes,
-  spacing,
-  typography,
-} from '../theme/tokens';
+import { radii, sizes, spacing, typography } from '../theme/tokens';
+import { useTheme, type AppTheme } from '../theme';
 
 export function TotpChallengeScreen({
   challenge,
@@ -36,6 +30,8 @@ export function TotpChallengeScreen({
   onSessionExpired: () => void;
 }) {
   const { t } = useTranslation('auth');
+  const { theme } = useTheme();
+  const styles = createStyles(theme);
   const mfa = useTotpChallenge(challenge, { onCancel, onSessionExpired });
   const busy = mfa.resolving || mfa.completed;
 
@@ -59,8 +55,8 @@ export function TotpChallengeScreen({
               hitSlop={12}
               style={styles.backButton}
             >
-              <Icon name="arrow-left" size={18} color={colors.mute} />
-              <Text style={[typography.subtitle, { color: colors.mute }]}>
+              <Icon name="arrow-left" size={18} color={theme.colors.textMuted} />
+              <Text style={[typography.subtitle, { color: theme.colors.textMuted }]}>
                 {t('totpChallenge.actions.backToLogin')}
               </Text>
             </Pressable>
@@ -78,7 +74,7 @@ export function TotpChallengeScreen({
                 accessibilityRole="radiogroup"
                 style={{ marginTop: spacing[6], gap: spacing[2] }}
               >
-                <Text style={[typography.subtitle, { color: colors.text }]}>
+                <Text style={[typography.subtitle, { color: theme.colors.textPrimary }]}>
                   {t('totpChallenge.factor.selectionLabel')}
                 </Text>
                 {challenge.hints.map((hint, index) => {
@@ -92,15 +88,15 @@ export function TotpChallengeScreen({
                       disabled={busy}
                       style={[styles.hint, selected && styles.hintSelected]}
                     >
-                      <Icon name="key" size={18} color={colors.accentHi} />
+                      <Icon name="key" size={18} color={theme.colors.primaryEmphasis} />
                       <Text
-                        style={[typography.subtitle, { color: colors.text, flex: 1 }]}
+                        style={[typography.subtitle, { color: theme.colors.textPrimary, flex: 1 }]}
                       >
                         {hint.displayName ??
                           t('totpChallenge.factor.defaultName', { index: index + 1 })}
                       </Text>
                       {selected ? (
-                        <Icon name="check" size={17} color={colors.success} />
+                        <Icon name="check" size={17} color={theme.colors.success} />
                       ) : null}
                     </Pressable>
                   );
@@ -109,7 +105,7 @@ export function TotpChallengeScreen({
             ) : null}
 
             <View style={{ marginTop: spacing[7] }}>
-              <Text style={[typography.subtitle, { color: colors.text }]}>
+              <Text style={[typography.subtitle, { color: theme.colors.textPrimary }]}>
                 {t('totpChallenge.codeLabel')}
               </Text>
               <TextInput
@@ -124,7 +120,7 @@ export function TotpChallengeScreen({
                 importantForAutofill="yes"
                 autoFocus
                 placeholder={t('totpChallenge.codePlaceholder')}
-                placeholderTextColor={colors.faint}
+                placeholderTextColor={theme.colors.textFaint}
                 style={styles.codeInput}
                 onSubmitEditing={() => void mfa.resolve()}
               />
@@ -132,9 +128,9 @@ export function TotpChallengeScreen({
 
             {mfa.issue ? (
               <View accessibilityRole="alert" style={styles.feedback}>
-                <Icon name="alert-triangle" size={17} color={colors.dangerText} />
+                <Icon name="alert-triangle" size={17} color={theme.colors.dangerText} />
                 <Text
-                  style={[typography.bodySmall, { color: colors.dangerText, flex: 1 }]}
+                  style={[typography.bodySmall, { color: theme.colors.dangerText, flex: 1 }]}
                 >
                   {issueText(mfa.issue, t)}
                 </Text>
@@ -143,7 +139,7 @@ export function TotpChallengeScreen({
 
             <View style={{ flex: 1, minHeight: spacing[10] }} />
             <CtaButton onPress={() => void mfa.resolve()} disabled={busy}>
-              {busy ? <ActivityIndicator color={colors.text} /> : null}
+              {busy ? <ActivityIndicator color={theme.colors.textPrimary} /> : null}
               <CtaText>
                 {busy
                   ? t('totpChallenge.actions.verifying')
@@ -156,7 +152,7 @@ export function TotpChallengeScreen({
               disabled={busy}
               style={styles.cancelButton}
             >
-              <Text style={[typography.subtitle, { color: colors.mute }]}>
+              <Text style={[typography.subtitle, { color: theme.colors.textMuted }]}>
                 {t('totpChallenge.actions.cancel')}
               </Text>
             </Pressable>
@@ -190,7 +186,8 @@ function issueText(
   }
 }
 
-const styles = {
+function createStyles(theme: AppTheme) {
+  return {
   content: {
     flexGrow: 1,
     width: '100%' as const,
@@ -209,7 +206,7 @@ const styles = {
     marginBottom: spacing[4],
   },
   description: {
-    color: colors.textSecondary,
+    color: theme.colors.textSecondary,
     marginTop: spacing[4],
   },
   hint: {
@@ -220,22 +217,22 @@ const styles = {
     gap: spacing[3],
     borderRadius: radii.md,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surface,
   },
   hintSelected: {
-    borderColor: colors.accent,
-    backgroundColor: colors.surfaceSelected,
+    borderColor: theme.colors.primary,
+    backgroundColor: theme.colors.surfaceSelected,
   },
   codeInput: {
     height: 64,
     marginTop: spacing[2],
     borderRadius: radii.lg,
     borderWidth: 1,
-    borderColor: colors.borderStrong,
-    backgroundColor: colors.surfaceRaised,
-    color: colors.text,
-    fontFamily: fonts.monoBold,
+    borderColor: theme.colors.borderStrong,
+    backgroundColor: theme.colors.surfaceElevated,
+    color: theme.colors.textPrimary,
+    fontFamily: theme.fonts.monoBold,
     fontSize: 26,
     letterSpacing: 8,
     textAlign: 'center' as const,
@@ -245,8 +242,8 @@ const styles = {
     padding: spacing[3.5],
     borderRadius: radii.md,
     borderWidth: 1,
-    borderColor: 'rgba(240,86,63,0.35)',
-    backgroundColor: 'rgba(240,86,63,0.10)',
+    borderColor: theme.colors.feedbackDangerBorder,
+    backgroundColor: theme.colors.feedbackDangerBackground,
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     gap: spacing[2.5],
@@ -257,4 +254,5 @@ const styles = {
     justifyContent: 'center' as const,
     marginTop: spacing[3],
   },
-};
+  };
+}

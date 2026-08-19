@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Card } from '../ui/Card';
 import { Icon } from '../ui/Icon';
 import { MonoLabel } from '../ui/Display';
-import { colors, fonts } from '../../theme/tokens';
+import { useTheme } from '../../theme';
 import { useUnits } from '../../state/UnitsContext';
 import {
   formatWeightFromKg,
@@ -25,6 +25,7 @@ export type AssessmentHistoryRow = {
 };
 
 function MiniStat({ l, v, u }: { l: string; v: string; u: string }) {
+  const { theme } = useTheme();
   return (
     <View
       style={{
@@ -32,31 +33,31 @@ function MiniStat({ l, v, u }: { l: string; v: string; u: string }) {
         alignItems: 'center',
         paddingVertical: 8,
         borderRadius: 8,
-        backgroundColor: 'rgba(255,255,255,0.03)',
+        backgroundColor: theme.colors.surface,
       }}
     >
       <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
         <Text
           style={{
-            fontFamily: fonts.display,
+            fontFamily: theme.fonts.display,
             fontSize: 15,
-            color: '#fff',
+            color: theme.colors.textPrimary,
             transform: [{ skewX: '-8deg' }],
           }}
         >
           {v}
         </Text>
         {u ? (
-          <Text style={{ fontFamily: fonts.mono, fontSize: 10, color: colors.faint, marginLeft: 1 }}>
+          <Text style={{ fontFamily: theme.fonts.mono, fontSize: 10, color: theme.colors.textFaint, marginLeft: 1 }}>
             {u}
           </Text>
         ) : null}
       </View>
       <Text
         style={{
-          fontFamily: fonts.mono,
+          fontFamily: theme.fonts.mono,
           fontSize: 8,
-          color: colors.faint,
+          color: theme.colors.textFaint,
           letterSpacing: 0.5,
           marginTop: 3,
         }}
@@ -78,6 +79,7 @@ function HistoryRow({
   expanded: boolean;
   onToggle: () => void;
 }) {
+  const { theme } = useTheme();
   const { t } = useTranslation('assessment');
   const { resolvedUnits } = useUnits();
   const massUnit = weightUnit(resolvedUnits);
@@ -125,10 +127,12 @@ function HistoryRow({
           width: 14,
           height: 14,
           borderRadius: 7,
-          backgroundColor: highlight ? colors.accent : 'rgba(255,255,255,0.12)',
+          backgroundColor: highlight ? theme.colors.primary : theme.colors.borderStrong,
           borderWidth: 2,
-          borderColor: highlight ? colors.accentHi : 'rgba(255,255,255,0.2)',
-          shadowColor: highlight ? colors.accent : 'transparent',
+          borderColor: highlight
+            ? theme.colors.primaryEmphasis
+            : theme.colors.equipmentCheckboxBorder,
+          shadowColor: highlight ? theme.colors.primary : 'transparent',
           shadowOpacity: highlight ? 0.7 : 0,
           shadowRadius: 8,
           shadowOffset: { width: 0, height: 0 },
@@ -138,8 +142,8 @@ function HistoryRow({
       <Card
         style={{
           padding: highlight ? 17 : 15,
-          borderColor: highlight ? 'rgba(11,112,249,0.42)' : colors.cardBorder,
-          shadowColor: highlight ? colors.accent : 'transparent',
+          borderColor: highlight ? theme.colors.primaryBorderStrong : theme.colors.cardBorder,
+          shadowColor: highlight ? theme.colors.primary : 'transparent',
           shadowOpacity: highlight ? 0.16 : 0,
           shadowRadius: highlight ? 14 : 0,
           shadowOffset: { width: 0, height: 6 },
@@ -150,14 +154,14 @@ function HistoryRow({
           style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}
         >
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <MonoLabel color={highlight ? colors.accentHi : colors.faint}>{entry.date}</MonoLabel>
+            <MonoLabel color={highlight ? theme.colors.primaryEmphasis : theme.colors.textFaint}>{entry.date}</MonoLabel>
             {entry.source === 'imported' && (
               <View
                 style={{
                   paddingHorizontal: 6,
                   paddingVertical: 2,
                   borderRadius: 5,
-                  backgroundColor: 'rgba(255,255,255,0.07)',
+                  backgroundColor: theme.colors.badgeBackground,
                 }}
               >
                 <MonoLabel size={8}>
@@ -174,10 +178,10 @@ function HistoryRow({
           >
             <Text
               style={{
-                fontFamily: fonts.mono,
+                fontFamily: theme.fonts.mono,
                 fontSize: 10,
                 letterSpacing: 1,
-                color: 'rgba(255,255,255,0.6)',
+                color: theme.colors.textSubtle,
               }}
             >
               {t('history.labels.viewDetails').toUpperCase()}
@@ -194,7 +198,7 @@ function HistoryRow({
                 ],
               }}
             >
-              <Icon name="chevron-right" size={12} color="rgba(255,255,255,0.6)" />
+              <Icon name="chevron-right" size={12} color={theme.colors.textSubtle} />
             </Animated.View>
           </Pressable>
         </View>
@@ -221,10 +225,10 @@ function HistoryRow({
               marginTop: 12,
               paddingTop: 12,
               borderTopWidth: 1,
-              borderTopColor: 'rgba(255,255,255,0.07)',
+              borderTopColor: theme.colors.border,
             }}
           >
-            <Text style={{ fontFamily: fonts.ui, fontSize: 12.5, color: colors.mute, lineHeight: 20 }}>
+            <Text style={{ fontFamily: theme.fonts.ui, fontSize: 12.5, color: theme.colors.textMuted, lineHeight: 20 }}>
               {t(detailKey, {
                 lean:
                   entry.leanMass != null
@@ -259,6 +263,7 @@ export function AssessmentHistoryCard({
   expandedId: string | null;
   onToggle: (id: string) => void;
 }) {
+  const { theme } = useTheme();
   return (
     <View style={{ position: 'relative', paddingLeft: 4 }}>
       <View
@@ -268,7 +273,7 @@ export function AssessmentHistoryCard({
           top: 6,
           bottom: 6,
           width: 1.5,
-          backgroundColor: 'rgba(11,112,249,0.25)',
+          backgroundColor: theme.colors.timeline,
         }}
       />
       {entries.map((e, i) => (

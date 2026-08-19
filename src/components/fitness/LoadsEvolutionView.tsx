@@ -7,7 +7,8 @@ import {
   type ProgressLoadExercisePreview,
 } from '../../data/progressDesignMocks';
 import { useUnits } from '../../state/UnitsContext';
-import { colors, fonts, radii, sizes, spacing } from '../../theme/tokens';
+import { radii, sizes, spacing } from '../../theme/tokens';
+import { useTheme } from '../../theme';
 import {
   formatWorkoutLoadFromKg,
   workoutLoadFromKg,
@@ -20,11 +21,12 @@ import { EvolutionAreaChart } from './EvolutionAreaChart';
 const GUTTER = sizes.screenGutter;
 
 function Rule() {
+  const { theme } = useTheme();
   return (
     <View
       style={{
         height: sizes.hairline,
-        backgroundColor: colors.border,
+        backgroundColor: theme.colors.border,
         marginHorizontal: GUTTER,
         marginVertical: spacing[5],
       }}
@@ -37,6 +39,7 @@ export function LoadsEvolutionView({
 }: {
   exercises: ProgressLoadExercisePreview[];
 }) {
+  const { theme } = useTheme();
   const { t } = useTranslation('home');
   const { resolvedUnits } = useUnits();
   const [selectedId, setSelectedId] = useState<ProgressLoadExerciseId>(
@@ -83,12 +86,12 @@ export function LoadsEvolutionView({
                   paddingHorizontal: spacing[3.5],
                   borderRadius: radii.control,
                   borderWidth: 1,
-                  borderColor: selectedExercise ? colors.accentHi : colors.border,
-                  backgroundColor: selectedExercise ? colors.surfaceSelected : colors.surface,
+                  borderColor: selectedExercise ? theme.colors.primaryEmphasis : theme.colors.border,
+                  backgroundColor: selectedExercise ? theme.colors.surfaceSelected : theme.colors.surface,
                   opacity: pressed ? 0.82 : 1,
                 })}
               >
-                <MonoLabel color={selectedExercise ? colors.text : colors.faint} size={9}>
+                <MonoLabel color={selectedExercise ? theme.colors.textPrimary : theme.colors.textFaint} size={9}>
                   {label}
                 </MonoLabel>
               </Pressable>
@@ -108,9 +111,9 @@ export function LoadsEvolutionView({
             <Text
               style={{
                 marginLeft: spacing[1],
-                fontFamily: fonts.mono,
+                fontFamily: theme.fonts.mono,
                 fontSize: 11,
-                color: colors.accentHi,
+                color: theme.colors.primaryEmphasis,
               }}
             >
               {t('progress.loads.delta', {
@@ -168,7 +171,7 @@ export function LoadsEvolutionView({
                 gap: spacing[3.5],
                 paddingVertical: spacing[3],
                 borderBottomWidth: sizes.hairline,
-                borderBottomColor: colors.border,
+                borderBottomColor: theme.colors.border,
               }}
             >
               <View
@@ -178,13 +181,13 @@ export function LoadsEvolutionView({
                   alignItems: 'center',
                   justifyContent: 'center',
                   borderRadius: radii.sm,
-                  backgroundColor: colors.accentSoft,
+                  backgroundColor: theme.colors.primarySoft,
                 }}
               >
-                <Icon name="trophy" size={17} color={colors.accentHi} />
+                <Icon name="trophy" size={17} color={theme.colors.primaryEmphasis} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={{ fontFamily: fonts.uiSemi, fontSize: 14, color: colors.text }}>
+                <Text style={{ fontFamily: theme.fonts.uiSemi, fontSize: 14, color: theme.colors.textPrimary }}>
                   {t(`progress.loads.exercises.${exercise.id}.full`)}
                 </Text>
                 <MonoLabel size={8.5} style={{ marginTop: spacing[1] }}>
@@ -194,13 +197,13 @@ export function LoadsEvolutionView({
                 </MonoLabel>
               </View>
               <View style={{ alignItems: 'flex-end' }}>
-                <Text style={{ fontFamily: fonts.display, fontSize: 18, color: colors.text }}>
+                <Text style={{ fontFamily: theme.fonts.display, fontSize: 18, color: theme.colors.textPrimary }}>
                   {formatWorkoutLoadFromKg(newestRecord.loadKg, resolvedUnits)}{' '}
-                  <Text style={{ fontFamily: fonts.mono, fontSize: 9, color: colors.faint }}>
+                  <Text style={{ fontFamily: theme.fonts.mono, fontSize: 9, color: theme.colors.textFaint }}>
                     {unit.toUpperCase()}
                   </Text>
                 </Text>
-                <Text style={{ fontFamily: fonts.mono, fontSize: 9.5, color: colors.accentHi }}>
+                <Text style={{ fontFamily: theme.fonts.mono, fontSize: 9.5, color: theme.colors.primaryEmphasis }}>
                   {t('progress.loads.gain', {
                     value: formatWorkoutLoadFromKg(gain, resolvedUnits),
                     unit,

@@ -227,8 +227,10 @@ describe('viewer and sheet close with the vault', () => {
   it('renders the viewer only for a photo with a live uri', () => {
     const viewer = read('src/components/photoVault/PhotoVaultViewer.tsx');
 
-    expect(viewer).toContain('photo?.fullUri ?? photo?.thumbnailUri ?? photo?.previewUri');
-    expect(viewer).toMatch(/photo !== null && displayUri !== null/);
+    // The representation choice is shared by the pager and the header, so it
+    // lives in one helper instead of being repeated per page.
+    expect(viewer).toContain('photo.fullUri ?? photo.thumbnailUri ?? photo.previewUri');
+    expect(viewer).toMatch(/photo !== null && displayUriOf\(photo\) !== null/);
   });
 
   it('uses thumbnail-first progressive rendering instead of waiting for full', () => {
@@ -242,8 +244,92 @@ describe('viewer and sheet close with the vault', () => {
     expect(row).toContain('photo.thumbnailUri ?? photo.previewUri');
     expect(row).not.toContain('fullUri');
     expect(grid).not.toContain('fullUri');
-    expect(viewer).toContain('photo?.fullUri ?? photo?.thumbnailUri ?? photo?.previewUri');
+    expect(viewer).toContain('photo.fullUri ?? photo.thumbnailUri ?? photo.previewUri');
     expect(viewer).toContain('photo?.fullLoading');
+  });
+
+  /**
+   * Paging must not widen what is decrypted. The gallery keeps a single viewer
+   * owner, so the screen has to release the previous claim before taking the
+   * next one — otherwise swiping fast would leave decrypts racing for
+   * ownership and their plaintext behind.
+   */
+  it('moves the vault claim one photo at a time while paging', () => {
+    const viewer = read('src/components/photoVault/PhotoVaultViewer.tsx');
+
+    expect(SCREEN).toContain('handleNavigateViewer');
+    expect(SCREEN).toMatch(
+      /releaseGalleryPhotoFromViewer\(current\);\s*\n\s*claimGalleryPhotoForViewer\(nextPhotoId\);/,
+    );
+    // Neighbouring pages must never request a full-resolution decrypt.
+    expect(viewer).not.toContain('claimGalleryPhotoForViewer');
+    expect(viewer).not.toContain('ensureFullPhotoLoaded');
+  });
+
+  /**
+   * Regression: a closing list emits one final momentum event while it tears
+   * down. Acting on it reported a page to the parent, which set a photo id
+   * again and reopened the viewer the user had just dismissed — closing it
+   * became impossible. The guard has to be a ref, read when the native event
+   * fires, so a callback created before the close cannot act on a stale value.
+   */
+  it('ignores the teardown paging event so closing the viewer sticks', () => {
+    const viewer = readCode('src/components/photoVault/PhotoVaultViewer.tsx');
+
+    expect(viewer).toContain('acceptsPagingRef');
+    // Cleared on the tap itself, ahead of any teardown event.
+    expect(viewer).toMatch(
+      /acceptsPagingRef\.current = false;\s*\n\s*onClose\(\);/,
+    );
+    // Both dismissal paths go through it, including the Android back button.
+    expect(viewer).toContain('onRequestClose={closeViewer}');
+    expect(viewer).toContain('onPress={closeViewer}');
+    // And a parent-driven close (lock, delete) never taps anything.
+    expect(viewer).toContain('photoId === null');
+  });
+
+  /**
+   * A page must be the pager's own box, never the window: the list sits below
+   * the header and inside the safe area, so a window-sized page centres the
+   * photo in a taller box than the visible one — pushing anything that is not
+   * the screen's aspect ratio below centre and clipping its bottom.
+   */
+  it('sizes each page from the measured viewport, not the window', () => {
+    const viewer = readCode('src/components/photoVault/PhotoVaultViewer.tsx');
+
+    expect(viewer).not.toContain('useWindowDimensions');
+    expect(viewer).toContain('onLayout={measurePage}');
+    // Offsets come from the measured width, so mounting before it is known
+    // would resolve every `initialScrollIndex` to the first page.
+    expect(viewer).toContain('length: page.width');
+    expect(viewer).toMatch(/\{page \? \(/);
+  });
+
+  it('centres a photo that does not fill the screen, on both axes', () => {
+    const viewer = readCode('src/components/photoVault/PhotoVaultViewer.tsx');
+
+    expect(viewer).toContain("alignItems: 'center'");
+    expect(viewer).toContain("justifyContent: 'center'");
+    // `contain` letterboxes rather than cropping; `cover` would fill the page
+    // by cutting the photo, which is not what a progress photo may do.
+    expect(viewer).toContain('resizeMode="contain"');
+    expect(viewer).not.toContain('resizeMode="cover"');
+  });
+
+  /**
+   * These are decrypted vault photos: a caching image component would persist
+   * plaintext to disk outside the vault's lifecycle.
+   */
+  it('keeps the viewer on the uncached Image element', () => {
+    const viewer = read('src/components/photoVault/PhotoVaultViewer.tsx');
+
+    expect(viewer).not.toContain('expo-image');
+    expect(viewer).toMatch(/from 'react-native'/);
+  });
+
+  /** The swipe sequence is the filtered one the grid paints, not everything. */
+  it('pages through the same photos the grid is showing', () => {
+    expect(SCREEN).toContain('flattenProgressDayPhotos(visibleDays)');
   });
 
   it('keeps one flat virtualized list rather than nesting or sectioning', () => {

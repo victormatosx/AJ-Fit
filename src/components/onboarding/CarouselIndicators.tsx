@@ -1,6 +1,6 @@
 import React from 'react';
 import { View } from 'react-native';
-import { colors } from '../../theme/tokens';
+import { useTheme } from '../../theme';
 
 export function CarouselIndicators({
   count,
@@ -9,6 +9,8 @@ export function CarouselIndicators({
   count: number;
   activeIndex: number;
 }) {
+  const { theme } = useTheme();
+
   return (
     <View
       importantForAccessibility="no-hide-descendants"
@@ -23,7 +25,7 @@ export function CarouselIndicators({
               width: active ? 18 : 6,
               height: 6,
               borderRadius: 3,
-              backgroundColor: active ? colors.accentHi : colors.border,
+              backgroundColor: active ? theme.colors.primaryEmphasis : theme.colors.border,
             }}
           />
         );

@@ -1,7 +1,9 @@
 import { Pressable, Text } from 'react-native';
-import { alpha, colors, fonts } from '../../theme/tokens';
+import { useTheme } from '../../theme';
 
 export function SupportChip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+  const { theme } = useTheme();
+
   return (
     <Pressable
       accessibilityRole="button"
@@ -12,12 +14,16 @@ export function SupportChip({ label, active, onPress }: { label: string; active:
         paddingVertical: 9,
         borderRadius: 999,
         borderWidth: 1,
-        borderColor: active ? colors.accentHi : colors.cardBorder,
-        backgroundColor: active ? alpha.blue18 : pressed ? colors.cardBgHi : colors.cardBg,
+        borderColor: active ? theme.colors.selectionBorder : theme.colors.cardBorder,
+        backgroundColor: active
+          ? theme.colors.selectionBackground
+          : pressed
+            ? theme.colors.cardBackgroundElevated
+            : theme.colors.cardBackground,
         opacity: pressed && !active ? 0.7 : 1,
       })}
     >
-      <Text style={{ color: active ? '#fff' : colors.mute, fontFamily: fonts.uiSemi, fontSize: 12 }}>{label}</Text>
+      <Text style={{ color: active ? theme.colors.selectionForeground : theme.colors.textMuted, fontFamily: theme.fonts.uiSemi, fontSize: 12 }}>{label}</Text>
     </Pressable>
   );
 }

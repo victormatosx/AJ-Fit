@@ -9,10 +9,12 @@ import { Icon } from '../components/ui/Icon';
 import { SocialProofCarousel } from '../components/onboarding/SocialProofCarousel';
 import { ScreenBg } from '../components/ui/ScreenBg';
 import { OutlineNumber } from '../components/ui/OutlineNumber';
-import { colors, fonts, sizes, spacing } from '../theme/tokens';
+import { sizes, spacing } from '../theme/tokens';
+import { useTheme } from '../theme';
 
 export function SocialProofScreen({ onDone }: { onDone: () => void }) {
   const { t } = useTranslation('onboarding');
+  const { theme } = useTheme();
   // Guards against a fast double-tap firing onDone twice.
   const advancing = useRef(false);
 
@@ -40,8 +42,8 @@ export function SocialProofScreen({ onDone }: { onDone: () => void }) {
         <Svg width={440} height={380}>
           <Defs>
             <RadialGradient id="socialProofGlow" cx="50%" cy="10%" r="60%">
-              <Stop offset="0%" stopColor={colors.accent} stopOpacity="0.16" />
-              <Stop offset="100%" stopColor={colors.accent} stopOpacity="0" />
+              <Stop offset="0%" stopColor={theme.colors.primary} stopOpacity="0.16" />
+              <Stop offset="100%" stopColor={theme.colors.primary} stopOpacity="0" />
             </RadialGradient>
           </Defs>
           <Rect x="0" y="0" width="440" height="380" fill="url(#socialProofGlow)" />
@@ -64,7 +66,7 @@ export function SocialProofScreen({ onDone }: { onDone: () => void }) {
               <Display size={22} skew={false} style={{ textAlign: 'center' }}>
                 {t('socialProof.headlineLine1')}
               </Display>
-              <Display size={22} skew={false} color={colors.accentHi} style={{ textAlign: 'center' }}>
+              <Display size={22} skew={false} color={theme.colors.primaryEmphasis} style={{ textAlign: 'center' }}>
                 {t('socialProof.headlineLine2')}
               </Display>
             </View>
@@ -72,10 +74,10 @@ export function SocialProofScreen({ onDone }: { onDone: () => void }) {
             <Text
               style={{
                 marginTop: spacing[1.5],
-                fontFamily: fonts.ui,
+                fontFamily: theme.fonts.ui,
                 fontSize: 12.5,
                 lineHeight: 17,
-                color: colors.mute,
+                color: theme.colors.textMuted,
                 textAlign: 'center',
                 maxWidth: 320,
               }}
@@ -105,8 +107,8 @@ export function SocialProofScreen({ onDone }: { onDone: () => void }) {
               marginTop: spacing[2],
             }}
           >
-            <Icon name="lock" size={12} color={colors.faint} />
-            <Text style={{ fontFamily: fonts.ui, fontSize: 11.5, color: colors.faint }}>
+            <Icon name="lock" size={12} color={theme.colors.textFaint} />
+            <Text style={{ fontFamily: theme.fonts.ui, fontSize: 11.5, color: theme.colors.textFaint }}>
               {t('socialProof.privacy')}
             </Text>
           </View>

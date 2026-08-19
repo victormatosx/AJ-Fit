@@ -27,7 +27,8 @@ import {
   PHOTO_COMPARE_POSTER_ASPECT_RATIO,
   PhotoComparePoster,
 } from './PhotoComparePoster';
-import { colors, fonts, sizes, spacing } from '../../theme/tokens';
+import { sizes, spacing } from '../../theme/tokens';
+import { useTheme } from '../../theme';
 import type {
   GalleryPhoto,
   GalleryThumbnailOwner,
@@ -114,6 +115,9 @@ function CompareCell({
   onHidden: (owner: GalleryThumbnailOwner) => void;
   onPress: () => void;
 }) {
+  const { theme } = useTheme();
+  const colors = theme.colors;
+  const fonts = theme.fonts;
   /**
    * Announcing visibility is what queues the decrypt, so scrolling drives the
    * work instead of the screen fetching the whole gallery at once.
@@ -210,6 +214,9 @@ export function PhotoCompareScreen({
   formatDate,
 }: Props) {
   const { t } = useTranslation('home');
+  const { theme } = useTheme();
+  const colors = theme.colors;
+  const fonts = theme.fonts;
   const [first, setFirst] = useState<GalleryPhoto | null>(null);
   const [second, setSecond] = useState<GalleryPhoto | null>(null);
   const [previewStarted, setPreviewStarted] = useState(false);
@@ -537,6 +544,9 @@ function ComparisonReview({
   onContinue: () => void;
 }) {
   const { t } = useTranslation('home');
+  const { theme } = useTheme();
+  const colors = theme.colors;
+  const fonts = theme.fonts;
 
   const side = (
     photo: GalleryPhoto,
@@ -614,6 +624,9 @@ function ComparisonReview({
 
 function ComparisonLoading({ loadedBefore }: { loadedBefore: boolean }) {
   const { t } = useTranslation('home');
+  const { theme } = useTheme();
+  const colors = theme.colors;
+  const fonts = theme.fonts;
   return (
     <View
       testID="photo-vault-compare-loading"
@@ -658,6 +671,9 @@ function ComparisonLoadError({
   onRetry: () => void;
 }) {
   const { t } = useTranslation('home');
+  const { theme } = useTheme();
+  const colors = theme.colors;
+  const fonts = theme.fonts;
   return (
     <View
       testID="photo-vault-compare-load-error"
@@ -716,6 +732,9 @@ function ComparisonPreview({
   poseLabel: string;
 }) {
   const { t, i18n } = useTranslation('home');
+  const { theme } = useTheme();
+  const colors = theme.colors;
+  const fonts = theme.fonts;
   const { width, height } = useWindowDimensions();
   const posterRef = useRef<View>(null);
   const [beforeRendered, setBeforeRendered] = useState(false);
@@ -967,6 +986,9 @@ function NoCandidates({
   onChooseAnother: () => void;
 }) {
   const { t } = useTranslation('home');
+  const { theme } = useTheme();
+  const colors = theme.colors;
+  const fonts = theme.fonts;
   return (
     <View
       style={{

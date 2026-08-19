@@ -1,7 +1,8 @@
 import { ActivityIndicator, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import type { ReauthenticationProvider } from '../../lib/authProviders';
-import { colors, fonts, spacing } from '../../theme/tokens';
+import { spacing } from '../../theme/tokens';
+import { useTheme } from '../../theme';
 import { CtaButton, CtaText } from '../ui/CtaButton';
 import { Icon } from '../ui/Icon';
 import { PasswordField } from '../ui/PasswordField';
@@ -29,6 +30,7 @@ export function ReauthenticationMethods({
   onConfirm,
 }: Props) {
   const { t } = useTranslation('settings');
+  const { theme } = useTheme();
   const hasPassword = providers.includes('password');
 
   return (
@@ -56,7 +58,7 @@ export function ReauthenticationMethods({
           disabled={disabled}
         >
           {busyProvider === 'password' ? (
-            <ActivityIndicator color={colors.text} />
+            <ActivityIndicator color={theme.colors.textPrimary} />
           ) : (
             <CtaText>
               {t('security.twoFactor.reauth.continueWithPassword')}
@@ -98,17 +100,18 @@ function FederatedButton({
   onPress: () => void;
 }) {
   const { t } = useTranslation('settings');
+  const { theme } = useTheme();
   return (
     <CtaButton ghost onPress={onPress} disabled={disabled}>
       {busy ? (
-        <ActivityIndicator color={colors.text} />
+        <ActivityIndicator color={theme.colors.textPrimary} />
       ) : (
         <>
-          <Icon name={provider} size={18} color={colors.text} />
+          <Icon name={provider} size={18} color={theme.colors.textPrimary} />
           <Text
             style={{
-              color: colors.text,
-              fontFamily: fonts.uiSemi,
+              color: theme.colors.textPrimary,
+              fontFamily: theme.fonts.uiSemi,
               fontSize: 14,
             }}
           >

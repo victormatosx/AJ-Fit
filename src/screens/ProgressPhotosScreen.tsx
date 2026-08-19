@@ -18,6 +18,7 @@ import { PhotoCompareScreen } from '../components/photoVault/PhotoCompareScreen'
 import { canCompareProgressPhotos } from '../lib/photoVaultCompare';
 import {
   filterProgressDays,
+  flattenProgressDayPhotos,
   groupProgressPhotosByDay,
   type ProgressPhotoFilter,
 } from '../lib/photoVaultDayGrouping';
@@ -50,7 +51,7 @@ import {
 import { usePhotoVault } from '../state/PhotoVaultContext';
 import { usePremiumAction } from '../state/PremiumActionContext';
 import { PremiumAction } from '../components/premium/PremiumAction';
-import { colors, fonts } from '../theme/tokens';
+import { useTheme } from '../theme';
 
 /**
  * The private photos area.
@@ -73,6 +74,7 @@ export function ProgressPhotosScreen({
   pageFooter = null,
 }: ProgressPhotosScreenProps = {}) {
   const { t } = useTranslation('home');
+  const { theme } = useTheme();
   const {
     status,
     lastIssue,
@@ -177,6 +179,10 @@ export function ProgressPhotosScreen({
   );
   const filterEmpty = !galleryEmpty && visibleDays.length === 0;
 
+  // The swipe sequence IS what the grid shows: derived from the same filtered
+  // days, so a pose filter narrows it and `all` spans the whole gallery.
+  const viewerPhotos = useMemo(() => flattenProgressDayPhotos(visibleDays), [visibleDays]);
+
   const viewerPhoto = viewerId
     ? (gallery.photos.find((p) => p.photoId === viewerId) ?? null)
     : null;
@@ -196,6 +202,22 @@ export function ProgressPhotosScreen({
   const handleOpenViewer = useCallback((photoId: string) => {
     claimGalleryPhotoForViewer(photoId);
     setViewerId(photoId);
+  }, []);
+
+  /**
+   * Paging moved to another photo.
+   *
+   * The claim moves with it, one photo at a time: the gallery keeps a single
+   * viewer owner, and releasing the previous one first is what stops a
+   * swiped-past decrypt from landing (and from keeping its plaintext).
+   */
+  const handleNavigateViewer = useCallback((nextPhotoId: string) => {
+    setViewerId((current) => {
+      if (current === nextPhotoId) return current;
+      releaseGalleryPhotoFromViewer(current);
+      claimGalleryPhotoForViewer(nextPhotoId);
+      return nextPhotoId;
+    });
   }, []);
 
   const handleCloseViewer = useCallback(() => {
@@ -450,15 +472,15 @@ export function ProgressPhotosScreen({
                         paddingVertical: 13,
                         borderRadius: 12,
                         borderWidth: 1,
-                        borderColor: colors.border,
-                        backgroundColor: colors.surface,
+                        borderColor: theme.colors.border,
+                        backgroundColor: theme.colors.surface,
                       }}
                     >
-                      <Icon name="swap" size={14} color={colors.accentHi} />
+                      <Icon name="swap" size={14} color={theme.colors.primaryEmphasis} />
                       <Text
                         style={{
-                          color: colors.text,
-                          fontFamily: fonts.mono,
+                          color: theme.colors.textPrimary,
+                          fontFamily: theme.fonts.mono,
                           fontSize: 10,
                           letterSpacing: 2,
                           textTransform: 'uppercase',
@@ -476,8 +498,8 @@ export function ProgressPhotosScreen({
                 <Text
                   accessibilityLiveRegion="polite"
                   style={{
-                    color: colors.mute,
-                    fontFamily: fonts.ui,
+                    color: theme.colors.textMuted,
+                    fontFamily: theme.fonts.ui,
                     fontSize: 13,
                     lineHeight: 19,
                   }}
@@ -489,11 +511,11 @@ export function ProgressPhotosScreen({
 
             {gallery.status === 'loading' ? (
               <View style={{ paddingVertical: 56, alignItems: 'center', gap: 14 }}>
-                <ActivityIndicator color={colors.faint} />
+                <ActivityIndicator color={theme.colors.textFaint} />
                 <Text
                   style={{
-                    color: colors.faint,
-                    fontFamily: fonts.mono,
+                    color: theme.colors.textFaint,
+                    fontFamily: theme.fonts.mono,
                     fontSize: 10,
                     letterSpacing: 2,
                     textTransform: 'uppercase',
@@ -506,8 +528,8 @@ export function ProgressPhotosScreen({
               <View style={{ paddingVertical: 56, alignItems: 'center', gap: 14 }}>
                 <Text
                   style={{
-                    color: colors.mute,
-                    fontFamily: fonts.ui,
+                    color: theme.colors.textMuted,
+                    fontFamily: theme.fonts.ui,
                     fontSize: 14,
                     textAlign: 'center',
                     paddingHorizontal: 22,
@@ -523,8 +545,8 @@ export function ProgressPhotosScreen({
                 >
                   <Text
                     style={{
-                      color: colors.accentHi,
-                      fontFamily: fonts.mono,
+                      color: theme.colors.primaryEmphasis,
+                      fontFamily: theme.fonts.mono,
                       fontSize: 10,
                       letterSpacing: 2,
                       textTransform: 'uppercase',
@@ -570,16 +592,16 @@ export function ProgressPhotosScreen({
                         paddingVertical: 15,
                         borderRadius: 12,
                         borderWidth: 1,
-                        borderColor: colors.border,
-                        backgroundColor: colors.surface,
+                        borderColor: theme.colors.border,
+                        backgroundColor: theme.colors.surface,
                         opacity: gallery.uploading ? 0.4 : 1,
                       }}
                     >
-                      <Icon name={locked ? 'lock' : 'plus'} size={14} color={colors.accentHi} />
+                      <Icon name={locked ? 'lock' : 'plus'} size={14} color={theme.colors.primaryEmphasis} />
                       <Text
                         style={{
-                          color: colors.text,
-                          fontFamily: fonts.mono,
+                          color: theme.colors.textPrimary,
+                          fontFamily: theme.fonts.mono,
                           fontSize: 10,
                           letterSpacing: 2,
                           textTransform: 'uppercase',
@@ -621,11 +643,13 @@ export function ProgressPhotosScreen({
       />
 
       <PhotoVaultViewer
-        photo={viewerPhoto}
+        photos={viewerPhotos}
+        photoId={viewerId}
         formatDate={formatDate}
         onClose={handleCloseViewer}
         onDelete={confirmDelete}
         onRendered={markViewerPhotoRendered}
+        onNavigate={handleNavigateViewer}
         deleting={gallery.deletingId !== null}
       />
     </View>

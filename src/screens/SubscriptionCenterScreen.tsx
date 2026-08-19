@@ -25,7 +25,7 @@ import {
   type SubscriptionCenterModel,
   type SubscriptionCenterStatus,
 } from '../lib/subscriptionCenter';
-import { colors, fonts } from '../theme/tokens';
+import { useTheme, type AppTheme } from '../theme';
 import { useScreenFocusEffect } from '../state/ScreenActivity';
 
 type ActionNotice = { tone: 'neutral' | 'error'; text: string } | null;
@@ -49,13 +49,15 @@ const STATUS_TIER: Record<SubscriptionCenterStatus, StatusTier> = {
   unknown: 'off',
 };
 
-const TIER_TONE: Record<StatusTier, { color: string; bg: string }> = {
-  success: { color: '#60d99a', bg: 'rgba(34,197,94,0.12)' },
-  info: { color: colors.accentHi, bg: 'rgba(11,112,249,0.16)' },
-  caution: { color: '#ffa840', bg: 'rgba(255,168,64,0.12)' },
-  attention: { color: '#ff9a9a', bg: 'rgba(240,86,63,0.16)' },
-  off: { color: colors.mute, bg: 'rgba(255,255,255,0.06)' },
-};
+function tierTones(theme: AppTheme): Record<StatusTier, { color: string; bg: string }> {
+  return {
+    success: { color: theme.colors.statusSuccessText, bg: theme.colors.statusSuccessBackground },
+    info: { color: theme.colors.statusInfoText, bg: theme.colors.statusInfoBackground },
+    caution: { color: theme.colors.statusCautionText, bg: theme.colors.statusCautionBackground },
+    attention: { color: theme.colors.statusAttentionText, bg: theme.colors.statusAttentionBackground },
+    off: { color: theme.colors.statusOffText, bg: theme.colors.statusOffBackground },
+  };
+}
 
 const STATUS_ICON: Record<SubscriptionCenterStatus, IconName> = {
   active: 'crown',
@@ -74,6 +76,7 @@ export function SubscriptionCenterScreen({
   onBack: () => void;
   onRenew: () => void;
 }) {
+  const { theme } = useTheme();
   const { t, i18n } = useTranslation('profile');
   const { profile } = useAuth();
   const {
@@ -185,7 +188,7 @@ export function SubscriptionCenterScreen({
               <RefreshControl
                 refreshing={refreshing}
                 onRefresh={handleRefresh}
-                tintColor={colors.accentHi}
+                tintColor={theme.colors.primaryEmphasis}
               />
             }
           >
@@ -215,7 +218,7 @@ export function SubscriptionCenterScreen({
 
               {offeringsLoading && !offerings ? (
                 <View style={{ alignItems: 'center', marginTop: 14 }}>
-                  <ActivityIndicator size="small" color={colors.accentHi} />
+                  <ActivityIndicator size="small" color={theme.colors.primaryEmphasis} />
                 </View>
               ) : null}
             </View>
@@ -243,6 +246,7 @@ export function SubscriptionCenterScreen({
 }
 
 function SubscriptionHeader({ onBack }: { onBack: () => void }) {
+  const { theme } = useTheme();
   const { t } = useTranslation('profile');
   return (
     <View
@@ -262,14 +266,14 @@ function SubscriptionHeader({ onBack }: { onBack: () => void }) {
           width: 42,
           height: 42,
           borderRadius: 12,
-          backgroundColor: colors.cardBgHi,
+          backgroundColor: theme.colors.cardBackgroundElevated,
           borderWidth: 1,
-          borderColor: colors.hair,
+          borderColor: theme.colors.divider,
           alignItems: 'center',
           justifyContent: 'center',
         }}
       >
-        <Icon name="arrow-left" size={18} color="#fff" />
+        <Icon name="arrow-left" size={18} color={theme.colors.textPrimary} />
       </Pressable>
       <View style={{ flex: 1, alignItems: 'center' }}>
         <MonoLabel>{t('subscriptionCenter.title')}</MonoLabel>
@@ -286,15 +290,16 @@ function StatusCard({
   model: SubscriptionCenterModel;
   formatDate: (date: Date) => string;
 }) {
+  const { theme } = useTheme();
   const { t } = useTranslation('profile');
   const tier = STATUS_TIER[model.status];
-  const tone = TIER_TONE[tier];
+  const tone = tierTones(theme)[tier];
   const icon = STATUS_ICON[model.status];
   // Icon glyph shifts to the tone color only for tiers that need urgency
   // (attention) or that no longer carry Premium (off); "still fine" tiers
   // (success/info/caution) keep the brand blue so the card doesn't turn
   // into a mixed-color badge for states the user shouldn't worry about.
-  const iconColor = tier === 'attention' || tier === 'off' ? tone.color : colors.accentHi;
+  const iconColor = tier === 'attention' || tier === 'off' ? tone.color : theme.colors.primaryEmphasis;
   const badge = statusBadge(model.status, t);
   const description = statusDescription(model, formatDate, t);
   const primary = primaryFact(model, formatDate, t);
@@ -306,14 +311,14 @@ function StatusCard({
 
   return (
     <LinearGradient
-      colors={['rgba(11,112,249,0.18)', 'rgba(11,112,249,0.03)', 'rgba(255,255,255,0.015)']}
+      colors={theme.gradients.subscriptionStatus}
       locations={[0, 0.6, 1]}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={{
         borderRadius: 18,
         borderWidth: 1,
-        borderColor: 'rgba(77,163,255,0.22)',
+        borderColor: theme.colors.primaryBorderHighlight,
         padding: 16,
       }}
     >
@@ -325,9 +330,9 @@ function StatusCard({
             borderRadius: 12,
             alignItems: 'center',
             justifyContent: 'center',
-            backgroundColor: 'rgba(255,255,255,0.06)',
+            backgroundColor: theme.colors.surfacePressed,
             borderWidth: 1,
-            borderColor: 'rgba(255,255,255,0.10)',
+            borderColor: theme.colors.dividerStrong,
           }}
         >
           <Icon name={icon} size={19} color={iconColor} />
@@ -346,7 +351,7 @@ function StatusCard({
               <Text
                 style={{
                   color: tone.color,
-                  fontFamily: fonts.monoBold,
+                  fontFamily: theme.fonts.monoBold,
                   fontSize: 9,
                   letterSpacing: 1.2,
                   textTransform: 'uppercase',
@@ -360,8 +365,8 @@ function StatusCard({
             <Text
               style={{
                 marginTop: 4,
-                color: colors.textSecondary,
-                fontFamily: fonts.uiMed,
+                color: theme.colors.textSecondary,
+                fontFamily: theme.fonts.uiMed,
                 fontSize: 12.5,
               }}
             >
@@ -375,8 +380,8 @@ function StatusCard({
         <Text
           style={{
             marginTop: 14,
-            color: colors.textSecondary,
-            fontFamily: fonts.ui,
+            color: theme.colors.textSecondary,
+            fontFamily: theme.fonts.ui,
             fontSize: 13,
             lineHeight: 19,
           }}
@@ -391,15 +396,15 @@ function StatusCard({
             marginTop: 14,
             paddingTop: 14,
             borderTopWidth: 1,
-            borderTopColor: colors.hair,
+            borderTopColor: theme.colors.divider,
           }}
         >
           <MonoLabel>{primary.label}</MonoLabel>
           <Text
             style={{
               marginTop: 6,
-              color: colors.text,
-              fontFamily: fonts.uiBold,
+              color: theme.colors.textPrimary,
+              fontFamily: theme.fonts.uiBold,
               fontSize: 19,
             }}
           >
@@ -424,6 +429,7 @@ function DetailsCard({
   model: SubscriptionCenterModel;
   formatDate: (date: Date) => string;
 }) {
+  const { theme } = useTheme();
   const { t } = useTranslation('profile');
   const rows: Array<{ label: string; value: string }> = [];
 
@@ -479,7 +485,7 @@ function DetailsCard({
           style={{
             paddingVertical: 10,
             borderTopWidth: index ? 1 : 0,
-            borderTopColor: colors.hair,
+            borderTopColor: theme.colors.divider,
             flexDirection: 'row',
             alignItems: 'flex-start',
             gap: 18,
@@ -488,8 +494,8 @@ function DetailsCard({
           <Text
             style={{
               flex: 1,
-              color: colors.mute,
-              fontFamily: fonts.ui,
+              color: theme.colors.textMuted,
+              fontFamily: theme.fonts.ui,
               fontSize: 12,
               lineHeight: 17,
             }}
@@ -499,8 +505,8 @@ function DetailsCard({
           <Text
             style={{
               flex: 1,
-              color: colors.textSecondary,
-              fontFamily: fonts.uiMed,
+              color: theme.colors.textSecondary,
+              fontFamily: theme.fonts.uiMed,
               fontSize: 12.5,
               lineHeight: 17,
               textAlign: 'right',
@@ -588,6 +594,7 @@ function ExpiredActions({
   restoring: boolean;
   busy: boolean;
 }) {
+  const { theme } = useTheme();
   const { t } = useTranslation('profile');
   return (
     <View style={{ marginTop: 24, alignItems: 'center' }}>
@@ -608,13 +615,13 @@ function ExpiredActions({
         })}
       >
         {restoring ? (
-          <ActivityIndicator size="small" color={colors.mute} />
+          <ActivityIndicator size="small" color={theme.colors.textMuted} />
         ) : (
           <>
             <Text
               style={{
-                color: colors.mute,
-                fontFamily: fonts.ui,
+                color: theme.colors.textMuted,
+                fontFamily: theme.fonts.ui,
                 fontSize: 12.5,
               }}
             >
@@ -622,8 +629,8 @@ function ExpiredActions({
             </Text>
             <Text
               style={{
-                color: colors.accentHi,
-                fontFamily: fonts.uiSemi,
+                color: theme.colors.primaryEmphasis,
+                fontFamily: theme.fonts.uiSemi,
                 fontSize: 12.5,
               }}
             >
@@ -637,6 +644,7 @@ function ExpiredActions({
 }
 
 function CenteredState({ error, onRetry }: { error: boolean; onRetry: () => void }) {
+  const { theme } = useTheme();
   const { t } = useTranslation('profile');
   return (
     <View
@@ -648,15 +656,15 @@ function CenteredState({ error, onRetry }: { error: boolean; onRetry: () => void
       }}
     >
       {error ? (
-        <Icon name="alert-triangle" size={26} color={colors.dangerText} />
+        <Icon name="alert-triangle" size={26} color={theme.colors.dangerText} />
       ) : (
-        <ActivityIndicator size="large" color={colors.accentHi} />
+        <ActivityIndicator size="large" color={theme.colors.primaryEmphasis} />
       )}
       <Text
         style={{
           marginTop: 16,
-          color: colors.text,
-          fontFamily: fonts.uiBold,
+          color: theme.colors.textPrimary,
+          fontFamily: theme.fonts.uiBold,
           fontSize: 18,
           textAlign: 'center',
         }}
@@ -668,8 +676,8 @@ function CenteredState({ error, onRetry }: { error: boolean; onRetry: () => void
       <Text
         style={{
           marginTop: 8,
-          color: colors.mute,
-          fontFamily: fonts.ui,
+          color: theme.colors.textMuted,
+          fontFamily: theme.fonts.ui,
           fontSize: 13.5,
           lineHeight: 20,
           textAlign: 'center',
@@ -689,6 +697,7 @@ function CenteredState({ error, onRetry }: { error: boolean; onRetry: () => void
 }
 
 function InlineNotice({ tone, text }: { tone: 'neutral' | 'error'; text: string }) {
+  const { theme } = useTheme();
   const error = tone === 'error';
   return (
     <View
@@ -696,15 +705,15 @@ function InlineNotice({ tone, text }: { tone: 'neutral' | 'error'; text: string 
         marginTop: 14,
         padding: 12,
         borderRadius: 12,
-        backgroundColor: error ? 'rgba(240,86,63,0.08)' : colors.cardBgHi,
+        backgroundColor: error ? theme.colors.feedbackCriticalBackgroundSoft : theme.colors.cardBackgroundElevated,
         borderWidth: 1,
-        borderColor: error ? 'rgba(255,118,118,0.28)' : colors.hair,
+        borderColor: error ? theme.colors.feedbackErrorBorderMuted : theme.colors.divider,
       }}
     >
       <Text
         style={{
-          color: error ? colors.dangerText : colors.mute,
-          fontFamily: fonts.uiMed,
+          color: error ? theme.colors.dangerText : theme.colors.textMuted,
+          fontFamily: theme.fonts.uiMed,
           fontSize: 12.5,
           lineHeight: 18,
         }}

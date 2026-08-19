@@ -6,7 +6,8 @@ import { CtaButton, CtaText } from '../ui/CtaButton';
 import { SegBar } from '../ui/SegBar';
 import { ScreenBg } from '../ui/ScreenBg';
 import { OutlineNumber } from '../ui/OutlineNumber';
-import { colors, fonts, sizes, spacing } from '../../theme/tokens';
+import { sizes, spacing } from '../../theme/tokens';
+import { useTheme } from '../../theme';
 
 /**
  * Shared chrome for the funnel's value/education interstitials (no data
@@ -61,13 +62,15 @@ export function InterstitialTitle({ children }: { children: React.ReactNode }) {
 }
 
 export function InterstitialBody({ children }: { children: React.ReactNode }) {
+  const { theme } = useTheme();
+
   return (
     <Text
       style={{
-        fontFamily: fonts.ui,
+        fontFamily: theme.fonts.ui,
         fontSize: 14.5,
         lineHeight: 21,
-        color: colors.mute,
+        color: theme.colors.textMuted,
         marginTop: spacing[1.5],
       }}
     >
@@ -77,12 +80,14 @@ export function InterstitialBody({ children }: { children: React.ReactNode }) {
 }
 
 export function InterstitialHighlight({ children }: { children: React.ReactNode }) {
+  const { theme } = useTheme();
+
   return (
     <Text
       style={{
-        fontFamily: fonts.uiBold,
+        fontFamily: theme.fonts.uiBold,
         fontSize: 15,
-        color: colors.accentHi,
+        color: theme.colors.primaryEmphasis,
         marginTop: spacing[3],
       }}
     >

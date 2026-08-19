@@ -13,14 +13,8 @@ import { useTranslation } from 'react-i18next';
 
 import { Display, MonoLabel } from '../ui/Display';
 import { Icon } from '../ui/Icon';
-import {
-  colors,
-  radii,
-  shadows,
-  sizes,
-  spacing,
-  typography,
-} from '../../theme/tokens';
+import { radii, sizes, spacing, typography } from '../../theme/tokens';
+import { useTheme, type AppTheme } from '../../theme';
 
 /**
  * Public, bundled sample photos. They have no relationship to the signed-in
@@ -40,10 +34,12 @@ function ProgressPhotoCard({
   highlighted?: boolean;
   style: StyleProp<ViewStyle>;
 }) {
+  const { theme } = useTheme();
+  const styles = createStyles(theme);
   return (
     <View
       style={[
-        shadows.card,
+        theme.shadows.card,
         highlighted && styles.photoShadowHighlighted,
         style,
       ]}
@@ -61,7 +57,7 @@ function ProgressPhotoCard({
           style={styles.photoImage}
         />
         <View style={styles.periodBadge}>
-          <MonoLabel size={8} color={colors.text}>
+          <MonoLabel size={8} color={theme.colors.textPrimary}>
             {period}
           </MonoLabel>
         </View>
@@ -78,6 +74,8 @@ function ProgressPhotoCard({
  */
 export const PhotoProgressIntro = memo(function PhotoProgressIntro() {
   const { t } = useTranslation('home');
+  const { theme } = useTheme();
+  const styles = createStyles(theme);
   const { width } = useWindowDimensions();
   const canvasWidth = Math.min(
     sizes.contentMaxWidth,
@@ -146,7 +144,7 @@ export const PhotoProgressIntro = memo(function PhotoProgressIntro() {
               },
             ]}
           >
-            <Icon name="arrow-right" size={13} color={colors.accentHi} stroke={2} />
+            <Icon name="arrow-right" size={13} color={theme.colors.primaryEmphasis} stroke={2} />
           </View>
 
           <ProgressPhotoCard
@@ -169,7 +167,8 @@ export const PhotoProgressIntro = memo(function PhotoProgressIntro() {
   );
 });
 
-const styles = StyleSheet.create({
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
   root: {
     flexGrow: 1,
     width: '100%',
@@ -187,17 +186,17 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   titleHighlight: {
-    color: colors.accentHi,
+    color: theme.colors.primaryEmphasis,
   },
   subtitle: {
     ...typography.bodySmall,
     maxWidth: 330,
     marginTop: spacing[2],
-    color: colors.textSecondary,
+    color: theme.colors.textSecondary,
     textAlign: 'center',
   },
   photoShadowHighlighted: {
-    shadowColor: colors.accent,
+    shadowColor: theme.colors.primary,
     shadowOpacity: 0.24,
     shadowRadius: 18,
     elevation: 9,
@@ -208,8 +207,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderRadius: radii.lg,
     borderWidth: sizes.hairline,
-    borderColor: colors.borderStrong,
-    backgroundColor: colors.bg2,
+    borderColor: theme.colors.borderStrong,
+    backgroundColor: theme.colors.backgroundSecondary,
   },
   photoImage: {
     width: '100%',
@@ -217,7 +216,7 @@ const styles = StyleSheet.create({
   },
   photoFrameHighlighted: {
     borderWidth: 1.5,
-    borderColor: colors.accentHi,
+    borderColor: theme.colors.primaryEmphasis,
   },
   periodBadge: {
     position: 'absolute',
@@ -227,8 +226,8 @@ const styles = StyleSheet.create({
     paddingVertical: spacing[1.5],
     borderRadius: radii.pill,
     borderWidth: sizes.hairline,
-    borderColor: colors.borderStrong,
-    backgroundColor: colors.overlayStrong,
+    borderColor: theme.colors.borderStrong,
+    backgroundColor: theme.colors.overlayStrong,
   },
   direction: {
     position: 'absolute',
@@ -238,8 +237,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: sizes.hairline,
-    borderColor: colors.accentSoft,
-    backgroundColor: colors.bg2,
+    borderColor: theme.colors.primarySoft,
+    backgroundColor: theme.colors.backgroundSecondary,
     zIndex: 4,
   },
-});
+  });
+}

@@ -1,6 +1,7 @@
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { Icon } from './Icon';
-import { colors, fonts, spacing, typography } from '../../theme/tokens';
+import { spacing } from '../../theme/tokens';
+import { useTheme } from '../../theme';
 
 type Props = {
   label: string;
@@ -29,9 +30,11 @@ export function PasswordField({
   returnKeyType,
   onSubmitEditing,
 }: Props) {
+  const { theme } = useTheme();
+
   return (
     <View style={{ gap: spacing[2] }}>
-      <Text style={{ ...typography.labelStrong, color: colors.textSecondary }}>
+      <Text style={{ ...theme.typography.labelStrong, color: theme.colors.inputLabel }}>
         {label.toUpperCase()}
       </Text>
       <View
@@ -43,18 +46,18 @@ export function PasswordField({
           paddingHorizontal: spacing[4],
           borderRadius: 14,
           borderWidth: 1,
-          borderColor: colors.borderStrong,
-          backgroundColor: colors.surfaceRaised,
-          opacity: editable ? 1 : 0.45,
+          borderColor: theme.colors.inputBorder,
+          backgroundColor: theme.colors.inputBackground,
+          opacity: editable ? 1 : theme.opacity.inputDisabled,
         }}
       >
-        <Icon name="lock" size={18} color={colors.faint} />
+        <Icon name="lock" size={18} color={theme.colors.inputIcon} />
         <TextInput
           accessibilityLabel={label}
           value={value}
           onChangeText={onChangeText}
           placeholder={placeholder}
-          placeholderTextColor={colors.faint}
+          placeholderTextColor={theme.colors.inputPlaceholder}
           secureTextEntry={!visible}
           editable={editable}
           autoCapitalize="none"
@@ -62,7 +65,12 @@ export function PasswordField({
           textContentType={textContentType}
           returnKeyType={returnKeyType}
           onSubmitEditing={onSubmitEditing}
-          style={{ flex: 1, color: colors.text, fontFamily: fonts.ui, fontSize: 15 }}
+          style={{
+            flex: 1,
+            color: theme.colors.inputText,
+            fontFamily: theme.fonts.ui,
+            fontSize: 15,
+          }}
         />
         <Pressable
           accessibilityRole="button"
@@ -73,7 +81,11 @@ export function PasswordField({
           onPress={onToggleVisibility}
           style={({ pressed }) => ({ opacity: pressed ? 0.55 : 1 })}
         >
-          <Icon name="eye" size={18} color={visible ? colors.accentHi : colors.faint} />
+          <Icon
+            name="eye"
+            size={18}
+            color={visible ? theme.colors.primaryEmphasis : theme.colors.inputIcon}
+          />
         </Pressable>
       </View>
     </View>

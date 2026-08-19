@@ -5,7 +5,8 @@ import { useTranslation } from 'react-i18next';
 import { Card } from '../ui/Card';
 import { Icon } from '../ui/Icon';
 import { MonoLabel } from '../ui/Display';
-import { colors, radii, fonts } from '../../theme/tokens';
+import { radii } from '../../theme/tokens';
+import { useTheme } from '../../theme';
 
 type Props = {
   name: string;
@@ -15,6 +16,7 @@ type Props = {
 
 export function BeforeAfterCard({ name, beforeImage, afterImage }: Props) {
   const { t } = useTranslation('onboarding');
+  const { theme } = useTheme();
   return (
     <Card style={{ flexDirection: 'row', flex: 1, overflow: 'hidden' }}>
       <ImageSlot
@@ -23,7 +25,7 @@ export function BeforeAfterCard({ name, beforeImage, afterImage }: Props) {
         label={t('socialProof.before')}
         accessibilityLabel={t('socialProof.accessibility.beforeImage', { name })}
       />
-      <View style={{ width: 1, backgroundColor: colors.border }} />
+      <View style={{ width: 1, backgroundColor: theme.colors.border }} />
       <ImageSlot
         source={afterImage}
         side="right"
@@ -44,14 +46,14 @@ export function BeforeAfterCard({ name, beforeImage, afterImage }: Props) {
           width: 36,
           height: 36,
           borderRadius: 18,
-          backgroundColor: colors.bg,
+          backgroundColor: theme.colors.background,
           borderWidth: 1,
-          borderColor: colors.borderStrong,
+          borderColor: theme.colors.borderStrong,
           alignItems: 'center',
           justifyContent: 'center',
         }}
       >
-        <Icon name="swap" size={16} color={colors.accentHi} stroke={1.8} />
+        <Icon name="swap" size={16} color={theme.colors.primaryEmphasis} stroke={1.8} />
       </View>
     </Card>
   );
@@ -71,11 +73,12 @@ function ImageSlot({
   highlight?: boolean;
 }) {
   const { t } = useTranslation('onboarding');
+  const { theme } = useTheme();
   return (
     <View
       style={{
         flex: 1,
-        backgroundColor: highlight ? colors.surfaceSelected : colors.surface,
+        backgroundColor: highlight ? theme.colors.surfaceSelected : theme.colors.surface,
       }}
     >
       {source ? (
@@ -94,13 +97,13 @@ function ImageSlot({
           accessibilityLabel={accessibilityLabel}
           style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8 }}
         >
-          <Icon name="camera" size={22} color={colors.faint} />
+          <Icon name="camera" size={22} color={theme.colors.textFaint} />
           <Text
             style={{
-              fontFamily: fonts.mono,
+              fontFamily: theme.fonts.mono,
               fontSize: 9,
               letterSpacing: 1.5,
-              color: colors.faint,
+              color: theme.colors.textFaint,
               textTransform: 'uppercase',
               textAlign: 'center',
               paddingHorizontal: 12,
@@ -119,10 +122,10 @@ function ImageSlot({
           paddingHorizontal: 8,
           paddingVertical: 4,
           borderRadius: radii.pill,
-          backgroundColor: highlight ? colors.accent : colors.overlayStrong,
+          backgroundColor: highlight ? theme.colors.primary : theme.colors.overlayStrong,
         }}
       >
-        <MonoLabel color={highlight ? '#fff' : colors.faint} size={9}>
+        <MonoLabel color={highlight ? theme.colors.primaryForeground : theme.colors.textFaint} size={9}>
           {label}
         </MonoLabel>
       </View>

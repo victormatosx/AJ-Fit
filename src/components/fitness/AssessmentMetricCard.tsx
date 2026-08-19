@@ -3,7 +3,7 @@ import { View, Text, StyleProp, ViewStyle } from 'react-native';
 import { Card } from '../ui/Card';
 import { Icon, IconName } from '../ui/Icon';
 import { MonoLabel } from '../ui/Display';
-import { colors, fonts } from '../../theme/tokens';
+import { useTheme } from '../../theme';
 
 export function AssessmentMetricCard({
   label,
@@ -20,6 +20,7 @@ export function AssessmentMetricCard({
   size?: 'lg' | 'sm';
   style?: StyleProp<ViewStyle>;
 }) {
+  const { theme } = useTheme();
   const big = size === 'lg';
   return (
     <Card style={[{ padding: big ? 15 : 10 }, style]}>
@@ -31,14 +32,16 @@ export function AssessmentMetricCard({
         }}
       >
         <MonoLabel size={big ? 10 : 8}>{label}</MonoLabel>
-        {icon && <Icon name={icon} size={big ? 14 : 11} color={colors.accentHi} />}
+        {icon && (
+          <Icon name={icon} size={big ? 14 : 11} color={theme.colors.primaryEmphasis} />
+        )}
       </View>
       <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
         <Text
           style={{
-            fontFamily: fonts.display,
+            fontFamily: theme.fonts.display,
             fontSize: big ? 26 : 16,
-            color: '#fff',
+            color: theme.colors.textPrimary,
             transform: [{ skewX: '-8deg' }],
           }}
         >

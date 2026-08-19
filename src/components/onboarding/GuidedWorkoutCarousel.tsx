@@ -1,9 +1,10 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, FlatList, Animated, StyleSheet, useWindowDimensions, type ViewToken } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { VideoView } from 'expo-video';
 import { CarouselIndicators } from './CarouselIndicators';
-import { colors, fonts, motion, palette, sizes, spacing } from '../../theme/tokens';
+import { motion, sizes, spacing } from '../../theme/tokens';
+import { useTheme, type AppTheme } from '../../theme';
 import { useReducedMotionPreference } from '../../lib/reducedMotion';
 import { getGuidedWorkoutVideoPlayers } from '../../onboarding/onboardingVideoPreload';
 import { guidedWorkoutShowcaseSlides, type GuidedWorkoutSlide } from '../../data/guidedWorkoutShowcase';
@@ -25,6 +26,8 @@ const AUTO_ADVANCE_INTERVAL_MS = 6000;
 
 export function GuidedWorkoutCarousel() {
   const { t } = useTranslation('onboarding');
+  const { theme } = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const reduceMotion = useReducedMotionPreference();
   const players = getGuidedWorkoutVideoPlayers();
@@ -146,7 +149,7 @@ export function GuidedWorkoutCarousel() {
         </View>
       </View>
     ),
-    [itemWidth, screenWidth, screenHeight, players],
+    [itemWidth, screenWidth, screenHeight, players, styles],
   );
 
   const active = guidedWorkoutShowcaseSlides[activeIndex] ?? guidedWorkoutShowcaseSlides[0];
@@ -185,10 +188,10 @@ export function GuidedWorkoutCarousel() {
       >
         <Text
           style={{
-            fontFamily: fonts.uiBold,
+            fontFamily: theme.fonts.uiBold,
             fontSize: 16,
             lineHeight: 22,
-            color: '#fff',
+            color: theme.colors.textPrimary,
             textAlign: 'center',
             maxWidth: 320,
           }}
@@ -200,14 +203,15 @@ export function GuidedWorkoutCarousel() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
   phoneFrame: {
-    backgroundColor: colors.bg2,
+    backgroundColor: theme.colors.backgroundSecondary,
     borderWidth: 1,
-    borderColor: colors.borderStrong,
+    borderColor: theme.colors.borderStrong,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: palette.black,
+    shadowColor: theme.colors.floatingShadow,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.35,
     shadowRadius: 16,
@@ -215,6 +219,7 @@ const styles = StyleSheet.create({
   },
   phoneScreen: {
     overflow: 'hidden',
-    backgroundColor: colors.bg,
+    backgroundColor: theme.colors.background,
   },
-});
+  });
+}

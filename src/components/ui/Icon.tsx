@@ -1,5 +1,6 @@
 import React from 'react';
 import Svg, { Path, Circle, Rect, Defs } from 'react-native-svg';
+import { useTheme } from '../../theme';
 
 export type IconName =
   | 'bolt' | 'dumbbell' | 'home' | 'chart' | 'user' | 'play'
@@ -18,7 +19,9 @@ type Props = {
   stroke?: number;
 };
 
-export function Icon({ name, size = 22, color = '#ffffff', stroke = 1.7 }: Props) {
+export function Icon({ name, size = 22, color: colorProp, stroke = 1.7 }: Props) {
+  const { theme } = useTheme();
+  const color = colorProp ?? theme.colors.textPrimary;
   const common = {
     width: size,
     height: size,

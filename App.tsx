@@ -1,7 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
+import * as NativeSplashScreen from 'expo-splash-screen';
 import { View, ActivityIndicator, Pressable, Text } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useFonts, Anton_400Regular } from '@expo-google-fonts/anton';
 import {
   Archivo_400Regular,
@@ -33,7 +35,8 @@ import { EmailVerificationScreen } from './src/screens/EmailVerificationScreen';
 import { AppShell } from './src/screens/AppShell';
 import { FullScreenLoading } from './src/components/ui/FullScreenLoading';
 import { requiresEmailVerification } from './src/lib/emailVerification';
-import { colors } from './src/theme/tokens';
+import { ThemeProvider, useTheme } from './src/theme';
+import { NativeThemeSync } from './src/theme/NativeThemeSync';
 import { initI18n } from './src/i18n';
 import { reconcileLanguageOnLoad } from './src/i18n/syncLanguage';
 import { reconcileUnitsOnLoad } from './src/units/syncUnits';
@@ -70,6 +73,17 @@ configureRevenueCat().catch(() => {
   // configureRevenueCat already emitted the sanitized root-cause error.
 });
 
+/**
+ * Keeps the native splash (fixed black, see app.json's expo-splash-screen
+ * config) on screen until AppContent's first commit, instead of the default
+ * auto-hide-on-bundle-load. Without this, the native splash can disappear
+ * before the first frame paints, exposing a blank white frame underneath —
+ * the same class of flash the in-JS Dark splash exists to avoid.
+ */
+NativeSplashScreen.preventAutoHideAsync().catch(() => {
+  // Best-effort: a rejection here just means the default auto-hide runs.
+});
+
 function SubscriptionResolutionError({
   message,
   offline,
@@ -79,11 +93,13 @@ function SubscriptionResolutionError({
   offline: boolean;
   onRetry: () => Promise<void>;
 }) {
+  const { theme } = useTheme();
+
   return (
     <View
       style={{
         flex: 1,
-        backgroundColor: colors.bg,
+        backgroundColor: theme.colors.background,
         alignItems: 'center',
         justifyContent: 'center',
         paddingHorizontal: 28,
@@ -91,7 +107,7 @@ function SubscriptionResolutionError({
     >
       <Text
         style={{
-          color: colors.text,
+          color: theme.colors.textPrimary,
           fontFamily: 'Archivo_700Bold',
           fontSize: 18,
           textAlign: 'center',
@@ -101,7 +117,7 @@ function SubscriptionResolutionError({
       </Text>
       <Text
         style={{
-          color: colors.mute,
+          color: theme.colors.textMuted,
           fontFamily: 'Archivo_400Regular',
           fontSize: 14,
           lineHeight: 21,
@@ -118,14 +134,14 @@ function SubscriptionResolutionError({
         style={{
           marginTop: 22,
           borderWidth: 1,
-          borderColor: colors.accentHi,
+          borderColor: theme.colors.primaryEmphasis,
           paddingHorizontal: 22,
           paddingVertical: 12,
         }}
       >
         <Text
           style={{
-            color: colors.text,
+            color: theme.colors.textPrimary,
             fontFamily: 'Archivo_700Bold',
             fontSize: 13,
           }}
@@ -138,6 +154,7 @@ function SubscriptionResolutionError({
 }
 
 function RootNavigator() {
+  const { theme } = useTheme();
   const { user, profile, questionnaire, initializing, profileLoading, refreshProfile } =
     useAuth();
   const {
@@ -290,7 +307,7 @@ function RootNavigator() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+    <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
       {resolvedScreen === 'splash' && (
         <SplashScreen
           onDone={() => {
@@ -343,17 +360,18 @@ function RootNavigator() {
             bottom: 0,
             alignItems: 'center',
             justifyContent: 'center',
-            backgroundColor: 'rgba(0,0,0,0.35)',
+            backgroundColor: theme.colors.loadingOverlay,
           }}
         >
-          <ActivityIndicator color={colors.accentHi} />
+          <ActivityIndicator color={theme.colors.primaryEmphasis} />
         </View>
       )}
     </View>
   );
 }
 
-export default function App() {
+function AppContent() {
+  const { theme, hydrated: themeHydrated } = useTheme();
   const [fontsLoaded] = useFonts({
     Anton_400Regular,
     Archivo_400Regular,
@@ -396,33 +414,59 @@ export default function App() {
     initI18n().finally(() => setI18nReady(true));
   }, []);
 
+  useEffect(() => {
+    // First commit of the JS tree already paints the Dark FullScreenLoading
+    // gate (same near-black background as the native splash), so it is safe
+    // to hand off here regardless of how long hydration/fonts/i18n still take.
+    void NativeSplashScreen.hideAsync();
+  }, []);
+
   return (
-    <SafeAreaProvider>
-      <AuthProvider>
-        {/* Nested inside AuthProvider so SubscriptionProvider can read
-            useAuth()'s `user`/`initializing` and react to it (calling
-            loginRevenueCat/logoutRevenueCat internally). AuthContext itself
-            is untouched — it stays the sole owner of identity and knows
-            nothing about RevenueCat; SubscriptionContext just watches it. */}
-        <SubscriptionProvider>
-          <PromoCodeProvider>
-            <UnitsProvider>
-              <AppStateProvider>
-                {/* Inside AuthProvider so it can re-lock on logout and account
-                    switches; wraps the navigator so its AppState listener is
-                    mounted for the whole session. */}
-                <PhotoVaultProvider>
-                  <StatusBar style="light" />
-                  {/* Providers mount immediately so Firebase profile reads,
-                      RevenueCat identity synchronization, vault locking and
-                      preference hydration can overlap font/i18n loading. */}
-                  {fontsLoaded && i18nReady ? <RootNavigator /> : <FullScreenLoading />}
-                </PhotoVaultProvider>
-              </AppStateProvider>
-            </UnitsProvider>
-          </PromoCodeProvider>
-        </SubscriptionProvider>
-      </AuthProvider>
-    </SafeAreaProvider>
+    // Root for react-native-gesture-handler. Required on Android for any
+    // gesture to be recognized at all; the Photo Vault viewer mounts a second
+    // one inside its native Modal, which is a separate view hierarchy.
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <AuthProvider>
+          {/* Nested inside AuthProvider so SubscriptionProvider can read
+              useAuth()'s `user`/`initializing` and react to it (calling
+              loginRevenueCat/logoutRevenueCat internally). AuthContext itself
+              is untouched — it stays the sole owner of identity and knows
+              nothing about RevenueCat; SubscriptionContext just watches it. */}
+          <SubscriptionProvider>
+            <PromoCodeProvider>
+              <UnitsProvider>
+                <AppStateProvider>
+                  {/* Inside AuthProvider so it can re-lock on logout and account
+                      switches; wraps the navigator so its AppState listener is
+                      mounted for the whole session. */}
+                  <PhotoVaultProvider>
+                    <StatusBar style={theme.statusBar.style} />
+                    <NativeThemeSync />
+                    {/* Business providers mount immediately so Firebase profile
+                        reads, RevenueCat identity synchronization and vault
+                        locking overlap the local theme/font/i18n bootstrap.
+                        Only the definitive UI is held behind this visual gate,
+                        preventing a stored Light preference from first painting
+                        the real app in Dark. */}
+                    {themeHydrated && fontsLoaded && i18nReady
+                      ? <RootNavigator />
+                      : <FullScreenLoading />}
+                  </PhotoVaultProvider>
+                </AppStateProvider>
+              </UnitsProvider>
+            </PromoCodeProvider>
+          </SubscriptionProvider>
+        </AuthProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
+  );
+}
+
+export default function App() {
+  return (
+    <ThemeProvider>
+      <AppContent />
+    </ThemeProvider>
   );
 }
