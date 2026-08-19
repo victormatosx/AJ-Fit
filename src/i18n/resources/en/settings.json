@@ -55,6 +55,54 @@
       "deleteAccount": "Delete account"
     },
     "safetyZoneDescription": "Keep your account protected by regularly reviewing your security settings.",
+    "deleteAccountFlow": {
+      "screenTitle": "Delete account",
+      "intro": {
+        "consequence1": "Your account will be permanently closed. Once completed, this process cannot be undone.",
+        "consequence2": "Your personal data will be deleted according to our privacy policy. Some records may be preserved when required by legal or security obligations.",
+        "consequence3": "Deleting your account is a serious action. We recommend reviewing your information before continuing.",
+        "subscriptionTitle": "Deleting your account does not cancel your subscription",
+        "subscriptionBody": "If you have an active subscription through the App Store or Google Play, it will continue until you cancel it directly in the store's settings.",
+        "manageSubscription": "Manage subscription",
+        "continueAction": "Continue with deletion"
+      },
+      "reauth": {
+        "title": "Confirm your identity",
+        "description": "For your security, confirm your identity before continuing to delete your account.",
+        "codeDescription": "Now enter the current code from your authenticator app to continue."
+      },
+      "confirm": {
+        "title": "Final confirmation",
+        "bullet1": "Your account will be closed.",
+        "bullet2": "Data marked for deletion by our policy will be removed.",
+        "bullet3": "Some records may be retained according to our retention policy.",
+        "bullet4": "Your subscription will not be cancelled automatically.",
+        "action": "Delete my account"
+      },
+      "submitting": {
+        "message": "Closing your account..."
+      },
+      "errors": {
+        "USER_SIGNED_OUT": "Your session is not available. Sign in again and try once more.",
+        "IDENTITY_CHANGED": "The account in use changed during the process. Nothing was changed — try again.",
+        "PROVIDER_MISMATCH": "Identity confirmation is not available for this account yet.",
+        "WRONG_PASSWORD": "That password is incorrect. Check it and try again.",
+        "PASSWORD_REQUIRED": "Enter your current password.",
+        "USER_CANCELLED": "Confirmation was cancelled. Nothing was changed.",
+        "RATE_LIMITED": "Too many attempts were made. Wait a moment and try again.",
+        "SESSION_EXPIRED": "Your session expired. Confirm your identity again to continue.",
+        "NETWORK_ERROR": "Could not connect. Check your internet connection and try again.",
+        "MFA_CANCELLED": "Confirmation was cancelled. Nothing was changed.",
+        "MFA_INVALID_CODE": "Incorrect code. Use the current code from your authenticator and try again.",
+        "REAUTH_FAILED": "We could not confirm your identity. Please try again.",
+        "reauthCancelled": "Confirmation was cancelled. Nothing was changed.",
+        "googleRevocationFailed": "We could not complete confirmation with Google. Please try again.",
+        "applePreparationCancelled": "Confirmation with Apple was cancelled. Nothing was changed.",
+        "applePreparationUnavailable": "Confirmation with Apple is not available right now. Please try again.",
+        "reconciliationRequired": "Your account already has a deletion request on file. Our team will review it.",
+        "requestFailed": "We could not process your request right now. Please try again."
+      }
+    },
     "twoFactor": {
       "title": "Two-step verification",
       "description": "Add a second layer of security to your account with an authenticator app.",

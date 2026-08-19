@@ -30,6 +30,7 @@ const MIGRATED_FLAGS = [
   'showSubscriptionCenter',
   'showTwoFactor',
   'showTotpEnrollment',
+  'showDeleteAccount',
 ];
 
 /** Screens still ephemeral — sensitive/transactional, per docs/23 §10/§17. */

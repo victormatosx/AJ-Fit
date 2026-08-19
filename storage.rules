@@ -29,13 +29,26 @@ service firebase.storage {
              .data.subscription.get('entitlementActive', false) == true;
     }
 
+    // Fase 5 (docs/25_exclusao_de_conta_arquitetura.md — "Bloqueio imediato
+    // da conta"): mirrors firestore.rules' `accountActive(userId)` exactly
+    // — same reasoning (a revoked-refresh-tokens session can still hold a
+    // live ID token for up to ~1h; this is what stops IT, independent of
+    // Storage-adjacent backend guards), same cost class as
+    // `hasServerPremium` above, same "checks lock existence, never status"
+    // design. Kept in sync manually with firestore.rules, like
+    // `hasServerPremium` already is.
+    function accountActive(userId) {
+      return !firestore.exists(/databases/(default)/documents/accountDeletionLocks/$(userId));
+    }
+
     match /users/{userId}/profile/avatar {
-      allow read: if request.auth != null && request.auth.uid == userId;
+      allow read: if request.auth != null && request.auth.uid == userId && accountActive(userId);
       allow create, update: if request.auth != null
         && request.auth.uid == userId
+        && accountActive(userId)
         && request.resource.size <= 5 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
-      allow delete: if request.auth != null && request.auth.uid == userId;
+      allow delete: if request.auth != null && request.auth.uid == userId && accountActive(userId);
     }
 
     // Fotos privadas de evolução (Photo Vault, docs/20). O objeto é
@@ -44,7 +57,8 @@ service firebase.storage {
     // nunca vê uma imagem aqui. O metadado correspondente vive em
     // users/{userId}/progressPhotos/{photoId} no Firestore.
     match /users/{userId}/progressPhotos/{fileName} {
-      allow read: if request.auth != null && request.auth.uid == userId;
+      // Fase 5: read also requires accountActive(userId).
+      allow read: if request.auth != null && request.auth.uid == userId && accountActive(userId);
 
       // FASE 7: ADD_PROGRESS_PHOTO/DELETE_PROGRESS_PHOTO are Premium
       // capabilities (Fase 3) — `hasServerPremium(userId)` is required
@@ -54,6 +68,7 @@ service firebase.storage {
       // metadata.
       allow create: if request.auth != null
         && request.auth.uid == userId
+        && accountActive(userId)
         && hasServerPremium(userId)
         // Imutabilidade real: no Cloud Storage um upload sobre um caminho já
         // existente cria uma nova GERAÇÃO do objeto e é avaliado como
@@ -95,13 +110,15 @@ service firebase.storage {
       // não podem ser alterados.
       allow update: if false;
 
-      allow delete: if request.auth != null && request.auth.uid == userId && hasServerPremium(userId);
+      allow delete: if request.auth != null && request.auth.uid == userId && accountActive(userId) && hasServerPremium(userId);
     }
 
     match /users/{userId}/support/{ticketId}/attachments/{fileName} {
-      allow read: if request.auth != null && request.auth.uid == userId;
+      // Fase 5: read also requires accountActive(userId).
+      allow read: if request.auth != null && request.auth.uid == userId && accountActive(userId);
       allow create: if request.auth != null
         && request.auth.uid == userId
+        && accountActive(userId)
         && request.resource.size <= 8 * 1024 * 1024
         && request.resource.contentType.matches('image/.*')
         && request.resource.metadata.ownerId == userId

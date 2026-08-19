@@ -50,3 +50,23 @@ export async function writeStoredUnitsPreference(
   await AsyncStorage.setItem(UNITS_PREFERENCE_STORAGE_KEY, preference);
   publish(preference);
 }
+
+/**
+ * Fase 11 audit finding: unlike `language` (`i18n/languageStorage.ts`,
+ * deliberately NOT cleared on logout — documented carry-over default), this
+ * key has no such documented exception, and it IS account data —
+ * `units/syncUnits.ts`'s `pushRemoteUnits` writes it to
+ * `users/{uid}.preferences.units`. `reconcileUnitsOnLoad` already refuses to
+ * apply a pending value stamped with a different uid on the NEXT login, so
+ * this is not a full cross-account leak, but that self-heal only runs once
+ * reconciliation executes — clearing proactively on account deletion removes
+ * that race window entirely, the same defensive treatment already given to
+ * the onboarding draft and workout-substitution preferences.
+ */
+export async function clearStoredUnitsPreference(): Promise<void> {
+  try {
+    await AsyncStorage.removeItem(UNITS_PREFERENCE_STORAGE_KEY);
+  } catch (err) {
+    logError('unitsStorage:clear', err);
+  }
+}

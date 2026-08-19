@@ -55,6 +55,54 @@
       "deleteAccount": "Excluir conta"
     },
     "safetyZoneDescription": "Mantenha sua conta protegida revisando regularmente suas configurações de segurança.",
+    "deleteAccountFlow": {
+      "screenTitle": "Excluir conta",
+      "intro": {
+        "consequence1": "Sua conta será encerrada permanentemente. Depois de concluído, esse processo não pode ser desfeito.",
+        "consequence2": "Seus dados pessoais serão excluídos conforme nossa política de privacidade. Alguns registros podem ser preservados quando exigido por obrigações legais ou de segurança.",
+        "consequence3": "Excluir sua conta é uma ação séria. Recomendamos revisar suas informações antes de continuar.",
+        "subscriptionTitle": "Excluir sua conta não cancela sua assinatura",
+        "subscriptionBody": "Se você possui uma assinatura ativa pela App Store ou Google Play, ela continuará até ser cancelada diretamente nas configurações da loja.",
+        "manageSubscription": "Gerenciar assinatura",
+        "continueAction": "Continuar com exclusão"
+      },
+      "reauth": {
+        "title": "Confirme sua identidade",
+        "description": "Por segurança, confirme sua identidade antes de continuar com a exclusão da sua conta.",
+        "codeDescription": "Agora informe o código atual do aplicativo autenticador para continuar."
+      },
+      "confirm": {
+        "title": "Última confirmação",
+        "bullet1": "Sua conta será encerrada.",
+        "bullet2": "Os dados definidos para exclusão pela nossa política serão removidos.",
+        "bullet3": "Alguns registros podem ser retidos conforme nossa política de retenção.",
+        "bullet4": "Sua assinatura não será cancelada automaticamente.",
+        "action": "Excluir minha conta"
+      },
+      "submitting": {
+        "message": "Encerrando sua conta..."
+      },
+      "errors": {
+        "USER_SIGNED_OUT": "Sua sessão não está disponível. Entre novamente e tente outra vez.",
+        "IDENTITY_CHANGED": "A conta em uso mudou durante o processo. Nenhuma alteração foi feita — tente novamente.",
+        "PROVIDER_MISMATCH": "A confirmação de identidade desta conta ainda não está disponível.",
+        "WRONG_PASSWORD": "A senha está incorreta. Verifique e tente novamente.",
+        "PASSWORD_REQUIRED": "Digite sua senha atual.",
+        "USER_CANCELLED": "A confirmação foi cancelada. Nenhuma alteração foi feita.",
+        "RATE_LIMITED": "Muitas tentativas foram feitas. Aguarde um pouco e tente novamente.",
+        "SESSION_EXPIRED": "Sua sessão expirou. Confirme sua identidade novamente para continuar.",
+        "NETWORK_ERROR": "Não foi possível conectar. Verifique sua internet e tente novamente.",
+        "MFA_CANCELLED": "A confirmação foi cancelada. Nenhuma alteração foi feita.",
+        "MFA_INVALID_CODE": "Código incorreto. Use o código atual do autenticador e tente novamente.",
+        "REAUTH_FAILED": "Não foi possível confirmar sua identidade. Tente novamente.",
+        "reauthCancelled": "A confirmação foi cancelada. Nenhuma alteração foi feita.",
+        "googleRevocationFailed": "Não foi possível concluir a confirmação com o Google. Tente novamente.",
+        "applePreparationCancelled": "A confirmação com a Apple foi cancelada. Nenhuma alteração foi feita.",
+        "applePreparationUnavailable": "A confirmação com a Apple não está disponível agora. Tente novamente.",
+        "reconciliationRequired": "Sua conta já possui uma solicitação de exclusão registrada. Nossa equipe irá revisar o caso.",
+        "requestFailed": "Não foi possível processar sua solicitação agora. Tente novamente."
+      }
+    },
     "twoFactor": {
       "title": "Verificação em duas etapas",
       "description": "Adicione uma segunda etapa de segurança à sua conta usando um aplicativo autenticador.",

@@ -16,6 +16,8 @@ import { backendHealth } from './health/backendHealth';
 import { createVault } from './photoVault/createVault';
 import { recoverVaultKey } from './photoVault/recoverVaultKey';
 import { cleanupPhotoVaultOrphans } from './photoVault/cleanupOrphans';
+import { requestAccountDeletion } from './accountDeletion/requestAccountDeletion';
+import { cleanupPendingAccountDeletions } from './accountDeletion/reconciliation/scheduler';
 
 /**
  * AJ Fit Cloud Functions entry point.
@@ -88,3 +90,29 @@ export const adminSetPromoCodeActive = onCall(adminSetPromoCodeActiveHandler);
 // Only authenticated, policy-enforcing Photo Vault callables are exported.
 // The KMS wrap/unwrap layer stays internal and has no endpoint of its own.
 export { backendHealth, cleanupPhotoVaultOrphans, createVault, recoverVaultKey };
+
+/**
+ * "Excluir Conta" — Fase 4 of docs/25_exclusao_de_conta_arquitetura.md.
+ * Requires recent-auth (same guard/window as `recoverVaultKey`) and ONLY
+ * persists the workflow's `REQUESTED` state, atomically deduplicated per
+ * uid — it never touches Firestore user data, Storage, RevenueCat, Apple,
+ * Google, or the Firebase Auth user record itself. The destructive worker
+ * that actually executes the eight workflow steps does not exist yet
+ * (Fase 5+) — see the Fase 4 report for the full boundary this callable
+ * does and does not cross.
+ */
+export { requestAccountDeletion };
+
+/**
+ * "Excluir Conta" reconciliation worker — Fase 14 of
+ * docs/25_exclusao_de_conta_arquitetura.md. Second line of defense: a
+ * scheduled sweep that finds any `AccountDeletionRecord` interrupted by a
+ * crash/timeout/network failure/process kill and continues it to a known
+ * terminal state, using ONLY the existing state machine, retry/backoff and
+ * step executors (Fase 1-13) — never a re-derivation of any of them. Acts
+ * exclusively on the `accountDeletions` control plane; never infers deletion
+ * intent from the absence of a resource elsewhere. See
+ * `accountDeletion/reconciliation/scheduler.ts` for the frequency/batch/
+ * timeout justification.
+ */
+export { cleanupPendingAccountDeletions };

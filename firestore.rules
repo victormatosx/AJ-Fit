@@ -58,6 +58,33 @@ service cloud.firestore {
              .data.subscription.get('entitlementActive', false) == true;
     }
 
+    // FASE 5 (docs/25_exclusao_de_conta_arquitetura.md — "Bloqueio imediato
+    // da conta"): once `requestAccountDeletion` has durably accepted a
+    // deletion, this becomes `false` and every private user-owned path
+    // below denies read/write, regardless of the internal workflow status
+    // (`REQUESTED`/`PROCESSING`/`RETRY_SCHEDULED`/`COMPLETED`/
+    // `FAILED_TERMINAL` all mean "not active" — see
+    // `functions/src/accountDeletion/activeAccountGuard.ts`'s doc comment
+    // for why status is never inspected, only existence). A stale ID token
+    // issued before the lock was created is exactly what this guards
+    // against: `admin.auth().revokeRefreshTokens` alone does not invalidate
+    // an already-issued ID token before its normal ~1h expiry, so this is
+    // the layer that actually stops a client SDK write/read with such a
+    // token, independent of any backend callable guard.
+    //
+    // One extra `exists()` read per rule evaluation, same cost class as
+    // `hasServerPremium` above (already an accepted pattern in this
+    // ruleset). Deliberately checks presence of the LOCK document, not
+    // `accountDeletions/{deletionId}`'s `status` field — the lock is a
+    // single, tiny, doc-id-keyed read; resolving a full record would need
+    // an extra indirection this check does not need.
+    //
+    // NÃO FAZER DEPLOY sem antes confirmar (Fase 0) que estas regras — e não
+    // uma versão diferente — são de fato as publicadas em produção.
+    function accountActive(userId) {
+      return !exists(/databases/$(database)/documents/accountDeletionLocks/$(userId));
+    }
+
     // O painel autentica com Firebase Auth e o backend promove previamente o
     // documento do operador. Escritas do app nunca podem alterar metadata.role.
     function isAdmin() {
@@ -538,8 +565,9 @@ service cloud.firestore {
 
     // ── Users, questionnaires and assessments ─────────────────────────────
     match /users/{userId} {
-      // Leitura: apenas o dono do documento.
-      allow read: if isOwner(userId);
+      // Leitura: apenas o dono do documento, e somente com a conta ativa
+      // (Fase 5 — ver `accountActive` acima).
+      allow read: if isOwner(userId) && accountActive(userId);
 
       // Criação: documento integralmente aninhado, com identidade coerente com
       // o token e sem campos de assinatura/internos definidos pelo cliente.
@@ -550,7 +578,12 @@ service cloud.firestore {
       // porém com um couponCode/influencerId arbitrário) no momento da
       // criação da conta, antes de qualquer validação server-side via
       // `validatePromoCode`.
+      // Fase 5: também exige `accountActive(userId)` — sem isso, um token
+      // ainda válido poderia RECRIAR o documento depois que
+      // FIRESTORE_CLEANUP já o removeu, ressuscitando dados de perfil no
+      // meio (ou depois) de uma exclusão em andamento.
       allow create: if isOwner(userId)
+        && accountActive(userId)
         && nestedUserValid(request.resource.data)
         && !('attribution' in request.resource.data)
         && request.resource.data.metadata.role == 'user'
@@ -569,7 +602,7 @@ service cloud.firestore {
       // apenas `preferences.language` e `preferences.units` podem variar;
       // `theme` segue protegido. Escritas legítimas usam caminhos pontuados,
       // preservando todas as preferências irmãs.
-      allow update: if isOwner(userId) && (
+      allow update: if isOwner(userId) && accountActive(userId) && (
         legacyMigrationValid()
         || (
           nestedUserValid(request.resource.data)
@@ -596,11 +629,12 @@ service cloud.firestore {
       // Questionários do usuário (inicial + reavaliações futuras).
       // Cada documento é um snapshot imutável.
       match /questionnaires/{questionnaireId} {
-        // Leitura: apenas o dono do usuário pai.
-        allow read: if isOwner(userId);
+        // Leitura: apenas o dono do usuário pai, com a conta ativa (Fase 5).
+        allow read: if isOwner(userId) && accountActive(userId);
 
         // Criação: apenas o dono, com os campos esperados e válidos.
         allow create: if isOwner(userId)
+          && accountActive(userId)
           && request.resource.data.keys().hasOnly(
                ['answers', 'version', 'createdAt'])
           && request.resource.data.answers is map
@@ -623,9 +657,11 @@ service cloud.firestore {
       // permanecem `if false` para todos — a Fase 3 só exigiria proteção
       // Premium aqui se essas ações existissem, e não existem.
       match /assessments/{assessmentId} {
-        allow read: if isOwner(userId);
+        // Fase 5: leitura/criação também exigem accountActive(userId).
+        allow read: if isOwner(userId) && accountActive(userId);
 
         allow create: if isOwner(userId)
+          && accountActive(userId)
           && hasServerPremium(userId)
           && assessmentCommonValid()
           && (guidedAssessmentValid() || importedAssessmentValid());
@@ -643,10 +679,11 @@ service cloud.firestore {
       // existente nunca fica bloqueada, só passa a exigir Premium para
       // criar/excluir um registro, sempre em conjunto com `isOwner(userId)`.
       match /progressPhotos/{photoId} {
-        allow read: if isOwner(userId);
-        allow create: if isOwner(userId) && hasServerPremium(userId) && progressPhotoValid(userId, photoId);
+        // Fase 5: leitura/criação/exclusão também exigem accountActive(userId).
+        allow read: if isOwner(userId) && accountActive(userId);
+        allow create: if isOwner(userId) && accountActive(userId) && hasServerPremium(userId) && progressPhotoValid(userId, photoId);
         allow update: if false;
-        allow delete: if isOwner(userId) && hasServerPremium(userId);
+        allow delete: if isOwner(userId) && accountActive(userId) && hasServerPremium(userId);
       }
 
       // Material criptográfico do Photo Vault (wrappedVaultKey e versões).
@@ -704,6 +741,28 @@ service cloud.firestore {
     // Admin SDK. Bloco explícito pelo mesmo motivo do `promoCodes` acima.
     match /couponRedemptions/{uid} {
       allow read, write: if false;
+    }
+
+    // Fase 4/5 account-deletion workflow state
+    // (functions/src/accountDeletion/{repository,activeAccountGuard}.ts).
+    // Backend-only in both directions: the client never creates, reads, or
+    // polls its own deletion record/lock through Firestore directly — a
+    // future status-check UI would need its OWN minimal, explicit callable
+    // contract (not implemented yet), never a direct read of these paths.
+    // `accountActive()` above reads `accountDeletionLocks/{userId}` via
+    // `exists()`, which does not require (and is unaffected by) an `allow
+    // read` rule here — these blocks exist to make the deny explicit and
+    // documented, matching `promoCodes`/`couponRedemptions` above, not to
+    // enable the `exists()` check.
+    match /accountDeletionLocks/{uid} {
+      allow read, write: if false;
+    }
+    match /accountDeletions/{deletionId} {
+      allow read, write: if false;
+
+      match /{subcollection=**} {
+        allow read, write: if false;
+      }
     }
 
     // ── Deny all undocumented collections ─────────────────────────────────

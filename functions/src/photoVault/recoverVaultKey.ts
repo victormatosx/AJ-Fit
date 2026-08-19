@@ -1,6 +1,7 @@
 import { HttpsError, onCall, type CallableRequest } from 'firebase-functions/v2/https';
 
 import { requireRecentAuth } from '../lib/auth';
+import { requireActiveAccount } from '../accountDeletion/activeAccountGuard';
 import { logFunctionError, logInfo } from '../lib/logger';
 import { VaultCryptoError } from './errors';
 import { validatePhotoVault } from './schema';
@@ -34,6 +35,11 @@ export async function handleRecoverVaultKey(
   // verified token — a `uid` in `request.data` is ignored entirely, so a
   // caller can only ever reach their own vault.
   const uid = requireRecentAuth(request);
+
+  // Fase 5: never hand back a key the deletion workflow may be about to
+  // destroy (or may have already destroyed) to a session that requested
+  // account deletion.
+  await requireActiveAccount(uid);
 
   let vaultKey: Buffer | undefined;
 

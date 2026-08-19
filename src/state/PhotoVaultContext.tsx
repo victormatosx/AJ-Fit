@@ -26,6 +26,7 @@ import {
 } from '../services/localAuthentication';
 import { pruneCachedThumbnailsExcept } from '../services/photoVaultEncryptedCache';
 import { cleanupPhotoVaultShareFiles } from '../services/photoVaultFileCrypto';
+import { resetGallery } from '../lib/photoVaultGallery';
 import { deactivatePhotoVaultScreenProtection } from '../services/photoVaultScreenProtection';
 import {
   readPhotoVaultContentPresence,
@@ -277,9 +278,23 @@ export function PhotoVaultProvider({ children }: { children: React.ReactNode }) 
    * previous account may reach the next one. Wrapped in try/catch — unlike
    * the lock/prune calls above, a filesystem sweep can throw on a genuine
    * error, and that must not skip resetting `capability`/`lastIssue` below.
+   *
+   * Fase 11 audit finding: `lockPhotoVault()` already discards decrypted
+   * plaintext (via `photoVaultGallery.ts`'s own subscription to vault
+   * status), but it does NOT clear the gallery's in-memory PHOTO METADATA
+   * (`state.photos` — photoId/assetId/dates, no image bytes) or its
+   * race-guard counters (`generation`/`viewerOwnerId`). `resetGallery()`
+   * existed for exactly this but was never wired to an identity change
+   * before this fix — the previous account's photo list/count/dates would
+   * otherwise survive in this module-level singleton until the next
+   * account's own Firestore listener happened to overwrite it. Called right
+   * after `lockPhotoVault()` so the generation bump here is the LAST one
+   * before any new-account listener attaches, closing the "late callback
+   * repopulates the wrong account's grid" window as well.
    */
   useEffect(() => {
     lockPhotoVault();
+    resetGallery();
     pruneCachedThumbnailsExcept(uid);
     try {
       cleanupPhotoVaultShareFiles();

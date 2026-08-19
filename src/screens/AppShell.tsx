@@ -26,6 +26,7 @@ import { SecurityScreen } from './SecurityScreen';
 import { ChangePasswordScreen } from './ChangePasswordScreen';
 import { TotpEnrollmentScreen } from './TotpEnrollmentScreen';
 import { TwoFactorSettingsScreen } from './TwoFactorSettingsScreen';
+import { DeleteAccountScreen } from './DeleteAccountScreen';
 import { EditProfileScreen } from './EditProfileScreen';
 import { PaywallScreen } from './PaywallScreen';
 import { SubscriptionCenterScreen } from './SubscriptionCenterScreen';
@@ -102,6 +103,7 @@ function AppShellContent({
   const [showTwoFactor, setShowTwoFactor] = useState(false);
   const [showTotpEnrollment, setShowTotpEnrollment] = useState(false);
   const [totpRefreshToken, setTotpRefreshToken] = useState(0);
+  const [showDeleteAccount, setShowDeleteAccount] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showSubscriptionCenter, setShowSubscriptionCenter] = useState(false);
   const [showWorkoutConfirmation, setShowWorkoutConfirmation] = useState(false);
@@ -128,6 +130,7 @@ function AppShellContent({
     showTotpEnrollment ||
     showEditProfile ||
     showSubscriptionCenter ||
+    showDeleteAccount ||
     showPremium ||
     !!supportRoute;
 
@@ -280,6 +283,7 @@ function AppShellContent({
             setLastFormRoute({ type: 'FEEDBACK' });
             setSupportRoute({ name: 'form', type: 'FEEDBACK' });
           }}
+          onOpenDeleteAccount={() => setShowDeleteAccount(true)}
         />
       </PersistentScreen>
       <PersistentScreen
@@ -292,6 +296,7 @@ function AppShellContent({
           onBack={() => setShowSecurity(false)}
           onOpenChangePassword={canChangePassword ? () => setShowChangePassword(true) : undefined}
           onOpenTwoFactor={() => setShowTwoFactor(true)}
+          onOpenDeleteAccount={() => setShowDeleteAccount(true)}
         />
       </PersistentScreen>
       {/*
@@ -338,6 +343,22 @@ function AppShellContent({
             setTotpRefreshToken((value) => value + 1);
           }}
         />
+      </PersistentScreen>
+      {/*
+        DeleteAccountScreen (Fase 12): same z-tier as ChangePassword/
+        TwoFactorSettings — a direct child of Security, not nested under
+        either of them. Same sensitive-state discipline: the shell is safe
+        to prewarm (no password/MFA-code/provider material exists until the
+        user interacts), and `useAccountDeletionFlow`'s `reset()` wipes it
+        all on deactivation via the screen's own `useScreenFocusEffect`.
+      */}
+      <PersistentScreen
+        active={showDeleteAccount}
+        prewarm={prewarmed.DELETE_ACCOUNT}
+        activeStyle={FULL_BLEED.overlayZ60}
+        inactiveMode="materialized"
+      >
+        <DeleteAccountScreen onBack={() => setShowDeleteAccount(false)} />
       </PersistentScreen>
       <PersistentScreen
         active={showEditProfile}

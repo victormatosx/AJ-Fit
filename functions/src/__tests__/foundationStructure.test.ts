@@ -89,9 +89,11 @@ describe('Photo Vault backend foundation — Phase 3 structural guarantees', () 
       'adminUpdatePromoCode',
       'authorizePromoPurchase',
       'backendHealth',
+      'cleanupPendingAccountDeletions',
       'cleanupPhotoVaultOrphans',
       'createVault',
       'recoverVaultKey',
+      'requestAccountDeletion',
       'revenueCatWebhook',
       'validatePromoCode',
     ]);

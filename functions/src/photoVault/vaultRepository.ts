@@ -64,6 +64,33 @@ export async function createVaultDocument(
   }
 }
 
+/**
+ * Deletes the vault document — Fase 12.5 (`VAULT_KEY_DESTRUCTION`).
+ *
+ * This document (`wrappedVaultKey` + `kmsKeyVersion`) is the ONLY backend
+ * copy of the user's wrapped Vault Key — confirmed by the Fase 12.5
+ * cryptographic audit: `createVault.ts` generates the raw DEK in function
+ * memory, wraps it once via the shared project-wide KMS KEK
+ * (`kmsClient.ts`'s `photo-vault-kek` — never per-user, never destroyed
+ * here), and persists only the wrapped ciphertext, here. `recoverVaultKey.ts`
+ * re-reads and re-unwraps this exact same document — there is no separate
+ * recovery blob, backup, or legacy-key document anywhere in the schema.
+ * Deleting this document is therefore sufficient, on its own, to make the
+ * Vault Key permanently unrecoverable (crypto-shredding: the sole wrapped
+ * ciphertext is gone, so KMS has nothing left to unwrap for this uid) —
+ * without touching the shared KEK, which every other user's vault still
+ * depends on.
+ *
+ * Plain Firestore `.delete()` is naturally idempotent — deleting an
+ * already-absent document succeeds silently, never throws "not found".
+ * `FIRESTORE_CLEANUP` (Fase 6) deliberately never touches this document
+ * (non-recursive delete of `users/{uid}`, see `firestoreCleanup/resources.ts`) —
+ * this repository function is the only writer that removes it.
+ */
+export async function deleteVaultDocument(uid: string): Promise<void> {
+  await vaultRef(uid).delete();
+}
+
 /** Reads the vault document, or null when the user has no vault yet. */
 export async function readVaultDocument(uid: string): Promise<PhotoVaultDocument | null> {
   const snapshot = await vaultRef(uid).get();

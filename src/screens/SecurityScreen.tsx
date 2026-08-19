@@ -12,10 +12,12 @@ export function SecurityScreen({
   onBack,
   onOpenChangePassword,
   onOpenTwoFactor,
+  onOpenDeleteAccount,
 }: {
   onBack: () => void;
   onOpenChangePassword?: () => void;
   onOpenTwoFactor: () => void;
+  onOpenDeleteAccount?: () => void;
 }) {
   const { t } = useTranslation('settings');
   const { linkedProviders } = useAuth();
@@ -82,7 +84,7 @@ export function SecurityScreen({
                 icon: 'trash',
                 label: t('security.items.deleteAccount'),
                 danger: true,
-                onPress: () => {},
+                onPress: onOpenDeleteAccount ?? (() => {}),
               },
             ]}
           />

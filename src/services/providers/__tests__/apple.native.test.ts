@@ -29,7 +29,7 @@ vi.mock('firebase/auth', () => ({
   },
 }));
 
-import { getAppleCredential } from '../apple.native';
+import { getAppleCredential, getAppleCredentialForAccountDeletion } from '../apple.native';
 
 describe('Apple credential acquisition', () => {
   let nonceSeed = 0;
@@ -49,6 +49,7 @@ describe('Apple credential acquisition', () => {
     mocks.signIn.mockResolvedValue({
       identityToken: 'apple-id-token',
       fullName: null,
+      authorizationCode: 'apple-authorization-code',
     });
     mocks.oauthCredential.mockImplementation((input) => ({ input }));
   });
@@ -106,5 +107,76 @@ describe('Apple credential acquisition', () => {
       new ProviderCredentialError('identityTokenMissing'),
     );
     expect(mocks.oauthCredential).not.toHaveBeenCalled();
+  });
+});
+
+describe('getAppleCredentialForAccountDeletion (Fase 3 — provider revocation)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    let nonceSeed = 0;
+    mocks.random.mockImplementation((array: Uint8Array) => {
+      nonceSeed += 1;
+      array.fill(nonceSeed);
+      return array;
+    });
+    mocks.digest.mockImplementation(async (_algorithm, rawNonce: string) => `hash:${rawNonce}`);
+    mocks.signIn.mockResolvedValue({
+      identityToken: 'apple-id-token',
+      fullName: { givenName: 'Should', familyName: 'BeIgnored' },
+      authorizationCode: 'apple-authorization-code',
+    });
+    mocks.oauthCredential.mockImplementation((input) => ({ input }));
+  });
+
+  it('returns the authorizationCode alongside the credential, and never requests profile scopes', async () => {
+    const result = await getAppleCredentialForAccountDeletion();
+    expect(result.authorizationCode).toBe('apple-authorization-code');
+    expect(result.displayName).toBeNull(); // profile never requested, unlike login
+    expect(mocks.signIn).toHaveBeenCalledWith({
+      requestedScopes: [],
+      nonce: expect.stringMatching(/^hash:/),
+    });
+  });
+
+  it('uses a fresh nonce, independent from getAppleCredential’s own calls', async () => {
+    await getAppleCredential({ requestProfile: false });
+    await getAppleCredentialForAccountDeletion();
+    const firstNonce = mocks.digest.mock.calls[0][1];
+    const secondNonce = mocks.digest.mock.calls[1][1];
+    expect(firstNonce).not.toBe(secondNonce);
+  });
+
+  it('propagates cancellation exactly like getAppleCredential', async () => {
+    mocks.signIn.mockRejectedValueOnce({ code: 'ERR_REQUEST_CANCELED' });
+    await expect(getAppleCredentialForAccountDeletion()).rejects.toBeInstanceOf(
+      SocialAuthCancelledError,
+    );
+  });
+
+  it('rejects when identityToken is missing, before ever building a Firebase credential', async () => {
+    mocks.signIn.mockResolvedValueOnce({ identityToken: null, authorizationCode: 'code' });
+    await expect(getAppleCredentialForAccountDeletion()).rejects.toEqual(
+      new ProviderCredentialError('identityTokenMissing'),
+    );
+    expect(mocks.oauthCredential).not.toHaveBeenCalled();
+  });
+
+  it('rejects when authorizationCode is missing, even though identityToken is present', async () => {
+    mocks.signIn.mockResolvedValueOnce({ identityToken: 'apple-id-token', authorizationCode: null });
+    await expect(getAppleCredentialForAccountDeletion()).rejects.toEqual(
+      new ProviderCredentialError('authorizationCodeMissing'),
+    );
+    expect(mocks.oauthCredential).not.toHaveBeenCalled();
+  });
+
+  it('does not change getAppleCredential’s own behavior (regression guard for the shared helper refactor)', async () => {
+    mocks.signIn.mockResolvedValue({
+      identityToken: 'apple-id-token',
+      fullName: { givenName: 'Apple', familyName: 'Person' },
+      authorizationCode: 'unused-by-getAppleCredential',
+    });
+    const result = await getAppleCredential();
+    expect(result).toEqual({ credential: { input: { idToken: 'apple-id-token', rawNonce: expect.any(String) } }, displayName: 'Apple Person' });
+    expect('authorizationCode' in result).toBe(false);
   });
 });

@@ -5,3 +5,7 @@ import type { ProviderResult } from './types';
 
 export declare function isGoogleSigninAvailable(): Promise<boolean>;
 export declare function getGoogleCredential(): Promise<ProviderResult>;
+
+/** Fase 3 — account deletion provider revocation. See google.native.ts for the full contract. */
+export type GoogleRevokeAccessOutcome = 'revoked' | 'unavailable' | 'failed';
+export declare function revokeGoogleAccess(): Promise<GoogleRevokeAccessOutcome>;

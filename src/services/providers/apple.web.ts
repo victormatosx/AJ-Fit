@@ -17,3 +17,10 @@ export async function getAppleCredential(
 ): Promise<ProviderResult> {
   throw new ProviderCredentialError('providerUnavailable');
 }
+
+/** Fase 3 — account deletion provider revocation. Web stub: never available. */
+export async function getAppleCredentialForAccountDeletion(): Promise<
+  ProviderResult & { authorizationCode: string }
+> {
+  throw new ProviderCredentialError('providerUnavailable');
+}

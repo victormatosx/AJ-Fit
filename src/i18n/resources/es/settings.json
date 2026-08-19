@@ -55,6 +55,54 @@
       "deleteAccount": "Eliminar cuenta"
     },
     "safetyZoneDescription": "Mantén tu cuenta protegida revisando regularmente la configuración de seguridad.",
+    "deleteAccountFlow": {
+      "screenTitle": "Eliminar cuenta",
+      "intro": {
+        "consequence1": "Tu cuenta se cerrará de forma permanente. Una vez completado, este proceso no se puede deshacer.",
+        "consequence2": "Tus datos personales se eliminarán según nuestra política de privacidad. Algunos registros pueden conservarse cuando lo exijan obligaciones legales o de seguridad.",
+        "consequence3": "Eliminar tu cuenta es una acción seria. Te recomendamos revisar tu información antes de continuar.",
+        "subscriptionTitle": "Eliminar tu cuenta no cancela tu suscripción",
+        "subscriptionBody": "Si tienes una suscripción activa a través de App Store o Google Play, continuará hasta que la canceles directamente en la configuración de la tienda.",
+        "manageSubscription": "Gestionar suscripción",
+        "continueAction": "Continuar con la eliminación"
+      },
+      "reauth": {
+        "title": "Confirma tu identidad",
+        "description": "Por tu seguridad, confirma tu identidad antes de continuar con la eliminación de tu cuenta.",
+        "codeDescription": "Ahora ingresa el código actual de tu aplicación autenticadora para continuar."
+      },
+      "confirm": {
+        "title": "Confirmación final",
+        "bullet1": "Tu cuenta se cerrará.",
+        "bullet2": "Los datos definidos para eliminación según nuestra política serán eliminados.",
+        "bullet3": "Algunos registros pueden conservarse según nuestra política de retención.",
+        "bullet4": "Tu suscripción no se cancelará automáticamente.",
+        "action": "Eliminar mi cuenta"
+      },
+      "submitting": {
+        "message": "Cerrando tu cuenta..."
+      },
+      "errors": {
+        "USER_SIGNED_OUT": "Tu sesión no está disponible. Inicia sesión nuevamente e inténtalo de nuevo.",
+        "IDENTITY_CHANGED": "La cuenta en uso cambió durante el proceso. No se realizó ningún cambio — inténtalo de nuevo.",
+        "PROVIDER_MISMATCH": "La confirmación de identidad de esta cuenta aún no está disponible.",
+        "WRONG_PASSWORD": "La contraseña es incorrecta. Verifícala e inténtalo de nuevo.",
+        "PASSWORD_REQUIRED": "Ingresa tu contraseña actual.",
+        "USER_CANCELLED": "La confirmación fue cancelada. No se realizó ningún cambio.",
+        "RATE_LIMITED": "Se realizaron demasiados intentos. Espera un momento e inténtalo de nuevo.",
+        "SESSION_EXPIRED": "Tu sesión expiró. Confirma tu identidad nuevamente para continuar.",
+        "NETWORK_ERROR": "No se pudo conectar. Verifica tu conexión a internet e inténtalo de nuevo.",
+        "MFA_CANCELLED": "La confirmación fue cancelada. No se realizó ningún cambio.",
+        "MFA_INVALID_CODE": "Código incorrecto. Usa el código actual de tu autenticador e inténtalo de nuevo.",
+        "REAUTH_FAILED": "No pudimos confirmar tu identidad. Inténtalo de nuevo.",
+        "reauthCancelled": "La confirmación fue cancelada. No se realizó ningún cambio.",
+        "googleRevocationFailed": "No pudimos completar la confirmación con Google. Inténtalo de nuevo.",
+        "applePreparationCancelled": "La confirmación con Apple fue cancelada. No se realizó ningún cambio.",
+        "applePreparationUnavailable": "La confirmación con Apple no está disponible en este momento. Inténtalo de nuevo.",
+        "reconciliationRequired": "Tu cuenta ya tiene una solicitud de eliminación registrada. Nuestro equipo la revisará.",
+        "requestFailed": "No pudimos procesar tu solicitud en este momento. Inténtalo de nuevo."
+      }
+    },
     "twoFactor": {
       "title": "Verificación en dos pasos",
       "description": "Añade una segunda capa de seguridad a tu cuenta con una aplicación de autenticación.",
