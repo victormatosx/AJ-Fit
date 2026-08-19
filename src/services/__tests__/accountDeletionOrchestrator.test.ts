@@ -1,13 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-type TestUser = { uid: string };
+type TestUser = { uid: string; providerData: Array<{ providerId: string }> };
 
 const mocks = vi.hoisted(() => ({
   auth: { currentUser: null as TestUser | null },
   httpsCallable: vi.fn(),
   call: vi.fn(),
   revokeGoogleProviderAccess: vi.fn(),
-  prepareAppleProviderRevocationMaterial: vi.fn(),
 }));
 
 vi.mock('../../lib/firebase', () => ({ auth: mocks.auth }));
@@ -15,13 +14,12 @@ vi.mock('../../lib/firebaseFunctions', () => ({ functions: {} }));
 vi.mock('firebase/functions', () => ({ httpsCallable: mocks.httpsCallable }));
 vi.mock('../accountDeletionProviderRevocation', () => ({
   revokeGoogleProviderAccess: mocks.revokeGoogleProviderAccess,
-  prepareAppleProviderRevocationMaterial: mocks.prepareAppleProviderRevocationMaterial,
 }));
 
 import { requestAccountDeletionWithProviderPreparation } from '../accountDeletionOrchestrator';
 
-function user(uid = 'uid-1'): TestUser {
-  return { uid };
+function user(uid = 'uid-1', providers: string[] = ['password']): TestUser {
+  return { uid, providerData: providers.map((providerId) => ({ providerId })) };
 }
 
 beforeEach(() => {
@@ -32,12 +30,11 @@ beforeEach(() => {
     data: { deletionId: 'del-1', status: 'REQUESTED', accepted: true, deduplicated: false, requiresReconciliation: false },
   });
   mocks.revokeGoogleProviderAccess.mockResolvedValue({ status: 'not-linked' });
-  mocks.prepareAppleProviderRevocationMaterial.mockResolvedValue({ status: 'not-linked' });
 });
 
 describe('requestAccountDeletionWithProviderPreparation — no providers linked (password-only)', () => {
-  it('calls the backend with an empty payload and returns accepted', async () => {
-    const result = await requestAccountDeletionWithProviderPreparation();
+  it('calls the backend with an empty payload and returns accepted, with null prepared material', async () => {
+    const result = await requestAccountDeletionWithProviderPreparation(null);
     expect(result).toEqual({
       status: 'accepted',
       deletionId: 'del-1',
@@ -47,57 +44,44 @@ describe('requestAccountDeletionWithProviderPreparation — no providers linked 
     expect(mocks.call).toHaveBeenCalledWith({});
   });
 
-  it('calls Google before Apple, and Apple before the commit', async () => {
+  it('calls Google before the commit; never touches Apple at all for a password-only account', async () => {
     const order: string[] = [];
     mocks.revokeGoogleProviderAccess.mockImplementation(async () => {
       order.push('google');
-      return { status: 'not-linked' };
-    });
-    mocks.prepareAppleProviderRevocationMaterial.mockImplementation(async () => {
-      order.push('apple');
       return { status: 'not-linked' };
     });
     mocks.call.mockImplementation(async () => {
       order.push('commit');
       return { data: { deletionId: 'del-1', accepted: true, deduplicated: false } };
     });
-    await requestAccountDeletionWithProviderPreparation();
-    expect(order).toEqual(['google', 'apple', 'commit']);
+    await requestAccountDeletionWithProviderPreparation(null);
+    expect(order).toEqual(['google', 'commit']);
   });
 });
 
 describe('requestAccountDeletionWithProviderPreparation — identity boundary', () => {
   it('returns identity-changed with no calls at all when there is no current user', async () => {
     mocks.auth.currentUser = null;
-    await expect(requestAccountDeletionWithProviderPreparation()).resolves.toEqual({
+    await expect(requestAccountDeletionWithProviderPreparation(null)).resolves.toEqual({
       status: 'identity-changed',
     });
     expect(mocks.revokeGoogleProviderAccess).not.toHaveBeenCalled();
     expect(mocks.call).not.toHaveBeenCalled();
   });
 
-  it('propagates identity-changed from Google without ever reaching Apple or the commit', async () => {
+  it('propagates identity-changed from Google without ever reaching the commit', async () => {
     mocks.revokeGoogleProviderAccess.mockResolvedValue({ status: 'identity-changed' });
-    await expect(requestAccountDeletionWithProviderPreparation()).resolves.toEqual({
-      status: 'identity-changed',
-    });
-    expect(mocks.prepareAppleProviderRevocationMaterial).not.toHaveBeenCalled();
-    expect(mocks.call).not.toHaveBeenCalled();
-  });
-
-  it('propagates identity-changed from Apple without ever reaching the commit', async () => {
-    mocks.prepareAppleProviderRevocationMaterial.mockResolvedValue({ status: 'identity-changed' });
-    await expect(requestAccountDeletionWithProviderPreparation()).resolves.toEqual({
+    await expect(requestAccountDeletionWithProviderPreparation(null)).resolves.toEqual({
       status: 'identity-changed',
     });
     expect(mocks.call).not.toHaveBeenCalled();
   });
 });
 
-describe('requestAccountDeletionWithProviderPreparation — Google gate', () => {
+describe('requestAccountDeletionWithProviderPreparation — Google gate (unchanged by Fase 16)', () => {
   it('google-revocation-failed blocks the request entirely (revoke failed)', async () => {
     mocks.revokeGoogleProviderAccess.mockResolvedValue({ status: 'failed' });
-    await expect(requestAccountDeletionWithProviderPreparation()).resolves.toEqual({
+    await expect(requestAccountDeletionWithProviderPreparation(null)).resolves.toEqual({
       status: 'google-revocation-failed',
     });
     expect(mocks.call).not.toHaveBeenCalled();
@@ -105,7 +89,7 @@ describe('requestAccountDeletionWithProviderPreparation — Google gate', () => 
 
   it('google-revocation-failed blocks the request when revoke succeeded but unlink failed (§17 trade-off)', async () => {
     mocks.revokeGoogleProviderAccess.mockResolvedValue({ status: 'revoked-unlink-failed' });
-    await expect(requestAccountDeletionWithProviderPreparation()).resolves.toEqual({
+    await expect(requestAccountDeletionWithProviderPreparation(null)).resolves.toEqual({
       status: 'google-revocation-failed',
     });
     expect(mocks.call).not.toHaveBeenCalled();
@@ -113,61 +97,46 @@ describe('requestAccountDeletionWithProviderPreparation — Google gate', () => 
 
   it('a successful Google revoke proceeds to the commit', async () => {
     mocks.revokeGoogleProviderAccess.mockResolvedValue({ status: 'revoked' });
-    await expect(requestAccountDeletionWithProviderPreparation()).resolves.toMatchObject({ status: 'accepted' });
+    await expect(requestAccountDeletionWithProviderPreparation(null)).resolves.toMatchObject({ status: 'accepted' });
   });
 });
 
-describe('requestAccountDeletionWithProviderPreparation — Apple gate', () => {
-  it('cancellation blocks the request entirely', async () => {
-    mocks.prepareAppleProviderRevocationMaterial.mockResolvedValue({ status: 'cancelled' });
-    await expect(requestAccountDeletionWithProviderPreparation()).resolves.toEqual({
-      status: 'apple-preparation-cancelled',
+describe('requestAccountDeletionWithProviderPreparation — Apple gate (Fase 16: consumes prepared material, never opens Apple itself)', () => {
+  it('apple-material-missing when apple.com is linked and no material was prepared — never opens Apple to recover', async () => {
+    mocks.auth.currentUser = user('uid-1', ['apple.com']);
+    await expect(requestAccountDeletionWithProviderPreparation(null)).resolves.toEqual({
+      status: 'apple-material-missing',
     });
     expect(mocks.call).not.toHaveBeenCalled();
   });
 
-  it('unavailable blocks the request entirely', async () => {
-    mocks.prepareAppleProviderRevocationMaterial.mockResolvedValue({ status: 'unavailable' });
-    await expect(requestAccountDeletionWithProviderPreparation()).resolves.toEqual({
-      status: 'apple-preparation-unavailable',
-    });
-    expect(mocks.call).not.toHaveBeenCalled();
-  });
-
-  it('a ready authorizationCode is forwarded to the callable payload', async () => {
-    mocks.prepareAppleProviderRevocationMaterial.mockResolvedValue({
-      status: 'ready',
-      authorizationCode: 'fresh-code-123',
-    });
-    await requestAccountDeletionWithProviderPreparation();
+  it('a prepared authorizationCode is forwarded to the callable payload, unchanged wire contract', async () => {
+    mocks.auth.currentUser = user('uid-1', ['apple.com']);
+    await requestAccountDeletionWithProviderPreparation('fresh-code-123');
     expect(mocks.call).toHaveBeenCalledWith({ appleAuthorizationCode: 'fresh-code-123' });
   });
-});
 
-describe('requestAccountDeletionWithProviderPreparation — multi-provider', () => {
-  it('password + Google + Apple: both preparations run, both feed into one commit', async () => {
+  it('apple.com NOT linked: prepared material (if any, e.g. stale) is simply not required — proceeds regardless', async () => {
+    mocks.auth.currentUser = user('uid-1', ['password']);
+    await expect(requestAccountDeletionWithProviderPreparation(null)).resolves.toMatchObject({ status: 'accepted' });
+    expect(mocks.call).toHaveBeenCalledWith({});
+  });
+
+  it('dual-linked (apple + google): Google resolves independently; Apple material is still required for the commit', async () => {
+    mocks.auth.currentUser = user('uid-1', ['google.com', 'apple.com']);
     mocks.revokeGoogleProviderAccess.mockResolvedValue({ status: 'revoked' });
-    mocks.prepareAppleProviderRevocationMaterial.mockResolvedValue({
-      status: 'ready',
-      authorizationCode: 'fresh-code',
-    });
-    const result = await requestAccountDeletionWithProviderPreparation();
-    expect(result).toEqual({
-      status: 'accepted',
-      deletionId: 'del-1',
-      deduplicated: false,
-      requiresReconciliation: false,
+    await expect(requestAccountDeletionWithProviderPreparation(null)).resolves.toEqual({
+      status: 'apple-material-missing',
     });
     expect(mocks.revokeGoogleProviderAccess).toHaveBeenCalledOnce();
-    expect(mocks.prepareAppleProviderRevocationMaterial).toHaveBeenCalledOnce();
-    expect(mocks.call).toHaveBeenCalledWith({ appleAuthorizationCode: 'fresh-code' });
+    expect(mocks.call).not.toHaveBeenCalled();
   });
 });
 
 describe('requestAccountDeletionWithProviderPreparation — commit failure handling', () => {
   it('maps a callable HttpsError to request-failed with its code', async () => {
     mocks.call.mockRejectedValue(Object.assign(new Error('bad'), { code: 'functions/failed-precondition' }));
-    await expect(requestAccountDeletionWithProviderPreparation()).resolves.toEqual({
+    await expect(requestAccountDeletionWithProviderPreparation(null)).resolves.toEqual({
       status: 'request-failed',
       code: 'failed-precondition',
     });
@@ -175,7 +144,7 @@ describe('requestAccountDeletionWithProviderPreparation — commit failure handl
 
   it('rejects a malformed response instead of trusting it', async () => {
     mocks.call.mockResolvedValue({ data: { nonsense: true } });
-    await expect(requestAccountDeletionWithProviderPreparation()).resolves.toEqual({
+    await expect(requestAccountDeletionWithProviderPreparation(null)).resolves.toEqual({
       status: 'request-failed',
       code: 'invalid-response',
     });
@@ -185,7 +154,7 @@ describe('requestAccountDeletionWithProviderPreparation — commit failure handl
     mocks.call.mockResolvedValue({
       data: { deletionId: 'del-1', accepted: true, deduplicated: true, requiresReconciliation: false },
     });
-    await expect(requestAccountDeletionWithProviderPreparation()).resolves.toEqual({
+    await expect(requestAccountDeletionWithProviderPreparation(null)).resolves.toEqual({
       status: 'accepted',
       deletionId: 'del-1',
       deduplicated: true,
@@ -197,7 +166,7 @@ describe('requestAccountDeletionWithProviderPreparation — commit failure handl
     mocks.call.mockResolvedValue({
       data: { deletionId: 'del-1', accepted: true, deduplicated: true, requiresReconciliation: true },
     });
-    await expect(requestAccountDeletionWithProviderPreparation()).resolves.toEqual({
+    await expect(requestAccountDeletionWithProviderPreparation(null)).resolves.toEqual({
       status: 'accepted',
       deletionId: 'del-1',
       deduplicated: true,

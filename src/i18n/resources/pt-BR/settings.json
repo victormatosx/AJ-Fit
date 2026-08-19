@@ -100,7 +100,8 @@
         "applePreparationCancelled": "A confirmação com a Apple foi cancelada. Nenhuma alteração foi feita.",
         "applePreparationUnavailable": "A confirmação com a Apple não está disponível agora. Tente novamente.",
         "reconciliationRequired": "Sua conta já possui uma solicitação de exclusão registrada. Nossa equipe irá revisar o caso.",
-        "requestFailed": "Não foi possível processar sua solicitação agora. Tente novamente."
+        "requestFailed": "Não foi possível processar sua solicitação agora. Tente novamente.",
+        "appleValidationFailed": "Não foi possível concluir a validação com a Apple. Tente novamente."
       }
     },
     "twoFactor": {

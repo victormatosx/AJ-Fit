@@ -41,10 +41,15 @@ export type AccountDeletionFlowIssue =
   | AccountDeletionReauthErrorCode
   | 'reauthCancelled'
   | 'googleRevocationFailed'
-  | 'applePreparationCancelled'
+  // Fase 16: Apple cancellation now surfaces through the generic
+  // 'USER_CANCELLED' (AccountDeletionReauthErrorCode) — cancelling the ONE
+  // Apple sheet happens entirely inside `submitReauth` now, never inside
+  // the orchestrator, so a separate "apple preparation cancelled" issue no
+  // longer has a producer.
   | 'applePreparationUnavailable'
   | 'reconciliationRequired'
-  | 'requestFailed';
+  | 'requestFailed'
+  | 'appleValidationFailed';
 
 function issueFromReauthError(error: unknown): AccountDeletionFlowIssue {
   if (error instanceof ReauthenticationCancelledError) return 'reauthCancelled';
@@ -64,6 +69,14 @@ export function useAccountDeletionFlow() {
   const [submitting, setSubmitting] = useState(false);
   const [accepted, setAccepted] = useState(false);
   const operationLock = useRef(false);
+  /**
+   * Fase 16: the Apple `authorizationCode` captured (once) during
+   * `submitReauth('apple')`/`submitMfaCode`, held ONLY in memory — never
+   * AsyncStorage/SecureStore/Firestore/logged. Read-and-cleared by
+   * `confirmDeletion` (single-use, never resent on retry) and wiped by
+   * `reset()`/a non-Apple reauth completing (see their own call sites).
+   */
+  const appleAuthorizationCodeRef = useRef<string | null>(null);
 
   const reauthenticationProviders = getReauthenticationProviders(user);
 
@@ -80,6 +93,7 @@ export function useAccountDeletionFlow() {
     setIssue(null);
     setSubmitting(false);
     setAccepted(false);
+    appleAuthorizationCodeRef.current = null;
     resetSensitiveState();
   }, [resetSensitiveState]);
 
@@ -130,6 +144,9 @@ export function useAccountDeletionFlow() {
           setMfaChallenge(outcome.challenge);
           setMfaCodeState('');
         } else {
+          // Fase 16: `undefined` for password/Google — explicitly clears any
+          // leftover material from an earlier, abandoned Apple attempt.
+          appleAuthorizationCodeRef.current = outcome.appleAuthorizationCode ?? null;
           resetSensitiveState();
           setStepState('confirm');
         }
@@ -163,7 +180,9 @@ export function useAccountDeletionFlow() {
         setIssue('MFA_INVALID_CODE');
         return;
       }
-      await finishAccountDeletionReauthentication(mfaChallenge, hintUid, mfaCode);
+      const outcome = await finishAccountDeletionReauthentication(mfaChallenge, hintUid, mfaCode);
+      appleAuthorizationCodeRef.current =
+        outcome.status === 'completed' ? outcome.appleAuthorizationCode ?? null : null;
       resetSensitiveState();
       setStepState('confirm');
     } catch (error) {
@@ -187,8 +206,14 @@ export function useAccountDeletionFlow() {
     setSubmitting(true);
     setStepState('submitting');
     setIssue(null);
+    // Fase 16: consume-and-clear BEFORE the network call — single-use by
+    // construction. Whether this attempt succeeds or fails, the ref is
+    // already empty, so neither a retry nor a double-tap racing past
+    // `operationLock` can ever resend the same (Apple-single-use) material.
+    const preparedAppleAuthorizationCode = appleAuthorizationCodeRef.current;
+    appleAuthorizationCodeRef.current = null;
     try {
-      const result = await requestAccountDeletionWithProviderPreparation();
+      const result = await requestAccountDeletionWithProviderPreparation(preparedAppleAuthorizationCode);
       switch (result.status) {
         case 'accepted': {
           setAccepted(true);
@@ -217,20 +242,35 @@ export function useAccountDeletionFlow() {
           setIssue('googleRevocationFailed');
           setStepState('confirm');
           return;
-        case 'apple-preparation-cancelled':
-          setIssue('applePreparationCancelled');
-          setStepState('confirm');
-          return;
-        case 'apple-preparation-unavailable':
+        case 'apple-material-missing':
+          // Fase 16: apple.com is linked but no material was available for
+          // this attempt (e.g. this screen was reached without ever
+          // capturing Apple material, or an earlier attempt's material was
+          // already consumed). This orchestrator never opens Apple itself
+          // — only reauth can, so that's the only place to send the user.
           setIssue('applePreparationUnavailable');
-          setStepState('confirm');
+          setStepState('reauth');
           return;
         case 'request-failed':
           if (result.code === 'failed-precondition' || result.code === 'unauthenticated') {
-            // Recent-auth (or Apple material) went stale between reauth and
-            // commit — send the user back to reauthenticate, never a dead
-            // end (Fase 12 §36).
+            // Recent-auth went stale between reauth and commit — send the
+            // user back to reauthenticate, never a dead end (Fase 12 §36).
+            // NEVER the code for an Apple exchange/config failure (Fase 15
+            // incident) — the backend reserves `failed-precondition`/
+            // `unauthenticated` exclusively for `requireRecentAuth` now.
             setIssue('SESSION_EXPIRED');
+            setStepState('reauth');
+            return;
+          }
+          if (result.code === 'aborted') {
+            // Apple rejected the authorization code itself (Fase 15/16) —
+            // the Firebase session is still fine, but the material was
+            // already consumed-and-cleared above and Apple codes are
+            // single-use regardless of outcome, so it can never be resent.
+            // Fase 16: since the orchestrator no longer opens Apple itself,
+            // recovering requires going back through reauth (which captures
+            // fresh material), never staying on 'confirm'.
+            setIssue('appleValidationFailed');
             setStepState('reauth');
             return;
           }

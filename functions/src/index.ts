@@ -18,6 +18,7 @@ import { recoverVaultKey } from './photoVault/recoverVaultKey';
 import { cleanupPhotoVaultOrphans } from './photoVault/cleanupOrphans';
 import { requestAccountDeletion } from './accountDeletion/requestAccountDeletion';
 import { cleanupPendingAccountDeletions } from './accountDeletion/reconciliation/scheduler';
+import { onAccountDeletionRequested } from './accountDeletion/immediateDispatch';
 
 /**
  * AJ Fit Cloud Functions entry point.
@@ -116,3 +117,17 @@ export { requestAccountDeletion };
  * timeout justification.
  */
 export { cleanupPendingAccountDeletions };
+
+/**
+ * "Excluir Conta" immediate dispatch — Fase 15 of
+ * docs/25_exclusao_de_conta_arquitetura.md. Fires exactly once per real new
+ * `accountDeletions/{deletionId}` document (Firestore `onDocumentCreated`,
+ * never on the deduplicated-reuse path), calling the SAME
+ * `processAccountDeletionRecord` engine as `cleanupPendingAccountDeletions`.
+ * `cleanupPendingAccountDeletions` remains the unconditional 15-minute
+ * fallback/reconciler — this only removes the up-to-15-minute wait for the
+ * NORMAL case where nothing fails. See
+ * `accountDeletion/immediateDispatch.ts` for the full commit-boundary and
+ * concurrency reasoning.
+ */
+export { onAccountDeletionRequested };

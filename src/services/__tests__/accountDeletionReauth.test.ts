@@ -2,12 +2,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 type TestUser = {
   uid: string;
+  providerData: { providerId: string }[];
   getIdTokenResult: ReturnType<typeof vi.fn>;
 };
 
 const mocks = vi.hoisted(() => ({
   auth: { currentUser: null as TestUser | null },
   reauthenticateCurrentUser: vi.fn(),
+  reauthenticateWithCredential: vi.fn(),
+  getAppleCredentialForAccountDeletion: vi.fn(),
   getMultiFactorResolver: vi.fn(),
   assertionForSignIn: vi.fn(),
 }));
@@ -16,6 +19,7 @@ vi.mock('../../lib/firebase', () => ({ auth: mocks.auth }));
 
 vi.mock('firebase/auth', () => ({
   getMultiFactorResolver: mocks.getMultiFactorResolver,
+  reauthenticateWithCredential: mocks.reauthenticateWithCredential,
   TotpMultiFactorGenerator: { assertionForSignIn: mocks.assertionForSignIn },
 }));
 
@@ -45,6 +49,18 @@ vi.mock('../reauthentication', () => {
   };
 });
 
+// Fase 16: Apple's native entry point, mocked at this boundary so no real
+// `expo-apple-authentication` module is ever loaded. Mocked via the
+// `.native` path (matching `vitest.config.mts`'s alias target for
+// `./providers/apple`, which is what `accountDeletionReauth.ts` actually
+// imports) — same pattern the pre-existing provider tests already use.
+// `../providers/types` is NOT mocked — its error classes are pure, no
+// native deps, and `instanceof` checks need the REAL classes.
+vi.mock('../providers/apple.native', () => ({
+  getAppleCredentialForAccountDeletion: mocks.getAppleCredentialForAccountDeletion,
+}));
+
+import { SocialAuthCancelledError, ProviderCredentialError } from '../providers/types';
 import {
   ReauthenticationCancelledError,
   ReauthenticationServiceError,
@@ -57,11 +73,24 @@ import {
   type AccountDeletionMfaChallenge,
 } from '../accountDeletionReauth';
 
-function user(uid = 'user-1', authTimeIso = new Date().toISOString()): TestUser {
+const PASSWORD_PROVIDER_ID = 'password';
+const GOOGLE_PROVIDER_ID = 'google.com';
+const APPLE_PROVIDER_ID = 'apple.com';
+
+function user(
+  uid = 'user-1',
+  authTimeIso = new Date().toISOString(),
+  providers: string[] = [PASSWORD_PROVIDER_ID],
+): TestUser {
   return {
     uid,
+    providerData: providers.map((providerId) => ({ providerId })),
     getIdTokenResult: vi.fn().mockResolvedValue({ authTime: authTimeIso }),
   };
+}
+
+function appleCredentialResult(authorizationCode = 'fresh-authorization-code') {
+  return { credential: { fake: 'firebase-credential' }, displayName: null, authorizationCode };
 }
 
 beforeEach(() => {
@@ -75,18 +104,30 @@ describe('needsAccountDeletionReauthentication', () => {
     await expect(needsAccountDeletionReauthentication()).resolves.toBe(true);
   });
 
-  it('is false for a token minted moments ago', async () => {
-    mocks.auth.currentUser = user('user-1', new Date().toISOString());
+  it('is false for a password-only user with a token minted moments ago', async () => {
+    mocks.auth.currentUser = user('user-1', new Date().toISOString(), [PASSWORD_PROVIDER_ID]);
     await expect(needsAccountDeletionReauthentication()).resolves.toBe(false);
   });
 
-  it('is true for a stale token', async () => {
-    mocks.auth.currentUser = user('user-1', new Date(Date.now() - 60 * 60 * 1000).toISOString());
+  it('is true for a stale token (password-only)', async () => {
+    mocks.auth.currentUser = user('user-1', new Date(Date.now() - 60 * 60 * 1000).toISOString(), [
+      PASSWORD_PROVIDER_ID,
+    ]);
+    await expect(needsAccountDeletionReauthentication()).resolves.toBe(true);
+  });
+
+  it('is still governed purely by freshness for a Google-only account — unchanged by Fase 16', async () => {
+    mocks.auth.currentUser = user('user-1', new Date().toISOString(), [GOOGLE_PROVIDER_ID]);
+    await expect(needsAccountDeletionReauthentication()).resolves.toBe(false);
+  });
+
+  it('Fase 16: is ALWAYS true for an Apple-linked account, even with a freshly-minted token — reauth is the ONLY place Apple material is captured', async () => {
+    mocks.auth.currentUser = user('user-1', new Date().toISOString(), [APPLE_PROVIDER_ID]);
     await expect(needsAccountDeletionReauthentication()).resolves.toBe(true);
   });
 });
 
-describe('startAccountDeletionReauthentication — success path', () => {
+describe('startAccountDeletionReauthentication — password/Google success path (unchanged by Fase 16)', () => {
   it('completes and forces an ID token refresh (Fase 2 §7)', async () => {
     mocks.reauthenticateCurrentUser.mockResolvedValue(mocks.auth.currentUser);
 
@@ -98,6 +139,7 @@ describe('startAccountDeletionReauthentication — success path', () => {
     expect(outcome.status).toBe('completed');
     if (outcome.status === 'completed') {
       expect(outcome.uid).toBe('user-1');
+      expect(outcome.appleAuthorizationCode).toBeUndefined();
     }
     expect(mocks.auth.currentUser!.getIdTokenResult).toHaveBeenCalledWith(true);
   });
@@ -105,16 +147,15 @@ describe('startAccountDeletionReauthentication — success path', () => {
   it('captures expectedUid before reauthenticating, not after (Fase 2 §14)', async () => {
     mocks.reauthenticateCurrentUser.mockResolvedValue(mocks.auth.currentUser);
     await startAccountDeletionReauthentication({ provider: 'google' });
-    // Verified indirectly: outcome.uid below matches the ORIGINAL user, and
-    // the identity-change tests below prove a mid-flight swap is caught.
     expect(mocks.reauthenticateCurrentUser).toHaveBeenCalledWith(
       { provider: 'google' },
       { preserveMultiFactorError: true },
     );
+    expect(mocks.getAppleCredentialForAccountDeletion).not.toHaveBeenCalled();
   });
 });
 
-describe('startAccountDeletionReauthentication — error taxonomy', () => {
+describe('startAccountDeletionReauthentication — error taxonomy (password/Google, unchanged by Fase 16)', () => {
   it('USER_SIGNED_OUT when there is no user to reauthenticate', async () => {
     mocks.auth.currentUser = null;
     await expect(
@@ -126,7 +167,7 @@ describe('startAccountDeletionReauthentication — error taxonomy', () => {
   it('USER_CANCELLED on provider cancellation', async () => {
     mocks.reauthenticateCurrentUser.mockRejectedValue(new ReauthenticationCancelledError());
     await expect(
-      startAccountDeletionReauthentication({ provider: 'apple' }),
+      startAccountDeletionReauthentication({ provider: 'google' }),
     ).rejects.toMatchObject({ code: 'USER_CANCELLED' });
   });
 
@@ -203,7 +244,7 @@ describe('startAccountDeletionReauthentication — error taxonomy', () => {
   });
 });
 
-describe('startAccountDeletionReauthentication — identity consistency', () => {
+describe('startAccountDeletionReauthentication — identity consistency (password/Google, unchanged by Fase 16)', () => {
   it('IDENTITY_CHANGED when reauthenticateCurrentUser resolves with a different uid', async () => {
     mocks.reauthenticateCurrentUser.mockResolvedValue(user('someone-else'));
     await expect(
@@ -236,7 +277,7 @@ describe('startAccountDeletionReauthentication — identity consistency', () => 
   });
 });
 
-describe('startAccountDeletionReauthentication — MFA challenge', () => {
+describe('startAccountDeletionReauthentication — MFA challenge (password/Google, unchanged by Fase 16)', () => {
   function multiFactorError() {
     return { code: 'auth/multi-factor-auth-required', customData: {} };
   }
@@ -253,6 +294,7 @@ describe('startAccountDeletionReauthentication — MFA challenge', () => {
     if (outcome.status === 'challenge') {
       expect(outcome.challenge.expectedUid).toBe('user-1');
       expect(outcome.challenge.hints).toEqual([{ uid: 'factor-1', displayName: 'Authenticator' }]);
+      expect(outcome.challenge.appleAuthorizationCode).toBeUndefined();
     }
   });
 
@@ -269,7 +311,124 @@ describe('startAccountDeletionReauthentication — MFA challenge', () => {
   });
 });
 
-describe('finishAccountDeletionReauthentication', () => {
+describe('startAccountDeletionReauthentication — Apple (Fase 16 consolidation): ONE native call produces BOTH Firebase reauth and authorizationCode', () => {
+  function appleUser(uid = 'user-1', authTimeIso = new Date().toISOString()): TestUser {
+    return user(uid, authTimeIso, [APPLE_PROVIDER_ID]);
+  }
+
+  it('#17 — calls the native Apple entry point exactly once for the whole reauth', async () => {
+    mocks.auth.currentUser = appleUser();
+    mocks.getAppleCredentialForAccountDeletion.mockResolvedValue(appleCredentialResult());
+    mocks.reauthenticateWithCredential.mockResolvedValue({ user: { uid: 'user-1' } });
+
+    await startAccountDeletionReauthentication({ provider: 'apple' });
+
+    expect(mocks.getAppleCredentialForAccountDeletion).toHaveBeenCalledTimes(1);
+    // Never routes through the generic federated path for apple anymore —
+    // that path is what used to discard authorizationCode.
+    expect(mocks.reauthenticateCurrentUser).not.toHaveBeenCalled();
+  });
+
+  it('C — returns BOTH Firebase reauth completion AND the authorizationCode from the SAME sign-in', async () => {
+    mocks.auth.currentUser = appleUser();
+    mocks.getAppleCredentialForAccountDeletion.mockResolvedValue(appleCredentialResult('code-123'));
+    mocks.reauthenticateWithCredential.mockResolvedValue({ user: { uid: 'user-1' } });
+
+    const outcome = await startAccountDeletionReauthentication({ provider: 'apple' });
+
+    expect(outcome.status).toBe('completed');
+    if (outcome.status === 'completed') {
+      expect(outcome.uid).toBe('user-1');
+      expect(outcome.appleAuthorizationCode).toBe('code-123');
+    }
+    expect(mocks.auth.currentUser!.getIdTokenResult).toHaveBeenCalledWith(true);
+    expect(mocks.reauthenticateWithCredential).toHaveBeenCalledWith(
+      mocks.auth.currentUser,
+      appleCredentialResult('code-123').credential,
+    );
+  });
+
+  it('PROVIDER_MISMATCH when apple is not actually linked — never opens the native sheet', async () => {
+    mocks.auth.currentUser = user('user-1', new Date().toISOString(), [PASSWORD_PROVIDER_ID]);
+    await expect(startAccountDeletionReauthentication({ provider: 'apple' })).rejects.toMatchObject({
+      code: 'PROVIDER_MISMATCH',
+    });
+    expect(mocks.getAppleCredentialForAccountDeletion).not.toHaveBeenCalled();
+  });
+
+  it('F — USER_CANCELLED when the Apple sheet is dismissed: no commit-eligible material produced', async () => {
+    mocks.auth.currentUser = appleUser();
+    mocks.getAppleCredentialForAccountDeletion.mockRejectedValue(new SocialAuthCancelledError());
+
+    await expect(startAccountDeletionReauthentication({ provider: 'apple' })).rejects.toMatchObject({
+      code: 'USER_CANCELLED',
+    });
+    expect(mocks.reauthenticateWithCredential).not.toHaveBeenCalled();
+  });
+
+  it('D/E — a native-layer failure (e.g. missing identityToken/authorizationCode) maps to REAUTH_FAILED, never SESSION_EXPIRED', async () => {
+    mocks.auth.currentUser = appleUser();
+    mocks.getAppleCredentialForAccountDeletion.mockRejectedValue(
+      new ProviderCredentialError('authorizationCodeMissing'),
+    );
+
+    await expect(startAccountDeletionReauthentication({ provider: 'apple' })).rejects.toMatchObject({
+      code: 'REAUTH_FAILED',
+    });
+    expect(mocks.reauthenticateWithCredential).not.toHaveBeenCalled();
+  });
+
+  it('H — IDENTITY_CHANGED when the uid changes while the Apple sheet is open: material is discarded, never sent onward', async () => {
+    mocks.auth.currentUser = appleUser();
+    mocks.getAppleCredentialForAccountDeletion.mockImplementation(async () => {
+      mocks.auth.currentUser = user('attacker', new Date().toISOString(), [APPLE_PROVIDER_ID]);
+      return appleCredentialResult();
+    });
+
+    await expect(startAccountDeletionReauthentication({ provider: 'apple' })).rejects.toMatchObject({
+      code: 'IDENTITY_CHANGED',
+    });
+    expect(mocks.reauthenticateWithCredential).not.toHaveBeenCalled();
+  });
+
+  it('G — a Firebase reauth failure maps through the normal taxonomy; the authorizationCode never reaches any outcome', async () => {
+    mocks.auth.currentUser = appleUser();
+    mocks.getAppleCredentialForAccountDeletion.mockResolvedValue(appleCredentialResult('code-should-be-discarded'));
+    mocks.reauthenticateWithCredential.mockRejectedValue({ code: 'auth/invalid-credential' });
+
+    await expect(startAccountDeletionReauthentication({ provider: 'apple' })).rejects.toMatchObject({
+      code: 'WRONG_PASSWORD',
+    });
+  });
+
+  it('IDENTITY_CHANGED when reauthenticateWithCredential resolves with a different uid than expected', async () => {
+    mocks.auth.currentUser = appleUser();
+    mocks.getAppleCredentialForAccountDeletion.mockResolvedValue(appleCredentialResult());
+    mocks.reauthenticateWithCredential.mockResolvedValue({ user: { uid: 'someone-else' } });
+
+    await expect(startAccountDeletionReauthentication({ provider: 'apple' })).rejects.toMatchObject({
+      code: 'IDENTITY_CHANGED',
+    });
+  });
+
+  it('an Apple MFA challenge preserves the already-captured authorizationCode for later consumption', async () => {
+    mocks.auth.currentUser = appleUser();
+    mocks.getAppleCredentialForAccountDeletion.mockResolvedValue(appleCredentialResult('code-for-mfa'));
+    mocks.reauthenticateWithCredential.mockRejectedValue({ code: 'auth/multi-factor-auth-required', customData: {} });
+    mocks.getMultiFactorResolver.mockReturnValue({
+      hints: [{ uid: 'factor-1', factorId: 'totp', displayName: 'Authenticator' }],
+      resolveSignIn: vi.fn(),
+    });
+
+    const outcome = await startAccountDeletionReauthentication({ provider: 'apple' });
+    expect(outcome.status).toBe('challenge');
+    if (outcome.status === 'challenge') {
+      expect(outcome.challenge.appleAuthorizationCode).toBe('code-for-mfa');
+    }
+  });
+});
+
+describe('finishAccountDeletionReauthentication (password/Google/TOTP mechanics unchanged by Fase 16)', () => {
   function challenge(overrides: Partial<AccountDeletionMfaChallenge> = {}): AccountDeletionMfaChallenge {
     return {
       expectedUid: 'user-1',
@@ -289,7 +448,18 @@ describe('finishAccountDeletionReauthentication', () => {
     expect(mocks.assertionForSignIn).toHaveBeenCalledWith('factor-1', '123456');
     expect(resolveSignIn).toHaveBeenCalledWith('assertion');
     expect(outcome.status).toBe('completed');
+    if (outcome.status === 'completed') expect(outcome.appleAuthorizationCode).toBeUndefined();
     expect(mocks.auth.currentUser!.getIdTokenResult).toHaveBeenCalledWith(true);
+  });
+
+  it('Fase 16: propagates challenge.appleAuthorizationCode into the completed outcome when present', async () => {
+    const resolveSignIn = vi.fn().mockResolvedValue({ user: { uid: 'user-1' } });
+    const ch = challenge({ resolver: { resolveSignIn } as never, appleAuthorizationCode: 'code-for-mfa' });
+    mocks.assertionForSignIn.mockReturnValue('assertion');
+
+    const outcome = await finishAccountDeletionReauthentication(ch, 'factor-1', '123456');
+    expect(outcome.status).toBe('completed');
+    if (outcome.status === 'completed') expect(outcome.appleAuthorizationCode).toBe('code-for-mfa');
   });
 
   it('MFA_INVALID_CODE for an empty/malformed code, without touching the resolver', async () => {

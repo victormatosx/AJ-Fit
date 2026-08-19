@@ -70,8 +70,8 @@ import { classifyErrorCode } from './errors';
 import { currentPolicy } from './policy';
 import {
   APPLE_KEY_ID,
+  APPLE_NATIVE_CLIENT_ID,
   APPLE_PRIVATE_KEY,
-  APPLE_SERVICES_CLIENT_ID,
   APPLE_TEAM_ID,
   AppleRevocationPreparationError,
   cacheAppleRevocationMaterial,
@@ -93,11 +93,17 @@ import {
   type RequestAccountDeletionResponseData,
 } from './requestContract';
 
-/** Cloud Functions v2 secret bindings this callable needs — bound in `index.ts`, mirroring `revenueCatWebhook`'s pattern. */
+/**
+ * Cloud Functions v2 secret bindings this callable needs — bound in
+ * `index.ts`, mirroring `revenueCatWebhook`'s pattern. `APPLE_SERVICES_CLIENT_ID`
+ * is deliberately NOT bound here — nothing on this native-only path reads it
+ * (Fase 15: see `appleIdentityConfig.ts`'s doc comment on native vs. services
+ * client_id).
+ */
 export const REQUEST_ACCOUNT_DELETION_SECRETS = [
   APPLE_TEAM_ID,
   APPLE_KEY_ID,
-  APPLE_SERVICES_CLIENT_ID,
+  APPLE_NATIVE_CLIENT_ID,
   APPLE_PRIVATE_KEY,
 ];
 
@@ -113,18 +119,35 @@ function resolveLinkedProviders(providerData: readonly { providerId: string }[])
   return PROVIDER_IDS.filter((id) => linked.has(id));
 }
 
-/** Maps an Apple exchange failure to the HttpsError the client should act on — retry vs. capture-fresh-material-and-retry. */
+/**
+ * Maps an Apple exchange failure to the HttpsError the client should act on
+ * — Fase 15 incident fix: this used to collapse into the SAME
+ * `failed-precondition` code `requireRecentAuth` uses for a genuinely stale
+ * session, which the client then (reasonably, given that single signal)
+ * displayed as "your session expired" — actively misleading for an Apple
+ * config/exchange problem that redoing Firebase reauth can never fix. Three
+ * DISTINCT codes now leave here, none of them `failed-precondition`/
+ * `unauthenticated` (those stay reserved for `requireRecentAuth`, above):
+ *   - RETRYABLE (network/5xx/timeout) -> `unavailable`, unchanged.
+ *   - `MISSING_REQUIRED_CONFIGURATION` (Apple rejected client_id/client_secret
+ *     itself — e.g. `invalid_client`) -> `internal`. This is OUR
+ *     configuration, never the user's session; the client already renders
+ *     `internal` as a generic "try again" without implying reauth is needed.
+ *   - Any other TERMINAL code (e.g. an expired/already-used authorizationCode)
+ *     -> `aborted`. The SAME code can never succeed on retry, but capturing a
+ *     FRESH one (still on THIS Firebase session — no Firebase reauth
+ *     required) can; the client surfaces this as its own
+ *     "could not validate with Apple" message, never as a session issue.
+ */
 function httpsErrorForAppleFailure(error: AppleRevocationPreparationError): HttpsError {
   const classification = classifyErrorCode(error.code);
   if (classification === 'RETRYABLE') {
     return new HttpsError('unavailable', 'Could not reach Apple. Please try again.');
   }
-  // TERMINAL (e.g. an expired/already-used authorizationCode) — the SAME
-  // code can never succeed on retry; the client must capture a fresh one.
-  return new HttpsError(
-    'failed-precondition',
-    'Apple sign-in material is missing or no longer valid. Please try again.',
-  );
+  if (error.code === 'MISSING_REQUIRED_CONFIGURATION') {
+    return new HttpsError('internal', 'Apple sign-in is temporarily unavailable. Please try again later.');
+  }
+  return new HttpsError('aborted', 'Could not validate with Apple. Please try again.');
 }
 
 export async function handleRequestAccountDeletion(
@@ -179,13 +202,20 @@ export async function handleRequestAccountDeletion(
     }
     try {
       appleRefreshToken = await exchangeAppleAuthorizationCode(payload.appleAuthorizationCode, {
-        client: deps.appleIdentityClient ?? createAppleIdentityClient(),
+        client: deps.appleIdentityClient ?? createAppleIdentityClient('native'),
       });
     } catch (error) {
       if (error instanceof AppleRevocationPreparationError) {
+        // `appleErrorClass`, never `code` — `lib/logger.ts`'s `sanitizeLogContext`
+        // blanket-redacts any context field literally named `code` (it
+        // exists to keep a promo/coupon `code` out of logs) to `[redacted]`,
+        // which silently destroyed this exact diagnostic during the Fase 15
+        // incident. `error.code` is a closed, non-sensitive
+        // `KnownErrorCode` enum value (`errors.ts`) — safe to log under a
+        // name the blanket rule doesn't match.
         logWarn(SCOPE, 'apple authorization exchange failed — deletion not accepted', {
           uid,
-          code: error.code,
+          appleErrorClass: error.code,
         });
         throw httpsErrorForAppleFailure(error);
       }

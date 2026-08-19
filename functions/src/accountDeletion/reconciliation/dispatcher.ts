@@ -104,7 +104,12 @@ export async function runProviderSubStep(
     return { kind: 'FAILED', code: 'MISSING_REQUIRED_CONFIGURATION' };
   }
 
-  const client = deps.appleClient ?? createAppleIdentityClient();
+  // Fase 15: the refresh token being revoked here was minted from a
+  // NATIVE-flow authorizationCode (`appleIdentityConfig.ts`'s doc comment)
+  // — revoke must authenticate as the SAME client_id the token was minted
+  // under, so this is 'native', matching the exchange in
+  // `requestAccountDeletion.ts`, never the default-omitted call.
+  const client = deps.appleClient ?? createAppleIdentityClient('native');
   const repository = deps.appleRepository ?? new FirestoreAppleRevocationMaterialRepository();
   const wrap = deps.wrap ?? wrapAppleRefreshToken;
   const unwrap = deps.unwrap ?? unwrapAppleRefreshToken;

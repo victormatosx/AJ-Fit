@@ -378,23 +378,36 @@ describe('handleRequestAccountDeletion — Apple pre-commit preparation (Fase 3/
     expect(cacheMock.cacheAppleRevocationMaterial).toHaveBeenCalledWith('del-apple-1', 'fake-refresh-token');
   });
 
-  it('exchange fails with a TERMINAL Apple error: deletion NOT created, no material cached', async () => {
+  it('exchange fails with a TERMINAL Apple error (e.g. expired/already-used code): maps to aborted, NEVER failed-precondition (Fase 15 — that code is reserved for a genuinely stale Firebase session)', async () => {
     mocks.getUser.mockResolvedValue({ providerData: providerData('apple.com') });
     const repo = fakeRepository();
+    const { AppleIdentityApiError } = await import('../providerRevocation/appleIdentityClient');
     const appleClient = {
       exchangeAuthorizationCode: vi
         .fn()
-        .mockRejectedValue(Object.assign(new Error('invalid_grant'), { code: 'PROVIDER_AUTHORIZATION_INVALID' })),
+        .mockRejectedValue(new AppleIdentityApiError('PROVIDER_AUTHORIZATION_INVALID', 400)),
     };
-    // AppleIdentityApiError instance needed for classification — build via the real class.
-    const { AppleIdentityApiError } = await import('../providerRevocation/appleIdentityClient');
-    appleClient.exchangeAuthorizationCode.mockRejectedValue(
-      new AppleIdentityApiError('PROVIDER_AUTHORIZATION_INVALID', 400),
-    );
 
     await expect(
       handleRequestAccountDeletion(request(0, withAppleMaterial()), repo, { appleIdentityClient: appleClient }),
-    ).rejects.toMatchObject({ code: 'failed-precondition' });
+    ).rejects.toMatchObject({ code: 'aborted' });
+    expect(repo.createOrReuse).not.toHaveBeenCalled();
+    expect(cacheMock.cacheAppleRevocationMaterial).not.toHaveBeenCalled();
+  });
+
+  it('exchange fails with MISSING_REQUIRED_CONFIGURATION (e.g. invalid_client): maps to internal, NEVER failed-precondition — a backend config problem must never look like a stale user session', async () => {
+    mocks.getUser.mockResolvedValue({ providerData: providerData('apple.com') });
+    const repo = fakeRepository();
+    const { AppleIdentityApiError } = await import('../providerRevocation/appleIdentityClient');
+    const appleClient = {
+      exchangeAuthorizationCode: vi
+        .fn()
+        .mockRejectedValue(new AppleIdentityApiError('MISSING_REQUIRED_CONFIGURATION', 401)),
+    };
+
+    await expect(
+      handleRequestAccountDeletion(request(0, withAppleMaterial()), repo, { appleIdentityClient: appleClient }),
+    ).rejects.toMatchObject({ code: 'internal' });
     expect(repo.createOrReuse).not.toHaveBeenCalled();
     expect(cacheMock.cacheAppleRevocationMaterial).not.toHaveBeenCalled();
   });

@@ -1,9 +1,7 @@
 import { unlink } from 'firebase/auth';
 import { auth } from '../lib/firebase';
 import { getReauthenticationProviders } from '../lib/authProviders';
-import { getAppleCredentialForAccountDeletion } from './providers/apple';
 import { revokeGoogleAccess } from './providers/google';
-import { SocialAuthCancelledError } from './providers/types';
 
 /**
  * Client-side provider revocation preparation for "Excluir Conta" — Fase 3,
@@ -11,82 +9,30 @@ import { SocialAuthCancelledError } from './providers/types';
  * docs/25_exclusao_de_conta_arquitetura.md's "Correção Fases 3/5" section).
  *
  * Nothing in this module cancels a subscription or disables/deletes an
- * account. Both providers now feed into `requestAccountDeletion()` as
- * PRE-COMMIT preparation, called from
- * `accountDeletionOrchestrator.ts` BEFORE the request itself — this is the
- * fix for the gap the audit found: previously nothing ever called either
- * function, and Google's doc comment even said the opposite of what's
- * correct (revoke AFTER commit) — see `revokeGoogleProviderAccess`'s
+ * account. `revokeGoogleProviderAccess` feeds into `requestAccountDeletion()`
+ * as PRE-COMMIT preparation, called from `accountDeletionOrchestrator.ts`
+ * BEFORE the request itself — this is the fix for the gap the Fase 3/5 audit
+ * found: previously nothing ever called it, and its doc comment even said
+ * the opposite of what's correct (revoke AFTER commit) — see this function's
  * current doc comment for why that was wrong.
  *
- *   - Apple: captures fresh `authorizationCode` material only — the
- *     backend (`functions/src/accountDeletion/providerRevocation/
- *     appleRevocationPreparation.ts`) exchanges it server-side, inside
- *     `requestAccountDeletion` itself, before ever creating a deletion
- *     record.
- *   - Google: performs the ONLY action that can revoke AJ Fit's Google
- *     OAuth grant (`GoogleSignin.revokeAccess()`, client-side, no backend
- *     equivalent — Fase 3's own researched conclusion, unchanged) AND
- *     unlinks `google.com` from the Firebase Auth user, so that the
- *     backend's OWN server-side snapshot (`admin.auth().getUser(uid)`,
- *     unchanged since Fase 4) correctly reflects "not linked" the moment
- *     `requestAccountDeletion` runs — no client boolean is ever trusted.
+ * Google performs the ONLY action that can revoke AJ Fit's Google OAuth
+ * grant (`GoogleSignin.revokeAccess()`, client-side, no backend equivalent
+ * — Fase 3's own researched conclusion, unchanged) AND unlinks `google.com`
+ * from the Firebase Auth user, so that the backend's OWN server-side
+ * snapshot (`admin.auth().getUser(uid)`, unchanged since Fase 4) correctly
+ * reflects "not linked" the moment `requestAccountDeletion` runs — no
+ * client boolean is ever trusted.
+ *
+ * Apple's equivalent preparation (`prepareAppleProviderRevocationMaterial`)
+ * was REMOVED by Fase 16 (Apple prompt consolidation —
+ * docs/25_exclusao_de_conta_arquitetura.md's Fase 16 section): capturing
+ * Apple's `authorizationCode` moved into `accountDeletionReauth.ts`'s
+ * `startAccountDeletionReauthentication`, the SAME native Apple sign-in
+ * that already proves Firebase recent-auth — a second, dedicated Apple-only
+ * sheet here was exactly the redundant prompt Fase 16 eliminated. See that
+ * file for Apple's current preparation path.
  */
-
-export type AppleProviderRevocationPreparation =
-  | { status: 'not-linked' }
-  | { status: 'cancelled' }
-  | { status: 'unavailable' }
-  /** Auth state changed between capturing `expectedUid` and Apple returning — never trust material captured for a different identity (Fase 3 §16). */
-  | { status: 'identity-changed' }
-  | {
-      status: 'ready';
-      /**
-       * Single-use, short-lived Apple authorization code. The caller must
-       * send this to the backend immediately and let it go out of scope —
-       * this module never stores it (no module state, no AsyncStorage/
-       * SecureStore/Firestore write, no log call anywhere in this file).
-       */
-      authorizationCode: string;
-    };
-
-/**
- * Opens a fresh Sign in with Apple sheet to capture a short-lived
- * `authorizationCode` for provider revocation. Distinct from Fase 2's
- * `startAccountDeletionReauthentication` — that proves identity for
- * creating the deletion request; this captures FRESH, single-use material
- * for a LATER step of an already-accepted workflow. `expectedUid` must be
- * the uid the in-flight deletion record belongs to.
- */
-export async function prepareAppleProviderRevocationMaterial(
-  expectedUid: string,
-): Promise<AppleProviderRevocationPreparation> {
-  const initialUser = auth.currentUser;
-  if (!initialUser || initialUser.uid !== expectedUid) {
-    return { status: 'identity-changed' };
-  }
-  if (!getReauthenticationProviders(initialUser).includes('apple')) {
-    return { status: 'not-linked' };
-  }
-
-  let authorizationCode: string;
-  try {
-    const result = await getAppleCredentialForAccountDeletion();
-    authorizationCode = result.authorizationCode;
-  } catch (error) {
-    if (error instanceof SocialAuthCancelledError) return { status: 'cancelled' };
-    return { status: 'unavailable' };
-  }
-
-  // Re-check identity AFTER the sheet closes — the same "sheet stayed open
-  // long enough for the session to change underneath it" concern Fase 2
-  // §14 already applies to reauthentication.
-  if (auth.currentUser?.uid !== expectedUid) {
-    return { status: 'identity-changed' };
-  }
-
-  return { status: 'ready', authorizationCode };
-}
 
 export type GoogleProviderRevocationResult =
   | { status: 'not-linked' }

@@ -32,7 +32,7 @@ describe('useAccountDeletionFlow — composition, not reimplementation', () => {
 
   it('is the ONLY caller of requestAccountDeletionWithProviderPreparation — never calls httpsCallable/requestAccountDeletion directly', () => {
     expect(SOURCE).toContain("from '../services/accountDeletionOrchestrator'");
-    expect(CODE).toContain('requestAccountDeletionWithProviderPreparation()');
+    expect(CODE).toContain('requestAccountDeletionWithProviderPreparation(preparedAppleAuthorizationCode)');
     expect(CODE).not.toContain('httpsCallable');
     expect(CODE).not.toContain("'requestAccountDeletion'");
   });
@@ -113,8 +113,7 @@ describe('useAccountDeletionFlow — orchestrator failure statuses never silentl
   for (const status of [
     'identity-changed',
     'google-revocation-failed',
-    'apple-preparation-cancelled',
-    'apple-preparation-unavailable',
+    'apple-material-missing',
     'request-failed',
   ]) {
     it(`handles "${status}" explicitly (not just a default/fallthrough)`, () => {
@@ -129,6 +128,62 @@ describe('useAccountDeletionFlow — orchestrator failure statuses never silentl
     );
     expect(requestFailedBranch).toContain("'failed-precondition'");
     expect(requestFailedBranch).toContain("setStepState('reauth')");
+  });
+
+  it('Fase 16: apple-material-missing sends the user back to reauth — the orchestrator never opens Apple itself to recover', () => {
+    const branch = CODE.slice(
+      CODE.indexOf("case 'apple-material-missing':"),
+      CODE.indexOf("case 'apple-material-missing':") + 400,
+    );
+    expect(branch).toContain("setIssue('applePreparationUnavailable')");
+    expect(branch).toContain("setStepState('reauth')");
+  });
+
+  it('Fase 16: an Apple validation failure (aborted) sends the user back to reauth — the material was already consumed and Apple codes are single-use', () => {
+    const requestFailedBranch = CODE.slice(
+      CODE.indexOf("case 'request-failed':"),
+      CODE.indexOf("case 'request-failed':") + 1600,
+    );
+    const abortedIndex = requestFailedBranch.indexOf("'aborted'");
+    expect(abortedIndex).toBeGreaterThan(-1);
+    const abortedBlock = requestFailedBranch.slice(abortedIndex, abortedIndex + 600);
+    expect(abortedBlock).toContain("setIssue('appleValidationFailed')");
+    expect(abortedBlock).toContain("setStepState('reauth')");
+  });
+});
+
+describe('useAccountDeletionFlow — Fase 16: Apple material lifecycle (single-use, memory-only)', () => {
+  it('confirmDeletion reads and clears appleAuthorizationCodeRef BEFORE calling the orchestrator — consume-and-clear, never resent on retry', () => {
+    const body = CODE.slice(
+      CODE.indexOf('const confirmDeletion = useCallback(async () => {'),
+      CODE.indexOf('requestAccountDeletionWithProviderPreparation(preparedAppleAuthorizationCode)'),
+    );
+    expect(body).toContain('appleAuthorizationCodeRef.current');
+    expect(body).toContain('appleAuthorizationCodeRef.current = null');
+  });
+
+  it('reset() wipes appleAuthorizationCodeRef — abandoning the flow discards any captured material', () => {
+    const resetBody = CODE.slice(
+      CODE.indexOf('const reset = useCallback(() => {'),
+      CODE.indexOf('}, [resetSensitiveState]);'),
+    );
+    expect(resetBody).toContain('appleAuthorizationCodeRef.current = null');
+  });
+
+  it('submitReauth stores appleAuthorizationCode from a completed outcome (undefined for password/Google clears any stale material)', () => {
+    const body = CODE.slice(CODE.indexOf('const submitReauth = useCallback('), CODE.indexOf('const submitMfaCode'));
+    expect(body).toContain('appleAuthorizationCodeRef.current = outcome.appleAuthorizationCode');
+  });
+
+  it('submitMfaCode also captures appleAuthorizationCode from the resolved outcome (Apple + TOTP combo)', () => {
+    const body = CODE.slice(CODE.indexOf('const submitMfaCode = useCallback('), CODE.indexOf('const cancelMfa'));
+    expect(body).toContain('appleAuthorizationCodeRef.current');
+  });
+
+  it('appleAuthorizationCodeRef is never spread into AsyncStorage/SecureStore/Firestore/logs — this hook has no such call at all', () => {
+    for (const forbidden of ['AsyncStorage', 'SecureStore', 'setDoc', 'console.log', 'logInfo', 'logWarn']) {
+      expect(CODE).not.toContain(forbidden);
+    }
   });
 });
 

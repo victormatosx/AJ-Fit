@@ -100,7 +100,8 @@
         "applePreparationCancelled": "Confirmation with Apple was cancelled. Nothing was changed.",
         "applePreparationUnavailable": "Confirmation with Apple is not available right now. Please try again.",
         "reconciliationRequired": "Your account already has a deletion request on file. Our team will review it.",
-        "requestFailed": "We could not process your request right now. Please try again."
+        "requestFailed": "We could not process your request right now. Please try again.",
+        "appleValidationFailed": "We could not complete validation with Apple. Please try again."
       }
     },
     "twoFactor": {

@@ -1,11 +1,14 @@
 import {
   getMultiFactorResolver,
+  reauthenticateWithCredential,
   TotpMultiFactorGenerator,
+  type AuthCredential,
   type MultiFactorError,
   type MultiFactorResolver,
 } from 'firebase/auth';
 
 import { auth } from '../lib/firebase';
+import { getReauthenticationProviders } from '../lib/authProviders';
 import {
   getFirebaseErrorCode,
   isMultiFactorAuthRequired,
@@ -13,6 +16,8 @@ import {
   validateTotpCode,
 } from '../lib/mfaTotp';
 import { hasRecentAuth } from '../lib/recentAuth';
+import { getAppleCredentialForAccountDeletion } from './providers/apple';
+import { SocialAuthCancelledError } from './providers/types';
 import {
   ReauthenticationCancelledError,
   ReauthenticationServiceError,
@@ -28,8 +33,9 @@ import {
  * This module composes THREE pieces of infrastructure that already exist
  * and are already tested elsewhere, rather than reimplementing any of them:
  *   - `reauthenticateCurrentUser` (`./reauthentication.ts`) — password/
- *     Google/Apple credential reauthentication, UID-mismatch protection,
- *     provider-linkage checks. UNCHANGED by this file.
+ *     Google credential reauthentication, UID-mismatch protection,
+ *     provider-linkage checks. UNCHANGED by this file. Apple is handled
+ *     separately below (Fase 16) — see that section's doc comment for why.
  *   - The MFA/TOTP two-phase "attempt → maybe challenge → resolve" pattern
  *     already proven by `startTotpUnenrollment`/`finishTotpUnenrollment`
  *     (`./mfaTotp.ts`). This file mirrors that exact shape for account
@@ -45,6 +51,17 @@ import {
  *      immediately after reauthentication succeeds — see
  *      `finalizeReauthentication` below for why neither step can be assumed
  *      to already be covered "for free".
+ *   3. Fase 16 (Apple prompt consolidation — see
+ *      `docs/25_exclusao_de_conta_arquitetura.md`'s Fase 16 section): for
+ *      Apple specifically, this module captures the `authorizationCode`
+ *      Apple's REST revoke needs from the SAME native sign-in call that
+ *      proves Firebase recent-auth — never a second `AppleAuthentication
+ *      .signInAsync()`. `AccountDeletionReauthOutcome`'s `completed` variant
+ *      carries an OPTIONAL `appleAuthorizationCode`, populated ONLY on the
+ *      Apple path — `reauthenticateCurrentUser` (password/Google, and every
+ *      OTHER caller of that shared function — Photo Vault, MFA
+ *      enrollment/disable) never sees or produces this field. This keeps the
+ *      blast radius of Fase 16 to this one file's Apple-specific code path.
  */
 
 // ── Error taxonomy ─────────────────────────────────────────────────────────
@@ -139,10 +156,25 @@ export type AccountDeletionMfaChallenge = {
   readonly expectedUid: string;
   readonly hints: AccountDeletionMfaHint[];
   readonly resolver: MultiFactorResolver;
+  /**
+   * Fase 16: set ONLY when this challenge arose from the Apple path — the
+   * `authorizationCode` was already captured (from the SAME native sign-in
+   * that triggered this MFA requirement) before Firebase asked for a second
+   * factor, and must survive to `finishAccountDeletionReauthentication`'s
+   * outcome rather than being silently dropped, which would otherwise force
+   * a second, avoidable Apple sign-in after MFA resolves.
+   */
+  readonly appleAuthorizationCode?: string;
 };
 
 export type AccountDeletionReauthOutcome =
-  | { status: 'completed'; uid: string; authTimeSeconds: number }
+  | {
+      status: 'completed';
+      uid: string;
+      authTimeSeconds: number;
+      /** Fase 16 — present only when `provider: 'apple'` produced it. Single-use; the caller must consume it or discard it, never persist it. */
+      appleAuthorizationCode?: string;
+    }
   | { status: 'challenge'; challenge: AccountDeletionMfaChallenge };
 
 // ── Final UID check + forced token refresh ──────────────────────────────────
@@ -215,9 +247,121 @@ async function finalizeReauthentication(expectedUid: string): Promise<AccountDel
  * — see `docs/25_exclusao_de_conta_arquitetura.md`'s Fase 2 addendum. A
  * future "Excluir Conta" screen calls this first; only when it resolves
  * `false` does it need to invoke `startAccountDeletionReauthentication`.
+ *
+ * Fase 16 EXCEPTION: for an Apple-linked account this ALWAYS resolves
+ * `true`, regardless of session freshness. Recent-auth freshness has no
+ * bearing on whether a fresh Apple `authorizationCode` is available — that
+ * material is single-use and ~5-minute-lived by Apple's own contract, so
+ * "the Firebase session happens to still be fresh" can never substitute for
+ * capturing it. Since Fase 16 made this module the ONLY place Apple
+ * material is ever captured (the orchestrator no longer opens Apple itself
+ * — see `accountDeletionOrchestrator.ts`), skipping the reauth step for an
+ * Apple-linked account would leave the confirm step with no material to
+ * send at all. Password/Google are UNCHANGED — still governed purely by
+ * `hasRecentAuth`.
  */
 export function needsAccountDeletionReauthentication(): Promise<boolean> {
-  return hasRecentAuth(auth.currentUser).then((fresh) => !fresh);
+  const user = auth.currentUser;
+  if (user && getReauthenticationProviders(user).includes('apple')) {
+    return Promise.resolve(true);
+  }
+  return hasRecentAuth(user).then((fresh) => !fresh);
+}
+
+/** Shared by both the Apple and the generic (password/Google) MFA-required catch — builds the same challenge shape either way, only ever adding `appleAuthorizationCode` when the caller has one to preserve. */
+function buildMfaChallengeOutcome(
+  expectedUid: string,
+  error: MultiFactorError,
+  appleAuthorizationCode?: string,
+): AccountDeletionReauthOutcome {
+  const resolver = getMultiFactorResolver(auth, error);
+  const totpHints = selectTotpFactors(resolver.hints);
+  if (totpHints.length === 0) {
+    throw new AccountDeletionReauthError('REAUTH_FAILED');
+  }
+
+  return {
+    status: 'challenge',
+    challenge: {
+      expectedUid,
+      resolver,
+      hints: totpHints.map((hint) => ({
+        uid: hint.uid,
+        displayName: hint.displayName ?? null,
+      })),
+      appleAuthorizationCode,
+    },
+  };
+}
+
+/**
+ * Fase 16 — the Apple-specific reauthentication path. ONE call to
+ * `getAppleCredentialForAccountDeletion()` (the ONLY function in this
+ * codebase that reads `authorizationCode` off a native Apple result —
+ * `apple.native.ts`'s doc comment) yields BOTH the Firebase credential
+ * (`identityToken` + the SAME `rawNonce` sent to Apple, exactly like
+ * `getAppleCredential` builds for every other Apple sign-in in this app —
+ * `apple.native.ts`'s `performAppleSignIn` is the single nonce-generation
+ * site, unchanged) AND the `authorizationCode` the backend later exchanges
+ * for revocation. This function then does its own `reauthenticateWithCredential`
+ * (never delegating to `reauthenticateCurrentUser`, which would need to
+ * either discard `authorizationCode` or leak it into a contract used by
+ * Photo Vault/MFA — Fase 16 §3) with the SAME uid-consistency guards
+ * `reauthenticateCurrentUser` already applies for every other provider.
+ */
+async function startAppleAccountDeletionReauthentication(
+  expectedUid: string,
+): Promise<AccountDeletionReauthOutcome> {
+  const initialUser = auth.currentUser;
+  if (!initialUser || initialUser.uid !== expectedUid) {
+    throw new AccountDeletionReauthError(initialUser ? 'IDENTITY_CHANGED' : 'USER_SIGNED_OUT');
+  }
+  if (!getReauthenticationProviders(initialUser).includes('apple')) {
+    throw new AccountDeletionReauthError('PROVIDER_MISMATCH');
+  }
+
+  let credential: AuthCredential;
+  let authorizationCode: string;
+  try {
+    const result = await getAppleCredentialForAccountDeletion();
+    credential = result.credential;
+    authorizationCode = result.authorizationCode;
+  } catch (error) {
+    if (error instanceof SocialAuthCancelledError) {
+      throw new AccountDeletionReauthError('USER_CANCELLED');
+    }
+    // ProviderCredentialError (missing identityToken/authorizationCode) or
+    // any other native-layer failure — never a commit-eligible outcome, and
+    // never SESSION_EXPIRED (this has nothing to do with Firebase recent-auth).
+    throw new AccountDeletionReauthError('REAUTH_FAILED');
+  }
+
+  // The sheet can stay open long enough for the session to change
+  // underneath it — same threat `reauthenticateCurrentUser` guards against
+  // for every other provider (`reauthentication.ts`).
+  const afterSheetUser = auth.currentUser;
+  if (!afterSheetUser || afterSheetUser.uid !== expectedUid) {
+    throw new AccountDeletionReauthError(afterSheetUser ? 'IDENTITY_CHANGED' : 'USER_SIGNED_OUT');
+  }
+
+  try {
+    const result = await reauthenticateWithCredential(afterSheetUser, credential);
+    if (result.user.uid !== expectedUid) {
+      throw new AccountDeletionReauthError('IDENTITY_CHANGED');
+    }
+  } catch (error) {
+    if (error instanceof AccountDeletionReauthError) throw error;
+    if (isMultiFactorAuthRequired(error)) {
+      // The authorizationCode survives INTO the challenge — see
+      // `AccountDeletionMfaChallenge`'s doc comment on why it must not be
+      // dropped here.
+      return buildMfaChallengeOutcome(expectedUid, error as MultiFactorError, authorizationCode);
+    }
+    throw mapReauthError(error);
+  }
+
+  const finalized = await finalizeReauthentication(expectedUid);
+  return finalized.status === 'completed' ? { ...finalized, appleAuthorizationCode: authorizationCode } : finalized;
 }
 
 /**
@@ -233,6 +377,10 @@ export async function startAccountDeletionReauthentication(
   const expectedUid = auth.currentUser?.uid ?? null;
   if (!expectedUid) throw new AccountDeletionReauthError('USER_SIGNED_OUT');
 
+  if (request.provider === 'apple') {
+    return startAppleAccountDeletionReauthentication(expectedUid);
+  }
+
   try {
     const reauthenticated = await reauthenticateCurrentUser(request, {
       preserveMultiFactorError: true,
@@ -243,24 +391,7 @@ export async function startAccountDeletionReauthentication(
     return await finalizeReauthentication(expectedUid);
   } catch (error) {
     if (!isMultiFactorAuthRequired(error)) throw mapReauthError(error);
-
-    const resolver = getMultiFactorResolver(auth, error as MultiFactorError);
-    const totpHints = selectTotpFactors(resolver.hints);
-    if (totpHints.length === 0) {
-      throw new AccountDeletionReauthError('REAUTH_FAILED');
-    }
-
-    return {
-      status: 'challenge',
-      challenge: {
-        expectedUid,
-        resolver,
-        hints: totpHints.map((hint) => ({
-          uid: hint.uid,
-          displayName: hint.displayName ?? null,
-        })),
-      },
-    };
+    return buildMfaChallengeOutcome(expectedUid, error as MultiFactorError);
   }
 }
 
@@ -306,5 +437,11 @@ export async function finishAccountDeletionReauthentication(
     throw mapReauthError(error);
   }
 
-  return finalizeReauthentication(challenge.expectedUid);
+  const finalized = await finalizeReauthentication(challenge.expectedUid);
+  // Fase 16: carries forward the authorizationCode the Apple path already
+  // captured before this MFA challenge was raised — never re-derived, never
+  // re-opens Apple.
+  return finalized.status === 'completed' && challenge.appleAuthorizationCode
+    ? { ...finalized, appleAuthorizationCode: challenge.appleAuthorizationCode }
+    : finalized;
 }
