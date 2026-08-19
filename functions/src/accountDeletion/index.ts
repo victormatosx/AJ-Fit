@@ -4,8 +4,19 @@
  * implements.
  *
  * `types`/`errors`/`policy`/`retry`/`steps`/`stateMachine`/`concurrency`/
- * `record`/`requestContract`/`authGuard` (Fase 1-2) remain pure — no
- * network/Firestore/KMS call in any of them.
+ * `record`/`requestContract` (Fase 1-2) remain pure — no network/Firestore/
+ * KMS call in any of them.
+ *
+ * Fase 17 (final production audit) removed `authGuard.ts`
+ * (`requireAccountDeletionAuthorization`) as dead code: the REAL
+ * `requestAccountDeletion` callable (Fase 4+) never adopted it — it calls
+ * `requireRecentAuth` directly and validates its payload with
+ * `requestContract.ts`'s `validateRequestAccountDeletionPayload` (a closed
+ * allowlist, strictly stronger than `authGuard.ts`'s denylist-based
+ * `rejectClientSuppliedIdentityOrPolicy`, which itself remains in
+ * `requestContract.ts` — unused by production today, kept there as a small,
+ * already-tested, colocated defense-in-depth utility, not deleted since
+ * removing it has no benefit and touches a live file for no gain).
  *
  * `providerRevocation/*` (Fase 3) is NOT entirely pure: `appleKmsClient.ts`,
  * `appleTokenCrypto.ts`, `appleRevocationRepository.ts` and
@@ -28,7 +39,6 @@ export * from './stateMachine';
 export * from './concurrency';
 export * from './record';
 export * from './requestContract';
-export * from './authGuard';
 export * from './providerRevocation';
 export * from './repository';
 export * from './requestAccountDeletion';

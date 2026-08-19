@@ -92,6 +92,7 @@ describe('Photo Vault backend foundation — Phase 3 structural guarantees', () 
       'cleanupPendingAccountDeletions',
       'cleanupPhotoVaultOrphans',
       'createVault',
+      'onAccountDeletionRequested',
       'recoverVaultKey',
       'requestAccountDeletion',
       'revenueCatWebhook',

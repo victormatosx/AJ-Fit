@@ -169,8 +169,7 @@ export async function handleRequestAccountDeletion(
   // the workflow. `requireRecentAuth` throws `unauthenticated` when
   // `request.auth` is absent, and `failed-precondition` when
   // `request.auth.token.auth_time` is missing/stale — both already
-  // exhaustively tested in Fase 2 (`functions/src/__tests__/auth.test.ts`,
-  // `functions/src/accountDeletion/__tests__/authGuard.test.ts`).
+  // exhaustively tested in `functions/src/__tests__/auth.test.ts`.
   const uid = requireRecentAuth(request);
   const authTimeSeconds =
     typeof request.auth?.token?.auth_time === 'number' ? request.auth.token.auth_time : 0;

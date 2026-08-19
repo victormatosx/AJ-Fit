@@ -16,7 +16,28 @@ vi.mock('../accountDeletionProviderRevocation', () => ({
   revokeGoogleProviderAccess: mocks.revokeGoogleProviderAccess,
 }));
 
+import { readFileSync } from 'node:fs';
 import { requestAccountDeletionWithProviderPreparation } from '../accountDeletionOrchestrator';
+
+/**
+ * Fase 17 architectural invariant: the orchestrator must NEVER regain the
+ * ability to open a native Apple sheet itself — that regression (the
+ * original Fase 15/16 bug) is invisible to behavioral tests unless they
+ * happen to assert on call counts, so this pins it structurally instead.
+ */
+describe('accountDeletionOrchestrator — never opens Apple itself (Fase 16 invariant)', () => {
+  it('the source file has zero reference to Apple sheet-opening symbols', () => {
+    const source = readFileSync(new URL('../accountDeletionOrchestrator.ts', import.meta.url), 'utf8');
+    for (const forbidden of [
+      'getAppleCredentialForAccountDeletion',
+      'getAppleCredential',
+      'AppleAuthentication',
+      'prepareAppleProviderRevocationMaterial',
+    ]) {
+      expect(source).not.toContain(forbidden);
+    }
+  });
+});
 
 function user(uid = 'uid-1', providers: string[] = ['password']): TestUser {
   return { uid, providerData: providers.map((providerId) => ({ providerId })) };

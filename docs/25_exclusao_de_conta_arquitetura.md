@@ -1,5 +1,11 @@
 # 25. Exclusão de Conta — Arquitetura (Fase 1 + Fase 2)
 
+> **Para a arquitetura ATUAL (produção, E2E validado nos 3 providers), veja
+> [`account-deletion.md`](./account-deletion.md).** Este documento permanece
+> como histórico/retrospectiva fase a fase — útil para entender POR QUE
+> certas decisões foram tomadas, mas não é a fonte de verdade sobre o estado
+> atual do sistema.
+
 ## 0. Status deste documento
 
 Este documento descreve a arquitetura da **Fase 1 — Contrato técnico e máquina

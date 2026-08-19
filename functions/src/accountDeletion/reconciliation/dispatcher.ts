@@ -82,8 +82,10 @@ export interface ProviderSubStepDispatcherDeps {
  * identity guard is satisfied by construction, not bypassed.
  *
  * Google: NO backend executor exists, and this is deliberate architecture
- * (`../providerRevocation/googleProviderRevocation.ts`'s doc comment) — the
- * Fase 3/5 correction moved Google's revoke+unlink entirely client-side,
+ * (Fase 17 removed the unused `googleProviderRevocation.ts` wire-contract
+ * module this used to point to — see `../providerRevocation/index.ts`'s
+ * doc comment for the full rationale) — the Fase 3/5 correction moved
+ * Google's revoke+unlink entirely client-side,
  * BEFORE `requestAccountDeletion()` is even called, so a successfully
  * revoked Google account is already `SKIPPED_BY_POLICY` at record-creation
  * time and this function should structurally never be asked to run it.

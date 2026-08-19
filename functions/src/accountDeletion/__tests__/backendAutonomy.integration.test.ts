@@ -14,9 +14,9 @@
  *
  * The only fake in this file is the Apple HTTP client (`AppleIdentityClient`)
  * — an external network dependency this test must never actually call, the
- * same way `appleProviderRevocation.test.ts`/`googleProviderRevocation.test.ts`
- * already fake it. Every OTHER step's dependencies are the REAL Firestore/
- * Storage/Auth Emulators, not fakes.
+ * same way `appleProviderRevocation.test.ts` already fakes it. Every OTHER
+ * step's dependencies are the REAL Firestore/Storage/Auth Emulators, not
+ * fakes.
  *
  * Skipped by default — only runs when `BACKEND_AUTONOMY_INTEGRATION=1` is
  * set. Run via `npm run test:integration:backendAutonomy`, which wraps this
