@@ -26,6 +26,10 @@ import { SecurityScreen } from './SecurityScreen';
 import { ChangePasswordScreen } from './ChangePasswordScreen';
 import { TotpEnrollmentScreen } from './TotpEnrollmentScreen';
 import { TwoFactorSettingsScreen } from './TwoFactorSettingsScreen';
+import {
+  RecoveryCodesScreen,
+  type RecoveryCodesOrigin,
+} from './RecoveryCodesScreen';
 import { EditProfileScreen } from './EditProfileScreen';
 import { PaywallScreen } from './PaywallScreen';
 import { SubscriptionCenterScreen } from './SubscriptionCenterScreen';
@@ -103,6 +107,10 @@ function AppShellContent({
   const [showTwoFactor, setShowTwoFactor] = useState(false);
   const [showTotpEnrollment, setShowTotpEnrollment] = useState(false);
   const [totpRefreshToken, setTotpRefreshToken] = useState(0);
+  // null means the recovery-codes screen is closed. The origin only changes
+  // copy and whether the flow reauthenticates before generating.
+  const [recoveryCodesOrigin, setRecoveryCodesOrigin] =
+    useState<RecoveryCodesOrigin | null>(null);
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showSubscriptionCenter, setShowSubscriptionCenter] = useState(false);
   const [showWorkoutConfirmation, setShowWorkoutConfirmation] = useState(false);
@@ -127,6 +135,7 @@ function AppShellContent({
     showChangePassword ||
     showTwoFactor ||
     showTotpEnrollment ||
+    recoveryCodesOrigin !== null ||
     showEditProfile ||
     showSubscriptionCenter ||
     showPremium ||
@@ -323,6 +332,7 @@ function AppShellContent({
         <TwoFactorSettingsScreen
           onBack={() => setShowTwoFactor(false)}
           onOpenEnrollment={() => setShowTotpEnrollment(true)}
+          onRegenerateRecoveryCodes={() => setRecoveryCodesOrigin('regeneration')}
           refreshToken={totpRefreshToken}
         />
       </PersistentScreen>
@@ -337,7 +347,23 @@ function AppShellContent({
           onCompleted={() => {
             setShowTotpEnrollment(false);
             setTotpRefreshToken((value) => value + 1);
+            // Recovery codes are generated only once the Firebase enrollment
+            // has actually completed — never while the QR is merely on screen,
+            // which the user may abandon.
+            setRecoveryCodesOrigin('enrollment');
           }}
+        />
+      </PersistentScreen>
+      <PersistentScreen
+        active={recoveryCodesOrigin !== null}
+        prewarm={prewarmed.RECOVERY_CODES}
+        activeStyle={FULL_BLEED.overlayZ70}
+        inactiveMode="materialized"
+      >
+        <RecoveryCodesScreen
+          origin={recoveryCodesOrigin ?? 'enrollment'}
+          onDone={() => setRecoveryCodesOrigin(null)}
+          onDismiss={() => setRecoveryCodesOrigin(null)}
         />
       </PersistentScreen>
       <PersistentScreen

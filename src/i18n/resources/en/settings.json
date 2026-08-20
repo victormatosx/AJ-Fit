@@ -58,15 +58,38 @@
     "twoFactor": {
       "title": "Two-step verification",
       "description": "Add a second layer of security to your account with an authenticator app.",
-      "status": { "label": "Status", "loading": "Checking...", "enabled": "Enabled", "disabled": "Disabled", "unavailable": "Unavailable" },
-      "method": { "authenticator": "Authenticator app" },
+      "status": {
+        "label": "Status",
+        "loading": "Checking...",
+        "enabled": "Enabled",
+        "disabled": "Disabled",
+        "unavailable": "Unavailable"
+      },
+      "method": {
+        "authenticator": "Authenticator app"
+      },
       "enrolledAt": "Set up on {{date}}",
       "benefits": {
-        "authenticator": { "title": "Authenticator codes", "description": "Use your preferred authenticator app to confirm access." },
-        "offline": { "title": "Works offline", "description": "Codes are generated on your device and do not rely on SMS." }
+        "authenticator": {
+          "title": "Authenticator codes",
+          "description": "Use your preferred authenticator app to confirm access."
+        },
+        "offline": {
+          "title": "Works offline",
+          "description": "Codes are generated on your device and do not rely on SMS."
+        }
       },
-      "actions": { "enable": "Enable two-step verification", "disable": "Disable verification", "continue": "Continue", "cancel": "Cancel", "retry": "Try again" },
-      "disableConfirmation": { "title": "Disable verification?", "message": "Disabling two-step verification will reduce your account's security." },
+      "actions": {
+        "enable": "Enable two-step verification",
+        "disable": "Disable verification",
+        "continue": "Continue",
+        "cancel": "Cancel",
+        "retry": "Try again"
+      },
+      "disableConfirmation": {
+        "title": "Disable verification?",
+        "message": "Disabling two-step verification will reduce your account's security."
+      },
       "reauth": {
         "title": "Confirm your identity",
         "enableDescription": "Choose a method linked to your account to confirm your identity before setting up the authenticator.",
@@ -170,6 +193,44 @@
       },
       "accessibility": {
         "toggleVisibility": "Show or hide {{field}}"
+      }
+    },
+    "recoveryCodes": {
+      "title": "Recovery codes",
+      "description": "Store these codes somewhere safe. Each code can be used only once if you lose access to your authenticator app.",
+      "warningOneTime": "You will not be able to view these codes again.",
+      "generating": "Generating your recovery codes…",
+      "copyAll": "Copy all",
+      "copied": "Codes copied",
+      "clipboardNotice": "The codes were copied. Avoid leaving them on the clipboard longer than necessary.",
+      "confirmSaved": "I saved my recovery codes somewhere safe.",
+      "done": "Done",
+      "leaveTitle": "Leave without saving the codes?",
+      "leaveDescription": "If you leave now, these codes cannot be shown again.",
+      "leaveStay": "Stay on this screen",
+      "leaveConfirm": "Leave anyway",
+      "regenerate": {
+        "action": "Generate new recovery codes",
+        "confirmTitle": "Generate new codes?",
+        "confirmDescription": "Generating new codes will invalidate all your previous recovery codes.",
+        "confirm": "Generate new codes",
+        "cancel": "Cancel"
+      },
+      "failure": {
+        "enrollmentTitle": "Two-factor authentication enabled",
+        "enrollmentDescription": "Your two-factor authentication is still active, but we could not generate your recovery codes. You can try again now or later in your security settings.",
+        "regenerationTitle": "Could not generate the codes",
+        "regenerationDescription": "Your previous recovery codes are still valid. Please try again.",
+        "retry": "Try again",
+        "later": "Not now"
+      },
+      "issues": {
+        "recoveryUnauthenticated": "Your session expired. Sign in again to continue.",
+        "recoveryReauthRequired": "For your security, confirm your identity again before generating the codes.",
+        "recoveryConflict": "Another code generation was detected. Please try again.",
+        "recoveryNetworkUnavailable": "We could not connect. Check your internet connection and try again.",
+        "recoveryInvalidResponse": "We received an unexpected response. No codes were generated. Please try again.",
+        "recoveryGenerationFailed": "We could not generate the codes. Please try again."
       }
     }
   },

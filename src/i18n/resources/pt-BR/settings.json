@@ -58,15 +58,38 @@
     "twoFactor": {
       "title": "Verificação em duas etapas",
       "description": "Adicione uma segunda etapa de segurança à sua conta usando um aplicativo autenticador.",
-      "status": { "label": "Status", "loading": "Verificando...", "enabled": "Ativada", "disabled": "Desativada", "unavailable": "Indisponível" },
-      "method": { "authenticator": "Aplicativo autenticador" },
+      "status": {
+        "label": "Status",
+        "loading": "Verificando...",
+        "enabled": "Ativada",
+        "disabled": "Desativada",
+        "unavailable": "Indisponível"
+      },
+      "method": {
+        "authenticator": "Aplicativo autenticador"
+      },
       "enrolledAt": "Configurado em {{date}}",
       "benefits": {
-        "authenticator": { "title": "Códigos no autenticador", "description": "Use seu aplicativo autenticador preferido para confirmar o acesso." },
-        "offline": { "title": "Funciona offline", "description": "Os códigos são gerados no aparelho e não dependem de SMS." }
+        "authenticator": {
+          "title": "Códigos no autenticador",
+          "description": "Use seu aplicativo autenticador preferido para confirmar o acesso."
+        },
+        "offline": {
+          "title": "Funciona offline",
+          "description": "Os códigos são gerados no aparelho e não dependem de SMS."
+        }
       },
-      "actions": { "enable": "Ativar verificação em duas etapas", "disable": "Desativar verificação", "continue": "Continuar", "cancel": "Cancelar", "retry": "Tentar novamente" },
-      "disableConfirmation": { "title": "Desativar verificação?", "message": "Desativar a verificação em duas etapas reduzirá a segurança da sua conta." },
+      "actions": {
+        "enable": "Ativar verificação em duas etapas",
+        "disable": "Desativar verificação",
+        "continue": "Continuar",
+        "cancel": "Cancelar",
+        "retry": "Tentar novamente"
+      },
+      "disableConfirmation": {
+        "title": "Desativar verificação?",
+        "message": "Desativar a verificação em duas etapas reduzirá a segurança da sua conta."
+      },
       "reauth": {
         "title": "Confirme sua identidade",
         "enableDescription": "Escolha uma forma vinculada à sua conta para confirmar sua identidade antes de configurar o autenticador.",
@@ -170,6 +193,44 @@
       },
       "accessibility": {
         "toggleVisibility": "Mostrar ou ocultar {{field}}"
+      }
+    },
+    "recoveryCodes": {
+      "title": "Códigos de recuperação",
+      "description": "Guarde estes códigos em um local seguro. Cada código poderá ser usado apenas uma vez caso você perca acesso ao seu aplicativo autenticador.",
+      "warningOneTime": "Você não poderá visualizar estes códigos novamente.",
+      "generating": "Gerando seus códigos de recuperação…",
+      "copyAll": "Copiar todos",
+      "copied": "Códigos copiados",
+      "clipboardNotice": "Os códigos foram copiados. Evite deixá-los na área de transferência por mais tempo que o necessário.",
+      "confirmSaved": "Eu salvei meus códigos de recuperação em um local seguro.",
+      "done": "Concluir",
+      "leaveTitle": "Sair sem salvar os códigos?",
+      "leaveDescription": "Se sair agora, estes códigos não poderão ser exibidos novamente.",
+      "leaveStay": "Continuar nesta tela",
+      "leaveConfirm": "Sair mesmo assim",
+      "regenerate": {
+        "action": "Gerar novos códigos de recuperação",
+        "confirmTitle": "Gerar novos códigos?",
+        "confirmDescription": "Gerar novos códigos invalidará todos os códigos de recuperação anteriores.",
+        "confirm": "Gerar novos códigos",
+        "cancel": "Cancelar"
+      },
+      "failure": {
+        "enrollmentTitle": "Verificação em duas etapas ativada",
+        "enrollmentDescription": "Sua verificação em duas etapas continua ativa, mas não foi possível gerar os códigos de recuperação. Você pode tentar novamente agora ou mais tarde nas configurações de segurança.",
+        "regenerationTitle": "Não foi possível gerar os códigos",
+        "regenerationDescription": "Seus códigos de recuperação anteriores continuam válidos. Tente novamente.",
+        "retry": "Tentar novamente",
+        "later": "Agora não"
+      },
+      "issues": {
+        "recoveryUnauthenticated": "Sua sessão expirou. Entre novamente para continuar.",
+        "recoveryReauthRequired": "Por segurança, confirme sua identidade novamente antes de gerar os códigos.",
+        "recoveryConflict": "Outra geração de códigos foi detectada. Tente novamente.",
+        "recoveryNetworkUnavailable": "Não foi possível conectar. Verifique sua internet e tente novamente.",
+        "recoveryInvalidResponse": "Recebemos uma resposta inesperada. Nenhum código foi gerado. Tente novamente.",
+        "recoveryGenerationFailed": "Não foi possível gerar os códigos. Tente novamente."
       }
     }
   },

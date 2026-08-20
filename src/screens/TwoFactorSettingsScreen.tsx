@@ -26,10 +26,13 @@ import { useScreenFocusEffect } from '../state/ScreenActivity';
 export function TwoFactorSettingsScreen({
   onBack,
   onOpenEnrollment,
+  onRegenerateRecoveryCodes,
   refreshToken = 0,
 }: {
   onBack: () => void;
   onOpenEnrollment: () => void;
+  /** Opens the recovery-codes flow in regeneration mode. */
+  onRegenerateRecoveryCodes: () => void;
   refreshToken?: number;
 }) {
   const { t, i18n } = useTranslation('settings');
@@ -62,6 +65,21 @@ export function TwoFactorSettingsScreen({
       setPasswordVisible(false);
     };
   });
+
+  const requestRegenerateRecoveryCodes = () => {
+    Alert.alert(
+      t('security.recoveryCodes.regenerate.confirmTitle'),
+      t('security.recoveryCodes.regenerate.confirmDescription'),
+      [
+        { text: t('security.recoveryCodes.regenerate.cancel'), style: 'cancel' },
+        {
+          text: t('security.recoveryCodes.regenerate.confirm'),
+          style: 'destructive',
+          onPress: onRegenerateRecoveryCodes,
+        },
+      ],
+    );
+  };
 
   const requestDisable = (factor: TotpFactor) => {
     Alert.alert(
@@ -211,6 +229,33 @@ export function TwoFactorSettingsScreen({
                   </View>
                 );
               })}
+
+              {/*
+                Recovery codes only make sense while a second factor exists —
+                they are what replaces it. This block lives inside the
+                "has enrolled factors" branch for exactly that reason.
+
+                Regenerating invalidates every previous code, so the warning is
+                a hard confirmation rather than a toast after the fact. The
+                reauthentication itself happens on the recovery-codes screen,
+                which is also where the new codes are revealed: keeping both in
+                one place means the plaintext never has to cross a screen
+                boundary.
+              */}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t('security.recoveryCodes.regenerate.action')}
+                disabled={mfa.disabling}
+                onPress={requestRegenerateRecoveryCodes}
+                style={({ pressed }) => [
+                  styles.regenerateButton,
+                  { opacity: mfa.disabling ? 0.35 : pressed ? 0.8 : 1 },
+                ]}
+              >
+                <Text style={[typography.subtitle, { color: colors.text }]}>
+                  {t('security.recoveryCodes.regenerate.action')}
+                </Text>
+              </Pressable>
             </View>
           ) : null}
 
@@ -476,6 +521,15 @@ function createStyles(theme: AppTheme) {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     gap: spacing[3],
+  },
+  regenerateButton: {
+    minHeight: 48,
+    marginTop: spacing[4],
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   disableButton: {
     minHeight: 46,

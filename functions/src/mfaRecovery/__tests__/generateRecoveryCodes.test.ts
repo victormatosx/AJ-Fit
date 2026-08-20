@@ -51,7 +51,7 @@ import { logger } from 'firebase-functions/v2';
 import { HttpsError } from 'firebase-functions/v2/https';
 
 import { parseRecoveryCode } from '../codeFormat';
-import { RECOVERY_PEPPER_MIN_BYTES } from '../digest';
+import { RECOVERY_PEPPER_MIN_BYTES, computeRecoveryCodeDigest } from '../digest';
 import { RecoveryError } from '../errors';
 import { handleGenerateRecoveryCodes } from '../generateRecoveryCodes';
 import {
@@ -240,6 +240,50 @@ describe('successful generation', () => {
     ]) {
       expect(serialized).not.toContain(leaked);
     }
+  });
+
+  it('returns codes in the grouped form the client validates', async () => {
+    // THE REGRESSION THIS LOCKS DOWN
+    // ------------------------------
+    // The generator produces the CANONICAL form (43 chars, no separators) —
+    // that is what gets hashed. The client validates the DISPLAY form (53
+    // chars, ten hyphens), because that is the artifact a user reads and
+    // writes down. Phase 3 originally shipped without the formatting step at
+    // the transport boundary, so every response failed the client's parser
+    // with `recoveryInvalidResponse` even though generation had fully
+    // succeeded and a recovery set had already been persisted.
+    //
+    // This pattern is copied verbatim from src/services/mfaRecovery.ts. The
+    // two packages cannot share a module, so the contract is pinned on the
+    // producing side instead.
+    const CLIENT_PATTERN = /^AJF(-[0-9A-HJKMNP-TV-Z]{4}){10}$/;
+
+    const response = await handleGenerateRecoveryCodes(request());
+
+    for (const code of response.codes) {
+      expect(code, 'must match the client-side contract').toMatch(CLIENT_PATTERN);
+      expect(code).toHaveLength(53);
+      expect((code.match(/-/g) ?? [])).toHaveLength(10);
+    }
+  });
+
+  it('hashes the canonical form, not the formatted one', async () => {
+    // Formatting happens after hashing. Both forms canonicalize identically,
+    // so a user typing the grouped code back verifies against the same
+    // digest — but the persisted digest must correspond to the canonical
+    // string, which is what `computeRecoveryCodeDigest` receives upstream.
+    const response = await handleGenerateRecoveryCodes(request());
+    const persisted = persistedDocument().codes as Array<{ digest: string }>;
+
+    for (const code of response.codes) {
+      const canonical = parseRecoveryCode(code).canonical;
+      expect(canonical).toHaveLength(43);
+      expect(canonical).not.toContain('-');
+      expect(computeRecoveryCodeDigest(canonical, PEPPER)).toBe(
+        computeRecoveryCodeDigest(code, PEPPER),
+      );
+    }
+    expect(persisted).toHaveLength(RECOVERY_CODES_PER_SET);
   });
 
   it('returns codes that all parse and share the returned selector', async () => {

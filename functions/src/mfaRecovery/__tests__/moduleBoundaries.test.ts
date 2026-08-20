@@ -235,13 +235,46 @@ describe('no plaintext recovery code can be persisted or logged', () => {
 });
 
 describe('backend-only: no client or entrypoint integration', () => {
-  it('is not wired into the functions entrypoint', () => {
-    // Exporting from index.ts is what makes a callable deployable. Phase 2
-    // ships no endpoint; wiring is a Phase 3 step.
+  it('exports ONLY the generation callable from the entrypoint', () => {
+    // Phase 2 asserted the module was absent from index.ts entirely, because
+    // it shipped no endpoint. Phase 3 deliberately publishes generation — so
+    // the guard moves from "nothing is exported" to "nothing MORE than
+    // generation is exported", which is the property that actually matters:
+    // consuming a code and resetting MFA must remain unreachable.
     const entrypoint = read('src/index.ts');
 
-    expect(entrypoint).not.toContain('mfaRecovery');
-    expect(entrypoint).not.toContain('generateMfaRecoveryCodes');
+    expect(entrypoint).toContain('generateMfaRecoveryCodes');
+
+    for (const forbidden of [
+      'consumeMfaRecoveryCode',
+      'consumeRecoveryCode',
+      'resetMfa',
+      'mfaRecoveryConsume',
+      'verifyAppCheckPoc',
+    ]) {
+      expect(entrypoint, `${forbidden} must not be exported`).not.toContain(forbidden);
+    }
+  });
+
+  it('keeps every pre-existing Cloud Function exported', () => {
+    // Adding an export must never quietly drop another one.
+    const entrypoint = read('src/index.ts');
+
+    for (const required of [
+      'revenueCatWebhook',
+      'validatePromoCode',
+      'authorizePromoPurchase',
+      'adminListPromoCodes',
+      'adminCreatePromoCode',
+      'adminUpdatePromoCode',
+      'adminSetPromoCodeActive',
+      'backendHealth',
+      'cleanupPhotoVaultOrphans',
+      'createVault',
+      'recoverVaultKey',
+    ]) {
+      expect(entrypoint, `${required} must stay exported`).toContain(required);
+    }
   });
 
   it('does not reference the mobile TOTP surface', () => {

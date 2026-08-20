@@ -3,6 +3,7 @@ import { HttpsError, onCall, type CallableRequest } from 'firebase-functions/v2/
 import { auth } from '../lib/firebaseAdmin';
 import { requireRecentAuth } from '../lib/auth';
 import { logFunctionError } from '../lib/logger';
+import { formatRecoveryCodeForDisplay } from './codeFormat';
 import { generateRecoveryCodeSet } from './codeGenerator';
 import { computeRecoveryCodeDigest } from './digest';
 import { RecoveryError, isRecoveryError } from './errors';
@@ -37,14 +38,15 @@ import { RECOVERY_DIGEST_ALGORITHM, RECOVERY_DIGEST_VERSION } from './digest';
  *             |
  *     return the plaintext ONCE
  *
- * PHASE 2 SCOPE. This mints and stores codes; it does NOT consume them, and
+ * This mints and stores codes; it does NOT consume them, and
  * it never touches a second factor. There is no Admin Auth write of any kind
  * here — `auth` is used for exactly one read (`getUser`) to confirm the user
  * has TOTP enrolled.
  *
- * NOT WIRED INTO src/index.ts. Exporting it there is what would make it
- * deployable, and this phase ships no endpoint. Wiring is a Phase 3 step,
- * together with the client that consumes the response.
+ * Exported from src/index.ts (Phase 3) and deployed to us-central1. The
+ * response carries the codes in their grouped display form; everything
+ * upstream of the return statement works on the canonical form, which is what
+ * is hashed.
  */
 
 const SCOPE = 'mfaRecovery.generate';
@@ -218,7 +220,19 @@ export async function handleGenerateRecoveryCodes(
 
     return {
       recoverySetId,
-      codes,
+      // Formatted for display HERE, at the transport boundary, and nowhere
+      // earlier. Everything upstream — generation, HMAC, persistence — works
+      // on the canonical form, which is what `computeRecoveryCodeDigest`
+      // hashes. Grouping is presentation only (codeFormat.ts), so applying it
+      // after hashing cannot change a digest; and because
+      // `parseRecoveryCode` canonicalizes on the way in, a user typing the
+      // grouped form back in a later phase still verifies against the same
+      // digest.
+      //
+      // This is the artifact the user actually reads and writes down, so the
+      // grouped form is what leaves the backend — matching the response
+      // contract the client validates.
+      codes: codes.map(formatRecoveryCodeForDisplay),
       createdAt: now.toISOString(),
       count: codes.length,
     };

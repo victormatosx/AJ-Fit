@@ -48,6 +48,17 @@ export type TotpEnrollmentDraft = {
   readonly enrollmentCompletionDeadline: string;
 };
 
+/** A pending TOTP challenge raised by a reauthentication attempt. */
+export type TotpReauthenticationChallenge = {
+  userUid: string;
+  reauthHintUid: string;
+  resolver: MultiFactorResolver;
+};
+
+export type TotpReauthenticationStart =
+  | { status: 'completed'; userUid: string }
+  | { status: 'challenge'; challenge: TotpReauthenticationChallenge };
+
 export type TotpUnenrollmentChallenge = {
   readonly userUid: string;
   readonly targetFactorUid: string;
@@ -266,18 +277,31 @@ async function unenrollCurrentTotpFactor(
   return refreshTotpFactors();
 }
 
-export async function startTotpUnenrollment(
-  factorUid: string,
+/**
+ * Reauthenticates the current user, surfacing the TOTP challenge that Firebase
+ * demands whenever the account has a second factor enrolled.
+ *
+ * This is the shared half of every sensitive 2FA operation. `reauthenticate
+ * WithCredential` does NOT complete for an MFA-enabled account — it throws
+ * `auth/multi-factor-auth-required` — so any flow that needs "prove it is
+ * really you" has to reauthenticate, catch that, build a resolver, and finish
+ * with a TOTP code. Unenrollment and recovery-code generation both need
+ * exactly that, and neither may weaken it: the second factor is required to
+ * act on the second factor.
+ *
+ * @param requiredFactorUid restricts the challenge to one specific enrolled
+ *   factor. Unenrollment passes the factor being removed (you must hold the
+ *   authenticator you are deleting); generation leaves it undefined, since any
+ *   enrolled TOTP proves possession.
+ */
+export async function startTotpReauthentication(
   request: ReauthenticationRequest,
-): Promise<TotpUnenrollmentStart> {
+  requiredFactorUid?: string,
+): Promise<TotpReauthenticationStart> {
   if (request.provider === 'password' && !request.password) {
     throw new MfaTotpServiceError('passwordRequired');
   }
   const user = currentUserOrThrow();
-  const target = selectTotpFactors(multiFactor(user).enrolledFactors).find(
-    (candidate) => candidate.uid === factorUid,
-  );
-  if (!target) throw new MfaTotpServiceError('factorNotFound');
 
   try {
     const reauthenticated = await reauthenticateCurrentUser(request, {
@@ -286,27 +310,83 @@ export async function startTotpUnenrollment(
     if (reauthenticated.uid !== user.uid) {
       throw new MfaTotpServiceError('sessionExpired');
     }
+    return { status: 'completed', userUid: user.uid };
+  } catch (error) {
+    if (!isMultiFactorAuthRequired(error)) throw error;
+    const resolver = getMultiFactorResolver(auth, error as MultiFactorError);
+    const hints = selectTotpFactors(resolver.hints);
+    const reauthHint = requiredFactorUid
+      ? hints.find((hint) => hint.uid === requiredFactorUid)
+      : hints[0];
+    if (!reauthHint) throw new MfaTotpServiceError('factorNotFound');
+    return {
+      status: 'challenge',
+      challenge: { userUid: user.uid, reauthHintUid: reauthHint.uid, resolver },
+    };
+  }
+}
+
+/**
+ * Completes a reauthentication challenge with a TOTP code.
+ *
+ * Returns the confirmed uid. The identity is re-checked on both sides of
+ * `resolveSignIn` so a resolver can never complete against a different
+ * account than the one that started the flow.
+ */
+export async function finishTotpReauthentication(
+  challenge: TotpReauthenticationChallenge,
+  code: string,
+): Promise<string> {
+  const user = currentUserOrThrow();
+  if (user.uid !== challenge.userUid) {
+    throw new MfaTotpServiceError('sessionExpired');
+  }
+  const normalizedCode = code.trim();
+  const validationIssue = validateTotpCode(normalizedCode);
+  if (validationIssue) throw new MfaTotpServiceError(validationIssue);
+
+  const assertion = TotpMultiFactorGenerator.assertionForSignIn(
+    challenge.reauthHintUid,
+    normalizedCode,
+  );
+  const credential = await challenge.resolver.resolveSignIn(assertion);
+  if (credential.user.uid !== challenge.userUid) {
+    throw new MfaTotpServiceError('sessionExpired');
+  }
+  return challenge.userUid;
+}
+
+export async function startTotpUnenrollment(
+  factorUid: string,
+  request: ReauthenticationRequest,
+): Promise<TotpUnenrollmentStart> {
+  const user = currentUserOrThrow();
+  const target = selectTotpFactors(multiFactor(user).enrolledFactors).find(
+    (candidate) => candidate.uid === factorUid,
+  );
+  if (!target) throw new MfaTotpServiceError('factorNotFound');
+
+  // The reauthentication half is shared with recovery-code generation; only
+  // the terminal action differs. `factorUid` is required here: removing an
+  // authenticator must be proved with that same authenticator.
+  const outcome = await startTotpReauthentication(request, factorUid);
+
+  if (outcome.status === 'completed') {
     return {
       status: 'completed',
       factors: await unenrollCurrentTotpFactor(factorUid, user.uid),
     };
-  } catch (error) {
-    if (!isMultiFactorAuthRequired(error)) throw error;
-    const resolver = getMultiFactorResolver(auth, error as MultiFactorError);
-    const reauthHint = selectTotpFactors(resolver.hints).find(
-      (hint) => hint.uid === factorUid,
-    );
-    if (!reauthHint) throw new MfaTotpServiceError('factorNotFound');
-    return {
-      status: 'challenge',
-      challenge: {
-        userUid: user.uid,
-        targetFactorUid: factorUid,
-        reauthHintUid: reauthHint.uid,
-        resolver,
-      },
-    };
   }
+
+  return {
+    status: 'challenge',
+    challenge: {
+      userUid: outcome.challenge.userUid,
+      targetFactorUid: factorUid,
+      reauthHintUid: outcome.challenge.reauthHintUid,
+      resolver: outcome.challenge.resolver,
+    },
+  };
 }
 
 /** Compatibility wrapper retained for the existing password reauth contract. */
@@ -324,24 +404,14 @@ export async function finishTotpUnenrollment(
   challenge: TotpUnenrollmentChallenge,
   code: string,
 ): Promise<TotpFactor[]> {
-  const user = currentUserOrThrow();
-  if (user.uid !== challenge.userUid) {
-    throw new MfaTotpServiceError('sessionExpired');
-  }
-  const normalizedCode = code.trim();
-  const validationIssue = validateTotpCode(normalizedCode);
-  if (validationIssue) throw new MfaTotpServiceError(validationIssue);
+  const userUid = await finishTotpReauthentication(
+    {
+      userUid: challenge.userUid,
+      reauthHintUid: challenge.reauthHintUid,
+      resolver: challenge.resolver,
+    },
+    code,
+  );
 
-  const assertion = TotpMultiFactorGenerator.assertionForSignIn(
-    challenge.reauthHintUid,
-    normalizedCode,
-  );
-  const credential = await challenge.resolver.resolveSignIn(assertion);
-  if (credential.user.uid !== challenge.userUid) {
-    throw new MfaTotpServiceError('sessionExpired');
-  }
-  return unenrollCurrentTotpFactor(
-    challenge.targetFactorUid,
-    challenge.userUid,
-  );
+  return unenrollCurrentTotpFactor(challenge.targetFactorUid, userUid);
 }
