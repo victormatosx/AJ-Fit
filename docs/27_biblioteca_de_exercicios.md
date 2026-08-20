@@ -16,13 +16,25 @@ Implementação de referência: `src/types/exercise.ts` (tipos + taxonomias),
 
 ## 2. Natureza do conteúdo
 
-`exercises` é conteúdo administrado pelo AJ Fit, não pelo usuário. Só o
-script de seed, rodando com Firebase Admin SDK (Application Default
-Credentials, nunca uma chave de service account no repositório), pode
-criar ou alterar documentos. Usuários comuns só leem.
+`exercises` é conteúdo administrado, não pelo usuário. Dois caminhos de
+escrita legítimos:
+
+1. O script de seed (`scripts/seedExercises.ts`, Firebase Admin SDK,
+   Application Default Credentials, nunca uma chave de service account no
+   repositório) — usado para carga inicial/em lote.
+2. O painel administrativo **ajfit-admin** (`/exercises`), usado por
+   administradores autenticados (`users/{uid}.metadata.role == 'admin'`)
+   para o CRUD do dia a dia — criar, editar, ativar/desativar, gerenciar
+   substituições e anexar/substituir/remover os vídeos de execução. Ver
+   `ajfit-admin/docs/exercises-admin.md` para a documentação do painel.
+
+Usuários comuns (não-admin) só leem.
 
 Ver `firestore.rules`, `match /exercises/{exerciseId}`: leitura liberada
-para qualquer usuário autenticado, escrita sempre negada para clients.
+para qualquer usuário autenticado; `create`/`update` liberados apenas para
+`isAdmin()` (mesmo mecanismo usado por `supportTickets`); `delete` sempre
+negado, mesmo para admins — exercícios podem ser referenciados por
+histórico de treino (ver §4.1).
 
 ---
 
@@ -40,6 +52,12 @@ exercises/cable-face-pull
 Nunca usar IDs aleatórios do Firestore. Nunca renomear um `id` só porque a
 tradução exibida mudou — o nome de exibição vive em `name.{ptBR,en,es}`,
 não no `id`.
+
+Nos 79 documentos gravados pelo seed inicial, a identidade canônica é o ID
+do documento e o corpo não contém o campo duplicado `id` (o seed o remove
+antes da escrita). O painel pode persistir `id` em documentos novos; quando
+presente, ele deve continuar igual ao ID do documento. As Rules aceitam os
+dois formatos sem permitir divergência de identidade.
 
 ---
 
@@ -67,7 +85,13 @@ type Exercise = {
   equipment: EquipmentId[];
   bodyPosition?: 'standing' | 'seated' | 'lying' | 'kneeling' | 'hanging';
 
-  execution: { videoUrl?: string; thumbnailUrl?: string };
+  execution: {
+    videos?: {
+      vertical?: { url: string; storagePath: string };
+      horizontal?: { url: string; storagePath: string };
+    };
+    thumbnailUrl?: string;
+  };
   instructions?: { ptBR: string[]; en?: string[]; es?: string[] };
 
   substitution: { group?: string; similarExerciseIds: string[] };
@@ -101,6 +125,36 @@ device-side `new Date()`.
 Retiring one means flipping `status`/`availability`, not removing the
 document — deleting it would break historical workout records that
 reference its id.
+
+### 4.2 Vídeos de execução (`execution.videos`)
+
+Cada exercício pode ter até dois vídeos de execução, ambos opcionais e
+independentes: `vertical` e `horizontal`. Evoluído a partir de um shape
+anterior de vídeo único (`execution.videoUrl`) — nenhum dos 79 exercícios
+tinha esse campo preenchido no momento da mudança, então não houve
+migração de dados.
+
+- Armazenamento: Firebase Storage, nunca Firestore (sem blob/base64).
+  Path determinístico: `exercises/{exerciseId}/execution/{vertical,horizontal}.webm`.
+- Formato aceito: exclusivamente `.webm` (`video/webm`), validado por
+  extensão e MIME tanto no cliente quanto no Storage Rules (`storage.rules`).
+- Orientação: validada no cliente lendo as dimensões reais do vídeo antes
+  do upload — vertical exige altura > largura, horizontal exige largura >
+  altura; vídeos quadrados são rejeitados nos dois slots.
+- `url`/`storagePath` no Firestore são só metadados de localização — a
+  fonte da mídia é sempre o Storage.
+- Gerenciados exclusivamente pelo painel `ajfit-admin` (anexar, substituir,
+  remover). O seed script não popula vídeos.
+- O gate administrativo das Storage Rules lê
+  `users/{uid}.metadata.role` no Firestore com `firestore.get/exists`. Em
+  produção isso exige que o service agent do Cloud Storage possua
+  `roles/firebaserules.firestoreServiceAgent`; o emulador não valida esse
+  vínculo IAM. Antes/depois de publicar as Rules, valide o projeto real com
+  `npm run check:storage-iam -- --project ajfit-2f321`.
+- Limite de tamanho: **não há política de negócio definida ainda.** O
+  painel aplica um teto técnico de 100 MB só para não deixar o Storage sem
+  cota nenhuma — não é um limite aprovado, revisar quando essa decisão for
+  tomada.
 
 ---
 

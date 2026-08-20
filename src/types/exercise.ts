@@ -121,8 +121,22 @@ export interface ExerciseMovement {
   laterality: Laterality;
 }
 
+export interface ExerciseVideo {
+  url: string;
+  storagePath: string;
+}
+
+/**
+ * Vertical and horizontal are independent slots (admin panel — ajfit-admin
+ * — attaches/replaces/removes each individually). Both optional, and the
+ * whole `videos` map is optional: every one of the 79 seeded documents
+ * predates this field and has neither.
+ */
 export interface ExerciseExecution {
-  videoUrl?: string;
+  videos?: {
+    vertical?: ExerciseVideo;
+    horizontal?: ExerciseVideo;
+  };
   thumbnailUrl?: string;
 }
 

@@ -117,8 +117,15 @@ export function validateExerciseSeed(exercises: ExerciseSeedInput[]): ExerciseVa
       errors.push(`${tag} bodyPosition inválido: "${ex.bodyPosition}"`);
     }
 
-    if (ex.execution?.videoUrl && !HAS_URL(ex.execution.videoUrl)) {
-      errors.push(`${tag} execution.videoUrl presente mas não parece uma URL válida`);
+    for (const orientation of ['vertical', 'horizontal'] as const) {
+      const video = ex.execution?.videos?.[orientation];
+      if (!video) continue;
+      if (!video.url || !HAS_URL(video.url)) {
+        errors.push(`${tag} execution.videos.${orientation}.url presente mas não parece uma URL válida`);
+      }
+      if (!video.storagePath || typeof video.storagePath !== 'string' || HAS_URL(video.storagePath)) {
+        errors.push(`${tag} execution.videos.${orientation}.storagePath ausente ou inválido (esperado path do Storage, não URL)`);
+      }
     }
 
     if (!ex.availability) {

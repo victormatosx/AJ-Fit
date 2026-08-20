@@ -212,11 +212,13 @@ equipamentos) e política de IDs: ver `27_biblioteca_de_exercicios.md`.
 Resumo: cada exercício em `exercises/{exerciseId}` possui identificação
 estável (ID/slug em inglês, independente da tradução exibida), nome
 localizado (ptBR/en/es), músculo alvo (principal e secundários), padrão de
-movimento, mecânica, lateralidade, equipamento, vídeo/instruções
-opcionais, `status` (active/inactive/draft) e `availability` por fluxo
-(geração de treino, seleção manual, substituição). Exercícios usados
-historicamente nunca são deletados — apenas desativados via
-`status`/`availability`.
+movimento, mecânica, lateralidade, equipamento, vídeos de execução
+(vertical/horizontal, opcionais) e instruções opcionais, `status`
+(active/inactive/draft) e `availability` por fluxo (geração de treino,
+seleção manual, substituição). Exercícios usados historicamente nunca são
+deletados — apenas desativados via `status`/`availability`. Administrado
+via `scripts/seedExercises.ts` (carga inicial/em lote) e pelo painel
+`ajfit-admin` (`/exercises`, CRUD do dia a dia por administradores).
 
 ---
 

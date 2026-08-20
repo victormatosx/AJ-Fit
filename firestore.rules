@@ -787,16 +787,60 @@ service cloud.firestore {
     }
 
     // ── Biblioteca oficial de exercícios (docs/27_biblioteca_de_exercicios.md) ─
-    // Conteúdo administrado pelo AJ Fit: só o Admin SDK (scripts/seedExercises.ts,
-    // rodado explicitamente por um humano) escreve aqui — o Admin SDK ignora
-    // estas regras, então `allow write: if false` é só para deixar explícito
-    // que nenhum client (usuário comum) pode criar, alterar ou apagar
-    // exercícios globais. Leitura liberada para qualquer usuário autenticado;
-    // a lista em si não é dado sensível e é necessária para exibir/gerar
-    // treinos e permitir substituição de exercícios.
+    // Conteúdo administrado: o script `scripts/seedExercises.ts` (Admin SDK,
+    // ignora estas regras) e, a partir do painel `ajfit-admin`, um admin
+    // autenticado (`isAdmin()` — mesmo mecanismo já usado por
+    // `supportTickets` acima: `users/{uid}.metadata.role == 'admin'`).
+    // Leitura liberada para qualquer usuário autenticado; a lista em si não
+    // é dado sensível e é necessária para exibir/gerar treinos e permitir
+    // substituição de exercícios.
+    //
+    // `exerciseWriteValid` valida identidade (id/slug == id do documento) e
+    // os poucos enums baratos de checar (status/difficulty). Não duplica o
+    // dicionário inteiro de taxonomia (músculos, padrões de movimento,
+    // equipamentos etc. — dezenas de valores em `src/types/exercise.ts`)
+    // aqui: o gate real de "quem escreve" já é `isAdmin()`, e a validação
+    // completa de taxonomia é feita no formulário do painel
+    // (`exerciseValidation.ts`, reaproveitado lá). Duplicar tudo aqui seria
+    // alto custo de manutenção por um ganho de segurança marginal, dado que
+    // só um admin autenticado chega a este `write` — mesmo trade-off que
+    // `supportTicketValid` já adota para campos operacionais.
+    function exerciseWriteValid(exerciseId) {
+      let d = request.resource.data;
+      // Os 79 documentos criados pelo seed histórico usam o document id
+      // como identidade e não persistem body.id. Documentos novos do painel
+      // podem conter o campo duplicado; quando presente, ele continua preso
+      // ao mesmo exerciseId e não pode ser falsificado em updates.
+      return d.get('id', exerciseId) == exerciseId
+        && d.slug == exerciseId
+        && d.status in ['active', 'inactive', 'draft']
+        && d.difficulty in ['beginner', 'intermediate', 'advanced']
+        && d.name is map
+        && d.name.keys().hasAll(['ptBR', 'en', 'es'])
+        && d.metadata is map
+        && d.metadata.updatedAt == request.time;
+    }
+
     match /exercises/{exerciseId} {
       allow read: if isSignedIn();
-      allow write: if false;
+
+      allow create: if isAdmin()
+        && exerciseWriteValid(exerciseId)
+        && request.resource.data.metadata.createdAt == request.time
+        && request.resource.data.metadata.version == 1;
+
+      // `createdAt`/`version` imutáveis a partir da Rule: o cliente nunca
+      // reescreve o histórico, e isso também bloqueia por construção uma
+      // tentativa de "criar" sobre um id que já existe com dados diferentes
+      // (createdAt novo != createdAt armazenado ⇒ rejeitado como update).
+      allow update: if isAdmin()
+        && exerciseWriteValid(exerciseId)
+        && request.resource.data.metadata.createdAt == resource.data.metadata.createdAt
+        && request.resource.data.metadata.version == resource.data.metadata.version;
+
+      // Exercícios podem ser referenciados por histórico de treino — sem
+      // hard delete nesta fase (docs/27 §8: desativação via status).
+      allow delete: if false;
     }
 
     // ── Deny all undocumented collections ─────────────────────────────────

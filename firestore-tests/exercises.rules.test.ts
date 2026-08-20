@@ -2,9 +2,13 @@
  * Firestore Rules — `exercises/{exerciseId}` (docs/27_biblioteca_de_exercicios.md).
  *
  * Executed against the Firestore emulator (`test:rules` npm script). Global
- * exercise library: readable by any signed-in user, never writable by a
- * client — only `scripts/seedExercises.ts` (Admin SDK, bypasses rules)
- * writes here.
+ * exercise library: readable by any signed-in user. Writable only by
+ * `scripts/seedExercises.ts` (Admin SDK, bypasses rules) and, since the
+ * ajfit-admin panel got exercise CRUD, by an authenticated admin
+ * (`isAdmin()` — `users/{uid}.metadata.role == 'admin'`, same mechanism as
+ * `supportTickets`). Hard delete stays denied even for admins (docs/27 §8
+ * — exercises may be referenced by workout history; deactivate via
+ * `status` instead).
  */
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -14,11 +18,12 @@ import {
   assertFails,
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing';
-import { doc, getDoc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
-import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest';
+import { doc, getDoc, setDoc, updateDoc, deleteDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 const PROJECT_ID = 'ajfit-rules-test';
 const EXERCISE_ID = 'barbell-back-squat';
+const ADMIN_UID = 'exercises-admin';
 
 let testEnv: RulesTestEnvironment;
 
@@ -26,11 +31,48 @@ function signedInDb() {
   return testEnv.authenticatedContext('alice').firestore();
 }
 
+function adminDb() {
+  return testEnv.authenticatedContext(ADMIN_UID).firestore();
+}
+
+async function seedAdminRole() {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), 'users', ADMIN_UID), {
+      profile: { name: 'Exercises Admin', email: `${ADMIN_UID}@example.com` },
+      preferences: { language: 'pt-BR', units: 'system', theme: 'dark' },
+      subscription: {},
+      metadata: { role: 'admin', createdAt: Timestamp.now(), updatedAt: Timestamp.now() },
+    });
+  });
+}
+
+function validExerciseData(overrides: Record<string, unknown> = {}) {
+  return {
+    id: EXERCISE_ID,
+    slug: EXERCISE_ID,
+    name: { ptBR: 'Agachamento Livre', en: 'Barbell Back Squat', es: 'Sentadilla Libre con Barra' },
+    status: 'active',
+    difficulty: 'intermediate',
+    target: { primaryMuscle: 'quads', secondaryMuscles: [] },
+    movement: { pattern: 'squat', mechanic: 'compound', laterality: 'bilateral' },
+    equipment: ['barbell'],
+    execution: {},
+    substitution: { similarExerciseIds: [] },
+    availability: { workoutGeneration: true, manualSelection: true, substitution: true },
+    metadata: { version: 1, createdAt: serverTimestamp(), updatedAt: serverTimestamp() },
+    ...overrides,
+  };
+}
+
 async function seedExercise() {
   await testEnv.withSecurityRulesDisabled(async (ctx) => {
     await setDoc(doc(ctx.firestore(), 'exercises', EXERCISE_ID), {
+      id: EXERCISE_ID,
+      slug: EXERCISE_ID,
       name: { ptBR: 'Agachamento Livre', en: 'Barbell Back Squat', es: 'Sentadilla Libre con Barra' },
       status: 'active',
+      difficulty: 'intermediate',
+      metadata: { version: 1, createdAt: Timestamp.now(), updatedAt: Timestamp.now() },
     });
   });
 }
@@ -49,6 +91,7 @@ afterAll(async () => {
 beforeEach(async () => {
   await testEnv.clearFirestore();
   await seedExercise();
+  await seedAdminRole();
 });
 
 describe('exercises — read', () => {
@@ -82,5 +125,105 @@ describe('exercises — write', () => {
   it('blocks an unauthenticated user from writing an exercise', async () => {
     const anon = testEnv.unauthenticatedContext().firestore();
     await assertFails(setDoc(doc(anon, 'exercises', EXERCISE_ID), { status: 'active' }));
+  });
+});
+
+describe('exercises — admin write (ajfit-admin panel)', () => {
+  it('lets an admin create a new, valid exercise', async () => {
+    await assertSucceeds(
+      setDoc(doc(adminDb(), 'exercises', 'made-up-exercise'), validExerciseData({ id: 'made-up-exercise', slug: 'made-up-exercise' })),
+    );
+  });
+
+  it('lets an admin update an existing exercise, preserving createdAt/version', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'exercises', EXERCISE_ID), validExerciseData({
+        metadata: { version: 1, createdAt: Timestamp.fromMillis(1000), updatedAt: Timestamp.fromMillis(1000) },
+      }));
+    });
+    await assertSucceeds(
+      updateDoc(doc(adminDb(), 'exercises', EXERCISE_ID), {
+        status: 'inactive',
+        'metadata.updatedAt': serverTimestamp(),
+      }),
+    );
+  });
+
+  it('lets an admin attach a video reference to a seeded exercise without a stored id field', async () => {
+    // Production seed documents use the document id as identity and omit the
+    // duplicated body.id (`seedExercises.ts` destructures it out before the
+    // write). This fixture intentionally uses that exact persisted shape.
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const { id: _id, ...persistedSeedShape } = validExerciseData({
+        metadata: { version: 1, createdAt: Timestamp.fromMillis(1000), updatedAt: Timestamp.fromMillis(1000) },
+      });
+      await setDoc(doc(ctx.firestore(), 'exercises', EXERCISE_ID), persistedSeedShape);
+    });
+
+    const ref = doc(adminDb(), 'exercises', EXERCISE_ID);
+    const before = await getDoc(ref);
+    expect(before.data()).not.toHaveProperty('id');
+
+    await assertSucceeds(
+      updateDoc(ref, {
+        'execution.videos.vertical': {
+          url: 'https://firebasestorage.googleapis.com/example.webm',
+          storagePath: `exercises/${EXERCISE_ID}/execution/vertical.webm`,
+        },
+        'metadata.updatedAt': serverTimestamp(),
+      }),
+    );
+
+    const after = await getDoc(ref);
+    expect(after.get('execution.videos.vertical.storagePath')).toBe(
+      `exercises/${EXERCISE_ID}/execution/vertical.webm`,
+    );
+  });
+
+  it('blocks an admin from creating an exercise whose id/slug do not match the document id', async () => {
+    await assertFails(
+      setDoc(doc(adminDb(), 'exercises', 'made-up-exercise'), validExerciseData({ id: 'other-id', slug: 'other-id' })),
+    );
+  });
+
+  it('blocks an admin from adding a mismatched body id to a seeded exercise', async () => {
+    await assertFails(
+      updateDoc(doc(adminDb(), 'exercises', EXERCISE_ID), {
+        id: 'different-exercise',
+        'metadata.updatedAt': serverTimestamp(),
+      }),
+    );
+  });
+
+  it('blocks an admin from rewriting metadata.createdAt on update', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'exercises', EXERCISE_ID), validExerciseData({
+        metadata: { version: 1, createdAt: Timestamp.fromMillis(1000), updatedAt: Timestamp.fromMillis(1000) },
+      }));
+    });
+    await assertFails(
+      updateDoc(doc(adminDb(), 'exercises', EXERCISE_ID), {
+        'metadata.createdAt': serverTimestamp(),
+        'metadata.updatedAt': serverTimestamp(),
+      }),
+    );
+  });
+
+  it('blocks an admin from incrementing metadata.version on update', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'exercises', EXERCISE_ID), validExerciseData({
+        metadata: { version: 1, createdAt: Timestamp.fromMillis(1000), updatedAt: Timestamp.fromMillis(1000) },
+      }));
+    });
+    await assertFails(
+      updateDoc(doc(adminDb(), 'exercises', EXERCISE_ID), {
+        'metadata.version': 2,
+        'metadata.updatedAt': serverTimestamp(),
+      }),
+    );
+  });
+
+  it('blocks an admin from deleting an exercise', async () => {
+    await assertFails(deleteDoc(doc(adminDb(), 'exercises', EXERCISE_ID)));
   });
 });

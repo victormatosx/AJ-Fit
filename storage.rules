@@ -125,5 +125,41 @@ service firebase.storage {
         && request.resource.metadata.ticketId == ticketId;
       allow update, delete: if false;
     }
+
+    // ── Vídeos de execução da biblioteca de exercícios (ajfit-admin) ──────
+    // Mesmo mecanismo de admin do Firestore (`users/{uid}.metadata.role ==
+    // 'admin'`), duplicado aqui porque Storage Rules e Firestore Rules são
+    // engines separadas sem namespace de função compartilhado — mesmo
+    // padrão já usado por `hasServerPremium`/`accountActive` acima.
+    //
+    // Path determinístico e fixo por orientação: um novo upload em
+    // `vertical.webm`/`horizontal.webm` SUBSTITUI o objeto existente (nova
+    // geração no mesmo caminho) — é o comportamento de "substituir vídeo"
+    // pedido pelo painel, não uma colisão a evitar.
+    //
+    // `request.resource.size <= 100 MB`: teto TÉCNICO de abuso, não uma
+    // política de produto aprovada — não existe limite oficial definido
+    // ainda (nem no app, nem neste painel). Revisar quando essa decisão for
+    // tomada.
+    function isExercisesAdmin() {
+      return request.auth != null
+        && firestore.exists(/databases/(default)/documents/users/$(request.auth.uid))
+        && firestore.get(/databases/(default)/documents/users/$(request.auth.uid))
+             .data.metadata.role == 'admin';
+    }
+
+    match /exercises/{exerciseId}/execution/{fileName} {
+      // Leitura: qualquer usuário autenticado, espelhando `firestore.rules`'
+      // `allow read: if isSignedIn()` na mesma collection.
+      allow read: if request.auth != null;
+
+      allow create, update: if isExercisesAdmin()
+        && fileName in ['vertical.webm', 'horizontal.webm']
+        && request.resource.contentType == 'video/webm'
+        && request.resource.size > 0
+        && request.resource.size <= 100 * 1024 * 1024;
+
+      allow delete: if isExercisesAdmin();
+    }
   }
 }

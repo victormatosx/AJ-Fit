@@ -31,7 +31,7 @@ describe('exercisesSeedData', () => {
 
   it('never invents execution URLs', () => {
     for (const ex of EXERCISES_SEED) {
-      expect(ex.execution.videoUrl).toBeUndefined();
+      expect(ex.execution.videos).toBeUndefined();
       expect(ex.execution.thumbnailUrl).toBeUndefined();
     }
   });
