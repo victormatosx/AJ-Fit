@@ -10,6 +10,12 @@ Princípio norteador: melhorar a narrativa de valor do onboarding sem tocar em
 lógica sensível (Auth, RevenueCat, premium gate) além do estritamente
 necessário para integração de contexto/copy.
 
+Para a arquitetura do gate de navegação raiz em si (`resolvePremiumGate`,
+bootstrap de identidade, `RootNavigator`), ver
+`docs/26_bootstrap_e_navegacao_raiz.md` — este documento cobre apenas as 26
+etapas do funil e como elas se encaixam nos `RootScreenId` que aquele gate
+já definia.
+
 ## 2. Fluxo completo (26 etapas)
 
 | # | Step id | Tipo | Tela/componente |

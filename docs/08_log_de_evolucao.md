@@ -3332,3 +3332,66 @@ Assinatura:
 Claude — 2026-08-16 — Correção do corte de glifos Anton no iOS (fix centralizado).
 
 ---
+
+Data: 2026-08-20
+Responsável: Claude — Agente Frontend
+Categoria: [CORREÇÃO]
+
+Descrição:
+Corrigido double loading/flicker de navegação raiz (`unresolved → app →
+unresolved → app`) confirmado após login e após editar perfil já dentro do
+app. Duas causas, ambas na mesma classe de bug — um blocker do gate
+(`resolvePremiumGate`) inicializado como não-bloqueante e só promovido a
+bloqueante depois do primeiro paint:
+
+1. `preferencesReconciling` (`App.tsx`) era `useState(false)` promovido a
+   `true` por um `useEffect` — que roda depois do commit do render que já
+   tinha aberto o gate para `'app'`. Corrigido derivando o valor
+   sincronamente durante o render (`needsPreferencesReconciliation`,
+   `src/lib/preferencesReconciliation.ts` — novo), a partir de uma ref de
+   "uid já reconciliado nesta sessão".
+2. `reduceProfileLoad` (`src/lib/profileLoadState.ts`) tratava qualquer
+   `refreshProfile()` pós-bootstrap (ex.: `EditProfileScreen` salvando)
+   como carga inicial, reabrindo `loading`/`questionnaireResolution` e
+   desmontando o `AppShell` inteiro para um refresh em segundo plano.
+   Corrigido com o campo `bootstrappedUid`: `load-started` só reabre esses
+   dois campos quando o uid do evento ainda não completou sua primeira
+   carga.
+
+Adicionado `explainPremiumGateBlockers()` (`src/lib/premiumGate.ts`) —
+diagnóstico puro, nunca consultado pelo gate, listando prerequisitos ainda
+não resolvidos — plugado como `blockingReasons` no log existente
+`navigation_gate_evaluated`. Nenhuma mudança de comportamento de navegação
+além da correção das duas causas acima; nenhum `setTimeout`/delay artificial
+usado.
+
+Documentação: criado `docs/26_bootstrap_e_navegacao_raiz.md` como fonte de
+verdade do gate de navegação raiz/bootstrap de identidade (não existia
+documento dedicado a este tema — `docs/23_navegacao_e_lifecycle.md` cobre
+apenas a navegação interna do `AppShell`, camada abaixo desta).
+Cross-referenciado a partir de `docs/23`, `docs/24` e `docs/13`.
+
+Segurança:
+Nenhuma mudança em Functions, Firestore/Storage Rules, RevenueCat
+backend/webhook, exclusão de conta, KMS ou segredos. Nenhum deploy
+necessário — mudança 100% client-side.
+
+Validação automática:
+2856 testes aprovados (159 arquivos), typecheck aprovado. Testes novos:
+`src/lib/__tests__/preferencesReconciliation.test.ts`; testes atualizados
+para refletir o invariante corrigido:
+`src/lib/__tests__/profileLoadState.test.ts`,
+`src/lib/__tests__/premiumGate.test.ts`,
+`src/lib/__tests__/preferenceReconciliationStructure.test.ts`.
+
+Validação manual (E2E real, aprovado pelo usuário):
+cold start autenticado, login, editar perfil, logout → outra conta — double
+loading não ocorreu em nenhum dos quatro cenários.
+
+Pendência:
+Nenhuma.
+
+Assinatura:
+Claude — 2026-08-20 — Correção do double loading do gate de navegação raiz + documentação arquitetural.
+
+---

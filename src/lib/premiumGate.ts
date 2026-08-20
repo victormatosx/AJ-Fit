@@ -118,3 +118,27 @@ export function resolvePremiumGate(state: PremiumGateState): RootScreenId | null
 
   return 'app';
 }
+
+/**
+ * Diagnostic-only companion to `resolvePremiumGate` — never consulted by the
+ * gate itself, so it can't change routing. Lists every prerequisite still
+ * unresolved for `state`, in the same priority order `resolvePremiumGate`
+ * checks them, so a logged `blockingReasons: []` alongside
+ * `resolvedScreen: 'unresolved'` is a real contradiction worth investigating
+ * (e.g. the exact class of bug this was added for — a gate-closing flag
+ * flipping back to `true` one render after the gate had already opened).
+ * Existing behavior/tests are unaffected: this is purely additive.
+ */
+export function explainPremiumGateBlockers(state: PremiumGateState): string[] {
+  const reasons: string[] = [];
+  if (state.authInitializing) reasons.push('auth-initializing');
+  if (state.profileLoading) reasons.push('profile-loading');
+  if (!state.authenticated) return reasons;
+  if (state.preferencesReconciling) reasons.push('preferences-reconciling');
+  if (state.questionnaireResolution !== 'found') {
+    reasons.push(`questionnaire-${state.questionnaireResolution}`);
+  }
+  if (state.subscriptionLoading) reasons.push('subscription-loading');
+  if (!state.subscriptionConfigured) reasons.push('subscription-not-configured');
+  return reasons;
+}

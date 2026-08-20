@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useReducer, useRef, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { View, ActivityIndicator, Pressable, Text } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -19,7 +19,11 @@ import { AuthProvider, useAuth } from './src/state/AuthContext';
 import { SubscriptionProvider } from './src/state/SubscriptionContext';
 import { PromoCodeProvider } from './src/state/PromoCodeContext';
 import { useSubscription } from './src/hooks/useSubscription';
-import { resolvePremiumGate, type RootScreenId } from './src/lib/premiumGate';
+import {
+  resolvePremiumGate,
+  explainPremiumGateBlockers,
+  type RootScreenId,
+} from './src/lib/premiumGate';
 import { PhotoVaultProvider } from './src/state/PhotoVaultContext';
 import { addQuestionnaire } from './src/services/userProfile';
 import { logAuthError } from './src/services/auth';
@@ -39,6 +43,7 @@ import { initI18n } from './src/i18n';
 import { reconcileLanguageOnLoad } from './src/i18n/syncLanguage';
 import { reconcileUnitsOnLoad } from './src/units/syncUnits';
 import { UnitsProvider } from './src/state/UnitsContext';
+import { needsPreferencesReconciliation } from './src/lib/preferencesReconciliation';
 import {
   cleanupPhotoVaultShareFiles,
   cleanupPhotoVaultTempFiles,
@@ -186,15 +191,31 @@ function RootNavigator() {
   // Guards the forced-questionnaire save below against double submission
   // (e.g. a fast double-tap on the last quiz question).
   const [savingQuestionnaire, setSavingQuestionnaire] = useState(false);
-  // Account-preference reconciliation runs at every profileLoading→false transition.
+  // Account-preference reconciliation runs once per authenticated identity.
   // While it runs, resolvePremiumGate holds the routing gate closed (same as
   // profileLoading) so the first authed screen renders with reconciled
-  // language and units already applied. Fires once per profile-load cycle —
-  // no polling, no timers. This NEVER influences the Premium decision below —
-  // it only delays which screen becomes visible, exactly like the other
-  // pre-Premium checks resolvePremiumGate already made (auth, questionnaire).
-  const [preferencesReconciling, setPreferencesReconciling] = useState(false);
-  const prevProfileLoadingRef = useRef(true);
+  // language and units already applied. This NEVER influences the Premium
+  // decision below — it only delays which screen becomes visible, exactly
+  // like the other pre-Premium checks resolvePremiumGate already made
+  // (auth, questionnaire).
+  //
+  // `reconciledUidRef`/`reconcilingUidRef` (not `useState`) are what make
+  // `preferencesReconciling` correct on the SAME render where
+  // `profileLoading` first becomes `false` — see
+  // `src/lib/preferencesReconciliation.ts`'s doc comment for the exact
+  // one-render-late bug this fixes (a `useState` flipped from a
+  // `useEffect` necessarily lags a render behind, letting the gate open to
+  // 'app' for one paint before reconciliation had even started).
+  const reconciledUidRef = useRef<string | null>(null);
+  const reconcilingUidRef = useRef<string | null>(null);
+  const [, forceReconciliationRerender] = useReducer((c: number) => c + 1, 0);
+  const preferencesReconciling = needsPreferencesReconciliation({
+    authInitializing: initializing,
+    profileLoading,
+    uid: user?.uid ?? null,
+    hasProfile: Boolean(profile),
+    reconciledUid: reconciledUidRef.current,
+  });
   // Copy-only context for AuthScreen (which funnel step sent the user here).
   // No auth/commerce logic reads this — see src/onboarding/authContext.ts.
   const [onboardingAuthContext, setOnboardingAuthContext] = useState<OnboardingAuthContext | null>(
@@ -216,14 +237,12 @@ function RootNavigator() {
   };
 
   useEffect(() => {
-    const wasLoading = prevProfileLoadingRef.current;
-    prevProfileLoadingRef.current = profileLoading;
-    // Account creation can briefly finish the auth listener's pre-provision
-    // profile read with `profile === null`. That is not a malformed profile:
-    // provisionNewUser is still creating it. Wait for the authoritative
-    // post-provision load instead of reporting missing preferences as errors.
-    if (initializing || profileLoading || !wasLoading || !user || !profile) return;
-    setPreferencesReconciling(true);
+    if (!preferencesReconciling || !user || !profile) return;
+    // Guards against re-kicking the same in-flight reconciliation on every
+    // render while it's pending (this effect's deps include `profile`,
+    // which the reconciliation's own writes can cause to change).
+    if (reconcilingUidRef.current === user.uid) return;
+    reconcilingUidRef.current = user.uid;
     Promise.all([
       reconcileLanguageOnLoad({
         uid: user.uid,
@@ -233,8 +252,21 @@ function RootNavigator() {
         uid: user.uid,
         remoteUnits: profile.preferences.units,
       }),
-    ]).finally(() => setPreferencesReconciling(false));
-  }, [initializing, profileLoading, user, profile]);
+    ]).finally(() => {
+      reconciledUidRef.current = user.uid;
+      reconcilingUidRef.current = null;
+      forceReconciliationRerender();
+    });
+  }, [preferencesReconciling, user, profile]);
+
+  // A logout (or account switch mid-flight) must not leave a stale
+  // `reconciledUidRef` that lets a DIFFERENT future uid skip reconciliation
+  // — `needsPreferencesReconciliation` already re-derives `true` for any
+  // uid that doesn't match `reconciledUidRef.current`, but clearing it here
+  // too keeps the ref from silently holding a signed-out user's uid forever.
+  useEffect(() => {
+    if (!user) reconciledUidRef.current = null;
+  }, [user]);
 
   // This pure decision is also the render guard: AppShell is never mounted
   // from a stale/requested route while auth, email verification, preference
@@ -273,6 +305,21 @@ function RootNavigator() {
       subscriptionStatus,
       isPremium,
       commercialGateResolved,
+      // Diagnostic-only, never read by the gate — see
+      // `explainPremiumGateBlockers`'s doc comment.
+      blockingReasons: explainPremiumGateBlockers({
+        requestedScreen: screen,
+        authInitializing: initializing,
+        profileLoading,
+        authenticated: Boolean(user),
+        emailVerificationRequired,
+        preferencesReconciling,
+        questionnaireResolution,
+        subscriptionLoading,
+        subscriptionConfigured,
+        isPremium,
+        commercialGateResolved,
+      }),
     });
   }, [
     user?.uid,

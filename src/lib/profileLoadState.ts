@@ -26,7 +26,23 @@ export type QuestionnaireResolution = 'unknown' | 'loading' | 'found' | 'not_fou
 export type ProfileLoadState<TProfile, TQuestionnaire> = {
   uid: string | null;
   generation: number;
+  /**
+   * True only for the FIRST load of an identity — the one the navigation
+   * gate (`resolvePremiumGate`) is allowed to block on. A later reload of
+   * the SAME already-bootstrapped uid (`refreshProfile()`, e.g. after
+   * `EditProfileScreen` saves) is a background refresh: it must never flip
+   * this back to `true`, or the root gate re-closes and unmounts AppShell
+   * for data the user is already looking at. See `bootstrappedUid` below.
+   */
   loading: boolean;
+  /**
+   * uid of the most recent identity whose FIRST load has resolved (success
+   * or failure). `load-started` for this same uid again is therefore known
+   * to be a background refresh, not a bootstrap — see `loading`'s doc
+   * comment. Cleared only by `identity-cleared`; a new/different uid is
+   * simply not equal to it, which is all `load-started` needs to check.
+   */
+  bootstrappedUid: string | null;
   profile: TProfile | null;
   questionnaire: TQuestionnaire | null;
   questionnaireResolution: QuestionnaireResolution;
@@ -53,6 +69,7 @@ export function createInitialProfileLoadState<TProfile, TQuestionnaire>(): Profi
     uid: null,
     generation: 0,
     loading: false,
+    bootstrappedUid: null,
     profile: null,
     questionnaire: null,
     questionnaireResolution: 'unknown',
@@ -84,6 +101,18 @@ function isCurrentLoad<TProfile, TQuestionnaire>(
  * same reason; a genuine identity change (different uid) clears them,
  * since carrying a stale account's data into a new one's loading window
  * would be a leak, not a convenience.
+ *
+ * `load-started` for a uid that already has a `bootstrappedUid` match is a
+ * BACKGROUND refresh: `loading` stays `false` and `questionnaireResolution`
+ * is left exactly as it was (still `'found'`), instead of bouncing through
+ * `'loading'`. Root-cause fix for a confirmed bug: `resolvePremiumGate`
+ * treats both `profileLoading` and a non-`'found'` `questionnaireResolution`
+ * as gate-closing. Before this fix, ANY call to `refreshProfile()` after
+ * the user was already inside AppShell (e.g. `EditProfileScreen` saving)
+ * re-opened both of those blocking conditions, unmounting the entire
+ * AppShell tree for a fully in-session, non-identity-changing reload — the
+ * same `READY → LOADING → READY` flicker reported for login, just
+ * triggered by a different caller.
  */
 export function reduceProfileLoad<TProfile, TQuestionnaire>(
   state: ProfileLoadState<TProfile, TQuestionnaire>,
@@ -95,13 +124,17 @@ export function reduceProfileLoad<TProfile, TQuestionnaire>(
 
     case 'load-started': {
       const sameIdentity = state.uid === event.uid;
+      const isBackgroundRefresh = state.bootstrappedUid === event.uid;
       return {
         uid: event.uid,
         generation: event.generation,
-        loading: true,
+        loading: !isBackgroundRefresh,
+        bootstrappedUid: state.bootstrappedUid,
         profile: sameIdentity ? state.profile : null,
         questionnaire: sameIdentity ? state.questionnaire : null,
-        questionnaireResolution: 'loading',
+        questionnaireResolution: isBackgroundRefresh
+          ? state.questionnaireResolution
+          : 'loading',
         error: null,
       };
     }
@@ -111,6 +144,7 @@ export function reduceProfileLoad<TProfile, TQuestionnaire>(
       return {
         ...state,
         loading: false,
+        bootstrappedUid: event.uid,
         profile: event.profile,
         questionnaire: event.questionnaire,
         questionnaireResolution: event.questionnaire ? 'found' : 'not_found',

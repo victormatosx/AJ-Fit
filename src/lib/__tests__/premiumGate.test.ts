@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { resolvePremiumGate, type RootScreenId } from '../premiumGate';
+import { resolvePremiumGate, explainPremiumGateBlockers, type RootScreenId } from '../premiumGate';
 
 type GateOverrides = Partial<Parameters<typeof resolvePremiumGate>[0]>;
 
@@ -273,4 +273,60 @@ describe('resolvePremiumGate', () => {
       expect(resolve({ ...marketingEvidence, isPremium: true } as GateOverrides)).toBe('app');
     },
   );
+});
+
+describe('explainPremiumGateBlockers — diagnostic-only, never drives routing', () => {
+  function explain(overrides: GateOverrides = {}) {
+    return explainPremiumGateBlockers({
+      requestedScreen: 'auth' as RootScreenId,
+      authInitializing: false,
+      profileLoading: false,
+      authenticated: true,
+      emailVerificationRequired: false,
+      preferencesReconciling: false,
+      questionnaireResolution: 'found',
+      subscriptionLoading: false,
+      subscriptionConfigured: true,
+      isPremium: false,
+      commercialGateResolved: true,
+      ...overrides,
+    });
+  }
+
+  it('is empty exactly when resolvePremiumGate resolves to a real screen', () => {
+    expect(explain({ isPremium: true })).toEqual([]);
+    expect(resolve({ isPremium: true })).toBe('app');
+  });
+
+  it('names preferences-reconciling — the exact confirmed root cause of the reported double-loading bug', () => {
+    expect(explain({ preferencesReconciling: true })).toEqual(['preferences-reconciling']);
+    expect(resolve({ preferencesReconciling: true })).toBeNull();
+  });
+
+  it('reports every unresolved prerequisite together, in resolvePremiumGate priority order', () => {
+    expect(
+      explain({
+        preferencesReconciling: true,
+        questionnaireResolution: 'loading',
+        subscriptionLoading: true,
+        subscriptionConfigured: false,
+      }),
+    ).toEqual([
+      'preferences-reconciling',
+      'questionnaire-loading',
+      'subscription-loading',
+      'subscription-not-configured',
+    ]);
+  });
+
+  it('stops at authInitializing/profileLoading — no downstream reasons listed while identity itself is unresolved', () => {
+    expect(explain({ authInitializing: true, profileLoading: true })).toEqual([
+      'auth-initializing',
+      'profile-loading',
+    ]);
+  });
+
+  it('is empty for an unauthenticated user (nothing left to block once routed to auth)', () => {
+    expect(explain({ authenticated: false })).toEqual([]);
+  });
 });

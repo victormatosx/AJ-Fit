@@ -43,7 +43,7 @@ describe('reduceProfileLoad — questionnaire resolution state machine', () => {
     expect(startedB.questionnaire).toBeNull();
   });
 
-  it('load-started for the SAME uid (a refresh) preserves the previous profile/questionnaire while loading', () => {
+  it('load-started for the SAME uid AFTER it already bootstrapped is a BACKGROUND refresh — loading/questionnaireResolution stay as-is, data is preserved', () => {
     const found = reduceProfileLoad(
       { ...initial(), uid: 'uid-A', generation: 1 },
       {
@@ -59,13 +59,42 @@ describe('reduceProfileLoad — questionnaire resolution state machine', () => {
       uid: 'uid-A',
       generation: 2,
     });
-    expect(refreshing.loading).toBe(true);
-    expect(refreshing.questionnaireResolution).toBe('loading');
+    // Root-cause fix: a background refresh (e.g. EditProfileScreen calling
+    // refreshProfile() after the user is already inside AppShell) must
+    // NEVER reintroduce either of the two conditions resolvePremiumGate
+    // treats as gate-closing (`loading: true` / a non-'found' resolution) —
+    // doing so used to unmount the entire AppShell tree for an in-session
+    // reload that has nothing to do with identity or bootstrap.
+    expect(refreshing.loading).toBe(false);
+    expect(refreshing.questionnaireResolution).toBe('found');
+    expect(refreshing.bootstrappedUid).toBe('uid-A');
     // Known-good data from the previous successful load survives the
     // refresh's loading window — never wiped just because a new attempt
     // started.
     expect(refreshing.profile).toEqual({ name: 'A' });
     expect(refreshing.questionnaire).toEqual({ id: 'q-A' });
+  });
+
+  it('load-started for a NEW uid is always a bootstrap load, even if a different uid was previously bootstrapped', () => {
+    const foundA = reduceProfileLoad(
+      { ...initial(), uid: 'uid-A', generation: 1 },
+      {
+        type: 'load-succeeded',
+        uid: 'uid-A',
+        generation: 1,
+        profile: { name: 'A' },
+        questionnaire: { id: 'q-A' },
+      },
+    );
+    const startedB = reduceProfileLoad(foundA, {
+      type: 'load-started',
+      uid: 'uid-B',
+      generation: 2,
+    });
+    expect(startedB.loading).toBe(true);
+    expect(startedB.questionnaireResolution).toBe('loading');
+    expect(startedB.profile).toBeNull();
+    expect(startedB.questionnaire).toBeNull();
   });
 
   it('1) load-succeeded with a questionnaire → found', () => {
