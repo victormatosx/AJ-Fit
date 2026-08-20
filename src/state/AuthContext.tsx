@@ -4,6 +4,7 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useReducer,
   useRef,
   useState,
 } from 'react';
@@ -37,7 +38,13 @@ import {
   refreshEmailVerificationStatus,
   sendVerificationEmail,
 } from '../services/emailVerification';
-import { logInfo } from '../lib/logger';
+import { logInfo, logWarn } from '../lib/logger';
+import {
+  createInitialProfileLoadState,
+  reduceProfileLoad,
+  withFirestoreRetry,
+  type QuestionnaireResolution,
+} from '../lib/profileLoadState';
 
 type AuthCtx = {
   /** Current authenticated user (Firebase Auth), or null when signed out. */
@@ -46,6 +53,14 @@ type AuthCtx = {
   profile: UserProfile | null;
   /** Most recent questionnaire for the current user, or null. */
   questionnaire: QuestionnaireDoc | null;
+  /**
+   * Explicit resolution of "does this account have a completed
+   * questionnaire" — see `src/lib/profileLoadState.ts`. This, NOT
+   * `Boolean(questionnaire)`, is the source of truth the navigation gate
+   * (`resolvePremiumGate`) must use: `questionnaire` alone cannot
+   * distinguish "not loaded yet" / "confirmed absent" / "read failed".
+   */
+  questionnaireResolution: QuestionnaireResolution;
   /** Linked sign-in providerIds, e.g. ['password','google.com','apple.com']. */
   linkedProviders: string[];
   /** True while the initial auth state is being resolved on startup. */
@@ -87,49 +102,127 @@ const AuthContext = createContext<AuthCtx | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [questionnaire, setQuestionnaire] = useState<QuestionnaireDoc | null>(null);
   const [initializing, setInitializing] = useState(true);
   // Firebase mutates the existing User instance during reload(). This revision
   // forces context consumers to observe updated readonly fields such as
   // `emailVerified` even when the object reference itself stays the same.
   const [authRevision, setAuthRevision] = useState(0);
-  // True while `user` may already be set but `profile`/`questionnaire` have not
-  // caught up yet (the gap between `setUser` and `loadUserState` resolving in
-  // signIn/signUp/social flows). Consumers that route navigation off
-  // `questionnaire` must wait this out, or they'd briefly see a stale
-  // "no questionnaire" state and bounce to the questionnaire screen.
-  const [profileLoading, setProfileLoading] = useState(false);
 
-  // Monotonic token so a slower/older load can never overwrite a newer one
-  // (e.g. the listener's pre-write read racing signUp's post-write read).
-  const loadSeq = useRef(0);
+  // Identity-scoped profile+questionnaire resolution — see
+  // `src/lib/profileLoadState.ts` for the full state machine and why
+  // `questionnaire: null` alone can never be trusted as "confirmed absent".
+  const [loadState, dispatchLoad] = useReducer(
+    reduceProfileLoad<UserProfile, QuestionnaireDoc>,
+    undefined,
+    createInitialProfileLoadState<UserProfile, QuestionnaireDoc>,
+  );
+  // Monotonic generation, read/incremented synchronously (independent of
+  // React's render/commit timing) so a slower/older load can never
+  // overwrite a newer one (e.g. the listener's pre-write read racing
+  // signUp's post-write read) — the reducer double-checks the same
+  // (uid, generation) pair again on commit, matching
+  // `SubscriptionContext`'s `identityGeneration` pattern.
+  const generationRef = useRef(0);
   // Separately scopes listener failures: an old rejected profile request must
-  // not clear the state established by a newer Firebase identity callback.
+  // not affect error handling for a newer Firebase identity callback.
   const authStateSeq = useRef(0);
 
-  /** Loads the user document (+ one-time schema migration) and questionnaire. */
+  /**
+   * Loads the user document (+ one-time schema migration) and questionnaire,
+   * with a small bounded retry for transient Firestore read failures
+   * (`unavailable`/`deadline-exceeded` — see `withFirestoreRetry`).
+   *
+   * Root-cause fix (cold-start `hasQuestionnaire` intermittency): a read
+   * failure now commits `questionnaireResolution: 'error'` — never
+   * silently collapsed into "no questionnaire". `profile`/`questionnaire`
+   * are left untouched on failure (never nulled out), so a transient error
+   * on a background refresh can never erase already-known-good data. Only a
+   * genuinely resolved empty query (`getLatestQuestionnaire` returning
+   * `null` without throwing) can ever produce `'not_found'`.
+   *
+   * Still rethrows on failure — existing callers (`signUp`/`signIn`/etc.)
+   * keep surfacing their own error UX unchanged; the difference is that
+   * `questionnaireResolution` is ALSO updated first, which is what the
+   * central navigation gate now reads instead of `Boolean(questionnaire)`.
+   */
   const loadUserState = useCallback(async (uid: string) => {
-    const seq = ++loadSeq.current;
-    setProfileLoading(true);
-    try {
-      const [nextProfile, nextQuestionnaire] = await Promise.all([
-        getUserProfile(uid),
-        getLatestQuestionnaire(uid),
-      ]);
-      if (seq !== loadSeq.current) return; // superseded by a newer load
-      setProfile(nextProfile);
-      setQuestionnaire(nextQuestionnaire);
-    } finally {
-      if (seq === loadSeq.current) setProfileLoading(false);
+    const generation = ++generationRef.current;
+    const startedAt = Date.now();
+    dispatchLoad({ type: 'load-started', uid, generation });
+
+    const outcome = await withFirestoreRetry(
+      (attempt) => Promise.all([getUserProfile(uid), getLatestQuestionnaire(uid, attempt)]),
+      {
+        onAttempt: ({ attempt, error, retryable }) => {
+          if (!error) return;
+          logWarn('auth', 'profile_state_load_failed', {
+            uid,
+            source: 'loadUserState',
+            attempt,
+            retryable: retryable ?? false,
+            final: false,
+            durationMs: Date.now() - startedAt,
+            error,
+          });
+        },
+      },
+    );
+
+    const superseded = generation !== generationRef.current;
+
+    if (outcome.ok) {
+      const [nextProfile, nextQuestionnaire] = outcome.value;
+      if (superseded) {
+        logInfo('auth', 'profile_state_load_superseded', {
+          uid,
+          source: 'loadUserState',
+          outcome: 'success',
+          durationMs: Date.now() - startedAt,
+        });
+        return;
+      }
+      dispatchLoad({
+        type: 'load-succeeded',
+        uid,
+        generation,
+        profile: nextProfile,
+        questionnaire: nextQuestionnaire,
+      });
+      logInfo('auth', 'profile_state_committed', {
+        uid,
+        questionnaireResolution: nextQuestionnaire ? 'found' : 'not_found',
+        profileLoading: false,
+        attempts: outcome.attempts,
+        durationMs: Date.now() - startedAt,
+      });
+      return;
     }
+
+    if (superseded) {
+      logInfo('auth', 'profile_state_load_superseded', {
+        uid,
+        source: 'loadUserState',
+        outcome: 'error',
+        durationMs: Date.now() - startedAt,
+      });
+    } else {
+      dispatchLoad({ type: 'load-failed', uid, generation, error: outcome.error });
+      logWarn('auth', 'profile_state_load_failed', {
+        uid,
+        source: 'loadUserState',
+        final: true,
+        attempts: outcome.attempts,
+        retryable: outcome.retryable,
+        durationMs: Date.now() - startedAt,
+        error: outcome.error,
+      });
+    }
+    throw outcome.error;
   }, []);
 
   const clearUserState = useCallback(() => {
-    loadSeq.current += 1; // cancel any in-flight load
-    setProfile(null);
-    setQuestionnaire(null);
-    setProfileLoading(false);
+    generationRef.current += 1; // cancel any in-flight load
+    dispatchLoad({ type: 'identity-cleared' });
   }, []);
 
   // The auth listener never creates documents. The repository may atomically
@@ -160,8 +253,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await userStatePromise;
       } catch (err) {
         if (authSeq !== authStateSeq.current) return;
+        // `loadUserState` already committed `questionnaireResolution:
+        // 'error'` (or left prior state untouched if superseded) before
+        // rethrowing — deliberately NOT calling `clearUserState()` here
+        // anymore. That call used to be the exact place a transient read
+        // failure got reinterpreted as "no questionnaire": it reset
+        // `questionnaire` to `null`, indistinguishable from a confirmed
+        // absence. See `src/lib/profileLoadState.ts`'s module doc comment.
         logAuthError('listener:load-profile', err);
-        clearUserState();
       }
     });
     return unsubscribe;
@@ -170,11 +269,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<AuthCtx>(
     () => ({
       user,
-      profile,
-      questionnaire,
+      profile: loadState.profile,
+      questionnaire: loadState.questionnaire,
+      questionnaireResolution: loadState.questionnaireResolution,
       linkedProviders: user ? getLinkedProviders(user) : [],
       initializing,
-      profileLoading,
+      profileLoading: loadState.loading,
       signUp: async (email, password, name, answers) => {
         // Single, authoritative creation flow — runs exactly once per account.
         const newUser = await signUpWithEmail(email, password, name);
@@ -258,15 +358,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (user) await loadUserState(user.uid);
       },
     }),
-    [
-      user,
-      profile,
-      questionnaire,
-      initializing,
-      profileLoading,
-      loadUserState,
-      authRevision,
-    ],
+    [user, loadState, initializing, loadUserState, authRevision],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

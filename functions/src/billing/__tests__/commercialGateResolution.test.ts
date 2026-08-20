@@ -13,6 +13,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  * this module now reads two different paths off the same snapshot
  * (`subscription.*` for ordering, `metadata.commercialGateResolvedAt` for
  * the gate marker).
+ *
+ * This suite only proves WHICH mock method was invoked and with what plain
+ * JS arguments — it cannot catch a bug where the argument shape is
+ * "correct" JS but Firestore's real dot-path semantics store it wrong (that
+ * class of bug is exactly what corrupted `users/{uid}` in production; see
+ * this module's own doc comment on the gate write). The emulator-backed
+ * proof that a real Firestore document ends up correctly nested — not just
+ * that these mocks were called — lives in
+ * `commercialGateResolution.integration.test.ts`.
  */
 
 const transactionMocks = vi.hoisted(() => ({
@@ -58,10 +67,7 @@ import { applySubscriptionEventAtomically } from '../subscriptionSync';
 describe('applySubscriptionEventAtomically — commercialGateResolvedAt', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('resolves the gate the first time an event confirms entitlementActive: true for a still-pending (null) account', async () => {
-    vi.mocked((await import('../../lib/firebaseAdmin')).db.doc).mockReturnValue({
-      get: async () => mockSnapshot({ commercialGateResolvedAt: null }),
-    } as never);
+  it('resolves the gate the first time an event confirms entitlementActive: true for a still-pending (null) account, via a SEPARATE update() call — never merged into the set(...,{merge:true}) subscription write', async () => {
     (await import('../../lib/firebaseAdmin')).db.runTransaction = vi.fn(async (op) =>
       op({
         get: async () => mockSnapshot({ commercialGateResolvedAt: null }),
@@ -74,13 +80,21 @@ describe('applySubscriptionEventAtomically — commercialGateResolvedAt', () => 
       entitlementActive: true,
     });
 
+    // The subscription mirror write never carries the dotted gate key.
     expect(transactionMocks.set).toHaveBeenCalledWith(
       expect.any(Object),
-      expect.objectContaining({
-        'metadata.commercialGateResolvedAt': expect.anything(),
-      }),
+      { subscription: expect.anything() },
       { merge: true },
     );
+    const [, subscriptionPayload] = transactionMocks.set.mock.calls[0] ?? [];
+    expect(subscriptionPayload).not.toHaveProperty('metadata.commercialGateResolvedAt');
+
+    // The gate marker is written through `update()`, which is the only
+    // Admin SDK operation that correctly parses a dotted string key as a
+    // nested field path.
+    expect(transactionMocks.update).toHaveBeenCalledWith(expect.any(Object), {
+      'metadata.commercialGateResolvedAt': expect.anything(),
+    });
   });
 
   it('does NOT touch the gate when the account already resolved it (existing Timestamp) — a later purchase never rewrites the original resolution', async () => {
@@ -97,8 +111,7 @@ describe('applySubscriptionEventAtomically — commercialGateResolvedAt', () => 
       entitlementActive: true,
     });
 
-    const [, payload] = transactionMocks.set.mock.calls[0] ?? [];
-    expect(payload).not.toHaveProperty('metadata.commercialGateResolvedAt');
+    expect(transactionMocks.update).not.toHaveBeenCalled();
   });
 
   it('does NOT touch the gate when the account predates the field (absent — legacy, already treated as resolved client-side)', async () => {
@@ -114,8 +127,7 @@ describe('applySubscriptionEventAtomically — commercialGateResolvedAt', () => 
       entitlementActive: true,
     });
 
-    const [, payload] = transactionMocks.set.mock.calls[0] ?? [];
-    expect(payload).not.toHaveProperty('metadata.commercialGateResolvedAt');
+    expect(transactionMocks.update).not.toHaveBeenCalled();
   });
 
   it('does NOT resolve the gate on an event that does not confirm an active entitlement (e.g. EXPIRATION)', async () => {
@@ -131,7 +143,6 @@ describe('applySubscriptionEventAtomically — commercialGateResolvedAt', () => 
       entitlementActive: false,
     });
 
-    const [, payload] = transactionMocks.set.mock.calls[0] ?? [];
-    expect(payload).not.toHaveProperty('metadata.commercialGateResolvedAt');
+    expect(transactionMocks.update).not.toHaveBeenCalled();
   });
 });

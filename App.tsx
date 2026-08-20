@@ -72,12 +72,12 @@ configureRevenueCat().catch(() => {
 });
 
 function SubscriptionResolutionError({
+  title,
   message,
-  offline,
   onRetry,
 }: {
+  title: string;
   message: string;
-  offline: boolean;
   onRetry: () => Promise<void>;
 }) {
   return (
@@ -98,7 +98,7 @@ function SubscriptionResolutionError({
           textAlign: 'center',
         }}
       >
-        {offline ? 'Conexão necessária' : 'Assinatura indisponível'}
+        {title}
       </Text>
       <Text
         style={{
@@ -139,8 +139,16 @@ function SubscriptionResolutionError({
 }
 
 function RootNavigator() {
-  const { user, profile, questionnaire, initializing, profileLoading, refreshProfile, logout } =
-    useAuth();
+  const {
+    user,
+    profile,
+    questionnaire,
+    questionnaireResolution,
+    initializing,
+    profileLoading,
+    refreshProfile,
+    logout,
+  } = useAuth();
   const {
     loading: subscriptionLoading,
     configured: subscriptionConfigured,
@@ -232,7 +240,7 @@ function RootNavigator() {
     authenticated: Boolean(user),
     emailVerificationRequired,
     preferencesReconciling,
-    hasQuestionnaire: Boolean(questionnaire),
+    questionnaireResolution,
     subscriptionLoading,
     subscriptionConfigured,
     isPremium,
@@ -249,7 +257,7 @@ function RootNavigator() {
       authenticated: Boolean(user),
       emailVerificationRequired,
       preferencesReconciling,
-      hasQuestionnaire: Boolean(questionnaire),
+      questionnaireResolution,
       subscriptionLoading,
       subscriptionConfigured,
       subscriptionStatus,
@@ -264,7 +272,7 @@ function RootNavigator() {
     profileLoading,
     emailVerificationRequired,
     preferencesReconciling,
-    questionnaire,
+    questionnaireResolution,
     subscriptionLoading,
     subscriptionConfigured,
     subscriptionStatus,
@@ -282,6 +290,22 @@ function RootNavigator() {
   screenRef.current = resolvedScreen;
 
   if (!resolvedScreen) {
+    // Retry-exhausted questionnaire/profile read failure — checked BEFORE
+    // the subscription-error branch below since it can't have resolved a
+    // `questionnaire` yet either way. Never falls through to onboarding
+    // (`resolvePremiumGate` already refuses that for `'error'`); this is
+    // the recoverable-error UI instead of an indefinite spinner. Reuses
+    // the same component/visual language as the subscription error below,
+    // per the "don't invent new design" instruction.
+    if (!initializing && !profileLoading && user && questionnaireResolution === 'error') {
+      return (
+        <SubscriptionResolutionError
+          title="Não foi possível carregar seus dados"
+          message="Verifique sua conexão e tente novamente."
+          onRetry={refreshProfile}
+        />
+      );
+    }
     if (
       !initializing &&
       !profileLoading &&
@@ -292,8 +316,8 @@ function RootNavigator() {
     ) {
       return (
         <SubscriptionResolutionError
+          title={subscriptionErrorKind === 'offline' ? 'Conexão necessária' : 'Assinatura indisponível'}
           message={subscriptionError ?? 'Não foi possível verificar a assinatura agora.'}
-          offline={subscriptionErrorKind === 'offline'}
           onRetry={retrySubscription}
         />
       );

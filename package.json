@@ -68,6 +68,8 @@
     "test:integration:vaultKeyDestruction": "firebase emulators:exec --only firestore,storage --project ajfit-rules-test 'cd functions && VAULT_KEY_DESTRUCTION_INTEGRATION=1 npx vitest run src/accountDeletion/__tests__/vaultKeyDestruction.integration.test.ts'",
     "test:integration:backendAutonomy": "firebase emulators:exec --only auth,firestore,storage --project ajfit-rules-test 'cd functions && BACKEND_AUTONOMY_INTEGRATION=1 npx vitest run src/accountDeletion/__tests__/backendAutonomy.integration.test.ts'",
     "test:integration:faultInjection": "firebase emulators:exec --only firestore --project ajfit-rules-test 'cd functions && FAULT_INJECTION_INTEGRATION=1 npx vitest run src/accountDeletion/__tests__/faultInjection.integration.test.ts'",
+    "test:integration:commercialGate": "firebase emulators:exec --only firestore --project ajfit-rules-test 'cd functions && COMMERCIAL_GATE_INTEGRATION=1 npx vitest run src/billing/__tests__/commercialGateResolution.integration.test.ts'",
+    "test:integration:questionnaireLoad": "firebase emulators:exec --only firestore --project ajfit-rules-test 'QUESTIONNAIRE_LOAD_INTEGRATION=1 vitest run src/services/__tests__/questionnaireLoad.integration.test.ts'",
     "test:integration:accountDeletionReconciliation": "firebase emulators:exec --only auth,firestore,storage --project ajfit-rules-test 'cd functions && ACCOUNT_DELETION_RECONCILIATION_INTEGRATION=1 npx vitest run src/accountDeletion/__tests__/accountDeletionReconciliation.integration.test.ts'",
     "typecheck": "tsc --noEmit",
     "i18n:check": "vitest run src/i18n/__tests__",

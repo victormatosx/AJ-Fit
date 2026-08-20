@@ -411,9 +411,6 @@ export async function applySubscriptionEventAtomically(
         | undefined;
       const shouldResolveCommercialGate =
         gateFieldValue === null && subscription.entitlementActive === true;
-      const extraFields = shouldResolveCommercialGate
-        ? { [COMMERCIAL_GATE_RESOLVED_AT_PATH]: FieldValue.serverTimestamp() }
-        : {};
 
       if (options.replaceSubscription) {
         // A TRANSFER reconciliation is a complete current-state snapshot,
@@ -421,18 +418,30 @@ export async function applySubscriptionEventAtomically(
         // such as an old active product/trial cannot survive an inactive
         // RevenueCat response. `update` also preserves the no-create
         // invariant already guarded by the transaction read above.
-        // `extraFields`' dotted key is a distinct top-level field path, so
-        // combining it here does not affect the full-map replace of
-        // `subscription`.
-        transaction.update(ref, { [SUBSCRIPTION_FIELD]: nextSubscription, ...extraFields });
+        transaction.update(ref, { [SUBSCRIPTION_FIELD]: nextSubscription });
       } else {
         // Ordinary commercial webhooks remain partial deltas and retain the
-        // long-standing deep-merge behavior.
-        transaction.set(
-          ref,
-          { [SUBSCRIPTION_FIELD]: nextSubscription, ...extraFields },
-          { merge: true },
-        );
+        // long-standing deep-merge behavior: `set(..., { merge: true })`
+        // deep-merges into the `subscription` map, leaving any sub-field
+        // this event's partial payload omits untouched. `SUBSCRIPTION_FIELD`
+        // has no dot, so this is safe regardless of merge vs. update.
+        transaction.set(ref, { [SUBSCRIPTION_FIELD]: nextSubscription }, { merge: true });
+      }
+
+      // Deliberately a SEPARATE write from the subscription mirror above,
+      // never combined into its payload: `COMMERCIAL_GATE_RESOLVED_AT_PATH`
+      // is a dotted string ('metadata.commercialGateResolvedAt'), and the
+      // Admin SDK only parses a dotted key as a nested field path for
+      // `update()` — not for `set(..., { merge: true })`, which previously
+      // stored it as a literal top-level field named
+      // `"metadata.commercialGateResolvedAt"` instead of nesting it under
+      // `metadata` (see confirmCommercialGate.ts's identical fix; proven by
+      // the emulator-backed integration test in
+      // __tests__/commercialGateResolution.integration.test.ts). `update()`
+      // is safe here unconditionally: `snapshot.exists` was already
+      // confirmed above, before this transaction ever reaches a write.
+      if (shouldResolveCommercialGate) {
+        transaction.update(ref, { [COMMERCIAL_GATE_RESOLVED_AT_PATH]: FieldValue.serverTimestamp() });
       }
 
       return outcome;

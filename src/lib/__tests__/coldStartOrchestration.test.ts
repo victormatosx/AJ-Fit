@@ -42,7 +42,7 @@ function gate({
     authenticated: true,
     emailVerificationRequired: false,
     preferencesReconciling: false,
-    hasQuestionnaire: true,
+    questionnaireResolution: 'found',
     subscriptionLoading,
     subscriptionConfigured,
     isPremium: Boolean(info?.entitlements.active.premium),

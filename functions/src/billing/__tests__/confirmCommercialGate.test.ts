@@ -12,7 +12,7 @@ import { RevenueCatApiError } from '../revenueCatApi';
  * as-is here.
  */
 
-const transactionMocks = vi.hoisted(() => ({ set: vi.fn() }));
+const transactionMocks = vi.hoisted(() => ({ update: vi.fn() }));
 
 function mockSnapshot(commercialGateResolvedAt: unknown, exists = true) {
   return {
@@ -89,11 +89,9 @@ describe('confirmCommercialGateEntitlement', () => {
     const result = await confirmCommercialGateEntitlement('uid-1', api);
 
     expect(result).toEqual({ status: 'resolved' });
-    expect(transactionMocks.set).toHaveBeenCalledWith(
-      expect.any(Object),
-      { 'metadata.commercialGateResolvedAt': expect.anything() },
-      { merge: true },
-    );
+    expect(transactionMocks.update).toHaveBeenCalledWith(expect.any(Object), {
+      'metadata.commercialGateResolvedAt': expect.anything(),
+    });
   });
 
   it('2) conta nova + restore confirmado (mesma entitlement real, caminho idêntico) → marker resolvido', async () => {
@@ -114,7 +112,7 @@ describe('confirmCommercialGateEntitlement', () => {
     const result = await confirmCommercialGateEntitlement('uid-1', api);
 
     expect(result).toEqual({ status: 'not_entitled' });
-    expect(transactionMocks.set).not.toHaveBeenCalled();
+    expect(transactionMocks.update).not.toHaveBeenCalled();
   });
 
   it('3b) nenhuma assinatura Premium encontrada → not_entitled, sem escrita', async () => {
@@ -123,7 +121,7 @@ describe('confirmCommercialGateEntitlement', () => {
     const result = await confirmCommercialGateEntitlement('uid-1', api);
 
     expect(result).toEqual({ status: 'not_entitled' });
-    expect(transactionMocks.set).not.toHaveBeenCalled();
+    expect(transactionMocks.update).not.toHaveBeenCalled();
   });
 
   it('4) RevenueCat indisponível → marker continua null, estado recuperável (webhook ainda pode resolver depois)', async () => {
@@ -134,7 +132,7 @@ describe('confirmCommercialGateEntitlement', () => {
     const result = await confirmCommercialGateEntitlement('uid-1', api);
 
     expect(result).toEqual({ status: 'revenuecat_unavailable' });
-    expect(transactionMocks.set).not.toHaveBeenCalled();
+    expect(transactionMocks.update).not.toHaveBeenCalled();
   });
 
   it('5) webhook chega primeiro (marker já é Timestamp) → confirmação síncrona posterior é no-op', async () => {
@@ -144,7 +142,7 @@ describe('confirmCommercialGateEntitlement', () => {
     const result = await confirmCommercialGateEntitlement('uid-1', api);
 
     expect(result).toEqual({ status: 'already_resolved' });
-    expect(transactionMocks.set).not.toHaveBeenCalled();
+    expect(transactionMocks.update).not.toHaveBeenCalled();
   });
 
   it('6) confirmação síncrona chega primeiro (marker vira Timestamp) — webhook subsequente já é coberto por subscriptionSync.test (idempotência simétrica)', async () => {
@@ -169,7 +167,7 @@ describe('confirmCommercialGateEntitlement', () => {
     // proves a later expiration cannot even reach the write path, let alone
     // revert an already-resolved marker.
     expect(result).toEqual({ status: 'not_entitled' });
-    expect(transactionMocks.set).not.toHaveBeenCalled();
+    expect(transactionMocks.update).not.toHaveBeenCalled();
   });
 
   it('8) conta legada sem o campo (ausente) → already_resolved, sem escrita (evita migração desnecessária por login/compra)', async () => {
@@ -179,7 +177,7 @@ describe('confirmCommercialGateEntitlement', () => {
     const result = await confirmCommercialGateEntitlement('uid-1', api);
 
     expect(result).toEqual({ status: 'already_resolved' });
-    expect(transactionMocks.set).not.toHaveBeenCalled();
+    expect(transactionMocks.update).not.toHaveBeenCalled();
   });
 
   it('múltiplas assinaturas Premium ativas simultaneamente → ambiguous, sem escrita', async () => {
@@ -191,7 +189,7 @@ describe('confirmCommercialGateEntitlement', () => {
     const result = await confirmCommercialGateEntitlement('uid-1', api);
 
     expect(result).toEqual({ status: 'ambiguous' });
-    expect(transactionMocks.set).not.toHaveBeenCalled();
+    expect(transactionMocks.update).not.toHaveBeenCalled();
   });
 
   it('documento do usuário não existe → user_not_found, sem escrita', async () => {
@@ -201,7 +199,7 @@ describe('confirmCommercialGateEntitlement', () => {
     const result = await confirmCommercialGateEntitlement('uid-1', api);
 
     expect(result).toEqual({ status: 'user_not_found' });
-    expect(transactionMocks.set).not.toHaveBeenCalled();
+    expect(transactionMocks.update).not.toHaveBeenCalled();
   });
 
   it('9) consulta sempre o uid do request.auth — nunca um uid de outro usuário (garantido pelo assinatura da função, não por dado do cliente)', async () => {

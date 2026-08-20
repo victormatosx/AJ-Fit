@@ -131,7 +131,7 @@ describe('production TOTP enrollment and management structure', () => {
     expect(authContext).toContain('subscribeToAuthState(async (nextUser) =>');
     expect(authContext).toContain('const userStatePromise = loadUserState(nextUser.uid)');
     expect(authContext).toContain('await userStatePromise');
-    const questionnaireGuard = premiumGate.indexOf('if (!state.hasQuestionnaire)');
+    const questionnaireGuard = premiumGate.indexOf("if (state.questionnaireResolution === 'not_found')");
     const funnelGuard = premiumGate.indexOf("return 'app';");
     expect(questionnaireGuard).toBeGreaterThan(-1);
     expect(funnelGuard).toBeGreaterThan(questionnaireGuard);

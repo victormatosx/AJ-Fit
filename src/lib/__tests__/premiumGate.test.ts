@@ -11,7 +11,7 @@ function resolve(overrides: GateOverrides = {}) {
     authenticated: true,
     emailVerificationRequired: false,
     preferencesReconciling: false,
-    hasQuestionnaire: true,
+    questionnaireResolution: 'found',
     subscriptionLoading: false,
     subscriptionConfigured: true,
     isPremium: false,
@@ -43,7 +43,7 @@ describe('resolvePremiumGate', () => {
   it('D) prioriza o questionário antes do estado da assinatura', () => {
     expect(
       resolve({
-        hasQuestionnaire: false,
+        questionnaireResolution: 'not_found',
         subscriptionLoading: true,
         subscriptionConfigured: false,
       }),
@@ -54,7 +54,7 @@ describe('resolvePremiumGate', () => {
     expect(
       resolve({
         emailVerificationRequired: true,
-        hasQuestionnaire: false,
+        questionnaireResolution: 'not_found',
         subscriptionLoading: true,
         subscriptionConfigured: false,
       }),
@@ -66,7 +66,7 @@ describe('resolvePremiumGate', () => {
       resolve({
         requestedScreen: 'app',
         authenticated: false,
-        hasQuestionnaire: false,
+        questionnaireResolution: 'not_found',
         isPremium: true,
       }),
     ).toBe('auth');
@@ -134,7 +134,7 @@ describe('resolvePremiumGate', () => {
   });
 
   it('K) uma vez reconciliado, o fluxo normal (questionário → assinatura → app) continua igual, com ou sem Premium', () => {
-    expect(resolve({ preferencesReconciling: false, hasQuestionnaire: false })).toBe(
+    expect(resolve({ preferencesReconciling: false, questionnaireResolution: 'not_found' })).toBe(
       'onboardingFunnel',
     );
     expect(resolve({ preferencesReconciling: false, isPremium: true })).toBe('app');
@@ -164,7 +164,7 @@ describe('resolvePremiumGate', () => {
 
     it('O) sem questionário ainda, independente do gate comercial → onboardingFunnel (questionário sempre precede o paywall)', () => {
       expect(
-        resolve({ commercialGateResolved: false, hasQuestionnaire: false, isPremium: false }),
+        resolve({ commercialGateResolved: false, questionnaireResolution: 'not_found', isPremium: false }),
       ).toBe('onboardingFunnel');
     });
 
@@ -186,6 +186,75 @@ describe('resolvePremiumGate', () => {
       // documenta que não há, e nunca deve haver, um campo `provider` aqui.
       expect(resolve({ commercialGateResolved: false, isPremium: false })).toBe('paywall');
       expect(resolve({ commercialGateResolved: true, isPremium: false })).toBe('app');
+    });
+  });
+
+  describe('questionnaireResolution — state machine invariants (cold-start intermittency fix)', () => {
+    it('1) found + demais gates ok → app', () => {
+      expect(resolve({ questionnaireResolution: 'found', isPremium: true })).toBe('app');
+    });
+
+    it('2) not_found → onboardingFunnel', () => {
+      expect(resolve({ questionnaireResolution: 'not_found' })).toBe('onboardingFunnel');
+    });
+
+    it('3) loading (query pending) → unresolved, nunca onboarding', () => {
+      expect(resolve({ questionnaireResolution: 'loading' })).toBeNull();
+    });
+
+    it('3b) unknown (ainda não iniciado) → unresolved, nunca onboarding', () => {
+      expect(resolve({ questionnaireResolution: 'unknown' })).toBeNull();
+    });
+
+    it('4) error (permission-denied, unavailable, ou qualquer falha de leitura) → unresolved, NUNCA onboarding', () => {
+      expect(resolve({ questionnaireResolution: 'error' })).toBeNull();
+      expect(resolve({ questionnaireResolution: 'error', isPremium: true })).toBeNull();
+      expect(resolve({ questionnaireResolution: 'error', isPremium: false })).toBeNull();
+    });
+
+    it('12) commercialGateResolved não interfere na existência do questionário — not_found continua onboarding independente dele', () => {
+      expect(
+        resolve({ questionnaireResolution: 'not_found', commercialGateResolved: false }),
+      ).toBe('onboardingFunnel');
+      expect(
+        resolve({ questionnaireResolution: 'not_found', commercialGateResolved: true }),
+      ).toBe('onboardingFunnel');
+    });
+
+    it('13) subscriptionLoading não transforma questionnaire error em onboarding', () => {
+      expect(
+        resolve({ questionnaireResolution: 'error', subscriptionLoading: true }),
+      ).toBeNull();
+      expect(
+        resolve({ questionnaireResolution: 'error', subscriptionLoading: false }),
+      ).toBeNull();
+    });
+
+    it('14) found + Premium ativo → app', () => {
+      expect(resolve({ questionnaireResolution: 'found', isPremium: true })).toBe('app');
+    });
+
+    it('15) found + commercialGate pendente + sem Premium → paywall', () => {
+      expect(
+        resolve({
+          questionnaireResolution: 'found',
+          commercialGateResolved: false,
+          isPremium: false,
+        }),
+      ).toBe('paywall');
+    });
+
+    it('16) not_found + Premium ativo → onboarding MESMO ASSIM — Premium nunca faz bypass do questionário obrigatório', () => {
+      expect(
+        resolve({ questionnaireResolution: 'not_found', isPremium: true }),
+      ).toBe('onboardingFunnel');
+      expect(
+        resolve({
+          questionnaireResolution: 'not_found',
+          isPremium: true,
+          commercialGateResolved: false,
+        }),
+      ).toBe('onboardingFunnel');
     });
   });
 

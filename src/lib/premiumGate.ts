@@ -1,3 +1,5 @@
+import type { QuestionnaireResolution } from './profileLoadState';
+
 /**
  * `'onboardingFunnel'` covers the entire pre-auth acquisition funnel — what
  * used to be five separate root screens ('onboarding'|'quiz'|'socialProof'|
@@ -34,7 +36,17 @@ type PremiumGateState = {
    * becomes visible, same as the other pre-Premium checks below.
    */
   preferencesReconciling: boolean;
-  hasQuestionnaire: boolean;
+  /**
+   * Explicit resolution of "does this account have a completed
+   * questionnaire" — `src/lib/profileLoadState.ts`. Replaces a plain
+   * `hasQuestionnaire: boolean`: a boolean cannot distinguish "not loaded
+   * yet", "confirmed absent", and "Firestore read failed", and collapsing
+   * those three into one `false` was the root cause of an intermittent
+   * cold-start bug that bounced established accounts back to onboarding on
+   * a transient read failure. Only `'not_found'` may ever route to
+   * `'onboardingFunnel'` — see the invariant enforced below.
+   */
+  questionnaireResolution: QuestionnaireResolution;
   subscriptionLoading: boolean;
   subscriptionConfigured: boolean;
   isPremium: boolean;
@@ -88,7 +100,17 @@ export function resolvePremiumGate(state: PremiumGateState): RootScreenId | null
 
   if (state.preferencesReconciling) return null;
 
-  if (!state.hasQuestionnaire) return 'onboardingFunnel';
+  // Only a CONFIRMED absence may ever send the user to onboarding.
+  // 'unknown'/'loading' keep the gate neutral, same as `profileLoading`
+  // above (belt-and-suspenders: the two are expected to always agree, but
+  // this check does not rely on that). 'error' — a failed read, exhausted
+  // retries included — is ALSO kept neutral here, on purpose: an
+  // infrastructure failure is never reinterpreted as "no questionnaire".
+  // The caller (`App.tsx`) is responsible for showing a recoverable error
+  // UI instead of an indefinite spinner when `questionnaireResolution ===
+  // 'error'` — this pure function only refuses to route to onboarding.
+  if (state.questionnaireResolution === 'not_found') return 'onboardingFunnel';
+  if (state.questionnaireResolution !== 'found') return null;
 
   if (state.subscriptionLoading || !state.subscriptionConfigured) return null;
 

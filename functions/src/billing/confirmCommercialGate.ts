@@ -111,11 +111,15 @@ export async function confirmCommercialGateEntitlement(
     const current = snapshot.get(COMMERCIAL_GATE_RESOLVED_AT_PATH) as Timestamp | null | undefined;
     if (current !== null) return 'already_resolved' as const;
 
-    transaction.set(
-      ref,
-      { [COMMERCIAL_GATE_RESOLVED_AT_PATH]: FieldValue.serverTimestamp() },
-      { merge: true },
-    );
+    // `update()`, not `set(..., { merge: true })`: the Admin SDK only
+    // parses a dotted string key like `COMMERCIAL_GATE_RESOLVED_AT_PATH` as
+    // a nested field path for `update()`. With `set(..., { merge: true })`
+    // it is stored as a literal top-level field named
+    // `"metadata.commercialGateResolvedAt"` instead of nesting under
+    // `metadata` — which then fails `nestedUserValid()`'s top-level
+    // `hasOnly` in firestore.rules and permanently blocks the client from
+    // ever updating its own profile again.
+    transaction.update(ref, { [COMMERCIAL_GATE_RESOLVED_AT_PATH]: FieldValue.serverTimestamp() });
     return 'resolved' as const;
   });
 

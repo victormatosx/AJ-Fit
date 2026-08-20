@@ -31,14 +31,14 @@ describe('definitive TOTP sign-in flow contract', () => {
     expect(authContext).toContain('const userStatePromise = loadUserState(nextUser.uid)');
     expect(authContext).toContain('await userStatePromise');
     expect(authContext).toContain('getUserProfile(uid)');
-    expect(authContext).toContain('getLatestQuestionnaire(uid)');
+    expect(authContext).toContain('getLatestQuestionnaire(uid, attempt)');
   });
 
   it('routes an existing questionnaire to Dashboard only after authentication loads', () => {
     const loadingGate = premiumGate.indexOf(
       'if (state.authInitializing || state.profileLoading) return null;',
     );
-    const questionnaireGuard = premiumGate.indexOf('if (!state.hasQuestionnaire)');
+    const questionnaireGuard = premiumGate.indexOf("if (state.questionnaireResolution === 'not_found')");
     const dashboardGuard = premiumGate.indexOf("return 'app';");
     expect(loadingGate).toBeGreaterThan(-1);
     expect(questionnaireGuard).toBeGreaterThan(loadingGate);
@@ -48,7 +48,7 @@ describe('definitive TOTP sign-in flow contract', () => {
 
   it('preserves email-verification priority over Quiz/Dashboard', () => {
     const verificationGuard = premiumGate.indexOf('if (state.emailVerificationRequired)');
-    const questionnaireGuard = premiumGate.indexOf('if (!state.hasQuestionnaire)');
+    const questionnaireGuard = premiumGate.indexOf("if (state.questionnaireResolution === 'not_found')");
     expect(verificationGuard).toBeGreaterThan(-1);
     expect(verificationGuard).toBeLessThan(questionnaireGuard);
   });
