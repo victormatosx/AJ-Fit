@@ -1,75 +1,36 @@
-import { Timestamp } from 'firebase/firestore';
-
-import type { AssessmentDelta, AssessmentView } from '../hooks/useAssessments';
-
 /**
- * Development-only data used to inspect the complete Progress experience.
+ * Development-only data used to inspect the Loads panel of the Progress
+ * experience, which has no repository behind it yet.
  *
- * Nothing in this file is persisted or sent to Firebase. Keeping the preview
- * data outside the screen also makes it difficult to mistake these values for
- * a user's real history when the load-history repository is implemented.
+ * Nothing here is persisted or sent to Firebase.
+ *
+ * SCOPE — READ THIS BEFORE ADDING ANYTHING
+ * ----------------------------------------
+ * This file covers the LOADS panel only. The "Corpo" panel used to have a
+ * preview here too, and it was removed: that panel is backed by real
+ * assessments through `useAssessments`, so preview values there meant a user
+ * could be shown a body history that was not theirs — weights, body fat and
+ * trends they never recorded. A screen that reports the user's own body must
+ * never be able to render anything but the user's own measurements.
+ *
+ * Do not reintroduce body/assessment preview data. An account with no
+ * assessments is meant to reach `BodyEvolutionView`'s empty state and its
+ * "add an assessment" CTA; that empty state IS the design for that case.
+ *
+ * The same reasoning will apply to Loads the moment a real load-history
+ * repository exists — at which point this file should be deleted rather than
+ * extended.
  */
 export const SHOW_PROGRESS_DESIGN_PREVIEW =
   typeof __DEV__ !== 'undefined' && __DEV__;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const HEIGHT_M = 1.76;
 
 function daysAgo(days: number): Date {
   const date = new Date(Date.now() - days * DAY_MS);
   date.setHours(12, 0, 0, 0);
   return date;
 }
-
-function assessment(
-  id: string,
-  days: number,
-  weight: number,
-  bodyFat: number,
-): AssessmentView {
-  const measuredAt = Timestamp.fromDate(daysAgo(days));
-  return {
-    id,
-    source: 'imported',
-    measuredAt,
-    createdAt: measuredAt,
-    weight,
-    height: HEIGHT_M,
-    bodyFat,
-    bmi: weight / HEIGHT_M ** 2,
-    leanMass: weight * (1 - bodyFat / 100),
-    fatMass: weight * (bodyFat / 100),
-  };
-}
-
-/** Newest first, matching the contract returned by useAssessments. */
-export const PROGRESS_BODY_PREVIEW: AssessmentView[] = [
-  assessment('preview-body-08', 0, 78.6, 18.7),
-  assessment('preview-body-07', 14, 79.2, 19.4),
-  assessment('preview-body-06', 28, 79.5, 19.8),
-  assessment('preview-body-05', 42, 80.1, 20.5),
-  assessment('preview-body-04', 56, 80.4, 21.0),
-  assessment('preview-body-03', 70, 81.2, 21.7),
-  assessment('preview-body-02', 84, 81.7, 22.1),
-  assessment('preview-body-01', 98, 82.4, 22.8),
-];
-
-function assessmentDelta(to: AssessmentView, from: AssessmentView): AssessmentDelta {
-  return {
-    weightDelta: to.weight - from.weight,
-    bodyFatDelta:
-      to.bodyFat != null && from.bodyFat != null ? to.bodyFat - from.bodyFat : null,
-    leanMassDelta:
-      to.leanMass != null && from.leanMass != null ? to.leanMass - from.leanMass : null,
-    fatMassDelta:
-      to.fatMass != null && from.fatMass != null ? to.fatMass - from.fatMass : null,
-  };
-}
-
-export const PROGRESS_BODY_PREVIEW_DELTA = assessmentDelta(
-  PROGRESS_BODY_PREVIEW[0]!,
-  PROGRESS_BODY_PREVIEW[1]!,
-);
 
 export type ProgressLoadExerciseId = 'benchPress' | 'squat' | 'deadlift';
 

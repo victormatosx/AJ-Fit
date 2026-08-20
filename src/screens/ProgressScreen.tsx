@@ -14,8 +14,6 @@ import { useTheme } from '../theme';
 import { useAuth } from '../state/AuthContext';
 import { useAssessments } from '../hooks/useAssessments';
 import {
-  PROGRESS_BODY_PREVIEW,
-  PROGRESS_BODY_PREVIEW_DELTA,
   PROGRESS_LOADS_PREVIEW,
   SHOW_PROGRESS_DESIGN_PREVIEW,
 } from '../data/progressDesignMocks';
@@ -69,12 +67,6 @@ export function ProgressScreen({
   const handleRetry = useCallback(() => {
     void refresh();
   }, [refresh]);
-
-  const bodyAssessments = SHOW_PROGRESS_DESIGN_PREVIEW ? PROGRESS_BODY_PREVIEW : assessments;
-  const bodyLatest = SHOW_PROGRESS_DESIGN_PREVIEW ? PROGRESS_BODY_PREVIEW[0]! : latest;
-  const bodyEvolution = SHOW_PROGRESS_DESIGN_PREVIEW
-    ? PROGRESS_BODY_PREVIEW_DELTA
-    : evolutionSincePrevious;
 
   /**
    * Header lives here because the Photos panel renders it inside its list.
@@ -148,12 +140,16 @@ export function ProgressScreen({
             {pageHeader}
             <PanelFade viewKey={view}>
               {view === 'body' ? (
+                // Corpo shows the user's own assessments and nothing else:
+                // straight from `useAssessments`, with no preview data behind
+                // it. An account with no assessments gets the empty state and
+                // its CTA — never a fabricated history.
                 <BodyEvolutionView
-                  assessments={bodyAssessments}
-                  loading={SHOW_PROGRESS_DESIGN_PREVIEW ? false : loading}
-                  error={SHOW_PROGRESS_DESIGN_PREVIEW ? null : error}
-                  latest={bodyLatest}
-                  evolutionSincePrevious={bodyEvolution}
+                  assessments={assessments}
+                  loading={loading}
+                  error={error}
+                  latest={latest}
+                  evolutionSincePrevious={evolutionSincePrevious}
                   onRetry={handleRetry}
                   onOpenAssessment={onOpenAssessment}
                 />
