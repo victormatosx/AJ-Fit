@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View, Text, Pressable, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
@@ -37,6 +37,11 @@ import { SupportSuccessScreen } from './SupportSuccessScreen';
 import type { HelpArticle, SupportTicketType } from '../types/support';
 import { PersistentScreen } from '../components/navigation/PersistentScreen';
 import { usePrewarmQueue } from '../components/navigation/usePrewarmQueue';
+import { useSubscription } from '../hooks/useSubscription';
+import {
+  INITIAL_PAYWALL_PREMIUM_RETURN_STATE,
+  resolvePaywallPremiumReturn,
+} from '../lib/paywallPremiumReturn';
 
 type SupportRoute =
   | { name: 'help' }
@@ -90,6 +95,8 @@ function AppShellContent({
 }) {
   const { tab, setTab } = useAppState();
   const { linkedProviders } = useAuth();
+  const { isPremium } = useSubscription();
+  const paywallPremiumReturnState = useRef(INITIAL_PAYWALL_PREMIUM_RETURN_STATE);
   // Single centralized prewarm schedule (docs/23_navegacao_e_lifecycle.md
   // §8/§14) — PREWARM_ROUTE_IDS in src/lib/prewarmRoutes.ts is the only
   // place route order/membership is declared; nothing here chains
@@ -137,6 +144,20 @@ function AppShellContent({
   useEffect(() => {
     if (!canChangePassword) setShowChangePassword(false);
   }, [canChangePassword]);
+
+  // The root Paywall is closed by resolvePremiumGate, but this on-demand
+  // Paywall is an AppShell overlay. Close that overlay only after the same
+  // RevenueCat-backed source of truth has actually transitioned false -> true
+  // while it is open. Clearing showPremium reveals the already-mounted screen
+  // underneath; no route reconstruction or fixed destination is involved.
+  useEffect(() => {
+    const transition = resolvePaywallPremiumReturn(paywallPremiumReturnState.current, {
+      visible: showPremium,
+      isPremium,
+    });
+    paywallPremiumReturnState.current = transition.state;
+    if (transition.shouldClose) setShowPremium(false);
+  }, [isPremium, setShowPremium, showPremium]);
 
   const selectTab = (nextTab: TabId) => {
     if (nextTab === 'workout' && tab !== 'workout') {
