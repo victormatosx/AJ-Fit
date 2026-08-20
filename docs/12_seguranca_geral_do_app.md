@@ -180,6 +180,74 @@ O usuário pode permanecer autenticado em múltiplos dispositivos.
 
 O usuário pode utilizar Android e iPhone simultaneamente.
 
+Não existe, hoje, infraestrutura de sessão nomeada/identificável por
+dispositivo (sem tabela de sessões, sem revogação individual, sem
+`refreshToken` correlacionado a um device record). Ver §6.1 para a
+consequência disso na tela de Segurança.
+
+---
+
+## 6.1 Tela de Segurança (`SecurityScreen`) — princípio geral
+
+> **A UI de segurança nunca pode sugerir uma capacidade que a arquitetura de
+> backend/autenticação não aplica de fato.** Se uma informação não tem uma
+> fonte de verdade real e identity-scoped, ela não aparece — não é
+> aproximada, não é enfeitada com um placeholder "bonito".
+
+`src/screens/SecurityScreen.tsx` é somente leitura sobre estado que já existe
+em outro lugar; a tela não é uma segunda fonte de verdade para nada.
+
+### O que aparece e de onde vem
+
+| Linha exibida | Fonte de verdade | Observações |
+|---|---|---|
+| Verificação em duas etapas — Ativada/Desativada | `useTotpMfa()` (`src/hooks/useTotpMfa.ts`), o mesmo hook usado por `TwoFactorSettingsScreen` | Nenhuma lógica de MFA é duplicada; a tela apenas chama `mfa.refresh()` em `useScreenFocusEffect` e lê `mfa.enabled`/`mfa.loading`. Identity-scoped: o hook já reseta ao trocar de UID. |
+| Alterar senha (linha só aparece condicionalmente) | `linkedProviders` do `AuthContext`, via `PASSWORD_PROVIDER_ID` (`src/lib/authProviders.ts`) | Regra: aparece **apenas** se `password` estiver em `user.providerData`. Não há heurística por "como o usuário entrou agora" — é sempre o estado atual de `providerData`. |
+| Método(s) de acesso — Google / Apple / E-mail e senha | `getReauthenticationProviders(user)` (`src/lib/authProviders.ts`), lido direto de `user.providerData` | Suporta múltiplos providers vinculados simultaneamente (ex.: `password` + `google.com`) sem esconder nenhum atrás de "um usuário = um provider". Nada é vinculado/desvinculado nesta tela — é somente leitura. |
+| Último login | `user.metadata.lastSignInTime` (Firebase Auth), via `parseLastSignInTime`/`describeLastSignIn` (`src/lib/lastSignIn.ts`) | Ver semântica exata abaixo. Se o campo estiver ausente ou não puder ser parseado, a linha inteira é omitida — nunca aparece um valor inventado ou "carregando" permanente. |
+| Excluir conta | Inalterado — abre `DeleteAccountScreen` via a mesma prop `onOpenDeleteAccount` que já existia | Nenhuma lógica do orchestrator/reauth/revogação foi tocada. |
+
+### Semântica exata de "Último login"
+
+`user.metadata.lastSignInTime` é o timestamp do **sign-in** mais recente
+resolvido pelo Firebase Authentication — não é "última atividade no app" nem
+"última requisição". Por isso o rótulo na UI é **"Último login"**, nunca
+"Último acesso" (que sugeriria atividade recente). A formatação
+(hoje/ontem/data) usa `Intl.DateTimeFormat` com `i18n.resolvedLanguage`,
+igual ao padrão já usado em `SubscriptionCenterScreen` — nenhum idioma nem
+fuso horário é hardcoded.
+
+### O que foi removido e por quê
+
+"Dispositivo atual", "Gerenciar dispositivos" e "Histórico de segurança"
+existiam apenas como UI estática (`onPress: () => {}`), sem nenhuma fonte de
+dados real por trás. Foram removidos por violarem o princípio acima.
+
+* **Gerenciamento de dispositivos** só é uma feature de segurança legítima se
+  o usuário puder identificar sessões individuais e revogá-las
+  individualmente. Isso exige um registro de sessão por dispositivo (device
+  id, plataforma, IP aproximado, último uso) e um caminho de revogação real
+  (invalidar refresh tokens daquele device especificamente) — nenhum dos
+  dois existe hoje. Requisito para implementar corretamente no futuro: uma
+  coleção Firestore (ou equivalente) de sessões por UID, escrita no
+  sign-in/refresh, com Rules que restrinjam leitura/escrita ao próprio dono,
+  e uma Cloud Function ou fluxo de revogação real de token.
+* **Histórico de segurança** exigiria um audit log de eventos de segurança
+  (login, troca de senha, ativação/desativação de MFA, tentativas
+  malsucedidas) persistido de forma identity-scoped e imutável do lado do
+  cliente. Hoje existem apenas logs operacionais (`logInfo`/`logWarn`, ver
+  §18) que não são security event logs nem estão expostos ao usuário.
+  Requisito para implementar corretamente no futuro: uma coleção de eventos
+  de segurança gravada por Cloud Functions (nunca pelo cliente diretamente,
+  para não permitir forjar o próprio histórico), com Rules somente-leitura
+  para o dono.
+
+Nenhuma das duas é implementada nesta rodada — nem com uma versão
+simplificada — porque uma versão cosmética delas é pior que não tê-las: cria
+a impressão de uma capacidade de segurança (identificar/revogar um
+dispositivo específico, auditar o que aconteceu na conta) que não existe de
+fato.
+
 ---
 
 # 7. Autorização

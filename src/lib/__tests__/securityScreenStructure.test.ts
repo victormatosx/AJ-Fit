@@ -31,8 +31,8 @@ const passwordServiceSource = readFileSync(
 );
 
 describe('SecurityScreen structure', () => {
-  it('renders the four required sections in order', () => {
-    const sectionKeys = ['account', 'sessions', 'activity', 'safetyZone'];
+  it('renders the three required sections in order', () => {
+    const sectionKeys = ['account', 'access', 'safetyZone'];
     const positions = sectionKeys.map((key) =>
       securitySource.indexOf(`t('security.sections.${key}')`),
     );
@@ -41,27 +41,48 @@ describe('SecurityScreen structure', () => {
     expect(positions).toEqual([...positions].sort((a, b) => a - b));
   });
 
-  it('renders all eight requested entries and both secondary texts', () => {
-    for (const key of [
-      'changePassword',
-      'biometrics',
-      'twoFactor',
+  it('never fabricates device/session/history UI that has no backing implementation', () => {
+    for (const forbidden of [
       'currentDevice',
       'manageDevices',
-      'lastLogin',
       'securityHistory',
-      'deleteAccount',
+      'Dispositivo atual',
+      'Gerenciar dispositivos',
+      'Histórico de segurança',
     ]) {
-      expect(securitySource).toContain(`t('security.items.${key}')`);
+      expect(securitySource).not.toContain(forbidden);
     }
-
-    expect(securitySource).toContain("description: t('security.items.currentDeviceDescription')");
-    expect(securitySource).toContain("description: t('security.items.lastLoginDescription')");
-    expect(securitySource).toContain("description={t('security.safetyZoneDescription')}");
-    expect(securitySource).toMatch(/deleteAccount'[\s\S]{0,120}danger: true/);
+    // The old fake rows also don't survive in the localization resources.
+    for (const resource of [ptBR, en, es]) {
+      expect(resource.security.items).not.toHaveProperty('currentDevice');
+      expect(resource.security.items).not.toHaveProperty('currentDeviceDescription');
+      expect(resource.security.items).not.toHaveProperty('manageDevices');
+      expect(resource.security.items).not.toHaveProperty('securityHistory');
+    }
   });
 
-  it('keeps unsupported security features UI-only', () => {
+  it('derives MFA status from the same hook TwoFactorSettingsScreen uses, not a second source of truth', () => {
+    expect(securitySource).toContain("useTotpMfa();");
+    expect(securitySource).toContain('mfa.enabled');
+    expect(securitySource).toContain("t('security.twoFactor.status.enabled')");
+    expect(securitySource).toContain("t('security.twoFactor.status.disabled')");
+    expect(securitySource).toContain("t('security.twoFactor.status.loading')");
+  });
+
+  it('derives access method(s) from real linked providerData, never a client-inferred flow', () => {
+    expect(securitySource).toContain('getReauthenticationProviders(user)');
+    expect(securitySource).toContain("'security.items.accessMethods'");
+    expect(securitySource).toContain("'security.items.accessMethod'");
+    expect(securitySource).toContain('accessProviders.length > 1');
+  });
+
+  it('derives last login from Firebase Auth metadata, with no line rendered when unavailable', () => {
+    expect(securitySource).toContain('parseLastSignInTime(user?.metadata.lastSignInTime)');
+    expect(securitySource).toContain('describeLastSignIn(signInDate, locale)');
+    expect(securitySource).toMatch(/if \(!signInDate\) return null;/);
+  });
+
+  it('keeps unsupported security features out of this screen entirely', () => {
     for (const forbidden of [
       'firebase',
       '/services/',
@@ -69,8 +90,6 @@ describe('SecurityScreen structure', () => {
       'LocalAuthentication',
       'useEffect',
       'useState',
-      'async ',
-      'await ',
       'Alert.',
     ]) {
       expect(securitySource).not.toContain(forbidden);
@@ -88,6 +107,13 @@ describe('SecurityScreen structure', () => {
     expect(securitySource).toContain('onPress: onOpenTwoFactor');
     expect(appShellSource).toContain('onOpenTwoFactor={() => setShowTwoFactor(true)}');
     expect(appShellSource).toContain('<TwoFactorSettingsScreen');
+  });
+
+  it('still navigates to account deletion through the existing overlay pattern', () => {
+    expect(securitySource).toContain('onOpenDeleteAccount?: () => void;');
+    expect(securitySource).toContain('onPress: onOpenDeleteAccount ?? (() => {})');
+    expect(appShellSource).toContain('onOpenDeleteAccount={() => setShowDeleteAccount(true)}');
+    expect(appShellSource).toContain('<DeleteAccountScreen');
   });
 
   it('guards password navigation for every linked-provider shape', () => {
@@ -115,17 +141,20 @@ describe('SecurityScreen structure', () => {
     expect(settingsSectionSource).toContain('accessibilityState={onPress ? { disabled } : undefined}');
   });
 
-  it('keeps localized Security copy in parity', () => {
+  it('keeps localized Security copy in parity across pt-BR/en/es', () => {
     for (const resource of [ptBR, en, es]) {
       expect(resource.security.screenTitle).toBeTruthy();
-      expect(Object.keys(resource.security.sections)).toEqual([
-        'account',
-        'sessions',
-        'activity',
-        'safetyZone',
-      ]);
-      expect(resource.security.items.currentDeviceDescription).toBeTruthy();
-      expect(resource.security.items.lastLoginDescription).toBeTruthy();
+      expect(Object.keys(resource.security.sections)).toEqual(['account', 'access', 'safetyZone']);
+      expect(resource.security.items.accessMethod).toBeTruthy();
+      expect(resource.security.items.accessMethods).toBeTruthy();
+      expect(resource.security.items.lastLogin).toBeTruthy();
+      expect(resource.security.accessMethod.password).toBeTruthy();
+      expect(resource.security.accessMethod.google).toBeTruthy();
+      expect(resource.security.accessMethod.apple).toBeTruthy();
+      expect(resource.security.lastLogin.today).toContain('{{time}}');
+      expect(resource.security.lastLogin.yesterday).toContain('{{time}}');
+      expect(resource.security.lastLogin.other).toContain('{{date}}');
+      expect(resource.security.lastLogin.other).toContain('{{time}}');
       expect(resource.security.safetyZoneDescription).toBeTruthy();
       expect(resource.security.changePassword.feedback.currentPasswordIncorrect).toBeTruthy();
       expect(resource.security.changePassword.feedback.success).toBeTruthy();

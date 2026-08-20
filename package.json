@@ -48,6 +48,8 @@
   "devDependencies": {
     "@firebase/rules-unit-testing": "^5.0.1",
     "@types/react": "~19.2.2",
+    "firebase-admin": "^12.7.0",
+    "tsx": "^4.23.0",
     "typescript": "~6.0.3",
     "vitest": "^4.1.10"
   },
@@ -72,6 +74,7 @@
     "test:integration:questionnaireLoad": "firebase emulators:exec --only firestore --project ajfit-rules-test 'QUESTIONNAIRE_LOAD_INTEGRATION=1 vitest run src/services/__tests__/questionnaireLoad.integration.test.ts'",
     "test:integration:accountDeletionReconciliation": "firebase emulators:exec --only auth,firestore,storage --project ajfit-rules-test 'cd functions && ACCOUNT_DELETION_RECONCILIATION_INTEGRATION=1 npx vitest run src/accountDeletion/__tests__/accountDeletionReconciliation.integration.test.ts'",
     "typecheck": "tsc --noEmit",
+    "seed:exercises": "tsx scripts/seedExercises.ts",
     "i18n:check": "vitest run src/i18n/__tests__",
     "i18n:audit": "node scripts/audit-i18n.mjs",
     "quality": "npm run typecheck && npm run test && npm run test:rules && npm run i18n:audit"

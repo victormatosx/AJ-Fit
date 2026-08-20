@@ -37,22 +37,27 @@
   "security": {
     "screenTitle": "Segurança",
     "sections": {
-      "account": "Segurança da conta",
-      "sessions": "Sessões",
-      "activity": "Atividade",
+      "account": "Proteção da conta",
+      "access": "Acesso",
       "safetyZone": "Zona de segurança"
     },
     "items": {
       "changePassword": "Alterar senha",
-      "biometrics": "Biometria",
       "twoFactor": "Verificação em duas etapas",
-      "currentDevice": "Dispositivo atual",
-      "currentDeviceDescription": "Este dispositivo está conectado.",
-      "manageDevices": "Gerenciar dispositivos",
+      "accessMethod": "Método de acesso",
+      "accessMethods": "Métodos de acesso",
       "lastLogin": "Último login",
-      "lastLoginDescription": "Hoje às 09:42",
-      "securityHistory": "Histórico de segurança",
       "deleteAccount": "Excluir conta"
+    },
+    "accessMethod": {
+      "password": "E-mail e senha",
+      "google": "Google",
+      "apple": "Apple"
+    },
+    "lastLogin": {
+      "today": "Hoje às {{time}}",
+      "yesterday": "Ontem às {{time}}",
+      "other": "{{date}} às {{time}}"
     },
     "safetyZoneDescription": "Mantenha sua conta protegida revisando regularmente suas configurações de segurança.",
     "deleteAccountFlow": {
@@ -111,14 +116,14 @@
     "twoFactor": {
       "title": "Verificação em duas etapas",
       "description": "Adicione uma segunda etapa de segurança à sua conta usando um aplicativo autenticador.",
-      "status": { "label": "Status", "loading": "Verificando...", "enabled": "Ativada", "disabled": "Desativada", "unavailable": "Indisponível" },
+      "status": { "label": "Status", "loading": "Verificando...", "enabled": "Ativada", "disabled": "Desativada", "unavailable": "Indisponível", "enabledSummary": "Sua conta possui uma camada adicional de proteção." },
       "method": { "authenticator": "Aplicativo autenticador" },
       "enrolledAt": "Configurado em {{date}}",
       "benefits": {
         "authenticator": { "title": "Códigos no autenticador", "description": "Use seu aplicativo autenticador preferido para confirmar o acesso." },
         "offline": { "title": "Funciona offline", "description": "Os códigos são gerados no aparelho e não dependem de SMS." }
       },
-      "actions": { "enable": "Ativar verificação em duas etapas", "disable": "Desativar verificação", "continue": "Continuar", "cancel": "Cancelar", "retry": "Tentar novamente" },
+      "actions": { "enable": "Ativar verificação em duas etapas", "disable": "Desativar verificação", "disableTwoFactor": "Desativar verificação em duas etapas", "continue": "Continuar", "cancel": "Cancelar", "retry": "Tentar novamente" },
       "disableConfirmation": { "title": "Desativar verificação?", "message": "Desativar a verificação em duas etapas reduzirá a segurança da sua conta." },
       "reauth": {
         "title": "Confirme sua identidade",

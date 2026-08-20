@@ -37,22 +37,27 @@
   "security": {
     "screenTitle": "Security",
     "sections": {
-      "account": "Account security",
-      "sessions": "Sessions",
-      "activity": "Activity",
+      "account": "Account protection",
+      "access": "Access",
       "safetyZone": "Security zone"
     },
     "items": {
       "changePassword": "Change password",
-      "biometrics": "Biometrics",
       "twoFactor": "Two-step verification",
-      "currentDevice": "Current device",
-      "currentDeviceDescription": "This device is connected.",
-      "manageDevices": "Manage devices",
+      "accessMethod": "Access method",
+      "accessMethods": "Access methods",
       "lastLogin": "Last login",
-      "lastLoginDescription": "Today at 9:42 AM",
-      "securityHistory": "Security history",
       "deleteAccount": "Delete account"
+    },
+    "accessMethod": {
+      "password": "Email and password",
+      "google": "Google",
+      "apple": "Apple"
+    },
+    "lastLogin": {
+      "today": "Today at {{time}}",
+      "yesterday": "Yesterday at {{time}}",
+      "other": "{{date}} at {{time}}"
     },
     "safetyZoneDescription": "Keep your account protected by regularly reviewing your security settings.",
     "deleteAccountFlow": {
@@ -111,14 +116,14 @@
     "twoFactor": {
       "title": "Two-step verification",
       "description": "Add a second layer of security to your account with an authenticator app.",
-      "status": { "label": "Status", "loading": "Checking...", "enabled": "Enabled", "disabled": "Disabled", "unavailable": "Unavailable" },
+      "status": { "label": "Status", "loading": "Checking...", "enabled": "Enabled", "disabled": "Disabled", "unavailable": "Unavailable", "enabledSummary": "Your account has an extra layer of protection." },
       "method": { "authenticator": "Authenticator app" },
       "enrolledAt": "Set up on {{date}}",
       "benefits": {
         "authenticator": { "title": "Authenticator codes", "description": "Use your preferred authenticator app to confirm access." },
         "offline": { "title": "Works offline", "description": "Codes are generated on your device and do not rely on SMS." }
       },
-      "actions": { "enable": "Enable two-step verification", "disable": "Disable verification", "continue": "Continue", "cancel": "Cancel", "retry": "Try again" },
+      "actions": { "enable": "Enable two-step verification", "disable": "Disable verification", "disableTwoFactor": "Disable two-step verification", "continue": "Continue", "cancel": "Cancel", "retry": "Try again" },
       "disableConfirmation": { "title": "Disable verification?", "message": "Disabling two-step verification will reduce your account's security." },
       "reauth": {
         "title": "Confirm your identity",

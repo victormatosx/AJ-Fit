@@ -206,29 +206,33 @@ Inicialmente existem apenas:
 
 # 6. Estrutura dos exercícios
 
-Cada exercício deve possuir:
+Schema definitivo, taxonomias (músculos, regiões, padrões de movimento,
+equipamentos) e política de IDs: ver `27_biblioteca_de_exercicios.md`.
 
-* identificação
-* nome
-* grupo muscular principal
-* vídeo
-* instruções
-
-Opcionalmente:
-
-* substituições válidas
+Resumo: cada exercício em `exercises/{exerciseId}` possui identificação
+estável (ID/slug em inglês, independente da tradução exibida), nome
+localizado (ptBR/en/es), músculo alvo (principal e secundários), padrão de
+movimento, mecânica, lateralidade, equipamento, vídeo/instruções
+opcionais, `status` (active/inactive/draft) e `availability` por fluxo
+(geração de treino, seleção manual, substituição). Exercícios usados
+historicamente nunca são deletados — apenas desativados via
+`status`/`availability`.
 
 ---
 
 # 7. Estrutura das substituições
 
-Cada exercício pode possuir até duas substituições pré-definidas.
+Cada exercício possui `substitution.group` (família funcional, ex.:
+`hip_hinge`, `horizontal_back_row`) e `substitution.similarExerciseIds`.
 
 As substituições devem:
 
-* preservar grupo muscular
+* preservar grupo muscular e padrão de movimento
 * preservar objetivo do exercício
 * manter estímulo semelhante
+
+Detalhes de como `group`/`similarExerciseIds` são derivados: ver
+`27_biblioteca_de_exercicios.md` §6.
 
 ---
 

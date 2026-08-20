@@ -14,6 +14,7 @@ import { useTranslation } from 'react-i18next';
 import { ReauthenticationMethods } from '../components/auth/ReauthenticationMethods';
 import { SupportScreenHeader } from '../components/support/SupportScreenHeader';
 import { CtaButton, CtaText } from '../components/ui/CtaButton';
+import { Display } from '../components/ui/Display';
 import { Icon } from '../components/ui/Icon';
 import { ScreenBg } from '../components/ui/ScreenBg';
 import { useTotpMfa } from '../hooks/useTotpMfa';
@@ -74,6 +75,22 @@ export function TwoFactorSettingsScreen({
     );
   };
 
+  const statusLabel = mfa.loading
+    ? t('security.twoFactor.status.loading')
+    : statusUnavailable
+      ? t('security.twoFactor.status.unavailable')
+      : mfa.enabled
+        ? t('security.twoFactor.status.enabled')
+        : t('security.twoFactor.status.disabled');
+
+  // The generic explainer is honest at any point before/while resolving
+  // status; the positive summary only replaces it once MFA is confirmed
+  // enabled — never during loading or an unresolved/unavailable status.
+  const heroCopy =
+    mfa.enabled && !mfa.loading
+      ? t('security.twoFactor.status.enabledSummary')
+      : t('security.twoFactor.description');
+
   return (
     <ScreenBg>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
@@ -86,41 +103,33 @@ export function TwoFactorSettingsScreen({
           contentContainerStyle={styles.content}
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.statusCard}>
-            <View style={styles.statusIcon}>
+          <View style={styles.hero}>
+            <View
+              style={[
+                styles.heroIcon,
+                mfa.enabled && !mfa.loading ? styles.heroIconEnabled : null,
+              ]}
+            >
               <Icon
                 name={mfa.enabled ? 'check' : 'shield'}
-                size={22}
+                size={24}
                 color={mfa.enabled ? colors.success : colors.accentHi}
               />
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[typography.bodySmall, { color: colors.faint }]}>
-                {t('security.twoFactor.status.label')}
-              </Text>
-              <Text
-                style={[
-                  typography.title,
-                  { color: mfa.enabled ? colors.success : colors.text },
-                ]}
+            <View style={styles.heroStatusRow}>
+              <Display
+                size={22}
+                color={mfa.enabled && !mfa.loading ? colors.success : colors.text}
+                style={styles.heroStatusText}
               >
-                {mfa.loading
-                  ? t('security.twoFactor.status.loading')
-                  : statusUnavailable
-                    ? t('security.twoFactor.status.unavailable')
-                  : mfa.enabled
-                    ? t('security.twoFactor.status.enabled')
-                    : t('security.twoFactor.status.disabled')}
-              </Text>
+                {statusLabel}
+              </Display>
+              {(mfa.loading || mfa.refreshing) && (
+                <ActivityIndicator size="small" color={colors.accentHi} />
+              )}
             </View>
-            {(mfa.loading || mfa.refreshing) && (
-              <ActivityIndicator color={colors.accentHi} />
-            )}
+            <Text style={[typography.body, styles.heroCopy]}>{heroCopy}</Text>
           </View>
-
-          <Text style={[typography.body, styles.description]}>
-            {t('security.twoFactor.description')}
-          </Text>
 
           {!mfa.enabled && !mfa.loading && !statusUnavailable ? (
             <View style={styles.infoCard}>
@@ -131,6 +140,7 @@ export function TwoFactorSettingsScreen({
                   'security.twoFactor.benefits.authenticator.description',
                 )}
               />
+              <View style={styles.infoDivider} />
               <InfoItem
                 icon="timer"
                 title={t('security.twoFactor.benefits.offline.title')}
@@ -152,6 +162,7 @@ export function TwoFactorSettingsScreen({
                   factor.enrollmentTime,
                   i18n.resolvedLanguage ?? i18n.language,
                 );
+                const disableDisabled = mfa.disabling || !mfa.canReauthenticate;
                 return (
                   <View key={factor.uid} style={styles.factorCard}>
                     <View style={styles.factorHeader}>
@@ -180,29 +191,28 @@ export function TwoFactorSettingsScreen({
                         {t('security.twoFactor.enrolledAt', { date: enrolledAt })}
                       </Text>
                     ) : null}
+                    <View style={styles.factorDivider} />
                     <Pressable
                       accessibilityRole="button"
-                      disabled={
-                        mfa.disabling || !mfa.canReauthenticate
-                      }
+                      accessibilityLabel={t('security.twoFactor.actions.disableTwoFactor')}
+                      accessibilityState={{ disabled: disableDisabled }}
+                      disabled={disableDisabled}
                       onPress={() => requestDisable(factor)}
                       style={({ pressed }) => [
-                        styles.disableButton,
-                        {
-                          opacity:
-                            mfa.disabling || !mfa.canReauthenticate
-                              ? 0.35
-                              : pressed
-                                ? 0.8
-                                : 1,
-                        },
+                        styles.disableRow,
+                        { opacity: disableDisabled ? 0.35 : pressed ? 0.7 : 1 },
                       ]}
                     >
+                      <Icon name="shield" size={16} color={colors.dangerText} />
                       <Text
-                        style={[typography.subtitle, { color: colors.dangerText }]}
+                        style={[
+                          typography.subtitle,
+                          { color: colors.dangerText, flex: 1 },
+                        ]}
                       >
-                        {t('security.twoFactor.actions.disable')}
+                        {t('security.twoFactor.actions.disableTwoFactor')}
                       </Text>
+                      <Icon name="chevron-right" size={14} color={colors.dangerText} />
                     </Pressable>
                   </View>
                 );
@@ -237,11 +247,17 @@ export function TwoFactorSettingsScreen({
 
           {!mfa.enabled && !mfa.loading && !statusUnavailable ? (
             <CtaButton
+              ghost
               onPress={onOpenEnrollment}
               disabled={!mfa.canReauthenticate}
               style={{ marginTop: spacing[7] }}
             >
-              <CtaText>{t('security.twoFactor.actions.enable')}</CtaText>
+              <View style={styles.enableCtaContent}>
+                <Icon name="shield" size={17} color={colors.accentHi} />
+                <Text style={styles.enableCtaText}>
+                  {t('security.twoFactor.actions.enable')}
+                </Text>
+              </View>
             </CtaButton>
           ) : null}
         </ScrollView>
@@ -355,7 +371,7 @@ function InfoItem({
 }) {
   return (
     <View style={styles.infoItem}>
-      <Icon name={icon} size={18} color={colors.accentHi} />
+      <Icon name={icon} size={17} color={colors.accentHi} />
       <View style={{ flex: 1 }}>
         <Text style={[typography.subtitle, { color: colors.text }]}>{title}</Text>
         <Text
@@ -414,29 +430,38 @@ const styles = {
     paddingTop: spacing[4],
     paddingBottom: spacing[10],
   },
-  statusCard: {
-    padding: spacing[4],
-    borderRadius: radii.xl,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    flexDirection: 'row' as const,
+  hero: {
     alignItems: 'center' as const,
-    gap: spacing[3],
+    paddingVertical: spacing[5],
   },
-  statusIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: radii.md,
+  heroIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: radii.pill,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
     backgroundColor: colors.accentSoft,
     borderWidth: 1,
     borderColor: colors.borderStrong,
   },
-  description: {
+  heroIconEnabled: {
+    backgroundColor: `${colors.success}1f`,
+    borderColor: `${colors.success}45`,
+  },
+  heroStatusRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: spacing[2.5],
+    marginTop: spacing[3.5],
+  },
+  heroStatusText: {
+    textAlign: 'center' as const,
+  },
+  heroCopy: {
     color: colors.textSecondary,
-    marginTop: spacing[5],
+    textAlign: 'center' as const,
+    marginTop: spacing[3],
+    maxWidth: 320,
   },
   infoCard: {
     marginTop: spacing[6],
@@ -452,6 +477,10 @@ const styles = {
     alignItems: 'flex-start' as const,
     gap: spacing[3],
   },
+  infoDivider: {
+    height: sizes.hairline,
+    backgroundColor: colors.hair,
+  },
   factorCard: {
     padding: spacing[4],
     borderRadius: radii.xl,
@@ -465,14 +494,26 @@ const styles = {
     alignItems: 'center' as const,
     gap: spacing[3],
   },
-  disableButton: {
-    minHeight: 46,
-    borderRadius: radii.control,
-    borderWidth: 1,
-    borderColor: 'rgba(240,86,63,0.3)',
-    backgroundColor: 'rgba(240,86,63,0.08)',
+  factorDivider: {
+    height: sizes.hairline,
+    backgroundColor: colors.hair,
+  },
+  disableRow: {
+    minHeight: 44,
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: spacing[2.5],
+  },
+  enableCtaContent: {
+    flexDirection: 'row' as const,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
+    gap: spacing[2.5],
+  },
+  enableCtaText: {
+    fontFamily: fonts.uiSemi,
+    fontSize: 14.5,
+    color: colors.text,
   },
   feedback: {
     marginTop: spacing[4],

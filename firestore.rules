@@ -786,10 +786,23 @@ service cloud.firestore {
       }
     }
 
+    // ── Biblioteca oficial de exercícios (docs/27_biblioteca_de_exercicios.md) ─
+    // Conteúdo administrado pelo AJ Fit: só o Admin SDK (scripts/seedExercises.ts,
+    // rodado explicitamente por um humano) escreve aqui — o Admin SDK ignora
+    // estas regras, então `allow write: if false` é só para deixar explícito
+    // que nenhum client (usuário comum) pode criar, alterar ou apagar
+    // exercícios globais. Leitura liberada para qualquer usuário autenticado;
+    // a lista em si não é dado sensível e é necessária para exibir/gerar
+    // treinos e permitir substituição de exercícios.
+    match /exercises/{exerciseId} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
+
     // ── Deny all undocumented collections ─────────────────────────────────
-    // Coleções de sistema (exercises, workout_templates, treinos do usuário,
-    // etc.) ainda não têm contrato de regras aprovado — negar por padrão até
-    // definição do Agente de Segurança/Arquiteto.
+    // Coleções de sistema (workout_templates, treinos do usuário, etc.) ainda
+    // não têm contrato de regras aprovado — negar por padrão até definição do
+    // Agente de Segurança/Arquiteto.
     match /{document=**} {
       allow read, write: if false;
     }
