@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Card } from '../ui/Card';
 import { Icon } from '../ui/Icon';
 import { MonoLabel } from '../ui/Display';
-import { colors, fonts } from '../../theme/tokens';
+import { colors, fonts, radii, spacing } from '../../theme/tokens';
 import { EvolutionLineChart, type EvolutionPoint } from './EvolutionLineChart';
 import { useUnits } from '../../state/UnitsContext';
 import { weightFromKg, weightUnit } from '../../units/weightConversions';
@@ -30,7 +30,7 @@ function DeltaChip({
   const { t } = useTranslation('assessment');
   if (value == null) {
     return (
-      <View style={{ flex: 1, alignItems: 'center' }}>
+      <View style={{ flex: 1, alignItems: 'center', paddingHorizontal: spacing[1] }}>
         <MonoLabel style={{ marginBottom: 6 }}>{label}</MonoLabel>
         <Text style={{ fontFamily: fonts.uiBold, fontSize: 15, color: colors.faint }}>—</Text>
       </View>
@@ -39,13 +39,13 @@ function DeltaChip({
   const positive = goodWhenNegative ? value <= 0 : value >= 0;
   const sign = value > 0 ? '+' : '';
   return (
-    <View style={{ flex: 1, alignItems: 'center' }}>
+    <View style={{ flex: 1, alignItems: 'center', paddingHorizontal: spacing[1] }}>
       <MonoLabel style={{ marginBottom: 6 }}>{label}</MonoLabel>
       <Text
         style={{
           fontFamily: fonts.uiBold,
           fontSize: 15,
-          color: positive ? '#22c55e' : '#f0563f',
+          color: positive ? colors.success : colors.danger,
         }}
       >
         {t('result', { value: `${sign}${value.toFixed(1)}`, unit })}
@@ -79,9 +79,9 @@ export function AssessmentEvolutionCard({
     value: weightFromKg(point.value, resolvedUnits),
   }));
   return (
-    <Card style={{ padding: 16 }}>
+    <Card style={{ padding: spacing[4], borderTopLeftRadius: radii.xs }}>
       <View accessible accessibilityLabel={t('accessibility.evolutionCard')}>
-      <View style={{ flexDirection: 'row', gap: 16, marginBottom: 12 }}>
+      <View style={{ flexDirection: 'row', gap: spacing[4] }}>
         <EvolutionLineChart
           label={t('metrics.weight').toUpperCase()}
           unit={massUnit}
@@ -100,42 +100,55 @@ export function AssessmentEvolutionCard({
         />
       </View>
 
-      {hasPrevious ? (
-        <View style={{ flexDirection: 'row' }}>
-          <DeltaChip
-            label={t('metrics.weight').toUpperCase()}
-            value={weightFromKg(weightDelta, resolvedUnits)}
-            unit={massUnit}
-            goodWhenNegative
-          />
-          <DeltaChip
-            label={t('metrics.bodyFat').toUpperCase()}
-            value={bodyFatDelta}
-            unit={t('units.percent')}
-            goodWhenNegative
-          />
-          <DeltaChip
-            label={t('metrics.leanMass').toUpperCase()}
-            value={
-              leanMassDelta != null
-                ? weightFromKg(leanMassDelta, resolvedUnits)
-                : null
-            }
-            unit={massUnit}
-          />
-        </View>
-      ) : (
-        <Text
-          style={{
-            fontFamily: fonts.ui,
-            fontSize: 12.5,
-            color: colors.mute,
-            textAlign: 'center',
-          }}
-        >
-          {t('evolution.noPreviousMessage')}
-        </Text>
-      )}
+      <View
+        style={{
+          marginTop: spacing[4],
+          paddingTop: spacing[4],
+          borderTopWidth: 1,
+          borderTopColor: colors.border,
+        }}
+      >
+        <MonoLabel color={colors.textSecondary} style={{ marginBottom: spacing[3] }}>
+          {t('evolution.sincePrevious').toUpperCase()}
+        </MonoLabel>
+
+        {hasPrevious ? (
+          <View style={{ flexDirection: 'row' }}>
+            <DeltaChip
+              label={t('metrics.weight').toUpperCase()}
+              value={weightFromKg(weightDelta, resolvedUnits)}
+              unit={massUnit}
+              goodWhenNegative
+            />
+            <DeltaChip
+              label={t('metrics.bodyFat').toUpperCase()}
+              value={bodyFatDelta}
+              unit={t('units.percent')}
+              goodWhenNegative
+            />
+            <DeltaChip
+              label={t('metrics.leanMass').toUpperCase()}
+              value={
+                leanMassDelta != null
+                  ? weightFromKg(leanMassDelta, resolvedUnits)
+                  : null
+              }
+              unit={massUnit}
+            />
+          </View>
+        ) : (
+          <Text
+            style={{
+              fontFamily: fonts.ui,
+              fontSize: 12.5,
+              lineHeight: 18,
+              color: colors.mute,
+            }}
+          >
+            {t('evolution.noPreviousMessage')}
+          </Text>
+        )}
+      </View>
 
       <Pressable
         onPress={onViewHistory}
@@ -146,8 +159,9 @@ export function AssessmentEvolutionCard({
           alignItems: 'center',
           justifyContent: 'center',
           gap: 6,
-          marginTop: 14,
-          paddingTop: 14,
+          minHeight: 44,
+          marginTop: spacing[2],
+          paddingTop: spacing[3],
           borderTopWidth: 1,
           borderTopColor: 'rgba(255,255,255,0.06)',
         }}

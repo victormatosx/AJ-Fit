@@ -21,6 +21,7 @@
   },
   "summary": {
     "noRecords": "No records",
+    "currentState": "Latest assessment",
     "lastAssessmentLabel": "Last assessment · {{date}}",
     "emptyCta": "You don't have any assessments yet · tap to record your first"
   },
@@ -29,13 +30,15 @@
     "noInitialDataFallback": "No onboarding data · record your first assessment"
   },
   "actions": {
+    "sheetTitle": "New assessment",
+    "firstAssessment": "Record first assessment",
     "guided": {
       "title": "Guided assessment",
-      "description": "Weight, measurements and skinfolds — the app crunches everything"
+      "description": "Weight, measurements, and skinfolds. The app calculates the results."
     },
     "import": {
       "title": "Import assessment",
-      "description": "Already have your results? Just record them"
+      "description": "Already have the results? Record them directly."
     },
     "saveGuided": "Save assessment",
     "registerImported": "Record assessment"
@@ -156,6 +159,7 @@
     "bodyFatEmpty": "Not enough assessments with body-fat data."
   },
   "evolution": {
+    "sincePrevious": "Since the previous assessment",
     "noPreviousMessage": "Record a new assessment to start tracking your evolution.",
     "viewHistoryCta": "View full history"
   },
@@ -189,6 +193,9 @@
     "today": "Today"
   },
   "accessibility": {
+    "addAssessment": "Add a new assessment",
+    "addFirstAssessment": "Record the first assessment",
+    "closeNewAssessment": "Close new assessment selector",
     "openGuided": "Open guided assessment",
     "openImport": "Open assessment import",
     "evolutionCard": "Assessment evolution charts and metrics",

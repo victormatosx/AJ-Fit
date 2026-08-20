@@ -4,7 +4,14 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
 import { Icon } from '../ui/Icon';
 import { MonoLabel } from '../ui/Display';
-import { colors, fonts } from '../../theme/tokens';
+import {
+  colors,
+  displayLineHeight,
+  fonts,
+  gradients,
+  radii,
+  spacing,
+} from '../../theme/tokens';
 import { useUnits } from '../../state/UnitsContext';
 import {
   formatWeightFromKg,
@@ -13,14 +20,14 @@ import {
 
 function Metric({ label, value, unit }: { label: string; value: string; unit: string }) {
   return (
-    <View style={{ width: '48%', marginBottom: 16 }}>
-      <MonoLabel style={{ marginBottom: 4 }}>{label}</MonoLabel>
+    <View style={{ width: '48%', paddingVertical: spacing[3] }}>
       <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
         <Text
           style={{
             fontFamily: fonts.display,
-            fontSize: 28,
-            color: '#fff',
+            fontSize: 30,
+            lineHeight: displayLineHeight(30),
+            color: colors.text,
             transform: [{ skewX: '-8deg' }],
           }}
         >
@@ -28,6 +35,7 @@ function Metric({ label, value, unit }: { label: string; value: string; unit: st
         </Text>
         {unit ? <MonoLabel>{unit}</MonoLabel> : null}
       </View>
+      <MonoLabel style={{ marginTop: -spacing[1] }}>{label}</MonoLabel>
     </View>
   );
 }
@@ -50,17 +58,37 @@ export function PhysicalAssessmentSummaryCard({
   const massUnit = weightUnit(resolvedUnits);
   return (
     <LinearGradient
-      colors={['rgba(11,112,249,0.24)', 'rgba(11,112,249,0.04)']}
+      accessible
+      accessibilityLabel={t('summary.lastAssessmentLabel', { date: lastDateLabel })}
+      colors={gradients.accentWash}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={{
-        padding: 20,
-        borderRadius: 18,
+        paddingHorizontal: spacing[5],
+        paddingTop: spacing[4],
+        paddingBottom: spacing[2],
+        borderRadius: radii.xxl,
         borderBottomRightRadius: 0,
         borderWidth: 1,
-        borderColor: 'rgba(11,112,249,0.4)',
+        borderColor: colors.accent,
       }}
     >
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          paddingBottom: spacing[2],
+          borderBottomWidth: 1,
+          borderBottomColor: colors.border,
+        }}
+      >
+        <MonoLabel color={colors.accentHi}>{t('summary.currentState').toUpperCase()}</MonoLabel>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing[1.5] }}>
+          <Icon name="calendar" size={12} color={colors.faint} />
+          <MonoLabel size={9}>{lastDateLabel}</MonoLabel>
+        </View>
+      </View>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
         <Metric
           label={t('metrics.weight').toUpperCase()}
@@ -82,21 +110,6 @@ export function PhysicalAssessmentSummaryCard({
           value={bmi != null ? bmi.toFixed(1) : '—'}
           unit=""
         />
-      </View>
-      <View
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 8,
-          paddingTop: 14,
-          borderTopWidth: 1,
-          borderTopColor: 'rgba(255,255,255,0.08)',
-        }}
-      >
-        <Icon name="calendar" size={13} color={colors.mute} />
-        <MonoLabel>
-          {t('summary.lastAssessmentLabel', { date: lastDateLabel }).toUpperCase()}
-        </MonoLabel>
       </View>
     </LinearGradient>
   );
