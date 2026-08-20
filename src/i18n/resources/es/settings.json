@@ -63,8 +63,10 @@
         "consequence3": "Eliminar tu cuenta es una acción seria. Te recomendamos revisar tu información antes de continuar.",
         "subscriptionTitle": "Eliminar tu cuenta no cancela tu suscripción",
         "subscriptionBody": "Si tienes una suscripción activa a través de App Store o Google Play, continuará hasta que la canceles directamente en la configuración de la tienda.",
+        "subscriptionEyebrow": "Suscripción",
         "manageSubscription": "Gestionar suscripción",
-        "continueAction": "Continuar con la eliminación"
+        "continueAction": "Continuar con la eliminación",
+        "impactTitle": "Qué sucede"
       },
       "reauth": {
         "title": "Confirma tu identidad",
@@ -73,6 +75,7 @@
       },
       "confirm": {
         "title": "Confirmación final",
+        "heroSubtitle": "Esta acción es permanente.",
         "bullet1": "Tu cuenta se cerrará.",
         "bullet2": "Los datos definidos para eliminación según nuestra política serán eliminados.",
         "bullet3": "Algunos registros pueden conservarse según nuestra política de retención.",
@@ -80,7 +83,8 @@
         "action": "Eliminar mi cuenta"
       },
       "submitting": {
-        "message": "Cerrando tu cuenta..."
+        "message": "Cerrando tu cuenta...",
+        "description": "Estamos protegiendo tus datos y completando tu solicitud. Esto puede tardar unos instantes."
       },
       "errors": {
         "USER_SIGNED_OUT": "Tu sesión no está disponible. Inicia sesión nuevamente e inténtalo de nuevo.",

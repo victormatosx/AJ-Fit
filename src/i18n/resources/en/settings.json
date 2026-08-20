@@ -63,8 +63,10 @@
         "consequence3": "Deleting your account is a serious action. We recommend reviewing your information before continuing.",
         "subscriptionTitle": "Deleting your account does not cancel your subscription",
         "subscriptionBody": "If you have an active subscription through the App Store or Google Play, it will continue until you cancel it directly in the store's settings.",
+        "subscriptionEyebrow": "Subscription",
         "manageSubscription": "Manage subscription",
-        "continueAction": "Continue with deletion"
+        "continueAction": "Continue with deletion",
+        "impactTitle": "What happens"
       },
       "reauth": {
         "title": "Confirm your identity",
@@ -73,6 +75,7 @@
       },
       "confirm": {
         "title": "Final confirmation",
+        "heroSubtitle": "This action is permanent.",
         "bullet1": "Your account will be closed.",
         "bullet2": "Data marked for deletion by our policy will be removed.",
         "bullet3": "Some records may be retained according to our retention policy.",
@@ -80,7 +83,8 @@
         "action": "Delete my account"
       },
       "submitting": {
-        "message": "Closing your account..."
+        "message": "Closing your account...",
+        "description": "We're protecting your data and completing your request. This may take a few moments."
       },
       "errors": {
         "USER_SIGNED_OUT": "Your session is not available. Sign in again and try once more.",

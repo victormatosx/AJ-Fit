@@ -5,8 +5,16 @@ import { useTranslation } from 'react-i18next';
 
 import { ReauthenticationMethods } from '../components/auth/ReauthenticationMethods';
 import { SupportScreenHeader } from '../components/support/SupportScreenHeader';
+import {
+  DeleteAccountHero,
+  DeletionImpactList,
+  DeletionStepProgress,
+  DeletionSubscriptionNotice,
+  SubscriptionWarningCard,
+} from '../components/deleteAccount/DeleteAccountVisuals';
 import { CtaButton, CtaText } from '../components/ui/CtaButton';
-import { Icon } from '../components/ui/Icon';
+import { MonoLabel } from '../components/ui/Display';
+import { Icon, type IconName } from '../components/ui/Icon';
 import { ScreenBg } from '../components/ui/ScreenBg';
 import { useAccountDeletionFlow, type AccountDeletionFlowIssue } from '../hooks/useAccountDeletionFlow';
 import { useSubscription } from '../hooks/useSubscription';
@@ -61,6 +69,11 @@ export function DeleteAccountScreen({ onBack }: { onBack: () => void }) {
           onBack={onBack}
           disabled={!backAllowed}
         />
+        {flow.step !== 'submitting' ? (
+          <View style={{ alignItems: 'center', paddingBottom: spacing[3] }}>
+            <DeletionStepProgress step={flow.step} />
+          </View>
+        ) : null}
         <ScrollView
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
@@ -96,7 +109,7 @@ export function DeleteAccountScreen({ onBack }: { onBack: () => void }) {
 
           {flow.step === 'confirm' && (
             <ConfirmStep
-              onConfirm={() => void flow.confirmDeletion()}
+              onConfirm={() => flow.confirmDeletion()}
               issue={flow.issue}
             />
           )}
@@ -121,31 +134,33 @@ function IntroStep({
 }) {
   const { t } = useTranslation('settings');
   return (
-    <View style={{ gap: spacing[5] }}>
-      <InfoCard icon="trash" tone="danger" text={t('security.deleteAccountFlow.intro.consequence1')} />
-      <InfoCard icon="shield" text={t('security.deleteAccountFlow.intro.consequence2')} />
-      <InfoCard icon="file-text" text={t('security.deleteAccountFlow.intro.consequence3')} />
+    <View style={{ gap: spacing[7] }}>
+      <DeleteAccountHero
+        icon="shield"
+        title={t('security.deleteAccountFlow.screenTitle')}
+        subtitle={t('security.deleteAccountFlow.intro.consequence3')}
+      />
 
-      <View style={styles.subscriptionCard}>
-        <Icon name="alert-triangle" size={19} color={colors.warning} />
-        <View style={{ flex: 1, gap: spacing[2] }}>
-          <Text style={[typography.subtitle, { color: colors.text }]}>
-            {t('security.deleteAccountFlow.intro.subscriptionTitle')}
-          </Text>
-          <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>
-            {t('security.deleteAccountFlow.intro.subscriptionBody')}
-          </Text>
-          {!subscriptionLoading && isPremium ? (
-            <Pressable accessibilityRole="button" onPress={onManageSubscription} style={styles.linkButton}>
-              <Text style={[typography.subtitle, { color: colors.accentHi }]}>
-                {t('security.deleteAccountFlow.intro.manageSubscription')}
-              </Text>
-            </Pressable>
-          ) : null}
-        </View>
+      <View style={{ gap: spacing[3] }}>
+        <MonoLabel>{t('security.deleteAccountFlow.intro.impactTitle')}</MonoLabel>
+        <DeletionImpactList
+          items={[
+            t('security.deleteAccountFlow.intro.consequence1'),
+            t('security.deleteAccountFlow.intro.consequence2'),
+          ]}
+        />
       </View>
 
-      <CtaButton ghost onPress={onContinue} style={{ marginTop: spacing[4] }}>
+      <SubscriptionWarningCard
+        eyebrow={t('security.deleteAccountFlow.intro.subscriptionEyebrow')}
+        title={t('security.deleteAccountFlow.intro.subscriptionTitle')}
+        body={t('security.deleteAccountFlow.intro.subscriptionBody')}
+        manageLabel={t('security.deleteAccountFlow.intro.manageSubscription')}
+        onManage={onManageSubscription}
+        showManage={!subscriptionLoading && isPremium}
+      />
+
+      <CtaButton onPress={onContinue}>
         <CtaText>{t('security.deleteAccountFlow.intro.continueAction')}</CtaText>
       </CtaButton>
     </View>
@@ -185,15 +200,16 @@ function ReauthStep({
 }) {
   const { t } = useTranslation('settings');
   return (
-    <View style={{ gap: spacing[5] }}>
-      <Text style={[typography.title, { color: colors.text }]}>
-        {t('security.deleteAccountFlow.reauth.title')}
-      </Text>
-      <Text style={[typography.body, { color: colors.textSecondary }]}>
-        {mfaChallenge
-          ? t('security.deleteAccountFlow.reauth.codeDescription')
-          : t('security.deleteAccountFlow.reauth.description')}
-      </Text>
+    <View style={{ gap: spacing[6] }}>
+      <DeleteAccountHero
+        icon="shield"
+        title={t('security.deleteAccountFlow.reauth.title')}
+        subtitle={
+          mfaChallenge
+            ? t('security.deleteAccountFlow.reauth.codeDescription')
+            : t('security.deleteAccountFlow.reauth.description')
+        }
+      />
 
       {mfaChallenge ? (
         <>
@@ -232,7 +248,7 @@ function ReauthStep({
         />
       )}
 
-      {issue ? <Feedback tone="error" message={issueMessage(issue, t)} /> : null}
+      {issue ? <Feedback issue={issue} message={issueMessage(issue, t)} /> : null}
     </View>
   );
 }
@@ -241,32 +257,60 @@ function ConfirmStep({
   onConfirm,
   issue,
 }: {
-  onConfirm: () => void;
+  onConfirm: () => Promise<void>;
   issue: AccountDeletionFlowIssue | null;
 }) {
   const { t } = useTranslation('settings');
-  return (
-    <View style={{ gap: spacing[5] }}>
-      <Text style={[typography.title, { color: colors.text }]}>
-        {t('security.deleteAccountFlow.confirm.title')}
-      </Text>
-      <View style={{ gap: spacing[3] }}>
-        <SummaryBullet text={t('security.deleteAccountFlow.confirm.bullet1')} />
-        <SummaryBullet text={t('security.deleteAccountFlow.confirm.bullet2')} />
-        <SummaryBullet text={t('security.deleteAccountFlow.confirm.bullet3')} />
-        <SummaryBullet text={t('security.deleteAccountFlow.confirm.bullet4')} />
-      </View>
+  const [isConfirming, setIsConfirming] = useState(false);
 
-      {issue ? <Feedback tone="error" message={issueMessage(issue, t)} /> : null}
+  const handleConfirm = async () => {
+    if (isConfirming) return;
+    setIsConfirming(true);
+    try {
+      await onConfirm();
+    } finally {
+      setIsConfirming(false);
+    }
+  };
+
+  return (
+    <View style={{ gap: spacing[6] }}>
+      <DeleteAccountHero
+        icon="trash"
+        tone="danger"
+        title={t('security.deleteAccountFlow.confirm.title')}
+        subtitle={t('security.deleteAccountFlow.confirm.heroSubtitle')}
+      />
+
+      <DeletionImpactList
+        items={[
+          t('security.deleteAccountFlow.confirm.bullet1'),
+          t('security.deleteAccountFlow.confirm.bullet2'),
+          t('security.deleteAccountFlow.confirm.bullet3'),
+        ]}
+      />
+
+      <DeletionSubscriptionNotice text={t('security.deleteAccountFlow.confirm.bullet4')} />
+
+      {issue ? <Feedback issue={issue} message={issueMessage(issue, t)} /> : null}
 
       <Pressable
         accessibilityRole="button"
-        onPress={onConfirm}
-        style={({ pressed }) => [styles.destructiveButton, { opacity: pressed ? 0.85 : 1 }]}
+        accessibilityState={{ disabled: isConfirming, busy: isConfirming }}
+        onPress={() => void handleConfirm()}
+        disabled={isConfirming}
+        style={({ pressed }) => [
+          styles.destructiveButton,
+          { opacity: isConfirming ? 0.7 : pressed ? 0.85 : 1 },
+        ]}
       >
-        <Text style={[typography.subtitle, { color: colors.dangerText }]}>
-          {t('security.deleteAccountFlow.confirm.action')}
-        </Text>
+        {isConfirming ? (
+          <ActivityIndicator color={colors.dangerText} />
+        ) : (
+          <Text style={[typography.button, { color: colors.dangerText, textTransform: 'uppercase' }]}>
+            {t('security.deleteAccountFlow.confirm.action')}
+          </Text>
+        )}
       </Pressable>
     </View>
   );
@@ -275,48 +319,41 @@ function ConfirmStep({
 function SubmittingStep() {
   const { t } = useTranslation('settings');
   return (
-    <View style={{ alignItems: 'center', gap: spacing[5], paddingTop: spacing[10] }}>
-      <ActivityIndicator color={colors.accentHi} size="large" />
-      <Text style={[typography.body, { color: colors.textSecondary, textAlign: 'center' }]}>
-        {t('security.deleteAccountFlow.submitting.message')}
-      </Text>
+    <View style={{ paddingTop: spacing[10] }}>
+      <DeleteAccountHero
+        icon="trash"
+        tone="accent"
+        loading
+        title={t('security.deleteAccountFlow.submitting.message')}
+        subtitle={t('security.deleteAccountFlow.submitting.description')}
+      />
     </View>
   );
 }
 
-function SummaryBullet({ text }: { text: string }) {
-  return (
-    <View style={{ flexDirection: 'row', gap: spacing[2.5], alignItems: 'flex-start' }}>
-      <Icon name="check" size={16} color={colors.textSecondary} />
-      <Text style={[typography.bodySmall, { color: colors.textSecondary, flex: 1 }]}>{text}</Text>
-    </View>
-  );
-}
-
-function InfoCard({
-  icon,
-  text,
-  tone,
-}: {
-  icon: 'trash' | 'shield' | 'file-text';
-  text: string;
-  tone?: 'danger';
-}) {
-  return (
-    <View style={styles.infoCard}>
-      <Icon name={icon} size={19} color={tone === 'danger' ? colors.dangerText : colors.accentHi} />
-      <Text style={[typography.body, { color: colors.textSecondary, flex: 1 }]}>{text}</Text>
-    </View>
-  );
-}
-
-function Feedback({ tone, message }: { tone: 'error'; message: string }) {
+function Feedback({ issue, message }: { issue: AccountDeletionFlowIssue; message: string }) {
   return (
     <View accessibilityRole="alert" style={styles.feedback}>
-      <Icon name="alert-triangle" size={17} color={colors.dangerText} />
+      <Icon name={issueIcon(issue)} size={17} color={colors.dangerText} />
       <Text style={[typography.bodySmall, { color: colors.dangerText, flex: 1 }]}>{message}</Text>
     </View>
   );
+}
+
+function issueIcon(issue: AccountDeletionFlowIssue): IconName {
+  switch (issue) {
+    case 'NETWORK_ERROR':
+      return 'globe';
+    case 'WRONG_PASSWORD':
+    case 'PASSWORD_REQUIRED':
+    case 'MFA_INVALID_CODE':
+      return 'key';
+    case 'SESSION_EXPIRED':
+    case 'USER_SIGNED_OUT':
+      return 'lock';
+    default:
+      return 'alert-triangle';
+  }
 }
 
 function issueMessage(
@@ -336,31 +373,6 @@ const styles = {
     paddingHorizontal: sizes.screenGutter,
     paddingTop: spacing[4],
     paddingBottom: spacing[10],
-  },
-  infoCard: {
-    padding: spacing[4],
-    borderRadius: radii.xl,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    flexDirection: 'row' as const,
-    alignItems: 'flex-start' as const,
-    gap: spacing[3],
-  },
-  subscriptionCard: {
-    padding: spacing[4],
-    borderRadius: radii.xl,
-    borderWidth: 1,
-    borderColor: 'rgba(234,179,8,0.35)',
-    backgroundColor: 'rgba(234,179,8,0.08)',
-    flexDirection: 'row' as const,
-    alignItems: 'flex-start' as const,
-    gap: spacing[3],
-  },
-  linkButton: {
-    minHeight: 32,
-    justifyContent: 'center' as const,
-    alignItems: 'flex-start' as const,
   },
   linkButtonCentered: {
     minHeight: 44,

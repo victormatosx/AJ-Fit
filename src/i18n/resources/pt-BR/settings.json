@@ -63,8 +63,10 @@
         "consequence3": "Excluir sua conta é uma ação séria. Recomendamos revisar suas informações antes de continuar.",
         "subscriptionTitle": "Excluir sua conta não cancela sua assinatura",
         "subscriptionBody": "Se você possui uma assinatura ativa pela App Store ou Google Play, ela continuará até ser cancelada diretamente nas configurações da loja.",
+        "subscriptionEyebrow": "Assinatura",
         "manageSubscription": "Gerenciar assinatura",
-        "continueAction": "Continuar com exclusão"
+        "continueAction": "Continuar com exclusão",
+        "impactTitle": "O que acontece"
       },
       "reauth": {
         "title": "Confirme sua identidade",
@@ -73,6 +75,7 @@
       },
       "confirm": {
         "title": "Última confirmação",
+        "heroSubtitle": "Esta ação é permanente.",
         "bullet1": "Sua conta será encerrada.",
         "bullet2": "Os dados definidos para exclusão pela nossa política serão removidos.",
         "bullet3": "Alguns registros podem ser retidos conforme nossa política de retenção.",
@@ -80,7 +83,8 @@
         "action": "Excluir minha conta"
       },
       "submitting": {
-        "message": "Encerrando sua conta..."
+        "message": "Encerrando sua conta...",
+        "description": "Estamos protegendo seus dados e concluindo sua solicitação. Isso pode levar alguns instantes."
       },
       "errors": {
         "USER_SIGNED_OUT": "Sua sessão não está disponível. Entre novamente e tente outra vez.",
