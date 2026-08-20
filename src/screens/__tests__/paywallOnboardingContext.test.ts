@@ -9,14 +9,18 @@ const appRoot = readFileSync(new URL('../../../App.tsx', import.meta.url), 'utf8
  * Regression guard for Fase H (docs/onboarding_funnel_architecture.md
  * §Paywall): `entryContext` must stay copy-only.
  *
- * FASE 1 (limited-mode rollout): the root gate no longer renders
- * PaywallScreen as `resolvedScreen === 'paywall'` — `resolvePremiumGate`
- * opens AppShell regardless of `isPremium` once the subscription is
- * resolved (see `src/lib/premiumGate.ts`). The onClose->logout() behavior
- * this file used to guard was specific to that now-removed root branch; it
- * no longer exists in App.tsx. PaywallScreen itself is untouched and stays
- * reachable on demand from inside AppShell (see `AppShell.tsx`'s
- * `showPremium` modal), where closing it does not log the user out.
+ * FASE 1 (limited-mode rollout, commit `5fc0fa1`) removed the root Paywall
+ * for EVERY non-Premium user. A later audit reintroduced it, but scoped
+ * only to accounts that never resolved their initial commercial gate
+ * (`commercialGateResolved` in `src/lib/premiumGate.ts`) — an established
+ * non-Premium account still opens AppShell unconditionally, unchanged from
+ * Fase 1. The reintroduced root branch reuses the pre-Fase-1
+ * onClose->logout() rule (docs/24_funil_onboarding_arquitetura.md §8),
+ * because that is still the only documented behavior for dismissing this
+ * specific (root, pre-app) Paywall. PaywallScreen itself stays untouched
+ * and also reachable on demand from inside AppShell (`AppShell.tsx`'s
+ * `showPremium` modal), where closing it does NOT log the user out — that
+ * is a different context from the one this file guards.
  */
 describe('PaywallScreen entryContext boundary', () => {
   it('accepts an optional, copy-only entryContext prop', () => {
@@ -39,8 +43,14 @@ describe('PaywallScreen entryContext boundary', () => {
     }
   });
 
-  it('FASE 1: root gate no longer renders PaywallScreen or calls logout() from App.tsx', () => {
-    expect(appRoot).not.toContain("resolvedScreen === 'paywall'");
-    expect(appRoot).not.toContain('paywall:logout');
+  it('root gate renders PaywallScreen only for a pending initial commercial gate, and closing it logs out', () => {
+    expect(appRoot).toContain("resolvedScreen === 'paywall'");
+    expect(appRoot).toContain('logout()');
+  });
+
+  it('the on-demand PaywallScreen inside AppShell is untouched and never calls logout on close', () => {
+    const appShell = read('screens/AppShell.tsx');
+    const line = appShell.split('\n').find((l) => l.includes('onClose={() => setShowPremium'));
+    expect(line).toBeTruthy();
   });
 });

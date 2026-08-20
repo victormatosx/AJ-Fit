@@ -95,6 +95,16 @@ export const USERS_COLLECTION = 'users';
 export const SUBSCRIPTION_FIELD = 'subscription';
 
 /**
+ * Dot-path to the initial-Paywall marker this module also resolves (never
+ * clears) the first time a webhook event confirms `entitlementActive: true`
+ * for a uid — see the `UserProfile.metadata` doc comment in
+ * src/services/userProfile.ts for the full null/absent/timestamp semantics.
+ * A sibling top-level field to `subscription`, written in the SAME
+ * transaction/write as the subscription mirror, never on its own.
+ */
+export const COMMERCIAL_GATE_RESOLVED_AT_PATH = 'metadata.commercialGateResolvedAt';
+
+/**
  * Sub-field names accessed directly (not via `validateSubscriptionPayload`)
  * by `applySubscriptionEventAtomically`'s transaction (subscriptionSync.ts,
  * Sprint 4.1) when reading the currently-stored mirror to decide

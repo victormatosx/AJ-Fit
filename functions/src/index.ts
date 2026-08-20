@@ -16,6 +16,7 @@ import { backendHealth } from './health/backendHealth';
 import { createVault } from './photoVault/createVault';
 import { recoverVaultKey } from './photoVault/recoverVaultKey';
 import { cleanupPhotoVaultOrphans } from './photoVault/cleanupOrphans';
+import { confirmCommercialGate } from './billing/confirmCommercialGate';
 import { requestAccountDeletion } from './accountDeletion/requestAccountDeletion';
 import { cleanupPendingAccountDeletions } from './accountDeletion/reconciliation/scheduler';
 import { onAccountDeletionRequested } from './accountDeletion/immediateDispatch';
@@ -91,6 +92,17 @@ export const adminSetPromoCodeActive = onCall(adminSetPromoCodeActiveHandler);
 // Only authenticated, policy-enforcing Photo Vault callables are exported.
 // The KMS wrap/unwrap layer stays internal and has no endpoint of its own.
 export { backendHealth, cleanupPhotoVaultOrphans, createVault, recoverVaultKey };
+
+/**
+ * Synchronous, server-authoritative second line of defense for
+ * `metadata.commercialGateResolvedAt` (the initial-Paywall marker) —
+ * complements (never replaces) `revenueCatWebhook`'s async resolution. See
+ * `billing/confirmCommercialGate.ts`'s module doc comment for the full
+ * security model. The client only requests a revalidation of ITS OWN uid
+ * (`request.auth.uid`); this callable independently re-derives entitlement
+ * from RevenueCat's V2 API before writing anything.
+ */
+export { confirmCommercialGate };
 
 /**
  * "Excluir Conta" — Fase 4 of docs/25_exclusao_de_conta_arquitetura.md.

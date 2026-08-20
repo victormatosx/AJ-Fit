@@ -110,6 +110,30 @@ export type UserProfile = {
     activeWorkoutId?: string;
     createdAt: Timestamp | null;
     updatedAt: Timestamp | null;
+    /**
+     * Server-set marker for the initial commercial gate (docs/13 — "Fase 1
+     * limited-mode rollout" removed the root Paywall for EVERYONE; this
+     * reintroduces it only for accounts that never resolved it).
+     *
+     * - Absent (no key at all): a document written before this field
+     *   existed. Never reinterpreted as "new" — see `provisionNewUser`. The
+     *   gate (`src/lib/premiumGate.ts`) treats absence as resolved, exactly
+     *   like an established account, so no pre-existing user is ever pushed
+     *   into an initial Paywall retroactively.
+     * - `null`: written explicitly by `provisionNewUser` for every account
+     *   created from this field's introduction onward. Means "brand new,
+     *   initial commercial gate still pending".
+     * - `Timestamp`: written exclusively by the backend
+     *   (`functions/src/billing/subscriptionSync.ts`) the first time a
+     *   RevenueCat webhook event confirms `entitlementActive: true` for this
+     *   uid. Never written or overwritable by the client — Firestore Rules'
+     *   `users/{userId}` update rule restricts client updates to
+     *   `metadata.updatedAt` only, so this field can only transition
+     *   null → Timestamp via the Admin SDK. Once set, never cleared: a
+     *   later cancellation/expiration does not revert the account to
+     *   "new" (see the CASE B matrix in docs/13).
+     */
+    commercialGateResolvedAt?: Timestamp | null;
   };
 };
 
@@ -244,6 +268,12 @@ export async function provisionNewUser(
         role: 'user',
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
+        // Explicit `null`, never omitted: this is what marks the account as
+        // "new, initial commercial gate pending" (see the `UserProfile`
+        // type doc comment). Written identically regardless of provider
+        // (email/password, Apple, Google) — `provisionNewUser` is the only
+        // place any of them create this document.
+        commercialGateResolvedAt: null,
       },
     },
   );

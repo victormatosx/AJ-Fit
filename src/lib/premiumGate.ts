@@ -38,6 +38,20 @@ type PremiumGateState = {
   subscriptionLoading: boolean;
   subscriptionConfigured: boolean;
   isPremium: boolean;
+  /**
+   * Server-backed marker distinguishing a brand-new account (never resolved
+   * its initial commercial gate) from an established one (legacy account
+   * that predates this field, or one that already completed
+   * purchase/restore at least once) — see `UserProfile.metadata`'s doc
+   * comment in src/services/userProfile.ts for the full null/absent/
+   * timestamp lifecycle. `true` for every established account; `false`
+   * ONLY for a still-pending new account. Reintroduces the pre-"Fase 1"
+   * root Paywall (`src/lib/premiumGate.ts` history, commit `5fc0fa1`), but
+   * scoped to this one case instead of every non-Premium user — established
+   * non-Premium accounts still open AppShell unconditionally, unchanged
+   * from Fase 1, gated per-capability inside it (`premiumCapabilities.ts`).
+   */
+  commercialGateResolved: boolean;
 };
 
 const AUTH_REQUIRED_SCREENS: RootScreenId[] = ['emailVerification', 'paywall', 'app'];
@@ -48,11 +62,18 @@ const AUTH_REQUIRED_SCREENS: RootScreenId[] = ['emailVerification', 'paywall', '
  * `null` means that identity/profile/RevenueCat is still unresolved and the
  * router must render its neutral loading state. Once an authenticated user
  * has a questionnaire and the subscription state is resolved, AppShell opens
- * unconditionally — Premium's `isPremium` entitlement is no longer a
- * navigation requirement here (Fase 1 of the limited-mode rollout). It stays
- * on the state and keeps flowing through `useSubscription()` for the
- * per-capability gating that later phases add inside AppShell; this root
- * gate simply stops reading it.
+ * for every ESTABLISHED account regardless of `isPremium` (Fase 1 of the
+ * limited-mode rollout) — Premium keeps flowing through `useSubscription()`
+ * for the per-capability gating inside AppShell (`premiumCapabilities.ts`);
+ * this root gate does not read `isPremium` for that population.
+ *
+ * The one case Fase 1 did not intend to cover: a brand-new account that has
+ * never resolved its initial commercial gate at all. That population still
+ * sees `'paywall'` here — same as the pre-Fase-1 behavior, but scoped by
+ * `commercialGateResolved` instead of applying to every non-Premium user.
+ * `isPremium` short-circuits straight to `'app'` even before the server
+ * marker catches up (the RevenueCat SDK's `CustomerInfo` resolves faster
+ * than the webhook-driven Firestore write — see subscriptionSync.ts).
  */
 export function resolvePremiumGate(state: PremiumGateState): RootScreenId | null {
   if (state.authInitializing || state.profileLoading) return null;
@@ -70,6 +91,8 @@ export function resolvePremiumGate(state: PremiumGateState): RootScreenId | null
   if (!state.hasQuestionnaire) return 'onboardingFunnel';
 
   if (state.subscriptionLoading || !state.subscriptionConfigured) return null;
+
+  if (!state.commercialGateResolved && !state.isPremium) return 'paywall';
 
   return 'app';
 }

@@ -15,6 +15,11 @@ function resolve(overrides: GateOverrides = {}) {
     subscriptionLoading: false,
     subscriptionConfigured: true,
     isPremium: false,
+    // Established by default — every pre-existing test in this file models
+    // an account that already resolved (or predates) the initial
+    // commercial gate. Tests for the brand-new/pending case set this to
+    // `false` explicitly (see the "conta nova" describe block below).
+    commercialGateResolved: true,
     ...overrides,
   });
 }
@@ -136,7 +141,7 @@ describe('resolvePremiumGate', () => {
     expect(resolve({ preferencesReconciling: false, isPremium: false })).toBe('app');
   });
 
-  it('L) resolvePremiumGate nunca mais retorna "paywall" — a rota deixou de ser uma decisão da navegação raiz', () => {
+  it('L) para uma conta ESTABELECIDA, resolvePremiumGate nunca retorna "paywall" — Fase 1 permanece intacta para quem já resolveu o gate comercial', () => {
     const outcomes = new Set<RootScreenId | null>();
     for (const isPremium of [true, false]) {
       for (const subscriptionLoading of [true, false]) {
@@ -146,6 +151,42 @@ describe('resolvePremiumGate', () => {
       }
     }
     expect(outcomes.has('paywall')).toBe(false);
+  });
+
+  describe('conta nova — commercialGateResolved: false', () => {
+    it('M) questionário concluído, sem Premium, gate comercial pendente → paywall', () => {
+      expect(resolve({ commercialGateResolved: false, isPremium: false })).toBe('paywall');
+    });
+
+    it('N) Premium ativo libera app mesmo antes do marker do servidor confirmar (CustomerInfo é mais rápido que o webhook)', () => {
+      expect(resolve({ commercialGateResolved: false, isPremium: true })).toBe('app');
+    });
+
+    it('O) sem questionário ainda, independente do gate comercial → onboardingFunnel (questionário sempre precede o paywall)', () => {
+      expect(
+        resolve({ commercialGateResolved: false, hasQuestionnaire: false, isPremium: false }),
+      ).toBe('onboardingFunnel');
+    });
+
+    it('P) subscription ainda não resolvida → não decide, mesmo com o gate comercial pendente', () => {
+      expect(
+        resolve({ commercialGateResolved: false, subscriptionLoading: true, isPremium: false }),
+      ).toBeNull();
+      expect(
+        resolve({
+          commercialGateResolved: false,
+          subscriptionConfigured: false,
+          isPremium: false,
+        }),
+      ).toBeNull();
+    });
+
+    it('Q) Apple/Google não alteram a regra — o gate só olha commercialGateResolved/isPremium, nunca o provider', () => {
+      // O provider nunca entra no shape de PremiumGateState — este teste
+      // documenta que não há, e nunca deve haver, um campo `provider` aqui.
+      expect(resolve({ commercialGateResolved: false, isPremium: false })).toBe('paywall');
+      expect(resolve({ commercialGateResolved: true, isPremium: false })).toBe('app');
+    });
   });
 
   it.each([

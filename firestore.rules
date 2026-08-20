@@ -183,14 +183,28 @@ service cloud.firestore {
         && (!('updatedAt' in data) || data.updatedAt is timestamp);
     }
 
+    // `commercialGateResolvedAt` (initial-Paywall marker — see the
+    // `UserProfile.metadata` doc comment in src/services/userProfile.ts):
+    // OPTIONAL like `activeWorkoutId`/`attribution` (absent on every
+    // document written before this field existed — never reinterpreted as
+    // "account is new"). When present it is either `null` (client-written
+    // only at account creation — see the `create` rule below) or a
+    // `timestamp` (backend-only, via the Admin SDK, which bypasses these
+    // Rules entirely — no client write path ever produces a timestamp
+    // here, enforced by the `update` rule's `metadata` diff restricted to
+    // `updatedAt`).
     function metadataValid(data) {
       return data is map
         && data.keys().hasAll(['role', 'createdAt', 'updatedAt'])
-        && data.keys().hasOnly(['role', 'activeWorkoutId', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(
+             ['role', 'activeWorkoutId', 'createdAt', 'updatedAt', 'commercialGateResolvedAt'])
         && data.role in ['user', 'admin']
         && (!('activeWorkoutId' in data) || data.activeWorkoutId is string)
         && data.createdAt is timestamp
-        && data.updatedAt is timestamp;
+        && data.updatedAt is timestamp
+        && (!('commercialGateResolvedAt' in data)
+             || data.commercialGateResolvedAt == null
+             || data.commercialGateResolvedAt is timestamp);
     }
 
     // Shape of `users/{userId}.attribution` — the read-optimized mirror of
@@ -591,7 +605,14 @@ service cloud.firestore {
         && request.resource.data.subscription.size() == 0
         && !('activeWorkoutId' in request.resource.data.metadata)
         && request.resource.data.metadata.createdAt == request.time
-        && request.resource.data.metadata.updatedAt == request.time;
+        && request.resource.data.metadata.updatedAt == request.time
+        // Only `null` (pending) is ever client-writable — a client cannot
+        // fabricate an already-resolved timestamp to skip its own initial
+        // Paywall. Omitting the key entirely is also rejected here (unlike
+        // `metadataValid`'s general tolerance for absence, which exists for
+        // documents written before this field existed) — every document
+        // `provisionNewUser` creates from now on writes it explicitly.
+        && request.resource.data.metadata.commercialGateResolvedAt == null;
 
       // Atualização: apenas o dono e somente os campos editáveis do perfil.
       // `diff().affectedKeys().hasOnly` impede alterações em campos de conta,

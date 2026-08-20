@@ -30,6 +30,7 @@ import { clearOnboardingDraft } from './src/onboarding/draftStorage';
 import type { OnboardingAuthContext } from './src/onboarding/authContext';
 import { AuthScreen } from './src/screens/AuthScreen';
 import { EmailVerificationScreen } from './src/screens/EmailVerificationScreen';
+import { PaywallScreen } from './src/screens/PaywallScreen';
 import { AppShell } from './src/screens/AppShell';
 import { FullScreenLoading } from './src/components/ui/FullScreenLoading';
 import { requiresEmailVerification } from './src/lib/emailVerification';
@@ -138,7 +139,7 @@ function SubscriptionResolutionError({
 }
 
 function RootNavigator() {
-  const { user, profile, questionnaire, initializing, profileLoading, refreshProfile } =
+  const { user, profile, questionnaire, initializing, profileLoading, refreshProfile, logout } =
     useAuth();
   const {
     loading: subscriptionLoading,
@@ -150,6 +151,14 @@ function RootNavigator() {
     retry: retrySubscription,
   } = useSubscription();
   const emailVerificationRequired = requiresEmailVerification(user);
+  // `!== null` folds two states into "resolved": an absent field (a
+  // document written before this marker existed — never reinterpreted as
+  // "new") and an actual `Timestamp` (the backend confirmed a purchase/
+  // restore at least once). Only an explicit `null` — written only by
+  // `provisionNewUser` for accounts created from this field's introduction
+  // onward — means "still pending". See the `UserProfile.metadata` doc
+  // comment in src/services/userProfile.ts.
+  const commercialGateResolved = profile?.metadata.commercialGateResolvedAt !== null;
   const { quiz } = useAppState();
   const [screen, setScreenState] = useState<RootScreenId>('splash');
   // Mirrors `screen` synchronously so late/stale callbacks (e.g. the splash
@@ -227,6 +236,7 @@ function RootNavigator() {
     subscriptionLoading,
     subscriptionConfigured,
     isPremium,
+    commercialGateResolved,
   });
 
   useEffect(() => {
@@ -244,6 +254,7 @@ function RootNavigator() {
       subscriptionConfigured,
       subscriptionStatus,
       isPremium,
+      commercialGateResolved,
     });
   }, [
     user?.uid,
@@ -258,6 +269,7 @@ function RootNavigator() {
     subscriptionConfigured,
     subscriptionStatus,
     isPremium,
+    commercialGateResolved,
   ]);
 
   // Keep the requested screen aligned with the centrally resolved route so
@@ -331,6 +343,25 @@ function RootNavigator() {
       )}
       {resolvedScreen === 'auth' && <AuthScreen entryContext={onboardingAuthContext} />}
       {resolvedScreen === 'emailVerification' && <EmailVerificationScreen />}
+      {resolvedScreen === 'paywall' && (
+        <PaywallScreen
+          entryContext={onboardingAuthContext}
+          // Reinstates the documented pre-"Fase 1" rule for this one case
+          // (docs/24_funil_onboarding_arquitetura.md §8 — "Botão X do
+          // Paywall": preserved exactly as it was, `onClose` calls
+          // `logout()`). Only reachable here for a brand-new account whose
+          // initial commercial gate is still pending — an ESTABLISHED
+          // account never renders this branch (see `resolvePremiumGate`),
+          // so this never logs out an existing non-Premium user. The
+          // on-demand `<PaywallScreen>` inside AppShell (`showPremium`)
+          // is untouched and keeps its own `onClose` that just closes the
+          // modal — that instance is a different context and was never
+          // part of this rule.
+          onClose={() => {
+            void logout();
+          }}
+        />
+      )}
       {resolvedScreen === 'app' && <AppShell />}
       {savingQuestionnaire && (
         <View

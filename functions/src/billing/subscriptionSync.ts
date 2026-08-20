@@ -2,6 +2,7 @@ import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { auth, db } from '../lib/firebaseAdmin';
 import { logFunctionError, logInfo, logWarn } from '../lib/logger';
 import {
+  COMMERCIAL_GATE_RESOLVED_AT_PATH,
   REVENUECAT_PROVIDER,
   SUBSCRIPTION_FIELD,
   SUBSCRIPTION_LAST_EVENT_ID_FIELD,
@@ -389,17 +390,49 @@ export async function applySubscriptionEventAtomically(
         updatedAt: FieldValue.serverTimestamp(),
       };
 
+      // Initial-Paywall marker (docs/13, "Fase 1 limited-mode rollout" +
+      // its later reintroduction of a gate scoped to brand-new accounts —
+      // see the `UserProfile.metadata` doc comment in
+      // src/services/userProfile.ts). Resolved here, in the SAME write as
+      // the subscription mirror, the first time a webhook event confirms an
+      // active entitlement — never on any other event, and never once it is
+      // already a timestamp (a later cancellation/expiration must not
+      // revert an established account back to "new"). Reading the
+      // dotted path off `snapshot` (not `current`, which only looks inside
+      // `subscription`) distinguishes the three states: `undefined`
+      // (absent — a pre-existing document from before this field existed,
+      // already treated as resolved by the client's own `!== null` check,
+      // so no write needed) vs `null` (a genuinely new, still-pending
+      // account) vs an existing `Timestamp` (already resolved — leave as
+      // is).
+      const gateFieldValue = snapshot.get(COMMERCIAL_GATE_RESOLVED_AT_PATH) as
+        | Timestamp
+        | null
+        | undefined;
+      const shouldResolveCommercialGate =
+        gateFieldValue === null && subscription.entitlementActive === true;
+      const extraFields = shouldResolveCommercialGate
+        ? { [COMMERCIAL_GATE_RESOLVED_AT_PATH]: FieldValue.serverTimestamp() }
+        : {};
+
       if (options.replaceSubscription) {
         // A TRANSFER reconciliation is a complete current-state snapshot,
         // not a partial event delta. Replace the nested map so stale fields
         // such as an old active product/trial cannot survive an inactive
         // RevenueCat response. `update` also preserves the no-create
         // invariant already guarded by the transaction read above.
-        transaction.update(ref, { [SUBSCRIPTION_FIELD]: nextSubscription });
+        // `extraFields`' dotted key is a distinct top-level field path, so
+        // combining it here does not affect the full-map replace of
+        // `subscription`.
+        transaction.update(ref, { [SUBSCRIPTION_FIELD]: nextSubscription, ...extraFields });
       } else {
         // Ordinary commercial webhooks remain partial deltas and retain the
         // long-standing deep-merge behavior.
-        transaction.set(ref, { [SUBSCRIPTION_FIELD]: nextSubscription }, { merge: true });
+        transaction.set(
+          ref,
+          { [SUBSCRIPTION_FIELD]: nextSubscription, ...extraFields },
+          { merge: true },
+        );
       }
 
       return outcome;

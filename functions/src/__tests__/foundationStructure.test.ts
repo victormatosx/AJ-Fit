@@ -91,6 +91,7 @@ describe('Photo Vault backend foundation — Phase 3 structural guarantees', () 
       'backendHealth',
       'cleanupPendingAccountDeletions',
       'cleanupPhotoVaultOrphans',
+      'confirmCommercialGate',
       'createVault',
       'onAccountDeletionRequested',
       'recoverVaultKey',

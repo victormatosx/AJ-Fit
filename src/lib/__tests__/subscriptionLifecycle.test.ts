@@ -60,6 +60,10 @@ function route(
     subscriptionLoading: Boolean(uid) && !info && state.phase !== 'error',
     subscriptionConfigured: !uid || Boolean(info),
     isPremium: Boolean(info?.entitlements.active.premium),
+    // This suite models an established account throughout — persistence/
+    // revalidation of an already-resolved subscription, not the brand-new
+    // pending-Paywall case (covered in premiumGate.test.ts instead).
+    commercialGateResolved: true,
     ...overrides,
   });
 }
@@ -88,6 +92,7 @@ describe('Fase 3 — persistência e revalidação Premium A–AA', () => {
         subscriptionLoading: false,
         subscriptionConfigured: true,
         isPremium: true,
+        commercialGateResolved: true,
       }),
     ).toBeNull();
   });
