@@ -14,7 +14,7 @@ import {
   JetBrainsMono_700Bold,
 } from '@expo-google-fonts/jetbrains-mono';
 
-import { AppStateProvider, useAppState } from './src/state/AppState';
+import { AppStateProvider as RawAppStateProvider, useAppState } from './src/state/AppState';
 import { AuthProvider, useAuth } from './src/state/AuthContext';
 import { SubscriptionProvider } from './src/state/SubscriptionContext';
 import { PromoCodeProvider } from './src/state/PromoCodeContext';
@@ -136,6 +136,16 @@ function SubscriptionResolutionError({
       </Pressable>
     </View>
   );
+}
+
+/**
+ * Bridges AuthContext's uid into `AppStateProvider` without that module
+ * importing AuthContext itself (see its doc comment) — the only reason this
+ * one-line wrapper exists.
+ */
+function AppStateProviderConnected({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  return <RawAppStateProvider uid={user?.uid ?? null}>{children}</RawAppStateProvider>;
 }
 
 function RootNavigator() {
@@ -462,7 +472,7 @@ export default function App() {
         <SubscriptionProvider>
           <PromoCodeProvider>
             <UnitsProvider>
-              <AppStateProvider>
+              <AppStateProviderConnected>
                 {/* Inside AuthProvider so it can re-lock on logout and account
                     switches; wraps the navigator so its AppState listener is
                     mounted for the whole session. */}
@@ -473,7 +483,7 @@ export default function App() {
                       preference hydration can overlap font/i18n loading. */}
                   {fontsLoaded && i18nReady ? <RootNavigator /> : <FullScreenLoading />}
                 </PhotoVaultProvider>
-              </AppStateProvider>
+              </AppStateProviderConnected>
             </UnitsProvider>
           </PromoCodeProvider>
         </SubscriptionProvider>

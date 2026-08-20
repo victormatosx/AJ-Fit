@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useMemo } from 'react';
+import React, { createContext, useContext, useState, useMemo, useRef } from 'react';
+import { nextValueForIdentity } from '../lib/quizIdentityScope';
 
 export type Quiz = {
   sex: 'm' | 'f' | null;
@@ -59,9 +60,39 @@ export const defaultQuiz: Quiz = {
 
 const AppStateContext = createContext<Ctx | null>(null);
 
-export function AppStateProvider({ children }: { children: React.ReactNode }) {
+/**
+ * `uid`: the currently authenticated Firebase uid, or `null` when signed
+ * out. Deliberately a plain prop rather than this file reaching for
+ * `useAuth()` itself — `App.tsx` (the one place that already wires
+ * AuthContext to everything else) passes it down, keeping this module free
+ * of any Firebase/React Native import so it stays testable as pure state
+ * logic. See `nextValueForIdentity`'s doc comment for the incident this
+ * fixes: `quiz` is read directly by AuthScreen's signup/link calls, so a
+ * stale value here becomes a cross-account Firestore write, not just a UI
+ * glitch.
+ */
+export function AppStateProvider({
+  uid,
+  children,
+}: {
+  uid: string | null;
+  children: React.ReactNode;
+}) {
   const [quiz, setQuiz] = useState<Quiz>(defaultQuiz);
   const [tab, setTab] = useState<TabId>('home');
+
+  // Adjusting a component's own state during its own render in response to a
+  // prop change (React's sanctioned pattern) — not an effect — so there is
+  // no committed render, not even one, where a child can read `quiz` against
+  // the wrong identity. Covers every uid transition: logout (uid -> null), a
+  // fresh login (null -> uid), and a fast account switch (uidA -> uidB).
+  const lastUidRef = useRef<string | null>(uid);
+  if (lastUidRef.current !== uid) {
+    const nextQuiz = nextValueForIdentity(lastUidRef.current, uid, quiz, defaultQuiz);
+    lastUidRef.current = uid;
+    if (nextQuiz !== quiz) setQuiz(nextQuiz);
+  }
+
   const value = useMemo(() => ({ quiz, setQuiz, tab, setTab }), [quiz, tab]);
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;
 }
