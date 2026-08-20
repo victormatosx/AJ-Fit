@@ -9,8 +9,10 @@ import { RecoveryError, isRecoveryError } from './errors';
 import { logRecoveryEvent } from './logging';
 import { CURRENT_RECOVERY_PEPPER_VERSION, MFA_RECOVERY_PEPPER, readRecoveryPepper } from './pepper';
 import {
+  RecoveryGenerationConflictError,
   RecoverySelectorTakenError,
   persistNewRecoverySet,
+  readRecoveryPointerState,
 } from './recoverySetRepository';
 import {
   RECOVERY_CODES_PER_SET,
@@ -115,6 +117,13 @@ export async function provisionRecoverySet(
   pepper: Uint8Array,
   now: Date,
 ): Promise<{ recoverySetId: string; codes: string[] }> {
+  // Captured BEFORE anything is minted. Every attempt below commits against
+  // this same value — deliberately NOT re-read on retry: re-reading would
+  // adopt a concurrent winner's state and rotate codes that were already
+  // handed to a user, which is precisely the failure the compare-and-set
+  // exists to prevent. A selector collision retries; a lost race does not.
+  const { version: expectedVersion } = await readRecoveryPointerState(uid);
+
   let lastError: unknown;
 
   for (let attempt = 1; attempt <= MAX_SELECTOR_ATTEMPTS; attempt += 1) {
@@ -134,6 +143,7 @@ export async function provisionRecoverySet(
     try {
       const result = await persistNewRecoverySet(
         uid,
+        expectedVersion,
         ({ version }): RecoverySetDocument => ({
           schemaVersion: RECOVERY_SCHEMA_VERSION,
           recoverySetId: selector,
@@ -213,9 +223,38 @@ export async function handleGenerateRecoveryCodes(
       count: codes.length,
     };
   } catch (err) {
-    // Nothing below returns detail to the caller: Firestore errors carry
-    // project and path information, and a recovery failure must not describe
-    // the state of the account's recovery material.
+    if (err instanceof RecoveryGenerationConflictError) {
+      // A concurrent generation won. Nothing was written and no codes are
+      // returned, so the caller can simply try again.
+      //
+      // This is the ONE place generation reports a distinct public reason,
+      // and it is safe to do so: the caller is already authenticated as the
+      // account owner with a fresh credential, so "another generation for
+      // YOUR account just happened" tells them nothing they are not entitled
+      // to know, and nothing about whether a recovery set exists, how many
+      // codes it holds, or what state it is in. The anti-enumeration rule
+      // that collapses every failure into one opaque code belongs to the
+      // UNAUTHENTICATED consumption surface (errors.ts), where the caller has
+      // not proved who they are — it is not a blanket rule for this module.
+      //
+      // `aborted` is the canonical code for a failed compare-and-set, and it
+      // is the one gRPC status whose documented meaning is "retry may
+      // succeed", which is exactly the guidance the client needs.
+      logRecoveryEvent({
+        eventType: 'recovery_set_created',
+        stage: 'persist',
+        outcome: 'rejected',
+        internalCode: 'GENERATION_CONFLICT',
+      });
+      throw new HttpsError(
+        'aborted',
+        'Another recovery code generation is already in progress. Please try again.',
+      );
+    }
+
+    // Everything else returns no detail: Firestore errors carry project and
+    // path information, and a recovery failure must not describe the state of
+    // the account's recovery material.
     logFunctionError(SCOPE, err, {
       internalCode: isRecoveryError(err) ? err.internalCode : 'UNCLASSIFIED',
     });

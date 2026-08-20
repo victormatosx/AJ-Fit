@@ -58,6 +58,11 @@ export type RecoveryInternalCode =
   | 'CODE_ALREADY_RESERVED'
   /** A second reset was attempted while one was still in flight. */
   | 'OPERATION_CONFLICT'
+  /**
+   * A concurrent generation committed first, so this one lost the
+   * compare-and-set on the pointer and must not issue codes.
+   */
+  | 'GENERATION_CONFLICT'
   /** A state transition outside the declared machine was attempted. */
   | 'INVALID_STATE_TRANSITION'
   /** The persisted document failed the closed-schema check. */

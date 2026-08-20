@@ -179,6 +179,10 @@ describe('_mfaRecoveryUsers — the active-set pointer is equally unreachable', 
         schemaVersion: 1,
         uid: OWNER_UID,
         activeSetId: RECOVERY_SET_ID,
+        // Compare-and-set token for concurrent generation. Backend-only like
+        // everything else here — a client must not be able to read it, let
+        // alone move it.
+        version: 1,
         updatedAt: new Date('2026-08-19T10:00:00Z'),
       });
     });

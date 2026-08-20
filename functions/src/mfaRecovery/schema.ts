@@ -550,6 +550,23 @@ export interface RecoveryPointerDocument {
   uid: string;
   /** `recoverySetId` of the one active set, or null when none exists. */
   activeSetId: string | null;
+  /**
+   * Monotonic count of successful generations for this uid, and the
+   * compare-and-set token that makes concurrent generation safe.
+   *
+   * A generation reads this value BEFORE minting anything, then commits only
+   * if it is still unchanged. A concurrent generation that started from the
+   * same value therefore loses at commit time and returns nothing — instead
+   * of succeeding and quietly rotating the winner's freshly-issued codes.
+   *
+   * It doubles as the fence against a stale operation: an attempt that was
+   * slow, retried, or replayed carries an expected version that no longer
+   * matches, so it can never commit over a newer set.
+   *
+   * Starts at 1 on the first write; a uid with no pointer is version 0. Always
+   * equals the `version` of the set named by `activeSetId`.
+   */
+  version: number;
   updatedAt: Date;
 }
 
@@ -557,6 +574,7 @@ const POINTER_KEYS: readonly (keyof RecoveryPointerDocument)[] = [
   'schemaVersion',
   'uid',
   'activeSetId',
+  'version',
   'updatedAt',
 ];
 
@@ -580,6 +598,9 @@ export function validateRecoveryPointer(candidate: unknown): string[] {
     !isNonEmptyString(candidate.activeSetId)
   ) {
     problems.push('pointer.activeSetId must be a non-empty string or null');
+  }
+  if ('version' in candidate && !isPositiveInteger(candidate.version)) {
+    problems.push('pointer.version must be an integer >= 1');
   }
   if ('updatedAt' in candidate && !isDate(candidate.updatedAt)) {
     problems.push('pointer.updatedAt must be a Date');

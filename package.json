@@ -69,7 +69,8 @@
     "typecheck": "tsc --noEmit",
     "i18n:check": "vitest run src/i18n/__tests__",
     "i18n:audit": "node scripts/audit-i18n.mjs",
-    "quality": "npm run typecheck && npm run test && npm run test:rules && npm run i18n:audit"
+    "quality": "npm run typecheck && npm run test && npm run test:rules && npm run i18n:audit",
+    "test:mfa-recovery:emulator": "firebase emulators:exec --only firestore --project ajfit-rules-test 'npm --prefix functions run test:integration'"
   },
   "private": true
 }

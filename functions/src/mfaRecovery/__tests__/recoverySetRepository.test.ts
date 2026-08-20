@@ -16,11 +16,14 @@ vi.mock('../../lib/firebaseAdmin', () => ({
 
 import { RECOVERY_DIGEST_ALGORITHM, RECOVERY_DIGEST_BYTES } from '../digest';
 import {
+  NO_RECOVERY_POINTER_VERSION,
+  RecoveryGenerationConflictError,
   RecoverySelectorTakenError,
   getActiveRecoverySetForUid,
   getRecoveryPointer,
   getRecoverySetById,
   persistNewRecoverySet,
+  readRecoveryPointerState,
 } from '../recoverySetRepository';
 import {
   MFA_RECOVERY_COLLECTION,
@@ -62,17 +65,51 @@ function buildSet(recoverySetId: string, version: number): RecoverySetDocument {
   };
 }
 
-function builderFor(recoverySetId: string) {
-  return ({ version }: { version: number }) => buildSet(recoverySetId, version);
+/** Calls the repository the way the handler does: read version, then commit. */
+function persist(recoverySetId: string, expectedVersion: number, now: Date = NOW) {
+  return persistNewRecoverySet(
+    UID,
+    expectedVersion,
+    ({ version }) => buildSet(recoverySetId, version),
+    now,
+  );
+}
+
+function activeSets(): string[] {
+  return [...fake.current.store.entries()]
+    .filter(
+      ([key, value]: [string, { data: Record<string, unknown> }]) =>
+        key.startsWith(`${MFA_RECOVERY_COLLECTION}/`) && value.data.status === 'active',
+    )
+    .map(([key]: [string, unknown]) => key.replace(`${MFA_RECOVERY_COLLECTION}/`, ''));
 }
 
 beforeEach(() => {
   fake.current = createFakeFirestore();
 });
 
+describe('pointer state — the compare-and-set token', () => {
+  it('reports version 0 for a user who has never generated', async () => {
+    expect(await readRecoveryPointerState(UID)).toEqual({
+      activeSetId: null,
+      version: NO_RECOVERY_POINTER_VERSION,
+    });
+    expect(NO_RECOVERY_POINTER_VERSION).toBe(0);
+  });
+
+  it('reports the current version and active set after a generation', async () => {
+    await persist('SELECTORAAAA', 0);
+
+    expect(await readRecoveryPointerState(UID)).toEqual({
+      activeSetId: 'SELECTORAAAA',
+      version: 1,
+    });
+  });
+});
+
 describe('persistNewRecoverySet — first set for a user', () => {
   it('creates the set and points the user at it', async () => {
-    const result = await persistNewRecoverySet(UID, builderFor('SELECTORAAAA'), NOW);
+    const result = await persist('SELECTORAAAA', 0);
 
     expect(result).toEqual({
       recoverySetId: 'SELECTORAAAA',
@@ -87,15 +124,20 @@ describe('persistNewRecoverySet — first set for a user', () => {
     const pointer = fake.current.read(MFA_RECOVERY_POINTER_COLLECTION, UID);
     expect(pointer?.activeSetId).toBe('SELECTORAAAA');
     expect(pointer?.uid).toBe(UID);
+    expect(pointer?.version).toBe(1);
   });
 
-  it('starts the rotation generation at 1', async () => {
-    const result = await persistNewRecoverySet(UID, builderFor('SELECTORAAAA'), NOW);
-    expect(result.version).toBe(1);
+  it('keeps pointer.version in lockstep with the active set version', async () => {
+    await persist('SELECTORAAAA', 0);
+
+    const pointer = fake.current.read(MFA_RECOVERY_POINTER_COLLECTION, UID);
+    const set = fake.current.read(MFA_RECOVERY_COLLECTION, pointer?.activeSetId as string);
+
+    expect(pointer?.version).toBe(set?.version);
   });
 
   it('persists no plaintext recovery code', async () => {
-    await persistNewRecoverySet(UID, builderFor('SELECTORAAAA'), NOW);
+    await persist('SELECTORAAAA', 0);
 
     const serialized = JSON.stringify(fake.current.read(MFA_RECOVERY_COLLECTION, 'SELECTORAAAA'));
 
@@ -109,8 +151,8 @@ describe('persistNewRecoverySet — first set for a user', () => {
     await expect(
       persistNewRecoverySet(
         UID,
-        ({ version }) =>
-          ({ ...buildSet('SELECTORAAAA', version), status: 'bogus' }) as never,
+        0,
+        ({ version }) => ({ ...buildSet('SELECTORAAAA', version), status: 'bogus' }) as never,
         NOW,
       ),
     ).rejects.toThrow(/Invalid recovery set/);
@@ -119,14 +161,14 @@ describe('persistNewRecoverySet — first set for a user', () => {
   });
 });
 
-describe('persistNewRecoverySet — rotation', () => {
+describe('persistNewRecoverySet — sequential rotation', () => {
   beforeEach(async () => {
-    await persistNewRecoverySet(UID, builderFor('SELECTORAAAA'), NOW);
+    await persist('SELECTORAAAA', 0);
   });
 
   it('moves the previous set to rotated and repoints', async () => {
     const later = new Date('2026-08-19T11:00:00Z');
-    const result = await persistNewRecoverySet(UID, builderFor('SELECTORBBBB'), later);
+    const result = await persist('SELECTORBBBB', 1, later);
 
     expect(result.rotatedSetId).toBe('SELECTORAAAA');
     expect(result.version).toBe(2);
@@ -135,30 +177,23 @@ describe('persistNewRecoverySet — rotation', () => {
     expect(previous?.status).toBe('rotated');
     expect(previous?.rotatedAt).toEqual(later);
 
-    const current = fake.current.read(MFA_RECOVERY_COLLECTION, 'SELECTORBBBB');
-    expect(current?.status).toBe('active');
-
-    expect(fake.current.read(MFA_RECOVERY_POINTER_COLLECTION, UID)?.activeSetId).toBe(
-      'SELECTORBBBB',
-    );
+    expect(fake.current.read(MFA_RECOVERY_COLLECTION, 'SELECTORBBBB')?.status).toBe('active');
+    expect(fake.current.read(MFA_RECOVERY_POINTER_COLLECTION, UID)).toMatchObject({
+      activeSetId: 'SELECTORBBBB',
+      version: 2,
+    });
   });
 
   it('leaves exactly one active set', async () => {
-    await persistNewRecoverySet(UID, builderFor('SELECTORBBBB'), NOW);
-    await persistNewRecoverySet(UID, builderFor('SELECTORCCCC'), NOW);
+    await persist('SELECTORBBBB', 1);
+    await persist('SELECTORCCCC', 2);
 
-    const active = [...fake.current.store.entries()].filter(
-      ([key, value]) =>
-        key.startsWith(`${MFA_RECOVERY_COLLECTION}/`) && value.data.status === 'active',
-    );
-
-    expect(active).toHaveLength(1);
-    expect(active[0][0]).toBe(`${MFA_RECOVERY_COLLECTION}/SELECTORCCCC`);
+    expect(activeSets()).toEqual(['SELECTORCCCC']);
   });
 
   it('increments the version across rotations', async () => {
-    expect((await persistNewRecoverySet(UID, builderFor('SELECTORBBBB'), NOW)).version).toBe(2);
-    expect((await persistNewRecoverySet(UID, builderFor('SELECTORCCCC'), NOW)).version).toBe(3);
+    expect((await persist('SELECTORBBBB', 1)).version).toBe(2);
+    expect((await persist('SELECTORCCCC', 2)).version).toBe(3);
   });
 
   it('repairs a stale pointer that names an already-rotated set', async () => {
@@ -170,7 +205,7 @@ describe('persistNewRecoverySet — rotation', () => {
       rotatedAt: NOW,
     });
 
-    const result = await persistNewRecoverySet(UID, builderFor('SELECTORBBBB'), NOW);
+    const result = await persist('SELECTORBBBB', 1);
 
     expect(result.rotatedSetId).toBeNull();
     expect(fake.current.read(MFA_RECOVERY_POINTER_COLLECTION, UID)?.activeSetId).toBe(
@@ -181,10 +216,105 @@ describe('persistNewRecoverySet — rotation', () => {
   it('tolerates a pointer naming a set that no longer exists', async () => {
     fake.current.store.delete(`${MFA_RECOVERY_COLLECTION}/SELECTORAAAA`);
 
-    const result = await persistNewRecoverySet(UID, builderFor('SELECTORBBBB'), NOW);
+    const result = await persist('SELECTORBBBB', 1);
 
     expect(result.rotatedSetId).toBeNull();
     expect(result.recoverySetId).toBe('SELECTORBBBB');
+  });
+});
+
+describe('compare-and-set — the concurrency guard', () => {
+  it('refuses to commit against a stale expected version', async () => {
+    await persist('SELECTORAAAA', 0);
+
+    // A generation that read version 0 before the winner committed.
+    await expect(persist('SELECTORBBBB', 0)).rejects.toBeInstanceOf(
+      RecoveryGenerationConflictError,
+    );
+  });
+
+  it('writes absolutely nothing when it conflicts', async () => {
+    await persist('SELECTORAAAA', 0);
+
+    await expect(persist('SELECTORBBBB', 0)).rejects.toThrow();
+
+    // The loser's set was never created...
+    expect(fake.current.read(MFA_RECOVERY_COLLECTION, 'SELECTORBBBB')).toBeUndefined();
+    // ...and the winner was neither rotated nor repointed.
+    expect(fake.current.read(MFA_RECOVERY_COLLECTION, 'SELECTORAAAA')?.status).toBe('active');
+    expect(fake.current.read(MFA_RECOVERY_POINTER_COLLECTION, UID)).toMatchObject({
+      activeSetId: 'SELECTORAAAA',
+      version: 1,
+    });
+  });
+
+  it('rejects a generation that started before ANY set existed, once one exists', async () => {
+    const staleVersion = (await readRecoveryPointerState(UID)).version;
+    await persist('SELECTORAAAA', 0);
+
+    await expect(persist('SELECTORBBBB', staleVersion)).rejects.toBeInstanceOf(
+      RecoveryGenerationConflictError,
+    );
+  });
+
+  it('fences a stale operation that resumes long after a newer set won', async () => {
+    // The critical case: an old, slow attempt must never commit over a newer
+    // set. Two rotations happen while it is away; its expected version is now
+    // two generations behind.
+    await persist('SELECTORAAAA', 0);
+    await persist('SELECTORBBBB', 1);
+
+    await expect(persist('SELECTORLATE', 0)).rejects.toBeInstanceOf(
+      RecoveryGenerationConflictError,
+    );
+    expect(activeSets()).toEqual(['SELECTORBBBB']);
+  });
+
+  it('conflicts when a competitor commits between our read and our commit', async () => {
+    // The genuine interleaving: our transaction reads version 0, a competitor
+    // commits version 1, and our commit is aborted-and-retried by Firestore.
+    // The retry re-reads version 1, sees it no longer matches what we
+    // generated against, and refuses — instead of rotating the competitor.
+    fake.current = createFakeFirestore({
+      onBeforeCommit: (attempt: number, store: Map<string, unknown>) => {
+        if (attempt === 1) {
+          store.set(`${MFA_RECOVERY_COLLECTION}/SELECTORZZZZ`, {
+            data: buildSet('SELECTORZZZZ', 1),
+            version: 1,
+          });
+          store.set(`${MFA_RECOVERY_POINTER_COLLECTION}/${UID}`, {
+            data: {
+              schemaVersion: 1,
+              uid: UID,
+              activeSetId: 'SELECTORZZZZ',
+              version: 1,
+              updatedAt: NOW,
+            },
+            version: 1,
+          });
+        }
+      },
+    });
+
+    await expect(persist('SELECTORBBBB', 0)).rejects.toBeInstanceOf(
+      RecoveryGenerationConflictError,
+    );
+
+    // The competitor keeps its freshly-issued codes: still active, never
+    // rotated by the loser.
+    expect(activeSets()).toEqual(['SELECTORZZZZ']);
+    expect(fake.current.read(MFA_RECOVERY_COLLECTION, 'SELECTORBBBB')).toBeUndefined();
+  });
+
+  it('lets a sequential regeneration through once it reads the new version', async () => {
+    await persist('SELECTORAAAA', 0);
+
+    // The losing caller retries properly: re-reads, then commits.
+    const { version } = await readRecoveryPointerState(UID);
+    const result = await persist('SELECTORBBBB', version);
+
+    expect(result.rotatedSetId).toBe('SELECTORAAAA');
+    expect(activeSets()).toEqual(['SELECTORBBBB']);
   });
 });
 
@@ -196,11 +326,8 @@ describe('persistNewRecoverySet — selector collision', () => {
       sentinel: 'untouched',
     });
 
-    await expect(
-      persistNewRecoverySet(UID, builderFor('SELECTORAAAA'), NOW),
-    ).rejects.toBeInstanceOf(RecoverySelectorTakenError);
+    await expect(persist('SELECTORAAAA', 0)).rejects.toBeInstanceOf(RecoverySelectorTakenError);
 
-    // The victim's document is byte-for-byte intact.
     expect(fake.current.read(MFA_RECOVERY_COLLECTION, 'SELECTORAAAA')).toEqual({
       uid: 'someone-else',
       status: 'active',
@@ -211,15 +338,14 @@ describe('persistNewRecoverySet — selector collision', () => {
   it('does not repoint the user when the create fails', async () => {
     fake.current.seed(MFA_RECOVERY_COLLECTION, 'SELECTORAAAA', { status: 'active' });
 
-    await expect(persistNewRecoverySet(UID, builderFor('SELECTORAAAA'), NOW)).rejects.toThrow();
+    await expect(persist('SELECTORAAAA', 0)).rejects.toThrow();
 
     expect(fake.current.read(MFA_RECOVERY_POINTER_COLLECTION, UID)).toBeUndefined();
   });
 
   it('surfaces a collision created mid-transaction', async () => {
-    // Another writer takes the selector between our read and our commit.
     fake.current = createFakeFirestore({
-      onBeforeCommit: (attempt, store) => {
+      onBeforeCommit: (attempt: number, store: Map<string, unknown>) => {
         if (attempt === 1) {
           store.set(`${MFA_RECOVERY_COLLECTION}/SELECTORAAAA`, {
             data: { status: 'active', uid: 'racer' },
@@ -229,62 +355,26 @@ describe('persistNewRecoverySet — selector collision', () => {
       },
     });
 
-    await expect(
-      persistNewRecoverySet(UID, builderFor('SELECTORAAAA'), NOW),
-    ).rejects.toBeInstanceOf(RecoverySelectorTakenError);
+    await expect(persist('SELECTORAAAA', 0)).rejects.toBeInstanceOf(RecoverySelectorTakenError);
   });
 });
 
-describe('persistNewRecoverySet — concurrency', () => {
-  it('serializes two generations for the same uid into one active set', async () => {
-    // A competing generation commits between our read and our commit, so our
-    // transaction is aborted and retried against the winner's state.
-    let injected = false;
-    fake.current = createFakeFirestore({
-      onBeforeCommit: (attempt, store) => {
-        if (attempt === 1 && !injected) {
-          injected = true;
-          store.set(`${MFA_RECOVERY_COLLECTION}/SELECTORZZZZ`, {
-            data: { ...buildSet('SELECTORZZZZ', 1), status: 'active' },
-            version: 1,
-          });
-          store.set(`${MFA_RECOVERY_POINTER_COLLECTION}/${UID}`, {
-            data: { schemaVersion: 1, uid: UID, activeSetId: 'SELECTORZZZZ', updatedAt: NOW },
-            version: 1,
-          });
-        }
-      },
-    });
-
-    const result = await persistNewRecoverySet(UID, builderFor('SELECTORBBBB'), NOW);
-
-    // Our retry observed the competitor and rotated it, rather than leaving
-    // two active sets or silently overwriting the pointer.
-    expect(result.rotatedSetId).toBe('SELECTORZZZZ');
-    expect(result.version).toBe(2);
-
-    const active = [...fake.current.store.entries()].filter(
-      ([key, value]) =>
-        key.startsWith(`${MFA_RECOVERY_COLLECTION}/`) && value.data.status === 'active',
-    );
-    expect(active).toHaveLength(1);
-    expect(active[0][0]).toBe(`${MFA_RECOVERY_COLLECTION}/SELECTORBBBB`);
-  });
-
+describe('persistNewRecoverySet — infrastructure failure', () => {
   it('never leaves a partially written state when the transaction aborts', async () => {
-    // A writer that keeps winning: every attempt is stale, so we exhaust the
-    // retry budget and commit nothing at all.
     fake.current = createFakeFirestore({
       maxAttempts: 3,
-      onBeforeCommit: (attempt, store) => {
+      onBeforeCommit: (attempt: number, store: Map<string, unknown>) => {
+        // A writer that keeps touching an unrelated field of the pointer, so
+        // every attempt is stale on the READ version without changing the CAS
+        // version — exhausting the retry budget.
         store.set(`${MFA_RECOVERY_POINTER_COLLECTION}/${UID}`, {
-          data: { schemaVersion: 1, uid: UID, activeSetId: `OTHER${attempt}`, updatedAt: NOW },
+          data: { schemaVersion: 1, uid: UID, activeSetId: null, version: 0, updatedAt: NOW },
           version: 100 + attempt,
         });
       },
     });
 
-    await expect(persistNewRecoverySet(UID, builderFor('SELECTORBBBB'), NOW)).rejects.toThrow();
+    await expect(persist('SELECTORBBBB', 0)).rejects.toThrow();
 
     expect(fake.current.read(MFA_RECOVERY_COLLECTION, 'SELECTORBBBB')).toBeUndefined();
   });
@@ -294,16 +384,14 @@ describe('persistNewRecoverySet — concurrency', () => {
       throw new Error('FIRESTORE_UNAVAILABLE');
     };
 
-    await expect(persistNewRecoverySet(UID, builderFor('SELECTORBBBB'), NOW)).rejects.toThrow(
-      'FIRESTORE_UNAVAILABLE',
-    );
+    await expect(persist('SELECTORBBBB', 0)).rejects.toThrow('FIRESTORE_UNAVAILABLE');
     expect(fake.current.read(MFA_RECOVERY_COLLECTION, 'SELECTORBBBB')).toBeUndefined();
   });
 });
 
 describe('reads', () => {
   beforeEach(async () => {
-    await persistNewRecoverySet(UID, builderFor('SELECTORAAAA'), NOW);
+    await persist('SELECTORAAAA', 0);
   });
 
   it('reads a set by selector', async () => {
@@ -327,7 +415,6 @@ describe('reads', () => {
   });
 
   it('reports no active set when the pointer is stale', async () => {
-    // A pointer at a rotated set must never be reported as active.
     fake.current.seed(MFA_RECOVERY_COLLECTION, 'SELECTORAAAA', {
       ...fake.current.read(MFA_RECOVERY_COLLECTION, 'SELECTORAAAA'),
       status: 'rotated',

@@ -48,6 +48,22 @@ export class RecoverySelectorTakenError extends Error {
   }
 }
 
+/**
+ * Raised when the pointer moved between the moment a generation read it and
+ * the moment it tried to commit — i.e. a concurrent generation won.
+ *
+ * This error is the whole point of the compare-and-set: the losing call must
+ * fail BEFORE returning anything, because the alternative (committing anyway
+ * and rotating the winner) hands a user recovery codes that are already dead.
+ * Nothing is written when this is thrown.
+ */
+export class RecoveryGenerationConflictError extends Error {
+  constructor() {
+    super('RECOVERY_GENERATION_CONFLICT');
+    this.name = 'RecoveryGenerationConflictError';
+  }
+}
+
 function setRef(recoverySetId: string) {
   return db.collection(MFA_RECOVERY_COLLECTION).doc(recoverySetId);
 }
@@ -132,6 +148,31 @@ export async function getRecoveryPointer(
   return { ...data, updatedAt: toDate(data.updatedAt) } as RecoveryPointerDocument;
 }
 
+/** Version carried by a uid with no pointer yet. The first write makes it 1. */
+export const NO_RECOVERY_POINTER_VERSION = 0;
+
+export interface RecoveryPointerState {
+  activeSetId: string | null;
+  /** Compare-and-set token to hand back to `persistNewRecoverySet`. */
+  version: number;
+}
+
+/**
+ * Reads the compare-and-set token a generation must commit against.
+ *
+ * Called BEFORE any code is minted. The value captured here is what makes a
+ * concurrent generation detectable: if it changed by commit time, someone
+ * else generated in the meantime and this attempt must abandon its codes.
+ */
+export async function readRecoveryPointerState(uid: string): Promise<RecoveryPointerState> {
+  const pointer = await getRecoveryPointer(uid);
+
+  return {
+    activeSetId: pointer?.activeSetId ?? null,
+    version: pointer?.version ?? NO_RECOVERY_POINTER_VERSION,
+  };
+}
+
 /**
  * Reads the uid's active recovery set via the pointer.
  *
@@ -161,35 +202,44 @@ export interface PersistRecoverySetResult {
 }
 
 /**
- * Atomically installs a new recovery set as the uid's active one.
+ * Atomically installs a new recovery set as the uid's active one, but ONLY if
+ * no other generation has happened since `expectedVersion` was read.
  *
  * In ONE transaction:
  *   1. read the pointer, and the set it names (all reads first — Firestore
  *      forbids a read after a write inside a transaction);
- *   2. `create` the new set, which fails if the selector is taken;
- *   3. move the previous active set to `rotated`;
- *   4. repoint `_mfaRecoveryUsers/{uid}` at the new set.
+ *   2. COMPARE-AND-SET: abort unless the pointer is still at
+ *      `expectedVersion`;
+ *   3. `create` the new set, which fails if the selector is taken;
+ *   4. move the previous active set to `rotated`;
+ *   5. repoint `_mfaRecoveryUsers/{uid}` at the new set, at
+ *      `expectedVersion + 1`.
  *
- * WHY THIS CANNOT LEAVE TWO ACTIVE SETS
- * -------------------------------------
- * Every path that makes a set active also writes the pointer, and the pointer
- * is a single document. Two concurrent generations for one uid therefore
- * contend on the same key: Firestore aborts and retries the loser, whose
- * retry re-reads the pointer, sees the winner's set, and rotates IT. The
- * outcome is always exactly one active set — never two, never zero.
+ * WHY THE COMPARE-AND-SET, AND NOT JUST "LAST WRITER WINS"
+ * -------------------------------------------------------
+ * The pointer is a single document, so Firestore already serializes
+ * concurrent generations and already guarantees exactly one active set. What
+ * it does NOT prevent is both callers SUCCEEDING: the loser's transaction
+ * retries, sees the winner's set, rotates it, and returns its own codes — so
+ * two users' worth of plaintext goes out the door and one of those sets is
+ * already dead. The caller has no way to know which.
  *
- * The observable consequence, stated explicitly because it is a real
- * behaviour and not an accident: BOTH callers get a successful response with
- * different codes, but only the set written by the transaction that committed
- * LAST remains active. The earlier caller's codes are already `rotated` and
- * will not work. Callers must not race themselves; the Phase 3 client is
- * responsible for not issuing a second generation while one is in flight.
+ * `expectedVersion` closes that. It is read BEFORE any code is minted, so a
+ * generation that started from a now-stale view fails here, having written
+ * nothing and having returned nothing. One winner; everyone else conflicts.
+ *
+ * This is also the stale-operation fence. A slow, retried or replayed attempt
+ * carries an expected version that no longer matches, so it can never commit
+ * over a newer set — no lock, no lease and therefore no orphaned lock to time
+ * out and reclaim.
  *
  * `version` increments across rotations so the history of a user's sets is
- * ordered even though each one lives under an unrelated random selector.
+ * ordered even though each one lives under an unrelated random selector, and
+ * it always matches the `version` of the set the pointer names.
  */
 export async function persistNewRecoverySet(
   uid: string,
+  expectedVersion: number,
   buildSet: (input: { version: number }) => RecoverySetDocument,
   now: Date,
 ): Promise<PersistRecoverySetResult> {
@@ -197,28 +247,46 @@ export async function persistNewRecoverySet(
     return await db.runTransaction(async (transaction) => {
       // ---- reads ----------------------------------------------------------
       const pointerSnapshot = await transaction.get(pointerRef(uid));
-      const previousSetId =
-        (pointerSnapshot.data()?.activeSetId as string | undefined) ?? null;
+      const pointerData = pointerSnapshot.data();
+      const currentVersion =
+        (pointerData?.version as number | undefined) ?? NO_RECOVERY_POINTER_VERSION;
+
+      // ---- compare-and-set -------------------------------------------------
+      // Thrown, not returned: a user-thrown error is not a contention abort,
+      // so Firestore propagates it instead of retrying the callback. Retrying
+      // is exactly what must NOT happen — a retry would re-read the winner's
+      // version and then succeed, which is the bug this guard exists to stop.
+      if (currentVersion !== expectedVersion) {
+        throw new RecoveryGenerationConflictError();
+      }
+
+      const previousSetId = (pointerData?.activeSetId as string | undefined) ?? null;
 
       const previousSnapshot = previousSetId
         ? await transaction.get(setRef(previousSetId))
         : null;
 
       const previousStatus = previousSnapshot?.data()?.status as string | undefined;
-      const previousVersion = previousSnapshot?.data()?.version as number | undefined;
 
       // A pointer at a set that is not active is stale, not a conflict: it
       // just means the last rotation was interrupted after the set moved but
       // before the pointer did. Rebuilding the pointer here repairs it.
       const shouldRotatePrevious = previousSnapshot?.exists && previousStatus === 'active';
 
-      const document = buildSet({ version: (previousVersion ?? 0) + 1 });
+      // Derived from the pointer, not from the previous set document: the
+      // pointer is the authority on how many generations this uid has had,
+      // and keeping the two in lockstep makes `pointer.version ===
+      // activeSet.version` an invariant the tests can assert.
+      const nextVersion = expectedVersion + 1;
+
+      const document = buildSet({ version: nextVersion });
       assertValidRecoverySet(document);
 
       const pointer: RecoveryPointerDocument = {
         schemaVersion: RECOVERY_SCHEMA_VERSION,
         uid,
         activeSetId: document.recoverySetId,
+        version: nextVersion,
         updatedAt: now,
       };
       assertValidRecoveryPointer(pointer);

@@ -31,16 +31,19 @@ vi.mock('../pepper', async () => {
 });
 
 const persistNewRecoverySet = vi.hoisted(() => vi.fn());
+const readRecoveryPointerState = vi.hoisted(() => vi.fn());
 vi.mock('../recoverySetRepository', async () => {
   const actual =
     await vi.importActual<typeof import('../recoverySetRepository')>('../recoverySetRepository');
   return {
     ...actual,
+    readRecoveryPointerState: (uid: string) => readRecoveryPointerState(uid),
     persistNewRecoverySet: (
       uid: string,
+      expectedVersion: number,
       buildSet: (input: { version: number }) => unknown,
       now: Date,
-    ) => persistNewRecoverySet(uid, buildSet, now),
+    ) => persistNewRecoverySet(uid, expectedVersion, buildSet, now),
   };
 });
 
@@ -51,7 +54,10 @@ import { parseRecoveryCode } from '../codeFormat';
 import { RECOVERY_PEPPER_MIN_BYTES } from '../digest';
 import { RecoveryError } from '../errors';
 import { handleGenerateRecoveryCodes } from '../generateRecoveryCodes';
-import { RecoverySelectorTakenError } from '../recoverySetRepository';
+import {
+  RecoveryGenerationConflictError,
+  RecoverySelectorTakenError,
+} from '../recoverySetRepository';
 import { RECOVERY_CODES_PER_SET, validateRecoverySet } from '../schema';
 
 const UID = 'alice';
@@ -69,9 +75,22 @@ function request(overrides: Record<string, unknown> = {}) {
 }
 
 /** Captures the document the handler asked the repository to persist. */
-function persistedDocument(): Record<string, unknown> {
-  const [, buildSet] = persistNewRecoverySet.mock.calls[0];
+function persistedDocument(callIndex = 0): Record<string, unknown> {
+  const buildSet = persistNewRecoverySet.mock.calls[callIndex][2];
   return (buildSet as (input: { version: number }) => Record<string, unknown>)({ version: 1 });
+}
+
+/** Succeeds, echoing back whatever selector the handler generated. */
+function persistSucceeds() {
+  return async (
+    _uid: string,
+    _expectedVersion: number,
+    buildSet: (i: { version: number }) => { recoverySetId: string },
+  ) => ({
+    recoverySetId: buildSet({ version: 1 }).recoverySetId,
+    rotatedSetId: null,
+    version: 1,
+  });
 }
 
 beforeEach(() => {
@@ -80,11 +99,8 @@ beforeEach(() => {
     multiFactor: { enrolledFactors: [{ factorId: 'totp', uid: 'factor-1' }] },
   });
   readRecoveryPepper.mockReturnValue(PEPPER);
-  persistNewRecoverySet.mockImplementation(async (_uid, buildSet: (i: { version: number }) => { recoverySetId: string }) => ({
-    recoverySetId: buildSet({ version: 1 }).recoverySetId,
-    rotatedSetId: null,
-    version: 1,
-  }));
+  readRecoveryPointerState.mockResolvedValue({ activeSetId: null, version: 0 });
+  persistNewRecoverySet.mockImplementation(persistSucceeds());
 });
 
 describe('authentication', () => {
@@ -306,27 +322,162 @@ describe('rotation', () => {
   });
 });
 
+describe('concurrent generation — exactly one winner', () => {
+  it('reports a conflict instead of issuing a second set of codes', async () => {
+    persistNewRecoverySet.mockRejectedValue(new RecoveryGenerationConflictError());
+
+    const error = await handleGenerateRecoveryCodes(request()).catch((err) => err);
+
+    expect(error).toBeInstanceOf(HttpsError);
+    expect(error.code).toBe('aborted');
+  });
+
+  it('returns no plaintext at all to the loser', async () => {
+    persistNewRecoverySet.mockRejectedValue(new RecoveryGenerationConflictError());
+
+    const error = await handleGenerateRecoveryCodes(request()).catch((err) => err);
+
+    // The whole point: a losing call must not hand out codes that are already
+    // dead. There is no `codes` anywhere on the failure path.
+    expect(error.codes).toBeUndefined();
+    expect(JSON.stringify(error.message)).not.toContain('AJF');
+  });
+
+  it('does not retry a conflict as if it were a selector collision', async () => {
+    // A retry would re-read the winner's version and then succeed — which is
+    // exactly the bug. A conflict is terminal for this call.
+    persistNewRecoverySet.mockRejectedValue(new RecoveryGenerationConflictError());
+
+    await handleGenerateRecoveryCodes(request()).catch(() => undefined);
+
+    expect(persistNewRecoverySet).toHaveBeenCalledTimes(1);
+  });
+
+  it('models two devices racing: one gets codes, the other is refused', async () => {
+    // Device A and device B, same uid, both with fresh auth, both reading
+    // version 0. The repository lets the first commit through and rejects the
+    // second on the compare-and-set.
+    let committed = false;
+    persistNewRecoverySet.mockImplementation(
+      async (
+        _uid: string,
+        _expectedVersion: number,
+        buildSet: (i: { version: number }) => { recoverySetId: string },
+      ) => {
+        if (committed) {
+          throw new RecoveryGenerationConflictError();
+        }
+        committed = true;
+        return { recoverySetId: buildSet({ version: 1 }).recoverySetId, rotatedSetId: null, version: 1 };
+      },
+    );
+
+    const [deviceA, deviceB] = await Promise.allSettled([
+      handleGenerateRecoveryCodes(request()),
+      handleGenerateRecoveryCodes(request()),
+    ]);
+
+    const outcomes = [deviceA, deviceB];
+    const winners = outcomes.filter((outcome) => outcome.status === 'fulfilled');
+    const losers = outcomes.filter((outcome) => outcome.status === 'rejected');
+
+    expect(winners).toHaveLength(1);
+    expect(losers).toHaveLength(1);
+
+    const winner = (winners[0] as PromiseFulfilledResult<{ codes: string[] }>).value;
+    expect(winner.codes).toHaveLength(RECOVERY_CODES_PER_SET);
+
+    const loser = (losers[0] as PromiseRejectedResult).reason;
+    expect(loser.code).toBe('aborted');
+    expect(loser.codes).toBeUndefined();
+  });
+
+  it('logs the conflict without a code, uid or selector', async () => {
+    persistNewRecoverySet.mockRejectedValue(new RecoveryGenerationConflictError());
+
+    await handleGenerateRecoveryCodes(request()).catch(() => undefined);
+
+    const logged = JSON.stringify([
+      ...vi.mocked(logger.warn).mock.calls,
+      ...vi.mocked(logger.info).mock.calls,
+      ...vi.mocked(logger.error).mock.calls,
+    ]);
+    expect(logged).toContain('GENERATION_CONFLICT');
+    expect(logged).not.toContain('AJF');
+    expect(logged).not.toContain(UID);
+  });
+});
+
+describe('lost response — state idempotency is not response idempotency', () => {
+  it('mints a brand new set rather than replaying an earlier one', async () => {
+    // The winner committed but its response never reached the client. The
+    // client calls again. The backend CANNOT return the previous plaintext —
+    // it was never stored — so it generates a fresh set and rotates the old.
+    readRecoveryPointerState.mockResolvedValue({ activeSetId: 'PREVIOUSSETX', version: 1 });
+    persistNewRecoverySet.mockImplementation(
+      async (
+        _uid: string,
+        _expectedVersion: number,
+        buildSet: (i: { version: number }) => { recoverySetId: string },
+      ) => ({
+        recoverySetId: buildSet({ version: 2 }).recoverySetId,
+        rotatedSetId: 'PREVIOUSSETX',
+        version: 2,
+      }),
+    );
+
+    const response = await handleGenerateRecoveryCodes(request());
+
+    expect(response.recoverySetId).not.toBe('PREVIOUSSETX');
+    expect(response.codes).toHaveLength(RECOVERY_CODES_PER_SET);
+    // Committed against the version it actually read — a legitimate sequential
+    // regeneration, not a conflict.
+    expect(persistNewRecoverySet.mock.calls[0][1]).toBe(1);
+  });
+
+  it('never exposes a way to read a previous set back', async () => {
+    // There is no handler input that could name an earlier set: the payload is
+    // not read at all, so a "give me my codes again" call is not expressible.
+    await handleGenerateRecoveryCodes(
+      request({ data: { recoverySetId: 'PREVIOUSSETX', replay: true } }),
+    );
+
+    expect(persistNewRecoverySet).toHaveBeenCalledTimes(1);
+    expect(persistedDocument().recoverySetId).not.toBe('PREVIOUSSETX');
+  });
+});
+
 describe('failure handling', () => {
   it('retries with a fresh selector when one is taken', async () => {
     persistNewRecoverySet
       .mockRejectedValueOnce(new RecoverySelectorTakenError())
-      .mockImplementationOnce(
-        async (_uid, buildSet: (i: { version: number }) => { recoverySetId: string }) => ({
-          recoverySetId: buildSet({ version: 1 }).recoverySetId,
-          rotatedSetId: null,
-          version: 1,
-        }),
-      );
+      .mockImplementationOnce(persistSucceeds());
 
     const response = await handleGenerateRecoveryCodes(request());
 
     expect(persistNewRecoverySet).toHaveBeenCalledTimes(2);
     // The retry regenerated everything, so the two attempts used different
     // selectors — reusing secrets under a new selector would break the digests.
-    const first = persistNewRecoverySet.mock.calls[0][1]({ version: 1 }).recoverySetId;
-    const second = persistNewRecoverySet.mock.calls[1][1]({ version: 1 }).recoverySetId;
+    const first = persistedDocument(0).recoverySetId;
+    const second = persistedDocument(1).recoverySetId;
     expect(first).not.toBe(second);
     expect(response.recoverySetId).toBe(second);
+  });
+
+  it('commits every selector retry against the SAME expected version', async () => {
+    persistNewRecoverySet
+      .mockRejectedValueOnce(new RecoverySelectorTakenError())
+      .mockImplementationOnce(persistSucceeds());
+    readRecoveryPointerState.mockResolvedValue({ activeSetId: 'PREVIOUSSETX', version: 4 });
+
+    await handleGenerateRecoveryCodes(request());
+
+    // Re-reading the version on retry would let this call adopt a concurrent
+    // winner's state and rotate codes already handed to a user. The token is
+    // read once, before minting, and never refreshed.
+    expect(persistNewRecoverySet.mock.calls[0][1]).toBe(4);
+    expect(persistNewRecoverySet.mock.calls[1][1]).toBe(4);
+    expect(readRecoveryPointerState).toHaveBeenCalledTimes(1);
   });
 
   it('gives up after the retry budget rather than looping', async () => {
