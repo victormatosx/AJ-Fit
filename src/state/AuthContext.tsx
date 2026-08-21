@@ -45,6 +45,7 @@ import {
   withFirestoreRetry,
   type QuestionnaireResolution,
 } from '../lib/profileLoadState';
+import { createSingleFlight } from '../lib/singleFlight';
 
 type AuthCtx = {
   /** Current authenticated user (Firebase Auth), or null when signed out. */
@@ -126,6 +127,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Separately scopes listener failures: an old rejected profile request must
   // not affect error handling for a newer Firebase identity callback.
   const authStateSeq = useRef(0);
+  // All operations that can replace Firebase's current identity share one
+  // synchronous flight. This closes the sign-in A/sign-in B race across the
+  // complete workflow (Firebase Auth + provisioning + state load), while reset
+  // remains independent because it does not mutate the current identity.
+  const identityOperationFlightRef = useRef<ReturnType<
+    typeof createSingleFlight<void>
+  > | null>(null);
+  const resetOperationFlightRef = useRef<ReturnType<
+    typeof createSingleFlight<void>
+  > | null>(null);
+  if (!identityOperationFlightRef.current) {
+    identityOperationFlightRef.current = createSingleFlight<void>();
+  }
+  if (!resetOperationFlightRef.current) {
+    resetOperationFlightRef.current = createSingleFlight<void>();
+  }
+  const identityOperationFlight = identityOperationFlightRef.current;
+  const resetOperationFlight = resetOperationFlightRef.current;
 
   /**
    * Loads the user document (+ one-time schema migration) and questionnaire,
@@ -275,29 +294,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       linkedProviders: user ? getLinkedProviders(user) : [],
       initializing,
       profileLoading: loadState.loading,
-      signUp: async (email, password, name, answers) => {
-        // Single, authoritative creation flow — runs exactly once per account.
-        const newUser = await signUpWithEmail(email, password, name);
-        // Start delivery immediately after Firebase Auth creates the password
-        // user. Capture a failure as data so profile provisioning still
-        // completes and the account never ends up half-created in Firestore.
-        const verificationError = sendVerificationEmail(newUser)
-          .then(() => null)
-          .catch((error: unknown) => error);
-        try {
-          await provisionNewUser(newUser, { name, answers });
-          setUser(newUser);
-          await loadUserState(newUser.uid); // authoritative post-write load
-        } catch (err) {
-          logAuthError('signup:firestore-profile', err);
-          throw toAuthError(err);
-        }
-        // Automatic delivery happens exactly once. Every later send requires
-        // an explicit user tap on the verification screen.
-        const sendError = await verificationError;
-        if (sendError) throw sendError;
-      },
-      signIn: async (email, password) => {
+      signUp: (email, password, name, answers) =>
+        identityOperationFlight.run(async () => {
+          // Single, authoritative creation flow — runs exactly once per account.
+          const newUser = await signUpWithEmail(email, password, name);
+          // Start delivery immediately after Firebase Auth creates the password
+          // user. Capture a failure as data so profile provisioning still
+          // completes and the account never ends up half-created in Firestore.
+          const verificationError = sendVerificationEmail(newUser)
+            .then(() => null)
+            .catch((error: unknown) => error);
+          try {
+            await provisionNewUser(newUser, { name, answers });
+            setUser(newUser);
+            await loadUserState(newUser.uid); // authoritative post-write load
+          } catch (err) {
+            logAuthError('signup:firestore-profile', err);
+            throw toAuthError(err);
+          }
+          // Automatic delivery happens exactly once. Every later send requires
+          // an explicit user tap on the verification screen.
+          const sendError = await verificationError;
+          if (sendError) throw sendError;
+        }),
+      signIn: (email, password) => identityOperationFlight.run(async () => {
         const authedUser = await signInWithEmail(email, password);
         try {
           setUser(authedUser);
@@ -306,48 +326,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           logAuthError('signin:load-profile', err);
           throw toAuthError(err);
         }
-      },
-      signInWithProvider: async (provider, answers) => {
-        // The credential sign-in triggers the auth-state listener; provisioning
-        // stays here (explicit flow) and only creates the doc on first login.
-        const authedUser = await socialSignIn(provider);
-        try {
-          await ensureUserProvisioned(authedUser, { answers });
-          setUser(authedUser);
-          await loadUserState(authedUser.uid);
-        } catch (err) {
-          logAuthError(`${provider}:firestore-profile`, err);
-          throw toAuthError(err);
-        }
-      },
-      completeLinkingWithPassword: async (email, password, answers) => {
-        const linkedUser = await socialLinkPassword(email, password);
-        try {
-          await ensureUserProvisioned(linkedUser, { answers });
-          setUser(linkedUser);
-          await loadUserState(linkedUser.uid);
-        } catch (err) {
-          logAuthError('link:password:firestore-profile', err);
-          throw toAuthError(err);
-        }
-      },
-      completeLinkingWithProvider: async (provider, answers) => {
-        const linkedUser = await socialLinkProvider(provider);
-        try {
-          await ensureUserProvisioned(linkedUser, { answers });
-          setUser(linkedUser);
-          await loadUserState(linkedUser.uid);
-        } catch (err) {
-          logAuthError(`link:${provider}:firestore-profile`, err);
-          throw toAuthError(err);
-        }
-      },
-      reset: async (email) => {
-        await resetPassword(email);
-      },
-      logout: async () => {
-        await signOutUser();
-      },
+      }),
+      signInWithProvider: (provider, answers) =>
+        identityOperationFlight.run(async () => {
+          // The credential sign-in triggers the auth-state listener; provisioning
+          // stays here (explicit flow) and only creates the doc on first login.
+          const authedUser = await socialSignIn(provider);
+          try {
+            await ensureUserProvisioned(authedUser, { answers });
+            setUser(authedUser);
+            await loadUserState(authedUser.uid);
+          } catch (err) {
+            logAuthError(`${provider}:firestore-profile`, err);
+            throw toAuthError(err);
+          }
+        }),
+      completeLinkingWithPassword: (email, password, answers) =>
+        identityOperationFlight.run(async () => {
+          const linkedUser = await socialLinkPassword(email, password);
+          try {
+            await ensureUserProvisioned(linkedUser, { answers });
+            setUser(linkedUser);
+            await loadUserState(linkedUser.uid);
+          } catch (err) {
+            logAuthError('link:password:firestore-profile', err);
+            throw toAuthError(err);
+          }
+        }),
+      completeLinkingWithProvider: (provider, answers) =>
+        identityOperationFlight.run(async () => {
+          const linkedUser = await socialLinkProvider(provider);
+          try {
+            await ensureUserProvisioned(linkedUser, { answers });
+            setUser(linkedUser);
+            await loadUserState(linkedUser.uid);
+          } catch (err) {
+            logAuthError(`link:${provider}:firestore-profile`, err);
+            throw toAuthError(err);
+          }
+        }),
+      reset: (email) => resetOperationFlight.run(() => resetPassword(email)),
+      logout: () => identityOperationFlight.run(() => signOutUser()),
       refreshEmailVerification: async () => {
         const refreshed = await refreshEmailVerificationStatus();
         setUser(refreshed.user);
@@ -358,7 +377,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (user) await loadUserState(user.uid);
       },
     }),
-    [user, loadState, initializing, loadUserState, authRevision],
+    [
+      user,
+      loadState,
+      initializing,
+      loadUserState,
+      authRevision,
+      identityOperationFlight,
+      resetOperationFlight,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

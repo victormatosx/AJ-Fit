@@ -21,7 +21,7 @@ describe('AuthScreen entryContext boundary', () => {
     for (const sensitiveOp of [
       'await signUp(email, password, name, quiz)',
       'await signIn(email, password)',
-      'await reset(email)',
+      '() => reset(email)',
       'await signInWithProvider(provider, quiz)',
       'await completeLinkingWithPassword(linking.email, linkPassword, quiz)',
       'await completeLinkingWithProvider(existing, quiz)',

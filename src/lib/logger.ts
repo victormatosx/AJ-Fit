@@ -26,6 +26,10 @@ export function sanitizeLogText(value: string): string {
     .replace(/Bearer\s+[A-Za-z0-9._~-]+/gi, 'Bearer [redacted]')
     .replace(/\$RCAnonymousID:[\w-]+/g, '$RCAnonymousID:[redacted]')
     .replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, '[redacted-jwt]')
+    .replace(
+      /\b[A-Za-z0-9_-]*(?:password|passwd|senha|credential|authorization|bearer|secret|token)[A-Za-z0-9_-]*\b/gi,
+      '[redacted]',
+    )
     .replace(/\b[A-Za-z0-9+/=_-]{48,}\b/g, '[redacted-value]')
     .replace(
       /\b(?=[A-Za-z0-9_-]{20,47}\b)(?=[A-Za-z0-9_-]*\d)(?=[A-Za-z0-9_-]*[A-Z])[A-Za-z0-9_-]+\b/g,

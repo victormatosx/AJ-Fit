@@ -14,6 +14,7 @@ import { logAuthError, toAuthError } from './auth';
 import { getGoogleCredential, isGoogleSigninAvailable } from './providers/google';
 import { getAppleCredential, isAppleAuthAvailable } from './providers/apple';
 import { SocialAuthCancelledError, type ProviderResult } from './providers/types';
+import { createSingleFlight } from '../lib/singleFlight';
 
 /**
  * Provider-agnostic social authentication. Screens call `signInWithProvider`
@@ -69,6 +70,11 @@ export class AccountLinkingRequiredError extends Error {
 let pendingCredential: AuthCredential | null = null;
 let pendingMfaDisplayName: string | null = null;
 
+// Google, Apple and account-linking all mutate the same Firebase Auth identity
+// and share process-memory linking state. One common flight prevents two native
+// provider sheets or two competing identity transitions from running together.
+const socialIdentityFlight = createSingleFlight<User>();
+
 async function applyDisplayName(user: User, displayName?: string | null) {
   if (!user.displayName && displayName?.trim()) {
     await updateProfile(user, { displayName: displayName.trim() });
@@ -86,7 +92,11 @@ function errorCode(err: unknown): string {
  * Throws `SocialAuthCancelledError` on cancel, or `AccountLinkingRequiredError`
  * when the email already exists under another provider.
  */
-export async function signInWithProvider(provider: SocialProvider): Promise<User> {
+export function signInWithProvider(provider: SocialProvider): Promise<User> {
+  return socialIdentityFlight.run(() => performSignInWithProvider(provider));
+}
+
+async function performSignInWithProvider(provider: SocialProvider): Promise<User> {
   let result: ProviderResult;
   try {
     result = await acquireCredential[provider]();
@@ -127,7 +137,14 @@ export async function signInWithProvider(provider: SocialProvider): Promise<User
  * Completes a pending link by re-authenticating with the existing email/password
  * account and attaching the pending social credential to the SAME user.
  */
-export async function completeLinkingWithPassword(
+export function completeLinkingWithPassword(
+  email: string,
+  password: string,
+): Promise<User> {
+  return socialIdentityFlight.run(() => performLinkingWithPassword(email, password));
+}
+
+async function performLinkingWithPassword(
   email: string,
   password: string,
 ): Promise<User> {
@@ -150,7 +167,13 @@ export async function completeLinkingWithPassword(
  * Completes a pending link by re-authenticating with another social provider
  * (the one that owns the email) and attaching the pending credential.
  */
-export async function completeLinkingWithProvider(
+export function completeLinkingWithProvider(
+  provider: SocialProvider,
+): Promise<User> {
+  return socialIdentityFlight.run(() => performLinkingWithProvider(provider));
+}
+
+async function performLinkingWithProvider(
   provider: SocialProvider,
 ): Promise<User> {
   let result: ProviderResult;

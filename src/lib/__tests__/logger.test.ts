@@ -41,4 +41,31 @@ describe('client logging policy', () => {
       message: 'failed for [redacted-email]',
     });
   });
+
+  it('sanitizes throttling errors without retaining attempted auth data', () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    logError(
+      'auth:sign-in',
+      Object.assign(
+        new Error(
+          'auth/too-many-requests for person@example.com with attempted-password-123',
+        ),
+        { code: 'auth/too-many-requests' },
+      ),
+      {
+        email: 'person@example.com',
+        password: 'attempted-password-123',
+        credential: 'opaque-credential',
+        authorization: 'Bearer opaque-token',
+      },
+    );
+
+    const serialized = JSON.stringify(error.mock.calls);
+    expect(serialized).not.toContain('person@example.com');
+    expect(serialized).not.toContain('attempted-password-123');
+    expect(serialized).not.toContain('opaque-credential');
+    expect(serialized).not.toContain('opaque-token');
+    expect(serialized).toContain('auth/too-many-requests');
+  });
 });

@@ -14,6 +14,7 @@ import { isMultiFactorAuthRequired } from '../lib/mfaTotp';
 // no business pulling the callable-functions client into its module graph.
 import { deleteVaultKey } from '../lib/photoVaultKeyStorage';
 import { logError } from '../lib/logger';
+import { createSingleFlight } from '../lib/singleFlight';
 
 /**
  * Reusable, typed authentication service.
@@ -38,7 +39,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   'auth/invalid-credential':
     'Credencial inválida. Se foi com Google, confira os client IDs OAuth do Firebase.',
   'auth/user-disabled': 'Esta conta foi desativada.',
-  'auth/too-many-requests': 'Muitas tentativas. Tente novamente mais tarde.',
+  'auth/too-many-requests':
+    'Muitas tentativas realizadas. Aguarde um momento antes de tentar novamente.',
   'auth/network-request-failed': 'Falha de conexão. Verifique sua internet.',
   'auth/requires-recent-login': 'Sua sessão expirou. Entre novamente para continuar.',
   'auth/user-token-expired': 'Sua sessão expirou. Entre novamente para continuar.',
@@ -59,6 +61,15 @@ const ERROR_MESSAGES: Record<string, string> = {
     'Login criado, mas o Firestore bloqueou a criação do perfil. Confira as regras publicadas.',
   'unavailable': 'Firestore indisponível no momento. Tente novamente.',
 };
+
+// Service-level barriers protect callers that bypass AuthScreen. Each action
+// has its own flight: resetting a password does not unnecessarily serialize a
+// sign-in, while duplicate calls to the same critical Firebase operation share
+// one Promise until it settles.
+const signUpFlight = createSingleFlight<User>();
+const signInFlight = createSingleFlight<User>();
+const resetPasswordFlight = createSingleFlight<void>();
+const signOutFlight = createSingleFlight<void>();
 
 export function getErrorCode(err: unknown): string {
   return typeof err === 'object' && err !== null && 'code' in err
@@ -84,78 +95,86 @@ export function toAuthError(err: unknown): Error {
   return friendly;
 }
 
-export async function signUpWithEmail(
+export function signUpWithEmail(
   email: string,
   password: string,
   displayName?: string,
 ): Promise<User> {
-  try {
-    const { user } = await createUserWithEmailAndPassword(
-      auth,
-      email.trim(),
-      password,
-    );
-    if (displayName?.trim()) {
-      await updateProfile(user, { displayName: displayName.trim() });
+  return signUpFlight.run(async () => {
+    try {
+      const { user } = await createUserWithEmailAndPassword(
+        auth,
+        email.trim(),
+        password,
+      );
+      if (displayName?.trim()) {
+        await updateProfile(user, { displayName: displayName.trim() });
+      }
+      return user;
+    } catch (err) {
+      throw toAuthError(err);
     }
-    return user;
-  } catch (err) {
-    throw toAuthError(err);
-  }
+  });
 }
 
-export async function signInWithEmail(
+export function signInWithEmail(
   email: string,
   password: string,
 ): Promise<User> {
-  try {
-    const { user } = await signInWithEmailAndPassword(
-      auth,
-      email.trim(),
-      password,
-    );
-    return user;
-  } catch (err) {
-    // getMultiFactorResolver requires the original MultiFactorError, including
-    // its opaque customData. Every non-MFA error keeps the existing friendly
-    // normalization contract.
-    if (isMultiFactorAuthRequired(err)) throw err;
-    throw toAuthError(err);
-  }
-}
-
-export async function resetPassword(email: string): Promise<void> {
-  try {
-    await sendPasswordResetEmail(auth, email.trim());
-  } catch (err) {
-    throw toAuthError(err);
-  }
-}
-
-export async function signOutUser(): Promise<void> {
-  // Captured before signOut, which clears currentUser: the vault key is
-  // namespaced per uid and cannot be removed without it.
-  const uid = auth.currentUser?.uid;
-
-  try {
-    await signOut(auth);
-  } catch (err) {
-    throw toAuthError(err);
-  }
-  // Rotates out the encryption key so no encrypted session blob survives
-  // logout, on top of Firebase's own persistence cleanup.
-  await clearSecureAuthSession();
-
-  // Logout ends the session explicitly, so the device should not keep the
-  // photo vault key: it stays recoverable from the backend after a fresh
-  // sign-in. Best effort — a storage failure must never block logout.
-  if (uid) {
+  return signInFlight.run(async () => {
     try {
-      await deleteVaultKey(uid);
-    } catch {
-      // Intentionally ignored: the user is already signed out.
+      const { user } = await signInWithEmailAndPassword(
+        auth,
+        email.trim(),
+        password,
+      );
+      return user;
+    } catch (err) {
+      // getMultiFactorResolver requires the original MultiFactorError, including
+      // its opaque customData. Every non-MFA error keeps the existing friendly
+      // normalization contract.
+      if (isMultiFactorAuthRequired(err)) throw err;
+      throw toAuthError(err);
     }
-  }
+  });
+}
+
+export function resetPassword(email: string): Promise<void> {
+  return resetPasswordFlight.run(async () => {
+    try {
+      await sendPasswordResetEmail(auth, email.trim());
+    } catch (err) {
+      throw toAuthError(err);
+    }
+  });
+}
+
+export function signOutUser(): Promise<void> {
+  return signOutFlight.run(async () => {
+    // Captured before signOut, which clears currentUser: the vault key is
+    // namespaced per uid and cannot be removed without it.
+    const uid = auth.currentUser?.uid;
+
+    try {
+      await signOut(auth);
+    } catch (err) {
+      throw toAuthError(err);
+    }
+    // Rotates out the encryption key so no encrypted session blob survives
+    // logout, on top of Firebase's own persistence cleanup.
+    await clearSecureAuthSession();
+
+    // Logout ends the session explicitly, so the device should not keep the
+    // photo vault key: it stays recoverable from the backend after a fresh
+    // sign-in. Best effort — a storage failure must never block logout.
+    if (uid) {
+      try {
+        await deleteVaultKey(uid);
+      } catch {
+        // Intentionally ignored: the user is already signed out.
+      }
+    }
+  });
 }
 
 /**

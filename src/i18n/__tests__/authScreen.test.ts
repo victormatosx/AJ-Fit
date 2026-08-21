@@ -29,6 +29,7 @@ describe('Auth screen i18n', () => {
       'fields.name',
       'validation.passwordMinimum',
       'actions.createAccount',
+      'actions.sendLinkCooldown',
       'social.continueWith',
       'linking.passwordMessage',
       'linking.providerMessage',
@@ -57,6 +58,24 @@ describe('Auth screen i18n', () => {
     }
   });
 
+  it('presents throttling and reset cooldown without infrastructure details', () => {
+    expect(ptBR.errors.tooManyRequests).toBe(
+      'Muitas tentativas realizadas. Aguarde um momento antes de tentar novamente.',
+    );
+    for (const resource of [ptBR, en, es]) {
+      expect(resource.errors.tooManyRequests).not.toMatch(
+        /firebase|identity|quota|infra/i,
+      );
+      expect(resource.actions.sendLinkCooldown).toContain('{{seconds}}');
+    }
+
+    expect(screen).toContain('requestPasswordResetWithCooldown');
+    expect(screen).toContain("mode === 'reset' && resetCooldown.isActive()");
+    expect(screen).toContain("result.status === 'cooldown'");
+    expect(screen).toContain('setInterval');
+    expect(screen).toContain('clearInterval');
+  });
+
   it('keeps signup limited to authentication instead of commercial eligibility', () => {
     for (const forbiddenDependency of [
       'react-native-purchases',
@@ -70,7 +89,7 @@ describe('Auth screen i18n', () => {
     for (const token of [
       'await signUp(email, password, name, quiz)',
       'await signIn(email, password)',
-      'await reset(email)',
+      '() => reset(email)',
       'await signInWithProvider(provider, quiz)',
       'await completeLinkingWithPassword(linking.email, linkPassword, quiz)',
       'await completeLinkingWithProvider(existing, quiz)',

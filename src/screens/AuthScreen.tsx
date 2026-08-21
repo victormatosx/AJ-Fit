@@ -45,6 +45,11 @@ import {
 } from '../lib/mfaTotp';
 import { TotpChallengeScreen } from './TotpChallengeScreen';
 import type { OnboardingAuthContext } from '../onboarding/authContext';
+import {
+  createPasswordResetCooldown,
+  requestPasswordResetWithCooldown,
+  type PasswordResetCooldown,
+} from '../lib/passwordResetCooldown';
 
 type Mode = 'signup' | 'login' | 'reset';
 
@@ -141,6 +146,24 @@ export function AuthScreen({
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [totpChallenge, setTotpChallenge] = useState<TotpSignInChallenge | null>(null);
+  // `busy` only updates on React's next render. This synchronous ref closes
+  // that gap across password, social and account-linking handlers; AuthContext
+  // independently protects programmatic callers below the UI layer.
+  const operationLock = useRef(false);
+  const resetCooldownRef = useRef<PasswordResetCooldown | null>(null);
+  if (!resetCooldownRef.current) {
+    resetCooldownRef.current = createPasswordResetCooldown();
+  }
+  const resetCooldown = resetCooldownRef.current;
+  const [resetCooldownSeconds, setResetCooldownSeconds] = useState(0);
+
+  useEffect(() => {
+    if (resetCooldownSeconds <= 0) return;
+    const timer = setInterval(() => {
+      setResetCooldownSeconds(resetCooldown.remainingSeconds());
+    }, 1_000);
+    return () => clearInterval(timer);
+  }, [resetCooldown, resetCooldownSeconds > 0]);
 
   // Social auth
   const [socialBusy, setSocialBusy] = useState<SocialProvider | null>(null);
@@ -214,6 +237,9 @@ export function AuthScreen({
     setConfirm('');
     setLinking(null);
     setLinkPassword('');
+    if (next === 'reset') {
+      setResetCooldownSeconds(resetCooldown.remainingSeconds());
+    }
   }
 
   function beginTotpChallenge(error: unknown, origin: TotpSignInOrigin): boolean {
@@ -233,11 +259,12 @@ export function AuthScreen({
   }
 
   async function handleSocial(provider: SocialProvider) {
-    if (busy) return;
+    if (operationLock.current || busy) return;
     if (provider === 'google' && !googleReallyAvailable) {
       setGoogleUnavailableNotice(true);
       return;
     }
+    operationLock.current = true;
     clearPendingSocialAuthState();
     setError(null);
     setInfo(null);
@@ -259,16 +286,18 @@ export function AuthScreen({
         setError(localizedAuthError(err, t, 'errors.signInFailed'));
       }
     } finally {
+      operationLock.current = false;
       setSocialBusy(null);
     }
   }
 
   async function handleLinkWithPassword() {
-    if (!linking || busy) return;
+    if (!linking || operationLock.current || busy) return;
     if (!linkPassword) {
       setError(t('validation.linkPasswordRequired'));
       return;
     }
+    operationLock.current = true;
     setError(null);
     setSocialBusy(linking.attempted);
     try {
@@ -278,12 +307,14 @@ export function AuthScreen({
         setError(localizedAuthError(err, t, 'errors.linkFailed'));
       }
     } finally {
+      operationLock.current = false;
       setSocialBusy(null);
     }
   }
 
   async function handleLinkWithProvider(existing: SocialProvider) {
-    if (!linking || busy) return;
+    if (!linking || operationLock.current || busy) return;
+    operationLock.current = true;
     setError(null);
     setSocialBusy(existing);
     try {
@@ -295,6 +326,7 @@ export function AuthScreen({
         setError(localizedAuthError(err, t, 'errors.linkFailed'));
       }
     } finally {
+      operationLock.current = false;
       setSocialBusy(null);
     }
   }
@@ -313,7 +345,11 @@ export function AuthScreen({
   }
 
   async function handleSubmit() {
-    if (busy) return;
+    if (operationLock.current || busy) return;
+    if (mode === 'reset' && resetCooldown.isActive()) {
+      setResetCooldownSeconds(resetCooldown.remainingSeconds());
+      return;
+    }
     setError(null);
     setInfo(null);
 
@@ -323,6 +359,7 @@ export function AuthScreen({
       return;
     }
 
+    operationLock.current = true;
     setLoading(true);
     try {
       if (mode === 'signup') {
@@ -331,7 +368,12 @@ export function AuthScreen({
         clearPendingSocialAuthState();
         await signIn(email, password);
       } else {
-        await reset(email);
+        const result = await requestPasswordResetWithCooldown(
+          resetCooldown,
+          () => reset(email),
+        );
+        setResetCooldownSeconds(result.remainingSeconds);
+        if (result.status === 'cooldown') return;
         setInfo(t('reset.success'));
         setTimeout(() => switchMode('login'), 1000);
       }
@@ -339,6 +381,7 @@ export function AuthScreen({
       if (mode === 'login' && beginTotpChallenge(err, 'password')) return;
       setError(localizedAuthError(err, t, 'errors.generic'));
     } finally {
+      operationLock.current = false;
       setLoading(false);
     }
   }
@@ -348,7 +391,9 @@ export function AuthScreen({
       ? t('actions.createAccount')
       : mode === 'login'
         ? t('actions.signIn')
-        : t('actions.sendLink');
+        : resetCooldownSeconds > 0
+          ? t('actions.sendLinkCooldown', { seconds: resetCooldownSeconds })
+          : t('actions.sendLink');
 
   if (totpChallenge) {
     return (
@@ -506,7 +551,10 @@ export function AuthScreen({
               <View style={{ flex: 1, minHeight: 24 }} />
 
               <View style={{ gap: 11 }}>
-                <CtaButton onPress={handleSubmit} disabled={busy}>
+                <CtaButton
+                  onPress={handleSubmit}
+                  disabled={busy || (mode === 'reset' && resetCooldownSeconds > 0)}
+                >
                   {loading ? (
                     <ActivityIndicator color="#fff" />
                   ) : (
