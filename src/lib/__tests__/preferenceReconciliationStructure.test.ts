@@ -14,7 +14,8 @@ describe('account preference reconciliation', () => {
     expect(app).toContain('needsPreferencesReconciliation({');
     expect(app).not.toContain('setPreferencesReconciling');
 
-    const guard = 'if (!preferencesReconciling || !user || !profile) return;';
+    const guard =
+      'if (emailVerificationRequired || !preferencesReconciling || !user || !profile) return;';
     const guardPosition = app.indexOf(guard);
     const languageReconciliationPosition = app.indexOf('reconcileLanguageOnLoad({');
     const unitsReconciliationPosition = app.indexOf('reconcileUnitsOnLoad({');
@@ -24,5 +25,6 @@ describe('account preference reconciliation', () => {
     expect(unitsReconciliationPosition).toBeGreaterThan(guardPosition);
     expect(app).toContain('remoteLanguage: profile.preferences.language');
     expect(app).toContain('remoteUnits: profile.preferences.units');
+    expect(app).toContain('[emailVerificationRequired, preferencesReconciling, user, profile]');
   });
 });

@@ -191,12 +191,38 @@ describe('Photo Vault backend foundation — Phase 3 structural guarantees', () 
     expect(source).not.toContain('randomBytes');
   });
 
-  it('keeps App Check enforcement pending until real-device validation', () => {
-    const entrypoint = readCode('src/index.ts');
-    const health = readCode('src/health/backendHealth.ts');
+  it('enforces App Check on exactly the six approved mobile callables', () => {
+    const protectedDefinitions = [
+      ['src/index.ts', 'validatePromoCode'],
+      ['src/index.ts', 'authorizePromoPurchase'],
+      ['src/photoVault/createVault.ts', 'createVault'],
+      ['src/photoVault/recoverVaultKey.ts', 'recoverVaultKey'],
+      ['src/billing/confirmCommercialGate.ts', 'confirmCommercialGate'],
+      ['src/accountDeletion/requestAccountDeletion.ts', 'requestAccountDeletion'],
+    ] as const;
 
-    expect(entrypoint).not.toMatch(/enforceAppCheck\s*:\s*true/);
-    expect(health).not.toMatch(/enforceAppCheck\s*:\s*true/);
+    for (const [file, functionName] of protectedDefinitions) {
+      const source = readCode(file);
+      const definition = new RegExp(
+        `export\\s+const\\s+${functionName}\\s*=\\s*onCall\\([\\s\\S]*?enforceAppCheck\\s*:\\s*true`,
+      );
+      expect(source, `${functionName} must enforce App Check`).toMatch(definition);
+    }
+
+    const allEndpointSources = [
+      'src/index.ts',
+      'src/health/backendHealth.ts',
+      'src/photoVault/createVault.ts',
+      'src/photoVault/recoverVaultKey.ts',
+      'src/photoVault/cleanupOrphans.ts',
+      'src/billing/confirmCommercialGate.ts',
+      'src/accountDeletion/requestAccountDeletion.ts',
+      'src/accountDeletion/immediateDispatch.ts',
+      'src/accountDeletion/reconciliation/scheduler.ts',
+    ].map(readCode).join('\n');
+
+    expect(allEndpointSources.match(/enforceAppCheck\s*:\s*true/g)).toHaveLength(6);
+    expect(allEndpointSources).not.toMatch(/consumeAppCheckToken\s*:\s*true/);
   });
 
   it('exports backendHealth from the entrypoint', () => {

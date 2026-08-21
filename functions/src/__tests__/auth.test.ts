@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { RECENT_AUTH_MAX_AGE_SECONDS, requireAuth, requireRecentAuth } from '../lib/auth';
+import {
+  RECENT_AUTH_MAX_AGE_SECONDS,
+  requireAuth,
+  requireRecentAuth,
+  requireVerifiedEmailForPrivateAccess,
+} from '../lib/auth';
 
 describe('requireAuth', () => {
   it('returns the uid from a verified auth token', () => {
@@ -22,6 +27,52 @@ describe('requireAuth', () => {
     } as never);
 
     expect(uid).toBe('real-uid-from-token');
+  });
+});
+
+describe('requireVerifiedEmailForPrivateAccess', () => {
+  const request = (token: Record<string, unknown>) =>
+    ({ auth: { uid: 'alice', token }, data: {} }) as never;
+
+  it('rejects an unverified Email/Password identity', () => {
+    expect(() => requireVerifiedEmailForPrivateAccess(request({
+      email_verified: false,
+      firebase: { identities: { email: ['alice@example.com'] } },
+    }))).toThrowError(expect.objectContaining({
+      code: 'permission-denied',
+      message: 'email_verification_required',
+    }));
+  });
+
+  it('accepts a verified Email/Password identity', () => {
+    expect(() => requireVerifiedEmailForPrivateAccess(request({
+      email_verified: true,
+      firebase: { identities: { email: ['alice@example.com'] } },
+    }))).not.toThrow();
+  });
+
+  it.each(['google.com', 'apple.com'])('accepts a social-only %s identity', (provider) => {
+    expect(() => requireVerifiedEmailForPrivateAccess(request({
+      email_verified: false,
+      firebase: { identities: { [provider]: ['provider-subject'] } },
+    }))).not.toThrow();
+  });
+
+  it('rejects an unverified linked password + social identity', () => {
+    expect(() => requireVerifiedEmailForPrivateAccess(request({
+      email_verified: false,
+      firebase: {
+        identities: {
+          email: ['alice@example.com'],
+          'google.com': ['provider-subject'],
+        },
+      },
+    }))).toThrowError(expect.objectContaining({ code: 'permission-denied' }));
+  });
+
+  it('rejects an unauthenticated request', () => {
+    expect(() => requireVerifiedEmailForPrivateAccess({ auth: null } as never))
+      .toThrowError(expect.objectContaining({ code: 'unauthenticated' }));
   });
 });
 

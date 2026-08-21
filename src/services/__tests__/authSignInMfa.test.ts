@@ -39,6 +39,18 @@ describe('email/password sign-in MFA boundary', () => {
     );
   });
 
+  it('sends a legacy six-character password to Firebase without strength validation', async () => {
+    const user = { uid: 'legacy-user' };
+    mocks.signInWithEmailAndPassword.mockResolvedValue({ user });
+
+    await expect(signInWithEmail('person@example.com', '123456')).resolves.toBe(user);
+    expect(mocks.signInWithEmailAndPassword).toHaveBeenCalledWith(
+      expect.anything(),
+      'person@example.com',
+      '123456',
+    );
+  });
+
   it('preserves the original MultiFactorError for the resolver', async () => {
     const original = {
       code: 'auth/multi-factor-auth-required',
@@ -51,13 +63,27 @@ describe('email/password sign-in MFA boundary', () => {
     );
   });
 
-  it('continues normalizing non-MFA Firebase errors', async () => {
-    mocks.signInWithEmailAndPassword.mockRejectedValue({
-      code: 'auth/invalid-credential',
-    });
+  it.each([
+    'auth/invalid-credential',
+    'auth/user-not-found',
+    'auth/wrong-password',
+    'auth/user-disabled',
+  ])('normalizes private sign-in failure %s to one external result', async (code) => {
+    mocks.signInWithEmailAndPassword.mockRejectedValue({ code });
 
     await expect(signInWithEmail('person@example.com', 'bad')).rejects.toMatchObject({
       code: 'auth/invalid-credential',
+      message: 'E-mail ou senha incorretos.',
     });
   });
+
+  it.each(['auth/too-many-requests', 'auth/network-request-failed', 'auth/invalid-email'])(
+    'preserves actionable sign-in failure %s',
+    async (code) => {
+      mocks.signInWithEmailAndPassword.mockRejectedValue({ code });
+      await expect(signInWithEmail('person@example.com', 'bad')).rejects.toMatchObject({
+        code,
+      });
+    },
+  );
 });

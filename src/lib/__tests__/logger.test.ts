@@ -68,4 +68,23 @@ describe('client logging policy', () => {
     expect(serialized).not.toContain('opaque-token');
     expect(serialized).toContain('auth/too-many-requests');
   });
+
+  it('never serializes exception cause, metadata or payload credentials', () => {
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const secret = 'correct horse battery staple';
+    const error = Object.assign(new Error('request rejected'), {
+      code: 'auth/weak-password',
+      cause: { password: secret },
+      metadata: { credential: secret },
+      payload: { authorization: secret },
+    });
+
+    logError('auth:signup', error);
+
+    const serialized = JSON.stringify(errorLog.mock.calls);
+    expect(serialized).not.toContain(secret);
+    expect(serialized).not.toContain('cause');
+    expect(serialized).not.toContain('metadata');
+    expect(serialized).not.toContain('payload');
+  });
 });

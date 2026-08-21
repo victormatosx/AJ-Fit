@@ -137,8 +137,13 @@ describe('Google/Apple sign-in MFA boundary', () => {
     const original = { code: 'auth/multi-factor-auth-required', customData: {} };
     mocks.signInWithEmailAndPassword.mockRejectedValueOnce(original);
     await expect(
-      completeLinkingWithPassword('person@example.com', 'password'),
+      completeLinkingWithPassword('person@example.com', '123456'),
     ).rejects.toBe(original);
+    expect(mocks.signInWithEmailAndPassword).toHaveBeenCalledWith(
+      expect.anything(),
+      'person@example.com',
+      '123456',
+    );
   });
 
   it('links the pending incoming credential after MFA resolves on the same user', async () => {

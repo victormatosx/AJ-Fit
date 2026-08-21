@@ -42,7 +42,23 @@ let testEnv: RulesTestEnvironment;
 let testEnvFirestore: RulesTestEnvironment;
 
 function userStorage(uid: string) {
-  return testEnv.authenticatedContext(uid).storage();
+  return testEnv.authenticatedContext(uid, {
+    email_verified: true,
+    firebase: { identities: { email: [`${uid}@example.com`] }, sign_in_provider: 'password' },
+  }).storage();
+}
+
+function passwordStorage(verified: boolean) {
+  return testEnv.authenticatedContext(UID, {
+    email_verified: verified,
+    firebase: { identities: { email: [`${UID}@example.com`] }, sign_in_provider: 'password' },
+  }).storage();
+}
+function socialStorage(provider: 'google.com' | 'apple.com') {
+  return testEnv.authenticatedContext(UID, {
+    email_verified: false,
+    firebase: { identities: { [provider]: ['provider-subject'] }, sign_in_provider: provider },
+  }).storage();
 }
 function anonStorage() {
   return testEnv.unauthenticatedContext().storage();
@@ -109,6 +125,28 @@ describe('exercise videos storage — read', () => {
   it('blocks an unauthenticated user from reading an execution video', async () => {
     await seedVideo();
     await assertFails(anonStorage().ref(VERTICAL_PATH).getDownloadURL());
+  });
+
+  it('blocks an unverified Email/Password user from reading', async () => {
+    await seedVideo();
+    await assertFails(passwordStorage(false).ref(VERTICAL_PATH).getDownloadURL());
+  });
+
+  it.each(['google.com', 'apple.com'] as const)('preserves social-only %s reads', async (provider) => {
+    await seedVideo();
+    await assertSucceeds(socialStorage(provider).ref(VERTICAL_PATH).getDownloadURL());
+  });
+
+  it('blocks an unverified linked password + social identity', async () => {
+    await seedVideo();
+    const storage = testEnv.authenticatedContext(UID, {
+      email_verified: false,
+      firebase: {
+        identities: { email: [`${UID}@example.com`], 'google.com': ['provider-subject'] },
+        sign_in_provider: 'google.com',
+      },
+    }).storage();
+    await assertFails(storage.ref(VERTICAL_PATH).getDownloadURL());
   });
 });
 

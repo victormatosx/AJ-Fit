@@ -55,12 +55,13 @@ export const revenueCatWebhook = onRequest(
  * `attribution/constants.ts`'s doc comment on `COUPON_REDEMPTIONS_COLLECTION`
  * for the one deviation from §33 this introduces).
  *
- * `enforceAppCheck` is left at its default (unset/false) for this phase —
- * flipping it to `true` later is a pure function-options change here, with
- * zero change to `validatePromoCodeHandler` or the request/response
- * contract.
+ * App Check is enforced as an additional caller-attestation layer. The
+ * handler's Auth, authorization and request/response contract stay unchanged.
  */
-export const validatePromoCode = onCall(validatePromoCodeHandler);
+export const validatePromoCode = onCall(
+  { enforceAppCheck: true },
+  validatePromoCodeHandler,
+);
 
 /**
  * Creates or idempotently returns the calling uid's short-lived iOS promo
@@ -68,7 +69,10 @@ export const validatePromoCode = onCall(validatePromoCodeHandler);
  * Offering, product ID, status and timestamps are derived transactionally
  * from `couponRedemptions/{uid}` by the backend.
  */
-export const authorizePromoPurchase = onCall(authorizePromoPurchaseHandler);
+export const authorizePromoPurchase = onCall(
+  { enforceAppCheck: true },
+  authorizePromoPurchaseHandler,
+);
 
 /**
  * Admin promo-code catalog surface (`ajfit-admin`'s "Cupons e Campanhas"

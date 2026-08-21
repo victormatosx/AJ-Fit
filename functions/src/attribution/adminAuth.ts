@@ -1,5 +1,6 @@
 import { HttpsError, type CallableRequest } from 'firebase-functions/v2/https';
 import { db } from '../lib/firebaseAdmin';
+import { requireVerifiedEmailForPrivateAccess } from '../lib/auth';
 import { userDocPath } from './constants';
 
 /**
@@ -29,6 +30,7 @@ export async function requireAdminUid(request: CallableRequest<unknown>): Promis
   if (!request.auth?.uid) {
     throw new HttpsError('unauthenticated', 'authentication_required');
   }
+  requireVerifiedEmailForPrivateAccess(request);
   const uid = request.auth.uid;
 
   const snapshot = await db.doc(userDocPath(uid)).get();

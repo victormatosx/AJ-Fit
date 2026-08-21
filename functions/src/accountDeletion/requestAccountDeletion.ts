@@ -306,6 +306,6 @@ export async function handleRequestAccountDeletion(
 }
 
 export const requestAccountDeletion = onCall(
-  { secrets: REQUEST_ACCOUNT_DELETION_SECRETS },
+  { secrets: REQUEST_ACCOUNT_DELETION_SECRETS, enforceAppCheck: true },
   (request: CallableRequest) => handleRequestAccountDeletion(request),
 );

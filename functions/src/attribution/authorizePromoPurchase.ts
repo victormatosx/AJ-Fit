@@ -1,4 +1,5 @@
 import { HttpsError, type CallableRequest } from 'firebase-functions/v2/https';
+import { requireVerifiedEmailForPrivateAccess } from '../lib/auth';
 import { logFunctionError, logInfo, logWarn } from '../lib/logger';
 import {
   PROMO_PURCHASE_PLANS,
@@ -29,6 +30,7 @@ export async function authorizePromoPurchaseHandler(
   if (!request.auth?.uid) {
     throw new HttpsError('unauthenticated', 'authentication_required');
   }
+  requireVerifiedEmailForPrivateAccess(request);
   const uid = request.auth.uid;
   const plan = parseRequestPlan(request.data);
   if (!plan) {

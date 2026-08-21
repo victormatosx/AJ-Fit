@@ -19,6 +19,10 @@ const socialAuth = readFileSync(
   new URL('../../services/socialAuth.ts', import.meta.url),
   'utf8',
 );
+const verificationService = readFileSync(
+  new URL('../../services/emailVerification.ts', import.meta.url),
+  'utf8',
+);
 
 describe('email verification integration structure', () => {
   it('starts one automatic send immediately after Auth creation', () => {
@@ -52,6 +56,7 @@ describe('email verification integration structure', () => {
     expect(context).toContain('setAuthRevision((revision) => revision + 1)');
     expect(screen).not.toContain('setScreen');
     expect(screen).not.toContain('navigate(');
+    expect(verificationService).toContain('await refreshedUser.getIdToken(true)');
   });
 
   it('reuses logout and disables every action during an operation', () => {

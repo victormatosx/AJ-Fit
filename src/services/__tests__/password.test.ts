@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   log: vi.fn(),
   reauthenticate: vi.fn(),
   update: vi.fn(),
+  policy: vi.fn(),
 }));
 
 type TestUser = {
@@ -22,6 +23,11 @@ vi.mock('firebase/auth', () => ({
 
 vi.mock('../../lib/firebase', () => ({ auth: mocks.auth }));
 
+vi.mock('../../lib/passwordPolicy', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../lib/passwordPolicy')>()),
+  assertNewPasswordMeetsPolicy: mocks.policy,
+}));
+
 vi.mock('../auth', () => ({
   logAuthError: mocks.log,
   toAuthError: (error: unknown) => error,
@@ -30,9 +36,9 @@ vi.mock('../auth', () => ({
 import { changePasswordWithReauthentication } from '../password';
 
 const input = {
-  currentPassword: 'old-pass',
-  newPassword: 'new-pass',
-  confirmation: 'new-pass',
+  currentPassword: '123456',
+  newPassword: 'new-passphrase-valid',
+  confirmation: 'new-passphrase-valid',
 };
 
 function user(providers = ['password']): TestUser {
@@ -52,6 +58,7 @@ describe('changePasswordWithReauthentication', () => {
       user: mocks.auth.currentUser,
     }));
     mocks.update.mockResolvedValue(undefined);
+    mocks.policy.mockResolvedValue(undefined);
   });
 
   it('reauthenticates before updating the password', async () => {
@@ -61,13 +68,16 @@ describe('changePasswordWithReauthentication', () => {
 
     expect(mocks.credential).toHaveBeenCalledWith(
       'person@example.com',
-      'old-pass',
+      '123456',
     );
     expect(mocks.reauthenticate).toHaveBeenCalledWith(
       mocks.auth.currentUser,
       { credential: true },
     );
-    expect(mocks.update).toHaveBeenCalledWith(mocks.auth.currentUser, 'new-pass');
+    expect(mocks.update).toHaveBeenCalledWith(
+      mocks.auth.currentUser,
+      'new-passphrase-valid',
+    );
     expect(mocks.reauthenticate.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.update.mock.invocationCallOrder[0],
     );
@@ -116,5 +126,12 @@ describe('changePasswordWithReauthentication', () => {
     expect(mocks.credential).not.toHaveBeenCalled();
     expect(mocks.reauthenticate).not.toHaveBeenCalled();
     expect(mocks.update).not.toHaveBeenCalled();
+  });
+
+  it('checks only the new password against Firebase policy before reauth', async () => {
+    await changePasswordWithReauthentication(input);
+
+    expect(mocks.policy).toHaveBeenCalledWith('new-passphrase-valid');
+    expect(mocks.policy).not.toHaveBeenCalledWith('123456');
   });
 });

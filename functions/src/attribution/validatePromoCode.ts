@@ -1,4 +1,5 @@
 import { HttpsError, type CallableRequest } from 'firebase-functions/v2/https';
+import { requireVerifiedEmailForPrivateAccess } from '../lib/auth';
 import { logFunctionError, logInfo, logWarn } from '../lib/logger';
 import { applyPromoCodeAttributionTransactionally } from './attributionSync';
 import { PROMO_CODE_PLATFORMS, type PromoCodePlatform } from './constants';
@@ -50,6 +51,7 @@ export async function validatePromoCodeHandler(
   if (!request.auth?.uid) {
     throw new HttpsError('unauthenticated', 'authentication_required');
   }
+  requireVerifiedEmailForPrivateAccess(request);
   const uid = request.auth.uid;
 
   const normalizedCode = normalizePromoCode(request.data?.code);

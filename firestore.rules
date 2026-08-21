@@ -28,6 +28,23 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
+    function hasPasswordIdentity() {
+      return isSignedIn()
+        && request.auth.token.get('firebase', {})
+             .get('identities', {})
+             .get('email', []).size() > 0;
+    }
+
+    function hasVerifiedEmailForPrivateAccess() {
+      return isSignedIn()
+        && (!hasPasswordIdentity()
+            || request.auth.token.get('email_verified', false) == true);
+    }
+
+    function isVerifiedOwner(userId) {
+      return isOwner(userId) && hasVerifiedEmailForPrivateAccess();
+    }
+
     // FASE 7 (docs/13_assinaturas_e_billing.md §10/§11/§26): server-side
     // authorization for Premium mutations. Reads the SAME field the client
     // treats as "the authorization signal" (`entitlementActive` —
@@ -88,7 +105,7 @@ service cloud.firestore {
     // O painel autentica com Firebase Auth e o backend promove previamente o
     // documento do operador. Escritas do app nunca podem alterar metadata.role.
     function isAdmin() {
-      return isSignedIn()
+      return hasVerifiedEmailForPrivateAccess()
         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
         && get(/databases/$(database)/documents/users/$(request.auth.uid))
              .data.metadata.role == 'admin';
@@ -623,7 +640,7 @@ service cloud.firestore {
       // apenas `preferences.language` e `preferences.units` podem variar;
       // `theme` segue protegido. Escritas legítimas usam caminhos pontuados,
       // preservando todas as preferências irmãs.
-      allow update: if isOwner(userId) && accountActive(userId) && (
+      allow update: if isVerifiedOwner(userId) && accountActive(userId) && (
         legacyMigrationValid()
         || (
           nestedUserValid(request.resource.data)
@@ -656,6 +673,10 @@ service cloud.firestore {
         // Criação: apenas o dono, com os campos esperados e válidos.
         allow create: if isOwner(userId)
           && accountActive(userId)
+          && (hasVerifiedEmailForPrivateAccess()
+              || (!exists(/databases/$(database)/documents/users/$(userId))
+                  && getAfter(/databases/$(database)/documents/users/$(userId)).data.profile.email
+                       == request.auth.token.email))
           && request.resource.data.keys().hasOnly(
                ['answers', 'version', 'createdAt'])
           && request.resource.data.answers is map
@@ -679,9 +700,9 @@ service cloud.firestore {
       // Premium aqui se essas ações existissem, e não existem.
       match /assessments/{assessmentId} {
         // Fase 5: leitura/criação também exigem accountActive(userId).
-        allow read: if isOwner(userId) && accountActive(userId);
+        allow read: if isVerifiedOwner(userId) && accountActive(userId);
 
-        allow create: if isOwner(userId)
+        allow create: if isVerifiedOwner(userId)
           && accountActive(userId)
           && hasServerPremium(userId)
           && assessmentCommonValid()
@@ -701,10 +722,10 @@ service cloud.firestore {
       // criar/excluir um registro, sempre em conjunto com `isOwner(userId)`.
       match /progressPhotos/{photoId} {
         // Fase 5: leitura/criação/exclusão também exigem accountActive(userId).
-        allow read: if isOwner(userId) && accountActive(userId);
-        allow create: if isOwner(userId) && accountActive(userId) && hasServerPremium(userId) && progressPhotoValid(userId, photoId);
+        allow read: if isVerifiedOwner(userId) && accountActive(userId);
+        allow create: if isVerifiedOwner(userId) && accountActive(userId) && hasServerPremium(userId) && progressPhotoValid(userId, photoId);
         allow update: if false;
-        allow delete: if isOwner(userId) && accountActive(userId) && hasServerPremium(userId);
+        allow delete: if isVerifiedOwner(userId) && accountActive(userId) && hasServerPremium(userId);
       }
 
       // Material criptográfico do Photo Vault (wrappedVaultKey e versões).
@@ -725,17 +746,17 @@ service cloud.firestore {
     // ── Support tickets and messages ──────────────────────────────────────
     match /supportTickets/{ticketId} {
       allow get, list: if isAdmin()
-        || (isSignedIn() && resource.data.userId == request.auth.uid);
-      allow create: if isSignedIn() && supportTicketValid(ticketId);
+        || (hasVerifiedEmailForPrivateAccess() && resource.data.userId == request.auth.uid);
+      allow create: if hasVerifiedEmailForPrivateAccess() && supportTicketValid(ticketId);
       allow update: if isAdmin() && adminSupportTicketUpdateValid();
       allow delete: if false;
 
       match /messages/{messageId} {
         allow get, list: if isAdmin()
-          || (isSignedIn()
+          || (hasVerifiedEmailForPrivateAccess()
               && get(/databases/$(database)/documents/supportTickets/$(ticketId))
                    .data.userId == request.auth.uid);
-        allow create: if (isSignedIn() && supportMessageValid(ticketId))
+        allow create: if (hasVerifiedEmailForPrivateAccess() && supportMessageValid(ticketId))
           || (isAdmin() && adminSupportMessageValid(ticketId));
         allow update, delete: if false;
       }
@@ -822,7 +843,7 @@ service cloud.firestore {
     }
 
     match /exercises/{exerciseId} {
-      allow read: if isSignedIn();
+      allow read: if hasVerifiedEmailForPrivateAccess();
 
       allow create: if isAdmin()
         && exerciseWriteValid(exerciseId)

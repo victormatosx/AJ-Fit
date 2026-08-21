@@ -6,6 +6,7 @@ type TestUser = {
   emailVerified: boolean;
   providerData: Array<{ providerId: string }>;
   reload: ReturnType<typeof vi.fn>;
+  getIdToken: ReturnType<typeof vi.fn>;
 };
 
 const mocks = vi.hoisted(() => ({
@@ -37,6 +38,7 @@ function user(emailVerified = false, providers = ['password']): TestUser {
     emailVerified,
     providerData: providers.map((providerId) => ({ providerId })),
     reload: vi.fn(),
+    getIdToken: vi.fn().mockResolvedValue('fresh-token'),
   };
 }
 
@@ -93,6 +95,10 @@ describe('email verification Firebase service', () => {
     const result = await refreshEmailVerificationStatus();
 
     expect(currentUser.reload).toHaveBeenCalledTimes(1);
+    expect(currentUser.getIdToken).toHaveBeenCalledWith(true);
+    expect(currentUser.reload.mock.invocationCallOrder[0]).toBeLessThan(
+      currentUser.getIdToken.mock.invocationCallOrder[0]!,
+    );
     expect(result).toEqual({ user: currentUser, emailVerified: true });
   });
 
@@ -103,7 +109,16 @@ describe('email verification Firebase service', () => {
     const result = await refreshEmailVerificationStatus();
 
     expect(currentUser.reload).toHaveBeenCalledTimes(1);
+    expect(currentUser.getIdToken).not.toHaveBeenCalled();
     expect(result.emailVerified).toBe(false);
+  });
+
+  it('keeps the gate closed when the forced verified-token refresh fails', async () => {
+    const currentUser = user(true);
+    currentUser.getIdToken.mockRejectedValue(new Error('offline'));
+    mocks.auth.currentUser = currentUser;
+
+    await expect(refreshEmailVerificationStatus()).rejects.toThrow('offline');
   });
 
   it.each([

@@ -1,4 +1,7 @@
-export const PASSWORD_MIN_LENGTH = 6;
+import {
+  validateNewPasswordLocally,
+  type NewPasswordPolicyIssue,
+} from './passwordPolicy';
 
 export type PasswordChangeInput = {
   currentPassword: string;
@@ -12,7 +15,7 @@ export type PasswordChangeValidationIssue =
   | 'confirmationRequired'
   | 'passwordMismatch'
   | 'passwordUnchanged'
-  | 'passwordTooShort';
+  | NewPasswordPolicyIssue;
 
 export type PasswordChangeIssue =
   | PasswordChangeValidationIssue
@@ -32,7 +35,8 @@ export function validatePasswordChange(
   if (!input.confirmation) return 'confirmationRequired';
   if (input.confirmation !== input.newPassword) return 'passwordMismatch';
   if (input.newPassword === input.currentPassword) return 'passwordUnchanged';
-  if (input.newPassword.length < PASSWORD_MIN_LENGTH) return 'passwordTooShort';
+  const policyIssue = validateNewPasswordLocally(input.newPassword);
+  if (policyIssue) return policyIssue;
   return null;
 }
 
@@ -48,7 +52,9 @@ export function passwordChangeIssueFromError(error: unknown): PasswordChangeIssu
     code === 'confirmationRequired' ||
     code === 'passwordMismatch' ||
     code === 'passwordUnchanged' ||
-    code === 'passwordTooShort'
+    code === 'passwordTooShort' ||
+    code === 'passwordTooLong' ||
+    code === 'passwordPolicyMismatch'
   ) {
     return code;
   }
@@ -59,6 +65,7 @@ export function passwordChangeIssueFromError(error: unknown): PasswordChangeIssu
     case 'auth/user-mismatch':
       return 'currentPasswordIncorrect';
     case 'auth/weak-password':
+    case 'auth/password-does-not-meet-requirements':
       return 'weakPassword';
     case 'auth/requires-recent-login':
     case 'auth/user-token-expired':

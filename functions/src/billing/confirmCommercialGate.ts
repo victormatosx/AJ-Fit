@@ -1,7 +1,7 @@
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { HttpsError, onCall, type CallableRequest } from 'firebase-functions/v2/https';
 import { db } from '../lib/firebaseAdmin';
-import { requireAuth } from '../lib/auth';
+import { requireAuth, requireVerifiedEmailForPrivateAccess } from '../lib/auth';
 import { requireActiveAccount } from '../accountDeletion/activeAccountGuard';
 import { logFunctionError, logInfo, logWarn } from '../lib/logger';
 import { COMMERCIAL_GATE_RESOLVED_AT_PATH, userDocPath } from './constants';
@@ -134,6 +134,7 @@ export async function handleConfirmCommercialGate(
   // never read by this handler, so a caller cannot claim to be, or act on
   // behalf of, any uid but its own.
   const uid = requireAuth(request);
+  requireVerifiedEmailForPrivateAccess(request);
   await requireActiveAccount(uid);
 
   try {
@@ -145,6 +146,6 @@ export async function handleConfirmCommercialGate(
 }
 
 export const confirmCommercialGate = onCall(
-  { secrets: [REVENUECAT_API_SECRET_KEY] },
+  { secrets: [REVENUECAT_API_SECRET_KEY], enforceAppCheck: true },
   handleConfirmCommercialGate,
 );

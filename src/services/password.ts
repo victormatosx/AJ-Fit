@@ -12,6 +12,7 @@ import {
   type PasswordChangeInput,
   type PasswordChangeValidationIssue,
 } from '../lib/passwordChange';
+import { assertNewPasswordMeetsPolicy } from '../lib/passwordPolicy';
 import { logAuthError, toAuthError } from './auth';
 
 function codedError(code: string): Error & { code: string } {
@@ -73,6 +74,8 @@ export async function changePasswordWithReauthentication(
 ): Promise<void> {
   const validationIssue = validatePasswordChange(input);
   if (validationIssue) throw validationError(validationIssue);
+
+  await assertNewPasswordMeetsPolicy(input.newPassword);
 
   const reauthenticatedUser = await reauthenticatePasswordUser(
     input.currentPassword,

@@ -12,6 +12,8 @@ type Props = {
   toggleAccessibilityLabel: string;
   editable?: boolean;
   textContentType?: 'password' | 'newPassword';
+  autoComplete?: 'current-password' | 'new-password';
+  maxLength?: number;
   returnKeyType?: 'next' | 'done';
   onSubmitEditing?: () => void;
 };
@@ -26,6 +28,8 @@ export function PasswordField({
   toggleAccessibilityLabel,
   editable = true,
   textContentType = 'password',
+  autoComplete = 'current-password',
+  maxLength,
   returnKeyType,
   onSubmitEditing,
 }: Props) {
@@ -60,6 +64,8 @@ export function PasswordField({
           autoCapitalize="none"
           autoCorrect={false}
           textContentType={textContentType}
+          autoComplete={autoComplete}
+          maxLength={maxLength}
           returnKeyType={returnKeyType}
           onSubmitEditing={onSubmitEditing}
           style={{ flex: 1, color: colors.text, fontFamily: fonts.ui, fontSize: 15 }}

@@ -50,6 +50,11 @@ import {
   requestPasswordResetWithCooldown,
   type PasswordResetCooldown,
 } from '../lib/passwordResetCooldown';
+import {
+  PASSWORD_POLICY_MAX_LENGTH,
+  PASSWORD_POLICY_MIN_LENGTH,
+  validateAuthFormPasswordPolicy,
+} from '../lib/passwordPolicy';
 
 type Mode = 'signup' | 'login' | 'reset';
 
@@ -65,6 +70,10 @@ const AUTH_ERROR_KEY_BY_CODE = {
   'auth/invalid-api-key': 'errors.invalidApiKey',
   'auth/missing-email': 'errors.missingEmail',
   'auth/weak-password': 'errors.weakPassword',
+  'auth/password-does-not-meet-requirements': 'errors.passwordPolicy',
+  passwordTooShort: 'errors.passwordPolicy',
+  passwordTooLong: 'errors.passwordPolicy',
+  passwordPolicyMismatch: 'errors.passwordPolicy',
   'auth/missing-password': 'errors.missingPassword',
   'auth/user-not-found': 'errors.userNotFound',
   'auth/wrong-password': 'errors.wrongPassword',
@@ -92,6 +101,22 @@ function localizedAuthError(
   const key = AUTH_ERROR_KEY_BY_CODE[code as keyof typeof AUTH_ERROR_KEY_BY_CODE];
   if (key) return t(key);
   return code ? t('errors.genericWithCode', { code }) : t(fallbackKey);
+}
+
+function localizedSignInError(err: unknown, t: TFunction<'auth'>): string {
+  const code =
+    typeof err === 'object' && err !== null && 'code' in err
+      ? String((err as { code: unknown }).code)
+      : '';
+  if (
+    code === 'auth/invalid-credential' ||
+    code === 'auth/user-not-found' ||
+    code === 'auth/wrong-password' ||
+    code === 'auth/user-disabled'
+  ) {
+    return t('errors.invalidLogin');
+  }
+  return localizedAuthError(err, t, 'errors.signInFailed');
 }
 
 function totpStartError(
@@ -338,7 +363,14 @@ export function AuthScreen({
     if (!EMAIL_RE.test(email.trim())) return t('validation.emailInvalid');
     if (mode === 'reset') return null;
     if (!password) return t('validation.passwordRequired');
-    if (password.length < 6) return t('validation.passwordMinimum', { min: 6 });
+    const passwordPolicyIssue = validateAuthFormPasswordPolicy(mode, password);
+    if (passwordPolicyIssue === 'passwordTooShort') {
+      return t('validation.passwordMinimum', { min: PASSWORD_POLICY_MIN_LENGTH });
+    }
+    if (passwordPolicyIssue === 'passwordTooLong') {
+      return t('validation.passwordMaximum', { max: PASSWORD_POLICY_MAX_LENGTH });
+    }
+    if (passwordPolicyIssue) return t('errors.passwordPolicy');
     if (mode === 'signup' && password !== confirm)
       return t('validation.passwordMismatch');
     return null;
@@ -379,7 +411,11 @@ export function AuthScreen({
       }
     } catch (err) {
       if (mode === 'login' && beginTotpChallenge(err, 'password')) return;
-      setError(localizedAuthError(err, t, 'errors.generic'));
+      setError(
+        mode === 'login'
+          ? localizedSignInError(err, t)
+          : localizedAuthError(err, t, 'errors.generic'),
+      );
     } finally {
       operationLock.current = false;
       setLoading(false);
@@ -492,6 +528,8 @@ export function AuthScreen({
                     onChangeText={setName}
                     keyboardType="default"
                     autoCapitalize="words"
+                    autoComplete="name"
+                    textContentType="name"
                     editable={!loading}
                   />
                 )}
@@ -502,6 +540,8 @@ export function AuthScreen({
                   value={email}
                   onChangeText={setEmail}
                   keyboardType="email-address"
+                  autoComplete="email"
+                  textContentType="emailAddress"
                   editable={!loading}
                 />
 
@@ -515,6 +555,9 @@ export function AuthScreen({
                     trailing="eye"
                     onTrailingPress={() => setShowPass((s) => !s)}
                     trailingAccessibilityLabel={t('accessibility.togglePassword')}
+                    autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+                    textContentType={mode === 'signup' ? 'newPassword' : 'password'}
+                    maxLength={mode === 'signup' ? PASSWORD_POLICY_MAX_LENGTH : undefined}
                     editable={!loading}
                   />
                 )}
@@ -526,8 +569,26 @@ export function AuthScreen({
                     value={confirm}
                     onChangeText={setConfirm}
                     secure={!showPass}
+                    autoComplete="new-password"
+                    textContentType="newPassword"
+                    maxLength={PASSWORD_POLICY_MAX_LENGTH}
                     editable={!loading}
                   />
+                )}
+
+                {mode === 'signup' && (
+                  <Text
+                    style={{
+                      color: colors.faint,
+                      fontFamily: fonts.ui,
+                      fontSize: 12.5,
+                      lineHeight: 18,
+                    }}
+                  >
+                    {t('validation.passwordGuidance', {
+                      min: PASSWORD_POLICY_MIN_LENGTH,
+                    })}
+                  </Text>
                 )}
 
                 {mode === 'login' && (
@@ -788,6 +849,8 @@ function LinkingPanel({
             value={password}
             onChangeText={onChangePassword}
             secure
+            autoComplete="current-password"
+            textContentType="password"
             editable={!busy}
           />
           <CtaButton onPress={onLinkPassword} disabled={busy}>
@@ -899,6 +962,9 @@ function AuthInput({
   trailingAccessibilityLabel,
   keyboardType,
   autoCapitalize = 'none',
+  autoComplete,
+  textContentType,
+  maxLength,
   editable = true,
 }: {
   icon: IconName;
@@ -911,6 +977,9 @@ function AuthInput({
   trailingAccessibilityLabel?: string;
   keyboardType?: 'email-address' | 'default';
   autoCapitalize?: 'none' | 'words';
+  autoComplete?: 'name' | 'email' | 'current-password' | 'new-password';
+  textContentType?: 'name' | 'emailAddress' | 'password' | 'newPassword';
+  maxLength?: number;
   editable?: boolean;
 }) {
   return (
@@ -936,6 +1005,9 @@ function AuthInput({
         onChangeText={onChangeText}
         secureTextEntry={secure}
         autoCapitalize={autoCapitalize}
+        autoComplete={autoComplete}
+        textContentType={textContentType}
+        maxLength={maxLength}
         autoCorrect={false}
         editable={editable}
         keyboardType={keyboardType ?? (icon === 'mail' ? 'email-address' : 'default')}

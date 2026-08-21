@@ -18,6 +18,28 @@ export function requireAuth(request: CallableRequest): string {
   return request.auth.uid;
 }
 
+function hasPasswordIdentity(request: CallableRequest): boolean {
+  const firebaseClaim = request.auth?.token?.firebase;
+  if (!firebaseClaim || typeof firebaseClaim !== 'object') return false;
+  const identities = (firebaseClaim as Record<string, unknown>).identities;
+  if (!identities || typeof identities !== 'object') return false;
+  const emails = (identities as Record<string, unknown>).email;
+  return Array.isArray(emails) && emails.length > 0;
+}
+
+/**
+ * Email/Password identities must verify ownership of their email before
+ * using private product surfaces. Social-only identities remain eligible;
+ * a linked account that also contains an email/password identity does not
+ * gain a bypass by signing in with another provider.
+ */
+export function requireVerifiedEmailForPrivateAccess(request: CallableRequest): void {
+  requireAuth(request);
+  if (hasPasswordIdentity(request) && request.auth?.token?.email_verified !== true) {
+    throw new HttpsError('permission-denied', 'email_verification_required');
+  }
+}
+
 /**
  * How recently the user must have proved their credentials for a sensitive
  * operation. A valid but old ID Token is deliberately NOT enough to recover

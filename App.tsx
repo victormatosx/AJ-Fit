@@ -237,7 +237,7 @@ function RootNavigator() {
   };
 
   useEffect(() => {
-    if (!preferencesReconciling || !user || !profile) return;
+    if (emailVerificationRequired || !preferencesReconciling || !user || !profile) return;
     // Guards against re-kicking the same in-flight reconciliation on every
     // render while it's pending (this effect's deps include `profile`,
     // which the reconciliation's own writes can cause to change).
@@ -257,7 +257,7 @@ function RootNavigator() {
       reconcilingUidRef.current = null;
       forceReconciliationRerender();
     });
-  }, [preferencesReconciling, user, profile]);
+  }, [emailVerificationRequired, preferencesReconciling, user, profile]);
 
   // A logout (or account switch mid-flight) must not leave a stale
   // `reconciledUidRef` that lets a DIFFERENT future uid skip reconciliation

@@ -28,7 +28,24 @@ const ADMIN_UID = 'exercises-admin';
 let testEnv: RulesTestEnvironment;
 
 function signedInDb() {
-  return testEnv.authenticatedContext('alice').firestore();
+  return testEnv.authenticatedContext('alice', {
+    email_verified: true,
+    firebase: { identities: { email: ['alice@example.com'] }, sign_in_provider: 'password' },
+  }).firestore();
+}
+
+function passwordDb(verified: boolean) {
+  return testEnv.authenticatedContext('alice', {
+    email_verified: verified,
+    firebase: { identities: { email: ['alice@example.com'] }, sign_in_provider: 'password' },
+  }).firestore();
+}
+
+function socialDb(provider: 'google.com' | 'apple.com') {
+  return testEnv.authenticatedContext('alice', {
+    email_verified: false,
+    firebase: { identities: { [provider]: ['provider-subject'] }, sign_in_provider: provider },
+  }).firestore();
 }
 
 function adminDb() {
@@ -102,6 +119,25 @@ describe('exercises — read', () => {
   it('blocks an unauthenticated user from reading an exercise', async () => {
     const anon = testEnv.unauthenticatedContext().firestore();
     await assertFails(getDoc(doc(anon, 'exercises', EXERCISE_ID)));
+  });
+
+  it('blocks an unverified Email/Password user', async () => {
+    await assertFails(getDoc(doc(passwordDb(false), 'exercises', EXERCISE_ID)));
+  });
+
+  it.each(['google.com', 'apple.com'] as const)('preserves social-only %s access', async (provider) => {
+    await assertSucceeds(getDoc(doc(socialDb(provider), 'exercises', EXERCISE_ID)));
+  });
+
+  it('blocks an unverified linked password + social identity', async () => {
+    const db = testEnv.authenticatedContext('alice', {
+      email_verified: false,
+      firebase: {
+        identities: { email: ['alice@example.com'], 'google.com': ['provider-subject'] },
+        sign_in_provider: 'google.com',
+      },
+    }).firestore();
+    await assertFails(getDoc(doc(db, 'exercises', EXERCISE_ID)));
   });
 });
 

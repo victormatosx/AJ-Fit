@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 
 import { HttpsError, onCall, type CallableRequest } from 'firebase-functions/v2/https';
 
-import { requireAuth } from '../lib/auth';
+import { requireAuth, requireVerifiedEmailForPrivateAccess } from '../lib/auth';
 import { requireActiveAccount } from '../accountDeletion/activeAccountGuard';
 import { logFunctionError, logInfo } from '../lib/logger';
 import { VaultCryptoError } from './errors';
@@ -43,6 +43,7 @@ export async function handleCreateVault(
   // The uid comes exclusively from the verified token. Anything in
   // `request.data` (including a `uid` field) is ignored entirely.
   const uid = requireAuth(request);
+  requireVerifiedEmailForPrivateAccess(request);
 
   // Fase 5: an account with a pending/in-progress deletion is not a normal
   // account — never mint a new vault key for it, even if the deletion
@@ -101,4 +102,7 @@ export async function handleCreateVault(
   }
 }
 
-export const createVault = onCall(handleCreateVault);
+export const createVault = onCall(
+  { enforceAppCheck: true },
+  handleCreateVault,
+);

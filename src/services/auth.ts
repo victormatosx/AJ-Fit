@@ -15,6 +15,11 @@ import { isMultiFactorAuthRequired } from '../lib/mfaTotp';
 import { deleteVaultKey } from '../lib/photoVaultKeyStorage';
 import { logError } from '../lib/logger';
 import { createSingleFlight } from '../lib/singleFlight';
+import {
+  assertNewPasswordMeetsPolicy,
+  PASSWORD_POLICY_MAX_LENGTH,
+  PASSWORD_POLICY_MIN_LENGTH,
+} from '../lib/passwordPolicy';
 
 /**
  * Reusable, typed authentication service.
@@ -28,17 +33,24 @@ const ERROR_MESSAGES: Record<string, string> = {
     'Configuração do Google Sign-In inválida. Recrie o build após conferir OAuth client, URL scheme e SHA-1.',
   'auth/app-not-authorized':
     'Este app não está autorizado no Firebase. Confira bundle/package e arquivos GoogleService.',
-  'auth/email-already-in-use': 'Este e-mail já está cadastrado.',
+  'auth/email-already-in-use':
+    'Não foi possível criar a conta com este e-mail. Tente entrar ou use outro endereço.',
   'auth/invalid-email': 'E-mail inválido.',
   'auth/invalid-api-key': 'A chave do Firebase está inválida. Confira o arquivo .env.',
   'auth/missing-email': 'Informe seu e-mail.',
-  'auth/weak-password': 'A senha deve ter no mínimo 6 caracteres.',
+  'auth/weak-password':
+    `Use uma senha entre ${PASSWORD_POLICY_MIN_LENGTH} e ${PASSWORD_POLICY_MAX_LENGTH} caracteres.`,
+  'auth/password-does-not-meet-requirements':
+    `Use uma senha entre ${PASSWORD_POLICY_MIN_LENGTH} e ${PASSWORD_POLICY_MAX_LENGTH} caracteres.`,
+  passwordTooShort: `Use pelo menos ${PASSWORD_POLICY_MIN_LENGTH} caracteres.`,
+  passwordTooLong: `Use no máximo ${PASSWORD_POLICY_MAX_LENGTH} caracteres.`,
+  passwordPolicyMismatch: 'A senha não atende à política de segurança.',
   'auth/missing-password': 'Informe sua senha.',
-  'auth/user-not-found': 'Não encontramos uma conta com esse e-mail.',
-  'auth/wrong-password': 'Senha incorreta.',
+  'auth/user-not-found': 'E-mail ou senha incorretos.',
+  'auth/wrong-password': 'E-mail ou senha incorretos.',
   'auth/invalid-credential':
     'Credencial inválida. Se foi com Google, confira os client IDs OAuth do Firebase.',
-  'auth/user-disabled': 'Esta conta foi desativada.',
+  'auth/user-disabled': 'E-mail ou senha incorretos.',
   'auth/too-many-requests':
     'Muitas tentativas realizadas. Aguarde um momento antes de tentar novamente.',
   'auth/network-request-failed': 'Falha de conexão. Verifique sua internet.',
@@ -95,6 +107,26 @@ export function toAuthError(err: unknown): Error {
   return friendly;
 }
 
+const PRIVATE_SIGN_IN_ERROR_CODES = new Set([
+  'auth/invalid-credential',
+  'auth/user-not-found',
+  'auth/wrong-password',
+  'auth/user-disabled',
+]);
+
+/**
+ * Keeps password sign-in failures externally indistinguishable. Identity
+ * Platform already returns `INVALID_LOGIN_CREDENTIALS` with improved email
+ * privacy enabled; the legacy codes remain here defensively for older SDK or
+ * emulator behavior and are normalized to the current Firebase client code.
+ */
+export function toSignInError(err: unknown): Error {
+  if (!PRIVATE_SIGN_IN_ERROR_CODES.has(getErrorCode(err))) return toAuthError(err);
+  const friendly = new Error('E-mail ou senha incorretos.');
+  (friendly as Error & { code?: string }).code = 'auth/invalid-credential';
+  return friendly;
+}
+
 export function signUpWithEmail(
   email: string,
   password: string,
@@ -102,6 +134,7 @@ export function signUpWithEmail(
 ): Promise<User> {
   return signUpFlight.run(async () => {
     try {
+      await assertNewPasswordMeetsPolicy(password);
       const { user } = await createUserWithEmailAndPassword(
         auth,
         email.trim(),
@@ -134,7 +167,7 @@ export function signInWithEmail(
       // its opaque customData. Every non-MFA error keeps the existing friendly
       // normalization contract.
       if (isMultiFactorAuthRequired(err)) throw err;
-      throw toAuthError(err);
+      throw toSignInError(err);
     }
   });
 }
@@ -144,6 +177,10 @@ export function resetPassword(email: string): Promise<void> {
     try {
       await sendPasswordResetEmail(auth, email.trim());
     } catch (err) {
+      // Improved email privacy resolves reset requests for unknown addresses.
+      // Preserve that same external contract defensively if an older SDK or
+      // emulator still surfaces the legacy code.
+      if (getErrorCode(err) === 'auth/user-not-found') return;
       throw toAuthError(err);
     }
   });

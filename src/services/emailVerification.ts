@@ -62,6 +62,13 @@ export async function refreshEmailVerificationStatus(): Promise<{
       throw codedError('auth/no-current-user');
     }
 
+    // `reload()` refreshes the User object, but Rules and callable handlers
+    // authorize with ID-token claims. Force a new token before releasing the
+    // navigation gate so `email_verified` cannot remain stale.
+    if (refreshedUser.emailVerified) {
+      await refreshedUser.getIdToken(true);
+    }
+
     return {
       user: refreshedUser,
       emailVerified: refreshedUser.emailVerified,

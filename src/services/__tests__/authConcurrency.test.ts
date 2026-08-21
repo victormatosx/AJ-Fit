@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   signIn: vi.fn(),
   signOut: vi.fn(),
   updateProfile: vi.fn(),
+  validatePassword: vi.fn(),
 }));
 
 vi.mock('firebase/auth', () => ({
@@ -16,6 +17,7 @@ vi.mock('firebase/auth', () => ({
   signInWithEmailAndPassword: mocks.signIn,
   signOut: mocks.signOut,
   updateProfile: mocks.updateProfile,
+  validatePassword: mocks.validatePassword,
 }));
 
 vi.mock('../../lib/firebase', () => ({ auth: mocks.auth }));
@@ -38,6 +40,7 @@ describe('email authentication concurrency', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.updateProfile.mockResolvedValue(undefined);
+    mocks.validatePassword.mockResolvedValue({ isValid: true });
   });
 
   afterEach(() => vi.restoreAllMocks());
@@ -66,15 +69,33 @@ describe('email authentication concurrency', () => {
     mocks.createUser.mockReturnValueOnce(pending.promise);
 
     const calls = Array.from({ length: 20 }, () =>
-      signUpWithEmail('person@example.com', 'password', 'Person'),
+      signUpWithEmail('person@example.com', 'valid-passphrase', 'Person'),
     );
-    await Promise.resolve();
-
-    expect(mocks.createUser).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(mocks.createUser).toHaveBeenCalledTimes(1));
     pending.resolve({ user: { uid: 'user-1' } });
     await Promise.all(calls);
 
     expect(mocks.updateProfile).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects a 14-character signup password before account creation', async () => {
+    await expect(
+      signUpWithEmail('person@example.com', 'a'.repeat(14), 'Person'),
+    ).rejects.toMatchObject({ code: 'passwordTooShort' });
+    expect(mocks.createUser).not.toHaveBeenCalled();
+  });
+
+  it('allows a 15-character lowercase signup password to reach Firebase', async () => {
+    mocks.createUser.mockResolvedValueOnce({ user: { uid: 'user-15' } });
+
+    await expect(
+      signUpWithEmail('person@example.com', 'a'.repeat(15), 'Person'),
+    ).resolves.toMatchObject({ uid: 'user-15' });
+    expect(mocks.createUser).toHaveBeenCalledWith(
+      expect.anything(),
+      'person@example.com',
+      'a'.repeat(15),
+    );
   });
 
   it('coalesces 20 pending password resets into one Firebase email request', async () => {
@@ -91,6 +112,35 @@ describe('email authentication concurrency', () => {
     mocks.resetPassword.mockResolvedValueOnce(undefined);
     await resetPassword('person@example.com');
     expect(mocks.resetPassword).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps an unknown-email reset externally successful for legacy SDK behavior', async () => {
+    mocks.resetPassword.mockRejectedValueOnce({ code: 'auth/user-not-found' });
+
+    await expect(resetPassword('absent@example.com')).resolves.toBeUndefined();
+    expect(mocks.resetPassword).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    'auth/invalid-email',
+    'auth/network-request-failed',
+    'auth/too-many-requests',
+  ])('preserves actionable reset failure %s', async (code) => {
+    mocks.resetPassword.mockRejectedValueOnce({ code });
+
+    await expect(resetPassword('person@example.com')).rejects.toMatchObject({ code });
+  });
+
+  it('keeps signup failure explicit without claiming that an account exists', async () => {
+    mocks.createUser.mockRejectedValueOnce({ code: 'auth/email-already-in-use' });
+
+    await expect(
+      signUpWithEmail('person@example.com', 'valid-passphrase', 'Person'),
+    ).rejects.toMatchObject({
+      code: 'auth/email-already-in-use',
+      message:
+        'Não foi possível criar a conta com este e-mail. Tente entrar ou use outro endereço.',
+    });
   });
 
   it('releases the login flight after an error', async () => {
@@ -152,10 +202,10 @@ describe('email authentication concurrency', () => {
       .mockResolvedValueOnce(undefined);
 
     await expect(
-      signUpWithEmail('person@example.com', 'password', 'Person'),
+      signUpWithEmail('person@example.com', 'valid-passphrase', 'Person'),
     ).rejects.toMatchObject({ code: 'auth/network-request-failed' });
     await expect(
-      signUpWithEmail('person@example.com', 'password', 'Person'),
+      signUpWithEmail('person@example.com', 'valid-passphrase', 'Person'),
     ).resolves.toMatchObject({ uid: 'user-1' });
 
     await expect(resetPassword('person@example.com')).rejects.toMatchObject({

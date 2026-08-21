@@ -92,9 +92,9 @@ describe('current-user reauthentication', () => {
   it('keeps password behavior delegated to the existing service', async () => {
     await reauthenticateCurrentUser({
       provider: 'password',
-      password: 'current-password',
+      password: '123456',
     });
-    expect(mocks.passwordReauth).toHaveBeenCalledWith('current-password');
+    expect(mocks.passwordReauth).toHaveBeenCalledWith('123456');
     expect(mocks.reauthenticate).not.toHaveBeenCalled();
   });
 

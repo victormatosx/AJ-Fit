@@ -15,7 +15,10 @@ import { Icon } from '../components/ui/Icon';
 import { PasswordField } from '../components/ui/PasswordField';
 import { ScreenBg } from '../components/ui/ScreenBg';
 import { useChangePassword } from '../hooks/useChangePassword';
-import { PASSWORD_MIN_LENGTH } from '../lib/passwordChange';
+import {
+  PASSWORD_POLICY_MAX_LENGTH,
+  PASSWORD_POLICY_MIN_LENGTH,
+} from '../lib/passwordPolicy';
 import { colors, fonts, spacing, typography } from '../theme/tokens';
 import { useScreenFocusEffect } from '../state/ScreenActivity';
 
@@ -118,6 +121,8 @@ export function ChangePasswordScreen({ onBack }: { onBack: () => void }) {
                 )}
                 editable={!change.submitting}
                 textContentType="newPassword"
+                autoComplete="new-password"
+                maxLength={PASSWORD_POLICY_MAX_LENGTH}
                 returnKeyType="next"
               />
               <PasswordField
@@ -132,6 +137,8 @@ export function ChangePasswordScreen({ onBack }: { onBack: () => void }) {
                 )}
                 editable={!change.submitting}
                 textContentType="newPassword"
+                autoComplete="new-password"
+                maxLength={PASSWORD_POLICY_MAX_LENGTH}
                 returnKeyType="done"
                 onSubmitEditing={() => void change.submit()}
               />
@@ -147,7 +154,7 @@ export function ChangePasswordScreen({ onBack }: { onBack: () => void }) {
               }}
             >
               {t('security.changePassword.minimumLength', {
-                count: PASSWORD_MIN_LENGTH,
+                count: PASSWORD_POLICY_MIN_LENGTH,
               })}
             </Text>
 
@@ -155,7 +162,8 @@ export function ChangePasswordScreen({ onBack }: { onBack: () => void }) {
               <Feedback
                 tone="error"
                 message={t(`security.changePassword.feedback.${change.issue}`, {
-                  count: PASSWORD_MIN_LENGTH,
+                  count: PASSWORD_POLICY_MIN_LENGTH,
+                  max: PASSWORD_POLICY_MAX_LENGTH,
                 })}
               />
             )}

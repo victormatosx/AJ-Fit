@@ -41,14 +41,27 @@ service firebase.storage {
       return !firestore.exists(/databases/(default)/documents/accountDeletionLocks/$(userId));
     }
 
+    function hasPasswordIdentity() {
+      return request.auth != null
+        && request.auth.token.get('firebase', {})
+             .get('identities', {})
+             .get('email', []).size() > 0;
+    }
+
+    function hasVerifiedEmailForPrivateAccess() {
+      return request.auth != null
+        && (!hasPasswordIdentity()
+            || request.auth.token.get('email_verified', false) == true);
+    }
+
     match /users/{userId}/profile/avatar {
-      allow read: if request.auth != null && request.auth.uid == userId && accountActive(userId);
-      allow create, update: if request.auth != null
+      allow read: if hasVerifiedEmailForPrivateAccess() && request.auth.uid == userId && accountActive(userId);
+      allow create, update: if hasVerifiedEmailForPrivateAccess()
         && request.auth.uid == userId
         && accountActive(userId)
         && request.resource.size <= 5 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
-      allow delete: if request.auth != null && request.auth.uid == userId && accountActive(userId);
+      allow delete: if hasVerifiedEmailForPrivateAccess() && request.auth.uid == userId && accountActive(userId);
     }
 
     // Fotos privadas de evolução (Photo Vault, docs/20). O objeto é
@@ -58,7 +71,7 @@ service firebase.storage {
     // users/{userId}/progressPhotos/{photoId} no Firestore.
     match /users/{userId}/progressPhotos/{fileName} {
       // Fase 5: read also requires accountActive(userId).
-      allow read: if request.auth != null && request.auth.uid == userId && accountActive(userId);
+      allow read: if hasVerifiedEmailForPrivateAccess() && request.auth.uid == userId && accountActive(userId);
 
       // FASE 7: ADD_PROGRESS_PHOTO/DELETE_PROGRESS_PHOTO are Premium
       // capabilities (Fase 3) — `hasServerPremium(userId)` is required
@@ -66,7 +79,7 @@ service firebase.storage {
       // above stays ownership-only: Free keeps full read access to an
       // existing gallery, matching the Firestore-side rule for the same
       // metadata.
-      allow create: if request.auth != null
+      allow create: if hasVerifiedEmailForPrivateAccess()
         && request.auth.uid == userId
         && accountActive(userId)
         && hasServerPremium(userId)
@@ -110,13 +123,13 @@ service firebase.storage {
       // não podem ser alterados.
       allow update: if false;
 
-      allow delete: if request.auth != null && request.auth.uid == userId && accountActive(userId) && hasServerPremium(userId);
+      allow delete: if hasVerifiedEmailForPrivateAccess() && request.auth.uid == userId && accountActive(userId) && hasServerPremium(userId);
     }
 
     match /users/{userId}/support/{ticketId}/attachments/{fileName} {
       // Fase 5: read also requires accountActive(userId).
-      allow read: if request.auth != null && request.auth.uid == userId && accountActive(userId);
-      allow create: if request.auth != null
+      allow read: if hasVerifiedEmailForPrivateAccess() && request.auth.uid == userId && accountActive(userId);
+      allow create: if hasVerifiedEmailForPrivateAccess()
         && request.auth.uid == userId
         && accountActive(userId)
         && request.resource.size <= 8 * 1024 * 1024
@@ -142,7 +155,7 @@ service firebase.storage {
     // ainda (nem no app, nem neste painel). Revisar quando essa decisão for
     // tomada.
     function isExercisesAdmin() {
-      return request.auth != null
+      return hasVerifiedEmailForPrivateAccess()
         && firestore.exists(/databases/(default)/documents/users/$(request.auth.uid))
         && firestore.get(/databases/(default)/documents/users/$(request.auth.uid))
              .data.metadata.role == 'admin';
@@ -151,7 +164,7 @@ service firebase.storage {
     match /exercises/{exerciseId}/execution/{fileName} {
       // Leitura: qualquer usuário autenticado, espelhando `firestore.rules`'
       // `allow read: if isSignedIn()` na mesma collection.
-      allow read: if request.auth != null;
+      allow read: if hasVerifiedEmailForPrivateAccess();
 
       allow create, update: if isExercisesAdmin()
         && fileName in ['vertical.webm', 'horizontal.webm']
