@@ -166,6 +166,10 @@
   "history": {
     "records_one": "{{count}} record",
     "records_other": "{{count}} records",
+    "full": {
+      "title": "Full history",
+      "summary": "All your assessments in a single timeline"
+    },
     "empty": {
       "title": "No assessment recorded",
       "message": "Save your first assessment to start the timeline."
@@ -176,9 +180,21 @@
     },
     "labels": {
       "importedBadge": "Imported",
-      "viewDetails": "View details"
+      "guidedBadge": "Guided assessment",
+      "viewDetails": "View details",
+      "hideDetails": "Hide details"
     },
     "details": {
+      "title": "Assessment details",
+      "notAvailable": "Not provided",
+      "compositionUnavailable": "Lean mass and fat mass cannot be calculated without a body-fat percentage.",
+      "sections": {
+        "composition": "Body composition",
+        "context": "Assessment data",
+        "skinfolds": "Recorded skinfolds",
+        "additional": "Additional data",
+        "notes": "Notes"
+      },
       "available": "Estimated lean mass {{lean}} · fat mass {{fat}}.",
       "availableProtocol": "Estimated lean mass {{lean}} · fat mass {{fat}} · protocol {{protocol}}.",
       "availableImported": "Estimated lean mass {{lean}} · fat mass {{fat}} · recorded from a professional assessment.",
@@ -200,7 +216,9 @@
     "openImport": "Open assessment import",
     "evolutionCard": "Assessment evolution charts and metrics",
     "viewHistory": "View full assessment history",
+    "closeHistory": "Return to Physical Assessment",
     "openAssessment": "View details for the assessment from {{date}}",
+    "closeAssessment": "Hide details for the assessment from {{date}}",
     "chart": "{{label}} chart. {{description}}",
     "formField": "{{label}} field",
     "selectProtocol": "Select protocol",

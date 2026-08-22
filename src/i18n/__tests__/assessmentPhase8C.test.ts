@@ -60,9 +60,11 @@ describe('Assessment domain presentation resources', () => {
     expect(screen).toContain("{ max: Infinity, classification: 'obesity'");
   });
 
-  it('uses complete translated history-detail sentences without translation concatenation', () => {
-    expect(history).toContain('history.details.availableProtocolImported');
-    expect(history).toContain('history.details.unavailableProtocolImported');
+  it('uses structured translated history details without translation concatenation', () => {
+    expect(history).toContain('history.details.sections.composition');
+    expect(history).toContain('history.details.sections.context');
+    expect(history).toContain('history.details.sections.skinfolds');
+    expect(history).toContain('history.details.sections.additional');
     expect(history).not.toContain('history.expanded.');
     expect(history).not.toMatch(/t\([^\n]+\)\s*\+/);
   });

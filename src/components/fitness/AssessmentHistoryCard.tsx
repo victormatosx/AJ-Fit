@@ -4,12 +4,13 @@ import { useTranslation } from 'react-i18next';
 import { Card } from '../ui/Card';
 import { Icon } from '../ui/Icon';
 import { MonoLabel } from '../ui/Display';
-import { colors, fonts } from '../../theme/tokens';
+import { colors, fonts, radii, spacing } from '../../theme/tokens';
 import { useUnits } from '../../state/UnitsContext';
 import {
   formatWeightFromKg,
   weightUnit,
 } from '../../units/weightConversions';
+import { formatHeightFromCm, heightUnit } from '../../units/heightConversions';
 
 export type AssessmentHistoryRow = {
   id: string;
@@ -20,8 +21,16 @@ export type AssessmentHistoryRow = {
   bmi: number | null;
   leanMass: number | null;
   fatMass: number | null;
+  height: number;
   source: 'guided' | 'imported';
   protocolLabel?: string;
+  age?: number;
+  sex?: 'm' | 'f';
+  skinfolds?: Array<{ label: string; value: number }>;
+  bodyWater?: number;
+  basalMetabolism?: number;
+  visceralFat?: number;
+  notes?: string;
 };
 
 function MiniStat({ l, v, u }: { l: string; v: string; u: string }) {
@@ -67,6 +76,65 @@ function MiniStat({ l, v, u }: { l: string; v: string; u: string }) {
   );
 }
 
+function DetailSection({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <View style={{ marginTop: spacing[5] }}>
+      <MonoLabel color={colors.accentHi}>{label}</MonoLabel>
+      <View style={{ marginTop: spacing[2.5] }}>{children}</View>
+    </View>
+  );
+}
+
+function DetailValue({
+  label,
+  value,
+  unit,
+}: {
+  label: string;
+  value: string;
+  unit?: string;
+}) {
+  return (
+    <View
+      style={{
+        width: '48%',
+        minHeight: 62,
+        paddingHorizontal: spacing[3],
+        paddingVertical: spacing[2.5],
+        borderRadius: radii.md,
+        backgroundColor: colors.surfaceRaised,
+        borderWidth: 1,
+        borderColor: colors.border,
+      }}
+    >
+      <MonoLabel size={8}>{label}</MonoLabel>
+      <View style={{ flexDirection: 'row', alignItems: 'baseline', marginTop: spacing[1.5] }}>
+        <Text style={{ fontFamily: fonts.uiBold, fontSize: 14, color: colors.text }}>{value}</Text>
+        {unit ? (
+          <Text style={{ marginLeft: 3, fontFamily: fonts.mono, fontSize: 9, color: colors.faint }}>
+            {unit}
+          </Text>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
+function DetailGrid({ children }: { children: React.ReactNode }) {
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'space-between',
+        rowGap: spacing[2.5],
+      }}
+    >
+      {children}
+    </View>
+  );
+}
+
 function HistoryRow({
   entry,
   highlight,
@@ -81,6 +149,7 @@ function HistoryRow({
   const { t } = useTranslation('assessment');
   const { resolvedUnits } = useUnits();
   const massUnit = weightUnit(resolvedUnits);
+  const displayedHeightUnit = heightUnit(resolvedUnits);
   const chevronRot = useRef(new Animated.Value(expanded ? 1 : 0)).current;
   useEffect(() => {
     Animated.timing(chevronRot, {
@@ -91,23 +160,12 @@ function HistoryRow({
   }, [expanded, chevronRot]);
 
   const hasComposition = entry.leanMass != null && entry.fatMass != null;
-  const hasProtocol = entry.protocolLabel != null;
   const isImported = entry.source === 'imported';
-  const detailKey = hasComposition
-    ? hasProtocol
-      ? isImported
-        ? 'history.details.availableProtocolImported'
-        : 'history.details.availableProtocol'
-      : isImported
-        ? 'history.details.availableImported'
-        : 'history.details.available'
-    : hasProtocol
-      ? isImported
-        ? 'history.details.unavailableProtocolImported'
-        : 'history.details.unavailableProtocol'
-      : isImported
-        ? 'history.details.unavailableImported'
-        : 'history.details.unavailable';
+  const hasImportedDetails =
+    entry.bodyWater != null ||
+    entry.basalMetabolism != null ||
+    entry.visceralFat != null;
+  const notAvailable = t('history.details.notAvailable');
 
   return (
     <View
@@ -169,7 +227,10 @@ function HistoryRow({
           <Pressable
             onPress={onToggle}
             accessibilityRole="button"
-            accessibilityLabel={t('accessibility.openAssessment', { date: entry.date })}
+            accessibilityLabel={t(
+              expanded ? 'accessibility.closeAssessment' : 'accessibility.openAssessment',
+              { date: entry.date },
+            )}
             style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
           >
             <Text
@@ -180,7 +241,7 @@ function HistoryRow({
                 color: 'rgba(255,255,255,0.6)',
               }}
             >
-              {t('history.labels.viewDetails').toUpperCase()}
+              {t(expanded ? 'history.labels.hideDetails' : 'history.labels.viewDetails').toUpperCase()}
             </Text>
             <Animated.View
               style={{
@@ -218,31 +279,160 @@ function HistoryRow({
         {expanded && (
           <View
             style={{
-              marginTop: 12,
-              paddingTop: 12,
+              marginTop: spacing[4],
+              paddingTop: spacing[4],
               borderTopWidth: 1,
-              borderTopColor: 'rgba(255,255,255,0.07)',
+              borderTopColor: colors.hair,
             }}
           >
-            <Text style={{ fontFamily: fonts.ui, fontSize: 12.5, color: colors.mute, lineHeight: 20 }}>
-              {t(detailKey, {
-                lean:
-                  entry.leanMass != null
-                    ? t('result', {
-                        value: formatWeightFromKg(entry.leanMass, resolvedUnits),
-                        unit: massUnit,
-                      })
-                    : undefined,
-                fat:
-                  entry.fatMass != null
-                    ? t('result', {
-                        value: formatWeightFromKg(entry.fatMass, resolvedUnits),
-                        unit: massUnit,
-                      })
-                    : undefined,
-                protocol: entry.protocolLabel,
-              })}
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing[2.5] }}>
+              <View
+                style={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: radii.control,
+                  backgroundColor: colors.accentSoft,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Icon name={isImported ? 'download' : 'ruler'} size={15} color={colors.accentHi} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontFamily: fonts.uiBold, fontSize: 14.5, color: colors.text }}>
+                  {t('history.details.title')}
+                </Text>
+                <Text style={{ marginTop: 2, fontFamily: fonts.ui, fontSize: 11.5, color: colors.mute }}>
+                  {isImported
+                    ? t('history.labels.importedBadge')
+                    : t('history.labels.guidedBadge')}
+                  {entry.protocolLabel ? ` · ${entry.protocolLabel}` : ''}
+                </Text>
+              </View>
+            </View>
+
+            <DetailSection label={t('history.details.sections.composition').toUpperCase()}>
+              <DetailGrid>
+                <DetailValue
+                  label={t('metrics.leanMass').toUpperCase()}
+                  value={
+                    entry.leanMass != null
+                      ? formatWeightFromKg(entry.leanMass, resolvedUnits)
+                      : notAvailable
+                  }
+                  unit={entry.leanMass != null ? massUnit : undefined}
+                />
+                <DetailValue
+                  label={t('metrics.fatMass').toUpperCase()}
+                  value={
+                    entry.fatMass != null
+                      ? formatWeightFromKg(entry.fatMass, resolvedUnits)
+                      : notAvailable
+                  }
+                  unit={entry.fatMass != null ? massUnit : undefined}
+                />
+              </DetailGrid>
+              {!hasComposition ? (
+                <Text
+                  style={{
+                    marginTop: spacing[2.5],
+                    fontFamily: fonts.ui,
+                    fontSize: 11.5,
+                    lineHeight: 17,
+                    color: colors.mute,
+                  }}
+                >
+                  {t('history.details.compositionUnavailable')}
+                </Text>
+              ) : null}
+            </DetailSection>
+
+            <DetailSection label={t('history.details.sections.context').toUpperCase()}>
+              <DetailGrid>
+                <DetailValue
+                  label={t('fields.height.label').toUpperCase()}
+                  value={formatHeightFromCm(entry.height, resolvedUnits)}
+                  unit={displayedHeightUnit}
+                />
+                <DetailValue
+                  label={t('guided.protocolLabel').toUpperCase()}
+                  value={entry.protocolLabel ?? (isImported ? t('history.labels.importedBadge') : notAvailable)}
+                />
+                {entry.age != null ? (
+                  <DetailValue
+                    label={t('fields.ageAtAssessment.label').toUpperCase()}
+                    value={String(entry.age)}
+                    unit={t('units.years')}
+                  />
+                ) : null}
+                {entry.sex ? (
+                  <DetailValue
+                    label={t('guided.sexLabel').toUpperCase()}
+                    value={t(entry.sex === 'm' ? 'guided.male' : 'guided.female')}
+                  />
+                ) : null}
+              </DetailGrid>
+            </DetailSection>
+
+            {entry.skinfolds?.length ? (
+              <DetailSection label={t('history.details.sections.skinfolds').toUpperCase()}>
+                <DetailGrid>
+                  {entry.skinfolds.map((fold) => (
+                    <DetailValue
+                      key={fold.label}
+                      label={fold.label.toUpperCase()}
+                      value={fold.value.toFixed(1).replace(/\.0$/, '')}
+                      unit={t('units.mm')}
+                    />
+                  ))}
+                </DetailGrid>
+              </DetailSection>
+            ) : null}
+
+            {isImported && hasImportedDetails ? (
+              <DetailSection label={t('history.details.sections.additional').toUpperCase()}>
+                <DetailGrid>
+                  {entry.bodyWater != null ? (
+                    <DetailValue
+                      label={t('fields.bodyWater.label').toUpperCase()}
+                      value={entry.bodyWater.toFixed(1)}
+                      unit={t('units.percent')}
+                    />
+                  ) : null}
+                  {entry.basalMetabolism != null ? (
+                    <DetailValue
+                      label={t('fields.basalMetabolism.label').toUpperCase()}
+                      value={entry.basalMetabolism.toFixed(0)}
+                      unit={t('units.kcal')}
+                    />
+                  ) : null}
+                  {entry.visceralFat != null ? (
+                    <DetailValue
+                      label={t('fields.visceralFat.label').toUpperCase()}
+                      value={entry.visceralFat.toFixed(1).replace(/\.0$/, '')}
+                    />
+                  ) : null}
+                </DetailGrid>
+              </DetailSection>
+            ) : null}
+
+            {entry.notes ? (
+              <DetailSection label={t('history.details.sections.notes').toUpperCase()}>
+                <View
+                  style={{
+                    padding: spacing[3],
+                    borderRadius: radii.md,
+                    backgroundColor: colors.surfaceRaised,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                  }}
+                >
+                  <Text style={{ fontFamily: fonts.ui, fontSize: 12.5, lineHeight: 18, color: colors.textSecondary }}>
+                    {entry.notes}
+                  </Text>
+                </View>
+              </DetailSection>
+            ) : null}
           </View>
         )}
       </Card>

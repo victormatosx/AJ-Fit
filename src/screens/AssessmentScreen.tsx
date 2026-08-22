@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { View, Text, ScrollView, Pressable, TextInput, Animated, Easing, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -19,6 +19,7 @@ import {
   AssessmentHistoryCard,
   AssessmentHistoryRow,
 } from '../components/fitness/AssessmentHistoryCard';
+import { AssessmentHistoryModal } from '../components/fitness/AssessmentHistoryModal';
 import { colors, fonts, radii, sizes, spacing } from '../theme/tokens';
 import { useAuth } from '../state/AuthContext';
 import { useAssessments, type SaveOutcome } from '../hooks/useAssessments';
@@ -54,6 +55,7 @@ import {
   weightToKg,
   weightUnit,
 } from '../units/weightConversions';
+import { normalizeDecimalInput, parseDecimalInput } from '../lib/decimalInput';
 
 
 const SITE_TRANSLATION_KEYS: Record<SiteKey, `skinfolds.${SiteKey}`> = {
@@ -131,7 +133,7 @@ export function AssessmentScreen({ onBack }: { onBack: () => void }) {
   const [showGuided, setShowGuided] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [showAssessmentActions, setShowAssessmentActions] = useState(false);
-  const [showFullHistory, setShowFullHistory] = useState(false);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
 
   const hasAssessments = assessments.length > 0;
@@ -188,13 +190,27 @@ export function AssessmentScreen({ onBack }: { onBack: () => void }) {
     bmi: a.bmi,
     leanMass: a.leanMass,
     fatMass: a.fatMass,
+    height: a.height,
+    notes: a.notes,
     source: a.source,
     protocolLabel:
       a.source === 'guided'
         ? t(`assessment:${PROTOCOL_TRANSLATION_KEYS[a.protocol]}`)
         : undefined,
+    age: a.source === 'guided' ? a.age : undefined,
+    sex: a.source === 'guided' ? a.sex : undefined,
+    skinfolds:
+      a.source === 'guided'
+        ? Object.entries(a.folds).map(([site, value]) => ({
+            label: t(`assessment:${SITE_TRANSLATION_KEYS[site as SiteKey]}`),
+            value,
+          }))
+        : undefined,
+    bodyWater: a.source === 'imported' ? a.bodyWater : undefined,
+    basalMetabolism: a.source === 'imported' ? a.basalMetabolism : undefined,
+    visceralFat: a.source === 'imported' ? a.visceralFat : undefined,
   }));
-  const visibleHistoryRows = showFullHistory ? historyRows : historyRows.slice(0, 3);
+  const visibleHistoryRows = historyRows.slice(0, 3);
 
   // The original entry callbacks stay unchanged. Once either flow opens, the
   // compact selector is dismissed so returning from a form lands on the dashboard.
@@ -325,7 +341,7 @@ export function AssessmentScreen({ onBack }: { onBack: () => void }) {
               weightDelta={evolutionSincePrevious?.weightDelta ?? 0}
               bodyFatDelta={evolutionSincePrevious?.bodyFatDelta ?? null}
               leanMassDelta={evolutionSincePrevious?.leanMassDelta ?? null}
-              onViewHistory={() => setShowFullHistory(true)}
+              onViewHistory={() => setShowHistoryModal(true)}
             />
           </AssessmentSection>
           </>
@@ -423,7 +439,9 @@ export function AssessmentScreen({ onBack }: { onBack: () => void }) {
                 />
                 {historyRows.length > 3 && (
                   <Pressable
-                    onPress={() => setShowFullHistory((v) => !v)}
+                    onPress={() => setShowHistoryModal(true)}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('assessment:accessibility.viewHistory')}
                     style={{ alignItems: 'center', paddingVertical: 10 }}
                   >
                     <Text
@@ -434,10 +452,7 @@ export function AssessmentScreen({ onBack }: { onBack: () => void }) {
                         color: colors.accentHi,
                       }}
                     >
-                      {(showFullHistory
-                        ? t('history.toggle.showLess')
-                        : t('history.toggle.showAll')
-                      ).toUpperCase()}
+                      {t('history.toggle.showAll').toUpperCase()}
                     </Text>
                   </Pressable>
                 )}
@@ -453,6 +468,14 @@ export function AssessmentScreen({ onBack }: { onBack: () => void }) {
         onClose={() => setShowAssessmentActions(false)}
         onGuided={() => setShowGuided(true)}
         onImport={() => setShowImport(true)}
+      />
+
+      <AssessmentHistoryModal
+        visible={showHistoryModal}
+        entries={historyRows}
+        expandedId={expandedHistoryId}
+        onToggle={(id) => setExpandedHistoryId((cur) => (cur === id ? null : id))}
+        onClose={() => setShowHistoryModal(false)}
       />
 
       {showGuided && (
@@ -501,6 +524,7 @@ function MeasureField({
   shakeX?: Animated.Value;
   placeholder: string;
 }) {
+  const [focused, setFocused] = useState(false);
   // IMPORTANT: never define the wrapper as a local component (e.g.
   // `const Wrapper = shakeX ? (props) => <Animated.View .../> : ...`).
   // That expression creates a brand-new function identity on every render,
@@ -518,28 +542,35 @@ function MeasureField({
         style={{
           flexDirection: 'row',
           alignItems: 'center',
-          gap: 6,
-          paddingVertical: small ? 10 : 13,
-          paddingHorizontal: small ? 12 : 14,
-          borderRadius: 12,
-          backgroundColor: 'rgba(255,255,255,0.04)',
+          gap: spacing[2],
+          minHeight: small ? 48 : 52,
+          paddingHorizontal: small ? spacing[3] : spacing[4],
+          borderRadius: radii.lg,
+          backgroundColor: colors.cardBg,
           borderWidth: 1,
-          borderColor: error ? '#f0563f' : 'rgba(255,255,255,0.09)',
+          borderColor: error
+            ? colors.danger
+            : focused
+              ? colors.focus
+              : colors.cardBorder,
         }}
       >
         <TextInput
           value={value}
           onChangeText={onChange}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
           placeholder={placeholder}
           accessibilityLabel={label}
           placeholderTextColor={colors.faint}
+          selectionColor={colors.accentHi}
           keyboardType="decimal-pad"
           style={{
             flex: 1,
             minWidth: 0,
-            color: '#fff',
-            fontFamily: fonts.display,
-            fontSize: small ? 18 : 22,
+            color: colors.text,
+            fontFamily: fonts.uiSemi,
+            fontSize: small ? 15 : 16,
             padding: 0,
           }}
         />
@@ -700,12 +731,14 @@ function ModalHeader({ onBack, title }: { onBack: () => void; title: string }) {
   return (
     <View
       style={{
-        paddingHorizontal: 22,
-        paddingTop: 12,
-        paddingBottom: 6,
+        width: '100%',
+        maxWidth: sizes.contentMaxWidth,
+        alignSelf: 'center',
+        paddingHorizontal: sizes.screenGutter,
+        paddingTop: spacing[3],
+        paddingBottom: spacing[2],
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 12,
       }}
     >
       <Pressable
@@ -713,21 +746,125 @@ function ModalHeader({ onBack, title }: { onBack: () => void; title: string }) {
         accessibilityRole="button"
         accessibilityLabel={t('actions.back')}
         style={{
-          width: 38,
-          height: 38,
-          borderRadius: 10,
-          backgroundColor: 'rgba(255,255,255,0.05)',
+          width: 44,
+          height: 44,
+          borderRadius: radii.control,
+          backgroundColor: colors.surfaceRaised,
           borderWidth: 1,
-          borderColor: 'rgba(255,255,255,0.09)',
+          borderColor: colors.border,
           alignItems: 'center',
           justifyContent: 'center',
         }}
       >
-        <Icon name="arrow-left" size={17} color="rgba(255,255,255,0.8)" />
+        <Icon name="arrow-left" size={17} color={colors.textSecondary} />
       </Pressable>
-      <Slash>{title}</Slash>
+      <View style={{ flex: 1, alignItems: 'center' }}>
+        <MonoLabel>{title}</MonoLabel>
+      </View>
+      <View style={{ width: 44 }} />
     </View>
   );
+}
+
+function AssessmentFormIntro({
+  icon,
+  title,
+  description,
+}: {
+  icon: 'ruler' | 'download';
+  title: string;
+  description: string;
+}) {
+  return (
+    <View
+      style={{
+        width: '100%',
+        maxWidth: sizes.contentMaxWidth,
+        alignSelf: 'center',
+        paddingHorizontal: sizes.screenGutter,
+        paddingTop: spacing[5],
+      }}
+    >
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing[3] }}>
+        <View
+          style={{
+            width: 42,
+            height: 42,
+            borderRadius: radii.md,
+            backgroundColor: colors.accentSoft,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Icon name={icon} size={18} color={colors.accentHi} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontFamily: fonts.uiBold, fontSize: 17, color: colors.text }}>
+            {title}
+          </Text>
+          <Text
+            style={{
+              marginTop: spacing[1],
+              fontFamily: fonts.ui,
+              fontSize: 12.5,
+              lineHeight: 18,
+              color: colors.mute,
+            }}
+          >
+            {description}
+          </Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function AssessmentFormSection({
+  index,
+  title,
+  children,
+}: {
+  index: number;
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <View
+      style={{
+        width: '100%',
+        maxWidth: sizes.contentMaxWidth,
+        alignSelf: 'center',
+        paddingHorizontal: sizes.screenGutter,
+        paddingTop: spacing[8],
+      }}
+    >
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: spacing[2],
+          marginBottom: spacing[3],
+        }}
+      >
+        <Text
+          style={{
+            fontFamily: fonts.monoBold,
+            fontSize: 10,
+            letterSpacing: 2,
+            color: colors.accentHi,
+          }}
+        >
+          {String(index).padStart(2, '0')}
+        </Text>
+        <Slash>{title}</Slash>
+      </View>
+      {children}
+    </View>
+  );
+}
+
+function FormDivider() {
+  return <View style={{ height: 1, backgroundColor: colors.hair, marginVertical: spacing[4] }} />;
 }
 
 function AssessmentSaveFooter({
@@ -755,41 +892,45 @@ function AssessmentSaveFooter({
     <SafeAreaView
       edges={['bottom']}
       style={{
-        paddingHorizontal: 22,
-        paddingTop: 12,
-        backgroundColor: colors.bg,
+        paddingHorizontal: sizes.screenGutter,
+        paddingTop: spacing[3],
+        backgroundColor: 'rgba(2,0,16,0.96)',
         borderTopWidth: 1,
-        borderTopColor: colors.border,
+        borderTopColor: colors.hair,
       }}
     >
-      <Animated.View style={{ transform: [{ translateX: shakeX }] }}>
+      <Animated.View
+        style={{
+          width: '100%',
+          maxWidth: sizes.contentMaxWidth - sizes.screenGutter * 2,
+          alignSelf: 'center',
+          transform: [{ translateX: shakeX }],
+        }}
+      >
         <Pressable
           onPress={onPress}
           disabled={saving}
           accessibilityRole="button"
           accessibilityLabel={accessibilityLabel}
           accessibilityState={{ disabled: saving }}
-          style={{ opacity: saving ? 0.75 : 1 }}
+          style={{ opacity: saving ? 0.75 : canSave ? 1 : 0.68 }}
         >
           <LinearGradient
             colors={['#1f82ff', colors.accent]}
             start={{ x: 0, y: 0 }}
             end={{ x: 0, y: 1 }}
             style={{
-              height: 58,
-              borderTopLeftRadius: 12,
-              borderTopRightRadius: 12,
-              borderBottomLeftRadius: 12,
-              borderBottomRightRadius: 0,
+              height: 54,
+              borderRadius: radii.lg,
               flexDirection: 'row',
               alignItems: 'center',
               justifyContent: 'center',
               gap: 10,
               shadowColor: colors.accent,
-              shadowOpacity: 0.45,
-              shadowRadius: 24,
-              shadowOffset: { width: 0, height: 8 },
-              elevation: 8,
+              shadowOpacity: canSave ? 0.3 : 0,
+              shadowRadius: canSave ? 18 : 0,
+              shadowOffset: { width: 0, height: 6 },
+              elevation: canSave ? 6 : 0,
             }}
           >
             {saving ? (
@@ -826,8 +967,16 @@ function AssessmentSaveFooter({
           </LinearGradient>
         </Pressable>
       </Animated.View>
-      <View style={{ minHeight: 26, justifyContent: 'center' }}>
-        {!canSave && (
+      <View
+        style={{
+          width: '100%',
+          maxWidth: sizes.contentMaxWidth - sizes.screenGutter * 2,
+          minHeight: 26,
+          alignSelf: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        {shake && !canSave && (
           <MonoLabel
             color={shake ? colors.danger : colors.faint}
             style={{ textAlign: 'center', marginTop: 8 }}
@@ -890,7 +1039,7 @@ function GuidedAssessmentModal({
 
   const proto = protocolById(protocolId);
   const sites = sex ? proto.sitesFor(sex) : [];
-  const displayedWeight = parseFloat(weight);
+  const displayedWeight = parseDecimalInput(weight);
   const weightKg = weightToKg(displayedWeight, resolvedUnits);
   const heightCm = defaultHeight ?? NaN;
   const bmi = computeBmi(weightKg, heightCm);
@@ -993,12 +1142,15 @@ function GuidedAssessmentModal({
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <ScrollView contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
           <ModalHeader onBack={onBack} title={t('guided.title').toUpperCase()} />
+          <AssessmentFormIntro
+            icon="ruler"
+            title={t('actions.guided.title')}
+            description={t('actions.guided.description')}
+          />
 
           {/* INFORMAÇÕES BÁSICAS */}
-          <View style={{ paddingHorizontal: 22, paddingTop: 22 }}>
-            <Slash style={{ marginBottom: 12 }}>{t('guided.basicInfoSection').toUpperCase()}</Slash>
-
-            <View style={{ marginBottom: 16 }}>
+          <AssessmentFormSection index={1} title={t('guided.basicInfoSection').toUpperCase()}>
+            <Card style={{ padding: spacing[4] }}>
               <NativeDatePickerField
                 label={t('fields.measurementDate.label').toUpperCase()}
                 value={measuredAtFields.date ?? new Date()}
@@ -1006,120 +1158,22 @@ function GuidedAssessmentModal({
                 maximumDate={new Date()}
                 error={shake && !measuredAtFields.isValid}
               />
-            </View>
-
-            <View style={{ marginBottom: 10 }}>
+              <FormDivider />
               <MeasureField
                 label={t('fields.weight.label').toUpperCase()}
                 unit={massUnit}
                 placeholder={t('form.numericPlaceholder')}
                 value={weight}
-                onChange={setWeight}
+                onChange={(value) => setWeight(normalizeDecimalInput(value, 2))}
                 error={shake && !(displayedWeight > 0)}
                 shakeX={shakeX}
               />
-            </View>
-            <Card style={{ padding: 16, marginTop: 12 }}>
-              <View
-                style={{
-                  flexDirection: 'row',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  marginBottom: 12,
-                }}
-              >
-                <MonoLabel>{t('results.automaticBmi').toUpperCase()}</MonoLabel>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <Text
-                    style={{
-                      fontFamily: fonts.display,
-                      fontSize: 26,
-                      color: '#fff',
-                      transform: [{ skewX: '-8deg' }],
-                    }}
-                  >
-                    {bmi != null ? bmi.toFixed(1) : '—'}
-                  </Text>
-                  {band && (
-                    <View
-                      style={{
-                        paddingHorizontal: 8,
-                        paddingVertical: 4,
-                        borderRadius: 6,
-                        backgroundColor: band.c,
-                      }}
-                    >
-                      <Text
-                        style={{ fontFamily: fonts.monoBold, fontSize: 9, letterSpacing: 0.8, color: '#020010' }}
-                      >
-                        {t(`classifications.bmi.${band.classification}`).toUpperCase()}
-                      </Text>
-                    </View>
-                  )}
-                </View>
-              </View>
-              <View
-                style={{
-                  position: 'relative',
-                  height: 8,
-                  borderRadius: 6,
-                  backgroundColor: 'rgba(255,255,255,0.07)',
-                  overflow: 'visible',
-                }}
-              >
-                <LinearGradient
-                  colors={['#4da3ff', '#22c55e', '#f5a623', '#f0563f']}
-                  locations={[0, 0.33, 0.66, 1]}
-                  start={{ x: 0, y: 0.5 }}
-                  end={{ x: 1, y: 0.5 }}
-                  style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    borderRadius: 6,
-                    opacity: 0.4,
-                  }}
-                />
-                {bmi != null && (
-                  <View
-                    style={{
-                      position: 'absolute',
-                      top: -3,
-                      left: `${bmiPct}%`,
-                      width: 3,
-                      height: 14,
-                      backgroundColor: '#fff',
-                      marginLeft: -1.5,
-                      shadowColor: '#fff',
-                      shadowOpacity: 0.8,
-                      shadowRadius: 6,
-                      shadowOffset: { width: 0, height: 0 },
-                      elevation: 4,
-                    }}
-                  />
-                )}
-              </View>
-              <View
-                style={{
-                  flexDirection: 'row',
-                  justifyContent: 'space-between',
-                  marginTop: 10,
-                  paddingHorizontal: 2,
-                }}
-              >
-                {['18.5', '25', '30'].map((t) => (
-                  <MonoLabel key={t}>{t}</MonoLabel>
-                ))}
-              </View>
             </Card>
-          </View>
+          </AssessmentFormSection>
 
           {/* DOBRAS CUTÂNEAS */}
-          <View style={{ paddingHorizontal: 22, paddingTop: 26 }}>
-            <Slash style={{ marginBottom: 12 }}>{t('sections.skinfolds').toUpperCase()}</Slash>
-
+          <AssessmentFormSection index={2} title={t('sections.skinfolds').toUpperCase()}>
+            <Card style={{ padding: spacing[4], overflow: 'visible' }}>
             <View style={{ position: 'relative', zIndex: 5 }}>
               <Pressable
                 onPress={() => setProtocolOpen((o) => !o)}
@@ -1233,9 +1287,16 @@ function GuidedAssessmentModal({
                   </MonoLabel>
                 </View>
 
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    flexWrap: 'wrap',
+                    justifyContent: 'space-between',
+                    rowGap: spacing[3],
+                  }}
+                >
                   {sites.map((s) => (
-                    <View key={s} style={{ width: '48.5%' }}>
+                    <View key={s} style={{ width: '48%' }}>
                       <MeasureField
                         label={t(SITE_TRANSLATION_KEYS[s]).toUpperCase()}
                         unit={t('units.mm')}
@@ -1249,11 +1310,117 @@ function GuidedAssessmentModal({
                 </View>
               </>
             )}
+            </Card>
+          </AssessmentFormSection>
+
+          <View
+            style={{
+              width: '100%',
+              maxWidth: sizes.contentMaxWidth,
+              alignSelf: 'center',
+              paddingHorizontal: sizes.screenGutter,
+              paddingTop: spacing[8],
+            }}
+          >
+            <Card style={{ padding: spacing[4] }}>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginBottom: 12,
+                }}
+              >
+                <MonoLabel>{t('results.automaticBmi').toUpperCase()}</MonoLabel>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Text
+                    style={{
+                      fontFamily: fonts.display,
+                      fontSize: 26,
+                      color: '#fff',
+                      transform: [{ skewX: '-8deg' }],
+                    }}
+                  >
+                    {bmi != null ? bmi.toFixed(1) : '—'}
+                  </Text>
+                  {band && (
+                    <View
+                      style={{
+                        paddingHorizontal: 8,
+                        paddingVertical: 4,
+                        borderRadius: 6,
+                        backgroundColor: band.c,
+                      }}
+                    >
+                      <Text
+                        style={{ fontFamily: fonts.monoBold, fontSize: 9, letterSpacing: 0.8, color: '#020010' }}
+                      >
+                        {t(`classifications.bmi.${band.classification}`).toUpperCase()}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+              <View
+                style={{
+                  position: 'relative',
+                  height: 8,
+                  borderRadius: 6,
+                  backgroundColor: 'rgba(255,255,255,0.07)',
+                  overflow: 'visible',
+                }}
+              >
+                <LinearGradient
+                  colors={['#4da3ff', '#22c55e', '#f5a623', '#f0563f']}
+                  locations={[0, 0.33, 0.66, 1]}
+                  start={{ x: 0, y: 0.5 }}
+                  end={{ x: 1, y: 0.5 }}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    borderRadius: 6,
+                    opacity: 0.4,
+                  }}
+                />
+                {bmi != null && (
+                  <View
+                    style={{
+                      position: 'absolute',
+                      top: -3,
+                      left: `${bmiPct}%`,
+                      width: 3,
+                      height: 14,
+                      backgroundColor: '#fff',
+                      marginLeft: -1.5,
+                      shadowColor: '#fff',
+                      shadowOpacity: 0.8,
+                      shadowRadius: 6,
+                      shadowOffset: { width: 0, height: 0 },
+                      elevation: 4,
+                    }}
+                  />
+                )}
+              </View>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  marginTop: 10,
+                  paddingHorizontal: 2,
+                }}
+              >
+                {['18.5', '25', '30'].map((t) => (
+                  <MonoLabel key={t}>{t}</MonoLabel>
+                ))}
+              </View>
+            </Card>
           </View>
 
           {/* RESULTADOS */}
-          <View style={{ paddingHorizontal: 22, paddingTop: 26 }}>
-            <Slash style={{ marginBottom: 12 }}>{t('results.title').toUpperCase()}</Slash>
+          <AssessmentFormSection index={3} title={t('results.title').toUpperCase()}>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
               <AssessmentMetricCard
                 label={t('metrics.bodyFat').toUpperCase()}
@@ -1292,7 +1459,7 @@ function GuidedAssessmentModal({
                 style={{ width: '48.5%' }}
               />
             </View>
-          </View>
+          </AssessmentFormSection>
 
         </ScrollView>
 
@@ -1354,7 +1521,7 @@ function ImportAssessmentModal({
     if (closeTimer.current) clearTimeout(closeTimer.current);
   }, []);
 
-  const displayedWeight = parseFloat(weight);
+  const displayedWeight = parseDecimalInput(weight);
   const weightKg = weightToKg(displayedWeight, resolvedUnits);
   const heightCm = defaultHeight ?? NaN;
   const canSave = weightKg > 0 && heightCm > 0 && measuredAtFields.isValid;
@@ -1432,17 +1599,14 @@ function ImportAssessmentModal({
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <ScrollView contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
           <ModalHeader onBack={onBack} title={t('import.title').toUpperCase()} />
+          <AssessmentFormIntro
+            icon="download"
+            title={t('actions.import.title')}
+            description={t('import.description')}
+          />
 
-          <View style={{ paddingHorizontal: 22, paddingTop: 10 }}>
-            <Text style={{ fontFamily: fonts.ui, fontSize: 13.5, lineHeight: 21, color: colors.mute }}>
-              {t('import.description')}
-            </Text>
-          </View>
-
-          <View style={{ paddingHorizontal: 22, paddingTop: 22 }}>
-            <Slash style={{ marginBottom: 12 }}>{t('import.basicInfoSection').toUpperCase()}</Slash>
-
-            <View style={{ marginBottom: 16 }}>
+          <AssessmentFormSection index={1} title={t('import.basicInfoSection').toUpperCase()}>
+            <Card style={{ padding: spacing[4] }}>
               <NativeDatePickerField
                 label={t('fields.measurementDate.label').toUpperCase()}
                 value={measuredAtFields.date ?? new Date()}
@@ -1450,62 +1614,63 @@ function ImportAssessmentModal({
                 maximumDate={new Date()}
                 error={shake && !measuredAtFields.isValid}
               />
-            </View>
-
-            <View style={{ marginBottom: 10 }}>
+              <FormDivider />
               <MeasureField
                 label={t('fields.weight.label').toUpperCase()}
                 unit={massUnit}
                 placeholder={t('form.numericPlaceholder')}
                 value={weight}
-                onChange={setWeight}
+                onChange={(value) => setWeight(normalizeDecimalInput(value, 2))}
                 error={shake && !(displayedWeight > 0)}
                 shakeX={shakeX}
               />
-            </View>
-          </View>
+            </Card>
+          </AssessmentFormSection>
 
-          <View style={{ paddingHorizontal: 22, paddingTop: 22 }}>
-            <Slash style={{ marginBottom: 12 }}>{t('import.resultsSection').toUpperCase()}</Slash>
-
-            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
-              <MeasureField label={t('fields.bodyFat.label').toUpperCase()} unit={t('units.percent')} placeholder={t('form.numericPlaceholder')} value={bodyFat} onChange={setBodyFat} />
-              <MeasureField label={t('fields.bodyWater.label').toUpperCase()} unit={t('units.percent')} placeholder={t('form.numericPlaceholder')} value={bodyWater} onChange={setBodyWater} />
-            </View>
-            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 14 }}>
-              <MeasureField
-                label={t('fields.basalMetabolism.label').toUpperCase()}
-                unit={t('units.kcal')}
-                placeholder={t('form.numericPlaceholder')}
-                value={basalMetabolism}
-                onChange={setBasalMetabolism}
-              />
-              <MeasureField label={t('fields.visceralFat.label').toUpperCase()} unit="" placeholder={t('form.numericPlaceholder')} value={visceralFat} onChange={setVisceralFat} />
-            </View>
-
-            <MonoLabel color={colors.faint} style={{ marginBottom: 6 }}>
-              {t('fields.notes.label').toUpperCase()}
-            </MonoLabel>
-            <View
-              style={{
-                paddingVertical: 13,
-                paddingHorizontal: 14,
-                borderRadius: 12,
-                backgroundColor: 'rgba(255,255,255,0.04)',
-                borderWidth: 1,
-                borderColor: 'rgba(255,255,255,0.09)',
-              }}
-            >
-              <TextInput
-                value={notes}
-                onChangeText={setNotes}
-                placeholder={t('fields.notes.placeholder')}
-                accessibilityLabel={t('fields.notes.label')}
-                placeholderTextColor={colors.faint}
-                style={{ color: '#fff', fontFamily: fonts.ui, fontSize: 13.5, padding: 0 }}
-              />
-            </View>
-          </View>
+          <AssessmentFormSection index={2} title={t('import.resultsSection').toUpperCase()}>
+            <Card style={{ padding: spacing[4] }}>
+              <View style={{ flexDirection: 'row', gap: spacing[3] }}>
+                <MeasureField label={t('fields.bodyFat.label').toUpperCase()} unit={t('units.percent')} placeholder={t('form.numericPlaceholder')} value={bodyFat} onChange={setBodyFat} />
+                <MeasureField label={t('fields.bodyWater.label').toUpperCase()} unit={t('units.percent')} placeholder={t('form.numericPlaceholder')} value={bodyWater} onChange={setBodyWater} />
+              </View>
+              <FormDivider />
+              <View style={{ flexDirection: 'row', gap: spacing[3] }}>
+                <MeasureField
+                  label={t('fields.basalMetabolism.label').toUpperCase()}
+                  unit={t('units.kcal')}
+                  placeholder={t('form.numericPlaceholder')}
+                  value={basalMetabolism}
+                  onChange={setBasalMetabolism}
+                />
+                <MeasureField label={t('fields.visceralFat.label').toUpperCase()} unit="" placeholder={t('form.numericPlaceholder')} value={visceralFat} onChange={setVisceralFat} />
+              </View>
+              <FormDivider />
+              <MonoLabel color={colors.faint} style={{ marginBottom: spacing[2] }}>
+                {t('fields.notes.label').toUpperCase()}
+              </MonoLabel>
+              <View
+                style={{
+                  minHeight: 52,
+                  paddingHorizontal: spacing[4],
+                  borderRadius: radii.lg,
+                  backgroundColor: colors.cardBg,
+                  borderWidth: 1,
+                  borderColor: colors.cardBorder,
+                  justifyContent: 'center',
+                }}
+              >
+                <TextInput
+                  value={notes}
+                  onChangeText={setNotes}
+                  placeholder={t('fields.notes.placeholder')}
+                  accessibilityLabel={t('fields.notes.label')}
+                  placeholderTextColor={colors.faint}
+                  selectionColor={colors.accentHi}
+                  style={{ color: colors.text, fontFamily: fonts.uiMed, fontSize: 14, padding: 0 }}
+                />
+              </View>
+            </Card>
+          </AssessmentFormSection>
 
         </ScrollView>
 

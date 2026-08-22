@@ -166,6 +166,10 @@
   "history": {
     "records_one": "{{count}} registro",
     "records_other": "{{count}} registros",
+    "full": {
+      "title": "Historial completo",
+      "summary": "Todas tus evaluaciones en una sola línea de tiempo"
+    },
     "empty": {
       "title": "Ninguna evaluación registrada",
       "message": "Guarda tu primera evaluación para iniciar la línea de tiempo."
@@ -176,9 +180,21 @@
     },
     "labels": {
       "importedBadge": "Importado",
-      "viewDetails": "Ver detalles"
+      "guidedBadge": "Evaluación guiada",
+      "viewDetails": "Ver detalles",
+      "hideDetails": "Ocultar detalles"
     },
     "details": {
+      "title": "Detalles de la evaluación",
+      "notAvailable": "No informado",
+      "compositionUnavailable": "La masa magra y la masa grasa no se pueden calcular sin el porcentaje de grasa.",
+      "sections": {
+        "composition": "Composición corporal",
+        "context": "Datos de la evaluación",
+        "skinfolds": "Pliegues registrados",
+        "additional": "Datos adicionales",
+        "notes": "Observaciones"
+      },
       "available": "Masa magra estimada {{lean}} · masa grasa {{fat}}.",
       "availableProtocol": "Masa magra estimada {{lean}} · masa grasa {{fat}} · protocolo {{protocol}}.",
       "availableImported": "Masa magra estimada {{lean}} · masa grasa {{fat}} · registrado desde una evaluación profesional.",
@@ -200,7 +216,9 @@
     "openImport": "Abrir importación de evaluación",
     "evolutionCard": "Gráficos y métricas de evolución de las evaluaciones",
     "viewHistory": "Ver historial completo de evaluaciones",
+    "closeHistory": "Volver a Evaluación Física",
     "openAssessment": "Ver detalles de la evaluación del {{date}}",
+    "closeAssessment": "Ocultar detalles de la evaluación del {{date}}",
     "chart": "Gráfico de {{label}}. {{description}}",
     "formField": "Campo {{label}}",
     "selectProtocol": "Seleccionar protocolo",

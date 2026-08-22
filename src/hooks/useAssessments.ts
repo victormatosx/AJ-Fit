@@ -65,6 +65,16 @@ export function useAssessments(uid: string | null) {
   const [assessments, setAssessments] = useState<AssessmentView[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  // `loading` describes the first resolution for an identity, not every
+  // subsequent revalidation. AssessmentScreen is prewarmed and kept alive:
+  // when it becomes visible, its focus effect refreshes the already-resolved
+  // data. Turning `loading` back on for that background refresh made an empty
+  // screen paint for one frame before the effect ran, then switch to the
+  // loader. Keep the resolved uid in state (for render-time stale-data
+  // protection) and in a ref (so refresh can classify the request without
+  // depending on an asynchronously updated closure).
+  const [resolvedUid, setResolvedUid] = useState<string | null>(null);
+  const resolvedUidRef = useRef<string | null>(null);
 
   // Monotonic token so a slower/older fetch can never overwrite a newer one
   // — same pattern as AuthContext's `loadSeq`. Without this, two overlapping
@@ -78,10 +88,19 @@ export function useAssessments(uid: string | null) {
     if (!uid) {
       setAssessments([]);
       setError(null);
+      resolvedUidRef.current = null;
+      setResolvedUid(null);
       setLoading(false);
       return;
     }
-    setLoading(true);
+    const isInitialLoad = resolvedUidRef.current !== uid;
+    if (isInitialLoad) {
+      // A new identity must never inherit the previous user's data/error,
+      // even during the render before this async refresh starts.
+      setAssessments([]);
+      setError(null);
+      setLoading(true);
+    }
     try {
       // Server-ordered by measuredAt desc, createdAt desc — a fresh full
       // re-fetch after every write, so a back-dated (imported) assessment
@@ -96,7 +115,11 @@ export function useAssessments(uid: string | null) {
       logError('assessments:load', err);
       setError(err instanceof Error ? err : new Error('Failed to load assessments'));
     } finally {
-      if (seq === fetchSeq.current) setLoading(false);
+      if (seq === fetchSeq.current) {
+        resolvedUidRef.current = uid;
+        setResolvedUid(uid);
+        setLoading(false);
+      }
     }
   }, [uid]);
 
@@ -104,9 +127,18 @@ export function useAssessments(uid: string | null) {
     refresh();
   }, [refresh]);
 
-  const latest = assessments[0] ?? null;
-  const previous = assessments[1] ?? null;
-  const first = assessments.length ? assessments[assessments.length - 1] : null;
+  // On a uid transition React renders once before the effect above runs.
+  // Treat that render as INITIALIZING and expose no stale assessment data.
+  const hasResolvedCurrentUid = resolvedUid === uid;
+  const visibleAssessments = hasResolvedCurrentUid ? assessments : [];
+  const visibleError = hasResolvedCurrentUid ? error : null;
+  const effectiveLoading = !hasResolvedCurrentUid || loading;
+
+  const latest = visibleAssessments[0] ?? null;
+  const previous = visibleAssessments[1] ?? null;
+  const first = visibleAssessments.length
+    ? visibleAssessments[visibleAssessments.length - 1]
+    : null;
 
   // Evolution since the previous assessment — the only view rendered today.
   const evolutionSincePrevious = latest && previous ? delta(latest, previous) : null;
@@ -154,9 +186,9 @@ export function useAssessments(uid: string | null) {
   );
 
   return {
-    assessments,
-    loading,
-    error,
+    assessments: visibleAssessments,
+    loading: effectiveLoading,
+    error: visibleError,
     latest,
     previous,
     first,

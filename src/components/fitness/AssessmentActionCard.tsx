@@ -109,6 +109,15 @@ export function AssessmentActionCard({
 }) {
   const { t } = useTranslation('assessment');
 
+  // The selector and both possible destinations are native Modal-based
+  // surfaces. Dismiss this modal in the same press that dispatches the
+  // gated action so the form (allowed) or PremiumRequiredSheet (blocked)
+  // never has to open on top of an already-visible native modal.
+  const selectAction = (action: () => void) => {
+    onClose();
+    action();
+  };
+
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <Pressable
@@ -174,7 +183,7 @@ export function AssessmentActionCard({
                       icon="ruler"
                       title={t('actions.guided.title')}
                       subtitle={t('actions.guided.description')}
-                      onPress={onPress}
+                      onPress={() => selectAction(onPress)}
                       accessibilityLabel={
                         locked ? t('accessibility.openGuidedLocked') : t('accessibility.openGuided')
                       }
@@ -188,7 +197,7 @@ export function AssessmentActionCard({
                       icon="download"
                       title={t('actions.import.title')}
                       subtitle={t('actions.import.description')}
-                      onPress={onPress}
+                      onPress={() => selectAction(onPress)}
                       accessibilityLabel={
                         locked ? t('accessibility.openImportLocked') : t('accessibility.openImport')
                       }

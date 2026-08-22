@@ -11,6 +11,7 @@ const action = read('components/fitness/AssessmentActionCard.tsx');
 const summary = read('components/fitness/PhysicalAssessmentSummaryCard.tsx');
 const evolution = read('components/fitness/AssessmentEvolutionCard.tsx');
 const history = read('components/fitness/AssessmentHistoryCard.tsx');
+const historyModal = read('components/fitness/AssessmentHistoryModal.tsx');
 const chart = read('components/fitness/EvolutionLineChart.tsx');
 
 describe('Assessment structure resources and consumers', () => {
@@ -22,6 +23,8 @@ describe('Assessment structure resources and consumers', () => {
       expect(resource.summary.lastAssessmentLabel).toContain('{{date}}');
       expect(resource.evolution.viewHistoryCta).toBeTruthy();
       expect(resource.history.empty.title).toBeTruthy();
+      expect(resource.history.full.title).toBeTruthy();
+      expect(resource.history.full.summary).toBeTruthy();
       expect(Object.values(resource.metrics).every(Boolean)).toBe(true);
       expect(resource.loading.title).toBeTruthy();
       expect(resource.errors.loadFailedTitle).toBeTruthy();
@@ -69,7 +72,8 @@ describe('Assessment structure resources and consumers', () => {
     expect(action).toContain("t('accessibility.openGuided')");
     expect(summary).toContain("t('summary.lastAssessmentLabel'");
     expect(evolution).toContain("t('accessibility.evolutionCard')");
-    expect(history).toContain("t('accessibility.openAssessment'");
+    expect(history).toContain("'accessibility.openAssessment'");
+    expect(history).toContain("'accessibility.closeAssessment'");
     expect(chart).toContain("t('accessibility.chart'");
     for (const source of [screen, action, summary, evolution, history, chart]) {
       expect(source).not.toMatch(/>\s*assessment:[\w.]+\s*</);
@@ -81,7 +85,11 @@ describe('Assessment permanent structure regression guard', () => {
   it('preserves query, ordering, callback values and persistence calls', () => {
     expect(screen).toContain('useAssessments(user?.uid ?? null)');
     expect(screen).toContain('const chronological = [...assessments].reverse()');
-    expect(screen).toContain('showFullHistory ? historyRows : historyRows.slice(0, 3)');
+    expect(screen).toContain('const visibleHistoryRows = historyRows.slice(0, 3)');
+    expect(screen).toContain('onViewHistory={() => setShowHistoryModal(true)}');
+    expect(screen).toContain('visible={showHistoryModal}');
+    expect(historyModal).toContain('entries={entries}');
+    expect(historyModal).toContain('onRequestClose={onClose}');
     expect(screen).toContain('onSave={saveGuided}');
     expect(screen).toContain('onSave={saveImported}');
     expect(screen.match(/await onSave\(\{/g)).toHaveLength(2);
