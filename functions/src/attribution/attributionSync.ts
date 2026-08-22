@@ -393,6 +393,8 @@ export type AttributionConfirmationInput =
       productId: string | undefined;
       /** Raw `event.offer_code` — read by `extractGooglePlayOfferCode`. `undefined` when the field itself is absent (same effect as `null`: no proof of an offer). */
       offerCode: string | null | undefined;
+      transactionId?: string;
+      originalTransactionId?: string;
     }
   | { eventType: 'RENEWAL'; eventTimestampMs: number; isTrialConversion: boolean };
 
@@ -636,6 +638,21 @@ export async function applyAttributionRevenueCatEvent(
           lockedAt: eventTimestamp,
           updatedAt: FieldValue.serverTimestamp(),
         };
+        if (
+          typeof input.transactionId === 'string' && input.transactionId.length > 0 &&
+          typeof input.originalTransactionId === 'string' && input.originalTransactionId.length > 0 &&
+          typeof input.store === 'string' && typeof input.productId === 'string'
+        ) {
+          update.subscriptionOrigin = {
+            transactionKey: `${input.store}:${input.originalTransactionId}`,
+            transactionId: input.transactionId,
+            originalTransactionId: input.originalTransactionId,
+            revenueCatEventId: input.eventId,
+            store: input.store,
+            productId: input.productId,
+            confirmedAt: eventTimestamp,
+          };
+        }
         if (decision.setTrialStartedAt) update.trialStartedAt = eventTimestamp;
         if (decision.setConvertedAt) update.convertedAt = eventTimestamp;
         if (applePromoCorrelation?.status === 'matched') {

@@ -157,6 +157,16 @@ export interface CouponRedemption {
   iosPromotion: IOSPromotionConfig | null;
   /** FASE 2/3 — absent until authorization; preserved as confirmed audit evidence after match. */
   purchaseIntent?: PromoPurchaseIntent;
+  /** Immutable commercial origin captured from the correlated INITIAL_PURCHASE; ownership transfers never rewrite it. */
+  subscriptionOrigin?: {
+    transactionKey: string;
+    originalTransactionId: string;
+    transactionId: string;
+    revenueCatEventId: string;
+    store: string;
+    productId: string;
+    confirmedAt: Timestamp;
+  };
   /** When the CURRENT `couponCode` was applied — reset on every swap while pending. */
   appliedAt: Timestamp;
   /** When this uid's first-ever promo code was applied — preserved across swaps, unlike `appliedAt`. */

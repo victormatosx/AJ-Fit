@@ -785,6 +785,11 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Immutable financial ledger written only by the verified RevenueCat webhook through Admin SDK.
+    match /subscriptionTransactions/{transactionId} {
+      allow read, write: if false;
+    }
+
     // Fase 4/5 account-deletion workflow state
     // (functions/src/accountDeletion/{repository,activeAccountGuard}.ts).
     // Backend-only in both directions: the client never creates, reads, or

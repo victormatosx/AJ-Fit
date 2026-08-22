@@ -255,6 +255,7 @@ function redemptionView(snapshot: DocumentSnapshot) {
   if (!snapshot.exists) return null;
   const document = snapshot.data() ?? {};
   const intent = objectMap(document.purchaseIntent);
+  const origin = objectMap(document.subscriptionOrigin);
   return {
     couponCode: safeString(document.couponCode),
     campaignId: safeString(document.campaignId),
@@ -270,6 +271,15 @@ function redemptionView(snapshot: DocumentSnapshot) {
       expectedProductId: safeString(intent.expectedProductId),
       expiresAt: isoDate(intent.expiresAt),
       confirmedAt: isoDate(intent.confirmedAt),
+    } : null,
+    subscriptionOrigin: Object.keys(origin).length ? {
+      transactionKey: safeString(origin.transactionKey),
+      originalTransactionId: safeString(origin.originalTransactionId),
+      transactionId: safeString(origin.transactionId),
+      revenueCatEventId: safeString(origin.revenueCatEventId),
+      store: safeString(origin.store),
+      productId: safeString(origin.productId),
+      confirmedAt: isoDate(origin.confirmedAt),
     } : null,
   };
 }

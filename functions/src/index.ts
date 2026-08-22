@@ -21,6 +21,7 @@ import { requestAccountDeletion } from './accountDeletion/requestAccountDeletion
 import { cleanupPendingAccountDeletions } from './accountDeletion/reconciliation/scheduler';
 import { onAccountDeletionRequested } from './accountDeletion/immediateDispatch';
 import { adminGetUserHandler, adminListUsersHandler } from './adminUsers/adminUsers';
+import { adminGetCouponHandler, adminListCouponsHandler } from './adminCoupons/adminCoupons';
 
 /**
  * AJ Fit Cloud Functions entry point.
@@ -101,6 +102,10 @@ export const adminSetPromoCodeActive = onCall(adminSetPromoCodeActiveHandler);
  */
 export const adminListUsers = onCall(adminListUsersHandler);
 export const adminGetUser = onCall(adminGetUserHandler);
+
+/** Commercial intelligence over the existing promo attribution + subscription mirrors. */
+export const adminListCoupons = onCall(adminListCouponsHandler);
+export const adminGetCoupon = onCall(adminGetCouponHandler);
 
 // Only authenticated, policy-enforcing Photo Vault callables are exported.
 // The KMS wrap/unwrap layer stays internal and has no endpoint of its own.

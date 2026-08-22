@@ -40,6 +40,7 @@ import {
   applyAttributionRevenueCatEvent,
   type AttributionConfirmationSkipReason,
 } from '../attribution/attributionSync';
+import { persistAttributedFinancialTransaction } from './subscriptionTransactions';
 
 /**
  * RevenueCat webhook processing — real implementation (Sprint 4;
@@ -227,6 +228,14 @@ export interface RawRevenueCatEvent {
    * `RENEWAL` (see that module's doc comment for why).
    */
   offer_code?: unknown;
+  transaction_id?: unknown;
+  original_transaction_id?: unknown;
+  currency?: unknown;
+  price?: unknown;
+  price_in_purchased_currency?: unknown;
+  tax_percentage?: unknown;
+  commission_percentage?: unknown;
+  takehome_percentage?: unknown;
 }
 
 function stringArray(value: unknown): string[] {
@@ -960,6 +969,8 @@ async function confirmPromoCodeAttributionIfApplicable(
             store: extractStore(event),
             productId: extractProductId(event),
             offerCode: extractOfferCode(event),
+            transactionId: typeof event.transaction_id === 'string' ? event.transaction_id : undefined,
+            originalTransactionId: typeof event.original_transaction_id === 'string' ? event.original_transaction_id : undefined,
           })
         : await applyAttributionRevenueCatEvent(uid, {
             eventType: 'RENEWAL',
@@ -1020,6 +1031,19 @@ async function respondConsideringAttribution(
 
   if (attribution.status === 'temporary_failure') {
     res.status(503).json({ error: 'attribution_temporary_failure' });
+    return;
+  }
+
+  try {
+    const financial = await persistAttributedFinancialTransaction(uid, event);
+    if (financial === 'recorded' || financial === 'duplicate') {
+      logInfo(SCOPE, 'attributed_financial_transaction', { eventId, eventType, uid: maskedUid, outcome: financial });
+    } else if (financial === 'invalid_financial_event') {
+      logWarn(SCOPE, 'financial_transaction_not_recorded', { eventId, eventType, uid: maskedUid, reason: financial });
+    }
+  } catch (err) {
+    logFunctionError(SCOPE, err, { eventId, eventType, uid: maskedUid, operation: 'financial_transaction' });
+    res.status(503).json({ error: 'financial_transaction_temporary_failure' });
     return;
   }
 
