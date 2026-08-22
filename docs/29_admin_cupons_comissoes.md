@@ -38,7 +38,19 @@ O documento é deduplicado pelo hash de `store + transaction_id`. A origem é lo
 
 ## Segurança e performance
 
-As Rules negam todo acesso cliente a `promoCodes`, `couponRedemptions` e `subscriptionTransactions`. O Admin usa callables que revalidam `users/{adminUid}.metadata.role == admin` e Admin SDK. CRUD de cupom continua na allowlist estrita existente.
+As Rules negam todo acesso cliente a `promoCodes`, `couponRedemptions` e `subscriptionTransactions`. O Admin usa callables que revalidam `users/{adminUid}.metadata.role == admin` e Admin SDK. CRUD de cupom continua na allowlist estrita existente. Novos cupons são criados exclusivamente pela callable administrativa e sempre começam inativos. A ativação é uma operação transacional separada e falha enquanto `appleConfigurationConfirmedAt` não existir.
+
+## Criação e configuração externa
+
+O fluxo escolhido é Admin como rascunho/inativo → configuração externa → confirmação administrativa → ativação. O formulário possui revisão final e envia uma allowlist para `adminCreatePromoCode`; o backend repete normalização, datas, pares Android, trio iOS, tipos, limites de tamanho, confirmação e duplicidade. O ID do documento é o código normalizado por `normalizePromoCode`, portanto diferenças de casing/espaço não criam identidades alternativas. O próprio código permanece imutável.
+
+Campos obrigatórios: código, `influencerId`, `campaignId`, booleanos de status/confirmação e os grupos de loja quando configurados. `internalName`, janela de validade e `notes` são opcionais. Não há limite de usos no contrato real, portanto ele não foi inventado na UI. Como não existe cadastro autoritativo de influenciadores, a validação segura disponível é do identificador escalar (não vazio e limitado); a UI sugere IDs já presentes no catálogo, sem fingir que há uma entidade externa verificada.
+
+No iOS, o mecanismo ativo não é Apple Offer Code. O operador precisa criar/configurar manualmente os SKUs promocionais mensal e anual e seus Introductory Offers no App Store Connect, além de disponibilizá-los na Offering promocional indicada no RevenueCat. O Admin apenas registra os identificadores e a declaração `appleConfigurationConfirmedAt/By`; não chama uma API da Apple e nunca apresenta esse estado como “verificado pela Apple”. No Android, cada plano usa o par exato `basePlanId + offerId`.
+
+Criação, edição, ativação e desativação emitem eventos estruturados no Cloud Logging (`coupon.created`, `coupon.updated`, `coupon.activated`, `coupon.deactivated`) com administrador, cupom e dimensões relevantes. Nenhum token ou secret é registrado. Nenhuma Firestore Rule foi aberta: navegador e mobile continuam sem leitura/escrita direta no catálogo.
+
+Editar ou desativar o catálogo não altera `couponRedemptions` nem `subscriptionTransactions`. Influenciador, campanha e configurações de loja já capturados permanecem nos snapshots históricos, e a origem financeira continua vinculada à identidade transacional original.
 
 As páginas administrativas fazem leituras em lote (`getAll`/`getUsers`) e não chamam RevenueCat por usuário. A página de detalhe é paginada no contrato. A visão geral ainda faz scans backend de redemptions/ledger para montar agregados reais; é adequada ao catálogo atual, mas deve migrar para agregados materializados quando volume/custo justificar.
 
@@ -49,8 +61,8 @@ Não foi necessário índice composto: as novas consultas usam igualdade em um �
 - Não há backfill automático: cobranças anteriores ao deploy de `subscriptionTransactions` não aparecem como receita capturada.
 - Auto-renew e fim do grace period não existem como campos separados no espelho atual.
 - Product IDs desconhecidos não são classificados por heurística.
-- Cupons não possuem descrição separada, duração ou limite de usos; `notes` é a única descrição administrativa real e o benefício deriva apenas da configuração de ofertas.
-- O catálogo não possui audit log Firestore com before/after; as Functions existentes emitem Cloud Logging com admin, ação e código.
+- Cupons não possuem duração promocional configurável nem limite de usos; `notes` é a descrição administrativa e o benefício deriva apenas da configuração real das lojas.
+- O catálogo não possui audit log Firestore com before/after; as Functions emitem eventos estruturados no Cloud Logging, inclusive mudanças relevantes e o estado anterior disponível.
 - `UNCANCELLATION` e `SUBSCRIPTION_PAUSED` ainda não atualizam o espelho.
 - `subscriptionTransactions` retém UIDs para conciliação, alinhado à retenção já aplicada a `couponRedemptions`; a política legal de retenção deve ser revista explicitamente antes de mudar esse comportamento.
 - A inspeção visual automatizada do browser local não esteve disponível nesta execução; lint, testes e builds foram executados.

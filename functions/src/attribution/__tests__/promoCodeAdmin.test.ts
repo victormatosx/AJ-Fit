@@ -5,18 +5,20 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const userGetMock = vi.hoisted(() => vi.fn());
 const promoCreateMock = vi.hoisted(() => vi.fn());
 const promoUpdateMock = vi.hoisted(() => vi.fn());
+const promoGetMock = vi.hoisted(() => vi.fn());
+const runTransactionMock = vi.hoisted(() => vi.fn());
 const collectionGetMock = vi.hoisted(() => vi.fn());
 
 const docMock = vi.hoisted(() =>
   vi.fn((path: string) => {
     if (path.startsWith('users/')) return { get: userGetMock };
-    return { create: promoCreateMock, update: promoUpdateMock };
+    return { create: promoCreateMock, update: promoUpdateMock, get: promoGetMock };
   }),
 );
 const collectionMock = vi.hoisted(() => vi.fn((_name: string) => ({ get: collectionGetMock })));
 
 vi.mock('../../lib/firebaseAdmin', () => ({
-  db: { doc: docMock, collection: collectionMock },
+  db: { doc: docMock, collection: collectionMock, runTransaction: runTransactionMock },
   auth: {},
 }));
 
@@ -57,7 +59,8 @@ const BASE_CREATE_PAYLOAD = {
   code: 'ARNALDO',
   campaignId: 'influencer-arnaldo-7d',
   influencerId: 'ARNALDO',
-  active: true,
+  active: false,
+  appleConfigurationConfirmed: false,
   startsAt: null,
   endsAt: null,
   notes: null,
@@ -67,10 +70,25 @@ beforeEach(() => {
   userGetMock.mockReset();
   promoCreateMock.mockReset();
   promoUpdateMock.mockReset();
+  promoGetMock.mockReset();
+  runTransactionMock.mockReset();
   collectionGetMock.mockReset();
   docMock.mockClear();
   collectionMock.mockClear();
   mockUserRole('admin');
+  promoGetMock.mockResolvedValue({
+    exists: true,
+    data: () => ({
+      code: 'ARNALDO', active: false, startsAt: null, endsAt: null,
+      influencerId: 'ARNALDO', campaignId: 'influencer-arnaldo-7d',
+      androidBasePlanIdMonthly: null, androidOfferIdMonthly: null,
+      androidBasePlanIdAnnual: null, androidOfferIdAnnual: null, iosPromotion: null,
+      createdAt: Timestamp.fromDate(new Date('2026-08-01T00:00:00.000Z')),
+      updatedAt: Timestamp.fromDate(new Date('2026-08-01T00:00:00.000Z')),
+      createdBy: ADMIN_UID, notes: null,
+    }),
+  });
+  runTransactionMock.mockImplementation(async (callback) => callback({ get: promoGetMock, update: promoUpdateMock }));
 });
 
 describe('admin auth enforcement (create/update/setActive/list)', () => {
@@ -135,6 +153,24 @@ describe('admin auth enforcement (create/update/setActive/list)', () => {
 });
 
 describe('adminCreatePromoCodeHandler', () => {
+  it('always rejects creating an active coupon, even when Apple was confirmed', async () => {
+    await expectHttpsError(
+      adminCreatePromoCodeHandler(request({
+        ...BASE_CREATE_PAYLOAD,
+        active: true,
+        appleConfigurationConfirmed: true,
+        iosPromotion: {
+          offeringIdentifier: 'promo_7d',
+          monthlyProductId: 'ajfit_premium_monthly_promo',
+          annualProductId: 'ajfit_premium_annual_promo',
+        },
+      }, ADMIN_UID)),
+      'failed-precondition',
+      'new_promo_code_must_start_inactive',
+    );
+    expect(promoCreateMock).not.toHaveBeenCalled();
+  });
+
   it('creates with only active fields and no Apple Offer Code fields', async () => {
     promoCreateMock.mockResolvedValue(undefined);
     await adminCreatePromoCodeHandler(request(BASE_CREATE_PAYLOAD, ADMIN_UID));
@@ -144,7 +180,7 @@ describe('adminCreatePromoCodeHandler', () => {
         code: 'ARNALDO',
         campaignId: 'influencer-arnaldo-7d',
         influencerId: 'ARNALDO',
-        active: true,
+        active: false,
         androidBasePlanIdMonthly: null,
         androidOfferIdMonthly: null,
         androidBasePlanIdAnnual: null,
@@ -332,11 +368,14 @@ describe('adminCreatePromoCodeHandler', () => {
         'endsAt',
         'influencerId',
         'campaignId',
+        'internalName',
         'androidBasePlanIdMonthly',
         'androidOfferIdMonthly',
         'androidBasePlanIdAnnual',
         'androidOfferIdAnnual',
         'iosPromotion',
+        'appleConfigurationConfirmedAt',
+        'appleConfigurationConfirmedBy',
         'createdAt',
         'updatedAt',
         'createdBy',
@@ -350,7 +389,7 @@ describe('adminUpdatePromoCodeHandler', () => {
   const UPDATE_PAYLOAD = { ...BASE_CREATE_PAYLOAD };
 
   it('rejects updating a nonexistent code with not-found', async () => {
-    promoUpdateMock.mockRejectedValue({ code: 5, message: 'NOT_FOUND' });
+    promoGetMock.mockResolvedValue({ exists: false });
     await expectHttpsError(
       adminUpdatePromoCodeHandler(request(UPDATE_PAYLOAD, ADMIN_UID)),
       'not-found',
@@ -362,7 +401,7 @@ describe('adminUpdatePromoCodeHandler', () => {
     promoUpdateMock.mockResolvedValue(undefined);
     await adminUpdatePromoCodeHandler(request({ ...UPDATE_PAYLOAD, notes: 'updated notes' }, ADMIN_UID));
 
-    const written = promoUpdateMock.mock.calls[0][0];
+    const written = promoUpdateMock.mock.calls[0][1];
     expect(written).not.toHaveProperty('createdAt');
     expect(written).not.toHaveProperty('createdBy');
     expect(written).not.toHaveProperty('code');
@@ -383,6 +422,36 @@ describe('adminUpdatePromoCodeHandler', () => {
 });
 
 describe('adminSetPromoCodeActiveHandler', () => {
+  it('rejects activation while the Apple configuration is pending', async () => {
+    await expectHttpsError(
+      adminSetPromoCodeActiveHandler(request({ code: 'ARNALDO', active: true }, ADMIN_UID)),
+      'failed-precondition',
+      'apple_configuration_confirmation_required',
+    );
+    expect(promoUpdateMock).not.toHaveBeenCalled();
+  });
+
+  it('activates after an admin confirmation exists', async () => {
+    promoGetMock.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        code: 'ARNALDO', active: false, startsAt: null, endsAt: null,
+        influencerId: 'ARNALDO', campaignId: 'influencer-arnaldo-7d',
+        androidBasePlanIdMonthly: null, androidOfferIdMonthly: null,
+        androidBasePlanIdAnnual: null, androidOfferIdAnnual: null,
+        iosPromotion: { offeringIdentifier: 'promo_7d', monthlyProductId: 'monthly-promo', annualProductId: 'annual-promo' },
+        appleConfigurationConfirmedAt: Timestamp.fromDate(new Date('2026-08-20T00:00:00.000Z')),
+        appleConfigurationConfirmedBy: ADMIN_UID,
+        createdAt: Timestamp.fromDate(new Date('2026-08-01T00:00:00.000Z')),
+        updatedAt: Timestamp.fromDate(new Date('2026-08-20T00:00:00.000Z')),
+        createdBy: ADMIN_UID, notes: null,
+      }),
+    });
+    const result = await adminSetPromoCodeActiveHandler(request({ code: 'ARNALDO', active: true }, ADMIN_UID));
+    expect(result).toEqual({ code: 'ARNALDO', active: true });
+    expect(promoUpdateMock.mock.calls[0][1]).toEqual(expect.objectContaining({ active: true }));
+  });
+
   it('deactivation writes only active + updatedAt — nothing else', async () => {
     promoUpdateMock.mockResolvedValue(undefined);
     const result = await adminSetPromoCodeActiveHandler(
@@ -390,13 +459,13 @@ describe('adminSetPromoCodeActiveHandler', () => {
     );
 
     expect(result).toEqual({ code: 'ARNALDO', active: false });
-    const written = promoUpdateMock.mock.calls[0][0];
+    const written = promoUpdateMock.mock.calls[0][1];
     expect(Object.keys(written).sort()).toEqual(['active', 'updatedAt']);
     expect(written.active).toBe(false);
   });
 
   it('rejects setting active on a nonexistent code with not-found', async () => {
-    promoUpdateMock.mockRejectedValue({ code: 5, message: 'NOT_FOUND' });
+    promoGetMock.mockResolvedValue({ exists: false });
     await expectHttpsError(
       adminSetPromoCodeActiveHandler(request({ code: 'ARNALDO', active: true }, ADMIN_UID)),
       'not-found',

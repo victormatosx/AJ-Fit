@@ -18,18 +18,22 @@ import type { PromoCodeDocument } from './types';
 
 export type PromoCodeWritableFields = Omit<
   PromoCodeDocument,
-  'createdAt' | 'updatedAt' | 'createdBy'
->;
+  'createdAt' | 'updatedAt' | 'createdBy' | 'appleConfigurationConfirmedAt' | 'appleConfigurationConfirmedBy'
+> & { appleConfigurationConfirmed: boolean };
 
 export type AdminPromoCodeValidationError =
   | 'invalid_code_format'
   | 'invalid_campaign_id'
   | 'invalid_influencer_id'
+  | 'invalid_internal_name'
   | 'invalid_active'
   | 'invalid_starts_at'
   | 'invalid_ends_at'
   | 'ends_at_before_starts_at'
   | 'invalid_notes'
+  | 'invalid_apple_configuration_confirmation'
+  | 'active_requires_apple_configuration_confirmation'
+  | 'apple_configuration_requires_ios_promotion'
   | 'android_monthly_partial'
   | 'android_annual_partial'
   | 'ios_promotion_invalid';
@@ -139,10 +143,12 @@ export interface AdminPromoCodeWriteInput {
   code?: unknown;
   campaignId?: unknown;
   influencerId?: unknown;
+  internalName?: unknown;
   active?: unknown;
   startsAt?: unknown;
   endsAt?: unknown;
   notes?: unknown;
+  appleConfigurationConfirmed?: unknown;
   android?: {
     monthly?: AndroidPlanInput | null;
     annual?: AndroidPlanInput | null;
@@ -187,7 +193,19 @@ export function validateAdminPromoCodeWrite(
   const influencerId = trimmedNonEmpty(input.influencerId, IDENTIFIER_MAX_LENGTH);
   if (influencerId === null) return { ok: false, error: 'invalid_influencer_id' };
 
+  let internalName: string | null = null;
+  if (!isBlank(input.internalName)) {
+    internalName = trimmedNonEmpty(input.internalName, IDENTIFIER_MAX_LENGTH);
+    if (internalName === null) return { ok: false, error: 'invalid_internal_name' };
+  }
+
   if (typeof input.active !== 'boolean') return { ok: false, error: 'invalid_active' };
+  if (typeof input.appleConfigurationConfirmed !== 'boolean') {
+    return { ok: false, error: 'invalid_apple_configuration_confirmation' };
+  }
+  if (input.active && !input.appleConfigurationConfirmed) {
+    return { ok: false, error: 'active_requires_apple_configuration_confirmation' };
+  }
 
   const startsAtResult = parseNullableTimestamp(input.startsAt);
   if (!startsAtResult.ok) return { ok: false, error: 'invalid_starts_at' };
@@ -225,6 +243,9 @@ export function validateAdminPromoCodeWrite(
 
   const iosPromotion = validateIOSPromotionInput(input.iosPromotion);
   if (!iosPromotion.ok) return { ok: false, error: 'ios_promotion_invalid' };
+  if (input.appleConfigurationConfirmed && iosPromotion.value === null) {
+    return { ok: false, error: 'apple_configuration_requires_ios_promotion' };
+  }
 
   return {
     ok: true,
@@ -235,11 +256,13 @@ export function validateAdminPromoCodeWrite(
       endsAt: endsAtResult.value,
       influencerId,
       campaignId,
+      internalName,
       androidBasePlanIdMonthly: androidMonthly.value?.first ?? null,
       androidOfferIdMonthly: androidMonthly.value?.second ?? null,
       androidBasePlanIdAnnual: androidAnnual.value?.first ?? null,
       androidOfferIdAnnual: androidAnnual.value?.second ?? null,
       iosPromotion: iosPromotion.value,
+      appleConfigurationConfirmed: input.appleConfigurationConfirmed,
       notes,
     },
   };

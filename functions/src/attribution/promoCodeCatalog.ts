@@ -24,12 +24,15 @@ const PROMO_CODE_DOCUMENT_KEYS = [
   'endsAt',
   'influencerId',
   'campaignId',
+  'internalName',
   'androidBasePlanIdMonthly',
   'androidOfferIdMonthly',
   'androidBasePlanIdAnnual',
   'androidOfferIdAnnual',
   // FASE 1 — optional-on-read for documents created before Promo SKU.
   'iosPromotion',
+  'appleConfigurationConfirmedAt',
+  'appleConfigurationConfirmedBy',
   'createdAt',
   'updatedAt',
   'createdBy',
@@ -138,11 +141,14 @@ export function parsePromoCodeDocument(data: unknown): PromoCodeDocument | null 
     !isNullableTimestamp(d.endsAt) ||
     typeof d.influencerId !== 'string' ||
     typeof d.campaignId !== 'string' ||
+    !(d.internalName === undefined || isNullableString(d.internalName)) ||
     !isNullableString(d.androidBasePlanIdMonthly) ||
     !isNullableString(d.androidOfferIdMonthly) ||
     !isNullableString(d.androidBasePlanIdAnnual) ||
     !isNullableString(d.androidOfferIdAnnual) ||
     !isOptionalNullableIOSPromotion(d.iosPromotion) ||
+    !(d.appleConfigurationConfirmedAt === undefined || isNullableTimestamp(d.appleConfigurationConfirmedAt)) ||
+    !(d.appleConfigurationConfirmedBy === undefined || isNullableString(d.appleConfigurationConfirmedBy)) ||
     !(d.createdAt instanceof Timestamp) ||
     !(d.updatedAt instanceof Timestamp) ||
     typeof d.createdBy !== 'string' ||
@@ -158,11 +164,14 @@ export function parsePromoCodeDocument(data: unknown): PromoCodeDocument | null 
     endsAt: d.endsAt,
     influencerId: d.influencerId,
     campaignId: d.campaignId,
+    ...(d.internalName !== undefined ? { internalName: d.internalName as string | null } : {}),
     androidBasePlanIdMonthly: d.androidBasePlanIdMonthly,
     androidOfferIdMonthly: d.androidOfferIdMonthly,
     androidBasePlanIdAnnual: d.androidBasePlanIdAnnual,
     androidOfferIdAnnual: d.androidOfferIdAnnual,
     iosPromotion: (d.iosPromotion as IOSPromotionConfig | null | undefined) ?? null,
+    ...(d.appleConfigurationConfirmedAt !== undefined ? { appleConfigurationConfirmedAt: d.appleConfigurationConfirmedAt as Timestamp | null } : {}),
+    ...(d.appleConfigurationConfirmedBy !== undefined ? { appleConfigurationConfirmedBy: d.appleConfigurationConfirmedBy as string | null } : {}),
     createdAt: d.createdAt,
     updatedAt: d.updatedAt,
     createdBy: d.createdBy,

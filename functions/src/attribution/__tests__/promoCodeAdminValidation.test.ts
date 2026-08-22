@@ -5,7 +5,8 @@ const BASE = {
   code: 'ARNALDO',
   campaignId: 'influencer-arnaldo-7d',
   influencerId: 'ARNALDO',
-  active: true,
+  active: false,
+  appleConfigurationConfirmed: false,
   startsAt: null,
   endsAt: null,
   notes: null,
@@ -30,6 +31,11 @@ describe('validateAdminPromoCodeWrite', () => {
   it('rejects a non-boolean active flag', () => {
     const result = validateAdminPromoCodeWrite({ ...BASE, active: 'true' }, { requireCode: true });
     expect(result).toEqual({ ok: false, error: 'invalid_active' });
+  });
+
+  it('rejects activation without the administrative Apple confirmation', () => {
+    const result = validateAdminPromoCodeWrite({ ...BASE, active: true }, { requireCode: true });
+    expect(result).toEqual({ ok: false, error: 'active_requires_apple_configuration_confirmation' });
   });
 
   it('rejects an unparseable startsAt', () => {
@@ -152,6 +158,23 @@ describe('validateAdminPromoCodeWrite', () => {
       );
       expect(result.ok).toBe(true);
       expect(result.ok && result.fields.iosPromotion).toEqual(VALID_IOS_PROMOTION);
+    });
+
+    it('requires a complete iOS promotion before accepting the Apple declaration', () => {
+      const result = validateAdminPromoCodeWrite(
+        { ...BASE, appleConfigurationConfirmed: true },
+        { requireCode: true },
+      );
+      expect(result).toEqual({ ok: false, error: 'apple_configuration_requires_ios_promotion' });
+    });
+
+    it('accepts the Apple declaration with the complete iOS promotion', () => {
+      const result = validateAdminPromoCodeWrite(
+        { ...BASE, appleConfigurationConfirmed: true, iosPromotion: VALID_IOS_PROMOTION },
+        { requireCode: true },
+      );
+      expect(result.ok).toBe(true);
+      expect(result.ok && result.fields.appleConfigurationConfirmed).toBe(true);
     });
 
     it('rejects a partial iosPromotion (one field missing) — never a partial authorization', () => {

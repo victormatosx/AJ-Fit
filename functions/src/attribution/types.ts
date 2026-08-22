@@ -247,6 +247,8 @@ export interface PromoCodeDocument {
   endsAt: Timestamp | null;
   influencerId: string;
   campaignId: string;
+  /** Optional human-facing label used only by the admin surface. Never participates in store routing or attribution. */
+  internalName?: string | null;
   /** Google Play base plan ID for the monthly plan (e.g. `"monthly"`) — half of the pair identifying a `SubscriptionOption`. */
   androidBasePlanIdMonthly: string | null;
   androidOfferIdMonthly: string | null;
@@ -262,6 +264,14 @@ export interface PromoCodeDocument {
    * must parse as `null`, never reject the whole document.
    */
   iosPromotion: IOSPromotionConfig | null;
+  /**
+   * Administrative acknowledgement only. A non-null value means an admin
+   * declared the RevenueCat Offering + App Store promotional SKUs/
+   * Introductory Offers configured externally. It is NOT an Apple API
+   * verification. Historical documents legitimately omit both fields.
+   */
+  appleConfigurationConfirmedAt?: Timestamp | null;
+  appleConfigurationConfirmedBy?: string | null;
   createdAt: Timestamp;
   updatedAt: Timestamp;
   /** uid of the admin who created this entry. */

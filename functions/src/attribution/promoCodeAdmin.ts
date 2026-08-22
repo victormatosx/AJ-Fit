@@ -71,15 +71,24 @@ export async function adminCreatePromoCodeHandler(
   const validation = validateAdminPromoCodeWrite(request.data, { requireCode: true });
   if (!validation.ok) invalidArgument(validation.error);
   const { fields } = validation;
+  if (fields.active) {
+    throw new HttpsError('failed-precondition', 'new_promo_code_must_start_inactive');
+  }
+
+  const { appleConfigurationConfirmed, ...catalogFields } = fields;
 
   const docRef = db.doc(promoCodeDocPath(fields.code));
   const now = FieldValue.serverTimestamp();
 
-  const document: Omit<PromoCodeDocument, 'createdAt' | 'updatedAt'> & {
+  const document: Omit<PromoCodeDocument, 'createdAt' | 'updatedAt' | 'appleConfigurationConfirmedAt'> & {
     createdAt: FieldValue;
     updatedAt: FieldValue;
+    appleConfigurationConfirmedAt: FieldValue | null;
   } = {
-    ...fields,
+    ...catalogFields,
+    active: false,
+    appleConfigurationConfirmedAt: appleConfigurationConfirmed ? now : null,
+    appleConfigurationConfirmedBy: appleConfigurationConfirmed ? adminUid : null,
     createdAt: now,
     updatedAt: now,
     createdBy: adminUid,
@@ -95,7 +104,15 @@ export async function adminCreatePromoCodeHandler(
     throw new HttpsError('internal', 'internal_error');
   }
 
-  logInfo(SCOPE, 'promo code created', { adminUid, code: fields.code });
+  logInfo(SCOPE, 'coupon.created', {
+    action: 'coupon.created',
+    adminUid,
+    couponId: fields.code,
+    code: fields.code,
+    influencerId: fields.influencerId,
+    appleConfigurationConfirmed,
+    active: false,
+  });
   return { code: fields.code };
 }
 
@@ -136,26 +153,48 @@ export async function adminUpdatePromoCodeHandler(
 
   const docRef = db.doc(promoCodeDocPath(normalizedCode));
 
-  const update: Omit<PromoCodeDocument, 'code' | 'createdAt' | 'updatedAt' | 'createdBy'> & {
-    updatedAt: FieldValue;
-  } = {
+  let previous: PromoCodeDocument | null = null;
+
+  const updateBase = {
     active: fields.active,
     startsAt: fields.startsAt,
     endsAt: fields.endsAt,
     influencerId: fields.influencerId,
     campaignId: fields.campaignId,
+    internalName: fields.internalName,
     androidBasePlanIdMonthly: fields.androidBasePlanIdMonthly,
     androidOfferIdMonthly: fields.androidOfferIdMonthly,
     androidBasePlanIdAnnual: fields.androidBasePlanIdAnnual,
     androidOfferIdAnnual: fields.androidOfferIdAnnual,
     iosPromotion: fields.iosPromotion,
     notes: fields.notes,
-    updatedAt: FieldValue.serverTimestamp(),
   };
 
   try {
-    await docRef.update(update);
+    await db.runTransaction(async (transaction) => {
+      const snapshot = await transaction.get(docRef);
+      if (!snapshot.exists) throw new HttpsError('not-found', 'promo_code_not_found');
+      previous = parsePromoCodeDocument(snapshot.data());
+      if (!previous) throw new HttpsError('failed-precondition', 'malformed_promo_code');
+
+      const confirmationWasPresent = previous.appleConfigurationConfirmedAt != null;
+      transaction.update(docRef, {
+        ...updateBase,
+        appleConfigurationConfirmedAt: fields.appleConfigurationConfirmed
+          ? confirmationWasPresent
+            ? previous.appleConfigurationConfirmedAt
+            : FieldValue.serverTimestamp()
+          : null,
+        appleConfigurationConfirmedBy: fields.appleConfigurationConfirmed
+          ? confirmationWasPresent
+            ? previous.appleConfigurationConfirmedBy
+            : adminUid
+          : null,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    });
   } catch (err) {
+    if (err instanceof HttpsError) throw err;
     if (isNotFound(err)) {
       throw new HttpsError('not-found', 'promo_code_not_found');
     }
@@ -163,7 +202,20 @@ export async function adminUpdatePromoCodeHandler(
     throw new HttpsError('internal', 'internal_error');
   }
 
-  logInfo(SCOPE, 'promo code updated', { adminUid, code: normalizedCode });
+  const previousSnapshot = previous as PromoCodeDocument | null;
+  logInfo(SCOPE, 'coupon.updated', {
+    action: 'coupon.updated',
+    adminUid,
+    couponId: normalizedCode,
+    code: normalizedCode,
+    influencerId: fields.influencerId,
+    previousInfluencerId: previousSnapshot?.influencerId ?? null,
+    active: fields.active,
+    previousActive: previousSnapshot?.active ?? null,
+    startsAtChanged: previousSnapshot?.startsAt?.toMillis() !== fields.startsAt?.toMillis(),
+    endsAtChanged: previousSnapshot?.endsAt?.toMillis() !== fields.endsAt?.toMillis(),
+    appleConfigurationConfirmed: fields.appleConfigurationConfirmed,
+  });
   return { code: normalizedCode };
 }
 
@@ -196,8 +248,18 @@ export async function adminSetPromoCodeActiveHandler(
   const docRef = db.doc(promoCodeDocPath(normalizedCode));
 
   try {
-    await docRef.update({ active, updatedAt: FieldValue.serverTimestamp() });
+    await db.runTransaction(async (transaction) => {
+      const snapshot = await transaction.get(docRef);
+      if (!snapshot.exists) throw new HttpsError('not-found', 'promo_code_not_found');
+      const promoCode = parsePromoCodeDocument(snapshot.data());
+      if (!promoCode) throw new HttpsError('failed-precondition', 'malformed_promo_code');
+      if (active && promoCode.appleConfigurationConfirmedAt == null) {
+        throw new HttpsError('failed-precondition', 'apple_configuration_confirmation_required');
+      }
+      transaction.update(docRef, { active, updatedAt: FieldValue.serverTimestamp() });
+    });
   } catch (err) {
+    if (err instanceof HttpsError) throw err;
     if (isNotFound(err)) {
       throw new HttpsError('not-found', 'promo_code_not_found');
     }
@@ -205,7 +267,13 @@ export async function adminSetPromoCodeActiveHandler(
     throw new HttpsError('internal', 'internal_error');
   }
 
-  logInfo(SCOPE, 'promo code active flag changed', { adminUid, code: normalizedCode, active });
+  logInfo(SCOPE, active ? 'coupon.activated' : 'coupon.deactivated', {
+    action: active ? 'coupon.activated' : 'coupon.deactivated',
+    adminUid,
+    couponId: normalizedCode,
+    code: normalizedCode,
+    active,
+  });
   return { code: normalizedCode, active };
 }
 

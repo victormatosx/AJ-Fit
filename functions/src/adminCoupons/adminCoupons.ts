@@ -4,6 +4,7 @@ import type { UserRecord } from 'firebase-admin/auth';
 import { requireAdminUid } from '../attribution/adminAuth';
 import { PROMO_CODES_COLLECTION } from '../attribution/constants';
 import { parsePromoCodeDocument } from '../attribution/promoCodeCatalog';
+import { normalizePromoCode } from '../attribution/normalize';
 import { auth, db } from '../lib/firebaseAdmin';
 import { logFunctionError, logInfo } from '../lib/logger';
 import { isoDate, safeString } from '../adminUsers/presentation';
@@ -71,6 +72,7 @@ function catalogView(id: string, value: unknown) {
     endsAt,
     influencerId: parsed.influencerId,
     campaignId: parsed.campaignId,
+    internalName: parsed.internalName,
     notes: parsed.notes,
     createdAt: isoDate(parsed.createdAt),
     updatedAt: isoDate(parsed.updatedAt),
@@ -80,6 +82,12 @@ function catalogView(id: string, value: unknown) {
       annual: parsed.androidBasePlanIdAnnual && parsed.androidOfferIdAnnual ? { basePlanId: parsed.androidBasePlanIdAnnual, offerId: parsed.androidOfferIdAnnual } : null,
     },
     iosPromotion: parsed.iosPromotion,
+    appleConfiguration: {
+      confirmedByAdmin: parsed.appleConfigurationConfirmedAt != null,
+      confirmedAt: isoDate(parsed.appleConfigurationConfirmedAt),
+      confirmedBy: parsed.appleConfigurationConfirmedBy,
+      verification: 'ADMIN_DECLARATION' as const,
+    },
     benefit: parsed.androidBasePlanIdMonthly || parsed.androidBasePlanIdAnnual || parsed.iosPromotion ? 'Campanha promocional da loja' : null,
   };
 }
@@ -205,7 +213,7 @@ export async function adminListCouponsHandler(request: CallableRequest<PlainDocu
     const coupons = catalog
       .filter((coupon) => filters.couponStatus === 'ALL' || coupon.status === filters.couponStatus)
       .filter((coupon) => !filters.influencerId || coupon.influencerId === filters.influencerId)
-      .filter((coupon) => !filters.search || coupon.code.toLocaleLowerCase('pt-BR').includes(filters.search) || coupon.influencerId.toLocaleLowerCase('pt-BR').includes(filters.search) || coupon.campaignId.toLocaleLowerCase('pt-BR').includes(filters.search))
+      .filter((coupon) => !filters.search || coupon.code.toLocaleLowerCase('pt-BR').includes(filters.search) || coupon.influencerId.toLocaleLowerCase('pt-BR').includes(filters.search) || coupon.campaignId.toLocaleLowerCase('pt-BR').includes(filters.search) || coupon.internalName?.toLocaleLowerCase('pt-BR').includes(filters.search))
       .map((coupon) => ({ ...coupon, metrics: { ...summarizeCouponJourney(byCode.get(coupon.code) ?? []), ...financialSummary(transactionsByCode.get(coupon.code) ?? []) } }))
       .filter((coupon) => filters.subscriptionState === 'ALL' && filters.plan === 'ALL' || coupon.metrics.redemptions > 0)
       .sort((a, b) => a.code.localeCompare(b.code));
@@ -230,8 +238,8 @@ export async function adminListCouponsHandler(request: CallableRequest<PlainDocu
 export async function adminGetCouponHandler(request: CallableRequest<PlainDocument>) {
   const adminUid = await requireAdminUid(request);
   const data = objectMap(request.data);
-  const code = typeof data.code === 'string' ? data.code.trim().toUpperCase() : '';
-  if (!code || code.length > 32 || code.includes('/')) throw new HttpsError('invalid-argument', 'invalid_code');
+  const code = normalizePromoCode(data.code);
+  if (!code) throw new HttpsError('invalid-argument', 'invalid_code');
   const filters = parseFilters(data);
   const size = data.pageSize === undefined ? PAGE_SIZE : data.pageSize;
   if (typeof size !== 'number' || !Number.isInteger(size) || size < 1 || size > MAX_PAGE_SIZE) throw new HttpsError('invalid-argument', 'invalid_page_size');
