@@ -19,7 +19,8 @@ import { Display, Slash } from '../components/ui/Display';
 import { CtaButton } from '../components/ui/CtaButton';
 import { Icon, IconName } from '../components/ui/Icon';
 import { OutlineNumber } from '../components/ui/OutlineNumber';
-import { colors, fonts, radii, sizes, spacing } from '../theme/tokens';
+import { radii, sizes, spacing } from '../theme/tokens';
+import { useTheme } from '../theme';
 import { useAuth } from '../state/AuthContext';
 import { useAppState } from '../state/AppState';
 import {
@@ -32,18 +33,6 @@ import {
   clearPendingSocialAuthState,
   type SocialProvider,
 } from '../services/socialAuth';
-import {
-  clearTotpSignInChallenge,
-  startTotpSignInChallenge,
-  type TotpSignInChallenge,
-  type TotpSignInOrigin,
-} from '../services/mfaTotp';
-import {
-  isMultiFactorAuthRequired,
-  mfaTotpIssueFromError,
-  type MfaTotpIssue,
-} from '../lib/mfaTotp';
-import { TotpChallengeScreen } from './TotpChallengeScreen';
 import type { OnboardingAuthContext } from '../onboarding/authContext';
 import {
   createPasswordResetCooldown,
@@ -118,20 +107,6 @@ function localizedSignInError(err: unknown, t: TFunction<'auth'>): string {
   }
   return localizedAuthError(err, t, 'errors.signInFailed');
 }
-
-function totpStartError(
-  issue: MfaTotpIssue,
-  t: TFunction<'auth'>,
-): string {
-  if (issue === 'resolverWithoutHints') {
-    return t('totpChallenge.errors.resolverWithoutHints');
-  }
-  if (issue === 'factorNotFound') {
-    return t('totpChallenge.errors.totpFactorMissing');
-  }
-  return t('totpChallenge.errors.generic');
-}
-
 export function AuthScreen({
   entryContext,
 }: {
@@ -143,6 +118,7 @@ export function AuthScreen({
    */
   entryContext?: OnboardingAuthContext | null;
 } = {}) {
+  const { theme } = useTheme();
   const { t } = useTranslation('auth');
   const {
     signUp,
@@ -170,7 +146,6 @@ export function AuthScreen({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
-  const [totpChallenge, setTotpChallenge] = useState<TotpSignInChallenge | null>(null);
   // `busy` only updates on React's next render. This synchronous ref closes
   // that gap across password, social and account-linking handlers; AuthContext
   // independently protects programmatic callers below the UI layer.
@@ -253,9 +228,7 @@ export function AuthScreen({
           };
 
   function switchMode(next: Mode) {
-    clearTotpSignInChallenge();
     clearPendingSocialAuthState();
-    setTotpChallenge(null);
     setMode(next);
     setError(null);
     setInfo(null);
@@ -265,22 +238,6 @@ export function AuthScreen({
     if (next === 'reset') {
       setResetCooldownSeconds(resetCooldown.remainingSeconds());
     }
-  }
-
-  function beginTotpChallenge(error: unknown, origin: TotpSignInOrigin): boolean {
-    if (!isMultiFactorAuthRequired(error)) return false;
-    try {
-      const challenge = startTotpSignInChallenge(error, origin);
-      setMode('login');
-      setError(null);
-      setInfo(null);
-      setTotpChallenge(challenge);
-    } catch (resolverError) {
-      clearTotpSignInChallenge();
-      clearPendingSocialAuthState();
-      setError(totpStartError(mfaTotpIssueFromError(resolverError), t));
-    }
-    return true;
   }
 
   async function handleSocial(provider: SocialProvider) {
@@ -304,9 +261,6 @@ export function AuthScreen({
         // user dismissed the native sheet — no error message
       } else if (err instanceof AccountLinkingRequiredError) {
         setLinking({ email: err.email, methods: err.methods, attempted: err.attempted });
-      } else if (beginTotpChallenge(err, provider)) {
-        // The provider sheet already completed the first factor. The in-memory
-        // resolver continues that same transaction without reopening it.
       } else {
         setError(localizedAuthError(err, t, 'errors.signInFailed'));
       }
@@ -328,9 +282,7 @@ export function AuthScreen({
     try {
       await completeLinkingWithPassword(linking.email, linkPassword, quiz);
     } catch (err) {
-      if (!beginTotpChallenge(err, 'account-linking')) {
-        setError(localizedAuthError(err, t, 'errors.linkFailed'));
-      }
+      setError(localizedAuthError(err, t, 'errors.linkFailed'));
     } finally {
       operationLock.current = false;
       setSocialBusy(null);
@@ -347,7 +299,7 @@ export function AuthScreen({
     } catch (err) {
       if (err instanceof SocialAuthCancelledError) {
         // user dismissed the native sheet
-      } else if (!beginTotpChallenge(err, 'account-linking')) {
+      } else {
         setError(localizedAuthError(err, t, 'errors.linkFailed'));
       }
     } finally {
@@ -410,7 +362,6 @@ export function AuthScreen({
         setTimeout(() => switchMode('login'), 1000);
       }
     } catch (err) {
-      if (mode === 'login' && beginTotpChallenge(err, 'password')) return;
       setError(
         mode === 'login'
           ? localizedSignInError(err, t)
@@ -430,36 +381,6 @@ export function AuthScreen({
         : resetCooldownSeconds > 0
           ? t('actions.sendLinkCooldown', { seconds: resetCooldownSeconds })
           : t('actions.sendLink');
-
-  if (totpChallenge) {
-    return (
-      <TotpChallengeScreen
-        challenge={totpChallenge}
-        onCancel={() => {
-          clearTotpSignInChallenge();
-          clearPendingSocialAuthState();
-          setTotpChallenge(null);
-          setMode('login');
-          setPassword('');
-          setLinkPassword('');
-          setLinking(null);
-          setError(null);
-          setInfo(null);
-        }}
-        onSessionExpired={() => {
-          clearTotpSignInChallenge();
-          clearPendingSocialAuthState();
-          setTotpChallenge(null);
-          setMode('login');
-          setPassword('');
-          setLinkPassword('');
-          setLinking(null);
-          setInfo(null);
-          setError(t('totpChallenge.errors.sessionExpired'));
-        }}
-      />
-    );
-  }
 
   return (
     <ScreenBg>
@@ -498,8 +419,8 @@ export function AuthScreen({
                     hitSlop={12}
                     style={{ marginBottom: 18, flexDirection: 'row', alignItems: 'center', gap: 8 }}
                   >
-                    <Icon name="arrow-left" size={18} color="rgba(255,255,255,0.6)" />
-                    <Text style={{ color: colors.mute, fontFamily: fonts.uiMed, fontSize: 13 }}>
+                    <Icon name="arrow-left" size={18} color={theme.colors.textSubtle} />
+                    <Text style={{ color: theme.colors.textMuted, fontFamily: theme.fonts.uiMed, fontSize: 13 }}>
                       {t('actions.back')}
                     </Text>
                   </Pressable>
@@ -510,9 +431,9 @@ export function AuthScreen({
                 <Text
                   style={{
                     marginTop: 14,
-                    color: colors.mute,
+                    color: theme.colors.textMuted,
                     fontSize: 14.5,
-                    fontFamily: fonts.ui,
+                    fontFamily: theme.fonts.ui,
                   }}
                 >
                   {copy.sub}
@@ -579,8 +500,8 @@ export function AuthScreen({
                 {mode === 'signup' && (
                   <Text
                     style={{
-                      color: colors.faint,
-                      fontFamily: fonts.ui,
+                      color: theme.colors.textFaint,
+                      fontFamily: theme.fonts.ui,
                       fontSize: 12.5,
                       lineHeight: 18,
                     }}
@@ -598,7 +519,7 @@ export function AuthScreen({
                     style={{ alignSelf: 'flex-end' }}
                   >
                     <Text
-                      style={{ color: colors.accentHi, fontFamily: fonts.uiSemi, fontSize: 13 }}
+                      style={{ color: theme.colors.primaryEmphasis, fontFamily: theme.fonts.uiSemi, fontSize: 13 }}
                     >
                       {t('actions.forgotPassword')}
                     </Text>
@@ -617,13 +538,13 @@ export function AuthScreen({
                   disabled={busy || (mode === 'reset' && resetCooldownSeconds > 0)}
                 >
                   {loading ? (
-                    <ActivityIndicator color="#fff" />
+                    <ActivityIndicator color={theme.colors.primaryForeground} />
                   ) : (
                     <>
                       <Text
                         style={{
-                          color: '#fff',
-                          fontFamily: fonts.display,
+                          color: theme.colors.primaryForeground,
+                          fontFamily: theme.fonts.display,
                           fontSize: 17,
                           letterSpacing: 1.5,
                           textTransform: 'uppercase',
@@ -631,7 +552,7 @@ export function AuthScreen({
                       >
                         {submitLabel}
                       </Text>
-                      <Icon name="arrow-right" size={18} color="#fff" />
+                      <Icon name="arrow-right" size={18} color={theme.colors.primaryForeground} />
                     </>
                   )}
                 </CtaButton>
@@ -655,28 +576,28 @@ export function AuthScreen({
                 {mode !== 'reset' && showSocial && !linking && (
                   <>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                      <View style={{ flex: 1, height: 1, backgroundColor: colors.hair }} />
+                      <View style={{ flex: 1, height: 1, backgroundColor: theme.colors.divider }} />
                       <Text
                         style={{
-                          fontFamily: fonts.mono,
+                          fontFamily: theme.fonts.mono,
                           fontSize: 10,
                           letterSpacing: 2,
-                          color: colors.faint,
+                          color: theme.colors.textFaint,
                         }}
                       >
                         {t('social.separator').toUpperCase()}
                       </Text>
-                      <View style={{ flex: 1, height: 1, backgroundColor: colors.hair }} />
+                      <View style={{ flex: 1, height: 1, backgroundColor: theme.colors.divider }} />
                     </View>
 
                     {showApple && (
                       <CtaButton ghost onPress={() => handleSocial('apple')} disabled={busy}>
                         {socialBusy === 'apple' ? (
-                          <ActivityIndicator color="#fff" />
+                          <ActivityIndicator color={theme.colors.textPrimary} />
                         ) : (
                           <>
                             <Icon name="apple" size={19} color="#fff" />
-                            <Text style={{ color: '#fff', fontFamily: fonts.uiSemi, fontSize: 14 }}>
+                            <Text style={{ color: theme.colors.textPrimary, fontFamily: theme.fonts.uiSemi, fontSize: 14 }}>
                               {t('social.continueWith', { provider: 'Apple' })}
                             </Text>
                           </>
@@ -687,11 +608,11 @@ export function AuthScreen({
                     {showGoogle && (
                       <CtaButton ghost onPress={() => handleSocial('google')} disabled={busy}>
                         {socialBusy === 'google' ? (
-                          <ActivityIndicator color="#fff" />
+                          <ActivityIndicator color={theme.colors.textPrimary} />
                         ) : (
                           <>
                             <Icon name="google" size={17} color="#fff" />
-                            <Text style={{ color: '#fff', fontFamily: fonts.uiSemi, fontSize: 14 }}>
+                            <Text style={{ color: theme.colors.textPrimary, fontFamily: theme.fonts.uiSemi, fontSize: 14 }}>
                               {t('social.continueWith', { provider: 'Google' })}
                             </Text>
                           </>
@@ -712,12 +633,12 @@ export function AuthScreen({
                         textAlign: 'center',
                         marginTop: 6,
                         fontSize: 13,
-                        color: colors.mute,
-                        fontFamily: fonts.ui,
+                        color: theme.colors.textMuted,
+                        fontFamily: theme.fonts.ui,
                       }}
                     >
                       {mode === 'signup' ? t('switchMode.hasAccount') : t('switchMode.needsAccount')}{' '}
-                      <Text style={{ color: colors.accentHi, fontFamily: fonts.uiSemi }}>
+                      <Text style={{ color: theme.colors.primaryEmphasis, fontFamily: theme.fonts.uiSemi }}>
                         {mode === 'signup' ? t('actions.signIn') : t('actions.createAccount')}
                       </Text>
                     </Text>
@@ -739,7 +660,7 @@ export function AuthScreen({
         <View
           style={{
             flex: 1,
-            backgroundColor: colors.overlayStrong,
+            backgroundColor: theme.colors.overlayStrong,
             justifyContent: 'center',
             paddingHorizontal: spacing[6],
           }}
@@ -752,25 +673,25 @@ export function AuthScreen({
               padding: spacing[5],
               borderRadius: radii.xl,
               borderWidth: 1,
-              borderColor: colors.borderStrong,
-              backgroundColor: '#0a0620',
+              borderColor: theme.colors.borderStrong,
+              backgroundColor: theme.colors.sheetBackground,
               gap: 12,
             }}
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              <Icon name="google" size={18} color={colors.mute} />
-              <Text style={{ flex: 1, color: '#fff', fontFamily: fonts.uiSemi, fontSize: 15 }}>
+              <Icon name="google" size={18} color={theme.colors.textMuted} />
+              <Text style={{ flex: 1, color: theme.colors.textPrimary, fontFamily: theme.fonts.uiSemi, fontSize: 15 }}>
                 {t('social.unavailable.title')}
               </Text>
             </View>
-            <Text style={{ color: colors.mute, fontFamily: fonts.ui, fontSize: 13.5, lineHeight: 19 }}>
+            <Text style={{ color: theme.colors.textMuted, fontFamily: theme.fonts.ui, fontSize: 13.5, lineHeight: 19 }}>
               {t('social.unavailable.message')}
             </Text>
             <CtaButton onPress={() => setGoogleUnavailableNotice(false)}>
               <Text
                 style={{
-                  color: '#fff',
-                  fontFamily: fonts.display,
+                  color: theme.colors.primaryForeground,
+                  fontFamily: theme.fonts.display,
                   fontSize: 15,
                   letterSpacing: 1,
                   textTransform: 'uppercase',
@@ -808,6 +729,7 @@ function LinkingPanel({
   onLinkProvider: (p: SocialProvider) => void;
   onCancel: () => void;
 }) {
+  const { theme } = useTheme();
   const { t } = useTranslation('auth');
   const hasPassword = linking.methods.includes('password');
   const existingSocial = socialProviderFromMethods(linking.methods);
@@ -823,21 +745,21 @@ function LinkingPanel({
         gap: 12,
         padding: 16,
         borderRadius: 14,
-        backgroundColor: 'rgba(11,112,249,0.10)',
+        backgroundColor: theme.colors.noticeBackground,
         borderWidth: 1,
-        borderColor: 'rgba(77,163,255,0.32)',
+        borderColor: theme.colors.noticeBorder,
       }}
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-        <Icon name="shield" size={16} color={colors.accentHi} />
-        <Text style={{ flex: 1, color: '#fff', fontFamily: fonts.uiSemi, fontSize: 13.5 }}>
+        <Icon name="shield" size={16} color={theme.colors.primaryEmphasis} />
+        <Text style={{ flex: 1, color: theme.colors.textPrimary, fontFamily: theme.fonts.uiSemi, fontSize: 13.5 }}>
           {t('linking.title')}
         </Text>
       </View>
 
       {hasPassword ? (
         <>
-          <Text style={{ color: colors.mute, fontFamily: fonts.ui, fontSize: 13, lineHeight: 18 }}>
+          <Text style={{ color: theme.colors.textMuted, fontFamily: theme.fonts.ui, fontSize: 13, lineHeight: 18 }}>
             {t('linking.passwordMessage', {
               email: linking.email,
               attemptedProvider: attemptedLabel,
@@ -855,12 +777,12 @@ function LinkingPanel({
           />
           <CtaButton onPress={onLinkPassword} disabled={busy}>
             {busy ? (
-              <ActivityIndicator color="#fff" />
+              <ActivityIndicator color={theme.colors.primaryForeground} />
             ) : (
               <Text
                 style={{
-                  color: '#fff',
-                  fontFamily: fonts.display,
+                  color: theme.colors.primaryForeground,
+                  fontFamily: theme.fonts.display,
                   fontSize: 16,
                   letterSpacing: 1.2,
                   textTransform: 'uppercase',
@@ -873,7 +795,7 @@ function LinkingPanel({
         </>
       ) : existingSocial ? (
         <>
-          <Text style={{ color: colors.mute, fontFamily: fonts.ui, fontSize: 13, lineHeight: 18 }}>
+          <Text style={{ color: theme.colors.textMuted, fontFamily: theme.fonts.ui, fontSize: 13, lineHeight: 18 }}>
             {t('linking.providerMessage', {
               email: linking.email,
               existingProvider: existingProviderLabel,
@@ -882,11 +804,11 @@ function LinkingPanel({
           </Text>
           <CtaButton ghost onPress={() => onLinkProvider(existingSocial)} disabled={busy}>
             {busy ? (
-              <ActivityIndicator color="#fff" />
+              <ActivityIndicator color={theme.colors.textPrimary} />
             ) : (
               <>
                 <Icon name={existingSocial === 'apple' ? 'apple' : 'google'} size={18} color="#fff" />
-                <Text style={{ color: '#fff', fontFamily: fonts.uiSemi, fontSize: 14 }}>
+                <Text style={{ color: theme.colors.textPrimary, fontFamily: theme.fonts.uiSemi, fontSize: 14 }}>
                   {t('social.continueWith', { provider: existingProviderLabel })}
                 </Text>
               </>
@@ -894,7 +816,7 @@ function LinkingPanel({
           </CtaButton>
         </>
       ) : (
-        <Text style={{ color: colors.mute, fontFamily: fonts.ui, fontSize: 13, lineHeight: 18 }}>
+        <Text style={{ color: theme.colors.textMuted, fontFamily: theme.fonts.ui, fontSize: 13, lineHeight: 18 }}>
           {t('linking.unknownMethodMessage')}
         </Text>
       )}
@@ -903,8 +825,8 @@ function LinkingPanel({
         <Text
           style={{
             textAlign: 'center',
-            color: colors.mute,
-            fontFamily: fonts.uiMed,
+            color: theme.colors.textMuted,
+            fontFamily: theme.fonts.uiMed,
             fontSize: 13,
           }}
         >
@@ -916,6 +838,7 @@ function LinkingPanel({
 }
 
 function Feedback({ tone, text }: { tone: 'error' | 'info'; text: string }) {
+  const { theme } = useTheme();
   const isError = tone === 'error';
   return (
     <View
@@ -926,21 +849,25 @@ function Feedback({ tone, text }: { tone: 'error' | 'info'; text: string }) {
         paddingHorizontal: 14,
         paddingVertical: 12,
         borderRadius: 12,
-        backgroundColor: isError ? 'rgba(255,86,86,0.10)' : 'rgba(11,112,249,0.12)',
+        backgroundColor: isError
+          ? theme.colors.feedbackErrorBackground
+          : theme.colors.feedbackInfoBackground,
         borderWidth: 1,
-        borderColor: isError ? 'rgba(255,86,86,0.32)' : 'rgba(77,163,255,0.32)',
+        borderColor: isError
+          ? theme.colors.feedbackErrorBorder
+          : theme.colors.feedbackInfoBorder,
       }}
     >
       <Icon
         name={isError ? 'x' : 'check'}
         size={15}
-        color={isError ? '#ff7676' : colors.accentHi}
+        color={isError ? theme.colors.feedbackErrorIcon : theme.colors.primaryEmphasis}
       />
       <Text
         style={{
           flex: 1,
-          color: isError ? '#ffb3b3' : colors.accentHi,
-          fontFamily: fonts.uiMed,
+          color: isError ? theme.colors.feedbackErrorText : theme.colors.primaryEmphasis,
+          fontFamily: theme.fonts.uiMed,
           fontSize: 13,
           lineHeight: 18,
         }}
@@ -982,6 +909,7 @@ function AuthInput({
   maxLength?: number;
   editable?: boolean;
 }) {
+  const { theme } = useTheme();
   return (
     <View
       style={{
@@ -991,16 +919,16 @@ function AuthInput({
         paddingHorizontal: 16,
         height: 56,
         borderRadius: 14,
-        backgroundColor: 'rgba(255,255,255,0.045)',
+        backgroundColor: theme.colors.authInputBackground,
         borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.09)',
+        borderColor: theme.colors.authInputBorder,
         opacity: editable ? 1 : 0.6,
       }}
     >
-      <Icon name={icon} size={18} color="rgba(255,255,255,0.45)" />
+      <Icon name={icon} size={18} color={theme.colors.authInputIcon} />
       <TextInput
         placeholder={placeholder}
-        placeholderTextColor="rgba(255,255,255,0.35)"
+        placeholderTextColor={theme.colors.authInputPlaceholder}
         value={value}
         onChangeText={onChangeText}
         secureTextEntry={secure}
@@ -1013,9 +941,9 @@ function AuthInput({
         keyboardType={keyboardType ?? (icon === 'mail' ? 'email-address' : 'default')}
         style={{
           flex: 1,
-          color: '#fff',
+          color: theme.colors.inputText,
           fontSize: 15,
-          fontFamily: fonts.ui,
+          fontFamily: theme.fonts.ui,
         }}
       />
       {trailing && (
@@ -1025,7 +953,7 @@ function AuthInput({
           accessibilityRole="button"
           accessibilityLabel={trailingAccessibilityLabel}
         >
-          <Icon name={trailing} size={18} color="rgba(255,255,255,0.45)" />
+          <Icon name={trailing} size={18} color={theme.colors.authInputIcon} />
         </Pressable>
       )}
     </View>

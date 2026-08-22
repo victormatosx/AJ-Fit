@@ -3,7 +3,8 @@ import { View, Animated } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { AJMark } from '../../components/ui/AJMark';
 import { Display } from '../../components/ui/Display';
-import { colors, spacing } from '../../theme/tokens';
+import { spacing } from '../../theme/tokens';
+import { useTheme } from '../../theme';
 import { useReducedMotionPreference } from '../../lib/reducedMotion';
 
 // Typewriter timing — tuned to read as a small brand detail, not a "look, an
@@ -145,6 +146,7 @@ export function WelcomeInterstitialScreen({
   onContinue: () => void;
 }) {
   const { t } = useTranslation('onboarding');
+  const { theme } = useTheme();
   const advancing = useRef(false);
   const reduceMotion = useReducedMotionPreference();
 
@@ -174,7 +176,7 @@ export function WelcomeInterstitialScreen({
     <View
       style={{
         flex: 1,
-        backgroundColor: colors.bg,
+        backgroundColor: theme.colors.background,
         alignItems: 'center',
         justifyContent: 'center',
         paddingHorizontal: spacing[6],
@@ -201,7 +203,7 @@ export function WelcomeInterstitialScreen({
             <Display size={26} style={{ textAlign: 'center' }}>
               {greetingTyping.displayText}
               {greetingCursor.showCursor && (
-                <Animated.Text style={{ opacity: greetingCursor.cursorOpacity, color: colors.text }}>
+                <Animated.Text style={{ opacity: greetingCursor.cursorOpacity, color: theme.colors.textPrimary }}>
                   {CURSOR_CHAR}
                 </Animated.Text>
               )}

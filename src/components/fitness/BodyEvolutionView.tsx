@@ -5,7 +5,8 @@ import { useTranslation } from 'react-i18next';
 import { EvolutionAreaChart } from './EvolutionAreaChart';
 import { Display, MonoLabel, Slash } from '../ui/Display';
 import { Icon } from '../ui/Icon';
-import { colors, fonts, sizes, spacing } from '../../theme/tokens';
+import { sizes, spacing } from '../../theme/tokens';
+import { useTheme } from '../../theme';
 import type { AssessmentDelta, AssessmentView } from '../../hooks/useAssessments';
 import { useUnits } from '../../state/UnitsContext';
 import { formatWeightFromKg, weightFromKg, weightUnit } from '../../units/weightConversions';
@@ -34,11 +35,12 @@ interface Props {
 }
 
 function Rule() {
+  const { theme } = useTheme();
   return (
     <View
       style={{
         height: sizes.hairline,
-        backgroundColor: colors.border,
+        backgroundColor: theme.colors.border,
         marginHorizontal: GUTTER,
         marginVertical: spacing[5],
       }}
@@ -53,12 +55,13 @@ function Rule() {
  * as success or danger.
  */
 function Delta({ value, unit }: { value: number; unit?: string }) {
+  const { theme } = useTheme();
   const { t } = useTranslation('home');
   if (value === 0) return null;
   const arrow = value > 0 ? '↑' : '↓';
   const magnitude = Math.abs(value).toFixed(1);
   return (
-    <Text style={{ fontFamily: fonts.mono, fontSize: 11, color: colors.accentHi }}>
+    <Text style={{ fontFamily: theme.fonts.mono, fontSize: 11, color: theme.colors.primaryEmphasis }}>
       {t('progress.body.delta', { direction: arrow, value: magnitude, unit: unit ?? '' }).trim()}
     </Text>
   );
@@ -75,6 +78,7 @@ function MetricRow({
   unit: string;
   delta?: number | null;
 }) {
+  const { theme } = useTheme();
   return (
     <View
       style={{
@@ -87,7 +91,7 @@ function MetricRow({
     >
       <MonoLabel style={{ flex: 1 }}>{label}</MonoLabel>
       <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: spacing[2] }}>
-        <Text style={{ fontFamily: fonts.uiSemi, fontSize: 15, color: colors.text }}>{value}</Text>
+        <Text style={{ fontFamily: theme.fonts.uiSemi, fontSize: 15, color: theme.colors.textPrimary }}>{value}</Text>
         <MonoLabel size={9}>{unit}</MonoLabel>
         {delta != null ? <Delta value={delta} /> : null}
       </View>
@@ -119,6 +123,7 @@ export function BodyEvolutionView({
   onRetry,
   onOpenAssessment,
 }: Props) {
+  const { theme } = useTheme();
   const { t } = useTranslation('home');
   const { resolvedUnits } = useUnits();
   const unit = weightUnit(resolvedUnits);
@@ -150,8 +155,8 @@ export function BodyEvolutionView({
   if (loading) {
     return (
       <CenteredState>
-        <ActivityIndicator color={colors.faint} />
-        <Text style={{ fontFamily: fonts.ui, fontSize: 13, color: colors.textSecondary }}>
+        <ActivityIndicator color={theme.colors.textFaint} />
+        <Text style={{ fontFamily: theme.fonts.ui, fontSize: 13, color: theme.colors.textSecondary }}>
           {t('progress.body.loading')}
         </Text>
       </CenteredState>
@@ -163,9 +168,9 @@ export function BodyEvolutionView({
       <CenteredState>
         <Text
           style={{
-            fontFamily: fonts.ui,
+            fontFamily: theme.fonts.ui,
             fontSize: 14,
-            color: colors.textSecondary,
+            color: theme.colors.textSecondary,
             textAlign: 'center',
           }}
         >
@@ -177,7 +182,7 @@ export function BodyEvolutionView({
           accessibilityLabel={t('progress.body.retry')}
           style={{ paddingVertical: spacing[2.5], paddingHorizontal: spacing[4.5] }}
         >
-          <Text style={{ fontFamily: fonts.uiSemi, fontSize: 14, color: colors.text }}>
+          <Text style={{ fontFamily: theme.fonts.uiSemi, fontSize: 14, color: theme.colors.textPrimary }}>
             {t('progress.body.retry')}
           </Text>
         </Pressable>
@@ -188,16 +193,16 @@ export function BodyEvolutionView({
   if (!latest) {
     return (
       <CenteredState>
-        <Icon name="chart" size={26} color={colors.faint} />
+        <Icon name="chart" size={26} color={theme.colors.textFaint} />
         <Display size={20} style={{ textAlign: 'center' }}>
           {t('progress.body.empty.title')}
         </Display>
         <Text
           style={{
-            fontFamily: fonts.ui,
+            fontFamily: theme.fonts.ui,
             fontSize: 13,
             lineHeight: 19,
-            color: colors.mute,
+            color: theme.colors.textMuted,
             textAlign: 'center',
           }}
         >
@@ -214,11 +219,11 @@ export function BodyEvolutionView({
               paddingHorizontal: spacing[5],
               borderRadius: 10,
               borderWidth: 1,
-              borderColor: colors.borderStrong,
-              backgroundColor: colors.surfaceRaised,
+              borderColor: theme.colors.borderStrong,
+              backgroundColor: theme.colors.surfaceElevated,
             }}
           >
-            <Text style={{ fontFamily: fonts.uiSemi, fontSize: 14, color: colors.text }}>
+            <Text style={{ fontFamily: theme.fonts.uiSemi, fontSize: 14, color: theme.colors.textPrimary }}>
               {t('progress.body.empty.cta')}
             </Text>
           </Pressable>
@@ -275,9 +280,9 @@ export function BodyEvolutionView({
           <Text
             style={{
               paddingHorizontal: GUTTER,
-              fontFamily: fonts.ui,
+              fontFamily: theme.fonts.ui,
               fontSize: 12.5,
-              color: colors.faint,
+              color: theme.colors.textFaint,
             }}
           >
             {t('progress.body.singleEntry')}
@@ -347,10 +352,10 @@ export function BodyEvolutionView({
               paddingVertical: spacing[3.5],
             }}
           >
-            <MonoLabel color={colors.text}>
+            <MonoLabel color={theme.colors.textPrimary}>
               {t('progress.body.openAssessment').toUpperCase()}
             </MonoLabel>
-            <Icon name="chevron-right" size={16} color={colors.accentHi} />
+            <Icon name="chevron-right" size={16} color={theme.colors.primaryEmphasis} />
           </Pressable>
         </>
       ) : null}

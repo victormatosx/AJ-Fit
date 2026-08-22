@@ -1809,8 +1809,8 @@ de `emailVerified` após a operação.
 Impacto:
 Usuários de e-mail/senha não acessam o fluxo principal até a confirmação real
 no Firebase. Contas exclusivamente Google/Apple não são bloqueadas. Não houve
-migração do Firebase Auth, dependência nova, alteração de Rules, deep linking,
-polling ou implementação de MFA.
+migração do Firebase Auth, dependência nova, alteração de Rules, deep linking
+ou polling.
 
 Testes feitos:
 - serviço de envio/recarga, sessão nula/trocada e
@@ -1829,176 +1829,6 @@ Firebase Auth; os testes automatizados cobrem o contrato com mocks.
 Assinatura:
 Codex — 2026-08-10 — prompt da tarefa de verificação de e-mail (versão 1).
 
----
-
-Data: 2026-08-10
-Responsável: Codex — Agente Frontend + Segurança + QA
-Categoria: [IMPLEMENTAÇÃO]
-
-Descrição:
-POC técnica isolada de TOTP MFA preparada na branch
-`feature/totp-mfa-poc`, mantendo Firebase Authentication no JS SDK. A POC
-temporária e exclusiva de development cobre geração do segredo, URI
-`otpauth://`, assertion/enrollment, leitura de `enrolledFactors`, captura de
-`auth/multi-factor-auth-required`, seleção do hint TOTP e resolução do login.
-O fluxo concluído por `resolveSignIn` não navega manualmente: permanece sob o
-listener do `AuthContext` e o guard central já existente.
-
-Resultado:
-TypeScript, 870 testes da suíte completa, 548 testes de i18n, auditoria i18n e
-21 verificações do Expo Doctor foram aprovados. A execução real do ciclo com o
-backend Firebase e autenticador ainda não foi realizada em development builds
-Android e iOS; portanto, o resultado desta fase permanece **NO-GO** até a
-validação obrigatória nos dois sistemas.
-
-Impacto:
-Não houve implementação de MFA de produção, migração de SDK, dependência nova,
-mudança de persistência, Firestore/Storage Rules, claims, SMS, reCAPTCHA ou
-alteração da `SecurityScreen`. O segredo e o OTP não são persistidos nem
-logados. O acesso à POC e a captura experimental no login são condicionados a
-`__DEV__`.
-
-Próxima ação:
-Executar enrollment, código incorreto e novo login com TOTP em Android e iOS,
-confirmando que um usuário com questionário existente retorna ao Dashboard e
-não ao Quiz. Somente após os dois resultados reais a POC poderá ser marcada
-como GO.
-
-Assinatura:
-Codex — 2026-08-10 — Fase 1 da POC TOTP MFA.
-
----
-
-Data: 2026-08-10
-Responsável: Codex — Agente Frontend + Segurança + QA
-Categoria: [IMPLEMENTAÇÃO]
-
-Descrição:
-Substituído o enrollment experimental da POC por gerenciamento TOTP de
-produção em Configurações → Segurança → Verificação em duas etapas. O status
-é relido de `multiFactor(user).enrolledFactors`; ativação e desativação exigem
-reauth de senha, operam sobre fatores TOTP explícitos e não criam flags no
-Firestore ou na persistência local. O enrollment oferece QR Code, chave
-manual, cópia explícita e abertura segura da URI `otpauth://`.
-
-Segurança:
-O segredo permanece somente na memória do hook e é limpo após sucesso,
-cancelamento, troca de usuário e unmount. Nenhum segredo, OTP ou token é
-logado. Contas somente Google/Apple ficam bloqueadas até a reautenticação
-federada da Fase 3. Na desativação de contas já protegidas, o fluxo também
-resolve o challenge TOTP se o Firebase o exigir durante a reautenticação.
-
-Resultado automático:
-TypeScript, 879 testes da suíte completa, 548 testes de i18n, auditoria i18n,
-21 verificações do Expo Doctor e `git diff --check` aprovados. A validação
-manual desta implementação em development builds Android/iOS permanece
-pendente antes da aprovação humana da fase.
-
-Limites:
-O enrollment DEV da POC e seu acesso em Configurações foram removidos. A ponte
-DEV de challenge por e-mail/senha permanece temporariamente para preservar a
-prova da Fase 1. O challenge definitivo de login para e-mail/senha, Google e
-Apple, recovery e revogação de sessões não foram implementados.
-
-Próxima ação:
-Executar o roteiro manual de ativação, configuração com um celular, código
-incorreto, cancelamento e desativação em Android e iOS. Depois da revisão
-humana, iniciar a Fase 3 para o challenge de login de produção.
-
-Assinatura:
-Codex — 2026-08-10 — Fase 2 de enrollment/gerenciamento TOTP.
-
----
-
-Data: 2026-08-10
-Responsável: Codex — Agente Frontend + Segurança + QA
-Categoria: [IMPLEMENTAÇÃO]
-
-Descrição:
-Implementado o challenge TOTP definitivo no login de produção para
-e-mail/senha, Google e Apple. Os services preservam o
-`auth/multi-factor-auth-required` original; `src/services/mfaTotp.ts` mantém o
-`MultiFactorResolver` somente em memória; `useTotpChallenge` controla seleção
-de fator, OTP, retry, expiração e cancelamento; `TotpChallengeScreen` fornece a
-UI única do fluxo. A ponte DEV da POC e seus três arquivos paralelos foram
-removidos.
-
-Integração:
-Após `resolveSignIn`, nenhum `User` é definido e nenhuma rota é aberta
-manualmente. `onAuthStateChanged` continua sendo a autoridade, carrega perfil
-e questionário e entrega o estado ao guard central. Assim, um usuário existente
-com questionário e TOTP retorna ao Dashboard, sem passar pelo Quiz. Linking
-continua separado de `account-exists-with-different-credential` e conclui a
-credencial pendente no mesmo UID depois do segundo fator.
-
-Segurança:
-Resolver, hints internos, credencial de linking e OTP não são persistidos nem
-logados. Cancelamento/unmount/erro terminal limpam a memória. Código incorreto,
-rede e rate limit permitem retry. Nenhuma alteração foi feita em
-`secureAuthStorage`, inicialização/persistência do Firebase, Firestore/Storage
-Rules, schemas ou custom claims. SMS, reCAPTCHA, recovery codes e revogação de
-outras sessões seguem fora do escopo.
-
-Validação:
-Testes automatizados cobrem primeiro fator com e sem MFA nos três provedores,
-resolução/retry/limpeza do resolver, linking, múltiplos hints, fator não TOTP,
-expiração, logout, verificação de e-mail, persistência segura, guard
-Quiz/Dashboard e paridade i18n. A validação runtime com contas reais e
-development builds Android/iOS continua obrigatoriamente manual.
-
-Assinatura:
-Codex — 2026-08-10 — Fase 3 do challenge de login TOTP.
-
----
-
-Data: 2026-08-10
-Responsável: Codex — Agente Frontend + Segurança + QA
-Categoria: [IMPLEMENTAÇÃO]
-
-Descrição:
-Implementada a Fase 4 do TOTP MFA com reautenticação federada para enrollment e
-unenrollment. Contas Google-only e Apple-only deixaram de ser bloqueadas em
-Configurações → Segurança → Verificação em duas etapas. A nova camada
-`reauthentication.ts` reutiliza as aquisições nativas existentes e aplica a
-credencial exclusivamente com `reauthenticateWithCredential` ao usuário atual.
-Login, linking, provisionamento e navegação não fazem parte dessa operação.
-
-Google reutiliza configuração, Play Services, folha nativa, extração de idToken
-e `GoogleAuthProvider.credential` já existentes. Apple gera raw nonce novo em
-cada tentativa, envia SHA-256 à Apple, usa o raw nonce apenas na credencial
-Firebase e não solicita nem depende de nome/e-mail durante reauth. Senha mantém
-o serviço anterior e segue como primeira opção quando vinculada. Contas
-multi-provider exibem todas as alternativas reais na ordem senha, Google e
-Apple, sem inferência por `providerData[0]`.
-
-Segurança:
-O UID original é validado antes da chamada Firebase, depois do resultado e
-novamente nas fronteiras assíncronas de geração do segredo e unenrollment.
-Cancelamento, provider indisponível, credencial divergente ou troca de sessão
-abortam sem tocar os fatores. Credenciais, id/identity tokens, raw nonce, senha,
-OTP, segredo e MultiFactorSession permanecem somente em memória e não são
-logados nem persistidos. A desativação continua resolvendo o TOTP já cadastrado
-quando a reautenticação retorna `auth/multi-factor-auth-required`.
-
-Validação automática:
-TypeScript aprovado; 945 testes da suíte completa aprovados; 75 testes focados
-de providers/reauth/MFA/regressão aprovados; 550 testes de i18n aprovados;
-auditoria i18n sem bloqueios; Expo Doctor com 21/21 verificações aprovadas; e
-`git diff --check` aprovado. Os testes cobrem os sete conjuntos de providers,
-nonce Apple novo, hash/raw nonce, códigos reais instalados do Google,
-cancelamento, mismatch de UID, enrollment/unenrollment federado e regressão dos
-challenges de login e account linking.
-
-Pendência:
-Executar em development builds o ciclo real Google-only no Android/iOS e o
-ciclo Apple-only em dispositivo iOS real: ativar, cancelar, escolher conta
-divergente quando possível, sair, entrar com TOTP e desativar. O repositório não
-possui emulador Firebase Auth capaz de substituir essa validação nativa.
-
-Assinatura:
-Codex — 2026-08-10 — Fase 4 de reautenticação federada TOTP.
-
----
 
 Data: 2026-08-11
 Responsável: Codex — Agente Backend + Segurança
@@ -3330,6 +3160,104 @@ de confirmação do usuário testando o app.
 
 Assinatura:
 Claude — 2026-08-16 — Correção do corte de glifos Anton no iOS (fix centralizado).
+
+---
+
+Data: 2026-08-18
+Responsável: Claude — Agente Frontend
+Categoria: [DECISÃO] [CORREÇÃO]
+
+Descrição:
+Feature Tema Claro/Escuro (branch `feature/light-dark-theme`), Fase 9 —
+fronteiras nativas. Fases 1–8 (runtime React, Settings, persistência,
+StatusBar, DatePicker) já estavam prontas e não foram alteradas.
+
+Decisões técnicas:
+
+1. `userInterfaceStyle`: "light" → "dark". Esse campo trava, em ambas as
+   plataformas, a aparência de qualquer superfície nativa que a Fase 1–8 não
+   estiliza explicitamente (Alert nativo, teclado, e — no Android, apenas
+   quando `expo-system-ui` está registrado — o `AppCompatDelegate` DayNight
+   que resolve os recursos `values-night/`). Como Dark é o default e a
+   maioria dos usuários parte dele, fixar em "dark" reduz a divergência de
+   chrome nativo para a baseline; usuários em Light aceitam essa mesma
+   divergência como limitação conhecida — não existe "automatic" possível
+   sem violar a regra de nunca seguir o tema do aparelho.
+
+2. Instaladas três dependências nativas via `npx expo install` (versões
+   resolvidas automaticamente para o SDK 56 instalado, nenhuma outra
+   dependência tocada): `expo-splash-screen` (~56.0.14), `expo-system-ui`
+   (~56.0.5), `expo-navigation-bar` (~56.0.3).
+
+3. Splash nativo (pré-JS) estava sem configuração alguma em app.json — o
+   fallback do template deixava fundo branco (`#FFFFFF`, confirmado em
+   `android/app/src/main/res/values/colors.xml` e no
+   `SplashScreen.storyboard` via `systemBackgroundColor`), diferente do
+   splash customizado em JS (`SplashScreen.tsx`, sempre preto). Isso já
+   causava um flash branco→preto em todo cold start, independente de tema.
+   Corrigido com plugin `expo-splash-screen` fixo em preto
+   (`backgroundColor: "#000000"`, mesma logo do app), sem a chave `dark`
+   (que o plugin usa para seguir a aparência do sistema — omitida de
+   propósito). `App.tsx` agora chama
+   `NativeSplashScreen.preventAutoHideAsync()` no escopo do módulo e
+   `hideAsync()` no primeiro efeito de `AppContent`, para o splash nativo só
+   sumir depois que a árvore JS já pintou o mesmo preto.
+
+4. Criado `src/theme/NativeThemeSync.tsx` (montado uma vez em `App.tsx`, ao
+   lado do `<StatusBar>`), único ponto que chama `expo-system-ui` e
+   `expo-navigation-bar`. A cada mudança de `theme` (após hidratação) ele
+   chama `SystemUI.setBackgroundColorAsync` (ambas as plataformas) e, só no
+   Android, `NavigationBar.setStyle`. O mapeamento tema→native é puro e
+   testável em `src/theme/nativeUiMapping.ts` — reaproveita exatamente a
+   convenção de `theme.statusBar.style` ('light'|'dark') em vez de criar uma
+   segunda tabela de cores.
+
+5. `expo-navigation-bar` nesta versão do SDK não tem mais
+   `setBackgroundColorAsync` (API antiga, pré edge-to-edge, removida) — só
+   `setStyle` (cor do ícone) e `setHidden`. Confirmado no autolinking
+   (`ExpoModulesPackageList.kt` já registra `EdgeToEdgePackage`) que o
+   projeto já roda edge-to-edge por padrão nesse SDK; não há mais opt-out via
+   app.json. O plugin do navigation bar tem `enforceContrast: true` por
+   padrão, e a própria documentação do pacote afirma que `setStyle` só tem
+   efeito com `enforceContrast: false` — por isso o plugin foi configurado
+   com `enforceContrast: false` (documentado como troca deliberada: perdemos
+   o scrim de contraste automático do Android, e passamos a depender do
+   `style` correto vindo do nosso próprio tema em todo momento).
+
+6. Adicionado `"backgroundColor": "#020010"` no topo do app.json (mesmo tom
+   de `colors.background` do Dark) — usado pelo plugin `expo-system-ui` para
+   gravar o background inicial estático do root nativo (Android
+   `windowBackground` / iOS `RCTRootViewBackgroundColor`), evitando qualquer
+   flash antes do primeiro `SystemUI.setBackgroundColorAsync` do runtime.
+
+Testes automatizados novos: `src/theme/__tests__/nativeUiMapping.test.ts`
+(mapeamento puro tema→native, ausência de leitura de aparência do sistema,
+NativeThemeSync montado uma única vez, app.json travado em Dark/sem
+"automatic"). Ajustado `sharedComponentsTheme.test.ts` (linha que travava
+`userInterfaceStyle: "light"`, decisão explicitamente adiada para esta
+fase) para o novo valor "dark".
+
+Validação automática:
+`npm run typecheck` ok. `npm test` (vitest) 2807 testes aprovados.
+`npm run test:rules` 242 testes aprovados (Firestore + Storage emulators,
+nenhuma regra alterada). `npm run i18n:check` 571 testes aprovados.
+`npm run i18n:audit` 0 problemas bloqueantes (9 hardcodes pré-existentes no
+Paywall, fora de escopo). `npx expo config --type prebuild` resolve sem
+erro (confirma que a cadeia de plugins — splash/system-ui/navigation-bar —
+é válida). `git diff --check` limpo.
+
+Pendência (real, não pode ser resolvida por este agente):
+QA físico completo (iOS e Android, cold start, troca de tema em runtime,
+background/foreground, Alert nativo, DatePicker, todas as telas críticas)
+não foi executado — este ambiente não tem simulador/dispositivo físico.
+`npx expo prebuild` não foi rodado (regeneraria `android/`/`ios/` locais,
+que não são versionados, para consumir os plugins novos) para não sobrescrever
+o workspace nativo local sem confirmação; é pré-requisito para o QA físico e
+para qualquer build de release — OTA isolado não é suficiente, exige rebuild
+nativo.
+
+Assinatura:
+Claude — 2026-08-18 — Tema Claro/Escuro, Fase 9 (fronteiras nativas).
 
 ---
 

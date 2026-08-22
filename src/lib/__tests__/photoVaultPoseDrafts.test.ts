@@ -7,6 +7,7 @@ import {
   filledPoses,
   partitionSavablePoses,
   setPoseDraft,
+  shouldWarnSlotTaken,
   stagedDraftUris,
   type PoseDraftPhoto,
   type PoseDrafts,
@@ -259,5 +260,75 @@ describe('filledPoses', () => {
 
   it('is empty for a fresh session', () => {
     expect(filledPoses(EMPTY_POSE_DRAFTS)).toEqual([]);
+  });
+});
+
+describe('shouldWarnSlotTaken', () => {
+  /**
+   * The regression this function exists for: pressing save inserts an
+   * optimistic gallery card for the very (day, pose) being saved, so the
+   * sheet immediately saw its own upload as an occupant and offered to
+   * replace it — on every save, whether or not the day already had a photo.
+   */
+  it('stays silent while the pose it would warn about is the one uploading', () => {
+    expect(
+      shouldWarnSlotTaken({
+        hasDraft: true,
+        uploading: true,
+        pose: 'front',
+        blocked: ['front'],
+      }),
+    ).toBe(false);
+  });
+
+  it('warns when another photo genuinely holds the slot', () => {
+    expect(
+      shouldWarnSlotTaken({
+        hasDraft: true,
+        uploading: false,
+        pose: 'front',
+        blocked: ['front'],
+      }),
+    ).toBe(true);
+  });
+
+  it('warns again once the upload settles and the slot is still held', () => {
+    const args = { hasDraft: true, pose: 'front' as ProgressPhotoPose, blocked: ['front' as ProgressPhotoPose] };
+
+    expect(shouldWarnSlotTaken({ ...args, uploading: true })).toBe(false);
+    expect(shouldWarnSlotTaken({ ...args, uploading: false })).toBe(true);
+  });
+
+  it('never warns about a pose the user has not filled', () => {
+    expect(
+      shouldWarnSlotTaken({
+        hasDraft: false,
+        uploading: false,
+        pose: 'front',
+        blocked: ['front'],
+      }),
+    ).toBe(false);
+  });
+
+  it('never warns about a free slot, uploading or not', () => {
+    expect(
+      shouldWarnSlotTaken({ hasDraft: true, uploading: false, pose: 'side', blocked: ['front'] }),
+    ).toBe(false);
+    expect(
+      shouldWarnSlotTaken({ hasDraft: true, uploading: true, pose: 'side', blocked: [] }),
+    ).toBe(false);
+  });
+
+  it('isolates poses: a sibling uploading does not silence this one', () => {
+    // `uploading` is per pose, so a blocked `front` still warns while `side`
+    // is the pose in flight.
+    expect(
+      shouldWarnSlotTaken({
+        hasDraft: true,
+        uploading: false,
+        pose: 'front',
+        blocked: ['front', 'side'],
+      }),
+    ).toBe(true);
   });
 });

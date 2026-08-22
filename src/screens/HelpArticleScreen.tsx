@@ -8,10 +8,12 @@ import { CtaButton } from '../components/ui/CtaButton';
 import { Display, Slash } from '../components/ui/Display';
 import { Icon } from '../components/ui/Icon';
 import type { HelpArticle } from '../types/support';
-import { alpha, colors, fonts, radii, spacing } from '../theme/tokens';
+import { radii, spacing } from '../theme/tokens';
+import { useTheme } from '../theme';
 
 export function HelpArticleScreen({ article, onBack, onOpenTicket }: { article: HelpArticle; onBack: () => void; onOpenTicket: (subject: string) => void }) {
   const { t } = useTranslation('support');
+  const { theme } = useTheme();
   const [resolved, setResolved] = useState<boolean | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   // Materialized + prewarmed (docs/23_navegacao_e_lifecycle.md §14) — this
@@ -41,8 +43,8 @@ export function HelpArticleScreen({ article, onBack, onOpenTicket }: { article: 
               <Text
                 key={index}
                 style={{
-                  color: colors.textSecondary,
-                  fontFamily: fonts.ui,
+                  color: theme.colors.textSecondary,
+                  fontFamily: theme.fonts.ui,
                   fontSize: 15,
                   lineHeight: 24,
                   marginTop: index === 0 ? spacing[5] : spacing[4],
@@ -56,8 +58,8 @@ export function HelpArticleScreen({ article, onBack, onOpenTicket }: { article: 
           <View style={{ flex: 1, minHeight: spacing[8] }} />
 
           <View>
-            <View style={{ height: 1, backgroundColor: colors.hair, marginBottom: spacing[6] }} />
-            <Text style={{ color: colors.mute, fontFamily: fonts.uiSemi, fontSize: 13.5, textAlign: 'center', marginBottom: spacing[4] }}>
+            <View style={{ height: 1, backgroundColor: theme.colors.divider, marginBottom: spacing[6] }} />
+            <Text style={{ color: theme.colors.textMuted, fontFamily: theme.fonts.uiSemi, fontSize: 13.5, textAlign: 'center', marginBottom: spacing[4] }}>
               {t('article.solved')}
             </Text>
 
@@ -67,7 +69,7 @@ export function HelpArticleScreen({ article, onBack, onOpenTicket }: { article: 
             </View>
 
             {resolved === true && (
-              <Text style={{ color: '#60d99a', fontFamily: fonts.uiSemi, fontSize: 13, textAlign: 'center', marginTop: spacing[3] }}>
+              <Text style={{ color: theme.colors.statusSuccessText, fontFamily: theme.fonts.uiSemi, fontSize: 13, textAlign: 'center', marginTop: spacing[3] }}>
                 {t('article.glad')}
               </Text>
             )}
@@ -80,7 +82,7 @@ export function HelpArticleScreen({ article, onBack, onOpenTicket }: { article: 
           accessibilityRole="button"
           accessibilityLabel={t('article.dismiss')}
           onPress={() => setModalVisible(false)}
-          style={{ flex: 1, backgroundColor: colors.overlayStrong, justifyContent: 'center', paddingHorizontal: 34 }}
+          style={{ flex: 1, backgroundColor: theme.colors.overlayStrong, justifyContent: 'center', paddingHorizontal: 34 }}
         >
           <Pressable
             accessibilityRole="none"
@@ -92,15 +94,15 @@ export function HelpArticleScreen({ article, onBack, onOpenTicket }: { article: 
               padding: spacing[6],
               borderRadius: radii.xl,
               borderWidth: 1,
-              borderColor: colors.cardBorder,
-              backgroundColor: colors.bg2,
+              borderColor: theme.colors.cardBorder,
+              backgroundColor: theme.colors.backgroundSecondary,
             }}
           >
             <Slash>{t('help.eyebrow')}</Slash>
             <Display size={24} style={{ marginTop: spacing[3] }}>
               {t('article.modalTitle')}
             </Display>
-            <Text style={{ color: colors.mute, fontFamily: fonts.ui, fontSize: 14, lineHeight: 20, marginTop: spacing[3] }}>
+            <Text style={{ color: theme.colors.textMuted, fontFamily: theme.fonts.ui, fontSize: 14, lineHeight: 20, marginTop: spacing[3] }}>
               {t('article.modalDescription')}
             </Text>
             <CtaButton
@@ -117,7 +119,7 @@ export function HelpArticleScreen({ article, onBack, onOpenTicket }: { article: 
               onPress={() => setModalVisible(false)}
               style={{ alignItems: 'center', paddingVertical: spacing[3], marginTop: spacing[1] }}
             >
-              <Text style={{ color: colors.mute, fontFamily: fonts.uiMed, fontSize: 13.5 }}>{t('article.dismiss')}</Text>
+              <Text style={{ color: theme.colors.textMuted, fontFamily: theme.fonts.uiMed, fontSize: 13.5 }}>{t('article.dismiss')}</Text>
             </Pressable>
           </Pressable>
         </Pressable>
@@ -127,6 +129,7 @@ export function HelpArticleScreen({ article, onBack, onOpenTicket }: { article: 
 }
 
 function FeedbackPill({ label, icon, active, onPress }: { label: string; icon?: 'check'; active: boolean; onPress: () => void }) {
+  const { theme } = useTheme();
   return (
     <Pressable
       accessibilityRole="button"
@@ -142,13 +145,13 @@ function FeedbackPill({ label, icon, active, onPress }: { label: string; icon?: 
         height: 44,
         borderRadius: radii.pill,
         borderWidth: 1,
-        borderColor: active ? colors.accentHi : colors.cardBorder,
-        backgroundColor: active ? alpha.blue18 : colors.cardBg,
+        borderColor: active ? theme.colors.primaryEmphasis : theme.colors.cardBorder,
+        backgroundColor: active ? theme.colors.selectionBackground : theme.colors.cardBackground,
         opacity: pressed ? 0.75 : 1,
       })}
     >
-      {icon && active && <Icon name={icon} size={14} color="#fff" stroke={2.2} />}
-      <Text style={{ color: active ? '#fff' : colors.mute, fontFamily: fonts.uiSemi, fontSize: 13.5 }}>{label}</Text>
+      {icon && active && <Icon name={icon} size={14} color={theme.colors.selectionForeground} stroke={2.2} />}
+      <Text style={{ color: active ? theme.colors.selectionForeground : theme.colors.textMuted, fontFamily: theme.fonts.uiSemi, fontSize: 13.5 }}>{label}</Text>
     </Pressable>
   );
 }

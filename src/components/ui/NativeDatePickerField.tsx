@@ -6,7 +6,7 @@ import DateTimePicker, {
 import { useTranslation } from 'react-i18next';
 import { Icon } from './Icon';
 import { MonoLabel } from './Display';
-import { colors, fonts } from '../../theme/tokens';
+import { useTheme } from '../../theme';
 
 type Props = {
   label: string;
@@ -41,6 +41,7 @@ export function NativeDatePickerField({
   maximumDate,
   error = false,
 }: Props) {
+  const { theme } = useTheme();
   const { t, i18n } = useTranslation('common');
   const [iosOpen, setIosOpen] = useState(false);
   const [draftDate, setDraftDate] = useState(value);
@@ -77,7 +78,10 @@ export function NativeDatePickerField({
 
   return (
     <View>
-      <MonoLabel color={error ? colors.danger : colors.faint} style={{ marginBottom: 6 }}>
+      <MonoLabel
+        color={error ? theme.colors.inputBorderError : theme.colors.textFaint}
+        style={{ marginBottom: 6 }}
+      >
         {label}
       </MonoLabel>
 
@@ -87,15 +91,15 @@ export function NativeDatePickerField({
             height: 50,
             borderRadius: 12,
             borderWidth: 1,
-            borderColor: error ? colors.danger : colors.borderStrong,
-            backgroundColor: colors.surfaceRaised,
+            borderColor: error ? theme.colors.inputBorderError : theme.colors.inputBorder,
+            backgroundColor: theme.colors.inputBackground,
             flexDirection: 'row',
             alignItems: 'center',
             paddingHorizontal: 14,
             gap: 10,
           }}
         >
-          <Icon name="calendar" size={17} color={colors.accentHi} />
+          <Icon name="calendar" size={17} color={theme.colors.primaryEmphasis} />
           <TextInput
             accessibilityLabel={label}
             value={webValue}
@@ -104,7 +108,12 @@ export function NativeDatePickerField({
               const parsed = parseIsoDate(next);
               if (parsed && (!maximumDate || parsed <= maximumDate)) onChange(parsed);
             }}
-            style={{ flex: 1, color: colors.text, fontFamily: fonts.uiSemi, fontSize: 14 }}
+            style={{
+              flex: 1,
+              color: theme.colors.inputText,
+              fontFamily: theme.fonts.uiSemi,
+              fontSize: 14,
+            }}
           />
         </View>
       ) : (
@@ -116,22 +125,29 @@ export function NativeDatePickerField({
             height: 50,
             borderRadius: 12,
             borderWidth: 1,
-            borderColor: error ? colors.danger : colors.borderStrong,
-            backgroundColor: pressed ? colors.surfacePressed : colors.surfaceRaised,
+            borderColor: error ? theme.colors.inputBorderError : theme.colors.inputBorder,
+            backgroundColor: pressed
+              ? theme.colors.surfacePressed
+              : theme.colors.inputBackground,
             flexDirection: 'row',
             alignItems: 'center',
             paddingHorizontal: 14,
             gap: 10,
           })}
         >
-          <Icon name="calendar" size={17} color={colors.accentHi} />
+          <Icon name="calendar" size={17} color={theme.colors.primaryEmphasis} />
           <Text
             numberOfLines={1}
-            style={{ flex: 1, color: colors.text, fontFamily: fonts.uiSemi, fontSize: 14 }}
+            style={{
+              flex: 1,
+              color: theme.colors.inputText,
+              fontFamily: theme.fonts.uiSemi,
+              fontSize: 14,
+            }}
           >
             {formattedDate}
           </Text>
-          <Icon name="chevron-down" size={15} color={colors.faint} />
+          <Icon name="chevron-down" size={15} color={theme.colors.inputIcon} />
         </Pressable>
       )}
 
@@ -150,7 +166,7 @@ export function NativeDatePickerField({
             style={{
               flex: 1,
               justifyContent: 'flex-end',
-              backgroundColor: colors.overlayStrong,
+              backgroundColor: theme.colors.overlayStrong,
             }}
           >
             <Pressable
@@ -160,8 +176,8 @@ export function NativeDatePickerField({
                 borderTopLeftRadius: 18,
                 borderTopRightRadius: 18,
                 borderWidth: 1,
-                borderColor: colors.borderStrong,
-                backgroundColor: colors.bg2,
+                borderColor: theme.colors.inputBorder,
+                backgroundColor: theme.colors.backgroundSecondary,
                 paddingHorizontal: 18,
                 paddingTop: 10,
                 paddingBottom: 20,
@@ -180,7 +196,7 @@ export function NativeDatePickerField({
                   onPress={() => setIosOpen(false)}
                   style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 6 }}
                 >
-                  <Text style={{ color: colors.textSecondary, fontFamily: fonts.uiSemi, fontSize: 14 }}>
+                  <Text style={{ color: theme.colors.textSecondary, fontFamily: theme.fonts.uiSemi, fontSize: 14 }}>
                     {t('actions.cancel')}
                   </Text>
                 </Pressable>
@@ -193,7 +209,7 @@ export function NativeDatePickerField({
                   }}
                   style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 6 }}
                 >
-                  <Text style={{ color: colors.accentHi, fontFamily: fonts.uiBold, fontSize: 14 }}>
+                  <Text style={{ color: theme.colors.primaryEmphasis, fontFamily: theme.fonts.uiBold, fontSize: 14 }}>
                     {t('actions.confirm')}
                   </Text>
                 </Pressable>
@@ -203,8 +219,8 @@ export function NativeDatePickerField({
                 mode="date"
                 display="spinner"
                 maximumDate={maximumDate}
-                themeVariant="dark"
-                textColor={colors.text}
+                themeVariant={theme.mode}
+                textColor={theme.colors.inputText}
                 onValueChange={(_event, selectedDate) => setDraftDate(startOfDay(selectedDate))}
               />
             </Pressable>

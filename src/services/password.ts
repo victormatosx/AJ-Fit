@@ -6,7 +6,6 @@ import {
 } from 'firebase/auth';
 import { hasPasswordProvider } from '../lib/authProviders';
 import { auth } from '../lib/firebase';
-import { isMultiFactorAuthRequired } from '../lib/mfaTotp';
 import {
   validatePasswordChange,
   type PasswordChangeInput,
@@ -26,7 +25,6 @@ function validationError(issue: PasswordChangeValidationIssue): Error & { code: 
 /** Reauthenticates the current password user and rejects any session change. */
 export async function reauthenticatePasswordUser(
   currentPassword: string,
-  options: { preserveMultiFactorError?: boolean } = {},
 ): Promise<User> {
   try {
     const user = auth.currentUser;
@@ -50,16 +48,6 @@ export async function reauthenticatePasswordUser(
     }
     return reauthenticatedUser;
   } catch (error) {
-    // A settings operation that acts on an already enrolled account must be
-    // able to resolve Firebase's second-factor reauthentication challenge.
-    // The resolver requires the original error/customData, not a normalized
-    // copy. Other password callers keep the existing friendly-error behavior.
-    // This is an expected step in that flow, not a failure, so it's not
-    // logged as an error (matching signInWithEmail's handling of the same
-    // Firebase challenge).
-    if (options.preserveMultiFactorError && isMultiFactorAuthRequired(error)) {
-      throw error;
-    }
     logAuthError('reauthenticate-password', error);
     throw toAuthError(error);
   }

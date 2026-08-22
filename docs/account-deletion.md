@@ -38,7 +38,7 @@ calls a step executor directly, and the Scheduler is not the normal path.
 
 Files: `src/screens/DeleteAccountScreen.tsx` (presentation only) →
 `src/hooks/useAccountDeletionFlow.ts` (all state/orchestration) →
-`src/services/accountDeletionReauth.ts` (password/Google/Apple/MFA reauth) →
+`src/services/accountDeletionReauth.ts` (password/Google/Apple reauth) →
 `src/services/accountDeletionProviderRevocation.ts` (Google-only prep) →
 `src/services/accountDeletionOrchestrator.ts` (the ONLY caller of the
 `requestAccountDeletion` callable) → `src/services/accountDeletionShutdown.ts`

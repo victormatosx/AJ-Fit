@@ -12,22 +12,16 @@ vi.mock('firebase/auth', () => ({
   signOut: vi.fn(),
   updateProfile: vi.fn(),
 }));
-
 vi.mock('../../lib/firebase', () => ({ auth: { currentUser: null } }));
-vi.mock('../../lib/secureAuthStorage', () => ({
-  clearSecureAuthSession: vi.fn(),
-}));
-
-vi.mock('../../lib/photoVaultKeyStorage', () => ({
-  deleteVaultKey: vi.fn(),
-}));
+vi.mock('../../lib/secureAuthStorage', () => ({ clearSecureAuthSession: vi.fn() }));
+vi.mock('../../lib/photoVaultKeyStorage', () => ({ deleteVaultKey: vi.fn() }));
 
 import { signInWithEmail } from '../auth';
 
-describe('email/password sign-in MFA boundary', () => {
+describe('email/password sign-in', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('returns the Firebase user unchanged when MFA is not required', async () => {
+  it('trims the email and returns the authenticated Firebase user', async () => {
     const user = { uid: 'user-1' };
     mocks.signInWithEmailAndPassword.mockResolvedValue({ user });
 
@@ -48,18 +42,6 @@ describe('email/password sign-in MFA boundary', () => {
       expect.anything(),
       'person@example.com',
       '123456',
-    );
-  });
-
-  it('preserves the original MultiFactorError for the resolver', async () => {
-    const original = {
-      code: 'auth/multi-factor-auth-required',
-      customData: { operationType: 'signIn', opaque: true },
-    };
-    mocks.signInWithEmailAndPassword.mockRejectedValue(original);
-
-    await expect(signInWithEmail('person@example.com', 'password')).rejects.toBe(
-      original,
     );
   });
 

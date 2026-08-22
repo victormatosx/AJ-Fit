@@ -4,7 +4,8 @@ import { useTranslation } from 'react-i18next';
 
 import { Icon } from '../ui/Icon';
 import { Display, MonoLabel } from '../ui/Display';
-import { colors, fonts, sizes, spacing } from '../../theme/tokens';
+import { sizes, spacing } from '../../theme/tokens';
+import { useTheme } from '../../theme';
 import type { ProgressPhotoPose } from '../../lib/photoVaultIdentity';
 
 /**
@@ -23,6 +24,7 @@ export function PhotoVaultFilterEmptyState({
   onAdd: () => void;
 }) {
   const { t } = useTranslation('home');
+  const { theme } = useTheme();
 
   const labels: Record<ProgressPhotoPose, string> = {
     front: t('progress.photos.poses.front'),
@@ -34,8 +36,8 @@ export function PhotoVaultFilterEmptyState({
   return (
     <View style={{ paddingHorizontal: sizes.screenGutter, paddingTop: spacing[8] }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing[2.5] }}>
-        <Icon name="camera" size={16} color={colors.accentHi} />
-        <MonoLabel color={colors.faint}>{labels[pose].toUpperCase()}</MonoLabel>
+        <Icon name="camera" size={16} color={theme.colors.primaryEmphasis} />
+        <MonoLabel color={theme.colors.textFaint}>{labels[pose].toUpperCase()}</MonoLabel>
       </View>
 
       <View accessibilityRole="header" style={{ marginTop: spacing[3] }}>
@@ -46,8 +48,8 @@ export function PhotoVaultFilterEmptyState({
 
       <Text
         style={{
-          color: colors.mute,
-          fontFamily: fonts.ui,
+          color: theme.colors.textMuted,
+          fontFamily: theme.fonts.ui,
           fontSize: 14,
           lineHeight: 21,
           marginTop: spacing[2.5],
@@ -69,12 +71,12 @@ export function PhotoVaultFilterEmptyState({
           paddingVertical: spacing[3.5],
           borderRadius: 12,
           borderWidth: 1,
-          borderColor: colors.border,
-          backgroundColor: colors.surface,
+          borderColor: theme.colors.border,
+          backgroundColor: theme.colors.surface,
         }}
       >
-        <Icon name="plus" size={14} color={colors.accentHi} />
-        <MonoLabel color={colors.text}>
+        <Icon name="plus" size={14} color={theme.colors.primaryEmphasis} />
+        <MonoLabel color={theme.colors.textPrimary}>
           {t('progress.photos.filterEmpty.cta', { pose: label }).toUpperCase()}
         </MonoLabel>
       </Pressable>

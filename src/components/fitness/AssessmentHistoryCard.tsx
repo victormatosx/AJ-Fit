@@ -4,7 +4,8 @@ import { useTranslation } from 'react-i18next';
 import { Card } from '../ui/Card';
 import { Icon } from '../ui/Icon';
 import { MonoLabel } from '../ui/Display';
-import { colors, fonts, radii, spacing } from '../../theme/tokens';
+import { useTheme } from '../../theme';
+import { radii, spacing } from '../../theme/tokens';
 import { useUnits } from '../../state/UnitsContext';
 import {
   formatWeightFromKg,
@@ -34,6 +35,7 @@ export type AssessmentHistoryRow = {
 };
 
 function MiniStat({ l, v, u }: { l: string; v: string; u: string }) {
+  const { theme } = useTheme();
   return (
     <View
       style={{
@@ -41,31 +43,31 @@ function MiniStat({ l, v, u }: { l: string; v: string; u: string }) {
         alignItems: 'center',
         paddingVertical: 8,
         borderRadius: 8,
-        backgroundColor: 'rgba(255,255,255,0.03)',
+        backgroundColor: theme.colors.surface,
       }}
     >
       <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
         <Text
           style={{
-            fontFamily: fonts.display,
+            fontFamily: theme.fonts.display,
             fontSize: 15,
-            color: '#fff',
+            color: theme.colors.textPrimary,
             transform: [{ skewX: '-8deg' }],
           }}
         >
           {v}
         </Text>
         {u ? (
-          <Text style={{ fontFamily: fonts.mono, fontSize: 10, color: colors.faint, marginLeft: 1 }}>
+          <Text style={{ fontFamily: theme.fonts.mono, fontSize: 10, color: theme.colors.textFaint, marginLeft: 1 }}>
             {u}
           </Text>
         ) : null}
       </View>
       <Text
         style={{
-          fontFamily: fonts.mono,
+          fontFamily: theme.fonts.mono,
           fontSize: 8,
-          color: colors.faint,
+          color: theme.colors.textFaint,
           letterSpacing: 0.5,
           marginTop: 3,
         }}
@@ -77,9 +79,10 @@ function MiniStat({ l, v, u }: { l: string; v: string; u: string }) {
 }
 
 function DetailSection({ label, children }: { label: string; children: React.ReactNode }) {
+  const { theme } = useTheme();
   return (
     <View style={{ marginTop: spacing[5] }}>
-      <MonoLabel color={colors.accentHi}>{label}</MonoLabel>
+      <MonoLabel color={theme.colors.primaryEmphasis}>{label}</MonoLabel>
       <View style={{ marginTop: spacing[2.5] }}>{children}</View>
     </View>
   );
@@ -94,6 +97,7 @@ function DetailValue({
   value: string;
   unit?: string;
 }) {
+  const { theme } = useTheme();
   return (
     <View
       style={{
@@ -102,16 +106,16 @@ function DetailValue({
         paddingHorizontal: spacing[3],
         paddingVertical: spacing[2.5],
         borderRadius: radii.md,
-        backgroundColor: colors.surfaceRaised,
+        backgroundColor: theme.colors.surfaceRaised,
         borderWidth: 1,
-        borderColor: colors.border,
+        borderColor: theme.colors.border,
       }}
     >
       <MonoLabel size={8}>{label}</MonoLabel>
       <View style={{ flexDirection: 'row', alignItems: 'baseline', marginTop: spacing[1.5] }}>
-        <Text style={{ fontFamily: fonts.uiBold, fontSize: 14, color: colors.text }}>{value}</Text>
+        <Text style={{ fontFamily: theme.fonts.uiBold, fontSize: 14, color: theme.colors.textPrimary }}>{value}</Text>
         {unit ? (
-          <Text style={{ marginLeft: 3, fontFamily: fonts.mono, fontSize: 9, color: colors.faint }}>
+          <Text style={{ marginLeft: 3, fontFamily: theme.fonts.mono, fontSize: 9, color: theme.colors.textFaint }}>
             {unit}
           </Text>
         ) : null}
@@ -146,6 +150,7 @@ function HistoryRow({
   expanded: boolean;
   onToggle: () => void;
 }) {
+  const { theme } = useTheme();
   const { t } = useTranslation('assessment');
   const { resolvedUnits } = useUnits();
   const massUnit = weightUnit(resolvedUnits);
@@ -183,10 +188,12 @@ function HistoryRow({
           width: 14,
           height: 14,
           borderRadius: 7,
-          backgroundColor: highlight ? colors.accent : 'rgba(255,255,255,0.12)',
+          backgroundColor: highlight ? theme.colors.primary : theme.colors.borderStrong,
           borderWidth: 2,
-          borderColor: highlight ? colors.accentHi : 'rgba(255,255,255,0.2)',
-          shadowColor: highlight ? colors.accent : 'transparent',
+          borderColor: highlight
+            ? theme.colors.primaryEmphasis
+            : theme.colors.equipmentCheckboxBorder,
+          shadowColor: highlight ? theme.colors.primary : 'transparent',
           shadowOpacity: highlight ? 0.7 : 0,
           shadowRadius: 8,
           shadowOffset: { width: 0, height: 0 },
@@ -196,8 +203,8 @@ function HistoryRow({
       <Card
         style={{
           padding: highlight ? 17 : 15,
-          borderColor: highlight ? 'rgba(11,112,249,0.42)' : colors.cardBorder,
-          shadowColor: highlight ? colors.accent : 'transparent',
+          borderColor: highlight ? theme.colors.primaryBorderStrong : theme.colors.cardBorder,
+          shadowColor: highlight ? theme.colors.primary : 'transparent',
           shadowOpacity: highlight ? 0.16 : 0,
           shadowRadius: highlight ? 14 : 0,
           shadowOffset: { width: 0, height: 6 },
@@ -208,14 +215,14 @@ function HistoryRow({
           style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}
         >
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <MonoLabel color={highlight ? colors.accentHi : colors.faint}>{entry.date}</MonoLabel>
+            <MonoLabel color={highlight ? theme.colors.primaryEmphasis : theme.colors.textFaint}>{entry.date}</MonoLabel>
             {entry.source === 'imported' && (
               <View
                 style={{
                   paddingHorizontal: 6,
                   paddingVertical: 2,
                   borderRadius: 5,
-                  backgroundColor: 'rgba(255,255,255,0.07)',
+                  backgroundColor: theme.colors.badgeBackground,
                 }}
               >
                 <MonoLabel size={8}>
@@ -235,10 +242,10 @@ function HistoryRow({
           >
             <Text
               style={{
-                fontFamily: fonts.mono,
+                fontFamily: theme.fonts.mono,
                 fontSize: 10,
                 letterSpacing: 1,
-                color: 'rgba(255,255,255,0.6)',
+                color: theme.colors.textSubtle,
               }}
             >
               {t(expanded ? 'history.labels.hideDetails' : 'history.labels.viewDetails').toUpperCase()}
@@ -255,7 +262,7 @@ function HistoryRow({
                 ],
               }}
             >
-              <Icon name="chevron-right" size={12} color="rgba(255,255,255,0.6)" />
+              <Icon name="chevron-right" size={12} color={theme.colors.textSubtle} />
             </Animated.View>
           </Pressable>
         </View>
@@ -282,7 +289,7 @@ function HistoryRow({
               marginTop: spacing[4],
               paddingTop: spacing[4],
               borderTopWidth: 1,
-              borderTopColor: colors.hair,
+              borderTopColor: theme.colors.border,
             }}
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing[2.5] }}>
@@ -291,18 +298,18 @@ function HistoryRow({
                   width: 34,
                   height: 34,
                   borderRadius: radii.control,
-                  backgroundColor: colors.accentSoft,
+                  backgroundColor: theme.colors.primarySoft,
                   alignItems: 'center',
                   justifyContent: 'center',
                 }}
               >
-                <Icon name={isImported ? 'download' : 'ruler'} size={15} color={colors.accentHi} />
+                <Icon name={isImported ? 'download' : 'ruler'} size={15} color={theme.colors.primaryEmphasis} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={{ fontFamily: fonts.uiBold, fontSize: 14.5, color: colors.text }}>
+                <Text style={{ fontFamily: theme.fonts.uiBold, fontSize: 14.5, color: theme.colors.textPrimary }}>
                   {t('history.details.title')}
                 </Text>
-                <Text style={{ marginTop: 2, fontFamily: fonts.ui, fontSize: 11.5, color: colors.mute }}>
+                <Text style={{ marginTop: 2, fontFamily: theme.fonts.ui, fontSize: 11.5, color: theme.colors.textMuted }}>
                   {isImported
                     ? t('history.labels.importedBadge')
                     : t('history.labels.guidedBadge')}
@@ -336,10 +343,10 @@ function HistoryRow({
                 <Text
                   style={{
                     marginTop: spacing[2.5],
-                    fontFamily: fonts.ui,
+                    fontFamily: theme.fonts.ui,
                     fontSize: 11.5,
                     lineHeight: 17,
-                    color: colors.mute,
+                    color: theme.colors.textMuted,
                   }}
                 >
                   {t('history.details.compositionUnavailable')}
@@ -422,12 +429,12 @@ function HistoryRow({
                   style={{
                     padding: spacing[3],
                     borderRadius: radii.md,
-                    backgroundColor: colors.surfaceRaised,
+                    backgroundColor: theme.colors.surfaceRaised,
                     borderWidth: 1,
-                    borderColor: colors.border,
+                    borderColor: theme.colors.border,
                   }}
                 >
-                  <Text style={{ fontFamily: fonts.ui, fontSize: 12.5, lineHeight: 18, color: colors.textSecondary }}>
+                  <Text style={{ fontFamily: theme.fonts.ui, fontSize: 12.5, lineHeight: 18, color: theme.colors.textSecondary }}>
                     {entry.notes}
                   </Text>
                 </View>
@@ -449,6 +456,7 @@ export function AssessmentHistoryCard({
   expandedId: string | null;
   onToggle: (id: string) => void;
 }) {
+  const { theme } = useTheme();
   return (
     <View style={{ position: 'relative', paddingLeft: 4 }}>
       <View
@@ -458,7 +466,7 @@ export function AssessmentHistoryCard({
           top: 6,
           bottom: 6,
           width: 1.5,
-          backgroundColor: 'rgba(11,112,249,0.25)',
+          backgroundColor: theme.colors.timeline,
         }}
       />
       {entries.map((e, i) => (

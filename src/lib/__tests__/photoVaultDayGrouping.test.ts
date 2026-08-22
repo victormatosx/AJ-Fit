@@ -10,6 +10,7 @@ import {
   POSE_SLOTS,
   PROGRESS_PHOTO_FILTERS,
   filterProgressDays,
+  flattenProgressDayPhotos,
   groupProgressPhotosByDay,
 } from '../photoVaultDayGrouping';
 import type { GalleryPhoto } from '../photoVaultGallery';
@@ -503,5 +504,63 @@ describe('optimistic uploads under a filter', () => {
     expect(filterProgressDays(days, 'front')[0]?.front?.uploadStatus).toBe('uploading');
     expect(filterProgressDays(days, 'side')).toEqual([]);
     expect(filterProgressDays(days, 'back')).toEqual([]);
+  });
+});
+
+describe('flattenProgressDayPhotos', () => {
+  const front = photo({ photoId: 'f1', takenAt: new Date(2026, 7, 15, 9), pose: 'front', dateKey: '2026-08-15' });
+  const side = photo({ photoId: 's1', takenAt: new Date(2026, 7, 15, 9), pose: 'side', dateKey: '2026-08-15' });
+  const back = photo({ photoId: 'b1', takenAt: new Date(2026, 7, 15, 9), pose: 'back', dateKey: '2026-08-15' });
+  const olderFront = photo({ photoId: 'f0', takenAt: new Date(2026, 7, 10, 9), pose: 'front', dateKey: '2026-08-10' });
+  const legacy = photo({ photoId: 'legacy', takenAt: new Date(2026, 7, 15, 20) });
+
+  it('follows the slot order inside a day, not the order photos arrived', () => {
+    const days = groupProgressPhotosByDay([back, front, side]);
+
+    expect(flattenProgressDayPhotos(days).map((p) => p.photoId)).toEqual(['f1', 's1', 'b1']);
+  });
+
+  it('keeps the day order the grid renders, across days', () => {
+    const days = groupProgressPhotosByDay([olderFront, front, side]);
+
+    // Whatever order the grouper puts the days in, the flattened sequence
+    // must agree with it exactly — the viewer pages through this.
+    expect(flattenProgressDayPhotos(days).map((p) => p.photoId)).toEqual(
+      days.flatMap((day) =>
+        [...POSE_SLOTS.map((pose) => day[pose]), ...day.unclassified]
+          .filter((p): p is GalleryPhoto => p !== undefined)
+          .map((p) => p.photoId),
+      ),
+    );
+  });
+
+  it('places a day unclassified photos after its posed ones', () => {
+    const days = groupProgressPhotosByDay([legacy, front]);
+    const ids = flattenProgressDayPhotos(days).map((p) => p.photoId);
+
+    expect(ids).toContain('legacy');
+    expect(ids.indexOf('f1')).toBeLessThan(ids.indexOf('legacy'));
+  });
+
+  it('narrows to the active filter, so the swipe matches what is on screen', () => {
+    const days = groupProgressPhotosByDay([olderFront, front, side, back, legacy]);
+
+    expect(flattenProgressDayPhotos(filterProgressDays(days, 'side')).map((p) => p.photoId)).toEqual(
+      ['s1'],
+    );
+    // A pose filter hides legacy photos, so they must leave the sequence too.
+    expect(
+      flattenProgressDayPhotos(filterProgressDays(days, 'front')).map((p) => p.photoId).sort(),
+    ).toEqual(['f0', 'f1']);
+  });
+
+  it('spans every photo under `all`', () => {
+    const days = groupProgressPhotosByDay([olderFront, front, side, back, legacy]);
+
+    expect(flattenProgressDayPhotos(filterProgressDays(days, 'all'))).toHaveLength(5);
+  });
+
+  it('is empty for an empty gallery', () => {
+    expect(flattenProgressDayPhotos([])).toEqual([]);
   });
 });

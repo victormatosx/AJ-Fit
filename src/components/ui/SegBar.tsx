@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, StyleProp, ViewStyle } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { colors } from '../../theme/tokens';
+import { useTheme } from '../../theme';
 
 type Props = {
   value: number;
@@ -10,6 +10,7 @@ type Props = {
 };
 
 export function SegBar({ value, segs = 14, style }: Props) {
+  const { theme } = useTheme();
   const on = Math.round(value * segs);
   return (
     <View style={[{ flexDirection: 'row', gap: 3 }, style]}>
@@ -24,9 +25,9 @@ export function SegBar({ value, segs = 14, style }: Props) {
                 flex: 1,
                 height: 7,
                 borderRadius: 1,
-                backgroundColor: '#fff',
+                backgroundColor: theme.colors.progressHighlight,
                 transform: [{ skewX: '-22deg' }],
-                shadowColor: '#fff',
+                shadowColor: theme.colors.progressHighlight,
                 shadowOpacity: 0.8,
                 shadowRadius: 6,
               }}
@@ -37,7 +38,7 @@ export function SegBar({ value, segs = 14, style }: Props) {
           return (
             <LinearGradient
               key={i}
-              colors={[colors.accent, colors.accentHi]}
+              colors={theme.gradients.progress}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={{
@@ -45,7 +46,7 @@ export function SegBar({ value, segs = 14, style }: Props) {
                 height: 7,
                 borderRadius: 1,
                 transform: [{ skewX: '-22deg' }],
-                shadowColor: colors.accent,
+                shadowColor: theme.colors.primary,
                 shadowOpacity: 0.7,
                 shadowRadius: 4,
                 shadowOffset: { width: 0, height: 0 },
@@ -60,7 +61,7 @@ export function SegBar({ value, segs = 14, style }: Props) {
               flex: 1,
               height: 7,
               borderRadius: 1,
-              backgroundColor: 'rgba(255,255,255,0.09)',
+              backgroundColor: theme.colors.progressTrack,
               transform: [{ skewX: '-22deg' }],
             }}
           />

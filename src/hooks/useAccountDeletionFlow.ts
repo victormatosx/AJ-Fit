@@ -4,13 +4,10 @@ import {
   getReauthenticationProviders,
   type ReauthenticationProvider,
 } from '../lib/authProviders';
-import { validateTotpCode } from '../lib/mfaTotp';
 import {
   AccountDeletionReauthError,
-  finishAccountDeletionReauthentication,
   needsAccountDeletionReauthentication,
   startAccountDeletionReauthentication,
-  type AccountDeletionMfaChallenge,
   type AccountDeletionReauthErrorCode,
 } from '../services/accountDeletionReauth';
 import { requestAccountDeletionWithProviderPreparation } from '../services/accountDeletionOrchestrator';
@@ -21,12 +18,12 @@ import { useAuth } from '../state/AuthContext';
 /**
  * Owns the ENTIRE "Excluir Conta" flow's state — Fase 12. Screens
  * (`DeleteAccountScreen.tsx`) are presentation only, mirroring the
- * established `useChangePassword`/`useTotpMfa` pattern: this hook is the
+ * established hook/screen split: this hook is the
  * only place that talks to `accountDeletionReauth.ts`/
  * `accountDeletionOrchestrator.ts`/`accountDeletionShutdown.ts`.
  *
  * Deliberately reuses, never reimplements:
- *   - `accountDeletionReauth.ts` (Fase 2) for password/Google/Apple/MFA
+ *   - `accountDeletionReauth.ts` (Fase 2) for password/Google/Apple
  *     reauthentication.
  *   - `accountDeletionOrchestrator.ts` (Fase 3/5 correction) — the ONLY
  *     function that may call `requestAccountDeletion`. This hook never
@@ -64,14 +61,12 @@ export function useAccountDeletionFlow() {
   const [issue, setIssue] = useState<AccountDeletionFlowIssue | null>(null);
   const [reauthProvider, setReauthProvider] = useState<ReauthenticationProvider | null>(null);
   const [reauthPassword, setReauthPasswordState] = useState('');
-  const [mfaChallenge, setMfaChallenge] = useState<AccountDeletionMfaChallenge | null>(null);
-  const [mfaCode, setMfaCodeState] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [accepted, setAccepted] = useState(false);
   const operationLock = useRef(false);
   /**
    * Fase 16: the Apple `authorizationCode` captured (once) during
-   * `submitReauth('apple')`/`submitMfaCode`, held ONLY in memory — never
+   * `submitReauth('apple')`, held ONLY in memory — never
    * AsyncStorage/SecureStore/Firestore/logged. Read-and-cleared by
    * `confirmDeletion` (single-use, never resent on retry) and wiped by
    * `reset()`/a non-Apple reauth completing (see their own call sites).
@@ -82,8 +77,6 @@ export function useAccountDeletionFlow() {
 
   const resetSensitiveState = useCallback(() => {
     setReauthPasswordState('');
-    setMfaCodeState('');
-    setMfaChallenge(null);
     setReauthProvider(null);
   }, []);
 
@@ -104,11 +97,6 @@ export function useAccountDeletionFlow() {
 
   const setReauthPassword = useCallback((value: string) => {
     setReauthPasswordState(value);
-    setIssue(null);
-  }, []);
-
-  const setMfaCode = useCallback((value: string) => {
-    setMfaCodeState(value.replace(/\D/g, '').slice(0, 6));
     setIssue(null);
   }, []);
 
@@ -140,16 +128,11 @@ export function useAccountDeletionFlow() {
           provider === 'password' ? ({ provider, password: reauthPassword } as const) : ({ provider } as const);
         const outcome = await startAccountDeletionReauthentication(request);
         setReauthPasswordState('');
-        if (outcome.status === 'challenge') {
-          setMfaChallenge(outcome.challenge);
-          setMfaCodeState('');
-        } else {
-          // Fase 16: `undefined` for password/Google — explicitly clears any
-          // leftover material from an earlier, abandoned Apple attempt.
-          appleAuthorizationCodeRef.current = outcome.appleAuthorizationCode ?? null;
-          resetSensitiveState();
-          setStepState('confirm');
-        }
+        // `undefined` for password/Google explicitly clears any leftover
+        // material from an earlier, abandoned Apple attempt.
+        appleAuthorizationCodeRef.current = outcome.appleAuthorizationCode ?? null;
+        resetSensitiveState();
+        setStepState('confirm');
       } catch (error) {
         setReauthPasswordState('');
         setIssue(issueFromReauthError(error));
@@ -160,44 +143,6 @@ export function useAccountDeletionFlow() {
     },
     [reauthPassword, resetSensitiveState],
   );
-
-  const submitMfaCode = useCallback(async () => {
-    if (operationLock.current || !mfaChallenge) return;
-    if (validateTotpCode(mfaCode)) {
-      setIssue('MFA_INVALID_CODE');
-      return;
-    }
-    operationLock.current = true;
-    setIssue(null);
-    try {
-      // A TOTP resolver may list more than one enrolled factor; the flow
-      // only ever offers the first hint — same simplification already
-      // accepted for other single-factor UI in this app (mirrors the "no
-      // factor picker" scope of `useTotpMfa`'s own disable flow when only
-      // one factor is relevant to the operation).
-      const hintUid = mfaChallenge.hints[0]?.uid;
-      if (!hintUid) {
-        setIssue('MFA_INVALID_CODE');
-        return;
-      }
-      const outcome = await finishAccountDeletionReauthentication(mfaChallenge, hintUid, mfaCode);
-      appleAuthorizationCodeRef.current =
-        outcome.status === 'completed' ? outcome.appleAuthorizationCode ?? null : null;
-      resetSensitiveState();
-      setStepState('confirm');
-    } catch (error) {
-      setMfaCodeState('');
-      setIssue(issueFromReauthError(error));
-    } finally {
-      operationLock.current = false;
-    }
-  }, [mfaChallenge, mfaCode, resetSensitiveState]);
-
-  const cancelMfa = useCallback(() => {
-    if (operationLock.current) return;
-    resetSensitiveState();
-    setIssue(null);
-  }, [resetSensitiveState]);
 
   /** "Excluir minha conta" — the final, destructive confirmation. */
   const confirmDeletion = useCallback(async () => {
@@ -286,21 +231,16 @@ export function useAccountDeletionFlow() {
 
   return {
     accepted,
-    cancelMfa,
     confirmDeletion,
     continueToNextStep,
     issue,
-    mfaChallenge,
-    mfaCode,
     reauthenticationProviders,
     reauthPassword,
     reauthProvider,
     reset,
     setReauthPassword,
-    setMfaCode,
     setStep,
     step,
-    submitMfaCode,
     submitReauth,
     submitting,
   };

@@ -2,7 +2,8 @@ import React from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
-import { colors, fonts, sizes, spacing } from '../../theme/tokens';
+import { sizes, spacing } from '../../theme/tokens';
+import { useTheme } from '../../theme';
 import {
   PROGRESS_PHOTO_FILTERS,
   type ProgressPhotoFilter,
@@ -22,6 +23,7 @@ interface Props {
 
 export function PhotoVaultFilterBar({ value, onChange }: Props) {
   const { t } = useTranslation('home');
+  const { theme } = useTheme();
 
   // Static lookup rather than a composed key: the translation keys are typed.
   const labels: Record<ProgressPhotoFilter, string> = {
@@ -59,18 +61,18 @@ export function PhotoVaultFilterBar({ value, onChange }: Props) {
               alignItems: 'center',
               borderRadius: 8,
               borderWidth: 1,
-              borderColor: selected ? colors.accent : colors.border,
-              backgroundColor: selected ? colors.accentSoft : 'transparent',
+              borderColor: selected ? theme.colors.primary : theme.colors.border,
+              backgroundColor: selected ? theme.colors.primarySoft : 'transparent',
             }}
           >
             <Text
               numberOfLines={1}
               style={{
-                fontFamily: fonts.mono,
+                fontFamily: theme.fonts.mono,
                 fontSize: 9,
                 letterSpacing: 1.5,
                 textTransform: 'uppercase',
-                color: selected ? colors.text : colors.faint,
+                color: selected ? theme.colors.textPrimary : theme.colors.textFaint,
               }}
             >
               {labels[filter]}

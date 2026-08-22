@@ -9,7 +9,6 @@ import {
 } from 'firebase/auth';
 
 import { auth } from '../lib/firebase';
-import { isMultiFactorAuthRequired } from '../lib/mfaTotp';
 import { logAuthError, toAuthError } from './auth';
 import { getGoogleCredential, isGoogleSigninAvailable } from './providers/google';
 import { getAppleCredential, isAppleAuthAvailable } from './providers/apple';
@@ -68,7 +67,6 @@ export class AccountLinkingRequiredError extends Error {
 
 // The credential that failed with account-exists — held until linking completes.
 let pendingCredential: AuthCredential | null = null;
-let pendingMfaDisplayName: string | null = null;
 
 // Google, Apple and account-linking all mutate the same Firebase Auth identity
 // and share process-memory linking state. One common flight prevents two native
@@ -113,20 +111,12 @@ async function performSignInWithProvider(provider: SocialProvider): Promise<User
   } catch (err) {
     if (errorCode(err) === 'auth/account-exists-with-different-credential') {
       pendingCredential = result.credential;
-      pendingMfaDisplayName = null;
       const email =
         (typeof err === 'object' && err !== null && 'customData' in err
           ? (err as { customData?: { email?: string } }).customData?.email
           : '') ?? '';
       const methods = email ? await fetchSignInMethodsForEmail(auth, email) : [];
       throw new AccountLinkingRequiredError(email, methods, provider);
-    }
-    if (isMultiFactorAuthRequired(err)) {
-      // Preserve the original Firebase error so getMultiFactorResolver can
-      // continue this exact first-factor session without reopening Google or
-      // Apple. Only the non-sensitive display name remains for post-MFA setup.
-      pendingMfaDisplayName = result.displayName?.trim() || null;
-      throw err;
     }
     logAuthError(`${provider}:firebase-sign-in`, err);
     throw toAuthError(err);
@@ -157,7 +147,6 @@ async function performLinkingWithPassword(
     }
     return user;
   } catch (err) {
-    if (isMultiFactorAuthRequired(err)) throw err;
     logAuthError('link:password', err);
     throw toAuthError(err);
   }
@@ -194,44 +183,14 @@ async function performLinkingWithProvider(
     }
     return user;
   } catch (err) {
-    if (isMultiFactorAuthRequired(err)) {
-      pendingMfaDisplayName = result.displayName?.trim() || null;
-      throw err;
-    }
     logAuthError(`link:${provider}:firebase-sign-in`, err);
     throw toAuthError(err);
   }
 }
 
-/**
- * Finishes the non-authentication work that follows a social first factor.
- * `resolveSignIn` itself remains authoritative for authentication; this only
- * restores the existing display-name/linking behavior after MFA completes.
- */
-export async function finalizeSocialSignInAfterMfa(
-  user: User,
-  linkPending: boolean,
-): Promise<User> {
-  try {
-    await applyDisplayName(user, pendingMfaDisplayName);
-    pendingMfaDisplayName = null;
-    if (linkPending && pendingCredential) {
-      const { user: linkedUser } = await linkWithCredential(user, pendingCredential);
-      pendingCredential = null;
-      return linkedUser;
-    }
-    return user;
-  } catch (err) {
-    // The resolver/session/credentials are intentionally never logged.
-    logAuthError('mfa:finalize-social', err);
-    throw toAuthError(err);
-  }
-}
-
-/** Clears all process-memory state when linking or MFA is abandoned. */
+/** Clears process-memory linking state when the flow is abandoned. */
 export function clearPendingSocialAuthState(): void {
   pendingCredential = null;
-  pendingMfaDisplayName = null;
 }
 
 /** Maps a methods list to the social provider key (for OAuth→OAuth linking). */

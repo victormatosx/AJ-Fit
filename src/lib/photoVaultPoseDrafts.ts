@@ -102,3 +102,28 @@ export function partitionSavablePoses<T extends PoseDraftPhoto>(
   }
   return { savable, blocked };
 }
+
+/**
+ * Whether the sheet should tell the user this pose's day is already taken.
+ *
+ * Not the same question as `partitionSavablePoses`. A pose that is mid-upload
+ * occupies its own slot: the gallery inserts an optimistic card the instant
+ * the save starts, and `isSlotTaken` counts it — deliberately, so a second
+ * surface cannot file a duplicate into the same (day, pose) while the first
+ * is still in flight.
+ *
+ * Surfacing THAT to the user reports their own photo as a conflict with
+ * itself, and offers to "replace" a photo that does not exist yet — the
+ * optimistic card has no metadata, so accepting the offer can only fail with
+ * `vaultReplaceSlotMissing`. A pose being saved right now is therefore never
+ * warned about; a slot genuinely held by another photo still is.
+ */
+export function shouldWarnSlotTaken(params: {
+  hasDraft: boolean;
+  uploading: boolean;
+  pose: ProgressPhotoPose;
+  blocked: ProgressPhotoPose[];
+}): boolean {
+  const { hasDraft, uploading, pose, blocked } = params;
+  return hasDraft && !uploading && blocked.includes(pose);
+}

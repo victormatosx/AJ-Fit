@@ -357,3 +357,14 @@ Avaliar continuamente:
 * aderência à proposta de evolução
 
 Toda proposta futura deve respeitar as decisões deste documento.
+
+---
+
+# 25. Autenticação sem MFA
+
+O AJ Fit não oferece MFA, TOTP, autenticação em dois fatores ou códigos de
+recuperação. A autenticação suportada é e-mail/senha, Google e Apple, com
+verificação de e-mail, recuperação/alteração de senha, account linking e
+persistência segura de sessão. Uma eventual reintrodução de MFA exige nova
+decisão de produto e nova arquitetura; não deve reutilizar resíduos da POC
+removida em agosto de 2026.

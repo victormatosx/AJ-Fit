@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, StyleProp, ViewStyle } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { colors } from '../../theme/tokens';
+import { useTheme } from '../../theme';
 
 export function Card({
   children,
@@ -10,16 +10,18 @@ export function Card({
   children: React.ReactNode;
   style?: StyleProp<ViewStyle>;
 }) {
+  const { theme } = useTheme();
+
   return (
     <LinearGradient
-      colors={['rgba(255,255,255,0.05)', 'rgba(255,255,255,0.015)']}
+      colors={theme.gradients.glass}
       start={{ x: 0, y: 0 }}
       end={{ x: 0, y: 1 }}
       style={[
         {
-          borderRadius: 16,
+          borderRadius: theme.radii.xl,
           borderWidth: 1,
-          borderColor: colors.cardBorder,
+          borderColor: theme.colors.cardBorder,
         },
         style,
       ]}
@@ -29,7 +31,10 @@ export function Card({
   );
 }
 
-export function HudCorners({ color = 'rgba(77,163,255,0.65)' }: { color?: string }) {
+export function HudCorners({ color }: { color?: string }) {
+  const { theme } = useTheme();
+  const resolvedColor = color ?? theme.colors.hudCorner;
+
   return (
     <>
       <View
@@ -42,7 +47,7 @@ export function HudCorners({ color = 'rgba(77,163,255,0.65)' }: { color?: string
           height: 14,
           borderTopWidth: 1.5,
           borderLeftWidth: 1.5,
-          borderColor: color,
+          borderColor: resolvedColor,
         }}
       />
       <View
@@ -55,7 +60,7 @@ export function HudCorners({ color = 'rgba(77,163,255,0.65)' }: { color?: string
           height: 14,
           borderBottomWidth: 1.5,
           borderRightWidth: 1.5,
-          borderColor: color,
+          borderColor: resolvedColor,
         }}
       />
     </>

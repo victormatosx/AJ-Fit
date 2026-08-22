@@ -8,7 +8,7 @@ import { MonoLabel } from '../components/ui/Display';
 import { Icon } from '../components/ui/Icon';
 import { SettingsSection } from '../components/ui/SettingsSection';
 import { useAuth } from '../state/AuthContext';
-import { colors, fonts } from '../theme/tokens';
+import { THEME_MODES, useTheme, type ThemeMode } from '../theme';
 import { SUPPORTED_LANGUAGES, type SupportedLanguage } from '../types/language';
 import { normalizeLanguage } from '../i18n/normalizeLanguage';
 import { changeLocalLanguage } from '../i18n/changeLocalLanguage';
@@ -45,8 +45,10 @@ export function SettingsScreen({
   onSendSuggestion?: () => void;
   onOpenDeleteAccount?: () => void;
 }) {
-  const { user, profile } = useAuth();
+  const { theme, mode: currentTheme, setTheme } = useTheme();
+  const { user } = useAuth();
   const { t, i18n } = useTranslation(['common', 'settings']);
+  const [themePickerOpen, setThemePickerOpen] = useState(false);
   const [langPickerOpen, setLangPickerOpen] = useState(false);
   const [langError, setLangError] = useState<string | null>(null);
   const [savingLang, setSavingLang] = useState<SupportedLanguage | null>(null);
@@ -84,10 +86,13 @@ export function SettingsScreen({
     [t],
   );
 
-  const themeLabel =
-    profile?.preferences.theme === 'dark'
-      ? t('settings:values.darkTheme')
-      : profile?.preferences.theme ?? '—';
+  const themeOptions = useMemo(
+    () =>
+      t('settings:theme.options', { returnObjects: true }) as Record<ThemeMode, string>,
+    [t],
+  );
+
+  const themeLabel = themeOptions[currentTheme];
   const unitsLabel = t(getUnitsSummaryKey(currentUnits, resolvedUnits));
   const appVersion = Constants.expoConfig?.version;
   const appVersionLabel = appVersion ? `v${appVersion}` : '—';
@@ -136,6 +141,11 @@ export function SettingsScreen({
     } finally {
       setSavingLang(null);
     }
+  };
+
+  const handleSelectTheme = (next: ThemeMode) => {
+    if (next !== currentTheme) void setTheme(next);
+    setThemePickerOpen(false);
   };
 
   const handleSelectUnits = async (next: UnitsPreference) => {
@@ -198,14 +208,14 @@ export function SettingsScreen({
               width: 38,
               height: 38,
               borderRadius: 10,
-              backgroundColor: 'rgba(255,255,255,0.05)',
+              backgroundColor: theme.colors.controlBackground,
               borderWidth: 1,
-              borderColor: 'rgba(255,255,255,0.09)',
+              borderColor: theme.colors.controlBorder,
               alignItems: 'center',
               justifyContent: 'center',
             }}
           >
-            <Icon name="arrow-left" size={17} color="#fff" />
+            <Icon name="arrow-left" size={17} color={theme.colors.textPrimary} />
           </Pressable>
           <View style={{ flex: 1, alignItems: 'center' }}>
             <MonoLabel>{t('settings:screenTitle').toUpperCase()}</MonoLabel>
@@ -236,7 +246,12 @@ export function SettingsScreen({
           <SettingsSection
             title={t('settings:sections.preferences').toUpperCase()}
             items={[
-              { icon: 'moon', label: t('settings:items.theme'), value: themeLabel, onPress: () => {} },
+              {
+                icon: 'moon',
+                label: t('settings:theme.title'),
+                value: themeLabel,
+                onPress: () => setThemePickerOpen(true),
+              },
               {
                 icon: 'globe',
                 label: t('settings:language.title'),
@@ -293,6 +308,15 @@ export function SettingsScreen({
         </ScrollView>
       </SafeAreaView>
 
+      <ThemePickerSheet
+        visible={themePickerOpen}
+        current={currentTheme}
+        options={themeOptions}
+        onSelect={handleSelectTheme}
+        onDismiss={() => setThemePickerOpen(false)}
+        cancelLabel={t('common:actions.cancel')}
+        title={t('settings:theme.chooseTitle')}
+      />
       <LanguagePickerSheet
         visible={langPickerOpen}
         current={currentLang}
@@ -319,6 +343,145 @@ export function SettingsScreen({
   );
 }
 
+function ThemePickerSheet({
+  visible,
+  current,
+  options,
+  onSelect,
+  onDismiss,
+  cancelLabel,
+  title,
+}: {
+  visible: boolean;
+  current: ThemeMode;
+  options: Record<ThemeMode, string>;
+  onSelect: (next: ThemeMode) => void;
+  onDismiss: () => void;
+  cancelLabel: string;
+  title: string;
+}) {
+  const { theme } = useTheme();
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onDismiss}
+    >
+      <Pressable
+        onPress={onDismiss}
+        style={{ flex: 1, backgroundColor: theme.colors.sheetBackdrop, justifyContent: 'flex-end' }}
+      >
+        <Pressable
+          onPress={() => {}}
+          style={{
+            backgroundColor: theme.colors.sheetBackground,
+            borderTopLeftRadius: 20,
+            borderTopRightRadius: 20,
+            borderTopWidth: 1,
+            borderColor: theme.colors.sheetBorder,
+            paddingBottom: 24,
+          }}
+        >
+          <View
+            style={{
+              paddingHorizontal: 22,
+              paddingTop: 18,
+              paddingBottom: 14,
+              borderBottomWidth: 1,
+              borderColor: theme.colors.sheetDivider,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+            }}
+          >
+            <Text
+              style={{
+                fontFamily: theme.fonts.mono,
+                fontSize: 11,
+                letterSpacing: 1.8,
+                color: theme.colors.textFaint,
+              }}
+            >
+              {title.toUpperCase()}
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={cancelLabel}
+              onPress={onDismiss}
+              hitSlop={10}
+            >
+              <Text
+                style={{
+                  fontFamily: theme.fonts.mono,
+                  fontSize: 11,
+                  letterSpacing: 1.5,
+                  color: theme.colors.textFaint,
+                }}
+              >
+                {cancelLabel.toUpperCase()}
+              </Text>
+            </Pressable>
+          </View>
+
+          <View style={{ paddingHorizontal: 12, paddingTop: 6 }}>
+            {THEME_MODES.map((mode) => {
+              const active = mode === current;
+              return (
+                <Pressable
+                  key={mode}
+                  testID={`theme-option-${mode}`}
+                  onPress={() => onSelect(mode)}
+                  accessibilityRole="radio"
+                  accessibilityLabel={options[mode]}
+                  accessibilityState={{ selected: active }}
+                  style={({ pressed }) => ({
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 14,
+                    paddingVertical: 16,
+                    paddingHorizontal: 14,
+                    marginVertical: 3,
+                    borderRadius: 12,
+                    backgroundColor: active
+                      ? theme.colors.choiceSelectedBackground
+                      : pressed
+                        ? theme.colors.inputBackgroundSubtle
+                        : 'transparent',
+                    borderWidth: 1,
+                    borderColor: active
+                      ? theme.colors.choiceSelectedBorder
+                      : theme.colors.sheetDivider,
+                  })}
+                >
+                  <View style={{ width: 22, alignItems: 'center' }}>
+                    {active ? (
+                      <Icon name="check" size={16} color={theme.colors.primaryEmphasis} />
+                    ) : null}
+                  </View>
+                  <Text
+                    style={{
+                      flex: 1,
+                      fontFamily: theme.fonts.uiSemi,
+                      fontSize: 15,
+                      color: active
+                        ? theme.colors.choiceText
+                        : theme.colors.choiceTextSecondary,
+                    }}
+                  >
+                    {options[mode]}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
 function LanguagePickerSheet({
   visible,
   current,
@@ -340,6 +503,7 @@ function LanguagePickerSheet({
   cancelLabel: string;
   title: string;
 }) {
+  const { theme } = useTheme();
   return (
     <Modal
       visible={visible}
@@ -349,16 +513,16 @@ function LanguagePickerSheet({
     >
       <Pressable
         onPress={onDismiss}
-        style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' }}
+        style={{ flex: 1, backgroundColor: theme.colors.sheetBackdrop, justifyContent: 'flex-end' }}
       >
         <Pressable
           onPress={() => {}}
           style={{
-            backgroundColor: '#0a0620',
+            backgroundColor: theme.colors.sheetBackground,
             borderTopLeftRadius: 20,
             borderTopRightRadius: 20,
             borderTopWidth: 1,
-            borderColor: 'rgba(255,255,255,0.09)',
+            borderColor: theme.colors.sheetBorder,
             paddingBottom: 24,
           }}
         >
@@ -368,7 +532,7 @@ function LanguagePickerSheet({
               paddingTop: 18,
               paddingBottom: 14,
               borderBottomWidth: 1,
-              borderColor: 'rgba(255,255,255,0.06)',
+              borderColor: theme.colors.sheetDivider,
               flexDirection: 'row',
               alignItems: 'center',
               justifyContent: 'space-between',
@@ -376,10 +540,10 @@ function LanguagePickerSheet({
           >
             <Text
               style={{
-                fontFamily: fonts.mono,
+                fontFamily: theme.fonts.mono,
                 fontSize: 11,
                 letterSpacing: 1.8,
-                color: colors.faint,
+                color: theme.colors.textFaint,
               }}
             >
               {title.toUpperCase()}
@@ -387,10 +551,10 @@ function LanguagePickerSheet({
             <Pressable onPress={onDismiss} hitSlop={10}>
               <Text
                 style={{
-                  fontFamily: fonts.mono,
+                  fontFamily: theme.fonts.mono,
                   fontSize: 11,
                   letterSpacing: 1.5,
-                  color: colors.faint,
+                  color: theme.colors.textFaint,
                 }}
               >
                 {cancelLabel.toUpperCase()}
@@ -418,36 +582,40 @@ function LanguagePickerSheet({
                     marginVertical: 3,
                     borderRadius: 12,
                     backgroundColor: active
-                      ? 'rgba(11,112,249,0.16)'
+                      ? theme.colors.choiceSelectedBackground
                       : pressed
-                        ? 'rgba(255,255,255,0.04)'
+                        ? theme.colors.inputBackgroundSubtle
                         : 'transparent',
                     borderWidth: 1,
-                    borderColor: active ? '#0b70f9' : 'rgba(255,255,255,0.06)',
+                    borderColor: active
+                      ? theme.colors.choiceSelectedBorder
+                      : theme.colors.sheetDivider,
                     opacity: savingLang !== null && !busy ? 0.4 : 1,
                   })}
                 >
                   <View style={{ width: 22, alignItems: 'center' }}>
                     {active ? (
-                      <Icon name="check" size={16} color={colors.accentHi} />
+                      <Icon name="check" size={16} color={theme.colors.primaryEmphasis} />
                     ) : null}
                   </View>
                   <Text
                     style={{
                       flex: 1,
-                      fontFamily: fonts.uiSemi,
+                      fontFamily: theme.fonts.uiSemi,
                       fontSize: 15,
-                      color: active ? '#fff' : 'rgba(255,255,255,0.85)',
+                      color: active
+                        ? theme.colors.choiceText
+                        : theme.colors.choiceTextSecondary,
                     }}
                   >
                     {options[lang]}
                   </Text>
                   <Text
                     style={{
-                      fontFamily: fonts.mono,
+                      fontFamily: theme.fonts.mono,
                       fontSize: 10,
                       letterSpacing: 1.5,
-                      color: colors.faint,
+                      color: theme.colors.textFaint,
                     }}
                   >
                     {lang.toUpperCase()}
@@ -465,16 +633,16 @@ function LanguagePickerSheet({
                 paddingVertical: 10,
                 paddingHorizontal: 14,
                 borderRadius: 10,
-                backgroundColor: 'rgba(255,86,86,0.10)',
+                backgroundColor: theme.colors.feedbackErrorBackground,
                 borderWidth: 1,
-                borderColor: 'rgba(255,86,86,0.32)',
+                borderColor: theme.colors.feedbackErrorBorder,
               }}
             >
               <Text
                 style={{
-                  fontFamily: fonts.ui,
+                  fontFamily: theme.fonts.ui,
                   fontSize: 13,
-                  color: '#ffb3b3',
+                  color: theme.colors.feedbackErrorText,
                 }}
               >
                 {error}
@@ -508,6 +676,7 @@ function UnitsPickerSheet({
   cancelLabel: string;
   title: string;
 }) {
+  const { theme } = useTheme();
   return (
     <Modal
       visible={visible}
@@ -517,16 +686,16 @@ function UnitsPickerSheet({
     >
       <Pressable
         onPress={onDismiss}
-        style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' }}
+        style={{ flex: 1, backgroundColor: theme.colors.sheetBackdrop, justifyContent: 'flex-end' }}
       >
         <Pressable
           onPress={() => {}}
           style={{
-            backgroundColor: '#0a0620',
+            backgroundColor: theme.colors.sheetBackground,
             borderTopLeftRadius: 20,
             borderTopRightRadius: 20,
             borderTopWidth: 1,
-            borderColor: 'rgba(255,255,255,0.09)',
+            borderColor: theme.colors.sheetBorder,
             paddingBottom: 24,
           }}
         >
@@ -536,7 +705,7 @@ function UnitsPickerSheet({
               paddingTop: 18,
               paddingBottom: 14,
               borderBottomWidth: 1,
-              borderColor: 'rgba(255,255,255,0.06)',
+              borderColor: theme.colors.sheetDivider,
               flexDirection: 'row',
               alignItems: 'center',
               justifyContent: 'space-between',
@@ -544,10 +713,10 @@ function UnitsPickerSheet({
           >
             <Text
               style={{
-                fontFamily: fonts.mono,
+                fontFamily: theme.fonts.mono,
                 fontSize: 11,
                 letterSpacing: 1.8,
-                color: colors.faint,
+                color: theme.colors.textFaint,
               }}
             >
               {title.toUpperCase()}
@@ -555,10 +724,10 @@ function UnitsPickerSheet({
             <Pressable onPress={onDismiss} hitSlop={10}>
               <Text
                 style={{
-                  fontFamily: fonts.mono,
+                  fontFamily: theme.fonts.mono,
                   fontSize: 11,
                   letterSpacing: 1.5,
-                  color: colors.faint,
+                  color: theme.colors.textFaint,
                 }}
               >
                 {cancelLabel.toUpperCase()}
@@ -589,35 +758,39 @@ function UnitsPickerSheet({
                     marginVertical: 3,
                     borderRadius: 12,
                     backgroundColor: active
-                      ? 'rgba(11,112,249,0.16)'
+                      ? theme.colors.choiceSelectedBackground
                       : pressed
-                        ? 'rgba(255,255,255,0.04)'
+                        ? theme.colors.inputBackgroundSubtle
                         : 'transparent',
                     borderWidth: 1,
-                    borderColor: active ? '#0b70f9' : 'rgba(255,255,255,0.06)',
+                    borderColor: active
+                      ? theme.colors.choiceSelectedBorder
+                      : theme.colors.sheetDivider,
                     opacity: savingUnits !== null && !busy ? 0.4 : 1,
                   })}
                 >
                   <View style={{ width: 22, alignItems: 'center' }}>
                     {active ? (
-                      <Icon name="check" size={16} color={colors.accentHi} />
+                      <Icon name="check" size={16} color={theme.colors.primaryEmphasis} />
                     ) : null}
                   </View>
                   <View style={{ flex: 1, gap: 3 }}>
                     <Text
                       style={{
-                        fontFamily: fonts.uiSemi,
+                        fontFamily: theme.fonts.uiSemi,
                         fontSize: 15,
-                        color: active ? '#fff' : 'rgba(255,255,255,0.85)',
+                        color: active
+                          ? theme.colors.choiceText
+                          : theme.colors.choiceTextSecondary,
                       }}
                     >
                       {option.label}
                     </Text>
                     <Text
                       style={{
-                        fontFamily: fonts.ui,
+                        fontFamily: theme.fonts.ui,
                         fontSize: 12,
-                        color: colors.faint,
+                        color: theme.colors.textFaint,
                       }}
                     >
                       {option.description}
@@ -636,12 +809,12 @@ function UnitsPickerSheet({
                 paddingVertical: 10,
                 paddingHorizontal: 14,
                 borderRadius: 10,
-                backgroundColor: 'rgba(255,86,86,0.10)',
+                backgroundColor: theme.colors.feedbackErrorBackground,
                 borderWidth: 1,
-                borderColor: 'rgba(255,86,86,0.32)',
+                borderColor: theme.colors.feedbackErrorBorder,
               }}
             >
-              <Text style={{ fontFamily: fonts.ui, fontSize: 13, color: '#ffb3b3' }}>
+              <Text style={{ fontFamily: theme.fonts.ui, fontSize: 13, color: theme.colors.feedbackErrorText }}>
                 {error}
               </Text>
             </View>

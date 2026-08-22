@@ -8,7 +8,7 @@ import { Icon, IconName } from '../components/ui/Icon';
 import { HudCorners } from '../components/ui/Card';
 import { Display, Slash } from '../components/ui/Display';
 import { OutlineNumber } from '../components/ui/OutlineNumber';
-import { colors, fonts } from '../theme/tokens';
+import { darkTheme, useTheme } from '../theme';
 import { useAppState, TabId } from '../state/AppState';
 import { useAuth } from '../state/AuthContext';
 import { PremiumActionProvider } from '../state/PremiumActionContext';
@@ -24,8 +24,6 @@ import { AssessmentScreen } from './AssessmentScreen';
 import { SettingsScreen } from './SettingsScreen';
 import { SecurityScreen } from './SecurityScreen';
 import { ChangePasswordScreen } from './ChangePasswordScreen';
-import { TotpEnrollmentScreen } from './TotpEnrollmentScreen';
-import { TwoFactorSettingsScreen } from './TwoFactorSettingsScreen';
 import { DeleteAccountScreen } from './DeleteAccountScreen';
 import { EditProfileScreen } from './EditProfileScreen';
 import { PaywallScreen } from './PaywallScreen';
@@ -64,7 +62,6 @@ const FULL_BLEED = StyleSheet.create({
   overlayZ40: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 40 },
   overlayZ50: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 50 },
   overlayZ60: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 60 },
-  overlayZ70: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 70 },
 });
 
 /**
@@ -93,6 +90,7 @@ function AppShellContent({
   showPremium: boolean;
   setShowPremium: (value: boolean) => void;
 }) {
+  const { theme } = useTheme();
   const { tab, setTab } = useAppState();
   const { linkedProviders } = useAuth();
   const { isPremium } = useSubscription();
@@ -107,9 +105,6 @@ function AppShellContent({
   const [showSettings, setShowSettings] = useState(false);
   const [showSecurity, setShowSecurity] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
-  const [showTwoFactor, setShowTwoFactor] = useState(false);
-  const [showTotpEnrollment, setShowTotpEnrollment] = useState(false);
-  const [totpRefreshToken, setTotpRefreshToken] = useState(0);
   const [showDeleteAccount, setShowDeleteAccount] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showSubscriptionCenter, setShowSubscriptionCenter] = useState(false);
@@ -133,8 +128,6 @@ function AppShellContent({
     showSettings ||
     showSecurity ||
     showChangePassword ||
-    showTwoFactor ||
-    showTotpEnrollment ||
     showEditProfile ||
     showSubscriptionCenter ||
     showDeleteAccount ||
@@ -184,7 +177,7 @@ function AppShellContent({
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+    <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
       {/*
         Main-tab lifecycle policy (docs/23_navegacao_e_lifecycle.md): Home,
         Progress and Profile are lazy-mounted + kept alive + materialized
@@ -316,20 +309,15 @@ function AppShellContent({
         <SecurityScreen
           onBack={() => setShowSecurity(false)}
           onOpenChangePassword={canChangePassword ? () => setShowChangePassword(true) : undefined}
-          onOpenTwoFactor={() => setShowTwoFactor(true)}
           onOpenDeleteAccount={() => setShowDeleteAccount(true)}
         />
       </PersistentScreen>
       {/*
-        ChangePassword/TwoFactorSettings/TotpEnrollment (docs/23_navegacao_
-        e_lifecycle.md §10): the visual shell is prewarmed + materialized
-        like every other screen above, but each screen wipes its own
-        sensitive state (password fields, TOTP secret/QR, reauth challenge)
-        the moment it deactivates — see the `useScreenFocusEffect` cleanup
-        in each screen's source, which reuses that screen's own already-
-        tested "cancel/reset" function rather than a new bespoke one. No
-        password/secret/challenge is ever alive while these are
-        materialized-but-inactive.
+        ChangePassword (docs/23_navegacao_e_lifecycle.md §10): the visual
+        shell is prewarmed + materialized like every other screen above, but
+        the screen wipes its password fields when it deactivates through its
+        `useScreenFocusEffect` cleanup. No password remains alive while the
+        screen is materialized but inactive.
       */}
       <PersistentScreen
         active={showChangePassword && canChangePassword}
@@ -339,40 +327,9 @@ function AppShellContent({
       >
         <ChangePasswordScreen onBack={() => setShowChangePassword(false)} />
       </PersistentScreen>
-      <PersistentScreen
-        active={showTwoFactor}
-        prewarm={prewarmed.TWO_FACTOR_SETTINGS}
-        activeStyle={FULL_BLEED.overlayZ60}
-        inactiveMode="materialized"
-      >
-        <TwoFactorSettingsScreen
-          onBack={() => setShowTwoFactor(false)}
-          onOpenEnrollment={() => setShowTotpEnrollment(true)}
-          refreshToken={totpRefreshToken}
-        />
-      </PersistentScreen>
-      <PersistentScreen
-        active={showTotpEnrollment}
-        prewarm={prewarmed.TOTP_ENROLLMENT}
-        activeStyle={FULL_BLEED.overlayZ70}
-        inactiveMode="materialized"
-      >
-        <TotpEnrollmentScreen
-          onBack={() => setShowTotpEnrollment(false)}
-          onCompleted={() => {
-            setShowTotpEnrollment(false);
-            setTotpRefreshToken((value) => value + 1);
-          }}
-        />
-      </PersistentScreen>
-      {/*
-        DeleteAccountScreen (Fase 12): same z-tier as ChangePassword/
-        TwoFactorSettings — a direct child of Security, not nested under
-        either of them. Same sensitive-state discipline: the shell is safe
-        to prewarm (no password/MFA-code/provider material exists until the
-        user interacts), and `useAccountDeletionFlow`'s `reset()` wipes it
-        all on deactivation via the screen's own `useScreenFocusEffect`.
-      */}
+      {/* DeleteAccountScreen is a direct child of Security. Its shell is
+          safe to prewarm because provider/password material exists only
+          after interaction, and the flow resets on deactivation. */}
       <PersistentScreen
         active={showDeleteAccount}
         prewarm={prewarmed.DELETE_ACCOUNT}
@@ -504,6 +461,9 @@ function StartWorkoutConfirmation({
    *  longer needs to know START_WORKOUT is a Premium capability at all. */
   onConfirm: () => void;
 }) {
+  // Product invariant: this confirmation belongs to the same Dark artwork
+  // as the Today Workout poster, even when the surrounding app uses Light.
+  const theme = darkTheme;
   const { t } = useTranslation('home');
   return (
     <Modal
@@ -521,7 +481,7 @@ function StartWorkoutConfirmation({
         onPress={onCancel}
         style={{
           flex: 1,
-          backgroundColor: 'rgba(0,0,0,0.84)',
+          backgroundColor: theme.colors.overlayStrong,
           justifyContent: 'center',
           paddingHorizontal: 34,
         }}
@@ -537,9 +497,9 @@ function StartWorkoutConfirmation({
             borderBottomRightRadius: 0,
             overflow: 'hidden',
             borderWidth: 1,
-            borderColor: 'rgba(11,112,249,0.3)',
-            backgroundColor: colors.bg,
-            shadowColor: colors.accent,
+            borderColor: theme.colors.primaryBorderQuiet,
+            backgroundColor: theme.colors.background,
+            shadowColor: theme.colors.primary,
             shadowOpacity: 0.18,
             shadowRadius: 20,
             shadowOffset: { width: 0, height: 10 },
@@ -547,15 +507,16 @@ function StartWorkoutConfirmation({
           }}
         >
           <LinearGradient
-            colors={['#0a1a55', '#051042', '#04021c']}
+            colors={theme.gradients.poster}
             locations={[0, 0.45, 1]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={{ padding: 18 }}
           >
-            <HudCorners />
+            <HudCorners color={theme.colors.hudCorner} />
             <OutlineNumber
               size={118}
+              color={theme.colors.decorativeOutline}
               style={{
                 position: 'absolute',
                 top: -28,
@@ -566,14 +527,19 @@ function StartWorkoutConfirmation({
               04
             </OutlineNumber>
 
-            <Slash>{t('todayCard.kicker').toUpperCase()}</Slash>
-            <Display size={26} style={{ marginTop: 9 }}>
+            <Slash
+              accentColor={theme.colors.primaryEmphasis}
+              textColor={theme.colors.textFaint}
+            >
+              {t('todayCard.kicker').toUpperCase()}
+            </Slash>
+            <Display size={26} color={theme.colors.textPrimary} style={{ marginTop: 9 }}>
               {t('todayCard.confirm.title').toUpperCase()}
             </Display>
             <Text
               style={{
-                color: 'rgba(255,255,255,0.62)',
-                fontFamily: fonts.ui,
+                color: theme.colors.textSecondaryStrong,
+                fontFamily: theme.fonts.ui,
                 fontSize: 13,
                 lineHeight: 19,
                 marginTop: 8,
@@ -583,8 +549,8 @@ function StartWorkoutConfirmation({
             </Text>
             <Text
               style={{
-                color: '#fff',
-                fontFamily: fonts.uiBold,
+                color: theme.colors.textPrimary,
+                fontFamily: theme.fonts.uiBold,
                 fontSize: 14,
                 lineHeight: 20,
                 marginTop: 1,
@@ -616,18 +582,18 @@ function StartWorkoutConfirmation({
                     marginTop: 18,
                     borderRadius: 10,
                     borderBottomRightRadius: 0,
-                    backgroundColor: '#fff',
+                    backgroundColor: theme.colors.inverseSurface,
                     flexDirection: 'row',
                     alignItems: 'center',
                     justifyContent: 'center',
                     gap: 9,
                   }}
                 >
-                  <Icon name={locked ? 'lock' : 'play'} size={12} color="#020010" />
+                  <Icon name={locked ? 'lock' : 'play'} size={12} color={theme.colors.inverseForeground} />
                   <Text
                     style={{
-                      color: '#020010',
-                      fontFamily: fonts.display,
+                      color: theme.colors.inverseForeground,
+                      fontFamily: theme.fonts.display,
                       fontSize: 15,
                       letterSpacing: 1.4,
                       textTransform: 'uppercase',
@@ -643,7 +609,7 @@ function StartWorkoutConfirmation({
               onPress={onCancel}
               style={{ alignSelf: 'center', paddingHorizontal: 18, paddingTop: 13, paddingBottom: 2 }}
             >
-              <Text style={{ color: colors.mute, fontFamily: fonts.ui, fontSize: 13 }}>
+              <Text style={{ color: theme.colors.textMuted, fontFamily: theme.fonts.ui, fontSize: 13 }}>
                 {t('todayCard.confirm.notNow')}
               </Text>
             </Pressable>
@@ -655,6 +621,7 @@ function StartWorkoutConfirmation({
 }
 
 function TabBar({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => void }) {
+  const { theme } = useTheme();
   const { t } = useTranslation('common');
   const { profile } = useAuth();
   const profilePhotoURL = profile?.profile.photoURL;
@@ -669,17 +636,13 @@ function TabBar({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => void }) {
       <View style={{ paddingHorizontal: 14, paddingBottom: 6, paddingTop: 8 }}>
         <View
           style={{
-            backgroundColor: 'rgba(7, 3, 26, 0.92)',
+            backgroundColor: theme.navigation.barBackground,
             borderWidth: 1,
-            borderColor: 'rgba(255,255,255,0.07)',
+            borderColor: theme.navigation.border,
             borderRadius: 18,
             padding: 7,
             flexDirection: 'row',
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: -8 },
-            shadowOpacity: 0.5,
-            shadowRadius: 30,
-            elevation: 12,
+            ...theme.shadows.nav,
           }}
         >
           {items.map((it) => {
@@ -695,7 +658,7 @@ function TabBar({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => void }) {
                   borderRadius: 12,
                   alignItems: 'center',
                   gap: 4,
-                  backgroundColor: active ? 'rgba(11,112,249,0.16)' : 'transparent',
+                  backgroundColor: active ? theme.navigation.activeBackground : 'transparent',
                 }}
               >
                 {active && (
@@ -706,7 +669,7 @@ function TabBar({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => void }) {
                       left: '30%',
                       right: '30%',
                       height: 2,
-                      backgroundColor: colors.accentHi,
+                      backgroundColor: theme.navigation.active,
                       borderRadius: 2,
                     }}
                   />
@@ -732,16 +695,16 @@ function TabBar({ tab, setTab }: { tab: TabId; setTab: (t: TabId) => void }) {
                   <Icon
                     name={it.icon}
                     size={20}
-                    color={active ? colors.accentHi : 'rgba(255,255,255,0.45)'}
+                    color={active ? theme.navigation.active : theme.navigation.inactiveIcon}
                     stroke={active ? 2.1 : 1.7}
                   />
                 )}
                 <Text
                   style={{
-                    fontFamily: fonts.mono,
+                    fontFamily: theme.fonts.mono,
                     fontSize: 8.5,
                     letterSpacing: 1.5,
-                    color: active ? colors.accentHi : 'rgba(255,255,255,0.4)',
+                    color: active ? theme.navigation.active : theme.navigation.inactiveLabel,
                   }}
                 >
                   {t(`navigation.${it.labelKey}`).toUpperCase()}

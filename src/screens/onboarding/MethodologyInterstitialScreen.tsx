@@ -8,7 +8,8 @@ import { Image } from 'expo-image';
 import { Display, Slash } from '../../components/ui/Display';
 import { CtaButton, CtaText } from '../../components/ui/CtaButton';
 import { SegBar } from '../../components/ui/SegBar';
-import { colors, fonts, motion, sizes, spacing } from '../../theme/tokens';
+import { motion, sizes, spacing } from '../../theme/tokens';
+import { useTheme, type AppTheme } from '../../theme';
 import { useReducedMotionPreference } from '../../lib/reducedMotion';
 import { getMethodologyVideoPlayer } from '../../onboarding/onboardingVideoPreload';
 import type { OnboardingProgress } from '../../onboarding/useOnboardingFunnel';
@@ -41,6 +42,8 @@ export function MethodologyInterstitialScreen({
   onContinue: () => void;
 }) {
   const { t } = useTranslation('onboarding');
+  const { theme } = useTheme();
+  const styles = createStyles(theme);
   const reduceMotion = useReducedMotionPreference();
   const player = getMethodologyVideoPlayer();
 
@@ -95,7 +98,7 @@ export function MethodologyInterstitialScreen({
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
         <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(2,0,16,0.32)' }]} />
         <LinearGradient
-          colors={['rgba(2,0,16,0)', 'rgba(2,0,16,0.6)', colors.bg]}
+          colors={['rgba(2,0,16,0)', 'rgba(2,0,16,0.6)', theme.colors.background]}
           locations={[0, 0.55, 1]}
           style={StyleSheet.absoluteFill}
         />
@@ -113,7 +116,7 @@ export function MethodologyInterstitialScreen({
 
           <View style={{ marginTop: spacing[2] }}>
             <Display size={32}>{t('interstitials.methodology.titleLine1')}</Display>
-            <Display size={32} color={colors.accentHi}>
+            <Display size={32} color={theme.colors.primaryEmphasis}>
               {t('interstitials.methodology.titleLine2')}
             </Display>
           </View>
@@ -129,15 +132,17 @@ export function MethodologyInterstitialScreen({
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg, overflow: 'hidden' },
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
+  root: { flex: 1, backgroundColor: theme.colors.background, overflow: 'hidden' },
   safe: { flex: 1 },
   body: {
-    fontFamily: fonts.ui,
+    fontFamily: theme.fonts.ui,
     fontSize: 14.5,
     lineHeight: 21,
-    color: colors.textSecondary,
+    color: theme.colors.textSecondary,
     marginTop: spacing[2],
     maxWidth: 320,
   },
-});
+  });
+}

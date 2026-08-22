@@ -2,7 +2,8 @@ import React from 'react';
 import { ActivityIndicator, View, Text, Pressable, StyleProp, ViewStyle } from 'react-native';
 import { Slash } from './Display';
 import { Icon, IconName } from './Icon';
-import { colors, fonts, opacity, spacing, typography } from '../../theme/tokens';
+import { opacity, spacing } from '../../theme/tokens';
+import { useTheme } from '../../theme';
 
 export function SettingsHeader({
   children,
@@ -15,16 +16,20 @@ export function SettingsHeader({
 }
 
 export function SettingsDivider() {
-  return <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.05)' }} />;
+  const { theme } = useTheme();
+
+  return <View style={{ height: 1, backgroundColor: theme.colors.settingsDivider }} />;
 }
 
 export function SettingsValue({ children }: { children: React.ReactNode }) {
+  const { theme } = useTheme();
+
   return (
     <Text
       style={{
-        fontFamily: fonts.mono,
+        fontFamily: theme.fonts.mono,
         fontSize: 10.5,
-        color: colors.mute,
+        color: theme.colors.textMuted,
         letterSpacing: 0.5,
       }}
     >
@@ -55,7 +60,8 @@ export function SettingsItem({
   loading = false,
   onPress,
 }: SettingsItemData) {
-  const accent = danger ? colors.danger : colors.accentHi;
+  const { theme } = useTheme();
+  const accent = danger ? theme.colors.danger : theme.colors.primaryEmphasis;
   const interactive = !!onPress && !disabled && !loading;
 
   return (
@@ -72,16 +78,16 @@ export function SettingsItem({
         paddingVertical: spacing[3.5],
         paddingHorizontal: spacing[4],
         opacity: disabled ? opacity.disabled : 1,
-        backgroundColor: pressed && interactive ? colors.surfacePressed : 'transparent',
+        backgroundColor: pressed && interactive ? theme.colors.surfacePressed : 'transparent',
       })}
     >
       <Icon name={icon} size={16} color={accent} />
       <View style={{ flex: 1 }}>
         <Text
           style={{
-            fontFamily: fonts.uiSemi,
+            fontFamily: theme.fonts.uiSemi,
             fontSize: 14,
-            color: danger ? colors.dangerText : colors.text,
+            color: danger ? theme.colors.dangerText : theme.colors.textPrimary,
           }}
         >
           {label}
@@ -89,8 +95,8 @@ export function SettingsItem({
         {description ? (
           <Text
             style={[
-              typography.bodySmall,
-              { color: colors.textSecondary, marginTop: spacing[1] },
+              theme.typography.bodySmall,
+              { color: theme.colors.textSecondary, marginTop: spacing[1] },
             ]}
           >
             {description}
@@ -98,11 +104,13 @@ export function SettingsItem({
         ) : null}
       </View>
       {loading ? (
-        <ActivityIndicator size="small" color={colors.mute} />
+        <ActivityIndicator size="small" color={theme.colors.textMuted} />
       ) : (
         <>
           {value ? <SettingsValue>{value}</SettingsValue> : null}
-          {onPress ? <Icon name="chevron-right" size={14} color={colors.faint} /> : null}
+          {onPress ? (
+            <Icon name="chevron-right" size={14} color={theme.colors.textFaint} />
+          ) : null}
         </>
       )}
     </Pressable>
@@ -120,6 +128,8 @@ export function SettingsSection({
   items: SettingsItemData[];
   style?: StyleProp<ViewStyle>;
 }) {
+  const { theme } = useTheme();
+
   return (
     <View style={[{ paddingHorizontal: 22, paddingBottom: 16 }, style]}>
       <SettingsHeader style={description ? { marginBottom: spacing[2] } : undefined}>
@@ -128,9 +138,9 @@ export function SettingsSection({
       {description ? (
         <Text
           style={[
-            typography.bodySmall,
+            theme.typography.bodySmall,
             {
-              color: colors.textSecondary,
+              color: theme.colors.textSecondary,
               marginBottom: spacing[3],
               maxWidth: 360,
             },
@@ -143,9 +153,9 @@ export function SettingsSection({
         style={{
           borderRadius: 14,
           overflow: 'hidden',
-          backgroundColor: 'rgba(255,255,255,0.03)',
+          backgroundColor: theme.colors.settingsGroupBackground,
           borderWidth: 1,
-          borderColor: 'rgba(255,255,255,0.06)',
+          borderColor: theme.colors.settingsGroupBorder,
         }}
       >
         {items.map((it, i) => (

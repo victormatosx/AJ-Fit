@@ -1,7 +1,7 @@
 import { Animated, Text, TextInput, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { MonoLabel } from './Display';
-import { colors, fonts } from '../../theme/tokens';
+import { useTheme } from '../../theme';
 
 /**
  * DIA/MÊS/ANO input row. Shared by the onboarding birth-date question and
@@ -31,6 +31,7 @@ export function DateFieldsInput({
   shakeX?: Animated.Value;
   placeholder?: string;
 }) {
+  const { theme } = useTheme();
   const { t } = useTranslation('common');
   // These are visible mono-style labels rendered ALL CAPS by design. The
   // translation stores natural case ("Dia"/"Day"/"Día"), so screen readers
@@ -42,7 +43,10 @@ export function DateFieldsInput({
   return (
     <View>
       {label && (
-        <MonoLabel color={error ? '#f0563f' : colors.faint} style={{ marginBottom: 6 }}>
+        <MonoLabel
+          color={error ? theme.colors.inputBorderError : theme.colors.textFaint}
+          style={{ marginBottom: 6 }}
+        >
           {label}
         </MonoLabel>
       )}
@@ -52,13 +56,13 @@ export function DateFieldsInput({
         <DateBox value={year} onChange={onYear} error={error} shakeX={shakeX} flex={1.3} maxLength={4} placeholder={placeholder} accessibilityLabel={yearLabel} />
       </View>
       <View style={{ flexDirection: 'row', marginTop: 4 }}>
-        <Text style={{ flex: 1, textAlign: 'center', fontFamily: fonts.mono, fontSize: 9, letterSpacing: 1, color: colors.faint }}>
+        <Text style={{ flex: 1, textAlign: 'center', fontFamily: theme.fonts.mono, fontSize: 9, letterSpacing: 1, color: theme.colors.textFaint }}>
           {dayLabel}
         </Text>
-        <Text style={{ flex: 1, textAlign: 'center', fontFamily: fonts.mono, fontSize: 9, letterSpacing: 1, color: colors.faint }}>
+        <Text style={{ flex: 1, textAlign: 'center', fontFamily: theme.fonts.mono, fontSize: 9, letterSpacing: 1, color: theme.colors.textFaint }}>
           {monthLabel}
         </Text>
-        <Text style={{ flex: 1.3, textAlign: 'center', fontFamily: fonts.mono, fontSize: 9, letterSpacing: 1, color: colors.faint }}>
+        <Text style={{ flex: 1.3, textAlign: 'center', fontFamily: theme.fonts.mono, fontSize: 9, letterSpacing: 1, color: theme.colors.textFaint }}>
           {yearLabel}
         </Text>
       </View>
@@ -85,6 +89,7 @@ function DateBox({
   placeholder: string;
   accessibilityLabel: string;
 }) {
+  const { theme } = useTheme();
   const Wrapper = shakeX ? Animated.View : View;
   return (
     <Wrapper style={{ flex, transform: shakeX ? [{ translateX: shakeX }] : undefined }}>
@@ -95,9 +100,11 @@ function DateBox({
           paddingVertical: 10,
           paddingHorizontal: 12,
           borderRadius: 12,
-          backgroundColor: 'rgba(255,255,255,0.04)',
+          backgroundColor: theme.colors.inputBackgroundSubtle,
           borderWidth: 1,
-          borderColor: error ? '#f0563f' : 'rgba(255,255,255,0.09)',
+          borderColor: error
+            ? theme.colors.inputBorderError
+            : theme.colors.inputBorderSubtle,
         }}
       >
         <TextInput
@@ -105,14 +112,14 @@ function DateBox({
           onChangeText={(v) => onChange(v.replace(/[^0-9]/g, ''))}
           placeholder={placeholder}
           accessibilityLabel={accessibilityLabel}
-          placeholderTextColor={colors.faint}
+          placeholderTextColor={theme.colors.inputPlaceholder}
           keyboardType="number-pad"
           maxLength={maxLength}
           style={{
             flex: 1,
             minWidth: 0,
-            color: '#fff',
-            fontFamily: fonts.display,
+            color: theme.colors.inputText,
+            fontFamily: theme.fonts.display,
             fontSize: 18,
             padding: 0,
             textAlign: 'center',

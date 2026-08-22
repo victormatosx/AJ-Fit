@@ -13,7 +13,7 @@ import { Display, Slash } from '../components/ui/Display';
 import { SegBar } from '../components/ui/SegBar';
 import { CtaButton } from '../components/ui/CtaButton';
 import { Icon } from '../components/ui/Icon';
-import { colors, fonts } from '../theme/tokens';
+import { useTheme } from '../theme';
 
 // Fixed step contract — three slides, always in this order. Text comes from
 // `onboarding:slides.stepN.*` via i18n. Renaming a step here breaks its
@@ -28,6 +28,7 @@ export function OnboardingScreen({
   onLogin: () => void;
 }) {
   const { t } = useTranslation(['onboarding', 'common']);
+  const { theme } = useTheme();
   const [step, setStep] = useState(0);
   const next = () => (step < 2 ? setStep(step + 1) : onDone());
 
@@ -54,7 +55,7 @@ export function OnboardingScreen({
   const outlineSvgH = 340;
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.bg, overflow: 'hidden' }}>
+    <View style={{ flex: 1, backgroundColor: theme.colors.background, overflow: 'hidden' }}>
       {/* Bottom-left blue radial glow */}
       <View
         pointerEvents="none"
@@ -69,9 +70,9 @@ export function OnboardingScreen({
         <Svg width={560} height={560}>
           <Defs>
             <RadialGradient id="blueGlow" cx="50%" cy="50%" r="50%">
-              <Stop offset="0%" stopColor="#0b70f9" stopOpacity="0.55" />
-              <Stop offset="45%" stopColor="#0b70f9" stopOpacity="0.18" />
-              <Stop offset="100%" stopColor="#0b70f9" stopOpacity="0" />
+              <Stop offset="0%" stopColor={theme.colors.primary} stopOpacity="0.55" />
+              <Stop offset="45%" stopColor={theme.colors.primary} stopOpacity="0.18" />
+              <Stop offset="100%" stopColor={theme.colors.primary} stopOpacity="0" />
             </RadialGradient>
           </Defs>
           <Rect x="0" y="0" width="560" height="560" fill="url(#blueGlow)" />
@@ -86,10 +87,10 @@ export function OnboardingScreen({
           <SvgText
             x={outlineSvgW}
             y={outlineSvgH * 0.85}
-            fontFamily={fonts.display}
+            fontFamily={theme.fonts.display}
             fontSize={outlineFontSize}
             textAnchor="end"
-            stroke="rgba(255,255,255,0.22)"
+            stroke={theme.colors.decorativeOutlineSoft}
             strokeWidth={1.5}
             fill="none"
           >
@@ -114,10 +115,10 @@ export function OnboardingScreen({
           <Pressable onPress={onDone}>
             <Text
               style={{
-                fontFamily: fonts.mono,
+                fontFamily: theme.fonts.mono,
                 fontSize: 10,
                 letterSpacing: 2,
-                color: 'rgba(255,255,255,0.5)',
+                color: theme.colors.textInactive,
               }}
             >
               {t('onboarding:actions.skip').toUpperCase()}
@@ -138,7 +139,7 @@ export function OnboardingScreen({
             <Display
               key={i}
               size={52}
-              color={i === 1 ? colors.accentHi : '#fff'}
+              color={i === 1 ? theme.colors.primaryEmphasis : theme.colors.textPrimary}
             >
               {l}
             </Display>
@@ -147,8 +148,8 @@ export function OnboardingScreen({
             style={{
               marginTop: 18,
               marginBottom: 28,
-              color: colors.mute,
-              fontFamily: fonts.ui,
+              color: theme.colors.textMuted,
+              fontFamily: theme.fonts.ui,
               fontSize: 15,
               lineHeight: 22,
               maxWidth: 300,
@@ -160,8 +161,8 @@ export function OnboardingScreen({
           <CtaButton onPress={next}>
             <Text
               style={{
-                color: '#fff',
-                fontFamily: fonts.display,
+                color: theme.colors.primaryForeground,
+                fontFamily: theme.fonts.display,
                 fontSize: 17,
                 letterSpacing: 1.5,
                 textTransform: 'uppercase',
@@ -171,7 +172,7 @@ export function OnboardingScreen({
                 ? t('common:actions.continue')
                 : t('onboarding:actions.buildPlan')}
             </Text>
-            <Icon name="arrow-right" size={18} color="#fff" />
+            <Icon name="arrow-right" size={18} color={theme.colors.primaryForeground} />
           </CtaButton>
 
           <Pressable
@@ -180,13 +181,13 @@ export function OnboardingScreen({
           >
             <Text
               style={{
-                fontFamily: fonts.ui,
+                fontFamily: theme.fonts.ui,
                 fontSize: 14,
-                color: colors.mute,
+                color: theme.colors.textMuted,
               }}
             >
               {t('onboarding:footer.hasAccount')}{' '}
-              <Text style={{ color: colors.accentHi, fontFamily: fonts.ui }}>
+              <Text style={{ color: theme.colors.primaryEmphasis, fontFamily: theme.fonts.ui }}>
                 {t('onboarding:footer.login')}
               </Text>
             </Text>

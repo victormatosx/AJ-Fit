@@ -8,7 +8,8 @@ import { SegBar } from '../../components/ui/SegBar';
 import { ScreenBg } from '../../components/ui/ScreenBg';
 import { OutlineNumber } from '../../components/ui/OutlineNumber';
 import { AjFitProgressCarousel } from '../../components/onboarding/AjFitProgressCarousel';
-import { colors, sizes, spacing } from '../../theme/tokens';
+import { sizes, spacing } from '../../theme/tokens';
+import { useTheme } from '../../theme';
 import type { OnboardingProgress } from '../../onboarding/useOnboardingFunnel';
 
 /**
@@ -28,6 +29,7 @@ export function AjFitProgressInterstitialScreen({
   onContinue: () => void;
 }) {
   const { t } = useTranslation('onboarding');
+  const { theme } = useTheme();
 
   return (
     <ScreenBg>
@@ -62,7 +64,7 @@ export function AjFitProgressInterstitialScreen({
                     ? t('interstitials.ajFitProgress.titleLine1', { name })
                     : t('interstitials.ajFitProgress.titleLine1NoName')}
                 </Display>
-                <Display size={30} color={colors.accentHi}>
+                <Display size={30} color={theme.colors.primaryEmphasis}>
                   {t('interstitials.ajFitProgress.titleLine2')}
                 </Display>
               </View>

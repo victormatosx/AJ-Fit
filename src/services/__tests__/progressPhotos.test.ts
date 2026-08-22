@@ -384,6 +384,65 @@ describe('dual encrypted upload', () => {
     expect(issueOf(error)).toBe('vaultUploadRollbackFailed');
     expect(mocks.deleteObject).toHaveBeenCalledTimes(2);
   });
+
+  /**
+   * A denied delete and a transient one both surface as
+   * `vaultUploadRollbackFailed`. Only the provider code separates "this
+   * account may not touch the vault at all" from "the network dropped", so
+   * losing it makes the failure undiagnosable in the field.
+   */
+  it('logs the provider code of the failed rollback delete, not just the issue', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      mocks.setDoc.mockRejectedValue(new Error('firestore'));
+      mocks.deleteObject.mockRejectedValueOnce(
+        Object.assign(new Error('denied'), { code: 'storage/unauthorized' }),
+      );
+
+      const error = await uploadProgressPhoto(uploadInput).catch((caught) => caught);
+
+      expect(issueOf(error)).toBe('vaultUploadRollbackFailed');
+      expect(logged).toHaveBeenCalledWith(
+        '[photoVault:progressPhotos]',
+        expect.objectContaining({
+          issue: 'vaultUploadRollbackFailed',
+          providerCode: 'storage/unauthorized',
+        }),
+      );
+    } finally {
+      logged.mockRestore();
+    }
+  });
+
+  /** The rollback outranks it as the thrown issue, but must not erase it. */
+  it('still logs why the upload failed when the rollback also fails', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      mocks.upload.mockImplementation(() => ({
+        on: (
+          _event: string,
+          _progress: unknown,
+          reject: (error: unknown) => void,
+        ) => reject(Object.assign(new Error('denied'), { code: 'storage/unauthorized' })),
+      }));
+      mocks.deleteObject.mockRejectedValue(
+        Object.assign(new Error('denied'), { code: 'storage/unauthorized' }),
+      );
+
+      const error = await uploadProgressPhoto(uploadInput).catch((caught) => caught);
+
+      expect(issueOf(error)).toBe('vaultUploadRollbackFailed');
+      expect(logged).toHaveBeenCalledWith(
+        '[photoVault:progressPhotos]',
+        expect.objectContaining({
+          issue: 'vaultUploadFailed',
+          providerCode: 'storage/unauthorized',
+        }),
+      );
+    } finally {
+      logged.mockRestore();
+    }
+  });
 });
 
 describe('listing compatibility', () => {

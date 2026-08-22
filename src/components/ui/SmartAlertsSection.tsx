@@ -3,7 +3,8 @@ import { Pressable, Text, View } from 'react-native';
 import { Card } from './Card';
 import { Slash } from './Display';
 import { Icon, type IconName } from './Icon';
-import { colors, fonts, spacing } from '../../theme/tokens';
+import { spacing } from '../../theme/tokens';
+import { useTheme } from '../../theme';
 
 export type SmartAlertItem = {
   id: string;
@@ -21,6 +22,7 @@ export function SmartAlertsSection({
   title: string;
   items: SmartAlertItem[];
 }) {
+  const { theme } = useTheme();
   if (items.length === 0) return null;
 
   return (
@@ -36,18 +38,18 @@ export function SmartAlertsSection({
                   flexDirection: 'row',
                   alignItems: 'center',
                   gap: spacing[3],
-                  backgroundColor: pressed ? colors.surfacePressed : undefined,
+                  backgroundColor: pressed ? theme.colors.surfacePressed : undefined,
                 }}
               >
-                <Icon name={item.icon} size={18} color={colors.warning} />
+                <Icon name={item.icon} size={18} color={theme.colors.warning} />
                 <View style={{ flex: 1 }}>
-                  <Text style={{ color: colors.text, fontFamily: fonts.uiSemi, fontSize: 14 }}>
+                  <Text style={{ color: theme.colors.textPrimary, fontFamily: theme.fonts.uiSemi, fontSize: 14 }}>
                     {item.title}
                   </Text>
                   <Text
                     style={{
-                      color: colors.textSecondary,
-                      fontFamily: fonts.ui,
+                      color: theme.colors.textSecondary,
+                      fontFamily: theme.fonts.ui,
                       fontSize: 12.5,
                       lineHeight: 18,
                       marginTop: spacing[1],
@@ -57,7 +59,7 @@ export function SmartAlertsSection({
                   </Text>
                 </View>
                 {item.onPress ? (
-                  <Icon name="chevron-right" size={14} color={colors.faint} />
+                  <Icon name="chevron-right" size={14} color={theme.colors.textFaint} />
                 ) : null}
               </Card>
             )}

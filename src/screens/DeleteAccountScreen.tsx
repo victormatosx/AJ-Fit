@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 
@@ -20,13 +20,14 @@ import { useAccountDeletionFlow, type AccountDeletionFlowIssue } from '../hooks/
 import { useSubscription } from '../hooks/useSubscription';
 import { PREMIUM_ENTITLEMENT_ID } from '../lib/subscriptionConstants';
 import { useScreenFocusEffect } from '../state/ScreenActivity';
-import { colors, fonts, radii, sizes, spacing, typography } from '../theme/tokens';
+import { useTheme } from '../theme';
+import { radii, sizes, spacing, typography } from '../theme/tokens';
 
 /**
  * "Excluir Conta" — Fase 12. Presentation only: every decision, every
  * network call, every piece of state lives in `useAccountDeletionFlow`
- * (mirrors `ChangePasswordScreen`/`TwoFactorSettingsScreen`'s hook/screen
- * split). This screen never calls `accountDeletionOrchestrator.ts`,
+ * (mirrors `ChangePasswordScreen`'s hook/screen split). This screen never
+ * calls `accountDeletionOrchestrator.ts`,
  * `accountDeletionReauth.ts`, or `accountDeletionShutdown.ts` directly.
  *
  * ONE flow, driven by `flow.step` — not four separate screens/routes. The
@@ -42,10 +43,8 @@ export function DeleteAccountScreen({ onBack }: { onBack: () => void }) {
   // local to the screen rather than in the hook).
   const [passwordVisible, setPasswordVisible] = useState(false);
 
-  // Sensitive state (password, MFA code, in-flight provider material) is
-  // wiped the moment this screen deactivates — same discipline as
-  // ChangePasswordScreen/TwoFactorSettingsScreen (Fase 12 §39-ish local
-  // convention, not a new pattern).
+  // Sensitive state (password and in-flight provider material) is wiped the
+  // moment this screen deactivates — the same discipline as ChangePasswordScreen.
   useScreenFocusEffect(() => {
     return () => {
       flow.reset();
@@ -97,11 +96,6 @@ export function DeleteAccountScreen({ onBack }: { onBack: () => void }) {
               onTogglePassword={() => setPasswordVisible((value) => !value)}
               busyProvider={flow.reauthProvider}
               onConfirmProvider={(provider) => void flow.submitReauth(provider)}
-              mfaChallenge={flow.mfaChallenge}
-              mfaCode={flow.mfaCode}
-              onChangeMfaCode={flow.setMfaCode}
-              onSubmitMfaCode={() => void flow.submitMfaCode()}
-              onCancelMfa={flow.cancelMfa}
               issue={flow.issue}
               busy={flow.reauthProvider !== null}
             />
@@ -175,11 +169,6 @@ function ReauthStep({
   onTogglePassword,
   busyProvider,
   onConfirmProvider,
-  mfaChallenge,
-  mfaCode,
-  onChangeMfaCode,
-  onSubmitMfaCode,
-  onCancelMfa,
   issue,
   busy,
 }: {
@@ -190,11 +179,6 @@ function ReauthStep({
   onTogglePassword: () => void;
   busyProvider: 'password' | 'google' | 'apple' | null;
   onConfirmProvider: (provider: 'password' | 'google' | 'apple') => void;
-  mfaChallenge: unknown;
-  mfaCode: string;
-  onChangeMfaCode: (value: string) => void;
-  onSubmitMfaCode: () => void;
-  onCancelMfa: () => void;
   issue: AccountDeletionFlowIssue | null;
   busy: boolean;
 }) {
@@ -204,49 +188,19 @@ function ReauthStep({
       <DeleteAccountHero
         icon="shield"
         title={t('security.deleteAccountFlow.reauth.title')}
-        subtitle={
-          mfaChallenge
-            ? t('security.deleteAccountFlow.reauth.codeDescription')
-            : t('security.deleteAccountFlow.reauth.description')
-        }
+        subtitle={t('security.deleteAccountFlow.reauth.description')}
       />
 
-      {mfaChallenge ? (
-        <>
-          <TextInput
-            accessibilityLabel={t('security.twoFactor.enrollment.codeLabel')}
-            value={mfaCode}
-            onChangeText={onChangeMfaCode}
-            editable={!busy}
-            keyboardType="number-pad"
-            maxLength={6}
-            textContentType="oneTimeCode"
-            autoComplete="one-time-code"
-            importantForAutofill="yes"
-            placeholder={t('security.twoFactor.enrollment.codePlaceholder')}
-            placeholderTextColor={colors.faint}
-            style={styles.codeInput}
-            onSubmitEditing={onSubmitMfaCode}
-          />
-          <CtaButton onPress={onSubmitMfaCode} disabled={busy}>
-            {busy ? <ActivityIndicator color={colors.text} /> : <CtaText>{t('security.twoFactor.actions.continue')}</CtaText>}
-          </CtaButton>
-          <Pressable accessibilityRole="button" onPress={onCancelMfa} disabled={busy} style={styles.linkButtonCentered}>
-            <Text style={[typography.subtitle, { color: colors.mute }]}>{t('security.twoFactor.actions.cancel')}</Text>
-          </Pressable>
-        </>
-      ) : (
-        <ReauthenticationMethods
-          providers={providers}
-          password={password}
-          passwordVisible={passwordVisible}
-          busyProvider={busyProvider}
-          disabled={busy}
-          onChangePassword={onChangePassword}
-          onTogglePassword={onTogglePassword}
-          onConfirm={onConfirmProvider}
-        />
-      )}
+      <ReauthenticationMethods
+        providers={providers}
+        password={password}
+        passwordVisible={passwordVisible}
+        busyProvider={busyProvider}
+        disabled={busy}
+        onChangePassword={onChangePassword}
+        onTogglePassword={onTogglePassword}
+        onConfirm={onConfirmProvider}
+      />
 
       {issue ? <Feedback issue={issue} message={issueMessage(issue, t)} /> : null}
     </View>
@@ -261,6 +215,7 @@ function ConfirmStep({
   issue: AccountDeletionFlowIssue | null;
 }) {
   const { t } = useTranslation('settings');
+  const { theme } = useTheme();
   const [isConfirming, setIsConfirming] = useState(false);
 
   const handleConfirm = async () => {
@@ -301,13 +256,17 @@ function ConfirmStep({
         disabled={isConfirming}
         style={({ pressed }) => [
           styles.destructiveButton,
+          {
+            borderColor: theme.colors.feedbackDangerBorder,
+            backgroundColor: theme.colors.feedbackDangerBackground,
+          },
           { opacity: isConfirming ? 0.7 : pressed ? 0.85 : 1 },
         ]}
       >
         {isConfirming ? (
-          <ActivityIndicator color={colors.dangerText} />
+          <ActivityIndicator color={theme.colors.dangerText} />
         ) : (
-          <Text style={[typography.button, { color: colors.dangerText, textTransform: 'uppercase' }]}>
+          <Text style={[typography.button, { color: theme.colors.dangerText, textTransform: 'uppercase' }]}>
             {t('security.deleteAccountFlow.confirm.action')}
           </Text>
         )}
@@ -332,10 +291,20 @@ function SubmittingStep() {
 }
 
 function Feedback({ issue, message }: { issue: AccountDeletionFlowIssue; message: string }) {
+  const { theme } = useTheme();
   return (
-    <View accessibilityRole="alert" style={styles.feedback}>
-      <Icon name={issueIcon(issue)} size={17} color={colors.dangerText} />
-      <Text style={[typography.bodySmall, { color: colors.dangerText, flex: 1 }]}>{message}</Text>
+    <View
+      accessibilityRole="alert"
+      style={[
+        styles.feedback,
+        {
+          borderColor: theme.colors.feedbackErrorBorder,
+          backgroundColor: theme.colors.feedbackErrorBackground,
+        },
+      ]}
+    >
+      <Icon name={issueIcon(issue)} size={17} color={theme.colors.dangerText} />
+      <Text style={[typography.bodySmall, { color: theme.colors.dangerText, flex: 1 }]}>{message}</Text>
     </View>
   );
 }
@@ -346,7 +315,6 @@ function issueIcon(issue: AccountDeletionFlowIssue): IconName {
       return 'globe';
     case 'WRONG_PASSWORD':
     case 'PASSWORD_REQUIRED':
-    case 'MFA_INVALID_CODE':
       return 'key';
     case 'SESSION_EXPIRED':
     case 'USER_SIGNED_OUT':
@@ -374,17 +342,10 @@ const styles = {
     paddingTop: spacing[4],
     paddingBottom: spacing[10],
   },
-  linkButtonCentered: {
-    minHeight: 44,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-  },
   destructiveButton: {
     minHeight: 58,
     borderRadius: radii.control,
     borderWidth: 1,
-    borderColor: 'rgba(240,86,63,0.4)',
-    backgroundColor: 'rgba(240,86,63,0.10)',
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
   },
@@ -392,22 +353,8 @@ const styles = {
     padding: spacing[3.5],
     borderRadius: radii.md,
     borderWidth: 1,
-    borderColor: 'rgba(240,86,63,0.35)',
-    backgroundColor: 'rgba(240,86,63,0.10)',
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     gap: spacing[2.5],
-  },
-  codeInput: {
-    height: 64,
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    borderColor: colors.borderStrong,
-    backgroundColor: colors.surfaceRaised,
-    color: colors.text,
-    fontFamily: fonts.monoBold,
-    fontSize: 26,
-    letterSpacing: 8,
-    textAlign: 'center' as const,
   },
 };

@@ -269,48 +269,56 @@ describe('progressPhotos — unauthenticated', () => {
   });
 });
 
-// ── progressPhotos: FASE 7 server-side Premium authorization ──────────────
+// ── progressPhotos: authorization is ownership, never subscription ─────────
 //
-// ADD_PROGRESS_PHOTO/DELETE_PROGRESS_PHOTO are Premium capabilities (Fase
-// 3). `hasServerPremium(userId)` in firestore.rules now gates create/delete
-// in addition to ownership — never instead of it. READ stays free for
-// everyone owning the doc (asserted above, still true with the default
-// Premium seed).
+// The whole app sits behind the paywall, so an authenticated user reaching
+// these documents is already a subscriber and the per-action check the FASE 7
+// rules carried (`hasServerPremium`) was removed from firestore.rules.
+//
+// These cases are the regression guard for that decision: the subscription
+// mirror must have NO effect here. They fail the moment someone reintroduces
+// a subscription read into this path — which would silently break every
+// account whose mirror is stale or unwritten.
 
-describe('progressPhotos — FASE 7: Free is denied the Premium mutation', () => {
-  it('denies a Free owner creating photo metadata', async () => {
+describe('progressPhotos — the subscription mirror never gates these documents', () => {
+  it('allows an owner with an explicitly inactive mirror to create photo metadata', async () => {
     await seedFree(UID);
-    await assertFails(
+    await assertSucceeds(
       setDoc(doc(ownerDb(), 'users', UID, 'progressPhotos', PHOTO_ID), validPhoto()),
     );
   });
 
-  it('denies a Free owner deleting their own existing photo metadata', async () => {
+  it('allows an owner with an explicitly inactive mirror to delete their metadata', async () => {
     await seedFree(UID);
     await seedPhoto();
-    await assertFails(deleteDoc(doc(ownerDb(), 'users', UID, 'progressPhotos', PHOTO_ID)));
+    await assertSucceeds(deleteDoc(doc(ownerDb(), 'users', UID, 'progressPhotos', PHOTO_ID)));
   });
 
-  it('fails closed when users/{uid} (and therefore its subscription map) does not exist at all', async () => {
+  /**
+   * The exact production state that motivated the removal: the RevenueCat
+   * webhook had never been registered, so no subscription mirror existed.
+   * Under the old rules this denied every write; ownership must not care.
+   */
+  it('allows the create when users/{uid} does not exist at all', async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       await ctx.firestore().doc(`users/${UID}`).delete();
     });
-    await assertFails(
+    await assertSucceeds(
       setDoc(doc(ownerDb(), 'users', UID, 'progressPhotos', PHOTO_ID), validPhoto()),
     );
   });
 
-  it('fails closed when users/{uid} exists but has no subscription field at all', async () => {
+  it('allows the create when users/{uid} exists but has no subscription field', async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       await ctx.firestore().doc(`users/${UID}`).delete();
       await ctx.firestore().doc(`users/${UID}`).set({ profile: { name: 'Alice', email: 'a@example.com' } });
     });
-    await assertFails(
+    await assertSucceeds(
       setDoc(doc(ownerDb(), 'users', UID, 'progressPhotos', PHOTO_ID), validPhoto()),
     );
   });
 
-  it('still allows a Free owner to READ their existing photo metadata (history is never blocked)', async () => {
+  it('still allows an owner to READ their existing photo metadata', async () => {
     await seedPhoto();
     await seedFree(UID);
     await assertSucceeds(getDoc(doc(ownerDb(), 'users', UID, 'progressPhotos', PHOTO_ID)));
@@ -318,15 +326,15 @@ describe('progressPhotos — FASE 7: Free is denied the Premium mutation', () =>
   });
 });
 
-describe('progressPhotos — FASE 7: Premium never overrides ownership', () => {
-  it('denies a Premium user creating metadata under someone else\'s uid', async () => {
-    // OTHER_UID is Premium (default seed) but does not own UID's namespace.
+describe('progressPhotos — ownership is the real boundary', () => {
+  it("denies a subscriber creating metadata under someone else's uid", async () => {
+    // OTHER_UID has an active mirror but does not own UID's namespace.
     await assertFails(
       setDoc(doc(otherDb(), 'users', UID, 'progressPhotos', PHOTO_ID), validPhoto()),
     );
   });
 
-  it("denies a Premium user deleting someone else's photo metadata", async () => {
+  it("denies a subscriber deleting someone else's photo metadata", async () => {
     await seedPhoto();
     await assertFails(deleteDoc(doc(otherDb(), 'users', UID, 'progressPhotos', PHOTO_ID)));
   });

@@ -5,10 +5,10 @@ import { describe, expect, it } from 'vitest';
 /**
  * Fase 12 — structural guarantees for `useAccountDeletionFlow.ts`. No
  * component renderer exists in this Node-only suite (vitest.config.mts,
- * same limitation documented in `usePremiumCapabilities.test.ts`/
- * `useTotpMfaLoadingStructure.test.ts`) — the REAL behavioral coverage for
+ * same limitation documented in `usePremiumCapabilities.test.ts`) — the
+ * REAL behavioral coverage for
  * every piece this hook composes already exists and is exhaustive:
- *   - `accountDeletionReauth.test.ts` — password/Google/Apple/MFA reauth.
+ *   - `accountDeletionReauth.test.ts` — password/Google/Apple reauth.
  *   - `accountDeletionOrchestrator.test.ts` — Google→Apple→commit sequencing.
  *   - `accountDeletionShutdown.test.ts` — local cleanup + logout.
  * This file only asserts the hook stays a thin, correct composition of
@@ -24,7 +24,6 @@ describe('useAccountDeletionFlow — composition, not reimplementation', () => {
     for (const symbol of [
       'needsAccountDeletionReauthentication',
       'startAccountDeletionReauthentication',
-      'finishAccountDeletionReauthentication',
     ]) {
       expect(CODE).toContain(`${symbol}(`);
     }
@@ -72,13 +71,6 @@ describe('useAccountDeletionFlow — double-tap protection (Fase 12 §18)', () =
     expect(body).toContain('operationLock.current = true;');
   });
 
-  it('submitMfaCode is guarded by operationLock', () => {
-    const body = CODE.slice(
-      CODE.indexOf('const submitMfaCode = useCallback(async () => {'),
-      CODE.indexOf('[mfaChallenge, mfaCode, resetSensitiveState]'),
-    );
-    expect(body).toContain('if (operationLock.current || !mfaChallenge) return;');
-  });
 });
 
 describe('useAccountDeletionFlow — accepted request never calls the callable again', () => {
@@ -171,13 +163,8 @@ describe('useAccountDeletionFlow — Fase 16: Apple material lifecycle (single-u
   });
 
   it('submitReauth stores appleAuthorizationCode from a completed outcome (undefined for password/Google clears any stale material)', () => {
-    const body = CODE.slice(CODE.indexOf('const submitReauth = useCallback('), CODE.indexOf('const submitMfaCode'));
+    const body = CODE.slice(CODE.indexOf('const submitReauth = useCallback('), CODE.indexOf('const confirmDeletion'));
     expect(body).toContain('appleAuthorizationCodeRef.current = outcome.appleAuthorizationCode');
-  });
-
-  it('submitMfaCode also captures appleAuthorizationCode from the resolved outcome (Apple + TOTP combo)', () => {
-    const body = CODE.slice(CODE.indexOf('const submitMfaCode = useCallback('), CODE.indexOf('const cancelMfa'));
-    expect(body).toContain('appleAuthorizationCodeRef.current');
   });
 
   it('appleAuthorizationCodeRef is never spread into AsyncStorage/SecureStore/Firestore/logs — this hook has no such call at all', () => {
@@ -188,7 +175,7 @@ describe('useAccountDeletionFlow — Fase 16: Apple material lifecycle (single-u
 });
 
 describe('useAccountDeletionFlow — sensitive-state cleanup', () => {
-  it('reset() clears password, MFA code, and MFA challenge', () => {
+  it('reset() clears sensitive reauthentication state', () => {
     const resetBody = CODE.slice(
       CODE.indexOf('const reset = useCallback(() => {'),
       CODE.indexOf('}, [resetSensitiveState]);'),
@@ -202,11 +189,10 @@ describe('useAccountDeletionFlow — sensitive-state cleanup', () => {
       CODE.indexOf('}, []);'),
     );
     expect(body).toContain('setReauthPasswordState(');
-    expect(body).toContain('setMfaCodeState(');
-    expect(body).toContain('setMfaChallenge(');
+    expect(body).toContain('setReauthProvider(');
   });
 
-  it('never logs the password or MFA code', () => {
+  it('never logs the password', () => {
     for (const forbidden of ['console.log', 'logInfo', 'logError']) {
       expect(CODE).not.toContain(forbidden);
     }

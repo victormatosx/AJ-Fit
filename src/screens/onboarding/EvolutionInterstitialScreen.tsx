@@ -8,7 +8,8 @@ import { SegBar } from '../../components/ui/SegBar';
 import { ScreenBg } from '../../components/ui/ScreenBg';
 import { OutlineNumber } from '../../components/ui/OutlineNumber';
 import { EvolutionCarousel } from '../../components/onboarding/EvolutionCarousel';
-import { colors, fonts, sizes, spacing } from '../../theme/tokens';
+import { sizes, spacing } from '../../theme/tokens';
+import { useTheme } from '../../theme';
 import type { OnboardingProgress } from '../../onboarding/useOnboardingFunnel';
 
 export function EvolutionInterstitialScreen({
@@ -19,6 +20,7 @@ export function EvolutionInterstitialScreen({
   onContinue: () => void;
 }) {
   const { t } = useTranslation('onboarding');
+  const { theme } = useTheme();
 
   return (
     <ScreenBg>
@@ -58,16 +60,16 @@ export function EvolutionInterstitialScreen({
           <View style={{ flexGrow: 1 }}>
             <View>
               <Display size={30}>{t('interstitials.evolution.titleLine1')}</Display>
-              <Display size={30} color={colors.accentHi}>
+              <Display size={30} color={theme.colors.primaryEmphasis}>
                 {t('interstitials.evolution.titleLine2')}
               </Display>
               <Text
                 style={{
                   marginTop: spacing[2],
-                  fontFamily: fonts.ui,
+                  fontFamily: theme.fonts.ui,
                   fontSize: 15,
                   lineHeight: 21,
-                  color: colors.mute,
+                  color: theme.colors.textMuted,
                   maxWidth: 340,
                 }}
               >

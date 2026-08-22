@@ -61,14 +61,6 @@ describe('SecurityScreen structure', () => {
     }
   });
 
-  it('derives MFA status from the same hook TwoFactorSettingsScreen uses, not a second source of truth', () => {
-    expect(securitySource).toContain("useTotpMfa();");
-    expect(securitySource).toContain('mfa.enabled');
-    expect(securitySource).toContain("t('security.twoFactor.status.enabled')");
-    expect(securitySource).toContain("t('security.twoFactor.status.disabled')");
-    expect(securitySource).toContain("t('security.twoFactor.status.loading')");
-  });
-
   it('derives access method(s) from real linked providerData, never a client-inferred flow', () => {
     expect(securitySource).toContain('getReauthenticationProviders(user)');
     expect(securitySource).toContain("'security.items.accessMethods'");
@@ -103,10 +95,6 @@ describe('SecurityScreen structure', () => {
     expect(appShellSource).toContain('onOpenSecurity={() => setShowSecurity(true)}');
     expect(appShellSource).toContain('<SecurityScreen');
     expect(appShellSource).toContain('onBack={() => setShowSecurity(false)}');
-    expect(securitySource).toContain('onOpenTwoFactor: () => void;');
-    expect(securitySource).toContain('onPress: onOpenTwoFactor');
-    expect(appShellSource).toContain('onOpenTwoFactor={() => setShowTwoFactor(true)}');
-    expect(appShellSource).toContain('<TwoFactorSettingsScreen');
   });
 
   it('still navigates to account deletion through the existing overlay pattern', () => {
@@ -136,7 +124,9 @@ describe('SecurityScreen structure', () => {
   it('prepares normal, pressed and disabled states in the shared item', () => {
     expect(settingsSectionSource).toContain('disabled?: boolean;');
     expect(settingsSectionSource).toContain('description?: string;');
-    expect(settingsSectionSource).toContain('backgroundColor: pressed && interactive ? colors.surfacePressed');
+    expect(settingsSectionSource).toContain(
+      'backgroundColor: pressed && interactive ? theme.colors.surfacePressed',
+    );
     expect(settingsSectionSource).toContain('opacity: disabled ? opacity.disabled : 1');
     expect(settingsSectionSource).toContain('accessibilityState={onPress ? { disabled } : undefined}');
   });

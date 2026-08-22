@@ -3,7 +3,8 @@ import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 
 import { Display, MonoLabel } from '../ui/Display';
 import { Icon, type IconName } from '../ui/Icon';
-import { alpha, colors, radii, spacing, typography } from '../../theme/tokens';
+import { useTheme } from '../../theme';
+import { radii, spacing, typography } from '../../theme/tokens';
 
 /**
  * Purely presentational pieces for `DeleteAccountScreen`. No business logic,
@@ -12,24 +13,6 @@ import { alpha, colors, radii, spacing, typography } from '../../theme/tokens';
  */
 
 type HeroTone = 'accent' | 'warning' | 'danger';
-
-const HERO_TONE_COLOR: Record<HeroTone, string> = {
-  accent: colors.accentHi,
-  warning: colors.warning,
-  danger: colors.dangerText,
-};
-
-const HERO_TONE_BG: Record<HeroTone, string> = {
-  accent: alpha.blue12,
-  warning: 'rgba(255,168,64,0.12)',
-  danger: 'rgba(240,86,63,0.12)',
-};
-
-const HERO_TONE_BORDER: Record<HeroTone, string> = {
-  accent: alpha.blue30,
-  warning: 'rgba(255,168,64,0.32)',
-  danger: 'rgba(240,86,63,0.32)',
-};
 
 export function DeleteAccountHero({
   icon,
@@ -44,7 +27,22 @@ export function DeleteAccountHero({
   subtitle?: string;
   loading?: boolean;
 }) {
-  const toneColor = HERO_TONE_COLOR[tone];
+  const { theme } = useTheme();
+  const toneColor: Record<HeroTone, string> = {
+    accent: theme.colors.accentHi,
+    warning: theme.colors.warning,
+    danger: theme.colors.dangerText,
+  };
+  const toneBackground: Record<HeroTone, string> = {
+    accent: theme.colors.primarySoft,
+    warning: theme.colors.statusCautionBackground,
+    danger: theme.colors.feedbackCriticalBackgroundSoft,
+  };
+  const toneBorder: Record<HeroTone, string> = {
+    accent: theme.colors.primaryBorderQuiet,
+    warning: theme.colors.toastWarningBorder,
+    danger: theme.colors.feedbackCriticalBorder,
+  };
   return (
     <View style={{ alignItems: 'center', gap: spacing[4], paddingTop: spacing[2] }}>
       <View
@@ -52,26 +50,26 @@ export function DeleteAccountHero({
           width: 76,
           height: 76,
           borderRadius: 38,
-          backgroundColor: HERO_TONE_BG[tone],
+          backgroundColor: toneBackground[tone],
           borderWidth: 1,
-          borderColor: HERO_TONE_BORDER[tone],
+          borderColor: toneBorder[tone],
           alignItems: 'center',
           justifyContent: 'center',
-          shadowColor: toneColor,
+          shadowColor: toneColor[tone],
           shadowOffset: { width: 0, height: 8 },
           shadowOpacity: 0.35,
           shadowRadius: 24,
           elevation: 10,
         }}
       >
-        {loading ? <ActivityIndicator color={toneColor} /> : <Icon name={icon} size={30} color={toneColor} />}
+        {loading ? <ActivityIndicator color={toneColor[tone]} /> : <Icon name={icon} size={30} color={toneColor[tone]} />}
       </View>
       <View style={{ gap: spacing[2], alignItems: 'center' }}>
         <Display size={26} skew={false} style={{ textAlign: 'center' }}>
           {title}
         </Display>
         {subtitle ? (
-          <Text style={[typography.body, { color: colors.textSecondary, textAlign: 'center' }]}>{subtitle}</Text>
+          <Text style={[typography.body, { color: theme.colors.textSecondary, textAlign: 'center' }]}>{subtitle}</Text>
         ) : null}
       </View>
     </View>
@@ -81,6 +79,7 @@ export function DeleteAccountHero({
 const FLOW_STEPS = ['intro', 'reauth', 'confirm'] as const;
 
 export function DeletionStepProgress({ step }: { step: (typeof FLOW_STEPS)[number] | 'submitting' }) {
+  const { theme } = useTheme();
   if (step === 'submitting') return null;
   const currentIndex = FLOW_STEPS.indexOf(step);
   return (
@@ -96,7 +95,7 @@ export function DeletionStepProgress({ step }: { step: (typeof FLOW_STEPS)[numbe
               width: 6,
               height: 6,
               borderRadius: 3,
-              backgroundColor: i <= currentIndex ? colors.accentHi : colors.border,
+              backgroundColor: i <= currentIndex ? theme.colors.accentHi : theme.colors.border,
             }}
           />
           {i < FLOW_STEPS.length - 1 ? (
@@ -104,7 +103,7 @@ export function DeletionStepProgress({ step }: { step: (typeof FLOW_STEPS)[numbe
               style={{
                 width: 18,
                 height: 1,
-                backgroundColor: i < currentIndex ? colors.accentHi : colors.border,
+                backgroundColor: i < currentIndex ? theme.colors.accentHi : theme.colors.border,
               }}
             />
           ) : null}
@@ -115,13 +114,14 @@ export function DeletionStepProgress({ step }: { step: (typeof FLOW_STEPS)[numbe
 }
 
 export function DeletionImpactList({ items }: { items: string[] }) {
+  const { theme } = useTheme();
   return (
     <View
       style={{
         borderRadius: radii.xl,
         borderWidth: 1,
-        borderColor: colors.border,
-        backgroundColor: colors.surface,
+        borderColor: theme.colors.border,
+        backgroundColor: theme.colors.surface,
         overflow: 'hidden',
       }}
     >
@@ -133,18 +133,18 @@ export function DeletionImpactList({ items }: { items: string[] }) {
                 width: 22,
                 height: 22,
                 borderRadius: 11,
-                backgroundColor: alpha.blue12,
+                backgroundColor: theme.colors.primarySoft,
                 alignItems: 'center',
                 justifyContent: 'center',
                 marginTop: 1,
               }}
             >
-              <Icon name="check" size={12} color={colors.accentHi} />
+              <Icon name="check" size={12} color={theme.colors.accentHi} />
             </View>
-            <Text style={[typography.body, { color: colors.textSecondary, flex: 1 }]}>{text}</Text>
+            <Text style={[typography.body, { color: theme.colors.textSecondary, flex: 1 }]}>{text}</Text>
           </View>
           {i < items.length - 1 ? (
-            <View style={{ height: 1, backgroundColor: colors.border, marginLeft: spacing[4] + 22 + spacing[3] }} />
+            <View style={{ height: 1, backgroundColor: theme.colors.border, marginLeft: spacing[4] + 22 + spacing[3] }} />
           ) : null}
         </View>
       ))}
@@ -167,13 +167,14 @@ export function SubscriptionWarningCard({
   onManage: () => void;
   showManage: boolean;
 }) {
+  const { theme } = useTheme();
   return (
     <View
       style={{
         borderRadius: radii.xl,
         borderWidth: 1,
-        borderColor: 'rgba(255,168,64,0.28)',
-        backgroundColor: 'rgba(255,168,64,0.06)',
+        borderColor: theme.colors.toastWarningBorder,
+        backgroundColor: theme.colors.statusCautionBackground,
         padding: spacing[4],
         gap: spacing[2.5],
       }}
@@ -184,25 +185,25 @@ export function SubscriptionWarningCard({
             width: 26,
             height: 26,
             borderRadius: 13,
-            backgroundColor: 'rgba(255,168,64,0.14)',
+            backgroundColor: theme.colors.statusCautionBackground,
             alignItems: 'center',
             justifyContent: 'center',
           }}
         >
-          <Icon name="alert-triangle" size={14} color={colors.warning} />
+          <Icon name="alert-triangle" size={14} color={theme.colors.warning} />
         </View>
-        <MonoLabel color={colors.warning}>{eyebrow}</MonoLabel>
+        <MonoLabel color={theme.colors.warning}>{eyebrow}</MonoLabel>
       </View>
-      <Text style={[typography.subtitle, { color: colors.text }]}>{title}</Text>
-      <Text style={[typography.bodySmall, { color: colors.textSecondary }]}>{body}</Text>
+      <Text style={[typography.subtitle, { color: theme.colors.text }]}>{title}</Text>
+      <Text style={[typography.bodySmall, { color: theme.colors.textSecondary }]}>{body}</Text>
       {showManage ? (
         <Pressable
           accessibilityRole="button"
           onPress={onManage}
           style={{ flexDirection: 'row', alignItems: 'center', gap: spacing[1.5], minHeight: 32 }}
         >
-          <Text style={[typography.subtitle, { color: colors.accentHi }]}>{manageLabel}</Text>
-          <Icon name="arrow-right" size={14} color={colors.accentHi} />
+          <Text style={[typography.subtitle, { color: theme.colors.accentHi }]}>{manageLabel}</Text>
+          <Icon name="arrow-right" size={14} color={theme.colors.accentHi} />
         </Pressable>
       ) : null}
     </View>
@@ -210,6 +211,7 @@ export function SubscriptionWarningCard({
 }
 
 export function DeletionSubscriptionNotice({ text }: { text: string }) {
+  const { theme } = useTheme();
   return (
     <View
       style={{
@@ -219,12 +221,12 @@ export function DeletionSubscriptionNotice({ text }: { text: string }) {
         padding: spacing[3.5],
         borderRadius: radii.lg,
         borderWidth: 1,
-        borderColor: 'rgba(255,168,64,0.25)',
-        backgroundColor: 'rgba(255,168,64,0.05)',
+        borderColor: theme.colors.toastWarningBorder,
+        backgroundColor: theme.colors.statusCautionBackground,
       }}
     >
-      <Icon name="alert-triangle" size={15} color={colors.warning} />
-      <Text style={[typography.bodySmall, { color: colors.textSecondary, flex: 1 }]}>{text}</Text>
+      <Icon name="alert-triangle" size={15} color={theme.colors.warning} />
+      <Text style={[typography.bodySmall, { color: theme.colors.textSecondary, flex: 1 }]}>{text}</Text>
     </View>
   );
 }

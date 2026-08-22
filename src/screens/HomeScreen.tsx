@@ -9,7 +9,7 @@ import { Card, HudCorners } from '../components/ui/Card';
 import { SegBar } from '../components/ui/SegBar';
 import { Icon, IconName } from '../components/ui/Icon';
 import { OutlineNumber } from '../components/ui/OutlineNumber';
-import { colors, fonts } from '../theme/tokens';
+import { darkTheme, useTheme } from '../theme';
 import { useAuth } from '../state/AuthContext';
 import { getDisplayFirstName } from '../lib/userName';
 import { ProfileAvatar } from '../components/ui/ProfileAvatar';
@@ -32,6 +32,7 @@ const TICKER_KEYS: Array<{ key: TickerKey; value: string }> = [
 ];
 
 function Ticker() {
+  const { theme } = useTheme();
   const { t } = useTranslation('home');
   const { resolvedUnits } = useUnits();
   const [width, setWidth] = useState(0);
@@ -85,14 +86,14 @@ function Ticker() {
         <Text
           key={i}
           style={{
-            fontFamily: fonts.mono,
+            fontFamily: theme.fonts.mono,
             fontSize: 10,
             letterSpacing: 2,
-            color: colors.faint,
+            color: theme.colors.textFaint,
           }}
         >
           {label}{' '}
-          <Text style={{ color: colors.accentHi, fontFamily: fonts.monoBold }}>{value}</Text>
+          <Text style={{ color: theme.colors.primaryEmphasis, fontFamily: theme.fonts.monoBold }}>{value}</Text>
         </Text>
       ))}
     </View>
@@ -103,7 +104,7 @@ function Ticker() {
       style={{
         borderTopWidth: 1,
         borderBottomWidth: 1,
-        borderColor: 'rgba(255,255,255,0.06)',
+        borderColor: theme.colors.settingsGroupBorder,
         paddingVertical: 8,
         marginBottom: 18,
         overflow: 'hidden',
@@ -138,6 +139,11 @@ const MOCK_DATE = {
 const TODAY_MOCK_META = { duration: 58, exercises: 8, kcal: 420 };
 const CONSISTENCY_MOCK = { done: 4, total: 5 };
 
+// Product invariant: the Today Workout poster keeps the official Dark art
+// direction in both app themes. This is intentionally scoped to this card;
+// surrounding Home surfaces still follow the active theme.
+const TODAY_WORKOUT_THEME = darkTheme;
+
 export function HomeScreen({
   onStart,
   onOpenConsistency,
@@ -147,6 +153,7 @@ export function HomeScreen({
   onOpenConsistency: () => void;
   onOpenProfile: () => void;
 }) {
+  const { theme } = useTheme();
   const { t } = useTranslation(['home', 'profile']);
   const { user, profile } = useAuth();
   const firstName = getDisplayFirstName({
@@ -205,7 +212,7 @@ export function HomeScreen({
           {/* TODAY POSTER */}
           <View style={{ paddingHorizontal: 22, paddingBottom: 16 }}>
             <LinearGradient
-              colors={['#0a1a55', '#051042', '#04021c']}
+              colors={TODAY_WORKOUT_THEME.gradients.poster}
               locations={[0, 0.45, 1]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
@@ -215,30 +222,42 @@ export function HomeScreen({
                 overflow: 'hidden',
                 minHeight: 250,
                 borderWidth: 1,
-                borderColor: 'rgba(11,112,249,0.3)',
+                borderColor: TODAY_WORKOUT_THEME.colors.primaryBorderQuiet,
                 padding: 20,
                 justifyContent: 'space-between',
               }}
             >
-              <HudCorners />
+              <HudCorners color={TODAY_WORKOUT_THEME.colors.hudCorner} />
               <OutlineNumber
                 size={210}
+                color={TODAY_WORKOUT_THEME.colors.decorativeOutline}
                 style={{ position: 'absolute', bottom: -64, right: -16, opacity: 0.5 }}
               >
                 04
               </OutlineNumber>
               <View>
-                <Slash>{t('home:todayCard.kicker').toUpperCase()}</Slash>
-                <Display size={38} style={{ marginTop: 12 }}>
+                <Slash
+                  accentColor={TODAY_WORKOUT_THEME.colors.primaryEmphasis}
+                  textColor={TODAY_WORKOUT_THEME.colors.textFaint}
+                >
+                  {t('home:todayCard.kicker').toUpperCase()}
+                </Slash>
+                <Display
+                  size={38}
+                  color={TODAY_WORKOUT_THEME.colors.textPrimary}
+                  style={{ marginTop: 12 }}
+                >
                   {t('home:mock.today.type').toUpperCase()} —
                 </Display>
-                <Display size={38}>{t('home:mock.today.focus').toUpperCase()}</Display>
+                <Display size={38} color={TODAY_WORKOUT_THEME.colors.textPrimary}>
+                  {t('home:mock.today.focus').toUpperCase()}
+                </Display>
                 <View style={{ flexDirection: 'row', gap: 12, marginTop: 14 }}>
                   <Text
                     style={{
-                      fontFamily: fonts.mono,
+                      fontFamily: theme.fonts.mono,
                       fontSize: 10.5,
-                      color: 'rgba(255,255,255,0.65)',
+                      color: TODAY_WORKOUT_THEME.colors.textSecondary,
                       letterSpacing: 1,
                     }}
                   >
@@ -254,7 +273,7 @@ export function HomeScreen({
                   marginTop: 20,
                   paddingVertical: 15,
                   paddingHorizontal: 26,
-                  backgroundColor: '#fff',
+                  backgroundColor: TODAY_WORKOUT_THEME.colors.inverseSurface,
                   borderTopLeftRadius: 10,
                   borderTopRightRadius: 10,
                   borderBottomLeftRadius: 10,
@@ -262,20 +281,24 @@ export function HomeScreen({
                   flexDirection: 'row',
                   alignItems: 'center',
                   gap: 10,
-                  shadowColor: '#fff',
+                  shadowColor: TODAY_WORKOUT_THEME.colors.inverseShadow,
                   shadowOpacity: 0.16,
                   shadowRadius: 20,
                   shadowOffset: { width: 0, height: 10 },
                   elevation: 8,
                 }}
               >
-                <Icon name="play" size={13} color="#020010" />
+                <Icon
+                  name="play"
+                  size={13}
+                  color={TODAY_WORKOUT_THEME.colors.inverseForeground}
+                />
                 <Text
                   style={{
-                    fontFamily: fonts.display,
+                    fontFamily: theme.fonts.display,
                     fontSize: 15,
                     letterSpacing: 1.5,
-                    color: '#020010',
+                    color: TODAY_WORKOUT_THEME.colors.inverseForeground,
                     textTransform: 'uppercase',
                   }}
                 >
@@ -301,18 +324,18 @@ export function HomeScreen({
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                     <Text
                       style={{
-                        fontFamily: fonts.display,
+                        fontFamily: theme.fonts.display,
                         fontSize: 22,
-                        color: '#fff',
+                        color: theme.colors.textPrimary,
                         textTransform: 'uppercase',
                       }}
                     >
                       {CONSISTENCY_MOCK.done}
-                      <Text style={{ color: colors.faint, fontSize: 15 }}>
+                      <Text style={{ color: theme.colors.textFaint, fontSize: 15 }}>
                         /{CONSISTENCY_MOCK.total}
                       </Text>
                     </Text>
-                    <Icon name="chevron-right" size={16} color="rgba(255,255,255,0.4)" />
+                    <Icon name="chevron-right" size={16} color={theme.colors.iconMuted} />
                   </View>
                 </View>
                 <SegBar value={0.8} segs={15} />
@@ -321,10 +344,10 @@ export function HomeScreen({
                     const s = CONSISTENCY_MOCK_STATES[i];
                     const bg =
                       s === 'done'
-                        ? 'rgba(11,112,249,0.3)'
+                        ? theme.chart.consistency.doneBackground
                         : s === 'today'
-                          ? colors.accent
-                          : 'rgba(255,255,255,0.04)';
+                          ? theme.colors.primary
+                          : theme.colors.surfaceMuted;
                     return (
                       <View key={i} style={{ flex: 1, alignItems: 'center' }}>
                         <View
@@ -338,23 +361,23 @@ export function HomeScreen({
                             backgroundColor: bg,
                             borderWidth: 1,
                             borderColor:
-                              s === 'today' ? colors.accentHi : 'rgba(255,255,255,0.06)',
-                            shadowColor: s === 'today' ? colors.accent : 'transparent',
+                              s === 'today' ? theme.colors.primaryEmphasis : theme.colors.settingsGroupBorder,
+                            shadowColor: s === 'today' ? theme.colors.primary : 'transparent',
                             shadowOpacity: s === 'today' ? 0.6 : 0,
                             shadowRadius: 8,
                             shadowOffset: { width: 0, height: 0 },
                             elevation: s === 'today' ? 4 : 0,
                           }}
                         >
-                          {s === 'done' && <Icon name="check" size={13} color="#fff" />}
-                          {s === 'today' && <Icon name="bolt" size={13} color="#fff" />}
+                          {s === 'done' && <Icon name="check" size={13} color={theme.colors.primaryForeground} />}
+                          {s === 'today' && <Icon name="bolt" size={13} color={theme.colors.primaryForeground} />}
                           {s === 'rest' && (
-                            <Text style={{ fontFamily: fonts.mono, fontSize: 8, color: colors.faint }}>
+                            <Text style={{ fontFamily: theme.fonts.mono, fontSize: 8, color: theme.colors.textFaint }}>
                               {t('home:consistency.restLabel').toUpperCase()}
                             </Text>
                           )}
                         </View>
-                        <Text style={{ fontFamily: fonts.mono, fontSize: 9, color: colors.faint }}>
+                        <Text style={{ fontFamily: theme.fonts.mono, fontSize: 9, color: theme.colors.textFaint }}>
                           {d}
                         </Text>
                       </View>
@@ -380,14 +403,14 @@ export function HomeScreen({
                     style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}
                   >
                     <MonoLabel>{label}</MonoLabel>
-                    <Icon name={s.icon as IconName} size={14} color={colors.accentHi} />
+                    <Icon name={s.icon as IconName} size={14} color={theme.colors.primaryEmphasis} />
                   </View>
                   <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 5 }}>
                     <Text
                       style={{
-                        fontFamily: fonts.display,
+                        fontFamily: theme.fonts.display,
                         fontSize: 34,
-                        color: '#fff',
+                        color: theme.colors.textPrimary,
                         transform: [{ skewX: '-8deg' }],
                       }}
                     >
@@ -395,7 +418,7 @@ export function HomeScreen({
                     </Text>
                     <MonoLabel>{unit}</MonoLabel>
                   </View>
-                  <Text style={{ fontFamily: fonts.ui, fontSize: 11, color: colors.mute, marginTop: 6 }}>
+                  <Text style={{ fontFamily: theme.fonts.ui, fontSize: 11, color: theme.colors.textMuted, marginTop: 6 }}>
                     {note}
                   </Text>
                 </Card>
@@ -423,16 +446,16 @@ export function HomeScreen({
                     paddingHorizontal: 14,
                     borderRadius: 12,
                     marginBottom: 8,
-                    backgroundColor: 'rgba(255,255,255,0.03)',
+                    backgroundColor: theme.colors.surface,
                     borderWidth: 1,
-                    borderColor: 'rgba(255,255,255,0.06)',
+                    borderColor: theme.colors.settingsGroupBorder,
                   }}
                 >
                   <Text
                     style={{
-                      fontFamily: fonts.display,
+                      fontFamily: theme.fonts.display,
                       fontSize: 15,
-                      color: 'rgba(255,255,255,0.3)',
+                      color: theme.colors.indicatorInactive,
                       width: 38,
                       textTransform: 'uppercase',
                     }}
@@ -440,14 +463,14 @@ export function HomeScreen({
                     {item.day}
                   </Text>
                   <View style={{ flex: 1 }}>
-                    <Text style={{ fontFamily: fonts.uiBold, fontSize: 14, color: '#fff' }}>
+                    <Text style={{ fontFamily: theme.fonts.uiBold, fontSize: 14, color: theme.colors.textPrimary }}>
                       {item.name}
                     </Text>
                     <Text
                       style={{
-                        fontFamily: fonts.mono,
+                        fontFamily: theme.fonts.mono,
                         fontSize: 10,
-                        color: colors.faint,
+                        color: theme.colors.textFaint,
                         marginTop: 3,
                         letterSpacing: 1,
                       }}
@@ -458,7 +481,7 @@ export function HomeScreen({
                       })}
                     </Text>
                   </View>
-                  <Icon name="chevron-right" size={15} color="rgba(255,255,255,0.35)" />
+                  <Icon name="chevron-right" size={15} color={theme.colors.controlHighlight} />
                 </View>
               );
             })}

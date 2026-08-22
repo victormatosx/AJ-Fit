@@ -19,7 +19,7 @@ import { ScreenBg } from '../components/ui/ScreenBg';
 import { ProfileAvatar } from '../components/ui/ProfileAvatar';
 import { Display, MonoLabel, Slash } from '../components/ui/Display';
 import { Icon } from '../components/ui/Icon';
-import { colors, fonts } from '../theme/tokens';
+import { useTheme, type AppTheme } from '../theme';
 import { useAuth } from '../state/AuthContext';
 import { useUnits } from '../state/UnitsContext';
 import { updateUserProfile } from '../services/userProfile';
@@ -77,6 +77,8 @@ function selectedAsset(result: ImagePicker.ImagePickerResult): LocalProfilePhoto
 }
 
 export function EditProfileScreen({ onBack }: { onBack: () => void }) {
+  const { theme } = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const { t } = useTranslation(['profile', 'common']);
   const { user, profile, questionnaire, refreshProfile } = useAuth();
   const { resolvedUnits } = useUnits();
@@ -442,7 +444,7 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
                 busy && styles.disabled,
               ]}
             >
-              <Icon name="arrow-left" size={17} color="#fff" />
+              <Icon name="arrow-left" size={17} color={theme.colors.textPrimary} />
             </Pressable>
             <View style={styles.headerTitle}>
               <MonoLabel>{t('profile:edit.title').toUpperCase()}</MonoLabel>
@@ -466,7 +468,7 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
               />
 
               <View style={styles.identityCopy}>
-                <MonoLabel color={colors.accentHi}>
+                <MonoLabel color={theme.colors.primaryEmphasis}>
                   {t('profile:header.memberSinceInline', { year: sinceYear }).toUpperCase()}
                 </MonoLabel>
                 <Display size={22} style={styles.identityName} numberOfLines={1}>
@@ -517,7 +519,7 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
                     <Icon
                       name="user"
                       size={16}
-                      color={nameFocused ? colors.accentHi : colors.faint}
+                      color={nameFocused ? theme.colors.primaryEmphasis : theme.colors.inputIcon}
                     />
                     <TextInput
                       accessibilityLabel={t('profile:edit.fields.displayName')}
@@ -538,8 +540,8 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
                       autoComplete="name"
                       returnKeyType="done"
                       placeholder={t('profile:edit.identity.namePlaceholder')}
-                      placeholderTextColor={colors.faint}
-                      selectionColor={colors.accentHi}
+                      placeholderTextColor={theme.colors.inputPlaceholder}
+                      selectionColor={theme.colors.primaryEmphasis}
                       style={styles.input}
                     />
                   </View>
@@ -642,16 +644,16 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
                     {t('profile:edit.fields.email').toUpperCase()}
                   </Text>
                   <View style={[styles.inputShell, styles.inputShellReadOnly]}>
-                    <Icon name="mail" size={16} color={colors.faint} />
+                    <Icon name="mail" size={16} color={theme.colors.inputIcon} />
                     <Text numberOfLines={1} style={styles.readOnlyValue}>
                       {email || t('profile:edit.fields.emailUnavailable')}
                     </Text>
-                    <Icon name="lock" size={13} color={colors.faint} />
+                    <Icon name="lock" size={13} color={theme.colors.inputIcon} />
                   </View>
                 </View>
               </View>
               <View style={styles.securityNote}>
-                <Icon name="shield" size={14} color={colors.accentHi} />
+                <Icon name="shield" size={14} color={theme.colors.primaryEmphasis} />
                 <Text style={styles.securityText}>
                   {t('profile:edit.fields.emailSecurityNote')}
                 </Text>
@@ -661,7 +663,7 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
             <View style={styles.footer}>
               {submitError ? (
                 <View accessibilityRole="alert" style={styles.errorBox}>
-                  <Icon name="alert-triangle" size={16} color="#ff9a9a" />
+                  <Icon name="alert-triangle" size={16} color={theme.colors.dangerText} />
                   <Text style={styles.errorText}>{submitError}</Text>
                 </View>
               ) : null}
@@ -677,14 +679,14 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
                 ]}
               >
                 <LinearGradient
-                  colors={['#1f82ff', colors.accent]}
+                  colors={theme.gradients.brand}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 0 }}
                   style={styles.saveButtonGradient}
                 >
                   {saving ? (
                     <>
-                      <ActivityIndicator color="#fff" size="small" />
+                      <ActivityIndicator color={theme.colors.primaryForeground} size="small" />
                       <Text style={styles.saveButtonText}>
                         {(uploadProgress === null
                           ? t('profile:edit.actions.saving')
@@ -699,7 +701,7 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
                       <Text style={styles.saveButtonText}>
                         {t('profile:edit.actions.save').toUpperCase()}
                       </Text>
-                      <Icon name="arrow-right" size={16} color="#fff" stroke={2} />
+                      <Icon name="arrow-right" size={16} color={theme.colors.primaryForeground} stroke={2} />
                     </>
                   )}
                 </LinearGradient>
@@ -729,6 +731,8 @@ function DatePartInput({
   onChangeText: (value: string) => void;
   editable: boolean;
 }) {
+  const { theme } = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const { t } = useTranslation('profile');
   // Accessibility uses the natural-case translation; visible micro-label
   // (`DIA/DAY/DÍA`) uppercases the same string at render — same pattern as
@@ -760,8 +764,8 @@ function DatePartInput({
         keyboardType="number-pad"
         maxLength={maxLength}
         placeholder={placeholder}
-        placeholderTextColor={colors.faint}
-        selectionColor={colors.accentHi}
+        placeholderTextColor={theme.colors.inputPlaceholder}
+        selectionColor={theme.colors.primaryEmphasis}
         style={styles.dateInput}
       />
       <Text style={styles.datePartLabel}>{displayLabel}</Text>
@@ -769,7 +773,8 @@ function DatePartInput({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(theme: AppTheme) {
+  return StyleSheet.create({
   safeArea: { flex: 1 },
   header: {
     paddingHorizontal: 22,
@@ -783,13 +788,13 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 10,
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: theme.colors.controlBackground,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.09)',
+    borderColor: theme.colors.controlBorder,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  backButtonPressed: { backgroundColor: 'rgba(255,255,255,0.1)' },
+  backButtonPressed: { backgroundColor: theme.colors.dividerStrong },
   disabled: { opacity: 0.45 },
   headerTitle: { flex: 1, alignItems: 'center' },
   headerSpacer: { width: 38 },
@@ -804,8 +809,8 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderBottomRightRadius: 0,
     borderWidth: 1,
-    borderColor: 'rgba(77,163,255,0.2)',
-    backgroundColor: 'rgba(11,112,249,0.07)',
+    borderColor: theme.colors.primaryBorderSoft,
+    backgroundColor: theme.colors.primarySurfaceSubtle,
     padding: 12,
     flexDirection: 'row',
     alignItems: 'center',
@@ -816,8 +821,8 @@ const styles = StyleSheet.create({
   identityName: { marginTop: 3 },
   photoAction: { alignSelf: 'flex-start', marginTop: 3 },
   photoActionText: {
-    color: colors.mute,
-    fontFamily: fonts.monoBold,
+    color: theme.colors.textMuted,
+    fontFamily: theme.fonts.monoBold,
     fontSize: 8,
     letterSpacing: 0.9,
   },
@@ -827,7 +832,7 @@ const styles = StyleSheet.create({
     right: 0,
     width: 22,
     height: 2,
-    backgroundColor: colors.accentHi,
+    backgroundColor: theme.colors.primaryEmphasis,
   },
   formSection: { marginTop: 27 },
   accountSection: { marginTop: 20 },
@@ -835,8 +840,8 @@ const styles = StyleSheet.create({
   formCard: {
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.07)',
-    backgroundColor: 'rgba(255,255,255,0.025)',
+    borderColor: theme.colors.border,
+    backgroundColor: theme.colors.surfaceQuiet,
     paddingHorizontal: 14,
   },
   fieldBlock: { paddingVertical: 14 },
@@ -846,15 +851,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   fieldLabel: {
-    color: colors.mute,
-    fontFamily: fonts.monoBold,
+    color: theme.colors.textMuted,
+    fontFamily: theme.fonts.monoBold,
     fontSize: 9,
     letterSpacing: 1.1,
     marginBottom: 7,
   },
   counter: {
-    color: colors.faint,
-    fontFamily: fonts.mono,
+    color: theme.colors.textFaint,
+    fontFamily: theme.fonts.mono,
     fontSize: 9,
     marginBottom: 7,
   },
@@ -862,33 +867,33 @@ const styles = StyleSheet.create({
     height: 46,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.09)',
-    backgroundColor: 'rgba(255,255,255,0.035)',
+    borderColor: theme.colors.inputBorderSubtle,
+    backgroundColor: theme.colors.inputBackgroundQuiet,
     paddingHorizontal: 13,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
   },
   inputShellFocused: {
-    borderColor: 'rgba(77,163,255,0.72)',
-    backgroundColor: 'rgba(11,112,249,0.08)',
+    borderColor: theme.colors.inputBorderFocusStrong,
+    backgroundColor: theme.colors.inputBackgroundFocused,
   },
-  inputShellInvalid: { borderColor: 'rgba(240,86,63,0.65)' },
+  inputShellInvalid: { borderColor: theme.colors.inputBorderErrorStrong },
   inputShellReadOnly: {
-    backgroundColor: 'rgba(255,255,255,0.018)',
-    borderColor: 'rgba(255,255,255,0.055)',
+    backgroundColor: theme.colors.inputBackgroundReadOnly,
+    borderColor: theme.colors.inputBorderReadOnly,
   },
   input: {
     flex: 1,
-    color: '#fff',
-    fontFamily: fonts.uiMed,
+    color: theme.colors.inputText,
+    fontFamily: theme.fonts.uiMed,
     fontSize: 14,
     paddingVertical: 0,
   },
   readOnlyValue: {
     flex: 1,
-    color: colors.mute,
-    fontFamily: fonts.ui,
+    color: theme.colors.textMuted,
+    fontFamily: theme.fonts.ui,
     fontSize: 13.5,
   },
   dateRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
@@ -897,35 +902,35 @@ const styles = StyleSheet.create({
     height: 48,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.09)',
-    backgroundColor: 'rgba(255,255,255,0.035)',
+    borderColor: theme.colors.inputBorderSubtle,
+    backgroundColor: theme.colors.inputBackgroundQuiet,
     alignItems: 'center',
     justifyContent: 'center',
   },
   datePartWide: { flex: 1.35 },
   dateInput: {
     width: '100%',
-    color: '#fff',
-    fontFamily: fonts.uiSemi,
+    color: theme.colors.inputText,
+    fontFamily: theme.fonts.uiSemi,
     fontSize: 14,
     textAlign: 'center',
     padding: 0,
   },
   datePartLabel: {
-    color: colors.faint,
-    fontFamily: fonts.mono,
+    color: theme.colors.textFaint,
+    fontFamily: theme.fonts.mono,
     fontSize: 7,
     letterSpacing: 0.8,
     marginTop: 1,
   },
-  dateSeparator: { color: colors.faint, fontFamily: fonts.mono, fontSize: 13 },
+  dateSeparator: { color: theme.colors.textFaint, fontFamily: theme.fonts.mono, fontSize: 13 },
   validationText: {
     marginTop: 6,
-    color: '#ff9a9a',
-    fontFamily: fonts.ui,
+    color: theme.colors.dangerText,
+    fontFamily: theme.fonts.ui,
     fontSize: 11,
   },
-  divider: { height: 1, backgroundColor: 'rgba(255,255,255,0.05)' },
+  divider: { height: 1, backgroundColor: theme.colors.settingsDivider },
   securityNote: {
     marginTop: 11,
     paddingHorizontal: 2,
@@ -935,8 +940,8 @@ const styles = StyleSheet.create({
   },
   securityText: {
     flex: 1,
-    color: colors.faint,
-    fontFamily: fonts.ui,
+    color: theme.colors.textFaint,
+    fontFamily: theme.fonts.ui,
     fontSize: 11,
   },
   footer: {
@@ -949,8 +954,8 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: 'rgba(240,86,63,0.3)',
-    backgroundColor: 'rgba(240,86,63,0.07)',
+    borderColor: theme.colors.feedbackCriticalBorder,
+    backgroundColor: theme.colors.feedbackCriticalBackground,
     padding: 11,
     flexDirection: 'row',
     alignItems: 'center',
@@ -958,8 +963,8 @@ const styles = StyleSheet.create({
   },
   errorText: {
     flex: 1,
-    color: '#ffb0b0',
-    fontFamily: fonts.ui,
+    color: theme.colors.feedbackCriticalText,
+    fontFamily: theme.fonts.ui,
     fontSize: 11.5,
   },
   saveButton: {
@@ -967,7 +972,7 @@ const styles = StyleSheet.create({
     borderRadius: 11,
     borderBottomRightRadius: 0,
     overflow: 'hidden',
-    shadowColor: colors.accent,
+    shadowColor: theme.colors.primary,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.3,
     shadowRadius: 20,
@@ -984,9 +989,10 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   saveButtonText: {
-    color: '#fff',
-    fontFamily: fonts.display,
+    color: theme.colors.primaryForeground,
+    fontFamily: theme.fonts.display,
     fontSize: 14,
     letterSpacing: 1.4,
   },
-});
+  });
+}

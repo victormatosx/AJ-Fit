@@ -3,7 +3,7 @@ import { View, Text } from 'react-native';
 import Svg, { Circle, Line, Polyline } from 'react-native-svg';
 import { useTranslation } from 'react-i18next';
 import { MonoLabel } from '../ui/Display';
-import { colors, fonts } from '../../theme/tokens';
+import { useTheme } from '../../theme';
 
 export type EvolutionPoint = { dateLabel: string; value: number };
 
@@ -38,6 +38,7 @@ export function EvolutionLineChart({
   emptyHint: string;
   showEmptyHint?: boolean;
 }) {
+  const { theme } = useTheme();
   const { t } = useTranslation('assessment');
   const [width, setWidth] = useState(0);
 
@@ -52,7 +53,7 @@ export function EvolutionLineChart({
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
         <MonoLabel>{label}</MonoLabel>
         {last && (
-          <Text style={{ fontFamily: fonts.uiBold, fontSize: 13, color: '#fff' }}>
+          <Text style={{ fontFamily: theme.fonts.uiBold, fontSize: 13, color: theme.colors.textPrimary }}>
             {t('result', { value: last.value.toFixed(1), unit })}
           </Text>
         )}
@@ -64,7 +65,7 @@ export function EvolutionLineChart({
       >
         {points.length < 2 || width === 0 ? (
           showEmptyHint ? (
-            <Text style={{ fontFamily: fonts.ui, fontSize: 11, color: colors.faint }}>
+            <Text style={{ fontFamily: theme.fonts.ui, fontSize: 11, color: theme.chart.label }}>
               {emptyHint}
             </Text>
           ) : null
@@ -75,8 +76,8 @@ export function EvolutionLineChart({
 
       {points.length >= 2 && (
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 2 }}>
-          <MonoLabel color={colors.faint}>{points[0].dateLabel}</MonoLabel>
-          <MonoLabel color={colors.faint}>{points[points.length - 1].dateLabel}</MonoLabel>
+          <MonoLabel color={theme.chart.label}>{points[0].dateLabel}</MonoLabel>
+          <MonoLabel color={theme.chart.label}>{points[points.length - 1].dateLabel}</MonoLabel>
         </View>
       )}
     </View>
@@ -84,6 +85,7 @@ export function EvolutionLineChart({
 }
 
 function ChartBody({ width, color, points }: { width: number; color: string; points: EvolutionPoint[] }) {
+  const { theme } = useTheme();
   const values = points.map((p) => p.value);
   const min = Math.min(...values);
   const max = Math.max(...values);
@@ -108,7 +110,7 @@ function ChartBody({ width, color, points }: { width: number; color: string; poi
         y1={HEIGHT - V_PADDING}
         x2={width}
         y2={HEIGHT - V_PADDING}
-        stroke={colors.hair}
+        stroke={theme.chart.axis}
         strokeWidth={1}
       />
       <Polyline
@@ -127,7 +129,7 @@ function ChartBody({ width, color, points }: { width: number; color: string; poi
             cx={c.x}
             cy={c.y}
             r={isEndpoint ? 3.5 : 2.5}
-            fill={isEndpoint ? color : colors.bg}
+            fill={isEndpoint ? color : theme.chart.background}
             stroke={color}
             strokeWidth={isEndpoint ? 0 : 1.5}
           />

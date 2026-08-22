@@ -21,7 +21,8 @@ import { SegBar } from '../components/ui/SegBar';
 import { Icon } from '../components/ui/Icon';
 import { OutlineNumber } from '../components/ui/OutlineNumber';
 import { ExerciseGif } from '../components/fitness/ExerciseGif';
-import { colors, fonts, displayLineHeight } from '../theme/tokens';
+import { displayLineHeight } from '../theme/tokens';
+import { useTheme } from '../theme';
 import { TODAY_WORKOUT } from '../lib/todayWorkout';
 import { logWarn } from '../lib/logger';
 import { useUnits } from '../state/UnitsContext';
@@ -195,7 +196,18 @@ function translateMuscleGroup(tLoose: LooseT, target: string): string {
 }
 
 export function WorkoutScreen({ onDone, onMinimize }: Props) {
+  const { theme } = useTheme();
   const { t } = useTranslation('workout');
+  const headerButtonStyle = {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: theme.colors.controlBackground,
+    borderWidth: 1,
+    borderColor: theme.colors.controlBorder,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  };
   const { resolvedUnits } = useUnits();
   const loadUnit = workoutLoadUnit(resolvedUnits);
   const tLoose = t as unknown as LooseT;
@@ -428,9 +440,9 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
             accessibilityRole="button"
             accessibilityLabel={t('header.accessibility.close')}
             onPress={onDone}
-            style={hdrBtnStyle}
+            style={headerButtonStyle}
           >
-            <Icon name="x" size={15} color="rgba(255,255,255,0.7)" />
+            <Icon name="x" size={15} color={theme.colors.iconEmphasis} />
           </Pressable>
           <View style={{ flex: 1 }}>
             <SegBar value={pct} segs={totalSets} />
@@ -442,7 +454,7 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
               }}
             >
               <MonoLabel>{TODAY_WORKOUT.dayLabel}</MonoLabel>
-              <MonoLabel color={colors.accentHi}>{fmt(elapsed)}</MonoLabel>
+              <MonoLabel color={theme.colors.primaryEmphasis}>{fmt(elapsed)}</MonoLabel>
               <MonoLabel>
                 {t('sets.progress', {
                   done: doneSets,
@@ -456,9 +468,9 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
             accessibilityRole="button"
             accessibilityLabel={t('header.accessibility.openQueue')}
             onPress={() => setQueueOpen(true)}
-            style={hdrBtnStyle}
+            style={headerButtonStyle}
           >
-            <Icon name="list" size={15} color="rgba(255,255,255,0.7)" />
+            <Icon name="list" size={15} color={theme.colors.iconEmphasis} />
           </Pressable>
         </View>
 
@@ -494,7 +506,7 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                 borderRadius: 6,
               }}
             >
-              <MonoLabel color="#fff">
+              <MonoLabel color={theme.colors.textPrimary}>
                 {t('header.exercisePrefix').toUpperCase()}{' '}
                 {String(exIdx + 1).padStart(2, '0')}
                 <Text style={{ opacity: 0.5 }}>
@@ -514,17 +526,17 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                 gap: 7,
                 paddingVertical: 9,
                 paddingHorizontal: 14,
-                backgroundColor: 'rgba(11,112,249,0.92)',
+                backgroundColor: theme.colors.primaryActionOverlay,
                 borderRadius: 11,
-                shadowColor: colors.accent,
+                shadowColor: theme.colors.primary,
                 shadowOpacity: 0.5,
                 shadowRadius: 12,
                 shadowOffset: { width: 0, height: 6 },
                 elevation: 6,
               }}
             >
-              <Icon name="play" size={11} color="#fff" />
-              <Text style={{ fontFamily: fonts.uiSemi, fontSize: 12, color: '#fff' }}>
+              <Icon name="play" size={11} color={theme.colors.primaryForeground} />
+              <Text style={{ fontFamily: theme.fonts.uiSemi, fontSize: 12, color: theme.colors.primaryForeground }}>
                 {t('actions.viewExecution')}
               </Text>
             </Pressable>
@@ -547,15 +559,19 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
             >
               <Slash>{translateMuscleGroup(tLoose, ex.target).toUpperCase()}</Slash>
               {wasSkipped && (
-                <Badge bg="rgba(11,112,249,0.18)" border="rgba(11,112,249,0.45)" color={colors.accentHi}>
+                <Badge
+                  bg={theme.colors.selectionBackground}
+                  border={theme.colors.primaryBorderInteractive}
+                  color={theme.colors.primaryEmphasis}
+                >
                   {t('badges.resumed').toUpperCase()}
                 </Badge>
               )}
               {isSubbed && (
                 <Badge
-                  bg="rgba(255,255,255,0.06)"
-                  border="rgba(255,255,255,0.18)"
-                  color="rgba(255,255,255,0.85)"
+                  bg={theme.colors.surfacePressed}
+                  border={theme.colors.badgeBorder}
+                  color={theme.colors.choiceTextSecondary}
                 >
                   {(sessionSubs[baseEx.id]
                     ? t('substitution.badges.today')
@@ -577,14 +593,14 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
               height: 38,
               paddingHorizontal: 12,
               borderRadius: 10,
-              backgroundColor: 'rgba(255,255,255,0.05)',
+              backgroundColor: theme.colors.controlBackground,
               borderWidth: 1,
-              borderColor: 'rgba(255,255,255,0.09)',
+              borderColor: theme.colors.controlBorder,
               marginTop: 2,
             }}
           >
-            <Icon name="swap" size={15} color={colors.accentHi} />
-            <Text style={{ fontSize: 12, fontFamily: fonts.uiSemi, color: 'rgba(255,255,255,0.85)' }}>
+            <Icon name="swap" size={15} color={theme.colors.primaryEmphasis} />
+            <Text style={{ fontSize: 12, fontFamily: theme.fonts.uiSemi, color: theme.colors.choiceTextSecondary }}>
               {t('actions.swap')}
             </Text>
           </Pressable>
@@ -596,16 +612,16 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
             style={{
               borderRadius: 18,
               padding: 18,
-              backgroundColor: 'rgba(11,112,249,0.10)',
+              backgroundColor: theme.colors.workoutActiveBackground,
               borderWidth: 1,
-              borderColor: 'rgba(11,112,249,0.4)',
+              borderColor: theme.colors.workoutActiveBorder,
               flexDirection: 'row',
               alignItems: 'center',
               gap: 18,
             }}
           >
             <View style={{ flex: 1 }}>
-              <MonoLabel color={colors.accentHi}>
+              <MonoLabel color={theme.colors.primaryEmphasis}>
                 {t('sets.next').toUpperCase()}
               </MonoLabel>
               <View style={{ flexDirection: 'row', alignItems: 'baseline', marginTop: 6 }}>
@@ -614,9 +630,9 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                 </Display>
                 <Text
                   style={{
-                    fontFamily: fonts.display,
+                    fontFamily: theme.fonts.display,
                     fontSize: 18,
-                    color: colors.faint,
+                    color: theme.colors.textFaint,
                     marginLeft: 6,
                     transform: [{ skewX: '-8deg' }],
                   }}
@@ -628,9 +644,9 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
             <View style={{ alignItems: 'center', minWidth: 60 }}>
               <Text
                 style={{
-                  fontFamily: fonts.display,
+                  fontFamily: theme.fonts.display,
                   fontSize: 40,
-                  color: '#fff',
+                  color: theme.colors.textPrimary,
                   lineHeight: displayLineHeight(40),
                   transform: [{ skewX: '-8deg' }],
                 }}
@@ -641,14 +657,14 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                 {t('reps.label').toUpperCase()}
               </MonoLabel>
             </View>
-            <View style={{ width: 1, alignSelf: 'stretch', backgroundColor: 'rgba(255,255,255,0.1)' }} />
+            <View style={{ width: 1, alignSelf: 'stretch', backgroundColor: theme.colors.dividerStrong }} />
             <View style={{ alignItems: 'center', minWidth: 66 }}>
               <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
                 <Text
                   style={{
-                    fontFamily: fonts.display,
+                    fontFamily: theme.fonts.display,
                     fontSize: 28,
-                    color: '#fff',
+                    color: theme.colors.textPrimary,
                     lineHeight: displayLineHeight(28),
                     transform: [{ skewX: '-8deg' }],
                   }}
@@ -656,7 +672,7 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                   {curLast > 0 ? formatWorkoutLoadFromKg(curLast, resolvedUnits) : '—'}
                 </Text>
                 {curLast > 0 && (
-                  <Text style={{ fontFamily: fonts.mono, fontSize: 12, color: colors.faint, marginLeft: 2 }}>
+                  <Text style={{ fontFamily: theme.fonts.mono, fontSize: 12, color: theme.colors.textFaint, marginLeft: 2 }}>
                     {loadUnit}
                   </Text>
                 )}
@@ -690,24 +706,32 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                   paddingHorizontal: 14,
                   borderRadius: 12,
                   marginBottom: 6,
-                  backgroundColor: now ? 'rgba(11,112,249,0.1)' : 'rgba(255,255,255,0.025)',
+                  backgroundColor: now
+                    ? theme.colors.workoutActiveBackground
+                    : theme.colors.workoutRowBackground,
                   borderWidth: 1,
-                  borderColor: now ? 'rgba(11,112,249,0.4)' : 'rgba(255,255,255,0.05)',
+                  borderColor: now
+                    ? theme.colors.workoutActiveBorder
+                    : theme.colors.workoutRowBorder,
                   opacity: done ? 0.5 : 1,
                 }}
               >
                 <Text
                   style={{
-                    fontFamily: fonts.display,
+                    fontFamily: theme.fonts.display,
                     fontSize: 14,
                     width: 20,
-                    color: done ? colors.accentHi : now ? '#fff' : colors.faint,
+                    color: done
+                      ? theme.colors.primaryEmphasis
+                      : now
+                        ? theme.colors.textPrimary
+                        : theme.colors.textFaint,
                     textTransform: 'uppercase',
                   }}
                 >
                   {done ? '✓' : String(i + 1).padStart(2, '0')}
                 </Text>
-                <Text style={{ fontFamily: fonts.mono, fontSize: 12, flex: 1, color: '#fff' }}>
+                <Text style={{ fontFamily: theme.fonts.mono, fontSize: 12, flex: 1, color: theme.colors.textPrimary }}>
                   {w > 0
                     ? t('sets.summaryWeighted', {
                         count: s0.r,
@@ -717,12 +741,12 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                     : t('sets.summaryBodyweight', { count: s0.r })}
                 </Text>
                 {justLogged && (
-                  <MonoLabel color={colors.accentHi}>
+                  <MonoLabel color={theme.colors.primaryEmphasis}>
                     {t('sets.registered').toUpperCase()}
                   </MonoLabel>
                 )}
                 {now && (
-                  <MonoLabel color={colors.accentHi}>
+                  <MonoLabel color={theme.colors.primaryEmphasis}>
                     {t('sets.current').toUpperCase()}
                   </MonoLabel>
                 )}
@@ -734,11 +758,11 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
         {/* CTAs */}
         <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 16 }}>
           <CtaButton onPress={completeSet}>
-            <Icon name="check" size={18} color="#fff" />
+            <Icon name="check" size={18} color={theme.colors.primaryForeground} />
             <Text
               style={{
-                color: '#fff',
-                fontFamily: fonts.display,
+                color: theme.colors.primaryForeground,
+                fontFamily: theme.fonts.display,
                 fontSize: 17,
                 letterSpacing: 1.5,
                 textTransform: 'uppercase',
@@ -757,17 +781,17 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                 marginTop: 10,
                 paddingVertical: 13,
                 borderRadius: 14,
-                backgroundColor: 'rgba(255,255,255,0.04)',
+                backgroundColor: theme.colors.inputBackgroundSubtle,
                 borderWidth: 1,
-                borderColor: 'rgba(255,255,255,0.1)',
+                borderColor: theme.colors.dividerStrong,
                 flexDirection: 'row',
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: 9,
               }}
             >
-              <Icon name="swap" size={15} color={colors.accentHi} />
-              <Text style={{ fontSize: 13.5, fontFamily: fonts.uiSemi, color: 'rgba(255,255,255,0.82)' }}>
+              <Icon name="swap" size={15} color={theme.colors.primaryEmphasis} />
+              <Text style={{ fontSize: 13.5, fontFamily: theme.fonts.uiSemi, color: theme.colors.textEmphasis }}>
                 {t('actions.skipBusy')}
               </Text>
             </Pressable>
@@ -804,7 +828,7 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
         >
           <SafeAreaView
             edges={['top', 'bottom']}
-            style={{ flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' }}
+            style={{ flex: 1, backgroundColor: theme.colors.background, alignItems: 'center', justifyContent: 'center' }}
           >
             <View
               style={{
@@ -836,14 +860,14 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                 }}
               >
                 <View style={{ flex: 1 }}>
-                  <MonoLabel color={colors.accentHi}>
+                  <MonoLabel color={theme.colors.primaryEmphasis}>
                     {t('video.execution').toUpperCase()}
                   </MonoLabel>
                   <Text
                     style={{
                       fontSize: 17,
-                      fontFamily: fonts.uiBold,
-                      color: '#fff',
+                      fontFamily: theme.fonts.uiBold,
+                      color: theme.colors.textPrimary,
                       marginTop: 3,
                     }}
                   >
@@ -876,7 +900,7 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                 style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 260 }}
               />
               <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: 22 }}>
-                <MonoLabel color={colors.accentHi} style={{ marginBottom: 10 }}>
+                <MonoLabel color={theme.colors.primaryEmphasis} style={{ marginBottom: 10 }}>
                   {t('video.keyPoints').toUpperCase()}
                 </MonoLabel>
                 {(['keyPoint1', 'keyPoint2', 'keyPoint3'] as const).map((key, i) => (
@@ -894,7 +918,7 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                         width: 6,
                         height: 6,
                         borderRadius: 3,
-                        backgroundColor: colors.accentHi,
+                        backgroundColor: theme.colors.primaryEmphasis,
                       }}
                     />
                     <Text style={{ fontSize: 13.5, color: 'rgba(255,255,255,0.88)' }}>
@@ -916,15 +940,15 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
         >
           <Pressable
             onPress={() => setSubSheet(false)}
-            style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}
+            style={{ flex: 1, backgroundColor: theme.colors.workoutSheetBackdrop, justifyContent: 'flex-end' }}
           >
             <Pressable
               onPress={(e) => e.stopPropagation()}
               style={{
                 maxHeight: '78%',
-                backgroundColor: '#05031e',
+                backgroundColor: theme.colors.workoutSheetBackground,
                 borderTopWidth: 1,
-                borderTopColor: 'rgba(11,112,249,0.4)',
+                borderTopColor: theme.colors.primaryBorderMuted,
                 borderTopLeftRadius: 20,
                 borderTopRightRadius: 20,
                 padding: 18,
@@ -936,7 +960,7 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                   width: 36,
                   height: 4,
                   borderRadius: 2,
-                  backgroundColor: 'rgba(255,255,255,0.2)',
+                  backgroundColor: theme.colors.equipmentCheckboxBorder,
                   alignSelf: 'center',
                   marginBottom: 16,
                 }}
@@ -944,7 +968,7 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
               <Slash style={{ marginBottom: 6 }}>
                 {t('substitution.sheetTitle').toUpperCase()}
               </Slash>
-              <Text style={{ fontSize: 12.5, color: colors.mute, marginBottom: 16 }}>
+              <Text style={{ fontSize: 12.5, color: theme.colors.textMuted, marginBottom: 16 }}>
                 {t('substitution.sheetSubtitle')}
               </Text>
               <ScrollView showsVerticalScrollIndicator={false}>
@@ -968,12 +992,12 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                         borderRadius: 14,
                         marginBottom: 8,
                         backgroundColor: active
-                          ? 'rgba(11,112,249,0.14)'
-                          : 'rgba(255,255,255,0.03)',
+                          ? theme.colors.primarySurface
+                          : theme.colors.surface,
                         borderWidth: 1,
                         borderColor: active
-                          ? 'rgba(11,112,249,0.5)'
-                          : 'rgba(255,255,255,0.06)',
+                          ? theme.colors.primaryBorderFocus
+                          : theme.colors.sheetDivider,
                       }}
                     >
                       <View style={{ width: 76 }}>
@@ -985,14 +1009,14 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                         />
                       </View>
                       <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 14.5, fontFamily: fonts.uiBold, color: '#fff' }}>
+                        <Text style={{ fontSize: 14.5, fontFamily: theme.fonts.uiBold, color: theme.colors.textPrimary }}>
                           {translateExerciseName(tLoose, o.db, o.name)}
                         </Text>
                         <Text
                           style={{
-                            fontFamily: fonts.mono,
+                            fontFamily: theme.fonts.mono,
                             fontSize: 9.5,
-                            color: colors.faint,
+                            color: theme.colors.textFaint,
                             letterSpacing: 1,
                             marginTop: 3,
                           }}
@@ -1005,11 +1029,11 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                         </Text>
                       </View>
                       {active ? (
-                        <MonoLabel color={colors.accentHi}>
+                        <MonoLabel color={theme.colors.primaryEmphasis}>
                           {t('substitution.labels.current').toUpperCase()}
                         </MonoLabel>
                       ) : (
-                        <Icon name="chevron-right" size={16} color="rgba(255,255,255,0.4)" />
+                        <Icon name="chevron-right" size={16} color={theme.colors.iconMuted} />
                       )}
                     </Pressable>
                   );
@@ -1030,7 +1054,7 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
             onPress={() => setPendingSub(null)}
             style={{
               flex: 1,
-              backgroundColor: 'rgba(2,0,16,0.9)',
+              backgroundColor: theme.colors.workoutDialogBackdrop,
               alignItems: 'center',
               justifyContent: 'center',
               paddingHorizontal: 28,
@@ -1042,10 +1066,10 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                 width: '100%',
                 borderRadius: 20,
                 padding: 24,
-                backgroundColor: '#080522',
+                backgroundColor: theme.colors.workoutDialogBackground,
                 borderWidth: 1,
-                borderColor: 'rgba(11,112,249,0.4)',
-                shadowColor: colors.accent,
+                borderColor: theme.colors.primaryBorderMuted,
+                shadowColor: theme.colors.primary,
                 shadowOpacity: 0.25,
                 shadowRadius: 40,
                 shadowOffset: { width: 0, height: 0 },
@@ -1063,8 +1087,8 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                 style={{
                   fontSize: 15,
                   lineHeight: 22,
-                  color: 'rgba(255,255,255,0.9)',
-                  fontFamily: fonts.uiBold,
+                  color: theme.colors.textStrong,
+                  fontFamily: theme.fonts.uiBold,
                 }}
               >
                 {t('substitution.replaceQuestion', {
@@ -1080,13 +1104,13 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                   style={{
                     paddingVertical: 15,
                     borderRadius: 14,
-                    backgroundColor: 'rgba(255,255,255,0.05)',
+                    backgroundColor: theme.colors.controlBackground,
                     borderWidth: 1,
-                    borderColor: 'rgba(255,255,255,0.12)',
+                    borderColor: theme.colors.borderStrong,
                     alignItems: 'center',
                   }}
                 >
-                  <Text style={{ fontSize: 14.5, fontFamily: fonts.uiSemi, color: '#fff' }}>
+                  <Text style={{ fontSize: 14.5, fontFamily: theme.fonts.uiSemi, color: theme.colors.textPrimary }}>
                     {t('substitution.actions.once')}
                   </Text>
                 </Pressable>
@@ -1095,16 +1119,16 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                   style={{
                     paddingVertical: 15,
                     borderRadius: 14,
-                    backgroundColor: colors.accent,
+                    backgroundColor: theme.colors.primary,
                     alignItems: 'center',
-                    shadowColor: colors.accent,
+                    shadowColor: theme.colors.primary,
                     shadowOpacity: 0.45,
                     shadowRadius: 24,
                     shadowOffset: { width: 0, height: 8 },
                     elevation: 8,
                   }}
                 >
-                  <Text style={{ fontSize: 14.5, fontFamily: fonts.uiBold, color: '#fff' }}>
+                  <Text style={{ fontSize: 14.5, fontFamily: theme.fonts.uiBold, color: theme.colors.primaryForeground }}>
                     {t('substitution.actions.permanent')}
                   </Text>
                 </Pressable>
@@ -1112,7 +1136,7 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                   onPress={() => setPendingSub(null)}
                   style={{ paddingVertical: 11, alignItems: 'center' }}
                 >
-                  <Text style={{ fontSize: 13, color: colors.mute, fontFamily: fonts.uiMed }}>
+                  <Text style={{ fontSize: 13, color: theme.colors.textMuted, fontFamily: theme.fonts.uiMed }}>
                     {t('substitution.actions.cancel')}
                   </Text>
                 </Pressable>
@@ -1130,15 +1154,15 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
         >
           <Pressable
             onPress={() => setQueueOpen(false)}
-            style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}
+            style={{ flex: 1, backgroundColor: theme.colors.workoutSheetBackdrop, justifyContent: 'flex-end' }}
           >
             <Pressable
               onPress={(e) => e.stopPropagation()}
               style={{
                 maxHeight: '75%',
-                backgroundColor: '#05031e',
+                backgroundColor: theme.colors.workoutSheetBackground,
                 borderTopWidth: 1,
-                borderTopColor: 'rgba(11,112,249,0.4)',
+                borderTopColor: theme.colors.primaryBorderMuted,
                 borderTopLeftRadius: 20,
                 borderTopRightRadius: 20,
                 padding: 18,
@@ -1150,7 +1174,7 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                   width: 36,
                   height: 4,
                   borderRadius: 2,
-                  backgroundColor: 'rgba(255,255,255,0.2)',
+                  backgroundColor: theme.colors.equipmentCheckboxBorder,
                   alignSelf: 'center',
                   marginBottom: 16,
                 }}
@@ -1175,24 +1199,26 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                         paddingHorizontal: 14,
                         borderRadius: 10,
                         marginBottom: 6,
-                        backgroundColor: now ? 'rgba(11,112,249,0.14)' : 'rgba(255,255,255,0.03)',
+                        backgroundColor: now ? theme.colors.primarySurface : theme.colors.surface,
                         borderWidth: 1,
-                        borderColor: now ? 'rgba(11,112,249,0.5)' : 'rgba(255,255,255,0.05)',
+                        borderColor: now
+                          ? theme.colors.primaryBorderFocus
+                          : theme.colors.workoutRowBorder,
                       }}
                     >
                       <Text
                         style={{
-                          fontFamily: fonts.display,
+                          fontFamily: theme.fonts.display,
                           fontSize: 14,
                           width: 26,
-                          color: colors.faint,
+                          color: theme.colors.textFaint,
                           textTransform: 'uppercase',
                         }}
                       >
                         {String(pos + 1).padStart(2, '0')}
                       </Text>
                       <View style={{ flex: 1 }}>
-                        <Text style={{ fontFamily: fonts.uiBold, fontSize: 14, color: '#fff' }}>
+                        <Text style={{ fontFamily: theme.fonts.uiBold, fontSize: 14, color: theme.colors.textPrimary }}>
                           {translateExerciseName(
                             tLoose,
                             resolve(e).db,
@@ -1201,9 +1227,9 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                         </Text>
                         <Text
                           style={{
-                            fontFamily: fonts.mono,
+                            fontFamily: theme.fonts.mono,
                             fontSize: 9.5,
-                            color: colors.faint,
+                            color: theme.colors.textFaint,
                             letterSpacing: 1,
                             marginTop: 2,
                           }}
@@ -1217,12 +1243,12 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                         </Text>
                       </View>
                       {wasSkip && !now && (
-                        <MonoLabel color={colors.accentHi}>
+                        <MonoLabel color={theme.colors.primaryEmphasis}>
                           {t('queue.states.skipped').toUpperCase()}
                         </MonoLabel>
                       )}
                       {now && (
-                        <MonoLabel color={colors.accentHi}>
+                        <MonoLabel color={theme.colors.primaryEmphasis}>
                           {t('queue.states.now').toUpperCase()}
                         </MonoLabel>
                       )}
@@ -1242,24 +1268,24 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                         borderRadius: 10,
                         marginBottom: 6,
                         opacity: 0.4,
-                        backgroundColor: 'rgba(255,255,255,0.02)',
+                        backgroundColor: theme.colors.surfaceSubtle,
                         borderWidth: 1,
-                        borderColor: 'rgba(255,255,255,0.05)',
+                        borderColor: theme.colors.workoutRowBorder,
                       }}
                     >
                       <Text
                         style={{
-                          fontFamily: fonts.display,
+                          fontFamily: theme.fonts.display,
                           fontSize: 14,
                           width: 26,
-                          color: colors.accentHi,
+                          color: theme.colors.primaryEmphasis,
                           textTransform: 'uppercase',
                         }}
                       >
                         ✓
                       </Text>
                       <View style={{ flex: 1 }}>
-                        <Text style={{ fontFamily: fonts.uiBold, fontSize: 14, color: '#fff' }}>
+                        <Text style={{ fontFamily: theme.fonts.uiBold, fontSize: 14, color: theme.colors.textPrimary }}>
                           {translateExerciseName(
                             tLoose,
                             resolve(e).db,
@@ -1268,9 +1294,9 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                         </Text>
                         <Text
                           style={{
-                            fontFamily: fonts.mono,
+                            fontFamily: theme.fonts.mono,
                             fontSize: 9.5,
-                            color: colors.faint,
+                            color: theme.colors.textFaint,
                             letterSpacing: 1,
                             marginTop: 2,
                           }}
@@ -1294,17 +1320,6 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
   );
 }
 
-const hdrBtnStyle = {
-  width: 38,
-  height: 38,
-  borderRadius: 10,
-  backgroundColor: 'rgba(255,255,255,0.05)',
-  borderWidth: 1,
-  borderColor: 'rgba(255,255,255,0.09)',
-  alignItems: 'center' as const,
-  justifyContent: 'center' as const,
-};
-
 function Badge({
   children,
   bg,
@@ -1316,6 +1331,7 @@ function Badge({
   border: string;
   color: string;
 }) {
+  const { theme } = useTheme();
   return (
     <View
       style={{
@@ -1329,7 +1345,7 @@ function Badge({
     >
       <Text
         style={{
-          fontFamily: fonts.monoBold,
+          fontFamily: theme.fonts.monoBold,
           fontSize: 9,
           letterSpacing: 1,
           color,
@@ -1364,9 +1380,20 @@ function RestOverlay({
   onSkip: () => void;
   onMinimize?: () => void;
 }) {
+  const { theme } = useTheme();
   const { t } = useTranslation('workout');
   const { resolvedUnits } = useUnits();
   const loadUnit = workoutLoadUnit(resolvedUnits);
+  const registerButtonStyle = {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: theme.colors.selectionBackground,
+    borderWidth: 1,
+    borderColor: theme.colors.primaryBorderInteractive,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  };
   return (
     <View
       style={{
@@ -1375,7 +1402,7 @@ function RestOverlay({
         left: 0,
         right: 0,
         bottom: 0,
-        backgroundColor: 'rgba(2,0,16,0.96)',
+        backgroundColor: theme.colors.workoutOverlayStrong,
         alignItems: 'center',
         justifyContent: 'center',
         paddingHorizontal: 28,
@@ -1397,13 +1424,13 @@ function RestOverlay({
             paddingVertical: 9,
             paddingHorizontal: 14,
             borderRadius: 999,
-            backgroundColor: 'rgba(255,255,255,0.06)',
+            backgroundColor: theme.colors.surfacePressed,
             borderWidth: 1,
-            borderColor: 'rgba(255,255,255,0.12)',
+            borderColor: theme.colors.borderStrong,
           }}
         >
-          <Icon name="minus" size={13} color={colors.accentHi} />
-          <Text style={{ fontFamily: fonts.mono, fontSize: 10, letterSpacing: 1, color: '#fff' }}>
+          <Icon name="minus" size={13} color={theme.colors.primaryEmphasis} />
+          <Text style={{ fontFamily: theme.fonts.mono, fontSize: 10, letterSpacing: 1, color: theme.colors.textPrimary }}>
             {t('rest.minimize').toUpperCase()}
           </Text>
         </Pressable>
@@ -1411,12 +1438,12 @@ function RestOverlay({
       <Slash style={{ marginBottom: 14 }}>{t('rest.title').toUpperCase()}</Slash>
       <Text
         style={{
-          fontFamily: fonts.display,
+          fontFamily: theme.fonts.display,
           fontSize: 104,
-          color: '#fff',
+          color: theme.colors.textPrimary,
           lineHeight: displayLineHeight(104),
           transform: [{ skewX: '-8deg' }],
-          textShadowColor: 'rgba(11,112,249,0.7)',
+          textShadowColor: theme.colors.primaryGlowStrong,
           textShadowRadius: 40,
           textShadowOffset: { width: 0, height: 0 },
         }}
@@ -1435,9 +1462,9 @@ function RestOverlay({
           marginTop: 36,
           borderRadius: 18,
           padding: 18,
-          backgroundColor: 'rgba(255,255,255,0.04)',
+          backgroundColor: theme.colors.inputBackgroundSubtle,
           borderWidth: 1,
-          borderColor: 'rgba(255,255,255,0.1)',
+          borderColor: theme.colors.dividerStrong,
         }}
       >
         <View
@@ -1451,7 +1478,7 @@ function RestOverlay({
           <MonoLabel>
             {t('rest.logLoad', { setNumber }).toUpperCase()}
           </MonoLabel>
-          <Text style={{ fontSize: 10.5, color: colors.faint, fontStyle: 'italic' }}>
+          <Text style={{ fontSize: 10.5, color: theme.colors.textFaint, fontStyle: 'italic' }}>
             {t('rest.optional')}
           </Text>
         </View>
@@ -1465,9 +1492,9 @@ function RestOverlay({
         >
           <Pressable
             onPress={() => setRegWeight((kg: number) => adjustWorkoutLoadKg(kg, -1, resolvedUnits))}
-            style={regBtnStyle}
+            style={registerButtonStyle}
           >
-            <Icon name="minus" size={16} color={colors.accentHi} />
+            <Icon name="minus" size={16} color={theme.colors.primaryEmphasis} />
           </Pressable>
           <View
             style={{
@@ -1480,7 +1507,7 @@ function RestOverlay({
             <TextInput
               value={regWeight > 0 ? formatWorkoutLoadFromKg(regWeight, resolvedUnits) : ''}
               placeholder="—"
-              placeholderTextColor={colors.faint}
+              placeholderTextColor={theme.colors.textFaint}
               keyboardType="decimal-pad"
               onChangeText={(t) => {
                 const v = t.replace(',', '.').replace(/[^0-9.]/g, '');
@@ -1489,23 +1516,23 @@ function RestOverlay({
               style={{
                 width: 96,
                 textAlign: 'center',
-                fontFamily: fonts.display,
+                fontFamily: theme.fonts.display,
                 transform: [{ skewX: '-8deg' }],
                 fontSize: 46,
                 lineHeight: displayLineHeight(46),
-                color: '#fff',
+                color: theme.colors.inputText,
                 padding: 0,
               }}
             />
-            <Text style={{ fontSize: 14, color: colors.faint, marginLeft: 2 }}>
+            <Text style={{ fontSize: 14, color: theme.colors.textFaint, marginLeft: 2 }}>
               {loadUnit}
             </Text>
           </View>
           <Pressable
             onPress={() => setRegWeight((kg: number) => adjustWorkoutLoadKg(kg, 1, resolvedUnits))}
-            style={regBtnStyle}
+            style={registerButtonStyle}
           >
-            <Icon name="plus" size={16} color={colors.accentHi} />
+            <Icon name="plus" size={16} color={theme.colors.primaryEmphasis} />
           </Pressable>
         </View>
         <Text
@@ -1513,8 +1540,8 @@ function RestOverlay({
             textAlign: 'center',
             marginTop: 10,
             fontSize: 10.5,
-            color: colors.faint,
-            fontFamily: fonts.mono,
+            color: theme.colors.textFaint,
+            fontFamily: theme.fonts.mono,
           }}
         >
           {t('rest.inputHint')}
@@ -1530,16 +1557,16 @@ function RestOverlay({
             paddingVertical: 14,
             paddingHorizontal: 22,
             borderRadius: 12,
-            backgroundColor: 'rgba(255,255,255,0.06)',
+            backgroundColor: theme.colors.surfacePressed,
             borderWidth: 1,
-            borderColor: 'rgba(255,255,255,0.12)',
+            borderColor: theme.colors.borderStrong,
           }}
         >
           {/* "+15s" is a universal compact glyph — kept verbatim across
               locales; the semantic label lives in `accessibilityLabel`
               (rest.addSecondsAccessibility) so screen readers announce
               "Add 15 seconds" in the active language. */}
-          <Text style={{ fontFamily: fonts.mono, fontSize: 12, letterSpacing: 1, color: '#fff' }}>
+          <Text style={{ fontFamily: theme.fonts.mono, fontSize: 12, letterSpacing: 1, color: theme.colors.textPrimary }}>
             +15s
           </Text>
         </Pressable>
@@ -1549,8 +1576,8 @@ function RestOverlay({
             paddingVertical: 14,
             paddingHorizontal: 28,
             borderRadius: 12,
-            backgroundColor: colors.accent,
-            shadowColor: colors.accent,
+            backgroundColor: theme.colors.primary,
+            shadowColor: theme.colors.primary,
             shadowOpacity: 0.5,
             shadowRadius: 24,
             shadowOffset: { width: 0, height: 8 },
@@ -1559,10 +1586,10 @@ function RestOverlay({
         >
           <Text
             style={{
-              fontFamily: fonts.display,
+              fontFamily: theme.fonts.display,
               fontSize: 14,
               letterSpacing: 1.5,
-              color: '#fff',
+              color: theme.colors.primaryForeground,
               textTransform: 'uppercase',
             }}
           >
@@ -1573,17 +1600,6 @@ function RestOverlay({
     </View>
   );
 }
-
-const regBtnStyle = {
-  width: 44,
-  height: 44,
-  borderRadius: 12,
-  backgroundColor: 'rgba(11,112,249,0.18)',
-  borderWidth: 1,
-  borderColor: 'rgba(11,112,249,0.45)',
-  alignItems: 'center' as const,
-  justifyContent: 'center' as const,
-};
 
 /* ─────────────────────────── PR CELEBRATION ─────────────────────────── */
 
@@ -1596,6 +1612,7 @@ function PROverlay({
   exName: string;
   prev: number;
 }) {
+  const { theme } = useTheme();
   const { t } = useTranslation('workout');
   const { resolvedUnits } = useUnits();
   const loadUnit = workoutLoadUnit(resolvedUnits);
@@ -1610,7 +1627,7 @@ function PROverlay({
         left: 0,
         right: 0,
         bottom: 0,
-        backgroundColor: 'rgba(2,0,16,0.95)',
+        backgroundColor: theme.colors.workoutOverlay,
         alignItems: 'center',
         justifyContent: 'center',
         paddingHorizontal: 28,
@@ -1630,7 +1647,7 @@ function PROverlay({
       >
         <PulseRings />
         <PopBadge>
-          <Icon name="trophy" size={46} color="#fff" stroke={2.2} />
+          <Icon name="trophy" size={46} color={theme.colors.primaryForeground} stroke={2.2} />
         </PopBadge>
       </View>
       <Slash style={{ marginBottom: 12 }}>{t('record.new').toUpperCase()}</Slash>
@@ -1638,9 +1655,9 @@ function PROverlay({
         <Display size={46}>{displayedWeight}</Display>
         <Text
           style={{
-            fontFamily: fonts.display,
+            fontFamily: theme.fonts.display,
             fontSize: 22,
-            color: colors.accentHi,
+            color: theme.colors.primaryEmphasis,
             marginLeft: 6,
             transform: [{ skewX: '-8deg' }],
           }}
@@ -1652,13 +1669,13 @@ function PROverlay({
         style={{
           marginTop: 14,
           fontSize: 14,
-          color: colors.mute,
+          color: theme.colors.textMuted,
           textAlign: 'center',
-          fontFamily: fonts.ui,
+          fontFamily: theme.fonts.ui,
         }}
       >
         {t('record.previousContext', { exName, previous: displayedPrevious, unit: loadUnit })}{' '}
-        <Text style={{ color: colors.accentHi, fontFamily: fonts.uiBold }}>
+        <Text style={{ color: theme.colors.primaryEmphasis, fontFamily: theme.fonts.uiBold }}>
           {t('record.gain', { delta: displayedDelta, unit: loadUnit })}
         </Text>
       </Text>
@@ -1666,7 +1683,9 @@ function PROverlay({
   );
 }
 
-const CONFETTI_COLORS = [colors.accent, colors.accentHi, '#ffffff', '#1f82ff'];
+// Celebration artwork keeps its fixed AJ Fit brand palette independent from
+// the surrounding interface theme.
+const CONFETTI_COLORS = ['#0b70f9', '#4da3ff', '#ffffff', '#1f82ff'];
 
 function Confetti() {
   const anims = useRef(
@@ -1726,6 +1745,7 @@ function Confetti() {
 }
 
 function PulseRings() {
+  const { theme } = useTheme();
   const rings = useRef([new Animated.Value(0), new Animated.Value(0), new Animated.Value(0)]).current;
   useEffect(() => {
     const loops = rings.map((r, i) =>
@@ -1761,7 +1781,7 @@ function PulseRings() {
             height: 96,
             borderRadius: 48,
             borderWidth: 2,
-            borderColor: 'rgba(11,112,249,0.55)',
+            borderColor: theme.colors.primaryGlow,
             opacity: r.interpolate({ inputRange: [0, 1], outputRange: [0.8, 0] }),
             transform: [
               {
@@ -1776,6 +1796,7 @@ function PulseRings() {
 }
 
 function PopBadge({ children }: { children: React.ReactNode }) {
+  const { theme } = useTheme();
   const s = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     Animated.sequence([
@@ -1796,7 +1817,7 @@ function PopBadge({ children }: { children: React.ReactNode }) {
   return (
     <Animated.View style={{ transform: [{ scale: s }] }}>
       <LinearGradient
-        colors={['#1f82ff', colors.accent]}
+        colors={theme.gradients.brand}
         start={{ x: 0, y: 0 }}
         end={{ x: 0, y: 1 }}
         style={{
@@ -1805,7 +1826,7 @@ function PopBadge({ children }: { children: React.ReactNode }) {
           borderRadius: 48,
           alignItems: 'center',
           justifyContent: 'center',
-          shadowColor: colors.accent,
+          shadowColor: theme.colors.primary,
           shadowOpacity: 0.7,
           shadowRadius: 30,
           shadowOffset: { width: 0, height: 0 },
@@ -1821,6 +1842,7 @@ function PopBadge({ children }: { children: React.ReactNode }) {
 /* ─────────────────────── EXERCISE DONE TRANSITION ─────────────────────── */
 
 function ExerciseDoneOverlay({ name, nextName }: { name: string; nextName: string }) {
+  const { theme } = useTheme();
   const { t } = useTranslation('workout');
   return (
     <View
@@ -1830,7 +1852,7 @@ function ExerciseDoneOverlay({ name, nextName }: { name: string; nextName: strin
         left: 0,
         right: 0,
         bottom: 0,
-        backgroundColor: 'rgba(2,0,16,0.96)',
+        backgroundColor: theme.colors.workoutOverlayStrong,
         alignItems: 'center',
         justifyContent: 'center',
         paddingHorizontal: 28,
@@ -1848,7 +1870,7 @@ function ExerciseDoneOverlay({ name, nextName }: { name: string; nextName: strin
       >
         <PulseRings />
         <PopBadge>
-          <Icon name="check" size={48} color="#fff" stroke={3} />
+          <Icon name="check" size={48} color={theme.colors.primaryForeground} stroke={3} />
         </PopBadge>
       </View>
       <Slash style={{ marginBottom: 12 }}>
@@ -1866,16 +1888,16 @@ function ExerciseDoneOverlay({ name, nextName }: { name: string; nextName: strin
           paddingVertical: 12,
           paddingHorizontal: 18,
           borderRadius: 14,
-          backgroundColor: 'rgba(255,255,255,0.05)',
+          backgroundColor: theme.colors.controlBackground,
           borderWidth: 1,
-          borderColor: 'rgba(11,112,249,0.35)',
+          borderColor: theme.colors.primaryBorderSubtle,
         }}
       >
-        <MonoLabel color={colors.accentHi}>
+        <MonoLabel color={theme.colors.primaryEmphasis}>
           {t('exerciseDone.nextLabel').toUpperCase()}
         </MonoLabel>
-        <Icon name="arrow-right" size={15} color={colors.accentHi} />
-        <Text style={{ fontSize: 15, fontFamily: fonts.uiBold, color: '#fff' }}>{nextName}</Text>
+        <Icon name="arrow-right" size={15} color={theme.colors.primaryEmphasis} />
+        <Text style={{ fontSize: 15, fontFamily: theme.fonts.uiBold, color: theme.colors.textPrimary }}>{nextName}</Text>
       </View>
     </View>
   );
@@ -1884,6 +1906,7 @@ function ExerciseDoneOverlay({ name, nextName }: { name: string; nextName: strin
 /* ─────────────────────────── WORKOUT DONE ─────────────────────────── */
 
 function WorkoutDone({ elapsed, onDone }: { elapsed: number; onDone: () => void }) {
+  const { theme } = useTheme();
   const { t } = useTranslation('workout');
   const fmt = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
   return (
@@ -1901,7 +1924,7 @@ function WorkoutDone({ elapsed, onDone }: { elapsed: number; onDone: () => void 
             {t('done.kicker').toUpperCase()}
           </Slash>
           <Display size={46}>{t('done.titleLine1').toUpperCase()}</Display>
-          <Display size={46} color={colors.accentHi}>
+          <Display size={46} color={theme.colors.primaryEmphasis}>
             {t('done.titleLine2').toUpperCase()}
           </Display>
 
@@ -1925,9 +1948,9 @@ function WorkoutDone({ elapsed, onDone }: { elapsed: number; onDone: () => void 
                 <MonoLabel>{t(`done.metrics.${s.key}`).toUpperCase()}</MonoLabel>
                 <Text
                   style={{
-                    fontFamily: fonts.display,
+                    fontFamily: theme.fonts.display,
                     fontSize: 30,
-                    color: '#fff',
+                    color: theme.colors.textPrimary,
                     marginTop: 8,
                     transform: [{ skewX: '-8deg' }],
                     textTransform: 'uppercase',
@@ -1944,19 +1967,19 @@ function WorkoutDone({ elapsed, onDone }: { elapsed: number; onDone: () => void 
               {t('done.streak.updated').toUpperCase()}
             </MonoLabel>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-              <Icon name="flame" size={26} color={colors.accentHi} />
+              <Icon name="flame" size={26} color={theme.colors.primaryEmphasis} />
               <Text
                 style={{
-                  fontFamily: fonts.display,
+                  fontFamily: theme.fonts.display,
                   fontSize: 34,
-                  color: '#fff',
+                  color: theme.colors.textPrimary,
                   transform: [{ skewX: '-8deg' }],
                   textTransform: 'uppercase',
                 }}
               >
                 {t('done.streak.days', { count: 15 }).toUpperCase()}
               </Text>
-              <Text style={{ fontFamily: fonts.ui, fontSize: 12, color: colors.mute }}>
+              <Text style={{ fontFamily: theme.fonts.ui, fontSize: 12, color: theme.colors.textMuted }}>
                 {t('done.streak.untilRecord', { count: 6 })}
               </Text>
             </View>
@@ -1966,8 +1989,8 @@ function WorkoutDone({ elapsed, onDone }: { elapsed: number; onDone: () => void 
           <CtaButton onPress={onDone}>
             <Text
               style={{
-                color: '#fff',
-                fontFamily: fonts.display,
+                color: theme.colors.primaryForeground,
+                fontFamily: theme.fonts.display,
                 fontSize: 17,
                 letterSpacing: 1.5,
                 textTransform: 'uppercase',
@@ -1975,7 +1998,7 @@ function WorkoutDone({ elapsed, onDone }: { elapsed: number; onDone: () => void 
             >
               {t('done.backHome')}
             </Text>
-            <Icon name="arrow-right" size={18} color="#fff" />
+            <Icon name="arrow-right" size={18} color={theme.colors.primaryForeground} />
           </CtaButton>
         </View>
       </SafeAreaView>

@@ -7,7 +7,8 @@ import { Display, MonoLabel } from '../components/ui/Display';
 import { Card } from '../components/ui/Card';
 import { SegBar } from '../components/ui/SegBar';
 import { Icon } from '../components/ui/Icon';
-import { colors, fonts, displayLineHeight } from '../theme/tokens';
+import { displayLineHeight } from '../theme/tokens';
+import { useTheme, type AppTheme } from '../theme';
 
 type Status = 'done' | 'today' | 'missed' | 'pending' | 'rest' | 'restFuture';
 
@@ -34,42 +35,43 @@ type CellStyle = {
   color: string;
 };
 
-function cellStyleFor(s: Status): CellStyle {
+function cellStyleFor(s: Status, theme: AppTheme): CellStyle {
   switch (s) {
     case 'done':
       return {
-        background: 'rgba(11,112,249,0.28)',
-        border: 'rgba(11,112,249,0.5)',
-        color: '#fff',
+        background: theme.chart.consistency.doneBackground,
+        border: theme.chart.consistency.doneBorder,
+        color: theme.colors.textPrimary,
       };
     case 'today':
       return {
-        background: { colors: ['#1f82ff', '#0b70f9'] as const },
-        border: '#7db4ff',
-        color: '#fff',
+        background: { colors: theme.chart.consistency.todayGradient },
+        border: theme.chart.consistency.todayBorder,
+        color: theme.colors.primaryForeground,
       };
     case 'missed':
       return {
-        background: 'rgba(255,80,80,0.1)',
-        border: 'rgba(255,90,90,0.4)',
-        color: '#ff9a9a',
+        background: theme.chart.consistency.missedBackground,
+        border: theme.chart.consistency.missedBorder,
+        color: theme.chart.consistency.missedText,
       };
     case 'pending':
       return {
-        background: 'rgba(255,255,255,0.03)',
-        border: 'rgba(11,112,249,0.55)',
-        color: '#7db4ff',
+        background: theme.colors.surface,
+        border: theme.chart.consistency.pendingBorder,
+        color: theme.chart.consistency.pendingText,
       };
     case 'rest':
-      return { background: 'transparent', border: 'transparent', color: 'rgba(255,255,255,0.28)' };
+      return { background: 'transparent', border: 'transparent', color: theme.colors.decorativeOutline };
     default:
-      return { background: 'transparent', border: 'transparent', color: 'rgba(255,255,255,0.35)' };
+      return { background: 'transparent', border: 'transparent', color: theme.colors.controlHighlight };
   }
 }
 
 function DayCell({ d }: { d: number }) {
+  const { theme } = useTheme();
   const s = statusOf(d);
-  const cs = cellStyleFor(s);
+  const cs = cellStyleFor(s, theme);
   const dashed = s === 'pending';
   const isGradient = typeof cs.background !== 'string';
 
@@ -77,7 +79,7 @@ function DayCell({ d }: { d: number }) {
     <>
       <Text
         style={{
-          fontFamily: fonts.mono,
+          fontFamily: theme.fonts.mono,
           fontSize: 13,
           color: cs.color,
         }}
@@ -92,7 +94,7 @@ function DayCell({ d }: { d: number }) {
             width: 4,
             height: 4,
             borderRadius: 2,
-            backgroundColor: '#7db4ff',
+            backgroundColor: theme.chart.consistency.doneMarker,
           }}
         />
       )}
@@ -120,7 +122,7 @@ function DayCell({ d }: { d: number }) {
         style={[
           commonWrap,
           {
-            shadowColor: colors.accent,
+            shadowColor: theme.colors.primary,
             shadowOpacity: 0.7,
             shadowRadius: 8,
             shadowOffset: { width: 0, height: 0 },
@@ -139,7 +141,8 @@ function DayCell({ d }: { d: number }) {
 }
 
 function LegendChip({ status, label }: { status: Status; label: string }) {
-  const cs = cellStyleFor(status);
+  const { theme } = useTheme();
+  const cs = cellStyleFor(status, theme);
   const isGradient = typeof cs.background !== 'string';
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
@@ -169,12 +172,13 @@ function LegendChip({ status, label }: { status: Status; label: string }) {
           }}
         />
       )}
-      <Text style={{ fontFamily: fonts.ui, fontSize: 11.5, color: colors.mute }}>{label}</Text>
+      <Text style={{ fontFamily: theme.fonts.ui, fontSize: 11.5, color: theme.colors.textMuted }}>{label}</Text>
     </View>
   );
 }
 
 export function ConsistencyScreen({ onBack }: { onBack: () => void }) {
+  const { theme } = useTheme();
   const { t } = useTranslation('home');
   const daysLeft = DAYS - TODAY;
   let doneCount = 0;
@@ -211,14 +215,14 @@ export function ConsistencyScreen({ onBack }: { onBack: () => void }) {
               width: 38,
               height: 38,
               borderRadius: 10,
-              backgroundColor: 'rgba(255,255,255,0.05)',
+              backgroundColor: theme.colors.controlBackground,
               borderWidth: 1,
-              borderColor: 'rgba(255,255,255,0.09)',
+              borderColor: theme.colors.controlBorder,
               alignItems: 'center',
               justifyContent: 'center',
             }}
           >
-            <Icon name="arrow-left" size={17} color="#fff" />
+            <Icon name="arrow-left" size={17} color={theme.colors.textPrimary} />
           </Pressable>
           <View style={{ flex: 1, alignItems: 'center' }}>
             <MonoLabel>{t('monthlyConsistency.title').toUpperCase()}</MonoLabel>
@@ -238,7 +242,7 @@ export function ConsistencyScreen({ onBack }: { onBack: () => void }) {
           </Display>
 
           <LinearGradient
-            colors={['rgba(11,112,249,0.22)', 'rgba(11,112,249,0.04)']}
+            colors={theme.gradients.accentSummary}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={{
@@ -246,7 +250,7 @@ export function ConsistencyScreen({ onBack }: { onBack: () => void }) {
               padding: 18,
               borderRadius: 16,
               borderWidth: 1,
-              borderColor: 'rgba(11,112,249,0.4)',
+              borderColor: theme.colors.primaryBorderMuted,
             }}
           >
             <MonoLabel>{t('monthlyConsistency.remainingTitle').toUpperCase()}</MonoLabel>
@@ -261,9 +265,9 @@ export function ConsistencyScreen({ onBack }: { onBack: () => void }) {
               <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 6 }}>
                 <Text
                   style={{
-                    fontFamily: fonts.display,
+                    fontFamily: theme.fonts.display,
                     fontSize: 46,
-                    color: '#fff',
+                    color: theme.colors.textPrimary,
                     lineHeight: displayLineHeight(46),
                     transform: [{ skewX: '-8deg' }],
                   }}
@@ -284,9 +288,9 @@ export function ConsistencyScreen({ onBack }: { onBack: () => void }) {
               >
                 <Text
                   style={{
-                    fontFamily: fonts.display,
+                    fontFamily: theme.fonts.display,
                     fontSize: 30,
-                    color: '#7db4ff',
+                    color: theme.chart.consistency.pendingText,
                     lineHeight: displayLineHeight(30),
                     transform: [{ skewX: '-8deg' }],
                   }}
@@ -321,9 +325,9 @@ export function ConsistencyScreen({ onBack }: { onBack: () => void }) {
                 <View key={i} style={{ flex: 1, alignItems: 'center' }}>
                   <Text
                     style={{
-                      fontFamily: fonts.mono,
+                      fontFamily: theme.fonts.mono,
                       fontSize: 9,
-                      color: colors.faint,
+                      color: theme.colors.textFaint,
                       letterSpacing: 1,
                     }}
                   >

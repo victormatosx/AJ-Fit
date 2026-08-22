@@ -3,7 +3,8 @@ import { View, type ImageSourcePropType } from 'react-native';
 import { Image } from 'expo-image';
 import { Icon, type IconName } from './Icon';
 import { MonoLabel } from './Display';
-import { colors, radii } from '../../theme/tokens';
+import { radii } from '../../theme/tokens';
+import { useTheme } from '../../theme';
 
 /** Modern-smartphone screen proportion (width / height). */
 const SCREEN_ASPECT_RATIO = 9 / 19.5;
@@ -35,6 +36,7 @@ export function PhoneFrame({
    */
   cropRatio?: number;
 }) {
+  const { theme } = useTheme();
   const fullHeight = width / SCREEN_ASPECT_RATIO;
   const height = fullHeight * cropRatio;
   // A crop should read as a genuine cut, not a rounded card — round only
@@ -53,11 +55,11 @@ export function PhoneFrame({
         borderBottomRightRadius: cropped ? 0 : radii.xxl + BEZEL,
         borderWidth: 2,
         borderBottomWidth: cropped ? 0 : 2,
-        borderColor: colors.borderStrong,
-        backgroundColor: colors.bg2,
+        borderColor: theme.colors.borderStrong,
+        backgroundColor: theme.colors.backgroundSecondary,
         padding: BEZEL,
         paddingBottom: cropped ? 0 : BEZEL,
-        shadowColor: '#000',
+        shadowColor: theme.colors.floatingShadow,
         shadowOffset: { width: 0, height: 12 },
         shadowOpacity: 0.3,
         shadowRadius: 22,
@@ -72,7 +74,7 @@ export function PhoneFrame({
           borderBottomLeftRadius: cropped ? 0 : radii.xxl,
           borderBottomRightRadius: cropped ? 0 : radii.xxl,
           overflow: 'hidden',
-          backgroundColor: colors.surface,
+          backgroundColor: theme.colors.surface,
         }}
       >
         {image ? (
@@ -97,14 +99,14 @@ export function PhoneFrame({
                 width: 46,
                 height: 46,
                 borderRadius: 13,
-                backgroundColor: colors.accentSoft,
+                backgroundColor: theme.colors.primarySoft,
                 alignItems: 'center',
                 justifyContent: 'center',
               }}
             >
-              <Icon name={placeholderIcon} size={20} color={colors.accentHi} />
+              <Icon name={placeholderIcon} size={20} color={theme.colors.primaryEmphasis} />
             </View>
-            <MonoLabel color={colors.faint} size={9}>
+            <MonoLabel color={theme.colors.textFaint} size={9}>
               {placeholderLabel}
             </MonoLabel>
           </View>

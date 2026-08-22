@@ -64,7 +64,7 @@ import {
   PREMIUM_ENTITLEMENT_ID,
 } from '../services/revenueCatService';
 import { authorizePromoPurchase } from '../services/promoCodeService';
-import { colors, fonts } from '../theme/tokens';
+import { useTheme } from '../theme';
 
 /**
  * FASE iOS-3 — derived from `isPromoCodeUiSupported` (see its doc comment,
@@ -114,6 +114,7 @@ export function PaywallScreen({
    */
   entryContext?: OnboardingAuthContext | null;
 }) {
+  const { theme } = useTheme();
   const { t } = useTranslation('common');
   const {
     offerings,
@@ -746,7 +747,7 @@ export function PaywallScreen({
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
               <LinearGradient
-                colors={['rgba(11,112,249,0.3)', 'rgba(11,112,249,0.08)']}
+                colors={theme.gradients.sheetAccent}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={{
@@ -754,15 +755,15 @@ export function PaywallScreen({
                   height: 48,
                   borderRadius: 14,
                   borderWidth: 1,
-                  borderColor: 'rgba(77,163,255,0.4)',
+                  borderColor: theme.colors.primaryBorder,
                   alignItems: 'center',
                   justifyContent: 'center',
                 }}
               >
-                <Icon name="crown" size={22} color={colors.accentHi} />
+                <Icon name="crown" size={22} color={theme.colors.primaryEmphasis} />
               </LinearGradient>
               <View style={{ flex: 1 }}>
-                <MonoLabel color={colors.accentHi}>AJ FIT PREMIUM</MonoLabel>
+                <MonoLabel color={theme.colors.primaryEmphasis}>AJ FIT PREMIUM</MonoLabel>
                 <Display size={27} style={{ marginTop: 4 }}>
                   Escolha seu plano
                 </Display>
@@ -772,10 +773,10 @@ export function PaywallScreen({
             <Text
               style={{
                 marginTop: 14,
-                fontFamily: fonts.ui,
+                fontFamily: theme.fonts.ui,
                 fontSize: 14,
                 lineHeight: 21,
-                color: colors.mute,
+                color: theme.colors.textMuted,
               }}
             >
               {entryContext?.origin === 'planCompleted'
@@ -841,7 +842,7 @@ export function PaywallScreen({
                 }
               >
                 {isPurchasing ? (
-                  <ActivityIndicator color="#fff" />
+                  <ActivityIndicator color={theme.colors.primaryForeground} />
                 ) : (
                   <CtaText>Continuar</CtaText>
                 )}
@@ -869,6 +870,7 @@ function PaywallHeader({
   disabled: boolean;
   accessibilityLabel: string;
 }) {
+  const { theme } = useTheme();
   return (
     <View
       style={{
@@ -889,15 +891,15 @@ function PaywallHeader({
           width: 42,
           height: 42,
           borderRadius: 12,
-          backgroundColor: colors.cardBgHi,
+          backgroundColor: theme.colors.cardBackgroundElevated,
           borderWidth: 1,
-          borderColor: colors.hair,
+          borderColor: theme.colors.divider,
           alignItems: 'center',
           justifyContent: 'center',
           opacity: disabled ? 0.4 : 1,
         }}
       >
-        <Icon name="x" size={18} color="#fff" />
+        <Icon name="x" size={18} color={theme.colors.textPrimary} />
       </Pressable>
       <View style={{ flex: 1, alignItems: 'center' }}>
         <MonoLabel>ASSINATURA</MonoLabel>
@@ -920,6 +922,7 @@ function PackageCard({
   promotionalTerms?: string | null;
   onSelect: () => void;
 }) {
+  const { theme } = useTheme();
   const period = packagePeriodLabel(pkg);
   return (
     <Pressable
@@ -935,9 +938,9 @@ function PackageCard({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 14,
-        backgroundColor: selected ? 'rgba(11,112,249,0.13)' : colors.cardBg,
+        backgroundColor: selected ? theme.colors.primarySurfaceSelected : theme.colors.cardBackground,
         borderWidth: selected ? 1.5 : 1,
-        borderColor: selected ? colors.accentHi : colors.cardBorder,
+        borderColor: selected ? theme.colors.primaryEmphasis : theme.colors.cardBorder,
         opacity: disabled ? 0.55 : 1,
       }}
     >
@@ -947,20 +950,20 @@ function PackageCard({
           height: 22,
           borderRadius: 11,
           borderWidth: 1.5,
-          borderColor: selected ? colors.accentHi : colors.faint,
-          backgroundColor: selected ? colors.accent : 'transparent',
+          borderColor: selected ? theme.colors.primaryEmphasis : theme.colors.textFaint,
+          backgroundColor: selected ? theme.colors.primary : 'transparent',
           alignItems: 'center',
           justifyContent: 'center',
         }}
       >
-        {selected && <Icon name="check" size={13} color="#fff" />}
+        {selected && <Icon name="check" size={13} color={theme.colors.primaryForeground} />}
       </View>
       <View style={{ flex: 1 }}>
         <Text
           style={{
-            fontFamily: fonts.uiBold,
+            fontFamily: theme.fonts.uiBold,
             fontSize: 15,
-            color: colors.text,
+            color: theme.colors.textPrimary,
           }}
         >
           {packageTitle(pkg)}
@@ -969,9 +972,9 @@ function PackageCard({
           <Text
             style={{
               marginTop: 4,
-              fontFamily: fonts.ui,
+              fontFamily: theme.fonts.ui,
               fontSize: 12,
-              color: colors.mute,
+              color: theme.colors.textMuted,
             }}
           >
             {period}
@@ -981,10 +984,10 @@ function PackageCard({
           <Text
             style={{
               marginTop: 5,
-              fontFamily: fonts.uiSemi,
+              fontFamily: theme.fonts.uiSemi,
               fontSize: 12,
               lineHeight: 17,
-              color: colors.accentHi,
+              color: theme.colors.primaryEmphasis,
             }}
           >
             {promotionalTerms}
@@ -993,9 +996,9 @@ function PackageCard({
       </View>
       <Text
         style={{
-          fontFamily: fonts.monoBold,
+          fontFamily: theme.fonts.monoBold,
           fontSize: 13,
-          color: selected ? colors.accentHi : colors.text,
+          color: selected ? theme.colors.primaryEmphasis : theme.colors.textPrimary,
           textAlign: 'right',
         }}
       >
@@ -1028,6 +1031,7 @@ function PromoCodeCard({
   iosPromoNotice: { tone: 'error' | 'neutral'; message: string; badge?: string | null } | null;
   disabled: boolean;
 }) {
+  const { theme } = useTheme();
   const validating = promoState.phase === 'validating';
   const applied = promoState.phase === 'applied' && promoState.applied;
   const hasMatchedOption = purchaseRoute?.kind === 'subscription_option';
@@ -1047,14 +1051,14 @@ function PromoCodeCard({
 
   return (
     <View style={{ marginTop: 18 }}>
-      <MonoLabel color={colors.mute}>CÓDIGO PROMOCIONAL</MonoLabel>
+      <MonoLabel color={theme.colors.textMuted}>CÓDIGO PROMOCIONAL</MonoLabel>
       <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
         <TextInput
           value={value}
           onChangeText={onChangeValue}
           editable={!disabled && !validating}
           placeholder="Ex.: ARNALDO"
-          placeholderTextColor={colors.faint}
+          placeholderTextColor={theme.colors.inputPlaceholder}
           autoCapitalize="characters"
           autoCorrect={false}
           accessibilityLabel="Código promocional"
@@ -1063,12 +1067,12 @@ function PromoCodeCard({
             height: 46,
             borderRadius: 12,
             borderWidth: 1,
-            borderColor: colors.cardBorder,
-            backgroundColor: colors.cardBg,
+            borderColor: theme.colors.cardBorder,
+            backgroundColor: theme.colors.cardBackground,
             paddingHorizontal: 14,
-            fontFamily: fonts.uiMed,
+            fontFamily: theme.fonts.uiMed,
             fontSize: 14,
-            color: colors.text,
+            color: theme.colors.inputText,
           }}
         />
         <Pressable
@@ -1082,16 +1086,16 @@ function PromoCodeCard({
             borderRadius: 12,
             alignItems: 'center',
             justifyContent: 'center',
-            backgroundColor: colors.cardBgHi,
+            backgroundColor: theme.colors.controlBackground,
             borderWidth: 1,
-            borderColor: colors.hair,
+            borderColor: theme.colors.divider,
             opacity: disabled || validating || !value.trim() ? 0.5 : 1,
           }}
         >
           {validating ? (
-            <ActivityIndicator color="#fff" />
+            <ActivityIndicator color={theme.colors.textPrimary} />
           ) : (
-            <Text style={{ fontFamily: fonts.uiSemi, fontSize: 13, color: '#fff' }}>Aplicar</Text>
+            <Text style={{ fontFamily: theme.fonts.uiSemi, fontSize: 13, color: theme.colors.textPrimary }}>Aplicar</Text>
           )}
         </Pressable>
       </View>
@@ -1132,9 +1136,10 @@ function RestoreButton({
   disabled: boolean;
   onPress: () => void;
 }) {
+  const { theme } = useTheme();
   return (
     <CtaButton ghost onPress={onPress} disabled={disabled} style={{ marginTop: 12 }}>
-      {isRestoring ? <ActivityIndicator color="#fff" /> : 'Restaurar compras'}
+      {isRestoring ? <ActivityIndicator color={theme.colors.textPrimary} /> : 'Restaurar compras'}
     </CtaButton>
   );
 }
@@ -1182,6 +1187,7 @@ function ActionNotices({
 }
 
 function InlineNotice({ tone, text }: { tone: 'error' | 'neutral'; text: string }) {
+  const { theme } = useTheme();
   const error = tone === 'error';
   return (
     <View
@@ -1189,17 +1195,17 @@ function InlineNotice({ tone, text }: { tone: 'error' | 'neutral'; text: string 
         marginTop: 14,
         padding: 12,
         borderRadius: 12,
-        backgroundColor: error ? 'rgba(255,118,118,0.08)' : colors.cardBgHi,
+        backgroundColor: error ? theme.colors.feedbackErrorBackgroundSubtle : theme.colors.cardBackgroundElevated,
         borderWidth: 1,
-        borderColor: error ? 'rgba(255,118,118,0.3)' : colors.hair,
+        borderColor: error ? theme.colors.feedbackErrorBorderSubtle : theme.colors.divider,
       }}
     >
       <Text
         style={{
-          fontFamily: fonts.uiMed,
+          fontFamily: theme.fonts.uiMed,
           fontSize: 12.5,
           lineHeight: 18,
-          color: error ? '#ff7676' : colors.mute,
+          color: error ? theme.colors.feedbackErrorTextStrong : theme.colors.textMuted,
         }}
       >
         {text}
@@ -1219,6 +1225,7 @@ function CenteredState({
   message?: string | null;
   onRetry?: () => void;
 }) {
+  const { theme } = useTheme();
   const content = {
     loading: {
       title: 'Carregando planos',
@@ -1250,7 +1257,7 @@ function CenteredState({
   return (
     <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }}>
       <LinearGradient
-        colors={['rgba(11,112,249,0.28)', 'rgba(11,112,249,0.05)']}
+        colors={theme.gradients.accentState}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={{
@@ -1260,13 +1267,13 @@ function CenteredState({
           alignItems: 'center',
           justifyContent: 'center',
           borderWidth: 1,
-          borderColor: 'rgba(11,112,249,0.4)',
+          borderColor: theme.colors.primaryBorderMuted,
         }}
       >
         {kind === 'loading' ? (
-          <ActivityIndicator color={colors.accentHi} />
+          <ActivityIndicator color={theme.colors.primaryEmphasis} />
         ) : (
-          <Icon name={kind === 'offline' ? 'alert-triangle' : 'info'} size={28} color={colors.accentHi} />
+          <Icon name={kind === 'offline' ? 'alert-triangle' : 'info'} size={28} color={theme.colors.primaryEmphasis} />
         )}
       </LinearGradient>
       <Display size={22} style={{ marginTop: 20, textAlign: 'center' }}>
@@ -1275,10 +1282,10 @@ function CenteredState({
       <Text
         style={{
           marginTop: 8,
-          fontFamily: fonts.ui,
+          fontFamily: theme.fonts.ui,
           fontSize: 13.5,
           lineHeight: 20,
-          color: colors.mute,
+          color: theme.colors.textMuted,
           textAlign: 'center',
         }}
       >
@@ -1292,12 +1299,12 @@ function CenteredState({
             paddingHorizontal: 22,
             paddingVertical: 12,
             borderRadius: 12,
-            backgroundColor: colors.cardBgHi,
+            backgroundColor: theme.colors.cardBackgroundElevated,
             borderWidth: 1,
-            borderColor: colors.hair,
+            borderColor: theme.colors.divider,
           }}
         >
-          <Text style={{ fontFamily: fonts.uiSemi, fontSize: 13, color: '#fff' }}>
+          <Text style={{ fontFamily: theme.fonts.uiSemi, fontSize: 13, color: theme.colors.textPrimary }}>
             Tentar novamente
           </Text>
         </Pressable>
@@ -1307,6 +1314,13 @@ function CenteredState({
 }
 
 function LegalLinks({ openLink }: { openLink: (url: string) => void }) {
+  const { theme } = useTheme();
+  const linkStyle = {
+    fontFamily: theme.fonts.uiMed,
+    fontSize: 12,
+    color: theme.colors.textMuted,
+    textDecorationLine: 'underline' as const,
+  };
   return (
     <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 22, marginTop: 20 }}>
       <Pressable onPress={() => openLink(PRIVACY_POLICY_URL)}>
@@ -1318,10 +1332,3 @@ function LegalLinks({ openLink }: { openLink: (url: string) => void }) {
     </View>
   );
 }
-
-const linkStyle = {
-  fontFamily: fonts.uiMed,
-  fontSize: 12,
-  color: colors.mute,
-  textDecorationLine: 'underline' as const,
-};

@@ -1,7 +1,8 @@
 import { ActivityIndicator, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import type { ReauthenticationProvider } from '../../lib/authProviders';
-import { colors, fonts, spacing } from '../../theme/tokens';
+import { useTheme } from '../../theme';
+import { spacing } from '../../theme/tokens';
 import { CtaButton, CtaText } from '../ui/CtaButton';
 import { Icon } from '../ui/Icon';
 import { PasswordField } from '../ui/PasswordField';
@@ -29,21 +30,20 @@ export function ReauthenticationMethods({
   onConfirm,
 }: Props) {
   const { t } = useTranslation('settings');
+  const { theme } = useTheme();
   const hasPassword = providers.includes('password');
 
   return (
     <View style={{ gap: spacing[3] }}>
       {hasPassword ? (
         <PasswordField
-          label={t('security.twoFactor.reauth.passwordLabel')}
-          placeholder={t('security.twoFactor.reauth.passwordPlaceholder')}
+          label={t('security.deleteAccountFlow.reauth.passwordLabel')}
+          placeholder={t('security.deleteAccountFlow.reauth.passwordPlaceholder')}
           value={password}
           onChangeText={onChangePassword}
           visible={passwordVisible}
           onToggleVisibility={onTogglePassword}
-          toggleAccessibilityLabel={t(
-            'security.twoFactor.reauth.togglePassword',
-          )}
+          toggleAccessibilityLabel={t('security.deleteAccountFlow.reauth.togglePassword')}
           editable={!disabled}
           returnKeyType="done"
           onSubmitEditing={() => onConfirm('password')}
@@ -51,16 +51,11 @@ export function ReauthenticationMethods({
       ) : null}
 
       {hasPassword ? (
-        <CtaButton
-          onPress={() => onConfirm('password')}
-          disabled={disabled}
-        >
+        <CtaButton onPress={() => onConfirm('password')} disabled={disabled}>
           {busyProvider === 'password' ? (
-            <ActivityIndicator color={colors.text} />
+            <ActivityIndicator color={theme.colors.text} />
           ) : (
-            <CtaText>
-              {t('security.twoFactor.reauth.continueWithPassword')}
-            </CtaText>
+            <CtaText>{t('security.deleteAccountFlow.reauth.continueWithPassword')}</CtaText>
           )}
         </CtaButton>
       ) : null}
@@ -98,24 +93,25 @@ function FederatedButton({
   onPress: () => void;
 }) {
   const { t } = useTranslation('settings');
+  const { theme } = useTheme();
   return (
     <CtaButton ghost onPress={onPress} disabled={disabled}>
       {busy ? (
-        <ActivityIndicator color={colors.text} />
+        <ActivityIndicator color={theme.colors.text} />
       ) : (
         <>
-          <Icon name={provider} size={18} color={colors.text} />
+          <Icon name={provider} size={18} color={theme.colors.text} />
           <Text
             style={{
-              color: colors.text,
-              fontFamily: fonts.uiSemi,
+              color: theme.colors.text,
+              fontFamily: theme.fonts.uiSemi,
               fontSize: 14,
             }}
           >
             {t(
               provider === 'google'
-                ? 'security.twoFactor.reauth.continueWithGoogle'
-                : 'security.twoFactor.reauth.continueWithApple',
+                ? 'security.deleteAccountFlow.reauth.continueWithGoogle'
+                : 'security.deleteAccountFlow.reauth.continueWithApple',
             )}
           </Text>
         </>

@@ -4,7 +4,8 @@ import { useTranslation } from 'react-i18next';
 import { Card } from '../ui/Card';
 import { Icon } from '../ui/Icon';
 import { MonoLabel } from '../ui/Display';
-import { colors, fonts, radii, spacing } from '../../theme/tokens';
+import { useTheme } from '../../theme';
+import { radii, spacing } from '../../theme/tokens';
 import { EvolutionLineChart, type EvolutionPoint } from './EvolutionLineChart';
 import { useUnits } from '../../state/UnitsContext';
 import { weightFromKg, weightUnit } from '../../units/weightConversions';
@@ -27,12 +28,13 @@ function DeltaChip({
   unit: string;
   goodWhenNegative?: boolean;
 }) {
+  const { theme } = useTheme();
   const { t } = useTranslation('assessment');
   if (value == null) {
     return (
       <View style={{ flex: 1, alignItems: 'center', paddingHorizontal: spacing[1] }}>
         <MonoLabel style={{ marginBottom: 6 }}>{label}</MonoLabel>
-        <Text style={{ fontFamily: fonts.uiBold, fontSize: 15, color: colors.faint }}>—</Text>
+        <Text style={{ fontFamily: theme.fonts.uiBold, fontSize: 15, color: theme.colors.textFaint }}>—</Text>
       </View>
     );
   }
@@ -43,9 +45,9 @@ function DeltaChip({
       <MonoLabel style={{ marginBottom: 6 }}>{label}</MonoLabel>
       <Text
         style={{
-          fontFamily: fonts.uiBold,
+          fontFamily: theme.fonts.uiBold,
           fontSize: 15,
-          color: positive ? colors.success : colors.danger,
+          color: positive ? theme.colors.success : theme.colors.danger,
         }}
       >
         {t('result', { value: `${sign}${value.toFixed(1)}`, unit })}
@@ -71,6 +73,7 @@ export function AssessmentEvolutionCard({
   leanMassDelta: number | null;
   onViewHistory: () => void;
 }) {
+  const { theme } = useTheme();
   const { t } = useTranslation('assessment');
   const { resolvedUnits } = useUnits();
   const massUnit = weightUnit(resolvedUnits);
@@ -105,10 +108,10 @@ export function AssessmentEvolutionCard({
           marginTop: spacing[4],
           paddingTop: spacing[4],
           borderTopWidth: 1,
-          borderTopColor: colors.border,
+          borderTopColor: theme.colors.border,
         }}
       >
-        <MonoLabel color={colors.textSecondary} style={{ marginBottom: spacing[3] }}>
+        <MonoLabel color={theme.colors.textSecondary} style={{ marginBottom: spacing[3] }}>
           {t('evolution.sincePrevious').toUpperCase()}
         </MonoLabel>
 
@@ -139,10 +142,10 @@ export function AssessmentEvolutionCard({
         ) : (
           <Text
             style={{
-              fontFamily: fonts.ui,
+              fontFamily: theme.fonts.ui,
               fontSize: 12.5,
               lineHeight: 18,
-              color: colors.mute,
+              color: theme.colors.mute,
             }}
           >
             {t('evolution.noPreviousMessage')}
@@ -163,20 +166,20 @@ export function AssessmentEvolutionCard({
           marginTop: spacing[2],
           paddingTop: spacing[3],
           borderTopWidth: 1,
-          borderTopColor: 'rgba(255,255,255,0.06)',
+          borderTopColor: theme.colors.sheetDivider,
         }}
       >
         <Text
           style={{
-            fontFamily: fonts.mono,
+            fontFamily: theme.fonts.mono,
             fontSize: 11,
             letterSpacing: 1,
-            color: colors.accentHi,
+            color: theme.colors.primaryEmphasis,
           }}
         >
           {t('evolution.viewHistoryCta').toUpperCase()}
         </Text>
-        <Icon name="chevron-right" size={12} color={colors.accentHi} />
+        <Icon name="chevron-right" size={12} color={theme.colors.primaryEmphasis} />
       </Pressable>
       </View>
     </Card>

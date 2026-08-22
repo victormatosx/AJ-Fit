@@ -5,7 +5,8 @@ import { useTranslation } from 'react-i18next';
 import { Icon, type IconName } from '../ui/Icon';
 import { MonoLabel } from '../ui/Display';
 import { PremiumAction } from '../premium/PremiumAction';
-import { colors, fonts, radii, sizes, spacing } from '../../theme/tokens';
+import { useTheme } from '../../theme';
+import { radii, sizes, spacing } from '../../theme/tokens';
 
 function ActionOption({
   icon,
@@ -24,6 +25,7 @@ function ActionOption({
   locked: boolean;
   last?: boolean;
 }) {
+  const { theme } = useTheme();
   return (
     <Pressable
       onPress={onPress}
@@ -36,8 +38,8 @@ function ActionOption({
         alignItems: 'center',
         gap: spacing[3],
         borderBottomWidth: last ? 0 : 1,
-        borderBottomColor: colors.border,
-        backgroundColor: pressed ? colors.surfacePressed : 'transparent',
+        borderBottomColor: theme.colors.border,
+        backgroundColor: pressed ? theme.colors.surfacePressed : 'transparent',
       })}
     >
       <View
@@ -45,14 +47,14 @@ function ActionOption({
           width: 42,
           height: 42,
           borderRadius: radii.md,
-          backgroundColor: colors.accentSoft,
+          backgroundColor: theme.colors.accentSoft,
           borderWidth: 1,
-          borderColor: colors.borderStrong,
+          borderColor: theme.colors.borderStrong,
           alignItems: 'center',
           justifyContent: 'center',
         }}
       >
-        <Icon name={icon} size={18} color={colors.accentHi} />
+        <Icon name={icon} size={18} color={theme.colors.accentHi} />
         {locked ? (
           <View
             style={{
@@ -62,35 +64,34 @@ function ActionOption({
               width: 17,
               height: 17,
               borderRadius: radii.pill,
-              backgroundColor: colors.bg2,
+              backgroundColor: theme.colors.bg2,
               borderWidth: 1,
-              borderColor: colors.borderStrong,
+              borderColor: theme.colors.borderStrong,
               alignItems: 'center',
               justifyContent: 'center',
             }}
           >
-            <Icon name="lock" size={9} color={colors.accentHi} />
+            <Icon name="lock" size={9} color={theme.colors.primaryEmphasis} />
           </View>
         ) : null}
       </View>
-
       <View style={{ flex: 1 }}>
-        <Text style={{ fontFamily: fonts.uiSemi, fontSize: 14.5, color: colors.text }}>
+        <Text style={{ fontFamily: theme.fonts.uiSemi, fontSize: 14.5, color: theme.colors.text }}>
           {title}
         </Text>
         <Text
           style={{
             marginTop: spacing[1],
-            fontFamily: fonts.ui,
+            fontFamily: theme.fonts.ui,
             fontSize: 12.5,
             lineHeight: 18,
-            color: colors.mute,
+            color: theme.colors.mute,
           }}
         >
           {subtitle}
         </Text>
       </View>
-      <Icon name="chevron-right" size={16} color={colors.faint} />
+      <Icon name="chevron-right" size={16} color={theme.colors.faint} />
     </Pressable>
   );
 }
@@ -108,6 +109,7 @@ export function AssessmentActionCard({
   onImport: () => void;
 }) {
   const { t } = useTranslation('assessment');
+  const { theme } = useTheme();
 
   // The selector and both possible destinations are native Modal-based
   // surfaces. Dismiss this modal in the same press that dispatches the
@@ -124,17 +126,17 @@ export function AssessmentActionCard({
         onPress={onClose}
         accessibilityRole="button"
         accessibilityLabel={t('accessibility.closeNewAssessment')}
-        style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: colors.overlayStrong }}
+        style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: theme.colors.overlayStrong }}
       >
         <Pressable
           accessibilityRole="none"
           onPress={(event) => event.stopPropagation()}
           style={{
-            backgroundColor: colors.bg2,
+            backgroundColor: theme.colors.bg2,
             borderTopLeftRadius: radii.xxl,
             borderTopRightRadius: radii.xxl,
             borderTopWidth: 1,
-            borderColor: colors.borderStrong,
+            borderColor: theme.colors.borderStrong,
           }}
         >
           <SafeAreaView edges={['bottom']}>
@@ -145,7 +147,7 @@ export function AssessmentActionCard({
                   width: 38,
                   height: 4,
                   borderRadius: radii.pill,
-                  backgroundColor: colors.borderStrong,
+                  backgroundColor: theme.colors.borderStrong,
                   marginBottom: spacing[5],
                 }}
               />
@@ -157,7 +159,7 @@ export function AssessmentActionCard({
                   marginBottom: spacing[2],
                 }}
               >
-                <MonoLabel color={colors.accentHi}>{t('actions.sheetTitle').toUpperCase()}</MonoLabel>
+                <MonoLabel color={theme.colors.accentHi}>{t('actions.sheetTitle').toUpperCase()}</MonoLabel>
                 <Pressable
                   onPress={onClose}
                   accessibilityRole="button"
@@ -169,10 +171,10 @@ export function AssessmentActionCard({
                     borderRadius: radii.control,
                     alignItems: 'center',
                     justifyContent: 'center',
-                    backgroundColor: pressed ? colors.surfacePressed : colors.surface,
+                    backgroundColor: pressed ? theme.colors.surfacePressed : theme.colors.surface,
                   })}
                 >
-                  <Icon name="x" size={17} color={colors.textSecondary} />
+                  <Icon name="x" size={17} color={theme.colors.textSecondary} />
                 </Pressable>
               </View>
 

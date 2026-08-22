@@ -4,13 +4,15 @@ import { useTranslation } from 'react-i18next';
 import { ScreenBg } from '../components/ui/ScreenBg';
 import { Display, MonoLabel } from '../components/ui/Display';
 import { Icon } from '../components/ui/Icon';
-import { colors, fonts, spacing } from '../theme/tokens';
+import { spacing } from '../theme/tokens';
+import { useTheme } from '../theme';
 import { useScreenFocusEffect } from '../state/ScreenActivity';
 
 const AUTO_RETURN_MS = 3000;
 
 export function SupportSuccessScreen({ onBack }: { onBack: () => void }) {
   const { t } = useTranslation('support');
+  const { theme } = useTheme();
 
   // Auto-return is tied to ACTIVATION, not mount: this screen is
   // prewarmed+materialized (docs/23_navegacao_e_lifecycle.md §14) and stays
@@ -29,25 +31,25 @@ export function SupportSuccessScreen({ onBack }: { onBack: () => void }) {
     <ScreenBg>
       <SafeAreaView style={{ flex: 1, paddingHorizontal: spacing[6], justifyContent: 'center' }}>
         <View style={{ alignItems: 'center' }}>
-          <Icon name="check" size={40} color="#60d99a" stroke={2.4} />
+          <Icon name="check" size={40} color={theme.colors.statusSuccessText} stroke={2.4} />
 
-          <MonoLabel color="#60d99a" style={{ marginTop: spacing[6] }}>
+          <MonoLabel color={theme.colors.statusSuccessText} style={{ marginTop: spacing[6] }}>
             {t('success.eyebrow')}
           </MonoLabel>
           <Display size={28} style={{ textAlign: 'center', marginTop: spacing[3] }}>
             {t('success.title')}
           </Display>
-          <Text style={{ color: colors.mute, fontFamily: fonts.ui, fontSize: 14.5, lineHeight: 22, textAlign: 'center', marginTop: spacing[3], maxWidth: 300 }}>
+          <Text style={{ color: theme.colors.textMuted, fontFamily: theme.fonts.ui, fontSize: 14.5, lineHeight: 22, textAlign: 'center', marginTop: spacing[3], maxWidth: 300 }}>
             {t('success.subtitle')}
           </Text>
         </View>
 
         <View style={{ marginTop: spacing[10], alignItems: 'center' }}>
-          <Text style={{ color: colors.faint, fontFamily: fonts.mono, fontSize: 10.5, letterSpacing: 1.5 }}>
+          <Text style={{ color: theme.colors.textFaint, fontFamily: theme.fonts.mono, fontSize: 10.5, letterSpacing: 1.5 }}>
             {t('success.returning').toUpperCase()}
           </Text>
           <Pressable accessibilityRole="button" onPress={onBack} style={{ marginTop: spacing[3], paddingVertical: spacing[2], paddingHorizontal: spacing[3] }}>
-            <Text style={{ color: colors.mute, fontFamily: fonts.uiMed, fontSize: 13 }}>{t('success.back')}</Text>
+            <Text style={{ color: theme.colors.textMuted, fontFamily: theme.fonts.uiMed, fontSize: 13 }}>{t('success.back')}</Text>
           </Pressable>
         </View>
       </SafeAreaView>

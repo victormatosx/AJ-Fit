@@ -2,41 +2,29 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-    // FASE 7 (docs/13_assinaturas_e_billing.md §10/§11/§26): same
-    // server-side authorization as firestore.rules' `hasServerPremium`,
-    // duplicated here on purpose — Storage Rules and Firestore Rules are
-    // two separate rules engines with no shared function namespace (same
-    // reason `PREMIUM_ENTITLEMENT_ID` is duplicated between the client and
-    // functions/ — see functions/src/billing/constants.ts's top comment).
-    // Both copies must read the exact same field
-    // (`users/{userId}.subscription.entitlementActive`, written only by
-    // `applySubscriptionEventAtomically` via the Admin SDK) and be kept in
-    // sync manually if that field ever changes.
+    // Não existe checagem de assinatura por ação aqui.
     //
-    // Uses Cloud Storage for Firebase's cross-service Firestore access
-    // (`firestore.get`/`firestore.exists`) rather than Custom Claims or a
-    // Cloud Function proxy — see the Fase 7 report §4 for why: the mirror
-    // already exists, is already hardened (idempotent, ordering-aware,
-    // fail-closed), and is already the client's own mental model of
-    // "server-controlled subscription state"; Custom Claims would add ID
-    // token refresh latency on top of webhook latency for no benefit, and a
-    // Function proxy would be strictly more code for a plain create/delete
-    // that Storage Rules can already express safely. `.get(..., false)`
-    // fails closed for a missing map or field — never defaults to `true`.
-    function hasServerPremium(userId) {
-      return firestore.exists(/databases/(default)/documents/users/$(userId))
-        && firestore.get(/databases/(default)/documents/users/$(userId))
-             .data.subscription.get('entitlementActive', false) == true;
-    }
+    // O AJ Fit é inteiramente pago: o acesso ao app já é condicionado à
+    // mensalidade antes de qualquer tela funcional ser alcançada, então todo
+    // usuário autenticado que chega a estes caminhos é, por definição, um
+    // assinante. A antiga `hasServerPremium(userId)` (FASE 7) checava
+    // `users/{userId}.subscription.entitlementActive` em create/delete de
+    // progressPhotos e virou redundante sob esse modelo de produto — foi
+    // removida junto com a cópia equivalente em firestore.rules.
+    //
+    // O que permanece é o que de fato protege dado: `request.auth.uid ==
+    // userId` em TODAS as operações. Nenhum usuário alcança o namespace de
+    // outro, com ou sem assinatura. A imutabilidade do objeto
+    // (`resource == null` no create, `allow update: if false`) também segue
+    // intacta.
 
     // Fase 5 (docs/25_exclusao_de_conta_arquitetura.md — "Bloqueio imediato
     // da conta"): mirrors firestore.rules' `accountActive(userId)` exactly
     // — same reasoning (a revoked-refresh-tokens session can still hold a
-    // live ID token for up to ~1h; this is what stops IT, independent of
-    // Storage-adjacent backend guards), same cost class as
-    // `hasServerPremium` above, same "checks lock existence, never status"
-    // design. Kept in sync manually with firestore.rules, like
-    // `hasServerPremium` already is.
+    // live ID token for up to ~1h; this is what stops it, independent of
+    // Storage-adjacent backend guards). It uses the same "checks lock
+    // existence, never status" design and stays in sync manually with
+    // firestore.rules.
     function accountActive(userId) {
       return !firestore.exists(/databases/(default)/documents/accountDeletionLocks/$(userId));
     }
@@ -73,16 +61,9 @@ service firebase.storage {
       // Fase 5: read also requires accountActive(userId).
       allow read: if hasVerifiedEmailForPrivateAccess() && request.auth.uid == userId && accountActive(userId);
 
-      // FASE 7: ADD_PROGRESS_PHOTO/DELETE_PROGRESS_PHOTO are Premium
-      // capabilities (Fase 3) — `hasServerPremium(userId)` is required
-      // alongside ownership on create/delete, never instead of it. `read`
-      // above stays ownership-only: Free keeps full read access to an
-      // existing gallery, matching the Firestore-side rule for the same
-      // metadata.
       allow create: if hasVerifiedEmailForPrivateAccess()
         && request.auth.uid == userId
         && accountActive(userId)
-        && hasServerPremium(userId)
         // Imutabilidade real: no Cloud Storage um upload sobre um caminho já
         // existente cria uma nova GERAÇÃO do objeto e é avaliado como
         // `create`, não como `update` — por isso `allow update: if false`
@@ -123,7 +104,7 @@ service firebase.storage {
       // não podem ser alterados.
       allow update: if false;
 
-      allow delete: if hasVerifiedEmailForPrivateAccess() && request.auth.uid == userId && accountActive(userId) && hasServerPremium(userId);
+      allow delete: if hasVerifiedEmailForPrivateAccess() && request.auth.uid == userId && accountActive(userId);
     }
 
     match /users/{userId}/support/{ticketId}/attachments/{fileName} {

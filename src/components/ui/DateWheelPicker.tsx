@@ -9,7 +9,7 @@ import {
   View,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { fonts } from '../../theme/tokens';
+import { useTheme } from '../../theme';
 
 /**
  * Cross-platform three-column date wheel — day / month / year, with a rounded
@@ -47,6 +47,7 @@ export function DateWheelPicker({
   locale,
   onChange,
 }: DateWheelPickerProps) {
+  const { theme } = useTheme();
   const { t } = useTranslation('common');
   const [day, setDay] = useState(value.getDate());
   const [month, setMonth] = useState(value.getMonth());
@@ -116,7 +117,7 @@ export function DateWheelPicker({
           top: 8 + ITEM_HEIGHT * CENTER_OFFSET,
           height: ITEM_HEIGHT,
           borderRadius: ITEM_HEIGHT / 2,
-          backgroundColor: 'rgba(255,255,255,0.08)',
+          backgroundColor: theme.colors.inputSelection,
         }}
       />
       <WheelColumn
@@ -170,6 +171,7 @@ function WheelColumn({
   format,
   accessibilityLabel,
 }: WheelColumnProps) {
+  const { theme } = useTheme();
   const scrollY = useRef(new Animated.Value(selectedIndex * ITEM_HEIGHT)).current;
   const listRef = useRef<FlatList<ColumnItem>>(null);
   const selectedIndexRef = useRef(selectedIndex);
@@ -222,9 +224,9 @@ function WheelColumn({
       >
         <Text
           style={{
-            fontFamily: fonts.uiSemi,
+            fontFamily: theme.fonts.uiSemi,
             fontSize: 19,
-            color: '#fff',
+            color: theme.colors.inputText,
             letterSpacing: 0.5,
           }}
         >

@@ -200,7 +200,9 @@
         "selectedAsAfter": "Seleccionada como después",
         "changeBefore": "Cambiar la foto de antes",
         "changeAfter": "Cambiar la foto de después",
-        "addPhotoLocked": "Añadir nueva foto, función Premium"
+        "addPhotoLocked": "Añadir nueva foto, función Premium",
+        "zoomHint": "Toca dos veces para acercar o alejar",
+        "photoPosition": "Foto {{current}} de {{total}}"
       },
       "poses": {
         "front": "Frente",

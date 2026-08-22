@@ -1,18 +1,20 @@
 import { ActivityIndicator, View } from 'react-native';
-import { colors } from '../../theme/tokens';
+import { useTheme } from '../../theme';
 
 /** One neutral loading surface shared by bootstrap and Paywall preparation. */
 export function FullScreenLoading() {
+  const { theme } = useTheme();
+
   return (
     <View
       style={{
         flex: 1,
-        backgroundColor: colors.bg,
+        backgroundColor: theme.colors.background,
         alignItems: 'center',
         justifyContent: 'center',
       }}
     >
-      <ActivityIndicator color={colors.accentHi} />
+      <ActivityIndicator color={theme.colors.primaryEmphasis} />
     </View>
   );
 }

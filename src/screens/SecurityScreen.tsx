@@ -11,9 +11,7 @@ import {
   type ReauthenticationProvider,
 } from '../lib/authProviders';
 import { describeLastSignIn, parseLastSignInTime } from '../lib/lastSignIn';
-import { useTotpMfa } from '../hooks/useTotpMfa';
 import { useAuth } from '../state/AuthContext';
-import { useScreenFocusEffect } from '../state/ScreenActivity';
 import { spacing } from '../theme/tokens';
 
 /** Firebase provider IDs, in the exact order `getReauthenticationProviders` returns them. */
@@ -26,25 +24,15 @@ const ACCESS_METHOD_LABEL_KEY: Record<ReauthenticationProvider, string> = {
 export function SecurityScreen({
   onBack,
   onOpenChangePassword,
-  onOpenTwoFactor,
   onOpenDeleteAccount,
 }: {
   onBack: () => void;
   onOpenChangePassword?: () => void;
-  onOpenTwoFactor: () => void;
   onOpenDeleteAccount?: () => void;
 }) {
   const { t, i18n } = useTranslation('settings');
   const { user, linkedProviders } = useAuth();
   const canChangePassword = linkedProviders.includes(PASSWORD_PROVIDER_ID);
-
-  // Same hook TwoFactorSettingsScreen uses — single source of truth for MFA
-  // status, already identity-scoped (resets on uid change) and already
-  // tested. This screen never derives its own MFA state.
-  const mfa = useTotpMfa();
-  useScreenFocusEffect(() => {
-    void mfa.refresh();
-  });
 
   // `user` (and therefore `providerData`) comes straight from AuthContext,
   // which replaces it wholesale on every auth-state change — no stale
@@ -68,27 +56,9 @@ export function SecurityScreen({
     return t('security.lastLogin.other', { date: description.date, time: description.time });
   }, [user?.metadata.lastSignInTime, locale, t]);
 
-  const protectionItems: SettingsItemData[] = [
-    {
-      icon: 'shield',
-      label: t('security.items.twoFactor'),
-      description: mfa.loading
-        ? t('security.twoFactor.status.loading')
-        : mfa.enabled
-          ? t('security.twoFactor.status.enabled')
-          : t('security.twoFactor.status.disabled'),
-      onPress: onOpenTwoFactor,
-    },
-    ...(canChangePassword && onOpenChangePassword
-      ? [
-          {
-            icon: 'key' as const,
-            label: t('security.items.changePassword'),
-            onPress: onOpenChangePassword,
-          },
-        ]
-      : []),
-  ];
+  const protectionItems: SettingsItemData[] = canChangePassword && onOpenChangePassword
+    ? [{ icon: 'key', label: t('security.items.changePassword'), onPress: onOpenChangePassword }]
+    : [];
 
   const accessItems: SettingsItemData[] = [
     ...(accessMethodValue
@@ -123,10 +93,12 @@ export function SecurityScreen({
           contentContainerStyle={{ paddingTop: spacing[3.5], paddingBottom: spacing[10] }}
           showsVerticalScrollIndicator={false}
         >
-          <SettingsSection
-            title={t('security.sections.account').toUpperCase()}
-            items={protectionItems}
-          />
+          {protectionItems.length > 0 && (
+            <SettingsSection
+              title={t('security.sections.account').toUpperCase()}
+              items={protectionItems}
+            />
+          )}
 
           {accessItems.length > 0 && (
             <SettingsSection

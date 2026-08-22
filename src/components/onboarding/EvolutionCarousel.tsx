@@ -3,7 +3,8 @@ import { View, Text, FlatList, Animated, useWindowDimensions, type ViewToken } f
 import { useTranslation } from 'react-i18next';
 import { PhoneFrame } from '../ui/PhoneFrame';
 import { CarouselIndicators } from './CarouselIndicators';
-import { colors, fonts, motion, sizes, spacing } from '../../theme/tokens';
+import { motion, sizes, spacing } from '../../theme/tokens';
+import { useTheme } from '../../theme';
 import { useReducedMotionPreference } from '../../lib/reducedMotion';
 import { evolutionShowcaseSlides, type EvolutionSlide } from '../../data/evolutionShowcase';
 
@@ -25,6 +26,7 @@ const AUTO_ADVANCE_INTERVAL_MS = 4000;
 
 export function EvolutionCarousel() {
   const { t } = useTranslation('onboarding');
+  const { theme } = useTheme();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const reduceMotion = useReducedMotionPreference();
 
@@ -160,9 +162,9 @@ export function EvolutionCarousel() {
       >
         <Text
           style={{
-            fontFamily: fonts.uiBold,
+            fontFamily: theme.fonts.uiBold,
             fontSize: 18,
-            color: '#fff',
+            color: theme.colors.textPrimary,
             textAlign: 'center',
           }}
         >
@@ -171,10 +173,10 @@ export function EvolutionCarousel() {
         <Text
           style={{
             marginTop: spacing[1.5],
-            fontFamily: fonts.ui,
+            fontFamily: theme.fonts.ui,
             fontSize: 14,
             lineHeight: 20,
-            color: colors.mute,
+            color: theme.colors.textMuted,
             textAlign: 'center',
             maxWidth: 320,
           }}

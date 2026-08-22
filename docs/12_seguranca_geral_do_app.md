@@ -115,65 +115,6 @@ no mount, e respeitam o rate limit do Firebase (`auth/too-many-requests`).
 
 ---
 
-### TOTP MFA — enrollment e gerenciamento
-
-A ativação e a desativação do TOTP usam o Firebase Authentication como fonte
-de verdade. O status é derivado de `multiFactor(user).enrolledFactors`,
-filtrado pelo `factorId` oficial de TOTP. É proibido criar flags equivalentes
-no Firestore, AsyncStorage, SecureStore, custom claims ou estado persistente.
-
-Ativação e desativação exigem reautenticação apropriada a um provider realmente
-vinculado. Senha usa `EmailAuthProvider`; Google adquire novo id token pelo
-Google Sign-In nativo; Apple cria um raw nonce novo por tentativa, envia apenas
-seu SHA-256 à Apple e usa o raw nonce com o identity token na credencial
-Firebase. Todas terminam em `reauthenticateWithCredential`, nunca em sign-in ou
-linking. Contas multi-provider exibem todas as opções válidas, com senha como
-primeira alternativa, sem selecionar `providerData[0]` arbitrariamente.
-
-O UID anterior à abertura da folha federada é validado novamente antes e depois
-do Firebase. Troca de sessão, credencial de outra conta, cancelamento ou erro
-abortam sem tocar MFA. Se a reautenticação de uma conta já protegida retornar
-`auth/multi-factor-auth-required`, o código atual do fator TOTP selecionado
-também é validado pelo `MultiFactorResolver` antes do `unenroll`.
-
-O `TotpSecret`, a URI `otpauth://` e os códigos de seis dígitos existem apenas
-na memória do fluxo de enrollment. O segredo é limpo ao concluir, cancelar,
-trocar de usuário ou desmontar a tela. Nenhum desses valores pode ser logado,
-enviado a analytics/crash reports ou gravado em armazenamento local/remoto.
-Credenciais Google/Apple, identity/id tokens, raw nonce, senha e
-`MultiFactorSession` também permanecem apenas na pilha da operação e nunca são
-logados ou persistidos. Sair da tela não cria autorização recente reutilizável.
-
-O QR Code representa exclusivamente a URI produzida por
-`TotpSecret.generateQrCodeUrl()`. A chave manual continua disponível por ação
-explícita de cópia para permitir configuração com um único aparelho.
-
-### TOTP MFA — challenge de login
-
-E-mail/senha, Google e Apple preservam o erro original
-`auth/multi-factor-auth-required` e continuam a mesma tentativa com
-`getMultiFactorResolver`, `assertionForSignIn` e `resolveSignIn`. O primeiro
-fator federado nunca é solicitado novamente depois que o resolver existe.
-
-O resolver, seus hints e o OTP são estado efêmero do processo JS. É proibido
-persisti-los em AsyncStorage, SecureStore, Firestore, Storage, analytics ou
-logs. O encerramento do app pode descartar a tentativa; nesse caso o usuário
-inicia um novo login. O cancelamento e erros terminais também limpam todo o
-estado pendente e retornam ao Login.
-
-Código incorreto, falha de rede e rate limit mantêm a tela e permitem retry sem
-recriar o primeiro fator. Sessão MFA inválida, fator removido ou
-`auth/code-expired` encerram a tentativa. Em `@firebase/auth` 1.13.3,
-`SESSION_EXPIRED` do backend é mapeado a `auth/code-expired`; o SDK não declara
-`auth/session-expired` como código público.
-
-`resolveSignIn` não navega nem publica `User` manualmente. O listener do
-`AuthContext` continua responsável por carregar perfil/questionário e o guard
-central preserva verificação de e-mail e a decisão Quiz/Dashboard. MFA é
-subestado de Auth e não uma rota permanente do funil.
-
----
-
 # 6. Sessões
 
 O usuário pode permanecer autenticado em múltiplos dispositivos.
@@ -201,7 +142,6 @@ em outro lugar; a tela não é uma segunda fonte de verdade para nada.
 
 | Linha exibida | Fonte de verdade | Observações |
 |---|---|---|
-| Verificação em duas etapas — Ativada/Desativada | `useTotpMfa()` (`src/hooks/useTotpMfa.ts`), o mesmo hook usado por `TwoFactorSettingsScreen` | Nenhuma lógica de MFA é duplicada; a tela apenas chama `mfa.refresh()` em `useScreenFocusEffect` e lê `mfa.enabled`/`mfa.loading`. Identity-scoped: o hook já reseta ao trocar de UID. |
 | Alterar senha (linha só aparece condicionalmente) | `linkedProviders` do `AuthContext`, via `PASSWORD_PROVIDER_ID` (`src/lib/authProviders.ts`) | Regra: aparece **apenas** se `password` estiver em `user.providerData`. Não há heurística por "como o usuário entrou agora" — é sempre o estado atual de `providerData`. |
 | Método(s) de acesso — Google / Apple / E-mail e senha | `getReauthenticationProviders(user)` (`src/lib/authProviders.ts`), lido direto de `user.providerData` | Suporta múltiplos providers vinculados simultaneamente (ex.: `password` + `google.com`) sem esconder nenhum atrás de "um usuário = um provider". Nada é vinculado/desvinculado nesta tela — é somente leitura. |
 | Último login | `user.metadata.lastSignInTime` (Firebase Auth), via `parseLastSignInTime`/`describeLastSignIn` (`src/lib/lastSignIn.ts`) | Ver semântica exata abaixo. Se o campo estiver ausente ou não puder ser parseado, a linha inteira é omitida — nunca aparece um valor inventado ou "carregando" permanente. |
@@ -233,7 +173,7 @@ dados real por trás. Foram removidos por violarem o princípio acima.
   sign-in/refresh, com Rules que restrinjam leitura/escrita ao próprio dono,
   e uma Cloud Function ou fluxo de revogação real de token.
 * **Histórico de segurança** exigiria um audit log de eventos de segurança
-  (login, troca de senha, ativação/desativação de MFA, tentativas
+  (login, troca de senha, exclusão de conta, tentativas
   malsucedidas) persistido de forma identity-scoped e imutável do lado do
   cliente. Hoje existem apenas logs operacionais (`logInfo`/`logWarn`, ver
   §18) que não são security event logs nem estão expostos ao usuário.

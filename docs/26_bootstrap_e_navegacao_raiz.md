@@ -101,8 +101,8 @@ Confirmado no código atual (`resolvePremiumGate`, `src/lib/premiumGate.ts`):
   reconciliação de idioma/unidades para um uid já reconciliado nesta sessão.
 * **Action loading** (já corretos — local, nunca leem `resolvePremiumGate`):
   spinner de "Entrar" em `AuthScreen`, `savingQuestionnaire` em
-  `RootNavigator` (overlay local, não parte do gate), fluxos MFA/TOTP,
-  Paywall/Offerings loading.
+  `RootNavigator` (overlay local, não parte do gate), reautenticação de
+  operações sensíveis e Paywall/Offerings loading.
 
 **Regra:** background refresh nunca reabre o gate raiz. Se um dado precisa
 de indicação visual de "atualizando", isso é responsabilidade da tela local

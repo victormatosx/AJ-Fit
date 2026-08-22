@@ -6,7 +6,8 @@
     "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/aj-logo.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#020010",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.ajfit.app",
@@ -85,7 +86,24 @@
       "@react-native-community/datetimepicker",
       "expo-localization",
       "expo-sharing",
-      "expo-video"
+      "expo-video",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#000000",
+          "image": "./assets/aj-logo.png",
+          "imageWidth": 160,
+          "resizeMode": "contain"
+        }
+      ],
+      "expo-system-ui",
+      [
+        "expo-navigation-bar",
+        {
+          "style": "light",
+          "enforceContrast": false
+        }
+      ]
     ]
   }
 }

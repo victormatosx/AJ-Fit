@@ -514,19 +514,16 @@ Dois arquivos novos materializam essa conexão:
 
 * **Client** — `src/services/accountDeletionReauth.ts`: compõe
   `reauthenticateCurrentUser` (`src/services/reauthentication.ts`, inalterado)
-  com o padrão de desafio MFA/TOTP já comprovado em
-  `startTotpUnenrollment`/`finishTotpUnenrollment`
-  (`src/services/mfaTotp.ts:269-347`), mais uma checagem final de
-  consistência de UID e um refresh forçado do ID token.
+  para senha/Google, o fluxo específico de Apple necessário à revogação do
+  provider, uma checagem final de consistência de UID e um refresh forçado
+  do ID token.
 * **Backend** — `functions/src/accountDeletion/authGuard.ts`: compõe
   `requireRecentAuth` (`functions/src/lib/auth.ts:47-72`, inalterado) com
   `rejectClientSuppliedIdentityOrPolicy` (Fase 1,
   `functions/src/accountDeletion/requestContract.ts:57-64`, inalterado).
 
-Nenhuma das duas infraestruturas reaproveitadas teve sua assinatura ou
-comportamento alterado — ambas continuam servindo seus call sites
-pré-existentes (MFA/TOTP, alteração de senha, Photo Vault) exatamente como
-antes.
+As infraestruturas compartilhadas continuam servindo seus call sites
+pré-existentes de alteração de senha e Photo Vault.
 
 ## 18. Janela de recent-auth (auditoria, não redefinição)
 
@@ -583,7 +580,7 @@ correta.
 (`src/services/accountDeletionReauth.ts`, função interna) chama
 explicitamente `user.getIdTokenResult(true)` — a API oficial de refresh
 forçado do SDK — imediatamente após qualquer reautenticação bem-sucedida
-(senha, Google, Apple, ou conclusão de desafio MFA). Isso custa uma chamada
+(senha, Google ou Apple). Isso custa uma chamada
 de rede extra no momento da reautenticação (não em cada retry do worker,
 que nunca depende de token do usuário — seção 11) em troca de nunca depender
 de um detalhe de cache não auditado do SDK continuar válido entre versões.
@@ -633,8 +630,7 @@ Três camadas independentes, cada uma testada:
    `reauthenticateCurrentUser` é revalidado contra ele mesmo depois da
    camada 1 já ter revalidado internamente — protege contra uma mudança de
    Auth state entre o retorno da camada 1 e a checagem desta função.
-3. **Em `finalizeReauthentication`** (novo, chamada tanto pelo caminho
-   direto quanto pelo pós-MFA): última checagem, imediatamente antes de
+3. **Em `finalizeReauthentication`** (novo): última checagem, imediatamente antes de
    devolver `{status:'completed'}` ao chamador — é o ponto mais próximo
    possível de uma futura chamada ao `requestAccountDeletion`.
 
@@ -647,13 +643,10 @@ solicitação seria criada.
 
 ## 23. Logout durante o fluxo
 
-Testado tanto no caminho direto (`startAccountDeletionReauthentication`)
-quanto no pós-MFA (`finishAccountDeletionReauthentication`): se
+Testado no caminho de `startAccountDeletionReauthentication`: se
 `auth.currentUser` se torna `null` a qualquer momento antes da checagem
-final, o resultado é `USER_SIGNED_OUT` — nunca uma exceção não tratada, nunca
-uma solicitação. No caminho MFA, a checagem ocorre ANTES de tocar o
-`resolver`, então um logout durante o prompt de código nunca chega a chamar
-`resolveSignIn`.
+final, o resultado é `USER_SIGNED_OUT` — nunca uma exceção não tratada e
+nunca uma solicitação.
 
 ## 24. Sessão recente vs. nova reautenticação obrigatória (decisão §16)
 
@@ -711,8 +704,7 @@ comprovado unitariamente:
 * o backend rejeita `auth_time` velho e aceita `auth_time` recente para o
   MESMO uid (seção 25);
 * o client chama `reauthenticateCurrentUser` corretamente por provider,
-  força `getIdTokenResult(true)` após sucesso, e propaga um desafio MFA
-  quando o Firebase o exige.
+  força `getIdTokenResult(true)` após sucesso e preserva a consistência de UID.
 
 O que só um teste E2E contra o Auth Emulator (ou um projeto de
 staging) pode comprovar, e fica pendente para uma fase posterior:
@@ -720,9 +712,6 @@ staging) pode comprovar, e fica pendente para uma fase posterior:
 * que `reauthenticateWithCredential`/o reauth de senha real de fato produz
   um ID token cujo `auth_time` está dentro da janela no momento em que uma
   callable real o receberia;
-* o comportamento real de `getMultiFactorResolver`/`resolveSignIn` contra o
-  serviço TOTP do Firebase (hoje só mockado, seguindo o mesmo nível de
-  confiança que o resto da suíte MFA/TOTP já aceita neste repositório).
 
 ## 27. O que a Fase 2 explicitamente NÃO faz
 
@@ -3009,7 +2998,7 @@ cliente autentica
    ↓ sucesso
    firebase/auth unlink(currentUser, 'google.com')
 ↓
-============= AGORA, E SÓ AGORA, ============= 
+============= AGORA, E SÓ AGORA, =============
 requestAccountDeletion() é chamado
 ↓
 [backend] admin.auth().getUser(uid).providerData — snapshot real (Fase 4, inalterado)
@@ -3265,10 +3254,9 @@ como um blocker de arquitetura.
 (`icon:'trash', danger:true, onPress: () => {}`) — stub puro, nunca
 conectado. `AppShell.tsx` usa um roteador custom (não React Navigation):
 flags `useState` booleanas + `<PersistentScreen>` (docs/23), prewarm
-centralizado em `lib/prewarmRoutes.ts`. `ChangePasswordScreen.tsx`/
-`TwoFactorSettingsScreen.tsx` (par hook+screen: `useChangePassword`/
-`useTotpMfa`) são o padrão estabelecido para fluxos sensíveis — reutilizado
-integralmente. `accountDeletionReauth.ts` (Fase 2), `accountDeletionOrchestrator.ts`
+centralizado em `lib/prewarmRoutes.ts`. `ChangePasswordScreen.tsx` e seu hook
+são o padrão estabelecido para fluxos sensíveis — reutilizado integralmente.
+`accountDeletionReauth.ts` (Fase 2), `accountDeletionOrchestrator.ts`
 (correção Fases 3/5) e `accountDeletionShutdown.ts` (Fase 5/11) já existiam
 completos e testados — a Fase 12 é inteiramente wiring, nenhuma
 reimplementação.
@@ -3277,10 +3265,10 @@ reimplementação.
 
 Um único componente, `DeleteAccountScreen.tsx`, com estado dirigido por
 `flow.step` (`'intro' → 'reauth' → 'confirm' → 'submitting'`) — não quatro
-telas separadas. Toda a lógica vive em `useAccountDeletionFlow.ts` (mirror
-exato do padrão `useChangePassword`/`useTotpMfa`), que compõe:
-`needsAccountDeletionReauthentication`/`startAccountDeletionReauthentication`/
-`finishAccountDeletionReauthentication` (Fase 2) →
+telas separadas. Toda a lógica vive em `useAccountDeletionFlow.ts` (mesmo
+padrão de `useChangePassword`), que compõe:
+`needsAccountDeletionReauthentication`/`startAccountDeletionReauthentication`
+(Fase 2) →
 `requestAccountDeletionWithProviderPreparation` (correção Fases 3/5,
 **única** chamada ao callable em todo o app) →
 `finalizeAccountDeletionClientShutdown` (Fase 5/11).
@@ -3310,12 +3298,9 @@ Nenhuma URL inventada, nenhum cancelamento implementado.
 
 ## 242. Reautenticação
 
-Reutiliza `ReauthenticationMethods` (componente já existente,
-`components/auth/`) para password/Google/Apple, e o mesmo par de strings
-`security.twoFactor.reauth.*` (mesma ação semântica — confirmar
-identidade). MFA/TOTP challenge reutiliza `finishAccountDeletionReauthentication`
-(Fase 2) com um `TextInput` de código no mesmo padrão visual de
-`TwoFactorSettingsScreen`. Bug real encontrado e corrigido durante a
+Reutiliza `ReauthenticationMethods` (componente em `components/auth/`) para
+password/Google/Apple e as strings dedicadas
+`security.deleteAccountFlow.reauth.*`. Bug real encontrado e corrigido durante a
 implementação: o toggle de visibilidade da senha estava inicialmente
 cabeado como um no-op (`passwordVisible={false}`,
 `onTogglePassword={() => {}}`) — corrigido com `useState` local na tela
@@ -3334,15 +3319,14 @@ Nenhuma manipulação direta de `authorizationCode`/tokens na UI.
 Etapa `'confirm'` — resumo de 4 bullets (conta encerrada, dados definidos
 para exclusão removidos, alguns registros podem ser retidos, assinatura não
 cancelada automaticamente) + botão destrutivo "Excluir minha conta"
-(tratamento visual `dangerText`, mesmo padrão do botão "Desativar" de
-`TwoFactorSettingsScreen`, já que `CtaButton` não tem variante destrutiva
-própria — não alterado só para isto).
+(tratamento visual `dangerText`, mesmo padrão das demais ações destrutivas,
+já que `CtaButton` não tem variante destrutiva própria).
 
 ## 245. Loading/double tap
 
 `operationLock` (ref) em `useAccountDeletionFlow`, mesmo padrão de
-`useChangePassword`/`useTotpMfa` — `confirmDeletion`/`submitReauth`/
-`submitMfaCode` todos guardados. Testado estruturalmente (não há renderer
+`useChangePassword` — `confirmDeletion` e `submitReauth` são guardados.
+Testado estruturalmente (não há renderer
 de componente neste projeto — ver §248). Etapa `'submitting'` mostra
 "Encerrando sua conta..." (nunca promete conclusão instantânea de todos os
 dados).
@@ -3351,7 +3335,7 @@ dados).
 
 Não coberto por um teste automatizado dedicado — a base já é sólida sem
 mudança nova: `PersistentScreen`/`inactiveMode="materialized"` (mesmo
-mecanismo que já protege `ChangePasswordScreen`/`TwoFactorSettingsScreen`
+mecanismo que já protege `ChangePasswordScreen`
 contra qualquer perda de estado em background real de app RN, que nunca
 desmonta o componente) + estado sensível vive em `useState` (sobrevive a
 background, é limpo por `useScreenFocusEffect` apenas na DESATIVAÇÃO da
@@ -3394,7 +3378,7 @@ pré-existentes em `PaywallScreen.tsx`, não tocados nesta fase).
 
 `accessibilityRole="button"`/`"alert"` consistentes com o resto do app;
 labels/hints reaproveitados dos componentes existentes
-(`PasswordField`/`ReauthenticationMethods`/campo de código MFA). **Não foi
+(`PasswordField`/`ReauthenticationMethods`). **Não foi
 possível fazer uma revisão manual em dispositivo/simulador real** — nenhum
 ambiente de execução visual estava disponível nesta sessão; a revisão desta
 fase se limitou a garantias estruturais (fonte) e reuso comprovado de
@@ -3403,8 +3387,8 @@ componentes já auditados em fases anteriores.
 ## 252. Dark/light
 
 Nenhuma cor hardcoded fora dos tokens (`colors.*`) e dos overlays `rgba(...)`
-já usados no mesmo padrão por `TwoFactorSettingsScreen` — tema-aware por
-construção, não testado visualmente pelo mesmo motivo do §251.
+do design system — tema-aware por construção, não testado visualmente pelo
+mesmo motivo do §251.
 
 ## 253. Arquivos alterados
 
@@ -3425,8 +3409,8 @@ construção, não testado visualmente pelo mesmo motivo do §251.
 28 novos (19 hook + 9 screen), todos estruturais (fonte) — este projeto não
 tem renderer de componente (`environment: 'node'`, sem
 `@testing-library/react-native`), confirmado pelo padrão já estabelecido em
-`usePremiumCapabilities.test.ts`/`useTotpMfaLoadingStructure.test.ts`/
-`appShellNavigationStructure.test.ts`. +1 no orchestrator
+`usePremiumCapabilities.test.ts`/`appShellNavigationStructure.test.ts`.
++1 no orchestrator
 (`requiresReconciliation`).
 
 ## 255. Revisão visual

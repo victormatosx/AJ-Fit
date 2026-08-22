@@ -12,7 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { HudCorners } from '../ui/Card';
 import { Icon, type IconName } from '../ui/Icon';
 import { DateWheelPicker } from '../ui/DateWheelPicker';
-import { colors, fonts } from '../../theme/tokens';
+import { useTheme } from '../../theme';
 import type { Quiz } from '../../state/AppState';
 import { computeAge } from '../../lib/ageCalculator';
 import { useUnits } from '../../state/UnitsContext';
@@ -55,9 +55,6 @@ export function canContinueQuestion(q: Question, value: unknown): boolean {
   return value != null;
 }
 
-const selBg = (sel: boolean) => (sel ? 'rgba(11,112,249,0.16)' : 'rgba(255,255,255,0.035)');
-const selBorder = (sel: boolean) => (sel ? '#0b70f9' : 'rgba(255,255,255,0.07)');
-
 export function ChoiceGrid({
   questionId,
   options,
@@ -69,6 +66,7 @@ export function ChoiceGrid({
   value: string | null;
   onChange: (v: string) => void;
 }) {
+  const { theme } = useTheme();
   const { t } = useTranslation('quiz');
   const tLoose = t as unknown as LooseT;
   return (
@@ -88,10 +86,14 @@ export function ChoiceGrid({
               flexDirection: 'row',
               alignItems: 'center',
               gap: 14,
-              backgroundColor: selBg(sel),
+              backgroundColor: sel
+                ? theme.colors.choiceSelectedBackground
+                : theme.colors.choiceBackground,
               borderWidth: 1,
-              borderColor: selBorder(sel),
-              shadowColor: sel ? colors.accent : 'transparent',
+              borderColor: sel
+                ? theme.colors.choiceSelectedBorder
+                : theme.colors.choiceBorder,
+              shadowColor: sel ? theme.colors.primary : 'transparent',
               shadowOpacity: sel ? 0.45 : 0,
               shadowRadius: sel ? 18 : 0,
               shadowOffset: { width: 0, height: 0 },
@@ -102,19 +104,19 @@ export function ChoiceGrid({
             {sel && <HudCorners />}
             <Text
               style={{
-                fontFamily: fonts.display,
+                fontFamily: theme.fonts.display,
                 fontSize: 20,
-                color: sel ? colors.accentHi : 'rgba(255,255,255,0.35)',
+                color: sel ? theme.colors.primaryEmphasis : theme.colors.choiceIndex,
                 minWidth: 44,
                 textTransform: 'uppercase',
               }}
             >
               {short}
             </Text>
-            <Text style={{ fontFamily: fonts.uiSemi, fontSize: 16, color: '#fff', flex: 1 }}>
+            <Text style={{ fontFamily: theme.fonts.uiSemi, fontSize: 16, color: theme.colors.choiceText, flex: 1 }}>
               {label}
             </Text>
-            {sel && <Icon name="check" size={18} color={colors.accentHi} />}
+            {sel && <Icon name="check" size={18} color={theme.colors.primaryEmphasis} />}
           </Pressable>
         );
       })}
@@ -133,6 +135,7 @@ export function ChoiceList({
   value: string | null;
   onChange: (v: string) => void;
 }) {
+  const { theme } = useTheme();
   const { t } = useTranslation('quiz');
   const tLoose = t as unknown as LooseT;
   return (
@@ -151,10 +154,14 @@ export function ChoiceList({
               flexDirection: 'row',
               alignItems: 'center',
               gap: 14,
-              backgroundColor: selBg(sel),
+              backgroundColor: sel
+                ? theme.colors.choiceSelectedBackground
+                : theme.colors.choiceBackground,
               borderWidth: 1,
-              borderColor: selBorder(sel),
-              shadowColor: sel ? colors.accent : 'transparent',
+              borderColor: sel
+                ? theme.colors.choiceSelectedBorder
+                : theme.colors.choiceBorder,
+              shadowColor: sel ? theme.colors.primary : 'transparent',
               shadowOpacity: sel ? 0.4 : 0,
               shadowRadius: sel ? 16 : 0,
               shadowOffset: { width: 0, height: 0 },
@@ -164,12 +171,12 @@ export function ChoiceList({
           >
             {sel && <HudCorners />}
             <View style={{ flex: 1 }}>
-              <Text style={{ fontFamily: fonts.uiBold, fontSize: 16, color: '#fff' }}>{label}</Text>
-              <Text style={{ fontFamily: fonts.ui, fontSize: 13, color: colors.mute, marginTop: 2 }}>
+              <Text style={{ fontFamily: theme.fonts.uiBold, fontSize: 16, color: theme.colors.choiceText }}>{label}</Text>
+              <Text style={{ fontFamily: theme.fonts.ui, fontSize: 13, color: theme.colors.textMuted, marginTop: 2 }}>
                 {description}
               </Text>
             </View>
-            {sel && <Icon name="check" size={20} color={colors.accentHi} stroke={2.8} />}
+            {sel && <Icon name="check" size={20} color={theme.colors.primaryEmphasis} stroke={2.8} />}
           </Pressable>
         );
       })}
@@ -191,6 +198,7 @@ export function MultiList({
   /** When set, selecting beyond this count is a no-op instead of growing the array. */
   maxSelections?: number;
 }) {
+  const { theme } = useTheme();
   const { t } = useTranslation('quiz');
   const tLoose = t as unknown as LooseT;
   const toggle = (v: string) => {
@@ -222,11 +230,15 @@ export function MultiList({
               flexDirection: 'row',
               alignItems: 'center',
               gap: 12,
-              backgroundColor: selBg(sel),
+              backgroundColor: sel
+                ? theme.colors.choiceSelectedBackground
+                : theme.colors.choiceBackground,
               borderWidth: 1,
-              borderColor: selBorder(sel),
+              borderColor: sel
+                ? theme.colors.choiceSelectedBorder
+                : theme.colors.choiceBorder,
               opacity: atLimit ? 0.4 : 1,
-              shadowColor: sel ? colors.accent : 'transparent',
+              shadowColor: sel ? theme.colors.primary : 'transparent',
               shadowOpacity: sel ? 0.45 : 0,
               shadowRadius: sel ? 22 : 0,
               shadowOffset: { width: 0, height: 0 },
@@ -234,16 +246,16 @@ export function MultiList({
           >
             <Text
               style={{
-                fontFamily: fonts.uiSemi,
+                fontFamily: theme.fonts.uiSemi,
                 fontSize: 14.5,
-                color: '#fff',
+                color: theme.colors.choiceText,
                 flexShrink: 1,
                 flex: 1,
               }}
             >
               {label}
             </Text>
-            {sel && <Icon name="check" size={18} color={colors.accentHi} stroke={2.8} />}
+            {sel && <Icon name="check" size={18} color={theme.colors.primaryEmphasis} stroke={2.8} />}
           </Pressable>
         );
       })}
@@ -265,6 +277,7 @@ export function NumberWheel({
   value: number;
   onChange: (v: number) => void;
 }) {
+  const { theme } = useTheme();
   const { t } = useTranslation('quiz');
   const { resolvedUnits } = useUnits();
   const tLoose = t as unknown as LooseT;
@@ -448,9 +461,9 @@ export function NumberWheel({
             autoFocus
             selectTextOnFocus
             style={{
-              fontFamily: fonts.display,
+              fontFamily: theme.fonts.display,
               fontSize: 120,
-              color: '#fff',
+              color: theme.colors.textPrimary,
               textAlign: 'right',
               transform: [{ skewX: '-8deg' }],
               width: numWidth,
@@ -461,16 +474,16 @@ export function NumberWheel({
           <Text
             onLayout={(e) => setNumWidth(e.nativeEvent.layout.width)}
             style={{
-              fontFamily: fonts.display,
+              fontFamily: theme.fonts.display,
               fontSize: 120,
-              color: '#fff',
+              color: theme.colors.textPrimary,
               transform: [{ skewX: '-8deg' }],
             }}
           >
             {displayValue}
           </Text>
         )}
-        <Text style={{ fontFamily: fonts.mono, fontSize: 13, letterSpacing: 2, color: colors.faint }}>
+        <Text style={{ fontFamily: theme.fonts.mono, fontSize: 13, letterSpacing: 2, color: theme.colors.textFaint }}>
           {unit}
         </Text>
       </Pressable>
@@ -529,7 +542,7 @@ export function NumberWheel({
                   style={{
                     width: 2,
                     height: tickValue % 5 === 0 ? 30 : 14,
-                    backgroundColor: 'rgba(11,112,249,0.85)',
+                    backgroundColor: theme.colors.choiceTick,
                     transform: [{ skewX: '-16deg' }],
                   }}
                 />
@@ -550,7 +563,7 @@ export function NumberWheel({
             bottom: 8,
             left: '50%',
             right: 0,
-            backgroundColor: colors.bg,
+            backgroundColor: theme.colors.background,
             opacity: 0.6,
           }}
         />
@@ -563,8 +576,8 @@ export function NumberWheel({
             left: '50%',
             marginLeft: -1.5,
             width: 3,
-            backgroundColor: '#fff',
-            shadowColor: colors.accent,
+            backgroundColor: theme.colors.choiceIndicator,
+            shadowColor: theme.colors.primary,
             shadowOpacity: 0.9,
             shadowRadius: 8,
             transform: [{ skewX: '-16deg' }],
@@ -573,13 +586,13 @@ export function NumberWheel({
       </View>
 
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%' }}>
-        <Text style={{ fontFamily: fonts.mono, fontSize: 10, letterSpacing: 2, color: colors.faint }}>
+        <Text style={{ fontFamily: theme.fonts.mono, fontSize: 10, letterSpacing: 2, color: theme.colors.textFaint }}>
           {displayMin}
         </Text>
-        <Text style={{ fontFamily: fonts.mono, fontSize: 10, letterSpacing: 2, color: colors.faint }}>
+        <Text style={{ fontFamily: theme.fonts.mono, fontSize: 10, letterSpacing: 2, color: theme.colors.textFaint }}>
           {t('progress.wheelHint').toUpperCase()}
         </Text>
-        <Text style={{ fontFamily: fonts.mono, fontSize: 10, letterSpacing: 2, color: colors.faint }}>
+        <Text style={{ fontFamily: theme.fonts.mono, fontSize: 10, letterSpacing: 2, color: theme.colors.textFaint }}>
           {displayMax}
         </Text>
       </View>
@@ -596,6 +609,7 @@ export function BirthDateWheel({
   value: Date | null;
   onChange: (d: Date) => void;
 }) {
+  const { theme } = useTheme();
   const { t, i18n } = useTranslation('quiz');
   const seed = useRef<Date>(
     value ??
@@ -614,18 +628,18 @@ export function BirthDateWheel({
       <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 10 }}>
         <Text
           style={{
-            fontFamily: fonts.display,
+            fontFamily: theme.fonts.display,
             fontSize: 100,
-            color: '#fff',
+            color: theme.colors.textPrimary,
             transform: [{ skewX: '-8deg' }],
-            textShadowColor: 'rgba(11,112,249,0.55)',
+            textShadowColor: theme.colors.primaryGlow,
             textShadowRadius: 30,
             textShadowOffset: { width: 0, height: 0 },
           }}
         >
           {age}
         </Text>
-        <Text style={{ fontFamily: fonts.mono, fontSize: 13, letterSpacing: 2, color: colors.faint }}>
+        <Text style={{ fontFamily: theme.fonts.mono, fontSize: 13, letterSpacing: 2, color: theme.colors.textFaint }}>
           {ageLabel.replace(/^\s*\d+\s*/, '').toUpperCase()}
         </Text>
       </View>

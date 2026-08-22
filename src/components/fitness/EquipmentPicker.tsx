@@ -5,7 +5,7 @@ import Svg, { Path, Circle, Rect } from 'react-native-svg';
 import { useTranslation } from 'react-i18next';
 import { Display, Slash } from '../ui/Display';
 import { Icon } from '../ui/Icon';
-import { colors, fonts } from '../../theme/tokens';
+import { useTheme } from '../../theme';
 
 /** Loose t signature for dynamic key lookups (equipment ids as key
  *  fragments). Bounded by string in/out — no `any`. */
@@ -19,9 +19,10 @@ type EqIconName =
   | 'treadmill' | 'bike' | 'rower' | 'box' | 'bodyweight' | 'mat'
   | 'trx' | 'medball';
 
-function EqIcon({ name, size = 26, color = '#cfe0ff' }: { name: EqIconName; size?: number; color?: string }) {
+function EqIcon({ name, size = 26, color }: { name: EqIconName; size?: number; color?: string }) {
+  const { theme } = useTheme();
   const p = {
-    stroke: color,
+    stroke: color ?? theme.colors.equipmentIcon,
     strokeWidth: 1.7,
     strokeLinecap: 'round' as const,
     strokeLinejoin: 'round' as const,
@@ -231,6 +232,7 @@ type Props = {
 };
 
 export function EquipmentPicker({ value, onChange, onDone, onBack, stepLabel }: Props) {
+  const { theme } = useTheme();
   const { t } = useTranslation(['quiz', 'common']);
   const tLoose = t as unknown as LooseT;
   const selected = value || [];
@@ -279,7 +281,11 @@ export function EquipmentPicker({ value, onChange, onDone, onBack, stepLabel }: 
   const q = query.trim().toLowerCase();
 
   const connColor =
-    conn === 'live' ? '#4da3ff' : conn === 'loading' ? '#caa84a' : 'rgba(255,255,255,0.4)';
+    conn === 'live'
+      ? theme.colors.statusConnected
+      : conn === 'loading'
+        ? theme.colors.statusConnecting
+        : theme.colors.statusOffline;
   const connLabel =
     conn === 'live'
       ? t('quiz:equipment.connection.live').toUpperCase()
@@ -303,7 +309,7 @@ export function EquipmentPicker({ value, onChange, onDone, onBack, stepLabel }: 
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+    <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
         {/* Header */}
         <View
@@ -321,23 +327,23 @@ export function EquipmentPicker({ value, onChange, onDone, onBack, stepLabel }: 
               width: 38,
               height: 38,
               borderRadius: 10,
-              backgroundColor: 'rgba(255,255,255,0.05)',
+              backgroundColor: theme.colors.controlBackground,
               borderWidth: 1,
-              borderColor: 'rgba(255,255,255,0.09)',
+              borderColor: theme.colors.controlBorder,
               alignItems: 'center',
               justifyContent: 'center',
             }}
           >
-            <Icon name="arrow-left" size={17} color="#fff" />
+            <Icon name="arrow-left" size={17} color={theme.colors.textPrimary} />
           </Pressable>
 
           <View style={{ flex: 1, alignItems: 'center' }}>
             <Text
               style={{
-                fontFamily: fonts.mono,
+                fontFamily: theme.fonts.mono,
                 fontSize: 10,
                 letterSpacing: 2,
-                color: colors.faint,
+                color: theme.colors.textFaint,
               }}
             >
               {stepLabel}
@@ -360,7 +366,7 @@ export function EquipmentPicker({ value, onChange, onDone, onBack, stepLabel }: 
               />
               <Text
                 style={{
-                  fontFamily: fonts.mono,
+                  fontFamily: theme.fonts.mono,
                   fontSize: 8.5,
                   letterSpacing: 1,
                   color: connColor,
@@ -377,12 +383,12 @@ export function EquipmentPicker({ value, onChange, onDone, onBack, stepLabel }: 
               paddingHorizontal: 16,
               paddingVertical: 9,
               borderRadius: 10,
-              backgroundColor: 'rgba(255,255,255,0.05)',
+              backgroundColor: theme.colors.controlBackground,
               borderWidth: 1,
-              borderColor: 'rgba(255,255,255,0.09)',
+              borderColor: theme.colors.controlBorder,
             }}
           >
-            <Text style={{ fontSize: 13, fontFamily: fonts.uiSemi, color: 'rgba(255,255,255,0.85)' }}>
+            <Text style={{ fontSize: 13, fontFamily: theme.fonts.uiSemi, color: theme.colors.choiceTextSecondary }}>
               {t('quiz:equipment.skip')}
             </Text>
           </Pressable>
@@ -394,10 +400,10 @@ export function EquipmentPicker({ value, onChange, onDone, onBack, stepLabel }: 
           <Text
             style={{
               marginTop: 12,
-              color: colors.mute,
+              color: theme.colors.textMuted,
               fontSize: 14,
               lineHeight: 21,
-              fontFamily: fonts.ui,
+              fontFamily: theme.fonts.ui,
             }}
           >
             {t('quiz:equipment.sub')}
@@ -413,13 +419,13 @@ export function EquipmentPicker({ value, onChange, onDone, onBack, stepLabel }: 
               paddingHorizontal: 14,
               paddingVertical: 8,
               borderRadius: 999,
-              backgroundColor: 'rgba(11,112,249,0.12)',
+              backgroundColor: theme.colors.surfaceSelected,
               borderWidth: 1,
-              borderColor: 'rgba(11,112,249,0.4)',
+              borderColor: theme.colors.primaryBorderMuted,
             }}
           >
-            <Icon name="check" size={13} color="#4da3ff" />
-            <Text style={{ color: '#4da3ff', fontSize: 12.5, fontFamily: fonts.uiSemi }}>
+            <Icon name="check" size={13} color={theme.colors.primaryEmphasis} />
+            <Text style={{ color: theme.colors.primaryEmphasis, fontSize: 12.5, fontFamily: theme.fonts.uiSemi }}>
               {t('quiz:equipment.quickPickAllGym')}
             </Text>
           </Pressable>
@@ -435,28 +441,28 @@ export function EquipmentPicker({ value, onChange, onDone, onBack, stepLabel }: 
               height: 46,
               paddingHorizontal: 14,
               borderRadius: 13,
-              backgroundColor: 'rgba(255,255,255,0.05)',
+              backgroundColor: theme.colors.inputBackground,
               borderWidth: 1,
-              borderColor: 'rgba(255,255,255,0.09)',
+              borderColor: theme.colors.inputBorderSubtle,
             }}
           >
-            <Icon name="target" size={16} color="rgba(255,255,255,0.4)" />
+            <Icon name="target" size={16} color={theme.colors.iconMuted} />
             <TextInput
               value={query}
               onChangeText={setQuery}
               placeholder={t('quiz:equipment.search')}
-              placeholderTextColor="rgba(255,255,255,0.3)"
+              placeholderTextColor={theme.colors.inputPlaceholderSubtle}
               style={{
                 flex: 1,
-                color: '#fff',
+                color: theme.colors.inputText,
                 fontSize: 14.5,
-                fontFamily: fonts.ui,
+                fontFamily: theme.fonts.ui,
                 padding: 0,
               }}
             />
             {query.length > 0 && (
               <Pressable onPress={() => setQuery('')} hitSlop={8}>
-                <Icon name="x" size={15} color="rgba(255,255,255,0.4)" />
+                <Icon name="x" size={15} color={theme.colors.inputIcon} />
               </Pressable>
             )}
           </View>
@@ -494,10 +500,12 @@ export function EquipmentPicker({ value, onChange, onDone, onBack, stepLabel }: 
                           paddingHorizontal: 14,
                           paddingVertical: 11,
                           borderRadius: 14,
-                          backgroundColor: on ? 'rgba(11,112,249,0.12)' : 'rgba(255,255,255,0.03)',
+                          backgroundColor: on
+                            ? theme.colors.equipmentItemSelectedBackground
+                            : theme.colors.equipmentItemBackground,
                           borderWidth: 1,
-                          borderColor: on ? colors.accent : 'rgba(255,255,255,0.06)',
-                          shadowColor: on ? colors.accent : 'transparent',
+                          borderColor: on ? theme.colors.primary : theme.colors.equipmentItemBorder,
+                          shadowColor: on ? theme.colors.primary : 'transparent',
                           shadowOpacity: on ? 0.35 : 0,
                           shadowRadius: on ? 18 : 0,
                           shadowOffset: { width: 0, height: 0 },
@@ -510,19 +518,29 @@ export function EquipmentPicker({ value, onChange, onDone, onBack, stepLabel }: 
                             borderRadius: 12,
                             alignItems: 'center',
                             justifyContent: 'center',
-                            backgroundColor: on ? 'rgba(11,112,249,0.18)' : 'rgba(255,255,255,0.04)',
+                            backgroundColor: on
+                              ? theme.colors.equipmentIconSelectedBackground
+                              : theme.colors.equipmentIconBackground,
                             borderWidth: 1,
-                            borderColor: 'rgba(255,255,255,0.06)',
+                            borderColor: theme.colors.equipmentItemBorder,
                           }}
                         >
-                          <EqIcon name={it.i} size={28} color={on ? '#7db4ff' : '#cfe0ff'} />
+                          <EqIcon
+                            name={it.i}
+                            size={28}
+                            color={
+                              on
+                                ? theme.colors.equipmentIconSelected
+                                : theme.colors.equipmentIcon
+                            }
+                          />
                         </View>
                         <Text
                           style={{
                             flex: 1,
-                            color: '#fff',
+                            color: theme.colors.textPrimary,
                             fontSize: 15.5,
-                            fontFamily: fonts.uiSemi,
+                            fontFamily: theme.fonts.uiSemi,
                           }}
                         >
                           {labelFor(it.v)}
@@ -534,12 +552,19 @@ export function EquipmentPicker({ value, onChange, onDone, onBack, stepLabel }: 
                             borderRadius: 8,
                             alignItems: 'center',
                             justifyContent: 'center',
-                            backgroundColor: on ? colors.accent : 'transparent',
+                            backgroundColor: on ? theme.colors.primary : 'transparent',
                             borderWidth: on ? 0 : 1.5,
-                            borderColor: 'rgba(255,255,255,0.2)',
+                            borderColor: theme.colors.equipmentCheckboxBorder,
                           }}
                         >
-                          {on && <Icon name="check" size={15} color="#fff" stroke={2.6} />}
+                          {on && (
+                            <Icon
+                              name="check"
+                              size={15}
+                              color={theme.colors.primaryForeground}
+                              stroke={2.6}
+                            />
+                          )}
                         </View>
                       </Pressable>
                     );
@@ -558,15 +583,15 @@ export function EquipmentPicker({ value, onChange, onDone, onBack, stepLabel }: 
                   >
                     <Text
                       style={{
-                        color: colors.mute,
+                        color: theme.colors.textMuted,
                         fontSize: 13,
-                        fontFamily: fonts.uiMed,
+                        fontFamily: theme.fonts.uiMed,
                       }}
                     >
                       {t('quiz:equipment.seeAll', { category: catLabel })}{' '}
-                      <Text style={{ color: colors.faint }}>· +{more}</Text>
+                      <Text style={{ color: theme.colors.textFaint }}>· +{more}</Text>
                     </Text>
-                    <Icon name="chevron-right" size={15} color="rgba(255,255,255,0.4)" />
+                    <Icon name="chevron-right" size={15} color={theme.colors.iconMuted} />
                   </Pressable>
                 )}
                 {!q && expanded[group.cat] && (
@@ -574,7 +599,7 @@ export function EquipmentPicker({ value, onChange, onDone, onBack, stepLabel }: 
                     onPress={() => setExpanded((e) => ({ ...e, [group.cat]: false }))}
                     style={{ paddingTop: 12, paddingBottom: 4 }}
                   >
-                    <Text style={{ color: colors.faint, fontSize: 12.5, fontFamily: fonts.uiMed }}>
+                    <Text style={{ color: theme.colors.textFaint, fontSize: 12.5, fontFamily: theme.fonts.uiMed }}>
                       {t('quiz:equipment.collapse')}
                     </Text>
                   </Pressable>
@@ -585,7 +610,7 @@ export function EquipmentPicker({ value, onChange, onDone, onBack, stepLabel }: 
 
           {emptyResults && (
             <View style={{ alignItems: 'center', paddingVertical: 30 }}>
-              <Text style={{ color: colors.faint, fontSize: 13, fontFamily: fonts.ui }}>
+              <Text style={{ color: theme.colors.textFaint, fontSize: 13, fontFamily: theme.fonts.ui }}>
                 {t('quiz:equipment.empty')}
               </Text>
             </View>
@@ -603,12 +628,12 @@ export function EquipmentPicker({ value, onChange, onDone, onBack, stepLabel }: 
               borderTopRightRadius: 12,
               borderBottomLeftRadius: 12,
               borderBottomRightRadius: 0,
-              backgroundColor: colors.accent,
+              backgroundColor: theme.colors.primary,
               flexDirection: 'row',
               alignItems: 'center',
               justifyContent: 'center',
               gap: 10,
-              shadowColor: colors.accent,
+              shadowColor: theme.colors.primary,
               shadowOffset: { width: 0, height: 10 },
               shadowOpacity: 0.45,
               shadowRadius: 20,
@@ -617,8 +642,8 @@ export function EquipmentPicker({ value, onChange, onDone, onBack, stepLabel }: 
           >
             <Text
               style={{
-                color: '#fff',
-                fontFamily: fonts.display,
+                color: theme.colors.primaryForeground,
+                fontFamily: theme.fonts.display,
                 fontSize: 17,
                 letterSpacing: 1.5,
                 textTransform: 'uppercase',
@@ -632,21 +657,21 @@ export function EquipmentPicker({ value, onChange, onDone, onBack, stepLabel }: 
                   paddingHorizontal: 8,
                   paddingVertical: 2,
                   borderRadius: 6,
-                  backgroundColor: 'rgba(255,255,255,0.22)',
+                  backgroundColor: theme.colors.counterBackground,
                 }}
               >
                 <Text
                   style={{
-                    fontFamily: fonts.mono,
+                    fontFamily: theme.fonts.mono,
                     fontSize: 12,
-                    color: '#fff',
+                    color: theme.colors.primaryForeground,
                   }}
                 >
                   {selected.length}
                 </Text>
               </View>
             )}
-            <Icon name="arrow-right" size={18} color="#fff" />
+            <Icon name="arrow-right" size={18} color={theme.colors.primaryForeground} />
           </Pressable>
         </View>
       </SafeAreaView>

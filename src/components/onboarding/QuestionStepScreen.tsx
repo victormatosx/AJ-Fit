@@ -8,7 +8,7 @@ import { SegBar } from '../ui/SegBar';
 import { CtaButton, CtaText } from '../ui/CtaButton';
 import { Icon } from '../ui/Icon';
 import { ImperialHeightInput } from '../ui/ImperialHeightInput';
-import { colors, fonts } from '../../theme/tokens';
+import { useTheme } from '../../theme';
 import type { Quiz } from '../../state/AppState';
 import { useUnits } from '../../state/UnitsContext';
 import {
@@ -58,6 +58,7 @@ export function QuestionStepScreen({
   ctaLabel?: string;
 }) {
   const { t, i18n } = useTranslation(['quiz', 'common']);
+  const { theme } = useTheme();
   const tLoose = t as unknown as LooseT;
   const { resolvedUnits } = useUnits();
   const canContinue = canContinueQuestion(question, value);
@@ -72,16 +73,16 @@ export function QuestionStepScreen({
   const questionSub = i18n.exists(questionSubKey) ? tLoose(questionSubKey) : null;
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.bg, overflow: 'hidden' }}>
+    <View style={{ flex: 1, backgroundColor: theme.colors.background, overflow: 'hidden' }}>
       <View pointerEvents="none" style={{ position: 'absolute', top: -28, right: 10 }}>
         <Svg width={outlineSvgW} height={outlineSvgH}>
           <SvgText
             x={outlineSvgW}
             y={outlineSvgH * 0.85}
-            fontFamily={fonts.display}
+            fontFamily={theme.fonts.display}
             fontSize={outlineFontSize}
             textAnchor="end"
-            stroke="rgba(255,255,255,0.22)"
+            stroke={theme.colors.decorativeOutlineSoft}
             strokeWidth={1.5}
             fill="none"
           >
@@ -109,20 +110,20 @@ export function QuestionStepScreen({
               width: 38,
               height: 38,
               borderRadius: 10,
-              backgroundColor: 'rgba(255,255,255,0.05)',
+              backgroundColor: theme.colors.surfaceElevated,
               borderWidth: 1,
-              borderColor: 'rgba(255,255,255,0.09)',
+              borderColor: theme.colors.inputBorderSubtle,
               alignItems: 'center',
               justifyContent: 'center',
               opacity: onBack ? 1 : 0.3,
             }}
           >
-            <Icon name="arrow-left" size={17} color="#fff" />
+            <Icon name="arrow-left" size={17} color={theme.colors.textPrimary} />
           </Pressable>
           <View style={{ flex: 1 }}>
             <SegBar value={stepNumber / totalSteps} segs={totalSteps} />
           </View>
-          <Text style={{ fontFamily: fonts.mono, fontSize: 10, letterSpacing: 2, color: colors.faint }}>
+          <Text style={{ fontFamily: theme.fonts.mono, fontSize: 10, letterSpacing: 2, color: theme.colors.textFaint }}>
             {String(stepNumber).padStart(2, '0')}
             <Text style={{ opacity: 0.4 }}>/{totalSteps}</Text>
           </Text>
@@ -132,7 +133,7 @@ export function QuestionStepScreen({
           <View style={{ marginBottom: 24 }}>
             <Display size={32}>{questionTitle}</Display>
             {questionSub && (
-              <Text style={{ marginTop: 10, color: colors.mute, fontSize: 14, fontFamily: fonts.ui }}>
+              <Text style={{ marginTop: 10, color: theme.colors.textMuted, fontSize: 14, fontFamily: theme.fonts.ui }}>
                 {questionSub}
               </Text>
             )}

@@ -5,7 +5,8 @@ import { useTranslation } from 'react-i18next';
 import { CtaButton } from '../ui/CtaButton';
 import { Icon } from '../ui/Icon';
 import { Display, MonoLabel } from '../ui/Display';
-import { colors, fonts, sizes, spacing } from '../../theme/tokens';
+import { displayLineHeight, sizes, spacing } from '../../theme/tokens';
+import { useTheme } from '../../theme';
 import type { PhotoVaultIssue } from '../../lib/photoVaultErrors';
 import { PhotoProgressIntro } from './PhotoProgressIntro';
 import { PhotoVaultProtectedIntro } from './PhotoVaultProtectedIntro';
@@ -71,6 +72,7 @@ export function PhotoVaultLockedState({
   onUnlock,
 }: Props) {
   const { t } = useTranslation('home');
+  const { theme } = useTheme();
   const authenticating = status === 'authenticating';
   const notConfigured = issue !== null && NOT_CONFIGURED.includes(issue);
   const errorMessage = useAuthErrorMessage(issue);
@@ -108,9 +110,9 @@ export function PhotoVaultLockedState({
           <Icon
             name={notConfigured ? 'alert-triangle' : 'lock'}
             size={16}
-            color={colors.accentHi}
+            color={theme.colors.primaryEmphasis}
           />
-          <MonoLabel color={colors.faint}>
+          <MonoLabel color={theme.colors.textFaint}>
             {t('progress.photos.locked.badge').toUpperCase()}
           </MonoLabel>
         </View>
@@ -124,8 +126,8 @@ export function PhotoVaultLockedState({
 
         <Text
           style={{
-            color: colors.mute,
-            fontFamily: fonts.ui,
+            color: theme.colors.textMuted,
+            fontFamily: theme.fonts.ui,
             fontSize: 14,
             lineHeight: 21,
             marginTop: spacing[2.5],
@@ -139,8 +141,8 @@ export function PhotoVaultLockedState({
           <Text
             accessibilityLiveRegion="polite"
             style={{
-              color: colors.textSecondary,
-              fontFamily: fonts.ui,
+              color: theme.colors.textSecondary,
+              fontFamily: theme.fonts.ui,
               fontSize: 13,
               marginBottom: spacing[4],
             }}
@@ -176,12 +178,16 @@ export function PhotoVaultLockedState({
                   gap: spacing[2.5],
                 }}
               >
-                <ActivityIndicator color={colors.text} />
+                <ActivityIndicator color={theme.colors.primaryForeground} />
                 <Text
                   style={{
-                    color: colors.text,
-                    fontFamily: fonts.uiSemi,
-                    fontSize: 14,
+                    color: theme.colors.primaryForeground,
+                    fontFamily: theme.fonts.display,
+                    fontSize: 17,
+                    lineHeight: displayLineHeight(17),
+                    letterSpacing: 1.5,
+                    textTransform: 'uppercase',
+                    includeFontPadding: false,
                   }}
                 >
                   {t('progress.photos.locked.unlocking')}

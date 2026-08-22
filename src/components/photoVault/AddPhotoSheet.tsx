@@ -15,13 +15,15 @@ import { useTranslation } from 'react-i18next';
 import { CtaButton } from '../ui/CtaButton';
 import { Icon } from '../ui/Icon';
 import { Display, MonoLabel, Slash } from '../ui/Display';
-import { colors, fonts, sizes, spacing } from '../../theme/tokens';
+import { sizes, spacing } from '../../theme/tokens';
+import { useTheme } from '../../theme';
 import { POSE_SLOTS } from '../../lib/photoVaultDayGrouping';
 import {
   EMPTY_POSE_DRAFTS,
   filledPoses,
   partitionSavablePoses,
   setPoseDraft,
+  shouldWarnSlotTaken,
   stagedDraftUris,
   type PoseDrafts as PoseDraftMap,
 } from '../../lib/photoVaultPoseDrafts';
@@ -115,6 +117,9 @@ function PoseOption({
   onPress: () => void;
 }) {
   const { t } = useTranslation('home');
+  const { theme } = useTheme();
+  const colors = theme.colors;
+  const fonts = theme.fonts;
   const failed = state.status === 'error';
   const uploading = state.status === 'uploading';
 
@@ -182,6 +187,9 @@ function SourceButton({
   onPress: () => void;
   disabled: boolean;
 }) {
+  const { theme } = useTheme();
+  const colors = theme.colors;
+  const fonts = theme.fonts;
   return (
     <Pressable
       onPress={onPress}
@@ -232,6 +240,9 @@ export function AddPhotoSheet({
   formatDate,
 }: Props) {
   const { t } = useTranslation('home');
+  const { theme } = useTheme();
+  const colors = theme.colors;
+  const fonts = theme.fonts;
   const [pose, setPose] = useState<ProgressPhotoPose>(initialPose ?? 'front');
   const [drafts, setDrafts] = useState<PoseDrafts>(EMPTY_DRAFTS);
   const [states, setStates] = useState<PoseStates>(IDLE_STATES);
@@ -289,7 +300,14 @@ export function AddPhotoSheet({
     drafts,
     isSlotTaken,
   );
-  const slotTaken = draft !== null && blockedPoses.includes(pose);
+  const slotTaken = shouldWarnSlotTaken({
+    hasDraft: draft !== null,
+    // While this pose is uploading, the slot is held by the optimistic card
+    // this very save created — see `shouldWarnSlotTaken`.
+    uploading: states[pose].status === 'uploading',
+    pose,
+    blocked: blockedPoses,
+  });
 
   const setDraft = useCallback((slot: ProgressPhotoPose, next: PickedPhoto | null) => {
     setDrafts((current) => {
@@ -451,7 +469,7 @@ export function AddPhotoSheet({
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={handleClose}>
-      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'flex-end' }}>
+      <View style={{ flex: 1, backgroundColor: theme.colors.modalBackdrop, justifyContent: 'flex-end' }}>
         <View
           style={{
             backgroundColor: colors.bg2,
@@ -650,9 +668,13 @@ export function AddPhotoSheet({
                     <View
                       style={{ flexDirection: 'row', alignItems: 'center', gap: spacing[2.5] }}
                     >
-                      <ActivityIndicator color={colors.text} />
+                      <ActivityIndicator color={colors.primaryForeground} />
                       <Text
-                        style={{ color: colors.text, fontFamily: fonts.uiSemi, fontSize: 14 }}
+                        style={{
+                          color: colors.primaryForeground,
+                          fontFamily: fonts.uiSemi,
+                          fontSize: 14,
+                        }}
                       >
                         {t('progress.photos.add.saving')}
                       </Text>

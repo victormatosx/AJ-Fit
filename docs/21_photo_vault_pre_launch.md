@@ -258,13 +258,13 @@ somente para build Debug, nunca solução de produção.
 Face ID/Touch ID/passcode; create/recover; câmera/galeria; encrypt-upload;
 download-decrypt; screenshot; gravação; app switcher; background/foreground;
 delete; logout/login; remoção local da chave e recuperação; App Check debug;
-Google/Apple/TOTP e Dashboard/Firestore.
+Google/Apple e Dashboard/Firestore.
 
 ### Android real
 
 Digital forte; face Classe 3 quando disponível; face fraca (deve cair para
 credencial); somente PIN/padrão/senha; câmera/galeria; screenshot; gravação;
-recent apps; background; delete; App Check debug; Google/TOTP e
+recent apps; background; delete; App Check debug; Google e
 Dashboard/Firestore.
 
 ### Android 9 e 10
@@ -305,7 +305,7 @@ Obrigatório:
 * App Check real nas duas plataformas e nos três produtos, antes de enforcement;
 * deploy/revisão seletiva da limpeza de órfãos;
 * Rules e regressões completas verdes;
-* Google/Apple/TOTP/RevenueCat validados no build candidato.
+* Google/Apple/RevenueCat validados no build candidato.
 
 Recomendado:
 

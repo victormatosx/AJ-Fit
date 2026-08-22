@@ -1,6 +1,7 @@
 import React from 'react';
 import { Text, TextStyle, StyleProp, View, ViewStyle } from 'react-native';
-import { colors, fonts, displayLineHeight } from '../../theme/tokens';
+import { displayLineHeight } from '../../theme/tokens';
+import { useTheme } from '../../theme';
 
 type Props = {
   children: React.ReactNode;
@@ -14,22 +15,24 @@ type Props = {
 export function Display({
   children,
   size = 34,
-  color = colors.text,
+  color,
   style,
   skew = true,
   numberOfLines,
 }: Props) {
+  const { theme } = useTheme();
+  const resolvedColor = color ?? theme.colors.textPrimary;
   const inner = (
     <Text
       numberOfLines={numberOfLines}
       style={[
         {
-          fontFamily: fonts.display,
+          fontFamily: theme.fonts.display,
           textTransform: 'uppercase',
           letterSpacing: 0.5,
           fontSize: size,
           lineHeight: displayLineHeight(size),
-          color,
+          color: resolvedColor,
           transform: skew ? [{ skewX: '-8deg' }] : undefined,
         },
         style,
@@ -44,28 +47,34 @@ export function Display({
 export function Slash({
   children,
   style,
+  accentColor,
+  textColor,
 }: {
   children: React.ReactNode;
   style?: StyleProp<ViewStyle>;
+  accentColor?: string;
+  textColor?: string;
 }) {
+  const { theme } = useTheme();
+
   return (
     <View style={[{ flexDirection: 'row', alignItems: 'center', gap: 8 }, style]}>
       <Text
         style={{
-          fontFamily: fonts.monoBold,
+          fontFamily: theme.fonts.monoBold,
           fontSize: 10,
           letterSpacing: 2.5,
-          color: colors.accentHi,
+          color: accentColor ?? theme.colors.primaryEmphasis,
         }}
       >
         //
       </Text>
       <Text
         style={{
-          fontFamily: fonts.mono,
+          fontFamily: theme.fonts.mono,
           fontSize: 10,
           letterSpacing: 2.5,
-          color: colors.faint,
+          color: textColor ?? theme.colors.textFaint,
           textTransform: 'uppercase',
         }}
       >
@@ -77,7 +86,7 @@ export function Slash({
 
 export function MonoLabel({
   children,
-  color = colors.faint,
+  color,
   size = 10,
   style,
 }: {
@@ -86,14 +95,16 @@ export function MonoLabel({
   size?: number;
   style?: StyleProp<TextStyle>;
 }) {
+  const { theme } = useTheme();
+
   return (
     <Text
       style={[
         {
-          fontFamily: fonts.mono,
+          fontFamily: theme.fonts.mono,
           fontSize: size,
           letterSpacing: 2,
-          color,
+          color: color ?? theme.colors.textFaint,
           textTransform: 'uppercase',
         },
         style,

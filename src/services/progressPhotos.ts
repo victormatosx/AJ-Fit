@@ -289,6 +289,13 @@ async function timed<T>(stage: PhotoVaultPerfStage, work: () => Promise<T>): Pro
   }
 }
 
+/**
+ * Result of a rollback attempt. Carries the provider error on failure so the
+ * caller can log *why* the orphaned ciphertext could not be reclaimed — a
+ * bare boolean loses exactly the detail that makes the failure diagnosable.
+ */
+type RollbackOutcome = { ok: true } | { ok: false; reason: unknown };
+
 function isObjectNotFound(error: unknown): boolean {
   return (
     typeof error === 'object' &&
@@ -298,11 +305,22 @@ function isObjectNotFound(error: unknown): boolean {
   );
 }
 
-async function deleteRefsForRollback(objectRefs: ReturnType<typeof ref>[]): Promise<boolean> {
+async function deleteRefsForRollback(
+  objectRefs: ReturnType<typeof ref>[],
+): Promise<RollbackOutcome> {
   const results = await Promise.allSettled(objectRefs.map((objectRef) => deleteObject(objectRef)));
-  return results.every(
-    (result) => result.status === 'fulfilled' || isObjectNotFound(result.reason),
+  // The first genuinely failed delete is what the caller logs. Without it the
+  // rollback issue reaches the log with `providerCode: undefined`, which hides
+  // the one thing that distinguishes a denied delete (`storage/unauthorized`,
+  // i.e. the caller is not authorized to touch the vault at all) from a
+  // transient one (`storage/retry-limit-exceeded`, offline, …).
+  const failed = results.find(
+    (result) => result.status === 'rejected' && !isObjectNotFound(result.reason),
   );
+
+  return failed?.status === 'rejected'
+    ? { ok: false, reason: failed.reason }
+    : { ok: true };
 }
 
 function uploadCiphertext(
@@ -368,7 +386,7 @@ interface UploadedAssets {
   encryption: ProgressPhotoEncryption;
   thumbnailEncryption: ProgressPhotoEncryption;
   /** Removes both objects. Idempotent; a missing object counts as removed. */
-  rollback: () => Promise<boolean>;
+  rollback: () => Promise<RollbackOutcome>;
 }
 
 /**
@@ -482,9 +500,17 @@ async function uploadNewAssets(params: {
       ),
     ]);
     if (uploads.some((result) => result.status === 'rejected')) {
-      if (!(await rollback())) fail('vaultUploadRollbackFailed');
       const rejected = uploads.find((result) => result.status === 'rejected');
-      fail('vaultUploadFailed', rejected?.status === 'rejected' ? rejected.reason : undefined);
+      const uploadCause = rejected?.status === 'rejected' ? rejected.reason : undefined;
+      const rolledBack = await rollback();
+      if (!rolledBack.ok) {
+        // An orphaned ciphertext outranks the upload error as the reported
+        // issue, but the upload cause is still the more useful diagnosis —
+        // log it before it is lost to the throw below.
+        logPhotoVaultIssue(SCOPE, 'vaultUploadFailed', sanitizedErrorCode(uploadCause));
+        fail('vaultUploadRollbackFailed', rolledBack.reason);
+      }
+      fail('vaultUploadFailed', uploadCause);
     }
 
     return {
@@ -576,7 +602,13 @@ export async function uploadProgressPhoto(
     } catch (error) {
       // Both objects go, whatever the cause: no ciphertext is left behind
       // outside the rollback policy.
-      if (!(await assets.rollback())) fail('vaultUploadRollbackFailed');
+      const rolledBack = await assets.rollback();
+      if (!rolledBack.ok) {
+        // Same precedence as the upload path: the orphan is what we report,
+        // but the metadata cause is logged first so it is not lost.
+        logPhotoVaultIssue(SCOPE, 'vaultMetadataCreateFailed', sanitizedErrorCode(error));
+        fail('vaultUploadRollbackFailed', rolledBack.reason);
+      }
       // A posed document is named after its (day, pose), so writing over an
       // existing one is an update — which the rules deny. Rather than guess
       // from the error code, ask whether the slot is actually taken: another
@@ -698,7 +730,15 @@ export async function replaceProgressPhoto(
       });
     } catch (error) {
       // The old photo is still the authority; take the new objects back out.
-      if (!(await assets.rollback())) fail('vaultUploadRollbackFailed');
+      const rolledBack = await assets.rollback();
+      if (!rolledBack.ok) {
+        logPhotoVaultIssue(
+          SCOPE,
+          isPhotoVaultError(error) ? error.issue : 'vaultDeleteFailed',
+          sanitizedErrorCode(error),
+        );
+        fail('vaultUploadRollbackFailed', rolledBack.reason);
+      }
       if (isPhotoVaultError(error)) throw error;
       fail('vaultDeleteFailed', error);
     }
@@ -726,7 +766,11 @@ export async function replaceProgressPhoto(
       // it is the acceptable price for not losing a photo.
       const restored = await restorePreviousMetadata(uid, documentId, previousBody!);
       if (restored) {
-        if (!(await assets.rollback())) fail('vaultUploadRollbackFailed');
+        const rolledBack = await assets.rollback();
+        if (!rolledBack.ok) {
+          logPhotoVaultIssue(SCOPE, 'vaultMetadataCreateFailed', sanitizedErrorCode(error));
+          fail('vaultUploadRollbackFailed', rolledBack.reason);
+        }
         fail('vaultMetadataCreateFailed', error);
       }
       // Restoration failed too. Deliberately keep BOTH ciphertexts: the old

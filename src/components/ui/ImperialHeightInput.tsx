@@ -8,7 +8,7 @@ import {
   View,
 } from 'react-native';
 import { MonoLabel } from './Display';
-import { colors, fonts } from '../../theme/tokens';
+import { useTheme } from '../../theme';
 import {
   cmToSelectableFeetInches,
   feetInchesToCm,
@@ -39,6 +39,7 @@ export function ImperialHeightInput({
   inchesLabel,
   error = false,
 }: Props) {
+  const { theme } = useTheme();
   const current = cmToSelectableFeetInches(valueCm, minCm, maxCm);
   const feetOptions = selectableFeet(minCm, maxCm);
   const inchOptions = selectableInchesForFeet(current.feet, minCm, maxCm);
@@ -57,13 +58,13 @@ export function ImperialHeightInput({
     <View>
       <View style={{ flexDirection: 'row', paddingHorizontal: 16 }}>
         <MonoLabel
-          color={error ? '#f0563f' : colors.faint}
+          color={error ? theme.colors.inputBorderError : theme.colors.textFaint}
           style={{ width: '50%', textAlign: 'center', marginBottom: 6 }}
         >
           {feetLabel.toUpperCase()}
         </MonoLabel>
         <MonoLabel
-          color={error ? '#f0563f' : colors.faint}
+          color={error ? theme.colors.inputBorderError : theme.colors.textFaint}
           style={{ width: '50%', textAlign: 'center', marginBottom: 6 }}
         >
           {inchesLabel.toUpperCase()}
@@ -78,7 +79,7 @@ export function ImperialHeightInput({
           position: 'relative',
           borderRadius: 12,
           borderWidth: error ? 1 : 0,
-          borderColor: error ? '#f0563f' : 'transparent',
+          borderColor: error ? theme.colors.inputBorderError : 'transparent',
         }}
       >
         <View
@@ -90,7 +91,7 @@ export function ImperialHeightInput({
             top: 8 + ITEM_HEIGHT * CENTER_OFFSET,
             height: ITEM_HEIGHT,
             borderRadius: ITEM_HEIGHT / 2,
-            backgroundColor: 'rgba(255,255,255,0.08)',
+            backgroundColor: theme.colors.inputSelection,
           }}
         />
         <HeightWheelColumn
@@ -125,6 +126,7 @@ function HeightWheelColumn({
   accessibilityLabel: string;
   formatValue: (value: number) => string;
 }) {
+  const { theme } = useTheme();
   const selectedIndex = Math.max(0, items.indexOf(selectedValue));
   const scrollY = useRef(new Animated.Value(selectedIndex * ITEM_HEIGHT)).current;
   const scrollRef = useRef<ScrollView>(null);
@@ -196,9 +198,9 @@ function HeightWheelColumn({
             >
               <Text
                 style={{
-                  fontFamily: fonts.uiSemi,
+                  fontFamily: theme.fonts.uiSemi,
                   fontSize: 19,
-                  color: '#fff',
+                  color: theme.colors.inputText,
                   letterSpacing: 0.5,
                 }}
               >

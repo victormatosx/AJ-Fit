@@ -20,7 +20,8 @@ import {
   AssessmentHistoryRow,
 } from '../components/fitness/AssessmentHistoryCard';
 import { AssessmentHistoryModal } from '../components/fitness/AssessmentHistoryModal';
-import { colors, fonts, radii, sizes, spacing } from '../theme/tokens';
+import { useTheme } from '../theme';
+import { radii, sizes, spacing } from '../theme/tokens';
 import { useAuth } from '../state/AuthContext';
 import { useAssessments, type SaveOutcome } from '../hooks/useAssessments';
 import { usePremiumCapabilities } from '../hooks/usePremiumCapabilities';
@@ -91,6 +92,7 @@ function formatAssessmentDate(
 }
 
 export function AssessmentScreen({ onBack }: { onBack: () => void }) {
+  const { theme } = useTheme();
   const { t, i18n } = useTranslation(['assessment', 'common']);
   const { resolvedUnits } = useUnits();
   // Translated label for the empty-timestamp fallback shown by
@@ -239,14 +241,14 @@ export function AssessmentScreen({ onBack }: { onBack: () => void }) {
               width: 44,
               height: 44,
               borderRadius: radii.control,
-              backgroundColor: colors.surfaceRaised,
+              backgroundColor: theme.colors.surfaceRaised,
               borderWidth: 1,
-              borderColor: colors.border,
+              borderColor: theme.colors.border,
               alignItems: 'center',
               justifyContent: 'center',
             }}
           >
-            <Icon name="arrow-left" size={17} color={colors.textSecondary} />
+            <Icon name="arrow-left" size={17} color={theme.colors.textSecondary} />
           </Pressable>
           <View style={{ flex: 1, alignItems: 'center' }}>
             <MonoLabel>{t('header.title').toUpperCase()}</MonoLabel>
@@ -262,27 +264,27 @@ export function AssessmentScreen({ onBack }: { onBack: () => void }) {
               borderRadius: radii.control,
               alignItems: 'center',
               justifyContent: 'center',
-              backgroundColor: pressed ? colors.accentHi : colors.accent,
+              backgroundColor: pressed ? theme.colors.accentHi : theme.colors.accent,
               borderWidth: 1,
-              borderColor: colors.accentHi,
+              borderColor: theme.colors.accentHi,
               transform: [{ scale: pressed ? 0.96 : 1 }],
             })}
           >
-            <Icon name="plus" size={20} color={colors.text} stroke={2.2} />
+            <Icon name="plus" size={20} color={theme.colors.text} stroke={2.2} />
           </Pressable>
         </View>
 
         {error ? (
           <View style={{ paddingHorizontal: 22, paddingTop: 40, alignItems: 'center' }}>
-            <Icon name="alert-triangle" size={26} color="#f0563f" />
-            <Text style={{ fontFamily: fonts.uiBold, fontSize: 14, color: '#fff', marginTop: 10 }}>
+            <Icon name="alert-triangle" size={26} color={theme.colors.danger} />
+            <Text style={{ fontFamily: theme.fonts.uiBold, fontSize: 14, color: theme.colors.textPrimary, marginTop: 10 }}>
               {t('errors.loadFailedTitle')}
             </Text>
             <Text
               style={{
-                fontFamily: fonts.ui,
+                fontFamily: theme.fonts.ui,
                 fontSize: 12.5,
-                color: colors.mute,
+                color: theme.colors.textMuted,
                 marginTop: 4,
                 textAlign: 'center',
               }}
@@ -296,20 +298,20 @@ export function AssessmentScreen({ onBack }: { onBack: () => void }) {
                 paddingHorizontal: 18,
                 paddingVertical: 10,
                 borderRadius: 10,
-                backgroundColor: 'rgba(11,112,249,0.16)',
+                backgroundColor: theme.colors.primarySoft,
                 borderWidth: 1,
-                borderColor: 'rgba(11,112,249,0.4)',
+                borderColor: theme.colors.primaryBorderMuted,
               }}
             >
-              <Text style={{ fontFamily: fonts.uiBold, fontSize: 12.5, color: colors.accentHi }}>
+              <Text style={{ fontFamily: theme.fonts.uiBold, fontSize: 12.5, color: theme.colors.primaryEmphasis }}>
                 {t('errors.retry').toUpperCase()}
               </Text>
             </Pressable>
           </View>
         ) : loading && !hasAssessments ? (
           <View style={{ paddingTop: 60, alignItems: 'center' }}>
-            <ActivityIndicator color={colors.accentHi} />
-            <Text style={{ marginTop: 10, fontFamily: fonts.ui, color: colors.mute }}>
+            <ActivityIndicator color={theme.colors.primaryEmphasis} />
+            <Text style={{ marginTop: 10, fontFamily: theme.fonts.ui, color: theme.colors.textMuted }}>
               {t('assessment:loading.title')}
             </Text>
           </View>
@@ -368,11 +370,11 @@ export function AssessmentScreen({ onBack }: { onBack: () => void }) {
                       borderRadius: radii.control,
                       alignItems: 'center',
                       justifyContent: 'center',
-                      backgroundColor: pressed ? colors.surfacePressed : 'transparent',
+                      backgroundColor: pressed ? theme.colors.surfacePressed : 'transparent',
                       transform: [{ scale: pressed ? 0.96 : 1 }],
                     })}
                   >
-                    <Icon name="plus" size={20} color={colors.accentHi} stroke={2.2} />
+                    <Icon name="plus" size={20} color={theme.colors.accentHi} stroke={2.2} />
                   </Pressable>
                 ) : null}
               </View>
@@ -385,22 +387,22 @@ export function AssessmentScreen({ onBack }: { onBack: () => void }) {
                     width: 48,
                     height: 48,
                     borderRadius: radii.lg,
-                    backgroundColor: colors.accentSoft,
+                    backgroundColor: theme.colors.accentSoft,
                     alignItems: 'center',
                     justifyContent: 'center',
                   }}
                 >
-                  <Icon name="chart" size={22} color={colors.accentHi} />
+                  <Icon name="chart" size={22} color={theme.colors.accentHi} />
                 </View>
-                <Text style={{ fontFamily: fonts.uiBold, fontSize: 15, color: colors.text, marginTop: spacing[4] }}>
+                <Text style={{ fontFamily: theme.fonts.uiBold, fontSize: 15, color: theme.colors.text, marginTop: spacing[4] }}>
                   {t('history.empty.title')}
                 </Text>
                 <Text
                   style={{
-                    fontFamily: fonts.ui,
+                    fontFamily: theme.fonts.ui,
                     fontSize: 12.5,
                     lineHeight: 18,
-                    color: colors.mute,
+                    color: theme.colors.mute,
                     marginTop: spacing[1.5],
                     textAlign: 'center',
                   }}
@@ -420,12 +422,12 @@ export function AssessmentScreen({ onBack }: { onBack: () => void }) {
                     alignItems: 'center',
                     justifyContent: 'center',
                     gap: spacing[2],
-                    backgroundColor: pressed ? colors.accentHi : colors.accent,
+                    backgroundColor: pressed ? theme.colors.accentHi : theme.colors.accent,
                     opacity: pressed ? 0.9 : 1,
                   })}
                 >
-                  <Icon name="plus" size={18} color={colors.text} stroke={2.2} />
-                  <Text style={{ fontFamily: fonts.uiSemi, fontSize: 14, color: colors.text }}>
+                  <Icon name="plus" size={18} color={theme.colors.text} stroke={2.2} />
+                  <Text style={{ fontFamily: theme.fonts.uiSemi, fontSize: 14, color: theme.colors.text }}>
                     {t('assessment:actions.firstAssessment')}
                   </Text>
                 </Pressable>
@@ -446,10 +448,10 @@ export function AssessmentScreen({ onBack }: { onBack: () => void }) {
                   >
                     <Text
                       style={{
-                        fontFamily: fonts.mono,
+                        fontFamily: theme.fonts.mono,
                         fontSize: 11,
                         letterSpacing: 1,
-                        color: colors.accentHi,
+                        color: theme.colors.primaryEmphasis,
                       }}
                     >
                       {t('history.toggle.showAll').toUpperCase()}
@@ -525,6 +527,7 @@ function MeasureField({
   placeholder: string;
 }) {
   const [focused, setFocused] = useState(false);
+  const { theme } = useTheme();
   // IMPORTANT: never define the wrapper as a local component (e.g.
   // `const Wrapper = shakeX ? (props) => <Animated.View .../> : ...`).
   // That expression creates a brand-new function identity on every render,
@@ -535,24 +538,24 @@ function MeasureField({
   // stable component references (Animated.View/View themselves never change).
   const content = (
     <>
-      <MonoLabel color={error ? '#f0563f' : colors.faint} style={{ marginBottom: 6 }}>
+      <MonoLabel color={error ? theme.colors.inputBorderError : theme.colors.textFaint} style={{ marginBottom: 6 }}>
         {label}
       </MonoLabel>
       <View
         style={{
           flexDirection: 'row',
           alignItems: 'center',
-          gap: spacing[2],
-          minHeight: small ? 48 : 52,
-          paddingHorizontal: small ? spacing[3] : spacing[4],
-          borderRadius: radii.lg,
-          backgroundColor: colors.cardBg,
+          gap: 6,
+          paddingVertical: small ? 10 : 13,
+          paddingHorizontal: small ? 12 : 14,
+          borderRadius: 12,
+          backgroundColor: theme.colors.inputBackgroundSubtle,
           borderWidth: 1,
           borderColor: error
-            ? colors.danger
+            ? theme.colors.inputBorderError
             : focused
-              ? colors.focus
-              : colors.cardBorder,
+              ? theme.colors.inputBorderFocusStrong
+              : theme.colors.inputBorderSubtle,
         }}
       >
         <TextInput
@@ -562,19 +565,19 @@ function MeasureField({
           onBlur={() => setFocused(false)}
           placeholder={placeholder}
           accessibilityLabel={label}
-          placeholderTextColor={colors.faint}
-          selectionColor={colors.accentHi}
+          placeholderTextColor={theme.colors.textFaint}
+          selectionColor={theme.colors.primaryEmphasis}
           keyboardType="decimal-pad"
           style={{
             flex: 1,
             minWidth: 0,
-            color: colors.text,
-            fontFamily: fonts.uiSemi,
-            fontSize: small ? 15 : 16,
+            color: theme.colors.inputText,
+            fontFamily: theme.fonts.display,
+            fontSize: small ? 18 : 22,
             padding: 0,
           }}
         />
-        <Text style={{ fontFamily: fonts.mono, fontSize: 11, color: colors.faint }}>{unit}</Text>
+        <Text style={{ fontFamily: theme.fonts.mono, fontSize: 11, color: theme.colors.textFaint }}>{unit}</Text>
       </View>
     </>
   );
@@ -606,6 +609,7 @@ function useMeasuredAtFields() {
 }
 
 function Spinner() {
+  const { theme } = useTheme();
   const rot = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     const loop = Animated.loop(
@@ -621,8 +625,8 @@ function Spinner() {
         height: 16,
         borderRadius: 8,
         borderWidth: 2,
-        borderColor: 'rgba(255,255,255,0.35)',
-        borderTopColor: '#fff',
+        borderColor: theme.colors.choiceIndex,
+        borderTopColor: theme.colors.choiceIndicator,
         transform: [{ rotate: rot.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] }) }],
       }}
     />
@@ -632,10 +636,10 @@ function Spinner() {
 /** success = write + refresh both OK · warning = write OK but the screen didn't refresh · error = the write itself failed. */
 type ToastTone = 'success' | 'warning' | 'error';
 
-const TOAST_TONE_STYLE: Record<ToastTone, { accent: string; icon: 'check' | 'alert-triangle' }> = {
-  success: { accent: '#22c55e', icon: 'check' },
-  warning: { accent: '#f5a623', icon: 'alert-triangle' },
-  error: { accent: '#f0563f', icon: 'alert-triangle' },
+const TOAST_TONE_ICON: Record<ToastTone, 'check' | 'alert-triangle'> = {
+  success: 'check',
+  warning: 'alert-triangle',
+  error: 'alert-triangle',
 };
 
 function Toast({
@@ -651,7 +655,20 @@ function Toast({
   title: string;
   subtitle: string;
 }) {
-  const { accent, icon } = TOAST_TONE_STYLE[tone];
+  const { theme } = useTheme();
+  const accent =
+    tone === 'success'
+      ? theme.colors.success
+      : tone === 'warning'
+        ? theme.colors.toastWarning
+        : theme.colors.danger;
+  const accentBorder =
+    tone === 'success'
+      ? theme.colors.toastSuccessBorder
+      : tone === 'warning'
+        ? theme.colors.toastWarningBorder
+        : theme.colors.toastErrorBorder;
+  const icon = TOAST_TONE_ICON[tone];
   return (
     <Animated.View
       pointerEvents="none"
@@ -665,9 +682,9 @@ function Toast({
         paddingVertical: 14,
         paddingHorizontal: 16,
         borderRadius: 14,
-        backgroundColor: 'rgba(8,10,30,0.94)',
+        backgroundColor: theme.colors.toastBackground,
         borderWidth: 1,
-        borderColor: `${accent}66`,
+        borderColor: accentBorder,
         shadowColor: accent,
         shadowOpacity: 0.25,
         shadowRadius: 20,
@@ -690,11 +707,11 @@ function Toast({
           justifyContent: 'center',
         }}
       >
-        <Icon name={icon} size={16} color="#020010" stroke={2.6} />
+        <Icon name={icon} size={16} color={theme.colors.statusForeground} stroke={2.6} />
       </View>
       <View style={{ flex: 1 }}>
-        <Text style={{ fontSize: 14, fontFamily: fonts.uiBold, color: '#fff' }}>{title}</Text>
-        <Text style={{ fontSize: 11.5, color: colors.mute, marginTop: 2, fontFamily: fonts.ui }}>
+        <Text style={{ fontSize: 14, fontFamily: theme.fonts.uiBold, color: theme.colors.textPrimary }}>{title}</Text>
+        <Text style={{ fontSize: 11.5, color: theme.colors.textMuted, marginTop: 2, fontFamily: theme.fonts.ui }}>
           {subtitle}
         </Text>
       </View>
@@ -727,6 +744,7 @@ function useToast() {
 }
 
 function ModalHeader({ onBack, title }: { onBack: () => void; title: string }) {
+  const { theme } = useTheme();
   const { t } = useTranslation('common');
   return (
     <View
@@ -746,17 +764,17 @@ function ModalHeader({ onBack, title }: { onBack: () => void; title: string }) {
         accessibilityRole="button"
         accessibilityLabel={t('actions.back')}
         style={{
-          width: 44,
-          height: 44,
-          borderRadius: radii.control,
-          backgroundColor: colors.surfaceRaised,
+          width: 38,
+          height: 38,
+          borderRadius: 10,
+          backgroundColor: theme.colors.controlBackground,
           borderWidth: 1,
-          borderColor: colors.border,
+          borderColor: theme.colors.controlBorder,
           alignItems: 'center',
           justifyContent: 'center',
         }}
       >
-        <Icon name="arrow-left" size={17} color={colors.textSecondary} />
+        <Icon name="arrow-left" size={17} color={theme.colors.iconStrong} />
       </Pressable>
       <View style={{ flex: 1, alignItems: 'center' }}>
         <MonoLabel>{title}</MonoLabel>
@@ -775,6 +793,7 @@ function AssessmentFormIntro({
   title: string;
   description: string;
 }) {
+  const { theme } = useTheme();
   return (
     <View
       style={{
@@ -791,24 +810,24 @@ function AssessmentFormIntro({
             width: 42,
             height: 42,
             borderRadius: radii.md,
-            backgroundColor: colors.accentSoft,
+            backgroundColor: theme.colors.primarySoft,
             alignItems: 'center',
             justifyContent: 'center',
           }}
         >
-          <Icon name={icon} size={18} color={colors.accentHi} />
+          <Icon name={icon} size={18} color={theme.colors.primaryEmphasis} />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={{ fontFamily: fonts.uiBold, fontSize: 17, color: colors.text }}>
+          <Text style={{ fontFamily: theme.fonts.uiBold, fontSize: 17, color: theme.colors.textPrimary }}>
             {title}
           </Text>
           <Text
             style={{
               marginTop: spacing[1],
-              fontFamily: fonts.ui,
+              fontFamily: theme.fonts.ui,
               fontSize: 12.5,
               lineHeight: 18,
-              color: colors.mute,
+              color: theme.colors.textMuted,
             }}
           >
             {description}
@@ -828,6 +847,7 @@ function AssessmentFormSection({
   title: string;
   children: ReactNode;
 }) {
+  const { theme } = useTheme();
   return (
     <View
       style={{
@@ -848,10 +868,10 @@ function AssessmentFormSection({
       >
         <Text
           style={{
-            fontFamily: fonts.monoBold,
+            fontFamily: theme.fonts.monoBold,
             fontSize: 10,
             letterSpacing: 2,
-            color: colors.accentHi,
+            color: theme.colors.primaryEmphasis,
           }}
         >
           {String(index).padStart(2, '0')}
@@ -864,7 +884,8 @@ function AssessmentFormSection({
 }
 
 function FormDivider() {
-  return <View style={{ height: 1, backgroundColor: colors.hair, marginVertical: spacing[4] }} />;
+  const { theme } = useTheme();
+  return <View style={{ height: 1, backgroundColor: theme.colors.divider, marginVertical: spacing[4] }} />;
 }
 
 function AssessmentSaveFooter({
@@ -888,15 +909,16 @@ function AssessmentSaveFooter({
   actionLabel: string;
   validationLabel: string;
 }) {
+  const { theme } = useTheme();
   return (
     <SafeAreaView
       edges={['bottom']}
       style={{
-        paddingHorizontal: sizes.screenGutter,
-        paddingTop: spacing[3],
-        backgroundColor: 'rgba(2,0,16,0.96)',
+        paddingHorizontal: 22,
+        paddingTop: 12,
+        backgroundColor: theme.colors.background,
         borderTopWidth: 1,
-        borderTopColor: colors.hair,
+        borderTopColor: theme.colors.border,
       }}
     >
       <Animated.View
@@ -916,7 +938,7 @@ function AssessmentSaveFooter({
           style={{ opacity: saving ? 0.75 : canSave ? 1 : 0.68 }}
         >
           <LinearGradient
-            colors={['#1f82ff', colors.accent]}
+            colors={theme.gradients.brand}
             start={{ x: 0, y: 0 }}
             end={{ x: 0, y: 1 }}
             style={{
@@ -926,7 +948,7 @@ function AssessmentSaveFooter({
               alignItems: 'center',
               justifyContent: 'center',
               gap: 10,
-              shadowColor: colors.accent,
+              shadowColor: theme.colors.primary,
               shadowOpacity: canSave ? 0.3 : 0,
               shadowRadius: canSave ? 18 : 0,
               shadowOffset: { width: 0, height: 6 },
@@ -938,10 +960,10 @@ function AssessmentSaveFooter({
                 <Spinner />
                 <Text
                   style={{
-                    fontFamily: fonts.display,
+                    fontFamily: theme.fonts.display,
                     fontSize: 17,
                     letterSpacing: 1.5,
-                    color: '#fff',
+                    color: theme.colors.primaryForeground,
                     textTransform: 'uppercase',
                   }}
                 >
@@ -952,16 +974,16 @@ function AssessmentSaveFooter({
               <>
                 <Text
                   style={{
-                    fontFamily: fonts.display,
+                    fontFamily: theme.fonts.display,
                     fontSize: 17,
                     letterSpacing: 1.5,
-                    color: '#fff',
+                    color: theme.colors.primaryForeground,
                     textTransform: 'uppercase',
                   }}
                 >
                   {actionLabel}
                 </Text>
-                <Icon name="arrow-right" size={18} color="#fff" />
+                <Icon name="arrow-right" size={18} color={theme.colors.primaryForeground} />
               </>
             )}
           </LinearGradient>
@@ -978,7 +1000,7 @@ function AssessmentSaveFooter({
       >
         {shake && !canSave && (
           <MonoLabel
-            color={shake ? colors.danger : colors.faint}
+            color={shake ? theme.colors.danger : theme.colors.textFaint}
             style={{ textAlign: 'center', marginTop: 8 }}
           >
             {validationLabel.toUpperCase()}
@@ -1005,6 +1027,7 @@ function GuidedAssessmentModal({
   /** When known, age is always derived from this — never asked manually (objective 6). */
   birthDate: Date | null;
 }) {
+  const { theme } = useTheme();
   const { t } = useTranslation('assessment');
   const { resolvedUnits } = useUnits();
   const massUnit = weightUnit(resolvedUnits);
@@ -1184,9 +1207,9 @@ function GuidedAssessmentModal({
                   paddingVertical: 16,
                   paddingHorizontal: 16,
                   borderRadius: 14,
-                  backgroundColor: colors.surfaceSelected,
+                  backgroundColor: theme.colors.surfaceSelected,
                   borderWidth: 1,
-                  borderColor: 'rgba(11,112,249,0.40)',
+                  borderColor: theme.colors.primaryBorderMuted,
                   flexDirection: 'row',
                   alignItems: 'center',
                   justifyContent: 'space-between',
@@ -1198,24 +1221,24 @@ function GuidedAssessmentModal({
                       width: 38,
                       height: 38,
                       borderRadius: 10,
-                      backgroundColor: 'rgba(11,112,249,0.22)',
+                      backgroundColor: theme.colors.primarySurfaceStrong,
                       alignItems: 'center',
                       justifyContent: 'center',
                     }}
                   >
-                    <Icon name="target" size={18} color={colors.accentHi} />
+                    <Icon name="target" size={18} color={theme.colors.primaryEmphasis} />
                   </View>
                   <View style={{ flex: 1 }}>
                     <MonoLabel style={{ marginBottom: 4 }}>
                       {t('guided.protocolLabel').toUpperCase()}
                     </MonoLabel>
-                    <Text style={{ fontSize: 15, fontFamily: fonts.uiBold, color: '#fff' }}>
+                    <Text style={{ fontSize: 15, fontFamily: theme.fonts.uiBold, color: theme.colors.textPrimary }}>
                       {t(PROTOCOL_TRANSLATION_KEYS[proto.id])}
                     </Text>
                   </View>
                 </View>
                 <View style={{ transform: [{ rotate: protocolOpen ? '180deg' : '0deg' }] }}>
-                  <Icon name="chevron-down" size={18} color={colors.accentHi} stroke={2} />
+                  <Icon name="chevron-down" size={18} color={theme.colors.primaryEmphasis} stroke={2} />
                 </View>
               </Pressable>
 
@@ -1229,10 +1252,10 @@ function GuidedAssessmentModal({
                     marginTop: 6,
                     borderRadius: 14,
                     overflow: 'hidden',
-                    backgroundColor: '#080323',
+                    backgroundColor: theme.colors.floatingSurface,
                     borderWidth: 1,
-                    borderColor: 'rgba(11,112,249,0.4)',
-                    shadowColor: '#000',
+                    borderColor: theme.colors.primaryBorderMuted,
+                    shadowColor: theme.colors.floatingShadow,
                     shadowOpacity: 0.5,
                     shadowRadius: 25,
                     shadowOffset: { width: 0, height: 10 },
@@ -1250,18 +1273,20 @@ function GuidedAssessmentModal({
                       style={{
                         paddingVertical: 13,
                         paddingHorizontal: 16,
-                        backgroundColor: protocolId === p.id ? 'rgba(11,112,249,0.16)' : 'transparent',
+                        backgroundColor: protocolId === p.id
+                          ? theme.colors.choiceSelectedBackground
+                          : 'transparent',
                         borderTopWidth: i ? 1 : 0,
-                        borderTopColor: 'rgba(255,255,255,0.06)',
+                        borderTopColor: theme.colors.sheetDivider,
                         flexDirection: 'row',
                         alignItems: 'center',
                         justifyContent: 'space-between',
                       }}
                     >
-                      <Text style={{ fontSize: 13.5, fontFamily: fonts.uiSemi, color: '#fff' }}>
+                      <Text style={{ fontSize: 13.5, fontFamily: theme.fonts.uiSemi, color: theme.colors.textPrimary }}>
                         {t(PROTOCOL_TRANSLATION_KEYS[p.id])}
                       </Text>
-                      {protocolId === p.id && <Icon name="check" size={14} color={colors.accentHi} />}
+                      {protocolId === p.id && <Icon name="check" size={14} color={theme.colors.primaryEmphasis} />}
                     </Pressable>
                   ))}
                 </View>
@@ -1335,7 +1360,7 @@ function GuidedAssessmentModal({
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                   <Text
                     style={{
-                      fontFamily: fonts.display,
+                      fontFamily: theme.fonts.display,
                       fontSize: 26,
                       color: '#fff',
                       transform: [{ skewX: '-8deg' }],
@@ -1353,7 +1378,7 @@ function GuidedAssessmentModal({
                       }}
                     >
                       <Text
-                        style={{ fontFamily: fonts.monoBold, fontSize: 9, letterSpacing: 0.8, color: '#020010' }}
+                        style={{ fontFamily: theme.fonts.monoBold, fontSize: 9, letterSpacing: 0.8, color: theme.colors.statusForeground }}
                       >
                         {t(`classifications.bmi.${band.classification}`).toUpperCase()}
                       </Text>
@@ -1498,6 +1523,7 @@ function ImportAssessmentModal({
   defaultWeight: number | null;
   defaultHeight: number | null;
 }) {
+  const { theme } = useTheme();
   const { t } = useTranslation('assessment');
   const { resolvedUnits } = useUnits();
   const massUnit = weightUnit(resolvedUnits);
@@ -1645,7 +1671,7 @@ function ImportAssessmentModal({
                 <MeasureField label={t('fields.visceralFat.label').toUpperCase()} unit="" placeholder={t('form.numericPlaceholder')} value={visceralFat} onChange={setVisceralFat} />
               </View>
               <FormDivider />
-              <MonoLabel color={colors.faint} style={{ marginBottom: spacing[2] }}>
+              <MonoLabel color={theme.colors.textFaint} style={{ marginBottom: spacing[2] }}>
                 {t('fields.notes.label').toUpperCase()}
               </MonoLabel>
               <View
@@ -1653,9 +1679,9 @@ function ImportAssessmentModal({
                   minHeight: 52,
                   paddingHorizontal: spacing[4],
                   borderRadius: radii.lg,
-                  backgroundColor: colors.cardBg,
+                  backgroundColor: theme.colors.inputBackgroundSubtle,
                   borderWidth: 1,
-                  borderColor: colors.cardBorder,
+                  borderColor: theme.colors.inputBorderSubtle,
                   justifyContent: 'center',
                 }}
               >
@@ -1664,9 +1690,9 @@ function ImportAssessmentModal({
                   onChangeText={setNotes}
                   placeholder={t('fields.notes.placeholder')}
                   accessibilityLabel={t('fields.notes.label')}
-                  placeholderTextColor={colors.faint}
-                  selectionColor={colors.accentHi}
-                  style={{ color: colors.text, fontFamily: fonts.uiMed, fontSize: 14, padding: 0 }}
+                  placeholderTextColor={theme.colors.textFaint}
+                  selectionColor={theme.colors.primaryEmphasis}
+                  style={{ color: theme.colors.inputText, fontFamily: theme.fonts.uiMed, fontSize: 14, padding: 0 }}
                 />
               </View>
             </Card>

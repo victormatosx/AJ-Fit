@@ -11,7 +11,7 @@ import { OutlineNumber } from '../components/ui/OutlineNumber';
 import { ProfileAvatar } from '../components/ui/ProfileAvatar';
 import { SettingsSection } from '../components/ui/SettingsSection';
 import { SmartAlertsSection } from '../components/ui/SmartAlertsSection';
-import { colors, fonts } from '../theme/tokens';
+import { useTheme } from '../theme';
 import { useAuth } from '../state/AuthContext';
 import { useSubscription } from '../hooks/useSubscription';
 import { resolveSubscriptionCenterModel } from '../lib/subscriptionCenter';
@@ -36,6 +36,7 @@ export function ProfileScreen({
   onOpenSubscription?: () => void;
 }) {
   const { t } = useTranslation('profile');
+  const { theme } = useTheme();
   const { user, profile, linkedProviders, logout } = useAuth();
   const { customerInfo } = useSubscription();
 
@@ -113,9 +114,9 @@ export function ProfileScreen({
                 {email ? (
                   <Text
                     style={{
-                      fontFamily: fonts.ui,
+                      fontFamily: theme.fonts.ui,
                       fontSize: 12.5,
-                      color: colors.mute,
+                      color: theme.colors.textMuted,
                       marginTop: 4,
                     }}
                     numberOfLines={1}
@@ -134,7 +135,7 @@ export function ProfileScreen({
                 style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}
               >
                 <Slash>{t('level.title').toUpperCase()}</Slash>
-                <MonoLabel color={colors.accentHi}>
+                <MonoLabel color={theme.colors.primaryEmphasis}>
                   {t('level.xp', { xp: '2.450' }).toUpperCase()}
                 </MonoLabel>
               </View>
@@ -201,9 +202,9 @@ export function ProfileScreen({
               style={{
                 borderRadius: 14,
                 overflow: 'hidden',
-                backgroundColor: 'rgba(255,255,255,0.03)',
+                backgroundColor: theme.colors.settingsGroupBackground,
                 borderWidth: 1,
-                borderColor: 'rgba(255,255,255,0.06)',
+                borderColor: theme.colors.settingsGroupBorder,
               }}
             >
               {PROVIDER_META.map((p, i) => {
@@ -219,21 +220,21 @@ export function ProfileScreen({
                       paddingVertical: 14,
                       paddingHorizontal: 16,
                       borderTopWidth: i ? 1 : 0,
-                      borderTopColor: 'rgba(255,255,255,0.05)',
+                      borderTopColor: theme.colors.settingsDivider,
                       opacity: linked ? 1 : 0.45,
                     }}
                   >
-                    <Icon name={p.icon} size={16} color="#fff" />
+                    <Icon name={p.icon} size={16} color={theme.colors.textPrimary} />
                     <Text
-                      style={{ flex: 1, fontFamily: fonts.uiSemi, fontSize: 14, color: '#fff' }}
+                      style={{ flex: 1, fontFamily: theme.fonts.uiSemi, fontSize: 14, color: theme.colors.textPrimary }}
                     >
                       {providerLabel}
                     </Text>
                     {linked ? (
-                      <Icon name="check" size={16} color={colors.accentHi} />
+                      <Icon name="check" size={16} color={theme.colors.primaryEmphasis} />
                     ) : (
                       <Text
-                        style={{ fontFamily: fonts.mono, fontSize: 10, color: colors.faint, letterSpacing: 1 }}
+                        style={{ fontFamily: theme.fonts.mono, fontSize: 10, color: theme.colors.textFaint, letterSpacing: 1 }}
                       >
                         {t('linkedProviders.notLinked').toUpperCase()}
                       </Text>

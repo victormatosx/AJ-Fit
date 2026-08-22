@@ -7,7 +7,8 @@ import { Icon } from '../components/ui/Icon';
 import { RiseIn } from '../components/ui/RiseIn';
 import { ScreenBg } from '../components/ui/ScreenBg';
 import { OutlineNumber } from '../components/ui/OutlineNumber';
-import { colors, fonts, displayLineHeight, spacing } from '../theme/tokens';
+import { displayLineHeight } from '../theme/tokens';
+import { useTheme } from '../theme';
 import { useAppState } from '../state/AppState';
 import { deriveTrainingDaySlots } from '../lib/planDerivation';
 
@@ -29,6 +30,7 @@ export function PlanReadyScreen({
   name?: string | null;
   onContinue: () => void;
 }) {
+  const { theme } = useTheme();
   const { t } = useTranslation(['plan', 'quiz']);
   const { quiz } = useAppState();
   const goalKey = quiz.goal ?? 'hyper';
@@ -64,11 +66,11 @@ export function PlanReadyScreen({
             <Slash style={{ marginBottom: 10 }}>{t('plan:header.eyebrow').toUpperCase()}</Slash>
             <Text
               style={{
-                fontFamily: fonts.display,
+                fontFamily: theme.fonts.display,
                 fontSize: 32,
                 lineHeight: displayLineHeight(32),
                 letterSpacing: 0.5,
-                color: '#fff',
+                color: theme.colors.textPrimary,
                 textTransform: 'uppercase',
                 transform: [{ skewX: '-8deg' }],
               }}
@@ -78,10 +80,10 @@ export function PlanReadyScreen({
             <Text
               style={{
                 marginTop: 10,
-                fontFamily: fonts.ui,
+                fontFamily: theme.fonts.ui,
                 fontSize: 14,
                 lineHeight: 20,
-                color: colors.mute,
+                color: theme.colors.textMuted,
               }}
             >
               {goalLabel} · {levelLabel} · {t('plan:summary.frequencyValue', { days })}
@@ -115,12 +117,12 @@ export function PlanReadyScreen({
                     paddingHorizontal: 2,
                     alignItems: 'center',
                     borderRadius: 10,
-                    backgroundColor: on ? 'rgba(11,112,249,0.14)' : 'transparent',
+                    backgroundColor: on ? theme.colors.primarySurface : 'transparent',
                     borderWidth: 1,
-                    borderColor: on ? 'rgba(11,112,249,0.4)' : 'rgba(255,255,255,0.07)',
+                    borderColor: on ? theme.colors.primaryBorderMuted : theme.colors.border,
                   }}
                 >
-                  <Text style={{ fontFamily: fonts.mono, fontSize: 9, letterSpacing: 1, color: colors.faint }}>
+                  <Text style={{ fontFamily: theme.fonts.mono, fontSize: 9, letterSpacing: 1, color: theme.colors.textFaint }}>
                     {t(`plan:schedule.dayLabels.${DAY_ORDER[i]}` as 'plan:schedule.dayLabels.mon')}
                   </Text>
                   <View
@@ -129,7 +131,7 @@ export function PlanReadyScreen({
                       width: 6,
                       height: 6,
                       borderRadius: 3,
-                      backgroundColor: on ? colors.accentHi : 'rgba(255,255,255,0.2)',
+                      backgroundColor: on ? theme.colors.primaryEmphasis : theme.colors.indicatorRest,
                     }}
                   />
                 </View>
@@ -147,16 +149,16 @@ export function PlanReadyScreen({
               style={{
                 padding: 18,
                 borderRadius: 16,
-                backgroundColor: 'rgba(255,255,255,0.03)',
+                backgroundColor: theme.colors.surface,
                 borderWidth: 1,
-                borderColor: 'rgba(255,255,255,0.08)',
+                borderColor: theme.colors.divider,
               }}
             >
               <Text
                 style={{
-                  fontFamily: fonts.uiBold,
+                  fontFamily: theme.fonts.uiBold,
                   fontSize: 16,
-                  color: '#fff',
+                  color: theme.colors.textPrimary,
                 }}
               >
                 {t('plan:journey.title')}
@@ -164,10 +166,10 @@ export function PlanReadyScreen({
               <Text
                 style={{
                   marginTop: 6,
-                  fontFamily: fonts.ui,
+                  fontFamily: theme.fonts.ui,
                   fontSize: 13.5,
                   lineHeight: 19,
-                  color: colors.mute,
+                  color: theme.colors.textMuted,
                 }}
               >
                 {t('plan:journey.body')}
@@ -188,11 +190,11 @@ export function PlanReadyScreen({
                 paddingVertical: 20,
                 paddingHorizontal: 22,
                 borderRadius: 16,
-                backgroundColor: colors.accent,
+                backgroundColor: theme.colors.primary,
                 flexDirection: 'row',
                 alignItems: 'center',
                 gap: 14,
-                shadowColor: colors.accent,
+                shadowColor: theme.colors.primary,
                 shadowOpacity: 0.55,
                 shadowRadius: 44,
                 shadowOffset: { width: 0, height: 14 },
@@ -207,16 +209,16 @@ export function PlanReadyScreen({
                   left: 0,
                   right: 0,
                   height: 1,
-                  backgroundColor: 'rgba(255,255,255,0.4)',
+                  backgroundColor: theme.colors.primaryForegroundHighlight,
                 }}
               />
               <View style={{ flex: 1 }}>
                 <Text
                   style={{
-                    fontFamily: fonts.display,
+                    fontFamily: theme.fonts.display,
                     fontSize: 24,
                     letterSpacing: 1,
-                    color: '#fff',
+                    color: theme.colors.primaryForeground,
                     textTransform: 'uppercase',
                     transform: [{ skewX: '-8deg' }],
                   }}
@@ -229,14 +231,14 @@ export function PlanReadyScreen({
                   width: 44,
                   height: 44,
                   borderRadius: 22,
-                  backgroundColor: 'rgba(255,255,255,0.18)',
+                  backgroundColor: theme.colors.primaryForegroundSurface,
                   borderWidth: 1,
-                  borderColor: 'rgba(255,255,255,0.35)',
+                  borderColor: theme.colors.primaryForegroundBorder,
                   alignItems: 'center',
                   justifyContent: 'center',
                 }}
               >
-                <Icon name="arrow-right" size={20} color="#fff" stroke={2.2} />
+                <Icon name="arrow-right" size={20} color={theme.colors.primaryForeground} stroke={2.2} />
               </View>
             </Pressable>
             <MonoLabel style={{ textAlign: 'center', marginTop: 12 }}>
@@ -250,6 +252,7 @@ export function PlanReadyScreen({
 }
 
 function SummaryCard({ label, value }: { label: string; value: string }) {
+  const { theme } = useTheme();
   return (
     <View
       style={{
@@ -257,18 +260,18 @@ function SummaryCard({ label, value }: { label: string; value: string }) {
         flexGrow: 1,
         padding: 14,
         borderRadius: 12,
-        backgroundColor: 'rgba(255,255,255,0.03)',
+        backgroundColor: theme.colors.surface,
         borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.07)',
+        borderColor: theme.colors.border,
       }}
     >
       <MonoLabel>{label.toUpperCase()}</MonoLabel>
       <Text
         style={{
           marginTop: 6,
-          fontFamily: fonts.uiBold,
+          fontFamily: theme.fonts.uiBold,
           fontSize: 16,
-          color: '#fff',
+          color: theme.colors.textPrimary,
         }}
         numberOfLines={1}
       >
@@ -279,6 +282,7 @@ function SummaryCard({ label, value }: { label: string; value: string }) {
 }
 
 function LegendDot({ on, label }: { on: boolean; label: string }) {
+  const { theme } = useTheme();
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
       <View
@@ -286,10 +290,10 @@ function LegendDot({ on, label }: { on: boolean; label: string }) {
           width: 6,
           height: 6,
           borderRadius: 3,
-          backgroundColor: on ? colors.accentHi : 'rgba(255,255,255,0.2)',
+          backgroundColor: on ? theme.colors.primaryEmphasis : theme.colors.indicatorRest,
         }}
       />
-      <Text style={{ fontFamily: fonts.mono, fontSize: 10, letterSpacing: 1, color: colors.faint }}>
+      <Text style={{ fontFamily: theme.fonts.mono, fontSize: 10, letterSpacing: 1, color: theme.colors.textFaint }}>
         {label.toUpperCase()}
       </Text>
     </View>
