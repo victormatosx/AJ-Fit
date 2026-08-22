@@ -3,6 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { HttpsError, onCall, type CallableRequest } from 'firebase-functions/v2/https';
 
 import { requireAuth } from '../lib/auth';
+import { requireActiveAccount } from '../accountDeletion/activeAccountGuard';
 import { logFunctionError, logInfo } from '../lib/logger';
 import { VaultCryptoError } from './errors';
 import {
@@ -42,6 +43,11 @@ export async function handleCreateVault(
   // The uid comes exclusively from the verified token. Anything in
   // `request.data` (including a `uid` field) is ignored entirely.
   const uid = requireAuth(request);
+
+  // Fase 5: an account with a pending/in-progress deletion is not a normal
+  // account — never mint a new vault key for it, even if the deletion
+  // workflow hasn't reached VAULT_KEY_DESTRUCTION yet.
+  await requireActiveAccount(uid);
 
   // CSPRNG — never Math.random, never derived from uid, email, password or
   // any token. `randomBytes` is Node's cryptographically secure source.

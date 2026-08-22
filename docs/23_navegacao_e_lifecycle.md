@@ -1,5 +1,12 @@
 # Navegação e Lifecycle de Telas
 
+> Este documento cobre a navegação **dentro** do `AppShell` (tabs, overlays,
+> persistência de tela), depois que o gate de navegação raiz já liberou
+> `resolvedScreen === 'app'`. Para o bootstrap de identidade e a decisão de
+> qual tela de topo mostrar (login, cold start, troca de conta, o
+> `RootNavigator` de `App.tsx`), ver
+> `docs/26_bootstrap_e_navegacao_raiz.md`.
+
 ## 1. Arquitetura de navegação
 
 O AJ Fit **não usa React Navigation nem Expo Router**. A navegação principal

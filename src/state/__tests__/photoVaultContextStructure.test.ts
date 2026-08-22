@@ -116,6 +116,20 @@ describe('identity changes', () => {
     expect(pruneAt).toBeGreaterThan(lockAt);
   });
 
+  it('resets the gallery singleton (metadata + race-guard counters) on identity change (Fase 11 audit fix)', () => {
+    // `resetGallery()` existed in photoVaultGallery.ts but was never called
+    // on an identity change before this fix — the previous account's photo
+    // list/count/dates and `generation`/`viewerOwnerId` counters would
+    // otherwise survive in that module-level singleton.
+    const effect = CONTEXT_CODE.slice(CONTEXT_CODE.indexOf('lockPhotoVault();'));
+    const lockAt = effect.indexOf('lockPhotoVault();');
+    const resetGalleryAt = effect.indexOf('resetGallery();');
+    const pruneAt = effect.indexOf('pruneCachedThumbnailsExcept(uid)');
+
+    expect(resetGalleryAt).toBeGreaterThan(lockAt);
+    expect(pruneAt).toBeGreaterThan(resetGalleryAt);
+  });
+
   /**
    * Anchored on `pruneCachedThumbnailsExcept(uid)`, which appears exactly
    * once in the file (unlike `lockPhotoVault();`, which also opens the

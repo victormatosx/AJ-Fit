@@ -35,6 +35,7 @@ export function SettingsScreen({
   onOpenHelpCenter,
   onReportProblem,
   onSendSuggestion,
+  onOpenDeleteAccount,
 }: {
   onBack?: () => void;
   onOpenEditProfile?: () => void;
@@ -42,6 +43,7 @@ export function SettingsScreen({
   onOpenHelpCenter?: () => void;
   onReportProblem?: () => void;
   onSendSuggestion?: () => void;
+  onOpenDeleteAccount?: () => void;
 }) {
   const { theme, mode: currentTheme, setTheme } = useTheme();
   const { user } = useAuth();
@@ -278,7 +280,12 @@ export function SettingsScreen({
               { icon: 'file-text', label: t('settings:items.termsOfUse'), onPress: () => {} },
               { icon: 'check', label: t('settings:items.acceptedConsents'), onPress: () => {} },
               { icon: 'download', label: t('settings:items.exportData'), onPress: () => {} },
-              { icon: 'trash', label: t('settings:items.deleteAccount'), danger: true, onPress: () => {} },
+              {
+                icon: 'trash',
+                label: t('settings:items.deleteAccount'),
+                danger: true,
+                onPress: onOpenDeleteAccount ?? (() => {}),
+              },
             ]}
           />
 

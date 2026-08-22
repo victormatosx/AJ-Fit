@@ -52,6 +52,8 @@
   "devDependencies": {
     "@firebase/rules-unit-testing": "^5.0.1",
     "@types/react": "~19.2.2",
+    "firebase-admin": "^12.7.0",
+    "tsx": "^4.23.0",
     "typescript": "~6.0.3",
     "vitest": "^4.1.10"
   },
@@ -65,7 +67,19 @@
     "test:rules": "firebase emulators:exec --only firestore,storage --project ajfit-rules-test 'vitest run --config vitest.firestore.config.mts && vitest run --config vitest.storage.config.mts'",
     "test:rules:firestore": "firebase emulators:exec --only firestore --project ajfit-rules-test 'vitest run --config vitest.firestore.config.mts'",
     "test:rules:storage": "firebase emulators:exec --only firestore,storage --project ajfit-rules-test 'vitest run --config vitest.storage.config.mts'",
+    "check:storage-iam": "node scripts/checkStorageRulesIam.cjs",
+    "test:integration:firestoreCleanup": "firebase emulators:exec --only firestore --project ajfit-rules-test 'cd functions && FIRESTORE_CLEANUP_INTEGRATION=1 npx vitest run src/accountDeletion/firestoreCleanup/__tests__/engine.integration.test.ts'",
+    "test:integration:storageCleanup": "firebase emulators:exec --only firestore,storage --project ajfit-rules-test 'cd functions && STORAGE_CLEANUP_INTEGRATION=1 npx vitest run src/accountDeletion/storageCleanup/__tests__/engine.integration.test.ts'",
+    "test:integration:retainedData": "firebase emulators:exec --only firestore,storage --project ajfit-rules-test 'cd functions && RETAINED_DATA_INTEGRATION=1 npx vitest run src/accountDeletion/retainedDataProcessing/__tests__/engine.integration.test.ts'",
+    "test:integration:authDeletion": "firebase emulators:exec --only auth --project ajfit-rules-test 'cd functions && AUTH_DELETION_INTEGRATION=1 npx vitest run src/accountDeletion/__tests__/authDeletion.integration.test.ts'",
+    "test:integration:vaultKeyDestruction": "firebase emulators:exec --only firestore,storage --project ajfit-rules-test 'cd functions && VAULT_KEY_DESTRUCTION_INTEGRATION=1 npx vitest run src/accountDeletion/__tests__/vaultKeyDestruction.integration.test.ts'",
+    "test:integration:backendAutonomy": "firebase emulators:exec --only auth,firestore,storage --project ajfit-rules-test 'cd functions && BACKEND_AUTONOMY_INTEGRATION=1 npx vitest run src/accountDeletion/__tests__/backendAutonomy.integration.test.ts'",
+    "test:integration:faultInjection": "firebase emulators:exec --only firestore --project ajfit-rules-test 'cd functions && FAULT_INJECTION_INTEGRATION=1 npx vitest run src/accountDeletion/__tests__/faultInjection.integration.test.ts'",
+    "test:integration:commercialGate": "firebase emulators:exec --only firestore --project ajfit-rules-test 'cd functions && COMMERCIAL_GATE_INTEGRATION=1 npx vitest run src/billing/__tests__/commercialGateResolution.integration.test.ts'",
+    "test:integration:questionnaireLoad": "firebase emulators:exec --only firestore --project ajfit-rules-test 'QUESTIONNAIRE_LOAD_INTEGRATION=1 vitest run src/services/__tests__/questionnaireLoad.integration.test.ts'",
+    "test:integration:accountDeletionReconciliation": "firebase emulators:exec --only auth,firestore,storage --project ajfit-rules-test 'cd functions && ACCOUNT_DELETION_RECONCILIATION_INTEGRATION=1 npx vitest run src/accountDeletion/__tests__/accountDeletionReconciliation.integration.test.ts'",
     "typecheck": "tsc --noEmit",
+    "seed:exercises": "tsx scripts/seedExercises.ts",
     "i18n:check": "vitest run src/i18n/__tests__",
     "i18n:audit": "node scripts/audit-i18n.mjs",
     "quality": "npm run typecheck && npm run test && npm run test:rules && npm run i18n:audit"

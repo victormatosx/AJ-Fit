@@ -34,8 +34,7 @@ import {
   workoutLoadToKg,
   workoutLoadUnit,
 } from '../units/workoutLoadConversions';
-
-const SUBS_KEY = 'ajfit-subs';
+import { WORKOUT_SUBSTITUTIONS_STORAGE_KEY as SUBS_KEY } from '../services/workoutSubstitutionsStorage';
 
 type SetData = { r: number; w: number };
 type SubOption = { name: string; target: string; db: string };

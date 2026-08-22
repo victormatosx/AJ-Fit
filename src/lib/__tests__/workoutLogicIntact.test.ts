@@ -62,7 +62,13 @@ describe('WorkoutScreen source — session state machine invariants', () => {
 
 describe('WorkoutScreen source — persistence and IDs untouched', () => {
   it('still reads/writes AsyncStorage under the same key', () => {
-    expect(WORKOUT_SRC).toContain("const SUBS_KEY = 'ajfit-subs'");
+    // Fase 11 audit fix: the key constant moved to a shared module
+    // (`workoutSubstitutionsStorage.ts`) so the account-deletion shutdown
+    // routine can clear it too — same literal key value, same AsyncStorage
+    // calls in the screen, just a single source of truth for the key.
+    expect(WORKOUT_SRC).toContain(
+      "import { WORKOUT_SUBSTITUTIONS_STORAGE_KEY as SUBS_KEY } from '../services/workoutSubstitutionsStorage'",
+    );
     expect(WORKOUT_SRC).toContain('AsyncStorage.getItem(SUBS_KEY)');
     expect(WORKOUT_SRC).toContain('AsyncStorage.setItem(SUBS_KEY');
   });

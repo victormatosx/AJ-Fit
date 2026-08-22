@@ -37,7 +37,7 @@ describe('email verification integration structure', () => {
 
   it('gives the central guard priority over questionnaire and app routes', () => {
     const verificationGuard = premiumGate.indexOf('if (state.emailVerificationRequired)');
-    const questionnaireGuard = premiumGate.indexOf('if (!state.hasQuestionnaire)');
+    const questionnaireGuard = premiumGate.indexOf("if (state.questionnaireResolution === 'not_found')");
 
     expect(verificationGuard).toBeGreaterThan(-1);
     expect(verificationGuard).toBeLessThan(questionnaireGuard);

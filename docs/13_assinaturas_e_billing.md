@@ -1150,6 +1150,12 @@ já há um snapshot confirmado para o mesmo UID. `unknown` ou erro inicial nunca
 
 ## Orquestração do cold start
 
+Para a arquitetura completa do gate raiz que consome `subscriptionLoading`/
+`subscriptionConfigured` (`resolvePremiumGate`, `RootNavigator`, o
+invariante contra reabrir o gate depois de READY), ver
+`docs/26_bootstrap_e_navegacao_raiz.md`. Esta seção cobre só a parte
+RevenueCat do bootstrap.
+
 O bootstrap do RevenueCat é disparado na avaliação do módulo, antes do mount do
 React. A hidratação de fontes, o observer do Firebase Auth e os providers
 começam sem uma barreira sequencial entre si. Quando o observer fornece um

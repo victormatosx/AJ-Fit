@@ -28,6 +28,7 @@ export const PREWARM_ROUTE_IDS = [
   'SUPPORT',
   'SUBSCRIPTION_CENTER',
   'CHANGE_PASSWORD',
+  'DELETE_ACCOUNT',
 ] as const;
 
 export type PrewarmRouteId = (typeof PREWARM_ROUTE_IDS)[number];

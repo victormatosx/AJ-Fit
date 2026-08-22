@@ -42,10 +42,14 @@ function gate({
     authenticated: true,
     emailVerificationRequired: false,
     preferencesReconciling: false,
-    hasQuestionnaire: true,
+    questionnaireResolution: 'found',
     subscriptionLoading,
     subscriptionConfigured,
     isPremium: Boolean(info?.entitlements.active.premium),
+    // This suite models an established account throughout — cold-start
+    // orchestration of an already-resolved subscription, not the brand-new
+    // pending-Paywall case (covered in premiumGate.test.ts instead).
+    commercialGateResolved: true,
   });
 }
 

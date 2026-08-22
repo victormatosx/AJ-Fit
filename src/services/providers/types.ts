@@ -15,7 +15,9 @@ export type AppleCredentialOptions = {
 export type ProviderCredentialIssue =
   | 'providerUnavailable'
   | 'providerBusy'
-  | 'identityTokenMissing';
+  | 'identityTokenMissing'
+  /** Apple did not return `authorizationCode` — only ever checked by `getAppleCredentialForAccountDeletion` (Fase 3); ordinary login/reauth never requests or needs this field. */
+  | 'authorizationCodeMissing';
 
 /** Safe provider acquisition failure without exposing tokens or credentials. */
 export class ProviderCredentialError extends Error {

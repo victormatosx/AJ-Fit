@@ -14,6 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
 import type { PurchasesPackage } from 'react-native-purchases';
 import { logError, logInfo, logWarn } from '../lib/logger';
+import { requestCommercialGateConfirmation } from '../services/commercialGate';
 import type { OnboardingAuthContext } from '../onboarding/authContext';
 import { ScreenBg } from '../components/ui/ScreenBg';
 import { CtaButton, CtaText } from '../components/ui/CtaButton';
@@ -593,6 +594,14 @@ export function PaywallScreen({
             kind: 'notice',
             message: 'Assinatura confirmada. Seu acesso Premium está ativo.',
           });
+          // Best-effort, fire-and-forget: accelerates the DURABLE server
+          // marker (`metadata.commercialGateResolvedAt`) so a later
+          // cancellation doesn't incorrectly reopen this Paywall if the
+          // async RevenueCat webhook is delayed or never arrives. Never
+          // awaited — `isPremium` above already carries the UX right now,
+          // and the webhook remains the authoritative fallback regardless
+          // of this call's outcome. See src/services/commercialGate.ts.
+          void requestCommercialGateConfirmation();
           break;
         case 'missing-entitlement':
           setPurchaseState({
@@ -643,6 +652,11 @@ export function PaywallScreen({
           kind: 'notice',
           message: 'Compra restaurada. Seu acesso Premium está ativo.',
         });
+        // See the identical call in handlePurchase above — restore is not a
+        // separate code path for this confirmation, deliberately: the
+        // backend re-derives entitlement from RevenueCat directly, it does
+        // not care HOW the client arrived at an active CustomerInfo.
+        void requestCommercialGateConfirmation();
       } else if (result === 'missing-entitlement') {
         setRestoreState({
           kind: 'notice',

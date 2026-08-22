@@ -21,6 +21,7 @@
   },
   "summary": {
     "noRecords": "Sin registros",
+    "currentState": "Última evaluación",
     "lastAssessmentLabel": "Última evaluación · {{date}}",
     "emptyCta": "Aún no tienes ninguna evaluación registrada · toca para registrar la primera"
   },
@@ -29,13 +30,15 @@
     "noInitialDataFallback": "Sin datos del registro · registra tu primera evaluación"
   },
   "actions": {
+    "sheetTitle": "Nueva evaluación",
+    "firstAssessment": "Registrar primera evaluación",
     "guided": {
       "title": "Evaluación guiada",
-      "description": "Peso, medidas y pliegues — la app calcula todo"
+      "description": "Peso, medidas y pliegues. La app calcula los resultados."
     },
     "import": {
       "title": "Importar evaluación",
-      "description": "¿Ya tienes los resultados? Regístralos directamente"
+      "description": "¿Ya tienes los resultados? Regístralos directamente."
     },
     "saveGuided": "Guardar evaluación",
     "registerImported": "Registrar evaluación"
@@ -156,6 +159,7 @@
     "bodyFatEmpty": "Sin suficientes evaluaciones con % de grasa."
   },
   "evolution": {
+    "sincePrevious": "Desde la evaluación anterior",
     "noPreviousMessage": "Registra una nueva evaluación para empezar a seguir tu evolución.",
     "viewHistoryCta": "Ver historial completo"
   },
@@ -189,6 +193,9 @@
     "today": "Hoy"
   },
   "accessibility": {
+    "addAssessment": "Añadir una nueva evaluación",
+    "addFirstAssessment": "Registrar la primera evaluación",
+    "closeNewAssessment": "Cerrar selector de nueva evaluación",
     "openGuided": "Abrir evaluación guiada",
     "openImport": "Abrir importación de evaluación",
     "evolutionCard": "Gráficos y métricas de evolución de las evaluaciones",

@@ -28,6 +28,7 @@ const MIGRATED_FLAGS = [
   'showSecurity',
   'showEditProfile',
   'showSubscriptionCenter',
+  'showDeleteAccount',
 ];
 
 /** Screens still ephemeral — sensitive/transactional, per docs/23 §10/§17. */

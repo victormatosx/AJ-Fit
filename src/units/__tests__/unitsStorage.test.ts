@@ -8,11 +8,15 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
     setItem: vi.fn(async (key: string, value: string) => {
       localStore.set(key, value);
     }),
+    removeItem: vi.fn(async (key: string) => {
+      localStore.delete(key);
+    }),
   },
 }));
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
+  clearStoredUnitsPreference,
   readStoredUnitsPreference,
   subscribeStoredUnitsPreference,
   UNITS_PREFERENCE_STORAGE_KEY,
@@ -69,5 +73,22 @@ describe('unitsStorage', () => {
     unsubscribe();
     await writeStoredUnitsPreference('metric');
     expect(listener).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('clearStoredUnitsPreference (Fase 11 audit finding)', () => {
+  it('removes the stored preference', async () => {
+    await writeStoredUnitsPreference('imperial');
+    await clearStoredUnitsPreference();
+    await expect(readStoredUnitsPreference()).resolves.toBeNull();
+  });
+
+  it('is a no-op, never throws, when nothing is stored', async () => {
+    await expect(clearStoredUnitsPreference()).resolves.toBeUndefined();
+  });
+
+  it('never throws even if the underlying storage call rejects', async () => {
+    vi.mocked(AsyncStorage.removeItem).mockRejectedValueOnce(new Error('disk error'));
+    await expect(clearStoredUnitsPreference()).resolves.toBeUndefined();
   });
 });

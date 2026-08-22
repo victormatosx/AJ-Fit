@@ -13,6 +13,14 @@ vi.mock('firebase-functions/v2/https', async () => {
   return { HttpsError, onCall: (handler: unknown) => handler };
 });
 
+// Fase 5: createVault now calls requireActiveAccount before minting a key.
+// These tests are about vault-creation policy, not account-deletion
+// status, so the guard is stubbed to always allow — see
+// activeAccountGuard.test.ts for its own dedicated coverage.
+vi.mock('../accountDeletion/activeAccountGuard', () => ({
+  requireActiveAccount: vi.fn().mockResolvedValue(undefined),
+}));
+
 // The repository is the Firestore boundary; stubbing it keeps these tests
 // about policy, not about the emulator.
 const createVaultDocument =

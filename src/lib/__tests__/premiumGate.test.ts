@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { resolvePremiumGate, type RootScreenId } from '../premiumGate';
+import { resolvePremiumGate, explainPremiumGateBlockers, type RootScreenId } from '../premiumGate';
 
 type GateOverrides = Partial<Parameters<typeof resolvePremiumGate>[0]>;
 
@@ -11,10 +11,15 @@ function resolve(overrides: GateOverrides = {}) {
     authenticated: true,
     emailVerificationRequired: false,
     preferencesReconciling: false,
-    hasQuestionnaire: true,
+    questionnaireResolution: 'found',
     subscriptionLoading: false,
     subscriptionConfigured: true,
     isPremium: false,
+    // Established by default — every pre-existing test in this file models
+    // an account that already resolved (or predates) the initial
+    // commercial gate. Tests for the brand-new/pending case set this to
+    // `false` explicitly (see the "conta nova" describe block below).
+    commercialGateResolved: true,
     ...overrides,
   });
 }
@@ -38,7 +43,7 @@ describe('resolvePremiumGate', () => {
   it('D) prioriza o questionário antes do estado da assinatura', () => {
     expect(
       resolve({
-        hasQuestionnaire: false,
+        questionnaireResolution: 'not_found',
         subscriptionLoading: true,
         subscriptionConfigured: false,
       }),
@@ -49,7 +54,7 @@ describe('resolvePremiumGate', () => {
     expect(
       resolve({
         emailVerificationRequired: true,
-        hasQuestionnaire: false,
+        questionnaireResolution: 'not_found',
         subscriptionLoading: true,
         subscriptionConfigured: false,
       }),
@@ -61,7 +66,7 @@ describe('resolvePremiumGate', () => {
       resolve({
         requestedScreen: 'app',
         authenticated: false,
-        hasQuestionnaire: false,
+        questionnaireResolution: 'not_found',
         isPremium: true,
       }),
     ).toBe('auth');
@@ -129,14 +134,14 @@ describe('resolvePremiumGate', () => {
   });
 
   it('K) uma vez reconciliado, o fluxo normal (questionário → assinatura → app) continua igual, com ou sem Premium', () => {
-    expect(resolve({ preferencesReconciling: false, hasQuestionnaire: false })).toBe(
+    expect(resolve({ preferencesReconciling: false, questionnaireResolution: 'not_found' })).toBe(
       'onboardingFunnel',
     );
     expect(resolve({ preferencesReconciling: false, isPremium: true })).toBe('app');
     expect(resolve({ preferencesReconciling: false, isPremium: false })).toBe('app');
   });
 
-  it('L) resolvePremiumGate nunca mais retorna "paywall" — a rota deixou de ser uma decisão da navegação raiz', () => {
+  it('L) para uma conta ESTABELECIDA, resolvePremiumGate nunca retorna "paywall" — Fase 1 permanece intacta para quem já resolveu o gate comercial', () => {
     const outcomes = new Set<RootScreenId | null>();
     for (const isPremium of [true, false]) {
       for (const subscriptionLoading of [true, false]) {
@@ -146,6 +151,111 @@ describe('resolvePremiumGate', () => {
       }
     }
     expect(outcomes.has('paywall')).toBe(false);
+  });
+
+  describe('conta nova — commercialGateResolved: false', () => {
+    it('M) questionário concluído, sem Premium, gate comercial pendente → paywall', () => {
+      expect(resolve({ commercialGateResolved: false, isPremium: false })).toBe('paywall');
+    });
+
+    it('N) Premium ativo libera app mesmo antes do marker do servidor confirmar (CustomerInfo é mais rápido que o webhook)', () => {
+      expect(resolve({ commercialGateResolved: false, isPremium: true })).toBe('app');
+    });
+
+    it('O) sem questionário ainda, independente do gate comercial → onboardingFunnel (questionário sempre precede o paywall)', () => {
+      expect(
+        resolve({ commercialGateResolved: false, questionnaireResolution: 'not_found', isPremium: false }),
+      ).toBe('onboardingFunnel');
+    });
+
+    it('P) subscription ainda não resolvida → não decide, mesmo com o gate comercial pendente', () => {
+      expect(
+        resolve({ commercialGateResolved: false, subscriptionLoading: true, isPremium: false }),
+      ).toBeNull();
+      expect(
+        resolve({
+          commercialGateResolved: false,
+          subscriptionConfigured: false,
+          isPremium: false,
+        }),
+      ).toBeNull();
+    });
+
+    it('Q) Apple/Google não alteram a regra — o gate só olha commercialGateResolved/isPremium, nunca o provider', () => {
+      // O provider nunca entra no shape de PremiumGateState — este teste
+      // documenta que não há, e nunca deve haver, um campo `provider` aqui.
+      expect(resolve({ commercialGateResolved: false, isPremium: false })).toBe('paywall');
+      expect(resolve({ commercialGateResolved: true, isPremium: false })).toBe('app');
+    });
+  });
+
+  describe('questionnaireResolution — state machine invariants (cold-start intermittency fix)', () => {
+    it('1) found + demais gates ok → app', () => {
+      expect(resolve({ questionnaireResolution: 'found', isPremium: true })).toBe('app');
+    });
+
+    it('2) not_found → onboardingFunnel', () => {
+      expect(resolve({ questionnaireResolution: 'not_found' })).toBe('onboardingFunnel');
+    });
+
+    it('3) loading (query pending) → unresolved, nunca onboarding', () => {
+      expect(resolve({ questionnaireResolution: 'loading' })).toBeNull();
+    });
+
+    it('3b) unknown (ainda não iniciado) → unresolved, nunca onboarding', () => {
+      expect(resolve({ questionnaireResolution: 'unknown' })).toBeNull();
+    });
+
+    it('4) error (permission-denied, unavailable, ou qualquer falha de leitura) → unresolved, NUNCA onboarding', () => {
+      expect(resolve({ questionnaireResolution: 'error' })).toBeNull();
+      expect(resolve({ questionnaireResolution: 'error', isPremium: true })).toBeNull();
+      expect(resolve({ questionnaireResolution: 'error', isPremium: false })).toBeNull();
+    });
+
+    it('12) commercialGateResolved não interfere na existência do questionário — not_found continua onboarding independente dele', () => {
+      expect(
+        resolve({ questionnaireResolution: 'not_found', commercialGateResolved: false }),
+      ).toBe('onboardingFunnel');
+      expect(
+        resolve({ questionnaireResolution: 'not_found', commercialGateResolved: true }),
+      ).toBe('onboardingFunnel');
+    });
+
+    it('13) subscriptionLoading não transforma questionnaire error em onboarding', () => {
+      expect(
+        resolve({ questionnaireResolution: 'error', subscriptionLoading: true }),
+      ).toBeNull();
+      expect(
+        resolve({ questionnaireResolution: 'error', subscriptionLoading: false }),
+      ).toBeNull();
+    });
+
+    it('14) found + Premium ativo → app', () => {
+      expect(resolve({ questionnaireResolution: 'found', isPremium: true })).toBe('app');
+    });
+
+    it('15) found + commercialGate pendente + sem Premium → paywall', () => {
+      expect(
+        resolve({
+          questionnaireResolution: 'found',
+          commercialGateResolved: false,
+          isPremium: false,
+        }),
+      ).toBe('paywall');
+    });
+
+    it('16) not_found + Premium ativo → onboarding MESMO ASSIM — Premium nunca faz bypass do questionário obrigatório', () => {
+      expect(
+        resolve({ questionnaireResolution: 'not_found', isPremium: true }),
+      ).toBe('onboardingFunnel');
+      expect(
+        resolve({
+          questionnaireResolution: 'not_found',
+          isPremium: true,
+          commercialGateResolved: false,
+        }),
+      ).toBe('onboardingFunnel');
+    });
   });
 
   it.each([
@@ -163,4 +273,60 @@ describe('resolvePremiumGate', () => {
       expect(resolve({ ...marketingEvidence, isPremium: true } as GateOverrides)).toBe('app');
     },
   );
+});
+
+describe('explainPremiumGateBlockers — diagnostic-only, never drives routing', () => {
+  function explain(overrides: GateOverrides = {}) {
+    return explainPremiumGateBlockers({
+      requestedScreen: 'auth' as RootScreenId,
+      authInitializing: false,
+      profileLoading: false,
+      authenticated: true,
+      emailVerificationRequired: false,
+      preferencesReconciling: false,
+      questionnaireResolution: 'found',
+      subscriptionLoading: false,
+      subscriptionConfigured: true,
+      isPremium: false,
+      commercialGateResolved: true,
+      ...overrides,
+    });
+  }
+
+  it('is empty exactly when resolvePremiumGate resolves to a real screen', () => {
+    expect(explain({ isPremium: true })).toEqual([]);
+    expect(resolve({ isPremium: true })).toBe('app');
+  });
+
+  it('names preferences-reconciling — the exact confirmed root cause of the reported double-loading bug', () => {
+    expect(explain({ preferencesReconciling: true })).toEqual(['preferences-reconciling']);
+    expect(resolve({ preferencesReconciling: true })).toBeNull();
+  });
+
+  it('reports every unresolved prerequisite together, in resolvePremiumGate priority order', () => {
+    expect(
+      explain({
+        preferencesReconciling: true,
+        questionnaireResolution: 'loading',
+        subscriptionLoading: true,
+        subscriptionConfigured: false,
+      }),
+    ).toEqual([
+      'preferences-reconciling',
+      'questionnaire-loading',
+      'subscription-loading',
+      'subscription-not-configured',
+    ]);
+  });
+
+  it('stops at authInitializing/profileLoading — no downstream reasons listed while identity itself is unresolved', () => {
+    expect(explain({ authInitializing: true, profileLoading: true })).toEqual([
+      'auth-initializing',
+      'profile-loading',
+    ]);
+  });
+
+  it('is empty for an unauthenticated user (nothing left to block once routed to auth)', () => {
+    expect(explain({ authenticated: false })).toEqual([]);
+  });
 });

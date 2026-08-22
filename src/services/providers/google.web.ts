@@ -12,3 +12,8 @@ export async function isGoogleSigninAvailable(): Promise<boolean> {
 export async function getGoogleCredential(): Promise<ProviderResult> {
   throw new ProviderCredentialError('providerUnavailable');
 }
+
+/** Fase 3 — account deletion provider revocation. Web stub: never available. */
+export async function revokeGoogleAccess(): Promise<'revoked' | 'unavailable' | 'failed'> {
+  return 'unavailable';
+}

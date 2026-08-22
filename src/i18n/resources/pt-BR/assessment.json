@@ -21,6 +21,7 @@
   },
   "summary": {
     "noRecords": "Sem registros",
+    "currentState": "Última avaliação",
     "lastAssessmentLabel": "Última avaliação · {{date}}",
     "emptyCta": "Você ainda não tem nenhuma avaliação registrada · toque para registrar a primeira"
   },
@@ -29,13 +30,15 @@
     "noInitialDataFallback": "Sem dados de cadastro · registre sua primeira avaliação"
   },
   "actions": {
+    "sheetTitle": "Nova avaliação",
+    "firstAssessment": "Registrar primeira avaliação",
     "guided": {
       "title": "Avaliação guiada",
-      "description": "Peso, medidas e dobras, o app calcula tudo"
+      "description": "Peso, medidas e dobras. O app calcula os resultados."
     },
     "import": {
       "title": "Importar avaliação",
-      "description": "Já tem os resultados? Registre direto"
+      "description": "Já possui os resultados? Registre diretamente."
     },
     "saveGuided": "Salvar avaliação",
     "registerImported": "Registrar avaliação"
@@ -156,6 +159,7 @@
     "bodyFatEmpty": "Sem avaliações com % de gordura suficientes."
   },
   "evolution": {
+    "sincePrevious": "Desde a avaliação anterior",
     "noPreviousMessage": "Registre uma nova avaliação para começar a acompanhar sua evolução.",
     "viewHistoryCta": "Ver histórico completo"
   },
@@ -189,6 +193,9 @@
     "today": "Hoje"
   },
   "accessibility": {
+    "addAssessment": "Adicionar uma nova avaliação",
+    "addFirstAssessment": "Registrar a primeira avaliação",
+    "closeNewAssessment": "Fechar seletor de nova avaliação",
     "openGuided": "Abrir avaliação guiada",
     "openImport": "Abrir importação de avaliação",
     "evolutionCard": "Gráficos e métricas de evolução das avaliações",

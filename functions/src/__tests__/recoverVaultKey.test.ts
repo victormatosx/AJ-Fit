@@ -13,6 +13,14 @@ vi.mock('firebase-functions/v2/https', async () => {
   return { HttpsError, onCall: (handler: unknown) => handler };
 });
 
+// Fase 5: recoverVaultKey now calls requireActiveAccount before returning
+// the key. These tests are about vault-recovery policy, not account-deletion
+// status, so the guard is stubbed to always allow — see
+// activeAccountGuard.test.ts for its own dedicated coverage.
+vi.mock('../accountDeletion/activeAccountGuard', () => ({
+  requireActiveAccount: vi.fn().mockResolvedValue(undefined),
+}));
+
 const readVaultDocument = vi.fn();
 vi.mock('../photoVault/vaultRepository', async () => {
   const actual = await vi.importActual<typeof import('../photoVault/vaultRepository')>(

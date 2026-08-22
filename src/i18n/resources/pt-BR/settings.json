@@ -37,23 +37,84 @@
   "security": {
     "screenTitle": "Segurança",
     "sections": {
-      "account": "Segurança da conta",
-      "sessions": "Sessões",
-      "activity": "Atividade",
+      "account": "Proteção da conta",
+      "access": "Acesso",
       "safetyZone": "Zona de segurança"
     },
     "items": {
       "changePassword": "Alterar senha",
-      "biometrics": "Biometria",
-      "currentDevice": "Dispositivo atual",
-      "currentDeviceDescription": "Este dispositivo está conectado.",
-      "manageDevices": "Gerenciar dispositivos",
+      "accessMethod": "Método de acesso",
+      "accessMethods": "Métodos de acesso",
       "lastLogin": "Último login",
-      "lastLoginDescription": "Hoje às 09:42",
-      "securityHistory": "Histórico de segurança",
       "deleteAccount": "Excluir conta"
     },
+    "accessMethod": {
+      "password": "E-mail e senha",
+      "google": "Google",
+      "apple": "Apple"
+    },
+    "lastLogin": {
+      "today": "Hoje às {{time}}",
+      "yesterday": "Ontem às {{time}}",
+      "other": "{{date}} às {{time}}"
+    },
     "safetyZoneDescription": "Mantenha sua conta protegida revisando regularmente suas configurações de segurança.",
+    "deleteAccountFlow": {
+      "screenTitle": "Excluir conta",
+      "intro": {
+        "consequence1": "Sua conta será encerrada permanentemente. Depois de concluído, esse processo não pode ser desfeito.",
+        "consequence2": "Seus dados pessoais serão excluídos conforme nossa política de privacidade. Alguns registros podem ser preservados quando exigido por obrigações legais ou de segurança.",
+        "consequence3": "Excluir sua conta é uma ação séria. Recomendamos revisar suas informações antes de continuar.",
+        "subscriptionTitle": "Excluir sua conta não cancela sua assinatura",
+        "subscriptionBody": "Se você possui uma assinatura ativa pela App Store ou Google Play, ela continuará até ser cancelada diretamente nas configurações da loja.",
+        "subscriptionEyebrow": "Assinatura",
+        "manageSubscription": "Gerenciar assinatura",
+        "continueAction": "Continuar com exclusão",
+        "impactTitle": "O que acontece"
+      },
+      "reauth": {
+        "title": "Confirme sua identidade",
+        "description": "Por segurança, confirme sua identidade antes de continuar com a exclusão da sua conta.",
+        "passwordLabel": "Senha atual",
+        "passwordPlaceholder": "Digite sua senha atual",
+        "togglePassword": "Mostrar ou ocultar senha atual",
+        "continueWithPassword": "Confirmar com senha",
+        "continueWithGoogle": "Continuar com Google",
+        "continueWithApple": "Continuar com Apple"
+      },
+      "confirm": {
+        "title": "Última confirmação",
+        "heroSubtitle": "Esta ação é permanente.",
+        "bullet1": "Sua conta será encerrada.",
+        "bullet2": "Os dados definidos para exclusão pela nossa política serão removidos.",
+        "bullet3": "Alguns registros podem ser retidos conforme nossa política de retenção.",
+        "bullet4": "Sua assinatura não será cancelada automaticamente.",
+        "action": "Excluir minha conta"
+      },
+      "submitting": {
+        "message": "Encerrando sua conta...",
+        "description": "Estamos protegendo seus dados e concluindo sua solicitação. Isso pode levar alguns instantes."
+      },
+      "errors": {
+        "USER_SIGNED_OUT": "Sua sessão não está disponível. Entre novamente e tente outra vez.",
+        "IDENTITY_CHANGED": "A conta em uso mudou durante o processo. Nenhuma alteração foi feita — tente novamente.",
+        "PROVIDER_MISMATCH": "A confirmação de identidade desta conta ainda não está disponível.",
+        "WRONG_PASSWORD": "A senha está incorreta. Verifique e tente novamente.",
+        "PASSWORD_REQUIRED": "Digite sua senha atual.",
+        "USER_CANCELLED": "A confirmação foi cancelada. Nenhuma alteração foi feita.",
+        "RATE_LIMITED": "Muitas tentativas foram feitas. Aguarde um pouco e tente novamente.",
+        "SESSION_EXPIRED": "Sua sessão expirou. Confirme sua identidade novamente para continuar.",
+        "NETWORK_ERROR": "Não foi possível conectar. Verifique sua internet e tente novamente.",
+        "REAUTH_FAILED": "Não foi possível confirmar sua identidade. Tente novamente.",
+        "reauthCancelled": "A confirmação foi cancelada. Nenhuma alteração foi feita.",
+        "googleRevocationFailed": "Não foi possível concluir a confirmação com o Google. Tente novamente.",
+        "applePreparationCancelled": "A confirmação com a Apple foi cancelada. Nenhuma alteração foi feita.",
+        "applePreparationUnavailable": "A confirmação com a Apple não está disponível agora. Tente novamente.",
+        "reconciliationRequired": "Sua conta já possui uma solicitação de exclusão registrada. Nossa equipe irá revisar o caso.",
+        "requestFailed": "Não foi possível processar sua solicitação agora. Tente novamente.",
+        "appleValidationFailed": "Não foi possível concluir a validação com a Apple. Tente novamente."
+      }
+    },
     "changePassword": {
       "screenTitle": "Alterar senha",
       "description": "Confirme sua senha atual antes de definir uma nova senha para sua conta.",
@@ -90,14 +151,6 @@
       "accessibility": {
         "toggleVisibility": "Mostrar ou ocultar {{field}}"
       }
-    }
-  },
-  "theme": {
-    "title": "Tema",
-    "chooseTitle": "Selecionar tema",
-    "options": {
-      "dark": "Escuro",
-      "light": "Claro"
     }
   },
   "language": {
@@ -139,6 +192,14 @@
     },
     "errors": {
       "changeFailed": "Não foi possível salvar o sistema de medidas. Tente novamente."
+    }
+  },
+  "theme": {
+    "title": "Tema",
+    "chooseTitle": "Selecionar tema",
+    "options": {
+      "dark": "Escuro",
+      "light": "Claro"
     }
   }
 }

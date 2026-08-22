@@ -1,9 +1,12 @@
 import React from 'react';
-import { View, Text, Pressable } from 'react-native';
+import { Modal, Pressable, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
-import { Icon, IconName } from '../ui/Icon';
+import { Icon, type IconName } from '../ui/Icon';
+import { MonoLabel } from '../ui/Display';
 import { PremiumAction } from '../premium/PremiumAction';
 import { useTheme } from '../../theme';
+import { radii, sizes, spacing } from '../../theme/tokens';
 
 function ActionOption({
   icon,
@@ -12,18 +15,15 @@ function ActionOption({
   onPress,
   accessibilityLabel,
   locked,
+  last,
 }: {
   icon: IconName;
   title: string;
   subtitle: string;
   onPress: () => void;
   accessibilityLabel: string;
-  /** FASE 4/5 (docs/13_assinaturas_e_billing.md): CREATE_ASSESSMENT is a
-   *  Premium capability. Still tappable when locked — `onPress` (wired by
-   *  the caller through `<PremiumAction>`) opens the shared blocked-action
-   *  sheet instead of the form. Only a small corner badge changes; the
-   *  option's own icon/title/subtitle stay as-is. */
   locked: boolean;
+  last?: boolean;
 }) {
   const { theme } = useTheme();
   return (
@@ -32,100 +32,178 @@ function ActionOption({
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       style={({ pressed }) => ({
-        flex: 1,
-        padding: 16,
-        borderRadius: 14,
-        backgroundColor: pressed ? theme.colors.surfacePressed : theme.colors.surface,
-        borderWidth: 1,
-        borderColor: theme.colors.divider,
-        gap: 10,
+        minHeight: 76,
+        paddingVertical: spacing[3.5],
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing[3],
+        borderBottomWidth: last ? 0 : 1,
+        borderBottomColor: theme.colors.border,
+        backgroundColor: pressed ? theme.colors.surfacePressed : 'transparent',
       })}
     >
       <View
         style={{
-          width: 36,
-          height: 36,
-          borderRadius: 10,
-          backgroundColor: theme.colors.primarySoft,
+          width: 42,
+          height: 42,
+          borderRadius: radii.md,
+          backgroundColor: theme.colors.accentSoft,
+          borderWidth: 1,
+          borderColor: theme.colors.borderStrong,
           alignItems: 'center',
           justifyContent: 'center',
         }}
       >
-        <Icon name={icon} size={17} color={theme.colors.primaryEmphasis} />
-        {locked && (
+        <Icon name={icon} size={18} color={theme.colors.accentHi} />
+        {locked ? (
           <View
             style={{
               position: 'absolute',
-              bottom: -4,
               right: -4,
-              width: 16,
-              height: 16,
-              borderRadius: 8,
-              backgroundColor: theme.colors.backgroundSecondary,
+              bottom: -4,
+              width: 17,
+              height: 17,
+              borderRadius: radii.pill,
+              backgroundColor: theme.colors.bg2,
               borderWidth: 1,
-              borderColor: theme.colors.divider,
+              borderColor: theme.colors.borderStrong,
               alignItems: 'center',
               justifyContent: 'center',
             }}
           >
             <Icon name="lock" size={9} color={theme.colors.primaryEmphasis} />
           </View>
-        )}
+        ) : null}
       </View>
-      <Text style={{ fontFamily: theme.fonts.uiBold, fontSize: 13.5, color: theme.colors.textPrimary }}>{title}</Text>
-      <Text style={{ fontFamily: theme.fonts.ui, fontSize: 11, lineHeight: 15, color: theme.colors.textMuted }}>
-        {subtitle}
-      </Text>
+      <View style={{ flex: 1 }}>
+        <Text style={{ fontFamily: theme.fonts.uiSemi, fontSize: 14.5, color: theme.colors.text }}>
+          {title}
+        </Text>
+        <Text
+          style={{
+            marginTop: spacing[1],
+            fontFamily: theme.fonts.ui,
+            fontSize: 12.5,
+            lineHeight: 18,
+            color: theme.colors.mute,
+          }}
+        >
+          {subtitle}
+        </Text>
+      </View>
+      <Icon name="chevron-right" size={16} color={theme.colors.faint} />
     </Pressable>
   );
 }
 
-/**
- * FASE 5: each option gates itself via `<PremiumAction>` — the caller
- * (`AssessmentScreen`) hands over plain, capability-unaware callbacks
- * (`onGuided`/`onImport`) exactly like it would for a free action. Both
- * options share the CREATE_ASSESSMENT capability but resolve `locked`
- * independently (same underlying `canPerform` read, so they can never
- * disagree).
- */
+/** Compact creation selector. The original PremiumAction boundary is kept. */
 export function AssessmentActionCard({
+  visible,
+  onClose,
   onGuided,
   onImport,
 }: {
+  visible: boolean;
+  onClose: () => void;
   onGuided: () => void;
   onImport: () => void;
 }) {
   const { t } = useTranslation('assessment');
+  const { theme } = useTheme();
+
   return (
-    <View style={{ flexDirection: 'row', gap: 10 }}>
-      <PremiumAction capability="CREATE_ASSESSMENT" onAllowed={onGuided}>
-        {({ locked, onPress }) => (
-          <ActionOption
-            icon="dumbbell"
-            title={t('actions.guided.title')}
-            subtitle={t('actions.guided.description')}
-            onPress={onPress}
-            accessibilityLabel={
-              locked ? t('accessibility.openGuidedLocked') : t('accessibility.openGuided')
-            }
-            locked={locked}
-          />
-        )}
-      </PremiumAction>
-      <PremiumAction capability="CREATE_ASSESSMENT" onAllowed={onImport}>
-        {({ locked, onPress }) => (
-          <ActionOption
-            icon="download"
-            title={t('actions.import.title')}
-            subtitle={t('actions.import.description')}
-            onPress={onPress}
-            accessibilityLabel={
-              locked ? t('accessibility.openImportLocked') : t('accessibility.openImport')
-            }
-            locked={locked}
-          />
-        )}
-      </PremiumAction>
-    </View>
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <Pressable
+        onPress={onClose}
+        accessibilityRole="button"
+        accessibilityLabel={t('accessibility.closeNewAssessment')}
+        style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: theme.colors.overlayStrong }}
+      >
+        <Pressable
+          accessibilityRole="none"
+          onPress={(event) => event.stopPropagation()}
+          style={{
+            backgroundColor: theme.colors.bg2,
+            borderTopLeftRadius: radii.xxl,
+            borderTopRightRadius: radii.xxl,
+            borderTopWidth: 1,
+            borderColor: theme.colors.borderStrong,
+          }}
+        >
+          <SafeAreaView edges={['bottom']}>
+            <View style={{ paddingHorizontal: sizes.screenGutter, paddingTop: spacing[2] }}>
+              <View
+                style={{
+                  alignSelf: 'center',
+                  width: 38,
+                  height: 4,
+                  borderRadius: radii.pill,
+                  backgroundColor: theme.colors.borderStrong,
+                  marginBottom: spacing[5],
+                }}
+              />
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  marginBottom: spacing[2],
+                }}
+              >
+                <MonoLabel color={theme.colors.accentHi}>{t('actions.sheetTitle').toUpperCase()}</MonoLabel>
+                <Pressable
+                  onPress={onClose}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('accessibility.closeNewAssessment')}
+                  hitSlop={8}
+                  style={({ pressed }) => ({
+                    width: 44,
+                    height: 44,
+                    borderRadius: radii.control,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: pressed ? theme.colors.surfacePressed : theme.colors.surface,
+                  })}
+                >
+                  <Icon name="x" size={17} color={theme.colors.textSecondary} />
+                </Pressable>
+              </View>
+
+              <View style={{ paddingBottom: spacing[3] }}>
+                <PremiumAction capability="CREATE_ASSESSMENT" onAllowed={onGuided}>
+                  {({ locked, onPress }) => (
+                    <ActionOption
+                      icon="ruler"
+                      title={t('actions.guided.title')}
+                      subtitle={t('actions.guided.description')}
+                      onPress={onPress}
+                      accessibilityLabel={
+                        locked ? t('accessibility.openGuidedLocked') : t('accessibility.openGuided')
+                      }
+                      locked={locked}
+                    />
+                  )}
+                </PremiumAction>
+                <PremiumAction capability="CREATE_ASSESSMENT" onAllowed={onImport}>
+                  {({ locked, onPress }) => (
+                    <ActionOption
+                      icon="download"
+                      title={t('actions.import.title')}
+                      subtitle={t('actions.import.description')}
+                      onPress={onPress}
+                      accessibilityLabel={
+                        locked ? t('accessibility.openImportLocked') : t('accessibility.openImport')
+                      }
+                      locked={locked}
+                      last
+                    />
+                  )}
+                </PremiumAction>
+              </View>
+            </View>
+          </SafeAreaView>
+        </Pressable>
+      </Pressable>
+    </Modal>
   );
 }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View, Text, Pressable, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
@@ -24,6 +24,7 @@ import { AssessmentScreen } from './AssessmentScreen';
 import { SettingsScreen } from './SettingsScreen';
 import { SecurityScreen } from './SecurityScreen';
 import { ChangePasswordScreen } from './ChangePasswordScreen';
+import { DeleteAccountScreen } from './DeleteAccountScreen';
 import { EditProfileScreen } from './EditProfileScreen';
 import { PaywallScreen } from './PaywallScreen';
 import { SubscriptionCenterScreen } from './SubscriptionCenterScreen';
@@ -34,6 +35,11 @@ import { SupportSuccessScreen } from './SupportSuccessScreen';
 import type { HelpArticle, SupportTicketType } from '../types/support';
 import { PersistentScreen } from '../components/navigation/PersistentScreen';
 import { usePrewarmQueue } from '../components/navigation/usePrewarmQueue';
+import { useSubscription } from '../hooks/useSubscription';
+import {
+  INITIAL_PAYWALL_PREMIUM_RETURN_STATE,
+  resolvePaywallPremiumReturn,
+} from '../lib/paywallPremiumReturn';
 
 type SupportRoute =
   | { name: 'help' }
@@ -87,6 +93,8 @@ function AppShellContent({
   const { theme } = useTheme();
   const { tab, setTab } = useAppState();
   const { linkedProviders } = useAuth();
+  const { isPremium } = useSubscription();
+  const paywallPremiumReturnState = useRef(INITIAL_PAYWALL_PREMIUM_RETURN_STATE);
   // Single centralized prewarm schedule (docs/23_navegacao_e_lifecycle.md
   // §8/§14) — PREWARM_ROUTE_IDS in src/lib/prewarmRoutes.ts is the only
   // place route order/membership is declared; nothing here chains
@@ -97,6 +105,7 @@ function AppShellContent({
   const [showSettings, setShowSettings] = useState(false);
   const [showSecurity, setShowSecurity] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
+  const [showDeleteAccount, setShowDeleteAccount] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showSubscriptionCenter, setShowSubscriptionCenter] = useState(false);
   const [showWorkoutConfirmation, setShowWorkoutConfirmation] = useState(false);
@@ -121,12 +130,27 @@ function AppShellContent({
     showChangePassword ||
     showEditProfile ||
     showSubscriptionCenter ||
+    showDeleteAccount ||
     showPremium ||
     !!supportRoute;
 
   useEffect(() => {
     if (!canChangePassword) setShowChangePassword(false);
   }, [canChangePassword]);
+
+  // The root Paywall is closed by resolvePremiumGate, but this on-demand
+  // Paywall is an AppShell overlay. Close that overlay only after the same
+  // RevenueCat-backed source of truth has actually transitioned false -> true
+  // while it is open. Clearing showPremium reveals the already-mounted screen
+  // underneath; no route reconstruction or fixed destination is involved.
+  useEffect(() => {
+    const transition = resolvePaywallPremiumReturn(paywallPremiumReturnState.current, {
+      visible: showPremium,
+      isPremium,
+    });
+    paywallPremiumReturnState.current = transition.state;
+    if (transition.shouldClose) setShowPremium(false);
+  }, [isPremium, setShowPremium, showPremium]);
 
   const selectTab = (nextTab: TabId) => {
     if (nextTab === 'workout' && tab !== 'workout') {
@@ -273,6 +297,7 @@ function AppShellContent({
             setLastFormRoute({ type: 'FEEDBACK' });
             setSupportRoute({ name: 'form', type: 'FEEDBACK' });
           }}
+          onOpenDeleteAccount={() => setShowDeleteAccount(true)}
         />
       </PersistentScreen>
       <PersistentScreen
@@ -284,6 +309,7 @@ function AppShellContent({
         <SecurityScreen
           onBack={() => setShowSecurity(false)}
           onOpenChangePassword={canChangePassword ? () => setShowChangePassword(true) : undefined}
+          onOpenDeleteAccount={() => setShowDeleteAccount(true)}
         />
       </PersistentScreen>
       {/*
@@ -300,6 +326,17 @@ function AppShellContent({
         inactiveMode="materialized"
       >
         <ChangePasswordScreen onBack={() => setShowChangePassword(false)} />
+      </PersistentScreen>
+      {/* DeleteAccountScreen is a direct child of Security. Its shell is
+          safe to prewarm because provider/password material exists only
+          after interaction, and the flow resets on deactivation. */}
+      <PersistentScreen
+        active={showDeleteAccount}
+        prewarm={prewarmed.DELETE_ACCOUNT}
+        activeStyle={FULL_BLEED.overlayZ60}
+        inactiveMode="materialized"
+      >
+        <DeleteAccountScreen onBack={() => setShowDeleteAccount(false)} />
       </PersistentScreen>
       <PersistentScreen
         active={showEditProfile}

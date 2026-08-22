@@ -37,23 +37,84 @@
   "security": {
     "screenTitle": "Security",
     "sections": {
-      "account": "Account security",
-      "sessions": "Sessions",
-      "activity": "Activity",
+      "account": "Account protection",
+      "access": "Access",
       "safetyZone": "Security zone"
     },
     "items": {
       "changePassword": "Change password",
-      "biometrics": "Biometrics",
-      "currentDevice": "Current device",
-      "currentDeviceDescription": "This device is connected.",
-      "manageDevices": "Manage devices",
+      "accessMethod": "Access method",
+      "accessMethods": "Access methods",
       "lastLogin": "Last login",
-      "lastLoginDescription": "Today at 9:42 AM",
-      "securityHistory": "Security history",
       "deleteAccount": "Delete account"
     },
+    "accessMethod": {
+      "password": "Email and password",
+      "google": "Google",
+      "apple": "Apple"
+    },
+    "lastLogin": {
+      "today": "Today at {{time}}",
+      "yesterday": "Yesterday at {{time}}",
+      "other": "{{date}} at {{time}}"
+    },
     "safetyZoneDescription": "Keep your account protected by regularly reviewing your security settings.",
+    "deleteAccountFlow": {
+      "screenTitle": "Delete account",
+      "intro": {
+        "consequence1": "Your account will be permanently closed. Once completed, this process cannot be undone.",
+        "consequence2": "Your personal data will be deleted according to our privacy policy. Some records may be preserved when required by legal or security obligations.",
+        "consequence3": "Deleting your account is a serious action. We recommend reviewing your information before continuing.",
+        "subscriptionTitle": "Deleting your account does not cancel your subscription",
+        "subscriptionBody": "If you have an active subscription through the App Store or Google Play, it will continue until you cancel it directly in the store's settings.",
+        "subscriptionEyebrow": "Subscription",
+        "manageSubscription": "Manage subscription",
+        "continueAction": "Continue with deletion",
+        "impactTitle": "What happens"
+      },
+      "reauth": {
+        "title": "Confirm your identity",
+        "description": "For your security, confirm your identity before continuing to delete your account.",
+        "passwordLabel": "Current password",
+        "passwordPlaceholder": "Enter your current password",
+        "togglePassword": "Show or hide current password",
+        "continueWithPassword": "Confirm with password",
+        "continueWithGoogle": "Continue with Google",
+        "continueWithApple": "Continue with Apple"
+      },
+      "confirm": {
+        "title": "Final confirmation",
+        "heroSubtitle": "This action is permanent.",
+        "bullet1": "Your account will be closed.",
+        "bullet2": "Data marked for deletion by our policy will be removed.",
+        "bullet3": "Some records may be retained according to our retention policy.",
+        "bullet4": "Your subscription will not be cancelled automatically.",
+        "action": "Delete my account"
+      },
+      "submitting": {
+        "message": "Closing your account...",
+        "description": "We're protecting your data and completing your request. This may take a few moments."
+      },
+      "errors": {
+        "USER_SIGNED_OUT": "Your session is not available. Sign in again and try once more.",
+        "IDENTITY_CHANGED": "The account in use changed during the process. Nothing was changed — try again.",
+        "PROVIDER_MISMATCH": "Identity confirmation is not available for this account yet.",
+        "WRONG_PASSWORD": "That password is incorrect. Check it and try again.",
+        "PASSWORD_REQUIRED": "Enter your current password.",
+        "USER_CANCELLED": "Confirmation was cancelled. Nothing was changed.",
+        "RATE_LIMITED": "Too many attempts were made. Wait a moment and try again.",
+        "SESSION_EXPIRED": "Your session expired. Confirm your identity again to continue.",
+        "NETWORK_ERROR": "Could not connect. Check your internet connection and try again.",
+        "REAUTH_FAILED": "We could not confirm your identity. Please try again.",
+        "reauthCancelled": "Confirmation was cancelled. Nothing was changed.",
+        "googleRevocationFailed": "We could not complete confirmation with Google. Please try again.",
+        "applePreparationCancelled": "Confirmation with Apple was cancelled. Nothing was changed.",
+        "applePreparationUnavailable": "Confirmation with Apple is not available right now. Please try again.",
+        "reconciliationRequired": "Your account already has a deletion request on file. Our team will review it.",
+        "requestFailed": "We could not process your request right now. Please try again.",
+        "appleValidationFailed": "We could not complete validation with Apple. Please try again."
+      }
+    },
     "changePassword": {
       "screenTitle": "Change password",
       "description": "Confirm your current password before setting a new password for your account.",
@@ -90,14 +151,6 @@
       "accessibility": {
         "toggleVisibility": "Show or hide {{field}}"
       }
-    }
-  },
-  "theme": {
-    "title": "Theme",
-    "chooseTitle": "Select theme",
-    "options": {
-      "dark": "Dark",
-      "light": "Light"
     }
   },
   "language": {
@@ -139,6 +192,14 @@
     },
     "errors": {
       "changeFailed": "Couldn't save the measurement system. Please try again."
+    }
+  },
+  "theme": {
+    "title": "Theme",
+    "chooseTitle": "Select theme",
+    "options": {
+      "dark": "Dark",
+      "light": "Light"
     }
   }
 }

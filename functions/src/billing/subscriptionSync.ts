@@ -2,6 +2,7 @@ import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { auth, db } from '../lib/firebaseAdmin';
 import { logFunctionError, logInfo, logWarn } from '../lib/logger';
 import {
+  COMMERCIAL_GATE_RESOLVED_AT_PATH,
   REVENUECAT_PROVIDER,
   SUBSCRIPTION_FIELD,
   SUBSCRIPTION_LAST_EVENT_ID_FIELD,
@@ -389,6 +390,28 @@ export async function applySubscriptionEventAtomically(
         updatedAt: FieldValue.serverTimestamp(),
       };
 
+      // Initial-Paywall marker (docs/13, "Fase 1 limited-mode rollout" +
+      // its later reintroduction of a gate scoped to brand-new accounts —
+      // see the `UserProfile.metadata` doc comment in
+      // src/services/userProfile.ts). Resolved here, in the SAME write as
+      // the subscription mirror, the first time a webhook event confirms an
+      // active entitlement — never on any other event, and never once it is
+      // already a timestamp (a later cancellation/expiration must not
+      // revert an established account back to "new"). Reading the
+      // dotted path off `snapshot` (not `current`, which only looks inside
+      // `subscription`) distinguishes the three states: `undefined`
+      // (absent — a pre-existing document from before this field existed,
+      // already treated as resolved by the client's own `!== null` check,
+      // so no write needed) vs `null` (a genuinely new, still-pending
+      // account) vs an existing `Timestamp` (already resolved — leave as
+      // is).
+      const gateFieldValue = snapshot.get(COMMERCIAL_GATE_RESOLVED_AT_PATH) as
+        | Timestamp
+        | null
+        | undefined;
+      const shouldResolveCommercialGate =
+        gateFieldValue === null && subscription.entitlementActive === true;
+
       if (options.replaceSubscription) {
         // A TRANSFER reconciliation is a complete current-state snapshot,
         // not a partial event delta. Replace the nested map so stale fields
@@ -398,8 +421,27 @@ export async function applySubscriptionEventAtomically(
         transaction.update(ref, { [SUBSCRIPTION_FIELD]: nextSubscription });
       } else {
         // Ordinary commercial webhooks remain partial deltas and retain the
-        // long-standing deep-merge behavior.
+        // long-standing deep-merge behavior: `set(..., { merge: true })`
+        // deep-merges into the `subscription` map, leaving any sub-field
+        // this event's partial payload omits untouched. `SUBSCRIPTION_FIELD`
+        // has no dot, so this is safe regardless of merge vs. update.
         transaction.set(ref, { [SUBSCRIPTION_FIELD]: nextSubscription }, { merge: true });
+      }
+
+      // Deliberately a SEPARATE write from the subscription mirror above,
+      // never combined into its payload: `COMMERCIAL_GATE_RESOLVED_AT_PATH`
+      // is a dotted string ('metadata.commercialGateResolvedAt'), and the
+      // Admin SDK only parses a dotted key as a nested field path for
+      // `update()` — not for `set(..., { merge: true })`, which previously
+      // stored it as a literal top-level field named
+      // `"metadata.commercialGateResolvedAt"` instead of nesting it under
+      // `metadata` (see confirmCommercialGate.ts's identical fix; proven by
+      // the emulator-backed integration test in
+      // __tests__/commercialGateResolution.integration.test.ts). `update()`
+      // is safe here unconditionally: `snapshot.exists` was already
+      // confirmed above, before this transaction ever reaches a write.
+      if (shouldResolveCommercialGate) {
+        transaction.update(ref, { [COMMERCIAL_GATE_RESOLVED_AT_PATH]: FieldValue.serverTimestamp() });
       }
 
       return outcome;

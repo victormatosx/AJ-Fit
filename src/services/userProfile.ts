@@ -23,6 +23,7 @@ import {
   type PersistedQuizAnswers,
 } from '../lib/questionnaireAnswers';
 import { logError } from '../lib/logError';
+import { logInfo, logWarn } from '../lib/logger';
 import {
   normalizeDisplayName,
   validateDisplayName,
@@ -110,6 +111,30 @@ export type UserProfile = {
     activeWorkoutId?: string;
     createdAt: Timestamp | null;
     updatedAt: Timestamp | null;
+    /**
+     * Server-set marker for the initial commercial gate (docs/13 — "Fase 1
+     * limited-mode rollout" removed the root Paywall for EVERYONE; this
+     * reintroduces it only for accounts that never resolved it).
+     *
+     * - Absent (no key at all): a document written before this field
+     *   existed. Never reinterpreted as "new" — see `provisionNewUser`. The
+     *   gate (`src/lib/premiumGate.ts`) treats absence as resolved, exactly
+     *   like an established account, so no pre-existing user is ever pushed
+     *   into an initial Paywall retroactively.
+     * - `null`: written explicitly by `provisionNewUser` for every account
+     *   created from this field's introduction onward. Means "brand new,
+     *   initial commercial gate still pending".
+     * - `Timestamp`: written exclusively by the backend
+     *   (`functions/src/billing/subscriptionSync.ts`) the first time a
+     *   RevenueCat webhook event confirms `entitlementActive: true` for this
+     *   uid. Never written or overwritable by the client — Firestore Rules'
+     *   `users/{userId}` update rule restricts client updates to
+     *   `metadata.updatedAt` only, so this field can only transition
+     *   null → Timestamp via the Admin SDK. Once set, never cleared: a
+     *   later cancellation/expiration does not revert the account to
+     *   "new" (see the CASE B matrix in docs/13).
+     */
+    commercialGateResolvedAt?: Timestamp | null;
   };
 };
 
@@ -244,6 +269,12 @@ export async function provisionNewUser(
         role: 'user',
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
+        // Explicit `null`, never omitted: this is what marks the account as
+        // "new, initial commercial gate pending" (see the `UserProfile`
+        // type doc comment). Written identically regardless of provider
+        // (email/password, Apple, Google) — `provisionNewUser` is the only
+        // place any of them create this document.
+        commercialGateResolvedAt: null,
       },
     },
   );
@@ -301,13 +332,59 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
   return migratedSnap.exists() ? (migratedSnap.data() as UserProfile) : null;
 }
 
-/** Reads the most recent questionnaire, or null when there is none. */
+/**
+ * Reads the most recent questionnaire, or null when there is none.
+ *
+ * Contract (load-bearing for `AuthContext.loadUserState`'s resolution state
+ * machine — `src/lib/profileLoadState.ts`): "found" (resolves to a doc),
+ * "not found" (resolves to `null`, `snap.empty`), and "read failed" (the
+ * promise REJECTS) are three distinct outcomes. This function NEVER
+ * silently turns a failed read into `null` — a caller must not either.
+ *
+ * `attempt` is caller-supplied bookkeeping only (which retry attempt this
+ * call is, 1-based) — purely for the logs below, no behavioral effect.
+ */
 export async function getLatestQuestionnaire(
   uid: string,
+  attempt = 1,
 ): Promise<QuestionnaireDoc | null> {
+  const startedAt = Date.now();
+  logInfo('questionnaire', 'questionnaire_load_started', {
+    uid,
+    source: 'getLatestQuestionnaire',
+    attempt,
+  });
+
   const q = query(questionnairesRef(uid), orderBy('createdAt', 'desc'), limit(1));
-  const snap = await getDocs(q);
-  if (snap.empty) return null;
+  let snap;
+  try {
+    snap = await getDocs(q);
+  } catch (err) {
+    // Deliberately NOT swallowed: rethrown as-is. The caller
+    // (`withFirestoreRetry` in AuthContext) decides whether this is
+    // retryable — this function only reports what happened.
+    logWarn('questionnaire', 'questionnaire_load_failed', {
+      uid,
+      source: 'getLatestQuestionnaire',
+      attempt,
+      durationMs: Date.now() - startedAt,
+      documentFound: false,
+      error: err,
+    });
+    throw err;
+  }
+
+  if (snap.empty) {
+    logInfo('questionnaire', 'questionnaire_load_not_found', {
+      uid,
+      source: 'getLatestQuestionnaire',
+      attempt,
+      durationMs: Date.now() - startedAt,
+      documentFound: false,
+    });
+    return null;
+  }
+
   const d = snap.docs[0];
   const raw = d.data() as {
     answers?: Partial<PersistedQuizAnswers>;
@@ -321,6 +398,13 @@ export async function getLatestQuestionnaire(
       questionnaireId: d.id,
     });
   }
+  logInfo('questionnaire', 'questionnaire_load_completed', {
+    uid,
+    source: 'getLatestQuestionnaire',
+    attempt,
+    durationMs: Date.now() - startedAt,
+    documentFound: true,
+  });
   return {
     id: d.id,
     answers: fromPersistedAnswers(raw.answers, raw.createdAt),

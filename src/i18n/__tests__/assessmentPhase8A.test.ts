@@ -32,9 +32,10 @@ describe('Assessment structure resources and consumers', () => {
   it('uses translations for every structural screen section and visible state', () => {
     for (const key of [
       'header.title', 'sections.evolution',
-      'sections.add', 'sections.history', 'loading.title',
+      'sections.history', 'loading.title',
       'errors.loadFailedTitle', 'history.empty.title',
     ]) expect(screen).toContain(key);
+    expect(action).toContain("t('actions.sheetTitle')");
 
     for (const hardcode of [
       'title="EVOLUÇÃO"', 'title="INFORMAÇÕES BÁSICAS"', 'title="DOBRAS CUTÂNEAS"',
@@ -43,16 +44,19 @@ describe('Assessment structure resources and consumers', () => {
     ]) expect(structuralScreen).not.toContain(hardcode);
   });
 
-  it('keeps the simplified visual hierarchy without duplicate overview blocks', () => {
+  it('keeps the dashboard hierarchy and moves creation into a contextual action', () => {
     const order = [
       'sections.evolution',
-      'sections.add',
       'sections.history',
     ].map((key) => structuralScreen.indexOf(key));
 
     expect(order.every((position) => position >= 0)).toBe(true);
     expect(order).toEqual([...order].sort((a, b) => a - b));
     expect(structuralScreen).not.toContain('sections.basicInfo');
+    expect(structuralScreen).not.toContain('sections.add');
+    expect(structuralScreen).toContain('setShowAssessmentActions(true)');
+    expect(structuralScreen).toContain('visible={showAssessmentActions}');
+    expect(structuralScreen).toContain("t('assessment:accessibility.addAssessment')");
     expect(structuralScreen).not.toContain('summary.emptyCta');
     expect(structuralScreen).not.toContain('sections.skinfolds');
     expect(structuralScreen).not.toContain('skinfoldsHint');

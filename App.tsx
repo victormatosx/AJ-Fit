@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useReducer, useRef, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import * as NativeSplashScreen from 'expo-splash-screen';
 import { View, ActivityIndicator, Pressable, Text } from 'react-native';
@@ -16,12 +16,16 @@ import {
   JetBrainsMono_700Bold,
 } from '@expo-google-fonts/jetbrains-mono';
 
-import { AppStateProvider, useAppState } from './src/state/AppState';
+import { AppStateProvider as RawAppStateProvider, useAppState } from './src/state/AppState';
 import { AuthProvider, useAuth } from './src/state/AuthContext';
 import { SubscriptionProvider } from './src/state/SubscriptionContext';
 import { PromoCodeProvider } from './src/state/PromoCodeContext';
 import { useSubscription } from './src/hooks/useSubscription';
-import { resolvePremiumGate, type RootScreenId } from './src/lib/premiumGate';
+import {
+  resolvePremiumGate,
+  explainPremiumGateBlockers,
+  type RootScreenId,
+} from './src/lib/premiumGate';
 import { PhotoVaultProvider } from './src/state/PhotoVaultContext';
 import { addQuestionnaire } from './src/services/userProfile';
 import { logAuthError } from './src/services/auth';
@@ -32,6 +36,7 @@ import { clearOnboardingDraft } from './src/onboarding/draftStorage';
 import type { OnboardingAuthContext } from './src/onboarding/authContext';
 import { AuthScreen } from './src/screens/AuthScreen';
 import { EmailVerificationScreen } from './src/screens/EmailVerificationScreen';
+import { PaywallScreen } from './src/screens/PaywallScreen';
 import { AppShell } from './src/screens/AppShell';
 import { FullScreenLoading } from './src/components/ui/FullScreenLoading';
 import { requiresEmailVerification } from './src/lib/emailVerification';
@@ -41,6 +46,7 @@ import { initI18n } from './src/i18n';
 import { reconcileLanguageOnLoad } from './src/i18n/syncLanguage';
 import { reconcileUnitsOnLoad } from './src/units/syncUnits';
 import { UnitsProvider } from './src/state/UnitsContext';
+import { needsPreferencesReconciliation } from './src/lib/preferencesReconciliation';
 import {
   cleanupPhotoVaultShareFiles,
   cleanupPhotoVaultTempFiles,
@@ -85,12 +91,12 @@ NativeSplashScreen.preventAutoHideAsync().catch(() => {
 });
 
 function SubscriptionResolutionError({
+  title,
   message,
-  offline,
   onRetry,
 }: {
+  title: string;
   message: string;
-  offline: boolean;
   onRetry: () => Promise<void>;
 }) {
   const { theme } = useTheme();
@@ -113,7 +119,7 @@ function SubscriptionResolutionError({
           textAlign: 'center',
         }}
       >
-        {offline ? 'Conexão necessária' : 'Assinatura indisponível'}
+        {title}
       </Text>
       <Text
         style={{
@@ -153,10 +159,28 @@ function SubscriptionResolutionError({
   );
 }
 
+/**
+ * Bridges AuthContext's uid into `AppStateProvider` without that module
+ * importing AuthContext itself (see its doc comment) — the only reason this
+ * one-line wrapper exists.
+ */
+function AppStateProviderConnected({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  return <RawAppStateProvider uid={user?.uid ?? null}>{children}</RawAppStateProvider>;
+}
+
 function RootNavigator() {
   const { theme } = useTheme();
-  const { user, profile, questionnaire, initializing, profileLoading, refreshProfile } =
-    useAuth();
+  const {
+    user,
+    profile,
+    questionnaire,
+    questionnaireResolution,
+    initializing,
+    profileLoading,
+    refreshProfile,
+    logout,
+  } = useAuth();
   const {
     loading: subscriptionLoading,
     configured: subscriptionConfigured,
@@ -167,6 +191,14 @@ function RootNavigator() {
     retry: retrySubscription,
   } = useSubscription();
   const emailVerificationRequired = requiresEmailVerification(user);
+  // `!== null` folds two states into "resolved": an absent field (a
+  // document written before this marker existed — never reinterpreted as
+  // "new") and an actual `Timestamp` (the backend confirmed a purchase/
+  // restore at least once). Only an explicit `null` — written only by
+  // `provisionNewUser` for accounts created from this field's introduction
+  // onward — means "still pending". See the `UserProfile.metadata` doc
+  // comment in src/services/userProfile.ts.
+  const commercialGateResolved = profile?.metadata.commercialGateResolvedAt !== null;
   const { quiz } = useAppState();
   const [screen, setScreenState] = useState<RootScreenId>('splash');
   // Mirrors `screen` synchronously so late/stale callbacks (e.g. the splash
@@ -176,15 +208,31 @@ function RootNavigator() {
   // Guards the forced-questionnaire save below against double submission
   // (e.g. a fast double-tap on the last quiz question).
   const [savingQuestionnaire, setSavingQuestionnaire] = useState(false);
-  // Account-preference reconciliation runs at every profileLoading→false transition.
+  // Account-preference reconciliation runs once per authenticated identity.
   // While it runs, resolvePremiumGate holds the routing gate closed (same as
   // profileLoading) so the first authed screen renders with reconciled
-  // language and units already applied. Fires once per profile-load cycle —
-  // no polling, no timers. This NEVER influences the Premium decision below —
-  // it only delays which screen becomes visible, exactly like the other
-  // pre-Premium checks resolvePremiumGate already made (auth, questionnaire).
-  const [preferencesReconciling, setPreferencesReconciling] = useState(false);
-  const prevProfileLoadingRef = useRef(true);
+  // language and units already applied. This NEVER influences the Premium
+  // decision below — it only delays which screen becomes visible, exactly
+  // like the other pre-Premium checks resolvePremiumGate already made
+  // (auth, questionnaire).
+  //
+  // `reconciledUidRef`/`reconcilingUidRef` (not `useState`) are what make
+  // `preferencesReconciling` correct on the SAME render where
+  // `profileLoading` first becomes `false` — see
+  // `src/lib/preferencesReconciliation.ts`'s doc comment for the exact
+  // one-render-late bug this fixes (a `useState` flipped from a
+  // `useEffect` necessarily lags a render behind, letting the gate open to
+  // 'app' for one paint before reconciliation had even started).
+  const reconciledUidRef = useRef<string | null>(null);
+  const reconcilingUidRef = useRef<string | null>(null);
+  const [, forceReconciliationRerender] = useReducer((c: number) => c + 1, 0);
+  const preferencesReconciling = needsPreferencesReconciliation({
+    authInitializing: initializing,
+    profileLoading,
+    uid: user?.uid ?? null,
+    hasProfile: Boolean(profile),
+    reconciledUid: reconciledUidRef.current,
+  });
   // Copy-only context for AuthScreen (which funnel step sent the user here).
   // No auth/commerce logic reads this — see src/onboarding/authContext.ts.
   const [onboardingAuthContext, setOnboardingAuthContext] = useState<OnboardingAuthContext | null>(
@@ -206,14 +254,12 @@ function RootNavigator() {
   };
 
   useEffect(() => {
-    const wasLoading = prevProfileLoadingRef.current;
-    prevProfileLoadingRef.current = profileLoading;
-    // Account creation can briefly finish the auth listener's pre-provision
-    // profile read with `profile === null`. That is not a malformed profile:
-    // provisionNewUser is still creating it. Wait for the authoritative
-    // post-provision load instead of reporting missing preferences as errors.
-    if (initializing || profileLoading || !wasLoading || !user || !profile) return;
-    setPreferencesReconciling(true);
+    if (!preferencesReconciling || !user || !profile) return;
+    // Guards against re-kicking the same in-flight reconciliation on every
+    // render while it's pending (this effect's deps include `profile`,
+    // which the reconciliation's own writes can cause to change).
+    if (reconcilingUidRef.current === user.uid) return;
+    reconcilingUidRef.current = user.uid;
     Promise.all([
       reconcileLanguageOnLoad({
         uid: user.uid,
@@ -223,8 +269,21 @@ function RootNavigator() {
         uid: user.uid,
         remoteUnits: profile.preferences.units,
       }),
-    ]).finally(() => setPreferencesReconciling(false));
-  }, [initializing, profileLoading, user, profile]);
+    ]).finally(() => {
+      reconciledUidRef.current = user.uid;
+      reconcilingUidRef.current = null;
+      forceReconciliationRerender();
+    });
+  }, [preferencesReconciling, user, profile]);
+
+  // A logout (or account switch mid-flight) must not leave a stale
+  // `reconciledUidRef` that lets a DIFFERENT future uid skip reconciliation
+  // — `needsPreferencesReconciliation` already re-derives `true` for any
+  // uid that doesn't match `reconciledUidRef.current`, but clearing it here
+  // too keeps the ref from silently holding a signed-out user's uid forever.
+  useEffect(() => {
+    if (!user) reconciledUidRef.current = null;
+  }, [user]);
 
   // This pure decision is also the render guard: AppShell is never mounted
   // from a stale/requested route while auth, email verification, preference
@@ -240,10 +299,11 @@ function RootNavigator() {
     authenticated: Boolean(user),
     emailVerificationRequired,
     preferencesReconciling,
-    hasQuestionnaire: Boolean(questionnaire),
+    questionnaireResolution,
     subscriptionLoading,
     subscriptionConfigured,
     isPremium,
+    commercialGateResolved,
   });
 
   useEffect(() => {
@@ -256,11 +316,27 @@ function RootNavigator() {
       authenticated: Boolean(user),
       emailVerificationRequired,
       preferencesReconciling,
-      hasQuestionnaire: Boolean(questionnaire),
+      questionnaireResolution,
       subscriptionLoading,
       subscriptionConfigured,
       subscriptionStatus,
       isPremium,
+      commercialGateResolved,
+      // Diagnostic-only, never read by the gate — see
+      // `explainPremiumGateBlockers`'s doc comment.
+      blockingReasons: explainPremiumGateBlockers({
+        requestedScreen: screen,
+        authInitializing: initializing,
+        profileLoading,
+        authenticated: Boolean(user),
+        emailVerificationRequired,
+        preferencesReconciling,
+        questionnaireResolution,
+        subscriptionLoading,
+        subscriptionConfigured,
+        isPremium,
+        commercialGateResolved,
+      }),
     });
   }, [
     user?.uid,
@@ -270,11 +346,12 @@ function RootNavigator() {
     profileLoading,
     emailVerificationRequired,
     preferencesReconciling,
-    questionnaire,
+    questionnaireResolution,
     subscriptionLoading,
     subscriptionConfigured,
     subscriptionStatus,
     isPremium,
+    commercialGateResolved,
   ]);
 
   // Keep the requested screen aligned with the centrally resolved route so
@@ -287,6 +364,22 @@ function RootNavigator() {
   screenRef.current = resolvedScreen;
 
   if (!resolvedScreen) {
+    // Retry-exhausted questionnaire/profile read failure — checked BEFORE
+    // the subscription-error branch below since it can't have resolved a
+    // `questionnaire` yet either way. Never falls through to onboarding
+    // (`resolvePremiumGate` already refuses that for `'error'`); this is
+    // the recoverable-error UI instead of an indefinite spinner. Reuses
+    // the same component/visual language as the subscription error below,
+    // per the "don't invent new design" instruction.
+    if (!initializing && !profileLoading && user && questionnaireResolution === 'error') {
+      return (
+        <SubscriptionResolutionError
+          title="Não foi possível carregar seus dados"
+          message="Verifique sua conexão e tente novamente."
+          onRetry={refreshProfile}
+        />
+      );
+    }
     if (
       !initializing &&
       !profileLoading &&
@@ -297,8 +390,8 @@ function RootNavigator() {
     ) {
       return (
         <SubscriptionResolutionError
+          title={subscriptionErrorKind === 'offline' ? 'Conexão necessária' : 'Assinatura indisponível'}
           message={subscriptionError ?? 'Não foi possível verificar a assinatura agora.'}
-          offline={subscriptionErrorKind === 'offline'}
           onRetry={retrySubscription}
         />
       );
@@ -348,6 +441,25 @@ function RootNavigator() {
       )}
       {resolvedScreen === 'auth' && <AuthScreen entryContext={onboardingAuthContext} />}
       {resolvedScreen === 'emailVerification' && <EmailVerificationScreen />}
+      {resolvedScreen === 'paywall' && (
+        <PaywallScreen
+          entryContext={onboardingAuthContext}
+          // Reinstates the documented pre-"Fase 1" rule for this one case
+          // (docs/24_funil_onboarding_arquitetura.md §8 — "Botão X do
+          // Paywall": preserved exactly as it was, `onClose` calls
+          // `logout()`). Only reachable here for a brand-new account whose
+          // initial commercial gate is still pending — an ESTABLISHED
+          // account never renders this branch (see `resolvePremiumGate`),
+          // so this never logs out an existing non-Premium user. The
+          // on-demand `<PaywallScreen>` inside AppShell (`showPremium`)
+          // is untouched and keeps its own `onClose` that just closes the
+          // modal — that instance is a different context and was never
+          // part of this rule.
+          onClose={() => {
+            void logout();
+          }}
+        />
+      )}
       {resolvedScreen === 'app' && <AppShell />}
       {savingQuestionnaire && (
         <View
@@ -436,7 +548,7 @@ function AppContent() {
           <SubscriptionProvider>
             <PromoCodeProvider>
               <UnitsProvider>
-                <AppStateProvider>
+                <AppStateProviderConnected>
                   {/* Inside AuthProvider so it can re-lock on logout and account
                       switches; wraps the navigator so its AppState listener is
                       mounted for the whole session. */}
@@ -453,7 +565,7 @@ function AppContent() {
                       ? <RootNavigator />
                       : <FullScreenLoading />}
                   </PhotoVaultProvider>
-                </AppStateProvider>
+                </AppStateProviderConnected>
               </UnitsProvider>
             </PromoCodeProvider>
           </SubscriptionProvider>

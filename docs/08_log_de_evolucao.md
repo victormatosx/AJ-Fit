@@ -3260,3 +3260,163 @@ Assinatura:
 Claude — 2026-08-18 — Tema Claro/Escuro, Fase 9 (fronteiras nativas).
 
 ---
+
+Data: 2026-08-20
+Responsável: Claude — Agente Frontend
+Categoria: [CORREÇÃO]
+
+Descrição:
+Corrigido double loading/flicker de navegação raiz (`unresolved → app →
+unresolved → app`) confirmado após login e após editar perfil já dentro do
+app. Duas causas, ambas na mesma classe de bug — um blocker do gate
+(`resolvePremiumGate`) inicializado como não-bloqueante e só promovido a
+bloqueante depois do primeiro paint:
+
+1. `preferencesReconciling` (`App.tsx`) era `useState(false)` promovido a
+   `true` por um `useEffect` — que roda depois do commit do render que já
+   tinha aberto o gate para `'app'`. Corrigido derivando o valor
+   sincronamente durante o render (`needsPreferencesReconciliation`,
+   `src/lib/preferencesReconciliation.ts` — novo), a partir de uma ref de
+   "uid já reconciliado nesta sessão".
+2. `reduceProfileLoad` (`src/lib/profileLoadState.ts`) tratava qualquer
+   `refreshProfile()` pós-bootstrap (ex.: `EditProfileScreen` salvando)
+   como carga inicial, reabrindo `loading`/`questionnaireResolution` e
+   desmontando o `AppShell` inteiro para um refresh em segundo plano.
+   Corrigido com o campo `bootstrappedUid`: `load-started` só reabre esses
+   dois campos quando o uid do evento ainda não completou sua primeira
+   carga.
+
+Adicionado `explainPremiumGateBlockers()` (`src/lib/premiumGate.ts`) —
+diagnóstico puro, nunca consultado pelo gate, listando prerequisitos ainda
+não resolvidos — plugado como `blockingReasons` no log existente
+`navigation_gate_evaluated`. Nenhuma mudança de comportamento de navegação
+além da correção das duas causas acima; nenhum `setTimeout`/delay artificial
+usado.
+
+Documentação: criado `docs/26_bootstrap_e_navegacao_raiz.md` como fonte de
+verdade do gate de navegação raiz/bootstrap de identidade (não existia
+documento dedicado a este tema — `docs/23_navegacao_e_lifecycle.md` cobre
+apenas a navegação interna do `AppShell`, camada abaixo desta).
+Cross-referenciado a partir de `docs/23`, `docs/24` e `docs/13`.
+
+Segurança:
+Nenhuma mudança em Functions, Firestore/Storage Rules, RevenueCat
+backend/webhook, exclusão de conta, KMS ou segredos. Nenhum deploy
+necessário — mudança 100% client-side.
+
+Validação automática:
+2856 testes aprovados (159 arquivos), typecheck aprovado. Testes novos:
+`src/lib/__tests__/preferencesReconciliation.test.ts`; testes atualizados
+para refletir o invariante corrigido:
+`src/lib/__tests__/profileLoadState.test.ts`,
+`src/lib/__tests__/premiumGate.test.ts`,
+`src/lib/__tests__/preferenceReconciliationStructure.test.ts`.
+
+Validação manual (E2E real, aprovado pelo usuário):
+cold start autenticado, login, editar perfil, logout → outra conta — double
+loading não ocorreu em nenhum dos quatro cenários.
+
+Pendência:
+Nenhuma.
+
+Assinatura:
+Claude — 2026-08-20 — Correção do double loading do gate de navegação raiz + documentação arquitetural.
+
+---
+
+Data: 2026-08-20
+Responsável: Claude — Agente Backend + Dados
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Criada a biblioteca oficial de exercícios em `exercises/{exerciseId}` — a
+collection não existia antes desta tarefa e caía no deny-all explícito de
+`firestore.rules` (comentário que já reservava o nome). Implementados
+`src/types/exercise.ts` (schema + taxonomias: 18 músculos, 11 regiões, 22
+padrões de movimento — dois deles, `scapular_elevation` e
+`horizontal_adduction`, adicionados além da lista de referência original
+por não terem equivalente sem forçar uma classificação errada — 12
+equipamentos, mecânica/lateralidade/dificuldade/status),
+`src/data/exercisesSeedData.ts` (79 exercícios classificados, com
+`substitution.similarExerciseIds` derivado automaticamente da família
+`substitution.group` em vez de curadoria manual par-a-par) e
+`src/validators/exerciseValidation.ts` (validação do dataset completo:
+duplicidade de IDs/slugs/nomes, enums, autorreferência, referências
+pendentes, URLs inventadas).
+
+Criado `scripts/seedExercises.ts` (Admin SDK, Application Default
+Credentials — nenhuma chave de service account no repositório): dry-run
+por padrão, escrita real só com `--confirm`, idempotente (preserva
+`metadata.createdAt`/`version` em atualizações, nunca deleta — exercícios
+são desativados via `status`/`availability`, não removidos).
+
+Adicionada regra mínima em `firestore.rules` para `exercises/{exerciseId}`:
+leitura liberada para usuário autenticado, escrita sempre negada para
+clients (só o Admin SDK escreve). Nenhum índice composto foi adicionado a
+`firestore.indexes.json` — as consultas previstas hoje são igualdades de
+campo único, já cobertas pelos índices automáticos do Firestore.
+
+Documentação: criado `docs/27_biblioteca_de_exercicios.md` (schema,
+taxonomias, política de IDs, mecânica de substituição, semântica de
+`status`/`availability`, uso do seed) e atualizado `docs/03
+_modelagem_banco_e_dados.md` §6/§7 para apontar para ele.
+
+Ambiguidades do dataset fonte (grip/ângulo/máquina/carga não especificados
+em ~15 dos 79 nomes fornecidos, ex.: "Pull Down", "Puxada Articulada
+Máquina", "Rosca Alongada") foram resolvidas escolhendo apenas a
+classificação inferível com segurança, sem inventar detalhe biomecânico —
+lista completa marcada com comentário "AMBIGUOUS" em
+`exercisesSeedData.ts`.
+
+Segurança:
+Única alteração de Rules desta tarefa: a regra nova de `exercises`
+descrita acima (adição, não enfraquecimento de nenhuma regra existente).
+Não foi possível rodar `test:rules:firestore` neste ambiente — o
+firebase-tools instalado exige Java 21+ e o ambiente só tem Java 17
+(limitação pré-existente do ambiente, não desta mudança). Foi criado
+`firestore-tests/exercises.rules.test.ts` seguindo o mesmo padrão dos
+testes existentes (`preferences.rules.test.ts`), cobrindo leitura
+autenticada/anônima e escrita bloqueada em todos os casos (update/create/
+delete, autenticado e anônimo) — pendente de execução na próxima vez que
+o emulador rodar com Java compatível.
+
+Validação automática:
+`npm run typecheck` aprovado. `npm test`: 2883 testes aprovados, 4 skipped
+(163 arquivos) — inclui os 6 testes novos de
+`src/lib/__tests__/exercisesSeedData.test.ts`. `npm run i18n:audit`: 0
+blocking issues (9 hardcodes pré-existentes em `PaywallScreen.tsx`, não
+relacionados a esta tarefa).
+
+Seed (produção, `ajfit-2f321` — único projeto configurado em
+`.firebaserc`, não há staging/dev):
+esperados 79, validados 79, criados 79, atualizados 0, ignorados 0,
+falharam 0. Reexecução em dry-run confirmou idempotência: 79 documentos
+existentes, 0 criações/79 atualizações planejadas. Documento de amostra
+(`barbell-back-squat`) verificado diretamente no Firestore com o shape
+esperado e `metadata.createdAt`/`updatedAt` como server timestamps reais.
+
+Impacto:
+Nenhuma alteração em autenticação, assinatura, telas existentes ou geração
+de treino atual. Nenhum dado de usuário tocado. Nenhuma migração
+destrutiva. Deploy de Rules **não** foi feito — a regra nova está apenas
+no arquivo local `firestore.rules`; publicar exige `firebase deploy
+--only firestore:rules` (fora do escopo desta tarefa, deploy fica a
+critério do responsável pelo projeto).
+
+Próxima ação:
+Publicar a regra de `exercises` (`firebase deploy --only
+firestore:rules`) quando o responsável decidir. Revisar as ~15
+classificações marcadas "AMBIGUOUS" em `exercisesSeedData.ts` com alguém
+que conheça a academia/equipamento original. Rodar
+`firestore-tests/exercises.rules.test.ts` assim que houver Java 21+
+disponível.
+
+Pendência:
+Deploy manual das Rules atualizadas; confirmação humana das classificações
+ambíguas; execução dos testes de Rules do emulador (bloqueado por versão
+de Java do ambiente atual).
+
+Assinatura:
+Claude — 2026-08-20 — Biblioteca oficial de exercícios: schema, taxonomias, seed de 79 exercícios (escrito em produção) e documentação.
+
+---

@@ -46,6 +46,32 @@ service cloud.firestore {
     // chaves permitidas no update) — o espelho segue sendo exclusivamente
     // do servidor, mesmo sem ninguém lendo `entitlementActive` aqui.
 
+    // FASE 5 (docs/25_exclusao_de_conta_arquitetura.md — "Bloqueio imediato
+    // da conta"): once `requestAccountDeletion` has durably accepted a
+    // deletion, this becomes `false` and every private user-owned path
+    // below denies read/write, regardless of the internal workflow status
+    // (`REQUESTED`/`PROCESSING`/`RETRY_SCHEDULED`/`COMPLETED`/
+    // `FAILED_TERMINAL` all mean "not active" — see
+    // `functions/src/accountDeletion/activeAccountGuard.ts`'s doc comment
+    // for why status is never inspected, only existence). A stale ID token
+    // issued before the lock was created is exactly what this guards
+    // against: `admin.auth().revokeRefreshTokens` alone does not invalidate
+    // an already-issued ID token before its normal ~1h expiry, so this is
+    // the layer that actually stops a client SDK write/read with such a
+    // token, independent of any backend callable guard.
+    //
+    // One extra `exists()` read per rule evaluation. Deliberately checks
+    // presence of the LOCK document, not
+    // `accountDeletions/{deletionId}`'s `status` field — the lock is a
+    // single, tiny, doc-id-keyed read; resolving a full record would need
+    // an extra indirection this check does not need.
+    //
+    // NÃO FAZER DEPLOY sem antes confirmar (Fase 0) que estas regras — e não
+    // uma versão diferente — são de fato as publicadas em produção.
+    function accountActive(userId) {
+      return !exists(/databases/$(database)/documents/accountDeletionLocks/$(userId));
+    }
+
     // O painel autentica com Firebase Auth e o backend promove previamente o
     // documento do operador. Escritas do app nunca podem alterar metadata.role.
     function isAdmin() {
@@ -144,14 +170,28 @@ service cloud.firestore {
         && (!('updatedAt' in data) || data.updatedAt is timestamp);
     }
 
+    // `commercialGateResolvedAt` (initial-Paywall marker — see the
+    // `UserProfile.metadata` doc comment in src/services/userProfile.ts):
+    // OPTIONAL like `activeWorkoutId`/`attribution` (absent on every
+    // document written before this field existed — never reinterpreted as
+    // "account is new"). When present it is either `null` (client-written
+    // only at account creation — see the `create` rule below) or a
+    // `timestamp` (backend-only, via the Admin SDK, which bypasses these
+    // Rules entirely — no client write path ever produces a timestamp
+    // here, enforced by the `update` rule's `metadata` diff restricted to
+    // `updatedAt`).
     function metadataValid(data) {
       return data is map
         && data.keys().hasAll(['role', 'createdAt', 'updatedAt'])
-        && data.keys().hasOnly(['role', 'activeWorkoutId', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(
+             ['role', 'activeWorkoutId', 'createdAt', 'updatedAt', 'commercialGateResolvedAt'])
         && data.role in ['user', 'admin']
         && (!('activeWorkoutId' in data) || data.activeWorkoutId is string)
         && data.createdAt is timestamp
-        && data.updatedAt is timestamp;
+        && data.updatedAt is timestamp
+        && (!('commercialGateResolvedAt' in data)
+             || data.commercialGateResolvedAt == null
+             || data.commercialGateResolvedAt is timestamp);
     }
 
     // Shape of `users/{userId}.attribution` — the read-optimized mirror of
@@ -526,8 +566,9 @@ service cloud.firestore {
 
     // ── Users, questionnaires and assessments ─────────────────────────────
     match /users/{userId} {
-      // Leitura: apenas o dono do documento.
-      allow read: if isOwner(userId);
+      // Leitura: apenas o dono do documento, e somente com a conta ativa
+      // (Fase 5 — ver `accountActive` acima).
+      allow read: if isOwner(userId) && accountActive(userId);
 
       // Criação: documento integralmente aninhado, com identidade coerente com
       // o token e sem campos de assinatura/internos definidos pelo cliente.
@@ -538,7 +579,12 @@ service cloud.firestore {
       // porém com um couponCode/influencerId arbitrário) no momento da
       // criação da conta, antes de qualquer validação server-side via
       // `validatePromoCode`.
+      // Fase 5: também exige `accountActive(userId)` — sem isso, um token
+      // ainda válido poderia RECRIAR o documento depois que
+      // FIRESTORE_CLEANUP já o removeu, ressuscitando dados de perfil no
+      // meio (ou depois) de uma exclusão em andamento.
       allow create: if isOwner(userId)
+        && accountActive(userId)
         && nestedUserValid(request.resource.data)
         && !('attribution' in request.resource.data)
         && request.resource.data.metadata.role == 'user'
@@ -546,7 +592,14 @@ service cloud.firestore {
         && request.resource.data.subscription.size() == 0
         && !('activeWorkoutId' in request.resource.data.metadata)
         && request.resource.data.metadata.createdAt == request.time
-        && request.resource.data.metadata.updatedAt == request.time;
+        && request.resource.data.metadata.updatedAt == request.time
+        // Only `null` (pending) is ever client-writable — a client cannot
+        // fabricate an already-resolved timestamp to skip its own initial
+        // Paywall. Omitting the key entirely is also rejected here (unlike
+        // `metadataValid`'s general tolerance for absence, which exists for
+        // documents written before this field existed) — every document
+        // `provisionNewUser` creates from now on writes it explicitly.
+        && request.resource.data.metadata.commercialGateResolvedAt == null;
 
       // Atualização: apenas o dono e somente os campos editáveis do perfil.
       // `diff().affectedKeys().hasOnly` impede alterações em campos de conta,
@@ -557,7 +610,7 @@ service cloud.firestore {
       // apenas `preferences.language` e `preferences.units` podem variar;
       // `theme` segue protegido. Escritas legítimas usam caminhos pontuados,
       // preservando todas as preferências irmãs.
-      allow update: if isOwner(userId) && (
+      allow update: if isOwner(userId) && accountActive(userId) && (
         legacyMigrationValid()
         || (
           nestedUserValid(request.resource.data)
@@ -584,11 +637,12 @@ service cloud.firestore {
       // Questionários do usuário (inicial + reavaliações futuras).
       // Cada documento é um snapshot imutável.
       match /questionnaires/{questionnaireId} {
-        // Leitura: apenas o dono do usuário pai.
-        allow read: if isOwner(userId);
+        // Leitura: apenas o dono do usuário pai, com a conta ativa (Fase 5).
+        allow read: if isOwner(userId) && accountActive(userId);
 
         // Criação: apenas o dono, com os campos esperados e válidos.
         allow create: if isOwner(userId)
+          && accountActive(userId)
           && request.resource.data.keys().hasOnly(
                ['answers', 'version', 'createdAt'])
           && request.resource.data.answers is map
@@ -607,9 +661,11 @@ service cloud.firestore {
       // checagem de assinatura por ação aqui (ver o comentário no topo deste
       // arquivo). UPDATE/DELETE permanecem `if false` para todos.
       match /assessments/{assessmentId} {
-        allow read: if isOwner(userId);
+        // Fase 5: leitura/criação também exigem accountActive(userId).
+        allow read: if isOwner(userId) && accountActive(userId);
 
         allow create: if isOwner(userId)
+          && accountActive(userId)
           && assessmentCommonValid()
           && (guidedAssessmentValid() || importedAssessmentValid());
 
@@ -623,10 +679,11 @@ service cloud.firestore {
       //
       // Autorização é ownership puro, pelo mesmo motivo das avaliações acima.
       match /progressPhotos/{photoId} {
-        allow read: if isOwner(userId);
-        allow create: if isOwner(userId) && progressPhotoValid(userId, photoId);
+        // Fase 5: leitura/criação/exclusão também exigem accountActive(userId).
+        allow read: if isOwner(userId) && accountActive(userId);
+        allow create: if isOwner(userId) && accountActive(userId) && progressPhotoValid(userId, photoId);
         allow update: if false;
-        allow delete: if isOwner(userId);
+        allow delete: if isOwner(userId) && accountActive(userId);
       }
 
       // Material criptográfico do Photo Vault (wrappedVaultKey e versões).
@@ -686,10 +743,89 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Fase 4/5 account-deletion workflow state
+    // (functions/src/accountDeletion/{repository,activeAccountGuard}.ts).
+    // Backend-only in both directions: the client never creates, reads, or
+    // polls its own deletion record/lock through Firestore directly — a
+    // future status-check UI would need its OWN minimal, explicit callable
+    // contract (not implemented yet), never a direct read of these paths.
+    // `accountActive()` above reads `accountDeletionLocks/{userId}` via
+    // `exists()`, which does not require (and is unaffected by) an `allow
+    // read` rule here — these blocks exist to make the deny explicit and
+    // documented, matching `promoCodes`/`couponRedemptions` above, not to
+    // enable the `exists()` check.
+    match /accountDeletionLocks/{uid} {
+      allow read, write: if false;
+    }
+    match /accountDeletions/{deletionId} {
+      allow read, write: if false;
+
+      match /{subcollection=**} {
+        allow read, write: if false;
+      }
+    }
+
+    // ── Biblioteca oficial de exercícios (docs/27_biblioteca_de_exercicios.md) ─
+    // Conteúdo administrado: o script `scripts/seedExercises.ts` (Admin SDK,
+    // ignora estas regras) e, a partir do painel `ajfit-admin`, um admin
+    // autenticado (`isAdmin()` — mesmo mecanismo já usado por
+    // `supportTickets` acima: `users/{uid}.metadata.role == 'admin'`).
+    // Leitura liberada para qualquer usuário autenticado; a lista em si não
+    // é dado sensível e é necessária para exibir/gerar treinos e permitir
+    // substituição de exercícios.
+    //
+    // `exerciseWriteValid` valida identidade (id/slug == id do documento) e
+    // os poucos enums baratos de checar (status/difficulty). Não duplica o
+    // dicionário inteiro de taxonomia (músculos, padrões de movimento,
+    // equipamentos etc. — dezenas de valores em `src/types/exercise.ts`)
+    // aqui: o gate real de "quem escreve" já é `isAdmin()`, e a validação
+    // completa de taxonomia é feita no formulário do painel
+    // (`exerciseValidation.ts`, reaproveitado lá). Duplicar tudo aqui seria
+    // alto custo de manutenção por um ganho de segurança marginal, dado que
+    // só um admin autenticado chega a este `write` — mesmo trade-off que
+    // `supportTicketValid` já adota para campos operacionais.
+    function exerciseWriteValid(exerciseId) {
+      let d = request.resource.data;
+      // Os 79 documentos criados pelo seed histórico usam o document id
+      // como identidade e não persistem body.id. Documentos novos do painel
+      // podem conter o campo duplicado; quando presente, ele continua preso
+      // ao mesmo exerciseId e não pode ser falsificado em updates.
+      return d.get('id', exerciseId) == exerciseId
+        && d.slug == exerciseId
+        && d.status in ['active', 'inactive', 'draft']
+        && d.difficulty in ['beginner', 'intermediate', 'advanced']
+        && d.name is map
+        && d.name.keys().hasAll(['ptBR', 'en', 'es'])
+        && d.metadata is map
+        && d.metadata.updatedAt == request.time;
+    }
+
+    match /exercises/{exerciseId} {
+      allow read: if isSignedIn();
+
+      allow create: if isAdmin()
+        && exerciseWriteValid(exerciseId)
+        && request.resource.data.metadata.createdAt == request.time
+        && request.resource.data.metadata.version == 1;
+
+      // `createdAt`/`version` imutáveis a partir da Rule: o cliente nunca
+      // reescreve o histórico, e isso também bloqueia por construção uma
+      // tentativa de "criar" sobre um id que já existe com dados diferentes
+      // (createdAt novo != createdAt armazenado ⇒ rejeitado como update).
+      allow update: if isAdmin()
+        && exerciseWriteValid(exerciseId)
+        && request.resource.data.metadata.createdAt == resource.data.metadata.createdAt
+        && request.resource.data.metadata.version == resource.data.metadata.version;
+
+      // Exercícios podem ser referenciados por histórico de treino — sem
+      // hard delete nesta fase (docs/27 §8: desativação via status).
+      allow delete: if false;
+    }
+
     // ── Deny all undocumented collections ─────────────────────────────────
-    // Coleções de sistema (exercises, workout_templates, treinos do usuário,
-    // etc.) ainda não têm contrato de regras aprovado — negar por padrão até
-    // definição do Agente de Segurança/Arquiteto.
+    // Coleções de sistema (workout_templates, treinos do usuário, etc.) ainda
+    // não têm contrato de regras aprovado — negar por padrão até definição do
+    // Agente de Segurança/Arquiteto.
     match /{document=**} {
       allow read, write: if false;
     }

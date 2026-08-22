@@ -1,6 +1,7 @@
 import { getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth, type Auth } from 'firebase-admin/auth';
 import { getFirestore, type Firestore } from 'firebase-admin/firestore';
+import { getStorage, type Storage } from 'firebase-admin/storage';
 
 /**
  * Centralized Firebase Admin setup, mirroring src/lib/firebase.ts on the
@@ -22,3 +23,5 @@ if (getApps().length === 0) {
 
 export const db: Firestore = getFirestore();
 export const auth: Auth = getAuth();
+/** Fase 7 — Storage Cleanup Engine. Same Application Default Credentials, no bucket name hardcoded here (the default bucket is resolved from the app's config). */
+export const storage: Storage = getStorage();

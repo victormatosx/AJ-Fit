@@ -20,6 +20,7 @@ import {
   AssessmentHistoryRow,
 } from '../components/fitness/AssessmentHistoryCard';
 import { useTheme } from '../theme';
+import { radii, sizes, spacing } from '../theme/tokens';
 import { useAuth } from '../state/AuthContext';
 import { useAssessments, type SaveOutcome } from '../hooks/useAssessments';
 import { usePremiumCapabilities } from '../hooks/usePremiumCapabilities';
@@ -131,6 +132,7 @@ export function AssessmentScreen({ onBack }: { onBack: () => void }) {
   // (Fase 3 defense-in-depth, intentionally kept).
   const [showGuided, setShowGuided] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [showAssessmentActions, setShowAssessmentActions] = useState(false);
   const [showFullHistory, setShowFullHistory] = useState(false);
   const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
 
@@ -196,14 +198,20 @@ export function AssessmentScreen({ onBack }: { onBack: () => void }) {
   }));
   const visibleHistoryRows = showFullHistory ? historyRows : historyRows.slice(0, 3);
 
+  // The original entry callbacks stay unchanged. Once either flow opens, the
+  // compact selector is dismissed so returning from a form lands on the dashboard.
+  useEffect(() => {
+    if (showGuided || showImport) setShowAssessmentActions(false);
+  }, [showGuided, showImport]);
+
   return (
     <ScreenBg>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <View
           style={{
-            paddingHorizontal: 22,
-            paddingBottom: 8,
-            paddingTop: 12,
+            paddingHorizontal: sizes.screenGutter,
+            paddingBottom: spacing[2],
+            paddingTop: spacing[3],
             flexDirection: 'row',
             alignItems: 'center',
             gap: 12,
@@ -214,22 +222,40 @@ export function AssessmentScreen({ onBack }: { onBack: () => void }) {
             accessibilityRole="button"
             accessibilityLabel={t('common:actions.back')}
             style={{
-              width: 38,
-              height: 38,
-              borderRadius: 10,
-              backgroundColor: theme.colors.controlBackground,
+              width: 44,
+              height: 44,
+              borderRadius: radii.control,
+              backgroundColor: theme.colors.surfaceRaised,
               borderWidth: 1,
-              borderColor: theme.colors.controlBorder,
+              borderColor: theme.colors.border,
               alignItems: 'center',
               justifyContent: 'center',
             }}
           >
-            <Icon name="arrow-left" size={17} color={theme.colors.iconStrong} />
+            <Icon name="arrow-left" size={17} color={theme.colors.textSecondary} />
           </Pressable>
           <View style={{ flex: 1, alignItems: 'center' }}>
             <MonoLabel>{t('header.title').toUpperCase()}</MonoLabel>
           </View>
-          <View style={{ width: 38 }} />
+          <Pressable
+            onPress={() => setShowAssessmentActions(true)}
+            accessibilityRole="button"
+            accessibilityLabel={t('assessment:accessibility.addAssessment')}
+            hitSlop={4}
+            style={({ pressed }) => ({
+              width: 44,
+              height: 44,
+              borderRadius: radii.control,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: pressed ? theme.colors.accentHi : theme.colors.accent,
+              borderWidth: 1,
+              borderColor: theme.colors.accentHi,
+              transform: [{ scale: pressed ? 0.96 : 1 }],
+            })}
+          >
+            <Icon name="plus" size={20} color={theme.colors.text} stroke={2.2} />
+          </Pressable>
         </View>
 
         {error ? (
@@ -274,9 +300,11 @@ export function AssessmentScreen({ onBack }: { onBack: () => void }) {
             </Text>
           </View>
         ) : (
-        <ScrollView contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
-          {/* RESUMO */}
-          <View style={{ paddingHorizontal: 22, paddingTop: 10 }}>
+        <ScrollView contentContainerStyle={{ paddingBottom: spacing[10] }} showsVerticalScrollIndicator={false}>
+          {hasAssessments ? (
+          <>
+          {/* ESTADO ATUAL */}
+          <View style={{ paddingHorizontal: sizes.screenGutter, paddingTop: spacing[3] }}>
             <PhysicalAssessmentSummaryCard
               weight={latest?.weight ?? null}
               bodyFat={latest?.bodyFat ?? null}
@@ -290,7 +318,7 @@ export function AssessmentScreen({ onBack }: { onBack: () => void }) {
             />
           </View>
 
-          {/* EVOLUÇÃO */}
+          {/* EVOLUÇÃO — conectada ao snapshot, sem bloco intermediário de ações. */}
           <AssessmentSection title={t('assessment:sections.evolution').toUpperCase()}>
             <AssessmentEvolutionCard
               hasPrevious={!!evolutionSincePrevious}
@@ -302,40 +330,91 @@ export function AssessmentScreen({ onBack }: { onBack: () => void }) {
               onViewHistory={() => setShowFullHistory(true)}
             />
           </AssessmentSection>
-
-          {/* ADICIONAR AVALIAÇÃO */}
-          <AssessmentSection
-            title={t('assessment:sections.add').toUpperCase()}
-            style={{ paddingTop: 22 }}
-          >
-            <AssessmentActionCard
-              onGuided={() => setShowGuided(true)}
-              onImport={() => setShowImport(true)}
-            />
-          </AssessmentSection>
+          </>
+          ) : null}
 
           {/* HISTÓRICO */}
           <AssessmentSection
             title={t('assessment:sections.history').toUpperCase()}
-            right={<MonoLabel>{t('assessment:history.records', { count: assessments.length }).toUpperCase()}</MonoLabel>}
+            style={{ paddingTop: hasAssessments ? spacing[8] : spacing[5] }}
+            right={
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing[3] }}>
+                <MonoLabel size={9}>
+                  {t('assessment:history.records', { count: assessments.length }).toUpperCase()}
+                </MonoLabel>
+                {hasAssessments ? (
+                  <Pressable
+                    onPress={() => setShowAssessmentActions(true)}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('assessment:accessibility.addAssessment')}
+                    hitSlop={4}
+                    style={({ pressed }) => ({
+                      width: 44,
+                      height: 44,
+                      borderRadius: radii.control,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: pressed ? theme.colors.surfacePressed : 'transparent',
+                      transform: [{ scale: pressed ? 0.96 : 1 }],
+                    })}
+                  >
+                    <Icon name="plus" size={20} color={theme.colors.accentHi} stroke={2.2} />
+                  </Pressable>
+                ) : null}
+              </View>
+            }
           >
             {assessments.length === 0 ? (
-              <Card style={{ padding: 32, alignItems: 'center' }}>
-                <Icon name="chart" size={26} color={theme.colors.emptyIcon} />
-                <Text style={{ fontFamily: theme.fonts.uiBold, fontSize: 14, color: theme.colors.textPrimary, marginTop: 10 }}>
+              <Card style={{ padding: spacing[8], alignItems: 'center' }}>
+                <View
+                  style={{
+                    width: 48,
+                    height: 48,
+                    borderRadius: radii.lg,
+                    backgroundColor: theme.colors.accentSoft,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Icon name="chart" size={22} color={theme.colors.accentHi} />
+                </View>
+                <Text style={{ fontFamily: theme.fonts.uiBold, fontSize: 15, color: theme.colors.text, marginTop: spacing[4] }}>
                   {t('history.empty.title')}
                 </Text>
                 <Text
                   style={{
                     fontFamily: theme.fonts.ui,
                     fontSize: 12.5,
-                    color: theme.colors.textMuted,
-                    marginTop: 4,
+                    lineHeight: 18,
+                    color: theme.colors.mute,
+                    marginTop: spacing[1.5],
                     textAlign: 'center',
                   }}
                 >
                   {t('history.empty.message')}
                 </Text>
+                <Pressable
+                  onPress={() => setShowAssessmentActions(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('assessment:accessibility.addFirstAssessment')}
+                  style={({ pressed }) => ({
+                    minHeight: 48,
+                    marginTop: spacing[6],
+                    paddingHorizontal: spacing[5],
+                    borderRadius: radii.md,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: spacing[2],
+                    backgroundColor: pressed ? theme.colors.accentHi : theme.colors.accent,
+                    opacity: pressed ? 0.9 : 1,
+                  })}
+                >
+                  <Icon name="plus" size={18} color={theme.colors.text} stroke={2.2} />
+                  <Text style={{ fontFamily: theme.fonts.uiSemi, fontSize: 14, color: theme.colors.text }}>
+                    {t('assessment:actions.firstAssessment')}
+                  </Text>
+                </Pressable>
               </Card>
             ) : (
               <>
@@ -370,6 +449,13 @@ export function AssessmentScreen({ onBack }: { onBack: () => void }) {
         </ScrollView>
         )}
       </SafeAreaView>
+
+      <AssessmentActionCard
+        visible={showAssessmentActions}
+        onClose={() => setShowAssessmentActions(false)}
+        onGuided={() => setShowGuided(true)}
+        onImport={() => setShowImport(true)}
+      />
 
       {showGuided && (
         <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 40 }}>
