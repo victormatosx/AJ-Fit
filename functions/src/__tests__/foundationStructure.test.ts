@@ -84,7 +84,9 @@ describe('Photo Vault backend foundation — Phase 3 structural guarantees', () 
 
     expect(exported).toEqual([
       'adminCreatePromoCode',
+      'adminGetUser',
       'adminListPromoCodes',
+      'adminListUsers',
       'adminSetPromoCodeActive',
       'adminUpdatePromoCode',
       'authorizePromoPurchase',

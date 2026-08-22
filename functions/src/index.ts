@@ -20,6 +20,7 @@ import { confirmCommercialGate } from './billing/confirmCommercialGate';
 import { requestAccountDeletion } from './accountDeletion/requestAccountDeletion';
 import { cleanupPendingAccountDeletions } from './accountDeletion/reconciliation/scheduler';
 import { onAccountDeletionRequested } from './accountDeletion/immediateDispatch';
+import { adminGetUserHandler, adminListUsersHandler } from './adminUsers/adminUsers';
 
 /**
  * AJ Fit Cloud Functions entry point.
@@ -92,6 +93,14 @@ export const adminListPromoCodes = onCall(adminListPromoCodesHandler);
 export const adminCreatePromoCode = onCall(adminCreatePromoCodeHandler);
 export const adminUpdatePromoCode = onCall(adminUpdatePromoCodeHandler);
 export const adminSetPromoCodeActive = onCall(adminSetPromoCodeActiveHandler);
+
+/**
+ * Read-only user-management surface for ajfit-admin. Firestore Rules remain
+ * owner-only for users: every request is authorized again on the backend and
+ * reads Auth/Firestore through the Admin SDK. No mutation endpoint is exposed.
+ */
+export const adminListUsers = onCall(adminListUsersHandler);
+export const adminGetUser = onCall(adminGetUserHandler);
 
 // Only authenticated, policy-enforcing Photo Vault callables are exported.
 // The KMS wrap/unwrap layer stays internal and has no endpoint of its own.
