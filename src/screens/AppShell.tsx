@@ -24,12 +24,6 @@ import { AssessmentScreen } from './AssessmentScreen';
 import { SettingsScreen } from './SettingsScreen';
 import { SecurityScreen } from './SecurityScreen';
 import { ChangePasswordScreen } from './ChangePasswordScreen';
-import { TotpEnrollmentScreen } from './TotpEnrollmentScreen';
-import { TwoFactorSettingsScreen } from './TwoFactorSettingsScreen';
-import {
-  RecoveryCodesScreen,
-  type RecoveryCodesOrigin,
-} from './RecoveryCodesScreen';
 import { EditProfileScreen } from './EditProfileScreen';
 import { PaywallScreen } from './PaywallScreen';
 import { SubscriptionCenterScreen } from './SubscriptionCenterScreen';
@@ -62,7 +56,6 @@ const FULL_BLEED = StyleSheet.create({
   overlayZ40: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 40 },
   overlayZ50: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 50 },
   overlayZ60: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 60 },
-  overlayZ70: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 70 },
 });
 
 /**
@@ -104,13 +97,6 @@ function AppShellContent({
   const [showSettings, setShowSettings] = useState(false);
   const [showSecurity, setShowSecurity] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
-  const [showTwoFactor, setShowTwoFactor] = useState(false);
-  const [showTotpEnrollment, setShowTotpEnrollment] = useState(false);
-  const [totpRefreshToken, setTotpRefreshToken] = useState(0);
-  // null means the recovery-codes screen is closed. The origin only changes
-  // copy and whether the flow reauthenticates before generating.
-  const [recoveryCodesOrigin, setRecoveryCodesOrigin] =
-    useState<RecoveryCodesOrigin | null>(null);
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showSubscriptionCenter, setShowSubscriptionCenter] = useState(false);
   const [showWorkoutConfirmation, setShowWorkoutConfirmation] = useState(false);
@@ -133,9 +119,6 @@ function AppShellContent({
     showSettings ||
     showSecurity ||
     showChangePassword ||
-    showTwoFactor ||
-    showTotpEnrollment ||
-    recoveryCodesOrigin !== null ||
     showEditProfile ||
     showSubscriptionCenter ||
     showPremium ||
@@ -301,19 +284,14 @@ function AppShellContent({
         <SecurityScreen
           onBack={() => setShowSecurity(false)}
           onOpenChangePassword={canChangePassword ? () => setShowChangePassword(true) : undefined}
-          onOpenTwoFactor={() => setShowTwoFactor(true)}
         />
       </PersistentScreen>
       {/*
-        ChangePassword/TwoFactorSettings/TotpEnrollment (docs/23_navegacao_
-        e_lifecycle.md §10): the visual shell is prewarmed + materialized
-        like every other screen above, but each screen wipes its own
-        sensitive state (password fields, TOTP secret/QR, reauth challenge)
-        the moment it deactivates — see the `useScreenFocusEffect` cleanup
-        in each screen's source, which reuses that screen's own already-
-        tested "cancel/reset" function rather than a new bespoke one. No
-        password/secret/challenge is ever alive while these are
-        materialized-but-inactive.
+        ChangePassword (docs/23_navegacao_e_lifecycle.md §10): the visual
+        shell is prewarmed + materialized like every other screen above, but
+        the screen wipes its password fields when it deactivates through its
+        `useScreenFocusEffect` cleanup. No password remains alive while the
+        screen is materialized but inactive.
       */}
       <PersistentScreen
         active={showChangePassword && canChangePassword}
@@ -322,49 +300,6 @@ function AppShellContent({
         inactiveMode="materialized"
       >
         <ChangePasswordScreen onBack={() => setShowChangePassword(false)} />
-      </PersistentScreen>
-      <PersistentScreen
-        active={showTwoFactor}
-        prewarm={prewarmed.TWO_FACTOR_SETTINGS}
-        activeStyle={FULL_BLEED.overlayZ60}
-        inactiveMode="materialized"
-      >
-        <TwoFactorSettingsScreen
-          onBack={() => setShowTwoFactor(false)}
-          onOpenEnrollment={() => setShowTotpEnrollment(true)}
-          onRegenerateRecoveryCodes={() => setRecoveryCodesOrigin('regeneration')}
-          refreshToken={totpRefreshToken}
-        />
-      </PersistentScreen>
-      <PersistentScreen
-        active={showTotpEnrollment}
-        prewarm={prewarmed.TOTP_ENROLLMENT}
-        activeStyle={FULL_BLEED.overlayZ70}
-        inactiveMode="materialized"
-      >
-        <TotpEnrollmentScreen
-          onBack={() => setShowTotpEnrollment(false)}
-          onCompleted={() => {
-            setShowTotpEnrollment(false);
-            setTotpRefreshToken((value) => value + 1);
-            // Recovery codes are generated only once the Firebase enrollment
-            // has actually completed — never while the QR is merely on screen,
-            // which the user may abandon.
-            setRecoveryCodesOrigin('enrollment');
-          }}
-        />
-      </PersistentScreen>
-      <PersistentScreen
-        active={recoveryCodesOrigin !== null}
-        prewarm={prewarmed.RECOVERY_CODES}
-        activeStyle={FULL_BLEED.overlayZ70}
-        inactiveMode="materialized"
-      >
-        <RecoveryCodesScreen
-          origin={recoveryCodesOrigin ?? 'enrollment'}
-          onDone={() => setRecoveryCodesOrigin(null)}
-          onDismiss={() => setRecoveryCodesOrigin(null)}
-        />
       </PersistentScreen>
       <PersistentScreen
         active={showEditProfile}

@@ -9,7 +9,6 @@ import {
 } from 'firebase/auth';
 import { auth } from '../lib/firebase';
 import { clearSecureAuthSession } from '../lib/secureAuthStorage';
-import { isMultiFactorAuthRequired } from '../lib/mfaTotp';
 // Imported from the storage layer, not from services/photoVault: logout has
 // no business pulling the callable-functions client into its module graph.
 import { deleteVaultKey } from '../lib/photoVaultKeyStorage';
@@ -116,10 +115,6 @@ export async function signInWithEmail(
     );
     return user;
   } catch (err) {
-    // getMultiFactorResolver requires the original MultiFactorError, including
-    // its opaque customData. Every non-MFA error keeps the existing friendly
-    // normalization contract.
-    if (isMultiFactorAuthRequired(err)) throw err;
     throw toAuthError(err);
   }
 }

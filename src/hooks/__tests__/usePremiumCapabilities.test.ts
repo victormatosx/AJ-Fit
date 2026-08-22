@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 /**
  * Fase 2 (docs/13_assinaturas_e_billing.md): this suite is source-inspection
- * based like `useTotpMfaLoadingStructure.test.ts` — no component renderer in
+ * based like the other source-inspection suites — no component renderer in
  * this Node-only suite (vitest.config.mts). The behavioral guarantees (pure,
  * deterministic, no independent state) are covered directly, with real
  * inputs, by `src/lib/__tests__/premiumCapabilities.test.ts`; this file only

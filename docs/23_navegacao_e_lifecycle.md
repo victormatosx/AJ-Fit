@@ -9,7 +9,7 @@ em renderização condicional dentro de um único componente React:
 * as 4 tabs principais (`home`, `workout`, `progress`, `profile`) são
   controladas por `tab: TabId` em `src/state/AppState.tsx`;
 * as telas secundárias (Configurações, Segurança, Editar Perfil, Central de
-  Assinatura, Suporte, MFA/TOTP, etc.) são controladas por flags booleanas
+  Assinatura, Suporte etc.) são controladas por flags booleanas
   (`showSettings`, `showSecurity`, ...) ou por uma união discriminada
   (`supportRoute`) locais ao `AppShell`, renderizadas como `View`
   `position: 'absolute'` empilhadas com `zIndex` sobre a tab ativa.
@@ -19,7 +19,7 @@ ou qualquer configuração de navigator — porque não há navigator. Qualquer
 raciocínio sobre esta navegação deve partir do React puro, não de conceitos
 do React Navigation.
 
-**Cobertura atual: 16 de 19 rotas de primeiro nível estão protegidas contra
+**Cobertura atual: 14 de 17 rotas de primeiro nível estão protegidas contra
 o artefato de navegação (seção 6).** Isso não é "global" — 3 rotas continuam
 com o padrão antigo por bloqueio real (decisão de produto pendente,
 segurança, ou estado transacional amplo), mais 2 sub-modais internos de
@@ -195,11 +195,9 @@ final desta rodada:
 | SupportSuccessScreen | overlay (`supportRoute`) | sim | sim | — (sem estado nenhum) | não | `materialized` + prewarm |
 | ProgressPhotosScreen | sub-view de Progress | **não** | não | — | **sim (cofre de fotos)** | ephemeral — bloqueio de segurança real, seção 6.1 |
 | ChangePasswordScreen | overlay | sim | sim | 3 campos de senha via cleanup do `useScreenFocusEffect` (não na ativação) | **sim** | `materialized` + prewarm — shell/segredo separados, seção 10 |
-| TotpEnrollmentScreen | overlay | sim | sim | `enrollment.cancel()` (draft/senha/código) via cleanup do `useScreenFocusEffect` | **sim** | `materialized` + prewarm — shell/segredo separados, seção 10 |
-| TwoFactorSettingsScreen | overlay | sim | sim | `mfa.refresh()` na ativação; `mfa.cancelDisable()` (senha/código/challenge) no cleanup | **sim** | `materialized` + prewarm — shell/segredo separados, seção 10 |
 | PaywallScreen | overlay | não | não | — | **sim (pagamento)** | ephemeral — nunca deve persistir, seção 10 |
 
-**16 telas migradas, 3 permanecem ephemeral** (Workout, ProgressPhotos,
+**14 telas migradas, 3 permanecem ephemeral** (Workout, ProgressPhotos,
 Paywall), mais os 2 sub-modais internos de Assessment.
 
 ### 6.1 — Correção de rota: ProgressPhotosScreen tem bloqueio real de segurança
@@ -310,15 +308,13 @@ presente em `expo/tsconfig.base` (confirmado com `npx tsc --noEmit`).
 export const PREWARM_ROUTE_IDS = [
   'PROGRESS', 'PROFILE', 'SETTINGS', 'SECURITY',
   'ASSESSMENT', 'EDIT_PROFILE', 'CONSISTENCY', 'SUPPORT',
-  'SUBSCRIPTION_CENTER', 'CHANGE_PASSWORD', 'TWO_FACTOR_SETTINGS',
-  'TOTP_ENROLLMENT',
+  'SUBSCRIPTION_CENTER', 'CHANGE_PASSWORD',
 ] as const;
 ```
 
-`CHANGE_PASSWORD`/`TWO_FACTOR_SETTINGS`/`TOTP_ENROLLMENT` are last —
-deliberately, both because they're reached one level deeper (via Security)
-and because prewarming them is only safe *because* nothing sensitive exists
-in the shell until the user actually interacts (seção 10).
+`CHANGE_PASSWORD` é a última rota porque fica um nível mais profundo (via
+Segurança) e seu prewarm só é seguro porque nenhuma senha existe no shell até
+o usuário interagir (seção 10).
 
 `usePrewarmQueue()` (`src/components/navigation/usePrewarmQueue.ts`) é uma
 **única chamada de hook** em `AppShell` que consome essa lista e devolve
@@ -390,31 +386,15 @@ compartilhado entre telas que possa corromper.
   explicitamente**. Nunca depender de unmount para "começar limpo" — ver a
   seção 5 (`useScreenFocusEffect` + reset por identidade de prop quando
   aplicável).
-* **Telas sensíveis (migradas) — ChangePassword, TotpEnrollment,
-  TwoFactorSettings:** autorizado explicitamente pelo usuário após esta
-  documentação existir, com a estratégia exatamente como descrita abaixo
-  antes de ser aplicada: **shell visual persiste (`prewarm`+`materialized`),
-  o dado sensível nunca sobrevive à desativação da tela.** Nenhum hook foi
-  alterado — as três telas já expunham a função de "abandonar/limpar" certa,
-  reaproveitada como o cleanup de `useScreenFocusEffect`
+* **Tela sensível migrada — ChangePassword:** usa a estratégia **shell visual
+  persistente (`prewarm`+`materialized`), dado sensível descartado na
+  desativação da tela**, por meio do cleanup de `useScreenFocusEffect`
   (`return () => { ... }`, disparado a cada transição `active → inactive`):
   * `ChangePasswordScreen`: `change.setCurrentPassword('')`,
     `setNewPassword('')`, `setConfirmation('')` — os três já limpam
     `issue`/`succeeded` internamente (`resetFeedback`).
-  * `TotpEnrollmentScreen`: `enrollment.cancel()` — a mesma função que já
-    existia para o botão "cancelar", agora reaproveitada. Limpa `draft`
-    (segredo TOTP + `otpAuthUri`), `currentPassword`, `code`. Cada nova
-    ativação começa um enrollment do zero, nunca retoma um QR/segredo
-    anterior — consistente com o `enrollmentCompletionDeadline` que o
-    backend já impõe.
-  * `TwoFactorSettingsScreen`: `mfa.cancelDisable()` no cleanup —
-    deliberadamente **não** limpa `factors`/`disabled` (não são sensíveis;
-    limpá-los causaria um flash de lista vazia na próxima ativação, exatamente
-    o tipo de artefato que esta arquitetura existe para eliminar). Na
-    ativação, `mfa.refresh()` recarrega a lista de fatores sem apagá-la
-    antes (stale-while-revalidate, sem flash).
-  * `saveLock`/`operationLock`/flags "em andamento" de nenhuma das três
-    telas são forçados — mesma regra do EditProfile/SubscriptionCenter
+  * `saveLock`/`operationLock`/flags "em andamento" não são forçados — mesma
+    regra do EditProfile/SubscriptionCenter
     (seção 6): eles já se autolimpam quando a operação assíncrona real
     termina.
 * **Paywall e ProgressPhotosScreen continuam ephemeral** — a primeira por
@@ -600,7 +580,7 @@ manualmente por tela.
 
 ### 15.10 Telas sensíveis
 
-Para senha, MFA/TOTP, pagamento, autenticação, ou qualquer sessão de
+Para senha, pagamento, autenticação, ou qualquer sessão de
 segurança (ex.: descriptografia de um cofre — ver ProgressPhotosScreen,
 seção 6.1): **não** aplicar persistência cegamente. Se a tela tem um
 `useEffect` de cleanup no unmount que revoga algo sensível (sessão, chave,
@@ -643,7 +623,7 @@ src/screens/AppShell.tsx                         — fiação real: quais telas 
 
 ## 17. Cobertura e pendências
 
-**16 de 19 rotas de primeiro nível protegidas, mais 2 sub-modais internos de
+**14 de 17 rotas de primeiro nível protegidas, mais 2 sub-modais internos de
 Assessment ainda pendentes.** Não usar "global" enquanto esta lista não
 estiver vazia:
 
@@ -654,10 +634,8 @@ estiver vazia:
 | `PaywallScreen` | Estado transacional amplo (múltiplos `useEffect`, fluxo de compra/restore) — seção 10 |
 | Dois modais internos de `AssessmentScreen` (`GuidedAssessmentModal`/`ImportAssessmentModal`) | Formulários extensos, não auditados para reset explícito nesta rodada |
 
-`ChangePasswordScreen`, `TotpEnrollmentScreen` e `TwoFactorSettingsScreen`
-**foram migradas** nesta rodada (shell persistente, segredo limpo no
-cleanup de `useScreenFocusEffect` — seção 10) após autorização explícita do
-usuário reconhecendo o risco documentado aqui.
+`ChangePasswordScreen` usa shell persistente e limpa as senhas no cleanup de
+`useScreenFocusEffect` (seção 10).
 
 Migrar qualquer uma das restantes exige repetir o processo desta rodada
 (auditoria completa, uma tela por vez, validação em dispositivo real antes

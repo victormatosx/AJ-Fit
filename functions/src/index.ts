@@ -16,7 +16,6 @@ import { backendHealth } from './health/backendHealth';
 import { createVault } from './photoVault/createVault';
 import { recoverVaultKey } from './photoVault/recoverVaultKey';
 import { cleanupPhotoVaultOrphans } from './photoVault/cleanupOrphans';
-import { generateMfaRecoveryCodes } from './mfaRecovery/generateRecoveryCodes';
 
 /**
  * AJ Fit Cloud Functions entry point.
@@ -89,25 +88,3 @@ export const adminSetPromoCodeActive = onCall(adminSetPromoCodeActiveHandler);
 // Only authenticated, policy-enforcing Photo Vault callables are exported.
 // The KMS wrap/unwrap layer stays internal and has no endpoint of its own.
 export { backendHealth, cleanupPhotoVaultOrphans, createVault, recoverVaultKey };
-
-/**
- * Mints a fresh set of MFA recovery codes for the calling user, rotating any
- * previous set (functions/src/mfaRecovery/generateRecoveryCodes.ts).
- *
- * Requires an authenticated caller, authentication no older than 5 minutes,
- * and a TOTP factor already enrolled — recovery codes only exist to replace a
- * second factor the account actually has. The plaintext codes are returned
- * exactly once and are never persisted in any form other than their
- * HMAC-SHA-256 digests; there is deliberately no endpoint that can read them
- * back. `MFA_RECOVERY_PEPPER` is bound at the function definition, so its
- * value materializes only inside this function's runtime.
- *
- * Only GENERATION is exported. Consuming a recovery code and resetting MFA
- * are a later phase and have no endpoint yet — nothing here can remove a
- * second factor or revoke a session.
- *
- * `enforceAppCheck` stays at its default (unset/false), matching every other
- * callable in this file: App Check enforcement is switched on project-wide
- * only after real-device attestation has been validated on both platforms.
- */
-export { generateMfaRecoveryCodes };

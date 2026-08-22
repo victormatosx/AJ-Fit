@@ -4,8 +4,8 @@ import { describe, expect, it } from 'vitest';
 /**
  * Fase 3 (docs/13_assinaturas_e_billing.md): "seus dados continuam seus,
  * Premium é necessário para continuar produzindo/alterando dados fitness".
- * Source-inspection suite (same pattern as
- * `usePremiumCapabilitiesLoadingStructure`/`useTotpMfaLoadingStructure`) —
+ * Source-inspection suite (same pattern as the other capability structure
+ * suites) —
  * no component renderer in this Node-only suite (vitest.config.mts). Runtime
  * behavior of the pure capability resolver is covered by
  * `src/lib/__tests__/premiumCapabilities.test.ts`; this file only proves the

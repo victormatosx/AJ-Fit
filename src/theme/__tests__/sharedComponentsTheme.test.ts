@@ -56,9 +56,6 @@ const PHASE_5_THEME_AWARE_AREAS = [
   'src/screens/ProgressPhotosScreen.tsx',
   'src/screens/EmailVerificationScreen.tsx',
   'src/screens/ChangePasswordScreen.tsx',
-  'src/screens/TotpChallengeScreen.tsx',
-  'src/screens/TotpEnrollmentScreen.tsx',
-  'src/screens/TwoFactorSettingsScreen.tsx',
   'src/screens/OnboardingScreen.tsx',
   'src/screens/OnboardingFunnelScreen.tsx',
   'src/screens/SocialProofScreen.tsx',
@@ -72,7 +69,6 @@ const PHASE_5_THEME_AWARE_AREAS = [
   'src/screens/onboarding/GuidedWorkoutInterstitialScreen.tsx',
   'src/screens/onboarding/EvolutionInterstitialScreen.tsx',
   'src/screens/onboarding/AjFitProgressInterstitialScreen.tsx',
-  'src/components/auth/ReauthenticationMethods.tsx',
   'src/components/ui/PhoneFrame.tsx',
   'src/components/fitness/ExerciseGif.tsx',
   'src/components/onboarding/QuestionStepScreen.tsx',
@@ -214,14 +210,6 @@ describe('Phase 5 remaining visible UI coverage', () => {
     expect(chrome).toContain('theme.colors');
     expect(dayRow).toContain("colors={['transparent', 'rgba(2,0,16,0.7)']}");
     expect(poster).not.toContain('useTheme');
-  });
-
-  it('preserves interoperable TOTP QR contrast independently from app chrome', () => {
-    const enrollment = readFileSync('src/screens/TotpEnrollmentScreen.tsx', 'utf8');
-
-    expect(enrollment).toContain('color="#020010"');
-    expect(enrollment).toContain('backgroundColor="#ffffff"');
-    expect(enrollment).toContain("backgroundColor: '#ffffff'");
   });
 
   it('does not introduce system appearance into app or onboarding theme selection', () => {

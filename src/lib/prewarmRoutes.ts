@@ -5,10 +5,9 @@
  * `inactiveMode="materialized"`, 2) it's been audited per the doc's process
  * (no sensitive/transactional state, or that state has its own explicit
  * activation lifecycle — see AssessmentScreen/EditProfileScreen for the
- * non-sensitive pattern, and ChangePasswordScreen/TwoFactorSettingsScreen/
- * TotpEnrollmentScreen for the sensitive-data variant: the *shell* is safe
- * to prewarm because no password/secret/challenge exists until the user
- * actually interacts, and every sensitive field is wiped on deactivation).
+ * non-sensitive pattern, and ChangePasswordScreen for the sensitive-data
+ * variant: the *shell* is safe to prewarm because no password exists until
+ * the user interacts, and every sensitive field is wiped on deactivation).
  * Don't add a screen here just to "cover" it — see the doc's per-screen
  * audit before extending this list.
  *
@@ -29,9 +28,6 @@ export const PREWARM_ROUTE_IDS = [
   'SUPPORT',
   'SUBSCRIPTION_CENTER',
   'CHANGE_PASSWORD',
-  'TWO_FACTOR_SETTINGS',
-  'TOTP_ENROLLMENT',
-  'RECOVERY_CODES',
 ] as const;
 
 export type PrewarmRouteId = (typeof PREWARM_ROUTE_IDS)[number];

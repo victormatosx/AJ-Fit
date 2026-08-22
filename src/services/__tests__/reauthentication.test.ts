@@ -140,22 +140,6 @@ describe('current-user reauthentication', () => {
     ).rejects.toMatchObject({ issue: 'userMismatch' });
   });
 
-  it('preserves the original MFA error only when a caller must resolve it', async () => {
-    mocks.auth.currentUser = user('user-1', ['google.com']);
-    const original = {
-      code: 'auth/multi-factor-auth-required',
-      customData: { opaque: true },
-    };
-    mocks.reauthenticate.mockRejectedValue(original);
-
-    await expect(
-      reauthenticateCurrentUser(
-        { provider: 'google' },
-        { preserveMultiFactorError: true },
-      ),
-    ).rejects.toBe(original);
-  });
-
   it('normalizes an invalid federated credential without exposing it', async () => {
     mocks.auth.currentUser = user('user-1', ['apple.com']);
     mocks.reauthenticate.mockRejectedValue({ code: 'auth/invalid-credential' });

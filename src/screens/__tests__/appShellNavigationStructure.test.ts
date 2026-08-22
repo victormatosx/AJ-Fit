@@ -28,8 +28,6 @@ const MIGRATED_FLAGS = [
   'showSecurity',
   'showEditProfile',
   'showSubscriptionCenter',
-  'showTwoFactor',
-  'showTotpEnrollment',
 ];
 
 /** Screens still ephemeral — sensitive/transactional, per docs/23 §10/§17. */
@@ -101,8 +99,6 @@ describe('AppShell centralized prewarm queue', () => {
         'active={showChangePassword && canChangePassword}',
         'prewarm={prewarmed.CHANGE_PASSWORD}',
       ],
-      ['active={showTwoFactor}', 'prewarm={prewarmed.TWO_FACTOR_SETTINGS}'],
-      ['active={showTotpEnrollment}', 'prewarm={prewarmed.TOTP_ENROLLMENT}'],
     ];
     for (const [activeProp, prewarmProp] of cases) {
       expect(blockBetween(activeProp)).toContain(prewarmProp);
@@ -177,16 +173,11 @@ describe('AppShell sensitive-screen shell/secret separation (docs/23 §10)', () 
     // in migratedScreensLifecycle.test.ts) — AppShell only needs to wire
     // active/prewarm/materialized like any other screen, never touch
     // password/secret state directly.
-    for (const activeProp of [
-      'active={showChangePassword && canChangePassword}',
-      'active={showTwoFactor}',
-      'active={showTotpEnrollment}',
-    ]) {
+    for (const activeProp of ['active={showChangePassword && canChangePassword}']) {
       const block = blockBetween(activeProp);
-      // Screen *names* legitimately contain "password"/"secret" — what must
-      // never appear here is AppShell reading or writing the sensitive
-      // state itself (that stays fully inside each screen's own hook).
-      expect(block).not.toMatch(/currentPassword|newPassword|secretKey|otpAuthUri|reauthCode/);
+      // The screen name legitimately contains "password" — AppShell must not
+      // read or write its sensitive state (that stays inside the screen hook).
+      expect(block).not.toMatch(/currentPassword|newPassword/);
     }
   });
 });
@@ -221,9 +212,6 @@ describe('AppShell overlay geometry stability', () => {
     );
     expect(APP_SHELL_CODE).toContain(
       "overlayZ60: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 60 }",
-    );
-    expect(APP_SHELL_CODE).toContain(
-      "overlayZ70: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 70 }",
     );
   });
 });

@@ -18,8 +18,7 @@
     "logs": "firebase functions:log",
     "logs:production": "firebase functions:log --project production",
     "deploy:production": "npm run build && firebase deploy --only functions --project production",
-    "deploy:staging": "npm run build && firebase deploy --only functions --project staging",
-    "test:integration": "vitest run --config vitest.integration.config.mts"
+    "deploy:staging": "npm run build && firebase deploy --only functions --project staging"
   },
   "dependencies": {
     "@google-cloud/kms": "^6.0.0",

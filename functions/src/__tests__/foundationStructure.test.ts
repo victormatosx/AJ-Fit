@@ -91,10 +91,6 @@ describe('Photo Vault backend foundation — Phase 3 structural guarantees', () 
       'backendHealth',
       'cleanupPhotoVaultOrphans',
       'createVault',
-      // MFA recovery: GENERATION only. Consuming a code and resetting a second
-      // factor are a later phase and must never appear in this list without a
-      // deliberate review.
-      'generateMfaRecoveryCodes',
       'recoverVaultKey',
       'revenueCatWebhook',
       'validatePromoCode',

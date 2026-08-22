@@ -45,7 +45,6 @@
     "items": {
       "changePassword": "Change password",
       "biometrics": "Biometrics",
-      "twoFactor": "Two-step verification",
       "currentDevice": "Current device",
       "currentDeviceDescription": "This device is connected.",
       "manageDevices": "Manage devices",
@@ -55,109 +54,6 @@
       "deleteAccount": "Delete account"
     },
     "safetyZoneDescription": "Keep your account protected by regularly reviewing your security settings.",
-    "twoFactor": {
-      "title": "Two-step verification",
-      "description": "Add a second layer of security to your account with an authenticator app.",
-      "status": {
-        "label": "Status",
-        "loading": "Checking...",
-        "enabled": "Enabled",
-        "disabled": "Disabled",
-        "unavailable": "Unavailable"
-      },
-      "method": {
-        "authenticator": "Authenticator app"
-      },
-      "enrolledAt": "Set up on {{date}}",
-      "benefits": {
-        "authenticator": {
-          "title": "Authenticator codes",
-          "description": "Use your preferred authenticator app to confirm access."
-        },
-        "offline": {
-          "title": "Works offline",
-          "description": "Codes are generated on your device and do not rely on SMS."
-        }
-      },
-      "actions": {
-        "enable": "Enable two-step verification",
-        "disable": "Disable verification",
-        "continue": "Continue",
-        "cancel": "Cancel",
-        "retry": "Try again"
-      },
-      "disableConfirmation": {
-        "title": "Disable verification?",
-        "message": "Disabling two-step verification will reduce your account's security."
-      },
-      "reauth": {
-        "title": "Confirm your identity",
-        "enableDescription": "Choose a method linked to your account to confirm your identity before setting up the authenticator.",
-        "disableDescription": "Choose a method linked to your account to confirm your identity and disable this protection.",
-        "codeDescription": "Now enter the current code from your authenticator app to finish disabling verification.",
-        "passwordLabel": "Current password",
-        "passwordPlaceholder": "Enter your current password",
-        "togglePassword": "Show or hide current password",
-        "continueWithPassword": "Confirm with password",
-        "continueWithGoogle": "Continue with Google",
-        "continueWithApple": "Continue with Apple",
-        "unavailableTitle": "Confirmation unavailable"
-      },
-      "enrollment": {
-        "title": "Set up your authenticator",
-        "description": "Scan the QR code or use the key below.",
-        "scanQr": "Scan with your authenticator app.",
-        "qrAccessibility": "QR code for setting up two-step verification",
-        "manualKey": "Setup key",
-        "copyKey": "Copy key",
-        "keyCopied": "Key copied",
-        "openAuthenticator": "Open authenticator app",
-        "codeLabel": "Verification code",
-        "codePlaceholder": "000000",
-        "confirm": "Confirm and enable",
-        "successTitle": "Verification enabled",
-        "successDescription": "Your account is now protected with an authenticator app.",
-        "done": "Done"
-      },
-      "feedback": {
-        "disabled": "Two-step verification disabled.",
-        "multipleFactors": "More than one authenticator is enrolled. Choose the one you want to disable."
-      },
-      "errors": {
-        "userMissing": "Your session is unavailable. Sign in again and retry.",
-        "emailUnverified": "Verify your email before enabling two-step verification.",
-        "passwordRequired": "Enter your current password.",
-        "currentPasswordIncorrect": "Your current password is incorrect. Check it and try again.",
-        "reauthProviderUnsupported": "Identity confirmation is not available for this account yet.",
-        "reauthCancelled": "Identity confirmation was cancelled. No changes were made.",
-        "reauthFailed": "We could not confirm your identity. Try again with the same account.",
-        "userMismatch": "The selected account is different from the account open in AJ Fit. No changes were made.",
-        "providerUnavailable": "This confirmation method is not available on this device.",
-        "providerBusy": "An identity confirmation is already in progress.",
-        "identityTokenMissing": "The provider did not complete confirmation. Try again.",
-        "codeRequired": "Enter the code from your authenticator app.",
-        "codeNonNumeric": "The code must contain numbers only.",
-        "codeLength": "Enter all 6 digits of the code.",
-        "invalidCode": "Incorrect code. Use the current authenticator code and try again.",
-        "expiredCode": "That code expired. Use the new code shown in your authenticator.",
-        "flowExpired": "This setup expired. Cancel and start again.",
-        "recentLoginRequired": "Confirm your identity again to continue.",
-        "sessionExpired": "Your session expired. Sign in again and retry.",
-        "network": "Unable to connect. Check your internet connection and try again.",
-        "tooManyRequests": "Too many attempts were made. Wait a moment and try again.",
-        "factorNotFound": "This authenticator was not found. Refresh the screen and try again.",
-        "factorAlreadyEnrolled": "This authenticator is already enrolled.",
-        "factorLimit": "Your account has reached the enrolled authenticator limit.",
-        "unsupportedFirstFactor": "This sign-in method cannot set up an authenticator here yet.",
-        "alreadyEnabled": "Two-step verification is already enabled for this account.",
-        "multipleFactors": "More than one authenticator is enrolled. Select a specific factor.",
-        "operationNotAllowed": "TOTP MFA is not enabled in this Firebase project's configuration.",
-        "authenticatorUnavailable": "No authenticator app could be opened. Copy the key and set it up manually.",
-        "clipboardFailed": "The key could not be copied. Select and copy it manually.",
-        "resolverWithoutHints": "No enrolled authenticator was found for this sign-in.",
-        "generic": "Unable to complete this right now. Try again."
-      }
-    },
     "changePassword": {
       "screenTitle": "Change password",
       "description": "Confirm your current password before setting a new password for your account.",
@@ -193,44 +89,6 @@
       },
       "accessibility": {
         "toggleVisibility": "Show or hide {{field}}"
-      }
-    },
-    "recoveryCodes": {
-      "title": "Recovery codes",
-      "description": "Store these codes somewhere safe. Each code can be used only once if you lose access to your authenticator app.",
-      "warningOneTime": "You will not be able to view these codes again.",
-      "generating": "Generating your recovery codes…",
-      "copyAll": "Copy all",
-      "copied": "Codes copied",
-      "clipboardNotice": "The codes were copied. Avoid leaving them on the clipboard longer than necessary.",
-      "confirmSaved": "I saved my recovery codes somewhere safe.",
-      "done": "Done",
-      "leaveTitle": "Leave without saving the codes?",
-      "leaveDescription": "If you leave now, these codes cannot be shown again.",
-      "leaveStay": "Stay on this screen",
-      "leaveConfirm": "Leave anyway",
-      "regenerate": {
-        "action": "Generate new recovery codes",
-        "confirmTitle": "Generate new codes?",
-        "confirmDescription": "Generating new codes will invalidate all your previous recovery codes.",
-        "confirm": "Generate new codes",
-        "cancel": "Cancel"
-      },
-      "failure": {
-        "enrollmentTitle": "Two-factor authentication enabled",
-        "enrollmentDescription": "Your two-factor authentication is still active, but we could not generate your recovery codes. You can try again now or later in your security settings.",
-        "regenerationTitle": "Could not generate the codes",
-        "regenerationDescription": "Your previous recovery codes are still valid. Please try again.",
-        "retry": "Try again",
-        "later": "Not now"
-      },
-      "issues": {
-        "recoveryUnauthenticated": "Your session expired. Sign in again to continue.",
-        "recoveryReauthRequired": "For your security, confirm your identity again before generating the codes.",
-        "recoveryConflict": "Another code generation was detected. Please try again.",
-        "recoveryNetworkUnavailable": "We could not connect. Check your internet connection and try again.",
-        "recoveryInvalidResponse": "We received an unexpected response. No codes were generated. Please try again.",
-        "recoveryGenerationFailed": "We could not generate the codes. Please try again."
       }
     }
   },

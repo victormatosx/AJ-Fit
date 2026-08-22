@@ -8,11 +8,6 @@ import {
   type ReauthenticationProvider,
 } from '../lib/authProviders';
 import { auth } from '../lib/firebase';
-import {
-  getFirebaseErrorCode,
-  isMultiFactorAuthRequired,
-  type MfaTotpIssue,
-} from '../lib/mfaTotp';
 import { reauthenticatePasswordUser } from './password';
 import { getAppleCredential } from './providers/apple';
 import { getGoogleCredential } from './providers/google';
@@ -26,9 +21,11 @@ export type ReauthenticationRequest =
   | { provider: 'google' }
   | { provider: 'apple' };
 
-type ReauthenticationOptions = {
-  preserveMultiFactorError?: boolean;
-};
+export type ReauthenticationIssue =
+  | 'userMissing'
+  | 'userMismatch'
+  | 'reauthProviderUnsupported'
+  | 'reauthFailed';
 
 export class ReauthenticationCancelledError extends Error {
   constructor() {
@@ -38,9 +35,9 @@ export class ReauthenticationCancelledError extends Error {
 }
 
 export class ReauthenticationServiceError extends Error {
-  readonly issue: MfaTotpIssue;
+  readonly issue: ReauthenticationIssue;
 
-  constructor(issue: MfaTotpIssue) {
+  constructor(issue: ReauthenticationIssue) {
     super(issue);
     this.name = 'ReauthenticationServiceError';
     this.issue = issue;
@@ -81,6 +78,10 @@ async function acquireFederatedCredential(
 }
 
 function shouldPreserveFirebaseError(error: unknown): boolean {
+  const code =
+    typeof error === 'object' && error !== null && 'code' in error
+      ? String((error as { code: unknown }).code)
+      : '';
   return [
     'auth/network-request-failed',
     'auth/too-many-requests',
@@ -89,7 +90,7 @@ function shouldPreserveFirebaseError(error: unknown): boolean {
     'auth/invalid-user-token',
     'auth/no-current-user',
     'auth/user-mismatch',
-  ].includes(getFirebaseErrorCode(error));
+  ].includes(code);
 }
 
 /**
@@ -99,7 +100,6 @@ function shouldPreserveFirebaseError(error: unknown): boolean {
  */
 export async function reauthenticateCurrentUser(
   request: ReauthenticationRequest,
-  options: ReauthenticationOptions = {},
 ): Promise<User> {
   const originalUser = auth.currentUser;
   if (!originalUser) throw new ReauthenticationServiceError('userMissing');
@@ -107,11 +107,7 @@ export async function reauthenticateCurrentUser(
   assertProviderLinked(originalUser, request.provider);
 
   if (request.provider === 'password') {
-    const reauthenticated = options.preserveMultiFactorError
-      ? await reauthenticatePasswordUser(request.password, {
-          preserveMultiFactorError: true,
-        })
-      : await reauthenticatePasswordUser(request.password);
+    const reauthenticated = await reauthenticatePasswordUser(request.password);
     const current = currentUserForUid(originalUid);
     if (reauthenticated.uid !== originalUid) {
       throw new ReauthenticationServiceError('userMismatch');
@@ -133,9 +129,6 @@ export async function reauthenticateCurrentUser(
     return current;
   } catch (error) {
     if (error instanceof ReauthenticationServiceError) throw error;
-    if (options.preserveMultiFactorError && isMultiFactorAuthRequired(error)) {
-      throw error;
-    }
     if (shouldPreserveFirebaseError(error)) throw error;
     throw new ReauthenticationServiceError('reauthFailed');
   }

@@ -686,45 +686,6 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // Conjuntos de códigos de recuperação de MFA
-    // (functions/src/mfaRecovery/schema.ts) — `_mfaRecovery/{recoverySetId}`,
-    // onde `recoverySetId` é o seletor embutido no próprio código. Guarda
-    // apenas digests HMAC-SHA-256 com pepper; o código em texto claro nunca é
-    // persistido (o schema fechado rejeita qualquer campo de plaintext).
-    //
-    // Negado a TODO cliente, sem exceção nem para o dono — e essa é a razão
-    // de a coleção ser de topo em vez de viver sob `users/{uid}`. O modelo de
-    // ameaça da recuperação inclui o primeiro fator comprometido: quem roubou
-    // a senha, o Google ou a Apple da vítima não pode conseguir ler o material
-    // que derruba o segundo fator. Sob `users/{uid}` esse material ficaria a
-    // uma regra distraída de distância de ser legível pela própria conta que
-    // ele protege.
-    //
-    // O `{document=**}` é recursivo de propósito: nega também qualquer
-    // subcoleção futura sem depender de alguém lembrar de adicioná-la aqui.
-    // O acesso é exclusivamente via Admin SDK (Cloud Functions), que ignora
-    // estas regras. Nenhuma exceção de leitura deve ser adicionada.
-    match /_mfaRecovery/{document=**} {
-      allow read, write: if false;
-    }
-
-    // Ponteiro backend-only para o RecoverySet ativo de cada usuário
-    // (functions/src/mfaRecovery/{schema,recoverySetRepository}.ts) —
-    // `_mfaRecoveryUsers/{uid}`, contendo apenas `activeSetId`. Existe para
-    // que a invariante "no máximo um set ativo por uid" seja uma escrita
-    // contendida em UM documento, que a transação do Firestore serializa —
-    // uma query `where(status == active)` não daria essa garantia.
-    //
-    // Aqui o uid É o doc id, ao contrário de `_mfaRecovery`, porque este
-    // documento não guarda material secreto — só um selector, que já é a
-    // metade pública de todo código do set. Ainda assim negado a todo
-    // cliente: saber se/quando alguém possui recovery codes ativos já é
-    // informação de segurança da conta, e o app nunca precisa ler isto
-    // diretamente (a callable de geração devolve o que o cliente precisa).
-    match /_mfaRecoveryUsers/{document=**} {
-      allow read, write: if false;
-    }
-
     // ── Deny all undocumented collections ─────────────────────────────────
     // Coleções de sistema (exercises, workout_templates, treinos do usuário,
     // etc.) ainda não têm contrato de regras aprovado — negar por padrão até

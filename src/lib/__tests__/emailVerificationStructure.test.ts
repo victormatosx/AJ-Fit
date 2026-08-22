@@ -62,20 +62,18 @@ describe('email verification integration structure', () => {
 
   it('preserves account linking and consumes the Firebase-linked user', () => {
     expect(socialAuth).toContain('await linkWithCredential(user, pendingCredential)');
-    // Password linking, provider linking, and the post-MFA continuation all
-    // consume Firebase's linked user for the same UID.
-    expect(socialAuth.match(/const \{ user: linkedUser \}/g)).toHaveLength(3);
-    expect(socialAuth.match(/return linkedUser;/g)).toHaveLength(3);
+    // Password and provider linking both consume Firebase's linked user for
+    // the same UID.
+    expect(socialAuth.match(/const \{ user: linkedUser \}/g)).toHaveLength(2);
+    expect(socialAuth.match(/return linkedUser;/g)).toHaveLength(2);
     expect(socialAuth).toContain('pendingCredential = null');
     expect(socialAuth).toContain('AccountLinkingRequiredError');
   });
 
-  it('contains no polling, AppState auto-refresh or MFA implementation', () => {
+  it('contains no polling, AppState auto-refresh or extra-factor implementation', () => {
     for (const forbidden of [
       'setInterval',
       'AppState',
-      'multiFactor',
-      'Totp',
       'PhoneAuthProvider',
     ]) {
       expect(`${screen}\n${hook}\n${context}`).not.toContain(forbidden);
