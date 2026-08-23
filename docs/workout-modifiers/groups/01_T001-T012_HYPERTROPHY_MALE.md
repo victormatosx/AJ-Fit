@@ -1,0 +1,780 @@
+# AJ Fit --- Hipertrofia / Composição Corporal --- Masculino
+
+## 1. Escopo
+
+Este documento especifica como o motor de modificadores deve operar
+sobre **T001--T012**.
+
+Família geral masculina para hipertrofia e composição corporal. A
+estrutura padrão distribui o estímulo de maneira global, com maior
+espaço relativo para tronco/superiores do que a família feminina, sem
+negligenciar membros inferiores. Emagrecimento e definição não criam
+outro template: entram por dieta, cardio, volume e outros modificadores.
+
+Este arquivo complementa:
+
+-   `01_ARCHITECTURE.md`
+-   `02_VARIABLES_CATALOG.md`
+-   `03_MODIFIERS_CATALOG.md`
+-   `04_PRIORITY_AND_CONFLICTS.md`
+-   `05_EXERCISE_SUBSTITUTIONS.md`
+
+Ele não redefine as regras globais; especializa-as para esta família.
+
+------------------------------------------------------------------------
+
+## 2. Templates cobertos
+
+### T001 --- gym · 2x/semana · Full Body A/B
+
+Base masculina geral para hipertrofia, definição ou emagrecimento.
+Definição/emagrecimento não justificam outra biblioteca: dieta, cardio e
+volume são modificadores.
+
+  -----------------------------------------------------------------------
+  Sessão                  Tipo                    Exercícios-base
+  ----------------------- ----------------------- -----------------------
+  A                       resistance              Agachamento livre,
+                                                  Supino reto, Remada
+                                                  articulada, Terra
+                                                  romeno, Puxada alta,
+                                                  Elevação lateral, Rosca
+                                                  bíceps, Tríceps polia
+
+  B                       resistance              Leg Press, Supino
+                                                  inclinado, Remada
+                                                  baixa, Mesa flexora,
+                                                  Desenvolvimento, Puxada
+                                                  neutra, Panturrilha,
+                                                  Core
+  -----------------------------------------------------------------------
+
+### T002 --- gym · 3x/semana · Push/Pull/Legs
+
+Base masculina geral para hipertrofia, definição ou emagrecimento.
+Definição/emagrecimento não justificam outra biblioteca: dieta, cardio e
+volume são modificadores.
+
+  -----------------------------------------------------------------------
+  Sessão                  Tipo                    Exercícios-base
+  ----------------------- ----------------------- -----------------------
+  Push                    resistance              Supino reto, Supino
+                                                  inclinado,
+                                                  Desenvolvimento,
+                                                  Elevação lateral,
+                                                  Tríceps polia
+
+  Pull                    resistance              Puxada alta, Remada
+                                                  articulada, Remada
+                                                  unilateral, Crucifixo
+                                                  inverso, Rosca direta,
+                                                  Rosca martelo
+
+  Legs                    resistance              Agachamento, Leg Press,
+                                                  Terra romeno, Mesa
+                                                  flexora, Extensora,
+                                                  Panturrilha, Core
+  -----------------------------------------------------------------------
+
+### T003 --- gym · 4x/semana · Upper/Lower x2
+
+Base masculina geral para hipertrofia, definição ou emagrecimento.
+Definição/emagrecimento não justificam outra biblioteca: dieta, cardio e
+volume são modificadores.
+
+  -----------------------------------------------------------------------
+  Sessão                  Tipo                    Exercícios-base
+  ----------------------- ----------------------- -----------------------
+  Upper A                 resistance              Supino reto, Remada
+                                                  articulada, Supino
+                                                  inclinado, Puxada alta,
+                                                  Elevação lateral,
+                                                  Bíceps, Tríceps
+
+  Lower A                 resistance              Agachamento, Terra
+                                                  romeno, Leg Press, Mesa
+                                                  flexora, Panturrilha,
+                                                  Core
+
+  Upper B                 resistance              Desenvolvimento, Puxada
+                                                  neutra, Supino
+                                                  inclinado, Remada
+                                                  baixa, Elevação
+                                                  lateral, Bíceps,
+                                                  Tríceps
+
+  Lower B                 resistance              Leg Press, Afundo,
+                                                  Terra romeno,
+                                                  Extensora, Flexora,
+                                                  Panturrilha
+  -----------------------------------------------------------------------
+
+### T004 --- gym · 5x/semana · PPL + Upper/Lower
+
+Base masculina geral para hipertrofia, definição ou emagrecimento.
+Definição/emagrecimento não justificam outra biblioteca: dieta, cardio e
+volume são modificadores.
+
+  -----------------------------------------------------------------------
+  Sessão                  Tipo                    Exercícios-base
+  ----------------------- ----------------------- -----------------------
+  Push                    resistance              Supino reto, Supino
+                                                  inclinado,
+                                                  Desenvolvimento,
+                                                  Elevação lateral,
+                                                  Tríceps polia
+
+  Pull                    resistance              Puxada alta, Remada
+                                                  articulada, Remada
+                                                  unilateral, Crucifixo
+                                                  inverso, Rosca direta,
+                                                  Rosca martelo
+
+  Legs                    resistance              Agachamento, Leg Press,
+                                                  Terra romeno, Mesa
+                                                  flexora, Extensora,
+                                                  Panturrilha, Core
+
+  Upper extra             resistance              Supino inclinado,
+                                                  Remada baixa,
+                                                  Desenvolvimento, Puxada
+                                                  alta, Elevação lateral,
+                                                  Braços
+
+  Lower extra             resistance              Leg Press, Terra
+                                                  romeno, Búlgaro,
+                                                  Flexora, Panturrilha
+  -----------------------------------------------------------------------
+
+### T005 --- gym · 6x/semana · Push/Pull/Legs x2
+
+Base masculina geral para hipertrofia, definição ou emagrecimento.
+Definição/emagrecimento não justificam outra biblioteca: dieta, cardio e
+volume são modificadores.
+
+  -----------------------------------------------------------------------
+  Sessão                  Tipo                    Exercícios-base
+  ----------------------- ----------------------- -----------------------
+  Push                    resistance              Supino reto, Supino
+                                                  inclinado,
+                                                  Desenvolvimento,
+                                                  Elevação lateral,
+                                                  Tríceps polia
+
+  Pull                    resistance              Puxada alta, Remada
+                                                  articulada, Remada
+                                                  unilateral, Crucifixo
+                                                  inverso, Rosca direta,
+                                                  Rosca martelo
+
+  Legs                    resistance              Agachamento, Leg Press,
+                                                  Terra romeno, Mesa
+                                                  flexora, Extensora,
+                                                  Panturrilha, Core
+
+  Push B                  resistance              Supino inclinado, Chest
+                                                  Press, Desenvolvimento,
+                                                  Elevação lateral,
+                                                  Tríceps
+
+  Pull B                  resistance              Barra fixa/Puxada,
+                                                  Remada baixa, Remada
+                                                  unilateral, Crucifixo
+                                                  inverso, Rosca
+
+  Legs B                  resistance              Leg Press, Búlgaro,
+                                                  Terra romeno, Flexora,
+                                                  Extensora, Panturrilha
+  -----------------------------------------------------------------------
+
+### T006 --- gym · 7x/semana · PPL x2 + recuperação ativa
+
+Base masculina geral para hipertrofia, definição ou emagrecimento.
+Definição/emagrecimento não justificam outra biblioteca: dieta, cardio e
+volume são modificadores.
+
+  -----------------------------------------------------------------------
+  Sessão                  Tipo                    Exercícios-base
+  ----------------------- ----------------------- -----------------------
+  Push                    resistance              Supino reto, Supino
+                                                  inclinado,
+                                                  Desenvolvimento,
+                                                  Elevação lateral,
+                                                  Tríceps polia
+
+  Pull                    resistance              Puxada alta, Remada
+                                                  articulada, Remada
+                                                  unilateral, Crucifixo
+                                                  inverso, Rosca direta,
+                                                  Rosca martelo
+
+  Legs                    resistance              Agachamento, Leg Press,
+                                                  Terra romeno, Mesa
+                                                  flexora, Extensora,
+                                                  Panturrilha, Core
+
+  Push B                  resistance              Supino inclinado, Chest
+                                                  Press, Desenvolvimento,
+                                                  Elevação lateral,
+                                                  Tríceps
+
+  Pull B                  resistance              Barra fixa/Puxada,
+                                                  Remada baixa, Remada
+                                                  unilateral, Crucifixo
+                                                  inverso, Rosca
+
+  Legs B                  resistance              Leg Press, Búlgaro,
+                                                  Terra romeno, Flexora,
+                                                  Extensora, Panturrilha
+
+  Recuperação ativa       recovery                Caminhada/bicicleta
+                                                  leve, Mobilidade
+  -----------------------------------------------------------------------
+
+### T007 --- home · 2x/semana · Full Body A/B
+
+Versão sem dependência de academia; usa halteres/elásticos/peso corporal
+e mantém estímulo global.
+
+  -----------------------------------------------------------------------
+  Sessão                  Tipo                    Exercícios-base
+  ----------------------- ----------------------- -----------------------
+  Full Body A             resistance              Goblet Squat, Supino
+                                                  halteres/Flexão, Remada
+                                                  unilateral, Terra
+                                                  romeno halteres,
+                                                  Desenvolvimento,
+                                                  Elevação lateral, Core
+
+  Full Body B             resistance              Búlgaro, Supino
+                                                  inclinado/Flexão,
+                                                  Remada elástico/halter,
+                                                  Hip Thrust, Puxada com
+                                                  elástico/Barra fixa,
+                                                  Braços, Core
+  -----------------------------------------------------------------------
+
+### T008 --- home · 3x/semana · Full Body A/B/C
+
+Versão sem dependência de academia; usa halteres/elásticos/peso corporal
+e mantém estímulo global.
+
+  -----------------------------------------------------------------------
+  Sessão                  Tipo                    Exercícios-base
+  ----------------------- ----------------------- -----------------------
+  Full Body A             resistance              Goblet Squat, Supino
+                                                  halteres/Flexão, Remada
+                                                  unilateral, Terra
+                                                  romeno halteres,
+                                                  Desenvolvimento,
+                                                  Elevação lateral, Core
+
+  Full Body B             resistance              Búlgaro, Supino
+                                                  inclinado/Flexão,
+                                                  Remada elástico/halter,
+                                                  Hip Thrust, Puxada com
+                                                  elástico/Barra fixa,
+                                                  Braços, Core
+
+  Full Body C             resistance              Agachamento, Flexão,
+                                                  Remada, RDL, Elevação
+                                                  lateral, Bíceps,
+                                                  Tríceps
+  -----------------------------------------------------------------------
+
+### T009 --- home · 4x/semana · Upper/Lower x2
+
+Versão sem dependência de academia; usa halteres/elásticos/peso corporal
+e mantém estímulo global.
+
+  -----------------------------------------------------------------------
+  Sessão                  Tipo                    Exercícios-base
+  ----------------------- ----------------------- -----------------------
+  Upper A                 resistance              Supino halteres/Flexão,
+                                                  Remada unilateral,
+                                                  Desenvolvimento, Puxada
+                                                  elástico, Braços
+
+  Lower A                 resistance              Goblet Squat, RDL,
+                                                  Búlgaro, Hip Thrust,
+                                                  Panturrilha
+
+  Upper B                 resistance              Supino
+                                                  inclinado/Flexão,
+                                                  Remada, Elevação
+                                                  lateral, Puxada
+                                                  elástico, Braços
+
+  Lower B                 resistance              Búlgaro, RDL, Hip
+                                                  Thrust, Step-up, Core
+  -----------------------------------------------------------------------
+
+### T010 --- home · 5x/semana · Upper/Lower + Upper extra
+
+Versão sem dependência de academia; usa halteres/elásticos/peso corporal
+e mantém estímulo global.
+
+  -----------------------------------------------------------------------
+  Sessão                  Tipo                    Exercícios-base
+  ----------------------- ----------------------- -----------------------
+  Upper A                 resistance              Supino halteres/Flexão,
+                                                  Remada unilateral,
+                                                  Desenvolvimento, Puxada
+                                                  elástico, Braços
+
+  Lower A                 resistance              Goblet Squat, RDL,
+                                                  Búlgaro, Hip Thrust,
+                                                  Panturrilha
+
+  Upper B                 resistance              Supino
+                                                  inclinado/Flexão,
+                                                  Remada, Elevação
+                                                  lateral, Puxada
+                                                  elástico, Braços
+
+  Lower B                 resistance              Búlgaro, RDL, Hip
+                                                  Thrust, Step-up, Core
+
+  Upper extra             resistance              Flexão/Supino, Remada,
+                                                  Desenvolvimento,
+                                                  Elevação lateral,
+                                                  Braços
+  -----------------------------------------------------------------------
+
+### T011 --- home · 6x/semana · Full Body A/B/C x2 (variações)
+
+Versão sem dependência de academia; usa halteres/elásticos/peso corporal
+e mantém estímulo global.
+
+  -----------------------------------------------------------------------
+  Sessão                  Tipo                    Exercícios-base
+  ----------------------- ----------------------- -----------------------
+  Full Body A             resistance              Goblet Squat, Supino
+                                                  halteres/Flexão, Remada
+                                                  unilateral, Terra
+                                                  romeno halteres,
+                                                  Desenvolvimento,
+                                                  Elevação lateral, Core
+
+  Full Body B             resistance              Búlgaro, Supino
+                                                  inclinado/Flexão,
+                                                  Remada elástico/halter,
+                                                  Hip Thrust, Puxada com
+                                                  elástico/Barra fixa,
+                                                  Braços, Core
+
+  Full Body C             resistance              Agachamento, Flexão,
+                                                  Remada, RDL, Elevação
+                                                  lateral, Bíceps,
+                                                  Tríceps
+
+  Upper Push              resistance              Flexão/Supino,
+                                                  Desenvolvimento,
+                                                  Elevação lateral,
+                                                  Tríceps
+
+  Upper Pull              resistance              Remada, Puxada
+                                                  elástico/Barra,
+                                                  Crucifixo inverso,
+                                                  Bíceps
+
+  Lower                   resistance              Goblet Squat, Búlgaro,
+                                                  RDL, Hip Thrust,
+                                                  Panturrilha
+  -----------------------------------------------------------------------
+
+### T012 --- home · 7x/semana · 6 sessões + recuperação ativa
+
+Versão sem dependência de academia; usa halteres/elásticos/peso corporal
+e mantém estímulo global.
+
+  -----------------------------------------------------------------------
+  Sessão                  Tipo                    Exercícios-base
+  ----------------------- ----------------------- -----------------------
+  Full Body A             resistance              Goblet Squat, Supino
+                                                  halteres/Flexão, Remada
+                                                  unilateral, Terra
+                                                  romeno halteres,
+                                                  Desenvolvimento,
+                                                  Elevação lateral, Core
+
+  Full Body B             resistance              Búlgaro, Supino
+                                                  inclinado/Flexão,
+                                                  Remada elástico/halter,
+                                                  Hip Thrust, Puxada com
+                                                  elástico/Barra fixa,
+                                                  Braços, Core
+
+  Full Body C             resistance              Agachamento, Flexão,
+                                                  Remada, RDL, Elevação
+                                                  lateral, Bíceps,
+                                                  Tríceps
+
+  Upper Push              resistance              Flexão/Supino,
+                                                  Desenvolvimento,
+                                                  Elevação lateral,
+                                                  Tríceps
+
+  Upper Pull              resistance              Remada, Puxada
+                                                  elástico/Barra,
+                                                  Crucifixo inverso,
+                                                  Bíceps
+
+  Lower                   resistance              Goblet Squat, Búlgaro,
+                                                  RDL, Hip Thrust,
+                                                  Panturrilha
+
+  Recuperação ativa       recovery                Caminhada leve,
+                                                  Mobilidade
+  -----------------------------------------------------------------------
+
+------------------------------------------------------------------------
+
+## 3. Hierarquia aplicável
+
+``` text
+P0 Safety (quando acionado)
+→ P2 limitações/capacidade/impacto
+→ P3 equipamento
+→ P4 experiência/recuperação
+→ P5 duração
+→ P6 objetivo/ênfase
+→ P7 preferência
+```
+
+Uma regra inferior só opera dentro das constraints deixadas pelas
+superiores.
+
+------------------------------------------------------------------------
+
+## 4. Modificadores aplicáveis
+
+### `EXP`
+
+Experiência. Ajusta complexidade, volume inicial, estabilidade, esforço
+e uso de técnicas avançadas.
+
+### `TIME`
+
+Duração disponível. Preserva componentes prioritários e reduz
+redundâncias/acessórios antes de destruir a estrutura.
+
+### `EQP`
+
+Equipamento. Substitui exercícios inviáveis preservando padrão,
+finalidade e demais constraints.
+
+### `KNEE`
+
+Limitação declarada de joelho. Filtra movimentos/variações incompatíveis
+sem diagnosticar a causa.
+
+### `HIP`
+
+Limitação declarada de quadril. Afeta candidatos, amplitude/posição
+quando houver regra formal e tolerância.
+
+### `SHOULDER`
+
+Limitação declarada de ombro. Pode alterar presses, puxadas ou posições
+conforme movimentos problemáticos relatados.
+
+### `SPINE`
+
+Limitação declarada de coluna. Exige regras específicas e não deve ser
+reduzida a uma substituição universal.
+
+### `WRIST`
+
+Limitação declarada de punho. Pode mudar pegada, apoio ou exercício
+quando documentado.
+
+### `ELBOW`
+
+Limitação declarada de cotovelo. Pode afetar presses, puxadas e
+isoladores.
+
+### `FUNC`
+
+Capacidade funcional/equilíbrio. Ajusta estabilidade, apoio,
+complexidade, unilateralidade e duração.
+
+### `IMP`
+
+Tolerância a impacto. Especialmente relevante para corrida, saltos e
+intervalados.
+
+### `REC`
+
+Recuperação/fadiga. Pode reduzir dose ou retirar intensificadores; não
+diagnostica doença/overtraining.
+
+### `PREF`
+
+Preferências musculares, de exercícios e modalidades. Sempre P7 e nunca
+reintroduzem algo bloqueado.
+
+### `CARDIO`
+
+Modalidade, duração e formato do cardio dentro da finalidade do
+template.
+
+## Regras específicas de hipertrofia/composição
+
+-   Preservar estímulo resistido e cobertura muscular antes de
+    acessórios cosméticos.
+-   `BEGINNER`: começar com menor volume e variantes mais estáveis
+    quando necessário; não significa máquinas obrigatórias.
+-   Sessão curta: preservar movimentos compostos/prioritários, depois
+    acessórios da ênfase escolhida; remover redundância antes de reduzir
+    tudo.
+-   Preferência muscular: primeiro trocar variantes/acessórios e
+    redistribuir volume; adicionar séries apenas se duração/recuperação
+    permitirem.
+-   Emagrecimento/definição: não trocar automaticamente o treino por
+    circuito ou HIIT. Cardio é camada adicional/modificada.
+-   Em 6--7 dias, proteger dias leves/recuperação; disponibilidade não
+    autoriza intensidade máxima diária.
+
+------------------------------------------------------------------------
+
+## 5. Estratégia de aplicação por categoria
+
+### Experiência
+
+Quando aplicável:
+
+**Beginner** - reduzir complexidade desnecessária; - reduzir volume
+inicial quando o template exceder a capacidade atual; - favorecer
+execução estável e repetível; - manter margem de esforço conservadora; -
+não usar técnicas avançadas como requisito.
+
+**Intermediate** - tende a preservar o template-base; - ajustes vêm
+principalmente de outras variáveis.
+
+**Advanced** - pode tolerar maior especificidade/dose quando a família e
+recuperação permitirem; - não significa adicionar volume
+automaticamente.
+
+### Duração
+
+Ordem de adaptação:
+
+``` text
+preservar constraints
+→ preservar componentes prioritários
+→ remover redundância
+→ reduzir acessórios de menor prioridade
+→ reorganizar pares/supersets compatíveis
+→ reduzir séries quando necessário
+→ validar duração e estrutura mínima
+```
+
+### Equipamento
+
+``` text
+exercício inviável
+→ identificar padrão/finalidade
+→ filtrar constraints
+→ filtrar equipamento
+→ escolher candidato
+→ validar sessão
+```
+
+Nunca selecionar substituto apenas pelo nome do músculo.
+
+### Limitações
+
+As limitações articulares/colunares devem operar a partir de: -
+movimentos declarados como problemáticos; - tolerância; - restrições
+profissionais; - regras específicas validadas.
+
+Não existe regra global `dor em X → exercício Y`.
+
+### Recuperação
+
+Quando recuperação estiver abaixo do esperado e não houver red flag: 1.
+remover intensificadores; 2. reduzir acessórios; 3. reduzir volume
+secundário; 4. ajustar densidade; 5. preservar, quando possível, a
+intenção central da sessão.
+
+### Preferências
+
+Preferências são aplicadas por último.
+
+Podem: - escolher entre variantes equivalentes; - substituir acessório
+equivalente; - redistribuir parte do volume; - escolher modalidade de
+cardio compatível.
+
+Não podem: - remover constraint; - reintroduzir exercício bloqueado; -
+exigir equipamento inexistente; - descaracterizar a família.
+
+------------------------------------------------------------------------
+
+## 6. Componentes prioritários e removíveis
+
+O motor deve classificar cada exercício da sessão em tempo de
+composição:
+
+``` text
+ESSENTIAL
+HIGH_PRIORITY
+ACCESSORY
+OPTIONAL
+```
+
+Critérios: - papel do exercício na finalidade da sessão; - cobertura de
+padrão/músculo; - redundância com outros exercícios; - objetivo da
+família; - preferência válida; - constraints ativas.
+
+Essa classificação deve ser contextual. O último exercício da lista não
+é automaticamente o primeiro a ser removido.
+
+------------------------------------------------------------------------
+
+## 7. Substituições
+
+Todas as substituições usam `05_EXERCISE_SUBSTITUTIONS.md`.
+
+Regra:
+
+``` text
+OriginalExercise
++
+ActiveConstraints
++
+AvailableEquipment
++
+Experience
++
+FamilyGoal
++
+Preference
+→ BestValidCandidate
+```
+
+Se não houver candidato:
+
+``` text
+NO_SAFE_SUBSTITUTION
+```
+
+Não executar cadeia cega `A → B → C`.
+
+------------------------------------------------------------------------
+
+## 8. Combinações importantes
+
+### Limitação + equipamento
+
+O candidato deve satisfazer simultaneamente ambos.
+
+### Iniciante + sessão curta
+
+Não somar reduções percentuais cegamente. Calcular uma sessão mínima
+coerente.
+
+### Preferência + limitação
+
+A preferência escolhe somente dentro do conjunto permitido pela
+limitação.
+
+### Preferência + tempo curto
+
+Redistribuir antes de adicionar volume.
+
+### Recuperação + alta frequência
+
+Proteger sessões leves/recuperativas existentes. Não transformar
+disponibilidade em intensidade diária.
+
+------------------------------------------------------------------------
+
+## 9. Validação pós-modificação
+
+Antes de liberar o treino:
+
+-   todos os exercícios são executáveis com o equipamento?
+-   todas as constraints continuam respeitadas?
+-   algum exercício bloqueado reapareceu?
+-   a sessão mantém sua finalidade?
+-   duração estimada cabe no limite?
+-   volume não foi duplicado por modificadores?
+-   há redundância criada por substituições?
+-   preferência alterou algo de prioridade superior?
+-   frequência semanal continua coerente?
+-   o treino final ainda pertence conceitualmente a esta família?
+
+------------------------------------------------------------------------
+
+## 10. Decision Trace mínimo
+
+Registrar:
+
+``` yaml
+base_workout: Txxx
+family: "{title}"
+active_modifiers: []
+protected_constraints: []
+changes:
+  - action: KEEP|REMOVE|REPLACE|ADD|REORDER|CHANGE_DOSE
+    target: null
+    replacement: null
+    modifier_id: null
+    reason: null
+validation_state: RESOLVED
+```
+
+------------------------------------------------------------------------
+
+## 11. Estados de saída
+
+``` text
+RESOLVED
+RESOLVED_WITH_WARNINGS
+NEEDS_REVIEW
+NO_SAFE_SUBSTITUTION
+SAFETY_GATE_BLOCKED
+INSUFFICIENT_DATA
+```
+
+------------------------------------------------------------------------
+
+## 12. Casos de teste obrigatórios desta família
+
+1.  template de menor frequência sem modificadores;
+2.  template de maior frequência sem modificadores;
+3.  iniciante;
+4.  sessão de 30 minutos;
+5.  equipamento reduzido;
+6.  uma limitação de membro inferior;
+7.  uma limitação de membro superior;
+8.  múltiplas limitações;
+9.  preferência compatível;
+10. preferência incompatível com constraint;
+11. recuperação ruim;
+12. 4+ modificadores simultâneos;
+13. nenhum substituto válido;
+14. repetição do mesmo modificador para testar idempotência;
+15. mesma entrada/mesma versão para testar determinismo.
+
+------------------------------------------------------------------------
+
+## 13. Pontos ainda dependentes de especificação
+
+Este documento **não inventa** regras clínicas ou números que ainda não
+foram definidos. Antes da implementação final ainda precisam ser
+fechados:
+
+-   IDs reais dos exercícios;
+-   tags e padrões de movimento do catálogo;
+-   limites mínimos/máximos de volume por família;
+-   cálculo oficial de duração;
+-   regras numéricas de esforço/intensidade;
+-   tabelas validadas para limitações;
+-   ranking real de substituições;
+-   critérios formais de progressão/regressão;
+-   questionário que alimentará cada variável.
+
+Esses pontos devem ser especificados antes de transformar a documentação
+em lógica de produção.
