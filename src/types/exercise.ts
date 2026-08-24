@@ -71,7 +71,14 @@ export type MovementPattern =
   | 'horizontal_adduction'
   | 'calf_raise'
   | 'core_flexion'
-  | 'core_anti_extension';
+  | 'core_anti_extension'
+  | 'core_anti_rotation'
+  | 'loaded_carry'
+  | 'gait'
+  | 'cycling'
+  | 'balance'
+  | 'mobility'
+  | 'breathing';
 
 export type Mechanic = 'compound' | 'isolation';
 
@@ -89,7 +96,12 @@ export type EquipmentId =
   | 'bench'
   | 'roman_chair'
   | 'mini_band'
-  | 'ez_bar';
+  | 'ez_bar'
+  | 'resistance_band'
+  | 'chair'
+  | 'step'
+  | 'stationary_bike'
+  | 'slider';
 
 export type BodyPosition = 'standing' | 'seated' | 'lying' | 'kneeling' | 'hanging';
 
@@ -199,6 +211,8 @@ export const MOVEMENT_PATTERNS: MovementPattern[] = [
   'shoulder_abduction', 'shoulder_flexion',
   'scapular_retraction', 'scapular_elevation', 'horizontal_adduction',
   'calf_raise', 'core_flexion', 'core_anti_extension',
+  'core_anti_rotation', 'loaded_carry', 'gait', 'cycling',
+  'balance', 'mobility', 'breathing',
 ];
 
 export const MECHANICS: Mechanic[] = ['compound', 'isolation'];
@@ -209,6 +223,7 @@ export const EQUIPMENT_IDS: EquipmentId[] = [
   'bodyweight', 'barbell', 'dumbbell', 'cable', 'machine',
   'smith_machine', 'hack_machine', 'leg_press', 'bench',
   'roman_chair', 'mini_band', 'ez_bar',
+  'resistance_band', 'chair', 'step', 'stationary_bike', 'slider',
 ];
 
 export const BODY_POSITIONS: BodyPosition[] = [

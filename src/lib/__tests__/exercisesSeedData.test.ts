@@ -4,8 +4,8 @@ import { EXERCISES_SEED } from '../../data/exercisesSeedData';
 import { validateExerciseSeed } from '../../validators/exerciseValidation';
 
 describe('exercisesSeedData', () => {
-  it('has exactly 79 exercises', () => {
-    expect(EXERCISES_SEED).toHaveLength(79);
+  it('has exactly 116 exercises', () => {
+    expect(EXERCISES_SEED).toHaveLength(116);
   });
 
   it('passes full dataset validation', () => {
@@ -44,6 +44,14 @@ describe('exercisesSeedData', () => {
         manualSelection: true,
         substitution: true,
       });
+    }
+  });
+
+  it('provides pt-BR, English, and Spanish instructions for the T001-T090 additions', () => {
+    for (const ex of EXERCISES_SEED.slice(79)) {
+      expect(ex.instructions?.ptBR.length).toBeGreaterThan(0);
+      expect(ex.instructions?.en?.length).toBeGreaterThan(0);
+      expect(ex.instructions?.es?.length).toBeGreaterThan(0);
     }
   });
 });

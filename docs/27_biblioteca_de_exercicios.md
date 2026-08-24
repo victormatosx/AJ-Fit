@@ -8,7 +8,7 @@ exibição, substituição, filtros e histórico. Complementa
 `03_modelagem_banco_e_dados.md` §6/§7 com o schema definitivo.
 
 Implementação de referência: `src/types/exercise.ts` (tipos + taxonomias),
-`src/data/exercisesSeedData.ts` (dataset dos 79 exercícios oficiais),
+`src/data/exercisesSeedData.ts` (dataset dos 116 exercícios oficiais),
 `src/validators/exerciseValidation.ts` (validação do dataset) e
 `scripts/seedExercises.ts` (script de seed).
 
@@ -190,7 +190,8 @@ knee_extension, knee_flexion, hip_extension, hip_abduction, hip_adduction,
 elbow_flexion, elbow_extension,
 shoulder_abduction, shoulder_flexion,
 scapular_retraction, scapular_elevation, horizontal_adduction,
-calf_raise, core_flexion, core_anti_extension
+calf_raise, core_flexion, core_anti_extension, core_anti_rotation,
+loaded_carry, gait, cycling, balance, mobility, breathing
 ```
 
 `scapular_elevation` (encolhimento de trapézio) e `horizontal_adduction`
@@ -203,7 +204,8 @@ forçar uma classificação biomecanicamente errada.
 ```txt
 bodyweight, barbell, dumbbell, cable, machine,
 smith_machine, hack_machine, leg_press, bench,
-roman_chair, mini_band, ez_bar
+roman_chair, mini_band, ez_bar, resistance_band, chair, step,
+stationary_bike, slider
 ```
 
 Nota: esta lista é intencionalmente diferente (e menor) do vocabulário
@@ -259,18 +261,18 @@ Grupos usados no seed atual: `vertical_back_pull`, `horizontal_back_row`,
 
 Script: `scripts/seedExercises.ts` (rodado via `npm run seed:exercises`).
 
-- Fonte de dados: `src/data/exercisesSeedData.ts` (79 exercícios).
+- Fonte de dados: `src/data/exercisesSeedData.ts` (116 exercícios).
 - Valida o dataset inteiro antes de qualquer chamada de rede
   (`validateExerciseSeed`): total, IDs/slugs/nomes ptBR únicos, enums,
   `similarExerciseIds` existentes, nenhuma autorreferência, nenhuma URL
   inventada em `execution`.
 - **Dry-run por padrão.** Sem flags, o script conecta ao Firestore, lê o
-  que já existe, mostra o plano (quantos criar/atualizar) e **não
+  que já existe, mostra o plano (quantos criar/ignorar) e **não
   escreve**. Escrita real exige `npm run seed:exercises -- --confirm`.
-- Idempotente: reexecutar não duplica documentos (`id` = doc id) e nunca
-  deleta nada. Em uma atualização, `metadata.createdAt` e
-  `metadata.version` do documento existente são preservados;
-  `metadata.updatedAt` é sempre `serverTimestamp()`.
+- Idempotente e conservador: reexecutar não duplica documentos (`id` = doc
+  id), não altera documentos existentes e nunca deleta nada. Novos
+  documentos recebem `metadata.createdAt` e `metadata.updatedAt` com
+  `serverTimestamp()`.
 - Usa Application Default Credentials — nunca uma chave de service account
   no repositório. Rodar `gcloud auth application-default login` antes de
   usar `--confirm`.

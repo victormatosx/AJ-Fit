@@ -37,10 +37,8 @@
  * -----------
  * Each exercise's `id` is used as the Firestore document id (never a
  * random id — docs/27 §2). Re-running is safe: existing documents are
- * updated in place (their `metadata.createdAt` and `metadata.version` are
- * preserved), missing documents are created. No document is ever deleted
- * by this script — exercises are retired via `status`/`availability`, not
- * removal (docs/27 §8).
+ * skipped and missing documents are created. No document is updated or
+ * deleted by this script; day-to-day edits belong to the admin panel.
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -52,7 +50,7 @@ import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { EXERCISES_SEED } from '../src/data/exercisesSeedData';
 import { validateExerciseSeed } from '../src/validators/exerciseValidation';
 
-const EXPECTED_TOTAL = 79;
+const EXPECTED_TOTAL = 116;
 const COLLECTION = 'exercises';
 const BATCH_SIZE = 400; // Firestore hard limit is 500 writes/batch.
 
@@ -111,11 +109,11 @@ async function main() {
   const existingById = new Map(existingSnapshot.docs.map((d) => [d.id, d.data()]));
 
   const toCreate = EXERCISES_SEED.filter((e) => !existingById.has(e.id));
-  const toUpdate = EXERCISES_SEED.filter((e) => existingById.has(e.id));
+  const toSkip = EXERCISES_SEED.filter((e) => existingById.has(e.id));
 
   console.log(`Documentos existentes na collection "${COLLECTION}": ${existingSnapshot.size}`);
-  console.log(`Planejado: ${toCreate.length} criação(ões), ${toUpdate.length} atualização(ões), 0 remoção(ões)`);
-  console.log('(este script nunca deleta documentos — desativação é feita via status/availability)\n');
+  console.log(`Planejado: ${toCreate.length} criação(ões), ${toSkip.length} ignorado(s), 0 atualização(ões), 0 remoção(ões)`);
+  console.log('(este script nunca altera nem deleta documentos existentes)\n');
 
   if (!confirm) {
     console.log('DRY RUN — nenhuma escrita foi realizada. Rode novamente com --confirm para aplicar.');
@@ -124,42 +122,24 @@ async function main() {
 
   // 3. Real write, batched, preserving createdAt/version on updates.
   let created = 0;
-  let updated = 0;
   let failed = 0;
 
-  for (let i = 0; i < EXERCISES_SEED.length; i += BATCH_SIZE) {
-    const chunk = EXERCISES_SEED.slice(i, i + BATCH_SIZE);
+  for (let i = 0; i < toCreate.length; i += BATCH_SIZE) {
+    const chunk = toCreate.slice(i, i + BATCH_SIZE);
     const batch = db.batch();
 
     for (const exercise of chunk) {
       const ref = db.collection(COLLECTION).doc(exercise.id);
-      const existing = existingById.get(exercise.id) as { metadata?: { version?: number } } | undefined;
       const { id: _id, ...body } = exercise;
-
-      if (existing) {
-        batch.set(
-          ref,
-          {
-            ...body,
-            metadata: {
-              version: existing.metadata?.version ?? 1,
-              updatedAt: FieldValue.serverTimestamp(),
-            },
-          },
-          { merge: true },
-        );
-        updated += 1;
-      } else {
-        batch.set(ref, {
-          ...body,
-          metadata: {
-            version: 1,
-            createdAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp(),
-          },
-        });
-        created += 1;
-      }
+      batch.create(ref, {
+        ...body,
+        metadata: {
+          version: 1,
+          createdAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+      });
+      created += 1;
     }
 
     try {
@@ -167,7 +147,6 @@ async function main() {
     } catch (err) {
       failed += chunk.length;
       created -= chunk.filter((e) => !existingById.has(e.id)).length;
-      updated -= chunk.filter((e) => existingById.has(e.id)).length;
       console.error(`ERRO ao commitar lote [${i}, ${i + chunk.length}):`, err);
     }
   }
@@ -178,8 +157,8 @@ async function main() {
   console.log(`esperados: ${EXPECTED_TOTAL}`);
   console.log(`validados: ${EXERCISES_SEED.length}`);
   console.log(`criados: ${created}`);
-  console.log(`atualizados: ${updated}`);
-  console.log(`ignorados: 0`);
+  console.log('atualizados: 0');
+  console.log(`ignorados: ${toSkip.length}`);
   console.log(`falharam: ${failed}`);
 
   if (failed > 0) process.exit(1);

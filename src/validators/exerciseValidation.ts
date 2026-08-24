@@ -128,8 +128,31 @@ export function validateExerciseSeed(exercises: ExerciseSeedInput[]): ExerciseVa
       }
     }
 
+    if (!ex.execution || typeof ex.execution !== 'object') {
+      errors.push(`${tag} execution ausente`);
+    }
+
+    if (ex.instructions) {
+      for (const locale of ['ptBR', 'en', 'es'] as const) {
+        const steps = ex.instructions[locale];
+        if (!steps?.length || steps.some((step) => !step.trim())) {
+          errors.push(`${tag} instructions.${locale} ausente ou vazia`);
+        }
+      }
+    }
+
     if (!ex.availability) {
       errors.push(`${tag} availability ausente`);
+    } else {
+      for (const key of ['workoutGeneration', 'manualSelection', 'substitution'] as const) {
+        if (typeof ex.availability[key] !== 'boolean') {
+          errors.push(`${tag} availability.${key} ausente ou inválida`);
+        }
+      }
+    }
+
+    if (!ex.substitution || !Array.isArray(ex.substitution.similarExerciseIds)) {
+      errors.push(`${tag} substitution.similarExerciseIds ausente ou inválido`);
     }
 
     if (ex.substitution?.similarExerciseIds?.includes(ex.id)) {
