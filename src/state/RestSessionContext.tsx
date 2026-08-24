@@ -26,10 +26,13 @@ import {
   readRestSession,
 } from '../services/restSessionStorage';
 import { logInfo } from '../lib/logger';
+import { restLiveActivity, type RestActivityState } from '../lib/restLiveActivity';
 
 type StartRestInput = Readonly<{
   durationSeconds: number;
   exerciseId: string;
+  /** Already localized/materialized by the workout layer. */
+  exerciseName: string;
   setIndex: number;
   totalSets: number;
 }>;
@@ -50,6 +53,17 @@ const RestSessionContext = createContext<RestSessionContextValue | null>(null);
 
 type ReconcileSource = 'deadline' | 'foreground';
 
+function toRestActivityState(rest: ActiveRest, exerciseName: string): RestActivityState {
+  return {
+    sessionId: rest.workoutSessionId,
+    startedAt: rest.startedAt,
+    endsAt: rest.endsAt,
+    exerciseName,
+    setIndex: rest.setIndex + 1,
+    totalSets: rest.totalSets,
+  };
+}
+
 /**
  * Owns only workout/rest identity and absolute rest time. Exercise order,
  * progress, load registration and PR decisions remain in WorkoutScreen.
@@ -61,6 +75,8 @@ export function RestSessionProvider({ children }: { children: React.ReactNode })
   const timerStateRef = useRef<RestTimerState>(IDLE_REST_TIMER_STATE);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
   const storageRevisionRef = useRef(0);
+  const restActivityStateRef = useRef<RestActivityState | null>(null);
+  const restActivitySessionStartedRef = useRef(false);
 
   const publishTimerState = useCallback((next: RestTimerState) => {
     timerStateRef.current = next;
@@ -90,6 +106,11 @@ export function RestSessionProvider({ children }: { children: React.ReactNode })
       publishTimerState(IDLE_REST_TIMER_STATE);
       logInfo('restSession', 'rest_cancelled', { reason: 'workout-ended' });
     }
+    if (restActivitySessionStartedRef.current) {
+      void restLiveActivity.end('workout_ended');
+    }
+    restActivityStateRef.current = null;
+    restActivitySessionStartedRef.current = false;
     workoutSessionIdRef.current = null;
     setWorkoutSessionId(null);
     clearPersistedTransition();
@@ -99,8 +120,9 @@ export function RestSessionProvider({ children }: { children: React.ReactNode })
     const current = timerStateRef.current;
     if (current.status !== 'idle') return current.rest;
 
+    const { exerciseName, ...restInput } = input;
     const rest = createRest({
-      ...input,
+      ...restInput,
       restId: randomUUID(),
       workoutSessionId: ensureSessionId(),
       startedAt: Date.now(),
@@ -109,6 +131,10 @@ export function RestSessionProvider({ children }: { children: React.ReactNode })
     publishTimerState(next);
     storageRevisionRef.current += 1;
     void persistRestSession(rest);
+    const activityState = toRestActivityState(rest, exerciseName);
+    restActivityStateRef.current = activityState;
+    restActivitySessionStartedRef.current = true;
+    void restLiveActivity.start(activityState);
     logInfo('restSession', 'rest_started', {
       durationSeconds: rest.initialDurationSeconds,
     });
@@ -123,6 +149,12 @@ export function RestSessionProvider({ children }: { children: React.ReactNode })
     publishTimerState({ status: 'running', rest });
     storageRevisionRef.current += 1;
     void persistRestSession(rest);
+    const currentActivityState = restActivityStateRef.current;
+    if (currentActivityState?.sessionId === rest.workoutSessionId) {
+      const activityState = { ...currentActivityState, endsAt: rest.endsAt };
+      restActivityStateRef.current = activityState;
+      void restLiveActivity.update(activityState);
+    }
     logInfo('restSession', 'rest_extended', { addedSeconds: seconds });
     return rest;
   }, [publishTimerState]);
@@ -152,6 +184,8 @@ export function RestSessionProvider({ children }: { children: React.ReactNode })
 
     publishTimerState(transition.state);
     clearPersistedTransition();
+    restActivityStateRef.current = null;
+    void restLiveActivity.end('cancelled');
     logInfo('restSession', 'rest_cancelled', { reason: 'skipped' });
     return true;
   }, [clearPersistedTransition, publishTimerState]);
@@ -161,6 +195,8 @@ export function RestSessionProvider({ children }: { children: React.ReactNode })
     if (!transition.consumed) return false;
 
     publishTimerState(transition.state);
+    restActivityStateRef.current = null;
+    void restLiveActivity.end('completed');
     return true;
   }, [publishTimerState]);
 
@@ -222,6 +258,10 @@ export function RestSessionProvider({ children }: { children: React.ReactNode })
   // unlike a WorkoutScreen tab unmount. Never leave its rest orphaned.
   useEffect(() => () => {
     if (timerStateRef.current.status !== 'idle') void clearRestSession();
+    if (restActivitySessionStartedRef.current) {
+      restActivitySessionStartedRef.current = false;
+      void restLiveActivity.end('workout_ended');
+    }
   }, []);
 
   const value = useMemo<RestSessionContextValue>(() => ({

@@ -417,6 +417,7 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
     startRest({
       durationSeconds: ex.rest,
       exerciseId: ex.id,
+      exerciseName: translateExerciseName(tLoose, ex.db, ex.name),
       setIndex: setIdx,
       totalSets: ex.sets.length,
     });

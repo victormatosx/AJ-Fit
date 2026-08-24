@@ -23,6 +23,62 @@ Responsável: Codex — Agente Frontend
 Categoria: [IMPLEMENTAÇÃO]
 
 Descrição:
+Implementada a Fase 3 do Live Rest Timer como uma fronteira opcional de
+apresentação, ainda sem superfície nativa real. O contrato
+`RestActivityState` contém somente `sessionId`, `startedAt`, `endsAt`, nome de
+exercício já materializado e série 1-based/total. Não atravessam a fronteira
+`remainingSeconds`, `restLeft`, exercício/workout completos, template,
+objetivo, modificadores, perfil ou estado Premium.
+
+Criada a facade `src/lib/restLiveActivity.ts` com `getCapabilities`, `start`,
+`update` e `end`. O adaptador `modules/ajfit-rest-activity/index.ts` usa
+`requireOptionalNativeModule('AJFitRestActivity')`; esta fase não inclui
+`expo-module.config.json`, Swift, Kotlin ou registro nativo, portanto módulos
+ausentes retornam `available: false`/`surface: 'none'` e todas as operações
+são no-op seguro. Erros e rejeições nativas são capturados e registrados sem
+interromper o domínio.
+
+Integração:
+O `WorkoutScreen` provisório resolve somente o nome traduzido do exercício ao
+chamar `startRest`. O `RestSessionContext` combina esse texto com o
+`ActiveRest` absoluto, mantém o snapshot visual apenas em memória e dispara a
+facade com `void`: início chama `start`, extensão chama `update` com o novo
+`endsAt`, consumo da expiração chama `end('completed')`, skip chama
+`end('cancelled')` e encerramento relevante da sessão chama
+`end('workout_ended')`. A garantia exactly-once continua sendo reivindicada
+por `restId` antes de qualquer `end` externo.
+
+Uma fila Promise mínima preserva a ordem de pedidos rápidos sem fazer o
+workout aguardar o nativo. O primeiro descanso abre a superfície lógica pelo
+`sessionId`; descansos posteriores da mesma execução usam `update`, evitando
+uma atividade lógica por série. O ticker visual continua restrito a
+`Date.now()`/render e nunca chama a facade.
+
+Desacoplamento:
+Nem contrato, facade, adaptador opcional ou Context importam o protótipo
+`EXERCISES`, a biblioteca T001-T090, templates, modificadores ou `ex.rest`.
+Quando a Workout Engine real materializar `effective_rest_seconds` e o nome
+de apresentação, ela poderá alimentar o mesmo Context/contrato sem mudança
+na interface futura de iOS/Android. Não foi criado AsyncStorage adicional.
+
+Testes:
+Adicionados testes de capabilities ausentes, no-op sem módulo, contrato
+temporal, payload sem remaining, reuso por sessão, extensão absoluta,
+captura de erros em start/update/end, ordem rápida e wiring estrutural de
+todas as transições. Também há guard explícito contra chamadas externas no
+ticker de um segundo e contra a criação de fontes Swift/Kotlin/config nesta
+fase.
+
+Assinatura:
+Codex — 2026-08-24 — Contrato e facade fail-open do Live Rest Timer.
+
+---
+
+Data: 2026-08-24
+Responsável: Codex — Agente Frontend
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
 Implementada a Fase 2 da fundação do Rest Timer. O countdown deixou de usar
 `restLeft--` como fonte de verdade e passou a representar cada descanso por
 `startedAt`/`endsAt` em epoch milliseconds. A UI mantém um ticker apenas para
