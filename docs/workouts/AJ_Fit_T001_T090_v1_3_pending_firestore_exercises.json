@@ -1,0 +1,191 @@
+{
+  "schema_version": "1.0.0",
+  "source": "AJ_Fit_T001_T090_workouts_canonical_v1_3.json",
+  "pending_exercises": [
+    {
+      "exercise_id": "abducao-de-quadril-com-apoio",
+      "name_pt_br": "Abdução de Quadril com Apoio",
+      "occurrences": 3
+    },
+    {
+      "exercise_id": "abducao-de-quadril-com-mini-band",
+      "name_pt_br": "Abdução de Quadril com Mini Band",
+      "occurrences": 17
+    },
+    {
+      "exercise_id": "afundo",
+      "name_pt_br": "Afundo",
+      "occurrences": 1
+    },
+    {
+      "exercise_id": "agachamento",
+      "name_pt_br": "Agachamento",
+      "occurrences": 6
+    },
+    {
+      "exercise_id": "agachamento-goblet",
+      "name_pt_br": "Agachamento Goblet",
+      "occurrences": 62
+    },
+    {
+      "exercise_id": "agachamento-ate-a-cadeira",
+      "name_pt_br": "Agachamento até a Cadeira",
+      "occurrences": 3
+    },
+    {
+      "exercise_id": "bicicleta-ergometrica",
+      "name_pt_br": "Bicicleta Ergométrica",
+      "occurrences": 56
+    },
+    {
+      "exercise_id": "bird-dog",
+      "name_pt_br": "Bird Dog",
+      "occurrences": 18
+    },
+    {
+      "exercise_id": "caminhada",
+      "name_pt_br": "Caminhada",
+      "occurrences": 116
+    },
+    {
+      "exercise_id": "caminhada-do-fazendeiro",
+      "name_pt_br": "Caminhada do Fazendeiro",
+      "occurrences": 23
+    },
+    {
+      "exercise_id": "dead-bug",
+      "name_pt_br": "Dead Bug",
+      "occurrences": 34
+    },
+    {
+      "exercise_id": "desenvolvimento-com-elastico",
+      "name_pt_br": "Desenvolvimento com Elástico",
+      "occurrences": 3
+    },
+    {
+      "exercise_id": "desenvolvimento-com-elastico-sentado",
+      "name_pt_br": "Desenvolvimento com Elástico Sentado",
+      "occurrences": 3
+    },
+    {
+      "exercise_id": "dobradica-de-quadril",
+      "name_pt_br": "Dobradiça de Quadril",
+      "occurrences": 2
+    },
+    {
+      "exercise_id": "equilibrio-com-apoio",
+      "name_pt_br": "Equilíbrio com Apoio",
+      "occurrences": 2
+    },
+    {
+      "exercise_id": "flexao-de-braco",
+      "name_pt_br": "Flexão de Braço",
+      "occurrences": 52
+    },
+    {
+      "exercise_id": "flexao-de-joelho-deslizante",
+      "name_pt_br": "Flexão de Joelho Deslizante",
+      "occurrences": 2
+    },
+    {
+      "exercise_id": "flexao-de-joelho-com-apoio",
+      "name_pt_br": "Flexão de joelho com apoio",
+      "occurrences": 6
+    },
+    {
+      "exercise_id": "flexao-na-parede",
+      "name_pt_br": "Flexão na Parede",
+      "occurrences": 6
+    },
+    {
+      "exercise_id": "marcha-controlada",
+      "name_pt_br": "Marcha Controlada",
+      "occurrences": 4
+    },
+    {
+      "exercise_id": "marcha-estacionaria",
+      "name_pt_br": "Marcha Estacionária",
+      "occurrences": 27
+    },
+    {
+      "exercise_id": "mobilidade-toracica",
+      "name_pt_br": "Mobilidade Torácica",
+      "occurrences": 4
+    },
+    {
+      "exercise_id": "mobilidade-de-quadril",
+      "name_pt_br": "Mobilidade de Quadril",
+      "occurrences": 26
+    },
+    {
+      "exercise_id": "mudancas-leves-de-direcao",
+      "name_pt_br": "Mudanças leves de direção",
+      "occurrences": 4
+    },
+    {
+      "exercise_id": "pallof-press",
+      "name_pt_br": "Pallof Press",
+      "occurrences": 24
+    },
+    {
+      "exercise_id": "panturrilha-com-apoio",
+      "name_pt_br": "Panturrilha com Apoio",
+      "occurrences": 9
+    },
+    {
+      "exercise_id": "ponte-de-gluteos",
+      "name_pt_br": "Ponte de Glúteos",
+      "occurrences": 27
+    },
+    {
+      "exercise_id": "posicao-semi-tandem-com-apoio",
+      "name_pt_br": "Posição Semi-Tandem com Apoio",
+      "occurrences": 4
+    },
+    {
+      "exercise_id": "puxada-com-elastico",
+      "name_pt_br": "Puxada com Elástico",
+      "occurrences": 70
+    },
+    {
+      "exercise_id": "remada-com-elastico",
+      "name_pt_br": "Remada com Elástico",
+      "occurrences": 34
+    },
+    {
+      "exercise_id": "respiracao-coordenada",
+      "name_pt_br": "Respiração Coordenada",
+      "occurrences": 4
+    },
+    {
+      "exercise_id": "rosca-martelo",
+      "name_pt_br": "Rosca Martelo",
+      "occurrences": 8
+    },
+    {
+      "exercise_id": "sentar-e-levantar-da-cadeira",
+      "name_pt_br": "Sentar e Levantar da Cadeira",
+      "occurrences": 17
+    },
+    {
+      "exercise_id": "subida-em-degrau-baixo",
+      "name_pt_br": "Subida em Degrau Baixo",
+      "occurrences": 6
+    },
+    {
+      "exercise_id": "subida-em-degrau-baixo-com-apoio",
+      "name_pt_br": "Subida em Degrau Baixo com Apoio",
+      "occurrences": 12
+    },
+    {
+      "exercise_id": "subida-no-banco",
+      "name_pt_br": "Subida no Banco",
+      "occurrences": 37
+    },
+    {
+      "exercise_id": "transferencia-de-peso",
+      "name_pt_br": "Transferência de Peso",
+      "occurrences": 4
+    }
+  ]
+}
