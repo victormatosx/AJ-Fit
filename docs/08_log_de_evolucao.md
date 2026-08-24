@@ -18,6 +18,61 @@ Este documento é a fonte oficial de histórico do projeto.
 
 ---
 
+Data: 2026-08-24
+Responsável: Codex — Agente Frontend
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Implementada a Fase 2 da fundação do Rest Timer. O countdown deixou de usar
+`restLeft--` como fonte de verdade e passou a representar cada descanso por
+`startedAt`/`endsAt` em epoch milliseconds. A UI mantém um ticker apenas para
+renderização e recalcula `ceil((endsAt - Date.now()) / 1000)` a cada tick;
+atrasos ou suspensão do JavaScript não acumulam drift.
+
+Criados `src/lib/restTimer.ts` (modelo/funções puras),
+`src/state/RestSessionContext.tsx` (estado temporal acima do
+`WorkoutScreen`) e `src/services/restSessionStorage.ts` (persistência mínima
+e serializada por transição). `workoutSessionId` e `restId` usam
+`expo-crypto/randomUUID()`, dependência que já existia no projeto. `+15s`
+estende apenas `endsAt`; a barra continua visualmente regressiva (cheia no
+início, vazia no fim), agora com duração efetiva `endsAt - startedAt` e clamp
+em `[0, 1]`.
+
+Expiração segue `running → expired → consumed`. O deadline absoluto, o
+retorno de `AppState` a `active` e o skip podem observar o mesmo descanso,
+mas a transição é reivindicada por `restId` no Context; apenas o consumidor
+vencedor chama o `advanceAfterRest()` já existente no `WorkoutScreen`.
+Registro de carga, PR, progressão de série/exercício e conclusão do treino
+não foram movidos para o timer.
+
+Persistência:
+O descanso é gravado apenas no início e em extensões, e removido em
+expiração, skip, encerramento ou cleanup. Não há escrita por segundo. Como o
+restante da workout engine ainda não é restaurável, um registro encontrado
+em cold start/process death é validado, descartado e removido; nenhum treino
+fictício é criado e `advanceAfterRest()` nunca é chamado sem o estado React
+que o possui.
+
+Testes:
+Adicionados testes unitários para criação, remaining absoluto, expiração,
+tick atrasado, extensões simples/múltiplas, clamp/progresso, estabilidade do
+session id, consumo único, skip concorrente e validação/persistência. O teste
+estrutural antigo que exigia literalmente `setRestLeft((r) => r - 1)` foi
+atualizado para proteger `endsAt`, derivação por `Date.now()`, preservação do
+timer `elapsed`, último set sem descanso e `advanceAfterRest()` como fronteira
+da workout engine.
+
+Limitação:
+Somente o descanso e a identidade da execução sobrevivem à desmontagem da
+tela. A engine completa (ordem, progresso, substituições e drafts de carga)
+ainda não possui persistência/restauração completa e não foi duplicada neste
+Context; process-death continua descartando o descanso com segurança.
+
+Assinatura:
+Codex — 2026-08-24 — Rest Timer absoluto, persistente e reconciliado por AppState.
+
+---
+
 # 2. Regras gerais
 
 Toda decisão relevante deve ser registrada.

@@ -19,6 +19,14 @@ const WORKOUT_SRC = readFileSync(
   resolve(__dirname, '../../screens/WorkoutScreen.tsx'),
   'utf8',
 );
+const REST_TIMER_SRC = readFileSync(resolve(__dirname, '../restTimer.ts'), 'utf8');
+const REST_CONTEXT_SRC = readFileSync(
+  resolve(__dirname, '../../state/RestSessionContext.tsx'),
+  'utf8',
+);
+const REST_CONTEXT_CODE = REST_CONTEXT_SRC
+  .replace(/\/\*[\s\S]*?\*\//g, '')
+  .replace(/\/\/.*$/gm, '');
 
 describe('WorkoutScreen source — session state machine invariants', () => {
   it('still declares the same session state variables', () => {
@@ -27,8 +35,6 @@ describe('WorkoutScreen source — session state machine invariants', () => {
       'const [progress, setProgress]',
       'const [skipped, setSkipped]',
       'const [logged, setLogged]',
-      'const [resting, setResting]',
-      'const [restLeft, setRestLeft]',
       'const [pending, setPending]',
       'const [regWeight, setRegWeight]',
       'const [permSubs, setPermSubs]',
@@ -52,11 +58,29 @@ describe('WorkoutScreen source — session state machine invariants', () => {
     }
   });
 
-  it('still ticks the elapsed session timer at 1s and the rest timer at 1s', () => {
-    // Two `setInterval`/`setTimeout` callbacks with 1000ms delay — one for
-    // `setElapsed((e) => e + 1)` and one for `setRestLeft((r) => r - 1)`.
+  it('keeps the elapsed timer, but derives rest time from an absolute endsAt', () => {
     expect(WORKOUT_SRC).toMatch(/setElapsed\(\(e\)\s*=>\s*e\s*\+\s*1\)/);
-    expect(WORKOUT_SRC).toMatch(/setRestLeft\(\(r\)\s*=>\s*r\s*-\s*1\)/);
+    expect(WORKOUT_SRC).not.toMatch(/setRestLeft\(\(r\)\s*=>\s*r\s*-\s*1\)/);
+    expect(WORKOUT_SRC).toContain('computeRemainingSeconds(rest, restNow)');
+    expect(REST_TIMER_SRC).toContain('endsAt: input.startedAt + input.durationSeconds * 1000');
+    expect(REST_TIMER_SRC).toContain('Math.ceil((rest.endsAt - now) / 1000)');
+  });
+
+  it('keeps advanceAfterRest as the sole workout transition after expiry or skip', () => {
+    expect(WORKOUT_SRC).toContain('if (consumeExpiration(rest.restId)) advanceAfterRest();');
+    expect(WORKOUT_SRC).toContain('if (cancelRest(rest.restId)) advanceAfterRest();');
+    expect(REST_CONTEXT_CODE).not.toContain('advanceAfterRest');
+  });
+
+  it('does not start a rest for the final set of the workout', () => {
+    const completeSet = WORKOUT_SRC.slice(
+      WORKOUT_SRC.indexOf('const completeSet = () => {'),
+      WORKOUT_SRC.indexOf('const skipRest = () => {'),
+    );
+    expect(completeSet.indexOf('if (isLastOverall)')).toBeLessThan(
+      completeSet.indexOf('startRest({'),
+    );
+    expect(completeSet).toMatch(/if \(isLastOverall\) \{[\s\S]*?setFinished\(true\);[\s\S]*?return;/);
   });
 });
 

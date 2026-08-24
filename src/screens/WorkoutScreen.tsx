@@ -35,6 +35,8 @@ import {
   workoutLoadUnit,
 } from '../units/workoutLoadConversions';
 import { WORKOUT_SUBSTITUTIONS_STORAGE_KEY as SUBS_KEY } from '../services/workoutSubstitutionsStorage';
+import { computeRemainingSeconds, computeRestProgress } from '../lib/restTimer';
+import { useRestSession } from '../state/RestSessionContext';
 
 type SetData = { r: number; w: number };
 type SubOption = { name: string; target: string; db: string };
@@ -212,6 +214,18 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
   const loadUnit = workoutLoadUnit(resolvedUnits);
   const tLoose = t as unknown as LooseT;
   const { canPerform } = usePremiumCapabilities();
+  const {
+    workoutSessionId,
+    status: restStatus,
+    rest,
+    startRest,
+    addSeconds: addRestSeconds,
+    cancelRest,
+    consumeExpiration,
+  } = useRestSession();
+  const restingExerciseIndex = rest
+    ? EXERCISES.findIndex((candidate) => candidate.id === rest.exerciseId)
+    : -1;
   // FASE 3: defense-in-depth, not the primary gate — AppShell's
   // `startWorkout()` is the only place that sets `tab === 'workout'` today,
   // and it already checks START_WORKOUT before doing so. This bounces back
@@ -225,18 +239,34 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
     // continuous subscription to `canPerform`/`onDone`.
   }, []);
   // Queue of exercise indices in current order (head = current)
-  const [order, setOrder] = useState<number[]>(() => EXERCISES.map((_, i) => i));
+  const [order, setOrder] = useState<number[]>(() => {
+    const defaultOrder = EXERCISES.map((_, i) => i);
+    if (restingExerciseIndex < 0) return defaultOrder;
+    return [restingExerciseIndex, ...defaultOrder.filter((i) => i !== restingExerciseIndex)];
+  });
   // exIdx -> sets completed
-  const [progress, setProgress] = useState<Record<number, number>>({});
+  const [progress, setProgress] = useState<Record<number, number>>(() =>
+    restingExerciseIndex >= 0 && rest
+      ? { [restingExerciseIndex]: rest.setIndex }
+      : {}
+  );
   // exercise indices that were skipped and later requeued
   const [skipped, setSkipped] = useState<number[]>([]);
   // `${exId}-${setIdx}` -> logged weight for the session
   const [logged, setLogged] = useState<Record<string, number>>({});
 
-  const [resting, setResting] = useState(false);
-  const [restLeft, setRestLeft] = useState(0);
-  const [pending, setPending] = useState<{ exId: string; setIdx: number } | null>(null);
-  const [regWeight, setRegWeight] = useState(0);
+  // `pending` and load entry remain workout-engine state. On an in-process
+  // tab remount, the active rest restores the current exercise/set identity
+  // needed to finish this transition without making RestSessionContext own
+  // load/PR, exercise order or progression decisions.
+  const [pending, setPending] = useState<{ exId: string; setIdx: number } | null>(() =>
+    rest ? { exId: rest.exerciseId, setIdx: rest.setIndex } : null
+  );
+  const [regWeight, setRegWeight] = useState(() => {
+    if (!rest) return 0;
+    const restingExercise = EXERCISES.find((candidate) => candidate.id === rest.exerciseId);
+    return restingExercise?.sets[rest.setIndex]?.w ?? 0;
+  });
 
   const [queueOpen, setQueueOpen] = useState(false);
   const [videoOpen, setVideoOpen] = useState(false);
@@ -245,6 +275,7 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
 
   const [finished, setFinished] = useState(false);
   const [elapsed, setElapsed] = useState(0);
+  const [restNow, setRestNow] = useState(Date.now);
 
   const [permSubs, setPermSubs] = useState<Record<string, SubOption>>({});
   const [sessionSubs, setSessionSubs] = useState<Record<string, SubOption>>({});
@@ -274,6 +305,16 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
     return () => clearInterval(t);
   }, []);
 
+  // Foreground-only visual ticker. It never decrements countdown state: every
+  // render derives the display from the absolute deadline and Date.now().
+  useEffect(() => {
+    if (restStatus !== 'running' || !rest) return undefined;
+    const tick = () => setRestNow(Date.now());
+    tick();
+    const timer = setInterval(tick, 1000);
+    return () => clearInterval(timer);
+  }, [restStatus, rest?.endsAt, rest?.restId]);
+
   const ovr = (id: string): SubOption | null => sessionSubs[id] || permSubs[id] || null;
   const resolve = (base: Exercise): Exercise => {
     const o = ovr(base.id);
@@ -295,6 +336,9 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
   const wasSkipped = skipped.includes(exIdx);
   const isSubbed = !!ovr(baseEx.id);
   const isLastOverall = order.length === 1 && setIdx === ex.sets.length - 1;
+  const resting = restStatus === 'running' && rest !== null;
+  const remainingRestSeconds = resting ? computeRemainingSeconds(rest, restNow) : 0;
+  const restProgress = resting ? computeRestProgress(rest, restNow) : 0;
 
   const lastWeight = (e: Exercise, i: number) =>
     logged[`${e.id}-${i}`] ?? e.sets[i].w;
@@ -327,7 +371,6 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
     const finishedSet = setIdx + 1;
     const nextProgress = { ...progress, [exIdx]: finishedSet };
     setProgress(nextProgress);
-    setResting(false);
     setPending(null);
     setRegWeight(0);
 
@@ -353,15 +396,15 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
   };
 
   useEffect(() => {
-    if (!resting) return;
-    if (restLeft <= 0) {
-      advanceAfterRest();
-      return;
-    }
-    const t = setTimeout(() => setRestLeft((r) => r - 1), 1000);
-    return () => clearTimeout(t);
+    if (restStatus !== 'expired' || !rest) return;
+    // Timer deadline, foreground reconciliation and a delayed render may all
+    // observe the same expiry. The Context lets exactly one caller claim it;
+    // only that winner may enter the workout business transition below.
+    if (consumeExpiration(rest.restId)) advanceAfterRest();
+    // advanceAfterRest intentionally remains the existing workout-owned
+    // transition and is not moved into the temporal Context.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resting, restLeft]);
+  }, [consumeExpiration, rest?.restId, restStatus]);
 
   const completeSet = () => {
     if (isLastOverall) {
@@ -371,8 +414,17 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
     }
     setPending({ exId: ex.id, setIdx });
     setRegWeight(lastWeight(ex, setIdx));
-    setRestLeft(ex.rest);
-    setResting(true);
+    startRest({
+      durationSeconds: ex.rest,
+      exerciseId: ex.id,
+      setIndex: setIdx,
+      totalSets: ex.sets.length,
+    });
+  };
+
+  const skipRest = () => {
+    if (!rest || rest.workoutSessionId !== workoutSessionId) return;
+    if (cancelRest(rest.restId)) advanceAfterRest();
   };
 
   const skipExercise = () => {
@@ -801,14 +853,14 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
         {/* REST OVERLAY */}
         {resting && (
           <RestOverlay
-            restLeft={restLeft}
-            restTotal={ex.rest}
+            remainingSeconds={remainingRestSeconds}
+            progress={restProgress}
             fmt={fmt}
             regWeight={regWeight}
             setRegWeight={setRegWeight}
             setNumber={(pending ? pending.setIdx : setIdx) + 1}
-            onAdd15={() => setRestLeft((r) => r + 15)}
-            onSkip={advanceAfterRest}
+            onAdd15={() => addRestSeconds(15)}
+            onSkip={skipRest}
             onMinimize={onMinimize}
           />
         )}
@@ -1360,8 +1412,8 @@ function Badge({
 /* ────────────────────────────── REST OVERLAY ────────────────────────────── */
 
 function RestOverlay({
-  restLeft,
-  restTotal,
+  remainingSeconds,
+  progress,
   fmt,
   regWeight,
   setRegWeight,
@@ -1370,8 +1422,8 @@ function RestOverlay({
   onSkip,
   onMinimize,
 }: {
-  restLeft: number;
-  restTotal: number;
+  remainingSeconds: number;
+  progress: number;
   fmt: (s: number) => string;
   regWeight: number;
   setRegWeight: (fn: number | ((prev: number) => number)) => void;
@@ -1448,10 +1500,10 @@ function RestOverlay({
           textShadowOffset: { width: 0, height: 0 },
         }}
       >
-        {fmt(restLeft)}
+        {fmt(remainingSeconds)}
       </Text>
       <View style={{ width: 220, marginTop: 22 }}>
-        <SegBar value={restLeft / (restTotal + 0.001)} segs={14} />
+        <SegBar value={progress} segs={14} />
       </View>
 
       {/* weight logging card */}

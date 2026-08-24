@@ -41,6 +41,7 @@ import {
   resolvePaywallPremiumReturn,
 } from '../lib/paywallPremiumReturn';
 import { useDeepLinkIntent } from '../state/DeepLinkContext';
+import { RestSessionProvider, useRestSession } from '../state/RestSessionContext';
 
 type SupportRoute =
   | { name: 'help' }
@@ -79,7 +80,9 @@ export function AppShell() {
   const [showPremium, setShowPremium] = useState(false);
   return (
     <PremiumActionProvider onRequestUpgrade={() => setShowPremium(true)}>
-      <AppShellContent showPremium={showPremium} setShowPremium={setShowPremium} />
+      <RestSessionProvider>
+        <AppShellContent showPremium={showPremium} setShowPremium={setShowPremium} />
+      </RestSessionProvider>
     </PremiumActionProvider>
   );
 }
@@ -96,6 +99,7 @@ function AppShellContent({
   const { linkedProviders } = useAuth();
   const { isPremium } = useSubscription();
   const { pendingIntent, consumeIntent } = useDeepLinkIntent();
+  const { beginWorkoutSession, endWorkoutSession } = useRestSession();
   const paywallPremiumReturnState = useRef(INITIAL_PAYWALL_PREMIUM_RETURN_STATE);
   // Single centralized prewarm schedule (docs/23_navegacao_e_lifecycle.md
   // §8/§14) — PREWARM_ROUTE_IDS in src/lib/prewarmRoutes.ts is the only
@@ -194,7 +198,13 @@ function AppShellContent({
   // (see Fase 3 report, "Decisão sobre REGISTER_SET").
   const startWorkout = () => {
     setShowWorkoutConfirmation(false);
+    beginWorkoutSession();
     setTab('workout');
+  };
+
+  const finishWorkoutSession = () => {
+    endWorkoutSession();
+    setTab('home');
   };
 
   return (
@@ -224,7 +234,12 @@ function AppShellContent({
             onOpenProfile={() => setTab('profile')}
           />
         </PersistentScreen>
-        {tab === 'workout' && <WorkoutScreen onDone={() => setTab('home')} />}
+        {tab === 'workout' && (
+          <WorkoutScreen
+            onDone={finishWorkoutSession}
+            onMinimize={() => setTab('home')}
+          />
+        )}
         <PersistentScreen
           active={tab === 'progress'}
           prewarm={prewarmed.PROGRESS}
