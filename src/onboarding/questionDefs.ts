@@ -2,9 +2,10 @@ import type { Question } from '../components/onboarding/QuestionRenderer';
 import { MAX_MUSCLE_FOCUS, type OnboardingStepId } from './steps';
 
 /**
- * Question structure/config for every funnel step whose id maps 1:1 to a
- * `Quiz` field. Copy lives in i18n (`quiz:${id}.*`), same lookup convention
- * the legacy QuizScreen used — nothing here is user-visible text.
+ * Question structure/config for every questionnaire step. Most ids map 1:1
+ * to a `Quiz` field; screening steps are mapped into their nested object by
+ * `questionnaireSchema.ts`. Copy lives in i18n (`quiz:${id}.*`) — nothing
+ * here is user-visible text.
  */
 export const FUNNEL_QUESTIONS: Partial<Record<OnboardingStepId, Question>> = {
   motivation: {
@@ -23,23 +24,33 @@ export const FUNNEL_QUESTIONS: Partial<Record<OnboardingStepId, Question>> = {
     id: 'goal',
     kind: 'choice-large',
     options: [
-      { v: 'hyper', icon: 'dumbbell' },
-      { v: 'cut', icon: 'flame' },
-      { v: 'perf', icon: 'bolt' },
-      { v: 'def', icon: 'target' },
-      { v: 'recon', icon: 'heart' },
+      { v: 'gain_muscle', icon: 'dumbbell' },
+      { v: 'lose_fat', icon: 'flame' },
+      { v: 'strength', icon: 'bolt' },
+      { v: 'conditioning', icon: 'heart' },
+      { v: 'body_composition', icon: 'target' },
+      { v: 'return_to_training', icon: 'heart' },
     ],
   },
   level: {
     id: 'level',
     kind: 'choice-large',
-    options: [{ v: 'beg' }, { v: 'int' }, { v: 'adv' }, { v: 'elite' }],
+    options: [
+      { v: 'never_or_starting' },
+      { v: 'beginner' },
+      { v: 'intermediate' },
+      { v: 'advanced' },
+    ],
   },
   sex: { id: 'sex', kind: 'choice', options: [{ v: 'm' }, { v: 'f' }] },
   birthDate: { id: 'birthDate', kind: 'date', minAge: 16, maxAge: 75 },
   height: { id: 'height', kind: 'wheel', min: 140, max: 220, default: 178, digits: { min: 3, max: 3 } },
   weight: { id: 'weight', kind: 'wheel', min: 40, max: 180, default: 78, digits: { min: 2, max: 3 } },
-  days: { id: 'days', kind: 'wheel', min: 2, max: 7, default: 4, digits: { min: 1, max: 1 } },
+  days: {
+    id: 'days',
+    kind: 'choice',
+    options: [{ v: '2' }, { v: '3' }, { v: '4' }, { v: '5' }, { v: '6' }, { v: '7' }],
+  },
   duration: {
     id: 'duration',
     kind: 'choice',
@@ -54,22 +65,156 @@ export const FUNNEL_QUESTIONS: Partial<Record<OnboardingStepId, Question>> = {
       { v: 'both', icon: 'bolt' },
     ],
   },
+  primaryPlace: {
+    id: 'primaryPlace',
+    kind: 'choice-large',
+    options: [{ v: 'gym', icon: 'dumbbell' }, { v: 'home', icon: 'heart' }],
+  },
+  equipment: {
+    id: 'equipment',
+    kind: 'multi',
+    exclusiveOption: 'none',
+    options: [
+      { v: 'bodyweight' },
+      { v: 'dumbbells' },
+      { v: 'bands' },
+      { v: 'bench_or_box' },
+      { v: 'barbell' },
+      { v: 'other' },
+      { v: 'none' },
+    ],
+  },
   limits: {
     id: 'limits',
     kind: 'multi',
+    exclusiveOption: 'none',
     options: [
       { v: 'none' },
       { v: 'knee' },
+      { v: 'hip' },
       { v: 'back' },
       { v: 'shoulder' },
+      { v: 'elbow' },
       { v: 'wrist' },
-      { v: 'hip' },
+      { v: 'ankle_foot' },
+      { v: 'other' },
+    ],
+  },
+  limitationImpact: {
+    id: 'limitationImpact',
+    kind: 'choice-large',
+    options: [
+      { v: 'mild' },
+      { v: 'requires_adaptation' },
+      { v: 'professional_restriction' },
+      { v: 'unknown' },
+    ],
+  },
+  specialConditions: {
+    id: 'specialConditions',
+    kind: 'multi',
+    exclusiveOption: 'none',
+    options: [
+      { v: 'none' },
+      { v: 'pregnancy' },
+      { v: 'postpartum' },
+      { v: 'functional_limitation' },
+      { v: 'medical_restriction' },
+    ],
+  },
+  pregnancyWeeks: {
+    id: 'pregnancyWeeks',
+    kind: 'wheel',
+    min: 1,
+    max: 42,
+    default: 12,
+    digits: { min: 1, max: 2 },
+  },
+  pregnancyPrenatalCare: {
+    id: 'pregnancyPrenatalCare',
+    kind: 'choice',
+    options: [{ v: 'yes' }, { v: 'no' }],
+  },
+  pregnancyExerciseRestriction: {
+    id: 'pregnancyExerciseRestriction',
+    kind: 'choice',
+    options: [{ v: 'no' }, { v: 'yes' }],
+  },
+  pregnancyComplication: {
+    id: 'pregnancyComplication',
+    kind: 'choice',
+    options: [{ v: 'no' }, { v: 'yes' }, { v: 'unsure' }],
+  },
+  pregnancyWarningSigns: {
+    id: 'pregnancyWarningSigns',
+    kind: 'multi',
+    exclusiveOption: 'none',
+    options: [
+      { v: 'vaginal_bleeding' },
+      { v: 'dizziness_fainting' },
+      { v: 'chest_pain' },
+      { v: 'unusual_shortness_of_breath' },
+      { v: 'painful_regular_contractions' },
+      { v: 'fluid_leakage' },
+      { v: 'calf_pain_swelling' },
+      { v: 'none' },
+    ],
+  },
+  postpartumTimeSinceBirth: {
+    id: 'postpartumTimeSinceBirth',
+    kind: 'choice-large',
+    options: [
+      { v: 'under_6_weeks' },
+      { v: '6_12_weeks' },
+      { v: '3_6_months' },
+      { v: '6_12_months' },
+      { v: 'over_1_year' },
+    ],
+  },
+  postpartumDeliveryType: {
+    id: 'postpartumDeliveryType',
+    kind: 'choice',
+    options: [{ v: 'vaginal' }, { v: 'cesarean' }, { v: 'prefer_not_to_say' }],
+  },
+  postpartumSigns: {
+    id: 'postpartumSigns',
+    kind: 'multi',
+    exclusiveOption: 'none',
+    options: [
+      { v: 'pain' },
+      { v: 'healing_problems' },
+      { v: 'abnormal_bleeding' },
+      { v: 'incontinence' },
+      { v: 'vaginal_pressure' },
+      { v: 'dizziness_weakness' },
+      { v: 'none' },
+    ],
+  },
+  postpartumReturnClearance: {
+    id: 'postpartumReturnClearance',
+    kind: 'choice-large',
+    options: [{ v: 'yes' }, { v: 'not_yet' }, { v: 'with_restrictions' }],
+  },
+  functionalSituations: {
+    id: 'functionalSituations',
+    kind: 'multi',
+    exclusiveOption: 'none',
+    options: [
+      { v: 'walking_difficulty' },
+      { v: 'support_needed' },
+      { v: 'stairs_difficulty' },
+      { v: 'balance_problems' },
+      { v: 'recent_fall' },
+      { v: 'sit_to_stand_difficulty' },
+      { v: 'daily_activities_difficulty' },
+      { v: 'none' },
     ],
   },
   muscleFocus: {
     id: 'muscleFocus',
     kind: 'multi',
     maxSelections: MAX_MUSCLE_FOCUS,
+    exclusiveOption: 'none',
     options: [
       { v: 'chest' },
       { v: 'back' },

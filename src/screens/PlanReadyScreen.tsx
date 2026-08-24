@@ -33,13 +33,13 @@ export function PlanReadyScreen({
   const { theme } = useTheme();
   const { t } = useTranslation(['plan', 'quiz']);
   const { quiz } = useAppState();
-  const goalKey = quiz.goal ?? 'hyper';
-  const levelKey = quiz.level ?? 'int';
+  const goalKey = quiz.goal ?? 'gain_muscle';
+  const levelKey = quiz.level ?? 'intermediate';
   const days = quiz.days || 4;
   const durationMinutes = quiz.duration ?? '60';
 
-  const goalLabel = t(`quiz:goal.options.${goalKey}.label` as 'quiz:goal.options.hyper.label');
-  const levelLabel = t(`quiz:level.options.${levelKey}.label` as 'quiz:level.options.beg.label');
+  const goalLabel = t(`quiz:goal.options.${goalKey}.label` as 'quiz:goal.options.gain_muscle.label');
+  const levelLabel = t(`quiz:level.options.${levelKey}.label` as 'quiz:level.options.intermediate.label');
   const trainingSlots = deriveTrainingDaySlots(days);
 
   return (

@@ -42,9 +42,15 @@
     }
   },
   "goal": {
-    "title": "Main goal?",
-    "sub": "Sets the program's focus.",
+    "title": "What is your primary goal?",
+    "sub": "This defines your plan's goal family.",
     "options": {
+      "gain_muscle": { "label": "Build muscle", "description": "Increase muscle mass and size" },
+      "lose_fat": { "label": "Lose fat / lose weight", "description": "Reduce body fat" },
+      "strength": { "label": "Increase my strength", "description": "Improve force production" },
+      "conditioning": { "label": "Improve my fitness", "description": "Build endurance and conditioning" },
+      "body_composition": { "label": "Improve definition/body composition", "description": "Improve overall body composition" },
+      "return_to_training": { "label": "Return after time away from training", "description": "Resume with appropriate progression" },
       "hyper": { "label": "Hypertrophy", "description": "Build muscle mass" },
       "cut": { "label": "Fat loss", "description": "Burn fat" },
       "perf": { "label": "Performance", "description": "Strength & power" },
@@ -53,9 +59,13 @@
     }
   },
   "level": {
-    "title": "Your level?",
-    "sub": "The program starts exactly where you are.",
+    "title": "What is your experience with strength training?",
+    "sub": "Your experience will be used to adapt the plan.",
     "options": {
+      "never_or_starting": { "label": "I've never trained or I'm starting now", "description": "First contact or a very recent start" },
+      "beginner": { "label": "I've trained, but I'm still a beginner", "description": "Still building the fundamentals" },
+      "intermediate": { "label": "I've trained regularly for some time", "description": "I have consistency and familiarity" },
+      "advanced": { "label": "I'm experienced and know the main exercises", "description": "I have technical proficiency and experience" },
       "beg": { "label": "Beginner", "description": "Less than 6 months" },
       "int": { "label": "Intermediate", "description": "6 months to 2 years" },
       "adv": { "label": "Advanced", "description": "More than 2 years" },
@@ -63,21 +73,26 @@
     }
   },
   "days": {
-    "title": "Days per week?",
-    "sub": "We'll hold you to exactly that commitment.",
-    "unit": "days/wk"
+    "title": "How many days per week can you realistically train?",
+    "sub": "Consider your actual availability.",
+    "unit": "days/wk",
+    "options": {
+      "2": { "label": "2 days", "short": "2" }, "3": { "label": "3 days", "short": "3" },
+      "4": { "label": "4 days", "short": "4" }, "5": { "label": "5 days", "short": "5" },
+      "6": { "label": "6 days", "short": "6" }, "7": { "label": "7 days", "short": "7" }
+    }
   },
   "duration": {
-    "title": "Time per workout?",
+    "title": "How much time do you have per workout?",
     "options": {
-      "30": { "label": "30 min", "short": "30" },
-      "45": { "label": "45 min", "short": "45" },
-      "60": { "label": "60 min", "short": "60" },
-      "90": { "label": "90+ min", "short": "90" }
+      "30": { "label": "Up to 30 min", "short": "30" },
+      "45": { "label": "About 45 min", "short": "45" },
+      "60": { "label": "About 60 min", "short": "60" },
+      "90": { "label": "75–90+ min", "short": "90" }
     }
   },
   "place": {
-    "title": "Where do you train?",
+    "title": "Where do you plan to do most of your workouts?",
     "sub": "The workout uses only what you have.",
     "options": {
       "gym": {
@@ -91,15 +106,20 @@
         "description": "Bodyweight and whatever gear you've got at home."
       },
       "both": {
-        "label": "Both",
+        "label": "I'll alternate between gym and home",
         "short": "2X",
         "description": "You switch between gym days and home workouts."
       }
     }
   },
   "equipment": {
-    "title": "Where do you exercise?",
-    "sub": "Select the equipment you have access to. You can change this later.",
+    "title": "What equipment do you have available?",
+    "sub": "Select everything available for home training.",
+    "options": {
+      "bodyweight": "Bodyweight", "dumbbells": "Dumbbells", "bands": "Resistance bands",
+      "bench_or_box": "Bench/box/sturdy chair", "barbell": "Barbell and plates",
+      "other": "Other equipment", "none": "No equipment"
+    },
     "stepLabel": "Equipment · {{current}} / {{total}}",
     "search": "Search equipment",
     "quickPickAllGym": "I have a full gym",
@@ -177,15 +197,115 @@
     }
   },
   "limits": {
-    "title": "Any limitations?",
-    "sub": "We'll protect what needs care.",
+    "title": "Do you have pain, discomfort, or a limitation that affects your training?",
+    "sub": "Only report what affects training today; this is not a diagnosis.",
     "options": {
       "none": "None",
       "knee": "Knee",
       "back": "Back",
       "shoulder": "Shoulder",
       "wrist": "Wrist",
-      "hip": "Hip"
+      "hip": "Hip",
+      "elbow": "Elbow",
+      "ankle_foot": "Ankle/foot",
+      "other": "Other"
+    }
+  },
+  "primaryPlace": {
+    "title": "Where would you prefer your main plan to be based?",
+    "options": {
+      "gym": { "label": "Gym", "description": "Use the gym as the main environment" },
+      "home": { "label": "Home", "description": "Use your home setup as the main environment" }
+    }
+  },
+  "limitationImpact": {
+    "title": "Does this limitation currently prevent or make any movement difficult?",
+    "options": {
+      "mild": { "label": "No, it is only mild discomfort", "description": "It does not prevent movement" },
+      "requires_adaptation": { "label": "Yes, I need to adapt some exercises", "description": "Some movements need adjustment" },
+      "professional_restriction": { "label": "Yes, I have professional guidance/specific restrictions", "description": "There is guidance that must be respected" },
+      "unknown": { "label": "I don't know", "description": "I cannot assess the impact yet" }
+    }
+  },
+  "specialConditions": {
+    "title": "Is there anything below we should consider when building your workout?",
+    "sub": "Select all that apply.",
+    "options": {
+      "none": "None", "pregnancy": "I am pregnant", "postpartum": "I am postpartum",
+      "functional_limitation": "I have difficulty with balance, mobility, or daily activities",
+      "medical_restriction": "I have a medical restriction for exercise"
+    }
+  },
+  "pregnancyWeeks": { "title": "How many weeks pregnant are you?", "unit": "weeks" },
+  "pregnancyPrenatalCare": {
+    "title": "Are you receiving prenatal care?",
+    "options": { "yes": { "label": "Yes", "short": "YES" }, "no": { "label": "No", "short": "NO" } }
+  },
+  "pregnancyExerciseRestriction": {
+    "title": "Has a health professional restricted your exercise?",
+    "options": { "no": { "label": "No", "short": "NO" }, "yes": { "label": "Yes", "short": "YES" } }
+  },
+  "pregnancyComplication": {
+    "title": "Does your pregnancy have a relevant complication or special guidance?",
+    "options": {
+      "no": { "label": "No", "short": "NO" }, "yes": { "label": "Yes", "short": "YES" },
+      "unsure": { "label": "I'm not sure", "short": "?" }
+    }
+  },
+  "pregnancyWarningSigns": {
+    "title": "Are you currently experiencing any of these warning signs?",
+    "sub": "This only prepares the safety gate; it is not a diagnosis.",
+    "options": {
+      "vaginal_bleeding": "Vaginal bleeding",
+      "dizziness_fainting": "Dizziness or fainting",
+      "chest_pain": "Chest pain",
+      "unusual_shortness_of_breath": "Unusual shortness of breath",
+      "painful_regular_contractions": "Regular painful contractions",
+      "fluid_leakage": "Fluid leakage",
+      "calf_pain_swelling": "Significant calf pain or swelling",
+      "none": "None"
+    }
+  },
+  "postpartumTimeSinceBirth": {
+    "title": "How long has it been since delivery?",
+    "options": {
+      "under_6_weeks": { "label": "Less than 6 weeks", "description": "Recent delivery" },
+      "6_12_weeks": { "label": "6–12 weeks", "description": "Between 6 and 12 weeks" },
+      "3_6_months": { "label": "3–6 months", "description": "Between 3 and 6 months" },
+      "6_12_months": { "label": "6–12 months", "description": "Between 6 and 12 months" },
+      "over_1_year": { "label": "More than 1 year", "description": "Over one year ago" }
+    }
+  },
+  "postpartumDeliveryType": {
+    "title": "What type of delivery did you have?",
+    "options": {
+      "vaginal": { "label": "Vaginal", "short": "VAG" }, "cesarean": { "label": "Cesarean", "short": "C-S" },
+      "prefer_not_to_say": { "label": "Prefer not to say", "short": "—" }
+    }
+  },
+  "postpartumSigns": {
+    "title": "Are you currently experiencing any of these signs?",
+    "options": {
+      "pain": "Significant pain", "healing_problems": "Healing problems", "abnormal_bleeding": "Abnormal bleeding",
+      "incontinence": "Urinary/fecal leakage", "vaginal_pressure": "Vaginal heaviness/pressure",
+      "dizziness_weakness": "Unusual dizziness or weakness", "none": "None"
+    }
+  },
+  "postpartumReturnClearance": {
+    "title": "Have you received clearance/guidance to return to exercise?",
+    "options": {
+      "yes": { "label": "Yes", "description": "I received clearance/guidance" },
+      "not_yet": { "label": "Not yet", "description": "I have not received clearance yet" },
+      "with_restrictions": { "label": "I was advised to exercise with restrictions", "description": "There are restrictions that must be respected" }
+    }
+  },
+  "functionalSituations": {
+    "title": "Are any of these situations part of your routine today?",
+    "options": {
+      "walking_difficulty": "I have difficulty walking", "support_needed": "I need support for some movements",
+      "stairs_difficulty": "I have difficulty climbing steps", "balance_problems": "I have balance problems",
+      "recent_fall": "I fell recently", "sit_to_stand_difficulty": "I have difficulty sitting down and standing up",
+      "daily_activities_difficulty": "Some daily activities are difficult", "none": "None of these"
     }
   },
   "muscleFocus": {

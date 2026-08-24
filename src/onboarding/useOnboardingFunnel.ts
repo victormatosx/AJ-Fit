@@ -60,23 +60,23 @@ export function useOnboardingFunnel(mode: OnboardingFunnelMode) {
     void writeOnboardingDraft(buildDraft({ currentStepId, name, quiz }));
   }, [mode, hydrated, currentStepId, name, quiz]);
 
-  const progress = computeOnboardingProgress(currentStepId, mode);
+  const progress = computeOnboardingProgress(currentStepId, mode, quiz);
 
   const goNext = useCallback(() => {
     logOnboardingEvent({ name: 'onboarding_step_completed', stepId: currentStepId });
-    const next = getNextStepId(currentStepId, mode);
+    const next = getNextStepId(currentStepId, mode, quiz);
     if (next) {
       setCurrentStepId(next);
       logOnboardingEvent({ name: 'onboarding_step_viewed', stepId: next });
     }
-  }, [currentStepId, mode]);
+  }, [currentStepId, mode, quiz]);
 
-  const canGoBack = getPreviousStepId(currentStepId, mode) !== null;
+  const canGoBack = getPreviousStepId(currentStepId, mode, quiz) !== null;
 
   const goBack = useCallback(() => {
-    const prev = getPreviousStepId(currentStepId, mode);
+    const prev = getPreviousStepId(currentStepId, mode, quiz);
     if (prev) setCurrentStepId(prev);
-  }, [currentStepId, mode]);
+  }, [currentStepId, mode, quiz]);
 
   const jumpTo = useCallback((id: OnboardingStepId) => {
     if (!isStepDevJumpable(id)) return;

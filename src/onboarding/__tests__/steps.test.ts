@@ -14,10 +14,10 @@ import {
 } from '../steps';
 
 describe('ONBOARDING_STEPS', () => {
-  it('has 25 unique step ids', () => {
+  it('has 39 unique step ids', () => {
     const ids = ONBOARDING_STEPS.map((s) => s.id);
-    expect(ids).toHaveLength(25);
-    expect(new Set(ids).size).toBe(25);
+    expect(ids).toHaveLength(39);
+    expect(new Set(ids).size).toBe(39);
   });
 
   it('never lets auth/paywall be dev-jumpable', () => {
@@ -46,7 +46,7 @@ describe('ONBOARDING_STEPS', () => {
 });
 
 describe('getStepSequence / anonymous vs forcedQuestionnaire', () => {
-  it('anonymous sequence includes all 25 steps in ONBOARDING_STEPS order', () => {
+  it('static anonymous sequence includes every registered step in order', () => {
     expect(getStepSequence('anonymous')).toEqual(ONBOARDING_STEPS.map((s) => s.id));
   });
 
@@ -66,7 +66,7 @@ describe('getNextStepId / getPreviousStepId', () => {
     const skipKinds = ['interstitial', 'socialProof', 'processing'];
     let id: OnboardingStepId = 'presentation';
     const visited: OnboardingStepId[] = [id];
-    for (let i = 0; i < 24; i++) {
+    for (let i = 0; i < ONBOARDING_STEPS.length - 1; i++) {
       const next = getNextStepId(id, 'anonymous');
       expect(next).not.toBeNull();
       id = next!;
@@ -87,7 +87,7 @@ describe('getNextStepId / getPreviousStepId', () => {
     // weight -> interstitial_methodology -> days
     expect(getPreviousStepId('days', 'anonymous')).toBe('weight');
     // place -> interstitial_guidedWorkout -> limits
-    expect(getPreviousStepId('limits', 'anonymous')).toBe('place');
+    expect(getPreviousStepId('limits', 'anonymous', { place: 'gym', limits: ['none'], specialConditions: ['none'] })).toBe('place');
     // muscleFocus -> interstitial_ajFitProgress -> socialProof -> commitment
     expect(getPreviousStepId('commitment', 'anonymous')).toBe('muscleFocus');
   });
@@ -128,6 +128,50 @@ describe('computeOnboardingProgress', () => {
     const anonTotal = computeOnboardingProgress('goal', 'anonymous').total;
     const forcedTotal = computeOnboardingProgress('goal', 'forcedQuestionnaire').total;
     expect(forcedTotal).toBeLessThan(anonTotal);
+  });
+});
+
+describe('conditional questionnaire branches', () => {
+  const standard = { place: 'gym', limits: ['none'], specialConditions: ['none'] };
+
+  it('keeps the standard path compact', () => {
+    const seq = getStepSequence('anonymous', standard);
+    expect(seq).not.toContain('equipment');
+    expect(seq).not.toContain('primaryPlace');
+    expect(seq).not.toContain('limitationImpact');
+    expect(seq).not.toContain('pregnancyWeeks');
+    expect(seq).not.toContain('postpartumSigns');
+    expect(seq).not.toContain('functionalSituations');
+  });
+
+  it('adds home equipment and both-environment resolution only when applicable', () => {
+    expect(getStepSequence('anonymous', { ...standard, place: 'home' })).toContain('equipment');
+    const both = getStepSequence('anonymous', { ...standard, place: 'both' });
+    expect(both).toContain('primaryPlace');
+    expect(both).toContain('equipment');
+  });
+
+  it('adds limitation impact and coexisting pregnancy/functional screening', () => {
+    const seq = getStepSequence('anonymous', {
+      place: 'gym',
+      limits: ['knee'],
+      specialConditions: ['pregnancy', 'functional_limitation'],
+    });
+    expect(seq).toContain('limitationImpact');
+    expect(seq).toContain('pregnancyComplication');
+    expect(seq).toContain('functionalSituations');
+    expect(getStepSequence('anonymous', { ...standard, specialConditions: ['postpartum'] })).toContain(
+      'postpartumReturnClearance',
+    );
+  });
+
+  it('uses the applicable path as the progress denominator', () => {
+    const standardTotal = computeOnboardingProgress('goal', 'anonymous', standard).total;
+    const pregnancyTotal = computeOnboardingProgress('goal', 'anonymous', {
+      ...standard,
+      specialConditions: ['pregnancy'],
+    }).total;
+    expect(pregnancyTotal).toBe(standardTotal + 5);
   });
 });
 

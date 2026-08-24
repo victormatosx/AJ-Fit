@@ -26,7 +26,7 @@ import { EvolutionInterstitialScreen } from './onboarding/EvolutionInterstitialS
 import { MethodologyInterstitialScreen } from './onboarding/MethodologyInterstitialScreen';
 import { GuidedWorkoutInterstitialScreen } from './onboarding/GuidedWorkoutInterstitialScreen';
 import { AjFitProgressInterstitialScreen } from './onboarding/AjFitProgressInterstitialScreen';
-import type { Quiz } from '../state/AppState';
+import { answerValueForStep, updateQuizAnswer } from '../lib/questionnaireSchema';
 
 export function OnboardingFunnelScreen({
   mode,
@@ -42,7 +42,7 @@ export function OnboardingFunnelScreen({
   const funnel = useOnboardingFunnel(mode);
   const { currentStepId, name, setName, quiz, setQuiz, progress, goNext, goBack, canGoBack, jumpTo } = funnel;
 
-  const setAnswer = (id: keyof Quiz, value: unknown) => setQuiz({ ...quiz, [id]: value } as Quiz);
+  const setAnswer = (id: typeof currentStepId, value: unknown) => setQuiz(updateQuizAnswer(quiz, id, value));
 
   // Two steps ahead of each video interstitial, warm up its player so the
   // native decoder has already opened the local asset by the time the user
@@ -83,10 +83,16 @@ export function OnboardingFunnelScreen({
     onAuthRequested({ origin: 'planCompleted', name });
   };
 
-  const renderQuestion = (id: keyof Quiz) => {
-    const question = FUNNEL_QUESTIONS[currentStepId];
+  const renderQuestion = () => {
+    let question = FUNNEL_QUESTIONS[currentStepId];
     if (!question) return null;
-    const nextId = getNextStepId(currentStepId, mode);
+    if (currentStepId === 'specialConditions' && quiz.sex !== 'f' && 'options' in question) {
+      question = {
+        ...question,
+        options: question.options.filter((option) => option.v !== 'pregnancy' && option.v !== 'postpartum'),
+      };
+    }
+    const nextId = getNextStepId(currentStepId, mode, quiz);
     const isLastQuestion = nextId === 'analyzing';
     return (
       <QuestionStepScreen
@@ -100,8 +106,8 @@ export function OnboardingFunnelScreen({
         // `AppState`, persisted independently of this component's lifecycle.
         key={currentStepId}
         question={question}
-        value={quiz[id]}
-        onChange={(v) => setAnswer(id, v)}
+        value={answerValueForStep(quiz, currentStepId)}
+        onChange={(v) => setAnswer(currentStepId, v)}
         onNext={goNext}
         onBack={canGoBack ? goBack : null}
         stepNumber={progress.current}
@@ -131,49 +137,67 @@ export function OnboardingFunnelScreen({
       content = <WelcomeInterstitialScreen name={name} onContinue={goNext} />;
       break;
     case 'motivation':
-      content = renderQuestion('motivation');
+      content = renderQuestion();
       break;
     case 'goal':
-      content = renderQuestion('goal');
+      content = renderQuestion();
       break;
     case 'level':
-      content = renderQuestion('level');
+      content = renderQuestion();
       break;
     case 'interstitial_evolution':
       content = <EvolutionInterstitialScreen progress={progress} onContinue={goNext} />;
       break;
     case 'sex':
-      content = renderQuestion('sex');
+      content = renderQuestion();
       break;
     case 'birthDate':
-      content = renderQuestion('birthDate');
+      content = renderQuestion();
       break;
     case 'height':
-      content = renderQuestion('height');
+      content = renderQuestion();
       break;
     case 'weight':
-      content = renderQuestion('weight');
+      content = renderQuestion();
       break;
     case 'interstitial_methodology':
       content = <MethodologyInterstitialScreen progress={progress} onContinue={goNext} />;
       break;
     case 'days':
-      content = renderQuestion('days');
+      content = renderQuestion();
       break;
     case 'duration':
-      content = renderQuestion('duration');
+      content = renderQuestion();
       break;
     case 'place':
-      content = renderQuestion('place');
+      content = renderQuestion();
+      break;
+    case 'primaryPlace':
+    case 'equipment':
+      content = renderQuestion();
       break;
     case 'interstitial_guidedWorkout':
       content = <GuidedWorkoutInterstitialScreen progress={progress} onContinue={goNext} />;
       break;
     case 'limits':
-      content = renderQuestion('limits');
+      content = renderQuestion();
+      break;
+    case 'limitationImpact':
+    case 'specialConditions':
+    case 'pregnancyWeeks':
+    case 'pregnancyPrenatalCare':
+    case 'pregnancyExerciseRestriction':
+    case 'pregnancyComplication':
+    case 'pregnancyWarningSigns':
+    case 'postpartumTimeSinceBirth':
+    case 'postpartumDeliveryType':
+    case 'postpartumSigns':
+    case 'postpartumReturnClearance':
+    case 'functionalSituations':
+      content = renderQuestion();
       break;
     case 'muscleFocus':
-      content = renderQuestion('muscleFocus');
+      content = renderQuestion();
       break;
     case 'interstitial_ajFitProgress':
       content = <AjFitProgressInterstitialScreen name={name} progress={progress} onContinue={goNext} />;
@@ -182,7 +206,7 @@ export function OnboardingFunnelScreen({
       content = <SocialProofScreen onDone={goNext} />;
       break;
     case 'commitment':
-      content = renderQuestion('commitment');
+      content = renderQuestion();
       break;
     case 'analyzing':
       content = <AnalyzingScreen name={name} onDone={goNext} />;

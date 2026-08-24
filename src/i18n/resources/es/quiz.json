@@ -42,9 +42,15 @@
     }
   },
   "goal": {
-    "title": "¿Objetivo principal?",
-    "sub": "Define el foco del programa.",
+    "title": "¿Cuál es tu objetivo principal?",
+    "sub": "Esto define la familia de objetivo de tu plan.",
     "options": {
+      "gain_muscle": { "label": "Ganar masa muscular", "description": "Aumentar masa y volumen muscular" },
+      "lose_fat": { "label": "Perder grasa / adelgazar", "description": "Reducir la grasa corporal" },
+      "strength": { "label": "Aumentar mi fuerza", "description": "Mejorar la capacidad de producir fuerza" },
+      "conditioning": { "label": "Mejorar mi condición física", "description": "Ganar resistencia y preparación física" },
+      "body_composition": { "label": "Mejorar definición/composición corporal", "description": "Mejorar la composición corporal" },
+      "return_to_training": { "label": "Volver a entrenar después de un tiempo", "description": "Retomar con una progresión adecuada" },
       "hyper": { "label": "Hipertrofia", "description": "Ganar masa muscular" },
       "cut": { "label": "Pérdida de grasa", "description": "Quemar grasa" },
       "perf": { "label": "Rendimiento", "description": "Fuerza y potencia" },
@@ -53,9 +59,13 @@
     }
   },
   "level": {
-    "title": "¿Tu nivel?",
-    "sub": "El programa empieza exactamente desde tu punto.",
+    "title": "¿Cuál es tu experiencia con musculación/entrenamiento de fuerza?",
+    "sub": "Tu experiencia se usará para adaptar el plan.",
     "options": {
+      "never_or_starting": { "label": "Nunca entrené o estoy empezando ahora", "description": "Primer contacto o inicio reciente" },
+      "beginner": { "label": "Ya entrené, pero todavía soy principiante", "description": "Aún estoy consolidando los fundamentos" },
+      "intermediate": { "label": "Entreno regularmente desde hace algún tiempo", "description": "Ya tengo constancia y familiaridad" },
+      "advanced": { "label": "Tengo experiencia y domino los ejercicios principales", "description": "Tengo dominio técnico y experiencia" },
       "beg": { "label": "Principiante", "description": "Menos de 6 meses" },
       "int": { "label": "Intermedio", "description": "6 meses a 2 años" },
       "adv": { "label": "Avanzado", "description": "Más de 2 años" },
@@ -63,21 +73,26 @@
     }
   },
   "days": {
-    "title": "¿Días por semana?",
-    "sub": "Vamos a exigirte exactamente ese compromiso.",
-    "unit": "días/sem"
+    "title": "¿Cuántos días por semana puedes entrenar realmente?",
+    "sub": "Considera tu disponibilidad real.",
+    "unit": "días/sem",
+    "options": {
+      "2": { "label": "2 días", "short": "2" }, "3": { "label": "3 días", "short": "3" },
+      "4": { "label": "4 días", "short": "4" }, "5": { "label": "5 días", "short": "5" },
+      "6": { "label": "6 días", "short": "6" }, "7": { "label": "7 días", "short": "7" }
+    }
   },
   "duration": {
-    "title": "¿Tiempo por entreno?",
+    "title": "¿Cuánto tiempo tienes por entrenamiento?",
     "options": {
-      "30": { "label": "30 min", "short": "30" },
-      "45": { "label": "45 min", "short": "45" },
-      "60": { "label": "60 min", "short": "60" },
-      "90": { "label": "90+ min", "short": "90" }
+      "30": { "label": "Hasta 30 min", "short": "30" },
+      "45": { "label": "Aproximadamente 45 min", "short": "45" },
+      "60": { "label": "Aproximadamente 60 min", "short": "60" },
+      "90": { "label": "75–90+ min", "short": "90" }
     }
   },
   "place": {
-    "title": "¿Dónde entrenas?",
+    "title": "¿Dónde planeas hacer la mayor parte de tus entrenamientos?",
     "sub": "El entreno usa solo lo que tienes.",
     "options": {
       "gym": {
@@ -91,15 +106,20 @@
         "description": "Peso corporal y lo que tengas disponible en casa."
       },
       "both": {
-        "label": "Ambos",
+        "label": "Alternaré entre gimnasio y casa",
         "short": "2X",
         "description": "Alternas entre días de gimnasio y entrenos en casa."
       }
     }
   },
   "equipment": {
-    "title": "¿Dónde te ejercitas?",
-    "sub": "Selecciona el equipo al que tienes acceso. Puedes cambiarlo después.",
+    "title": "¿Qué tienes disponible para entrenar?",
+    "sub": "Selecciona todo lo disponible para entrenar en casa.",
+    "options": {
+      "bodyweight": "Peso corporal", "dumbbells": "Mancuernas", "bands": "Bandas elásticas",
+      "bench_or_box": "Banco/caja/silla firme", "barbell": "Barra y discos",
+      "other": "Otros equipos", "none": "Ningún equipo"
+    },
     "stepLabel": "Equipo · {{current}} / {{total}}",
     "search": "Buscar equipo",
     "quickPickAllGym": "Tengo un gimnasio completo",
@@ -177,15 +197,115 @@
     }
   },
   "limits": {
-    "title": "¿Alguna limitación?",
-    "sub": "Vamos a proteger lo que necesita cuidado.",
+    "title": "¿Sientes dolor, molestias o tienes alguna limitación que afecte tus entrenamientos?",
+    "sub": "Indica solo lo que afecta tu entrenamiento hoy; esto no es un diagnóstico.",
     "options": {
       "none": "Ninguna",
       "knee": "Rodilla",
       "back": "Columna",
       "shoulder": "Hombro",
       "wrist": "Muñeca",
-      "hip": "Cadera"
+      "hip": "Cadera",
+      "elbow": "Codo",
+      "ankle_foot": "Tobillo/pie",
+      "other": "Otra"
+    }
+  },
+  "primaryPlace": {
+    "title": "¿Dónde prefieres que se configure tu plan principal?",
+    "options": {
+      "gym": { "label": "Gimnasio", "description": "Usar el gimnasio como entorno principal" },
+      "home": { "label": "Casa", "description": "Usar tu estructura de casa como entorno principal" }
+    }
+  },
+  "limitationImpact": {
+    "title": "¿Esta limitación impide o dificulta actualmente algún movimiento?",
+    "options": {
+      "mild": { "label": "No, solo es una molestia leve", "description": "No impide mis movimientos" },
+      "requires_adaptation": { "label": "Sí, necesito adaptar algunos ejercicios", "description": "Algunos movimientos necesitan ajustes" },
+      "professional_restriction": { "label": "Sí, tengo orientación profesional/restricciones específicas", "description": "Hay una orientación que debe respetarse" },
+      "unknown": { "label": "No lo sé", "description": "Todavía no puedo evaluar el impacto" }
+    }
+  },
+  "specialConditions": {
+    "title": "¿Hay alguna situación que debamos considerar al preparar tu entrenamiento?",
+    "sub": "Selecciona todas las que correspondan.",
+    "options": {
+      "none": "Ninguna", "pregnancy": "Estoy embarazada", "postpartum": "Estoy en el período posparto",
+      "functional_limitation": "Tengo dificultades de equilibrio, movilidad o actividades cotidianas",
+      "medical_restriction": "Tengo alguna restricción médica para hacer ejercicio"
+    }
+  },
+  "pregnancyWeeks": { "title": "¿De cuántas semanas estás?", "unit": "semanas" },
+  "pregnancyPrenatalCare": {
+    "title": "¿Estás recibiendo atención prenatal?",
+    "options": { "yes": { "label": "Sí", "short": "SÍ" }, "no": { "label": "No", "short": "NO" } }
+  },
+  "pregnancyExerciseRestriction": {
+    "title": "¿Algún profesional de salud restringió tu práctica de ejercicios?",
+    "options": { "no": { "label": "No", "short": "NO" }, "yes": { "label": "Sí", "short": "SÍ" } }
+  },
+  "pregnancyComplication": {
+    "title": "¿Tu embarazo tiene alguna complicación relevante o recibiste orientación especial?",
+    "options": {
+      "no": { "label": "No", "short": "NO" }, "yes": { "label": "Sí", "short": "SÍ" },
+      "unsure": { "label": "No estoy segura", "short": "?" }
+    }
+  },
+  "pregnancyWarningSigns": {
+    "title": "¿Presentas actualmente alguno de estos signos de alerta?",
+    "sub": "Esta respuesta solo prepara el control de seguridad; no es un diagnóstico.",
+    "options": {
+      "vaginal_bleeding": "Sangrado vaginal",
+      "dizziness_fainting": "Mareo o desmayo",
+      "chest_pain": "Dolor en el pecho",
+      "unusual_shortness_of_breath": "Falta de aire inusual",
+      "painful_regular_contractions": "Contracciones dolorosas regulares",
+      "fluid_leakage": "Pérdida de líquido",
+      "calf_pain_swelling": "Dolor o hinchazón importante en la pantorrilla",
+      "none": "Ninguno"
+    }
+  },
+  "postpartumTimeSinceBirth": {
+    "title": "¿Cuánto tiempo ha pasado desde el parto?",
+    "options": {
+      "under_6_weeks": { "label": "Menos de 6 semanas", "description": "Parto reciente" },
+      "6_12_weeks": { "label": "6–12 semanas", "description": "Entre 6 y 12 semanas" },
+      "3_6_months": { "label": "3–6 meses", "description": "Entre 3 y 6 meses" },
+      "6_12_months": { "label": "6–12 meses", "description": "Entre 6 y 12 meses" },
+      "over_1_year": { "label": "Más de 1 año", "description": "Hace más de un año" }
+    }
+  },
+  "postpartumDeliveryType": {
+    "title": "¿Cómo fue el parto?",
+    "options": {
+      "vaginal": { "label": "Vaginal", "short": "VAG" }, "cesarean": { "label": "Cesárea", "short": "CES" },
+      "prefer_not_to_say": { "label": "Prefiero no decirlo", "short": "—" }
+    }
+  },
+  "postpartumSigns": {
+    "title": "¿Presentas actualmente alguno de estos signos?",
+    "options": {
+      "pain": "Dolor relevante", "healing_problems": "Problemas de cicatrización", "abnormal_bleeding": "Sangrado anormal",
+      "incontinence": "Pérdida urinaria/fecal", "vaginal_pressure": "Sensación de peso/presión vaginal",
+      "dizziness_weakness": "Mareo o debilidad inusual", "none": "Ninguno"
+    }
+  },
+  "postpartumReturnClearance": {
+    "title": "¿Recibiste autorización/orientación para volver a hacer ejercicio?",
+    "options": {
+      "yes": { "label": "Sí", "description": "Recibí autorización/orientación" },
+      "not_yet": { "label": "Todavía no", "description": "Aún no recibí autorización" },
+      "with_restrictions": { "label": "Me indicaron hacer ejercicios con restricciones", "description": "Hay restricciones que deben respetarse" }
+    }
+  },
+  "functionalSituations": {
+    "title": "¿Alguna de estas situaciones forma parte de tu rutina hoy?",
+    "options": {
+      "walking_difficulty": "Tengo dificultad para caminar", "support_needed": "Necesito apoyo para algunos movimientos",
+      "stairs_difficulty": "Tengo dificultad para subir escalones", "balance_problems": "Tengo problemas de equilibrio",
+      "recent_fall": "Me caí recientemente", "sit_to_stand_difficulty": "Tengo dificultad para sentarme y levantarme",
+      "daily_activities_difficulty": "Algunas actividades cotidianas son difíciles", "none": "Ninguna de estas"
     }
   },
   "muscleFocus": {

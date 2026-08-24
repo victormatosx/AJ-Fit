@@ -1,6 +1,47 @@
 import React, { createContext, useContext, useState, useMemo, useRef } from 'react';
 import { nextValueForIdentity } from '../lib/quizIdentityScope';
 
+export type Sex = 'm' | 'f';
+export type PrimaryGoal =
+  | 'gain_muscle'
+  | 'lose_fat'
+  | 'strength'
+  | 'conditioning'
+  | 'body_composition'
+  | 'return_to_training';
+export type LegacyGoal = 'hyper' | 'cut' | 'perf' | 'def' | 'recon';
+export type ExperienceLevel = 'never_or_starting' | 'beginner' | 'intermediate' | 'advanced';
+export type LegacyExperienceLevel = 'beg' | 'int' | 'adv' | 'elite';
+export type TrainingEnvironment = 'gym' | 'home' | 'both';
+export type PrimaryTrainingEnvironment = Exclude<TrainingEnvironment, 'both'>;
+export type LimitationImpact =
+  | 'mild'
+  | 'requires_adaptation'
+  | 'professional_restriction'
+  | 'unknown';
+export type SpecialCondition =
+  | 'pregnancy'
+  | 'postpartum'
+  | 'functional_limitation'
+  | 'medical_restriction'
+  | 'none';
+export type PregnancyScreening = {
+  weeks: number | null;
+  prenatalCare: 'yes' | 'no' | null;
+  exerciseRestriction: 'yes' | 'no' | null;
+  complication: 'yes' | 'no' | 'unsure' | null;
+  warningSigns: string[];
+};
+export type PostpartumScreening = {
+  timeSinceBirth: 'under_6_weeks' | '6_12_weeks' | '3_6_months' | '6_12_months' | 'over_1_year' | null;
+  deliveryType: 'vaginal' | 'cesarean' | 'prefer_not_to_say' | null;
+  signs: string[];
+  returnClearance: 'yes' | 'not_yet' | 'with_restrictions' | null;
+};
+export type FunctionalScreening = {
+  situations: string[];
+};
+
 export type Quiz = {
   sex: 'm' | 'f' | null;
   /**
@@ -12,13 +53,17 @@ export type Quiz = {
   birthDate: Date | null;
   height: number;
   weight: number;
-  goal: 'hyper' | 'cut' | 'perf' | 'def' | 'recon' | null;
+  /** New writes use `PrimaryGoal`; legacy IDs remain readable until a future explicit migration. */
+  goal: PrimaryGoal | LegacyGoal | null;
   frequency: string | null;
-  level: 'beg' | 'int' | 'adv' | 'elite' | null;
+  /** Experience modifier. `elite` and the other short IDs are read-only legacy values. */
+  level: ExperienceLevel | LegacyExperienceLevel | null;
   limits: string[];
   duration: '30' | '45' | '60' | '90' | null;
-  days: number;
-  place: 'gym' | 'home' | 'both' | null;
+  days: number | null;
+  place: TrainingEnvironment | null;
+  /** Required only when `place === 'both'`; always resolves the future base selector to gym/home. */
+  primaryPlace: PrimaryTrainingEnvironment | null;
   equipment: string[];
   style: string[];
   /** Etapa 4 do novo funil — distinto de `goal`: motivo emocional/contextual que trouxe o usuário, não o resultado técnico buscado. */
@@ -27,6 +72,11 @@ export type Quiz = {
   muscleFocus: string[];
   /** Etapa 22 — nível de compromisso declarado. Onboarding-only: não influencia nenhum algoritmo de treino hoje. */
   commitment: string | null;
+  limitationImpact: LimitationImpact | null;
+  specialConditions: SpecialCondition[];
+  pregnancyScreening: PregnancyScreening | null;
+  postpartumScreening: PostpartumScreening | null;
+  functionalScreening: FunctionalScreening | null;
 };
 
 export type TabId = 'home' | 'workout' | 'progress' | 'profile';
@@ -49,13 +99,19 @@ export const defaultQuiz: Quiz = {
   level: null,
   limits: [],
   duration: null,
-  days: 4,
+  days: null,
   place: null,
+  primaryPlace: null,
   equipment: [],
   style: [],
   motivation: null,
   muscleFocus: [],
   commitment: null,
+  limitationImpact: null,
+  specialConditions: [],
+  pregnancyScreening: null,
+  postpartumScreening: null,
+  functionalScreening: null,
 };
 
 const AppStateContext = createContext<Ctx | null>(null);

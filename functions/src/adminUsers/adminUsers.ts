@@ -226,6 +226,9 @@ function questionnaireView(snapshot: DocumentSnapshot | null) {
   if (!snapshot?.exists) return null;
   const document = snapshot.data() ?? {};
   const answers = objectMap(document.answers);
+  const pregnancyScreening = objectMap(answers.pregnancyScreening);
+  const postpartumScreening = objectMap(answers.postpartumScreening);
+  const functionalScreening = objectMap(answers.functionalScreening);
   return {
     id: snapshot.id,
     version: typeof document.version === 'number' ? document.version : null,
@@ -242,11 +245,30 @@ function questionnaireView(snapshot: DocumentSnapshot | null) {
       duration: safeString(answers.duration),
       days: typeof answers.days === 'number' ? answers.days : null,
       place: safeString(answers.place),
+      primaryPlace: safeString(answers.primaryPlace),
       equipment: Array.isArray(answers.equipment) ? answers.equipment.filter((item): item is string => typeof item === 'string') : [],
       style: Array.isArray(answers.style) ? answers.style.filter((item): item is string => typeof item === 'string') : [],
       motivation: safeString(answers.motivation),
       muscleFocus: Array.isArray(answers.muscleFocus) ? answers.muscleFocus.filter((item): item is string => typeof item === 'string') : [],
       commitment: safeString(answers.commitment),
+      limitationImpact: safeString(answers.limitationImpact),
+      specialConditions: Array.isArray(answers.specialConditions) ? answers.specialConditions.filter((item): item is string => typeof item === 'string') : [],
+      pregnancyScreening: Object.keys(pregnancyScreening).length ? {
+        weeks: typeof pregnancyScreening.weeks === 'number' ? pregnancyScreening.weeks : null,
+        prenatalCare: safeString(pregnancyScreening.prenatalCare),
+        exerciseRestriction: safeString(pregnancyScreening.exerciseRestriction),
+        complication: safeString(pregnancyScreening.complication),
+        warningSigns: Array.isArray(pregnancyScreening.warningSigns) ? pregnancyScreening.warningSigns.filter((item): item is string => typeof item === 'string') : [],
+      } : null,
+      postpartumScreening: Object.keys(postpartumScreening).length ? {
+        timeSinceBirth: safeString(postpartumScreening.timeSinceBirth),
+        deliveryType: safeString(postpartumScreening.deliveryType),
+        signs: Array.isArray(postpartumScreening.signs) ? postpartumScreening.signs.filter((item): item is string => typeof item === 'string') : [],
+        returnClearance: safeString(postpartumScreening.returnClearance),
+      } : null,
+      functionalScreening: Object.keys(functionalScreening).length ? {
+        situations: Array.isArray(functionalScreening.situations) ? functionalScreening.situations.filter((item): item is string => typeof item === 'string') : [],
+      } : null,
     },
   };
 }

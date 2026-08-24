@@ -3,9 +3,11 @@
  * source of truth for "what comes after what". See
  * docs/onboarding_funnel_architecture.md for the full narrative rationale.
  *
- * `App.tsx`/`premiumGate.ts` know nothing about these 25 ids — they only see
+ * `App.tsx`/`premiumGate.ts` know nothing about the registered step ids — they only see
  * the single `RootScreenId` value `'onboardingFunnel'`. Everything below is
- * internal to `useOnboardingFunnel`/`OnboardingFunnelScreen`.
+ * internal to `useOnboardingFunnel`/`OnboardingFunnelScreen`. The registry
+ * includes every possible branch; `getStepSequence` removes inapplicable
+ * questions for the current answers.
  */
 
 export type OnboardingStepKind =
@@ -34,8 +36,22 @@ export type OnboardingStepId =
   | 'days'
   | 'duration'
   | 'place'
+  | 'primaryPlace'
+  | 'equipment'
   | 'interstitial_guidedWorkout'
   | 'limits'
+  | 'limitationImpact'
+  | 'specialConditions'
+  | 'pregnancyWeeks'
+  | 'pregnancyPrenatalCare'
+  | 'pregnancyExerciseRestriction'
+  | 'pregnancyComplication'
+  | 'pregnancyWarningSigns'
+  | 'postpartumTimeSinceBirth'
+  | 'postpartumDeliveryType'
+  | 'postpartumSigns'
+  | 'postpartumReturnClearance'
+  | 'functionalSituations'
   | 'muscleFocus'
   | 'interstitial_ajFitProgress'
   | 'socialProof'
@@ -75,8 +91,22 @@ export const ONBOARDING_STEPS: readonly OnboardingStepDef[] = [
   { id: 'days', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
   { id: 'duration', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
   { id: 'place', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
+  { id: 'primaryPlace', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
+  { id: 'equipment', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
   { id: 'interstitial_guidedWorkout', kind: 'interstitial', countsTowardProgress: false, persistsToDraft: false, devJumpable: true },
   { id: 'limits', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
+  { id: 'limitationImpact', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
+  { id: 'specialConditions', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
+  { id: 'pregnancyWeeks', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
+  { id: 'pregnancyPrenatalCare', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
+  { id: 'pregnancyExerciseRestriction', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
+  { id: 'pregnancyComplication', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
+  { id: 'pregnancyWarningSigns', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
+  { id: 'postpartumTimeSinceBirth', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
+  { id: 'postpartumDeliveryType', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
+  { id: 'postpartumSigns', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
+  { id: 'postpartumReturnClearance', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
+  { id: 'functionalSituations', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
   { id: 'muscleFocus', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
   { id: 'interstitial_ajFitProgress', kind: 'interstitial', countsTowardProgress: false, persistsToDraft: false, devJumpable: true },
   { id: 'socialProof', kind: 'socialProof', countsTowardProgress: false, persistsToDraft: false, devJumpable: true },
@@ -107,8 +137,22 @@ export const FORCED_QUESTIONNAIRE_STEP_IDS: readonly OnboardingStepId[] = [
   'days',
   'duration',
   'place',
+  'primaryPlace',
+  'equipment',
   'interstitial_guidedWorkout',
   'limits',
+  'limitationImpact',
+  'specialConditions',
+  'pregnancyWeeks',
+  'pregnancyPrenatalCare',
+  'pregnancyExerciseRestriction',
+  'pregnancyComplication',
+  'pregnancyWarningSigns',
+  'postpartumTimeSinceBirth',
+  'postpartumDeliveryType',
+  'postpartumSigns',
+  'postpartumReturnClearance',
+  'functionalSituations',
   'muscleFocus',
   'interstitial_ajFitProgress',
   'analyzing',
@@ -133,17 +177,39 @@ export function getStepIndex(id: OnboardingStepId): number {
   return STEP_INDEX_BY_ID[id];
 }
 
-export function getStepSequence(mode: 'anonymous' | 'forcedQuestionnaire'): readonly OnboardingStepId[] {
-  return mode === 'forcedQuestionnaire'
+export type OnboardingFlowAnswers = {
+  place?: string | null;
+  limits?: string[];
+  specialConditions?: string[];
+};
+
+function isApplicableStep(id: OnboardingStepId, answers?: OnboardingFlowAnswers): boolean {
+  if (!answers) return true;
+  if (id === 'primaryPlace') return answers?.place === 'both';
+  if (id === 'equipment') return answers?.place === 'home' || answers?.place === 'both';
+  if (id === 'limitationImpact') return !!answers?.limits?.some((value) => value !== 'none');
+  if (id.startsWith('pregnancy')) return !!answers?.specialConditions?.includes('pregnancy');
+  if (id.startsWith('postpartum')) return !!answers?.specialConditions?.includes('postpartum');
+  if (id === 'functionalSituations') return !!answers?.specialConditions?.includes('functional_limitation');
+  return true;
+}
+
+export function getStepSequence(
+  mode: 'anonymous' | 'forcedQuestionnaire',
+  answers?: OnboardingFlowAnswers,
+): readonly OnboardingStepId[] {
+  const base = mode === 'forcedQuestionnaire'
     ? FORCED_QUESTIONNAIRE_STEP_IDS
     : ONBOARDING_STEPS.map((s) => s.id);
+  return base.filter((id) => isApplicableStep(id, answers));
 }
 
 export function getNextStepId(
   current: OnboardingStepId,
   mode: 'anonymous' | 'forcedQuestionnaire',
+  answers?: OnboardingFlowAnswers,
 ): OnboardingStepId | null {
-  const seq = getStepSequence(mode);
+  const seq = getStepSequence(mode, answers);
   const i = seq.indexOf(current);
   if (i === -1 || i === seq.length - 1) return null;
   return seq[i + 1];
@@ -160,8 +226,9 @@ const NON_BACK_TARGET_KINDS: readonly OnboardingStepKind[] = ['interstitial', 's
 export function getPreviousStepId(
   current: OnboardingStepId,
   mode: 'anonymous' | 'forcedQuestionnaire',
+  answers?: OnboardingFlowAnswers,
 ): OnboardingStepId | null {
-  const seq = getStepSequence(mode);
+  const seq = getStepSequence(mode, answers);
   let i = seq.indexOf(current) - 1;
   while (i >= 0 && NON_BACK_TARGET_KINDS.includes(getStepDef(seq[i]).kind)) {
     i -= 1;
@@ -181,8 +248,9 @@ const QUESTION_STEP_IDS: readonly OnboardingStepId[] = ONBOARDING_STEPS.filter(
 export function computeOnboardingProgress(
   currentStepId: OnboardingStepId,
   mode: 'anonymous' | 'forcedQuestionnaire',
+  answers?: OnboardingFlowAnswers,
 ): { current: number; total: number } {
-  const seq = getStepSequence(mode);
+  const seq = getStepSequence(mode, answers);
   const total = seq.filter((id) => QUESTION_STEP_IDS.includes(id)).length;
   const idx = seq.indexOf(currentStepId);
   let current = 0;

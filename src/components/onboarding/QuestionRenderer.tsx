@@ -13,7 +13,6 @@ import { HudCorners } from '../ui/Card';
 import { Icon, type IconName } from '../ui/Icon';
 import { DateWheelPicker } from '../ui/DateWheelPicker';
 import { useTheme } from '../../theme';
-import type { Quiz } from '../../state/AppState';
 import { computeAge } from '../../lib/ageCalculator';
 import { useUnits } from '../../state/UnitsContext';
 import { kgToLb, lbToKg, weightUnit } from '../../units/weightConversions';
@@ -27,12 +26,12 @@ import { kgToLb, lbToKg, weightUnit } from '../../units/weightConversions';
  */
 export type OptionDef = { v: string; icon?: IconName };
 export type Question =
-  | { id: keyof Quiz; kind: 'choice'; options: OptionDef[] }
-  | { id: keyof Quiz; kind: 'choice-large'; options: OptionDef[] }
-  | { id: keyof Quiz; kind: 'multi'; options: OptionDef[]; maxSelections?: number }
-  | { id: keyof Quiz; kind: 'date'; minAge: number; maxAge: number }
+  | { id: string; kind: 'choice'; options: OptionDef[] }
+  | { id: string; kind: 'choice-large'; options: OptionDef[] }
+  | { id: string; kind: 'multi'; options: OptionDef[]; maxSelections?: number; exclusiveOption?: string }
+  | { id: string; kind: 'date'; minAge: number; maxAge: number }
   | {
-      id: keyof Quiz;
+      id: string;
       kind: 'wheel';
       min: number;
       max: number;
@@ -61,7 +60,7 @@ export function ChoiceGrid({
   value,
   onChange,
 }: {
-  questionId: keyof Quiz;
+  questionId: string;
   options: OptionDef[];
   value: string | null;
   onChange: (v: string) => void;
@@ -79,6 +78,9 @@ export function ChoiceGrid({
           <Pressable
             key={o.v}
             onPress={() => onChange(o.v)}
+            accessibilityRole="radio"
+            accessibilityState={{ checked: sel }}
+            accessibilityLabel={label}
             style={{
               width: '100%',
               padding: 20,
@@ -130,7 +132,7 @@ export function ChoiceList({
   value,
   onChange,
 }: {
-  questionId: keyof Quiz;
+  questionId: string;
   options: OptionDef[];
   value: string | null;
   onChange: (v: string) => void;
@@ -148,6 +150,9 @@ export function ChoiceList({
           <Pressable
             key={o.v}
             onPress={() => onChange(o.v)}
+            accessibilityRole="radio"
+            accessibilityState={{ checked: sel }}
+            accessibilityLabel={label}
             style={{
               padding: 16,
               borderRadius: 14,
@@ -190,13 +195,15 @@ export function MultiList({
   value,
   onChange,
   maxSelections,
+  exclusiveOption,
 }: {
-  questionId: keyof Quiz;
+  questionId: string;
   options: OptionDef[];
   value: string[];
   onChange: (v: string[]) => void;
   /** When set, selecting beyond this count is a no-op instead of growing the array. */
   maxSelections?: number;
+  exclusiveOption?: string;
 }) {
   const { theme } = useTheme();
   const { t } = useTranslation('quiz');
@@ -206,21 +213,33 @@ export function MultiList({
       onChange(value.filter((x) => x !== v));
       return;
     }
-    if (maxSelections != null && value.length >= maxSelections) return;
-    onChange([...value, v]);
+    if (v === exclusiveOption) {
+      onChange([v]);
+      return;
+    }
+    const withoutExclusive = exclusiveOption ? value.filter((item) => item !== exclusiveOption) : value;
+    if (maxSelections != null && withoutExclusive.length >= maxSelections) return;
+    onChange([...withoutExclusive, v]);
   };
   const GAP = 10;
   return (
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: GAP }}>
       {options.map((o) => {
         const sel = value.includes(o.v);
-        const atLimit = maxSelections != null && value.length >= maxSelections && !sel;
+        const atLimit =
+          maxSelections != null &&
+          value.filter((item) => item !== exclusiveOption).length >= maxSelections &&
+          !sel &&
+          o.v !== exclusiveOption;
         const label = tLoose(`${String(questionId)}.options.${o.v}`);
         return (
           <Pressable
             key={o.v}
             onPress={() => toggle(o.v)}
             disabled={atLimit}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: sel, disabled: atLimit }}
+            accessibilityLabel={label}
             style={{
               flexBasis: '48%',
               flexGrow: 1,

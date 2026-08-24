@@ -1,6 +1,7 @@
 import { Timestamp } from 'firebase/firestore';
 import { defaultQuiz, type Quiz } from '../state/AppState';
 import { birthDateFromLegacyAge } from './ageCalculator';
+import { cleanApplicableAnswers, normalizeLoadedQuiz } from './questionnaireSchema';
 
 /**
  * Firestore ⇄ client conversion for the questionnaire's `answers` map.
@@ -27,7 +28,7 @@ export type PersistedQuizAnswers = Omit<Quiz, 'birthDate'> & {
 
 /** `Quiz` (client shape, `birthDate: Date | null`) → Firestore shape. */
 export function toPersistedAnswers(answers: Quiz): PersistedQuizAnswers {
-  const { birthDate, ...rest } = answers;
+  const { birthDate, ...rest } = cleanApplicableAnswers(answers);
   return { ...rest, birthDate: birthDate ? Timestamp.fromDate(birthDate) : null };
 }
 
@@ -56,5 +57,5 @@ export function fromPersistedAnswers(
   // `defaultQuiz` backfills any field missing from a sparse/corrupted doc —
   // never throws, never leaves a field silently `undefined` for downstream
   // code (e.g. `.map()`/`.includes()` on the array fields) to crash on.
-  return { ...defaultQuiz, ...rest, birthDate: resolvedBirthDate };
+  return normalizeLoadedQuiz({ ...defaultQuiz, ...rest, birthDate: resolvedBirthDate });
 }

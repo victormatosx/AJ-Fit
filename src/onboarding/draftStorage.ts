@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { defaultQuiz, type Quiz } from '../state/AppState';
 import { logError, logInfo } from '../lib/logger';
 import type { OnboardingStepId } from './steps';
+import { cleanApplicableAnswers, normalizeLoadedQuiz } from '../lib/questionnaireSchema';
 
 export const ONBOARDING_DRAFT_STORAGE_KEY = 'ajfit-onboarding-draft';
 export const ONBOARDING_DRAFT_SCHEMA_VERSION = 1 as const;
@@ -25,18 +26,18 @@ export interface OnboardingDraftV1 {
 export type OnboardingDraft = OnboardingDraftV1;
 
 function toDraftAnswers(quiz: Quiz): DraftQuizAnswers {
-  const { birthDate, ...rest } = quiz;
+  const { birthDate, ...rest } = cleanApplicableAnswers(quiz);
   return { ...rest, birthDate: birthDate ? birthDate.toISOString() : null };
 }
 
 function fromDraftAnswers(raw: Partial<DraftQuizAnswers> | undefined | null): Quiz {
   const { birthDate, ...rest } = raw ?? {};
   const parsedBirthDate = birthDate ? new Date(birthDate) : null;
-  return {
+  return normalizeLoadedQuiz({
     ...defaultQuiz,
     ...rest,
     birthDate: parsedBirthDate && !Number.isNaN(parsedBirthDate.getTime()) ? parsedBirthDate : null,
-  };
+  });
 }
 
 export function buildDraft(params: {

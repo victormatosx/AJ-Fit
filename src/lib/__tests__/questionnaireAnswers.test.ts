@@ -37,6 +37,36 @@ describe('toPersistedAnswers / fromPersistedAnswers (new shape)', () => {
     expect(persisted.birthDate).toBeNull();
     expect(fromPersistedAnswers(persisted, Timestamp.now()).birthDate).toBeNull();
   });
+
+  it('round-trips canonical selector, modifier, and safety fields', () => {
+    const canonical: Quiz = {
+      ...fullQuiz,
+      goal: 'body_composition',
+      level: 'intermediate',
+      place: 'both',
+      primaryPlace: 'home',
+      equipment: ['dumbbells', 'bands'],
+      limitationImpact: 'requires_adaptation',
+      specialConditions: ['pregnancy'],
+      pregnancyScreening: {
+        weeks: 18,
+        prenatalCare: 'yes',
+        exerciseRestriction: 'no',
+        complication: 'unsure',
+        warningSigns: ['none'],
+      },
+    };
+    expect(fromPersistedAnswers(toPersistedAnswers(canonical), Timestamp.now())).toMatchObject({
+      goal: 'body_composition',
+      level: 'intermediate',
+      place: 'both',
+      primaryPlace: 'home',
+      equipment: ['dumbbells', 'bands'],
+      limitationImpact: 'requires_adaptation',
+      specialConditions: ['pregnancy'],
+      pregnancyScreening: canonical.pregnancyScreening,
+    });
+  });
 });
 
 describe('fromPersistedAnswers — legacy `age`-only documents (backward compat)', () => {
@@ -59,6 +89,11 @@ describe('fromPersistedAnswers — legacy `age`-only documents (backward compat)
       createdAt,
     );
     expect(restored.birthDate?.getTime()).toBe(explicitBirthDate.toDate().getTime());
+  });
+
+  it('preserves the removed elite UI value as a readable legacy value', () => {
+    const restored = fromPersistedAnswers({ ...toPersistedAnswers(fullQuiz), level: 'elite' }, Timestamp.now());
+    expect(restored.level).toBe('elite');
   });
 });
 
