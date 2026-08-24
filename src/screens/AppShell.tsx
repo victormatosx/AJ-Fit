@@ -40,6 +40,7 @@ import {
   INITIAL_PAYWALL_PREMIUM_RETURN_STATE,
   resolvePaywallPremiumReturn,
 } from '../lib/paywallPremiumReturn';
+import { useDeepLinkIntent } from '../state/DeepLinkContext';
 
 type SupportRoute =
   | { name: 'help' }
@@ -94,6 +95,7 @@ function AppShellContent({
   const { tab, setTab } = useAppState();
   const { linkedProviders } = useAuth();
   const { isPremium } = useSubscription();
+  const { pendingIntent, consumeIntent } = useDeepLinkIntent();
   const paywallPremiumReturnState = useRef(INITIAL_PAYWALL_PREMIUM_RETURN_STATE);
   // Single centralized prewarm schedule (docs/23_navegacao_e_lifecycle.md
   // §8/§14) — PREWARM_ROUTE_IDS in src/lib/prewarmRoutes.ts is the only
@@ -160,6 +162,25 @@ function AppShellContent({
 
     setTab(nextTab);
   };
+
+  useEffect(() => {
+    // RootNavigator's gate is what made this component mount, so reaching this
+    // effect already proves auth, email verification, questionnaire,
+    // preferences and subscription bootstrap are resolved. Existing overlays
+    // remain authoritative; keep the intent pending until they close.
+    if (!pendingIntent || overlayOpen) return;
+
+    if (pendingIntent.type === 'active-workout') {
+      // Workout has no persisted/restorable active-session model yet. Reuse
+      // the normal confirmation + START_WORKOUT capability gate instead of
+      // manufacturing a session by setting the tab directly. If a live
+      // WorkoutScreen is already mounted, this is intentionally a no-op.
+      if (tab !== 'workout' && !showWorkoutConfirmation) {
+        setShowWorkoutConfirmation(true);
+      }
+      consumeIntent(pendingIntent);
+    }
+  }, [consumeIntent, overlayOpen, pendingIntent, showWorkoutConfirmation, tab]);
 
   // FASE 3→5 (docs/13_assinaturas_e_billing.md): START_WORKOUT is a Premium
   // capability. `selectTab` below always routes a tap on the Workout icon

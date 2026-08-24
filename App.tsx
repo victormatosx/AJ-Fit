@@ -53,6 +53,7 @@ import {
 } from './src/services/photoVaultFileCrypto';
 import { logPhotoVaultIssue } from './src/lib/photoVaultErrors';
 import { logInfo } from './src/lib/logger';
+import { DeepLinkProvider } from './src/state/DeepLinkContext';
 
 /**
  * Configures the RevenueCat SDK at module evaluation time — the same
@@ -553,17 +554,23 @@ function AppContent() {
                       switches; wraps the navigator so its AppState listener is
                       mounted for the whole session. */}
                   <PhotoVaultProvider>
-                    <StatusBar style={theme.statusBar.style} />
-                    <NativeThemeSync />
-                    {/* Business providers mount immediately so Firebase profile
-                        reads, RevenueCat identity synchronization and vault
-                        locking overlap the local theme/font/i18n bootstrap.
-                        Only the definitive UI is held behind this visual gate,
-                        preventing a stored Light preference from first painting
-                        the real app in Dark. */}
-                    {themeHydrated && fontsLoaded && i18nReady
-                      ? <RootNavigator />
-                      : <FullScreenLoading />}
+                    {/* Mounted above the visual/bootstrap gate so cold-start and
+                        foreground URLs are retained until RootNavigator is
+                        allowed to mount AppShell. It never changes root routing
+                        or authorization state itself. */}
+                    <DeepLinkProvider>
+                      <StatusBar style={theme.statusBar.style} />
+                      <NativeThemeSync />
+                      {/* Business providers mount immediately so Firebase profile
+                          reads, RevenueCat identity synchronization and vault
+                          locking overlap the local theme/font/i18n bootstrap.
+                          Only the definitive UI is held behind this visual gate,
+                          preventing a stored Light preference from first painting
+                          the real app in Dark. */}
+                      {themeHydrated && fontsLoaded && i18nReady
+                        ? <RootNavigator />
+                        : <FullScreenLoading />}
+                    </DeepLinkProvider>
                   </PhotoVaultProvider>
                 </AppStateProviderConnected>
               </UnitsProvider>
