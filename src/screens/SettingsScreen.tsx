@@ -22,6 +22,11 @@ import { writeStoredUnitsPreference } from '../units/unitsStorage';
 import { changeUnitsForUser } from '../units/syncUnits';
 import { getUnitsSummaryKey } from '../units/unitsPresentation';
 import { useUnits } from '../state/UnitsContext';
+import { useDevSubscriptionOverrideContext } from '../dev/DevSubscriptionOverrideContext';
+import {
+  DevSubscriptionOverridePickerSheet,
+  DEV_OVERRIDE_LABELS,
+} from '../dev/DevSubscriptionOverridePickerSheet';
 
 type UnitsOptionCopy = {
   label: string;
@@ -56,6 +61,12 @@ export function SettingsScreen({
   const [unitsError, setUnitsError] = useState<string | null>(null);
   const [savingUnits, setSavingUnits] = useState<UnitsPreference | null>(null);
   const { preference: currentUnits, resolvedUnits } = useUnits();
+  const {
+    allowed: devOverrideAllowed,
+    override: devOverride,
+    setOverride: setDevOverride,
+  } = useDevSubscriptionOverrideContext();
+  const [devOverridePickerOpen, setDevOverridePickerOpen] = useState(false);
 
   // `i18n.language` is the runtime source of truth — DO NOT read
   // `profile.preferences.language` here. That field will diverge from the
@@ -305,6 +316,22 @@ export function SettingsScreen({
               { icon: 'file-text', label: t('settings:items.licenses'), onPress: () => {} },
             ]}
           />
+
+          {/* Dev/QA only — never rendered outside a development build (see
+              `useDevSubscriptionOverrideContext`'s `allowed`). */}
+          {devOverrideAllowed ? (
+            <SettingsSection
+              title="DEVELOPER"
+              items={[
+                {
+                  icon: 'key',
+                  label: 'Subscription Override',
+                  value: DEV_OVERRIDE_LABELS[devOverride],
+                  onPress: () => setDevOverridePickerOpen(true),
+                },
+              ]}
+            />
+          ) : null}
         </ScrollView>
       </SafeAreaView>
 
@@ -339,6 +366,17 @@ export function SettingsScreen({
         cancelLabel={t('common:actions.cancel')}
         title={t('settings:units.chooseTitle')}
       />
+      {devOverrideAllowed ? (
+        <DevSubscriptionOverridePickerSheet
+          visible={devOverridePickerOpen}
+          current={devOverride}
+          onSelect={(next) => {
+            void setDevOverride(next);
+            setDevOverridePickerOpen(false);
+          }}
+          onDismiss={() => setDevOverridePickerOpen(false)}
+        />
+      ) : null}
     </ScreenBg>
   );
 }
