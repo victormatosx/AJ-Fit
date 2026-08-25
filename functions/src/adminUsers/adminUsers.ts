@@ -229,6 +229,10 @@ function questionnaireView(snapshot: DocumentSnapshot | null) {
   const pregnancyScreening = objectMap(answers.pregnancyScreening);
   const postpartumScreening = objectMap(answers.postpartumScreening);
   const functionalScreening = objectMap(answers.functionalScreening);
+  const lipedemaScreening = objectMap(answers.lipedemaScreening);
+  const dizzinessScreening = objectMap(answers.dizzinessScreening);
+  const postSurgicalScreening = objectMap(answers.postSurgicalScreening);
+  const medicalRestrictionScreening = objectMap(answers.medicalRestrictionScreening);
   return {
     id: snapshot.id,
     version: typeof document.version === 'number' ? document.version : null,
@@ -268,6 +272,22 @@ function questionnaireView(snapshot: DocumentSnapshot | null) {
       } : null,
       functionalScreening: Object.keys(functionalScreening).length ? {
         situations: Array.isArray(functionalScreening.situations) ? functionalScreening.situations.filter((item): item is string => typeof item === 'string') : [],
+      } : null,
+      lipedemaScreening: Object.keys(lipedemaScreening).length ? {
+        symptomImpact: safeString(lipedemaScreening.symptomImpact),
+        professionalGuidance: safeString(lipedemaScreening.professionalGuidance),
+      } : null,
+      dizzinessScreening: Object.keys(dizzinessScreening).length ? {
+        symptomFrequency: safeString(dizzinessScreening.symptomFrequency),
+        affectsBalance: safeString(dizzinessScreening.affectsBalance),
+      } : null,
+      postSurgicalScreening: Object.keys(postSurgicalScreening).length ? {
+        recoveryStatus: safeString(postSurgicalScreening.recoveryStatus),
+        bodyRegion: safeString(postSurgicalScreening.bodyRegion),
+        returnClearance: safeString(postSurgicalScreening.returnClearance),
+      } : null,
+      medicalRestrictionScreening: Object.keys(medicalRestrictionScreening).length ? {
+        professionalExerciseRestriction: safeString(medicalRestrictionScreening.professionalExerciseRestriction),
       } : null,
     },
   };

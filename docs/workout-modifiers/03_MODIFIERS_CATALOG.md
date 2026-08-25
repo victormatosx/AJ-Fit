@@ -527,3 +527,20 @@ Cada arquivo `groups/Txxx...md` deverá dizer:
 5.  quais substituições são válidas;
 6.  limites de volume/intensidade;
 7.  exceções da família.
+
+------------------------------------------------------------------------
+
+# 20. Contratos de domínio da Fase 2
+
+``` text
+MOD-LIP-xxx   — lipedema; usa impacto + orientação, prioridade P2/P0
+MOD-DIZ-xxx   — tontura/vertigem; usa frequência + equilíbrio, P2/P0
+MOD-POST-xxx  — pós-cirúrgico; sempre precedido por SAF-POST, P0
+SAF-MED-xxx   — restrição profissional estruturada, P0
+```
+
+Os prefixos reservam identidade e responsabilidade; não representam regras já
+implementadas. `SAF-POST` deve decidir se há espaço permitido antes de qualquer
+`MOD-POST`. `MOD-LIP` não equivale a baixo impacto. `MOD-DIZ` não substitui a
+avaliação do equilíbrio. Nenhum deles pode converter `UNKNOWN/UNSURE` em
+ausência de restrição.

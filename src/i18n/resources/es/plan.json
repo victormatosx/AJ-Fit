@@ -2,7 +2,8 @@
   "header": {
     "eyebrow": "Tu primera fase",
     "titleWithName": "{{name}}, tu primera fase está lista.",
-    "titleNoName": "Tu primera fase está lista."
+    "titleNoName": "Tu primera fase está lista.",
+    "reviewTitle": "Revisemos tu próximo paso."
   },
   "summary": {
     "title": "Tu estrategia",
@@ -22,6 +23,13 @@
   "journey": {
     "title": "Esta es tu primera fase.",
     "body": "Tu camino continúa a medida que registras tus entrenos y evolucionas."
+  },
+  "prescription": {
+    "success": { "title": "Tu base fue seleccionada.", "body": "{{templateId}} · {{split}}. Tus sesiones finales están versionadas y listas." },
+    "requiresClearance": { "title": "Necesitamos más información", "body": "Identificamos una condición que requiere más cuidado antes de una personalización segura. Sigue la orientación del profesional responsable y actualiza tus respuestas cuando no existan restricciones que la app no pueda representar." },
+    "blocked": { "title": "Entrenamiento pausado por seguridad", "body": "Tus respuestas actuales activan una interrupción de seguridad documentada. AJ Fit no prescribe un entrenamiento en este estado." },
+    "needsQuestionnaireUpdate": { "title": "Actualiza tu información", "body": "Faltan respuestas necesarias para una selección segura, o tu cuestionario contiene datos antiguos insuficientes." },
+    "unavailable": { "title": "Entrenamiento aún no disponible", "body": "Todavía no se ha definido una regla de composición segura requerida por tus respuestas. No se generó un entrenamiento genérico." }
   },
   "cta": {
     "label": "Quiero empezar",

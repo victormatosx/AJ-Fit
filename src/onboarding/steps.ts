@@ -43,15 +43,17 @@ export type OnboardingStepId =
   | 'limitationImpact'
   | 'specialConditions'
   | 'pregnancyWeeks'
-  | 'pregnancyPrenatalCare'
-  | 'pregnancyExerciseRestriction'
-  | 'pregnancyComplication'
+  | 'pregnancyCare'
   | 'pregnancyWarningSigns'
-  | 'postpartumTimeSinceBirth'
-  | 'postpartumDeliveryType'
+  | 'postpartumContext'
   | 'postpartumSigns'
   | 'postpartumReturnClearance'
   | 'functionalSituations'
+  | 'lipedemaScreening'
+  | 'dizzinessScreening'
+  | 'postSurgicalStatus'
+  | 'postSurgicalRegion'
+  | 'medicalRestrictionDetails'
   | 'muscleFocus'
   | 'interstitial_ajFitProgress'
   | 'socialProof'
@@ -79,14 +81,14 @@ export const ONBOARDING_STEPS: readonly OnboardingStepDef[] = [
   { id: 'presentation', kind: 'presentation', countsTowardProgress: false, persistsToDraft: false, devJumpable: true },
   { id: 'name', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
   { id: 'welcome', kind: 'interstitial', countsTowardProgress: false, persistsToDraft: false, devJumpable: true },
-  { id: 'motivation', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
-  { id: 'goal', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
-  { id: 'level', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
-  { id: 'interstitial_evolution', kind: 'interstitial', countsTowardProgress: false, persistsToDraft: false, devJumpable: true },
   { id: 'sex', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
   { id: 'birthDate', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
   { id: 'height', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
   { id: 'weight', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
+  { id: 'motivation', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
+  { id: 'goal', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
+  { id: 'level', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
+  { id: 'interstitial_evolution', kind: 'interstitial', countsTowardProgress: false, persistsToDraft: false, devJumpable: true },
   { id: 'interstitial_methodology', kind: 'interstitial', countsTowardProgress: false, persistsToDraft: false, devJumpable: true },
   { id: 'days', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
   { id: 'duration', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
@@ -94,20 +96,22 @@ export const ONBOARDING_STEPS: readonly OnboardingStepDef[] = [
   { id: 'primaryPlace', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
   { id: 'equipment', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
   { id: 'interstitial_guidedWorkout', kind: 'interstitial', countsTowardProgress: false, persistsToDraft: false, devJumpable: true },
+  { id: 'muscleFocus', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
+  { id: 'specialConditions', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
   { id: 'limits', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
   { id: 'limitationImpact', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
-  { id: 'specialConditions', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
+  { id: 'lipedemaScreening', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
+  { id: 'dizzinessScreening', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
+  { id: 'postSurgicalStatus', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
+  { id: 'postSurgicalRegion', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
   { id: 'pregnancyWeeks', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
-  { id: 'pregnancyPrenatalCare', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
-  { id: 'pregnancyExerciseRestriction', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
-  { id: 'pregnancyComplication', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
+  { id: 'pregnancyCare', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
   { id: 'pregnancyWarningSigns', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
-  { id: 'postpartumTimeSinceBirth', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
-  { id: 'postpartumDeliveryType', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
+  { id: 'postpartumContext', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
   { id: 'postpartumSigns', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
   { id: 'postpartumReturnClearance', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
   { id: 'functionalSituations', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
-  { id: 'muscleFocus', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
+  { id: 'medicalRestrictionDetails', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
   { id: 'interstitial_ajFitProgress', kind: 'interstitial', countsTowardProgress: false, persistsToDraft: false, devJumpable: true },
   { id: 'socialProof', kind: 'socialProof', countsTowardProgress: false, persistsToDraft: false, devJumpable: true },
   { id: 'commitment', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
@@ -126,13 +130,13 @@ export const ONBOARDING_STEPS: readonly OnboardingStepDef[] = [
  * personalização mesmo pós-cadastro.
  */
 export const FORCED_QUESTIONNAIRE_STEP_IDS: readonly OnboardingStepId[] = [
-  'goal',
-  'level',
-  'interstitial_evolution',
   'sex',
   'birthDate',
   'height',
   'weight',
+  'goal',
+  'level',
+  'interstitial_evolution',
   'interstitial_methodology',
   'days',
   'duration',
@@ -140,20 +144,22 @@ export const FORCED_QUESTIONNAIRE_STEP_IDS: readonly OnboardingStepId[] = [
   'primaryPlace',
   'equipment',
   'interstitial_guidedWorkout',
+  'muscleFocus',
+  'specialConditions',
   'limits',
   'limitationImpact',
-  'specialConditions',
+  'lipedemaScreening',
+  'dizzinessScreening',
+  'postSurgicalStatus',
+  'postSurgicalRegion',
   'pregnancyWeeks',
-  'pregnancyPrenatalCare',
-  'pregnancyExerciseRestriction',
-  'pregnancyComplication',
+  'pregnancyCare',
   'pregnancyWarningSigns',
-  'postpartumTimeSinceBirth',
-  'postpartumDeliveryType',
+  'postpartumContext',
   'postpartumSigns',
   'postpartumReturnClearance',
   'functionalSituations',
-  'muscleFocus',
+  'medicalRestrictionDetails',
   'interstitial_ajFitProgress',
   'analyzing',
   'plan',
@@ -178,6 +184,7 @@ export function getStepIndex(id: OnboardingStepId): number {
 }
 
 export type OnboardingFlowAnswers = {
+  sex?: string | null;
   place?: string | null;
   limits?: string[];
   specialConditions?: string[];
@@ -187,10 +194,18 @@ function isApplicableStep(id: OnboardingStepId, answers?: OnboardingFlowAnswers)
   if (!answers) return true;
   if (id === 'primaryPlace') return answers?.place === 'both';
   if (id === 'equipment') return answers?.place === 'home' || answers?.place === 'both';
-  if (id === 'limitationImpact') return !!answers?.limits?.some((value) => value !== 'none');
+  if (id === 'limits' || id === 'limitationImpact') {
+    return !!answers?.specialConditions?.includes('musculoskeletal_limitation');
+  }
+  if (id === 'lipedemaScreening') return !!answers?.specialConditions?.includes('lipedema');
+  if (id === 'dizzinessScreening') return !!answers?.specialConditions?.includes('dizziness_or_vertigo');
+  if (id === 'postSurgicalStatus' || id === 'postSurgicalRegion') {
+    return !!answers?.specialConditions?.includes('post_surgical');
+  }
   if (id.startsWith('pregnancy')) return !!answers?.specialConditions?.includes('pregnancy');
   if (id.startsWith('postpartum')) return !!answers?.specialConditions?.includes('postpartum');
   if (id === 'functionalSituations') return !!answers?.specialConditions?.includes('functional_limitation');
+  if (id === 'medicalRestrictionDetails') return !!answers?.specialConditions?.includes('medical_restriction');
   return true;
 }
 

@@ -52,7 +52,7 @@ export function OnboardingFunnelScreen({
   // Neither preload is tied to the interstitial's own unmount, so a dev
   // jump or revisit doesn't pay the decoder-init cost twice.
   useEffect(() => {
-    if (currentStepId === 'height') preloadMethodologyVideo();
+    if (currentStepId === 'goal') preloadMethodologyVideo();
     if (currentStepId === 'duration') preloadGuidedWorkoutVideo();
     // Methodology is strictly before Guided Workout in every funnel
     // sequence, so once the user reaches this interstitial its player is no
@@ -185,15 +185,17 @@ export function OnboardingFunnelScreen({
     case 'limitationImpact':
     case 'specialConditions':
     case 'pregnancyWeeks':
-    case 'pregnancyPrenatalCare':
-    case 'pregnancyExerciseRestriction':
-    case 'pregnancyComplication':
+    case 'pregnancyCare':
     case 'pregnancyWarningSigns':
-    case 'postpartumTimeSinceBirth':
-    case 'postpartumDeliveryType':
+    case 'postpartumContext':
     case 'postpartumSigns':
     case 'postpartumReturnClearance':
     case 'functionalSituations':
+    case 'lipedemaScreening':
+    case 'dizzinessScreening':
+    case 'postSurgicalStatus':
+    case 'postSurgicalRegion':
+    case 'medicalRestrictionDetails':
       content = renderQuestion();
       break;
     case 'muscleFocus':

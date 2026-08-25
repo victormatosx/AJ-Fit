@@ -15,6 +15,7 @@ import {
   canContinueQuestion,
   ChoiceGrid,
   ChoiceList,
+  CompoundChoiceList,
   MultiList,
   NumberWheel,
   type LooseT,
@@ -198,6 +199,13 @@ export function QuestionStepScreen({
                   onChange={onChange}
                   maxSelections={question.maxSelections}
                   exclusiveOption={question.exclusiveOption}
+                />
+              )}
+              {question.kind === 'compound-choice' && (
+                <CompoundChoiceList
+                  question={question}
+                  value={(value as Record<string, string | null>) ?? {}}
+                  onChange={onChange}
                 />
               )}
             </ScrollView>

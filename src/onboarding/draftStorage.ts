@@ -64,9 +64,16 @@ function migrateDraft(raw: unknown): OnboardingDraft | null {
   const candidate = raw as Partial<OnboardingDraftV1>;
   if (candidate.version !== 1) return null;
   if (typeof candidate.currentStepId !== 'string') return null;
+  const legacyGroupedSteps: Record<string, OnboardingStepId> = {
+    pregnancyPrenatalCare: 'pregnancyCare',
+    pregnancyExerciseRestriction: 'pregnancyCare',
+    pregnancyComplication: 'pregnancyCare',
+    postpartumTimeSinceBirth: 'postpartumContext',
+    postpartumDeliveryType: 'postpartumContext',
+  };
   return {
     version: 1,
-    currentStepId: candidate.currentStepId as OnboardingStepId,
+    currentStepId: legacyGroupedSteps[candidate.currentStepId] ?? candidate.currentStepId as OnboardingStepId,
     updatedAt: typeof candidate.updatedAt === 'string' ? candidate.updatedAt : new Date().toISOString(),
     name: typeof candidate.name === 'string' ? candidate.name : null,
     answers: (candidate.answers ?? {}) as DraftQuizAnswers,

@@ -1,115 +1,153 @@
-# Questionário — contrato de entrada para T001–T090
+# Questionário — contrato de entrada para T001–T090 (Fase 2)
 
-Este documento registra a auditoria e o contrato de coleta preparado para o
-futuro motor de seleção/modificadores. Ele **não** descreve nem implementa a
-seleção final de templates.
+Este documento registra a auditoria, a redução de fricção e o contrato de
+coleta preparado para o futuro motor. Ele **não** implementa seleção final de
+Txxx, modificadores executáveis ou mutação dos templates.
 
-## Auditoria do contrato anterior
+## 1. Auditoria antes da Fase 2
 
-- UI/fluxo: `src/screens/OnboardingFunnelScreen.tsx`,
-  `src/components/onboarding/QuestionStepScreen.tsx`,
-  `src/components/onboarding/QuestionRenderer.tsx`, `src/onboarding/steps.ts`
-  e `src/onboarding/questionDefs.ts`.
-- Estado/tipos: `Quiz` e `defaultQuiz` em `src/state/AppState.tsx`.
-- Draft anônimo: AsyncStorage em `src/onboarding/draftStorage.ts`.
-- Firestore: snapshots imutáveis em
-  `users/{uid}/questionnaires/{questionnaireId}`, convertidos por
-  `src/lib/questionnaireAnswers.ts` e gravados por
-  `src/services/userProfile.ts`.
-- Consumidores: `PlanReadyScreen` usa `goal`, `level`, `days` e `duration`;
-  `AssessmentScreen` recebe o questionário; `EditProfileScreen` usa
-  `birthDate`/`height`; a Cloud Function administrativa expõe os campos para
-  consulta. Não existe motor T001–T090 ativo no cliente.
-- Analytics usa IDs estáveis de etapa, nunca texto ou valor clínico. O logger
-  ainda é no-op.
-- Campos legados sem pergunta no funil atual: `frequency` e `style`. O antigo
-  catálogo detalhado de `equipment` existe no componente não montado
-  `EquipmentPicker`. Esses contratos permanecem legíveis.
-- Valores legados preservados na leitura: objetivos `hyper/cut/perf/def/recon`,
-  experiências `beg/int/adv/elite`, equipamentos detalhados e `age` (convertido
-  em `birthDate`).
-- Firestore Rules aceitam `answers` como mapa e já restringem o documento a
-  criação imutável pelo dono; nenhum relaxamento de regra foi necessário.
+Contagem aproximada de telas de pergunta no caminho `gym`, sem equipamentos
+condicionais:
 
-## Shape atual (`Quiz` / `answers`)
+| Cenário anterior | Telas de pergunta |
+|---|---:|
+| padrão masculino | 15 |
+| padrão feminino | 15 |
+| gestação | 20 |
+| pós-parto | 19 |
+| limitação funcional | 16 |
 
-```ts
-{
-  // profile
-  sex: 'm' | 'f' | null;
-  birthDate: Date | Timestamp | null;
-  height: number;
-  weight: number;
+As duas fontes principais de fricção eram: `limits` aparecia para todos antes
+do roteador de saúde; gestação adicionava cinco telas consecutivas e pós-parto,
+quatro. A auditoria também confirmou que `PlanReadyScreen` usa apenas dados
+resumidos, não existe motor T001–T090 ativo no cliente, analytics registra IDs
+estáveis de etapa (sem valores clínicos) e Firestore já aceita `answers` como
+mapa imutável do dono.
 
-  // base selection (future engine)
-  goal: PrimaryGoal | LegacyGoal | null;
-  days: 2 | 3 | 4 | 5 | 6 | 7 | null;
-  place: 'gym' | 'home' | 'both' | null;
-  primaryPlace: 'gym' | 'home' | null;
+## 2. Fluxo após a Fase 2
 
-  // modifiers
-  level: ExperienceLevel | LegacyExperienceLevel | null;
-  duration: '30' | '45' | '60' | '90' | null;
-  equipment: string[];
-  limits: string[];
-  limitationImpact: 'mild' | 'requires_adaptation' |
-    'professional_restriction' | 'unknown' | null;
-  muscleFocus: string[]; // máximo 2
+Ordem mental:
 
-  // special population / safety
-  specialConditions: Array<'none' | 'pregnancy' | 'postpartum' |
-    'functional_limitation' | 'medical_restriction'>;
-  pregnancyScreening: {
-    weeks: number | null;
-    prenatalCare: 'yes' | 'no' | null;
-    exerciseRestriction: 'yes' | 'no' | null;
-    complication: 'yes' | 'no' | 'unsure' | null;
-    warningSigns: string[];
-  } | null;
-  postpartumScreening: {
-    timeSinceBirth: string | null;
-    deliveryType: string | null;
-    signs: string[];
-    returnClearance: string | null;
-  } | null;
-  functionalScreening: { situations: string[] } | null;
-
-  // funnel only / legacy preserved
-  motivation: string | null;
-  commitment: string | null;
-  frequency: string | null;
-  style: string[];
-}
+``` text
+sobre você → objetivo → rotina → personalização → saúde → finalização
 ```
 
-No Firestore, `birthDate` é `Timestamp`; no draft é ISO string. Os demais IDs
-são invariantes entre idiomas.
+No caminho padrão `gym`, há 14 telas de pergunta. Gestação e pós-parto passam
+a adicionar três telas cada (17 no total), agrupando campos relacionados sem
+perder informação. Limitação funcional adiciona uma (15). Musculoesquelética
+e pós-cirúrgico adicionam duas (16); lipedema, tontura/vertigem e restrição
+médica adicionam uma cada (15). `home` soma equipamento; `both` soma ambiente
+principal e equipamento. Múltiplos ramos somam suas telas e coexistem.
 
-## Fluxo condicional
+O roteador canônico oferece:
 
-- Padrão: perguntas comuns + condição especial + prioridade muscular.
-- `home`: inclui equipamentos.
-- `both`: inclui ambiente principal e equipamentos.
-- Limitação diferente de `none`: inclui impacto da limitação.
-- `pregnancy`: semana, pré-natal, restrição profissional, complicação e sinais
-  de alerta declarados.
-- `postpartum`: tempo, tipo de parto, sinais e orientação de retorno.
-- `functional_limitation`: situações funcionais declaradas.
+``` text
+none
+musculoskeletal_limitation
+pregnancy
+postpartum
+lipedema
+dizziness_or_vertigo
+post_surgical
+functional_limitation
+medical_restriction
+```
 
-`none` é exclusivo em todos os multi-selects. Gestação e pós-parto são estados
-mutuamente exclusivos; cada um pode coexistir com restrição médica ou limitação
-funcional. Trocar um roteador limpa deterministicamente o objeto condicional
-que deixou de ser aplicável. Idade nunca ativa fragilidade.
+`none` é exclusivo. Gestação e pós-parto são mutuamente exclusivos. As demais
+condições podem coexistir. `limits` e `limitationImpact` agora aparecem somente
+no ramo `musculoskeletal_limitation`.
 
-O progresso usa somente as perguntas do caminho atualmente aplicável.
+## 3. Pergunta → campo → finalidade → papel → ramo
 
-## Compatibilidade
+| Tela/pergunta | Campo persistido | Finalidade futura | Papel | Condição |
+|---|---|---|---|---|
+| sexo | `sex` | compatibilidade de população | selector | comum |
+| nascimento | `birthDate` | idade derivada, nunca fragilidade automática | context | comum |
+| altura/peso | `height`, `weight` | contexto físico | context | comum |
+| motivação | `motivation` | contexto de onboarding | funnel-only | comum anônimo |
+| objetivo | `goal` | família/base futura | selector | comum |
+| experiência | `level` | complexidade/dose futura | modifier P4 | comum |
+| dias | `days` | frequência/base futura | selector | comum |
+| duração | `duration` | orçamento temporal | modifier P5 | comum |
+| local | `place` | ambiente base | selector | comum |
+| ambiente principal | `primaryPlace` | resolver `both` | selector | `place=both` |
+| equipamentos | `equipment[]` | viabilidade | modifier P3 | `home/both` |
+| prioridade muscular | `muscleFocus[]` | ênfase, máximo 2 | preference P7 | comum |
+| roteador de saúde | `specialConditions[]` | ativar ramos explícitos | router | comum |
+| região limitada | `limits[]` | constraints de movimento | modifier P2 | musculoesquelética |
+| impacto da limitação | `limitationImpact` | diferenciar desconforto/adaptação/restrição | safety/modifier | musculoesquelética |
+| semanas | `pregnancyScreening.weeks` | contexto da população | selector/context | gestação |
+| cuidados (agrupada) | `prenatalCare`, `exerciseRestriction`, `complication` | gate declarado | safety P0/P1 | gestação |
+| sinais gestacionais | `warningSigns[]` | red flags declaradas | safety P0 | gestação |
+| contexto pós-parto (agrupada) | `timeSinceBirth`, `deliveryType` | contexto de retorno | selector/context | pós-parto |
+| sinais pós-parto | `signs[]` | red flags declaradas | safety P0/P1 | pós-parto |
+| orientação de retorno | `returnClearance` | gate declarado | safety P0/P1 | pós-parto |
+| situações funcionais | `functionalScreening.situations[]` | capacidade e apoio | safety/modifier P2 | funcional |
+| lipedema (agrupada) | `symptomImpact`, `professionalGuidance` | separar rótulo, impacto e orientação | modifier P2 + safety | lipedema |
+| tontura/vertigem (agrupada) | `symptomFrequency`, `affectsBalance` | distinguir histórico, atividade e equilíbrio | safety P0 + modifier P2 | tontura/vertigem |
+| recuperação/liberação (agrupada) | `recoveryStatus`, `returnClearance` | gate restritivo | safety P0 + modifier | pós-cirúrgico |
+| região operada | `bodyRegion` | contexto sem inferir procedimento | safety/modifier | pós-cirúrgico |
+| restrição profissional | `professionalExerciseRestriction` | estruturar a opção genérica | safety P0 | restrição médica |
+| compromisso | `commitment` | conclusão do onboarding | funnel-only | comum anônimo |
 
-Questionários v1 continuam sendo carregados com defaults nulos/vazios apenas
-para campos ausentes. IDs antigos não são reclassificados ou inventados;
-inclusive `elite` continua visível para consumidores de um documento antigo,
-embora não seja oferecido na UI nova. `PlanReadyScreen` traduz tanto os IDs
-canônicos quanto os legados.
+## 4. Shape persistido relevante
 
-O motor completo `QuestionnaireAnswers -> Txxx -> modifiers -> workout` não
-faz parte desta etapa e permanece não implementado.
+```ts
+specialConditions: SpecialCondition[];
+limits: string[];
+limitationImpact: 'mild' | 'requires_adaptation' |
+  'professional_restriction' | 'unknown' | null;
+
+lipedemaScreening: {
+  symptomImpact: 'none' | 'mild_or_occasional' |
+    'interferes_with_exercises' | 'unknown' | null;
+  professionalGuidance: 'no' | 'yes' | 'unsure' | null;
+} | null;
+
+dizzinessScreening: {
+  symptomFrequency: 'history_only' | 'occasional' |
+    'frequent' | 'current_or_recent' | null;
+  affectsBalance: 'no' | 'yes' | 'unknown' | null;
+} | null;
+
+postSurgicalScreening: {
+  recoveryStatus: 'completed' | 'in_progress' | 'unsure' | null;
+  bodyRegion: string | null;
+  returnClearance: 'cleared_no_restrictions' |
+    'cleared_with_restrictions' | 'not_yet' | 'unsure' | null;
+} | null;
+
+medicalRestrictionScreening: {
+  professionalExerciseRestriction: 'yes' | 'no' | 'unsure' | null;
+} | null;
+```
+
+Gestação, pós-parto e funcional mantêm os objetos documentados na Fase 1.
+`birthDate` é ISO no draft e `Timestamp` no Firestore. IDs são invariantes
+entre pt-BR, en e es.
+
+## 5. Limpeza, compatibilidade e segurança de dados
+
+- Ao desmarcar um ramo, seu objeto e campos associados voltam a `null`/`[]`;
+  dados ocultos não permanecem ativos.
+- Trocar sexo para masculino remove gestação/pós-parto, preservando os demais
+  ramos sem inferência.
+- Rascunhos v1 cujo cursor estava nas telas antigas de cuidados gestacionais
+  ou contexto pós-parto retomam nas telas agrupadas equivalentes.
+- Questionários antigos e shapes esparsos continuam legíveis por defaults;
+  `frequency`, `style`, objetivos/experiências legados e `age` continuam sob a
+  política de compatibilidade existente.
+- Orientação profissional de lipedema e liberação cirúrgica com restrições
+  permanecem em seus domínios; não são convertidas silenciosamente em
+  `medical_restriction`.
+- A visão administrativa expõe todos os novos objetos de forma defensiva.
+- Textos e opções existem em pt-BR, inglês e espanhol; valores persistidos não
+  dependem do idioma.
+
+## 6. Integração com o motor
+
+O questionário continua sendo o contrato imutável de entrada. A implementação
+do pipeline `QuestionnaireAnswers → safety → Txxx → modifiers → composition →
+validation` está documentada em `docs/32_workout_prescription_engine.md`.
+Regras ainda não formalizadas não são inferidas: o motor retorna um estado de
+domínio explícito no ponto da lacuna.

@@ -14,10 +14,10 @@ import {
 } from '../steps';
 
 describe('ONBOARDING_STEPS', () => {
-  it('has 39 unique step ids', () => {
+  it('has 41 unique step ids', () => {
     const ids = ONBOARDING_STEPS.map((s) => s.id);
-    expect(ids).toHaveLength(39);
-    expect(new Set(ids).size).toBe(39);
+    expect(ids).toHaveLength(41);
+    expect(new Set(ids).size).toBe(41);
   });
 
   it('never lets auth/paywall be dev-jumpable', () => {
@@ -56,7 +56,7 @@ describe('getStepSequence / anonymous vs forcedQuestionnaire', () => {
       expect(seq).not.toContain(skipped);
     }
     expect(seq).toEqual(FORCED_QUESTIONNAIRE_STEP_IDS);
-    expect(seq[0]).toBe('goal');
+    expect(seq[0]).toBe('sex');
     expect(seq[seq.length - 1]).toBe('plan');
   });
 });
@@ -80,21 +80,19 @@ describe('getNextStepId / getPreviousStepId', () => {
   });
 
   it('back from a question after an interstitial skips straight to the prior question', () => {
-    // presentation -> name -> welcome(interstitial) -> motivation
-    expect(getPreviousStepId('motivation', 'anonymous')).toBe('name');
-    // level -> interstitial_evolution -> sex
-    expect(getPreviousStepId('sex', 'anonymous')).toBe('level');
-    // weight -> interstitial_methodology -> days
-    expect(getPreviousStepId('days', 'anonymous')).toBe('weight');
-    // place -> interstitial_guidedWorkout -> limits
-    expect(getPreviousStepId('limits', 'anonymous', { place: 'gym', limits: ['none'], specialConditions: ['none'] })).toBe('place');
-    // muscleFocus -> interstitial_ajFitProgress -> socialProof -> commitment
-    expect(getPreviousStepId('commitment', 'anonymous')).toBe('muscleFocus');
+    // presentation -> name -> welcome(interstitial) -> sex
+    expect(getPreviousStepId('sex', 'anonymous')).toBe('name');
+    // level -> evolution/methodology interstitials -> days
+    expect(getPreviousStepId('days', 'anonymous')).toBe('level');
+    // place -> guided interstitial -> muscleFocus
+    expect(getPreviousStepId('muscleFocus', 'anonymous', { place: 'gym', specialConditions: ['none'] })).toBe('place');
+    // specialConditions -> AJ progress/social proof -> commitment
+    expect(getPreviousStepId('commitment', 'anonymous', { place: 'gym', specialConditions: ['none'] })).toBe('specialConditions');
   });
 
   it('has no previous step before the first step of each mode', () => {
     expect(getPreviousStepId('presentation', 'anonymous')).toBeNull();
-    expect(getPreviousStepId('goal', 'forcedQuestionnaire')).toBeNull();
+    expect(getPreviousStepId('sex', 'forcedQuestionnaire')).toBeNull();
   });
 
   it('reaches the end of the forcedQuestionnaire sequence at plan', () => {
@@ -132,16 +130,24 @@ describe('computeOnboardingProgress', () => {
 });
 
 describe('conditional questionnaire branches', () => {
-  const standard = { place: 'gym', limits: ['none'], specialConditions: ['none'] };
+  const standard = { place: 'gym', limits: [], specialConditions: ['none'] };
 
   it('keeps the standard path compact', () => {
     const seq = getStepSequence('anonymous', standard);
     expect(seq).not.toContain('equipment');
     expect(seq).not.toContain('primaryPlace');
     expect(seq).not.toContain('limitationImpact');
+    expect(seq).not.toContain('limits');
     expect(seq).not.toContain('pregnancyWeeks');
     expect(seq).not.toContain('postpartumSigns');
     expect(seq).not.toContain('functionalSituations');
+  });
+
+  it('keeps standard male and female paths identical when the health router is none', () => {
+    const male = getStepSequence('anonymous', { ...standard, sex: 'm' });
+    const female = getStepSequence('anonymous', { ...standard, sex: 'f' });
+    expect(female).toEqual(male);
+    expect(female.filter((id) => getStepDef(id).kind === 'question')).toHaveLength(14);
   });
 
   it('adds home equipment and both-environment resolution only when applicable', () => {
@@ -155,10 +161,10 @@ describe('conditional questionnaire branches', () => {
     const seq = getStepSequence('anonymous', {
       place: 'gym',
       limits: ['knee'],
-      specialConditions: ['pregnancy', 'functional_limitation'],
+      specialConditions: ['musculoskeletal_limitation', 'pregnancy', 'functional_limitation'],
     });
     expect(seq).toContain('limitationImpact');
-    expect(seq).toContain('pregnancyComplication');
+    expect(seq).toContain('pregnancyCare');
     expect(seq).toContain('functionalSituations');
     expect(getStepSequence('anonymous', { ...standard, specialConditions: ['postpartum'] })).toContain(
       'postpartumReturnClearance',
@@ -171,7 +177,42 @@ describe('conditional questionnaire branches', () => {
       ...standard,
       specialConditions: ['pregnancy'],
     }).total;
-    expect(pregnancyTotal).toBe(standardTotal + 5);
+    expect(pregnancyTotal).toBe(standardTotal + 3);
+  });
+
+  it('routes and combines every phase 2 health branch', () => {
+    const seq = getStepSequence('anonymous', {
+      ...standard,
+      specialConditions: ['lipedema', 'dizziness_or_vertigo', 'post_surgical', 'medical_restriction'],
+    });
+    expect(seq).toEqual(expect.arrayContaining([
+      'lipedemaScreening',
+      'dizzinessScreening',
+      'postSurgicalStatus',
+      'postSurgicalRegion',
+      'medicalRestrictionDetails',
+    ]));
+  });
+
+  it.each([
+    ['lipedema', ['lipedemaScreening']],
+    ['dizziness_or_vertigo', ['dizzinessScreening']],
+    ['post_surgical', ['postSurgicalStatus', 'postSurgicalRegion']],
+  ] as const)('opens only the %s-specific phase 2 screens', (condition, expected) => {
+    const seq = getStepSequence('anonymous', { ...standard, specialConditions: [condition] });
+    const phase2Ids = ['lipedemaScreening', 'dizzinessScreening', 'postSurgicalStatus', 'postSurgicalRegion'];
+    expect(seq.filter((id) => phase2Ids.includes(id))).toEqual(expected);
+  });
+
+  it('combines lipedema and musculoskeletal details without duplicating screens', () => {
+    const seq = getStepSequence('anonymous', {
+      ...standard,
+      limits: ['knee'],
+      specialConditions: ['lipedema', 'musculoskeletal_limitation'],
+    });
+    for (const id of ['limits', 'limitationImpact', 'lipedemaScreening'] as const) {
+      expect(seq.filter((stepId) => stepId === id)).toHaveLength(1);
+    }
   });
 });
 

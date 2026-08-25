@@ -18,6 +18,8 @@
     "kicker": "Treino de hoje",
     "meta": "{{duration}} min · {{exercises}} exercícios · ~{{kcal}} kcal",
     "start": "Iniciar treino",
+    "review": "Revisar informações",
+    "prescribedMeta": "{{sessions}} sessões/semana · {{exercises}} exercícios nesta sessão",
     "confirm": {
       "title": "Iniciar treino?",
       "question": "Deseja iniciar agora",
@@ -26,6 +28,24 @@
       "dismiss": "Fechar confirmação de treino",
       "accessibilityConfirm": "Confirmar início do treino",
       "accessibilityConfirmLocked": "Confirmar início do treino, recurso Premium"
+    }
+  },
+  "prescription": {
+    "requiresClearance": {
+      "title": "Precisamos de mais informações",
+      "body": "Identificamos uma condição que exige mais cuidado antes de personalizar seu treino com segurança. Siga a orientação do profissional responsável e atualize suas respostas quando não houver restrições que o app não consiga representar."
+    },
+    "blocked": {
+      "title": "Treino pausado por segurança",
+      "body": "Suas respostas atuais ativam uma interrupção de segurança documentada. O AJ Fit não prescreve nem inicia um treino nesse estado."
+    },
+    "needsQuestionnaireUpdate": {
+      "title": "Atualize suas informações",
+      "body": "Faltam algumas respostas necessárias para selecionar seu treino com segurança, ou seu questionário usa dados antigos insuficientes."
+    },
+    "unavailable": {
+      "title": "Treino ainda indisponível",
+      "body": "Uma regra de composição segura exigida pelas suas respostas ainda não foi definida. Nenhum treino genérico foi gerado."
     }
   },
   "consistency": {

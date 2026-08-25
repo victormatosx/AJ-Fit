@@ -40,6 +40,8 @@ import {
   INITIAL_PAYWALL_PREMIUM_RETURN_STATE,
   resolvePaywallPremiumReturn,
 } from '../lib/paywallPremiumReturn';
+import { useWorkoutPrescription } from '../workoutPrescription/useWorkoutPrescription';
+import type { PrescriptionResult } from '../workoutPrescription/types';
 
 type SupportRoute =
   | { name: 'help' }
@@ -93,6 +95,7 @@ function AppShellContent({
   const { theme } = useTheme();
   const { tab, setTab } = useAppState();
   const { linkedProviders } = useAuth();
+  const prescription = useWorkoutPrescription();
   const { isPremium } = useSubscription();
   const paywallPremiumReturnState = useRef(INITIAL_PAYWALL_PREMIUM_RETURN_STATE);
   // Single centralized prewarm schedule (docs/23_navegacao_e_lifecycle.md
@@ -172,6 +175,7 @@ function AppShellContent({
   // session this call opens — so that same gate is also what protects them
   // (see Fase 3 report, "Decisão sobre REGISTER_SET").
   const startWorkout = () => {
+    if (prescription.status !== 'SUCCESS') return;
     setShowWorkoutConfirmation(false);
     setTab('workout');
   };
@@ -198,12 +202,15 @@ function AppShellContent({
       <View style={{ flex: 1 }}>
         <PersistentScreen active={tab === 'home'} activeStyle={FULL_BLEED.tab} inactiveMode="materialized">
           <HomeScreen
+            prescription={prescription}
             onStart={() => setShowWorkoutConfirmation(true)}
             onOpenConsistency={() => setShowCal(true)}
             onOpenProfile={() => setTab('profile')}
           />
         </PersistentScreen>
-        {tab === 'workout' && <WorkoutScreen onDone={() => setTab('home')} />}
+        {tab === 'workout' && prescription.status === 'SUCCESS' && (
+          <WorkoutScreen plan={prescription.plan} onDone={() => setTab('home')} />
+        )}
         <PersistentScreen
           active={tab === 'progress'}
           prewarm={prewarmed.PROGRESS}
@@ -247,6 +254,7 @@ function AppShellContent({
       )}
       <StartWorkoutConfirmation
         visible={showWorkoutConfirmation}
+        prescription={prescription}
         onCancel={() => setShowWorkoutConfirmation(false)}
         onConfirm={startWorkout}
       />
@@ -451,10 +459,12 @@ function AppShellContent({
 
 function StartWorkoutConfirmation({
   visible,
+  prescription,
   onCancel,
   onConfirm,
 }: {
   visible: boolean;
+  prescription: PrescriptionResult;
   onCancel: () => void;
   /** FASE 5: this is the pure "start the session" action — it runs only
    *  when `<PremiumAction>` below has already allowed it. The caller no
@@ -465,6 +475,14 @@ function StartWorkoutConfirmation({
   // as the Today Workout poster, even when the surrounding app uses Light.
   const theme = darkTheme;
   const { t } = useTranslation('home');
+  const canStart = prescription.status === 'SUCCESS';
+  const outcomeKey = prescription.status === 'REQUIRES_CLEARANCE'
+    ? 'requiresClearance'
+    : prescription.status === 'BLOCKED'
+      ? 'blocked'
+      : prescription.status === 'NEEDS_QUESTIONNAIRE_UPDATE'
+        ? 'needsQuestionnaireUpdate'
+        : 'unavailable';
   return (
     <Modal
       visible={visible}
@@ -534,7 +552,7 @@ function StartWorkoutConfirmation({
               {t('todayCard.kicker').toUpperCase()}
             </Slash>
             <Display size={26} color={theme.colors.textPrimary} style={{ marginTop: 9 }}>
-              {t('todayCard.confirm.title').toUpperCase()}
+              {t(canStart ? 'todayCard.confirm.title' : `prescription.${outcomeKey}.title`).toUpperCase()}
             </Display>
             <Text
               style={{
@@ -545,7 +563,9 @@ function StartWorkoutConfirmation({
                 marginTop: 8,
               }}
             >
-              {t('todayCard.confirm.question')}
+              {canStart
+                ? t('todayCard.confirm.question')
+                : t(`prescription.${outcomeKey}.body`)}
             </Text>
             <Text
               style={{
@@ -556,7 +576,7 @@ function StartWorkoutConfirmation({
                 marginTop: 1,
               }}
             >
-              {t('mock.today.name')}?
+              {canStart ? `${prescription.plan.templateId} · ${prescription.plan.split}` : ''}
             </Text>
 
             {/* FASE 5: <PremiumAction> is the entry-point gate — locked stays
@@ -564,7 +584,7 @@ function StartWorkoutConfirmation({
                 before either starting the session or opening
                 PremiumRequiredSheet, exactly like the Fase 4 behavior this
                 replaces. */}
-            <PremiumAction capability="START_WORKOUT" onAllowed={onConfirm}>
+            {canStart && <PremiumAction capability="START_WORKOUT" onAllowed={onConfirm}>
               {({ locked, onPress }) => (
                 <Pressable
                   accessibilityRole="button"
@@ -603,7 +623,7 @@ function StartWorkoutConfirmation({
                   </Text>
                 </Pressable>
               )}
-            </PremiumAction>
+            </PremiumAction>}
             <Pressable
               accessibilityRole="button"
               onPress={onCancel}

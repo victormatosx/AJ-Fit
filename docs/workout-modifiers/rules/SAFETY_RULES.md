@@ -218,58 +218,46 @@ Regras:
 
 ## 9. Pós-cirúrgico
 
-O cenário foi identificado como necessário, mas a biblioteca T001--T090
-atual não contém família pós-cirúrgica dedicada.
+É um **Safety Gate restritivo** e também uma futura fonte de modificação. A
+entrada mínima é: estado da recuperação, região operada e liberação de retorno.
 
-Portanto:
+- `IN_PROGRESS`, `NOT_YET`, `UNSURE` ou liberação com restrições não podem ser
+  neutralizados por objetivo, experiência, preferência ou duração;
+- ausência de qualquer campo obrigatório produz `INSUFFICIENT_DATA`;
+- cirurgia concluída e liberação sem restrições apenas satisfazem o gate de
+  entrada; não criam uma prescrição clínica nem garantem compatibilidade;
+- não inferir tipo de cirurgia, tecido, amplitude ou prazo pela região.
 
-``` text
-POST_SURGICAL != generic modifier
-```
-
-Até existir módulo próprio com critérios de entrada, tipo de cirurgia,
-fase de recuperação, restrições e liberação profissional, o motor não
-deve inventar uma prescrição pós-cirúrgica.
-
-Estado recomendado:
-
-``` text
-NEEDS_REVIEW
-```
-
-ou fluxo específico fora do motor geral.
+Como ainda não há família pós-cirúrgica T001--T090 nem regras aprovadas, a
+implementação futura deverá retornar `NEEDS_REVIEW` quando não puder provar a
+composição segura. Esta fase apenas coleta o contrato.
 
 ------------------------------------------------------------------------
 
-## 10. Vertigem/labirintite
+## 10. Tontura/vertigem
 
-Também requer módulo próprio.
+O questionário coleta frequência e efeito declarado no equilíbrio. Sintoma
+`CURRENT_OR_RECENT` ou equilíbrio `YES/UNKNOWN` entra na avaliação P0; histórico
+ou ocorrência ocasional sem efeito de equilíbrio pode alimentar um futuro
+modificador P2.
 
-Possíveis implicações de equilíbrio e posição não devem ser inferidas
-genericamente.
-
-Até regras validadas existirem:
-
--   não criar modificador universal;
--   não assumir que exercícios sentados resolvem todos os casos;
--   considerar `NEEDS_REVIEW` quando o quadro declarado impactar
-    segurança do treino.
+Não diagnosticar labirintite, não inferir causa e não assumir que "sentado =
+seguro". Sem regra validada para resolver o estado, usar `NEEDS_REVIEW`; com
+dado obrigatório ausente, `INSUFFICIENT_DATA`.
 
 ------------------------------------------------------------------------
 
 ## 11. Lipedema
 
-Lipedema não deve ser reduzido a:
+Lipedema é MODIFIER + entrada de SAFETY. A coleta separa impacto nos exercícios
+e existência de orientação profissional.
 
-``` text
-NO_IMPACT
-```
-
-ou qualquer outra regra única.
-
-A biblioteca atual não possui módulo específico documentado. Até ele
-existir, o motor não deve criar prescrição clínica automática baseada
-apenas no rótulo.
+- diagnóstico/suspeita isolado não ativa `NO_IMPACT`, redução de volume ou
+  incapacidade;
+- impacto que interfere ou orientação profissional devem ser preservados no
+  decision trace e nunca vencidos por preferência;
+- `UNKNOWN/UNSURE` não é tratado como ausência de risco;
+- sem regra específica aprovada, não produzir prescrição clínica automática.
 
 ------------------------------------------------------------------------
 

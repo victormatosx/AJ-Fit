@@ -450,3 +450,22 @@ Esta arquitetura deverá ser complementada por:
 -   regressão;
 -   critérios de saída de populações especiais;
 -   testes de composição.
+
+------------------------------------------------------------------------
+
+## 15. Entradas de saúde da Fase 2
+
+O roteador do questionário pode ativar vários ramos simultaneamente. Cada ramo
+produz dados declarados, nunca diagnóstico:
+
+``` text
+lipedema             → MODIFIER + SAFETY input
+dizziness_or_vertigo → SAFETY + MODIFIER input
+post_surgical        → RESTRICTIVE SAFETY GATE + MODIFIER input
+medical_restriction  → structured P0 input
+```
+
+Coleta, persistência e consulta administrativa estão disponíveis. O pipeline
+`QuestionnaireAnswers → Txxx → modifiers → workout` continua fora do runtime;
+nenhuma entrada desta seção altera hoje template, exercício, volume ou
+intensidade.

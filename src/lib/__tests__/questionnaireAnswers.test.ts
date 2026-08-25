@@ -47,7 +47,7 @@ describe('toPersistedAnswers / fromPersistedAnswers (new shape)', () => {
       primaryPlace: 'home',
       equipment: ['dumbbells', 'bands'],
       limitationImpact: 'requires_adaptation',
-      specialConditions: ['pregnancy'],
+      specialConditions: ['musculoskeletal_limitation', 'pregnancy'],
       pregnancyScreening: {
         weeks: 18,
         prenatalCare: 'yes',
@@ -63,7 +63,7 @@ describe('toPersistedAnswers / fromPersistedAnswers (new shape)', () => {
       primaryPlace: 'home',
       equipment: ['dumbbells', 'bands'],
       limitationImpact: 'requires_adaptation',
-      specialConditions: ['pregnancy'],
+      specialConditions: ['musculoskeletal_limitation', 'pregnancy'],
       pregnancyScreening: canonical.pregnancyScreening,
     });
   });

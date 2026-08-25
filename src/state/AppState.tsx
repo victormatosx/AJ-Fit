@@ -20,8 +20,12 @@ export type LimitationImpact =
   | 'professional_restriction'
   | 'unknown';
 export type SpecialCondition =
+  | 'musculoskeletal_limitation'
   | 'pregnancy'
   | 'postpartum'
+  | 'lipedema'
+  | 'dizziness_or_vertigo'
+  | 'post_surgical'
   | 'functional_limitation'
   | 'medical_restriction'
   | 'none';
@@ -40,6 +44,33 @@ export type PostpartumScreening = {
 };
 export type FunctionalScreening = {
   situations: string[];
+};
+export type LipedemaScreening = {
+  symptomImpact: 'none' | 'mild_or_occasional' | 'interferes_with_exercises' | 'unknown' | null;
+  professionalGuidance: 'no' | 'yes' | 'unsure' | null;
+};
+export type DizzinessScreening = {
+  symptomFrequency: 'history_only' | 'occasional' | 'frequent' | 'current_or_recent' | null;
+  affectsBalance: 'no' | 'yes' | 'unknown' | null;
+};
+export type PostSurgicalScreening = {
+  recoveryStatus: 'completed' | 'in_progress' | 'unsure' | null;
+  bodyRegion:
+    | 'knee'
+    | 'hip'
+    | 'back'
+    | 'shoulder'
+    | 'elbow'
+    | 'wrist'
+    | 'ankle_foot'
+    | 'abdomen'
+    | 'chest'
+    | 'other'
+    | null;
+  returnClearance: 'cleared_no_restrictions' | 'cleared_with_restrictions' | 'not_yet' | 'unsure' | null;
+};
+export type MedicalRestrictionScreening = {
+  professionalExerciseRestriction: 'yes' | 'no' | 'unsure' | null;
 };
 
 export type Quiz = {
@@ -77,6 +108,10 @@ export type Quiz = {
   pregnancyScreening: PregnancyScreening | null;
   postpartumScreening: PostpartumScreening | null;
   functionalScreening: FunctionalScreening | null;
+  lipedemaScreening: LipedemaScreening | null;
+  dizzinessScreening: DizzinessScreening | null;
+  postSurgicalScreening: PostSurgicalScreening | null;
+  medicalRestrictionScreening: MedicalRestrictionScreening | null;
 };
 
 export type TabId = 'home' | 'workout' | 'progress' | 'profile';
@@ -112,6 +147,10 @@ export const defaultQuiz: Quiz = {
   pregnancyScreening: null,
   postpartumScreening: null,
   functionalScreening: null,
+  lipedemaScreening: null,
+  dizzinessScreening: null,
+  postSurgicalScreening: null,
+  medicalRestrictionScreening: null,
 };
 
 const AppStateContext = createContext<Ctx | null>(null);

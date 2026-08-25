@@ -231,7 +231,8 @@
     "title": "Is there anything below we should consider when building your workout?",
     "sub": "Select all that apply.",
     "options": {
-      "none": "None", "pregnancy": "I am pregnant", "postpartum": "I am postpartum",
+      "none": "None", "musculoskeletal_limitation": "I have musculoskeletal pain or limitations", "pregnancy": "I am pregnant", "postpartum": "I am postpartum",
+      "lipedema": "I have diagnosed or suspected lipedema", "dizziness_or_vertigo": "I experience vertigo, dizziness, or balance problems", "post_surgical": "I am recovering from surgery",
       "functional_limitation": "I have difficulty with balance, mobility, or daily activities",
       "medical_restriction": "I have a medical restriction for exercise"
     }
@@ -252,6 +253,11 @@
       "unsure": { "label": "I'm not sure", "short": "?" }
     }
   },
+  "pregnancyCare": { "title": "Pregnancy care and guidance", "fields": {
+    "prenatalCare": { "title": "Are you receiving prenatal care?", "options": { "yes": { "label": "Yes", "short": "YES" }, "no": { "label": "No", "short": "NO" } } },
+    "exerciseRestriction": { "title": "Has a professional restricted your exercise?", "options": { "no": { "label": "No", "short": "NO" }, "yes": { "label": "Yes", "short": "YES" } } },
+    "complication": { "title": "Is there a relevant complication or special guidance?", "options": { "no": { "label": "No", "short": "NO" }, "yes": { "label": "Yes", "short": "YES" }, "unsure": { "label": "I'm not sure", "short": "?" } } }
+  } },
   "pregnancyWarningSigns": {
     "title": "Are you currently experiencing any of these warning signs?",
     "sub": "This only prepares the safety gate; it is not a diagnosis.",
@@ -283,6 +289,10 @@
       "prefer_not_to_say": { "label": "Prefer not to say", "short": "—" }
     }
   },
+  "postpartumContext": { "title": "Postpartum context", "fields": {
+    "timeSinceBirth": { "title": "How long has it been since delivery?", "options": { "under_6_weeks": { "label": "Less than 6 weeks", "short": "<6W" }, "6_12_weeks": { "label": "6–12 weeks", "short": "6–12W" }, "3_6_months": { "label": "3–6 months", "short": "3–6M" }, "6_12_months": { "label": "6–12 months", "short": "6–12M" }, "over_1_year": { "label": "More than 1 year", "short": ">1Y" } } },
+    "deliveryType": { "title": "What type of delivery did you have?", "options": { "vaginal": { "label": "Vaginal", "short": "VAG" }, "cesarean": { "label": "Cesarean", "short": "C-S" }, "prefer_not_to_say": { "label": "Prefer not to say", "short": "—" } } }
+  } },
   "postpartumSigns": {
     "title": "Are you currently experiencing any of these signs?",
     "options": {
@@ -308,6 +318,20 @@
       "daily_activities_difficulty": "Some daily activities are difficult", "none": "None of these"
     }
   },
+  "lipedemaScreening": { "title": "How does lipedema affect you today?", "fields": {
+    "symptomImpact": { "title": "Impact on exercise", "options": { "none": { "label": "No current impact", "short": "NONE" }, "mild_or_occasional": { "label": "Mild or occasional", "short": "MILD" }, "interferes_with_exercises": { "label": "Interferes with exercise", "short": "INTERFERES" }, "unknown": { "label": "I cannot assess it", "short": "?" } } },
+    "professionalGuidance": { "title": "Have you received specific professional guidance?", "options": { "no": { "label": "No", "short": "NO" }, "yes": { "label": "Yes", "short": "YES" }, "unsure": { "label": "I'm not sure", "short": "?" } } }
+  } },
+  "dizzinessScreening": { "title": "About your dizziness or vertigo", "fields": {
+    "symptomFrequency": { "title": "How often does it happen?", "options": { "history_only": { "label": "Only in the past", "short": "PAST" }, "occasional": { "label": "Occasionally", "short": "SOMETIMES" }, "frequent": { "label": "Frequently", "short": "FREQUENT" }, "current_or_recent": { "label": "Now or recently", "short": "RECENT" } } },
+    "affectsBalance": { "title": "Does it affect your balance?", "options": { "no": { "label": "No", "short": "NO" }, "yes": { "label": "Yes", "short": "YES" }, "unknown": { "label": "I don't know", "short": "?" } } }
+  } },
+  "postSurgicalStatus": { "title": "About your surgical recovery", "fields": {
+    "recoveryStatus": { "title": "What is your recovery status?", "options": { "completed": { "label": "Completed", "short": "COMPLETED" }, "in_progress": { "label": "In progress", "short": "IN PROGRESS" }, "unsure": { "label": "I'm not sure", "short": "?" } } },
+    "returnClearance": { "title": "What is your exercise clearance?", "options": { "cleared_no_restrictions": { "label": "Cleared without restrictions", "short": "CLEARED" }, "cleared_with_restrictions": { "label": "Cleared with restrictions", "short": "RESTRICTED" }, "not_yet": { "label": "Not cleared yet", "short": "NOT YET" }, "unsure": { "label": "I'm not sure", "short": "?" } } }
+  } },
+  "postSurgicalRegion": { "title": "Which area was operated on?", "options": { "knee": { "label": "Knee", "description": "Knee area" }, "hip": { "label": "Hip", "description": "Hip area" }, "back": { "label": "Spine or back", "description": "Spine area" }, "shoulder": { "label": "Shoulder", "description": "Shoulder area" }, "elbow": { "label": "Elbow", "description": "Elbow area" }, "wrist": { "label": "Wrist or hand", "description": "Wrist or hand area" }, "ankle_foot": { "label": "Ankle or foot", "description": "Ankle or foot area" }, "abdomen": { "label": "Abdomen", "description": "Abdominal area" }, "chest": { "label": "Chest", "description": "Chest area" }, "other": { "label": "Other area", "description": "Another body area" } } },
+  "medicalRestrictionDetails": { "title": "Was this exercise restriction given by a professional?", "options": { "yes": { "label": "Yes", "short": "YES" }, "no": { "label": "No", "short": "NO" }, "unsure": { "label": "I'm not sure", "short": "?" } } },
   "muscleFocus": {
     "title": "Any muscle group to prioritize?",
     "sub": "Choose up to 2 — this helps steer your training.",

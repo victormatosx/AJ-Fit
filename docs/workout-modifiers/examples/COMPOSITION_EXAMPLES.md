@@ -651,13 +651,15 @@ efeito aplicado uma única vez
 
 ------------------------------------------------------------------------
 
-# Exemplo 27 --- Pós-cirúrgico sem módulo específico
+# Exemplo 27 --- Pós-cirúrgico com gate restritivo
 
 ## Entrada
 
 ``` yaml
-post_surgical: true
-surgery_context: insufficient
+post_surgical:
+  recovery_status: in_progress
+  body_region: knee
+  return_clearance: cleared_with_restrictions
 ```
 
 ## Resultado
@@ -671,13 +673,14 @@ impacto.
 
 ------------------------------------------------------------------------
 
-# Exemplo 28 --- Vertigem/labirintite
+# Exemplo 28 --- Tontura/vertigem e equilíbrio
 
 ## Entrada
 
 ``` yaml
-vertigo_or_labyrinthitis: true
-rules_module_available: false
+dizziness_or_vertigo:
+  symptom_frequency: current_or_recent
+  affects_balance: yes
 ```
 
 ## Resultado
@@ -690,13 +693,14 @@ Não assumir que "sentado = seguro".
 
 ------------------------------------------------------------------------
 
-# Exemplo 29 --- Lipedema
+# Exemplo 29 --- Lipedema com impacto declarado
 
 ## Entrada
 
 ``` yaml
-lipedema: true
-rules_module_available: false
+lipedema:
+  symptom_impact: interferes_with_exercises
+  professional_guidance: yes
 ```
 
 ## Resultado
@@ -707,7 +711,8 @@ Não aplicar uma regra universal de impacto/volume.
 NEEDS_REVIEW
 ```
 
-até o módulo específico existir.
+até as regras específicas serem aprovadas. O rótulo isolado não autoriza essa
+conclusão; são o impacto e a orientação declarados que alimentam a avaliação.
 
 ------------------------------------------------------------------------
 

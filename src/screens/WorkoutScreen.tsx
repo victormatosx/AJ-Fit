@@ -23,8 +23,9 @@ import { OutlineNumber } from '../components/ui/OutlineNumber';
 import { ExerciseGif } from '../components/fitness/ExerciseGif';
 import { displayLineHeight } from '../theme/tokens';
 import { useTheme } from '../theme';
-import { TODAY_WORKOUT } from '../lib/todayWorkout';
 import { logWarn } from '../lib/logger';
+import { EXERCISES_SEED } from '../data/exercisesSeedData';
+import type { FinalWorkoutPlan } from '../workoutPrescription/types';
 import { useUnits } from '../state/UnitsContext';
 import { usePremiumCapabilities } from '../hooks/usePremiumCapabilities';
 import {
@@ -36,7 +37,7 @@ import {
 } from '../units/workoutLoadConversions';
 import { WORKOUT_SUBSTITUTIONS_STORAGE_KEY as SUBS_KEY } from '../services/workoutSubstitutionsStorage';
 
-type SetData = { r: number; w: number };
+type SetData = { r: string; w: number };
 type SubOption = { name: string; target: string; db: string };
 type Exercise = {
   id: string;
@@ -48,106 +49,40 @@ type Exercise = {
   subs: SubOption[];
 };
 
-const EXERCISES: Exercise[] = [
-  {
-    id: 'supino-reto',
-    name: 'Supino Reto Máquina',
-    target: 'Peitoral',
-    db: 'Barbell_Bench_Press_-_Medium_Grip',
-    sets: [{ r: 10, w: 60 }, { r: 8, w: 70 }, { r: 8, w: 75 }, { r: 6, w: 80 }],
-    rest: 90,
-    subs: [
-      { name: 'Supino Reto Halteres', target: 'Peitoral', db: 'Dumbbell_Bench_Press' },
-      { name: 'Supino Máquina', target: 'Peitoral', db: 'Machine_Bench_Press' },
-    ],
-  },
-  {
-    id: 'supino-incl',
-    name: 'Supino Inclinado Halter',
-    target: 'Peitoral Superior',
-    db: 'Incline_Dumbbell_Bench_With_Palms_Facing_In',
-    sets: [{ r: 10, w: 24 }, { r: 10, w: 26 }, { r: 8, w: 28 }],
-    rest: 75,
-    subs: [
-      { name: 'Supino Inclinado Barra', target: 'Peitoral Superior', db: 'Barbell_Incline_Bench_Press_Medium-Grip' },
-      { name: 'Crossover Baixo', target: 'Peitoral Superior', db: 'Low_Cable_Crossover' },
-    ],
-  },
-  {
-    id: 'crucifixo',
-    name: 'Crucifixo Polia',
-    target: 'Peitoral',
-    db: 'Cable_Crossover',
-    sets: [{ r: 12, w: 14 }, { r: 12, w: 16 }, { r: 10, w: 18 }],
-    rest: 60,
-    subs: [
-      { name: 'Crucifixo Halteres', target: 'Peitoral', db: 'Dumbbell_Flyes' },
-      { name: 'Peck Deck', target: 'Peitoral', db: 'Butterfly' },
-    ],
-  },
-  {
-    id: 'militar',
-    name: 'Desenvolvimento Militar',
-    target: 'Ombro',
-    db: 'Standing_Military_Press',
-    sets: [{ r: 10, w: 30 }, { r: 8, w: 35 }, { r: 8, w: 40 }],
-    rest: 90,
-    subs: [
-      { name: 'Desenvolvimento Halteres', target: 'Ombro', db: 'Dumbbell_Shoulder_Press' },
-      { name: 'Desenvolvimento Arnold', target: 'Ombro', db: 'Arnold_Dumbbell_Press' },
-    ],
-  },
-  {
-    id: 'lateral',
-    name: 'Elevação Lateral',
-    target: 'Ombro Lateral',
-    db: 'Side_Lateral_Raise',
-    sets: [{ r: 12, w: 8 }, { r: 12, w: 10 }, { r: 10, w: 12 }],
-    rest: 60,
-    subs: [
-      { name: 'Elevação Lateral Polia', target: 'Ombro Lateral', db: 'Cable_Shoulder_Press' },
-      { name: 'Elevação Frontal', target: 'Ombro Frontal', db: 'Front_Dumbbell_Raise' },
-    ],
-  },
-  {
-    id: 'pulley',
-    name: 'Tríceps Pulley',
-    target: 'Tríceps',
-    db: 'Triceps_Pushdown',
-    sets: [{ r: 12, w: 20 }, { r: 10, w: 24 }, { r: 10, w: 26 }],
-    rest: 60,
-    subs: [
-      { name: 'Tríceps Corda', target: 'Tríceps', db: 'Tricep_Dumbbell_Kickback' },
-      { name: 'Tríceps Testa', target: 'Tríceps', db: 'Barbell_Skullcrusher_Extension' },
-    ],
-  },
-  {
-    id: 'frances',
-    name: 'Tríceps Francês',
-    target: 'Tríceps',
-    db: 'EZ-Bar_Skullcrusher',
-    sets: [{ r: 10, w: 14 }, { r: 10, w: 16 }, { r: 8, w: 18 }],
-    rest: 60,
-    subs: [
-      { name: 'Tríceps Testa Halter', target: 'Tríceps', db: 'Seated_Dumbbell_Tricep_Press' },
-      { name: 'Coice Halter', target: 'Tríceps', db: 'Tricep_Dumbbell_Kickback' },
-    ],
-  },
-  {
-    id: 'paralelas',
-    name: 'Mergulho Paralelas',
-    target: 'Tríceps & Peito',
-    db: 'Dips_-_Triceps_Version',
-    sets: [{ r: 10, w: 0 }, { r: 8, w: 0 }, { r: 8, w: 0 }],
-    rest: 60,
-    subs: [
-      { name: 'Dips Máquina', target: 'Tríceps', db: 'Weighted_Bench_Dip' },
-      { name: 'Flexão Fechada', target: 'Tríceps', db: 'Close-Grip_Push-Up_off_of_a_Wall' },
-    ],
-  },
-];
+type Props = { plan: FinalWorkoutPlan; onDone: () => void; onMinimize?: () => void };
 
-type Props = { onDone: () => void; onMinimize?: () => void };
+const catalogExerciseById = new Map(EXERCISES_SEED.map((exercise) => [exercise.id, exercise]));
+
+function workoutExercisesFromPlan(plan: FinalWorkoutPlan, language: string): Exercise[] {
+  const session = plan.sessions[0];
+  if (!session) return [];
+  const locale = language === 'pt-BR' ? 'ptBR' : language === 'es' ? 'es' : 'en';
+  return session.exercises.map((prescribed) => {
+    const catalog = catalogExerciseById.get(prescribed.exerciseId);
+    if (!catalog) throw new Error(`Missing catalog exercise ${prescribed.exerciseId}`);
+    const count = prescribed.sets ?? 1;
+    return {
+      id: prescribed.exerciseId,
+      name: catalog.name[locale],
+      target: catalog.target.primaryMuscle,
+      db: prescribed.exerciseId,
+      // Keep the canonical range/duration verbatim. Rendering only the lower
+      // bound would silently change "8-12" into a prescription of 8.
+      sets: Array.from({ length: count }, () => ({
+        r: prescribed.reps ?? prescribed.duration ?? '—',
+        w: 0,
+      })),
+      // T001–T090 do not define numeric rest intervals. Zero disables the
+      // legacy demo countdown instead of inventing a prescribed interval.
+      rest: 0,
+      // Runtime substitutions cannot bypass the engine's equipment/safety
+      // filters. The current plan contains only its already-approved final
+      // exercise; future interactive alternatives must come from a
+      // constraint-aware engine result, not the raw similarity graph.
+      subs: [],
+    };
+  });
+}
 
 /**
  * Pure translation helpers — closed over the `t` returned by useTranslation.
@@ -195,9 +130,10 @@ function translateMuscleGroup(tLoose: LooseT, target: string): string {
   return value || target;
 }
 
-export function WorkoutScreen({ onDone, onMinimize }: Props) {
+export function WorkoutScreen({ plan, onDone, onMinimize }: Props) {
   const { theme } = useTheme();
-  const { t } = useTranslation('workout');
+  const { t, i18n } = useTranslation('workout');
+  const exercises = useMemo(() => workoutExercisesFromPlan(plan, i18n.language), [i18n.language, plan]);
   const headerButtonStyle = {
     width: 38,
     height: 38,
@@ -225,7 +161,7 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
     // continuous subscription to `canPerform`/`onDone`.
   }, []);
   // Queue of exercise indices in current order (head = current)
-  const [order, setOrder] = useState<number[]>(() => EXERCISES.map((_, i) => i));
+  const [order, setOrder] = useState<number[]>(() => exercises.map((_, i) => i));
   // exIdx -> sets completed
   const [progress, setProgress] = useState<Record<number, number>>({});
   // exercise indices that were skipped and later requeued
@@ -274,20 +210,25 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
     return () => clearInterval(t);
   }, []);
 
-  const ovr = (id: string): SubOption | null => sessionSubs[id] || permSubs[id] || null;
+  const ovr = (id: string): SubOption | null => {
+    const candidate = sessionSubs[id] || permSubs[id] || null;
+    const allowed = exercises.find((exercise) => exercise.id === id)?.subs
+      .some((option) => option.db === candidate?.db);
+    return allowed ? candidate : null;
+  };
   const resolve = (base: Exercise): Exercise => {
     const o = ovr(base.id);
     return o ? { ...base, name: o.name, target: o.target, db: o.db } : base;
   };
 
   const exIdx = order.length > 0 ? order[0] : 0;
-  const baseEx = EXERCISES[exIdx];
+  const baseEx = exercises[exIdx];
   const ex = resolve(baseEx);
   const setIdx = progress[exIdx] || 0;
-  const exDone = (i: number) => (progress[i] || 0) >= EXERCISES[i].sets.length;
+  const exDone = (i: number) => (progress[i] || 0) >= exercises[i].sets.length;
 
-  const totalSets = EXERCISES.reduce((a, e) => a + e.sets.length, 0);
-  const doneSets = EXERCISES.reduce(
+  const totalSets = exercises.reduce((a, e) => a + e.sets.length, 0);
+  const doneSets = exercises.reduce(
     (a, e, i) => a + Math.min(progress[i] || 0, e.sets.length),
     0
   );
@@ -305,9 +246,9 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
   const advanceAfterRest = () => {
     let nextLogged = logged;
     if (pending && regWeight > 0) {
-      const baseId = EXERCISES[exIdx].id;
+      const baseId = exercises[exIdx].id;
       const prevBest = Math.max(
-        ...EXERCISES[exIdx].sets.map((s) => s.w),
+        ...exercises[exIdx].sets.map((s) => s.w),
         ...Object.entries(logged)
           .filter(([k]) => k.startsWith(baseId + '-'))
           .map(([, v]) => v),
@@ -343,7 +284,7 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
         setFinished(true);
         return;
       }
-      const nextEx = resolve(EXERCISES[nextOrder[0]]);
+      const nextEx = resolve(exercises[nextOrder[0]]);
       setExComplete({
         name: completedName,
         nextName: translateExerciseName(tLoose, nextEx.db, nextEx.name),
@@ -388,7 +329,7 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
   };
 
   const applySub = async (option: SubOption, scope: 'once' | 'all') => {
-    const baseId = EXERCISES[exIdx].id;
+    const baseId = exercises[exIdx].id;
     if (scope === 'all') {
       const next = { ...permSubs, [baseId]: option };
       setPermSubs(next);
@@ -453,7 +394,7 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                 marginTop: 7,
               }}
             >
-              <MonoLabel>{TODAY_WORKOUT.dayLabel}</MonoLabel>
+              <MonoLabel>{plan.templateId} · {plan.sessions[0]?.name}</MonoLabel>
               <MonoLabel color={theme.colors.primaryEmphasis}>{fmt(elapsed)}</MonoLabel>
               <MonoLabel>
                 {t('sets.progress', {
@@ -511,7 +452,7 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                 {String(exIdx + 1).padStart(2, '0')}
                 <Text style={{ opacity: 0.5 }}>
                   {' '}
-                  / {String(EXERCISES.length).padStart(2, '0')}
+                  / {String(exercises.length).padStart(2, '0')}
                 </Text>
               </MonoLabel>
             </View>
@@ -584,7 +525,7 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
               {translateExerciseName(tLoose, ex.db, ex.name)}
             </Display>
           </View>
-          <Pressable
+          {baseEx.subs.length > 0 && <Pressable
             onPress={() => setSubSheet(true)}
             style={{
               flexDirection: 'row',
@@ -603,7 +544,7 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
             <Text style={{ fontSize: 12, fontFamily: theme.fonts.uiSemi, color: theme.colors.choiceTextSecondary }}>
               {t('actions.swap')}
             </Text>
-          </Pressable>
+          </Pressable>}
         </View>
 
         {/* Next-set card */}
@@ -1180,11 +1121,11 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                 }}
               />
               <Slash style={{ marginBottom: 14 }}>
-                {t('queue.title', { count: EXERCISES.length }).toUpperCase()}
+                {t('queue.title', { count: exercises.length }).toUpperCase()}
               </Slash>
               <ScrollView showsVerticalScrollIndicator={false}>
                 {order.map((i, pos) => {
-                  const e = EXERCISES[i];
+                  const e = exercises[i];
                   const now = pos === 0;
                   const wasSkip = skipped.includes(i);
                   return (
@@ -1255,7 +1196,7 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                     </Pressable>
                   );
                 })}
-                {EXERCISES.map((e, i) =>
+                {exercises.map((e, i) =>
                   exDone(i) ? (
                     <View
                       key={'done-' + e.id}

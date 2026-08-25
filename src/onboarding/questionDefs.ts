@@ -89,7 +89,6 @@ export const FUNNEL_QUESTIONS: Partial<Record<OnboardingStepId, Question>> = {
     kind: 'multi',
     exclusiveOption: 'none',
     options: [
-      { v: 'none' },
       { v: 'knee' },
       { v: 'hip' },
       { v: 'back' },
@@ -116,8 +115,12 @@ export const FUNNEL_QUESTIONS: Partial<Record<OnboardingStepId, Question>> = {
     exclusiveOption: 'none',
     options: [
       { v: 'none' },
+      { v: 'musculoskeletal_limitation' },
       { v: 'pregnancy' },
       { v: 'postpartum' },
+      { v: 'lipedema' },
+      { v: 'dizziness_or_vertigo' },
+      { v: 'post_surgical' },
       { v: 'functional_limitation' },
       { v: 'medical_restriction' },
     ],
@@ -130,20 +133,14 @@ export const FUNNEL_QUESTIONS: Partial<Record<OnboardingStepId, Question>> = {
     default: 12,
     digits: { min: 1, max: 2 },
   },
-  pregnancyPrenatalCare: {
-    id: 'pregnancyPrenatalCare',
-    kind: 'choice',
-    options: [{ v: 'yes' }, { v: 'no' }],
-  },
-  pregnancyExerciseRestriction: {
-    id: 'pregnancyExerciseRestriction',
-    kind: 'choice',
-    options: [{ v: 'no' }, { v: 'yes' }],
-  },
-  pregnancyComplication: {
-    id: 'pregnancyComplication',
-    kind: 'choice',
-    options: [{ v: 'no' }, { v: 'yes' }, { v: 'unsure' }],
+  pregnancyCare: {
+    id: 'pregnancyCare',
+    kind: 'compound-choice',
+    fields: [
+      { id: 'prenatalCare', options: [{ v: 'yes' }, { v: 'no' }] },
+      { id: 'exerciseRestriction', options: [{ v: 'no' }, { v: 'yes' }] },
+      { id: 'complication', options: [{ v: 'no' }, { v: 'yes' }, { v: 'unsure' }] },
+    ],
   },
   pregnancyWarningSigns: {
     id: 'pregnancyWarningSigns',
@@ -160,21 +157,22 @@ export const FUNNEL_QUESTIONS: Partial<Record<OnboardingStepId, Question>> = {
       { v: 'none' },
     ],
   },
-  postpartumTimeSinceBirth: {
-    id: 'postpartumTimeSinceBirth',
-    kind: 'choice-large',
-    options: [
-      { v: 'under_6_weeks' },
-      { v: '6_12_weeks' },
-      { v: '3_6_months' },
-      { v: '6_12_months' },
-      { v: 'over_1_year' },
+  postpartumContext: {
+    id: 'postpartumContext',
+    kind: 'compound-choice',
+    fields: [
+      {
+        id: 'timeSinceBirth',
+        options: [
+          { v: 'under_6_weeks' },
+          { v: '6_12_weeks' },
+          { v: '3_6_months' },
+          { v: '6_12_months' },
+          { v: 'over_1_year' },
+        ],
+      },
+      { id: 'deliveryType', options: [{ v: 'vaginal' }, { v: 'cesarean' }, { v: 'prefer_not_to_say' }] },
     ],
-  },
-  postpartumDeliveryType: {
-    id: 'postpartumDeliveryType',
-    kind: 'choice',
-    options: [{ v: 'vaginal' }, { v: 'cesarean' }, { v: 'prefer_not_to_say' }],
   },
   postpartumSigns: {
     id: 'postpartumSigns',
@@ -209,6 +207,75 @@ export const FUNNEL_QUESTIONS: Partial<Record<OnboardingStepId, Question>> = {
       { v: 'daily_activities_difficulty' },
       { v: 'none' },
     ],
+  },
+  lipedemaScreening: {
+    id: 'lipedemaScreening',
+    kind: 'compound-choice',
+    fields: [
+      {
+        id: 'symptomImpact',
+        options: [
+          { v: 'none' },
+          { v: 'mild_or_occasional' },
+          { v: 'interferes_with_exercises' },
+          { v: 'unknown' },
+        ],
+      },
+      { id: 'professionalGuidance', options: [{ v: 'no' }, { v: 'yes' }, { v: 'unsure' }] },
+    ],
+  },
+  dizzinessScreening: {
+    id: 'dizzinessScreening',
+    kind: 'compound-choice',
+    fields: [
+      {
+        id: 'symptomFrequency',
+        options: [
+          { v: 'history_only' },
+          { v: 'occasional' },
+          { v: 'frequent' },
+          { v: 'current_or_recent' },
+        ],
+      },
+      { id: 'affectsBalance', options: [{ v: 'no' }, { v: 'yes' }, { v: 'unknown' }] },
+    ],
+  },
+  postSurgicalStatus: {
+    id: 'postSurgicalStatus',
+    kind: 'compound-choice',
+    fields: [
+      { id: 'recoveryStatus', options: [{ v: 'completed' }, { v: 'in_progress' }, { v: 'unsure' }] },
+      {
+        id: 'returnClearance',
+        options: [
+          { v: 'cleared_no_restrictions' },
+          { v: 'cleared_with_restrictions' },
+          { v: 'not_yet' },
+          { v: 'unsure' },
+        ],
+      },
+    ],
+  },
+  postSurgicalRegion: {
+    id: 'postSurgicalRegion',
+    kind: 'choice-large',
+    options: [
+      { v: 'knee' },
+      { v: 'hip' },
+      { v: 'back' },
+      { v: 'shoulder' },
+      { v: 'elbow' },
+      { v: 'wrist' },
+      { v: 'ankle_foot' },
+      { v: 'abdomen' },
+      { v: 'chest' },
+      { v: 'other' },
+    ],
+  },
+  medicalRestrictionDetails: {
+    id: 'medicalRestrictionDetails',
+    kind: 'choice',
+    options: [{ v: 'yes' }, { v: 'no' }, { v: 'unsure' }],
   },
   muscleFocus: {
     id: 'muscleFocus',

@@ -25,11 +25,13 @@ import { kgToLb, lbToKg, weightUnit } from '../../units/weightConversions';
  * this is a lift, not a rewrite.
  */
 export type OptionDef = { v: string; icon?: IconName };
+export type CompoundChoiceField = { id: string; options: OptionDef[] };
 export type Question =
   | { id: string; kind: 'choice'; options: OptionDef[] }
   | { id: string; kind: 'choice-large'; options: OptionDef[] }
   | { id: string; kind: 'multi'; options: OptionDef[]; maxSelections?: number; exclusiveOption?: string }
   | { id: string; kind: 'date'; minAge: number; maxAge: number }
+  | { id: string; kind: 'compound-choice'; fields: CompoundChoiceField[] }
   | {
       id: string;
       kind: 'wheel';
@@ -44,6 +46,11 @@ export type LooseT = (key: string, options?: Record<string, unknown>) => string;
 
 export function canContinueQuestion(q: Question, value: unknown): boolean {
   if (q.kind === 'multi') return Array.isArray(value) && value.length > 0;
+  if (q.kind === 'compound-choice') {
+    if (!value || typeof value !== 'object') return false;
+    const answers = value as Record<string, unknown>;
+    return q.fields.every((field) => answers[field.id] != null);
+  }
   if (q.kind === 'wheel') return true;
   if (q.kind === 'date') {
     if (!(value instanceof Date)) return false;
@@ -56,11 +63,13 @@ export function canContinueQuestion(q: Question, value: unknown): boolean {
 
 export function ChoiceGrid({
   questionId,
+  translationKey,
   options,
   value,
   onChange,
 }: {
   questionId: string;
+  translationKey?: string;
   options: OptionDef[];
   value: string | null;
   onChange: (v: string) => void;
@@ -72,8 +81,9 @@ export function ChoiceGrid({
     <View style={{ flexDirection: 'column', gap: 10 }}>
       {options.map((o) => {
         const sel = value === o.v;
-        const label = tLoose(`${String(questionId)}.options.${o.v}.label`);
-        const short = tLoose(`${String(questionId)}.options.${o.v}.short`);
+        const key = translationKey ?? String(questionId);
+        const label = tLoose(`${key}.options.${o.v}.label`);
+        const short = tLoose(`${key}.options.${o.v}.short`);
         return (
           <Pressable
             key={o.v}
@@ -120,6 +130,41 @@ export function ChoiceGrid({
             </Text>
             {sel && <Icon name="check" size={18} color={theme.colors.primaryEmphasis} />}
           </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+export function CompoundChoiceList({
+  question,
+  value,
+  onChange,
+}: {
+  question: Extract<Question, { kind: 'compound-choice' }>;
+  value: Record<string, string | null>;
+  onChange: (value: Record<string, string | null>) => void;
+}) {
+  const { theme } = useTheme();
+  const { t } = useTranslation('quiz');
+  const tLoose = t as unknown as LooseT;
+  return (
+    <View style={{ gap: 24 }}>
+      {question.fields.map((field) => {
+        const translationKey = `${question.id}.fields.${field.id}`;
+        return (
+          <View key={field.id} style={{ gap: 10 }}>
+            <Text style={{ fontFamily: theme.fonts.uiBold, fontSize: 16, lineHeight: 22, color: theme.colors.textPrimary }}>
+              {tLoose(`${translationKey}.title`)}
+            </Text>
+            <ChoiceGrid
+              questionId={question.id}
+              translationKey={translationKey}
+              options={field.options}
+              value={value[field.id] ?? null}
+              onChange={(next) => onChange({ ...value, [field.id]: next })}
+            />
+          </View>
         );
       })}
     </View>

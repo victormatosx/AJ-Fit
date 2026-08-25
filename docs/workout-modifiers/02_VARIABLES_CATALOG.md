@@ -468,29 +468,47 @@ Não equivale a idade avançada.
 
 ------------------------------------------------------------------------
 
-# 10. Condições/cenários que exigem módulos próprios
+# 10. Lipedema, tontura/vertigem e pós-cirúrgico
 
-Os seguintes cenários foram previstos para personalização, mas **não
-devem receber regras clínicas inventadas neste catálogo global**:
+Esses cenários agora possuem **contrato de entrada**, mas ainda não possuem
+regras clínicas executáveis no motor T001--T090.
 
-``` text
-POST_SURGICAL
-VERTIGO_LABYRINTHITIS
-LIPEDEMA
-```
+## `LIPEDEMA_STATUS`, `LIPEDEMA_SYMPTOM_IMPACT`, `LIPEDEMA_PROFESSIONAL_GUIDANCE`
 
-Cada um deve ter:
+Valores coletados: presença declarada; impacto `NONE`,
+`MILD_OR_OCCASIONAL`, `INTERFERES_WITH_EXERCISES` ou `UNKNOWN`; orientação
+profissional `YES`, `NO` ou `UNSURE`.
 
--   critérios de entrada;
--   perguntas;
--   Safety Gate;
--   escopo permitido do app;
--   regras de modificação;
--   condições de bloqueio;
--   necessidade de orientação profissional.
+**Papel:** MODIFIER P2 + entrada de SAFETY. O rótulo isolado não implica baixo
+impacto, redução de volume ou incapacidade.
 
-Até essa documentação existir, não devem ser tratados como modificadores
-genéricos equivalentes a "iniciante".
+## `DIZZINESS_STATUS`, `DIZZINESS_FREQUENCY`, `DIZZINESS_AFFECTS_BALANCE`
+
+Frequência: `HISTORY_ONLY`, `OCCASIONAL`, `FREQUENT` ou
+`CURRENT_OR_RECENT`. Equilíbrio: `YES`, `NO` ou `UNKNOWN`.
+
+**Papel:** SAFETY P0 quando atual/recente ou com equilíbrio afetado;
+MODIFIER P2 nos demais estados documentados. Não equivale a um diagnóstico de
+labirintite.
+
+## `POST_SURGICAL_STATUS`, `POST_SURGICAL_REGION`, `POST_SURGICAL_CLEARANCE`
+
+Recuperação: `COMPLETED`, `IN_PROGRESS`, `UNSURE`. Região: joelho, quadril,
+coluna/costas, ombro, cotovelo, punho/mão, tornozelo/pé, abdômen, tórax ou
+outra. Liberação: `CLEARED_NO_RESTRICTIONS`, `CLEARED_WITH_RESTRICTIONS`,
+`NOT_YET`, `UNSURE`.
+
+**Papel:** RESTRICTIVE SAFETY GATE P0 + MODIFIER. A região não autoriza inferir
+procedimento, tecido, prazo ou exercício permitido.
+
+## `PROFESSIONAL_EXERCISE_RESTRICTION`
+
+Valores: `YES`, `NO`, `UNSURE`. Estrutura a antiga opção genérica de restrição
+médica sem inventar seu conteúdo.
+
+**Papel:** SAFETY P0. Orientação de lipedema ou liberação cirúrgica com
+restrições permanecem em seus próprios objetos; não são convertidas
+silenciosamente nesta variável.
 
 ------------------------------------------------------------------------
 

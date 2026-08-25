@@ -1,0 +1,105 @@
+import type { QuestionnaireAnswers, ResolvedModifier, SafetyDecision } from './types';
+import { normalizeExperience, normalizeGoal } from './input';
+
+function modifier(
+  id: string,
+  priority: ResolvedModifier['priority'],
+  application: ResolvedModifier['application'],
+  reasonCode: string,
+  protectedConstraints?: string[],
+): ResolvedModifier {
+  return { id, priority, application, reasonCode, protectedConstraints };
+}
+
+/**
+ * Resolves intent without pretending that an undocumented numeric dose or
+ * clinical substitution exists. `RULE_DEFINITION_REQUIRED` is deliberately a
+ * first-class result: composition will fail closed instead of mutating the
+ * canonical template by opinion.
+ */
+export function resolveModifiers(
+  answers: QuestionnaireAnswers,
+  safety: SafetyDecision,
+): ResolvedModifier[] {
+  const result: ResolvedModifier[] = [];
+
+  for (const id of safety.requiredModifierIds) {
+    if (id.startsWith('population:')) {
+      result.push(modifier(id, 'P1', 'APPLIED', 'SPECIAL_POPULATION_BASE_TEMPLATE'));
+    } else {
+      result.push(modifier(
+        id,
+        'P0',
+        'RULE_DEFINITION_REQUIRED',
+        'SAFE_EXECUTABLE_TRANSFORMATION_NOT_DOCUMENTED',
+        safety.protectedConstraints,
+      ));
+    }
+  }
+
+  if (answers.place === 'home' || answers.place === 'both') {
+    result.push(modifier('equipment:available_inventory', 'P3', 'APPLIED', 'HOME_INVENTORY_FILTER'));
+    if (answers.equipment.includes('other')) {
+      result.push(modifier(
+        'equipment:other_unmapped',
+        'P3',
+        'RULE_DEFINITION_REQUIRED',
+        'OTHER_EQUIPMENT_HAS_NO_CANONICAL_MAPPING',
+      ));
+    }
+  }
+
+  const experience = normalizeExperience(answers.level);
+  if (experience === 'intermediate') {
+    result.push(modifier('experience:intermediate', 'P4', 'DECLARATIVE', 'PRESERVE_BASE_DOSE'));
+  } else if (experience) {
+    result.push(modifier(
+      `experience:${experience}`,
+      'P4',
+      'RULE_DEFINITION_REQUIRED',
+      'EXPERIENCE_DOSE_RANGES_NOT_DOCUMENTED',
+    ));
+  }
+
+  const goal = normalizeGoal(answers.goal);
+  if (goal === 'return_to_training') {
+    result.push(modifier(
+      'goal:return_to_training',
+      'P2',
+      'RULE_DEFINITION_REQUIRED',
+      'RETURN_TO_TRAINING_DOSE_NOT_DOCUMENTED',
+    ));
+  } else if (goal === 'lose_fat' || goal === 'body_composition') {
+    result.push(modifier(`goal:${goal}`, 'P6', 'DECLARATIVE', 'PRESERVE_RESISTANCE_BASE'));
+  }
+
+  const priorities = answers.muscleFocus.filter((value) => value !== 'none').slice(0, 2);
+  for (const priority of priorities) {
+    result.push(modifier(
+      `muscle_priority:${priority}`,
+      'P7',
+      'RULE_DEFINITION_REQUIRED',
+      'MUSCLE_PRIORITY_VOLUME_LIMITS_NOT_DOCUMENTED',
+    ));
+  }
+
+  if (answers.duration === '60') {
+    result.push(modifier('duration:60', 'P5', 'DECLARATIVE', 'PRESERVE_BASE_SESSION'));
+  } else if (answers.duration === '90') {
+    result.push(modifier('duration:90', 'P5', 'DECLARATIVE', 'AVAILABLE_TIME_DOES_NOT_FORCE_VOLUME'));
+  } else if (answers.duration) {
+    result.push(modifier(
+      `duration:${answers.duration}`,
+      'P5',
+      'RULE_DEFINITION_REQUIRED',
+      'SESSION_TIME_ESTIMATION_AND_MINIMUM_VIABLE_SESSION_NOT_DOCUMENTED',
+    ));
+  }
+
+  // Stable priority ordering is part of the engine contract. Modern JS sort
+  // is stable, so modifiers at the same priority retain their questionnaire/
+  // resolver order while P0 can never be applied after a preference.
+  return result.sort((left, right) =>
+    Number(left.priority.slice(1)) - Number(right.priority.slice(1)),
+  );
+}

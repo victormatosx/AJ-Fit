@@ -18,6 +18,8 @@
     "kicker": "Today's workout",
     "meta": "{{duration}} min · {{exercises}} exercises · ~{{kcal}} kcal",
     "start": "Start workout",
+    "review": "Review information",
+    "prescribedMeta": "{{sessions}} sessions/week · {{exercises}} exercises in this session",
     "confirm": {
       "title": "Start workout?",
       "question": "Do you want to start now",
@@ -26,6 +28,24 @@
       "dismiss": "Close workout confirmation",
       "accessibilityConfirm": "Confirm workout start",
       "accessibilityConfirmLocked": "Confirm workout start, Premium feature"
+    }
+  },
+  "prescription": {
+    "requiresClearance": {
+      "title": "More information is needed",
+      "body": "We identified a condition that needs extra care before your workout can be personalized safely. Follow your responsible professional's guidance and update your answers when no unrepresented restrictions remain."
+    },
+    "blocked": {
+      "title": "Workout paused for safety",
+      "body": "Your current answers activate a documented safety stop. AJ Fit will not prescribe or start a workout in this state."
+    },
+    "needsQuestionnaireUpdate": {
+      "title": "Update your information",
+      "body": "Some answers required to select your workout safely are missing or from an older questionnaire."
+    },
+    "unavailable": {
+      "title": "Workout not available yet",
+      "body": "A safe composition rule required by your answers has not been defined yet. No generic workout was generated."
     }
   },
   "consistency": {

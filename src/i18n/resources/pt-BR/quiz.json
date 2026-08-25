@@ -239,8 +239,12 @@
     "sub": "Selecione todas que se aplicam.",
     "options": {
       "none": "Nenhuma",
+      "musculoskeletal_limitation": "Tenho dor ou limitação musculoesquelética",
       "pregnancy": "Estou grávida",
       "postpartum": "Estou no período pós-parto",
+      "lipedema": "Tenho diagnóstico ou suspeita de lipedema",
+      "dizziness_or_vertigo": "Tenho vertigem, tontura ou problemas de equilíbrio",
+      "post_surgical": "Estou em recuperação pós-cirúrgica",
       "functional_limitation": "Tenho dificuldade de equilíbrio, mobilidade ou atividades do dia a dia",
       "medical_restriction": "Tenho alguma restrição médica para exercícios"
     }
@@ -260,6 +264,14 @@
       "no": { "label": "Não", "short": "NÃO" },
       "yes": { "label": "Sim", "short": "SIM" },
       "unsure": { "label": "Não tenho certeza", "short": "?" }
+    }
+  },
+  "pregnancyCare": {
+    "title": "Cuidados e orientações da gestação",
+    "fields": {
+      "prenatalCare": { "title": "Você realiza acompanhamento pré-natal?", "options": { "yes": { "label": "Sim", "short": "SIM" }, "no": { "label": "Não", "short": "NÃO" } } },
+      "exerciseRestriction": { "title": "Algum profissional restringiu seus exercícios?", "options": { "no": { "label": "Não", "short": "NÃO" }, "yes": { "label": "Sim", "short": "SIM" } } },
+      "complication": { "title": "Há complicação relevante ou orientação especial?", "options": { "no": { "label": "Não", "short": "NÃO" }, "yes": { "label": "Sim", "short": "SIM" }, "unsure": { "label": "Não tenho certeza", "short": "?" } } }
     }
   },
   "pregnancyWarningSigns": {
@@ -292,6 +304,13 @@
       "vaginal": { "label": "Vaginal", "short": "VAG" },
       "cesarean": { "label": "Cesárea", "short": "CES" },
       "prefer_not_to_say": { "label": "Prefiro não informar", "short": "—" }
+    }
+  },
+  "postpartumContext": {
+    "title": "Contexto do pós-parto",
+    "fields": {
+      "timeSinceBirth": { "title": "Há quanto tempo foi o parto?", "options": { "under_6_weeks": { "label": "Menos de 6 semanas", "short": "<6S" }, "6_12_weeks": { "label": "6–12 semanas", "short": "6–12S" }, "3_6_months": { "label": "3–6 meses", "short": "3–6M" }, "6_12_months": { "label": "6–12 meses", "short": "6–12M" }, "over_1_year": { "label": "Mais de 1 ano", "short": ">1A" } } },
+      "deliveryType": { "title": "Como foi o parto?", "options": { "vaginal": { "label": "Vaginal", "short": "VAG" }, "cesarean": { "label": "Cesárea", "short": "CES" }, "prefer_not_to_say": { "label": "Prefiro não informar", "short": "—" } } }
     }
   },
   "postpartumSigns": {
@@ -327,6 +346,29 @@
       "none": "Nenhuma dessas"
     }
   },
+  "lipedemaScreening": {
+    "title": "Como o lipedema afeta você hoje?",
+    "fields": {
+      "symptomImpact": { "title": "Impacto nos exercícios", "options": { "none": { "label": "Sem impacto atual", "short": "NENHUM" }, "mild_or_occasional": { "label": "Leve ou ocasional", "short": "LEVE" }, "interferes_with_exercises": { "label": "Interfere nos exercícios", "short": "INTERFERE" }, "unknown": { "label": "Não sei avaliar", "short": "?" } } },
+      "professionalGuidance": { "title": "Você recebeu orientação profissional específica?", "options": { "no": { "label": "Não", "short": "NÃO" }, "yes": { "label": "Sim", "short": "SIM" }, "unsure": { "label": "Não tenho certeza", "short": "?" } } }
+    }
+  },
+  "dizzinessScreening": {
+    "title": "Sobre a tontura ou vertigem",
+    "fields": {
+      "symptomFrequency": { "title": "Com que frequência acontece?", "options": { "history_only": { "label": "Apenas no passado", "short": "PASSADO" }, "occasional": { "label": "Ocasionalmente", "short": "ÀS VEZES" }, "frequent": { "label": "Com frequência", "short": "FREQUENTE" }, "current_or_recent": { "label": "Agora ou recentemente", "short": "RECENTE" } } },
+      "affectsBalance": { "title": "Isso afeta seu equilíbrio?", "options": { "no": { "label": "Não", "short": "NÃO" }, "yes": { "label": "Sim", "short": "SIM" }, "unknown": { "label": "Não sei", "short": "?" } } }
+    }
+  },
+  "postSurgicalStatus": {
+    "title": "Sobre sua recuperação cirúrgica",
+    "fields": {
+      "recoveryStatus": { "title": "Como está a recuperação?", "options": { "completed": { "label": "Concluída", "short": "CONCLUÍDA" }, "in_progress": { "label": "Em andamento", "short": "EM CURSO" }, "unsure": { "label": "Não tenho certeza", "short": "?" } } },
+      "returnClearance": { "title": "Qual é sua liberação para exercícios?", "options": { "cleared_no_restrictions": { "label": "Liberado sem restrições", "short": "LIBERADO" }, "cleared_with_restrictions": { "label": "Liberado com restrições", "short": "RESTRIÇÕES" }, "not_yet": { "label": "Ainda não fui liberado", "short": "AINDA NÃO" }, "unsure": { "label": "Não tenho certeza", "short": "?" } } }
+    }
+  },
+  "postSurgicalRegion": { "title": "Qual região foi operada?", "options": { "knee": { "label": "Joelho", "description": "Região do joelho" }, "hip": { "label": "Quadril", "description": "Região do quadril" }, "back": { "label": "Coluna ou costas", "description": "Região da coluna" }, "shoulder": { "label": "Ombro", "description": "Região do ombro" }, "elbow": { "label": "Cotovelo", "description": "Região do cotovelo" }, "wrist": { "label": "Punho ou mão", "description": "Região do punho ou mão" }, "ankle_foot": { "label": "Tornozelo ou pé", "description": "Região do tornozelo ou pé" }, "abdomen": { "label": "Abdômen", "description": "Região abdominal" }, "chest": { "label": "Tórax", "description": "Região do tórax" }, "other": { "label": "Outra região", "description": "Outra região do corpo" } } },
+  "medicalRestrictionDetails": { "title": "Essa restrição foi indicada por um profissional para a prática de exercícios?", "options": { "yes": { "label": "Sim", "short": "SIM" }, "no": { "label": "Não", "short": "NÃO" }, "unsure": { "label": "Não tenho certeza", "short": "?" } } },
   "muscleFocus": {
     "title": "Algum grupo muscular para priorizar?",
     "sub": "Escolha até 2 — isso ajuda a direcionar seu treino.",

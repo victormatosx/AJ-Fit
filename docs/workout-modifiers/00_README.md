@@ -272,3 +272,9 @@ O motor deve respeitar permanentemente:
 Este conjunto define a **arquitetura inicial** do motor. Regras
 numéricas específicas, matrizes por família e substituições completas
 serão refinadas nos documentos de grupo antes da implementação final.
+
+O questionário da Fase 2 formaliza entradas para lipedema, tontura/vertigem e
+pós-cirúrgico. Isso **não** cria novas famílias Txxx nem liga regras ao motor.
+Os contratos estão em `02_VARIABLES_CATALOG.md`, os papéis em
+`03_MODIFIERS_CATALOG.md`, a precedência em `04_PRIORITY_AND_CONFLICTS.md` e os
+gates conceituais em `rules/SAFETY_RULES.md`.

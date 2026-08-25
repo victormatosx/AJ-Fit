@@ -3,17 +3,12 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 /**
- * Phase 7A REGRESSION GUARD.
+ * Workout runtime regression guard.
  *
- * 7A migrates only structural copy — session logic (state machine, timers,
- * substitution, weight logging, AsyncStorage, exercise catalog) must remain
- * byte-for-byte identical because 7B and 7C will build on it. This suite
- * pins the invariants that the migration MUST NOT have touched, checked
- * via lightweight string presence in the source file (no runtime imports
- * of React Native components).
- *
- * If any of these assertions fail after a diff, the 7A migration crossed
- * a boundary — stop and review.
+ * The session state machine/timers remain pinned via lightweight source
+ * checks (no runtime import of React Native). Exercise identity is now
+ * intentionally plan-driven; raw persisted substitutions must never bypass
+ * the prescription engine's constraints.
  */
 const WORKOUT_SRC = readFileSync(
   resolve(__dirname, '../../screens/WorkoutScreen.tsx'),
@@ -60,7 +55,7 @@ describe('WorkoutScreen source — session state machine invariants', () => {
   });
 });
 
-describe('WorkoutScreen source — persistence and IDs untouched', () => {
+describe('WorkoutScreen source — plan-driven IDs and constrained substitutions', () => {
   it('still reads/writes AsyncStorage under the same key', () => {
     // Fase 11 audit fix: the key constant moved to a shared module
     // (`workoutSubstitutionsStorage.ts`) so the account-deletion shutdown
@@ -73,25 +68,18 @@ describe('WorkoutScreen source — persistence and IDs untouched', () => {
     expect(WORKOUT_SRC).toContain('AsyncStorage.setItem(SUBS_KEY');
   });
 
-  it('exercise IDs and DB pointers remain unchanged', () => {
-    // Sampling a few — full catalog check is out of scope; these six
-    // cover the union so a rename would immediately break the test.
-    for (const id of [
-      "id: 'supino-reto'",
-      "id: 'supino-incl'",
-      "id: 'crucifixo'",
-      "id: 'militar'",
-      "id: 'lateral'",
-      "id: 'paralelas'",
-    ]) {
-      expect(WORKOUT_SRC).toContain(id);
-    }
+  it('resolves runtime identity from the final plan and canonical exercise catalog', () => {
+    expect(WORKOUT_SRC).toContain('function workoutExercisesFromPlan(plan: FinalWorkoutPlan');
+    expect(WORKOUT_SRC).toContain('catalogExerciseById.get(prescribed.exerciseId)');
+    expect(WORKOUT_SRC).toContain('id: prescribed.exerciseId');
+    expect(WORKOUT_SRC).not.toContain("id: 'supino-reto'");
   });
 
-  it('substitution mechanic still resolves through ovr → permSubs → sessionSubs', () => {
-    expect(WORKOUT_SRC).toMatch(
-      /const ovr = \(id: string\): SubOption \| null => sessionSubs\[id\] \|\| permSubs\[id\] \|\| null;/,
-    );
+  it('never applies a persisted/manual substitution unless the current plan explicitly allows it', () => {
+    expect(WORKOUT_SRC).toContain('const candidate = sessionSubs[id] || permSubs[id] || null;');
+    expect(WORKOUT_SRC).toContain('.some((option) => option.db === candidate?.db)');
+    expect(WORKOUT_SRC).toContain('return allowed ? candidate : null;');
+    expect(WORKOUT_SRC).toContain('subs: []');
   });
 });
 

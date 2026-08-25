@@ -16,6 +16,7 @@ import { ProfileAvatar } from '../components/ui/ProfileAvatar';
 import { useUnits } from '../state/UnitsContext';
 import { formatWorkoutLoadFromKg, workoutLoadUnit } from '../units/workoutLoadConversions';
 import { useIsScreenActive } from '../state/ScreenActivity';
+import type { PrescriptionResult } from '../workoutPrescription/types';
 
 /**
  * Ticker rows read from i18n keys. The values themselves are placeholder
@@ -136,7 +137,6 @@ const MOCK_DATE = {
   totalWeeks: '12',
 };
 
-const TODAY_MOCK_META = { duration: 58, exercises: 8, kcal: 420 };
 const CONSISTENCY_MOCK = { done: 4, total: 5 };
 
 // Product invariant: the Today Workout poster keeps the official Dark art
@@ -145,10 +145,12 @@ const CONSISTENCY_MOCK = { done: 4, total: 5 };
 const TODAY_WORKOUT_THEME = darkTheme;
 
 export function HomeScreen({
+  prescription,
   onStart,
   onOpenConsistency,
   onOpenProfile,
 }: {
+  prescription: PrescriptionResult;
   onStart: () => void;
   onOpenConsistency: () => void;
   onOpenProfile: () => void;
@@ -167,6 +169,14 @@ export function HomeScreen({
   const localizedFirstName = (
     firstName === 'Atleta' ? t('profile:fallback.athlete') : firstName
   ).toUpperCase();
+  const prescriptionOutcomeKey = prescription.status === 'REQUIRES_CLEARANCE'
+    ? 'requiresClearance'
+    : prescription.status === 'BLOCKED'
+      ? 'blocked'
+      : prescription.status === 'NEEDS_QUESTIONNAIRE_UPDATE'
+        ? 'needsQuestionnaireUpdate'
+        : 'unavailable';
+  const firstSession = prescription.status === 'SUCCESS' ? prescription.plan.sessions[0] : null;
 
   const dayInitials = t('consistency.dayInitials', {
     returnObjects: true,
@@ -247,10 +257,12 @@ export function HomeScreen({
                   color={TODAY_WORKOUT_THEME.colors.textPrimary}
                   style={{ marginTop: 12 }}
                 >
-                  {t('home:mock.today.type').toUpperCase()} —
+                  {(firstSession
+                    ? `${prescription.status === 'SUCCESS' ? prescription.plan.templateId : ''} · ${firstSession.name}`
+                    : t(`home:prescription.${prescriptionOutcomeKey}.title`)).toUpperCase()}
                 </Display>
                 <Display size={38} color={TODAY_WORKOUT_THEME.colors.textPrimary}>
-                  {t('home:mock.today.focus').toUpperCase()}
+                  {(prescription.status === 'SUCCESS' ? prescription.plan.split : '').toUpperCase()}
                 </Display>
                 <View style={{ flexDirection: 'row', gap: 12, marginTop: 14 }}>
                   <Text
@@ -261,7 +273,12 @@ export function HomeScreen({
                       letterSpacing: 1,
                     }}
                   >
-                    {t('home:todayCard.meta', TODAY_MOCK_META).toUpperCase()}
+                    {(prescription.status === 'SUCCESS'
+                      ? t('home:todayCard.prescribedMeta', {
+                          sessions: prescription.plan.prescribedStructuredDays,
+                          exercises: firstSession?.exercises.length ?? 0,
+                        })
+                      : t(`home:prescription.${prescriptionOutcomeKey}.body`)).toUpperCase()}
                   </Text>
                 </View>
               </View>
@@ -302,7 +319,7 @@ export function HomeScreen({
                     textTransform: 'uppercase',
                   }}
                 >
-                  {t('home:todayCard.start')}
+                  {t(prescription.status === 'SUCCESS' ? 'home:todayCard.start' : 'home:todayCard.review')}
                 </Text>
               </Pressable>
             </LinearGradient>

@@ -518,3 +518,26 @@ Criar cenários para pelo menos:
 -   limitação + equipamento reduzido;
 -   população especial + preferência;
 -   alta frequência + baixa recuperação.
+
+------------------------------------------------------------------------
+
+# 21. Precedência clínica interna da Fase 2
+
+Sem alterar `P0 > P1 > ... > P7`, a ordem de composição quando os novos ramos
+coexistem é:
+
+``` text
+1. red flags e restrições profissionais explícitas (P0)
+2. gate pós-cirúrgico restritivo (P0)
+3. tontura atual/recente ou equilíbrio afetado/incerto (P0)
+4. envelope de gestação/pós-parto (P1)
+5. capacidade funcional e limitações musculoesqueléticas (P2)
+6. impacto/orientação de lipedema e tontura controlada (P2)
+7. equipamento, experiência, disponibilidade, objetivo e preferência (P3–P7)
+```
+
+Ramos múltiplos são compostos por interseção. Uma orientação específica de
+lipedema ou cirurgia permanece no seu domínio e tem autoridade de safety; ela
+não precisa ser duplicada artificialmente como `medical_restriction` para ser
+respeitada. Duração continua em P5 porque limita a viabilidade temporal, mas
+jamais reduz a autoridade das camadas clínicas anteriores.

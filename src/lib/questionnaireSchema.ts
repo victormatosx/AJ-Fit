@@ -1,65 +1,21 @@
 import {
   defaultQuiz,
+  type DizzinessScreening,
   type FunctionalScreening,
+  type LipedemaScreening,
+  type MedicalRestrictionScreening,
+  type PostSurgicalScreening,
   type PostpartumScreening,
   type PregnancyScreening,
   type Quiz,
 } from '../state/AppState';
 import type { OnboardingStepId } from '../onboarding/steps';
 
-export const HOME_EQUIPMENT_IDS = [
-  'bodyweight',
-  'dumbbells',
-  'bands',
-  'bench_or_box',
-  'barbell',
-  'other',
-  'none',
-] as const;
-
-export const LIMITATION_IDS = [
-  'none',
-  'knee',
-  'hip',
-  'back',
-  'shoulder',
-  'elbow',
-  'wrist',
-  'ankle_foot',
-  'other',
-] as const;
-
-export const POSTPARTUM_SIGN_IDS = [
-  'pain',
-  'healing_problems',
-  'abnormal_bleeding',
-  'incontinence',
-  'vaginal_pressure',
-  'dizziness_weakness',
-  'none',
-] as const;
-
-export const PREGNANCY_WARNING_SIGN_IDS = [
-  'vaginal_bleeding',
-  'dizziness_fainting',
-  'chest_pain',
-  'unusual_shortness_of_breath',
-  'painful_regular_contractions',
-  'fluid_leakage',
-  'calf_pain_swelling',
-  'none',
-] as const;
-
-export const FUNCTIONAL_SITUATION_IDS = [
-  'walking_difficulty',
-  'support_needed',
-  'stairs_difficulty',
-  'balance_problems',
-  'recent_fall',
-  'sit_to_stand_difficulty',
-  'daily_activities_difficulty',
-  'none',
-] as const;
+export const HOME_EQUIPMENT_IDS = ['bodyweight', 'dumbbells', 'bands', 'bench_or_box', 'barbell', 'other', 'none'] as const;
+export const LIMITATION_IDS = ['none', 'knee', 'hip', 'back', 'shoulder', 'elbow', 'wrist', 'ankle_foot', 'other'] as const;
+export const POSTPARTUM_SIGN_IDS = ['pain', 'healing_problems', 'abnormal_bleeding', 'incontinence', 'vaginal_pressure', 'dizziness_weakness', 'none'] as const;
+export const PREGNANCY_WARNING_SIGN_IDS = ['vaginal_bleeding', 'dizziness_fainting', 'chest_pain', 'unusual_shortness_of_breath', 'painful_regular_contractions', 'fluid_leakage', 'calf_pain_swelling', 'none'] as const;
+export const FUNCTIONAL_SITUATION_IDS = ['walking_difficulty', 'support_needed', 'stairs_difficulty', 'balance_problems', 'recent_fall', 'sit_to_stand_difficulty', 'daily_activities_difficulty', 'none'] as const;
 
 export function exclusiveNone(values: string[]): string[] {
   if (!values.includes('none')) return [...new Set(values)];
@@ -69,168 +25,101 @@ export function exclusiveNone(values: string[]): string[] {
 function normalizeSpecialConditions(values: string[]): Quiz['specialConditions'] {
   const normalized = exclusiveNone(values) as Quiz['specialConditions'];
   if (!normalized.includes('pregnancy') || !normalized.includes('postpartum')) return normalized;
-  const lastReproductiveStatus = [...normalized].reverse().find(
-    (value) => value === 'pregnancy' || value === 'postpartum',
-  );
-  return normalized.filter(
-    (value) => (value !== 'pregnancy' && value !== 'postpartum') || value === lastReproductiveStatus,
-  );
+  const lastStatus = [...normalized].reverse().find((value) => value === 'pregnancy' || value === 'postpartum');
+  return normalized.filter((value) => (value !== 'pregnancy' && value !== 'postpartum') || value === lastStatus);
 }
 
-function emptyPregnancyScreening(): PregnancyScreening {
-  return { weeks: null, prenatalCare: null, exerciseRestriction: null, complication: null, warningSigns: [] };
-}
+const emptyPregnancyScreening = (): PregnancyScreening => ({ weeks: null, prenatalCare: null, exerciseRestriction: null, complication: null, warningSigns: [] });
+const emptyPostpartumScreening = (): PostpartumScreening => ({ timeSinceBirth: null, deliveryType: null, signs: [], returnClearance: null });
+const emptyFunctionalScreening = (): FunctionalScreening => ({ situations: [] });
+const emptyLipedemaScreening = (): LipedemaScreening => ({ symptomImpact: null, professionalGuidance: null });
+const emptyDizzinessScreening = (): DizzinessScreening => ({ symptomFrequency: null, affectsBalance: null });
+const emptyPostSurgicalScreening = (): PostSurgicalScreening => ({ recoveryStatus: null, bodyRegion: null, returnClearance: null });
+const emptyMedicalRestrictionScreening = (): MedicalRestrictionScreening => ({ professionalExerciseRestriction: null });
 
-function emptyPostpartumScreening(): PostpartumScreening {
-  return { timeSinceBirth: null, deliveryType: null, signs: [], returnClearance: null };
-}
-
-function emptyFunctionalScreening(): FunctionalScreening {
-  return { situations: [] };
-}
-
-/**
- * Removes answers whose branch is no longer applicable. This is intentionally
- * run after every onboarding edit and before persistence, so going back and
- * changing a router answer cannot leave hidden health data active.
- */
+/** Removes hidden branch answers after every edit and before persistence. */
 export function cleanApplicableAnswers(input: Quiz): Quiz {
   let specialConditions = normalizeSpecialConditions(input.specialConditions);
-  if (input.sex !== 'f') {
-    specialConditions = specialConditions.filter((value) => value !== 'pregnancy' && value !== 'postpartum');
-  }
-
-  const hasLimitations = input.limits.length > 0 && !input.limits.includes('none');
-  const hasPregnancy = specialConditions.includes('pregnancy');
-  const hasPostpartum = specialConditions.includes('postpartum');
-  const hasFunctionalLimitation = specialConditions.includes('functional_limitation');
-  const muscleFocus = exclusiveNone(input.muscleFocus).slice(0, 2);
-  const postpartumScreening = hasPostpartum
-    ? (input.postpartumScreening ?? emptyPostpartumScreening())
-    : null;
-  const functionalScreening = hasFunctionalLimitation
-    ? (input.functionalScreening ?? emptyFunctionalScreening())
-    : null;
-
+  if (input.sex !== 'f') specialConditions = specialConditions.filter((value) => value !== 'pregnancy' && value !== 'postpartum');
+  const has = (condition: Quiz['specialConditions'][number]) => specialConditions.includes(condition);
+  const postpartum = has('postpartum') ? (input.postpartumScreening ?? emptyPostpartumScreening()) : null;
+  const functional = has('functional_limitation') ? (input.functionalScreening ?? emptyFunctionalScreening()) : null;
   return {
     ...input,
     primaryPlace: input.place === 'both' ? input.primaryPlace : null,
     equipment: input.place === 'home' || input.place === 'both' ? exclusiveNone(input.equipment) : [],
-    limits: exclusiveNone(input.limits),
-    limitationImpact: hasLimitations ? input.limitationImpact : null,
-    muscleFocus,
+    limits: has('musculoskeletal_limitation') ? exclusiveNone(input.limits) : [],
+    limitationImpact: has('musculoskeletal_limitation') ? input.limitationImpact : null,
+    muscleFocus: exclusiveNone(input.muscleFocus).slice(0, 2),
     specialConditions,
-    pregnancyScreening: hasPregnancy
-      ? {
-          ...(input.pregnancyScreening ?? emptyPregnancyScreening()),
-          warningSigns: exclusiveNone(input.pregnancyScreening?.warningSigns ?? []),
-        }
+    pregnancyScreening: has('pregnancy')
+      ? { ...(input.pregnancyScreening ?? emptyPregnancyScreening()), warningSigns: exclusiveNone(input.pregnancyScreening?.warningSigns ?? []) }
       : null,
-    postpartumScreening: postpartumScreening
-      ? { ...postpartumScreening, signs: exclusiveNone(postpartumScreening.signs) }
-      : null,
-    functionalScreening: functionalScreening
-      ? { ...functionalScreening, situations: exclusiveNone(functionalScreening.situations) }
-      : null,
+    postpartumScreening: postpartum ? { ...postpartum, signs: exclusiveNone(postpartum.signs) } : null,
+    functionalScreening: functional ? { ...functional, situations: exclusiveNone(functional.situations) } : null,
+    lipedemaScreening: has('lipedema') ? (input.lipedemaScreening ?? emptyLipedemaScreening()) : null,
+    dizzinessScreening: has('dizziness_or_vertigo') ? (input.dizzinessScreening ?? emptyDizzinessScreening()) : null,
+    postSurgicalScreening: has('post_surgical') ? (input.postSurgicalScreening ?? emptyPostSurgicalScreening()) : null,
+    medicalRestrictionScreening: has('medical_restriction') ? (input.medicalRestrictionScreening ?? emptyMedicalRestrictionScreening()) : null,
   };
 }
 
 /** Defensive read compatibility for sparse/malformed and all v1 questionnaires. */
 export function normalizeLoadedQuiz(input: Partial<Quiz>): Quiz {
   const merged = { ...defaultQuiz, ...input };
+  const strings = (value: unknown) => Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+  const allowedConditions: string[] = ['none', 'musculoskeletal_limitation', 'pregnancy', 'postpartum', 'lipedema', 'dizziness_or_vertigo', 'post_surgical', 'functional_limitation', 'medical_restriction'];
+  const loadedLimits = strings(merged.limits);
+  const loadedConditions = strings(merged.specialConditions).filter((value): value is Quiz['specialConditions'][number] => allowedConditions.includes(value));
+  // Phase 1 asked `limits` before this condition existed in the router. Only
+  // infer the new branch when the old document has no router answer at all;
+  // an explicit `none` in a new document must continue to clear stale data.
+  const specialConditions = loadedConditions.length === 0 && loadedLimits.some((value) => value !== 'none')
+    ? ['musculoskeletal_limitation' as const]
+    : loadedConditions;
   return {
     ...merged,
-    limits: Array.isArray(merged.limits) ? merged.limits.filter((value): value is string => typeof value === 'string') : [],
-    equipment: Array.isArray(merged.equipment)
-      ? merged.equipment.filter((value): value is string => typeof value === 'string')
-      : [],
-    style: Array.isArray(merged.style) ? merged.style.filter((value): value is string => typeof value === 'string') : [],
-    muscleFocus: Array.isArray(merged.muscleFocus)
-      ? merged.muscleFocus.filter((value): value is string => typeof value === 'string').slice(0, 2)
-      : [],
-    specialConditions: Array.isArray(merged.specialConditions)
-      ? merged.specialConditions.filter((value): value is Quiz['specialConditions'][number] =>
-          ['none', 'pregnancy', 'postpartum', 'functional_limitation', 'medical_restriction'].includes(String(value)),
-        )
-      : [],
-    pregnancyScreening:
-      merged.pregnancyScreening && typeof merged.pregnancyScreening === 'object'
-        ? {
-            ...emptyPregnancyScreening(),
-            ...merged.pregnancyScreening,
-            warningSigns: Array.isArray(merged.pregnancyScreening.warningSigns)
-              ? merged.pregnancyScreening.warningSigns
-              : [],
-          }
-        : null,
-    postpartumScreening:
-      merged.postpartumScreening && typeof merged.postpartumScreening === 'object'
-        ? {
-            ...emptyPostpartumScreening(),
-            ...merged.postpartumScreening,
-            signs: Array.isArray(merged.postpartumScreening.signs) ? merged.postpartumScreening.signs : [],
-          }
-        : null,
-    functionalScreening:
-      merged.functionalScreening && typeof merged.functionalScreening === 'object'
-        ? {
-            ...emptyFunctionalScreening(),
-            ...merged.functionalScreening,
-            situations: Array.isArray(merged.functionalScreening.situations)
-              ? merged.functionalScreening.situations
-              : [],
-          }
-        : null,
+    limits: loadedLimits,
+    equipment: strings(merged.equipment),
+    style: strings(merged.style),
+    muscleFocus: strings(merged.muscleFocus).slice(0, 2),
+    specialConditions,
+    pregnancyScreening: merged.pregnancyScreening && typeof merged.pregnancyScreening === 'object'
+      ? { ...emptyPregnancyScreening(), ...merged.pregnancyScreening, warningSigns: strings(merged.pregnancyScreening.warningSigns) }
+      : null,
+    postpartumScreening: merged.postpartumScreening && typeof merged.postpartumScreening === 'object'
+      ? { ...emptyPostpartumScreening(), ...merged.postpartumScreening, signs: strings(merged.postpartumScreening.signs) }
+      : null,
+    functionalScreening: merged.functionalScreening && typeof merged.functionalScreening === 'object'
+      ? { ...emptyFunctionalScreening(), ...merged.functionalScreening, situations: strings(merged.functionalScreening.situations) }
+      : null,
+    lipedemaScreening: merged.lipedemaScreening && typeof merged.lipedemaScreening === 'object' ? { ...emptyLipedemaScreening(), ...merged.lipedemaScreening } : null,
+    dizzinessScreening: merged.dizzinessScreening && typeof merged.dizzinessScreening === 'object' ? { ...emptyDizzinessScreening(), ...merged.dizzinessScreening } : null,
+    postSurgicalScreening: merged.postSurgicalScreening && typeof merged.postSurgicalScreening === 'object' ? { ...emptyPostSurgicalScreening(), ...merged.postSurgicalScreening } : null,
+    medicalRestrictionScreening: merged.medicalRestrictionScreening && typeof merged.medicalRestrictionScreening === 'object' ? { ...emptyMedicalRestrictionScreening(), ...merged.medicalRestrictionScreening } : null,
   };
 }
 
 export function updateQuizAnswer(quiz: Quiz, stepId: OnboardingStepId, value: unknown): Quiz {
   let next: Quiz;
   switch (stepId) {
-    case 'days':
-      next = { ...quiz, days: Number(value) };
-      break;
-    case 'primaryPlace':
-      next = { ...quiz, primaryPlace: value as Quiz['primaryPlace'] };
-      break;
-    case 'limitationImpact':
-      next = { ...quiz, limitationImpact: value as Quiz['limitationImpact'] };
-      break;
-    case 'specialConditions':
-      next = { ...quiz, specialConditions: normalizeSpecialConditions(value as string[]) };
-      break;
-    case 'pregnancyWeeks':
-      next = { ...quiz, pregnancyScreening: { ...(quiz.pregnancyScreening ?? emptyPregnancyScreening()), weeks: value as number } };
-      break;
-    case 'pregnancyPrenatalCare':
-      next = { ...quiz, pregnancyScreening: { ...(quiz.pregnancyScreening ?? emptyPregnancyScreening()), prenatalCare: value as PregnancyScreening['prenatalCare'] } };
-      break;
-    case 'pregnancyExerciseRestriction':
-      next = { ...quiz, pregnancyScreening: { ...(quiz.pregnancyScreening ?? emptyPregnancyScreening()), exerciseRestriction: value as PregnancyScreening['exerciseRestriction'] } };
-      break;
-    case 'pregnancyComplication':
-      next = { ...quiz, pregnancyScreening: { ...(quiz.pregnancyScreening ?? emptyPregnancyScreening()), complication: value as PregnancyScreening['complication'] } };
-      break;
-    case 'pregnancyWarningSigns':
-      next = { ...quiz, pregnancyScreening: { ...(quiz.pregnancyScreening ?? emptyPregnancyScreening()), warningSigns: exclusiveNone(value as string[]) } };
-      break;
-    case 'postpartumTimeSinceBirth':
-      next = { ...quiz, postpartumScreening: { ...(quiz.postpartumScreening ?? emptyPostpartumScreening()), timeSinceBirth: value as PostpartumScreening['timeSinceBirth'] } };
-      break;
-    case 'postpartumDeliveryType':
-      next = { ...quiz, postpartumScreening: { ...(quiz.postpartumScreening ?? emptyPostpartumScreening()), deliveryType: value as PostpartumScreening['deliveryType'] } };
-      break;
-    case 'postpartumSigns':
-      next = { ...quiz, postpartumScreening: { ...(quiz.postpartumScreening ?? emptyPostpartumScreening()), signs: exclusiveNone(value as string[]) } };
-      break;
-    case 'postpartumReturnClearance':
-      next = { ...quiz, postpartumScreening: { ...(quiz.postpartumScreening ?? emptyPostpartumScreening()), returnClearance: value as PostpartumScreening['returnClearance'] } };
-      break;
-    case 'functionalSituations':
-      next = { ...quiz, functionalScreening: { situations: exclusiveNone(value as string[]) } };
-      break;
-    default:
-      next = { ...quiz, [stepId]: value } as Quiz;
+    case 'days': next = { ...quiz, days: Number(value) }; break;
+    case 'primaryPlace': next = { ...quiz, primaryPlace: value as Quiz['primaryPlace'] }; break;
+    case 'limitationImpact': next = { ...quiz, limitationImpact: value as Quiz['limitationImpact'] }; break;
+    case 'specialConditions': next = { ...quiz, specialConditions: normalizeSpecialConditions(value as string[]) }; break;
+    case 'pregnancyWeeks': next = { ...quiz, pregnancyScreening: { ...(quiz.pregnancyScreening ?? emptyPregnancyScreening()), weeks: value as number } }; break;
+    case 'pregnancyCare': next = { ...quiz, pregnancyScreening: { ...(quiz.pregnancyScreening ?? emptyPregnancyScreening()), ...(value as Pick<PregnancyScreening, 'prenatalCare' | 'exerciseRestriction' | 'complication'>) } }; break;
+    case 'pregnancyWarningSigns': next = { ...quiz, pregnancyScreening: { ...(quiz.pregnancyScreening ?? emptyPregnancyScreening()), warningSigns: exclusiveNone(value as string[]) } }; break;
+    case 'postpartumContext': next = { ...quiz, postpartumScreening: { ...(quiz.postpartumScreening ?? emptyPostpartumScreening()), ...(value as Pick<PostpartumScreening, 'timeSinceBirth' | 'deliveryType'>) } }; break;
+    case 'postpartumSigns': next = { ...quiz, postpartumScreening: { ...(quiz.postpartumScreening ?? emptyPostpartumScreening()), signs: exclusiveNone(value as string[]) } }; break;
+    case 'postpartumReturnClearance': next = { ...quiz, postpartumScreening: { ...(quiz.postpartumScreening ?? emptyPostpartumScreening()), returnClearance: value as PostpartumScreening['returnClearance'] } }; break;
+    case 'functionalSituations': next = { ...quiz, functionalScreening: { situations: exclusiveNone(value as string[]) } }; break;
+    case 'lipedemaScreening': next = { ...quiz, lipedemaScreening: value as LipedemaScreening }; break;
+    case 'dizzinessScreening': next = { ...quiz, dizzinessScreening: value as DizzinessScreening }; break;
+    case 'postSurgicalStatus': next = { ...quiz, postSurgicalScreening: { ...(quiz.postSurgicalScreening ?? emptyPostSurgicalScreening()), ...(value as Pick<PostSurgicalScreening, 'recoveryStatus' | 'returnClearance'>) } }; break;
+    case 'postSurgicalRegion': next = { ...quiz, postSurgicalScreening: { ...(quiz.postSurgicalScreening ?? emptyPostSurgicalScreening()), bodyRegion: value as PostSurgicalScreening['bodyRegion'] } }; break;
+    case 'medicalRestrictionDetails': next = { ...quiz, medicalRestrictionScreening: { professionalExerciseRestriction: value as MedicalRestrictionScreening['professionalExerciseRestriction'] } }; break;
+    default: next = { ...quiz, [stepId]: value } as Quiz;
   }
   return cleanApplicableAnswers(next);
 }
@@ -239,89 +128,54 @@ export function answerValueForStep(quiz: Quiz, stepId: OnboardingStepId): unknow
   switch (stepId) {
     case 'days': return quiz.days == null ? null : String(quiz.days);
     case 'pregnancyWeeks': return quiz.pregnancyScreening?.weeks ?? null;
-    case 'pregnancyPrenatalCare': return quiz.pregnancyScreening?.prenatalCare ?? null;
-    case 'pregnancyExerciseRestriction': return quiz.pregnancyScreening?.exerciseRestriction ?? null;
-    case 'pregnancyComplication': return quiz.pregnancyScreening?.complication ?? null;
+    case 'pregnancyCare': return { prenatalCare: quiz.pregnancyScreening?.prenatalCare ?? null, exerciseRestriction: quiz.pregnancyScreening?.exerciseRestriction ?? null, complication: quiz.pregnancyScreening?.complication ?? null };
     case 'pregnancyWarningSigns': return quiz.pregnancyScreening?.warningSigns ?? [];
-    case 'postpartumTimeSinceBirth': return quiz.postpartumScreening?.timeSinceBirth ?? null;
-    case 'postpartumDeliveryType': return quiz.postpartumScreening?.deliveryType ?? null;
+    case 'postpartumContext': return { timeSinceBirth: quiz.postpartumScreening?.timeSinceBirth ?? null, deliveryType: quiz.postpartumScreening?.deliveryType ?? null };
     case 'postpartumSigns': return quiz.postpartumScreening?.signs ?? [];
     case 'postpartumReturnClearance': return quiz.postpartumScreening?.returnClearance ?? null;
     case 'functionalSituations': return quiz.functionalScreening?.situations ?? [];
+    case 'lipedemaScreening': return quiz.lipedemaScreening ?? emptyLipedemaScreening();
+    case 'dizzinessScreening': return quiz.dizzinessScreening ?? emptyDizzinessScreening();
+    case 'postSurgicalStatus': return { recoveryStatus: quiz.postSurgicalScreening?.recoveryStatus ?? null, returnClearance: quiz.postSurgicalScreening?.returnClearance ?? null };
+    case 'postSurgicalRegion': return quiz.postSurgicalScreening?.bodyRegion ?? null;
+    case 'medicalRestrictionDetails': return quiz.medicalRestrictionScreening?.professionalExerciseRestriction ?? null;
     default: return quiz[stepId as keyof Quiz];
   }
 }
 
 export type QuestionnaireValidationCode =
-  | 'unsupported_days'
-  | 'too_many_muscle_priorities'
-  | 'exclusive_none_conflict'
-  | 'primary_place_required'
-  | 'equipment_required'
-  | 'limitation_impact_required'
-  | 'pregnancy_screening_incomplete'
-  | 'postpartum_screening_incomplete'
-  | 'functional_screening_incomplete';
+  | 'unsupported_days' | 'too_many_muscle_priorities' | 'exclusive_none_conflict'
+  | 'primary_place_required' | 'equipment_required' | 'limitations_required' | 'limitation_impact_required'
+  | 'pregnancy_screening_incomplete' | 'postpartum_screening_incomplete' | 'functional_screening_incomplete'
+  | 'lipedema_screening_incomplete' | 'dizziness_screening_incomplete'
+  | 'post_surgical_screening_incomplete' | 'medical_restriction_screening_incomplete';
 
-function hasNoneConflict(values: string[]): boolean {
-  return values.includes('none') && values.length > 1;
-}
+function hasNoneConflict(values: string[]): boolean { return values.includes('none') && values.length > 1; }
 
-/** Locale-free domain validation used by tests and available to persistence callers. */
+/** Locale-free domain validation used by tests and persistence callers. */
 export function questionnaireValidationErrors(quiz: Quiz): QuestionnaireValidationCode[] {
   const errors: QuestionnaireValidationCode[] = [];
   if (quiz.days == null || ![2, 3, 4, 5, 6, 7].includes(quiz.days)) errors.push('unsupported_days');
   if (quiz.muscleFocus.filter((value) => value !== 'none').length > 2) errors.push('too_many_muscle_priorities');
-  if (
-    [
-      quiz.equipment,
-      quiz.limits,
-      quiz.muscleFocus,
-      quiz.specialConditions,
-      quiz.pregnancyScreening?.warningSigns ?? [],
-      quiz.postpartumScreening?.signs ?? [],
-      quiz.functionalScreening?.situations ?? [],
-    ].some(hasNoneConflict)
-  ) {
-    errors.push('exclusive_none_conflict');
-  }
+  if ([quiz.equipment, quiz.limits, quiz.muscleFocus, quiz.specialConditions, quiz.pregnancyScreening?.warningSigns ?? [], quiz.postpartumScreening?.signs ?? [], quiz.functionalScreening?.situations ?? []].some(hasNoneConflict)) errors.push('exclusive_none_conflict');
   if (quiz.place === 'both' && !quiz.primaryPlace) errors.push('primary_place_required');
   if ((quiz.place === 'home' || quiz.place === 'both') && quiz.equipment.length === 0) errors.push('equipment_required');
-  if (quiz.limits.some((value) => value !== 'none') && !quiz.limitationImpact) {
-    errors.push('limitation_impact_required');
+  if (quiz.specialConditions.includes('musculoskeletal_limitation')) {
+    if (quiz.limits.length === 0 || quiz.limits.includes('none')) errors.push('limitations_required');
+    if (!quiz.limitationImpact) errors.push('limitation_impact_required');
   }
   if (quiz.specialConditions.includes('pregnancy')) {
-    const screening = quiz.pregnancyScreening;
-    if (
-      !screening ||
-      screening.weeks == null ||
-      screening.weeks < 1 ||
-      screening.weeks > 42 ||
-      !screening.prenatalCare ||
-      !screening.exerciseRestriction ||
-      !screening.complication ||
-      screening.warningSigns.length === 0
-    ) {
-      errors.push('pregnancy_screening_incomplete');
-    }
+    const value = quiz.pregnancyScreening;
+    if (!value || value.weeks == null || value.weeks < 1 || value.weeks > 42 || !value.prenatalCare || !value.exerciseRestriction || !value.complication || value.warningSigns.length === 0) errors.push('pregnancy_screening_incomplete');
   }
   if (quiz.specialConditions.includes('postpartum')) {
-    const screening = quiz.postpartumScreening;
-    if (
-      !screening ||
-      !screening.timeSinceBirth ||
-      !screening.deliveryType ||
-      screening.signs.length === 0 ||
-      !screening.returnClearance
-    ) {
-      errors.push('postpartum_screening_incomplete');
-    }
+    const value = quiz.postpartumScreening;
+    if (!value || !value.timeSinceBirth || !value.deliveryType || value.signs.length === 0 || !value.returnClearance) errors.push('postpartum_screening_incomplete');
   }
-  if (
-    quiz.specialConditions.includes('functional_limitation') &&
-    (!quiz.functionalScreening || quiz.functionalScreening.situations.length === 0)
-  ) {
-    errors.push('functional_screening_incomplete');
-  }
+  if (quiz.specialConditions.includes('functional_limitation') && (!quiz.functionalScreening || quiz.functionalScreening.situations.length === 0)) errors.push('functional_screening_incomplete');
+  if (quiz.specialConditions.includes('lipedema') && (!quiz.lipedemaScreening?.symptomImpact || !quiz.lipedemaScreening.professionalGuidance)) errors.push('lipedema_screening_incomplete');
+  if (quiz.specialConditions.includes('dizziness_or_vertigo') && (!quiz.dizzinessScreening?.symptomFrequency || !quiz.dizzinessScreening.affectsBalance)) errors.push('dizziness_screening_incomplete');
+  if (quiz.specialConditions.includes('post_surgical') && (!quiz.postSurgicalScreening?.recoveryStatus || !quiz.postSurgicalScreening.bodyRegion || !quiz.postSurgicalScreening.returnClearance)) errors.push('post_surgical_screening_incomplete');
+  if (quiz.specialConditions.includes('medical_restriction') && !quiz.medicalRestrictionScreening?.professionalExerciseRestriction) errors.push('medical_restriction_screening_incomplete');
   return errors;
 }
