@@ -12,9 +12,8 @@ export type AJFitRestActivityNativeModule = {
   end(sessionId: string, reason: RestActivityEndReason): void | Promise<void>;
 };
 
-// Phase 3 intentionally ships no expo-module.config.json or native sources.
-// Existing binaries therefore resolve this optional presentation module to
-// null. A later native phase can register this exact name and contract.
+// This remains optional so older binaries and non-Android platforms keep the
+// Phase 3 fail-open behavior when the native presentation module is absent.
 const nativeModule =
   requireOptionalNativeModule<AJFitRestActivityNativeModule>('AJFitRestActivity');
 

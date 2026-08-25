@@ -77,11 +77,14 @@ function enqueueNativeOperation(
 async function getSupportedNativeModule() {
   const nativeModule = getAJFitRestActivityNativeModule();
   if (!nativeModule) {
+    logInfo('restLiveActivity', 'module_available', { available: false });
     logInfo('restLiveActivity', 'rest_live_unsupported', { reason: 'module-unavailable' });
     return null;
   }
 
+  logInfo('restLiveActivity', 'module_available', { available: true });
   const capabilities = normalizeCapabilities(await nativeModule.getCapabilities());
+  logInfo('restLiveActivity', 'capabilities', capabilities);
   if (!capabilities.available) {
     logInfo('restLiveActivity', 'rest_live_unsupported', { reason: 'surface-unavailable' });
     return null;
@@ -92,12 +95,16 @@ async function getSupportedNativeModule() {
 async function getCapabilities(): Promise<RestLiveCapabilities> {
   const nativeModule = getAJFitRestActivityNativeModule();
   if (!nativeModule) {
+    logInfo('restLiveActivity', 'module_available', { available: false });
     logInfo('restLiveActivity', 'rest_live_unsupported', { reason: 'module-unavailable' });
     return NO_REST_LIVE_CAPABILITIES;
   }
 
+  logInfo('restLiveActivity', 'module_available', { available: true });
   try {
-    return normalizeCapabilities(await nativeModule.getCapabilities());
+    const capabilities = normalizeCapabilities(await nativeModule.getCapabilities());
+    logInfo('restLiveActivity', 'capabilities', capabilities);
+    return capabilities;
   } catch (error) {
     logWarn('restLiveActivity', 'rest_live_native_error', {
       operation: 'capabilities',
@@ -108,7 +115,12 @@ async function getCapabilities(): Promise<RestLiveCapabilities> {
 }
 
 function start(state: RestActivityState): Promise<void> {
-  logInfo('restLiveActivity', 'rest_live_start_requested');
+  logInfo('restLiveActivity', 'rest_live_start_requested', {
+    startedAt: state.startedAt,
+    endsAt: state.endsAt,
+    setIndex: state.setIndex,
+    totalSets: state.totalSets,
+  });
   if (!isValidState(state)) {
     logWarn('restLiveActivity', 'rest_live_invalid_state', { operation: 'start' });
     return Promise.resolve();

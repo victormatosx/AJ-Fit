@@ -23,6 +23,91 @@ Responsável: Codex — Agente Frontend
 Categoria: [IMPLEMENTAÇÃO]
 
 Descrição:
+Implementada a Fase 4 do Live Rest Timer com a primeira superfície nativa
+real: uma ongoing notification Android baseada no `endsAt` absoluto já
+materializado pelo domínio TypeScript. O módulo Expo local
+`AJFitRestActivity` implementa `getCapabilities`, `start`, `update` e `end`,
+mantendo a interface da facade da Fase 3. Não há implementação iOS.
+
+Countdown e apresentação:
+A notificação usa `setWhen(endsAt)`, `setUsesChronometer(true)`,
+`setChronometerCountDown(true)` e `setOngoing(true)`. O SystemUI renderiza o
+countdown sem ticker, loop ou atualização por segundo em Kotlin/JavaScript.
+Um notification ID constante substitui o descanso anterior; `+15s` reconstrói
+a mesma notificação com o novo `endsAt`, enquanto expiração, skip e fim da
+sessão a cancelam pelos motivos já definidos no domínio.
+
+Canal e navegação:
+Criado o canal estável `rest_timer` com importância `DEFAULT`, sem som,
+vibração ou badge e com visibilidade pública na lock screen. O small icon
+monocromático e strings pt/en/es vivem nos recursos versionados do próprio
+módulo, portanto são mesclados novamente em um prebuild limpo. O tap usa um
+`PendingIntent` imutável para `ajfit://workout/active`, reaproveitando os
+guards e o pending intent da Fase 1.
+
+Permissão:
+`android.permission.POST_NOTIFICATIONS` foi declarada em
+`expo.android.permissions`, conforme a configuração versionada do Expo 56.
+Em API 33+ o primeiro `start` relevante usa o permission manager já fornecido
+pelo Expo Modules. A tentativa é registrada em preferência nativa específica
+para não insistir após negação; ausência/negação resulta em no-op e
+capability indisponível nas chamadas seguintes. Não foi adicionada uma tela
+explicativa própria nesta fase: o pedido contextual mínimo é o prompt do
+sistema, disparado apenas pelo primeiro descanso.
+
+Compatibilidade e cleanup:
+API 24/25 usa a prioridade equivalente sem channel. API 26+ cria o channel e
+recalcula `setTimeoutAfter(remaining + 5s)` em cada start/update para limpeza
+visual após process death. O timeout não executa regra de workout. Não foram
+adicionados Foreground Service, AlarmManager, exact alarms, notificações com
+ações, Android Live Updates API 36, biblioteca externa ou persistência
+duplicada do estado de descanso.
+
+Testes:
+Atualizados os testes da facade para a capability
+`android-notification`. Adicionados guards estruturais para registro do Expo
+Module, permission no app config, API start/update/end, channel, chronometer,
+ID constante, timeout, deep link/PendingIntent, small icon e ausência de
+service/alarm/loop/Live Updates. O guard anterior que exigia somente o bridge
+TypeScript foi evoluído para proteger o registro Android-only.
+
+Limitações:
+O permission prompt ainda não possui pre-prompt visual customizado. Em API
+24/25 não existe `setTimeoutAfter`; se o processo morrer antes do domínio
+cancelar, o sistema pode manter a notificação além do fim. O treino completo
+continua não restaurável após process death; tocar a notificação abre a rota
+segura existente, sem fabricar ou autorizar uma sessão.
+
+Diagnóstico E2E no Android (2026-08-25):
+O primeiro APK testado continha o módulo e o recurso
+`ic_ajfit_rest_notification`, mas seu manifesto gerado estava desatualizado e
+não continha `POST_NOTIFICATIONS`. A evidência em runtime foi a entrada real no
+Kotlin seguida de `manifestDeclared=false`; não houve criação do canal nem
+chamada a `notify`. Um `expo prebuild --clean --platform android --no-install`
+isolado regenerou a permissão declarada em `app.json`; o APK recompilado então
+exibiu o prompt contextual, criou `rest_timer`, publicou o ID `41704` e mostrou
+o countdown na shade. `dumpsys notification` confirmou a notificação ativa,
+ícone `0x7f0800fe`, `when=endsAt`, chronometer regressivo, `PUBLIC`, importância
+3 e o mesmo ID após `+15s`. Skip removeu o ID e o tap entregou
+`active-workout` ao listener da Fase 1. Com a permissão revogada, capabilities
+retornou `none`, nenhum ID foi publicado e o timer interno continuou. Portanto,
+qualquer build feito a partir de diretórios nativos já existentes precisa
+regenerá-los depois de alterar `expo.android.permissions`; apenas executar
+Gradle sobre um manifesto gerado antigo não consome a mudança de `app.json`.
+O emulator usado estava com a Lock Screen desabilitada
+(`locksettings get-disabled=true`), então a exibição na Lock Screen permanece
+pendente de QA em um device/emulator com keyguard configurado.
+
+Assinatura:
+Codex — 2026-08-24 — Ongoing notification Android com countdown nativo por `endsAt`.
+
+---
+
+Data: 2026-08-24
+Responsável: Codex — Agente Frontend
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
 Implementada a Fase 3 do Live Rest Timer como uma fronteira opcional de
 apresentação, ainda sem superfície nativa real. O contrato
 `RestActivityState` contém somente `sessionId`, `startedAt`, `endsAt`, nome de

@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const context = readFileSync('src/state/RestSessionContext.tsx', 'utf8');
@@ -41,8 +41,14 @@ describe('rest live presentation boundary', () => {
     expect(codeOnly(facade)).not.toContain('Platform.OS');
   });
 
-  it('ships only the optional TypeScript bridge in this phase', () => {
-    expect(readdirSync('modules/ajfit-rest-activity').sort()).toEqual(['index.ts']);
+  it('keeps the bridge optional while registering only an Android module', () => {
+    const config = readFileSync(
+      'modules/ajfit-rest-activity/expo-module.config.json',
+      'utf8',
+    );
+    expect(config).toContain('"platforms": ["android"]');
+    expect(config).toContain('com.ajfit.restactivity.AJFitRestActivityModule');
+    expect(existsSync('modules/ajfit-rest-activity/ios')).toBe(false);
   });
 
   it('materializes the translated exercise name outside the temporal domain', () => {

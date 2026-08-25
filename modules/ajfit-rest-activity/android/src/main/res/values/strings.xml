@@ -1,0 +1,6 @@
+<resources>
+  <string name="ajfit_rest_channel_name">Timer de descanso</string>
+  <string name="ajfit_rest_channel_description">Contagem regressiva do descanso atual</string>
+  <string name="ajfit_rest_notification_title">AJ Fit · Descanso</string>
+  <string name="ajfit_rest_series_format">Série %1$d/%2$d</string>
+</resources>

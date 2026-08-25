@@ -134,6 +134,12 @@ export function RestSessionProvider({ children }: { children: React.ReactNode })
     const activityState = toRestActivityState(rest, exerciseName);
     restActivityStateRef.current = activityState;
     restActivitySessionStartedRef.current = true;
+    logInfo('restSession', 'rest_live_start_dispatch', {
+      startedAt: activityState.startedAt,
+      endsAt: activityState.endsAt,
+      setIndex: activityState.setIndex,
+      totalSets: activityState.totalSets,
+    });
     void restLiveActivity.start(activityState);
     logInfo('restSession', 'rest_started', {
       durationSeconds: rest.initialDurationSeconds,

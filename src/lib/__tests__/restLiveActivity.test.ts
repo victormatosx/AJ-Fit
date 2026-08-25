@@ -45,7 +45,7 @@ function installNativeModule(): NativeModuleMock {
   const nativeModule: NativeModuleMock = {
     getCapabilities: vi.fn(async () => ({
       available: true,
-      surface: 'ios-live-activity',
+      surface: 'android-notification',
     })),
     start: vi.fn(async () => undefined),
     update: vi.fn(async () => undefined),
@@ -81,13 +81,13 @@ describe('restLiveActivity optional capabilities', () => {
     await expect(facade.end('cancelled')).resolves.toBeUndefined();
   });
 
-  it('uses native capability detection rather than platform detection', async () => {
+  it('reports the real Android notification capability from the native module', async () => {
     const nativeModule = installNativeModule();
     const facade = await loadFacade();
 
     await expect(facade.getCapabilities()).resolves.toEqual({
       available: true,
-      surface: 'ios-live-activity',
+      surface: 'android-notification',
     });
     expect(nativeModule.getCapabilities).toHaveBeenCalledTimes(1);
   });
