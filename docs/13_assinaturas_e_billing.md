@@ -2536,3 +2536,72 @@ continua `CustomerInfo.entitlements.active["premium"]`.
 A etapa seguinte é exclusivamente o E2E iOS Sandbox real, que validará App,
 RevenueCat SDK, StoreKit, Apple ID Sandbox, Intro Eligibility,
 `purchasePackage`, CustomerInfo e webhook real no mesmo circuito.
+
+---
+
+## Dev Subscription Override (exclusivo de desenvolvimento/QA)
+
+Ferramenta interna para simular localmente diferentes estados de assinatura
+durante desenvolvimento/QA, sem comprar de verdade na Google Play/App Store.
+Código em `src/dev/`:
+
+* `subscriptionOverride.ts` — tipos dos estados simulados e o transform puro
+  (`applyDevSubscriptionOverride`) que reconstrói um `CustomerInfo` sintético
+  a partir do real.
+* `subscriptionOverrideStorage.ts` — persistência local (AsyncStorage),
+  nunca Firestore/RevenueCat/backend.
+* `DevSubscriptionOverrideContext.tsx` — estado reativo consumido por
+  `SubscriptionContext`.
+
+**Como ativar:** defina `EXPO_PUBLIC_ENABLE_DEV_SUBSCRIPTION_OVERRIDES=1` no
+`.env` local (veja `.env.example`) e rode um development build (`__DEV__`
+true). O seletor tem duas entradas de UI, ambas controlando exatamente o
+mesmo `DevSubscriptionOverrideContext`/AsyncStorage
+(`ajfit-dev-subscription-override`) via o mesmo componente compartilhado
+`src/dev/DevSubscriptionOverridePickerSheet.tsx`:
+
+1. Configurações → seção "DEVELOPER" → "Subscription Override".
+2. Paywall → linha discreta "DEVELOPER — Subscription Override" (só visível
+   quando o mecanismo está permitido) — existe especificamente para
+   contornar o problema de bootstrap de uma conta nova: ela ainda não tem
+   acesso a Configurações porque o navigation gate a mantém no Paywall.
+   Selecionar um estado ali só altera o override; o navigation gate real
+   reage sozinho a `isPremium` e decide se libera o app — nenhuma navegação
+   direta/bypass foi adicionada.
+
+**Estados disponíveis:** `REAL` (nenhuma simulação — usa RevenueCat como
+hoje), `FREE`, `PREMIUM_MONTHLY`, `PREMIUM_ANNUAL`, `TRIAL`,
+`CANCELED_ACTIVE` (Premium ainda ativo até a expiração, `willRenew=false`) e
+`EXPIRED`.
+
+**Arquitetura:**
+
+```txt
+RevenueCat -> Real Subscription State -> Dev Override -> Effective State -> App
+```
+
+`SubscriptionContext` continua sincronizando identidade/CustomerInfo com o
+RevenueCat exatamente como antes (`realCustomerInfo`). O único ponto novo é
+que o `customerInfo`/`isPremium` expostos ao restante do app passam por
+`applyDevSubscriptionOverride(realCustomerInfo, devOverride)` antes de
+chegar aos Premium Gates, ao Paywall e à Central de Assinatura.
+`configured`/`loading` continuam derivados exclusivamente do estado real —
+o override nunca finge que o RevenueCat terminou de configurar.
+
+**Garantia de segurança (produção):** o override exige simultaneamente
+`__DEV__` (flag de bundle JS de debug, definida pelo Metro/Babel em tempo de
+bundle e eliminada como código morto pelo minificador em qualquer build
+release/produção — não é um valor manipulável em runtime) **e**
+`EXPO_PUBLIC_ENABLE_DEV_SUBSCRIPTION_OVERRIDES=1`. Nenhuma das duas condições
+é suficiente sozinha. `readStoredDevSubscriptionOverride` nem chega a ler o
+AsyncStorage quando essa combinação não está presente — um valor
+`PREMIUM_ANNUAL` deixado no dispositivo por um build de desenvolvimento
+anterior (ou adulterado manualmente) não significa nada em uma build onde
+overrides não são permitidos.
+
+**Nunca simula billing real.** Compra, restore, Offer Codes/promo codes,
+cancelamento e renovação continuam exigindo StoreKit/Google Play
+Billing/RevenueCat reais (sandbox ou produção) — o override só reformata o
+`CustomerInfo` já resolvido para os Premium Gates/UI, nunca cria
+entitlement no RevenueCat, nunca escreve em Firestore, nunca chama o
+backend.

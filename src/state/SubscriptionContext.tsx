@@ -51,6 +51,8 @@ import {
   type SubscriptionPhase,
 } from '../lib/subscriptionLifecycle';
 import { logInfo } from '../lib/logger';
+import { useDevSubscriptionOverrideContext } from '../dev/DevSubscriptionOverrideContext';
+import { applyDevSubscriptionOverride } from '../dev/subscriptionOverride';
 
 /**
  * RevenueCat state context (docs/13_assinaturas_e_billing.md).
@@ -82,10 +84,18 @@ type SubscriptionCtx = {
   loading: boolean;
   /** True once CustomerInfo has been fetched for the current Firebase UID. */
   configured: boolean;
-  /** CustomerInfo for the current Firebase UID, or null while it is unresolved. */
+  /**
+   * Effective CustomerInfo for the current Firebase UID, or null while it is
+   * unresolved. In every non-development build this is exactly what
+   * RevenueCat returned. In a development build with the Dev Subscription
+   * Override active (`src/dev/`), this is the real CustomerInfo transformed
+   * by that override — the real snapshot itself is untouched internally.
+   */
   customerInfo: CustomerInfo | null;
   /** Derived from `customerInfo.entitlements.active[premium]` — never separate state. */
   isPremium: boolean;
+  /** `'development_override'` only when a Dev Subscription Override is actively reshaping `customerInfo`. */
+  subscriptionSource: 'revenuecat' | 'development_override';
   /** Detailed lifecycle phase; `error` never means "not Premium". */
   status: SubscriptionPhase;
   /** True only for a refresh of an already confirmed snapshot. */
@@ -597,10 +607,26 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     return () => subscription.remove();
   }, [refreshCustomerInfo]);
 
-  const customerInfo = selectIdentityCustomerInfo(lifecycle, uid);
-  const configured = !initializing && (uid === null || customerInfo !== null);
+  const realCustomerInfo = selectIdentityCustomerInfo(lifecycle, uid);
+  // `configured`/`loading` reflect only the REAL RevenueCat resolution — the
+  // Dev Override never fakes "RevenueCat is configured", it only reshapes
+  // entitlement content once the real identity has already resolved.
+  const configured = !initializing && (uid === null || realCustomerInfo !== null);
   const loading =
     initializing || (uid !== null && !configured && lifecycle.phase !== 'error');
+
+  // Single seam: RevenueCat -> Real State -> Dev Override -> Effective
+  // State -> App. `devOverride` is hard-pinned to `'REAL'` outside
+  // development builds (DevSubscriptionOverrideContext), and
+  // `applyDevSubscriptionOverride` itself re-checks the same allow-gate, so
+  // `customerInfo` here is byte-for-byte `realCustomerInfo` in production.
+  const { override: devOverride } = useDevSubscriptionOverrideContext();
+  const customerInfo = useMemo(
+    () => applyDevSubscriptionOverride(realCustomerInfo, devOverride),
+    [realCustomerInfo, devOverride],
+  );
+  const subscriptionSource: 'revenuecat' | 'development_override' =
+    customerInfo !== realCustomerInfo ? 'development_override' : 'revenuecat';
 
   const isPremium = useMemo(
     () => Boolean(customerInfo?.entitlements.active[PREMIUM_ENTITLEMENT_ID]),
@@ -803,6 +829,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
       configured,
       customerInfo,
       isPremium,
+      subscriptionSource,
       status: lifecycle.phase,
       refreshing: lifecycle.refreshing,
       errorKind: lifecycle.error?.kind ?? null,
@@ -825,6 +852,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
       configured,
       customerInfo,
       isPremium,
+      subscriptionSource,
       lifecycle.phase,
       lifecycle.refreshing,
       lifecycle.error,

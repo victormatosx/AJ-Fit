@@ -19,6 +19,7 @@ import {
 import { AppStateProvider as RawAppStateProvider, useAppState } from './src/state/AppState';
 import { AuthProvider, useAuth } from './src/state/AuthContext';
 import { SubscriptionProvider } from './src/state/SubscriptionContext';
+import { DevSubscriptionOverrideProvider } from './src/dev/DevSubscriptionOverrideContext';
 import { PromoCodeProvider } from './src/state/PromoCodeContext';
 import { useSubscription } from './src/hooks/useSubscription';
 import {
@@ -546,36 +547,43 @@ function AppContent() {
               loginRevenueCat/logoutRevenueCat internally). AuthContext itself
               is untouched — it stays the sole owner of identity and knows
               nothing about RevenueCat; SubscriptionContext just watches it. */}
-          <SubscriptionProvider>
-            <PromoCodeProvider>
-              <UnitsProvider>
-                <AppStateProviderConnected>
-                  {/* Inside AuthProvider so it can re-lock on logout and account
-                      switches; wraps the navigator so its AppState listener is
-                      mounted for the whole session. */}
-                  <PhotoVaultProvider>
-                    {/* Mounted above the visual/bootstrap gate so cold-start and
-                        foreground URLs are retained until RootNavigator is
-                        allowed to mount AppShell. It never changes root routing
-                        or authorization state itself. */}
-                    <DeepLinkProvider>
-                      <StatusBar style={theme.statusBar.style} />
-                      <NativeThemeSync />
-                      {/* Business providers mount immediately so Firebase profile
-                          reads, RevenueCat identity synchronization and vault
-                          locking overlap the local theme/font/i18n bootstrap.
-                          Only the definitive UI is held behind this visual gate,
-                          preventing a stored Light preference from first painting
-                          the real app in Dark. */}
-                      {themeHydrated && fontsLoaded && i18nReady
-                        ? <RootNavigator />
-                        : <FullScreenLoading />}
-                    </DeepLinkProvider>
-                  </PhotoVaultProvider>
-                </AppStateProviderConnected>
-              </UnitsProvider>
-            </PromoCodeProvider>
-          </SubscriptionProvider>
+          {/* Owns the reactive Dev Subscription Override state (dev/QA only,
+              see src/dev/). Nested above SubscriptionProvider so it can
+              transform the RevenueCat-derived state before the rest of the
+              app ever sees it — inert everywhere outside a development
+              build. */}
+          <DevSubscriptionOverrideProvider>
+            <SubscriptionProvider>
+              <PromoCodeProvider>
+                <UnitsProvider>
+                  <AppStateProviderConnected>
+                    {/* Inside AuthProvider so it can re-lock on logout and account
+                        switches; wraps the navigator so its AppState listener is
+                        mounted for the whole session. */}
+                    <PhotoVaultProvider>
+                      {/* Mounted above the visual/bootstrap gate so cold-start and
+                          foreground URLs are retained until RootNavigator is
+                          allowed to mount AppShell. It never changes root routing
+                          or authorization state itself. */}
+                      <DeepLinkProvider>
+                        <StatusBar style={theme.statusBar.style} />
+                        <NativeThemeSync />
+                        {/* Business providers mount immediately so Firebase profile
+                            reads, RevenueCat identity synchronization and vault
+                            locking overlap the local theme/font/i18n bootstrap.
+                            Only the definitive UI is held behind this visual gate,
+                            preventing a stored Light preference from first painting
+                            the real app in Dark. */}
+                        {themeHydrated && fontsLoaded && i18nReady
+                          ? <RootNavigator />
+                          : <FullScreenLoading />}
+                      </DeepLinkProvider>
+                    </PhotoVaultProvider>
+                  </AppStateProviderConnected>
+                </UnitsProvider>
+              </PromoCodeProvider>
+            </SubscriptionProvider>
+          </DevSubscriptionOverrideProvider>
         </AuthProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

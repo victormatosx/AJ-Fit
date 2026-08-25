@@ -65,6 +65,11 @@ import {
 } from '../services/revenueCatService';
 import { authorizePromoPurchase } from '../services/promoCodeService';
 import { useTheme } from '../theme';
+import { useDevSubscriptionOverrideContext } from '../dev/DevSubscriptionOverrideContext';
+import {
+  DevSubscriptionOverridePickerSheet,
+  DEV_OVERRIDE_LABELS,
+} from '../dev/DevSubscriptionOverridePickerSheet';
 
 /**
  * FASE iOS-3 — derived from `isPromoCodeUiSupported` (see its doc comment,
@@ -127,6 +132,20 @@ export function PaywallScreen({
     purchaseOption,
     restore,
   } = useSubscription();
+
+  // Dev/QA only — same DevSubscriptionOverrideContext as Settings > Developer
+  // (see docs/13_assinaturas_e_billing.md). Lets a brand-new account, which
+  // has no Premium yet and is blocked here by the real navigation gate,
+  // simulate a Premium state without buying. This screen only ever writes
+  // to `setOverride`; the gate that actually opens AppShell is unaware this
+  // entry point exists — it just reacts to `isPremium` becoming true like it
+  // would for a real purchase.
+  const {
+    allowed: devOverrideAllowed,
+    override: devOverride,
+    setOverride: setDevOverride,
+  } = useDevSubscriptionOverrideContext();
+  const [devOverridePickerOpen, setDevOverridePickerOpen] = useState(false);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [purchaseState, setPurchaseState] = useState<PurchaseUiState>({ kind: 'idle' });
@@ -718,6 +737,18 @@ export function PaywallScreen({
           accessibilityLabel={closeAccessibilityLabel}
         />
 
+        {/* Dev/QA only — never rendered outside a development build (see
+            `useDevSubscriptionOverrideContext`'s `allowed`). Second UI over
+            the exact same DevSubscriptionOverrideContext as Settings >
+            Developer, so a brand-new account can simulate Premium here
+            before Settings is reachable. */}
+        {devOverrideAllowed ? (
+          <DevSubscriptionOverrideRow
+            current={devOverride}
+            onPress={() => setDevOverridePickerOpen(true)}
+          />
+        ) : null}
+
         {centerState ? (
           <View style={{ flex: 1 }}>
             <CenteredState
@@ -857,7 +888,78 @@ export function PaywallScreen({
           </ScrollView>
         )}
       </SafeAreaView>
+      {devOverrideAllowed ? (
+        <DevSubscriptionOverridePickerSheet
+          visible={devOverridePickerOpen}
+          current={devOverride}
+          onSelect={(next) => {
+            void setDevOverride(next);
+            setDevOverridePickerOpen(false);
+          }}
+          onDismiss={() => setDevOverridePickerOpen(false)}
+        />
+      ) : null}
     </ScreenBg>
+  );
+}
+
+/**
+ * Dev/QA only — discreet, never mounted outside a development build (see
+ * `devOverrideAllowed` above). Deliberately does not attempt to look like a
+ * real Paywall feature.
+ */
+function DevSubscriptionOverrideRow({
+  current,
+  onPress,
+}: {
+  current: ReturnType<typeof useDevSubscriptionOverrideContext>['override'];
+  onPress: () => void;
+}) {
+  const { theme } = useTheme();
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`Developer Subscription Override, current: ${DEV_OVERRIDE_LABELS[current]}`}
+      style={{
+        marginHorizontal: 22,
+        marginBottom: 8,
+        paddingVertical: 10,
+        paddingHorizontal: 14,
+        borderRadius: 10,
+        borderWidth: 1,
+        borderStyle: 'dashed',
+        borderColor: theme.colors.divider,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 10,
+      }}
+    >
+      <View>
+        <Text
+          style={{
+            fontFamily: theme.fonts.mono,
+            fontSize: 9.5,
+            letterSpacing: 1.4,
+            color: theme.colors.textFaint,
+          }}
+        >
+          DEVELOPER
+        </Text>
+        <Text
+          style={{
+            fontFamily: theme.fonts.uiSemi,
+            fontSize: 12.5,
+            color: theme.colors.textMuted,
+            marginTop: 2,
+          }}
+        >
+          Subscription Override — {DEV_OVERRIDE_LABELS[current]}
+        </Text>
+      </View>
+      <Icon name="chevron-right" size={16} color={theme.colors.textFaint} />
+    </Pressable>
   );
 }
 
