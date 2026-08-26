@@ -18,7 +18,7 @@ import {
   assertFails,
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing';
-import { doc, getDoc, setDoc, updateDoc, deleteDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { deleteDoc, deleteField, doc, getDoc, serverTimestamp, setDoc, Timestamp, updateDoc } from 'firebase/firestore';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 const PROJECT_ID = 'ajfit-rules-test';
@@ -79,6 +79,43 @@ function validExerciseData(overrides: Record<string, unknown> = {}) {
     metadata: { version: 1, createdAt: serverTimestamp(), updatedAt: serverTimestamp() },
     ...overrides,
   };
+}
+
+function validLimitationProfile(overrides: Record<string, unknown> = {}) {
+  return {
+    schemaVersion: 1,
+    protocolVersion: 'musculoskeletal-v1',
+    reviewStatus: 'approved',
+    reviewBasis: 'product_policy',
+    regions: {
+      knee: { status: 'not_applicable' },
+      hip: { status: 'compatible' },
+      back: {
+        status: 'avoid',
+        substituteExerciseIds: [],
+        candidateStatus: 'missing_exercise_candidate',
+      },
+      shoulder: {
+        status: 'adapt',
+        adaptation: { kind: 'exercise_variant', exerciseId: 'machine-shoulder-press' },
+      },
+      elbow: { status: 'compatible' },
+      wrist: {
+        status: 'avoid',
+        substituteExerciseIds: ['wall-push-up'],
+        candidateStatus: 'ready',
+      },
+      ankle_foot: { status: 'not_applicable' },
+    },
+    ...overrides,
+  };
+}
+
+async function updateLimitationProfile(profile: Record<string, unknown>) {
+  return updateDoc(doc(adminDb(), 'exercises', EXERCISE_ID), {
+    limitationProfile: profile,
+    'metadata.updatedAt': serverTimestamp(),
+  });
 }
 
 async function seedExercise() {
@@ -261,5 +298,91 @@ describe('exercises — admin write (ajfit-admin panel)', () => {
 
   it('blocks an admin from deleting an exercise', async () => {
     await assertFails(deleteDoc(doc(adminDb(), 'exercises', EXERCISE_ID)));
+  });
+});
+
+describe('exercises — limitationProfile validation', () => {
+  it('accepts an approved product-policy profile with all rule variants', async () => {
+    await assertSucceeds(updateLimitationProfile(validLimitationProfile()));
+  });
+
+  it('accepts a professional-review profile only with real audit fields', async () => {
+    await assertSucceeds(updateLimitationProfile(validLimitationProfile({
+      reviewBasis: 'professional_review',
+      reviewedAt: Timestamp.now(),
+      reviewedBy: 'professional-review-record-id',
+    })));
+  });
+
+  it.each([
+    ['unknown status', () => validLimitationProfile({
+      regions: { ...validLimitationProfile().regions, hip: { status: 'unknown' } },
+    })],
+    ['missing region', () => {
+      const { ankle_foot: _removed, ...regions } = validLimitationProfile().regions;
+      return validLimitationProfile({ regions });
+    }],
+    ['extra region', () => validLimitationProfile({
+      regions: { ...validLimitationProfile().regions, neck: { status: 'compatible' } },
+    })],
+    ['unexpected profile field', () => validLimitationProfile({ clinicalApproval: true })],
+    ['unexpected rule field', () => validLimitationProfile({
+      regions: { ...validLimitationProfile().regions, hip: { status: 'compatible', note: 'extra' } },
+    })],
+    ['adapt without adaptation', () => validLimitationProfile({
+      regions: { ...validLimitationProfile().regions, shoulder: { status: 'adapt' } },
+    })],
+    ['adapt with self-reference', () => validLimitationProfile({
+      regions: {
+        ...validLimitationProfile().regions,
+        shoulder: { status: 'adapt', adaptation: { kind: 'exercise_variant', exerciseId: EXERCISE_ID } },
+      },
+    })],
+    ['avoid empty without missing marker', () => validLimitationProfile({
+      regions: {
+        ...validLimitationProfile().regions,
+        back: { status: 'avoid', substituteExerciseIds: [], candidateStatus: 'ready' },
+      },
+    })],
+    ['duplicate substitutes', () => validLimitationProfile({
+      regions: {
+        ...validLimitationProfile().regions,
+        wrist: {
+          status: 'avoid',
+          substituteExerciseIds: ['wall-push-up', 'wall-push-up'],
+          candidateStatus: 'ready',
+        },
+      },
+    })],
+    ['product policy with fake professional identity', () => validLimitationProfile({
+      reviewedAt: Timestamp.now(),
+      reviewedBy: 'fake-reviewer',
+    })],
+  ])('rejects %s', async (_label, buildProfile) => {
+    await assertFails(updateLimitationProfile(buildProfile()));
+  });
+
+  it('rejects professional_review without reviewer/timestamp', async () => {
+    await assertFails(updateLimitationProfile(validLimitationProfile({ reviewBasis: 'professional_review' })));
+  });
+
+  it('prevents removal of an existing approved profile', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'exercises', EXERCISE_ID), {
+        id: EXERCISE_ID,
+        slug: EXERCISE_ID,
+        name: { ptBR: 'Agachamento Livre', en: 'Barbell Back Squat', es: 'Sentadilla Libre con Barra' },
+        status: 'active',
+        difficulty: 'intermediate',
+        limitationProfile: validLimitationProfile(),
+        metadata: { version: 1, createdAt: Timestamp.now(), updatedAt: Timestamp.now() },
+      });
+    });
+    await assertFails(
+      updateDoc(doc(adminDb(), 'exercises', EXERCISE_ID), {
+        limitationProfile: deleteField(),
+        'metadata.updatedAt': serverTimestamp(),
+      }),
+    );
   });
 });

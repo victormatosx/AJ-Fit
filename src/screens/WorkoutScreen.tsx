@@ -49,12 +49,24 @@ type Exercise = {
   subs: SubOption[];
 };
 
-type Props = { plan: FinalWorkoutPlan; onDone: () => void; onMinimize?: () => void };
+type Props = {
+  plan: FinalWorkoutPlan;
+  onDone: () => void;
+  onMinimize?: () => void;
+  /** Which session in `plan.sessions` to run — decided by the Schedule Engine (docs/workout-lifecycle/03_SCHEDULE_ENGINE.md). Defaults to 0 for callers that haven't wired schedule resolution yet. */
+  sessionIndex?: number;
+  /** Fires once, the moment every set is done — distinct from `onDone` (which also fires on an early exit/X tap). This is what the Schedule Engine listens to advance the rotation. */
+  onSessionCompleted?: () => void;
+  /** Fires once a set's weight is actually logged (docs/workout-lifecycle/09_WORKOUT_EXECUTION_AND_HISTORY.md) — `exerciseIndex` matches this exercise's position in `plan.sessions[sessionIndex].exercises`, the same identity the Execution record uses. */
+  onSetLogged?: (exerciseIndex: number, setIndex: number, weightKg: number) => void;
+  /** Fires when the user exits via the header close button before the session finished — distinct from a normal finish; the Schedule Engine must never advance because of this (docs §36). */
+  onAbandon?: () => void;
+};
 
 const catalogExerciseById = new Map(EXERCISES_SEED.map((exercise) => [exercise.id, exercise]));
 
-function workoutExercisesFromPlan(plan: FinalWorkoutPlan, language: string): Exercise[] {
-  const session = plan.sessions[0];
+function workoutExercisesFromPlan(plan: FinalWorkoutPlan, language: string, sessionIndex: number): Exercise[] {
+  const session = plan.sessions[sessionIndex] ?? plan.sessions[0];
   if (!session) return [];
   const locale = language === 'pt-BR' ? 'ptBR' : language === 'es' ? 'es' : 'en';
   return session.exercises.map((prescribed) => {
@@ -130,10 +142,13 @@ function translateMuscleGroup(tLoose: LooseT, target: string): string {
   return value || target;
 }
 
-export function WorkoutScreen({ plan, onDone, onMinimize }: Props) {
+export function WorkoutScreen({ plan, onDone, onMinimize, sessionIndex = 0, onSessionCompleted, onSetLogged, onAbandon }: Props) {
   const { theme } = useTheme();
   const { t, i18n } = useTranslation('workout');
-  const exercises = useMemo(() => workoutExercisesFromPlan(plan, i18n.language), [i18n.language, plan]);
+  const exercises = useMemo(
+    () => workoutExercisesFromPlan(plan, i18n.language, sessionIndex),
+    [i18n.language, plan, sessionIndex],
+  );
   const headerButtonStyle = {
     width: 38,
     height: 38,
@@ -171,7 +186,7 @@ export function WorkoutScreen({ plan, onDone, onMinimize }: Props) {
 
   const [resting, setResting] = useState(false);
   const [restLeft, setRestLeft] = useState(0);
-  const [pending, setPending] = useState<{ exId: string; setIdx: number } | null>(null);
+  const [pending, setPending] = useState<{ exId: string; exIdx: number; setIdx: number } | null>(null);
   const [regWeight, setRegWeight] = useState(0);
 
   const [queueOpen, setQueueOpen] = useState(false);
@@ -265,6 +280,10 @@ export function WorkoutScreen({ plan, onDone, onMinimize }: Props) {
       nextLogged = { ...logged, [`${pending.exId}-${pending.setIdx}`]: regWeight };
       setLogged(nextLogged);
     }
+    if (pending) {
+      const finalWeight = nextLogged[`${pending.exId}-${pending.setIdx}`] ?? exercises[pending.exIdx].sets[pending.setIdx].w;
+      onSetLogged?.(pending.exIdx, pending.setIdx, finalWeight);
+    }
     const finishedSet = setIdx + 1;
     const nextProgress = { ...progress, [exIdx]: finishedSet };
     setProgress(nextProgress);
@@ -306,11 +325,12 @@ export function WorkoutScreen({ plan, onDone, onMinimize }: Props) {
 
   const completeSet = () => {
     if (isLastOverall) {
+      onSetLogged?.(exIdx, setIdx, lastWeight(ex, setIdx));
       setProgress((p) => ({ ...p, [exIdx]: setIdx + 1 }));
       setFinished(true);
       return;
     }
-    setPending({ exId: ex.id, setIdx });
+    setPending({ exId: ex.id, exIdx, setIdx });
     setRegWeight(lastWeight(ex, setIdx));
     setRestLeft(ex.rest);
     setResting(true);
@@ -361,6 +381,14 @@ export function WorkoutScreen({ plan, onDone, onMinimize }: Props) {
   const curReps = ex.sets[setIdx].r;
   const curLast = lastWeight(ex, setIdx);
 
+  // Mount-once-per-finish signal for the Schedule Engine — separate from
+  // `onDone`, which also fires on an early exit (the X button) and must
+  // never be read as a completion.
+  useEffect(() => {
+    if (finished) onSessionCompleted?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [finished]);
+
   if (finished) return <WorkoutDone elapsed={elapsed} onDone={onDone} />;
 
   return (
@@ -380,7 +408,13 @@ export function WorkoutScreen({ plan, onDone, onMinimize }: Props) {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={t('header.accessibility.close')}
-            onPress={onDone}
+            onPress={() => {
+              // Reaching this button at all means `finished` is false (the
+              // component early-returns to `WorkoutDone` otherwise) — an
+              // early exit here is always an abandon, never a finish.
+              onAbandon?.();
+              onDone();
+            }}
             style={headerButtonStyle}
           >
             <Icon name="x" size={15} color={theme.colors.iconEmphasis} />
@@ -394,7 +428,7 @@ export function WorkoutScreen({ plan, onDone, onMinimize }: Props) {
                 marginTop: 7,
               }}
             >
-              <MonoLabel>{plan.templateId} · {plan.sessions[0]?.name}</MonoLabel>
+              <MonoLabel>{plan.templateId} · {(plan.sessions[sessionIndex] ?? plan.sessions[0])?.name}</MonoLabel>
               <MonoLabel color={theme.colors.primaryEmphasis}>{fmt(elapsed)}</MonoLabel>
               <MonoLabel>
                 {t('sets.progress', {

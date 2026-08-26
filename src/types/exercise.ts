@@ -169,6 +169,35 @@ export interface ExerciseMetadata<TTimestamp = unknown> {
   updatedAt: TTimestamp;
 }
 
+export const LIMITATION_REGION_IDS = [
+  'knee', 'hip', 'back', 'shoulder', 'elbow', 'wrist', 'ankle_foot',
+] as const;
+
+export type LimitationRegionId = (typeof LIMITATION_REGION_IDS)[number];
+export type PersistedLimitationStatus = 'compatible' | 'adapt' | 'avoid' | 'not_applicable';
+export type LimitationReviewBasis = 'product_policy' | 'professional_review';
+
+export type ExerciseLimitationRule =
+  | { status: 'compatible' | 'not_applicable' }
+  | { status: 'adapt'; adaptation: { kind: 'exercise_variant'; exerciseId: string } }
+  | {
+      status: 'avoid';
+      substituteExerciseIds: string[];
+      candidateStatus: 'ready' | 'missing_exercise_candidate';
+    };
+
+interface ExerciseLimitationProfileCore {
+  schemaVersion: 1;
+  protocolVersion: 'musculoskeletal-v1';
+  reviewStatus: 'approved';
+  regions: Record<LimitationRegionId, ExerciseLimitationRule>;
+}
+
+export type ExerciseLimitationProfile<TTimestamp = unknown> = ExerciseLimitationProfileCore & (
+  | { reviewBasis: 'product_policy'; reviewedAt?: never; reviewedBy?: never }
+  | { reviewBasis: 'professional_review'; reviewedAt: TTimestamp; reviewedBy: string }
+);
+
 export interface Exercise<TTimestamp = unknown> {
   id: string;
   name: LocalizedText;
@@ -184,6 +213,7 @@ export interface Exercise<TTimestamp = unknown> {
   difficulty: ExerciseDifficulty;
   availability: ExerciseAvailability;
   tags?: string[];
+  limitationProfile?: ExerciseLimitationProfile<TTimestamp>;
   metadata: ExerciseMetadata<TTimestamp>;
 }
 

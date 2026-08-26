@@ -100,13 +100,13 @@ Não significa que todos os dias serão intensos.
 
 **Tipo:** enum/range
 
-Faixas iniciais sugeridas:
+Opções atuais:
 
 ``` text
 SHORT       ≈ 30 min
 MEDIUM      ≈ 45 min
 STANDARD    ≈ 60 min
-LONG        ≈ 75+ min
+LONG        ≈ 90 min
 ```
 
 **Papel:** MODIFIER
@@ -115,10 +115,12 @@ Pode alterar:
 
 -   acessórios;
 -   séries;
--   descanso;
 -   organização;
--   supersets quando apropriados;
 -   duração de cardio.
+
+30/45 não autorizam compressão cega de descanso, circuitos ou supersets
+automáticos. A estratégia aprovada preserva safety/core/prioridade e reduz
+redundâncias e componentes de menor prioridade.
 
 Não deve remover silenciosamente os componentes prioritários do treino.
 
@@ -191,15 +193,11 @@ ADVANCED
 
 **Papel:** MODIFIER
 
-Afeta potencialmente:
-
--   volume inicial;
--   complexidade;
--   proximidade da falha;
--   técnicas avançadas;
--   seleção de exercícios;
--   progressão;
--   necessidade de estabilidade.
+Regra aprovada: `BEGINNER` inicia adaptação temporária nas semanas 1 e 2;
+`INTERMEDIATE` e `ADVANCED` preservam a dose-base e não recebem volume ou
+intensidade extra apenas pelo nível. Experiência de onboarding não é progressão
+permanente. Familiaridade de movimento pode continuar informando uma troca
+específica, respeitando todas as constraints.
 
 ------------------------------------------------------------------------
 
@@ -531,7 +529,14 @@ GENERAL
 
 **Papel:** MODIFIER P7
 
-Pode redistribuir volume dentro de limites.
+Pode preservar/ordenar candidatos e adicionar no máximo +1 set por
+priority/sessão nas condições da V1.
+
+Direção V1: até duas priorities protegem e antecipam o primeiro exercício
+relevante de cada músculo. Fora de Beginner Week 1/2 e duration 30, cada uma
+pode adicionar exatamente +1 set por sessão no primeiro candidato com sets
+numéricos. Em 45, isso só ocorre se a sessão não foi reduzida. Não há budget
+semanal, donors/receivers ou `slotRole`.
 
 Não pode vencer segurança.
 
@@ -655,3 +660,8 @@ Antes da implementação final, os documentos por família deverão decidir:
 -   como registrar restrições profissionais;
 -   se preferências musculares aceitam múltiplas prioridades;
 -   quais dados serão perguntados e quais serão derivados.
+
+O índice canônico atualizado é `../workout-lifecycle/07_OPEN_DECISIONS.md`.
+Dias da semana preferidos e data/reavaliação pós-parto são entradas futuras,
+não campos atuais (`../workout-lifecycle/03_SCHEDULE_ENGINE.md` e
+`../workout-lifecycle/06_REASSESSMENT.md`).

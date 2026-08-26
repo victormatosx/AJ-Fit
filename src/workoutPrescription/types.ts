@@ -1,4 +1,5 @@
 import type { Quiz } from '../state/AppState';
+import type { LimitationCatalogExercise, LimitationDecisionTrace } from './limitationResolver';
 
 export type TemplateId = `T${string}`;
 export type TemplateEnvironment = 'gym' | 'home';
@@ -10,8 +11,9 @@ export const PRESCRIPTION_VERSIONS = {
   templateLibrary: '1.3.0',
   selectionEngine: '1.0.0',
   safetyRules: '1.0.0',
-  modifierRules: '1.0.0',
-  compositionEngine: '1.0.0',
+  modifierRules: '2.0.0',
+  compositionEngine: '2.0.0',
+  limitationResolver: '1.0.0',
 } as const;
 
 export type PrescriptionVersions = typeof PRESCRIPTION_VERSIONS;
@@ -81,6 +83,11 @@ export interface CanonicalExercise {
   sets?: number;
   reps?: string;
   duration?: string;
+  cycles?: number;
+  intensity?: string;
+  notes?: string;
+  source_name_v1_1?: string;
+  source_name_v1_2?: string;
 }
 
 export interface CanonicalSession {
@@ -102,6 +109,7 @@ export interface CanonicalTemplate {
   split: string;
   rationale: string;
   sessions: CanonicalSession[];
+  assumptions?: unknown;
   safety?: unknown;
 }
 
@@ -111,6 +119,9 @@ export interface FinalWorkoutExercise {
   sets?: number;
   reps?: string;
   duration?: string;
+  cycles?: number;
+  intensity?: string;
+  notes?: string;
 }
 
 export interface FinalWorkoutSession {
@@ -127,6 +138,28 @@ export interface ExerciseSubstitutionTrace {
   reasonCode: 'EQUIPMENT_UNAVAILABLE';
 }
 
+export type CompositionReasonCode =
+  | 'BEGINNER_SESSION_REDUCED'
+  | 'DURATION_SESSION_REDUCED'
+  | 'DURATION_SET_FALLBACK'
+  | 'MUSCLE_PRIORITY_PRESERVED'
+  | 'MUSCLE_PRIORITY_REORDERED'
+  | 'MUSCLE_PRIORITY_SET_ADDED'
+  | 'PRIORITY_SET_SKIPPED_BEGINNER'
+  | 'PRIORITY_SET_SKIPPED_DURATION'
+  | 'PRIORITY_SET_SKIPPED_SAFETY';
+
+export interface CompositionDecision {
+  reasonCode: CompositionReasonCode;
+  sessionIndex: number;
+  priority?: string;
+  exerciseId?: string;
+  baseExerciseCount?: number;
+  targetExerciseCount?: number;
+  beforeSets?: number;
+  afterSets?: number;
+}
+
 export interface PrescriptionTrace {
   selectionReasons: string[];
   safety: SafetyDecision;
@@ -134,7 +167,19 @@ export interface PrescriptionTrace {
   unresolvedModifiers: string[];
   conflicts: ConflictResolution[];
   substitutions: ExerciseSubstitutionTrace[];
+  limitationResolverVersion: 1;
+  limitationDecisions: LimitationDecisionTrace[];
+  compositionDecisions: CompositionDecision[];
   validationCodes: string[];
+}
+
+export interface PrescriptionGenerationContext {
+  /** Week 1 is the default for a newly generated beginner plan; 3 means Week 3+. */
+  adaptationWeek?: number;
+  /** Explicit runtime template. Production supplies this from Firestore. */
+  template?: CanonicalTemplate;
+  /** One preloaded catalog snapshot; the pure resolver performs no Firestore reads. */
+  exerciseCatalog?: readonly LimitationCatalogExercise[];
 }
 
 export interface FinalWorkoutPlan {
@@ -146,6 +191,7 @@ export interface FinalWorkoutPlan {
   environment: TemplateEnvironment;
   goalFamily: GoalFamily;
   split: string;
+  adaptationStage?: 1 | 2 | 3;
   sessions: FinalWorkoutSession[];
   versions: PrescriptionVersions;
   trace: PrescriptionTrace;

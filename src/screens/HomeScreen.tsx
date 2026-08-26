@@ -17,6 +17,7 @@ import { useUnits } from '../state/UnitsContext';
 import { formatWorkoutLoadFromKg, workoutLoadUnit } from '../units/workoutLoadConversions';
 import { useIsScreenActive } from '../state/ScreenActivity';
 import type { PrescriptionResult } from '../workoutPrescription/types';
+import type { ScheduleResolution } from '../scheduleEngine';
 
 /**
  * Ticker rows read from i18n keys. The values themselves are placeholder
@@ -146,11 +147,14 @@ const TODAY_WORKOUT_THEME = darkTheme;
 
 export function HomeScreen({
   prescription,
+  scheduleResolution,
   onStart,
   onOpenConsistency,
   onOpenProfile,
 }: {
   prescription: PrescriptionResult;
+  /** Schedule Engine's read on "what to train right now" (docs/workout-lifecycle/03_SCHEDULE_ENGINE.md). Optional — omitted callers keep the pre-Schedule-Engine behavior of always showing session 0. */
+  scheduleResolution?: ScheduleResolution;
   onStart: () => void;
   onOpenConsistency: () => void;
   onOpenProfile: () => void;
@@ -176,7 +180,18 @@ export function HomeScreen({
       : prescription.status === 'NEEDS_QUESTIONNAIRE_UPDATE'
         ? 'needsQuestionnaireUpdate'
         : 'unavailable';
-  const firstSession = prescription.status === 'SUCCESS' ? prescription.plan.sessions[0] : null;
+  const scheduledSessionIndex = scheduleResolution?.status === 'SESSION_READY' ? scheduleResolution.sessionIndex : 0;
+  const firstSession = prescription.status === 'SUCCESS'
+    ? prescription.plan.sessions[scheduledSessionIndex] ?? prescription.plan.sessions[0]
+    : null;
+  // REST_DAY/SCHEDULE_SETUP_REQUIRED only override the card when there is
+  // otherwise a ready program — a legacy/blocked prescription keeps its own
+  // outcome copy above (docs/workout-lifecycle/03_SCHEDULE_ENGINE.md §UI mínima).
+  const scheduleOverrideKey = prescription.status === 'SUCCESS' && scheduleResolution?.status === 'REST_DAY'
+    ? 'restDay'
+    : prescription.status === 'SUCCESS' && scheduleResolution?.status === 'SCHEDULE_SETUP_REQUIRED'
+      ? 'setupRequired'
+      : null;
 
   const dayInitials = t('consistency.dayInitials', {
     returnObjects: true,
@@ -257,13 +272,17 @@ export function HomeScreen({
                   color={TODAY_WORKOUT_THEME.colors.textPrimary}
                   style={{ marginTop: 12 }}
                 >
-                  {(firstSession
-                    ? `${prescription.status === 'SUCCESS' ? prescription.plan.templateId : ''} · ${firstSession.name}`
-                    : t(`home:prescription.${prescriptionOutcomeKey}.title`)).toUpperCase()}
+                  {(scheduleOverrideKey
+                    ? t(`home:schedule.${scheduleOverrideKey}.title`)
+                    : firstSession
+                      ? `${prescription.status === 'SUCCESS' ? prescription.plan.templateId : ''} · ${firstSession.name}`
+                      : t(`home:prescription.${prescriptionOutcomeKey}.title`)).toUpperCase()}
                 </Display>
-                <Display size={38} color={TODAY_WORKOUT_THEME.colors.textPrimary}>
-                  {(prescription.status === 'SUCCESS' ? prescription.plan.split : '').toUpperCase()}
-                </Display>
+                {!scheduleOverrideKey && (
+                  <Display size={38} color={TODAY_WORKOUT_THEME.colors.textPrimary}>
+                    {(prescription.status === 'SUCCESS' ? prescription.plan.split : '').toUpperCase()}
+                  </Display>
+                )}
                 <View style={{ flexDirection: 'row', gap: 12, marginTop: 14 }}>
                   <Text
                     style={{
@@ -273,12 +292,14 @@ export function HomeScreen({
                       letterSpacing: 1,
                     }}
                   >
-                    {(prescription.status === 'SUCCESS'
-                      ? t('home:todayCard.prescribedMeta', {
-                          sessions: prescription.plan.prescribedStructuredDays,
-                          exercises: firstSession?.exercises.length ?? 0,
-                        })
-                      : t(`home:prescription.${prescriptionOutcomeKey}.body`)).toUpperCase()}
+                    {(scheduleOverrideKey
+                      ? t(`home:schedule.${scheduleOverrideKey}.body`)
+                      : prescription.status === 'SUCCESS'
+                        ? t('home:todayCard.prescribedMeta', {
+                            sessions: prescription.plan.prescribedStructuredDays,
+                            exercises: firstSession?.exercises.length ?? 0,
+                          })
+                        : t(`home:prescription.${prescriptionOutcomeKey}.body`)).toUpperCase()}
                   </Text>
                 </View>
               </View>

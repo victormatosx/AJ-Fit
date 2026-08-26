@@ -128,7 +128,7 @@ Pode ser subdividido por região para facilitar auditoria:
 MOD-KNEE-xxx
 MOD-HIP-xxx
 MOD-SHOULDER-xxx
-MOD-SPINE-xxx
+MOD-BACK-xxx
 MOD-WRIST-xxx
 MOD-ELBOW-xxx
 MOD-ANKLE-xxx
@@ -139,8 +139,8 @@ Prioridade: `P2`.
 Responsabilidades:
 
 -   remover ou substituir movimentos incompatíveis;
--   modificar amplitude quando formalmente previsto;
--   adicionar apoio;
+-   aplicar somente variante estruturada existente quando `adapt` for aprovado;
+-   nunca interpretar texto livre de amplitude, carga, apoio ou técnica;
 -   alterar impacto;
 -   preservar estímulo quando possível.
 
@@ -150,6 +150,10 @@ Regra:
 
 As regras específicas deverão se basear no que a pessoa relata que não
 consegue/tolera e em restrições profissionais disponíveis.
+
+Contrato técnico: `compatible | adapt | avoid | unknown | not_applicable`.
+Perfil/região ausente, draft ou versão desconhecida é `unknown` fail-safe.
+Detalhes em `exercise-limitations/01_LIMITATION_SCHEMA.md`.
 
 ------------------------------------------------------------------------
 
@@ -229,22 +233,19 @@ MOD-EXP-003 — Advanced
 
 ### Beginner
 
-Pode futuramente:
-
--   reduzir volume inicial;
--   favorecer exercícios mais estáveis;
--   aumentar margem de esforço;
--   evitar técnicas avançadas;
--   simplificar combinações complexas.
+Regra `IMPLEMENTED`: Week 1 mantém
+`ceil(exerciseCount×0,50)`, Week 2 mantém `ceil(exerciseCount×0,70)` e Week 3+
+mantém a sessão-base. Exercícios retidos preservam sets/reps/duration/cycles.
+Não há RIR. `return_to_training` não ativa este modifier (DR-022).
 
 ### Intermediate
 
-Tende a preservar template-base.
+Preserva o template-base na ausência de constraints superiores.
 
 ### Advanced
 
-Pode permitir maior especificidade, volume ou técnicas quando a família
-justificar.
+Preserva o template-base na ausência de constraints superiores. O rótulo não
+adiciona volume, intensidade ou técnicas; progressão futura é outro motor.
 
 Regra:
 
@@ -260,28 +261,21 @@ MOD-TIME-xxx
 
 Prioridade: `P5`.
 
-Sugestão:
+Contrato:
 
 ``` text
 MOD-TIME-001 — 30 Minute Session
 MOD-TIME-002 — 45 Minute Session
 MOD-TIME-003 — 60 Minute Session
-MOD-TIME-004 — 75+ Minute Session
+MOD-TIME-004 — 90 Minute Session
 ```
 
-Ordem preferencial para encurtar sessão:
-
-``` text
-1. preservar safety
-2. preservar movimentos prioritários
-3. remover redundância
-4. reduzir acessórios de menor prioridade
-5. reorganizar supersets compatíveis
-6. ajustar séries quando necessário
-7. ajustar cardio conforme finalidade da sessão
-```
-
-Nunca começar cortando aleatoriamente o primeiro/último exercício.
+30 minutos mantém `ceil(exerciseCount×0,60)`; 45 mantém
+`ceil(exerciseCount×0,80)`; 60/90 preservam a lista. A seleção protege primeiro
+item e priorities, completa pela ordem canônica e usa um guard mínimo de
+movement pattern. Em sessão curta sem remoção possível, o fallback reduz um set
+do último candidato com sets >1. Não criar circuito, superset, timing ou
+compressão de descanso; 90 é disponibilidade, não obrigação de preencher.
 
 ------------------------------------------------------------------------
 

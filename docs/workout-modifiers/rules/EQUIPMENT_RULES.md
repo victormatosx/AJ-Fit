@@ -326,3 +326,20 @@ Antes da implementação:
 -   grafo de substituições;
 -   ranking por família;
 -   regras de progressão para equipamento limitado.
+
+Ordem aprovada para cobertura: manter o exercício original quando viável →
+usar substituição real do catálogo atual → criar novo `exerciseId` somente após
+gap demonstrado. “Parecido” sem candidato validado não autoriza criação ou
+troca silenciosa.
+
+A auditoria encontrou dois gaps reproduzíveis mesmo com todo inventário HOME
+representável: `cable-rear-delt-fly` (8 templates) e `stationary-bike` (12).
+O primeiro é provável gap de catálogo; o segundo pode ser gap do resolver/input,
+pois alternativas de cardio mudam o movement pattern. Consulte
+`../exercise-limitations/05_CATALOG_GAPS.md`.
+
+Equipment resolution ocorre antes de priority. O candidato escolhido deve
+passar também pelas limitações; `unknown` nunca equivale a compatível (DR-005).
+Somente depois o exercício pode participar do signal simples de priority e das
+reduções por ordem. Equipment não autoriza priority sobre exercício que será
+substituído nem exige metadata estrutural nova.

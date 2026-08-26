@@ -1,5 +1,6 @@
 import {
   defaultQuiz,
+  WEEKDAY_ORDER,
   type DizzinessScreening,
   type FunctionalScreening,
   type LipedemaScreening,
@@ -8,6 +9,7 @@ import {
   type PostpartumScreening,
   type PregnancyScreening,
   type Quiz,
+  type Weekday,
 } from '../state/AppState';
 import type { OnboardingStepId } from '../onboarding/steps';
 
@@ -16,6 +18,13 @@ export const LIMITATION_IDS = ['none', 'knee', 'hip', 'back', 'shoulder', 'elbow
 export const POSTPARTUM_SIGN_IDS = ['pain', 'healing_problems', 'abnormal_bleeding', 'incontinence', 'vaginal_pressure', 'dizziness_weakness', 'none'] as const;
 export const PREGNANCY_WARNING_SIGN_IDS = ['vaginal_bleeding', 'dizziness_fainting', 'chest_pain', 'unusual_shortness_of_breath', 'painful_regular_contractions', 'fluid_leakage', 'calf_pain_swelling', 'none'] as const;
 export const FUNCTIONAL_SITUATION_IDS = ['walking_difficulty', 'support_needed', 'stairs_difficulty', 'balance_problems', 'recent_fall', 'sit_to_stand_difficulty', 'daily_activities_difficulty', 'none'] as const;
+
+/** Dedupes, drops unknown values, and sorts to canonical chronological order — never the order the user clicked (docs/workout-lifecycle/03_SCHEDULE_ENGINE.md). */
+export function normalizeWeekdays(values: string[]): Weekday[] {
+  const valid = new Set<string>(WEEKDAY_ORDER);
+  const deduped = [...new Set(values.filter((value) => valid.has(value)))] as Weekday[];
+  return WEEKDAY_ORDER.filter((day) => deduped.includes(day));
+}
 
 export function exclusiveNone(values: string[]): string[] {
   if (!values.includes('none')) return [...new Set(values)];
@@ -46,6 +55,17 @@ export function cleanApplicableAnswers(input: Quiz): Quiz {
   const functional = has('functional_limitation') ? (input.functionalScreening ?? emptyFunctionalScreening()) : null;
   return {
     ...input,
+    // days === 7 needs no explicit preference: every weekday is implied and
+    // never asked (docs/workout-lifecycle/03_SCHEDULE_ENGINE.md §Coleta
+    // futura). For 2-6, keep whatever subset the user has picked so far —
+    // the exact-count requirement is enforced by
+    // `questionnaireValidationErrors`/`canContinueQuestion`, not silently
+    // truncated here.
+    trainingDays: input.days === 7
+      ? [...WEEKDAY_ORDER]
+      : input.days == null
+        ? null
+        : normalizeWeekdays(input.trainingDays ?? []),
     primaryPlace: input.place === 'both' ? input.primaryPlace : null,
     equipment: input.place === 'home' || input.place === 'both' ? exclusiveNone(input.equipment) : [],
     limits: has('musculoskeletal_limitation') ? exclusiveNone(input.limits) : [],
@@ -70,6 +90,14 @@ export function normalizeLoadedQuiz(input: Partial<Quiz>): Quiz {
   const strings = (value: unknown) => Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
   const allowedConditions: string[] = ['none', 'musculoskeletal_limitation', 'pregnancy', 'postpartum', 'lipedema', 'dizziness_or_vertigo', 'post_surgical', 'functional_limitation', 'medical_restriction'];
   const loadedLimits = strings(merged.limits);
+  // Legacy questionnaires (pre-Schedule Engine) have no `trainingDays` at
+  // all — never invent weekdays for them; the Schedule Engine treats a null
+  // value as SCHEDULE_SETUP_REQUIRED rather than guessing a preference.
+  const trainingDays = merged.days === 7
+    ? [...WEEKDAY_ORDER]
+    : Array.isArray(merged.trainingDays) && merged.trainingDays.length > 0
+      ? normalizeWeekdays(strings(merged.trainingDays))
+      : null;
   const loadedConditions = strings(merged.specialConditions).filter((value): value is Quiz['specialConditions'][number] => allowedConditions.includes(value));
   // Phase 1 asked `limits` before this condition existed in the router. Only
   // infer the new branch when the old document has no router answer at all;
@@ -80,6 +108,7 @@ export function normalizeLoadedQuiz(input: Partial<Quiz>): Quiz {
   return {
     ...merged,
     limits: loadedLimits,
+    trainingDays,
     equipment: strings(merged.equipment),
     style: strings(merged.style),
     muscleFocus: strings(merged.muscleFocus).slice(0, 2),
@@ -104,6 +133,7 @@ export function updateQuizAnswer(quiz: Quiz, stepId: OnboardingStepId, value: un
   let next: Quiz;
   switch (stepId) {
     case 'days': next = { ...quiz, days: Number(value) }; break;
+    case 'trainingDays': next = { ...quiz, trainingDays: normalizeWeekdays(value as string[]) }; break;
     case 'primaryPlace': next = { ...quiz, primaryPlace: value as Quiz['primaryPlace'] }; break;
     case 'limitationImpact': next = { ...quiz, limitationImpact: value as Quiz['limitationImpact'] }; break;
     case 'specialConditions': next = { ...quiz, specialConditions: normalizeSpecialConditions(value as string[]) }; break;
@@ -151,6 +181,19 @@ export type QuestionnaireValidationCode =
   | 'post_surgical_screening_incomplete' | 'medical_restriction_screening_incomplete';
 
 function hasNoneConflict(values: string[]): boolean { return values.includes('none') && values.length > 1; }
+
+/**
+ * Schedule Engine's own gate — deliberately NOT part of
+ * `questionnaireValidationErrors`. Prescription (Selection/Safety/Modifiers/
+ * Composition) must keep generating a plan even for a legacy user who has
+ * never answered `trainingDays`; the Schedule Engine treats that case as
+ * `SCHEDULE_SETUP_REQUIRED` on its own (docs/workout-lifecycle/
+ * 03_SCHEDULE_ENGINE.md), never by blocking the prescription pipeline.
+ */
+export function trainingDaysValid(quiz: Pick<Quiz, 'days' | 'trainingDays'>): boolean {
+  if (quiz.days == null || ![2, 3, 4, 5, 6, 7].includes(quiz.days)) return false;
+  return (quiz.trainingDays?.length ?? 0) === quiz.days;
+}
 
 /** Locale-free domain validation used by tests and persistence callers. */
 export function questionnaireValidationErrors(quiz: Quiz): QuestionnaireValidationCode[] {

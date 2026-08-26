@@ -36,6 +36,10 @@ Treino final personalizado
 O objetivo é permitir alta personalização sem multiplicar
 artificialmente a quantidade de treinos-base.
 
+O contrato simplificado de beginner, duration, priority e preservação por ordem
+está em `06_NORMALIZED_DOSE_AND_SESSION_MODEL.md`. RIR, timing engine,
+`slotRole` e budget semanal não pertencem à V1.
+
 ------------------------------------------------------------------------
 
 ## 2. Princípio central
@@ -63,7 +67,8 @@ possível da intenção do template original.
 
 ## 3. Separação de responsabilidades
 
-Existem três responsabilidades diferentes no motor.
+Existem três responsabilidades dentro da prescrição. Agenda e progressão são
+responsabilidades externas, documentadas em `../workout-lifecycle/`.
 
 ### 3.1 Seleção
 
@@ -141,6 +146,13 @@ modificadores.
 Sistema de substituição de exercícios por padrão de movimento,
 finalidade e motivo da troca.
 
+### `exercise-limitations/`
+
+Contrato e Limitation Resolver V1 implementados, inventário dos 116, 76 profiles
+de política de produto, 40 ausentes fail-closed, interseção, trace e catalog
+gaps. A fila de revisão profissional continua documental e não é confundida
+com a aprovação conservadora de produto.
+
 ------------------------------------------------------------------------
 
 ## 5. Documentos por família
@@ -178,6 +190,8 @@ família de treinos**.
 6.  `05_EXERCISE_SUBSTITUTIONS.md`
 7.  documento específico da família Txxx
 8.  exemplos/testes de composição
+9.  `../workout-lifecycle/00_README.md`
+10. `../workout-lifecycle/08_PRESCRIPTION_CLOSURE_ANALYSIS.md`
 
 ------------------------------------------------------------------------
 
@@ -269,12 +283,15 @@ O motor deve respeitar permanentemente:
 
 ## 10. Estado deste documento
 
-Este conjunto define a **arquitetura inicial** do motor. Regras
-numéricas específicas, matrizes por família e substituições completas
-serão refinadas nos documentos de grupo antes da implementação final.
+Este conjunto contém arquitetura conceitual e regras com estados diferentes.
+Use sempre a legenda `IMPLEMENTED`, `APPROVED_NOT_IMPLEMENTED`,
+`FUTURE_DESIGN` e `DECISION_REQUIRED` de
+`../workout-lifecycle/00_README.md`; texto conceitual não prova execução.
 
 O questionário da Fase 2 formaliza entradas para lipedema, tontura/vertigem e
 pós-cirúrgico. Isso **não** cria novas famílias Txxx nem liga regras ao motor.
 Os contratos estão em `02_VARIABLES_CATALOG.md`, os papéis em
 `03_MODIFIERS_CATALOG.md`, a precedência em `04_PRIORITY_AND_CONFLICTS.md` e os
-gates conceituais em `rules/SAFETY_RULES.md`.
+gates conceituais em `rules/SAFETY_RULES.md`. Seleção, safety, composição,
+substituição pelo grafo atual, trace e snapshot local já possuem implementação,
+com lacunas enumeradas em `../32_workout_prescription_engine.md`.

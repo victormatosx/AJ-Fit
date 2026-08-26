@@ -1,8 +1,14 @@
 # Questionário — contrato de entrada para T001–T090 (Fase 2)
 
 Este documento registra a auditoria, a redução de fricção e o contrato de
-coleta preparado para o futuro motor. Ele **não** implementa seleção final de
-Txxx, modificadores executáveis ou mutação dos templates.
+coleta consumido pelo motor atual. O questionário não seleciona Txxx nem aplica
+modificadores por conta própria; essa responsabilidade pertence ao pipeline
+documentado em `32_workout_prescription_engine.md`.
+
+Status deste documento: o contrato descrito nas seções 1–6 está
+`IMPLEMENTED`; as extensões da seção 7 estão explicitamente separadas como
+`FUTURE_DESIGN` ou `DECISION_REQUIRED`. A legenda comum está em
+`workout-lifecycle/00_README.md`.
 
 ## 1. Auditoria antes da Fase 2
 
@@ -20,7 +26,8 @@ condicionais:
 As duas fontes principais de fricção eram: `limits` aparecia para todos antes
 do roteador de saúde; gestação adicionava cinco telas consecutivas e pós-parto,
 quatro. A auditoria também confirmou que `PlanReadyScreen` usa apenas dados
-resumidos, não existe motor T001–T090 ativo no cliente, analytics registra IDs
+resumidos e não existia motor T001–T090 ativo no cliente naquele momento;
+analytics registra IDs
 estáveis de etapa (sem valores clínicos) e Firestore já aceita `answers` como
 mapa imutável do dono.
 
@@ -151,3 +158,38 @@ do pipeline `QuestionnaireAnswers → safety → Txxx → modifiers → composit
 validation` está documentada em `docs/32_workout_prescription_engine.md`.
 Regras ainda não formalizadas não são inferidas: o motor retorna um estado de
 domínio explícito no ponto da lacuna.
+
+## 7. Extensões aprovadas para coleta futura
+
+Estas extensões não existem no fluxo atual e não devem ser lidas de campos
+aproximados:
+
+| Extensão | Papel | Status | Decisão pendente |
+|---|---|---|---|
+| `deliveryDate` no ramo pós-parto | derivar tempo sem inferir recuperação | `APPROVED_NOT_IMPLEMENTED` | momento em DR-007 |
+| pergunta explícita de reavaliação pós-parto | informar novo safety/lifecycle gate | `APPROVED_NOT_IMPLEMENTED` | texto/opções e saída em DR-020/DR-008 |
+
+`trainingDays` (dias da semana preferidos após `days`) deixou de ser uma
+extensão futura: está `IMPLEMENTED` como entrada do Schedule Engine (DR-017
+`RESOLVED_V1`, `workout-lifecycle/03_SCHEDULE_ENGINE.md`). Campo persistido:
+
+```ts
+trainingDays: ('MON'|'TUE'|'WED'|'THU'|'FRI'|'SAT'|'SUN')[] | null;
+```
+
+Para frequência de 2 a 6, a pergunta `trainingDays` exige exatamente a
+quantidade declarada em `days`, sem duplicatas; para 7, a pergunta é pulada e
+os sete IDs são preenchidos automaticamente. Valores são sempre normalizados
+para ordem cronológica canônica (nunca ordem de clique) e são independentes
+de idioma. Questionários antigos sem este campo carregam `null` — o Schedule
+Engine trata isso como `SCHEDULE_SETUP_REQUIRED`, nunca como uma preferência
+inventada. Essa preferência não muda a identidade das sessões A/B/C e não
+pertence ao Selection Engine; `trainingDaysValid()` é um gate próprio do
+Schedule Engine, deliberadamente fora de `questionnaireValidationErrors` — a
+ausência de `trainingDays` nunca bloqueia a geração da prescrição.
+
+`deliveryDate` é o nome proposto para não colidir com `birthDate`, que representa
+o nascimento da usuária. A data do parto e qualquer autodeclaração de prontidão são contexto. Elas não
+neutralizam sinais, restrições profissionais, ausência de liberação ou outro
+Safety Gate. Consulte `workout-lifecycle/03_SCHEDULE_ENGINE.md` e
+`workout-lifecycle/06_REASSESSMENT.md`.

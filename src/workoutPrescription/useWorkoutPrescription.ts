@@ -1,70 +1,86 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useAuth } from '../state/AuthContext';
+import { useCallback, useEffect, useState } from 'react';
 import { logInfo, logWarn } from '../lib/logger';
-import { generateWorkoutPrescription } from './engine';
-import { persistPrescriptionSnapshot, readPrescriptionSnapshot } from './storage';
+import { generateAndPersistWorkoutProgram, loadActiveWorkoutProgram } from '../services/workoutPrograms';
+import { useAuth } from '../state/AuthContext';
 import type { PrescriptionResult } from './types';
 
-export function useWorkoutPrescription(): PrescriptionResult {
+const loadingResult: PrescriptionResult = {
+  status: 'NEEDS_QUESTIONNAIRE_UPDATE',
+  reasonCodes: ['ACTIVE_WORKOUT_PROGRAM_LOADING'],
+};
+
+export interface WorkoutPrescriptionController {
+  prescription: PrescriptionResult;
+  generating: boolean;
+  generate: () => Promise<PrescriptionResult>;
+  reload: () => Promise<void>;
+}
+
+/** Loading this hook never runs the engine; generation is an explicit command. */
+export function useWorkoutPrescription(): WorkoutPrescriptionController {
   const { user, questionnaire } = useAuth();
-  const generated = useMemo(
-    () => questionnaire
-      ? generateWorkoutPrescription(questionnaire.answers)
-      : { status: 'NEEDS_QUESTIONNAIRE_UPDATE', reasonCodes: ['QUESTIONNAIRE_NOT_LOADED'] } as PrescriptionResult,
-    [questionnaire],
-  );
-  const identity = user && questionnaire ? `${user.uid}:${questionnaire.id}` : 'unresolved';
-  const loadingResult: PrescriptionResult = {
-    status: 'NEEDS_QUESTIONNAIRE_UPDATE',
-    reasonCodes: ['PRESCRIPTION_SNAPSHOT_LOADING'],
-  };
+  const identity = user?.uid ?? 'signed-out';
   const [resolved, setResolved] = useState<{ identity: string; result: PrescriptionResult }>({
     identity: 'unresolved',
     result: loadingResult,
   });
+  const [generating, setGenerating] = useState(false);
 
-  useEffect(() => {
-    if (!user || !questionnaire) {
-      setResolved({ identity, result: generated });
+  const reload = useCallback(async () => {
+    if (!user) {
+      setResolved({ identity, result: { status: 'NEEDS_QUESTIONNAIRE_UPDATE', reasonCodes: ['AUTHENTICATION_REQUIRED'] } });
       return;
     }
-    let active = true;
-    void (async () => {
-      try {
-        const snapshot = await readPrescriptionSnapshot(user.uid, questionnaire.id);
-        if (!active) return;
-        if (snapshot) {
-          setResolved({ identity, result: { status: 'SUCCESS', plan: snapshot } });
-          logInfo('workout_generation', 'workout_generation_snapshot_loaded', {
-            templateId: snapshot.templateId,
-            engineVersion: snapshot.versions.compositionEngine,
-          });
-          return;
-        }
-        setResolved({ identity, result: generated });
-        if (generated.status === 'SUCCESS') {
-          await persistPrescriptionSnapshot(user.uid, questionnaire.id, generated.plan);
-          logInfo('workout_generation', 'workout_generation_completed', {
-            templateId: generated.plan.templateId,
-            engineVersion: generated.plan.versions.compositionEngine,
-            modifierCount: generated.plan.trace.appliedModifiers.length,
-          });
-        } else {
-          logInfo('workout_generation', 'workout_generation_not_completed', {
-            outcome: generated.status,
-          });
-        }
-      } catch (error) {
-        if (!active) return;
-        setResolved({ identity, result: generated });
-        logWarn('workout_generation', 'workout_generation_snapshot_failed', {
-          outcome: generated.status,
-          error,
-        });
-      }
-    })();
-    return () => { active = false; };
-  }, [generated, identity, questionnaire, user]);
+    setResolved({ identity, result: loadingResult });
+    try {
+      const program = await loadActiveWorkoutProgram(user.uid);
+      setResolved({
+        identity,
+        result: program
+          ? { status: 'SUCCESS', plan: program }
+          : { status: 'NEEDS_QUESTIONNAIRE_UPDATE', reasonCodes: [questionnaire ? 'WORKOUT_PROGRAM_NOT_GENERATED' : 'QUESTIONNAIRE_NOT_LOADED'] },
+      });
+      logInfo('workout_program', 'active_workout_program_loaded', { found: Boolean(program), templateId: program?.templateId });
+    } catch (error) {
+      setResolved({ identity, result: { status: 'INVALID_CONFIGURATION', reasonCodes: ['ACTIVE_WORKOUT_PROGRAM_LOAD_FAILED'] } });
+      logWarn('workout_program', 'active_workout_program_load_failed', { error });
+    }
+  }, [identity, questionnaire, user]);
 
-  return resolved.identity === identity ? resolved.result : loadingResult;
+  useEffect(() => { void reload(); }, [reload]);
+
+  const generate = useCallback(async (): Promise<PrescriptionResult> => {
+    if (!user || !questionnaire) {
+      return { status: 'NEEDS_QUESTIONNAIRE_UPDATE', reasonCodes: ['QUESTIONNAIRE_NOT_LOADED'] };
+    }
+    setGenerating(true);
+    try {
+      const result = await generateAndPersistWorkoutProgram({
+        uid: user.uid,
+        questionnaireId: questionnaire.id,
+        questionnaireVersion: questionnaire.version,
+        answers: questionnaire.answers,
+        source: 'manual_regeneration',
+      });
+      const prescription: PrescriptionResult = result.status === 'SUCCESS'
+        ? { status: 'SUCCESS', plan: result.program }
+        : result;
+      setResolved({ identity, result: prescription });
+      return prescription;
+    } catch (error) {
+      logWarn('workout_program', 'workout_program_generation_failed', { error });
+      const result: PrescriptionResult = { status: 'INVALID_CONFIGURATION', reasonCodes: ['PROGRAM_PERSIST_FAILED'] };
+      setResolved({ identity, result });
+      return result;
+    } finally {
+      setGenerating(false);
+    }
+  }, [identity, questionnaire, user]);
+
+  return {
+    prescription: resolved.identity === identity ? resolved.result : loadingResult,
+    generating,
+    generate,
+    reload,
+  };
 }

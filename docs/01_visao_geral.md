@@ -95,9 +95,8 @@ O sistema trabalha com evolução contínua.
 
 O usuário não reinicia jornadas.
 
-Os treinos são atualizados aproximadamente a cada 60 dias.
-
-A variação exata de dias pode mudar para evitar percepção de ciclo fixo.
+Revisões futuras pertencem ao Progression Engine e não usam 60/90 dias como
+timer único. Meses/~3 meses são apenas referência de ciclo.
 
 A atualização não gera um treino livre novo.
 
@@ -114,16 +113,9 @@ A variação controlada pode:
 
 ## 7. Fases de treino
 
-Cada tipo de treino possui duas fases:
-
-- treino adaptativo
-- treino avançado
-
-O treino adaptativo é destinado a usuários iniciantes.
-
-O treino avançado é destinado aos demais usuários.
-
-Após o treino avançado, futuras atualizações devem variar exercícios e ordem sem criar uma nova fase estrutural.
+Não há templates distintos por fase de experiência. O iniciante recebe um
+modifier temporário nas semanas 1 e 2; intermediário e avançado partem do
+template-base. Evolução posterior é responsabilidade do Progression Engine.
 
 ---
 

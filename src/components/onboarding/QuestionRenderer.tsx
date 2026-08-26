@@ -30,6 +30,8 @@ export type Question =
   | { id: string; kind: 'choice'; options: OptionDef[] }
   | { id: string; kind: 'choice-large'; options: OptionDef[] }
   | { id: string; kind: 'multi'; options: OptionDef[]; maxSelections?: number; exclusiveOption?: string }
+  /** Like 'multi', but must select exactly `count` options to continue (e.g. trainingDays == days). */
+  | { id: string; kind: 'multi-exact'; options: OptionDef[]; count: number }
   | { id: string; kind: 'date'; minAge: number; maxAge: number }
   | { id: string; kind: 'compound-choice'; fields: CompoundChoiceField[] }
   | {
@@ -46,6 +48,7 @@ export type LooseT = (key: string, options?: Record<string, unknown>) => string;
 
 export function canContinueQuestion(q: Question, value: unknown): boolean {
   if (q.kind === 'multi') return Array.isArray(value) && value.length > 0;
+  if (q.kind === 'multi-exact') return Array.isArray(value) && value.length === q.count;
   if (q.kind === 'compound-choice') {
     if (!value || typeof value !== 'object') return false;
     const answers = value as Record<string, unknown>;

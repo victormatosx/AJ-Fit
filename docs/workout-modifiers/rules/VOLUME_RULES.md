@@ -34,91 +34,41 @@ Modificadores podem alterar essa dose, mas devem preservar:
 
 ------------------------------------------------------------------------
 
-## 3. Classificação de componentes
+## 3. Sinal de preservação
 
-Cada exercício/bloco deve receber prioridade contextual:
-
-``` text
-ESSENTIAL
-HIGH_PRIORITY
-ACCESSORY
-OPTIONAL
-```
-
-### `ESSENTIAL`
-
-Componente cuja remoção descaracteriza a sessão ou elimina um padrão
-prioritário.
-
-### `HIGH_PRIORITY`
-
-Importante para a finalidade, mas substituível/reorganizável.
-
-### `ACCESSORY`
-
-Complementa volume, musculatura ou equilíbrio do programa.
-
-### `OPTIONAL`
-
-Primeiro candidato a remoção em restrições de tempo/recuperação.
+Não classificar componentes manualmente. A ordem do template é o sinal
+principal: proteger o primeiro exercício, os primeiros candidatos das muscle
+priorities e preencher pelas posições iniciais. Usar movement pattern existente
+somente como guard quando todos os retidos ficariam iguais.
 
 ------------------------------------------------------------------------
 
 ## 4. Redução de volume
 
-Ordem padrão:
-
-``` text
-1. remover técnicas intensificadoras opcionais
-2. remover redundâncias
-3. reduzir OPTIONAL
-4. reduzir ACCESSORY
-5. reduzir séries de HIGH_PRIORITY quando necessário
-6. alterar ESSENTIAL somente se ainda houver estrutura mínima válida
-```
-
-Nunca reduzir todos os exercícios na mesma proporção sem verificar a
-finalidade.
+Beginner e duration calculam quantidade-alvo e selecionam por esse sinal. Não
+há loop de compressão nem hierarquia de roles.
 
 ------------------------------------------------------------------------
 
 ## 5. Iniciante
 
-`BEGINNER` pode justificar volume inicial menor.
-
-Porém:
+Regra `IMPLEMENTED` sobre a quantidade de exercícios:
 
 ``` text
-BEGINNER != treino mínimo para sempre
+semana 1 → ceil(exerciseCount × 0.50)
+semana 2 → ceil(exerciseCount × 0.70)
+semana 3+ → todos os exercícios
 ```
 
-A lógica deve permitir progressão posterior.
-
-O iniciante não deve receber simultaneamente reduções independentes de
-experiência, tempo e recuperação sem validação do volume final.
+Os itens retidos mantêm a dose. `BEGINNER != treino mínimo para sempre`.
 
 ------------------------------------------------------------------------
 
 ## 6. Sessão curta
 
-A duração não deve produzir:
-
-``` text
--40% TIME
--40% BEGINNER
--30% RECOVERY
-```
-
-como multiplicação cega.
-
-Pipeline:
-
-``` text
-target por experiência
-→ target por recuperação
-→ encaixar dentro da duração
-→ validar mínimo estrutural
-```
+Duration e beginner calculam seus targets sobre a mesma lista-base: 30 mantém
+60%, 45 mantém 80%, Week 1 mantém 50% e Week 2 mantém 70%. O resultado usa o
+menor target aplicável, nunca percentuais sequenciais. Cada target usa `ceil`.
 
 ------------------------------------------------------------------------
 
@@ -138,22 +88,12 @@ Quando não houver red flag:
 
 Preferência não significa adicionar volume automaticamente.
 
-Ordem:
-
-``` text
-1. escolher variante com maior ênfase
-2. trocar acessório equivalente
-3. redistribuir volume
-4. adicionar volume apenas se houver orçamento
-```
-
-`orçamento` depende de:
-
--   duração;
--   recuperação;
--   frequência;
--   família;
--   experiência.
+A regra V1 não calcula exposição semanal. Para cada uma das até duas priorities,
+preservar/antecipar o primeiro exercício relevante e, quando permitido,
+adicionar +1 set nele. Máximo +1 por priority por sessão. Beginner Week 1/2 e
+30 minutos não adicionam sets; 45 só adiciona se não houve redução; 60/90 podem
+adicionar. O candidato precisa ter sets numéricos e já ter passado safety,
+limitations e equipment.
 
 ------------------------------------------------------------------------
 

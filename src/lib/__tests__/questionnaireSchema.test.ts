@@ -4,6 +4,7 @@ import {
   cleanApplicableAnswers,
   normalizeLoadedQuiz,
   questionnaireValidationErrors,
+  trainingDaysValid,
   updateQuizAnswer,
 } from '../questionnaireSchema';
 
@@ -14,6 +15,7 @@ function standardQuiz(overrides: Partial<Quiz> = {}): Quiz {
     goal: 'gain_muscle',
     level: 'intermediate',
     days: 4,
+    trainingDays: ['MON', 'TUE', 'THU', 'FRI'],
     duration: '60',
     place: 'gym',
     limits: [],
@@ -40,6 +42,7 @@ describe('questionnaire schema and branching payload', () => {
       goal: 'body_composition',
       place: 'home',
       days: 3,
+      trainingDays: ['MON', 'WED', 'FRI'],
       equipment: ['dumbbells', 'bands'],
     });
     expect(questionnaireValidationErrors(quiz)).toEqual([]);
@@ -172,5 +175,45 @@ describe('questionnaire schema and branching payload', () => {
       expect.arrayContaining(['exclusive_none_conflict', 'too_many_muscle_priorities']),
     );
     expect(cleanApplicableAnswers({ ...conflicted, place: 'home' }).equipment).toEqual(['dumbbells']);
+  });
+});
+
+describe('trainingDays (Schedule Engine input)', () => {
+  it('requires exactly `days` weekdays for 2-6 days/week — a Schedule-only gate, never blocking prescription', () => {
+    const quiz = standardQuiz({ days: 3, trainingDays: ['MON', 'WED'] });
+    expect(trainingDaysValid(quiz)).toBe(false);
+    expect(questionnaireValidationErrors(quiz)).toEqual([]);
+    expect(trainingDaysValid({ ...quiz, trainingDays: ['MON', 'WED', 'FRI'] })).toBe(true);
+  });
+
+  it('normalizes selection order to canonical chronological order, not click order', () => {
+    const next = updateQuizAnswer(standardQuiz({ days: 3 }), 'trainingDays', ['FRI', 'MON', 'WED']);
+    expect(next.trainingDays).toEqual(['MON', 'WED', 'FRI']);
+  });
+
+  it('dedupes repeated weekdays', () => {
+    const next = updateQuizAnswer(standardQuiz({ days: 2 }), 'trainingDays', ['MON', 'MON', 'TUE']);
+    expect(next.trainingDays).toEqual(['MON', 'TUE']);
+  });
+
+  it('auto-fills all seven weekdays for days === 7 and needs no explicit answer', () => {
+    const quiz = cleanApplicableAnswers(standardQuiz({ days: 7, trainingDays: null }));
+    expect(quiz.trainingDays).toEqual(['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN']);
+    expect(trainingDaysValid(quiz)).toBe(true);
+  });
+
+  it('legacy questionnaires without trainingDays load as null, never an invented preference', () => {
+    const loaded = normalizeLoadedQuiz({ days: 4 });
+    expect(loaded.trainingDays).toBeNull();
+  });
+
+  it('legacy days === 7 questionnaires still auto-fill on load', () => {
+    const loaded = normalizeLoadedQuiz({ days: 7 });
+    expect(loaded.trainingDays).toEqual(['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN']);
+  });
+
+  it('ignores unknown/malformed weekday values on load', () => {
+    const loaded = normalizeLoadedQuiz({ days: 2, trainingDays: ['MON', 'bogus', 'MON'] as unknown as Quiz['trainingDays'] });
+    expect(loaded.trainingDays).toEqual(['MON']);
   });
 });

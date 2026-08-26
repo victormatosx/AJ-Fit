@@ -30,7 +30,42 @@
       "accessibilityConfirmLocked": "Confirm workout start, Premium feature"
     }
   },
+  "progression": {
+    "dismiss": "Got it",
+    "beginnerStage": {
+      "title": "Your workout evolved",
+      "body": "You've completed your adaptation phase. Upcoming workouts already reflect this evolution."
+    },
+    "rotated": {
+      "title": "Your program was renewed",
+      "body": "It's time to renew your training cycle. Upcoming workouts already reflect this update."
+    }
+  },
+  "schedule": {
+    "restDay": {
+      "title": "No workout planned today",
+      "body": "Today isn't one of your training days. You can still start manually whenever you want."
+    },
+    "setupRequired": {
+      "title": "Set up your training days",
+      "body": "Choose which days you usually train so we can organize your schedule."
+    },
+    "missedDecision": {
+      "title": "You missed your last workout",
+      "body": "No problem. How do you want to continue?",
+      "continueSequence": {
+        "title": "Continue sequence",
+        "subtitle": "Do the pending workout now"
+      },
+      "followSchedule": {
+        "title": "Follow schedule",
+        "subtitle": "Skip the missed workout and follow today's"
+      }
+    }
+  },
   "prescription": {
+    "generate": "Generate my workout",
+    "generating": "Generating workout...",
     "requiresClearance": {
       "title": "More information is needed",
       "body": "We identified a condition that needs extra care before your workout can be personalized safely. Follow your responsible professional's guidance and update your answers when no unrepresented restrictions remain."

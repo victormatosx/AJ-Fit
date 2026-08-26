@@ -28,6 +28,7 @@ import {
 } from './src/lib/premiumGate';
 import { PhotoVaultProvider } from './src/state/PhotoVaultContext';
 import { addQuestionnaire } from './src/services/userProfile';
+import { generateAndPersistWorkoutProgram } from './src/services/workoutPrograms';
 import { logAuthError } from './src/services/auth';
 import { configureRevenueCat } from './src/services/revenueCatService';
 import { SplashScreen } from './src/screens/SplashScreen';
@@ -427,7 +428,14 @@ function RootNavigator() {
             if (!user || savingQuestionnaire) return;
             setSavingQuestionnaire(true);
             try {
-              await addQuestionnaire(user.uid, quiz, 1);
+              const questionnaireId = await addQuestionnaire(user.uid, quiz, 1);
+              await generateAndPersistWorkoutProgram({
+                uid: user.uid,
+                questionnaireId,
+                questionnaireVersion: 1,
+                answers: quiz,
+                source: 'onboarding',
+              });
               await refreshProfile();
             } catch (err) {
               logAuthError('quiz:save-questionnaire', err);

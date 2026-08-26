@@ -230,20 +230,16 @@ A lógica do sistema seleciona treinos existentes com base no questionário do u
 
 ### 7.2 Estrutura das fases
 
-Cada tipo de treino possui:
-
-* uma fase adaptativa
-* uma fase avançada
-
-O treino adaptativo é destinado a iniciantes.
-
-O treino avançado é destinado aos demais usuários.
+O contrato atual não possui templates separados por “fase adaptativa” e
+“avançada”. Iniciantes usam o mesmo Txxx com Beginner Adaptation temporário nas
+duas primeiras semanas; intermediários e avançados partem da base normal.
 
 ---
 
 ### 7.3 Atualização de treinos
 
-Os treinos são atualizados aproximadamente a cada 60 dias.
+Atualização/revisão pertence ao futuro Progression Engine. Não há timer fixo de
+60 dias aprovado; calendário deve ser combinado com execução real.
 
 A atualização ocorre através de variação controlada.
 

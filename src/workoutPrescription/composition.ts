@@ -1,22 +1,27 @@
 import { EXERCISES_SEED } from '../data/exercisesSeedData';
-import type { ExerciseSeedInput, MuscleId } from '../types/exercise';
+import type { ExerciseSeedInput, MovementPattern, MuscleId } from '../types/exercise';
+import { equipmentContextFor, isExerciseExecutable } from './equipment';
+import {
+  evaluateDirectLimitationCandidate,
+  resolveExerciseLimitations,
+  type LimitationCatalog,
+  type LimitationCatalogExercise,
+} from './limitationResolver';
+import { adaptationStage, beginnerKeepFactor, durationKeepFactor, isBeginnerExperience, keepCount } from './personalization';
 import type {
+  CompositionDecision,
   CanonicalTemplate,
   ExerciseSubstitutionTrace,
+  FinalWorkoutExercise,
   FinalWorkoutSession,
   QuestionnaireAnswers,
+  SafetyDecision,
+  TemplateEnvironment,
 } from './types';
+import type { LimitationDecisionTrace } from './limitationResolver';
+import type { LimitationRegionId } from '../types/exercise';
 
 const exerciseById = new Map(EXERCISES_SEED.map((exercise) => [exercise.id, exercise]));
-
-const EQUIPMENT_MAP: Record<string, ExerciseSeedInput['equipment']> = {
-  bodyweight: ['bodyweight'],
-  dumbbells: ['dumbbell'],
-  bands: ['resistance_band', 'mini_band'],
-  bench_or_box: ['bench', 'chair', 'step'],
-  barbell: ['barbell', 'ez_bar'],
-  none: ['bodyweight'],
-};
 
 const MUSCLE_FOCUS_MAP: Record<string, MuscleId[]> = {
   chest: ['chest'],
@@ -29,74 +34,192 @@ const MUSCLE_FOCUS_MAP: Record<string, MuscleId[]> = {
   calves: ['calves'],
 };
 
-function availableEquipment(answers: QuestionnaireAnswers): Set<string> {
-  const available = new Set<string>(['bodyweight']);
-  for (const answer of answers.equipment) {
-    for (const item of EQUIPMENT_MAP[answer] ?? []) available.add(item);
-  }
-  return available;
-}
+type ResolvedSlot = {
+  exercise: FinalWorkoutExercise;
+  originalIndex: number;
+  primaryMuscle?: MuscleId;
+  movementPattern?: MovementPattern;
+};
 
-function isExecutable(exercise: ExerciseSeedInput, available: Set<string>): boolean {
-  return exercise.equipment.every((equipment) => available.has(equipment));
-}
+type PriorityCandidate = { priority: string; slotIndex: number };
+
+export type CompositionResult =
+  | { status: 'COMPOSED'; sessions: FinalWorkoutSession[]; substitutions: ExerciseSubstitutionTrace[]; limitationDecisions: LimitationDecisionTrace[]; decisions: CompositionDecision[] }
+  | { status: 'INVALID_CONFIGURATION'; reasonCodes: string[]; substitutions: ExerciseSubstitutionTrace[]; limitationDecisions: LimitationDecisionTrace[]; decisions: CompositionDecision[] }
+  | { status: 'MISSING_EXERCISE'; reasonCodes: string[]; substitutions: ExerciseSubstitutionTrace[]; limitationDecisions: LimitationDecisionTrace[]; decisions: CompositionDecision[] };
 
 function compatibleSubstitute(
-  source: ExerciseSeedInput,
-  available: Set<string>,
-): ExerciseSeedInput | undefined {
+  source: LimitationCatalogExercise,
+  catalog: LimitationCatalog,
+  executable: (exercise: LimitationCatalogExercise) => boolean,
+  limitationRegions: LimitationRegionId[],
+  visitedExerciseIds: ReadonlySet<string>,
+): LimitationCatalogExercise | undefined {
   return source.substitution.similarExerciseIds
-    .map((id) => exerciseById.get(id))
-    .find((candidate): candidate is ExerciseSeedInput => Boolean(
+    .map((id) => catalog.get(id))
+    .find((candidate): candidate is LimitationCatalogExercise => Boolean(
       candidate
       && candidate.status === 'active'
       && candidate.availability.workoutGeneration
       && candidate.availability.substitution
       && candidate.movement.pattern === source.movement.pattern
       && candidate.target.primaryMuscle === source.target.primaryMuscle
-      && isExecutable(candidate, available),
+      && executable(candidate)
+      && (
+        limitationRegions.length === 0
+        || evaluateDirectLimitationCandidate({
+          source,
+          candidateId: candidate.id,
+          regions: limitationRegions,
+          catalog,
+          isExecutable: executable,
+          visitedExerciseIds,
+        }).accepted
+      ),
     ));
 }
 
-function priorityRank(exerciseId: string, priorities: string[]): number {
-  const target = exerciseById.get(exerciseId)?.target.primaryMuscle;
-  if (!target) return priorities.length;
-  const index = priorities.findIndex((priority) => MUSCLE_FOCUS_MAP[priority]?.includes(target));
-  return index < 0 ? priorities.length : index;
+function priorityCandidates(slots: ResolvedSlot[], priorities: string[]): PriorityCandidate[] {
+  const usedSlots = new Set<number>();
+  const result: PriorityCandidate[] = [];
+  for (const priority of priorities) {
+    const muscles = MUSCLE_FOCUS_MAP[priority] ?? [];
+    const slotIndex = slots.findIndex((slot, index) =>
+      !usedSlots.has(index) && slot.primaryMuscle != null && muscles.includes(slot.primaryMuscle),
+    );
+    if (slotIndex >= 0) {
+      usedSlots.add(slotIndex);
+      result.push({ priority, slotIndex });
+    }
+  }
+  return result;
 }
 
-export type CompositionResult =
-  | { status: 'COMPOSED'; sessions: FinalWorkoutSession[]; substitutions: ExerciseSubstitutionTrace[] }
-  | { status: 'INVALID_CONFIGURATION'; reasonCodes: string[]; substitutions: ExerciseSubstitutionTrace[] }
-  | { status: 'MISSING_EXERCISE'; reasonCodes: string[]; substitutions: ExerciseSubstitutionTrace[] };
+function selectSlotIndices(
+  slots: ResolvedSlot[],
+  target: number,
+  candidates: PriorityCandidate[],
+): Set<number> {
+  const selected = new Set<number>();
+  const protectedIndices = new Set<number>();
+  if (target > 0 && slots.length > 0) {
+    selected.add(0);
+    protectedIndices.add(0);
+  }
+  for (const candidate of candidates) {
+    if (selected.size >= target) break;
+    selected.add(candidate.slotIndex);
+    protectedIndices.add(candidate.slotIndex);
+  }
+  for (let index = 0; index < slots.length && selected.size < target; index += 1) {
+    selected.add(index);
+  }
+
+  if (selected.size >= 2) {
+    const selectedPatterns = new Set([...selected].map((index) => slots[index].movementPattern).filter(Boolean));
+    const allPatterns = new Set(slots.map((slot) => slot.movementPattern).filter(Boolean));
+    if (selectedPatterns.size === 1 && allPatterns.size > 1) {
+      const retainedPattern = [...selectedPatterns][0];
+      const replacement = slots.findIndex((slot, index) =>
+        !selected.has(index) && slot.movementPattern != null && slot.movementPattern !== retainedPattern,
+      );
+      const replaceable = [...selected]
+        .sort((left, right) => right - left)
+        .find((index) => !protectedIndices.has(index));
+      if (replacement >= 0 && replaceable != null) {
+        selected.delete(replaceable);
+        selected.add(replacement);
+      }
+    }
+  }
+  return selected;
+}
+
+function orderedSlotIndices(selected: Set<number>, candidates: PriorityCandidate[]): number[] {
+  const result: number[] = [];
+  const append = (index: number) => {
+    if (selected.has(index) && !result.includes(index)) result.push(index);
+  };
+  append(0);
+  for (const candidate of candidates) append(candidate.slotIndex);
+  for (const index of [...selected].sort((left, right) => left - right)) append(index);
+  return result;
+}
 
 export function composeTemplate(
   template: CanonicalTemplate,
   answers: QuestionnaireAnswers,
+  options: {
+    adaptationWeek?: number;
+    safety: SafetyDecision;
+    environment?: TemplateEnvironment;
+    limitationRegions?: LimitationRegionId[];
+    exerciseCatalog?: readonly LimitationCatalogExercise[];
+  },
 ): CompositionResult {
   const substitutions: ExerciseSubstitutionTrace[] = [];
+  const limitationDecisions: LimitationDecisionTrace[] = [];
+  const decisions: CompositionDecision[] = [];
   const missing: string[] = [];
   const unresolved: string[] = [];
-  const applyInventory = template.profile.environment === 'home';
-  const available = availableEquipment(answers);
+  const environment = options.environment ?? template.profile.environment;
+  const equipment = equipmentContextFor(answers, environment);
+  const applyInventory = environment === 'home';
+  const catalog = new Map<string, LimitationCatalogExercise>(
+    (options.exerciseCatalog ?? EXERCISES_SEED).map((exercise) => [exercise.id, exercise]),
+  );
+  const limitationRegions = options.limitationRegions ?? [];
+  const executable = (exercise: LimitationCatalogExercise) => isExerciseExecutable(exercise, equipment);
   const priorities = answers.muscleFocus.filter((value) => value !== 'none').slice(0, 2);
+  const beginner = isBeginnerExperience(answers);
+  const stage = adaptationStage(options.adaptationWeek);
+  const beginnerActive = beginner && stage < 3;
 
   const sessions = template.sessions.map((session, sessionIndex): FinalWorkoutSession => {
-    const exercises = session.exercises.map((item) => {
-      const source = exerciseById.get(item.exercise_id);
+    const slots = session.exercises.map((item, originalIndex): ResolvedSlot => {
+      const source = catalog.get(item.exercise_id);
       if (!source) {
         missing.push(item.exercise_id);
         return {
-          exerciseId: item.exercise_id,
-          sourceExerciseId: item.exercise_id,
-          sets: item.sets,
-          reps: item.reps,
-          duration: item.duration,
+          originalIndex,
+          exercise: {
+            exerciseId: item.exercise_id,
+            sourceExerciseId: item.exercise_id,
+            sets: item.sets,
+            reps: item.reps,
+            duration: item.duration,
+            cycles: item.cycles,
+            intensity: item.intensity,
+            notes: item.notes,
+          },
         };
       }
       let selected = source;
-      if (applyInventory && !isExecutable(source, available)) {
-        const replacement = compatibleSubstitute(source, available);
+      const visitedExerciseIds = new Set<string>([source.id]);
+      if (limitationRegions.length) {
+        const limitation = resolveExerciseLimitations({
+          exerciseId: source.id,
+          regions: limitationRegions,
+          catalog,
+          isExecutable: executable,
+          visitedExerciseIds,
+        });
+        if (limitation.status === 'FAILED') {
+          unresolved.push(...limitation.reasonCodes.map((code) => `${code}:${source.id}`));
+        } else {
+          selected = limitation.exercise;
+          visitedExerciseIds.add(selected.id);
+          limitationDecisions.push({ sessionIndex, ...limitation.trace });
+        }
+      }
+      if (applyInventory && !executable(selected)) {
+        const replacement = compatibleSubstitute(
+          selected,
+          catalog,
+          executable,
+          limitationRegions,
+          visitedExerciseIds,
+        );
         if (!replacement) unresolved.push(`NO_SAFE_EQUIPMENT_SUBSTITUTE:${source.id}`);
         else {
           selected = replacement;
@@ -109,33 +232,146 @@ export function composeTemplate(
         }
       }
       return {
-        exerciseId: selected.id,
-        sourceExerciseId: source.id,
-        sets: item.sets,
-        reps: item.reps,
-        duration: item.duration,
+        originalIndex,
+        primaryMuscle: selected.target.primaryMuscle,
+        movementPattern: selected.movement.pattern,
+        exercise: {
+          exerciseId: selected.id,
+          sourceExerciseId: source.id,
+          sets: item.sets,
+          reps: item.reps,
+          duration: item.duration,
+          cycles: item.cycles,
+          intensity: item.intensity,
+          notes: item.notes,
+        },
       };
     });
 
-    // Reordering is safe and deterministic; the still-undefined volume
-    // increase is represented separately as RULE_DEFINITION_REQUIRED.
-    const ordered = exercises
-      .map((exercise, index) => ({ exercise, index }))
-      .sort((left, right) =>
-        priorityRank(left.exercise.exerciseId, priorities) - priorityRank(right.exercise.exerciseId, priorities)
-        || left.index - right.index,
-      )
-      .map(({ exercise }) => exercise);
-    return { name: session.name, type: session.type, notes: session.notes, exercises: ordered };
+    const baseCount = slots.length;
+    const durationTarget = keepCount(baseCount, durationKeepFactor(answers.duration));
+    const beginnerTarget = beginnerActive ? keepCount(baseCount, beginnerKeepFactor(stage)) : baseCount;
+    const target = Math.min(baseCount, durationTarget, beginnerTarget);
+    const candidates = priorityCandidates(slots, priorities);
+    const selected = selectSlotIndices(slots, target, candidates);
+
+    if (beginnerTarget < baseCount) {
+      decisions.push({
+        reasonCode: 'BEGINNER_SESSION_REDUCED', sessionIndex,
+        baseExerciseCount: baseCount, targetExerciseCount: beginnerTarget,
+      });
+    }
+    if (durationTarget < baseCount) {
+      decisions.push({
+        reasonCode: 'DURATION_SESSION_REDUCED', sessionIndex,
+        baseExerciseCount: baseCount, targetExerciseCount: durationTarget,
+      });
+    }
+    for (const candidate of candidates) {
+      if (selected.has(candidate.slotIndex) && target < baseCount) {
+        decisions.push({
+          reasonCode: 'MUSCLE_PRIORITY_PRESERVED', sessionIndex,
+          priority: candidate.priority, exerciseId: slots[candidate.slotIndex].exercise.exerciseId,
+        });
+      }
+    }
+
+    let fallbackUsed = false;
+    if (
+      (answers.duration === '30' || answers.duration === '45')
+      && durationTarget === baseCount
+      && !beginnerActive
+      && options.safety.status === 'CLEAR'
+    ) {
+      const fallbackIndex = [...selected]
+        .sort((left, right) => right - left)
+        .find((index) => (slots[index].exercise.sets ?? 0) > 1);
+      if (fallbackIndex != null) {
+        const exercise = slots[fallbackIndex].exercise;
+        const beforeSets = exercise.sets as number;
+        slots[fallbackIndex] = {
+          ...slots[fallbackIndex],
+          exercise: { ...exercise, sets: beforeSets - 1 },
+        };
+        fallbackUsed = true;
+        decisions.push({
+          reasonCode: 'DURATION_SET_FALLBACK', sessionIndex,
+          exerciseId: exercise.exerciseId, beforeSets, afterSets: beforeSets - 1,
+        });
+      }
+    }
+
+    const canonicalSelected = [...selected].sort((left, right) => left - right);
+    const orderedIndices = orderedSlotIndices(selected, candidates);
+    for (const candidate of candidates) {
+      if (
+        selected.has(candidate.slotIndex)
+        && canonicalSelected.indexOf(candidate.slotIndex) !== orderedIndices.indexOf(candidate.slotIndex)
+      ) {
+        decisions.push({
+          reasonCode: 'MUSCLE_PRIORITY_REORDERED', sessionIndex,
+          priority: candidate.priority, exerciseId: slots[candidate.slotIndex].exercise.exerciseId,
+        });
+      }
+    }
+
+    const extraAppliedTo = new Set<number>();
+    for (const candidate of candidates) {
+      if (!selected.has(candidate.slotIndex) || extraAppliedTo.has(candidate.slotIndex)) continue;
+      const slot = slots[candidate.slotIndex];
+      if (beginnerActive) {
+        decisions.push({
+          reasonCode: 'PRIORITY_SET_SKIPPED_BEGINNER', sessionIndex,
+          priority: candidate.priority, exerciseId: slot.exercise.exerciseId,
+        });
+        continue;
+      }
+      if (
+        answers.duration === '30'
+        || (answers.duration === '45' && (durationTarget < baseCount || fallbackUsed))
+      ) {
+        decisions.push({
+          reasonCode: 'PRIORITY_SET_SKIPPED_DURATION', sessionIndex,
+          priority: candidate.priority, exerciseId: slot.exercise.exerciseId,
+        });
+        continue;
+      }
+      if (options.safety.status !== 'CLEAR') {
+        decisions.push({
+          reasonCode: 'PRIORITY_SET_SKIPPED_SAFETY', sessionIndex,
+          priority: candidate.priority, exerciseId: slot.exercise.exerciseId,
+        });
+        continue;
+      }
+      if (slot.exercise.sets == null) continue;
+      const beforeSets = slot.exercise.sets;
+      slots[candidate.slotIndex] = {
+        ...slot,
+        exercise: { ...slot.exercise, sets: beforeSets + 1 },
+      };
+      extraAppliedTo.add(candidate.slotIndex);
+      decisions.push({
+        reasonCode: 'MUSCLE_PRIORITY_SET_ADDED', sessionIndex,
+        priority: candidate.priority, exerciseId: slot.exercise.exerciseId,
+        beforeSets, afterSets: beforeSets + 1,
+      });
+    }
+
+    return {
+      name: session.name,
+      type: session.type,
+      notes: session.notes,
+      exercises: orderedIndices.map((index) => slots[index].exercise),
+    };
   });
 
   if (missing.length) {
-    return { status: 'MISSING_EXERCISE', reasonCodes: [...new Set(missing)].sort(), substitutions };
+    return { status: 'MISSING_EXERCISE', reasonCodes: [...new Set(missing)].sort(), substitutions, limitationDecisions, decisions };
   }
   if (unresolved.length) {
-    return { status: 'INVALID_CONFIGURATION', reasonCodes: [...new Set(unresolved)].sort(), substitutions };
+    return { status: 'INVALID_CONFIGURATION', reasonCodes: [...new Set(unresolved)].sort(), substitutions, limitationDecisions, decisions };
   }
-  return { status: 'COMPOSED', sessions, substitutions };
+  return { status: 'COMPOSED', sessions, substitutions, limitationDecisions, decisions };
 }
 
 export function exerciseExists(exerciseId: string): boolean {

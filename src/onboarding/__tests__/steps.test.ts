@@ -14,10 +14,10 @@ import {
 } from '../steps';
 
 describe('ONBOARDING_STEPS', () => {
-  it('has 41 unique step ids', () => {
+  it('has 42 unique step ids', () => {
     const ids = ONBOARDING_STEPS.map((s) => s.id);
-    expect(ids).toHaveLength(41);
-    expect(new Set(ids).size).toBe(41);
+    expect(ids).toHaveLength(42);
+    expect(new Set(ids).size).toBe(42);
   });
 
   it('never lets auth/paywall be dev-jumpable', () => {
@@ -213,6 +213,22 @@ describe('conditional questionnaire branches', () => {
     for (const id of ['limits', 'limitationImpact', 'lipedemaScreening'] as const) {
       expect(seq.filter((stepId) => stepId === id)).toHaveLength(1);
     }
+  });
+});
+
+describe('trainingDays applicability', () => {
+  const base = { place: 'gym', limits: [] as string[], specialConditions: ['none'] as string[] };
+
+  it.each([2, 3, 4, 5, 6] as const)('is asked for %i days/week', (days) => {
+    expect(getStepSequence('anonymous', { ...base, days })).toContain('trainingDays');
+  });
+
+  it('is skipped for 7 days/week (all days implied)', () => {
+    expect(getStepSequence('anonymous', { ...base, days: 7 })).not.toContain('trainingDays');
+  });
+
+  it('is skipped when days has not been answered yet', () => {
+    expect(getStepSequence('anonymous', { ...base, days: null })).not.toContain('trainingDays');
   });
 });
 

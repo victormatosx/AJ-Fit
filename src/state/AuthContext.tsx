@@ -46,6 +46,7 @@ import {
   type QuestionnaireResolution,
 } from '../lib/profileLoadState';
 import { createSingleFlight } from '../lib/singleFlight';
+import { generateAndPersistWorkoutProgram } from '../services/workoutPrograms';
 
 type AuthCtx = {
   /** Current authenticated user (Firebase Auth), or null when signed out. */
@@ -305,7 +306,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             .then(() => null)
             .catch((error: unknown) => error);
           try {
-            await provisionNewUser(newUser, { name, answers });
+            const questionnaireId = await provisionNewUser(newUser, { name, answers });
+            if (questionnaireId && answers) {
+              try {
+                const generation = await generateAndPersistWorkoutProgram({
+                  uid: newUser.uid,
+                  questionnaireId,
+                  questionnaireVersion: 1,
+                  answers,
+                  source: 'onboarding',
+                });
+                logInfo('workout_program', 'initial_workout_program_generation_completed', {
+                  outcome: generation.status,
+                  templateId: generation.status === 'SUCCESS' ? generation.program.templateId : undefined,
+                });
+              } catch (error) {
+                // Account creation remains durable. The explicit generation
+                // action in the workout entry flow is the idempotent retry.
+                logWarn('workout_program', 'initial_workout_program_generation_failed', { error });
+              }
+            }
             setUser(newUser);
             await loadUserState(newUser.uid); // authoritative post-write load
           } catch (err) {

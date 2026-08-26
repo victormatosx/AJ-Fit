@@ -42,6 +42,12 @@ import {
 } from '../lib/paywallPremiumReturn';
 import { useWorkoutPrescription } from '../workoutPrescription/useWorkoutPrescription';
 import type { PrescriptionResult } from '../workoutPrescription/types';
+import type { WorkoutProgramSnapshot } from '../services/workoutPrograms';
+import { useWorkoutSchedule } from '../scheduleEngine';
+import { MissedSessionDecisionModal } from '../components/schedule/MissedSessionDecisionModal';
+import { useWorkoutExecution } from '../workoutExecution/useWorkoutExecution';
+import { useWorkoutProgression } from '../progressionEngine/useWorkoutProgression';
+import { ProgressionFeedbackModal } from '../components/progression/ProgressionFeedbackModal';
 
 type SupportRoute =
   | { name: 'help' }
@@ -95,7 +101,24 @@ function AppShellContent({
   const { theme } = useTheme();
   const { tab, setTab } = useAppState();
   const { linkedProviders } = useAuth();
-  const prescription = useWorkoutPrescription();
+  const {
+    prescription,
+    generating: generatingWorkout,
+    generate: generateWorkout,
+    reload: reloadPrescription,
+  } = useWorkoutPrescription();
+  // `prescription.plan` is always the full `WorkoutProgramSnapshot` at
+  // runtime here — `useWorkoutPrescription` only ever assigns it from
+  // `loadActiveWorkoutProgram`/`generateAndPersistWorkoutProgram`, which
+  // return the full snapshot, even though the type is widened to
+  // `FinalWorkoutPlan` for the Prescription Engine's own contract.
+  const activeProgram = prescription.status === 'SUCCESS'
+    ? (prescription.plan as WorkoutProgramSnapshot)
+    : null;
+  const schedule = useWorkoutSchedule(activeProgram);
+  const execution = useWorkoutExecution(activeProgram, schedule.config?.timezone);
+  const progression = useWorkoutProgression();
+  const [activeSessionIndex, setActiveSessionIndex] = useState(0);
   const { isPremium } = useSubscription();
   const paywallPremiumReturnState = useRef(INITIAL_PAYWALL_PREMIUM_RETURN_STATE);
   // Single centralized prewarm schedule (docs/23_navegacao_e_lifecycle.md
@@ -176,8 +199,25 @@ function AppShellContent({
   // (see Fase 3 report, "Decisão sobre REGISTER_SET").
   const startWorkout = () => {
     if (prescription.status !== 'SUCCESS') return;
+    // Schedule Engine decides WHICH session — never Selection/Composition
+    // (docs/workout-lifecycle/03_SCHEDULE_ENGINE.md §7). A legacy/unset
+    // schedule (SCHEDULE_SETUP_REQUIRED) or any other non-ready status falls
+    // back to session 0 rather than blocking a Premium user from training.
+    const sessionIndex = schedule.resolution.status === 'SESSION_READY' ? schedule.resolution.sessionIndex : 0;
+    setActiveSessionIndex(sessionIndex);
     setShowWorkoutConfirmation(false);
     setTab('workout');
+    // Only a resolved SESSION_READY gets a persisted Execution — REST_DAY,
+    // SCHEDULE_SETUP_REQUIRED, PROGRAM_NOT_AVAILABLE and a pending miss
+    // decision must never create one (docs/workout-lifecycle/
+    // 09_WORKOUT_EXECUTION_AND_HISTORY.md §71-74). The Workout tab can still
+    // open in those cases (preserving the existing non-blocking UX above),
+    // just without a backing Execution record. Idempotent otherwise — a
+    // double tap or a cold-start reopen resumes the same execution instead
+    // of creating a duplicate (docs §22-25).
+    if (schedule.resolution.status === 'SESSION_READY') {
+      void execution.start(sessionIndex);
+    }
   };
 
   return (
@@ -203,13 +243,39 @@ function AppShellContent({
         <PersistentScreen active={tab === 'home'} activeStyle={FULL_BLEED.tab} inactiveMode="materialized">
           <HomeScreen
             prescription={prescription}
+            scheduleResolution={schedule.resolution}
             onStart={() => setShowWorkoutConfirmation(true)}
             onOpenConsistency={() => setShowCal(true)}
             onOpenProfile={() => setTab('profile')}
           />
         </PersistentScreen>
         {tab === 'workout' && prescription.status === 'SUCCESS' && (
-          <WorkoutScreen plan={prescription.plan} onDone={() => setTab('home')} />
+          <WorkoutScreen
+            plan={prescription.plan}
+            sessionIndex={activeSessionIndex}
+            onDone={() => setTab('home')}
+            onAbandon={() => { void execution.abandon(); }}
+            onSetLogged={(exerciseIndex, setIndex, weightKg) => {
+              void execution.recordSet(exerciseIndex, setIndex, weightKg);
+            }}
+            onSessionCompleted={() => {
+              // Execution finishes first (COMPLETED/PARTIALLY_COMPLETED),
+              // then the Schedule Engine advances via its own existing,
+              // already-idempotent completion mechanism — no parallel
+              // "advance the rotation" logic here (docs §40). Progression is
+              // only ever checked AFTER the session has fully ended — never
+              // while one is IN_PROGRESS (docs/workout-lifecycle/
+              // 04_PROGRESSION_ENGINE.md §23-25).
+              const programId = activeProgram?.programId;
+              void (async () => {
+                await execution.finish();
+                await schedule.completeSession(activeSessionIndex);
+                if (!programId) return;
+                const { applied } = await progression.checkAndApply(programId);
+                if (applied) await reloadPrescription();
+              })();
+            }}
+          />
         )}
         <PersistentScreen
           active={tab === 'progress'}
@@ -257,7 +323,14 @@ function AppShellContent({
         prescription={prescription}
         onCancel={() => setShowWorkoutConfirmation(false)}
         onConfirm={startWorkout}
+        generating={generatingWorkout}
+        onGenerate={() => { void generateWorkout(); }}
       />
+      <MissedSessionDecisionModal
+        visible={tab !== 'workout' && schedule.resolution.status === 'MISSED_SESSION_DECISION_REQUIRED'}
+        onChoose={(decision) => { void schedule.resolveMiss(decision); }}
+      />
+      <ProgressionFeedbackModal kind={progression.feedback} onDismiss={progression.dismissFeedback} />
       {/*
         Settings, Security, Assessment, EditProfile, Consistency, Support
         (help/success halves) and SubscriptionCenter are the secondary
@@ -462,6 +535,8 @@ function StartWorkoutConfirmation({
   prescription,
   onCancel,
   onConfirm,
+  generating,
+  onGenerate,
 }: {
   visible: boolean;
   prescription: PrescriptionResult;
@@ -470,6 +545,8 @@ function StartWorkoutConfirmation({
    *  when `<PremiumAction>` below has already allowed it. The caller no
    *  longer needs to know START_WORKOUT is a Premium capability at all. */
   onConfirm: () => void;
+  generating: boolean;
+  onGenerate: () => void;
 }) {
   // Product invariant: this confirmation belongs to the same Dark artwork
   // as the Today Workout poster, even when the surrounding app uses Light.
@@ -624,6 +701,35 @@ function StartWorkoutConfirmation({
                 </Pressable>
               )}
             </PremiumAction>}
+            {!canStart && prescription.status === 'NEEDS_QUESTIONNAIRE_UPDATE'
+              && prescription.reasonCodes.includes('WORKOUT_PROGRAM_NOT_GENERATED') && (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t('prescription.generate')}
+                disabled={generating}
+                onPress={onGenerate}
+                style={{
+                  height: 48,
+                  marginTop: 18,
+                  borderRadius: 10,
+                  borderBottomRightRadius: 0,
+                  backgroundColor: theme.colors.inverseSurface,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  opacity: generating ? 0.6 : 1,
+                }}
+              >
+                <Text style={{
+                  color: theme.colors.inverseForeground,
+                  fontFamily: theme.fonts.display,
+                  fontSize: 15,
+                  letterSpacing: 1.4,
+                  textTransform: 'uppercase',
+                }}>
+                  {t(generating ? 'prescription.generating' : 'prescription.generate')}
+                </Text>
+              </Pressable>
+            )}
             <Pressable
               accessibilityRole="button"
               onPress={onCancel}

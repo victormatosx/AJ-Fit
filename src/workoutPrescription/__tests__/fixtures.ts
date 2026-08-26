@@ -1,5 +1,29 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+import { EXERCISES_SEED } from '../../data/exercisesSeedData';
 import { defaultQuiz, type Quiz } from '../../state/AppState';
+import type { LimitationCatalogExercise } from '../limitationResolver';
 import type { CanonicalTemplate } from '../types';
+
+type TechnicalArtifact = {
+  profiles: Array<{ exerciseId: string; limitationProfile: unknown }>;
+};
+
+const technicalArtifact = JSON.parse(readFileSync(join(
+  process.cwd(),
+  'docs/workout-modifiers/exercise-limitations/15_LIMITATION_PROFILES_TECHNICAL_v2.json',
+), 'utf8')) as TechnicalArtifact;
+const limitationProfileById = new Map(
+  technicalArtifact.profiles.map((entry) => [entry.exerciseId, entry.limitationProfile]),
+);
+
+export function realLimitationCatalogFixture(): LimitationCatalogExercise[] {
+  return EXERCISES_SEED.map((exercise) => ({
+    ...exercise,
+    limitationProfile: limitationProfileById.get(exercise.id),
+  }));
+}
 
 export function completeAnswers(overrides: Partial<Quiz> = {}): Quiz {
   return {

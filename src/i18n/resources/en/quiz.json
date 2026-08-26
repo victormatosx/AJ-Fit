@@ -82,6 +82,19 @@
       "6": { "label": "6 days", "short": "6" }, "7": { "label": "7 days", "short": "7" }
     }
   },
+  "trainingDays": {
+    "title": "Which days do you usually train?",
+    "sub": "Pick the days that best fit your routine.",
+    "options": {
+      "MON": "Mon",
+      "TUE": "Tue",
+      "WED": "Wed",
+      "THU": "Thu",
+      "FRI": "Fri",
+      "SAT": "Sat",
+      "SUN": "Sun"
+    }
+  },
   "duration": {
     "title": "How much time do you have per workout?",
     "options": {

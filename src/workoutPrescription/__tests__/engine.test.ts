@@ -1,12 +1,38 @@
 import { describe, expect, it } from 'vitest';
 import { EXERCISES_SEED } from '../../data/exercisesSeedData';
-import { WORKOUT_TEMPLATES } from '../catalog';
+import { getTemplateById, WORKOUT_TEMPLATES } from '../catalog';
 import { generateWorkoutPrescription } from '../engine';
+import { limitationReadinessFailure } from '../generationPolicy';
 import { resolveModifiers } from '../modifiers';
 import { evaluateSafety } from '../safety';
+import { selectTemplate } from '../selection';
 import { completeAnswers } from './fixtures';
 
 describe('prescription pipeline and invariants', () => {
+  it('marks the former DR-006 blanket gate as resolved', () => {
+    expect(limitationReadinessFailure(completeAnswers({
+      specialConditions: ['musculoskeletal_limitation'],
+      limits: ['knee'],
+      limitationImpact: 'mild',
+    }))).toBeNull();
+  });
+
+  it('composes from the explicit runtime template without mutating the canonical fixture', () => {
+    const answers = completeAnswers({ days: 4 });
+    const selected = selectTemplate(answers);
+    expect(selected.status).toBe('SELECTED');
+    if (selected.status !== 'SELECTED') return;
+    const original = getTemplateById(selected.decision.templateId);
+    expect(original).toBeDefined();
+    if (!original) return;
+    const runtime = structuredClone(original);
+    runtime.sessions[0].exercises[0].sets = 99;
+    const generated = generateWorkoutPrescription(answers, { template: runtime });
+    expect(generated.status).toBe('SUCCESS');
+    if (generated.status === 'SUCCESS') expect(generated.plan.sessions[0].exercises[0].sets).toBe(99);
+    expect(original.sessions[0].exercises[0].sets).not.toBe(99);
+  });
+
   it('produces the same versioned snapshot for the same input', () => {
     const answers = completeAnswers();
     const first = generateWorkoutPrescription(answers);
@@ -17,6 +43,10 @@ describe('prescription pipeline and invariants', () => {
       expect(first.plan.templateId).toBe('T003');
       expect(first.plan.planId).toMatch(/^wp_[0-9a-f]{8}$/);
       expect(first.plan.versions.templateLibrary).toBe('1.3.0');
+      expect(first.plan.versions.modifierRules).toBe('2.0.0');
+      expect(first.plan.versions.compositionEngine).toBe('2.0.0');
+      expect(first.plan.versions.limitationResolver).toBe('1.0.0');
+      expect(first.plan.trace.limitationResolverVersion).toBe(1);
     }
   });
 
@@ -40,15 +70,13 @@ describe('prescription pipeline and invariants', () => {
     expect(generateWorkoutPrescription(completeAnswers({ duration: null })).status).toBe('NEEDS_QUESTIONNAIRE_UPDATE');
   });
 
-  it('fails closed at an underdefined modifier rule', () => {
+  it('generates the simplified beginner + 30 minute plan', () => {
     const result = generateWorkoutPrescription(completeAnswers({ level: 'beginner', duration: '30' }));
-    expect(result).toEqual(expect.objectContaining({
-      status: 'INVALID_CONFIGURATION',
-      reasonCodes: expect.arrayContaining([
-        expect.stringContaining('experience:beginner'),
-        expect.stringContaining('duration:30'),
-      ]),
-    }));
+    expect(result.status).toBe('SUCCESS');
+    if (result.status === 'SUCCESS') {
+      expect(result.plan.sessions.map((session) => session.exercises.length)).toEqual([4, 3, 4, 3]);
+      expect(result.plan.trace.unresolvedModifiers).toEqual([]);
+    }
   });
 
   it('resolves all requested modifier domains in deterministic priority order', () => {
@@ -60,7 +88,7 @@ describe('prescription pipeline and invariants', () => {
       'goal:return_to_training', 'experience:advanced', 'duration:30',
       'muscle_priority:glutes', 'muscle_priority:chest',
     ]);
-    expect(modifiers.every((value) => value.application === 'RULE_DEFINITION_REQUIRED')).toBe(true);
+    expect(modifiers.every((value) => value.application !== 'RULE_DEFINITION_REQUIRED')).toBe(true);
   });
 
   it.each([

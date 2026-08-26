@@ -30,7 +30,42 @@
       "accessibilityConfirmLocked": "Confirmar início do treino, recurso Premium"
     }
   },
+  "progression": {
+    "dismiss": "Entendi",
+    "beginnerStage": {
+      "title": "Seu treino evoluiu",
+      "body": "Você concluiu sua fase de adaptação. Os próximos treinos já refletem essa evolução."
+    },
+    "rotated": {
+      "title": "Seu programa foi renovado",
+      "body": "Chegou a hora de renovar seu ciclo de treino. Os próximos treinos já refletem essa atualização."
+    }
+  },
+  "schedule": {
+    "restDay": {
+      "title": "Sem treino planejado hoje",
+      "body": "Hoje não é um dos seus dias de treino. Você ainda pode iniciar manualmente quando quiser."
+    },
+    "setupRequired": {
+      "title": "Configure seus dias de treino",
+      "body": "Escolha quais dias você costuma treinar para organizarmos sua agenda."
+    },
+    "missedDecision": {
+      "title": "Você perdeu seu último treino",
+      "body": "Sem problema. Como você quer continuar?",
+      "continueSequence": {
+        "title": "Continuar sequência",
+        "subtitle": "Fazer agora o treino que ficou pendente"
+      },
+      "followSchedule": {
+        "title": "Seguir planejamento",
+        "subtitle": "Pular o treino perdido e seguir o de hoje"
+      }
+    }
+  },
   "prescription": {
+    "generate": "Gerar meu treino",
+    "generating": "Gerando treino...",
     "requiresClearance": {
       "title": "Precisamos de mais informações",
       "body": "Identificamos uma condição que exige mais cuidado antes de personalizar seu treino com segurança. Siga a orientação do profissional responsável e atualize suas respostas quando não houver restrições que o app não consiga representar."

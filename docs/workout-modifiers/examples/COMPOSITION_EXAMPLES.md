@@ -42,8 +42,9 @@ MOD-TIME-002
 
 1.  preservar Push/Pull/Legs;
 2.  simplificar variantes quando necessário;
-3.  usar volume inicial compatível com iniciante;
-4.  remover acessórios redundantes se a sessão exceder 45 min;
+3.  manter 50% dos exercícios na Week 1 ou 70% na Week 2; na Week 3+
+    manter todos;
+4.  em 45 min, manter 80% da lista pela regra de ordem/priority;
 5.  não transformar PPL em circuito.
 
 ## Resultado esperado
@@ -78,16 +79,8 @@ A família já possui ênfase padrão em glúteos/inferiores.
 
 ## Regra
 
-Não adicionar volume automaticamente.
-
-Ordem:
-
-``` text
-verificar ênfase já existente
-→ escolher variantes mais alinhadas
-→ redistribuir acessório se necessário
-→ adicionar volume somente se houver orçamento
-```
+Preservar/antecipar o primeiro candidato de glúteos. Fora de beginner/30, ele
+pode receber +1 set; não recalcular o programa inteiro.
 
 ## Resultado
 
@@ -258,10 +251,10 @@ equipment removes 2 exercises
 
 ``` text
 1. adaptar exercícios ao equipamento
-2. definir target de complexidade/volume para iniciante
-3. classificar ESSENTIAL/HIGH/ACCESSORY/OPTIONAL
-4. encaixar estrutura mínima em 30 min
-5. validar cobertura
+2. calcular o signal de priority
+3. manter 60%/80% dos exercícios para duration quando aplicável
+4. calcular 50%/70% também sobre a base e usar o menor target
+5. validar safety, existência e diversidade mínima
 ```
 
 ------------------------------------------------------------------------
@@ -284,8 +277,8 @@ PREGNANCY_SAFETY_GATE
 → experience
 ```
 
-Experiência avançada pode preservar maior familiaridade e capacidade
-dentro do envelope permitido.
+Experiência avançada preserva a dose-base dentro do envelope permitido;
+familiaridade pode orientar execução, mas não cria bônus de dose.
 
 Não remove constraints gestacionais.
 
@@ -359,7 +352,7 @@ Safety
 → preference
 ```
 
-Preferência só redistribui o que for permitido.
+Preferência só preserva/ordena e aplica o +1 permitido pela regra V1.
 
 ------------------------------------------------------------------------
 
@@ -527,8 +520,8 @@ explicit_preference:
 
 A ênfase feminina é default, não obrigação.
 
-O motor pode redistribuir acessórios/volume para uma estrutura mais
-geral, preservando inferiores.
+O motor pode preservar/ordenar a prioridade declarada e aplicar o +1 permitido,
+sem reconstruir a distribuição semanal.
 
 ------------------------------------------------------------------------
 
@@ -550,7 +543,7 @@ volume/duração.
 
 ------------------------------------------------------------------------
 
-# Exemplo 22 --- 75+ minutos
+# Exemplo 22 --- 90 minutos
 
 ## Entrada
 
@@ -593,7 +586,7 @@ O exercício preferido não entra.
 
 ------------------------------------------------------------------------
 
-# Exemplo 24 --- Sessão mínima não cabe
+# Exemplo 24 --- Duração fora do contrato
 
 ## Entrada
 
@@ -602,13 +595,13 @@ base: strength_template
 session_duration: 15
 ```
 
-Se a família não possuir versão válida dentro desse orçamento:
+Como a V1 aceita somente 30/45/60/90, `15` não dispara timing/compressão:
 
 ``` text
-SESSION_TOO_SHORT_FOR_TEMPLATE
+NEEDS_QUESTIONNAIRE_UPDATE
 ```
 
-O motor não deve comprimir descanso e segurança para fingir que cabe.
+O motor não deve estimar minutos nem comprimir descanso para fingir que cabe.
 
 ------------------------------------------------------------------------
 
@@ -762,7 +755,63 @@ O treino final deve:
 
 ------------------------------------------------------------------------
 
-# 31. Critério de sucesso dos exemplos
+# Exemplos consolidados A–E
+
+Estes exemplos tornam explícita a fronteira entre decisão aprovada e execução
+atual.
+
+## A — Iniciante ao longo das semanas
+
+T002 possui sessões com 5, 6 e 7 exercícios. Week 1 mantém 3, 3 e 4; Week 2
+mantém 4, 5 e 5; Week 3+ restaura 5, 6 e 7. Os exercícios preservados mantêm
+sets/reps/duration/cycles originais. Não há RIR. Status:
+`IMPLEMENTED`.
+
+## B — 30 minutos com prioridade muscular
+
+Usuária, hipertrofia, academia, quatro dias, 30 minutos e prioridade em glúteos
+seleciona o Txxx normal. A composição preserva safety e movimentos essenciais,
+protege/antecipa a prioridade e mantém `ceil(n×0,60)` exercícios pela ordem do
+template. Não adiciona set em 30 minutos e não estima tempo real. Status:
+`IMPLEMENTED`; DR-015 está resolvido para V1 pela regra simples.
+
+## C — Uma limitação
+
+Txxx contém Exercise X; para `knee`, X está `avoid` e aponta para Exercise Y. Y
+só substitui X após validação de equipamento, safety e demais constraints, e
+deve ser um `exerciseId` real. O schema está `RESOLVED_SCHEMA`, mas continua
+sem runtime/Firestore; DR-006 está `REVIEW_QUEUE_READY`. `unknown` nunca é
+compatible; `not_applicable` precisa ser explícito em perfil aprovado; sem
+candidato para slot preservado, falha.
+
+## D — Duas limitações
+
+X está `avoid` para `knee` e sugere Y; Y está `avoid` para `back`. Para usuário
+com `knee + back`, Y é inválido. O resolver procura a próxima alternativa que
+satisfaça a interseção ou retorna `NO_SAFE_SUBSTITUTION`. Não inventa treino.
+Status: `FUTURE_DESIGN`.
+
+## E — Agenda e sessão perdida
+
+Com rotação A/B/C e preferência segunda/quarta/sexta, concluir A faz B ser a
+próxima identidade, independentemente do weekday. Se quarta for perdida, o
+produto pergunta se o usuário quer continuar a agenda ou recuperar/deslocar a
+sessão. Não decide silenciosamente. Status: `APPROVED_NOT_IMPLEMENTED`; estados
+em DR-012.
+
+------------------------------------------------------------------------
+
+# 31. Simulações da fase de fechamento
+
+As 14 simulações obrigatórias — T002/T016/T026, 30/45 minutos, uma/duas
+prioridades, limitações simples/múltiplas, HOME e composição
+beginner+priority+30 — estão consolidadas com dados reais em
+`../../workout-lifecycle/08_PRESCRIPTION_CLOSURE_ANALYSIS.md`. Elas não são
+testes runtime e não alteram Txxx.
+
+------------------------------------------------------------------------
+
+# 32. Critério de sucesso dos exemplos
 
 Cada cenário deve futuramente virar teste automatizado contendo:
 
@@ -783,13 +832,30 @@ AND support_required remains protected
 
 ------------------------------------------------------------------------
 
-# 32. O que estes exemplos não fecham
+# 33. Exemplos finais simplificados
 
-Ainda faltam especificações numéricas para:
+| Exemplo | Composição determinística |
+|---|---|
+| A — T002 W1 | 5/6/7 exercícios tornam-se 3/3/4; doses internas preservadas. |
+| B — T002 W2 | 5/6/7 tornam-se 4/5/5. |
+| C — T002 W3 | volta a 5/6/7. |
+| D — return | `return_to_training` usa Txxx normal; não ativa beginner. |
+| E — T004 chest, 60 | preserva/antecipa chest e adiciona no máximo +1 set em candidato elegível. |
+| F — T004 chest+back, 60 | um candidato chest e um back podem receber +1 cada. |
+| G — priority+30 | priority apenas protege/ordena; zero sets extras. |
+| H — beginner+30 | calcula 60% e 50%/70% sobre a base e usa o menor; priority só ajuda a escolher. |
+| I — ciclos | `8-10 ciclos` permanece igual se o exercício for retido. |
 
--   volume mínimo/máximo;
--   RIR/RPE/%1RM;
--   duração real por exercício;
+T016 é o template correto para female hypertrophy 5d gym no exemplo solicitado;
+glutes+quads podem receber até +1 set cada em 60 minutos. T073 preserva Safety e
+estrutura de população especial antes dos modifiers.
+
+# 34. O que estes exemplos não fecham
+
+Itens fora do escopo V1:
+
+-   intensidade/esforço interno;
+-   duração cronometrada por exercício;
 -   progressão;
 -   regressão;
 -   regras clínicas específicas;

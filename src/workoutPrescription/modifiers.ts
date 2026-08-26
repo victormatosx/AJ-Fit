@@ -1,5 +1,6 @@
 import type { QuestionnaireAnswers, ResolvedModifier, SafetyDecision } from './types';
 import { normalizeExperience, normalizeGoal } from './input';
+import { adaptationStage, isBeginnerExperience } from './personalization';
 
 function modifier(
   id: string,
@@ -20,12 +21,21 @@ function modifier(
 export function resolveModifiers(
   answers: QuestionnaireAnswers,
   safety: SafetyDecision,
+  adaptationWeek?: number,
 ): ResolvedModifier[] {
   const result: ResolvedModifier[] = [];
 
   for (const id of safety.requiredModifierIds) {
     if (id.startsWith('population:')) {
       result.push(modifier(id, 'P1', 'APPLIED', 'SPECIAL_POPULATION_BASE_TEMPLATE'));
+    } else if (id === 'safety:musculoskeletal_adaptation' || id === 'safety:musculoskeletal_mild') {
+      result.push(modifier(
+        id,
+        'P0',
+        'APPLIED',
+        'LIMITATION_RESOLVER_V1',
+        safety.protectedConstraints,
+      ));
     } else {
       result.push(modifier(
         id,
@@ -50,15 +60,16 @@ export function resolveModifiers(
   }
 
   const experience = normalizeExperience(answers.level);
-  if (experience === 'intermediate') {
-    result.push(modifier('experience:intermediate', 'P4', 'DECLARATIVE', 'PRESERVE_BASE_DOSE'));
-  } else if (experience) {
+  if (isBeginnerExperience(answers)) {
+    const stage = adaptationStage(adaptationWeek);
     result.push(modifier(
       `experience:${experience}`,
       'P4',
-      'RULE_DEFINITION_REQUIRED',
-      'EXPERIENCE_DOSE_RANGES_NOT_DOCUMENTED',
+      stage < 3 ? 'APPLIED' : 'DECLARATIVE',
+      stage < 3 ? `BEGINNER_WEEK_${stage}_EXERCISE_REDUCTION` : 'BEGINNER_ADAPTATION_COMPLETE',
     ));
+  } else if (experience === 'intermediate' || experience === 'advanced') {
+    result.push(modifier(`experience:${experience}`, 'P4', 'DECLARATIVE', 'PRESERVE_BASE_DOSE'));
   }
 
   const goal = normalizeGoal(answers.goal);
@@ -66,8 +77,8 @@ export function resolveModifiers(
     result.push(modifier(
       'goal:return_to_training',
       'P2',
-      'RULE_DEFINITION_REQUIRED',
-      'RETURN_TO_TRAINING_DOSE_NOT_DOCUMENTED',
+      'DECLARATIVE',
+      'RETURN_TO_TRAINING_PRESERVES_SELECTED_TEMPLATE',
     ));
   } else if (goal === 'lose_fat' || goal === 'body_composition') {
     result.push(modifier(`goal:${goal}`, 'P6', 'DECLARATIVE', 'PRESERVE_RESISTANCE_BASE'));
@@ -78,22 +89,22 @@ export function resolveModifiers(
     result.push(modifier(
       `muscle_priority:${priority}`,
       'P7',
-      'RULE_DEFINITION_REQUIRED',
-      'MUSCLE_PRIORITY_VOLUME_LIMITS_NOT_DOCUMENTED',
+      'APPLIED',
+      'SIMPLE_PRIORITY_PRESERVE_ORDER_AND_OPTIONAL_SET',
     ));
   }
 
-  if (answers.duration === '60') {
-    result.push(modifier('duration:60', 'P5', 'DECLARATIVE', 'PRESERVE_BASE_SESSION'));
-  } else if (answers.duration === '90') {
-    result.push(modifier('duration:90', 'P5', 'DECLARATIVE', 'AVAILABLE_TIME_DOES_NOT_FORCE_VOLUME'));
-  } else if (answers.duration) {
+  if (answers.duration === '30' || answers.duration === '45') {
     result.push(modifier(
       `duration:${answers.duration}`,
       'P5',
-      'RULE_DEFINITION_REQUIRED',
-      'SESSION_TIME_ESTIMATION_AND_MINIMUM_VIABLE_SESSION_NOT_DOCUMENTED',
+      'APPLIED',
+      'APPROXIMATE_EXERCISE_COUNT_REDUCTION',
     ));
+  } else if (answers.duration === '60') {
+    result.push(modifier('duration:60', 'P5', 'DECLARATIVE', 'PRESERVE_BASE_SESSION'));
+  } else if (answers.duration === '90') {
+    result.push(modifier('duration:90', 'P5', 'DECLARATIVE', 'AVAILABLE_TIME_DOES_NOT_FORCE_VOLUME'));
   }
 
   // Stable priority ordering is part of the engine contract. Modern JS sort

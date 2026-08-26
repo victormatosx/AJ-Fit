@@ -13,6 +13,11 @@ uma decisão determinística de prescrição. As fontes canônicas são:
 O JSON v1.3.0 permanece imutável. Nenhum T091+, template duplicado ou exercício
 novo foi criado.
 
+Este documento distingue `IMPLEMENTED`, `APPROVED_NOT_IMPLEMENTED`,
+`FUTURE_DESIGN` e `DECISION_REQUIRED` conforme
+`workout-lifecycle/00_README.md`. Prescrição, agenda e progressão são motores
+separados; este arquivo descreve somente a prescrição atual e suas lacunas.
+
 ## 2. Fronteira de integração
 
 Antes desta entrega, `AuthContext` carregava o último questionário, mas o plano
@@ -129,15 +134,17 @@ Uma regra posterior nunca enfraquece uma anterior.
 |---|---:|---|
 | população pregnancy/postpartum/frailty | P1 | aplicado pela base especial |
 | inventário home | P3 | aplicado com catálogo e grafo real de similares |
-| experience intermediate | P4 | preserva dose base |
+| experience intermediate | P4 | `IMPLEMENTED`: preserva dose base |
+| experience advanced | P4 | `IMPLEMENTED`: preserva dose base |
+| experience beginner/never | P4 | `IMPLEMENTED`: manter 50%/70%/100% dos exercícios; dose dos retidos permanece base |
 | duration 60 | P5 | preserva sessão base |
 | duration 90 | P5 | não preenche tempo artificialmente |
 | lose_fat/body_composition | P6 | preserva musculação base; sem circuito/nutrição inventados |
-| muscle priority | P7 | reordenação determinística é possível, mas o aumento de volume permanece bloqueado por falta de limites |
-| beginner/never/advanced | P4 | `RULE_DEFINITION_REQUIRED` |
-| return_to_training | P2 | `RULE_DEFINITION_REQUIRED` |
-| duration 30/45 | P5 | `RULE_DEFINITION_REQUIRED` |
-| safety clínico adaptado | P0 | `RULE_DEFINITION_REQUIRED` quando não existe transformação executável validada |
+| muscle priority | P7 | `IMPLEMENTED`: preservar/ordenar e até +1 set por priority/sessão |
+| return_to_training | P2 | `IMPLEMENTED`: preserva template e não ativa beginner por si só |
+| duration 30/45 | P5 | `IMPLEMENTED`: manter `ceil(n×0,60)`/`ceil(n×0,80)` exercícios |
+| limitação musculoesquelética mild/requires_adaptation | P0 | `IMPLEMENTED`: Limitation Resolver V1, fail-closed |
+| demais safety clínicos adaptados sem transformação estruturada | P0 | `RULE_DEFINITION_REQUIRED` |
 
 Um modifier obrigatório sem regra completa faz o resultado final ser
 `INVALID_CONFIGURATION`. Isso é intencional e implementa `DO NOT IMPROVISE`.
@@ -145,7 +152,7 @@ Um modifier obrigatório sem regra completa faz o resultado final ser
 ## 7. Equipment e exercise resolution
 
 O inventário do questionário é normalizado para os IDs reais de `Exercise`.
-Para uma incompatibilidade:
+Para uma incompatibilidade de equipment:
 
 1. lê o `Exercise` fonte;
 2. percorre `similarExerciseIds` na ordem canônica;
@@ -154,10 +161,14 @@ Para uma incompatibilidade:
 5. exige que todo equipamento do candidato esteja disponível;
 6. seleciona o primeiro candidato válido e registra a troca.
 
-Não há query por exercício. O catálogo local versionado é carregado uma vez.
-As 2.108 referências dos 90 templates resolvem para 71 IDs únicos existentes,
-com zero ausências. Quando o grafo não possui candidato seguro para o inventário
-real, o motor retorna `NO_SAFE_EQUIPMENT_SUBSTITUTE`.
+Não há query por exercício. Sem limitação musculoesquelética, a composição
+continua usando o catálogo local versionado. Com limitação, o serviço carrega
+os 116 documentos de `exercises` em uma única query e entrega o snapshot ao
+resolver puro; candidatos de equipment também precisam ser diretamente válidos
+para todas as regiões declaradas. As 2.108 referências dos 90 templates
+resolvem para 71 IDs únicos existentes, com zero ausências. Quando o grafo não
+possui candidato seguro para o inventário real, o motor retorna
+`NO_SAFE_EQUIPMENT_SUBSTITUTE`.
 
 ## 8. Conflitos
 
@@ -165,18 +176,21 @@ Resoluções são dados estruturados no trace:
 
 - return-to-training vence progressão advanced;
 - safety musculoesquelético restringe muscle priority;
-- 30 minutos obriga prioridade a redistribuir, não adicionar volume;
+- 30 minutos usa priority apenas para preservar/ordenar, sem adicionar volume;
 - beginner vence a tentação de preencher 90 minutos;
 - lipedema + limitação exige interseção de constraints;
 - safety P0 permanece antes de equipment/home e preferências.
 
 Não existe cadeia de mutações destrutivas nem reintrodução de item bloqueado.
+As decisões aprovadas não autorizam circuitos automáticos, compressão cega de
+descanso ou corte dos últimos N itens para caber em 30/45 minutos.
 
 ## 9. Composição e validação final
 
 O template é clonado para um snapshot mínimo de sessões e referências. Dose
-canônica (`sets`, `reps`, `duration`) é preservada. Substituições de equipamento
-e reordenação estável por prioridade são aplicadas antes da validação.
+canônica (`sets`, `reps`, `duration`) é preservada. Resolução de limitações,
+substituições de equipamento e reordenação estável por prioridade são aplicadas
+antes da validação.
 
 A validação verifica:
 
@@ -200,16 +214,23 @@ Versões atuais:
   "templateLibrary": "1.3.0",
   "selectionEngine": "1.0.0",
   "safetyRules": "1.0.0",
-  "modifierRules": "1.0.0",
-  "compositionEngine": "1.0.0"
+  "modifierRules": "2.0.0",
+  "compositionEngine": "2.0.0",
+  "limitationResolver": "1.0.0"
 }
 ```
 
 O `planId` é um hash estável das dimensões da prescrição, modifiers,
-substituições e versões. Não existe aleatoriedade. O trace contém reason codes,
-seleção, safety, modifiers aplicados/não resolvidos, conflitos, substituições e
-resultado da validação. Respostas completas, PII e texto médico livre não são
-logados.
+substituições, decisões de limitações, decisões de composição, estágio beginner
+e versões. Week 3+ normaliza para estágio 3. Não existe aleatoriedade. O trace
+contém reason codes, seleção, safety, modifiers aplicados/não resolvidos,
+conflitos, substituições, `limitationResolverVersion: 1`, decisões de limitações
+e resultado da validação. O snapshot registra a decisão, não copia o profile.
+Respostas completas, PII e texto médico livre não são logados.
+
+`generateWorkoutPrescription(answers, { adaptationWeek })` recebe o estágio de
+lifecycle sem adicioná-lo ao questionário. Para novo beginner, ausência do
+contexto significa Week 1. Usuários não beginner ignoram esse contexto.
 
 Exemplo anonimizado:
 
@@ -263,23 +284,50 @@ os exercícios da primeira sessão do snapshot real. Como o catálogo não cont�
 intervalos numéricos de descanso, o countdown demonstrativo é desativado em vez
 de prescrever 60/90 segundos inventados.
 
-## 13. Decisões ainda requeridas
+## 13. Fronteira de ciclo de vida e decisões abertas
 
-1. Faixas numéricas por experience e return-to-training (volume, intensidade,
-   proximidade da falha, progressão e complexidade).
-2. Modelo de duração: tempo por set, descansos, mínimo viável por família e
-   regra executável para 30/45 minutos.
-3. Mapeamento validado de movimentos/posições para joelho, quadril, coluna,
-   ombro, cotovelo, punho e tornozelo; também estabilidade para tontura,
-   lipedema e pós-cirúrgico adaptado.
-4. Limites de volume e redistribuição de uma ou duas prioridades musculares.
-5. Cobertura do grafo para inventários restritos. Exemplos atuais sem candidato
-   comprovado incluem `cable-rear-delt-fly`, `stationary-bike` e diversos casos
-   bodyweight-only. `other` também precisa de inventário canônico, não um bool.
-6. Critério estruturado de saída do contexto postpartum; tempo isolado continua
-   insuficiente.
-7. Backend/Rules para sincronizar snapshots entre dispositivos, caso o produto
-   não aceite persistência local por usuário.
+O motor de prescrição não implementa progressão, ciclos automáticos nem
+reavaliação pós-parto. Agenda (Schedule Engine) está `IMPLEMENTED_V1` como
+motor separado — ver `workout-lifecycle/03_SCHEDULE_ENGINE.md`; ele consome o
+programa ativo já persistido, sem alterar Selection/Safety/Modifiers/
+Composition. Essas responsabilidades estão documentadas em `workout-lifecycle/`.
 
-Até essas decisões existirem, os casos afetados param exatamente na regra
-ausente e permanecem auditáveis.
+Os estados atuais estão em `workout-lifecycle/07_OPEN_DECISIONS.md`. A
+simplificação V1 substituiu DR-001/002/003/016/021; DR-015 está resolvido pela
+regra aproximada de contagem. DR-023/024/026 foram cancelados e DR-025 deixou de
+bloquear Prescription V1. DR-005/019/022 permanecem resolvidos; DR-004 está
+`RESOLVED_IMPLEMENTED_V1` e DR-006 foi resolvido para o comportamento
+conservador de produto V1, sem alegação de aprovação profissional.
+
+A persistência V1 de templates e programas está implementada conforme
+`workout-lifecycle/05_PERSISTENCE_AND_VERSIONING.md`. Questionários com regiões
+canônicas agora passam pelo Limitation Resolver e só geram plano quando todos
+os slots terminam válidos. Profile ausente/inválido e `other` continuam
+fail-closed. A mudança local correspondente das Rules está testada, mas não foi
+publicada porque o ruleset completo contém alterações pendentes de outros
+fluxos; status `RULESET_DEPLOY_PENDING`.
+
+## 14. Equipamento e limitações: V1 implementada
+
+O Limitation Resolver consome os profiles estruturados no catálogo real,
+intersecta todas as regiões e aplica somente variantes/substitutos por
+`exerciseId`. Candidatos são revalidados diretamente contra profile,
+disponibilidade, purpose e equipment. Substituições não encadeiam: se B falha,
+o resolver tenta o próximo candidato original de A, com proteção de visitados.
+Ausência de profile, profile draft, versão desconhecida ou região ausente falham
+fechado; sem limitação musculoesquelética, a ausência não afeta o usuário. O
+contrato, as matrizes históricas e o relatório de implementação estão em
+`exercise-limitations/`.
+
+## 15. Contrato simplificado V1
+
+O modelo atual está em
+`workout-modifiers/06_NORMALIZED_DOSE_AND_SESSION_MODEL.md`. Beginner e duration
+reduzem a quantidade de exercícios pela ordem do template. Priority funciona
+como sinal de preservação/ordenação e pode adicionar no máximo +1 set por
+priority/sessão fora de beginner/30. Não há RIR, timing engine, `slotRole`,
+budget +20% ou dose normalizada obrigatória. `return_to_training` não ativa
+beginner e 90 minutos não obriga expansão.
+
+A ordem de expansão do catálogo é: exercício original → substituição existente
+validada → criação de exercício somente depois de um gap demonstrado.

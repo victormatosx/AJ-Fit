@@ -79,24 +79,16 @@ O treino deve respeitar:
 
 ## 2.5 Tipos de fase de treino
 
-Cada tipo de treino deve possuir duas fases principais:
-
-* treino adaptativo
-* treino avançado
-
-O treino adaptativo é destinado a usuários iniciantes.
-
-O treino avançado é destinado aos demais usuários.
-
-A definição entre adaptativo e avançado depende da resposta de experiência no questionário.
+Não existem templates separados por nível. Iniciantes recebem Beginner
+Adaptation temporário nas semanas 1 e 2; intermediários e avançados partem da
+base normal. O nível do onboarding não é classificação permanente.
 
 ---
 
 ## 2.6 Atualização periódica de treino
 
-O sistema deve atualizar a estrutura apresentada ao usuário aproximadamente a cada 60 dias.
-
-A variação exata de dias pode ser ajustada para evitar percepção de ciclo fixo.
+O futuro Progression Engine decidirá revisão/troca combinando calendário e
+execução real. Não existe atualização automática aprovada a cada 60 dias.
 
 A atualização não significa geração livre de novo treino.
 
@@ -379,14 +371,9 @@ A variação deve gerar percepção de novidade sem comprometer a lógica do pro
 
 ## 4.9 Regra de fases
 
-Usuários iniciantes devem receber treino adaptativo.
-
-Usuários não iniciantes devem receber treino avançado.
-
-Cada tipo de treino possui apenas:
-
-* uma fase adaptativa
-* uma fase avançada
+Usuários iniciantes recebem o mesmo Txxx com Beginner Adaptation temporário.
+Intermediários e avançados recebem a dose-base na ausência de outras
+constraints. Consulte `workout-lifecycle/02_BEGINNER_ADAPTATION.md`.
 
 ---
 
@@ -555,14 +542,15 @@ Aponte requisitos que precisam de definição adicional antes da implementação
 
 ## 11. Solicitação de novo treino
 
-O usuário pode solicitar um novo treino após 30 dias do início do treino ativo.
+O usuário poderá solicitar revisão/troca conforme critérios futuros do
+Progression Engine; o prazo mínimo não está aprovado (DR-014).
 
 A solicitação pode ocorrer de duas formas:
 
 - utilizando as respostas atuais do questionário
 - refazendo o questionário
 
-O limite é de uma solicitação a cada 30 dias.
+Frequência e limites dessa solicitação também permanecem em DR-014.
 
 O sistema deve apresentar uma tela de geração simulada antes da entrega do novo treino.
 

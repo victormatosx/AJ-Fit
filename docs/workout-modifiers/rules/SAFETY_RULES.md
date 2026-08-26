@@ -285,6 +285,16 @@ o sistema pode adaptar somente quando conhece:
 Se apenas o nome da região estiver disponível, evitar inferência
 excessiva.
 
+O destino arquitetural é metadado por exercício com estados estruturados
+`compatible`, `adapt`, `avoid`, `unknown` e `not_applicable`, resolvido pela
+interseção de todas as constraints. DR-005 está `RESOLVED`: perfil/região
+ausente, perfil draft ou versão desconhecida nunca é compatível.
+`not_applicable` só é ignorado quando explícito em perfil integral aprovado.
+Em `mild + unknown`, tentar alternativa revisada contra todas as constraints e
+preferir `compatible`; `adapt` exige regra executável. Sem alternativa, slot
+preservado retorna `NO_SAFE_SUBSTITUTION`. Uma possível redução posterior por
+duration/beginner não substitui a resolução de safety.
+
 ------------------------------------------------------------------------
 
 ## 13. Coluna

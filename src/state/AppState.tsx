@@ -14,6 +14,9 @@ export type ExperienceLevel = 'never_or_starting' | 'beginner' | 'intermediate' 
 export type LegacyExperienceLevel = 'beg' | 'int' | 'adv' | 'elite';
 export type TrainingEnvironment = 'gym' | 'home' | 'both';
 export type PrimaryTrainingEnvironment = Exclude<TrainingEnvironment, 'both'>;
+/** Canonical chronological order (Monday-first). Persisted values never depend on locale or click order — see questionnaireSchema.ts `normalizeWeekdays`. */
+export const WEEKDAY_ORDER = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'] as const;
+export type Weekday = (typeof WEEKDAY_ORDER)[number];
 export type LimitationImpact =
   | 'mild'
   | 'requires_adaptation'
@@ -92,6 +95,14 @@ export type Quiz = {
   limits: string[];
   duration: '30' | '45' | '60' | '90' | null;
   days: number | null;
+  /**
+   * Schedule Engine input (docs/workout-lifecycle/03_SCHEDULE_ENGINE.md).
+   * `null` means not collected yet (legacy questionnaire, or funnel not
+   * reached this step). For `days === 7` this always holds all seven
+   * `WEEKDAY_ORDER` values; for 2-6 it holds exactly `days` distinct values,
+   * always normalized to canonical chronological order.
+   */
+  trainingDays: Weekday[] | null;
   place: TrainingEnvironment | null;
   /** Required only when `place === 'both'`; always resolves the future base selector to gym/home. */
   primaryPlace: PrimaryTrainingEnvironment | null;
@@ -135,6 +146,7 @@ export const defaultQuiz: Quiz = {
   limits: [],
   duration: null,
   days: null,
+  trainingDays: null,
   place: null,
   primaryPlace: null,
   equipment: [],

@@ -376,7 +376,7 @@ Depois de aplicar modificadores, validar:
 -   existe ao menos uma sessão válida?
 -   frequência está correta?
 -   sessão ficou vazia?
--   duração estimada é compatível?
+-   a redução aproximada de duration foi aplicada corretamente?
 
 ### Movimento
 
@@ -445,11 +445,15 @@ Esta arquitetura deverá ser complementada por:
 -   regras específicas T001--T090;
 -   catálogo completo de exercícios;
 -   tags biomecânicas/funcionais;
--   cálculo de duração;
+-   cronômetro/estimativa de execução, se futuramente útil fora da V1;
 -   progressão;
 -   regressão;
 -   critérios de saída de populações especiais;
 -   testes de composição.
+
+Agenda, progressão, ciclos, reavaliação e histórico em nuvem não pertencem a
+este pipeline. Seus contratos e versões são independentes e estão em
+`../workout-lifecycle/`.
 
 ------------------------------------------------------------------------
 
@@ -466,6 +470,34 @@ medical_restriction  → structured P0 input
 ```
 
 Coleta, persistência e consulta administrativa estão disponíveis. O pipeline
-`QuestionnaireAnswers → Txxx → modifiers → workout` continua fora do runtime;
-nenhuma entrada desta seção altera hoje template, exercício, volume ou
-intensidade.
+`QuestionnaireAnswers → Txxx → modifiers → workout` está no runtime atual, mas
+uma condição `ADAPTED` sem transformação validada permanece fail-closed; ela
+não autoriza alterar exercício, volume ou intensidade por improviso.
+
+## 16. Estado arquitetural consolidado
+
+- `IMPLEMENTED`: seleção T001–T090, safety agregado, resolução pelo catálogo
+  atual, composição/validação, trace e snapshot local.
+- `IMPLEMENTED`: adaptação inicial, advanced na dose-base, regra 30/45 e
+  prioridade muscular simples.
+- `APPROVED_NOT_IMPLEMENTED`: Schedule Engine e Firestore de templates/programas.
+- `IMPLEMENTED_V1`: limitation profile por exercício e Limitation Resolver
+  puro integrado ao Prescription Engine.
+- `FUTURE_DESIGN`: expansão de protocolos clínicos e demais evoluções fora da
+  política conservadora V1.
+- `DECISION_REQUIRED`: itens DR em
+  `../workout-lifecycle/07_OPEN_DECISIONS.md`.
+
+O fechamento quantitativo auditado e seus limites estão em
+`../workout-lifecycle/08_PRESCRIPTION_CLOSURE_ANALYSIS.md`; limitation metadata
+e o inventário dos 116, a matriz dos 71 usados e a fila de 300 pares estão em
+`exercise-limitations/`.
+
+## 17. Ordem executável futura
+
+`Questionnaire → Safety → immutable Txxx → limitations/equipment → priority
+signal → duration → beginner → priority ordering/extra set → validation →
+snapshot`. A ordem do template e metadata muscular/de movimento existentes são
+os únicos sinais estruturais necessários. Não há timing, effort target ou
+`slotRole` na V1. As etapas partem da base/versionamentos para garantir
+idempotência. Detalhes em `06_NORMALIZED_DOSE_AND_SESSION_MODEL.md`.

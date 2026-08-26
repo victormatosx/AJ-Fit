@@ -5,9 +5,12 @@ import { prescriptionInputErrors } from './input';
 import { resolveModifiers } from './modifiers';
 import { evaluateSafety } from './safety';
 import { selectTemplate } from './selection';
+import { adaptationStage, isBeginnerExperience } from './personalization';
+import { LIMITATION_RESOLVER_VERSION, mapQuestionnaireLimitations } from './limitationResolver';
 import {
   PRESCRIPTION_VERSIONS,
   type FinalWorkoutPlan,
+  type PrescriptionGenerationContext,
   type PrescriptionResult,
   type QuestionnaireAnswers,
 } from './types';
@@ -22,7 +25,10 @@ function stableHash(value: string): string {
   return (hash >>> 0).toString(16).padStart(8, '0');
 }
 
-export function generateWorkoutPrescription(answers: QuestionnaireAnswers): PrescriptionResult {
+export function generateWorkoutPrescription(
+  answers: QuestionnaireAnswers,
+  context: PrescriptionGenerationContext = {},
+): PrescriptionResult {
   const inputErrors = prescriptionInputErrors(answers);
   if (inputErrors.length) {
     return { status: 'NEEDS_QUESTIONNAIRE_UPDATE', reasonCodes: inputErrors };
@@ -44,18 +50,39 @@ export function generateWorkoutPrescription(answers: QuestionnaireAnswers): Pres
     return { status: 'REQUIRES_CLEARANCE', reasonCodes: safety.reasons, safety };
   }
 
+  const limitationMapping = mapQuestionnaireLimitations(answers);
+  if (limitationMapping.status === 'UNMAPPED') {
+    return { status: 'INVALID_CONFIGURATION', reasonCodes: limitationMapping.reasonCodes, safety };
+  }
+
   const selection = selectTemplate(answers);
   if (selection.status === 'MISSING_TEMPLATE') {
     return { status: 'MISSING_TEMPLATE', reasonCodes: selection.reasonCodes, safety };
   }
-  const template = getTemplateById(selection.decision.templateId);
+  const template = context.template ?? getTemplateById(selection.decision.templateId);
   if (!template) {
     return { status: 'MISSING_TEMPLATE', reasonCodes: [selection.decision.templateId], safety };
   }
+  if (template.id !== selection.decision.templateId) {
+    return {
+      status: 'INVALID_CONFIGURATION',
+      reasonCodes: [`RUNTIME_TEMPLATE_ID_MISMATCH:${selection.decision.templateId}:${template.id}`],
+      safety,
+    };
+  }
 
-  const modifiers = resolveModifiers(answers, safety);
+  const planAdaptationStage = isBeginnerExperience(answers)
+    ? adaptationStage(context.adaptationWeek)
+    : undefined;
+  const modifiers = resolveModifiers(answers, safety, planAdaptationStage);
   const conflicts = resolveConflicts(answers, modifiers);
-  const composition = composeTemplate(template, answers);
+  const composition = composeTemplate(template, answers, {
+    adaptationWeek: planAdaptationStage,
+    safety,
+    environment: selection.decision.environment,
+    limitationRegions: limitationMapping.regions,
+    exerciseCatalog: context.exerciseCatalog,
+  });
   const partialTrace = {
     selectionReasons: selection.decision.reasons,
     safety,
@@ -67,6 +94,9 @@ export function generateWorkoutPrescription(answers: QuestionnaireAnswers): Pres
       .map((modifier) => modifier.id),
     conflicts,
     substitutions: composition.substitutions,
+    limitationResolverVersion: LIMITATION_RESOLVER_VERSION,
+    limitationDecisions: composition.limitationDecisions,
+    compositionDecisions: composition.decisions,
   };
   if (composition.status !== 'COMPOSED') {
     return {
@@ -98,6 +128,9 @@ export function generateWorkoutPrescription(answers: QuestionnaireAnswers): Pres
     requestedDays: selection.decision.requestedDays,
     modifiers: modifiers.map((modifier) => modifier.id),
     substitutions: composition.substitutions,
+    limitationDecisions: composition.limitationDecisions,
+    compositionDecisions: composition.decisions,
+    adaptationStage: planAdaptationStage,
     versions: PRESCRIPTION_VERSIONS,
   });
   const plan: FinalWorkoutPlan = {
@@ -109,6 +142,7 @@ export function generateWorkoutPrescription(answers: QuestionnaireAnswers): Pres
     environment: selection.decision.environment,
     goalFamily: selection.decision.goalFamily,
     split: template.split,
+    adaptationStage: planAdaptationStage,
     sessions: composition.sessions,
     versions: PRESCRIPTION_VERSIONS,
     trace,

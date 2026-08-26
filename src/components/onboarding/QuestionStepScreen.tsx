@@ -201,6 +201,15 @@ export function QuestionStepScreen({
                   exclusiveOption={question.exclusiveOption}
                 />
               )}
+              {question.kind === 'multi-exact' && (
+                <MultiList
+                  questionId={question.id}
+                  options={question.options}
+                  value={(value as string[]) || []}
+                  onChange={onChange}
+                  maxSelections={question.count}
+                />
+              )}
               {question.kind === 'compound-choice' && (
                 <CompoundChoiceList
                   question={question}

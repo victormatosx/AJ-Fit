@@ -92,6 +92,9 @@ export function OnboardingFunnelScreen({
         options: question.options.filter((option) => option.v !== 'pregnancy' && option.v !== 'postpartum'),
       };
     }
+    if (currentStepId === 'trainingDays' && question.kind === 'multi-exact') {
+      question = { ...question, count: quiz.days ?? question.count };
+    }
     const nextId = getNextStepId(currentStepId, mode, quiz);
     const isLastQuestion = nextId === 'analyzing';
     return (
@@ -164,6 +167,9 @@ export function OnboardingFunnelScreen({
       content = <MethodologyInterstitialScreen progress={progress} onContinue={goNext} />;
       break;
     case 'days':
+      content = renderQuestion();
+      break;
+    case 'trainingDays':
       content = renderQuestion();
       break;
     case 'duration':

@@ -1,5 +1,5 @@
 import type { ConflictResolution, QuestionnaireAnswers, ResolvedModifier } from './types';
-import { normalizeExperience, normalizeGoal } from './input';
+import { normalizeExperience } from './input';
 
 export function resolveConflicts(
   answers: QuestionnaireAnswers,
@@ -10,14 +10,6 @@ export function resolveConflicts(
   const priorities = answers.muscleFocus.filter((value) => value !== 'none');
   const limitations = answers.limits.filter((value) => value !== 'none');
 
-  if (normalizeExperience(answers.level) === 'advanced' && normalizeGoal(answers.goal) === 'return_to_training') {
-    conflicts.push({
-      id: 'return_over_advanced',
-      winnerModifierId: 'goal:return_to_training',
-      constrainedModifierId: 'experience:advanced',
-      reasonCode: 'RECONDITIONING_PRECEDES_AGGRESSIVE_PROGRESSION',
-    });
-  }
   if (priorities.length && limitations.length) {
     for (const priority of priorities) {
       conflicts.push({
@@ -31,10 +23,10 @@ export function resolveConflicts(
   if (answers.duration === '30' && priorities.length) {
     for (const priority of priorities) {
       conflicts.push({
-        id: `duration_budget_with_priority:${priority}`,
+        id: `duration_limits_priority_extra_set:${priority}`,
         winnerModifierId: 'duration:30',
         constrainedModifierId: `muscle_priority:${priority}`,
-        reasonCode: 'PRIORITY_MUST_REDISTRIBUTE_WITHIN_TIME_BUDGET',
+        reasonCode: 'THIRTY_MINUTES_DISALLOWS_PRIORITY_EXTRA_SET',
       });
     }
   }
