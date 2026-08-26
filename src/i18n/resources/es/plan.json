@@ -29,7 +29,8 @@
     "requiresClearance": { "title": "Necesitamos más información", "body": "Identificamos una condición que requiere más cuidado antes de una personalización segura. Sigue la orientación del profesional responsable y actualiza tus respuestas cuando no existan restricciones que la app no pueda representar." },
     "blocked": { "title": "Entrenamiento pausado por seguridad", "body": "Tus respuestas actuales activan una interrupción de seguridad documentada. AJ Fit no prescribe un entrenamiento en este estado." },
     "needsQuestionnaireUpdate": { "title": "Actualiza tu información", "body": "Faltan respuestas necesarias para una selección segura, o tu cuestionario contiene datos antiguos insuficientes." },
-    "unavailable": { "title": "Entrenamiento aún no disponible", "body": "Todavía no se ha definido una regla de composición segura requerida por tus respuestas. No se generó un entrenamiento genérico." }
+    "unavailable": { "title": "Entrenamiento aún no disponible", "body": "Todavía no se ha definido una regla de composición segura requerida por tus respuestas. No se generó un entrenamiento genérico." },
+    "technicalError": { "title": "No pudimos preparar tu entrenamiento", "body": "Algo salió mal al generar tu entrenamiento. Inténtalo de nuevo en unos instantes." }
   },
   "cta": {
     "label": "Quiero empezar",

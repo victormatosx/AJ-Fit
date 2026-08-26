@@ -13,8 +13,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { Icon } from '../components/ui/Icon';
 import { MonoLabel } from '../components/ui/Display';
+import { CtaButton } from '../components/ui/CtaButton';
 import { displayLineHeight } from '../theme/tokens';
 import { useTheme } from '../theme';
+import { useAppState } from '../state/AppState';
+import { logInfo, logWarn } from '../lib/logger';
+import { prepareWorkoutProgramLocally } from '../services/workoutPrograms';
 
 export function AnalyzingScreen({
   name,
@@ -25,6 +29,7 @@ export function AnalyzingScreen({
 }) {
   const { theme } = useTheme();
   const { t } = useTranslation('onboarding');
+  const { quiz, setPreparedWorkoutProgram } = useAppState();
   const [progress, setProgress] = useState(0);
   const steps = [
     t('analyzing.steps.profile'),
@@ -33,6 +38,61 @@ export function AnalyzingScreen({
     t('analyzing.steps.periodization'),
     t('analyzing.steps.plan'),
   ];
+
+  // Phase 3, Part D — the REAL Prescription Engine now runs here (pre-auth,
+  // local sources — `prepareWorkoutProgramLocally`), not just a timed
+  // animation. `attempt` bumps to let the retry button re-run the exact
+  // same computation after a failure (deterministic — see
+  // `prepareWorkoutProgram`'s doc comment — a retry can only ever help if
+  // the previous attempt's cause was a genuine transient anomaly, but it's
+  // a safe, harmless escape hatch either way; the user is never stuck on
+  // a dead screen).
+  const [attempt, setAttempt] = useState(0);
+  const [computeStatus, setComputeStatus] = useState<'pending' | 'success' | 'error'>('pending');
+
+  useEffect(() => {
+    let cancelled = false;
+    const startedAt = Date.now();
+    // Never logs full questionnaire answers — only technical identifiers.
+    logInfo('onboarding', 'onboarding_workout_generation_started', { attempt });
+    prepareWorkoutProgramLocally(quiz)
+      .then((result) => {
+        if (cancelled) return;
+        const durationMs = Date.now() - startedAt;
+        if (result.status === 'SUCCESS') {
+          setPreparedWorkoutProgram(result);
+          logInfo('onboarding', 'onboarding_workout_generation_succeeded', {
+            templateId: result.templateId,
+            planId: result.plan.planId,
+            durationMs,
+            status: result.status,
+          });
+          setComputeStatus('success');
+        } else {
+          setPreparedWorkoutProgram(null);
+          logWarn('onboarding', 'onboarding_workout_generation_failed', {
+            durationMs,
+            status: result.status,
+            reasonCode: result.reasonCodes[0],
+          });
+          setComputeStatus('error');
+        }
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        setPreparedWorkoutProgram(null);
+        logWarn('onboarding', 'onboarding_workout_generation_failed', {
+          durationMs: Date.now() - startedAt,
+          status: 'EXCEPTION',
+          errorClass: error instanceof Error ? error.constructor.name : typeof error,
+        });
+        setComputeStatus('error');
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `quiz` is intentionally captured once per `attempt`, not re-run on every keystroke-level change
+  }, [attempt]);
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -45,14 +105,54 @@ export function AnalyzingScreen({
       });
     }, 52);
     return () => clearInterval(id);
-  }, []);
+  }, [attempt]);
 
   useEffect(() => {
-    if (progress >= 100) {
-      const t = setTimeout(onDone, 700);
-      return () => clearTimeout(t);
+    // Never advances on a timer alone (existing UX minimum) AND never
+    // advances without the real result (Part D's "não avance... enquanto o
+    // resultado obrigatório ainda não estiver pronto"). Whichever finishes
+    // last is what gates `onDone`.
+    if (progress >= 100 && computeStatus === 'success') {
+      const id = setTimeout(onDone, 700);
+      return () => clearTimeout(id);
     }
-  }, [progress]);
+  }, [progress, computeStatus]);
+
+  if (computeStatus === 'error') {
+    return (
+      <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
+        <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
+          <View style={{ flex: 1, paddingHorizontal: 24, justifyContent: 'center', gap: 16 }}>
+            <Text
+              style={{
+                fontFamily: theme.fonts.display,
+                fontSize: 26,
+                lineHeight: displayLineHeight(26),
+                color: theme.colors.textPrimary,
+                textAlign: 'center',
+              }}
+            >
+              {t('analyzing.error.title')}
+            </Text>
+            <Text style={{ fontFamily: theme.fonts.ui, fontSize: 14, color: theme.colors.textMuted, textAlign: 'center' }}>
+              {t('analyzing.error.body')}
+            </Text>
+            <CtaButton
+              onPress={() => {
+                setProgress(0);
+                setComputeStatus('pending');
+                setAttempt((a) => a + 1);
+              }}
+            >
+              <Text style={{ color: theme.colors.primaryForeground, fontFamily: theme.fonts.display, fontSize: 16 }}>
+                {t('analyzing.error.retry')}
+              </Text>
+            </CtaButton>
+          </View>
+        </SafeAreaView>
+      </View>
+    );
+  }
 
   // Active step index: 0..steps.length-1. Clamped so the final step stays
   // "active" until onDone fires (never enters the "done" state itself).

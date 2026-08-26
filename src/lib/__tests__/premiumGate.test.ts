@@ -20,6 +20,11 @@ function resolve(overrides: GateOverrides = {}) {
     // commercial gate. Tests for the brand-new/pending case set this to
     // `false` explicitly (see the "conta nova" describe block below).
     commercialGateResolved: true,
+    // Ready by default — every pre-existing test in this file is about the
+    // auth/questionnaire/subscription/commercial-gate axes, not workout
+    // readiness. See the dedicated `workoutReadinessGate` describe block
+    // below for that axis's own coverage.
+    workoutReadinessGate: 'ready',
     ...overrides,
   });
 }
@@ -258,6 +263,39 @@ describe('resolvePremiumGate', () => {
     });
   });
 
+  describe('workoutReadinessGate — first-app-entry readiness (audit: onboarding→Home lifecycle)', () => {
+    it('F) AppShell is never reached while the gate is still "checking", even with every other prerequisite resolved and Premium active', () => {
+      expect(resolve({ isPremium: true, workoutReadinessGate: 'checking' })).toBeNull();
+      expect(resolve({ isPremium: false, workoutReadinessGate: 'checking' })).toBeNull();
+    });
+
+    it('idle behaves exactly like checking — never a route on its own', () => {
+      expect(resolve({ isPremium: true, workoutReadinessGate: 'idle' })).toBeNull();
+    });
+
+    it('G) once the gate flips to "ready", AppShell opens immediately — same render, no extra wait', () => {
+      expect(resolve({ isPremium: true, workoutReadinessGate: 'ready' })).toBe('app');
+    });
+
+    it('is the LAST prerequisite checked — never overrides questionnaire/subscription/commercial-gate priority', () => {
+      expect(
+        resolve({ questionnaireResolution: 'not_found', workoutReadinessGate: 'checking' }),
+      ).toBe('onboardingFunnel');
+      expect(
+        resolve({ subscriptionLoading: true, workoutReadinessGate: 'checking' }),
+      ).toBeNull();
+      expect(
+        resolve({ commercialGateResolved: false, isPremium: false, workoutReadinessGate: 'checking' }),
+      ).toBe('paywall');
+    });
+
+    it('never blocks an unauthenticated user — routes straight to auth regardless of readiness', () => {
+      expect(
+        resolve({ requestedScreen: 'app', authenticated: false, workoutReadinessGate: 'checking' }),
+      ).toBe('auth');
+    });
+  });
+
   it.each([
     ['cupom válido', { couponCode: 'ARNALDO' }],
     ['iosPromotion', { iosPromotion: { offeringIdentifier: 'promo_7d' } }],
@@ -289,6 +327,7 @@ describe('explainPremiumGateBlockers — diagnostic-only, never drives routing',
       subscriptionConfigured: true,
       isPremium: false,
       commercialGateResolved: true,
+      workoutReadinessGate: 'ready',
       ...overrides,
     });
   }
@@ -328,5 +367,11 @@ describe('explainPremiumGateBlockers — diagnostic-only, never drives routing',
 
   it('is empty for an unauthenticated user (nothing left to block once routed to auth)', () => {
     expect(explain({ authenticated: false })).toEqual([]);
+  });
+
+  it('names workout-readiness-checking/idle so a stuck first-app-entry gate is diagnosable', () => {
+    expect(explain({ workoutReadinessGate: 'checking' })).toEqual(['workout-readiness-checking']);
+    expect(explain({ workoutReadinessGate: 'idle' })).toEqual(['workout-readiness-idle']);
+    expect(explain({ workoutReadinessGate: 'ready' })).toEqual([]);
   });
 });

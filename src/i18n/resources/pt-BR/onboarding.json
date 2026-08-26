@@ -131,7 +131,12 @@
       "progress": "Montagem do plano: {{progress}} por cento"
     },
     "titleWithNameLine1": "Estamos estruturando",
-    "titleWithNameLine2": "sua jornada, {{name}}."
+    "titleWithNameLine2": "sua jornada, {{name}}.",
+    "error": {
+      "title": "Não conseguimos montar seu plano",
+      "body": "Algo deu errado ao calcular seu treino. Você pode tentar novamente.",
+      "retry": "Tentar novamente"
+    }
   },
   "socialProof": {
     "eyebrow": "Prova social",

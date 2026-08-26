@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { useAuth } from '../state/AuthContext';
-import { logWarn } from '../lib/logger';
+import { errorClass, errorCode, logInfo, logWarn } from '../lib/logger';
 import { localDateInTimezone } from '../scheduleEngine/localDate';
 import {
   abandonWorkoutExecution,
@@ -94,12 +94,36 @@ export function useWorkoutExecution(program: WorkoutProgramSnapshot | null, time
 
   const finish = useCallback(async () => {
     if (!uid || !execution) return null;
+    // Diagnostic instrumentation (Phase 2, Part F) — technical fields only
+    // (never questionnaire/personal data), added to trace the exact point a
+    // prior E2E crash was reported at. That crash was later explained by a
+    // separate cause (Schedule stuck in SCHEDULE_SETUP_REQUIRED, fixed in
+    // Phase 1) — this instrumentation is precautionary for the next E2E,
+    // not a fix for a confirmed bug in this function.
+    logInfo('workout_execution', 'execution_finish_started', {
+      programId: execution.programId,
+      executionId: execution.executionId,
+      sessionIndex: execution.sessionIndex,
+    });
     try {
       const result = await finishWorkoutExecution(uid, execution.executionId);
       setExecution((prev) => (prev ? { ...prev, status: result.status, finishedAt: prev.finishedAt } : prev));
+      logInfo('workout_execution', 'execution_finish_succeeded', {
+        programId: execution.programId,
+        executionId: execution.executionId,
+        sessionIndex: execution.sessionIndex,
+        status: result.status,
+      });
       return result.status;
     } catch (error) {
       logWarn('workout_execution', 'finish_failed', { error });
+      logWarn('workout_execution', 'execution_finish_failed', {
+        programId: execution.programId,
+        executionId: execution.executionId,
+        sessionIndex: execution.sessionIndex,
+        errorCode: errorCode(error),
+        errorClass: errorClass(error),
+      });
       return null;
     }
   }, [uid, execution]);

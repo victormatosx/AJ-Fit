@@ -278,7 +278,7 @@ service cloud.firestore {
         && questionnaire.data.version == data.questionnaireVersion
         && workoutProgramLimitationValid(questionnaire, data)
         && data.status in ['active', 'superseded']
-        && data.source in ['onboarding', 'manual_regeneration', 'automatic_progression']
+        && data.source in ['onboarding', 'manual_regeneration', 'automatic_progression', 'automatic_reconciliation']
         && data.requestedDays is int && data.requestedDays >= 2 && data.requestedDays <= 6
         && data.prescribedStructuredDays is int
         && data.prescribedStructuredDays >= 2 && data.prescribedStructuredDays <= 6

@@ -42,12 +42,14 @@ import {
 } from '../lib/paywallPremiumReturn';
 import { useWorkoutPrescription } from '../workoutPrescription/useWorkoutPrescription';
 import type { PrescriptionResult } from '../workoutPrescription/types';
+import { canRetryGeneration, prescriptionOutcomeKey } from '../workoutPrescription/uiOutcome';
 import type { WorkoutProgramSnapshot } from '../services/workoutPrograms';
 import { useWorkoutSchedule } from '../scheduleEngine';
 import { MissedSessionDecisionModal } from '../components/schedule/MissedSessionDecisionModal';
 import { useWorkoutExecution } from '../workoutExecution/useWorkoutExecution';
 import { useWorkoutProgression } from '../progressionEngine/useWorkoutProgression';
 import { ProgressionFeedbackModal } from '../components/progression/ProgressionFeedbackModal';
+import { logInfo } from '../lib/logger';
 
 type SupportRoute =
   | { name: 'help' }
@@ -103,6 +105,7 @@ function AppShellContent({
   const { linkedProviders } = useAuth();
   const {
     prescription,
+    loading: prescriptionLoading,
     generating: generatingWorkout,
     generate: generateWorkout,
     reload: reloadPrescription,
@@ -243,6 +246,8 @@ function AppShellContent({
         <PersistentScreen active={tab === 'home'} activeStyle={FULL_BLEED.tab} inactiveMode="materialized">
           <HomeScreen
             prescription={prescription}
+            loading={prescriptionLoading}
+            generating={generatingWorkout}
             scheduleResolution={schedule.resolution}
             onStart={() => setShowWorkoutConfirmation(true)}
             onOpenConsistency={() => setShowCal(true)}
@@ -267,6 +272,20 @@ function AppShellContent({
               // while one is IN_PROGRESS (docs/workout-lifecycle/
               // 04_PROGRESSION_ENGINE.md §23-25).
               const programId = activeProgram?.programId;
+              // Diagnostic instrumentation (Phase 2, Part F) — a prior E2E
+              // reported a crash on finishing a workout. That report was
+              // later traced to a separate, now-fixed cause (Schedule stuck
+              // in SCHEDULE_SETUP_REQUIRED, so Workout Execution never
+              // actually started — Phase 1). No uncaught-throw path was
+              // found in this chain on audit (`execution.finish`/
+              // `schedule.completeSession` are both already internally
+              // try/caught) — this logs the boundary so the next real E2E
+              // either confirms it's clean or pinpoints exactly where it
+              // isn't.
+              logInfo('workout', 'workout_finish_requested', {
+                programId,
+                sessionIndex: activeSessionIndex,
+              });
               void (async () => {
                 await execution.finish();
                 await schedule.completeSession(activeSessionIndex);
@@ -321,6 +340,7 @@ function AppShellContent({
       <StartWorkoutConfirmation
         visible={showWorkoutConfirmation}
         prescription={prescription}
+        loading={prescriptionLoading}
         onCancel={() => setShowWorkoutConfirmation(false)}
         onConfirm={startWorkout}
         generating={generatingWorkout}
@@ -533,6 +553,7 @@ function AppShellContent({
 function StartWorkoutConfirmation({
   visible,
   prescription,
+  loading,
   onCancel,
   onConfirm,
   generating,
@@ -540,6 +561,8 @@ function StartWorkoutConfirmation({
 }: {
   visible: boolean;
   prescription: PrescriptionResult;
+  /** Same meaning as `useWorkoutPrescription`'s `loading` — see HomeScreen's doc comment. Keeps this modal from ever reading `prescription.status` as a real outcome before the first resolution lands. */
+  loading: boolean;
   onCancel: () => void;
   /** FASE 5: this is the pure "start the session" action — it runs only
    *  when `<PremiumAction>` below has already allowed it. The caller no
@@ -553,13 +576,14 @@ function StartWorkoutConfirmation({
   const theme = darkTheme;
   const { t } = useTranslation('home');
   const canStart = prescription.status === 'SUCCESS';
-  const outcomeKey = prescription.status === 'REQUIRES_CLEARANCE'
-    ? 'requiresClearance'
-    : prescription.status === 'BLOCKED'
-      ? 'blocked'
-      : prescription.status === 'NEEDS_QUESTIONNAIRE_UPDATE'
-        ? 'needsQuestionnaireUpdate'
-        : 'unavailable';
+  const showLoadingState = loading && !canStart;
+  const outcomeKey = showLoadingState
+    ? 'loadingState'
+    : generating
+      ? 'generatingState'
+      : canStart
+        ? 'unavailable' // unused when canStart — title/body below branch on `canStart` first
+        : prescriptionOutcomeKey(prescription.status);
   return (
     <Modal
       visible={visible}
@@ -701,8 +725,17 @@ function StartWorkoutConfirmation({
                 </Pressable>
               )}
             </PremiumAction>}
-            {!canStart && prescription.status === 'NEEDS_QUESTIONNAIRE_UPDATE'
-              && prescription.reasonCodes.includes('WORKOUT_PROGRAM_NOT_GENERATED') && (
+            {/*
+              Fallback only — automatic reconciliation (`useWorkoutPrescription`)
+              already retries on every app open. This button exists for a
+              technical/persistence failure a manual retry might actually fix
+              (`canRetryGeneration`); it never appears for
+              `NEEDS_QUESTIONNAIRE_UPDATE` (retrying with the same answers
+              fails identically — the user must update the questionnaire) or
+              for `BLOCKED`/`REQUIRES_CLEARANCE` (fail-closed; a retry button
+              here would look like a way around a safety stop).
+            */}
+            {!canStart && !generating && !showLoadingState && canRetryGeneration(prescription.status) && (
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={t('prescription.generate')}

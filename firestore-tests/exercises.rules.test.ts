@@ -240,8 +240,8 @@ describe('exercises — admin write (ajfit-admin panel)', () => {
     await assertSucceeds(
       updateDoc(ref, {
         'execution.videos.vertical': {
-          url: 'https://firebasestorage.googleapis.com/example.webm',
-          storagePath: `exercises/${EXERCISE_ID}/execution/vertical.webm`,
+          url: 'https://firebasestorage.googleapis.com/example.mp4',
+          storagePath: `exercises/${EXERCISE_ID}/execution/vertical.mp4`,
         },
         'metadata.updatedAt': serverTimestamp(),
       }),
@@ -249,7 +249,7 @@ describe('exercises — admin write (ajfit-admin panel)', () => {
 
     const after = await getDoc(ref);
     expect(after.get('execution.videos.vertical.storagePath')).toBe(
-      `exercises/${EXERCISE_ID}/execution/vertical.webm`,
+      `exercises/${EXERCISE_ID}/execution/vertical.mp4`,
     );
   });
 

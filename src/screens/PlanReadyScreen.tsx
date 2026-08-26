@@ -12,6 +12,7 @@ import { useTheme } from '../theme';
 import { useAppState } from '../state/AppState';
 import { deriveTrainingDaySlots } from '../lib/planDerivation';
 import { generateWorkoutPrescription } from '../workoutPrescription/engine';
+import { prescriptionOutcomeKey } from '../workoutPrescription/uiOutcome';
 
 const DAY_ORDER = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
 
@@ -39,15 +40,9 @@ export function PlanReadyScreen({
   const days = quiz.days || 4;
   const durationMinutes = quiz.duration ?? '60';
   const prescription = generateWorkoutPrescription(quiz);
-  const prescriptionCopyKey = prescription.status === 'REQUIRES_CLEARANCE'
-    ? 'requiresClearance'
-    : prescription.status === 'BLOCKED'
-      ? 'blocked'
-      : prescription.status === 'NEEDS_QUESTIONNAIRE_UPDATE'
-        ? 'needsQuestionnaireUpdate'
-        : prescription.status === 'SUCCESS'
-          ? 'success'
-          : 'unavailable';
+  const prescriptionCopyKey = prescription.status === 'SUCCESS'
+    ? 'success'
+    : prescriptionOutcomeKey(prescription.status);
 
   const goalLabel = t(`quiz:goal.options.${goalKey}.label` as 'quiz:goal.options.gain_muscle.label');
   const levelLabel = t(`quiz:level.options.${levelKey}.label` as 'quiz:level.options.intermediate.label');

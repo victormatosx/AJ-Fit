@@ -129,29 +129,40 @@ describe('workout — substitution badges per locale', () => {
 });
 
 describe('workout — muscle groups per locale', () => {
-  it.each([
-    ['pt-BR', 'chest', 'Peitoral'],
-    ['en', 'chest', 'Chest'],
-    ['es', 'chest', 'Pecho'],
-    ['pt-BR', 'upperChest', 'Peitoral superior'],
-    ['en', 'upperChest', 'Upper chest'],
-    ['es', 'upperChest', 'Pecho superior'],
-    ['pt-BR', 'shoulders', 'Ombro'],
-    ['en', 'shoulders', 'Shoulder'],
-    ['es', 'shoulders', 'Hombro'],
-    ['pt-BR', 'sideDelt', 'Ombro lateral'],
-    ['en', 'sideDelt', 'Side delt'],
-    ['es', 'sideDelt', 'Deltoides lateral'],
-    ['pt-BR', 'frontDelt', 'Ombro frontal'],
-    ['en', 'frontDelt', 'Front delt'],
-    ['es', 'frontDelt', 'Deltoides anterior'],
-    ['pt-BR', 'triceps', 'Tríceps'],
-    ['en', 'triceps', 'Triceps'],
-    ['es', 'triceps', 'Tríceps'],
-    ['pt-BR', 'tricepsChest', 'Tríceps e peito'],
-    ['en', 'tricepsChest', 'Triceps & chest'],
-    ['es', 'tricepsChest', 'Tríceps y pecho'],
-  ] as Array<[SupportedLanguage, string, string]>)(
+  // `muscleGroups.*` is keyed directly by the canonical `MuscleId`
+  // (`src/types/exercise.ts`) — the same value `workoutExercisesFromPlan`
+  // reads straight off the exercise catalog's `target.primaryMuscle`. Every
+  // `MuscleId` must have an entry here or `translateMuscleGroup` falls back
+  // to the raw id (see `resourceParity.test.ts` for the no-empty-leaf half
+  // of this guarantee; this exercises the actual display text).
+  const MUSCLE_IDS: Array<[string, string, string, string]> = [
+    ['chest', 'Peitoral', 'Chest', 'Pecho'],
+    ['lats', 'Dorsal', 'Lats', 'Dorsales'],
+    ['upper_back', 'Costas superiores', 'Upper back', 'Espalda superior'],
+    ['traps', 'Trapézio', 'Traps', 'Trapecio'],
+    ['lower_back', 'Lombar', 'Lower back', 'Zona lumbar'],
+    ['front_deltoid', 'Ombro frontal', 'Front delt', 'Deltoides anterior'],
+    ['side_deltoid', 'Ombro lateral', 'Side delt', 'Deltoides lateral'],
+    ['rear_deltoid', 'Ombro posterior', 'Rear delt', 'Deltoides posterior'],
+    ['biceps', 'Bíceps', 'Biceps', 'Bíceps'],
+    ['triceps', 'Tríceps', 'Triceps', 'Tríceps'],
+    ['forearms', 'Antebraço', 'Forearms', 'Antebrazo'],
+    ['quads', 'Quadríceps', 'Quads', 'Cuádriceps'],
+    ['hamstrings', 'Posterior de coxa', 'Hamstrings', 'Isquiotibiales'],
+    ['glutes', 'Glúteos', 'Glutes', 'Glúteos'],
+    ['adductors', 'Adutores', 'Adductors', 'Aductores'],
+    ['abductors', 'Abdutores', 'Abductors', 'Abductores'],
+    ['calves', 'Panturrilha', 'Calves', 'Pantorrillas'],
+    ['abs', 'Abdômen', 'Abs', 'Abdomen'],
+  ];
+
+  it.each(
+    MUSCLE_IDS.flatMap(([key, ptBR, en, es]) => [
+      ['pt-BR', key, ptBR],
+      ['en', key, en],
+      ['es', key, es],
+    ]) as Array<[SupportedLanguage, string, string]>,
+  )(
     '[%s] muscleGroups.%s',
     async (lang, key, expected) => {
       const i18n = await freshI18nAt(lang);

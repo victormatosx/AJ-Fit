@@ -32,11 +32,15 @@ const PROJECT_ID = 'ajfit-rules-test';
 const UID = 'alice';
 const ADMIN_UID = 'exercises-admin';
 const EXERCISE_ID = 'barbell-back-squat';
-const VERTICAL_PATH = `exercises/${EXERCISE_ID}/execution/vertical.webm`;
-const HORIZONTAL_PATH = `exercises/${EXERCISE_ID}/execution/horizontal.webm`;
+const VERTICAL_PATH = `exercises/${EXERCISE_ID}/execution/vertical.mp4`;
+const HORIZONTAL_PATH = `exercises/${EXERCISE_ID}/execution/horizontal.mp4`;
 
-const WEBM = 'video/webm';
 const MP4 = 'video/mp4';
+// Only used to prove the wrong-content-type case still fails — the format
+// itself (WebM) is exactly why this Rule was migrated to `.mp4`: iOS's
+// `expo-video`/AVFoundation can't decode WebM at all (see storage.rules'
+// doc comment on this match block).
+const WEBM = 'video/webm';
 
 let testEnv: RulesTestEnvironment;
 let testEnvFirestore: RulesTestEnvironment;
@@ -89,7 +93,7 @@ async function seedRole(uid: string, role: 'user' | 'admin') {
 
 async function seedVideo(path = VERTICAL_PATH) {
   await testEnv.withSecurityRulesDisabled(async (ctx) => {
-    await ctx.storage().ref(path).put(video(), { contentType: WEBM });
+    await ctx.storage().ref(path).put(video(), { contentType: MP4 });
   });
 }
 
@@ -152,12 +156,12 @@ describe('exercise videos storage — read', () => {
 
 describe('exercise videos storage — regular user write', () => {
   it('blocks a regular signed-in user from uploading a video', async () => {
-    await assertFails(put(userStorage(UID), VERTICAL_PATH, video(), { contentType: WEBM }));
+    await assertFails(put(userStorage(UID), VERTICAL_PATH, video(), { contentType: MP4 }));
   });
 
   it('blocks a regular signed-in user from replacing an existing video', async () => {
     await seedVideo();
-    await assertFails(put(userStorage(UID), VERTICAL_PATH, video(2048), { contentType: WEBM }));
+    await assertFails(put(userStorage(UID), VERTICAL_PATH, video(2048), { contentType: MP4 }));
   });
 
   it('blocks a regular signed-in user from deleting a video', async () => {
@@ -166,37 +170,37 @@ describe('exercise videos storage — regular user write', () => {
   });
 
   it('blocks an unauthenticated user from uploading a video', async () => {
-    await assertFails(put(anonStorage(), VERTICAL_PATH, video(), { contentType: WEBM }));
+    await assertFails(put(anonStorage(), VERTICAL_PATH, video(), { contentType: MP4 }));
   });
 });
 
 describe('exercise videos storage — admin write', () => {
-  it('allows an admin to upload a valid vertical .webm', async () => {
-    await assertSucceeds(put(userStorage(ADMIN_UID), VERTICAL_PATH, video(), { contentType: WEBM }));
+  it('allows an admin to upload a valid vertical .mp4', async () => {
+    await assertSucceeds(put(userStorage(ADMIN_UID), VERTICAL_PATH, video(), { contentType: MP4 }));
   });
 
-  it('allows an admin to upload a valid horizontal .webm', async () => {
-    await assertSucceeds(put(userStorage(ADMIN_UID), HORIZONTAL_PATH, video(), { contentType: WEBM }));
+  it('allows an admin to upload a valid horizontal .mp4', async () => {
+    await assertSucceeds(put(userStorage(ADMIN_UID), HORIZONTAL_PATH, video(), { contentType: MP4 }));
   });
 
   it('allows an admin to replace an existing video at the same path', async () => {
     await seedVideo();
-    await assertSucceeds(put(userStorage(ADMIN_UID), VERTICAL_PATH, video(2048), { contentType: WEBM }));
+    await assertSucceeds(put(userStorage(ADMIN_UID), VERTICAL_PATH, video(2048), { contentType: MP4 }));
   });
 
-  it('blocks an admin from uploading a non-webm content type', async () => {
-    await assertFails(put(userStorage(ADMIN_UID), VERTICAL_PATH, video(), { contentType: MP4 }));
+  it('blocks an admin from uploading a non-mp4 content type (e.g. the old .webm — the exact format iOS can\'t play)', async () => {
+    await assertFails(put(userStorage(ADMIN_UID), VERTICAL_PATH, video(), { contentType: WEBM }));
   });
 
   it('blocks an admin from uploading to a file name outside the allowed set', async () => {
     await assertFails(
-      put(userStorage(ADMIN_UID), `exercises/${EXERCISE_ID}/execution/side.webm`, video(), { contentType: WEBM }),
+      put(userStorage(ADMIN_UID), `exercises/${EXERCISE_ID}/execution/side.mp4`, video(), { contentType: MP4 }),
     );
   });
 
   it('blocks an admin from uploading a file over the size ceiling', async () => {
     await assertFails(
-      put(userStorage(ADMIN_UID), VERTICAL_PATH, video(101 * 1024 * 1024), { contentType: WEBM }),
+      put(userStorage(ADMIN_UID), VERTICAL_PATH, video(101 * 1024 * 1024), { contentType: MP4 }),
     );
   });
 

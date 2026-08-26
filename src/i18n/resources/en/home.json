@@ -66,6 +66,14 @@
   "prescription": {
     "generate": "Generate my workout",
     "generating": "Generating workout...",
+    "generatingState": {
+      "title": "Preparing your workout",
+      "body": "This only takes a moment."
+    },
+    "loadingState": {
+      "title": "Loading your workout",
+      "body": "Just a moment."
+    },
     "requiresClearance": {
       "title": "More information is needed",
       "body": "We identified a condition that needs extra care before your workout can be personalized safely. Follow your responsible professional's guidance and update your answers when no unrepresented restrictions remain."
@@ -81,6 +89,10 @@
     "unavailable": {
       "title": "Workout not available yet",
       "body": "A safe composition rule required by your answers has not been defined yet. No generic workout was generated."
+    },
+    "technicalError": {
+      "title": "We couldn't prepare your workout",
+      "body": "Something went wrong generating your workout. Please try again shortly."
     }
   },
   "consistency": {

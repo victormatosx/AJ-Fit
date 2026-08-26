@@ -17,6 +17,8 @@ import { useUnits } from '../state/UnitsContext';
 import { formatWorkoutLoadFromKg, workoutLoadUnit } from '../units/workoutLoadConversions';
 import { useIsScreenActive } from '../state/ScreenActivity';
 import type { PrescriptionResult } from '../workoutPrescription/types';
+import { prescriptionOutcomeKey } from '../workoutPrescription/uiOutcome';
+import { resolveSessionDisplayName, type LooseTranslate } from '../workoutPrescription/sessionPresentation';
 import type { ScheduleResolution } from '../scheduleEngine';
 
 /**
@@ -147,12 +149,26 @@ const TODAY_WORKOUT_THEME = darkTheme;
 
 export function HomeScreen({
   prescription,
+  loading,
+  generating,
   scheduleResolution,
   onStart,
   onOpenConsistency,
   onOpenProfile,
 }: {
   prescription: PrescriptionResult;
+  /**
+   * True until the FIRST resolution of `prescription` for the current
+   * identity lands (`useWorkoutPrescription`'s own `loading`) — while true,
+   * `prescription.status` may still be an internal placeholder and must
+   * never be read. Distinct from `generating`: this covers the ordinary
+   * "we haven't read Firestore yet" window (happy path, no engine running),
+   * so it renders a neutral loading state, never the "generating"/"needs
+   * questionnaire update" copy below.
+   */
+  loading?: boolean;
+  /** True while automatic reconciliation or the manual fallback is generating the first/updated program — shown in place of the outcome copy below, never alongside it. */
+  generating?: boolean;
   /** Schedule Engine's read on "what to train right now" (docs/workout-lifecycle/03_SCHEDULE_ENGINE.md). Optional — omitted callers keep the pre-Schedule-Engine behavior of always showing session 0. */
   scheduleResolution?: ScheduleResolution;
   onStart: () => void;
@@ -173,13 +189,22 @@ export function HomeScreen({
   const localizedFirstName = (
     firstName === 'Atleta' ? t('profile:fallback.athlete') : firstName
   ).toUpperCase();
-  const prescriptionOutcomeKey = prescription.status === 'REQUIRES_CLEARANCE'
-    ? 'requiresClearance'
-    : prescription.status === 'BLOCKED'
-      ? 'blocked'
-      : prescription.status === 'NEEDS_QUESTIONNAIRE_UPDATE'
-        ? 'needsQuestionnaireUpdate'
-        : 'unavailable';
+  // `loading` only forces the neutral loading copy when there's no known
+  // SUCCESS yet — a refresh that already has a valid plan on screen keeps
+  // showing it instead of flashing "loading" over real data. While
+  // `generating`, the card shows the in-flight copy regardless of the last
+  // known `prescription.status` — reconciliation/manual retry are about to
+  // replace it with a real outcome, so the stale one is never shown
+  // mid-attempt (`docs/workout-lifecycle` — distinguishes "generating" from
+  // every terminal outcome, incl. "not generated yet").
+  const showLoadingState = Boolean(loading) && prescription.status !== 'SUCCESS';
+  const outcomeKey = showLoadingState
+    ? 'loadingState'
+    : generating
+      ? 'generatingState'
+      : prescription.status === 'SUCCESS'
+        ? null
+        : prescriptionOutcomeKey(prescription.status);
   const scheduledSessionIndex = scheduleResolution?.status === 'SESSION_READY' ? scheduleResolution.sessionIndex : 0;
   const firstSession = prescription.status === 'SUCCESS'
     ? prescription.plan.sessions[scheduledSessionIndex] ?? prescription.plan.sessions[0]
@@ -272,11 +297,16 @@ export function HomeScreen({
                   color={TODAY_WORKOUT_THEME.colors.textPrimary}
                   style={{ marginTop: 12 }}
                 >
-                  {(scheduleOverrideKey
-                    ? t(`home:schedule.${scheduleOverrideKey}.title`)
-                    : firstSession
-                      ? `${prescription.status === 'SUCCESS' ? prescription.plan.templateId : ''} · ${firstSession.name}`
-                      : t(`home:prescription.${prescriptionOutcomeKey}.title`)).toUpperCase()}
+                  {(showLoadingState
+                    ? t('home:prescription.loadingState.title')
+                    : generating
+                      ? t('home:prescription.generatingState.title')
+                      : scheduleOverrideKey
+                        ? t(`home:schedule.${scheduleOverrideKey}.title`)
+                        : firstSession
+                          ? `${prescription.status === 'SUCCESS' ? prescription.plan.templateId : ''} · ${resolveSessionDisplayName(t as unknown as LooseTranslate, firstSession.name, firstSession.type)}`
+                          : t(`home:prescription.${outcomeKey}.title` as 'home:prescription.unavailable.title')
+                  ).toUpperCase()}
                 </Display>
                 {!scheduleOverrideKey && (
                   <Display size={38} color={TODAY_WORKOUT_THEME.colors.textPrimary}>
@@ -292,14 +322,19 @@ export function HomeScreen({
                       letterSpacing: 1,
                     }}
                   >
-                    {(scheduleOverrideKey
-                      ? t(`home:schedule.${scheduleOverrideKey}.body`)
-                      : prescription.status === 'SUCCESS'
-                        ? t('home:todayCard.prescribedMeta', {
-                            sessions: prescription.plan.prescribedStructuredDays,
-                            exercises: firstSession?.exercises.length ?? 0,
-                          })
-                        : t(`home:prescription.${prescriptionOutcomeKey}.body`)).toUpperCase()}
+                    {(showLoadingState
+                      ? t('home:prescription.loadingState.body')
+                      : generating
+                        ? t('home:prescription.generatingState.body')
+                        : scheduleOverrideKey
+                          ? t(`home:schedule.${scheduleOverrideKey}.body`)
+                          : prescription.status === 'SUCCESS'
+                            ? t('home:todayCard.prescribedMeta', {
+                                sessions: prescription.plan.prescribedStructuredDays,
+                                exercises: firstSession?.exercises.length ?? 0,
+                              })
+                            : t(`home:prescription.${outcomeKey}.body` as 'home:prescription.unavailable.body')
+                    ).toUpperCase()}
                   </Text>
                 </View>
               </View>

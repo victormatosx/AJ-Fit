@@ -6,6 +6,7 @@ import { FUNNEL_QUESTIONS } from '../onboarding/questionDefs';
 import { getNextStepId } from '../onboarding/steps';
 import type { OnboardingAuthContext } from '../onboarding/authContext';
 import { logOnboardingEvent } from '../onboarding/onboardingAnalytics';
+import { logInfo } from '../lib/logger';
 import {
   preloadMethodologyVideo,
   preloadGuidedWorkoutVideo,
@@ -41,6 +42,20 @@ export function OnboardingFunnelScreen({
   const { t } = useTranslation('quiz');
   const funnel = useOnboardingFunnel(mode);
   const { currentStepId, name, setName, quiz, setQuiz, progress, goNext, goBack, canGoBack, jumpTo } = funnel;
+
+  // Diagnostic only — unrelated to any functional behavior. A real E2E
+  // reported this screen flashing for ~2s right after a purchase, with no
+  // corresponding `navigation_gate_evaluated` log entry showing
+  // `resolvedScreen: 'onboardingFunnel'` in that window — meaning the root
+  // cause could not be confirmed from the central gate's own logging alone
+  // (App.tsx). This pins down whether the central gate actually re-resolved
+  // here (mount + `currentStepId`/`mode` would appear in the trace) versus
+  // some other rendering artifact, on the next real occurrence.
+  useEffect(() => {
+    logInfo('navigation', 'onboarding_funnel_mounted', { mode, currentStepId });
+    return () => logInfo('navigation', 'onboarding_funnel_unmounted', { mode });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const setAnswer = (id: typeof currentStepId, value: unknown) => setQuiz(updateQuizAnswer(quiz, id, value));
 

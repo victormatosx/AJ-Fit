@@ -10,8 +10,11 @@ import {
 
 import { db } from '../lib/firebase';
 import { EXERCISES_SEED } from '../data/exercisesSeedData';
+import { getTemplateById, TEMPLATE_LIBRARY_VERSION } from '../workoutPrescription/catalog';
 import { generateWorkoutPrescription } from '../workoutPrescription/engine';
+import { prescriptionInputErrors, sanitizeAnswersForEngine } from '../workoutPrescription/input';
 import type { LimitationCatalogExercise } from '../workoutPrescription/limitationResolver';
+import { loadLocalExerciseCatalogForLimitations } from '../workoutPrescription/localLimitationCatalog';
 import { selectTemplate } from '../workoutPrescription/selection';
 import {
   fromWorkoutTemplateDocument,
@@ -20,6 +23,7 @@ import {
 } from '../workoutPrescription/templateDocument';
 import {
   PRESCRIPTION_VERSIONS,
+  type CanonicalTemplate,
   type FinalWorkoutPlan,
   type PrescriptionResult,
   type QuestionnaireAnswers,
@@ -34,8 +38,18 @@ const EXERCISES = 'exercises';
 const EXPECTED_EXERCISE_COUNT = 116;
 
 export type WorkoutProgramStatus = 'active' | 'superseded';
-/** `automatic_progression` — Progression Engine V1: Beginner stage transitions and normal-cycle renewal (docs/workout-lifecycle/04_PROGRESSION_ENGINE.md). */
-export type WorkoutProgramSource = 'onboarding' | 'manual_regeneration' | 'automatic_progression';
+/**
+ * `automatic_progression` — Progression Engine V1: Beginner stage
+ * transitions and normal-cycle renewal (docs/workout-lifecycle/
+ * 04_PROGRESSION_ENGINE.md).
+ *
+ * `automatic_reconciliation` — the FIRST program for an account, generated
+ * the moment `useWorkoutPrescription` finds none (every app open that
+ * reaches Home, not just once during `signUp()`). `onboarding` is kept only
+ * for pre-existing documents written before this source value existed —
+ * nothing in the client writes it anymore.
+ */
+export type WorkoutProgramSource = 'onboarding' | 'manual_regeneration' | 'automatic_progression' | 'automatic_reconciliation';
 
 export interface WorkoutProgramSnapshot extends FinalWorkoutPlan {
   programId: string;
@@ -272,21 +286,94 @@ export async function saveAndActivateWorkoutProgram(input: {
   return savedData;
 }
 
-export async function generateAndPersistWorkoutProgram(input: {
-  uid: string;
-  questionnaireId: string;
-  questionnaireVersion: number;
+// ─── COMPUTE (Phase 3, Part B) ───────────────────────────────────────────
+//
+// `prepareWorkoutProgram` is the ONE place the compute pipeline (sanitize →
+// validate → select Txxx → load template → Limitation Resolver → engine →
+// exercise-existence check) lives. `generateAndPersistWorkoutProgram`
+// (Firestore-backed, post-auth) and `prepareWorkoutProgramLocally`
+// (bundled-sources, pre-auth — Phase 3 Part C) both call this SAME function
+// with different loader callbacks; neither re-implements any of it. Persist
+// (Firestore transaction, active pointer, superseding) stays entirely
+// separate, in `saveAndActivateWorkoutProgram`.
+
+export interface PreparedWorkoutProgram {
+  status: 'SUCCESS';
+  plan: FinalWorkoutPlan;
+  templateId: TemplateId;
+  /**
+   * True only when BOTH the Limitation Resolver actually ran AND it ran
+   * against the local bundled catalog (`loadLocalExerciseCatalogForLimitations`)
+   * rather than Firestore's. `persistPreparedWorkoutProgram` treats this as
+   * an automatic "do not trust for direct persist" signal — see its doc
+   * comment.
+   */
+  usedLocalLimitationCatalog: boolean;
+  /** Deterministic hash of the normalized answers this plan was computed from — see `questionnaireFingerprint`. */
+  questionnaireFingerprint: string;
+  /** Engine/rule versions active at compute time (also embedded in `plan.versions`, duplicated here so a version drift can be checked without reaching into the plan). */
+  prescriptionVersions: typeof PRESCRIPTION_VERSIONS;
+  /** `TEMPLATE_LIBRARY_VERSION` at compute time — the local catalog's own version marker, independent of any Firestore document. */
+  templateLibraryVersion: string;
+  generatedAt: number;
+}
+
+export type PrepareWorkoutProgramResult = PreparedWorkoutProgram | Exclude<PrescriptionResult, { status: 'SUCCESS' }>;
+
+function stableStringify(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
+  if (value !== null && typeof value === 'object') {
+    if (!isPlainObject(value)) return JSON.stringify(value);
+    const keys = Object.keys(value).sort();
+    return `{${keys.map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+/**
+ * Deterministic fingerprint of the NORMALIZED, sanitized answers a prepared
+ * plan was computed from (docs/workout-lifecycle — Phase 3 Part F). Two
+ * calls with the same effective answers always produce the same value,
+ * regardless of object key order — `persistPreparedWorkoutProgram` recomputes
+ * this from the actually-persisted questionnaire and rejects `prepared` on
+ * any mismatch, rather than trusting an in-memory object blindly.
+ */
+export function questionnaireFingerprint(answers: QuestionnaireAnswers): string {
+  const { answers: sanitized } = sanitizeAnswersForEngine(answers);
+  return stableHash(stableStringify(sanitized));
+}
+
+export async function prepareWorkoutProgram(input: {
   answers: QuestionnaireAnswers;
-  source: WorkoutProgramSource;
   adaptationWeek?: number;
-}): Promise<GenerateAndPersistResult> {
-  const selection = selectTemplate(input.answers);
+  loadTemplate: (templateId: TemplateId) => Promise<CanonicalTemplate | null>;
+  loadLimitationCatalog: () => Promise<LimitationCatalogExercise[]>;
+  /** Declares which source `loadLimitationCatalog` actually reads from — never inferred. */
+  usedLocalLimitationCatalog: boolean;
+}): Promise<PrepareWorkoutProgramResult> {
+  // Boundary first — same guard `generateWorkoutPrescription` applies
+  // internally, but this function calls `selectTemplate` and inspects
+  // `specialConditions` itself (to know which template/catalog to fetch)
+  // BEFORE ever reaching the engine, so it must not trust `input.answers`
+  // either. A legacy/malformed shape must never resolve past this point.
+  const { answers, legacyReasonCodes } = sanitizeAnswersForEngine(input.answers);
+  // Same domain validation `generateWorkoutPrescription` runs internally,
+  // checked here too so a genuinely incomplete/invalid questionnaire is
+  // always reported as `NEEDS_QUESTIONNAIRE_UPDATE` with real reasonCodes —
+  // never as `MISSING_TEMPLATE` just because `selectTemplate` (below) also
+  // happens to fail on the same missing dimension. The UI tells these two
+  // apart (docs/workout-lifecycle) and must never see the wrong one.
+  const inputErrors = [...legacyReasonCodes, ...prescriptionInputErrors(answers)];
+  if (inputErrors.length) {
+    return { status: 'NEEDS_QUESTIONNAIRE_UPDATE', reasonCodes: [...new Set(inputErrors)].sort() };
+  }
+  const selection = selectTemplate(answers);
   if (selection.status !== 'SELECTED') {
     return { status: 'MISSING_TEMPLATE', reasonCodes: selection.reasonCodes };
   }
-  let template: WorkoutTemplateDocument | null;
+  let template: CanonicalTemplate | null;
   try {
-    template = await loadWorkoutTemplate(selection.decision.templateId);
+    template = await input.loadTemplate(selection.decision.templateId);
   } catch (error) {
     return {
       status: 'INVALID_CONFIGURATION',
@@ -297,9 +384,10 @@ export async function generateAndPersistWorkoutProgram(input: {
     return { status: 'MISSING_TEMPLATE', reasonCodes: ['WORKOUT_TEMPLATE_NOT_FOUND'] };
   }
   let exerciseCatalog: LimitationCatalogExercise[] | undefined;
-  if (input.answers.specialConditions.includes('musculoskeletal_limitation')) {
+  const needsLimitationCatalog = answers.specialConditions.includes('musculoskeletal_limitation');
+  if (needsLimitationCatalog) {
     try {
-      exerciseCatalog = await loadExerciseCatalogForLimitations();
+      exerciseCatalog = await input.loadLimitationCatalog();
     } catch (error) {
       return {
         status: 'INVALID_CONFIGURATION',
@@ -307,9 +395,9 @@ export async function generateAndPersistWorkoutProgram(input: {
       };
     }
   }
-  const result = generateWorkoutPrescription(input.answers, {
+  const result = generateWorkoutPrescription(answers, {
     adaptationWeek: input.adaptationWeek,
-    template: fromWorkoutTemplateDocument(template),
+    template,
     exerciseCatalog,
   });
   if (result.status !== 'SUCCESS') return result;
@@ -321,10 +409,228 @@ export async function generateAndPersistWorkoutProgram(input: {
       trace: result.plan.trace,
     };
   }
-  const program = await saveAndActivateWorkoutProgram({
-    ...input,
+  return {
+    status: 'SUCCESS',
     plan: result.plan,
-    template,
+    templateId: selection.decision.templateId,
+    usedLocalLimitationCatalog: needsLimitationCatalog && input.usedLocalLimitationCatalog,
+    questionnaireFingerprint: questionnaireFingerprint(answers),
+    prescriptionVersions: PRESCRIPTION_VERSIONS,
+    templateLibraryVersion: TEMPLATE_LIBRARY_VERSION,
+    generatedAt: Date.now(),
+  };
+}
+
+/**
+ * Pre-auth compute (Phase 3, Part C) — uses ONLY bundled, versioned local
+ * sources (`catalog.ts`'s `getTemplateById`, `localLimitationCatalog.ts`),
+ * never Firestore. This is necessary, not just an optimization:
+ * `firestore.rules` requires `isSignedIn()` for `workoutTemplates` and
+ * `hasVerifiedEmailForPrivateAccess()` for `exercises` — a client with no
+ * Firebase user yet cannot read either. Runs the exact same
+ * `prepareWorkoutProgram` pipeline as the post-auth path; Firestore remains
+ * authoritative for what actually gets PERSISTED (see
+ * `persistPreparedWorkoutProgram`).
+ */
+export async function prepareWorkoutProgramLocally(
+  answers: QuestionnaireAnswers,
+  adaptationWeek?: number,
+): Promise<PrepareWorkoutProgramResult> {
+  return prepareWorkoutProgram({
+    answers,
+    adaptationWeek,
+    loadTemplate: (templateId) => Promise.resolve(getTemplateById(templateId) ?? null),
+    loadLimitationCatalog: () => Promise.resolve(loadLocalExerciseCatalogForLimitations()),
+    usedLocalLimitationCatalog: true,
+  });
+}
+
+export async function generateAndPersistWorkoutProgram(input: {
+  uid: string;
+  questionnaireId: string;
+  questionnaireVersion: number;
+  answers: QuestionnaireAnswers;
+  source: WorkoutProgramSource;
+  adaptationWeek?: number;
+}): Promise<GenerateAndPersistResult> {
+  let firestoreTemplate: WorkoutTemplateDocument | null = null;
+  const prepared = await prepareWorkoutProgram({
+    answers: input.answers,
+    adaptationWeek: input.adaptationWeek,
+    loadTemplate: async (templateId) => {
+      firestoreTemplate = await loadWorkoutTemplate(templateId);
+      return firestoreTemplate ? fromWorkoutTemplateDocument(firestoreTemplate) : null;
+    },
+    loadLimitationCatalog: loadExerciseCatalogForLimitations,
+    usedLocalLimitationCatalog: false,
+  });
+  if (prepared.status !== 'SUCCESS') return prepared;
+  // `prepared.status === 'SUCCESS'` only happens after `loadTemplate`
+  // resolved a non-null template, which is the only place `firestoreTemplate`
+  // is assigned — always non-null here; the check below is defensive, not
+  // expected to ever actually throw.
+  if (!firestoreTemplate) throw new Error('WORKOUT_TEMPLATE_NOT_FOUND');
+  const program = await saveAndActivateWorkoutProgram({
+    uid: input.uid,
+    questionnaireId: input.questionnaireId,
+    questionnaireVersion: input.questionnaireVersion,
+    source: input.source,
+    plan: prepared.plan,
+    template: firestoreTemplate,
   });
   return { status: 'SUCCESS', plan: program, program };
+}
+
+/**
+ * Module-level (not per-hook-instance, not per-call-site) in-flight registry
+ * keyed by exactly what determines a program's deterministic identity — see
+ * `programIdentity()` above. `saveAndActivateWorkoutProgram`'s deterministic
+ * `programId` + Firestore transaction already GUARANTEE correctness under
+ * concurrency (two overlapping calls converge on the same document —
+ * proved in `workoutProgramReconciliation.integration.test.ts`); this
+ * registry exists purely to stop concurrent callers from each starting
+ * their OWN redundant Firestore transaction in the first place. Phase 3
+ * widens this beyond `useWorkoutPrescription`'s reconciliation
+ * (`generateAndPersistWorkoutProgramDeduped`) to ALSO cover
+ * `persistPreparedWorkoutProgram` (the signup-time bridge) — both go
+ * through the exact same map/key, so a signup-time persist racing
+ * `AppShell`'s automatic reconciliation (e.g. the app cold-starts into
+ * AppShell a moment after signup, before the signup promise chain has
+ * settled) share ONE attempt instead of two. `applyProgression`
+ * (Progression Engine) keeps calling `generateAndPersistWorkoutProgram`
+ * directly — its own eligibility check (`expectedProgramId` match against
+ * the freshly-evaluated active program) is already the narrower,
+ * already-proven-correct guard for that call site (see
+ * `workoutProgression.integration.test.ts`'s concurrent-apply case); this
+ * registry only targets the first-program creation race.
+ */
+const inFlightGenerations = new Map<string, Promise<GenerateAndPersistResult>>();
+
+function generationKey(input: { uid: string; questionnaireId: string; adaptationWeek?: number }): string {
+  return `${input.uid}:${input.questionnaireId}:${input.adaptationWeek ?? 'current'}`;
+}
+
+/**
+ * Runs `attempt()` deduped by `key` — concurrent callers for the same key
+ * share ONE in-flight Promise and both observe its real, final result
+ * (never a synthetic "still working" placeholder). The registry entry is
+ * removed the instant the call settles, success OR failure — a failure is
+ * never cached, so the very next call for the same key always starts a
+ * genuinely fresh attempt (this is deliberately not a result cache).
+ */
+function dedupedByKey(
+  key: string,
+  attempt: () => Promise<GenerateAndPersistResult>,
+): Promise<GenerateAndPersistResult> {
+  const existing = inFlightGenerations.get(key);
+  if (existing) return existing;
+
+  const promise = attempt().finally(() => {
+    if (inFlightGenerations.get(key) === promise) inFlightGenerations.delete(key);
+  });
+  inFlightGenerations.set(key, promise);
+  return promise;
+}
+
+/**
+ * Dedup layer in front of `generateAndPersistWorkoutProgram` — see
+ * `dedupedByKey`/`inFlightGenerations`'s doc comments. `useWorkoutPrescription`'s
+ * automatic reconciliation AND its manual retry fallback both go through
+ * this (not the raw function), so that an auto-reconciliation racing a
+ * manual tap — or two mounts of the same hook, e.g. `AppShell` unmounting/
+ * remounting mid-transition — collapse into one write instead of two.
+ */
+export function generateAndPersistWorkoutProgramDeduped(
+  input: Parameters<typeof generateAndPersistWorkoutProgram>[0],
+): Promise<GenerateAndPersistResult> {
+  return dedupedByKey(generationKey(input), () => generateAndPersistWorkoutProgram(input));
+}
+
+/**
+ * Signup-time bridge for the pre-auth `prepared` result (Phase 3, Part F).
+ * `prepared` is NEVER trusted blindly — Firestore remains authoritative
+ * after signup:
+ *
+ *   1. `prepared` must exist and be `SUCCESS` (the process may have died,
+ *      or the Analysis screen's compute may itself have failed/timed out).
+ *   2. `questionnaireFingerprint` recomputed from the ACTUALLY-PERSISTED
+ *      answers must match exactly — any drift (edited an answer, a stale
+ *      object from a previous attempt, a different account) invalidates it.
+ *   3. Every recorded engine/template-library version must match the
+ *      CURRENT app's live constants — protects against a `prepared` value
+ *      that survived an app update mid-onboarding.
+ *   4. `usedLocalLimitationCatalog` must be `false` — a plan computed
+ *      through the Limitation Resolver against the LOCAL catalog is never
+ *      persisted directly, regardless of fingerprint/version match. This
+ *      keeps the safety-critical case on the exact same Firestore-verified
+ *      path as before Phase 3 existed; only the Analysis screen's PREVIEW
+ *      benefits from the local computation in that case, not the actual
+ *      persisted write.
+ *   5. Even once trusted, the REAL Firestore `workoutTemplates/{id}`
+ *      document is still loaded and used for the persisted snapshot's
+ *      version/hash metadata — `prepared.plan`'s content is reused, but
+ *      never its (locally-sourced) template version bookkeeping.
+ *
+ * Any failure at any step silently falls back to the full, unchanged,
+ * authoritative `generateAndPersistWorkoutProgram` — never a partial or
+ * degraded result, never an error surfaced just because the fast path
+ * didn't apply. The WHOLE function runs through the same
+ * `inFlightGenerations` registry `generateAndPersistWorkoutProgramDeduped`
+ * uses (Phase 3, Part I) — a concurrent `automatic_reconciliation` attempt
+ * for the same (uid, questionnaireId) shares this exact call instead of
+ * starting its own.
+ */
+export async function persistPreparedWorkoutProgram(input: {
+  uid: string;
+  questionnaireId: string;
+  questionnaireVersion: number;
+  answers: QuestionnaireAnswers;
+  prepared: PrepareWorkoutProgramResult | null;
+  source: WorkoutProgramSource;
+}): Promise<GenerateAndPersistResult> {
+  return dedupedByKey(
+    generationKey({ uid: input.uid, questionnaireId: input.questionnaireId }),
+    async () => {
+      const { prepared } = input;
+      if (prepared && prepared.status === 'SUCCESS' && !prepared.usedLocalLimitationCatalog) {
+        const currentFingerprint = questionnaireFingerprint(input.answers);
+        const versions = prepared.prescriptionVersions;
+        const versionsMatch = versions.templateLibrary === PRESCRIPTION_VERSIONS.templateLibrary
+          && versions.selectionEngine === PRESCRIPTION_VERSIONS.selectionEngine
+          && versions.safetyRules === PRESCRIPTION_VERSIONS.safetyRules
+          && versions.modifierRules === PRESCRIPTION_VERSIONS.modifierRules
+          && versions.compositionEngine === PRESCRIPTION_VERSIONS.compositionEngine
+          && versions.limitationResolver === PRESCRIPTION_VERSIONS.limitationResolver
+          && prepared.templateLibraryVersion === TEMPLATE_LIBRARY_VERSION;
+
+        if (currentFingerprint === prepared.questionnaireFingerprint && versionsMatch) {
+          try {
+            const firestoreTemplate = await loadWorkoutTemplate(prepared.templateId);
+            if (firestoreTemplate) {
+              const program = await saveAndActivateWorkoutProgram({
+                uid: input.uid,
+                questionnaireId: input.questionnaireId,
+                questionnaireVersion: input.questionnaireVersion,
+                source: input.source,
+                plan: prepared.plan,
+                template: firestoreTemplate,
+              });
+              return { status: 'SUCCESS', plan: program, program };
+            }
+          } catch {
+            // Fall through — the authoritative path below re-derives
+            // everything from scratch and reports its own precise failure
+            // if it also fails.
+          }
+        }
+      }
+      return generateAndPersistWorkoutProgram({
+        uid: input.uid,
+        questionnaireId: input.questionnaireId,
+        questionnaireVersion: input.questionnaireVersion,
+        answers: input.answers,
+        source: input.source,
+      });
+    },
+  );
 }

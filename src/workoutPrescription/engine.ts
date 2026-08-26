@@ -1,7 +1,7 @@
 import { catalogInvariantErrors, getTemplateById, TEMPLATE_LIBRARY_VERSION } from './catalog';
 import { composeTemplate } from './composition';
 import { resolveConflicts } from './conflicts';
-import { prescriptionInputErrors } from './input';
+import { prescriptionInputErrors, sanitizeAnswersForEngine } from './input';
 import { resolveModifiers } from './modifiers';
 import { evaluateSafety } from './safety';
 import { selectTemplate } from './selection';
@@ -26,12 +26,16 @@ function stableHash(value: string): string {
 }
 
 export function generateWorkoutPrescription(
-  answers: QuestionnaireAnswers,
+  rawAnswers: QuestionnaireAnswers,
   context: PrescriptionGenerationContext = {},
 ): PrescriptionResult {
-  const inputErrors = prescriptionInputErrors(answers);
+  // Boundary first: never index a possibly-legacy/malformed shape before
+  // this. See `sanitizeAnswersForEngine`'s doc comment — `legacyReasonCodes`
+  // is never merged into a "safe" default, it always blocks generation.
+  const { answers, legacyReasonCodes } = sanitizeAnswersForEngine(rawAnswers);
+  const inputErrors = [...legacyReasonCodes, ...prescriptionInputErrors(answers)];
   if (inputErrors.length) {
-    return { status: 'NEEDS_QUESTIONNAIRE_UPDATE', reasonCodes: inputErrors };
+    return { status: 'NEEDS_QUESTIONNAIRE_UPDATE', reasonCodes: [...new Set(inputErrors)].sort() };
   }
 
   const catalogErrors = catalogInvariantErrors();

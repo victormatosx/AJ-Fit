@@ -131,7 +131,12 @@
       "progress": "Building your plan: {{progress}} percent"
     },
     "titleWithNameLine1": "We're structuring",
-    "titleWithNameLine2": "your journey, {{name}}."
+    "titleWithNameLine2": "your journey, {{name}}.",
+    "error": {
+      "title": "We couldn't build your plan",
+      "body": "Something went wrong calculating your workout. You can try again.",
+      "retry": "Try again"
+    }
   },
   "socialProof": {
     "eyebrow": "Social proof",

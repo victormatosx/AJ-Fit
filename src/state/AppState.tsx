@@ -1,5 +1,9 @@
 import React, { createContext, useContext, useState, useMemo, useRef } from 'react';
 import { nextValueForIdentity } from '../lib/quizIdentityScope';
+// Type-only — erased at compile time, no Firebase/RN runtime dependency
+// leaks into this module (see the `uid` prop doc comment below for why
+// that matters here).
+import type { PrepareWorkoutProgramResult } from '../services/workoutPrograms';
 
 export type Sex = 'm' | 'f';
 export type PrimaryGoal =
@@ -132,6 +136,19 @@ type Ctx = {
   setQuiz: (q: Quiz) => void;
   tab: TabId;
   setTab: (t: TabId) => void;
+  /**
+   * Phase 3 — the Analysis screen's real, pre-auth `prepareWorkoutProgram`
+   * result, held in memory only (never AsyncStorage — see
+   * `src/services/workoutPrograms.ts`'s `PreparedWorkoutProgram` doc
+   * comment: it is a transient onboarding-lifecycle optimization, never a
+   * new source of truth). `signUp()` reads it once to fast-path persistence
+   * and always validates it against the actually-persisted questionnaire
+   * before trusting it (fingerprint + version check) — never assumed valid
+   * just because it exists. Reset on every identity transition, exactly
+   * like `quiz`, so it can never leak across accounts.
+   */
+  preparedWorkoutProgram: PrepareWorkoutProgramResult | null;
+  setPreparedWorkoutProgram: (p: PrepareWorkoutProgramResult | null) => void;
 };
 
 /** Exported so userProfile.ts can fall back to it when normalizing a sparse/corrupted questionnaire doc. */
@@ -187,20 +204,29 @@ export function AppStateProvider({
 }) {
   const [quiz, setQuiz] = useState<Quiz>(defaultQuiz);
   const [tab, setTab] = useState<TabId>('home');
+  const [preparedWorkoutProgram, setPreparedWorkoutProgram] = useState<PrepareWorkoutProgramResult | null>(null);
 
   // Adjusting a component's own state during its own render in response to a
   // prop change (React's sanctioned pattern) — not an effect — so there is
   // no committed render, not even one, where a child can read `quiz` against
   // the wrong identity. Covers every uid transition: logout (uid -> null), a
   // fresh login (null -> uid), and a fast account switch (uidA -> uidB).
+  // `preparedWorkoutProgram` rides along on the exact same reset — it was
+  // computed FOR whatever `quiz` looked like under the previous identity,
+  // so it is exactly as stale as `quiz` would be.
   const lastUidRef = useRef<string | null>(uid);
   if (lastUidRef.current !== uid) {
     const nextQuiz = nextValueForIdentity(lastUidRef.current, uid, quiz, defaultQuiz);
+    const nextPrepared = nextValueForIdentity(lastUidRef.current, uid, preparedWorkoutProgram, null);
     lastUidRef.current = uid;
     if (nextQuiz !== quiz) setQuiz(nextQuiz);
+    if (nextPrepared !== preparedWorkoutProgram) setPreparedWorkoutProgram(nextPrepared);
   }
 
-  const value = useMemo(() => ({ quiz, setQuiz, tab, setTab }), [quiz, tab]);
+  const value = useMemo(
+    () => ({ quiz, setQuiz, tab, setTab, preparedWorkoutProgram, setPreparedWorkoutProgram }),
+    [quiz, tab, preparedWorkoutProgram],
+  );
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;
 }
 

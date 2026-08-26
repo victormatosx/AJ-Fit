@@ -19,7 +19,7 @@ describe('AuthScreen entryContext boundary', () => {
 
   it('keeps every sensitive auth operation untouched by entryContext', () => {
     for (const sensitiveOp of [
-      'await signUp(email, password, name, quiz)',
+      'await signUp(email, password, name, quiz, preparedWorkoutProgram)',
       'await signIn(email, password)',
       '() => reset(email)',
       'await signInWithProvider(provider, quiz)',

@@ -1,6 +1,7 @@
 import { EXERCISES_SEED } from '../data/exercisesSeedData';
 import type { ExerciseSeedInput, MovementPattern, MuscleId } from '../types/exercise';
 import { equipmentContextFor, isExerciseExecutable } from './equipment';
+import { goalFamilyFor } from './input';
 import {
   evaluateDirectLimitationCandidate,
   resolveExerciseLimitations,
@@ -8,6 +9,7 @@ import {
   type LimitationCatalogExercise,
 } from './limitationResolver';
 import { adaptationStage, beginnerKeepFactor, durationKeepFactor, isBeginnerExperience, keepCount } from './personalization';
+import { prescribeRestSeconds } from './restPrescription';
 import type {
   CompositionDecision,
   CanonicalTemplate,
@@ -174,6 +176,7 @@ export function composeTemplate(
   const beginner = isBeginnerExperience(answers);
   const stage = adaptationStage(options.adaptationWeek);
   const beginnerActive = beginner && stage < 3;
+  const goalFamily = goalFamilyFor(answers.goal);
 
   const sessions = template.sessions.map((session, sessionIndex): FinalWorkoutSession => {
     const slots = session.exercises.map((item, originalIndex): ResolvedSlot => {
@@ -244,6 +247,12 @@ export function composeTemplate(
           cycles: item.cycles,
           intensity: item.intensity,
           notes: item.notes,
+          restSeconds: prescribeRestSeconds({
+            movement: selected.movement,
+            sessionType: session.type,
+            reps: item.reps,
+            goalFamily,
+          }),
         },
       };
     });

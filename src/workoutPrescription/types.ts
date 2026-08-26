@@ -122,6 +122,16 @@ export interface FinalWorkoutExercise {
   cycles?: number;
   intensity?: string;
   notes?: string;
+  /**
+   * Prescribed rest between sets, in seconds — decided once, here, by
+   * `restPrescription.ts` at composition time (Phase 2). `0` is a
+   * deliberate "no traditional rest" value for movement patterns where it
+   * doesn't apply (mobility/balance/breathing/gait/cycling), not a missing
+   * value. Absent (`undefined`) ONLY on a snapshot persisted before this
+   * field existed — consumers (the Rest Timer) must use
+   * `LEGACY_REST_SECONDS_FALLBACK`, never silently treat that as `0`.
+   */
+  restSeconds?: number;
 }
 
 export interface FinalWorkoutSession {

@@ -66,6 +66,14 @@
   "prescription": {
     "generate": "Gerar meu treino",
     "generating": "Gerando treino...",
+    "generatingState": {
+      "title": "Preparando seu treino",
+      "body": "Isso leva só um instante."
+    },
+    "loadingState": {
+      "title": "Carregando seu treino",
+      "body": "Só um instante."
+    },
     "requiresClearance": {
       "title": "Precisamos de mais informações",
       "body": "Identificamos uma condição que exige mais cuidado antes de personalizar seu treino com segurança. Siga a orientação do profissional responsável e atualize suas respostas quando não houver restrições que o app não consiga representar."
@@ -81,6 +89,10 @@
     "unavailable": {
       "title": "Treino ainda indisponível",
       "body": "Uma regra de composição segura exigida pelas suas respostas ainda não foi definida. Nenhum treino genérico foi gerado."
+    },
+    "technicalError": {
+      "title": "Não foi possível preparar seu treino",
+      "body": "Algo deu errado ao gerar seu treino. Tente novamente em instantes."
     }
   },
   "consistency": {

@@ -61,12 +61,19 @@ export function sanitizeLogContext(context?: LogContext): LogContext | undefined
   );
 }
 
-function errorCode(err: unknown): string | undefined {
+/** Safe, allowlist-validated error identifier (e.g. a Firestore `code` like `failed-precondition`) — never the raw error object/message. */
+export function errorCode(err: unknown): string | undefined {
   const raw =
     typeof err === 'object' && err !== null && 'code' in err
       ? String((err as { code: unknown }).code)
       : '';
   return /^[a-z0-9/_-]{1,64}$/i.test(raw) ? raw : undefined;
+}
+
+/** Constructor name only (e.g. `FirebaseError`, `TypeError`) — never the message/stack. */
+export function errorClass(err: unknown): string {
+  if (err instanceof Error) return err.constructor.name || 'Error';
+  return typeof err;
 }
 
 function sanitizeError(err: unknown): { code?: string; message: string } {

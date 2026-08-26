@@ -87,6 +87,49 @@ export async function saveScheduleConfig(uid: string, config: { trainingDays: We
   });
 }
 
+/**
+ * Bridges the Questionnaire's already-answered `trainingDays` into the
+ * Schedule Engine automatically — the user must never be asked again for
+ * something they already told the questionnaire (docs/workout-lifecycle/
+ * 03_SCHEDULE_ENGINE.md). Called from `useWorkoutSchedule`'s own `reload()`
+ * whenever it finds no `scheduleConfig` yet, mirroring the deterministic,
+ * transaction-guarded idempotency `saveAndActivateWorkoutProgram` already
+ * uses for the exact same class of problem (concurrent/double-mount
+ * reconciliation attempts for the same uid).
+ *
+ * Create-only, via a transaction: if `scheduleConfig` already exists —
+ * whether written by a previous reconciliation OR because the user
+ * explicitly edited their days afterward via `saveScheduleConfig` — this
+ * NEVER overwrites it; it just returns the existing value. Two concurrent
+ * calls (e.g. `useWorkoutSchedule` mounting twice) race safely at the
+ * Firestore transaction layer: whichever commits first creates the
+ * document, the other's stale read is retried by the SDK and finds it
+ * already there, so it also returns the existing value instead of writing
+ * a second time.
+ */
+export async function ensureScheduleConfigFromQuestionnaire(
+  uid: string,
+  trainingDays: Weekday[],
+  timezone: string,
+): Promise<ScheduleConfig | null> {
+  const ref = scheduleConfigRef(uid);
+  return runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    if (snapshot.exists()) {
+      const data = snapshot.data();
+      if (!Array.isArray(data.trainingDays) || typeof data.timezone !== 'string') return null;
+      return {
+        trainingDays: data.trainingDays as Weekday[],
+        timezone: data.timezone,
+        scheduleVersion: typeof data.scheduleVersion === 'number' ? data.scheduleVersion : SCHEDULE_VERSION,
+      };
+    }
+    const config = { trainingDays, timezone, scheduleVersion: SCHEDULE_VERSION };
+    transaction.set(ref, { ...config, updatedAt: serverTimestamp() });
+    return config;
+  });
+}
+
 async function loadScheduleState(uid: string, programId: string): Promise<PersistedScheduleState | null> {
   const snapshot = await getDoc(scheduleStateRef(uid, programId));
   if (!snapshot.exists()) return null;
