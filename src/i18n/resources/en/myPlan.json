@@ -1,0 +1,64 @@
+{
+  "header": {
+    "title": "My Plan",
+    "badge": "Personalized plan",
+    "subtitle": "Your plan was built from your answers, taking into account your goal, your experience and your weekly availability."
+  },
+  "summary": {
+    "goal": "Goal",
+    "frequency": "Frequency",
+    "level": "Level",
+    "structure": "Structure",
+    "frequencyValue_one": "{{count}}x per week",
+    "frequencyValue_other": "{{count}}x per week"
+  },
+  "goalFamily": {
+    "hypertrophy_body_composition": "Hypertrophy and body composition",
+    "strength": "Strength",
+    "conditioning": "Conditioning"
+  },
+  "madeForYou": {
+    "title": "Made for you",
+    "subtitle": "Your workout takes your answers and needs into account.",
+    "factors": {
+      "goal": "Goal",
+      "level": "Experience",
+      "place": "Training place",
+      "equipment": "Equipment",
+      "days_one": "{{count}} day available per week",
+      "days_other": "{{count}} days available per week"
+    }
+  },
+  "week": {
+    "title": "Your week",
+    "trainingDay": "Workout",
+    "restDay": "Rest",
+    "today": "Today",
+    "todaySession": "Today: {{session}}"
+  },
+  "workouts": {
+    "title": "Your workouts",
+    "exerciseCount_one": "{{count}} exercise",
+    "exerciseCount_other": "{{count}} exercises",
+    "viewWorkout": "View workout",
+    "hideWorkout": "Hide workout",
+    "setsReps": "{{sets}} sets × {{reps}}",
+    "setsDuration": "{{sets}} sets × {{duration}}",
+    "rest": "Rest: {{seconds}}s"
+  },
+  "adaptations": {
+    "title": "Adjusted for you",
+    "equipment": "Adapted to the equipment you have available.",
+    "limitations": "Exercises adapted to your limitations.",
+    "experience": "Volume adjusted to your experience.",
+    "duration": "Sessions adjusted to the time you have available."
+  },
+  "states": {
+    "loading": "Loading your plan...",
+    "emptyTitle": "No plan available",
+    "emptyBody": "As soon as your workout is generated, it will show up here.",
+    "errorTitle": "We couldn't load your plan",
+    "errorBody": "Please try again in a moment."
+  },
+  "back": "Back"
+}

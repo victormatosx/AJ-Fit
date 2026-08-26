@@ -29,11 +29,13 @@ export function ProfileScreen({
   onOpenEditProfile,
   onOpenSettings,
   onOpenSubscription,
+  onOpenMyPlan,
 }: {
   onOpenAssessment?: () => void;
   onOpenEditProfile?: () => void;
   onOpenSettings?: () => void;
   onOpenSubscription?: () => void;
+  onOpenMyPlan?: () => void;
 }) {
   const { t } = useTranslation('profile');
   const { theme } = useTheme();
@@ -168,7 +170,7 @@ export function ProfileScreen({
               {
                 icon: 'target',
                 label: t('groups.goalsPlan.items.viewPlan'),
-                onPress: () => {},
+                onPress: onOpenMyPlan,
               },
             ]}
           />

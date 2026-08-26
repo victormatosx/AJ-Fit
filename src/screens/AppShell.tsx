@@ -26,6 +26,7 @@ import { SecurityScreen } from './SecurityScreen';
 import { ChangePasswordScreen } from './ChangePasswordScreen';
 import { DeleteAccountScreen } from './DeleteAccountScreen';
 import { EditProfileScreen } from './EditProfileScreen';
+import { MyPlanScreen } from './MyPlanScreen';
 import { PaywallScreen } from './PaywallScreen';
 import { SubscriptionCenterScreen } from './SubscriptionCenterScreen';
 import { HelpCenterScreen } from './HelpCenterScreen';
@@ -136,6 +137,7 @@ function AppShellContent({
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [showDeleteAccount, setShowDeleteAccount] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
+  const [showMyPlan, setShowMyPlan] = useState(false);
   const [showSubscriptionCenter, setShowSubscriptionCenter] = useState(false);
   const [showWorkoutConfirmation, setShowWorkoutConfirmation] = useState(false);
   const [supportRoute, setSupportRoute] = useState<SupportRoute | null>(null);
@@ -158,6 +160,7 @@ function AppShellContent({
     showSecurity ||
     showChangePassword ||
     showEditProfile ||
+    showMyPlan ||
     showSubscriptionCenter ||
     showDeleteAccount ||
     showPremium ||
@@ -315,6 +318,7 @@ function AppShellContent({
             onOpenEditProfile={() => setShowEditProfile(true)}
             onOpenSettings={() => setShowSettings(true)}
             onOpenSubscription={() => setShowSubscriptionCenter(true)}
+            onOpenMyPlan={() => setShowMyPlan(true)}
           />
         </PersistentScreen>
       </View>
@@ -446,6 +450,32 @@ function AppShellContent({
         inactiveMode="materialized"
       >
         <EditProfileScreen onBack={() => setShowEditProfile(false)} />
+      </PersistentScreen>
+      {/*
+        Meu Plano is a pure VIEW of `prescription`/`schedule` — the exact
+        same values AppShell already resolved above for Home/Workout. It
+        never mounts its own `useWorkoutPrescription`/`useWorkoutSchedule`,
+        so opening it can never trigger a second reconciliation/generation
+        attempt.
+      */}
+      {/*
+        No `prewarm` — PREWARM_ROUTE_IDS (src/lib/prewarmRoutes.ts) is a
+        curated, per-screen-audited list; this screen hasn't been through
+        that audit. Lazy-mount + keep-alive only (same pattern as
+        HelpArticleScreen/SupportFormScreen): first open pays a normal mount
+        cost, every subsequent open is a pure activity toggle.
+      */}
+      <PersistentScreen
+        active={showMyPlan}
+        activeStyle={FULL_BLEED.overlayZ50}
+        inactiveMode="materialized"
+      >
+        <MyPlanScreen
+          prescription={prescription}
+          loading={prescriptionLoading}
+          schedule={schedule}
+          onBack={() => setShowMyPlan(false)}
+        />
       </PersistentScreen>
       <PersistentScreen
         active={showSubscriptionCenter}

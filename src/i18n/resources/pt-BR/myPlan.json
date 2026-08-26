@@ -1,0 +1,64 @@
+{
+  "header": {
+    "title": "Meu Plano",
+    "badge": "Plano personalizado",
+    "subtitle": "Seu plano foi estruturado a partir das suas respostas, considerando seu objetivo, sua experiência e sua disponibilidade semanal."
+  },
+  "summary": {
+    "goal": "Objetivo",
+    "frequency": "Frequência",
+    "level": "Nível",
+    "structure": "Estrutura",
+    "frequencyValue_one": "{{count}}x por semana",
+    "frequencyValue_other": "{{count}}x por semana"
+  },
+  "goalFamily": {
+    "hypertrophy_body_composition": "Hipertrofia e composição corporal",
+    "strength": "Força",
+    "conditioning": "Condicionamento"
+  },
+  "madeForYou": {
+    "title": "Feito para você",
+    "subtitle": "Seu treino considera suas respostas e necessidades.",
+    "factors": {
+      "goal": "Objetivo",
+      "level": "Experiência",
+      "place": "Local de treino",
+      "equipment": "Equipamentos",
+      "days_one": "{{count}} dia disponível por semana",
+      "days_other": "{{count}} dias disponíveis por semana"
+    }
+  },
+  "week": {
+    "title": "Sua semana",
+    "trainingDay": "Treino",
+    "restDay": "Descanso",
+    "today": "Hoje",
+    "todaySession": "Hoje: {{session}}"
+  },
+  "workouts": {
+    "title": "Seus treinos",
+    "exerciseCount_one": "{{count}} exercício",
+    "exerciseCount_other": "{{count}} exercícios",
+    "viewWorkout": "Ver treino",
+    "hideWorkout": "Ocultar treino",
+    "setsReps": "{{sets}} séries × {{reps}}",
+    "setsDuration": "{{sets}} séries × {{duration}}",
+    "rest": "Descanso: {{seconds}}s"
+  },
+  "adaptations": {
+    "title": "Ajustado para você",
+    "equipment": "Adaptado aos equipamentos que você tem disponível.",
+    "limitations": "Exercícios adaptados às suas limitações.",
+    "experience": "Volume ajustado à sua experiência.",
+    "duration": "Sessões ajustadas ao tempo que você tem disponível."
+  },
+  "states": {
+    "loading": "Carregando seu plano...",
+    "emptyTitle": "Nenhum plano disponível",
+    "emptyBody": "Assim que seu treino for gerado, ele vai aparecer aqui.",
+    "errorTitle": "Não foi possível carregar seu plano",
+    "errorBody": "Tente novamente em alguns instantes."
+  },
+  "back": "Voltar"
+}
