@@ -118,6 +118,44 @@ export function AnalyzingScreen({
     }
   }, [progress, computeStatus]);
 
+  // Pulsing ambient glow inside the ring — mirrors @keyframes aj2-pulse.
+  // Range boosted from 0.55↔1 to 0.75↔1 so the LED never dims to a faint blur.
+  //
+  // MUST be declared before the `computeStatus === 'error'` early return
+  // below (Rules of Hooks: every hook this component calls must run on
+  // every render, in the same order). It used to sit after that return,
+  // which worked only while `computeStatus` was never anything but
+  // 'pending'/'success' — the moment a real generation failure flipped it to
+  // 'error' for the first time, this component called two fewer hooks than
+  // the previous render and React threw "Rendered fewer hooks than
+  // expected", crashing the whole tree (no error boundary exists anywhere in
+  // the app) — which is what actually destroyed the onboarding funnel, not
+  // the generation failure itself. The effect body still no-ops while
+  // `computeStatus === 'error'` (nothing on screen uses `pulse` then), so
+  // behavior for 'pending'/'success' is unchanged.
+  const pulse = useRef(new Animated.Value(0.75)).current;
+  useEffect(() => {
+    if (computeStatus === 'error') return;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, {
+          toValue: 1,
+          duration: 1100,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulse, {
+          toValue: 0.75,
+          duration: 1100,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse, computeStatus]);
+
   if (computeStatus === 'error') {
     return (
       <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
@@ -158,30 +196,6 @@ export function AnalyzingScreen({
   // "active" until onDone fires (never enters the "done" state itself).
   const stepFloat = (progress / 100) * steps.length;
   const activeIdx = Math.min(steps.length - 1, Math.floor(stepFloat));
-
-  // Pulsing ambient glow inside the ring — mirrors @keyframes aj2-pulse.
-  // Range boosted from 0.55↔1 to 0.75↔1 so the LED never dims to a faint blur.
-  const pulse = useRef(new Animated.Value(0.75)).current;
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulse, {
-          toValue: 1,
-          duration: 1100,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulse, {
-          toValue: 0.75,
-          duration: 1100,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-      ]),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [pulse]);
 
   // Ring geometry — bumped up ~20% from the CSS mock (184 → 224) per user feedback.
   const RING_SIZE = 224;
