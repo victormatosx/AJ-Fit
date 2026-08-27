@@ -97,21 +97,30 @@ type AuthCtx = {
     prepared?: PrepareWorkoutProgramResult | null,
   ) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
-  /** Sign in with a social provider (may throw AccountLinkingRequiredError). */
+  /**
+   * Sign in with a social provider (may throw AccountLinkingRequiredError).
+   * `name` is only ever used the ONE time this actually provisions a brand
+   * new user document (`ensureUserProvisioned` never overwrites an existing
+   * one) — same onboarding name `signUp` already threads through for the
+   * email/password path.
+   */
   signInWithProvider: (
     provider: SocialProvider,
     answers?: QuestionnaireAnswers | null,
+    name?: string | null,
   ) => Promise<void>;
   /** Complete a pending link using the existing email/password account. */
   completeLinkingWithPassword: (
     email: string,
     password: string,
     answers?: QuestionnaireAnswers | null,
+    name?: string | null,
   ) => Promise<void>;
   /** Complete a pending link using another social provider. */
   completeLinkingWithProvider: (
     provider: SocialProvider,
     answers?: QuestionnaireAnswers | null,
+    name?: string | null,
   ) => Promise<void>;
   reset: (email: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -449,13 +458,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           throw toAuthError(err);
         }
       }),
-      signInWithProvider: (provider, answers) =>
+      signInWithProvider: (provider, answers, name) =>
         identityOperationFlight.run(async () => {
           // The credential sign-in triggers the auth-state listener; provisioning
           // stays here (explicit flow) and only creates the doc on first login.
           const authedUser = await socialSignIn(provider);
           try {
-            await ensureUserProvisioned(authedUser, { answers });
+            await ensureUserProvisioned(authedUser, { answers, name: name ?? undefined });
             setUser(authedUser);
             await loadUserState(authedUser.uid);
           } catch (err) {
@@ -463,11 +472,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             throw toAuthError(err);
           }
         }),
-      completeLinkingWithPassword: (email, password, answers) =>
+      completeLinkingWithPassword: (email, password, answers, name) =>
         identityOperationFlight.run(async () => {
           const linkedUser = await socialLinkPassword(email, password);
           try {
-            await ensureUserProvisioned(linkedUser, { answers });
+            await ensureUserProvisioned(linkedUser, { answers, name: name ?? undefined });
             setUser(linkedUser);
             await loadUserState(linkedUser.uid);
           } catch (err) {
@@ -475,11 +484,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             throw toAuthError(err);
           }
         }),
-      completeLinkingWithProvider: (provider, answers) =>
+      completeLinkingWithProvider: (provider, answers, name) =>
         identityOperationFlight.run(async () => {
           const linkedUser = await socialLinkProvider(provider);
           try {
-            await ensureUserProvisioned(linkedUser, { answers });
+            await ensureUserProvisioned(linkedUser, { answers, name: name ?? undefined });
             setUser(linkedUser);
             await loadUserState(linkedUser.uid);
           } catch (err) {

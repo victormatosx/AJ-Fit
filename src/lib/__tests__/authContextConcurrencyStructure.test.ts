@@ -20,13 +20,13 @@ describe('AuthContext concurrency wiring', () => {
       'signIn: (email, password) => identityOperationFlight.run',
     );
     expect(authContext).toMatch(
-      /signInWithProvider: \(provider, answers\) =>\s+identityOperationFlight\.run/,
+      /signInWithProvider: \(provider, answers, name\) =>\s+identityOperationFlight\.run/,
     );
     expect(authContext).toMatch(
-      /completeLinkingWithPassword: \(email, password, answers\) =>\s+identityOperationFlight\.run/,
+      /completeLinkingWithPassword: \(email, password, answers, name\) =>\s+identityOperationFlight\.run/,
     );
     expect(authContext).toMatch(
-      /completeLinkingWithProvider: \(provider, answers\) =>\s+identityOperationFlight\.run/,
+      /completeLinkingWithProvider: \(provider, answers, name\) =>\s+identityOperationFlight\.run/,
     );
     expect(authContext).toContain(
       'logout: () => identityOperationFlight.run(() => signOutUser())',

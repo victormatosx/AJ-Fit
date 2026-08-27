@@ -265,7 +265,7 @@ export function AuthScreen({
     setLinking(null);
     setSocialBusy(provider);
     try {
-      await signInWithProvider(provider, quiz);
+      await signInWithProvider(provider, quiz, name);
       // Navigation is decided centrally by RootNavigator from the resulting
       // auth/questionnaire state — this screen doesn't pick a destination.
     } catch (err) {
@@ -292,7 +292,7 @@ export function AuthScreen({
     setError(null);
     setSocialBusy(linking.attempted);
     try {
-      await completeLinkingWithPassword(linking.email, linkPassword, quiz);
+      await completeLinkingWithPassword(linking.email, linkPassword, quiz, name);
     } catch (err) {
       setError(localizedAuthError(err, t, 'errors.linkFailed'));
     } finally {
@@ -307,7 +307,7 @@ export function AuthScreen({
     setError(null);
     setSocialBusy(existing);
     try {
-      await completeLinkingWithProvider(existing, quiz);
+      await completeLinkingWithProvider(existing, quiz, name);
     } catch (err) {
       if (err instanceof SocialAuthCancelledError) {
         // user dismissed the native sheet
