@@ -4,11 +4,8 @@
  * compares against.
  *
  * IMPORTANT: this baseline represents DEBT, not an acceptance criterion.
- * It exists so CI can catch NEW regressions without being blocked by the
- * 176 combinations already known to be invalid (see
- * docs/workout-modifiers/LIMITATION_DATASET_AUDIT.md). It must be
- * regenerated (and, ideally, shrink) as remediation rows get resolved —
- * never grown to "make a new regression pass".
+ * It exists so CI catches regressions by key. The baseline is currently
+ * zero and must never grow to "make a new regression pass".
  *
  * Usage: npx tsx scripts/generateLimitationDatasetBaseline.ts
  */
@@ -49,7 +46,7 @@ function main() {
 
   const baseline = {
     generatedAt: new Date().toISOString(),
-    note: 'KNOWN DEBT, not an acceptance target. See docs/workout-modifiers/LIMITATION_DATASET_AUDIT.md. Regenerate via `npx tsx scripts/generateLimitationDatasetBaseline.ts` only after a case is genuinely fixed (never to silence a new regression).',
+    note: 'ZERO-DEBT quality baseline for reachable T001-T090 exerciseId:region pairs. See docs/workout-modifiers/LIMITATION_DATASET_AUDIT.md. Never regenerate this file to absorb a regression.',
     knownInvalidCount: Object.keys(knownInvalid).length,
     knownInvalid,
   };

@@ -162,6 +162,12 @@ function renderTop20Markdown(queue: QueueUnit[]): string {
   lines.push('');
   lines.push(`Generated: ${new Date().toISOString()}`);
   lines.push('');
+  if (queue.length === 0) {
+    lines.push('Nenhuma decisão pendente no escopo alcançável dos templates T001–T090 × 7 regiões.');
+    lines.push('');
+    lines.push('O audit atual registra **0 combinações inválidas** e o quality gate usa baseline zero.');
+    return lines.join('\n');
+  }
   lines.push('Fila de decisões de conteúdo/clínicas pendentes, agrupada por decisão');
   lines.push('compartilhada (corrigir um target de `adapt` resolve todas as linhas do');
   lines.push('grupo de uma vez). Nenhuma decisão foi tomada — `clinicalDecision` é sempre');

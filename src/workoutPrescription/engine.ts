@@ -100,6 +100,7 @@ export function generateWorkoutPrescription(
     substitutions: composition.substitutions,
     limitationResolverVersion: LIMITATION_RESOLVER_VERSION,
     limitationDecisions: composition.limitationDecisions,
+    exerciseOmissions: composition.exerciseOmissions,
     compositionDecisions: composition.decisions,
   };
   if (composition.status !== 'COMPOSED') {

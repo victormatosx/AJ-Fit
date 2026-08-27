@@ -1,6 +1,6 @@
 {
   "datasetVersion": "phase3-limitation-profiles-v2",
-  "generatedAt": "2026-08-26",
+  "generatedAt": "2026-08-27",
   "sourceDatasets": [
     {
       "file": "12_LIMITATION_PROFILES_TECHNICAL_v1.json",
@@ -9,6 +9,10 @@
     {
       "file": "11_GENERALIZED_CONSERVATIVE_LIMITATION_DATASET_v3.json",
       "datasetVersion": "3.0.0-generalized-conservative"
+    },
+    {
+      "file": "AJ_Fit_limitation_clinical_decisions_v1.json",
+      "datasetVersion": "ajfit-limitation-clinical-decisions-v1"
     }
   ],
   "target": {
@@ -112,39 +116,19 @@
     "profileCount": 76,
     "pairCount": 532,
     "statusCounts": {
-      "compatible": 66,
-      "adapt": 138,
-      "avoid": 114,
-      "not_applicable": 214,
+      "compatible": 129,
+      "adapt": 158,
+      "avoid": 4,
+      "not_applicable": 241,
       "unknown": 0
     },
-    "avoidWithoutSubstituteCount": 114,
-    "actionCandidateCount": 31,
+    "avoidWithoutSubstituteCount": 4,
+    "actionCandidateCount": 25,
     "remainingExternalActionCandidateCount": 0,
-    "cycleCount": 11
+    "cycleCount": 3
   },
   "dependencies": {
     "avoidWithoutSubstitute": [
-      {
-        "exerciseId": "bench-step-up",
-        "region": "back"
-      },
-      {
-        "exerciseId": "bird-dog",
-        "region": "hip"
-      },
-      {
-        "exerciseId": "bodyweight-squat",
-        "region": "back"
-      },
-      {
-        "exerciseId": "bulgarian-split-squat",
-        "region": "back"
-      },
-      {
-        "exerciseId": "bulgarian-split-squat-dumbbell",
-        "region": "back"
-      },
       {
         "exerciseId": "cable-biceps-curl",
         "region": "shoulder"
@@ -154,620 +138,30 @@
         "region": "back"
       },
       {
-        "exerciseId": "cable-rear-delt-fly",
-        "region": "back"
-      },
-      {
-        "exerciseId": "cable-triceps-pushdown",
-        "region": "shoulder"
-      },
-      {
-        "exerciseId": "chair-sit-to-stand",
-        "region": "back"
-      },
-      {
-        "exerciseId": "chair-squat",
-        "region": "back"
-      },
-      {
-        "exerciseId": "controlled-marching",
-        "region": "back"
-      },
-      {
-        "exerciseId": "conventional-deadlift",
-        "region": "knee"
-      },
-      {
-        "exerciseId": "conventional-deadlift",
-        "region": "shoulder"
-      },
-      {
-        "exerciseId": "conventional-deadlift",
-        "region": "ankle_foot"
-      },
-      {
-        "exerciseId": "dead-bug",
-        "region": "knee"
-      },
-      {
-        "exerciseId": "dead-bug",
-        "region": "hip"
-      },
-      {
-        "exerciseId": "dead-bug",
-        "region": "shoulder"
-      },
-      {
-        "exerciseId": "dumbbell-lateral-raise",
-        "region": "back"
-      },
-      {
-        "exerciseId": "dumbbell-lateral-raise",
-        "region": "elbow"
-      },
-      {
-        "exerciseId": "dumbbell-overhead-triceps-extension",
-        "region": "back"
-      },
-      {
-        "exerciseId": "dumbbell-shoulder-press",
-        "region": "back"
-      },
-      {
-        "exerciseId": "dumbbell-stiff-leg-deadlift",
-        "region": "knee"
-      },
-      {
-        "exerciseId": "dumbbell-stiff-leg-deadlift",
-        "region": "shoulder"
-      },
-      {
-        "exerciseId": "dumbbell-stiff-leg-deadlift",
-        "region": "ankle_foot"
-      },
-      {
-        "exerciseId": "ez-bar-biceps-curl",
-        "region": "back"
-      },
-      {
-        "exerciseId": "ez-bar-biceps-curl",
-        "region": "shoulder"
-      },
-      {
-        "exerciseId": "farmers-walk",
-        "region": "knee"
-      },
-      {
-        "exerciseId": "farmers-walk",
-        "region": "hip"
-      },
-      {
-        "exerciseId": "farmers-walk",
-        "region": "back"
-      },
-      {
-        "exerciseId": "farmers-walk",
-        "region": "shoulder"
-      },
-      {
-        "exerciseId": "farmers-walk",
-        "region": "elbow"
-      },
-      {
-        "exerciseId": "farmers-walk",
-        "region": "wrist"
-      },
-      {
-        "exerciseId": "farmers-walk",
-        "region": "ankle_foot"
-      },
-      {
-        "exerciseId": "floor-crunch",
-        "region": "hip"
-      },
-      {
-        "exerciseId": "gentle-direction-changes",
-        "region": "back"
-      },
-      {
-        "exerciseId": "glute-bridge",
-        "region": "knee"
-      },
-      {
-        "exerciseId": "glute-bridge",
-        "region": "back"
-      },
-      {
-        "exerciseId": "glute-bridge",
-        "region": "ankle_foot"
-      },
-      {
-        "exerciseId": "goblet-squat",
-        "region": "wrist"
-      },
-      {
-        "exerciseId": "hack-squat-machine",
-        "region": "back"
-      },
-      {
-        "exerciseId": "hammer-curl",
-        "region": "back"
-      },
-      {
-        "exerciseId": "hammer-curl",
-        "region": "shoulder"
-      },
-      {
-        "exerciseId": "hip-hinge-drill",
-        "region": "knee"
-      },
-      {
-        "exerciseId": "hip-hinge-drill",
-        "region": "ankle_foot"
-      },
-      {
-        "exerciseId": "hip-mobility",
-        "region": "knee"
-      },
-      {
-        "exerciseId": "hip-mobility",
-        "region": "hip"
-      },
-      {
-        "exerciseId": "hip-mobility",
-        "region": "back"
-      },
-      {
-        "exerciseId": "hip-mobility",
-        "region": "shoulder"
-      },
-      {
-        "exerciseId": "hip-mobility",
-        "region": "ankle_foot"
-      },
-      {
-        "exerciseId": "hip-thrust",
-        "region": "knee"
-      },
-      {
-        "exerciseId": "hip-thrust",
-        "region": "back"
-      },
-      {
-        "exerciseId": "hip-thrust",
-        "region": "ankle_foot"
-      },
-      {
-        "exerciseId": "incline-dumbbell-bench-press",
-        "region": "back"
-      },
-      {
-        "exerciseId": "leg-extension-machine",
-        "region": "hip"
-      },
-      {
-        "exerciseId": "leg-extension-machine",
-        "region": "back"
-      },
-      {
-        "exerciseId": "leg-extension-machine",
-        "region": "ankle_foot"
-      },
-      {
-        "exerciseId": "leg-press-45",
-        "region": "back"
-      },
-      {
-        "exerciseId": "low-step-up",
-        "region": "back"
-      },
-      {
-        "exerciseId": "lying-leg-curl-machine",
-        "region": "hip"
-      },
-      {
-        "exerciseId": "lying-leg-curl-machine",
-        "region": "back"
-      },
-      {
-        "exerciseId": "lying-leg-curl-machine",
-        "region": "ankle_foot"
-      },
-      {
         "exerciseId": "lying-leg-raise",
         "region": "hip"
       },
       {
         "exerciseId": "machine-lateral-raise",
         "region": "elbow"
-      },
-      {
-        "exerciseId": "march-in-place",
-        "region": "back"
-      },
-      {
-        "exerciseId": "mini-band-hip-abduction",
-        "region": "knee"
-      },
-      {
-        "exerciseId": "mini-band-hip-abduction",
-        "region": "back"
-      },
-      {
-        "exerciseId": "mini-band-hip-abduction",
-        "region": "ankle_foot"
-      },
-      {
-        "exerciseId": "pallof-press",
-        "region": "hip"
-      },
-      {
-        "exerciseId": "pallof-press",
-        "region": "back"
-      },
-      {
-        "exerciseId": "pallof-press",
-        "region": "shoulder"
-      },
-      {
-        "exerciseId": "pallof-press",
-        "region": "elbow"
-      },
-      {
-        "exerciseId": "pallof-press",
-        "region": "wrist"
-      },
-      {
-        "exerciseId": "plank",
-        "region": "hip"
-      },
-      {
-        "exerciseId": "push-up",
-        "region": "back"
-      },
-      {
-        "exerciseId": "resistance-band-lat-pulldown",
-        "region": "knee"
-      },
-      {
-        "exerciseId": "resistance-band-lat-pulldown",
-        "region": "back"
-      },
-      {
-        "exerciseId": "resistance-band-shoulder-press",
-        "region": "back"
-      },
-      {
-        "exerciseId": "seated-dumbbell-curl",
-        "region": "shoulder"
-      },
-      {
-        "exerciseId": "seated-hip-abductor-machine",
-        "region": "knee"
-      },
-      {
-        "exerciseId": "seated-hip-abductor-machine",
-        "region": "ankle_foot"
-      },
-      {
-        "exerciseId": "seated-leg-curl-machine",
-        "region": "hip"
-      },
-      {
-        "exerciseId": "seated-leg-curl-machine",
-        "region": "ankle_foot"
-      },
-      {
-        "exerciseId": "slider-leg-curl",
-        "region": "hip"
-      },
-      {
-        "exerciseId": "slider-leg-curl",
-        "region": "back"
-      },
-      {
-        "exerciseId": "slider-leg-curl",
-        "region": "ankle_foot"
-      },
-      {
-        "exerciseId": "standing-calf-raise-machine",
-        "region": "knee"
-      },
-      {
-        "exerciseId": "standing-calf-raise-machine",
-        "region": "hip"
-      },
-      {
-        "exerciseId": "standing-calf-raise-machine",
-        "region": "back"
-      },
-      {
-        "exerciseId": "stationary-bike",
-        "region": "back"
-      },
-      {
-        "exerciseId": "stationary-lunge",
-        "region": "back"
-      },
-      {
-        "exerciseId": "supported-balance",
-        "region": "back"
-      },
-      {
-        "exerciseId": "supported-calf-raise",
-        "region": "knee"
-      },
-      {
-        "exerciseId": "supported-calf-raise",
-        "region": "hip"
-      },
-      {
-        "exerciseId": "supported-calf-raise",
-        "region": "back"
-      },
-      {
-        "exerciseId": "supported-hip-abduction",
-        "region": "knee"
-      },
-      {
-        "exerciseId": "supported-hip-abduction",
-        "region": "back"
-      },
-      {
-        "exerciseId": "supported-hip-abduction",
-        "region": "ankle_foot"
-      },
-      {
-        "exerciseId": "supported-low-step-up",
-        "region": "back"
-      },
-      {
-        "exerciseId": "supported-semi-tandem-stance",
-        "region": "back"
-      },
-      {
-        "exerciseId": "supported-standing-leg-curl",
-        "region": "hip"
-      },
-      {
-        "exerciseId": "supported-standing-leg-curl",
-        "region": "back"
-      },
-      {
-        "exerciseId": "thoracic-mobility",
-        "region": "knee"
-      },
-      {
-        "exerciseId": "thoracic-mobility",
-        "region": "back"
-      },
-      {
-        "exerciseId": "thoracic-mobility",
-        "region": "shoulder"
-      },
-      {
-        "exerciseId": "thoracic-mobility",
-        "region": "ankle_foot"
-      },
-      {
-        "exerciseId": "triceps-rope-pushdown",
-        "region": "back"
-      },
-      {
-        "exerciseId": "triceps-rope-pushdown",
-        "region": "shoulder"
-      },
-      {
-        "exerciseId": "unilateral-iso-lateral-row-machine",
-        "region": "back"
-      },
-      {
-        "exerciseId": "walking",
-        "region": "back"
-      },
-      {
-        "exerciseId": "walking-lunges",
-        "region": "back"
-      },
-      {
-        "exerciseId": "wall-push-up",
-        "region": "back"
-      },
-      {
-        "exerciseId": "wall-push-up",
-        "region": "ankle_foot"
-      },
-      {
-        "exerciseId": "weight-shift",
-        "region": "back"
       }
     ],
-    "cyclesByRegion": [
-      {
-        "region": "hip",
-        "exerciseIds": [
-          "glute-bridge",
-          "cable-glute-kickback",
-          "glute-bridge"
-        ]
-      },
-      {
-        "region": "hip",
-        "exerciseIds": [
-          "hip-hinge-drill",
-          "dumbbell-stiff-leg-deadlift",
-          "hip-hinge-drill"
-        ]
-      },
-      {
-        "region": "hip",
-        "exerciseIds": [
-          "supported-hip-abduction",
-          "seated-hip-abductor-machine",
-          "supported-hip-abduction"
-        ]
-      },
-      {
-        "region": "back",
-        "exerciseIds": [
-          "hip-hinge-drill",
-          "dumbbell-stiff-leg-deadlift",
-          "hip-hinge-drill"
-        ]
-      },
-      {
-        "region": "back",
-        "exerciseIds": [
-          "lying-leg-raise",
-          "floor-crunch",
-          "lying-leg-raise"
-        ]
-      },
-      {
-        "region": "shoulder",
-        "exerciseIds": [
-          "machine-lateral-raise",
-          "dumbbell-lateral-raise",
-          "machine-lateral-raise"
-        ]
-      },
-      {
-        "region": "shoulder",
-        "exerciseIds": [
-          "resistance-band-lat-pulldown",
-          "iso-lateral-pulldown-machine",
-          "resistance-band-lat-pulldown"
-        ]
-      },
-      {
-        "region": "shoulder",
-        "exerciseIds": [
-          "seated-resistance-band-shoulder-press",
-          "machine-shoulder-press",
-          "seated-resistance-band-shoulder-press"
-        ]
-      },
-      {
-        "region": "elbow",
-        "exerciseIds": [
-          "hammer-curl",
-          "cable-biceps-curl",
-          "hammer-curl"
-        ]
-      },
-      {
-        "region": "elbow",
-        "exerciseIds": [
-          "triceps-rope-pushdown",
-          "cable-triceps-pushdown",
-          "triceps-rope-pushdown"
-        ]
-      },
-      {
-        "region": "elbow",
-        "exerciseIds": [
-          "resistance-band-lat-pulldown",
-          "iso-lateral-pulldown-machine",
-          "resistance-band-lat-pulldown"
-        ]
-      },
-      {
-        "region": "elbow",
-        "exerciseIds": [
-          "resistance-band-row",
-          "iso-lateral-row-machine",
-          "resistance-band-row"
-        ]
-      },
-      {
-        "region": "elbow",
-        "exerciseIds": [
-          "seated-resistance-band-shoulder-press",
-          "machine-shoulder-press",
-          "seated-resistance-band-shoulder-press"
-        ]
-      },
-      {
-        "region": "wrist",
-        "exerciseIds": [
-          "resistance-band-lat-pulldown",
-          "iso-lateral-pulldown-machine",
-          "resistance-band-lat-pulldown"
-        ]
-      },
-      {
-        "region": "wrist",
-        "exerciseIds": [
-          "resistance-band-row",
-          "iso-lateral-row-machine",
-          "resistance-band-row"
-        ]
-      },
-      {
-        "region": "wrist",
-        "exerciseIds": [
-          "seated-resistance-band-shoulder-press",
-          "machine-shoulder-press",
-          "seated-resistance-band-shoulder-press"
-        ]
-      }
-    ],
+    "cyclesByRegion": [],
     "globalCycles": [
       [
-        "hammer-curl",
-        "cable-biceps-curl",
-        "hammer-curl"
+        "cable-triceps-pushdown",
+        "triceps-rope-pushdown",
+        "cable-triceps-pushdown"
       ],
       [
         "seated-dumbbell-curl",
         "hammer-curl",
-        "cable-biceps-curl",
         "seated-dumbbell-curl"
       ],
       [
-        "glute-bridge",
-        "cable-glute-kickback",
-        "glute-bridge"
-      ],
-      [
-        "triceps-rope-pushdown",
-        "cable-triceps-pushdown",
-        "triceps-rope-pushdown"
-      ],
-      [
-        "machine-lateral-raise",
-        "dumbbell-lateral-raise",
-        "machine-lateral-raise"
-      ],
-      [
-        "hip-hinge-drill",
-        "dumbbell-stiff-leg-deadlift",
-        "hip-hinge-drill"
-      ],
-      [
-        "lying-leg-raise",
-        "floor-crunch",
-        "lying-leg-raise"
-      ],
-      [
-        "resistance-band-lat-pulldown",
         "iso-lateral-pulldown-machine",
-        "resistance-band-lat-pulldown"
-      ],
-      [
-        "resistance-band-row",
-        "iso-lateral-row-machine",
-        "resistance-band-row"
-      ],
-      [
-        "seated-resistance-band-shoulder-press",
-        "machine-shoulder-press",
-        "seated-resistance-band-shoulder-press"
-      ],
-      [
-        "supported-hip-abduction",
-        "seated-hip-abductor-machine",
-        "supported-hip-abduction"
+        "resistance-band-lat-pulldown",
+        "iso-lateral-pulldown-machine"
       ]
     ],
     "cyclesBlocking": false,
@@ -857,7 +251,7 @@
             "status": "adapt",
             "adaptation": {
               "kind": "exercise_variant",
-              "exerciseId": "chair-squat"
+              "exerciseId": "chair-sit-to-stand"
             }
           },
           "shoulder": {
@@ -906,9 +300,11 @@
             }
           },
           "back": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "adapt",
+            "adaptation": {
+              "kind": "exercise_variant",
+              "exerciseId": "supported-low-step-up"
+            }
           },
           "shoulder": {
             "status": "not_applicable"
@@ -945,9 +341,7 @@
             }
           },
           "hip": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "compatible"
           },
           "back": {
             "status": "compatible"
@@ -994,9 +388,11 @@
             "status": "compatible"
           },
           "back": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "adapt",
+            "adaptation": {
+              "kind": "exercise_variant",
+              "exerciseId": "chair-sit-to-stand"
+            }
           },
           "shoulder": {
             "status": "not_applicable"
@@ -1040,9 +436,11 @@
             }
           },
           "back": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "adapt",
+            "adaptation": {
+              "kind": "exercise_variant",
+              "exerciseId": "supported-low-step-up"
+            }
           },
           "shoulder": {
             "status": "not_applicable"
@@ -1086,9 +484,11 @@
             }
           },
           "back": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "adapt",
+            "adaptation": {
+              "kind": "exercise_variant",
+              "exerciseId": "supported-low-step-up"
+            }
           },
           "shoulder": {
             "status": "not_applicable"
@@ -1220,16 +620,10 @@
             "status": "not_applicable"
           },
           "back": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "compatible"
           },
           "shoulder": {
-            "status": "adapt",
-            "adaptation": {
-              "kind": "exercise_variant",
-              "exerciseId": "resistance-band-row"
-            }
+            "status": "compatible"
           },
           "elbow": {
             "status": "adapt",
@@ -1269,9 +663,7 @@
             "status": "compatible"
           },
           "shoulder": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "not_applicable"
           },
           "elbow": {
             "status": "adapt",
@@ -1308,9 +700,7 @@
             "status": "compatible"
           },
           "back": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "compatible"
           },
           "shoulder": {
             "status": "not_applicable"
@@ -1342,9 +732,11 @@
             "status": "compatible"
           },
           "back": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "adapt",
+            "adaptation": {
+              "kind": "exercise_variant",
+              "exerciseId": "chair-sit-to-stand"
+            }
           },
           "shoulder": {
             "status": "not_applicable"
@@ -1376,9 +768,7 @@
             "status": "compatible"
           },
           "back": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "compatible"
           },
           "shoulder": {
             "status": "not_applicable"
@@ -1404,9 +794,11 @@
         "protocolVersion": "musculoskeletal-v1",
         "regions": {
           "knee": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "adapt",
+            "adaptation": {
+              "kind": "exercise_variant",
+              "exerciseId": "hip-hinge-drill"
+            }
           },
           "hip": {
             "status": "adapt",
@@ -1423,9 +815,11 @@
             }
           },
           "shoulder": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "adapt",
+            "adaptation": {
+              "kind": "exercise_variant",
+              "exerciseId": "hip-hinge-drill"
+            }
           },
           "elbow": {
             "status": "not_applicable"
@@ -1434,13 +828,15 @@
             "status": "adapt",
             "adaptation": {
               "kind": "exercise_variant",
-              "exerciseId": "hip-hinge-drill"
+              "exerciseId": "dumbbell-stiff-leg-deadlift"
             }
           },
           "ankle_foot": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "adapt",
+            "adaptation": {
+              "kind": "exercise_variant",
+              "exerciseId": "hip-hinge-drill"
+            }
           }
         },
         "reviewStatus": "approved",
@@ -1486,22 +882,16 @@
         "protocolVersion": "musculoskeletal-v1",
         "regions": {
           "knee": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "not_applicable"
           },
           "hip": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "compatible"
           },
           "back": {
             "status": "compatible"
           },
           "shoulder": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "compatible"
           },
           "elbow": {
             "status": "compatible"
@@ -1530,9 +920,11 @@
             "status": "not_applicable"
           },
           "back": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "adapt",
+            "adaptation": {
+              "kind": "exercise_variant",
+              "exerciseId": "machine-lateral-raise"
+            }
           },
           "shoulder": {
             "status": "adapt",
@@ -1542,9 +934,7 @@
             }
           },
           "elbow": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "not_applicable"
           },
           "wrist": {
             "status": "adapt",
@@ -1574,9 +964,11 @@
             "status": "not_applicable"
           },
           "back": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "adapt",
+            "adaptation": {
+              "kind": "exercise_variant",
+              "exerciseId": "cable-triceps-pushdown"
+            }
           },
           "shoulder": {
             "status": "adapt",
@@ -1620,9 +1012,11 @@
             "status": "not_applicable"
           },
           "back": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "adapt",
+            "adaptation": {
+              "kind": "exercise_variant",
+              "exerciseId": "machine-shoulder-press"
+            }
           },
           "shoulder": {
             "status": "adapt",
@@ -1660,9 +1054,11 @@
         "protocolVersion": "musculoskeletal-v1",
         "regions": {
           "knee": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "adapt",
+            "adaptation": {
+              "kind": "exercise_variant",
+              "exerciseId": "hip-hinge-drill"
+            }
           },
           "hip": {
             "status": "adapt",
@@ -1679,24 +1075,24 @@
             }
           },
           "shoulder": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
-          },
-          "elbow": {
-            "status": "not_applicable"
-          },
-          "wrist": {
             "status": "adapt",
             "adaptation": {
               "kind": "exercise_variant",
               "exerciseId": "hip-hinge-drill"
             }
           },
+          "elbow": {
+            "status": "not_applicable"
+          },
+          "wrist": {
+            "status": "compatible"
+          },
           "ankle_foot": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "adapt",
+            "adaptation": {
+              "kind": "exercise_variant",
+              "exerciseId": "hip-hinge-drill"
+            }
           }
         },
         "reviewStatus": "approved",
@@ -1716,14 +1112,14 @@
             "status": "not_applicable"
           },
           "back": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "adapt",
+            "adaptation": {
+              "kind": "exercise_variant",
+              "exerciseId": "seated-dumbbell-curl"
+            }
           },
           "shoulder": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "not_applicable"
           },
           "elbow": {
             "status": "adapt",
@@ -1754,39 +1150,25 @@
         "protocolVersion": "musculoskeletal-v1",
         "regions": {
           "knee": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "compatible"
           },
           "hip": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "compatible"
           },
           "back": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "compatible"
           },
           "shoulder": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "compatible"
           },
           "elbow": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "compatible"
           },
           "wrist": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "compatible"
           },
           "ankle_foot": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "compatible"
           }
         },
         "reviewStatus": "approved",
@@ -1803,16 +1185,10 @@
             "status": "not_applicable"
           },
           "hip": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "compatible"
           },
           "back": {
-            "status": "adapt",
-            "adaptation": {
-              "kind": "exercise_variant",
-              "exerciseId": "lying-leg-raise"
-            }
+            "status": "compatible"
           },
           "shoulder": {
             "status": "not_applicable"
@@ -1838,23 +1214,13 @@
         "protocolVersion": "musculoskeletal-v1",
         "regions": {
           "knee": {
-            "status": "adapt",
-            "adaptation": {
-              "kind": "exercise_variant",
-              "exerciseId": "controlled-marching"
-            }
+            "status": "compatible"
           },
           "hip": {
-            "status": "adapt",
-            "adaptation": {
-              "kind": "exercise_variant",
-              "exerciseId": "controlled-marching"
-            }
+            "status": "compatible"
           },
           "back": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "compatible"
           },
           "shoulder": {
             "status": "not_applicable"
@@ -1866,11 +1232,7 @@
             "status": "not_applicable"
           },
           "ankle_foot": {
-            "status": "adapt",
-            "adaptation": {
-              "kind": "exercise_variant",
-              "exerciseId": "controlled-marching"
-            }
+            "status": "compatible"
           }
         },
         "reviewStatus": "approved",
@@ -1884,21 +1246,13 @@
         "protocolVersion": "musculoskeletal-v1",
         "regions": {
           "knee": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "compatible"
           },
           "hip": {
-            "status": "adapt",
-            "adaptation": {
-              "kind": "exercise_variant",
-              "exerciseId": "cable-glute-kickback"
-            }
+            "status": "compatible"
           },
           "back": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "compatible"
           },
           "shoulder": {
             "status": "not_applicable"
@@ -1910,9 +1264,7 @@
             "status": "not_applicable"
           },
           "ankle_foot": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "not_applicable"
           }
         },
         "reviewStatus": "approved",
@@ -1943,7 +1295,7 @@
             "status": "adapt",
             "adaptation": {
               "kind": "exercise_variant",
-              "exerciseId": "chair-squat"
+              "exerciseId": "chair-sit-to-stand"
             }
           },
           "shoulder": {
@@ -1953,9 +1305,11 @@
             "status": "not_applicable"
           },
           "wrist": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "adapt",
+            "adaptation": {
+              "kind": "exercise_variant",
+              "exerciseId": "chair-sit-to-stand"
+            }
           },
           "ankle_foot": {
             "status": "adapt",
@@ -1990,9 +1344,11 @@
             }
           },
           "back": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "adapt",
+            "adaptation": {
+              "kind": "exercise_variant",
+              "exerciseId": "chair-sit-to-stand"
+            }
           },
           "shoulder": {
             "status": "not_applicable"
@@ -2028,21 +1384,17 @@
             "status": "not_applicable"
           },
           "back": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
-          },
-          "shoulder": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
-          },
-          "elbow": {
             "status": "adapt",
             "adaptation": {
               "kind": "exercise_variant",
-              "exerciseId": "cable-biceps-curl"
+              "exerciseId": "seated-dumbbell-curl"
             }
+          },
+          "shoulder": {
+            "status": "not_applicable"
+          },
+          "elbow": {
+            "status": "compatible"
           },
           "wrist": {
             "status": "compatible"
@@ -2062,23 +1414,13 @@
         "protocolVersion": "musculoskeletal-v1",
         "regions": {
           "knee": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "compatible"
           },
           "hip": {
-            "status": "adapt",
-            "adaptation": {
-              "kind": "exercise_variant",
-              "exerciseId": "dumbbell-stiff-leg-deadlift"
-            }
+            "status": "compatible"
           },
           "back": {
-            "status": "adapt",
-            "adaptation": {
-              "kind": "exercise_variant",
-              "exerciseId": "dumbbell-stiff-leg-deadlift"
-            }
+            "status": "compatible"
           },
           "shoulder": {
             "status": "not_applicable"
@@ -2090,9 +1432,7 @@
             "status": "not_applicable"
           },
           "ankle_foot": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "compatible"
           }
         },
         "reviewStatus": "approved",
@@ -2106,24 +1446,16 @@
         "protocolVersion": "musculoskeletal-v1",
         "regions": {
           "knee": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "not_applicable"
           },
           "hip": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "compatible"
           },
           "back": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "compatible"
           },
           "shoulder": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "not_applicable"
           },
           "elbow": {
             "status": "not_applicable"
@@ -2132,9 +1464,7 @@
             "status": "not_applicable"
           },
           "ankle_foot": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "not_applicable"
           }
         },
         "reviewStatus": "approved",
@@ -2148,9 +1478,11 @@
         "protocolVersion": "musculoskeletal-v1",
         "regions": {
           "knee": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "adapt",
+            "adaptation": {
+              "kind": "exercise_variant",
+              "exerciseId": "glute-bridge"
+            }
           },
           "hip": {
             "status": "adapt",
@@ -2160,9 +1492,11 @@
             }
           },
           "back": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "adapt",
+            "adaptation": {
+              "kind": "exercise_variant",
+              "exerciseId": "glute-bridge"
+            }
           },
           "shoulder": {
             "status": "not_applicable"
@@ -2174,9 +1508,11 @@
             "status": "not_applicable"
           },
           "ankle_foot": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "adapt",
+            "adaptation": {
+              "kind": "exercise_variant",
+              "exerciseId": "glute-bridge"
+            }
           }
         },
         "reviewStatus": "approved",
@@ -2196,9 +1532,11 @@
             "status": "not_applicable"
           },
           "back": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "adapt",
+            "adaptation": {
+              "kind": "exercise_variant",
+              "exerciseId": "machine-flat-bench-press"
+            }
           },
           "shoulder": {
             "status": "adapt",
@@ -2371,14 +1709,10 @@
             "status": "compatible"
           },
           "hip": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "not_applicable"
           },
           "back": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "not_applicable"
           },
           "shoulder": {
             "status": "not_applicable"
@@ -2390,9 +1724,7 @@
             "status": "not_applicable"
           },
           "ankle_foot": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "not_applicable"
           }
         },
         "reviewStatus": "approved",
@@ -2420,9 +1752,11 @@
             }
           },
           "back": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "adapt",
+            "adaptation": {
+              "kind": "exercise_variant",
+              "exerciseId": "chair-sit-to-stand"
+            }
           },
           "shoulder": {
             "status": "not_applicable"
@@ -2510,9 +1844,11 @@
             }
           },
           "back": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "adapt",
+            "adaptation": {
+              "kind": "exercise_variant",
+              "exerciseId": "supported-low-step-up"
+            }
           },
           "shoulder": {
             "status": "not_applicable"
@@ -2545,14 +1881,10 @@
             "status": "compatible"
           },
           "hip": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "not_applicable"
           },
           "back": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "not_applicable"
           },
           "shoulder": {
             "status": "not_applicable"
@@ -2564,9 +1896,7 @@
             "status": "not_applicable"
           },
           "ankle_foot": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "not_applicable"
           }
         },
         "reviewStatus": "approved",
@@ -2641,11 +1971,7 @@
             }
           },
           "wrist": {
-            "status": "adapt",
-            "adaptation": {
-              "kind": "exercise_variant",
-              "exerciseId": "wall-push-up"
-            }
+            "status": "compatible"
           },
           "ankle_foot": {
             "status": "not_applicable"
@@ -2673,11 +1999,7 @@
             "status": "compatible"
           },
           "shoulder": {
-            "status": "adapt",
-            "adaptation": {
-              "kind": "exercise_variant",
-              "exerciseId": "dumbbell-lateral-raise"
-            }
+            "status": "compatible"
           },
           "elbow": {
             "status": "avoid",
@@ -2723,11 +2045,7 @@
             }
           },
           "wrist": {
-            "status": "adapt",
-            "adaptation": {
-              "kind": "exercise_variant",
-              "exerciseId": "seated-resistance-band-shoulder-press"
-            }
+            "status": "compatible"
           },
           "ankle_foot": {
             "status": "not_applicable"
@@ -2750,9 +2068,7 @@
             "status": "compatible"
           },
           "back": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "compatible"
           },
           "shoulder": {
             "status": "not_applicable"
@@ -2778,9 +2094,11 @@
         "protocolVersion": "musculoskeletal-v1",
         "regions": {
           "knee": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "adapt",
+            "adaptation": {
+              "kind": "exercise_variant",
+              "exerciseId": "seated-hip-abductor-machine"
+            }
           },
           "hip": {
             "status": "adapt",
@@ -2790,9 +2108,11 @@
             }
           },
           "back": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "adapt",
+            "adaptation": {
+              "kind": "exercise_variant",
+              "exerciseId": "seated-hip-abductor-machine"
+            }
           },
           "shoulder": {
             "status": "not_applicable"
@@ -2804,9 +2124,11 @@
             "status": "not_applicable"
           },
           "ankle_foot": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "adapt",
+            "adaptation": {
+              "kind": "exercise_variant",
+              "exerciseId": "seated-hip-abductor-machine"
+            }
           }
         },
         "reviewStatus": "approved",
@@ -2871,29 +2193,19 @@
             "status": "not_applicable"
           },
           "hip": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "not_applicable"
           },
           "back": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "compatible"
           },
           "shoulder": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "compatible"
           },
           "elbow": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "compatible"
           },
           "wrist": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "compatible"
           },
           "ankle_foot": {
             "status": "not_applicable"
@@ -2917,9 +2229,7 @@
             }
           },
           "hip": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "compatible"
           },
           "back": {
             "status": "adapt",
@@ -2970,9 +2280,11 @@
             "status": "not_applicable"
           },
           "back": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "adapt",
+            "adaptation": {
+              "kind": "exercise_variant",
+              "exerciseId": "wall-push-up"
+            }
           },
           "shoulder": {
             "status": "adapt",
@@ -3010,38 +2322,26 @@
         "protocolVersion": "musculoskeletal-v1",
         "regions": {
           "knee": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "not_applicable"
           },
           "hip": {
             "status": "not_applicable"
           },
           "back": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "adapt",
+            "adaptation": {
+              "kind": "exercise_variant",
+              "exerciseId": "iso-lateral-pulldown-machine"
+            }
           },
           "shoulder": {
-            "status": "adapt",
-            "adaptation": {
-              "kind": "exercise_variant",
-              "exerciseId": "iso-lateral-pulldown-machine"
-            }
+            "status": "compatible"
           },
           "elbow": {
-            "status": "adapt",
-            "adaptation": {
-              "kind": "exercise_variant",
-              "exerciseId": "iso-lateral-pulldown-machine"
-            }
+            "status": "compatible"
           },
           "wrist": {
-            "status": "adapt",
-            "adaptation": {
-              "kind": "exercise_variant",
-              "exerciseId": "iso-lateral-pulldown-machine"
-            }
+            "status": "compatible"
           },
           "ankle_foot": {
             "status": "not_applicable"
@@ -3070,18 +2370,10 @@
             "status": "compatible"
           },
           "elbow": {
-            "status": "adapt",
-            "adaptation": {
-              "kind": "exercise_variant",
-              "exerciseId": "iso-lateral-row-machine"
-            }
+            "status": "compatible"
           },
           "wrist": {
-            "status": "adapt",
-            "adaptation": {
-              "kind": "exercise_variant",
-              "exerciseId": "iso-lateral-row-machine"
-            }
+            "status": "compatible"
           },
           "ankle_foot": {
             "status": "not_applicable"
@@ -3104,9 +2396,11 @@
             "status": "not_applicable"
           },
           "back": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "adapt",
+            "adaptation": {
+              "kind": "exercise_variant",
+              "exerciseId": "machine-shoulder-press"
+            }
           },
           "shoulder": {
             "status": "adapt",
@@ -3153,9 +2447,7 @@
             "status": "compatible"
           },
           "shoulder": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "not_applicable"
           },
           "elbow": {
             "status": "adapt",
@@ -3186,16 +2478,10 @@
         "protocolVersion": "musculoskeletal-v1",
         "regions": {
           "knee": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "not_applicable"
           },
           "hip": {
-            "status": "adapt",
-            "adaptation": {
-              "kind": "exercise_variant",
-              "exerciseId": "supported-hip-abduction"
-            }
+            "status": "compatible"
           },
           "back": {
             "status": "compatible"
@@ -3210,9 +2496,7 @@
             "status": "not_applicable"
           },
           "ankle_foot": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "not_applicable"
           }
         },
         "reviewStatus": "approved",
@@ -3229,9 +2513,7 @@
             "status": "compatible"
           },
           "hip": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "not_applicable"
           },
           "back": {
             "status": "compatible"
@@ -3246,9 +2528,7 @@
             "status": "not_applicable"
           },
           "ankle_foot": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "not_applicable"
           }
         },
         "reviewStatus": "approved",
@@ -3271,25 +2551,13 @@
             "status": "compatible"
           },
           "shoulder": {
-            "status": "adapt",
-            "adaptation": {
-              "kind": "exercise_variant",
-              "exerciseId": "machine-shoulder-press"
-            }
+            "status": "compatible"
           },
           "elbow": {
-            "status": "adapt",
-            "adaptation": {
-              "kind": "exercise_variant",
-              "exerciseId": "machine-shoulder-press"
-            }
+            "status": "compatible"
           },
           "wrist": {
-            "status": "adapt",
-            "adaptation": {
-              "kind": "exercise_variant",
-              "exerciseId": "machine-shoulder-press"
-            }
+            "status": "compatible"
           },
           "ankle_foot": {
             "status": "not_applicable"
@@ -3309,14 +2577,18 @@
             "status": "compatible"
           },
           "hip": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "adapt",
+            "adaptation": {
+              "kind": "exercise_variant",
+              "exerciseId": "seated-leg-curl-machine"
+            }
           },
           "back": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "adapt",
+            "adaptation": {
+              "kind": "exercise_variant",
+              "exerciseId": "seated-leg-curl-machine"
+            }
           },
           "shoulder": {
             "status": "not_applicable"
@@ -3328,9 +2600,7 @@
             "status": "not_applicable"
           },
           "ankle_foot": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "compatible"
           }
         },
         "reviewStatus": "approved",
@@ -3344,19 +2614,17 @@
         "protocolVersion": "musculoskeletal-v1",
         "regions": {
           "knee": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "compatible"
           },
           "hip": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "not_applicable"
           },
           "back": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "adapt",
+            "adaptation": {
+              "kind": "exercise_variant",
+              "exerciseId": "supported-calf-raise"
+            }
           },
           "shoulder": {
             "status": "not_applicable"
@@ -3392,9 +2660,7 @@
             "status": "compatible"
           },
           "back": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "compatible"
           },
           "shoulder": {
             "status": "not_applicable"
@@ -3434,9 +2700,11 @@
             }
           },
           "back": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "adapt",
+            "adaptation": {
+              "kind": "exercise_variant",
+              "exerciseId": "supported-low-step-up"
+            }
           },
           "shoulder": {
             "status": "not_applicable"
@@ -3472,9 +2740,7 @@
             "status": "compatible"
           },
           "back": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "compatible"
           },
           "shoulder": {
             "status": "not_applicable"
@@ -3500,19 +2766,13 @@
         "protocolVersion": "musculoskeletal-v1",
         "regions": {
           "knee": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "compatible"
           },
           "hip": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "not_applicable"
           },
           "back": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "compatible"
           },
           "shoulder": {
             "status": "not_applicable"
@@ -3538,9 +2798,11 @@
         "protocolVersion": "musculoskeletal-v1",
         "regions": {
           "knee": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "adapt",
+            "adaptation": {
+              "kind": "exercise_variant",
+              "exerciseId": "seated-hip-abductor-machine"
+            }
           },
           "hip": {
             "status": "adapt",
@@ -3550,9 +2812,11 @@
             }
           },
           "back": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "adapt",
+            "adaptation": {
+              "kind": "exercise_variant",
+              "exerciseId": "seated-hip-abductor-machine"
+            }
           },
           "shoulder": {
             "status": "not_applicable"
@@ -3564,9 +2828,11 @@
             "status": "not_applicable"
           },
           "ankle_foot": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "adapt",
+            "adaptation": {
+              "kind": "exercise_variant",
+              "exerciseId": "seated-hip-abductor-machine"
+            }
           }
         },
         "reviewStatus": "approved",
@@ -3586,9 +2852,7 @@
             "status": "compatible"
           },
           "back": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "compatible"
           },
           "shoulder": {
             "status": "not_applicable"
@@ -3620,9 +2884,7 @@
             "status": "compatible"
           },
           "back": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "compatible"
           },
           "shoulder": {
             "status": "not_applicable"
@@ -3651,14 +2913,18 @@
             "status": "compatible"
           },
           "hip": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "adapt",
+            "adaptation": {
+              "kind": "exercise_variant",
+              "exerciseId": "seated-leg-curl-machine"
+            }
           },
           "back": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "adapt",
+            "adaptation": {
+              "kind": "exercise_variant",
+              "exerciseId": "seated-leg-curl-machine"
+            }
           },
           "shoulder": {
             "status": "not_applicable"
@@ -3688,22 +2954,16 @@
         "protocolVersion": "musculoskeletal-v1",
         "regions": {
           "knee": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "not_applicable"
           },
           "hip": {
             "status": "not_applicable"
           },
           "back": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "compatible"
           },
           "shoulder": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "compatible"
           },
           "elbow": {
             "status": "not_applicable"
@@ -3712,9 +2972,7 @@
             "status": "not_applicable"
           },
           "ankle_foot": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "not_applicable"
           }
         },
         "reviewStatus": "approved",
@@ -3734,21 +2992,21 @@
             "status": "not_applicable"
           },
           "back": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
-          },
-          "shoulder": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
-          },
-          "elbow": {
             "status": "adapt",
             "adaptation": {
               "kind": "exercise_variant",
               "exerciseId": "cable-triceps-pushdown"
             }
+          },
+          "shoulder": {
+            "status": "adapt",
+            "adaptation": {
+              "kind": "exercise_variant",
+              "exerciseId": "cable-triceps-pushdown"
+            }
+          },
+          "elbow": {
+            "status": "compatible"
           },
           "wrist": {
             "status": "compatible"
@@ -3774,9 +3032,11 @@
             "status": "not_applicable"
           },
           "back": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "adapt",
+            "adaptation": {
+              "kind": "exercise_variant",
+              "exerciseId": "resistance-band-row"
+            }
           },
           "shoulder": {
             "status": "adapt",
@@ -3864,9 +3124,7 @@
             "status": "compatible"
           },
           "back": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "compatible"
           },
           "shoulder": {
             "status": "not_applicable"
@@ -3906,9 +3164,11 @@
             }
           },
           "back": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "adapt",
+            "adaptation": {
+              "kind": "exercise_variant",
+              "exerciseId": "supported-low-step-up"
+            }
           },
           "shoulder": {
             "status": "not_applicable"
@@ -3944,9 +3204,7 @@
             "status": "not_applicable"
           },
           "back": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "compatible"
           },
           "shoulder": {
             "status": "compatible"
@@ -3958,9 +3216,7 @@
             "status": "compatible"
           },
           "ankle_foot": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "not_applicable"
           }
         },
         "reviewStatus": "approved",
@@ -3980,9 +3236,7 @@
             "status": "compatible"
           },
           "back": {
-            "status": "avoid",
-            "substituteExerciseIds": [],
-            "candidateStatus": "missing_exercise_candidate"
+            "status": "compatible"
           },
           "shoulder": {
             "status": "not_applicable"

@@ -12,9 +12,8 @@ import auditJson from '../../../docs/workout-modifiers/limitation-dataset-audit.
 /**
  * Regression/documentation tests for the limitation dataset audit tool
  * (scripts/auditLimitationDataset.ts). These pin down the CURRENT, known
- * state of the real dataset — they exist so a future dataset edit that
- * changes these specific, already-diagnosed cases is a deliberate,
- * visible change, not a silent drift. This is deterministic: it calls the
+ * state of the real dataset after the approved clinical decisions were
+ * materialized. This is deterministic: it calls the
  * REAL `resolveExerciseLimitations`/`validateLimitationProfile` from
  * `limitationResolver.ts` — nothing here reimplements resolver logic.
  */
@@ -32,14 +31,14 @@ function classify(exerciseId: string, region: Parameters<typeof classifyPair>[1]
 }
 
 describe('auditLimitationDataset — classifyPair', () => {
-  it('classifies plank×knee as INVALID_ADAPT_TARGET_AVOID (adapt target dead-bug is itself avoid for knee)', () => {
+  it('classifies plank×knee as a valid, terminal adaptation to dead-bug', () => {
     const result = classify('plank', 'knee');
-    expect(result.classification).toBe('INVALID_ADAPT_TARGET_AVOID');
-    expect(result.rootCause).toBe('A_ADAPT_TARGET_MARKED_AVOID');
-    expect(result.valid).toBe(false);
+    expect(result.classification).toBe('VALID_ADAPTATION');
+    expect(result.rootCause).toBeNull();
+    expect(result.valid).toBe(true);
     expect(result.adaptTargetId).toBe('dead-bug');
-    expect(result.adaptTargetStatusForRegion).toBe('avoid');
-    expect(VALID_CLASSIFICATIONS.has(result.classification)).toBe(false);
+    expect(result.adaptTargetStatusForRegion).toBe('not_applicable');
+    expect(VALID_CLASSIFICATIONS.has(result.classification)).toBe(true);
   });
 
   it('classifies plank×ankle_foot as DIRECT_NOT_APPLICABLE (a genuinely valid, unaffected region)', () => {
@@ -56,11 +55,11 @@ describe('auditLimitationDataset — classifyPair', () => {
     expect(result.adaptTargetId).toBe('wall-push-up');
   });
 
-  it('classifies an avoid rule with no persisted substitute as AVOID_NO_CANDIDATES, never inflated to a different category', () => {
+  it('classifies a former avoid-without-candidate as the approved terminal decision', () => {
     const result = classify('plank', 'hip');
-    expect(result.classification).toBe('AVOID_NO_CANDIDATES');
-    expect(result.rootCause).toBe('F_AVOID_NO_CANDIDATES_LISTED');
-    expect(result.avoidSubstituteIds).toEqual([]);
+    expect(result.classification).toBe('DIRECT_COMPATIBLE');
+    expect(result.rootCause).toBeNull();
+    expect(result.valid).toBe(true);
   });
 
   it('reports templatesAffected/templateCount from the exercise-template index, not guessed', () => {
@@ -79,8 +78,8 @@ describe('auditLimitationDataset — classifyPair', () => {
   });
 });
 
-describe('auditLimitationDataset — dataset-wide invariants (documents current state, does not fix it)', () => {
-  it('matches the known audited total: 176/497 combinations invalid across the 71 templated exercises', () => {
+describe('auditLimitationDataset — dataset-wide invariants', () => {
+  it('matches the zero-debt audit: 0/497 invalid across the 71 templated exercises', () => {
     // Mirrors the real script's own scope (see scripts/auditLimitationDataset.ts main()).
     // Recomputing the exact 71-exercise x 7-region matrix here would duplicate the
     // script; instead this pins the two numbers already cross-checked in the
@@ -89,6 +88,7 @@ describe('auditLimitationDataset — dataset-wide invariants (documents current 
     // NOTE: this is intentionally a snapshot, not a hard CI gate — see the
     // report's "Quality Gate futuro" section for the proposed baseline strategy.
     expect(auditJson.summary.totalAnalyzed).toBe(497);
-    expect(auditJson.summary.totalInvalid).toBe(176);
+    expect(auditJson.summary.totalValid).toBe(497);
+    expect(auditJson.summary.totalInvalid).toBe(0);
   });
 });

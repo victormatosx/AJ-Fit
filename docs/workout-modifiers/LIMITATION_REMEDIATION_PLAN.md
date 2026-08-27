@@ -2,6 +2,11 @@
 
 Generated: 2026-08-27.
 
+> **Status atual:** plano histórico concluído para o escopo individual alcançável.
+> As 176 decisões foram materializadas; o audit T001–T090 × 7 regiões está
+> em 497/497 válidas e o baseline de dívida é zero. O histórico abaixo foi
+> preservado para explicar a origem e a classificação da remediação.
+
 This document is the output of the remediation-preparation phase. It makes
 **no clinical decisions** and **no dataset edits**. It exists to (1) confirm
 the project's own existing contract for `avoid`/`adapt` before touching

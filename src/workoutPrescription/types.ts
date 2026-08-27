@@ -148,6 +148,19 @@ export interface ExerciseSubstitutionTrace {
   reasonCode: 'EQUIPMENT_UNAVAILABLE';
 }
 
+export type WorkoutExerciseOmissionReason =
+  | 'NO_SAFE_SUBSTITUTION'
+  | 'NO_ENVIRONMENT_CANDIDATE'
+  | 'COLLISION_NO_ALTERNATIVE'
+  | 'MULTI_LIMITATION_NO_INTERSECTION';
+
+export interface WorkoutExerciseOmissionTrace {
+  event: 'workout_exercise_omitted';
+  sessionIndex: number;
+  sourceExerciseId: string;
+  reason: WorkoutExerciseOmissionReason;
+}
+
 export type CompositionReasonCode =
   | 'BEGINNER_SESSION_REDUCED'
   | 'DURATION_SESSION_REDUCED'
@@ -157,7 +170,8 @@ export type CompositionReasonCode =
   | 'MUSCLE_PRIORITY_SET_ADDED'
   | 'PRIORITY_SET_SKIPPED_BEGINNER'
   | 'PRIORITY_SET_SKIPPED_DURATION'
-  | 'PRIORITY_SET_SKIPPED_SAFETY';
+  | 'PRIORITY_SET_SKIPPED_SAFETY'
+  | 'OMIT_UNSAFE_EXERCISE';
 
 export interface CompositionDecision {
   reasonCode: CompositionReasonCode;
@@ -168,6 +182,7 @@ export interface CompositionDecision {
   targetExerciseCount?: number;
   beforeSets?: number;
   afterSets?: number;
+  omissionReason?: WorkoutExerciseOmissionReason;
 }
 
 export interface PrescriptionTrace {
@@ -179,6 +194,8 @@ export interface PrescriptionTrace {
   substitutions: ExerciseSubstitutionTrace[];
   limitationResolverVersion: 1;
   limitationDecisions: LimitationDecisionTrace[];
+  /** Absent only on plans persisted before contextual limitation omission support. */
+  exerciseOmissions?: WorkoutExerciseOmissionTrace[];
   compositionDecisions: CompositionDecision[];
   validationCodes: string[];
 }
@@ -213,7 +230,8 @@ export type PrescriptionFailureCode =
   | 'BLOCKED'
   | 'INVALID_CONFIGURATION'
   | 'MISSING_TEMPLATE'
-  | 'MISSING_EXERCISE';
+  | 'MISSING_EXERCISE'
+  | 'NO_EXECUTABLE_SESSION';
 
 export type PrescriptionResult =
   | { status: 'SUCCESS'; plan: FinalWorkoutPlan }

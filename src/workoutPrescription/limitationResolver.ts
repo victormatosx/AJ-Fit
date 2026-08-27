@@ -51,6 +51,27 @@ export type LimitationResolutionResult =
   | { status: 'RESOLVED'; exercise: LimitationCatalogExercise; trace: ResolverTrace }
   | { status: 'FAILED'; reasonCodes: string[]; candidatesEvaluated: LimitationCandidateEvaluation[] };
 
+export type LimitationCandidateOrigin = 'preferred' | 'declared' | 'similar' | 'family';
+
+export interface RankedLimitationCandidateEvaluation extends LimitationCandidateEvaluation {
+  origin: LimitationCandidateOrigin;
+  rank: number;
+}
+
+export type ContextualLimitationResolutionResult =
+  | {
+      status: 'RESOLVED';
+      exercise: LimitationCatalogExercise;
+      trace: ResolverTrace;
+      candidateOrigin: 'original' | LimitationCandidateOrigin;
+    }
+  | {
+      status: 'FAILED';
+      failureKind: 'INVALID_CONFIGURATION' | 'NO_SAFE_CANDIDATE';
+      reasonCodes: string[];
+      candidatesEvaluated: RankedLimitationCandidateEvaluation[];
+    };
+
 export type QuestionnaireLimitationMapping =
   | { status: 'MAPPED'; regions: LimitationRegionId[] }
   | { status: 'UNMAPPED'; reasonCodes: ['UNMAPPED_LIMITATION_REGION'] };
@@ -163,8 +184,208 @@ function purposePreserved(
   source: LimitationCatalogExercise,
   candidate: LimitationCatalogExercise,
 ): boolean {
-  return candidate.movement.pattern === source.movement.pattern
-    && candidate.target.primaryMuscle === source.target.primaryMuscle;
+  const samePattern = candidate.movement.pattern === source.movement.pattern;
+  const samePrimaryMuscle = candidate.target.primaryMuscle === source.target.primaryMuscle;
+  const explicitlyApprovedVariant = source.substitution.limitationVariantIds
+    ?.includes(candidate.id) ?? false;
+  return samePattern && (samePrimaryMuscle || explicitlyApprovedVariant);
+}
+
+const DIFFICULTY_RANK = { beginner: 0, intermediate: 1, advanced: 2 } as const;
+const POSITION_STABILITY_RANK = {
+  lying: 0,
+  seated: 1,
+  kneeling: 2,
+  standing: 3,
+  hanging: 4,
+} as const;
+
+interface CandidateSeed {
+  exerciseId: string;
+  origin: LimitationCandidateOrigin;
+  originRank: number;
+}
+
+/**
+ * Builds a finite candidate pool from explicit clinical rules and canonical
+ * substitution relationships. Final ordering never depends on Map/Firestore
+ * iteration order: origin, declared order, laterality, stability, difficulty,
+ * then exerciseId form a total deterministic order.
+ */
+function rankedLimitationCandidates(input: {
+  source: LimitationCatalogExercise;
+  profile: ExerciseLimitationProfile;
+  regions: LimitationRegionId[];
+  catalog: LimitationCatalog;
+}): CandidateSeed[] {
+  const seeds = new Map<string, CandidateSeed>();
+  const originPriority = { preferred: 0, declared: 1, similar: 2, family: 3 } as const;
+  const add = (exerciseId: string, origin: LimitationCandidateOrigin, originRank: number) => {
+    if (!exerciseId || exerciseId === input.source.id) return;
+    const current = seeds.get(exerciseId);
+    if (
+      current
+      && (
+        originPriority[current.origin] < originPriority[origin]
+        || (current.origin === origin && current.originRank <= originRank)
+      )
+    ) return;
+    seeds.set(exerciseId, { exerciseId, origin, originRank });
+  };
+
+  let preferredRank = 0;
+  let declaredRank = 0;
+  for (const region of input.regions) {
+    const rule = input.profile.regions[region];
+    if (rule.status === 'adapt') add(rule.adaptation.exerciseId, 'preferred', preferredRank++);
+    if (rule.status === 'avoid') {
+      for (const exerciseId of rule.substituteExerciseIds) {
+        add(exerciseId, 'declared', declaredRank++);
+      }
+    }
+  }
+  for (const exerciseId of input.source.substitution.limitationVariantIds ?? []) {
+    add(exerciseId, 'declared', declaredRank++);
+  }
+  for (const exerciseId of [...input.source.substitution.similarExerciseIds].sort()) {
+    add(exerciseId, 'similar', 0);
+  }
+  const group = input.source.substitution.group;
+  if (group) {
+    for (const candidate of input.catalog.values()) {
+      if (
+        candidate.id !== input.source.id
+        && candidate.substitution.group === group
+        && candidate.movement.pattern === input.source.movement.pattern
+        && candidate.movement.mechanic === input.source.movement.mechanic
+      ) {
+        add(candidate.id, 'family', 0);
+      }
+    }
+  }
+
+  return [...seeds.values()].sort((left, right) => {
+    const leftExercise = input.catalog.get(left.exerciseId);
+    const rightExercise = input.catalog.get(right.exerciseId);
+    const leftTuple = [
+      originPriority[left.origin],
+      left.originRank,
+      leftExercise?.movement.laterality === input.source.movement.laterality ? 0 : 1,
+      leftExercise?.bodyPosition ? POSITION_STABILITY_RANK[leftExercise.bodyPosition] : 5,
+      leftExercise ? DIFFICULTY_RANK[leftExercise.difficulty] : 3,
+    ];
+    const rightTuple = [
+      originPriority[right.origin],
+      right.originRank,
+      rightExercise?.movement.laterality === input.source.movement.laterality ? 0 : 1,
+      rightExercise?.bodyPosition ? POSITION_STABILITY_RANK[rightExercise.bodyPosition] : 5,
+      rightExercise ? DIFFICULTY_RANK[rightExercise.difficulty] : 3,
+    ];
+    for (let index = 0; index < leftTuple.length; index += 1) {
+      if (leftTuple[index] !== rightTuple[index]) return leftTuple[index] - rightTuple[index];
+    }
+    return left.exerciseId.localeCompare(right.exerciseId);
+  });
+}
+
+/**
+ * Contextual selector used by composition. It does not recurse through
+ * limitation rules: every accepted candidate must already be terminal for
+ * the complete intersection of selected regions.
+ */
+export function resolveExerciseLimitationsFromCandidates(input: {
+  exerciseId: string;
+  regions: LimitationRegionId[];
+  catalog: LimitationCatalog;
+  isExecutable: (exercise: LimitationCatalogExercise) => boolean;
+  excludedExerciseIds?: ReadonlySet<string>;
+}): ContextualLimitationResolutionResult {
+  const source = input.catalog.get(input.exerciseId);
+  if (!source) {
+    return {
+      status: 'FAILED', failureKind: 'INVALID_CONFIGURATION',
+      reasonCodes: ['LIMITATION_PROFILE_MISSING'], candidatesEvaluated: [],
+    };
+  }
+  const sourceValidation = validateLimitationProfile(source.id, source.limitationProfile);
+  if (!sourceValidation.valid) {
+    return {
+      status: 'FAILED', failureKind: 'INVALID_CONFIGURATION',
+      reasonCodes: [sourceValidation.reasonCode], candidatesEvaluated: [],
+    };
+  }
+
+  const excluded = new Set(input.excludedExerciseIds ?? []);
+  const rules = input.regions.map((region) => ({
+    region,
+    rule: sourceValidation.profile.regions[region],
+  }));
+  const sourceTerminal = rules.every(({ rule }) =>
+    rule.status === 'compatible' || rule.status === 'not_applicable');
+  if (sourceTerminal && input.isExecutable(source) && !excluded.has(source.id)) {
+    return {
+      status: 'RESOLVED',
+      exercise: source,
+      candidateOrigin: 'original',
+      trace: {
+        originalExerciseId: source.id,
+        finalExerciseId: source.id,
+        regionsEvaluated: input.regions,
+        resolution: 'compatible',
+        reasonRegions: [],
+        protocolVersion: sourceValidation.profile.protocolVersion,
+        reviewBasis: sourceValidation.profile.reviewBasis,
+      },
+    };
+  }
+
+  const ranked = rankedLimitationCandidates({
+    source,
+    profile: sourceValidation.profile,
+    regions: input.regions,
+    catalog: input.catalog,
+  });
+  const visited = new Set<string>([source.id, ...excluded]);
+  const candidatesEvaluated: RankedLimitationCandidateEvaluation[] = [];
+  for (const [rank, candidate] of ranked.entries()) {
+    const evaluation = evaluateDirectLimitationCandidate({
+      source,
+      candidateId: candidate.exerciseId,
+      regions: input.regions,
+      catalog: input.catalog,
+      isExecutable: input.isExecutable,
+      visitedExerciseIds: visited,
+    });
+    const rankedEvaluation = { ...evaluation, origin: candidate.origin, rank };
+    candidatesEvaluated.push(rankedEvaluation);
+    if (!evaluation.accepted) continue;
+    const selected = input.catalog.get(candidate.exerciseId) as LimitationCatalogExercise;
+    const reasonRegions = rules
+      .filter(({ rule }) => rule.status === 'adapt' || rule.status === 'avoid')
+      .map(({ region }) => region);
+    return {
+      status: 'RESOLVED',
+      exercise: selected,
+      candidateOrigin: candidate.origin,
+      trace: {
+        originalExerciseId: source.id,
+        finalExerciseId: selected.id,
+        regionsEvaluated: input.regions,
+        resolution: rules.some(({ rule }) => rule.status === 'avoid') ? 'substituted' : 'adapted',
+        reasonRegions,
+        candidatesEvaluated,
+        protocolVersion: sourceValidation.profile.protocolVersion,
+        reviewBasis: sourceValidation.profile.reviewBasis,
+      },
+    };
+  }
+
+  return {
+    status: 'FAILED',
+    failureKind: 'NO_SAFE_CANDIDATE',
+    reasonCodes: ['NO_SAFE_SUBSTITUTION'],
+    candidatesEvaluated,
+  };
 }
 
 export function evaluateDirectLimitationCandidate(input: {

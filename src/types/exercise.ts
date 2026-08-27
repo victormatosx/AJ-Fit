@@ -155,6 +155,8 @@ export interface ExerciseExecution {
 export interface ExerciseSubstitution {
   group?: string;
   similarExerciseIds: string[];
+  /** Explicit cross-primary-muscle variants approved only for limitation resolution. */
+  limitationVariantIds?: string[];
 }
 
 export interface ExerciseAvailability {

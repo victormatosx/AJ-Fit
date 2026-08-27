@@ -1,0 +1,437 @@
+{
+  "generatedAt": "2026-08-27T16:10:52.407Z",
+  "candidatePolicy": {
+    "recursive": false,
+    "ranking": [
+      "preferred target",
+      "declared limitation variants",
+      "canonical similarExerciseIds",
+      "same substitution group + pattern + mechanic",
+      "same laterality",
+      "stable body position",
+      "lower difficulty",
+      "exerciseId"
+    ],
+    "terminalStatuses": [
+      "compatible",
+      "not_applicable"
+    ],
+    "multiLimitationPolicy": "intersection"
+  },
+  "individualPipeline": {
+    "total": 630,
+    "completed": 630,
+    "outcomes": {
+      "FULLY_PRESERVED": 9,
+      "ADAPTED": 207,
+      "ADAPTED_WITH_OMISSIONS": 414,
+      "NO_EXECUTABLE_SESSION": 0
+    },
+    "totalOmissions": 1184,
+    "omissionReasons": {
+      "NO_SAFE_SUBSTITUTION": 304,
+      "NO_ENVIRONMENT_CANDIDATE": 445,
+      "COLLISION_NO_ALTERNATIVE": 435,
+      "MULTI_LIMITATION_NO_INTERSECTION": 0
+    },
+    "noExecutableSession": 0,
+    "fatalCases": [],
+    "perRegion": {
+      "knee": {
+        "completed": 90,
+        "omissions": 112,
+        "noExecutableSession": 0
+      },
+      "hip": {
+        "completed": 90,
+        "omissions": 121,
+        "noExecutableSession": 0
+      },
+      "back": {
+        "completed": 90,
+        "omissions": 306,
+        "noExecutableSession": 0
+      },
+      "shoulder": {
+        "completed": 90,
+        "omissions": 176,
+        "noExecutableSession": 0
+      },
+      "elbow": {
+        "completed": 90,
+        "omissions": 168,
+        "noExecutableSession": 0
+      },
+      "wrist": {
+        "completed": 90,
+        "omissions": 180,
+        "noExecutableSession": 0
+      },
+      "ankle_foot": {
+        "completed": 90,
+        "omissions": 121,
+        "noExecutableSession": 0
+      }
+    },
+    "perEnvironment": {
+      "gym": {
+        "completed": 315,
+        "omissions": 246,
+        "noExecutableSession": 0
+      },
+      "home": {
+        "completed": 315,
+        "omissions": 938,
+        "noExecutableSession": 0
+      }
+    },
+    "topTemplateSessionsByOmissions": [
+      {
+        "key": "T067:session-2",
+        "omissions": 19
+      },
+      {
+        "key": "T068:session-3",
+        "omissions": 19
+      },
+      {
+        "key": "T055:session-2",
+        "omissions": 15
+      },
+      {
+        "key": "T056:session-3",
+        "omissions": 15
+      },
+      {
+        "key": "T057:session-4",
+        "omissions": 14
+      },
+      {
+        "key": "T058:session-4",
+        "omissions": 14
+      },
+      {
+        "key": "T059:session-5",
+        "omissions": 14
+      },
+      {
+        "key": "T060:session-5",
+        "omissions": 14
+      },
+      {
+        "key": "T069:session-4",
+        "omissions": 14
+      },
+      {
+        "key": "T070:session-4",
+        "omissions": 14
+      },
+      {
+        "key": "T071:session-5",
+        "omissions": 14
+      },
+      {
+        "key": "T072:session-5",
+        "omissions": 14
+      },
+      {
+        "key": "T078:session-2",
+        "omissions": 12
+      },
+      {
+        "key": "T084:session-2",
+        "omissions": 12
+      },
+      {
+        "key": "T020:session-3",
+        "omissions": 11
+      },
+      {
+        "key": "T023:session-3",
+        "omissions": 11
+      },
+      {
+        "key": "T024:session-3",
+        "omissions": 11
+      },
+      {
+        "key": "T067:session-1",
+        "omissions": 11
+      },
+      {
+        "key": "T068:session-1",
+        "omissions": 11
+      },
+      {
+        "key": "T069:session-1",
+        "omissions": 11
+      }
+    ]
+  },
+  "multiLimitationSlots": {
+    "total": 9017,
+    "resolvedSafe": 8433,
+    "omittedNoSafeCandidate": 584,
+    "invalidConfiguration": 0,
+    "omissionsBySelectedRegionCount": {
+      "2": 30,
+      "3": 123,
+      "4": 199,
+      "5": 159,
+      "6": 63,
+      "7": 10
+    },
+    "compositionOutcomes": {
+      "originalSafe": 4159,
+      "adaptedSafe": 4274,
+      "omittedNoSafeCandidate": 584,
+      "fatal": 0
+    }
+  },
+  "formerlyFatalHomePairs": {
+    "total": 29,
+    "before": {
+      "fatalNoSafeEquipmentSubstitute": 29
+    },
+    "after": {
+      "fatalNoSafeEquipmentSubstitute": 0,
+      "adaptedSafe": 6,
+      "originalSafe": 0,
+      "omittedNoSafeCandidate": 23
+    },
+    "cases": [
+      {
+        "exerciseId": "dumbbell-lateral-raise",
+        "region": "back",
+        "outcome": "OMITTED_NO_SAFE_CANDIDATE",
+        "finalExerciseId": null,
+        "candidateOrigin": null,
+        "executableAtHome": null
+      },
+      {
+        "exerciseId": "dumbbell-lateral-raise",
+        "region": "shoulder",
+        "outcome": "OMITTED_NO_SAFE_CANDIDATE",
+        "finalExerciseId": null,
+        "candidateOrigin": null,
+        "executableAtHome": null
+      },
+      {
+        "exerciseId": "dumbbell-lateral-raise",
+        "region": "wrist",
+        "outcome": "OMITTED_NO_SAFE_CANDIDATE",
+        "finalExerciseId": null,
+        "candidateOrigin": null,
+        "executableAtHome": null
+      },
+      {
+        "exerciseId": "dumbbell-overhead-triceps-extension",
+        "region": "back",
+        "outcome": "OMITTED_NO_SAFE_CANDIDATE",
+        "finalExerciseId": null,
+        "candidateOrigin": null,
+        "executableAtHome": null
+      },
+      {
+        "exerciseId": "dumbbell-overhead-triceps-extension",
+        "region": "shoulder",
+        "outcome": "OMITTED_NO_SAFE_CANDIDATE",
+        "finalExerciseId": null,
+        "candidateOrigin": null,
+        "executableAtHome": null
+      },
+      {
+        "exerciseId": "dumbbell-overhead-triceps-extension",
+        "region": "elbow",
+        "outcome": "OMITTED_NO_SAFE_CANDIDATE",
+        "finalExerciseId": null,
+        "candidateOrigin": null,
+        "executableAtHome": null
+      },
+      {
+        "exerciseId": "dumbbell-overhead-triceps-extension",
+        "region": "wrist",
+        "outcome": "OMITTED_NO_SAFE_CANDIDATE",
+        "finalExerciseId": null,
+        "candidateOrigin": null,
+        "executableAtHome": null
+      },
+      {
+        "exerciseId": "dumbbell-shoulder-press",
+        "region": "back",
+        "outcome": "ADAPTED_SAFE",
+        "finalExerciseId": "seated-resistance-band-shoulder-press",
+        "candidateOrigin": "similar",
+        "executableAtHome": true
+      },
+      {
+        "exerciseId": "dumbbell-shoulder-press",
+        "region": "wrist",
+        "outcome": "ADAPTED_SAFE",
+        "finalExerciseId": "seated-resistance-band-shoulder-press",
+        "candidateOrigin": "similar",
+        "executableAtHome": true
+      },
+      {
+        "exerciseId": "incline-dumbbell-bench-press",
+        "region": "back",
+        "outcome": "ADAPTED_SAFE",
+        "finalExerciseId": "wall-push-up",
+        "candidateOrigin": "similar",
+        "executableAtHome": true
+      },
+      {
+        "exerciseId": "incline-dumbbell-bench-press",
+        "region": "wrist",
+        "outcome": "ADAPTED_SAFE",
+        "finalExerciseId": "wall-push-up",
+        "candidateOrigin": "similar",
+        "executableAtHome": true
+      },
+      {
+        "exerciseId": "mini-band-hip-abduction",
+        "region": "knee",
+        "outcome": "OMITTED_NO_SAFE_CANDIDATE",
+        "finalExerciseId": null,
+        "candidateOrigin": null,
+        "executableAtHome": null
+      },
+      {
+        "exerciseId": "mini-band-hip-abduction",
+        "region": "hip",
+        "outcome": "OMITTED_NO_SAFE_CANDIDATE",
+        "finalExerciseId": null,
+        "candidateOrigin": null,
+        "executableAtHome": null
+      },
+      {
+        "exerciseId": "mini-band-hip-abduction",
+        "region": "back",
+        "outcome": "OMITTED_NO_SAFE_CANDIDATE",
+        "finalExerciseId": null,
+        "candidateOrigin": null,
+        "executableAtHome": null
+      },
+      {
+        "exerciseId": "mini-band-hip-abduction",
+        "region": "ankle_foot",
+        "outcome": "OMITTED_NO_SAFE_CANDIDATE",
+        "finalExerciseId": null,
+        "candidateOrigin": null,
+        "executableAtHome": null
+      },
+      {
+        "exerciseId": "one-arm-dumbbell-row",
+        "region": "back",
+        "outcome": "ADAPTED_SAFE",
+        "finalExerciseId": "resistance-band-row",
+        "candidateOrigin": "family",
+        "executableAtHome": true
+      },
+      {
+        "exerciseId": "resistance-band-lat-pulldown",
+        "region": "back",
+        "outcome": "OMITTED_NO_SAFE_CANDIDATE",
+        "finalExerciseId": null,
+        "candidateOrigin": null,
+        "executableAtHome": null
+      },
+      {
+        "exerciseId": "resistance-band-shoulder-press",
+        "region": "back",
+        "outcome": "ADAPTED_SAFE",
+        "finalExerciseId": "seated-resistance-band-shoulder-press",
+        "candidateOrigin": "similar",
+        "executableAtHome": true
+      },
+      {
+        "exerciseId": "slider-leg-curl",
+        "region": "hip",
+        "outcome": "OMITTED_NO_SAFE_CANDIDATE",
+        "finalExerciseId": null,
+        "candidateOrigin": null,
+        "executableAtHome": null
+      },
+      {
+        "exerciseId": "slider-leg-curl",
+        "region": "back",
+        "outcome": "OMITTED_NO_SAFE_CANDIDATE",
+        "finalExerciseId": null,
+        "candidateOrigin": null,
+        "executableAtHome": null
+      },
+      {
+        "exerciseId": "supported-hip-abduction",
+        "region": "knee",
+        "outcome": "OMITTED_NO_SAFE_CANDIDATE",
+        "finalExerciseId": null,
+        "candidateOrigin": null,
+        "executableAtHome": null
+      },
+      {
+        "exerciseId": "supported-hip-abduction",
+        "region": "hip",
+        "outcome": "OMITTED_NO_SAFE_CANDIDATE",
+        "finalExerciseId": null,
+        "candidateOrigin": null,
+        "executableAtHome": null
+      },
+      {
+        "exerciseId": "supported-hip-abduction",
+        "region": "back",
+        "outcome": "OMITTED_NO_SAFE_CANDIDATE",
+        "finalExerciseId": null,
+        "candidateOrigin": null,
+        "executableAtHome": null
+      },
+      {
+        "exerciseId": "supported-hip-abduction",
+        "region": "ankle_foot",
+        "outcome": "OMITTED_NO_SAFE_CANDIDATE",
+        "finalExerciseId": null,
+        "candidateOrigin": null,
+        "executableAtHome": null
+      },
+      {
+        "exerciseId": "supported-standing-leg-curl",
+        "region": "hip",
+        "outcome": "OMITTED_NO_SAFE_CANDIDATE",
+        "finalExerciseId": null,
+        "candidateOrigin": null,
+        "executableAtHome": null
+      },
+      {
+        "exerciseId": "supported-standing-leg-curl",
+        "region": "back",
+        "outcome": "OMITTED_NO_SAFE_CANDIDATE",
+        "finalExerciseId": null,
+        "candidateOrigin": null,
+        "executableAtHome": null
+      },
+      {
+        "exerciseId": "supported-standing-leg-curl",
+        "region": "ankle_foot",
+        "outcome": "OMITTED_NO_SAFE_CANDIDATE",
+        "finalExerciseId": null,
+        "candidateOrigin": null,
+        "executableAtHome": null
+      },
+      {
+        "exerciseId": "triceps-rope-pushdown",
+        "region": "back",
+        "outcome": "OMITTED_NO_SAFE_CANDIDATE",
+        "finalExerciseId": null,
+        "candidateOrigin": null,
+        "executableAtHome": null
+      },
+      {
+        "exerciseId": "triceps-rope-pushdown",
+        "region": "shoulder",
+        "outcome": "OMITTED_NO_SAFE_CANDIDATE",
+        "finalExerciseId": null,
+        "candidateOrigin": null,
+        "executableAtHome": null
+      }
+    ]
+  }
+}

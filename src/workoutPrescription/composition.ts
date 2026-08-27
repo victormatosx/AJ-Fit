@@ -4,7 +4,7 @@ import { equipmentContextFor, isExerciseExecutable } from './equipment';
 import { goalFamilyFor } from './input';
 import {
   evaluateDirectLimitationCandidate,
-  resolveExerciseLimitations,
+  resolveExerciseLimitationsFromCandidates,
   type LimitationCatalog,
   type LimitationCatalogExercise,
 } from './limitationResolver';
@@ -19,11 +19,14 @@ import type {
   QuestionnaireAnswers,
   SafetyDecision,
   TemplateEnvironment,
+  WorkoutExerciseOmissionReason,
+  WorkoutExerciseOmissionTrace,
 } from './types';
 import type { LimitationDecisionTrace } from './limitationResolver';
 import type { LimitationRegionId } from '../types/exercise';
 
 const exerciseById = new Map(EXERCISES_SEED.map((exercise) => [exercise.id, exercise]));
+export const MINIMUM_EXECUTABLE_EXERCISES = 1;
 
 const MUSCLE_FOCUS_MAP: Record<string, MuscleId[]> = {
   chest: ['chest'],
@@ -46,9 +49,8 @@ type ResolvedSlot = {
 type PriorityCandidate = { priority: string; slotIndex: number };
 
 export type CompositionResult =
-  | { status: 'COMPOSED'; sessions: FinalWorkoutSession[]; substitutions: ExerciseSubstitutionTrace[]; limitationDecisions: LimitationDecisionTrace[]; decisions: CompositionDecision[] }
-  | { status: 'INVALID_CONFIGURATION'; reasonCodes: string[]; substitutions: ExerciseSubstitutionTrace[]; limitationDecisions: LimitationDecisionTrace[]; decisions: CompositionDecision[] }
-  | { status: 'MISSING_EXERCISE'; reasonCodes: string[]; substitutions: ExerciseSubstitutionTrace[]; limitationDecisions: LimitationDecisionTrace[]; decisions: CompositionDecision[] };
+  | { status: 'COMPOSED'; sessions: FinalWorkoutSession[]; substitutions: ExerciseSubstitutionTrace[]; limitationDecisions: LimitationDecisionTrace[]; exerciseOmissions: WorkoutExerciseOmissionTrace[]; decisions: CompositionDecision[] }
+  | { status: 'INVALID_CONFIGURATION' | 'MISSING_EXERCISE' | 'NO_EXECUTABLE_SESSION'; reasonCodes: string[]; substitutions: ExerciseSubstitutionTrace[]; limitationDecisions: LimitationDecisionTrace[]; exerciseOmissions: WorkoutExerciseOmissionTrace[]; decisions: CompositionDecision[] };
 
 function compatibleSubstitute(
   source: LimitationCatalogExercise,
@@ -161,6 +163,7 @@ export function composeTemplate(
 ): CompositionResult {
   const substitutions: ExerciseSubstitutionTrace[] = [];
   const limitationDecisions: LimitationDecisionTrace[] = [];
+  const exerciseOmissions: WorkoutExerciseOmissionTrace[] = [];
   const decisions: CompositionDecision[] = [];
   const missing: string[] = [];
   const unresolved: string[] = [];
@@ -178,12 +181,37 @@ export function composeTemplate(
   const beginnerActive = beginner && stage < 3;
   const goalFamily = goalFamilyFor(answers.goal);
 
+  function omissionReason(input: {
+    sourceId: string;
+    excludedExerciseIds: ReadonlySet<string>;
+    candidatesEvaluated: Array<{ reasonCodes: string[] }>;
+  }): WorkoutExerciseOmissionReason {
+    if (input.excludedExerciseIds.size > 0) {
+      const withoutCollisionConstraint = resolveExerciseLimitationsFromCandidates({
+        exerciseId: input.sourceId,
+        regions: limitationRegions,
+        catalog,
+        isExecutable: executable,
+      });
+      if (withoutCollisionConstraint.status === 'RESOLVED') return 'COLLISION_NO_ALTERNATIVE';
+    }
+    if (input.candidatesEvaluated.some((candidate) =>
+      candidate.reasonCodes.includes('LIMITATION_CANDIDATE_EQUIPMENT_UNAVAILABLE'))) {
+      return 'NO_ENVIRONMENT_CANDIDATE';
+    }
+    if (limitationRegions.length > 1) return 'MULTI_LIMITATION_NO_INTERSECTION';
+    return 'NO_SAFE_SUBSTITUTION';
+  }
+
   const sessions = template.sessions.map((session, sessionIndex): FinalWorkoutSession => {
-    const slots = session.exercises.map((item, originalIndex): ResolvedSlot => {
+    const slots: ResolvedSlot[] = [];
+    const usedExerciseIds = new Set<string>();
+    let omittedInSession = false;
+    for (const [originalIndex, item] of session.exercises.entries()) {
       const source = catalog.get(item.exercise_id);
       if (!source) {
         missing.push(item.exercise_id);
-        return {
+        slots.push({
           originalIndex,
           exercise: {
             exerciseId: item.exercise_id,
@@ -195,20 +223,43 @@ export function composeTemplate(
             intensity: item.intensity,
             notes: item.notes,
           },
-        };
+        });
+        continue;
       }
       let selected = source;
       const visitedExerciseIds = new Set<string>([source.id]);
       if (limitationRegions.length) {
-        const limitation = resolveExerciseLimitations({
+        const limitation = resolveExerciseLimitationsFromCandidates({
           exerciseId: source.id,
           regions: limitationRegions,
           catalog,
           isExecutable: executable,
-          visitedExerciseIds,
+          excludedExerciseIds: usedExerciseIds,
         });
         if (limitation.status === 'FAILED') {
-          unresolved.push(...limitation.reasonCodes.map((code) => `${code}:${source.id}`));
+          if (limitation.failureKind === 'INVALID_CONFIGURATION') {
+            unresolved.push(...limitation.reasonCodes.map((code) => `${code}:${source.id}`));
+          } else {
+            const reason = omissionReason({
+              sourceId: source.id,
+              excludedExerciseIds: usedExerciseIds,
+              candidatesEvaluated: limitation.candidatesEvaluated,
+            });
+            omittedInSession = true;
+            exerciseOmissions.push({
+              event: 'workout_exercise_omitted',
+              sessionIndex,
+              sourceExerciseId: source.id,
+              reason,
+            });
+            decisions.push({
+              reasonCode: 'OMIT_UNSAFE_EXERCISE',
+              sessionIndex,
+              exerciseId: source.id,
+              omissionReason: reason,
+            });
+          }
+          continue;
         } else {
           selected = limitation.exercise;
           visitedExerciseIds.add(selected.id);
@@ -223,7 +274,10 @@ export function composeTemplate(
           limitationRegions,
           visitedExerciseIds,
         );
-        if (!replacement) unresolved.push(`NO_SAFE_EQUIPMENT_SUBSTITUTE:${source.id}`);
+        if (!replacement) {
+          unresolved.push(`NO_SAFE_EQUIPMENT_SUBSTITUTE:${source.id}`);
+          continue;
+        }
         else {
           selected = replacement;
           substitutions.push({
@@ -234,7 +288,8 @@ export function composeTemplate(
           });
         }
       }
-      return {
+      usedExerciseIds.add(selected.id);
+      slots.push({
         originalIndex,
         primaryMuscle: selected.target.primaryMuscle,
         movementPattern: selected.movement.pattern,
@@ -254,8 +309,8 @@ export function composeTemplate(
             goalFamily,
           }),
         },
-      };
-    });
+      });
+    }
 
     const baseCount = slots.length;
     const durationTarget = keepCount(baseCount, durationKeepFactor(answers.duration));
@@ -352,7 +407,7 @@ export function composeTemplate(
         });
         continue;
       }
-      if (slot.exercise.sets == null) continue;
+      if (slot.exercise.sets == null || omittedInSession) continue;
       const beforeSets = slot.exercise.sets;
       slots[candidate.slotIndex] = {
         ...slot,
@@ -375,12 +430,26 @@ export function composeTemplate(
   });
 
   if (missing.length) {
-    return { status: 'MISSING_EXERCISE', reasonCodes: [...new Set(missing)].sort(), substitutions, limitationDecisions, decisions };
+    return { status: 'MISSING_EXERCISE', reasonCodes: [...new Set(missing)].sort(), substitutions, limitationDecisions, exerciseOmissions, decisions };
   }
   if (unresolved.length) {
-    return { status: 'INVALID_CONFIGURATION', reasonCodes: [...new Set(unresolved)].sort(), substitutions, limitationDecisions, decisions };
+    return { status: 'INVALID_CONFIGURATION', reasonCodes: [...new Set(unresolved)].sort(), substitutions, limitationDecisions, exerciseOmissions, decisions };
   }
-  return { status: 'COMPOSED', sessions, substitutions, limitationDecisions, decisions };
+  const emptySessionIndexes = sessions
+    .map((session, index) => ({ session, index }))
+    .filter(({ session }) => session.exercises.length < MINIMUM_EXECUTABLE_EXERCISES)
+    .map(({ index }) => index);
+  if (emptySessionIndexes.length) {
+    return {
+      status: 'NO_EXECUTABLE_SESSION',
+      reasonCodes: emptySessionIndexes.map((index) => `NO_EXECUTABLE_SESSION:${index}`),
+      substitutions,
+      limitationDecisions,
+      exerciseOmissions,
+      decisions,
+    };
+  }
+  return { status: 'COMPOSED', sessions, substitutions, limitationDecisions, exerciseOmissions, decisions };
 }
 
 export function exerciseExists(exerciseId: string): boolean {

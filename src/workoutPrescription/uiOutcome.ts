@@ -30,6 +30,7 @@ export function prescriptionOutcomeKey(
     case 'NEEDS_QUESTIONNAIRE_UPDATE':
       return 'needsQuestionnaireUpdate';
     case 'MISSING_TEMPLATE':
+    case 'NO_EXECUTABLE_SESSION':
       return 'unavailable';
     case 'INVALID_CONFIGURATION':
     case 'MISSING_EXERCISE':

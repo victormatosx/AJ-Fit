@@ -10,10 +10,7 @@ import { buildExerciseTemplateIndex, classifyPair, VALID_CLASSIFICATIONS } from 
  * Quality gate for the exercise limitation dataset
  * (docs/workout-modifiers/exercise-limitations/15_LIMITATION_PROFILES_TECHNICAL_v2.json).
  *
- * This gate is a KNOWN-DEBT BASELINE, not an acceptance test — the dataset
- * has 176 known-invalid combinations today (see
- * docs/workout-modifiers/LIMITATION_DATASET_AUDIT.md), and this gate does
- * NOT fail on that pre-existing debt. What it DOES fail on:
+ * The known-debt baseline is zero. This gate fails on:
  *
  *   - a NEW invalid combination not already in the baseline (regression);
  *   - a baseline combination whose FAILURE CATEGORY silently changed
@@ -39,7 +36,7 @@ const usedExerciseIds = [...exerciseTemplates.keys()].sort();
 const catalogArr = loadLocalExerciseCatalogForLimitations();
 const catalog = new Map<string, LimitationCatalogExercise>(catalogArr.map((e) => [e.id, e]));
 
-describe('Limitation dataset quality gate — baseline (known debt, not acceptance)', () => {
+describe('Limitation dataset quality gate — zero-debt baseline', () => {
   const currentInvalid = new Map<string, string>();
   for (const exerciseId of usedExerciseIds) {
     for (const region of LIMITATION_REGION_IDS) {
@@ -65,6 +62,11 @@ describe('Limitation dataset quality gate — baseline (known debt, not acceptan
 
   it('the baseline count matches what is actually persisted (baseline is not stale)', () => {
     expect(baseline.knownInvalidCount).toBe(Object.keys(knownInvalid).length);
+  });
+
+  it('keeps the reachable limitation debt at zero', () => {
+    expect(baseline.knownInvalidCount).toBe(0);
+    expect(currentInvalid.size).toBe(0);
   });
 
   it('resolved debt is welcome and never blocks CI (documents current count, does not enforce it)', () => {

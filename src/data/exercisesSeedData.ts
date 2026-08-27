@@ -18,6 +18,8 @@ import type { ExerciseSeedInput, MuscleId } from '../types/exercise';
 type SeedEntry = Omit<ExerciseSeedInput, 'substitution'> & {
   /** Family used to auto-derive `substitution.similarExerciseIds` — see `buildSubstitutions` below. */
   substitutionGroup?: string;
+  /** Narrow allowlist for clinically approved limitation variants outside the primary-muscle match. */
+  limitationVariantIds?: string[];
 };
 
 const ACTIVE_AVAILABLE = {
@@ -206,6 +208,7 @@ const RAW_EXERCISES: SeedEntry[] = [
     equipment: ['cable'],
     difficulty: 'beginner',
     substitutionGroup: 'rear_delt_fly',
+    limitationVariantIds: ['resistance-band-row'],
     ...ACTIVE_AVAILABLE, ...NO_EXECUTION,
   },
   {
@@ -752,6 +755,7 @@ const RAW_EXERCISES: SeedEntry[] = [
     equipment: ['barbell'],
     difficulty: 'advanced',
     substitutionGroup: 'hip_hinge',
+    limitationVariantIds: ['hip-hinge-drill', 'dumbbell-stiff-leg-deadlift'],
     ...ACTIVE_AVAILABLE, ...NO_EXECUTION,
   },
   {
@@ -1267,15 +1271,28 @@ function buildSubstitutions(entries: SeedEntry[]): ExerciseSeedInput[] {
     byGroup.set(e.substitutionGroup, list);
   }
 
-  return entries.map(({ substitutionGroup, ...rest }) => {
+  return entries.map(({ substitutionGroup, limitationVariantIds, ...rest }) => {
     if (!substitutionGroup) {
-      return { ...rest, substitution: { similarExerciseIds: [] } };
+      return {
+        ...rest,
+        substitution: {
+          similarExerciseIds: [],
+          ...(limitationVariantIds ? { limitationVariantIds } : {}),
+        },
+      };
     }
     const peers = (byGroup.get(substitutionGroup) ?? []).filter((p) => p.id !== rest.id);
     const sameLaterality = peers.filter((p) => p.movement.laterality === rest.movement.laterality);
     const crossLaterality = peers.filter((p) => p.movement.laterality !== rest.movement.laterality);
     const similarExerciseIds = [...sameLaterality, ...crossLaterality].slice(0, 4).map((p) => p.id);
-    return { ...rest, substitution: { group: substitutionGroup, similarExerciseIds } };
+    return {
+      ...rest,
+      substitution: {
+        group: substitutionGroup,
+        similarExerciseIds,
+        ...(limitationVariantIds ? { limitationVariantIds } : {}),
+      },
+    };
   });
 }
 

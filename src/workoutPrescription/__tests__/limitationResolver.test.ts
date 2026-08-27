@@ -10,6 +10,7 @@ import {
 import {
   mapQuestionnaireLimitations,
   resolveExerciseLimitations,
+  resolveExerciseLimitationsFromCandidates,
   validateLimitationProfile,
   type LimitationCatalogExercise,
 } from '../limitationResolver';
@@ -66,6 +67,90 @@ function resolve(input: {
 }
 
 describe('Limitation Resolver V1', () => {
+  it('uses the preferred clinical target when it is terminal and executable', () => {
+    const source = exercise('a', profile({
+      knee: { status: 'adapt', adaptation: { kind: 'exercise_variant', exerciseId: 'b' } },
+    }));
+    const preferred = exercise('b');
+    const fallback = exercise('c');
+    source.substitution.limitationVariantIds = ['c'];
+    const catalog = new Map([source, preferred, fallback].map((item) => [item.id, item]));
+
+    const result = resolveExerciseLimitationsFromCandidates({
+      exerciseId: source.id,
+      regions: ['knee'],
+      catalog,
+      isExecutable: () => true,
+    });
+    expect(result).toEqual(expect.objectContaining({
+      status: 'RESOLVED',
+      exercise: expect.objectContaining({ id: 'b' }),
+      candidateOrigin: 'preferred',
+    }));
+  });
+
+  it('skips an unavailable preferred target and selects an executable declared fallback', () => {
+    const source = exercise('a', profile({
+      knee: { status: 'adapt', adaptation: { kind: 'exercise_variant', exerciseId: 'b' } },
+    }));
+    const preferred = exercise('b');
+    const fallback = exercise('c');
+    source.substitution.limitationVariantIds = ['c'];
+    const catalog = new Map([source, preferred, fallback].map((item) => [item.id, item]));
+
+    const result = resolveExerciseLimitationsFromCandidates({
+      exerciseId: source.id,
+      regions: ['knee'],
+      catalog,
+      isExecutable: (item) => item.id !== 'b',
+    });
+    expect(result).toEqual(expect.objectContaining({
+      status: 'RESOLVED',
+      exercise: expect.objectContaining({ id: 'c' }),
+      candidateOrigin: 'declared',
+    }));
+    if (result.status === 'RESOLVED') {
+      expect(result.trace.candidatesEvaluated?.[0]).toEqual(expect.objectContaining({
+        exerciseId: 'b', accepted: false,
+        reasonCodes: expect.arrayContaining(['LIMITATION_CANDIDATE_EQUIPMENT_UNAVAILABLE']),
+      }));
+    }
+  });
+
+  it('computes the intersection of multiple limitations with no region precedence', () => {
+    const source = exercise('a', profile({
+      knee: { status: 'adapt', adaptation: { kind: 'exercise_variant', exerciseId: 'b' } },
+      back: { status: 'adapt', adaptation: { kind: 'exercise_variant', exerciseId: 'c' } },
+    }));
+    const kneeOnly = exercise('b', profile({
+      back: { status: 'avoid', substituteExerciseIds: [], candidateStatus: 'missing_exercise_candidate' },
+    }));
+    const backOnly = exercise('c', profile({
+      knee: { status: 'avoid', substituteExerciseIds: [], candidateStatus: 'missing_exercise_candidate' },
+    }));
+    const intersection = exercise('d');
+    source.substitution.limitationVariantIds = ['d'];
+    const catalog = new Map([source, kneeOnly, backOnly, intersection]
+      .map((item) => [item.id, item]));
+
+    const result = resolveExerciseLimitationsFromCandidates({
+      exerciseId: source.id,
+      regions: ['knee', 'back'],
+      catalog,
+      isExecutable: () => true,
+    });
+    expect(result).toEqual(expect.objectContaining({
+      status: 'RESOLVED',
+      exercise: expect.objectContaining({ id: 'd' }),
+    }));
+    if (result.status === 'RESOLVED') {
+      expect(result.trace.candidatesEvaluated).toEqual(expect.arrayContaining([
+        expect.objectContaining({ exerciseId: 'b', accepted: false }),
+        expect.objectContaining({ exerciseId: 'c', accepted: false }),
+        expect.objectContaining({ exerciseId: 'd', accepted: true }),
+      ]));
+    }
+  });
   it('accepts exactly the 76 persisted V2 profiles and leaves 40 unreviewed', () => {
     const catalogFixture = realLimitationCatalogFixture();
     const reviewed = catalogFixture.filter((item) => item.limitationProfile != null);
@@ -144,6 +229,53 @@ describe('Limitation Resolver V1', () => {
     }));
   });
 
+  it('accepts only an explicitly allowlisted cross-primary-muscle limitation variant', () => {
+    const source = {
+      ...exercise('a', profile({
+        knee: { status: 'adapt', adaptation: { kind: 'exercise_variant', exerciseId: 'b' } },
+      })),
+      target: { ...base.target, primaryMuscle: 'rear_deltoid' as const },
+      movement: { ...base.movement, pattern: 'horizontal_pull' as const },
+      substitution: { similarExerciseIds: [], limitationVariantIds: ['b'] },
+    };
+    const candidate = {
+      ...exercise('b'),
+      target: { ...base.target, primaryMuscle: 'upper_back' as const },
+      movement: { ...base.movement, pattern: 'horizontal_pull' as const },
+    };
+
+    expect(resolve({ source, candidates: [candidate] })).toEqual(expect.objectContaining({
+      status: 'RESOLVED',
+      exercise: expect.objectContaining({ id: 'b' }),
+    }));
+
+    const withoutApproval = {
+      ...source,
+      substitution: { similarExerciseIds: [], limitationVariantIds: [] },
+    };
+    expect(resolve({ source: withoutApproval, candidates: [candidate] })).toEqual(expect.objectContaining({
+      status: 'FAILED', reasonCodes: ['LIMITATION_ADAPTATION_INVALID'],
+    }));
+  });
+
+  it('still rejects an explicitly listed limitation variant with a different movement pattern', () => {
+    const source = {
+      ...exercise('a', profile({
+        knee: { status: 'adapt', adaptation: { kind: 'exercise_variant', exerciseId: 'b' } },
+      })),
+      movement: { ...base.movement, pattern: 'horizontal_pull' as const },
+      substitution: { similarExerciseIds: [], limitationVariantIds: ['b'] },
+    };
+    const candidate = {
+      ...exercise('b'),
+      movement: { ...base.movement, pattern: 'vertical_pull' as const },
+    };
+
+    expect(resolve({ source, candidates: [candidate] })).toEqual(expect.objectContaining({
+      status: 'FAILED', reasonCodes: ['LIMITATION_ADAPTATION_INVALID'],
+    }));
+  });
+
   it('fails closed when an adaptation target is itself not directly safe', () => {
     const source = exercise('a', profile({
       knee: { status: 'adapt', adaptation: { kind: 'exercise_variant', exerciseId: 'b' } },
@@ -152,6 +284,18 @@ describe('Limitation Resolver V1', () => {
       knee: { status: 'avoid', substituteExerciseIds: ['a'], candidateStatus: 'ready' },
     }));
     expect(resolve({ source, candidates: [candidate] })).toEqual(expect.objectContaining({
+      status: 'FAILED', reasonCodes: ['LIMITATION_ADAPTATION_INVALID'],
+    }));
+  });
+
+  it('fails closed when an adaptation target does not exist', () => {
+    const source = exercise('a', profile({
+      knee: {
+        status: 'adapt',
+        adaptation: { kind: 'exercise_variant', exerciseId: 'nonexistent-exercise' },
+      },
+    }));
+    expect(resolve({ source })).toEqual(expect.objectContaining({
       status: 'FAILED', reasonCodes: ['LIMITATION_ADAPTATION_INVALID'],
     }));
   });
