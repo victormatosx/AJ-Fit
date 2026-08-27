@@ -20,13 +20,13 @@ const emptyTrace: PrescriptionTrace = {
 
 describe('buildWeekView', () => {
   it('marks only the configured weekdays as training days, in Monday-first order', () => {
-    const week = buildWeekView(['MON', 'WED', 'FRI'], 'MON', { status: 'REST_DAY' });
+    const week = buildWeekView(['MON', 'WED', 'FRI'], 'MON', { status: 'REST_DAY', nextWorkoutDate: '2026-08-05', nextSessionIndex: 1 });
     expect(week.map((d) => d.weekday)).toEqual(['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN']);
     expect(week.filter((d) => d.isTrainingDay).map((d) => d.weekday)).toEqual(['MON', 'WED', 'FRI']);
   });
 
   it('flags exactly one day as today', () => {
-    const week = buildWeekView(['MON', 'WED', 'FRI'], 'WED', { status: 'REST_DAY' });
+    const week = buildWeekView(['MON', 'WED', 'FRI'], 'WED', { status: 'REST_DAY', nextWorkoutDate: '2026-08-07', nextSessionIndex: 2 });
     expect(week.filter((d) => d.isToday)).toHaveLength(1);
     expect(week.find((d) => d.isToday)?.weekday).toBe('WED');
   });

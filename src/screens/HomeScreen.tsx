@@ -19,7 +19,7 @@ import { useIsScreenActive } from '../state/ScreenActivity';
 import type { PrescriptionResult } from '../workoutPrescription/types';
 import { prescriptionOutcomeKey } from '../workoutPrescription/uiOutcome';
 import { resolveSessionDisplayName, type LooseTranslate } from '../workoutPrescription/sessionPresentation';
-import type { ScheduleResolution } from '../scheduleEngine';
+import { weekdayOfLocalDate, type ScheduleResolution } from '../scheduleEngine';
 
 /**
  * Ticker rows read from i18n keys. The values themselves are placeholder
@@ -209,14 +209,34 @@ export function HomeScreen({
   const firstSession = prescription.status === 'SUCCESS'
     ? prescription.plan.sessions[scheduledSessionIndex] ?? prescription.plan.sessions[0]
     : null;
-  // REST_DAY/SCHEDULE_SETUP_REQUIRED only override the card when there is
-  // otherwise a ready program — a legacy/blocked prescription keeps its own
-  // outcome copy above (docs/workout-lifecycle/03_SCHEDULE_ENGINE.md §UI mínima).
-  const scheduleOverrideKey = prescription.status === 'SUCCESS' && scheduleResolution?.status === 'REST_DAY'
-    ? 'restDay'
-    : prescription.status === 'SUCCESS' && scheduleResolution?.status === 'SCHEDULE_SETUP_REQUIRED'
-      ? 'setupRequired'
-      : null;
+  // REST_DAY/TODAY_COMPLETED/SCHEDULE_SETUP_REQUIRED only override the card
+  // when there is otherwise a ready program — a legacy/blocked prescription
+  // keeps its own outcome copy above (docs/workout-lifecycle/
+  // 03_SCHEDULE_ENGINE.md §UI mínima). REST_DAY and TODAY_COMPLETED never
+  // offer "Iniciar treino" again today — the CTA below is swapped for a
+  // "próximo treino" info row instead (docs §Bloqueio real): the domain
+  // layer (Schedule Engine resolution itself, not just this button) is what
+  // actually prevents a second session the same day.
+  const scheduleOverrideKey = prescription.status !== 'SUCCESS'
+    ? null
+    : scheduleResolution?.status === 'REST_DAY'
+      ? 'restDay'
+      : scheduleResolution?.status === 'TODAY_COMPLETED'
+        ? 'completedToday'
+        : scheduleResolution?.status === 'SCHEDULE_SETUP_REQUIRED'
+          ? 'setupRequired'
+          : null;
+  const isBlockedToday = scheduleResolution?.status === 'REST_DAY' || scheduleResolution?.status === 'TODAY_COMPLETED';
+  const nextSession = prescription.status === 'SUCCESS' && isBlockedToday
+    ? prescription.plan.sessions[(scheduleResolution as { nextSessionIndex: number }).nextSessionIndex] ?? null
+    : null;
+  const tLoose = t as unknown as LooseTranslate;
+  const nextWorkoutLine = nextSession && isBlockedToday
+    ? t('home:schedule.nextWorkout.value', {
+        weekday: tLoose(`quiz:trainingDays.options.${weekdayOfLocalDate((scheduleResolution as { nextWorkoutDate: string }).nextWorkoutDate)}`),
+        session: resolveSessionDisplayName(tLoose, nextSession.name, nextSession.type),
+      })
+    : null;
 
   const dayInitials = t('consistency.dayInitials', {
     returnObjects: true,
@@ -339,45 +359,82 @@ export function HomeScreen({
                 </View>
               </View>
 
-              <Pressable
-                onPress={onStart}
-                style={{
-                  alignSelf: 'flex-start',
-                  marginTop: 20,
-                  paddingVertical: 15,
-                  paddingHorizontal: 26,
-                  backgroundColor: TODAY_WORKOUT_THEME.colors.inverseSurface,
-                  borderTopLeftRadius: 10,
-                  borderTopRightRadius: 10,
-                  borderBottomLeftRadius: 10,
-                  borderBottomRightRadius: 0,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 10,
-                  shadowColor: TODAY_WORKOUT_THEME.colors.inverseShadow,
-                  shadowOpacity: 0.16,
-                  shadowRadius: 20,
-                  shadowOffset: { width: 0, height: 10 },
-                  elevation: 8,
-                }}
-              >
-                <Icon
-                  name="play"
-                  size={13}
-                  color={TODAY_WORKOUT_THEME.colors.inverseForeground}
-                />
-                <Text
+              {isBlockedToday ? (
+                nextWorkoutLine && (
+                  <View
+                    style={{
+                      alignSelf: 'flex-start',
+                      marginTop: 20,
+                      paddingVertical: 13,
+                      paddingHorizontal: 18,
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: TODAY_WORKOUT_THEME.colors.primaryBorderQuiet,
+                      backgroundColor: TODAY_WORKOUT_THEME.colors.surfaceMuted,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 10,
+                    }}
+                  >
+                    <Icon name="calendar" size={14} color={TODAY_WORKOUT_THEME.colors.primaryEmphasis} />
+                    <View>
+                      <MonoLabel color={TODAY_WORKOUT_THEME.colors.textFaint}>
+                        {t('home:schedule.nextWorkout.label').toUpperCase()}
+                      </MonoLabel>
+                      <Text
+                        style={{
+                          fontFamily: theme.fonts.uiBold,
+                          fontSize: 13,
+                          color: TODAY_WORKOUT_THEME.colors.textPrimary,
+                          marginTop: 2,
+                        }}
+                      >
+                        {nextWorkoutLine}
+                      </Text>
+                    </View>
+                  </View>
+                )
+              ) : (
+                <Pressable
+                  onPress={onStart}
                   style={{
-                    fontFamily: theme.fonts.display,
-                    fontSize: 15,
-                    letterSpacing: 1.5,
-                    color: TODAY_WORKOUT_THEME.colors.inverseForeground,
-                    textTransform: 'uppercase',
+                    alignSelf: 'flex-start',
+                    marginTop: 20,
+                    paddingVertical: 15,
+                    paddingHorizontal: 26,
+                    backgroundColor: TODAY_WORKOUT_THEME.colors.inverseSurface,
+                    borderTopLeftRadius: 10,
+                    borderTopRightRadius: 10,
+                    borderBottomLeftRadius: 10,
+                    borderBottomRightRadius: 0,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 10,
+                    shadowColor: TODAY_WORKOUT_THEME.colors.inverseShadow,
+                    shadowOpacity: 0.16,
+                    shadowRadius: 20,
+                    shadowOffset: { width: 0, height: 10 },
+                    elevation: 8,
                   }}
                 >
-                  {t(prescription.status === 'SUCCESS' ? 'home:todayCard.start' : 'home:todayCard.review')}
-                </Text>
-              </Pressable>
+                  <Icon
+                    name="play"
+                    size={13}
+                    color={TODAY_WORKOUT_THEME.colors.inverseForeground}
+                  />
+                  <Text
+                    style={{
+                      fontFamily: theme.fonts.display,
+                      fontSize: 15,
+                      letterSpacing: 1.5,
+                      color: TODAY_WORKOUT_THEME.colors.inverseForeground,
+                      textTransform: 'uppercase',
+                    }}
+                  >
+                    {t(prescription.status === 'SUCCESS' ? 'home:todayCard.start' : 'home:todayCard.review')}
+                  </Text>
+                </Pressable>
+              )}
             </LinearGradient>
           </View>
 

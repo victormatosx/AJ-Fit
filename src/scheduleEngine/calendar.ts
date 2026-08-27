@@ -74,3 +74,21 @@ export function normalizeWeekdayOrder(days: readonly Weekday[]): Weekday[] {
   const set = new Set(days);
   return WEEKDAY_ORDER.filter((day) => set.has(day));
 }
+
+/**
+ * First trainingDay at or after `fromDateInclusive` — powers the "next
+ * workout" info surfaced on REST_DAY/TODAY_COMPLETED (docs/workout-lifecycle/
+ * 03_SCHEDULE_ENGINE.md). `trainingDays` must be non-empty (callers only
+ * reach this past the SCHEDULE_SETUP_REQUIRED gate).
+ */
+export function nextTrainingDayOnOrAfter(trainingDays: readonly Weekday[], fromDateInclusive: LocalDate): LocalDate {
+  const allowed = new Set(trainingDays);
+  let cursor = fromDateInclusive;
+  let guard = 0;
+  while (guard < MAX_WALK_DAYS) {
+    if (allowed.has(weekdayOfLocalDate(cursor))) return cursor;
+    cursor = addDaysLocal(cursor, 1);
+    guard += 1;
+  }
+  throw new Error('NO_TRAINING_DAY_FOUND');
+}

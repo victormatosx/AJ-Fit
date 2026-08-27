@@ -5,9 +5,11 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
 import { Icon, IconName } from '../components/ui/Icon';
-import { HudCorners } from '../components/ui/Card';
-import { Display, Slash } from '../components/ui/Display';
+import { Card, HudCorners } from '../components/ui/Card';
+import { Display, MonoLabel, Slash } from '../components/ui/Display';
 import { OutlineNumber } from '../components/ui/OutlineNumber';
+import { CtaButton } from '../components/ui/CtaButton';
+import { ScreenBg } from '../components/ui/ScreenBg';
 import { darkTheme, useTheme } from '../theme';
 import { useAppState, TabId } from '../state/AppState';
 import { useAuth } from '../state/AuthContext';
@@ -42,15 +44,16 @@ import {
   resolvePaywallPremiumReturn,
 } from '../lib/paywallPremiumReturn';
 import { useWorkoutPrescription } from '../workoutPrescription/useWorkoutPrescription';
-import type { PrescriptionResult } from '../workoutPrescription/types';
+import type { FinalWorkoutPlan, PrescriptionResult } from '../workoutPrescription/types';
 import { canRetryGeneration, prescriptionOutcomeKey } from '../workoutPrescription/uiOutcome';
 import type { WorkoutProgramSnapshot } from '../services/workoutPrograms';
-import { useWorkoutSchedule } from '../scheduleEngine';
+import { useWorkoutSchedule, weekdayOfLocalDate, type ScheduleResolution } from '../scheduleEngine';
 import { MissedSessionDecisionModal } from '../components/schedule/MissedSessionDecisionModal';
 import { useWorkoutExecution } from '../workoutExecution/useWorkoutExecution';
 import { useWorkoutProgression } from '../progressionEngine/useWorkoutProgression';
 import { ProgressionFeedbackModal } from '../components/progression/ProgressionFeedbackModal';
 import { logInfo } from '../lib/logger';
+import { resolveSessionDisplayName, type LooseTranslate } from '../workoutPrescription/sessionPresentation';
 
 type SupportRoute =
   | { name: 'help' }
@@ -205,23 +208,22 @@ function AppShellContent({
   // (see Fase 3 report, "Decisão sobre REGISTER_SET").
   const startWorkout = () => {
     if (prescription.status !== 'SUCCESS') return;
-    // Schedule Engine decides WHICH session — never Selection/Composition
-    // (docs/workout-lifecycle/03_SCHEDULE_ENGINE.md §7). A legacy/unset
-    // schedule (SCHEDULE_SETUP_REQUIRED) or any other non-ready status falls
-    // back to session 0 rather than blocking a Premium user from training.
-    const sessionIndex = schedule.resolution.status === 'SESSION_READY' ? schedule.resolution.sessionIndex : 0;
-    setActiveSessionIndex(sessionIndex);
     setShowWorkoutConfirmation(false);
     setTab('workout');
-    // Only a resolved SESSION_READY gets a persisted Execution — REST_DAY,
-    // SCHEDULE_SETUP_REQUIRED, PROGRAM_NOT_AVAILABLE and a pending miss
-    // decision must never create one (docs/workout-lifecycle/
-    // 09_WORKOUT_EXECUTION_AND_HISTORY.md §71-74). The Workout tab can still
-    // open in those cases (preserving the existing non-blocking UX above),
-    // just without a backing Execution record. Idempotent otherwise — a
-    // double tap or a cold-start reopen resumes the same execution instead
-    // of creating a duplicate (docs §22-25).
+    // BLOQUEIO REAL (docs/workout-lifecycle/03_SCHEDULE_ENGINE.md §Bloqueio
+    // real): the Schedule Engine resolution — not this button, not whatever
+    // tab the user happened to land on — is what decides whether a session
+    // may start. Only SESSION_READY ever sets `activeSessionIndex`/calls
+    // `execution.start`; REST_DAY, TODAY_COMPLETED, SCHEDULE_SETUP_REQUIRED,
+    // PROGRAM_NOT_AVAILABLE and a pending miss decision all fall through to
+    // the Workout tab's own blocked-state render below instead of a live
+    // session — a stale confirmation, a deep link or a re-tap can reach this
+    // function in any of those states and still can never open a second
+    // session for a day already resolved (idempotent otherwise: a double
+    // tap or a cold-start reopen resumes the same execution, docs §22-25).
     if (schedule.resolution.status === 'SESSION_READY') {
+      const sessionIndex = schedule.resolution.sessionIndex;
+      setActiveSessionIndex(sessionIndex);
       void execution.start(sessionIndex);
     }
   };
@@ -257,7 +259,14 @@ function AppShellContent({
             onOpenProfile={() => setTab('profile')}
           />
         </PersistentScreen>
-        {tab === 'workout' && prescription.status === 'SUCCESS' && (
+        {tab === 'workout' && prescription.status === 'SUCCESS' && schedule.resolution.status !== 'SESSION_READY' && (
+          <WorkoutTabBlockedState
+            resolution={schedule.resolution}
+            plan={prescription.plan}
+            onDone={() => setTab('home')}
+          />
+        )}
+        {tab === 'workout' && prescription.status === 'SUCCESS' && schedule.resolution.status === 'SESSION_READY' && (
           <WorkoutScreen
             plan={prescription.plan}
             sessionIndex={activeSessionIndex}
@@ -806,6 +815,96 @@ function StartWorkoutConfirmation({
         </Pressable>
       </Pressable>
     </Modal>
+  );
+}
+
+/**
+ * Renders in place of `WorkoutScreen` for every non-`SESSION_READY`
+ * resolution (docs/workout-lifecycle/03_SCHEDULE_ENGINE.md §Bloqueio real) —
+ * the same `home:schedule.*` copy Home uses, so the Treino tab and Home can
+ * never disagree about whether today is done/resting (docs §Consistência
+ * com Meu Plano). No "iniciar novamente" affordance exists here at all —
+ * this screen has no start action, only a way back.
+ */
+function WorkoutTabBlockedState({
+  resolution,
+  plan,
+  onDone,
+}: {
+  resolution: Exclude<ScheduleResolution, { status: 'SESSION_READY' }>;
+  plan: FinalWorkoutPlan;
+  onDone: () => void;
+}) {
+  const { theme } = useTheme();
+  const { t } = useTranslation('home');
+  const tLoose = t as unknown as LooseTranslate;
+
+  const copyKey =
+    resolution.status === 'TODAY_COMPLETED' ? 'completedToday' :
+    resolution.status === 'REST_DAY' ? 'restDay' :
+    resolution.status === 'SCHEDULE_SETUP_REQUIRED' ? 'setupRequired' :
+    resolution.status === 'MISSED_SESSION_DECISION_REQUIRED' ? 'missedDecision' :
+    null;
+
+  const nextUp = resolution.status === 'REST_DAY' || resolution.status === 'TODAY_COMPLETED'
+    ? { session: plan.sessions[resolution.nextSessionIndex] ?? null, date: resolution.nextWorkoutDate }
+    : null;
+
+  return (
+    <ScreenBg>
+      <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
+        <View style={{ flex: 1, paddingHorizontal: 26, paddingTop: 20, paddingBottom: 36 }}>
+          <OutlineNumber
+            size={280}
+            color={theme.colors.decorativeOutline}
+            style={{ position: 'absolute', top: -40, right: -60, opacity: 0.35 }}
+          >
+            {resolution.status === 'TODAY_COMPLETED' ? '✓' : '—'}
+          </OutlineNumber>
+
+          <Slash style={{ marginBottom: 14 }}>
+            {(copyKey ? t(`schedule.${copyKey}.title`) : t('todayCard.kicker')).toUpperCase()}
+          </Slash>
+          <Display size={28} style={{ marginTop: 4, maxWidth: 300 }}>
+            {(copyKey ? t(`schedule.${copyKey}.body`) : '').toUpperCase()}
+          </Display>
+
+          {nextUp?.session && (
+            <Card style={{ marginTop: 30, padding: 18 }}>
+              <MonoLabel>{t('schedule.nextWorkout.label').toUpperCase()}</MonoLabel>
+              <Text
+                style={{
+                  fontFamily: theme.fonts.uiBold,
+                  fontSize: 18,
+                  color: theme.colors.textPrimary,
+                  marginTop: 8,
+                }}
+              >
+                {t('schedule.nextWorkout.value', {
+                  weekday: tLoose(`quiz:trainingDays.options.${weekdayOfLocalDate(nextUp.date)}`),
+                  session: resolveSessionDisplayName(tLoose, nextUp.session.name, nextUp.session.type),
+                })}
+              </Text>
+            </Card>
+          )}
+
+          <View style={{ flex: 1 }} />
+          <CtaButton onPress={onDone}>
+            <Text
+              style={{
+                color: theme.colors.primaryForeground,
+                fontFamily: theme.fonts.display,
+                fontSize: 15,
+                letterSpacing: 1.5,
+                textTransform: 'uppercase',
+              }}
+            >
+              {tLoose('common:actions.back')}
+            </Text>
+          </CtaButton>
+        </View>
+      </SafeAreaView>
+    </ScreenBg>
   );
 }
 

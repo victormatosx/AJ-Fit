@@ -43,8 +43,16 @@
   },
   "schedule": {
     "restDay": {
-      "title": "No workout planned today",
-      "body": "Today isn't one of your training days. You can still start manually whenever you want."
+      "title": "Rest day",
+      "body": "Today isn't one of your training days."
+    },
+    "completedToday": {
+      "title": "Workout completed",
+      "body": "You've already completed today's workout."
+    },
+    "nextWorkout": {
+      "label": "Next workout",
+      "value": "{{weekday}} · {{session}}"
     },
     "setupRequired": {
       "title": "Set up your training days",

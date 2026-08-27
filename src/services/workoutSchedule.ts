@@ -15,6 +15,7 @@ import type { Weekday } from '../state/AppState';
 // barrel — that barrel also re-exports `useWorkoutSchedule` (a React hook
 // pulling in AuthContext/RN), which a pure Firestore service module must
 // never drag in transitively (breaks Node-only test/tooling consumers).
+import { addDaysLocal } from '../scheduleEngine/calendar';
 import { detectMissedSessionGap, resolveWorkoutSchedule } from '../scheduleEngine/resolver';
 import type {
   MissDecision,
@@ -183,38 +184,57 @@ export async function resolveTodaysSchedule(input: {
     todayLocalDate: input.todayLocalDate,
   };
 
+  // `detectMissedSessionGap` is a pure calendar walk — it doesn't know
+  // whether THIS exact gap (same sessionIndex + first occurrence) already
+  // got a decision. Before persisting anything, check the ledger via the
+  // very same deterministic id `resolveMissedSession` writes on
+  // CONTINUE_SEQUENCE/FOLLOW_SCHEDULE (docs §Decisão idempotente) — a
+  // single targeted read, no scan, no second source of truth. If it's
+  // already there, this is not a NEW gap to ask about; it's the same
+  // pending session still not done, and `resolveWorkoutSchedule` below
+  // (given `resolvedMissScheduledDate`) reports it as SESSION_READY instead
+  // of re-deriving MISSED_SESSION_DECISION_REQUIRED forever.
   const gap = detectMissedSessionGap(resolverInput);
+  let resolvedMissScheduledDate: string | null = null;
   if (gap) {
-    await runTransaction(db, async (transaction) => {
-      const ref = scheduleStateRef(input.uid, programId);
-      const current = await transaction.get(ref);
-      // Re-check inside the transaction: a concurrent call may have already
-      // recorded this gap (or the user may have completed the session in
-      // the meantime), so never blindly overwrite.
-      if (current.exists() && current.data().pendingMissDecision) return;
-      const pendingMissDecision: PendingMissDecision = {
-        missedSessionIndex: gap.missedSessionIndex,
-        calendarSessionIndex: gap.calendarSessionIndex,
-        missedScheduledDate: gap.missedScheduledDate,
-        detectedOnDate: input.todayLocalDate,
-      };
-      if (current.exists()) {
-        transaction.update(ref, { pendingMissDecision, updatedAt: serverTimestamp() });
-      } else {
-        transaction.set(ref, {
-          programId,
-          nextSessionIndex: gap.missedSessionIndex,
-          cursorDate: activatedAtLocalDate,
-          lastCompletedAt: null,
-          pendingMissDecision,
-          updatedAt: serverTimestamp(),
-        });
-      }
-    });
-    state = await loadScheduleState(input.uid, programId);
+    const alreadyResolvedSnapshot = await getDoc(doc(
+      scheduleEventsCollection(input.uid, programId),
+      scheduleEventId({ type: 'MISS_RESOLVED', sessionIndex: gap.missedSessionIndex, scheduledDate: gap.missedScheduledDate }),
+    ));
+    if (alreadyResolvedSnapshot.exists()) {
+      resolvedMissScheduledDate = gap.missedScheduledDate;
+    } else {
+      await runTransaction(db, async (transaction) => {
+        const ref = scheduleStateRef(input.uid, programId);
+        const current = await transaction.get(ref);
+        // Re-check inside the transaction: a concurrent call may have already
+        // recorded this gap (or the user may have completed the session in
+        // the meantime), so never blindly overwrite.
+        if (current.exists() && current.data().pendingMissDecision) return;
+        const pendingMissDecision: PendingMissDecision = {
+          missedSessionIndex: gap.missedSessionIndex,
+          calendarSessionIndex: gap.calendarSessionIndex,
+          missedScheduledDate: gap.missedScheduledDate,
+          detectedOnDate: input.todayLocalDate,
+        };
+        if (current.exists()) {
+          transaction.update(ref, { pendingMissDecision, updatedAt: serverTimestamp() });
+        } else {
+          transaction.set(ref, {
+            programId,
+            nextSessionIndex: gap.missedSessionIndex,
+            cursorDate: activatedAtLocalDate,
+            lastCompletedAt: null,
+            pendingMissDecision,
+            updatedAt: serverTimestamp(),
+          });
+        }
+      });
+      state = await loadScheduleState(input.uid, programId);
+    }
   }
 
-  return resolveWorkoutSchedule({ ...resolverInput, state });
+  return resolveWorkoutSchedule({ ...resolverInput, state, resolvedMissScheduledDate });
 }
 
 /**
@@ -330,7 +350,18 @@ export async function resolveMissedSession(input: {
     transaction.set(stateRef, {
       programId: input.programId,
       nextSessionIndex: pending.calendarSessionIndex,
-      cursorDate: input.todayLocalDate,
+      // The day BEFORE today, never today itself: `cursorDate` means "every
+      // trainingDay up to and including this date is already accounted
+      // for" (docs §Ancoragem inicial uses the same "day before" convention
+      // for a fresh program). FOLLOW_SCHEDULE only accounts for the SKIPPED
+      // sessions strictly before `calendarSessionIndex` — that session
+      // itself is what's newly due, not yet resolved. Setting cursorDate to
+      // `todayLocalDate` here made `trainingDayOccurrences`'s exclusive walk
+      // treat today as already consumed, so the very next resolve (even
+      // seconds later, same day) collapsed straight to REST_DAY instead of
+      // offering `calendarSessionIndex` — the bug this comment guards
+      // against regressing.
+      cursorDate: addDaysLocal(input.todayLocalDate, -1),
       lastCompletedAt: data.lastCompletedAt ?? null,
       pendingMissDecision: null,
       updatedAt: serverTimestamp(),

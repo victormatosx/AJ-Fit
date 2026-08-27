@@ -54,7 +54,10 @@ export interface ScheduleState {
 export type ScheduleResolution =
   | { status: 'PROGRAM_NOT_AVAILABLE' }
   | { status: 'SCHEDULE_SETUP_REQUIRED' }
-  | { status: 'REST_DAY' }
+  /** Today isn't a trainingDay. `nextWorkoutDate`/`nextSessionIndex` are the calendar's and the rotation's answer to "when/what next" (docs §Próximo treino != próximo dia) — never re-derived independently by callers. */
+  | { status: 'REST_DAY'; nextWorkoutDate: string; nextSessionIndex: number }
+  /** Today IS a trainingDay and its session was already completed — distinct from REST_DAY so the UI never conflates "nothing scheduled" with "already done" (docs §Conclusão diária). */
+  | { status: 'TODAY_COMPLETED'; nextWorkoutDate: string; nextSessionIndex: number }
   | { status: 'SESSION_READY'; sessionIndex: number }
   | {
       status: 'MISSED_SESSION_DECISION_REQUIRED';
@@ -67,9 +70,22 @@ export interface ResolveWorkoutScheduleInput {
   sessionCount: number;
   config: ScheduleConfig | null;
   /** null means the program has never been walked yet (freshly activated). */
-  state: Pick<ScheduleState, 'nextSessionIndex' | 'cursorDate' | 'pendingMissDecision'> | null;
+  state: Pick<ScheduleState, 'nextSessionIndex' | 'cursorDate' | 'pendingMissDecision' | 'lastCompletedAt'> | null;
   /** Local activation date (YYYY-MM-DD) of the active program; used only when `state` is null. */
   activatedAtLocalDate: string;
   /** Local "today" (YYYY-MM-DD), already resolved in the user's timezone by the caller. */
   todayLocalDate: string;
+  /**
+   * `scheduledDate` of a miss occurrence that already has a `MISS_RESOLVED`
+   * ledger event (docs §Decisão idempotente) — derived by the caller from
+   * `scheduleEvents` via the deterministic `scheduleEventId`, never a second
+   * source of truth. When the current walk's `occurrences[0]` matches this
+   * date, that exact gap already received a decision (CONTINUE_SEQUENCE or
+   * FOLLOW_SCHEDULE) and must not be re-asked — CONTINUE_SEQUENCE's contract
+   * is "keep offering the missed session," not "re-litigate it on every
+   * subsequent read." A genuinely NEW miss can only arise once `cursorDate`
+   * itself advances (a real completion), which always produces a different
+   * `occurrences[0]`.
+   */
+  resolvedMissScheduledDate?: string | null;
 }

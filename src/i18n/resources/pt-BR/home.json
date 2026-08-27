@@ -43,8 +43,16 @@
   },
   "schedule": {
     "restDay": {
-      "title": "Sem treino planejado hoje",
-      "body": "Hoje não é um dos seus dias de treino. Você ainda pode iniciar manualmente quando quiser."
+      "title": "Dia de descanso",
+      "body": "Hoje não é um dos seus dias de treino."
+    },
+    "completedToday": {
+      "title": "Treino concluído",
+      "body": "Você já concluiu seu treino de hoje."
+    },
+    "nextWorkout": {
+      "label": "Próximo treino",
+      "value": "{{weekday}} · {{session}}"
     },
     "setupRequired": {
       "title": "Configure seus dias de treino",
