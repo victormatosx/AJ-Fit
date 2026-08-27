@@ -218,7 +218,7 @@
   },
   "limits": {
     "title": "Você sente dor, desconforto ou possui alguma limitação que afete seus treinos?",
-    "sub": "Apenas colete o que afeta o treino hoje; isso não é um diagnóstico.",
+    "sub": "Apenas colete o que afeta o treino hoje; isso não é um diagnóstico. Vamos adaptar os exercícios para as áreas selecionadas quando necessário.",
     "options": {
       "none": "Nenhuma",
       "knee": "Joelho",
@@ -236,15 +236,6 @@
     "options": {
       "gym": { "label": "Academia", "description": "Usar a academia como ambiente principal" },
       "home": { "label": "Casa", "description": "Usar sua estrutura de casa como ambiente principal" }
-    }
-  },
-  "limitationImpact": {
-    "title": "Essa limitação atualmente impede ou dificulta algum movimento?",
-    "options": {
-      "mild": { "label": "Não, é apenas um desconforto leve", "description": "Não impede meus movimentos" },
-      "requires_adaptation": { "label": "Sim, preciso adaptar alguns exercícios", "description": "Alguns movimentos precisam de ajuste" },
-      "professional_restriction": { "label": "Sim, tenho orientação profissional/restrições específicas", "description": "Existe uma orientação que deve ser respeitada" },
-      "unknown": { "label": "Não sei", "description": "Ainda não consigo avaliar o impacto" }
     }
   },
   "specialConditions": {

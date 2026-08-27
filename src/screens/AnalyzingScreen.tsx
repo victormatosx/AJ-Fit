@@ -19,16 +19,21 @@ import { useTheme } from '../theme';
 import { useAppState } from '../state/AppState';
 import { logInfo, logWarn } from '../lib/logger';
 import { prepareWorkoutProgramLocally } from '../services/workoutPrograms';
+import type { PrescriptionResult } from '../workoutPrescription/types';
+import { onboardingGenerationFailurePresentation } from '../workoutPrescription/uiOutcome';
 
 export function AnalyzingScreen({
   name,
   onDone,
+  onReviewAnswers,
 }: {
   name?: string | null;
   onDone: () => void;
+  onReviewAnswers: () => void;
 }) {
   const { theme } = useTheme();
   const { t } = useTranslation('onboarding');
+  const { t: tPlan } = useTranslation('plan');
   const { quiz, setPreparedWorkoutProgram } = useAppState();
   const [progress, setProgress] = useState(0);
   const steps = [
@@ -49,6 +54,7 @@ export function AnalyzingScreen({
   // a dead screen).
   const [attempt, setAttempt] = useState(0);
   const [computeStatus, setComputeStatus] = useState<'pending' | 'success' | 'error'>('pending');
+  const [failureStatus, setFailureStatus] = useState<Exclude<PrescriptionResult['status'], 'SUCCESS'> | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -70,6 +76,7 @@ export function AnalyzingScreen({
           setComputeStatus('success');
         } else {
           setPreparedWorkoutProgram(null);
+          setFailureStatus(result.status);
           logWarn('onboarding', 'onboarding_workout_generation_failed', {
             durationMs,
             status: result.status,
@@ -81,6 +88,7 @@ export function AnalyzingScreen({
       .catch((error: unknown) => {
         if (cancelled) return;
         setPreparedWorkoutProgram(null);
+        setFailureStatus(null);
         logWarn('onboarding', 'onboarding_workout_generation_failed', {
           durationMs: Date.now() - startedAt,
           status: 'EXCEPTION',
@@ -157,6 +165,9 @@ export function AnalyzingScreen({
   }, [pulse, computeStatus]);
 
   if (computeStatus === 'error') {
+    const presentation = failureStatus
+      ? onboardingGenerationFailurePresentation(failureStatus)
+      : { outcomeKey: 'technicalError' as const, action: 'retry' as const };
     return (
       <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
         <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
@@ -170,20 +181,25 @@ export function AnalyzingScreen({
                 textAlign: 'center',
               }}
             >
-              {t('analyzing.error.title')}
+              {tPlan(`prescription.${presentation.outcomeKey}.title`)}
             </Text>
             <Text style={{ fontFamily: theme.fonts.ui, fontSize: 14, color: theme.colors.textMuted, textAlign: 'center' }}>
-              {t('analyzing.error.body')}
+              {tPlan(`prescription.${presentation.outcomeKey}.body`)}
             </Text>
             <CtaButton
-              onPress={() => {
-                setProgress(0);
-                setComputeStatus('pending');
-                setAttempt((a) => a + 1);
-              }}
+              onPress={presentation.action === 'retry'
+                ? () => {
+                    setProgress(0);
+                    setFailureStatus(null);
+                    setComputeStatus('pending');
+                    setAttempt((a) => a + 1);
+                  }
+                : onReviewAnswers}
             >
               <Text style={{ color: theme.colors.primaryForeground, fontFamily: theme.fonts.display, fontSize: 16 }}>
-                {t('analyzing.error.retry')}
+                {presentation.action === 'retry'
+                  ? t('analyzing.error.retry')
+                  : t('analyzing.error.reviewAnswers')}
               </Text>
             </CtaButton>
           </View>

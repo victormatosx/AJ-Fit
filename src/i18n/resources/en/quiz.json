@@ -211,7 +211,7 @@
   },
   "limits": {
     "title": "Do you have pain, discomfort, or a limitation that affects your training?",
-    "sub": "Only report what affects training today; this is not a diagnosis.",
+    "sub": "Only report what affects training today; this is not a diagnosis. We'll adapt exercises for the areas you select when needed.",
     "options": {
       "none": "None",
       "knee": "Knee",
@@ -229,15 +229,6 @@
     "options": {
       "gym": { "label": "Gym", "description": "Use the gym as the main environment" },
       "home": { "label": "Home", "description": "Use your home setup as the main environment" }
-    }
-  },
-  "limitationImpact": {
-    "title": "Does this limitation currently prevent or make any movement difficult?",
-    "options": {
-      "mild": { "label": "No, it is only mild discomfort", "description": "It does not prevent movement" },
-      "requires_adaptation": { "label": "Yes, I need to adapt some exercises", "description": "Some movements need adjustment" },
-      "professional_restriction": { "label": "Yes, I have professional guidance/specific restrictions", "description": "There is guidance that must be respected" },
-      "unknown": { "label": "I don't know", "description": "I cannot assess the impact yet" }
     }
   },
   "specialConditions": {

@@ -12,7 +12,11 @@ export const ONBOARDING_DRAFT_SCHEMA_VERSION = 1 as const;
  * `null`), mirroring the same problem `toPersistedAnswers` solves for
  * Firestore's `Timestamp`.
  */
-export type DraftQuizAnswers = Omit<Quiz, 'birthDate'> & { birthDate: string | null };
+export type DraftQuizAnswers = Omit<Quiz, 'birthDate'> & {
+  birthDate: string | null;
+  /** @deprecated read-only compatibility for drafts created before removal. */
+  limitationImpact?: unknown;
+};
 
 export interface OnboardingDraftV1 {
   version: 1;
@@ -31,7 +35,7 @@ function toDraftAnswers(quiz: Quiz): DraftQuizAnswers {
 }
 
 function fromDraftAnswers(raw: Partial<DraftQuizAnswers> | undefined | null): Quiz {
-  const { birthDate, ...rest } = raw ?? {};
+  const { birthDate, limitationImpact: _legacyLimitationImpact, ...rest } = raw ?? {};
   const parsedBirthDate = birthDate ? new Date(birthDate) : null;
   return normalizeLoadedQuiz({
     ...defaultQuiz,

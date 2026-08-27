@@ -69,7 +69,7 @@ describe('prepareWorkoutProgramLocally — Phase 3, Part C (pre-auth compute, lo
   it('(8) a musculoskeletal limitation runs the REAL Limitation Resolver against the local catalog, never bypassed — identical outcome to calling the engine directly with the same local catalog', async () => {
     const answers = completeAnswers({
       level: 'intermediate', days: 4, place: 'gym', sex: 'm', goal: 'gain_muscle',
-      specialConditions: ['musculoskeletal_limitation'], limits: ['knee'], limitationImpact: 'mild',
+      specialConditions: ['musculoskeletal_limitation'], limits: ['knee'],
     });
     const localCatalog = loadLocalExerciseCatalogForLimitations();
     const template = getTemplateById('T003')!;
@@ -90,11 +90,10 @@ describe('prepareWorkoutProgramLocally — Phase 3, Part C (pre-auth compute, lo
     }
   });
 
-  it('(24) a musculoskeletal limitation with no resolvable adaptation stays fail-closed — no generic workout generated', async () => {
+  it('(24) a musculoskeletal limitation with no selected region stays fail-closed — no generic workout generated', async () => {
     const answers = completeAnswers({
       specialConditions: ['musculoskeletal_limitation'],
-      limits: ['knee'],
-      limitationImpact: null, // required screening field missing
+      limits: [],
     });
     const result = await prepareWorkoutProgramLocally(answers);
     expect(result.status).toBe('NEEDS_QUESTIONNAIRE_UPDATE');

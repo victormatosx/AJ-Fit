@@ -123,25 +123,13 @@ export function evaluateSafety(answers: QuestionnaireAnswers): SafetyDecision {
   }
 
   if (has('musculoskeletal_limitation')) {
-    if (answers.limitationImpact === 'professional_restriction') {
-      add(decision, 'REQUIRES_CLEARANCE', 'MUSCULOSKELETAL_PROFESSIONAL_RESTRICTION');
-    } else if (answers.limitationImpact === 'requires_adaptation') {
-      add(
-        decision,
-        'ADAPTED',
-        'MUSCULOSKELETAL_ADAPTATION_REQUIRED',
-        'safety:musculoskeletal_adaptation',
-        answers.limits.filter((value) => value !== 'none').map((value) => `limitation:${value}`),
-      );
-    } else if (answers.limitationImpact === 'mild') {
-      add(
-        decision,
-        'ADAPTED',
-        'MUSCULOSKELETAL_MILD',
-        'safety:musculoskeletal_mild',
-        answers.limits.filter((value) => value !== 'none').map((value) => `limitation:${value}`),
-      );
-    }
+    add(
+      decision,
+      'ADAPTED',
+      'MUSCULOSKELETAL_ADAPTATION_REQUIRED',
+      'safety:musculoskeletal_adaptation',
+      answers.limits.filter((value) => value !== 'none').map((value) => `limitation:${value}`),
+    );
   }
 
   if (has('lipedema')) {

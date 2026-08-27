@@ -21,9 +21,8 @@ describe('safety engine', () => {
     const answers = postSurgical('completed', 'cleared_no_restrictions');
     answers.specialConditions = ['post_surgical', 'musculoskeletal_limitation'];
     answers.limits = ['knee'];
-    answers.limitationImpact = 'mild';
     expect(evaluateSafety(answers)).toEqual(expect.objectContaining({
-      status: 'ADAPTED', reasons: expect.arrayContaining(['MUSCULOSKELETAL_MILD']),
+      status: 'ADAPTED', reasons: expect.arrayContaining(['MUSCULOSKELETAL_ADAPTATION_REQUIRED']),
     }));
   });
 
@@ -52,14 +51,15 @@ describe('safety engine', () => {
     })).status).toBe(expected);
   });
 
-  it.each([
-    ['mild', 'ADAPTED'],
-    ['requires_adaptation', 'ADAPTED'],
-    ['professional_restriction', 'REQUIRES_CLEARANCE'],
-  ] as const)('musculoskeletal %s => %s', (impact, expected) => {
+  it('activates musculoskeletal adaptation from the selected region alone', () => {
     expect(evaluateSafety(completeAnswers({
-      specialConditions: ['musculoskeletal_limitation'], limits: ['knee'], limitationImpact: impact,
-    })).status).toBe(expected);
+      specialConditions: ['musculoskeletal_limitation'], limits: ['knee'],
+    }))).toEqual(expect.objectContaining({
+      status: 'ADAPTED',
+      reasons: ['MUSCULOSKELETAL_ADAPTATION_REQUIRED'],
+      requiredModifierIds: ['safety:musculoskeletal_adaptation'],
+      protectedConstraints: ['limitation:knee'],
+    }));
   });
 
   it('blocks only the documented pregnancy red flags', () => {

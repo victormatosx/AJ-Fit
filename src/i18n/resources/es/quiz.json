@@ -211,7 +211,7 @@
   },
   "limits": {
     "title": "¿Sientes dolor, molestias o tienes alguna limitación que afecte tus entrenamientos?",
-    "sub": "Indica solo lo que afecta tu entrenamiento hoy; esto no es un diagnóstico.",
+    "sub": "Indica solo lo que afecta tu entrenamiento hoy; esto no es un diagnóstico. Adaptaremos los ejercicios para las áreas que selecciones cuando sea necesario.",
     "options": {
       "none": "Ninguna",
       "knee": "Rodilla",
@@ -229,15 +229,6 @@
     "options": {
       "gym": { "label": "Gimnasio", "description": "Usar el gimnasio como entorno principal" },
       "home": { "label": "Casa", "description": "Usar tu estructura de casa como entorno principal" }
-    }
-  },
-  "limitationImpact": {
-    "title": "¿Esta limitación impide o dificulta actualmente algún movimiento?",
-    "options": {
-      "mild": { "label": "No, solo es una molestia leve", "description": "No impide mis movimientos" },
-      "requires_adaptation": { "label": "Sí, necesito adaptar algunos ejercicios", "description": "Algunos movimientos necesitan ajustes" },
-      "professional_restriction": { "label": "Sí, tengo orientación profesional/restricciones específicas", "description": "Hay una orientación que debe respetarse" },
-      "unknown": { "label": "No lo sé", "description": "Todavía no puedo evaluar el impacto" }
     }
   },
   "specialConditions": {

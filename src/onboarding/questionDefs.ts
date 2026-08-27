@@ -117,16 +117,6 @@ export const FUNNEL_QUESTIONS: Partial<Record<OnboardingStepId, Question>> = {
       { v: 'other' },
     ],
   },
-  limitationImpact: {
-    id: 'limitationImpact',
-    kind: 'choice-large',
-    options: [
-      { v: 'mild' },
-      { v: 'requires_adaptation' },
-      { v: 'professional_restriction' },
-      { v: 'unknown' },
-    ],
-  },
   specialConditions: {
     id: 'specialConditions',
     kind: 'multi',

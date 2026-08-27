@@ -54,12 +54,21 @@ describe('questionnaire schema and branching payload', () => {
     expect(questionnaireValidationErrors({ ...quiz, primaryPlace: 'gym' })).not.toContain('primary_place_required');
   });
 
-  it('requires musculoskeletal details and removes them when the router branch is deselected', () => {
-    let quiz = standardQuiz({ specialConditions: ['musculoskeletal_limitation'], limits: ['knee'], limitationImpact: 'requires_adaptation' });
-    expect(questionnaireValidationErrors(quiz)).not.toContain('limitation_impact_required');
+  it('requires only musculoskeletal regions and removes them when the router branch is deselected', () => {
+    let quiz = standardQuiz({ specialConditions: ['musculoskeletal_limitation'], limits: ['knee'] });
+    expect(questionnaireValidationErrors(quiz)).toEqual([]);
     quiz = updateQuizAnswer(quiz, 'specialConditions', ['none']);
     expect(quiz.limits).toEqual([]);
-    expect(quiz.limitationImpact).toBeNull();
+  });
+
+  it('drops the removed legacy impact field while normalizing old documents', () => {
+    const loaded = normalizeLoadedQuiz({
+      limits: ['knee'],
+      specialConditions: ['musculoskeletal_limitation'],
+      limitationImpact: 'professional_restriction',
+    });
+    expect(loaded.limits).toEqual(['knee']);
+    expect(Object.prototype.hasOwnProperty.call(loaded, 'limitationImpact')).toBe(false);
   });
 
   it('validates a complete pregnancy screening', () => {

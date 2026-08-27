@@ -69,7 +69,6 @@ export function cleanApplicableAnswers(input: Quiz): Quiz {
     primaryPlace: input.place === 'both' ? input.primaryPlace : null,
     equipment: input.place === 'home' || input.place === 'both' ? exclusiveNone(input.equipment) : [],
     limits: has('musculoskeletal_limitation') ? exclusiveNone(input.limits) : [],
-    limitationImpact: has('musculoskeletal_limitation') ? input.limitationImpact : null,
     muscleFocus: exclusiveNone(input.muscleFocus).slice(0, 2),
     specialConditions,
     pregnancyScreening: has('pregnancy')
@@ -85,8 +84,12 @@ export function cleanApplicableAnswers(input: Quiz): Quiz {
 }
 
 /** Defensive read compatibility for sparse/malformed and all v1 questionnaires. */
-export function normalizeLoadedQuiz(input: Partial<Quiz>): Quiz {
-  const merged = { ...defaultQuiz, ...input };
+export function normalizeLoadedQuiz(input: Partial<Quiz> & { limitationImpact?: unknown }): Quiz {
+  // Read-only compatibility: old questionnaires/drafts may still contain
+  // this removed field. Drop it at the normalization boundary so the current
+  // model and prescription engine can never observe or re-persist it.
+  const { limitationImpact: _legacyLimitationImpact, ...currentInput } = input;
+  const merged = { ...defaultQuiz, ...currentInput };
   const strings = (value: unknown) => Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
   const allowedConditions: string[] = ['none', 'musculoskeletal_limitation', 'pregnancy', 'postpartum', 'lipedema', 'dizziness_or_vertigo', 'post_surgical', 'functional_limitation', 'medical_restriction'];
   const loadedLimits = strings(merged.limits);
@@ -135,7 +138,6 @@ export function updateQuizAnswer(quiz: Quiz, stepId: OnboardingStepId, value: un
     case 'days': next = { ...quiz, days: Number(value) }; break;
     case 'trainingDays': next = { ...quiz, trainingDays: normalizeWeekdays(value as string[]) }; break;
     case 'primaryPlace': next = { ...quiz, primaryPlace: value as Quiz['primaryPlace'] }; break;
-    case 'limitationImpact': next = { ...quiz, limitationImpact: value as Quiz['limitationImpact'] }; break;
     case 'specialConditions': next = { ...quiz, specialConditions: normalizeSpecialConditions(value as string[]) }; break;
     case 'pregnancyWeeks': next = { ...quiz, pregnancyScreening: { ...(quiz.pregnancyScreening ?? emptyPregnancyScreening()), weeks: value as number } }; break;
     case 'pregnancyCare': next = { ...quiz, pregnancyScreening: { ...(quiz.pregnancyScreening ?? emptyPregnancyScreening()), ...(value as Pick<PregnancyScreening, 'prenatalCare' | 'exerciseRestriction' | 'complication'>) } }; break;
@@ -175,7 +177,7 @@ export function answerValueForStep(quiz: Quiz, stepId: OnboardingStepId): unknow
 
 export type QuestionnaireValidationCode =
   | 'unsupported_days' | 'too_many_muscle_priorities' | 'exclusive_none_conflict'
-  | 'primary_place_required' | 'equipment_required' | 'limitations_required' | 'limitation_impact_required'
+  | 'primary_place_required' | 'equipment_required' | 'limitations_required'
   | 'pregnancy_screening_incomplete' | 'postpartum_screening_incomplete' | 'functional_screening_incomplete'
   | 'lipedema_screening_incomplete' | 'dizziness_screening_incomplete'
   | 'post_surgical_screening_incomplete' | 'medical_restriction_screening_incomplete';
@@ -205,7 +207,6 @@ export function questionnaireValidationErrors(quiz: Quiz): QuestionnaireValidati
   if ((quiz.place === 'home' || quiz.place === 'both') && quiz.equipment.length === 0) errors.push('equipment_required');
   if (quiz.specialConditions.includes('musculoskeletal_limitation')) {
     if (quiz.limits.length === 0 || quiz.limits.includes('none')) errors.push('limitations_required');
-    if (!quiz.limitationImpact) errors.push('limitation_impact_required');
   }
   if (quiz.specialConditions.includes('pregnancy')) {
     const value = quiz.pregnancyScreening;

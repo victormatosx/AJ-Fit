@@ -203,7 +203,6 @@ export function OnboardingFunnelScreen({
     case 'limits':
       content = renderQuestion();
       break;
-    case 'limitationImpact':
     case 'specialConditions':
     case 'pregnancyWeeks':
     case 'pregnancyCare':
@@ -232,7 +231,7 @@ export function OnboardingFunnelScreen({
       content = renderQuestion();
       break;
     case 'analyzing':
-      content = <AnalyzingScreen name={name} onDone={goNext} />;
+      content = <AnalyzingScreen name={name} onDone={goNext} onReviewAnswers={goBack} />;
       break;
     case 'plan':
       content = <PlanReadyScreen name={name} onContinue={handlePlanContinue} />;

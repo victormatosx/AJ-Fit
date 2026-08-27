@@ -21,11 +21,6 @@ export type PrimaryTrainingEnvironment = Exclude<TrainingEnvironment, 'both'>;
 /** Canonical chronological order (Monday-first). Persisted values never depend on locale or click order — see questionnaireSchema.ts `normalizeWeekdays`. */
 export const WEEKDAY_ORDER = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'] as const;
 export type Weekday = (typeof WEEKDAY_ORDER)[number];
-export type LimitationImpact =
-  | 'mild'
-  | 'requires_adaptation'
-  | 'professional_restriction'
-  | 'unknown';
 export type SpecialCondition =
   | 'musculoskeletal_limitation'
   | 'pregnancy'
@@ -118,7 +113,6 @@ export type Quiz = {
   muscleFocus: string[];
   /** Etapa 22 — nível de compromisso declarado. Onboarding-only: não influencia nenhum algoritmo de treino hoje. */
   commitment: string | null;
-  limitationImpact: LimitationImpact | null;
   specialConditions: SpecialCondition[];
   pregnancyScreening: PregnancyScreening | null;
   postpartumScreening: PostpartumScreening | null;
@@ -171,7 +165,6 @@ export const defaultQuiz: Quiz = {
   motivation: null,
   muscleFocus: [],
   commitment: null,
-  limitationImpact: null,
   specialConditions: [],
   pregnancyScreening: null,
   postpartumScreening: null,

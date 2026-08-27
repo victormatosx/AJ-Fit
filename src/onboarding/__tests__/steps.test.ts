@@ -14,10 +14,10 @@ import {
 } from '../steps';
 
 describe('ONBOARDING_STEPS', () => {
-  it('has 42 unique step ids', () => {
+  it('has 41 unique step ids', () => {
     const ids = ONBOARDING_STEPS.map((s) => s.id);
-    expect(ids).toHaveLength(42);
-    expect(new Set(ids).size).toBe(42);
+    expect(ids).toHaveLength(41);
+    expect(new Set(ids).size).toBe(41);
   });
 
   it('never lets auth/paywall be dev-jumpable', () => {
@@ -136,7 +136,6 @@ describe('conditional questionnaire branches', () => {
     const seq = getStepSequence('anonymous', standard);
     expect(seq).not.toContain('equipment');
     expect(seq).not.toContain('primaryPlace');
-    expect(seq).not.toContain('limitationImpact');
     expect(seq).not.toContain('limits');
     expect(seq).not.toContain('pregnancyWeeks');
     expect(seq).not.toContain('postpartumSigns');
@@ -157,13 +156,13 @@ describe('conditional questionnaire branches', () => {
     expect(both).toContain('equipment');
   });
 
-  it('adds limitation impact and coexisting pregnancy/functional screening', () => {
+  it('adds limitation regions directly and coexisting pregnancy/functional screening', () => {
     const seq = getStepSequence('anonymous', {
       place: 'gym',
       limits: ['knee'],
       specialConditions: ['musculoskeletal_limitation', 'pregnancy', 'functional_limitation'],
     });
-    expect(seq).toContain('limitationImpact');
+    expect(seq).toContain('limits');
     expect(seq).toContain('pregnancyCare');
     expect(seq).toContain('functionalSituations');
     expect(getStepSequence('anonymous', { ...standard, specialConditions: ['postpartum'] })).toContain(
@@ -210,7 +209,7 @@ describe('conditional questionnaire branches', () => {
       limits: ['knee'],
       specialConditions: ['lipedema', 'musculoskeletal_limitation'],
     });
-    for (const id of ['limits', 'limitationImpact', 'lipedemaScreening'] as const) {
+    for (const id of ['limits', 'lipedemaScreening'] as const) {
       expect(seq.filter((stepId) => stepId === id)).toHaveLength(1);
     }
   });

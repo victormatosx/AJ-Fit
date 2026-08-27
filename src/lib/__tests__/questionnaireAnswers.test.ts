@@ -46,7 +46,6 @@ describe('toPersistedAnswers / fromPersistedAnswers (new shape)', () => {
       place: 'both',
       primaryPlace: 'home',
       equipment: ['dumbbells', 'bands'],
-      limitationImpact: 'requires_adaptation',
       specialConditions: ['musculoskeletal_limitation', 'pregnancy'],
       pregnancyScreening: {
         weeks: 18,
@@ -62,10 +61,16 @@ describe('toPersistedAnswers / fromPersistedAnswers (new shape)', () => {
       place: 'both',
       primaryPlace: 'home',
       equipment: ['dumbbells', 'bands'],
-      limitationImpact: 'requires_adaptation',
       specialConditions: ['musculoskeletal_limitation', 'pregnancy'],
       pregnancyScreening: canonical.pregnancyScreening,
     });
+  });
+
+  it('reads and ignores the removed legacy field, and never writes it again', () => {
+    const legacy = { ...toPersistedAnswers(fullQuiz), limitationImpact: 'professional_restriction' };
+    const restored = fromPersistedAnswers(legacy, Timestamp.now());
+    expect(Object.prototype.hasOwnProperty.call(restored, 'limitationImpact')).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(toPersistedAnswers(restored), 'limitationImpact')).toBe(false);
   });
 });
 

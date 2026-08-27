@@ -135,7 +135,8 @@
     "error": {
       "title": "Não conseguimos montar seu plano",
       "body": "Algo deu errado ao calcular seu treino. Você pode tentar novamente.",
-      "retry": "Tentar novamente"
+      "retry": "Tentar novamente",
+      "reviewAnswers": "Revisar respostas"
     }
   },
   "socialProof": {

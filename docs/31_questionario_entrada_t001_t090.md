@@ -41,10 +41,15 @@ sobre você → objetivo → rotina → personalização → saúde → finaliza
 
 No caminho padrão `gym`, há 14 telas de pergunta. Gestação e pós-parto passam
 a adicionar três telas cada (17 no total), agrupando campos relacionados sem
-perder informação. Limitação funcional adiciona uma (15). Musculoesquelética
-e pós-cirúrgico adicionam duas (16); lipedema, tontura/vertigem e restrição
-médica adicionam uma cada (15). `home` soma equipamento; `both` soma ambiente
-principal e equipamento. Múltiplos ramos somam suas telas e coexistem.
+perder informação. Limitação funcional, musculoesquelética, pós-cirúrgico,
+lipedema, tontura/vertigem e restrição médica adicionam uma tela cada (15).
+`home` soma equipamento; `both` soma ambiente principal e equipamento.
+Múltiplos ramos somam suas telas e coexistem.
+
+Musculoesquelética não possui mais uma segunda tela de "impacto da
+limitação" (`limitationImpact`, removida). Selecionar uma ou mais regiões em
+`limits[]` já é suficiente para ativar automaticamente a adaptação daquela(s)
+região(ões) — ver seção 3 e `docs/32_workout_prescription_engine.md`.
 
 O roteador canônico oferece:
 
@@ -61,8 +66,8 @@ medical_restriction
 ```
 
 `none` é exclusivo. Gestação e pós-parto são mutuamente exclusivos. As demais
-condições podem coexistir. `limits` e `limitationImpact` agora aparecem somente
-no ramo `musculoskeletal_limitation`.
+condições podem coexistir. `limits` aparece somente no ramo
+`musculoskeletal_limitation`.
 
 ## 3. Pergunta → campo → finalidade → papel → ramo
 
@@ -81,8 +86,7 @@ no ramo `musculoskeletal_limitation`.
 | equipamentos | `equipment[]` | viabilidade | modifier P3 | `home/both` |
 | prioridade muscular | `muscleFocus[]` | ênfase, máximo 2 | preference P7 | comum |
 | roteador de saúde | `specialConditions[]` | ativar ramos explícitos | router | comum |
-| região limitada | `limits[]` | constraints de movimento | modifier P2 | musculoesquelética |
-| impacto da limitação | `limitationImpact` | diferenciar desconforto/adaptação/restrição | safety/modifier | musculoesquelética |
+| região limitada | `limits[]` | constraints de movimento; ativa adaptação automaticamente | safety/modifier P0 | musculoesquelética |
 | semanas | `pregnancyScreening.weeks` | contexto da população | selector/context | gestação |
 | cuidados (agrupada) | `prenatalCare`, `exerciseRestriction`, `complication` | gate declarado | safety P0/P1 | gestação |
 | sinais gestacionais | `warningSigns[]` | red flags declaradas | safety P0 | gestação |
@@ -102,8 +106,6 @@ no ramo `musculoskeletal_limitation`.
 ```ts
 specialConditions: SpecialCondition[];
 limits: string[];
-limitationImpact: 'mild' | 'requires_adaptation' |
-  'professional_restriction' | 'unknown' | null;
 
 lipedemaScreening: {
   symptomImpact: 'none' | 'mild_or_occasional' |

@@ -13,7 +13,6 @@ describe('prescription pipeline and invariants', () => {
     expect(limitationReadinessFailure(completeAnswers({
       specialConditions: ['musculoskeletal_limitation'],
       limits: ['knee'],
-      limitationImpact: 'mild',
     }))).toBeNull();
   });
 

@@ -69,4 +69,12 @@ describe('AnalyzingScreen — Rules of Hooks regression guard', () => {
     expect(pulseRefIndex).toBeGreaterThan(-1);
     expect(pulseRefIndex).toBeLessThan(earlyReturnIndex);
   });
+
+  it('preserves domain outcomes and sends non-retryable safety results back to answer review', () => {
+    expect(body).toContain('onboardingGenerationFailurePresentation(failureStatus)');
+    expect(body).toContain("presentation.action === 'retry'");
+    expect(body).toContain(': onReviewAnswers');
+    expect(body).toContain('tPlan(`prescription.${presentation.outcomeKey}.title`)');
+    expect(body).toContain("t('analyzing.error.reviewAnswers')");
+  });
 });

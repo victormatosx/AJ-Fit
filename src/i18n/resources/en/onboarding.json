@@ -135,7 +135,8 @@
     "error": {
       "title": "We couldn't build your plan",
       "body": "Something went wrong calculating your workout. You can try again.",
-      "retry": "Try again"
+      "retry": "Try again",
+      "reviewAnswers": "Review answers"
     }
   },
   "socialProof": {

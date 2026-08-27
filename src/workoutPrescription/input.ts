@@ -51,7 +51,6 @@ export function prescriptionInputErrors(answers: QuestionnaireAnswers): string[]
   if (!answers.level) errors.push('QUESTIONNAIRE_EXPERIENCE_REQUIRED');
   if (!answers.duration) errors.push('QUESTIONNAIRE_DURATION_REQUIRED');
   if (!answers.place) errors.push('QUESTIONNAIRE_ENVIRONMENT_REQUIRED');
-  if (answers.limitationImpact === 'unknown') errors.push('QUESTIONNAIRE_LIMITATION_IMPACT_UNKNOWN');
   if (answers.lipedemaScreening?.symptomImpact === 'unknown') errors.push('QUESTIONNAIRE_LIPEDEMA_IMPACT_UNKNOWN');
   return [...new Set(errors)].sort();
 }

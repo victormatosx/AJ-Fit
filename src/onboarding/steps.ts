@@ -41,7 +41,6 @@ export type OnboardingStepId =
   | 'equipment'
   | 'interstitial_guidedWorkout'
   | 'limits'
-  | 'limitationImpact'
   | 'specialConditions'
   | 'pregnancyWeeks'
   | 'pregnancyCare'
@@ -101,7 +100,6 @@ export const ONBOARDING_STEPS: readonly OnboardingStepDef[] = [
   { id: 'muscleFocus', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
   { id: 'specialConditions', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
   { id: 'limits', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
-  { id: 'limitationImpact', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
   { id: 'lipedemaScreening', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
   { id: 'dizzinessScreening', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
   { id: 'postSurgicalStatus', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
@@ -150,7 +148,6 @@ export const FORCED_QUESTIONNAIRE_STEP_IDS: readonly OnboardingStepId[] = [
   'muscleFocus',
   'specialConditions',
   'limits',
-  'limitationImpact',
   'lipedemaScreening',
   'dizzinessScreening',
   'postSurgicalStatus',
@@ -201,7 +198,7 @@ function isApplicableStep(id: OnboardingStepId, answers?: OnboardingFlowAnswers)
   if (id === 'trainingDays') return answers?.days != null && answers.days >= 2 && answers.days <= 6;
   if (id === 'primaryPlace') return answers?.place === 'both';
   if (id === 'equipment') return answers?.place === 'home' || answers?.place === 'both';
-  if (id === 'limits' || id === 'limitationImpact') {
+  if (id === 'limits') {
     return !!answers?.specialConditions?.includes('musculoskeletal_limitation');
   }
   if (id === 'lipedemaScreening') return !!answers?.specialConditions?.includes('lipedema');

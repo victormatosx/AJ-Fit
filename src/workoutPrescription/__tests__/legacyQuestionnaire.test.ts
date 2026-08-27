@@ -62,15 +62,13 @@ describe('legacy questionnaire shapes never crash the engine', () => {
     expect(result.status).toBe('NEEDS_QUESTIONNAIRE_UPDATE');
   });
 
-  it('a musculoskeletal limitation without a resolvable adaptation stays fail-closed (never bypassed by the sanitize boundary)', () => {
+  it('a declared musculoskeletal region alone is a complete, valid questionnaire — no removed limitationImpact gate blocks it', () => {
     const answers = completeAnswers({
       specialConditions: ['musculoskeletal_limitation'],
       limits: ['knee'],
-      limitationImpact: null,
     });
+    expect(answers).not.toHaveProperty('limitationImpact');
     const result = generateWorkoutPrescription(answers);
-    expect(result.status).toBe('NEEDS_QUESTIONNAIRE_UPDATE');
-    if (result.status !== 'NEEDS_QUESTIONNAIRE_UPDATE') return;
-    expect(result.reasonCodes).toContain('QUESTIONNAIRE_LIMITATION_IMPACT_REQUIRED');
+    expect(result.status).not.toBe('NEEDS_QUESTIONNAIRE_UPDATE');
   });
 });

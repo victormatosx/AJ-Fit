@@ -39,7 +39,6 @@ function limitationAnswersForTemplate(
     ...base,
     specialConditions,
     limits: regions,
-    limitationImpact: 'mild',
   };
 }
 
@@ -99,7 +98,6 @@ describe('Pipeline limitation quality gate', () => {
     let composedOutcomes = 0;
     const compositionAnswers = completeAnswers({
       specialConditions: ['musculoskeletal_limitation'],
-      limitationImpact: 'mild',
     });
     for (const exerciseId of usedExerciseIds) {
       for (let mask = 1; mask < (1 << LIMITATION_REGION_IDS.length); mask += 1) {

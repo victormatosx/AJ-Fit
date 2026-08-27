@@ -55,3 +55,23 @@ export function prescriptionOutcomeKey(
 export function canRetryGeneration(status: PrescriptionResult['status']): boolean {
   return status === 'INVALID_CONFIGURATION' || status === 'MISSING_TEMPLATE' || status === 'MISSING_EXERCISE';
 }
+
+export type OnboardingGenerationFailurePresentation = {
+  outcomeKey: PrescriptionOutcomeKey;
+  action: 'retry' | 'reviewAnswers';
+};
+
+/**
+ * The pre-auth analysis screen must preserve domain failures instead of
+ * presenting every non-success result as a transient calculation error.
+ * Safety/answer outcomes are reviewed by changing the questionnaire; only
+ * genuinely retryable generation failures keep the retry action.
+ */
+export function onboardingGenerationFailurePresentation(
+  status: Exclude<PrescriptionResult['status'], 'SUCCESS'>,
+): OnboardingGenerationFailurePresentation {
+  return {
+    outcomeKey: prescriptionOutcomeKey(status),
+    action: canRetryGeneration(status) ? 'retry' : 'reviewAnswers',
+  };
+}

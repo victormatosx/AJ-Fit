@@ -51,7 +51,6 @@ function limitationAnswers(overrides: Partial<QuestionnaireAnswers> = {}): Quest
     days: 2,
     specialConditions: ['musculoskeletal_limitation'],
     limits: ['shoulder'],
-    limitationImpact: 'mild',
     ...overrides,
   });
 }
@@ -422,6 +421,30 @@ describe('Prescription Engine + Limitation Resolver V1', () => {
     if (result.status === 'SUCCESS') {
       expect(result.plan.templateId).toBe(oneExerciseTemplate(limitationAnswers(), 'machine-flat-bench-press').id);
       expect(result.plan.sessions.flatMap((session) => session.exercises).every((item) => knownIds.has(item.exerciseId))).toBe(true);
+    }
+  });
+
+  it('wrist representative: selecting `limits: ["wrist"]` alone activates the real dataset decision (incline-dumbbell-bench-press → machine-flat-bench-press), with no limitationImpact field anywhere in the answers', () => {
+    const answers = limitationAnswers({ limits: ['wrist'] });
+    expect(answers).not.toHaveProperty('limitationImpact');
+    const result = generateSingle(answers, 'incline-dumbbell-bench-press');
+    expect(result.status).toBe('SUCCESS');
+    if (result.status === 'SUCCESS') {
+      for (const session of result.plan.sessions) {
+        expect(session.exercises).toEqual([
+          expect.objectContaining({
+            exerciseId: 'machine-flat-bench-press',
+            sourceExerciseId: 'incline-dumbbell-bench-press',
+          }),
+        ]);
+      }
+      expect(result.plan.trace.limitationDecisions).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          originalExerciseId: 'incline-dumbbell-bench-press',
+          finalExerciseId: 'machine-flat-bench-press',
+          reasonRegions: ['wrist'],
+        }),
+      ]));
     }
   });
 });

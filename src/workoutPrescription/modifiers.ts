@@ -28,7 +28,7 @@ export function resolveModifiers(
   for (const id of safety.requiredModifierIds) {
     if (id.startsWith('population:')) {
       result.push(modifier(id, 'P1', 'APPLIED', 'SPECIAL_POPULATION_BASE_TEMPLATE'));
-    } else if (id === 'safety:musculoskeletal_adaptation' || id === 'safety:musculoskeletal_mild') {
+    } else if (id === 'safety:musculoskeletal_adaptation') {
       result.push(modifier(
         id,
         'P0',

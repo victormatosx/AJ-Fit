@@ -121,8 +121,7 @@ para provar a transição à família convencional.
 | lipedema sem impacto | none + guidance no | `CLEAR` |
 | lipedema com impacto | mild/interferes + guidance no | `ADAPTED` |
 | orientação de lipedema não representável | guidance yes/unsure | `REQUIRES_CLEARANCE` |
-| limitação musculoesquelética | mild/requires_adaptation | `ADAPTED` |
-| restrição musculoesquelética profissional | professional_restriction | `REQUIRES_CLEARANCE` |
+| limitação musculoesquelética | qualquer região declarada em `limits[]` | `ADAPTED` |
 | restrição médica | yes/unsure | `REQUIRES_CLEARANCE` |
 
 O agregador é monotônico: `BLOCKED > REQUIRES_CLEARANCE > ADAPTED > CLEAR`.
@@ -143,7 +142,7 @@ Uma regra posterior nunca enfraquece uma anterior.
 | muscle priority | P7 | `IMPLEMENTED`: preservar/ordenar e até +1 set por priority/sessão |
 | return_to_training | P2 | `IMPLEMENTED`: preserva template e não ativa beginner por si só |
 | duration 30/45 | P5 | `IMPLEMENTED`: manter `ceil(n×0,60)`/`ceil(n×0,80)` exercícios |
-| limitação musculoesquelética mild/requires_adaptation | P0 | `IMPLEMENTED`: Limitation Resolver V1, fail-closed |
+| limitação musculoesquelética (qualquer região declarada) | P0 | `IMPLEMENTED`: Limitation Resolver V1, fail-closed |
 | demais safety clínicos adaptados sem transformação estruturada | P0 | `RULE_DEFINITION_REQUIRED` |
 
 Um modifier obrigatório sem regra completa faz o resultado final ser

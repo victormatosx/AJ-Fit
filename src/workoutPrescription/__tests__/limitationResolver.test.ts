@@ -329,7 +329,7 @@ describe('Limitation Resolver V1', () => {
 
   it('returns UNMAPPED_LIMITATION_REGION instead of ignoring other', () => {
     expect(mapQuestionnaireLimitations(completeAnswers({
-      specialConditions: ['musculoskeletal_limitation'], limits: ['other'], limitationImpact: 'mild',
+      specialConditions: ['musculoskeletal_limitation'], limits: ['other'],
     }))).toEqual({ status: 'UNMAPPED', reasonCodes: ['UNMAPPED_LIMITATION_REGION'] });
   });
 

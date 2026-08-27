@@ -25,7 +25,7 @@ describe('explicit conflict resolution', () => {
   ])('%s priority cannot override %s safety', (focus, region) => {
     expect(conflictIds({
       muscleFocus: [focus], specialConditions: ['musculoskeletal_limitation'],
-      limits: [region], limitationImpact: 'requires_adaptation',
+      limits: [region],
     })).toContain(`safety_over_priority:${focus}`);
   });
 
@@ -39,7 +39,7 @@ describe('explicit conflict resolution', () => {
     expect(conflictIds({
       specialConditions: ['lipedema', 'musculoskeletal_limitation'],
       lipedemaScreening: { symptomImpact: 'interferes_with_exercises', professionalGuidance: 'no' },
-      limits: ['knee'], limitationImpact: 'requires_adaptation',
+      limits: ['knee'],
     })).toContain('lipedema_with_musculoskeletal_limitation');
   });
 
@@ -56,7 +56,7 @@ describe('explicit conflict resolution', () => {
     ['post-surgical', {
       specialConditions: ['post_surgical', 'musculoskeletal_limitation'],
       postSurgicalScreening: { recoveryStatus: 'in_progress', returnClearance: 'cleared_no_restrictions', bodyRegion: 'knee' },
-      limits: ['knee'], limitationImpact: 'mild',
+      limits: ['knee'],
     }],
   ] as const)('%s adapted keeps P0 modifiers before lower priorities', (_name, overrides) => {
     const answers = completeAnswers(overrides as unknown as Partial<Quiz>);

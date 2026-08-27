@@ -67,7 +67,7 @@ function limitationAnswersForTemplate(
     base.specialConditions.includes('none')
       ? ['musculoskeletal_limitation']
       : [...base.specialConditions, 'musculoskeletal_limitation'];
-  return { ...base, specialConditions, limits: regions, limitationImpact: 'mild' };
+  return { ...base, specialConditions, limits: regions };
 }
 
 function main(): void {
@@ -144,7 +144,6 @@ function main(): void {
   const multiOmissionsByRegionCount: Record<string, number> = {};
   const multiAnswers = completeAnswers({
     specialConditions: ['musculoskeletal_limitation'],
-    limitationImpact: 'mild',
   });
   for (const exerciseId of usedExerciseIds) {
     for (let mask = 1; mask < (1 << LIMITATION_REGION_IDS.length); mask += 1) {
