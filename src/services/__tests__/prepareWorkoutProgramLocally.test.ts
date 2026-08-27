@@ -18,6 +18,10 @@ import { generateWorkoutPrescription } from '../../workoutPrescription/engine';
 import { getTemplateById } from '../../workoutPrescription/catalog';
 import { completeAnswers } from '../../workoutPrescription/__tests__/fixtures';
 import { loadLocalExerciseCatalogForLimitations } from '../../workoutPrescription/localLimitationCatalog';
+import {
+  CANONICAL_LIMITATION_DATASET_HASH,
+  CANONICAL_LIMITATION_DATASET_VERSION,
+} from '../../workoutPrescription/limitationDataset';
 
 const VALID_ANSWERS = completeAnswers({ level: 'intermediate', days: 4, place: 'gym', sex: 'm', goal: 'gain_muscle' });
 
@@ -27,6 +31,8 @@ describe('prepareWorkoutProgramLocally — Phase 3, Part C (pre-auth compute, lo
     expect(result.status).toBe('SUCCESS');
     if (result.status !== 'SUCCESS') return;
     expect(result.plan.sessions.length).toBeGreaterThan(0);
+    expect(result.plan.limitationDatasetVersion).toBe(CANONICAL_LIMITATION_DATASET_VERSION);
+    expect(result.plan.limitationDatasetHash).toBe(CANONICAL_LIMITATION_DATASET_HASH);
     expect(result.templateId).toMatch(/^T\d{3}$/);
     expect(result.usedLocalLimitationCatalog).toBe(false); // no limitation declared
   });

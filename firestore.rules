@@ -256,7 +256,8 @@ service cloud.firestore {
              'questionnaireVersion', 'status', 'source', 'requestedDays',
              'prescribedStructuredDays', 'population', 'environment',
              'goalFamily', 'split', 'adaptationStage', 'sessions', 'versions',
-             'trace', 'createdAt', 'activatedAt', 'updatedAt'
+             'trace', 'limitationDatasetVersion', 'limitationDatasetHash',
+             'createdAt', 'activatedAt', 'updatedAt'
            ])
         && data.programId == programId
         // `planId` is `FinalWorkoutPlan.planId` spread verbatim onto the
@@ -296,6 +297,25 @@ service cloud.firestore {
         && data.trace.unresolvedModifiers.size() == 0
         && (!('adaptationStage' in data)
             || (data.adaptationStage is int && data.adaptationStage >= 1 && data.adaptationStage <= 3));
+    }
+
+    // New program snapshots are cryptographically tied to the exact active
+    // clinical dataset. Legacy snapshots remain readable/updateable so an
+    // activation transaction can supersede them without rewriting history.
+    function workoutProgramLimitationDatasetValid(data) {
+      let active = get(/databases/$(database)/documents/limitationDatasetState/active);
+      return (
+          !data.keys().hasAny(['limitationDatasetVersion', 'limitationDatasetHash'])
+        ) || (
+          data.keys().hasAll(['limitationDatasetVersion', 'limitationDatasetHash'])
+          && data.limitationDatasetVersion is string
+          && data.limitationDatasetVersion.size() >= 1
+          && data.limitationDatasetVersion.size() <= 120
+          && data.limitationDatasetHash is string
+          && data.limitationDatasetHash.matches('^[a-f0-9]{64}$')
+          && active.data.datasetVersion == data.limitationDatasetVersion
+          && active.data.limitationDatasetHash == data.limitationDatasetHash
+        );
     }
 
     // Workout Execution & History V1 (docs/workout-lifecycle/
@@ -804,6 +824,10 @@ service cloud.firestore {
         allow create: if isOwner(userId)
           && accountActive(userId)
           && workoutProgramCommonValid(userId, programId, request.resource.data)
+          // Transitional rollout compatibility: the already-published app
+          // may omit both fields; the new app always sends both, and any
+          // supplied identity is required to equal the active dataset.
+          && workoutProgramLimitationDatasetValid(request.resource.data)
           && request.resource.data.status == 'active'
           && request.resource.data.createdAt == request.time
           && request.resource.data.activatedAt == request.time
@@ -1264,6 +1288,17 @@ service cloud.firestore {
       // Exercícios podem ser referenciados por histórico de treino — sem
       // hard delete nesta fase (docs/27 §8: desativação via status).
       allow delete: if false;
+    }
+
+    // Published clinical dataset identity. Clients consume only the active
+    // pointer; immutable version snapshots and all writes remain server-only.
+    match /limitationDatasetState/{stateId} {
+      allow read: if stateId == 'active' && hasVerifiedEmailForPrivateAccess();
+      allow write: if false;
+    }
+
+    match /limitationDatasetVersions/{datasetHash} {
+      allow read, write: if false;
     }
 
     function workoutTemplateValid(templateId) {

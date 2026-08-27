@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-27T16:10:46.759Z",
+  "generatedAt": "2026-08-27T16:58:37.080Z",
   "methodology": "Real resolveExerciseLimitations()/validateLimitationProfile() from src/workoutPrescription/limitationResolver.ts, run for every exercise actually referenced by T001-T090 x each of the 7 limitation regions, one region at a time (equipment/environment ignored — separate axis).",
   "summary": {
     "totalAnalyzed": 497,

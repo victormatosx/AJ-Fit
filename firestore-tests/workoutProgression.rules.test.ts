@@ -13,6 +13,8 @@ const PROJECT_ID = 'ajfit-rules-test';
 const UID = 'alice';
 const OTHER_UID = 'mallory';
 const FROM_PROGRAM_ID = 'wpg_stage1';
+const LIMITATION_DATASET_VERSION = 'phase3-limitation-profiles-v2';
+const LIMITATION_DATASET_HASH = 'a'.repeat(64);
 // A fixed point far in the past — guaranteed never to equal `request.time`,
 // unlike `Timestamp.now()` (which can occasionally coincide with the local
 // emulator's own clock down to the millisecond, flaking these assertions).
@@ -59,6 +61,10 @@ beforeEach(async () => {
     await setDoc(doc(context.firestore(), 'users', OTHER_UID), userDocument(OTHER_UID));
     await setDoc(doc(context.firestore(), 'users', UID, 'workoutPrograms', FROM_PROGRAM_ID), { programId: FROM_PROGRAM_ID, status: 'superseded' });
     await setDoc(doc(context.firestore(), 'users', OTHER_UID, 'workoutPrograms', FROM_PROGRAM_ID), { programId: FROM_PROGRAM_ID, status: 'superseded' });
+    await setDoc(doc(context.firestore(), 'limitationDatasetState', 'active'), {
+      datasetVersion: LIMITATION_DATASET_VERSION,
+      limitationDatasetHash: LIMITATION_DATASET_HASH,
+    });
   });
 });
 
@@ -137,6 +143,7 @@ describe('workoutPrograms — automatic_progression source (Progression Engine V
       templateSourceVersion: '1.3.0', templateContentHash: 'a'.repeat(64), questionnaireId: 'q1', questionnaireVersion: 1,
       status: 'active', source: 'automatic_progression', requestedDays: 4, prescribedStructuredDays: 4,
       population: 'convencional', environment: 'gym', goalFamily: 'hypertrophy_body_composition', split: 'ABCD',
+      limitationDatasetVersion: LIMITATION_DATASET_VERSION, limitationDatasetHash: LIMITATION_DATASET_HASH,
       sessions: [{ name: 'A', type: 'strength', exercises: [] }],
       versions: { templateLibrary: '1.3.0', selectionEngine: '1.0.0', safetyRules: '1.0.0', modifierRules: '2.0.0', compositionEngine: '2.0.0' },
       trace: { safety: { status: 'CLEAR' }, unresolvedModifiers: [] },

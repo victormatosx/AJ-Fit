@@ -14,7 +14,15 @@ import { getTemplateById, TEMPLATE_LIBRARY_VERSION } from '../workoutPrescriptio
 import { generateWorkoutPrescription } from '../workoutPrescription/engine';
 import { prescriptionInputErrors, sanitizeAnswersForEngine } from '../workoutPrescription/input';
 import type { LimitationCatalogExercise } from '../workoutPrescription/limitationResolver';
-import { loadLocalExerciseCatalogForLimitations } from '../workoutPrescription/localLimitationCatalog';
+import { loadLocalLimitationDataset } from '../workoutPrescription/localLimitationCatalog';
+import {
+  LIMITATION_DATASET_ACTIVE_DOCUMENT,
+  LIMITATION_DATASET_STATE_COLLECTION,
+  canonicalizeLimitationProfiles,
+  type LimitationDatasetIdentity,
+  type LimitationDatasetSnapshot,
+} from '../workoutPrescription/limitationDataset';
+import { logError, logInfo } from '../lib/logger';
 import { selectTemplate } from '../workoutPrescription/selection';
 import {
   fromWorkoutTemplateDocument,
@@ -155,18 +163,82 @@ function isExerciseCatalogDocument(value: unknown, id: string): value is Limitat
 }
 
 /** Single catalog query; Limitation Resolver remains pure and performs no I/O. */
-export async function loadExerciseCatalogForLimitations(): Promise<LimitationCatalogExercise[]> {
+function limitationDatasetStateRef() {
+  return doc(db, LIMITATION_DATASET_STATE_COLLECTION, LIMITATION_DATASET_ACTIVE_DOCUMENT);
+}
+
+function parseRemoteLimitationDatasetIdentity(value: unknown): LimitationDatasetIdentity | null {
+  if (!value || typeof value !== 'object') return null;
+  const data = value as Record<string, unknown>;
+  if (
+    typeof data.datasetVersion !== 'string'
+    || typeof data.limitationDatasetHash !== 'string'
+    || !/^[a-f0-9]{64}$/.test(data.limitationDatasetHash)
+  ) return null;
+  return { version: data.datasetVersion, hash: data.limitationDatasetHash, source: 'firestore' };
+}
+
+export async function loadExerciseCatalogForLimitations(
+  includeExercises = true,
+): Promise<LimitationDatasetSnapshot> {
+  const identityBeforeSnapshot = await getDoc(limitationDatasetStateRef());
+  const identityBefore = identityBeforeSnapshot.exists()
+    ? parseRemoteLimitationDatasetIdentity(identityBeforeSnapshot.data())
+    : null;
+  if (!identityBefore) throw new Error('LIMITATION_DATASET_ACTIVE_IDENTITY_MISSING');
+
+  if (!includeExercises) {
+    logInfo('limitation_dataset', 'limitation_dataset_loaded', {
+      version: identityBefore.version,
+      hash: identityBefore.hash,
+      source: identityBefore.source,
+    });
+    return { ...identityBefore, exercises: [] };
+  }
+
   const snapshot = await getDocs(collection(db, EXERCISES));
   if (snapshot.size !== EXPECTED_EXERCISE_COUNT) {
     throw new Error(`LIMITATION_CATALOG_COUNT_INVALID:${snapshot.size}`);
   }
-  return snapshot.docs.map((document) => {
+  const exercises = snapshot.docs.map((document) => {
     const data = { ...document.data(), id: document.id };
     if (!isExerciseCatalogDocument(data, document.id)) {
       throw new Error(`LIMITATION_CATALOG_EXERCISE_INVALID:${document.id}`);
     }
     return data;
   });
+  const profiles = exercises
+    .filter((exercise) => exercise.limitationProfile != null)
+    .map((exercise) => ({ exerciseId: exercise.id, limitationProfile: exercise.limitationProfile }));
+  const Crypto = await import('expo-crypto');
+  const computedHash = await Crypto.digestStringAsync(
+    Crypto.CryptoDigestAlgorithm.SHA256,
+    canonicalizeLimitationProfiles(profiles, exercises),
+  );
+  const identityAfterSnapshot = await getDoc(limitationDatasetStateRef());
+  const identityAfter = identityAfterSnapshot.exists()
+    ? parseRemoteLimitationDatasetIdentity(identityAfterSnapshot.data())
+    : null;
+  if (
+    !identityAfter
+    || identityBefore.version !== identityAfter.version
+    || identityBefore.hash !== identityAfter.hash
+    || computedHash !== identityAfter.hash
+  ) {
+    logError('limitation_dataset_version_mismatch', new Error('LIMITATION_DATASET_VERSION_MISMATCH'), {
+      expectedVersion: identityAfter?.version ?? null,
+      expectedHash: identityAfter?.hash ?? null,
+      computedHash,
+      source: 'firestore',
+    });
+    throw new Error('LIMITATION_DATASET_VERSION_MISMATCH');
+  }
+  logInfo('limitation_dataset', 'limitation_dataset_loaded', {
+    version: identityAfter.version,
+    hash: identityAfter.hash,
+    source: identityAfter.source,
+  });
+  return { ...identityAfter, exercises };
 }
 
 function isProgramSnapshot(value: unknown, programId: string): value is WorkoutProgramSnapshot {
@@ -218,6 +290,8 @@ function programIdentity(input: {
     templateVersion: input.template.version,
     templateContentHash: input.template.contentHash,
     versions: input.plan.versions,
+    limitationDatasetVersion: input.plan.limitationDatasetVersion,
+    limitationDatasetHash: input.plan.limitationDatasetHash,
     adaptationStage: input.plan.adaptationStage ?? null,
   });
 }
@@ -347,8 +421,8 @@ export async function prepareWorkoutProgram(input: {
   answers: QuestionnaireAnswers;
   adaptationWeek?: number;
   loadTemplate: (templateId: TemplateId) => Promise<CanonicalTemplate | null>;
-  loadLimitationCatalog: () => Promise<LimitationCatalogExercise[]>;
-  /** Declares which source `loadLimitationCatalog` actually reads from — never inferred. */
+  loadLimitationDataset: (includeExercises: boolean) => Promise<LimitationDatasetSnapshot>;
+  /** Declares which source `loadLimitationDataset` actually reads from — never inferred. */
   usedLocalLimitationCatalog: boolean;
 }): Promise<PrepareWorkoutProgramResult> {
   // Boundary first — same guard `generateWorkoutPrescription` applies
@@ -383,22 +457,21 @@ export async function prepareWorkoutProgram(input: {
   if (!template) {
     return { status: 'MISSING_TEMPLATE', reasonCodes: ['WORKOUT_TEMPLATE_NOT_FOUND'] };
   }
-  let exerciseCatalog: LimitationCatalogExercise[] | undefined;
+  let limitationDataset: LimitationDatasetSnapshot;
   const needsLimitationCatalog = answers.specialConditions.includes('musculoskeletal_limitation');
-  if (needsLimitationCatalog) {
-    try {
-      exerciseCatalog = await input.loadLimitationCatalog();
-    } catch (error) {
-      return {
-        status: 'INVALID_CONFIGURATION',
-        reasonCodes: [error instanceof Error ? error.message : 'LIMITATION_CATALOG_LOAD_FAILED'],
-      };
-    }
+  try {
+    limitationDataset = await input.loadLimitationDataset(needsLimitationCatalog);
+  } catch (error) {
+    return {
+      status: 'INVALID_CONFIGURATION',
+      reasonCodes: [error instanceof Error ? error.message : 'LIMITATION_CATALOG_LOAD_FAILED'],
+    };
   }
   const result = generateWorkoutPrescription(answers, {
     adaptationWeek: input.adaptationWeek,
     template,
-    exerciseCatalog,
+    exerciseCatalog: needsLimitationCatalog ? limitationDataset.exercises : undefined,
+    limitationDataset,
   });
   if (result.status !== 'SUCCESS') return result;
   const missingExercises = validateProgramExerciseIds(result.plan);
@@ -440,7 +513,7 @@ export async function prepareWorkoutProgramLocally(
     answers,
     adaptationWeek,
     loadTemplate: (templateId) => Promise.resolve(getTemplateById(templateId) ?? null),
-    loadLimitationCatalog: () => Promise.resolve(loadLocalExerciseCatalogForLimitations()),
+    loadLimitationDataset: () => Promise.resolve(loadLocalLimitationDataset()),
     usedLocalLimitationCatalog: true,
   });
 }
@@ -461,7 +534,7 @@ export async function generateAndPersistWorkoutProgram(input: {
       firestoreTemplate = await loadWorkoutTemplate(templateId);
       return firestoreTemplate ? fromWorkoutTemplateDocument(firestoreTemplate) : null;
     },
-    loadLimitationCatalog: loadExerciseCatalogForLimitations,
+    loadLimitationDataset: loadExerciseCatalogForLimitations,
     usedLocalLimitationCatalog: false,
   });
   if (prepared.status !== 'SUCCESS') return prepared;
@@ -566,7 +639,9 @@ export function generateAndPersistWorkoutProgramDeduped(
  *      path as before Phase 3 existed; only the Analysis screen's PREVIEW
  *      benefits from the local computation in that case, not the actual
  *      persisted write.
- *   5. Even once trusted, the REAL Firestore `workoutTemplates/{id}`
+ *   5. The dataset identity embedded in the plan must match a freshly
+ *      loaded and content-hash-verified Firestore limitation dataset.
+ *   6. Even once trusted, the REAL Firestore `workoutTemplates/{id}`
  *      document is still loaded and used for the persisted snapshot's
  *      version/hash metadata — `prepared.plan`'s content is reused, but
  *      never its (locally-sourced) template version bookkeeping.
@@ -605,8 +680,13 @@ export async function persistPreparedWorkoutProgram(input: {
 
         if (currentFingerprint === prepared.questionnaireFingerprint && versionsMatch) {
           try {
-            const firestoreTemplate = await loadWorkoutTemplate(prepared.templateId);
-            if (firestoreTemplate) {
+            const [firestoreTemplate, firestoreLimitationDataset] = await Promise.all([
+              loadWorkoutTemplate(prepared.templateId),
+              loadExerciseCatalogForLimitations(false),
+            ]);
+            const datasetMatches = prepared.plan.limitationDatasetVersion === firestoreLimitationDataset.version
+              && prepared.plan.limitationDatasetHash === firestoreLimitationDataset.hash;
+            if (firestoreTemplate && datasetMatches) {
               const program = await saveAndActivateWorkoutProgram({
                 uid: input.uid,
                 questionnaireId: input.questionnaireId,

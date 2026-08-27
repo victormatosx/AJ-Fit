@@ -1,5 +1,6 @@
 import type { Quiz } from '../state/AppState';
 import type { LimitationCatalogExercise, LimitationDecisionTrace } from './limitationResolver';
+import type { LimitationDatasetIdentity } from './limitationDataset';
 
 export type TemplateId = `T${string}`;
 export type TemplateEnvironment = 'gym' | 'home';
@@ -207,6 +208,8 @@ export interface PrescriptionGenerationContext {
   template?: CanonicalTemplate;
   /** One preloaded catalog snapshot; the pure resolver performs no Firestore reads. */
   exerciseCatalog?: readonly LimitationCatalogExercise[];
+  /** Exact clinical dataset used by this generation; remote callers must pass the verified Firestore identity. */
+  limitationDataset?: LimitationDatasetIdentity;
 }
 
 export interface FinalWorkoutPlan {
@@ -219,6 +222,8 @@ export interface FinalWorkoutPlan {
   goalFamily: GoalFamily;
   split: string;
   adaptationStage?: 1 | 2 | 3;
+  limitationDatasetVersion: string;
+  limitationDatasetHash: string;
   sessions: FinalWorkoutSession[];
   versions: PrescriptionVersions;
   trace: PrescriptionTrace;

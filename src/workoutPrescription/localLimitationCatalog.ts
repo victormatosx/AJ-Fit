@@ -1,6 +1,11 @@
-import limitationProfilesJson from '../../docs/workout-modifiers/exercise-limitations/15_LIMITATION_PROFILES_TECHNICAL_v2.json';
 import { EXERCISES_SEED } from '../data/exercisesSeedData';
 import type { LimitationCatalogExercise } from './limitationResolver';
+import {
+  CANONICAL_LIMITATION_DATASET_VERSION,
+  CANONICAL_LIMITATION_PROFILES,
+  localLimitationDatasetIdentity,
+  type LimitationDatasetSnapshot,
+} from './limitationDataset';
 
 /**
  * Local, bundled equivalent of `loadExerciseCatalogForLimitations`
@@ -31,16 +36,14 @@ import type { LimitationCatalogExercise } from './limitationResolver';
  * authoritative Firestore-backed recomputation is always what actually
  * gets persisted for that case.
  */
-export const LIMITATION_PROFILES_DATASET_VERSION: string = (
-  limitationProfilesJson as { datasetVersion: string }
-).datasetVersion;
+export const LIMITATION_PROFILES_DATASET_VERSION = CANONICAL_LIMITATION_DATASET_VERSION;
 
 type LimitationProfilesFile = {
   profiles: Array<{ exerciseId: string; limitationProfile: unknown }>;
 };
 
 const profileByExerciseId = new Map(
-  (limitationProfilesJson as unknown as LimitationProfilesFile).profiles.map(
+  (CANONICAL_LIMITATION_PROFILES as LimitationProfilesFile['profiles']).map(
     (entry) => [entry.exerciseId, entry.limitationProfile],
   ),
 );
@@ -61,4 +64,11 @@ export function loadLocalExerciseCatalogForLimitations(): LimitationCatalogExerc
     ...exercise,
     limitationProfile: profileByExerciseId.get(exercise.id),
   }));
+}
+
+export function loadLocalLimitationDataset(): LimitationDatasetSnapshot {
+  return {
+    ...localLimitationDatasetIdentity(),
+    exercises: loadLocalExerciseCatalogForLimitations(),
+  };
 }

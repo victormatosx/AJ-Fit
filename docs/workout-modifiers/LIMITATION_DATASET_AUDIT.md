@@ -1,6 +1,6 @@
 # Limitation Dataset Audit
 
-Generated: 2026-08-27T16:10:46.763Z
+Generated: 2026-08-27T16:58:37.083Z
 
 Formal, mechanical audit of `15_LIMITATION_PROFILES_TECHNICAL_v2.json` run against the
 real, unmodified `resolveExerciseLimitations()`/`validateLimitationProfile()` from

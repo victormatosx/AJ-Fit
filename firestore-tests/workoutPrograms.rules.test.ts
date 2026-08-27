@@ -20,6 +20,8 @@ import {
 const PROJECT_ID = 'ajfit-rules-test';
 const UID = 'alice';
 const OTHER_UID = 'mallory';
+const LIMITATION_DATASET_VERSION = 'phase3-limitation-profiles-v2';
+const LIMITATION_DATASET_HASH = 'a'.repeat(64);
 let testEnv: RulesTestEnvironment;
 
 function dbFor(uid: string, admin = false) {
@@ -57,6 +59,8 @@ function programDocument(programId = 'wpg_12345678') {
     questionnaireId: 'q1', questionnaireVersion: 1, status: 'active', source: 'onboarding',
     requestedDays: 4, prescribedStructuredDays: 4, population: 'conventional', environment: 'gym',
     goalFamily: 'hypertrophy_body_composition', split: 'upper/lower',
+    limitationDatasetVersion: LIMITATION_DATASET_VERSION,
+    limitationDatasetHash: LIMITATION_DATASET_HASH,
     sessions: [{ name: 'A', type: 'strength', exercises: [{ exerciseId: 'squat', sourceExerciseId: 'squat', sets: 3, reps: '8-12' }] }],
     versions: { templateLibrary: '1.3.0', selectionEngine: '1.0.0', safetyRules: '1.0.0', modifierRules: '2.0.0', compositionEngine: '2.0.0', limitationResolver: '1.0.0' },
     trace: { selectionReasons: [], safety: { status: 'CLEAR', reasons: [], requiredModifierIds: [], protectedConstraints: [] }, appliedModifiers: [], unresolvedModifiers: [], conflicts: [], substitutions: [], limitationResolverVersion: 1, limitationDecisions: [] as Array<Record<string, unknown>>, compositionDecisions: [], validationCodes: [] },
@@ -77,6 +81,10 @@ beforeEach(async () => {
     await setDoc(doc(context.firestore(), 'users', UID), userDocument(UID));
     await setDoc(doc(context.firestore(), 'users', OTHER_UID), userDocument(OTHER_UID));
     await setDoc(doc(context.firestore(), 'workoutTemplates', 'T003'), templateDocument());
+    await setDoc(doc(context.firestore(), 'limitationDatasetState', 'active'), {
+      datasetVersion: LIMITATION_DATASET_VERSION,
+      limitationDatasetHash: LIMITATION_DATASET_HASH,
+    });
     await setDoc(doc(context.firestore(), 'users', UID, 'questionnaires', 'q1'), {
       answers: { specialConditions: ['none'] }, version: 1, createdAt: Timestamp.now(),
     });
@@ -127,6 +135,21 @@ describe('workoutPrograms', () => {
 
   it('denies a program without the matching parent-pointer transaction', async () => {
     await assertFails(setDoc(doc(dbFor(UID), 'users', UID, 'workoutPrograms', 'wpg_12345678'), programDocument()));
+  });
+
+  it('accepts a legacy program without identity, but rejects partial or non-active identity', async () => {
+    const legacy = programDocument('wpg_legacy1') as Record<string, unknown>;
+    delete legacy.limitationDatasetVersion;
+    delete legacy.limitationDatasetHash;
+    await assertSucceeds(createAndActivate(UID, 'wpg_legacy1', legacy as ReturnType<typeof programDocument>));
+
+    const missing = programDocument() as Record<string, unknown>;
+    delete missing.limitationDatasetHash;
+    await assertFails(createAndActivate(UID, 'wpg_missing1', { ...missing, programId: 'wpg_missing1' } as ReturnType<typeof programDocument>));
+    await assertFails(createAndActivate(UID, 'wpg_mismatch', {
+      ...programDocument('wpg_mismatch'),
+      limitationDatasetHash: 'b'.repeat(64),
+    }));
   });
 
   it('isolates users and freezes prescription content', async () => {

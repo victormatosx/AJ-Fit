@@ -22,6 +22,10 @@ import { collection, doc, getDoc, getDocs, setDoc, Timestamp } from 'firebase/fi
 import { buildSeedDocuments } from '../../../scripts/seedWorkoutTemplates';
 import { completeAnswers } from '../../workoutPrescription/__tests__/fixtures';
 import { toPersistedAnswers } from '../../lib/questionnaireAnswers';
+import {
+  CANONICAL_LIMITATION_DATASET_HASH,
+  CANONICAL_LIMITATION_DATASET_VERSION,
+} from '../../workoutPrescription/limitationDataset';
 
 const PROJECT_ID = 'ajfit-rules-test';
 const UID = 'bob';
@@ -66,6 +70,10 @@ async function seedUserAndQuestionnaire(
       metadata: { role: 'user', createdAt: Timestamp.now(), updatedAt: Timestamp.now(), commercialGateResolvedAt: Timestamp.now() },
     });
     await setDoc(doc(rawDb, 'workoutTemplates', 'T003'), T003_SEED);
+    await setDoc(doc(rawDb, 'limitationDatasetState', 'active'), {
+      datasetVersion: CANONICAL_LIMITATION_DATASET_VERSION,
+      limitationDatasetHash: CANONICAL_LIMITATION_DATASET_HASH,
+    });
     await setDoc(doc(rawDb, 'users', UID, 'questionnaires', QUESTIONNAIRE_ID), {
       answers: rawLegacyAnswers ?? toPersistedAnswers(answers),
       version: 1,
@@ -104,6 +112,8 @@ describe.skipIf(!enabled)('First Workout Program reconciliation — real Firesto
     if (result.status !== 'SUCCESS') return;
     expect(result.program.status).toBe('active');
     expect(result.program.source).toBe('automatic_reconciliation');
+    expect(result.program.limitationDatasetVersion).toBe(CANONICAL_LIMITATION_DATASET_VERSION);
+    expect(result.program.limitationDatasetHash).toBe(CANONICAL_LIMITATION_DATASET_HASH);
 
     const activeState = await getDoc(doc(mocks.db as never, 'users', UID, 'workoutProgramState', 'active'));
     expect(activeState.data()?.programId).toBe(result.program.programId);

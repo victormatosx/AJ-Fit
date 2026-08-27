@@ -7,6 +7,7 @@ import { evaluateSafety } from './safety';
 import { selectTemplate } from './selection';
 import { adaptationStage, isBeginnerExperience } from './personalization';
 import { LIMITATION_RESOLVER_VERSION, mapQuestionnaireLimitations } from './limitationResolver';
+import { localLimitationDatasetIdentity } from './limitationDataset';
 import {
   PRESCRIPTION_VERSIONS,
   type FinalWorkoutPlan,
@@ -128,6 +129,7 @@ export function generateWorkoutPrescription(
     };
   }
 
+  const limitationDataset = context.limitationDataset ?? localLimitationDatasetIdentity();
   const planIdentity = JSON.stringify({
     templateId: selection.decision.templateId,
     requestedDays: selection.decision.requestedDays,
@@ -136,6 +138,10 @@ export function generateWorkoutPrescription(
     limitationDecisions: composition.limitationDecisions,
     compositionDecisions: composition.decisions,
     adaptationStage: planAdaptationStage,
+    limitationDataset: {
+      version: limitationDataset.version,
+      hash: limitationDataset.hash,
+    },
     versions: PRESCRIPTION_VERSIONS,
   });
   const plan: FinalWorkoutPlan = {
@@ -148,6 +154,8 @@ export function generateWorkoutPrescription(
     goalFamily: selection.decision.goalFamily,
     split: template.split,
     adaptationStage: planAdaptationStage,
+    limitationDatasetVersion: limitationDataset.version,
+    limitationDatasetHash: limitationDataset.hash,
     sessions: composition.sessions,
     versions: PRESCRIPTION_VERSIONS,
     trace,

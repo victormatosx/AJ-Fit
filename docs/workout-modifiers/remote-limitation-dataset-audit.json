@@ -1,0 +1,42 @@
+{
+  "generatedAt": "2026-08-27T16:58:39.224Z",
+  "projectId": "ajfit-2f321",
+  "canonicalIdentity": {
+    "limitationDatasetVersion": "phase3-limitation-dataset-v3",
+    "limitationDatasetHash": "21ce79bcb57802df8a6072e933942b02ea34ba1d9ab85f0dc091395bff0f3944"
+  },
+  "activeIdentity": {
+    "limitationDatasetVersion": "phase3-limitation-dataset-v3",
+    "limitationDatasetHash": "21ce79bcb57802df8a6072e933942b02ea34ba1d9ab85f0dc091395bff0f3944"
+  },
+  "exerciseCount": {
+    "expected": 116,
+    "remote": 116
+  },
+  "profileCount": {
+    "expected": 76,
+    "remote": 76
+  },
+  "regionCount": 7,
+  "remoteHash": "21ce79bcb57802df8a6072e933942b02ea34ba1d9ab85f0dc091395bff0f3944",
+  "diffCounts": {
+    "LOCAL_ONLY": 0,
+    "REMOTE_ONLY": 0,
+    "STATUS_MISMATCH": 0,
+    "TARGET_MISMATCH": 0,
+    "METADATA_MISMATCH": 0,
+    "EXACT_MATCH": 812
+  },
+  "remoteDiff": 0,
+  "individualResolver": {
+    "total": 497,
+    "valid": 497,
+    "invalid": 0,
+    "invalidPairs": []
+  },
+  "plankKnee": {
+    "status": "RESOLVED",
+    "finalExerciseId": "dead-bug"
+  },
+  "deadBugKneeStatus": "not_applicable"
+}
