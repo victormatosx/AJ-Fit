@@ -228,6 +228,90 @@ describe('Prescription Engine + Limitation Resolver V1', () => {
     expect(result.status).toBe('SUCCESS');
   });
 
+  // Reproduction for the onboarding crash report: user declares a knee
+  // limitation, generation fails with `LIMITATION_ADAPTATION_INVALID:plank`.
+  // Root cause is a DATASET gap, not a resolver bug — `plank`'s knee rule
+  // adapts to `dead-bug`, but `dead-bug`'s OWN profile marks knee as `avoid`
+  // (no substitute), so the candidate is correctly rejected per the
+  // documented "no chaining/no improvisation" contract
+  // (docs/workout-modifiers/exercise-limitations/20_PHASE5_LIMITATION_RESOLVER.md).
+  // This is intentionally NOT "fixed" here: doing so would require a clinical/
+  // product decision about which exercise is actually knee-safe in place of
+  // `plank`, which is outside what this investigation is authorized to invent.
+  describe('plank / knee limitation (onboarding_workout_generation_failed reproduction)', () => {
+    it('KNOWN DEBT (baseline key plank:knee, CLASS_1_DATASET_CONTRADICTORY) — reproduces LIMITATION_ADAPTATION_INVALID:plank exactly as reported', () => {
+      // Tracked in docs/workout-modifiers/limitation-dataset-baseline.json
+      // and docs/workout-modifiers/limitation-remediation-matrix.json under
+      // key "plank:knee". This assertion is intentionally the FAIL-CLOSED
+      // outcome, not a workaround — the onboarding must never improvise an
+      // alternative while this remains an open clinical decision.
+      //
+      // ⚠️ Once a clinical decision resolves this specific case (see the
+      // remediation matrix's `plank:knee` row — reviewStatus transitions
+      // NEEDS_CLINICAL_REVIEW → APPROVED → RESOLVED), this test MUST be
+      // updated to expect a valid resolution instead, and
+      // `docs/workout-modifiers/limitation-dataset-baseline.json` must be
+      // regenerated (`npx tsx scripts/generateLimitationDatasetBaseline.ts`)
+      // so the quality gate's floor drops with it — never leave this
+      // expectation stale once the underlying data changes.
+      const answers = limitationAnswers({ limits: ['knee'] });
+      const result = generateSingle(answers, 'plank');
+      expect(result).toEqual(expect.objectContaining({
+        status: 'INVALID_CONFIGURATION',
+        reasonCodes: expect.arrayContaining(['LIMITATION_ADAPTATION_INVALID:plank']),
+      }));
+    });
+
+    it('documents the exact dataset contradiction causing the failure', () => {
+      const plank = catalog.find((exercise) => exercise.id === 'plank');
+      const deadBug = catalog.find((exercise) => exercise.id === 'dead-bug');
+      expect(plank?.limitationProfile).toMatchObject({
+        regions: { knee: { status: 'adapt', adaptation: { exerciseId: 'dead-bug' } } },
+      });
+      // dead-bug's own knee rule is `avoid` with no substitute — it is not
+      // actually usable as plank's knee adaptation target, regardless of
+      // what plank's own profile claims.
+      expect(deadBug?.limitationProfile).toMatchObject({
+        regions: { knee: { status: 'avoid', substituteExerciseIds: [] } },
+      });
+    });
+
+    it('generates plank normally when no limitation is declared', () => {
+      const answers = completeAnswers({ days: 2 });
+      const result = generateSingle(answers, 'plank');
+      expect(result.status).toBe('SUCCESS');
+      if (result.status === 'SUCCESS') {
+        expect(result.plan.sessions.every((session) => session.exercises[0].exerciseId === 'plank')).toBe(true);
+      }
+    });
+
+    it('generates plank normally for a limitation region it is genuinely compatible with (ankle_foot: not_applicable)', () => {
+      const answers = limitationAnswers({ limits: ['ankle_foot'] });
+      const result = generateSingle(answers, 'plank');
+      expect(result.status).toBe('SUCCESS');
+      if (result.status === 'SUCCESS') {
+        expect(result.plan.sessions.every((session) => session.exercises[0].exerciseId === 'plank')).toBe(true);
+        expect(result.plan.trace.limitationDecisions).toEqual(expect.arrayContaining([
+          expect.objectContaining({ originalExerciseId: 'plank', finalExerciseId: 'plank', resolution: 'compatible' }),
+        ]));
+      }
+    });
+
+    it('combining knee with another region still fails closed for plank — no silent fallback', () => {
+      const answers = limitationAnswers({ limits: ['knee', 'shoulder'] });
+      const result = generateSingle(answers, 'plank');
+      expect(result).toEqual(expect.objectContaining({
+        status: 'INVALID_CONFIGURATION',
+        reasonCodes: expect.arrayContaining(['LIMITATION_ADAPTATION_INVALID:plank']),
+      }));
+    });
+
+    it('a genuinely complete adaptation (shoulder + machine-flat-bench-press) still succeeds — the resolver logic itself is sound', () => {
+      const result = generateSingle(limitationAnswers({ limits: ['shoulder'] }), 'machine-flat-bench-press');
+      expect(result.status).toBe('SUCCESS');
+    });
+  });
+
   it('preserves all 90 template IDs and emits only existing exercise IDs', () => {
     expect(WORKOUT_TEMPLATES).toHaveLength(90);
     const knownIds = new Set(EXERCISES_SEED.map((exercise) => exercise.id));
