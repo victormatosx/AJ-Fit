@@ -77,9 +77,17 @@ export function useWorkoutReadinessGate(input: {
     setResolved({ identity: uid, status: 'checking' });
 
     void (async () => {
-      let generated = false;
+      // `true` only means a fallback generation attempt STARTED (the
+      // `resolveWorkoutPrescription` "no active program yet" branch ran) —
+      // NOT that it produced a usable program. Log this as
+      // `generationAttempted`, never `generated`: a prior version of this
+      // log used the latter and the resulting `{ generated: true, outcome:
+      // 'INVALID_CONFIGURATION' }` reads as "a program was created" when a
+      // generation attempt in fact failed — exactly the ambiguity that
+      // masked the first-app-entry regression in device logs.
+      let generationAttempted = false;
       const prescription = await resolveWorkoutPrescription(uid, questionnaire, {
-        onGenerationStart: () => { generated = true; },
+        onGenerationStart: () => { generationAttempted = true; },
       });
       const prescribedTrainingDays = prescription.status === 'SUCCESS'
         ? prescription.plan.weeklySchedule
@@ -112,7 +120,11 @@ export function useWorkoutReadinessGate(input: {
 
       logInfo('workout_program', 'first_app_entry_readiness_resolved', {
         outcome: prescription.status,
-        generated,
+        generationAttempted,
+        // Explicit success signal, distinct from `generationAttempted` —
+        // a program actually exists and is usable only when this is true.
+        programReady: prescription.status === 'SUCCESS',
+        reasonCodes: prescription.status === 'SUCCESS' ? undefined : prescription.reasonCodes,
         durationMs: Date.now() - startedAt,
       });
       checkingIdentityRef.current = null;

@@ -49,14 +49,11 @@ export function resolveModifiers(
 
   if (answers.place === 'home' || answers.place === 'both') {
     result.push(modifier('equipment:available_inventory', 'P3', 'APPLIED', 'HOME_INVENTORY_FILTER'));
-    if (answers.equipment.includes('other')) {
-      result.push(modifier(
-        'equipment:other_unmapped',
-        'P3',
-        'RULE_DEFINITION_REQUIRED',
-        'OTHER_EQUIPMENT_HAS_NO_CANONICAL_MAPPING',
-      ));
-    }
+    // `equipment: ['other']` is a real, always-offered UI option — never a
+    // signal to fail closed. `equipmentContextFor` (equipment.ts) already
+    // treats an unmapped equipment id as contributing nothing beyond the
+    // bodyweight baseline, exactly like leaving it unselected; there is
+    // nothing left here for a modifier to resolve or block on.
   }
 
   const experience = normalizeExperience(answers.level);

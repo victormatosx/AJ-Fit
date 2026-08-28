@@ -22,7 +22,7 @@ import {
   type LimitationDatasetIdentity,
   type LimitationDatasetSnapshot,
 } from '../workoutPrescription/limitationDataset';
-import { logError, logInfo } from '../lib/logger';
+import { logError, logInfo, logWarn } from '../lib/logger';
 import { selectTemplate } from '../workoutPrescription/selection';
 import {
   fromWorkoutTemplateDocument,
@@ -486,6 +486,35 @@ export function questionnaireFingerprint(answers: QuestionnaireAnswers): string 
   return stableHash(stableStringify(sanitized));
 }
 
+/**
+ * Classifies a `loadTemplate`/`loadLimitationDataset` failure for INTERNAL
+ * diagnostics only — the public `status`/`reasonCodes` contract this feeds
+ * into (`INVALID_CONFIGURATION`) is unchanged and never exposes this to the
+ * end user. Before this, any thrown error (a real bad-config signal, a
+ * Firestore Rules permission-denied, or a transient network/infra failure)
+ * was reported identically, making a genuine data problem indistinguishable
+ * from e.g. a signed-in-but-not-yet-verified account being denied a read —
+ * exactly what made the first-app-entry `INVALID_CONFIGURATION` regression
+ * hard to diagnose from logs alone.
+ */
+type PrepareLoadFailureClass = 'ACCESS_DENIED' | 'NETWORK_UNAVAILABLE' | 'CONFIGURATION';
+
+function classifyPrepareLoadFailure(error: unknown): { failureClass: PrepareLoadFailureClass; code?: string } {
+  const code = error && typeof error === 'object' && 'code' in error ? String((error as { code: unknown }).code) : undefined;
+  if (code === 'permission-denied' || code === 'unauthenticated') return { failureClass: 'ACCESS_DENIED', code };
+  if (code === 'unavailable' || code === 'deadline-exceeded' || code === 'cancelled') return { failureClass: 'NETWORK_UNAVAILABLE', code };
+  return { failureClass: 'CONFIGURATION', code };
+}
+
+function reportPrepareLoadFailure(step: 'TEMPLATE' | 'LIMITATION_DATASET', error: unknown, fallbackCode: string): string[] {
+  const { failureClass, code } = classifyPrepareLoadFailure(error);
+  const message = error instanceof Error ? error.message : fallbackCode;
+  // Internal-only: never surfaced to the end user, who only ever sees the
+  // generic `INVALID_CONFIGURATION` outcome and a safe fallback UI.
+  logWarn('workout_program', 'prepare_workout_program_load_failed', { step, failureClass, code, message });
+  return [message];
+}
+
 export async function prepareWorkoutProgram(input: {
   answers: QuestionnaireAnswers;
   adaptationWeek?: number;
@@ -520,7 +549,7 @@ export async function prepareWorkoutProgram(input: {
   } catch (error) {
     return {
       status: 'INVALID_CONFIGURATION',
-      reasonCodes: [error instanceof Error ? error.message : 'WORKOUT_TEMPLATE_VERSION_MISMATCH'],
+      reasonCodes: reportPrepareLoadFailure('TEMPLATE', error, 'WORKOUT_TEMPLATE_VERSION_MISMATCH'),
     };
   }
   if (!template) {
@@ -533,7 +562,7 @@ export async function prepareWorkoutProgram(input: {
   } catch (error) {
     return {
       status: 'INVALID_CONFIGURATION',
-      reasonCodes: [error instanceof Error ? error.message : 'LIMITATION_CATALOG_LOAD_FAILED'],
+      reasonCodes: reportPrepareLoadFailure('LIMITATION_DATASET', error, 'LIMITATION_CATALOG_LOAD_FAILED'),
     };
   }
   const result = generateWorkoutPrescription(answers, {

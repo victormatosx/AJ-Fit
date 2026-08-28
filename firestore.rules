@@ -1321,8 +1321,15 @@ service cloud.firestore {
 
     // Published clinical dataset identity. Clients consume only the active
     // pointer; immutable version snapshots and all writes remain server-only.
+    // Contains only a version string + content hash — no clinical/PII data —
+    // so it needs no stronger gate than `isSignedIn()`. Every workout program
+    // generation reads this (to stamp its dataset identity) regardless of
+    // whether the user has any limitations at all; gating it behind email
+    // verification blocked first-program generation for every signed-in,
+    // not-yet-verified account (`workoutPrograms.ts`'s `prepareWorkoutProgram`
+    // maps the resulting permission-denied into `INVALID_CONFIGURATION`).
     match /limitationDatasetState/{stateId} {
-      allow read: if stateId == 'active' && hasVerifiedEmailForPrivateAccess();
+      allow read: if stateId == 'active' && isSignedIn();
       allow write: if false;
     }
 

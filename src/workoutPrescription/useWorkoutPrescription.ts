@@ -103,6 +103,11 @@ export async function resolveWorkoutPrescription(
     logInfo('workout_program', 'workout_program_generation_attempted', {
       source: 'automatic_reconciliation',
       outcome: result.status,
+      // Absent only on SUCCESS — every failure outcome carries these so a
+      // generic `INVALID_CONFIGURATION` in the logs is distinguishable from
+      // e.g. `MISSING_TEMPLATE`/`NEEDS_QUESTIONNAIRE_UPDATE`, and from each
+      // other's specific cause, without exposing anything to the end user.
+      reasonCodes: result.status === 'SUCCESS' ? undefined : result.reasonCodes,
     });
     return toPrescription(result);
   } catch (error) {
@@ -179,6 +184,7 @@ export function useWorkoutPrescription(): WorkoutPrescriptionController {
       logInfo('workout_program', 'workout_program_generation_attempted', {
         source,
         outcome: result.status,
+        reasonCodes: result.status === 'SUCCESS' ? undefined : result.reasonCodes,
       });
       return prescription;
     } catch (error) {
