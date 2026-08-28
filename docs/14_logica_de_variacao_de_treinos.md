@@ -1,5 +1,10 @@
 # Lógica de Variação de Treinos
 
+> **Status:** especificação legada, substituída para novas implementações por
+> `workout-lifecycle/04_PROGRESSION_ENGINE.md`. Prazos e percentuais abaixo não
+> constituem regra aprovada enquanto não forem reconciliados pelo futuro
+> Progression Engine.
+
 ## 1. Objetivo deste documento
 
 Definir a lógica oficial de geração de novos treinos.
@@ -67,20 +72,15 @@ Existem duas formas de gerar um Novo Treino:
 
 ## Atualização automática
 
-Ocorre aproximadamente a cada:
-
-```txt
-60 dias
-```
+`FUTURE_DESIGN`: não possui timer fixo aprovado; deve combinar calendário,
+sessões concluídas, aderência, desempenho e estado do programa.
 
 ---
 
 ## Solicitação manual
 
-Disponível:
-
-* após 30 dias do início do treino atual
-* uma vez a cada 30 dias
+Disponibilidade e frequência são `DECISION_REQUIRED` (DR-014); não há limite de
+30 dias aprovado.
 
 ---
 
@@ -102,13 +102,8 @@ Representar evolução natural da jornada.
 
 ## Intensidade da mudança
 
-Aproximadamente:
-
-```txt
-60%
-```
-
-dos exercícios podem variar.
+Percentual de exercícios que pode variar é `DECISION_REQUIRED`; não há alvo de
+60% aprovado.
 
 ---
 

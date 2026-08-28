@@ -64,6 +64,9 @@ function route(
     // revalidation of an already-resolved subscription, not the brand-new
     // pending-Paywall case (covered in premiumGate.test.ts instead).
     commercialGateResolved: true,
+    // This suite is entirely about the subscription/commercial-gate axis —
+    // workout readiness is out of scope, always modeled as already resolved.
+    workoutReadinessGate: 'ready',
     ...overrides,
   });
 }
@@ -93,6 +96,7 @@ describe('Fase 3 — persistência e revalidação Premium A–AA', () => {
         subscriptionConfigured: true,
         isPremium: true,
         commercialGateResolved: true,
+        workoutReadinessGate: 'ready',
       }),
     ).toBeNull();
   });

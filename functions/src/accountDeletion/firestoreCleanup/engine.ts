@@ -1,8 +1,8 @@
 /**
  * `FIRESTORE_CLEANUP` step executor — Fase 6.
  *
- * Runs the four resource deletes in dependency order (Fase 6 §10):
- * questionnaires → assessments → progressPhotos → the `users/{uid}`
+ * Runs user-resource deletes in dependency order (Fase 6 §10):
+ * questionnaires → assessments → progressPhotos → workoutPrograms/state → the `users/{uid}`
  * document itself, last. Reports the same `AccountDeletionStepOutcome`
  * shape every other step already reports through (Fase 1's `errors.ts`) —
  * no parallel result contract.
@@ -46,6 +46,10 @@ import {
   deleteUserAssessments,
   deleteUserProfileDocument,
   deleteUserQuestionnaires,
+  deleteUserWorkoutExecutions,
+  deleteUserWorkoutPrograms,
+  deleteUserWorkoutProgramState,
+  deleteUserWorkoutProgressionEvents,
 } from './resources';
 import type { ResourceCleanupResult } from './types';
 
@@ -103,6 +107,13 @@ export async function runFirestoreCleanup(
     deleteUserQuestionnaires,
     deleteUserAssessments,
     deleteProgressPhotoDocuments,
+    // Must run before deleteUserWorkoutPrograms — it enumerates program ids
+    // to reach their nested progressionEvents subcollections, which a
+    // one-level-only delete of the parent docs would otherwise orphan.
+    deleteUserWorkoutProgressionEvents,
+    deleteUserWorkoutPrograms,
+    deleteUserWorkoutProgramState,
+    deleteUserWorkoutExecutions,
     // Always last — see this module's doc comment on why `users/{uid}`
     // must be deleted only after its deletable subcollections.
     deleteUserProfileDocument,

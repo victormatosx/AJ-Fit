@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { defaultQuiz, type Quiz } from '../state/AppState';
 import { logError, logInfo } from '../lib/logger';
 import type { OnboardingStepId } from './steps';
+import { cleanApplicableAnswers, normalizeLoadedQuiz } from '../lib/questionnaireSchema';
 
 export const ONBOARDING_DRAFT_STORAGE_KEY = 'ajfit-onboarding-draft';
 export const ONBOARDING_DRAFT_SCHEMA_VERSION = 1 as const;
@@ -11,7 +12,11 @@ export const ONBOARDING_DRAFT_SCHEMA_VERSION = 1 as const;
  * `null`), mirroring the same problem `toPersistedAnswers` solves for
  * Firestore's `Timestamp`.
  */
-export type DraftQuizAnswers = Omit<Quiz, 'birthDate'> & { birthDate: string | null };
+export type DraftQuizAnswers = Omit<Quiz, 'birthDate'> & {
+  birthDate: string | null;
+  /** @deprecated read-only compatibility for drafts created before removal. */
+  limitationImpact?: unknown;
+};
 
 export interface OnboardingDraftV1 {
   version: 1;
@@ -25,18 +30,18 @@ export interface OnboardingDraftV1 {
 export type OnboardingDraft = OnboardingDraftV1;
 
 function toDraftAnswers(quiz: Quiz): DraftQuizAnswers {
-  const { birthDate, ...rest } = quiz;
+  const { birthDate, ...rest } = cleanApplicableAnswers(quiz);
   return { ...rest, birthDate: birthDate ? birthDate.toISOString() : null };
 }
 
 function fromDraftAnswers(raw: Partial<DraftQuizAnswers> | undefined | null): Quiz {
-  const { birthDate, ...rest } = raw ?? {};
+  const { birthDate, limitationImpact: _legacyLimitationImpact, ...rest } = raw ?? {};
   const parsedBirthDate = birthDate ? new Date(birthDate) : null;
-  return {
+  return normalizeLoadedQuiz({
     ...defaultQuiz,
     ...rest,
     birthDate: parsedBirthDate && !Number.isNaN(parsedBirthDate.getTime()) ? parsedBirthDate : null,
-  };
+  });
 }
 
 export function buildDraft(params: {
@@ -63,9 +68,16 @@ function migrateDraft(raw: unknown): OnboardingDraft | null {
   const candidate = raw as Partial<OnboardingDraftV1>;
   if (candidate.version !== 1) return null;
   if (typeof candidate.currentStepId !== 'string') return null;
+  const legacyGroupedSteps: Record<string, OnboardingStepId> = {
+    pregnancyPrenatalCare: 'pregnancyCare',
+    pregnancyExerciseRestriction: 'pregnancyCare',
+    pregnancyComplication: 'pregnancyCare',
+    postpartumTimeSinceBirth: 'postpartumContext',
+    postpartumDeliveryType: 'postpartumContext',
+  };
   return {
     version: 1,
-    currentStepId: candidate.currentStepId as OnboardingStepId,
+    currentStepId: legacyGroupedSteps[candidate.currentStepId] ?? candidate.currentStepId as OnboardingStepId,
     updatedAt: typeof candidate.updatedAt === 'string' ? candidate.updatedAt : new Date().toISOString(),
     name: typeof candidate.name === 'string' ? candidate.name : null,
     answers: (candidate.answers ?? {}) as DraftQuizAnswers,

@@ -127,9 +127,16 @@ service firebase.storage {
     // padrão já usado por `hasServerPremium`/`accountActive` acima.
     //
     // Path determinístico e fixo por orientação: um novo upload em
-    // `vertical.webm`/`horizontal.webm` SUBSTITUI o objeto existente (nova
+    // `vertical.mp4`/`horizontal.mp4` SUBSTITUI o objeto existente (nova
     // geração no mesmo caminho) — é o comportamento de "substituir vídeo"
     // pedido pelo painel, não uma colisão a evitar.
+    //
+    // `.mp4` (era `.webm`): migrado porque o player nativo do app no iOS
+    // (`expo-video`/AVFoundation) não decodifica WebM — todo vídeo `.webm`
+    // já anexado falhava silenciosamente ao abrir "Ver Execução" no iOS,
+    // mesmo com a referência correta no Firestore/Storage (ver
+    // `src/components/fitness/ExerciseGif.tsx`). `.mp4`/H.264 funciona em
+    // iOS (AVPlayer) e Android (ExoPlayer).
     //
     // `request.resource.size <= 100 MB`: teto TÉCNICO de abuso, não uma
     // política de produto aprovada — não existe limite oficial definido
@@ -148,8 +155,8 @@ service firebase.storage {
       allow read: if hasVerifiedEmailForPrivateAccess();
 
       allow create, update: if isExercisesAdmin()
-        && fileName in ['vertical.webm', 'horizontal.webm']
-        && request.resource.contentType == 'video/webm'
+        && fileName in ['vertical.mp4', 'horizontal.mp4']
+        && request.resource.contentType == 'video/mp4'
         && request.resource.size > 0
         && request.resource.size <= 100 * 1024 * 1024;
 

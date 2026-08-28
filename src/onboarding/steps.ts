@@ -3,9 +3,11 @@
  * source of truth for "what comes after what". See
  * docs/onboarding_funnel_architecture.md for the full narrative rationale.
  *
- * `App.tsx`/`premiumGate.ts` know nothing about these 25 ids — they only see
+ * `App.tsx`/`premiumGate.ts` know nothing about the registered step ids — they only see
  * the single `RootScreenId` value `'onboardingFunnel'`. Everything below is
- * internal to `useOnboardingFunnel`/`OnboardingFunnelScreen`.
+ * internal to `useOnboardingFunnel`/`OnboardingFunnelScreen`. The registry
+ * includes every possible branch; `getStepSequence` removes inapplicable
+ * questions for the current answers.
  */
 
 export type OnboardingStepKind =
@@ -32,10 +34,26 @@ export type OnboardingStepId =
   | 'weight'
   | 'interstitial_methodology'
   | 'days'
+  | 'trainingDays'
   | 'duration'
   | 'place'
+  | 'primaryPlace'
+  | 'equipment'
   | 'interstitial_guidedWorkout'
   | 'limits'
+  | 'specialConditions'
+  | 'pregnancyWeeks'
+  | 'pregnancyCare'
+  | 'pregnancyWarningSigns'
+  | 'postpartumContext'
+  | 'postpartumSigns'
+  | 'postpartumReturnClearance'
+  | 'functionalSituations'
+  | 'lipedemaScreening'
+  | 'dizzinessScreening'
+  | 'postSurgicalStatus'
+  | 'postSurgicalRegion'
+  | 'medicalRestrictionDetails'
   | 'muscleFocus'
   | 'interstitial_ajFitProgress'
   | 'socialProof'
@@ -63,21 +81,37 @@ export const ONBOARDING_STEPS: readonly OnboardingStepDef[] = [
   { id: 'presentation', kind: 'presentation', countsTowardProgress: false, persistsToDraft: false, devJumpable: true },
   { id: 'name', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
   { id: 'welcome', kind: 'interstitial', countsTowardProgress: false, persistsToDraft: false, devJumpable: true },
-  { id: 'motivation', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
-  { id: 'goal', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
-  { id: 'level', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
-  { id: 'interstitial_evolution', kind: 'interstitial', countsTowardProgress: false, persistsToDraft: false, devJumpable: true },
   { id: 'sex', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
   { id: 'birthDate', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
   { id: 'height', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
   { id: 'weight', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
+  { id: 'motivation', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
+  { id: 'goal', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
+  { id: 'level', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
+  { id: 'interstitial_evolution', kind: 'interstitial', countsTowardProgress: false, persistsToDraft: false, devJumpable: true },
   { id: 'interstitial_methodology', kind: 'interstitial', countsTowardProgress: false, persistsToDraft: false, devJumpable: true },
   { id: 'days', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
+  { id: 'trainingDays', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
   { id: 'duration', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
   { id: 'place', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
+  { id: 'primaryPlace', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
+  { id: 'equipment', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
   { id: 'interstitial_guidedWorkout', kind: 'interstitial', countsTowardProgress: false, persistsToDraft: false, devJumpable: true },
-  { id: 'limits', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
   { id: 'muscleFocus', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
+  { id: 'specialConditions', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
+  { id: 'limits', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
+  { id: 'lipedemaScreening', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
+  { id: 'dizzinessScreening', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
+  { id: 'postSurgicalStatus', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
+  { id: 'postSurgicalRegion', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
+  { id: 'pregnancyWeeks', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
+  { id: 'pregnancyCare', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
+  { id: 'pregnancyWarningSigns', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
+  { id: 'postpartumContext', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
+  { id: 'postpartumSigns', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
+  { id: 'postpartumReturnClearance', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
+  { id: 'functionalSituations', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
+  { id: 'medicalRestrictionDetails', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
   { id: 'interstitial_ajFitProgress', kind: 'interstitial', countsTowardProgress: false, persistsToDraft: false, devJumpable: true },
   { id: 'socialProof', kind: 'socialProof', countsTowardProgress: false, persistsToDraft: false, devJumpable: true },
   { id: 'commitment', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
@@ -96,20 +130,36 @@ export const ONBOARDING_STEPS: readonly OnboardingStepDef[] = [
  * personalização mesmo pós-cadastro.
  */
 export const FORCED_QUESTIONNAIRE_STEP_IDS: readonly OnboardingStepId[] = [
-  'goal',
-  'level',
-  'interstitial_evolution',
   'sex',
   'birthDate',
   'height',
   'weight',
+  'goal',
+  'level',
+  'interstitial_evolution',
   'interstitial_methodology',
   'days',
+  'trainingDays',
   'duration',
   'place',
+  'primaryPlace',
+  'equipment',
   'interstitial_guidedWorkout',
-  'limits',
   'muscleFocus',
+  'specialConditions',
+  'limits',
+  'lipedemaScreening',
+  'dizzinessScreening',
+  'postSurgicalStatus',
+  'postSurgicalRegion',
+  'pregnancyWeeks',
+  'pregnancyCare',
+  'pregnancyWarningSigns',
+  'postpartumContext',
+  'postpartumSigns',
+  'postpartumReturnClearance',
+  'functionalSituations',
+  'medicalRestrictionDetails',
   'interstitial_ajFitProgress',
   'analyzing',
   'plan',
@@ -133,17 +183,52 @@ export function getStepIndex(id: OnboardingStepId): number {
   return STEP_INDEX_BY_ID[id];
 }
 
-export function getStepSequence(mode: 'anonymous' | 'forcedQuestionnaire'): readonly OnboardingStepId[] {
-  return mode === 'forcedQuestionnaire'
+export type OnboardingFlowAnswers = {
+  sex?: string | null;
+  place?: string | null;
+  limits?: string[];
+  specialConditions?: string[];
+  days?: number | null;
+};
+
+function isApplicableStep(id: OnboardingStepId, answers?: OnboardingFlowAnswers): boolean {
+  if (!answers) return true;
+  // 7 days requires no preference screen — all seven weekdays are implied
+  // (docs/workout-lifecycle/03_SCHEDULE_ENGINE.md §Coleta futura).
+  if (id === 'trainingDays') return answers?.days != null && answers.days >= 2 && answers.days <= 6;
+  if (id === 'primaryPlace') return answers?.place === 'both';
+  if (id === 'equipment') return answers?.place === 'home' || answers?.place === 'both';
+  if (id === 'limits') {
+    return !!answers?.specialConditions?.includes('musculoskeletal_limitation');
+  }
+  if (id === 'lipedemaScreening') return !!answers?.specialConditions?.includes('lipedema');
+  if (id === 'dizzinessScreening') return !!answers?.specialConditions?.includes('dizziness_or_vertigo');
+  if (id === 'postSurgicalStatus' || id === 'postSurgicalRegion') {
+    return !!answers?.specialConditions?.includes('post_surgical');
+  }
+  if (id.startsWith('pregnancy')) return !!answers?.specialConditions?.includes('pregnancy');
+  if (id.startsWith('postpartum')) return !!answers?.specialConditions?.includes('postpartum');
+  if (id === 'functionalSituations') return !!answers?.specialConditions?.includes('functional_limitation');
+  if (id === 'medicalRestrictionDetails') return !!answers?.specialConditions?.includes('medical_restriction');
+  return true;
+}
+
+export function getStepSequence(
+  mode: 'anonymous' | 'forcedQuestionnaire',
+  answers?: OnboardingFlowAnswers,
+): readonly OnboardingStepId[] {
+  const base = mode === 'forcedQuestionnaire'
     ? FORCED_QUESTIONNAIRE_STEP_IDS
     : ONBOARDING_STEPS.map((s) => s.id);
+  return base.filter((id) => isApplicableStep(id, answers));
 }
 
 export function getNextStepId(
   current: OnboardingStepId,
   mode: 'anonymous' | 'forcedQuestionnaire',
+  answers?: OnboardingFlowAnswers,
 ): OnboardingStepId | null {
-  const seq = getStepSequence(mode);
+  const seq = getStepSequence(mode, answers);
   const i = seq.indexOf(current);
   if (i === -1 || i === seq.length - 1) return null;
   return seq[i + 1];
@@ -160,8 +245,9 @@ const NON_BACK_TARGET_KINDS: readonly OnboardingStepKind[] = ['interstitial', 's
 export function getPreviousStepId(
   current: OnboardingStepId,
   mode: 'anonymous' | 'forcedQuestionnaire',
+  answers?: OnboardingFlowAnswers,
 ): OnboardingStepId | null {
-  const seq = getStepSequence(mode);
+  const seq = getStepSequence(mode, answers);
   let i = seq.indexOf(current) - 1;
   while (i >= 0 && NON_BACK_TARGET_KINDS.includes(getStepDef(seq[i]).kind)) {
     i -= 1;
@@ -181,8 +267,9 @@ const QUESTION_STEP_IDS: readonly OnboardingStepId[] = ONBOARDING_STEPS.filter(
 export function computeOnboardingProgress(
   currentStepId: OnboardingStepId,
   mode: 'anonymous' | 'forcedQuestionnaire',
+  answers?: OnboardingFlowAnswers,
 ): { current: number; total: number } {
-  const seq = getStepSequence(mode);
+  const seq = getStepSequence(mode, answers);
   const total = seq.filter((id) => QUESTION_STEP_IDS.includes(id)).length;
   const idx = seq.indexOf(currentStepId);
   let current = 0;

@@ -3,20 +3,24 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 /**
- * Phase 7A REGRESSION GUARD.
+ * Workout runtime regression guard.
  *
- * 7A migrates only structural copy — session logic (state machine, timers,
- * substitution, weight logging, AsyncStorage, exercise catalog) must remain
- * byte-for-byte identical because 7B and 7C will build on it. This suite
- * pins the invariants that the migration MUST NOT have touched, checked
- * via lightweight string presence in the source file (no runtime imports
- * of React Native components).
- *
- * If any of these assertions fail after a diff, the 7A migration crossed
- * a boundary — stop and review.
+ * The session state machine/timers remain pinned via lightweight source
+ * checks (no runtime import of React Native). Exercise identity is now
+ * intentionally plan-driven; raw persisted substitutions must never bypass
+ * the prescription engine's constraints.
  */
 const WORKOUT_SRC = readFileSync(
   resolve(__dirname, '../../screens/WorkoutScreen.tsx'),
+  'utf8',
+);
+// `workoutExercisesFromPlan` (plan → runtime `Exercise[]` identity, incl.
+// `subs: []`) moved to a sibling pure module in Phase 2 (Part D) so it can
+// be unit-tested directly (no RN import needed) — see
+// `screens/__tests__/workoutScreenPlan.test.ts`. Checked here too, against
+// its new home, so this guard still catches a regression in that logic.
+const WORKOUT_PLAN_SRC = readFileSync(
+  resolve(__dirname, '../../screens/workoutScreenPlan.ts'),
   'utf8',
 );
 
@@ -58,9 +62,18 @@ describe('WorkoutScreen source — session state machine invariants', () => {
     expect(WORKOUT_SRC).toMatch(/setElapsed\(\(e\)\s*=>\s*e\s*\+\s*1\)/);
     expect(WORKOUT_SRC).toMatch(/setRestLeft\(\(r\)\s*=>\s*r\s*-\s*1\)/);
   });
+
+  it('the session timer stops once finished — regression: WorkoutDone kept ticking "time" after the session ended', () => {
+    const timerEffect = WORKOUT_SRC.slice(
+      WORKOUT_SRC.indexOf('// session timer'),
+      WORKOUT_SRC.indexOf('const ovr = (id: string)'),
+    );
+    expect(timerEffect).toContain('if (finished) return;');
+    expect(timerEffect).toMatch(/}, \[finished\]\);/);
+  });
 });
 
-describe('WorkoutScreen source — persistence and IDs untouched', () => {
+describe('WorkoutScreen source — plan-driven IDs and constrained substitutions', () => {
   it('still reads/writes AsyncStorage under the same key', () => {
     // Fase 11 audit fix: the key constant moved to a shared module
     // (`workoutSubstitutionsStorage.ts`) so the account-deletion shutdown
@@ -73,25 +86,19 @@ describe('WorkoutScreen source — persistence and IDs untouched', () => {
     expect(WORKOUT_SRC).toContain('AsyncStorage.setItem(SUBS_KEY');
   });
 
-  it('exercise IDs and DB pointers remain unchanged', () => {
-    // Sampling a few — full catalog check is out of scope; these six
-    // cover the union so a rename would immediately break the test.
-    for (const id of [
-      "id: 'supino-reto'",
-      "id: 'supino-incl'",
-      "id: 'crucifixo'",
-      "id: 'militar'",
-      "id: 'lateral'",
-      "id: 'paralelas'",
-    ]) {
-      expect(WORKOUT_SRC).toContain(id);
-    }
+  it('resolves runtime identity from the final plan and canonical exercise catalog', () => {
+    expect(WORKOUT_PLAN_SRC).toContain('function workoutExercisesFromPlan(plan: FinalWorkoutPlan');
+    expect(WORKOUT_PLAN_SRC).toContain('catalogExerciseById.get(prescribed.exerciseId)');
+    expect(WORKOUT_PLAN_SRC).toContain('id: prescribed.exerciseId');
+    expect(WORKOUT_SRC).not.toContain("id: 'supino-reto'");
+    expect(WORKOUT_PLAN_SRC).not.toContain("id: 'supino-reto'");
   });
 
-  it('substitution mechanic still resolves through ovr → permSubs → sessionSubs', () => {
-    expect(WORKOUT_SRC).toMatch(
-      /const ovr = \(id: string\): SubOption \| null => sessionSubs\[id\] \|\| permSubs\[id\] \|\| null;/,
-    );
+  it('never applies a persisted/manual substitution unless the current plan explicitly allows it', () => {
+    expect(WORKOUT_SRC).toContain('const candidate = sessionSubs[id] || permSubs[id] || null;');
+    expect(WORKOUT_SRC).toContain('.some((option) => option.db === candidate?.db)');
+    expect(WORKOUT_SRC).toContain('return allowed ? candidate : null;');
+    expect(WORKOUT_PLAN_SRC).toContain('subs: []');
   });
 });
 
@@ -160,17 +167,20 @@ describe('WorkoutScreen source — 7B + 7C strings fully migrated (positive guar
     'Não trave os cotovelos no topo',
     // Old queue-item combined `${target.toUpperCase()} · ${sets.progress...}`
     '.target.toUpperCase()} ·',
-    // Old direct renderings of catalog data (now go through translate helpers)
-    '{ex.name}',
+    // Old raw (un-namespaced) muscle-group renderings — must always go
+    // through `translateMuscleGroup`, unlike exercise names (see below).
     '{ex.target',
-    'name={ex.name}',
-    '{resolve(e).name}',
-    '{o.name}',
     '{o.target',
     '{pendingSub?.name}',
-    '{baseEx.name}',
     'no lugar de',
-    'exName: ex.name',
+    // Phase 2, Part G — fake WorkoutDone metrics removed (never real data):
+    "'8.2t'",
+    "v: '25'",
+    "v: '+1'",
+    'elapsed || 3480',
+    "t('done.streak.updated')",
+    "t('done.streak.days'",
+    "t('done.streak.untilRecord'",
   ];
   for (const s of MUST_BE_MIGRATED) {
     it(`raw literal "${s}" has been removed`, () => {
@@ -191,7 +201,7 @@ describe('WorkoutScreen source — 7B + 7C migrations use i18n keys', () => {
     "t('sets.registered')",
     "t('sets.current')",
     "t('sets.summaryWeighted'",
-    "t('sets.summaryBodyweight'",
+    "t('sets.summaryReps'",
     "t('reps.label')",
     'workoutLoadUnit(resolvedUnits)',
     "t('actions.completeSet'",
@@ -206,9 +216,9 @@ describe('WorkoutScreen source — 7B + 7C migrations use i18n keys', () => {
     "t('record.new')",
     "t('record.previousContext'",
     "t('record.gain'",
-    "t('done.streak.updated')",
-    "t('done.streak.days'",
-    "t('done.streak.untilRecord'",
+    // `done.streak.*` intentionally removed in Phase 2 Part G — the card
+    // showed a hardcoded fake streak with no real data source. See
+    // `MUST_BE_MIGRATED` below, which now guards this stays removed.
     "t('queue.completedItem'",
     // 7C (new)
     "t('substitution.sheetTitle')",
@@ -225,8 +235,8 @@ describe('WorkoutScreen source — 7B + 7C migrations use i18n keys', () => {
     "t('substitution.badges.permanent')",
     "t('queue.activeItem'",
     "t(`instructions.default.${key}`)",
-    // Helpers wire exercise/target translations
-    'translateExerciseName(tLoose, ex.db, ex.name)',
+    // Muscle group labels always go through the translate helper — `target`
+    // is a canonical `MuscleId`, never display text on its own.
     'translateMuscleGroup(tLoose, ex.target)',
   ];
   for (const call of REQUIRED_T_CALLS) {
@@ -234,6 +244,76 @@ describe('WorkoutScreen source — 7B + 7C migrations use i18n keys', () => {
       expect(WORKOUT_SRC).toContain(call);
     });
   }
+});
+
+describe('WorkoutScreen source — exercise names render straight from the catalog (regression: missing_exercise_translation spam)', () => {
+  // Real bug: `translateExerciseName` looked exercise names up in a
+  // separate, incomplete, legacy i18n map keyed by old ExerciseDB-style ids
+  // — the modern catalog's kebab-case ids never matched, so this always
+  // missed, logged a warning, and fell back to `ex.name` anyway (the exact
+  // value already sitting on `ex`/`o`/`baseEx`, already localized by
+  // `workoutExercisesFromPlan` off the real catalog). It was called from
+  // ~13 call sites, several inside list `.map()`s, on a component that
+  // re-renders every second (the session timer) — hence "dozens/hundreds"
+  // of repeated warnings. Fix: read `.name` directly; no lookup, no
+  // fallback, no warning, identical (correct) display text.
+  it('the helper and its lookup namespace are gone', () => {
+    expect(WORKOUT_SRC).not.toContain('function translateExerciseName');
+    expect(WORKOUT_SRC).not.toContain('missing_exercise_translation');
+  });
+
+  for (const call of [
+    'exName: ex.name',
+    'const completedName = ex.name;',
+    'nextName: nextEx.name',
+    'name={ex.name}',
+    '{ex.name}',
+    'name={o.name}',
+    '{o.name}',
+    '{resolve(e).name}',
+  ]) {
+    it(`renders "${call}" directly, no translate lookup`, () => {
+      expect(WORKOUT_SRC).toContain(call);
+    });
+  }
+});
+
+describe('WorkoutScreen source — missing_muscle_group_translation warns at most once per key (regression: per-render spam)', () => {
+  it('tracks warned keys in a module-level Set instead of logging unconditionally', () => {
+    expect(WORKOUT_SRC).toContain('const warnedMissingMuscleGroups = new Set<string>();');
+    expect(WORKOUT_SRC).toMatch(
+      /if \(__DEV__ && !warnedMissingMuscleGroups\.has\(target\)\) {\s*warnedMissingMuscleGroups\.add\(target\);\s*logWarn\('workout', 'missing_muscle_group_translation'/,
+    );
+  });
+});
+
+describe('WorkoutScreen source — rest overlay keyboard dismisses on outside tap', () => {
+  // The weight-logging `TextInput` lives inside `RestOverlay`. Its outer
+  // container is a `Pressable` (not a plain `View`) calling
+  // `Keyboard.dismiss()` — RN's touch responder system only lets that fire
+  // when the touch didn't land on a nested Pressable/TextInput (they claim
+  // the responder first), so the +/-, +15s, and "next set" buttons — and
+  // the TextInput itself — keep working; only empty space dismisses.
+  it('imports Keyboard and wires it to the overlay container onPress', () => {
+    expect(WORKOUT_SRC).toContain("Keyboard,");
+    expect(WORKOUT_SRC).toContain('onPress={() => Keyboard.dismiss()}');
+  });
+
+  it('RestOverlay renders a Pressable (not a plain View) as its outermost element', () => {
+    const restOverlayBody = WORKOUT_SRC.slice(
+      WORKOUT_SRC.indexOf('function RestOverlay('),
+      WORKOUT_SRC.indexOf('\nfunction PROverlay('),
+    );
+    const returnIdx = restOverlayBody.indexOf('return (');
+    const outerTagIdx = restOverlayBody.indexOf('<', returnIdx);
+    expect(restOverlayBody.slice(outerTagIdx, outerTagIdx + 10)).toContain('Pressable');
+    // The TextInput and every other control (+/-, +15s, next set) must
+    // remain reachable — this guard fails if the overlay ever collapses
+    // back into a single inert `View` with no way to dismiss the keyboard.
+    expect(restOverlayBody).toContain('<TextInput');
+    expect(restOverlayBody).toContain('onPress={onAdd15}');
+    expect(restOverlayBody).toContain('onPress={onSkip}');
+  });
 });
 
 describe('WorkoutScreen source — sub-sheet and confirm modal are never both visible', () => {

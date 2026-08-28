@@ -15,6 +15,10 @@ function seedFullUser(harness: ReturnType<typeof createFakeFirestore>, uid: stri
   harness.seed(`users/${uid}/assessments/a1`);
   harness.seed(`users/${uid}/assessments/a2`);
   harness.seed(`users/${uid}/progressPhotos/p1`);
+  harness.seed(`users/${uid}/workoutPrograms/wpg1`);
+  harness.seed(`users/${uid}/workoutProgramState/active`);
+  harness.seed(`users/${uid}/workoutExecutions/exec1`);
+  harness.seed(`users/${uid}/workoutPrograms/wpg1/progressionEvents/pe1`);
   harness.seed(`users/${uid}/privateSecurity/photoVault`);
 }
 
@@ -42,6 +46,10 @@ describe('runFirestoreCleanup — happy path', () => {
     expect(harness.listUnder('users/uid-1/questionnaires/')).toHaveLength(0);
     expect(harness.listUnder('users/uid-1/assessments/')).toHaveLength(0);
     expect(harness.listUnder('users/uid-1/progressPhotos/')).toHaveLength(0);
+    expect(harness.listUnder('users/uid-1/workoutPrograms/')).toHaveLength(0);
+    expect(harness.listUnder('users/uid-1/workoutProgramState/')).toHaveLength(0);
+    expect(harness.listUnder('users/uid-1/workoutExecutions/')).toHaveLength(0);
+    expect(harness.listUnder('users/uid-1/workoutPrograms/wpg1/progressionEvents/')).toHaveLength(0);
   });
 
   it('cleanup outcome is identical for a Free or Premium user (no subscription check exists here)', async () => {
@@ -132,7 +140,10 @@ describe('runFirestoreCleanup — ordering (Fase 6 §10)', () => {
       onResourceCompleted: (result: ResourceCleanupResult) => order.push(result.resource),
     });
 
-    expect(order).toEqual(['questionnaires', 'assessments', 'progressPhotos', 'userProfile']);
+    expect(order).toEqual([
+      'questionnaires', 'assessments', 'progressPhotos', 'progressionEvents',
+      'workoutPrograms', 'workoutProgramState', 'workoutExecutions', 'userProfile',
+    ]);
   });
 });
 

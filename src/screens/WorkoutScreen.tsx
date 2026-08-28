@@ -8,6 +8,7 @@ import {
   TextInput,
   Animated,
   Easing,
+  Keyboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -21,10 +22,11 @@ import { SegBar } from '../components/ui/SegBar';
 import { Icon } from '../components/ui/Icon';
 import { OutlineNumber } from '../components/ui/OutlineNumber';
 import { ExerciseGif } from '../components/fitness/ExerciseGif';
+import { useExerciseExecutionMedia } from '../workoutExecution/useExerciseExecutionMedia';
 import { displayLineHeight } from '../theme/tokens';
 import { useTheme } from '../theme';
-import { TODAY_WORKOUT } from '../lib/todayWorkout';
-import { logWarn } from '../lib/logger';
+import { logInfo, logWarn } from '../lib/logger';
+import type { FinalWorkoutPlan } from '../workoutPrescription/types';
 import { useUnits } from '../state/UnitsContext';
 import { usePremiumCapabilities } from '../hooks/usePremiumCapabilities';
 import {
@@ -35,169 +37,70 @@ import {
   workoutLoadUnit,
 } from '../units/workoutLoadConversions';
 import { WORKOUT_SUBSTITUTIONS_STORAGE_KEY as SUBS_KEY } from '../services/workoutSubstitutionsStorage';
+import { resolveSessionDisplayName } from '../workoutPrescription/sessionPresentation';
+import { resolveCardioFinisherPresentation } from '../workoutPrescription/cardioPresentation';
+import { workoutExercisesFromPlan, pluralCountForReps, type Exercise, type SetData, type SubOption } from './workoutScreenPlan';
 
-type SetData = { r: number; w: number };
-type SubOption = { name: string; target: string; db: string };
-type Exercise = {
-  id: string;
-  name: string;
-  target: string;
-  db: string;
-  sets: SetData[];
-  rest: number;
-  subs: SubOption[];
+type Props = {
+  plan: FinalWorkoutPlan;
+  onDone: () => void;
+  onMinimize?: () => void;
+  /** Which session in `plan.sessions` to run — decided by the Schedule Engine (docs/workout-lifecycle/03_SCHEDULE_ENGINE.md). Defaults to 0 for callers that haven't wired schedule resolution yet. */
+  sessionIndex?: number;
+  /** Fires once, the moment every set is done — distinct from `onDone` (which also fires on an early exit/X tap). This is what the Schedule Engine listens to advance the rotation. */
+  onSessionCompleted?: () => void;
+  /** Fires once a set's weight is actually logged (docs/workout-lifecycle/09_WORKOUT_EXECUTION_AND_HISTORY.md) — `exerciseIndex` matches this exercise's position in `plan.sessions[sessionIndex].exercises`, the same identity the Execution record uses. */
+  onSetLogged?: (exerciseIndex: number, setIndex: number, weightKg: number) => void;
+  /** Fires when the user exits via the header close button before the session finished — distinct from a normal finish; the Schedule Engine must never advance because of this (docs §36). */
+  onAbandon?: () => void;
 };
 
-const EXERCISES: Exercise[] = [
-  {
-    id: 'supino-reto',
-    name: 'Supino Reto Máquina',
-    target: 'Peitoral',
-    db: 'Barbell_Bench_Press_-_Medium_Grip',
-    sets: [{ r: 10, w: 60 }, { r: 8, w: 70 }, { r: 8, w: 75 }, { r: 6, w: 80 }],
-    rest: 90,
-    subs: [
-      { name: 'Supino Reto Halteres', target: 'Peitoral', db: 'Dumbbell_Bench_Press' },
-      { name: 'Supino Máquina', target: 'Peitoral', db: 'Machine_Bench_Press' },
-    ],
-  },
-  {
-    id: 'supino-incl',
-    name: 'Supino Inclinado Halter',
-    target: 'Peitoral Superior',
-    db: 'Incline_Dumbbell_Bench_With_Palms_Facing_In',
-    sets: [{ r: 10, w: 24 }, { r: 10, w: 26 }, { r: 8, w: 28 }],
-    rest: 75,
-    subs: [
-      { name: 'Supino Inclinado Barra', target: 'Peitoral Superior', db: 'Barbell_Incline_Bench_Press_Medium-Grip' },
-      { name: 'Crossover Baixo', target: 'Peitoral Superior', db: 'Low_Cable_Crossover' },
-    ],
-  },
-  {
-    id: 'crucifixo',
-    name: 'Crucifixo Polia',
-    target: 'Peitoral',
-    db: 'Cable_Crossover',
-    sets: [{ r: 12, w: 14 }, { r: 12, w: 16 }, { r: 10, w: 18 }],
-    rest: 60,
-    subs: [
-      { name: 'Crucifixo Halteres', target: 'Peitoral', db: 'Dumbbell_Flyes' },
-      { name: 'Peck Deck', target: 'Peitoral', db: 'Butterfly' },
-    ],
-  },
-  {
-    id: 'militar',
-    name: 'Desenvolvimento Militar',
-    target: 'Ombro',
-    db: 'Standing_Military_Press',
-    sets: [{ r: 10, w: 30 }, { r: 8, w: 35 }, { r: 8, w: 40 }],
-    rest: 90,
-    subs: [
-      { name: 'Desenvolvimento Halteres', target: 'Ombro', db: 'Dumbbell_Shoulder_Press' },
-      { name: 'Desenvolvimento Arnold', target: 'Ombro', db: 'Arnold_Dumbbell_Press' },
-    ],
-  },
-  {
-    id: 'lateral',
-    name: 'Elevação Lateral',
-    target: 'Ombro Lateral',
-    db: 'Side_Lateral_Raise',
-    sets: [{ r: 12, w: 8 }, { r: 12, w: 10 }, { r: 10, w: 12 }],
-    rest: 60,
-    subs: [
-      { name: 'Elevação Lateral Polia', target: 'Ombro Lateral', db: 'Cable_Shoulder_Press' },
-      { name: 'Elevação Frontal', target: 'Ombro Frontal', db: 'Front_Dumbbell_Raise' },
-    ],
-  },
-  {
-    id: 'pulley',
-    name: 'Tríceps Pulley',
-    target: 'Tríceps',
-    db: 'Triceps_Pushdown',
-    sets: [{ r: 12, w: 20 }, { r: 10, w: 24 }, { r: 10, w: 26 }],
-    rest: 60,
-    subs: [
-      { name: 'Tríceps Corda', target: 'Tríceps', db: 'Tricep_Dumbbell_Kickback' },
-      { name: 'Tríceps Testa', target: 'Tríceps', db: 'Barbell_Skullcrusher_Extension' },
-    ],
-  },
-  {
-    id: 'frances',
-    name: 'Tríceps Francês',
-    target: 'Tríceps',
-    db: 'EZ-Bar_Skullcrusher',
-    sets: [{ r: 10, w: 14 }, { r: 10, w: 16 }, { r: 8, w: 18 }],
-    rest: 60,
-    subs: [
-      { name: 'Tríceps Testa Halter', target: 'Tríceps', db: 'Seated_Dumbbell_Tricep_Press' },
-      { name: 'Coice Halter', target: 'Tríceps', db: 'Tricep_Dumbbell_Kickback' },
-    ],
-  },
-  {
-    id: 'paralelas',
-    name: 'Mergulho Paralelas',
-    target: 'Tríceps & Peito',
-    db: 'Dips_-_Triceps_Version',
-    sets: [{ r: 10, w: 0 }, { r: 8, w: 0 }, { r: 8, w: 0 }],
-    rest: 60,
-    subs: [
-      { name: 'Dips Máquina', target: 'Tríceps', db: 'Weighted_Bench_Dip' },
-      { name: 'Flexão Fechada', target: 'Tríceps', db: 'Close-Grip_Push-Up_off_of_a_Wall' },
-    ],
-  },
-];
-
-type Props = { onDone: () => void; onMinimize?: () => void };
-
 /**
- * Pure translation helpers — closed over the `t` returned by useTranslation.
- * Exercise names look up by the ExerciseDB `db` field (stable identifier
- * shared by base and substitution rows). Muscle groups look up via a static
- * mapping from the catalog's PT target string to a stable key — the same
- * mapping used for backward-compat with subs persisted before Phase 7C.
- *
- * When a translation is missing (new exercise not yet in the JSON, or a
- * legacy persisted sub with an unmapped `db`), fall back to the catalog's
- * original PT `name`/`target` so the UI never renders a raw i18n key.
+ * Muscle group label lookup — closed over the `t` returned by
+ * useTranslation. `target` is always a canonical `MuscleId`
+ * (`src/types/exercise.ts`) here: `workoutExercisesFromPlan` sets it
+ * straight from the exercise catalog's `target.primaryMuscle`, the same
+ * authoritative source (Firestore/local catalog, already localized) that
+ * exercise NAMES come from — which is why exercise names need no lookup
+ * helper at all anymore (see below). `muscleGroups.*` covers every
+ * `MuscleId` value, so a miss here means a genuinely new muscle id was
+ * added to the catalog without its i18n entry, not routine data — logged
+ * once per unique id (module-level `Set`, not per render) so a real gap is
+ * still visible in dev without spamming the console every second (this
+ * hook re-renders on every session-timer tick).
  */
 type LooseT = (key: string, opts?: Record<string, unknown>) => string;
 
-const MUSCLE_GROUP_KEY_BY_TARGET: Record<string, string> = {
-  Peitoral: 'chest',
-  'Peitoral Superior': 'upperChest',
-  Ombro: 'shoulders',
-  'Ombro Lateral': 'sideDelt',
-  'Ombro Frontal': 'frontDelt',
-  Tríceps: 'triceps',
-  'Tríceps & Peito': 'tricepsChest',
-};
-
-function translateExerciseName(tLoose: LooseT, db: string, fallbackName: string): string {
-  const key = `exercises.${db}`;
-  const value = tLoose(key, { defaultValue: '' });
-  if (value && value !== key) return value;
-  if (__DEV__) {
-    logWarn('workout', 'missing_exercise_translation', { exercise: db });
-  }
-  return fallbackName;
-}
+const warnedMissingMuscleGroups = new Set<string>();
 
 function translateMuscleGroup(tLoose: LooseT, target: string): string {
-  const stableKey = MUSCLE_GROUP_KEY_BY_TARGET[target];
-  if (!stableKey) {
-    if (__DEV__) {
-      logWarn('workout', 'missing_muscle_group_translation', { target });
-    }
-    return target;
-  }
-  const key = `muscleGroups.${stableKey}`;
+  const key = `muscleGroups.${target}`;
   const value = tLoose(key, { defaultValue: '' });
-  return value || target;
+  if (value) return value;
+  if (__DEV__ && !warnedMissingMuscleGroups.has(target)) {
+    warnedMissingMuscleGroups.add(target);
+    logWarn('workout', 'missing_muscle_group_translation', { target });
+  }
+  return target;
 }
 
-export function WorkoutScreen({ onDone, onMinimize }: Props) {
+export function WorkoutScreen({ plan, onDone, onMinimize, sessionIndex = 0, onSessionCompleted, onSetLogged, onAbandon }: Props) {
   const { theme } = useTheme();
-  const { t } = useTranslation('workout');
+  const { t, i18n } = useTranslation('workout');
+  const exercises = useMemo(
+    () => workoutExercisesFromPlan(plan, i18n.language, sessionIndex),
+    [i18n.language, plan, sessionIndex],
+  );
+  // Own-video priority (item #7): a small, targeted Firestore lookup for
+  // exactly this session's exercise ids — never the whole catalog, never on
+  // the generation path. `ExerciseGif` falls back to its own library/
+  // unavailable state for any id this resolves nothing for — but only once
+  // `exerciseMediaLoading` confirms the lookup actually landed, so the
+  // fallback library never flashes on screen first for an exercise that
+  // does have an own video.
+  const { media: exerciseExecutionMedia, loading: exerciseMediaLoading } = useExerciseExecutionMedia(
+    useMemo(() => exercises.map((e) => e.id), [exercises]),
+  );
   const headerButtonStyle = {
     width: 38,
     height: 38,
@@ -212,6 +115,8 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
   const loadUnit = workoutLoadUnit(resolvedUnits);
   const tLoose = t as unknown as LooseT;
   const { canPerform } = usePremiumCapabilities();
+  const currentSession = plan.sessions[sessionIndex] ?? plan.sessions[0];
+  const cardioFinisher = currentSession?.cardioFinisher;
   // FASE 3: defense-in-depth, not the primary gate — AppShell's
   // `startWorkout()` is the only place that sets `tab === 'workout'` today,
   // and it already checks START_WORKOUT before doing so. This bounces back
@@ -225,7 +130,7 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
     // continuous subscription to `canPerform`/`onDone`.
   }, []);
   // Queue of exercise indices in current order (head = current)
-  const [order, setOrder] = useState<number[]>(() => EXERCISES.map((_, i) => i));
+  const [order, setOrder] = useState<number[]>(() => exercises.map((_, i) => i));
   // exIdx -> sets completed
   const [progress, setProgress] = useState<Record<number, number>>({});
   // exercise indices that were skipped and later requeued
@@ -235,7 +140,7 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
 
   const [resting, setResting] = useState(false);
   const [restLeft, setRestLeft] = useState(0);
-  const [pending, setPending] = useState<{ exId: string; setIdx: number } | null>(null);
+  const [pending, setPending] = useState<{ exId: string; exIdx: number; setIdx: number } | null>(null);
   const [regWeight, setRegWeight] = useState(0);
 
   const [queueOpen, setQueueOpen] = useState(false);
@@ -244,6 +149,7 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
   const [pendingSub, setPendingSub] = useState<SubOption | null>(null);
 
   const [finished, setFinished] = useState(false);
+  const [showCardioFinisher, setShowCardioFinisher] = useState(false);
   const [elapsed, setElapsed] = useState(0);
 
   const [permSubs, setPermSubs] = useState<Record<string, SubOption>>({});
@@ -268,26 +174,35 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
       });
   }, []);
 
-  // session timer
+  // session timer — stops the instant the session finishes (`finished`
+  // dependency): without this, the interval kept running after the early
+  // return to `WorkoutDone` below, so the "time" metric on the completion
+  // screen kept counting up instead of showing the real final duration.
   useEffect(() => {
+    if (finished) return;
     const t = setInterval(() => setElapsed((e) => e + 1), 1000);
     return () => clearInterval(t);
-  }, []);
+  }, [finished]);
 
-  const ovr = (id: string): SubOption | null => sessionSubs[id] || permSubs[id] || null;
+  const ovr = (id: string): SubOption | null => {
+    const candidate = sessionSubs[id] || permSubs[id] || null;
+    const allowed = exercises.find((exercise) => exercise.id === id)?.subs
+      .some((option) => option.db === candidate?.db);
+    return allowed ? candidate : null;
+  };
   const resolve = (base: Exercise): Exercise => {
     const o = ovr(base.id);
     return o ? { ...base, name: o.name, target: o.target, db: o.db } : base;
   };
 
   const exIdx = order.length > 0 ? order[0] : 0;
-  const baseEx = EXERCISES[exIdx];
+  const baseEx = exercises[exIdx];
   const ex = resolve(baseEx);
   const setIdx = progress[exIdx] || 0;
-  const exDone = (i: number) => (progress[i] || 0) >= EXERCISES[i].sets.length;
+  const exDone = (i: number) => (progress[i] || 0) >= exercises[i].sets.length;
 
-  const totalSets = EXERCISES.reduce((a, e) => a + e.sets.length, 0);
-  const doneSets = EXERCISES.reduce(
+  const totalSets = exercises.reduce((a, e) => a + e.sets.length, 0);
+  const doneSets = exercises.reduce(
     (a, e, i) => a + Math.min(progress[i] || 0, e.sets.length),
     0
   );
@@ -305,9 +220,9 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
   const advanceAfterRest = () => {
     let nextLogged = logged;
     if (pending && regWeight > 0) {
-      const baseId = EXERCISES[exIdx].id;
+      const baseId = exercises[exIdx].id;
       const prevBest = Math.max(
-        ...EXERCISES[exIdx].sets.map((s) => s.w),
+        ...exercises[exIdx].sets.map((s) => s.w),
         ...Object.entries(logged)
           .filter(([k]) => k.startsWith(baseId + '-'))
           .map(([, v]) => v),
@@ -316,13 +231,17 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
       if (regWeight > prevBest && prevBest > 0) {
         setPr({
           weight: regWeight,
-          exName: translateExerciseName(tLoose, ex.db, ex.name),
+          exName: ex.name,
           prev: prevBest,
         });
         setTimeout(() => setPr(null), 2600);
       }
       nextLogged = { ...logged, [`${pending.exId}-${pending.setIdx}`]: regWeight };
       setLogged(nextLogged);
+    }
+    if (pending) {
+      const finalWeight = nextLogged[`${pending.exId}-${pending.setIdx}`] ?? exercises[pending.exIdx].sets[pending.setIdx].w;
+      onSetLogged?.(pending.exIdx, pending.setIdx, finalWeight);
     }
     const finishedSet = setIdx + 1;
     const nextProgress = { ...progress, [exIdx]: finishedSet };
@@ -335,18 +254,19 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
       // Snapshot translated names AT TRANSITION TIME so the overlay always
       // renders in the language active when the exercise ended, even if the
       // user changes language during the 2s overlay window.
-      const completedName = translateExerciseName(tLoose, ex.db, ex.name);
+      const completedName = ex.name;
       const nextOrder = order.slice(1);
       setOrder(nextOrder);
       setSkipped((s) => s.filter((x) => x !== exIdx));
       if (nextOrder.length === 0) {
-        setFinished(true);
+        if (cardioFinisher) setShowCardioFinisher(true);
+        else setFinished(true);
         return;
       }
-      const nextEx = resolve(EXERCISES[nextOrder[0]]);
+      const nextEx = resolve(exercises[nextOrder[0]]);
       setExComplete({
         name: completedName,
-        nextName: translateExerciseName(tLoose, nextEx.db, nextEx.name),
+        nextName: nextEx.name,
       });
       setTimeout(() => setExComplete(null), 2000);
     }
@@ -365,11 +285,13 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
 
   const completeSet = () => {
     if (isLastOverall) {
+      onSetLogged?.(exIdx, setIdx, lastWeight(ex, setIdx));
       setProgress((p) => ({ ...p, [exIdx]: setIdx + 1 }));
-      setFinished(true);
+      if (cardioFinisher) setShowCardioFinisher(true);
+      else setFinished(true);
       return;
     }
-    setPending({ exId: ex.id, setIdx });
+    setPending({ exId: ex.id, exIdx, setIdx });
     setRegWeight(lastWeight(ex, setIdx));
     setRestLeft(ex.rest);
     setResting(true);
@@ -388,7 +310,7 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
   };
 
   const applySub = async (option: SubOption, scope: 'once' | 'all') => {
-    const baseId = EXERCISES[exIdx].id;
+    const baseId = exercises[exIdx].id;
     if (scope === 'all') {
       const next = { ...permSubs, [baseId]: option };
       setPermSubs(next);
@@ -417,10 +339,84 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
     [baseEx]
   );
 
+  // Mount-once-per-finish signal for the Schedule Engine — separate from
+  // `onDone`, which also fires on an early exit (the X button) and must
+  // never be read as a completion.
+  useEffect(() => {
+    if (finished) onSessionCompleted?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [finished]);
+
+  if (finished) {
+    return (
+      <WorkoutDone
+        elapsed={elapsed}
+        doneSets={doneSets}
+        totalSets={totalSets}
+        onDone={() => {
+          // Diagnostic instrumentation (Phase 2, Part F) — only the true
+          // post-completion navigation (this branch only renders once
+          // `finished` is true), never the early-exit/abandon path, which
+          // reuses the same `onDone` prop from a different call site.
+          logInfo('workout', 'workout_done_navigation', {
+            templateId: plan.templateId,
+            sessionIndex,
+          });
+          onDone();
+        }}
+      />
+    );
+  }
+
+  if (showCardioFinisher && cardioFinisher) {
+    const cardio = resolveCardioFinisherPresentation(tLoose, cardioFinisher);
+    return (
+      <ScreenBg>
+        <SafeAreaView style={{ flex: 1, justifyContent: 'center', padding: 20 }} edges={['top', 'bottom']}>
+          <Card style={{ padding: 22 }}>
+            <MonoLabel color={theme.colors.primaryEmphasis}>
+              {t('cardioFinisher.kicker').toUpperCase()}
+            </MonoLabel>
+            <Display size={30} style={{ marginTop: 10 }}>
+              {t('cardioFinisher.title')}
+            </Display>
+            <Text style={{ marginTop: 18, fontFamily: theme.fonts.uiBold, fontSize: 19, color: theme.colors.textPrimary }}>
+              {cardio.mode}
+            </Text>
+            <Text style={{ marginTop: 8, fontFamily: theme.fonts.mono, fontSize: 13, color: theme.colors.textEmphasis }}>
+              {cardio.duration} · {cardio.intensity}
+            </Text>
+            {cardio.optional && (
+              <Text style={{ marginTop: 10, fontFamily: theme.fonts.ui, fontSize: 13, color: theme.colors.textFaint }}>
+                {t('cardioFinisher.optional')}
+              </Text>
+            )}
+          </Card>
+          <View style={{ marginTop: 16 }}>
+            <CtaButton onPress={() => setFinished(true)}>
+              <Icon name="check" size={18} color={theme.colors.primaryForeground} />
+              <Text style={{ color: theme.colors.primaryForeground, fontFamily: theme.fonts.display, fontSize: 17, letterSpacing: 1.5, textTransform: 'uppercase' }}>
+                {t('actions.finishWorkout')}
+              </Text>
+            </CtaButton>
+          </View>
+        </SafeAreaView>
+      </ScreenBg>
+    );
+  }
+
+  // Only computed once `finished` is ruled out above — `order` (and thus
+  // `exIdx`/`setIdx`) is only ever left pointing at an exercise with
+  // remaining sets while `finished` is false (both `advanceAfterRest` and
+  // `completeSet`'s last-set branch flip `finished` to true in the SAME
+  // update as the progress/order change that would otherwise leave
+  // `setIdx` pointing past the end of `ex.sets`). Reading these before the
+  // early return above was the exact cause of the
+  // "Cannot read property 'r' of undefined" crash on the final set/final
+  // exercise transition: the render right after `finished` became true
+  // still fell through to here with a stale/out-of-range `setIdx`.
   const curReps = ex.sets[setIdx].r;
   const curLast = lastWeight(ex, setIdx);
-
-  if (finished) return <WorkoutDone elapsed={elapsed} onDone={onDone} />;
 
   return (
     <ScreenBg>
@@ -439,7 +435,13 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={t('header.accessibility.close')}
-            onPress={onDone}
+            onPress={() => {
+              // Reaching this button at all means `finished` is false (the
+              // component early-returns to `WorkoutDone` otherwise) — an
+              // early exit here is always an abandon, never a finish.
+              onAbandon?.();
+              onDone();
+            }}
             style={headerButtonStyle}
           >
             <Icon name="x" size={15} color={theme.colors.iconEmphasis} />
@@ -453,7 +455,12 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                 marginTop: 7,
               }}
             >
-              <MonoLabel>{TODAY_WORKOUT.dayLabel}</MonoLabel>
+              <MonoLabel>{plan.templateId} · {(() => {
+                const session = plan.sessions[sessionIndex] ?? plan.sessions[0];
+                return session
+                  ? resolveSessionDisplayName(tLoose, session.name, session.type, session.displayName)
+                  : '';
+              })()}</MonoLabel>
               <MonoLabel color={theme.colors.primaryEmphasis}>{fmt(elapsed)}</MonoLabel>
               <MonoLabel>
                 {t('sets.progress', {
@@ -479,9 +486,11 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
           <View style={{ position: 'relative', borderRadius: 20, overflow: 'hidden' }}>
             <ExerciseGif
               id={ex.db}
-              name={translateExerciseName(tLoose, ex.db, ex.name)}
+              name={ex.name}
               height={224}
               radius={20}
+              ownVideo={exerciseExecutionMedia[ex.id]?.videos}
+              ownVideoLoading={exerciseMediaLoading}
             />
             {/* gradient overlay for legibility */}
             <LinearGradient
@@ -511,7 +520,7 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                 {String(exIdx + 1).padStart(2, '0')}
                 <Text style={{ opacity: 0.5 }}>
                   {' '}
-                  / {String(EXERCISES.length).padStart(2, '0')}
+                  / {String(exercises.length).padStart(2, '0')}
                 </Text>
               </MonoLabel>
             </View>
@@ -581,10 +590,10 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
               )}
             </View>
             <Display size={26} style={{ marginTop: 8 }}>
-              {translateExerciseName(tLoose, ex.db, ex.name)}
+              {ex.name}
             </Display>
           </View>
-          <Pressable
+          {baseEx.subs.length > 0 && <Pressable
             onPress={() => setSubSheet(true)}
             style={{
               flexDirection: 'row',
@@ -603,7 +612,7 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
             <Text style={{ fontSize: 12, fontFamily: theme.fonts.uiSemi, color: theme.colors.choiceTextSecondary }}>
               {t('actions.swap')}
             </Text>
-          </Pressable>
+          </Pressable>}
         </View>
 
         {/* Next-set card */}
@@ -734,11 +743,12 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                 <Text style={{ fontFamily: theme.fonts.mono, fontSize: 12, flex: 1, color: theme.colors.textPrimary }}>
                   {w > 0
                     ? t('sets.summaryWeighted', {
-                        count: s0.r,
+                        count: pluralCountForReps(s0.r),
+                        reps: s0.r,
                         weight: formatWorkoutLoadFromKg(w, resolvedUnits),
                         unit: loadUnit,
                       })
-                    : t('sets.summaryBodyweight', { count: s0.r })}
+                    : t('sets.summaryReps', { count: pluralCountForReps(s0.r), reps: s0.r })}
                 </Text>
                 {justLogged && (
                   <MonoLabel color={theme.colors.primaryEmphasis}>
@@ -842,9 +852,11 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
             >
               <ExerciseGif
                 id={ex.db}
-                name={translateExerciseName(tLoose, ex.db, ex.name)}
+                name={ex.name}
                 aspectRatio={9 / 16}
                 radius={20}
+                ownVideo={exerciseExecutionMedia[ex.id]?.videos}
+                ownVideoLoading={exerciseMediaLoading}
               />
 
               <View
@@ -871,7 +883,7 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                       marginTop: 3,
                     }}
                   >
-                    {translateExerciseName(tLoose, ex.db, ex.name)}
+                    {ex.name}
                   </Text>
                 </View>
                 <Pressable
@@ -1003,14 +1015,16 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                       <View style={{ width: 76 }}>
                         <ExerciseGif
                           id={o.db}
-                          name={translateExerciseName(tLoose, o.db, o.name)}
+                          name={o.name}
                           height={58}
                           radius={10}
+                          ownVideo={exerciseExecutionMedia[o.db]?.videos}
+                          ownVideoLoading={exerciseMediaLoading}
                         />
                       </View>
                       <View style={{ flex: 1 }}>
                         <Text style={{ fontSize: 14.5, fontFamily: theme.fonts.uiBold, color: theme.colors.textPrimary }}>
-                          {translateExerciseName(tLoose, o.db, o.name)}
+                          {o.name}
                         </Text>
                         <Text
                           style={{
@@ -1093,9 +1107,9 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
               >
                 {t('substitution.replaceQuestion', {
                   replacement: pendingSub
-                    ? translateExerciseName(tLoose, pendingSub.db, pendingSub.name)
+                    ? pendingSub.name
                     : '',
-                  original: translateExerciseName(tLoose, baseEx.db, baseEx.name),
+                  original: baseEx.name,
                 })}
               </Text>
               <View style={{ marginTop: 22, gap: 10 }}>
@@ -1180,11 +1194,11 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                 }}
               />
               <Slash style={{ marginBottom: 14 }}>
-                {t('queue.title', { count: EXERCISES.length }).toUpperCase()}
+                {t('queue.title', { count: exercises.length }).toUpperCase()}
               </Slash>
               <ScrollView showsVerticalScrollIndicator={false}>
                 {order.map((i, pos) => {
-                  const e = EXERCISES[i];
+                  const e = exercises[i];
                   const now = pos === 0;
                   const wasSkip = skipped.includes(i);
                   return (
@@ -1219,11 +1233,7 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                       </Text>
                       <View style={{ flex: 1 }}>
                         <Text style={{ fontFamily: theme.fonts.uiBold, fontSize: 14, color: theme.colors.textPrimary }}>
-                          {translateExerciseName(
-                            tLoose,
-                            resolve(e).db,
-                            resolve(e).name,
-                          )}
+                          {resolve(e).name}
                         </Text>
                         <Text
                           style={{
@@ -1255,7 +1265,7 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                     </Pressable>
                   );
                 })}
-                {EXERCISES.map((e, i) =>
+                {exercises.map((e, i) =>
                   exDone(i) ? (
                     <View
                       key={'done-' + e.id}
@@ -1286,11 +1296,7 @@ export function WorkoutScreen({ onDone, onMinimize }: Props) {
                       </Text>
                       <View style={{ flex: 1 }}>
                         <Text style={{ fontFamily: theme.fonts.uiBold, fontSize: 14, color: theme.colors.textPrimary }}>
-                          {translateExerciseName(
-                            tLoose,
-                            resolve(e).db,
-                            resolve(e).name,
-                          )}
+                          {resolve(e).name}
                         </Text>
                         <Text
                           style={{
@@ -1395,7 +1401,14 @@ function RestOverlay({
     justifyContent: 'center' as const,
   };
   return (
-    <View
+    // Tapping anywhere in the overlay dismisses the keyboard — RN's touch
+    // responder system only lets this `onPress` fire when the touch didn't
+    // land on a nested Pressable/TextInput (they claim the responder first),
+    // so the +/-, +15s, "next set" buttons and the weight `TextInput` all
+    // keep working exactly as before; only empty space around them dismisses.
+    <Pressable
+      accessibilityRole="none"
+      onPress={() => Keyboard.dismiss()}
       style={{
         position: 'absolute',
         top: 0,
@@ -1597,7 +1610,7 @@ function RestOverlay({
           </Text>
         </Pressable>
       </View>
-    </View>
+    </Pressable>
   );
 }
 
@@ -1905,7 +1918,17 @@ function ExerciseDoneOverlay({ name, nextName }: { name: string; nextName: strin
 
 /* ─────────────────────────── WORKOUT DONE ─────────────────────────── */
 
-function WorkoutDone({ elapsed, onDone }: { elapsed: number; onDone: () => void }) {
+function WorkoutDone({
+  elapsed,
+  doneSets,
+  totalSets,
+  onDone,
+}: {
+  elapsed: number;
+  doneSets: number;
+  totalSets: number;
+  onDone: () => void;
+}) {
   const { theme } = useTheme();
   const { t } = useTranslation('workout');
   const fmt = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
@@ -1937,11 +1960,19 @@ function WorkoutDone({ elapsed, onDone }: { elapsed: number; onDone: () => void 
             }}
           >
             {(
+              // Phase 2, Part G: `volume` and `newPr` were hardcoded demo
+              // values (always "8.2t" / "+1") shown as if they were real
+              // results — removed rather than left presenting fabricated
+              // data as fact. No reliable infrastructure exists yet to
+              // compute either for real (actual reps performed per set
+              // isn't logged today, only weight; PR detection exists
+              // per-set during the session but nothing aggregates a count
+              // across the workout) — this phase does not add a
+              // Progression/PR Engine to manufacture one. `time` and `sets`
+              // are both real, already-tracked session state.
               [
-                { key: 'time', v: fmt(elapsed || 3480) },
-                { key: 'volume', v: '8.2t' },
-                { key: 'sets', v: '25' },
-                { key: 'newPr', v: '+1' },
+                { key: 'time', v: fmt(elapsed) },
+                { key: 'sets', v: `${doneSets}/${totalSets}` },
               ] as const
             ).map((s) => (
               <Card key={s.key} style={{ width: '47%', padding: 16 }}>
@@ -1962,28 +1993,15 @@ function WorkoutDone({ elapsed, onDone }: { elapsed: number; onDone: () => void 
             ))}
           </View>
 
-          <Card style={{ padding: 16, marginTop: 12 }}>
-            <MonoLabel style={{ marginBottom: 10 }}>
-              {t('done.streak.updated').toUpperCase()}
-            </MonoLabel>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-              <Icon name="flame" size={26} color={theme.colors.primaryEmphasis} />
-              <Text
-                style={{
-                  fontFamily: theme.fonts.display,
-                  fontSize: 34,
-                  color: theme.colors.textPrimary,
-                  transform: [{ skewX: '-8deg' }],
-                  textTransform: 'uppercase',
-                }}
-              >
-                {t('done.streak.days', { count: 15 }).toUpperCase()}
-              </Text>
-              <Text style={{ fontFamily: theme.fonts.ui, fontSize: 12, color: theme.colors.textMuted }}>
-                {t('done.streak.untilRecord', { count: 6 })}
-              </Text>
-            </View>
-          </Card>
+          {/*
+            Phase 2, Part G: this card showed a hardcoded "15 day streak,
+            6 until a record" regardless of the user's real history — no
+            streak-tracking infrastructure exists yet to compute either
+            value for real (`HomeScreen`'s own streak ticker is documented
+            as the same kind of placeholder). Removed rather than left
+            presenting fabricated data as fact; not replaced with a Streak
+            Engine in this phase.
+          */}
 
           <View style={{ flex: 1 }} />
           <CtaButton onPress={onDone}>

@@ -203,48 +203,17 @@ Sessão de 30 minutos em hipertrofia.
 O modificador de tempo não deve transformar o treino em cardio porque
 "cabe melhor".
 
-Deve preservar a intenção:
-
-``` text
-movimentos prioritários
-→ volume essencial
-→ acessórios prioritários
-→ acessórios opcionais
-```
-
-e cortar do fim dessa hierarquia lógica, não necessariamente da ordem
-visual.
+Deve preservar a intenção usando a ordem do template, o primeiro exercício e o
+signal de muscle priority. Mantém `ceil(n×0,60)` itens, com um guard mínimo de
+movement pattern.
 
 ------------------------------------------------------------------------
 
 # 8. Exemplo: iniciante + sessão curta
 
-Dois modificadores podem querer reduzir volume.
-
-Erro:
-
-``` text
-BEGINNER = -40%
-TIME_30 = -40%
-
-resultado = -80%
-```
-
-A composição não deve ser multiplicação cega.
-
-Deve existir um limite por família e uma regra de volume final.
-
-Conceito:
-
-``` text
-base volume
-↓
-target volume allowed by experience
-↓
-fit target inside session duration
-↓
-validate minimum effective structure
-```
+A composição calcula duration e beginner sobre a base e usa o menor target.
+Cada cálculo usa `ceil` e preservação por ordem/priority. Durante beginner não
+existe +1 set de priority.
 
 ------------------------------------------------------------------------
 
@@ -266,6 +235,11 @@ substituto do punho = exercício B
 ```
 
 O substituto final precisa satisfazer **ambas** as constraints.
+
+Para cada região, `unknown` falha fechado, `avoid` rejeita, `adapt` exige ação
+estruturada, `compatible` permite e `not_applicable` é ignorado somente quando
+explícito em perfil aprovado. Qualquer rejeição vence; duas adaptações que não
+compõem de forma inequívoca também retornam `NO_SAFE_SUBSTITUTION`.
 
 Formalmente:
 
@@ -340,16 +314,16 @@ Mesmo dentro das prioridades:
 
 Preferência por um músculo não significa simplesmente adicionar séries.
 
-Estratégias possíveis, em ordem:
+Regra V1: preservar e antecipar o primeiro exercício relevante; depois, quando
+permitido, adicionar +1 set nesse candidato. Não trocar exercício seguro apenas
+para criar ênfase nem calcular redistribuição semanal.
 
-``` text
-1. escolher variante já compatível com maior ênfase;
-2. trocar acessório equivalente;
-3. redistribuir volume de músculos menos prioritários;
-4. adicionar volume somente se orçamento de recuperação/duração permitir.
-```
-
-Isso evita crescimento ilimitado do treino.
+A direção V1 é perceptível e limitada: priority protege o primeiro exercício
+relevante durante reduções, pode antecipá-lo de forma estável e pode adicionar
++1 set nesse exercício. Com duas priorities, repetir uma vez para cada uma.
+Beginner Week 1/2 e duration 30 nunca recebem sets extras; em 45, +1 só quando a
+sessão não precisou ser reduzida. Safety, limitations e equipment sempre vencem.
+Não há budget +20%, donors/receivers, round-robin ou `slotRole`.
 
 ------------------------------------------------------------------------
 
@@ -518,3 +492,26 @@ Criar cenários para pelo menos:
 -   limitação + equipamento reduzido;
 -   população especial + preferência;
 -   alta frequência + baixa recuperação.
+
+------------------------------------------------------------------------
+
+# 21. Precedência clínica interna da Fase 2
+
+Sem alterar `P0 > P1 > ... > P7`, a ordem de composição quando os novos ramos
+coexistem é:
+
+``` text
+1. red flags e restrições profissionais explícitas (P0)
+2. gate pós-cirúrgico restritivo (P0)
+3. tontura atual/recente ou equilíbrio afetado/incerto (P0)
+4. envelope de gestação/pós-parto (P1)
+5. capacidade funcional e limitações musculoesqueléticas (P2)
+6. impacto/orientação de lipedema e tontura controlada (P2)
+7. equipamento, experiência, disponibilidade, objetivo e preferência (P3–P7)
+```
+
+Ramos múltiplos são compostos por interseção. Uma orientação específica de
+lipedema ou cirurgia permanece no seu domínio e tem autoridade de safety; ela
+não precisa ser duplicada artificialmente como `medical_restriction` para ser
+respeitada. Duração continua em P5 porque limita a viabilidade temporal, mas
+jamais reduz a autoridade das camadas clínicas anteriores.

@@ -34,6 +34,9 @@ import esAuth from './resources/es/auth.json';
 import ptBRSupport from './resources/pt-BR/support.json';
 import enSupport from './resources/en/support.json';
 import esSupport from './resources/es/support.json';
+import ptBRMyPlan from './resources/pt-BR/myPlan.json';
+import enMyPlan from './resources/en/myPlan.json';
+import esMyPlan from './resources/es/myPlan.json';
 
 /** Single runtime registry used by bootstrap, parity tests and audits. */
 export const resources = {
@@ -50,6 +53,7 @@ export const resources = {
     assessment: ptBRAssessment,
     auth: ptBRAuth,
     support: ptBRSupport,
+    myPlan: ptBRMyPlan,
   },
   en: {
     common: enCommon,
@@ -64,6 +68,7 @@ export const resources = {
     assessment: enAssessment,
     auth: enAuth,
     support: enSupport,
+    myPlan: enMyPlan,
   },
   es: {
     common: esCommon,
@@ -78,6 +83,7 @@ export const resources = {
     assessment: esAssessment,
     auth: esAuth,
     support: esSupport,
+    myPlan: esMyPlan,
   },
 } as const;
 

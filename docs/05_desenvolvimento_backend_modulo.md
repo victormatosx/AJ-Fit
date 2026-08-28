@@ -90,10 +90,8 @@ O usuário pode:
 * utilizar respostas existentes
 * refazer o questionário
 
-Limite:
-
-* 1 solicitação a cada 30 dias
-* apenas após 30 dias do início do treino ativo
+Limites temporais de solicitação de revisão/troca não estão aprovados; pertencem
+a DR-014 e ao futuro Progression Engine.
 
 ---
 
@@ -171,13 +169,14 @@ Cloud Function:
 generateWorkoutVariation
 ```
 
-Responsável por evolução periódica dos treinos.
+Nome legado/proposta não implementada. Evolução pertence ao futuro Progression
+Engine e não deve ser inferida desta seção.
 
 ---
 
 ## Regras
 
-A atualização ocorre aproximadamente a cada 60 dias.
+Não há prazo automático aprovado. Calendário isolado não troca programa.
 
 A atualização cria nova versão do treino.
 

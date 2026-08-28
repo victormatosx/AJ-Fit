@@ -47,11 +47,27 @@ exercise:
   loading_options: []
   skill_level: intermediate
 
+  limitation_compatibility:
+    knee: compatible
+    shoulder: adapt
+    back: unknown
+
   tags: []
 ```
 
 As tags finais deverão ser compatíveis com a biblioteca real de
 exercícios do AJ Fit.
+
+O nome conceitual acima foi consolidado como `limitationProfile`; seu schema e
+resolver estão `IMPLEMENTED_V1`. Seus estados de domínio são
+`compatible`, `adapt`, `avoid`, `unknown` e `not_applicable`. DR-005 fecha que ausente/não revisado
+nunca é `compatible`. O metadado pertence ao exercício real,
+não a uma matriz gigante paralela.
+
+Os IDs coletados hoje são `knee`, `hip`, `back`, `shoulder`, `elbow`, `wrist`,
+`ankle_foot` e `other`. Labels traduzidas não são chaves. As sete regiões
+canônicas são resolvidas; `other` retorna `UNMAPPED_LIMITATION_REGION` sem
+renomear ou ignorar respostas históricas.
 
 ------------------------------------------------------------------------
 
@@ -520,6 +536,10 @@ closestExercise[0]
 
 sem validação.
 
+O candidato deve ser um `exerciseId` real e satisfazer a interseção de todas as
+constraints ativas. Nenhuma condição é avaliada isoladamente e nenhuma troca
+pode reintroduzir algo proibido por outra condição.
+
 ------------------------------------------------------------------------
 
 # 18. Validação após troca
@@ -574,3 +594,13 @@ ganhar:
 -   tags de estabilidade/impacto;
 -   restrições específicas validadas;
 -   testes de substituição.
+
+A expansão seguirá: original viável → substituição existente no catálogo →
+novo exercício somente após gap demonstrado. Metadado ausente/não revisado não
+equivale automaticamente a `compatible` ou `not_applicable`
+(DR-004/DR-005/DR-019).
+
+O inventário integral, schema proposto, política de interseção, reviews e gaps
+estão em `exercise-limitations/`. São 116 exercícios, 71 usados nos templates,
+497 pares usados triados e 300 pares M+U na fila profissional; 45 exercícios
+ficam fora do escopo atual, mas podem ser candidatos após revisão.

@@ -1,6 +1,6 @@
 rules_version = '2';
 
-// AJ Fit — Firestore Security Rules (SUGESTÃO / pendente de validação humana).
+// AJ Fit — Firestore Security Rules (production contract).
 //
 // Baseado em:
 //   - docs/12_seguranca_geral_do_app.md (cliente não é fonte de verdade;
@@ -14,8 +14,8 @@ rules_version = '2';
 // Princípio: o app só escreve profile, language/units e metadata.updatedAt.
 // Assinatura e metadados internos têm mapas próprios e validação independente.
 // As respostas do questionário ficam na subcoleção `questionnaires`. Campos de
-// assinatura e treino são gravados apenas pelo backend (Cloud Functions /
-// webhook RevenueCat via Admin SDK, que ignora estas regras).
+// assinatura é gravada apenas pelo backend. Programas de treino privados são
+// snapshots client-authorized, validados e ativados atomicamente pelas regras.
 
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -83,8 +83,8 @@ service cloud.firestore {
     // single, tiny, doc-id-keyed read; resolving a full record would need
     // an extra indirection this check does not need.
     //
-    // NÃO FAZER DEPLOY sem antes confirmar (Fase 0) que estas regras — e não
-    // uma versão diferente — são de fato as publicadas em produção.
+    // Antes do deploy desta fase, o ruleset publicado foi confirmado byte a
+    // byte contra o firestore.rules do HEAD inicial.
     function accountActive(userId) {
       return !exists(/databases/$(database)/documents/accountDeletionLocks/$(userId));
     }
@@ -209,6 +209,173 @@ service cloud.firestore {
         && (!('commercialGateResolvedAt' in data)
              || data.commercialGateResolvedAt == null
              || data.commercialGateResolvedAt is timestamp);
+    }
+
+    function workoutProgramLimitationValid(questionnaire, data) {
+      let conditions = questionnaire.data.answers.get('specialConditions', []);
+      let limits = questionnaire.data.answers.get('limits', []);
+      return conditions is list
+        && limits is list
+        && (
+          (
+            !conditions.hasAny(['musculoskeletal_limitation'])
+            && !limits.hasAny([
+                 'knee', 'hip', 'back', 'shoulder', 'elbow', 'wrist', 'ankle_foot', 'other'
+               ])
+          )
+          || (
+            conditions.hasAny(['musculoskeletal_limitation'])
+            && limits.size() >= 1
+            && limits.toSet().hasOnly([
+                 'knee', 'hip', 'back', 'shoulder', 'elbow', 'wrist', 'ankle_foot'
+               ])
+            && data.versions.limitationResolver == '1.0.0'
+            && data.trace.limitationResolverVersion == 1
+            && data.trace.limitationDecisions is list
+            && data.trace.limitationDecisions.size() >= data.sessions.size()
+            && data.trace.limitationDecisions.size() <= 100
+          )
+        );
+    }
+
+    function workoutProgramCommonValid(userId, programId, data) {
+      let template = get(/databases/$(database)/documents/workoutTemplates/$(data.templateId));
+      let questionnaire = get(/databases/$(database)/documents/users/$(userId)/questionnaires/$(data.questionnaireId));
+      return data is map
+        && data.keys().hasAll([
+             'programId', 'planId', 'prescriptionId', 'templateId', 'templateVersion',
+             'templateSourceVersion', 'templateContentHash', 'questionnaireId',
+             'questionnaireVersion', 'status', 'source', 'requestedDays',
+             'prescribedStructuredDays', 'population', 'environment',
+             'goalFamily', 'split', 'sessions', 'versions', 'trace',
+             'createdAt', 'activatedAt', 'updatedAt'
+           ])
+        && data.keys().hasOnly([
+             'programId', 'planId', 'prescriptionId', 'templateId', 'templateVersion',
+             'templateSourceVersion', 'templateContentHash', 'questionnaireId',
+             'questionnaireVersion', 'status', 'source', 'requestedDays',
+             'prescribedStructuredDays', 'population', 'environment',
+             'goalFamily', 'split', 'adaptationStage', 'sessions', 'versions',
+             'trace', 'limitationDatasetVersion', 'limitationDatasetHash',
+             'prescribedTrainingFrequency', 'availability', 'weeklySchedule',
+             'createdAt', 'activatedAt', 'updatedAt'
+           ])
+        && data.programId == programId
+        // `planId` is `FinalWorkoutPlan.planId` spread verbatim onto the
+        // program doc (`WorkoutProgramSnapshot extends FinalWorkoutPlan`,
+        // src/services/workoutPrograms.ts); `prescriptionId` is always set
+        // to that same value at persist time — enforced here too so the two
+        // can never silently diverge.
+        && data.planId is string
+        && data.prescriptionId == data.planId
+        && data.prescriptionId is string
+        && data.templateId is string
+        && data.templateId.matches('^T(00[1-9]|0[1-8][0-9]|090)$')
+        && template.data.status == 'active'
+        && data.templateVersion == template.data.version
+        && data.templateSourceVersion == template.data.sourceVersion
+        && data.templateContentHash == template.data.contentHash
+        && data.questionnaireId is string
+        && data.questionnaireVersion is int && data.questionnaireVersion >= 1
+        && questionnaire.data.version == data.questionnaireVersion
+        && workoutProgramLimitationValid(questionnaire, data)
+        && data.status in ['active', 'superseded']
+        && data.source in ['onboarding', 'manual_regeneration', 'automatic_progression', 'automatic_reconciliation']
+        && data.requestedDays is int && data.requestedDays >= 2 && data.requestedDays <= 7
+        && data.prescribedStructuredDays is int
+        && data.prescribedStructuredDays >= 2 && data.prescribedStructuredDays <= 7
+        && data.sessions is list && data.sessions.size() >= 1 && data.sessions.size() <= 7
+        && data.versions is map
+        && ((data.versions.templateLibrary == '1.3.0'
+              && data.versions.compositionEngine == '2.0.0')
+            || (data.versions.templateLibrary == '2.0.0'
+              && data.versions.compositionEngine == '2.1.0'))
+        && data.versions.selectionEngine in ['1.0.0', '2.0.0']
+        && (
+          (data.versions.selectionEngine == '1.0.0'
+            && !data.keys().hasAny(['prescribedTrainingFrequency', 'availability', 'weeklySchedule']))
+          ||
+          (data.versions.selectionEngine == '2.0.0'
+            && data.keys().hasAll(['prescribedTrainingFrequency', 'availability', 'weeklySchedule'])
+            && data.prescribedTrainingFrequency is int
+            && data.prescribedTrainingFrequency == data.prescribedStructuredDays
+            && data.prescribedTrainingFrequency >= 2
+            && data.prescribedTrainingFrequency <= 6
+            && data.prescribedTrainingFrequency <= data.requestedDays
+            && data.availability is map
+            && data.availability.keys().hasAll(['days', 'weekdays'])
+            && data.availability.keys().hasOnly(['days', 'weekdays'])
+            && data.availability.days == data.requestedDays
+            && data.availability.weekdays is list
+            && (data.availability.weekdays.size() == 0
+              || data.availability.weekdays.size() == data.availability.days)
+            && data.weeklySchedule is list
+            && (data.weeklySchedule.size() == 0 || data.weeklySchedule.size() == 7))
+        )
+        && data.versions.safetyRules == '1.0.0'
+        && data.versions.modifierRules == '2.0.0'
+        && data.trace is map
+        && data.trace.safety is map
+        && data.trace.safety.status in ['CLEAR', 'ADAPTED']
+        && data.trace.unresolvedModifiers is list
+        && data.trace.unresolvedModifiers.size() == 0
+        && (!('adaptationStage' in data)
+            || (data.adaptationStage is int && data.adaptationStage >= 1 && data.adaptationStage <= 3));
+    }
+
+    // New program snapshots are cryptographically tied to the exact active
+    // clinical dataset. Legacy snapshots remain readable/updateable so an
+    // activation transaction can supersede them without rewriting history.
+    function workoutProgramLimitationDatasetValid(data) {
+      let active = get(/databases/$(database)/documents/limitationDatasetState/active);
+      return (
+          !data.keys().hasAny(['limitationDatasetVersion', 'limitationDatasetHash'])
+        ) || (
+          data.keys().hasAll(['limitationDatasetVersion', 'limitationDatasetHash'])
+          && data.limitationDatasetVersion is string
+          && data.limitationDatasetVersion.size() >= 1
+          && data.limitationDatasetVersion.size() <= 120
+          && data.limitationDatasetHash is string
+          && data.limitationDatasetHash.matches('^[a-f0-9]{64}$')
+          && active.data.datasetVersion == data.limitationDatasetVersion
+          && active.data.limitationDatasetHash == data.limitationDatasetHash
+        );
+    }
+
+    // Workout Execution & History V1 (docs/workout-lifecycle/
+    // 09_WORKOUT_EXECUTION_AND_HISTORY.md). `exercises` is validated only for
+    // shape/bounds here, the same precedent `workoutProgramCommonValid` sets
+    // for `sessions` above — deep per-set validation belongs to the app
+    // layer, not Rules. Ownership of the referenced program comes from the
+    // `get()` itself: it can only ever resolve under this same `userId`'s
+    // subtree, so a bogus/foreign `programId` simply fails to exist.
+    function workoutExecutionCommonValid(userId, data) {
+      let program = get(/databases/$(database)/documents/users/$(userId)/workoutPrograms/$(data.programId));
+      return data is map
+        && data.keys().hasAll([
+             'programId', 'templateId', 'sessionIndex', 'sessionName',
+             'scheduledLocalDate', 'status', 'startedAt', 'finishedAt',
+             'exercises', 'executionSchemaVersion', 'createdAt', 'updatedAt'
+           ])
+        && data.keys().hasOnly([
+             'programId', 'templateId', 'sessionIndex', 'sessionName',
+             'scheduledLocalDate', 'status', 'startedAt', 'finishedAt',
+             'exercises', 'executionSchemaVersion', 'createdAt', 'updatedAt'
+           ])
+        && data.programId is string
+        && program.data.programId == data.programId
+        && data.templateId is string
+        && data.sessionIndex is int && data.sessionIndex >= 0
+        && data.sessionName is string
+        && data.scheduledLocalDate is string
+        && data.scheduledLocalDate.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && data.status in ['IN_PROGRESS', 'COMPLETED', 'PARTIALLY_COMPLETED', 'ABANDONED']
+        && data.startedAt is timestamp
+        && (data.finishedAt == null || data.finishedAt is timestamp)
+        && data.exercises is list && data.exercises.size() >= 1 && data.exercises.size() <= 20
+        && data.executionSchemaVersion == 1
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
     }
 
     // Shape of `users/{userId}.attribution` — the read-optimized mirror of
@@ -641,9 +808,9 @@ service cloud.firestore {
             || request.resource.data.preferences.diff(resource.data.preferences).affectedKeys()
                  .hasOnly(['language', 'units'])
           )
+          && request.resource.data.metadata.updatedAt == request.time
           && request.resource.data.metadata.diff(resource.data.metadata).affectedKeys()
                .hasOnly(['updatedAt'])
-          && request.resource.data.metadata.updatedAt == request.time
         )
       );
 
@@ -673,6 +840,196 @@ service cloud.firestore {
 
         // Histórico imutável: sem edição nem exclusão pelo cliente.
         allow update, delete: if false;
+      }
+
+      match /workoutPrograms/{programId} {
+        allow read: if isOwner(userId) && accountActive(userId);
+
+        allow create: if isOwner(userId)
+          && accountActive(userId)
+          && workoutProgramCommonValid(userId, programId, request.resource.data)
+          // Transitional rollout compatibility: the already-published app
+          // may omit both fields; the new app always sends both, and any
+          // supplied identity is required to equal the active dataset.
+          && workoutProgramLimitationDatasetValid(request.resource.data)
+          && request.resource.data.status == 'active'
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.activatedAt == request.time
+          && request.resource.data.updatedAt == request.time
+          && getAfter(/databases/$(database)/documents/users/$(userId)/workoutProgramState/active).data.programId == programId;
+
+        allow update: if isOwner(userId)
+          && accountActive(userId)
+          && (workoutProgramCommonValid(userId, programId, request.resource.data)
+              // A v1.3 snapshot may need to be superseded after the single
+              // template document has been upgraded to v2. Its immutable
+              // prescription fields are protected by the diff below; do not
+              // revalidate them against today's replaced template document.
+              || resource.data.versions.templateLibrary == '1.3.0')
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['status', 'activatedAt', 'updatedAt'])
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.updatedAt == request.time
+          && (
+            (request.resource.data.status == 'active'
+              && request.resource.data.activatedAt == request.time
+              && getAfter(/databases/$(database)/documents/users/$(userId)/workoutProgramState/active).data.programId == programId)
+            ||
+            (request.resource.data.status == 'superseded'
+              && request.resource.data.activatedAt == resource.data.activatedAt
+              && getAfter(/databases/$(database)/documents/users/$(userId)/workoutProgramState/active).data.programId != programId)
+          );
+
+        allow delete: if false;
+
+        // Runtime schedule cursor for THIS program only — never carried over
+        // to a new program (docs/workout-lifecycle/03_SCHEDULE_ENGINE.md
+        // §Troca de programa). Single fixed id 'current', same pattern as
+        // workoutProgramState/active above.
+        match /scheduleState/{stateId} {
+          allow read: if isOwner(userId) && accountActive(userId) && stateId == 'current';
+          allow create, update: if isOwner(userId)
+            && accountActive(userId)
+            && stateId == 'current'
+            && request.resource.data.keys().hasAll(
+                 ['programId', 'nextSessionIndex', 'cursorDate', 'lastCompletedAt', 'pendingMissDecision', 'updatedAt'])
+            && request.resource.data.keys().hasOnly(
+                 ['programId', 'nextSessionIndex', 'cursorDate', 'lastCompletedAt', 'pendingMissDecision', 'updatedAt'])
+            && request.resource.data.programId == programId
+            && request.resource.data.nextSessionIndex is int
+            && request.resource.data.nextSessionIndex >= 0
+            && request.resource.data.cursorDate is string
+            && request.resource.data.updatedAt == request.time;
+          allow delete: if false;
+        }
+
+        // Immutable schedule ledger (COMPLETED/SKIPPED/MISS_RESOLVED) — never
+        // edited or deleted by the client (docs §44 Event ledger, §48
+        // Imutabilidade). Client-authorized like the rest of this program:
+        // ownership is the path, not a payload field.
+        match /scheduleEvents/{eventId} {
+          allow read: if isOwner(userId) && accountActive(userId);
+          allow create: if isOwner(userId)
+            && accountActive(userId)
+            && request.resource.data.keys().hasAll(['type', 'sessionIndex', 'scheduledDate', 'occurredAt'])
+            && request.resource.data.keys().hasOnly(
+                 ['type', 'sessionIndex', 'scheduledDate', 'occurredAt', 'reasonCode', 'decision'])
+            && request.resource.data.type in ['COMPLETED', 'SKIPPED', 'MISS_RESOLVED']
+            && request.resource.data.sessionIndex is int
+            && request.resource.data.sessionIndex >= 0
+            && request.resource.data.scheduledDate is string
+            && request.resource.data.occurredAt == request.time;
+          allow update, delete: if false;
+        }
+
+        // Progression Engine V1 (docs/workout-lifecycle/
+        // 04_PROGRESSION_ENGINE.md). Immutable audit ledger of transitions
+        // AWAY FROM this program — nested under the FROM program so it
+        // survives being superseded. `toProgramId` may equal this same
+        // `programId` for a NORMAL_ROTATION renewal-in-place (no real
+        // template alternative exists — docs §40/§41).
+        match /progressionEvents/{eventId} {
+          allow read: if isOwner(userId) && accountActive(userId);
+          allow create: if isOwner(userId)
+            && accountActive(userId)
+            && request.resource.data.keys().hasAll(
+                 ['type', 'toProgramId', 'fromStage', 'toStage', 'reason', 'occurredAt', 'progressionEngineVersion'])
+            && request.resource.data.keys().hasOnly(
+                 ['type', 'toProgramId', 'fromStage', 'toStage', 'reason', 'occurredAt', 'progressionEngineVersion'])
+            && request.resource.data.type in ['BEGINNER_STAGE_TRANSITION', 'NORMAL_ROTATION']
+            && request.resource.data.toProgramId is string
+            && (request.resource.data.fromStage == null || request.resource.data.fromStage in [1, 2, 3])
+            && (request.resource.data.toStage == null || request.resource.data.toStage in [1, 2, 3])
+            && request.resource.data.reason is string
+            && request.resource.data.occurredAt == request.time
+            && request.resource.data.progressionEngineVersion is int
+            && request.resource.data.progressionEngineVersion >= 1;
+          allow update, delete: if false;
+        }
+      }
+
+      // Single fixed-id pointer document; direct lookup, no status query or
+      // composite index. It moves atomically with program lifecycle writes.
+      // `scheduleConfig` is a second fixed id in this same collection: the
+      // Schedule Engine's trainingDays/timezone preference. It is a *user*
+      // preference, not program-scoped (docs/workout-lifecycle/
+      // 03_SCHEDULE_ENGINE.md §Alteração dos dias) — it survives program
+      // regeneration, unlike `scheduleState` below.
+      match /workoutProgramState/{stateId} {
+        allow read: if isOwner(userId) && accountActive(userId)
+          && (stateId == 'active' || stateId == 'scheduleConfig');
+        allow create: if isOwner(userId)
+          && accountActive(userId)
+          && stateId == 'active'
+          && request.resource.data.keys().hasAll(['programId', 'updatedAt'])
+          && request.resource.data.keys().hasOnly(['programId', 'updatedAt'])
+          && request.resource.data.programId is string
+          && request.resource.data.updatedAt == request.time
+          && getAfter(/databases/$(database)/documents/users/$(userId)/workoutPrograms/$(request.resource.data.programId)).data.status == 'active';
+        allow update: if isOwner(userId)
+          && accountActive(userId)
+          && stateId == 'active'
+          && request.resource.data.keys().hasAll(['programId', 'updatedAt'])
+          && request.resource.data.keys().hasOnly(['programId', 'updatedAt'])
+          && request.resource.data.programId is string
+          && request.resource.data.updatedAt == request.time
+          && getAfter(/databases/$(database)/documents/users/$(userId)/workoutPrograms/$(request.resource.data.programId)).data.status == 'active'
+          && (resource.data.programId == request.resource.data.programId
+              || getAfter(/databases/$(database)/documents/users/$(userId)/workoutPrograms/$(resource.data.programId)).data.status == 'superseded');
+        allow create, update: if isOwner(userId)
+          && accountActive(userId)
+          && stateId == 'scheduleConfig'
+          && request.resource.data.keys().hasAll(['trainingDays', 'timezone', 'scheduleVersion', 'updatedAt'])
+          && request.resource.data.keys().hasOnly(['trainingDays', 'timezone', 'scheduleVersion', 'updatedAt'])
+          && request.resource.data.trainingDays is list
+          && request.resource.data.trainingDays.size() >= 2
+          && request.resource.data.trainingDays.size() <= 7
+          && request.resource.data.timezone is string
+          && request.resource.data.timezone.size() > 0
+          && request.resource.data.scheduleVersion is int
+          && request.resource.data.updatedAt == request.time;
+        allow delete: if false;
+      }
+
+      // Workout Execution & History V1 (docs/workout-lifecycle/
+      // 09_WORKOUT_EXECUTION_AND_HISTORY.md). Top-level per-user collection
+      // (not nested under workoutPrograms/{programId}) so history queries
+      // ("last N workouts") never require scanning every program a user has
+      // ever had, and so account-deletion cleanup can delete it the same
+      // one-level way as `workoutPrograms` (docs §47/§48).
+      //
+      // Mutable only while IN_PROGRESS or ABANDONED (an abandoned attempt can
+      // be restarted fresh); once COMPLETED/PARTIALLY_COMPLETED it is
+      // immutable history, same as a schedule event (docs §53).
+      match /workoutExecutions/{executionId} {
+        allow read: if isOwner(userId) && accountActive(userId);
+
+        allow create: if isOwner(userId)
+          && accountActive(userId)
+          && workoutExecutionCommonValid(userId, request.resource.data)
+          && request.resource.data.status == 'IN_PROGRESS'
+          && request.resource.data.finishedAt == null
+          && request.resource.data.startedAt == request.time
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time;
+
+        allow update: if isOwner(userId)
+          && accountActive(userId)
+          && workoutExecutionCommonValid(userId, request.resource.data)
+          && resource.data.status in ['IN_PROGRESS', 'ABANDONED']
+          && request.resource.data.programId == resource.data.programId
+          && request.resource.data.sessionIndex == resource.data.sessionIndex
+          && request.resource.data.scheduledLocalDate == resource.data.scheduledLocalDate
+          && request.resource.data.startedAt == resource.data.startedAt
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.updatedAt == request.time
+          && (
+            (request.resource.data.status == 'IN_PROGRESS' && request.resource.data.finishedAt == null)
+            || (request.resource.data.status in ['COMPLETED', 'PARTIALLY_COMPLETED', 'ABANDONED']
+                && request.resource.data.finishedAt == request.time)
+          );
+
+        allow delete: if false;
       }
 
       // Avaliações físicas do usuário (guiadas ou importadas). Cada documento
@@ -800,6 +1157,116 @@ service cloud.firestore {
     // é dado sensível e é necessária para exibir/gerar treinos e permitir
     // substituição de exercícios.
     //
+    function limitationExerciseIdValid(value) {
+      return value is string
+        && value.size() >= 1
+        && value.size() <= 120
+        && value.matches('^[a-z0-9]+(-[a-z0-9]+)*$');
+    }
+
+    // Firestore Rules não possui loops. O limite fechado de 10 mantém a
+    // validação integral dos IDs, ordem e unicidade sem extrapolar o tamanho
+    // razoável de uma lista de candidatos do protocolo V1.
+    function limitationExerciseIdListValid(ids, exerciseId) {
+      return ids is list
+        && ids.size() <= 10
+        && ids.toSet().size() == ids.size()
+        && (ids.size() < 1 || (limitationExerciseIdValid(ids[0]) && ids[0] != exerciseId))
+        && (ids.size() < 2 || (limitationExerciseIdValid(ids[1]) && ids[1] != exerciseId))
+        && (ids.size() < 3 || (limitationExerciseIdValid(ids[2]) && ids[2] != exerciseId))
+        && (ids.size() < 4 || (limitationExerciseIdValid(ids[3]) && ids[3] != exerciseId))
+        && (ids.size() < 5 || (limitationExerciseIdValid(ids[4]) && ids[4] != exerciseId))
+        && (ids.size() < 6 || (limitationExerciseIdValid(ids[5]) && ids[5] != exerciseId))
+        && (ids.size() < 7 || (limitationExerciseIdValid(ids[6]) && ids[6] != exerciseId))
+        && (ids.size() < 8 || (limitationExerciseIdValid(ids[7]) && ids[7] != exerciseId))
+        && (ids.size() < 9 || (limitationExerciseIdValid(ids[8]) && ids[8] != exerciseId))
+        && (ids.size() < 10 || (limitationExerciseIdValid(ids[9]) && ids[9] != exerciseId));
+    }
+
+    function limitationRuleValid(rule, exerciseId) {
+      return rule is map
+        && (
+          (
+            rule.keys().hasOnly(['status'])
+            && rule.status in ['compatible', 'not_applicable']
+          )
+          || (
+            rule.keys().hasAll(['status', 'adaptation'])
+            && rule.keys().hasOnly(['status', 'adaptation'])
+            && rule.status == 'adapt'
+            && rule.adaptation is map
+            && rule.adaptation.keys().hasAll(['kind', 'exerciseId'])
+            && rule.adaptation.keys().hasOnly(['kind', 'exerciseId'])
+            && rule.adaptation.kind == 'exercise_variant'
+            && limitationExerciseIdValid(rule.adaptation.exerciseId)
+            && rule.adaptation.exerciseId != exerciseId
+          )
+          || (
+            rule.keys().hasAll(['status', 'substituteExerciseIds', 'candidateStatus'])
+            && rule.keys().hasOnly(['status', 'substituteExerciseIds', 'candidateStatus'])
+            && rule.status == 'avoid'
+            && limitationExerciseIdListValid(rule.substituteExerciseIds, exerciseId)
+            && (
+              (rule.substituteExerciseIds.size() == 0
+                && rule.candidateStatus == 'missing_exercise_candidate')
+              || (rule.substituteExerciseIds.size() > 0
+                && rule.candidateStatus == 'ready')
+            )
+          )
+        );
+    }
+
+    function limitationRegionsValid(regions, exerciseId) {
+      return regions is map
+        && regions.keys().hasAll([
+             'knee', 'hip', 'back', 'shoulder', 'elbow', 'wrist', 'ankle_foot'
+           ])
+        && regions.keys().hasOnly([
+             'knee', 'hip', 'back', 'shoulder', 'elbow', 'wrist', 'ankle_foot'
+           ])
+        && limitationRuleValid(regions.knee, exerciseId)
+        && limitationRuleValid(regions.hip, exerciseId)
+        && limitationRuleValid(regions.back, exerciseId)
+        && limitationRuleValid(regions.shoulder, exerciseId)
+        && limitationRuleValid(regions.elbow, exerciseId)
+        && limitationRuleValid(regions.wrist, exerciseId)
+        && limitationRuleValid(regions.ankle_foot, exerciseId);
+    }
+
+    function limitationProfileValid(profile, exerciseId) {
+      return profile is map
+        && profile.schemaVersion == 1
+        && profile.protocolVersion == 'musculoskeletal-v1'
+        && profile.reviewStatus == 'approved'
+        && limitationRegionsValid(profile.regions, exerciseId)
+        && (
+          (
+            profile.keys().hasAll([
+              'schemaVersion', 'protocolVersion', 'reviewStatus', 'reviewBasis', 'regions'
+            ])
+            && profile.keys().hasOnly([
+              'schemaVersion', 'protocolVersion', 'reviewStatus', 'reviewBasis', 'regions'
+            ])
+            && profile.reviewBasis == 'product_policy'
+          )
+          || (
+            profile.keys().hasAll([
+              'schemaVersion', 'protocolVersion', 'reviewStatus', 'reviewBasis',
+              'regions', 'reviewedAt', 'reviewedBy'
+            ])
+            && profile.keys().hasOnly([
+              'schemaVersion', 'protocolVersion', 'reviewStatus', 'reviewBasis',
+              'regions', 'reviewedAt', 'reviewedBy'
+            ])
+            && profile.reviewBasis == 'professional_review'
+            && profile.reviewedAt is timestamp
+            && profile.reviewedBy is string
+            && profile.reviewedBy.size() >= 1
+            && profile.reviewedBy.size() <= 200
+          )
+        );
+    }
+
     // `exerciseWriteValid` valida identidade (id/slug == id do documento) e
     // os poucos enums baratos de checar (status/difficulty). Não duplica o
     // dicionário inteiro de taxonomia (músculos, padrões de movimento,
@@ -823,7 +1290,9 @@ service cloud.firestore {
         && d.name is map
         && d.name.keys().hasAll(['ptBR', 'en', 'es'])
         && d.metadata is map
-        && d.metadata.updatedAt == request.time;
+        && d.metadata.updatedAt == request.time
+        && (!('limitationProfile' in d)
+            || limitationProfileValid(d.limitationProfile, exerciseId));
     }
 
     match /exercises/{exerciseId} {
@@ -840,6 +1309,8 @@ service cloud.firestore {
       // (createdAt novo != createdAt armazenado ⇒ rejeitado como update).
       allow update: if isAdmin()
         && exerciseWriteValid(exerciseId)
+        && (!('limitationProfile' in resource.data)
+            || ('limitationProfile' in request.resource.data))
         && request.resource.data.metadata.createdAt == resource.data.metadata.createdAt
         && request.resource.data.metadata.version == resource.data.metadata.version;
 
@@ -848,10 +1319,54 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Published clinical dataset identity. Clients consume only the active
+    // pointer; immutable version snapshots and all writes remain server-only.
+    // Contains only a version string + content hash — no clinical/PII data —
+    // so it needs no stronger gate than `isSignedIn()`. Every workout program
+    // generation reads this (to stamp its dataset identity) regardless of
+    // whether the user has any limitations at all; gating it behind email
+    // verification blocked first-program generation for every signed-in,
+    // not-yet-verified account (`workoutPrograms.ts`'s `prepareWorkoutProgram`
+    // maps the resulting permission-denied into `INVALID_CONFIGURATION`).
+    match /limitationDatasetState/{stateId} {
+      allow read: if stateId == 'active' && isSignedIn();
+      allow write: if false;
+    }
+
+    match /limitationDatasetVersions/{datasetHash} {
+      allow read, write: if false;
+    }
+
+    function workoutTemplateValid(templateId) {
+      let data = request.resource.data;
+      return data.keys().hasAll([
+          'id', 'version', 'sourceVersion', 'libraryId', 'contentHash',
+          'status', 'profile', 'split', 'rationale', 'sessions',
+          'createdAt', 'updatedAt'
+        ])
+        && data.id == templateId
+        && templateId.matches('^T(00[1-9]|0[1-8][0-9]|090)$')
+        && data.version is int && data.version >= 1
+        && data.sourceVersion is string
+        && data.contentHash is string && data.contentHash.size() == 64
+        && data.status == 'active'
+        && data.sessions is list && data.sessions.size() >= 1 && data.sessions.size() <= 6
+        && data.updatedAt == request.time;
+    }
+
+    match /workoutTemplates/{templateId} {
+      allow read: if isSignedIn();
+      allow create: if isAdmin()
+        && workoutTemplateValid(templateId)
+        && request.resource.data.createdAt == request.time;
+      allow update: if isAdmin()
+        && workoutTemplateValid(templateId)
+        && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if false;
+    }
+
     // ── Deny all undocumented collections ─────────────────────────────────
-    // Coleções de sistema (workout_templates, treinos do usuário, etc.) ainda
-    // não têm contrato de regras aprovado — negar por padrão até definição do
-    // Agente de Segurança/Arquiteto.
+    // Everything not documented above remains denied by default.
     match /{document=**} {
       allow read, write: if false;
     }

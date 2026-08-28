@@ -18,6 +18,8 @@
     "kicker": "Treino de hoje",
     "meta": "{{duration}} min · {{exercises}} exercícios · ~{{kcal}} kcal",
     "start": "Iniciar treino",
+    "review": "Revisar informações",
+    "prescribedMeta": "{{sessions}} sessões/semana · {{exercises}} exercícios nesta sessão",
     "confirm": {
       "title": "Iniciar treino?",
       "question": "Deseja iniciar agora",
@@ -26,6 +28,83 @@
       "dismiss": "Fechar confirmação de treino",
       "accessibilityConfirm": "Confirmar início do treino",
       "accessibilityConfirmLocked": "Confirmar início do treino, recurso Premium"
+    }
+  },
+  "progression": {
+    "dismiss": "Entendi",
+    "beginnerStage": {
+      "title": "Seu treino evoluiu",
+      "body": "Você concluiu sua fase de adaptação. Os próximos treinos já refletem essa evolução."
+    },
+    "rotated": {
+      "title": "Seu programa foi renovado",
+      "body": "Chegou a hora de renovar seu ciclo de treino. Os próximos treinos já refletem essa atualização."
+    }
+  },
+  "schedule": {
+    "activeRecovery": {
+      "title": "Recuperação ativa",
+      "body": "Hoje é dia de movimento leve e recuperação, sem treino estruturado."
+    },
+    "restDay": {
+      "title": "Dia de descanso",
+      "body": "Hoje não é um dos seus dias de treino."
+    },
+    "completedToday": {
+      "title": "Treino concluído",
+      "body": "Você já concluiu seu treino de hoje."
+    },
+    "nextWorkout": {
+      "label": "Próximo treino",
+      "value": "{{weekday}} · {{session}}"
+    },
+    "setupRequired": {
+      "title": "Configure seus dias de treino",
+      "body": "Escolha quais dias você costuma treinar para organizarmos sua agenda."
+    },
+    "missedDecision": {
+      "title": "Você perdeu seu último treino",
+      "body": "Sem problema. Como você quer continuar?",
+      "continueSequence": {
+        "title": "Continuar sequência",
+        "subtitle": "Fazer agora o treino que ficou pendente"
+      },
+      "followSchedule": {
+        "title": "Seguir planejamento",
+        "subtitle": "Pular o treino perdido e seguir o de hoje"
+      }
+    }
+  },
+  "prescription": {
+    "generate": "Gerar meu treino",
+    "generating": "Gerando treino...",
+    "generatingState": {
+      "title": "Preparando seu treino",
+      "body": "Isso leva só um instante."
+    },
+    "loadingState": {
+      "title": "Carregando seu treino",
+      "body": "Só um instante."
+    },
+    "requiresClearance": {
+      "title": "Precisamos de mais informações",
+      "body": "Identificamos uma condição que exige mais cuidado antes de personalizar seu treino com segurança. Siga a orientação do profissional responsável e atualize suas respostas quando não houver restrições que o app não consiga representar."
+    },
+    "blocked": {
+      "title": "Treino pausado por segurança",
+      "body": "Suas respostas atuais ativam uma interrupção de segurança documentada. O AJ Fit não prescreve nem inicia um treino nesse estado."
+    },
+    "needsQuestionnaireUpdate": {
+      "title": "Atualize suas informações",
+      "body": "Faltam algumas respostas necessárias para selecionar seu treino com segurança, ou seu questionário usa dados antigos insuficientes."
+    },
+    "unavailable": {
+      "title": "Treino ainda indisponível",
+      "body": "Uma regra de composição segura exigida pelas suas respostas ainda não foi definida. Nenhum treino genérico foi gerado."
+    },
+    "technicalError": {
+      "title": "Não foi possível preparar seu treino",
+      "body": "Algo deu errado ao gerar seu treino. Tente novamente em instantes."
     }
   },
   "consistency": {

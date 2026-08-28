@@ -391,8 +391,8 @@ Responsável por:
 
 Disponível apenas:
 
-* após 30 dias do início do treino ativo
-* uma vez a cada 30 dias
+* disponibilidade e frequência ainda dependem de DR-014;
+* não usar calendário isolado como autorização para trocar o programa.
 
 ---
 

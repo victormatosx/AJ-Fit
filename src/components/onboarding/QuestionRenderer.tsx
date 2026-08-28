@@ -13,7 +13,6 @@ import { HudCorners } from '../ui/Card';
 import { Icon, type IconName } from '../ui/Icon';
 import { DateWheelPicker } from '../ui/DateWheelPicker';
 import { useTheme } from '../../theme';
-import type { Quiz } from '../../state/AppState';
 import { computeAge } from '../../lib/ageCalculator';
 import { useUnits } from '../../state/UnitsContext';
 import { kgToLb, lbToKg, weightUnit } from '../../units/weightConversions';
@@ -26,13 +25,17 @@ import { kgToLb, lbToKg, weightUnit } from '../../units/weightConversions';
  * this is a lift, not a rewrite.
  */
 export type OptionDef = { v: string; icon?: IconName };
+export type CompoundChoiceField = { id: string; options: OptionDef[] };
 export type Question =
-  | { id: keyof Quiz; kind: 'choice'; options: OptionDef[] }
-  | { id: keyof Quiz; kind: 'choice-large'; options: OptionDef[] }
-  | { id: keyof Quiz; kind: 'multi'; options: OptionDef[]; maxSelections?: number }
-  | { id: keyof Quiz; kind: 'date'; minAge: number; maxAge: number }
+  | { id: string; kind: 'choice'; options: OptionDef[] }
+  | { id: string; kind: 'choice-large'; options: OptionDef[] }
+  | { id: string; kind: 'multi'; options: OptionDef[]; maxSelections?: number; exclusiveOption?: string }
+  /** Like 'multi', but must select exactly `count` options to continue (e.g. trainingDays == days). */
+  | { id: string; kind: 'multi-exact'; options: OptionDef[]; count: number }
+  | { id: string; kind: 'date'; minAge: number; maxAge: number }
+  | { id: string; kind: 'compound-choice'; fields: CompoundChoiceField[] }
   | {
-      id: keyof Quiz;
+      id: string;
       kind: 'wheel';
       min: number;
       max: number;
@@ -45,6 +48,12 @@ export type LooseT = (key: string, options?: Record<string, unknown>) => string;
 
 export function canContinueQuestion(q: Question, value: unknown): boolean {
   if (q.kind === 'multi') return Array.isArray(value) && value.length > 0;
+  if (q.kind === 'multi-exact') return Array.isArray(value) && value.length === q.count;
+  if (q.kind === 'compound-choice') {
+    if (!value || typeof value !== 'object') return false;
+    const answers = value as Record<string, unknown>;
+    return q.fields.every((field) => answers[field.id] != null);
+  }
   if (q.kind === 'wheel') return true;
   if (q.kind === 'date') {
     if (!(value instanceof Date)) return false;
@@ -57,11 +66,13 @@ export function canContinueQuestion(q: Question, value: unknown): boolean {
 
 export function ChoiceGrid({
   questionId,
+  translationKey,
   options,
   value,
   onChange,
 }: {
-  questionId: keyof Quiz;
+  questionId: string;
+  translationKey?: string;
   options: OptionDef[];
   value: string | null;
   onChange: (v: string) => void;
@@ -73,12 +84,16 @@ export function ChoiceGrid({
     <View style={{ flexDirection: 'column', gap: 10 }}>
       {options.map((o) => {
         const sel = value === o.v;
-        const label = tLoose(`${String(questionId)}.options.${o.v}.label`);
-        const short = tLoose(`${String(questionId)}.options.${o.v}.short`);
+        const key = translationKey ?? String(questionId);
+        const label = tLoose(`${key}.options.${o.v}.label`);
+        const short = tLoose(`${key}.options.${o.v}.short`);
         return (
           <Pressable
             key={o.v}
             onPress={() => onChange(o.v)}
+            accessibilityRole="radio"
+            accessibilityState={{ checked: sel }}
+            accessibilityLabel={label}
             style={{
               width: '100%',
               padding: 20,
@@ -124,13 +139,48 @@ export function ChoiceGrid({
   );
 }
 
+export function CompoundChoiceList({
+  question,
+  value,
+  onChange,
+}: {
+  question: Extract<Question, { kind: 'compound-choice' }>;
+  value: Record<string, string | null>;
+  onChange: (value: Record<string, string | null>) => void;
+}) {
+  const { theme } = useTheme();
+  const { t } = useTranslation('quiz');
+  const tLoose = t as unknown as LooseT;
+  return (
+    <View style={{ gap: 24 }}>
+      {question.fields.map((field) => {
+        const translationKey = `${question.id}.fields.${field.id}`;
+        return (
+          <View key={field.id} style={{ gap: 10 }}>
+            <Text style={{ fontFamily: theme.fonts.uiBold, fontSize: 16, lineHeight: 22, color: theme.colors.textPrimary }}>
+              {tLoose(`${translationKey}.title`)}
+            </Text>
+            <ChoiceGrid
+              questionId={question.id}
+              translationKey={translationKey}
+              options={field.options}
+              value={value[field.id] ?? null}
+              onChange={(next) => onChange({ ...value, [field.id]: next })}
+            />
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
 export function ChoiceList({
   questionId,
   options,
   value,
   onChange,
 }: {
-  questionId: keyof Quiz;
+  questionId: string;
   options: OptionDef[];
   value: string | null;
   onChange: (v: string) => void;
@@ -148,6 +198,9 @@ export function ChoiceList({
           <Pressable
             key={o.v}
             onPress={() => onChange(o.v)}
+            accessibilityRole="radio"
+            accessibilityState={{ checked: sel }}
+            accessibilityLabel={label}
             style={{
               padding: 16,
               borderRadius: 14,
@@ -190,13 +243,15 @@ export function MultiList({
   value,
   onChange,
   maxSelections,
+  exclusiveOption,
 }: {
-  questionId: keyof Quiz;
+  questionId: string;
   options: OptionDef[];
   value: string[];
   onChange: (v: string[]) => void;
   /** When set, selecting beyond this count is a no-op instead of growing the array. */
   maxSelections?: number;
+  exclusiveOption?: string;
 }) {
   const { theme } = useTheme();
   const { t } = useTranslation('quiz');
@@ -206,21 +261,33 @@ export function MultiList({
       onChange(value.filter((x) => x !== v));
       return;
     }
-    if (maxSelections != null && value.length >= maxSelections) return;
-    onChange([...value, v]);
+    if (v === exclusiveOption) {
+      onChange([v]);
+      return;
+    }
+    const withoutExclusive = exclusiveOption ? value.filter((item) => item !== exclusiveOption) : value;
+    if (maxSelections != null && withoutExclusive.length >= maxSelections) return;
+    onChange([...withoutExclusive, v]);
   };
   const GAP = 10;
   return (
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: GAP }}>
       {options.map((o) => {
         const sel = value.includes(o.v);
-        const atLimit = maxSelections != null && value.length >= maxSelections && !sel;
+        const atLimit =
+          maxSelections != null &&
+          value.filter((item) => item !== exclusiveOption).length >= maxSelections &&
+          !sel &&
+          o.v !== exclusiveOption;
         const label = tLoose(`${String(questionId)}.options.${o.v}`);
         return (
           <Pressable
             key={o.v}
             onPress={() => toggle(o.v)}
             disabled={atLimit}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: sel, disabled: atLimit }}
+            accessibilityLabel={label}
             style={{
               flexBasis: '48%',
               flexGrow: 1,

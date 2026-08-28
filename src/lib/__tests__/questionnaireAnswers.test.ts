@@ -37,6 +37,41 @@ describe('toPersistedAnswers / fromPersistedAnswers (new shape)', () => {
     expect(persisted.birthDate).toBeNull();
     expect(fromPersistedAnswers(persisted, Timestamp.now()).birthDate).toBeNull();
   });
+
+  it('round-trips canonical selector, modifier, and safety fields', () => {
+    const canonical: Quiz = {
+      ...fullQuiz,
+      goal: 'body_composition',
+      level: 'intermediate',
+      place: 'both',
+      primaryPlace: 'home',
+      equipment: ['dumbbells', 'bands'],
+      specialConditions: ['musculoskeletal_limitation', 'pregnancy'],
+      pregnancyScreening: {
+        weeks: 18,
+        prenatalCare: 'yes',
+        exerciseRestriction: 'no',
+        complication: 'unsure',
+        warningSigns: ['none'],
+      },
+    };
+    expect(fromPersistedAnswers(toPersistedAnswers(canonical), Timestamp.now())).toMatchObject({
+      goal: 'body_composition',
+      level: 'intermediate',
+      place: 'both',
+      primaryPlace: 'home',
+      equipment: ['dumbbells', 'bands'],
+      specialConditions: ['musculoskeletal_limitation', 'pregnancy'],
+      pregnancyScreening: canonical.pregnancyScreening,
+    });
+  });
+
+  it('reads and ignores the removed legacy field, and never writes it again', () => {
+    const legacy = { ...toPersistedAnswers(fullQuiz), limitationImpact: 'professional_restriction' };
+    const restored = fromPersistedAnswers(legacy, Timestamp.now());
+    expect(Object.prototype.hasOwnProperty.call(restored, 'limitationImpact')).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(toPersistedAnswers(restored), 'limitationImpact')).toBe(false);
+  });
 });
 
 describe('fromPersistedAnswers — legacy `age`-only documents (backward compat)', () => {
@@ -59,6 +94,11 @@ describe('fromPersistedAnswers — legacy `age`-only documents (backward compat)
       createdAt,
     );
     expect(restored.birthDate?.getTime()).toBe(explicitBirthDate.toDate().getTime());
+  });
+
+  it('preserves the removed elite UI value as a readable legacy value', () => {
+    const restored = fromPersistedAnswers({ ...toPersistedAnswers(fullQuiz), level: 'elite' }, Timestamp.now());
+    expect(restored.level).toBe('elite');
   });
 });
 

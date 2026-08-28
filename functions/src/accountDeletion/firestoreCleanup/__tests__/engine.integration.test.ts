@@ -51,6 +51,8 @@ describe.skipIf(!enabled)('Firestore Cleanup Engine — real Emulator integratio
       wipeCollectionGroup('questionnaires'),
       wipeCollectionGroup('assessments'),
       wipeCollectionGroup('progressPhotos'),
+      wipeCollectionGroup('workoutPrograms'),
+      wipeCollectionGroup('workoutProgramState'),
       wipeCollectionGroup('privateSecurity'),
     ]);
     const users = await db.collection('users').get();
@@ -87,6 +89,8 @@ describe.skipIf(!enabled)('Firestore Cleanup Engine — real Emulator integratio
     await db.collection('users').doc(uid).collection('privateSecurity').doc('photoVault').set({
       wrappedVaultKey: 'ciphertext-not-a-real-key',
     });
+    await db.collection('users').doc(uid).collection('workoutPrograms').doc('wpg1').set({ status: 'active' });
+    await db.collection('users').doc(uid).collection('workoutProgramState').doc('active').set({ programId: 'wpg1' });
   }
 
   beforeAll(async () => {
@@ -140,6 +144,12 @@ describe.skipIf(!enabled)('Firestore Cleanup Engine — real Emulator integratio
         .collection('progressPhotos')
         .get();
       expect(progressPhotos.empty).toBe(true);
+      const workoutPrograms = await db
+        .collection('users').doc('test-uid-cleanup-A').collection('workoutPrograms').get();
+      expect(workoutPrograms.empty).toBe(true);
+      const workoutProgramState = await db
+        .collection('users').doc('test-uid-cleanup-A').collection('workoutProgramState').get();
+      expect(workoutProgramState.empty).toBe(true);
 
       // ── Vault = preserved (VAULT_KEY_DESTRUCTION's responsibility, not this engine's) ──
       const vault = await db

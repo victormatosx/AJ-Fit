@@ -5,9 +5,11 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
 import { Icon, IconName } from '../components/ui/Icon';
-import { HudCorners } from '../components/ui/Card';
-import { Display, Slash } from '../components/ui/Display';
+import { Card, HudCorners } from '../components/ui/Card';
+import { Display, MonoLabel, Slash } from '../components/ui/Display';
 import { OutlineNumber } from '../components/ui/OutlineNumber';
+import { CtaButton } from '../components/ui/CtaButton';
+import { ScreenBg } from '../components/ui/ScreenBg';
 import { darkTheme, useTheme } from '../theme';
 import { useAppState, TabId } from '../state/AppState';
 import { useAuth } from '../state/AuthContext';
@@ -26,6 +28,7 @@ import { SecurityScreen } from './SecurityScreen';
 import { ChangePasswordScreen } from './ChangePasswordScreen';
 import { DeleteAccountScreen } from './DeleteAccountScreen';
 import { EditProfileScreen } from './EditProfileScreen';
+import { MyPlanScreen } from './MyPlanScreen';
 import { PaywallScreen } from './PaywallScreen';
 import { SubscriptionCenterScreen } from './SubscriptionCenterScreen';
 import { HelpCenterScreen } from './HelpCenterScreen';
@@ -40,6 +43,17 @@ import {
   INITIAL_PAYWALL_PREMIUM_RETURN_STATE,
   resolvePaywallPremiumReturn,
 } from '../lib/paywallPremiumReturn';
+import { useWorkoutPrescription } from '../workoutPrescription/useWorkoutPrescription';
+import type { FinalWorkoutPlan, PrescriptionResult } from '../workoutPrescription/types';
+import { canRetryGeneration, prescriptionOutcomeKey } from '../workoutPrescription/uiOutcome';
+import type { WorkoutProgramSnapshot } from '../services/workoutPrograms';
+import { useWorkoutSchedule, weekdayOfLocalDate, type ScheduleResolution } from '../scheduleEngine';
+import { MissedSessionDecisionModal } from '../components/schedule/MissedSessionDecisionModal';
+import { useWorkoutExecution } from '../workoutExecution/useWorkoutExecution';
+import { useWorkoutProgression } from '../progressionEngine/useWorkoutProgression';
+import { ProgressionFeedbackModal } from '../components/progression/ProgressionFeedbackModal';
+import { logInfo } from '../lib/logger';
+import { resolveSessionDisplayName, type LooseTranslate } from '../workoutPrescription/sessionPresentation';
 
 type SupportRoute =
   | { name: 'help' }
@@ -93,6 +107,25 @@ function AppShellContent({
   const { theme } = useTheme();
   const { tab, setTab } = useAppState();
   const { linkedProviders } = useAuth();
+  const {
+    prescription,
+    loading: prescriptionLoading,
+    generating: generatingWorkout,
+    generate: generateWorkout,
+    reload: reloadPrescription,
+  } = useWorkoutPrescription();
+  // `prescription.plan` is always the full `WorkoutProgramSnapshot` at
+  // runtime here — `useWorkoutPrescription` only ever assigns it from
+  // `loadActiveWorkoutProgram`/`generateAndPersistWorkoutProgram`, which
+  // return the full snapshot, even though the type is widened to
+  // `FinalWorkoutPlan` for the Prescription Engine's own contract.
+  const activeProgram = prescription.status === 'SUCCESS'
+    ? (prescription.plan as WorkoutProgramSnapshot)
+    : null;
+  const schedule = useWorkoutSchedule(activeProgram);
+  const execution = useWorkoutExecution(activeProgram, schedule.config?.timezone);
+  const progression = useWorkoutProgression();
+  const [activeSessionIndex, setActiveSessionIndex] = useState(0);
   const { isPremium } = useSubscription();
   const paywallPremiumReturnState = useRef(INITIAL_PAYWALL_PREMIUM_RETURN_STATE);
   // Single centralized prewarm schedule (docs/23_navegacao_e_lifecycle.md
@@ -107,6 +140,7 @@ function AppShellContent({
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [showDeleteAccount, setShowDeleteAccount] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
+  const [showMyPlan, setShowMyPlan] = useState(false);
   const [showSubscriptionCenter, setShowSubscriptionCenter] = useState(false);
   const [showWorkoutConfirmation, setShowWorkoutConfirmation] = useState(false);
   const [supportRoute, setSupportRoute] = useState<SupportRoute | null>(null);
@@ -129,6 +163,7 @@ function AppShellContent({
     showSecurity ||
     showChangePassword ||
     showEditProfile ||
+    showMyPlan ||
     showSubscriptionCenter ||
     showDeleteAccount ||
     showPremium ||
@@ -172,8 +207,25 @@ function AppShellContent({
   // session this call opens — so that same gate is also what protects them
   // (see Fase 3 report, "Decisão sobre REGISTER_SET").
   const startWorkout = () => {
+    if (prescription.status !== 'SUCCESS') return;
     setShowWorkoutConfirmation(false);
     setTab('workout');
+    // BLOQUEIO REAL (docs/workout-lifecycle/03_SCHEDULE_ENGINE.md §Bloqueio
+    // real): the Schedule Engine resolution — not this button, not whatever
+    // tab the user happened to land on — is what decides whether a session
+    // may start. Only SESSION_READY ever sets `activeSessionIndex`/calls
+    // `execution.start`; REST_DAY, TODAY_COMPLETED, SCHEDULE_SETUP_REQUIRED,
+    // PROGRAM_NOT_AVAILABLE and a pending miss decision all fall through to
+    // the Workout tab's own blocked-state render below instead of a live
+    // session — a stale confirmation, a deep link or a re-tap can reach this
+    // function in any of those states and still can never open a second
+    // session for a day already resolved (idempotent otherwise: a double
+    // tap or a cold-start reopen resumes the same execution, docs §22-25).
+    if (schedule.resolution.status === 'SESSION_READY') {
+      const sessionIndex = schedule.resolution.sessionIndex;
+      setActiveSessionIndex(sessionIndex);
+      void execution.start(sessionIndex);
+    }
   };
 
   return (
@@ -198,12 +250,64 @@ function AppShellContent({
       <View style={{ flex: 1 }}>
         <PersistentScreen active={tab === 'home'} activeStyle={FULL_BLEED.tab} inactiveMode="materialized">
           <HomeScreen
+            prescription={prescription}
+            loading={prescriptionLoading}
+            generating={generatingWorkout}
+            scheduleResolution={schedule.resolution}
             onStart={() => setShowWorkoutConfirmation(true)}
             onOpenConsistency={() => setShowCal(true)}
             onOpenProfile={() => setTab('profile')}
           />
         </PersistentScreen>
-        {tab === 'workout' && <WorkoutScreen onDone={() => setTab('home')} />}
+        {tab === 'workout' && prescription.status === 'SUCCESS' && schedule.resolution.status !== 'SESSION_READY' && (
+          <WorkoutTabBlockedState
+            resolution={schedule.resolution}
+            plan={prescription.plan}
+            onDone={() => setTab('home')}
+          />
+        )}
+        {tab === 'workout' && prescription.status === 'SUCCESS' && schedule.resolution.status === 'SESSION_READY' && (
+          <WorkoutScreen
+            plan={prescription.plan}
+            sessionIndex={activeSessionIndex}
+            onDone={() => setTab('home')}
+            onAbandon={() => { void execution.abandon(); }}
+            onSetLogged={(exerciseIndex, setIndex, weightKg) => {
+              void execution.recordSet(exerciseIndex, setIndex, weightKg);
+            }}
+            onSessionCompleted={() => {
+              // Execution finishes first (COMPLETED/PARTIALLY_COMPLETED),
+              // then the Schedule Engine advances via its own existing,
+              // already-idempotent completion mechanism — no parallel
+              // "advance the rotation" logic here (docs §40). Progression is
+              // only ever checked AFTER the session has fully ended — never
+              // while one is IN_PROGRESS (docs/workout-lifecycle/
+              // 04_PROGRESSION_ENGINE.md §23-25).
+              const programId = activeProgram?.programId;
+              // Diagnostic instrumentation (Phase 2, Part F) — a prior E2E
+              // reported a crash on finishing a workout. That report was
+              // later traced to a separate, now-fixed cause (Schedule stuck
+              // in SCHEDULE_SETUP_REQUIRED, so Workout Execution never
+              // actually started — Phase 1). No uncaught-throw path was
+              // found in this chain on audit (`execution.finish`/
+              // `schedule.completeSession` are both already internally
+              // try/caught) — this logs the boundary so the next real E2E
+              // either confirms it's clean or pinpoints exactly where it
+              // isn't.
+              logInfo('workout', 'workout_finish_requested', {
+                programId,
+                sessionIndex: activeSessionIndex,
+              });
+              void (async () => {
+                await execution.finish();
+                await schedule.completeSession(activeSessionIndex);
+                if (!programId) return;
+                const { applied } = await progression.checkAndApply(programId);
+                if (applied) await reloadPrescription();
+              })();
+            }}
+          />
+        )}
         <PersistentScreen
           active={tab === 'progress'}
           prewarm={prewarmed.PROGRESS}
@@ -223,6 +327,7 @@ function AppShellContent({
             onOpenEditProfile={() => setShowEditProfile(true)}
             onOpenSettings={() => setShowSettings(true)}
             onOpenSubscription={() => setShowSubscriptionCenter(true)}
+            onOpenMyPlan={() => setShowMyPlan(true)}
           />
         </PersistentScreen>
       </View>
@@ -247,9 +352,18 @@ function AppShellContent({
       )}
       <StartWorkoutConfirmation
         visible={showWorkoutConfirmation}
+        prescription={prescription}
+        loading={prescriptionLoading}
         onCancel={() => setShowWorkoutConfirmation(false)}
         onConfirm={startWorkout}
+        generating={generatingWorkout}
+        onGenerate={() => { void generateWorkout(); }}
       />
+      <MissedSessionDecisionModal
+        visible={tab !== 'workout' && schedule.resolution.status === 'MISSED_SESSION_DECISION_REQUIRED'}
+        onChoose={(decision) => { void schedule.resolveMiss(decision); }}
+      />
+      <ProgressionFeedbackModal kind={progression.feedback} onDismiss={progression.dismissFeedback} />
       {/*
         Settings, Security, Assessment, EditProfile, Consistency, Support
         (help/success halves) and SubscriptionCenter are the secondary
@@ -345,6 +459,32 @@ function AppShellContent({
         inactiveMode="materialized"
       >
         <EditProfileScreen onBack={() => setShowEditProfile(false)} />
+      </PersistentScreen>
+      {/*
+        Meu Plano is a pure VIEW of `prescription`/`schedule` — the exact
+        same values AppShell already resolved above for Home/Workout. It
+        never mounts its own `useWorkoutPrescription`/`useWorkoutSchedule`,
+        so opening it can never trigger a second reconciliation/generation
+        attempt.
+      */}
+      {/*
+        No `prewarm` — PREWARM_ROUTE_IDS (src/lib/prewarmRoutes.ts) is a
+        curated, per-screen-audited list; this screen hasn't been through
+        that audit. Lazy-mount + keep-alive only (same pattern as
+        HelpArticleScreen/SupportFormScreen): first open pays a normal mount
+        cost, every subsequent open is a pure activity toggle.
+      */}
+      <PersistentScreen
+        active={showMyPlan}
+        activeStyle={FULL_BLEED.overlayZ50}
+        inactiveMode="materialized"
+      >
+        <MyPlanScreen
+          prescription={prescription}
+          loading={prescriptionLoading}
+          schedule={schedule}
+          onBack={() => setShowMyPlan(false)}
+        />
       </PersistentScreen>
       <PersistentScreen
         active={showSubscriptionCenter}
@@ -451,20 +591,38 @@ function AppShellContent({
 
 function StartWorkoutConfirmation({
   visible,
+  prescription,
+  loading,
   onCancel,
   onConfirm,
+  generating,
+  onGenerate,
 }: {
   visible: boolean;
+  prescription: PrescriptionResult;
+  /** Same meaning as `useWorkoutPrescription`'s `loading` — see HomeScreen's doc comment. Keeps this modal from ever reading `prescription.status` as a real outcome before the first resolution lands. */
+  loading: boolean;
   onCancel: () => void;
   /** FASE 5: this is the pure "start the session" action — it runs only
    *  when `<PremiumAction>` below has already allowed it. The caller no
    *  longer needs to know START_WORKOUT is a Premium capability at all. */
   onConfirm: () => void;
+  generating: boolean;
+  onGenerate: () => void;
 }) {
   // Product invariant: this confirmation belongs to the same Dark artwork
   // as the Today Workout poster, even when the surrounding app uses Light.
   const theme = darkTheme;
   const { t } = useTranslation('home');
+  const canStart = prescription.status === 'SUCCESS';
+  const showLoadingState = loading && !canStart;
+  const outcomeKey = showLoadingState
+    ? 'loadingState'
+    : generating
+      ? 'generatingState'
+      : canStart
+        ? 'unavailable' // unused when canStart — title/body below branch on `canStart` first
+        : prescriptionOutcomeKey(prescription.status);
   return (
     <Modal
       visible={visible}
@@ -534,7 +692,7 @@ function StartWorkoutConfirmation({
               {t('todayCard.kicker').toUpperCase()}
             </Slash>
             <Display size={26} color={theme.colors.textPrimary} style={{ marginTop: 9 }}>
-              {t('todayCard.confirm.title').toUpperCase()}
+              {t(canStart ? 'todayCard.confirm.title' : `prescription.${outcomeKey}.title`).toUpperCase()}
             </Display>
             <Text
               style={{
@@ -545,7 +703,9 @@ function StartWorkoutConfirmation({
                 marginTop: 8,
               }}
             >
-              {t('todayCard.confirm.question')}
+              {canStart
+                ? t('todayCard.confirm.question')
+                : t(`prescription.${outcomeKey}.body`)}
             </Text>
             <Text
               style={{
@@ -556,7 +716,7 @@ function StartWorkoutConfirmation({
                 marginTop: 1,
               }}
             >
-              {t('mock.today.name')}?
+              {canStart ? `${prescription.plan.templateId} · ${prescription.plan.split}` : ''}
             </Text>
 
             {/* FASE 5: <PremiumAction> is the entry-point gate — locked stays
@@ -564,7 +724,7 @@ function StartWorkoutConfirmation({
                 before either starting the session or opening
                 PremiumRequiredSheet, exactly like the Fase 4 behavior this
                 replaces. */}
-            <PremiumAction capability="START_WORKOUT" onAllowed={onConfirm}>
+            {canStart && <PremiumAction capability="START_WORKOUT" onAllowed={onConfirm}>
               {({ locked, onPress }) => (
                 <Pressable
                   accessibilityRole="button"
@@ -603,7 +763,45 @@ function StartWorkoutConfirmation({
                   </Text>
                 </Pressable>
               )}
-            </PremiumAction>
+            </PremiumAction>}
+            {/*
+              Fallback only — automatic reconciliation (`useWorkoutPrescription`)
+              already retries on every app open. This button exists for a
+              technical/persistence failure a manual retry might actually fix
+              (`canRetryGeneration`); it never appears for
+              `NEEDS_QUESTIONNAIRE_UPDATE` (retrying with the same answers
+              fails identically — the user must update the questionnaire) or
+              for `BLOCKED`/`REQUIRES_CLEARANCE` (fail-closed; a retry button
+              here would look like a way around a safety stop).
+            */}
+            {!canStart && !generating && !showLoadingState && canRetryGeneration(prescription.status) && (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t('prescription.generate')}
+                disabled={generating}
+                onPress={onGenerate}
+                style={{
+                  height: 48,
+                  marginTop: 18,
+                  borderRadius: 10,
+                  borderBottomRightRadius: 0,
+                  backgroundColor: theme.colors.inverseSurface,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  opacity: generating ? 0.6 : 1,
+                }}
+              >
+                <Text style={{
+                  color: theme.colors.inverseForeground,
+                  fontFamily: theme.fonts.display,
+                  fontSize: 15,
+                  letterSpacing: 1.4,
+                  textTransform: 'uppercase',
+                }}>
+                  {t(generating ? 'prescription.generating' : 'prescription.generate')}
+                </Text>
+              </Pressable>
+            )}
             <Pressable
               accessibilityRole="button"
               onPress={onCancel}
@@ -617,6 +815,97 @@ function StartWorkoutConfirmation({
         </Pressable>
       </Pressable>
     </Modal>
+  );
+}
+
+/**
+ * Renders in place of `WorkoutScreen` for every non-`SESSION_READY`
+ * resolution (docs/workout-lifecycle/03_SCHEDULE_ENGINE.md §Bloqueio real) —
+ * the same `home:schedule.*` copy Home uses, so the Treino tab and Home can
+ * never disagree about whether today is done/resting (docs §Consistência
+ * com Meu Plano). No "iniciar novamente" affordance exists here at all —
+ * this screen has no start action, only a way back.
+ */
+function WorkoutTabBlockedState({
+  resolution,
+  plan,
+  onDone,
+}: {
+  resolution: Exclude<ScheduleResolution, { status: 'SESSION_READY' }>;
+  plan: FinalWorkoutPlan;
+  onDone: () => void;
+}) {
+  const { theme } = useTheme();
+  const { t } = useTranslation('home');
+  const tLoose = t as unknown as LooseTranslate;
+
+  const copyKey =
+    resolution.status === 'TODAY_COMPLETED' ? 'completedToday' :
+    resolution.status === 'REST_DAY' ? 'restDay' :
+    resolution.status === 'ACTIVE_RECOVERY_DAY' ? 'activeRecovery' :
+    resolution.status === 'SCHEDULE_SETUP_REQUIRED' ? 'setupRequired' :
+    resolution.status === 'MISSED_SESSION_DECISION_REQUIRED' ? 'missedDecision' :
+    null;
+
+  const nextUp = resolution.status === 'REST_DAY' || resolution.status === 'ACTIVE_RECOVERY_DAY' || resolution.status === 'TODAY_COMPLETED'
+    ? { session: plan.sessions[resolution.nextSessionIndex] ?? null, date: resolution.nextWorkoutDate }
+    : null;
+
+  return (
+    <ScreenBg>
+      <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
+        <View style={{ flex: 1, paddingHorizontal: 26, paddingTop: 20, paddingBottom: 36 }}>
+          <OutlineNumber
+            size={280}
+            color={theme.colors.decorativeOutline}
+            style={{ position: 'absolute', top: -40, right: -60, opacity: 0.35 }}
+          >
+            {resolution.status === 'TODAY_COMPLETED' ? '✓' : '—'}
+          </OutlineNumber>
+
+          <Slash style={{ marginBottom: 14 }}>
+            {(copyKey ? t(`schedule.${copyKey}.title`) : t('todayCard.kicker')).toUpperCase()}
+          </Slash>
+          <Display size={28} style={{ marginTop: 4, maxWidth: 300 }}>
+            {(copyKey ? t(`schedule.${copyKey}.body`) : '').toUpperCase()}
+          </Display>
+
+          {nextUp?.session && (
+            <Card style={{ marginTop: 30, padding: 18 }}>
+              <MonoLabel>{t('schedule.nextWorkout.label').toUpperCase()}</MonoLabel>
+              <Text
+                style={{
+                  fontFamily: theme.fonts.uiBold,
+                  fontSize: 18,
+                  color: theme.colors.textPrimary,
+                  marginTop: 8,
+                }}
+              >
+                {t('schedule.nextWorkout.value', {
+                  weekday: tLoose(`quiz:trainingDays.options.${weekdayOfLocalDate(nextUp.date)}`),
+                  session: resolveSessionDisplayName(tLoose, nextUp.session.name, nextUp.session.type),
+                })}
+              </Text>
+            </Card>
+          )}
+
+          <View style={{ flex: 1 }} />
+          <CtaButton onPress={onDone}>
+            <Text
+              style={{
+                color: theme.colors.primaryForeground,
+                fontFamily: theme.fonts.display,
+                fontSize: 15,
+                letterSpacing: 1.5,
+                textTransform: 'uppercase',
+              }}
+            >
+              {tLoose('common:actions.back')}
+            </Text>
+          </CtaButton>
+        </View>
+      </SafeAreaView>
+    </ScreenBg>
   );
 }
 

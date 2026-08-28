@@ -26,4 +26,9 @@ describe('AppState quiz identity scoping (regression: account A -> account B lea
     expect(appState).not.toContain("from './AuthContext'");
     expect(appState).not.toContain('firebase');
   });
+
+  it('(26) preparedWorkoutProgram (Phase 3) resets through the exact same identity-transition mechanism as quiz — logout/login never carries a stale prepared result into the wrong account', () => {
+    expect(appState).toContain('nextValueForIdentity(lastUidRef.current, uid, preparedWorkoutProgram, null)');
+    expect(appState).toContain('const [preparedWorkoutProgram, setPreparedWorkoutProgram] = useState');
+  });
 });

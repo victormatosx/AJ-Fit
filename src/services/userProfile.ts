@@ -50,7 +50,8 @@ import {
  *       fields the legacy migration below can populate are typed here; the
  *       rest are backend-only, written exclusively via
  *       functions/src/billing/subscriptionSync.ts)
- *     metadata { role, activeWorkoutId, createdAt, updatedAt }
+ *     metadata { role, activeWorkoutId (legacy), createdAt, updatedAt }
+ *   users/{userId}/workoutProgramState/active { programId, updatedAt }
  *
  *   users/{userId}/questionnaires/{questionnaireId}
  *     answers, version, createdAt
@@ -246,8 +247,9 @@ export function hasMeaningfulAnswers(answers?: QuestionnaireAnswers | null): boo
 export async function provisionNewUser(
   user: User,
   input: { name?: string; answers?: QuestionnaireAnswers | null },
-): Promise<void> {
+): Promise<string | null> {
   const batch = writeBatch(db);
+  let questionnaireId: string | null = null;
 
   batch.set(
     userRef(user.uid),
@@ -283,6 +285,7 @@ export async function provisionNewUser(
   // an empty questionnaire (e.g. a social login that skipped onboarding).
   if (hasMeaningfulAnswers(input.answers)) {
     const qDoc = doc(questionnairesRef(user.uid));
+    questionnaireId = qDoc.id;
     batch.set(qDoc, {
       answers: toPersistedAnswers(input.answers as Quiz),
       version: 1,
@@ -291,6 +294,7 @@ export async function provisionNewUser(
   }
 
   await batch.commit();
+  return questionnaireId;
 }
 
 /**
@@ -407,6 +411,26 @@ export async function getLatestQuestionnaire(
   });
   return {
     id: d.id,
+    answers: fromPersistedAnswers(raw.answers, raw.createdAt),
+    version: raw.version,
+    createdAt: raw.createdAt,
+  };
+}
+
+/**
+ * Reads one specific questionnaire by id — used by the Progression Engine to
+ * reuse the exact immutable questionnaire already associated with a program
+ * (docs/workout-lifecycle/09... §27 — never the "latest" one, which may have
+ * changed since; a stage transition must not silently pick up newer answers).
+ * Returns `null` when the doc doesn't exist; rethrows on a failed read, same
+ * contract as `getLatestQuestionnaire`.
+ */
+export async function getQuestionnaireById(uid: string, questionnaireId: string): Promise<QuestionnaireDoc | null> {
+  const snapshot = await getDoc(doc(questionnairesRef(uid), questionnaireId));
+  if (!snapshot.exists()) return null;
+  const raw = snapshot.data() as { answers?: Partial<PersistedQuizAnswers>; version: number; createdAt: Timestamp | null };
+  return {
+    id: snapshot.id,
     answers: fromPersistedAnswers(raw.answers, raw.createdAt),
     version: raw.version,
     createdAt: raw.createdAt,

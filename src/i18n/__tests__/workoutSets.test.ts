@@ -73,37 +73,90 @@ describe('workout — sets.number label per locale', () => {
 });
 
 describe('workout — summary (weighted vs bodyweight) with reps plural', () => {
+  // `reps` is always the raw display string `WorkoutScreen` actually passes
+  // (via `pluralCountForReps` for `count`, `s0.r` verbatim for `{{reps}}`) —
+  // a plain number, but also possibly a range ("8-12") or duration ("30s").
+  // `count` and the displayed `reps` are deliberately independent so a range
+  // still renders its exact text while correctly picking the plural form.
   it.each([
-    ['pt-BR', 1, 60, '1 rep × 60 kg'],
-    ['pt-BR', 10, 60, '10 reps × 60 kg'],
-    ['en', 1, 60, '1 rep × 60 kg'],
-    ['en', 10, 60, '10 reps × 60 kg'],
-    ['es', 1, 60, '1 rep × 60 kg'],
-    ['es', 10, 60, '10 reps × 60 kg'],
-  ] as Array<[SupportedLanguage, number, number, string]>)(
-    '[%s] weighted %i × %i',
-    async (lang, reps, weight, expected) => {
+    ['pt-BR', 1, '1', 60, '1 rep × 60 kg'],
+    ['pt-BR', 2, '10', 60, '10 reps × 60 kg'],
+    ['pt-BR', 2, '8-12', 60, '8-12 reps × 60 kg'],
+    ['en', 1, '1', 60, '1 rep × 60 kg'],
+    ['en', 2, '10', 60, '10 reps × 60 kg'],
+    ['en', 2, '8-12', 60, '8-12 reps × 60 kg'],
+    ['es', 1, '1', 60, '1 rep × 60 kg'],
+    ['es', 2, '10', 60, '10 reps × 60 kg'],
+    ['es', 2, '8-12', 60, '8-12 reps × 60 kg'],
+  ] as Array<[SupportedLanguage, number, string, number, string]>)(
+    '[%s] weighted %s × %i',
+    async (lang, count, reps, weight, expected) => {
       const i18n = await freshI18nAt(lang);
       const t = i18n.getFixedT(lang, 'workout' as 'workout') as unknown as LooseT;
-      expect(t('sets.summaryWeighted', { count: reps, weight, unit: 'kg' })).toBe(expected);
+      expect(t('sets.summaryWeighted', { count, reps, weight, unit: 'kg' })).toBe(expected);
     },
   );
 
   it.each([
-    ['pt-BR', 1, '1 rep × peso corporal'],
-    ['pt-BR', 8, '8 reps × peso corporal'],
-    ['en', 1, '1 rep × bodyweight'],
-    ['en', 8, '8 reps × bodyweight'],
-    ['es', 1, '1 rep × peso corporal'],
-    ['es', 8, '8 reps × peso corporal'],
-  ] as Array<[SupportedLanguage, number, string]>)(
-    '[%s] bodyweight %i',
-    async (lang, reps, expected) => {
+    ['pt-BR', 1, '1', '1 rep × peso corporal'],
+    ['pt-BR', 2, '8', '8 reps × peso corporal'],
+    ['pt-BR', 2, '30s', '30s reps × peso corporal'],
+    ['en', 1, '1', '1 rep × bodyweight'],
+    ['en', 2, '8', '8 reps × bodyweight'],
+    ['en', 2, '30s', '30s reps × bodyweight'],
+    ['es', 1, '1', '1 rep × peso corporal'],
+    ['es', 2, '8', '8 reps × peso corporal'],
+    ['es', 2, '30s', '30s reps × peso corporal'],
+  ] as Array<[SupportedLanguage, number, string, string]>)(
+    '[%s] bodyweight %s',
+    async (lang, count, reps, expected) => {
       const i18n = await freshI18nAt(lang);
       const t = i18n.getFixedT(lang, 'workout' as 'workout') as unknown as LooseT;
-      expect(t('sets.summaryBodyweight', { count: reps })).toBe(expected);
+      expect(t('sets.summaryBodyweight', { count, reps })).toBe(expected);
     },
   );
+
+  it.each([
+    ['pt-BR', 1, '1', '1 rep'],
+    ['pt-BR', 2, '8', '8 reps'],
+    ['pt-BR', 2, '30s', '30s reps'],
+    ['en', 1, '1', '1 rep'],
+    ['en', 2, '8', '8 reps'],
+    ['en', 2, '30s', '30s reps'],
+    ['es', 1, '1', '1 rep'],
+    ['es', 2, '8', '8 reps'],
+    ['es', 2, '30s', '30s reps'],
+  ] as Array<[SupportedLanguage, number, string, string]>)(
+    // No weight registered yet — WorkoutScreen shows reps only, never
+    // "bodyweight"/"peso corporal" as a stand-in for "not logged yet".
+    '[%s] no weight registered yet %s',
+    async (lang, count, reps, expected) => {
+      const i18n = await freshI18nAt(lang);
+      const t = i18n.getFixedT(lang, 'workout' as 'workout') as unknown as LooseT;
+      expect(t('sets.summaryReps', { count, reps })).toBe(expected);
+    },
+  );
+
+  it('never returns the raw key when reps is a non-numeric range/duration (the exact bug this hook regresses)', async () => {
+    const i18n = await freshI18nAt('pt-BR');
+    const t = i18n.getFixedT('pt-BR', 'workout' as 'workout') as unknown as LooseT;
+    for (const reps of ['8-12', '30s', '—']) {
+      const weighted = t('sets.summaryWeighted', {
+        count: /^1$/.test(reps) ? 1 : 2,
+        reps,
+        weight: 60,
+        unit: 'kg',
+      });
+      const bodyweight = t('sets.summaryBodyweight', {
+        count: /^1$/.test(reps) ? 1 : 2,
+        reps,
+      });
+      expect(weighted).not.toContain('summaryWeighted');
+      expect(weighted).not.toContain('{{');
+      expect(bodyweight).not.toContain('summaryBodyweight');
+      expect(bodyweight).not.toContain('{{');
+    }
+  });
 });
 
 describe('workout — CTA "complete set N" per locale', () => {

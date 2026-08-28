@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   initialize: vi.fn(),
@@ -70,6 +70,50 @@ describe('Firebase JS CustomProvider bridge', () => {
     mocks.platform = 'web';
     expect(initializeFirebaseAppCheck({} as never)).toBeNull();
     expect(mocks.initialize).not.toHaveBeenCalled();
+  });
+
+  describe('__DEV__ debug-token fallback (audit: ERR_APP_CHECK_TOKEN / confirmCommercialGate functions/unauthenticated)', () => {
+    const globalWithDev = globalThis as typeof globalThis & { __DEV__?: boolean };
+
+    afterEach(() => {
+      delete globalWithDev.__DEV__;
+      delete (globalThis as typeof globalThis & { FIREBASE_APPCHECK_DEBUG_TOKEN?: unknown })
+        .FIREBASE_APPCHECK_DEBUG_TOKEN;
+    });
+
+    it('initializes via the debug-token exchange when the native module is absent AND __DEV__ is true', () => {
+      globalWithDev.__DEV__ = true;
+      mocks.available.mockReturnValue(false);
+
+      const result = initializeFirebaseAppCheck({} as never);
+
+      expect(result).toEqual({ name: 'app-check-instance' });
+      expect(mocks.initialize).toHaveBeenCalledTimes(1);
+      expect(
+        (globalThis as typeof globalThis & { FIREBASE_APPCHECK_DEBUG_TOKEN?: unknown })
+          .FIREBASE_APPCHECK_DEBUG_TOKEN,
+      ).toBe(true);
+    });
+
+    it('never sets the debug-token flag when the native module IS available, even in __DEV__ (production attestation path untouched)', () => {
+      globalWithDev.__DEV__ = true;
+      mocks.available.mockReturnValue(true);
+
+      initializeFirebaseAppCheck({} as never);
+
+      expect(
+        (globalThis as typeof globalThis & { FIREBASE_APPCHECK_DEBUG_TOKEN?: unknown })
+          .FIREBASE_APPCHECK_DEBUG_TOKEN,
+      ).toBeUndefined();
+    });
+
+    it('still returns null outside __DEV__ when the native module is absent — no debug fallback in production', () => {
+      globalWithDev.__DEV__ = false;
+      mocks.available.mockReturnValue(false);
+
+      expect(initializeFirebaseAppCheck({} as never)).toBeNull();
+      expect(mocks.initialize).not.toHaveBeenCalled();
+    });
   });
 
   it('reuses one JS App Check instance across Fast Refresh', () => {

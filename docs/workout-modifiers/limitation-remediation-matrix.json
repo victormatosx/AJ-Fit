@@ -1,0 +1,15 @@
+{
+  "generatedAt": "2026-08-27T15:20:24.960Z",
+  "methodology": "Transform of docs/workout-modifiers/limitation-dataset-audit.json — no re-resolution, no clinical judgment. clinicalDecision is always null.",
+  "totalRows": 0,
+  "totalDecisionUnits": 0,
+  "reviewStatusModel": {
+    "PENDING": "Row identified by the audit, not yet triaged.",
+    "NEEDS_CLINICAL_REVIEW": "Triaged — requires a content/clinical decision before any dataset edit.",
+    "APPROVED": "A specific resolution was clinically approved but not yet applied to the dataset.",
+    "REJECTED": "A proposed resolution was reviewed and rejected; needs a different proposal.",
+    "RESOLVED": "Applied to the dataset AND re-validated by the real resolver (see quality gate) as producing a valid combination."
+  },
+  "rows": [],
+  "queue": []
+}

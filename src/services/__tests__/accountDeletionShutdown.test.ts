@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   clearOnboardingDraft: vi.fn(),
   clearWorkoutSubstitutionPreferences: vi.fn(),
   clearStoredUnitsPreference: vi.fn(),
+  clearPrescriptionSnapshotsForUser: vi.fn(),
 }));
 
 vi.mock('../photoVaultEncryptedCache', () => ({
@@ -19,6 +20,9 @@ vi.mock('../workoutSubstitutionsStorage', () => ({
 vi.mock('../../units/unitsStorage', () => ({
   clearStoredUnitsPreference: mocks.clearStoredUnitsPreference,
 }));
+vi.mock('../../workoutPrescription/storage', () => ({
+  clearPrescriptionSnapshotsForUser: mocks.clearPrescriptionSnapshotsForUser,
+}));
 
 import { finalizeAccountDeletionClientShutdown } from '../accountDeletionShutdown';
 
@@ -27,6 +31,7 @@ beforeEach(() => {
   mocks.clearOnboardingDraft.mockResolvedValue(undefined);
   mocks.clearWorkoutSubstitutionPreferences.mockResolvedValue(undefined);
   mocks.clearStoredUnitsPreference.mockResolvedValue(undefined);
+  mocks.clearPrescriptionSnapshotsForUser.mockResolvedValue(undefined);
 });
 
 describe('finalizeAccountDeletionClientShutdown', () => {
@@ -63,6 +68,12 @@ describe('finalizeAccountDeletionClientShutdown', () => {
     const logout = vi.fn().mockResolvedValue(undefined);
     await finalizeAccountDeletionClientShutdown('uid-1', logout);
     expect(mocks.clearStoredUnitsPreference).toHaveBeenCalledOnce();
+  });
+
+  it('clears every immutable workout prescription snapshot for the deleted uid', async () => {
+    const logout = vi.fn().mockResolvedValue(undefined);
+    await finalizeAccountDeletionClientShutdown('uid-1', logout);
+    expect(mocks.clearPrescriptionSnapshotsForUser).toHaveBeenCalledWith('uid-1');
   });
 
   it('a failure clearing the units preference does not block the other cleanups or logout', async () => {

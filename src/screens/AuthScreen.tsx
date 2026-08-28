@@ -23,6 +23,7 @@ import { radii, sizes, spacing } from '../theme/tokens';
 import { useTheme } from '../theme';
 import { useAuth } from '../state/AuthContext';
 import { useAppState } from '../state/AppState';
+import { logInfo } from '../lib/logger';
 import {
   AccountLinkingRequiredError,
   SocialAuthCancelledError,
@@ -128,7 +129,7 @@ export function AuthScreen({
     completeLinkingWithPassword,
     completeLinkingWithProvider,
   } = useAuth();
-  const { quiz } = useAppState();
+  const { quiz, preparedWorkoutProgram } = useAppState();
 
   // A user who tapped "Entrar" directly should land on the login form, not
   // the signup copy that references a plan they never built (see
@@ -137,6 +138,17 @@ export function AuthScreen({
   const [mode, setMode] = useState<Mode>(
     entryContext?.origin === 'directLogin' ? 'login' : 'signup',
   );
+
+  // Diagnostic only. See the matching comment in OnboardingFunnelScreen —
+  // pins down whether the reported post-purchase flicker actually re-mounts
+  // THIS screen (the central gate's `!authenticated` branch would route
+  // here, not to the questionnaire, if `Boolean(user)` transiently flips
+  // false while `screen` is already 'paywall') on the next occurrence.
+  useEffect(() => {
+    logInfo('navigation', 'auth_screen_mounted', { origin: entryContext?.origin });
+    return () => logInfo('navigation', 'auth_screen_unmounted', {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [name, setName] = useState(entryContext?.name ?? '');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -253,7 +265,7 @@ export function AuthScreen({
     setLinking(null);
     setSocialBusy(provider);
     try {
-      await signInWithProvider(provider, quiz);
+      await signInWithProvider(provider, quiz, name);
       // Navigation is decided centrally by RootNavigator from the resulting
       // auth/questionnaire state — this screen doesn't pick a destination.
     } catch (err) {
@@ -280,7 +292,7 @@ export function AuthScreen({
     setError(null);
     setSocialBusy(linking.attempted);
     try {
-      await completeLinkingWithPassword(linking.email, linkPassword, quiz);
+      await completeLinkingWithPassword(linking.email, linkPassword, quiz, name);
     } catch (err) {
       setError(localizedAuthError(err, t, 'errors.linkFailed'));
     } finally {
@@ -295,7 +307,7 @@ export function AuthScreen({
     setError(null);
     setSocialBusy(existing);
     try {
-      await completeLinkingWithProvider(existing, quiz);
+      await completeLinkingWithProvider(existing, quiz, name);
     } catch (err) {
       if (err instanceof SocialAuthCancelledError) {
         // user dismissed the native sheet
@@ -347,7 +359,7 @@ export function AuthScreen({
     setLoading(true);
     try {
       if (mode === 'signup') {
-        await signUp(email, password, name, quiz);
+        await signUp(email, password, name, quiz, preparedWorkoutProgram);
       } else if (mode === 'login') {
         clearPendingSocialAuthState();
         await signIn(email, password);

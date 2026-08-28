@@ -1,0 +1,6 @@
+{
+  "generatedAt": "2026-08-27T15:20:24.693Z",
+  "note": "ZERO-DEBT quality baseline for reachable T001-T090 exerciseId:region pairs. See docs/workout-modifiers/LIMITATION_DATASET_AUDIT.md. Never regenerate this file to absorb a regression.",
+  "knownInvalidCount": 0,
+  "knownInvalid": {}
+}

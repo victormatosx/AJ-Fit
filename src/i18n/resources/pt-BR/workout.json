@@ -13,6 +13,21 @@
     "skipBusy": "Pular · aparelho ocupado",
     "completeSet": "Concluir série {{number}}"
   },
+  "cardioFinisher": {
+    "kicker": "Pós-musculação",
+    "title": "Cardio final",
+    "optional": "Opcional · faça somente se estiver se sentindo bem e sem sintomas.",
+    "optionSeparator": " ou ",
+    "options": {
+      "walking": "Caminhada",
+      "stationary-bike": "Bicicleta ergométrica"
+    },
+    "intensities": {
+      "lightModerate": "Leve a moderada",
+      "comfortableLightModerate": "Leve a moderada, confortável",
+      "moderate": "Moderada"
+    }
+  },
   "badges": {
     "resumed": "Retomado"
   },
@@ -47,10 +62,12 @@
     "current": "Agora",
     "registered": "Registrado",
     "lastTime": "Última vez",
-    "summaryWeighted_one": "{{count}} rep × {{weight}} {{unit}}",
-    "summaryWeighted_other": "{{count}} reps × {{weight}} {{unit}}",
-    "summaryBodyweight_one": "{{count}} rep × peso corporal",
-    "summaryBodyweight_other": "{{count}} reps × peso corporal"
+    "summaryWeighted_one": "{{reps}} rep × {{weight}} {{unit}}",
+    "summaryWeighted_other": "{{reps}} reps × {{weight}} {{unit}}",
+    "summaryBodyweight_one": "{{reps}} rep × peso corporal",
+    "summaryBodyweight_other": "{{reps}} reps × peso corporal",
+    "summaryReps_one": "{{reps}} rep",
+    "summaryReps_other": "{{reps}} reps"
   },
   "reps": {
     "label": "Reps"
@@ -114,12 +131,23 @@
   },
   "muscleGroups": {
     "chest": "Peitoral",
-    "upperChest": "Peitoral superior",
-    "shoulders": "Ombro",
-    "sideDelt": "Ombro lateral",
-    "frontDelt": "Ombro frontal",
+    "lats": "Dorsal",
+    "upper_back": "Costas superiores",
+    "traps": "Trapézio",
+    "lower_back": "Lombar",
+    "front_deltoid": "Ombro frontal",
+    "side_deltoid": "Ombro lateral",
+    "rear_deltoid": "Ombro posterior",
+    "biceps": "Bíceps",
     "triceps": "Tríceps",
-    "tricepsChest": "Tríceps e peito"
+    "forearms": "Antebraço",
+    "quads": "Quadríceps",
+    "hamstrings": "Posterior de coxa",
+    "glutes": "Glúteos",
+    "adductors": "Adutores",
+    "abductors": "Abdutores",
+    "calves": "Panturrilha",
+    "abs": "Abdômen"
   },
   "exercises": {
     "Barbell_Bench_Press_-_Medium_Grip": "Supino reto máquina",
@@ -152,5 +180,85 @@
       "keyPoint2": "Desça controlando a fase excêntrica",
       "keyPoint3": "Não trave os cotovelos no topo"
     }
+  },
+  "sessionDisplayNames": {
+    "Peito, Ombros & Tríceps · Push": "Peito, Ombros & Tríceps · Push",
+    "Costas & Bíceps · Pull": "Costas & Bíceps · Pull",
+    "Pernas Completas · Legs": "Pernas Completas · Legs",
+    "Superiores Completos · Upper": "Superiores Completos · Upper",
+    "Inferiores Completos · Lower": "Inferiores Completos · Lower",
+    "Peito, Ombros & Tríceps · Push B": "Peito, Ombros & Tríceps · Push B",
+    "Costas & Bíceps · Pull B": "Costas & Bíceps · Pull B",
+    "Pernas Completas · Legs B": "Pernas Completas · Legs B",
+    "Superiores · Ênfase Push": "Superiores · Ênfase Push",
+    "Superiores · Ênfase Pull": "Superiores · Ênfase Pull",
+    "Inferiores Completos": "Inferiores Completos",
+    "Força Total A": "Força Total A",
+    "Força Total B": "Força Total B",
+    "Força Total C": "Força Total C",
+    "Condicionamento Total A": "Condicionamento Total A",
+    "Condicionamento Total B": "Condicionamento Total B",
+    "Cardio Contínuo": "Cardio Contínuo",
+    "Cardio Leve & Mobilidade": "Cardio Leve & Mobilidade"
+  },
+  "sessionNames": {
+    "A": "Treino A",
+    "B": "Treino B",
+    "Aeróbico + Core": "Aeróbico + Core",
+    "Aeróbico + Mobilidade": "Aeróbico + Mobilidade",
+    "Aeróbico contínuo": "Aeróbico Contínuo",
+    "Aeróbico leve": "Aeróbico Leve",
+    "Bench": "Supino",
+    "Cardio + Core": "Cardio + Core",
+    "Cardio + Equilíbrio": "Cardio + Equilíbrio",
+    "Conditioning A": "Condicionamento A",
+    "Conditioning B": "Condicionamento B",
+    "Conditioning B + intervalos": "Condicionamento B + Intervalos",
+    "Conditioning C": "Condicionamento C",
+    "Força A": "Força A",
+    "Força B": "Força B",
+    "Força C": "Força C",
+    "Força funcional A": "Força Funcional A",
+    "Força funcional B": "Força Funcional B",
+    "Full Body A": "Corpo Inteiro A",
+    "Full Body B": "Corpo Inteiro B",
+    "Full Body C": "Corpo Inteiro C",
+    "Hinge/Pull": "Dobradiça de Quadril + Puxada",
+    "Interval + resistência": "Intervalado + Resistência",
+    "Intervalado": "Intervalado",
+    "Legs": "Pernas",
+    "Legs B": "Pernas B",
+    "Lower": "Inferiores",
+    "Lower + Full": "Inferiores + Corpo Inteiro",
+    "Lower A": "Inferiores A",
+    "Lower B": "Inferiores B",
+    "Lower extra": "Inferiores Extra",
+    "Lower secundário": "Inferiores Secundário",
+    "Movimento leve": "Movimento Leve",
+    "Pull": "Puxar",
+    "Pull B": "Puxar B",
+    "Push": "Empurrar",
+    "Push B": "Empurrar B",
+    "Recuperação ativa": "Recuperação Ativa",
+    "Squat": "Agachamento",
+    "Upper": "Superiores",
+    "Upper A": "Superiores A",
+    "Upper B": "Superiores B",
+    "Upper Press": "Desenvolvimento Superior",
+    "Upper Pull": "Puxada Superior",
+    "Upper Pull / técnico": "Puxada Superior / Técnico",
+    "Upper Push": "Empurrar Superior",
+    "Upper extra": "Superiores Extra"
+  },
+  "sessionTypes": {
+    "resistance": "Resistência",
+    "strength": "Força",
+    "cardio": "Cardio",
+    "circuit": "Circuito",
+    "mixed": "Misto",
+    "functionalStrength": "Força Funcional",
+    "interval": "Intervalado",
+    "recovery": "Recuperação",
+    "balanceCardio": "Cardio + Equilíbrio"
   }
 }

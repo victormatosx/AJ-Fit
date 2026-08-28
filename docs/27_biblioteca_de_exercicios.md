@@ -135,9 +135,13 @@ tinha esse campo preenchido no momento da mudança, então não houve
 migração de dados.
 
 - Armazenamento: Firebase Storage, nunca Firestore (sem blob/base64).
-  Path determinístico: `exercises/{exerciseId}/execution/{vertical,horizontal}.webm`.
-- Formato aceito: exclusivamente `.webm` (`video/webm`), validado por
+  Path determinístico: `exercises/{exerciseId}/execution/{vertical,horizontal}.mp4`.
+- Formato aceito: exclusivamente `.mp4` (`video/mp4`, H.264), validado por
   extensão e MIME tanto no cliente quanto no Storage Rules (`storage.rules`).
+  Era `.webm` originalmente; migrado porque `expo-video`/AVFoundation no
+  iOS não decodifica WebM — todo vídeo `.webm` falhava silenciosamente ao
+  abrir "Ver Execução" no app, mesmo com a referência correta no
+  Firestore/Storage (ver `src/components/fitness/ExerciseGif.tsx`).
 - Orientação: validada no cliente lendo as dimensões reais do vídeo antes
   do upload — vertical exige altura > largura, horizontal exige largura >
   altura; vídeos quadrados são rejeitados nos dois slots.

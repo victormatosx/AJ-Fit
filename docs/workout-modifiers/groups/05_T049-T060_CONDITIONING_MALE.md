@@ -461,10 +461,10 @@ template.
     prevista no template.
 -   `NO_HIGH_IMPACT`: trocar modalidade, não necessariamente reduzir o
     estímulo cardiovascular.
--   `BEGINNER`: reduzir densidade, duração ou número de voltas antes de
-    tornar os movimentos tecnicamente complexos.
--   Sessão curta: reduzir voltas/duração e preservar aquecimento/volta à
-    calma quando relevantes.
+-   `BEGINNER`: reduzir apenas a quantidade de exercícios; duração/ciclos dos
+    itens retidos permanecem iguais.
+-   Sessão curta: reduzir a lista pela regra 60%/80%; não alterar voltas ou
+    duração interna para estimar minutos.
 -   Cardio preferido só pode ser escolhido se impacto, equipamento e
     limitações permitirem.
 -   HIIT não deve ser usado como fallback universal para emagrecimento.
@@ -477,31 +477,20 @@ template.
 
 Quando aplicável:
 
-**Beginner** - reduzir complexidade desnecessária; - reduzir volume
-inicial quando o template exceder a capacidade atual; - favorecer
-execução estável e repetível; - manter margem de esforço conservadora; -
-não usar técnicas avançadas como requisito.
+**Beginner** - adaptação temporária por lista: manter 50% dos exercícios na
+Week 1, 70% na Week 2 e todos na Week 3+, usando `ceil`. A dose interna dos
+itens retidos permanece igual; não há modifier de intensidade.
 
-**Intermediate** - tende a preservar o template-base; - ajustes vêm
+**Intermediate** - preserva o template-base; - ajustes vêm
 principalmente de outras variáveis.
 
-**Advanced** - pode tolerar maior especificidade/dose quando a família e
-recuperação permitirem; - não significa adicionar volume
-automaticamente.
+**Advanced** - preserva o template-base; nível sozinho não adiciona
+volume, intensidade ou técnicas. Progressão pertence ao motor futuro.
 
 ### Duração
 
-Ordem de adaptação:
-
-``` text
-preservar constraints
-→ preservar componentes prioritários
-→ remover redundância
-→ reduzir acessórios de menor prioridade
-→ reorganizar pares/supersets compatíveis
-→ reduzir séries quando necessário
-→ validar duração e estrutura mínima
-```
+30 mantém 60% e 45 mantém 80% dos exercícios com `ceil`; 60/90 preservam
+a lista. Usar ordem do template e signal de priority, sem estimar minutos.
 
 ### Equipamento
 
@@ -535,33 +524,21 @@ intenção central da sessão.
 
 Preferências são aplicadas por último.
 
-Podem: - escolher entre variantes equivalentes; - substituir acessório
-equivalente; - redistribuir parte do volume; - escolher modalidade de
-cardio compatível.
+Podem: - escolher entre variantes equivalentes; - preservar/antecipar exercício
+prioritário; - adicionar no máximo +1 set por priority/sessão quando a regra V1
+permitir; - escolher modalidade de cardio compatível.
 
 Não podem: - remover constraint; - reintroduzir exercício bloqueado; -
 exigir equipamento inexistente; - descaracterizar a família.
 
 ------------------------------------------------------------------------
 
-## 6. Componentes prioritários e removíveis
+## 6. Preservação simples na redução
 
-O motor deve classificar cada exercício da sessão em tempo de
-composição:
-
-``` text
-ESSENTIAL
-HIGH_PRIORITY
-ACCESSORY
-OPTIONAL
-```
-
-Critérios: - papel do exercício na finalidade da sessão; - cobertura de
-padrão/músculo; - redundância com outros exercícios; - objetivo da
-família; - preferência válida; - constraints ativas.
-
-Essa classificação deve ser contextual. O último exercício da lista não
-é automaticamente o primeiro a ser removido.
+O motor usa a ordem canônica como sinal principal: protege o primeiro
+exercício e candidatos de muscle priority, preenche pelas posições iniciais e
+usa movement pattern apenas como guard mínimo de diversidade. Não classifica
+slots manualmente. Safety, limitations e equipment já devem estar resolvidos.
 
 ------------------------------------------------------------------------
 
@@ -631,7 +608,7 @@ Antes de liberar o treino:
 -   todas as constraints continuam respeitadas?
 -   algum exercício bloqueado reapareceu?
 -   a sessão mantém sua finalidade?
--   duração estimada cabe no limite?
+-   a redução aproximada de duration foi aplicada corretamente?
 -   volume não foi duplicado por modificadores?
 -   há redundância criada por substituições?
 -   preferência alterou algo de prioridade superior?
@@ -702,7 +679,7 @@ fechados:
 -   IDs reais dos exercícios;
 -   tags e padrões de movimento do catálogo;
 -   limites mínimos/máximos de volume por família;
--   cálculo oficial de duração;
+-   eventual cronômetro de execução, fora do Prescription Engine V1;
 -   regras numéricas de esforço/intensidade;
 -   tabelas validadas para limitações;
 -   ranking real de substituições;

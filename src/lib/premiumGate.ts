@@ -64,6 +64,19 @@ type PremiumGateState = {
    * from Fase 1, gated per-capability inside it (`premiumCapabilities.ts`).
    */
   commercialGateResolved: boolean;
+  /**
+   * First-app-entry readiness (`useWorkoutReadinessGate`) — `'ready'` once
+   * the active workout program AND scheduleConfig are confirmed to exist
+   * (or a genuine, terminal generation failure was confirmed; this gate
+   * never blocks forever). Without this, `'app'` could resolve while
+   * `AppShell`'s own `useWorkoutPrescription` had not yet even run its
+   * first Firestore read — Home would then become the trigger for the
+   * account's first generation instead of finding it already there. Only
+   * consulted at the same point `commercialGateResolved`/`isPremium` are —
+   * an established account resolves this in one fast read, so it adds no
+   * gate latency to every cold start, only to the first one.
+   */
+  workoutReadinessGate: 'idle' | 'checking' | 'ready';
 };
 
 const AUTH_REQUIRED_SCREENS: RootScreenId[] = ['emailVerification', 'paywall', 'app'];
@@ -116,6 +129,12 @@ export function resolvePremiumGate(state: PremiumGateState): RootScreenId | null
 
   if (!state.commercialGateResolved && !state.isPremium) return 'paywall';
 
+  // First-app-entry readiness — see `workoutReadinessGate`'s doc comment.
+  // Checked LAST, after every other prerequisite, so it never changes
+  // routing for a signed-out/unresolved/non-premium user — only whether the
+  // final step into `'app'` itself is still held open.
+  if (state.workoutReadinessGate !== 'ready') return null;
+
   return 'app';
 }
 
@@ -140,5 +159,6 @@ export function explainPremiumGateBlockers(state: PremiumGateState): string[] {
   }
   if (state.subscriptionLoading) reasons.push('subscription-loading');
   if (!state.subscriptionConfigured) reasons.push('subscription-not-configured');
+  if (state.workoutReadinessGate !== 'ready') reasons.push(`workout-readiness-${state.workoutReadinessGate}`);
   return reasons;
 }

@@ -83,7 +83,10 @@ describe('quiz IDs — sex', () => {
 });
 
 describe('quiz IDs — goal', () => {
-  const IDS = ['hyper', 'cut', 'perf', 'def', 'recon'] as const;
+  const IDS = [
+    'gain_muscle', 'lose_fat', 'strength', 'conditioning', 'body_composition', 'return_to_training',
+    'hyper', 'cut', 'perf', 'def', 'recon',
+  ] as const;
   it('defaultQuiz.goal is null (never persisted as a label)', () => {
     expect(defaultQuiz.goal).toBeNull();
   });
@@ -91,19 +94,19 @@ describe('quiz IDs — goal', () => {
     ['pt-BR', ptBRQuiz],
     ['en', enQuiz],
     ['es', esQuiz],
-  ] as const)('every locale ships label + description for all 5 goals: %s', (loc, json) => {
+  ] as const)('every locale ships canonical and legacy goal labels: %s', (loc, json) => {
     assertOptionsHaveLabel(loc, json, 'goal', IDS, 'label');
     assertOptionsHaveLabel(loc, json, 'goal', IDS, 'description');
   });
 });
 
 describe('quiz IDs — level', () => {
-  const IDS = ['beg', 'int', 'adv', 'elite'] as const;
+  const IDS = ['never_or_starting', 'beginner', 'intermediate', 'advanced', 'beg', 'int', 'adv', 'elite'] as const;
   it.each([
     ['pt-BR', ptBRQuiz],
     ['en', enQuiz],
     ['es', esQuiz],
-  ] as const)('every locale ships label + description for all 4 levels: %s', (loc, json) => {
+  ] as const)('every locale ships canonical and legacy experience labels: %s', (loc, json) => {
     assertOptionsHaveLabel(loc, json, 'level', IDS, 'label');
     assertOptionsHaveLabel(loc, json, 'level', IDS, 'description');
   });
@@ -137,12 +140,12 @@ describe('quiz IDs — place', () => {
 });
 
 describe('quiz IDs — limits (multi)', () => {
-  const IDS = ['none', 'knee', 'back', 'shoulder', 'wrist', 'hip'] as const;
+  const IDS = ['none', 'knee', 'hip', 'back', 'shoulder', 'elbow', 'wrist', 'ankle_foot', 'other'] as const;
   it.each([
     ['pt-BR', ptBRQuiz],
     ['en', enQuiz],
     ['es', esQuiz],
-  ] as const)('every locale ships all 6 limit labels: %s', (loc, json) => {
+  ] as const)('every locale ships all limitation labels: %s', (loc, json) => {
     assertMultiOptionsHaveLabel(loc, json, 'limits', IDS);
   });
 });

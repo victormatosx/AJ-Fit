@@ -87,12 +87,12 @@ describe('Auth screen i18n', () => {
 
   it('preserves email/password and Google/Apple authentication behavior', () => {
     for (const token of [
-      'await signUp(email, password, name, quiz)',
+      'await signUp(email, password, name, quiz, preparedWorkoutProgram)',
       'await signIn(email, password)',
       '() => reset(email)',
-      'await signInWithProvider(provider, quiz)',
-      'await completeLinkingWithPassword(linking.email, linkPassword, quiz)',
-      'await completeLinkingWithProvider(existing, quiz)',
+      'await signInWithProvider(provider, quiz, name)',
+      'await completeLinkingWithPassword(linking.email, linkPassword, quiz, name)',
+      'await completeLinkingWithProvider(existing, quiz, name)',
       "Platform.OS === 'ios'",
       "Platform.OS !== 'web'",
       "socialBusy === 'apple'",
