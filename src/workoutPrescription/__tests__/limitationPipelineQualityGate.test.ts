@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import templatesJson from '../../../docs/workouts/AJ_Fit_T001_T090_workouts_canonical_v1_3.json';
+import templatesJson from '../../../docs/workouts/AJ_Fit_T001_T090_workouts_reformed_v2_0.json';
 import { LIMITATION_REGION_IDS, type LimitationRegionId } from '../../types/exercise';
 import { equipmentContextFor, isExerciseExecutable } from '../equipment';
 import { composeTemplate } from '../composition';
+import { evaluateSafety } from '../safety';
 import { generateWorkoutPrescription } from '../engine';
 import {
   resolveExerciseLimitationsFromCandidates,
@@ -50,22 +51,32 @@ describe('Pipeline limitation quality gate', () => {
     for (const template of templates) {
       for (const region of LIMITATION_REGION_IDS) {
         const answers = limitationAnswersForTemplate(template, [region]);
-        const first = generateWorkoutPrescription(answers, {
-          template,
-          exerciseCatalog: catalogArray,
-        });
-        const second = generateWorkoutPrescription(answers, {
-          template,
-          exerciseCatalog: catalogArray,
-        });
+        // Phase 2 intentionally makes conventional 7-slot templates
+        // unselectable (availability 7 must retain a real REST day). Keep
+        // their limitation content under the same deterministic composition
+        // gate without pretending they are a valid Phase 2 selection.
+        const legacySevenSlot = !template.profile.special_population && template.profile.days_per_week === 7;
+        const generate = () => legacySevenSlot
+          ? composeTemplate(template, answers, {
+              safety: evaluateSafety(answers),
+              environment: template.profile.environment,
+              limitationRegions: [region],
+              exerciseCatalog: catalogArray,
+            })
+          : generateWorkoutPrescription(answers, { template, exerciseCatalog: catalogArray });
+        const first = generate();
+        const second = generate();
         executions += 1;
         expect(second).toEqual(first);
-        expect(first.status, `${template.id}:${region}`).toBe('SUCCESS');
-        if (first.status !== 'SUCCESS') continue;
+        expect(first.status, `${template.id}:${region}`).toBe(legacySevenSlot ? 'COMPOSED' : 'SUCCESS');
+        if (first.status !== 'SUCCESS' && first.status !== 'COMPOSED') continue;
 
-        omissions += first.plan.trace.exerciseOmissions?.length ?? 0;
+        const sessions = first.status === 'SUCCESS' ? first.plan.sessions : first.sessions;
+        omissions += first.status === 'SUCCESS'
+          ? first.plan.trace.exerciseOmissions?.length ?? 0
+          : first.exerciseOmissions.length;
         const equipment = equipmentContextFor(answers, template.profile.environment);
-        for (const session of first.plan.sessions) {
+        for (const session of sessions) {
           expect(session.exercises.length, `${template.id}:${session.name}:${region}`).toBeGreaterThanOrEqual(1);
           const sourceByFinalId = new Map<string, string>();
           for (const item of session.exercises) {

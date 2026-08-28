@@ -257,6 +257,7 @@ service cloud.firestore {
              'prescribedStructuredDays', 'population', 'environment',
              'goalFamily', 'split', 'adaptationStage', 'sessions', 'versions',
              'trace', 'limitationDatasetVersion', 'limitationDatasetHash',
+             'prescribedTrainingFrequency', 'availability', 'weeklySchedule',
              'createdAt', 'activatedAt', 'updatedAt'
            ])
         && data.programId == programId
@@ -280,16 +281,39 @@ service cloud.firestore {
         && workoutProgramLimitationValid(questionnaire, data)
         && data.status in ['active', 'superseded']
         && data.source in ['onboarding', 'manual_regeneration', 'automatic_progression', 'automatic_reconciliation']
-        && data.requestedDays is int && data.requestedDays >= 2 && data.requestedDays <= 6
+        && data.requestedDays is int && data.requestedDays >= 2 && data.requestedDays <= 7
         && data.prescribedStructuredDays is int
-        && data.prescribedStructuredDays >= 2 && data.prescribedStructuredDays <= 6
-        && data.sessions is list && data.sessions.size() >= 1 && data.sessions.size() <= 6
+        && data.prescribedStructuredDays >= 2 && data.prescribedStructuredDays <= 7
+        && data.sessions is list && data.sessions.size() >= 1 && data.sessions.size() <= 7
         && data.versions is map
-        && data.versions.templateLibrary == '1.3.0'
-        && data.versions.selectionEngine == '1.0.0'
+        && ((data.versions.templateLibrary == '1.3.0'
+              && data.versions.compositionEngine == '2.0.0')
+            || (data.versions.templateLibrary == '2.0.0'
+              && data.versions.compositionEngine == '2.1.0'))
+        && data.versions.selectionEngine in ['1.0.0', '2.0.0']
+        && (
+          (data.versions.selectionEngine == '1.0.0'
+            && !data.keys().hasAny(['prescribedTrainingFrequency', 'availability', 'weeklySchedule']))
+          ||
+          (data.versions.selectionEngine == '2.0.0'
+            && data.keys().hasAll(['prescribedTrainingFrequency', 'availability', 'weeklySchedule'])
+            && data.prescribedTrainingFrequency is int
+            && data.prescribedTrainingFrequency == data.prescribedStructuredDays
+            && data.prescribedTrainingFrequency >= 2
+            && data.prescribedTrainingFrequency <= 6
+            && data.prescribedTrainingFrequency <= data.requestedDays
+            && data.availability is map
+            && data.availability.keys().hasAll(['days', 'weekdays'])
+            && data.availability.keys().hasOnly(['days', 'weekdays'])
+            && data.availability.days == data.requestedDays
+            && data.availability.weekdays is list
+            && (data.availability.weekdays.size() == 0
+              || data.availability.weekdays.size() == data.availability.days)
+            && data.weeklySchedule is list
+            && (data.weeklySchedule.size() == 0 || data.weeklySchedule.size() == 7))
+        )
         && data.versions.safetyRules == '1.0.0'
         && data.versions.modifierRules == '2.0.0'
-        && data.versions.compositionEngine == '2.0.0'
         && data.trace is map
         && data.trace.safety is map
         && data.trace.safety.status in ['CLEAR', 'ADAPTED']
@@ -836,7 +860,12 @@ service cloud.firestore {
 
         allow update: if isOwner(userId)
           && accountActive(userId)
-          && workoutProgramCommonValid(userId, programId, request.resource.data)
+          && (workoutProgramCommonValid(userId, programId, request.resource.data)
+              // A v1.3 snapshot may need to be superseded after the single
+              // template document has been upgraded to v2. Its immutable
+              // prescription fields are protected by the diff below; do not
+              // revalidate them against today's replaced template document.
+              || resource.data.versions.templateLibrary == '1.3.0')
           && request.resource.data.diff(resource.data).affectedKeys()
                .hasOnly(['status', 'activatedAt', 'updatedAt'])
           && request.resource.data.createdAt == resource.data.createdAt

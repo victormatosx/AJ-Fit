@@ -11,7 +11,7 @@ import {
 import { EXERCISES_SEED } from '../../data/exercisesSeedData';
 
 describe('workout template seed source', () => {
-  it('contains exactly T001-T090, 378 sessions, 2,108 valid slots', () => {
+  it('contains exactly T001-T090, 378 sessions, 2,116 valid slots', () => {
     const documents = buildSeedDocuments();
     expect(documents).toHaveLength(EXPECTED_TEMPLATE_COUNT);
     expect(documents.flatMap((item) => item.sessions)).toHaveLength(EXPECTED_SESSION_COUNT);

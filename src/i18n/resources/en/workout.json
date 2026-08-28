@@ -13,6 +13,21 @@
     "skipBusy": "Skip · machine in use",
     "completeSet": "Complete set {{number}}"
   },
+  "cardioFinisher": {
+    "kicker": "After strength work",
+    "title": "Cardio finisher",
+    "optional": "Optional · continue only if you feel well and have no symptoms.",
+    "optionSeparator": " or ",
+    "options": {
+      "walking": "Walking",
+      "stationary-bike": "Stationary bike"
+    },
+    "intensities": {
+      "lightModerate": "Light to moderate",
+      "comfortableLightModerate": "Comfortable, light to moderate",
+      "moderate": "Moderate"
+    }
+  },
   "badges": {
     "resumed": "Resumed"
   },
@@ -165,6 +180,26 @@
       "keyPoint2": "Lower under control (eccentric)",
       "keyPoint3": "Don't lock your elbows at the top"
     }
+  },
+  "sessionDisplayNames": {
+    "Peito, Ombros & Tríceps · Push": "Chest, Shoulders & Triceps · Push",
+    "Costas & Bíceps · Pull": "Back & Biceps · Pull",
+    "Pernas Completas · Legs": "Complete Legs · Legs",
+    "Superiores Completos · Upper": "Complete Upper Body · Upper",
+    "Inferiores Completos · Lower": "Complete Lower Body · Lower",
+    "Peito, Ombros & Tríceps · Push B": "Chest, Shoulders & Triceps · Push B",
+    "Costas & Bíceps · Pull B": "Back & Biceps · Pull B",
+    "Pernas Completas · Legs B": "Complete Legs · Legs B",
+    "Superiores · Ênfase Push": "Upper Body · Push Focus",
+    "Superiores · Ênfase Pull": "Upper Body · Pull Focus",
+    "Inferiores Completos": "Complete Lower Body",
+    "Força Total A": "Total Strength A",
+    "Força Total B": "Total Strength B",
+    "Força Total C": "Total Strength C",
+    "Condicionamento Total A": "Total Conditioning A",
+    "Condicionamento Total B": "Total Conditioning B",
+    "Cardio Contínuo": "Continuous Cardio",
+    "Cardio Leve & Mobilidade": "Light Cardio & Mobility"
   },
   "sessionNames": {
     "A": "Workout A",

@@ -62,8 +62,8 @@ export function MyPlanScreen({
   const timezone = schedule.config?.timezone ?? deviceTimezone();
   const todayWeekday = useMemo(() => weekdayOfLocalDate(localDateInTimezone(new Date(), timezone)), [timezone]);
   const weekView = useMemo(
-    () => buildWeekView(schedule.config?.trainingDays ?? [], todayWeekday, schedule.resolution),
-    [schedule.config, schedule.resolution, todayWeekday],
+    () => buildWeekView(schedule.config?.trainingDays ?? [], todayWeekday, schedule.resolution, plan?.weeklySchedule),
+    [schedule.config, schedule.resolution, todayWeekday, plan?.weeklySchedule],
   );
   const adaptations = useMemo(() => (plan ? buildAdaptationFlags(plan.trace) : null), [plan]);
 
@@ -98,7 +98,9 @@ export function MyPlanScreen({
         {
           key: 'frequency',
           label: t('summary.frequency'),
-          value: t('summary.frequencyValue', { count: plan.prescribedStructuredDays }),
+          value: t('summary.frequencyValue', {
+            count: plan.prescribedTrainingFrequency ?? plan.prescribedStructuredDays,
+          }),
         },
         levelLabel ? { key: 'level', label: t('summary.level'), value: levelLabel } : null,
         { key: 'structure', label: t('summary.structure'), value: plan.split },
@@ -375,12 +377,12 @@ export function MyPlanScreen({
                       }}
                     >
                       <Icon
-                        name={day.isTrainingDay ? 'dumbbell' : 'moon'}
+                        name={day.state === 'TRAINING' ? 'dumbbell' : day.state === 'ACTIVE_RECOVERY' ? 'heart' : 'moon'}
                         size={14}
                         color={
                           day.isToday
                             ? theme.colors.primaryForeground
-                            : day.isTrainingDay
+                            : day.state !== 'REST'
                               ? theme.colors.primaryEmphasis
                               : theme.colors.textFaint
                         }
@@ -396,6 +398,16 @@ export function MyPlanScreen({
                       }}
                     >
                       {tLoose(`quiz:trainingDays.options.${day.weekday}`).toUpperCase()}
+                    </Text>
+                    <Text
+                      numberOfLines={1}
+                      style={{ fontFamily: theme.fonts.ui, fontSize: 7, color: theme.colors.textFaint }}
+                    >
+                      {day.state === 'TRAINING'
+                        ? t('week.trainingDay')
+                        : day.state === 'ACTIVE_RECOVERY'
+                          ? t('week.activeRecovery')
+                          : t('week.restDay')}
                     </Text>
                   </View>
                 ))}

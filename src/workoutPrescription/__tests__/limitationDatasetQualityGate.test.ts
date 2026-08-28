@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { loadLocalExerciseCatalogForLimitations } from '../localLimitationCatalog';
 import { validateLimitationProfile, type LimitationCatalogExercise } from '../limitationResolver';
 import { LIMITATION_REGION_IDS } from '../../types/exercise';
-import templatesJson from '../../../docs/workouts/AJ_Fit_T001_T090_workouts_canonical_v1_3.json';
+import templatesJson from '../../../docs/workouts/AJ_Fit_T001_T090_workouts_reformed_v2_0.json';
 import baseline from '../../../docs/workout-modifiers/limitation-dataset-baseline.json';
 import { buildExerciseTemplateIndex, classifyPair, VALID_CLASSIFICATIONS } from '../../../scripts/auditLimitationDataset';
 

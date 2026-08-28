@@ -18,10 +18,18 @@ export function isBeginnerExperience(answers: QuestionnaireAnswers): boolean {
   return ['never_or_starting', 'beginner'].includes(normalizeExperience(answers.level) ?? '');
 }
 
-export function beginnerKeepFactor(stage: AdaptationStage): number {
-  if (stage === 1) return 0.50;
-  if (stage === 2) return 0.70;
-  return 1;
+/**
+ * Beginner adaptation reduces working-set volume, not exercise coverage.
+ * Stage 1 caps each exercise at 2 working sets, stage 2 at 3, stage 3+
+ * converges to the template's base volume. This deliberately never touches
+ * exercise count — see composition.ts, which no longer derives a
+ * beginner-specific `target` slot count.
+ */
+export function beginnerAdjustedSets(baseSets: number | undefined, stage: AdaptationStage): number | undefined {
+  if (baseSets == null) return baseSets;
+  if (stage === 1) return Math.min(baseSets, 2);
+  if (stage === 2) return Math.min(baseSets, 3);
+  return baseSets;
 }
 
 export function durationKeepFactor(duration: QuestionnaireAnswers['duration']): number {

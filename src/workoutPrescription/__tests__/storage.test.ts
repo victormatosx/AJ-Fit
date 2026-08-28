@@ -21,7 +21,7 @@ describe('prescription snapshot storage', () => {
     const snapshot = vi.mocked(AsyncStorage.setItem).mock.calls[0][1];
     expect(snapshot).not.toContain('birthDate');
     expect(snapshot).not.toContain('pregnancyScreening');
-    expect(snapshot).toContain('"templateLibrary":"1.3.0"');
+    expect(snapshot).toContain('"templateLibrary":"2.0.0"');
   });
 
   it('does not overwrite an existing immutable snapshot', async () => {

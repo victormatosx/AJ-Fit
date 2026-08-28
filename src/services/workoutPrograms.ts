@@ -241,16 +241,85 @@ export async function loadExerciseCatalogForLimitations(
   return { ...identityAfter, exercises };
 }
 
-function isProgramSnapshot(value: unknown, programId: string): value is WorkoutProgramSnapshot {
+const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
+
+function hasValidPrescriptionVersions(value: unknown): boolean {
+  if (!isPlainObject(value)) return false;
+  return [
+    'templateLibrary', 'selectionEngine', 'safetyRules',
+    'modifierRules', 'compositionEngine', 'limitationResolver',
+  ].every((key) => typeof value[key] === 'string' && SEMVER.test(value[key]));
+}
+
+const WEEKDAYS = new Set(['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN']);
+
+function hasValidPhase2FrequencyCalendar(value: Partial<WorkoutProgramSnapshot>): boolean {
+  if (value.versions?.selectionEngine !== '2.0.0') return true;
+  if (
+    typeof value.requestedDays !== 'number'
+    || typeof value.prescribedStructuredDays !== 'number'
+    || value.prescribedTrainingFrequency !== value.prescribedStructuredDays
+    || value.prescribedTrainingFrequency > value.requestedDays
+    || !isPlainObject(value.availability)
+    || value.availability.days !== value.requestedDays
+    || !Array.isArray(value.availability.weekdays)
+    || !value.availability.weekdays.every((day) => typeof day === 'string' && WEEKDAYS.has(day))
+    || ![0, value.requestedDays].includes(value.availability.weekdays.length)
+    || new Set(value.availability.weekdays).size !== value.availability.weekdays.length
+    || !Array.isArray(value.weeklySchedule)
+    || ![0, 7].includes(value.weeklySchedule.length)
+  ) return false;
+  return value.weeklySchedule.every((day) =>
+    isPlainObject(day)
+    && typeof day.weekday === 'string'
+    && WEEKDAYS.has(day.weekday)
+    && ['TRAINING', 'ACTIVE_RECOVERY', 'REST'].includes(String(day.state))
+    && (day.state === 'REST' || (typeof day.sessionIndex === 'number' && Number.isInteger(day.sessionIndex))),
+  );
+}
+
+/** Exported only so backward-compatibility quality gates can exercise the exact load boundary. */
+export function isProgramSnapshot(value: unknown, programId: string): value is WorkoutProgramSnapshot {
   if (!value || typeof value !== 'object') return false;
   const item = value as Partial<WorkoutProgramSnapshot>;
   return item.programId === programId
+    && typeof item.prescriptionId === 'string'
+    && item.prescriptionId.length > 0
     && item.status === 'active'
+    && ['onboarding', 'manual_regeneration', 'automatic_progression', 'automatic_reconciliation'].includes(item.source ?? '')
     && /^T(?:00[1-9]|0[1-8][0-9]|090)$/.test(item.templateId ?? '')
     && Array.isArray(item.sessions)
     && item.sessions.length > 0
+    && item.sessions.every((session) =>
+      isPlainObject(session)
+      && typeof session.name === 'string'
+      && typeof session.type === 'string'
+      && Array.isArray(session.exercises)
+      && session.exercises.length > 0
+      && session.exercises.every((exercise) =>
+        isPlainObject(exercise)
+        && typeof exercise.exerciseId === 'string'
+        && typeof exercise.sourceExerciseId === 'string'),
+    )
     && typeof item.questionnaireId === 'string'
-    && item.versions?.templateLibrary === PRESCRIPTION_VERSIONS.templateLibrary;
+    && item.questionnaireId.length > 0
+    && typeof item.questionnaireVersion === 'number'
+    && Number.isInteger(item.questionnaireVersion)
+    && item.questionnaireVersion > 0
+    && typeof item.templateVersion === 'number'
+    && Number.isInteger(item.templateVersion)
+    && item.templateVersion > 0
+    && typeof item.templateSourceVersion === 'string'
+    && SEMVER.test(item.templateSourceVersion)
+    && typeof item.templateContentHash === 'string'
+    && /^[a-f0-9]{64}$/.test(item.templateContentHash)
+    // Shape validation only — NOT an equality check against the current
+    // engine's PRESCRIPTION_VERSIONS.templateLibrary. Programs persisted
+    // under an older catalog version (e.g. 1.3.0) must stay readable after
+    // the catalog is upgraded (e.g. to 2.0.0); a mismatched-but-well-formed
+    // version string is a legitimate legacy program, not a corrupt one.
+    && hasValidPrescriptionVersions(item.versions)
+    && hasValidPhase2FrequencyCalendar(item);
 }
 
 export async function loadActiveWorkoutProgram(uid: string): Promise<WorkoutProgramSnapshot | null> {

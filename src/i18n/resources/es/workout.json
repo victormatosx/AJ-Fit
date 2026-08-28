@@ -13,6 +13,21 @@
     "skipBusy": "Saltar · máquina ocupada",
     "completeSet": "Completar serie {{number}}"
   },
+  "cardioFinisher": {
+    "kicker": "Después de la fuerza",
+    "title": "Cardio final",
+    "optional": "Opcional · continúa solo si te sientes bien y no tienes síntomas.",
+    "optionSeparator": " o ",
+    "options": {
+      "walking": "Caminata",
+      "stationary-bike": "Bicicleta estática"
+    },
+    "intensities": {
+      "lightModerate": "Ligera a moderada",
+      "comfortableLightModerate": "Cómoda, ligera a moderada",
+      "moderate": "Moderada"
+    }
+  },
   "badges": {
     "resumed": "Retomado"
   },
@@ -165,6 +180,26 @@
       "keyPoint2": "Baja controlando la fase excéntrica",
       "keyPoint3": "No bloquees los codos arriba"
     }
+  },
+  "sessionDisplayNames": {
+    "Peito, Ombros & Tríceps · Push": "Pecho, Hombros y Tríceps · Empuje",
+    "Costas & Bíceps · Pull": "Espalda y Bíceps · Jalón",
+    "Pernas Completas · Legs": "Piernas Completas",
+    "Superiores Completos · Upper": "Tren Superior Completo",
+    "Inferiores Completos · Lower": "Tren Inferior Completo",
+    "Peito, Ombros & Tríceps · Push B": "Pecho, Hombros y Tríceps · Empuje B",
+    "Costas & Bíceps · Pull B": "Espalda y Bíceps · Jalón B",
+    "Pernas Completas · Legs B": "Piernas Completas B",
+    "Superiores · Ênfase Push": "Tren Superior · Énfasis Empuje",
+    "Superiores · Ênfase Pull": "Tren Superior · Énfasis Jalón",
+    "Inferiores Completos": "Tren Inferior Completo",
+    "Força Total A": "Fuerza Total A",
+    "Força Total B": "Fuerza Total B",
+    "Força Total C": "Fuerza Total C",
+    "Condicionamento Total A": "Acondicionamiento Total A",
+    "Condicionamento Total B": "Acondicionamiento Total B",
+    "Cardio Contínuo": "Cardio Continuo",
+    "Cardio Leve & Mobilidade": "Cardio Ligero y Movilidad"
   },
   "sessionNames": {
     "A": "Entreno A",

@@ -16,6 +16,8 @@ import {
   type QuestionnaireAnswers,
 } from './types';
 import { validateFinalWorkout } from './validation';
+import { normalizeWeekdays } from '../lib/questionnaireSchema';
+import { buildWorkoutWeek } from './weeklySchedule';
 
 function stableHash(value: string): string {
   let hash = 0x811c9dc5;
@@ -130,9 +132,26 @@ export function generateWorkoutPrescription(
   }
 
   const limitationDataset = context.limitationDataset ?? localLimitationDatasetIdentity();
+  const normalizedAvailableWeekdays = normalizeWeekdays(answers.trainingDays ?? []);
+  const availability = {
+    days: selection.decision.requestedDays,
+    // Missing/incomplete concrete weekdays are a legacy setup state, not
+    // permission to invent or silently narrow availability.
+    weekdays: normalizedAvailableWeekdays.length === selection.decision.requestedDays
+      ? normalizedAvailableWeekdays
+      : [],
+  };
+  const weeklySchedule = buildWorkoutWeek(
+    availability,
+    composition.sessions,
+    selection.decision.prescribedStructuredDays,
+  );
   const planIdentity = JSON.stringify({
     templateId: selection.decision.templateId,
     requestedDays: selection.decision.requestedDays,
+    prescribedTrainingFrequency: selection.decision.prescribedStructuredDays,
+    availability,
+    weeklySchedule,
     modifiers: modifiers.map((modifier) => modifier.id),
     substitutions: composition.substitutions,
     limitationDecisions: composition.limitationDecisions,
@@ -149,6 +168,9 @@ export function generateWorkoutPrescription(
     templateId: selection.decision.templateId,
     requestedDays: selection.decision.requestedDays,
     prescribedStructuredDays: selection.decision.prescribedStructuredDays,
+    prescribedTrainingFrequency: selection.decision.prescribedStructuredDays,
+    availability,
+    weeklySchedule,
     population: selection.decision.population,
     environment: selection.decision.environment,
     goalFamily: selection.decision.goalFamily,

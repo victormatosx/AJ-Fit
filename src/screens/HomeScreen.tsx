@@ -221,12 +221,16 @@ export function HomeScreen({
     ? null
     : scheduleResolution?.status === 'REST_DAY'
       ? 'restDay'
+      : scheduleResolution?.status === 'ACTIVE_RECOVERY_DAY'
+        ? 'activeRecovery'
       : scheduleResolution?.status === 'TODAY_COMPLETED'
         ? 'completedToday'
         : scheduleResolution?.status === 'SCHEDULE_SETUP_REQUIRED'
           ? 'setupRequired'
           : null;
-  const isBlockedToday = scheduleResolution?.status === 'REST_DAY' || scheduleResolution?.status === 'TODAY_COMPLETED';
+  const isBlockedToday = scheduleResolution?.status === 'REST_DAY'
+    || scheduleResolution?.status === 'ACTIVE_RECOVERY_DAY'
+    || scheduleResolution?.status === 'TODAY_COMPLETED';
   const nextSession = prescription.status === 'SUCCESS' && isBlockedToday
     ? prescription.plan.sessions[(scheduleResolution as { nextSessionIndex: number }).nextSessionIndex] ?? null
     : null;
@@ -350,7 +354,8 @@ export function HomeScreen({
                           ? t(`home:schedule.${scheduleOverrideKey}.body`)
                           : prescription.status === 'SUCCESS'
                             ? t('home:todayCard.prescribedMeta', {
-                                sessions: prescription.plan.prescribedStructuredDays,
+                                sessions: prescription.plan.prescribedTrainingFrequency
+                                  ?? prescription.plan.prescribedStructuredDays,
                                 exercises: firstSession?.exercises.length ?? 0,
                               })
                             : t(`home:prescription.${outcomeKey}.body` as 'home:prescription.unavailable.body')

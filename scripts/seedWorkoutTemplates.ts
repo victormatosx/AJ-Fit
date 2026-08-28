@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
 import { FieldValue, getFirestore, type Firestore } from 'firebase-admin/firestore';
 
-import catalogJson from '../docs/workouts/AJ_Fit_T001_T090_workouts_canonical_v1_3.json';
+import catalogJson from '../docs/workouts/AJ_Fit_T001_T090_workouts_reformed_v2_0.json';
 import { EXERCISES_SEED } from '../src/data/exercisesSeedData';
 import {
   toWorkoutTemplateDocumentBody,
@@ -16,7 +16,7 @@ import type { CanonicalTemplate } from '../src/workoutPrescription/types';
 
 export const EXPECTED_TEMPLATE_COUNT = 90;
 export const EXPECTED_SESSION_COUNT = 378;
-export const EXPECTED_SLOT_COUNT = 2108;
+export const EXPECTED_SLOT_COUNT = 2116;
 export const WORKOUT_TEMPLATES_COLLECTION = 'workoutTemplates';
 
 type Catalog = { schema_version: string; library: string; workouts: CanonicalTemplate[] };
@@ -53,7 +53,7 @@ export function validateCanonicalSnapshot(liveExerciseIds?: Set<string>): string
   const sourceIds = new Set(EXERCISES_SEED.map((exercise) => exercise.id));
   if (templates.length !== EXPECTED_TEMPLATE_COUNT) errors.push(`EXPECTED_90_TEMPLATES:${templates.length}`);
   if (sessions.length !== EXPECTED_SESSION_COUNT) errors.push(`EXPECTED_378_SESSIONS:${sessions.length}`);
-  if (slots.length !== EXPECTED_SLOT_COUNT) errors.push(`EXPECTED_2108_SLOTS:${slots.length}`);
+  if (slots.length !== EXPECTED_SLOT_COUNT) errors.push(`EXPECTED_2116_SLOTS:${slots.length}`);
   const ids = new Set(templates.map((template) => template.id));
   for (let index = 1; index <= EXPECTED_TEMPLATE_COUNT; index += 1) {
     const id = `T${String(index).padStart(3, '0')}`;

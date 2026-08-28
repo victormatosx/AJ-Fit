@@ -3,14 +3,14 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { resolveSessionDisplayName } from '../sessionPresentation';
 
-type CanonicalWorkoutsFile = { workouts: Array<{ id: string; sessions: Array<{ name: string; type: string }> }> };
+type CanonicalWorkoutsFile = { workouts: Array<{ id: string; sessions: Array<{ name: string; type: string; display_name?: string }> }> };
 
 function readJson<T>(relativePath: string): T {
   return JSON.parse(readFileSync(join(process.cwd(), relativePath), 'utf8')) as T;
 }
 
 const canonical = readJson<CanonicalWorkoutsFile>(
-  'docs/workouts/AJ_Fit_T001_T090_workouts_canonical_v1_3.json',
+  'docs/workouts/AJ_Fit_T001_T090_workouts_reformed_v2_0.json',
 );
 
 /** Every distinct (name, type) pair actually present across all 90 templates. */
@@ -23,7 +23,11 @@ for (const workout of canonical.workouts) {
 
 const LOCALES = ['pt-BR', 'en', 'es'] as const;
 
-type WorkoutResource = { sessionNames: Record<string, string>; sessionTypes: Record<string, string> };
+type WorkoutResource = {
+  sessionDisplayNames: Record<string, string>;
+  sessionNames: Record<string, string>;
+  sessionTypes: Record<string, string>;
+};
 
 const resources: Record<(typeof LOCALES)[number], WorkoutResource> = Object.fromEntries(
   LOCALES.map((locale) => [locale, readJson<WorkoutResource>(`src/i18n/resources/${locale}/workout.json`)]),
@@ -35,7 +39,11 @@ function makeT(locale: (typeof LOCALES)[number]) {
     const [, path] = key.split(':');
     const [bucket, ...rest] = path.split('.');
     const lookupKey = rest.join('.');
-    const table = bucket === 'sessionNames' ? resources[locale].sessionNames : resources[locale].sessionTypes;
+    const table = bucket === 'sessionDisplayNames'
+      ? resources[locale].sessionDisplayNames
+      : bucket === 'sessionNames'
+        ? resources[locale].sessionNames
+        : resources[locale].sessionTypes;
     return table[lookupKey] ?? (opts?.defaultValue as string | undefined) ?? key;
   };
 }
@@ -77,6 +85,15 @@ describe('session name presentation — real T001-T090 catalog vs real i18n reso
     const t = makeT('pt-BR');
     expect(() => resolveSessionDisplayName(t, 'Totally Unknown', 'totally_unknown_type')).not.toThrow();
     expect(resolveSessionDisplayName(t, 'Totally Unknown', 'totally_unknown_type')).toBe('Totally Unknown');
+  });
+
+  it('uses localized v2 display_name without leaking its pt-BR authoring value into en/es', () => {
+    expect(resolveSessionDisplayName(makeT('pt-BR'), 'Push', 'resistance', 'Peito, Ombros & Tríceps · Push'))
+      .toBe('Peito, Ombros & Tríceps · Push');
+    expect(resolveSessionDisplayName(makeT('en'), 'Push', 'resistance', 'Peito, Ombros & Tríceps · Push'))
+      .toBe('Chest, Shoulders & Triceps · Push');
+    expect(resolveSessionDisplayName(makeT('es'), 'Push', 'resistance', 'Peito, Ombros & Tríceps · Push'))
+      .toBe('Pecho, Hombros y Tríceps · Empuje');
   });
 
   it('all 9 real session types have a presentation entry in every locale', () => {

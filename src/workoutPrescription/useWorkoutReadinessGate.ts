@@ -81,17 +81,24 @@ export function useWorkoutReadinessGate(input: {
       const prescription = await resolveWorkoutPrescription(uid, questionnaire, {
         onGenerationStart: () => { generated = true; },
       });
+      const prescribedTrainingDays = prescription.status === 'SUCCESS'
+        ? prescription.plan.weeklySchedule
+          ?.filter((day) => day.state === 'TRAINING')
+          .map((day) => day.weekday) ?? []
+        : [];
 
       // Mirrors `useWorkoutSchedule`'s own bootstrap exactly (docs/
       // workout-lifecycle/03_SCHEDULE_ENGINE.md) — create-only, never
       // overwrites an existing/user-edited config.
-      if (questionnaire && trainingDaysValid(questionnaire.answers)) {
+      if (questionnaire && (prescribedTrainingDays.length > 0 || trainingDaysValid(questionnaire.answers))) {
         try {
           const existingConfig = await loadScheduleConfig(uid);
           if (!existingConfig) {
             await ensureScheduleConfigFromQuestionnaire(
               uid,
-              normalizeWeekdays(questionnaire.answers.trainingDays ?? []),
+              prescribedTrainingDays.length > 0
+                ? prescribedTrainingDays
+                : normalizeWeekdays(questionnaire.answers.trainingDays ?? []),
               deviceTimezone(),
             );
           }

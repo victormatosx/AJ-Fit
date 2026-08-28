@@ -42,6 +42,10 @@
     }
   },
   "schedule": {
+    "activeRecovery": {
+      "title": "Recuperação ativa",
+      "body": "Hoje é dia de movimento leve e recuperação, sem treino estruturado."
+    },
     "restDay": {
       "title": "Dia de descanso",
       "body": "Hoje não é um dos seus dias de treino."

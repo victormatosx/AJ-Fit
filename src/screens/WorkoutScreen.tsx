@@ -38,6 +38,7 @@ import {
 } from '../units/workoutLoadConversions';
 import { WORKOUT_SUBSTITUTIONS_STORAGE_KEY as SUBS_KEY } from '../services/workoutSubstitutionsStorage';
 import { resolveSessionDisplayName } from '../workoutPrescription/sessionPresentation';
+import { resolveCardioFinisherPresentation } from '../workoutPrescription/cardioPresentation';
 import { workoutExercisesFromPlan, pluralCountForReps, type Exercise, type SetData, type SubOption } from './workoutScreenPlan';
 
 type Props = {
@@ -114,6 +115,8 @@ export function WorkoutScreen({ plan, onDone, onMinimize, sessionIndex = 0, onSe
   const loadUnit = workoutLoadUnit(resolvedUnits);
   const tLoose = t as unknown as LooseT;
   const { canPerform } = usePremiumCapabilities();
+  const currentSession = plan.sessions[sessionIndex] ?? plan.sessions[0];
+  const cardioFinisher = currentSession?.cardioFinisher;
   // FASE 3: defense-in-depth, not the primary gate — AppShell's
   // `startWorkout()` is the only place that sets `tab === 'workout'` today,
   // and it already checks START_WORKOUT before doing so. This bounces back
@@ -146,6 +149,7 @@ export function WorkoutScreen({ plan, onDone, onMinimize, sessionIndex = 0, onSe
   const [pendingSub, setPendingSub] = useState<SubOption | null>(null);
 
   const [finished, setFinished] = useState(false);
+  const [showCardioFinisher, setShowCardioFinisher] = useState(false);
   const [elapsed, setElapsed] = useState(0);
 
   const [permSubs, setPermSubs] = useState<Record<string, SubOption>>({});
@@ -255,7 +259,8 @@ export function WorkoutScreen({ plan, onDone, onMinimize, sessionIndex = 0, onSe
       setOrder(nextOrder);
       setSkipped((s) => s.filter((x) => x !== exIdx));
       if (nextOrder.length === 0) {
-        setFinished(true);
+        if (cardioFinisher) setShowCardioFinisher(true);
+        else setFinished(true);
         return;
       }
       const nextEx = resolve(exercises[nextOrder[0]]);
@@ -282,7 +287,8 @@ export function WorkoutScreen({ plan, onDone, onMinimize, sessionIndex = 0, onSe
     if (isLastOverall) {
       onSetLogged?.(exIdx, setIdx, lastWeight(ex, setIdx));
       setProgress((p) => ({ ...p, [exIdx]: setIdx + 1 }));
-      setFinished(true);
+      if (cardioFinisher) setShowCardioFinisher(true);
+      else setFinished(true);
       return;
     }
     setPending({ exId: ex.id, exIdx, setIdx });
@@ -362,6 +368,43 @@ export function WorkoutScreen({ plan, onDone, onMinimize, sessionIndex = 0, onSe
     );
   }
 
+  if (showCardioFinisher && cardioFinisher) {
+    const cardio = resolveCardioFinisherPresentation(tLoose, cardioFinisher);
+    return (
+      <ScreenBg>
+        <SafeAreaView style={{ flex: 1, justifyContent: 'center', padding: 20 }} edges={['top', 'bottom']}>
+          <Card style={{ padding: 22 }}>
+            <MonoLabel color={theme.colors.primaryEmphasis}>
+              {t('cardioFinisher.kicker').toUpperCase()}
+            </MonoLabel>
+            <Display size={30} style={{ marginTop: 10 }}>
+              {t('cardioFinisher.title')}
+            </Display>
+            <Text style={{ marginTop: 18, fontFamily: theme.fonts.uiBold, fontSize: 19, color: theme.colors.textPrimary }}>
+              {cardio.mode}
+            </Text>
+            <Text style={{ marginTop: 8, fontFamily: theme.fonts.mono, fontSize: 13, color: theme.colors.textEmphasis }}>
+              {cardio.duration} · {cardio.intensity}
+            </Text>
+            {cardio.optional && (
+              <Text style={{ marginTop: 10, fontFamily: theme.fonts.ui, fontSize: 13, color: theme.colors.textFaint }}>
+                {t('cardioFinisher.optional')}
+              </Text>
+            )}
+          </Card>
+          <View style={{ marginTop: 16 }}>
+            <CtaButton onPress={() => setFinished(true)}>
+              <Icon name="check" size={18} color={theme.colors.primaryForeground} />
+              <Text style={{ color: theme.colors.primaryForeground, fontFamily: theme.fonts.display, fontSize: 17, letterSpacing: 1.5, textTransform: 'uppercase' }}>
+                {t('actions.finishWorkout')}
+              </Text>
+            </CtaButton>
+          </View>
+        </SafeAreaView>
+      </ScreenBg>
+    );
+  }
+
   // Only computed once `finished` is ruled out above — `order` (and thus
   // `exIdx`/`setIdx`) is only ever left pointing at an exercise with
   // remaining sets while `finished` is false (both `advanceAfterRest` and
@@ -414,7 +457,9 @@ export function WorkoutScreen({ plan, onDone, onMinimize, sessionIndex = 0, onSe
             >
               <MonoLabel>{plan.templateId} · {(() => {
                 const session = plan.sessions[sessionIndex] ?? plan.sessions[0];
-                return session ? resolveSessionDisplayName(tLoose, session.name, session.type) : '';
+                return session
+                  ? resolveSessionDisplayName(tLoose, session.name, session.type, session.displayName)
+                  : '';
               })()}</MonoLabel>
               <MonoLabel color={theme.colors.primaryEmphasis}>{fmt(elapsed)}</MonoLabel>
               <MonoLabel>

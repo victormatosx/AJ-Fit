@@ -24,7 +24,7 @@ import {
   type LimitationCatalogExercise,
 } from '../src/workoutPrescription/limitationResolver';
 import { LIMITATION_REGION_IDS, type LimitationRegionId } from '../src/types/exercise';
-import templatesJson from '../docs/workouts/AJ_Fit_T001_T090_workouts_canonical_v1_3.json';
+import templatesJson from '../docs/workouts/AJ_Fit_T001_T090_workouts_reformed_v2_0.json';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '..');

@@ -13,6 +13,21 @@
     "skipBusy": "Pular · aparelho ocupado",
     "completeSet": "Concluir série {{number}}"
   },
+  "cardioFinisher": {
+    "kicker": "Pós-musculação",
+    "title": "Cardio final",
+    "optional": "Opcional · faça somente se estiver se sentindo bem e sem sintomas.",
+    "optionSeparator": " ou ",
+    "options": {
+      "walking": "Caminhada",
+      "stationary-bike": "Bicicleta ergométrica"
+    },
+    "intensities": {
+      "lightModerate": "Leve a moderada",
+      "comfortableLightModerate": "Leve a moderada, confortável",
+      "moderate": "Moderada"
+    }
+  },
   "badges": {
     "resumed": "Retomado"
   },
@@ -165,6 +180,26 @@
       "keyPoint2": "Desça controlando a fase excêntrica",
       "keyPoint3": "Não trave os cotovelos no topo"
     }
+  },
+  "sessionDisplayNames": {
+    "Peito, Ombros & Tríceps · Push": "Peito, Ombros & Tríceps · Push",
+    "Costas & Bíceps · Pull": "Costas & Bíceps · Pull",
+    "Pernas Completas · Legs": "Pernas Completas · Legs",
+    "Superiores Completos · Upper": "Superiores Completos · Upper",
+    "Inferiores Completos · Lower": "Inferiores Completos · Lower",
+    "Peito, Ombros & Tríceps · Push B": "Peito, Ombros & Tríceps · Push B",
+    "Costas & Bíceps · Pull B": "Costas & Bíceps · Pull B",
+    "Pernas Completas · Legs B": "Pernas Completas · Legs B",
+    "Superiores · Ênfase Push": "Superiores · Ênfase Push",
+    "Superiores · Ênfase Pull": "Superiores · Ênfase Pull",
+    "Inferiores Completos": "Inferiores Completos",
+    "Força Total A": "Força Total A",
+    "Força Total B": "Força Total B",
+    "Força Total C": "Força Total C",
+    "Condicionamento Total A": "Condicionamento Total A",
+    "Condicionamento Total B": "Condicionamento Total B",
+    "Cardio Contínuo": "Cardio Contínuo",
+    "Cardio Leve & Mobilidade": "Cardio Leve & Mobilidade"
   },
   "sessionNames": {
     "A": "Treino A",

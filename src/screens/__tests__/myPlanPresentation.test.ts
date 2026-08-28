@@ -64,7 +64,7 @@ describe('buildAdaptationFlags', () => {
   it('flags experience only for beginner-driven composition decisions, not duration-driven ones', () => {
     const trace: PrescriptionTrace = {
       ...emptyTrace,
-      compositionDecisions: [{ reasonCode: 'BEGINNER_SESSION_REDUCED', sessionIndex: 0 }],
+      compositionDecisions: [{ reasonCode: 'BEGINNER_VOLUME_REDUCED', sessionIndex: 0 }],
     };
     const flags = buildAdaptationFlags(trace);
     expect(flags.experience).toBe(true);

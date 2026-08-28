@@ -3,7 +3,7 @@
  * raw in the UI. T001–T090's canonical `name` field mixes already-correct
  * Portuguese phrases ("Aeróbico contínuo") with English/gym-shorthand codes
  * ("Push", "Bench", bare "A"/"B") with no i18n of its own — the exact set
- * catalogued from `docs/workouts/AJ_Fit_T001_T090_workouts_canonical_v1_3.json`
+ * catalogued from `docs/workouts/AJ_Fit_T001_T090_workouts_reformed_v2_0.json`
  * (47 distinct values as of this audit).
  *
  * `name` stays the STRUCTURAL identity (session identity, exercise
@@ -50,7 +50,19 @@ const SESSION_TYPE_KEYS: Record<string, string> = {
  *      no worse than the pre-Phase-2 behavior for a name genuinely new to
  *      both tables.
  */
-export function resolveSessionDisplayName(t: LooseTranslate, name: string, type: string): string {
+export function resolveSessionDisplayName(
+  t: LooseTranslate,
+  name: string,
+  type: string,
+  displayName?: string,
+): string {
+  // `display_name` is authored in pt-BR, so it is never rendered directly.
+  // It is a stable lookup value whose localized presentation lives in i18n.
+  if (displayName) {
+    const displayKey = `workout:sessionDisplayNames.${displayName}`;
+    const byDisplayName = t(displayKey, { defaultValue: '' });
+    if (byDisplayName && byDisplayName !== displayKey) return byDisplayName;
+  }
   // Namespace-qualified (`workout:...`), never a bare key — this is called
   // from screens whose own default namespace is NOT `workout` (e.g.
   // `HomeScreen`'s `home`/`profile`), and i18next only resolves an

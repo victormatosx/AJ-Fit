@@ -41,9 +41,9 @@ describe('prescription pipeline and invariants', () => {
     if (first.status === 'SUCCESS') {
       expect(first.plan.templateId).toBe('T003');
       expect(first.plan.planId).toMatch(/^wp_[0-9a-f]{8}$/);
-      expect(first.plan.versions.templateLibrary).toBe('1.3.0');
+      expect(first.plan.versions.templateLibrary).toBe('2.0.0');
       expect(first.plan.versions.modifierRules).toBe('2.0.0');
-      expect(first.plan.versions.compositionEngine).toBe('2.0.0');
+      expect(first.plan.versions.compositionEngine).toBe('2.1.0');
       expect(first.plan.versions.limitationResolver).toBe('1.0.0');
       expect(first.plan.trace.limitationResolverVersion).toBe(1);
     }
@@ -73,7 +73,8 @@ describe('prescription pipeline and invariants', () => {
     const result = generateWorkoutPrescription(completeAnswers({ level: 'beginner', duration: '30' }));
     expect(result.status).toBe('SUCCESS');
     if (result.status === 'SUCCESS') {
-      expect(result.plan.sessions.map((session) => session.exercises.length)).toEqual([4, 3, 4, 3]);
+      expect(result.plan.sessions.map((session) => session.exercises.length)).toEqual([7, 6, 7, 6]);
+      expect(result.plan.sessions.flatMap((session) => session.exercises).every((exercise) => (exercise.sets ?? 0) <= 2)).toBe(true);
       expect(result.plan.trace.unresolvedModifiers).toEqual([]);
     }
   });
@@ -116,12 +117,7 @@ describe('prescription pipeline and invariants', () => {
     }));
     expect(result.status).toBe('SUCCESS');
     if (result.status === 'SUCCESS') {
-      expect(result.plan.trace.substitutions).toContainEqual({
-        sessionIndex: 2,
-        fromExerciseId: 'iso-lateral-row-machine',
-        toExerciseId: 'bent-over-dumbbell-row',
-        reasonCode: 'EQUIPMENT_UNAVAILABLE',
-      });
+      expect(result.plan.trace.substitutions).toEqual([]);
       const allowed = new Set(['bodyweight', 'dumbbell', 'resistance_band', 'mini_band', 'bench', 'chair', 'step']);
       const catalog = new Map(EXERCISES_SEED.map((exercise) => [exercise.id, exercise]));
       for (const exercise of result.plan.sessions.flatMap((session) => session.exercises)) {
@@ -140,12 +136,12 @@ describe('prescription pipeline and invariants', () => {
     }));
   });
 
-  it('all 2,108 canonical final references resolve to the real seeded exercise catalog', () => {
+  it('all 2,116 canonical final references resolve to the real seeded exercise catalog', () => {
     const ids = new Set(EXERCISES_SEED.map((exercise) => exercise.id));
     const references = WORKOUT_TEMPLATES.flatMap((template) =>
       template.sessions.flatMap((session) => session.exercises.map((exercise) => exercise.exercise_id)),
     );
-    expect(references).toHaveLength(2108);
+    expect(references).toHaveLength(2116);
     expect(references.filter((id) => !ids.has(id))).toEqual([]);
   });
 

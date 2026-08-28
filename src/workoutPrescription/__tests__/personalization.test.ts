@@ -50,8 +50,8 @@ describe('keepCount', () => {
 
 describe('beginner adaptation', () => {
   it.each([
-    [1, [3, 3, 4]],
-    [2, [4, 5, 5]],
+    [1, [5, 6, 7]],
+    [2, [5, 6, 7]],
     [3, [5, 6, 7]],
     [4, [5, 6, 7]],
   ] as const)('T002 week %s has the documented counts', (week, expected) => {
@@ -67,14 +67,14 @@ describe('beginner adaptation', () => {
     expect(week3.adaptationStage).toBe(3);
   });
 
-  it('preserves the original dose of retained exercises', () => {
+  it('preserves exercise coverage while reducing beginner working sets', () => {
     const template = getTemplateById('T002');
     if (!template) throw new Error('T002 missing');
     const plan = successfulPlan(completeAnswers({ level: 'beginner', days: 3 }), 1);
     for (const [sessionIndex, session] of plan.sessions.entries()) {
       for (const exercise of session.exercises) {
         const source = template.sessions[sessionIndex].exercises.find((item) => item.exercise_id === exercise.sourceExerciseId);
-        expect(exercise.sets).toBe(source?.sets);
+        expect(exercise.sets).toBe(Math.min(source?.sets ?? 2, 2));
         expect(exercise.reps).toBe(source?.reps);
         expect(exercise.duration).toBe(source?.duration);
       }
@@ -99,14 +99,16 @@ describe('duration and composition limits', () => {
     expect(plan.sessions.map((session) => session.exercises.length)).toEqual(expected);
   });
 
-  it('uses the strongest BASE limit instead of sequential percentages', () => {
+  it('uses set reductions before exercise removal for beginner short sessions', () => {
     const week1 = successfulPlan(completeAnswers({ level: 'beginner', days: 3, duration: '30' }), 1);
     const week2 = successfulPlan(completeAnswers({ level: 'beginner', days: 3, duration: '30' }), 2);
-    expect(week1.sessions[1].exercises).toHaveLength(3);
-    expect(week2.sessions[1].exercises).toHaveLength(4);
+    expect(week1.sessions[1].exercises).toHaveLength(6);
+    expect(week2.sessions[1].exercises).toHaveLength(6);
+    expect(week1.sessions[1].exercises.some((exercise) => exercise.sets === 1)).toBe(true);
+    expect(week2.sessions[1].exercises.some((exercise) => exercise.sets === 2)).toBe(true);
   });
 
-  it('uses at most one fallback set and never during beginner adaptation', () => {
+  it('uses one fallback set normally and set-first reductions during beginner adaptation', () => {
     const template = templateWith([
       { name: 'A', exercise_id: 'barbell-back-squat', sets: 3, reps: '6-10' },
       { name: 'B', exercise_id: 'machine-flat-bench-press', sets: 3, reps: '6-10' },
@@ -125,7 +127,8 @@ describe('duration and composition limits', () => {
       adaptationWeek: 1,
       safety: evaluateSafety(beginnerAnswers),
     });
-    expect(beginner.decisions.some((decision) => decision.reasonCode === 'DURATION_SET_FALLBACK')).toBe(false);
+    expect(beginner.decisions.filter((decision) => decision.reasonCode === 'DURATION_SET_FALLBACK')).toHaveLength(1);
+    expect(beginner.status === 'COMPOSED' && beginner.sessions[0].exercises).toHaveLength(4);
   });
 });
 
@@ -169,7 +172,7 @@ describe('muscle priority', () => {
     expect(result.decisions.some((decision) => decision.reasonCode === 'MUSCLE_PRIORITY_SET_ADDED')).toBe(false);
   });
 
-  it('does not reintroduce a priority candidate that cannot fit', () => {
+  it('preserves all slots while keeping beginner priority volume capped', () => {
     const twoSlots = templateWith([
       { name: 'Squat', exercise_id: 'barbell-back-squat', sets: 3, reps: '6-10' },
       { name: 'Chest', exercise_id: 'machine-flat-bench-press', sets: 3, reps: '6-10' },
@@ -178,7 +181,10 @@ describe('muscle priority', () => {
     const result = composeTemplate(twoSlots, answers, { adaptationWeek: 1, safety: evaluateSafety(answers) });
     expect(result.status).toBe('COMPOSED');
     if (result.status === 'COMPOSED') {
-      expect(result.sessions[0].exercises.map((exercise) => exercise.exerciseId)).toEqual(['barbell-back-squat']);
+      expect(result.sessions[0].exercises.map((exercise) => exercise.exerciseId)).toEqual([
+        'barbell-back-squat', 'machine-flat-bench-press',
+      ]);
+      expect(result.sessions[0].exercises.map((exercise) => exercise.sets)).toEqual([2, 2]);
     }
   });
 
@@ -193,7 +199,7 @@ describe('muscle priority', () => {
     expect(result.status).toBe('COMPOSED');
     if (result.status === 'COMPOSED') {
       expect(result.sessions[0].exercises.map((exercise) => exercise.exerciseId)).toEqual([
-        'machine-flat-bench-press', 'barbell-back-squat',
+        'machine-flat-bench-press', 'iso-lateral-incline-chest-press-machine', 'barbell-back-squat',
       ]);
     }
   });
@@ -217,6 +223,6 @@ describe('safety and snapshot regressions', () => {
     const week1 = successfulPlan(answers, 1);
     const week2 = successfulPlan(answers, 2);
     expect(week1.planId).not.toBe(week2.planId);
-    expect(week1.versions).toEqual(expect.objectContaining({ modifierRules: '2.0.0', compositionEngine: '2.0.0' }));
+    expect(week1.versions).toEqual(expect.objectContaining({ modifierRules: '2.0.0', compositionEngine: '2.1.0' }));
   });
 });

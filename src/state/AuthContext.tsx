@@ -397,6 +397,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             // app opens, exactly like a transient failure always could.
             if (questionnaireId && answers) {
               const persistStartedAt = Date.now();
+              let generatedPlanTrainingDays: NonNullable<QuestionnaireAnswers['trainingDays']> = [];
               try {
                 const generation = await persistPreparedWorkoutProgram({
                   uid: newUser.uid,
@@ -411,18 +412,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                   usedPrepared: Boolean(prepared && prepared.status === 'SUCCESS'),
                   durationMs: Date.now() - persistStartedAt,
                 });
+                if (generation.status === 'SUCCESS') {
+                  generatedPlanTrainingDays = generation.plan.weeklySchedule
+                    ?.filter((day) => day.state === 'TRAINING')
+                    .map((day) => day.weekday) ?? [];
+                }
               } catch (error) {
                 logWarn('workout_program', 'onboarding_workout_program_persist_failed', {
                   error,
                   durationMs: Date.now() - persistStartedAt,
                 });
               }
-              if (trainingDaysValid(answers)) {
+              if (generatedPlanTrainingDays.length > 0 || trainingDaysValid(answers)) {
                 const scheduleStartedAt = Date.now();
                 try {
                   await ensureScheduleConfigFromQuestionnaire(
                     newUser.uid,
-                    normalizeWeekdays(answers.trainingDays ?? []),
+                    generatedPlanTrainingDays.length > 0
+                      ? generatedPlanTrainingDays
+                      : normalizeWeekdays(answers.trainingDays ?? []),
                     deviceTimezone(),
                   );
                   logInfo('workout_schedule', 'onboarding_schedule_config_completed', {

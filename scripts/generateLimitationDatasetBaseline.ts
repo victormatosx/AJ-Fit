@@ -16,7 +16,7 @@ import { fileURLToPath } from 'node:url';
 import { loadLocalExerciseCatalogForLimitations } from '../src/workoutPrescription/localLimitationCatalog';
 import type { LimitationCatalogExercise } from '../src/workoutPrescription/limitationResolver';
 import { LIMITATION_REGION_IDS } from '../src/types/exercise';
-import templatesJson from '../docs/workouts/AJ_Fit_T001_T090_workouts_canonical_v1_3.json';
+import templatesJson from '../docs/workouts/AJ_Fit_T001_T090_workouts_reformed_v2_0.json';
 import { buildExerciseTemplateIndex, classifyPair, VALID_CLASSIFICATIONS } from './auditLimitationDataset';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));

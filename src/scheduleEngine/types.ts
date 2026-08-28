@@ -10,6 +10,8 @@ import type { Weekday } from '../state/AppState';
 /** User preference. Survives program regeneration; not program-scoped. */
 export interface ScheduleConfig {
   trainingDays: Weekday[];
+  /** Program-scoped guidance days. Never walked as executable sessions. */
+  activeRecoveryDays?: Weekday[];
   /** IANA timezone (e.g. "America/Sao_Paulo"). Weekday resolution is always local, never UTC. */
   timezone: string;
   scheduleVersion: number;
@@ -56,6 +58,7 @@ export type ScheduleResolution =
   | { status: 'SCHEDULE_SETUP_REQUIRED' }
   /** Today isn't a trainingDay. `nextWorkoutDate`/`nextSessionIndex` are the calendar's and the rotation's answer to "when/what next" (docs §Próximo treino != próximo dia) — never re-derived independently by callers. */
   | { status: 'REST_DAY'; nextWorkoutDate: string; nextSessionIndex: number }
+  | { status: 'ACTIVE_RECOVERY_DAY'; nextWorkoutDate: string; nextSessionIndex: number }
   /** Today IS a trainingDay and its session was already completed — distinct from REST_DAY so the UI never conflates "nothing scheduled" with "already done" (docs §Conclusão diária). */
   | { status: 'TODAY_COMPLETED'; nextWorkoutDate: string; nextSessionIndex: number }
   | { status: 'SESSION_READY'; sessionIndex: number }

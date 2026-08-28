@@ -9,7 +9,7 @@ import { EXERCISES_SEED } from '../src/data/exercisesSeedData';
 import type { ExerciseSeedInput } from '../src/types/exercise';
 import { validateExerciseSeed } from '../src/validators/exerciseValidation';
 
-const WORKOUTS_PATH = join(process.cwd(), 'docs/workouts/AJ_Fit_T001_T090_workouts_canonical_v1_3.json');
+const WORKOUTS_PATH = join(process.cwd(), 'docs/workouts/AJ_Fit_T001_T090_workouts_reformed_v2_0.json');
 const FORBIDDEN_EXACT_NAMES = new Set(['Braços', 'Core', 'Cardio', 'Mobilidade Geral', 'Caminhada leve']);
 
 type WorkoutExercise = { name: string; exercise_id: string; catalog_status?: string };

@@ -1,4 +1,5 @@
-import { findTemplate } from './catalog';
+import { findTemplateForFrequency } from './catalog';
+import { prescribeTrainingFrequency } from './frequency';
 import { environmentFor, goalFamilyFor } from './input';
 import type { Population, QuestionnaireAnswers, SelectionDecision } from './types';
 
@@ -22,18 +23,18 @@ export function selectTemplate(answers: QuestionnaireAnswers): SelectionResult {
   const population = populationFor(answers);
   const environment = environmentFor(answers);
   const goalFamily = goalFamilyFor(answers.goal);
-  if (!answers.sex || !environment || !goalFamily || !answers.days) {
+  if (!answers.sex || !environment || !goalFamily || !answers.days || ![2, 3, 4, 5, 6, 7].includes(answers.days)) {
     return { status: 'MISSING_TEMPLATE', reasonCodes: ['SELECTION_DIMENSION_MISSING'] };
   }
-  const prescribedStructuredDays = population === 'conventional'
-    ? answers.days
-    : Math.min(answers.days, 4);
-  const template = findTemplate({
+  const frequency = prescribeTrainingFrequency(answers, population);
+  const prescribedStructuredDays = frequency.prescribedTrainingFrequency;
+  const template = findTemplateForFrequency({
     population,
     sex: answers.sex === 'm' ? 'male' : 'female',
     environment,
     goalFamily,
-    days: prescribedStructuredDays,
+    prescribedTrainingFrequency: prescribedStructuredDays,
+    availabilityDays: frequency.availabilityDays,
   });
   if (!template) {
     return {
@@ -58,6 +59,7 @@ export function selectTemplate(answers: QuestionnaireAnswers): SelectionResult {
         `goal_family:${template.profile.primary_goal}`,
         `environment:${environment}`,
         `structured_days:${prescribedStructuredDays}`,
+        `frequency_policy:${frequency.reasonCode}`,
         ...(answers.days !== prescribedStructuredDays ? [`requested_days:${answers.days}`] : []),
       ],
     },

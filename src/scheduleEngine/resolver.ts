@@ -60,7 +60,9 @@ export function resolveWorkoutSchedule(input: ResolveWorkoutScheduleInput): Sche
       ?? anchorSessionIndex(config.trainingDays, weekdayOfLocalDate(nextWorkoutDate), sessionCount);
     return state?.lastCompletedAt === todayLocalDate
       ? { status: 'TODAY_COMPLETED', nextWorkoutDate, nextSessionIndex }
-      : { status: 'REST_DAY', nextWorkoutDate, nextSessionIndex };
+      : config.activeRecoveryDays?.includes(weekdayOfLocalDate(todayLocalDate))
+        ? { status: 'ACTIVE_RECOVERY_DAY', nextWorkoutDate, nextSessionIndex }
+        : { status: 'REST_DAY', nextWorkoutDate, nextSessionIndex };
   }
 
   const nextSessionIndex = state?.nextSessionIndex
@@ -74,7 +76,9 @@ export function resolveWorkoutSchedule(input: ResolveWorkoutScheduleInput): Sche
     // reveals whether there's really a gap (docs §Detecção de miss).
     if (!config.trainingDays.includes(weekdayOfLocalDate(todayLocalDate))) {
       const nextWorkoutDate = nextTrainingDayOnOrAfter(config.trainingDays, addDaysLocal(todayLocalDate, 1));
-      return { status: 'REST_DAY', nextWorkoutDate, nextSessionIndex };
+      return config.activeRecoveryDays?.includes(weekdayOfLocalDate(todayLocalDate))
+        ? { status: 'ACTIVE_RECOVERY_DAY', nextWorkoutDate, nextSessionIndex }
+        : { status: 'REST_DAY', nextWorkoutDate, nextSessionIndex };
     }
     return { status: 'SESSION_READY', sessionIndex: nextSessionIndex };
   }

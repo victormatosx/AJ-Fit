@@ -158,9 +158,19 @@ export async function resolveTodaysSchedule(input: {
   sessionCount: number;
   activatedAtLocalDate: string | null;
   todayLocalDate: string;
+  /** Phase 2 program-scoped training days. Legacy programs omit this and use ScheduleConfig unchanged. */
+  trainingDaysOverride?: Weekday[];
+  activeRecoveryDaysOverride?: Weekday[];
 }): Promise<ScheduleResolution> {
   const hasActiveProgram = input.programId != null && input.sessionCount > 0;
-  const config = await loadScheduleConfig(input.uid);
+  const storedConfig = await loadScheduleConfig(input.uid);
+  const config = storedConfig && input.trainingDaysOverride?.length
+    ? {
+        ...storedConfig,
+        trainingDays: input.trainingDaysOverride,
+        activeRecoveryDays: input.activeRecoveryDaysOverride ?? [],
+      }
+    : storedConfig;
 
   if (!hasActiveProgram) return resolveWorkoutSchedule({
     hasActiveProgram: false,

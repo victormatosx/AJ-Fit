@@ -79,7 +79,10 @@ export async function evaluateActiveProgression(uid: string): Promise<{
     adaptationStage: program.adaptationStage,
     activatedAtLocalDate,
     todayLocalDate,
-    trainingDaysPerWeek: config?.trainingDays.length ?? 0,
+    trainingDaysPerWeek: program.prescribedTrainingFrequency
+      ?? program.prescribedStructuredDays
+      ?? config?.trainingDays.length
+      ?? 0,
     completedOrPartialSessionCount: executions.filter((e) => e.status === 'COMPLETED' || e.status === 'PARTIALLY_COMPLETED').length,
     hasActiveExecution: executions.some((e) => e.status === 'IN_PROGRESS'),
   });

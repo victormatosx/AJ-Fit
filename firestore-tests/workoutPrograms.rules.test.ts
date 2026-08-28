@@ -68,6 +68,36 @@ function programDocument(programId = 'wpg_12345678') {
   };
 }
 
+function v2TemplateDocument() {
+  return { ...templateDocument(), version: 2, sourceVersion: '2.0.0', libraryId: 'reformed-v2' };
+}
+
+function v2ProgramDocument(programId = 'wpg_v2000000') {
+  return {
+    ...programDocument(programId),
+    templateVersion: 2,
+    templateSourceVersion: '2.0.0',
+    versions: {
+      ...programDocument(programId).versions,
+      templateLibrary: '2.0.0',
+      compositionEngine: '2.1.0',
+    },
+  };
+}
+
+function phase2ProgramDocument(programId = 'wpg_phase200') {
+  return {
+    ...v2ProgramDocument(programId),
+    requestedDays: 7,
+    prescribedStructuredDays: 4,
+    prescribedTrainingFrequency: 4,
+    availability: { days: 7, weekdays: ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'] },
+    weeklySchedule: ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'].map((weekday, index) =>
+      index < 4 ? { weekday, state: 'TRAINING', sessionIndex: 0 } : { weekday, state: 'REST' }),
+    versions: { ...v2ProgramDocument(programId).versions, selectionEngine: '2.0.0' },
+  };
+}
+
 beforeAll(async () => {
   testEnv = await initializeTestEnvironment({
     projectId: PROJECT_ID,
@@ -97,7 +127,7 @@ beforeEach(async () => {
 async function createAndActivate(
   uid = UID,
   programId = 'wpg_12345678',
-  program = programDocument(programId),
+  program: Record<string, unknown> = programDocument(programId),
 ) {
   const db = dbFor(uid);
   await runTransaction(db, async (transaction) => {
@@ -131,6 +161,44 @@ describe('workoutPrograms', () => {
     await assertSucceeds(createAndActivate());
     const state = await getDoc(doc(dbFor(UID), 'users', UID, 'workoutProgramState', 'active'));
     expect(state.data()?.programId).toBe('wpg_12345678');
+  });
+
+  it('accepts a v2 program against the active v2 template', async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'workoutTemplates', 'T003'), v2TemplateDocument());
+    });
+    await assertSucceeds(createAndActivate(UID, 'wpg_v2000000', v2ProgramDocument()));
+  });
+
+  it('accepts a Phase 2 availability=7 program with prescribed frequency 4 and rejects frequency 7', async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'workoutTemplates', 'T003'), v2TemplateDocument());
+    });
+    await assertSucceeds(createAndActivate(UID, 'wpg_phase200', phase2ProgramDocument()));
+    await assertFails(createAndActivate(UID, 'wpg_phasebad', {
+      ...phase2ProgramDocument('wpg_phasebad'),
+      prescribedStructuredDays: 7,
+      prescribedTrainingFrequency: 7,
+    }));
+  });
+
+  it('can supersede an existing v1.3 snapshot after its template document is upgraded to v2', async () => {
+    await assertSucceeds(createAndActivate());
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'workoutTemplates', 'T003'), v2TemplateDocument());
+    });
+    const db = dbFor(UID);
+    await assertSucceeds(runTransaction(db, async (transaction) => {
+      transaction.update(doc(db, 'users', UID, 'workoutPrograms', 'wpg_12345678'), {
+        status: 'superseded',
+        updatedAt: serverTimestamp(),
+      });
+      transaction.set(doc(db, 'users', UID, 'workoutPrograms', 'wpg_v2000000'), v2ProgramDocument());
+      transaction.set(doc(db, 'users', UID, 'workoutProgramState', 'active'), {
+        programId: 'wpg_v2000000',
+        updatedAt: serverTimestamp(),
+      });
+    }));
   });
 
   it('denies a program without the matching parent-pointer transaction', async () => {

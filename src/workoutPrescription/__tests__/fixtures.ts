@@ -53,6 +53,7 @@ export function answersForTemplate(template: CanonicalTemplate): Quiz {
   return completeAnswers({
     sex: template.profile.sex === 'male' ? 'm' : 'f',
     goal,
+    level: template.profile.days_per_week >= 6 ? 'advanced' : 'intermediate',
     days: template.profile.days_per_week,
     place: template.profile.environment,
     equipment: template.profile.environment === 'home'

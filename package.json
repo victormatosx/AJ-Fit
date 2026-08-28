@@ -94,6 +94,7 @@
     "audit:remote-limitation-dataset": "tsx scripts/auditRemoteLimitationDataset.ts",
     "seed:workout-templates": "tsx scripts/seedWorkoutTemplates.ts",
     "audit:workout-exercises": "tsx scripts/auditWorkoutExercises.ts",
+    "audit:workout-frequency": "tsx scripts/auditWorkoutFrequency.ts",
     "i18n:check": "vitest run src/i18n/__tests__",
     "i18n:audit": "node scripts/audit-i18n.mjs",
     "quality": "npm run typecheck && npm run test && npm run test:rules && npm run i18n:audit"

@@ -8,11 +8,13 @@
  */
 import { WEEKDAY_ORDER, type Weekday } from '../state/AppState';
 import type { ScheduleResolution } from '../scheduleEngine/types';
-import type { CompositionReasonCode, PrescriptionTrace } from '../workoutPrescription/types';
+import type { CompositionReasonCode, PrescriptionTrace, WorkoutDayState, WorkoutWeekdayPrescription } from '../workoutPrescription/types';
 
 export interface WeekDayViewModel {
   weekday: Weekday;
   isTrainingDay: boolean;
+  state: WorkoutDayState;
+  prescribedSessionIndex: number | null;
   isToday: boolean;
   /**
    * Only set for TODAY, and only when the Schedule Engine has already
@@ -33,15 +35,21 @@ export function buildWeekView(
   trainingDays: readonly Weekday[],
   todayWeekday: Weekday,
   resolution: ScheduleResolution,
+  weeklySchedule?: readonly WorkoutWeekdayPrescription[],
 ): WeekDayViewModel[] {
   const trainingDaySet = new Set(trainingDays);
+  const prescriptionByDay = new Map(weeklySchedule?.map((day) => [day.weekday, day]));
   return WEEKDAY_ORDER.map((weekday) => {
     const isToday = weekday === todayWeekday;
+    const prescribed = prescriptionByDay.get(weekday);
+    const state = prescribed?.state ?? (trainingDaySet.has(weekday) ? 'TRAINING' : 'REST');
     const dueSessionIndex =
       isToday && resolution.status === 'SESSION_READY' ? resolution.sessionIndex : null;
     return {
       weekday,
-      isTrainingDay: trainingDaySet.has(weekday),
+      isTrainingDay: state === 'TRAINING',
+      state,
+      prescribedSessionIndex: prescribed?.sessionIndex ?? null,
       isToday,
       dueSessionIndex,
     };
@@ -49,7 +57,7 @@ export function buildWeekView(
 }
 
 const BEGINNER_REASON_CODES: readonly CompositionReasonCode[] = [
-  'BEGINNER_SESSION_REDUCED',
+  'BEGINNER_VOLUME_REDUCED',
   'PRIORITY_SET_SKIPPED_BEGINNER',
 ];
 

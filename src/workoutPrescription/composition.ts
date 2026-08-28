@@ -8,13 +8,14 @@ import {
   type LimitationCatalog,
   type LimitationCatalogExercise,
 } from './limitationResolver';
-import { adaptationStage, beginnerKeepFactor, durationKeepFactor, isBeginnerExperience, keepCount } from './personalization';
+import { adaptationStage, beginnerAdjustedSets, durationKeepFactor, isBeginnerExperience, keepCount } from './personalization';
 import { prescribeRestSeconds } from './restPrescription';
 import type {
   CompositionDecision,
   CanonicalTemplate,
   ExerciseSubstitutionTrace,
   FinalWorkoutExercise,
+  FinalCardioFinisher,
   FinalWorkoutSession,
   QuestionnaireAnswers,
   SafetyDecision,
@@ -47,6 +48,41 @@ type ResolvedSlot = {
 };
 
 type PriorityCandidate = { priority: string; slotIndex: number };
+
+const CARDIO_DOMINANT_SESSION_TYPES = new Set([
+  'cardio', 'interval', 'circuit', 'mixed', 'recovery', 'balance_cardio',
+]);
+
+function composeCardioFinisher(
+  session: CanonicalTemplate['sessions'][number],
+  goalFamily: ReturnType<typeof goalFamilyFor>,
+  safety: SafetyDecision,
+): FinalCardioFinisher | undefined {
+  const source = session.cardio_finisher;
+  if (
+    !source
+    || source.mode === 'integrated'
+    || !source.exercise_options?.length
+    || !source.duration
+    || !source.intensity
+    || goalFamily === 'conditioning'
+    || CARDIO_DOMINANT_SESSION_TYPES.has(session.type)
+  ) {
+    return undefined;
+  }
+  // Safety remains sovereign. Catalog-authored finishers for an adapted
+  // population may survive only as explicitly optional, safety-gated advice.
+  if (safety.status !== 'CLEAR' && (!source.safety_gated || source.required)) return undefined;
+  return {
+    mode: source.mode,
+    exerciseOptions: [...source.exercise_options],
+    duration: source.duration,
+    intensity: source.intensity,
+    required: safety.status === 'CLEAR' ? source.required : false,
+    ...(source.safety_gated !== undefined ? { safetyGated: source.safety_gated } : {}),
+    ...(source.notes !== undefined ? { notes: source.notes } : {}),
+  };
+}
 
 export type CompositionResult =
   | { status: 'COMPOSED'; sessions: FinalWorkoutSession[]; substitutions: ExerciseSubstitutionTrace[]; limitationDecisions: LimitationDecisionTrace[]; exerciseOmissions: WorkoutExerciseOmissionTrace[]; decisions: CompositionDecision[] }
@@ -288,6 +324,13 @@ export function composeTemplate(
           });
         }
       }
+      const adjustedSets = beginnerActive ? beginnerAdjustedSets(item.sets, stage) : item.sets;
+      if (beginnerActive && adjustedSets !== item.sets) {
+        decisions.push({
+          reasonCode: 'BEGINNER_VOLUME_REDUCED', sessionIndex,
+          exerciseId: selected.id, beforeSets: item.sets, afterSets: adjustedSets,
+        });
+      }
       usedExerciseIds.add(selected.id);
       slots.push({
         originalIndex,
@@ -296,7 +339,7 @@ export function composeTemplate(
         exercise: {
           exerciseId: selected.id,
           sourceExerciseId: source.id,
-          sets: item.sets,
+          sets: adjustedSets,
           reps: item.reps,
           duration: item.duration,
           cycles: item.cycles,
@@ -313,18 +356,16 @@ export function composeTemplate(
     }
 
     const baseCount = slots.length;
-    const durationTarget = keepCount(baseCount, durationKeepFactor(answers.duration));
-    const beginnerTarget = beginnerActive ? keepCount(baseCount, beginnerKeepFactor(stage)) : baseCount;
-    const target = Math.min(baseCount, durationTarget, beginnerTarget);
+    // Beginner adaptation has already reduced working-set volume. Preserve
+    // movement coverage and express short-duration pressure through sets;
+    // duration may still remove low-priority slots for non-beginners.
+    const durationTarget = beginnerActive
+      ? baseCount
+      : keepCount(baseCount, durationKeepFactor(answers.duration));
+    const target = Math.min(baseCount, durationTarget);
     const candidates = priorityCandidates(slots, priorities);
     const selected = selectSlotIndices(slots, target, candidates);
 
-    if (beginnerTarget < baseCount) {
-      decisions.push({
-        reasonCode: 'BEGINNER_SESSION_REDUCED', sessionIndex,
-        baseExerciseCount: baseCount, targetExerciseCount: beginnerTarget,
-      });
-    }
     if (durationTarget < baseCount) {
       decisions.push({
         reasonCode: 'DURATION_SESSION_REDUCED', sessionIndex,
@@ -341,10 +382,33 @@ export function composeTemplate(
     }
 
     let fallbackUsed = false;
+    if (beginnerActive && (answers.duration === '30' || answers.duration === '45')) {
+      const desiredReductions = answers.duration === '30'
+        ? Math.max(1, Math.ceil(baseCount * 0.4))
+        : 1;
+      const protectedIndices = new Set<number>([0, ...candidates.map((candidate) => candidate.slotIndex)]);
+      const reducible = [...selected]
+        .sort((left, right) => right - left)
+        .filter((index) => !protectedIndices.has(index) && (slots[index].exercise.sets ?? 0) > 1);
+      for (const fallbackIndex of reducible.slice(0, desiredReductions)) {
+        const exercise = slots[fallbackIndex].exercise;
+        const beforeSets = exercise.sets as number;
+        slots[fallbackIndex] = {
+          ...slots[fallbackIndex],
+          exercise: { ...exercise, sets: beforeSets - 1 },
+        };
+        fallbackUsed = true;
+        decisions.push({
+          reasonCode: 'DURATION_SET_FALLBACK', sessionIndex,
+          exerciseId: exercise.exerciseId, beforeSets, afterSets: beforeSets - 1,
+        });
+      }
+    }
     if (
+      !beginnerActive
+      &&
       (answers.duration === '30' || answers.duration === '45')
       && durationTarget === baseCount
-      && !beginnerActive
       && options.safety.status === 'CLEAR'
     ) {
       const fallbackIndex = [...selected]
@@ -421,11 +485,14 @@ export function composeTemplate(
       });
     }
 
+    const cardioFinisher = composeCardioFinisher(session, goalFamily, options.safety);
     return {
       name: session.name,
       type: session.type,
       notes: session.notes,
       exercises: orderedIndices.map((index) => slots[index].exercise),
+      ...(session.display_name ? { displayName: session.display_name } : {}),
+      ...(cardioFinisher ? { cardioFinisher } : {}),
     };
   });
 

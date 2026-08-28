@@ -42,6 +42,10 @@
     }
   },
   "schedule": {
+    "activeRecovery": {
+      "title": "Active recovery",
+      "body": "Today is for light movement and recovery, with no structured workout."
+    },
     "restDay": {
       "title": "Rest day",
       "body": "Today isn't one of your training days."

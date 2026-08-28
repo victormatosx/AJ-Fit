@@ -1,6 +1,6 @@
-import type { CanonicalTemplate, TemplateId } from './types';
+import type { CanonicalCardioFinisher, CanonicalTemplate, TemplateId } from './types';
 
-export const WORKOUT_TEMPLATE_DOCUMENT_VERSION = 1;
+export const WORKOUT_TEMPLATE_DOCUMENT_VERSION = 2;
 export const WORKOUT_TEMPLATE_STATUS = 'active' as const;
 
 export interface WorkoutTemplateDocumentBody {
@@ -22,8 +22,18 @@ export interface WorkoutTemplateDocumentBody {
   safety?: unknown;
   sessions: Array<{
     name: string;
+    displayName?: string;
     type: string;
     notes?: string;
+    cardioFinisher?: {
+      mode: string;
+      exerciseOptions?: string[];
+      duration?: string;
+      intensity?: string;
+      required: boolean;
+      safetyGated?: boolean;
+      notes?: string;
+    };
     exercises: Array<{
       exerciseId: string;
       sets?: number;
@@ -78,8 +88,18 @@ export function toWorkoutTemplateDocumentBody(
     safety: template.safety,
     sessions: template.sessions.map((session) => ({
       name: session.name,
+      displayName: session.display_name,
       type: session.type,
       notes: session.notes,
+      cardioFinisher: session.cardio_finisher ? {
+        mode: session.cardio_finisher.mode,
+        exerciseOptions: session.cardio_finisher.exercise_options,
+        duration: session.cardio_finisher.duration,
+        intensity: session.cardio_finisher.intensity,
+        required: session.cardio_finisher.required,
+        safetyGated: session.cardio_finisher.safety_gated,
+        notes: session.cardio_finisher.notes,
+      } : undefined,
       exercises: session.exercises.map((exercise) => ({
         exerciseId: exercise.exercise_id,
         sets: exercise.sets,
@@ -109,8 +129,24 @@ export function fromWorkoutTemplateDocument(doc: WorkoutTemplateDocument): Canon
     ...(doc.safety !== undefined ? { safety: doc.safety } : {}),
     sessions: doc.sessions.map((session) => ({
       name: session.name,
+      ...(session.displayName ? { display_name: session.displayName } : {}),
       type: session.type,
       ...(session.notes ? { notes: session.notes } : {}),
+      ...(session.cardioFinisher ? {
+        cardio_finisher: {
+          mode: session.cardioFinisher.mode,
+          ...(session.cardioFinisher.exerciseOptions
+            ? { exercise_options: [...session.cardioFinisher.exerciseOptions] }
+            : {}),
+          ...(session.cardioFinisher.duration ? { duration: session.cardioFinisher.duration } : {}),
+          ...(session.cardioFinisher.intensity ? { intensity: session.cardioFinisher.intensity } : {}),
+          required: session.cardioFinisher.required,
+          ...(session.cardioFinisher.safetyGated !== undefined
+            ? { safety_gated: session.cardioFinisher.safetyGated }
+            : {}),
+          ...(session.cardioFinisher.notes !== undefined ? { notes: session.cardioFinisher.notes } : {}),
+        } satisfies CanonicalCardioFinisher,
+      } : {}),
       exercises: session.exercises.map((exercise) => ({
         name: exercise.exerciseId,
         exercise_id: exercise.exerciseId,

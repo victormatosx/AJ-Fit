@@ -177,9 +177,8 @@ describe.skipIf(!enabled)('prepared-persist + automatic_reconciliation concurren
   });
 
   it('a fingerprint mismatch (prepared computed for different answers) discards prepared and regenerates authoritatively — no wrong plan persisted', async () => {
-    // `never_or_starting` halves exercises-per-session at stage 1
-    // (beginnerKeepFactor 0.50) — a reliable, already-tested structural
-    // difference from `intermediate`'s unreduced sessions, used here purely
+    // `never_or_starting` caps working sets at stage 1 — a reliable,
+    // already-tested volume difference from `intermediate`, used here purely
     // to PROVE which answers actually shaped the persisted plan.
     const staleAnswers = completeAnswers({ level: 'never_or_starting', days: 4, place: 'gym', sex: 'm', goal: 'gain_muscle' });
     const prepared = await prepareWorkoutProgramLocally(staleAnswers);
@@ -194,12 +193,12 @@ describe.skipIf(!enabled)('prepared-persist + automatic_reconciliation concurren
 
     expect(result.status).toBe('SUCCESS');
     if (result.status !== 'SUCCESS') return;
-    // If the mismatch had gone undetected, the beginner-reduced `prepared.plan`
+    // If the mismatch had gone undetected, the beginner-volume `prepared.plan`
     // would have been persisted verbatim. It wasn't — the persisted session
-    // has MORE exercises than the stale prepared one, proving the
+    // has MORE total working sets than the stale prepared one, proving the
     // authoritative path (using `VALID_ANSWERS`) actually ran.
-    expect(result.program.sessions[0].exercises.length).toBeGreaterThan(
-      prepared.plan.sessions[0].exercises.length,
+    expect(result.program.sessions[0].exercises.reduce((sum, exercise) => sum + (exercise.sets ?? 0), 0)).toBeGreaterThan(
+      prepared.plan.sessions[0].exercises.reduce((sum, exercise) => sum + (exercise.sets ?? 0), 0),
     );
   });
 });

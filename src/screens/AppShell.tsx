@@ -842,11 +842,12 @@ function WorkoutTabBlockedState({
   const copyKey =
     resolution.status === 'TODAY_COMPLETED' ? 'completedToday' :
     resolution.status === 'REST_DAY' ? 'restDay' :
+    resolution.status === 'ACTIVE_RECOVERY_DAY' ? 'activeRecovery' :
     resolution.status === 'SCHEDULE_SETUP_REQUIRED' ? 'setupRequired' :
     resolution.status === 'MISSED_SESSION_DECISION_REQUIRED' ? 'missedDecision' :
     null;
 
-  const nextUp = resolution.status === 'REST_DAY' || resolution.status === 'TODAY_COMPLETED'
+  const nextUp = resolution.status === 'REST_DAY' || resolution.status === 'ACTIVE_RECOVERY_DAY' || resolution.status === 'TODAY_COMPLETED'
     ? { session: plan.sessions[resolution.nextSessionIndex] ?? null, date: resolution.nextWorkoutDate }
     : null;
 

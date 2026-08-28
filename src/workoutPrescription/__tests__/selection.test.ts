@@ -4,7 +4,11 @@ import { selectTemplate } from '../selection';
 import { completeAnswers, answersForTemplate } from './fixtures';
 
 describe('selection engine T001-T090 matrix', () => {
-  it.each(WORKOUT_TEMPLATES.map((template) => [template.id, template] as const))(
+  const directlySelectable = WORKOUT_TEMPLATES.filter((template) =>
+    template.profile.special_population || template.profile.days_per_week <= 5,
+  );
+
+  it.each(directlySelectable.map((template) => [template.id, template] as const))(
     'selects %s from its canonical metadata dimensions',
     (id, template) => {
       expect(selectTemplate(answersForTemplate(template))).toEqual(
@@ -16,11 +20,9 @@ describe('selection engine T001-T090 matrix', () => {
     },
   );
 
-  it('does not let experience, duration, muscle focus, or equipment select a different Txxx', () => {
+  it('does not let duration, muscle focus, or equipment select a different Txxx', () => {
     const base = completeAnswers();
     const variants = [
-      { ...base, level: 'beginner' as const },
-      { ...base, level: 'advanced' as const },
       { ...base, duration: '30' as const },
       { ...base, duration: '90' as const },
       { ...base, muscleFocus: ['chest', 'arms'] },
@@ -30,6 +32,15 @@ describe('selection engine T001-T090 matrix', () => {
       return result.status === 'SELECTED' ? result.decision.templateId : result.status;
     });
     expect(new Set(ids).size).toBe(1);
+  });
+
+  it('uses experience only for deterministic high-availability frequency prescription', () => {
+    const templateIds = (['beginner', 'intermediate', 'advanced'] as const).map((level) => {
+      const result = selectTemplate(completeAnswers({ days: 7, level }));
+      if (result.status !== 'SELECTED') throw new Error(result.status);
+      return [result.decision.prescribedStructuredDays, result.decision.templateId];
+    });
+    expect(templateIds).toEqual([[4, 'T003'], [5, 'T004'], [6, 'T005']]);
   });
 
   it('uses primaryPlace for both', () => {

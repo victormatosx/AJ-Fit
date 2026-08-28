@@ -12,6 +12,7 @@ import { normalizeWeekdays, trainingDaysValid } from '../lib/questionnaireSchema
 import { localDateInTimezone } from './localDate';
 import type { MissDecision, ScheduleConfig, ScheduleResolution } from './types';
 import type { WorkoutProgramSnapshot } from '../services/workoutPrograms';
+import { legacyTrainingDays } from '../workoutPrescription/weeklySchedule';
 
 const notAvailable: ScheduleResolution = { status: 'PROGRAM_NOT_AVAILABLE' };
 
@@ -44,7 +45,13 @@ export function useWorkoutSchedule(program: WorkoutProgramSnapshot | null): Work
   const { user, questionnaire } = useAuth();
   const uid = user?.uid ?? null;
   const programId = program?.programId ?? null;
-  const sessionCount = program?.sessions.length ?? 0;
+  const prescribedProgramDays = program ? legacyTrainingDays(program) : [];
+  const prescribedRecoveryDays = program?.weeklySchedule
+    ?.filter((day) => day.state === 'ACTIVE_RECOVERY')
+    .map((day) => day.weekday) ?? [];
+  const sessionCount = program
+    ? program.prescribedTrainingFrequency ?? program.prescribedStructuredDays ?? program.sessions.length
+    : 0;
   const activatedAtLocalDate = program?.activatedAt
     ? localDateInTimezone(program.activatedAt.toDate(), deviceTimezone())
     : null;
@@ -70,14 +77,23 @@ export function useWorkoutSchedule(program: WorkoutProgramSnapshot | null): Work
       // overwrites a config the user edited afterward) and transaction-
       // guarded (safe against this hook mounting twice concurrently) — see
       // its doc comment in `services/workoutSchedule.ts`.
-      if (!loadedConfig && questionnaire && trainingDaysValid(questionnaire.answers)) {
+      if (!loadedConfig && prescribedProgramDays.length > 0) {
+        loadedConfig = await ensureScheduleConfigFromQuestionnaire(
+          uid,
+          prescribedProgramDays,
+          deviceTimezone(),
+        );
+      } else if (!loadedConfig && questionnaire && trainingDaysValid(questionnaire.answers)) {
         loadedConfig = await ensureScheduleConfigFromQuestionnaire(
           uid,
           normalizeWeekdays(questionnaire.answers.trainingDays ?? []),
           deviceTimezone(),
         );
       }
-      setConfig(loadedConfig);
+      const effectiveConfig = loadedConfig && prescribedProgramDays.length > 0
+        ? { ...loadedConfig, trainingDays: prescribedProgramDays, activeRecoveryDays: prescribedRecoveryDays }
+        : loadedConfig;
+      setConfig(effectiveConfig);
       const timezone = loadedConfig?.timezone ?? deviceTimezone();
       const todayLocalDate = localDateInTimezone(new Date(), timezone);
       const result = await resolveTodaysSchedule({
@@ -86,6 +102,8 @@ export function useWorkoutSchedule(program: WorkoutProgramSnapshot | null): Work
         sessionCount,
         activatedAtLocalDate,
         todayLocalDate,
+        trainingDaysOverride: prescribedProgramDays,
+        activeRecoveryDaysOverride: prescribedRecoveryDays,
       });
       setResolution(result);
       logInfo('workout_schedule', 'schedule_resolved', { status: result.status });
@@ -95,7 +113,7 @@ export function useWorkoutSchedule(program: WorkoutProgramSnapshot | null): Work
     } finally {
       setLoading(false);
     }
-  }, [uid, programId, sessionCount, activatedAtLocalDate, questionnaire]);
+  }, [uid, programId, sessionCount, activatedAtLocalDate, questionnaire, prescribedProgramDays.join(','), prescribedRecoveryDays.join(',')]);
 
   useEffect(() => { void reload(); }, [reload]);
 

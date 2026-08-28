@@ -1,4 +1,4 @@
-import type { Quiz } from '../state/AppState';
+import type { Quiz, Weekday } from '../state/AppState';
 import type { LimitationCatalogExercise, LimitationDecisionTrace } from './limitationResolver';
 import type { LimitationDatasetIdentity } from './limitationDataset';
 
@@ -8,16 +8,23 @@ export type GoalFamily = 'hypertrophy_body_composition' | 'strength' | 'conditio
 export type Population = 'conventional' | 'pregnancy' | 'postpartum' | 'frailty';
 export type SafetyStatus = 'CLEAR' | 'ADAPTED' | 'REQUIRES_CLEARANCE' | 'BLOCKED';
 
+export interface PrescriptionVersions {
+  templateLibrary: string;
+  selectionEngine: string;
+  safetyRules: string;
+  modifierRules: string;
+  compositionEngine: string;
+  limitationResolver: string;
+}
+
 export const PRESCRIPTION_VERSIONS = {
-  templateLibrary: '1.3.0',
-  selectionEngine: '1.0.0',
+  templateLibrary: '2.0.0',
+  selectionEngine: '2.0.0',
   safetyRules: '1.0.0',
   modifierRules: '2.0.0',
-  compositionEngine: '2.0.0',
+  compositionEngine: '2.1.0',
   limitationResolver: '1.0.0',
-} as const;
-
-export type PrescriptionVersions = typeof PRESCRIPTION_VERSIONS;
+} as const satisfies PrescriptionVersions;
 
 export type SafetyReasonCode =
   | 'PREGNANCY_POPULATION'
@@ -49,12 +56,29 @@ export interface SafetyDecision {
 
 export interface SelectionDecision {
   templateId: TemplateId;
+  /** Questionnaire availability ceiling. Kept as `requestedDays` on legacy snapshots. */
   requestedDays: number;
+  /** Number of TRAINING sessions. Recovery sessions never count toward this value. */
   prescribedStructuredDays: number;
   population: Population;
   environment: TemplateEnvironment;
   goalFamily: GoalFamily;
   reasons: string[];
+}
+
+export type WorkoutDayState = 'TRAINING' | 'ACTIVE_RECOVERY' | 'REST';
+
+export interface WorkoutAvailability {
+  days: number;
+  /** Empty only when a legacy questionnaire did not collect concrete weekdays. */
+  weekdays: Weekday[];
+}
+
+export interface WorkoutWeekdayPrescription {
+  weekday: Weekday;
+  state: WorkoutDayState;
+  /** Index into `FinalWorkoutPlan.sessions`; absent for REST. */
+  sessionIndex?: number;
 }
 
 export type ModifierPriority = 'P0' | 'P1' | 'P2' | 'P3' | 'P4' | 'P5' | 'P6' | 'P7';
@@ -89,11 +113,35 @@ export interface CanonicalExercise {
   source_name_v1_2?: string;
 }
 
+/**
+ * A short, optional cardio block appended after a resistance session's own
+ * exercises — never a replacement for them, never itself a `session`. Schema
+ * introduced in the v2.0.0 template library (`cardio_finisher`). `required`
+ * is catalog-authored intent, not a safety clearance: composition still runs
+ * it through the same safety/population gates as everything else before it
+ * can survive into a `FinalWorkoutSession` — see `composition.ts`.
+ */
+export interface CanonicalCardioFinisher {
+  mode: string;
+  /** Omitted only for `mode: "integrated"`, which marks cardio already in-session. */
+  exercise_options?: string[];
+  duration?: string;
+  intensity?: string;
+  required: boolean;
+  /** Authoring signal used by special-population finishers. */
+  safety_gated?: boolean;
+  notes?: string;
+}
+
 export interface CanonicalSession {
   name: string;
   type: string;
   notes?: string;
   exercises: CanonicalExercise[];
+  /** v2.0.0+. Commercial/presentation name — see `sessionPresentation.ts`. */
+  display_name?: string;
+  /** v2.0.0+. See `CanonicalCardioFinisher`. */
+  cardio_finisher?: CanonicalCardioFinisher;
 }
 
 export interface CanonicalTemplate {
@@ -110,6 +158,20 @@ export interface CanonicalTemplate {
   sessions: CanonicalSession[];
   assumptions?: unknown;
   safety?: unknown;
+  /**
+   * v2.0.0+. Documentation-only metadata, deliberately NOT consumed by the
+   * runtime calendar. Phase 2 deliberately keeps the typed, deterministic
+   * Schedule Engine authoritative instead of promoting localized authoring
+   * strings into a contract. Kept loosely typed for tooling only.
+   */
+  weekly_schedule?: unknown;
+  /**
+   * v2.0.0+. Declarative authoring guidance (target exercise-count ranges,
+   * etc.) that informed how the v2 catalog content itself was written.
+   * Documentation-only this phase — NOT read by `personalization.ts`, which
+   * implements its own fixed beginner policy (see `beginnerAdjustedSets`).
+   */
+  experience_modifiers?: unknown;
 }
 
 export interface FinalWorkoutExercise {
@@ -133,11 +195,26 @@ export interface FinalWorkoutExercise {
   restSeconds?: number;
 }
 
+/** Runtime counterpart of `CanonicalCardioFinisher` — camelCase, same fields. */
+export interface FinalCardioFinisher {
+  mode: string;
+  exerciseOptions: string[];
+  duration: string;
+  intensity: string;
+  required: boolean;
+  safetyGated?: boolean;
+  notes?: string;
+}
+
 export interface FinalWorkoutSession {
   name: string;
   type: string;
   notes?: string;
   exercises: FinalWorkoutExercise[];
+  /** Preferred over `name` for UI presentation when present — see `sessionPresentation.ts`. */
+  displayName?: string;
+  /** Absent when the source session has none, or when safety/population gating removed it. */
+  cardioFinisher?: FinalCardioFinisher;
 }
 
 export interface ExerciseSubstitutionTrace {
@@ -161,7 +238,7 @@ export interface WorkoutExerciseOmissionTrace {
 }
 
 export type CompositionReasonCode =
-  | 'BEGINNER_SESSION_REDUCED'
+  | 'BEGINNER_VOLUME_REDUCED'
   | 'DURATION_SESSION_REDUCED'
   | 'DURATION_SET_FALLBACK'
   | 'MUSCLE_PRIORITY_PRESERVED'
@@ -215,6 +292,12 @@ export interface FinalWorkoutPlan {
   templateId: TemplateId;
   requestedDays: number;
   prescribedStructuredDays: number;
+  /** Phase 2 canonical name. `prescribedStructuredDays` remains a backward-compatible alias. */
+  prescribedTrainingFrequency?: number;
+  /** Phase 2 explicit availability; absent on Phase 1/v1.3 snapshots. */
+  availability?: WorkoutAvailability;
+  /** Monday-first, reproducible calendar; absent on legacy snapshots. */
+  weeklySchedule?: WorkoutWeekdayPrescription[];
   population: Population;
   environment: TemplateEnvironment;
   goalFamily: GoalFamily;
