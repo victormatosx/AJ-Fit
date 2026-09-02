@@ -1,18 +1,9 @@
 {
   "meta": {
-    "todayLine": "{{weekday}} · {{day}} {{month}} · Semana {{currentWeek}}/{{totalWeeks}}"
+    "todayLine": "{{weekday}} · {{day}} {{month}}"
   },
   "greeting": {
     "casual": "E aí,"
-  },
-  "ticker": {
-    "streak": "Sequência",
-    "weekVolume": "Volume semana",
-    "benchPr": "PR supino",
-    "consistency": "Consistência",
-    "nextLevel": "Próximo nível",
-    "daysUnit": "dias",
-    "nextLevelValue": "—{{days}} DIAS"
   },
   "todayCard": {
     "kicker": "Treino de hoje",
@@ -106,20 +97,6 @@
       "title": "Não foi possível preparar seu treino",
       "body": "Algo deu errado ao gerar seu treino. Tente novamente em instantes."
     }
-  },
-  "consistency": {
-    "title": "Consistência · semana",
-    "progressLabel": "{{done}}/{{total}}",
-    "restLabel": "Off",
-    "dayInitials": [
-      "S",
-      "T",
-      "Q",
-      "Q",
-      "S",
-      "S",
-      "D"
-    ]
   },
   "progress": {
     "header": {
@@ -357,68 +334,10 @@
       "selectTab": "Exibir progresso de {{tab}}"
     }
   },
-  "monthlyConsistency": {
-    "title": "Consistência mensal",
-    "month": "Julho",
-    "monthYear": "{{month}} {{year}}",
-    "remainingTitle": "Falta para fechar o mês",
-    "daysRemaining_one": "dia",
-    "daysRemaining_other": "dias",
-    "pendingWorkouts_one": "treino",
-    "pendingWorkouts_other": "treinos",
-    "progress": "Dia {{current}} de {{total}} · {{done}} treinos feitos",
-    "legend": {
-      "done": "Treino feito",
-      "today": "Hoje",
-      "pending": "A fazer",
-      "missed": "Perdido",
-      "rest": "Descanso"
-    },
-    "accessibility": {
-      "back": "Voltar da consistência mensal"
-    }
-  },
-  "stats": {
-    "streak": {
-      "label": "Sequência",
-      "unit": "dias",
-      "note": "recorde pessoal: 21"
-    },
-    "volume": {
-      "label": "Volume",
-      "unit": "ton",
-      "note": "+8% vs semana passada"
-    }
-  },
-  "upcoming": {
-    "title": "Próximos treinos",
-    "meta": "{{duration}} min · {{exercises}} exercícios",
-    "items": {
-      "pull": {
-        "day": "Qua",
-        "name": "PULL — Costas & Bíceps",
-        "duration": 54,
-        "exercises": 7
-      },
-      "legs": {
-        "day": "Sex",
-        "name": "LEGS — Quadríceps & Glúteos",
-        "duration": 62,
-        "exercises": 9
-      },
-      "upper": {
-        "day": "Sáb",
-        "name": "UPPER — Empurrar leve",
-        "duration": 45,
-        "exercises": 6
-      }
-    }
-  },
-  "mock": {
-    "today": {
-      "type": "Push",
-      "focus": "Peito & ombro",
-      "name": "Push — Peito & Ombro"
-    }
+  "consistencyUnavailable": {
+    "title": "O histórico de consistência ainda não está disponível",
+    "body": "O AJ Fit não mostra um calendário até que o histórico de treinos concluídos possa sustentá-lo.",
+    "note": "Nenhum dado de exemplo é exibido",
+    "back": "Voltar"
   }
 }

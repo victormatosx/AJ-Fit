@@ -40,10 +40,14 @@ export interface ExerciseExecution {
 }
 
 export const WORKOUT_EXECUTION_SCHEMA_VERSION = 1;
+export const WORKOUT_EXECUTION_LIFECYCLE_SCHEMA_VERSION = 2;
 
 export interface WorkoutExecution {
   executionId: string;
+  /** V1 content identity retained for prescription lookup/backward compatibility. */
   programId: string;
+  /** V2 lifecycle namespace. Absent only on legacy executions. */
+  programInstanceId?: string;
   templateId: string;
   sessionIndex: number;
   sessionName: string;
@@ -59,8 +63,8 @@ export interface WorkoutExecution {
 }
 
 /** Deterministic — a retried "start workout" (double tap, network retry, cold start) lands on the same doc instead of creating a duplicate execution (docs §22 Idempotência). */
-export function workoutExecutionId(programId: string, sessionIndex: number, scheduledLocalDate: string): string {
-  return `exec_${programId}_${sessionIndex}_${scheduledLocalDate}`;
+export function workoutExecutionId(programOrInstanceId: string, sessionIndex: number, scheduledLocalDate: string): string {
+  return `exec_${programOrInstanceId}_${sessionIndex}_${scheduledLocalDate}`;
 }
 
 /**

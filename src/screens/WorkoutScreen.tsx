@@ -50,7 +50,7 @@ type Props = {
   /** Fires once, the moment every set is done — distinct from `onDone` (which also fires on an early exit/X tap). This is what the Schedule Engine listens to advance the rotation. */
   onSessionCompleted?: () => void;
   /** Fires once a set's weight is actually logged (docs/workout-lifecycle/09_WORKOUT_EXECUTION_AND_HISTORY.md) — `exerciseIndex` matches this exercise's position in `plan.sessions[sessionIndex].exercises`, the same identity the Execution record uses. */
-  onSetLogged?: (exerciseIndex: number, setIndex: number, weightKg: number) => void;
+  onSetLogged?: (exerciseIndex: number, setIndex: number, weightKg: number) => void | Promise<void>;
   /** Fires when the user exits via the header close button before the session finished — distinct from a normal finish; the Schedule Engine must never advance because of this (docs §36). */
   onAbandon?: () => void;
 };
@@ -149,6 +149,7 @@ export function WorkoutScreen({ plan, onDone, onMinimize, sessionIndex = 0, onSe
   const [pendingSub, setPendingSub] = useState<SubOption | null>(null);
 
   const [finished, setFinished] = useState(false);
+  const completionSignaledRef = useRef(false);
   const [showCardioFinisher, setShowCardioFinisher] = useState(false);
   const [elapsed, setElapsed] = useState(0);
 
@@ -241,6 +242,10 @@ export function WorkoutScreen({ plan, onDone, onMinimize, sessionIndex = 0, onSe
     }
     if (pending) {
       const finalWeight = nextLogged[`${pending.exId}-${pending.setIdx}`] ?? exercises[pending.exIdx].sets[pending.setIdx].w;
+      // The persistence hook registers this mutation in its serialized queue
+      // synchronously before returning the Promise. The UI transition stays
+      // synchronous to preserve the final-set render invariant; finish() is
+      // the authoritative await/flush barrier.
       onSetLogged?.(pending.exIdx, pending.setIdx, finalWeight);
     }
     const finishedSet = setIdx + 1;
@@ -343,7 +348,10 @@ export function WorkoutScreen({ plan, onDone, onMinimize, sessionIndex = 0, onSe
   // `onDone`, which also fires on an early exit (the X button) and must
   // never be read as a completion.
   useEffect(() => {
-    if (finished) onSessionCompleted?.();
+    if (finished && !completionSignaledRef.current) {
+      completionSignaledRef.current = true;
+      onSessionCompleted?.();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [finished]);
 
@@ -1997,8 +2005,7 @@ function WorkoutDone({
             Phase 2, Part G: this card showed a hardcoded "15 day streak,
             6 until a record" regardless of the user's real history — no
             streak-tracking infrastructure exists yet to compute either
-            value for real (`HomeScreen`'s own streak ticker is documented
-            as the same kind of placeholder). Removed rather than left
+            value for real. Removed rather than left
             presenting fabricated data as fact; not replaced with a Streak
             Engine in this phase.
           */}

@@ -1,18 +1,9 @@
 {
   "meta": {
-    "todayLine": "{{weekday}} · {{month}} {{day}} · Week {{currentWeek}}/{{totalWeeks}}"
+    "todayLine": "{{weekday}} · {{month}} {{day}}"
   },
   "greeting": {
     "casual": "Hey,"
-  },
-  "ticker": {
-    "streak": "Streak",
-    "weekVolume": "Week volume",
-    "benchPr": "Bench PR",
-    "consistency": "Consistency",
-    "nextLevel": "Next level",
-    "daysUnit": "days",
-    "nextLevelValue": "—{{days}} DAYS"
   },
   "todayCard": {
     "kicker": "Today's workout",
@@ -106,20 +97,6 @@
       "title": "We couldn't prepare your workout",
       "body": "Something went wrong generating your workout. Please try again shortly."
     }
-  },
-  "consistency": {
-    "title": "Consistency · week",
-    "progressLabel": "{{done}}/{{total}}",
-    "restLabel": "Off",
-    "dayInitials": [
-      "S",
-      "M",
-      "T",
-      "W",
-      "T",
-      "F",
-      "S"
-    ]
   },
   "progress": {
     "header": {
@@ -357,68 +334,10 @@
       "selectTab": "Show {{tab}} progress"
     }
   },
-  "monthlyConsistency": {
-    "title": "Monthly consistency",
-    "month": "July",
-    "monthYear": "{{month}} {{year}}",
-    "remainingTitle": "Left to complete the month",
-    "daysRemaining_one": "day",
-    "daysRemaining_other": "days",
-    "pendingWorkouts_one": "workout",
-    "pendingWorkouts_other": "workouts",
-    "progress": "Day {{current}} of {{total}} · {{done}} workouts completed",
-    "legend": {
-      "done": "Workout done",
-      "today": "Today",
-      "pending": "To do",
-      "missed": "Missed",
-      "rest": "Rest"
-    },
-    "accessibility": {
-      "back": "Back from monthly consistency"
-    }
-  },
-  "stats": {
-    "streak": {
-      "label": "Streak",
-      "unit": "days",
-      "note": "personal record: 21"
-    },
-    "volume": {
-      "label": "Volume",
-      "unit": "ton",
-      "note": "+8% vs last week"
-    }
-  },
-  "upcoming": {
-    "title": "Upcoming workouts",
-    "meta": "{{duration}} min · {{exercises}} exercises",
-    "items": {
-      "pull": {
-        "day": "Wed",
-        "name": "PULL — Back & Biceps",
-        "duration": 54,
-        "exercises": 7
-      },
-      "legs": {
-        "day": "Fri",
-        "name": "LEGS — Quads & Glutes",
-        "duration": 62,
-        "exercises": 9
-      },
-      "upper": {
-        "day": "Sat",
-        "name": "UPPER — Light push",
-        "duration": 45,
-        "exercises": 6
-      }
-    }
-  },
-  "mock": {
-    "today": {
-      "type": "Push",
-      "focus": "Chest & shoulder",
-      "name": "Push — Chest & Shoulder"
-    }
+  "consistencyUnavailable": {
+    "title": "Consistency history isn't available yet",
+    "body": "AJ Fit does not show a calendar until completed workout history can support it.",
+    "note": "No sample data is displayed",
+    "back": "Back"
   }
 }

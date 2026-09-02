@@ -53,6 +53,14 @@ describe.skipIf(!enabled)('Firestore Cleanup Engine — real Emulator integratio
       wipeCollectionGroup('progressPhotos'),
       wipeCollectionGroup('workoutPrograms'),
       wipeCollectionGroup('workoutProgramState'),
+      wipeCollectionGroup('workoutExecutions'),
+      wipeCollectionGroup('workoutLifecycleState'),
+      wipeCollectionGroup('trainingCycles'),
+      wipeCollectionGroup('programInstances'),
+      wipeCollectionGroup('workoutLifecycleEvents'),
+      wipeCollectionGroup('pendingEvolutions'),
+      wipeCollectionGroup('workoutLifecycleAuthorityGrants'),
+      wipeCollectionGroup('workoutLifecycleTrustedTelemetryReceipts'),
       wipeCollectionGroup('privateSecurity'),
     ]);
     const users = await db.collection('users').get();
@@ -91,6 +99,26 @@ describe.skipIf(!enabled)('Firestore Cleanup Engine — real Emulator integratio
     });
     await db.collection('users').doc(uid).collection('workoutPrograms').doc('wpg1').set({ status: 'active' });
     await db.collection('users').doc(uid).collection('workoutProgramState').doc('active').set({ programId: 'wpg1' });
+    await db.collection('users').doc(uid).collection('workoutExecutions').doc('exec1').set({ status: 'COMPLETED' });
+    await db.collection('users').doc(uid).collection('workoutLifecycleState').doc('current').set({ currentCycleId: 'cycle1' });
+    await db.collection('users').doc(uid).collection('trainingCycles').doc('cycle1').set({ status: 'ACTIVE' });
+    await db.collection('users').doc(uid).collection('programInstances').doc('instance1').set({
+      contentIdentity: 'wpg1',
+      prescriptionInputSnapshot: {
+        snapshotId: 'pis_deletion_fixture', schemaVersion: 1, source: 'PROGRAM_ADAPTATION',
+        inputs: { limits: ['knee'], level: 'intermediate' },
+      },
+    });
+    await db.collection('users').doc(uid).collection('workoutLifecycleEvents').doc('event1').set({ type: 'PROGRAM_STARTED' });
+    await db.collection('users').doc(uid).collection('pendingEvolutions').doc('current').set({
+      type: 'CYCLE_EVOLUTION', status: 'READY',
+      targetPrescriptionInputSnapshot: {
+        snapshotId: 'pis_pending_deletion_fixture', schemaVersion: 1, source: 'CYCLE_EVOLUTION',
+        inputs: { limits: ['knee'], level: 'intermediate' },
+      },
+    });
+    await db.collection('users').doc(uid).collection('workoutLifecycleAuthorityGrants').doc('current').set({ operation: 'EARN' });
+    await db.collection('users').doc(uid).collection('workoutLifecycleTrustedTelemetryReceipts').doc('receipt1').set({ eventType: 'LEVEL_PROMOTED' });
   }
 
   beforeAll(async () => {
@@ -150,6 +178,20 @@ describe.skipIf(!enabled)('Firestore Cleanup Engine — real Emulator integratio
       const workoutProgramState = await db
         .collection('users').doc('test-uid-cleanup-A').collection('workoutProgramState').get();
       expect(workoutProgramState.empty).toBe(true);
+      for (const collectionName of [
+        'workoutExecutions',
+        'workoutLifecycleState',
+        'trainingCycles',
+        'programInstances',
+        'workoutLifecycleEvents',
+        'pendingEvolutions',
+        'workoutLifecycleAuthorityGrants',
+        'workoutLifecycleTrustedTelemetryReceipts',
+      ]) {
+        const snapshot = await db
+          .collection('users').doc('test-uid-cleanup-A').collection(collectionName).get();
+        expect(snapshot.empty).toBe(true);
+      }
 
       // ── Vault = preserved (VAULT_KEY_DESTRUCTION's responsibility, not this engine's) ──
       const vault = await db
@@ -181,6 +223,20 @@ describe.skipIf(!enabled)('Firestore Cleanup Engine — real Emulator integratio
         .collection('assessments')
         .get();
       expect(otherAssessments.size).toBe(120);
+      const otherLifecycle = await db
+        .collection('users')
+        .doc('test-uid-cleanup-B')
+        .collection('workoutLifecycleState')
+        .doc('current')
+        .get();
+      expect(otherLifecycle.exists).toBe(true);
+      const otherPending = await db
+        .collection('users')
+        .doc('test-uid-cleanup-B')
+        .collection('pendingEvolutions')
+        .doc('current')
+        .get();
+      expect(otherPending.exists).toBe(true);
       const otherVault = await db
         .collection('users')
         .doc('test-uid-cleanup-B')

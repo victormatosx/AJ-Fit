@@ -21,6 +21,13 @@ import { collection, doc, getDoc, getDocs, setDoc, Timestamp } from 'firebase/fi
 import { buildSeedDocuments } from '../../../scripts/seedWorkoutTemplates';
 import { completeAnswers } from '../../workoutPrescription/__tests__/fixtures';
 import { toPersistedAnswers } from '../../lib/questionnaireAnswers';
+import {
+  CANONICAL_LIMITATION_DATASET_HASH,
+  CANONICAL_LIMITATION_DATASET_VERSION,
+} from '../../workoutPrescription/limitationDataset';
+import { buildPrescriptionInputSnapshot } from '../../workoutLifecycle/prescriptionInputs';
+import { enableWorkoutLifecycleRollout } from './workoutLifecycleRolloutFixture';
+import { installWorkoutLifecycleAuthorityFixture, resetWorkoutLifecycleAuthorityFixture } from './workoutLifecycleAuthorityFixture';
 
 const PROJECT_ID = 'ajfit-rules-test';
 const UID = 'erin';
@@ -56,12 +63,17 @@ describe.skipIf(!enabled)('prepared-persist + automatic_reconciliation concurren
       firestore: { rules: readFileSync(resolve(__dirname, '../../../firestore.rules'), 'utf8') },
     });
     mocks.db = testEnv.authenticatedContext(UID, { email: 'erin@example.com', email_verified: true }).firestore();
+    installWorkoutLifecycleAuthorityFixture(testEnv, UID);
   });
 
-  afterAll(async () => testEnv.cleanup());
+  afterAll(async () => {
+    resetWorkoutLifecycleAuthorityFixture();
+    await testEnv.cleanup();
+  });
 
   beforeEach(async () => {
     await testEnv.clearFirestore();
+    await enableWorkoutLifecycleRollout(testEnv);
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       const rawDb = ctx.firestore();
       await setDoc(doc(rawDb, 'users', UID), {
@@ -71,6 +83,10 @@ describe.skipIf(!enabled)('prepared-persist + automatic_reconciliation concurren
         metadata: { role: 'user', createdAt: Timestamp.now(), updatedAt: Timestamp.now(), commercialGateResolvedAt: Timestamp.now() },
       });
       await setDoc(doc(rawDb, 'workoutTemplates', 'T003'), T003_SEED);
+      await setDoc(doc(rawDb, 'limitationDatasetState', 'active'), {
+        datasetVersion: CANONICAL_LIMITATION_DATASET_VERSION,
+        limitationDatasetHash: CANONICAL_LIMITATION_DATASET_HASH,
+      });
       await setDoc(doc(rawDb, 'users', UID, 'questionnaires', QUESTIONNAIRE_ID), {
         answers: toPersistedAnswers(VALID_ANSWERS),
         version: 1,
@@ -153,6 +169,11 @@ describe.skipIf(!enabled)('prepared-persist + automatic_reconciliation concurren
       plan: prepared.plan,
       template: T003_SEED,
       source: 'onboarding' as const,
+      prescriptionInputSnapshot: buildPrescriptionInputSnapshot({
+        answers: VALID_ANSWERS,
+        currentTrainingLevel: 'INTERMEDIATE',
+        source: 'QUESTIONNAIRE_BASELINE',
+      }),
     };
 
     const results = await Promise.allSettled([

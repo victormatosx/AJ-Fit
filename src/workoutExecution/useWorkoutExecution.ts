@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useAuth } from '../state/AuthContext';
 import { errorClass, errorCode, logInfo, logWarn } from '../lib/logger';
 import { localDateInTimezone } from '../scheduleEngine/localDate';
@@ -12,6 +12,7 @@ import {
   type PersistedWorkoutExecution,
 } from '../services/workoutExecutions';
 import type { WorkoutProgramSnapshot } from '../services/workoutPrograms';
+import { WorkoutMutationQueue } from '../workoutLifecycle/mutationQueue';
 
 function deviceTimezone(): string {
   try {
@@ -47,10 +48,12 @@ export function useWorkoutExecution(program: WorkoutProgramSnapshot | null, time
   const uid = user?.uid ?? null;
   const [execution, setExecution] = useState<PersistedWorkoutExecution | null>(null);
   const [starting, setStarting] = useState(false);
+  const mutationQueueRef = useRef(new WorkoutMutationQueue());
 
   const start = useCallback(async (sessionIndex: number) => {
     if (!uid || !program) return null;
     setStarting(true);
+    mutationQueueRef.current.reset();
     try {
       const scheduledLocalDate = localDateInTimezone(new Date(), timezone ?? deviceTimezone());
       const result = await startOrResumeWorkoutExecution({ uid, program, sessionIndex, scheduledLocalDate });
@@ -68,7 +71,10 @@ export function useWorkoutExecution(program: WorkoutProgramSnapshot | null, time
   const recordSet = useCallback(async (exerciseIndex: number, setIndex: number, weightKg: number | null, actualReps: number | null = null) => {
     if (!uid || !execution) return;
     try {
-      await recordSetExecution({ uid, executionId: execution.executionId, exerciseIndex, setIndex, weightKg, actualReps });
+      await mutationQueueRef.current.enqueue(
+        `set:${exerciseIndex}:${setIndex}`,
+        () => recordSetExecution({ uid, executionId: execution.executionId, exerciseIndex, setIndex, weightKg, actualReps }),
+      );
     } catch (error) {
       logWarn('workout_execution', 'record_set_failed', { error });
     }
@@ -77,7 +83,10 @@ export function useWorkoutExecution(program: WorkoutProgramSnapshot | null, time
   const skipSet = useCallback(async (exerciseIndex: number, setIndex: number) => {
     if (!uid || !execution) return;
     try {
-      await skipSetExecution({ uid, executionId: execution.executionId, exerciseIndex, setIndex });
+      await mutationQueueRef.current.enqueue(
+        `set:${exerciseIndex}:${setIndex}`,
+        () => skipSetExecution({ uid, executionId: execution.executionId, exerciseIndex, setIndex }),
+      );
     } catch (error) {
       logWarn('workout_execution', 'skip_set_failed', { error });
     }
@@ -86,7 +95,10 @@ export function useWorkoutExecution(program: WorkoutProgramSnapshot | null, time
   const skipExercise = useCallback(async (exerciseIndex: number) => {
     if (!uid || !execution) return;
     try {
-      await skipExerciseExecution({ uid, executionId: execution.executionId, exerciseIndex });
+      await mutationQueueRef.current.enqueue(
+        `exercise:${exerciseIndex}`,
+        () => skipExerciseExecution({ uid, executionId: execution.executionId, exerciseIndex }),
+      );
     } catch (error) {
       logWarn('workout_execution', 'skip_exercise_failed', { error });
     }
@@ -106,6 +118,7 @@ export function useWorkoutExecution(program: WorkoutProgramSnapshot | null, time
       sessionIndex: execution.sessionIndex,
     });
     try {
+      await mutationQueueRef.current.flush();
       const result = await finishWorkoutExecution(uid, execution.executionId);
       setExecution((prev) => (prev ? { ...prev, status: result.status, finishedAt: prev.finishedAt } : prev));
       logInfo('workout_execution', 'execution_finish_succeeded', {
@@ -132,6 +145,7 @@ export function useWorkoutExecution(program: WorkoutProgramSnapshot | null, time
     if (!uid || !execution) return;
     try {
       await abandonWorkoutExecution(uid, execution.executionId);
+      mutationQueueRef.current.reset();
     } catch (error) {
       logWarn('workout_execution', 'abandon_failed', { error });
     }

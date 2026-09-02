@@ -3,6 +3,8 @@ import { assertResourceParity, extractLeafPaths, inspectResourceParity } from '.
 import { NAMESPACES, resources } from '../resourceCatalog';
 import auditAllowlist from '../resource-audit-allowlist.json';
 
+const nonStringLeaves = auditAllowlist.nonStringLeaves as string[];
+
 const ptBRCommon = resources['pt-BR'].common;
 const enCommon = resources.en.common;
 const esCommon = resources.es.common;
@@ -25,7 +27,7 @@ describe('i18n resources — structural parity across pt-BR, en, es', () => {
         'pt-BR': resources['pt-BR'][ns],
         en: resources.en[ns],
         es: resources.es[ns],
-      }, auditAllowlist.nonStringLeaves
+      }, nonStringLeaves
         .filter((entry) => entry.startsWith(`${ns}:`))
         .map((entry) => entry.slice(ns.length + 1)));
     });
@@ -39,9 +41,8 @@ describe('i18n resources — structural parity across pt-BR, en, es', () => {
     });
   });
 
-  it('keeps the legacy non-string allowlist explicit and limited to Home mock data', () => {
-    expect(auditAllowlist.nonStringLeaves).toHaveLength(6);
-    expect(auditAllowlist.nonStringLeaves.every((entry) => entry.startsWith('home:upcoming.items.'))).toBe(true);
+  it('needs no non-string exception after production Home mock data removal', () => {
+    expect(nonStringLeaves).toEqual([]);
   });
 });
 

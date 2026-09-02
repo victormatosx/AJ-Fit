@@ -24,6 +24,10 @@ import { completeAnswers } from '../../workoutPrescription/__tests__/fixtures';
 import { toPersistedAnswers } from '../../lib/questionnaireAnswers';
 import { resolveWorkoutSchedule } from '../../scheduleEngine/resolver';
 import type { Weekday } from '../../state/AppState';
+import {
+  CANONICAL_LIMITATION_DATASET_HASH,
+  CANONICAL_LIMITATION_DATASET_VERSION,
+} from '../../workoutPrescription/limitationDataset';
 
 const PROJECT_ID = 'ajfit-rules-test';
 const UID = 'carol';
@@ -45,6 +49,8 @@ vi.mock('../../lib/firebase', () => ({
 import { generateAndPersistWorkoutProgram } from '../workoutPrograms';
 import { ensureScheduleConfigFromQuestionnaire, loadScheduleConfig, saveScheduleConfig } from '../workoutSchedule';
 import { startOrResumeWorkoutExecution } from '../workoutExecutions';
+import { enableWorkoutLifecycleRollout } from './workoutLifecycleRolloutFixture';
+import { installWorkoutLifecycleAuthorityFixture, resetWorkoutLifecycleAuthorityFixture } from './workoutLifecycleAuthorityFixture';
 
 const T003_SEED = buildSeedDocuments().find((t) => t.id === 'T003');
 if (!T003_SEED) throw new Error('T003 fixture missing — cannot run scheduleConfig reconciliation integration tests');
@@ -64,6 +70,10 @@ async function seedUserQuestionnaireAndTemplate() {
       metadata: { role: 'user', createdAt: Timestamp.now(), updatedAt: Timestamp.now(), commercialGateResolvedAt: Timestamp.now() },
     });
     await setDoc(doc(rawDb, 'workoutTemplates', 'T003'), T003_SEED);
+    await setDoc(doc(rawDb, 'limitationDatasetState', 'active'), {
+      datasetVersion: CANONICAL_LIMITATION_DATASET_VERSION,
+      limitationDatasetHash: CANONICAL_LIMITATION_DATASET_HASH,
+    });
     await setDoc(doc(rawDb, 'users', UID, 'questionnaires', QUESTIONNAIRE_ID), {
       answers: toPersistedAnswers(VALID_ANSWERS),
       version: 1,
@@ -88,12 +98,17 @@ describe.skipIf(!enabled)('scheduleConfig reconciliation — real Firestore Emul
       firestore: { rules: readFileSync(resolve(__dirname, '../../../firestore.rules'), 'utf8') },
     });
     mocks.db = testEnv.authenticatedContext(UID, { email: 'carol@example.com', email_verified: true }).firestore();
+    installWorkoutLifecycleAuthorityFixture(testEnv, UID);
   });
 
-  afterAll(async () => testEnv.cleanup());
+  afterAll(async () => {
+    resetWorkoutLifecycleAuthorityFixture();
+    await testEnv.cleanup();
+  });
 
   beforeEach(async () => {
     await testEnv.clearFirestore();
+    await enableWorkoutLifecycleRollout(testEnv);
     await seedUserQuestionnaireAndTemplate();
   });
 

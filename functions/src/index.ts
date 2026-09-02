@@ -22,6 +22,9 @@ import { cleanupPendingAccountDeletions } from './accountDeletion/reconciliation
 import { onAccountDeletionRequested } from './accountDeletion/immediateDispatch';
 import { adminGetUserHandler, adminListUsersHandler } from './adminUsers/adminUsers';
 import { adminGetCouponHandler, adminListCouponsHandler } from './adminCoupons/adminCoupons';
+import { recordWorkoutLifecycleTelemetryHandler } from './telemetry/workoutLifecycleTelemetry';
+import { onTrustedWorkoutLifecycleEventCreated } from './telemetry/trustedWorkoutLifecycleTelemetry';
+import { authorizeWorkoutLifecycleMutationHandler } from './workoutLifecycle/authorizeMutation';
 
 /**
  * AJ Fit Cloud Functions entry point.
@@ -75,6 +78,21 @@ export const authorizePromoPurchase = onCall(
   { enforceAppCheck: true },
   authorizePromoPurchaseHandler,
 );
+
+/** PII-free operational lifecycle telemetry, authenticated and attested. */
+export const recordWorkoutLifecycleTelemetry = onCall(
+  { enforceAppCheck: true },
+  recordWorkoutLifecycleTelemetryHandler,
+);
+
+/** Short-lived, one-operation authority grant for semantically validated lifecycle mutations. */
+export const authorizeWorkoutLifecycleMutation = onCall(
+  { enforceAppCheck: true },
+  authorizeWorkoutLifecycleMutationHandler,
+);
+
+/** Trusted operational projection sourced only from the immutable backend-authoritative domain ledger. */
+export { onTrustedWorkoutLifecycleEventCreated };
 
 /**
  * Admin promo-code catalog surface (`ajfit-admin`'s "Cupons e Campanhas"

@@ -23,6 +23,36 @@ import {
   type LimitationDatasetSnapshot,
 } from '../workoutPrescription/limitationDataset';
 import { logError, logInfo, logWarn } from '../lib/logger';
+import { getQuestionnaireById } from './userProfile';
+import {
+  loadWorkoutLifecycle,
+  loadWorkoutLifecycleRolloutConfig,
+  ensureWorkoutLifecycleV2,
+  recoverWorkoutLifecyclePartialState,
+} from './workoutLifecycle';
+import { isEligibleForNewMigration, stickyRolloutBucket } from '../workoutLifecycle/rollout';
+import {
+  logWorkoutLifecycleEvent,
+  workoutLifecycleErrorCategory,
+} from '../workoutLifecycle/telemetry';
+import {
+  cycleIdForOperation,
+  lifecycleEventId,
+  programInstanceIdForOperation,
+  startingLevelFromQuestionnaire,
+} from '../workoutLifecycle/domain';
+import {
+  WORKOUT_LIFECYCLE_SCHEMA_VERSION,
+  type CurrentTrainingLevel,
+  type PrescriptionInputSnapshot,
+  type WorkoutLifecycleEventType,
+} from '../workoutLifecycle/types';
+import { buildPrescriptionInputSnapshot } from '../workoutLifecycle/prescriptionInputs';
+import {
+  authorizeWorkoutLifecycleMutation,
+  requireWorkoutLifecycleCanonical,
+  WORKOUT_LIFECYCLE_AUTHORITY_GRANT_ID,
+} from '../workoutLifecycle/authorityProvider';
 import { selectTemplate } from '../workoutPrescription/selection';
 import {
   fromWorkoutTemplateDocument,
@@ -57,7 +87,15 @@ export type WorkoutProgramStatus = 'active' | 'superseded';
  * for pre-existing documents written before this source value existed —
  * nothing in the client writes it anymore.
  */
-export type WorkoutProgramSource = 'onboarding' | 'manual_regeneration' | 'automatic_progression' | 'automatic_reconciliation';
+export type WorkoutProgramSource =
+  | 'onboarding'
+  | 'manual_regeneration'
+  | 'automatic_progression'
+  | 'automatic_reconciliation'
+  /** Fase 4 — a prepared Cycle Evolution/Level Promotion/Motivational Renewal becoming active. */
+  | 'evolution_activation'
+  /** Fase 4 — an explicit Program Adaptation (updated inputs), never an earned transition. */
+  | 'program_adaptation';
 
 export interface WorkoutProgramSnapshot extends FinalWorkoutPlan {
   programId: string;
@@ -72,6 +110,12 @@ export interface WorkoutProgramSnapshot extends FinalWorkoutPlan {
   createdAt: Timestamp | null;
   activatedAt: Timestamp | null;
   updatedAt: Timestamp | null;
+  /** Runtime-only V2 lifecycle context; never stored on the content snapshot. */
+  programInstanceId?: string;
+  /** Runtime-only V2 lifecycle context; never stored on the content snapshot. */
+  trainingCycleId?: string;
+  /** Authoritative activation instant for this lifecycle instance. */
+  programInstanceActivatedAt?: Timestamp | null;
 }
 
 export type GenerateAndPersistResult = Exclude<PrescriptionResult, { status: 'SUCCESS' }> | {
@@ -80,7 +124,7 @@ export type GenerateAndPersistResult = Exclude<PrescriptionResult, { status: 'SU
   program: WorkoutProgramSnapshot;
 };
 
-function stableHash(value: string): string {
+export function stableHash(value: string): string {
   let hash = 0x811c9dc5;
   for (let index = 0; index < value.length; index += 1) {
     hash ^= value.charCodeAt(index);
@@ -96,7 +140,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return proto === Object.prototype || proto === null;
 }
 
-function withoutUndefined<T>(value: T): T {
+export function withoutUndefined<T>(value: T): T {
   if (Array.isArray(value)) return value.map(withoutUndefined) as T;
   if (isPlainObject(value)) {
     return Object.fromEntries(
@@ -286,7 +330,7 @@ export function isProgramSnapshot(value: unknown, programId: string): value is W
     && typeof item.prescriptionId === 'string'
     && item.prescriptionId.length > 0
     && item.status === 'active'
-    && ['onboarding', 'manual_regeneration', 'automatic_progression', 'automatic_reconciliation'].includes(item.source ?? '')
+    && ['onboarding', 'manual_regeneration', 'automatic_progression', 'automatic_reconciliation', 'evolution_activation', 'program_adaptation'].includes(item.source ?? '')
     && /^T(?:00[1-9]|0[1-8][0-9]|090)$/.test(item.templateId ?? '')
     && Array.isArray(item.sessions)
     && item.sessions.length > 0
@@ -323,14 +367,97 @@ export function isProgramSnapshot(value: unknown, programId: string): value is W
 }
 
 export async function loadActiveWorkoutProgram(uid: string): Promise<WorkoutProgramSnapshot | null> {
-  const stateSnapshot = await getDoc(activeProgramStateRef(uid));
-  if (!stateSnapshot.exists()) return null;
-  const activeWorkoutId = stateSnapshot.data().programId;
-  if (typeof activeWorkoutId !== 'string' || !activeWorkoutId) return null;
+  // V2 lifecycle is authoritative. The legacy pointer is consulted only to
+  // bootstrap accounts that have not crossed the migration boundary yet.
+  let lifecycle: Awaited<ReturnType<typeof loadWorkoutLifecycle>>;
+  try {
+    lifecycle = await loadWorkoutLifecycle(uid);
+  } catch (error) {
+    if (!(error instanceof Error) || error.message !== 'WORKOUT_LIFECYCLE_REFERENT_MISSING') throw error;
+    const recovery = await recoverWorkoutLifecyclePartialState(uid);
+    if (!recovery.lifecycle) throw new Error(`WORKOUT_LIFECYCLE_PARTIAL_STATE:${recovery.classification}`);
+    lifecycle = recovery.lifecycle;
+  }
+  let activeWorkoutId = lifecycle?.lifecycle.activeContentIdentity ?? null;
+  if (!activeWorkoutId) {
+    const stateSnapshot = await getDoc(activeProgramStateRef(uid));
+    if (!stateSnapshot.exists()) return null;
+    activeWorkoutId = stateSnapshot.data().programId;
+    if (typeof activeWorkoutId !== 'string' || !activeWorkoutId) return null;
+  }
   const programSnapshot = await getDoc(programRef(uid, activeWorkoutId));
   if (!programSnapshot.exists()) throw new Error('ACTIVE_WORKOUT_PROGRAM_NOT_FOUND');
-  const data = programSnapshot.data();
-  if (!isProgramSnapshot(data, activeWorkoutId)) throw new Error('ACTIVE_WORKOUT_PROGRAM_INVALID');
+  const initialData = programSnapshot.data();
+  if (!isProgramSnapshot(initialData, activeWorkoutId)) throw new Error('ACTIVE_WORKOUT_PROGRAM_INVALID');
+  let data: WorkoutProgramSnapshot = initialData;
+  if (!lifecycle) {
+    const questionnaire = await getQuestionnaireById(uid, data.questionnaireId);
+    if (!questionnaire) throw new Error('ACTIVE_WORKOUT_PROGRAM_QUESTIONNAIRE_NOT_FOUND');
+    const rolloutConfig = await loadWorkoutLifecycleRolloutConfig();
+    let enrollment: Awaited<ReturnType<typeof ensureWorkoutLifecycleV2>>;
+    try {
+      enrollment = await ensureWorkoutLifecycleV2(uid, {
+      contentIdentity: data.programId,
+      prescriptionIdentity: data.prescriptionId,
+      questionnaireId: data.questionnaireId,
+      questionnaireExperienceLevel: questionnaire.answers.level,
+      prescriptionInputSnapshot: buildPrescriptionInputSnapshot({
+        answers: questionnaire.answers,
+        currentTrainingLevel: startingLevelFromQuestionnaire(questionnaire.answers.level)!,
+        source: 'QUESTIONNAIRE_BASELINE',
+      }),
+      activatedAt: data.activatedAt ?? null,
+      }, rolloutConfig);
+    } catch (error) {
+      const errorCategory = workoutLifecycleErrorCategory(error);
+      logWorkoutLifecycleEvent({ name: 'migration_failed', errorCategory, retryable: true });
+      logWorkoutLifecycleEvent({
+        name: 'progression_failed', stage: 'MIGRATION', errorCategory, retryable: true,
+      });
+      throw error;
+    }
+    logWorkoutLifecycleEvent({
+      name: 'lifecycle_rollout_decision',
+      decision: enrollment.status === 'NOT_ROLLED_OUT' ? 'NOT_ROLLED_OUT' : 'ENROLLED',
+      bucket: stickyRolloutBucket(uid),
+      percentage: rolloutConfig.percentage,
+    });
+    if (enrollment.status === 'NOT_ROLLED_OUT') {
+      // Safe legacy-compatible execution/schedule path: the runtime model
+      // deliberately keeps ProgramInstance fields optional. V1 progression
+      // is not re-enabled; the account simply remains outside V2 until a
+      // later eligible load performs the deterministic migration.
+      return data;
+    }
+    lifecycle = enrollment.lifecycle;
+  }
+  if (lifecycle.lifecycle.activeContentIdentity !== data.programId) {
+    const canonicalSnapshot = await getDoc(programRef(uid, lifecycle.lifecycle.activeContentIdentity));
+    const canonicalData = canonicalSnapshot.data();
+    if (!canonicalSnapshot.exists() || !isProgramSnapshot(canonicalData, lifecycle.lifecycle.activeContentIdentity)) {
+      throw new Error('ACTIVE_WORKOUT_PROGRAM_LIFECYCLE_MISMATCH');
+    }
+    data = canonicalData;
+  }
+  return {
+    ...data,
+    programInstanceId: lifecycle.programInstance.programInstanceId,
+    trainingCycleId: lifecycle.cycle.cycleId,
+    programInstanceActivatedAt: lifecycle.programInstance.activatedAt,
+  };
+}
+
+/** Reads an immutable content snapshot by its lifecycle content identity.
+ * Used for local current-vs-previous presentation; it never activates or
+ * mutates a program. */
+export async function loadWorkoutProgramSnapshot(
+  uid: string,
+  contentIdentity: string,
+): Promise<WorkoutProgramSnapshot | null> {
+  const snapshot = await getDoc(programRef(uid, contentIdentity));
+  if (!snapshot.exists()) return null;
+  const data = snapshot.data();
+  if (!isProgramSnapshot(data, contentIdentity)) throw new Error('WORKOUT_PROGRAM_INVALID');
   return data;
 }
 
@@ -345,11 +472,12 @@ function validateProgramExerciseIds(plan: FinalWorkoutPlan): string[] {
     .sort();
 }
 
-function programIdentity(input: {
+/** Exported so Fase 4's orchestrator can precompute the exact `workoutPrograms/{contentIdentity}` id a prescription will get once activated — see `contentIdentityFor`. */
+export function programIdentity(input: {
   questionnaireId: string;
   questionnaireVersion: number;
   plan: FinalWorkoutPlan;
-  template: WorkoutTemplateDocument;
+  template: Pick<WorkoutTemplateDocument, 'id' | 'version' | 'sourceVersion' | 'contentHash'>;
 }): string {
   return JSON.stringify({
     questionnaireId: input.questionnaireId,
@@ -365,49 +493,315 @@ function programIdentity(input: {
   });
 }
 
+/**
+ * The exact deterministic `workoutPrograms/{contentIdentity}` id
+ * `saveAndActivateWorkoutProgram` will use for this `(questionnaireId,
+ * questionnaireVersion, plan, template)` combination — computed identically,
+ * before any write. Mirrors `programIdentity`'s exact JSON shape but only
+ * requires `id`/`version`/`contentHash` of the template (the only fields
+ * `programIdentity` reads), so a caller that already has those three (e.g.
+ * Fase 3's `PrescriptionEvolutionResult`) never needs to re-fetch the full
+ * template document just to predict the id.
+ */
+export function contentIdentityFor(input: {
+  questionnaireId: string;
+  questionnaireVersion: number;
+  plan: FinalWorkoutPlan;
+  template: Pick<WorkoutTemplateDocument, 'id' | 'version' | 'contentHash'>;
+}): string {
+  const identity = JSON.stringify({
+    questionnaireId: input.questionnaireId,
+    questionnaireVersion: input.questionnaireVersion,
+    prescriptionId: input.plan.planId,
+    templateId: input.template.id,
+    templateVersion: input.template.version,
+    templateContentHash: input.template.contentHash,
+    versions: input.plan.versions,
+    limitationDatasetVersion: input.plan.limitationDatasetVersion,
+    limitationDatasetHash: input.plan.limitationDatasetHash,
+    adaptationStage: input.plan.adaptationStage ?? null,
+  });
+  return `wpg_${stableHash(identity)}`;
+}
+
 export async function saveAndActivateWorkoutProgram(input: {
   uid: string;
   questionnaireId: string;
   questionnaireVersion: number;
   plan: FinalWorkoutPlan;
-  template: WorkoutTemplateDocument;
+  template: Pick<WorkoutTemplateDocument, 'id' | 'version' | 'sourceVersion' | 'contentHash'>;
+  /** Immutable effective inputs that generated this exact ProgramInstance. */
+  prescriptionInputSnapshot: PrescriptionInputSnapshot;
   source: WorkoutProgramSource;
+  /** Stable logical transition key. Required when intentionally reusing the same content in a new lifecycle period. */
+  lifecycleIdempotencyKey?: string;
+  /** Optimistic-concurrency base for a precomputed transition. */
+  expectedActiveProgramInstanceId?: string;
+  expectedCycleId?: string;
+  expectedPrescriptionInputSnapshotId?: string;
+  /**
+   * Fase 4 — provided only for an EARNED cycle/level transition (never for a
+   * same-cycle renewal or a Program Adaptation): completes the current
+   * `TrainingCycle` and starts a new one instead of reusing it. Omitting
+   * this preserves the exact pre-Fase-4 behavior (same cycle, new Program
+   * Instance) — used by Motivational Renewal and Program Adaptation alike,
+   * since neither of those ever starts a new cycle (docs §35/§51/§59).
+   */
+  nextCycle?: {
+    level: CurrentTrainingLevel;
+    cycleNumber: number;
+    progressionReason: string;
+  };
+  /** Fase 4 — overrides the lifecycle event written for this activation. Defaults to `PROGRAM_STARTED` (pre-Fase-4 behavior). */
+  eventType?: WorkoutLifecycleEventType;
+  eventPayload?: Record<string, string | number | boolean | null>;
+  /** Fase 4 — atomically clears `pendingEvolutions/current` as part of this same activation transaction (a no-op delete if already absent), so an evolution's PREPARED state can never outlive its own activation (docs §11/§78). */
+  clearPendingEvolution?: boolean;
+  /** Required by earned activation: the pending fact must still exist and be the exact target read by the caller when this transaction commits. */
+  expectedPendingEvolutionId?: string;
+  /** Exact user-controlled input patch independently re-derived by backend for ADAPT. */
+  authorityUpdatedFields?: Record<string, unknown>;
 }): Promise<WorkoutProgramSnapshot> {
-  const programId = `wpg_${stableHash(programIdentity(input))}`;
-  const targetRef = programRef(input.uid, programId);
+  const candidateProgramId = `wpg_${stableHash(programIdentity(input))}`;
   const parentRef = userRef(input.uid);
   const stateRef = activeProgramStateRef(input.uid);
+  const lifecycleStateRef = doc(db, USERS, input.uid, 'workoutLifecycleState', 'current');
+  const questionnaireRef = doc(db, USERS, input.uid, 'questionnaires', input.questionnaireId);
+  const pendingRef = doc(db, USERS, input.uid, 'pendingEvolutions', 'current');
+  const authorityGrantRef = doc(
+    db, USERS, input.uid, 'workoutLifecycleAuthorityGrants', WORKOUT_LIFECYCLE_AUTHORITY_GRANT_ID,
+  );
+  const explicitlyExpectedInstanceId = input.lifecycleIdempotencyKey
+    ? programInstanceIdForOperation(`activation:${input.lifecycleIdempotencyKey}`)
+    : null;
+  // Existing V2 accounts never consult rollout and therefore cannot be
+  // downgraded by a kill-switch/config outage. Only an account with no V2
+  // state pays the config read and may take the legacy-compatible branch.
+  const lifecycleAtEntry = await loadWorkoutLifecycle(input.uid);
+  const rolloutConfig = lifecycleAtEntry === null ? await loadWorkoutLifecycleRolloutConfig() : null;
+  const allowNewV2Enrollment = lifecycleAtEntry !== null
+    || isEligibleForNewMigration(input.uid, rolloutConfig!);
+  if (rolloutConfig) {
+    logWorkoutLifecycleEvent({
+      name: 'lifecycle_rollout_decision',
+      decision: allowNewV2Enrollment ? 'ENROLLED' : 'NOT_ROLLED_OUT',
+      bucket: stickyRolloutBucket(input.uid),
+      percentage: rolloutConfig.percentage,
+    });
+  }
 
-  await runTransaction(db, async (transaction) => {
-    const parentSnapshot = await transaction.get(parentRef);
+  const preflightState = await getDoc(stateRef);
+  const preflightLifecycle = lifecycleAtEntry?.lifecycle ?? null;
+  const preflightCurrentInstanceId = preflightLifecycle?.activeProgramInstanceId ?? null;
+  const preflightCurrentCycleId = preflightLifecycle?.currentCycleId ?? null;
+  const preflightSameContent = preflightLifecycle?.activeContentIdentity === candidateProgramId;
+  const preflightShouldCreateInstance = allowNewV2Enrollment && (!preflightLifecycle
+    || !preflightSameContent || Boolean(input.lifecycleIdempotencyKey));
+  const preflightOperationKey = input.lifecycleIdempotencyKey
+    ? `activation:${input.lifecycleIdempotencyKey}`
+    : preflightLifecycle
+      ? `content:${preflightCurrentInstanceId}:${candidateProgramId}`
+      : `${preflightState.exists() ? 'v1-baseline' : 'v2-initial'}:${candidateProgramId}`;
+  const preflightTargetInstanceId = preflightShouldCreateInstance
+    ? programInstanceIdForOperation(preflightOperationKey)
+    : preflightCurrentInstanceId ?? programInstanceIdForOperation(preflightOperationKey);
+  const preflightTargetCycleId = input.nextCycle
+    ? cycleIdForOperation(`cycle:${preflightOperationKey}`)
+    : preflightCurrentCycleId ?? cycleIdForOperation(preflightOperationKey);
+  if (preflightLifecycle
+    && !preflightSameContent
+    && input.source !== 'evolution_activation'
+    && input.source !== 'program_adaptation'
+    && input.source !== 'manual_regeneration') {
+    // Once V2 lifecycle state exists, it owns prescription-content authority
+    // exclusively (mirrors the `V2_LIFECYCLE_OWNS_ELIGIBILITY` guard in
+    // workoutProgression.ts for the V1 progression engine). `onboarding`,
+    // `automatic_progression`, and `automatic_reconciliation` are
+    // bootstrap/compatibility sources that must never install NEW/DIFFERENT
+    // content past that point — RECOVER (identity/state reconciliation only)
+    // cannot carry it, and the backend rejects any RECOVER request with a
+    // `targetPlan` outright. Fail fast here with a clear reason instead of a
+    // round-tripped authority rejection. A re-run that resolves to the SAME
+    // already-active content (`preflightSameContent`) is a legitimate
+    // idempotent no-op — see the RECOVER branch below, which never carries
+    // a plan for exactly that reason.
+    throw new Error('WORKOUT_LIFECYCLE_V2_OWNS_CONTENT');
+  }
+  const authorityOperation = !preflightLifecycle
+    ? (preflightState.exists() ? 'MIGRATE' : 'INITIALIZE')
+    : input.source === 'evolution_activation'
+      ? 'ACTIVATE'
+      : input.source === 'program_adaptation' || input.source === 'manual_regeneration'
+        ? 'ADAPT'
+        // Only reachable when `preflightSameContent` is true (guard above) —
+        // pure identity/state reconciliation, never new content.
+        : 'RECOVER';
+  const authorityEventType = input.eventType ?? 'PROGRAM_STARTED';
+  const authorityEventId = lifecycleEventId(authorityEventType, preflightOperationKey);
+  const authorityResult = await authorizeWorkoutLifecycleMutation({
+    operation: authorityOperation,
+    ...(preflightCurrentInstanceId ? { sourceProgramInstanceId: preflightCurrentInstanceId } : {}),
+    ...(preflightCurrentCycleId ? { sourceCycleId: preflightCurrentCycleId } : {}),
+    ...(input.expectedPrescriptionInputSnapshotId
+      ? { sourcePrescriptionInputSnapshotId: input.expectedPrescriptionInputSnapshotId } : {}),
+    targetProgramInstanceId: preflightTargetInstanceId,
+    targetCycleId: preflightTargetCycleId,
+    targetContentIdentity: candidateProgramId,
+    targetPrescriptionIdentity: input.plan.planId,
+    ...(input.nextCycle || preflightLifecycle
+      ? {
+        targetTrainingLevel: input.nextCycle?.level ?? preflightLifecycle!.currentTrainingLevel,
+        targetCycleNumber: input.nextCycle?.cycleNumber ?? preflightLifecycle!.currentCycleNumber,
+      }
+      : {}),
+    questionnaireId: input.questionnaireId,
+    questionnaireVersion: input.questionnaireVersion,
+    targetProgramSource: input.source,
+    targetTemplateVersion: input.template.version,
+    targetTemplateSourceVersion: input.template.sourceVersion,
+    targetTemplateContentHash: input.template.contentHash,
+    ...(input.expectedPendingEvolutionId ? { pendingEvolutionId: input.expectedPendingEvolutionId } : {}),
+    eventId: authorityEventId,
+    eventType: authorityEventType,
+    idempotencyKey: preflightOperationKey,
+    // RECOVER never carries content authority (Phase 10D — docs/workout-
+    // lifecycle/v2/architecture/23_PHASE_10D_FINAL_AUTHORITY_BYPASS_
+    // REMEDIATION.md) — the backend rejects any `targetPlan` on a RECOVER
+    // request outright, so it must never be sent for that operation.
+    ...(authorityOperation !== 'RECOVER'
+      ? { targetPlan: withoutUndefined(input.plan) as unknown as Record<string, unknown> }
+      : {}),
+    targetPrescriptionInputSnapshot: input.prescriptionInputSnapshot as unknown as Record<string, unknown>,
+    ...(input.authorityUpdatedFields ? { updatedFields: input.authorityUpdatedFields } : {}),
+  });
+
+  let authorizedInput = input;
+  let programId = candidateProgramId;
+  if (authorityOperation === 'INITIALIZE' || authorityOperation === 'MIGRATE' || authorityOperation === 'ADAPT') {
+    const canonical = requireWorkoutLifecycleCanonical(authorityResult, authorityOperation);
+    const canonicalTemplate = {
+      id: canonical.targetPlan.templateId,
+      version: canonical.targetTemplateVersion,
+      sourceVersion: canonical.targetTemplateSourceVersion,
+      contentHash: canonical.targetTemplateContentHash,
+    };
+    const computedContentIdentity = contentIdentityFor({
+      questionnaireId: input.questionnaireId,
+      questionnaireVersion: input.questionnaireVersion,
+      plan: canonical.targetPlan,
+      template: canonicalTemplate,
+    });
+    if (
+      canonical.targetPrescriptionIdentity !== canonical.targetPlan.planId
+      || canonical.targetContentIdentity !== computedContentIdentity
+    ) {
+      throw new Error('WORKOUT_LIFECYCLE_CANONICAL_IDENTITY_INVALID');
+    }
+    authorizedInput = { ...input, plan: canonical.targetPlan, template: canonicalTemplate };
+    programId = canonical.targetContentIdentity;
+  }
+  const targetRef = programRef(input.uid, programId);
+
+  try {
+    await runTransaction(db, async (transaction) => {
+    const [parentSnapshot, stateSnapshot, targetSnapshot, questionnaireSnapshot, lifecycleSnapshot, pendingSnapshot] = await Promise.all([
+      transaction.get(parentRef),
+      transaction.get(stateRef),
+      transaction.get(targetRef),
+      transaction.get(questionnaireRef),
+      transaction.get(lifecycleStateRef),
+      input.expectedPendingEvolutionId ? transaction.get(pendingRef) : Promise.resolve(null),
+    ]);
     if (!parentSnapshot.exists()) throw new Error('WORKOUT_PROGRAM_USER_NOT_FOUND');
-    const stateSnapshot = await transaction.get(stateRef);
-    const currentId = stateSnapshot.exists() ? stateSnapshot.data().programId : null;
-    const targetSnapshot = await transaction.get(targetRef);
+    if (!questionnaireSnapshot.exists()) throw new Error('WORKOUT_PROGRAM_QUESTIONNAIRE_NOT_FOUND');
+    const startingLevel = startingLevelFromQuestionnaire(questionnaireSnapshot.data().answers?.level);
+    if (!startingLevel) throw new Error('WORKOUT_LIFECYCLE_STARTING_LEVEL_UNKNOWN');
+    const lifecycleData = lifecycleSnapshot.exists() ? lifecycleSnapshot.data() : null;
+    if (input.expectedPendingEvolutionId && (
+      !pendingSnapshot?.exists()
+      || pendingSnapshot.data().pendingEvolutionId !== input.expectedPendingEvolutionId
+    )) {
+      throw new Error('WORKOUT_LIFECYCLE_STALE_PENDING');
+    }
+    const v2LifecycleEnabled = lifecycleSnapshot.exists() || allowNewV2Enrollment;
+    // Once V2 exists, its content identity—not the compatibility mirror—is
+    // authoritative for which previous content must be superseded.
+    const currentId = lifecycleSnapshot.exists()
+      ? lifecycleData?.activeContentIdentity
+      : stateSnapshot.exists()
+        ? stateSnapshot.data().programId
+        : null;
     const currentRef = typeof currentId === 'string' && currentId !== programId
       ? programRef(input.uid, currentId)
       : null;
     const currentSnapshot = currentRef ? await transaction.get(currentRef) : null;
+    const currentProgramInstanceId = typeof lifecycleData?.activeProgramInstanceId === 'string'
+      ? lifecycleData.activeProgramInstanceId
+      : null;
+    const currentCycleId = typeof lifecycleData?.currentCycleId === 'string'
+      ? lifecycleData.currentCycleId
+      : null;
+    const currentInstanceRef = currentProgramInstanceId
+      ? doc(db, USERS, input.uid, 'programInstances', currentProgramInstanceId)
+      : null;
+    const currentCycleRef = currentCycleId
+      ? doc(db, USERS, input.uid, 'trainingCycles', currentCycleId)
+      : null;
+    const currentInstanceSnapshot = currentInstanceRef ? await transaction.get(currentInstanceRef) : null;
+    const currentCycleSnapshot = currentCycleRef ? await transaction.get(currentCycleRef) : null;
+
+    const expectedActiveProgramInstanceId = input.expectedActiveProgramInstanceId ?? preflightCurrentInstanceId ?? undefined;
+    const expectedCycleId = input.expectedCycleId ?? preflightCurrentCycleId ?? undefined;
+    if (expectedActiveProgramInstanceId && currentProgramInstanceId !== expectedActiveProgramInstanceId) {
+      throw new Error('WORKOUT_LIFECYCLE_STALE_ACTIVE_INSTANCE');
+    }
+    if (expectedCycleId && currentCycleId !== expectedCycleId) {
+      throw new Error('WORKOUT_LIFECYCLE_STALE_CYCLE');
+    }
+    if (
+      input.expectedPrescriptionInputSnapshotId
+      && (currentInstanceSnapshot?.data()?.prescriptionInputSnapshot?.snapshotId
+        ?? (currentProgramInstanceId ? `legacy:${currentProgramInstanceId}` : null)) !== input.expectedPrescriptionInputSnapshotId
+    ) {
+      throw new Error('WORKOUT_LIFECYCLE_STALE_PRESCRIPTION_INPUTS');
+    }
+
+    const sameActiveContent = lifecycleData?.activeContentIdentity === programId;
+    const shouldCreateInstance = v2LifecycleEnabled && (!lifecycleSnapshot.exists()
+      || !sameActiveContent
+      || Boolean(input.lifecycleIdempotencyKey));
+    const operationKey = input.lifecycleIdempotencyKey
+      ? `activation:${input.lifecycleIdempotencyKey}`
+      : lifecycleSnapshot.exists()
+        ? `content:${currentProgramInstanceId}:${programId}`
+        : `${stateSnapshot.exists() ? 'v1-baseline' : 'v2-initial'}:${programId}`;
+    const nextProgramInstanceId = shouldCreateInstance
+      ? programInstanceIdForOperation(operationKey)
+      : currentProgramInstanceId;
+    const nextInstanceRef = nextProgramInstanceId
+      ? doc(db, USERS, input.uid, 'programInstances', nextProgramInstanceId)
+      : null;
+    const nextInstanceSnapshot = nextInstanceRef ? await transaction.get(nextInstanceRef) : null;
 
     if (currentRef && currentSnapshot?.exists()) {
       transaction.update(currentRef, { status: 'superseded', updatedAt: serverTimestamp() });
     }
     if (targetSnapshot.exists()) {
-      transaction.update(targetRef, {
-        status: 'active',
-        activatedAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
+      // `activatedAt` on the legacy content snapshot is no longer rewritten.
+      // ProgramInstance.activatedAt is authoritative for lifecycle periods.
+      if (currentId !== programId) {
+        transaction.update(targetRef, { status: 'active', updatedAt: serverTimestamp() });
+      }
     } else {
       transaction.set(targetRef, withoutUndefined({
-        ...input.plan,
+        ...authorizedInput.plan,
         programId,
-        prescriptionId: input.plan.planId,
+        prescriptionId: authorizedInput.plan.planId,
         status: 'active',
         source: input.source,
-        templateVersion: input.template.version,
-        templateSourceVersion: input.template.sourceVersion,
-        templateContentHash: input.template.contentHash,
+        templateVersion: authorizedInput.template.version,
+        templateSourceVersion: authorizedInput.template.sourceVersion,
+        templateContentHash: authorizedInput.template.contentHash,
         questionnaireId: input.questionnaireId,
         questionnaireVersion: input.questionnaireVersion,
         createdAt: serverTimestamp(),
@@ -415,18 +809,231 @@ export async function saveAndActivateWorkoutProgram(input: {
         updatedAt: serverTimestamp(),
       }));
     }
+    const now = serverTimestamp();
+    const initializationOrigin = stateSnapshot.exists() ? 'V1_MIGRATION_BASELINE' : 'V2_NATIVE';
+    const cycleId = input.nextCycle
+      ? cycleIdForOperation(`cycle:${operationKey}`)
+      : currentCycleId ?? cycleIdForOperation(operationKey);
+
+    if (v2LifecycleEnabled && !lifecycleSnapshot.exists()) {
+      const baselinePreviousId = typeof currentId === 'string' && currentId !== programId
+        ? programInstanceIdForOperation(`v1-baseline:${currentId}`)
+        : null;
+      if (baselinePreviousId && currentSnapshot?.exists()) {
+        const old = currentSnapshot.data();
+        transaction.set(doc(db, USERS, input.uid, 'programInstances', baselinePreviousId), {
+          programInstanceId: baselinePreviousId,
+          cycleId,
+          contentIdentity: currentId,
+          prescriptionIdentity: old.prescriptionId,
+          questionnaireId: old.questionnaireId,
+          activatedAt: old.activatedAt ?? now,
+          supersededAt: now,
+          previousProgramInstanceId: null,
+          activationReason: 'V1_MIGRATION_BASELINE',
+          schemaVersion: WORKOUT_LIFECYCLE_SCHEMA_VERSION,
+          createdAt: now,
+          updatedAt: now,
+        });
+      }
+      if (nextInstanceRef && !nextInstanceSnapshot?.exists()) {
+        transaction.set(nextInstanceRef, {
+          programInstanceId: nextProgramInstanceId,
+          cycleId,
+          contentIdentity: programId,
+          prescriptionIdentity: authorizedInput.plan.planId,
+          questionnaireId: input.questionnaireId,
+          prescriptionInputSnapshot: authorizedInput.prescriptionInputSnapshot,
+          activatedAt: targetSnapshot.exists() && currentId === programId
+            ? (targetSnapshot.data().activatedAt ?? now)
+            : now,
+          supersededAt: null,
+          previousProgramInstanceId: baselinePreviousId,
+          activationReason: initializationOrigin === 'V1_MIGRATION_BASELINE'
+            ? 'V1_MIGRATION_BASELINE'
+            : 'INITIAL_PROGRAM',
+          schemaVersion: WORKOUT_LIFECYCLE_SCHEMA_VERSION,
+          createdAt: now,
+          updatedAt: now,
+        });
+      }
+      transaction.set(doc(db, USERS, input.uid, 'trainingCycles', cycleId), {
+        cycleId,
+        level: startingLevel,
+        cycleNumber: 1,
+        status: 'ACTIVE',
+        origin: initializationOrigin,
+        programInstanceId: nextProgramInstanceId,
+        previousProgramInstanceId: baselinePreviousId,
+        startedAt: targetSnapshot.exists() && currentId === programId
+          ? (targetSnapshot.data().activatedAt ?? now)
+          : now,
+        eligibleAt: null,
+        completedAt: null,
+        completionReason: null,
+        progressionReason: initializationOrigin === 'V1_MIGRATION_BASELINE'
+          ? 'V1_MIGRATION_BASELINE_NO_PRIOR_HISTORY_INFERRED'
+          : 'INITIAL_PRESCRIPTION',
+        schemaVersion: WORKOUT_LIFECYCLE_SCHEMA_VERSION,
+        createdAt: now,
+        updatedAt: now,
+      });
+      transaction.set(lifecycleStateRef, {
+        startingLevel,
+        currentTrainingLevel: startingLevel,
+        currentCycleId: cycleId,
+        currentCycleNumber: 1,
+        activeProgramInstanceId: nextProgramInstanceId,
+        activeContentIdentity: programId,
+        activePrescriptionIdentity: authorizedInput.plan.planId,
+        initializationOrigin,
+        historyCompleteFrom: now,
+        schemaVersion: WORKOUT_LIFECYCLE_SCHEMA_VERSION,
+        createdAt: now,
+        updatedAt: now,
+      });
+    } else if (v2LifecycleEnabled && shouldCreateInstance && nextInstanceRef && !nextInstanceSnapshot?.exists()) {
+      if (!currentInstanceRef || !currentInstanceSnapshot?.exists() || !currentCycleRef || !currentCycleSnapshot?.exists()) {
+        throw new Error('WORKOUT_LIFECYCLE_REFERENT_MISSING');
+      }
+      transaction.update(currentInstanceRef, { supersededAt: now, updatedAt: now });
+      transaction.set(nextInstanceRef, {
+        programInstanceId: nextProgramInstanceId,
+        cycleId,
+        contentIdentity: programId,
+        prescriptionIdentity: authorizedInput.plan.planId,
+        questionnaireId: input.questionnaireId,
+        prescriptionInputSnapshot: authorizedInput.prescriptionInputSnapshot,
+        activatedAt: now,
+        supersededAt: null,
+        previousProgramInstanceId: currentProgramInstanceId,
+        activationReason: input.nextCycle
+          ? 'EVOLUTION_ACTIVATION'
+          : input.source === 'program_adaptation'
+            ? 'PROGRAM_ADAPTATION'
+          : input.source === 'automatic_progression'
+            ? 'V1_AUTOMATIC_PROGRESSION'
+            : input.source === 'manual_regeneration'
+              ? 'MANUAL_REGENERATION'
+              : 'AUTOMATIC_RECONCILIATION',
+        schemaVersion: WORKOUT_LIFECYCLE_SCHEMA_VERSION,
+        createdAt: now,
+        updatedAt: now,
+      });
+      if (input.nextCycle) {
+        // Earned cycle/level transition — the previous cycle is now
+        // historical, never overwritten (docs §35/§37/§38).
+        transaction.update(currentCycleRef, {
+          status: 'COMPLETED',
+          completedAt: now,
+          ...(input.source === 'evolution_activation' ? { completionReason: 'EARNED_EVOLUTION' } : {}),
+          updatedAt: now,
+        });
+        transaction.set(doc(db, USERS, input.uid, 'trainingCycles', cycleId), {
+          cycleId,
+          level: input.nextCycle.level,
+          cycleNumber: input.nextCycle.cycleNumber,
+          status: 'ACTIVE',
+          origin: 'V2_NATIVE',
+          programInstanceId: nextProgramInstanceId,
+          previousProgramInstanceId: currentProgramInstanceId,
+          startedAt: now,
+          eligibleAt: null,
+          completedAt: null,
+          completionReason: null,
+          progressionReason: input.nextCycle.progressionReason,
+          schemaVersion: WORKOUT_LIFECYCLE_SCHEMA_VERSION,
+          createdAt: now,
+          updatedAt: now,
+        });
+      } else {
+        // Same-cycle renewal (V1 rotation, Motivational Renewal, Program
+        // Adaptation) — the cycle's own record is never replaced, only its
+        // active-instance pointer moves (docs §51/§59).
+        transaction.update(currentCycleRef, {
+          programInstanceId: nextProgramInstanceId,
+          previousProgramInstanceId: currentProgramInstanceId,
+          updatedAt: now,
+        });
+      }
+      transaction.update(lifecycleStateRef, {
+        activeProgramInstanceId: nextProgramInstanceId,
+        activeContentIdentity: programId,
+        activePrescriptionIdentity: authorizedInput.plan.planId,
+        // Only an earned cycle/level transition moves the cycle pointer and
+        // (re-affirms, idempotently) the career level — a same-cycle
+        // renewal/adaptation never touches either (docs §21/§59).
+        ...(input.nextCycle
+          ? { currentCycleId: cycleId, currentCycleNumber: input.nextCycle.cycleNumber, currentTrainingLevel: input.nextCycle.level }
+          : {}),
+        updatedAt: now,
+      });
+    }
+    if (v2LifecycleEnabled && shouldCreateInstance && nextProgramInstanceId && !nextInstanceSnapshot?.exists()) {
+      const eventType = input.eventType ?? 'PROGRAM_STARTED';
+      const eventId = lifecycleEventId(eventType, operationKey);
+      transaction.set(doc(db, USERS, input.uid, 'workoutLifecycleEvents', eventId), {
+        eventId,
+        type: eventType,
+        occurredAt: now,
+        cycleId,
+        programInstanceId: nextProgramInstanceId,
+        idempotencyKey: operationKey,
+        payload: { source: input.source, ...input.eventPayload },
+        schemaVersion: WORKOUT_LIFECYCLE_SCHEMA_VERSION,
+      });
+    }
     transaction.set(stateRef, {
       programId,
-      updatedAt: serverTimestamp(),
+      ...(nextProgramInstanceId ? { programInstanceId: nextProgramInstanceId } : {}),
+      updatedAt: now,
     });
-  });
+    if (v2LifecycleEnabled && input.clearPendingEvolution) {
+      transaction.delete(pendingRef);
+    }
+    transaction.delete(authorityGrantRef);
+    });
+  } catch (error) {
+    // Same deterministic-create race handled by the legacy bootstrap: the
+    // emulator (and potentially a Rules evaluation edge in production) can
+    // surface PERMISSION_DENIED to the stale loser instead of ABORTED. Only
+    // accept convergence after proving every authoritative pointer and
+    // lifecycle identity already resolves to this exact content.
+    const [convergedState, convergedProgram, convergedLifecycle] = await Promise.all([
+      getDoc(stateRef).catch(() => null),
+      getDoc(targetRef).catch(() => null),
+      loadWorkoutLifecycle(input.uid).catch(() => null),
+    ]);
+    if (
+      !convergedState?.exists()
+      || convergedState.data().programId !== programId
+      || !convergedProgram?.exists()
+      || convergedProgram.data().status !== 'active'
+      || (convergedLifecycle
+        ? (convergedLifecycle.lifecycle.activeContentIdentity !== programId
+          || convergedLifecycle.lifecycle.activePrescriptionIdentity !== authorizedInput.plan.planId
+          || (explicitlyExpectedInstanceId !== null
+            && convergedLifecycle.lifecycle.activeProgramInstanceId !== explicitlyExpectedInstanceId))
+        : allowNewV2Enrollment)
+    ) throw error;
+  }
 
   const saved = await getDoc(targetRef);
   const savedData = saved.data();
   if (!saved.exists() || !isProgramSnapshot(savedData, programId)) {
     throw new Error('PROGRAM_PERSIST_FAILED');
   }
-  return savedData;
+  const lifecycle = await loadWorkoutLifecycle(input.uid);
+  if (lifecycle && lifecycle.lifecycle.activeContentIdentity !== programId) {
+    throw new Error('PROGRAM_LIFECYCLE_PERSIST_FAILED');
+  }
+  if (!lifecycle) return savedData;
+  return {
+    ...savedData,
+    programInstanceId: lifecycle.programInstance.programInstanceId,
+    trainingCycleId: lifecycle.cycle.cycleId,
+    programInstanceActivatedAt: lifecycle.programInstance.activatedAt,
+  };
 }
 
 // ─── COMPUTE (Phase 3, Part B) ───────────────────────────────────────────
@@ -623,6 +1230,7 @@ export async function generateAndPersistWorkoutProgram(input: {
   answers: QuestionnaireAnswers;
   source: WorkoutProgramSource;
   adaptationWeek?: number;
+  lifecycleIdempotencyKey?: string;
 }): Promise<GenerateAndPersistResult> {
   let firestoreTemplate: WorkoutTemplateDocument | null = null;
   const prepared = await prepareWorkoutProgram({
@@ -648,6 +1256,12 @@ export async function generateAndPersistWorkoutProgram(input: {
     source: input.source,
     plan: prepared.plan,
     template: firestoreTemplate,
+    prescriptionInputSnapshot: buildPrescriptionInputSnapshot({
+      answers: input.answers,
+      currentTrainingLevel: startingLevelFromQuestionnaire(input.answers.level)!,
+      source: 'QUESTIONNAIRE_BASELINE',
+    }),
+    lifecycleIdempotencyKey: input.lifecycleIdempotencyKey,
   });
   return { status: 'SUCCESS', plan: program, program };
 }
@@ -792,6 +1406,11 @@ export async function persistPreparedWorkoutProgram(input: {
                 source: input.source,
                 plan: prepared.plan,
                 template: firestoreTemplate,
+                prescriptionInputSnapshot: buildPrescriptionInputSnapshot({
+                  answers: input.answers,
+                  currentTrainingLevel: startingLevelFromQuestionnaire(input.answers.level)!,
+                  source: 'QUESTIONNAIRE_BASELINE',
+                }),
               });
               return { status: 'SUCCESS', plan: program, program };
             }

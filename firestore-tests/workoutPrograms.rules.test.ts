@@ -297,4 +297,188 @@ describe('workoutPrograms', () => {
     });
     await assertFails(createAndActivate());
   });
+
+  // Phase 10 (docs/workout-lifecycle/v2/decisions/
+  // ADR-016_BACKEND_AUTHORITATIVE_PRESCRIPTION.md) — the exact exploit that
+  // motivated this phase: a V2 (lifecycle-managed) plan is otherwise
+  // structurally valid (passes every check above, including an arbitrary
+  // 1,000,000-set exercise the earlier checks never bounded) but was never
+  // validated by `assertPlanSafe`/sealed by the backend. It must be denied
+  // purely because no matching one-time grant exists — not because of any
+  // content bound expressible in Rules.
+  describe('V2 prescription authority (backend grant required)', () => {
+    async function seedV2LifecycleState(programInstanceId: string) {
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        await setDoc(doc(context.firestore(), 'users', UID, 'workoutLifecycleState', 'current'), {
+          activeProgramInstanceId: programInstanceId,
+        });
+      });
+    }
+
+    function arbitraryAttackerPlan(programId: string) {
+      return {
+        ...programDocument(programId),
+        sessions: [{
+          name: 'A', type: 'strength',
+          exercises: [{ exerciseId: 'squat', sourceExerciseId: 'squat', sets: 1_000_000, reps: '8-12' }],
+        }],
+      };
+    }
+
+    async function attemptV2Write(programId: string, programInstanceId: string, plan: Record<string, unknown>) {
+      const db = dbFor(UID);
+      return runTransaction(db, async (transaction) => {
+        transaction.set(doc(db, 'users', UID, 'workoutPrograms', programId), plan);
+        transaction.set(doc(db, 'users', UID, 'workoutProgramState', 'active'), {
+          programId, programInstanceId, updatedAt: serverTimestamp(),
+        });
+      });
+    }
+
+    it('denies an arbitrary V2 targetPlan sealed with no backend grant at all', async () => {
+      const programId = 'wpg_v2attack1';
+      const programInstanceId = 'wpi_attack1';
+      await seedV2LifecycleState(programInstanceId);
+      await assertFails(attemptV2Write(programId, programInstanceId, arbitraryAttackerPlan(programId)));
+    });
+
+    // Phase 10D closure of P0-2 (docs/workout-lifecycle/v2/architecture/
+    // 22_POST_PHASE_10C_FINAL_ADVERSARIAL_AUDIT.md Finding
+    // FS-RULES-BYPASS-01): the grant requirement above used to be gated on
+    // whether `workoutProgramState/active` happened to carry a
+    // `programInstanceId` field — a field the client chooses whether to
+    // send on this exact write, not a backend-controlled fact. Omitting it
+    // used to skip the grant check entirely for ANY V2 user, not just
+    // genuine pre-V2 accounts. It is now gated on
+    // `existsAfter(workoutLifecycleState/current)`, which can only ever be
+    // created under a real grant and can never be deleted — omitting
+    // `programInstanceId` on this write must no longer have any effect on
+    // whether a grant is required.
+    it('denies the exact programInstanceId-omission exploit: a V2 user cannot skip the grant by omitting the field', async () => {
+      const programId = 'wpg_v2attack_omit';
+      const programInstanceId = 'wpi_attack_omit';
+      await seedV2LifecycleState(programInstanceId);
+      const db = dbFor(UID);
+      await assertFails(runTransaction(db, async (transaction) => {
+        transaction.set(doc(db, 'users', UID, 'workoutPrograms', programId), arbitraryAttackerPlan(programId));
+        // Deliberately omit `programInstanceId` here — this is the exact
+        // exploit shape: same attacker plan, same lack of any grant, but
+        // now via the field-omission path instead of the no-grant-at-all
+        // path exercised above.
+        transaction.set(doc(db, 'users', UID, 'workoutProgramState', 'active'), {
+          programId, updatedAt: serverTimestamp(),
+        });
+      }));
+    });
+
+    it('a genuinely legacy V1 account (no workoutLifecycleState/current ever) may still omit programInstanceId', async () => {
+      // No seedV2LifecycleState call — this account has never had V2
+      // lifecycle state, matching the real legacy-compatibility case this
+      // escape hatch exists for.
+      const programId = 'wpg_v1legacy';
+      const db = dbFor(UID);
+      await assertSucceeds(runTransaction(db, async (transaction) => {
+        transaction.set(doc(db, 'users', UID, 'workoutPrograms', programId), programDocument(programId));
+        transaction.set(doc(db, 'users', UID, 'workoutProgramState', 'active'), {
+          programId, updatedAt: serverTimestamp(),
+        });
+      }));
+    });
+
+    it('denies the same V2 write when a grant exists for a different contentIdentity or operation', async () => {
+      const programId = 'wpg_v2attack2';
+      const programInstanceId = 'wpi_attack2';
+      await seedV2LifecycleState(programInstanceId);
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        await setDoc(doc(context.firestore(), 'users', UID, 'workoutLifecycleAuthorityGrants', 'current'), {
+          uid: UID, schemaVersion: 1, operation: 'ADAPT',
+          targetContentIdentity: 'wpg_some_other_identity',
+          expiresAt: Timestamp.fromMillis(Date.now() + 60_000),
+        });
+      });
+      await assertFails(attemptV2Write(programId, programInstanceId, arbitraryAttackerPlan(programId)));
+
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        await setDoc(doc(context.firestore(), 'users', UID, 'workoutLifecycleAuthorityGrants', 'current'), {
+          uid: UID, schemaVersion: 1, operation: 'DEFER', // never installs prescription content
+          targetContentIdentity: programId,
+          expiresAt: Timestamp.fromMillis(Date.now() + 60_000),
+        });
+      });
+      await assertFails(attemptV2Write(programId, programInstanceId, arbitraryAttackerPlan(programId)));
+    });
+
+    it('denies the grant from a different user (cross-user grant cannot authorize this write)', async () => {
+      const programId = 'wpg_v2attack3';
+      const programInstanceId = 'wpi_attack3';
+      await seedV2LifecycleState(programInstanceId);
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        await setDoc(doc(context.firestore(), 'users', UID, 'workoutLifecycleAuthorityGrants', 'current'), {
+          uid: OTHER_UID, schemaVersion: 1, operation: 'ADAPT',
+          targetContentIdentity: programId,
+          expiresAt: Timestamp.fromMillis(Date.now() + 60_000),
+        });
+      });
+      await assertFails(attemptV2Write(programId, programInstanceId, arbitraryAttackerPlan(programId)));
+    });
+
+    it('denies an expired grant even when every other field matches', async () => {
+      const programId = 'wpg_v2attack4';
+      const programInstanceId = 'wpi_attack4';
+      await seedV2LifecycleState(programInstanceId);
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        await setDoc(doc(context.firestore(), 'users', UID, 'workoutLifecycleAuthorityGrants', 'current'), {
+          uid: UID, schemaVersion: 1, operation: 'ADAPT',
+          targetContentIdentity: programId,
+          expiresAt: Timestamp.fromMillis(Date.now() - 1_000),
+        });
+      });
+      await assertFails(attemptV2Write(programId, programInstanceId, arbitraryAttackerPlan(programId)));
+    });
+
+    it('allows the write once a valid, matching, same-user grant for the correct identity is consumed', async () => {
+      const programId = 'wpg_v2ok';
+      const programInstanceId = 'wpi_ok';
+      await seedV2LifecycleState(programInstanceId);
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        await setDoc(doc(context.firestore(), 'users', UID, 'workoutLifecycleAuthorityGrants', 'current'), {
+          uid: UID, schemaVersion: 1, operation: 'ADAPT',
+          targetContentIdentity: programId,
+          expiresAt: Timestamp.fromMillis(Date.now() + 60_000),
+        });
+      });
+      const db = dbFor(UID);
+      await assertSucceeds(runTransaction(db, async (transaction) => {
+        transaction.set(doc(db, 'users', UID, 'workoutPrograms', programId), programDocument(programId));
+        transaction.set(doc(db, 'users', UID, 'workoutProgramState', 'active'), {
+          programId, programInstanceId, updatedAt: serverTimestamp(),
+        });
+        transaction.delete(doc(db, 'users', UID, 'workoutLifecycleAuthorityGrants', 'current'));
+      }));
+    });
+
+    it('rejects a same-user, correct-identity grant that is not deleted in the same transaction (replay guard)', async () => {
+      const programId = 'wpg_v2replay';
+      const programInstanceId = 'wpi_replay';
+      await seedV2LifecycleState(programInstanceId);
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        await setDoc(doc(context.firestore(), 'users', UID, 'workoutLifecycleAuthorityGrants', 'current'), {
+          uid: UID, schemaVersion: 1, operation: 'ADAPT',
+          targetContentIdentity: programId,
+          expiresAt: Timestamp.fromMillis(Date.now() + 60_000),
+        });
+      });
+      const db = dbFor(UID);
+      // Legitimate consume-and-delete, then attempt to reuse the same
+      // (already-consumed, now-nonexistent) grant for a second write.
+      await assertSucceeds(runTransaction(db, async (transaction) => {
+        transaction.set(doc(db, 'users', UID, 'workoutPrograms', programId), programDocument(programId));
+        transaction.set(doc(db, 'users', UID, 'workoutProgramState', 'active'), {
+          programId, programInstanceId, updatedAt: serverTimestamp(),
+        });
+        transaction.delete(doc(db, 'users', UID, 'workoutLifecycleAuthorityGrants', 'current'));
+      }));
+      await assertFails(attemptV2Write('wpg_v2replay2', programInstanceId, programDocument('wpg_v2replay2')));
+    });
+  });
 });

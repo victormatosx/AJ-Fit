@@ -1,146 +1,23 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, ScrollView, Pressable, Animated, Easing } from 'react-native';
+import { View, Text, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
 import { ScreenBg } from '../components/ui/ScreenBg';
 import { Display, Slash, MonoLabel } from '../components/ui/Display';
-import { Card, HudCorners } from '../components/ui/Card';
-import { SegBar } from '../components/ui/SegBar';
-import { Icon, IconName } from '../components/ui/Icon';
-import { OutlineNumber } from '../components/ui/OutlineNumber';
+import { HudCorners } from '../components/ui/Card';
+import { Icon } from '../components/ui/Icon';
 import { darkTheme, useTheme } from '../theme';
 import { useAuth } from '../state/AuthContext';
 import { getDisplayFirstName } from '../lib/userName';
 import { ProfileAvatar } from '../components/ui/ProfileAvatar';
-import { useUnits } from '../state/UnitsContext';
-import { formatWorkoutLoadFromKg, workoutLoadUnit } from '../units/workoutLoadConversions';
-import { useIsScreenActive } from '../state/ScreenActivity';
 import type { PrescriptionResult } from '../workoutPrescription/types';
 import { prescriptionOutcomeKey } from '../workoutPrescription/uiOutcome';
 import { resolveSessionDisplayName, type LooseTranslate } from '../workoutPrescription/sessionPresentation';
 import { weekdayOfLocalDate, type ScheduleResolution } from '../scheduleEngine';
+import { EvolutionCard } from '../components/evolution/EvolutionCard';
+import type { EvolutionViewModel } from '../workoutEvolution/types';
 
-/**
- * Ticker rows read from i18n keys. The values themselves are placeholder
- * mock stats until the analytics pipeline lands; when it does, replace this
- * static list with derived data. The i18n structure (label + value) stays.
- */
-type TickerKey = 'streak' | 'weekVolume' | 'benchPr' | 'consistency' | 'nextLevel';
-const TICKER_KEYS: Array<{ key: TickerKey; value: string }> = [
-  { key: 'streak', value: '14' },
-  { key: 'weekVolume', value: '12.4T' },
-  { key: 'benchPr', value: '82.5' },
-  { key: 'consistency', value: '92%' },
-  { key: 'nextLevel', value: '12' },
-];
-
-function Ticker() {
-  const { theme } = useTheme();
-  const { t } = useTranslation('home');
-  const { resolvedUnits } = useUnits();
-  const [width, setWidth] = useState(0);
-  const x = useRef(new Animated.Value(0)).current;
-  // Home is kept alive while inactive (docs/23_navegacao_e_lifecycle.md) —
-  // without this guard the marquee's native-driven loop would keep running
-  // forever on an invisible screen every time another tab is active.
-  const isActive = useIsScreenActive();
-
-  useEffect(() => {
-    if (width === 0 || !isActive) return;
-    x.setValue(0);
-    const loop = Animated.loop(
-      Animated.timing(x, {
-        toValue: -width,
-        duration: 18000,
-        easing: Easing.linear,
-        useNativeDriver: true,
-      })
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [width, x, isActive]);
-
-  const items = useMemo(
-    () =>
-      TICKER_KEYS.map(({ key, value }) => {
-        const label = t(`ticker.${key}` as 'ticker.streak').toUpperCase();
-        // `nextLevel` interpolates a day count; other tickers show the raw
-        // mock number as-is until real analytics wire in.
-        const display = key === 'benchPr'
-          ? `${formatWorkoutLoadFromKg(Number(value), resolvedUnits)}${workoutLoadUnit(resolvedUnits).toUpperCase()}`
-          : key === 'nextLevel'
-            ? t('ticker.nextLevelValue', { days: value })
-            : value;
-        return { label, value: display };
-      }),
-    [resolvedUnits, t],
-  );
-
-  const row = (onLayout?: (w: number) => void) => (
-    <View
-      onLayout={
-        onLayout
-          ? (e) => onLayout(e.nativeEvent.layout.width)
-          : undefined
-      }
-      style={{ flexDirection: 'row', gap: 36, paddingRight: 36 }}
-    >
-      {items.map(({ label, value }, i) => (
-        <Text
-          key={i}
-          style={{
-            fontFamily: theme.fonts.mono,
-            fontSize: 10,
-            letterSpacing: 2,
-            color: theme.colors.textFaint,
-          }}
-        >
-          {label}{' '}
-          <Text style={{ color: theme.colors.primaryEmphasis, fontFamily: theme.fonts.monoBold }}>{value}</Text>
-        </Text>
-      ))}
-    </View>
-  );
-
-  return (
-    <View
-      style={{
-        borderTopWidth: 1,
-        borderBottomWidth: 1,
-        borderColor: theme.colors.settingsGroupBorder,
-        paddingVertical: 8,
-        marginBottom: 18,
-        overflow: 'hidden',
-      }}
-    >
-      <Animated.View
-        style={{
-          flexDirection: 'row',
-          transform: [{ translateX: x }],
-          paddingLeft: 22,
-        }}
-      >
-        {row((w) => setWidth(w))}
-        {row()}
-      </Animated.View>
-    </View>
-  );
-}
-const UPCOMING_KEYS = ['pull', 'legs', 'upper'] as const;
-const CONSISTENCY_MOCK_STATES = ['done', 'done', 'done', 'rest', 'done', 'today', 'future'];
-
-/** Mock date placeholder — will be derived from real state once the plan
- *  timeline pipeline is wired. Kept here so tokens are single-sourced. */
-const MOCK_DATE = {
-  weekday: 'Seg',
-  day: '03',
-  month: 'Jun',
-  currentWeek: '04',
-  totalWeeks: '12',
-};
-
-const CONSISTENCY_MOCK = { done: 4, total: 5 };
+// Lifecycle claims on Home come from the shared EvolutionViewModel.
 
 // Product invariant: the Today Workout poster keeps the official Dark art
 // direction in both app themes. This is intentionally scoped to this card;
@@ -153,8 +30,9 @@ export function HomeScreen({
   generating,
   scheduleResolution,
   onStart,
-  onOpenConsistency,
   onOpenProfile,
+  evolutionViewModel,
+  onOpenEvolution,
 }: {
   prescription: PrescriptionResult;
   /**
@@ -172,11 +50,13 @@ export function HomeScreen({
   /** Schedule Engine's read on "what to train right now" (docs/workout-lifecycle/03_SCHEDULE_ENGINE.md). Optional — omitted callers keep the pre-Schedule-Engine behavior of always showing session 0. */
   scheduleResolution?: ScheduleResolution;
   onStart: () => void;
-  onOpenConsistency: () => void;
   onOpenProfile: () => void;
+  /** Fase 5 — real Training Level/Cycle/progress state; replaces the old hardcoded ticker (docs product §67/§130/§132/§AU). */
+  evolutionViewModel: EvolutionViewModel;
+  onOpenEvolution?: () => void;
 }) {
   const { theme } = useTheme();
-  const { t } = useTranslation(['home', 'profile']);
+  const { t, i18n } = useTranslation(['home', 'profile']);
   const { user, profile } = useAuth();
   const firstName = getDisplayFirstName({
     profileName: profile?.profile.name,
@@ -242,9 +122,15 @@ export function HomeScreen({
       })
     : null;
 
-  const dayInitials = t('consistency.dayInitials', {
-    returnObjects: true,
-  }) as string[];
+  // Today's real locale-formatted calendar date. There is no fixed
+  // week-of-program countdown because the lifecycle has no such fact.
+  const today = new Date();
+  const locale = i18n.resolvedLanguage ?? i18n.language;
+  const todayLine = t('home:meta.todayLine', {
+    weekday: new Intl.DateTimeFormat(locale, { weekday: 'short' }).format(today),
+    day: new Intl.DateTimeFormat(locale, { day: '2-digit' }).format(today),
+    month: new Intl.DateTimeFormat(locale, { month: 'short' }).format(today),
+  });
 
   return (
     <ScreenBg>
@@ -263,7 +149,7 @@ export function HomeScreen({
           >
             <View>
               <MonoLabel>
-                {t('home:meta.todayLine', MOCK_DATE).toUpperCase()}
+                {todayLine.toUpperCase()}
               </MonoLabel>
               <Display size={34} style={{ marginTop: 8 }}>
                 {t('home:greeting.casual').toUpperCase()}
@@ -280,8 +166,10 @@ export function HomeScreen({
             </Pressable>
           </View>
 
-          {/* ticker */}
-          <Ticker />
+          {/* Real Training Level/Cycle state from Workout Lifecycle V2. */}
+          <View style={{ paddingHorizontal: 22, marginBottom: 18 }}>
+            <EvolutionCard viewModel={evolutionViewModel} onPress={onOpenEvolution} />
+          </View>
 
           {/* TODAY POSTER */}
           <View style={{ paddingHorizontal: 22, paddingBottom: 16 }}>
@@ -302,13 +190,6 @@ export function HomeScreen({
               }}
             >
               <HudCorners color={TODAY_WORKOUT_THEME.colors.hudCorner} />
-              <OutlineNumber
-                size={210}
-                color={TODAY_WORKOUT_THEME.colors.decorativeOutline}
-                style={{ position: 'absolute', bottom: -64, right: -16, opacity: 0.5 }}
-              >
-                04
-              </OutlineNumber>
               <View>
                 <Slash
                   accentColor={TODAY_WORKOUT_THEME.colors.primaryEmphasis}
@@ -443,184 +324,8 @@ export function HomeScreen({
             </LinearGradient>
           </View>
 
-          {/* consistency card (tap → monthly calendar) */}
-          <View style={{ paddingHorizontal: 22, paddingBottom: 16 }}>
-            <Pressable onPress={onOpenConsistency}>
-              <Card style={{ padding: 18 }}>
-                <View
-                  style={{
-                    flexDirection: 'row',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    marginBottom: 12,
-                  }}
-                >
-                  <Slash>{t('home:consistency.title').toUpperCase()}</Slash>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Text
-                      style={{
-                        fontFamily: theme.fonts.display,
-                        fontSize: 22,
-                        color: theme.colors.textPrimary,
-                        textTransform: 'uppercase',
-                      }}
-                    >
-                      {CONSISTENCY_MOCK.done}
-                      <Text style={{ color: theme.colors.textFaint, fontSize: 15 }}>
-                        /{CONSISTENCY_MOCK.total}
-                      </Text>
-                    </Text>
-                    <Icon name="chevron-right" size={16} color={theme.colors.iconMuted} />
-                  </View>
-                </View>
-                <SegBar value={0.8} segs={15} />
-                <View style={{ flexDirection: 'row', gap: 6, marginTop: 14 }}>
-                  {dayInitials.map((d, i) => {
-                    const s = CONSISTENCY_MOCK_STATES[i];
-                    const bg =
-                      s === 'done'
-                        ? theme.chart.consistency.doneBackground
-                        : s === 'today'
-                          ? theme.colors.primary
-                          : theme.colors.surfaceMuted;
-                    return (
-                      <View key={i} style={{ flex: 1, alignItems: 'center' }}>
-                        <View
-                          style={{
-                            height: 34,
-                            width: '100%',
-                            borderRadius: 8,
-                            marginBottom: 5,
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            backgroundColor: bg,
-                            borderWidth: 1,
-                            borderColor:
-                              s === 'today' ? theme.colors.primaryEmphasis : theme.colors.settingsGroupBorder,
-                            shadowColor: s === 'today' ? theme.colors.primary : 'transparent',
-                            shadowOpacity: s === 'today' ? 0.6 : 0,
-                            shadowRadius: 8,
-                            shadowOffset: { width: 0, height: 0 },
-                            elevation: s === 'today' ? 4 : 0,
-                          }}
-                        >
-                          {s === 'done' && <Icon name="check" size={13} color={theme.colors.primaryForeground} />}
-                          {s === 'today' && <Icon name="bolt" size={13} color={theme.colors.primaryForeground} />}
-                          {s === 'rest' && (
-                            <Text style={{ fontFamily: theme.fonts.mono, fontSize: 8, color: theme.colors.textFaint }}>
-                              {t('home:consistency.restLabel').toUpperCase()}
-                            </Text>
-                          )}
-                        </View>
-                        <Text style={{ fontFamily: theme.fonts.mono, fontSize: 9, color: theme.colors.textFaint }}>
-                          {d}
-                        </Text>
-                      </View>
-                    );
-                  })}
-                </View>
-              </Card>
-            </Pressable>
-          </View>
-
-          {/* twin stats */}
-          <View style={{ paddingHorizontal: 22, paddingBottom: 16, flexDirection: 'row', gap: 12 }}>
-            {([
-              { key: 'streak', icon: 'flame', value: '14' },
-              { key: 'volume', icon: 'dumbbell', value: '12.4' },
-            ] as const).map((s) => {
-              const label = t(`home:stats.${s.key}.label`).toUpperCase();
-              const unit = t(`home:stats.${s.key}.unit`).toUpperCase();
-              const note = t(`home:stats.${s.key}.note`);
-              return (
-                <Card key={s.key} style={{ flex: 1, padding: 16 }}>
-                  <View
-                    style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}
-                  >
-                    <MonoLabel>{label}</MonoLabel>
-                    <Icon name={s.icon as IconName} size={14} color={theme.colors.primaryEmphasis} />
-                  </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 5 }}>
-                    <Text
-                      style={{
-                        fontFamily: theme.fonts.display,
-                        fontSize: 34,
-                        color: theme.colors.textPrimary,
-                        transform: [{ skewX: '-8deg' }],
-                      }}
-                    >
-                      {s.value}
-                    </Text>
-                    <MonoLabel>{unit}</MonoLabel>
-                  </View>
-                  <Text style={{ fontFamily: theme.fonts.ui, fontSize: 11, color: theme.colors.textMuted, marginTop: 6 }}>
-                    {note}
-                  </Text>
-                </Card>
-              );
-            })}
-          </View>
-
-          {/* up next */}
-          <View style={{ paddingHorizontal: 22, paddingBottom: 18 }}>
-            <Slash style={{ marginBottom: 12 }}>
-              {t('home:upcoming.title').toUpperCase()}
-            </Slash>
-            {UPCOMING_KEYS.map((k) => {
-              const item = t(`home:upcoming.items.${k}`, {
-                returnObjects: true,
-              }) as { day: string; name: string; duration: number; exercises: number };
-              return (
-                <View
-                  key={k}
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 14,
-                    paddingVertical: 13,
-                    paddingHorizontal: 14,
-                    borderRadius: 12,
-                    marginBottom: 8,
-                    backgroundColor: theme.colors.surface,
-                    borderWidth: 1,
-                    borderColor: theme.colors.settingsGroupBorder,
-                  }}
-                >
-                  <Text
-                    style={{
-                      fontFamily: theme.fonts.display,
-                      fontSize: 15,
-                      color: theme.colors.indicatorInactive,
-                      width: 38,
-                      textTransform: 'uppercase',
-                    }}
-                  >
-                    {item.day}
-                  </Text>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontFamily: theme.fonts.uiBold, fontSize: 14, color: theme.colors.textPrimary }}>
-                      {item.name}
-                    </Text>
-                    <Text
-                      style={{
-                        fontFamily: theme.fonts.mono,
-                        fontSize: 10,
-                        color: theme.colors.textFaint,
-                        marginTop: 3,
-                        letterSpacing: 1,
-                      }}
-                    >
-                      {t('home:upcoming.meta', {
-                        duration: item.duration,
-                        exercises: item.exercises,
-                      })}
-                    </Text>
-                  </View>
-                  <Icon name="chevron-right" size={15} color={theme.colors.controlHighlight} />
-                </View>
-              );
-            })}
-          </View>
+          {/* No consistency/streak/volume/PR or future-workout preview is
+              rendered until those claims have a production data source. */}
         </ScrollView>
       </SafeAreaView>
     </ScreenBg>

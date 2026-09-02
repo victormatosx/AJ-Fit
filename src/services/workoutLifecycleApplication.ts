@@ -1,0 +1,1036 @@
+import { doc, runTransaction, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { db } from '../lib/firebase';
+import {
+  evolutionIdempotencyKey,
+  lifecycleEventId,
+  pendingEvolutionIdForOperation,
+  programInstanceIdForOperation,
+} from '../workoutLifecycle/domain';
+import { applyDefer, canDefer, isAutoActivationDue, toDeferralView } from '../workoutLifecycle/deferral';
+import {
+  WORKOUT_LIFECYCLE_SCHEMA_VERSION,
+  type CurrentTrainingLevel,
+  type PendingEvolution,
+  type PendingEvolutionType,
+} from '../workoutLifecycle/types';
+import type { QuestionnaireAnswers, TemplateId } from '../workoutPrescription/types';
+import type { LevelPromotionTarget } from '../prescriptionEvolution/levelPromotion';
+import { buildPrescriptionInputSnapshot, questionnaireAnswersFromPrescriptionInputs } from '../workoutLifecycle/prescriptionInputs';
+import { evolvePrescription } from './prescriptionEvolution';
+import { loadAuthoritativePrescriptionInputs } from './prescriptionInputs';
+import { evaluateProgressionV2ForUser } from './workoutProgressionV2';
+import {
+  lifecycleRef,
+  loadPendingEvolution,
+  loadWorkoutLifecycle,
+  listWorkoutLifecycleEvents,
+  pendingEvolutionRef,
+  recoverWorkoutLifecyclePartialState,
+} from './workoutLifecycle';
+import {
+  contentIdentityFor,
+  loadActiveWorkoutProgram,
+  loadExerciseCatalogForLimitations,
+  loadWorkoutTemplate,
+  prepareWorkoutProgram,
+  saveAndActivateWorkoutProgram,
+  withoutUndefined,
+  type WorkoutProgramSnapshot,
+} from './workoutPrograms';
+import { fromWorkoutTemplateDocument } from '../workoutPrescription/templateDocument';
+import {
+  logWorkoutLifecycleEvent,
+  workoutLifecycleErrorCategory,
+} from '../workoutLifecycle/telemetry';
+import {
+  authorizeWorkoutLifecycleMutation,
+  requireWorkoutLifecycleCanonical,
+  WORKOUT_LIFECYCLE_AUTHORITY_GRANT_ID,
+  type WorkoutLifecycleAuthorityRequest,
+} from '../workoutLifecycle/authorityProvider';
+
+const USERS = 'users';
+const WORKOUT_LIFECYCLE_EVENTS = 'workoutLifecycleEvents';
+
+function eventRef(uid: string, eventId: string) {
+  return doc(db, USERS, uid, WORKOUT_LIFECYCLE_EVENTS, eventId);
+}
+
+function authorityGrantRef(uid: string) {
+  return doc(db, USERS, uid, 'workoutLifecycleAuthorityGrants', WORKOUT_LIFECYCLE_AUTHORITY_GRANT_ID);
+}
+
+// ─── PREPARE ────────────────────────────────────────────────────────────
+
+export type PrepareEvolutionResult =
+  | { status: 'NO_ACTION' }
+  | { status: 'ALREADY_PENDING'; pending: PendingEvolution<Timestamp> }
+  | { status: 'NO_LIFECYCLE' }
+  | { status: 'PREPARATION_FAILED'; reasonCodes: string[] }
+  | { status: 'PREPARED'; pending: PendingEvolution<Timestamp> };
+
+interface EarnedEvolutionFact {
+  idempotencyKey: string;
+  type: PendingEvolutionType;
+  fromLevel: CurrentTrainingLevel;
+  toLevel: CurrentTrainingLevel;
+  quality: PendingEvolution<Timestamp>['quality'];
+  sessionsCompletedAtEarn: number;
+  adherenceAtEarnBp: number;
+  earnedAt: Timestamp;
+  deferralCount: 0 | 1 | 2;
+  nextPromptAt: Timestamp | null;
+  autoActivateAt: Timestamp | null;
+}
+
+function timestampMillis(value: Timestamp): number {
+  return value.toMillis();
+}
+
+async function loadOutstandingEarnedFact(uid: string): Promise<EarnedEvolutionFact | null> {
+  const [events, lifecycle] = await Promise.all([
+    listWorkoutLifecycleEvents(uid),
+    loadWorkoutLifecycle(uid),
+  ]);
+  if (!lifecycle) return null;
+  const activations = new Set(events
+    .filter((event) => ['LEVEL_PROMOTED', 'EVOLUTION_ACTIVATED', 'MOTIVATIONAL_RENEWAL_ACTIVATED'].includes(event.type))
+    .map((event) => event.idempotencyKey));
+  const earned = events
+    .filter((event) => event.type === 'EVOLUTION_EARNED' || event.type === 'MOTIVATIONAL_RENEWAL_OFFERED')
+    .filter((event) => !activations.has(`activation:${event.idempotencyKey}`))
+    .sort((a, b) => timestampMillis(b.occurredAt) - timestampMillis(a.occurredAt))[0];
+  if (!earned) return null;
+
+  const type = String(earned.payload.evolutionType) as PendingEvolutionType;
+  if (!['CYCLE_EVOLUTION', 'LEVEL_PROMOTION', 'MOTIVATIONAL_RENEWAL'].includes(type)) return null;
+  const deferEvents = events
+    .filter((event) => event.type === 'EVOLUTION_DEFERRED' && event.idempotencyKey.startsWith(`${earned.idempotencyKey}:defer:`))
+    .sort((a, b) => timestampMillis(a.occurredAt) - timestampMillis(b.occurredAt));
+  const deferralCount = Math.min(2, deferEvents.length) as 0 | 1 | 2;
+  const lastDeferEvent = deferEvents.at(-1) ?? null;
+  const lastDefer = lastDeferEvent?.occurredAt ?? null;
+  const windowMs = 14 * 24 * 60 * 60 * 1000;
+  const persistedNextPromptAtMs = lastDeferEvent?.payload.nextPromptAtMs;
+  const persistedAutoActivateAtMs = lastDeferEvent?.payload.autoActivateAtMs;
+  const nextPromptAt = deferralCount === 1 && typeof persistedNextPromptAtMs === 'number'
+    ? Timestamp.fromMillis(persistedNextPromptAtMs)
+    : deferralCount === 1 && lastDefer
+      ? Timestamp.fromMillis(lastDefer.toMillis() + windowMs)
+    : null;
+  const autoActivateAt = deferralCount === 2 && typeof persistedAutoActivateAtMs === 'number'
+    ? Timestamp.fromMillis(persistedAutoActivateAtMs)
+    : deferralCount === 2 && lastDefer
+      ? Timestamp.fromMillis(lastDefer.toMillis() + windowMs)
+    : null;
+  const fromLevel = String(earned.payload.fromLevel ?? lifecycle.cycle.level) as CurrentTrainingLevel;
+  const toLevel = String(earned.payload.toLevel ?? (
+    type === 'LEVEL_PROMOTION' ? lifecycle.lifecycle.currentTrainingLevel : lifecycle.cycle.level
+  )) as CurrentTrainingLevel;
+  return {
+    idempotencyKey: earned.idempotencyKey,
+    type,
+    fromLevel,
+    toLevel,
+    quality: String(earned.payload.quality ?? 'GOOD') as EarnedEvolutionFact['quality'],
+    sessionsCompletedAtEarn: Number(earned.payload.sessionsCompletedAtEarn ?? 0),
+    adherenceAtEarnBp: Number(earned.payload.adherenceAtEarnBp ?? 0),
+    earnedAt: earned.occurredAt,
+    deferralCount,
+    nextPromptAt,
+    autoActivateAt,
+  };
+}
+
+async function persistEarnedFact(input: {
+  uid: string;
+  lifecycle: NonNullable<Awaited<ReturnType<typeof loadWorkoutLifecycle>>>;
+  fact: Omit<EarnedEvolutionFact, 'earnedAt' | 'deferralCount' | 'nextPromptAt' | 'autoActivateAt'>;
+}): Promise<EarnedEvolutionFact> {
+  const eventType = input.fact.type === 'MOTIVATIONAL_RENEWAL'
+    ? 'MOTIVATIONAL_RENEWAL_OFFERED'
+    : 'EVOLUTION_EARNED';
+  const targetEventRef = eventRef(input.uid, lifecycleEventId(eventType, input.fact.idempotencyKey));
+  await authorizeWorkoutLifecycleMutation({
+    operation: 'EARN',
+    sourceProgramInstanceId: input.lifecycle.programInstance.programInstanceId,
+    sourceCycleId: input.lifecycle.cycle.cycleId,
+    sourcePrescriptionInputSnapshotId: input.lifecycle.programInstance.prescriptionInputSnapshot?.snapshotId
+      ?? `legacy:${input.lifecycle.programInstance.programInstanceId}`,
+    eventId: lifecycleEventId(eventType, input.fact.idempotencyKey),
+    eventType,
+    idempotencyKey: input.fact.idempotencyKey,
+    earnedFact: {
+      type: input.fact.type,
+      fromLevel: input.fact.fromLevel,
+      toLevel: input.fact.toLevel,
+      quality: input.fact.quality,
+      sessionsCompletedAtEarn: input.fact.sessionsCompletedAtEarn,
+      adherenceAtEarnBp: input.fact.adherenceAtEarnBp,
+    },
+  });
+  try {
+    await runTransaction(db, async (transaction) => {
+      const [stateSnapshot, existingEvent] = await Promise.all([
+        transaction.get(lifecycleRef(input.uid)),
+        transaction.get(targetEventRef),
+      ]);
+      if (existingEvent.exists()) {
+        transaction.delete(authorityGrantRef(input.uid));
+        return;
+      }
+      if (!stateSnapshot.exists()) throw new Error('WORKOUT_LIFECYCLE_NOT_INITIALIZED');
+      const state = stateSnapshot.data();
+      if (
+        state.activeProgramInstanceId !== input.lifecycle.programInstance.programInstanceId
+        || state.currentCycleId !== input.lifecycle.cycle.cycleId
+      ) throw new Error('WORKOUT_LIFECYCLE_STALE_EARN_BASE');
+      const nowTs = serverTimestamp();
+      transaction.set(targetEventRef, {
+        eventId: lifecycleEventId(eventType, input.fact.idempotencyKey),
+        type: eventType,
+        occurredAt: nowTs,
+        cycleId: input.lifecycle.cycle.cycleId,
+        programInstanceId: input.lifecycle.programInstance.programInstanceId,
+        idempotencyKey: input.fact.idempotencyKey,
+        payload: {
+          evolutionType: input.fact.type,
+          quality: input.fact.quality,
+          fromLevel: input.fact.fromLevel,
+          toLevel: input.fact.toLevel,
+          sessionsCompletedAtEarn: input.fact.sessionsCompletedAtEarn,
+          adherenceAtEarnBp: input.fact.adherenceAtEarnBp,
+        },
+        schemaVersion: WORKOUT_LIFECYCLE_SCHEMA_VERSION,
+      });
+      // Earning is an immutable ledger fact, not an active lifecycle
+      // transition. `currentTrainingLevel` moves only when activation also
+      // installs the matching TrainingCycle and ProgramInstance. This keeps
+      // lifecycle/cycle semantics coherent and makes an isolated owner write
+      // indistinguishable from an attack rather than a supported state.
+      transaction.delete(authorityGrantRef(input.uid));
+    });
+  } catch (error) {
+    const converged = await loadOutstandingEarnedFact(input.uid).catch(() => null);
+    if (!converged || converged.idempotencyKey !== input.fact.idempotencyKey) throw error;
+    return converged;
+  }
+  const persisted = await loadOutstandingEarnedFact(input.uid);
+  if (!persisted || persisted.idempotencyKey !== input.fact.idempotencyKey) {
+    throw new Error('WORKOUT_LIFECYCLE_EARNED_FACT_PERSIST_FAILED');
+  }
+  return persisted;
+}
+
+/**
+ * The Fase 4 Lifecycle Orchestrator's PREPARE step (docs §6/§9/§22):
+ * evaluate Progression V2 (pure), and if it earned a transition, call the
+ * Prescription Evolution Engine (pure) and persist the result as a pending
+ * evolution — WITHOUT activating it. Current Program Instance remains
+ * active throughout (docs §10/§84).
+ *
+ * Idempotent: a pending evolution already existing short-circuits before
+ * ever re-evaluating progression (docs §14/§53/§94 — no evaluation loop
+ * while a transition is outstanding).
+ */
+async function prepareEvolutionAttempt(input: { uid: string; now?: Date }): Promise<PrepareEvolutionResult> {
+  const now = input.now ?? new Date();
+
+  const existingPending = await loadPendingEvolution(input.uid);
+  if (existingPending) return { status: 'ALREADY_PENDING', pending: existingPending };
+
+  let earnedFact = await loadOutstandingEarnedFact(input.uid);
+  if (!earnedFact) {
+    const decision = await evaluateProgressionV2ForUser(input.uid, now);
+    if (!decision || decision.type === 'NO_ACTION' || decision.type === 'PROGRESS_CONTINUES') {
+      return { status: 'NO_ACTION' };
+    }
+    const lifecycleAtEarn = await loadWorkoutLifecycle(input.uid);
+    if (!lifecycleAtEarn) return { status: 'NO_LIFECYCLE' };
+    let type: PendingEvolutionType;
+    let fromLevel = lifecycleAtEarn.lifecycle.currentTrainingLevel;
+    let toLevel = lifecycleAtEarn.lifecycle.currentTrainingLevel;
+    let quality = decision.adherence.quality;
+    if (decision.type === 'LEVEL_PROMOTION_ELIGIBLE') {
+      type = 'LEVEL_PROMOTION'; fromLevel = decision.from; toLevel = decision.to; quality = decision.quality;
+    } else if (decision.type === 'EVOLUTION_ELIGIBLE') {
+      type = 'CYCLE_EVOLUTION'; quality = decision.quality;
+    } else {
+      type = 'MOTIVATIONAL_RENEWAL';
+    }
+    const idempotencyKey = evolutionIdempotencyKey({
+      sourceProgramInstanceId: lifecycleAtEarn.programInstance.programInstanceId,
+      type,
+    });
+    earnedFact = await persistEarnedFact({
+      uid: input.uid,
+      lifecycle: lifecycleAtEarn,
+      fact: {
+        idempotencyKey, type, fromLevel, toLevel, quality,
+        sessionsCompletedAtEarn: decision.validSessionCount,
+        adherenceAtEarnBp: Math.round(decision.adherence.ratio * 10000),
+      },
+    });
+  }
+
+  const lifecycle = await loadWorkoutLifecycle(input.uid);
+  if (!lifecycle) return { status: 'NO_LIFECYCLE' };
+  const { type, fromLevel, toLevel, quality, idempotencyKey } = earnedFact;
+
+  const evolutionResult = type === 'LEVEL_PROMOTION'
+    ? await evolvePrescription({ uid: input.uid, mode: 'LEVEL_PROMOTION', targetLevel: toLevel as LevelPromotionTarget })
+    : await evolvePrescription({ uid: input.uid, mode: type, targetCycleIdentity: idempotencyKey });
+
+  if (evolutionResult.status !== 'SUCCESS') {
+    logWorkoutLifecycleEvent({
+      name: 'progression_failed', stage: 'PREPARATION',
+      errorCategory: evolutionResult.reasonCodes[0] ?? 'UNKNOWN', retryable: false,
+    });
+    return { status: 'PREPARATION_FAILED', reasonCodes: evolutionResult.reasonCodes };
+  }
+
+  const candidateTargetContentIdentity = contentIdentityFor({
+    questionnaireId: evolutionResult.questionnaireId,
+    questionnaireVersion: evolutionResult.questionnaireVersion,
+    plan: evolutionResult.plan,
+    template: {
+      id: evolutionResult.templateId as TemplateId,
+      version: evolutionResult.templateVersion,
+      contentHash: evolutionResult.templateContentHash,
+    },
+  });
+  const targetProgramInstanceId = programInstanceIdForOperation(`activation:${idempotencyKey}`);
+  const pendingEvolutionId = pendingEvolutionIdForOperation(idempotencyKey);
+  const pendingRef = pendingEvolutionRef(input.uid);
+  const stateRef = lifecycleRef(input.uid);
+  const sourceSnapshotId = lifecycle.programInstance.prescriptionInputSnapshot?.snapshotId
+    ?? `legacy:${lifecycle.programInstance.programInstanceId}`;
+  const sourceInstanceRef = doc(db, USERS, input.uid, 'programInstances', lifecycle.programInstance.programInstanceId);
+
+  const authorityResult = await authorizeWorkoutLifecycleMutation({
+    operation: 'PREPARE',
+    sourceProgramInstanceId: lifecycle.programInstance.programInstanceId,
+    sourceCycleId: lifecycle.cycle.cycleId,
+    sourcePrescriptionInputSnapshotId: sourceSnapshotId,
+    targetProgramInstanceId,
+    targetContentIdentity: candidateTargetContentIdentity,
+    targetPrescriptionIdentity: evolutionResult.plan.planId,
+    pendingEvolutionId,
+    targetPlan: withoutUndefined(evolutionResult.plan) as unknown as Record<string, unknown>,
+    targetPrescriptionInputSnapshot: evolutionResult.prescriptionInputSnapshot as unknown as Record<string, unknown>,
+    earnedFact: {
+      type, fromLevel, toLevel, quality,
+      sessionsCompletedAtEarn: earnedFact.sessionsCompletedAtEarn,
+      adherenceAtEarnBp: earnedFact.adherenceAtEarnBp,
+    },
+  });
+  const canonical = requireWorkoutLifecycleCanonical(authorityResult, 'PREPARE');
+  const canonicalTemplate = {
+    id: canonical.targetPlan.templateId as TemplateId,
+    version: canonical.targetTemplateVersion,
+    contentHash: canonical.targetTemplateContentHash,
+  };
+  const targetContentIdentity = contentIdentityFor({
+    questionnaireId: evolutionResult.questionnaireId,
+    questionnaireVersion: evolutionResult.questionnaireVersion,
+    plan: canonical.targetPlan,
+    template: canonicalTemplate,
+  });
+  if (
+    canonical.targetPrescriptionIdentity !== canonical.targetPlan.planId
+    || canonical.targetContentIdentity !== targetContentIdentity
+  ) {
+    throw new Error('WORKOUT_LIFECYCLE_CANONICAL_IDENTITY_INVALID');
+  }
+
+  try {
+    await runTransaction(db, async (transaction) => {
+      const [pendingSnapshot, stateSnapshot, sourceInstanceSnapshot] = await Promise.all([
+        transaction.get(pendingRef),
+        transaction.get(stateRef),
+        transaction.get(sourceInstanceRef),
+      ]);
+      if (pendingSnapshot.exists()) {
+        transaction.delete(authorityGrantRef(input.uid));
+        return; // converged — another caller already prepared this exact evolution.
+      }
+      if (!stateSnapshot.exists()) throw new Error('WORKOUT_LIFECYCLE_NOT_INITIALIZED');
+      const state = stateSnapshot.data();
+      if (
+        state.activeProgramInstanceId !== lifecycle.programInstance.programInstanceId
+        || state.currentCycleId !== lifecycle.cycle.cycleId
+      ) throw new Error('WORKOUT_LIFECYCLE_STALE_PREPARE_BASE');
+      if (!sourceInstanceSnapshot.exists()) throw new Error('WORKOUT_LIFECYCLE_STALE_PREPARE_BASE');
+      const persistedSourceSnapshotId = sourceInstanceSnapshot.data().prescriptionInputSnapshot?.snapshotId
+        ?? `legacy:${lifecycle.programInstance.programInstanceId}`;
+      if (persistedSourceSnapshotId !== sourceSnapshotId) {
+        throw new Error('WORKOUT_LIFECYCLE_STALE_PREPARE_INPUTS');
+      }
+
+      const nowTs = serverTimestamp();
+      transaction.set(pendingRef, {
+      pendingEvolutionId,
+      type,
+      sourceCycleId: lifecycle.cycle.cycleId,
+      sourceProgramInstanceId: lifecycle.programInstance.programInstanceId,
+      sourcePrescriptionInputSnapshotId: sourceSnapshotId,
+      fromLevel,
+      toLevel,
+      quality,
+      sessionsCompletedAtEarn: earnedFact.sessionsCompletedAtEarn,
+      adherenceAtEarnBp: earnedFact.adherenceAtEarnBp,
+      plan: withoutUndefined(canonical.targetPlan),
+      targetContentIdentity,
+      targetPrescriptionIdentity: canonical.targetPrescriptionIdentity,
+      targetProgramInstanceId,
+      targetQuestionnaireId: evolutionResult.questionnaireId,
+      targetQuestionnaireVersion: evolutionResult.questionnaireVersion,
+      targetPrescriptionInputSnapshot: evolutionResult.prescriptionInputSnapshot,
+      targetTemplateId: canonical.targetPlan.templateId,
+      targetTemplateVersion: canonical.targetTemplateVersion,
+      targetTemplateSourceVersion: canonical.targetTemplateSourceVersion,
+      targetTemplateContentHash: canonical.targetTemplateContentHash,
+      earnedAt: earnedFact.earnedAt,
+      status: earnedFact.deferralCount === 0 ? 'READY' : 'DEFERRED',
+      deferralCount: earnedFact.deferralCount,
+      nextPromptAt: earnedFact.nextPromptAt,
+      autoActivateAt: earnedFact.autoActivateAt,
+      idempotencyKey,
+      schemaVersion: WORKOUT_LIFECYCLE_SCHEMA_VERSION,
+      createdAt: nowTs,
+      updatedAt: nowTs,
+      });
+      transaction.delete(authorityGrantRef(input.uid));
+    });
+  } catch (error) {
+    const converged = await loadPendingEvolution(input.uid).catch(() => null);
+    if (converged?.idempotencyKey === idempotencyKey) {
+      return { status: 'ALREADY_PENDING', pending: converged };
+    }
+    const current = await loadWorkoutLifecycle(input.uid).catch(() => null);
+    if (current && (
+      current.programInstance.programInstanceId !== lifecycle.programInstance.programInstanceId
+      || current.cycle.cycleId !== lifecycle.cycle.cycleId
+    )) {
+      logWorkoutLifecycleEvent({
+        name: 'progression_failed', stage: 'PREPARATION', errorCategory: 'STALE_PREPARE', retryable: true,
+      });
+      return { status: 'PREPARATION_FAILED', reasonCodes: ['STALE_PREPARE_REJECTED_RETRYABLE'] };
+    }
+    logWorkoutLifecycleEvent({
+      name: 'progression_failed', stage: 'PREPARATION',
+      errorCategory: workoutLifecycleErrorCategory(error), retryable: true,
+    });
+    throw error;
+  }
+
+  const created = await loadPendingEvolution(input.uid);
+  if (!created) throw new Error('PENDING_EVOLUTION_PERSIST_FAILED');
+  return { status: 'PREPARED', pending: created };
+}
+
+// ─── DEFER ──────────────────────────────────────────────────────────────
+
+/**
+ * A grant is deliberately single-use. A different lifecycle command may
+ * replace it after this caller has computed its transition but before its
+ * transaction commits. Recompute from authoritative state so benign
+ * cross-device races converge without ever reusing stale prescription data.
+ *
+ * Bounded convergence (docs/workout-lifecycle/v2/architecture/
+ * 22_POST_PHASE_10C_FINAL_ADVERSARIAL_AUDIT.md §34/§49.2): a single retry was
+ * not always enough — under sustained load a concurrent ADAPT can still be
+ * committing across both attempts, so `prepareEvolutionAttempt`'s own
+ * staleness convergence check can fail twice in a row for an otherwise
+ * benign race. Exactly `MAX_ATTEMPTS` attempts total — never retried beyond
+ * this — then an explicit, retryable outcome is returned instead of an
+ * unhandled rejection reaching the caller.
+ */
+const PREPARE_EVOLUTION_MAX_ATTEMPTS = 3;
+
+export async function prepareEvolution(input: { uid: string; now?: Date }): Promise<PrepareEvolutionResult> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= PREPARE_EVOLUTION_MAX_ATTEMPTS; attempt += 1) {
+    try {
+      return await prepareEvolutionAttempt(input);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  const converged = await loadPendingEvolution(input.uid).catch(() => null);
+  if (converged) return { status: 'ALREADY_PENDING', pending: converged };
+  logWorkoutLifecycleEvent({
+    name: 'progression_failed', stage: 'PREPARATION',
+    errorCategory: workoutLifecycleErrorCategory(lastError), retryable: true,
+  });
+  return { status: 'PREPARATION_FAILED', reasonCodes: ['STALE_PREPARE_REJECTED_RETRYABLE'] };
+}
+
+export type DeferEvolutionResult =
+  | { status: 'NO_PENDING_EVOLUTION' }
+  | { status: 'CANNOT_DEFER' }
+  | { status: 'DEFERRED'; pending: PendingEvolution<Timestamp> };
+
+/** First deferral opens a 14-day second window; second (final) deferral opens the auto-activation deadline instead (docs §25-29, ADR-009). */
+export async function deferPendingEvolution(input: { uid: string; now?: Date }): Promise<DeferEvolutionResult> {
+  const now = input.now ?? new Date();
+  const pendingRef = pendingEvolutionRef(input.uid);
+  let outcome: DeferEvolutionResult | null = null;
+  const preflightPending = await loadPendingEvolution(input.uid);
+  if (!preflightPending) return { status: 'NO_PENDING_EVOLUTION' };
+  await authorizeWorkoutLifecycleMutation({
+    operation: 'DEFER',
+    sourceProgramInstanceId: preflightPending.sourceProgramInstanceId,
+    sourceCycleId: preflightPending.sourceCycleId,
+    pendingEvolutionId: preflightPending.pendingEvolutionId,
+    eventType: 'EVOLUTION_DEFERRED',
+    idempotencyKey: `${preflightPending.idempotencyKey}:defer:${preflightPending.deferralCount + 1}`,
+    eventId: lifecycleEventId(
+      'EVOLUTION_DEFERRED',
+      `${preflightPending.idempotencyKey}:defer:${preflightPending.deferralCount + 1}`,
+    ),
+  });
+
+  try {
+    await runTransaction(db, async (transaction) => {
+      const snapshot = await transaction.get(pendingRef);
+      if (!snapshot.exists()) {
+        outcome = { status: 'NO_PENDING_EVOLUTION' };
+        transaction.delete(authorityGrantRef(input.uid));
+        return;
+      }
+      const data = snapshot.data() as PendingEvolution<Timestamp>;
+      const view = toDeferralView({
+        pendingEvolutionId: data.pendingEvolutionId,
+        status: data.status,
+        deferralCount: data.deferralCount,
+        nextPromptAt: data.nextPromptAt ? data.nextPromptAt.toDate() : null,
+        autoActivateAt: data.autoActivateAt ? data.autoActivateAt.toDate() : null,
+      });
+      if (!canDefer(view, now)) {
+        outcome = { status: 'CANNOT_DEFER' };
+        transaction.delete(authorityGrantRef(input.uid));
+        return;
+      }
+      const transition = applyDefer(view, now);
+      const nowTs = serverTimestamp();
+      transaction.update(pendingRef, {
+        status: transition.status,
+        deferralCount: transition.deferralCount,
+        nextPromptAt: transition.nextPromptAt ? Timestamp.fromDate(transition.nextPromptAt) : null,
+        autoActivateAt: transition.autoActivateAt ? Timestamp.fromDate(transition.autoActivateAt) : null,
+        updatedAt: nowTs,
+      });
+      const deferIdempotencyKey = `${data.idempotencyKey}:defer:${transition.deferralCount}`;
+      const eventId = lifecycleEventId('EVOLUTION_DEFERRED', deferIdempotencyKey);
+      transaction.set(eventRef(input.uid, eventId), {
+        eventId,
+        type: 'EVOLUTION_DEFERRED',
+        occurredAt: nowTs,
+        cycleId: data.sourceCycleId,
+        programInstanceId: data.sourceProgramInstanceId,
+        idempotencyKey: deferIdempotencyKey,
+        payload: {
+          deferralCount: transition.deferralCount,
+          nextPromptAtMs: transition.nextPromptAt?.getTime() ?? null,
+          autoActivateAtMs: transition.autoActivateAt?.getTime() ?? null,
+        },
+        schemaVersion: WORKOUT_LIFECYCLE_SCHEMA_VERSION,
+      });
+      transaction.delete(authorityGrantRef(input.uid));
+    });
+  } catch (error) {
+    // Two concurrent defer calls (double tap, or two devices) can both pass
+    // the pure `canDefer` check against the same pre-write state; only one
+    // commits, and Firestore Rules reject the loser's stale `deferralCount ==
+    // resource.data.deferralCount + 1` at commit time as PERMISSION_DENIED
+    // rather than a retryable ABORTED (docs Fase 6 §44/AE). Converge instead
+    // of surfacing a raw error for what is, from the user's single shared
+    // pendingEvolutions/current doc, a benign race — never invent a second
+    // deferral on top of the one that actually landed.
+    const reconciled = await loadPendingEvolution(input.uid).catch(() => null);
+    if (!reconciled || reconciled.status !== 'DEFERRED') {
+      logWorkoutLifecycleEvent({
+        name: 'progression_failed', stage: 'DEFERRAL',
+        errorCategory: workoutLifecycleErrorCategory(error), retryable: true,
+      });
+      throw error;
+    }
+    return { status: 'DEFERRED', pending: reconciled };
+  }
+
+  if (outcome) return outcome;
+  const updated = await loadPendingEvolution(input.uid);
+  if (!updated) return { status: 'NO_PENDING_EVOLUTION' };
+  return { status: 'DEFERRED', pending: updated };
+}
+
+// ─── ACTIVATE ───────────────────────────────────────────────────────────
+
+export type ActivateEvolutionResult =
+  | { status: 'NO_PENDING_EVOLUTION' }
+  | { status: 'NOT_DUE' }
+  | { status: 'STALE_PENDING'; reasonCodes: string[] }
+  | { status: 'ACTIVATED'; program: WorkoutProgramSnapshot };
+
+/**
+ * Manual ("START NOW") or automatic (post-deadline reconciliation)
+ * activation of the pending evolution. Delegates the actual atomic
+ * content+instance+cycle+lifecycle write to `saveAndActivateWorkoutProgram`
+ * (extended in Fase 4 with `nextCycle`/`clearPendingEvolution`) — this
+ * function only resolves WHICH transition to apply and validates the
+ * pending evolution is still valid to activate (docs §34/§40-44).
+ */
+export async function activatePendingEvolution(input: {
+  uid: string;
+  now?: Date;
+  trigger: 'MANUAL' | 'AUTO';
+}): Promise<ActivateEvolutionResult> {
+  const now = input.now ?? new Date();
+  const pending = await loadPendingEvolution(input.uid);
+  if (!pending) return { status: 'NO_PENDING_EVOLUTION' };
+
+  if (input.trigger === 'AUTO') {
+    const view = toDeferralView({
+      pendingEvolutionId: pending.pendingEvolutionId,
+      status: pending.status,
+      deferralCount: pending.deferralCount,
+      nextPromptAt: pending.nextPromptAt ? pending.nextPromptAt.toDate() : null,
+      autoActivateAt: pending.autoActivateAt ? pending.autoActivateAt.toDate() : null,
+    });
+    if (!isAutoActivationDue(view, now)) return { status: 'NOT_DUE' };
+  }
+
+  const lifecycle = await loadWorkoutLifecycle(input.uid);
+  if (!lifecycle) return { status: 'STALE_PENDING', reasonCodes: ['LIFECYCLE_MISSING'] };
+  if (lifecycle.lifecycle.activeProgramInstanceId === pending.targetProgramInstanceId) {
+    // Already activated by a concurrent caller — converge without a second write.
+    return { status: 'ACTIVATED', program: await mustLoadActiveProgram(input.uid) };
+  }
+  if (lifecycle.programInstance.programInstanceId !== pending.sourceProgramInstanceId) {
+    // The source Program Instance this evolution was prepared against is no
+    // longer active (e.g. a Program Adaptation superseded it) — never
+    // activate stale content blindly (docs §72/§108/§AX).
+    return { status: 'STALE_PENDING', reasonCodes: ['SOURCE_PROGRAM_INSTANCE_CHANGED'] };
+  }
+  if (lifecycle.cycle.cycleId !== pending.sourceCycleId) {
+    return { status: 'STALE_PENDING', reasonCodes: ['SOURCE_CYCLE_CHANGED'] };
+  }
+  if (
+    pending.sourcePrescriptionInputSnapshotId
+    && lifecycle.programInstance.prescriptionInputSnapshot?.snapshotId !== pending.sourcePrescriptionInputSnapshotId
+  ) {
+    return { status: 'STALE_PENDING', reasonCodes: ['SOURCE_PRESCRIPTION_INPUTS_CHANGED'] };
+  }
+
+  const template = await loadWorkoutTemplate(pending.targetTemplateId as TemplateId);
+  if (
+    !template
+    || template.version !== pending.targetTemplateVersion
+    || template.contentHash !== pending.targetTemplateContentHash
+  ) {
+    return { status: 'STALE_PENDING', reasonCodes: ['TEMPLATE_CHANGED'] };
+  }
+
+  const eventType = pending.type === 'LEVEL_PROMOTION'
+    ? 'LEVEL_PROMOTED'
+    : pending.type === 'MOTIVATIONAL_RENEWAL'
+      ? 'MOTIVATIONAL_RENEWAL_ACTIVATED'
+      : 'EVOLUTION_ACTIVATED';
+
+  const nextCycle = pending.type === 'MOTIVATIONAL_RENEWAL'
+    ? undefined
+    : pending.type === 'LEVEL_PROMOTION'
+      ? { level: pending.toLevel, cycleNumber: 1, progressionReason: 'EARNED_LEVEL_PROMOTION' }
+      : { level: pending.toLevel, cycleNumber: lifecycle.lifecycle.currentCycleNumber + 1, progressionReason: 'EARNED_CYCLE_EVOLUTION' };
+
+  let targetPrescriptionInputSnapshot = pending.targetPrescriptionInputSnapshot;
+  if (!targetPrescriptionInputSnapshot) {
+    // Compatibility path for pending records prepared before the Phase 8A
+    // snapshot schema existed. Never dereference a missing questionnaire or
+    // silently synthesize prescription inputs when the source can no longer be
+    // recovered.
+    const authoritative = await loadAuthoritativePrescriptionInputs(input.uid, lifecycle);
+    if (!authoritative) {
+      return { status: 'STALE_PENDING', reasonCodes: ['PRESCRIPTION_INPUTS_UNAVAILABLE'] };
+    }
+    targetPrescriptionInputSnapshot = buildPrescriptionInputSnapshot({
+      answers: questionnaireAnswersFromPrescriptionInputs(authoritative.snapshot.inputs),
+      currentTrainingLevel: pending.toLevel,
+      source: pending.type === 'LEVEL_PROMOTION'
+        ? 'LEVEL_PROMOTION'
+        : pending.type === 'MOTIVATIONAL_RENEWAL'
+          ? 'MOTIVATIONAL_RENEWAL'
+          : 'CYCLE_EVOLUTION',
+    });
+  }
+
+  try {
+    const program = await saveAndActivateWorkoutProgram({
+      uid: input.uid,
+      questionnaireId: pending.targetQuestionnaireId,
+      questionnaireVersion: pending.targetQuestionnaireVersion,
+      plan: pending.plan as Parameters<typeof saveAndActivateWorkoutProgram>[0]['plan'],
+      template,
+      prescriptionInputSnapshot: targetPrescriptionInputSnapshot,
+      source: 'evolution_activation',
+      lifecycleIdempotencyKey: pending.idempotencyKey,
+      expectedActiveProgramInstanceId: pending.sourceProgramInstanceId,
+      expectedCycleId: pending.sourceCycleId,
+      expectedPrescriptionInputSnapshotId: pending.sourcePrescriptionInputSnapshotId,
+      nextCycle,
+      eventType,
+      eventPayload: { evolutionType: pending.type, quality: pending.quality, trigger: input.trigger },
+      clearPendingEvolution: true,
+      expectedPendingEvolutionId: pending.pendingEvolutionId,
+    });
+    return { status: 'ACTIVATED', program };
+  } catch (error) {
+    // A concurrent safety-relevant Program Adaptation (docs §47/§48/AJ) can
+    // supersede this pending's source Program Instance between our read above
+    // and the write below — that must always lose to safety, never activate
+    // stale/incompatible prescription content. Re-check rather than assume:
+    // only report STALE_PENDING once the lifecycle genuinely no longer points
+    // at the source this evolution was prepared against; any other failure
+    // is a real error and must not be swallowed.
+    const relifecycle = await loadWorkoutLifecycle(input.uid).catch(() => null);
+    if (relifecycle && relifecycle.programInstance.programInstanceId !== pending.sourceProgramInstanceId) {
+      return { status: 'STALE_PENDING', reasonCodes: ['SOURCE_PROGRAM_INSTANCE_CHANGED_CONCURRENTLY'] };
+    }
+    const repending = await loadPendingEvolution(input.uid).catch(() => null);
+    if (!repending || repending.pendingEvolutionId !== pending.pendingEvolutionId) {
+      return { status: 'STALE_PENDING', reasonCodes: ['PENDING_INVALIDATED_CONCURRENTLY'] };
+    }
+    logWorkoutLifecycleEvent({
+      name: 'progression_failed', stage: 'ACTIVATION',
+      errorCategory: workoutLifecycleErrorCategory(error), retryable: true,
+    });
+    throw error;
+  }
+}
+
+async function mustLoadActiveProgram(uid: string): Promise<WorkoutProgramSnapshot> {
+  const program = await loadActiveWorkoutProgram(uid);
+  if (!program) throw new Error('WORKOUT_LIFECYCLE_ACTIVE_PROGRAM_MISSING');
+  return program;
+}
+
+// ─── RECONCILE ──────────────────────────────────────────────────────────
+
+export interface ReconcileResult {
+  prepared: boolean;
+  autoActivated: boolean;
+  staleClearedPendingEvolution: boolean;
+  program?: WorkoutProgramSnapshot;
+}
+
+export interface PostWorkoutLifecycleResult extends ReconcileResult {
+  status: 'PROCESSED';
+}
+
+/**
+ * The single production post-workout authority. The workout execution and
+ * schedule completion have already committed before this function runs, so
+ * callers may safely retry it after an offline/unknown result. All lifecycle
+ * work is delegated to the same idempotent reconciliation path used on cold
+ * start; V1 progression is intentionally absent from this boundary.
+ */
+export async function processWorkoutLifecycleAfterSession(input: {
+  uid: string;
+  now?: Date;
+}): Promise<PostWorkoutLifecycleResult> {
+  const result = await reconcileWorkoutLifecycle({ ...input, trigger: 'POST_WORKOUT' });
+  return { status: 'PROCESSED', ...result };
+}
+
+/**
+ * Single entry point for "catch up the lifecycle" on any trusted runtime
+ * entry (app start, readiness gate, post-workout) — never depends on the
+ * app being open exactly at a deadline (docs §30-32/§75).
+ */
+export async function reconcileWorkoutLifecycle(input: {
+  uid: string;
+  now?: Date;
+  trigger?: 'POST_WORKOUT' | 'COLD_START' | 'RECOVERY';
+}): Promise<ReconcileResult> {
+  const now = input.now ?? new Date();
+  const trigger = input.trigger ?? 'RECOVERY';
+  logWorkoutLifecycleEvent({ name: 'lifecycle_reconcile_started', trigger });
+  try {
+    let recovery = await recoverWorkoutLifecyclePartialState(input.uid);
+    if (recovery.classification === 'UNRECOVERABLE') {
+      throw new Error('WORKOUT_LIFECYCLE_PARTIAL_STATE_UNRECOVERABLE');
+    }
+    if (recovery.recovered) {
+      logWorkoutLifecycleEvent({ name: 'lifecycle_partial_state_recovered', classification: recovery.classification });
+    }
+
+    // NO_V2_STATE can still mean a valid legacy-only account. Loading the
+    // active program is the one compatibility boundary that may consult the
+    // legacy mirror; it creates the deterministic V2 baseline before any
+    // progression decision. This makes migration/workout-finish and cold-
+    // start ordering converge on V2 rather than temporarily falling back to
+    // V1 authority.
+    if (recovery.classification === 'NO_V2_STATE') {
+      await loadActiveWorkoutProgram(input.uid);
+      recovery = await recoverWorkoutLifecyclePartialState(input.uid);
+      if (recovery.classification === 'UNRECOVERABLE') {
+        throw new Error('WORKOUT_LIFECYCLE_PARTIAL_STATE_UNRECOVERABLE');
+      }
+    }
+    const lifecycle = recovery.lifecycle ?? await loadWorkoutLifecycle(input.uid);
+    if (!lifecycle) {
+      const result = { prepared: false, autoActivated: false, staleClearedPendingEvolution: false };
+      logWorkoutLifecycleEvent({ name: 'lifecycle_reconcile_completed', trigger, outcome: 'NO_LIFECYCLE' });
+      return result;
+    }
+
+    const pending = await loadPendingEvolution(input.uid);
+    if (!pending) {
+    // Recovery: an eligible evolution may have been earned but never
+    // prepared (crash before persistence) — safe to attempt, idempotent
+    // either way (docs §76).
+      const result = await prepareEvolution({ uid: input.uid, now });
+      const response = { prepared: result.status === 'PREPARED', autoActivated: false, staleClearedPendingEvolution: false };
+      logWorkoutLifecycleEvent({ name: 'lifecycle_reconcile_completed', trigger, outcome: response.prepared ? 'PREPARED' : 'NO_ACTION' });
+      return response;
+    }
+
+  if (lifecycle.lifecycle.activeProgramInstanceId === pending.targetProgramInstanceId) {
+    // Activation already succeeded; only its own cleanup didn't run for some
+    // external reason — clear it now (docs §77/§87).
+      await authorizeWorkoutLifecycleMutation({
+        operation: 'RECOVER',
+        sourceProgramInstanceId: lifecycle.programInstance.programInstanceId,
+        sourceCycleId: lifecycle.cycle.cycleId,
+      });
+      await runTransaction(db, async (transaction) => {
+        transaction.delete(pendingEvolutionRef(input.uid));
+        transaction.delete(authorityGrantRef(input.uid));
+      }).catch(() => undefined);
+      const response = { prepared: false, autoActivated: false, staleClearedPendingEvolution: true };
+      logWorkoutLifecycleEvent({ name: 'lifecycle_reconcile_completed', trigger, outcome: 'NO_ACTION' });
+      return response;
+    }
+
+  const currentSnapshotId = lifecycle.programInstance.prescriptionInputSnapshot?.snapshotId
+    ?? `legacy:${lifecycle.programInstance.programInstanceId}`;
+  const pendingIsStale = lifecycle.programInstance.programInstanceId !== pending.sourceProgramInstanceId
+    || lifecycle.cycle.cycleId !== pending.sourceCycleId
+    || (pending.sourcePrescriptionInputSnapshotId != null
+      && pending.sourcePrescriptionInputSnapshotId !== currentSnapshotId);
+    if (pendingIsStale) {
+      const staleReason = lifecycle.programInstance.programInstanceId !== pending.sourceProgramInstanceId
+        ? 'PROGRAM_INSTANCE'
+        : lifecycle.cycle.cycleId !== pending.sourceCycleId
+          ? 'CYCLE'
+          : 'INPUT_SNAPSHOT';
+      logWorkoutLifecycleEvent({ name: 'lifecycle_stale_prepare_rejected', reason: staleReason });
+    // Compare-and-delete: never clear a newer pending that another caller may
+    // have installed while this reconciliation was reading.
+    await authorizeWorkoutLifecycleMutation({
+      operation: 'RECOVER',
+      sourceProgramInstanceId: lifecycle.programInstance.programInstanceId,
+      sourceCycleId: lifecycle.cycle.cycleId,
+      pendingEvolutionId: pending.pendingEvolutionId,
+    });
+    await runTransaction(db, async (transaction) => {
+      const snapshot = await transaction.get(pendingEvolutionRef(input.uid));
+      if (snapshot.exists() && snapshot.data().pendingEvolutionId === pending.pendingEvolutionId) {
+        transaction.delete(pendingEvolutionRef(input.uid));
+      }
+      transaction.delete(authorityGrantRef(input.uid));
+    });
+      const reprepared = await prepareEvolution({ uid: input.uid, now });
+      const response = {
+        prepared: reprepared.status === 'PREPARED' || reprepared.status === 'ALREADY_PENDING',
+        autoActivated: false,
+        staleClearedPendingEvolution: true,
+      };
+      logWorkoutLifecycleEvent({ name: 'lifecycle_reconcile_completed', trigger, outcome: 'STALE_REPREPARED' });
+      return response;
+    }
+
+  const view = toDeferralView({
+    pendingEvolutionId: pending.pendingEvolutionId,
+    status: pending.status,
+    deferralCount: pending.deferralCount,
+    nextPromptAt: pending.nextPromptAt ? pending.nextPromptAt.toDate() : null,
+    autoActivateAt: pending.autoActivateAt ? pending.autoActivateAt.toDate() : null,
+  });
+    if (!isAutoActivationDue(view, now)) {
+      const response = { prepared: false, autoActivated: false, staleClearedPendingEvolution: false };
+      logWorkoutLifecycleEvent({ name: 'lifecycle_reconcile_completed', trigger, outcome: 'NO_ACTION' });
+      return response;
+    }
+
+  const activation = await activatePendingEvolution({ uid: input.uid, now, trigger: 'AUTO' });
+    if (activation.status === 'ACTIVATED') {
+      const response = { prepared: false, autoActivated: true, staleClearedPendingEvolution: false, program: activation.program };
+      logWorkoutLifecycleEvent({ name: 'lifecycle_reconcile_completed', trigger, outcome: 'AUTO_ACTIVATED' });
+      return response;
+    }
+    const response = { prepared: false, autoActivated: false, staleClearedPendingEvolution: false };
+    logWorkoutLifecycleEvent({ name: 'lifecycle_reconcile_completed', trigger, outcome: 'NO_ACTION' });
+    return response;
+  } catch (error) {
+    logWorkoutLifecycleEvent({
+      name: 'lifecycle_reconcile_failed', trigger,
+      errorCategory: workoutLifecycleErrorCategory(error), retryable: true,
+    });
+    logWorkoutLifecycleEvent({
+      name: 'progression_failed', stage: 'RECONCILIATION',
+      errorCategory: workoutLifecycleErrorCategory(error), retryable: true,
+    });
+    throw error;
+  }
+}
+
+// ─── PROGRAM ADAPTATION ─────────────────────────────────────────────────
+
+export type ProgramAdaptationReason = 'AVAILABILITY' | 'GOAL' | 'ENVIRONMENT' | 'LIMITATION' | 'PREFERENCE';
+
+export type ProgramAdaptationResult =
+  | { status: 'SUCCESS'; program: WorkoutProgramSnapshot }
+  | { status: 'FAILED'; reasonCodes: string[] };
+
+/**
+ * Explicit Program Adaptation service boundary (docs prescription/06,
+ * §56-74). NOT an evolution: preserves career level and TrainingCycle,
+ * never increments earned-cycle credit, and always activates immediately —
+ * safety-relevant changes (LIMITATION) must never wait for a deferral
+ * window (docs §65/§66/§AV/§AW). Always clears any pending evolution, since
+ * it was prepared against constraints that no longer apply (docs §72/§74)
+ * — the EARNED fact itself survives in the immutable event ledger.
+ */
+async function invalidatePendingEvolutionForAdaptation(
+  uid: string,
+  authority: WorkoutLifecycleAuthorityRequest,
+): Promise<void> {
+  await authorizeWorkoutLifecycleMutation(authority);
+  const pendingRef = pendingEvolutionRef(uid);
+  await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(pendingRef);
+    if (snapshot.exists()) transaction.delete(pendingRef);
+    transaction.delete(authorityGrantRef(uid));
+  });
+}
+
+async function adaptWorkoutProgramAttempt(input: {
+  uid: string;
+  updatedFields: Partial<Omit<QuestionnaireAnswers, 'level'>>;
+  reason: ProgramAdaptationReason;
+  idempotencyKey: string;
+}): Promise<ProgramAdaptationResult> {
+  const program = await loadActiveWorkoutProgram(input.uid);
+  if (!program) return { status: 'FAILED', reasonCodes: ['NO_ACTIVE_PROGRAM'] };
+  const lifecycle = await loadWorkoutLifecycle(input.uid);
+  if (!lifecycle) return { status: 'FAILED', reasonCodes: ['NO_LIFECYCLE'] };
+  const authoritative = await loadAuthoritativePrescriptionInputs(input.uid, lifecycle);
+  if (!authoritative) return { status: 'FAILED', reasonCodes: ['QUESTIONNAIRE_NOT_FOUND'] };
+
+  // Adaptation never changes level — that is Level Promotion's exclusive
+  // responsibility (docs §57/§AO type signature already excludes `level`,
+  // this is the runtime mirror of that guarantee).
+  const syntheticAnswers: QuestionnaireAnswers = {
+    ...authoritative.answers,
+    ...input.updatedFields,
+    level: authoritative.answers.level,
+  };
+  const prescriptionInputSnapshot = buildPrescriptionInputSnapshot({
+    answers: syntheticAnswers,
+    currentTrainingLevel: lifecycle.lifecycle.currentTrainingLevel,
+    source: 'PROGRAM_ADAPTATION',
+  });
+
+  const prepared = await prepareWorkoutProgram({
+    answers: syntheticAnswers,
+    loadTemplate: async (templateId) => {
+      const template = await loadWorkoutTemplate(templateId);
+      return template ? fromWorkoutTemplateDocument(template) : null;
+    },
+    loadLimitationDataset: loadExerciseCatalogForLimitations,
+    usedLocalLimitationCatalog: false,
+  });
+  if (prepared.status !== 'SUCCESS') return { status: 'FAILED', reasonCodes: prepared.reasonCodes };
+
+  const template = await loadWorkoutTemplate(prepared.templateId);
+  if (!template) return { status: 'FAILED', reasonCodes: ['WORKOUT_TEMPLATE_NOT_FOUND'] };
+
+  const activationInput = {
+    uid: input.uid,
+    questionnaireId: program.questionnaireId,
+    questionnaireVersion: program.questionnaireVersion,
+    plan: prepared.plan,
+    template,
+    prescriptionInputSnapshot,
+    source: 'program_adaptation' as const,
+    lifecycleIdempotencyKey: `adaptation:${input.idempotencyKey}`,
+    expectedActiveProgramInstanceId: lifecycle.programInstance.programInstanceId,
+    expectedCycleId: lifecycle.cycle.cycleId,
+    expectedPrescriptionInputSnapshotId: lifecycle.programInstance.prescriptionInputSnapshot?.snapshotId
+      ?? `legacy:${lifecycle.programInstance.programInstanceId}`,
+    authorityUpdatedFields: input.updatedFields as Record<string, unknown>,
+    // No `nextCycle` — adaptation never starts a new TrainingCycle (docs §59).
+    eventType: 'PROGRAM_ADAPTED' as const,
+    eventPayload: { reason: input.reason },
+  };
+
+  // Invalidate the old target before committing new safety inputs. Activation
+  // now CAS-checks the same pending id inside its own transaction, so a stale
+  // target cannot slip through between this delete and the adaptation commit.
+  // The immutable earned event remains and is re-prepared afterward.
+  await invalidatePendingEvolutionForAdaptation(input.uid, {
+    operation: 'ADAPT',
+    sourceProgramInstanceId: lifecycle.programInstance.programInstanceId,
+    sourceCycleId: lifecycle.cycle.cycleId,
+    sourcePrescriptionInputSnapshotId: lifecycle.programInstance.prescriptionInputSnapshot?.snapshotId
+      ?? `legacy:${lifecycle.programInstance.programInstanceId}`,
+    targetProgramInstanceId: programInstanceIdForOperation(`activation:adaptation:${input.idempotencyKey}`),
+    targetContentIdentity: contentIdentityFor({
+      questionnaireId: program.questionnaireId,
+      questionnaireVersion: program.questionnaireVersion,
+      plan: prepared.plan,
+      template,
+    }),
+    targetPrescriptionIdentity: prepared.plan.planId,
+    targetTrainingLevel: lifecycle.lifecycle.currentTrainingLevel,
+    targetCycleNumber: lifecycle.lifecycle.currentCycleNumber,
+    questionnaireId: program.questionnaireId,
+    questionnaireVersion: program.questionnaireVersion,
+    targetProgramSource: 'program_adaptation',
+    targetTemplateVersion: template.version,
+    targetTemplateSourceVersion: template.sourceVersion,
+    targetTemplateContentHash: template.contentHash,
+    targetPlan: withoutUndefined(prepared.plan) as unknown as Record<string, unknown>,
+    targetPrescriptionInputSnapshot: prescriptionInputSnapshot as unknown as Record<string, unknown>,
+    updatedFields: input.updatedFields as Record<string, unknown>,
+  });
+  const result = await saveAndActivateWorkoutProgram(activationInput);
+  await reconcileWorkoutLifecycle({ uid: input.uid }).catch(() => undefined);
+  return { status: 'SUCCESS', program: result };
+}
+
+export async function adaptWorkoutProgram(input: {
+  uid: string;
+  updatedFields: Partial<Omit<QuestionnaireAnswers, 'level'>>;
+  reason: ProgramAdaptationReason;
+  idempotencyKey: string;
+}): Promise<ProgramAdaptationResult> {
+  try {
+    return await adaptWorkoutProgramAttempt(input);
+  } catch (firstError) {
+    // A concurrent activation/adaptation may invalidate the CAS base after
+    // preparation. Rebuild once from the newly authoritative lifecycle and
+    // inputs; never reuse a plan/snapshot derived from the stale base.
+    try {
+      return await adaptWorkoutProgramAttempt(input);
+    } catch (retryError) {
+      logWorkoutLifecycleEvent({
+        name: 'progression_failed', stage: 'ADAPTATION',
+        errorCategory: workoutLifecycleErrorCategory(retryError), retryable: true,
+      });
+      throw firstError;
+    }
+  }
+}

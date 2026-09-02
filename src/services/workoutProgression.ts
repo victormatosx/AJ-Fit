@@ -9,8 +9,9 @@ import {
 import { db } from '../lib/firebase';
 import { getQuestionnaireById } from './userProfile';
 import { loadActiveWorkoutProgram, generateAndPersistWorkoutProgram, type WorkoutProgramSnapshot } from './workoutPrograms';
-import { listExecutionsForProgram } from './workoutExecutions';
+import { listExecutionsForProgram, listExecutionsForProgramInstance } from './workoutExecutions';
 import { loadScheduleConfig } from './workoutSchedule';
+import { loadWorkoutLifecycle } from './workoutLifecycle';
 import { localDateInTimezone } from '../scheduleEngine/localDate';
 import { evaluateWorkoutProgression } from '../progressionEngine/resolver';
 import {
@@ -65,13 +66,16 @@ export async function evaluateActiveProgression(uid: string): Promise<{
 
   const [config, executions] = await Promise.all([
     loadScheduleConfig(uid),
-    listExecutionsForProgram(uid, program.programId),
+    program.programInstanceId
+      ? listExecutionsForProgramInstance(uid, program.programInstanceId)
+      : listExecutionsForProgram(uid, program.programId),
   ]);
 
   const timezone = config?.timezone ?? deviceTimezone();
   const todayLocalDate = localDateInTimezone(new Date(), timezone);
-  const activatedAtLocalDate = program.activatedAt
-    ? localDateInTimezone(program.activatedAt.toDate(), timezone)
+  const authoritativeActivatedAt = program.programInstanceActivatedAt ?? program.activatedAt;
+  const activatedAtLocalDate = authoritativeActivatedAt
+    ? localDateInTimezone(authoritativeActivatedAt.toDate(), timezone)
     : todayLocalDate;
 
   const resolution = evaluateWorkoutProgression({
@@ -102,7 +106,15 @@ export async function applyProgression(input: {
   uid: string;
   expectedProgramId: string;
 }): Promise<
-  | { applied: false; reason: 'ALREADY_APPLIED' | 'NOT_ELIGIBLE' | 'BLOCKED_ACTIVE_EXECUTION' | 'INVALID_PROGRAM_STATE' }
+  | {
+      applied: false;
+      reason:
+        | 'ALREADY_APPLIED'
+        | 'NOT_ELIGIBLE'
+        | 'BLOCKED_ACTIVE_EXECUTION'
+        | 'INVALID_PROGRAM_STATE'
+        | 'V2_LIFECYCLE_OWNS_ELIGIBILITY';
+    }
   | { applied: true; program: WorkoutProgramSnapshot; event: ProgressionEvent }
 > {
   const { resolution, program } = await evaluateActiveProgression(input.uid);
@@ -116,6 +128,13 @@ export async function applyProgression(input: {
   if (resolution.status === 'BLOCKED_ACTIVE_EXECUTION') return { applied: false, reason: 'BLOCKED_ACTIVE_EXECUTION' };
   if (resolution.status === 'NOT_ELIGIBLE') return { applied: false, reason: 'NOT_ELIGIBLE' };
 
+  // Phase 8B authority boundary: once the deterministic bootstrap has
+  // produced a V2 lifecycle, V1 is read-only compatibility input. This also
+  // retires the old Beginner Stage 1→2→3 mutation path; keeping it writable
+  // would leave a second prescription authority competing with V2.
+  const lifecycle = await loadWorkoutLifecycle(input.uid).catch(() => null);
+  if (lifecycle) return { applied: false, reason: 'V2_LIFECYCLE_OWNS_ELIGIBILITY' };
+
   const questionnaire = await getQuestionnaireById(input.uid, program.questionnaireId);
   if (!questionnaire) return { applied: false, reason: 'INVALID_PROGRAM_STATE' };
 
@@ -126,6 +145,8 @@ export async function applyProgression(input: {
   // would make `adaptationStage(undefined)` default back to Stage 1 for a
   // Beginner-origin user who already graduated (regression bug otherwise).
   const adaptationWeek = resolution.status === 'BEGINNER_STAGE_PROGRESSION_AVAILABLE' ? resolution.toStage : 3;
+  const config = await loadScheduleConfig(input.uid);
+  const todayLocalDate = localDateInTimezone(new Date(), config?.timezone ?? deviceTimezone());
 
   const result = await generateAndPersistWorkoutProgram({
     uid: input.uid,
@@ -134,11 +155,10 @@ export async function applyProgression(input: {
     answers: questionnaire.answers,
     source: 'automatic_progression',
     adaptationWeek,
+    lifecycleIdempotencyKey: `v1:${program.programInstanceId ?? program.programId}:${type}:${todayLocalDate}`,
   });
   if (result.status !== 'SUCCESS') return { applied: false, reason: 'INVALID_PROGRAM_STATE' };
 
-  const config = await loadScheduleConfig(input.uid);
-  const todayLocalDate = localDateInTimezone(new Date(), config?.timezone ?? deviceTimezone());
   const eventRef = doc(progressionEventsCollection(input.uid, program.programId), progressionEventId(type, todayLocalDate));
 
   const event: ProgressionEvent = await runTransaction(db, async (transaction) => {
