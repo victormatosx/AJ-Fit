@@ -2,5 +2,7 @@
   <string name="ajfit_rest_channel_name">Rest timer</string>
   <string name="ajfit_rest_channel_description">Countdown for the current rest</string>
   <string name="ajfit_rest_notification_title">AJ Fit · Rest</string>
+  <string name="ajfit_rest_live_update_title">Rest</string>
   <string name="ajfit_rest_series_format">Set %1$d/%2$d</string>
+  <string name="ajfit_rest_short_critical_text">REST</string>
 </resources>

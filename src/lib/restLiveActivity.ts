@@ -28,6 +28,9 @@ const SUPPORTED_SURFACES = new Set<RestLiveSurface>([
 
 let operationQueue: Promise<void> = Promise.resolve();
 let logicalSessionId: string | null = null;
+// True on a fresh JS process because an older native process/system surface
+// may have survived. A successful start makes cleanup relevant again.
+let nativeCleanupRequired = true;
 
 function normalizeCapabilities(value: unknown): RestLiveCapabilities {
   if (!value || typeof value !== 'object') return NO_REST_LIVE_CAPABILITIES;
@@ -60,7 +63,7 @@ function isValidState(state: RestActivityState): boolean {
 }
 
 function enqueueNativeOperation(
-  operation: 'start' | 'update' | 'end',
+  operation: 'start' | 'update' | 'end' | 'cleanup',
   callback: () => Promise<void>,
 ): Promise<void> {
   const next = operationQueue.then(async () => {
@@ -77,14 +80,11 @@ function enqueueNativeOperation(
 async function getSupportedNativeModule() {
   const nativeModule = getAJFitRestActivityNativeModule();
   if (!nativeModule) {
-    logInfo('restLiveActivity', 'module_available', { available: false });
     logInfo('restLiveActivity', 'rest_live_unsupported', { reason: 'module-unavailable' });
     return null;
   }
 
-  logInfo('restLiveActivity', 'module_available', { available: true });
   const capabilities = normalizeCapabilities(await nativeModule.getCapabilities());
-  logInfo('restLiveActivity', 'capabilities', capabilities);
   if (!capabilities.available) {
     logInfo('restLiveActivity', 'rest_live_unsupported', { reason: 'surface-unavailable' });
     return null;
@@ -95,15 +95,15 @@ async function getSupportedNativeModule() {
 async function getCapabilities(): Promise<RestLiveCapabilities> {
   const nativeModule = getAJFitRestActivityNativeModule();
   if (!nativeModule) {
-    logInfo('restLiveActivity', 'module_available', { available: false });
     logInfo('restLiveActivity', 'rest_live_unsupported', { reason: 'module-unavailable' });
     return NO_REST_LIVE_CAPABILITIES;
   }
 
-  logInfo('restLiveActivity', 'module_available', { available: true });
   try {
     const capabilities = normalizeCapabilities(await nativeModule.getCapabilities());
-    logInfo('restLiveActivity', 'capabilities', capabilities);
+    if (!capabilities.available) {
+      logInfo('restLiveActivity', 'rest_live_unsupported', { reason: 'surface-unavailable' });
+    }
     return capabilities;
   } catch (error) {
     logWarn('restLiveActivity', 'rest_live_native_error', {
@@ -115,14 +115,11 @@ async function getCapabilities(): Promise<RestLiveCapabilities> {
 }
 
 function start(state: RestActivityState): Promise<void> {
-  logInfo('restLiveActivity', 'rest_live_start_requested', {
-    startedAt: state.startedAt,
-    endsAt: state.endsAt,
-    setIndex: state.setIndex,
-    totalSets: state.totalSets,
-  });
   if (!isValidState(state)) {
-    logWarn('restLiveActivity', 'rest_live_invalid_state', { operation: 'start' });
+    logWarn('restLiveActivity', 'rest_live_native_error', {
+      operation: 'start',
+      reason: 'invalid-state',
+    });
     return Promise.resolve();
   }
 
@@ -132,18 +129,24 @@ function start(state: RestActivityState): Promise<void> {
 
     if (logicalSessionId === state.sessionId) {
       await nativeModule.update(state);
+      nativeCleanupRequired = true;
+      logInfo('restLiveActivity', 'rest_live_started', { reused: true });
       return;
     }
 
     await nativeModule.start(state);
     logicalSessionId = state.sessionId;
+    nativeCleanupRequired = true;
+    logInfo('restLiveActivity', 'rest_live_started', { reused: false });
   });
 }
 
 function update(state: RestActivityState): Promise<void> {
-  logInfo('restLiveActivity', 'rest_live_update_requested');
   if (!isValidState(state)) {
-    logWarn('restLiveActivity', 'rest_live_invalid_state', { operation: 'update' });
+    logWarn('restLiveActivity', 'rest_live_native_error', {
+      operation: 'update',
+      reason: 'invalid-state',
+    });
     return Promise.resolve();
   }
 
@@ -151,21 +154,67 @@ function update(state: RestActivityState): Promise<void> {
     const nativeModule = await getSupportedNativeModule();
     if (!nativeModule || logicalSessionId !== state.sessionId) return;
     await nativeModule.update(state);
+    nativeCleanupRequired = true;
+    logInfo('restLiveActivity', 'rest_live_updated');
   });
 }
 
 function end(reason: RestActivityEndReason): Promise<void> {
-  logInfo('restLiveActivity', 'rest_live_end_requested', { reason });
   return enqueueNativeOperation('end', async () => {
     const sessionId = logicalSessionId;
+    let ended = false;
     try {
-      const nativeModule = await getSupportedNativeModule();
-      if (!nativeModule || !sessionId) return;
+      if (!sessionId) return;
+      // Dismissal must not depend on the capability that allowed publication.
+      // Permissions/Live Activities may be disabled while a surface from the
+      // same workout is still visible.
+      const nativeModule = getAJFitRestActivityNativeModule();
+      if (!nativeModule) {
+        logInfo('restLiveActivity', 'rest_live_unsupported', {
+          reason: 'module-unavailable',
+        });
+        return;
+      }
       await nativeModule.end(sessionId, reason);
+      ended = true;
+      logInfo('restLiveActivity', 'rest_live_ended', { reason });
     } finally {
       // Completed/cancelled close only the current rest presentation. Keeping
       // the logical session lets the next rest update the same native surface.
-      if (reason === 'workout_ended') logicalSessionId = null;
+      if (reason === 'workout_ended') {
+        logicalSessionId = null;
+        if (ended) nativeCleanupRequired = false;
+      }
+    }
+  });
+}
+
+/**
+ * Removes presentation state whose owning workout cannot exist anymore.
+ * Unlike start/update, cleanup intentionally bypasses capability checks:
+ * revoking notification permission or disabling Live Activities must never
+ * prevent an already-visible surface from being dismissed.
+ */
+function cleanup(): Promise<void> {
+  return enqueueNativeOperation('cleanup', async () => {
+    if (!nativeCleanupRequired && logicalSessionId === null) return;
+
+    const nativeModule = getAJFitRestActivityNativeModule();
+    if (!nativeModule || typeof nativeModule.cleanup !== 'function') {
+      logicalSessionId = null;
+      nativeCleanupRequired = false;
+      logInfo('restLiveActivity', 'rest_live_unsupported', {
+        reason: nativeModule ? 'cleanup-unavailable' : 'module-unavailable',
+      });
+      return;
+    }
+
+    try {
+      await nativeModule.cleanup();
+      nativeCleanupRequired = false;
+      logInfo('restLiveActivity', 'rest_live_ended', { reason: 'cleanup' });
+    } finally {
+      logicalSessionId = null;
     }
   });
 }
@@ -175,4 +224,5 @@ export const restLiveActivity = Object.freeze({
   start,
   update,
   end,
+  cleanup,
 });

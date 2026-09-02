@@ -1,0 +1,48 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "rest_activity_completed_accessibility" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Rest completed" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Descanso completado" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Descanso concluído" } }
+      }
+    },
+    "rest_activity_lock_screen_title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "REST" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "DESCANSO" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "DESCANSO" } }
+      }
+    },
+    "rest_activity_return_to_workout" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Tap to return to workout" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Toca para volver al entreno" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Toque para voltar ao treino" } }
+      }
+    },
+    "rest_activity_series_format" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "SET %1$lld / %2$lld" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "SERIE %1$lld / %2$lld" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "SÉRIE %1$lld / %2$lld" } }
+      }
+    },
+    "rest_activity_time_accessibility" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Rest time" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Tiempo de descanso" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Tempo de descanso" } }
+      }
+    },
+    "rest_activity_title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "AJ FIT · REST" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "AJ FIT · DESCANSO" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "AJ FIT · DESCANSO" } }
+      }
+    }
+  },
+  "version" : "1.0"
+}

@@ -9,6 +9,7 @@ type NativeModuleMock = {
   getCapabilities: ReturnType<typeof vi.fn<() => Promise<RestLiveCapabilities>>>;
   start: ReturnType<typeof vi.fn<(state: RestActivityState) => Promise<void>>>;
   update: ReturnType<typeof vi.fn<(state: RestActivityState) => Promise<void>>>;
+  cleanup?: ReturnType<typeof vi.fn<() => Promise<void>>>;
   end: ReturnType<
     typeof vi.fn<(sessionId: string, reason: RestActivityEndReason) => Promise<void>>
   >;
@@ -41,15 +42,18 @@ const BASE_STATE: RestActivityState = {
   totalSets: 4,
 };
 
-function installNativeModule(): NativeModuleMock {
+function installNativeModule(
+  capabilities: RestLiveCapabilities = {
+    available: true,
+    surface: 'android-notification',
+  },
+): NativeModuleMock {
   const nativeModule: NativeModuleMock = {
-    getCapabilities: vi.fn(async () => ({
-      available: true,
-      surface: 'android-notification',
-    })),
+    getCapabilities: vi.fn(async () => capabilities),
     start: vi.fn(async () => undefined),
     update: vi.fn(async () => undefined),
     end: vi.fn(async () => undefined),
+    cleanup: vi.fn(async () => undefined),
   };
   bridge.nativeModule = nativeModule;
   return nativeModule;
@@ -79,6 +83,7 @@ describe('restLiveActivity optional capabilities', () => {
     await expect(facade.start(BASE_STATE)).resolves.toBeUndefined();
     await expect(facade.update({ ...BASE_STATE, endsAt: 205_000 })).resolves.toBeUndefined();
     await expect(facade.end('cancelled')).resolves.toBeUndefined();
+    await expect(facade.cleanup()).resolves.toBeUndefined();
   });
 
   it('reports the real Android notification capability from the native module', async () => {
@@ -88,6 +93,20 @@ describe('restLiveActivity optional capabilities', () => {
     await expect(facade.getCapabilities()).resolves.toEqual({
       available: true,
       surface: 'android-notification',
+    });
+    expect(nativeModule.getCapabilities).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports the real iOS Live Activity capability from the native module', async () => {
+    const nativeModule = installNativeModule({
+      available: true,
+      surface: 'ios-live-activity',
+    });
+    const facade = await loadFacade();
+
+    await expect(facade.getCapabilities()).resolves.toEqual({
+      available: true,
+      surface: 'ios-live-activity',
     });
     expect(nativeModule.getCapabilities).toHaveBeenCalledTimes(1);
   });
@@ -189,6 +208,24 @@ describe('restLiveActivity fail-open behavior', () => {
     );
   });
 
+  it('still dismisses after publication capability is revoked', async () => {
+    const nativeModule = installNativeModule();
+    const facade = await loadFacade();
+
+    await facade.start(BASE_STATE);
+    nativeModule.getCapabilities.mockResolvedValue({
+      available: false,
+      surface: 'none',
+    });
+    await facade.end('workout_ended');
+
+    expect(nativeModule.getCapabilities).toHaveBeenCalledTimes(1);
+    expect(nativeModule.end).toHaveBeenCalledWith(
+      BASE_STATE.sessionId,
+      'workout_ended',
+    );
+  });
+
   it('preserves call order for rapid start, update and end requests', async () => {
     const nativeModule = installNativeModule();
     const order: string[] = [];
@@ -204,6 +241,51 @@ describe('restLiveActivity fail-open behavior', () => {
     ]);
 
     expect(order).toEqual(['start', 'update', 'end']);
+  });
+
+  it('serializes a rapid start then cancel so the final native state is ended', async () => {
+    const nativeModule = installNativeModule();
+    const order: string[] = [];
+    nativeModule.start.mockImplementation(async () => { order.push('start'); });
+    nativeModule.end.mockImplementation(async () => { order.push('end'); });
+    const facade = await loadFacade();
+
+    await Promise.all([facade.start(BASE_STATE), facade.end('cancelled')]);
+
+    expect(order).toEqual(['start', 'end']);
+  });
+
+  it('queues orphan cleanup after pending start/update and leaves no logical surface', async () => {
+    const nativeModule = installNativeModule();
+    const order: string[] = [];
+    nativeModule.start.mockImplementation(async () => { order.push('start'); });
+    nativeModule.update.mockImplementation(async () => { order.push('update'); });
+    nativeModule.cleanup?.mockImplementation(async () => { order.push('cleanup'); });
+    const facade = await loadFacade();
+
+    await Promise.all([
+      facade.start(BASE_STATE),
+      facade.update({ ...BASE_STATE, endsAt: 205_000 }),
+      facade.cleanup(),
+    ]);
+    await facade.start({ ...BASE_STATE, startedAt: 300_000, endsAt: 390_000 });
+
+    expect(order).toEqual(['start', 'update', 'cleanup', 'start']);
+    expect(nativeModule.start).toHaveBeenCalledTimes(2);
+  });
+
+  it('deduplicates repeated cleanup and tolerates a pre-Phase-7 native binary', async () => {
+    const nativeModule = installNativeModule();
+    const facade = await loadFacade();
+
+    await facade.cleanup();
+    await facade.cleanup();
+    expect(nativeModule.cleanup).toHaveBeenCalledTimes(1);
+
+    vi.resetModules();
+    delete nativeModule.cleanup;
+    const legacyFacade = await loadFacade();
+    await expect(legacyFacade.cleanup()).resolves.toBeUndefined();
   });
 
   it('does not send workout_ended repeatedly after the logical session is closed', async () => {

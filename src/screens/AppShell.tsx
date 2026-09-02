@@ -78,9 +78,10 @@ const FULL_BLEED = StyleSheet.create({
  */
 export function AppShell() {
   const [showPremium, setShowPremium] = useState(false);
+  const { user } = useAuth();
   return (
     <PremiumActionProvider onRequestUpgrade={() => setShowPremium(true)}>
-      <RestSessionProvider>
+      <RestSessionProvider key={user?.uid ?? 'signed-out'}>
         <AppShellContent showPremium={showPremium} setShowPremium={setShowPremium} />
       </RestSessionProvider>
     </PremiumActionProvider>

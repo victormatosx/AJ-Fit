@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   clearOnboardingDraft: vi.fn(),
   clearWorkoutSubstitutionPreferences: vi.fn(),
   clearStoredUnitsPreference: vi.fn(),
+  cleanupRestSessionArtifacts: vi.fn(),
 }));
 
 vi.mock('../photoVaultEncryptedCache', () => ({
@@ -19,6 +20,9 @@ vi.mock('../workoutSubstitutionsStorage', () => ({
 vi.mock('../../units/unitsStorage', () => ({
   clearStoredUnitsPreference: mocks.clearStoredUnitsPreference,
 }));
+vi.mock('../restSessionCleanup', () => ({
+  cleanupRestSessionArtifacts: mocks.cleanupRestSessionArtifacts,
+}));
 
 import { finalizeAccountDeletionClientShutdown } from '../accountDeletionShutdown';
 
@@ -27,6 +31,7 @@ beforeEach(() => {
   mocks.clearOnboardingDraft.mockResolvedValue(undefined);
   mocks.clearWorkoutSubstitutionPreferences.mockResolvedValue(undefined);
   mocks.clearStoredUnitsPreference.mockResolvedValue(undefined);
+  mocks.cleanupRestSessionArtifacts.mockResolvedValue(undefined);
 });
 
 describe('finalizeAccountDeletionClientShutdown', () => {
@@ -63,6 +68,15 @@ describe('finalizeAccountDeletionClientShutdown', () => {
     const logout = vi.fn().mockResolvedValue(undefined);
     await finalizeAccountDeletionClientShutdown('uid-1', logout);
     expect(mocks.clearStoredUnitsPreference).toHaveBeenCalledOnce();
+  });
+
+  it('cleans persisted rest and native presentation before logout', async () => {
+    const logout = vi.fn().mockResolvedValue(undefined);
+    await finalizeAccountDeletionClientShutdown('uid-1', logout);
+    expect(mocks.cleanupRestSessionArtifacts).toHaveBeenCalledOnce();
+    expect(mocks.cleanupRestSessionArtifacts.mock.invocationCallOrder[0]).toBeLessThan(
+      logout.mock.invocationCallOrder[0],
+    );
   });
 
   it('a failure clearing the units preference does not block the other cleanups or logout', async () => {

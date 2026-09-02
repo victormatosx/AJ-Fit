@@ -2,6 +2,7 @@ import { clearOnboardingDraft } from '../onboarding/draftStorage';
 import { removeCachedThumbnailsForUser } from './photoVaultEncryptedCache';
 import { clearWorkoutSubstitutionPreferences } from './workoutSubstitutionsStorage';
 import { clearStoredUnitsPreference } from '../units/unitsStorage';
+import { cleanupRestSessionArtifacts } from './restSessionCleanup';
 
 /**
  * Client-side shutdown after `requestAccountDeletion` has durably accepted
@@ -83,6 +84,7 @@ export async function finalizeAccountDeletionClientShutdown(
     clearOnboardingDraft(),
     clearWorkoutSubstitutionPreferences(),
     clearStoredUnitsPreference(),
+    cleanupRestSessionArtifacts(),
   ]);
 
   await logout();

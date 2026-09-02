@@ -1,0 +1,358 @@
+const {
+  createRunOncePlugin,
+  withDangerousMod,
+  withXcodeProject,
+} = require('@expo/config-plugins');
+const { execFileSync } = require('node:child_process');
+const fs = require('node:fs');
+const path = require('node:path');
+
+const TARGET_NAME = 'AJFitRestActivityExtension';
+const EXTENSION_BUNDLE_SUFFIX = 'RestActivity';
+const DEPLOYMENT_TARGET = '16.4';
+const EMBED_PHASE_NAME = 'Embed Foundation Extensions';
+const ASSET_CATALOG = 'Assets.xcassets';
+const LOGO_IMAGESET = 'AJFitLogo.imageset';
+const APP_LOGO_FILE = 'aj-logo.png';
+const LIVE_ACTIVITY_LOGO_RENDITIONS = [
+  { filename: APP_LOGO_FILE, pixels: 24 },
+  { filename: 'aj-logo@2x.png', pixels: 48 },
+  { filename: 'aj-logo@3x.png', pixels: 72 },
+];
+const SOURCE_FILES = [
+  'AJFitRestActivityAttributes.swift',
+  'AJFitRestActivityBundle.swift',
+  'AJFitRestActivityWidget.swift',
+];
+const RESOURCE_FILES = ['Localizable.xcstrings', ASSET_CATALOG];
+const EXTENSION_FILES = [
+  ...SOURCE_FILES,
+  ...RESOURCE_FILES,
+  'Info.plist',
+];
+
+function extensionBundleIdentifier(config) {
+  const appBundleIdentifier = config.ios && config.ios.bundleIdentifier;
+  if (!appBundleIdentifier) {
+    throw new Error(
+      'AJ Fit rest activity requires expo.ios.bundleIdentifier before creating its extension.',
+    );
+  }
+  return `${appBundleIdentifier}.${EXTENSION_BUNDLE_SUFFIX}`;
+}
+
+function declareEasExtension(config, bundleIdentifier) {
+  const currentExtensions =
+    config.extra?.eas?.build?.experimental?.ios?.appExtensions ?? [];
+  const extensionConfig = {
+    targetName: TARGET_NAME,
+    bundleIdentifier,
+    entitlements: {},
+  };
+  const existingIndex = currentExtensions.findIndex(
+    (candidate) => candidate.targetName === TARGET_NAME,
+  );
+  const appExtensions = [...currentExtensions];
+  if (existingIndex >= 0) appExtensions[existingIndex] = extensionConfig;
+  else appExtensions.push(extensionConfig);
+
+  config.extra = {
+    ...config.extra,
+    eas: {
+      ...config.extra?.eas,
+      build: {
+        ...config.extra?.eas?.build,
+        experimental: {
+          ...config.extra?.eas?.build?.experimental,
+          ios: {
+            ...config.extra?.eas?.build?.experimental?.ios,
+            appExtensions,
+          },
+        },
+      },
+    },
+  };
+  return config;
+}
+
+function copyExtensionFiles(platformProjectRoot) {
+  const targetDirectory = path.join(platformProjectRoot, TARGET_NAME);
+  const templateDirectory = path.join(__dirname, 'ios', TARGET_NAME);
+  const sharedAttributes = path.resolve(
+    __dirname,
+    '../../modules/ajfit-rest-activity/ios/AJFitRestActivityAttributes.swift',
+  );
+  const sharedAppLogo = path.resolve(__dirname, '../../assets/aj-logo.png');
+
+  fs.mkdirSync(targetDirectory, { recursive: true });
+  for (const file of EXTENSION_FILES) {
+    if (file === ASSET_CATALOG) continue;
+    const source =
+      file === 'AJFitRestActivityAttributes.swift'
+        ? sharedAttributes
+        : path.join(templateDirectory, file);
+    if (!fs.existsSync(source)) {
+      throw new Error(`AJ Fit rest activity source is missing: ${source}`);
+    }
+    fs.copyFileSync(source, path.join(targetDirectory, file));
+  }
+
+  const assetCatalogTemplate = path.join(templateDirectory, ASSET_CATALOG);
+  const targetAssetCatalog = path.join(targetDirectory, ASSET_CATALOG);
+  const targetLogoImageSet = path.join(targetAssetCatalog, LOGO_IMAGESET);
+  if (!fs.existsSync(assetCatalogTemplate)) {
+    throw new Error(
+      `AJ Fit rest activity asset catalog is missing: ${assetCatalogTemplate}`,
+    );
+  }
+  if (!fs.existsSync(sharedAppLogo)) {
+    throw new Error(`AJ Fit app logo is missing: ${sharedAppLogo}`);
+  }
+  fs.cpSync(assetCatalogTemplate, targetAssetCatalog, { recursive: true });
+  for (const rendition of LIVE_ACTIVITY_LOGO_RENDITIONS) {
+    execFileSync(
+      '/usr/bin/sips',
+      [
+        '--resampleHeightWidth',
+        String(rendition.pixels),
+        String(rendition.pixels),
+        sharedAppLogo,
+        '--out',
+        path.join(targetLogoImageSet, rendition.filename),
+      ],
+      { stdio: 'pipe' },
+    );
+  }
+}
+
+function unquote(value) {
+  return typeof value === 'string' ? value.replace(/^"(.*)"$/, '$1') : value;
+}
+
+function extensionStatus(xcodeProject, bundleIdentifier) {
+  const nativeTargets = xcodeProject.pbxNativeTargetSection();
+  const existingTarget = Object.values(nativeTargets).find(
+    (target) => target && target.name && unquote(target.name) === TARGET_NAME,
+  );
+  if (!existingTarget) return 'missing';
+
+  const configurationList =
+    xcodeProject.pbxXCConfigurationList()[existingTarget.buildConfigurationList];
+  const firstConfiguration = configurationList?.buildConfigurations?.[0]?.value;
+  const buildConfiguration =
+    xcodeProject.pbxXCBuildConfigurationSection()[firstConfiguration];
+  const existingIdentifier = unquote(
+    buildConfiguration?.buildSettings?.PRODUCT_BUNDLE_IDENTIFIER,
+  );
+  return existingIdentifier === bundleIdentifier ? 'exists' : 'conflict';
+}
+
+function addConfigurationList(
+  xcodeProject,
+  config,
+  bundleIdentifier,
+) {
+  const commonSettings = {
+    APPLICATION_EXTENSION_API_ONLY: 'YES',
+    CLANG_ENABLE_MODULES: 'YES',
+    CODE_SIGN_STYLE: 'Automatic',
+    CURRENT_PROJECT_VERSION: `"${config.ios?.buildNumber ?? '1'}"`,
+    GENERATE_INFOPLIST_FILE: 'NO',
+    INFOPLIST_FILE: `"${TARGET_NAME}/Info.plist"`,
+    IPHONEOS_DEPLOYMENT_TARGET: `"${DEPLOYMENT_TARGET}"`,
+    LD_RUNPATH_SEARCH_PATHS: [
+      '"$(inherited)"',
+      '"@executable_path/Frameworks"',
+      '"@executable_path/../../Frameworks"',
+    ],
+    MARKETING_VERSION: config.version ?? '1.0',
+    PRODUCT_BUNDLE_IDENTIFIER: `"${bundleIdentifier}"`,
+    PRODUCT_NAME: '"$(TARGET_NAME)"',
+    SKIP_INSTALL: 'YES',
+    SWIFT_EMIT_LOC_STRINGS: 'YES',
+    SWIFT_VERSION: '5.9',
+    TARGETED_DEVICE_FAMILY: '"1,2"',
+    ...(config.ios?.appleTeamId
+      ? { DEVELOPMENT_TEAM: `"${config.ios.appleTeamId}"` }
+      : {}),
+  };
+  const configurations = [
+    {
+      name: 'Debug',
+      isa: 'XCBuildConfiguration',
+      buildSettings: {
+        ...commonSettings,
+        DEBUG_INFORMATION_FORMAT: 'dwarf',
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: '"DEBUG $(inherited)"',
+        SWIFT_OPTIMIZATION_LEVEL: '"-Onone"',
+      },
+    },
+    {
+      name: 'Release',
+      isa: 'XCBuildConfiguration',
+      buildSettings: {
+        ...commonSettings,
+        COPY_PHASE_STRIP: 'NO',
+        DEBUG_INFORMATION_FORMAT: '"dwarf-with-dsym"',
+        SWIFT_COMPILATION_MODE: 'wholemodule',
+      },
+    },
+  ];
+  return xcodeProject.addXCConfigurationList(
+    configurations,
+    'Release',
+    `Build configuration list for PBXNativeTarget "${TARGET_NAME}"`,
+  );
+}
+
+function addProductFile(xcodeProject) {
+  return xcodeProject.addProductFile(TARGET_NAME, {
+    basename: `${TARGET_NAME}.appex`,
+    group: EMBED_PHASE_NAME,
+    explicitFileType: 'wrapper.app-extension',
+    settings: { ATTRIBUTES: ['RemoveHeadersOnCopy'] },
+    includeInIndex: 0,
+    path: `${TARGET_NAME}.appex`,
+    sourceTree: 'BUILT_PRODUCTS_DIR',
+  });
+}
+
+function addExtensionTarget(xcodeProject, config, bundleIdentifier) {
+  const status = extensionStatus(xcodeProject, bundleIdentifier);
+  if (status === 'conflict') {
+    throw new Error(
+      `An iOS target named ${TARGET_NAME} already exists with another bundle identifier. ` +
+        'Run expo prebuild --clean to regenerate it safely.',
+    );
+  }
+  if (status === 'exists') return;
+
+  const targetUuid = xcodeProject.generateUuid();
+  const configurationList = addConfigurationList(
+    xcodeProject,
+    config,
+    bundleIdentifier,
+  );
+  const productFile = addProductFile(xcodeProject);
+  const nativeTarget = {
+    uuid: targetUuid,
+    pbxNativeTarget: {
+      isa: 'PBXNativeTarget',
+      name: TARGET_NAME,
+      productName: TARGET_NAME,
+      productReference: productFile.fileRef,
+      productType: '"com.apple.product-type.app-extension"',
+      buildConfigurationList: configurationList.uuid,
+      buildPhases: [],
+      buildRules: [],
+      dependencies: [],
+    },
+  };
+
+  xcodeProject.addToPbxNativeTargetSection(nativeTarget);
+  xcodeProject.addToPbxProjectSection(nativeTarget);
+
+  // The app must build the extension before the embed phase runs. Relying on
+  // Xcode's implicit product-reference dependency is fragile for clean builds
+  // and archives, so model the target relationship explicitly.
+  xcodeProject.hash.project.objects.PBXTargetDependency ??= {};
+  xcodeProject.hash.project.objects.PBXContainerItemProxy ??= {};
+  xcodeProject.addTargetDependency(xcodeProject.getFirstTarget().uuid, [targetUuid]);
+
+  const projectUuid = xcodeProject.getFirstProject().uuid;
+  const projectSection = xcodeProject.pbxProjectSection()[projectUuid];
+  projectSection.attributes.TargetAttributes ??= {};
+  projectSection.attributes.TargetAttributes[targetUuid] = {
+    CreatedOnToolsVersion: '26.0',
+    LastSwiftMigration: 2600,
+    ProvisioningStyle: 'Automatic',
+  };
+
+  const folderType = 'app_extension';
+  const buildPath = '""';
+  xcodeProject.addBuildPhase(
+    SOURCE_FILES,
+    'PBXSourcesBuildPhase',
+    TARGET_NAME,
+    targetUuid,
+    folderType,
+    buildPath,
+  );
+  xcodeProject.addBuildPhase(
+    [],
+    'PBXFrameworksBuildPhase',
+    TARGET_NAME,
+    targetUuid,
+    folderType,
+    buildPath,
+  );
+  xcodeProject.addBuildPhase(
+    RESOURCE_FILES,
+    'PBXResourcesBuildPhase',
+    TARGET_NAME,
+    targetUuid,
+    folderType,
+    buildPath,
+  );
+
+  xcodeProject.addBuildPhase(
+    [],
+    'PBXCopyFilesBuildPhase',
+    EMBED_PHASE_NAME,
+    xcodeProject.getFirstTarget().uuid,
+    folderType,
+    buildPath,
+  );
+  xcodeProject
+    .buildPhaseObject('PBXCopyFilesBuildPhase', EMBED_PHASE_NAME, productFile.target)
+    .files.push({
+      value: productFile.uuid,
+      comment: `${productFile.basename} in ${productFile.group}`,
+    });
+  xcodeProject.addToPbxBuildFileSection(productFile);
+
+  const { uuid: extensionGroupUuid } = xcodeProject.addPbxGroup(
+    EXTENSION_FILES,
+    TARGET_NAME,
+    TARGET_NAME,
+  );
+  if (extensionGroupUuid) {
+    const groups = xcodeProject.hash.project.objects.PBXGroup;
+    for (const key of Object.keys(groups)) {
+      if (!groups[key].name && !groups[key].path) {
+        xcodeProject.addToPbxGroup(extensionGroupUuid, key);
+      }
+    }
+  }
+}
+
+function withRestActivity(config) {
+  const bundleIdentifier = extensionBundleIdentifier(config);
+  config = declareEasExtension(config, bundleIdentifier);
+  config.ios = {
+    ...config.ios,
+    infoPlist: {
+      ...config.ios?.infoPlist,
+      NSSupportsLiveActivities: true,
+    },
+  };
+
+  config = withDangerousMod(config, [
+    'ios',
+    async (dangerousConfig) => {
+      copyExtensionFiles(dangerousConfig.modRequest.platformProjectRoot);
+      return dangerousConfig;
+    },
+  ]);
+
+  return withXcodeProject(config, (xcodeConfig) => {
+    addExtensionTarget(xcodeConfig.modResults, xcodeConfig, bundleIdentifier);
+    return xcodeConfig;
+  });
+}
+
+module.exports = createRunOncePlugin(
+  withRestActivity,
+  'ajfit-rest-activity-ios',
+  '1.0.0',
+);

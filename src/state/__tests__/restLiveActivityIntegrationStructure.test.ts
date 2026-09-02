@@ -41,14 +41,15 @@ describe('rest live presentation boundary', () => {
     expect(codeOnly(facade)).not.toContain('Platform.OS');
   });
 
-  it('keeps the bridge optional while registering only an Android module', () => {
+  it('keeps the bridge optional while registering Apple and Android modules', () => {
     const config = readFileSync(
       'modules/ajfit-rest-activity/expo-module.config.json',
       'utf8',
     );
-    expect(config).toContain('"platforms": ["android"]');
+    expect(config).toContain('"platforms": ["apple", "android"]');
+    expect(config).toContain('AJFitRestActivityModule');
     expect(config).toContain('com.ajfit.restactivity.AJFitRestActivityModule');
-    expect(existsSync('modules/ajfit-rest-activity/ios')).toBe(false);
+    expect(existsSync('modules/ajfit-rest-activity/ios')).toBe(true);
   });
 
   it('materializes the translated exercise name outside the temporal domain', () => {
@@ -112,6 +113,13 @@ describe('RestSessionContext live transition wiring', () => {
     expect(endBlock).toContain('if (restActivitySessionStartedRef.current)');
     expect(endBlock).toContain("void restLiveActivity.end('workout_ended')");
     expect(endBlock).toContain('restActivitySessionStartedRef.current = false');
+  });
+
+  it('cleans storage and native orphans together on cold start', () => {
+    expect(context).toContain("from '../services/restSessionCleanup'");
+    expect(context).toContain('void cleanupRestSessionArtifacts()');
+    expect(facade).toContain('function cleanup(): Promise<void>');
+    expect(bridge).toContain('cleanup?(): void | Promise<void>');
   });
 
   it('never calls the facade from the one-second visual ticker', () => {

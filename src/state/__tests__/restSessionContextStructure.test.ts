@@ -9,7 +9,7 @@ const storage = readFileSync('src/services/restSessionStorage.ts', 'utf8');
 
 describe('RestSessionProvider ownership and lifecycle', () => {
   it('wraps AppShellContent above the ephemeral WorkoutScreen', () => {
-    const providerStart = appShell.indexOf('<RestSessionProvider>');
+    const providerStart = appShell.indexOf('<RestSessionProvider');
     const content = appShell.indexOf('<AppShellContent');
     const providerEnd = appShell.indexOf('</RestSessionProvider>');
 
@@ -42,9 +42,14 @@ describe('RestSessionProvider ownership and lifecycle', () => {
   it('discards persisted process-death state without inventing a workout', () => {
     expect(contextCode).toContain('readRestSession()');
     expect(contextCode).toContain("reason: 'workout-not-restorable'");
+    expect(contextCode).toContain('cleanupRestSessionArtifacts()');
     expect(contextCode).not.toContain('setTab(');
     expect(contextCode).not.toContain('setProgress(');
     expect(contextCode).not.toContain('setLogged(');
+  });
+
+  it('remounts the provider per authenticated identity and cleans account switches', () => {
+    expect(appShell).toContain("<RestSessionProvider key={user?.uid ?? 'signed-out'}>");
   });
 
   it('exposes domain operations, not arbitrary temporal setters', () => {

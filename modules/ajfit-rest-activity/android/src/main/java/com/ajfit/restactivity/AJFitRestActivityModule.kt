@@ -33,46 +33,31 @@ class AJFitRestActivityModule : Module() {
 
     Function("getCapabilities") {
       val context = appContext.reactContext?.applicationContext
-      val available = context?.let(::isNotificationSurfaceAvailable) == true
-      Log.i(
-        REST_NOTIFICATION_LOG_TAG,
-        "[rest-live:android] module_available available=${context != null}",
-      )
-      if (context != null) logPermissionState(context, "capabilities")
-      Log.i(
-        REST_NOTIFICATION_LOG_TAG,
-        "[rest-live:android] capabilities available=$available " +
-          "surface=${if (available) "android-notification" else "none"}",
-      )
+      val surface = context?.let(::resolveCapabilities) ?: RestLiveSurface.NONE
+      val available = surface != RestLiveSurface.NONE
       mapOf(
         "available" to available,
-        "surface" to if (available) "android-notification" else "none",
+        "surface" to surface.wireValue,
       )
     }
 
     AsyncFunction("start") { state: RestActivityStateRecord, promise: Promise ->
       val context = appContext.reactContext?.applicationContext
       if (context == null) {
-        Log.i(REST_NOTIFICATION_LOG_TAG, "[rest-live:android] start_received context=false")
+        Log.w(REST_NOTIFICATION_LOG_TAG, "[rest-live:android] native_error operation=start reason=context")
         promise.resolve(null)
         return@AsyncFunction
       }
 
-      Log.i(
-        REST_NOTIFICATION_LOG_TAG,
-        "[rest-live:android] start_received startedAt=${state.startedAt} " +
-          "endsAt=${state.endsAt} setIndex=${state.setIndex} totalSets=${state.totalSets}",
-      )
-      logPermissionState(context, "start")
       if (!state.isValid()) {
-        Log.w(REST_NOTIFICATION_LOG_TAG, "[rest-live:android] notify_error invalid_start_payload")
+        Log.w(REST_NOTIFICATION_LOG_TAG, "[rest-live:android] native_error operation=start reason=payload")
         promise.resolve(null)
         return@AsyncFunction
       }
 
       if (canPostNotifications(context)) {
         safelyResolve(promise, "start") {
-          postNotification(context, state, "notification posted")
+          postNotification(context, state, "started")
         }
         return@AsyncFunction
       }
@@ -82,14 +67,19 @@ class AJFitRestActivityModule : Module() {
 
     AsyncFunction("update") { state: RestActivityStateRecord, promise: Promise ->
       val context = appContext.reactContext?.applicationContext
-      if (context == null || !state.isValid() || !canPostNotifications(context)) {
-        Log.i(REST_NOTIFICATION_LOG_TAG, "[rest-live:android] permission_unavailable update_skipped")
+      if (context == null || !state.isValid()) {
+        Log.w(REST_NOTIFICATION_LOG_TAG, "[rest-live:android] native_error operation=update reason=context_or_payload")
+        promise.resolve(null)
+        return@AsyncFunction
+      }
+      if (!canPostNotifications(context)) {
+        Log.i(REST_NOTIFICATION_LOG_TAG, "[rest-live:android] permission_denied operation=update")
         promise.resolve(null)
         return@AsyncFunction
       }
 
       safelyResolve(promise, "update") {
-        postNotification(context, state, "notification updated")
+        postNotification(context, state, "updated")
       }
     }
 
@@ -108,7 +98,22 @@ class AJFitRestActivityModule : Module() {
         RestNotificationChannel.manager(context).cancel(REST_NOTIFICATION_ID)
         Log.i(
           REST_NOTIFICATION_LOG_TAG,
-          "[rest-live:android] notification_cancelled id=$REST_NOTIFICATION_ID reason=$reason",
+          "[rest-live:android] ended id=$REST_NOTIFICATION_ID reason=$reason",
+        )
+      }
+    }
+
+    AsyncFunction("cleanup") { promise: Promise ->
+      val context = appContext.reactContext?.applicationContext
+      if (context == null) {
+        promise.resolve(null)
+        return@AsyncFunction
+      }
+      safelyResolve(promise, "cleanup") {
+        RestNotificationChannel.manager(context).cancel(REST_NOTIFICATION_ID)
+        Log.i(
+          REST_NOTIFICATION_LOG_TAG,
+          "[rest-live:android] ended id=$REST_NOTIFICATION_ID reason=cleanup",
         )
       }
     }
@@ -120,14 +125,14 @@ class AJFitRestActivityModule : Module() {
     promise: Promise,
   ) {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-      Log.i(REST_NOTIFICATION_LOG_TAG, "[rest-live:android] permission_unavailable notifications_disabled")
+      Log.i(REST_NOTIFICATION_LOG_TAG, "[rest-live:android] permission_denied reason=notifications_disabled")
       promise.resolve(null)
       return
     }
 
     val preferences = permissionPreferences(context)
     if (preferences.getBoolean(PERMISSION_REQUESTED_KEY, false)) {
-      Log.i(REST_NOTIFICATION_LOG_TAG, "[rest-live:android] permission_unavailable request_already_answered")
+      Log.i(REST_NOTIFICATION_LOG_TAG, "[rest-live:android] permission_denied reason=already_answered")
       promise.resolve(null)
       return
     }
@@ -140,10 +145,9 @@ class AJFitRestActivityModule : Module() {
       permissions == null ||
       !manifestDeclared
     ) {
-      Log.i(
+      Log.w(
         REST_NOTIFICATION_LOG_TAG,
-        "[rest-live:android] permission_unavailable manifestDeclared=$manifestDeclared " +
-          "permissionManager=${permissions != null}",
+        "[rest-live:android] native_error operation=permission reason=unavailable",
       )
       promise.resolve(null)
       return
@@ -151,32 +155,23 @@ class AJFitRestActivityModule : Module() {
 
     preferences.edit().putBoolean(PERMISSION_REQUESTED_KEY, true).apply()
     try {
-      Log.i(
-        REST_NOTIFICATION_LOG_TAG,
-        "[rest-live:android] permission_request_attempted " +
-          "activityAvailable=${appContext.currentActivity != null}",
-      )
       permissions.askForPermissions(
         { response ->
           val granted = response[Manifest.permission.POST_NOTIFICATIONS]?.status ==
             PermissionsStatus.GRANTED
-          Log.i(
-            REST_NOTIFICATION_LOG_TAG,
-            "[rest-live:android] permission_request_result resultKnown=true granted=$granted",
-          )
           if (!granted || !canPostNotifications(context)) {
-            Log.i(REST_NOTIFICATION_LOG_TAG, "[rest-live:android] permission_unavailable request_denied")
+            Log.i(REST_NOTIFICATION_LOG_TAG, "[rest-live:android] permission_denied reason=request_denied")
             promise.resolve(null)
             return@askForPermissions
           }
           safelyResolve(promise, "start") {
-            postNotification(context, state, "notification posted")
+            postNotification(context, state, "started")
           }
         },
         Manifest.permission.POST_NOTIFICATIONS,
       )
     } catch (error: Throwable) {
-      Log.w(REST_NOTIFICATION_LOG_TAG, "[rest-live:android] permission_request_error", error)
+      Log.w(REST_NOTIFICATION_LOG_TAG, "[rest-live:android] native_error operation=permission", error)
       promise.resolve(null)
     }
   }
@@ -184,7 +179,7 @@ class AJFitRestActivityModule : Module() {
   private fun postNotification(
     context: Context,
     state: RestActivityStateRecord,
-    logMessage: String,
+    event: String,
   ) {
     val now = System.currentTimeMillis()
     val manager = RestNotificationChannel.ensureCreated(context)
@@ -192,26 +187,120 @@ class AJFitRestActivityModule : Module() {
       manager.cancel(REST_NOTIFICATION_ID)
       return
     }
-    val remaining = (state.endsAt - now).coerceAtLeast(0L)
-    val smallIcon = R.drawable.ic_ajfit_rest_notification
-    Log.i(
-      REST_NOTIFICATION_LOG_TAG,
-      "[rest-live:android] notification_build id=$REST_NOTIFICATION_ID " +
-        "channel=$REST_NOTIFICATION_CHANNEL_ID endsAt=${state.endsAt} when=${state.endsAt} " +
-        "remaining=$remaining permissionGranted=${hasPostNotificationsPermission(context)} " +
-        "smallIcon=$smallIcon",
+    val buildResult = RestNotificationBuilder.build(context, state, now)
+    val resolvedSurface = resolveBuiltSurface(
+      manager = manager,
+      buildResult = buildResult,
+      source = event,
     )
-    val notification = RestNotificationBuilder.build(context, state, now)
-    Log.i(REST_NOTIFICATION_LOG_TAG, "[rest-live:android] notify_called id=$REST_NOTIFICATION_ID")
+    val notification = buildResult.notification
     manager.notify(REST_NOTIFICATION_ID, notification)
-    Log.i(REST_NOTIFICATION_LOG_TAG, "[rest-live:android] notify_success id=$REST_NOTIFICATION_ID event=$logMessage")
-    val active = manager.activeNotifications.any { it.id == REST_NOTIFICATION_ID }
     Log.i(
       REST_NOTIFICATION_LOG_TAG,
-      "[rest-live:android] active_notification_found id=$REST_NOTIFICATION_ID " +
-        "found=$active timing=immediate",
+      "[rest-live:android] $event id=$REST_NOTIFICATION_ID surface=${resolvedSurface.wireValue}",
     )
   }
+
+  private fun resolveCapabilities(context: Context): RestLiveSurface {
+    val normalSurfaceAvailable = isNotificationSurfaceAvailable(context)
+    if (!normalSurfaceAvailable) return RestLiveSurface.NONE
+
+    // Preserve the existing first-use flow: before the one allowed runtime
+    // prompt, the module stays available as a normal notification capability
+    // so start() can request POST_NOTIFICATIONS. Once denied, availability is
+    // false through isNotificationSurfaceAvailable().
+    if (!canPostNotifications(context)) {
+      Log.i(
+        REST_NOTIFICATION_LOG_TAG,
+        "[rest-live:android] fallback source=capabilities " +
+          "surface=${RestLiveSurface.NOTIFICATION.wireValue} " +
+          "reason=notification_permission_pending",
+      )
+      return RestLiveSurface.NOTIFICATION
+    }
+
+    if (!isLiveUpdateSdkSupported()) {
+      Log.i(
+        REST_NOTIFICATION_LOG_TAG,
+        "[rest-live:android] fallback source=capabilities " +
+          "surface=${RestLiveSurface.NOTIFICATION.wireValue} reason=sdk_unsupported",
+      )
+      return RestLiveSurface.NOTIFICATION
+    }
+
+    return try {
+      val now = System.currentTimeMillis()
+      val probe = RestActivityStateRecord(
+        sessionId = "capability-probe",
+        startedAt = now,
+        endsAt = now + 60_000L,
+        exerciseName = context.getString(R.string.ajfit_rest_notification_title),
+        setIndex = 1,
+        totalSets = 1,
+      )
+      resolveBuiltSurface(
+        manager = RestNotificationChannel.manager(context),
+        buildResult = RestNotificationBuilder.build(context, probe, now),
+        source = "capabilities",
+      )
+    } catch (error: Throwable) {
+      Log.w(
+        REST_NOTIFICATION_LOG_TAG,
+        "[rest-live:android] fallback source=capabilities " +
+          "surface=${RestLiveSurface.NOTIFICATION.wireValue} reason=probe_error",
+        error,
+      )
+      RestLiveSurface.NOTIFICATION
+    }
+  }
+
+  private fun resolveBuiltSurface(
+    manager: NotificationManager,
+    buildResult: RestNotificationBuildResult,
+    source: String,
+  ): RestLiveSurface {
+    if (!buildResult.liveUpdateSdkSupported) {
+      Log.i(
+        REST_NOTIFICATION_LOG_TAG,
+        "[rest-live:android] fallback source=$source " +
+          "surface=${RestLiveSurface.NOTIFICATION.wireValue} reason=sdk_unsupported",
+      )
+      return RestLiveSurface.NOTIFICATION
+    }
+
+    val promotionDeclared = isPromotedNotificationPermissionDeclared()
+    val promotionAllowed = promotionDeclared && try {
+      RestLiveUpdateApi36.canPostPromotedNotifications(manager)
+    } catch (error: Throwable) {
+      Log.w(REST_NOTIFICATION_LOG_TAG, "[rest-live:android] native_error operation=promotion", error)
+      false
+    }
+
+    val surface = resolveRestLiveSurface(
+      sdk = Build.VERSION.SDK_INT,
+      notificationPermission = true,
+      promotionPermission = promotionAllowed,
+      promotable = buildResult.promotable,
+    )
+    if (surface != RestLiveSurface.LIVE_UPDATE) {
+      val reason = when {
+        !promotionAllowed -> "promotion_denied"
+        !buildResult.promotable -> "not_promotable"
+        else -> "system_fallback"
+      }
+      Log.i(
+        REST_NOTIFICATION_LOG_TAG,
+        "[rest-live:android] fallback source=$source " +
+          "surface=${surface.wireValue} reason=$reason",
+      )
+    }
+    return surface
+  }
+
+  private fun isPromotedNotificationPermissionDeclared(): Boolean =
+    appContext.permissions?.isPermissionPresentInManifest(
+      POST_PROMOTED_NOTIFICATIONS_PERMISSION,
+    ) == true
 
   private fun isNotificationSurfaceAvailable(context: Context): Boolean {
     val manager = RestNotificationChannel.manager(context)
@@ -230,22 +319,6 @@ class AJFitRestActivityModule : Module() {
     Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
       context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) ==
       PackageManager.PERMISSION_GRANTED
-
-  private fun logPermissionState(context: Context, source: String) {
-    val permissions = appContext.permissions
-    val manifestDeclared = permissions?.isPermissionPresentInManifest(
-      Manifest.permission.POST_NOTIFICATIONS,
-    ) == true
-    Log.i(
-      REST_NOTIFICATION_LOG_TAG,
-      "[rest-live:android] permission_state source=$source sdk=${Build.VERSION.SDK_INT} " +
-        "required=${Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU} " +
-        "granted=${hasPostNotificationsPermission(context)} " +
-        "previouslyRequested=${permissionPreferences(context).getBoolean(PERMISSION_REQUESTED_KEY, false)} " +
-        "manifestDeclared=$manifestDeclared activityAvailable=${appContext.currentActivity != null} " +
-        "notificationsEnabled=${RestNotificationChannel.manager(context).areNotificationsEnabled()}",
-    )
-  }
 
   private fun permissionPreferences(context: Context) =
     context.getSharedPreferences(PERMISSION_PREFERENCES, Context.MODE_PRIVATE)
@@ -266,7 +339,7 @@ class AJFitRestActivityModule : Module() {
     try {
       block()
     } catch (error: Throwable) {
-      Log.w(REST_NOTIFICATION_LOG_TAG, "[rest-live:android] notify_error operation=$operation", error)
+      Log.w(REST_NOTIFICATION_LOG_TAG, "[rest-live:android] native_error operation=$operation", error)
     }
     promise.resolve(null)
   }

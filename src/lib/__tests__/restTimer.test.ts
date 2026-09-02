@@ -56,9 +56,15 @@ describe('absolute rest time', () => {
   });
 
   it('supports multiple +15s extensions consistently', () => {
-    const extended = addRestSeconds(addRestSeconds(BASE_REST, 15), 15);
-    expect(extended.endsAt).toBe(220_000);
-    expect(computeRemainingSeconds(extended, 145_000)).toBe(75);
+    const extended = addRestSeconds(
+      addRestSeconds(addRestSeconds(BASE_REST, 15), 15),
+      15,
+    );
+    expect(extended.endsAt).toBe(235_000);
+    expect(extended.startedAt).toBe(BASE_REST.startedAt);
+    expect(extended.restId).toBe(BASE_REST.restId);
+    expect(extended.workoutSessionId).toBe(BASE_REST.workoutSessionId);
+    expect(computeRemainingSeconds(extended, 145_000)).toBe(90);
   });
 
   it.each([0, 50_000, 100_000, 145_000, 190_000, 250_000])(

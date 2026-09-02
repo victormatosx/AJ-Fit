@@ -100,6 +100,7 @@
         }
       ],
       "expo-system-ui",
+      "./plugins/rest-activity",
       [
         "expo-navigation-bar",
         {

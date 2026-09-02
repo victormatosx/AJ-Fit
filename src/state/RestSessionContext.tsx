@@ -25,6 +25,7 @@ import {
   persistRestSession,
   readRestSession,
 } from '../services/restSessionStorage';
+import { cleanupRestSessionArtifacts } from '../services/restSessionCleanup';
 import { logInfo } from '../lib/logger';
 import { restLiveActivity, type RestActivityState } from '../lib/restLiveActivity';
 
@@ -104,7 +105,7 @@ export function RestSessionProvider({ children }: { children: React.ReactNode })
     const current = timerStateRef.current;
     if (current.status !== 'idle') {
       publishTimerState(IDLE_REST_TIMER_STATE);
-      logInfo('restSession', 'rest_cancelled', { reason: 'workout-ended' });
+      logInfo('restSession', 'rest_ended', { reason: 'workout-ended' });
     }
     if (restActivitySessionStartedRef.current) {
       void restLiveActivity.end('workout_ended');
@@ -134,12 +135,6 @@ export function RestSessionProvider({ children }: { children: React.ReactNode })
     const activityState = toRestActivityState(rest, exerciseName);
     restActivityStateRef.current = activityState;
     restActivitySessionStartedRef.current = true;
-    logInfo('restSession', 'rest_live_start_dispatch', {
-      startedAt: activityState.startedAt,
-      endsAt: activityState.endsAt,
-      setIndex: activityState.setIndex,
-      totalSets: activityState.totalSets,
-    });
     void restLiveActivity.start(activityState);
     logInfo('restSession', 'rest_started', {
       durationSeconds: rest.initialDurationSeconds,
@@ -161,26 +156,18 @@ export function RestSessionProvider({ children }: { children: React.ReactNode })
       restActivityStateRef.current = activityState;
       void restLiveActivity.update(activityState);
     }
-    logInfo('restSession', 'rest_extended', { addedSeconds: seconds });
+    logInfo('restSession', 'rest_updated', { addedSeconds: seconds });
     return rest;
   }, [publishTimerState]);
 
   const reconcileExpiration = useCallback((now: number, source: ReconcileSource) => {
     const current = timerStateRef.current;
     const next = reconcileRestExpiration(current, now);
-    if (next === current) {
-      if (source === 'foreground' && current.status === 'running') {
-        logInfo('restSession', 'rest_reconciled', { expired: false });
-      }
-      return false;
-    }
+    if (next === current) return false;
 
     publishTimerState(next);
     clearPersistedTransition();
     logInfo('restSession', 'rest_expired', { source });
-    if (source === 'foreground') {
-      logInfo('restSession', 'rest_reconciled', { expired: true });
-    }
     return true;
   }, [clearPersistedTransition, publishTimerState]);
 
@@ -192,7 +179,7 @@ export function RestSessionProvider({ children }: { children: React.ReactNode })
     clearPersistedTransition();
     restActivityStateRef.current = null;
     void restLiveActivity.end('cancelled');
-    logInfo('restSession', 'rest_cancelled', { reason: 'skipped' });
+    logInfo('restSession', 'rest_ended', { reason: 'skipped' });
     return true;
   }, [clearPersistedTransition, publishTimerState]);
 
@@ -203,6 +190,7 @@ export function RestSessionProvider({ children }: { children: React.ReactNode })
     publishTimerState(transition.state);
     restActivityStateRef.current = null;
     void restLiveActivity.end('completed');
+    logInfo('restSession', 'rest_ended', { reason: 'completed' });
     return true;
   }, [publishTimerState]);
 
@@ -247,18 +235,23 @@ export function RestSessionProvider({ children }: { children: React.ReactNode })
   // A persisted rest cannot be restored without the rest of the workout
   // engine. Discard it on a cold provider mount instead of fabricating a
   // workout or calling advanceAfterRest without its owning screen state.
+  // Cleanup runs even with no storage record because ActivityKit/SystemUI may
+  // have outlived the previous JS process independently of AsyncStorage.
   useEffect(() => {
     let mounted = true;
     const readRevision = storageRevisionRef.current;
     void readRestSession().then((persisted) => {
-      if (!mounted || !persisted || storageRevisionRef.current !== readRevision) return;
-      logInfo('restSession', 'rest_discarded', { reason: 'workout-not-restorable' });
-      clearPersistedTransition();
+      if (!mounted || storageRevisionRef.current !== readRevision) return;
+      if (persisted) {
+        logInfo('restSession', 'rest_discarded', { reason: 'workout-not-restorable' });
+      }
+      storageRevisionRef.current += 1;
+      void cleanupRestSessionArtifacts();
     });
     return () => {
       mounted = false;
     };
-  }, [clearPersistedTransition]);
+  }, []);
 
   // AppShell unmount is a real workout-session boundary (logout/root gate),
   // unlike a WorkoutScreen tab unmount. Never leave its rest orphaned.

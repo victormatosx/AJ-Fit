@@ -22,12 +22,19 @@ internal fun calculateRestNotificationTimeout(endsAt: Long, now: Long): Long {
 internal fun sanitizeRestNotificationText(value: String): String =
   value.trim().replace(Regex("\\s+"), " ").take(MAX_EXERCISE_NAME_LENGTH)
 
+internal data class RestNotificationBuildResult(
+  val notification: Notification,
+  val liveUpdateSdkSupported: Boolean,
+  val promotionRequested: Boolean,
+  val promotable: Boolean,
+)
+
 internal object RestNotificationBuilder {
   fun build(
     context: Context,
     state: RestActivityStateRecord,
     now: Long,
-  ): Notification {
+  ): RestNotificationBuildResult {
     val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
       Notification.Builder(context, REST_NOTIFICATION_CHANNEL_ID)
     } else {
@@ -63,7 +70,33 @@ internal object RestNotificationBuilder {
       builder.setTimeoutAfter(calculateRestNotificationTimeout(state.endsAt, now))
     }
 
-    return builder.build()
+    if (!isLiveUpdateSdkSupported()) {
+      return RestNotificationBuildResult(
+        notification = builder.build(),
+        liveUpdateSdkSupported = false,
+        promotionRequested = false,
+        promotable = false,
+      )
+    }
+
+    val notification = RestLiveUpdateApi36.enrich(
+      builder = builder,
+      contextTitle = context.getString(R.string.ajfit_rest_live_update_title),
+      contextShortCriticalText = context.getString(
+        R.string.ajfit_rest_short_critical_text,
+      ),
+      state = state,
+      now = now,
+    )
+    return RestNotificationBuildResult(
+      notification = notification,
+      liveUpdateSdkSupported = true,
+      promotionRequested = notification.extras.getBoolean(
+        REQUEST_PROMOTED_ONGOING_EXTRA,
+        false,
+      ),
+      promotable = RestLiveUpdateApi36.hasPromotableCharacteristics(notification),
+    )
   }
 
   @Suppress("DEPRECATION")

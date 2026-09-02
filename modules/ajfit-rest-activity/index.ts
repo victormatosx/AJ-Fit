@@ -10,6 +10,8 @@ export type AJFitRestActivityNativeModule = {
   start(state: RestActivityState): void | Promise<void>;
   update(state: RestActivityState): void | Promise<void>;
   end(sessionId: string, reason: RestActivityEndReason): void | Promise<void>;
+  /** Optional for compatibility with binaries produced before Phase 7. */
+  cleanup?(): void | Promise<void>;
 };
 
 // This remains optional so older binaries and non-Android platforms keep the
