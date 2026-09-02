@@ -18,6 +18,7 @@ import { buildRecentSlotHistory, evolveCycle } from './prescriptionEngine/prescr
 import { PRESCRIPTION_EVOLUTION_CONFIG } from './prescriptionEngine/prescriptionEvolution/config';
 import { countEarnedIntermediateCycles } from './prescriptionEngine/progressionEngineV2/earnedCycles';
 import type { TrainingCycle } from './prescriptionEngine/workoutLifecycle/types';
+import { isOperationBlockedByCircuitBreaker, loadWorkoutLifecycleCircuitBreakerConfig } from './circuitBreaker';
 
 export const WORKOUT_LIFECYCLE_AUTHORITY_GRANT_ID = 'current';
 
@@ -1053,6 +1054,16 @@ export async function authorizeWorkoutLifecycleMutationHandler(
 }> {
   const uid = requireAuth(request);
   const data = parseRequest(request.data);
+  // Phase 10E circuit breaker (docs/workout-lifecycle/v2/architecture/
+  // 26_FINAL_INDEPENDENT_ADVERSARIAL_AUDIT_2.md §50): evaluated before any
+  // validation/canonical-generation work, backend-enforced, unconditional —
+  // an old or modified client cannot opt out of this check by not asking
+  // for it. See `circuitBreaker.ts` for the operation-by-operation
+  // justification of what stays allowed even while open.
+  const circuitBreakerConfig = await loadWorkoutLifecycleCircuitBreakerConfig(firestore);
+  if (isOperationBlockedByCircuitBreaker(data.operation, circuitBreakerConfig)) {
+    throw new HttpsError('unavailable', 'workout_lifecycle_circuit_breaker_open');
+  }
   const validated = await validateRequest(uid, data, firestore);
   // `validated` carries the backend-computed canonical plan/identity for
   // INITIALIZE/MIGRATE/ADAPT/PREPARE (docs/workout-lifecycle/v2/decisions/

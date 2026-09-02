@@ -218,3 +218,56 @@ describe('users/{uid}/workoutExecutions — immutability after finish (item 53)'
     await assertFails(deleteDoc(ref));
   });
 });
+
+// Phase 10E (P3, docs/workout-lifecycle/v2/architecture/
+// 26_FINAL_INDEPENDENT_ADVERSARIAL_AUDIT_2.md §51): `exercises.size()` was
+// bounded but each exercise's own `sets` array was not — capped only by
+// Firestore's 1MB document limit. Real prescriptions cap sets at 1-10 per
+// exercise; 15 is the Rules-enforced safe margin. Write-size hygiene only —
+// session-qualification already requires an exact set-count match, so this
+// was never able to earn false progression credit.
+describe('users/{uid}/workoutExecutions — exercise sets array bound (item 51)', () => {
+  const setsOf = (n: number) => Array.from({ length: n }, (_, i) => (
+    { setIndex: i, status: 'PENDING', actualReps: null, weightKg: null, actualDurationSeconds: null }
+  ));
+
+  it('allows a normal prescribed sets count', async () => {
+    const db = dbFor(UID);
+    await assertSucceeds(setDoc(doc(db, 'users', UID, 'workoutExecutions', EXECUTION_ID), executionDoc({
+      exercises: [{
+        exerciseIndex: 0, exerciseId: 'bench_press', prescribedSets: 3, prescribedReps: '8-12',
+        prescribedDuration: null, prescribedCycles: null, sets: setsOf(3),
+      }],
+    })));
+  });
+
+  it('allows a reasonable upper-bound sets count', async () => {
+    const db = dbFor(UID);
+    await assertSucceeds(setDoc(doc(db, 'users', UID, 'workoutExecutions', EXECUTION_ID), executionDoc({
+      exercises: [{
+        exerciseIndex: 0, exerciseId: 'bench_press', prescribedSets: 15, prescribedReps: '8-12',
+        prescribedDuration: null, prescribedCycles: null, sets: setsOf(15),
+      }],
+    })));
+  });
+
+  it('denies an absurdly large sets array on a single exercise', async () => {
+    const db = dbFor(UID);
+    await assertFails(setDoc(doc(db, 'users', UID, 'workoutExecutions', EXECUTION_ID), executionDoc({
+      exercises: [{
+        exerciseIndex: 0, exerciseId: 'bench_press', prescribedSets: 3, prescribedReps: '8-12',
+        prescribedDuration: null, prescribedCycles: null, sets: setsOf(16),
+      }],
+    })));
+  });
+
+  it('denies an absurdly large sets array on a later exercise in a multi-exercise session', async () => {
+    const db = dbFor(UID);
+    await assertFails(setDoc(doc(db, 'users', UID, 'workoutExecutions', EXECUTION_ID), executionDoc({
+      exercises: [
+        { exerciseIndex: 0, exerciseId: 'bench_press', prescribedSets: 3, prescribedReps: '8-12', prescribedDuration: null, prescribedCycles: null, sets: setsOf(3) },
+        { exerciseIndex: 1, exerciseId: 'squat', prescribedSets: 3, prescribedReps: '8-12', prescribedDuration: null, prescribedCycles: null, sets: setsOf(500) },
+      ],
+    })));
+  });
+});

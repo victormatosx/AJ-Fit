@@ -342,6 +342,43 @@ service cloud.firestore {
         );
     }
 
+    // Phase 10E (P3, docs/workout-lifecycle/v2/architecture/
+    // 26_FINAL_INDEPENDENT_ADVERSARIAL_AUDIT_2.md §51): `exercises.size()`
+    // was bounded (<=20) but each exercise's own `sets` array was not,
+    // capped only by Firestore's 1MB document limit. Real prescriptions cap
+    // sets at 1-10 per exercise (`assertPlanSafe`,
+    // functions/src/workoutLifecycle/authorizeMutation.ts:428) — 15 gives a
+    // safe margin without constraining any real prescribed or logged
+    // session. Firestore Rules has no loop/recursion construct, so this is
+    // unrolled to the same 20-exercise cap `workoutExecutionCommonValid`
+    // already enforces. Write-size hygiene only — session-qualification
+    // (`isValidProgressionSessionAgainstPrescription`) already requires an
+    // exact set-count match against the real prescription, so an oversized
+    // array here was never able to earn progression credit; this only
+    // closes the ability to write one at all.
+    function executionExerciseSetsWithinBound(exercises) {
+      return (exercises.size() <= 0 || !('sets' in exercises[0]) || (exercises[0].sets is list && exercises[0].sets.size() <= 15))
+        && (exercises.size() <= 1 || !('sets' in exercises[1]) || (exercises[1].sets is list && exercises[1].sets.size() <= 15))
+        && (exercises.size() <= 2 || !('sets' in exercises[2]) || (exercises[2].sets is list && exercises[2].sets.size() <= 15))
+        && (exercises.size() <= 3 || !('sets' in exercises[3]) || (exercises[3].sets is list && exercises[3].sets.size() <= 15))
+        && (exercises.size() <= 4 || !('sets' in exercises[4]) || (exercises[4].sets is list && exercises[4].sets.size() <= 15))
+        && (exercises.size() <= 5 || !('sets' in exercises[5]) || (exercises[5].sets is list && exercises[5].sets.size() <= 15))
+        && (exercises.size() <= 6 || !('sets' in exercises[6]) || (exercises[6].sets is list && exercises[6].sets.size() <= 15))
+        && (exercises.size() <= 7 || !('sets' in exercises[7]) || (exercises[7].sets is list && exercises[7].sets.size() <= 15))
+        && (exercises.size() <= 8 || !('sets' in exercises[8]) || (exercises[8].sets is list && exercises[8].sets.size() <= 15))
+        && (exercises.size() <= 9 || !('sets' in exercises[9]) || (exercises[9].sets is list && exercises[9].sets.size() <= 15))
+        && (exercises.size() <= 10 || !('sets' in exercises[10]) || (exercises[10].sets is list && exercises[10].sets.size() <= 15))
+        && (exercises.size() <= 11 || !('sets' in exercises[11]) || (exercises[11].sets is list && exercises[11].sets.size() <= 15))
+        && (exercises.size() <= 12 || !('sets' in exercises[12]) || (exercises[12].sets is list && exercises[12].sets.size() <= 15))
+        && (exercises.size() <= 13 || !('sets' in exercises[13]) || (exercises[13].sets is list && exercises[13].sets.size() <= 15))
+        && (exercises.size() <= 14 || !('sets' in exercises[14]) || (exercises[14].sets is list && exercises[14].sets.size() <= 15))
+        && (exercises.size() <= 15 || !('sets' in exercises[15]) || (exercises[15].sets is list && exercises[15].sets.size() <= 15))
+        && (exercises.size() <= 16 || !('sets' in exercises[16]) || (exercises[16].sets is list && exercises[16].sets.size() <= 15))
+        && (exercises.size() <= 17 || !('sets' in exercises[17]) || (exercises[17].sets is list && exercises[17].sets.size() <= 15))
+        && (exercises.size() <= 18 || !('sets' in exercises[18]) || (exercises[18].sets is list && exercises[18].sets.size() <= 15))
+        && (exercises.size() <= 19 || !('sets' in exercises[19]) || (exercises[19].sets is list && exercises[19].sets.size() <= 15));
+    }
+
     // Workout Execution & History V1 (docs/workout-lifecycle/
     // 09_WORKOUT_EXECUTION_AND_HISTORY.md). `exercises` is validated only for
     // shape/bounds here, the same precedent `workoutProgramCommonValid` sets
@@ -374,6 +411,7 @@ service cloud.firestore {
         && data.startedAt is timestamp
         && (data.finishedAt == null || data.finishedAt is timestamp)
         && data.exercises is list && data.exercises.size() >= 1 && data.exercises.size() <= 20
+        && executionExerciseSetsWithinBound(data.exercises)
         && data.executionSchemaVersion in [1, 2]
         && (
           (data.executionSchemaVersion == 1 && !('programInstanceId' in data))
@@ -890,6 +928,20 @@ service cloud.firestore {
                    && lifecycleAuthorityGrant(userId).targetContentIdentity == programId)
              );
 
+        // Phase 10E fix: `create` was hardened in Phase 10D (existsAfter-gated
+        // grant requirement above), but `update` — the path a reactivation of
+        // a previously-superseded, content-addressed `workoutPrograms` doc
+        // takes (`transaction.update` in `saveAndActivateWorkoutProgram` when
+        // `targetSnapshot.exists()`) — had NO grant requirement at all. A V2
+        // owner could flip a stale doc's `status` back to `active` and
+        // repoint `workoutProgramState/active` at it with zero authorization
+        // (docs/workout-lifecycle/v2/architecture/
+        // 26_FINAL_INDEPENDENT_ADVERSARIAL_AUDIT_2.md §48). Bounded impact —
+        // `workoutLifecycleState/current` remained the real authority, so
+        // progression/adherence/execution were never affected — but this
+        // closes the display/content-drift gap structurally, the same way
+        // the `create` fix did: gated on `existsAfter(workoutLifecycleState/
+        // current)`, never on a client-omittable field.
         allow update: if isOwner(userId)
           && accountActive(userId)
           && (workoutProgramCommonValid(userId, programId, request.resource.data)
@@ -903,10 +955,18 @@ service cloud.firestore {
           && request.resource.data.createdAt == resource.data.createdAt
           && request.resource.data.updatedAt == request.time
           && (
+               !existsAfter(/databases/$(database)/documents/users/$(userId)/workoutLifecycleState/current)
+               || consumesLifecycleAuthorityGrant(userId, ['INITIALIZE', 'MIGRATE', 'ACTIVATE', 'ADAPT', 'RECOVER'])
+             )
+          && (
             (request.resource.data.status == 'active'
               && (request.resource.data.activatedAt == request.time
                   || request.resource.data.activatedAt == resource.data.activatedAt)
-              && getAfter(/databases/$(database)/documents/users/$(userId)/workoutProgramState/active).data.programId == programId)
+              && getAfter(/databases/$(database)/documents/users/$(userId)/workoutProgramState/active).data.programId == programId
+              && (
+                   !existsAfter(/databases/$(database)/documents/users/$(userId)/workoutLifecycleState/current)
+                   || lifecycleAuthorityGrant(userId).targetContentIdentity == programId
+                 ))
             ||
             (request.resource.data.status == 'superseded'
               && request.resource.data.activatedAt == resource.data.activatedAt
@@ -924,12 +984,19 @@ service cloud.firestore {
             && accountActive(userId)
             && (stateId == 'current'
                 || get(/databases/$(database)/documents/users/$(userId)/programInstances/$(stateId)).data.contentIdentity == programId);
-          // Bootstrap create only: fresh state, no prior rotation position to
-          // protect yet. A malicious first write here is a narrow, documented
-          // residual gap (docs/workout-lifecycle/v2/decisions/
-          // ADR-016_BACKEND_AUTHORITATIVE_PRESCRIPTION.md) — every write
-          // AFTER this one that actually moves the rotation is grant-bound
-          // below, so it cannot be exploited to keep gaming completions.
+          // Phase 10E fix: `programInstanceId` presence used to be optional
+          // (`!('programInstanceId' in data) || (...)`) — the same shape that
+          // caused FS-RULES-BYPASS-01. Omitting the field let a client target
+          // the dead-for-V2 `scheduleState/current` doc-id with no identity
+          // check at all. For any V2 account the field is now MANDATORY and
+          // must match `stateId`, gated on the backend-controlled fact
+          // `existsAfter(workoutLifecycleState/current)` — never on whether
+          // the client chose to send the field (docs/workout-lifecycle/v2/
+          // architecture/26_FINAL_INDEPENDENT_ADVERSARIAL_AUDIT_2.md §49).
+          // Bootstrap create still needs no grant (fresh rotation state, no
+          // position to protect yet — see the update rule's own comment for
+          // why that remains safe), but it can no longer skip the identity
+          // check by omitting the field.
           allow create: if isOwner(userId)
             && accountActive(userId)
             && (stateId == 'current' || stateId == request.resource.data.get('programInstanceId', ''))
@@ -938,9 +1005,14 @@ service cloud.firestore {
             && request.resource.data.keys().hasOnly(
                  ['programId', 'programInstanceId', 'nextSessionIndex', 'cursorDate', 'lastCompletedAt', 'pendingMissDecision', 'updatedAt'])
             && request.resource.data.programId == programId
-            && (!('programInstanceId' in request.resource.data)
-                || (request.resource.data.programInstanceId == stateId
-                    && get(/databases/$(database)/documents/users/$(userId)/programInstances/$(stateId)).data.contentIdentity == programId))
+            && (
+                 !existsAfter(/databases/$(database)/documents/users/$(userId)/workoutLifecycleState/current)
+                 || (
+                      'programInstanceId' in request.resource.data
+                      && request.resource.data.programInstanceId == stateId
+                      && get(/databases/$(database)/documents/users/$(userId)/programInstances/$(stateId)).data.contentIdentity == programId
+                    )
+               )
             && request.resource.data.nextSessionIndex is int
             && request.resource.data.nextSessionIndex >= 0
             && request.resource.data.cursorDate is string
@@ -952,7 +1024,9 @@ service cloud.firestore {
           // write that actually ADVANCES the rotation for a V2 program must
           // be exactly the target the backend already computed and bound to
           // a one-time grant (docs §Scheduled Opportunity Integrity) — the
-          // client can no longer self-select a favorable next session.
+          // client can no longer self-select a favorable next session, and
+          // (Phase 10E) can no longer skip this requirement by omitting
+          // `programInstanceId` for a V2 account.
           allow update: if isOwner(userId)
             && accountActive(userId)
             && (stateId == 'current' || stateId == request.resource.data.get('programInstanceId', ''))
@@ -961,15 +1035,28 @@ service cloud.firestore {
             && request.resource.data.keys().hasOnly(
                  ['programId', 'programInstanceId', 'nextSessionIndex', 'cursorDate', 'lastCompletedAt', 'pendingMissDecision', 'updatedAt'])
             && request.resource.data.programId == programId
-            && (!('programInstanceId' in request.resource.data)
-                || (request.resource.data.programInstanceId == stateId
-                    && get(/databases/$(database)/documents/users/$(userId)/programInstances/$(stateId)).data.contentIdentity == programId))
+            && (
+                 !existsAfter(/databases/$(database)/documents/users/$(userId)/workoutLifecycleState/current)
+                 || (
+                      'programInstanceId' in request.resource.data
+                      && request.resource.data.programInstanceId == stateId
+                      && get(/databases/$(database)/documents/users/$(userId)/programInstances/$(stateId)).data.contentIdentity == programId
+                    )
+               )
             && request.resource.data.nextSessionIndex is int
             && request.resource.data.nextSessionIndex >= 0
             && request.resource.data.cursorDate is string
             && request.resource.data.updatedAt == request.time
+            // Legacy V1 has no grant system at all — its rotation legitimately
+            // advances via a direct, ungated write (`src/services/
+            // workoutSchedule.ts`, no `programInstanceId`/grant involved).
+            // That path is preserved by the same backend-controlled
+            // `!existsAfter(workoutLifecycleState/current)` boundary used
+            // above and everywhere else in this phase's fix — never by a
+            // client-omittable field. For V2, only a same-position bookkeeping
+            // write or a real grant-bound advance is allowed.
             && (
-                 !('programInstanceId' in request.resource.data)
+                 !existsAfter(/databases/$(database)/documents/users/$(userId)/workoutLifecycleState/current)
                  || (request.resource.data.nextSessionIndex == resource.data.nextSessionIndex
                      && request.resource.data.cursorDate == resource.data.cursorDate)
                  || (consumesLifecycleAuthorityGrant(userId, ['COMPLETE_SCHEDULE', 'RESOLVE_MISSED_SESSION'])
@@ -986,26 +1073,46 @@ service cloud.firestore {
         // ownership is the path, not a payload field.
         match /scheduleEvents/{eventId} {
           allow read: if isOwner(userId) && accountActive(userId);
+          // Phase 10E fix: the grant requirement used to be skipped entirely
+          // whenever the client omitted `programInstanceId` from the payload
+          // (`!request.resource.data.keys().hasAny(['programInstanceId'])`) —
+          // the same FS-RULES-BYPASS-01 shape, letting a V2 owner write a
+          // grant-free COMPLETED/SKIPPED/MISS_RESOLVED ledger entry (docs/
+          // workout-lifecycle/v2/architecture/
+          // 26_FINAL_INDEPENDENT_ADVERSARIAL_AUDIT_2.md §49). Traced this
+          // pass to a conclusive NON_EXPLOITABLE-for-progression verdict
+          // (see 27_PHASE_10E_FINAL_STAGED_ROLLOUT_CLOSURE.md §9): the
+          // backend's `authoritativeEarnedFact` only ever reads `COMPLETED`
+          // events filtered by exact `programInstanceId` equality — an
+          // omitted (`undefined`) field can never match a real instance id —
+          // and SKIPPED/MISS_RESOLVED events are never read by the backend
+          // authority at all. Still fixed structurally regardless, per this
+          // phase's explicit instruction not to leave security depending on
+          // an optional field: legacy V1 (no `workoutLifecycleState/current`)
+          // keeps its ungated write; V2 now always requires the matching
+          // grant.
           allow create: if isOwner(userId)
             && accountActive(userId)
             && request.resource.data.keys().hasAll(['type', 'sessionIndex', 'scheduledDate', 'occurredAt'])
             && request.resource.data.keys().hasOnly(
                  ['type', 'sessionIndex', 'scheduledDate', 'occurredAt', 'reasonCode', 'decision', 'programInstanceId'])
-	            && request.resource.data.type in ['COMPLETED', 'SKIPPED', 'MISS_RESOLVED']
-	            && (!request.resource.data.keys().hasAny(['programInstanceId'])
-	                || (request.resource.data.type == 'COMPLETED'
-	                  && consumesLifecycleAuthorityGrant(userId, ['COMPLETE_SCHEDULE'])
-	                  && lifecycleAuthorityGrant(userId).sourceProgramInstanceId == request.resource.data.programInstanceId
-	                  && lifecycleAuthorityGrant(userId).sessionIndex == request.resource.data.sessionIndex
-	                  && lifecycleAuthorityGrant(userId).scheduledLocalDate == request.resource.data.scheduledDate)
-	                || (request.resource.data.type in ['SKIPPED', 'MISS_RESOLVED']
-	                  && consumesLifecycleAuthorityGrant(userId, ['RESOLVE_MISSED_SESSION'])
-	                  && lifecycleAuthorityGrant(userId).sourceProgramInstanceId == request.resource.data.programInstanceId
-	                  && lifecycleAuthorityGrant(userId).targetScheduleEvents.hasAny([{
-	                       'type': request.resource.data.type,
-	                       'sessionIndex': request.resource.data.sessionIndex,
-	                       'scheduledDate': request.resource.data.scheduledDate,
-	                     }])))
+            && request.resource.data.type in ['COMPLETED', 'SKIPPED', 'MISS_RESOLVED']
+            && (
+                 !existsAfter(/databases/$(database)/documents/users/$(userId)/workoutLifecycleState/current)
+                 || (request.resource.data.type == 'COMPLETED'
+                   && consumesLifecycleAuthorityGrant(userId, ['COMPLETE_SCHEDULE'])
+                   && lifecycleAuthorityGrant(userId).sourceProgramInstanceId == request.resource.data.programInstanceId
+                   && lifecycleAuthorityGrant(userId).sessionIndex == request.resource.data.sessionIndex
+                   && lifecycleAuthorityGrant(userId).scheduledLocalDate == request.resource.data.scheduledDate)
+                 || (request.resource.data.type in ['SKIPPED', 'MISS_RESOLVED']
+                   && consumesLifecycleAuthorityGrant(userId, ['RESOLVE_MISSED_SESSION'])
+                   && lifecycleAuthorityGrant(userId).sourceProgramInstanceId == request.resource.data.programInstanceId
+                   && lifecycleAuthorityGrant(userId).targetScheduleEvents.hasAny([{
+                        'type': request.resource.data.type,
+                        'sessionIndex': request.resource.data.sessionIndex,
+                        'scheduledDate': request.resource.data.scheduledDate,
+                      }]))
+               )
             && request.resource.data.sessionIndex is int
             && request.resource.data.sessionIndex >= 0
             && request.resource.data.scheduledDate is string
@@ -1984,6 +2091,19 @@ service cloud.firestore {
     match /workoutLifecycleRolloutConfig/{configId} {
       allow read: if configId == 'active' && isSignedIn();
       allow write: if false;
+    }
+
+    // Phase 10E — ops-controlled circuit breaker for ALREADY-migrated V2
+    // accounts (docs/workout-lifecycle/v2/architecture/
+    // 26_FINAL_INDEPENDENT_ADVERSARIAL_AUDIT_2.md §50). Deliberately
+    // separate from `workoutLifecycleRolloutConfig` above — rollout decides
+    // who enters V2, this decides whether an already-migrated account's
+    // mutation may proceed right now. Admin-SDK-write-only; enforcement
+    // itself happens in `authorizeWorkoutLifecycleMutationHandler`
+    // (functions/src/workoutLifecycle/circuitBreaker.ts), not in Rules — no
+    // client read is even needed for that, so none is granted.
+    match /workoutLifecycleCircuitBreaker/{configId} {
+      allow read, write: if false;
     }
 
     match /limitationDatasetVersions/{datasetHash} {

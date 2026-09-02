@@ -778,4 +778,178 @@ describe.skipIf(!enabled)('Workout Lifecycle authority — real Firestore Emulat
       } as never, db)).rejects.toMatchObject({ code: 'permission-denied', message: 'schedule_completion_session_not_expected' });
     });
   });
+
+  // Phase 10E stale-device test (docs/workout-lifecycle/v2/architecture/
+  // 26_FINAL_INDEPENDENT_ADVERSARIAL_AUDIT_2.md §92, 27_PHASE_10E_FINAL_
+  // STAGED_ROLLOUT_CLOSURE.md §33-34). "Device A reads state X. Device B
+  // advances the lifecycle X→Y. Device A later submits a mutation derived
+  // from stale X." Chosen operation: ADAPT, the highest-risk
+  // content-producing transition. `assertSource` (authorizeMutation.ts:152)
+  // is the mechanism under test — it must fail closed the moment a
+  // request's `sourceProgramInstanceId`/`sourceCycleId` no longer matches
+  // the CURRENT authoritative state, regardless of how that mismatch arose
+  // (a genuine two-device race is just one way to reach this state; a
+  // single stale in-memory client cache after any prior mutation reaches
+  // the exact same code path).
+  describe('stale-device mutation (Device A reads X, Device B advances to Y, Device A submits stale X)', () => {
+    it('denies an ADAPT whose sourceProgramInstanceId/sourceCycleId no longer match current state, and does not mutate authoritative state', async () => {
+      // Device A's read, at the start of the test: activeProgramInstanceId
+      // = 'wpi_active', currentCycleId = 'cyc_active' (seeded by the outer
+      // beforeEach — this IS "state X").
+      // Device B advances the lifecycle to a new instance/cycle — "state Y"
+      // — via a legitimate-shaped direct write (standing in for a real
+      // ADAPT/PREPARE+ACTIVATE that already completed on another device).
+      await db.collection('users').doc(UID).collection('programInstances').doc('wpi_device_b').set({
+        programInstanceId: 'wpi_device_b', cycleId: 'cyc_device_b', contentIdentity: 'wpg_active',
+        prescriptionIdentity: 'rx_active', activatedAt: Timestamp.now(),
+        prescriptionInputSnapshot: {
+          snapshotId: 'pis_device_b', schemaVersion: 1, source: 'QUESTIONNAIRE_BASELINE',
+          inputs: { level: 'beginner', trainingDays: ['MON', 'WED', 'FRI'] },
+        },
+      });
+      await db.collection('users').doc(UID).collection('trainingCycles').doc('cyc_device_b').set({
+        cycleId: 'cyc_device_b', level: 'BEGINNER', cycleNumber: 1, status: 'ACTIVE',
+        programInstanceId: 'wpi_device_b',
+      });
+      await db.collection('users').doc(UID).collection('workoutLifecycleState').doc('current')
+        .update({ activeProgramInstanceId: 'wpi_device_b', currentCycleId: 'cyc_device_b' });
+
+      // Device A, unaware of Device B's change, submits an ADAPT still
+      // bound to its stale read of state X.
+      await expect(authorizeWorkoutLifecycleMutationHandler({
+        auth: { uid: UID },
+        data: {
+          operation: 'ADAPT', targetProgramSource: 'program_adaptation',
+          sourceProgramInstanceId: 'wpi_active', sourceCycleId: 'cyc_active',
+        },
+      } as never, db)).rejects.toMatchObject({ code: 'aborted', message: 'stale_lifecycle_authority_base' });
+
+      // Authoritative state must still point at Device B's advance — never
+      // overwritten, never duplicated, no grant issued for the stale request.
+      const state = (await db.collection('users').doc(UID).collection('workoutLifecycleState').doc('current').get()).data();
+      expect(state?.activeProgramInstanceId).toBe('wpi_device_b');
+      expect(state?.currentCycleId).toBe('cyc_device_b');
+      expect((await db.collection('users').doc(UID)
+        .collection('workoutLifecycleAuthorityGrants').doc('current').get()).exists).toBe(false);
+    });
+
+    it('a fresh read of the CURRENT state (Device A catching up) is accepted normally', async () => {
+      await db.collection('users').doc(UID).collection('programInstances').doc('wpi_device_b').set({
+        programInstanceId: 'wpi_device_b', cycleId: 'cyc_device_b', contentIdentity: 'wpg_active',
+        prescriptionIdentity: 'rx_active', activatedAt: Timestamp.now(),
+        prescriptionInputSnapshot: {
+          snapshotId: 'pis_device_b', schemaVersion: 1, source: 'QUESTIONNAIRE_BASELINE',
+          inputs: { level: 'beginner', trainingDays: ['MON', 'WED', 'FRI'] },
+        },
+      });
+      await db.collection('users').doc(UID).collection('trainingCycles').doc('cyc_device_b').set({
+        cycleId: 'cyc_device_b', level: 'BEGINNER', cycleNumber: 1, status: 'ACTIVE',
+        programInstanceId: 'wpi_device_b',
+      });
+      await db.collection('users').doc(UID).collection('workoutLifecycleState').doc('current')
+        .update({ activeProgramInstanceId: 'wpi_device_b', currentCycleId: 'cyc_device_b' });
+
+      // Never rejected for staleness once the source matches CURRENT state
+      // (it may still fail later for other request-shape reasons unrelated
+      // to this test).
+      await expect(authorizeWorkoutLifecycleMutationHandler({
+        auth: { uid: UID },
+        data: {
+          operation: 'ADAPT', targetProgramSource: 'program_adaptation',
+          sourceProgramInstanceId: 'wpi_device_b', sourceCycleId: 'cyc_device_b',
+        },
+      } as never, db)).rejects.not.toMatchObject({ message: 'stale_lifecycle_authority_base' });
+    });
+  });
+
+  // Phase 10E circuit breaker (docs/workout-lifecycle/v2/architecture/
+  // 26_FINAL_INDEPENDENT_ADVERSARIAL_AUDIT_2.md §50, 27_PHASE_10E_FINAL_
+  // STAGED_ROLLOUT_CLOSURE.md §16-21). Deliberately separate from
+  // `workoutLifecycleRolloutConfig` (which only ever gates brand-new V1→V2
+  // migrations) — this account already has V2 lifecycle state (seeded in
+  // the outer `beforeEach`), matching the "already-migrated user" scenario
+  // the audit brief's kill-switch scenario names explicitly. Backend-
+  // enforced: the circuit-breaker check runs before any request-specific
+  // validation, so even a garbage/incomplete payload for a blocked
+  // operation is denied for the circuit-breaker reason specifically, not
+  // some other validation error — proving an old/modified client cannot
+  // route around it by sending a different shape.
+  describe('circuit breaker — already-migrated V2 account', () => {
+    async function setCircuitBreaker(open: boolean) {
+      await db.collection('workoutLifecycleCircuitBreaker').doc('active').set({ schemaVersion: 1, open });
+    }
+
+    it.each(['INITIALIZE', 'MIGRATE', 'PREPARE', 'ACTIVATE', 'ADAPT'] as const)(
+      'denies %s outright when the circuit is open, before any other validation',
+      async (operation) => {
+        await setCircuitBreaker(true);
+        await expect(authorizeWorkoutLifecycleMutationHandler({
+          auth: { uid: UID },
+          // Deliberately minimal/incomplete payload — if the circuit-breaker
+          // check did not run first, this would fail with some OTHER
+          // validation error instead.
+          data: { operation },
+        } as never, db)).rejects.toMatchObject({ code: 'unavailable', message: 'workout_lifecycle_circuit_breaker_open' });
+        expect((await db.collection('users').doc(UID)
+          .collection('workoutLifecycleAuthorityGrants').doc('current').get()).exists).toBe(false);
+      },
+    );
+
+    // RECOVER is covered separately below (it succeeds outright with this
+    // fixture's seeded state, which is an even stronger proof it isn't
+    // blocked than "rejects for some other reason").
+    it.each(['EARN', 'DEFER', 'FINISH_EXECUTION', 'COMPLETE_SCHEDULE', 'RESOLVE_MISSED_SESSION'] as const)(
+      '%s is not blocked by an open circuit (fails, if at all, for its own normal validation reasons)',
+      async (operation) => {
+        await setCircuitBreaker(true);
+        await expect(authorizeWorkoutLifecycleMutationHandler({
+          auth: { uid: UID },
+          data: { operation },
+        } as never, db)).rejects.not.toMatchObject({ message: 'workout_lifecycle_circuit_breaker_open' });
+      },
+    );
+
+    it('RECOVER succeeds normally while the circuit is open (safe reconciliation stays available)', async () => {
+      await setCircuitBreaker(true);
+      await expect(authorizeWorkoutLifecycleMutationHandler({
+        auth: { uid: UID },
+        data: { operation: 'RECOVER', sourceProgramInstanceId: 'wpi_active', sourceCycleId: 'cyc_active' },
+      } as never, db)).resolves.toMatchObject({ grantId: 'current' });
+    });
+
+    it('ADAPT is denied while open, then succeeds normally once the circuit is closed again (resume after reopen)', async () => {
+      await setCircuitBreaker(true);
+      await expect(authorizeWorkoutLifecycleMutationHandler({
+        auth: { uid: UID },
+        data: { operation: 'ADAPT', targetProgramSource: 'program_adaptation' },
+      } as never, db)).rejects.toMatchObject({ code: 'unavailable', message: 'workout_lifecycle_circuit_breaker_open' });
+
+      await setCircuitBreaker(false);
+      // No longer blocked by the circuit breaker specifically — it may
+      // still fail for an unrelated reason (this fixture's minimal ADAPT
+      // payload isn't a full valid request), but never for the
+      // circuit-breaker message, proving resume-after-reopen works.
+      await expect(authorizeWorkoutLifecycleMutationHandler({
+        auth: { uid: UID },
+        data: { operation: 'ADAPT', targetProgramSource: 'program_adaptation' },
+      } as never, db)).rejects.not.toMatchObject({ message: 'workout_lifecycle_circuit_breaker_open' });
+    });
+
+    it('a missing circuit-breaker config document fails closed to normal operation (not to blocking everything)', async () => {
+      // No setCircuitBreaker call at all — the doc never exists, matching a
+      // fresh environment that has never configured this collection.
+      await expect(authorizeWorkoutLifecycleMutationHandler({
+        auth: { uid: UID },
+        data: { operation: 'RECOVER', sourceProgramInstanceId: 'wpi_active', sourceCycleId: 'cyc_active' },
+      } as never, db)).resolves.toMatchObject({ grantId: 'current' });
+    });
+
+    it('a malformed circuit-breaker config document fails closed to normal operation', async () => {
+      await db.collection('workoutLifecycleCircuitBreaker').doc('active').set({ garbage: true });
+      await expect(authorizeWorkoutLifecycleMutationHandler({
+        auth: { uid: UID },
+        data: { operation: 'RECOVER', sourceProgramInstanceId: 'wpi_active', sourceCycleId: 'cyc_active' },
+      } as never, db)).resolves.toMatchObject({ grantId: 'current' });
+    });
+  });
 });

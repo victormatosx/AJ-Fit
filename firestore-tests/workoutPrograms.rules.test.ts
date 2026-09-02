@@ -480,5 +480,240 @@ describe('workoutPrograms', () => {
       }));
       await assertFails(attemptV2Write('wpg_v2replay2', programInstanceId, programDocument('wpg_v2replay2')));
     });
+
+    // Phase 10E (docs/workout-lifecycle/v2/architecture/
+    // 26_FINAL_INDEPENDENT_ADVERSARIAL_AUDIT_2.md §48): `workoutPrograms`
+    // `create` required a grant (Phase 10D), but `update` — the path a
+    // reactivation of a previously-sealed, content-addressed doc takes
+    // (`transaction.update` in `saveAndActivateWorkoutProgram` when
+    // `targetSnapshot.exists()`) — did not. A V2 owner could flip a stale,
+    // superseded doc's `status` back to `active` and repoint
+    // `workoutProgramState/active` at it with zero authorization. Historical
+    // exploit shape; expected current behavior: DENY.
+    it('denies reactivating a stale/superseded workoutPrograms doc via update with no grant (workoutPrograms update authority gap)', async () => {
+      const programInstanceId = 'wpi_reactivate';
+      const staleProgramId = 'wpg_stale_a';
+      const activeProgramId = 'wpg_active_b';
+      await seedV2LifecycleState(programInstanceId);
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        await setDoc(doc(context.firestore(), 'users', UID, 'workoutPrograms', staleProgramId), {
+          ...programDocument(staleProgramId), status: 'superseded',
+        });
+        await setDoc(doc(context.firestore(), 'users', UID, 'workoutPrograms', activeProgramId), {
+          ...programDocument(activeProgramId), status: 'active',
+        });
+        await setDoc(doc(context.firestore(), 'users', UID, 'workoutProgramState', 'active'), {
+          programId: activeProgramId, programInstanceId, updatedAt: Timestamp.now(),
+        });
+      });
+      const db = dbFor(UID);
+      await assertFails(runTransaction(db, async (transaction) => {
+        transaction.update(doc(db, 'users', UID, 'workoutPrograms', staleProgramId), {
+          status: 'active', activatedAt: serverTimestamp(), updatedAt: serverTimestamp(),
+        });
+        transaction.set(doc(db, 'users', UID, 'workoutProgramState', 'active'), {
+          programId: staleProgramId, programInstanceId, updatedAt: serverTimestamp(),
+        });
+      }));
+      // Authoritative state must remain unchanged after the denied attack.
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        const stale = await getDoc(doc(context.firestore(), 'users', UID, 'workoutPrograms', staleProgramId));
+        expect(stale.data()?.status).toBe('superseded');
+        const active = await getDoc(doc(context.firestore(), 'users', UID, 'workoutProgramState', 'active'));
+        expect(active.data()?.programId).toBe(activeProgramId);
+      });
+    });
+
+    it('allows a grant-backed reactivation of a previously-sealed content identity (legitimate idempotent convergence)', async () => {
+      const programInstanceId = 'wpi_reactivate_ok';
+      const targetProgramId = 'wpg_reactivate_ok';
+      await seedV2LifecycleState(programInstanceId);
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        await setDoc(doc(context.firestore(), 'users', UID, 'workoutPrograms', targetProgramId), {
+          ...programDocument(targetProgramId), status: 'superseded',
+        });
+        await setDoc(doc(context.firestore(), 'users', UID, 'workoutLifecycleAuthorityGrants', 'current'), {
+          uid: UID, schemaVersion: 1, operation: 'RECOVER',
+          targetContentIdentity: targetProgramId,
+          expiresAt: Timestamp.fromMillis(Date.now() + 60_000),
+        });
+      });
+      const db = dbFor(UID);
+      await assertSucceeds(runTransaction(db, async (transaction) => {
+        transaction.update(doc(db, 'users', UID, 'workoutPrograms', targetProgramId), {
+          status: 'active', activatedAt: serverTimestamp(), updatedAt: serverTimestamp(),
+        });
+        transaction.set(doc(db, 'users', UID, 'workoutProgramState', 'active'), {
+          programId: targetProgramId, programInstanceId, updatedAt: serverTimestamp(),
+        });
+        transaction.delete(doc(db, 'users', UID, 'workoutLifecycleAuthorityGrants', 'current'));
+      }));
+    });
+
+    it('a genuinely legacy V1 account can still transition workoutPrograms status without a grant', async () => {
+      // No seedV2LifecycleState call, and — matching every other legacy V1
+      // fixture in this file — no `programInstanceId` on the state pointer
+      // either, since `workoutLifecycleState/current` never exists to
+      // resolve it against.
+      const programId = 'wpg_v1status';
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        await setDoc(doc(context.firestore(), 'users', UID, 'workoutPrograms', programId), {
+          ...programDocument(programId), status: 'superseded',
+        });
+      });
+      const db = dbFor(UID);
+      await assertSucceeds(runTransaction(db, async (transaction) => {
+        transaction.update(doc(db, 'users', UID, 'workoutPrograms', programId), {
+          status: 'active', activatedAt: serverTimestamp(), updatedAt: serverTimestamp(),
+        });
+        transaction.set(doc(db, 'users', UID, 'workoutProgramState', 'active'), {
+          programId, updatedAt: serverTimestamp(),
+        });
+      }));
+    });
+  });
+
+  // Phase 10E (docs/workout-lifecycle/v2/architecture/
+  // 26_FINAL_INDEPENDENT_ADVERSARIAL_AUDIT_2.md §49): the same
+  // optional-field-omission shape as FS-RULES-BYPASS-01, found unfixed in
+  // `scheduleState`/`scheduleEvents`. Traced NON_EXPLOITABLE for
+  // progression/adherence (backend never reads SKIPPED/MISS_RESOLVED events,
+  // and COMPLETED events are filtered by exact programInstanceId equality —
+  // see 27_PHASE_10E_FINAL_STAGED_ROLLOUT_CLOSURE.md §6-9), but fixed
+  // structurally regardless per this phase's explicit instruction.
+  describe('scheduleState / scheduleEvents authority (Phase 10E)', () => {
+    const programId = 'wpg_sched_fixture';
+    const programInstanceId = 'wpi_sched_fixture';
+
+    async function seedV2WithInstance() {
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        await setDoc(doc(context.firestore(), 'users', UID, 'workoutPrograms', programId), programDocument(programId));
+        await setDoc(doc(context.firestore(), 'users', UID, 'programInstances', programInstanceId), {
+          contentIdentity: programId,
+        });
+        await setDoc(doc(context.firestore(), 'users', UID, 'workoutLifecycleState', 'current'), {
+          activeProgramInstanceId: programInstanceId,
+        });
+      });
+    }
+
+    it('denies a forged scheduleState advance via the programInstanceId-omission exploit (writes to the dead-for-V2 "current" doc-id)', async () => {
+      await seedV2WithInstance();
+      const db = dbFor(UID);
+      await assertFails(setDoc(doc(db, 'users', UID, 'workoutPrograms', programId, 'scheduleState', 'current'), {
+        programId, nextSessionIndex: 3, cursorDate: '2026-09-10',
+        lastCompletedAt: null, pendingMissDecision: null, updatedAt: serverTimestamp(),
+      }));
+    });
+
+    it('denies a forged scheduleState update on the real programInstanceId doc-id with no grant (field cannot be omitted for V2)', async () => {
+      await seedV2WithInstance();
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        await setDoc(doc(context.firestore(), 'users', UID, 'workoutPrograms', programId, 'scheduleState', programInstanceId), {
+          programId, programInstanceId, nextSessionIndex: 0, cursorDate: '2026-09-01',
+          lastCompletedAt: null, pendingMissDecision: null, updatedAt: Timestamp.now(),
+        });
+      });
+      const db = dbFor(UID);
+      // Real doc-id, but the field is present and correct here — this must
+      // still be denied because there is no grant and the index actually
+      // changes (not a same-position bookkeeping write).
+      await assertFails(updateDoc(doc(db, 'users', UID, 'workoutPrograms', programId, 'scheduleState', programInstanceId), {
+        programId, programInstanceId, nextSessionIndex: 5, cursorDate: '2026-09-10',
+        lastCompletedAt: null, pendingMissDecision: null, updatedAt: serverTimestamp(),
+      }));
+    });
+
+    it('allows a grant-backed scheduleState advance for a V2 account', async () => {
+      await seedV2WithInstance();
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        await setDoc(doc(context.firestore(), 'users', UID, 'workoutPrograms', programId, 'scheduleState', programInstanceId), {
+          programId, programInstanceId, nextSessionIndex: 0, cursorDate: '2026-09-01',
+          lastCompletedAt: null, pendingMissDecision: null, updatedAt: Timestamp.now(),
+        });
+        await setDoc(doc(context.firestore(), 'users', UID, 'workoutLifecycleAuthorityGrants', 'current'), {
+          uid: UID, schemaVersion: 1, operation: 'COMPLETE_SCHEDULE',
+          sourceProgramInstanceId: programInstanceId, targetNextSessionIndex: 1, targetCursorDate: '2026-09-01',
+          expiresAt: Timestamp.fromMillis(Date.now() + 60_000),
+        });
+      });
+      const db = dbFor(UID);
+      await assertSucceeds(runTransaction(db, async (transaction) => {
+        transaction.update(doc(db, 'users', UID, 'workoutPrograms', programId, 'scheduleState', programInstanceId), {
+          programId, programInstanceId, nextSessionIndex: 1, cursorDate: '2026-09-01',
+          lastCompletedAt: serverTimestamp(), pendingMissDecision: null, updatedAt: serverTimestamp(),
+        });
+        transaction.delete(doc(db, 'users', UID, 'workoutLifecycleAuthorityGrants', 'current'));
+      }));
+    });
+
+    it('a genuinely legacy V1 account can still advance scheduleState/current without a grant', async () => {
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        await setDoc(doc(context.firestore(), 'users', UID, 'workoutPrograms', programId), programDocument(programId));
+        await setDoc(doc(context.firestore(), 'users', UID, 'workoutPrograms', programId, 'scheduleState', 'current'), {
+          programId, nextSessionIndex: 0, cursorDate: '2026-09-01',
+          lastCompletedAt: null, pendingMissDecision: null, updatedAt: Timestamp.now(),
+        });
+      });
+      const db = dbFor(UID);
+      await assertSucceeds(updateDoc(doc(db, 'users', UID, 'workoutPrograms', programId, 'scheduleState', 'current'), {
+        programId, nextSessionIndex: 1, cursorDate: '2026-09-02',
+        lastCompletedAt: serverTimestamp(), pendingMissDecision: null, updatedAt: serverTimestamp(),
+      }));
+    });
+
+    it('denies forged COMPLETED/SKIPPED/MISS_RESOLVED scheduleEvents via the programInstanceId-omission exploit', async () => {
+      await seedV2WithInstance();
+      const db = dbFor(UID);
+      for (const type of ['COMPLETED', 'SKIPPED', 'MISS_RESOLVED'] as const) {
+        await assertFails(setDoc(
+          doc(db, 'users', UID, 'workoutPrograms', programId, 'scheduleEvents', `forged_${type}`),
+          { type, sessionIndex: 0, scheduledDate: '2026-09-05', occurredAt: serverTimestamp() },
+        ));
+      }
+    });
+
+    it('denies forged scheduleEvents even when programInstanceId is included but no grant exists', async () => {
+      await seedV2WithInstance();
+      const db = dbFor(UID);
+      await assertFails(setDoc(
+        doc(db, 'users', UID, 'workoutPrograms', programId, 'scheduleEvents', 'forged_with_id'),
+        { type: 'COMPLETED', sessionIndex: 0, scheduledDate: '2026-09-05', occurredAt: serverTimestamp(), programInstanceId },
+      ));
+    });
+
+    it('allows a grant-backed COMPLETED scheduleEvents write for a V2 account', async () => {
+      await seedV2WithInstance();
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        await setDoc(doc(context.firestore(), 'users', UID, 'workoutLifecycleAuthorityGrants', 'current'), {
+          uid: UID, schemaVersion: 1, operation: 'COMPLETE_SCHEDULE',
+          sourceProgramInstanceId: programInstanceId, sessionIndex: 0, scheduledLocalDate: '2026-09-05',
+          expiresAt: Timestamp.fromMillis(Date.now() + 60_000),
+        });
+      });
+      const db = dbFor(UID);
+      // The grant must be consumed (deleted) in the same atomic write as the
+      // event create — a bare `setDoc` never deletes it, so this has to be a
+      // batch/transaction, matching every other grant-consuming test in this
+      // file.
+      await assertSucceeds(runTransaction(db, async (transaction) => {
+        transaction.set(
+          doc(db, 'users', UID, 'workoutPrograms', programId, 'scheduleEvents', 'legit_completed'),
+          { type: 'COMPLETED', sessionIndex: 0, scheduledDate: '2026-09-05', occurredAt: serverTimestamp(), programInstanceId },
+        );
+        transaction.delete(doc(db, 'users', UID, 'workoutLifecycleAuthorityGrants', 'current'));
+      }));
+    });
+
+    it('a genuinely legacy V1 account can still write scheduleEvents without a grant', async () => {
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        await setDoc(doc(context.firestore(), 'users', UID, 'workoutPrograms', programId), programDocument(programId));
+      });
+      const db = dbFor(UID);
+      await assertSucceeds(setDoc(
+        doc(db, 'users', UID, 'workoutPrograms', programId, 'scheduleEvents', 'v1_completed'),
+        { type: 'COMPLETED', sessionIndex: 0, scheduledDate: '2026-09-05', occurredAt: serverTimestamp() },
+      ));
+    });
   });
 });
