@@ -35,11 +35,11 @@ describe('WorkoutScreen — finish-workout crash (ex.sets[setIdx].r of undefined
   it('completeSet\'s last-set branch sets progress and finished in the same synchronous call, before any other state can be read', () => {
     const completeSetBody = source.slice(
       source.indexOf('const completeSet = () => {'),
-      source.indexOf('const skipExercise = () => {'),
+      source.indexOf('const skipRest = () => {'),
     );
     const isLastOverallBranch = completeSetBody.slice(
       completeSetBody.indexOf('if (isLastOverall) {'),
-      completeSetBody.indexOf('setPending({'),
+      completeSetBody.indexOf('const completedSet ='),
     );
     expect(isLastOverallBranch).toContain('setProgress');
     expect(isLastOverallBranch).toContain('setFinished(true)');
@@ -47,8 +47,8 @@ describe('WorkoutScreen — finish-workout crash (ex.sets[setIdx].r of undefined
 
   it('advanceAfterRest flips finished to true in the same call that empties `order`, never leaving a stale non-empty order with finished still false', () => {
     const advanceBody = source.slice(
-      source.indexOf('const advanceAfterRest = () => {'),
-      source.indexOf('useEffect(() => {\n    if (!resting)'),
+      source.indexOf('const advanceAfterRest = ('),
+      source.indexOf("useEffect(() => {\n    if (restStatus !== 'expired'"),
     );
     const emptyOrderBranch = advanceBody.slice(advanceBody.indexOf('if (nextOrder.length === 0) {'));
     expect(emptyOrderBranch.slice(0, emptyOrderBranch.indexOf('}') + 1)).toContain('setFinished(true)');

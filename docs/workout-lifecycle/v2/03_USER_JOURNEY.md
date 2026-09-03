@@ -1,6 +1,6 @@
 # User Journey
 
-**Status:** TARGET_SPEC  
+**Status:** TARGET_SPEC
 **Implementation:** PARTIAL — persistence foundation only; V2 journey behavior remains future work
 
 ## Beginner

@@ -57,4 +57,3 @@ describe('PrescriptionInputSnapshot', () => {
     })).toBe(false);
   });
 });
-

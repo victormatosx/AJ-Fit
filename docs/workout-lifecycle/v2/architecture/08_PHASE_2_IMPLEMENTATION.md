@@ -4,7 +4,7 @@
 > documented below. Current Progression V2 enumerates real prescribed calendar
 > opportunities inside the ProgramInstance window; see ADR-015 and Phase 9.
 
-**Status:** IMPLEMENTED for Phase 2 scope (pure decision engine only)  
+**Status:** IMPLEMENTED for Phase 2 scope (pure decision engine only)
 **Overall V2 Implementation:** PARTIAL
 
 ## What this phase answers

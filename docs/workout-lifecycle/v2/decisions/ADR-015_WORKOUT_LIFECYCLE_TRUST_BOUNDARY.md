@@ -122,4 +122,3 @@ deletion reconciliation tests.
 - V2 remains the sole progression authority; V1 is compatibility-only.
 - Backend availability is required to authorize new critical V2 writes.
 - No rollout or production configuration is changed by this decision.
-

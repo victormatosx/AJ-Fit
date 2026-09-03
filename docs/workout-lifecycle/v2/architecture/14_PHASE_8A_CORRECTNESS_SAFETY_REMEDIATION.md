@@ -1,7 +1,7 @@
 # Fase 8A — Correctness & Safety — Relatório Final
 
-Date: 2026-08-29  
-Verdict: COMPLETE  
+Date: 2026-08-29
+Verdict: COMPLETE
 Scope: the seven correctness/safety findings explicitly authorized for Phase 8A.
 
 ## 1. Git

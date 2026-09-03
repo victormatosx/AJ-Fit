@@ -3,6 +3,7 @@ import { removeCachedThumbnailsForUser } from './photoVaultEncryptedCache';
 import { clearWorkoutSubstitutionPreferences } from './workoutSubstitutionsStorage';
 import { clearStoredUnitsPreference } from '../units/unitsStorage';
 import { clearPrescriptionSnapshotsForUser } from '../workoutPrescription/storage';
+import { cleanupRestSessionArtifacts } from './restSessionCleanup';
 
 /**
  * Client-side shutdown after `requestAccountDeletion` has durably accepted
@@ -85,6 +86,7 @@ export async function finalizeAccountDeletionClientShutdown(
     clearWorkoutSubstitutionPreferences(),
     clearStoredUnitsPreference(),
     clearPrescriptionSnapshotsForUser(uid),
+    cleanupRestSessionArtifacts(),
   ]);
 
   await logout();

@@ -1,6 +1,6 @@
 # Domain Model
 
-**Status:** TARGET_SPEC  
+**Status:** TARGET_SPEC
 **Implementation:** PARTIAL — typed Phase 1 concepts and persisted lifecycle core
 
 ## Canonical concepts

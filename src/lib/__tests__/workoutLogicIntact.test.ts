@@ -31,8 +31,6 @@ describe('WorkoutScreen source — session state machine invariants', () => {
       'const [progress, setProgress]',
       'const [skipped, setSkipped]',
       'const [logged, setLogged]',
-      'const [resting, setResting]',
-      'const [restLeft, setRestLeft]',
       'const [pending, setPending]',
       'const [regWeight, setRegWeight]',
       'const [permSubs, setPermSubs]',
@@ -56,11 +54,11 @@ describe('WorkoutScreen source — session state machine invariants', () => {
     }
   });
 
-  it('still ticks the elapsed session timer at 1s and the rest timer at 1s', () => {
-    // Two `setInterval`/`setTimeout` callbacks with 1000ms delay — one for
-    // `setElapsed((e) => e + 1)` and one for `setRestLeft((r) => r - 1)`.
+  it('ticks elapsed/display time without owning a decrementing rest counter', () => {
     expect(WORKOUT_SRC).toMatch(/setElapsed\(\(e\)\s*=>\s*e\s*\+\s*1\)/);
-    expect(WORKOUT_SRC).toMatch(/setRestLeft\(\(r\)\s*=>\s*r\s*-\s*1\)/);
+    expect(WORKOUT_SRC).toContain('const tick = () => setRestNow(Date.now())');
+    expect(WORKOUT_SRC).toContain('computeRemainingSeconds(rest, restNow)');
+    expect(WORKOUT_SRC).not.toMatch(/setRestLeft\(\(r\)\s*=>\s*r\s*-\s*1\)/);
   });
 
   it('the session timer stops once finished — regression: WorkoutDone kept ticking "time" after the session ended', () => {

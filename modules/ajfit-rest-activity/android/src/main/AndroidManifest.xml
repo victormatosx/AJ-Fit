@@ -1,0 +1,6 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <!-- Non-runtime permission used by Android's promoted ongoing notification
+       surface. API 24-36 safely ignore it when the platform does not enforce
+       the newer declaration. POST_NOTIFICATIONS remains owned by app.json. -->
+  <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />
+</manifest>

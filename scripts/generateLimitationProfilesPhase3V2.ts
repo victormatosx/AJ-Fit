@@ -122,4 +122,3 @@ const artifact = {
 
 writeFileSync(OUTPUT_PATH, `${JSON.stringify(artifact, null, 2)}\n`);
 console.log(JSON.stringify({ output: OUTPUT_PATH, ...artifact.summary, closure: artifact.closure }, null, 2));
-

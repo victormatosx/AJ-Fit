@@ -28,8 +28,14 @@ describe('AuthContext concurrency wiring', () => {
     expect(authContext).toMatch(
       /completeLinkingWithProvider: \(provider, answers, name\) =>\s+identityOperationFlight\.run/,
     );
-    expect(authContext).toContain(
-      'logout: () => identityOperationFlight.run(() => signOutUser())',
+    const logoutStart = authContext.lastIndexOf('logout: () =>');
+    const logout = authContext.slice(
+      logoutStart,
+      authContext.indexOf('refreshEmailVerification:', logoutStart),
+    );
+    expect(logout).toContain('identityOperationFlight.run(async () =>');
+    expect(logout.indexOf('await cleanupRestSessionArtifacts()')).toBeLessThan(
+      logout.indexOf('await signOutUser()'),
     );
   });
 

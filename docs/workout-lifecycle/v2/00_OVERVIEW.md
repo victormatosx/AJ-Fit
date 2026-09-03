@@ -1,6 +1,6 @@
 # Workout Progression System V2 — Overview
 
-**Status:** TARGET_SPEC  
+**Status:** TARGET_SPEC
 **Implementation:** PRODUCTION-HARDENED THROUGH PHASE 8C — Phase 8A established correctness and safety; Phase 8B established sole V2 lifecycle authority and convergent concurrent transitions; Phase 8C integrates deterministic rollout into the real hot path, provides a live kill switch and rollback runbook, semantic Rules, real PII-free operational telemetry, reproducible toolchains, explicit CI gates, and long-run regression proof. See `architecture/14_PHASE_8A_CORRECTNESS_SAFETY_REMEDIATION.md`, `architecture/15_PHASE_8B_LIFECYCLE_AUTHORITY_CONCURRENCY_REMEDIATION.md`, `architecture/16_PHASE_8C_PRODUCTION_HARDENING.md`, ADR-012 through ADR-014, and the operations runbook. Still future: XP/gamification economy, load progression, push notifications, and Phase 8D device-level UX truthfulness/visual validation.
 **Version:** 2.0
 

@@ -1,6 +1,6 @@
 # Phase 1 Implementation — Domain, Persistence and Integrity
 
-**Status:** IMPLEMENTED for Phase 1 scope  
+**Status:** IMPLEMENTED for Phase 1 scope
 **Overall V2 Implementation:** PARTIAL
 
 ## Persisted records
