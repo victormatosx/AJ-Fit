@@ -1,0 +1,862 @@
+{
+  "executedAt": "2026-08-26T02:54:32.665Z",
+  "mode": "DRY_RUN",
+  "projectId": "ajfit-2f321",
+  "datasetVersion": "phase3-limitation-profiles-v1",
+  "firestore": {
+    "collection": "exercises",
+    "documentCount": 116,
+    "expectedDocumentCount": 116,
+    "catalogCountValid": true,
+    "existingLimitationProfileCount": 0,
+    "nonTargetDocumentCount": 45,
+    "nonTargetDocumentsModified": 0
+  },
+  "actionCounts": {
+    "CREATE_PROFILE": 71,
+    "UPDATE_PROFILE": 0,
+    "UNCHANGED": 0,
+    "BLOCKED": 0,
+    "ERROR": 0
+  },
+  "plans": [
+    {
+      "exerciseId": "bar-lat-pulldown",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "barbell-back-squat",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "bench-step-up",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "bird-dog",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "bodyweight-squat",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "bulgarian-split-squat",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "bulgarian-split-squat-dumbbell",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "cable-rear-delt-fly",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "cable-triceps-pushdown",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "chair-sit-to-stand",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "chair-squat",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "controlled-marching",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "conventional-deadlift",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "coordinated-breathing",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "dead-bug",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "dumbbell-lateral-raise",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "dumbbell-overhead-triceps-extension",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "dumbbell-shoulder-press",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "dumbbell-stiff-leg-deadlift",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "ez-bar-biceps-curl",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "farmers-walk",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "floor-crunch",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "gentle-direction-changes",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "glute-bridge",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "goblet-squat",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "hack-squat-machine",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "hammer-curl",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "hip-hinge-drill",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "hip-mobility",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "hip-thrust",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "incline-dumbbell-bench-press",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "iso-lateral-incline-chest-press-machine",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "iso-lateral-row-machine",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "leg-extension-machine",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "leg-press-45",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "low-cable-row-wide-neutral-grip",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "low-step-up",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "lying-leg-curl-machine",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "machine-flat-bench-press",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "machine-shoulder-press",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "march-in-place",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "mini-band-hip-abduction",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "one-arm-dumbbell-row",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "pallof-press",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "plank",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "push-up",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "resistance-band-lat-pulldown",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "resistance-band-row",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "resistance-band-shoulder-press",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "seated-dumbbell-curl",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "seated-hip-abductor-machine",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "seated-leg-curl-machine",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "seated-resistance-band-shoulder-press",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "slider-leg-curl",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "standing-calf-raise-machine",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "stationary-bike",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "stationary-lunge",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "supported-balance",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "supported-calf-raise",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "supported-hip-abduction",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "supported-low-step-up",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "supported-semi-tandem-stance",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "supported-standing-leg-curl",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "thoracic-mobility",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "triceps-rope-pushdown",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "unilateral-iso-lateral-row-machine",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "v-bar-pulldown",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "walking",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "walking-lunges",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "wall-push-up",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    },
+    {
+      "exerciseId": "weight-shift",
+      "action": "CREATE_PROFILE",
+      "reason": "campo limitationProfile ausente",
+      "changedFields": [
+        "limitationProfile"
+      ]
+    }
+  ],
+  "externalCandidateProfiles": [
+    {
+      "exerciseId": "bent-over-dumbbell-row",
+      "exists": true,
+      "hasLimitationProfile": false,
+      "hasStructurallyCompleteProfile": false
+    },
+    {
+      "exerciseId": "bent-over-row-smith-machine",
+      "exists": true,
+      "hasLimitationProfile": false,
+      "hasStructurallyCompleteProfile": false
+    },
+    {
+      "exerciseId": "bulgarian-split-squat-machine",
+      "exists": true,
+      "hasLimitationProfile": false,
+      "hasStructurallyCompleteProfile": false
+    },
+    {
+      "exerciseId": "cable-biceps-curl",
+      "exists": true,
+      "hasLimitationProfile": false,
+      "hasStructurallyCompleteProfile": false
+    },
+    {
+      "exerciseId": "cable-glute-kickback",
+      "exists": true,
+      "hasLimitationProfile": false,
+      "hasStructurallyCompleteProfile": false
+    },
+    {
+      "exerciseId": "cable-lateral-raise",
+      "exists": true,
+      "hasLimitationProfile": false,
+      "hasStructurallyCompleteProfile": false
+    },
+    {
+      "exerciseId": "cable-skull-crusher",
+      "exists": true,
+      "hasLimitationProfile": false,
+      "hasStructurallyCompleteProfile": false
+    },
+    {
+      "exerciseId": "face-pull",
+      "exists": true,
+      "hasLimitationProfile": false,
+      "hasStructurallyCompleteProfile": false
+    },
+    {
+      "exerciseId": "hack-squat-machine-variation",
+      "exists": true,
+      "hasLimitationProfile": false,
+      "hasStructurallyCompleteProfile": false
+    },
+    {
+      "exerciseId": "incline-dumbbell-curl",
+      "exists": true,
+      "hasLimitationProfile": false,
+      "hasStructurallyCompleteProfile": false
+    },
+    {
+      "exerciseId": "iso-lateral-pulldown-machine",
+      "exists": true,
+      "hasLimitationProfile": false,
+      "hasStructurallyCompleteProfile": false
+    },
+    {
+      "exerciseId": "lat-pulldown",
+      "exists": true,
+      "hasLimitationProfile": false,
+      "hasStructurallyCompleteProfile": false
+    },
+    {
+      "exerciseId": "lat-pulldown-supinated-grip",
+      "exists": true,
+      "hasLimitationProfile": false,
+      "hasStructurallyCompleteProfile": false
+    },
+    {
+      "exerciseId": "lateral-band-walk",
+      "exists": true,
+      "hasLimitationProfile": false,
+      "hasStructurallyCompleteProfile": false
+    },
+    {
+      "exerciseId": "leg-press-90",
+      "exists": true,
+      "hasLimitationProfile": false,
+      "hasStructurallyCompleteProfile": false
+    },
+    {
+      "exerciseId": "low-cable-row-close-supinated-grip",
+      "exists": true,
+      "hasLimitationProfile": false,
+      "hasStructurallyCompleteProfile": false
+    },
+    {
+      "exerciseId": "lying-leg-raise",
+      "exists": true,
+      "hasLimitationProfile": false,
+      "hasStructurallyCompleteProfile": false
+    },
+    {
+      "exerciseId": "machine-lateral-raise",
+      "exists": true,
+      "hasLimitationProfile": false,
+      "hasStructurallyCompleteProfile": false
+    },
+    {
+      "exerciseId": "preacher-curl",
+      "exists": true,
+      "hasLimitationProfile": false,
+      "hasStructurallyCompleteProfile": false
+    },
+    {
+      "exerciseId": "reverse-hack-squat",
+      "exists": true,
+      "hasLimitationProfile": false,
+      "hasStructurallyCompleteProfile": false
+    },
+    {
+      "exerciseId": "seated-calf-raise-machine",
+      "exists": true,
+      "hasLimitationProfile": false,
+      "hasStructurallyCompleteProfile": false
+    },
+    {
+      "exerciseId": "standing-single-leg-curl-machine",
+      "exists": true,
+      "hasLimitationProfile": false,
+      "hasStructurallyCompleteProfile": false
+    },
+    {
+      "exerciseId": "stiff-leg-deadlift-hack-machine",
+      "exists": true,
+      "hasLimitationProfile": false,
+      "hasStructurallyCompleteProfile": false
+    },
+    {
+      "exerciseId": "stiff-leg-deadlift-machine",
+      "exists": true,
+      "hasLimitationProfile": false,
+      "hasStructurallyCompleteProfile": false
+    },
+    {
+      "exerciseId": "stiff-leg-deadlift-smith-machine",
+      "exists": true,
+      "hasLimitationProfile": false,
+      "hasStructurallyCompleteProfile": false
+    },
+    {
+      "exerciseId": "sumo-deadlift-dumbbell",
+      "exists": true,
+      "hasLimitationProfile": false,
+      "hasStructurallyCompleteProfile": false
+    },
+    {
+      "exerciseId": "sumo-deadlift-smith-machine",
+      "exists": true,
+      "hasLimitationProfile": false,
+      "hasStructurallyCompleteProfile": false
+    },
+    {
+      "exerciseId": "sumo-squat-machine",
+      "exists": true,
+      "hasLimitationProfile": false,
+      "hasStructurallyCompleteProfile": false
+    }
+  ],
+  "externalActionCandidateProfiles": [
+    {
+      "exerciseId": "cable-biceps-curl",
+      "exists": true,
+      "hasLimitationProfile": false,
+      "hasStructurallyCompleteProfile": false
+    },
+    {
+      "exerciseId": "cable-glute-kickback",
+      "exists": true,
+      "hasLimitationProfile": false,
+      "hasStructurallyCompleteProfile": false
+    },
+    {
+      "exerciseId": "iso-lateral-pulldown-machine",
+      "exists": true,
+      "hasLimitationProfile": false,
+      "hasStructurallyCompleteProfile": false
+    },
+    {
+      "exerciseId": "lying-leg-raise",
+      "exists": true,
+      "hasLimitationProfile": false,
+      "hasStructurallyCompleteProfile": false
+    },
+    {
+      "exerciseId": "machine-lateral-raise",
+      "exists": true,
+      "hasLimitationProfile": false,
+      "hasStructurallyCompleteProfile": false
+    }
+  ],
+  "externalCandidatesWithoutSufficientProfile": [
+    "bent-over-dumbbell-row",
+    "bent-over-row-smith-machine",
+    "bulgarian-split-squat-machine",
+    "cable-biceps-curl",
+    "cable-glute-kickback",
+    "cable-lateral-raise",
+    "cable-skull-crusher",
+    "face-pull",
+    "hack-squat-machine-variation",
+    "incline-dumbbell-curl",
+    "iso-lateral-pulldown-machine",
+    "lat-pulldown",
+    "lat-pulldown-supinated-grip",
+    "lateral-band-walk",
+    "leg-press-90",
+    "low-cable-row-close-supinated-grip",
+    "lying-leg-raise",
+    "machine-lateral-raise",
+    "preacher-curl",
+    "reverse-hack-squat",
+    "seated-calf-raise-machine",
+    "standing-single-leg-curl-machine",
+    "stiff-leg-deadlift-hack-machine",
+    "stiff-leg-deadlift-machine",
+    "stiff-leg-deadlift-smith-machine",
+    "sumo-deadlift-dumbbell",
+    "sumo-deadlift-smith-machine",
+    "sumo-squat-machine"
+  ],
+  "cycles": [
+    [
+      "triceps-rope-pushdown",
+      "cable-triceps-pushdown",
+      "triceps-rope-pushdown"
+    ],
+    [
+      "hip-hinge-drill",
+      "dumbbell-stiff-leg-deadlift",
+      "hip-hinge-drill"
+    ],
+    [
+      "resistance-band-row",
+      "iso-lateral-row-machine",
+      "resistance-band-row"
+    ],
+    [
+      "seated-resistance-band-shoulder-press",
+      "machine-shoulder-press",
+      "seated-resistance-band-shoulder-press"
+    ],
+    [
+      "supported-hip-abduction",
+      "seated-hip-abductor-machine",
+      "supported-hip-abduction"
+    ]
+  ],
+  "governance": {
+    "proposedReviewStatus": "draft",
+    "approvedClaimed": false,
+    "note": "Dry-run não é bloqueado por governança; uso em resolver exige decisão explícita posterior."
+  },
+  "writeSafety": {
+    "firestoreWriteExecuted": false,
+    "deletesExecuted": 0,
+    "documentReplacementUsed": false,
+    "onlyFieldPlanned": "limitationProfile"
+  }
+}

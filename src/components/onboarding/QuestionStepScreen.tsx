@@ -9,13 +9,13 @@ import { CtaButton, CtaText } from '../ui/CtaButton';
 import { Icon } from '../ui/Icon';
 import { ImperialHeightInput } from '../ui/ImperialHeightInput';
 import { useTheme } from '../../theme';
-import type { Quiz } from '../../state/AppState';
 import { useUnits } from '../../state/UnitsContext';
 import {
   BirthDateWheel,
   canContinueQuestion,
   ChoiceGrid,
   ChoiceList,
+  CompoundChoiceList,
   MultiList,
   NumberWheel,
   type LooseT,
@@ -62,6 +62,12 @@ export function QuestionStepScreen({
   const tLoose = t as unknown as LooseT;
   const { resolvedUnits } = useUnits();
   const canContinue = canContinueQuestion(question, value);
+  const handleNext = () => {
+    if (question.kind === 'wheel' && typeof value !== 'number') {
+      onChange(question.default);
+    }
+    onNext();
+  };
 
   const outlineFontSize = 240;
   const outlineSvgW = 280;
@@ -192,12 +198,29 @@ export function QuestionStepScreen({
                   value={(value as string[]) || []}
                   onChange={onChange}
                   maxSelections={question.maxSelections}
+                  exclusiveOption={question.exclusiveOption}
+                />
+              )}
+              {question.kind === 'multi-exact' && (
+                <MultiList
+                  questionId={question.id}
+                  options={question.options}
+                  value={(value as string[]) || []}
+                  onChange={onChange}
+                  maxSelections={question.count}
+                />
+              )}
+              {question.kind === 'compound-choice' && (
+                <CompoundChoiceList
+                  question={question}
+                  value={(value as Record<string, string | null>) ?? {}}
+                  onChange={onChange}
                 />
               )}
             </ScrollView>
           )}
 
-          <CtaButton onPress={onNext} disabled={!canContinue} style={{ marginTop: 14 }}>
+          <CtaButton onPress={handleNext} disabled={!canContinue} style={{ marginTop: 14 }}>
             <CtaText>{ctaLabel ?? t('common:actions.continue')}</CtaText>
           </CtaButton>
         </View>

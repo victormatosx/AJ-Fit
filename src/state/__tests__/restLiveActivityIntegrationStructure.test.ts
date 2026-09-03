@@ -53,9 +53,8 @@ describe('rest live presentation boundary', () => {
   });
 
   it('materializes the translated exercise name outside the temporal domain', () => {
-    expect(workout).toContain(
-      'exerciseName: translateExerciseName(tLoose, ex.db, ex.name)',
-    );
+    expect(workout).toContain('exerciseName: ex.name');
+    expect(workout).toContain('workoutExercisesFromPlan(plan, i18n.language, sessionIndex)');
     expect(codeOnly(context)).not.toContain('EXERCISES');
   });
 

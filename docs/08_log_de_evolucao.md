@@ -631,6 +631,78 @@ Criar documentação específica de billing.
 
 # 18. Primeiras entradas do projeto
 
+Data: 2026-08-25
+Responsável: Agente Backend + Agente Frontend + Agente QA
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Implementado localmente o Schedule Engine V1 (dias preferenciais + sequência
+por conclusão + tratamento explícito de treino perdido), conforme
+`workout-lifecycle/03_SCHEDULE_ENGINE.md` (DR-012/DR-017/DR-018 agora
+`RESOLVED_V1`).
+
+- Questionário: novo campo `Quiz.trainingDays: Weekday[] | null` e pergunta
+  `trainingDays` (`multi-exact`) logo após `days`; pulada para `days === 7`
+  (auto-preenchido); ordem sempre normalizada para cronológica canônica,
+  nunca ordem de clique. Questionários legados sem o campo carregam `null` —
+  nenhuma preferência é inventada. `trainingDaysValid()` é um gate próprio do
+  Schedule Engine, deliberadamente separado de
+  `questionnaireValidationErrors` (o gate do Prescription Engine): a ausência
+  de `trainingDays` nunca bloqueia a geração de prescrição.
+- Novo módulo puro `src/scheduleEngine/` (`resolver.ts`, `calendar.ts`,
+  `localDate.ts`): `resolveWorkoutSchedule` é determinístico e sem I/O,
+  recebe `todayLocalDate` já resolvida no fuso do usuário. Estados:
+  `PROGRAM_NOT_AVAILABLE`, `SCHEDULE_SETUP_REQUIRED`, `REST_DAY`,
+  `SESSION_READY`, `MISSED_SESSION_DECISION_REQUIRED`. Faltas múltiplas
+  colapsam em uma única decisão em vez de um popup por dia perdido.
+- Persistência (`src/services/workoutSchedule.ts`):
+  `users/{uid}/workoutProgramState/scheduleConfig` (preferência do usuário,
+  sobrevive à troca de programa), `users/{uid}/workoutPrograms/{programId}/
+  scheduleState/current` (cursor, escopado ao programId) e `.../
+  scheduleEvents/{eventId}` (ledger imutável COMPLETED/SKIPPED/MISS_RESOLVED,
+  id determinístico — retry/duplo toque idempotente por construção). A única
+  escrita permitida numa leitura é registrar uma falta recém-detectada, via
+  transação com re-check.
+- Firestore Rules: novos blocos para `scheduleConfig`, `scheduleState` e
+  `scheduleEvents`, ownership por path, ledger sem update/delete.
+- UI mínima: `AppShell`/`useWorkoutSchedule` decidem `sessionIndex` antes de
+  abrir `WorkoutScreen` (que antes sempre usava `sessions[0]`);
+  `onSessionCompleted` (distinto de `onDone`, que também dispara num X/saída
+  antecipada) persiste a conclusão. `MissedSessionDecisionModal` apresenta
+  CONTINUE_SEQUENCE/SEGUIR PLANEJAMENTO sem linguagem punitiva; `HomeScreen`
+  mostra REST_DAY/SCHEDULE_SETUP_REQUIRED sem expor estado técnico.
+
+Fora de escopo (mantido intacto): DR-006/Limitation Resolver, Progression
+Engine, transição automática de Beginner, histórico completo de séries/carga,
+notificações e qualquer redesenho amplo de calendário. Nenhuma sessão/set/
+reps/exerciseId do snapshot do programa é alterada pelo Schedule Engine.
+
+Impacto:
+Nenhuma mudança em Selection/Safety/Modifiers/Composition, no schema do
+`workoutPrograms` existente ou no pointer `workoutProgramState/active`.
+Usuários sem `trainingDays` continuam gerando prescrição normalmente.
+
+Testes:
+- `src/scheduleEngine/__tests__/resolver.test.ts`: gates de disponibilidade,
+  ativação, dia de descanso, sequência normal, detecção de falta única e
+  múltipla, fronteira de semana, 7 dias/semana, idempotência de leitura.
+- `src/lib/__tests__/questionnaireSchema.test.ts` e
+  `src/onboarding/__tests__/steps.test.ts`: contagem exata por `days`,
+  normalização de ordem, dedupe, auto-preenchimento em 7 dias, compatibilidade
+  com questionário legado, aplicabilidade condicional da pergunta.
+- `firestore-tests/workoutSchedule.rules.test.ts`: isolamento por usuário,
+  validação de payload, imutabilidade do ledger — 280 testes de Rules
+  aprovados (`npm run test:rules:firestore`, requer JDK 21+).
+- `npm test`: 3291 testes aprovados. `npx tsc --noEmit`: limpo.
+  `npm run i18n:audit`: 0 problemas bloqueantes, sem hardcode novo.
+
+Próxima ação:
+Validação manual em dispositivo (fluxo de treino perdido, dias 2-7,
+regeneração de programa) e decisão de produto sobre tela de configuração de
+`trainingDays` fora do onboarding (mudar dias sem refazer o questionário).
+
+---
+
 Data: 2026-08-12
 Responsável: Codex — Agente Frontend + Segurança + QA
 Categoria: [IMPLEMENTAÇÃO]
@@ -1630,7 +1702,7 @@ subcoleção (leitura/criação só do próprio dono; documentos imutáveis).
 AuthContext passa a expor `profile` e `questionnaire` (mais recente).
 
 Próxima ação:
-Ao implementar reavaliações (novo treino a cada 30/60 dias), usar
+Ao implementar reavaliações (sem timer fixo; critérios em DR-014), usar
 `addQuestionnaire` com `version` incremental.
 
 ---

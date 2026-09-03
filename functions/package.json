@@ -8,17 +8,22 @@
   },
   "main": "lib/index.js",
   "scripts": {
+    "sync:scheduleEngine": "node ../scripts/syncScheduleEngineToFunctions.cjs",
+    "sync:prescriptionEngine": "node ../scripts/syncPrescriptionEngineToFunctions.cjs",
+    "prebuild": "npm run sync:scheduleEngine && npm run sync:prescriptionEngine",
+    "pretypecheck": "npm run sync:scheduleEngine && npm run sync:prescriptionEngine",
+    "pretest": "npm run sync:scheduleEngine && npm run sync:prescriptionEngine",
     "build": "tsc -p tsconfig.build.json",
     "build:watch": "tsc -p tsconfig.build.json --watch",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "serve": "npm run build && firebase emulators:start --only functions",
-    "deploy": "firebase deploy --only functions",
-    "logs": "firebase functions:log",
-    "logs:production": "firebase functions:log --project production",
-    "deploy:production": "npm run build && firebase deploy --only functions --project production",
-    "deploy:staging": "npm run build && firebase deploy --only functions --project staging"
+    "serve": "npm run build && ../node_modules/.bin/firebase emulators:start --only functions",
+    "deploy": "../node_modules/.bin/firebase deploy --only functions",
+    "logs": "../node_modules/.bin/firebase functions:log",
+    "logs:production": "../node_modules/.bin/firebase functions:log --project production",
+    "deploy:production": "npm run build && ../node_modules/.bin/firebase deploy --only functions --project production",
+    "deploy:staging": "npm run build && ../node_modules/.bin/firebase deploy --only functions --project staging"
   },
   "dependencies": {
     "@google-cloud/kms": "^6.0.0",

@@ -158,12 +158,24 @@ export function validateExerciseSeed(exercises: ExerciseSeedInput[]): ExerciseVa
     if (ex.substitution?.similarExerciseIds?.includes(ex.id)) {
       errors.push(`${tag} similarExerciseIds contém autorreferência`);
     }
+    if (ex.substitution?.limitationVariantIds !== undefined
+        && !Array.isArray(ex.substitution.limitationVariantIds)) {
+      errors.push(`${tag} substitution.limitationVariantIds inválido`);
+    }
+    if (ex.substitution?.limitationVariantIds?.includes(ex.id)) {
+      errors.push(`${tag} limitationVariantIds contém autorreferência`);
+    }
   }
 
   for (const ex of exercises) {
     for (const simId of ex.substitution?.similarExerciseIds ?? []) {
       if (!ids.has(simId)) {
         errors.push(`[${ex.id}] similarExerciseIds referencia id inexistente: "${simId}"`);
+      }
+    }
+    for (const variantId of ex.substitution?.limitationVariantIds ?? []) {
+      if (!ids.has(variantId)) {
+        errors.push(`[${ex.id}] limitationVariantIds referencia id inexistente: "${variantId}"`);
       }
     }
   }

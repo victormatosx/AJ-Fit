@@ -2,6 +2,7 @@ import { clearOnboardingDraft } from '../onboarding/draftStorage';
 import { removeCachedThumbnailsForUser } from './photoVaultEncryptedCache';
 import { clearWorkoutSubstitutionPreferences } from './workoutSubstitutionsStorage';
 import { clearStoredUnitsPreference } from '../units/unitsStorage';
+import { clearPrescriptionSnapshotsForUser } from '../workoutPrescription/storage';
 import { cleanupRestSessionArtifacts } from './restSessionCleanup';
 
 /**
@@ -84,6 +85,7 @@ export async function finalizeAccountDeletionClientShutdown(
     clearOnboardingDraft(),
     clearWorkoutSubstitutionPreferences(),
     clearStoredUnitsPreference(),
+    clearPrescriptionSnapshotsForUser(uid),
     cleanupRestSessionArtifacts(),
   ]);
 

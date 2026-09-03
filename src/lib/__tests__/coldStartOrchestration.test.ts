@@ -50,6 +50,7 @@ function gate({
     // orchestration of an already-resolved subscription, not the brand-new
     // pending-Paywall case (covered in premiumGate.test.ts instead).
     commercialGateResolved: true,
+    workoutReadinessGate: 'ready',
   });
 }
 

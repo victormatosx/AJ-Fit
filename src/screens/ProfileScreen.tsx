@@ -5,16 +5,17 @@ import { useTranslation } from 'react-i18next';
 import { ScreenBg } from '../components/ui/ScreenBg';
 import { Display, Slash, MonoLabel } from '../components/ui/Display';
 import { Card } from '../components/ui/Card';
-import { SegBar } from '../components/ui/SegBar';
 import { Icon, IconName } from '../components/ui/Icon';
 import { OutlineNumber } from '../components/ui/OutlineNumber';
 import { ProfileAvatar } from '../components/ui/ProfileAvatar';
 import { SettingsSection } from '../components/ui/SettingsSection';
 import { SmartAlertsSection } from '../components/ui/SmartAlertsSection';
+import { EvolutionCard } from '../components/evolution/EvolutionCard';
 import { useTheme } from '../theme';
 import { useAuth } from '../state/AuthContext';
 import { useSubscription } from '../hooks/useSubscription';
 import { resolveSubscriptionCenterModel } from '../lib/subscriptionCenter';
+import type { EvolutionViewModel } from '../workoutEvolution/types';
 
 /** Provider ids come from Firebase Auth and MUST NOT be renamed here —
  *  translation happens at the label lookup, never on the id. */
@@ -29,11 +30,18 @@ export function ProfileScreen({
   onOpenEditProfile,
   onOpenSettings,
   onOpenSubscription,
+  onOpenMyPlan,
+  evolutionViewModel,
+  onOpenEvolution,
 }: {
   onOpenAssessment?: () => void;
   onOpenEditProfile?: () => void;
   onOpenSettings?: () => void;
   onOpenSubscription?: () => void;
+  onOpenMyPlan?: () => void;
+  /** Fase 5 — real Training Level/Cycle state; replaces the old hardcoded XP/level bar (docs product §57/§AP-AR). */
+  evolutionViewModel: EvolutionViewModel;
+  onOpenEvolution?: () => void;
 }) {
   const { t } = useTranslation('profile');
   const { theme } = useTheme();
@@ -128,25 +136,9 @@ export function ProfileScreen({
             </View>
           </View>
 
-          {/* level bar */}
+          {/* Real Training Level/Cycle — Fase 5 replaces the old hardcoded XP/level bar. */}
           <View style={{ paddingHorizontal: 22, paddingBottom: 16 }}>
-            <Card style={{ padding: 16 }}>
-              <View
-                style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}
-              >
-                <Slash>{t('level.title').toUpperCase()}</Slash>
-                <MonoLabel color={theme.colors.primaryEmphasis}>
-                  {t('level.xp', { xp: '2.450' }).toUpperCase()}
-                </MonoLabel>
-              </View>
-              <SegBar value={0.62} segs={16} />
-              <MonoLabel style={{ marginTop: 8 }}>
-                {t('level.toNext', {
-                  amount: '950',
-                  nextLevel: t('level.nextLevel'),
-                }).toUpperCase()}
-              </MonoLabel>
-            </Card>
+            <EvolutionCard viewModel={evolutionViewModel} onPress={onOpenEvolution} />
           </View>
 
           <SmartAlertsSection title={t('smartAlerts.title').toUpperCase()} items={[]} />
@@ -168,7 +160,7 @@ export function ProfileScreen({
               {
                 icon: 'target',
                 label: t('groups.goalsPlan.items.viewPlan'),
-                onPress: () => {},
+                onPress: onOpenMyPlan,
               },
             ]}
           />

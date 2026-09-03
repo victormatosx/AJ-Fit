@@ -13,18 +13,28 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { Icon } from '../components/ui/Icon';
 import { MonoLabel } from '../components/ui/Display';
+import { CtaButton } from '../components/ui/CtaButton';
 import { displayLineHeight } from '../theme/tokens';
 import { useTheme } from '../theme';
+import { useAppState } from '../state/AppState';
+import { logInfo, logWarn } from '../lib/logger';
+import { prepareWorkoutProgramLocally } from '../services/workoutPrograms';
+import type { PrescriptionResult } from '../workoutPrescription/types';
+import { onboardingGenerationFailurePresentation } from '../workoutPrescription/uiOutcome';
 
 export function AnalyzingScreen({
   name,
   onDone,
+  onReviewAnswers,
 }: {
   name?: string | null;
   onDone: () => void;
+  onReviewAnswers: () => void;
 }) {
   const { theme } = useTheme();
   const { t } = useTranslation('onboarding');
+  const { t: tPlan } = useTranslation('plan');
+  const { quiz, setPreparedWorkoutProgram } = useAppState();
   const [progress, setProgress] = useState(0);
   const steps = [
     t('analyzing.steps.profile'),
@@ -33,6 +43,64 @@ export function AnalyzingScreen({
     t('analyzing.steps.periodization'),
     t('analyzing.steps.plan'),
   ];
+
+  // Phase 3, Part D — the REAL Prescription Engine now runs here (pre-auth,
+  // local sources — `prepareWorkoutProgramLocally`), not just a timed
+  // animation. `attempt` bumps to let the retry button re-run the exact
+  // same computation after a failure (deterministic — see
+  // `prepareWorkoutProgram`'s doc comment — a retry can only ever help if
+  // the previous attempt's cause was a genuine transient anomaly, but it's
+  // a safe, harmless escape hatch either way; the user is never stuck on
+  // a dead screen).
+  const [attempt, setAttempt] = useState(0);
+  const [computeStatus, setComputeStatus] = useState<'pending' | 'success' | 'error'>('pending');
+  const [failureStatus, setFailureStatus] = useState<Exclude<PrescriptionResult['status'], 'SUCCESS'> | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const startedAt = Date.now();
+    // Never logs full questionnaire answers — only technical identifiers.
+    logInfo('onboarding', 'onboarding_workout_generation_started', { attempt });
+    prepareWorkoutProgramLocally(quiz)
+      .then((result) => {
+        if (cancelled) return;
+        const durationMs = Date.now() - startedAt;
+        if (result.status === 'SUCCESS') {
+          setPreparedWorkoutProgram(result);
+          logInfo('onboarding', 'onboarding_workout_generation_succeeded', {
+            templateId: result.templateId,
+            planId: result.plan.planId,
+            durationMs,
+            status: result.status,
+          });
+          setComputeStatus('success');
+        } else {
+          setPreparedWorkoutProgram(null);
+          setFailureStatus(result.status);
+          logWarn('onboarding', 'onboarding_workout_generation_failed', {
+            durationMs,
+            status: result.status,
+            reasonCode: result.reasonCodes[0],
+          });
+          setComputeStatus('error');
+        }
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        setPreparedWorkoutProgram(null);
+        setFailureStatus(null);
+        logWarn('onboarding', 'onboarding_workout_generation_failed', {
+          durationMs: Date.now() - startedAt,
+          status: 'EXCEPTION',
+          errorClass: error instanceof Error ? error.constructor.name : typeof error,
+        });
+        setComputeStatus('error');
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `quiz` is intentionally captured once per `attempt`, not re-run on every keystroke-level change
+  }, [attempt]);
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -45,24 +113,37 @@ export function AnalyzingScreen({
       });
     }, 52);
     return () => clearInterval(id);
-  }, []);
+  }, [attempt]);
 
   useEffect(() => {
-    if (progress >= 100) {
-      const t = setTimeout(onDone, 700);
-      return () => clearTimeout(t);
+    // Never advances on a timer alone (existing UX minimum) AND never
+    // advances without the real result (Part D's "não avance... enquanto o
+    // resultado obrigatório ainda não estiver pronto"). Whichever finishes
+    // last is what gates `onDone`.
+    if (progress >= 100 && computeStatus === 'success') {
+      const id = setTimeout(onDone, 700);
+      return () => clearTimeout(id);
     }
-  }, [progress]);
-
-  // Active step index: 0..steps.length-1. Clamped so the final step stays
-  // "active" until onDone fires (never enters the "done" state itself).
-  const stepFloat = (progress / 100) * steps.length;
-  const activeIdx = Math.min(steps.length - 1, Math.floor(stepFloat));
+  }, [progress, computeStatus]);
 
   // Pulsing ambient glow inside the ring — mirrors @keyframes aj2-pulse.
   // Range boosted from 0.55↔1 to 0.75↔1 so the LED never dims to a faint blur.
+  //
+  // MUST be declared before the `computeStatus === 'error'` early return
+  // below (Rules of Hooks: every hook this component calls must run on
+  // every render, in the same order). It used to sit after that return,
+  // which worked only while `computeStatus` was never anything but
+  // 'pending'/'success' — the moment a real generation failure flipped it to
+  // 'error' for the first time, this component called two fewer hooks than
+  // the previous render and React threw "Rendered fewer hooks than
+  // expected", crashing the whole tree (no error boundary exists anywhere in
+  // the app) — which is what actually destroyed the onboarding funnel, not
+  // the generation failure itself. The effect body still no-ops while
+  // `computeStatus === 'error'` (nothing on screen uses `pulse` then), so
+  // behavior for 'pending'/'success' is unchanged.
   const pulse = useRef(new Animated.Value(0.75)).current;
   useEffect(() => {
+    if (computeStatus === 'error') return;
     const loop = Animated.loop(
       Animated.sequence([
         Animated.timing(pulse, {
@@ -81,7 +162,56 @@ export function AnalyzingScreen({
     );
     loop.start();
     return () => loop.stop();
-  }, [pulse]);
+  }, [pulse, computeStatus]);
+
+  if (computeStatus === 'error') {
+    const presentation = failureStatus
+      ? onboardingGenerationFailurePresentation(failureStatus)
+      : { outcomeKey: 'technicalError' as const, action: 'retry' as const };
+    return (
+      <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
+        <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
+          <View style={{ flex: 1, paddingHorizontal: 24, justifyContent: 'center', gap: 16 }}>
+            <Text
+              style={{
+                fontFamily: theme.fonts.display,
+                fontSize: 26,
+                lineHeight: displayLineHeight(26),
+                color: theme.colors.textPrimary,
+                textAlign: 'center',
+              }}
+            >
+              {tPlan(`prescription.${presentation.outcomeKey}.title`)}
+            </Text>
+            <Text style={{ fontFamily: theme.fonts.ui, fontSize: 14, color: theme.colors.textMuted, textAlign: 'center' }}>
+              {tPlan(`prescription.${presentation.outcomeKey}.body`)}
+            </Text>
+            <CtaButton
+              onPress={presentation.action === 'retry'
+                ? () => {
+                    setProgress(0);
+                    setFailureStatus(null);
+                    setComputeStatus('pending');
+                    setAttempt((a) => a + 1);
+                  }
+                : onReviewAnswers}
+            >
+              <Text style={{ color: theme.colors.primaryForeground, fontFamily: theme.fonts.display, fontSize: 16 }}>
+                {presentation.action === 'retry'
+                  ? t('analyzing.error.retry')
+                  : t('analyzing.error.reviewAnswers')}
+              </Text>
+            </CtaButton>
+          </View>
+        </SafeAreaView>
+      </View>
+    );
+  }
+
+  // Active step index: 0..steps.length-1. Clamped so the final step stays
+  // "active" until onDone fires (never enters the "done" state itself).
+  const stepFloat = (progress / 100) * steps.length;
+  const activeIdx = Math.min(steps.length - 1, Math.floor(stepFloat));
 
   // Ring geometry — bumped up ~20% from the CSS mock (184 → 224) per user feedback.
   const RING_SIZE = 224;

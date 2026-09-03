@@ -2,7 +2,8 @@
   "header": {
     "eyebrow": "Your first phase",
     "titleWithName": "{{name}}, your first phase is ready.",
-    "titleNoName": "Your first phase is ready."
+    "titleNoName": "Your first phase is ready.",
+    "reviewTitle": "Let's review your next step."
   },
   "summary": {
     "title": "Your strategy",
@@ -22,6 +23,14 @@
   "journey": {
     "title": "This is your first phase.",
     "body": "Your journey continues as you log your workouts and progress."
+  },
+  "prescription": {
+    "success": { "title": "Your base is selected.", "body": "{{templateId}} · {{split}}. Your final sessions are versioned and ready." },
+    "requiresClearance": { "title": "More information is needed", "body": "We identified a condition that needs extra care before safe personalization. Follow your responsible professional's guidance and update your answers when no unrepresented restrictions remain." },
+    "blocked": { "title": "Workout paused for safety", "body": "Your current answers activate a documented safety stop. AJ Fit will not prescribe a workout in this state." },
+    "needsQuestionnaireUpdate": { "title": "Update your information", "body": "Some answers required for safe selection are missing or come from an older questionnaire." },
+    "unavailable": { "title": "Workout not available yet", "body": "A safe composition rule required by your answers has not been defined. No generic workout was generated." },
+    "technicalError": { "title": "We couldn't prepare your workout", "body": "Something went wrong generating your workout. Please try again shortly." }
   },
   "cta": {
     "label": "I want to start",

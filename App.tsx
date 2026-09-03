@@ -48,13 +48,20 @@ import { reconcileLanguageOnLoad } from './src/i18n/syncLanguage';
 import { reconcileUnitsOnLoad } from './src/units/syncUnits';
 import { UnitsProvider } from './src/state/UnitsContext';
 import { needsPreferencesReconciliation } from './src/lib/preferencesReconciliation';
+import { useWorkoutReadinessGate } from './src/workoutPrescription/useWorkoutReadinessGate';
 import {
   cleanupPhotoVaultShareFiles,
   cleanupPhotoVaultTempFiles,
 } from './src/services/photoVaultFileCrypto';
 import { logPhotoVaultIssue } from './src/lib/photoVaultErrors';
 import { logInfo } from './src/lib/logger';
+import { configureWorkoutLifecycleTelemetry } from './src/workoutLifecycle/telemetryProvider';
 import { DeepLinkProvider } from './src/state/DeepLinkContext';
+
+// Operational lifecycle events are delivered to an authenticated/App-Check
+// callable and then Cloud Logging. Installation is synchronous; delivery is
+// always best-effort and never blocks a domain transition.
+configureWorkoutLifecycleTelemetry();
 
 /**
  * Configures the RevenueCat SDK at module evaluation time — the same
@@ -294,6 +301,18 @@ function RootNavigator() {
   // opens regardless of `isPremium` (Fase 1 limited-mode rollout) — the
   // entitlement keeps flowing through `useSubscription()` for capability
   // gating inside AppShell in later phases, it just no longer blocks entry.
+  // First-app-entry readiness (audit: onboarding→Home lifecycle) — starts as
+  // soon as auth + questionnaire are resolved, so it overlaps with the
+  // user's time on Paywall instead of adding a new wait after it. See
+  // `useWorkoutReadinessGate`'s doc comment: for an established account
+  // (program already exists) this resolves in one fast read; only a
+  // genuinely first-time account waits on it, and it never blocks forever.
+  const workoutReadinessGate = useWorkoutReadinessGate({
+    enabled: Boolean(user) && questionnaireResolution === 'found',
+    uid: user?.uid ?? null,
+    questionnaire,
+  });
+
   const resolvedScreen = resolvePremiumGate({
     requestedScreen: screen,
     authInitializing: initializing,
@@ -306,6 +325,7 @@ function RootNavigator() {
     subscriptionConfigured,
     isPremium,
     commercialGateResolved,
+    workoutReadinessGate,
   });
 
   useEffect(() => {
@@ -324,6 +344,7 @@ function RootNavigator() {
       subscriptionStatus,
       isPremium,
       commercialGateResolved,
+      workoutReadinessGate,
       // Diagnostic-only, never read by the gate — see
       // `explainPremiumGateBlockers`'s doc comment.
       blockingReasons: explainPremiumGateBlockers({
@@ -338,6 +359,7 @@ function RootNavigator() {
         subscriptionConfigured,
         isPremium,
         commercialGateResolved,
+        workoutReadinessGate,
       }),
     });
   }, [
@@ -354,6 +376,7 @@ function RootNavigator() {
     subscriptionStatus,
     isPremium,
     commercialGateResolved,
+    workoutReadinessGate,
   ]);
 
   // Keep the requested screen aligned with the centrally resolved route so
@@ -426,6 +449,14 @@ function RootNavigator() {
             // social login that never had one). Persist it and let the
             // central gate above choose app/paywall once `questionnaire`
             // reloads — this screen never navigates itself in that case.
+            // Deliberately no `generateAndPersistWorkoutProgram` call here:
+            // once the gate opens AppShell (auth + questionnaire +
+            // commercial gate all resolved), `useWorkoutPrescription`'s
+            // automatic reconciliation generates the first program itself —
+            // a single source of truth instead of a second, premature
+            // attempt racing it here (and, before, an unhandled crash from
+            // this attempt used to abort BEFORE `refreshProfile()`, leaving
+            // the freshly-saved questionnaire invisible to the gate).
             if (!user || savingQuestionnaire) return;
             setSavingQuestionnaire(true);
             try {
@@ -561,10 +592,9 @@ function AppContent() {
                         switches; wraps the navigator so its AppState listener is
                         mounted for the whole session. */}
                     <PhotoVaultProvider>
-                      {/* Mounted above the visual/bootstrap gate so cold-start and
-                          foreground URLs are retained until RootNavigator is
-                          allowed to mount AppShell. It never changes root routing
-                          or authorization state itself. */}
+                      {/* Retains cold-start and foreground URLs until the guarded
+                          navigator can consume them. It never changes auth,
+                          prescription or schedule authority. */}
                       <DeepLinkProvider>
                         <StatusBar style={theme.statusBar.style} />
                         <NativeThemeSync />

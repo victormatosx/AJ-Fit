@@ -47,6 +47,20 @@ import {
   type QuestionnaireResolution,
 } from '../lib/profileLoadState';
 import { createSingleFlight } from '../lib/singleFlight';
+import { normalizeWeekdays, trainingDaysValid } from '../lib/questionnaireSchema';
+import {
+  persistPreparedWorkoutProgram,
+  type PrepareWorkoutProgramResult,
+} from '../services/workoutPrograms';
+import { ensureScheduleConfigFromQuestionnaire } from '../services/workoutSchedule';
+
+function deviceTimezone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  } catch {
+    return 'UTC';
+  }
+}
 
 type AuthCtx = {
   /** Current authenticated user (Firebase Auth), or null when signed out. */
@@ -74,23 +88,40 @@ type AuthCtx = {
     password: string,
     name: string,
     answers: QuestionnaireAnswers,
+    /**
+     * Phase 3 — the Analysis screen's pre-auth `prepareWorkoutProgram`
+     * result (the onboarding funnel's own `preparedWorkoutProgram` state),
+     * if it produced one. Optional and never trusted blindly —
+     * `persistPreparedWorkoutProgram` re-validates it against the
+     * questionnaire this call persists before using it for anything.
+     */
+    prepared?: PrepareWorkoutProgramResult | null,
   ) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
-  /** Sign in with a social provider (may throw AccountLinkingRequiredError). */
+  /**
+   * Sign in with a social provider (may throw AccountLinkingRequiredError).
+   * `name` is only ever used the ONE time this actually provisions a brand
+   * new user document (`ensureUserProvisioned` never overwrites an existing
+   * one) — same onboarding name `signUp` already threads through for the
+   * email/password path.
+   */
   signInWithProvider: (
     provider: SocialProvider,
     answers?: QuestionnaireAnswers | null,
+    name?: string | null,
   ) => Promise<void>;
   /** Complete a pending link using the existing email/password account. */
   completeLinkingWithPassword: (
     email: string,
     password: string,
     answers?: QuestionnaireAnswers | null,
+    name?: string | null,
   ) => Promise<void>;
   /** Complete a pending link using another social provider. */
   completeLinkingWithProvider: (
     provider: SocialProvider,
     answers?: QuestionnaireAnswers | null,
+    name?: string | null,
   ) => Promise<void>;
   reset: (email: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -262,6 +293,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
+      // Every identity-mutating operation (`signUp`/`signIn`/social sign-in/
+      // linking) runs inside `identityOperationFlight` AND already calls its
+      // OWN authoritative `loadUserState` once it has finished whatever this
+      // identity needed first (`signUp` specifically: `provisionNewUser`
+      // writing the user doc + questionnaire). Firebase fires this listener
+      // the instant Auth creates/signs in the user — independently, and
+      // typically BEFORE that provisioning finishes. A read at that exact
+      // moment is not wrong, it is just PREMATURE: it genuinely finds no
+      // questionnaire yet and — correctly, by `profileLoadState.ts`'s own
+      // rules — commits `questionnaireResolution: 'not_found'`, which
+      // `resolvePremiumGate` (accurately, given what it was told) routes to
+      // `'onboardingFunnel'`. That committed-then-corrected state is exactly
+      // what produced a real ~2-3s flash of the questionnaire right after
+      // signup, before the explicit flow's own load corrected it to
+      // `'found'`. Skipping this listener's redundant read while an
+      // identity operation owns this uid removes the premature read
+      // entirely — `questionnaireResolution` simply stays at whatever it
+      // already was (`'unknown'` on a fresh signup, never `'not_found'`)
+      // until the owning operation's own load commits the real answer.
+      // `resolvePremiumGate` treats anything but `'found'`/`'not_found'` as
+      // neutral (renders the loading state, not onboarding), so this is not
+      // a timeout/sleep/hidden-loading-spinner workaround — it is simply
+      // never performing the read that was wrong to begin with. A cold
+      // start with an already-persisted session (the common case this
+      // listener exists for) has no identity operation in flight at all —
+      // `isRunning()` is `false` — and behaves exactly as before.
+      if (identityOperationFlight.isRunning()) {
+        setInitializing(false);
+        return;
+      }
+
       // `loadUserState` marks profileLoading synchronously. Releasing
       // `initializing` immediately after starting it lets SubscriptionContext
       // synchronize the same UID with RevenueCat in parallel with the two
@@ -295,8 +357,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       linkedProviders: user ? getLinkedProviders(user) : [],
       initializing,
       profileLoading: loadState.loading,
-      signUp: (email, password, name, answers) =>
+      signUp: (email, password, name, answers, prepared) =>
         identityOperationFlight.run(async () => {
+          // Timing instrumentation (audit: onboarding→Home lifecycle report,
+          // item 9) — never logs questionnaire content, only durations/ids/
+          // status, matching the pattern `onboarding_workout_generation_*`
+          // already established in AnalyzingScreen.
+          const signUpStartedAt = Date.now();
           // Single, authoritative creation flow — runs exactly once per account.
           const newUser = await signUpWithEmail(email, password, name);
           // Start delivery immediately after Firebase Auth creates the password
@@ -306,7 +373,78 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             .then(() => null)
             .catch((error: unknown) => error);
           try {
-            await provisionNewUser(newUser, { name, answers });
+            const provisionStartedAt = Date.now();
+            const questionnaireId = await provisionNewUser(newUser, { name, answers });
+            logInfo('auth', 'signup_provision_completed', {
+              durationMs: Date.now() - provisionStartedAt,
+              found: Boolean(questionnaireId),
+            });
+            // Phase 3: the Analysis screen already computed (or attempted to
+            // compute) the plan pre-auth — `persistPreparedWorkoutProgram`
+            // validates it against the questionnaire just written above
+            // (fingerprint + engine/template versions) and, when it checks
+            // out, persists it directly instead of recomputing; on any
+            // mismatch/missing `prepared` it transparently falls back to the
+            // full authoritative Firestore-backed computation
+            // (`generateAndPersistWorkoutProgram`), same as before Phase 3.
+            // `scheduleConfig` is bridged from the same questionnaire's
+            // `trainingDays` right after, reusing Phase 1's
+            // `ensureScheduleConfigFromQuestionnaire` unchanged — by the time
+            // this try block finishes, an established account normally has
+            // both `workoutPrograms` AND `scheduleConfig` ready before ever
+            // reaching Paywall/Home. A failure in EITHER step is deliberately
+            // NON-FATAL to signup — `automatic_reconciliation` (Phase 1)
+            // remains the fallback that fills either gap the next time the
+            // app opens, exactly like a transient failure always could.
+            if (questionnaireId && answers) {
+              const persistStartedAt = Date.now();
+              let generatedPlanTrainingDays: NonNullable<QuestionnaireAnswers['trainingDays']> = [];
+              try {
+                const generation = await persistPreparedWorkoutProgram({
+                  uid: newUser.uid,
+                  questionnaireId,
+                  questionnaireVersion: 1,
+                  answers,
+                  prepared: prepared ?? null,
+                  source: 'onboarding',
+                });
+                logInfo('workout_program', 'onboarding_workout_program_persist_completed', {
+                  outcome: generation.status,
+                  usedPrepared: Boolean(prepared && prepared.status === 'SUCCESS'),
+                  durationMs: Date.now() - persistStartedAt,
+                });
+                if (generation.status === 'SUCCESS') {
+                  generatedPlanTrainingDays = generation.plan.weeklySchedule
+                    ?.filter((day) => day.state === 'TRAINING')
+                    .map((day) => day.weekday) ?? [];
+                }
+              } catch (error) {
+                logWarn('workout_program', 'onboarding_workout_program_persist_failed', {
+                  error,
+                  durationMs: Date.now() - persistStartedAt,
+                });
+              }
+              if (generatedPlanTrainingDays.length > 0 || trainingDaysValid(answers)) {
+                const scheduleStartedAt = Date.now();
+                try {
+                  await ensureScheduleConfigFromQuestionnaire(
+                    newUser.uid,
+                    generatedPlanTrainingDays.length > 0
+                      ? generatedPlanTrainingDays
+                      : normalizeWeekdays(answers.trainingDays ?? []),
+                    deviceTimezone(),
+                  );
+                  logInfo('workout_schedule', 'onboarding_schedule_config_completed', {
+                    durationMs: Date.now() - scheduleStartedAt,
+                  });
+                } catch (error) {
+                  logWarn('workout_schedule', 'onboarding_schedule_config_failed', {
+                    error,
+                    durationMs: Date.now() - scheduleStartedAt,
+                  });
+                }
+              }
+            }
             setUser(newUser);
             await loadUserState(newUser.uid); // authoritative post-write load
           } catch (err) {
@@ -317,6 +455,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // an explicit user tap on the verification screen.
           const sendError = await verificationError;
           if (sendError) throw sendError;
+          logInfo('auth', 'signup_completed', { durationMs: Date.now() - signUpStartedAt });
         }),
       signIn: (email, password) => identityOperationFlight.run(async () => {
         const authedUser = await signInWithEmail(email, password);
@@ -328,13 +467,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           throw toAuthError(err);
         }
       }),
-      signInWithProvider: (provider, answers) =>
+      signInWithProvider: (provider, answers, name) =>
         identityOperationFlight.run(async () => {
           // The credential sign-in triggers the auth-state listener; provisioning
           // stays here (explicit flow) and only creates the doc on first login.
           const authedUser = await socialSignIn(provider);
           try {
-            await ensureUserProvisioned(authedUser, { answers });
+            await ensureUserProvisioned(authedUser, { answers, name: name ?? undefined });
             setUser(authedUser);
             await loadUserState(authedUser.uid);
           } catch (err) {
@@ -342,11 +481,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             throw toAuthError(err);
           }
         }),
-      completeLinkingWithPassword: (email, password, answers) =>
+      completeLinkingWithPassword: (email, password, answers, name) =>
         identityOperationFlight.run(async () => {
           const linkedUser = await socialLinkPassword(email, password);
           try {
-            await ensureUserProvisioned(linkedUser, { answers });
+            await ensureUserProvisioned(linkedUser, { answers, name: name ?? undefined });
             setUser(linkedUser);
             await loadUserState(linkedUser.uid);
           } catch (err) {
@@ -354,11 +493,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             throw toAuthError(err);
           }
         }),
-      completeLinkingWithProvider: (provider, answers) =>
+      completeLinkingWithProvider: (provider, answers, name) =>
         identityOperationFlight.run(async () => {
           const linkedUser = await socialLinkProvider(provider);
           try {
-            await ensureUserProvisioned(linkedUser, { answers });
+            await ensureUserProvisioned(linkedUser, { answers, name: name ?? undefined });
             setUser(linkedUser);
             await loadUserState(linkedUser.uid);
           } catch (err) {

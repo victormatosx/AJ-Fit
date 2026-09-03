@@ -131,7 +131,13 @@
       "progress": "Creación de tu plan: {{progress}} por ciento"
     },
     "titleWithNameLine1": "Estamos estructurando",
-    "titleWithNameLine2": "tu camino, {{name}}."
+    "titleWithNameLine2": "tu camino, {{name}}.",
+    "error": {
+      "title": "No pudimos crear tu plan",
+      "body": "Algo salió mal al calcular tu entrenamiento. Puedes intentarlo de nuevo.",
+      "retry": "Intentar de nuevo",
+      "reviewAnswers": "Revisar respuestas"
+    }
   },
   "socialProof": {
     "eyebrow": "Prueba social",

@@ -55,6 +55,16 @@ describe('draft round-trip', () => {
 });
 
 describe('missing/corrupted/future-versioned draft', () => {
+  it('migrates legacy per-question pregnancy and postpartum cursors to grouped screens', async () => {
+    for (const [legacy, grouped] of [
+      ['pregnancyComplication', 'pregnancyCare'],
+      ['postpartumDeliveryType', 'postpartumContext'],
+    ]) {
+      localStore.set(ONBOARDING_DRAFT_STORAGE_KEY, JSON.stringify({ version: 1, currentStepId: legacy, answers: {} }));
+      await expect(readOnboardingDraft()).resolves.toMatchObject({ currentStepId: grouped });
+    }
+  });
+
   it('returns null when nothing is stored', async () => {
     await expect(readOnboardingDraft()).resolves.toBeNull();
   });

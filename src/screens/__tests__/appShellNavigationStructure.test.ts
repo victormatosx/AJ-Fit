@@ -22,7 +22,6 @@ const APP_SHELL_CODE = APP_SHELL.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.
 
 /** Boolean-flag secondary screens now covered by PersistentScreen (docs/23 §6). */
 const MIGRATED_FLAGS = [
-  'showCal',
   'showAssessment',
   'showSettings',
   'showSecurity',
@@ -90,7 +89,6 @@ describe('AppShell centralized prewarm queue', () => {
     const cases: Array<[string, string]> = [
       ["active={tab === 'progress'}", 'prewarm={prewarmed.PROGRESS}'],
       ["active={tab === 'profile'}", 'prewarm={prewarmed.PROFILE}'],
-      ['active={showCal}', 'prewarm={prewarmed.CONSISTENCY}'],
       ['active={showAssessment}', 'prewarm={prewarmed.ASSESSMENT}'],
       ['active={showSettings}', 'prewarm={prewarmed.SETTINGS}'],
       ['active={showSecurity}', 'prewarm={prewarmed.SECURITY}'],

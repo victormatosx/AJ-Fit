@@ -92,12 +92,15 @@ describe('Photo Vault backend foundation — Phase 3 structural guarantees', () 
       'adminSetPromoCodeActive',
       'adminUpdatePromoCode',
       'authorizePromoPurchase',
+      'authorizeWorkoutLifecycleMutation',
       'backendHealth',
       'cleanupPendingAccountDeletions',
       'cleanupPhotoVaultOrphans',
       'confirmCommercialGate',
       'createVault',
       'onAccountDeletionRequested',
+      'onTrustedWorkoutLifecycleEventCreated',
+      'recordWorkoutLifecycleTelemetry',
       'recoverVaultKey',
       'requestAccountDeletion',
       'revenueCatWebhook',
@@ -195,10 +198,12 @@ describe('Photo Vault backend foundation — Phase 3 structural guarantees', () 
     expect(source).not.toContain('randomBytes');
   });
 
-  it('enforces App Check on exactly the six approved mobile callables', () => {
+  it('enforces App Check on exactly the eight approved mobile callables', () => {
     const protectedDefinitions = [
       ['src/index.ts', 'validatePromoCode'],
       ['src/index.ts', 'authorizePromoPurchase'],
+      ['src/index.ts', 'recordWorkoutLifecycleTelemetry'],
+      ['src/index.ts', 'authorizeWorkoutLifecycleMutation'],
       ['src/photoVault/createVault.ts', 'createVault'],
       ['src/photoVault/recoverVaultKey.ts', 'recoverVaultKey'],
       ['src/billing/confirmCommercialGate.ts', 'confirmCommercialGate'],
@@ -225,7 +230,7 @@ describe('Photo Vault backend foundation — Phase 3 structural guarantees', () 
       'src/accountDeletion/reconciliation/scheduler.ts',
     ].map(readCode).join('\n');
 
-    expect(allEndpointSources.match(/enforceAppCheck\s*:\s*true/g)).toHaveLength(6);
+    expect(allEndpointSources.match(/enforceAppCheck\s*:\s*true/g)).toHaveLength(8);
     expect(allEndpointSources).not.toMatch(/consumeAppCheckToken\s*:\s*true/);
   });
 

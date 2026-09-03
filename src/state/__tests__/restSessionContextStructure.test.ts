@@ -16,12 +16,13 @@ describe('RestSessionProvider ownership and lifecycle', () => {
     expect(providerStart).toBeGreaterThan(-1);
     expect(providerStart).toBeLessThan(content);
     expect(content).toBeLessThan(providerEnd);
-    expect(appShell).toContain("{tab === 'workout' && (");
+    expect(appShell).toContain("{tab === 'workout'");
+    expect(appShell).toContain('<WorkoutScreen');
   });
 
   it('creates UUIDs through the already-installed Expo Crypto API', () => {
     expect(contextCode).toContain("import { randomUUID } from 'expo-crypto'");
-    expect(contextCode).toContain('ensureWorkoutSessionId(current, randomUUID)');
+    expect(contextCode).toContain('preferredId ?? randomUUID()');
     expect(contextCode).toContain('restId: randomUUID()');
   });
 
@@ -86,7 +87,7 @@ describe('WorkoutScreen temporal integration', () => {
   it('reconnects a remounted screen to the active rest exercise and set', () => {
     expect(workout).toContain('candidate.id === rest.exerciseId');
     expect(workout).toContain('{ [restingExerciseIndex]: rest.setIndex }');
-    expect(workout).toContain('rest ? { exId: rest.exerciseId, setIdx: rest.setIndex } : null');
+    expect(workout).toContain('exId: rest.exerciseId, exIdx: restingExerciseIndex, setIdx: rest.setIndex');
   });
 
   it('allows minimizing without ending the provider-owned workout session', () => {

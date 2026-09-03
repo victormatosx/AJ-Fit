@@ -1,23 +1,16 @@
 {
   "meta": {
-    "todayLine": "{{weekday}} · {{month}} {{day}} · Week {{currentWeek}}/{{totalWeeks}}"
+    "todayLine": "{{weekday}} · {{month}} {{day}}"
   },
   "greeting": {
     "casual": "Hey,"
-  },
-  "ticker": {
-    "streak": "Streak",
-    "weekVolume": "Week volume",
-    "benchPr": "Bench PR",
-    "consistency": "Consistency",
-    "nextLevel": "Next level",
-    "daysUnit": "days",
-    "nextLevelValue": "—{{days}} DAYS"
   },
   "todayCard": {
     "kicker": "Today's workout",
     "meta": "{{duration}} min · {{exercises}} exercises · ~{{kcal}} kcal",
     "start": "Start workout",
+    "review": "Review information",
+    "prescribedMeta": "{{sessions}} sessions/week · {{exercises}} exercises in this session",
     "confirm": {
       "title": "Start workout?",
       "question": "Do you want to start now",
@@ -28,19 +21,82 @@
       "accessibilityConfirmLocked": "Confirm workout start, Premium feature"
     }
   },
-  "consistency": {
-    "title": "Consistency · week",
-    "progressLabel": "{{done}}/{{total}}",
-    "restLabel": "Off",
-    "dayInitials": [
-      "S",
-      "M",
-      "T",
-      "W",
-      "T",
-      "F",
-      "S"
-    ]
+  "progression": {
+    "dismiss": "Got it",
+    "beginnerStage": {
+      "title": "Your workout evolved",
+      "body": "You've completed your adaptation phase. Upcoming workouts already reflect this evolution."
+    },
+    "rotated": {
+      "title": "Your program was renewed",
+      "body": "It's time to renew your training cycle. Upcoming workouts already reflect this update."
+    }
+  },
+  "schedule": {
+    "activeRecovery": {
+      "title": "Active recovery",
+      "body": "Today is for light movement and recovery, with no structured workout."
+    },
+    "restDay": {
+      "title": "Rest day",
+      "body": "Today isn't one of your training days."
+    },
+    "completedToday": {
+      "title": "Workout completed",
+      "body": "You've already completed today's workout."
+    },
+    "nextWorkout": {
+      "label": "Next workout",
+      "value": "{{weekday}} · {{session}}"
+    },
+    "setupRequired": {
+      "title": "Set up your training days",
+      "body": "Choose which days you usually train so we can organize your schedule."
+    },
+    "missedDecision": {
+      "title": "You missed your last workout",
+      "body": "No problem. How do you want to continue?",
+      "continueSequence": {
+        "title": "Continue sequence",
+        "subtitle": "Do the pending workout now"
+      },
+      "followSchedule": {
+        "title": "Follow schedule",
+        "subtitle": "Skip the missed workout and follow today's"
+      }
+    }
+  },
+  "prescription": {
+    "generate": "Generate my workout",
+    "generating": "Generating workout...",
+    "generatingState": {
+      "title": "Preparing your workout",
+      "body": "This only takes a moment."
+    },
+    "loadingState": {
+      "title": "Loading your workout",
+      "body": "Just a moment."
+    },
+    "requiresClearance": {
+      "title": "More information is needed",
+      "body": "We identified a condition that needs extra care before your workout can be personalized safely. Follow your responsible professional's guidance and update your answers when no unrepresented restrictions remain."
+    },
+    "blocked": {
+      "title": "Workout paused for safety",
+      "body": "Your current answers activate a documented safety stop. AJ Fit will not prescribe or start a workout in this state."
+    },
+    "needsQuestionnaireUpdate": {
+      "title": "Update your information",
+      "body": "Some answers required to select your workout safely are missing or from an older questionnaire."
+    },
+    "unavailable": {
+      "title": "Workout not available yet",
+      "body": "A safe composition rule required by your answers has not been defined yet. No generic workout was generated."
+    },
+    "technicalError": {
+      "title": "We couldn't prepare your workout",
+      "body": "Something went wrong generating your workout. Please try again shortly."
+    }
   },
   "progress": {
     "header": {
@@ -278,68 +334,10 @@
       "selectTab": "Show {{tab}} progress"
     }
   },
-  "monthlyConsistency": {
-    "title": "Monthly consistency",
-    "month": "July",
-    "monthYear": "{{month}} {{year}}",
-    "remainingTitle": "Left to complete the month",
-    "daysRemaining_one": "day",
-    "daysRemaining_other": "days",
-    "pendingWorkouts_one": "workout",
-    "pendingWorkouts_other": "workouts",
-    "progress": "Day {{current}} of {{total}} · {{done}} workouts completed",
-    "legend": {
-      "done": "Workout done",
-      "today": "Today",
-      "pending": "To do",
-      "missed": "Missed",
-      "rest": "Rest"
-    },
-    "accessibility": {
-      "back": "Back from monthly consistency"
-    }
-  },
-  "stats": {
-    "streak": {
-      "label": "Streak",
-      "unit": "days",
-      "note": "personal record: 21"
-    },
-    "volume": {
-      "label": "Volume",
-      "unit": "ton",
-      "note": "+8% vs last week"
-    }
-  },
-  "upcoming": {
-    "title": "Upcoming workouts",
-    "meta": "{{duration}} min · {{exercises}} exercises",
-    "items": {
-      "pull": {
-        "day": "Wed",
-        "name": "PULL — Back & Biceps",
-        "duration": 54,
-        "exercises": 7
-      },
-      "legs": {
-        "day": "Fri",
-        "name": "LEGS — Quads & Glutes",
-        "duration": 62,
-        "exercises": 9
-      },
-      "upper": {
-        "day": "Sat",
-        "name": "UPPER — Light push",
-        "duration": 45,
-        "exercises": 6
-      }
-    }
-  },
-  "mock": {
-    "today": {
-      "type": "Push",
-      "focus": "Chest & shoulder",
-      "name": "Push — Chest & Shoulder"
-    }
+  "consistencyUnavailable": {
+    "title": "Consistency history isn't available yet",
+    "body": "AJ Fit does not show a calendar until completed workout history can support it.",
+    "note": "No sample data is displayed",
+    "back": "Back"
   }
 }

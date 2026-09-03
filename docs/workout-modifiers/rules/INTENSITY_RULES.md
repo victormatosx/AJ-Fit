@@ -104,12 +104,10 @@ Não usar falha muscular como objetivo padrão.
 
 ### Beginner
 
-Possíveis efeitos:
-
--   esforço mais conservador;
--   maior margem da falha;
--   evitar técnicas avançadas;
--   descanso suficiente para repetir técnica.
+A V1 não modifica intensidade por experience. Beginner reduz somente a
+quantidade de exercícios na Week 1/2; cada item retido mantém a prescrição-base.
+Não há RIR, effort target ou controle de proximidade da falha no Prescription
+Engine. DR-002 foi substituído e DR-023 cancelado.
 
 ### Intermediate
 
@@ -117,8 +115,8 @@ Preserva dose-base na ausência de outras constraints.
 
 ### Advanced
 
-Pode permitir maior especificidade/intensidade quando a família
-autorizar.
+Preserva a intensidade-base. O nível avançado, sozinho, não aumenta intensidade
+nem autoriza técnicas; evolução futura pertence ao Progression Engine.
 
 ------------------------------------------------------------------------
 
@@ -236,9 +234,9 @@ pode reduzir impacto mantendo intensidade cardiovascular relativa.
 
 ------------------------------------------------------------------------
 
-## 17. Valores numéricos
+## 17. Valores numéricos fora da V1
 
-Este documento não fixa universalmente:
+O Prescription Engine V1 não calcula:
 
 -   RPE;
 -   RIR;
@@ -247,8 +245,8 @@ Este documento não fixa universalmente:
 -   velocidade;
 -   wattagem.
 
-Esses parâmetros deverão ser definidos apenas quando houver uma
-estratégia de produto clara e mensurável.
+Uma funcionalidade futura de execução/progressão pode tratá-los sem bloquear a
+seleção e personalização V1.
 
 ------------------------------------------------------------------------
 

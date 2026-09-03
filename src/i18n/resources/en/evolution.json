@@ -1,0 +1,102 @@
+{
+  "level": { "BEGINNER": "Beginner", "INTERMEDIATE": "Intermediate", "ADVANCED": "Advanced" },
+  "cycle": "Cycle {{number}}",
+  "activePrescription": "Active workout",
+  "careerLevel": "Earned level: {{level}}",
+  "state": {
+    "loading": "Loading your training cycle",
+    "error": "Your training cycle couldn't be loaded right now",
+    "unavailable": "Cycle progress is not available for this account yet",
+    "evaluationPaused": "Workout in progress"
+  },
+  "proximity": {
+    "BUILDING": "Building your foundation",
+    "ON_TRACK": "Building consistency",
+    "READY": "Your next evolution is available"
+  },
+  "adherence": {
+    "BELOW_TARGET": "Building consistency",
+    "GOOD": "Consistent frequency",
+    "HIGH": "Very consistent frequency"
+  },
+  "stats": {
+    "activeDays": "{{count}} active days",
+    "sessionsCompleted": "{{count}} valid workouts"
+  },
+  "unlock": {
+    "levelPromotionEyebrow": "NEW LEVEL UNLOCKED",
+    "cycleEvolutionEyebrow": "NEW CYCLE AVAILABLE",
+    "levelReadyCard": "A new level is available",
+    "cycleReadyCard": "Your next cycle is available",
+    "cycleTitle": "Cycle {{number}}",
+    "reasonHigh": "Your training frequency this cycle was exceptional.",
+    "reasonStandard": "You completed this cycle's criteria.",
+    "startCta": "START NEW WORKOUT",
+    "keepCta": "KEEP CURRENT WORKOUT",
+    "keepConsequence": "Your current workout stays active. This option will be offered again.",
+    "deferredStatus": "Your current workout is still active; the next one is already available.",
+    "readyAgainStatus": "Your next workout is still available.",
+    "deferredCurrentActive": "Your current workout remains active.",
+    "deferredAvailable": "The next workout can already be started.",
+    "secondDeferConsequence": "The next workout is available and will activate automatically when this period ends.",
+    "errorRetry": "This couldn't be completed. Review the current state and try again."
+  },
+  "motivationalRenewal": {
+    "eyebrow": "A NEW VERSION IS AVAILABLE",
+    "cardReady": "A new workout version is available",
+    "title": "Alternative version",
+    "body": "We prepared an alternative to your current workout. Your level and cycle stay the same.",
+    "cta": "USE NEW VERSION",
+    "keepCta": "KEEP CURRENT WORKOUT"
+  },
+  "auto": {
+    "card": {
+      "LEVEL_PROMOTION": "Your new level was applied",
+      "CYCLE_EVOLUTION": "Your next cycle was applied",
+      "MOTIVATIONAL_RENEWAL": "A new workout version was applied"
+    },
+    "eyebrow": {
+      "LEVEL_PROMOTION": "AUTOMATIC ACTIVATION · LEVEL",
+      "CYCLE_EVOLUTION": "AUTOMATIC ACTIVATION · CYCLE",
+      "MOTIVATIONAL_RENEWAL": "AUTOMATIC WORKOUT UPDATE"
+    },
+    "title": {
+      "LEVEL_PROMOTION": "Your new level is active",
+      "CYCLE_EVOLUTION": "Your next cycle is active",
+      "MOTIVATIONAL_RENEWAL": "A new version is active"
+    },
+    "body": {
+      "LEVEL_PROMOTION": "The evolution you earned activated automatically after the deferral period.",
+      "CYCLE_EVOLUTION": "The next cycle that was already available activated automatically after the deferral period.",
+      "MOTIVATIONAL_RENEWAL": "The available version activated automatically after the deferral period. This does not change your level or cycle."
+    },
+    "activeNow": "Now active: {{level}} · Cycle {{cycle}}",
+    "ackCta": "GOT IT"
+  },
+  "diff": {
+    "title": {
+      "level": "Changes for the new level",
+      "cycle": "Changes for the next cycle",
+      "renewal": "Changes in this version",
+      "auto": "What was applied"
+    },
+    "replacements": "{{count}} exercises replaced",
+    "added": "{{count}} exercises added",
+    "removed": "{{count}} exercises removed",
+    "reordered": "Order updated in {{count}} sessions",
+    "sets": "Sets changed for {{count}} exercises",
+    "reps": "Reps changed for {{count}} exercises",
+    "rest": "Rest timing changed for {{count}} exercises",
+    "frequencyChanged": "Weekly frequency: {{before}} → {{after}}",
+    "sessionCountChanged": "Program sessions: {{before}} → {{after}}",
+    "structureChanged": "The weekly structure changed",
+    "noObservableChange": "The prescription was updated with no visible structural changes"
+  },
+  "adaptation": {
+    "note": "Your workout was adjusted based on your latest information. Your level and cycle were preserved."
+  },
+  "accessibility": {
+    "openDetails": "Opens details about the available workout",
+    "close": "Close evolution details"
+  }
+}

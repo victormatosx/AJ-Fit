@@ -42,7 +42,7 @@ interface RestSessionContextValue {
   workoutSessionId: string | null;
   status: RestTimerState['status'];
   rest: ActiveRest | null;
-  beginWorkoutSession: () => string;
+  beginWorkoutSession: (executionId?: string) => string;
   endWorkoutSession: () => void;
   startRest: (input: StartRestInput) => ActiveRest;
   addSeconds: (seconds: number) => ActiveRest | null;
@@ -89,9 +89,10 @@ export function RestSessionProvider({ children }: { children: React.ReactNode })
     void clearRestSession();
   }, []);
 
-  const ensureSessionId = useCallback(() => {
+  const ensureSessionId = useCallback((executionId?: string) => {
     const current = workoutSessionIdRef.current;
-    const next = ensureWorkoutSessionId(current, randomUUID);
+    const preferredId = executionId?.trim() || null;
+    const next = ensureWorkoutSessionId(current, () => preferredId ?? randomUUID());
     if (next !== current) {
       workoutSessionIdRef.current = next;
       setWorkoutSessionId(next);
@@ -99,7 +100,10 @@ export function RestSessionProvider({ children }: { children: React.ReactNode })
     return next;
   }, []);
 
-  const beginWorkoutSession = useCallback(() => ensureSessionId(), [ensureSessionId]);
+  const beginWorkoutSession = useCallback(
+    (executionId?: string) => ensureSessionId(executionId),
+    [ensureSessionId],
+  );
 
   const endWorkoutSession = useCallback(() => {
     const current = timerStateRef.current;

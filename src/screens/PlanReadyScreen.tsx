@@ -11,6 +11,8 @@ import { displayLineHeight } from '../theme/tokens';
 import { useTheme } from '../theme';
 import { useAppState } from '../state/AppState';
 import { deriveTrainingDaySlots } from '../lib/planDerivation';
+import { generateWorkoutPrescription } from '../workoutPrescription/engine';
+import { prescriptionOutcomeKey } from '../workoutPrescription/uiOutcome';
 
 const DAY_ORDER = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
 
@@ -33,13 +35,17 @@ export function PlanReadyScreen({
   const { theme } = useTheme();
   const { t } = useTranslation(['plan', 'quiz']);
   const { quiz } = useAppState();
-  const goalKey = quiz.goal ?? 'hyper';
-  const levelKey = quiz.level ?? 'int';
+  const goalKey = quiz.goal ?? 'gain_muscle';
+  const levelKey = quiz.level ?? 'intermediate';
   const days = quiz.days || 4;
   const durationMinutes = quiz.duration ?? '60';
+  const prescription = generateWorkoutPrescription(quiz);
+  const prescriptionCopyKey = prescription.status === 'SUCCESS'
+    ? 'success'
+    : prescriptionOutcomeKey(prescription.status);
 
-  const goalLabel = t(`quiz:goal.options.${goalKey}.label` as 'quiz:goal.options.hyper.label');
-  const levelLabel = t(`quiz:level.options.${levelKey}.label` as 'quiz:level.options.beg.label');
+  const goalLabel = t(`quiz:goal.options.${goalKey}.label` as 'quiz:goal.options.gain_muscle.label');
+  const levelLabel = t(`quiz:level.options.${levelKey}.label` as 'quiz:level.options.intermediate.label');
   const trainingSlots = deriveTrainingDaySlots(days);
 
   return (
@@ -75,7 +81,9 @@ export function PlanReadyScreen({
                 transform: [{ skewX: '-8deg' }],
               }}
             >
-              {name ? t('plan:header.titleWithName', { name }) : t('plan:header.titleNoName')}
+              {prescription.status === 'SUCCESS'
+                ? (name ? t('plan:header.titleWithName', { name }) : t('plan:header.titleNoName'))
+                : t('plan:header.reviewTitle')}
             </Text>
             <Text
               style={{
@@ -161,7 +169,7 @@ export function PlanReadyScreen({
                   color: theme.colors.textPrimary,
                 }}
               >
-                {t('plan:journey.title')}
+                {t(`plan:prescription.${prescriptionCopyKey}.title`)}
               </Text>
               <Text
                 style={{
@@ -172,7 +180,10 @@ export function PlanReadyScreen({
                   color: theme.colors.textMuted,
                 }}
               >
-                {t('plan:journey.body')}
+                {t(`plan:prescription.${prescriptionCopyKey}.body`, {
+                  templateId: prescription.status === 'SUCCESS' ? prescription.plan.templateId : '',
+                  split: prescription.status === 'SUCCESS' ? prescription.plan.split : '',
+                })}
               </Text>
             </View>
           </RiseIn>

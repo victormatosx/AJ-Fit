@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleProp, ViewStyle, Animated, Image, ImageStyle, StyleSheet } from 'react-native';
+import { useEventListener } from 'expo';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { useTheme } from '../../theme';
+import { logWarn } from '../../lib/logger';
+import { EXERCISE_FALLBACK_VIDEO_ID } from '../../data/exerciseFallbackVideoMap';
+import type { ExerciseExecution } from '../../types/exercise';
 
 const DB_BASE = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises';
 
@@ -23,39 +27,118 @@ type Props = {
   aspectRatio?: number;
   radius?: number;
   style?: StyleProp<ViewStyle>;
+  /**
+   * The exercise's own admin-registered video (Firestore `exercises/{id}
+   * .execution.videos`), when the caller has one loaded — see
+   * `useExerciseExecutionMedia`. Takes priority over every fallback below;
+   * an own video for the requested orientation must NEVER be replaced by
+   * `LOCAL_VIDEOS` or the free-exercise-db frames.
+   */
+  ownVideo?: ExerciseExecution['videos'];
+  /**
+   * True while the caller's own-video lookup (`useExerciseExecutionMedia`)
+   * hasn't resolved yet for this exercise. MUST be passed whenever `ownVideo`
+   * comes from that hook — without it, `ownVideo` being `undefined` is
+   * indistinguishable from "confirmed no own video", and this component
+   * falls straight to the fallback library (`LOCAL_VIDEOS`/free-exercise-db)
+   * for the brief window before the real lookup lands, flashing the wrong
+   * demo on screen even for an exercise that DOES have an own video (real
+   * bug this prop fixes). Defaults to `false` — safe for any caller that
+   * doesn't use the hook (`ownVideo` always fully known synchronously).
+   */
+  ownVideoLoading?: boolean;
 };
 
 /**
- * Renders a looping local demo video for exercises in `LOCAL_VIDEOS`.
- * Otherwise falls back to a two-frame cross-fade of a free-exercise-db demo
- * (start ↔ end), or a labeled placeholder on load error or missing id.
+ * Priority: (1) the exercise's own registered video (`ownVideo`, Firestore/
+ * admin), (2) a local demo video in `LOCAL_VIDEOS`, (3) a two-frame
+ * cross-fade of a free-exercise-db demo (start ↔ end), (4) a labeled
+ * "unavailable" placeholder on load error or missing id. (2)+(3) together
+ * are the fallback library — used whenever there's no own video, never
+ * instead of one. While `ownVideoLoading` is true and no source has
+ * resolved yet, renders neither (3) nor (4) — a blank frame instead, so the
+ * fallback library never flashes ahead of an own video that's still loading.
  */
-export function ExerciseGif({ id, name, height, aspectRatio, radius = 16, style }: Props) {
+export function ExerciseGif({ id, name, height, aspectRatio, radius = 16, style, ownVideo, ownVideoLoading = false }: Props) {
   const { theme } = useTheme();
   const [failed, setFailed] = useState(false);
   const opacity = useRef(new Animated.Value(0)).current;
   const showingSecond = useRef(false);
 
-  // Portrait slots (9:16 fullscreen modal) get the em-pé take; every other
-  // slot (the wide banner) gets the deitado take.
+  // Portrait slots (9:16 fullscreen modal) get the em-pé/vertical take;
+  // every other slot (the wide banner) gets the deitado/horizontal take.
   const isPortrait = !!aspectRatio && aspectRatio < 1;
+  const ownVideoForOrientationRaw = isPortrait ? ownVideo?.vertical : ownVideo?.horizontal;
   const localVideos = id ? LOCAL_VIDEOS[id] : undefined;
-  const localSource = localVideos ? (isPortrait ? localVideos.portrait : localVideos.landscape) : null;
+  const localSourceRaw = localVideos ? (isPortrait ? localVideos.portrait : localVideos.landscape) : null;
+
+  // A source that fails to actually PLAY (wrong/unsupported format, broken
+  // URL, network error — `statusChange`'s `'error'` status below) must fall
+  // through to the next priority tier instead of leaving a permanently
+  // blank/black player — `resolvedSource` being truthy previously meant
+  // "we picked a source", never "it actually loaded". Scoped to exactly
+  // this (id, own-video URL, orientation) combination, via `identityKey`, so
+  // switching to a different exercise/orientation always gets a fresh
+  // attempt — a failure never sticks around and silently hides a LATER,
+  // perfectly playable video.
+  const identityKey = `${id ?? ''}|${ownVideoForOrientationRaw?.url ?? ''}|${isPortrait}`;
+  const [failure, setFailure] = useState<{ key: string; ownFailed: boolean; localFailed: boolean }>({
+    key: '',
+    ownFailed: false,
+    localFailed: false,
+  });
+  const { ownFailed, localFailed } = failure.key === identityKey
+    ? failure
+    : { ownFailed: false, localFailed: false };
+
+  const ownVideoForOrientation = ownFailed ? undefined : ownVideoForOrientationRaw;
+  const localSource = localFailed ? null : localSourceRaw;
+  const resolvedSource = ownVideoForOrientation ? ownVideoForOrientation.url : localSource;
+
+  // Fallback library (3) — `id` is OUR catalog id, never a free-exercise-db
+  // id by construction (see exerciseFallbackVideoMap.ts's doc comment for
+  // why). Falls back to `id` itself when unmapped so a coincidental direct
+  // match (or a future id that happens to already align) still works —
+  // harmless either way, since an unresolvable path just 404s into the
+  // existing `onError` → `failed` placeholder below, same as before this
+  // map existed.
+  const fallbackVideoId = id ? (EXERCISE_FALLBACK_VIDEO_ID[id] ?? id) : null;
 
   // `setup` runs once, synchronously, right after this exact player is
   // constructed — unlike a separate effect keyed on `player`, it can't fire
   // after `useVideoPlayer` has already swapped/released the native object
-  // when `localSource` changes (that caused a NativeSharedObjectNotFound
+  // when `resolvedSource` changes (that caused a NativeSharedObjectNotFound
   // crash from a stale `player.pause()` call).
-  const player = useVideoPlayer(localSource, (p) => {
-    if (!localSource) return;
+  const player = useVideoPlayer(resolvedSource, (p) => {
+    if (!resolvedSource) return;
     p.loop = true;
     p.muted = true;
     p.play();
   });
 
+  // `player` gets a fresh identity every time `resolvedSource` changes
+  // (see above), so this always listens on the player actually attempting
+  // THIS render's `resolvedSource` — no stale-closure risk despite
+  // `useEventListener` only re-subscribing on emitter identity change.
+  useEventListener(player, 'statusChange', ({ status, error }) => {
+    if (status !== 'error') return;
+    logWarn('workout', 'exercise_video_playback_failed', {
+      exerciseId: id ?? undefined,
+      tier: ownVideoForOrientation ? 'own' : localSource ? 'local' : 'unknown',
+      errorMessage: error?.message,
+    });
+    setFailure((current) => {
+      const base = current.key === identityKey ? current : { key: identityKey, ownFailed: false, localFailed: false };
+      if (ownVideoForOrientation) return { ...base, key: identityKey, ownFailed: true };
+      if (localSource) return { ...base, key: identityKey, localFailed: true };
+      return base;
+    });
+  });
+
   useEffect(() => {
-    if (localSource) return;
+    // Also holds off while `ownVideoLoading` — no point animating a
+    // crossfade this render won't even show (see the render branch below).
+    if (resolvedSource || ownVideoLoading) return;
     setFailed(false);
     opacity.setValue(0);
     showingSecond.current = false;
@@ -68,7 +151,7 @@ export function ExerciseGif({ id, name, height, aspectRatio, radius = 16, style 
       }).start();
     }, 760);
     return () => clearInterval(interval);
-  }, [id, opacity, localSource]);
+  }, [id, opacity, resolvedSource, ownVideoLoading]);
 
   const sizeStyle: ViewStyle = aspectRatio
     ? { aspectRatio }
@@ -85,7 +168,7 @@ export function ExerciseGif({ id, name, height, aspectRatio, radius = 16, style 
     style,
   ];
 
-  if (localSource) {
+  if (resolvedSource) {
     return (
       <View style={wrapper}>
         <VideoView
@@ -98,6 +181,15 @@ export function ExerciseGif({ id, name, height, aspectRatio, radius = 16, style 
         />
       </View>
     );
+  }
+
+  // No source resolved yet AND we don't yet know whether an own video
+  // exists — render blank (just the background) rather than the fallback
+  // library, so it never flashes ahead of an own video that's about to
+  // arrive. Once `ownVideoLoading` clears, this re-renders straight into
+  // either the video above or the real fallback below — never both.
+  if (ownVideoLoading) {
+    return <View style={wrapper} />;
   }
 
   if (failed || !id) {
@@ -144,12 +236,12 @@ export function ExerciseGif({ id, name, height, aspectRatio, radius = 16, style 
         }}
       />
       <Image
-        source={{ uri: `${DB_BASE}/${id}/0.jpg` }}
+        source={{ uri: `${DB_BASE}/${fallbackVideoId}/0.jpg` }}
         onError={() => setFailed(true)}
         style={imgStyle}
       />
       <Animated.Image
-        source={{ uri: `${DB_BASE}/${id}/1.jpg` }}
+        source={{ uri: `${DB_BASE}/${fallbackVideoId}/1.jpg` }}
         onError={() => setFailed(true)}
         style={[imgStyle, { opacity }]}
       />
