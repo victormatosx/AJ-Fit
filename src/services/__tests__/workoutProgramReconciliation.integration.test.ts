@@ -43,6 +43,8 @@ vi.mock('../../lib/firebase', () => ({
 }));
 
 import { generateAndPersistWorkoutProgram } from '../workoutPrograms';
+import { enableWorkoutLifecycleRollout } from './workoutLifecycleRolloutFixture';
+import { installWorkoutLifecycleAuthorityFixture, resetWorkoutLifecycleAuthorityFixture } from './workoutLifecycleAuthorityFixture';
 
 const T003_SEED = buildSeedDocuments().find((t) => t.id === 'T003');
 if (!T003_SEED) throw new Error('T003 fixture missing from catalog — cannot run reconciliation integration tests');
@@ -89,12 +91,17 @@ describe.skipIf(!enabled)('First Workout Program reconciliation — real Firesto
       firestore: { rules: readFileSync(resolve(__dirname, '../../../firestore.rules'), 'utf8') },
     });
     mocks.db = testEnv.authenticatedContext(UID, { email: 'bob@example.com', email_verified: true }).firestore();
+    installWorkoutLifecycleAuthorityFixture(testEnv, UID);
   });
 
-  afterAll(async () => testEnv.cleanup());
+  afterAll(async () => {
+    resetWorkoutLifecycleAuthorityFixture();
+    await testEnv.cleanup();
+  });
 
   beforeEach(async () => {
     await testEnv.clearFirestore();
+    await enableWorkoutLifecycleRollout(testEnv);
   });
 
   it('(B) authenticated + valid questionnaire + no active program → generates and activates the first program', async () => {

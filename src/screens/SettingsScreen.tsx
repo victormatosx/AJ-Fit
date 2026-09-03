@@ -27,6 +27,8 @@ import {
   DevSubscriptionOverridePickerSheet,
   DEV_OVERRIDE_LABELS,
 } from '../dev/DevSubscriptionOverridePickerSheet';
+import { isWorkoutLifecycleQaPanelAllowed } from '../dev/workoutLifecycle/qaPanelGate';
+import { WorkoutLifecycleQaSheet } from '../dev/workoutLifecycle/WorkoutLifecycleQaSheet';
 
 type UnitsOptionCopy = {
   label: string;
@@ -67,6 +69,8 @@ export function SettingsScreen({
     setOverride: setDevOverride,
   } = useDevSubscriptionOverrideContext();
   const [devOverridePickerOpen, setDevOverridePickerOpen] = useState(false);
+  const workoutLifecycleQaPanelAllowed = isWorkoutLifecycleQaPanelAllowed();
+  const [workoutLifecycleQaSheetOpen, setWorkoutLifecycleQaSheetOpen] = useState(false);
 
   // `i18n.language` is the runtime source of truth — DO NOT read
   // `profile.preferences.language` here. That field will diverge from the
@@ -319,16 +323,21 @@ export function SettingsScreen({
 
           {/* Dev/QA only — never rendered outside a development build (see
               `useDevSubscriptionOverrideContext`'s `allowed`). */}
-          {devOverrideAllowed ? (
+          {devOverrideAllowed || workoutLifecycleQaPanelAllowed ? (
             <SettingsSection
               title="DEVELOPER"
               items={[
-                {
-                  icon: 'key',
+                ...(devOverrideAllowed ? [{
+                  icon: 'key' as const,
                   label: 'Subscription Override',
                   value: DEV_OVERRIDE_LABELS[devOverride],
                   onPress: () => setDevOverridePickerOpen(true),
-                },
+                }] : []),
+                ...(workoutLifecycleQaPanelAllowed && user ? [{
+                  icon: 'chart' as const,
+                  label: 'Workout Lifecycle',
+                  onPress: () => setWorkoutLifecycleQaSheetOpen(true),
+                }] : []),
               ]}
             />
           ) : null}
@@ -375,6 +384,13 @@ export function SettingsScreen({
             setDevOverridePickerOpen(false);
           }}
           onDismiss={() => setDevOverridePickerOpen(false)}
+        />
+      ) : null}
+      {workoutLifecycleQaPanelAllowed && user ? (
+        <WorkoutLifecycleQaSheet
+          visible={workoutLifecycleQaSheetOpen}
+          uid={user.uid}
+          onDismiss={() => setWorkoutLifecycleQaSheetOpen(false)}
         />
       ) : null}
     </ScreenBg>

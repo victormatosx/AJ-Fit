@@ -19,6 +19,13 @@ function seedFullUser(harness: ReturnType<typeof createFakeFirestore>, uid: stri
   harness.seed(`users/${uid}/workoutProgramState/active`);
   harness.seed(`users/${uid}/workoutExecutions/exec1`);
   harness.seed(`users/${uid}/workoutPrograms/wpg1/progressionEvents/pe1`);
+  harness.seed(`users/${uid}/workoutLifecycleState/current`);
+  harness.seed(`users/${uid}/trainingCycles/cyc1`);
+  harness.seed(`users/${uid}/programInstances/wpi1`);
+  harness.seed(`users/${uid}/workoutLifecycleEvents/wle1`);
+  harness.seed(`users/${uid}/pendingEvolutions/current`);
+  harness.seed(`users/${uid}/workoutLifecycleAuthorityGrants/current`);
+  harness.seed(`users/${uid}/workoutLifecycleTrustedTelemetryReceipts/receipt1`);
   harness.seed(`users/${uid}/privateSecurity/photoVault`);
 }
 
@@ -50,6 +57,13 @@ describe('runFirestoreCleanup — happy path', () => {
     expect(harness.listUnder('users/uid-1/workoutProgramState/')).toHaveLength(0);
     expect(harness.listUnder('users/uid-1/workoutExecutions/')).toHaveLength(0);
     expect(harness.listUnder('users/uid-1/workoutPrograms/wpg1/progressionEvents/')).toHaveLength(0);
+    expect(harness.listUnder('users/uid-1/workoutLifecycleState/')).toHaveLength(0);
+    expect(harness.listUnder('users/uid-1/trainingCycles/')).toHaveLength(0);
+    expect(harness.listUnder('users/uid-1/programInstances/')).toHaveLength(0);
+    expect(harness.listUnder('users/uid-1/workoutLifecycleEvents/')).toHaveLength(0);
+    expect(harness.listUnder('users/uid-1/pendingEvolutions/')).toHaveLength(0);
+    expect(harness.listUnder('users/uid-1/workoutLifecycleAuthorityGrants/')).toHaveLength(0);
+    expect(harness.listUnder('users/uid-1/workoutLifecycleTrustedTelemetryReceipts/')).toHaveLength(0);
   });
 
   it('cleanup outcome is identical for a Free or Premium user (no subscription check exists here)', async () => {
@@ -142,6 +156,7 @@ describe('runFirestoreCleanup — ordering (Fase 6 §10)', () => {
 
     expect(order).toEqual([
       'questionnaires', 'assessments', 'progressPhotos', 'progressionEvents',
+      'workoutLifecycleEvents', 'workoutLifecycleAuthorityGrants', 'workoutLifecycleTrustedTelemetryReceipts', 'pendingEvolutions', 'programInstances', 'trainingCycles', 'workoutLifecycleState',
       'workoutPrograms', 'workoutProgramState', 'workoutExecutions', 'userProfile',
     ]);
   });

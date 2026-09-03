@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { addDaysLocal } from '../calendar';
-import { detectMissedSessionGap, resolveWorkoutSchedule } from '../resolver';
+import { anchorSessionIndex, detectMissedSessionGap, initialSessionIndexFor, resolveWorkoutSchedule } from '../resolver';
 import type { ResolveWorkoutScheduleInput, ScheduleConfig } from '../types';
 
 /**
@@ -647,5 +647,64 @@ describe('detectMissedSessionGap', () => {
       calendarSessionIndex: 2, // C
       missedScheduledDate: '2026-08-03',
     });
+  });
+});
+
+describe('initialSessionIndexFor — the canonical "no ScheduleState yet" derivation', () => {
+  // Real production regression (docs — SESSION_INDEX_OUT_OF_SEQUENCE,
+  // src/services/workoutSchedule.ts's old `current?.nextSessionIndex ?? 0`):
+  // trainingDays=[MON,TUE,WED,THU], activated Thursday, first session must
+  // anchor to 3 — `completeScheduledSession` now calls this exact function
+  // instead of assuming 0.
+  const FOUR_DAY: readonly ['MON', 'TUE', 'WED', 'THU'] = ['MON', 'TUE', 'WED', 'THU'];
+
+  it.each([
+    ['MON', '2026-08-31', 0],
+    ['TUE', '2026-09-01', 1],
+    ['WED', '2026-09-02', 2],
+    ['THU', '2026-09-03', 3],
+  ] as const)('activation on %s (%s) anchors to session %i', (_label, date, expected) => {
+    expect(initialSessionIndexFor({
+      trainingDays: FOUR_DAY,
+      activatedAtLocalDate: date,
+      todayLocalDate: date,
+      sessionCount: 4,
+    })).toBe(expected);
+  });
+
+  it('matches resolveWorkoutSchedule\'s own SESSION_READY sessionIndex for the exact same inputs (no drift between the two)', () => {
+    for (const date of ['2026-08-31', '2026-09-01', '2026-09-02', '2026-09-03']) {
+      const resolved = resolveWorkoutSchedule({
+        hasActiveProgram: true,
+        sessionCount: 4,
+        config: { trainingDays: [...FOUR_DAY], timezone: 'UTC', scheduleVersion: 1 },
+        state: null,
+        activatedAtLocalDate: date,
+        todayLocalDate: date,
+      });
+      expect(resolved.status).toBe('SESSION_READY');
+      const viaHelper = initialSessionIndexFor({
+        trainingDays: FOUR_DAY, activatedAtLocalDate: date, todayLocalDate: date, sessionCount: 4,
+      });
+      expect(resolved.status === 'SESSION_READY' && resolved.sessionIndex).toBe(viaHelper);
+    }
+  });
+
+  it('a non-consecutive schedule (MON,WED,FRI) still anchors correctly on each of its trainingDays', () => {
+    const days: readonly ['MON', 'WED', 'FRI'] = ['MON', 'WED', 'FRI'];
+    expect(initialSessionIndexFor({ trainingDays: days, activatedAtLocalDate: '2026-08-03', todayLocalDate: '2026-08-03', sessionCount: 3 })).toBe(0); // Monday
+    expect(initialSessionIndexFor({ trainingDays: days, activatedAtLocalDate: '2026-08-05', todayLocalDate: '2026-08-05', sessionCount: 3 })).toBe(1); // Wednesday
+    expect(initialSessionIndexFor({ trainingDays: days, activatedAtLocalDate: '2026-08-07', todayLocalDate: '2026-08-07', sessionCount: 3 })).toBe(2); // Friday
+  });
+
+  it('wraps via modulo when trainingDays.length exceeds sessionCount', () => {
+    // 4 trainingDays, only 2 sessions (A/B) — Thursday is position 3, wraps to 3 % 2 = 1.
+    expect(initialSessionIndexFor({
+      trainingDays: ['MON', 'TUE', 'WED', 'THU'], activatedAtLocalDate: '2026-09-03', todayLocalDate: '2026-09-03', sessionCount: 2,
+    })).toBe(1);
+  });
+
+  it('falls back to 0 for a weekday that is not in trainingDays (defensive — anchorSessionIndex\'s own contract)', () => {
+    expect(anchorSessionIndex(['MON', 'TUE'], 'SAT', 2)).toBe(0);
   });
 });

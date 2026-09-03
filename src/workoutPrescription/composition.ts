@@ -1,5 +1,5 @@
 import { EXERCISES_SEED } from '../data/exercisesSeedData';
-import type { ExerciseSeedInput, MovementPattern, MuscleId } from '../types/exercise';
+import type { MovementPattern, MuscleId } from '../types/exercise';
 import { equipmentContextFor, isExerciseExecutable } from './equipment';
 import { goalFamilyFor } from './input';
 import {

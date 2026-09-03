@@ -15,7 +15,12 @@ import {
 import { db } from '../lib/firebase';
 import type { WorkoutProgramSnapshot } from './workoutPrograms';
 import {
+  authorizeWorkoutLifecycleMutation,
+  WORKOUT_LIFECYCLE_AUTHORITY_GRANT_ID,
+} from '../workoutLifecycle/authorityProvider';
+import {
   WORKOUT_EXECUTION_SCHEMA_VERSION,
+  WORKOUT_EXECUTION_LIFECYCLE_SCHEMA_VERSION,
   buildInitialExerciseExecutions,
   deriveFinishStatus,
   sweepPendingSetsToSkipped,
@@ -48,6 +53,7 @@ function fromDoc(executionId: string, data: Record<string, unknown>): PersistedW
   return {
     executionId,
     programId: data.programId as string,
+    ...(typeof data.programInstanceId === 'string' ? { programInstanceId: data.programInstanceId } : {}),
     templateId: data.templateId as string,
     sessionIndex: data.sessionIndex as number,
     sessionName: data.sessionName as string,
@@ -83,7 +89,8 @@ export async function startOrResumeWorkoutExecution(input: {
   const { uid, program, sessionIndex, scheduledLocalDate } = input;
   const session = program.sessions[sessionIndex];
   if (!session) throw new Error('SESSION_INDEX_OUT_OF_RANGE');
-  const executionId = workoutExecutionId(program.programId, sessionIndex, scheduledLocalDate);
+  const executionScopeId = program.programInstanceId ?? program.programId;
+  const executionId = workoutExecutionId(executionScopeId, sessionIndex, scheduledLocalDate);
   const ref = executionRef(uid, executionId);
 
   await runTransaction(db, async (transaction) => {
@@ -96,13 +103,16 @@ export async function startOrResumeWorkoutExecution(input: {
 
     const base = {
       programId: program.programId,
+      ...(program.programInstanceId ? { programInstanceId: program.programInstanceId } : {}),
       templateId: program.templateId,
       sessionIndex,
       sessionName: session.name,
       scheduledLocalDate,
       status: 'IN_PROGRESS' as const,
       exercises: buildInitialExerciseExecutions(session),
-      executionSchemaVersion: WORKOUT_EXECUTION_SCHEMA_VERSION,
+      executionSchemaVersion: program.programInstanceId
+        ? WORKOUT_EXECUTION_LIFECYCLE_SCHEMA_VERSION
+        : WORKOUT_EXECUTION_SCHEMA_VERSION,
       finishedAt: null,
     };
 
@@ -222,11 +232,21 @@ export async function skipExerciseExecution(input: { uid: string; executionId: s
  */
 export async function finishWorkoutExecution(uid: string, executionId: string): Promise<{ status: 'COMPLETED' | 'PARTIALLY_COMPLETED' }> {
   const ref = executionRef(uid, executionId);
+  const existing = await getDoc(ref);
+  if (existing.exists() && ['COMPLETED', 'PARTIALLY_COMPLETED'].includes(existing.data().status)) {
+    return { status: existing.data().status as 'COMPLETED' | 'PARTIALLY_COMPLETED' };
+  }
+  const requiresV2Authority = typeof existing.data()?.programInstanceId === 'string';
+  if (requiresV2Authority) {
+    await authorizeWorkoutLifecycleMutation({ operation: 'FINISH_EXECUTION', executionId });
+  }
+  const grantRef = doc(db, USERS, uid, 'workoutLifecycleAuthorityGrants', WORKOUT_LIFECYCLE_AUTHORITY_GRANT_ID);
   return runTransaction(db, async (transaction) => {
     const snapshot = await transaction.get(ref);
     if (!snapshot.exists()) throw new Error('EXECUTION_NOT_FOUND');
     const data = snapshot.data();
     if (data.status === 'COMPLETED' || data.status === 'PARTIALLY_COMPLETED') {
+      if (requiresV2Authority) transaction.delete(grantRef);
       return { status: data.status as 'COMPLETED' | 'PARTIALLY_COMPLETED' };
     }
     if (data.status !== 'IN_PROGRESS') throw new Error('EXECUTION_NOT_IN_PROGRESS');
@@ -234,6 +254,7 @@ export async function finishWorkoutExecution(uid: string, executionId: string): 
     const exercises = sweepPendingSetsToSkipped(data.exercises as ExerciseExecution[]);
     const status = deriveFinishStatus(exercises);
     transaction.update(ref, { exercises, status, finishedAt: serverTimestamp(), updatedAt: serverTimestamp() });
+    if (requiresV2Authority) transaction.delete(grantRef);
     return { status };
   });
 }
@@ -284,6 +305,13 @@ export async function listRecentWorkoutExecutions(uid: string, count = 20): Prom
  */
 export async function listExecutionsForProgram(uid: string, programId: string): Promise<PersistedWorkoutExecution[]> {
   const q = query(executionsCollection(uid), where('programId', '==', programId));
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map((item) => fromDoc(item.id, item.data()));
+}
+
+/** V2 instance-scoped history; prevents equivalent content reused in two cycles from sharing progression counts. */
+export async function listExecutionsForProgramInstance(uid: string, programInstanceId: string): Promise<PersistedWorkoutExecution[]> {
+  const q = query(executionsCollection(uid), where('programInstanceId', '==', programInstanceId));
   const snapshot = await getDocs(q);
   return snapshot.docs.map((item) => fromDoc(item.id, item.data()));
 }

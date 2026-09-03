@@ -1,7 +1,7 @@
 # User Journey
 
 **Status:** TARGET_SPEC  
-**Implementation:** NOT_IMPLEMENTED
+**Implementation:** PARTIAL — persistence foundation only; V2 journey behavior remains future work
 
 ## Beginner
 User starts with a Beginner prescription. The adaptation period targets roughly four active weeks. Eligibility requires the minimum active period and at least 70% of prescribed valid sessions. If the session target is not reached, Beginner continues until it is. Successful completion promotes the current training level to Intermediate and generates the corresponding Intermediate prescription for the user's unchanged profile constraints.

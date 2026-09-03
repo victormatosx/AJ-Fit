@@ -21,7 +21,6 @@ import { HomeScreen } from './HomeScreen';
 import { WorkoutScreen } from './WorkoutScreen';
 import { ProgressScreen } from './ProgressScreen';
 import { ProfileScreen } from './ProfileScreen';
-import { ConsistencyScreen } from './ConsistencyScreen';
 import { AssessmentScreen } from './AssessmentScreen';
 import { SettingsScreen } from './SettingsScreen';
 import { SecurityScreen } from './SecurityScreen';
@@ -50,10 +49,13 @@ import type { WorkoutProgramSnapshot } from '../services/workoutPrograms';
 import { useWorkoutSchedule, weekdayOfLocalDate, type ScheduleResolution } from '../scheduleEngine';
 import { MissedSessionDecisionModal } from '../components/schedule/MissedSessionDecisionModal';
 import { useWorkoutExecution } from '../workoutExecution/useWorkoutExecution';
-import { useWorkoutProgression } from '../progressionEngine/useWorkoutProgression';
-import { ProgressionFeedbackModal } from '../components/progression/ProgressionFeedbackModal';
-import { logInfo } from '../lib/logger';
+import { completeWorkoutSessionFlow } from '../workoutLifecycle/finishFlow';
+import { useWorkoutEvolution } from '../workoutEvolution/useWorkoutEvolution';
+import { processWorkoutLifecycleAfterSession } from '../services/workoutLifecycleApplication';
+import { EvolutionUnlockScreen } from './EvolutionUnlockScreen';
+import { logInfo, logWarn } from '../lib/logger';
 import { resolveSessionDisplayName, type LooseTranslate } from '../workoutPrescription/sessionPresentation';
+import { useReducedMotionPreference } from '../lib/reducedMotion';
 
 type SupportRoute =
   | { name: 'help' }
@@ -105,8 +107,9 @@ function AppShellContent({
   setShowPremium: (value: boolean) => void;
 }) {
   const { theme } = useTheme();
+  const reduceMotion = useReducedMotionPreference();
   const { tab, setTab } = useAppState();
-  const { linkedProviders } = useAuth();
+  const { user, linkedProviders } = useAuth();
   const {
     prescription,
     loading: prescriptionLoading,
@@ -124,7 +127,9 @@ function AppShellContent({
     : null;
   const schedule = useWorkoutSchedule(activeProgram);
   const execution = useWorkoutExecution(activeProgram, schedule.config?.timezone);
-  const progression = useWorkoutProgression();
+  // Fase 5 — single canonical evolution view-model/actions for the whole
+  // app (docs product §144/§146); reconciles once per AppShell mount.
+  const evolution = useWorkoutEvolution();
   const [activeSessionIndex, setActiveSessionIndex] = useState(0);
   const { isPremium } = useSubscription();
   const paywallPremiumReturnState = useRef(INITIAL_PAYWALL_PREMIUM_RETURN_STATE);
@@ -133,7 +138,6 @@ function AppShellContent({
   // place route order/membership is declared; nothing here chains
   // `usePrewarm` calls by hand anymore.
   const prewarmed = usePrewarmQueue();
-  const [showCal, setShowCal] = useState(false);
   const [showAssessment, setShowAssessment] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showSecurity, setShowSecurity] = useState(false);
@@ -143,6 +147,7 @@ function AppShellContent({
   const [showMyPlan, setShowMyPlan] = useState(false);
   const [showSubscriptionCenter, setShowSubscriptionCenter] = useState(false);
   const [showWorkoutConfirmation, setShowWorkoutConfirmation] = useState(false);
+  const [showEvolutionUnlock, setShowEvolutionUnlock] = useState(false);
   const [supportRoute, setSupportRoute] = useState<SupportRoute | null>(null);
   // HelpArticleScreen/SupportFormScreen are persistent+materialized but
   // can't be prewarmed with no real data (docs/23_navegacao_e_lifecycle.md
@@ -157,7 +162,6 @@ function AppShellContent({
   }>({ type: 'SUPPORT' });
   const canChangePassword = linkedProviders.includes(PASSWORD_PROVIDER_ID);
   const overlayOpen =
-    showCal ||
     showAssessment ||
     showSettings ||
     showSecurity ||
@@ -172,6 +176,22 @@ function AppShellContent({
   useEffect(() => {
     if (!canChangePassword) setShowChangePassword(false);
   }, [canChangePassword]);
+
+  // Explain a persisted AUTO activation at the next safe app surface. Never
+  // interrupt a live workout, a confirmation, or another overlay.
+  useEffect(() => {
+    if (
+      evolution.viewModel.kind === 'AUTO_ACTIVATION_NOTICE'
+      && tab !== 'workout'
+      && !overlayOpen
+      && !showWorkoutConfirmation
+    ) {
+      // Hydrate the ProgramInstance that the persisted event says is active,
+      // but only after leaving the live Workout surface.
+      void reloadPrescription();
+      setShowEvolutionUnlock(true);
+    }
+  }, [evolution.viewModel.kind, overlayOpen, reloadPrescription, showWorkoutConfirmation, tab]);
 
   // The root Paywall is closed by resolvePremiumGate, but this on-demand
   // Paywall is an AppShell overlay. Close that overlay only after the same
@@ -255,8 +275,9 @@ function AppShellContent({
             generating={generatingWorkout}
             scheduleResolution={schedule.resolution}
             onStart={() => setShowWorkoutConfirmation(true)}
-            onOpenConsistency={() => setShowCal(true)}
             onOpenProfile={() => setTab('profile')}
+            evolutionViewModel={evolution.viewModel}
+            onOpenEvolution={() => setShowEvolutionUnlock(true)}
           />
         </PersistentScreen>
         {tab === 'workout' && prescription.status === 'SUCCESS' && schedule.resolution.status !== 'SESSION_READY' && (
@@ -272,9 +293,8 @@ function AppShellContent({
             sessionIndex={activeSessionIndex}
             onDone={() => setTab('home')}
             onAbandon={() => { void execution.abandon(); }}
-            onSetLogged={(exerciseIndex, setIndex, weightKg) => {
-              void execution.recordSet(exerciseIndex, setIndex, weightKg);
-            }}
+            onSetLogged={(exerciseIndex, setIndex, weightKg) =>
+              execution.recordSet(exerciseIndex, setIndex, weightKg)}
             onSessionCompleted={() => {
               // Execution finishes first (COMPLETED/PARTIALLY_COMPLETED),
               // then the Schedule Engine advances via its own existing,
@@ -299,11 +319,36 @@ function AppShellContent({
                 sessionIndex: activeSessionIndex,
               });
               void (async () => {
-                await execution.finish();
-                await schedule.completeSession(activeSessionIndex);
-                if (!programId) return;
-                const { applied } = await progression.checkAndApply(programId);
-                if (applied) await reloadPrescription();
+                const result = await completeWorkoutSessionFlow({
+                  finishExecution: execution.finish,
+                  completeSchedule: () => schedule.completeSession(activeSessionIndex),
+                  afterSchedule: async () => {
+                    if (!user) return;
+                    const lifecycleResult = await processWorkoutLifecycleAfterSession({ uid: user.uid });
+                    if (lifecycleResult.autoActivated) await reloadPrescription();
+                    await evolution.refresh();
+                  },
+                });
+                // The "treino concluído" screen (WorkoutScreen's own
+                // `finished` local state) already rendered by this point,
+                // independent of this result — so a non-COMPLETED outcome
+                // can never be silently indistinguishable from success in
+                // the logs. `EXECUTION_FAILED`/`SCHEDULE_FAILED` mean the
+                // WorkoutExecution finished but the Schedule Engine never
+                // advanced (no scheduleEvent COMPLETED, Home keeps offering
+                // the same session) — never masked as
+                // `workout_finish_succeeded` the way it was before this was
+                // logged. Deliberately not attempting any rollback/retry
+                // here: the execution is already a durable terminal fact
+                // (docs — `finishFlow.ts`'s own doc comment), and the next
+                // trusted reconciliation entry point (cold start/readiness
+                // gate) is the safe place to retry, not this fire-and-forget
+                // handler.
+                if (result === 'COMPLETED') {
+                  logInfo('workout', 'workout_finish_succeeded', { programId, sessionIndex: activeSessionIndex });
+                } else {
+                  logWarn('workout', 'workout_finish_incomplete', { programId, sessionIndex: activeSessionIndex, result });
+                }
               })();
             }}
           />
@@ -328,6 +373,8 @@ function AppShellContent({
             onOpenSettings={() => setShowSettings(true)}
             onOpenSubscription={() => setShowSubscriptionCenter(true)}
             onOpenMyPlan={() => setShowMyPlan(true)}
+            evolutionViewModel={evolution.viewModel}
+            onOpenEvolution={() => setShowEvolutionUnlock(true)}
           />
         </PersistentScreen>
       </View>
@@ -363,7 +410,49 @@ function AppShellContent({
         visible={tab !== 'workout' && schedule.resolution.status === 'MISSED_SESSION_DECISION_REQUIRED'}
         onChoose={(decision) => { void schedule.resolveMiss(decision); }}
       />
-      <ProgressionFeedbackModal kind={progression.feedback} onDismiss={progression.dismissFeedback} />
+      <Modal
+        visible={showEvolutionUnlock
+          && (evolution.viewModel.kind === 'EVOLUTION_READY'
+            || evolution.viewModel.kind === 'EVOLUTION_DEFERRED'
+            || evolution.viewModel.kind === 'AUTO_ACTIVATION_NOTICE')}
+        animationType={reduceMotion ? 'none' : 'slide'}
+        presentationStyle="pageSheet"
+        onRequestClose={() => {
+          if (evolution.viewModel.kind === 'AUTO_ACTIVATION_NOTICE') {
+            void evolution.acknowledgeAutoActivation();
+          }
+          setShowEvolutionUnlock(false);
+        }}
+      >
+        {(evolution.viewModel.kind === 'EVOLUTION_READY'
+          || evolution.viewModel.kind === 'EVOLUTION_DEFERRED'
+          || evolution.viewModel.kind === 'AUTO_ACTIVATION_NOTICE') ? (
+          <EvolutionUnlockScreen
+            viewModel={evolution.viewModel}
+            diff={evolution.diff}
+            actionPending={evolution.actionPending}
+            actionError={evolution.actionError}
+            onStart={() => {
+              void evolution.start().then(async (activated) => {
+                if (!activated) return;
+                await reloadPrescription();
+                setShowEvolutionUnlock(false);
+              });
+            }}
+            onDefer={() => {
+              void evolution.defer().then((deferred) => {
+                if (deferred) setShowEvolutionUnlock(false);
+              });
+            }}
+            onClose={() => {
+              if (evolution.viewModel.kind === 'AUTO_ACTIVATION_NOTICE') {
+                void evolution.acknowledgeAutoActivation();
+              }
+              setShowEvolutionUnlock(false);
+            }}
+          />
+        ) : null}
+      </Modal>
       {/*
         Settings, Security, Assessment, EditProfile, Consistency, Support
         (help/success halves) and SubscriptionCenter are the secondary
@@ -376,14 +465,6 @@ function AppShellContent({
         below is still a bare `{showX && (...)}` conditional (ephemeral) —
         each needs its own audit before it can move to this pattern.
       */}
-      <PersistentScreen
-        active={showCal}
-        prewarm={prewarmed.CONSISTENCY}
-        activeStyle={FULL_BLEED.overlayZ40}
-        inactiveMode="materialized"
-      >
-        <ConsistencyScreen onBack={() => setShowCal(false)} />
-      </PersistentScreen>
       <PersistentScreen
         active={showAssessment}
         prewarm={prewarmed.ASSESSMENT}

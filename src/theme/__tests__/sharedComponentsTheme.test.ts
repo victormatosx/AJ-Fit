@@ -168,18 +168,12 @@ describe('Phase 4 acquisition and primary app coverage', () => {
     expect(source).not.toMatch(STATIC_VISUAL_IMPORT);
   });
 
-  it('routes consistency data colors through a dedicated visualization contract', () => {
+  it('keeps the retired consistency route as a theme-aware empty state without chart claims', () => {
     const consistency = readFileSync('src/screens/ConsistencyScreen.tsx', 'utf8');
-
-    for (const role of [
-      'doneBackground',
-      'doneBorder',
-      'todayGradient',
-      'missedBackground',
-      'pendingBorder',
-    ]) {
-      expect(consistency).toContain(`theme.chart.consistency.${role}`);
-    }
+    expect(consistency).toContain('theme.colors.textPrimary');
+    expect(consistency).toContain('theme.colors.textMuted');
+    expect(consistency).not.toContain('theme.chart.consistency');
+    expect(consistency).not.toContain('const TODAY');
   });
 
   it('keeps the Phase 4 critical screens free of Dark color literals', () => {

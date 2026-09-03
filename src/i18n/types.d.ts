@@ -23,6 +23,7 @@ import type ptBRAssessment from './resources/pt-BR/assessment.json';
 import type ptBRAuth from './resources/pt-BR/auth.json';
 import type ptBRSupport from './resources/pt-BR/support.json';
 import type ptBRMyPlan from './resources/pt-BR/myPlan.json';
+import type ptBREvolution from './resources/pt-BR/evolution.json';
 
 declare module 'i18next' {
   interface CustomTypeOptions {
@@ -41,6 +42,7 @@ declare module 'i18next' {
       auth: typeof ptBRAuth;
       support: typeof ptBRSupport;
       myPlan: typeof ptBRMyPlan;
+      evolution: typeof ptBREvolution;
     };
     returnNull: false;
   }

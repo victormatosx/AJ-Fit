@@ -21,6 +21,7 @@ import { doc, getDoc, setDoc, Timestamp } from 'firebase/firestore';
 import { buildSeedDocuments } from '../../../scripts/seedWorkoutTemplates';
 import { completeAnswers } from '../../workoutPrescription/__tests__/fixtures';
 import { toPersistedAnswers } from '../../lib/questionnaireAnswers';
+import { CANONICAL_LIMITATION_DATASET_HASH, CANONICAL_LIMITATION_DATASET_VERSION } from '../../workoutPrescription/limitationDataset';
 
 const PROJECT_ID = 'ajfit-rules-test';
 const UID = 'dana';
@@ -39,6 +40,8 @@ vi.mock('../../lib/firebase', () => ({
 
 import { generateAndPersistWorkoutProgram } from '../workoutPrograms';
 import { startOrResumeWorkoutExecution, recordSetExecution, finishWorkoutExecution } from '../workoutExecutions';
+import { enableWorkoutLifecycleRollout } from './workoutLifecycleRolloutFixture';
+import { installWorkoutLifecycleAuthorityFixture, resetWorkoutLifecycleAuthorityFixture } from './workoutLifecycleAuthorityFixture';
 
 const T003_SEED = buildSeedDocuments().find((t) => t.id === 'T003');
 if (!T003_SEED) throw new Error('T003 fixture missing — cannot run restSeconds integration tests');
@@ -52,12 +55,17 @@ describe.skipIf(!enabled)('restSeconds persistence — real Firestore Emulator i
       firestore: { rules: readFileSync(resolve(__dirname, '../../../firestore.rules'), 'utf8') },
     });
     mocks.db = testEnv.authenticatedContext(UID, { email: 'dana@example.com', email_verified: true }).firestore();
+    installWorkoutLifecycleAuthorityFixture(testEnv, UID);
   });
 
-  afterAll(async () => testEnv.cleanup());
+  afterAll(async () => {
+    resetWorkoutLifecycleAuthorityFixture();
+    await testEnv.cleanup();
+  });
 
   beforeEach(async () => {
     await testEnv.clearFirestore();
+    await enableWorkoutLifecycleRollout(testEnv);
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       const rawDb = ctx.firestore();
       await setDoc(doc(rawDb, 'users', UID), {
@@ -67,6 +75,10 @@ describe.skipIf(!enabled)('restSeconds persistence — real Firestore Emulator i
         metadata: { role: 'user', createdAt: Timestamp.now(), updatedAt: Timestamp.now(), commercialGateResolvedAt: Timestamp.now() },
       });
       await setDoc(doc(rawDb, 'workoutTemplates', 'T003'), T003_SEED);
+      await setDoc(doc(rawDb, 'limitationDatasetState', 'active'), {
+        datasetVersion: CANONICAL_LIMITATION_DATASET_VERSION,
+        limitationDatasetHash: CANONICAL_LIMITATION_DATASET_HASH,
+      });
       await setDoc(doc(rawDb, 'users', UID, 'questionnaires', QUESTIONNAIRE_ID), {
         answers: toPersistedAnswers(ANSWERS),
         version: 1,

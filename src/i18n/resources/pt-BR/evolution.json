@@ -1,0 +1,102 @@
+{
+  "level": { "BEGINNER": "Iniciante", "INTERMEDIATE": "Intermediário", "ADVANCED": "Avançado" },
+  "cycle": "Ciclo {{number}}",
+  "activePrescription": "Treino ativo",
+  "careerLevel": "Nível conquistado: {{level}}",
+  "state": {
+    "loading": "Carregando seu ciclo de treino",
+    "error": "Não foi possível carregar seu ciclo agora",
+    "unavailable": "O progresso do ciclo ainda não está disponível para esta conta",
+    "evaluationPaused": "Treino em andamento"
+  },
+  "proximity": {
+    "BUILDING": "Construindo sua base",
+    "ON_TRACK": "Criando consistência",
+    "READY": "Próxima evolução disponível"
+  },
+  "adherence": {
+    "BELOW_TARGET": "Construindo consistência",
+    "GOOD": "Frequência consistente",
+    "HIGH": "Frequência muito consistente"
+  },
+  "stats": {
+    "activeDays": "{{count}} dias ativos",
+    "sessionsCompleted": "{{count}} treinos válidos"
+  },
+  "unlock": {
+    "levelPromotionEyebrow": "NOVO NÍVEL DESBLOQUEADO",
+    "cycleEvolutionEyebrow": "NOVO CICLO DISPONÍVEL",
+    "levelReadyCard": "Novo nível disponível",
+    "cycleReadyCard": "Próximo ciclo disponível",
+    "cycleTitle": "Ciclo {{number}}",
+    "reasonHigh": "Sua frequência neste ciclo foi excepcional.",
+    "reasonStandard": "Os critérios deste ciclo foram concluídos.",
+    "startCta": "COMEÇAR NOVO TREINO",
+    "keepCta": "CONTINUAR TREINO ATUAL",
+    "keepConsequence": "Seu treino atual permanece ativo. Esta opção será oferecida novamente.",
+    "deferredStatus": "Seu treino atual continua ativo; o próximo já está disponível.",
+    "readyAgainStatus": "Seu próximo treino continua disponível.",
+    "deferredCurrentActive": "Seu treino atual permanece ativo.",
+    "deferredAvailable": "O próximo treino já pode ser iniciado.",
+    "secondDeferConsequence": "O próximo treino já está disponível e será ativado automaticamente ao fim deste período.",
+    "errorRetry": "Não foi possível concluir agora. Revise o estado e tente novamente."
+  },
+  "motivationalRenewal": {
+    "eyebrow": "UMA NOVA VERSÃO ESTÁ DISPONÍVEL",
+    "cardReady": "Nova versão de treino disponível",
+    "title": "Versão alternativa",
+    "body": "Preparamos uma alternativa para o seu treino atual. Seu nível e seu ciclo permanecem os mesmos.",
+    "cta": "USAR NOVA VERSÃO",
+    "keepCta": "MANTER TREINO ATUAL"
+  },
+  "auto": {
+    "card": {
+      "LEVEL_PROMOTION": "Seu novo nível foi aplicado",
+      "CYCLE_EVOLUTION": "Seu próximo ciclo foi aplicado",
+      "MOTIVATIONAL_RENEWAL": "Uma nova versão do treino foi aplicada"
+    },
+    "eyebrow": {
+      "LEVEL_PROMOTION": "ATIVAÇÃO AUTOMÁTICA · NÍVEL",
+      "CYCLE_EVOLUTION": "ATIVAÇÃO AUTOMÁTICA · CICLO",
+      "MOTIVATIONAL_RENEWAL": "ATUALIZAÇÃO AUTOMÁTICA DO TREINO"
+    },
+    "title": {
+      "LEVEL_PROMOTION": "Seu novo nível está ativo",
+      "CYCLE_EVOLUTION": "Seu próximo ciclo está ativo",
+      "MOTIVATIONAL_RENEWAL": "Uma nova versão está ativa"
+    },
+    "body": {
+      "LEVEL_PROMOTION": "A evolução que você conquistou foi ativada automaticamente após o período de adiamento.",
+      "CYCLE_EVOLUTION": "O próximo ciclo que já estava disponível foi ativado automaticamente após o período de adiamento.",
+      "MOTIVATIONAL_RENEWAL": "A versão disponível foi ativada automaticamente após o período de adiamento. Isso não altera seu nível nem seu ciclo."
+    },
+    "activeNow": "Agora ativo: {{level}} · Ciclo {{cycle}}",
+    "ackCta": "ENTENDI"
+  },
+  "diff": {
+    "title": {
+      "level": "Mudanças do novo nível",
+      "cycle": "Mudanças do próximo ciclo",
+      "renewal": "Mudanças desta versão",
+      "auto": "O que foi aplicado"
+    },
+    "replacements": "{{count}} exercícios substituídos",
+    "added": "{{count}} exercícios adicionados",
+    "removed": "{{count}} exercícios removidos",
+    "reordered": "Ordem atualizada em {{count}} sessões",
+    "sets": "Séries alteradas em {{count}} exercícios",
+    "reps": "Repetições alteradas em {{count}} exercícios",
+    "rest": "Descanso alterado em {{count}} exercícios",
+    "frequencyChanged": "Frequência semanal: {{before}} → {{after}}",
+    "sessionCountChanged": "Sessões do programa: {{before}} → {{after}}",
+    "structureChanged": "A estrutura semanal foi alterada",
+    "noObservableChange": "A prescrição foi atualizada sem mudanças visíveis na estrutura"
+  },
+  "adaptation": {
+    "note": "Seu treino foi ajustado com base nas suas informações mais recentes. Seu nível e ciclo foram preservados."
+  },
+  "accessibility": {
+    "openDetails": "Abre os detalhes do treino disponível",
+    "close": "Fechar detalhes da evolução"
+  }
+}

@@ -62,40 +62,16 @@ describe('home — greeting + interpolated meta per locale', () => {
     }
   });
 
-  it('interpolates todayLine with mock date parts', async () => {
+  it('interpolates todayLine with real date parts (Fase 6 dropped the fabricated week-of-program counter)', async () => {
     for (const lang of ['pt-BR', 'en', 'es'] as const) {
       const i18n = await freshI18nAt(lang);
       const t = i18n.getFixedT(lang, 'home' as 'home') as unknown as LooseT;
-      const out = t('meta.todayLine', {
-        weekday: 'X',
-        day: '03',
-        month: 'Y',
-        currentWeek: '04',
-        totalWeeks: '12',
-      });
+      const out = t('meta.todayLine', { weekday: 'X', day: '03', month: 'Y' });
       expect(out).toContain('03');
-      expect(out).toContain('04');
-      expect(out).toContain('12');
       expect(out).not.toContain('{{');
     }
   });
 
-  it('exposes day initials as an array with exactly 7 entries per locale', async () => {
-    for (const lang of ['pt-BR', 'en', 'es'] as const) {
-      const i18n = await freshI18nAt(lang);
-      const t = i18n.getFixedT(lang, 'home' as 'home') as unknown as (
-        key: string,
-        opts: { returnObjects: true },
-      ) => string[];
-      const arr = t('consistency.dayInitials', { returnObjects: true });
-      expect(Array.isArray(arr)).toBe(true);
-      expect(arr).toHaveLength(7);
-      for (const letter of arr) {
-        expect(typeof letter).toBe('string');
-        expect(letter.length).toBeGreaterThan(0);
-      }
-    }
-  });
 });
 
 describe('profile — subscription label lookup + fallback', () => {

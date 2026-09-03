@@ -27,6 +27,10 @@ import type { User } from 'firebase/auth';
 
 import { buildSeedDocuments } from '../../../scripts/seedWorkoutTemplates';
 import { completeAnswers } from '../../workoutPrescription/__tests__/fixtures';
+import {
+  CANONICAL_LIMITATION_DATASET_HASH,
+  CANONICAL_LIMITATION_DATASET_VERSION,
+} from '../../workoutPrescription/limitationDataset';
 
 const PROJECT_ID = 'ajfit-rules-test';
 const UID = 'fiona';
@@ -51,6 +55,8 @@ import {
 } from '../workoutPrograms';
 import { ensureScheduleConfigFromQuestionnaire, loadScheduleConfig } from '../workoutSchedule';
 import { normalizeWeekdays, trainingDaysValid } from '../../lib/questionnaireSchema';
+import { enableWorkoutLifecycleRollout } from './workoutLifecycleRolloutFixture';
+import { installWorkoutLifecycleAuthorityFixture, resetWorkoutLifecycleAuthorityFixture } from './workoutLifecycleAuthorityFixture';
 
 const T003_SEED = buildSeedDocuments().find((t) => t.id === 'T003');
 if (!T003_SEED) throw new Error('T003 fixture missing — cannot run this integration test');
@@ -69,14 +75,23 @@ describe.skipIf(!enabled)('Onboarding → signup lifecycle (conceptual E2E) — 
       firestore: { rules: readFileSync(resolve(__dirname, '../../../firestore.rules'), 'utf8') },
     });
     mocks.db = testEnv.authenticatedContext(UID, { email: 'fiona@example.com', email_verified: true }).firestore();
+    installWorkoutLifecycleAuthorityFixture(testEnv, UID);
   });
 
-  afterAll(async () => testEnv.cleanup());
+  afterAll(async () => {
+    resetWorkoutLifecycleAuthorityFixture();
+    await testEnv.cleanup();
+  });
 
   beforeEach(async () => {
     await testEnv.clearFirestore();
+    await enableWorkoutLifecycleRollout(testEnv);
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       await setDoc(doc(ctx.firestore(), 'workoutTemplates', 'T003'), T003_SEED);
+      await setDoc(doc(ctx.firestore(), 'limitationDatasetState', 'active'), {
+        datasetVersion: CANONICAL_LIMITATION_DATASET_VERSION,
+        limitationDatasetHash: CANONICAL_LIMITATION_DATASET_HASH,
+      });
     });
   });
 

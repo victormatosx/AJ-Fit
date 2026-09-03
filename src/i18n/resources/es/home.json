@@ -1,18 +1,9 @@
 {
   "meta": {
-    "todayLine": "{{weekday}} · {{day}} {{month}} · Semana {{currentWeek}}/{{totalWeeks}}"
+    "todayLine": "{{weekday}} · {{day}} {{month}}"
   },
   "greeting": {
     "casual": "Hola,"
-  },
-  "ticker": {
-    "streak": "Racha",
-    "weekVolume": "Volumen semana",
-    "benchPr": "PR press banca",
-    "consistency": "Constancia",
-    "nextLevel": "Próximo nivel",
-    "daysUnit": "días",
-    "nextLevelValue": "—{{days}} DÍAS"
   },
   "todayCard": {
     "kicker": "Entreno de hoy",
@@ -106,20 +97,6 @@
       "title": "No pudimos preparar tu entrenamiento",
       "body": "Algo salió mal al generar tu entrenamiento. Inténtalo de nuevo en unos instantes."
     }
-  },
-  "consistency": {
-    "title": "Constancia · semana",
-    "progressLabel": "{{done}}/{{total}}",
-    "restLabel": "Off",
-    "dayInitials": [
-      "D",
-      "L",
-      "M",
-      "M",
-      "J",
-      "V",
-      "S"
-    ]
   },
   "progress": {
     "header": {
@@ -357,68 +334,10 @@
       "selectTab": "Mostrar progreso de {{tab}}"
     }
   },
-  "monthlyConsistency": {
-    "title": "Constancia mensual",
-    "month": "Julio",
-    "monthYear": "{{month}} de {{year}}",
-    "remainingTitle": "Falta para completar el mes",
-    "daysRemaining_one": "día",
-    "daysRemaining_other": "días",
-    "pendingWorkouts_one": "entreno",
-    "pendingWorkouts_other": "entrenos",
-    "progress": "Día {{current}} de {{total}} · {{done}} entrenos completados",
-    "legend": {
-      "done": "Entreno hecho",
-      "today": "Hoy",
-      "pending": "Por hacer",
-      "missed": "Perdido",
-      "rest": "Descanso"
-    },
-    "accessibility": {
-      "back": "Volver de la constancia mensual"
-    }
-  },
-  "stats": {
-    "streak": {
-      "label": "Racha",
-      "unit": "días",
-      "note": "récord personal: 21"
-    },
-    "volume": {
-      "label": "Volumen",
-      "unit": "ton",
-      "note": "+8% vs semana pasada"
-    }
-  },
-  "upcoming": {
-    "title": "Próximos entrenos",
-    "meta": "{{duration}} min · {{exercises}} ejercicios",
-    "items": {
-      "pull": {
-        "day": "Mié",
-        "name": "PULL — Espalda y bíceps",
-        "duration": 54,
-        "exercises": 7
-      },
-      "legs": {
-        "day": "Vie",
-        "name": "LEGS — Cuádriceps y glúteos",
-        "duration": 62,
-        "exercises": 9
-      },
-      "upper": {
-        "day": "Sáb",
-        "name": "UPPER — Empuje ligero",
-        "duration": 45,
-        "exercises": 6
-      }
-    }
-  },
-  "mock": {
-    "today": {
-      "type": "Push",
-      "focus": "Pecho y hombro",
-      "name": "Push — Pecho y Hombro"
-    }
+  "consistencyUnavailable": {
+    "title": "El historial de constancia aún no está disponible",
+    "body": "AJ Fit no muestra un calendario hasta que el historial de entrenamientos completados pueda respaldarlo.",
+    "note": "No se muestran datos de ejemplo",
+    "back": "Volver"
   }
 }

@@ -98,6 +98,33 @@ service cloud.firestore {
              .data.metadata.role == 'admin';
     }
 
+    // DEV Workout Lifecycle QA (docs/workout-lifecycle/v2/qa/): same shape
+    // as isAdmin() above — only readable, never client-writable (see
+    // metadataValid's comment and the users/{userId} update rule, which
+    // never lets `metadata` diffs touch this key). `workoutLifecycleQaMode`
+    // is single-valued ('ACCELERATED' | 'TRANSITION') — mutually exclusive
+    // by construction, never two independent flags. This helper mirrors
+    // `functions/src/workoutLifecycle/qaPolicy.ts`'s resolution exactly,
+    // including the deprecated legacy-boolean fallback (only consulted when
+    // the new field is absent). Only QA_ACCELERATED widens the
+    // pendingEvolutions deferral timing tolerance below — QA_TRANSITION
+    // uses the real 14-day window like any other account, since deferral
+    // timing is real production behavior it deliberately doesn't touch.
+    // The real progression thresholds (28/85 days, 70%/85% adherence, 4
+    // cycles) and the QA_TRANSITION eligibility bypass are enforced
+    // server-side in authorizeMutation.ts reading this exact same field —
+    // this Rules helper never grants those on its own.
+    function workoutLifecycleQaModeIsAccelerated(userId) {
+      return exists(/databases/$(database)/documents/users/$(userId))
+        && (
+          get(/databases/$(database)/documents/users/$(userId)).data.metadata.get('workoutLifecycleQaMode', null) == 'ACCELERATED'
+          || (
+            !('workoutLifecycleQaMode' in get(/databases/$(database)/documents/users/$(userId)).data.metadata)
+            && get(/databases/$(database)/documents/users/$(userId)).data.metadata.get('workoutLifecycleQaAccelerated', false) == true
+          )
+        );
+    }
+
     function profileValid(data) {
       return data is map
         && data.keys().hasAll(['name', 'email'])
@@ -201,14 +228,29 @@ service cloud.firestore {
       return data is map
         && data.keys().hasAll(['role', 'createdAt', 'updatedAt'])
         && data.keys().hasOnly(
-             ['role', 'activeWorkoutId', 'createdAt', 'updatedAt', 'commercialGateResolvedAt'])
+             ['role', 'activeWorkoutId', 'createdAt', 'updatedAt', 'commercialGateResolvedAt',
+              'workoutLifecycleQaMode', 'workoutLifecycleQaAccelerated'])
         && data.role in ['user', 'admin']
         && (!('activeWorkoutId' in data) || data.activeWorkoutId is string)
         && data.createdAt is timestamp
         && data.updatedAt is timestamp
         && (!('commercialGateResolvedAt' in data)
              || data.commercialGateResolvedAt == null
-             || data.commercialGateResolvedAt is timestamp);
+             || data.commercialGateResolvedAt is timestamp)
+        // DEV Workout Lifecycle QA (docs/workout-lifecycle/v2/qa/): only the
+        // Admin SDK / Firebase Console can ever write these fields — the
+        // `users/{userId}` update rule below restricts client-affected keys
+        // to `metadata.updatedAt` only, so these presence checks exist
+        // purely so a client CAN'T be locked out of its own unrelated
+        // profile edits once an admin sets one (`hasOnly` above would
+        // otherwise reject the whole doc). `workoutLifecycleQaMode` is
+        // single-valued and mutually exclusive by construction. The legacy
+        // `workoutLifecycleQaAccelerated` boolean (deprecated) is still
+        // accepted for accounts not yet migrated to the new field.
+        && (!('workoutLifecycleQaMode' in data)
+             || data.workoutLifecycleQaMode in ['ACCELERATED', 'TRANSITION'])
+        && (!('workoutLifecycleQaAccelerated' in data)
+             || data.workoutLifecycleQaAccelerated is bool);
     }
 
     function workoutProgramLimitationValid(questionnaire, data) {
@@ -280,7 +322,7 @@ service cloud.firestore {
         && questionnaire.data.version == data.questionnaireVersion
         && workoutProgramLimitationValid(questionnaire, data)
         && data.status in ['active', 'superseded']
-        && data.source in ['onboarding', 'manual_regeneration', 'automatic_progression', 'automatic_reconciliation']
+        && data.source in ['onboarding', 'manual_regeneration', 'automatic_progression', 'automatic_reconciliation', 'evolution_activation', 'program_adaptation']
         && data.requestedDays is int && data.requestedDays >= 2 && data.requestedDays <= 7
         && data.prescribedStructuredDays is int
         && data.prescribedStructuredDays >= 2 && data.prescribedStructuredDays <= 7
@@ -342,6 +384,43 @@ service cloud.firestore {
         );
     }
 
+    // Phase 10E (P3, docs/workout-lifecycle/v2/architecture/
+    // 26_FINAL_INDEPENDENT_ADVERSARIAL_AUDIT_2.md §51): `exercises.size()`
+    // was bounded (<=20) but each exercise's own `sets` array was not,
+    // capped only by Firestore's 1MB document limit. Real prescriptions cap
+    // sets at 1-10 per exercise (`assertPlanSafe`,
+    // functions/src/workoutLifecycle/authorizeMutation.ts:428) — 15 gives a
+    // safe margin without constraining any real prescribed or logged
+    // session. Firestore Rules has no loop/recursion construct, so this is
+    // unrolled to the same 20-exercise cap `workoutExecutionCommonValid`
+    // already enforces. Write-size hygiene only — session-qualification
+    // (`isValidProgressionSessionAgainstPrescription`) already requires an
+    // exact set-count match against the real prescription, so an oversized
+    // array here was never able to earn progression credit; this only
+    // closes the ability to write one at all.
+    function executionExerciseSetsWithinBound(exercises) {
+      return (exercises.size() <= 0 || !('sets' in exercises[0]) || (exercises[0].sets is list && exercises[0].sets.size() <= 15))
+        && (exercises.size() <= 1 || !('sets' in exercises[1]) || (exercises[1].sets is list && exercises[1].sets.size() <= 15))
+        && (exercises.size() <= 2 || !('sets' in exercises[2]) || (exercises[2].sets is list && exercises[2].sets.size() <= 15))
+        && (exercises.size() <= 3 || !('sets' in exercises[3]) || (exercises[3].sets is list && exercises[3].sets.size() <= 15))
+        && (exercises.size() <= 4 || !('sets' in exercises[4]) || (exercises[4].sets is list && exercises[4].sets.size() <= 15))
+        && (exercises.size() <= 5 || !('sets' in exercises[5]) || (exercises[5].sets is list && exercises[5].sets.size() <= 15))
+        && (exercises.size() <= 6 || !('sets' in exercises[6]) || (exercises[6].sets is list && exercises[6].sets.size() <= 15))
+        && (exercises.size() <= 7 || !('sets' in exercises[7]) || (exercises[7].sets is list && exercises[7].sets.size() <= 15))
+        && (exercises.size() <= 8 || !('sets' in exercises[8]) || (exercises[8].sets is list && exercises[8].sets.size() <= 15))
+        && (exercises.size() <= 9 || !('sets' in exercises[9]) || (exercises[9].sets is list && exercises[9].sets.size() <= 15))
+        && (exercises.size() <= 10 || !('sets' in exercises[10]) || (exercises[10].sets is list && exercises[10].sets.size() <= 15))
+        && (exercises.size() <= 11 || !('sets' in exercises[11]) || (exercises[11].sets is list && exercises[11].sets.size() <= 15))
+        && (exercises.size() <= 12 || !('sets' in exercises[12]) || (exercises[12].sets is list && exercises[12].sets.size() <= 15))
+        && (exercises.size() <= 13 || !('sets' in exercises[13]) || (exercises[13].sets is list && exercises[13].sets.size() <= 15))
+        && (exercises.size() <= 14 || !('sets' in exercises[14]) || (exercises[14].sets is list && exercises[14].sets.size() <= 15))
+        && (exercises.size() <= 15 || !('sets' in exercises[15]) || (exercises[15].sets is list && exercises[15].sets.size() <= 15))
+        && (exercises.size() <= 16 || !('sets' in exercises[16]) || (exercises[16].sets is list && exercises[16].sets.size() <= 15))
+        && (exercises.size() <= 17 || !('sets' in exercises[17]) || (exercises[17].sets is list && exercises[17].sets.size() <= 15))
+        && (exercises.size() <= 18 || !('sets' in exercises[18]) || (exercises[18].sets is list && exercises[18].sets.size() <= 15))
+        && (exercises.size() <= 19 || !('sets' in exercises[19]) || (exercises[19].sets is list && exercises[19].sets.size() <= 15));
+    }
+
     // Workout Execution & History V1 (docs/workout-lifecycle/
     // 09_WORKOUT_EXECUTION_AND_HISTORY.md). `exercises` is validated only for
     // shape/bounds here, the same precedent `workoutProgramCommonValid` sets
@@ -360,7 +439,8 @@ service cloud.firestore {
         && data.keys().hasOnly([
              'programId', 'templateId', 'sessionIndex', 'sessionName',
              'scheduledLocalDate', 'status', 'startedAt', 'finishedAt',
-             'exercises', 'executionSchemaVersion', 'createdAt', 'updatedAt'
+             'exercises', 'executionSchemaVersion', 'createdAt', 'updatedAt',
+             'programInstanceId'
            ])
         && data.programId is string
         && program.data.programId == data.programId
@@ -373,7 +453,14 @@ service cloud.firestore {
         && data.startedAt is timestamp
         && (data.finishedAt == null || data.finishedAt is timestamp)
         && data.exercises is list && data.exercises.size() >= 1 && data.exercises.size() <= 20
-        && data.executionSchemaVersion == 1
+        && executionExerciseSetsWithinBound(data.exercises)
+        && data.executionSchemaVersion in [1, 2]
+        && (
+          (data.executionSchemaVersion == 1 && !('programInstanceId' in data))
+          || (data.executionSchemaVersion == 2
+              && data.programInstanceId is string
+              && get(/databases/$(database)/documents/users/$(userId)/programInstances/$(data.programInstanceId)).data.contentIdentity == data.programId)
+        )
         && data.createdAt is timestamp
         && data.updatedAt is timestamp;
     }
@@ -845,6 +932,26 @@ service cloud.firestore {
       match /workoutPrograms/{programId} {
         allow read: if isOwner(userId) && accountActive(userId);
 
+        // V2 (lifecycle-managed) content is backend-authoritative: a client
+        // can only make this identity "live" by presenting the one-time
+        // grant `authorizeWorkoutLifecycleMutation` already issued for THIS
+        // exact contentIdentity, after the backend independently validated
+        // it (assertPlanSafe) — never by satisfying structural shape alone
+        // (docs/workout-lifecycle/v2/decisions/
+        // ADR-016_BACKEND_AUTHORITATIVE_PRESCRIPTION.md). Legacy V1 (never
+        // had a `workoutLifecycleState/current` document) is unaffected.
+        //
+        // The escape hatch below is gated on `existsAfter(workoutLifecycleState/
+        // current)` — NOT on whether `workoutProgramState/active` happens to
+        // carry a `programInstanceId` (Phase 10D fix: that was client-choosable
+        // per write and let ANY user, not just genuine pre-V2 accounts, skip
+        // the grant requirement simply by omitting an optional field —
+        // docs/workout-lifecycle/v2/architecture/
+        // 22_POST_PHASE_10C_FINAL_ADVERSARIAL_AUDIT.md Finding FS-RULES-BYPASS-01).
+        // `workoutLifecycleState/current` can only ever be created under a
+        // real authority grant (see its own `create` rule) and can never be
+        // deleted (`allow delete: if false` below) — its existence is a
+        // backend-controlled fact, not something a client can toggle per write.
         allow create: if isOwner(userId)
           && accountActive(userId)
           && workoutProgramCommonValid(userId, programId, request.resource.data)
@@ -856,8 +963,27 @@ service cloud.firestore {
           && request.resource.data.createdAt == request.time
           && request.resource.data.activatedAt == request.time
           && request.resource.data.updatedAt == request.time
-          && getAfter(/databases/$(database)/documents/users/$(userId)/workoutProgramState/active).data.programId == programId;
+          && getAfter(/databases/$(database)/documents/users/$(userId)/workoutProgramState/active).data.programId == programId
+          && (
+               !existsAfter(/databases/$(database)/documents/users/$(userId)/workoutLifecycleState/current)
+               || (consumesLifecycleAuthorityGrant(userId, ['INITIALIZE', 'MIGRATE', 'ACTIVATE', 'ADAPT', 'RECOVER'])
+                   && lifecycleAuthorityGrant(userId).targetContentIdentity == programId)
+             );
 
+        // Phase 10E fix: `create` was hardened in Phase 10D (existsAfter-gated
+        // grant requirement above), but `update` — the path a reactivation of
+        // a previously-superseded, content-addressed `workoutPrograms` doc
+        // takes (`transaction.update` in `saveAndActivateWorkoutProgram` when
+        // `targetSnapshot.exists()`) — had NO grant requirement at all. A V2
+        // owner could flip a stale doc's `status` back to `active` and
+        // repoint `workoutProgramState/active` at it with zero authorization
+        // (docs/workout-lifecycle/v2/architecture/
+        // 26_FINAL_INDEPENDENT_ADVERSARIAL_AUDIT_2.md §48). Bounded impact —
+        // `workoutLifecycleState/current` remained the real authority, so
+        // progression/adherence/execution were never affected — but this
+        // closes the display/content-drift gap structurally, the same way
+        // the `create` fix did: gated on `existsAfter(workoutLifecycleState/
+        // current)`, never on a client-omittable field.
         allow update: if isOwner(userId)
           && accountActive(userId)
           && (workoutProgramCommonValid(userId, programId, request.resource.data)
@@ -871,9 +997,18 @@ service cloud.firestore {
           && request.resource.data.createdAt == resource.data.createdAt
           && request.resource.data.updatedAt == request.time
           && (
+               !existsAfter(/databases/$(database)/documents/users/$(userId)/workoutLifecycleState/current)
+               || consumesLifecycleAuthorityGrant(userId, ['INITIALIZE', 'MIGRATE', 'ACTIVATE', 'ADAPT', 'RECOVER'])
+             )
+          && (
             (request.resource.data.status == 'active'
-              && request.resource.data.activatedAt == request.time
-              && getAfter(/databases/$(database)/documents/users/$(userId)/workoutProgramState/active).data.programId == programId)
+              && (request.resource.data.activatedAt == request.time
+                  || request.resource.data.activatedAt == resource.data.activatedAt)
+              && getAfter(/databases/$(database)/documents/users/$(userId)/workoutProgramState/active).data.programId == programId
+              && (
+                   !existsAfter(/databases/$(database)/documents/users/$(userId)/workoutLifecycleState/current)
+                   || lifecycleAuthorityGrant(userId).targetContentIdentity == programId
+                 ))
             ||
             (request.resource.data.status == 'superseded'
               && request.resource.data.activatedAt == resource.data.activatedAt
@@ -887,19 +1022,90 @@ service cloud.firestore {
         // §Troca de programa). Single fixed id 'current', same pattern as
         // workoutProgramState/active above.
         match /scheduleState/{stateId} {
-          allow read: if isOwner(userId) && accountActive(userId) && stateId == 'current';
-          allow create, update: if isOwner(userId)
+          allow read: if isOwner(userId)
             && accountActive(userId)
-            && stateId == 'current'
+            && (stateId == 'current'
+                || get(/databases/$(database)/documents/users/$(userId)/programInstances/$(stateId)).data.contentIdentity == programId);
+          // Phase 10E fix: `programInstanceId` presence used to be optional
+          // (`!('programInstanceId' in data) || (...)`) — the same shape that
+          // caused FS-RULES-BYPASS-01. Omitting the field let a client target
+          // the dead-for-V2 `scheduleState/current` doc-id with no identity
+          // check at all. For any V2 account the field is now MANDATORY and
+          // must match `stateId`, gated on the backend-controlled fact
+          // `existsAfter(workoutLifecycleState/current)` — never on whether
+          // the client chose to send the field (docs/workout-lifecycle/v2/
+          // architecture/26_FINAL_INDEPENDENT_ADVERSARIAL_AUDIT_2.md §49).
+          // Bootstrap create still needs no grant (fresh rotation state, no
+          // position to protect yet — see the update rule's own comment for
+          // why that remains safe), but it can no longer skip the identity
+          // check by omitting the field.
+          allow create: if isOwner(userId)
+            && accountActive(userId)
+            && (stateId == 'current' || stateId == request.resource.data.get('programInstanceId', ''))
             && request.resource.data.keys().hasAll(
                  ['programId', 'nextSessionIndex', 'cursorDate', 'lastCompletedAt', 'pendingMissDecision', 'updatedAt'])
             && request.resource.data.keys().hasOnly(
-                 ['programId', 'nextSessionIndex', 'cursorDate', 'lastCompletedAt', 'pendingMissDecision', 'updatedAt'])
+                 ['programId', 'programInstanceId', 'nextSessionIndex', 'cursorDate', 'lastCompletedAt', 'pendingMissDecision', 'updatedAt'])
             && request.resource.data.programId == programId
+            && (
+                 !existsAfter(/databases/$(database)/documents/users/$(userId)/workoutLifecycleState/current)
+                 || (
+                      'programInstanceId' in request.resource.data
+                      && request.resource.data.programInstanceId == stateId
+                      && get(/databases/$(database)/documents/users/$(userId)/programInstances/$(stateId)).data.contentIdentity == programId
+                    )
+               )
             && request.resource.data.nextSessionIndex is int
             && request.resource.data.nextSessionIndex >= 0
             && request.resource.data.cursorDate is string
             && request.resource.data.updatedAt == request.time;
+
+          // Update: a write that keeps the rotation position (nextSessionIndex
+          // + cursorDate) unchanged is bookkeeping only (e.g. recording a
+          // newly-detected miss's pendingMissDecision) and stays ungated. A
+          // write that actually ADVANCES the rotation for a V2 program must
+          // be exactly the target the backend already computed and bound to
+          // a one-time grant (docs §Scheduled Opportunity Integrity) — the
+          // client can no longer self-select a favorable next session, and
+          // (Phase 10E) can no longer skip this requirement by omitting
+          // `programInstanceId` for a V2 account.
+          allow update: if isOwner(userId)
+            && accountActive(userId)
+            && (stateId == 'current' || stateId == request.resource.data.get('programInstanceId', ''))
+            && request.resource.data.keys().hasAll(
+                 ['programId', 'nextSessionIndex', 'cursorDate', 'lastCompletedAt', 'pendingMissDecision', 'updatedAt'])
+            && request.resource.data.keys().hasOnly(
+                 ['programId', 'programInstanceId', 'nextSessionIndex', 'cursorDate', 'lastCompletedAt', 'pendingMissDecision', 'updatedAt'])
+            && request.resource.data.programId == programId
+            && (
+                 !existsAfter(/databases/$(database)/documents/users/$(userId)/workoutLifecycleState/current)
+                 || (
+                      'programInstanceId' in request.resource.data
+                      && request.resource.data.programInstanceId == stateId
+                      && get(/databases/$(database)/documents/users/$(userId)/programInstances/$(stateId)).data.contentIdentity == programId
+                    )
+               )
+            && request.resource.data.nextSessionIndex is int
+            && request.resource.data.nextSessionIndex >= 0
+            && request.resource.data.cursorDate is string
+            && request.resource.data.updatedAt == request.time
+            // Legacy V1 has no grant system at all — its rotation legitimately
+            // advances via a direct, ungated write (`src/services/
+            // workoutSchedule.ts`, no `programInstanceId`/grant involved).
+            // That path is preserved by the same backend-controlled
+            // `!existsAfter(workoutLifecycleState/current)` boundary used
+            // above and everywhere else in this phase's fix — never by a
+            // client-omittable field. For V2, only a same-position bookkeeping
+            // write or a real grant-bound advance is allowed.
+            && (
+                 !existsAfter(/databases/$(database)/documents/users/$(userId)/workoutLifecycleState/current)
+                 || (request.resource.data.nextSessionIndex == resource.data.nextSessionIndex
+                     && request.resource.data.cursorDate == resource.data.cursorDate)
+                 || (consumesLifecycleAuthorityGrant(userId, ['COMPLETE_SCHEDULE', 'RESOLVE_MISSED_SESSION'])
+                     && lifecycleAuthorityGrant(userId).sourceProgramInstanceId == request.resource.data.programInstanceId
+                     && lifecycleAuthorityGrant(userId).targetNextSessionIndex == request.resource.data.nextSessionIndex
+                     && lifecycleAuthorityGrant(userId).targetCursorDate == request.resource.data.cursorDate)
+               );
           allow delete: if false;
         }
 
@@ -909,15 +1115,51 @@ service cloud.firestore {
         // ownership is the path, not a payload field.
         match /scheduleEvents/{eventId} {
           allow read: if isOwner(userId) && accountActive(userId);
+          // Phase 10E fix: the grant requirement used to be skipped entirely
+          // whenever the client omitted `programInstanceId` from the payload
+          // (`!request.resource.data.keys().hasAny(['programInstanceId'])`) —
+          // the same FS-RULES-BYPASS-01 shape, letting a V2 owner write a
+          // grant-free COMPLETED/SKIPPED/MISS_RESOLVED ledger entry (docs/
+          // workout-lifecycle/v2/architecture/
+          // 26_FINAL_INDEPENDENT_ADVERSARIAL_AUDIT_2.md §49). Traced this
+          // pass to a conclusive NON_EXPLOITABLE-for-progression verdict
+          // (see 27_PHASE_10E_FINAL_STAGED_ROLLOUT_CLOSURE.md §9): the
+          // backend's `authoritativeEarnedFact` only ever reads `COMPLETED`
+          // events filtered by exact `programInstanceId` equality — an
+          // omitted (`undefined`) field can never match a real instance id —
+          // and SKIPPED/MISS_RESOLVED events are never read by the backend
+          // authority at all. Still fixed structurally regardless, per this
+          // phase's explicit instruction not to leave security depending on
+          // an optional field: legacy V1 (no `workoutLifecycleState/current`)
+          // keeps its ungated write; V2 now always requires the matching
+          // grant.
           allow create: if isOwner(userId)
             && accountActive(userId)
             && request.resource.data.keys().hasAll(['type', 'sessionIndex', 'scheduledDate', 'occurredAt'])
             && request.resource.data.keys().hasOnly(
-                 ['type', 'sessionIndex', 'scheduledDate', 'occurredAt', 'reasonCode', 'decision'])
+                 ['type', 'sessionIndex', 'scheduledDate', 'occurredAt', 'reasonCode', 'decision', 'programInstanceId'])
             && request.resource.data.type in ['COMPLETED', 'SKIPPED', 'MISS_RESOLVED']
+            && (
+                 !existsAfter(/databases/$(database)/documents/users/$(userId)/workoutLifecycleState/current)
+                 || (request.resource.data.type == 'COMPLETED'
+                   && consumesLifecycleAuthorityGrant(userId, ['COMPLETE_SCHEDULE'])
+                   && lifecycleAuthorityGrant(userId).sourceProgramInstanceId == request.resource.data.programInstanceId
+                   && lifecycleAuthorityGrant(userId).sessionIndex == request.resource.data.sessionIndex
+                   && lifecycleAuthorityGrant(userId).scheduledLocalDate == request.resource.data.scheduledDate)
+                 || (request.resource.data.type in ['SKIPPED', 'MISS_RESOLVED']
+                   && consumesLifecycleAuthorityGrant(userId, ['RESOLVE_MISSED_SESSION'])
+                   && lifecycleAuthorityGrant(userId).sourceProgramInstanceId == request.resource.data.programInstanceId
+                   && lifecycleAuthorityGrant(userId).targetScheduleEvents.hasAny([{
+                        'type': request.resource.data.type,
+                        'sessionIndex': request.resource.data.sessionIndex,
+                        'scheduledDate': request.resource.data.scheduledDate,
+                      }]))
+               )
             && request.resource.data.sessionIndex is int
             && request.resource.data.sessionIndex >= 0
             && request.resource.data.scheduledDate is string
+            && (!('programInstanceId' in request.resource.data)
+                || get(/databases/$(database)/documents/users/$(userId)/programInstances/$(request.resource.data.programInstanceId)).data.contentIdentity == programId)
             && request.resource.data.occurredAt == request.time;
           allow update, delete: if false;
         }
@@ -962,17 +1204,21 @@ service cloud.firestore {
           && accountActive(userId)
           && stateId == 'active'
           && request.resource.data.keys().hasAll(['programId', 'updatedAt'])
-          && request.resource.data.keys().hasOnly(['programId', 'updatedAt'])
+          && request.resource.data.keys().hasOnly(['programId', 'programInstanceId', 'updatedAt'])
           && request.resource.data.programId is string
           && request.resource.data.updatedAt == request.time
+          && (!('programInstanceId' in request.resource.data)
+              || getAfter(/databases/$(database)/documents/users/$(userId)/workoutLifecycleState/current).data.activeProgramInstanceId == request.resource.data.programInstanceId)
           && getAfter(/databases/$(database)/documents/users/$(userId)/workoutPrograms/$(request.resource.data.programId)).data.status == 'active';
         allow update: if isOwner(userId)
           && accountActive(userId)
           && stateId == 'active'
           && request.resource.data.keys().hasAll(['programId', 'updatedAt'])
-          && request.resource.data.keys().hasOnly(['programId', 'updatedAt'])
+          && request.resource.data.keys().hasOnly(['programId', 'programInstanceId', 'updatedAt'])
           && request.resource.data.programId is string
           && request.resource.data.updatedAt == request.time
+          && (!('programInstanceId' in request.resource.data)
+              || getAfter(/databases/$(database)/documents/users/$(userId)/workoutLifecycleState/current).data.activeProgramInstanceId == request.resource.data.programInstanceId)
           && getAfter(/databases/$(database)/documents/users/$(userId)/workoutPrograms/$(request.resource.data.programId)).data.status == 'active'
           && (resource.data.programId == request.resource.data.programId
               || getAfter(/databases/$(database)/documents/users/$(userId)/workoutPrograms/$(resource.data.programId)).data.status == 'superseded');
@@ -989,6 +1235,562 @@ service cloud.firestore {
           && request.resource.data.scheduleVersion is int
           && request.resource.data.updatedAt == request.time;
         allow delete: if false;
+      }
+
+      // Workout Lifecycle V2 authoritative current state. The original
+      // questionnaire is immutable and never becomes the mutable level
+      // source of truth.
+      function prescriptionInputSnapshotValid(snapshot) {
+        return snapshot is map
+          && snapshot.keys().hasAll(['snapshotId', 'schemaVersion', 'source', 'inputs'])
+          && snapshot.keys().hasOnly(['snapshotId', 'schemaVersion', 'source', 'inputs'])
+          && snapshot.snapshotId is string
+          && snapshot.schemaVersion == 1
+          && snapshot.source in [
+               'QUESTIONNAIRE_BASELINE', 'PROGRAM_ADAPTATION',
+               'LEVEL_PROMOTION', 'CYCLE_EVOLUTION', 'MOTIVATIONAL_RENEWAL']
+          && snapshot.inputs is map
+          && snapshot.inputs.keys().hasAll([
+               'sex', 'goal', 'level', 'limits', 'duration', 'days',
+               'trainingDays', 'place', 'primaryPlace', 'equipment', 'style',
+               'muscleFocus', 'specialConditions', 'pregnancyScreening',
+               'postpartumScreening', 'functionalScreening',
+               'lipedemaScreening', 'dizzinessScreening',
+               'postSurgicalScreening', 'medicalRestrictionScreening'])
+          && snapshot.inputs.keys().hasOnly([
+               'sex', 'goal', 'level', 'limits', 'duration', 'days',
+               'trainingDays', 'place', 'primaryPlace', 'equipment', 'style',
+               'muscleFocus', 'specialConditions', 'pregnancyScreening',
+               'postpartumScreening', 'functionalScreening',
+               'lipedemaScreening', 'dizzinessScreening',
+               'postSurgicalScreening', 'medicalRestrictionScreening'])
+          && snapshot.inputs.level in ['beginner', 'intermediate', 'advanced']
+          && snapshot.inputs.limits is list
+          && snapshot.inputs.equipment is list
+          && snapshot.inputs.style is list
+          && snapshot.inputs.muscleFocus is list
+          && snapshot.inputs.specialConditions is list
+          && (snapshot.inputs.trainingDays == null || snapshot.inputs.trainingDays is list);
+      }
+
+      function lifecycleLevelTransitionValid(from, to) {
+        return from == to
+          || (from == 'BEGINNER' && to == 'INTERMEDIATE')
+          || (from == 'INTERMEDIATE' && to == 'ADVANCED');
+      }
+
+      function lifecycleAuthorityGrantPath(userId) {
+        return /databases/$(database)/documents/users/$(userId)/workoutLifecycleAuthorityGrants/current;
+      }
+
+      function lifecycleAuthorityGrant(userId) {
+        return get(lifecycleAuthorityGrantPath(userId)).data;
+      }
+
+      function consumesLifecycleAuthorityGrant(userId, operations) {
+        return exists(lifecycleAuthorityGrantPath(userId))
+          && lifecycleAuthorityGrant(userId).uid == userId
+          && lifecycleAuthorityGrant(userId).schemaVersion == 1
+          && lifecycleAuthorityGrant(userId).operation in operations
+          && lifecycleAuthorityGrant(userId).expiresAt is timestamp
+          && lifecycleAuthorityGrant(userId).expiresAt >= request.time
+          && !existsAfter(lifecycleAuthorityGrantPath(userId));
+      }
+
+      function grantSourceMatches(userId, cycleId, programInstanceId) {
+        return lifecycleAuthorityGrant(userId).sourceCycleId == cycleId
+          && lifecycleAuthorityGrant(userId).sourceProgramInstanceId == programInstanceId;
+      }
+
+      function grantTargetMatches(userId, cycleId, programInstanceId) {
+        return lifecycleAuthorityGrant(userId).targetCycleId == cycleId
+          && lifecycleAuthorityGrant(userId).targetProgramInstanceId == programInstanceId;
+      }
+
+      function questionnaireLevelMatches(userId, programInstanceId, level) {
+        let instance = getAfter(/databases/$(database)/documents/users/$(userId)/programInstances/$(programInstanceId)).data;
+        let questionnaire = getAfter(/databases/$(database)/documents/users/$(userId)/questionnaires/$(instance.questionnaireId)).data;
+        return (level == 'BEGINNER' && questionnaire.answers.level in ['never_or_starting', 'beginner', 'beg'])
+          || (level == 'INTERMEDIATE' && questionnaire.answers.level in ['intermediate', 'int'])
+          || (level == 'ADVANCED' && questionnaire.answers.level in ['advanced', 'adv', 'elite']);
+      }
+
+      // This is deliberately a bounded structural/relationship boundary,
+      // not a second prescription engine. It prevents an owner from storing
+      // an arbitrary map while the application remains responsible for the
+      // deep exercise/safety semantics.
+      function pendingPlanValid(data) {
+        let plan = data.plan;
+        return plan is map
+          && plan.keys().hasAll([
+               'planId', 'templateId', 'requestedDays', 'prescribedStructuredDays',
+               'population', 'environment', 'goalFamily', 'split',
+               'limitationDatasetVersion', 'limitationDatasetHash', 'sessions',
+               'versions', 'trace'])
+          && plan.keys().hasOnly([
+               'planId', 'templateId', 'requestedDays', 'prescribedStructuredDays',
+               'prescribedTrainingFrequency', 'availability', 'weeklySchedule',
+               'population', 'environment', 'goalFamily', 'split', 'adaptationStage',
+               'limitationDatasetVersion', 'limitationDatasetHash', 'sessions',
+               'versions', 'trace'])
+          && plan.planId == data.targetPrescriptionIdentity
+          && plan.templateId == data.targetTemplateId
+          && plan.requestedDays is int && plan.requestedDays >= 1 && plan.requestedDays <= 7
+          && plan.prescribedStructuredDays is int
+          && plan.prescribedStructuredDays >= 1 && plan.prescribedStructuredDays <= 7
+          && plan.sessions is list && plan.sessions.size() >= 1 && plan.sessions.size() <= 7
+          && plan.versions is map && plan.trace is map
+          && plan.limitationDatasetVersion is string
+          && plan.limitationDatasetHash is string && plan.limitationDatasetHash.size() == 64;
+      }
+
+      function lifecycleEventPayloadValid(data) {
+        let payload = data.payload;
+        return payload is map && (
+          (data.type == 'PROGRAM_STARTED'
+            && ((payload.keys().hasOnly(['activationReason']) && payload.activationReason is string)
+              || (payload.keys().hasOnly(['source']) && payload.source is string)))
+          || (data.type == 'PROGRAM_ADAPTED'
+            && payload.keys().hasOnly(['source', 'reason'])
+            && payload.source == 'program_adaptation'
+            && payload.reason in ['AVAILABILITY', 'GOAL', 'ENVIRONMENT', 'LIMITATION', 'PREFERENCE'])
+          || (data.type in ['EVOLUTION_EARNED', 'MOTIVATIONAL_RENEWAL_OFFERED']
+            && payload.keys().hasOnly([
+                 'evolutionType', 'quality', 'fromLevel', 'toLevel',
+                 'sessionsCompletedAtEarn', 'adherenceAtEarnBp'])
+            && payload.evolutionType in ['CYCLE_EVOLUTION', 'LEVEL_PROMOTION', 'MOTIVATIONAL_RENEWAL']
+            && payload.quality in ['BELOW_TARGET', 'GOOD', 'HIGH']
+            && payload.fromLevel in ['BEGINNER', 'INTERMEDIATE', 'ADVANCED']
+            && payload.toLevel in ['BEGINNER', 'INTERMEDIATE', 'ADVANCED']
+            && lifecycleLevelTransitionValid(payload.fromLevel, payload.toLevel)
+            && payload.sessionsCompletedAtEarn is int && payload.sessionsCompletedAtEarn >= 0
+            && payload.adherenceAtEarnBp is int
+            && payload.adherenceAtEarnBp >= 0 && payload.adherenceAtEarnBp <= 10000)
+          || (data.type == 'EVOLUTION_DEFERRED'
+            && payload.keys().hasOnly(['deferralCount', 'nextPromptAtMs', 'autoActivateAtMs'])
+            && payload.deferralCount in [1, 2]
+            && (payload.nextPromptAtMs == null || payload.nextPromptAtMs is int)
+            && (payload.autoActivateAtMs == null || payload.autoActivateAtMs is int))
+          || (data.type in ['EVOLUTION_ACTIVATED', 'LEVEL_PROMOTED', 'MOTIVATIONAL_RENEWAL_ACTIVATED']
+            && payload.keys().hasOnly(['source', 'evolutionType', 'quality', 'trigger'])
+            && payload.source == 'evolution_activation'
+            && payload.evolutionType in ['CYCLE_EVOLUTION', 'LEVEL_PROMOTION', 'MOTIVATIONAL_RENEWAL']
+            && payload.quality in ['BELOW_TARGET', 'GOOD', 'HIGH']
+            && payload.trigger in ['MANUAL', 'AUTO']
+            && (data.type != 'LEVEL_PROMOTED' || payload.evolutionType == 'LEVEL_PROMOTION')
+            && (data.type != 'MOTIVATIONAL_RENEWAL_ACTIVATED' || payload.evolutionType == 'MOTIVATIONAL_RENEWAL'))
+          || (data.type in ['CYCLE_STARTED', 'CYCLE_ELIGIBLE', 'CYCLE_COMPLETED', 'EVOLUTION_ELIGIBLE']
+            && payload.keys().size() == 0)
+        );
+      }
+
+      match /workoutLifecycleState/{stateId} {
+        allow read: if isOwner(userId) && accountActive(userId) && stateId == 'current';
+        allow create: if isOwner(userId)
+          && accountActive(userId)
+          && consumesLifecycleAuthorityGrant(userId, ['INITIALIZE', 'MIGRATE', 'RECOVER'])
+          && grantTargetMatches(userId, request.resource.data.currentCycleId, request.resource.data.activeProgramInstanceId)
+          && stateId == 'current'
+          && request.resource.data.keys().hasAll([
+               'startingLevel', 'currentTrainingLevel', 'currentCycleId',
+               'currentCycleNumber', 'activeProgramInstanceId',
+               'activeContentIdentity', 'activePrescriptionIdentity',
+               'initializationOrigin', 'historyCompleteFrom', 'schemaVersion',
+               'createdAt', 'updatedAt'])
+          && request.resource.data.keys().hasOnly([
+               'startingLevel', 'currentTrainingLevel', 'currentCycleId',
+               'currentCycleNumber', 'activeProgramInstanceId',
+               'activeContentIdentity', 'activePrescriptionIdentity',
+               'initializationOrigin', 'historyCompleteFrom', 'schemaVersion',
+               'createdAt', 'updatedAt'])
+          && request.resource.data.startingLevel in ['BEGINNER', 'INTERMEDIATE', 'ADVANCED']
+          && request.resource.data.currentTrainingLevel in ['BEGINNER', 'INTERMEDIATE', 'ADVANCED']
+          && request.resource.data.currentCycleNumber is int
+          && request.resource.data.currentCycleNumber >= 1
+          && request.resource.data.initializationOrigin in ['V2_NATIVE', 'V1_MIGRATION_BASELINE']
+          && request.resource.data.schemaVersion == 2
+          // Structural recovery may recreate only the missing pointer while
+          // preserving the already-persisted V2 history boundary. Never allow
+          // a future boundary; `createdAt`/`updatedAt` still prove this is the
+          // current recovery write.
+          && request.resource.data.historyCompleteFrom is timestamp
+          && request.resource.data.historyCompleteFrom <= request.time
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time
+          && questionnaireLevelMatches(userId, request.resource.data.activeProgramInstanceId, request.resource.data.startingLevel)
+          && getAfter(/databases/$(database)/documents/users/$(userId)/trainingCycles/$(request.resource.data.currentCycleId)).data.status == 'ACTIVE'
+          && getAfter(/databases/$(database)/documents/users/$(userId)/trainingCycles/$(request.resource.data.currentCycleId)).data.level == request.resource.data.currentTrainingLevel
+          && getAfter(/databases/$(database)/documents/users/$(userId)/trainingCycles/$(request.resource.data.currentCycleId)).data.cycleNumber == request.resource.data.currentCycleNumber
+          && getAfter(/databases/$(database)/documents/users/$(userId)/trainingCycles/$(request.resource.data.currentCycleId)).data.programInstanceId == request.resource.data.activeProgramInstanceId
+          && getAfter(/databases/$(database)/documents/users/$(userId)/programInstances/$(request.resource.data.activeProgramInstanceId)).data.contentIdentity == request.resource.data.activeContentIdentity
+          && getAfter(/databases/$(database)/documents/users/$(userId)/programInstances/$(request.resource.data.activeProgramInstanceId)).data.prescriptionIdentity == request.resource.data.activePrescriptionIdentity;
+        allow update: if isOwner(userId)
+          && accountActive(userId)
+          && consumesLifecycleAuthorityGrant(userId, ['ADAPT', 'ACTIVATE', 'RECOVER'])
+          && grantSourceMatches(userId, resource.data.currentCycleId, resource.data.activeProgramInstanceId)
+          && lifecycleAuthorityGrant(userId).targetProgramInstanceId == request.resource.data.activeProgramInstanceId
+          && lifecycleAuthorityGrant(userId).targetTrainingLevel == request.resource.data.currentTrainingLevel
+          && lifecycleAuthorityGrant(userId).targetCycleNumber == request.resource.data.currentCycleNumber
+          && stateId == 'current'
+          && request.resource.data.keys() == resource.data.keys()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+               'currentTrainingLevel', 'currentCycleId', 'currentCycleNumber',
+               'activeProgramInstanceId', 'activeContentIdentity',
+               'activePrescriptionIdentity', 'updatedAt'])
+          && request.resource.data.startingLevel == resource.data.startingLevel
+          && request.resource.data.initializationOrigin == resource.data.initializationOrigin
+          && request.resource.data.historyCompleteFrom == resource.data.historyCompleteFrom
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.currentTrainingLevel in ['BEGINNER', 'INTERMEDIATE', 'ADVANCED']
+          && lifecycleLevelTransitionValid(resource.data.currentTrainingLevel, request.resource.data.currentTrainingLevel)
+          && ((request.resource.data.currentTrainingLevel == resource.data.currentTrainingLevel)
+              || request.resource.data.currentCycleId != resource.data.currentCycleId)
+          && lifecycleAuthorityGrant(userId).targetTrainingLevel == request.resource.data.currentTrainingLevel
+          && lifecycleAuthorityGrant(userId).targetCycleNumber == request.resource.data.currentCycleNumber
+          && ((request.resource.data.currentCycleId == resource.data.currentCycleId
+                && getAfter(/databases/$(database)/documents/users/$(userId)/trainingCycles/$(resource.data.currentCycleId)).data.status == 'ACTIVE')
+              || (request.resource.data.currentCycleId != resource.data.currentCycleId
+                && getAfter(/databases/$(database)/documents/users/$(userId)/trainingCycles/$(resource.data.currentCycleId)).data.status == 'COMPLETED'))
+          && ((request.resource.data.activeProgramInstanceId == resource.data.activeProgramInstanceId)
+              || getAfter(/databases/$(database)/documents/users/$(userId)/programInstances/$(resource.data.activeProgramInstanceId)).data.supersededAt == request.time)
+          && request.resource.data.currentCycleNumber is int
+          && request.resource.data.currentCycleNumber >= 1
+          && request.resource.data.updatedAt == request.time
+          && getAfter(/databases/$(database)/documents/users/$(userId)/trainingCycles/$(request.resource.data.currentCycleId)).data.status == 'ACTIVE'
+          && getAfter(/databases/$(database)/documents/users/$(userId)/trainingCycles/$(request.resource.data.currentCycleId)).data.level == request.resource.data.currentTrainingLevel
+          && getAfter(/databases/$(database)/documents/users/$(userId)/trainingCycles/$(request.resource.data.currentCycleId)).data.cycleNumber == request.resource.data.currentCycleNumber
+          && getAfter(/databases/$(database)/documents/users/$(userId)/trainingCycles/$(request.resource.data.currentCycleId)).data.programInstanceId == request.resource.data.activeProgramInstanceId
+          && getAfter(/databases/$(database)/documents/users/$(userId)/programInstances/$(request.resource.data.activeProgramInstanceId)).data.contentIdentity == request.resource.data.activeContentIdentity
+          && getAfter(/databases/$(database)/documents/users/$(userId)/programInstances/$(request.resource.data.activeProgramInstanceId)).data.prescriptionIdentity == request.resource.data.activePrescriptionIdentity;
+        allow delete: if false;
+      }
+
+      match /trainingCycles/{cycleId} {
+        allow read: if isOwner(userId) && accountActive(userId);
+        allow create: if isOwner(userId)
+          && accountActive(userId)
+          && consumesLifecycleAuthorityGrant(userId, ['INITIALIZE', 'MIGRATE', 'ACTIVATE', 'RECOVER'])
+          && lifecycleAuthorityGrant(userId).targetCycleId == cycleId
+          && lifecycleAuthorityGrant(userId).targetProgramInstanceId == request.resource.data.programInstanceId
+          && request.resource.data.keys().hasAll([
+               'cycleId', 'level', 'cycleNumber', 'status', 'origin',
+               'programInstanceId', 'previousProgramInstanceId', 'startedAt',
+               'eligibleAt', 'completedAt', 'completionReason', 'progressionReason', 'schemaVersion',
+               'createdAt', 'updatedAt'])
+          && request.resource.data.keys().hasOnly([
+               'cycleId', 'level', 'cycleNumber', 'status', 'origin',
+               'programInstanceId', 'previousProgramInstanceId', 'startedAt',
+               'eligibleAt', 'completedAt', 'completionReason', 'progressionReason', 'schemaVersion',
+               'createdAt', 'updatedAt'])
+          && request.resource.data.cycleId == cycleId
+          && request.resource.data.level in ['BEGINNER', 'INTERMEDIATE', 'ADVANCED']
+          && request.resource.data.level == lifecycleAuthorityGrant(userId).targetTrainingLevel
+          && request.resource.data.cycleNumber is int && request.resource.data.cycleNumber >= 1
+          && request.resource.data.cycleNumber == lifecycleAuthorityGrant(userId).targetCycleNumber
+          && request.resource.data.status == 'ACTIVE'
+          && request.resource.data.origin in ['V2_NATIVE', 'V1_MIGRATION_BASELINE']
+          && request.resource.data.programInstanceId is string
+          && (request.resource.data.previousProgramInstanceId == null || request.resource.data.previousProgramInstanceId is string)
+          && request.resource.data.startedAt is timestamp
+          && request.resource.data.eligibleAt == null
+          && request.resource.data.completedAt == null
+          && request.resource.data.completionReason == null
+          && request.resource.data.progressionReason is string
+          && request.resource.data.schemaVersion == 2
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time
+          && getAfter(/databases/$(database)/documents/users/$(userId)/workoutLifecycleState/current).data.currentCycleId == cycleId
+          && getAfter(/databases/$(database)/documents/users/$(userId)/workoutLifecycleState/current).data.currentCycleNumber == request.resource.data.cycleNumber
+          && getAfter(/databases/$(database)/documents/users/$(userId)/workoutLifecycleState/current).data.activeProgramInstanceId == request.resource.data.programInstanceId;
+        allow update: if isOwner(userId)
+          && accountActive(userId)
+          && consumesLifecycleAuthorityGrant(userId, ['ADAPT', 'ACTIVATE', 'RECOVER'])
+          && lifecycleAuthorityGrant(userId).sourceCycleId == cycleId
+          && lifecycleAuthorityGrant(userId).sourceProgramInstanceId == resource.data.programInstanceId
+          && request.resource.data.keys().hasAll([
+               'cycleId', 'level', 'cycleNumber', 'status', 'origin',
+               'programInstanceId', 'previousProgramInstanceId', 'startedAt',
+               'eligibleAt', 'completedAt', 'progressionReason', 'schemaVersion',
+               'createdAt', 'updatedAt'])
+          && request.resource.data.keys().hasOnly([
+               'cycleId', 'level', 'cycleNumber', 'status', 'origin',
+               'programInstanceId', 'previousProgramInstanceId', 'startedAt',
+               'eligibleAt', 'completedAt', 'completionReason', 'progressionReason',
+               'schemaVersion', 'createdAt', 'updatedAt'])
+          && (!resource.data.keys().hasAny(['completionReason']) || request.resource.data.keys().hasAny(['completionReason']))
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+               'status', 'programInstanceId', 'previousProgramInstanceId',
+               'eligibleAt', 'completedAt', 'completionReason', 'progressionReason', 'updatedAt'])
+          && request.resource.data.cycleId == resource.data.cycleId
+          && request.resource.data.level == resource.data.level
+          && request.resource.data.cycleNumber == resource.data.cycleNumber
+          && request.resource.data.origin == resource.data.origin
+          && request.resource.data.startedAt == resource.data.startedAt
+          && request.resource.data.createdAt == resource.data.createdAt
+          && resource.data.status == 'ACTIVE'
+          && request.resource.data.status in ['ACTIVE', 'COMPLETED']
+          && request.resource.data.get('completionReason', null) in [null, 'EARNED_EVOLUTION']
+          && ((request.resource.data.status == 'ACTIVE'
+                && request.resource.data.completedAt == null
+                && request.resource.data.get('completionReason', null) == null)
+              || (request.resource.data.status == 'COMPLETED'
+                && request.resource.data.completedAt == request.time
+                && request.resource.data.get('completionReason', null) == 'EARNED_EVOLUTION'
+                && getAfter(/databases/$(database)/documents/users/$(userId)/workoutLifecycleState/current).data.currentCycleId != cycleId))
+          && request.resource.data.updatedAt == request.time;
+        allow delete: if false;
+      }
+
+      match /programInstances/{programInstanceId} {
+        allow read: if isOwner(userId) && accountActive(userId);
+        allow create: if isOwner(userId)
+          && accountActive(userId)
+          && consumesLifecycleAuthorityGrant(userId, ['INITIALIZE', 'MIGRATE', 'ADAPT', 'ACTIVATE', 'RECOVER'])
+          && (lifecycleAuthorityGrant(userId).targetProgramInstanceId == programInstanceId
+              || (lifecycleAuthorityGrant(userId).operation == 'MIGRATE'
+                && lifecycleAuthorityGrant(userId).baselineProgramInstanceId == programInstanceId
+                && lifecycleAuthorityGrant(userId).baselineContentIdentity == request.resource.data.contentIdentity))
+          && lifecycleAuthorityGrant(userId).targetCycleId == request.resource.data.cycleId
+          && ((lifecycleAuthorityGrant(userId).targetProgramInstanceId == programInstanceId
+                && lifecycleAuthorityGrant(userId).targetContentIdentity == request.resource.data.contentIdentity
+                && lifecycleAuthorityGrant(userId).targetPrescriptionIdentity == request.resource.data.prescriptionIdentity)
+              || (lifecycleAuthorityGrant(userId).operation == 'MIGRATE'
+                && lifecycleAuthorityGrant(userId).baselineProgramInstanceId == programInstanceId
+                && lifecycleAuthorityGrant(userId).baselineContentIdentity == request.resource.data.contentIdentity
+                && lifecycleAuthorityGrant(userId).baselinePrescriptionIdentity == request.resource.data.prescriptionIdentity))
+          && (!request.resource.data.keys().hasAny(['prescriptionInputSnapshot'])
+              || request.resource.data.prescriptionInputSnapshot == lifecycleAuthorityGrant(userId).targetPrescriptionInputSnapshot)
+          && request.resource.data.keys().hasAll([
+               'programInstanceId', 'cycleId', 'contentIdentity',
+               'prescriptionIdentity', 'questionnaireId', 'activatedAt',
+               'supersededAt', 'previousProgramInstanceId', 'activationReason',
+               'schemaVersion', 'createdAt', 'updatedAt'])
+          && request.resource.data.keys().hasOnly([
+               'programInstanceId', 'cycleId', 'contentIdentity',
+               'prescriptionIdentity', 'questionnaireId', 'prescriptionInputSnapshot', 'activatedAt',
+               'supersededAt', 'previousProgramInstanceId', 'activationReason',
+               'schemaVersion', 'createdAt', 'updatedAt'])
+          && request.resource.data.programInstanceId == programInstanceId
+          && getAfter(/databases/$(database)/documents/users/$(userId)/workoutPrograms/$(request.resource.data.contentIdentity)).data.prescriptionId == request.resource.data.prescriptionIdentity
+          && existsAfter(/databases/$(database)/documents/users/$(userId)/questionnaires/$(request.resource.data.questionnaireId))
+          && (
+               (request.resource.data.keys().hasAny(['prescriptionInputSnapshot'])
+                 && prescriptionInputSnapshotValid(request.resource.data.prescriptionInputSnapshot))
+               || request.resource.data.activationReason in [
+                    'V1_MIGRATION_BASELINE', 'V1_AUTOMATIC_PROGRESSION'])
+          && request.resource.data.activatedAt is timestamp
+          && (request.resource.data.supersededAt == null
+              || (request.resource.data.activationReason == 'V1_MIGRATION_BASELINE'
+                && request.resource.data.supersededAt == request.time))
+          && (request.resource.data.previousProgramInstanceId == null || request.resource.data.previousProgramInstanceId is string)
+          && request.resource.data.activationReason in [
+               'INITIAL_PROGRAM', 'V1_MIGRATION_BASELINE',
+               'V1_AUTOMATIC_PROGRESSION', 'MANUAL_REGENERATION',
+               'AUTOMATIC_RECONCILIATION', 'EVOLUTION_ACTIVATION',
+               'PROGRAM_ADAPTATION']
+          && request.resource.data.schemaVersion == 2
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time
+          && (request.resource.data.supersededAt != null
+              || (getAfter(/databases/$(database)/documents/users/$(userId)/workoutLifecycleState/current).data.activeProgramInstanceId == programInstanceId
+                && getAfter(/databases/$(database)/documents/users/$(userId)/trainingCycles/$(request.resource.data.cycleId)).data.programInstanceId == programInstanceId));
+        allow update: if isOwner(userId)
+          && accountActive(userId)
+          && consumesLifecycleAuthorityGrant(userId, ['ADAPT', 'ACTIVATE', 'RECOVER'])
+          && lifecycleAuthorityGrant(userId).sourceProgramInstanceId == programInstanceId
+          && request.resource.data.keys() == resource.data.keys()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['supersededAt', 'updatedAt'])
+          && resource.data.supersededAt == null
+          && request.resource.data.supersededAt == request.time
+          && request.resource.data.updatedAt == request.time
+          && getAfter(/databases/$(database)/documents/users/$(userId)/workoutLifecycleState/current).data.activeProgramInstanceId != programInstanceId;
+        allow delete: if false;
+      }
+
+      match /workoutLifecycleEvents/{eventId} {
+        allow read: if isOwner(userId) && accountActive(userId);
+        allow create: if isOwner(userId)
+          && accountActive(userId)
+          && consumesLifecycleAuthorityGrant(userId, ['INITIALIZE', 'MIGRATE', 'RECOVER', 'EARN', 'DEFER', 'ACTIVATE', 'ADAPT'])
+          && lifecycleAuthorityGrant(userId).keys().hasAll(['eventId', 'eventType', 'idempotencyKey'])
+          && lifecycleAuthorityGrant(userId).eventId == eventId
+          && lifecycleAuthorityGrant(userId).eventType == request.resource.data.type
+          && lifecycleAuthorityGrant(userId).idempotencyKey == request.resource.data.idempotencyKey
+          && (!(request.resource.data.type in ['EVOLUTION_EARNED', 'MOTIVATIONAL_RENEWAL_OFFERED'])
+              || (lifecycleAuthorityGrant(userId).operation == 'EARN'
+                && request.resource.data.payload.evolutionType == lifecycleAuthorityGrant(userId).authoritativeEarnedFact.type
+                && request.resource.data.payload.fromLevel == lifecycleAuthorityGrant(userId).authoritativeEarnedFact.fromLevel
+                && request.resource.data.payload.toLevel == lifecycleAuthorityGrant(userId).authoritativeEarnedFact.toLevel
+                && request.resource.data.payload.quality == lifecycleAuthorityGrant(userId).authoritativeEarnedFact.quality
+                && request.resource.data.payload.sessionsCompletedAtEarn == lifecycleAuthorityGrant(userId).authoritativeEarnedFact.sessionsCompletedAtEarn
+                && request.resource.data.payload.adherenceAtEarnBp == lifecycleAuthorityGrant(userId).authoritativeEarnedFact.adherenceAtEarnBp))
+          && request.resource.data.keys().hasAll([
+               'eventId', 'type', 'occurredAt', 'cycleId', 'programInstanceId',
+               'idempotencyKey', 'payload', 'schemaVersion'])
+          && request.resource.data.keys().hasOnly([
+               'eventId', 'type', 'occurredAt', 'cycleId', 'programInstanceId',
+               'idempotencyKey', 'payload', 'schemaVersion'])
+          && request.resource.data.eventId == eventId
+          && request.resource.data.type in [
+               'CYCLE_STARTED', 'CYCLE_ELIGIBLE', 'CYCLE_COMPLETED',
+               'EVOLUTION_ELIGIBLE', 'EVOLUTION_EARNED', 'EVOLUTION_DEFERRED',
+               'EVOLUTION_ACTIVATED', 'MOTIVATIONAL_RENEWAL_OFFERED',
+               'MOTIVATIONAL_RENEWAL_ACTIVATED', 'LEVEL_PROMOTED',
+               'PROGRAM_STARTED', 'PROGRAM_ADAPTED']
+          && request.resource.data.occurredAt == request.time
+          && request.resource.data.cycleId is string
+          && request.resource.data.programInstanceId is string
+          && request.resource.data.idempotencyKey is string
+          && lifecycleEventPayloadValid(request.resource.data)
+          && request.resource.data.schemaVersion == 2
+          && existsAfter(/databases/$(database)/documents/users/$(userId)/trainingCycles/$(request.resource.data.cycleId))
+          && existsAfter(/databases/$(database)/documents/users/$(userId)/programInstances/$(request.resource.data.programInstanceId))
+          && (request.resource.data.type != 'LEVEL_PROMOTED'
+              || (getAfter(/databases/$(database)/documents/users/$(userId)/workoutLifecycleState/current).data.currentCycleId == request.resource.data.cycleId
+                && getAfter(/databases/$(database)/documents/users/$(userId)/workoutLifecycleState/current).data.activeProgramInstanceId == request.resource.data.programInstanceId));
+        allow update, delete: if false;
+      }
+
+      // Fase 4 — an earned-but-not-yet-active transition (docs §11: PREPARED
+      // != ACTIVE). Single fixed id 'current': at most one pending evolution
+      // can exist per user at a time, guaranteed structurally rather than by
+      // an extra invariant check. `plan` carries the next prescription's
+      // full content (a `FinalWorkoutPlan`) — deliberately validated only as
+      // `is map` here, not deep-structurally: it was already produced and
+      // validated by the trusted Prescription Evolution/Engine pipeline, and
+      // is re-validated again at activation time when it becomes the real
+      // `workoutPrograms/{contentIdentity}` document (which IS fully
+      // schema-validated by the existing `workoutProgramCommonValid` rule).
+      match /pendingEvolutions/{pendingId} {
+        allow read: if isOwner(userId) && accountActive(userId) && pendingId == 'current';
+        allow create: if isOwner(userId)
+          && accountActive(userId)
+          && consumesLifecycleAuthorityGrant(userId, ['PREPARE'])
+          && lifecycleAuthorityGrant(userId).pendingEvolutionId == request.resource.data.pendingEvolutionId
+          && lifecycleAuthorityGrant(userId).targetProgramInstanceId == request.resource.data.targetProgramInstanceId
+          && lifecycleAuthorityGrant(userId).targetContentIdentity == request.resource.data.targetContentIdentity
+          && lifecycleAuthorityGrant(userId).targetPrescriptionIdentity == request.resource.data.targetPrescriptionIdentity
+          && request.resource.data.plan == lifecycleAuthorityGrant(userId).targetPlan
+          && request.resource.data.targetPrescriptionInputSnapshot == lifecycleAuthorityGrant(userId).targetPrescriptionInputSnapshot
+          && pendingId == 'current'
+          && request.resource.data.keys().hasAll([
+               'pendingEvolutionId', 'type', 'status', 'sourceCycleId',
+               'sourceProgramInstanceId', 'sourcePrescriptionInputSnapshotId', 'fromLevel', 'toLevel', 'quality',
+               'sessionsCompletedAtEarn', 'adherenceAtEarnBp',
+               'plan', 'targetContentIdentity', 'targetPrescriptionIdentity',
+               'targetProgramInstanceId', 'targetQuestionnaireId',
+               'targetQuestionnaireVersion', 'targetPrescriptionInputSnapshot', 'targetTemplateId',
+               'targetTemplateVersion', 'targetTemplateSourceVersion',
+               'targetTemplateContentHash', 'earnedAt', 'deferralCount',
+               'nextPromptAt', 'autoActivateAt', 'idempotencyKey',
+               'schemaVersion', 'createdAt', 'updatedAt'])
+          && request.resource.data.keys().hasOnly([
+               'pendingEvolutionId', 'type', 'status', 'sourceCycleId',
+               'sourceProgramInstanceId', 'sourcePrescriptionInputSnapshotId', 'fromLevel', 'toLevel', 'quality',
+               'sessionsCompletedAtEarn', 'adherenceAtEarnBp',
+               'plan', 'targetContentIdentity', 'targetPrescriptionIdentity',
+               'targetProgramInstanceId', 'targetQuestionnaireId',
+               'targetQuestionnaireVersion', 'targetPrescriptionInputSnapshot', 'targetTemplateId',
+               'targetTemplateVersion', 'targetTemplateSourceVersion',
+               'targetTemplateContentHash', 'earnedAt', 'deferralCount',
+               'nextPromptAt', 'autoActivateAt', 'idempotencyKey',
+               'schemaVersion', 'createdAt', 'updatedAt'])
+          && request.resource.data.type in ['CYCLE_EVOLUTION', 'LEVEL_PROMOTION', 'MOTIVATIONAL_RENEWAL']
+          && request.resource.data.status in ['READY', 'DEFERRED']
+          && request.resource.data.sourceCycleId
+               == get(/databases/$(database)/documents/users/$(userId)/workoutLifecycleState/current).data.currentCycleId
+          && request.resource.data.sourceProgramInstanceId
+               == get(/databases/$(database)/documents/users/$(userId)/workoutLifecycleState/current).data.activeProgramInstanceId
+          && request.resource.data.sourcePrescriptionInputSnapshotId is string
+          && ((get(/databases/$(database)/documents/users/$(userId)/programInstances/$(request.resource.data.sourceProgramInstanceId)).data.keys().hasAny(['prescriptionInputSnapshot'])
+                && request.resource.data.sourcePrescriptionInputSnapshotId
+                  == get(/databases/$(database)/documents/users/$(userId)/programInstances/$(request.resource.data.sourceProgramInstanceId)).data.prescriptionInputSnapshot.snapshotId)
+              || (!get(/databases/$(database)/documents/users/$(userId)/programInstances/$(request.resource.data.sourceProgramInstanceId)).data.keys().hasAny(['prescriptionInputSnapshot'])
+                && request.resource.data.sourcePrescriptionInputSnapshotId
+                  == 'legacy:' + request.resource.data.sourceProgramInstanceId))
+          && request.resource.data.fromLevel in ['BEGINNER', 'INTERMEDIATE', 'ADVANCED']
+          && request.resource.data.toLevel in ['BEGINNER', 'INTERMEDIATE', 'ADVANCED']
+          && request.resource.data.quality in ['BELOW_TARGET', 'GOOD', 'HIGH']
+          && request.resource.data.sessionsCompletedAtEarn is int && request.resource.data.sessionsCompletedAtEarn >= 0
+          && request.resource.data.adherenceAtEarnBp is int
+          && request.resource.data.adherenceAtEarnBp >= 0 && request.resource.data.adherenceAtEarnBp <= 10000
+          && request.resource.data.targetContentIdentity is string
+          && request.resource.data.targetPrescriptionIdentity is string
+          && request.resource.data.targetProgramInstanceId is string
+          && request.resource.data.targetProgramInstanceId != request.resource.data.sourceProgramInstanceId
+          && request.resource.data.targetQuestionnaireVersion is int
+          && request.resource.data.targetTemplateVersion is int
+          && request.resource.data.earnedAt is timestamp
+          && request.resource.data.earnedAt <= request.time
+          && request.resource.data.deferralCount in [0, 1, 2]
+          && ((request.resource.data.deferralCount == 0
+                && request.resource.data.status == 'READY'
+                && request.resource.data.nextPromptAt == null
+                && request.resource.data.autoActivateAt == null)
+              || (request.resource.data.deferralCount == 1
+                && request.resource.data.status == 'DEFERRED'
+                && request.resource.data.nextPromptAt is timestamp
+                && request.resource.data.autoActivateAt == null)
+              || (request.resource.data.deferralCount == 2
+                && request.resource.data.status == 'DEFERRED'
+                && request.resource.data.nextPromptAt == null
+                && request.resource.data.autoActivateAt is timestamp))
+          && request.resource.data.idempotencyKey is string
+          && request.resource.data.schemaVersion == 2
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time;
+        allow update: if isOwner(userId)
+          && accountActive(userId)
+          && consumesLifecycleAuthorityGrant(userId, ['DEFER'])
+          && lifecycleAuthorityGrant(userId).pendingEvolutionId == resource.data.pendingEvolutionId
+          && pendingId == 'current'
+          && request.resource.data.keys() == resource.data.keys()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+               'status', 'deferralCount', 'nextPromptAt', 'autoActivateAt', 'updatedAt'])
+          && request.resource.data.pendingEvolutionId == resource.data.pendingEvolutionId
+          && request.resource.data.status == 'DEFERRED'
+          && request.resource.data.deferralCount == resource.data.deferralCount + 1
+          && request.resource.data.deferralCount in [1, 2]
+          // DEV Accelerated Lifecycle QA: the NORMAL tolerance band is
+          // 13-15 days (centered on the real 14-day window in
+          // src/workoutLifecycle/deferral.ts, +/-1 day for client/server
+          // clock skew). QA-authorized accounts (see
+          // workoutLifecycleQaAccelerated() above) get an 8-12 minute band
+          // instead (centered on DEFERRAL_CONFIG_QA_ACCELERATED's 10
+          // minutes) — this ONLY widens how fast a deferral's own re-prompt/
+          // auto-activation window may legitimately elapse; it never touches
+          // the 28/85-day progression gates, which stay fully backend-
+          // authoritative in authorizeMutation.ts regardless of this flag.
+          && ((request.resource.data.deferralCount == 1
+                && request.resource.data.nextPromptAt is timestamp
+                && request.resource.data.nextPromptAt >= request.time + (
+                     workoutLifecycleQaModeIsAccelerated(userId) ? duration.value(8, 'm') : duration.value(13, 'd'))
+                && request.resource.data.nextPromptAt <= request.time + (
+                     workoutLifecycleQaModeIsAccelerated(userId) ? duration.value(12, 'm') : duration.value(15, 'd'))
+                && request.resource.data.autoActivateAt == null)
+              || (request.resource.data.deferralCount == 2
+                && request.resource.data.nextPromptAt == null
+                && request.resource.data.autoActivateAt is timestamp
+                && resource.data.nextPromptAt is timestamp
+                && request.resource.data.autoActivateAt >= resource.data.nextPromptAt + (
+                     workoutLifecycleQaModeIsAccelerated(userId) ? duration.value(8, 'm') : duration.value(13, 'd'))
+                && request.resource.data.autoActivateAt <= resource.data.nextPromptAt + (
+                     workoutLifecycleQaModeIsAccelerated(userId) ? duration.value(12, 'm') : duration.value(15, 'd'))))
+          && request.resource.data.updatedAt == request.time;
+        // Cleared as part of the same client transaction that writes the
+        // activation's other documents (programInstances/trainingCycles/
+        // workoutLifecycleState) — each of those is independently
+        // Rules-validated; this delete only needs ownership.
+        allow delete: if isOwner(userId)
+          && accountActive(userId)
+          && pendingId == 'current'
+          && consumesLifecycleAuthorityGrant(userId, ['ADAPT', 'ACTIVATE', 'RECOVER']);
+      }
+
+      match /workoutLifecycleAuthorityGrants/{grantId} {
+        allow read: if isOwner(userId) && accountActive(userId) && grantId == 'current';
+        allow delete: if isOwner(userId) && grantId == 'current';
+        allow create, update: if false;
       }
 
       // Workout Execution & History V1 (docs/workout-lifecycle/
@@ -1027,7 +1829,12 @@ service cloud.firestore {
             (request.resource.data.status == 'IN_PROGRESS' && request.resource.data.finishedAt == null)
             || (request.resource.data.status in ['COMPLETED', 'PARTIALLY_COMPLETED', 'ABANDONED']
                 && request.resource.data.finishedAt == request.time)
-          );
+          )
+          && (request.resource.data.status == 'IN_PROGRESS'
+              || request.resource.data.status == 'ABANDONED'
+              || request.resource.data.executionSchemaVersion == 1
+              || (consumesLifecycleAuthorityGrant(userId, ['FINISH_EXECUTION'])
+                && lifecycleAuthorityGrant(userId).executionId == executionId));
 
         allow delete: if false;
       }
@@ -1331,6 +2138,28 @@ service cloud.firestore {
     match /limitationDatasetState/{stateId} {
       allow read: if stateId == 'active' && isSignedIn();
       allow write: if false;
+    }
+
+    // Fase 6 — ops-controlled rollout gate for NEW Workout Lifecycle V2
+    // migrations (architecture/12_PHASE_6_IMPLEMENTATION.md "Rollout").
+    // Admin-SDK-write-only, same pattern as limitationDatasetState above:
+    // the client can never edit its own rollout eligibility.
+    match /workoutLifecycleRolloutConfig/{configId} {
+      allow read: if configId == 'active' && isSignedIn();
+      allow write: if false;
+    }
+
+    // Phase 10E — ops-controlled circuit breaker for ALREADY-migrated V2
+    // accounts (docs/workout-lifecycle/v2/architecture/
+    // 26_FINAL_INDEPENDENT_ADVERSARIAL_AUDIT_2.md §50). Deliberately
+    // separate from `workoutLifecycleRolloutConfig` above — rollout decides
+    // who enters V2, this decides whether an already-migrated account's
+    // mutation may proceed right now. Admin-SDK-write-only; enforcement
+    // itself happens in `authorizeWorkoutLifecycleMutationHandler`
+    // (functions/src/workoutLifecycle/circuitBreaker.ts), not in Rules — no
+    // client read is even needed for that, so none is granted.
+    match /workoutLifecycleCircuitBreaker/{configId} {
+      allow read, write: if false;
     }
 
     match /limitationDatasetVersions/{datasetHash} {

@@ -6,11 +6,12 @@ import ptBR from '../resources/pt-BR/home.json';
 
 const read = (path: string) => readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8');
 const progress = read('screens/ProgressScreen.tsx');
-const consistency = read('screens/ConsistencyScreen.tsx');
+const appShell = read('screens/AppShell.tsx');
+const home = read('screens/HomeScreen.tsx');
 
 const body = read('components/fitness/BodyEvolutionView.tsx');
 
-describe('Progress and monthly consistency i18n', () => {
+describe('Progress truthfulness and retired consistency preview', () => {
   it('ships complete copy in every supported language', () => {
     for (const resource of [ptBR, en, es]) {
       expect(Object.values(resource.progress.tabs).every(Boolean)).toBe(true);
@@ -18,9 +19,6 @@ describe('Progress and monthly consistency i18n', () => {
       expect(Object.values(resource.progress.body.empty).every(Boolean)).toBe(true);
       expect(Object.values(resource.progress.loads.empty).every(Boolean)).toBe(true);
       expect(resource.progress.body.measuredAt).toContain('{{date}}');
-      expect(Object.values(resource.monthlyConsistency.legend).every(Boolean)).toBe(true);
-      expect(resource.monthlyConsistency.progress).toContain('{{done}}');
-      expect(resource.monthlyConsistency.monthYear).toContain('{{year}}');
     }
   });
 
@@ -52,23 +50,11 @@ describe('Progress and monthly consistency i18n', () => {
     ]) expect(progress).not.toContain(hardcode);
   });
 
-  it('localizes month, plurals, progress sentence, legend and back accessibility', () => {
-    for (const key of [
-      'monthlyConsistency.title',
-      'monthlyConsistency.monthYear',
-      'monthlyConsistency.daysRemaining',
-      'monthlyConsistency.pendingWorkouts',
-      'monthlyConsistency.progress',
-      'monthlyConsistency.legend.done',
-      'monthlyConsistency.accessibility.back',
-    ]) expect(consistency).toContain(key);
-
-    for (const hardcode of [
-      'CONSISTÊNCIA MENSAL',
-      'FALTA PARA FECHAR O MÊS',
-      'Treino feito',
-      'A fazer',
-    ]) expect(consistency).not.toContain(hardcode);
+  it('does not expose the fixed monthly calendar or fake upcoming list in production navigation', () => {
+    expect(appShell).not.toContain("from './ConsistencyScreen'");
+    expect(appShell).not.toContain('showCal');
+    expect(home).not.toContain('onOpenConsistency');
+    expect(home).not.toContain('UPCOMING_KEYS');
   });
 
   it('derives the body panel from real assessments instead of fixed samples', () => {
@@ -91,10 +77,4 @@ describe('Progress and monthly consistency i18n', () => {
     expect(progress).toContain('<ProgressPhotosScreen pageHeader={pageHeader} />');
   });
 
-  it('preserves calendar data mechanics', () => {
-    expect(consistency).toContain('const DAYS = 31');
-    expect(consistency).toContain('const FIRST_WD = 2');
-    expect(consistency).toContain('const TODAY = 16');
-    expect(consistency).toContain('const MISSED = [9]');
-  });
 });

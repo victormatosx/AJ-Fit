@@ -1,0 +1,127 @@
+name: CI
+
+# Fase 6 (docs/workout-lifecycle/v2/architecture/12_PHASE_6_IMPLEMENTATION.md
+# "CI") — no workflow existed before this phase. Every job here uses the
+# Firebase Emulator Suite and test-project fixtures only; nothing depends on
+# production Firebase credentials (docs §68/§BN).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static:
+    name: static (typecheck, lint, i18n)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run quality:static
+
+  unit:
+    name: unit tests (root)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run test
+
+  firebase-integration:
+    name: Firestore/Storage Rules + integration (real Emulator)
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - run: npm ci
+      - run: npx --no-install firebase --version | grep -Fx '15.26.0'
+      - run: npm run test:integration:preflight
+      - run: npm run test:rules
+      - run: npm run test:integration
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: firebase-integration-debug-logs
+          path: |
+            firebase-debug.log
+            firestore-debug.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+  functions:
+    name: Cloud Functions (typecheck, tests, build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: functions
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run test
+      - run: npm run build
+
+  functions-integration:
+    name: Cloud Functions account-deletion integration (real Emulator)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - run: npm ci
+      - run: cd functions && npm ci
+      - run: npx --no-install firebase --version | grep -Fx '15.26.0'
+      - run: npm run test:integration:lifecycleAuthority
+      - run: npm run test:integration:firestoreCleanup
+      - run: npm run test:integration:storageCleanup
+      - run: npm run test:integration:retainedData
+      - run: npm run test:integration:authDeletion
+      - run: npm run test:integration:vaultKeyDestruction
+      - run: npm run test:integration:backendAutonomy
+      - run: npm run test:integration:faultInjection
+      - run: npm run test:integration:accountDeletionReconciliation
+      - run: npm run test:integration:commercialGate
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: functions-integration-debug-logs
+          path: |
+            firebase-debug.log
+            firestore-debug.log
+          if-no-files-found: ignore
+          retention-days: 7

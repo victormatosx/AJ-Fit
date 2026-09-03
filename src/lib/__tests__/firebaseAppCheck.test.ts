@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   available: vi.fn(),
   platform: 'ios',
   providerOptions: null as null | { getToken: () => Promise<unknown> },
+  logWarn: vi.fn(),
 }));
 
 vi.mock('react-native', () => ({
@@ -29,6 +30,11 @@ vi.mock('../nativeAppCheck', () => ({
   getNativeAppCheckToken: mocks.nativeToken,
   isNativeAppCheckAvailable: mocks.available,
 }));
+
+vi.mock('../logger', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../logger')>();
+  return { ...actual, logWarn: mocks.logWarn };
+});
 
 import { initializeFirebaseAppCheck } from '../firebaseAppCheck';
 
@@ -123,5 +129,77 @@ describe('Firebase JS CustomProvider bridge', () => {
 
     expect(first).toBe(second);
     expect(mocks.initialize).toHaveBeenCalledTimes(1);
+  });
+
+  describe('failure diagnostics (smoke-test audit: functions/unauthenticated with app=MISSING)', () => {
+    const globalWithDev = globalThis as typeof globalThis & { __DEV__?: boolean };
+
+    afterEach(() => {
+      delete globalWithDev.__DEV__;
+    });
+
+    it('rethrows the original error unchanged — diagnostics never mask or replace the real failure', async () => {
+      globalWithDev.__DEV__ = true;
+      const nativeError = Object.assign(new Error('boom'), { code: 'ERR_APP_CHECK_TOKEN' });
+      mocks.nativeToken.mockRejectedValue(nativeError);
+
+      initializeFirebaseAppCheck({} as never);
+
+      await expect(mocks.providerOptions!.getToken()).rejects.toBe(nativeError);
+    });
+
+    it('logs a categorized diagnostic in __DEV__ without ever including the token value', async () => {
+      globalWithDev.__DEV__ = true;
+      const nativeError = Object.assign(new Error('Firebase App Check token request failed: [FIRAppCheckErrorDomain#1] server rejected debug token'), { code: 'ERR_APP_CHECK_TOKEN' });
+      mocks.nativeToken.mockRejectedValue(nativeError);
+
+      initializeFirebaseAppCheck({} as never);
+      await mocks.providerOptions!.getToken().catch(() => {});
+
+      expect(mocks.logWarn).toHaveBeenCalledWith(
+        'app-check',
+        'native_token_fetch_failed',
+        expect.objectContaining({ category: 'NATIVE_ERROR', errorCode: 'ERR_APP_CHECK_TOKEN' }),
+      );
+      const loggedContext = mocks.logWarn.mock.calls[0][2];
+      expect(JSON.stringify(loggedContext)).not.toMatch(/opaque|token.{0,20}[a-f0-9]{20}/i);
+    });
+
+    it('categorizes MODULE_NOT_AVAILABLE / FIREBASE_NOT_CONFIGURED / TOKEN_REJECTED / UNKNOWN distinctly', async () => {
+      globalWithDev.__DEV__ = true;
+      const cases: [string | undefined, string][] = [
+        ['ERR_APP_CHECK_MODULE_UNAVAILABLE', 'MODULE_NOT_AVAILABLE'],
+        ['ERR_APP_CHECK_NOT_CONFIGURED', 'FIREBASE_NOT_CONFIGURED'],
+        ['ERR_APP_CHECK_INVALID_TOKEN', 'TOKEN_REJECTED'],
+        [undefined, 'UNKNOWN'],
+      ];
+      for (const [code, expectedCategory] of cases) {
+        mocks.logWarn.mockClear();
+        const err = code ? Object.assign(new Error('x'), { code }) : new Error('x');
+        mocks.nativeToken.mockRejectedValue(err);
+        delete (globalThis as typeof globalThis & { __ajFitFirebaseAppCheck?: unknown }).__ajFitFirebaseAppCheck;
+
+        initializeFirebaseAppCheck({} as never);
+        await mocks.providerOptions!.getToken().catch(() => {});
+
+        expect(mocks.logWarn).toHaveBeenCalledWith(
+          'app-check',
+          'native_token_fetch_failed',
+          expect.objectContaining({ category: expectedCategory }),
+        );
+      }
+    });
+
+    it('never logs the diagnostic outside __DEV__ (no behavior change in production)', async () => {
+      globalWithDev.__DEV__ = false;
+      mocks.available.mockReturnValue(true);
+      const nativeError = Object.assign(new Error('boom'), { code: 'ERR_APP_CHECK_TOKEN' });
+      mocks.nativeToken.mockRejectedValue(nativeError);
+
+      initializeFirebaseAppCheck({} as never);
+      await expect(mocks.providerOptions!.getToken()).rejects.toBe(nativeError);
+
+      expect(mocks.logWarn).not.toHaveBeenCalled();
+    });
   });
 });

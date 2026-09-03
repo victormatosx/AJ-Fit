@@ -22,7 +22,7 @@ export interface WorkoutScheduleController {
   loading: boolean;
   reload: () => Promise<void>;
   /** Call once the active WorkoutScreen session actually finishes. */
-  completeSession: (sessionIndex: number) => Promise<void>;
+  completeSession: (sessionIndex: number) => Promise<boolean>;
   resolveMiss: (decision: MissDecision) => Promise<void>;
 }
 
@@ -45,6 +45,7 @@ export function useWorkoutSchedule(program: WorkoutProgramSnapshot | null): Work
   const { user, questionnaire } = useAuth();
   const uid = user?.uid ?? null;
   const programId = program?.programId ?? null;
+  const programInstanceId = program?.programInstanceId ?? null;
   const prescribedProgramDays = program ? legacyTrainingDays(program) : [];
   const prescribedRecoveryDays = program?.weeklySchedule
     ?.filter((day) => day.state === 'ACTIVE_RECOVERY')
@@ -52,8 +53,9 @@ export function useWorkoutSchedule(program: WorkoutProgramSnapshot | null): Work
   const sessionCount = program
     ? program.prescribedTrainingFrequency ?? program.prescribedStructuredDays ?? program.sessions.length
     : 0;
-  const activatedAtLocalDate = program?.activatedAt
-    ? localDateInTimezone(program.activatedAt.toDate(), deviceTimezone())
+  const authoritativeActivatedAt = program?.programInstanceActivatedAt ?? program?.activatedAt;
+  const activatedAtLocalDate = authoritativeActivatedAt
+    ? localDateInTimezone(authoritativeActivatedAt.toDate(), deviceTimezone())
     : null;
 
   const [resolution, setResolution] = useState<ScheduleResolution>(notAvailable);
@@ -99,6 +101,7 @@ export function useWorkoutSchedule(program: WorkoutProgramSnapshot | null): Work
       const result = await resolveTodaysSchedule({
         uid,
         programId,
+        programInstanceId,
         sessionCount,
         activatedAtLocalDate,
         todayLocalDate,
@@ -113,19 +116,28 @@ export function useWorkoutSchedule(program: WorkoutProgramSnapshot | null): Work
     } finally {
       setLoading(false);
     }
-  }, [uid, programId, sessionCount, activatedAtLocalDate, questionnaire, prescribedProgramDays.join(','), prescribedRecoveryDays.join(',')]);
+  }, [uid, programId, programInstanceId, sessionCount, activatedAtLocalDate, questionnaire, prescribedProgramDays.join(','), prescribedRecoveryDays.join(',')]);
 
   useEffect(() => { void reload(); }, [reload]);
 
   const completeSession = useCallback(async (sessionIndex: number) => {
-    if (!uid || !programId || sessionCount === 0) return;
+    if (!uid || !programId || sessionCount === 0) return false;
+    // Both required by `completeScheduledSession` to derive the expected
+    // first-ever session correctly (no silent `?? 0` fallback there
+    // anymore) — without them there is no valid resolved schedule to
+    // complete against, so fail closed exactly like the guards above.
+    if (!activatedAtLocalDate || !config?.trainingDays?.length) return false;
     const timezone = config?.timezone ?? deviceTimezone();
     const scheduledLocalDate = localDateInTimezone(new Date(), timezone);
     // Diagnostic instrumentation (Phase 2, Part F) — technical fields only.
     logInfo('workout_schedule', 'schedule_completion_started', { programId, sessionIndex });
     try {
-      await completeScheduledSession({ uid, programId, sessionIndex, sessionCount, scheduledLocalDate });
+      await completeScheduledSession({
+        uid, programId, ...(programInstanceId ? { programInstanceId } : {}), sessionIndex, sessionCount,
+        scheduledLocalDate, trainingDays: config.trainingDays, activatedAtLocalDate,
+      });
       logInfo('workout_schedule', 'schedule_completion_succeeded', { programId, sessionIndex });
+      return true;
     } catch (error) {
       logWarn('workout_schedule', 'schedule_complete_failed', { error });
       logWarn('workout_schedule', 'schedule_completion_failed', {
@@ -134,23 +146,24 @@ export function useWorkoutSchedule(program: WorkoutProgramSnapshot | null): Work
         errorCode: errorCode(error),
         errorClass: errorClass(error),
       });
+      return false;
     } finally {
       await reload();
     }
-  }, [uid, programId, sessionCount, config, reload]);
+  }, [uid, programId, programInstanceId, sessionCount, config, activatedAtLocalDate, reload]);
 
   const resolveMiss = useCallback(async (decision: MissDecision) => {
     if (!uid || !programId || sessionCount === 0) return;
     const timezone = config?.timezone ?? deviceTimezone();
     const todayLocalDate = localDateInTimezone(new Date(), timezone);
     try {
-      await resolveMissedSession({ uid, programId, sessionCount, decision, todayLocalDate });
+      await resolveMissedSession({ uid, programId, ...(programInstanceId ? { programInstanceId } : {}), sessionCount, decision, todayLocalDate });
     } catch (error) {
       logWarn('workout_schedule', 'schedule_miss_resolution_failed', { error });
     } finally {
       await reload();
     }
-  }, [uid, programId, sessionCount, config, reload]);
+  }, [uid, programId, programInstanceId, sessionCount, config, reload]);
 
   return { resolution, config, loading, reload, completeSession, resolveMiss };
 }

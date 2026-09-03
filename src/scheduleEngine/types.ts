@@ -24,6 +24,8 @@ export type MissDecision = 'CONTINUE_SEQUENCE' | 'FOLLOW_SCHEDULE';
 /** Immutable ledger entry. Never rewritten; see docs §Persistência. */
 export interface ScheduleEvent {
   type: ScheduleEventType;
+  /** Present on V2 events; scopes identical content reused by later instances. */
+  programInstanceId?: string;
   sessionIndex: number;
   /** Local calendar date (YYYY-MM-DD) this occurrence was scheduled for. */
   scheduledDate: string;

@@ -55,6 +55,12 @@ import {
 } from './src/services/photoVaultFileCrypto';
 import { logPhotoVaultIssue } from './src/lib/photoVaultErrors';
 import { logInfo } from './src/lib/logger';
+import { configureWorkoutLifecycleTelemetry } from './src/workoutLifecycle/telemetryProvider';
+
+// Operational lifecycle events are delivered to an authenticated/App-Check
+// callable and then Cloud Logging. Installation is synchronous; delivery is
+// always best-effort and never blocks a domain transition.
+configureWorkoutLifecycleTelemetry();
 
 /**
  * Configures the RevenueCat SDK at module evaluation time — the same
