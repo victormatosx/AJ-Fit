@@ -6,7 +6,8 @@ import {
   pendingEvolutionIdForOperation,
   programInstanceIdForOperation,
 } from '../workoutLifecycle/domain';
-import { applyDefer, canDefer, isAutoActivationDue, toDeferralView } from '../workoutLifecycle/deferral';
+import { applyDefer, canDefer, isAutoActivationDue, resolveDeferralConfig, toDeferralView } from '../workoutLifecycle/deferral';
+import { resolveWorkoutLifecycleProgressionPolicy } from '../workoutLifecycle/qaPolicy';
 import {
   WORKOUT_LIFECYCLE_SCHEMA_VERSION,
   type CurrentTrainingLevel,
@@ -18,15 +19,18 @@ import type { LevelPromotionTarget } from '../prescriptionEvolution/levelPromoti
 import { buildPrescriptionInputSnapshot, questionnaireAnswersFromPrescriptionInputs } from '../workoutLifecycle/prescriptionInputs';
 import { evolvePrescription } from './prescriptionEvolution';
 import { loadAuthoritativePrescriptionInputs } from './prescriptionInputs';
-import { evaluateProgressionV2ForUser } from './workoutProgressionV2';
+import { evaluateProgressionV2ForUser, evaluateProgressionV2ForUserFull } from './workoutProgressionV2';
 import {
   lifecycleRef,
   loadPendingEvolution,
   loadWorkoutLifecycle,
+  listTrainingCycles,
   listWorkoutLifecycleEvents,
   pendingEvolutionRef,
   recoverWorkoutLifecyclePartialState,
 } from './workoutLifecycle';
+import { countEarnedIntermediateCycles } from '../progressionEngineV2/earnedCycles';
+import { PROGRESSION_V2_CONFIG } from '../progressionEngineV2/config';
 import {
   contentIdentityFor,
   loadActiveWorkoutProgram,
@@ -81,6 +85,21 @@ interface EarnedEvolutionFact {
   deferralCount: 0 | 1 | 2;
   nextPromptAt: Timestamp | null;
   autoActivateAt: Timestamp | null;
+  /**
+   * QA_TRANSITION marker (docs/workout-lifecycle/v2/qa/) — set ONLY by
+   * `prepareQaTransitionEvolution` below. Included in the `earnedFact` sent
+   * to the backend's EARN authorization (so it can match its own
+   * QA-forced computation) and in the ephemeral authority grant document,
+   * but deliberately NEVER in the persisted `workoutLifecycleEvents`
+   * ledger payload — `persistEarnedFact` picks an explicit 6-field object
+   * for that write, so a QA-forced transition never needs a Rules change
+   * to stay out of the domain ledger's strict payload schema. Telemetry
+   * tags QA_TRANSITION independently via the account's own QA mode
+   * (`functions/src/telemetry/trustedWorkoutLifecycleTelemetry.ts`), not
+   * via this field.
+   */
+  qaForced?: true;
+  triggerSource?: 'QA_TRANSITION';
 }
 
 function timestampMillis(value: Timestamp): number {
@@ -167,6 +186,10 @@ async function persistEarnedFact(input: {
       quality: input.fact.quality,
       sessionsCompletedAtEarn: input.fact.sessionsCompletedAtEarn,
       adherenceAtEarnBp: input.fact.adherenceAtEarnBp,
+      // Only present for a QA_TRANSITION-forced fact — must match the
+      // backend's own `authoritativeEarnedFact` output exactly (canonical()
+      // comparison) or the EARN authorization fails closed as a forged fact.
+      ...(input.fact.qaForced ? { qaForced: true, triggerSource: input.fact.triggerSource } : {}),
     },
   });
   try {
@@ -466,6 +489,124 @@ export async function prepareEvolution(input: { uid: string; now?: Date }): Prom
   return { status: 'PREPARATION_FAILED', reasonCodes: ['STALE_PREPARE_REJECTED_RETRYABLE'] };
 }
 
+// ─── QA_TRANSITION ──────────────────────────────────────────────────────
+// docs/workout-lifecycle/v2/qa/ — replaces ONLY the eligibility decision
+// (`authoritativeEarnedFact`'s activeDays/adherence gate, server-side).
+// Everything downstream — canonical prescription generation, ProgramInstance,
+// TrainingCycle, PendingEvolution, defer/activate — is the exact same
+// pipeline a real earned transition uses (`prepareEvolution` below, called
+// completely unmodified once the EARN ledger event exists).
+
+export interface QaTransitionPreview {
+  currentLevel: CurrentTrainingLevel;
+  currentCycleNumber: number;
+  currentProgramInstanceId: string;
+  currentContentIdentity: string;
+  /** Derived from the account's REAL currentTrainingLevel/earned-cycle history — never chosen by the caller. */
+  targetType: 'LEVEL_PROMOTION' | 'CYCLE_EVOLUTION';
+  targetLevel: CurrentTrainingLevel;
+}
+
+/**
+ * Read-only preview of what "Preparar próxima evolução" would target,
+ * using the exact same branching `authoritativeEarnedFact` uses server-side
+ * (BEGINNER -> INTERMEDIATE; INTERMEDIATE -> ADVANCED only at the 4th
+ * earned cycle, else another INTERMEDIATE cycle; ADVANCED -> another
+ * ADVANCED cycle, never a new terminal level). Never lets a caller pick the
+ * target — this only reports what the real career rules already decided.
+ */
+export async function previewQaTransition(uid: string): Promise<QaTransitionPreview | null> {
+  const lifecycle = await loadWorkoutLifecycle(uid);
+  if (!lifecycle) return null;
+  const currentLevel = lifecycle.lifecycle.currentTrainingLevel;
+  const earnedIntermediateCycleCount = currentLevel === 'INTERMEDIATE'
+    ? countEarnedIntermediateCycles(await listTrainingCycles(uid))
+    : 0;
+  let targetType: 'LEVEL_PROMOTION' | 'CYCLE_EVOLUTION' = 'CYCLE_EVOLUTION';
+  let targetLevel = currentLevel;
+  if (currentLevel === 'BEGINNER') {
+    targetType = 'LEVEL_PROMOTION';
+    targetLevel = 'INTERMEDIATE';
+  } else if (currentLevel === 'INTERMEDIATE') {
+    if (earnedIntermediateCycleCount + 1 >= PROGRESSION_V2_CONFIG.intermediateCyclesForPromotion) {
+      targetType = 'LEVEL_PROMOTION';
+      targetLevel = 'ADVANCED';
+    } else {
+      targetType = 'CYCLE_EVOLUTION';
+    }
+  } else {
+    targetType = 'CYCLE_EVOLUTION'; // ADVANCED never gets a new terminal level.
+  }
+  return {
+    currentLevel,
+    currentCycleNumber: lifecycle.lifecycle.currentCycleNumber,
+    currentProgramInstanceId: lifecycle.programInstance.programInstanceId,
+    currentContentIdentity: lifecycle.lifecycle.activeContentIdentity,
+    targetType,
+    targetLevel,
+  };
+}
+
+/**
+ * The "Preparar próxima evolução" action (Settings > Developer > Workout
+ * Lifecycle, QA_TRANSITION only). Falsifies exactly one thing — "this
+ * account earned the right to request its next evolution" — and nothing
+ * about how that evolution happens:
+ *
+ *   1. If no EVOLUTION_EARNED ledger event is already outstanding, derive
+ *      the real target (`previewQaTransition`) and the account's REAL
+ *      current adherence/valid-session numbers (`evaluateProgressionV2ForUserFull`
+ *      — completely unaffected by QA), then request EARN with those real
+ *      numbers plus a `qaForced`/`triggerSource` marker. The backend
+ *      independently re-derives the same target from the same real state
+ *      and only skips its own activeDays/adherence check when this
+ *      account's `workoutLifecycleQaMode` is actually `TRANSITION` — a
+ *      non-QA_TRANSITION account sending this fails closed with
+ *      `forged_earned_fact`, no special-casing needed here.
+ *   2. Delegate to `prepareEvolution` — the exact same, unmodified real
+ *      PREPARE pipeline (canonical prescription, ProgramInstance,
+ *      PendingEvolution) a genuinely earned transition uses.
+ *
+ * Never writes `currentTrainingLevel`, `earnedIntermediateCycles`, or a
+ * `PendingEvolution` directly — every one of those is still produced by the
+ * real backend-authoritative pipeline, just triggered earlier than a real
+ * career would allow.
+ */
+export async function prepareQaTransitionEvolution(input: { uid: string; now?: Date }): Promise<PrepareEvolutionResult> {
+  const existingPending = await loadPendingEvolution(input.uid);
+  if (existingPending) return { status: 'ALREADY_PENDING', pending: existingPending };
+
+  const existingEarned = await loadOutstandingEarnedFact(input.uid);
+  if (!existingEarned) {
+    const lifecycle = await loadWorkoutLifecycle(input.uid);
+    if (!lifecycle) return { status: 'NO_LIFECYCLE' };
+    const preview = await previewQaTransition(input.uid);
+    if (!preview) return { status: 'NO_LIFECYCLE' };
+    const full = await evaluateProgressionV2ForUserFull(input.uid, input.now);
+    const idempotencyKey = evolutionIdempotencyKey({
+      sourceProgramInstanceId: lifecycle.programInstance.programInstanceId,
+      type: preview.targetType,
+    });
+    await persistEarnedFact({
+      uid: input.uid,
+      lifecycle,
+      fact: {
+        idempotencyKey,
+        type: preview.targetType,
+        fromLevel: preview.currentLevel,
+        toLevel: preview.targetLevel,
+        quality: full?.snapshot.adherence.quality ?? 'BELOW_TARGET',
+        sessionsCompletedAtEarn: full?.snapshot.validSessionCount ?? 0,
+        adherenceAtEarnBp: full ? Math.round(full.snapshot.adherence.ratio * 10_000) : 0,
+        qaForced: true,
+        triggerSource: 'QA_TRANSITION',
+      },
+    });
+  }
+
+  return prepareEvolution({ uid: input.uid, now: input.now });
+}
+
 export type DeferEvolutionResult =
   | { status: 'NO_PENDING_EVOLUTION' }
   | { status: 'CANNOT_DEFER' }
@@ -478,6 +619,7 @@ export async function deferPendingEvolution(input: { uid: string; now?: Date }):
   let outcome: DeferEvolutionResult | null = null;
   const preflightPending = await loadPendingEvolution(input.uid);
   if (!preflightPending) return { status: 'NO_PENDING_EVOLUTION' };
+  const deferralConfig = resolveDeferralConfig(await resolveWorkoutLifecycleProgressionPolicy(input.uid));
   await authorizeWorkoutLifecycleMutation({
     operation: 'DEFER',
     sourceProgramInstanceId: preflightPending.sourceProgramInstanceId,
@@ -507,12 +649,12 @@ export async function deferPendingEvolution(input: { uid: string; now?: Date }):
         nextPromptAt: data.nextPromptAt ? data.nextPromptAt.toDate() : null,
         autoActivateAt: data.autoActivateAt ? data.autoActivateAt.toDate() : null,
       });
-      if (!canDefer(view, now)) {
+      if (!canDefer(view, now, deferralConfig)) {
         outcome = { status: 'CANNOT_DEFER' };
         transaction.delete(authorityGrantRef(input.uid));
         return;
       }
-      const transition = applyDefer(view, now);
+      const transition = applyDefer(view, now, deferralConfig);
       const nowTs = serverTimestamp();
       transaction.update(pendingRef, {
         status: transition.status,

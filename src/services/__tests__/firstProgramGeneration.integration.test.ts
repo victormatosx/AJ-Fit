@@ -129,6 +129,37 @@ async function seedUserAndQuestionnaire() {
   });
 }
 
+/**
+ * Simulates an account that already had a program before Workout Lifecycle
+ * V2 existed: a legacy `workoutProgramState/active` pointer + a real
+ * `workoutPrograms/{id}` doc, but NO `workoutLifecycleState/current`. Real
+ * new accounts can never reach this shape anymore — `saveAndActivateWorkoutProgram`
+ * now enrolls every brand-new account in V2 unconditionally (the fix this
+ * suite protects) — so this fixture deliberately bypasses the app's own
+ * generation path and writes the legacy shape directly, the only way to
+ * reproduce a genuine pre-V2 account for the migration-only tests below.
+ */
+async function seedLegacyV1Account() {
+  await seedUserAndQuestionnaire();
+  const loaded = await getLatestQuestionnaire(UID);
+  const generated = await generateAndPersistWorkoutProgram({
+    uid: UID, questionnaireId: loaded!.id, questionnaireVersion: loaded!.version,
+    answers: loaded!.answers, source: 'automatic_reconciliation',
+  });
+  if (generated.status !== 'SUCCESS') throw new Error('seedLegacyV1Account setup failed');
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    const rawDb = ctx.firestore();
+    await deleteDoc(doc(rawDb, 'users', UID, 'workoutLifecycleState', 'current'));
+    for (const instance of (await getDocs(collection(rawDb, 'users', UID, 'programInstances'))).docs) {
+      await deleteDoc(instance.ref);
+    }
+    for (const cycle of (await getDocs(collection(rawDb, 'users', UID, 'trainingCycles'))).docs) {
+      await deleteDoc(cycle.ref);
+    }
+  });
+  return generated;
+}
+
 describe.skipIf(!enabled)('First program generation — real device regression, real Firestore Emulator', () => {
   beforeAll(async () => {
     testEnv = await initializeTestEnvironment({
@@ -299,21 +330,51 @@ describe.skipIf(!enabled)('First program generation — real device regression, 
     }
   });
 
-  it('uses the real enrollment hot path for OFF → ON and keeps an existing V2 account sticky after kill switch', async () => {
-    await seedUserAndQuestionnaire();
+  it('a brand-new account enrolls in V2 immediately, regardless of rollout config (disabled/missing/malformed)', async () => {
+    // Root-cause regression: `workoutLifecycleRolloutConfig/active` was
+    // never provisioned in production, so every brand-new account silently
+    // stuck on V1-compatible mode with no error. Rollout must only gate
+    // genuine V1→V2 MIGRATIONS (an account with pre-existing legacy state),
+    // never a first-ever signup — see `saveAndActivateWorkoutProgram`'s
+    // `isBrandNewAccount` short-circuit.
+    for (const rolloutState of [
+      { label: 'disabled', doc: { schemaVersion: 1, enabled: false, percentage: 0 } },
+      { label: 'missing', doc: null },
+      { label: 'malformed', doc: { schemaVersion: 99, enabled: true, percentage: 100, unexpected: true } },
+    ] as const) {
+      await testEnv.clearFirestore();
+      await seedUserAndQuestionnaire();
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        if (rolloutState.doc) {
+          await setDoc(doc(ctx.firestore(), 'workoutLifecycleRolloutConfig', 'active'), rolloutState.doc);
+        } else {
+          await deleteDoc(doc(ctx.firestore(), 'workoutLifecycleRolloutConfig', 'active'));
+        }
+      });
+      const loaded = await getLatestQuestionnaire(UID);
+      const generated = await generateAndPersistWorkoutProgram({
+        uid: UID, questionnaireId: loaded!.id, questionnaireVersion: loaded!.version,
+        answers: loaded!.answers, source: 'automatic_reconciliation',
+      });
+      expect(generated.status, rolloutState.label).toBe('SUCCESS');
+      if (generated.status !== 'SUCCESS') continue;
+      expect(generated.program.programInstanceId, rolloutState.label).toMatch(/^wpi_/);
+      expect(
+        (await getDoc(doc(mocks.db as never, 'users', UID, 'workoutLifecycleState', 'current'))).exists(),
+        rolloutState.label,
+      ).toBe(true);
+    }
+  });
+
+  it('uses the real enrollment hot path for OFF → ON and keeps an existing V2 account sticky after kill switch (legacy migration only)', async () => {
+    await seedLegacyV1Account();
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       await setDoc(doc(ctx.firestore(), 'workoutLifecycleRolloutConfig', 'active'), {
         schemaVersion: 1, enabled: false, percentage: 100,
       });
     });
-    const loaded = await getLatestQuestionnaire(UID);
-    const generated = await generateAndPersistWorkoutProgram({
-      uid: UID, questionnaireId: loaded!.id, questionnaireVersion: loaded!.version,
-      answers: loaded!.answers, source: 'automatic_reconciliation',
-    });
-    expect(generated.status).toBe('SUCCESS');
-    if (generated.status !== 'SUCCESS') return;
-    expect(generated.program.programInstanceId).toBeUndefined();
+    const beforeRollout = await loadActiveWorkoutProgram(UID);
+    expect(beforeRollout?.programInstanceId).toBeUndefined();
     expect((await getDoc(doc(mocks.db as never, 'users', UID, 'workoutLifecycleState', 'current'))).exists()).toBe(false);
 
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
@@ -338,20 +399,12 @@ describe.skipIf(!enabled)('First program generation — real device regression, 
       .toEqual(lifecycleBeforeKillSwitch);
   });
 
-  it('fails closed on missing or malformed config for new enrollment, without damaging workout execution data', async () => {
-    await seedUserAndQuestionnaire();
+  it('fails closed on missing or malformed config for a genuine legacy migration, without damaging workout execution data', async () => {
+    await seedLegacyV1Account();
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       await deleteDoc(doc(ctx.firestore(), 'workoutLifecycleRolloutConfig', 'active'));
     });
-    const loaded = await getLatestQuestionnaire(UID);
-    const generated = await generateAndPersistWorkoutProgram({
-      uid: UID, questionnaireId: loaded!.id, questionnaireVersion: loaded!.version,
-      answers: loaded!.answers, source: 'automatic_reconciliation',
-    });
-    expect(generated.status).toBe('SUCCESS');
-    expect((await loadActiveWorkoutProgram(UID))?.programId).toBe(
-      generated.status === 'SUCCESS' ? generated.program.programId : '',
-    );
+    expect((await loadActiveWorkoutProgram(UID))?.programInstanceId).toBeUndefined();
     expect((await getDoc(doc(mocks.db as never, 'users', UID, 'workoutLifecycleState', 'current'))).exists()).toBe(false);
 
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
@@ -363,19 +416,7 @@ describe.skipIf(!enabled)('First program generation — real device regression, 
   });
 
   it('reports a real hot-path migration failure without emitting enrollment success', async () => {
-    await seedUserAndQuestionnaire();
-    await testEnv.withSecurityRulesDisabled(async (ctx) => {
-      await setDoc(doc(ctx.firestore(), 'workoutLifecycleRolloutConfig', 'active'), {
-        schemaVersion: 1, enabled: false, percentage: 0,
-      });
-    });
-    const loaded = await getLatestQuestionnaire(UID);
-    const generated = await generateAndPersistWorkoutProgram({
-      uid: UID, questionnaireId: loaded!.id, questionnaireVersion: loaded!.version,
-      answers: loaded!.answers, source: 'automatic_reconciliation',
-    });
-    expect(generated.status).toBe('SUCCESS');
-
+    await seedLegacyV1Account();
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       await setDoc(doc(ctx.firestore(), 'users', UID, 'questionnaires', QUESTIONNAIRE_ID), {
         answers: { ...toPersistedAnswers(ORIGINAL_SCENARIO_ANSWERS), level: 'unknown' },

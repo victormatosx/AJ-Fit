@@ -4,6 +4,7 @@ import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 
 import { db } from '../lib/firebaseAdmin';
 import { logInfo, type LogContext } from '../lib/logger';
+import { progressionPolicyModeFor, resolveWorkoutLifecycleQaMode } from '../workoutLifecycle/qaPolicy';
 
 interface PersistedLifecycleEvent {
   eventId?: unknown;
@@ -103,6 +104,13 @@ export async function emitTrustedWorkoutLifecycleTelemetry(
     sink?: TrustedTelemetrySink;
     /** Trusted trigger path scope; never emitted to logs. */
     correlationScope?: string;
+    /**
+     * DEV Accelerated Lifecycle QA (docs/workout-lifecycle/v2/qa/): tags
+     * the emitted event so compressed-timeline (QA_ACCELERATED) and
+     * eligibility-bypassed (QA_TRANSITION) accounts are never mistaken for
+     * real production behavior downstream. No PII — just the policy label.
+     */
+    qaMode?: 'NORMAL' | 'QA_ACCELERATED' | 'QA_TRANSITION';
   } = {},
 ): Promise<{ emitted: boolean; name: string | null }> {
   if (typeof value.eventId !== 'string' || typeof value.type !== 'string') {
@@ -116,10 +124,16 @@ export async function emitTrustedWorkoutLifecycleTelemetry(
   if (status === 'delivered') return { emitted: false, name };
 
   const payload = plainObject(value.payload) ? value.payload : {};
+  const qaMode = dependencies.qaMode ?? 'NORMAL';
   const context: LogContext = {
     trustLevel: 'TRUSTED_DOMAIN',
     correlationHash,
     domainEventType: value.type,
+    qaMode,
+    // Kept for existing dashboards/queries built against this field —
+    // TRANSITION accounts never use compressed thresholds, so they collapse
+    // to 'NORMAL' here exactly like a real account would.
+    progressionPolicy: progressionPolicyModeFor(qaMode),
   };
   for (const key of ['evolutionType', 'quality', 'trigger', 'deferralCount']) {
     const item = payload[key];
@@ -137,8 +151,10 @@ export const onTrustedWorkoutLifecycleEventCreated = onDocumentCreated(
   async (event) => {
     const snapshot = event.data;
     if (!snapshot) return;
+    const qaMode = await resolveWorkoutLifecycleQaMode(event.params.uid, db);
     await emitTrustedWorkoutLifecycleTelemetry(snapshot.data(), {
       correlationScope: event.params.uid,
+      qaMode,
     });
   },
 );

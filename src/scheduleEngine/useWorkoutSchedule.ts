@@ -122,12 +122,20 @@ export function useWorkoutSchedule(program: WorkoutProgramSnapshot | null): Work
 
   const completeSession = useCallback(async (sessionIndex: number) => {
     if (!uid || !programId || sessionCount === 0) return false;
+    // Both required by `completeScheduledSession` to derive the expected
+    // first-ever session correctly (no silent `?? 0` fallback there
+    // anymore) — without them there is no valid resolved schedule to
+    // complete against, so fail closed exactly like the guards above.
+    if (!activatedAtLocalDate || !config?.trainingDays?.length) return false;
     const timezone = config?.timezone ?? deviceTimezone();
     const scheduledLocalDate = localDateInTimezone(new Date(), timezone);
     // Diagnostic instrumentation (Phase 2, Part F) — technical fields only.
     logInfo('workout_schedule', 'schedule_completion_started', { programId, sessionIndex });
     try {
-      await completeScheduledSession({ uid, programId, ...(programInstanceId ? { programInstanceId } : {}), sessionIndex, sessionCount, scheduledLocalDate });
+      await completeScheduledSession({
+        uid, programId, ...(programInstanceId ? { programInstanceId } : {}), sessionIndex, sessionCount,
+        scheduledLocalDate, trainingDays: config.trainingDays, activatedAtLocalDate,
+      });
       logInfo('workout_schedule', 'schedule_completion_succeeded', { programId, sessionIndex });
       return true;
     } catch (error) {
@@ -142,7 +150,7 @@ export function useWorkoutSchedule(program: WorkoutProgramSnapshot | null): Work
     } finally {
       await reload();
     }
-  }, [uid, programId, programInstanceId, sessionCount, config, reload]);
+  }, [uid, programId, programInstanceId, sessionCount, config, activatedAtLocalDate, reload]);
 
   const resolveMiss = useCallback(async (decision: MissDecision) => {
     if (!uid || !programId || sessionCount === 0) return;

@@ -17,8 +17,10 @@ import { equipmentContextFor } from './prescriptionEngine/workoutPrescription/eq
 import { buildRecentSlotHistory, evolveCycle } from './prescriptionEngine/prescriptionEvolution/cycleEvolution';
 import { PRESCRIPTION_EVOLUTION_CONFIG } from './prescriptionEngine/prescriptionEvolution/config';
 import { countEarnedIntermediateCycles } from './prescriptionEngine/progressionEngineV2/earnedCycles';
+import { resolveProgressionV2Config } from './prescriptionEngine/progressionEngineV2/config';
 import type { TrainingCycle } from './prescriptionEngine/workoutLifecycle/types';
 import { isOperationBlockedByCircuitBreaker, loadWorkoutLifecycleCircuitBreakerConfig } from './circuitBreaker';
+import { progressionPolicyModeFor, resolveWorkoutLifecycleQaMode } from './qaPolicy';
 
 export const WORKOUT_LIFECYCLE_AUTHORITY_GRANT_ID = 'current';
 
@@ -297,15 +299,21 @@ function qualifyingExecution(execution: DocumentData, session: DocumentData, exp
   return counts !== null && counts.completed * 100 >= counts.prescribed * 70;
 }
 
-async function authoritativeEarnedFact(uid: string, firestore: Firestore, now: Date): Promise<Record<string, unknown>> {
+// Exported for tests only (docs/workout-lifecycle/v2/qa/) — lets QA_TRANSITION
+// test coverage use this function's own real output as the oracle for what
+// the EARN handler should accept, instead of hand-computing activeDays/
+// adherence numbers. Not imported by any non-test module.
+export async function authoritativeEarnedFact(uid: string, firestore: Firestore, now: Date): Promise<Record<string, unknown>> {
   const { state, instance, program } = await activeBundle(uid, firestore);
   const root = firestore.collection('users').doc(uid);
-  const [scheduleConfigSnapshot, executionsSnapshot, scheduleEventsSnapshot, cyclesSnapshot] = await Promise.all([
+  const [qaMode, scheduleConfigSnapshot, executionsSnapshot, scheduleEventsSnapshot, cyclesSnapshot] = await Promise.all([
+    resolveWorkoutLifecycleQaMode(uid, firestore),
     root.collection('workoutProgramState').doc('scheduleConfig').get(),
     root.collection('workoutExecutions').where('programInstanceId', '==', state.activeProgramInstanceId).get(),
     root.collection('workoutPrograms').doc(state.activeContentIdentity).collection('scheduleEvents').get(),
     root.collection('trainingCycles').get(),
   ]);
+  const config = resolveProgressionV2Config(progressionPolicyModeFor(qaMode));
   const scheduleConfig = scheduleConfigSnapshot.data() ?? {};
   const snapshotInputs = plainObject(instance.prescriptionInputSnapshot?.inputs)
     ? instance.prescriptionInputSnapshot.inputs as Record<string, unknown>
@@ -329,7 +337,7 @@ async function authoritativeEarnedFact(uid: string, firestore: Firestore, now: D
     if (!paused) { activeDays += 1; countedDates.add(cursor); }
     if (!hasExecution && trainingDays.has(weekday(cursor)) && cursor < today) {
       missed += 1;
-      if (missed >= 3) paused = true;
+      if (missed >= config.inactivityMissedOpportunityThreshold) paused = true;
     }
   }
   const opportunityDates = new Set([...countedDates].filter((date) => trainingDays.has(weekday(date))));
@@ -345,9 +353,19 @@ async function authoritativeEarnedFact(uid: string, firestore: Firestore, now: D
   }
   const expected = opportunityDates.size;
   const ratioBp = expected === 0 ? 0 : Math.min(10_000, Math.floor(fulfilled.size * 10_000 / expected));
-  const quality = ratioBp >= 8500 ? 'HIGH' : ratioBp >= 7000 ? 'GOOD' : 'BELOW_TARGET';
-  const minDays = state.currentTrainingLevel === 'BEGINNER' ? 28 : 85;
-  const earned = activeDays >= minDays && ratioBp >= 7000;
+  const quality = ratioBp >= config.adherenceHighThresholdBp ? 'HIGH'
+    : ratioBp >= config.adherenceEarnedThresholdBp ? 'GOOD' : 'BELOW_TARGET';
+  const minDays = state.currentTrainingLevel === 'BEGINNER'
+    ? config.beginnerMinimumActiveDays : config.intermediateAdvancedMinimumActiveDays;
+  // QA_TRANSITION's entire purpose (docs/workout-lifecycle/v2/qa/): replace
+  // ONLY the eligibility decision — never activeDays, never adherence, never
+  // the type/toLevel branching below, which still runs unmodified off the
+  // account's REAL currentTrainingLevel/earned-cycle history. Every other
+  // gate (70%/85% quality bands, the 4-cycle rule, canonical prescription
+  // generation downstream in PREPARE) is completely untouched.
+  const earned = qaMode === 'QA_TRANSITION'
+    ? true
+    : activeDays >= minDays && ratioBp >= config.adherenceEarnedThresholdBp;
   let type: string | null = null;
   let toLevel = state.currentTrainingLevel;
   if (earned && state.currentTrainingLevel === 'BEGINNER') { type = 'LEVEL_PROMOTION'; toLevel = 'INTERMEDIATE'; }
@@ -360,10 +378,10 @@ async function authoritativeEarnedFact(uid: string, firestore: Firestore, now: D
     const earnedIntermediate = countEarnedIntermediateCycles(
       cyclesSnapshot.docs.map((item) => item.data() as unknown as Pick<TrainingCycle<unknown>,
         'level' | 'status' | 'progressionReason' | 'cycleNumber' | 'completionReason'>));
-    if (earnedIntermediate + 1 >= 4) { type = 'LEVEL_PROMOTION'; toLevel = 'ADVANCED'; }
+    if (earnedIntermediate + 1 >= config.intermediateCyclesForPromotion) { type = 'LEVEL_PROMOTION'; toLevel = 'ADVANCED'; }
     else type = 'CYCLE_EVOLUTION';
   } else if (earned && state.currentTrainingLevel === 'ADVANCED') type = 'CYCLE_EVOLUTION';
-  else if (!earned && activeDays >= minDays + 30 && ratioBp < 7000) type = 'MOTIVATIONAL_RENEWAL';
+  else if (!earned && activeDays >= minDays + config.motivationalRenewalExtensionDays && ratioBp < config.adherenceEarnedThresholdBp) type = 'MOTIVATIONAL_RENEWAL';
   if (!type) throw new HttpsError('failed-precondition', 'progression_not_eligible');
   return {
     type,
@@ -372,6 +390,13 @@ async function authoritativeEarnedFact(uid: string, firestore: Firestore, now: D
     quality,
     sessionsCompletedAtEarn: fulfilled.size,
     adherenceAtEarnBp: ratioBp,
+    // Ephemeral marker, never persisted verbatim to the domain ledger
+    // (`persistEarnedFact`'s Firestore write picks an explicit 6-field
+    // payload — see src/services/workoutLifecycleApplication.ts — so this
+    // never needs a Rules change). Only used here, in the EARN grant, and
+    // in trusted telemetry, so a QA_TRANSITION-forced transition is never
+    // mistaken for a real earned one downstream.
+    ...(qaMode === 'QA_TRANSITION' ? { qaForced: true, triggerSource: 'QA_TRANSITION' } : {}),
   };
 }
 

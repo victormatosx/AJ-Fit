@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { deleteApp, initializeApp, type App } from 'firebase-admin/app';
 import { getFirestore, Timestamp, type Firestore } from 'firebase-admin/firestore';
 
-import { authorizeWorkoutLifecycleMutationHandler } from '../authorizeMutation';
+import { authorizeWorkoutLifecycleMutationHandler, authoritativeEarnedFact } from '../authorizeMutation';
 import { seedRealPrescriptionCatalog } from './realCatalogFixture';
 import { weekdayOfLocalDate } from '../scheduleEngine/calendar';
 
@@ -950,6 +950,143 @@ describe.skipIf(!enabled)('Workout Lifecycle authority — real Firestore Emulat
         auth: { uid: UID },
         data: { operation: 'RECOVER', sourceProgramInstanceId: 'wpi_active', sourceCycleId: 'cyc_active' },
       } as never, db)).resolves.toMatchObject({ grantId: 'current' });
+    });
+  });
+
+  describe('EARN — QA_TRANSITION eligibility bypass (docs/workout-lifecycle/v2/qa/)', () => {
+    // Fixture account: BEGINNER, activatedAt ~1 day ago, zero executions —
+    // activeDays is far below even QA_ACCELERATED's 7-day floor and
+    // adherence is 0%. Real progression, and QA_ACCELERATED's compressed
+    // progression, must both still deny EARN for this account. Only
+    // QA_TRANSITION may.
+    async function setQaMode(mode: 'ACCELERATED' | 'TRANSITION' | null) {
+      await db.collection('users').doc(UID).set({
+        metadata: mode ? { role: 'user', workoutLifecycleQaMode: mode } : { role: 'user' },
+      });
+    }
+
+    it('NORMAL account: not eligible — real progression is never bypassed', async () => {
+      await setQaMode(null);
+      await expect(authoritativeEarnedFact(UID, db, new Date()))
+        .rejects.toMatchObject({ message: 'progression_not_eligible' });
+    });
+
+    it('QA_ACCELERATED account: still not eligible — ACCELERATED compresses time, it never skips the gate', async () => {
+      await setQaMode('ACCELERATED');
+      await expect(authoritativeEarnedFact(UID, db, new Date()))
+        .rejects.toMatchObject({ message: 'progression_not_eligible' });
+    });
+
+    it('QA_TRANSITION account: EARN succeeds despite ~1 active day and 0% adherence, deriving the real BEGINNER -> INTERMEDIATE target', async () => {
+      await setQaMode('TRANSITION');
+      const fact = await authoritativeEarnedFact(UID, db, new Date());
+      expect(fact).toMatchObject({
+        type: 'LEVEL_PROMOTION', fromLevel: 'BEGINNER', toLevel: 'INTERMEDIATE',
+        qaForced: true, triggerSource: 'QA_TRANSITION',
+      });
+    });
+
+    it('legacy boolean fallback: workoutLifecycleQaAccelerated=true alone never implies QA_TRANSITION', async () => {
+      await db.collection('users').doc(UID).set({ metadata: { role: 'user', workoutLifecycleQaAccelerated: true } });
+      await expect(authoritativeEarnedFact(UID, db, new Date()))
+        .rejects.toMatchObject({ message: 'progression_not_eligible' });
+    });
+
+    it('mutual exclusivity: the new field always wins over the legacy boolean, in both directions', async () => {
+      await db.collection('users').doc(UID).set({
+        metadata: { role: 'user', workoutLifecycleQaMode: 'TRANSITION', workoutLifecycleQaAccelerated: false },
+      });
+      const forced = await authoritativeEarnedFact(UID, db, new Date());
+      expect(forced.qaForced).toBe(true);
+
+      await db.collection('users').doc(UID).set({
+        metadata: { role: 'user', workoutLifecycleQaMode: 'ACCELERATED', workoutLifecycleQaAccelerated: true },
+      });
+      // ACCELERATED (not TRANSITION) still denies this fixture's ~1 active day.
+      await expect(authoritativeEarnedFact(UID, db, new Date()))
+        .rejects.toMatchObject({ message: 'progression_not_eligible' });
+    });
+
+    describe('full EARN operation — client cannot forge the target', () => {
+      function earnRequest(idempotencyKey: string, earnedFact: Record<string, unknown>) {
+        return {
+          auth: { uid: UID },
+          data: {
+            operation: 'EARN', sourceProgramInstanceId: 'wpi_active', sourceCycleId: 'cyc_active',
+            sourcePrescriptionInputSnapshotId: 'pis_active',
+            eventType: 'EVOLUTION_EARNED', idempotencyKey,
+            eventId: lifecycleEventId('EVOLUTION_EARNED', idempotencyKey),
+            earnedFact,
+          },
+        } as never;
+      }
+
+      it('NORMAL account sending a QA-shaped earnedFact via the real EARN operation is denied', async () => {
+        await setQaMode(null);
+        await expect(authorizeWorkoutLifecycleMutationHandler(
+          earnRequest('evolution:wpi_active:LEVEL_PROMOTION', {
+            type: 'LEVEL_PROMOTION', fromLevel: 'BEGINNER', toLevel: 'INTERMEDIATE',
+            quality: 'HIGH', sessionsCompletedAtEarn: 30, adherenceAtEarnBp: 10_000,
+            qaForced: true, triggerSource: 'QA_TRANSITION',
+          }), db,
+        )).rejects.toThrow();
+      });
+
+      it('QA_ACCELERATED account sending the same QA-shaped earnedFact is denied', async () => {
+        await setQaMode('ACCELERATED');
+        await expect(authorizeWorkoutLifecycleMutationHandler(
+          earnRequest('evolution:wpi_active:LEVEL_PROMOTION', {
+            type: 'LEVEL_PROMOTION', fromLevel: 'BEGINNER', toLevel: 'INTERMEDIATE',
+            quality: 'HIGH', sessionsCompletedAtEarn: 30, adherenceAtEarnBp: 10_000,
+            qaForced: true, triggerSource: 'QA_TRANSITION',
+          }), db,
+        )).rejects.toThrow();
+      });
+
+      it('QA_TRANSITION account: EARN succeeds when the client submits exactly the oracle-derived fact, and the grant carries the QA marker', async () => {
+        await setQaMode('TRANSITION');
+        const oracle = await authoritativeEarnedFact(UID, db, new Date());
+        const idempotencyKey = `evolution:wpi_active:${oracle.type}`;
+        const result = await authorizeWorkoutLifecycleMutationHandler(earnRequest(idempotencyKey, oracle), db);
+        expect(result.grantId).toBe('current');
+        const grant = (await db.collection('users').doc(UID)
+          .collection('workoutLifecycleAuthorityGrants').doc('current').get()).data();
+        expect(grant?.earnedFact).toMatchObject({ qaForced: true, triggerSource: 'QA_TRANSITION' });
+      });
+
+      it('QA_TRANSITION account: client tampering with toLevel (claiming ADVANCED for a BEGINNER account) is rejected', async () => {
+        await setQaMode('TRANSITION');
+        const oracle = await authoritativeEarnedFact(UID, db, new Date());
+        const tampered = { ...oracle, toLevel: 'ADVANCED' };
+        const idempotencyKey = `evolution:wpi_active:${oracle.type}`;
+        await expect(authorizeWorkoutLifecycleMutationHandler(earnRequest(idempotencyKey, tampered), db))
+          .rejects.toMatchObject({ message: 'forged_earned_fact' });
+      });
+
+      it('QA_TRANSITION account: client inventing sessionsCompletedAtEarn/adherenceAtEarnBp is rejected', async () => {
+        await setQaMode('TRANSITION');
+        const oracle = await authoritativeEarnedFact(UID, db, new Date());
+        const tampered = { ...oracle, sessionsCompletedAtEarn: 9999, adherenceAtEarnBp: 10_000 };
+        const idempotencyKey = `evolution:wpi_active:${oracle.type}`;
+        await expect(authorizeWorkoutLifecycleMutationHandler(earnRequest(idempotencyKey, tampered), db))
+          .rejects.toMatchObject({ message: 'forged_earned_fact' });
+      });
+
+      it('unauthenticated request is denied regardless of QA mode', async () => {
+        await setQaMode('TRANSITION');
+        const oracle = await authoritativeEarnedFact(UID, db, new Date());
+        const idempotencyKey = `evolution:wpi_active:${oracle.type}`;
+        await expect(authorizeWorkoutLifecycleMutationHandler({
+          auth: undefined,
+          data: {
+            operation: 'EARN', sourceProgramInstanceId: 'wpi_active', sourceCycleId: 'cyc_active',
+            sourcePrescriptionInputSnapshotId: 'pis_active',
+            eventType: 'EVOLUTION_EARNED', idempotencyKey,
+            eventId: lifecycleEventId('EVOLUTION_EARNED', idempotencyKey),
+            earnedFact: oracle,
+          },
+        } as never, db)).rejects.toThrow();
+      });
     });
   });
 });

@@ -48,7 +48,13 @@ const TS_FILES = [
   // Intermediate→Advanced earned-cycle count must use the exact same rule
   // as the client's local mirror — a hand-reimplementation previously
   // under-counted legacy pre-8A V2 cycles relative to this module.
-  ['progressionEngineV2', ['earnedCycles']],
+  //
+  // `config` (DEV Accelerated Lifecycle QA): the NORMAL/QA_ACCELERATED
+  // threshold constants used to live only in the client and were
+  // hand-duplicated as literals in `authorizeMutation.ts`. Syncing the real
+  // module removes that duplication — the backend's `authoritativeEarnedFact`
+  // now imports the exact same `resolveProgressionV2Config`.
+  ['progressionEngineV2', ['earnedCycles', 'config']],
 ];
 
 const JSON_FILES = [

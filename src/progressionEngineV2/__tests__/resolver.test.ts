@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PROGRESSION_V2_CONFIG } from '../config';
+import { PROGRESSION_V2_CONFIG, PROGRESSION_V2_CONFIG_QA_ACCELERATED } from '../config';
 import { evaluateProgressionV2 } from '../resolver';
 import type { ProgressionSnapshotV2 } from '../types';
 
@@ -195,5 +195,89 @@ describe('Idempotency', () => {
     const first = evaluateProgressionV2(input);
     const second = evaluateProgressionV2(input);
     expect(first).toEqual(second);
+  });
+});
+
+describe('QA_ACCELERATED policy — DEV Accelerated Lifecycle QA', () => {
+  const qa = PROGRESSION_V2_CONFIG_QA_ACCELERATED;
+
+  it('NORMAL config passed explicitly behaves exactly like the default (no drift introduced by threading config through)', () => {
+    const input = snapshot({ activeDays: 28, ratio: 0.7, level: 'BEGINNER' });
+    expect(evaluateProgressionV2(input, PROGRESSION_V2_CONFIG)).toEqual(evaluateProgressionV2(input));
+  });
+
+  it('QA does not evolve a Beginner before the QA minimum, even with perfect adherence', () => {
+    const decision = evaluateProgressionV2(
+      snapshot({ activeDays: qa.beginnerMinimumActiveDays - 1, ratio: 1.0, level: 'BEGINNER' }), qa,
+    );
+    expect(decision.type).toBe('PROGRESS_CONTINUES');
+  });
+
+  it('QA evolves a Beginner exactly at the QA minimum + earned adherence', () => {
+    const decision = evaluateProgressionV2(
+      snapshot({ activeDays: qa.beginnerMinimumActiveDays, ratio: 0.70, level: 'BEGINNER' }), qa,
+    );
+    expect(decision).toMatchObject({ type: 'LEVEL_PROMOTION_ELIGIBLE', from: 'BEGINNER', to: 'INTERMEDIATE', quality: 'GOOD' });
+  });
+
+  it('QA still enforces the unchanged 70%/85% adherence boundaries (only the day-count shrank)', () => {
+    const insufficient = evaluateProgressionV2(
+      snapshot({ activeDays: qa.beginnerMinimumActiveDays, ratio: 0.699, level: 'BEGINNER' }), qa,
+    );
+    expect(insufficient.type).toBe('PROGRESS_CONTINUES');
+    const high = evaluateProgressionV2(
+      snapshot({ activeDays: qa.beginnerMinimumActiveDays, ratio: 0.85, level: 'BEGINNER' }), qa,
+    );
+    expect(high).toMatchObject({ type: 'LEVEL_PROMOTION_ELIGIBLE', quality: 'HIGH' });
+  });
+
+  it('QA does not evolve Intermediate/Advanced before the QA minimum', () => {
+    const decision = evaluateProgressionV2(
+      snapshot({ activeDays: qa.intermediateAdvancedMinimumActiveDays - 1, ratio: 1.0, level: 'INTERMEDIATE' }), qa,
+    );
+    expect(decision.type).toBe('PROGRESS_CONTINUES');
+  });
+
+  it('QA still requires all 4 earned Intermediate cycles for Advanced — never fewer', () => {
+    const threeEarned = evaluateProgressionV2(
+      snapshot({
+        activeDays: qa.intermediateAdvancedMinimumActiveDays, ratio: 0.70, level: 'INTERMEDIATE',
+        earnedIntermediateCycleCount: 2,
+      }), qa,
+    );
+    expect(threeEarned).toMatchObject({ type: 'EVOLUTION_ELIGIBLE' });
+
+    const fourEarned = evaluateProgressionV2(
+      snapshot({
+        activeDays: qa.intermediateAdvancedMinimumActiveDays, ratio: 0.70, level: 'INTERMEDIATE',
+        earnedIntermediateCycleCount: 3,
+      }), qa,
+    );
+    expect(fourEarned).toMatchObject({ type: 'LEVEL_PROMOTION_ELIGIBLE', from: 'INTERMEDIATE', to: 'ADVANCED' });
+  });
+
+  it('QA offers Motivational Renewal only after the QA-compressed extension, never before', () => {
+    const beforeExtension = evaluateProgressionV2(
+      snapshot({
+        activeDays: qa.beginnerMinimumActiveDays + qa.motivationalRenewalExtensionDays - 1,
+        ratio: 0.2, level: 'BEGINNER',
+      }), qa,
+    );
+    expect(beforeExtension.type).toBe('PROGRESS_CONTINUES');
+
+    const atExtension = evaluateProgressionV2(
+      snapshot({
+        activeDays: qa.beginnerMinimumActiveDays + qa.motivationalRenewalExtensionDays,
+        ratio: 0.2, level: 'BEGINNER',
+      }), qa,
+    );
+    expect(atExtension.type).toBe('MOTIVATIONAL_RENEWAL_AVAILABLE');
+  });
+
+  it('extra workouts still cannot substitute for QA active-day accrual (adherence caps at 100%, day-count independently gates)', () => {
+    const decision = evaluateProgressionV2(
+      snapshot({ activeDays: qa.beginnerMinimumActiveDays - 1, ratio: 1.0, level: 'BEGINNER', validSessionCount: 999 }), qa,
+    );
+    expect(decision.type).toBe('PROGRESS_CONTINUES');
   });
 });

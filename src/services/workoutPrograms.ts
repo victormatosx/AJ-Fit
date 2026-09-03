@@ -578,8 +578,24 @@ export async function saveAndActivateWorkoutProgram(input: {
   // downgraded by a kill-switch/config outage. Only an account with no V2
   // state pays the config read and may take the legacy-compatible branch.
   const lifecycleAtEntry = await loadWorkoutLifecycle(input.uid);
-  const rolloutConfig = lifecycleAtEntry === null ? await loadWorkoutLifecycleRolloutConfig() : null;
+  const preflightState = await getDoc(stateRef);
+  // `rollout.ts`'s own doc comment scopes this gate to "NEW V1→V2
+  // migrations only" — an account that never had a `workoutProgramState/
+  // active` pointer has no V1 history to protect and is not a migration at
+  // all; it is this account's very first program. Gating brand-new accounts
+  // on the same ops-controlled percentage made new-account onboarding
+  // depend on `workoutLifecycleRolloutConfig/active` being correctly
+  // provisioned in Firestore — a single missing/misconfigured document
+  // silently stuck EVERY new account in V1-compatible mode with no error
+  // (confirmed root cause of a production incident: the doc was never
+  // seeded). Only a genuine legacy migration (pointer exists, no V2 state
+  // yet) still consults the percentage rollout.
+  const isBrandNewAccount = lifecycleAtEntry === null && !preflightState.exists();
+  const rolloutConfig = lifecycleAtEntry === null && preflightState.exists()
+    ? await loadWorkoutLifecycleRolloutConfig()
+    : null;
   const allowNewV2Enrollment = lifecycleAtEntry !== null
+    || isBrandNewAccount
     || isEligibleForNewMigration(input.uid, rolloutConfig!);
   if (rolloutConfig) {
     logWorkoutLifecycleEvent({
@@ -589,8 +605,6 @@ export async function saveAndActivateWorkoutProgram(input: {
       percentage: rolloutConfig.percentage,
     });
   }
-
-  const preflightState = await getDoc(stateRef);
   const preflightLifecycle = lifecycleAtEntry?.lifecycle ?? null;
   const preflightCurrentInstanceId = preflightLifecycle?.activeProgramInstanceId ?? null;
   const preflightCurrentCycleId = preflightLifecycle?.currentCycleId ?? null;

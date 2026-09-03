@@ -136,6 +136,29 @@ export type UserProfile = {
      *   "new" (see the CASE B matrix in docs/13).
      */
     commercialGateResolvedAt?: Timestamp | null;
+    /**
+     * Dev-only manual-QA mode for Workout Lifecycle V2
+     * (docs/workout-lifecycle/v2/qa/). `'ACCELERATED'` and `'TRANSITION'`
+     * are mutually exclusive — a single-valued field, never two
+     * independent booleans. Absent: NORMAL (real production behavior). Set
+     * exclusively via the Firebase Console or Admin SDK; the client's own
+     * `users/{userId}` update rule only permits `metadata.updatedAt` to
+     * change, so this can never be self-granted. Purely advisory
+     * client-side (UI display, and matching the DEFER window/QA-candidate
+     * earned fact the client writes) — the real authority is the server
+     * re-reading this same field in
+     * `functions/src/workoutLifecycle/authorizeMutation.ts` /
+     * `functions/src/workoutLifecycle/qaPolicy.ts`.
+     */
+    workoutLifecycleQaMode?: 'ACCELERATED' | 'TRANSITION';
+    /**
+     * @deprecated Superseded by `workoutLifecycleQaMode: 'ACCELERATED'`.
+     * Still honored as a fallback (see `src/workoutLifecycle/qaPolicy.ts`'s
+     * `qaModeFromMetadata`) only when the new field is absent, so no
+     * already-authorized account silently loses QA access. New QA
+     * authorizations should always use `workoutLifecycleQaMode`.
+     */
+    workoutLifecycleQaAccelerated?: boolean;
   };
 };
 

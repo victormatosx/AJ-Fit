@@ -98,6 +98,33 @@ service cloud.firestore {
              .data.metadata.role == 'admin';
     }
 
+    // DEV Workout Lifecycle QA (docs/workout-lifecycle/v2/qa/): same shape
+    // as isAdmin() above — only readable, never client-writable (see
+    // metadataValid's comment and the users/{userId} update rule, which
+    // never lets `metadata` diffs touch this key). `workoutLifecycleQaMode`
+    // is single-valued ('ACCELERATED' | 'TRANSITION') — mutually exclusive
+    // by construction, never two independent flags. This helper mirrors
+    // `functions/src/workoutLifecycle/qaPolicy.ts`'s resolution exactly,
+    // including the deprecated legacy-boolean fallback (only consulted when
+    // the new field is absent). Only QA_ACCELERATED widens the
+    // pendingEvolutions deferral timing tolerance below — QA_TRANSITION
+    // uses the real 14-day window like any other account, since deferral
+    // timing is real production behavior it deliberately doesn't touch.
+    // The real progression thresholds (28/85 days, 70%/85% adherence, 4
+    // cycles) and the QA_TRANSITION eligibility bypass are enforced
+    // server-side in authorizeMutation.ts reading this exact same field —
+    // this Rules helper never grants those on its own.
+    function workoutLifecycleQaModeIsAccelerated(userId) {
+      return exists(/databases/$(database)/documents/users/$(userId))
+        && (
+          get(/databases/$(database)/documents/users/$(userId)).data.metadata.get('workoutLifecycleQaMode', null) == 'ACCELERATED'
+          || (
+            !('workoutLifecycleQaMode' in get(/databases/$(database)/documents/users/$(userId)).data.metadata)
+            && get(/databases/$(database)/documents/users/$(userId)).data.metadata.get('workoutLifecycleQaAccelerated', false) == true
+          )
+        );
+    }
+
     function profileValid(data) {
       return data is map
         && data.keys().hasAll(['name', 'email'])
@@ -201,14 +228,29 @@ service cloud.firestore {
       return data is map
         && data.keys().hasAll(['role', 'createdAt', 'updatedAt'])
         && data.keys().hasOnly(
-             ['role', 'activeWorkoutId', 'createdAt', 'updatedAt', 'commercialGateResolvedAt'])
+             ['role', 'activeWorkoutId', 'createdAt', 'updatedAt', 'commercialGateResolvedAt',
+              'workoutLifecycleQaMode', 'workoutLifecycleQaAccelerated'])
         && data.role in ['user', 'admin']
         && (!('activeWorkoutId' in data) || data.activeWorkoutId is string)
         && data.createdAt is timestamp
         && data.updatedAt is timestamp
         && (!('commercialGateResolvedAt' in data)
              || data.commercialGateResolvedAt == null
-             || data.commercialGateResolvedAt is timestamp);
+             || data.commercialGateResolvedAt is timestamp)
+        // DEV Workout Lifecycle QA (docs/workout-lifecycle/v2/qa/): only the
+        // Admin SDK / Firebase Console can ever write these fields — the
+        // `users/{userId}` update rule below restricts client-affected keys
+        // to `metadata.updatedAt` only, so these presence checks exist
+        // purely so a client CAN'T be locked out of its own unrelated
+        // profile edits once an admin sets one (`hasOnly` above would
+        // otherwise reject the whole doc). `workoutLifecycleQaMode` is
+        // single-valued and mutually exclusive by construction. The legacy
+        // `workoutLifecycleQaAccelerated` boolean (deprecated) is still
+        // accepted for accounts not yet migrated to the new field.
+        && (!('workoutLifecycleQaMode' in data)
+             || data.workoutLifecycleQaMode in ['ACCELERATED', 'TRANSITION'])
+        && (!('workoutLifecycleQaAccelerated' in data)
+             || data.workoutLifecycleQaAccelerated is bool);
     }
 
     function workoutProgramLimitationValid(questionnaire, data) {
@@ -1709,17 +1751,31 @@ service cloud.firestore {
           && request.resource.data.status == 'DEFERRED'
           && request.resource.data.deferralCount == resource.data.deferralCount + 1
           && request.resource.data.deferralCount in [1, 2]
+          // DEV Accelerated Lifecycle QA: the NORMAL tolerance band is
+          // 13-15 days (centered on the real 14-day window in
+          // src/workoutLifecycle/deferral.ts, +/-1 day for client/server
+          // clock skew). QA-authorized accounts (see
+          // workoutLifecycleQaAccelerated() above) get an 8-12 minute band
+          // instead (centered on DEFERRAL_CONFIG_QA_ACCELERATED's 10
+          // minutes) — this ONLY widens how fast a deferral's own re-prompt/
+          // auto-activation window may legitimately elapse; it never touches
+          // the 28/85-day progression gates, which stay fully backend-
+          // authoritative in authorizeMutation.ts regardless of this flag.
           && ((request.resource.data.deferralCount == 1
                 && request.resource.data.nextPromptAt is timestamp
-                && request.resource.data.nextPromptAt >= request.time + duration.value(13, 'd')
-                && request.resource.data.nextPromptAt <= request.time + duration.value(15, 'd')
+                && request.resource.data.nextPromptAt >= request.time + (
+                     workoutLifecycleQaModeIsAccelerated(userId) ? duration.value(8, 'm') : duration.value(13, 'd'))
+                && request.resource.data.nextPromptAt <= request.time + (
+                     workoutLifecycleQaModeIsAccelerated(userId) ? duration.value(12, 'm') : duration.value(15, 'd'))
                 && request.resource.data.autoActivateAt == null)
               || (request.resource.data.deferralCount == 2
                 && request.resource.data.nextPromptAt == null
                 && request.resource.data.autoActivateAt is timestamp
                 && resource.data.nextPromptAt is timestamp
-                && request.resource.data.autoActivateAt >= resource.data.nextPromptAt + duration.value(13, 'd')
-                && request.resource.data.autoActivateAt <= resource.data.nextPromptAt + duration.value(15, 'd')))
+                && request.resource.data.autoActivateAt >= resource.data.nextPromptAt + (
+                     workoutLifecycleQaModeIsAccelerated(userId) ? duration.value(8, 'm') : duration.value(13, 'd'))
+                && request.resource.data.autoActivateAt <= resource.data.nextPromptAt + (
+                     workoutLifecycleQaModeIsAccelerated(userId) ? duration.value(12, 'm') : duration.value(15, 'd'))))
           && request.resource.data.updatedAt == request.time;
         // Cleared as part of the same client transaction that writes the
         // activation's other documents (programInstances/trainingCycles/

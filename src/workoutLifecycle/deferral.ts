@@ -1,12 +1,33 @@
 import type { PendingEvolution } from './types';
 
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+const MS_PER_MINUTE = 60 * 1000;
+
 /** Fase 4 domain constants (docs progression/09_DEFERRAL.md, ADR-009). */
 export const DEFERRAL_CONFIG = {
-  windowDays: 14,
+  windowMs: 14 * MS_PER_DAY,
   maxDeferrals: 2,
 } as const;
 
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
+/**
+ * Dev-only manual-QA variant — compresses the wait to minutes without
+ * touching `maxDeferrals` (still exactly two deferrals) or the transition
+ * logic below. `firestore.rules`' `pendingEvolutions` update rule enforces a
+ * matching QA-only tolerance band for accounts carrying the backend
+ * `workoutLifecycleQaAccelerated` flag; a normal account's write is rejected
+ * if it doesn't land in the 13-15 day NORMAL band, so this config alone
+ * grants nothing (see src/workoutLifecycle/qaPolicy.ts).
+ */
+export const DEFERRAL_CONFIG_QA_ACCELERATED = {
+  windowMs: 10 * MS_PER_MINUTE,
+  maxDeferrals: 2,
+} as const;
+
+export type DeferralConfig = { windowMs: number; maxDeferrals: number };
+
+export function resolveDeferralConfig(mode: 'NORMAL' | 'QA_ACCELERATED'): DeferralConfig {
+  return mode === 'QA_ACCELERATED' ? DEFERRAL_CONFIG_QA_ACCELERATED : DEFERRAL_CONFIG;
+}
 
 export interface DeferralView {
   pendingEvolutionId: string;
@@ -29,8 +50,8 @@ export function isPromptable(pending: DeferralView, now: Date): boolean {
 }
 
 /** A deferral is only accepted while promptable and under the maximum (docs §29). */
-export function canDefer(pending: DeferralView, now: Date): boolean {
-  return pending.deferralCount < DEFERRAL_CONFIG.maxDeferrals && isPromptable(pending, now);
+export function canDefer(pending: DeferralView, now: Date, config: DeferralConfig = DEFERRAL_CONFIG): boolean {
+  return pending.deferralCount < config.maxDeferrals && isPromptable(pending, now);
 }
 
 export interface DeferralTransition {
@@ -46,18 +67,18 @@ export interface DeferralTransition {
  * auto-activation deadline (`autoActivateAt`) instead — there is no third
  * window (docs §26/§28/§29).
  */
-export function applyDefer(pending: DeferralView, now: Date): DeferralTransition {
-  if (!canDefer(pending, now)) throw new Error('WORKOUT_LIFECYCLE_DEFERRAL_NOT_ALLOWED');
+export function applyDefer(pending: DeferralView, now: Date, config: DeferralConfig = DEFERRAL_CONFIG): DeferralTransition {
+  if (!canDefer(pending, now, config)) throw new Error('WORKOUT_LIFECYCLE_DEFERRAL_NOT_ALLOWED');
   const deferralCount = (pending.deferralCount + 1) as 1 | 2;
-  const windowEnd = new Date(now.getTime() + DEFERRAL_CONFIG.windowDays * MS_PER_DAY);
+  const windowEnd = new Date(now.getTime() + config.windowMs);
   return deferralCount === 1
     ? { deferralCount, status: 'DEFERRED', nextPromptAt: windowEnd, autoActivateAt: null }
     : { deferralCount, status: 'DEFERRED', nextPromptAt: null, autoActivateAt: windowEnd };
 }
 
 /** Auto-activation is due once the second deferral's window has fully elapsed — reconciled on any trusted runtime entry, not on a wall-clock deadline callback (docs §30-32). */
-export function isAutoActivationDue(pending: DeferralView, now: Date): boolean {
-  return pending.deferralCount >= DEFERRAL_CONFIG.maxDeferrals
+export function isAutoActivationDue(pending: DeferralView, now: Date, config: DeferralConfig = DEFERRAL_CONFIG): boolean {
+  return pending.deferralCount >= config.maxDeferrals
     && pending.autoActivateAt != null
     && now.getTime() >= pending.autoActivateAt.getTime();
 }

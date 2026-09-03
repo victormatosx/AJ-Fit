@@ -44,6 +44,7 @@ import {
   startOrResumeWorkoutExecution,
 } from '../workoutExecutions';
 import { completeScheduledSession } from '../workoutSchedule';
+import { resolveWorkoutSchedule } from '../../scheduleEngine/resolver';
 import type { WorkoutProgramSnapshot } from '../workoutPrograms';
 
 function program(overrides: Partial<WorkoutProgramSnapshot> = {}): WorkoutProgramSnapshot {
@@ -199,7 +200,7 @@ describe.skipIf(!enabled)('Workout Execution & History — real Firestore Emulat
     }
     const finish = await finishWorkoutExecution(UID, started.executionId);
     expect(finish.status).toBe('COMPLETED');
-    await completeScheduledSession({ uid: UID, programId: 'wpg_test1', sessionIndex: 0, sessionCount: 2, scheduledLocalDate: '2026-08-25' });
+    await completeScheduledSession({ uid: UID, programId: 'wpg_test1', sessionIndex: 0, sessionCount: 2, scheduledLocalDate: '2026-08-25', trainingDays: ['MON', 'TUE'], activatedAtLocalDate: '2026-08-24' });
     const state = await getDoc(doc(mocks.db as never, 'users', UID, 'workoutPrograms', 'wpg_test1', 'scheduleState', 'current'));
     expect(state.data()?.nextSessionIndex).toBe(1);
   });
@@ -214,7 +215,7 @@ describe.skipIf(!enabled)('Workout Execution & History — real Firestore Emulat
     expect(finish.status).toBe('PARTIALLY_COMPLETED');
     const loaded = await loadWorkoutExecution(UID, started.executionId);
     expect(loaded?.exercises[0].sets[1].status).toBe('SKIPPED'); // swept
-    await completeScheduledSession({ uid: UID, programId: 'wpg_test1', sessionIndex: 0, sessionCount: 2, scheduledLocalDate: '2026-08-25' });
+    await completeScheduledSession({ uid: UID, programId: 'wpg_test1', sessionIndex: 0, sessionCount: 2, scheduledLocalDate: '2026-08-25', trainingDays: ['MON', 'TUE'], activatedAtLocalDate: '2026-08-24' });
     const state = await getDoc(doc(mocks.db as never, 'users', UID, 'workoutPrograms', 'wpg_test1', 'scheduleState', 'current'));
     expect(state.data()?.nextSessionIndex).toBe(1);
   });
@@ -240,10 +241,97 @@ describe.skipIf(!enabled)('Workout Execution & History — real Firestore Emulat
     const second = await finishWorkoutExecution(UID, started.executionId); // double tap
     expect(first.status).toBe(second.status);
 
-    await completeScheduledSession({ uid: UID, programId: 'wpg_test1', sessionIndex: 0, sessionCount: 2, scheduledLocalDate: '2026-08-25' });
-    await completeScheduledSession({ uid: UID, programId: 'wpg_test1', sessionIndex: 0, sessionCount: 2, scheduledLocalDate: '2026-08-25' }); // double tap
+    await completeScheduledSession({ uid: UID, programId: 'wpg_test1', sessionIndex: 0, sessionCount: 2, scheduledLocalDate: '2026-08-25', trainingDays: ['MON', 'TUE'], activatedAtLocalDate: '2026-08-24' });
+    await completeScheduledSession({ uid: UID, programId: 'wpg_test1', sessionIndex: 0, sessionCount: 2, scheduledLocalDate: '2026-08-25', trainingDays: ['MON', 'TUE'], activatedAtLocalDate: '2026-08-24' }); // double tap
     const state = await getDoc(doc(mocks.db as never, 'users', UID, 'workoutPrograms', 'wpg_test1', 'scheduleState', 'current'));
     expect(state.data()?.nextSessionIndex).toBe(1); // advanced exactly once, not twice
+  });
+
+  describe('SESSION_INDEX_OUT_OF_SEQUENCE regression — first completion, no ScheduleState yet', () => {
+    // Real production data (docs — QA account KVBSbHQ8RPMqVBrsyTicjkXgP6l2):
+    // trainingDays=[MON,TUE,WED,THU], ProgramInstance activated on a
+    // Thursday, first prescribed session anchored to index 3 ("Lower B").
+    // The old `current?.nextSessionIndex ?? 0` fallback rejected the
+    // legitimate first completion of session 3 as out-of-sequence — the
+    // Schedule Engine's own anchor (`anchorSessionIndex`/
+    // `initialSessionIndexFor`) must be consulted instead of a hardcoded 0.
+    const FOUR_DAY_TRAINING_DAYS = ['MON', 'TUE', 'WED', 'THU'] as const;
+
+    it('accepts the real first session (Thursday activation, sessionIndex 3) that the old fallback rejected', async () => {
+      await completeScheduledSession({
+        uid: UID, programId: 'wpg_test1', sessionIndex: 3, sessionCount: 4,
+        scheduledLocalDate: '2026-09-03', // Thursday
+        trainingDays: FOUR_DAY_TRAINING_DAYS, activatedAtLocalDate: '2026-09-03',
+      });
+      const event = await getDoc(doc(
+        mocks.db as never, 'users', UID, 'workoutPrograms', 'wpg_test1', 'scheduleEvents', 'completed_3_2026-09-03',
+      ));
+      expect(event.exists()).toBe(true);
+      const state = await getDoc(doc(mocks.db as never, 'users', UID, 'workoutPrograms', 'wpg_test1', 'scheduleState', 'current'));
+      expect(state.data()).toMatchObject({ nextSessionIndex: 0, cursorDate: '2026-09-03', lastCompletedAt: '2026-09-03' }); // wraps 3 -> 0
+
+      // The resolver must never re-offer session 3 for that same date again.
+      const resolution = resolveWorkoutSchedule({
+        hasActiveProgram: true,
+        sessionCount: 4,
+        config: { trainingDays: [...FOUR_DAY_TRAINING_DAYS], timezone: 'America/Sao_Paulo', scheduleVersion: 1 },
+        state: {
+          nextSessionIndex: state.data()!.nextSessionIndex,
+          cursorDate: state.data()!.cursorDate,
+          lastCompletedAt: state.data()!.lastCompletedAt,
+          pendingMissDecision: null,
+        },
+        activatedAtLocalDate: '2026-09-03',
+        todayLocalDate: '2026-09-03',
+      });
+      expect(resolution.status).toBe('TODAY_COMPLETED');
+    });
+
+    it.each([
+      ['MON', 0], ['TUE', 1], ['WED', 2], ['THU', 3],
+    ] as const)('activation on %s anchors the first completion to session %i', async (weekdayLabel, expectedIndex) => {
+      const dateByWeekday: Record<string, string> = {
+        MON: '2026-08-31', TUE: '2026-09-01', WED: '2026-09-02', THU: '2026-09-03',
+      };
+      const scheduledLocalDate = dateByWeekday[weekdayLabel];
+      await completeScheduledSession({
+        uid: UID, programId: 'wpg_test1', sessionIndex: expectedIndex, sessionCount: 4,
+        scheduledLocalDate, trainingDays: FOUR_DAY_TRAINING_DAYS, activatedAtLocalDate: scheduledLocalDate,
+      });
+      const state = await getDoc(doc(mocks.db as never, 'users', UID, 'workoutPrograms', 'wpg_test1', 'scheduleState', 'current'));
+      expect(state.data()?.nextSessionIndex).toBe((expectedIndex + 1) % 4);
+    });
+
+    it('still rejects a genuinely wrong first sessionIndex (0 sent when the anchor requires 3)', async () => {
+      await expect(completeScheduledSession({
+        uid: UID, programId: 'wpg_test1', sessionIndex: 0, sessionCount: 4,
+        scheduledLocalDate: '2026-09-03', // Thursday — anchors to 3, not 0
+        trainingDays: FOUR_DAY_TRAINING_DAYS, activatedAtLocalDate: '2026-09-03',
+      })).rejects.toThrow('SESSION_INDEX_OUT_OF_SEQUENCE');
+      const event = await getDoc(doc(
+        mocks.db as never, 'users', UID, 'workoutPrograms', 'wpg_test1', 'scheduleEvents', 'completed_0_2026-09-03',
+      ));
+      expect(event.exists()).toBe(false);
+    });
+
+    it('once ScheduleState exists, current.nextSessionIndex is authoritative again — the anchor is never recomputed', async () => {
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'users', UID, 'workoutPrograms', 'wpg_test1', 'scheduleState', 'current'), {
+          programId: 'wpg_test1', nextSessionIndex: 1, cursorDate: '2026-09-03', lastCompletedAt: '2026-09-03', pendingMissDecision: null, updatedAt: Timestamp.now(),
+        });
+      });
+      // Anchor for Thursday would be 3 — but state says 1 is next, and that must win.
+      await expect(completeScheduledSession({
+        uid: UID, programId: 'wpg_test1', sessionIndex: 3, sessionCount: 4,
+        scheduledLocalDate: '2026-09-10', trainingDays: FOUR_DAY_TRAINING_DAYS, activatedAtLocalDate: '2026-09-03',
+      })).rejects.toThrow('SESSION_INDEX_OUT_OF_SEQUENCE');
+      await completeScheduledSession({
+        uid: UID, programId: 'wpg_test1', sessionIndex: 1, sessionCount: 4,
+        scheduledLocalDate: '2026-09-10', trainingDays: FOUR_DAY_TRAINING_DAYS, activatedAtLocalDate: '2026-09-03',
+      });
+      const state = await getDoc(doc(mocks.db as never, 'users', UID, 'workoutPrograms', 'wpg_test1', 'scheduleState', 'current'));
+      expect(state.data()?.nextSessionIndex).toBe(2);
+    });
   });
 
   it('§90/§91 execution operations never touch the Program Snapshot or its template', async () => {

@@ -46,6 +46,8 @@ import {
   adaptWorkoutProgram,
   deferPendingEvolution,
   prepareEvolution,
+  prepareQaTransitionEvolution,
+  previewQaTransition,
   processWorkoutLifecycleAfterSession,
   reconcileWorkoutLifecycle,
 } from '../workoutLifecycleApplication';
@@ -242,7 +244,7 @@ describe.skipIf(!enabled)('Fase 4 Lifecycle Orchestrator — real Firestore Emul
           uid: UID, programId: generated.program.programId,
           programInstanceId: generated.program.programInstanceId,
           sessionIndex: 0, sessionCount: generated.program.sessions.length,
-          scheduledLocalDate: '2026-08-29',
+          scheduledLocalDate: '2026-08-29', trainingDays: TRAINING_DAYS, activatedAtLocalDate: '2026-08-29',
         });
         return true;
       },
@@ -407,6 +409,7 @@ describe.skipIf(!enabled)('Fase 4 Lifecycle Orchestrator — real Firestore Emul
         await completeScheduledSession({
           uid: UID, programId: active.programId, programInstanceId: active.programInstanceId,
           sessionIndex: 0, sessionCount: active.sessions.length, scheduledLocalDate: '2026-08-29',
+          trainingDays: TRAINING_DAYS, activatedAtLocalDate: '2026-08-29',
         });
         return true;
       },
@@ -1054,4 +1057,75 @@ describe.skipIf(!enabled)('Fase 4 Lifecycle Orchestrator — real Firestore Emul
       .toHaveLength(4);
     expect((await loadWorkoutLifecycle(UID))!.lifecycle.currentTrainingLevel).toBe('ADVANCED');
   }, 60_000);
+
+  describe('QA_TRANSITION — real pipeline, eligibility bypassed (docs/workout-lifecycle/v2/qa/)', () => {
+    async function setQaMode(mode: 'ACCELERATED' | 'TRANSITION' | null) {
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'users', UID), {
+          metadata: mode ? { role: 'user', workoutLifecycleQaMode: mode } : { role: 'user' },
+        }, { merge: true });
+      });
+    }
+
+    it('BEGINNER account with zero real history: QA prepare -> real INTERMEDIATE pending, canonical prescription, old ProgramInstance untouched until activation', async () => {
+      await seedBaseUser();
+      const generated = await generateAndPersistWorkoutProgram({
+        uid: UID, questionnaireId: QUESTIONNAIRE_ID, questionnaireVersion: 1,
+        answers: BEGINNER_ANSWERS, source: 'onboarding',
+      });
+      if (generated.status !== 'SUCCESS') throw new Error('setup failed');
+      await setQaMode('TRANSITION');
+
+      const before = await loadWorkoutLifecycle(UID);
+      expect(before!.lifecycle.currentTrainingLevel).toBe('BEGINNER');
+
+      const preview = await previewQaTransition(UID);
+      expect(preview).toMatchObject({ currentLevel: 'BEGINNER', targetType: 'LEVEL_PROMOTION', targetLevel: 'INTERMEDIATE' });
+
+      const result = await prepareQaTransitionEvolution({ uid: UID });
+      expect(result.status).toBe('PREPARED');
+      if (result.status !== 'PREPARED') return;
+      expect(result.pending).toMatchObject({ type: 'LEVEL_PROMOTION', fromLevel: 'BEGINNER', toLevel: 'INTERMEDIATE' });
+      expect(result.pending.targetProgramInstanceId).not.toBe(before!.programInstance.programInstanceId);
+      // Real canonical prescription — never a client-fabricated/empty plan.
+      const plan = result.pending.plan as { sessions: unknown[] };
+      expect(Array.isArray(plan.sessions)).toBe(true);
+      expect(plan.sessions.length).toBeGreaterThan(0);
+
+      // Old ProgramInstance remains active until ACTIVATE — PREPARE never installs it.
+      const stillOld = await loadWorkoutLifecycle(UID);
+      expect(stillOld!.lifecycle.currentTrainingLevel).toBe('BEGINNER');
+      expect(stillOld!.programInstance.programInstanceId).toBe(before!.programInstance.programInstanceId);
+
+      // Idempotent re-invocation: a pending evolution already exists -> ALREADY_PENDING, never a second one.
+      const again = await prepareQaTransitionEvolution({ uid: UID });
+      expect(again.status).toBe('ALREADY_PENDING');
+
+      // Real DEFER — QA_TRANSITION never fakes this either.
+      const deferred = await deferPendingEvolution({ uid: UID });
+      expect(deferred.status).toBe('DEFERRED');
+
+      // Real ACTIVATE — schedule/Home only reflect the new program from here.
+      const activated = await activatePendingEvolution({ uid: UID, trigger: 'MANUAL' });
+      expect(activated.status).toBe('ACTIVATED');
+      const after = await loadWorkoutLifecycle(UID);
+      expect(after!.lifecycle.currentTrainingLevel).toBe('INTERMEDIATE');
+      expect(after!.programInstance.programInstanceId).toBe(result.pending.targetProgramInstanceId);
+    }, 30_000);
+
+    it('NORMAL account (same zero-history fixture): QA prepare is never attempted by the real flow, and forcing EARN directly is denied', async () => {
+      await seedBaseUser();
+      const generated = await generateAndPersistWorkoutProgram({
+        uid: UID, questionnaireId: QUESTIONNAIRE_ID, questionnaireVersion: 1,
+        answers: BEGINNER_ANSWERS, source: 'onboarding',
+      });
+      if (generated.status !== 'SUCCESS') throw new Error('setup failed');
+      await setQaMode(null);
+
+      // The real, unmodified prepareEvolution() path — client-side eligibility
+      // check refuses even to attempt EARN for an account with no real history.
+      const result = await prepareEvolution({ uid: UID });
+      expect(result.status).toBe('NO_ACTION');
+    }, 30_000);
+  });
 });

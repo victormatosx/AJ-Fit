@@ -6,6 +6,7 @@ import {
   countFulfilledPrescribedOpportunities,
 } from '../progressionEngineV2/prescribedOpportunities';
 import { evaluateProgressionV2 } from '../progressionEngineV2/resolver';
+import { resolveProgressionV2Config } from '../progressionEngineV2/config';
 import type { ProgressionDecision, ProgressionSnapshotV2 } from '../progressionEngineV2/types';
 import { localDateInTimezone } from '../scheduleEngine/localDate';
 import { doc, getDoc } from 'firebase/firestore';
@@ -18,6 +19,7 @@ import {
   type PersistedWorkoutLifecycleBundle,
 } from './workoutLifecycle';
 import { loadAuthoritativePrescriptionInputs } from './prescriptionInputs';
+import { resolveWorkoutLifecycleProgressionPolicy } from '../workoutLifecycle/qaPolicy';
 
 async function loadAuthoritativePrescribedSessions(uid: string, contentIdentity: string) {
   const snapshot = await getDoc(doc(db, 'users', uid, 'workoutPrograms', contentIdentity));
@@ -69,16 +71,38 @@ export async function evaluateProgressionV2ForUser(
   uid: string,
   now: Date = new Date(),
 ): Promise<ProgressionDecision | null> {
+  const full = await evaluateProgressionV2ForUserFull(uid, now);
+  return full?.decision ?? null;
+}
+
+/**
+ * Same computation as `evaluateProgressionV2ForUser`, but also returns the
+ * raw snapshot/cycle number/policy mode it was computed from — used by the
+ * dev-only Workout Lifecycle QA readout (Settings > Developer, see
+ * src/dev/workoutLifecycle/), which needs to *display* active days,
+ * prescribed opportunities and adherence, not just the final decision.
+ */
+export async function evaluateProgressionV2ForUserFull(
+  uid: string,
+  now: Date = new Date(),
+): Promise<{
+  decision: ProgressionDecision;
+  snapshot: ProgressionSnapshotV2;
+  expectedSessions: number;
+  cycleNumber: number;
+  policyMode: Awaited<ReturnType<typeof resolveWorkoutLifecycleProgressionPolicy>>;
+} | null> {
   const bundle = await loadWorkoutLifecycle(uid);
   if (!bundle) return null;
 
-  const [config, { executions }, allCycles, scheduleEvents, authoritativeInputs, prescribedSessions] = await Promise.all([
+  const [config, { executions }, allCycles, scheduleEvents, authoritativeInputs, prescribedSessions, policyMode] = await Promise.all([
     loadScheduleConfig(uid),
     loadCurrentProgressionWindowExecutions(uid, bundle),
     listTrainingCycles(uid),
     listScheduleEvents(uid, bundle.lifecycle.activeContentIdentity),
     loadAuthoritativePrescriptionInputs(uid, bundle),
     loadAuthoritativePrescribedSessions(uid, bundle.lifecycle.activeContentIdentity),
+    resolveWorkoutLifecycleProgressionPolicy(uid),
   ]);
   if (!authoritativeInputs || !prescribedSessions) return null;
 
@@ -124,6 +148,6 @@ export async function evaluateProgressionV2ForUser(
     validSessionCount,
   };
 
-  const decision = evaluateProgressionV2(snapshot);
-  return decision;
+  const decision = evaluateProgressionV2(snapshot, resolveProgressionV2Config(policyMode));
+  return { decision, snapshot, expectedSessions, cycleNumber: bundle.cycle.cycleNumber, policyMode };
 }

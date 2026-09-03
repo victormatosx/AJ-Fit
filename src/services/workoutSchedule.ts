@@ -20,7 +20,7 @@ import type { Weekday } from '../state/AppState';
 // pulling in AuthContext/RN), which a pure Firestore service module must
 // never drag in transitively (breaks Node-only test/tooling consumers).
 import { addDaysLocal } from '../scheduleEngine/calendar';
-import { detectMissedSessionGap, resolveWorkoutSchedule } from '../scheduleEngine/resolver';
+import { detectMissedSessionGap, initialSessionIndexFor, resolveWorkoutSchedule } from '../scheduleEngine/resolver';
 import type {
   MissDecision,
   PendingMissDecision,
@@ -268,6 +268,20 @@ export async function completeScheduledSession(input: {
   sessionIndex: number;
   sessionCount: number;
   scheduledLocalDate: string;
+  /**
+   * Required to derive the expected first-ever session when no
+   * `ScheduleState` exists yet (see `expectedIndex` below) — the exact same
+   * `trainingDays`/`activatedAtLocalDate` the caller's own
+   * `resolveWorkoutSchedule` read used to decide `SESSION_READY` in the
+   * first place. Deliberately required (not optional with a silent
+   * fallback) — an omitted value must fail loudly at the call site instead
+   * of resurrecting the `?? 0` bug this replaces (docs — regression: a
+   * ProgramInstance activating on a trainingDay that isn't the first in the
+   * ordered list anchors its first session to a non-zero index; treating a
+   * missing value as "assume session 0" reintroduces the exact defect).
+   */
+  trainingDays: readonly Weekday[];
+  activatedAtLocalDate: string;
 }): Promise<void> {
   const eventRef = doc(
     scheduleEventsCollection(input.uid, input.programId),
@@ -299,7 +313,18 @@ export async function completeScheduledSession(input: {
 
     const current = stateSnapshot.exists() ? stateSnapshot.data() : null;
     if (current?.pendingMissDecision) throw new Error('MISSED_SESSION_DECISION_PENDING');
-    const expectedIndex = current?.nextSessionIndex ?? 0;
+    // No ScheduleState yet means this is the account's first-ever
+    // completion — the expected session is whatever the Schedule Engine
+    // itself anchors to for this exact date (`initialSessionIndexFor`, the
+    // same derivation `resolveWorkoutSchedule` used to return SESSION_READY
+    // in the first place), never a hardcoded 0. A program that activates on
+    // a non-first trainingDay legitimately opens on a session other than 0.
+    const expectedIndex = current?.nextSessionIndex ?? initialSessionIndexFor({
+      trainingDays: input.trainingDays,
+      activatedAtLocalDate: input.activatedAtLocalDate,
+      todayLocalDate: input.scheduledLocalDate,
+      sessionCount: input.sessionCount,
+    });
     if (input.sessionIndex !== expectedIndex) throw new Error('SESSION_INDEX_OUT_OF_SEQUENCE');
 
     transaction.set(eventRef, {

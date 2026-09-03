@@ -1,4 +1,5 @@
 import { addDaysLocal, nextTrainingDayOnOrAfter, normalizeWeekdayOrder, trainingDayOccurrences, weekdayOfLocalDate } from './calendar';
+import type { LocalDate } from './calendar';
 import type { ResolveWorkoutScheduleInput, ScheduleResolution } from './types';
 import type { Weekday } from '../state/AppState';
 
@@ -10,10 +11,39 @@ import type { Weekday } from '../state/AppState';
  * `nextSessionIndex` yet — every later read/completion/miss is entirely
  * owned by the rotation-by-completion cursor (`ScheduleState`), never
  * recomputed from the calendar again.
+ *
+ * Exported so callers outside the resolver (`completeScheduledSession`,
+ * `src/services/workoutSchedule.ts`) never need a second, independently
+ * maintained formula for "what session does this weekday anchor to" — see
+ * `initialSessionIndexFor` below for the full first-completion derivation.
  */
-function anchorSessionIndex(trainingDays: readonly Weekday[], weekday: Weekday, sessionCount: number): number {
+export function anchorSessionIndex(trainingDays: readonly Weekday[], weekday: Weekday, sessionCount: number): number {
   const position = normalizeWeekdayOrder(trainingDays).indexOf(weekday);
   return position < 0 ? 0 : position % sessionCount;
+}
+
+/**
+ * The exact session index `resolveWorkoutSchedule` would anchor to for
+ * `todayLocalDate` when no `ScheduleState` exists yet (a first-ever
+ * completion) — same cursor/occurrences walk as the no-state branches above
+ * (lines "No state yet" / occurrences[0]), extracted so it can be reused
+ * verbatim by `completeScheduledSession` instead of a second, drifted
+ * fallback. Regression: an account whose ProgramInstance activates on a
+ * trainingDay that isn't the first in the ordered list (e.g. activates on a
+ * Thursday with trainingDays=[MON,TUE,WED,THU]) anchors to a non-zero
+ * session (3, not 0) — `completeScheduledSession`'s old `?? 0` fallback
+ * rejected that legitimate first completion as SESSION_INDEX_OUT_OF_SEQUENCE.
+ */
+export function initialSessionIndexFor(input: {
+  trainingDays: readonly Weekday[];
+  activatedAtLocalDate: LocalDate;
+  todayLocalDate: LocalDate;
+  sessionCount: number;
+}): number {
+  const cursorDate = addDaysLocal(input.activatedAtLocalDate, -1);
+  const occurrences = trainingDayOccurrences(input.trainingDays, cursorDate, input.todayLocalDate);
+  const anchorDate = occurrences[0] ?? input.todayLocalDate;
+  return anchorSessionIndex(input.trainingDays, weekdayOfLocalDate(anchorDate), input.sessionCount);
 }
 
 /**

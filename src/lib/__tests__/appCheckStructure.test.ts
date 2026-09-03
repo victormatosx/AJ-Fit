@@ -84,6 +84,21 @@ describe('App Check structural security', () => {
     );
   });
 
+  it('propagates the real native App Check error instead of a generic swallowed message (smoke-test audit: functions/unauthenticated with app=MISSING, no diagnosable reason)', () => {
+    const source = read('modules/ajfit-app-check/ios/AJFitAppCheckModule.swift');
+
+    // The token-fetch completion handler must surface the real NSError
+    // (domain/code/description), not a single hardcoded string that hides
+    // whether the failure was a debug-token rejection, network issue,
+    // App Attest unavailability, etc.
+    expect(source).toMatch(/if let error/);
+    expect(source).toContain('as NSError');
+    expect(source).toContain('nsError.localizedDescription');
+    expect(source).toContain('ERR_APP_CHECK_NOT_CONFIGURED');
+    // Still never logs/exposes an actual token value.
+    expect(source).not.toMatch(/print\(.*token/i);
+  });
+
   it('preserves mobile identity and the corrected Google iOS callback', () => {
     const config = JSON.parse(read('app.json')).expo;
 

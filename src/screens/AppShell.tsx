@@ -53,7 +53,7 @@ import { completeWorkoutSessionFlow } from '../workoutLifecycle/finishFlow';
 import { useWorkoutEvolution } from '../workoutEvolution/useWorkoutEvolution';
 import { processWorkoutLifecycleAfterSession } from '../services/workoutLifecycleApplication';
 import { EvolutionUnlockScreen } from './EvolutionUnlockScreen';
-import { logInfo } from '../lib/logger';
+import { logInfo, logWarn } from '../lib/logger';
 import { resolveSessionDisplayName, type LooseTranslate } from '../workoutPrescription/sessionPresentation';
 import { useReducedMotionPreference } from '../lib/reducedMotion';
 
@@ -319,7 +319,7 @@ function AppShellContent({
                 sessionIndex: activeSessionIndex,
               });
               void (async () => {
-                await completeWorkoutSessionFlow({
+                const result = await completeWorkoutSessionFlow({
                   finishExecution: execution.finish,
                   completeSchedule: () => schedule.completeSession(activeSessionIndex),
                   afterSchedule: async () => {
@@ -329,6 +329,26 @@ function AppShellContent({
                     await evolution.refresh();
                   },
                 });
+                // The "treino concluído" screen (WorkoutScreen's own
+                // `finished` local state) already rendered by this point,
+                // independent of this result — so a non-COMPLETED outcome
+                // can never be silently indistinguishable from success in
+                // the logs. `EXECUTION_FAILED`/`SCHEDULE_FAILED` mean the
+                // WorkoutExecution finished but the Schedule Engine never
+                // advanced (no scheduleEvent COMPLETED, Home keeps offering
+                // the same session) — never masked as
+                // `workout_finish_succeeded` the way it was before this was
+                // logged. Deliberately not attempting any rollback/retry
+                // here: the execution is already a durable terminal fact
+                // (docs — `finishFlow.ts`'s own doc comment), and the next
+                // trusted reconciliation entry point (cold start/readiness
+                // gate) is the safe place to retry, not this fire-and-forget
+                // handler.
+                if (result === 'COMPLETED') {
+                  logInfo('workout', 'workout_finish_succeeded', { programId, sessionIndex: activeSessionIndex });
+                } else {
+                  logWarn('workout', 'workout_finish_incomplete', { programId, sessionIndex: activeSessionIndex, result });
+                }
               })();
             }}
           />

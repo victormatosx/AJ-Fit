@@ -43,11 +43,35 @@ public final class AJFitAppCheckModule: Module {
     AsyncFunction("getAppCheckToken") { (forceRefresh: Bool, promise: Promise) in
       AJFitAppCheckConfigurator.configureNativeFirebaseIfNeeded()
 
+      // Defensive/diagnostic only — `configureNativeFirebaseIfNeeded()` above
+      // is the sole place `FirebaseApp.configure()` is ever called in this
+      // codebase (guarded, idempotent, provider-factory-set-before-configure).
+      // In practice this should never be nil by this point; if it somehow is
+      // (e.g. a future change adds a second `FirebaseApp.configure()` call
+      // elsewhere and races this one), fail with a distinct, greppable code
+      // instead of letting `AppCheck.appCheck()` hit its own internal
+      // "not configured" fatal path with zero diagnostic value on the JS side.
+      guard FirebaseApp.app() != nil else {
+        promise.reject(
+          "ERR_APP_CHECK_NOT_CONFIGURED",
+          "FirebaseApp.app() is nil after configureNativeFirebaseIfNeeded() — native Firebase was never configured."
+        )
+        return
+      }
+
       AppCheck.appCheck().token(forcingRefresh: forceRefresh) { result, error in
-        if error != nil {
+        if let error {
+          // Previously this discarded `error` entirely and always reported the
+          // same generic "Firebase App Check token request failed." — making
+          // every real failure (debug token rejected by the server, network
+          // unreachable, App Attest unavailable, keychain error, etc.)
+          // indistinguishable from the JS side. Propagate the real
+          // NSError code/domain/description instead so the failure category
+          // is visible in the app's own logs, not just Xcode's console.
+          let nsError = error as NSError
           promise.reject(
             "ERR_APP_CHECK_TOKEN",
-            "Firebase App Check token request failed."
+            "Firebase App Check token request failed: [\(nsError.domain)#\(nsError.code)] \(nsError.localizedDescription)"
           )
           return
         }
@@ -55,7 +79,7 @@ public final class AJFitAppCheckModule: Module {
         guard let result else {
           promise.reject(
             "ERR_APP_CHECK_TOKEN",
-            "Firebase App Check returned no token."
+            "Firebase App Check returned no token and no error (unexpected SDK contract violation)."
           )
           return
         }
