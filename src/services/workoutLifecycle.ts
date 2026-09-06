@@ -3,6 +3,8 @@ import {
   doc,
   getDoc,
   getDocs,
+  limit,
+  orderBy,
   query,
   runTransaction,
   serverTimestamp,
@@ -715,6 +717,28 @@ export async function activateProgramInstance(
 
 export async function listTrainingCycles(uid: string): Promise<TrainingCycle<Timestamp>[]> {
   const snapshot = await getDocs(collection(db, USERS, uid, TRAINING_CYCLES));
+  return snapshot.docs.map((item) => {
+    if (!isTrainingCycle(item.data())) throw new Error(`TRAINING_CYCLE_INVALID:${item.id}`);
+    return item.data() as TrainingCycle<Timestamp>;
+  });
+}
+
+/**
+ * Bounded progression history for the Intermediate promotion decision.
+ * The active cycle plus the three immediately preceding earned cycles are
+ * sufficient for the four-cycle rule (and retain the successor needed by
+ * the conservative pre-8A completion inference).
+ */
+export async function listRecentIntermediateTrainingCycles(
+  uid: string,
+  maximumCycles: number,
+): Promise<TrainingCycle<Timestamp>[]> {
+  const snapshot = await getDocs(query(
+    collection(db, USERS, uid, TRAINING_CYCLES),
+    where('level', '==', 'INTERMEDIATE'),
+    orderBy('cycleNumber', 'desc'),
+    limit(maximumCycles),
+  ));
   return snapshot.docs.map((item) => {
     if (!isTrainingCycle(item.data())) throw new Error(`TRAINING_CYCLE_INVALID:${item.id}`);
     return item.data() as TrainingCycle<Timestamp>;

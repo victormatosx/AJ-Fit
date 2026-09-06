@@ -6,7 +6,7 @@ import {
   countFulfilledPrescribedOpportunities,
 } from '../progressionEngineV2/prescribedOpportunities';
 import { evaluateProgressionV2 } from '../progressionEngineV2/resolver';
-import { resolveProgressionV2Config } from '../progressionEngineV2/config';
+import { PROGRESSION_V2_CONFIG, resolveProgressionV2Config } from '../progressionEngineV2/config';
 import type { ProgressionDecision, ProgressionSnapshotV2 } from '../progressionEngineV2/types';
 import { localDateInTimezone } from '../scheduleEngine/localDate';
 import { doc, getDoc } from 'firebase/firestore';
@@ -14,7 +14,7 @@ import { db } from '../lib/firebase';
 import { listExecutionsForProgramInstance, type PersistedWorkoutExecution } from './workoutExecutions';
 import { listScheduleEvents, loadScheduleConfig } from './workoutSchedule';
 import {
-  listTrainingCycles,
+  listRecentIntermediateTrainingCycles,
   loadWorkoutLifecycle,
   type PersistedWorkoutLifecycleBundle,
 } from './workoutLifecycle';
@@ -95,10 +95,12 @@ export async function evaluateProgressionV2ForUserFull(
   const bundle = await loadWorkoutLifecycle(uid);
   if (!bundle) return null;
 
-  const [config, { executions }, allCycles, scheduleEvents, authoritativeInputs, prescribedSessions, policyMode] = await Promise.all([
+  const [config, { executions }, relevantCycles, scheduleEvents, authoritativeInputs, prescribedSessions, policyMode] = await Promise.all([
     loadScheduleConfig(uid),
     loadCurrentProgressionWindowExecutions(uid, bundle),
-    listTrainingCycles(uid),
+    bundle.lifecycle.currentTrainingLevel === 'INTERMEDIATE'
+      ? listRecentIntermediateTrainingCycles(uid, PROGRESSION_V2_CONFIG.intermediateCyclesForPromotion)
+      : Promise.resolve([]),
     listScheduleEvents(uid, bundle.lifecycle.activeContentIdentity),
     loadAuthoritativePrescriptionInputs(uid, bundle),
     loadAuthoritativePrescribedSessions(uid, bundle.lifecycle.activeContentIdentity),
@@ -137,7 +139,7 @@ export async function evaluateProgressionV2ForUserFull(
   const adherence = computeAdherence(validSessionCount, expectedSessions);
 
   const earnedIntermediateCycleCount =
-    bundle.lifecycle.currentTrainingLevel === 'INTERMEDIATE' ? countEarnedIntermediateCycles(allCycles) : 0;
+    bundle.lifecycle.currentTrainingLevel === 'INTERMEDIATE' ? countEarnedIntermediateCycles(relevantCycles) : 0;
 
   const snapshot: ProgressionSnapshotV2 = {
     level: bundle.lifecycle.currentTrainingLevel,

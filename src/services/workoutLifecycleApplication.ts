@@ -26,7 +26,7 @@ import {
   loadPendingEvolution,
   loadWorkoutLifecycle,
   listTrainingCycles,
-  listWorkoutLifecycleEvents,
+  listWorkoutLifecycleEventsForProgramInstance,
   pendingEvolutionRef,
   recoverWorkoutLifecyclePartialState,
 } from './workoutLifecycle';
@@ -108,11 +108,12 @@ function timestampMillis(value: Timestamp): number {
 }
 
 async function loadOutstandingEarnedFact(uid: string): Promise<EarnedEvolutionFact | null> {
-  const [events, lifecycle] = await Promise.all([
-    listWorkoutLifecycleEvents(uid),
-    loadWorkoutLifecycle(uid),
-  ]);
+  const lifecycle = await loadWorkoutLifecycle(uid);
   if (!lifecycle) return null;
+  const events = await listWorkoutLifecycleEventsForProgramInstance(
+    uid,
+    lifecycle.lifecycle.activeProgramInstanceId,
+  );
   const activations = new Set(events
     .filter((event) => ['LEVEL_PROMOTED', 'EVOLUTION_ACTIVATED', 'MOTIVATIONAL_RENEWAL_ACTIVATED'].includes(event.type))
     .map((event) => event.idempotencyKey));

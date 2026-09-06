@@ -19,6 +19,8 @@ function seedFullUser(harness: ReturnType<typeof createFakeFirestore>, uid: stri
   harness.seed(`users/${uid}/workoutProgramState/active`);
   harness.seed(`users/${uid}/workoutExecutions/exec1`);
   harness.seed(`users/${uid}/workoutPrograms/wpg1/progressionEvents/pe1`);
+  harness.seed(`users/${uid}/workoutPrograms/wpg1/scheduleState/state1`);
+  harness.seed(`users/${uid}/workoutPrograms/wpg1/scheduleEvents/event1`);
   harness.seed(`users/${uid}/workoutLifecycleState/current`);
   harness.seed(`users/${uid}/trainingCycles/cyc1`);
   harness.seed(`users/${uid}/programInstances/wpi1`);
@@ -57,6 +59,8 @@ describe('runFirestoreCleanup — happy path', () => {
     expect(harness.listUnder('users/uid-1/workoutProgramState/')).toHaveLength(0);
     expect(harness.listUnder('users/uid-1/workoutExecutions/')).toHaveLength(0);
     expect(harness.listUnder('users/uid-1/workoutPrograms/wpg1/progressionEvents/')).toHaveLength(0);
+    expect(harness.listUnder('users/uid-1/workoutPrograms/wpg1/scheduleState/')).toHaveLength(0);
+    expect(harness.listUnder('users/uid-1/workoutPrograms/wpg1/scheduleEvents/')).toHaveLength(0);
     expect(harness.listUnder('users/uid-1/workoutLifecycleState/')).toHaveLength(0);
     expect(harness.listUnder('users/uid-1/trainingCycles/')).toHaveLength(0);
     expect(harness.listUnder('users/uid-1/programInstances/')).toHaveLength(0);
@@ -155,7 +159,7 @@ describe('runFirestoreCleanup — ordering (Fase 6 §10)', () => {
     });
 
     expect(order).toEqual([
-      'questionnaires', 'assessments', 'progressPhotos', 'progressionEvents',
+      'questionnaires', 'assessments', 'progressPhotos', 'workoutProgramDescendants',
       'workoutLifecycleEvents', 'workoutLifecycleAuthorityGrants', 'workoutLifecycleTrustedTelemetryReceipts', 'pendingEvolutions', 'programInstances', 'trainingCycles', 'workoutLifecycleState',
       'workoutPrograms', 'workoutProgramState', 'workoutExecutions', 'userProfile',
     ]);

@@ -52,6 +52,9 @@ describe.skipIf(!enabled)('Firestore Cleanup Engine — real Emulator integratio
       wipeCollectionGroup('assessments'),
       wipeCollectionGroup('progressPhotos'),
       wipeCollectionGroup('workoutPrograms'),
+      wipeCollectionGroup('progressionEvents'),
+      wipeCollectionGroup('scheduleState'),
+      wipeCollectionGroup('scheduleEvents'),
       wipeCollectionGroup('workoutProgramState'),
       wipeCollectionGroup('workoutExecutions'),
       wipeCollectionGroup('workoutLifecycleState'),
@@ -98,6 +101,10 @@ describe.skipIf(!enabled)('Firestore Cleanup Engine — real Emulator integratio
       wrappedVaultKey: 'ciphertext-not-a-real-key',
     });
     await db.collection('users').doc(uid).collection('workoutPrograms').doc('wpg1').set({ status: 'active' });
+    const programRef = db.collection('users').doc(uid).collection('workoutPrograms').doc('wpg1');
+    await programRef.collection('progressionEvents').doc('pe1').set({ type: 'NORMAL_ROTATION' });
+    await programRef.collection('scheduleState').doc('instance1').set({ nextSessionIndex: 1 });
+    await programRef.collection('scheduleEvents').doc('se1').set({ type: 'COMPLETED' });
     await db.collection('users').doc(uid).collection('workoutProgramState').doc('active').set({ programId: 'wpg1' });
     await db.collection('users').doc(uid).collection('workoutExecutions').doc('exec1').set({ status: 'COMPLETED' });
     await db.collection('users').doc(uid).collection('workoutLifecycleState').doc('current').set({ currentCycleId: 'cycle1' });
@@ -175,6 +182,12 @@ describe.skipIf(!enabled)('Firestore Cleanup Engine — real Emulator integratio
       const workoutPrograms = await db
         .collection('users').doc('test-uid-cleanup-A').collection('workoutPrograms').get();
       expect(workoutPrograms.empty).toBe(true);
+      for (const collectionName of ['progressionEvents', 'scheduleState', 'scheduleEvents']) {
+        const descendant = await db
+          .collection('users').doc('test-uid-cleanup-A')
+          .collection('workoutPrograms').doc('wpg1').collection(collectionName).get();
+        expect(descendant.empty).toBe(true);
+      }
       const workoutProgramState = await db
         .collection('users').doc('test-uid-cleanup-A').collection('workoutProgramState').get();
       expect(workoutProgramState.empty).toBe(true);

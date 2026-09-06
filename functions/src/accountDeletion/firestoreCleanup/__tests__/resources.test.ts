@@ -6,6 +6,7 @@ import {
   deleteUserAssessments,
   deleteUserProfileDocument,
   deleteUserQuestionnaires,
+  deleteUserWorkoutProgramDescendants,
 } from '../resources';
 import { createFakeFirestore } from './fakeFirestore';
 
@@ -65,6 +66,31 @@ describe('deleteProgressPhotoDocuments', () => {
     const result = await deleteProgressPhotoDocuments('uid-1', fs(harness));
 
     expect(result).toEqual({ resource: 'progressPhotos', deletedCount: 2, alreadyAbsent: false });
+  });
+});
+
+describe('deleteUserWorkoutProgramDescendants', () => {
+  it('deletes every known descendant before the workout program document', async () => {
+    const harness = createFakeFirestore();
+    harness.seed('users/uid-1/workoutPrograms/wpg1');
+    harness.seed('users/uid-1/workoutPrograms/wpg1/progressionEvents/pe1');
+    harness.seed('users/uid-1/workoutPrograms/wpg1/scheduleState/state1');
+    harness.seed('users/uid-1/workoutPrograms/wpg1/scheduleEvents/event1');
+
+    const result = await deleteUserWorkoutProgramDescendants('uid-1', fs(harness));
+
+    expect(result).toEqual({ resource: 'workoutProgramDescendants', deletedCount: 3, alreadyAbsent: false });
+    expect(harness.exists('users/uid-1/workoutPrograms/wpg1')).toBe(true);
+    expect(harness.listUnder('users/uid-1/workoutPrograms/wpg1/')).toHaveLength(0);
+  });
+
+  it('is idempotent and tolerates empty descendant collections', async () => {
+    const harness = createFakeFirestore();
+    harness.seed('users/uid-1/workoutPrograms/wpg1');
+
+    await expect(deleteUserWorkoutProgramDescendants('uid-1', fs(harness))).resolves.toEqual({
+      resource: 'workoutProgramDescendants', deletedCount: 0, alreadyAbsent: true,
+    });
   });
 });
 

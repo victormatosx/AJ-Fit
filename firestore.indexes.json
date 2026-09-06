@@ -103,7 +103,22 @@
         { "fieldPath": "subscription.status", "order": "ASCENDING" },
         { "fieldPath": "profile.name", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "trainingCycles",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "level", "order": "ASCENDING" },
+        { "fieldPath": "cycleNumber", "order": "DESCENDING" }
+      ]
     }
   ],
-  "fieldOverrides": []
+  "fieldOverrides": [
+    {
+      "collectionGroup": "workoutLifecycleTrustedTelemetryReceipts",
+      "fieldPath": "expireAt",
+      "ttl": true,
+      "indexes": []
+    }
+  ]
 }

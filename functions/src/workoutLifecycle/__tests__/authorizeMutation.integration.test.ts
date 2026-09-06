@@ -3,7 +3,12 @@ import { deleteApp, initializeApp, type App } from 'firebase-admin/app';
 import { getFirestore, Timestamp, type Firestore } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
 
-import { authorizeWorkoutLifecycleMutationHandler, authoritativeEarnedFact } from '../authorizeMutation';
+import {
+  authorizeWorkoutLifecycleMutationHandler,
+  authoritativeEarnedFact,
+  authoritativeEarnedFactFullScanOracleForTest,
+} from '../authorizeMutation';
+import { countEarnedIntermediateCycles } from '../prescriptionEngine/progressionEngineV2/earnedCycles';
 import { seedRealPrescriptionCatalog } from './realCatalogFixture';
 import { weekdayOfLocalDate } from '../scheduleEngine/calendar';
 
@@ -1106,11 +1111,96 @@ describe.skipIf(!enabled)('Workout Lifecycle authority — real Firestore Emulat
 
     it('QA_TRANSITION account: EARN succeeds despite ~1 active day and 0% adherence, deriving the real BEGINNER -> INTERMEDIATE target', async () => {
       await setQaMode('TRANSITION');
-      const fact = await authoritativeEarnedFact(UID, db, new Date());
+      const now = new Date();
+      const fact = await authoritativeEarnedFact(UID, db, now);
       expect(fact).toMatchObject({
         type: 'LEVEL_PROMOTION', fromLevel: 'BEGINNER', toLevel: 'INTERMEDIATE',
         qaForced: true, triggerSource: 'QA_TRANSITION',
       });
+      await expect(authoritativeEarnedFactFullScanOracleForTest(UID, db, now)).resolves.toEqual(fact);
+    });
+
+    it('matches the old full-scan oracle at the INTERMEDIATE promotion boundary with 120 irrelevant historical cycles and on retry', async () => {
+      await setQaMode('TRANSITION');
+      const root = db.collection('users').doc(UID);
+      const batch = db.batch();
+      batch.update(root.collection('workoutLifecycleState').doc('current'), {
+        currentTrainingLevel: 'INTERMEDIATE', currentCycleId: 'cyc_intermediate_4', currentCycleNumber: 4,
+      });
+      batch.update(root.collection('programInstances').doc('wpi_active'), { cycleId: 'cyc_intermediate_4' });
+      for (let cycleNumber = 1; cycleNumber <= 4; cycleNumber += 1) {
+        batch.set(root.collection('trainingCycles').doc(`cyc_intermediate_${cycleNumber}`), {
+          cycleId: `cyc_intermediate_${cycleNumber}`, level: 'INTERMEDIATE', cycleNumber,
+          status: cycleNumber === 4 ? 'ACTIVE' : 'COMPLETED',
+          progressionReason: cycleNumber === 1 ? 'INITIAL_PRESCRIPTION' : 'EARNED_CYCLE_EVOLUTION',
+          completionReason: cycleNumber === 4 ? null : 'EARNED_EVOLUTION',
+        });
+      }
+      for (let index = 0; index < 120; index += 1) {
+        batch.set(root.collection('trainingCycles').doc(`irrelevant_${index}`), {
+          cycleId: `irrelevant_${index}`, level: index % 2 === 0 ? 'BEGINNER' : 'ADVANCED',
+          cycleNumber: index + 100, status: 'COMPLETED', progressionReason: 'EARNED_CYCLE_EVOLUTION',
+          completionReason: 'EARNED_EVOLUTION',
+        });
+      }
+      await batch.commit();
+
+      const fullSnapshot = await root.collection('trainingCycles').get();
+      const oldFullScanCount = countEarnedIntermediateCycles(fullSnapshot.docs.map((item) => item.data() as never));
+      const oldFullScanType = oldFullScanCount + 1 >= 4 ? 'LEVEL_PROMOTION' : 'CYCLE_EVOLUTION';
+      const now = new Date();
+      const fullScanOracle = await authoritativeEarnedFactFullScanOracleForTest(UID, db, now);
+      const first = await authoritativeEarnedFact(UID, db, now);
+      const retry = await authoritativeEarnedFact(UID, db, now);
+
+      expect(first.type).toBe(oldFullScanType);
+      expect(first).toMatchObject({ fromLevel: 'INTERMEDIATE', toLevel: 'ADVANCED' });
+      expect(first).toEqual(fullScanOracle);
+      expect(retry).toEqual(first);
+    });
+
+    it('is structurally identical to the old full-scan result across valid level/cycle histories', async () => {
+      await setQaMode('TRANSITION');
+      const root = db.collection('users').doc(UID);
+      const scenarios = [
+        { name: 'BEGINNER initial', level: 'BEGINNER', current: 1, completedIntermediate: 0 },
+        { name: 'INTERMEDIATE cycle 1', level: 'INTERMEDIATE', current: 1, completedIntermediate: 0 },
+        { name: 'INTERMEDIATE cycle 2', level: 'INTERMEDIATE', current: 2, completedIntermediate: 1 },
+        { name: 'several INTERMEDIATE cycles', level: 'INTERMEDIATE', current: 3, completedIntermediate: 2 },
+        { name: 'promotion boundary', level: 'INTERMEDIATE', current: 4, completedIntermediate: 3 },
+        { name: 'ADVANCED after promotion', level: 'ADVANCED', current: 1, completedIntermediate: 4 },
+      ] as const;
+
+      for (const scenario of scenarios) {
+        const existing = await root.collection('trainingCycles').get();
+        const cleanup = db.batch();
+        existing.docs.forEach((item) => cleanup.delete(item.ref));
+        await cleanup.commit();
+
+        const activeCycleId = `active_${scenario.level}_${scenario.current}`;
+        const seed = db.batch();
+        seed.update(root.collection('workoutLifecycleState').doc('current'), {
+          currentTrainingLevel: scenario.level, currentCycleId: activeCycleId, currentCycleNumber: scenario.current,
+        });
+        for (let cycleNumber = 1; cycleNumber <= scenario.completedIntermediate; cycleNumber += 1) {
+          seed.set(root.collection('trainingCycles').doc(`completed_${cycleNumber}`), {
+            cycleId: `completed_${cycleNumber}`, level: 'INTERMEDIATE', cycleNumber, status: 'COMPLETED',
+            progressionReason: cycleNumber === 1 ? 'INITIAL_PRESCRIPTION' : 'EARNED_CYCLE_EVOLUTION',
+            completionReason: 'EARNED_EVOLUTION',
+          });
+        }
+        seed.set(root.collection('trainingCycles').doc(activeCycleId), {
+          cycleId: activeCycleId, level: scenario.level, cycleNumber: scenario.current, status: 'ACTIVE',
+          progressionReason: scenario.level === 'BEGINNER' ? 'INITIAL_PRESCRIPTION' : 'EARNED_LEVEL_PROMOTION',
+          completionReason: null,
+        });
+        await seed.commit();
+
+        const now = new Date();
+        const oldResult = await authoritativeEarnedFactFullScanOracleForTest(UID, db, now);
+        const newResult = await authoritativeEarnedFact(UID, db, now);
+        expect(newResult, scenario.name).toEqual(oldResult);
+      }
     });
 
     it('legacy boolean fallback: workoutLifecycleQaAccelerated=true alone never implies QA_TRANSITION', async () => {

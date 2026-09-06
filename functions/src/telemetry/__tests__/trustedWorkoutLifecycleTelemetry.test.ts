@@ -2,10 +2,19 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   emitTrustedWorkoutLifecycleTelemetry,
+  TRUSTED_TELEMETRY_RECEIPT_RETENTION_MS,
+  trustedTelemetryReceiptExpiresAt,
   trustedTelemetryNameForLifecycleEvent,
 } from '../trustedWorkoutLifecycleTelemetry';
 
 describe('trusted workout lifecycle telemetry projection', () => {
+  it('retains receipts beyond Pub/Sub\'s maximum 31-day redelivery horizon', () => {
+    const claimedAt = new Date('2026-01-01T00:00:00.000Z');
+    expect(trustedTelemetryReceiptExpiresAt(claimedAt).getTime() - claimedAt.getTime())
+      .toBe(TRUSTED_TELEMETRY_RECEIPT_RETENTION_MS);
+    expect(TRUSTED_TELEMETRY_RECEIPT_RETENTION_MS).toBe(32 * 24 * 60 * 60 * 1000);
+  });
+
   it('maps only authoritative lifecycle facts', () => {
     expect(trustedTelemetryNameForLifecycleEvent('LEVEL_PROMOTED')).toBe('level_promoted');
     expect(trustedTelemetryNameForLifecycleEvent('EVOLUTION_ACTIVATED')).toBe('evolution_activated');

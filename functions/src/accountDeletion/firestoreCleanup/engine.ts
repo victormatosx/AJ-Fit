@@ -56,7 +56,7 @@ import {
   deleteUserWorkoutLifecycleState,
   deleteUserWorkoutPrograms,
   deleteUserWorkoutProgramState,
-  deleteUserWorkoutProgressionEvents,
+  deleteUserWorkoutProgramDescendants,
 } from './resources';
 import type { ResourceCleanupResult } from './types';
 
@@ -115,9 +115,9 @@ export async function runFirestoreCleanup(
     deleteUserAssessments,
     deleteProgressPhotoDocuments,
     // Must run before deleteUserWorkoutPrograms — it enumerates program ids
-    // to reach their nested progressionEvents subcollections, which a
+    // to reach the explicit allowlist of nested collections, which a
     // one-level-only delete of the parent docs would otherwise orphan.
-    deleteUserWorkoutProgressionEvents,
+    deleteUserWorkoutProgramDescendants,
     deleteUserWorkoutLifecycleEvents,
     deleteUserWorkoutLifecycleAuthorityGrants,
     deleteUserWorkoutLifecycleTrustedTelemetryReceipts,

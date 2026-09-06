@@ -36,6 +36,8 @@ const WORKOUT_PROGRAMS_COLLECTION = 'workoutPrograms';
 const WORKOUT_PROGRAM_STATE_COLLECTION = 'workoutProgramState';
 const WORKOUT_EXECUTIONS_COLLECTION = 'workoutExecutions';
 const PROGRESSION_EVENTS_COLLECTION = 'progressionEvents';
+const SCHEDULE_STATE_COLLECTION = 'scheduleState';
+const SCHEDULE_EVENTS_COLLECTION = 'scheduleEvents';
 const WORKOUT_LIFECYCLE_STATE_COLLECTION = 'workoutLifecycleState';
 const TRAINING_CYCLES_COLLECTION = 'trainingCycles';
 const PROGRAM_INSTANCES_COLLECTION = 'programInstances';
@@ -86,29 +88,34 @@ export async function deleteProgressPhotoDocuments(
 }
 
 /**
- * Deletes every `progressionEvents` subcollection nested under each of the
- * user's `workoutPrograms/{programId}` docs (Progression Engine V1,
- * docs/workout-lifecycle/04_PROGRESSION_ENGINE.md). Must run BEFORE
+ * Deletes every known subcollection nested under each of the user's
+ * `workoutPrograms/{programId}` docs. Must run BEFORE
  * `deleteUserWorkoutPrograms` below — `deleteCollectionDocuments` is
  * deliberately one-level-only (see this file's top doc comment), so nothing
  * else would ever reach these nested docs once their parent program doc is
- * gone. Each program's own deletion is untouched by this function — it only
- * enumerates program ids (a small, per-user-bounded count) to reach their
- * `progressionEvents` subcollection.
+ * gone. The explicit allowlist avoids recursive deletion crossing the
+ * `privateSecurity` ownership boundary documented above while covering both
+ * V1 progression history and the schedule engine's state/event ledger.
  */
-export async function deleteUserWorkoutProgressionEvents(
+export async function deleteUserWorkoutProgramDescendants(
   uid: string,
   db: Firestore = defaultDb,
 ): Promise<ResourceCleanupResult> {
   const programsSnapshot = await userDocRef(db, uid).collection(WORKOUT_PROGRAMS_COLLECTION).get();
   let deletedCount = 0;
   for (const programDoc of programsSnapshot.docs) {
-    const { deletedCount: perProgram } = await deleteCollectionDocuments(
-      programDoc.ref.collection(PROGRESSION_EVENTS_COLLECTION),
-    );
-    deletedCount += perProgram;
+    for (const collectionName of [
+      PROGRESSION_EVENTS_COLLECTION,
+      SCHEDULE_STATE_COLLECTION,
+      SCHEDULE_EVENTS_COLLECTION,
+    ]) {
+      const { deletedCount: perCollection } = await deleteCollectionDocuments(
+        programDoc.ref.collection(collectionName),
+      );
+      deletedCount += perCollection;
+    }
   }
-  return { resource: 'progressionEvents', deletedCount, alreadyAbsent: deletedCount === 0 };
+  return { resource: 'workoutProgramDescendants', deletedCount, alreadyAbsent: deletedCount === 0 };
 }
 
 export async function deleteUserWorkoutPrograms(

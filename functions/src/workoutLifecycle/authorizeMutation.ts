@@ -17,7 +17,7 @@ import { equipmentContextFor } from './prescriptionEngine/workoutPrescription/eq
 import { buildRecentSlotHistory, evolveCycle } from './prescriptionEngine/prescriptionEvolution/cycleEvolution';
 import { PRESCRIPTION_EVOLUTION_CONFIG } from './prescriptionEngine/prescriptionEvolution/config';
 import { countEarnedIntermediateCycles } from './prescriptionEngine/progressionEngineV2/earnedCycles';
-import { resolveProgressionV2Config } from './prescriptionEngine/progressionEngineV2/config';
+import { PROGRESSION_V2_CONFIG, resolveProgressionV2Config } from './prescriptionEngine/progressionEngineV2/config';
 import type { TrainingCycle } from './prescriptionEngine/workoutLifecycle/types';
 import { isOperationBlockedByCircuitBreaker, loadWorkoutLifecycleCircuitBreakerConfig } from './circuitBreaker';
 import { progressionPolicyModeFor, resolveWorkoutLifecycleQaMode } from './qaPolicy';
@@ -319,7 +319,12 @@ function qualifyingExecution(execution: DocumentData, session: DocumentData, exp
 // test coverage use this function's own real output as the oracle for what
 // the EARN handler should accept, instead of hand-computing activeDays/
 // adherence numbers. Not imported by any non-test module.
-export async function authoritativeEarnedFact(uid: string, firestore: Firestore, now: Date): Promise<Record<string, unknown>> {
+async function authoritativeEarnedFactWithCycleHistory(
+  uid: string,
+  firestore: Firestore,
+  now: Date,
+  cycleHistory: 'BOUNDED' | 'FULL_SCAN_ORACLE',
+): Promise<Record<string, unknown>> {
   const { state, instance, program } = await activeBundle(uid, firestore);
   const root = firestore.collection('users').doc(uid);
   const [qaMode, scheduleConfigSnapshot, executionsSnapshot, scheduleEventsSnapshot, cyclesSnapshot] = await Promise.all([
@@ -327,7 +332,15 @@ export async function authoritativeEarnedFact(uid: string, firestore: Firestore,
     root.collection('workoutProgramState').doc('scheduleConfig').get(),
     root.collection('workoutExecutions').where('programInstanceId', '==', state.activeProgramInstanceId).get(),
     root.collection('workoutPrograms').doc(state.activeContentIdentity).collection('scheduleEvents').get(),
-    root.collection('trainingCycles').get(),
+    cycleHistory === 'FULL_SCAN_ORACLE'
+      ? root.collection('trainingCycles').get()
+      : state.currentTrainingLevel === 'INTERMEDIATE'
+      ? root.collection('trainingCycles')
+        .where('level', '==', 'INTERMEDIATE')
+        .orderBy('cycleNumber', 'desc')
+        .limit(PROGRESSION_V2_CONFIG.intermediateCyclesForPromotion)
+        .get()
+      : Promise.resolve(null),
   ]);
   const config = resolveProgressionV2Config(progressionPolicyModeFor(qaMode));
   const scheduleConfig = scheduleConfigSnapshot.data() ?? {};
@@ -392,7 +405,7 @@ export async function authoritativeEarnedFact(uid: string, firestore: Firestore,
     // inline check previously diverged from it (missing the legacy pre-8A
     // fallback inference), under-counting real earned cycles for those users.
     const earnedIntermediate = countEarnedIntermediateCycles(
-      cyclesSnapshot.docs.map((item) => item.data() as unknown as Pick<TrainingCycle<unknown>,
+      (cyclesSnapshot?.docs ?? []).map((item) => item.data() as unknown as Pick<TrainingCycle<unknown>,
         'level' | 'status' | 'progressionReason' | 'cycleNumber' | 'completionReason'>));
     if (earnedIntermediate + 1 >= config.intermediateCyclesForPromotion) { type = 'LEVEL_PROMOTION'; toLevel = 'ADVANCED'; }
     else type = 'CYCLE_EVOLUTION';
@@ -414,6 +427,19 @@ export async function authoritativeEarnedFact(uid: string, firestore: Firestore,
     // mistaken for a real earned one downstream.
     ...(qaMode === 'QA_TRANSITION' ? { qaForced: true, triggerSource: 'QA_TRANSITION' } : {}),
   };
+}
+
+export async function authoritativeEarnedFact(uid: string, firestore: Firestore, now: Date): Promise<Record<string, unknown>> {
+  return authoritativeEarnedFactWithCycleHistory(uid, firestore, now, 'BOUNDED');
+}
+
+/** Test-only reference preserving the pre-Phase-2 history read for structural equivalence assertions. */
+export async function authoritativeEarnedFactFullScanOracleForTest(
+  uid: string,
+  firestore: Firestore,
+  now: Date,
+): Promise<Record<string, unknown>> {
+  return authoritativeEarnedFactWithCycleHistory(uid, firestore, now, 'FULL_SCAN_ORACLE');
 }
 
 function assertSnapshot(request: AuthorityRequest, bundle: Awaited<ReturnType<typeof activeBundle>>): Record<string, unknown> {

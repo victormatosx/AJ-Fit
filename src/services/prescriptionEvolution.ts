@@ -2,16 +2,17 @@ import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { buildRecentSlotHistory, evolveCycle, type ExerciseSubstitutionExplanation } from '../prescriptionEvolution/cycleEvolution';
 import { PRESCRIPTION_EVOLUTION_CONFIG } from '../prescriptionEvolution/config';
+import { collectRecentPrescriptionSessions } from '../prescriptionEvolution/recentPrescriptionHistory';
 import { buildLevelPromotionAnswers, type LevelPromotionTarget } from '../prescriptionEvolution/levelPromotion';
 import { buildPrescriptionInputSnapshot } from '../workoutLifecycle/prescriptionInputs';
-import type { PrescriptionInputSnapshot } from '../workoutLifecycle/types';
+import type { PrescriptionInputSnapshot, ProgramInstance } from '../workoutLifecycle/types';
 import { EXERCISES_SEED } from '../data/exercisesSeedData';
 import { equipmentContextFor } from '../workoutPrescription/equipment';
 import { mapQuestionnaireLimitations, type LimitationCatalogExercise } from '../workoutPrescription/limitationResolver';
 import { fromWorkoutTemplateDocument } from '../workoutPrescription/templateDocument';
 import type { FinalWorkoutPlan } from '../workoutPrescription/types';
 import { loadAuthoritativePrescriptionInputs } from './prescriptionInputs';
-import { listProgramInstances, loadWorkoutLifecycle } from './workoutLifecycle';
+import { loadProgramInstance, loadWorkoutLifecycle } from './workoutLifecycle';
 import {
   isProgramSnapshot,
   loadActiveWorkoutProgram,
@@ -91,20 +92,16 @@ function evolutionPlanId(basePlanId: string, targetCycleIdentity: string, sessio
  */
 async function loadRecentPrescriptionSessions(
   uid: string,
-  activeProgramInstanceId: string,
+  startingInstance: Pick<ProgramInstance<unknown>, 'previousProgramInstanceId'>,
 ): Promise<FinalWorkoutPlan['sessions'][]> {
-  const instances = await listProgramInstances(uid);
-  const byId = new Map(instances.map((instance) => [instance.programInstanceId, instance]));
-  const history: FinalWorkoutPlan['sessions'][] = [];
-  let cursor = byId.get(activeProgramInstanceId)?.previousProgramInstanceId ?? null;
-  while (cursor && history.length < PRESCRIPTION_EVOLUTION_CONFIG.antiPingPongWindow) {
-    const instance = byId.get(cursor);
-    if (!instance) break;
-    const priorProgram = await loadWorkoutProgramById(uid, instance.contentIdentity);
-    if (priorProgram) history.push(priorProgram.sessions);
-    cursor = instance.previousProgramInstanceId;
-  }
-  return history;
+  return collectRecentPrescriptionSessions({
+    uid,
+    previousProgramInstanceId: startingInstance.previousProgramInstanceId,
+    maximumSessions: PRESCRIPTION_EVOLUTION_CONFIG.antiPingPongWindow,
+    loadInstance: loadProgramInstance,
+    loadProgramSessions: async (ownerUid, contentIdentity) =>
+      (await loadWorkoutProgramById(ownerUid, contentIdentity))?.sessions ?? null,
+  });
 }
 
 /**
@@ -197,7 +194,7 @@ export async function evolvePrescription(request: PrescriptionEvolutionRequest):
   const catalog = new Map<string, LimitationCatalogExercise>(EXERCISES_SEED.map((exercise) => [exercise.id, exercise]));
   const equipmentContext = equipmentContextFor(currentAnswers, program.environment);
   const priorSessions = lifecycle
-    ? await loadRecentPrescriptionSessions(request.uid, lifecycle.programInstance.programInstanceId)
+    ? await loadRecentPrescriptionSessions(request.uid, lifecycle.programInstance)
     : [];
 
   const result = evolveCycle({

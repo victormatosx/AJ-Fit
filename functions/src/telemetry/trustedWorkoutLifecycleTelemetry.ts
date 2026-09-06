@@ -12,6 +12,16 @@ interface PersistedLifecycleEvent {
   payload?: unknown;
 }
 
+// Pub/Sub's configurable message-retention ceiling is 31 days. Keep the
+// idempotency receipt for one additional full day so every possible Eventarc
+// redelivery remains covered before Firestore TTL can make it eligible for
+// asynchronous deletion.
+export const TRUSTED_TELEMETRY_RECEIPT_RETENTION_MS = 32 * 24 * 60 * 60 * 1000;
+
+export function trustedTelemetryReceiptExpiresAt(now: Date): Date {
+  return new Date(now.getTime() + TRUSTED_TELEMETRY_RECEIPT_RETENTION_MS);
+}
+
 /**
  * 'new' and 'pending' both mean the sink has not yet confirmed delivery and
  * must be (re)attempted; 'delivered' means a prior attempt already reached
@@ -61,11 +71,13 @@ const firestoreClaimStore: TrustedTelemetryClaimStore = {
     return db.runTransaction(async (tx) => {
       const snapshot = await tx.get(ref);
       if (!snapshot.exists) {
+        const claimedAt = new Date();
         tx.set(ref, {
           correlationHash,
           eventType,
           status: 'pending',
-          claimedAt: new Date(),
+          claimedAt,
+          expireAt: trustedTelemetryReceiptExpiresAt(claimedAt),
           schemaVersion: 2,
         });
         return 'new';

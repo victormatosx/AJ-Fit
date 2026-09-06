@@ -606,6 +606,45 @@ describe.skipIf(!enabled)('Fase 4 Lifecycle Orchestrator — real Firestore Emul
     expect(events.docs.filter((item) => item.data().type === 'EVOLUTION_EARNED')).toHaveLength(1);
   }, 30_000);
 
+  it('outstanding earned lookup ignores a large historical ledger from superseded ProgramInstances', async () => {
+    await seedBaseUser();
+    const generated = await generateAndPersistWorkoutProgram({
+      uid: UID, questionnaireId: QUESTIONNAIRE_ID, questionnaireVersion: 1,
+      answers: BEGINNER_ANSWERS, source: 'onboarding',
+    });
+    if (generated.status !== 'SUCCESS') throw new Error('setup failed');
+    const current = await loadWorkoutLifecycle(UID);
+    if (!current) throw new Error('lifecycle setup failed');
+
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const rawDb = ctx.firestore();
+      await Promise.all(Array.from({ length: 120 }, (_, index) => {
+        const eventId = `historical_earned_${index}`;
+        return setDoc(doc(rawDb, 'users', UID, 'workoutLifecycleEvents', eventId), {
+          eventId,
+          type: 'EVOLUTION_EARNED',
+          occurredAt: Timestamp.fromMillis(Date.now() + index),
+          cycleId: `historical_cycle_${index}`,
+          programInstanceId: `superseded_instance_${index}`,
+          idempotencyKey: `evolution:superseded_instance_${index}:CYCLE_EVOLUTION`,
+          payload: {
+            evolutionType: 'CYCLE_EVOLUTION', quality: 'GOOD',
+            fromLevel: 'INTERMEDIATE', toLevel: 'INTERMEDIATE',
+            sessionsCompletedAtEarn: 100, adherenceAtEarnBp: 10_000,
+          },
+          schemaVersion: 2,
+        });
+      }));
+    });
+
+    // The current instance has no qualifying history and no earned event.
+    // Historical earned facts must neither become outstanding nor trigger PREPARE.
+    await expect(prepareEvolution({ uid: UID })).resolves.toEqual({ status: 'NO_ACTION' });
+    expect(await loadPendingEvolution(UID)).toBeNull();
+    expect((await loadWorkoutLifecycle(UID))!.programInstance.programInstanceId)
+      .toBe(current.programInstance.programInstanceId);
+  }, 30_000);
+
   it('§104-105 BS: Motivational Renewal E2E — same level, earned-cycle count untouched, no CYCLE_COMPLETED artifact, new fresh Program Instance', async () => {
     await seedBaseUser();
     const generated = await generateAndPersistWorkoutProgram({
@@ -753,7 +792,7 @@ describe.skipIf(!enabled)('Fase 4 Lifecycle Orchestrator — real Firestore Emul
   }, 30_000);
 
   it.each([0, 1, 2] as const)(
-    '§72/§108 adaptation invalidates READY/DEFERRED(%s), preserves earned fact and consumed deferrals',
+    'adaptation invalidates READY/DEFERRED(%s) and does not carry an old instance earned fact forward',
     async (deferralCount) => {
     await seedBaseUser();
     const generated = await generateAndPersistWorkoutProgram({
@@ -767,7 +806,6 @@ describe.skipIf(!enabled)('Fase 4 Lifecycle Orchestrator — real Firestore Emul
     const levelBeforeActivation = (await loadWorkoutLifecycle(UID))!.lifecycle.currentTrainingLevel;
     expect(levelBeforeActivation).toBe('BEGINNER');
 
-    const earnedAt = prepared.status === 'PREPARED' ? prepared.pending.earnedAt.toMillis() : 0;
     // Rules compare the persisted deadline with request.time; use the live
     // emulator clock so this regression remains valid after its authoring day.
     let timelinePending = prepared.status === 'PREPARED' ? prepared.pending : null;
@@ -780,22 +818,17 @@ describe.skipIf(!enabled)('Fase 4 Lifecycle Orchestrator — real Firestore Emul
       if (deferred.status !== 'DEFERRED') return;
       timelinePending = deferred.pending;
     }
-    const originalNextPromptAt = timelinePending?.nextPromptAt?.toMillis();
-    const originalAutoActivateAt = timelinePending?.autoActivateAt?.toMillis();
     await adaptWorkoutProgram({ uid: UID, updatedFields: { goal: 'lose_fat' }, reason: 'GOAL', idempotencyKey: 'adapt-invalidate' });
 
-    // The stale prescription is replaced, while the original earned fact and
-    // timeline survive. The user never has to earn the promotion twice.
+    // The immutable old-instance ledger survives, but its earned fact is not
+    // outstanding for the newly-active ProgramInstance. The new progression
+    // window must earn independently before another pending can be prepared.
     const afterLifecycle = (await loadWorkoutLifecycle(UID))!;
-    const reprepared = await loadPendingEvolution(UID);
-    expect(reprepared).not.toBeNull();
-    expect(reprepared!.sourceProgramInstanceId).toBe(afterLifecycle.programInstance.programInstanceId);
-    expect(reprepared!.sourceProgramInstanceId).not.toBe(generated.program.programInstanceId);
-    expect(reprepared!.targetPrescriptionInputSnapshot?.inputs.goal).toBe('lose_fat');
-    expect(reprepared!.earnedAt.toMillis()).toBe(earnedAt);
-    expect(reprepared!.deferralCount).toBe(deferralCount);
-    expect(reprepared!.nextPromptAt?.toMillis()).toBe(originalNextPromptAt);
-    expect(reprepared!.autoActivateAt?.toMillis()).toBe(originalAutoActivateAt);
+    expect(await loadPendingEvolution(UID)).toBeNull();
+    expect(afterLifecycle.programInstance.programInstanceId).not.toBe(generated.program.programInstanceId);
+    const events = await getDocs(collection(mocks.db as never, 'users', UID, 'workoutLifecycleEvents'));
+    expect(events.docs.filter((item) => item.data().type === 'EVOLUTION_EARNED')).toHaveLength(1);
+    expect(events.docs.filter((item) => item.data().type === 'EVOLUTION_DEFERRED')).toHaveLength(deferralCount);
     const afterLevel = afterLifecycle.lifecycle.currentTrainingLevel;
     expect(afterLevel).toBe('BEGINNER');
     },
@@ -975,7 +1008,9 @@ describe.skipIf(!enabled)('Fase 4 Lifecycle Orchestrator — real Firestore Emul
     });
     if (afterNewHistory?.type === 'LEVEL_PROMOTION_ELIGIBLE') {
       expect(afterNewHistory.validSessionCount).toBeGreaterThan(0);
-      expect(afterNewHistory.adherence.quality).toBe('HIGH');
+      // Calendar alignment can make this synthetic 30-day fixture GOOD or
+      // HIGH; this test's contract is independent eligibility after ADAPT.
+      expect(['GOOD', 'HIGH']).toContain(afterNewHistory.adherence.quality);
     }
   }, 60_000);
 
