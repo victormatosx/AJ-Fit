@@ -20,13 +20,13 @@ const clientDiagnosticSchemas: Record<string, Record<string, Validator>> = {
   },
   lifecycle_rollout_config_failed: { reason: oneOf('MISSING', 'MALFORMED', 'UNAVAILABLE') },
   migration_failed: { errorCategory: category, retryable: booleanValue },
-  lifecycle_reconcile_started: { trigger: oneOf('POST_WORKOUT', 'COLD_START', 'RECOVERY') },
+  lifecycle_reconcile_started: { trigger: oneOf('POST_WORKOUT', 'COLD_START', 'RECOVERY', 'FOREGROUND') },
   lifecycle_reconcile_completed: {
-    trigger: oneOf('POST_WORKOUT', 'COLD_START', 'RECOVERY'),
+    trigger: oneOf('POST_WORKOUT', 'COLD_START', 'RECOVERY', 'FOREGROUND'),
     outcome: oneOf('NO_LIFECYCLE', 'NO_ACTION', 'PREPARED', 'AUTO_ACTIVATED', 'STALE_REPREPARED'),
   },
   lifecycle_reconcile_failed: {
-    trigger: oneOf('POST_WORKOUT', 'COLD_START', 'RECOVERY'), errorCategory: category, retryable: booleanValue,
+    trigger: oneOf('POST_WORKOUT', 'COLD_START', 'RECOVERY', 'FOREGROUND'), errorCategory: category, retryable: booleanValue,
   },
   lifecycle_stale_prepare_rejected: {
     reason: oneOf('PROGRAM_INSTANCE', 'CYCLE', 'INPUT_SNAPSHOT', 'CONCURRENT_WRITE'),

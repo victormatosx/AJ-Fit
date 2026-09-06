@@ -22,6 +22,34 @@ describe('Workout Lifecycle telemetry callable', () => {
     expect(JSON.stringify(loggerMocks.info.mock.calls)).not.toContain('secret-user-id');
   });
 
+  it.each([
+    'lifecycle_reconcile_started',
+    'lifecycle_reconcile_completed',
+    'lifecycle_reconcile_failed',
+  ])('accepts trigger FOREGROUND for %s (background -> active resume reconciliation)', (name) => {
+    const base: Record<string, unknown> = { name, trigger: 'FOREGROUND' };
+    if (name === 'lifecycle_reconcile_completed') base.outcome = 'NO_ACTION';
+    if (name === 'lifecycle_reconcile_failed') {
+      base.errorCategory = 'NETWORK';
+      base.retryable = true;
+    }
+    expect(() => validateWorkoutLifecycleTelemetryEvent(base)).not.toThrow();
+  });
+
+  it.each([
+    'lifecycle_reconcile_started',
+    'lifecycle_reconcile_completed',
+    'lifecycle_reconcile_failed',
+  ])('still rejects an unknown trigger value for %s', (name) => {
+    const base: Record<string, unknown> = { name, trigger: 'SOME_UNKNOWN_TRIGGER' };
+    if (name === 'lifecycle_reconcile_completed') base.outcome = 'NO_ACTION';
+    if (name === 'lifecycle_reconcile_failed') {
+      base.errorCategory = 'NETWORK';
+      base.retryable = true;
+    }
+    expect(() => validateWorkoutLifecycleTelemetryEvent(base)).toThrow();
+  });
+
   it.each(['level_promoted', 'evolution_activated', 'progression_evaluated'])(
     'rejects a client attempt to fabricate trusted-domain event %s',
     async (name) => {

@@ -22,15 +22,15 @@ export type WorkoutLifecycleTelemetryEvent =
     }
   | { name: 'lifecycle_rollout_config_failed'; reason: 'MISSING' | 'MALFORMED' | 'UNAVAILABLE' }
   | { name: 'migration_failed'; errorCategory: string; retryable: boolean }
-  | { name: 'lifecycle_reconcile_started'; trigger: 'POST_WORKOUT' | 'COLD_START' | 'RECOVERY' }
+  | { name: 'lifecycle_reconcile_started'; trigger: 'POST_WORKOUT' | 'COLD_START' | 'RECOVERY' | 'FOREGROUND' }
   | {
       name: 'lifecycle_reconcile_completed';
-      trigger: 'POST_WORKOUT' | 'COLD_START' | 'RECOVERY';
+      trigger: 'POST_WORKOUT' | 'COLD_START' | 'RECOVERY' | 'FOREGROUND';
       outcome: 'NO_LIFECYCLE' | 'NO_ACTION' | 'PREPARED' | 'AUTO_ACTIVATED' | 'STALE_REPREPARED';
     }
   | {
       name: 'lifecycle_reconcile_failed';
-      trigger: 'POST_WORKOUT' | 'COLD_START' | 'RECOVERY';
+      trigger: 'POST_WORKOUT' | 'COLD_START' | 'RECOVERY' | 'FOREGROUND';
       errorCategory: string;
       retryable: boolean;
     }

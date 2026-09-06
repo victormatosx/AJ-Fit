@@ -943,7 +943,7 @@ export async function processWorkoutLifecycleAfterSession(input: {
 export async function reconcileWorkoutLifecycle(input: {
   uid: string;
   now?: Date;
-  trigger?: 'POST_WORKOUT' | 'COLD_START' | 'RECOVERY';
+  trigger?: 'POST_WORKOUT' | 'COLD_START' | 'RECOVERY' | 'FOREGROUND';
 }): Promise<ReconcileResult> {
   const now = input.now ?? new Date();
   const trigger = input.trigger ?? 'RECOVERY';

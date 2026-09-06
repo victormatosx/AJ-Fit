@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { AppState, type AppStateStatus } from 'react-native';
 import { onSnapshot, type Timestamp } from 'firebase/firestore';
 import { useAuth } from '../state/AuthContext';
 import { logWarn } from '../lib/logger';
+import {
+  FOREGROUND_RECONCILE_THROTTLE_MS,
+  shouldReconcileOnForeground,
+} from './foregroundReconcile';
 import {
   listWorkoutLifecycleEventsForProgramInstance,
   lifecycleRef,
@@ -77,14 +82,25 @@ export function useWorkoutEvolution(): WorkoutEvolutionController {
   const [diff, setDiff] = useState<PrescriptionDiffSummary | null>(null);
   const hasLoadedOnce = useRef(false);
   const actionInFlight = useRef(false);
+  // Foreground-resume trigger bookkeeping (docs: foreground reconcile gap).
+  // `reconcileInFlight` covers ANY `load()` caller — COLD_START, the
+  // Firestore realtime listeners below, a user action's own refresh, or a
+  // previous FOREGROUND — so a foreground resume racing any of those never
+  // fires a second, overlapping reconcile; the existing idempotent
+  // `reconcileWorkoutLifecycle` plus this guard is what makes concurrent
+  // triggers converge instead of duplicating work.
+  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+  const reconcileInFlight = useRef(false);
+  const lastForegroundReconcileAtRef = useRef<number | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (options?: { trigger?: 'FOREGROUND' }) => {
     if (!user) return;
     if (!hasLoadedOnce.current) setLoading(true);
+    reconcileInFlight.current = true;
     try {
       await reconcileWorkoutLifecycle({
         uid: user.uid,
-        trigger: hasLoadedOnce.current ? 'RECOVERY' : 'COLD_START',
+        trigger: options?.trigger ?? (hasLoadedOnce.current ? 'RECOVERY' : 'COLD_START'),
       });
 
       const [lifecycle, pendingAfter, decision] = await Promise.all([
@@ -148,12 +164,52 @@ export function useWorkoutEvolution(): WorkoutEvolutionController {
     } finally {
       hasLoadedOnce.current = true;
       setLoading(false);
+      reconcileInFlight.current = false;
     }
   }, [user]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  // FOREGROUND trigger: cold start and POST_WORKOUT already cover app launch
+  // and finishing a session, but a background -> foreground resume WITHOUT a
+  // remount (the common case on mobile) previously reconciled nothing until
+  // the next cold start or completed workout. Mirrors the
+  // `PhotoVaultContext`/`RestSessionContext`/`SubscriptionContext` AppState
+  // pattern: track the previous state in a ref, act only on a real resume,
+  // remove the listener on cleanup. Reads `user`/`load` from the closure of
+  // an effect scoped to `user`, so a logout/login (`user` identity change)
+  // tears down the old listener before a new one — for a new uid — is ever
+  // attached; it can never stay attached to a stale account.
+  useEffect(() => {
+    if (!user) return undefined;
+    const subscription = AppState.addEventListener('change', (next: AppStateStatus) => {
+      const previous = appStateRef.current;
+      appStateRef.current = next;
+      const now = Date.now();
+      const shouldReconcile = shouldReconcileOnForeground({
+        previousState: previous,
+        nextState: next,
+        hasLoadedOnce: hasLoadedOnce.current,
+        reconcileInFlight: reconcileInFlight.current,
+        now,
+        lastForegroundReconcileAtMs: lastForegroundReconcileAtRef.current,
+        throttleMs: FOREGROUND_RECONCILE_THROTTLE_MS,
+      });
+      if (!shouldReconcile) return;
+      lastForegroundReconcileAtRef.current = now;
+      // `load()` already has its own try/catch (see above) that logs and
+      // falls back to an ERROR view-model on a transient failure without
+      // throwing — this `.catch` is only a defensive backstop, matching the
+      // same non-blocking contract COLD_START already relies on. The next
+      // foreground resume or POST_WORKOUT is what actually retries.
+      void load({ trigger: 'FOREGROUND' }).catch((error) => {
+        logWarn('workout_evolution', 'foreground_reconcile_failed', { error });
+      });
+    });
+    return () => subscription.remove();
+  }, [load, user]);
 
   useEffect(() => {
     if (!user) return undefined;

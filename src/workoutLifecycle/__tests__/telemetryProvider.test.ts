@@ -45,10 +45,13 @@ describe('workout lifecycle production telemetry adapter', () => {
     const events: WorkoutLifecycleTelemetryEvent[] = [
       { name: 'lifecycle_rollout_decision', decision: 'ENROLLED', bucket: 10, percentage: 50 },
       { name: 'lifecycle_reconcile_started', trigger: 'COLD_START' },
+      { name: 'lifecycle_reconcile_started', trigger: 'FOREGROUND' },
       { name: 'lifecycle_reconcile_completed', trigger: 'COLD_START', outcome: 'NO_ACTION' },
+      { name: 'lifecycle_reconcile_completed', trigger: 'FOREGROUND', outcome: 'NO_ACTION' },
       { name: 'progression_failed', stage: 'EVALUATION', errorCategory: 'ERROR', retryable: true },
       { name: 'migration_failed', errorCategory: 'MIGRATION_ERROR', retryable: true },
       { name: 'lifecycle_reconcile_failed', trigger: 'RECOVERY', errorCategory: 'ERROR', retryable: true },
+      { name: 'lifecycle_reconcile_failed', trigger: 'FOREGROUND', errorCategory: 'ERROR', retryable: true },
       { name: 'lifecycle_stale_prepare_rejected', reason: 'CONCURRENT_WRITE' },
     ];
 
