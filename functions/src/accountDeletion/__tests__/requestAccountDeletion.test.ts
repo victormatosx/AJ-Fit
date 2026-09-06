@@ -13,6 +13,7 @@ vi.mock('../../lib/firebaseAdmin', () => ({
 }));
 
 import { HttpsError } from 'firebase-functions/v2/https';
+import { logger } from 'firebase-functions/v2';
 import { handleRequestAccountDeletion } from '../requestAccountDeletion';
 import { AccountDeletionRepositoryError } from '../repository';
 import { currentPolicy } from '../policy';
@@ -109,6 +110,45 @@ describe('handleRequestAccountDeletion — authentication gates', () => {
     const response = await handleRequestAccountDeletion(request(0), repo);
     expect(response).toMatchObject({ deletionId: 'del-1', status: 'REQUESTED', accepted: true });
     expect(repo.createOrReuse).toHaveBeenCalledOnce();
+  });
+
+  it('a stale token logs WHY requireRecentAuth rejected it (ageSeconds, provider) — the password-reauth loop was previously unfalsifiable from Cloud Logging alone', async () => {
+    const repo = fakeRepository();
+    const staleRequest = {
+      auth: { uid: 'uid-1', token: { auth_time: nowSeconds() - 1000, firebase: { sign_in_provider: 'password' } } },
+      data: {},
+    } as never;
+    await expect(handleRequestAccountDeletion(staleRequest, repo)).rejects.toMatchObject({
+      code: 'failed-precondition',
+    });
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('requireRecentAuth rejected'),
+      expect.objectContaining({
+        hasAuthTime: true,
+        ageSeconds: expect.any(Number),
+        signInProvider: 'password',
+      }),
+    );
+  });
+
+  it('an unauthenticated request also logs (uid/ageSeconds null) rather than failing silently', async () => {
+    const repo = fakeRepository();
+    await expect(handleRequestAccountDeletion(request(null), repo)).rejects.toThrow(HttpsError);
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('requireRecentAuth rejected'),
+      expect.objectContaining({ hasAuthTime: false, ageSeconds: null, signInProvider: null }),
+    );
+  });
+
+  it('never logs a token, credential, or password alongside the rejection', async () => {
+    const repo = fakeRepository();
+    await expect(handleRequestAccountDeletion(request(1000), repo)).rejects.toMatchObject({
+      code: 'failed-precondition',
+    });
+    const loggedContext = (logger.warn as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as Record<string, unknown>;
+    for (const forbiddenKey of ['token', 'idToken', 'password', 'credential']) {
+      expect(loggedContext).not.toHaveProperty(forbiddenKey);
+    }
   });
 });
 

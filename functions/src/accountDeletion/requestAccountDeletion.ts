@@ -170,7 +170,29 @@ export async function handleRequestAccountDeletion(
   // `request.auth` is absent, and `failed-precondition` when
   // `request.auth.token.auth_time` is missing/stale — both already
   // exhaustively tested in `functions/src/__tests__/auth.test.ts`.
-  const uid = requireRecentAuth(request);
+  //
+  // Investigation note (email/password reauth loop report): `requireRecentAuth`
+  // itself never logged WHY it rejected a request, which made a reported
+  // "keeps asking for the password" loop unfalsifiable from Cloud Logging
+  // alone — see the account-deletion password-reauth audit. This log line is
+  // scoped to THIS call site only (never the shared `requireRecentAuth`, used
+  // elsewhere e.g. Photo Vault) and never logs anything beyond what's already
+  // safe to log elsewhere in this file (uid, timing, provider) — no token,
+  // no credential, no password.
+  let uid: string;
+  try {
+    uid = requireRecentAuth(request);
+  } catch (error) {
+    const authTime = request.auth?.token?.auth_time;
+    const firebaseClaim = request.auth?.token?.firebase as { sign_in_provider?: unknown } | undefined;
+    logWarn(SCOPE, 'requireRecentAuth rejected requestAccountDeletion', {
+      uid: request.auth?.uid ?? null,
+      hasAuthTime: typeof authTime === 'number',
+      ageSeconds: typeof authTime === 'number' ? Math.round(Date.now() / 1000 - authTime) : null,
+      signInProvider: typeof firebaseClaim?.sign_in_provider === 'string' ? firebaseClaim.sign_in_provider : null,
+    });
+    throw error;
+  }
   const authTimeSeconds =
     typeof request.auth?.token?.auth_time === 'number' ? request.auth.token.auth_time : 0;
 

@@ -191,6 +191,17 @@ function ReauthStep({
         subtitle={t('security.deleteAccountFlow.reauth.description')}
       />
 
+      {/*
+        Rendered ABOVE the password field/CTA (unlike `ConfirmStep`, where it
+        stays below): right after a failed submit the on-screen keyboard is
+        still up, pushing anything placed after the button out of view in
+        this ScrollView — an error banner below the button risked being
+        invisible exactly when it matters (account-deletion password-reauth
+        audit: a rejection the user never scrolled to see read, from their
+        side, as "nothing happened, it just asked for the password again").
+      */}
+      {issue ? <Feedback issue={issue} message={issueMessage(issue, t)} /> : null}
+
       <ReauthenticationMethods
         providers={providers}
         password={password}
@@ -201,8 +212,6 @@ function ReauthStep({
         onTogglePassword={onTogglePassword}
         onConfirm={onConfirmProvider}
       />
-
-      {issue ? <Feedback issue={issue} message={issueMessage(issue, t)} /> : null}
     </View>
   );
 }

@@ -83,6 +83,20 @@ describe('DeleteAccountScreen — password visibility toggle actually works', ()
   });
 });
 
+describe('DeleteAccountScreen — reauth error banner is never hidden below the fold (password-reauth loop audit)', () => {
+  it('ReauthStep renders the Feedback banner BEFORE ReauthenticationMethods, not after — a rejection must be visible without scrolling past the keyboard/CTA', () => {
+    const reauthStepBody = CODE.slice(
+      CODE.indexOf('function ReauthStep('),
+      CODE.indexOf('function ConfirmStep('),
+    );
+    const feedbackIndex = reauthStepBody.indexOf('<Feedback');
+    const methodsIndex = reauthStepBody.indexOf('<ReauthenticationMethods');
+    expect(feedbackIndex).toBeGreaterThan(-1);
+    expect(methodsIndex).toBeGreaterThan(-1);
+    expect(feedbackIndex).toBeLessThan(methodsIndex);
+  });
+});
+
 describe('DeleteAccountScreen — no hardcoded strings for user-facing copy', () => {
   it('every visible label goes through t(...)', () => {
     // Heuristic guard, not exhaustive: the strings a naive implementation
