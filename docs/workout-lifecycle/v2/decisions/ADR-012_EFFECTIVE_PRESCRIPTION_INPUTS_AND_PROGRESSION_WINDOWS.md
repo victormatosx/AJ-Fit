@@ -52,4 +52,3 @@ history is synthesized for a lone legacy baseline.
 - account deletion needs no new resource handler because snapshots are
   embedded in already-deleted ProgramInstance/pending documents;
 - Firestore Rules must validate snapshot shape and prevent historical mutation.
-

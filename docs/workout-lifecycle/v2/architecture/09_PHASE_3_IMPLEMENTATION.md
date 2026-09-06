@@ -1,6 +1,6 @@
 # Phase 3 Implementation — Prescription Evolution Engine
 
-**Status:** IMPLEMENTED for Phase 3 scope (pure "next prescription candidate" generation only)  
+**Status:** IMPLEMENTED for Phase 3 scope (pure "next prescription candidate" generation only)
 **Overall V2 Implementation:** PARTIAL
 
 ## What this phase answers

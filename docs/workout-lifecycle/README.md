@@ -1,7 +1,7 @@
 # AJ Fit — Workout Lifecycle
 
-**Status:** Documentation index  
-**Target specification:** `v2/`  
+**Status:** Documentation index
+**Target specification:** `v2/`
 **Current runtime baseline:** Progression Engine V1 audited on 2026-08-28
 
 This directory separates the currently implemented lifecycle from the approved target model. The V2 documents are **TARGET_SPEC** unless explicitly marked otherwise; they must not be interpreted as already implemented.

@@ -18,6 +18,383 @@ Este documento é a fonte oficial de histórico do projeto.
 
 ---
 
+Data: 2026-09-01
+Responsável: Codex — Agente Frontend
+Categoria: [HARDENING]
+
+Descrição:
+Concluída a Fase 7 de integração do Live Rest Timer. O fluxo ponta a ponta foi
+reauditado desde `completeSet` até `advanceAfterRest`, mantendo o domínio
+React Native como única fonte de verdade e `endsAt` como deadline único. iOS e
+Android continuam recebendo somente timestamps absolutos e dados mínimos de
+apresentação; nenhuma superfície nativa processa expiração ou avança a workout.
+
+Cleanup e identidade:
+Foi criado um cleanup central idempotente para remover, em paralelo e de forma
+fail-open, o registro persistido e qualquer apresentação nativa órfã. Ele é
+executado no cold start sem workout restaurável, antes do logout e no shutdown
+de exclusão de conta. O provider também passa a ser identificado pelo `uid`,
+garantindo remount/cleanup numa troca direta de conta. Android cancela o ID
+`41704`; iOS enumera e encerra Live Activities existentes. Encerramento não
+depende mais da capability de publicação, cobrindo permissão revogada depois do
+start.
+
+Corridas e deduplicação:
+A fila da facade preserva `start → update → end/cleanup`. Foram protegidos por
+teste start/cancel rápido, start/update/cleanup, cleanup repetido, binário nativo
+antigo sem `cleanup`, capabilities revogadas, três `+15` consecutivos e reuso da
+mesma sessão/superfície. A transição de expiração continua síncrona e consumível
+uma única vez por `restId`.
+
+iOS e localização:
+O plugin CNG agora modela uma dependência explícita do app para a Widget
+Extension, além do embed phase, e inclui um String Catalog versionado em
+pt-BR/en/es. O prebuild iOS limpo recriou target, resources, bundle ID e
+dependência; `pod install` confirmou o autolinking do módulo. Por solicitação do
+responsável pelo projeto, não foi gerado build Xcode: signing, execução e QA
+visual ficam para o dispositivo físico dele.
+
+Observabilidade e validação:
+Logs temporários da Fase 6 foram reduzidos aos eventos úteis de início,
+atualização, encerramento, unsupported/fallback, erro nativo e permissão negada,
+sem eventos por segundo. Testes focados passaram (102), a suíte completa passou
+(3194 testes; quatro skips preexistentes), typecheck e auditoria i18n passaram
+sem bloqueios. O assemble debug Android passou com JDK 17, compile/target SDK 36
+e o módulo `ajfit-rest-activity` autolinkado. Não há FGS, AlarmManager, overlay,
+loop em background ou atualização nativa por segundo.
+
+Limitação de aceite:
+O QA visual em aparelhos, Dynamic Island, Lock Screen, promoção Android 16 e
+force quit não foi executado nesta rodada. O código e os builds automatizáveis
+estão verdes, mas a aprovação de produção permanece condicionada ao checklist
+manual versionado em `docs/28_live_rest_timer_qa_final.md`.
+
+Assinatura:
+Codex — 2026-09-01 — Integração final e hardening cross-platform do Live Rest Timer.
+
+---
+
+Data: 2026-08-26
+Responsável: Codex — Agente Frontend
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Implementada a Fase 6 do Live Rest Timer como progressive enhancement da
+ongoing notification Android da Fase 4. O módulo mantém o mesmo estado
+(`startedAt`/`endsAt` absolutos), canal `rest_timer`, notification ID `41704`,
+chronometer regressivo e deep link. Em API 24–35 o builder anterior permanece
+inalterado; em API 36+ ele é enriquecido no mesmo ciclo de build e publicação.
+
+APIs e compatibilidade:
+As assinaturas foram conferidas diretamente nos `android.jar` 36 e 37
+instalados. API 36 oferece `Notification.ProgressStyle`,
+`hasPromotableCharacteristics`, `FLAG_PROMOTED_ONGOING`,
+`setShortCriticalText` e `canPostPromotedNotifications`. O método de conveniência
+`setRequestPromotedOngoing` e a constante compilável
+`POST_PROMOTED_NOTIFICATIONS` aparecem no SDK 37. Para manter compileSdk 36, o
+pedido usa o extra documentado `android.requestPromotedOngoing`, exatamente
+como o AndroidX Core 1.17 já presente no grafo, e a permissão é declarada pelo
+nome estável no manifesto. Todas as referências de framework API 36 estão
+isoladas em objeto com guard explícito de `SDK_INT`.
+
+Feature detection e fallback:
+`getCapabilities` só resolve `android-live-update` quando a notification normal
+pode ser publicada, o SDK é 36+, a permissão/configuração de promoção está
+declarada, `canPostPromotedNotifications()` permite promoção e a notification
+construída retorna `hasPromotableCharacteristics()`. Negação ou inelegibilidade
+resolve automaticamente `android-notification`; apenas impossibilidade real de
+publicar a superfície normal resolve `none`. A tela de Settings específica foi
+catalogada para diagnóstico, mas nunca é aberta automaticamente.
+
+ProgressStyle e conteúdo:
+O progresso numérico é derivado de `startedAt`, `endsAt` e do relógio apenas no
+momento de construir a notification. Não existe atualização por segundo; o
+chronometer do SystemUI continua sendo a fonte dinâmica do countdown. A
+superfície usa título de descanso, exercício, série e o texto crítico estático
+`REST`, evitando representar um relógio estático incorreto.
+
+Ciclo de vida e observabilidade:
+`start` e `update` reconstruem a mesma notification; `completed`, `cancelled` e
+`workout_ended` continuam cancelando o mesmo ID. Foram adicionados logs de SDK,
+permissão de promoção, qualificabilidade, publicação e fallback, sem ticker.
+Não foram adicionados Service/Foreground Service, AlarmManager, overlay, ação
+externa, dependência ou campo Android no contrato TypeScript.
+
+Validação:
+Prebuild Android limpo executado com Expo 56, autolinking e manifesto mesclado
+revalidados. A suíte Vitest completa, typecheck, compilação Kotlin com JDK 17 e
+assemble debug arm64 passaram. Testes estruturais protegem guard API 36,
+ProgressStyle, promoção, fallback, ID/chronometer, ausência de ticker, FGS,
+AlarmManager e implementação de overlay. O runtime visual continua dependente
+de imagem/dispositivo com a promoção disponibilizada pelo sistema e de uma
+sessão de treino autenticada; a decisão visual final pertence ao SystemUI.
+
+Assinatura:
+Codex — 2026-08-26 — Android Live Updates com promoção nativa e fallback integral.
+
+---
+
+Data: 2026-08-25
+Responsável: Codex — Agente Frontend
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Implementada a Fase 5 do Live Rest Timer com uma Widget Extension iOS
+reproduzível por CNG e uma ponte Expo Modules para ActivityKit. O contrato
+TypeScript não mudou: `sessionId`, `startedAt`, `endsAt`, nome de apresentação
+do exercício e série/total continuam sendo o único payload. O iOS não conhece
+templates T001-T090, modificadores, duração de descanso ou regras da workout.
+
+Infraestrutura CNG:
+O plugin local `plugins/rest-activity` copia fontes Swift versionadas, cria o
+target `AJFitRestActivityExtension`, usa o bundle ID
+`com.ajfit.app.RestActivity`, deployment target 16.4, incorpora o `.appex` no
+app e declara a extension em
+`extra.eas.build.experimental.ios.appExtensions`. O mesmo plugin configura
+`NSSupportsLiveActivities` no Info.plist principal. Nenhuma edição manual da
+pasta `ios/` é fonte de verdade.
+
+App Group:
+Não foi criado. App e extension não compartilham storage: ActivityKit entrega
+`ActivityAttributes`/`ContentState` à Widget Extension, e a fonte de verdade
+persistida continua em `RestSessionContext`/`restSessionStorage`. Também não
+foram adicionados push entitlement, APNs ou atualizações remotas.
+
+ActivityKit:
+O módulo Apple `AJFitRestActivityModule` usa
+`ActivityAuthorizationInfo().areActivitiesEnabled` para capabilities. Start e
+update localizam a Activity pelo `sessionId`; o primeiro descanso chama
+`Activity.request`, e descansos seguintes atualizam a mesma Activity lógica.
+`staleDate` recebe o `endsAt` materializado. Qualquer falha é registrada no
+nativo e permanece fail-open para a facade/workout.
+
+Semântica entre descansos:
+`completed` e `cancelled` atualizam a Activity para uma apresentação dormente,
+sem encerrá-la, pois uma Activity encerrada pelo ActivityKit não pode ser
+reativada no próximo descanso. `workout_ended` é a única transição definitiva:
+chama `Activity.end` com dismissal imediato. Esse estado dormente é apenas
+apresentação; não avança série, não registra carga e não substitui a garantia
+exactly-once do domínio TypeScript.
+
+Apresentação:
+A Lock Screen e as variantes compact, minimal e expanded da Dynamic Island
+usam SwiftUI/WidgetKit. O countdown é renderizado por
+`Text(timerInterval:countsDown:)` sobre `startedAt...endsAt`; não existe
+`Timer`, loop por segundo ou background task. O tap em qualquer apresentação
+abre `ajfit://workout/active`, reaproveitando o parser, bootstrap e guards da
+Fase 1.
+
+Limitações:
+A workout completa ainda não é restaurável após process death. ActivityKit
+pode continuar exibindo o deadline, mas tocar a superfície não fabrica uma
+sessão. `staleDate` marca conteúdo desatualizado, não encerra automaticamente a
+Activity nem executa negócio; o encerramento confiável depende de
+`workout_ended` enquanto o domínio está disponível e das políticas de ciclo de
+vida do próprio iOS. Force quit e comportamento visual final continuam sujeitos
+às garantias do sistema. Signing da extension exige um App ID/profile próprio
+para `com.ajfit.app.RestActivity`, gerenciado pelo EAS ou Apple Developer.
+
+Assinatura:
+Codex — 2026-08-25 — Live Activity iOS por deadline absoluto e Widget Extension CNG.
+
+---
+
+Data: 2026-08-24
+Responsável: Codex — Agente Frontend
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Implementada a Fase 4 do Live Rest Timer com a primeira superfície nativa
+real: uma ongoing notification Android baseada no `endsAt` absoluto já
+materializado pelo domínio TypeScript. O módulo Expo local
+`AJFitRestActivity` implementa `getCapabilities`, `start`, `update` e `end`,
+mantendo a interface da facade da Fase 3. Não há implementação iOS.
+
+Countdown e apresentação:
+A notificação usa `setWhen(endsAt)`, `setUsesChronometer(true)`,
+`setChronometerCountDown(true)` e `setOngoing(true)`. O SystemUI renderiza o
+countdown sem ticker, loop ou atualização por segundo em Kotlin/JavaScript.
+Um notification ID constante substitui o descanso anterior; `+15s` reconstrói
+a mesma notificação com o novo `endsAt`, enquanto expiração, skip e fim da
+sessão a cancelam pelos motivos já definidos no domínio.
+
+Canal e navegação:
+Criado o canal estável `rest_timer` com importância `DEFAULT`, sem som,
+vibração ou badge e com visibilidade pública na lock screen. O small icon
+monocromático e strings pt/en/es vivem nos recursos versionados do próprio
+módulo, portanto são mesclados novamente em um prebuild limpo. O tap usa um
+`PendingIntent` imutável para `ajfit://workout/active`, reaproveitando os
+guards e o pending intent da Fase 1.
+
+Permissão:
+`android.permission.POST_NOTIFICATIONS` foi declarada em
+`expo.android.permissions`, conforme a configuração versionada do Expo 56.
+Em API 33+ o primeiro `start` relevante usa o permission manager já fornecido
+pelo Expo Modules. A tentativa é registrada em preferência nativa específica
+para não insistir após negação; ausência/negação resulta em no-op e
+capability indisponível nas chamadas seguintes. Não foi adicionada uma tela
+explicativa própria nesta fase: o pedido contextual mínimo é o prompt do
+sistema, disparado apenas pelo primeiro descanso.
+
+Compatibilidade e cleanup:
+API 24/25 usa a prioridade equivalente sem channel. API 26+ cria o channel e
+recalcula `setTimeoutAfter(remaining + 5s)` em cada start/update para limpeza
+visual após process death. O timeout não executa regra de workout. Não foram
+adicionados Foreground Service, AlarmManager, exact alarms, notificações com
+ações, Android Live Updates API 36, biblioteca externa ou persistência
+duplicada do estado de descanso.
+
+Testes:
+Atualizados os testes da facade para a capability
+`android-notification`. Adicionados guards estruturais para registro do Expo
+Module, permission no app config, API start/update/end, channel, chronometer,
+ID constante, timeout, deep link/PendingIntent, small icon e ausência de
+service/alarm/loop/Live Updates. O guard anterior que exigia somente o bridge
+TypeScript foi evoluído para proteger o registro Android-only.
+
+Limitações:
+O permission prompt ainda não possui pre-prompt visual customizado. Em API
+24/25 não existe `setTimeoutAfter`; se o processo morrer antes do domínio
+cancelar, o sistema pode manter a notificação além do fim. O treino completo
+continua não restaurável após process death; tocar a notificação abre a rota
+segura existente, sem fabricar ou autorizar uma sessão.
+
+Diagnóstico E2E no Android (2026-08-25):
+O primeiro APK testado continha o módulo e o recurso
+`ic_ajfit_rest_notification`, mas seu manifesto gerado estava desatualizado e
+não continha `POST_NOTIFICATIONS`. A evidência em runtime foi a entrada real no
+Kotlin seguida de `manifestDeclared=false`; não houve criação do canal nem
+chamada a `notify`. Um `expo prebuild --clean --platform android --no-install`
+isolado regenerou a permissão declarada em `app.json`; o APK recompilado então
+exibiu o prompt contextual, criou `rest_timer`, publicou o ID `41704` e mostrou
+o countdown na shade. `dumpsys notification` confirmou a notificação ativa,
+ícone `0x7f0800fe`, `when=endsAt`, chronometer regressivo, `PUBLIC`, importância
+3 e o mesmo ID após `+15s`. Skip removeu o ID e o tap entregou
+`active-workout` ao listener da Fase 1. Com a permissão revogada, capabilities
+retornou `none`, nenhum ID foi publicado e o timer interno continuou. Portanto,
+qualquer build feito a partir de diretórios nativos já existentes precisa
+regenerá-los depois de alterar `expo.android.permissions`; apenas executar
+Gradle sobre um manifesto gerado antigo não consome a mudança de `app.json`.
+O emulator usado estava com a Lock Screen desabilitada
+(`locksettings get-disabled=true`), então a exibição na Lock Screen permanece
+pendente de QA em um device/emulator com keyguard configurado.
+
+Assinatura:
+Codex — 2026-08-24 — Ongoing notification Android com countdown nativo por `endsAt`.
+
+---
+
+Data: 2026-08-24
+Responsável: Codex — Agente Frontend
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Implementada a Fase 3 do Live Rest Timer como uma fronteira opcional de
+apresentação, ainda sem superfície nativa real. O contrato
+`RestActivityState` contém somente `sessionId`, `startedAt`, `endsAt`, nome de
+exercício já materializado e série 1-based/total. Não atravessam a fronteira
+`remainingSeconds`, `restLeft`, exercício/workout completos, template,
+objetivo, modificadores, perfil ou estado Premium.
+
+Criada a facade `src/lib/restLiveActivity.ts` com `getCapabilities`, `start`,
+`update` e `end`. O adaptador `modules/ajfit-rest-activity/index.ts` usa
+`requireOptionalNativeModule('AJFitRestActivity')`; esta fase não inclui
+`expo-module.config.json`, Swift, Kotlin ou registro nativo, portanto módulos
+ausentes retornam `available: false`/`surface: 'none'` e todas as operações
+são no-op seguro. Erros e rejeições nativas são capturados e registrados sem
+interromper o domínio.
+
+Integração:
+O `WorkoutScreen` provisório resolve somente o nome traduzido do exercício ao
+chamar `startRest`. O `RestSessionContext` combina esse texto com o
+`ActiveRest` absoluto, mantém o snapshot visual apenas em memória e dispara a
+facade com `void`: início chama `start`, extensão chama `update` com o novo
+`endsAt`, consumo da expiração chama `end('completed')`, skip chama
+`end('cancelled')` e encerramento relevante da sessão chama
+`end('workout_ended')`. A garantia exactly-once continua sendo reivindicada
+por `restId` antes de qualquer `end` externo.
+
+Uma fila Promise mínima preserva a ordem de pedidos rápidos sem fazer o
+workout aguardar o nativo. O primeiro descanso abre a superfície lógica pelo
+`sessionId`; descansos posteriores da mesma execução usam `update`, evitando
+uma atividade lógica por série. O ticker visual continua restrito a
+`Date.now()`/render e nunca chama a facade.
+
+Desacoplamento:
+Nem contrato, facade, adaptador opcional ou Context importam o protótipo
+`EXERCISES`, a biblioteca T001-T090, templates, modificadores ou `ex.rest`.
+Quando a Workout Engine real materializar `effective_rest_seconds` e o nome
+de apresentação, ela poderá alimentar o mesmo Context/contrato sem mudança
+na interface futura de iOS/Android. Não foi criado AsyncStorage adicional.
+
+Testes:
+Adicionados testes de capabilities ausentes, no-op sem módulo, contrato
+temporal, payload sem remaining, reuso por sessão, extensão absoluta,
+captura de erros em start/update/end, ordem rápida e wiring estrutural de
+todas as transições. Também há guard explícito contra chamadas externas no
+ticker de um segundo e contra a criação de fontes Swift/Kotlin/config nesta
+fase.
+
+Assinatura:
+Codex — 2026-08-24 — Contrato e facade fail-open do Live Rest Timer.
+
+---
+
+Data: 2026-08-24
+Responsável: Codex — Agente Frontend
+Categoria: [IMPLEMENTAÇÃO]
+
+Descrição:
+Implementada a Fase 2 da fundação do Rest Timer. O countdown deixou de usar
+`restLeft--` como fonte de verdade e passou a representar cada descanso por
+`startedAt`/`endsAt` em epoch milliseconds. A UI mantém um ticker apenas para
+renderização e recalcula `ceil((endsAt - Date.now()) / 1000)` a cada tick;
+atrasos ou suspensão do JavaScript não acumulam drift.
+
+Criados `src/lib/restTimer.ts` (modelo/funções puras),
+`src/state/RestSessionContext.tsx` (estado temporal acima do
+`WorkoutScreen`) e `src/services/restSessionStorage.ts` (persistência mínima
+e serializada por transição). `workoutSessionId` e `restId` usam
+`expo-crypto/randomUUID()`, dependência que já existia no projeto. `+15s`
+estende apenas `endsAt`; a barra continua visualmente regressiva (cheia no
+início, vazia no fim), agora com duração efetiva `endsAt - startedAt` e clamp
+em `[0, 1]`.
+
+Expiração segue `running → expired → consumed`. O deadline absoluto, o
+retorno de `AppState` a `active` e o skip podem observar o mesmo descanso,
+mas a transição é reivindicada por `restId` no Context; apenas o consumidor
+vencedor chama o `advanceAfterRest()` já existente no `WorkoutScreen`.
+Registro de carga, PR, progressão de série/exercício e conclusão do treino
+não foram movidos para o timer.
+
+Persistência:
+O descanso é gravado apenas no início e em extensões, e removido em
+expiração, skip, encerramento ou cleanup. Não há escrita por segundo. Como o
+restante da workout engine ainda não é restaurável, um registro encontrado
+em cold start/process death é validado, descartado e removido; nenhum treino
+fictício é criado e `advanceAfterRest()` nunca é chamado sem o estado React
+que o possui.
+
+Testes:
+Adicionados testes unitários para criação, remaining absoluto, expiração,
+tick atrasado, extensões simples/múltiplas, clamp/progresso, estabilidade do
+session id, consumo único, skip concorrente e validação/persistência. O teste
+estrutural antigo que exigia literalmente `setRestLeft((r) => r - 1)` foi
+atualizado para proteger `endsAt`, derivação por `Date.now()`, preservação do
+timer `elapsed`, último set sem descanso e `advanceAfterRest()` como fronteira
+da workout engine.
+
+Limitação:
+Somente o descanso e a identidade da execução sobrevivem à desmontagem da
+tela. A engine completa (ordem, progresso, substituições e drafts de carga)
+ainda não possui persistência/restauração completa e não foi duplicada neste
+Context; process-death continua descartando o descanso com segurança.
+
+Assinatura:
+Codex — 2026-08-24 — Rest Timer absoluto, persistente e reconciliado por AppState.
+
+---
+
 # 2. Regras gerais
 
 Toda decisão relevante deve ser registrada.

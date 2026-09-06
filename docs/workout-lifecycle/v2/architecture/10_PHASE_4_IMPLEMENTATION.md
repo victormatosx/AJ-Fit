@@ -5,7 +5,7 @@
 > below. Current runtime keeps lifecycle level coherent with the active cycle;
 > earned state lives in immutable events/pending until activation.
 
-**Status:** IMPLEMENTED for Phase 4 scope  
+**Status:** IMPLEMENTED for Phase 4 scope
 **Overall V2 Implementation:** PARTIAL
 
 ## What this phase answers

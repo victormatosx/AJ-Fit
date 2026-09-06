@@ -26,6 +26,9 @@
       "package": "com.ajfit.mobile",
       "versionCode": 1,
       "googleServicesFile": "./google-services.json",
+      "permissions": [
+        "android.permission.POST_NOTIFICATIONS"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/aj-logo.png"
@@ -97,6 +100,7 @@
         }
       ],
       "expo-system-ui",
+      "./plugins/rest-activity",
       [
         "expo-navigation-bar",
         {

@@ -1,6 +1,6 @@
 # Product Principles
 
-**Status:** TARGET_SPEC  
+**Status:** TARGET_SPEC
 **Implementation:** PARTIAL — Phase 1 boundaries and persistent identities only
 
 1. **Motivation and consistency first.** Progression should make adherence feel meaningful.

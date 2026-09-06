@@ -46,9 +46,15 @@ import { useWorkoutPrescription } from '../workoutPrescription/useWorkoutPrescri
 import type { FinalWorkoutPlan, PrescriptionResult } from '../workoutPrescription/types';
 import { canRetryGeneration, prescriptionOutcomeKey } from '../workoutPrescription/uiOutcome';
 import type { WorkoutProgramSnapshot } from '../services/workoutPrograms';
-import { useWorkoutSchedule, weekdayOfLocalDate, type ScheduleResolution } from '../scheduleEngine';
+import {
+  localDateInTimezone,
+  useWorkoutSchedule,
+  weekdayOfLocalDate,
+  type ScheduleResolution,
+} from '../scheduleEngine';
 import { MissedSessionDecisionModal } from '../components/schedule/MissedSessionDecisionModal';
 import { useWorkoutExecution } from '../workoutExecution/useWorkoutExecution';
+import { activeExecutionId } from '../services/workoutExecutions';
 import { completeWorkoutSessionFlow } from '../workoutLifecycle/finishFlow';
 import { useWorkoutEvolution } from '../workoutEvolution/useWorkoutEvolution';
 import { processWorkoutLifecycleAfterSession } from '../services/workoutLifecycleApplication';
@@ -56,12 +62,22 @@ import { EvolutionUnlockScreen } from './EvolutionUnlockScreen';
 import { logInfo, logWarn } from '../lib/logger';
 import { resolveSessionDisplayName, type LooseTranslate } from '../workoutPrescription/sessionPresentation';
 import { useReducedMotionPreference } from '../lib/reducedMotion';
+import { useDeepLinkIntent } from '../state/DeepLinkContext';
+import { RestSessionProvider, useRestSession } from '../state/RestSessionContext';
 
 type SupportRoute =
   | { name: 'help' }
   | { name: 'article'; article: HelpArticle }
   | { name: 'form'; type: SupportTicketType; subject?: string }
   | { name: 'success' };
+
+function deviceTimezone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  } catch {
+    return 'UTC';
+  }
+}
 
 /**
  * Shared full-viewport geometry for every persistent screen — tabs and
@@ -92,9 +108,12 @@ const FULL_BLEED = StyleSheet.create({
  */
 export function AppShell() {
   const [showPremium, setShowPremium] = useState(false);
+  const { user } = useAuth();
   return (
     <PremiumActionProvider onRequestUpgrade={() => setShowPremium(true)}>
-      <AppShellContent showPremium={showPremium} setShowPremium={setShowPremium} />
+      <RestSessionProvider key={user?.uid ?? 'signed-out'}>
+        <AppShellContent showPremium={showPremium} setShowPremium={setShowPremium} />
+      </RestSessionProvider>
     </PremiumActionProvider>
   );
 }
@@ -130,6 +149,8 @@ function AppShellContent({
   // Fase 5 — single canonical evolution view-model/actions for the whole
   // app (docs product §144/§146); reconciles once per AppShell mount.
   const evolution = useWorkoutEvolution();
+  const { pendingIntent, consumeIntent } = useDeepLinkIntent();
+  const { beginWorkoutSession, endWorkoutSession } = useRestSession();
   const [activeSessionIndex, setActiveSessionIndex] = useState(0);
   const { isPremium } = useSubscription();
   const paywallPremiumReturnState = useRef(INITIAL_PAYWALL_PREMIUM_RETURN_STATE);
@@ -216,6 +237,28 @@ function AppShellContent({
     setTab(nextTab);
   };
 
+  useEffect(() => {
+    // RootNavigator and the workout-readiness gate have already resolved by
+    // the time AppShell mounts. Native taps still reuse the canonical start
+    // confirmation and Schedule Engine decision; a deep link never creates
+    // or materializes a workout session on its own.
+    if (!pendingIntent || overlayOpen || showEvolutionUnlock) return;
+
+    if (pendingIntent.type === 'active-workout') {
+      if (tab !== 'workout' && !showWorkoutConfirmation) {
+        setShowWorkoutConfirmation(true);
+      }
+      consumeIntent(pendingIntent);
+    }
+  }, [
+    consumeIntent,
+    overlayOpen,
+    pendingIntent,
+    showEvolutionUnlock,
+    showWorkoutConfirmation,
+    tab,
+  ]);
+
   // FASE 3→5 (docs/13_assinaturas_e_billing.md): START_WORKOUT is a Premium
   // capability. `selectTab` below always routes a tap on the Workout icon
   // through the same confirmation flow, so this is the single real entry
@@ -244,8 +287,23 @@ function AppShellContent({
     if (schedule.resolution.status === 'SESSION_READY') {
       const sessionIndex = schedule.resolution.sessionIndex;
       setActiveSessionIndex(sessionIndex);
+      const executionScopeId = activeProgram?.programInstanceId ?? activeProgram?.programId;
+      const scheduledLocalDate = localDateInTimezone(
+        new Date(),
+        schedule.config?.timezone ?? deviceTimezone(),
+      );
+      beginWorkoutSession(
+        executionScopeId
+          ? activeExecutionId(executionScopeId, sessionIndex, scheduledLocalDate)
+          : undefined,
+      );
       void execution.start(sessionIndex);
     }
+  };
+
+  const finishWorkoutSession = () => {
+    endWorkoutSession();
+    setTab('home');
   };
 
   return (
@@ -284,18 +342,23 @@ function AppShellContent({
           <WorkoutTabBlockedState
             resolution={schedule.resolution}
             plan={prescription.plan}
-            onDone={() => setTab('home')}
+            onDone={finishWorkoutSession}
           />
         )}
         {tab === 'workout' && prescription.status === 'SUCCESS' && schedule.resolution.status === 'SESSION_READY' && (
           <WorkoutScreen
             plan={prescription.plan}
             sessionIndex={activeSessionIndex}
-            onDone={() => setTab('home')}
+            onDone={finishWorkoutSession}
+            onMinimize={() => setTab('home')}
             onAbandon={() => { void execution.abandon(); }}
             onSetLogged={(exerciseIndex, setIndex, weightKg) =>
               execution.recordSet(exerciseIndex, setIndex, weightKg)}
             onSessionCompleted={() => {
+              // The workout engine remains authoritative for completion and
+              // evolution. The rest layer only closes its temporal surface
+              // before those durable transitions start.
+              endWorkoutSession();
               // Execution finishes first (COMPLETED/PARTIALLY_COMPLETED),
               // then the Schedule Engine advances via its own existing,
               // already-idempotent completion mechanism — no parallel

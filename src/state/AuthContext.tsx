@@ -38,6 +38,7 @@ import {
   refreshEmailVerificationStatus,
   sendVerificationEmail,
 } from '../services/emailVerification';
+import { cleanupRestSessionArtifacts } from '../services/restSessionCleanup';
 import { logInfo, logWarn } from '../lib/logger';
 import {
   createInitialProfileLoadState,
@@ -505,7 +506,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         }),
       reset: (email) => resetOperationFlight.run(() => resetPassword(email)),
-      logout: () => identityOperationFlight.run(() => signOutUser()),
+      logout: () => identityOperationFlight.run(async () => {
+        await cleanupRestSessionArtifacts();
+        await signOutUser();
+      }),
       refreshEmailVerification: async () => {
         const refreshed = await refreshEmailVerificationStatus();
         setUser(refreshed.user);

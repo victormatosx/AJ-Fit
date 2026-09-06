@@ -56,6 +56,7 @@ import {
 import { logPhotoVaultIssue } from './src/lib/photoVaultErrors';
 import { logInfo } from './src/lib/logger';
 import { configureWorkoutLifecycleTelemetry } from './src/workoutLifecycle/telemetryProvider';
+import { DeepLinkProvider } from './src/state/DeepLinkContext';
 
 // Operational lifecycle events are delivered to an authenticated/App-Check
 // callable and then Cloud Logging. Installation is synchronous; delivery is
@@ -591,17 +592,22 @@ function AppContent() {
                         switches; wraps the navigator so its AppState listener is
                         mounted for the whole session. */}
                     <PhotoVaultProvider>
-                      <StatusBar style={theme.statusBar.style} />
-                      <NativeThemeSync />
-                      {/* Business providers mount immediately so Firebase profile
-                          reads, RevenueCat identity synchronization and vault
-                          locking overlap the local theme/font/i18n bootstrap.
-                          Only the definitive UI is held behind this visual gate,
-                          preventing a stored Light preference from first painting
-                          the real app in Dark. */}
-                      {themeHydrated && fontsLoaded && i18nReady
-                        ? <RootNavigator />
-                        : <FullScreenLoading />}
+                      {/* Retains cold-start and foreground URLs until the guarded
+                          navigator can consume them. It never changes auth,
+                          prescription or schedule authority. */}
+                      <DeepLinkProvider>
+                        <StatusBar style={theme.statusBar.style} />
+                        <NativeThemeSync />
+                        {/* Business providers mount immediately so Firebase profile
+                            reads, RevenueCat identity synchronization and vault
+                            locking overlap the local theme/font/i18n bootstrap.
+                            Only the definitive UI is held behind this visual gate,
+                            preventing a stored Light preference from first painting
+                            the real app in Dark. */}
+                        {themeHydrated && fontsLoaded && i18nReady
+                          ? <RootNavigator />
+                          : <FullScreenLoading />}
+                      </DeepLinkProvider>
                     </PhotoVaultProvider>
                   </AppStateProviderConnected>
                 </UnitsProvider>

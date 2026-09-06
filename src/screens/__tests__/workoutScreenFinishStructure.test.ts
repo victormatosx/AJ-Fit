@@ -13,14 +13,14 @@ const source = readFileSync(new URL('../WorkoutScreen.tsx', import.meta.url), 'u
  * this phase's `restSeconds` wiring.
  */
 describe('WorkoutScreen.completeSet — last set of the whole workout never opens a rest screen (structural)', () => {
-  it('(13) `isLastOverall` short-circuits to `setFinished(true)` before any `setResting`/`setRestLeft` call', () => {
+  it('(13) `isLastOverall` short-circuits to `setFinished(true)` before starting a rest', () => {
     const fnStart = source.indexOf('const completeSet = () => {');
     expect(fnStart).toBeGreaterThan(-1);
-    const fnBody = source.slice(fnStart, source.indexOf('};', fnStart));
+    const fnBody = source.slice(fnStart, source.indexOf('const skipRest = () => {', fnStart));
 
     const isLastOverallCheck = fnBody.indexOf('if (isLastOverall)');
     const setFinishedCall = fnBody.indexOf('setFinished(true);');
-    const restingBranchIndex = fnBody.indexOf('setResting(true);');
+    const restingBranchIndex = fnBody.indexOf('startRest({');
 
     expect(isLastOverallCheck).toBeGreaterThan(-1);
     expect(setFinishedCall).toBeGreaterThan(-1);
