@@ -1,5 +1,5 @@
 /** Opt-in real Firestore Emulator coverage for the Fase 4 Lifecycle Orchestrator (activation, deferral, adaptation). */
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { initializeTestEnvironment, type RulesTestEnvironment } from '@firebase/rules-unit-testing';
@@ -17,6 +17,7 @@ import { EXERCISES_SEED } from '../../data/exercisesSeedData';
 import { isLimitationSafe } from '../../prescriptionEvolution/equivalence';
 import { countEarnedIntermediateCycles } from '../../progressionEngineV2/earnedCycles';
 import { completeWorkoutSessionFlow } from '../../workoutLifecycle/finishFlow';
+import { programInstanceIdForOperation } from '../../workoutLifecycle/domain';
 
 const PROJECT_ID = 'ajfit-rules-test';
 const UID = 'frank';
@@ -1106,11 +1107,43 @@ describe.skipIf(!enabled)('Fase 4 Lifecycle Orchestrator — real Firestore Emul
       expect(deferred.status).toBe('DEFERRED');
 
       // Real ACTIVATE — schedule/Home only reflect the new program from here.
+      const beginnerProgramInstanceId = before!.programInstance.programInstanceId;
+      const beginnerCycleId = before!.cycle.cycleId;
       const activated = await activatePendingEvolution({ uid: UID, trigger: 'MANUAL' });
       expect(activated.status).toBe('ACTIVATED');
       const after = await loadWorkoutLifecycle(UID);
       expect(after!.lifecycle.currentTrainingLevel).toBe('INTERMEDIATE');
       expect(after!.programInstance.programInstanceId).toBe(result.pending.targetProgramInstanceId);
+      expect(after!.lifecycle.activeProgramInstanceId).toBe(result.pending.targetProgramInstanceId);
+      // active content identity points at the exact plan just activated.
+      expect(after!.lifecycle.activeContentIdentity).toBe(result.pending.targetContentIdentity);
+      // A LEVEL_PROMOTION always starts a fresh cycle/Program Instance —
+      // the BEGINNER cycle/instance is superseded, never reused/mutated.
+      expect(after!.cycle.cycleId).not.toBe(beginnerCycleId);
+      expect(after!.lifecycle.currentCycleNumber).toBe(1);
+
+      const instances = await listProgramInstances(UID);
+      const beginnerInstance = instances.find((instance) => instance.programInstanceId === beginnerProgramInstanceId);
+      const intermediateInstance = instances.find((instance) => instance.programInstanceId === result.pending.targetProgramInstanceId);
+      expect(beginnerInstance?.supersededAt).not.toBeNull();
+      expect(intermediateInstance?.supersededAt).toBeNull();
+
+      const cycles = await listTrainingCycles(UID);
+      const beginnerCycle = cycles.find((cycle) => cycle.cycleId === beginnerCycleId);
+      const intermediateCycle = cycles.find((cycle) => cycle.cycleId === after!.cycle.cycleId);
+      expect(beginnerCycle?.status).toBe('COMPLETED');
+      expect(intermediateCycle?.status).toBe('ACTIVE');
+      expect(intermediateCycle?.level).toBe('INTERMEDIATE');
+      expect(intermediateCycle?.cycleNumber).toBe(1);
+
+      // Pending is consumed — nothing left to re-activate or re-prompt.
+      expect(await loadPendingEvolution(UID)).toBeNull();
+
+      // Home/program pointer (`workoutPrograms/{contentIdentity}`) reflects
+      // the newly-activated INTERMEDIATE content.
+      const activeProgram = await loadActiveWorkoutProgram(UID);
+      expect(activeProgram?.programId).toBe(result.pending.targetContentIdentity);
+      expect(activeProgram?.status).toBe('active');
     }, 30_000);
 
     it('NORMAL account (same zero-history fixture): QA prepare is never attempted by the real flow, and forcing EARN directly is denied', async () => {
@@ -1127,5 +1160,237 @@ describe.skipIf(!enabled)('Fase 4 Lifecycle Orchestrator — real Firestore Emul
       const result = await prepareEvolution({ uid: UID });
       expect(result.status).toBe('NO_ACTION');
     }, 30_000);
+
+    describe('PREPARE identity single-source-of-truth (root-cause fix, docs/workout-lifecycle/v2/qa/)', () => {
+      afterEach(() => {
+        vi.restoreAllMocks();
+      });
+
+      async function prepareBeginnerToIntermediate() {
+        await seedBaseUser();
+        const generated = await generateAndPersistWorkoutProgram({
+          uid: UID, questionnaireId: QUESTIONNAIRE_ID, questionnaireVersion: 1,
+          answers: BEGINNER_ANSWERS, source: 'onboarding',
+        });
+        if (generated.status !== 'SUCCESS') throw new Error('setup failed');
+        await setQaMode('TRANSITION');
+        const prepared = await prepareQaTransitionEvolution({ uid: UID });
+        expect(prepared.status).toBe('PREPARED');
+        if (prepared.status !== 'PREPARED') throw new Error('setup failed');
+        return prepared.pending;
+      }
+
+      it('write Pending -> fresh read from Firestore -> recompute identity from the exact read-back plan -> matches the frozen targetContentIdentity, and ACTIVATE is authorized (root-cause regression, item 8)', async () => {
+        const pending = await prepareBeginnerToIntermediate();
+
+        // A real BEGINNER->INTERMEDIATE promotion targets a non-beginner
+        // plan, so `adaptationStage` is legitimately absent — exactly the
+        // withoutUndefined boundary the bug hid in (item 9).
+        expect('adaptationStage' in (pending.plan as Record<string, unknown>)).toBe(false);
+
+        // Read the SAME Pending back from Firestore via a completely fresh
+        // path (not the in-memory object PREPARE just returned) — this is
+        // the real Firestore round trip the fix must survive.
+        const reread = await loadPendingEvolution(UID);
+        expect(reread).not.toBeNull();
+        const rereadPlan = reread!.plan as Parameters<typeof contentIdentityFor>[0]['plan'];
+        const recomputed = contentIdentityFor({
+          questionnaireId: reread!.targetQuestionnaireId,
+          questionnaireVersion: reread!.targetQuestionnaireVersion,
+          plan: rereadPlan,
+          template: {
+            id: reread!.targetTemplateId as Parameters<typeof contentIdentityFor>[0]['template']['id'],
+            version: reread!.targetTemplateVersion,
+            contentHash: reread!.targetTemplateContentHash,
+          },
+        });
+        expect(recomputed).toBe(reread!.targetContentIdentity);
+        expect(recomputed).toBe(pending.targetContentIdentity);
+
+        // And the real, unmodified ACTIVATE path is authorized end to end.
+        const activated = await activatePendingEvolution({ uid: UID, trigger: 'MANUAL' });
+        expect(activated.status).toBe('ACTIVATED');
+        if (activated.status === 'ACTIVATED') {
+          expect(activated.program.programId).toBe(pending.targetContentIdentity);
+        }
+      }, 30_000);
+
+      it('targetPrescriptionIdentity equals plan.planId on the plan actually read back from Firestore (item 4)', async () => {
+        const pending = await prepareBeginnerToIntermediate();
+        const reread = await loadPendingEvolution(UID);
+        expect(reread!.targetPrescriptionIdentity).toBe((reread!.plan as { planId: string }).planId);
+        expect(reread!.targetPrescriptionIdentity).toBe(pending.targetPrescriptionIdentity);
+      }, 30_000);
+
+      it('targetProgramInstanceId is a pure function of idempotencyKey, unaffected by plan content — unchanged by this fix (item 5)', async () => {
+        const pending = await prepareBeginnerToIntermediate();
+        expect(pending.targetProgramInstanceId).toBe(programInstanceIdForOperation(`activation:${pending.idempotencyKey}`));
+      }, 30_000);
+
+      it('the pre-write defensive invariant fails PREPARE loudly and diagnosably, and persists nothing, if the identity and the plan ever diverge again (item 3)', async () => {
+        await seedBaseUser();
+        const generated = await generateAndPersistWorkoutProgram({
+          uid: UID, questionnaireId: QUESTIONNAIRE_ID, questionnaireVersion: 1,
+          answers: BEGINNER_ANSWERS, source: 'onboarding',
+        });
+        if (generated.status !== 'SUCCESS') throw new Error('setup failed');
+        await setQaMode('TRANSITION');
+
+        // Force the invariant's recompute to disagree with the frozen
+        // `targetContentIdentity`, simulating a future edit that
+        // reintroduces two divergent plan representations. `prepareEvolution`
+        // (which `prepareQaTransitionEvolution` delegates to) transparently
+        // retries a failed `prepareEvolutionAttempt` up to 3 times, each
+        // attempt making its own 3 `contentIdentityFor` calls (candidate,
+        // persisted-plan identity, defensive invariant) — so the mock must
+        // tamper the 3rd call of EVERY attempt (`% 3 === 0`), not just a
+        // single global 3rd call, to observe the invariant actually winning
+        // over the retry instead of being silently absorbed by it.
+        const workoutProgramsModule = await import('../workoutPrograms');
+        const realContentIdentityFor = workoutProgramsModule.contentIdentityFor;
+        let callCount = 0;
+        const identitySpy = vi.spyOn(workoutProgramsModule, 'contentIdentityFor')
+          .mockImplementation((...args: Parameters<typeof realContentIdentityFor>) => {
+            callCount += 1;
+            const real = realContentIdentityFor(...args);
+            return callCount % 3 === 0 ? `${real}_TAMPERED` : real;
+          });
+
+        try {
+          const result = await prepareQaTransitionEvolution({ uid: UID });
+          // Every retry attempt hits the same tampered invariant, so all 3
+          // are exhausted — `prepareEvolution` reports failure as a typed
+          // result rather than a rejection (its documented retry contract).
+          expect(result.status).toBe('PREPARATION_FAILED');
+          const afterFailure = await loadPendingEvolution(UID);
+          expect(afterFailure).toBeNull(); // nothing partially/inconsistently persisted across any attempt
+        } finally {
+          identitySpy.mockRestore();
+        }
+      }, 30_000);
+
+      it('permanent telemetry never fires for a freshly-prepared Pending (docs/workout-lifecycle/v2/qa/)', async () => {
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        await prepareBeginnerToIntermediate();
+        await activatePendingEvolution({ uid: UID, trigger: 'MANUAL' });
+        expect(warnSpy.mock.calls.some(([line]) => String(line).includes('pending_content_identity_inconsistent'))).toBe(false);
+      }, 30_000);
+
+      it('permanent telemetry fires for a legacy Pending whose targetContentIdentity predates this fix — existing broken Pending (docs/workout-lifecycle/v2/qa/)', async () => {
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+        // Simulate exactly this account's real, pre-existing broken artifact:
+        // a Pending whose `targetContentIdentity` no longer matches its own
+        // persisted `plan` — never producible by the fixed PREPARE, only by
+        // directly corrupting the document (Rules-disabled, test-only, same
+        // technique `seedBaseUser` uses elsewhere).
+        await seedBaseUser();
+        const generated = await generateAndPersistWorkoutProgram({
+          uid: UID, questionnaireId: QUESTIONNAIRE_ID, questionnaireVersion: 1,
+          answers: BEGINNER_ANSWERS, source: 'onboarding',
+        });
+        if (generated.status !== 'SUCCESS') throw new Error('setup failed');
+        await setQaMode('TRANSITION');
+        const prepared = await prepareQaTransitionEvolution({ uid: UID });
+        if (prepared.status !== 'PREPARED') throw new Error('setup failed');
+        const originalPlan = prepared.pending.plan as Record<string, unknown>;
+        await testEnv.withSecurityRulesDisabled(async (ctx) => {
+          await setDoc(doc(ctx.firestore(), 'users', UID, 'pendingEvolutions', 'current'), {
+            ...prepared.pending,
+            plan: { ...originalPlan, limitationDatasetVersion: 'CORRUPTED_LEGACY_ARTIFACT' },
+          });
+        });
+
+        await activatePendingEvolution({ uid: UID, trigger: 'MANUAL' }).catch(() => undefined);
+        const call = warnSpy.mock.calls.find(([line]) => String(line).includes('pending_content_identity_inconsistent'));
+        expect(call).toBeDefined();
+        const [line, context] = call as [string, Record<string, unknown>];
+        expect(line).toBe('[workout_evolution] pending_content_identity_inconsistent');
+        expect(context.pendingEvolutionId).toBe(prepared.pending.pendingEvolutionId);
+        // No plan/session/questionnaire content in the permanent log.
+        expect(JSON.stringify(warnSpy.mock.calls)).not.toMatch(/sessions|exercises|exerciseId|limitationDataset/);
+      }, 30_000);
+    });
+
+    describe('root-cause fix — versions key-order canonicalization survives a real Firestore round trip (docs/workout-lifecycle/v2/qa/)', () => {
+      afterEach(() => {
+        vi.restoreAllMocks();
+      });
+
+      async function prepareBeginnerToIntermediate() {
+        await seedBaseUser();
+        const generated = await generateAndPersistWorkoutProgram({
+          uid: UID, questionnaireId: QUESTIONNAIRE_ID, questionnaireVersion: 1,
+          answers: BEGINNER_ANSWERS, source: 'onboarding',
+        });
+        if (generated.status !== 'SUCCESS') throw new Error('setup failed');
+        await setQaMode('TRANSITION');
+        const prepared = await prepareQaTransitionEvolution({ uid: UID });
+        expect(prepared.status).toBe('PREPARED');
+        if (prepared.status !== 'PREPARED') throw new Error('setup failed');
+        return prepared.pending;
+      }
+
+      it('a Pending whose persisted `plan.versions` has a DIFFERENT (but content-identical) key order than what PREPARE originally hashed still activates — this is the exact real-device failure mode for wpe_e3c68302, reproduced via a real Firestore write/read, not an in-memory object', async () => {
+        const pending = await prepareBeginnerToIntermediate();
+        const originalPlan = pending.plan as Record<string, unknown>;
+        const originalVersions = originalPlan.versions as Record<string, string>;
+
+        // Real Firestore round trip: overwrite ONLY key order (same keys,
+        // same values) — Rules are bypassed purely to plant this fixture,
+        // exactly like `seedBaseUser` does elsewhere; Pending is backend-
+        // owned so no real client could perform this write itself. (This
+        // local emulator's storage layer happens to normalize the order
+        // back on read regardless of what's written — confirmed separately
+        // — so this test cannot assert the order survived; the real device
+        // reordering is the evidence for that. What this DOES prove is that
+        // the fix produces the correct identity from whatever order a read
+        // returns, end to end through a real write/read, not an in-memory
+        // object — the exact real-device failure mode for wpe_e3c68302.)
+        const reordered = Object.fromEntries([...Object.entries(originalVersions)].reverse());
+        await testEnv.withSecurityRulesDisabled(async (ctx) => {
+          await setDoc(doc(ctx.firestore(), 'users', UID, 'pendingEvolutions', 'current'), {
+            ...pending,
+            plan: { ...originalPlan, versions: reordered },
+          });
+        });
+
+        const activated = await activatePendingEvolution({ uid: UID, trigger: 'MANUAL' });
+        expect(activated.status).toBe('ACTIVATED');
+        if (activated.status === 'ACTIVATED') {
+          expect(activated.program.programId).toBe(pending.targetContentIdentity);
+        }
+      }, 30_000);
+
+      it('the permanent `pending_content_identity_inconsistent` telemetry never fires for this reordered-but-content-identical case (it is no longer an inconsistency)', async () => {
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        const pending = await prepareBeginnerToIntermediate();
+        const originalPlan = pending.plan as Record<string, unknown>;
+        const reordered = Object.fromEntries([...Object.entries(originalPlan.versions as Record<string, string>)].reverse());
+        await testEnv.withSecurityRulesDisabled(async (ctx) => {
+          await setDoc(doc(ctx.firestore(), 'users', UID, 'pendingEvolutions', 'current'), {
+            ...pending,
+            plan: { ...originalPlan, versions: reordered },
+          });
+        });
+
+        await activatePendingEvolution({ uid: UID, trigger: 'MANUAL' });
+        expect(warnSpy.mock.calls.some(([line]) => String(line).includes('pending_content_identity_inconsistent'))).toBe(false);
+      }, 30_000);
+
+      it('a GENUINE content change to `versions` (not just reordering) is still detected and fails authorization closed — canonicalization never weakens the real check', async () => {
+        const pending = await prepareBeginnerToIntermediate();
+        const originalPlan = pending.plan as Record<string, unknown>;
+        const tampered = { ...(originalPlan.versions as Record<string, string>), safetyRules: '9.9.9' };
+        await testEnv.withSecurityRulesDisabled(async (ctx) => {
+          await setDoc(doc(ctx.firestore(), 'users', UID, 'pendingEvolutions', 'current'), {
+            ...pending,
+            plan: { ...originalPlan, versions: tampered },
+          });
+        });
+
+        await expect(activatePendingEvolution({ uid: UID, trigger: 'MANUAL' })).rejects.toThrow();
+      }, 30_000);
+    });
   });
 });

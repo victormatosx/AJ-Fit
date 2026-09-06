@@ -1,6 +1,7 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { deleteApp, initializeApp, type App } from 'firebase-admin/app';
 import { getFirestore, Timestamp, type Firestore } from 'firebase-admin/firestore';
+import { logger } from 'firebase-functions/v2';
 
 import { authorizeWorkoutLifecycleMutationHandler, authoritativeEarnedFact } from '../authorizeMutation';
 import { seedRealPrescriptionCatalog } from './realCatalogFixture';
@@ -160,6 +161,132 @@ describe.skipIf(!enabled)('Workout Lifecycle authority — real Firestore Emulat
         pendingEvolutionId: 'wpe_forged', targetProgramInstanceId: 'wpi_forged',
       },
     } as never, db)).rejects.toMatchObject({ code: 'aborted' });
+  });
+
+  // QA_TRANSITION forensic follow-up (docs/workout-lifecycle/v2/qa/): a real
+  // "PREPARAR PRÓXIMA EVOLUÇÃO" -> ACTIVATE round trip on a QA_TRANSITION
+  // account produced a 403 `activation_does_not_match_authoritative_pending`
+  // whose specific mismatching clause could not be attributed from Cloud
+  // Logging (the six comparisons were OR'd into one throw). These tests
+  // pin down that the diagnostic logging added alongside the throw changes
+  // NOTHING about which requests are authorized vs. denied — only ONE test
+  // below authorizes; every mismatch variant must still deny with the exact
+  // same HttpsError code+message as before this change.
+  describe('ACTIVATE — activation must match the authoritative pending evolution byte-for-byte', () => {
+    const PENDING_ID = 'wpe_1';
+    const IDEMPOTENCY_KEY = `activation:${PENDING_ID}`;
+    const LEVEL_PROMOTED = 'LEVEL_PROMOTED';
+    const validInputs = completeInputs({ level: 'intermediate' });
+    const validPlan = {
+      planId: 'rx_promoted', templateId: 'T001',
+      sessions: [{ exercises: [{ exerciseId: 'lat-pulldown', sets: 3 }] }],
+    };
+    const validSnapshot = {
+      snapshotId: snapshotIdFor('LEVEL_PROMOTION', validInputs), schemaVersion: 1,
+      source: 'LEVEL_PROMOTION', inputs: validInputs,
+    };
+
+    async function seedPending() {
+      await db.collection('users').doc(UID).collection('pendingEvolutions').doc('current').set({
+        pendingEvolutionId: PENDING_ID, status: 'READY', type: 'LEVEL_PROMOTION',
+        fromLevel: 'BEGINNER', toLevel: 'INTERMEDIATE', quality: 'GOOD',
+        sourceProgramInstanceId: 'wpi_active', sourceCycleId: 'cyc_active',
+        targetProgramInstanceId: 'wpi_promoted', targetContentIdentity: 'wpg_promoted',
+        targetPrescriptionIdentity: 'rx_promoted',
+        plan: validPlan, targetPrescriptionInputSnapshot: validSnapshot,
+        idempotencyKey: IDEMPOTENCY_KEY,
+      });
+    }
+
+    function activateRequest(overrides: Record<string, unknown> = {}) {
+      return {
+        auth: { uid: UID },
+        data: {
+          operation: 'ACTIVATE', sourceProgramInstanceId: 'wpi_active', sourceCycleId: 'cyc_active',
+          pendingEvolutionId: PENDING_ID,
+          targetProgramInstanceId: 'wpi_promoted', targetContentIdentity: 'wpg_promoted',
+          targetPrescriptionIdentity: 'rx_promoted',
+          targetTrainingLevel: 'INTERMEDIATE', targetCycleNumber: 1,
+          questionnaireId: 'q1', questionnaireVersion: 1,
+          targetProgramSource: 'evolution_activation',
+          targetTemplateVersion: 1, targetTemplateSourceVersion: '1.0.0', targetTemplateContentHash: 'a'.repeat(64),
+          eventType: LEVEL_PROMOTED, eventId: lifecycleEventId(LEVEL_PROMOTED, IDEMPOTENCY_KEY),
+          idempotencyKey: IDEMPOTENCY_KEY,
+          targetPlan: validPlan, targetPrescriptionInputSnapshot: validSnapshot,
+          ...overrides,
+        },
+      } as never;
+    }
+
+    it('a fully matching ACTIVATE is authorized (case 1: valid activation)', async () => {
+      await seedPending();
+      const result = await authorizeWorkoutLifecycleMutationHandler(activateRequest(), db);
+      expect(result.grantId).toBe('current');
+    });
+
+    it.each([
+      ['targetProgramInstanceId (case 2)', { targetProgramInstanceId: 'wpi_forged' }],
+      ['targetContentIdentity (case 3)', { targetContentIdentity: 'wpg_forged' }],
+      ['targetPrescriptionIdentity (case 4)', { targetPrescriptionIdentity: 'rx_forged' }],
+      ['eventType (case 5)', {
+        eventType: 'EVOLUTION_ACTIVATED',
+        eventId: lifecycleEventId('EVOLUTION_ACTIVATED', IDEMPOTENCY_KEY),
+      }],
+      ['targetPlan (case 6)', {
+        targetPlan: { ...validPlan, sessions: [{ exercises: [{ exerciseId: 'lat-pulldown', sets: 5 }] }] },
+      }],
+      ['targetPrescriptionInputSnapshot (case 7)', {
+        targetPrescriptionInputSnapshot: { ...validSnapshot, inputs: { ...validInputs, days: 5 } },
+      }],
+    ])('mismatch of %s is still denied with the exact same reason as before instrumentation', async (_label, overrides) => {
+      await seedPending();
+      await expect(authorizeWorkoutLifecycleMutationHandler(activateRequest(overrides), db))
+        .rejects.toMatchObject({ code: 'permission-denied', message: 'activation_does_not_match_authoritative_pending' });
+      // No side effect leaked from a denied ACTIVATE — same as pre-existing behavior.
+      expect((await db.collection('users').doc(UID)
+        .collection('workoutLifecycleAuthorityGrants').doc('current').get()).exists).toBe(false);
+    });
+
+    it('mismatch of expected level/cycle (case 8: a real subcondition, distinct error message) is still denied', async () => {
+      await seedPending();
+      await expect(authorizeWorkoutLifecycleMutationHandler(activateRequest({ targetCycleNumber: 2 }), db))
+        .rejects.toMatchObject({ code: 'permission-denied', message: 'activation_cycle_semantics_not_authoritative' });
+    });
+
+    it('case 9: the diagnostic log identifies the mismatched field and carries only hashes/booleans/ids — never plan, questionnaire, or snapshot content', async () => {
+      const warnSpy = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+      try {
+        await seedPending();
+        const forgedPlan = {
+          ...validPlan,
+          sessions: [{ exercises: [{ exerciseId: 'lat-pulldown', sets: 5 }] }],
+        };
+        await expect(authorizeWorkoutLifecycleMutationHandler(
+          activateRequest({ targetPlan: forgedPlan }), db,
+        )).rejects.toMatchObject({ code: 'permission-denied' });
+
+        expect(warnSpy).toHaveBeenCalled();
+        const [message, context] = warnSpy.mock.calls[warnSpy.mock.calls.length - 1] as [string, Record<string, unknown>];
+        expect(message).toContain('activation_does_not_match_authoritative_pending');
+        expect(context.mismatchFields).toBe('targetPlan');
+
+        const serialized = JSON.stringify(context);
+        // No raw exercise/plan/questionnaire content ever reaches the log —
+        // only sha256 hex fingerprints, booleans, short ids, and level/cycle
+        // enum-like strings appear as values.
+        expect(serialized).not.toContain('lat-pulldown');
+        expect(serialized).not.toContain('exerciseId');
+        expect(serialized).not.toContain('sessions');
+        expect(serialized).not.toContain('specialConditions');
+        expect(serialized).not.toContain(JSON.stringify(validInputs).slice(0, 20));
+        for (const [key, value] of Object.entries(context)) {
+          if (typeof value !== 'string' || !/Fingerprint$|Hash$/.test(key)) continue;
+          expect(value).toMatch(/^[0-9a-f]{64}$/);
+        }
+      } finally {
+        warnSpy.mockRestore();
+      }
+    });
   });
 
   it('ADAPT never seals a knee-unsafe exercise even when the declared limitation would have allowed the client to ask for one', async () => {

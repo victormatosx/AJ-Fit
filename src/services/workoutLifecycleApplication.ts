@@ -1,5 +1,6 @@
 import { doc, runTransaction, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
+import { logWarn } from '../lib/logger';
 import {
   evolutionIdempotencyKey,
   lifecycleEventId,
@@ -322,6 +323,7 @@ async function prepareEvolutionAttempt(input: { uid: string; now?: Date }): Prom
       contentHash: evolutionResult.templateContentHash,
     },
   });
+
   const targetProgramInstanceId = programInstanceIdForOperation(`activation:${idempotencyKey}`);
   const pendingEvolutionId = pendingEvolutionIdForOperation(idempotencyKey);
   const pendingRef = pendingEvolutionRef(input.uid);
@@ -353,17 +355,43 @@ async function prepareEvolutionAttempt(input: { uid: string; now?: Date }): Prom
     version: canonical.targetTemplateVersion,
     contentHash: canonical.targetTemplateContentHash,
   };
+  // Single source of truth (docs/workout-lifecycle/v2/qa/ — root-cause fix
+  // for a real device bug): `pending.plan` is written as `withoutUndefined(
+  // canonical.targetPlan)`, a DIFFERENT object from `canonical.targetPlan`
+  // itself. Hashing the latter while persisting the former let the frozen
+  // `targetContentIdentity` silently stop matching the Pending's own
+  // content — the backend's `activation_does_not_match_authoritative_
+  // pending` check then (correctly) denied ACTIVATE. `persistedTargetPlan`
+  // is computed exactly once and is the ONLY plan object either hashed or
+  // written below, so the two can never diverge again.
+  const persistedTargetPlan = withoutUndefined(canonical.targetPlan);
   const targetContentIdentity = contentIdentityFor({
     questionnaireId: evolutionResult.questionnaireId,
     questionnaireVersion: evolutionResult.questionnaireVersion,
-    plan: canonical.targetPlan,
+    plan: persistedTargetPlan,
     template: canonicalTemplate,
   });
   if (
-    canonical.targetPrescriptionIdentity !== canonical.targetPlan.planId
+    canonical.targetPrescriptionIdentity !== persistedTargetPlan.planId
     || canonical.targetContentIdentity !== targetContentIdentity
   ) {
     throw new Error('WORKOUT_LIFECYCLE_CANONICAL_IDENTITY_INVALID');
+  }
+
+  // Defensive invariant, intentionally redundant with the single-source-of-
+  // truth fix above: recompute the identity one more time from the EXACT
+  // plan object about to be persisted, immediately before the write. Its
+  // only job is to make a future edit that reintroduces two divergent plan
+  // representations fail loudly and diagnosably during PREPARE, instead of
+  // surfacing later as a device-specific `permission-denied` during
+  // ACTIVATE. Must never succeed in persisting an inconsistent Pending.
+  if (contentIdentityFor({
+    questionnaireId: evolutionResult.questionnaireId,
+    questionnaireVersion: evolutionResult.questionnaireVersion,
+    plan: persistedTargetPlan,
+    template: canonicalTemplate,
+  }) !== targetContentIdentity) {
+    throw new Error('WORKOUT_LIFECYCLE_PENDING_IDENTITY_INCONSISTENT');
   }
 
   try {
@@ -402,14 +430,14 @@ async function prepareEvolutionAttempt(input: { uid: string; now?: Date }): Prom
       quality,
       sessionsCompletedAtEarn: earnedFact.sessionsCompletedAtEarn,
       adherenceAtEarnBp: earnedFact.adherenceAtEarnBp,
-      plan: withoutUndefined(canonical.targetPlan),
+      plan: persistedTargetPlan,
       targetContentIdentity,
       targetPrescriptionIdentity: canonical.targetPrescriptionIdentity,
       targetProgramInstanceId,
       targetQuestionnaireId: evolutionResult.questionnaireId,
       targetQuestionnaireVersion: evolutionResult.questionnaireVersion,
       targetPrescriptionInputSnapshot: evolutionResult.prescriptionInputSnapshot,
-      targetTemplateId: canonical.targetPlan.templateId,
+      targetTemplateId: persistedTargetPlan.templateId,
       targetTemplateVersion: canonical.targetTemplateVersion,
       targetTemplateSourceVersion: canonical.targetTemplateSourceVersion,
       targetTemplateContentHash: canonical.targetTemplateContentHash,
@@ -804,6 +832,27 @@ export async function activatePendingEvolution(input: {
         : pending.type === 'MOTIVATIONAL_RENEWAL'
           ? 'MOTIVATIONAL_RENEWAL'
           : 'CYCLE_EVOLUTION',
+    });
+  }
+
+  // Defensive telemetry (docs/workout-lifecycle/v2/qa/ — root-cause fix):
+  // PREPARE now guarantees `pending.targetContentIdentity` is derived from
+  // the exact object persisted as `pending.plan` (see the invariant in
+  // `prepareEvolutionAttempt`), so this can only ever fire for a Pending
+  // created before that fix shipped. Kept small and permanent (not
+  // DEV-gated — cheap, and contains no plan/session/questionnaire content)
+  // purely so a known legacy-broken Pending is distinguishable from a real
+  // regression in production logs, without reproducing the heavy forensic
+  // diagnostic that found this bug.
+  const activateContentIdentity = contentIdentityFor({
+    questionnaireId: pending.targetQuestionnaireId,
+    questionnaireVersion: pending.targetQuestionnaireVersion,
+    plan: pending.plan as Parameters<typeof saveAndActivateWorkoutProgram>[0]['plan'],
+    template: { id: template.id, version: template.version, contentHash: template.contentHash },
+  });
+  if (activateContentIdentity !== pending.targetContentIdentity) {
+    logWarn('workout_evolution', 'pending_content_identity_inconsistent', {
+      pendingEvolutionId: pending.pendingEvolutionId,
     });
   }
 

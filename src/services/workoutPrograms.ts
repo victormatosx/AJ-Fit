@@ -140,6 +140,30 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return proto === Object.prototype || proto === null;
 }
 
+/**
+ * Root-cause fix (docs/workout-lifecycle/v2/qa/ — confirmed via a real
+ * device: the React Native/Hermes Firestore client deserialized
+ * `plan.versions`, a Firestore map field, with a DIFFERENT (but
+ * content-identical) key order than the Node/Admin SDK for the exact same
+ * document — silently changing `JSON.stringify`'s output and therefore
+ * `contentIdentityFor`'s hash, even though `stableHash`/FNV-1a itself is
+ * fully ECMAScript-spec-deterministic and never at fault). Mirrors, field
+ * for field, the EXISTING `canonical()` helper already used by
+ * `functions/src/workoutLifecycle/authorizeMutation.ts` for its own
+ * plan-comparison checks — reused here, not reinvented, as the identity
+ * preimage's serializer so a value's position in the object literal (never
+ * incidental) is the only thing that can affect the hash, not incidental
+ * key insertion order carried over from any particular Firestore SDK/engine
+ * round trip.
+ */
+function canonicalStringify(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalStringify).join(',')}]`;
+  if (isPlainObject(value)) {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalStringify(value[key])}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
 export function withoutUndefined<T>(value: T): T {
   if (Array.isArray(value)) return value.map(withoutUndefined) as T;
   if (isPlainObject(value)) {
@@ -479,7 +503,40 @@ export function programIdentity(input: {
   plan: FinalWorkoutPlan;
   template: Pick<WorkoutTemplateDocument, 'id' | 'version' | 'sourceVersion' | 'contentHash'>;
 }): string {
-  return JSON.stringify({
+  // Delegates to the exact same canonical preimage `contentIdentityFor` uses
+  // (`sourceVersion` isn't part of the hash either way — only `id`/`version`/
+  // `contentHash` are read) so the two never risk drifting apart again.
+  return contentIdentityPreimage(input);
+}
+
+/**
+ * The exact deterministic `workoutPrograms/{contentIdentity}` id
+ * `saveAndActivateWorkoutProgram` will use for this `(questionnaireId,
+ * questionnaireVersion, plan, template)` combination — computed identically,
+ * before any write. Mirrors `programIdentity`'s exact JSON shape but only
+ * requires `id`/`version`/`contentHash` of the template (the only fields
+ * `programIdentity` reads), so a caller that already has those three (e.g.
+ * Fase 3's `PrescriptionEvolutionResult`) never needs to re-fetch the full
+ * template document just to predict the id.
+ */
+/**
+ * Purely mechanical extraction of `contentIdentityFor`'s preimage — the
+ * exact string handed to `stableHash` — with zero change to composition or
+ * key order (docs/workout-lifecycle/v2/qa/, forensic follow-up). Exists so
+ * DEV-only diagnostics can inspect the real preimage (length, external hash,
+ * per-field fingerprints) without ever re-implementing this JSON shape.
+ */
+export function contentIdentityPreimage(input: {
+  questionnaireId: string;
+  questionnaireVersion: number;
+  plan: FinalWorkoutPlan;
+  template: Pick<WorkoutTemplateDocument, 'id' | 'version' | 'contentHash'>;
+}): string {
+  // `canonicalStringify`, NOT raw `JSON.stringify` — see its doc comment.
+  // `versions` (the only nested object this reads) is now hashed by VALUE,
+  // never by whatever key order a particular Firestore SDK/engine happened
+  // to hand back.
+  return canonicalStringify({
     questionnaireId: input.questionnaireId,
     questionnaireVersion: input.questionnaireVersion,
     prescriptionId: input.plan.planId,
@@ -493,35 +550,13 @@ export function programIdentity(input: {
   });
 }
 
-/**
- * The exact deterministic `workoutPrograms/{contentIdentity}` id
- * `saveAndActivateWorkoutProgram` will use for this `(questionnaireId,
- * questionnaireVersion, plan, template)` combination — computed identically,
- * before any write. Mirrors `programIdentity`'s exact JSON shape but only
- * requires `id`/`version`/`contentHash` of the template (the only fields
- * `programIdentity` reads), so a caller that already has those three (e.g.
- * Fase 3's `PrescriptionEvolutionResult`) never needs to re-fetch the full
- * template document just to predict the id.
- */
 export function contentIdentityFor(input: {
   questionnaireId: string;
   questionnaireVersion: number;
   plan: FinalWorkoutPlan;
   template: Pick<WorkoutTemplateDocument, 'id' | 'version' | 'contentHash'>;
 }): string {
-  const identity = JSON.stringify({
-    questionnaireId: input.questionnaireId,
-    questionnaireVersion: input.questionnaireVersion,
-    prescriptionId: input.plan.planId,
-    templateId: input.template.id,
-    templateVersion: input.template.version,
-    templateContentHash: input.template.contentHash,
-    versions: input.plan.versions,
-    limitationDatasetVersion: input.plan.limitationDatasetVersion,
-    limitationDatasetHash: input.plan.limitationDatasetHash,
-    adaptationStage: input.plan.adaptationStage ?? null,
-  });
-  return `wpg_${stableHash(identity)}`;
+  return `wpg_${stableHash(contentIdentityPreimage(input))}`;
 }
 
 export async function saveAndActivateWorkoutProgram(input: {

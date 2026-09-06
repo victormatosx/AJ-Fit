@@ -21,6 +21,7 @@ import { resolveProgressionV2Config } from './prescriptionEngine/progressionEngi
 import type { TrainingCycle } from './prescriptionEngine/workoutLifecycle/types';
 import { isOperationBlockedByCircuitBreaker, loadWorkoutLifecycleCircuitBreakerConfig } from './circuitBreaker';
 import { progressionPolicyModeFor, resolveWorkoutLifecycleQaMode } from './qaPolicy';
+import { logWarn } from '../lib/logger';
 
 export const WORKOUT_LIFECYCLE_AUTHORITY_GRANT_ID = 'current';
 
@@ -119,13 +120,28 @@ function lifecycleStableHash(value: string): string {
   return (hash >>> 0).toString(16).padStart(8, '0');
 }
 
-function canonicalContentIdentity(input: {
+/**
+ * Root-cause fix (docs/workout-lifecycle/v2/qa/ — confirmed via a real
+ * device): a React Native/Hermes Firestore client can deserialize
+ * `plan.versions`, a Firestore map field, with a different (but
+ * content-identical) key order than this Cloud Function's own read of the
+ * same document — silently changing a plain `JSON.stringify`'s output and
+ * therefore the hash, even though `lifecycleStableHash`/FNV-1a itself is
+ * fully ECMAScript-spec-deterministic. Uses the EXISTING `canonical()`
+ * helper (already defined above and already used by this file's own
+ * plan-comparison checks) instead of raw `JSON.stringify`, so a value's
+ * position in the object literal below is the only thing that can affect
+ * the hash — never incidental key insertion order from any SDK/engine.
+ * Mirrored exactly by the client's `contentIdentityPreimage`
+ * (`src/services/workoutPrograms.ts`).
+ */
+export function canonicalContentIdentity(input: {
   questionnaireId: string;
   questionnaireVersion: number;
   plan: FinalWorkoutPlan;
   templateMetadata: { version: number; contentHash: string };
 }): string {
-  const identity = JSON.stringify({
+  const identity = canonical({
     questionnaireId: input.questionnaireId,
     questionnaireVersion: input.questionnaireVersion,
     prescriptionId: input.plan.planId,
@@ -899,12 +915,36 @@ async function validateRequest(uid: string, request: AuthorityRequest, firestore
     const pending = pendingSnapshot.data()!;
     const expectedEventType = pending.type === 'LEVEL_PROMOTION' ? 'LEVEL_PROMOTED'
       : pending.type === 'MOTIVATIONAL_RENEWAL' ? 'MOTIVATIONAL_RENEWAL_ACTIVATED' : 'EVOLUTION_ACTIVATED';
-    if (request.targetProgramInstanceId !== pending.targetProgramInstanceId
-      || request.targetContentIdentity !== pending.targetContentIdentity
-      || request.targetPrescriptionIdentity !== pending.targetPrescriptionIdentity
-      || canonical(request.targetPlan) !== canonical(pending.plan)
-      || canonical(request.targetPrescriptionInputSnapshot) !== canonical(pending.targetPrescriptionInputSnapshot)
-      || request.eventType !== expectedEventType) {
+    // Diagnostic only: each entry mirrors one clause of the OR-chain below so
+    // a `permission-denied` can be attributed to the exact clause that
+    // tripped it. Never fold this into the throw condition itself — the
+    // authorization result must stay byte-for-byte identical to the single
+    // combined boolean.
+    const activationMismatches: Array<[string, boolean]> = [
+      ['targetProgramInstanceId', request.targetProgramInstanceId !== pending.targetProgramInstanceId],
+      ['targetContentIdentity', request.targetContentIdentity !== pending.targetContentIdentity],
+      ['targetPrescriptionIdentity', request.targetPrescriptionIdentity !== pending.targetPrescriptionIdentity],
+      ['targetPlan', canonical(request.targetPlan) !== canonical(pending.plan)],
+      ['targetPrescriptionInputSnapshot',
+        canonical(request.targetPrescriptionInputSnapshot) !== canonical(pending.targetPrescriptionInputSnapshot)],
+      ['eventType', request.eventType !== expectedEventType],
+    ];
+    if (activationMismatches.some(([, mismatched]) => mismatched)) {
+      logWarn('workoutLifecycle.authorize', 'activation_does_not_match_authoritative_pending', {
+        mismatchFields: activationMismatches.filter(([, mismatched]) => mismatched).map(([field]) => field).join(','),
+        requestTargetProgramInstanceIdHash: stableHash(request.targetProgramInstanceId ?? null),
+        pendingTargetProgramInstanceIdHash: stableHash(pending.targetProgramInstanceId ?? null),
+        requestTargetContentIdentityHash: stableHash(request.targetContentIdentity ?? null),
+        pendingTargetContentIdentityHash: stableHash(pending.targetContentIdentity ?? null),
+        requestTargetPrescriptionIdentityHash: stableHash(request.targetPrescriptionIdentity ?? null),
+        pendingTargetPrescriptionIdentityHash: stableHash(pending.targetPrescriptionIdentity ?? null),
+        requestTargetPlanFingerprint: stableHash(request.targetPlan ?? null),
+        pendingTargetPlanFingerprint: stableHash(pending.plan ?? null),
+        requestPrescriptionInputSnapshotFingerprint: stableHash(request.targetPrescriptionInputSnapshot ?? null),
+        pendingPrescriptionInputSnapshotFingerprint: stableHash(pending.targetPrescriptionInputSnapshot ?? null),
+        requestEventType: request.eventType ?? null,
+        expectedEventType,
+      });
       throw new HttpsError('permission-denied', 'activation_does_not_match_authoritative_pending');
     }
     const expectedLevel = pending.toLevel;
@@ -914,6 +954,16 @@ async function validateRequest(uid: string, request: AuthorityRequest, firestore
         ? bundle.state.currentCycleNumber + 1
         : bundle.state.currentCycleNumber;
     if (request.targetTrainingLevel !== expectedLevel || request.targetCycleNumber !== expectedCycleNumber) {
+      logWarn('workoutLifecycle.authorize', 'activation_cycle_semantics_not_authoritative', {
+        mismatchFields: [
+          request.targetTrainingLevel !== expectedLevel ? 'targetTrainingLevel' : null,
+          request.targetCycleNumber !== expectedCycleNumber ? 'targetCycleNumber' : null,
+        ].filter((field): field is string => field !== null).join(','),
+        requestTargetTrainingLevel: request.targetTrainingLevel ?? null,
+        expectedTrainingLevel: expectedLevel ?? null,
+        requestTargetCycleNumber: request.targetCycleNumber ?? null,
+        expectedCycleNumber: expectedCycleNumber ?? null,
+      });
       throw new HttpsError('permission-denied', 'activation_cycle_semantics_not_authoritative');
     }
     await assertPlanSafe(request, firestore);
