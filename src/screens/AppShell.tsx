@@ -57,6 +57,8 @@ import { useWorkoutExecution } from '../workoutExecution/useWorkoutExecution';
 import { activeExecutionId } from '../services/workoutExecutions';
 import { completeWorkoutSessionFlow } from '../workoutLifecycle/finishFlow';
 import { useWorkoutEvolution } from '../workoutEvolution/useWorkoutEvolution';
+import { useWorkoutActivitySnapshot } from '../home/useWorkoutActivitySnapshot';
+import { useFrequencyWindow } from '../home/useFrequencyWindow';
 import { processWorkoutLifecycleAfterSession } from '../services/workoutLifecycleApplication';
 import { EvolutionUnlockScreen } from './EvolutionUnlockScreen';
 import { logInfo, logWarn } from '../lib/logger';
@@ -149,6 +151,24 @@ function AppShellContent({
   // Fase 5 — single canonical evolution view-model/actions for the whole
   // app (docs product §144/§146); reconciles once per AppShell mount.
   const evolution = useWorkoutEvolution();
+  // Home's "esta semana"/"sua frequência" sections — same authoritative
+  // trainingDays/activeRecoveryDays/timezone the Schedule Engine itself
+  // resolved (`schedule.config`), never a second computation of them.
+  const activatedAtLocalDate = (() => {
+    const authoritativeActivatedAt = activeProgram?.programInstanceActivatedAt ?? activeProgram?.activatedAt;
+    return authoritativeActivatedAt
+      ? localDateInTimezone(authoritativeActivatedAt.toDate(), schedule.config?.timezone ?? deviceTimezone())
+      : null;
+  })();
+  const activitySnapshot = useWorkoutActivitySnapshot({
+    timezone: schedule.config?.timezone ?? deviceTimezone(),
+    trainingDays: schedule.config?.trainingDays ?? [],
+    activeRecoveryDays: schedule.config?.activeRecoveryDays ?? [],
+    activatedAtLocalDate,
+  });
+  // "Sua frequência" — independently paginated (30-day blocks), same
+  // canonical `workoutExecutions` completion source, own bounded/cached read.
+  const frequencyWindow = useFrequencyWindow(schedule.config?.timezone ?? deviceTimezone());
   const { pendingIntent, consumeIntent } = useDeepLinkIntent();
   const { beginWorkoutSession, endWorkoutSession } = useRestSession();
   const [activeSessionIndex, setActiveSessionIndex] = useState(0);
@@ -336,6 +356,12 @@ function AppShellContent({
             onOpenProfile={() => setTab('profile')}
             evolutionViewModel={evolution.viewModel}
             onOpenEvolution={() => setShowEvolutionUnlock(true)}
+            weekOverview={activitySnapshot.week}
+            frequencyWindow={frequencyWindow.viewModel}
+            frequencyLoading={frequencyWindow.loading}
+            frequencyCanGoNext={frequencyWindow.canGoNext}
+            onFrequencyPrev={frequencyWindow.goPrev}
+            onFrequencyNext={frequencyWindow.goNext}
           />
         </PersistentScreen>
         {tab === 'workout' && prescription.status === 'SUCCESS' && schedule.resolution.status !== 'SESSION_READY' && (
@@ -390,6 +416,8 @@ function AppShellContent({
                     const lifecycleResult = await processWorkoutLifecycleAfterSession({ uid: user.uid });
                     if (lifecycleResult.autoActivated) await reloadPrescription();
                     await evolution.refresh();
+                    await activitySnapshot.reload();
+                    await frequencyWindow.reload();
                   },
                 });
                 // The "treino concluído" screen (WorkoutScreen's own

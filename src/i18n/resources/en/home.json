@@ -334,6 +334,34 @@
       "selectTab": "Show {{tab}} progress"
     }
   },
+  "activity": {
+    "programProgress": {
+      "title": "Program evolution"
+    },
+    "week": {
+      "title": "This week",
+      "summary": "{{completed}} of {{scheduled}} workouts done",
+      "status": {
+        "COMPLETED": "Workout completed",
+        "TODAY_COMPLETED": "Today's workout completed",
+        "TODAY_PENDING": "Today's workout pending",
+        "MISSED": "Workout not completed",
+        "UPCOMING": "Scheduled workout",
+        "ACTIVE_RECOVERY": "Active recovery",
+        "REST": "Rest day",
+        "BEFORE_PROGRAM": "Before the program started"
+      }
+    },
+    "frequency": {
+      "title": "Your frequency",
+      "summaryCurrent": "{{count}} workouts in the last 30 days",
+      "summaryPeriod": "{{count}} workouts in this period",
+      "cellCompleted": "{{date}} — workout completed",
+      "cellEmpty": "{{date}} — no workout logged",
+      "prev": "Previous 30-day period",
+      "next": "Next 30-day period"
+    }
+  },
   "consistencyUnavailable": {
     "title": "Consistency history isn't available yet",
     "body": "AJ Fit does not show a calendar until completed workout history can support it.",

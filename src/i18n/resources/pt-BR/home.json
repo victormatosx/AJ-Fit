@@ -334,6 +334,34 @@
       "selectTab": "Exibir progresso de {{tab}}"
     }
   },
+  "activity": {
+    "programProgress": {
+      "title": "Evolução do programa"
+    },
+    "week": {
+      "title": "Esta semana",
+      "summary": "{{completed}} de {{scheduled}} treinos concluídos",
+      "status": {
+        "COMPLETED": "Treino concluído",
+        "TODAY_COMPLETED": "Treino de hoje concluído",
+        "TODAY_PENDING": "Treino de hoje pendente",
+        "MISSED": "Treino não realizado",
+        "UPCOMING": "Treino programado",
+        "ACTIVE_RECOVERY": "Recuperação ativa",
+        "REST": "Dia de descanso",
+        "BEFORE_PROGRAM": "Antes do início do programa"
+      }
+    },
+    "frequency": {
+      "title": "Sua frequência",
+      "summaryCurrent": "{{count}} treinos nos últimos 30 dias",
+      "summaryPeriod": "{{count}} treinos neste período",
+      "cellCompleted": "{{date}} — treino concluído",
+      "cellEmpty": "{{date}} — nenhum treino registrado",
+      "prev": "Período de 30 dias anterior",
+      "next": "Próximo período de 30 dias"
+    }
+  },
   "consistencyUnavailable": {
     "title": "O histórico de consistência ainda não está disponível",
     "body": "O AJ Fit não mostra um calendário até que o histórico de treinos concluídos possa sustentá-lo.",

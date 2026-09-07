@@ -18,6 +18,11 @@ import { EvolutionTicker } from '../components/evolution/EvolutionTicker';
 import type { EvolutionViewModel } from '../workoutEvolution/types';
 import { BodyMuscleMap } from '../components/fitness/BodyMuscleMap';
 import { deriveSessionMuscles } from '../lib/sessionMuscles';
+import { ProgramProgressStrip } from '../components/home/ProgramProgressStrip';
+import { WeeklyOverview } from '../components/home/WeeklyOverview';
+import { FrequencyHeatmap } from '../components/home/FrequencyHeatmap';
+import type { WeekOverviewViewModel } from '../home/weekOverview';
+import type { FrequencyWindowViewModel } from '../home/frequencyHeatmap';
 
 // Lifecycle claims on Home come from the shared EvolutionViewModel.
 
@@ -35,6 +40,12 @@ export function HomeScreen({
   onOpenProfile,
   evolutionViewModel,
   onOpenEvolution,
+  weekOverview,
+  frequencyWindow,
+  frequencyLoading,
+  frequencyCanGoNext,
+  onFrequencyPrev,
+  onFrequencyNext,
 }: {
   prescription: PrescriptionResult;
   /**
@@ -56,6 +67,16 @@ export function HomeScreen({
   /** Real Training Level/Cycle/progress state, rendered as the compact `EvolutionTicker` marquee — the historical Home ticker's visual identity (commit d24319b) rebuilt on real data instead of its old hardcoded mock stats. Profile renders this same view model through its own card. */
   evolutionViewModel: EvolutionViewModel;
   onOpenEvolution?: () => void;
+  /** Real "esta semana" projection (Schedule Engine config + completed dates) — `null` while the first read is in flight or unavailable; the section is simply omitted rather than showing a fabricated/empty skeleton. */
+  weekOverview?: WeekOverviewViewModel | null;
+  /** Real "sua frequência" 30-day window (one block at a time) — `null` only until the very first read ever resolves; the section is simply omitted until then rather than showing a fabricated/empty skeleton. Never goes back to `null` afterward — a newly-selected but not-yet-loaded period keeps showing the previous one (see `frequencyLoading`) so the section's geometry never changes and the surrounding scroll position is never disturbed. */
+  frequencyWindow?: FrequencyWindowViewModel | null;
+  /** True while a newly-selected period's data isn't available yet — `frequencyWindow` is still the previous period. */
+  frequencyLoading?: boolean;
+  /** False on the most recent (current) 30-day window — the "next" control must be disabled/hidden there. */
+  frequencyCanGoNext?: boolean;
+  onFrequencyPrev?: () => void;
+  onFrequencyNext?: () => void;
 }) {
   const { theme } = useTheme();
   const { t, i18n } = useTranslation(['home', 'profile']);
@@ -363,8 +384,30 @@ export function HomeScreen({
             </LinearGradient>
           </View>
 
-          {/* No consistency/streak/volume/PR or future-workout preview is
-              rendered until those claims have a production data source. */}
+          {/* Below the Today card, in "hoje → progresso → semana →
+              histórico" order. Each section is a real projection of state
+              Home (or AppShell) already holds — no new claims, no fabricated
+              numbers — and is simply omitted while its data isn't loaded yet
+              instead of showing a fake skeleton (docs task §11/§12). */}
+          <ProgramProgressStrip viewModel={evolutionViewModel} onPress={onOpenEvolution} />
+
+          {weekOverview ? (
+            <View style={{ marginTop: 4 }}>
+              <WeeklyOverview overview={weekOverview} />
+            </View>
+          ) : null}
+
+          {frequencyWindow && onFrequencyPrev && onFrequencyNext ? (
+            <View style={{ marginTop: 4, marginBottom: 8 }}>
+              <FrequencyHeatmap
+                window={frequencyWindow}
+                loading={Boolean(frequencyLoading)}
+                canGoNext={Boolean(frequencyCanGoNext)}
+                onPrev={onFrequencyPrev}
+                onNext={onFrequencyNext}
+              />
+            </View>
+          ) : null}
         </ScrollView>
       </SafeAreaView>
     </ScreenBg>

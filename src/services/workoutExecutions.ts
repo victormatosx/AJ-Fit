@@ -316,4 +316,37 @@ export async function listExecutionsForProgramInstance(uid: string, programInsta
   return snapshot.docs.map((item) => fromDoc(item.id, item.data()));
 }
 
+/**
+ * Distinct calendar dates (`scheduledLocalDate`) with a COMPLETED or
+ * PARTIALLY_COMPLETED execution within `[fromLocalDate, toLocalDate]`
+ * (inclusive) — the Home screen's weekly overview and frequency heatmap
+ * share this single bounded read instead of one query per day/week (docs
+ * §41/§45: history is derived entirely from `workoutExecutions`, unscoped by
+ * program, so a since-superseded program's completions still count). Status
+ * is filtered client-side rather than via a second `where` clause so this
+ * never requires a composite Firestore index beyond the single-field range
+ * on `scheduledLocalDate`.
+ */
+export async function listCompletedWorkoutDatesInRange(
+  uid: string,
+  fromLocalDate: string,
+  toLocalDate: string,
+): Promise<string[]> {
+  const q = query(
+    executionsCollection(uid),
+    where('scheduledLocalDate', '>=', fromLocalDate),
+    where('scheduledLocalDate', '<=', toLocalDate),
+  );
+  const snapshot = await getDocs(q);
+  const dates = new Set<string>();
+  snapshot.docs.forEach((item) => {
+    const data = item.data();
+    const status = data.status as WorkoutExecutionStatus;
+    if (status === 'COMPLETED' || status === 'PARTIALLY_COMPLETED') {
+      dates.add(data.scheduledLocalDate as string);
+    }
+  });
+  return Array.from(dates);
+}
+
 export type { PersistedWorkoutExecution };
