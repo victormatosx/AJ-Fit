@@ -14,7 +14,7 @@ import type { PrescriptionResult } from '../workoutPrescription/types';
 import { prescriptionOutcomeKey } from '../workoutPrescription/uiOutcome';
 import { resolveSessionDisplayName, type LooseTranslate } from '../workoutPrescription/sessionPresentation';
 import { weekdayOfLocalDate, type ScheduleResolution } from '../scheduleEngine';
-import { EvolutionCard } from '../components/evolution/EvolutionCard';
+import { EvolutionTicker } from '../components/evolution/EvolutionTicker';
 import type { EvolutionViewModel } from '../workoutEvolution/types';
 
 // Lifecycle claims on Home come from the shared EvolutionViewModel.
@@ -51,7 +51,7 @@ export function HomeScreen({
   scheduleResolution?: ScheduleResolution;
   onStart: () => void;
   onOpenProfile: () => void;
-  /** Fase 5 — real Training Level/Cycle/progress state; replaces the old hardcoded ticker (docs product §67/§130/§132/§AU). */
+  /** Real Training Level/Cycle/progress state, rendered as the compact `EvolutionTicker` marquee — the historical Home ticker's visual identity (commit d24319b) rebuilt on real data instead of its old hardcoded mock stats. Profile renders this same view model through its own card. */
   evolutionViewModel: EvolutionViewModel;
   onOpenEvolution?: () => void;
 }) {
@@ -166,9 +166,10 @@ export function HomeScreen({
             </Pressable>
           </View>
 
-          {/* Real Training Level/Cycle state from Workout Lifecycle V2. */}
-          <View style={{ paddingHorizontal: 22, marginBottom: 18 }}>
-            <EvolutionCard viewModel={evolutionViewModel} onPress={onOpenEvolution} />
+          {/* Real Training Level/Cycle/progress state from Workout Lifecycle V2,
+              rendered full-bleed like the historical Home ticker. */}
+          <View style={{ marginBottom: 18 }}>
+            <EvolutionTicker viewModel={evolutionViewModel} onPress={onOpenEvolution} />
           </View>
 
           {/* TODAY POSTER */}

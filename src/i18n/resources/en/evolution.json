@@ -98,5 +98,32 @@
   "accessibility": {
     "openDetails": "Opens details about the available workout",
     "close": "Close evolution details"
+  },
+  "ticker": {
+    "viewEvolution": "View evolution",
+    "viewChanges": "View changes",
+    "labels": {
+      "earnedLevel": "Earned level",
+      "activeDays": "Active days",
+      "sessions": "Workouts",
+      "adherence": "Consistency",
+      "proximity": "Evolution"
+    },
+    "values": {
+      "adherence": {
+        "BELOW_TARGET": "Building consistency",
+        "GOOD": "Consistent",
+        "HIGH": "Very consistent"
+      },
+      "proximity": {
+        "BUILDING": "Building foundation",
+        "ON_TRACK": "On track",
+        "READY": "Available"
+      }
+    },
+    "accessibility": {
+      "openEvolution": "Opens details about the available evolution",
+      "openAutoActivation": "Opens details about the automatically applied update"
+    }
   }
 }

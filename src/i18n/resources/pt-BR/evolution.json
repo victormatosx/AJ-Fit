@@ -98,5 +98,32 @@
   "accessibility": {
     "openDetails": "Abre os detalhes do treino disponível",
     "close": "Fechar detalhes da evolução"
+  },
+  "ticker": {
+    "viewEvolution": "Ver evolução",
+    "viewChanges": "Ver mudanças",
+    "labels": {
+      "earnedLevel": "Nível conquistado",
+      "activeDays": "Dias ativos",
+      "sessions": "Treinos",
+      "adherence": "Frequência",
+      "proximity": "Evolução"
+    },
+    "values": {
+      "adherence": {
+        "BELOW_TARGET": "Construindo consistência",
+        "GOOD": "Consistente",
+        "HIGH": "Muito consistente"
+      },
+      "proximity": {
+        "BUILDING": "Construindo base",
+        "ON_TRACK": "No caminho",
+        "READY": "Disponível"
+      }
+    },
+    "accessibility": {
+      "openEvolution": "Abre os detalhes da evolução disponível",
+      "openAutoActivation": "Abre os detalhes da atualização aplicada automaticamente"
+    }
   }
 }

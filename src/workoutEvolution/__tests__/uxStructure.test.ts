@@ -6,10 +6,13 @@ import ptBR from '../../i18n/resources/pt-BR/evolution.json';
 
 const read = (path: string) => readFileSync(path, 'utf8');
 const card = read('src/components/evolution/EvolutionCard.tsx');
+const ticker = read('src/components/evolution/EvolutionTicker.tsx');
+const tickerItems = read('src/workoutEvolution/tickerItems.ts');
 const unlock = read('src/screens/EvolutionUnlockScreen.tsx');
 const shell = read('src/screens/AppShell.tsx');
 const hook = read('src/workoutEvolution/useWorkoutEvolution.ts');
 const home = read('src/screens/HomeScreen.tsx');
+const profile = read('src/screens/ProfileScreen.tsx');
 
 describe('Evolution UX component contracts (Node structural fallback)', () => {
   it('shows separate real dimensions and no synthetic progress bar/percentage', () => {
@@ -57,7 +60,7 @@ describe('Evolution UX component contracts (Node structural fallback)', () => {
   });
 
   it('keeps production Home free of historical fake surfaces', () => {
-    for (const marker of ['onOpenConsistency', 'UPCOMING_KEYS', 'weekVolume', 'benchPr', 'nextLevelValue', 'CONSISTENCY_MOCK', 'MOCK_DATE']) {
+    for (const marker of ['onOpenConsistency', 'UPCOMING_KEYS', 'weekVolume', 'benchPr', 'nextLevelValue', 'CONSISTENCY_MOCK', 'MOCK_DATE', 'TICKER_KEYS']) {
       expect(home).not.toContain(marker);
     }
   });
@@ -97,5 +100,78 @@ describe('Evolution copy parity and semantic boundaries', () => {
         expect(copy).not.toContain(forbidden);
       }
     }
+  });
+});
+
+describe('EvolutionTicker replaces EvolutionCard on Home only', () => {
+  it('Home renders EvolutionTicker, not EvolutionCard', () => {
+    expect(home).toContain('<EvolutionTicker');
+    expect(home).not.toContain('EvolutionCard');
+  });
+
+  it('EvolutionCard keeps working unchanged on Profile', () => {
+    expect(profile).toContain('<EvolutionCard');
+    expect(profile).toContain('onOpenEvolution');
+  });
+
+  it('never recomputes domain logic — no Firestore, no eligibility math', () => {
+    for (const source of [ticker, tickerItems]) {
+      expect(source).not.toContain('firebase/firestore');
+      expect(source).not.toContain('evaluateProgressionV2ForUser');
+      expect(source).not.toContain('reconcileWorkoutLifecycle');
+    }
+  });
+
+  it('never surfaces cycleNumber in the Home marquee', () => {
+    expect(tickerItems).not.toContain('cycleNumber');
+  });
+
+  it('does not reintroduce the historical mock ticker data', () => {
+    for (const marker of ['TICKER_KEYS', "'streak'", "'weekVolume'", "'benchPr'", "'nextLevel'"]) {
+      expect(ticker).not.toContain(marker);
+      expect(tickerItems).not.toContain(marker);
+    }
+  });
+
+  it('pauses the marquee loop when Home is inactive and cleans it up on unmount', () => {
+    expect(ticker).toContain('useIsScreenActive');
+    expect(ticker).toContain('if (width === 0 || !isActive) return;');
+    expect(ticker).toContain('return () => loop.stop();');
+    expect(ticker).toContain('useNativeDriver: true');
+  });
+
+  it('only the ACTION surface is an accessible button — the marquee stays plain text', () => {
+    expect(ticker).toContain("accessibilityRole=\"button\"");
+    expect(ticker).toContain('accessibilityLabel={content.accessibilityLabel}');
+    // The marquee/static branches never render a Pressable of their own —
+    // TickerAction is the sole Pressable in the file.
+    expect(ticker.match(/<Pressable/g)?.length).toBe(1);
+  });
+
+  it('ACTION mode never mixes a CTA into the running marquee — modes are mutually exclusive', () => {
+    expect(ticker).toContain("content.mode === 'MARQUEE'");
+    expect(ticker).toContain("content.mode === 'ACTION'");
+  });
+
+  it('routes the ACTION press through the same onOpenEvolution/EvolutionUnlockScreen flow', () => {
+    expect(shell).toContain('onOpenEvolution={() => setShowEvolutionUnlock(true)}');
+    expect(home).toContain('<EvolutionTicker viewModel={evolutionViewModel} onPress={onOpenEvolution} />');
+  });
+
+  it('marquee items keep the historical label(faint)/value(accent) split — every value is accented, not just "good" ones', () => {
+    expect(tickerItems).toContain('label: string');
+    expect(tickerItems).toContain('value: string');
+    // The nested value <Text> is unconditionally colored `primaryEmphasis` —
+    // no ternary/condition gates it on adherence/proximity quality (docs
+    // audit "visual refinement" §historical parity: d24319b colored every
+    // ticker value, never just the positive ones).
+    expect(ticker).toMatch(/color:\s*theme\.colors\.primaryEmphasis,\s*fontFamily:\s*theme\.fonts\.monoBold/);
+    expect(ticker).not.toContain('emphasis ?');
+  });
+
+  it('ACTION CTA and chevron share the same accent color as the marquee values', () => {
+    const actionBlock = ticker.slice(ticker.indexOf('function TickerAction'));
+    expect(actionBlock).toContain('theme.colors.primaryEmphasis');
+    expect(actionBlock.match(/theme\.colors\.primaryEmphasis/g)?.length).toBeGreaterThanOrEqual(3);
   });
 });
