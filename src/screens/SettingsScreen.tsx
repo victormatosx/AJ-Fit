@@ -29,6 +29,9 @@ import {
 } from '../dev/DevSubscriptionOverridePickerSheet';
 import { isWorkoutLifecycleQaPanelAllowed } from '../dev/workoutLifecycle/qaPanelGate';
 import { WorkoutLifecycleQaSheet } from '../dev/workoutLifecycle/WorkoutLifecycleQaSheet';
+import { useSubscription } from '../hooks/useSubscription';
+import { PREMIUM_ENTITLEMENT_ID } from '../lib/subscriptionConstants';
+import type { CustomerInfo } from 'react-native-purchases';
 
 type UnitsOptionCopy = {
   label: string;
@@ -68,6 +71,12 @@ export function SettingsScreen({
     override: devOverride,
     setOverride: setDevOverride,
   } = useDevSubscriptionOverrideContext();
+  const {
+    realCustomerInfo,
+    effectiveCustomerInfo,
+    realIsPremium,
+    effectiveIsPremium,
+  } = useSubscription();
   const [devOverridePickerOpen, setDevOverridePickerOpen] = useState(false);
   const workoutLifecycleQaPanelAllowed = isWorkoutLifecycleQaPanelAllowed();
   const [workoutLifecycleQaSheetOpen, setWorkoutLifecycleQaSheetOpen] = useState(false);
@@ -329,9 +338,24 @@ export function SettingsScreen({
               items={[
                 ...(devOverrideAllowed ? [{
                   icon: 'key' as const,
-                  label: 'Subscription Override',
+                  label: devOverride === 'REAL'
+                    ? 'Subscription Override'
+                    : 'DEV · Simulated subscription',
                   value: DEV_OVERRIDE_LABELS[devOverride],
+                  description: devOverride === 'REAL'
+                    ? 'RevenueCat controls the effective state.'
+                    : 'Session-only; resets on restart, logout, or account change.',
                   onPress: () => setDevOverridePickerOpen(true),
+                }, {
+                  icon: 'info' as const,
+                  label: 'RevenueCat real',
+                  value: realIsPremium ? 'Premium: YES' : 'Premium: NO',
+                  description: describeDevSubscriptionSnapshot(realCustomerInfo),
+                }, {
+                  icon: 'check' as const,
+                  label: 'Effective state',
+                  value: effectiveIsPremium ? 'Premium: YES' : 'Premium: NO',
+                  description: describeDevSubscriptionSnapshot(effectiveCustomerInfo),
                 }] : []),
                 ...(workoutLifecycleQaPanelAllowed && user ? [{
                   icon: 'chart' as const,
@@ -395,6 +419,21 @@ export function SettingsScreen({
       ) : null}
     </ScreenBg>
   );
+}
+
+function describeDevSubscriptionSnapshot(customerInfo: CustomerInfo | null): string {
+  if (!customerInfo) return 'Status: unresolved · Expiration: —';
+  const entitlement =
+    customerInfo.entitlements.active[PREMIUM_ENTITLEMENT_ID]
+    ?? customerInfo.entitlements.all[PREMIUM_ENTITLEMENT_ID];
+  if (!entitlement) return 'Status: no subscription · Expiration: —';
+  const status = entitlement.isActive
+    ? entitlement.willRenew ? 'active · renewing' : 'active · not renewing'
+    : 'expired';
+  const expiration = entitlement.expirationDate
+    ? new Date(entitlement.expirationDate).toISOString().slice(0, 10)
+    : '—';
+  return `Status: ${status} · Expiration: ${expiration}`;
 }
 
 function ThemePickerSheet({

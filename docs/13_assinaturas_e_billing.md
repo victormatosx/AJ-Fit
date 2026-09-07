@@ -2548,16 +2548,15 @@ Código em `src/dev/`:
 * `subscriptionOverride.ts` — tipos dos estados simulados e o transform puro
   (`applyDevSubscriptionOverride`) que reconstrói um `CustomerInfo` sintético
   a partir do real.
-* `subscriptionOverrideStorage.ts` — persistência local (AsyncStorage),
-  nunca Firestore/RevenueCat/backend.
-* `DevSubscriptionOverrideContext.tsx` — estado reativo consumido por
-  `SubscriptionContext`.
+* `subscriptionOverrideStorage.ts` — migração unidirecional que apenas remove
+  a chave global legada; nenhum estado selecionado é lido ou persistido.
+* `DevSubscriptionOverrideContext.tsx` — estado reativo, em memória e
+  vinculado ao UID atual, consumido por `SubscriptionContext`.
 
 **Como ativar:** defina `EXPO_PUBLIC_ENABLE_DEV_SUBSCRIPTION_OVERRIDES=1` no
 `.env` local (veja `.env.example`) e rode um development build (`__DEV__`
 true). O seletor tem duas entradas de UI, ambas controlando exatamente o
-mesmo `DevSubscriptionOverrideContext`/AsyncStorage
-(`ajfit-dev-subscription-override`) via o mesmo componente compartilhado
+mesmo `DevSubscriptionOverrideContext` session-scoped via o mesmo componente compartilhado
 `src/dev/DevSubscriptionOverridePickerSheet.tsx`:
 
 1. Configurações → seção "DEVELOPER" → "Subscription Override".
@@ -2577,7 +2576,12 @@ hoje), `FREE`, `PREMIUM_MONTHLY`, `PREMIUM_ANNUAL`, `TRIAL`,
 **Arquitetura:**
 
 ```txt
-RevenueCat -> Real Subscription State -> Dev Override -> Effective State -> App
+RevenueCat -> realCustomerInfo -> realIsPremium
+                        |
+              DEV simulation (session + UID)
+                        |
+                        v
+            effectiveCustomerInfo -> effectiveIsPremium -> App/Paywall/Gate
 ```
 
 `SubscriptionContext` continua sincronizando identidade/CustomerInfo com o
@@ -2588,16 +2592,27 @@ chegar aos Premium Gates, ao Paywall e à Central de Assinatura.
 `configured`/`loading` continuam derivados exclusivamente do estado real —
 o override nunca finge que o RevenueCat terminou de configurar.
 
+`customerInfo` e `isPremium` permanecem aliases compatíveis do estado efetivo;
+o contexto também expõe explicitamente `realCustomerInfo`, `realIsPremium`,
+`effectiveCustomerInfo` e `effectiveIsPremium` para diagnóstico. Em `REAL`,
+o snapshot efetivo é a mesma referência do snapshot real.
+
+O override começa sempre em `REAL` a cada cold start e não é persistido. A
+sessão guarda o UID proprietário da simulação; logout ou qualquer troca de
+UID faz o valor exposto resolver imediatamente para `REAL`, antes mesmo do
+effect de limpeza. Assim, uma conta nova nunca herda a simulação anterior.
+No primeiro mount permitido, a antiga chave global
+`ajfit-dev-subscription-override` é removida sem ser lida.
+
 **Garantia de segurança (produção):** o override exige simultaneamente
 `__DEV__` (flag de bundle JS de debug, definida pelo Metro/Babel em tempo de
 bundle e eliminada como código morto pelo minificador em qualquer build
 release/produção — não é um valor manipulável em runtime) **e**
 `EXPO_PUBLIC_ENABLE_DEV_SUBSCRIPTION_OVERRIDES=1`. Nenhuma das duas condições
-é suficiente sozinha. `readStoredDevSubscriptionOverride` nem chega a ler o
-AsyncStorage quando essa combinação não está presente — um valor
-`PREMIUM_ANNUAL` deixado no dispositivo por um build de desenvolvimento
-anterior (ou adulterado manualmente) não significa nada em uma build onde
-overrides não são permitidos.
+é suficiente sozinha. O mecanismo nunca lê um estado de override do
+AsyncStorage; a única operação restante é a remoção DEV-only da chave legada.
+Quando `__DEV__ === false`, até essa limpeza é inerte e o estado efetivo fica
+obrigatoriamente em `REAL`.
 
 **Nunca simula billing real.** Compra, restore, Offer Codes/promo codes,
 cancelamento e renovação continuam exigindo StoreKit/Google Play

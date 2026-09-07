@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
  * the exact same `DevSubscriptionOverrideContext`/shared sheet already used
  * by Settings > Developer — not a new override mechanism, not a navigation
  * bypass. Behavioral coverage of the override itself (each simulated state,
- * the security gate, persistence) already lives in
+ * the security gate and session/identity reset) already lives in
  * `src/dev/__tests__/subscriptionOverride.test.ts` and
  * `subscriptionOverrideStorage.test.ts` — not duplicated here.
  */
@@ -48,7 +48,7 @@ describe('Paywall dev subscription override wiring', () => {
     }
   });
 
-  it('never touches AsyncStorage directly — persistence stays inside subscriptionOverrideStorage.ts', () => {
+  it('never touches AsyncStorage directly — the UI owns no persistence', () => {
     expect(CODE).not.toContain('AsyncStorage');
     expect(CODE).not.toContain('ajfit-dev-subscription-override');
   });

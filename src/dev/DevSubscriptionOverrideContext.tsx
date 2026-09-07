@@ -1,10 +1,14 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { logInfo } from '../lib/logger';
-import { isDevSubscriptionOverrideAllowed, type DevSubscriptionOverrideState } from './subscriptionOverride';
 import {
-  readStoredDevSubscriptionOverride,
-  writeStoredDevSubscriptionOverride,
-} from './subscriptionOverrideStorage';
+  createDevSubscriptionOverrideSession,
+  isDevSubscriptionOverrideAllowed,
+  isDevSubscriptionOverrideState,
+  resolveDevSubscriptionOverrideForIdentity,
+  type DevSubscriptionOverrideState,
+} from './subscriptionOverride';
+import { clearLegacyStoredDevSubscriptionOverride } from './subscriptionOverrideStorage';
+import { useAuth } from '../state/AuthContext';
 
 /**
  * Owns the reactive dev override state consumed by `SubscriptionContext`.
@@ -22,33 +26,40 @@ type DevSubscriptionOverrideCtx = {
 const DevSubscriptionOverrideContext = createContext<DevSubscriptionOverrideCtx | null>(null);
 
 export function DevSubscriptionOverrideProvider({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  const uid = user?.uid ?? null;
   const allowed = isDevSubscriptionOverrideAllowed();
-  const [override, setOverrideState] = useState<DevSubscriptionOverrideState>('REAL');
+  const [session, setSession] = useState(() => createDevSubscriptionOverrideSession(uid));
+  const override = resolveDevSubscriptionOverrideForIdentity(session, uid, allowed);
 
   useEffect(() => {
     if (!allowed) return;
-    let cancelled = false;
-    void readStoredDevSubscriptionOverride().then((stored) => {
-      if (!cancelled) setOverrideState(stored);
-    });
-    return () => {
-      cancelled = true;
-    };
+    void clearLegacyStoredDevSubscriptionOverride();
   }, [allowed]);
+
+  useEffect(() => {
+    if (session.uid === uid) return;
+    setSession(createDevSubscriptionOverrideSession(uid));
+    if (allowed) {
+      logInfo('subscription', 'dev_subscription_override_identity_reset', { uidPresent: !!uid });
+    }
+  }, [allowed, session.uid, uid]);
 
   const setOverride = useCallback(
     async (next: DevSubscriptionOverrideState) => {
       if (!allowed) return;
-      await writeStoredDevSubscriptionOverride(next);
-      setOverrideState(next);
+      if (!isDevSubscriptionOverrideState(next)) {
+        throw new Error(`[devSubscriptionOverride] invalid override: ${String(next)}`);
+      }
+      setSession({ uid, override: next });
       logInfo('subscription', 'dev_subscription_override_changed', { override: next });
     },
-    [allowed],
+    [allowed, setSession, uid],
   );
 
   return (
     <DevSubscriptionOverrideContext.Provider
-      value={{ allowed, override: allowed ? override : 'REAL', setOverride }}
+      value={{ allowed, override, setOverride }}
     >
       {children}
     </DevSubscriptionOverrideContext.Provider>

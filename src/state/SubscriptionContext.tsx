@@ -94,6 +94,14 @@ type SubscriptionCtx = {
   customerInfo: CustomerInfo | null;
   /** Derived from `customerInfo.entitlements.active[premium]` — never separate state. */
   isPremium: boolean;
+  /** Untouched RevenueCat snapshot retained for development diagnostics. */
+  realCustomerInfo: CustomerInfo | null;
+  /** Explicit alias for `customerInfo`, after the optional DEV transform. */
+  effectiveCustomerInfo: CustomerInfo | null;
+  /** Premium access derived only from the untouched RevenueCat snapshot. */
+  realIsPremium: boolean;
+  /** Explicit alias for `isPremium`, used by the app and Premium Gate. */
+  effectiveIsPremium: boolean;
   /** `'development_override'` only when a Dev Subscription Override is actively reshaping `customerInfo`. */
   subscriptionSource: 'revenuecat' | 'development_override';
   /** Detailed lifecycle phase; `error` never means "not Premium". */
@@ -621,17 +629,24 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
   // `applyDevSubscriptionOverride` itself re-checks the same allow-gate, so
   // `customerInfo` here is byte-for-byte `realCustomerInfo` in production.
   const { override: devOverride } = useDevSubscriptionOverrideContext();
-  const customerInfo = useMemo(
+  const effectiveCustomerInfo = useMemo(
     () => applyDevSubscriptionOverride(realCustomerInfo, devOverride),
     [realCustomerInfo, devOverride],
   );
+  // Backward-compatible public names remain the effective commercial state.
+  const customerInfo = effectiveCustomerInfo;
   const subscriptionSource: 'revenuecat' | 'development_override' =
-    customerInfo !== realCustomerInfo ? 'development_override' : 'revenuecat';
+    effectiveCustomerInfo !== realCustomerInfo ? 'development_override' : 'revenuecat';
 
+  const realIsPremium = useMemo(
+    () => Boolean(realCustomerInfo?.entitlements.active[PREMIUM_ENTITLEMENT_ID]),
+    [realCustomerInfo],
+  );
   const isPremium = useMemo(
     () => Boolean(customerInfo?.entitlements.active[PREMIUM_ENTITLEMENT_ID]),
     [customerInfo],
   );
+  const effectiveIsPremium = isPremium;
 
   const [offerings, setOfferings] = useState<PurchasesOfferings | null>(null);
   const [offeringsLoading, setOfferingsLoading] = useState(false);
@@ -829,6 +844,10 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
       configured,
       customerInfo,
       isPremium,
+      realCustomerInfo,
+      effectiveCustomerInfo,
+      realIsPremium,
+      effectiveIsPremium,
       subscriptionSource,
       status: lifecycle.phase,
       refreshing: lifecycle.refreshing,
@@ -852,6 +871,10 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
       configured,
       customerInfo,
       isPremium,
+      realCustomerInfo,
+      effectiveCustomerInfo,
+      realIsPremium,
+      effectiveIsPremium,
       subscriptionSource,
       lifecycle.phase,
       lifecycle.refreshing,

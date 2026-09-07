@@ -33,6 +33,30 @@ export const DEV_SUBSCRIPTION_OVERRIDE_STATES = [
 
 export type DevSubscriptionOverrideState = (typeof DEV_SUBSCRIPTION_OVERRIDE_STATES)[number];
 
+/**
+ * In-memory ownership for a single app execution. The UID is part of the
+ * state so a render with a different Firebase identity can resolve to REAL
+ * immediately, before the cleanup effect commits the new session owner.
+ */
+export type DevSubscriptionOverrideSession = {
+  uid: string | null;
+  override: DevSubscriptionOverrideState;
+};
+
+export function createDevSubscriptionOverrideSession(
+  uid: string | null,
+): DevSubscriptionOverrideSession {
+  return { uid, override: 'REAL' };
+}
+
+export function resolveDevSubscriptionOverrideForIdentity(
+  session: DevSubscriptionOverrideSession,
+  uid: string | null,
+  allowed: boolean,
+): DevSubscriptionOverrideState {
+  return allowed && session.uid === uid ? session.override : 'REAL';
+}
+
 export function isDevSubscriptionOverrideState(
   value: unknown,
 ): value is DevSubscriptionOverrideState {
@@ -135,7 +159,7 @@ function buildOverrideEntitlement(
         willRenew: true,
         periodType: 'NORMAL',
         purchasedAtMs: nowMs - 5 * DAY_MS,
-        expirationMs: nowMs + 300 * DAY_MS,
+        expirationMs: nowMs + 360 * DAY_MS,
       });
     case 'TRIAL':
       return buildEntitlement({

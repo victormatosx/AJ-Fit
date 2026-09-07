@@ -31,13 +31,12 @@ const DEV_OVERRIDE_DESCRIPTIONS: Record<DevSubscriptionOverrideState, string> = 
 /**
  * Dev/QA only. Shared between Settings > Developer and the Paywall's own
  * Developer entry point — both are just a UI surface over the exact same
- * `DevSubscriptionOverrideContext`/AsyncStorage key
- * (`ajfit-dev-subscription-override`); this component owns no state of its
+ * session-scoped `DevSubscriptionOverrideContext`; this component owns no state of its
  * own. Only ever mounted when the caller has already checked
  * `useDevSubscriptionOverrideContext().allowed` — a development build with
  * the opt-in flag set. Selecting an option calls the caller's `onSelect`,
- * which is expected to forward straight to `setOverride` — persists to
- * AsyncStorage and updates `SubscriptionContext` reactively, no
+ * which is expected to forward straight to `setOverride` — updates
+ * `SubscriptionContext` reactively for this execution only, with no
  * RevenueCat/Firestore/backend call.
  */
 export function DevSubscriptionOverridePickerSheet({

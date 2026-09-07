@@ -20,8 +20,8 @@ describe('DevSubscriptionOverrideContext wiring', () => {
     expect(SOURCE).toMatch(/setOverride = useCallback\(\s*async \(next[\s\S]*?if \(!allowed\) return;/);
   });
 
-  it('the provider value always reads `allowed \\? override : \'REAL\'` — never exposes a stale override when disallowed', () => {
-    expect(SOURCE).toContain("override: allowed ? override : 'REAL'");
+  it('resolves the exposed override against both the current UID and allow gate', () => {
+    expect(SOURCE).toContain('resolveDevSubscriptionOverrideForIdentity(session, uid, allowed)');
   });
 
   it('never touches RevenueCat, Firestore, or the backend directly', () => {
@@ -30,8 +30,16 @@ describe('DevSubscriptionOverrideContext wiring', () => {
     }
   });
 
-  it('persistence goes exclusively through the gated storage module', () => {
+  it('uses storage only for one-way legacy cleanup, never persistence', () => {
     expect(SOURCE).toContain("from './subscriptionOverrideStorage'");
+    expect(SOURCE).toContain('clearLegacyStoredDevSubscriptionOverride()');
+    expect(CODE).not.toMatch(/readStored|writeStored/);
     expect(CODE).not.toContain('AsyncStorage');
+  });
+
+  it('binds the session to AuthContext UID and resets when it changes', () => {
+    expect(SOURCE).toContain('const { user } = useAuth()');
+    expect(SOURCE).toContain('createDevSubscriptionOverrideSession(uid)');
+    expect(SOURCE).toContain('if (session.uid === uid) return;');
   });
 });

@@ -1,40 +1,21 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { logError } from '../lib/logger';
-import {
-  isDevSubscriptionOverrideAllowed,
-  isDevSubscriptionOverrideState,
-  type DevSubscriptionOverrideState,
-} from './subscriptionOverride';
+import { isDevSubscriptionOverrideAllowed } from './subscriptionOverride';
 
-/** Local-only, device-wide. Never written to Firestore, RevenueCat, or any backend. */
+/** Legacy device-wide key used by the old persistent implementation. */
 export const DEV_SUBSCRIPTION_OVERRIDE_STORAGE_KEY = 'ajfit-dev-subscription-override';
 
 /**
- * Never touches AsyncStorage when overrides are not allowed — a value
- * written by a past development build left on the device, or a value
- * tampered with directly in a production install, is never even read, let
- * alone applied. This is what makes "storage = PREMIUM_ANNUAL" mean nothing
- * in a build where overrides are disallowed.
+ * One-way migration cleanup. The new override is session-scoped and never
+ * reads or writes a selected state. Removing the old key prevents a stale
+ * Premium simulation from surviving an app update, while keeping all storage
+ * access behind the same development-only allow gate.
  */
-export async function readStoredDevSubscriptionOverride(): Promise<DevSubscriptionOverrideState> {
-  if (!isDevSubscriptionOverrideAllowed()) return 'REAL';
-  try {
-    const raw = await AsyncStorage.getItem(DEV_SUBSCRIPTION_OVERRIDE_STORAGE_KEY);
-    return isDevSubscriptionOverrideState(raw) ? raw : 'REAL';
-  } catch (err) {
-    logError('devSubscriptionOverrideStorage:read', err);
-    return 'REAL';
-  }
-}
-
-export async function writeStoredDevSubscriptionOverride(
-  state: DevSubscriptionOverrideState,
-): Promise<void> {
+export async function clearLegacyStoredDevSubscriptionOverride(): Promise<void> {
   if (!isDevSubscriptionOverrideAllowed()) return;
-  if (!isDevSubscriptionOverrideState(state)) {
-    throw new Error(
-      `[devSubscriptionOverrideStorage] refuse to persist invalid override: ${String(state)}`,
-    );
+  try {
+    await AsyncStorage.removeItem(DEV_SUBSCRIPTION_OVERRIDE_STORAGE_KEY);
+  } catch (err) {
+    logError('devSubscriptionOverrideStorage:clearLegacy', err);
   }
-  await AsyncStorage.setItem(DEV_SUBSCRIPTION_OVERRIDE_STORAGE_KEY, state);
 }

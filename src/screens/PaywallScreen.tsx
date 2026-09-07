@@ -945,7 +945,7 @@ function DevSubscriptionOverrideRow({
             color: theme.colors.textFaint,
           }}
         >
-          DEVELOPER
+          {current === 'REAL' ? 'DEVELOPER' : 'DEV · SIMULATED SUBSCRIPTION'}
         </Text>
         <Text
           style={{

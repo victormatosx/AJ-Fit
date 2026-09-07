@@ -6,8 +6,10 @@ vi.mock('react-native', () => ({ Platform: mockPlatform }));
 
 import {
   applyDevSubscriptionOverride,
+  createDevSubscriptionOverrideSession,
   isDevSubscriptionOverrideAllowed,
   isDevSubscriptionOverrideState,
+  resolveDevSubscriptionOverrideForIdentity,
 } from '../subscriptionOverride';
 import { PREMIUM_ENTITLEMENT_ID } from '../../lib/subscriptionConstants';
 
@@ -84,6 +86,45 @@ describe('isDevSubscriptionOverrideAllowed', () => {
   });
 });
 
+describe('session-scoped override identity', () => {
+  it('cold start always creates REAL, with no persisted state input', () => {
+    expect(createDevSubscriptionOverrideSession('user-a')).toEqual({
+      uid: 'user-a',
+      override: 'REAL',
+    });
+  });
+
+  it('resets synchronously on logout and UID change', () => {
+    const premiumSession = { uid: 'user-a', override: 'PREMIUM_MONTHLY' } as const;
+    expect(resolveDevSubscriptionOverrideForIdentity(premiumSession, null, true)).toBe('REAL');
+    expect(resolveDevSubscriptionOverrideForIdentity(premiumSession, 'user-b', true)).toBe('REAL');
+  });
+
+  it('keeps an explicit simulation only for its current identity', () => {
+    const premiumSession = { uid: 'user-a', override: 'PREMIUM_MONTHLY' } as const;
+    expect(resolveDevSubscriptionOverrideForIdentity(premiumSession, 'user-a', true)).toBe(
+      'PREMIUM_MONTHLY',
+    );
+  });
+
+  it('selecting REAL removes the simulation immediately for the same UID', () => {
+    const realSession = { uid: 'user-a', override: 'REAL' } as const;
+    expect(resolveDevSubscriptionOverrideForIdentity(realSession, 'user-a', true)).toBe('REAL');
+  });
+
+  it('a newly-created account cannot inherit the previous account override', () => {
+    const previousAccount = { uid: 'user-a', override: 'PREMIUM_ANNUAL' } as const;
+    expect(resolveDevSubscriptionOverrideForIdentity(previousAccount, 'new-user', true)).toBe(
+      'REAL',
+    );
+  });
+
+  it('production/disallowed builds always resolve REAL', () => {
+    const premiumSession = { uid: 'user-a', override: 'PREMIUM_MONTHLY' } as const;
+    expect(resolveDevSubscriptionOverrideForIdentity(premiumSession, 'user-a', false)).toBe('REAL');
+  });
+});
+
 describe('applyDevSubscriptionOverride', () => {
   beforeEach(() => setDevFlags({ dev: true, optIn: true }));
   afterEach(() => setDevFlags({ dev: false, optIn: false }));
@@ -106,6 +147,7 @@ describe('applyDevSubscriptionOverride', () => {
 
   it('PREMIUM_MONTHLY: Premium active, monthly product id, no trial', () => {
     const real = fakeRealCustomerInfo();
+    const originalReal = structuredClone(real);
     const effective = applyDevSubscriptionOverride(real, 'PREMIUM_MONTHLY', NOW)!;
     const entitlement = effective.entitlements.active[PREMIUM_ENTITLEMENT_ID];
     expect(entitlement).toBeDefined();
@@ -114,6 +156,8 @@ describe('applyDevSubscriptionOverride', () => {
     expect(entitlement.periodType).toBe('NORMAL');
     expect(entitlement.productIdentifier).toContain('monthly');
     expect(new Date(entitlement.expirationDate!).getTime()).toBeGreaterThan(NOW.getTime());
+    expect(real).toEqual(originalReal);
+    expect(effective).not.toBe(real);
   });
 
   it('PREMIUM_ANNUAL: Premium active, annual product id, no trial, further-out expiration than monthly', () => {
@@ -128,6 +172,10 @@ describe('applyDevSubscriptionOverride', () => {
     expect(new Date(annualEntitlement.expirationDate!).getTime()).toBeGreaterThan(
       new Date(monthlyEntitlement.expirationDate!).getTime(),
     );
+    expect(
+      new Date(annualEntitlement.expirationDate!).getTime()
+        - new Date(annualEntitlement.latestPurchaseDate).getTime(),
+    ).toBe(365 * 24 * 60 * 60 * 1000);
   });
 
   it('TRIAL: Premium active, trial period, expiration a few days in the future', () => {

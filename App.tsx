@@ -578,8 +578,8 @@ function AppContent() {
               loginRevenueCat/logoutRevenueCat internally). AuthContext itself
               is untouched — it stays the sole owner of identity and knows
               nothing about RevenueCat; SubscriptionContext just watches it. */}
-          {/* Owns the reactive Dev Subscription Override state (dev/QA only,
-              see src/dev/). Nested above SubscriptionProvider so it can
+          {/* Owns the UID-bound, session-scoped Dev Subscription Override
+              state (dev/QA only, see src/dev/). Nested above SubscriptionProvider so it can
               transform the RevenueCat-derived state before the rest of the
               app ever sees it — inert everywhere outside a development
               build. */}

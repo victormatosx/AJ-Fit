@@ -17,10 +17,22 @@ describe('SubscriptionContext dev override wiring', () => {
     );
   });
 
-  it('derives isPremium from the post-override `customerInfo`, not the raw real snapshot', () => {
+  it('derives isPremium from the post-override snapshot and exposes its effective alias', () => {
     expect(SOURCE).toMatch(
       /const isPremium = useMemo\(\s*\(\) => Boolean\(customerInfo\?\.entitlements\.active\[PREMIUM_ENTITLEMENT_ID\]\)/,
     );
+    expect(SOURCE).toContain('const effectiveIsPremium = isPremium;');
+  });
+
+  it('retains explicit real and effective snapshots and Premium flags', () => {
+    for (const field of [
+      'realCustomerInfo',
+      'effectiveCustomerInfo',
+      'realIsPremium',
+      'effectiveIsPremium',
+    ]) {
+      expect(SOURCE).toContain(field);
+    }
   });
 
   it('`configured`/`loading` are computed from realCustomerInfo, never from the overridden one', () => {
