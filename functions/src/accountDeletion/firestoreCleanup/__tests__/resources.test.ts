@@ -7,6 +7,10 @@ import {
   deleteUserProfileDocument,
   deleteUserQuestionnaires,
   deleteUserWorkoutProgramDescendants,
+  deleteUserNotificationDispatches,
+  deleteUserPushDevices,
+  deleteUserPushTokenOwners,
+  releaseUserPushInstallations,
 } from '../resources';
 import { createFakeFirestore } from './fakeFirestore';
 
@@ -66,6 +70,56 @@ describe('deleteProgressPhotoDocuments', () => {
     const result = await deleteProgressPhotoDocuments('uid-1', fs(harness));
 
     expect(result).toEqual({ resource: 'progressPhotos', deletedCount: 2, alreadyAbsent: false });
+  });
+});
+
+describe('push resources', () => {
+  it('removes the user projection, raw-token claim and dispatch descendants', async () => {
+    const harness = createFakeFirestore();
+    harness.seed('users/uid-1/devices/install-1');
+    harness.seed('pushTokenOwners/hash-1', { ownerUid: 'uid-1' });
+    harness.seed('notificationDispatches/dispatch-1', { uid: 'uid-1' });
+    harness.seed('notificationDispatches/dispatch-1/deliveries/install-1');
+
+    await deleteUserPushDevices('uid-1', fs(harness));
+    await deleteUserPushTokenOwners('uid-1', fs(harness));
+    await deleteUserNotificationDispatches('uid-1', fs(harness));
+
+    expect(harness.exists('users/uid-1/devices/install-1')).toBe(false);
+    expect(harness.exists('pushTokenOwners/hash-1')).toBe(false);
+    expect(harness.exists('notificationDispatches/dispatch-1')).toBe(false);
+    expect(harness.exists('notificationDispatches/dispatch-1/deliveries/install-1')).toBe(false);
+  });
+
+  it('releases only installations still owned by the deleted account', async () => {
+    const harness = createFakeFirestore();
+    harness.seed('pushInstallations/owned', {
+      ownerUid: 'uid-1',
+      tokenHash: 'hash-owned',
+      ownershipVersion: 1,
+    });
+    harness.seed('pushTokenOwners/hash-owned', {
+      ownerUid: 'uid-1',
+      installationId: 'owned',
+      ownershipVersion: 1,
+    });
+    harness.seed('pushInstallations/transferred', {
+      ownerUid: 'uid-2',
+      tokenHash: 'hash-transferred',
+      ownershipVersion: 2,
+    });
+    harness.seed('pushTokenOwners/hash-transferred', {
+      ownerUid: 'uid-2',
+      installationId: 'transferred',
+      ownershipVersion: 2,
+    });
+
+    await releaseUserPushInstallations('uid-1', fs(harness));
+
+    expect(harness.data('pushInstallations/owned')?.ownerUid).toBeNull();
+    expect(harness.exists('pushTokenOwners/hash-owned')).toBe(false);
+    expect(harness.data('pushInstallations/transferred')?.ownerUid).toBe('uid-2');
+    expect(harness.exists('pushTokenOwners/hash-transferred')).toBe(true);
   });
 });
 

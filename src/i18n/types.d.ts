@@ -24,6 +24,7 @@ import type ptBRAuth from './resources/pt-BR/auth.json';
 import type ptBRSupport from './resources/pt-BR/support.json';
 import type ptBRMyPlan from './resources/pt-BR/myPlan.json';
 import type ptBREvolution from './resources/pt-BR/evolution.json';
+import type ptBRNotifications from './resources/pt-BR/notifications.json';
 
 declare module 'i18next' {
   interface CustomTypeOptions {
@@ -43,6 +44,7 @@ declare module 'i18next' {
       support: typeof ptBRSupport;
       myPlan: typeof ptBRMyPlan;
       evolution: typeof ptBREvolution;
+      notifications: typeof ptBRNotifications;
     };
     returnNull: false;
   }

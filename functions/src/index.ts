@@ -25,6 +25,13 @@ import { adminGetCouponHandler, adminListCouponsHandler } from './adminCoupons/a
 import { recordWorkoutLifecycleTelemetryHandler } from './telemetry/workoutLifecycleTelemetry';
 import { onTrustedWorkoutLifecycleEventCreated } from './telemetry/trustedWorkoutLifecycleTelemetry';
 import { authorizeWorkoutLifecycleMutationHandler } from './workoutLifecycle/authorizeMutation';
+import {
+  releasePushDeviceHandler,
+  syncPushDeviceHandler,
+} from './pushDevices/pushDeviceRegistration';
+import { dispatchTestNotificationHandler } from './notifications/qaDispatch';
+import { reconcileNotificationReceipts } from './notifications/receiptsReconciler';
+import { retryNotificationDispatches } from './notifications/retryScheduler';
 
 /**
  * AJ Fit Cloud Functions entry point.
@@ -179,3 +186,28 @@ export { cleanupPendingAccountDeletions };
  * concurrency reasoning.
  */
 export { onAccountDeletionRequested };
+
+/**
+ * Push foundation callables. Sync requires Auth; release additionally supports
+ * the narrow post-logout installation-proof capability. App Check is enforced
+ * for both paths.
+ */
+export const syncPushDevice = onCall(
+  { enforceAppCheck: true },
+  syncPushDeviceHandler,
+);
+export const releasePushDevice = onCall(
+  { enforceAppCheck: true },
+  releasePushDeviceHandler,
+);
+
+/**
+ * Fixed-copy, self-targeted admin probe. This is not a general notification
+ * API and accepts no target, title, body, category or data from the client.
+ */
+export const dispatchTestNotification = onCall(
+  { enforceAppCheck: true },
+  dispatchTestNotificationHandler,
+);
+
+export { reconcileNotificationReceipts, retryNotificationDispatches };

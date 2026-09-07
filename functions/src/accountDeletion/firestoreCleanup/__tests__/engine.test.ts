@@ -28,6 +28,19 @@ function seedFullUser(harness: ReturnType<typeof createFakeFirestore>, uid: stri
   harness.seed(`users/${uid}/pendingEvolutions/current`);
   harness.seed(`users/${uid}/workoutLifecycleAuthorityGrants/current`);
   harness.seed(`users/${uid}/workoutLifecycleTrustedTelemetryReceipts/receipt1`);
+  harness.seed(`users/${uid}/devices/install1`, { ownerUid: uid });
+  harness.seed('pushInstallations/install1', {
+    ownerUid: uid,
+    tokenHash: 'token-hash',
+    ownershipVersion: 1,
+  });
+  harness.seed('pushTokenOwners/token-hash', {
+    ownerUid: uid,
+    installationId: 'install1',
+    ownershipVersion: 1,
+  });
+  harness.seed('notificationDispatches/dispatch1', { uid });
+  harness.seed('notificationDispatches/dispatch1/deliveries/install1', { uid });
   harness.seed(`users/${uid}/privateSecurity/photoVault`);
 }
 
@@ -68,6 +81,11 @@ describe('runFirestoreCleanup — happy path', () => {
     expect(harness.listUnder('users/uid-1/pendingEvolutions/')).toHaveLength(0);
     expect(harness.listUnder('users/uid-1/workoutLifecycleAuthorityGrants/')).toHaveLength(0);
     expect(harness.listUnder('users/uid-1/workoutLifecycleTrustedTelemetryReceipts/')).toHaveLength(0);
+    expect(harness.listUnder('users/uid-1/devices/')).toHaveLength(0);
+    expect(harness.exists('pushTokenOwners/token-hash')).toBe(false);
+    expect(harness.data('pushInstallations/install1')?.ownerUid).toBeNull();
+    expect(harness.exists('notificationDispatches/dispatch1')).toBe(false);
+    expect(harness.exists('notificationDispatches/dispatch1/deliveries/install1')).toBe(false);
   });
 
   it('cleanup outcome is identical for a Free or Premium user (no subscription check exists here)', async () => {
@@ -159,7 +177,9 @@ describe('runFirestoreCleanup — ordering (Fase 6 §10)', () => {
     });
 
     expect(order).toEqual([
-      'questionnaires', 'assessments', 'progressPhotos', 'workoutProgramDescendants',
+      'questionnaires', 'assessments', 'progressPhotos',
+      'pushTokenOwners', 'pushInstallations', 'pushDevices', 'notificationDispatches',
+      'workoutProgramDescendants',
       'workoutLifecycleEvents', 'workoutLifecycleAuthorityGrants', 'workoutLifecycleTrustedTelemetryReceipts', 'pendingEvolutions', 'programInstances', 'trainingCycles', 'workoutLifecycleState',
       'workoutPrograms', 'workoutProgramState', 'workoutExecutions', 'userProfile',
     ]);

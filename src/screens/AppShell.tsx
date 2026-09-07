@@ -23,6 +23,7 @@ import { ProgressScreen } from './ProgressScreen';
 import { ProfileScreen } from './ProfileScreen';
 import { AssessmentScreen } from './AssessmentScreen';
 import { SettingsScreen } from './SettingsScreen';
+import { NotificationSettingsScreen } from './NotificationSettingsScreen';
 import { SecurityScreen } from './SecurityScreen';
 import { ChangePasswordScreen } from './ChangePasswordScreen';
 import { DeleteAccountScreen } from './DeleteAccountScreen';
@@ -162,6 +163,7 @@ function AppShellContent({
   const [showAssessment, setShowAssessment] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showSecurity, setShowSecurity] = useState(false);
+  const [showNotificationSettings, setShowNotificationSettings] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [showDeleteAccount, setShowDeleteAccount] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
@@ -186,6 +188,7 @@ function AppShellContent({
     showAssessment ||
     showSettings ||
     showSecurity ||
+    showNotificationSettings ||
     showChangePassword ||
     showEditProfile ||
     showMyPlan ||
@@ -546,6 +549,7 @@ function AppShellContent({
           onBack={() => setShowSettings(false)}
           onOpenEditProfile={() => setShowEditProfile(true)}
           onOpenSecurity={() => setShowSecurity(true)}
+          onOpenNotifications={() => setShowNotificationSettings(true)}
           onOpenHelpCenter={() => setSupportRoute({ name: 'help' })}
           onReportProblem={() => {
             setLastFormRoute({ type: 'BUG' });
@@ -558,6 +562,11 @@ function AppShellContent({
           onOpenDeleteAccount={() => setShowDeleteAccount(true)}
         />
       </PersistentScreen>
+      {showNotificationSettings ? (
+        <View style={FULL_BLEED.overlayZ50}>
+          <NotificationSettingsScreen onBack={() => setShowNotificationSettings(false)} />
+        </View>
+      ) : null}
       <PersistentScreen
         active={showSecurity}
         prewarm={prewarmed.SECURITY}

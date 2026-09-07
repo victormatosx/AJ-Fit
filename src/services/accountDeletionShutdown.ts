@@ -4,6 +4,7 @@ import { clearWorkoutSubstitutionPreferences } from './workoutSubstitutionsStora
 import { clearStoredUnitsPreference } from '../units/unitsStorage';
 import { clearPrescriptionSnapshotsForUser } from '../workoutPrescription/storage';
 import { cleanupRestSessionArtifacts } from './restSessionCleanup';
+import { clearNotificationAccountPreferenceState } from './notificationAccountLifecycle';
 
 /**
  * Client-side shutdown after `requestAccountDeletion` has durably accepted
@@ -87,6 +88,7 @@ export async function finalizeAccountDeletionClientShutdown(
     clearStoredUnitsPreference(),
     clearPrescriptionSnapshotsForUser(uid),
     cleanupRestSessionArtifacts(),
+    clearNotificationAccountPreferenceState(uid),
   ]);
 
   await logout();

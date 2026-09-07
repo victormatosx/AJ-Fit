@@ -91,6 +91,13 @@
       "expo-sharing",
       "expo-video",
       [
+        "expo-notifications",
+        {
+          "defaultChannel": "ajfit_general",
+          "enableBackgroundRemoteNotifications": false
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "backgroundColor": "#000000",

@@ -1,27 +1,26 @@
 /**
- * Minimal in-memory fake of the slice of the Firestore Admin SDK this
- * module's engine actually uses: `collection().doc()`, `collection()
- * .orderBy().limit().startAfter().get()`, `doc().get()/.delete()`, and
- * `firestore.bulkWriter()`. NOT a general-purpose Firestore emulator
- * substitute — just enough surface, faithfully enough (real pagination via
- * id ordering + `startAfter`, real "document really removed from the
- * store" semantics), to unit-test `deleteCollectionDocuments`/`resources.ts`/
- * `engine.ts` without any network or the real Emulator. The Fase 6 report's
- * Emulator-based integration test is what proves this against real
- * Firestore behavior.
+ * Minimal in-memory fake for account-deletion resource tests. Transaction
+ * callbacks are serialized by the JavaScript turn; the Firestore Emulator
+ * suite proves real contention semantics.
  */
 
+export interface FakeSnapshot {
+  exists: boolean;
+  ref: FakeDocRef;
+  data(): Record<string, unknown> | undefined;
+}
 export interface FakeDocRef {
   path: string;
   id: string;
-  get(): Promise<{ exists: boolean; ref: FakeDocRef }>;
+  get(): Promise<FakeSnapshot>;
+  set(data: Record<string, unknown>, options?: { merge?: boolean }): Promise<void>;
   delete(): Promise<void>;
   collection(name: string): FakeCollectionRef;
 }
 
-interface FakeSnapshotDoc {
+interface FakeSnapshotDoc extends FakeSnapshot {
   id: string;
-  ref: FakeDocRef;
+  data(): Record<string, unknown>;
 }
 
 interface FakeQuery {
@@ -29,6 +28,7 @@ interface FakeQuery {
   orderBy(field: string): FakeQuery;
   limit(n: number): FakeQuery;
   startAfter(doc: FakeSnapshotDoc): FakeQuery;
+  where(field: string, operator: '==', value: unknown): FakeQuery;
 }
 
 export interface FakeCollectionRef extends FakeQuery {
@@ -42,36 +42,63 @@ export interface FakeBulkWriter {
   close(): Promise<void>;
 }
 
+interface FakeTransaction {
+  get(ref: FakeDocRef): Promise<FakeSnapshot>;
+  set(ref: FakeDocRef, data: Record<string, unknown>, options?: { merge?: boolean }): void;
+  delete(ref: FakeDocRef): void;
+}
+
 export interface FakeFirestore {
   collection(name: string): FakeCollectionRef;
   bulkWriter(): FakeBulkWriter;
+  recursiveDelete(ref: FakeDocRef): Promise<void>;
+  runTransaction<T>(operation: (transaction: FakeTransaction) => Promise<T>): Promise<T>;
 }
 
 export interface FakeFirestoreHarness {
   db: FakeFirestore;
-  /** Seeds a document as "existing" — path segments joined with '/', e.g. `seed('users/uid-1')`. */
-  seed(path: string): void;
-  /** Whether a document currently exists in the fake store. */
+  seed(path: string, data?: Record<string, unknown>): void;
   exists(path: string): boolean;
-  /** All currently-existing document paths under a given prefix (for assertions). */
+  data(path: string): Record<string, unknown> | undefined;
   listUnder(prefix: string): string[];
-  /** Forces the NEXT `bulkWriter.close()` call to reject, simulating a mid-flush failure. */
   failNextBulkWriterClose(error: Error): void;
 }
 
 export function createFakeFirestore(): FakeFirestoreHarness {
   const existing = new Set<string>();
+  const documents = new Map<string, Record<string, unknown>>();
   let pendingCloseFailure: Error | null = null;
+
+  function write(path: string, data: Record<string, unknown>, merge = false) {
+    existing.add(path);
+    documents.set(path, merge ? { ...documents.get(path), ...data } : { ...data });
+  }
+
+  function remove(path: string) {
+    existing.delete(path);
+    documents.delete(path);
+  }
+
+  function snapshot(path: string): FakeSnapshot {
+    return {
+      exists: existing.has(path),
+      ref: docRef(path),
+      data: () => documents.get(path),
+    };
+  }
 
   function docRef(path: string): FakeDocRef {
     return {
       path,
       id: path.split('/').pop() as string,
       async get() {
-        return { exists: existing.has(path), ref: docRef(path) };
+        return snapshot(path);
+      },
+      async set(data, options) {
+        write(path, data, options?.merge === true);
       },
       async delete() {
-        existing.delete(path);
+        remove(path);
       },
       collection(name: string) {
         return collectionRef(`${path}/${name}`);
@@ -80,33 +107,54 @@ export function createFakeFirestore(): FakeFirestoreHarness {
   }
 
   function collectionRef(path: string): FakeCollectionRef {
-    function buildQuery(state: { limit?: number; startAfterId?: string }): FakeQuery {
+    function buildQuery(state: {
+      limit?: number;
+      startAfterId?: string;
+      filters: Array<{ field: string; value: unknown }>;
+    }): FakeQuery {
       return {
         orderBy() {
           return buildQuery(state);
         },
-        limit(n: number) {
+        limit(n) {
           return buildQuery({ ...state, limit: n });
         },
-        startAfter(doc: FakeSnapshotDoc) {
-          return buildQuery({ ...state, startAfterId: doc.id });
+        startAfter(document) {
+          return buildQuery({ ...state, startAfterId: document.id });
+        },
+        where(field, operator, value) {
+          if (operator !== '==') throw new Error(`unsupported fake operator: ${operator}`);
+          return buildQuery({
+            ...state,
+            filters: [...state.filters, { field, value }],
+          });
         },
         async get() {
           const prefix = `${path}/`;
           let ids = [...existing]
-            .filter((p) => p.startsWith(prefix) && !p.slice(prefix.length).includes('/'))
-            .map((p) => p.slice(prefix.length))
+            .filter((candidate) =>
+              candidate.startsWith(prefix) &&
+              !candidate.slice(prefix.length).includes('/') &&
+              state.filters.every(({ field, value }) => documents.get(candidate)?.[field] === value),
+            )
+            .map((candidate) => candidate.slice(prefix.length))
             .sort();
 
           if (state.startAfterId) {
-            const idx = ids.indexOf(state.startAfterId);
-            ids = idx >= 0 ? ids.slice(idx + 1) : ids;
+            const index = ids.indexOf(state.startAfterId);
+            ids = index >= 0 ? ids.slice(index + 1) : ids;
           }
-          if (state.limit !== undefined) {
-            ids = ids.slice(0, state.limit);
-          }
+          if (state.limit !== undefined) ids = ids.slice(0, state.limit);
 
-          const docs = ids.map((id) => ({ id, ref: docRef(`${path}/${id}`) }));
+          const docs: FakeSnapshotDoc[] = ids.map((id) => {
+            const pathForDocument = `${path}/${id}`;
+            return {
+              id,
+              exists: true,
+              ref: docRef(pathForDocument),
+              data: () => documents.get(pathForDocument) ?? {},
+            };
+          });
           return { empty: docs.length === 0, size: docs.length, docs };
         },
       };
@@ -115,21 +163,21 @@ export function createFakeFirestore(): FakeFirestoreHarness {
     return {
       path,
       firestore: db,
-      doc(id: string) {
+      doc(id) {
         return docRef(`${path}/${id}`);
       },
-      ...buildQuery({}),
+      ...buildQuery({ filters: [] }),
     };
   }
 
   const db: FakeFirestore = {
-    collection(name: string) {
+    collection(name) {
       return collectionRef(name);
     },
-    bulkWriter(): FakeBulkWriter {
+    bulkWriter() {
       const pending: FakeDocRef[] = [];
       return {
-        delete(ref: FakeDocRef) {
+        delete(ref) {
           pending.push(ref);
         },
         async close() {
@@ -138,24 +186,46 @@ export function createFakeFirestore(): FakeFirestoreHarness {
             pendingCloseFailure = null;
             throw error;
           }
-          for (const ref of pending) existing.delete(ref.path);
+          pending.forEach((ref) => remove(ref.path));
         },
       };
+    },
+    async recursiveDelete(ref) {
+      [...existing]
+        .filter((path) => path === ref.path || path.startsWith(`${ref.path}/`))
+        .forEach(remove);
+    },
+    async runTransaction(operation) {
+      const writes: Array<() => void> = [];
+      const result = await operation({
+        get: async (ref) => snapshot(ref.path),
+        set: (ref, data, options) => {
+          writes.push(() => write(ref.path, data, options?.merge === true));
+        },
+        delete: (ref) => {
+          writes.push(() => remove(ref.path));
+        },
+      });
+      writes.forEach((commit) => commit());
+      return result;
     },
   };
 
   return {
     db,
-    seed(path: string) {
-      existing.add(path);
+    seed(path, data = {}) {
+      write(path, data);
     },
-    exists(path: string) {
+    exists(path) {
       return existing.has(path);
     },
-    listUnder(prefix: string) {
-      return [...existing].filter((p) => p.startsWith(prefix)).sort();
+    data(path) {
+      return documents.get(path);
     },
-    failNextBulkWriterClose(error: Error) {
+    listUnder(prefix) {
+      return [...existing].filter((path) => path.startsWith(prefix)).sort();
+    },
+    failNextBulkWriterClose(error) {
       pendingCloseFailure = error;
     },
   };

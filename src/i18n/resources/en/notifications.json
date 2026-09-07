@@ -1,0 +1,31 @@
+{
+  "screenTitle": "Notifications",
+  "groups": {
+    "workoutsAndReminders": {
+      "title": "Workouts & reminders",
+      "description": "Get reminders about your workouts and routine."
+    },
+    "evolutionAndAchievements": {
+      "title": "Evolution & achievements",
+      "description": "Follow your evolution, new phases and achievements."
+    },
+    "progress": {
+      "title": "Progress",
+      "description": "Get reminders to log and track your progress."
+    }
+  },
+  "permission": {
+    "granted": "Notifications are allowed on this device.",
+    "denied": "Notifications are turned off in this device's settings.",
+    "notDetermined": "Turn on notifications to follow your workouts and evolution.",
+    "unsupported": "This device does not support notifications.",
+    "error": "Couldn't check the notification status.",
+    "actions": {
+      "enable": "Enable notifications",
+      "openSettings": "Open device settings"
+    }
+  },
+  "errors": {
+    "changeFailed": "Couldn't save. Please try again."
+  }
+}

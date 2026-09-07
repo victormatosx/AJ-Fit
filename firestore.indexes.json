@@ -111,11 +111,57 @@
         { "fieldPath": "level", "order": "ASCENDING" },
         { "fieldPath": "cycleNumber", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "notificationDispatches",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "nextAttemptAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "deliveries",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "receiptNextCheckAt", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": [
     {
       "collectionGroup": "workoutLifecycleTrustedTelemetryReceipts",
+      "fieldPath": "expireAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "pushInstallations",
+      "fieldPath": "expireAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "pushTokenOwners",
+      "fieldPath": "expireAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "devices",
+      "fieldPath": "expireAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "notificationDispatches",
+      "fieldPath": "expireAt",
+      "ttl": true,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "deliveries",
       "fieldPath": "expireAt",
       "ttl": true,
       "indexes": []
