@@ -20,6 +20,9 @@ import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest';
 const PROJECT_ID = 'ajfit-rules-test';
 const UID = 'notification-owner';
 const OTHER_UID = 'notification-other';
+const RULES_PATH = process.env.FIRESTORE_RULES_PATH
+  ? resolve(process.env.FIRESTORE_RULES_PATH)
+  : resolve(__dirname, '../firestore.rules');
 let environment: RulesTestEnvironment;
 
 function db(uid: string) {
@@ -27,6 +30,10 @@ function db(uid: string) {
     email: `${uid}@example.com`,
     email_verified: true,
   }).firestore();
+}
+
+function unauthenticatedDb() {
+  return environment.unauthenticatedContext().firestore();
 }
 
 async function seedUsers() {
@@ -70,7 +77,7 @@ beforeAll(async () => {
   environment = await initializeTestEnvironment({
     projectId: PROJECT_ID,
     firestore: {
-      rules: readFileSync(resolve(__dirname, '../firestore.rules'), 'utf8'),
+      rules: readFileSync(RULES_PATH, 'utf8'),
     },
   });
 });
@@ -120,6 +127,41 @@ describe('notification preferences rules', () => {
       'metadata.updatedAt': serverTimestamp(),
     }));
   });
+
+  it('rejects unauthenticated updates', async () => {
+    await assertFails(updateDoc(doc(unauthenticatedDb(), 'users', UID), {
+      'preferences.notificationPreferences.progress': false,
+      'metadata.updatedAt': serverTimestamp(),
+    }));
+  });
+
+  it('rejects updates while the account deletion lock exists', async () => {
+    await environment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'accountDeletionLocks', UID), {
+        createdAt: Timestamp.now(),
+      });
+    });
+
+    await assertFails(updateDoc(doc(db(UID), 'users', UID), {
+      'preferences.notificationPreferences.progress': false,
+      'metadata.updatedAt': serverTimestamp(),
+    }));
+  });
+
+  it('rejects an unexpected notification preference field', async () => {
+    await assertFails(updateDoc(doc(db(UID), 'users', UID), {
+      'preferences.notificationPreferences.unexpected': false,
+      'metadata.updatedAt': serverTimestamp(),
+    }));
+  });
+
+  it('rejects privileged fields in the same update', async () => {
+    await assertFails(updateDoc(doc(db(UID), 'users', UID), {
+      'preferences.notificationPreferences.progress': false,
+      'subscription.entitlementActive': true,
+      'metadata.updatedAt': serverTimestamp(),
+    }));
+  });
 });
 
 describe('private push registries', () => {
@@ -133,5 +175,12 @@ describe('private push registries', () => {
     const reference = doc(db(UID), collectionPath, id);
     await assertFails(getDoc(reference));
     await assertFails(setDoc(reference, { ownerUid: UID }));
+  });
+
+  it('denies raw Expo Push Token writes from the client', async () => {
+    await assertFails(setDoc(doc(db(UID), 'pushTokenOwners', 'raw-token-hash'), {
+      ownerUid: UID,
+      expoPushToken: 'ExponentPushToken[client-must-not-write-this]',
+    }));
   });
 });
