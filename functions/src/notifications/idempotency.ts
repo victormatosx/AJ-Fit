@@ -5,8 +5,10 @@ import { Timestamp, type Firestore } from 'firebase-admin/firestore';
 import { assertValidDispatchRequest } from './contentPolicy';
 import {
   MAX_DISPATCH_ATTEMPTS,
+  NOTIFICATION_CATEGORIES,
   NOTIFICATION_DISPATCHES_COLLECTION,
   NOTIFICATION_RETENTION_MS,
+  NOTIFICATION_TYPES,
   type DispatchStatus,
   type NotificationDispatchRequest,
 } from './schema';
@@ -39,17 +41,33 @@ export function dispatchIdFor(idempotencyKey: string): string {
 }
 
 export function contractHashFor(request: NotificationDispatchRequest): string {
-  const contract = JSON.stringify({
+  const semanticContract = {
     uid: request.uid,
     type: request.type,
     category: request.category,
     sourceIdentity: request.sourceIdentity,
     notificationId: request.notificationId,
-    title: request.title,
-    body: request.body,
     intent: request.intent ?? null,
     data: request.data ?? null,
-  });
+  };
+  // Product copy is presentation selected from a strict allowlist using the
+  // user's current locale. A replay after a language change is still the same
+  // semantic notification and must deduplicate instead of conflicting. Keep
+  // the Phase-1 QA hash byte-for-byte compatible with already-persisted probe
+  // dispatches, while product types fence only identity-bearing fields.
+  const contract = JSON.stringify(request.type === 'QA_TEST'
+    ? {
+        uid: request.uid,
+        type: request.type,
+        category: request.category,
+        sourceIdentity: request.sourceIdentity,
+        notificationId: request.notificationId,
+        title: request.title,
+        body: request.body,
+        intent: request.intent ?? null,
+        data: request.data ?? null,
+      }
+    : semanticContract);
   return createHash('sha256').update(contract, 'utf8').digest('hex');
 }
 
@@ -219,8 +237,10 @@ export function persistedDispatchRequest(
   if (
     typeof record.uid !== 'string' ||
     typeof record.notificationId !== 'string' ||
-    record.type !== 'QA_TEST' ||
-    record.category !== 'OPERATIONAL' ||
+    typeof record.type !== 'string' ||
+    !(NOTIFICATION_TYPES as readonly string[]).includes(record.type) ||
+    typeof record.category !== 'string' ||
+    !(NOTIFICATION_CATEGORIES as readonly string[]).includes(record.category) ||
     typeof record.sourceIdentity !== 'string' ||
     typeof record.title !== 'string' ||
     typeof record.body !== 'string' ||
@@ -235,8 +255,8 @@ export function persistedDispatchRequest(
   const parsed: NotificationDispatchRequest = {
     uid: record.uid,
     notificationId: record.notificationId,
-    type: record.type,
-    category: record.category,
+    type: record.type as NotificationDispatchRequest['type'],
+    category: record.category as NotificationDispatchRequest['category'],
     sourceIdentity: record.sourceIdentity,
     title: record.title,
     body: record.body,

@@ -4,11 +4,13 @@ export const NOTIFICATION_DELIVERIES_SUBCOLLECTION = 'deliveries';
 export const NOTIFICATION_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
 export const MAX_DISPATCH_ATTEMPTS = 5;
 
-/**
- * Phase 1 deliberately exposes only the infrastructure probe. Product types
- * are added with their typed builders in their own phases.
- */
-export const NOTIFICATION_TYPES = ['QA_TEST'] as const;
+export const NOTIFICATION_TYPES = [
+  'QA_TEST',
+  'EVOLUTION_UNLOCKED',
+  'PROGRAM_UPDATED',
+  'BILLING_ISSUE',
+  'PREMIUM_ENDED',
+] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
 export const NOTIFICATION_CATEGORIES = [

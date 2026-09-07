@@ -2,6 +2,8 @@ import * as crypto from 'crypto';
 import type { Request } from 'firebase-functions/v2/https';
 import type { Response } from 'express';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { handleRevenueCatWebhook } from '../revenuecat';
+import { RevenueCatApiError } from '../revenueCatApi';
 
 const subscriptionSyncMocks = vi.hoisted(() => ({
   applySubscriptionEventAtomically: vi.fn(),
@@ -37,6 +39,13 @@ const attributionSyncMocks = vi.hoisted(() => ({
   }),
 }));
 
+const notificationMocks = vi.hoisted(() => ({
+  dispatchRevenueCatNotification: vi.fn().mockResolvedValue({
+    status: 'NO_ELIGIBLE_DEVICE',
+    dispatchId: 'notification-dispatch',
+  }),
+}));
+
 vi.mock('../subscriptionSync', () => subscriptionSyncMocks);
 vi.mock('../revenueCatIdentity', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../revenueCatIdentity')>();
@@ -50,9 +59,7 @@ vi.mock('../revenueCatApi', async (importOriginal) => {
   };
 });
 vi.mock('../../attribution/attributionSync', () => attributionSyncMocks);
-
-import { handleRevenueCatWebhook } from '../revenuecat';
-import { RevenueCatApiError } from '../revenueCatApi';
+vi.mock('../../notifications/revenueCatNotifications', () => notificationMocks);
 
 const SECRET = 'test-signing-secret';
 const ORIGINAL_SECRET = process.env.REVENUECAT_WEBHOOK_SECRET;
@@ -191,6 +198,9 @@ describe('handleRevenueCatWebhook validation order', () => {
   beforeEach(() => {
     process.env.REVENUECAT_WEBHOOK_SECRET = SECRET;
     vi.clearAllMocks();
+    notificationMocks.dispatchRevenueCatNotification.mockResolvedValue({
+      status: 'NO_ELIGIBLE_DEVICE', dispatchId: 'notification-dispatch',
+    });
     identityMocks.resolveRevenueCatFirebaseUid.mockResolvedValue({
       status: 'resolved',
       uid: completeRenewalEvent.app_user_id,
@@ -883,6 +893,97 @@ describe('handleRevenueCatWebhook validation order', () => {
     expect(identityMocks.resolveRevenueCatFirebaseUid).not.toHaveBeenCalled();
     expect(subscriptionSyncMocks.applySubscriptionEventAtomically).not.toHaveBeenCalled();
   });
+
+  it('dispatches BILLING_ISSUE only after the subscription transaction is processed', async () => {
+    const event = {
+      ...completeRenewalEvent,
+      id: 'evt_billing_issue_notification',
+      type: 'BILLING_ISSUE',
+      grace_period_expiration_at_ms: Date.parse('2026-09-15T12:00:00.000Z'),
+    };
+
+    const result = await invoke({ api_version: '1.0', event });
+
+    expect(result.body()).toEqual({ status: 'processed' });
+    expect(notificationMocks.dispatchRevenueCatNotification).toHaveBeenCalledWith({
+      uid: completeRenewalEvent.app_user_id,
+      eventId: event.id,
+      eventType: 'BILLING_ISSUE',
+      concernsPremium: true,
+      entitlementActive: true,
+    });
+    expect(
+      subscriptionSyncMocks.applySubscriptionEventAtomically.mock.invocationCallOrder[0],
+    ).toBeLessThan(notificationMocks.dispatchRevenueCatNotification.mock.invocationCallOrder[0]);
+  });
+
+  it('routes CANCELLATION through the notification filter with entitlement still active', async () => {
+    const result = await invoke({
+      api_version: '1.0',
+      event: { ...completeRenewalEvent, id: 'evt_cancel_notification', type: 'CANCELLATION' },
+    });
+
+    expect(result.body()).toEqual({ status: 'processed' });
+    expect(notificationMocks.dispatchRevenueCatNotification).toHaveBeenCalledWith(
+      expect.objectContaining({ eventType: 'CANCELLATION', entitlementActive: true }),
+    );
+  });
+
+  it('evaluates PREMIUM_ENDED only after EXPIRATION resolved entitlement inactive', async () => {
+    const event = {
+      ...completeRenewalEvent,
+      id: 'evt_expiration_notification',
+      type: 'EXPIRATION',
+      expiration_at_ms: Date.parse('2026-08-10T11:59:59.000Z'),
+    };
+
+    const result = await invoke({ api_version: '1.0', event });
+
+    expect(result.body()).toEqual({ status: 'processed' });
+    expect(notificationMocks.dispatchRevenueCatNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventId: event.id,
+        eventType: 'EXPIRATION',
+        concernsPremium: true,
+        entitlementActive: false,
+      }),
+    );
+  });
+
+  it('re-evaluates a duplicate webhook through notification idempotency', async () => {
+    subscriptionSyncMocks.applySubscriptionEventAtomically.mockResolvedValue({ status: 'duplicate' });
+    const event = { ...completeRenewalEvent, id: 'evt_billing_duplicate', type: 'BILLING_ISSUE' };
+
+    const result = await invoke({ api_version: '1.0', event });
+
+    expect(result.body()).toEqual({ status: 'duplicate' });
+    expect(notificationMocks.dispatchRevenueCatNotification).toHaveBeenCalledOnce();
+  });
+
+  it('does not evaluate notification for a stale billing event', async () => {
+    subscriptionSyncMocks.applySubscriptionEventAtomically.mockResolvedValue({ status: 'stale' });
+
+    const result = await invoke({
+      api_version: '1.0',
+      event: { ...completeRenewalEvent, id: 'evt_billing_stale', type: 'BILLING_ISSUE' },
+    });
+
+    expect(result.body()).toEqual({ status: 'stale' });
+    expect(notificationMocks.dispatchRevenueCatNotification).not.toHaveBeenCalled();
+  });
+
+  it('keeps the subscription processed when notification dispatch throws unexpectedly', async () => {
+    notificationMocks.dispatchRevenueCatNotification.mockRejectedValueOnce(
+      new Error('notification dispatcher unavailable'),
+    );
+    const event = { ...completeRenewalEvent, id: 'evt_billing_push_failure', type: 'BILLING_ISSUE' };
+
+    const result = await invoke({ api_version: '1.0', event });
+
+    expect(subscriptionSyncMocks.applySubscriptionEventAtomically).toHaveBeenCalledOnce();
+    expect(result.statusCode()).toBe(200);
+    expect(result.body()).toEqual({ status: 'processed' });
+  });
 });
 
 // Fase 4B — integration-level tests for `confirmPromoCodeAttributionIfApplicable`
@@ -908,6 +1009,9 @@ describe('handleRevenueCatWebhook — Fase 4B attribution confirmation wiring', 
   beforeEach(() => {
     process.env.REVENUECAT_WEBHOOK_SECRET = SECRET;
     vi.clearAllMocks();
+    notificationMocks.dispatchRevenueCatNotification.mockResolvedValue({
+      status: 'NO_ELIGIBLE_DEVICE', dispatchId: 'notification-dispatch',
+    });
     identityMocks.resolveRevenueCatFirebaseUid.mockResolvedValue({
       status: 'resolved',
       uid: 'firebase-uid-001',
@@ -1224,6 +1328,9 @@ describe('FASE 4B.1 — recovery: two consecutive deliveries of the SAME event.i
   beforeEach(() => {
     process.env.REVENUECAT_WEBHOOK_SECRET = SECRET;
     vi.clearAllMocks();
+    notificationMocks.dispatchRevenueCatNotification.mockResolvedValue({
+      status: 'NO_ELIGIBLE_DEVICE', dispatchId: 'notification-dispatch',
+    });
     identityMocks.resolveRevenueCatFirebaseUid.mockResolvedValue({
       status: 'resolved',
       uid: 'firebase-uid-recovery',

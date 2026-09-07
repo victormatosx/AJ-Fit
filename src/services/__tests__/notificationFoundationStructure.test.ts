@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 const root = resolve(__dirname, '../../..');
 const read = (path: string) => readFileSync(resolve(root, path), 'utf8');
 
-describe('push foundation structural boundaries', () => {
+describe('push notification structural boundaries', () => {
   it('keeps RevenueCat bootstrap before React runtime composition', () => {
     const app = read('App.tsx');
     expect(app.indexOf('configureRevenueCat().catch')).toBeLessThan(
@@ -40,26 +40,30 @@ describe('push foundation structural boundaries', () => {
       .toContain('rest_timer');
   });
 
-  it('registers no product notification type in the dispatcher contract', () => {
+  it('registers only QA_TEST and the four Phase-2 product types', () => {
     const schema = read('functions/src/notifications/schema.ts');
-    expect(schema).toContain("NOTIFICATION_TYPES = ['QA_TEST']");
+    for (const type of [
+      'QA_TEST',
+      'EVOLUTION_UNLOCKED',
+      'PROGRAM_UPDATED',
+      'BILLING_ISSUE',
+      'PREMIUM_ENDED',
+    ]) {
+      expect(schema).toContain(`'${type}'`);
+    }
     for (const type of [
       'WORKOUT_DAY',
       'MISSED_WORKOUT',
       'RE_ENGAGEMENT_EARLY',
       'RE_ENGAGEMENT_LATE',
       'RECOVERY_DAY',
-      'EVOLUTION_UNLOCKED',
       'EVOLUTION_APPROACHING',
       'WEEK_COMPLETED',
       'WEEK_STREAK',
-      'PROGRAM_UPDATED',
       'GOAL_PROXIMITY',
       'PHOTO_REMINDER',
       'ASSESSMENT_REMINDER',
       'COMPARE_PROGRESS',
-      'BILLING_ISSUE',
-      'PREMIUM_ENDED',
     ]) {
       expect(schema).not.toContain(type);
     }
@@ -71,6 +75,20 @@ describe('push foundation structural boundaries', () => {
     );
     expect(read('functions/src/notifications/dispatcher.ts')).not.toContain('exp.host');
     expect(read('functions/src/notifications/qaDispatch.ts')).not.toContain('exp.host');
+    expect(read('functions/src/notifications/workoutLifecycleNotifications.ts'))
+      .not.toContain('exp.host');
+    expect(read('functions/src/notifications/revenueCatNotifications.ts'))
+      .not.toContain('exp.host');
+  });
+
+  it('connects product candidates only after their persisted business facts', () => {
+    const lifecycle = read('functions/src/telemetry/trustedWorkoutLifecycleTelemetry.ts');
+    expect(lifecycle.indexOf('emitTrustedWorkoutLifecycleTelemetry(lifecycleEvent'))
+      .toBeLessThan(lifecycle.indexOf('dispatchWorkoutLifecycleNotification({'));
+
+    const revenueCat = read('functions/src/billing/revenuecat.ts');
+    expect(revenueCat.lastIndexOf('applySubscriptionEventAtomically('))
+      .toBeLessThan(revenueCat.lastIndexOf('dispatchRevenueCatNotificationAfterSubscription({'));
   });
 
   it('preserves current account-deletion workout descendant cleanup', () => {

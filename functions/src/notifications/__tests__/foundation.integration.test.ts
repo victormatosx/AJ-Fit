@@ -4,7 +4,13 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { deleteApp, initializeApp, type App } from 'firebase-admin/app';
 import { getFirestore, Timestamp, type Firestore } from 'firebase-admin/firestore';
 
-import { buildQaTestNotification } from '../contentPolicy';
+import {
+  buildBillingIssueNotification,
+  buildEvolutionUnlockedNotification,
+  buildPremiumEndedNotification,
+  buildProgramUpdatedNotification,
+  buildQaTestNotification,
+} from '../contentPolicy';
 import { loadEligibleDevices } from '../deviceEligibility';
 import { dispatchNotification, type DispatcherDependencies } from '../dispatcher';
 import type {
@@ -20,6 +26,7 @@ import {
 import { runReceiptsReconciliation } from '../receiptsReconciler';
 import { runDispatchRetries } from '../retryScheduler';
 import { NOTIFICATION_DISPATCHES_COLLECTION } from '../schema';
+import { dispatchUserNotificationCandidate } from '../userNotificationDispatch';
 import { createPushDeviceHandlers } from '../../pushDevices/pushDeviceRegistration';
 
 const enabled = process.env.PUSH_FOUNDATION_INTEGRATION === '1';
@@ -350,6 +357,96 @@ describe.skipIf(!enabled)('push foundation — Firestore Emulator', () => {
   });
 
   describe('idempotency and dispatcher', () => {
+    it.each([
+      ['EVOLUTION_UNLOCKED', buildEvolutionUnlockedNotification({
+        uid: UID_A, lifecycleEventId: 'wle-earned-integration', locale: 'pt-BR', variant: 'EVOLUTION',
+      })],
+      ['PROGRAM_UPDATED', buildProgramUpdatedNotification({
+        uid: UID_A, lifecycleEventId: 'wle-adapted-integration', locale: 'pt-BR',
+      })],
+      ['BILLING_ISSUE', buildBillingIssueNotification({
+        uid: UID_A, revenueCatEventId: 'rc-billing-integration', locale: 'pt-BR',
+      })],
+      ['PREMIUM_ENDED', buildPremiumEndedNotification({
+        uid: UID_A, revenueCatEventId: 'rc-expired-integration', locale: 'pt-BR',
+      })],
+    ] as const)('deduplicates a replay of %s in the real dispatch store', async (_type, request) => {
+      await seedEligibleDevice();
+      const expo = fakeExpo();
+
+      const first = await dispatchNotification(request, dependencies(expo));
+      const replay = await dispatchNotification(request, dependencies(expo));
+
+      expect(first.status).toBe('PENDING_RECEIPTS');
+      expect(replay.status).toBe('DUPLICATE');
+      expect(expo.send).toHaveBeenCalledOnce();
+    });
+
+    it('deduplicates the same product event after a locale change', async () => {
+      await seedEligibleDevice();
+      const expo = fakeExpo();
+      const ptBr = buildEvolutionUnlockedNotification({
+        uid: UID_A,
+        lifecycleEventId: 'wle-earned-locale-change',
+        locale: 'pt-BR',
+        variant: 'EVOLUTION',
+      });
+      const en = buildEvolutionUnlockedNotification({
+        uid: UID_A,
+        lifecycleEventId: 'wle-earned-locale-change',
+        locale: 'en',
+        variant: 'EVOLUTION',
+      });
+
+      expect((await dispatchNotification(ptBr, dependencies(expo))).status)
+        .toBe('PENDING_RECEIPTS');
+      expect((await dispatchNotification(en, dependencies(expo))).status)
+        .toBe('DUPLICATE');
+      expect(expo.send).toHaveBeenCalledOnce();
+    });
+
+    it('persists product preference suppression before reaching Expo', async () => {
+      await db.collection('users').doc(UID_A).update({
+        preferences: {
+          language: 'pt-BR',
+          notificationPreferences: { evolutionAndAchievements: false },
+        },
+      });
+      await seedEligibleDevice();
+      const expo = fakeExpo();
+
+      const outcome = await dispatchUserNotificationCandidate({
+        uid: UID_A,
+        category: 'EVOLUTION_AND_ACHIEVEMENTS',
+        build: (locale) => buildEvolutionUnlockedNotification({
+          uid: UID_A, lifecycleEventId: 'wle-preference-off', locale, variant: 'EVOLUTION',
+        }),
+      }, dependencies(expo));
+
+      expect(outcome.status).toBe('SUPPRESSED_BY_PREFERENCE');
+      expect(expo.send).not.toHaveBeenCalled();
+      const dispatch = await db.collection(NOTIFICATION_DISPATCHES_COLLECTION)
+        .doc(outcome.dispatchId).get();
+      expect(dispatch.data()).toMatchObject({
+        status: 'SUPPRESSED_BY_PREFERENCE',
+        terminalReason: 'DISABLED_BY_USER',
+      });
+    });
+
+    it('keeps an event-driven candidate terminal and harmless without a device', async () => {
+      const expo = fakeExpo();
+      const outcome = await dispatchUserNotificationCandidate({
+        uid: UID_A,
+        category: 'OPERATIONAL',
+        build: (locale) => buildBillingIssueNotification({
+          uid: UID_A, revenueCatEventId: 'rc-no-device', locale,
+        }),
+      }, dependencies(expo));
+
+      expect(outcome.status).toBe('NO_ELIGIBLE_DEVICE');
+      expect(expo.send).not.toHaveBeenCalled();
+    });
+
     it('allows one concurrent worker and fences a stale claimant', async () => {
       const request = qaRequest();
       const [first, second] = await Promise.all([

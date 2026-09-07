@@ -1,6 +1,10 @@
 import type { Firestore } from 'firebase-admin/firestore';
 
 import { db as defaultDb } from '../lib/firebaseAdmin';
+import {
+  NOTIFICATION_LOCALES,
+  type NotificationLocale,
+} from './contentPolicy';
 import type { NotificationCategory } from './schema';
 
 export const NOTIFICATION_PREFERENCE_CATEGORIES = [
@@ -30,6 +34,10 @@ export interface NotificationEligibilityResult {
   allowed: boolean;
   reason: NotificationEligibilityReason;
 }
+
+export interface UserNotificationPolicyResult extends NotificationEligibilityResult {
+  locale: NotificationLocale;
+}
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -49,16 +57,31 @@ export async function resolveNotificationEligibility(
   params: { uid: string; category: NotificationCategory },
   db: Firestore = defaultDb,
 ): Promise<NotificationEligibilityResult> {
+  const { locale: _locale, ...eligibility } = await resolveUserNotificationPolicy(params, db);
+  return eligibility;
+}
+
+export async function resolveUserNotificationPolicy(
+  params: { uid: string; category: NotificationCategory },
+  db: Firestore = defaultDb,
+): Promise<UserNotificationPolicyResult> {
   const [user, deletionLock] = await Promise.all([
     db.collection('users').doc(params.uid).get(),
     db.collection('accountDeletionLocks').doc(params.uid).get(),
   ]);
-  if (!user.exists) return { allowed: false, reason: 'USER_NOT_FOUND' };
-  if (deletionLock.exists) return { allowed: false, reason: 'ACCOUNT_INACTIVE' };
-  if (params.category === 'OPERATIONAL') return { allowed: true, reason: 'ALLOWED' };
+  const language = user.data()?.preferences?.language;
+  const locale: NotificationLocale =
+    typeof language === 'string' && (NOTIFICATION_LOCALES as readonly string[]).includes(language)
+      ? language as NotificationLocale
+      : 'pt-BR';
+  if (!user.exists) return { allowed: false, reason: 'USER_NOT_FOUND', locale };
+  if (deletionLock.exists) return { allowed: false, reason: 'ACCOUNT_INACTIVE', locale };
+  if (params.category === 'OPERATIONAL') {
+    return { allowed: true, reason: 'ALLOWED', locale };
+  }
 
   const allowed = readToggle(user.data()?.preferences, params.category);
   return allowed
-    ? { allowed: true, reason: 'ALLOWED' }
-    : { allowed: false, reason: 'DISABLED_BY_USER' };
+    ? { allowed: true, reason: 'ALLOWED', locale }
+    : { allowed: false, reason: 'DISABLED_BY_USER', locale };
 }
