@@ -1,4 +1,4 @@
-import { View, Text, ScrollView, Pressable } from 'react-native';
+import { View, Text, ScrollView, Pressable, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
@@ -16,6 +16,8 @@ import { resolveSessionDisplayName, type LooseTranslate } from '../workoutPrescr
 import { weekdayOfLocalDate, type ScheduleResolution } from '../scheduleEngine';
 import { EvolutionTicker } from '../components/evolution/EvolutionTicker';
 import type { EvolutionViewModel } from '../workoutEvolution/types';
+import { BodyMuscleMap } from '../components/fitness/BodyMuscleMap';
+import { deriveSessionMuscles } from '../lib/sessionMuscles';
 
 // Lifecycle claims on Home come from the shared EvolutionViewModel.
 
@@ -57,6 +59,11 @@ export function HomeScreen({
 }) {
   const { theme } = useTheme();
   const { t, i18n } = useTranslation(['home', 'profile']);
+  const { width: windowWidth } = useWindowDimensions();
+  // ~58px validated visually in the body-muscle-map spike; narrower devices
+  // (compact iPhones, small Android) shrink it slightly rather than letting
+  // it crowd the CTA/next-workout row it now shares a line with.
+  const bodyMuscleMapSize = windowWidth < 360 ? 46 : 58;
   const { user, profile } = useAuth();
   const firstName = getDisplayFirstName({
     profileName: profile?.profile.name,
@@ -89,6 +96,7 @@ export function HomeScreen({
   const firstSession = prescription.status === 'SUCCESS'
     ? prescription.plan.sessions[scheduledSessionIndex] ?? prescription.plan.sessions[0]
     : null;
+  const totalSets = firstSession?.exercises.reduce((sum, exercise) => sum + (exercise.sets ?? 0), 0) ?? 0;
   // REST_DAY/TODAY_COMPLETED/SCHEDULE_SETUP_REQUIRED only override the card
   // when there is otherwise a ready program — a legacy/blocked prescription
   // keeps its own outcome copy above (docs/workout-lifecycle/
@@ -111,6 +119,20 @@ export function HomeScreen({
   const isBlockedToday = scheduleResolution?.status === 'REST_DAY'
     || scheduleResolution?.status === 'ACTIVE_RECOVERY_DAY'
     || scheduleResolution?.status === 'TODAY_COMPLETED';
+  // BodyMuscleMap is a read-only visual projection of the session already
+  // resolved above (`firstSession.exercises[].exerciseId` is the effective,
+  // post-adaptation/substitution/omission id) — it never influences
+  // `firstSession` itself. Only computed/shown in the same "ready session"
+  // state that renders the title/meta/CTA above (not while
+  // loading/generating, and not under a schedule override, which replaces
+  // this content with different copy entirely). Requiring at least one
+  // resolved primary muscle means a catalog lookup miss degrades to "no
+  // map" instead of an empty gray silhouette.
+  const sessionExerciseIds = !showLoadingState && !generating && !scheduleOverrideKey && firstSession
+    ? firstSession.exercises.map((exercise) => exercise.exerciseId)
+    : [];
+  const sessionMuscles = deriveSessionMuscles(sessionExerciseIds);
+  const showBodyMuscleMap = sessionMuscles.primary.length > 0;
   const nextSession = prescription.status === 'SUCCESS' && isBlockedToday
     ? prescription.plan.sessions[(scheduleResolution as { nextSessionIndex: number }).nextSessionIndex] ?? null
     : null;
@@ -140,28 +162,27 @@ export function HomeScreen({
           <View
             style={{
               paddingHorizontal: 22,
-              paddingBottom: 18,
-              paddingTop: 12,
+              paddingBottom: 12,
+              paddingTop: 10,
               flexDirection: 'row',
-              alignItems: 'flex-end',
+              alignItems: 'center',
               justifyContent: 'space-between',
             }}
           >
-            <View>
+            <View style={{ flex: 1, marginRight: 12 }}>
               <MonoLabel>
                 {todayLine.toUpperCase()}
               </MonoLabel>
-              <Display size={34} style={{ marginTop: 8 }}>
-                {t('home:greeting.casual').toUpperCase()}
+              <Display size={28} style={{ marginTop: 6 }} numberOfLines={1}>
+                {`${t('home:greeting.casual')} ${localizedFirstName}.`.toUpperCase()}
               </Display>
-              <Display size={34}>{localizedFirstName}.</Display>
             </View>
             <Pressable onPress={onOpenProfile} hitSlop={8}>
               <ProfileAvatar
                 displayName={profile?.profile.name || firstName}
                 photoURL={profile?.profile.photoURL}
                 photoVersion={profile?.profile.photoVersion}
-                size={46}
+                size={40}
               />
             </Pressable>
           </View>
@@ -210,7 +231,7 @@ export function HomeScreen({
                       : scheduleOverrideKey
                         ? t(`home:schedule.${scheduleOverrideKey}.title`)
                         : firstSession
-                          ? `${prescription.status === 'SUCCESS' ? prescription.plan.templateId : ''} · ${resolveSessionDisplayName(t as unknown as LooseTranslate, firstSession.name, firstSession.type)}`
+                          ? resolveSessionDisplayName(t as unknown as LooseTranslate, firstSession.name, firstSession.type, firstSession.displayName)
                           : t(`home:prescription.${outcomeKey}.title` as 'home:prescription.unavailable.title')
                   ).toUpperCase()}
                 </Display>
@@ -235,10 +256,9 @@ export function HomeScreen({
                         : scheduleOverrideKey
                           ? t(`home:schedule.${scheduleOverrideKey}.body`)
                           : prescription.status === 'SUCCESS'
-                            ? t('home:todayCard.prescribedMeta', {
-                                sessions: prescription.plan.prescribedTrainingFrequency
-                                  ?? prescription.plan.prescribedStructuredDays,
+                            ? t('home:todayCard.sessionMeta', {
                                 exercises: firstSession?.exercises.length ?? 0,
+                                sets: totalSets,
                               })
                             : t(`home:prescription.${outcomeKey}.body` as 'home:prescription.unavailable.body')
                     ).toUpperCase()}
@@ -246,82 +266,100 @@ export function HomeScreen({
                 </View>
               </View>
 
-              {isBlockedToday ? (
-                nextWorkoutLine && (
-                  <View
+              {/* CTA/next-workout row shares its row with BodyMuscleMap so the
+                  title/meta block above always keeps the full card width —
+                  titles vary a lot in length ("PERNAS" vs "PEITO, OMBROS &
+                  TRÍCEPS" wrapping to 2-3 lines) and must never fight the map
+                  for horizontal space. */}
+              <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 }}>
+                {isBlockedToday ? (
+                  nextWorkoutLine && (
+                    <View
+                      style={{
+                        alignSelf: 'flex-start',
+                        marginTop: 20,
+                        paddingVertical: 13,
+                        paddingHorizontal: 18,
+                        borderRadius: 12,
+                        borderWidth: 1,
+                        borderColor: TODAY_WORKOUT_THEME.colors.primaryBorderQuiet,
+                        backgroundColor: TODAY_WORKOUT_THEME.colors.surfaceMuted,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 10,
+                      }}
+                    >
+                      <Icon name="calendar" size={14} color={TODAY_WORKOUT_THEME.colors.primaryEmphasis} />
+                      <View>
+                        <MonoLabel color={TODAY_WORKOUT_THEME.colors.textFaint}>
+                          {t('home:schedule.nextWorkout.label').toUpperCase()}
+                        </MonoLabel>
+                        <Text
+                          style={{
+                            fontFamily: theme.fonts.uiBold,
+                            fontSize: 13,
+                            color: TODAY_WORKOUT_THEME.colors.textPrimary,
+                            marginTop: 2,
+                          }}
+                        >
+                          {nextWorkoutLine}
+                        </Text>
+                      </View>
+                    </View>
+                  )
+                ) : (
+                  <Pressable
+                    onPress={onStart}
                     style={{
                       alignSelf: 'flex-start',
                       marginTop: 20,
-                      paddingVertical: 13,
-                      paddingHorizontal: 18,
-                      borderRadius: 12,
-                      borderWidth: 1,
-                      borderColor: TODAY_WORKOUT_THEME.colors.primaryBorderQuiet,
-                      backgroundColor: TODAY_WORKOUT_THEME.colors.surfaceMuted,
+                      paddingVertical: 15,
+                      paddingHorizontal: 26,
+                      backgroundColor: TODAY_WORKOUT_THEME.colors.inverseSurface,
+                      borderTopLeftRadius: 10,
+                      borderTopRightRadius: 10,
+                      borderBottomLeftRadius: 10,
+                      borderBottomRightRadius: 0,
                       flexDirection: 'row',
                       alignItems: 'center',
                       gap: 10,
+                      shadowColor: TODAY_WORKOUT_THEME.colors.inverseShadow,
+                      shadowOpacity: 0.16,
+                      shadowRadius: 20,
+                      shadowOffset: { width: 0, height: 10 },
+                      elevation: 8,
                     }}
                   >
-                    <Icon name="calendar" size={14} color={TODAY_WORKOUT_THEME.colors.primaryEmphasis} />
-                    <View>
-                      <MonoLabel color={TODAY_WORKOUT_THEME.colors.textFaint}>
-                        {t('home:schedule.nextWorkout.label').toUpperCase()}
-                      </MonoLabel>
-                      <Text
-                        style={{
-                          fontFamily: theme.fonts.uiBold,
-                          fontSize: 13,
-                          color: TODAY_WORKOUT_THEME.colors.textPrimary,
-                          marginTop: 2,
-                        }}
-                      >
-                        {nextWorkoutLine}
-                      </Text>
-                    </View>
-                  </View>
-                )
-              ) : (
-                <Pressable
-                  onPress={onStart}
-                  style={{
-                    alignSelf: 'flex-start',
-                    marginTop: 20,
-                    paddingVertical: 15,
-                    paddingHorizontal: 26,
-                    backgroundColor: TODAY_WORKOUT_THEME.colors.inverseSurface,
-                    borderTopLeftRadius: 10,
-                    borderTopRightRadius: 10,
-                    borderBottomLeftRadius: 10,
-                    borderBottomRightRadius: 0,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 10,
-                    shadowColor: TODAY_WORKOUT_THEME.colors.inverseShadow,
-                    shadowOpacity: 0.16,
-                    shadowRadius: 20,
-                    shadowOffset: { width: 0, height: 10 },
-                    elevation: 8,
-                  }}
-                >
-                  <Icon
-                    name="play"
-                    size={13}
-                    color={TODAY_WORKOUT_THEME.colors.inverseForeground}
+                    <Icon
+                      name="play"
+                      size={13}
+                      color={TODAY_WORKOUT_THEME.colors.inverseForeground}
+                    />
+                    <Text
+                      style={{
+                        fontFamily: theme.fonts.display,
+                        fontSize: 15,
+                        letterSpacing: 1.5,
+                        color: TODAY_WORKOUT_THEME.colors.inverseForeground,
+                        textTransform: 'uppercase',
+                      }}
+                    >
+                      {t(prescription.status === 'SUCCESS' ? 'home:todayCard.start' : 'home:todayCard.review')}
+                    </Text>
+                  </Pressable>
+                )}
+
+                {showBodyMuscleMap && (
+                  <BodyMuscleMap
+                    primaryMuscles={sessionMuscles.primary}
+                    secondaryMuscles={sessionMuscles.secondary}
+                    activeColor={TODAY_WORKOUT_THEME.colors.primaryEmphasis}
+                    baseColor={TODAY_WORKOUT_THEME.colors.textFaint}
+                    outlineColor={TODAY_WORKOUT_THEME.colors.border}
+                    size={bodyMuscleMapSize}
                   />
-                  <Text
-                    style={{
-                      fontFamily: theme.fonts.display,
-                      fontSize: 15,
-                      letterSpacing: 1.5,
-                      color: TODAY_WORKOUT_THEME.colors.inverseForeground,
-                      textTransform: 'uppercase',
-                    }}
-                  >
-                    {t(prescription.status === 'SUCCESS' ? 'home:todayCard.start' : 'home:todayCard.review')}
-                  </Text>
-                </Pressable>
-              )}
+                )}
+              </View>
             </LinearGradient>
           </View>
 

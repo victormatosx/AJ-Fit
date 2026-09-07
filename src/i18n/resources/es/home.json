@@ -10,7 +10,7 @@
     "meta": "{{duration}} min · {{exercises}} ejercicios · ~{{kcal}} kcal",
     "start": "Iniciar entreno",
     "review": "Revisar información",
-    "prescribedMeta": "{{sessions}} sesiones/semana · {{exercises}} ejercicios en esta sesión",
+    "sessionMeta": "{{exercises}} ejercicios · {{sets}} series",
     "confirm": {
       "title": "¿Iniciar entreno?",
       "question": "¿Quieres iniciar ahora",

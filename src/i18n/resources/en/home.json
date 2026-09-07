@@ -10,7 +10,7 @@
     "meta": "{{duration}} min · {{exercises}} exercises · ~{{kcal}} kcal",
     "start": "Start workout",
     "review": "Review information",
-    "prescribedMeta": "{{sessions}} sessions/week · {{exercises}} exercises in this session",
+    "sessionMeta": "{{exercises}} exercises · {{sets}} sets",
     "confirm": {
       "title": "Start workout?",
       "question": "Do you want to start now",
