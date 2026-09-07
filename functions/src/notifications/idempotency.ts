@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 
 import { Timestamp, type Firestore } from 'firebase-admin/firestore';
 
+import { assertValidDispatchRequest } from './contentPolicy';
 import {
   MAX_DISPATCH_ATTEMPTS,
   NOTIFICATION_DISPATCHES_COLLECTION,
@@ -210,6 +211,7 @@ export async function markDispatchOutcome(
 
 export function persistedDispatchRequest(
   value: FirebaseFirestore.DocumentData,
+  expectedDispatchId: string,
 ): NotificationDispatchRequest | null {
   const request = value.request;
   if (typeof request !== 'object' || request === null) return null;
@@ -230,7 +232,7 @@ export function persistedDispatchRequest(
   const data = typeof record.data === 'object' && record.data !== null && !Array.isArray(record.data)
     ? record.data as Record<string, string | number | boolean>
     : undefined;
-  return {
+  const parsed: NotificationDispatchRequest = {
     uid: record.uid,
     notificationId: record.notificationId,
     type: record.type,
@@ -242,4 +244,17 @@ export function persistedDispatchRequest(
     ...(data ? { data } : {}),
     idempotencyKey: record.idempotencyKey,
   };
+  if (
+    dispatchIdFor(parsed.idempotencyKey) !== expectedDispatchId ||
+    value.idempotencyKeyHash !== expectedDispatchId ||
+    value.contractHash !== contractHashFor(parsed)
+  ) {
+    return null;
+  }
+  try {
+    assertValidDispatchRequest(parsed);
+  } catch {
+    return null;
+  }
+  return parsed;
 }

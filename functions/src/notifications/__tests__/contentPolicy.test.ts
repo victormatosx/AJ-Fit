@@ -52,11 +52,15 @@ describe('notification content policy', () => {
     } as unknown as NotificationDispatchRequest)).toThrow(NotificationContentPolicyError);
   });
 
-  it('rejects arbitrary copy even when the technical type is valid', () => {
+  it.each([
+    { title: 'Arbitrary title' },
+    { body: 'Arbitrary body' },
+    { data: { harmless: true } },
+  ])('rejects arbitrary QA content even when the technical type is valid %#', (override) => {
     expect(() => assertValidDispatchRequest({
       ...request(),
-      data: { harmless: true },
-    })).toThrow(/data_key_not_allowed/);
+      ...override,
+    })).toThrow(NotificationContentPolicyError);
   });
 
   it('does not expose product builders', async () => {

@@ -6,14 +6,23 @@ import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { db as defaultDb } from '../lib/firebaseAdmin';
 import { logFunctionError, logInfo, logWarn } from '../lib/logger';
 import { recomputeDispatchAggregate } from './dispatchAggregation';
-import { classifyDeliveryError, deliveryStatusForClassification } from './errors';
+import {
+  classifyDeliveryError,
+  deliveryStatusForClassification,
+  retryDelayMs,
+} from './errors';
 import { createExpoPushClient, type ExpoPushClient, type ExpoReceiptResult } from './expoPushClient';
 import {
+  MAX_DISPATCH_ATTEMPTS,
   NOTIFICATION_DELIVERIES_SUBCOLLECTION,
   NOTIFICATION_DISPATCHES_COLLECTION,
   type DeliveryStatus,
 } from './schema';
-import { invalidateDeliveryToken, type DeliveryOwnershipSnapshot } from './tokenInvalidation';
+import {
+  applyDeliveryTokenInvalidation,
+  readDeliveryOwnershipState,
+  type DeliveryOwnershipSnapshot,
+} from './tokenInvalidation';
 
 const SCOPE = 'notifications.receipts';
 const RECEIPT_RECHECK_DELAY_MS = 30 * 60 * 1000;
@@ -36,9 +45,12 @@ export interface ReceiptsReconcilerResult {
   confirmed: number;
   invalidToken: number;
   failedTerminal: number;
+  retryScheduled: number;
+  retryExhausted: number;
   stillPending: number;
   exhausted: number;
   fenced: number;
+  processingErrors: number;
 }
 
 function candidateData(data: FirebaseFirestore.DocumentData): Omit<ClaimedReceipt, 'ref' | 'dispatchId' | 'claimToken' | 'receiptAttemptCount'> | null {
@@ -100,14 +112,15 @@ async function claimReceipt(
 
 function receiptResolution(
   receipt: ExpoReceiptResult,
-  attempt: number,
+  receiptAttempt: number,
+  dispatchAttempt: number,
 ): { status: DeliveryStatus; errorCode: string | null; errorClass: string | null; terminalReason: string | null } {
   if (receipt.status === 'ok') {
     return { status: 'RECEIPT_CONFIRMED', errorCode: null, errorClass: null, terminalReason: null };
   }
 
   if (receipt.status === 'pending') {
-    if (attempt >= MAX_RECEIPT_ATTEMPTS) {
+    if (receiptAttempt >= MAX_RECEIPT_ATTEMPTS) {
       return {
         status: 'RECEIPT_EXHAUSTED',
         errorCode: receipt.errorCode ?? null,
@@ -124,9 +137,13 @@ function receiptResolution(
   }
 
   const classification = classifyDeliveryError(receipt.errorCode);
-  if (classification === 'RETRYABLE' && attempt < MAX_RECEIPT_ATTEMPTS) {
+  // A provider receipt is final. MessageRateExceeded therefore needs a new
+  // send attempt; repeatedly fetching the same receipt can never turn it into
+  // success. Request-level/network failures arrive as `pending` above and are
+  // still rechecked without duplicating a notification.
+  if (classification === 'RETRYABLE' && dispatchAttempt < MAX_DISPATCH_ATTEMPTS) {
     return {
-      status: 'PENDING_RECEIPT',
+      status: 'FAILED_RETRYABLE',
       errorCode: receipt.errorCode,
       errorClass: classification,
       terminalReason: null,
@@ -134,10 +151,10 @@ function receiptResolution(
   }
   if (classification === 'RETRYABLE') {
     return {
-      status: 'RECEIPT_EXHAUSTED',
+      status: 'FAILED_RETRY_EXHAUSTED',
       errorCode: receipt.errorCode,
       errorClass: classification,
-      terminalReason: 'RECEIPT_RETRY_EXHAUSTED',
+      terminalReason: 'DISPATCH_RETRY_EXHAUSTED',
     };
   }
   return {
@@ -153,8 +170,8 @@ async function finalizeReceipt(
   claimed: ClaimedReceipt,
   receipt: ExpoReceiptResult,
   now: Timestamp,
-): Promise<DeliveryStatus | null> {
-  const resolution = receiptResolution(receipt, claimed.receiptAttemptCount);
+  random: () => number,
+): Promise<{ status: DeliveryStatus; invalidated: boolean | null } | null> {
   const parentRef = db.collection(NOTIFICATION_DISPATCHES_COLLECTION).doc(claimed.dispatchId);
 
   return db.runTransaction(async (tx) => {
@@ -171,11 +188,30 @@ async function finalizeReceipt(
       return null;
     }
 
+    const dispatchAttempt = typeof parent.data()?.attemptCount === 'number'
+      ? parent.data()!.attemptCount
+      : 1;
+    const resolution = receiptResolution(
+      receipt,
+      claimed.receiptAttemptCount,
+      dispatchAttempt,
+    );
+    const invalidationState = resolution.status === 'INVALID_TOKEN'
+      ? await readDeliveryOwnershipState(db, tx, claimed.ownership)
+      : null;
+    const invalidated = invalidationState
+      ? applyDeliveryTokenInvalidation(tx, invalidationState, claimed.ownership, now)
+      : null;
+    const retryAt = resolution.status === 'FAILED_RETRYABLE'
+      ? Timestamp.fromMillis(now.toMillis() + retryDelayMs(dispatchAttempt, random))
+      : null;
+
     tx.update(claimed.ref, {
       status: resolution.status,
       errorCode: resolution.errorCode,
       errorClass: resolution.errorClass,
       terminalReason: resolution.terminalReason,
+      nextAttemptAt: retryAt,
       receiptNextCheckAt: resolution.status === 'PENDING_RECEIPT'
         ? Timestamp.fromMillis(now.toMillis() + RECEIPT_RECHECK_DELAY_MS)
         : null,
@@ -187,9 +223,14 @@ async function finalizeReceipt(
       const revision = typeof parent.data()?.deliveryRevision === 'number'
         ? parent.data()!.deliveryRevision
         : 0;
-      tx.update(parentRef, { deliveryRevision: revision + 1, updatedAt: now });
+      tx.update(parentRef, {
+        deliveryRevision: revision + 1,
+        updatedAt: now,
+        ...(retryAt ? { nextAttemptAt: retryAt } : {}),
+        ...(resolution.status === 'FAILED_RETRY_EXHAUSTED' ? { nextAttemptAt: null } : {}),
+      });
     }
-    return resolution.status;
+    return { status: resolution.status, invalidated };
   });
 }
 
@@ -199,12 +240,14 @@ export async function runReceiptsReconciliation(
     expoClient?: ExpoPushClient;
     now?: () => Timestamp;
     batchSize?: number;
+    random?: () => number;
   } = {},
 ): Promise<ReceiptsReconcilerResult> {
   const db = dependencies.db ?? defaultDb;
   const expoClient = dependencies.expoClient ?? createExpoPushClient();
   const now = (dependencies.now ?? Timestamp.now)();
   const batchSize = dependencies.batchSize ?? RECEIPTS_BATCH_SIZE;
+  const random = dependencies.random ?? Math.random;
 
   const snapshot = await db.collectionGroup(NOTIFICATION_DELIVERIES_SUBCOLLECTION)
     .where('status', '==', 'PENDING_RECEIPT')
@@ -219,9 +262,12 @@ export async function runReceiptsReconciliation(
     confirmed: 0,
     invalidToken: 0,
     failedTerminal: 0,
+    retryScheduled: 0,
+    retryExhausted: 0,
     stillPending: 0,
     exhausted: 0,
     fenced: 0,
+    processingErrors: 0,
   };
 
   const claims = (await Promise.all(snapshot.docs.map((document) =>
@@ -234,37 +280,50 @@ export async function runReceiptsReconciliation(
   const affectedDispatches = new Set<string>();
 
   await Promise.all(claims.map(async (claim) => {
-    const receipt = receipts.get(claim.ticketId) ?? { status: 'pending' as const };
-    const status = await finalizeReceipt(db, claim, receipt, now);
-    if (!status) {
-      result.fenced += 1;
-      logWarn(SCOPE, 'receipt_claim_fenced', { dispatchId: claim.dispatchId });
-      return;
-    }
-    affectedDispatches.add(claim.dispatchId);
+    try {
+      const receipt = receipts.get(claim.ticketId) ?? { status: 'pending' as const };
+      const resolution = await finalizeReceipt(db, claim, receipt, now, random);
+      if (!resolution) {
+        result.fenced += 1;
+        logWarn(SCOPE, 'receipt_claim_fenced', { dispatchId: claim.dispatchId });
+        return;
+      }
+      affectedDispatches.add(claim.dispatchId);
 
-    if (status === 'RECEIPT_CONFIRMED') {
-      result.confirmed += 1;
-      logInfo(SCOPE, 'receipt_accepted', { dispatchId: claim.dispatchId });
-    } else if (status === 'PENDING_RECEIPT') {
-      result.stillPending += 1;
-      logInfo(SCOPE, 'receipt_pending', {
+      if (resolution.status === 'RECEIPT_CONFIRMED') {
+        result.confirmed += 1;
+        logInfo(SCOPE, 'receipt_accepted', { dispatchId: claim.dispatchId });
+      } else if (resolution.status === 'PENDING_RECEIPT') {
+        result.stillPending += 1;
+        logInfo(SCOPE, 'receipt_pending', {
+          dispatchId: claim.dispatchId,
+          attemptCount: claim.receiptAttemptCount,
+        });
+      } else if (resolution.status === 'RECEIPT_EXHAUSTED') {
+        result.exhausted += 1;
+        logWarn(SCOPE, 'receipt_exhausted', { dispatchId: claim.dispatchId });
+      } else if (resolution.status === 'INVALID_TOKEN') {
+        result.invalidToken += 1;
+        logWarn(SCOPE, resolution.invalidated ? 'invalid_token_removed' : 'invalid_token_fenced', {
+          dispatchId: claim.dispatchId,
+          installationId: claim.ownership.installationId,
+        });
+      } else if (resolution.status === 'FAILED_RETRYABLE') {
+        result.retryScheduled += 1;
+        logWarn(SCOPE, 'receipt_retry_scheduled', { dispatchId: claim.dispatchId });
+      } else if (resolution.status === 'FAILED_RETRY_EXHAUSTED') {
+        result.retryExhausted += 1;
+        logWarn(SCOPE, 'receipt_retry_exhausted', { dispatchId: claim.dispatchId });
+      } else {
+        result.failedTerminal += 1;
+        logWarn(SCOPE, 'receipt_rejected', { dispatchId: claim.dispatchId });
+      }
+    } catch (error) {
+      result.processingErrors += 1;
+      logFunctionError(SCOPE, error, {
+        operation: 'finalize_receipt',
         dispatchId: claim.dispatchId,
-        attemptCount: claim.receiptAttemptCount,
       });
-    } else if (status === 'RECEIPT_EXHAUSTED') {
-      result.exhausted += 1;
-      logWarn(SCOPE, 'receipt_exhausted', { dispatchId: claim.dispatchId });
-    } else if (status === 'INVALID_TOKEN') {
-      result.invalidToken += 1;
-      const invalidated = await invalidateDeliveryToken(db, claim.ownership, now);
-      logWarn(SCOPE, invalidated ? 'invalid_token_removed' : 'invalid_token_fenced', {
-        dispatchId: claim.dispatchId,
-        installationId: claim.ownership.installationId,
-      });
-    } else {
-      result.failedTerminal += 1;
-      logWarn(SCOPE, 'receipt_rejected', { dispatchId: claim.dispatchId });
     }
   }));
 
@@ -285,9 +344,12 @@ export const reconcileNotificationReceipts = onSchedule(
         confirmed: result.confirmed,
         invalidToken: result.invalidToken,
         failedTerminal: result.failedTerminal,
+        retryScheduled: result.retryScheduled,
+        retryExhausted: result.retryExhausted,
         stillPending: result.stillPending,
         exhausted: result.exhausted,
         fenced: result.fenced,
+        processingErrors: result.processingErrors,
       });
     } catch (error) {
       logFunctionError(SCOPE, error, { operation: 'reconcile' });

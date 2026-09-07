@@ -26,7 +26,8 @@ import {
   type NotificationDispatchRequest,
 } from './schema';
 import {
-  invalidateDeliveryToken,
+  applyDeliveryTokenInvalidation,
+  readDeliveryOwnershipState,
   type DeliveryOwnershipSnapshot,
 } from './tokenInvalidation';
 
@@ -116,7 +117,10 @@ async function persistAttempt(
   tickets: ExpoTicketResult[],
   staleRetryableIds: readonly string[],
   now: Timestamp,
-): Promise<{ aggregate: ReturnType<typeof aggregateDeliveryStatuses>; invalid: DeliveryOwnershipSnapshot[] } | null> {
+): Promise<{
+  aggregate: ReturnType<typeof aggregateDeliveryStatuses>;
+  invalid: { ownership: DeliveryOwnershipSnapshot; invalidated: boolean }[];
+} | null> {
   const parentRef = dispatchRef(dependencies.db, dispatchId);
   const retryAt = Timestamp.fromMillis(
     now.toMillis() + retryDelayMs(attemptCount, dependencies.random ?? Math.random),
@@ -140,6 +144,11 @@ async function persistAttempt(
     for (const document of currentSnapshot.docs) {
       statuses.set(document.id, document.data().status as DeliveryStatus);
     }
+
+    const invalidUpdates = updates.filter((update) => update.status === 'INVALID_TOKEN');
+    const invalidationStates = await Promise.all(invalidUpdates.map((update) =>
+      readDeliveryOwnershipState(dependencies.db, tx, update.ownership),
+    ));
 
     for (const installationId of staleRetryableIds) {
       if (statuses.get(installationId) !== 'FAILED_RETRYABLE') continue;
@@ -214,9 +223,15 @@ async function persistAttempt(
     });
     return {
       aggregate,
-      invalid: updates
-        .filter((update) => update.status === 'INVALID_TOKEN')
-        .map((update) => update.ownership),
+      invalid: invalidUpdates.map((update, index) => ({
+        ownership: update.ownership,
+        invalidated: applyDeliveryTokenInvalidation(
+          tx,
+          invalidationStates[index]!,
+          update.ownership,
+          now,
+        ),
+      })),
     };
   });
 
@@ -344,11 +359,10 @@ export async function dispatchNotification(
       return { status: 'DUPLICATE', dispatchId: claim.dispatchId };
     }
 
-    for (const ownership of persisted.invalid) {
-      const invalidated = await invalidateDeliveryToken(dependencies.db, ownership, now);
-      logInfo(SCOPE, invalidated ? 'invalid_token_removed' : 'invalid_token_fenced', {
+    for (const invalid of persisted.invalid) {
+      logInfo(SCOPE, invalid.invalidated ? 'invalid_token_removed' : 'invalid_token_fenced', {
         dispatchId: claim.dispatchId,
-        installationId: ownership.installationId,
+        installationId: invalid.ownership.installationId,
       });
     }
 

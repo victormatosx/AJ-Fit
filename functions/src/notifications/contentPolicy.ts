@@ -19,6 +19,8 @@ interface TypePolicy {
   category: NotificationCategory;
   allowedDataKeys: readonly string[];
   allowedIntents: readonly string[];
+  fixedTitle?: string;
+  fixedBody?: string;
 }
 
 const TYPE_POLICIES: Readonly<Record<NotificationType, TypePolicy>> = {
@@ -26,6 +28,8 @@ const TYPE_POLICIES: Readonly<Record<NotificationType, TypePolicy>> = {
     category: 'OPERATIONAL',
     allowedDataKeys: [],
     allowedIntents: [],
+    fixedTitle: 'AJ Fit — teste de push',
+    fixedBody: 'A infraestrutura de notificações está funcionando.',
   },
 };
 
@@ -103,6 +107,12 @@ export function assertValidDispatchRequest(
 
   assertDisplayString(request.title, 'title', MAX_TITLE_LENGTH);
   assertDisplayString(request.body, 'body', MAX_BODY_LENGTH);
+  if (policy.fixedTitle !== undefined && request.title !== policy.fixedTitle) {
+    fail('title_not_allowed');
+  }
+  if (policy.fixedBody !== undefined && request.body !== policy.fixedBody) {
+    fail('body_not_allowed');
+  }
 
   if (request.intent !== undefined && !policy.allowedIntents.includes(request.intent)) {
     fail('intent_not_allowed');

@@ -54,7 +54,7 @@ export async function runDispatchRetries(
   };
 
   for (const document of snapshot.docs) {
-    const request = persistedDispatchRequest(document.data());
+    const request = persistedDispatchRequest(document.data(), document.id);
     if (!request) {
       result.malformed += 1;
       await markMalformed(dependencies.db, document.ref, now);

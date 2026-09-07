@@ -21,9 +21,12 @@ subscription event is connected to the dispatcher.
    a fenced dispatch claim and paginated device eligibility.
 5. Only `expoPushClient.ts` calls Expo. Tickets become per-device deliveries.
 6. Scheduled workers retry transient dispatch failures and reconcile receipts.
-   Both have transactional claims/fencing and bounded attempts.
-7. `DeviceNotRegistered` deletes a raw token only when uid, installation,
-   token hash and ownership version still match the original delivery.
+   Both have transactional claims/fencing and bounded attempts. A final
+   `MessageRateExceeded` receipt schedules a new send with backoff; a missing
+   receipt is rechecked without resending and becomes explicitly exhausted.
+7. `DeviceNotRegistered` updates the delivery and deletes its raw token in the
+   same transaction, only when uid, installation, token hash and ownership
+   version still match the original delivery.
 
 Logout never waits for network. A release contains the last ownership version;
 a late A release after B binds is a no-op. App Check is enforced on the callable,

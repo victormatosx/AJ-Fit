@@ -436,6 +436,59 @@ describe.skipIf(!enabled)('push foundation — Firestore Emulator', () => {
         .doc(terminalResult.dispatchId).get()).data()?.nextAttemptAt).toBeNull();
     });
 
+    it('atomically invalidates an exact DeviceNotRegistered ticket ownership', async () => {
+      const tokenHash = '9'.repeat(64);
+      await seedEligibleDevice(UID_A, INSTALLATION, tokenHash, 3);
+      const invalidTicketRequest = qaRequest({
+        notificationId: 'qa-test-invalid-ticket',
+        sourceIdentity: 'qa-probe:user-A:invalid-ticket',
+        idempotencyKey: 'qa-test:user-A:invalid-ticket',
+      });
+      const expo = fakeExpo({
+        send: vi.fn(async (): Promise<ExpoTicketResult[]> => [
+          { ok: false, errorCode: 'DeviceNotRegistered' },
+        ]),
+      });
+
+      const outcome = await dispatchNotification(
+        invalidTicketRequest,
+        dependencies(expo),
+      );
+      const parent = db.collection(NOTIFICATION_DISPATCHES_COLLECTION)
+        .doc(outcome.dispatchId);
+
+      expect(outcome.status).toBe('FAILED_TERMINAL');
+      expect((await parent.collection('deliveries').doc(INSTALLATION).get()).data())
+        .toMatchObject({ status: 'INVALID_TOKEN', ownershipVersion: 3, tokenHash });
+      expect((await db.collection('pushTokenOwners').doc(tokenHash).get()).exists).toBe(false);
+      expect((await db.collection('pushInstallations').doc(INSTALLATION).get()).data())
+        .toMatchObject({ pushEnabled: false, invalidAt: now });
+    });
+
+    it('fences a DeviceNotRegistered ticket after ownership transfers from A to B', async () => {
+      const tokenHash = '0'.repeat(64);
+      await seedEligibleDevice(UID_A, INSTALLATION, tokenHash, 1);
+      const staleTicketRequest = qaRequest({
+        notificationId: 'qa-test-stale-ticket',
+        sourceIdentity: 'qa-probe:user-A:stale-ticket',
+        idempotencyKey: 'qa-test:user-A:stale-ticket',
+      });
+      const expo = fakeExpo({
+        send: vi.fn(async (): Promise<ExpoTicketResult[]> => {
+          await seedEligibleDevice(UID_B, INSTALLATION, tokenHash, 2);
+          return [{ ok: false, errorCode: 'DeviceNotRegistered' }];
+        }),
+      });
+
+      const outcome = await dispatchNotification(staleTicketRequest, dependencies(expo));
+
+      expect(outcome.status).toBe('FAILED_TERMINAL');
+      expect((await db.collection('pushInstallations').doc(INSTALLATION).get()).data())
+        .toMatchObject({ ownerUid: UID_B, pushEnabled: true, ownershipVersion: 2 });
+      expect((await db.collection('pushTokenOwners').doc(tokenHash).get()).data())
+        .toMatchObject({ ownerUid: UID_B, active: true, ownershipVersion: 2 });
+    });
+
     it('exhausts persistent retryable tickets after the bounded fifth attempt', async () => {
       await seedEligibleDevice();
       const expo = fakeExpo({
@@ -500,6 +553,31 @@ describe.skipIf(!enabled)('push foundation — Firestore Emulator', () => {
       });
     });
 
+    it('terminates a semantically corrupt persisted retry without sending or looping', async () => {
+      await seedEligibleDevice();
+      const firstExpo = fakeExpo({
+        send: vi.fn(async (): Promise<ExpoTicketResult[]> => [
+          { ok: false, errorCode: 'SERVER_ERROR' },
+        ]),
+      });
+      const first = await dispatchNotification(qaRequest(), dependencies(firstExpo));
+      const parent = db.collection(NOTIFICATION_DISPATCHES_COLLECTION).doc(first.dispatchId);
+      const firstSnapshot = await parent.get();
+      now = firstSnapshot.data()?.nextAttemptAt as Timestamp;
+      await parent.update({ 'request.uid': UID_B });
+
+      const retryExpo = fakeExpo();
+      const retried = await runDispatchRetries(dependencies(retryExpo));
+
+      expect(retried).toMatchObject({ candidateCount: 1, processed: 0, malformed: 1 });
+      expect(retryExpo.send).not.toHaveBeenCalled();
+      expect((await parent.get()).data()).toMatchObject({
+        status: 'FAILED_TERMINAL',
+        nextAttemptAt: null,
+        terminalReason: 'INVALID_PERSISTED_REQUEST',
+      });
+    });
+
     it('moves from pending tickets to a partial parent after mixed receipt outcomes', async () => {
       await Promise.all([
         seedEligibleDevice(UID_A, INSTALLATION, '5'.repeat(64), 1),
@@ -536,11 +614,13 @@ describe.skipIf(!enabled)('push foundation — Firestore Emulator', () => {
     ownershipVersion: number;
     tokenHash: string;
     receiptAttemptCount?: number;
+    dispatchAttemptCount?: number;
   }) {
     const parent = db.collection(NOTIFICATION_DISPATCHES_COLLECTION).doc(params.dispatchId);
     await parent.set({
       uid: params.uid,
       status: 'PENDING_RECEIPTS',
+      attemptCount: params.dispatchAttemptCount ?? 1,
       deliveryRevision: 1,
       createdAt: now,
       updatedAt: now,
@@ -688,6 +768,94 @@ describe.skipIf(!enabled)('push foundation — Firestore Emulator', () => {
         status: 'FAILED_TERMINAL',
         terminalReason: 'ALL_DELIVERIES_FAILED',
       });
+    });
+
+    it('retries a final MessageRateExceeded receipt with dispatch backoff', async () => {
+      const tokenHash = '7'.repeat(64);
+      await seedEligibleDevice(UID_A, INSTALLATION, tokenHash, 1);
+      const request = qaRequest({
+        notificationId: 'qa-test-receipt-retryable',
+        sourceIdentity: 'qa-probe:user-A:receipt-retryable',
+        idempotencyKey: 'qa-test:user-A:receipt-retryable',
+      });
+      const initialExpo = fakeExpo({
+        send: vi.fn(async (): Promise<ExpoTicketResult[]> => [
+          { ok: true, ticketId: 'ticket-receipt-retryable' },
+        ]),
+      });
+      const dispatched = await dispatchNotification(request, dependencies(initialExpo));
+      expect(dispatched.status).toBe('PENDING_RECEIPTS');
+      now = Timestamp.fromMillis(now.toMillis() + 16 * 60 * 1000);
+      const receiptExpo = fakeExpo({
+        getReceipts: vi.fn(async (ids: string[]) => new Map(ids.map((id) => [
+          id,
+          { status: 'error', errorCode: 'MessageRateExceeded' } as ExpoReceiptResult,
+        ]))),
+      });
+
+      const reconciled = await runReceiptsReconciliation({
+        db,
+        expoClient: receiptExpo,
+        now: () => now,
+        random: () => 0.5,
+      });
+      const parent = db.collection(NOTIFICATION_DISPATCHES_COLLECTION).doc(dispatched.dispatchId);
+      const afterReceipt = await parent.get();
+      const delivery = await parent.collection('deliveries').doc(INSTALLATION).get();
+
+      expect(reconciled.retryScheduled).toBe(1);
+      expect(delivery.data()).toMatchObject({
+        status: 'FAILED_RETRYABLE',
+        errorCode: 'MessageRateExceeded',
+      });
+      expect(afterReceipt.data()?.status).toBe('RETRY_SCHEDULED');
+      expect(afterReceipt.data()?.nextAttemptAt).toBeInstanceOf(Timestamp);
+
+      now = afterReceipt.data()?.nextAttemptAt as Timestamp;
+      const retryExpo = fakeExpo();
+      const retried = await runDispatchRetries(dependencies(retryExpo));
+      expect(retried.processed).toBe(1);
+      expect(retryExpo.send).toHaveBeenCalledTimes(1);
+      expect((await parent.get()).data()).toMatchObject({
+        status: 'PENDING_RECEIPTS',
+        attemptCount: 2,
+      });
+    });
+
+    it('does not requeue a retryable receipt after dispatch attempts are exhausted', async () => {
+      await seedPendingReceipt({
+        dispatchId: 'dispatch-receipt-retry-exhausted',
+        uid: UID_A,
+        ownershipVersion: 1,
+        tokenHash: '8'.repeat(64),
+        dispatchAttemptCount: 5,
+      });
+      const expo = fakeExpo({
+        getReceipts: vi.fn(async (ids: string[]) => new Map(ids.map((id) => [
+          id,
+          { status: 'error', errorCode: 'MessageRateExceeded' } as ExpoReceiptResult,
+        ]))),
+      });
+
+      const result = await runReceiptsReconciliation({
+        db,
+        expoClient: expo,
+        now: () => now,
+      });
+      const parent = db.collection(NOTIFICATION_DISPATCHES_COLLECTION)
+        .doc('dispatch-receipt-retry-exhausted');
+
+      expect(result.retryExhausted).toBe(1);
+      expect((await parent.get()).data()).toMatchObject({
+        status: 'FAILED_RETRY_EXHAUSTED',
+        nextAttemptAt: null,
+        terminalReason: 'DISPATCH_RETRY_EXHAUSTED',
+      });
+      expect((await parent.collection('deliveries').doc(INSTALLATION).get()).data())
+        .toMatchObject({
+          status: 'FAILED_RETRY_EXHAUSTED',
+          terminalReason: 'DISPATCH_RETRY_EXHAUSTED',
+        });
     });
   });
 });
