@@ -20,6 +20,7 @@ import type { Weekday } from '../state/AppState';
 // pulling in AuthContext/RN), which a pure Firestore service module must
 // never drag in transitively (breaks Node-only test/tooling consumers).
 import { addDaysLocal } from '../scheduleEngine/calendar';
+import { scheduleEventDocumentId } from '../scheduleEngine/identities';
 import { detectMissedSessionGap, initialSessionIndexFor, resolveWorkoutSchedule } from '../scheduleEngine/resolver';
 import type {
   MissDecision,
@@ -63,8 +64,7 @@ function scheduleEventsCollection(uid: string, programId: string) {
 
 /** Deterministic — a retried write (double tap, network retry) lands on the same doc instead of duplicating the ledger (docs §36 Double tap/retry). */
 function scheduleEventId(event: Pick<ScheduleEvent, 'type' | 'sessionIndex' | 'scheduledDate'>, programInstanceId?: string): string {
-  const legacyId = `${event.type.toLowerCase()}_${event.sessionIndex}_${event.scheduledDate}`;
-  return programInstanceId ? `${programInstanceId}_${legacyId}` : legacyId;
+  return scheduleEventDocumentId({ ...event, ...(programInstanceId ? { programInstanceId } : {}) });
 }
 
 export async function loadScheduleConfig(uid: string): Promise<ScheduleConfig | null> {

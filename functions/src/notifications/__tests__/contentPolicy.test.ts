@@ -7,12 +7,18 @@ import {
   buildEvolutionUnlockedNotification,
   buildPremiumEndedNotification,
   buildProgramUpdatedNotification,
+  buildWorkoutDayNotification,
+  buildRecoveryDayNotification,
+  buildMissedWorkoutNotification,
   buildQaTestNotification,
   EVOLUTION_UNLOCKED_COPIES,
   NOTIFICATION_LOCALES,
   NotificationContentPolicyError,
   PREMIUM_ENDED_COPIES,
   PROGRAM_UPDATED_COPIES,
+  WORKOUT_DAY_COPIES,
+  RECOVERY_DAY_COPIES,
+  MISSED_WORKOUT_COPIES,
 } from '../contentPolicy';
 import type { NotificationDispatchRequest } from '../schema';
 
@@ -31,11 +37,8 @@ describe('notification content policy', () => {
   });
 
   it.each([
-    'WORKOUT_DAY',
-    'MISSED_WORKOUT',
     'RE_ENGAGEMENT_EARLY',
     'RE_ENGAGEMENT_LATE',
-    'RECOVERY_DAY',
     'EVOLUTION_APPROACHING',
     'WEEK_COMPLETED',
     'WEEK_STREAK',
@@ -79,7 +82,7 @@ describe('notification content policy', () => {
     })).toThrow(NotificationContentPolicyError);
   });
 
-  it('exposes only QA and the four Phase-2 product builders', async () => {
+  it('exposes only QA and the Phase-2/Phase-3 product builders', async () => {
     const module = await import('../contentPolicy');
     expect(Object.keys(module).filter((key) => key.startsWith('build')).sort()).toEqual([
       'buildBillingIssueNotification',
@@ -87,6 +90,9 @@ describe('notification content policy', () => {
       'buildPremiumEndedNotification',
       'buildProgramUpdatedNotification',
       'buildQaTestNotification',
+      'buildWorkoutDayNotification',
+      'buildRecoveryDayNotification',
+      'buildMissedWorkoutNotification',
     ].sort());
   });
 
@@ -106,6 +112,11 @@ describe('notification content policy', () => {
       }),
       buildPremiumEndedNotification({
         uid: 'user-123', revenueCatEventId: 'event-expired', locale,
+      }),
+      buildWorkoutDayNotification({ uid: 'user-123', localDate: '2026-09-07', locale }),
+      buildRecoveryDayNotification({ uid: 'user-123', localDate: '2026-09-07', locale }),
+      buildMissedWorkoutNotification({
+        uid: 'user-123', plannedSessionIdentity: 'instance:2026-09-05:1', locale,
       }),
     ];
     for (const item of requests) expect(() => assertValidDispatchRequest(item)).not.toThrow();
@@ -127,6 +138,15 @@ describe('notification content policy', () => {
     expect(buildPremiumEndedNotification({
       uid: 'user-123', revenueCatEventId: 'expired', locale,
     })).toMatchObject(PREMIUM_ENDED_COPIES[locale]);
+    expect(buildWorkoutDayNotification({
+      uid: 'user-123', localDate: '2026-09-07', locale,
+    })).toMatchObject(WORKOUT_DAY_COPIES[locale]);
+    expect(buildRecoveryDayNotification({
+      uid: 'user-123', localDate: '2026-09-07', locale,
+    })).toMatchObject(RECOVERY_DAY_COPIES[locale]);
+    expect(buildMissedWorkoutNotification({
+      uid: 'user-123', plannedSessionIdentity: 'instance:2026-09-05:1', locale,
+    })).toMatchObject(MISSED_WORKOUT_COPIES[locale]);
   });
 
   it('binds idempotency to uid, notification type and hashed source event identity', () => {
@@ -147,6 +167,29 @@ describe('notification content policy', () => {
     expect(adapted.idempotencyKey).not.toBe(earned.idempotencyKey);
     expect(anotherUser.idempotencyKey).not.toBe(earned.idempotencyKey);
     expect(earned.sourceIdentity).not.toContain('event/with/provider-safe-hashing');
+  });
+
+  it('binds daily idempotency to type/date and missed idempotency to the planned session', () => {
+    const workout = buildWorkoutDayNotification({
+      uid: 'user-123', localDate: '2026-09-07', locale: 'pt-BR',
+    });
+    const workoutReplay = buildWorkoutDayNotification({
+      uid: 'user-123', localDate: '2026-09-07', locale: 'en',
+    });
+    const recovery = buildRecoveryDayNotification({
+      uid: 'user-123', localDate: '2026-09-07', locale: 'pt-BR',
+    });
+    const missed = buildMissedWorkoutNotification({
+      uid: 'user-123', plannedSessionIdentity: 'wpi-1:2026-09-05:0', locale: 'pt-BR',
+    });
+    const anotherMiss = buildMissedWorkoutNotification({
+      uid: 'user-123', plannedSessionIdentity: 'wpi-1:2026-09-05:1', locale: 'pt-BR',
+    });
+
+    expect(workoutReplay.idempotencyKey).toBe(workout.idempotencyKey);
+    expect(recovery.idempotencyKey).not.toBe(workout.idempotencyKey);
+    expect(anotherMiss.idempotencyKey).not.toBe(missed.idempotencyKey);
+    expect(missed.sourceIdentity).not.toContain('wpi-1');
   });
 
   it('rejects a valid title paired with another allowed body', () => {

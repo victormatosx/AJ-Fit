@@ -44,6 +44,8 @@ import type { AccountDeletionStepOutcome, KnownErrorCode } from '../errors';
 import {
   deleteProgressPhotoDocuments,
   deleteUserNotificationDispatches,
+  deleteUserDailyNotificationRegistration,
+  deleteUserNotificationProductWindows,
   deleteUserPushDevices,
   deleteUserPushTokenOwners,
   deleteUserAssessments,
@@ -124,6 +126,8 @@ export async function runFirestoreCleanup(
     releaseUserPushInstallations,
     deleteUserPushDevices,
     deleteUserNotificationDispatches,
+    deleteUserNotificationProductWindows,
+    deleteUserDailyNotificationRegistration,
     // Must run before deleteUserWorkoutPrograms — it enumerates program ids
     // to reach the explicit allowlist of nested collections, which a
     // one-level-only delete of the parent docs would otherwise orphan.

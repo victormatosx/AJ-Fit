@@ -1,4 +1,5 @@
 import type { FinalWorkoutSession } from '../workoutPrescription/types';
+import { workoutExecutionDocumentId } from '../scheduleEngine/identities';
 
 /**
  * Workout Execution & History V1 (docs/workout-lifecycle/09_WORKOUT_EXECUTION_AND_HISTORY.md).
@@ -64,7 +65,7 @@ export interface WorkoutExecution {
 
 /** Deterministic — a retried "start workout" (double tap, network retry, cold start) lands on the same doc instead of creating a duplicate execution (docs §22 Idempotência). */
 export function workoutExecutionId(programOrInstanceId: string, sessionIndex: number, scheduledLocalDate: string): string {
-  return `exec_${programOrInstanceId}_${sessionIndex}_${scheduledLocalDate}`;
+  return workoutExecutionDocumentId(programOrInstanceId, sessionIndex, scheduledLocalDate);
 }
 
 /**

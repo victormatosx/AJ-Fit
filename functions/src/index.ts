@@ -32,6 +32,7 @@ import {
 import { dispatchTestNotificationHandler } from './notifications/qaDispatch';
 import { reconcileNotificationReceipts } from './notifications/receiptsReconciler';
 import { retryNotificationDispatches } from './notifications/retryScheduler';
+import { evaluateDailyWorkoutNotifications } from './notifications/dailyScheduler';
 
 /**
  * AJ Fit Cloud Functions entry point.
@@ -210,4 +211,8 @@ export const dispatchTestNotification = onCall(
   dispatchTestNotificationHandler,
 );
 
-export { reconcileNotificationReceipts, retryNotificationDispatches };
+export {
+  evaluateDailyWorkoutNotifications,
+  reconcileNotificationReceipts,
+  retryNotificationDispatches,
+};

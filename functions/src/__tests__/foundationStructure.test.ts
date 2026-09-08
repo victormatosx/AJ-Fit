@@ -99,6 +99,7 @@ describe('Photo Vault backend foundation — Phase 3 structural guarantees', () 
       'confirmCommercialGate',
       'createVault',
       'dispatchTestNotification',
+      'evaluateDailyWorkoutNotifications',
       'onAccountDeletionRequested',
       'onTrustedWorkoutLifecycleEventCreated',
       'reconcileNotificationReceipts',

@@ -63,6 +63,12 @@ async function seedUsers() {
     await setDoc(doc(context.firestore(), 'notificationDispatches', 'dispatch'), {
       uid: UID,
     });
+    await setDoc(doc(context.firestore(), 'notificationDailyUsers', UID), {
+      timezone: 'UTC',
+    });
+    await setDoc(doc(context.firestore(), 'notificationProductWindows', 'window'), {
+      uid: UID,
+    });
     await setDoc(doc(
       context.firestore(),
       'notificationDispatches',
@@ -171,6 +177,8 @@ describe('private push registries', () => {
     ['users/notification-owner/devices', 'installation'],
     ['notificationDispatches', 'dispatch'],
     ['notificationDispatches/dispatch/deliveries', 'installation'],
+    ['notificationDailyUsers', UID],
+    ['notificationProductWindows', 'window'],
   ])('denies client read and write at %s/%s', async (collectionPath, id) => {
     const reference = doc(db(UID), collectionPath, id);
     await assertFails(getDoc(reference));

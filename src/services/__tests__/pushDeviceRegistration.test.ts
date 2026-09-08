@@ -11,6 +11,9 @@ vi.mock('expo-secure-store', () => ({
   getItemAsync: vi.fn(),
   setItemAsync: vi.fn(),
 }));
+vi.mock('expo-localization', () => ({
+  getCalendars: vi.fn(() => [{ timeZone: 'America/Sao_Paulo' }]),
+}));
 vi.mock('firebase/functions', () => ({
   httpsCallable: vi.fn(() => vi.fn()),
 }));
@@ -82,6 +85,7 @@ function fixture(overrides: Record<string, unknown> = {}) {
     localGet: vi.fn(async (key: string) => local.get(key) ?? null),
     localSet: vi.fn(async (key: string, value: string) => { local.set(key, value); }),
     permissionStatus: vi.fn(async () => 'granted' as const),
+    timezone: vi.fn(() => 'America/Sao_Paulo'),
     currentToken: vi.fn(() => TOKEN),
     acquireToken: vi.fn(async () => TOKEN),
     clearTokenMemory: vi.fn(),
@@ -111,6 +115,7 @@ describe('push device registration client', () => {
       expectedOwnershipVersion: 0,
       platform: 'android',
       permissionStatus: 'granted',
+      timezone: 'America/Sao_Paulo',
       expoPushToken: TOKEN.expoPushToken,
       nativePushToken: TOKEN.nativeToken,
     });
@@ -137,6 +142,23 @@ describe('push device registration client', () => {
       expoPushToken: 'ExponentPushToken[token-bbbbbbbb]',
     });
     expect(syncRemote).toHaveBeenCalledTimes(2);
+  });
+
+  it('syncs a changed IANA timezone even while the token binding is otherwise unchanged', async () => {
+    let timezone = 'America/Sao_Paulo';
+    const { service, syncRemote } = fixture({ timezone: vi.fn(() => timezone) });
+    await service.setAuthenticatedUser('user-A');
+    timezone = 'Europe/Lisbon';
+    await service.retryPendingDeviceBindings('user-A');
+
+    expect(syncRemote).toHaveBeenCalledTimes(2);
+    expect(syncRemote.mock.calls[1]?.[0]).toMatchObject({ timezone: 'Europe/Lisbon' });
+  });
+
+  it('omits timezone when the device cannot provide a valid IANA zone', async () => {
+    const { service, syncRemote } = fixture({ timezone: vi.fn(() => null) });
+    await service.setAuthenticatedUser('user-A');
+    expect(syncRemote.mock.calls[0]?.[0]).not.toHaveProperty('timezone');
   });
 
   it('never makes B wait for a slow release of A', async () => {

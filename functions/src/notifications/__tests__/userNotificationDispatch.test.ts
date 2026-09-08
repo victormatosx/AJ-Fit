@@ -3,7 +3,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   buildBillingIssueNotification,
   buildEvolutionUnlockedNotification,
+  buildMissedWorkoutNotification,
   buildProgramUpdatedNotification,
+  buildRecoveryDayNotification,
+  buildWorkoutDayNotification,
 } from '../contentPolicy';
 import { dispatchUserNotificationCandidate } from '../userNotificationDispatch';
 
@@ -159,6 +162,36 @@ describe('event-driven notification policy orchestration', () => {
     await expect(dispatchUserNotificationCandidate(
       programCandidate,
       dependencies({ preferences: { notificationPreferences: { evolutionAndAchievements: false } } }),
+    )).resolves.toEqual({ status: 'SUPPRESSED_BY_PREFERENCE', dispatchId: 'dispatch-1' });
+    expect(mocks.dispatchNotification).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['WORKOUT_DAY', (locale: 'pt-BR' | 'en' | 'es') => buildWorkoutDayNotification({
+      uid: 'uid-1', localDate: '2026-09-07', locale,
+    })],
+    ['RECOVERY_DAY', (locale: 'pt-BR' | 'en' | 'es') => buildRecoveryDayNotification({
+      uid: 'uid-1', localDate: '2026-09-07', locale,
+    })],
+    ['MISSED_WORKOUT', (locale: 'pt-BR' | 'en' | 'es') => buildMissedWorkoutNotification({
+      uid: 'uid-1', plannedSessionIdentity: 'wpi-1:2026-09-05:0', locale,
+    })],
+  ] as const)('honors workoutsAndReminders ON/OFF for %s', async (_type, build) => {
+    const workoutCandidate = {
+      uid: 'uid-1',
+      category: 'WORKOUTS_AND_REMINDERS' as const,
+      build,
+    };
+
+    await expect(dispatchUserNotificationCandidate(
+      workoutCandidate,
+      dependencies({ preferences: { notificationPreferences: { workoutsAndReminders: true } } }),
+    )).resolves.toMatchObject({ status: 'PENDING_RECEIPTS' });
+
+    mocks.dispatchNotification.mockClear();
+    await expect(dispatchUserNotificationCandidate(
+      workoutCandidate,
+      dependencies({ preferences: { notificationPreferences: { workoutsAndReminders: false } } }),
     )).resolves.toEqual({ status: 'SUPPRESSED_BY_PREFERENCE', dispatchId: 'dispatch-1' });
     expect(mocks.dispatchNotification).not.toHaveBeenCalled();
   });

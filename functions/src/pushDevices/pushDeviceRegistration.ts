@@ -11,6 +11,12 @@ import { requireActiveAccount } from '../accountDeletion/activeAccountGuard';
 import { db as defaultDb } from '../lib/firebaseAdmin';
 import { requireAuth } from '../lib/auth';
 import { logFunctionError, logInfo } from '../lib/logger';
+import { canonicalIanaTimezone } from '../workoutLifecycle/scheduleEngine/localDate';
+import {
+  dailyNotificationRegistrationRef,
+  dailyNotificationRegistrationWrite,
+  persistDailyNotificationRegistration,
+} from '../notifications/dailyRegistration';
 import {
   PUSH_INSTALLATIONS_COLLECTION,
   PUSH_PERMISSION_STATUSES,
@@ -78,6 +84,7 @@ function parseSyncInput(value: unknown): SyncPushDeviceInput {
     'permissionStatus',
     'expoPushToken',
     'nativePushToken',
+    'timezone',
   ])) {
     throw new HttpsError('invalid-argument', 'unexpected_device_fields');
   }
@@ -103,6 +110,10 @@ function parseSyncInput(value: unknown): SyncPushDeviceInput {
 
   const expoPushToken = value.expoPushToken;
   const nativePushToken = value.nativePushToken;
+  const timezone = value.timezone === undefined ? null : canonicalIanaTimezone(value.timezone);
+  if (value.timezone !== undefined && !timezone) {
+    throw new HttpsError('invalid-argument', 'invalid_iana_timezone');
+  }
   const granted = permissionStatus === 'granted';
   if (granted) {
     if (
@@ -126,6 +137,7 @@ function parseSyncInput(value: unknown): SyncPushDeviceInput {
     expectedOwnershipVersion: value.expectedOwnershipVersion,
     platform: platform as PushPlatform,
     permissionStatus: permissionStatus as PushPermissionStatus,
+    ...(timezone ? { timezone } : {}),
     ...(granted
       ? {
           expoPushToken: expoPushToken as string,
@@ -236,6 +248,8 @@ export function createPushDeviceHandlers(
       .collection(PUSH_INSTALLATIONS_COLLECTION)
       .doc(input.installationId);
     const userRef = dependencies.db.collection('users').doc(uid);
+    const scheduleConfigRef = userRef.collection('workoutProgramState').doc('scheduleConfig');
+    const dailyRegistrationRef = dailyNotificationRegistrationRef(dependencies.db, uid);
 
     try {
       const result = await dependencies.db.runTransaction(async (transaction) => {
@@ -268,6 +282,12 @@ export function createPushDeviceHandlers(
           ? await transaction.get(nextTokenRef)
           : previousTokenSnapshot;
         const nextTokenData = nextTokenSnapshot?.data();
+        const scheduleConfigSnapshot = input.timezone
+          ? await transaction.get(scheduleConfigRef)
+          : null;
+        const dailyRegistrationSnapshot = input.timezone
+          ? await transaction.get(dailyRegistrationRef)
+          : null;
 
         assertInstallationProof(installationData, nextTokenData, secretHash);
         const claimedInstallation = existingString(nextTokenData, 'installationId');
@@ -380,6 +400,22 @@ export function createPushDeviceHandlers(
           });
         } else if (previousTokenRef) {
           transaction.delete(previousTokenRef);
+        }
+
+        if (input.timezone) {
+          const registration = dailyNotificationRegistrationWrite({
+            timezone: input.timezone,
+            now,
+            existing: dailyRegistrationSnapshot?.data(),
+          });
+          if (!registration) throw new HttpsError('invalid-argument', 'invalid_iana_timezone');
+          persistDailyNotificationRegistration(transaction, dailyRegistrationRef, registration);
+          if (
+            scheduleConfigSnapshot?.exists
+            && scheduleConfigSnapshot.data()?.timezone !== input.timezone
+          ) {
+            transaction.update(scheduleConfigRef, { timezone: input.timezone, updatedAt: now });
+          }
         }
 
         return {

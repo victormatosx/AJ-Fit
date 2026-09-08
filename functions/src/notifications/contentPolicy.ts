@@ -115,6 +115,51 @@ export const PREMIUM_ENDED_COPIES = {
   },
 } as const satisfies Readonly<Record<NotificationLocale, NotificationCopy>>;
 
+export const WORKOUT_DAY_COPIES = {
+  'pt-BR': {
+    title: 'Hoje é dia de treino 💪',
+    body: 'Seu treino de hoje está pronto. Vamos continuar sua evolução.',
+  },
+  en: {
+    title: 'It’s workout day 💪',
+    body: 'Today’s workout is ready. Keep building your progress.',
+  },
+  es: {
+    title: 'Hoy toca entrenamiento 💪',
+    body: 'Tu entrenamiento de hoy está listo. Sigue avanzando.',
+  },
+} as const satisfies Readonly<Record<NotificationLocale, NotificationCopy>>;
+
+export const RECOVERY_DAY_COPIES = {
+  'pt-BR': {
+    title: 'Hoje é dia de recuperação',
+    body: 'Seu descanso também faz parte do plano. Aproveite para recuperar as energias.',
+  },
+  en: {
+    title: 'Today is a recovery day',
+    body: 'Rest is part of the plan too. Give your body time to recover.',
+  },
+  es: {
+    title: 'Hoy es día de recuperación',
+    body: 'El descanso también forma parte del plan. Aprovecha para recuperarte.',
+  },
+} as const satisfies Readonly<Record<NotificationLocale, NotificationCopy>>;
+
+export const MISSED_WORKOUT_COPIES = {
+  'pt-BR': {
+    title: 'Não perca o ritmo',
+    body: 'Seu último treino ficou pendente. Volte ao plano quando estiver pronto.',
+  },
+  en: {
+    title: 'Keep your momentum',
+    body: 'Your last workout is still pending. Get back to your plan when you’re ready.',
+  },
+  es: {
+    title: 'No pierdas el ritmo',
+    body: 'Tu último entrenamiento quedó pendiente. Retoma tu plan cuando estés listo.',
+  },
+} as const satisfies Readonly<Record<NotificationLocale, NotificationCopy>>;
+
 function copies<T extends Record<NotificationLocale, NotificationCopy>>(localized: T) {
   return NOTIFICATION_LOCALES.map((locale) => localized[locale]);
 }
@@ -152,6 +197,24 @@ const TYPE_POLICIES: Readonly<Record<NotificationType, TypePolicy>> = {
     allowedDataKeys: [],
     allowedIntents: [],
     allowedCopies: copies(PREMIUM_ENDED_COPIES),
+  },
+  WORKOUT_DAY: {
+    category: 'WORKOUTS_AND_REMINDERS',
+    allowedDataKeys: [],
+    allowedIntents: [],
+    allowedCopies: copies(WORKOUT_DAY_COPIES),
+  },
+  RECOVERY_DAY: {
+    category: 'WORKOUTS_AND_REMINDERS',
+    allowedDataKeys: [],
+    allowedIntents: [],
+    allowedCopies: copies(RECOVERY_DAY_COPIES),
+  },
+  MISSED_WORKOUT: {
+    category: 'WORKOUTS_AND_REMINDERS',
+    allowedDataKeys: [],
+    allowedIntents: [],
+    allowedCopies: copies(MISSED_WORKOUT_COPIES),
   },
 };
 
@@ -272,6 +335,19 @@ function eventIdentity(params: {
   };
 }
 
+function dailyIdentity(params: {
+  uid: string;
+  type: 'WORKOUT_DAY' | 'RECOVERY_DAY' | 'MISSED_WORKOUT';
+  sourceIdentity: string;
+}): Pick<NotificationDispatchRequest, 'notificationId' | 'sourceIdentity' | 'idempotencyKey'> {
+  const sourceHash = createHash('sha256').update(params.sourceIdentity, 'utf8').digest('hex');
+  return {
+    notificationId: `${params.type}:${sourceHash}`,
+    sourceIdentity: `dailySchedule:${sourceHash}`,
+    idempotencyKey: `notification:${params.uid}:${params.type}:${sourceHash}`,
+  };
+}
+
 function buildProductNotification(params: {
   uid: string;
   type: Exclude<NotificationType, 'QA_TEST'>;
@@ -350,5 +426,62 @@ export function buildPremiumEndedNotification(params: {
     source: 'revenueCatEvent',
     sourceEventId: params.revenueCatEventId,
     copy: PREMIUM_ENDED_COPIES[params.locale],
+  });
+}
+
+function buildDailyWorkoutNotification(params: {
+  uid: string;
+  type: 'WORKOUT_DAY' | 'RECOVERY_DAY' | 'MISSED_WORKOUT';
+  sourceIdentity: string;
+  copy: NotificationCopy;
+}): NotificationDispatchRequest {
+  const request: NotificationDispatchRequest = {
+    uid: params.uid,
+    type: params.type,
+    category: 'WORKOUTS_AND_REMINDERS',
+    ...dailyIdentity(params),
+    ...params.copy,
+    data: {},
+  };
+  assertValidDispatchRequest(request);
+  return request;
+}
+
+export function buildWorkoutDayNotification(params: {
+  uid: string;
+  localDate: string;
+  locale: NotificationLocale;
+}): NotificationDispatchRequest {
+  return buildDailyWorkoutNotification({
+    uid: params.uid,
+    type: 'WORKOUT_DAY',
+    sourceIdentity: params.localDate,
+    copy: WORKOUT_DAY_COPIES[params.locale],
+  });
+}
+
+export function buildRecoveryDayNotification(params: {
+  uid: string;
+  localDate: string;
+  locale: NotificationLocale;
+}): NotificationDispatchRequest {
+  return buildDailyWorkoutNotification({
+    uid: params.uid,
+    type: 'RECOVERY_DAY',
+    sourceIdentity: params.localDate,
+    copy: RECOVERY_DAY_COPIES[params.locale],
+  });
+}
+
+export function buildMissedWorkoutNotification(params: {
+  uid: string;
+  plannedSessionIdentity: string;
+  locale: NotificationLocale;
+}): NotificationDispatchRequest {
+  return buildDailyWorkoutNotification({
+    uid: params.uid,
+    type: 'MISSED_WORKOUT',
+    sourceIdentity: params.plannedSessionIdentity,
+    copy: MISSED_WORKOUT_COPIES[params.locale],
   });
 }

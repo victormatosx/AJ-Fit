@@ -25,6 +25,8 @@ export interface SyncPushDeviceInput {
   expectedOwnershipVersion: number;
   platform: PushPlatform;
   permissionStatus: PushPermissionStatus;
+  /** Canonical IANA timezone observed by the authenticated foreground app. */
+  timezone?: string;
   expoPushToken?: string;
   nativePushToken?: NativePushTokenInput;
 }

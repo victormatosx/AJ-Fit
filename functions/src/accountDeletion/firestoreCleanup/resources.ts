@@ -39,6 +39,8 @@ import {
 import {
   NOTIFICATION_DISPATCHES_COLLECTION,
 } from '../../notifications/schema';
+import { DAILY_NOTIFICATION_USERS_COLLECTION } from '../../notifications/dailyRegistration';
+import { DAILY_PRODUCT_WINDOWS_COLLECTION } from '../../notifications/dailyProductRateLimit';
 import { deleteCollectionDocuments } from './deleteCollectionDocuments';
 import type { ResourceCleanupResult } from './types';
 
@@ -65,12 +67,13 @@ async function queryOwnedDocuments(
   uid: string,
   db: Firestore,
   visit: (document: QueryDocumentSnapshot) => Promise<boolean>,
+  ownerField = 'ownerUid',
 ): Promise<number> {
   let affected = 0;
   let cursor: QueryDocumentSnapshot | undefined;
   for (;;) {
     let query: Query = db.collection(collectionName)
-      .where('ownerUid', '==', uid)
+      .where(ownerField, '==', uid)
       .orderBy('__name__')
       .limit(100);
     if (cursor) query = query.startAfter(cursor);
@@ -236,6 +239,41 @@ export async function deleteUserNotificationDispatches(
   const deletedCount = await deleteUserDispatchHistory(uid, db);
   return {
     resource: 'notificationDispatches',
+    deletedCount,
+    alreadyAbsent: deletedCount === 0,
+  };
+}
+
+export async function deleteUserDailyNotificationRegistration(
+  uid: string,
+  db: Firestore = defaultDb,
+): Promise<ResourceCleanupResult> {
+  const ref = db.collection(DAILY_NOTIFICATION_USERS_COLLECTION).doc(uid);
+  const snapshot = await ref.get();
+  if (snapshot.exists) await ref.delete();
+  return {
+    resource: 'dailyNotificationRegistration',
+    deletedCount: snapshot.exists ? 1 : 0,
+    alreadyAbsent: !snapshot.exists,
+  };
+}
+
+export async function deleteUserNotificationProductWindows(
+  uid: string,
+  db: Firestore = defaultDb,
+): Promise<ResourceCleanupResult> {
+  const deletedCount = await queryOwnedDocuments(
+    DAILY_PRODUCT_WINDOWS_COLLECTION,
+    uid,
+    db,
+    async (candidate) => {
+      await candidate.ref.delete();
+      return true;
+    },
+    'uid',
+  );
+  return {
+    resource: 'notificationProductWindows',
     deletedCount,
     alreadyAbsent: deletedCount === 0,
   };

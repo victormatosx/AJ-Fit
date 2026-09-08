@@ -10,6 +10,9 @@ import {
   buildPremiumEndedNotification,
   buildProgramUpdatedNotification,
   buildQaTestNotification,
+  buildWorkoutDayNotification,
+  buildRecoveryDayNotification,
+  buildMissedWorkoutNotification,
 } from '../contentPolicy';
 import { loadEligibleDevices } from '../deviceEligibility';
 import { dispatchNotification, type DispatcherDependencies } from '../dispatcher';
@@ -28,6 +31,13 @@ import { runDispatchRetries } from '../retryScheduler';
 import { NOTIFICATION_DISPATCHES_COLLECTION } from '../schema';
 import { dispatchUserNotificationCandidate } from '../userNotificationDispatch';
 import { createPushDeviceHandlers } from '../../pushDevices/pushDeviceRegistration';
+import { DAILY_NOTIFICATION_USERS_COLLECTION } from '../dailyRegistration';
+import { DAILY_PRODUCT_WINDOWS_COLLECTION } from '../dailyProductRateLimit';
+import {
+  hasFinishedWorkoutExecution,
+  loadDailyWorkoutContext,
+} from '../dailyWorkoutNotifications';
+import { workoutExecutionDocumentId } from '../../workoutLifecycle/scheduleEngine/identities';
 
 const enabled = process.env.PUSH_FOUNDATION_INTEGRATION === '1';
 
@@ -59,6 +69,8 @@ describe.skipIf(!enabled)('push foundation — Firestore Emulator', () => {
       'pushTokenOwners',
       NOTIFICATION_DISPATCHES_COLLECTION,
       'accountDeletionLocks',
+      DAILY_NOTIFICATION_USERS_COLLECTION,
+      DAILY_PRODUCT_WINDOWS_COLLECTION,
     ]) {
       const snapshot = await db.collection(collectionName).get();
       await Promise.all(snapshot.docs.map((document) => db.recursiveDelete(document.ref)));
@@ -298,6 +310,65 @@ describe.skipIf(!enabled)('push foundation — Firestore Emulator', () => {
       expect(disabled.pushEnabled).toBe(false);
       expect((await db.collection('pushTokenOwners').doc(tokenHash).get()).exists).toBe(false);
     });
+
+    it('persists a backend-only daily registration and updates the canonical schedule timezone', async () => {
+      await db.collection('users').doc(UID_A).collection('workoutProgramState').doc('scheduleConfig').set({
+        trainingDays: ['MON', 'WED', 'FRI'],
+        timezone: 'UTC',
+        scheduleVersion: 1,
+        updatedAt: now,
+      });
+
+      await handlers().sync({
+        auth: { uid: UID_A },
+        data: syncData({ timezone: 'America/Sao_Paulo' }),
+      } as never);
+
+      expect((await db.collection(DAILY_NOTIFICATION_USERS_COLLECTION).doc(UID_A).get()).data())
+        .toMatchObject({
+          timezone: 'America/Sao_Paulo',
+          schemaVersion: 1,
+        });
+      expect((await db.collection('users').doc(UID_A).collection('workoutProgramState')
+        .doc('scheduleConfig').get()).data()?.timezone).toBe('America/Sao_Paulo');
+    });
+
+    it('rejects fixed offsets and does not create a daily registration', async () => {
+      await expect(handlers().sync({
+        auth: { uid: UID_A },
+        data: syncData({ timezone: '-03:00' }),
+      } as never)).rejects.toMatchObject({ code: 'invalid-argument', message: 'invalid_iana_timezone' });
+      expect((await db.collection(DAILY_NOTIFICATION_USERS_COLLECTION).doc(UID_A).get()).exists)
+        .toBe(false);
+    });
+
+    it('cannot let a stale A sync overwrite B daily timezone ownership after transfer', async () => {
+      const service = handlers();
+      const a = await service.sync({
+        auth: { uid: UID_A },
+        data: syncData({ timezone: 'America/Sao_Paulo' }),
+      } as never);
+      const b = await service.sync({
+        auth: { uid: UID_B },
+        data: syncData({
+          sessionBindingId: SESSION_B,
+          expectedOwnershipVersion: a.ownershipVersion,
+          timezone: 'Europe/Lisbon',
+        }),
+      } as never);
+      const staleA = await service.sync({
+        auth: { uid: UID_A },
+        data: syncData({
+          expectedOwnershipVersion: a.ownershipVersion,
+          timezone: 'Asia/Tokyo',
+        }),
+      } as never);
+
+      expect(staleA.status).toBe('stale-sync');
+      expect(b.status).toBe('synced');
+      expect((await db.collection(DAILY_NOTIFICATION_USERS_COLLECTION).doc(UID_B).get()).data()?.timezone)
+        .toBe('Europe/Lisbon');
+    });
   });
 
   describe('eligibility pagination', () => {
@@ -356,6 +427,103 @@ describe.skipIf(!enabled)('push foundation — Firestore Emulator', () => {
     });
   });
 
+  describe('daily workout source contract', () => {
+    async function seedDailyWorkoutDomain() {
+      const userRef = db.collection('users').doc(UID_A);
+      await Promise.all([
+        userRef.collection('workoutProgramState').doc('scheduleConfig').set({
+          trainingDays: ['MON', 'WED', 'FRI'],
+          timezone: 'UTC',
+          scheduleVersion: 1,
+          updatedAt: now,
+        }),
+        userRef.collection('workoutLifecycleState').doc('current').set({
+          activeContentIdentity: 'wpg-current',
+          activeProgramInstanceId: 'wpi-current',
+        }),
+        userRef.collection('programInstances').doc('wpi-current').set({
+          contentIdentity: 'wpg-current',
+          activatedAt: Timestamp.fromDate(new Date('2033-05-16T00:00:00.000Z')),
+          supersededAt: null,
+        }),
+        userRef.collection('workoutPrograms').doc('wpg-current').set({
+          status: 'active',
+          prescribedTrainingFrequency: 3,
+          sessions: [{}, {}, {}],
+          weeklySchedule: [
+            { weekday: 'MON', state: 'TRAINING', sessionIndex: 0 },
+            { weekday: 'TUE', state: 'ACTIVE_RECOVERY', sessionIndex: 2 },
+            { weekday: 'WED', state: 'TRAINING', sessionIndex: 1 },
+            { weekday: 'THU', state: 'REST' },
+            { weekday: 'FRI', state: 'TRAINING', sessionIndex: 2 },
+            { weekday: 'SAT', state: 'REST' },
+            { weekday: 'SUN', state: 'REST' },
+          ],
+        }),
+      ]);
+    }
+
+    it('loads only the active V2 lifecycle/program/schedule documents', async () => {
+      await seedDailyWorkoutDomain();
+      const loaded = await loadDailyWorkoutContext(
+        db,
+        UID_A,
+        new Date('2033-05-16T08:30:00.000Z'),
+      );
+      expect(loaded).toMatchObject({
+        status: 'READY',
+        timezone: 'UTC',
+        programId: 'wpg-current',
+        programInstanceId: 'wpi-current',
+        sessionCount: 3,
+      });
+      if (loaded.status !== 'READY') throw new Error('daily context not ready');
+      expect(loaded.weeklySchedule.find((day) => day.weekday === 'TUE')?.state)
+        .toBe('ACTIVE_RECOVERY');
+    });
+
+    it('uses the existing scheduleConfig fallback for a valid legacy program without a weekly calendar', async () => {
+      await seedDailyWorkoutDomain();
+      await db.collection('users').doc(UID_A).collection('workoutPrograms').doc('wpg-current').update({
+        weeklySchedule: [],
+      });
+
+      const loaded = await loadDailyWorkoutContext(
+        db,
+        UID_A,
+        new Date('2033-05-16T08:30:00.000Z'),
+      );
+
+      expect(loaded).toMatchObject({ status: 'READY' });
+      if (loaded.status !== 'READY') throw new Error('daily context not ready');
+      expect(loaded.weeklySchedule.filter((day) => day.state === 'TRAINING').map((day) => day.weekday))
+        .toEqual(['MON', 'WED', 'FRI']);
+      expect(loaded.weeklySchedule.some((day) => day.state === 'ACTIVE_RECOVERY')).toBe(false);
+    });
+
+    it('recognizes completion only at the deterministic active-instance execution', async () => {
+      await seedDailyWorkoutDomain();
+      const loaded = await loadDailyWorkoutContext(
+        db,
+        UID_A,
+        new Date('2033-05-16T08:30:00.000Z'),
+      );
+      if (loaded.status !== 'READY') throw new Error('daily context not ready');
+      const executionId = workoutExecutionDocumentId('wpi-current', 0, '2033-05-16');
+      await db.collection('users').doc(UID_A).collection('workoutExecutions').doc(executionId).set({
+        programInstanceId: 'wpi-current',
+        sessionIndex: 0,
+        scheduledLocalDate: '2033-05-16',
+        status: 'PARTIALLY_COMPLETED',
+      });
+
+      await expect(hasFinishedWorkoutExecution(db, UID_A, loaded, 0, '2033-05-16'))
+        .resolves.toBe(true);
+      await expect(hasFinishedWorkoutExecution(db, UID_A, loaded, 0, '2033-05-17'))
+        .resolves.toBe(false);
+    });
+  });
+
   describe('idempotency and dispatcher', () => {
     it.each([
       ['EVOLUTION_UNLOCKED', buildEvolutionUnlockedNotification({
@@ -369,6 +537,15 @@ describe.skipIf(!enabled)('push foundation — Firestore Emulator', () => {
       })],
       ['PREMIUM_ENDED', buildPremiumEndedNotification({
         uid: UID_A, revenueCatEventId: 'rc-expired-integration', locale: 'pt-BR',
+      })],
+      ['WORKOUT_DAY', buildWorkoutDayNotification({
+        uid: UID_A, localDate: '2026-09-07', locale: 'pt-BR',
+      })],
+      ['RECOVERY_DAY', buildRecoveryDayNotification({
+        uid: UID_A, localDate: '2026-09-08', locale: 'pt-BR',
+      })],
+      ['MISSED_WORKOUT', buildMissedWorkoutNotification({
+        uid: UID_A, plannedSessionIdentity: 'wpi-a:2026-09-04:1', locale: 'pt-BR',
       })],
     ] as const)('deduplicates a replay of %s in the real dispatch store', async (_type, request) => {
       await seedEligibleDevice();
@@ -403,6 +580,28 @@ describe.skipIf(!enabled)('push foundation — Firestore Emulator', () => {
       expect((await dispatchNotification(en, dependencies(expo))).status)
         .toBe('DUPLICATE');
       expect(expo.send).toHaveBeenCalledOnce();
+    });
+
+    it('fans one WORKOUT_DAY candidate to multiple devices without duplicating per device', async () => {
+      await Promise.all([
+        seedEligibleDevice(UID_A, INSTALLATION, '1'.repeat(64), 1),
+        seedEligibleDevice(UID_A, INSTALLATION_2, '2'.repeat(64), 1),
+      ]);
+      const expo = fakeExpo();
+      const request = buildWorkoutDayNotification({
+        uid: UID_A, localDate: '2026-09-09', locale: 'pt-BR',
+      });
+
+      const first = await dispatchNotification(request, dependencies(expo));
+      const replay = await dispatchNotification(request, dependencies(expo));
+
+      expect(first).toMatchObject({ status: 'PENDING_RECEIPTS', deviceCount: 2, acceptedCount: 2 });
+      expect(replay.status).toBe('DUPLICATE');
+      expect(expo.send).toHaveBeenCalledTimes(1);
+      expect(expo.send).toHaveBeenCalledWith(expect.arrayContaining([
+        expect.objectContaining({ to: expect.stringContaining(INSTALLATION) }),
+        expect.objectContaining({ to: expect.stringContaining(INSTALLATION_2) }),
+      ]));
     });
 
     it('persists product preference suppression before reaching Expo', async () => {

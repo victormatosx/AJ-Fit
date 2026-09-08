@@ -82,6 +82,8 @@ describe.skipIf(!enabled)('Firestore Cleanup Engine — real Emulator integratio
       'pushInstallations',
       'pushTokenOwners',
       'notificationDispatches',
+      'notificationDailyUsers',
+      'notificationProductWindows',
     ]) {
       const snapshot = await db.collection(collectionName).get();
       await Promise.all(snapshot.docs.map((doc) => db.recursiveDelete(doc.ref)));
@@ -180,6 +182,12 @@ describe.skipIf(!enabled)('Firestore Cleanup Engine — real Emulator integratio
       });
       await db.collection('notificationDispatches').doc('dispatch-owned')
         .collection('deliveries').doc('push-owned').set({ uid: 'test-uid-cleanup-A' });
+      await db.collection('notificationDailyUsers').doc('test-uid-cleanup-A').set({
+        timezone: 'UTC', nextEvaluationAt: new Date(),
+      });
+      await db.collection('notificationProductWindows').doc('window-owned').set({
+        uid: 'test-uid-cleanup-A', localDate: '2026-09-07',
+      });
 
       // Transfer control: cleanup for A must not touch ownership now held by B.
       await db.collection('users').doc('test-uid-cleanup-B')
@@ -243,6 +251,10 @@ describe.skipIf(!enabled)('Firestore Cleanup Engine — real Emulator integratio
       expect((await db.collection('pushInstallations').doc('push-owned').get()).data())
         .toMatchObject({ ownerUid: null, tokenHash: null, pushEnabled: false });
       expect((await db.collection('notificationDispatches').doc('dispatch-owned').get()).exists)
+        .toBe(false);
+      expect((await db.collection('notificationDailyUsers').doc('test-uid-cleanup-A').get()).exists)
+        .toBe(false);
+      expect((await db.collection('notificationProductWindows').doc('window-owned').get()).exists)
         .toBe(false);
       for (const collectionName of [
         'workoutExecutions',

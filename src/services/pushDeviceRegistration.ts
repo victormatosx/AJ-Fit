@@ -1,11 +1,13 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Crypto from 'expo-crypto';
+import { getCalendars } from 'expo-localization';
 import * as SecureStore from 'expo-secure-store';
 import { httpsCallable } from 'firebase/functions';
 import { Platform } from 'react-native';
 
 import { functions } from '../lib/firebaseFunctions';
 import { logError, logInfo } from '../lib/logger';
+import { canonicalIanaTimezone } from '../scheduleEngine/localDate';
 import {
   clearPushTokenMemory,
   getCurrentPushToken,
@@ -31,6 +33,7 @@ interface SyncPushDeviceRequest extends InstallationCredentials {
   expectedOwnershipVersion: number;
   platform: 'ios' | 'android';
   permissionStatus: 'granted' | 'denied' | 'not-determined';
+  timezone?: string;
   expoPushToken?: string;
   nativePushToken?: PushTokenSnapshot['nativeToken'];
 }
@@ -55,6 +58,7 @@ interface LocalBinding {
   ownershipVersion: number | null;
   permissionStatus: 'granted' | 'denied' | 'not-determined' | null;
   tokenFingerprint: string | null;
+  timezone: string | null;
   lastSuccessfulAt: number | null;
 }
 
@@ -100,6 +104,7 @@ interface PushDeviceRegistrationDependencies {
   localGet(key: string): Promise<string | null>;
   localSet(key: string, value: string): Promise<void>;
   permissionStatus(): Promise<PushPermissionStatus>;
+  timezone(): string | null;
   currentToken(): PushTokenSnapshot | null;
   acquireToken(): Promise<PushTokenSnapshot | null>;
   clearTokenMemory(): void;
@@ -123,6 +128,16 @@ export interface PushDeviceRegistrationService {
 
 function emptyState(): LocalLifecycleState {
   return { version: 2, desiredUid: null, binding: null, pendingReleases: {} };
+}
+
+function currentDeviceTimezone(): string | null {
+  try {
+    const calendarTimezone = getCalendars()[0]?.timeZone;
+    return canonicalIanaTimezone(calendarTimezone)
+      ?? canonicalIanaTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone);
+  } catch {
+    return null;
+  }
 }
 
 function validUid(uid: string): boolean {
@@ -174,7 +189,9 @@ function parseState(raw: string | null): LocalLifecycleState {
     return {
       version: 2,
       desiredUid: typeof value.desiredUid === 'string' ? value.desiredUid : null,
-      binding: validBinding ? binding as LocalBinding : null,
+      binding: validBinding
+        ? { ...binding as LocalBinding, timezone: canonicalIanaTimezone(binding.timezone) }
+        : null,
       pendingReleases,
     };
   } catch {
@@ -205,6 +222,7 @@ function createDefaultDependencies(): PushDeviceRegistrationDependencies {
     localGet: AsyncStorage.getItem,
     localSet: AsyncStorage.setItem,
     permissionStatus: getNotificationPermissionStatus,
+    timezone: currentDeviceTimezone,
     currentToken: getCurrentPushToken,
     acquireToken: getPushToken,
     clearTokenMemory: clearPushTokenMemory,
@@ -285,6 +303,7 @@ export function createPushDeviceRegistrationService(
         ownershipVersion: null,
         permissionStatus: null,
         tokenFingerprint: null,
+        timezone: null,
         lastSuccessfulAt: null,
       };
       return {
@@ -327,6 +346,7 @@ export function createPushDeviceRegistrationService(
     }
 
     const permissionStatus = permission as 'granted' | 'denied' | 'not-determined';
+    const timezone = dependencies.timezone();
     const tokenFingerprint = token
       ? await dependencies.hash(`${token.expoPushToken}:${token.nativeToken.data}`)
       : null;
@@ -344,7 +364,8 @@ export function createPushDeviceRegistrationService(
       latest.binding.sessionBindingId === binding.sessionBindingId &&
       latest.binding.ownershipVersion !== null &&
       latest.binding.permissionStatus === permissionStatus &&
-      latest.binding.tokenFingerprint === tokenFingerprint;
+      latest.binding.tokenFingerprint === tokenFingerprint &&
+      latest.binding.timezone === timezone;
     const recent =
       latest.binding?.lastSuccessfulAt != null &&
       dependencies.now() - latest.binding.lastSuccessfulAt < LAST_SEEN_THROTTLE_MS;
@@ -364,6 +385,7 @@ export function createPushDeviceRegistrationService(
         expectedOwnershipVersion,
         platform: dependencies.platform as 'ios' | 'android',
         permissionStatus,
+        ...(timezone ? { timezone } : {}),
         ...(token
           ? { expoPushToken: token.expoPushToken, nativePushToken: token.nativeToken }
           : {}),
@@ -407,6 +429,7 @@ export function createPushDeviceRegistrationService(
               ownershipVersion: response.ownershipVersion,
               permissionStatus,
               tokenFingerprint,
+              timezone,
               lastSuccessfulAt: dependencies.now(),
             },
           },

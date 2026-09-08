@@ -10,6 +10,9 @@ export const NOTIFICATION_TYPES = [
   'PROGRAM_UPDATED',
   'BILLING_ISSUE',
   'PREMIUM_ENDED',
+  'WORKOUT_DAY',
+  'RECOVERY_DAY',
+  'MISSED_WORKOUT',
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 

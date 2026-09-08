@@ -28,7 +28,7 @@ interface FakeQuery {
   orderBy(field: string): FakeQuery;
   limit(n: number): FakeQuery;
   startAfter(doc: FakeSnapshotDoc): FakeQuery;
-  where(field: string, operator: '==', value: unknown): FakeQuery;
+  where(field: string, operator: '==' | '<=', value: unknown): FakeQuery;
 }
 
 export interface FakeCollectionRef extends FakeQuery {
@@ -46,6 +46,7 @@ interface FakeTransaction {
   get(ref: FakeDocRef): Promise<FakeSnapshot>;
   set(ref: FakeDocRef, data: Record<string, unknown>, options?: { merge?: boolean }): void;
   delete(ref: FakeDocRef): void;
+  update(ref: FakeDocRef, data: Record<string, unknown>): void;
 }
 
 export interface FakeFirestore {
@@ -110,7 +111,7 @@ export function createFakeFirestore(): FakeFirestoreHarness {
     function buildQuery(state: {
       limit?: number;
       startAfterId?: string;
-      filters: Array<{ field: string; value: unknown }>;
+      filters: Array<{ field: string; operator: '==' | '<='; value: unknown }>;
     }): FakeQuery {
       return {
         orderBy() {
@@ -123,10 +124,9 @@ export function createFakeFirestore(): FakeFirestoreHarness {
           return buildQuery({ ...state, startAfterId: document.id });
         },
         where(field, operator, value) {
-          if (operator !== '==') throw new Error(`unsupported fake operator: ${operator}`);
           return buildQuery({
             ...state,
-            filters: [...state.filters, { field, value }],
+            filters: [...state.filters, { field, operator, value }],
           });
         },
         async get() {
@@ -135,7 +135,17 @@ export function createFakeFirestore(): FakeFirestoreHarness {
             .filter((candidate) =>
               candidate.startsWith(prefix) &&
               !candidate.slice(prefix.length).includes('/') &&
-              state.filters.every(({ field, value }) => documents.get(candidate)?.[field] === value),
+              state.filters.every(({ field, operator, value }) => {
+                const actual = documents.get(candidate)?.[field];
+                if (operator === '==') return actual === value;
+                const comparable = (item: unknown) => typeof item === 'object'
+                  && item !== null
+                  && 'toMillis' in item
+                  && typeof (item as { toMillis?: unknown }).toMillis === 'function'
+                  ? (item as { toMillis(): number }).toMillis()
+                  : item;
+                return (comparable(actual) as number) <= (comparable(value) as number);
+              }),
             )
             .map((candidate) => candidate.slice(prefix.length))
             .sort();
@@ -204,6 +214,9 @@ export function createFakeFirestore(): FakeFirestoreHarness {
         },
         delete: (ref) => {
           writes.push(() => remove(ref.path));
+        },
+        update: (ref, data) => {
+          writes.push(() => write(ref.path, data, true));
         },
       });
       writes.forEach((commit) => commit());
