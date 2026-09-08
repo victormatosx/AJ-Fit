@@ -296,6 +296,51 @@ describe('resolvePremiumGate', () => {
     });
   });
 
+  describe('workoutReadinessGate === "needsQuestionnaire" (Fluxo B missing-data repair)', () => {
+    it('routes back to onboardingFunnel instead of app — the confirmed root cause this state exists to close', () => {
+      expect(resolve({ isPremium: true, workoutReadinessGate: 'needsQuestionnaire' })).toBe(
+        'onboardingFunnel',
+      );
+      expect(resolve({ isPremium: false, workoutReadinessGate: 'needsQuestionnaire' })).toBe(
+        'onboardingFunnel',
+      );
+    });
+
+    it('never resolves "app" for needsQuestionnaire, regardless of every other prerequisite being resolved', () => {
+      const outcomes = new Set<RootScreenId | null>();
+      for (const isPremium of [true, false]) {
+        for (const commercialGateResolved of [true, false]) {
+          outcomes.add(
+            resolve({ isPremium, commercialGateResolved, workoutReadinessGate: 'needsQuestionnaire' }),
+          );
+        }
+      }
+      expect(outcomes.has('app')).toBe(false);
+    });
+
+    it('is still checked only after questionnaire/subscription/commercial-gate priority — a not_found questionnaire wins first', () => {
+      expect(
+        resolve({ questionnaireResolution: 'not_found', workoutReadinessGate: 'needsQuestionnaire' }),
+      ).toBe('onboardingFunnel');
+      expect(
+        resolve({ subscriptionLoading: true, workoutReadinessGate: 'needsQuestionnaire' }),
+      ).toBeNull();
+      expect(
+        resolve({
+          commercialGateResolved: false,
+          isPremium: false,
+          workoutReadinessGate: 'needsQuestionnaire',
+        }),
+      ).toBe('paywall');
+    });
+
+    it('never blocks an unauthenticated user — routes straight to auth regardless of needsQuestionnaire', () => {
+      expect(
+        resolve({ requestedScreen: 'app', authenticated: false, workoutReadinessGate: 'needsQuestionnaire' }),
+      ).toBe('auth');
+    });
+  });
+
   it.each([
     ['cupom válido', { couponCode: 'ARNALDO' }],
     ['iosPromotion', { iosPromotion: { offeringIdentifier: 'promo_7d' } }],
@@ -373,5 +418,11 @@ describe('explainPremiumGateBlockers — diagnostic-only, never drives routing',
     expect(explain({ workoutReadinessGate: 'checking' })).toEqual(['workout-readiness-checking']);
     expect(explain({ workoutReadinessGate: 'idle' })).toEqual(['workout-readiness-idle']);
     expect(explain({ workoutReadinessGate: 'ready' })).toEqual([]);
+  });
+
+  it('names workout-readiness-needsQuestionnaire even though resolvePremiumGate already decided a route for it', () => {
+    expect(explain({ workoutReadinessGate: 'needsQuestionnaire' })).toEqual([
+      'workout-readiness-needsQuestionnaire',
+    ]);
   });
 });

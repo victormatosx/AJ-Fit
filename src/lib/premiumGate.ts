@@ -67,16 +67,29 @@ type PremiumGateState = {
   /**
    * First-app-entry readiness (`useWorkoutReadinessGate`) — `'ready'` once
    * the active workout program AND scheduleConfig are confirmed to exist
-   * (or a genuine, terminal generation failure was confirmed; this gate
-   * never blocks forever). Without this, `'app'` could resolve while
-   * `AppShell`'s own `useWorkoutPrescription` had not yet even run its
-   * first Firestore read — Home would then become the trigger for the
-   * account's first generation instead of finding it already there. Only
-   * consulted at the same point `commercialGateResolved`/`isPremium` are —
-   * an established account resolves this in one fast read, so it adds no
-   * gate latency to every cold start, only to the first one.
+   * (or a genuine, terminal generation failure was confirmed that ISN'T
+   * about missing questionnaire data; this gate never blocks forever).
+   * Without this, `'app'` could resolve while `AppShell`'s own
+   * `useWorkoutPrescription` had not yet even run its first Firestore read —
+   * Home would then become the trigger for the account's first generation
+   * instead of finding it already there. Only consulted at the same point
+   * `commercialGateResolved`/`isPremium` are — an established account
+   * resolves this in one fast read, so it adds no gate latency to every cold
+   * start, only to the first one.
+   *
+   * `'needsQuestionnaire'` — distinct from `'ready'` — means the engine
+   * confirmed the persisted questionnaire is missing data it hard-requires
+   * (`NEEDS_QUESTIONNAIRE_UPDATE`, e.g. a legacy/partial doc missing `sex`).
+   * Routed back to `'onboardingFunnel'` (see below) instead of ever opening
+   * AppShell — the single case this root gate refuses to paper over with
+   * AppShell's own degraded-prescription UI, because unlike a safety block
+   * or a catalog error, it is a data-completeness problem the user can fix
+   * immediately, and letting them reach Home first only to see an
+   * "informações insuficientes" card is exactly the bug this state exists to
+   * prevent (see `useWorkoutReadinessGate`'s doc comment for the confirmed
+   * root cause).
    */
-  workoutReadinessGate: 'idle' | 'checking' | 'ready';
+  workoutReadinessGate: 'idle' | 'checking' | 'ready' | 'needsQuestionnaire';
 };
 
 const AUTH_REQUIRED_SCREENS: RootScreenId[] = ['emailVerification', 'paywall', 'app'];
@@ -132,7 +145,10 @@ export function resolvePremiumGate(state: PremiumGateState): RootScreenId | null
   // First-app-entry readiness — see `workoutReadinessGate`'s doc comment.
   // Checked LAST, after every other prerequisite, so it never changes
   // routing for a signed-out/unresolved/non-premium user — only whether the
-  // final step into `'app'` itself is still held open.
+  // final step into `'app'` itself is still held open. A confirmed
+  // data-completeness failure routes back to the questionnaire instead of
+  // holding the gate neutral forever or letting it fall through to `'app'`.
+  if (state.workoutReadinessGate === 'needsQuestionnaire') return 'onboardingFunnel';
   if (state.workoutReadinessGate !== 'ready') return null;
 
   return 'app';

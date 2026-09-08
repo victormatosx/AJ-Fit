@@ -4,8 +4,9 @@ import { normalizeWeekdays, trainingDaysValid } from '../lib/questionnaireSchema
 import { ensureScheduleConfigFromQuestionnaire, loadScheduleConfig } from '../services/workoutSchedule';
 import type { QuestionnaireDoc } from '../services/userProfile';
 import { resolveWorkoutPrescription } from './useWorkoutPrescription';
+import { readinessStatusForPrescription, type WorkoutReadinessGateStatus } from './readiness';
 
-export type WorkoutReadinessGateStatus = 'idle' | 'checking' | 'ready';
+export { readinessStatusForPrescription, type WorkoutReadinessGateStatus };
 
 function deviceTimezone(): string {
   try {
@@ -35,13 +36,24 @@ function deviceTimezone(): string {
  * call with any signup-time `persistPreparedWorkoutProgram` or a concurrent
  * `AppShell` mount into one shared attempt.
  *
- * Resolves to `'ready'` on ANY terminal outcome — a genuine, confirmed
- * generation failure included. This gate only ever delays WHEN AppShell
- * mounts, never blocks it forever: AppShell already renders a correct,
- * non-crashing degraded UI for a non-SUCCESS prescription (see
- * `StartWorkoutConfirmation`'s `canRetryGeneration` fallback). Fail-closed
- * behavior belongs to the Prescription Engine/Safety layer, not to
- * navigation.
+ * Resolves to `'ready'` on every terminal outcome EXCEPT
+ * `NEEDS_QUESTIONNAIRE_UPDATE` (see `readinessStatusForPrescription` above) —
+ * that one specific outcome means the questionnaire on file is missing data
+ * the engine hard-requires (e.g. `sex`), which `resolvePremiumGate`
+ * (src/lib/premiumGate.ts) routes back to `'onboardingFunnel'` instead of
+ * ever opening AppShell. Root-cause fix, not just this gate: this used to
+ * ALSO resolve `'ready'` for `NEEDS_QUESTIONNAIRE_UPDATE`, which is exactly
+ * how a Fluxo B account with a missing required field (`useOnboardingFunnel`
+ * used to start the forced questionnaire at `'goal'`, skipping `sex` —
+ * fixed separately) could reach Home with an "insufficient information" card
+ * instead of being sent back to actually complete it. Every OTHER terminal
+ * outcome (a genuine, confirmed safety `BLOCKED`/`REQUIRES_CLEARANCE`, a
+ * catalog/config error) still resolves `'ready'`: AppShell already renders a
+ * correct, non-crashing degraded UI for those (see
+ * `StartWorkoutConfirmation`'s `canRetryGeneration` fallback), and second-
+ * guessing the Prescription/Safety layer's OWN outcomes from navigation is
+ * out of scope here — only "we don't have enough data to even try" gets
+ * special-cased.
  *
  * `enabled` should be `true` only once auth + questionnaire are already
  * confirmed resolved (`questionnaireResolution === 'found'`) — the same
@@ -59,9 +71,25 @@ export function useWorkoutReadinessGate(input: {
 }): WorkoutReadinessGateStatus {
   const { enabled, uid, questionnaire } = input;
   const identity = uid ?? 'signed-out';
-  const [resolved, setResolved] = useState<{ identity: string; status: WorkoutReadinessGateStatus }>({
+  const [resolved, setResolved] = useState<{
+    identity: string;
+    status: WorkoutReadinessGateStatus;
+    /**
+     * The exact `questionnaire` reference this resolution was computed for.
+     * Needed because `'needsQuestionnaire'` — unlike `'ready'` — is NOT
+     * skipped by identity alone below: after a repair re-submission,
+     * `refreshProfile()` produces a NEW `questionnaire` object for the SAME
+     * uid, and that must re-trigger a real re-check, not be silently treated
+     * as "already resolved". Comparing this instead of `status` is what lets
+     * the skip condition tell "still the same stale resolution" apart from
+     * "a fresh questionnaire arrived" without re-deriving completeness here
+     * (that stays the engine's job via `resolveWorkoutPrescription`).
+     */
+    questionnaire: QuestionnaireDoc | null;
+  }>({
     identity: 'unresolved',
     status: 'idle',
+    questionnaire: null,
   });
   // Guards against re-kicking a fresh check on every render while one is
   // already in flight for this identity (this effect's deps include
@@ -71,10 +99,12 @@ export function useWorkoutReadinessGate(input: {
   useEffect(() => {
     if (!enabled || !uid) return;
     if (checkingIdentityRef.current === uid) return;
-    if (resolved.identity === uid && resolved.status === 'ready') return;
+    if (resolved.identity === uid && resolved.status !== 'checking' && resolved.questionnaire === questionnaire) {
+      return;
+    }
     checkingIdentityRef.current = uid;
     const startedAt = Date.now();
-    setResolved({ identity: uid, status: 'checking' });
+    setResolved({ identity: uid, status: 'checking', questionnaire });
 
     void (async () => {
       // `true` only means a fallback generation attempt STARTED (the
@@ -118,6 +148,7 @@ export function useWorkoutReadinessGate(input: {
         }
       }
 
+      const readinessStatus = readinessStatusForPrescription(prescription.status);
       logInfo('workout_program', 'first_app_entry_readiness_resolved', {
         outcome: prescription.status,
         generationAttempted,
@@ -125,12 +156,21 @@ export function useWorkoutReadinessGate(input: {
         // a program actually exists and is usable only when this is true.
         programReady: prescription.status === 'SUCCESS',
         reasonCodes: prescription.status === 'SUCCESS' ? undefined : prescription.reasonCodes,
+        // Distinguishes "sent back to complete the questionnaire" from every
+        // other non-SUCCESS outcome in the logs — see
+        // `readinessStatusForPrescription`'s doc comment.
+        readinessStatus,
         durationMs: Date.now() - startedAt,
       });
       checkingIdentityRef.current = null;
-      setResolved({ identity: uid, status: 'ready' });
+      setResolved({ identity: uid, status: readinessStatus, questionnaire });
     })();
-  }, [enabled, uid, questionnaire, resolved.identity, resolved.status]);
+    // `resolved.questionnaire` (not `resolved.status`) is what the
+    // early-return above compares against `questionnaire` to decide whether
+    // this is a genuinely new check or a self-triggered rerun of an already-
+    // settled resolution — see its doc comment. Both are still listed here
+    // so the effect reacts to either changing.
+  }, [enabled, uid, questionnaire, resolved.identity, resolved.status, resolved.questionnaire]);
 
   if (!enabled) return 'idle';
   return resolved.identity === identity ? resolved.status : 'checking';

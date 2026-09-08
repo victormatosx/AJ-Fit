@@ -16,7 +16,7 @@ import {
   JetBrainsMono_700Bold,
 } from '@expo-google-fonts/jetbrains-mono';
 
-import { AppStateProvider as RawAppStateProvider, useAppState } from './src/state/AppState';
+import { AppStateProvider as RawAppStateProvider, useAppState, defaultQuiz } from './src/state/AppState';
 import { AuthProvider, useAuth } from './src/state/AuthContext';
 import { SubscriptionProvider } from './src/state/SubscriptionContext';
 import { DevSubscriptionOverrideProvider } from './src/dev/DevSubscriptionOverrideContext';
@@ -208,7 +208,7 @@ function RootNavigator() {
   // onward — means "still pending". See the `UserProfile.metadata` doc
   // comment in src/services/userProfile.ts.
   const commercialGateResolved = profile?.metadata.commercialGateResolvedAt !== null;
-  const { quiz } = useAppState();
+  const { quiz, setQuiz } = useAppState();
   const [screen, setScreenState] = useState<RootScreenId>('splash');
   // Mirrors `screen` synchronously so late/stale callbacks (e.g. the splash
   // timer firing after the router already moved on) can check the current
@@ -256,6 +256,11 @@ function RootNavigator() {
   useEffect(() => {
     if (user && questionnaire) void clearOnboardingDraft();
   }, [user, questionnaire]);
+
+  // Ref (not state) so it can be read/reset from effects defined further
+  // below, before its own hydration effect — see the effect near
+  // `resolvedScreen` for the full rationale.
+  const repairHydratedUidRef = useRef<string | null>(null);
 
   const setScreen = (next: RootScreenId) => {
     screenRef.current = next;
@@ -327,6 +332,27 @@ function RootNavigator() {
     commercialGateResolved,
     workoutReadinessGate,
   });
+
+  // Repair re-entry: `resolvePremiumGate` sends an authenticated user with an
+  // EXISTING but incomplete questionnaire back to `'onboardingFunnel'` too
+  // (`workoutReadinessGate === 'needsQuestionnaire'` — see premiumGate.ts).
+  // Unlike the brand-new-account case (`questionnaireResolution ===
+  // 'not_found'`, where `questionnaire` is null and `quiz` is correctly
+  // blank), here real answers already exist server-side — prefilling `quiz`
+  // from them means the reduced funnel re-asks nothing the user already
+  // answered; only whichever field was actually missing stays unset. Runs
+  // once per uid (not on every render where the condition holds) so it never
+  // clobbers the user's own edits mid-repair.
+  useEffect(() => {
+    if (!user) {
+      repairHydratedUidRef.current = null;
+      return;
+    }
+    if (resolvedScreen !== 'onboardingFunnel' || !questionnaire) return;
+    if (repairHydratedUidRef.current === user.uid) return;
+    repairHydratedUidRef.current = user.uid;
+    setQuiz({ ...defaultQuiz, ...questionnaire.answers });
+  }, [user, questionnaire, resolvedScreen, setQuiz]);
 
   useEffect(() => {
     logInfo('subscription', 'navigation_gate_evaluated', {
