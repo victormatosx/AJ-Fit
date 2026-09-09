@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   randomUUID: vi.fn(() => '10000000-0000-4000-8000-000000000001'),
   currentUid: 'user-A' as string | null,
   getPermission: vi.fn(async () => 'granted' as const),
+  getSupport: vi.fn(() => ({ supported: true, reasonCode: 'SUPPORTED' as const })),
   currentToken: vi.fn(() => ({ expoPushToken: 'never-expose-me' })),
   requestToken: vi.fn(async () => ({ expoPushToken: 'never-expose-me' })),
   sync: vi.fn(async () => ({ status: 'synced' as const })),
@@ -24,6 +25,7 @@ vi.mock('../pushDeviceRegistration', () => ({
 vi.mock('../pushNotifications', () => ({
   getCurrentPushToken: mocks.currentToken,
   getNotificationPermissionStatus: mocks.getPermission,
+  getPushSupportStatus: mocks.getSupport,
   requestPushTokenForDevelopment: mocks.requestToken,
 }));
 
@@ -31,6 +33,7 @@ import {
   loadQaPushDiagnostics,
   QA_PUSH_NOTIFICATION_TYPES,
   qaPushErrorMessage,
+  qaPushUnavailableMessage,
   refreshQaPushRegistration,
   sendQaPushNotification,
 } from '../qaPushNotification';
@@ -81,6 +84,7 @@ describe('QA push client boundary', () => {
   it('loads diagnostics through the existing registration flow without exposing the token', async () => {
     const result = await loadQaPushDiagnostics('user-A');
     expect(result).toEqual({
+      support: { supported: true, reasonCode: 'SUPPORTED' },
       permission: 'granted', registration: 'synced', expoPushTokenPresent: true,
     });
     expect(JSON.stringify(result)).not.toContain('never-expose-me');
@@ -106,6 +110,7 @@ describe('QA push client boundary', () => {
     mocks.currentUid = 'user-B';
     releasePermission();
     await expect(pending).resolves.toEqual({
+      support: { supported: true, reasonCode: 'SUPPORTED' },
       permission: 'error', registration: 'stale-identity', expoPushTokenPresent: false,
     });
     expect(mocks.sync).not.toHaveBeenCalled();
@@ -114,6 +119,7 @@ describe('QA push client boundary', () => {
   it('does nothing after logout and reports stale identity', async () => {
     mocks.currentUid = null;
     await expect(loadQaPushDiagnostics('user-A')).resolves.toEqual({
+      support: { supported: true, reasonCode: 'SUPPORTED' },
       permission: 'error', registration: 'stale-identity', expoPushTokenPresent: false,
     });
     expect(mocks.getPermission).not.toHaveBeenCalled();
@@ -125,5 +131,12 @@ describe('QA push client boundary', () => {
       .toBe('Esta conta não está autorizada para QA de push.');
     expect(qaPushErrorMessage(new Error('ExponentPushToken[secret]')))
       .not.toContain('secret');
+  });
+
+  it('provides an explicit rebuild message when the native API is missing', () => {
+    expect(qaPushUnavailableMessage('NATIVE_API_MISSING')).toBe(
+      'Push não está disponível neste build. Recompile o development build com suporte nativo a notifications.',
+    );
+    expect(qaPushUnavailableMessage('SUPPORTED')).toBeNull();
   });
 });

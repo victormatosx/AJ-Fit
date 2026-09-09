@@ -12,8 +12,10 @@ import {
 import {
   getCurrentPushToken,
   getNotificationPermissionStatus,
+  getPushSupportStatus,
   requestPushTokenForDevelopment,
   type PushPermissionStatus,
+  type PushSupportStatus,
 } from './pushNotifications';
 
 export const QA_PUSH_NOTIFICATION_TYPES = [
@@ -37,6 +39,7 @@ export type QaPushDispatchResult = {
 };
 
 export interface QaPushDiagnostics {
+  support: PushSupportStatus;
   permission: PushPermissionStatus;
   registration: PushDeviceSyncResult['status'];
   expoPushTokenPresent: boolean;
@@ -77,18 +80,35 @@ export async function sendQaPushNotification(
 /** Reads permission/token state and reuses the existing registration flow. */
 export async function loadQaPushDiagnostics(uid: string): Promise<QaPushDiagnostics> {
   assertDevelopment();
+  const support = getPushSupportStatus();
   if (!identityIsCurrent(uid)) {
-    return { permission: 'error', registration: 'stale-identity', expoPushTokenPresent: false };
+    return {
+      support,
+      permission: 'error',
+      registration: 'stale-identity',
+      expoPushTokenPresent: false,
+    };
   }
   const permission = await getNotificationPermissionStatus();
   if (!identityIsCurrent(uid)) {
-    return { permission: 'error', registration: 'stale-identity', expoPushTokenPresent: false };
+    return {
+      support,
+      permission: 'error',
+      registration: 'stale-identity',
+      expoPushTokenPresent: false,
+    };
   }
   const registration = await syncCurrentDeviceBinding(uid);
   if (!identityIsCurrent(uid)) {
-    return { permission: 'error', registration: 'stale-identity', expoPushTokenPresent: false };
+    return {
+      support,
+      permission: 'error',
+      registration: 'stale-identity',
+      expoPushTokenPresent: false,
+    };
   }
   return {
+    support,
     permission,
     registration: registration.status,
     expoPushTokenPresent: getCurrentPushToken() !== null,
@@ -98,25 +118,57 @@ export async function loadQaPushDiagnostics(uid: string): Promise<QaPushDiagnost
 /** Explicit QA action: request permission/token, then force the existing binding sync. */
 export async function refreshQaPushRegistration(uid: string): Promise<QaPushDiagnostics> {
   assertDevelopment();
+  const support = getPushSupportStatus();
   if (!identityIsCurrent(uid)) {
-    return { permission: 'error', registration: 'stale-identity', expoPushTokenPresent: false };
+    return {
+      support,
+      permission: 'error',
+      registration: 'stale-identity',
+      expoPushTokenPresent: false,
+    };
   }
   const token = await requestPushTokenForDevelopment();
   if (!identityIsCurrent(uid)) {
-    return { permission: 'error', registration: 'stale-identity', expoPushTokenPresent: false };
+    return {
+      support,
+      permission: 'error',
+      registration: 'stale-identity',
+      expoPushTokenPresent: false,
+    };
   }
   const registration = token
     ? await refreshCurrentDeviceToken(uid, token)
     : await updatePushPermissionState(uid);
   const permission = await getNotificationPermissionStatus();
   if (!identityIsCurrent(uid)) {
-    return { permission: 'error', registration: 'stale-identity', expoPushTokenPresent: false };
+    return {
+      support,
+      permission: 'error',
+      registration: 'stale-identity',
+      expoPushTokenPresent: false,
+    };
   }
   return {
+    support,
     permission,
     registration: registration.status,
     expoPushTokenPresent: getCurrentPushToken() !== null,
   };
+}
+
+export function qaPushUnavailableMessage(
+  reasonCode: PushSupportStatus['reasonCode'],
+): string | null {
+  switch (reasonCode) {
+    case 'SUPPORTED':
+      return null;
+    case 'EXPO_GO':
+      return 'Push remoto não está disponível no Expo Go. Abra o development build do AJ Fit.';
+    case 'NATIVE_API_MISSING':
+      return 'Push não está disponível neste build. Recompile o development build com suporte nativo a notifications.';
+    case 'UNSUPPORTED_PLATFORM':
+      return 'Push remoto não está disponível nesta plataforma.';
+  }
 }
 
 export function qaPushErrorMessage(cause: unknown): string {

@@ -43,6 +43,14 @@ describe('Push Notifications DEV/QA panel', () => {
     expect(sheet).toContain('QA_PUSH_NOTIFICATION_TYPES.map');
   });
 
+  it('disables send and shows the concrete support failure instead of failing silently', () => {
+    const sheet = read('src/dev/pushNotifications/PushNotificationQaSheet.tsx');
+    expect(sheet).toContain('qaPushUnavailableMessage(diagnostics.value.support.reasonCode)');
+    expect(sheet).toContain('disabled={sendDisabled}');
+    expect(sheet).toContain('accessibilityRole="alert"');
+    expect(sheet).toContain("setSendState({ status: 'failed', message: unavailableMessage })");
+  });
+
   it('resets async state by uid/visibility and cancels stale account results', () => {
     const sheet = read('src/dev/pushNotifications/PushNotificationQaSheet.tsx');
     expect(sheet).toContain('}, [uid, visible]);');

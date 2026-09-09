@@ -4,11 +4,14 @@ vi.mock('react-native', () => ({
   Linking: { openSettings: vi.fn(async () => undefined) },
   Platform: { OS: 'android' },
 }));
+vi.mock('expo', () => ({ isRunningInExpoGo: () => false }));
 vi.mock('expo-constants', () => ({
   default: {
     easConfig: { projectId: 'project-id' },
     expoConfig: { extra: { eas: { projectId: 'project-id' } } },
-    expoGoConfig: null,
+    // A dev-launcher manifest may populate this. It must not be interpreted
+    // as proof that the custom development build is Expo Go.
+    expoGoConfig: { developer: { tool: 'expo-cli' } },
   },
 }));
 vi.mock('expo-notifications', () => ({
@@ -21,6 +24,14 @@ vi.mock('expo-notifications', () => ({
     PROVISIONAL: 3,
     EPHEMERAL: 4,
   },
+  getPermissionsAsync: vi.fn(),
+  requestPermissionsAsync: vi.fn(),
+  getDevicePushTokenAsync: vi.fn(),
+  getExpoPushTokenAsync: vi.fn(),
+  addNotificationReceivedListener: vi.fn(),
+  addNotificationResponseReceivedListener: vi.fn(),
+  addPushTokenListener: vi.fn(),
+  setNotificationHandler: vi.fn(),
 }));
 vi.mock('../../../modules/ajfit-rest-activity', () => ({
   getAJFitRestActivityNativeModule: () => null,
@@ -28,6 +39,7 @@ vi.mock('../../../modules/ajfit-rest-activity', () => ({
 
 import {
   createPushNotificationsService,
+  isPushSupported as isDefaultPushSupported,
   parsePushPayload,
   type PushNotificationsDependencies,
 } from '../pushNotifications';
@@ -64,6 +76,7 @@ function fixture(overrides: Partial<PushNotificationsDependencies> = {}) {
     notifications: notifications as never,
     platform: 'android',
     isExpoGo: false,
+    nativeApiAvailable: true,
     projectId: 'project-id',
     now: () => 100,
     development: true,
@@ -81,6 +94,10 @@ function fixture(overrides: Partial<PushNotificationsDependencies> = {}) {
 }
 
 describe('push notification runtime', () => {
+  it('does not misclassify a development-client manifest as Expo Go', () => {
+    expect(isDefaultPushSupported()).toBe(true);
+  });
+
   it('is passive: initialization never prompts or requests a token', () => {
     const { service, notifications } = fixture();
     const dispose = service.initializeRuntime();
@@ -137,12 +154,44 @@ describe('push notification runtime', () => {
     });
   });
 
-  it('treats Expo Go and web as unsupported without throwing', async () => {
-    const expoGo = fixture({ isExpoGo: true }).service;
+  it('supports physical iOS and Android when the native API is available', () => {
+    expect(fixture({ platform: 'ios' }).service.getPushSupportStatus()).toEqual({
+      supported: true,
+      reasonCode: 'SUPPORTED',
+    });
+    expect(fixture({ platform: 'android' }).service.isPushSupported()).toBe(true);
+  });
+
+  it('reports precise reasons for genuinely unsupported environments', async () => {
+    const expoGo = fixture({ isExpoGo: true });
     const web = fixture({ platform: 'web' }).service;
-    expect(expoGo.isPushSupported()).toBe(false);
-    expect(web.isPushSupported()).toBe(false);
-    await expect(expoGo.requestNotificationPermission()).resolves.toBe('unsupported');
+    const missingNativeApi = fixture({ nativeApiAvailable: false }).service;
+
+    expect(expoGo.service.getPushSupportStatus().reasonCode).toBe('EXPO_GO');
+    expect(web.getPushSupportStatus().reasonCode).toBe('UNSUPPORTED_PLATFORM');
+    expect(missingNativeApi.getPushSupportStatus().reasonCode).toBe('NATIVE_API_MISSING');
+    await expect(expoGo.service.getNotificationPermissionStatus()).resolves.toBe('unsupported');
+    await expect(missingNativeApi.getNotificationPermissionStatus()).resolves.toBe('unsupported');
+    expect(expoGo.notifications.getPermissionsAsync).not.toHaveBeenCalled();
+    expect(expoGo.dependencies.info).toHaveBeenCalledWith('push_unsupported', {
+      platform: 'android',
+      reasonCode: 'EXPO_GO',
+    });
+  });
+
+  it.each([
+    ['not-determined', 0],
+    ['denied', 1],
+  ] as const)('does not turn iOS permission %s into unsupported', async (expected, iosStatus) => {
+    const { service, notifications } = fixture({ platform: 'ios' });
+    notifications.getPermissionsAsync.mockResolvedValue({
+      granted: false,
+      status: expected === 'denied' ? 'denied' : 'undetermined',
+      ios: { status: iosStatus },
+    } as never);
+
+    expect(service.isPushSupported()).toBe(true);
+    await expect(service.getNotificationPermissionStatus()).resolves.toBe(expected);
   });
 
   it('refreshes an Expo token from the native token listener', async () => {

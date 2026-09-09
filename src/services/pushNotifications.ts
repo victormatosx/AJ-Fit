@@ -1,5 +1,6 @@
 import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
+import { isRunningInExpoGo } from 'expo';
 import { Linking, Platform } from 'react-native';
 
 import { logError, logInfo } from '../lib/logger';
@@ -14,6 +15,17 @@ export type PushPermissionStatus =
   | 'not-determined'
   | 'unsupported'
   | 'error';
+
+export type PushSupportReasonCode =
+  | 'SUPPORTED'
+  | 'UNSUPPORTED_PLATFORM'
+  | 'EXPO_GO'
+  | 'NATIVE_API_MISSING';
+
+export type PushSupportStatus = Readonly<{
+  supported: boolean;
+  reasonCode: PushSupportReasonCode;
+}>;
 
 /**
  * Small routing-independent contract for future notification phases.
@@ -68,6 +80,7 @@ export interface PushNotificationsDependencies {
   notifications: NotificationsApi;
   platform: string;
   isExpoGo: boolean;
+  nativeApiAvailable: boolean;
   projectId?: string;
   now(): number;
   development: boolean;
@@ -78,6 +91,7 @@ export interface PushNotificationsDependencies {
 
 export interface PushNotificationsService {
   isPushSupported(): boolean;
+  getPushSupportStatus(): PushSupportStatus;
   getNotificationPermissionStatus(): Promise<PushPermissionStatus>;
   requestNotificationPermission(): Promise<PushPermissionStatus>;
   getPushToken(): Promise<PushTokenSnapshot | null>;
@@ -121,9 +135,21 @@ function createDefaultDependencies(): PushNotificationsDependencies {
   return {
     notifications: Notifications,
     platform: Platform.OS,
-    // SDK 56: expoGoConfig exists only in Expo Go. executionEnvironment
-    // cannot distinguish Expo Go from a development build.
-    isExpoGo: Constants.expoGoConfig != null,
+    // SDK 56 executionEnvironment=storeClient covers both Expo Go and a
+    // development build, while expoGoConfig can be populated from the dev
+    // launcher manifest. This is the same native ExpoGo-module check used by
+    // expo-notifications itself.
+    isExpoGo: isRunningInExpoGo(),
+    nativeApiAvailable: [
+      Notifications.getPermissionsAsync,
+      Notifications.requestPermissionsAsync,
+      Notifications.getDevicePushTokenAsync,
+      Notifications.getExpoPushTokenAsync,
+      Notifications.addNotificationReceivedListener,
+      Notifications.addNotificationResponseReceivedListener,
+      Notifications.addPushTokenListener,
+      Notifications.setNotificationHandler,
+    ].every((candidate) => typeof candidate === 'function'),
     projectId: resolveProjectId(),
     now: Date.now,
     development: typeof __DEV__ !== 'undefined' && __DEV__,
@@ -165,9 +191,20 @@ export function createPushNotificationsService(
     if (dependencies.development) dependencies.error(operation, cause);
   };
 
-  const isPushSupported = () =>
-    (dependencies.platform === 'ios' || dependencies.platform === 'android') &&
-    !dependencies.isExpoGo;
+  const getPushSupportStatus = (): PushSupportStatus => {
+    if (dependencies.platform !== 'ios' && dependencies.platform !== 'android') {
+      return { supported: false, reasonCode: 'UNSUPPORTED_PLATFORM' };
+    }
+    if (dependencies.isExpoGo) {
+      return { supported: false, reasonCode: 'EXPO_GO' };
+    }
+    if (!dependencies.nativeApiAvailable) {
+      return { supported: false, reasonCode: 'NATIVE_API_MISSING' };
+    }
+    return { supported: true, reasonCode: 'SUPPORTED' };
+  };
+
+  const isPushSupported = () => getPushSupportStatus().supported;
 
   const mapPermission = (
     response: Notifications.NotificationPermissionsStatus,
@@ -192,7 +229,10 @@ export function createPushNotificationsService(
 
   const getNotificationPermissionStatus = async (): Promise<PushPermissionStatus> => {
     if (!isPushSupported()) {
-      devInfo('push_unsupported', { platform: dependencies.platform });
+      devInfo('push_unsupported', {
+        platform: dependencies.platform,
+        reasonCode: getPushSupportStatus().reasonCode,
+      });
       return 'unsupported';
     }
 
@@ -512,6 +552,7 @@ export function createPushNotificationsService(
 
   return {
     isPushSupported,
+    getPushSupportStatus,
     getNotificationPermissionStatus,
     requestNotificationPermission,
     getPushToken: () => acquirePushToken(false),
@@ -529,6 +570,7 @@ export function createPushNotificationsService(
 const pushNotifications = createPushNotificationsService(createDefaultDependencies());
 
 export const isPushSupported = pushNotifications.isPushSupported;
+export const getPushSupportStatus = pushNotifications.getPushSupportStatus;
 export const getNotificationPermissionStatus =
   pushNotifications.getNotificationPermissionStatus;
 export const requestNotificationPermission =

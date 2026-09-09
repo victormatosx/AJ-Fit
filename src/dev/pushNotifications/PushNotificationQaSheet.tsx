@@ -6,6 +6,7 @@ import {
   loadQaPushDiagnostics,
   QA_PUSH_NOTIFICATION_TYPES,
   qaPushErrorMessage,
+  qaPushUnavailableMessage,
   refreshQaPushRegistration,
   sendQaPushNotification,
   type QaPushDiagnostics,
@@ -116,6 +117,13 @@ export function PushNotificationQaSheet({
   };
 
   const send = async () => {
+    const unavailableMessage = diagnostics.status === 'ready'
+      ? qaPushUnavailableMessage(diagnostics.value.support.reasonCode)
+      : null;
+    if (unavailableMessage) {
+      setSendState({ status: 'failed', message: unavailableMessage });
+      return;
+    }
     const current = ++sendOperation.current;
     setSendState({ status: 'sending' });
     try {
@@ -142,6 +150,10 @@ export function PushNotificationQaSheet({
     { label: 'Registro push', value: registrationLabel(diagnostics.value.registration) },
     { label: 'Expo push token presente', value: diagnostics.value.expoPushTokenPresent ? 'SIM' : 'NÃO' },
   ] : [];
+  const pushUnavailableMessage = diagnostics.status === 'ready'
+    ? qaPushUnavailableMessage(diagnostics.value.support.reasonCode)
+    : null;
+  const sendDisabled = sendState.status === 'sending' || pushUnavailableMessage !== null;
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onDismiss}>
@@ -206,6 +218,11 @@ export function PushNotificationQaSheet({
                 {diagnostics.message}
               </Text>
             ) : null}
+            {pushUnavailableMessage ? (
+              <Text accessibilityRole="alert" style={{ marginTop: 10, fontFamily: theme.fonts.ui, fontSize: 12, lineHeight: 17, color: theme.colors.dangerText }}>
+                {pushUnavailableMessage}
+              </Text>
+            ) : null}
             <Pressable
               accessibilityRole="button"
               disabled={diagnostics.status === 'loading'}
@@ -267,8 +284,8 @@ export function PushNotificationQaSheet({
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Enviar notificação"
-              accessibilityState={{ disabled: sendState.status === 'sending' }}
-              disabled={sendState.status === 'sending'}
+              accessibilityState={{ disabled: sendDisabled }}
+              disabled={sendDisabled}
               onPress={() => void send()}
               style={({ pressed }) => ({
                 marginTop: 18,
@@ -277,7 +294,7 @@ export function PushNotificationQaSheet({
                 backgroundColor: pressed ? theme.colors.accentHi : theme.colors.accent,
                 alignItems: 'center',
                 justifyContent: 'center',
-                opacity: sendState.status === 'sending' ? 0.7 : 1,
+                opacity: sendDisabled ? 0.5 : 1,
               })}
             >
               {sendState.status === 'sending' ? (
