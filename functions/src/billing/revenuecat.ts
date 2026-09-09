@@ -41,6 +41,7 @@ import {
   type AttributionConfirmationSkipReason,
 } from '../attribution/attributionSync';
 import { persistAttributedFinancialTransaction } from './subscriptionTransactions';
+import { dispatchRevenueCatNotification } from '../notifications/revenueCatNotifications';
 
 /**
  * RevenueCat webhook processing — real implementation (Sprint 4;
@@ -882,6 +883,33 @@ function eventConcernsPremiumEntitlement(event: RawRevenueCatEvent): boolean {
   return entitlementIds.includes(PREMIUM_ENTITLEMENT_ID);
 }
 
+async function dispatchRevenueCatNotificationAfterSubscription(input: {
+  uid: string;
+  eventId: string;
+  eventType: SupportedRevenueCatWebhookEventType;
+  event: RawRevenueCatEvent;
+  entitlementActive: boolean;
+}): Promise<void> {
+  try {
+    await dispatchRevenueCatNotification({
+      uid: input.uid,
+      eventId: input.eventId,
+      eventType: input.eventType,
+      concernsPremium: eventConcernsPremiumEntitlement(input.event),
+      entitlementActive: input.entitlementActive,
+    });
+  } catch (error) {
+    // Notifications are an independent post-commit side effect. Even an
+    // unexpected adapter failure must never change the subscription result
+    // or the HTTP response that drives RevenueCat's retry semantics.
+    logFunctionError(SCOPE, error, {
+      eventId: maskRevenueCatIdentifier(input.eventId),
+      eventType: input.eventType,
+      operation: 'post_subscription_notification',
+    });
+  }
+}
+
 function extractPeriodType(event: RawRevenueCatEvent): string | undefined {
   return typeof event.period_type === 'string' ? event.period_type : undefined;
 }
@@ -1213,6 +1241,18 @@ export async function handleRevenueCatWebhook(req: Request, res: Response): Prom
       eventTimestampMs,
       validation.data,
     );
+
+    if (result.status === 'processed' || result.status === 'duplicate') {
+      await dispatchRevenueCatNotificationAfterSubscription({
+        uid,
+        eventId,
+        eventType,
+        event,
+        // normalizeSubscription always resolves this field. Keep the check
+        // explicit so an impossible malformed internal result fails closed.
+        entitlementActive: validation.data.entitlementActive === true,
+      });
+    }
 
     switch (result.status) {
       case 'processed':

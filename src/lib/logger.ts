@@ -13,6 +13,7 @@ const IDENTIFIER_KEYS = new Set([
   'originaltransactionid',
   'photoid',
   'questionnaireid',
+  'installationid',
 ]);
 
 function maskIdentifier(value: string): string {

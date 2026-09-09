@@ -26,6 +26,7 @@
     "expo-local-authentication": "~56.0.5",
     "expo-localization": "~56.0.6",
     "expo-navigation-bar": "~56.0.3",
+    "expo-notifications": "~56.0.25",
     "expo-screen-capture": "~56.0.5",
     "expo-secure-store": "~56.0.4",
     "expo-sharing": "~56.0.25",

@@ -35,6 +35,7 @@ import {
   DEFAULT_UNITS_PREFERENCE,
   type UnitsPreference,
 } from '../types/units';
+import type { NotificationPreferences } from '../types/notificationPreferences';
 
 /**
  * User repository — the only place that touches `users/{userId}` and its
@@ -89,6 +90,7 @@ export type UserProfile = {
     language: SupportedLanguage;
     units: UnitsPreference;
     theme: 'dark' | 'light' | 'system';
+    notificationPreferences?: NotificationPreferences;
   };
   subscription: {
     status?: SubscriptionStatus;

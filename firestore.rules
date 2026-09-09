@@ -155,10 +155,24 @@ service cloud.firestore {
       // em src/types/language.ts.
       return data is map
         && data.keys().hasAll(['language', 'units', 'theme'])
-        && data.keys().hasOnly(['language', 'units', 'theme'])
+        && data.keys().hasOnly(['language', 'units', 'theme', 'notificationPreferences'])
         && data.language in ['pt-BR', 'en', 'es']
         && data.units in ['system', 'metric', 'imperial']
-        && data.theme in ['dark', 'light', 'system'];
+        && data.theme in ['dark', 'light', 'system']
+        && (!('notificationPreferences' in data)
+             || notificationPreferencesValid(data.notificationPreferences));
+    }
+
+    function notificationPreferencesValid(data) {
+      return data is map
+        && data.keys().hasOnly([
+             'workoutsAndReminders',
+             'evolutionAndAchievements',
+             'progress'
+           ])
+        && (!('workoutsAndReminders' in data) || data.workoutsAndReminders is bool)
+        && (!('evolutionAndAchievements' in data) || data.evolutionAndAchievements is bool)
+        && (!('progress' in data) || data.progress is bool);
     }
 
     // Shape of `users/{userId}.subscription` — consolidated in Sprint 3.5 to
@@ -878,9 +892,10 @@ service cloud.firestore {
       // adicionados ao documento no futuro.
       //
       // `preferences` é aceito no conjunto top-level mudável, mas dentro dele
-      // apenas `preferences.language` e `preferences.units` podem variar;
-      // `theme` segue protegido. Escritas legítimas usam caminhos pontuados,
-      // preservando todas as preferências irmãs.
+      // apenas `preferences.language`, `preferences.units` e o mapa validado
+      // `notificationPreferences` podem variar; `theme` segue protegido.
+      // Escritas legítimas usam caminhos pontuados, preservando todas as
+      // preferências irmãs.
       allow update: if isVerifiedOwner(userId) && accountActive(userId) && (
         legacyMigrationValid()
         || (
@@ -893,7 +908,7 @@ service cloud.firestore {
           && (
             !request.resource.data.diff(resource.data).affectedKeys().hasAny(['preferences'])
             || request.resource.data.preferences.diff(resource.data.preferences).affectedKeys()
-                 .hasOnly(['language', 'units'])
+                 .hasOnly(['language', 'units', 'notificationPreferences'])
           )
           && request.resource.data.metadata.updatedAt == request.time
           && request.resource.data.metadata.diff(resource.data.metadata).affectedKeys()
@@ -904,6 +919,13 @@ service cloud.firestore {
       // Exclusão: negada ao cliente (remoção é processo de backend — 90 dias,
       // docs/12 §10). Somente o Admin SDK pode excluir.
       allow delete: if false;
+
+      // Backend-maintained projection. It contains no raw token, but is
+      // intentionally not a client API: sync/release happen only through
+      // authenticated, App-Check-enforced callables.
+      match /devices/{installationId} {
+        allow read, write: if false;
+      }
 
       // Questionários do usuário (inicial + reavaliações futuras).
       // Cada documento é um snapshot imutável.
@@ -2192,6 +2214,24 @@ service cloud.firestore {
         && workoutTemplateValid(templateId)
         && request.resource.data.createdAt == resource.data.createdAt;
       allow delete: if false;
+    }
+
+    // Push registries, raw tokens, dispatches and deliveries are exclusively
+    // backend-controlled. App clients use App-Check-enforced callables and
+    // never read or write these collections directly.
+    match /pushInstallations/{installationId} {
+      allow read, write: if false;
+    }
+
+    match /pushTokenOwners/{tokenHash} {
+      allow read, write: if false;
+    }
+
+    match /notificationDispatches/{dispatchId} {
+      allow read, write: if false;
+      match /deliveries/{deliveryId} {
+        allow read, write: if false;
+      }
     }
 
     // ── Deny all undocumented collections ─────────────────────────────────

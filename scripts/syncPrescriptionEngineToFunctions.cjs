@@ -54,7 +54,10 @@ const TS_FILES = [
   // hand-duplicated as literals in `authorizeMutation.ts`. Syncing the real
   // module removes that duplication — the backend's `authoritativeEarnedFact`
   // now imports the exact same `resolveProgressionV2Config`.
-  ['progressionEngineV2', ['earnedCycles', 'config']],
+  ['progressionEngineV2', ['earnedCycles', 'config', 'types', 'resolver', 'activeTime',
+    'adherence', 'prescribedOpportunities', 'expectedSessionIndex', 'sessionQualification']],
+  // Notification observers consume the same pure progression/calendar functions.
+  ['scheduleEngine', ['calendar', 'localDate']],
 ];
 
 const JSON_FILES = [

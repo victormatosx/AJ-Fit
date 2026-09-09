@@ -18,7 +18,7 @@ const REPO_ROOT = path.resolve(__dirname, '..');
 const SOURCE_DIR = path.join(REPO_ROOT, 'src', 'scheduleEngine');
 const DEST_DIR = path.join(REPO_ROOT, 'functions', 'src', 'workoutLifecycle', 'scheduleEngine');
 
-const FILES = ['calendar.ts', 'resolver.ts', 'types.ts', 'localDate.ts'];
+const FILES = ['calendar.ts', 'resolver.ts', 'types.ts', 'localDate.ts', 'identities.ts'];
 
 const HEADER = `// GENERATED FILE — do not edit directly.
 // Synced from src/scheduleEngine by scripts/syncScheduleEngineToFunctions.cjs.

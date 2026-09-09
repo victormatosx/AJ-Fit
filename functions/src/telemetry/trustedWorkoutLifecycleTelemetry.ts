@@ -4,6 +4,7 @@ import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 
 import { db } from '../lib/firebaseAdmin';
 import { logInfo, type LogContext } from '../lib/logger';
+import { dispatchWorkoutLifecycleNotification } from '../notifications/workoutLifecycleNotifications';
 import { progressionPolicyModeFor, resolveWorkoutLifecycleQaMode } from '../workoutLifecycle/qaPolicy';
 
 interface PersistedLifecycleEvent {
@@ -163,10 +164,16 @@ export const onTrustedWorkoutLifecycleEventCreated = onDocumentCreated(
   async (event) => {
     const snapshot = event.data;
     if (!snapshot) return;
+    const lifecycleEvent = snapshot.data() as PersistedLifecycleEvent;
     const qaMode = await resolveWorkoutLifecycleQaMode(event.params.uid, db);
-    await emitTrustedWorkoutLifecycleTelemetry(snapshot.data(), {
+    await emitTrustedWorkoutLifecycleTelemetry(lifecycleEvent, {
       correlationScope: event.params.uid,
       qaMode,
+    });
+    await dispatchWorkoutLifecycleNotification({
+      uid: event.params.uid,
+      eventId: event.params.eventId,
+      eventType: typeof lifecycleEvent.type === 'string' ? lifecycleEvent.type : '',
     });
   },
 );

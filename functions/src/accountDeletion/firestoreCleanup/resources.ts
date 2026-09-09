@@ -22,9 +22,26 @@
  * policy).
  */
 
-import type { Firestore } from 'firebase-admin/firestore';
+import {
+  Timestamp,
+  type Firestore,
+  type Query,
+  type QueryDocumentSnapshot,
+} from 'firebase-admin/firestore';
 
 import { db as defaultDb } from '../../lib/firebaseAdmin';
+import {
+  PUSH_INSTALLATIONS_COLLECTION,
+  PUSH_TOKEN_OWNERS_COLLECTION,
+  RELEASED_INSTALLATION_RETENTION_MS,
+  USER_DEVICES_COLLECTION,
+} from '../../pushDevices/schema';
+import {
+  NOTIFICATION_DISPATCHES_COLLECTION,
+} from '../../notifications/schema';
+import { DAILY_NOTIFICATION_USERS_COLLECTION } from '../../notifications/dailyRegistration';
+import { DAILY_PRODUCT_WINDOWS_COLLECTION } from '../../notifications/dailyProductRateLimit';
+import { NOTIFICATION_ACHIEVEMENT_MILESTONES_COLLECTION } from '../../notifications/achievementMilestones';
 import { deleteCollectionDocuments } from './deleteCollectionDocuments';
 import type { ResourceCleanupResult } from './types';
 
@@ -45,6 +62,51 @@ const WORKOUT_LIFECYCLE_EVENTS_COLLECTION = 'workoutLifecycleEvents';
 const PENDING_EVOLUTIONS_COLLECTION = 'pendingEvolutions';
 const WORKOUT_LIFECYCLE_AUTHORITY_GRANTS_COLLECTION = 'workoutLifecycleAuthorityGrants';
 const WORKOUT_LIFECYCLE_TRUSTED_TELEMETRY_RECEIPTS_COLLECTION = 'workoutLifecycleTrustedTelemetryReceipts';
+
+async function queryOwnedDocuments(
+  collectionName: string,
+  uid: string,
+  db: Firestore,
+  visit: (document: QueryDocumentSnapshot) => Promise<boolean>,
+  ownerField = 'ownerUid',
+): Promise<number> {
+  let affected = 0;
+  let cursor: QueryDocumentSnapshot | undefined;
+  for (;;) {
+    let query: Query = db.collection(collectionName)
+      .where(ownerField, '==', uid)
+      .orderBy('__name__')
+      .limit(100);
+    if (cursor) query = query.startAfter(cursor);
+    const snapshot = await query.get();
+    if (snapshot.empty) break;
+    for (const document of snapshot.docs) {
+      if (await visit(document)) affected += 1;
+    }
+    cursor = snapshot.docs[snapshot.docs.length - 1];
+    if (snapshot.size < 100) break;
+  }
+  return affected;
+}
+
+async function deleteUserDispatchHistory(uid: string, db: Firestore): Promise<number> {
+  let deletedCount = 0;
+  let cursor: QueryDocumentSnapshot | undefined;
+  for (;;) {
+    let query: Query = db.collection(NOTIFICATION_DISPATCHES_COLLECTION)
+      .where('uid', '==', uid)
+      .orderBy('__name__')
+      .limit(50);
+    if (cursor) query = query.startAfter(cursor);
+    const snapshot = await query.get();
+    if (snapshot.empty) break;
+    await Promise.all(snapshot.docs.map((document) => db.recursiveDelete(document.ref)));
+    deletedCount += snapshot.size;
+    cursor = snapshot.docs[snapshot.docs.length - 1];
+    if (snapshot.size < 50) break;
+  }
+  return deletedCount;
+}
 
 function userDocRef(db: Firestore, uid: string) {
   return db.collection(USERS_COLLECTION).doc(uid);
@@ -85,6 +147,158 @@ export async function deleteProgressPhotoDocuments(
     userDocRef(db, uid).collection(PROGRESS_PHOTOS_COLLECTION),
   );
   return { resource: 'progressPhotos', deletedCount, alreadyAbsent: deletedCount === 0 };
+}
+
+export async function deleteUserPushDevices(
+  uid: string,
+  db: Firestore = defaultDb,
+): Promise<ResourceCleanupResult> {
+  const { deletedCount } = await deleteCollectionDocuments(
+    userDocRef(db, uid).collection(USER_DEVICES_COLLECTION),
+  );
+  return { resource: 'pushDevices', deletedCount, alreadyAbsent: deletedCount === 0 };
+}
+
+/**
+ * Releases installation ownership transactionally. The owner/version/token
+ * relation is re-read inside the transaction so a concurrent transfer to a
+ * different account is never overwritten by deletion cleanup.
+ */
+export async function releaseUserPushInstallations(
+  uid: string,
+  db: Firestore = defaultDb,
+): Promise<ResourceCleanupResult> {
+  const now = Timestamp.now();
+  const releasedCount = await queryOwnedDocuments(
+    PUSH_INSTALLATIONS_COLLECTION,
+    uid,
+    db,
+    async (candidate) => db.runTransaction(async (tx) => {
+      const current = await tx.get(candidate.ref);
+      const data = current.data();
+      if (!data || data.ownerUid !== uid) return false;
+
+      const tokenHash = typeof data.tokenHash === 'string' ? data.tokenHash : null;
+      if (tokenHash) {
+        const tokenRef = db.collection(PUSH_TOKEN_OWNERS_COLLECTION).doc(tokenHash);
+        const token = await tx.get(tokenRef);
+        if (
+          token.data()?.ownerUid === uid &&
+          token.data()?.installationId === candidate.id &&
+          token.data()?.ownershipVersion === data.ownershipVersion
+        ) {
+          tx.delete(tokenRef);
+        }
+      }
+
+      tx.set(candidate.ref, {
+        ownerUid: null,
+        tokenHash: null,
+        nativeTokenHash: null,
+        nativeTokenType: null,
+        permissionStatus: 'not-determined',
+        pushEnabled: false,
+        disabledAt: now,
+        releasedAt: now,
+        leaseExpiresAt: now,
+        expireAt: Timestamp.fromMillis(now.toMillis() + RELEASED_INSTALLATION_RETENTION_MS),
+        updatedAt: now,
+      }, { merge: true });
+      return true;
+    }),
+  );
+  return {
+    resource: 'pushInstallations',
+    deletedCount: releasedCount,
+    alreadyAbsent: releasedCount === 0,
+  };
+}
+
+/** Deletes orphan token claims only while they are still owned by this UID. */
+export async function deleteUserPushTokenOwners(
+  uid: string,
+  db: Firestore = defaultDb,
+): Promise<ResourceCleanupResult> {
+  const deletedCount = await queryOwnedDocuments(
+    PUSH_TOKEN_OWNERS_COLLECTION,
+    uid,
+    db,
+    async (candidate) => db.runTransaction(async (tx) => {
+      const current = await tx.get(candidate.ref);
+      if (current.data()?.ownerUid !== uid) return false;
+      tx.delete(candidate.ref);
+      return true;
+    }),
+  );
+  return { resource: 'pushTokenOwners', deletedCount, alreadyAbsent: deletedCount === 0 };
+}
+
+export async function deleteUserNotificationDispatches(
+  uid: string,
+  db: Firestore = defaultDb,
+): Promise<ResourceCleanupResult> {
+  const deletedCount = await deleteUserDispatchHistory(uid, db);
+  return {
+    resource: 'notificationDispatches',
+    deletedCount,
+    alreadyAbsent: deletedCount === 0,
+  };
+}
+
+export async function deleteUserDailyNotificationRegistration(
+  uid: string,
+  db: Firestore = defaultDb,
+): Promise<ResourceCleanupResult> {
+  const ref = db.collection(DAILY_NOTIFICATION_USERS_COLLECTION).doc(uid);
+  const snapshot = await ref.get();
+  if (snapshot.exists) await ref.delete();
+  return {
+    resource: 'dailyNotificationRegistration',
+    deletedCount: snapshot.exists ? 1 : 0,
+    alreadyAbsent: !snapshot.exists,
+  };
+}
+
+export async function deleteUserNotificationProductWindows(
+  uid: string,
+  db: Firestore = defaultDb,
+): Promise<ResourceCleanupResult> {
+  const deletedCount = await queryOwnedDocuments(
+    DAILY_PRODUCT_WINDOWS_COLLECTION,
+    uid,
+    db,
+    async (candidate) => {
+      await candidate.ref.delete();
+      return true;
+    },
+    'uid',
+  );
+  return {
+    resource: 'notificationProductWindows',
+    deletedCount,
+    alreadyAbsent: deletedCount === 0,
+  };
+}
+
+export async function deleteUserNotificationAchievementMilestones(
+  uid: string,
+  db: Firestore = defaultDb,
+): Promise<ResourceCleanupResult> {
+  const deletedCount = await queryOwnedDocuments(
+    NOTIFICATION_ACHIEVEMENT_MILESTONES_COLLECTION,
+    uid,
+    db,
+    async (candidate) => {
+      await candidate.ref.delete();
+      return true;
+    },
+    'uid',
+  );
+  return {
+    resource: 'notificationAchievementMilestones',
+    deletedCount,
+    alreadyAbsent: deletedCount === 0,
+  };
 }
 
 /**
