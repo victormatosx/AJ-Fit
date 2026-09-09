@@ -7,6 +7,7 @@ import {
   ACHIEVEMENT_MILESTONE_CLAIM_STALE_MS,
   claimAchievementMilestone,
   completeAchievementMilestone,
+  releaseAchievementMilestoneClaim,
 } from '../achievementMilestones';
 
 const NOW = Timestamp.fromMillis(2_000_000_000_000);
@@ -59,5 +60,25 @@ describe('achievement milestone projection', () => {
     expect(a.outcome).toBe('CLAIMED');
     expect(b.outcome).toBe('CLAIMED');
     expect(a.milestoneId).not.toBe(b.milestoneId);
+  });
+
+  it('releases only the current in-flight claim without deleting a completed milestone', async () => {
+    const db = createFakeFirestore().db as never;
+    const first = await claimAchievementMilestone(db, REQUEST, NOW);
+    if (first.outcome !== 'CLAIMED') throw new Error('expected claim');
+    await expect(releaseAchievementMilestoneClaim(db, {
+      milestoneId: first.milestoneId,
+      claimToken: 'stale',
+    })).resolves.toBe(false);
+    await expect(releaseAchievementMilestoneClaim(db, first)).resolves.toBe(true);
+    const reclaimed = await claimAchievementMilestone(db, REQUEST, NOW);
+    expect(reclaimed.outcome).toBe('CLAIMED');
+    if (reclaimed.outcome !== 'CLAIMED') throw new Error('expected reclaimed milestone');
+    await completeAchievementMilestone(db, {
+      milestoneId: reclaimed.milestoneId,
+      claimToken: reclaimed.claimToken,
+      outcome: 'PENDING_RECEIPTS',
+    }, NOW);
+    await expect(releaseAchievementMilestoneClaim(db, reclaimed)).resolves.toBe(false);
   });
 });

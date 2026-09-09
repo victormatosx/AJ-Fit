@@ -31,8 +31,23 @@ export type PushSupportStatus = Readonly<{
  * Small routing-independent contract for future notification phases.
  * Display copy is deliberately absent: consumers must never route by title/body.
  */
+export const PUSH_NOTIFICATION_TYPES = [
+  'QA_TEST',
+  'EVOLUTION_UNLOCKED',
+  'EVOLUTION_APPROACHING',
+  'PROGRAM_UPDATED',
+  'BILLING_ISSUE',
+  'PREMIUM_ENDED',
+  'WORKOUT_DAY',
+  'RECOVERY_DAY',
+  'MISSED_WORKOUT',
+  'RE_ENGAGEMENT_EARLY',
+  'RE_ENGAGEMENT_LATE',
+] as const;
+export type PushNotificationType = (typeof PUSH_NOTIFICATION_TYPES)[number];
+
 export interface PushPayload {
-  type: 'QA_TEST';
+  type: PushNotificationType;
   notificationId: string;
 }
 
@@ -118,8 +133,10 @@ export function parsePushPayload(value: unknown): PushPayload | null {
 
   const type = nonEmptyString(value.type);
   const notificationId = nonEmptyString(value.notificationId);
-  if (type !== 'QA_TEST' || !notificationId) return null;
-  return { type, notificationId };
+  if (!(PUSH_NOTIFICATION_TYPES as readonly string[]).includes(type ?? '') || !notificationId) {
+    return null;
+  }
+  return { type: type as PushNotificationType, notificationId };
 }
 
 function resolveProjectId(): string | undefined {

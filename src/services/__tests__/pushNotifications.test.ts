@@ -222,21 +222,29 @@ describe('push notification runtime', () => {
 });
 
 describe('push payload parsing', () => {
-  it('accepts only the foundation QA payload', () => {
-    expect(parsePushPayload({ type: 'QA_TEST', notificationId: 'qa-1' }))
-      .toEqual({ type: 'QA_TEST', notificationId: 'qa-1' });
-  });
-
-  it.each(['WORKOUT_DAY', 'MISSED_WORKOUT', 'BILLING_ISSUE'])(
-    'does not route product type %s in Phase 1',
+  it.each([
+    'QA_TEST',
+    'EVOLUTION_UNLOCKED',
+    'EVOLUTION_APPROACHING',
+    'PROGRAM_UPDATED',
+    'BILLING_ISSUE',
+    'PREMIUM_ENDED',
+    'WORKOUT_DAY',
+    'RECOVERY_DAY',
+    'MISSED_WORKOUT',
+    'RE_ENGAGEMENT_EARLY',
+    'RE_ENGAGEMENT_LATE',
+  ] as const)(
+    'parses the structured payload for current notification type %s',
     (type) => {
-      expect(parsePushPayload({ type, notificationId: 'id' })).toBeNull();
+      expect(parsePushPayload({ type, notificationId: 'id' })).toEqual({ type, notificationId: 'id' });
     },
   );
 
   it('rejects malformed and nested-only payloads', () => {
     expect(parsePushPayload(null)).toBeNull();
     expect(parsePushPayload({ type: 'QA_TEST' })).toBeNull();
+    expect(parsePushPayload({ type: 'WEEK_COMPLETED', notificationId: 'id' })).toBeNull();
     expect(parsePushPayload({ data: { type: 'QA_TEST', notificationId: 'qa' } })).toBeNull();
   });
 });

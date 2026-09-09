@@ -13,6 +13,8 @@ import {
   buildMissedWorkoutNotification,
   buildQaTestNotification,
   buildQaPreviewNotification,
+  buildReEngagementEarlyNotification,
+  buildReEngagementLateNotification,
   EVOLUTION_UNLOCKED_COPIES,
   EVOLUTION_APPROACHING_COPIES,
   NOTIFICATION_LOCALES,
@@ -22,6 +24,8 @@ import {
   WORKOUT_DAY_COPIES,
   RECOVERY_DAY_COPIES,
   MISSED_WORKOUT_COPIES,
+  RE_ENGAGEMENT_EARLY_COPIES,
+  RE_ENGAGEMENT_LATE_COPIES,
 } from '../contentPolicy';
 import type { NotificationDispatchRequest } from '../schema';
 
@@ -40,8 +44,6 @@ describe('notification content policy', () => {
   });
 
   it.each([
-    'RE_ENGAGEMENT_EARLY',
-    'RE_ENGAGEMENT_LATE',
     'WEEK_COMPLETED',
     'WEEK_STREAK',
     'GOAL_PROXIMITY',
@@ -94,6 +96,8 @@ describe('notification content policy', () => {
       'buildProgramUpdatedNotification',
       'buildQaTestNotification',
       'buildQaPreviewNotification',
+      'buildReEngagementEarlyNotification',
+      'buildReEngagementLateNotification',
       'buildWorkoutDayNotification',
       'buildRecoveryDayNotification',
       'buildMissedWorkoutNotification',
@@ -111,6 +115,8 @@ describe('notification content policy', () => {
       'EVOLUTION_APPROACHING',
       'BILLING_ISSUE',
       'PREMIUM_ENDED',
+      'RE_ENGAGEMENT_EARLY',
+      'RE_ENGAGEMENT_LATE',
     ].map((type) => [type, buildQaPreviewNotification({
       uid: 'user-123', type: type as never, qaRequestId, locale,
     })]));
@@ -123,6 +129,8 @@ describe('notification content policy', () => {
     expect(previews.EVOLUTION_APPROACHING).toMatchObject(EVOLUTION_APPROACHING_COPIES[locale]);
     expect(previews.BILLING_ISSUE).toMatchObject(BILLING_ISSUE_COPIES[locale]);
     expect(previews.PREMIUM_ENDED).toMatchObject(PREMIUM_ENDED_COPIES[locale]);
+    expect(previews.RE_ENGAGEMENT_EARLY).toMatchObject(RE_ENGAGEMENT_EARLY_COPIES[locale]);
+    expect(previews.RE_ENGAGEMENT_LATE).toMatchObject(RE_ENGAGEMENT_LATE_COPIES[locale]);
     for (const preview of Object.values(previews)) {
       expect(preview.data).toEqual({});
       expect(preview.intent).toBeUndefined();
@@ -175,6 +183,12 @@ describe('notification content policy', () => {
       buildMissedWorkoutNotification({
         uid: 'user-123', plannedSessionIdentity: 'instance:2026-09-05:1', locale,
       }),
+      buildReEngagementEarlyNotification({
+        uid: 'user-123', episodeIdentity: 'instance:2026-09-05', locale,
+      }),
+      buildReEngagementLateNotification({
+        uid: 'user-123', episodeIdentity: 'instance:2026-09-05', locale,
+      }),
     ];
     for (const item of requests) expect(() => assertValidDispatchRequest(item)).not.toThrow();
   });
@@ -207,6 +221,12 @@ describe('notification content policy', () => {
     expect(buildMissedWorkoutNotification({
       uid: 'user-123', plannedSessionIdentity: 'instance:2026-09-05:1', locale,
     })).toMatchObject(MISSED_WORKOUT_COPIES[locale]);
+    expect(buildReEngagementEarlyNotification({
+      uid: 'user-123', episodeIdentity: 'instance:2026-09-05', locale,
+    })).toMatchObject(RE_ENGAGEMENT_EARLY_COPIES[locale]);
+    expect(buildReEngagementLateNotification({
+      uid: 'user-123', episodeIdentity: 'instance:2026-09-05', locale,
+    })).toMatchObject(RE_ENGAGEMENT_LATE_COPIES[locale]);
   });
 
   it('binds idempotency to uid, notification type and hashed source event identity', () => {

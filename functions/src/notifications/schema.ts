@@ -14,6 +14,8 @@ export const NOTIFICATION_TYPES = [
   'WORKOUT_DAY',
   'RECOVERY_DAY',
   'MISSED_WORKOUT',
+  'RE_ENGAGEMENT_EARLY',
+  'RE_ENGAGEMENT_LATE',
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 

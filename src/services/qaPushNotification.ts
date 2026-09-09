@@ -17,6 +17,7 @@ import {
   getPushSupportStatus,
   requestPushTokenForDevelopment,
   type PushPermissionStatus,
+  type PushNotificationType,
   type PushSupportStatus,
 } from './pushNotifications';
 
@@ -30,7 +31,9 @@ export const QA_PUSH_NOTIFICATION_TYPES = [
   'EVOLUTION_APPROACHING',
   'BILLING_ISSUE',
   'PREMIUM_ENDED',
-] as const;
+  'RE_ENGAGEMENT_EARLY',
+  'RE_ENGAGEMENT_LATE',
+] as const satisfies readonly PushNotificationType[];
 export type QaPushNotificationType = (typeof QA_PUSH_NOTIFICATION_TYPES)[number];
 
 const QA_PUSH_LOG_SCOPE = 'qaPushNotification';

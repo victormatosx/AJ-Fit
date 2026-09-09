@@ -2,6 +2,8 @@ import { createHash } from 'node:crypto';
 
 import { Timestamp, type Firestore } from 'firebase-admin/firestore';
 
+import { buildReEngagementEarlyNotification, buildReEngagementLateNotification } from './contentPolicy';
+import { readReEngagementContext } from './reengagementContext';
 import type { NotificationDispatchRequest } from './schema';
 
 export type NotificationPreflightResult =
@@ -54,10 +56,37 @@ async function evolutionApproachingPreflight(
 export async function runNotificationPreflight(
   db: Firestore,
   request: NotificationDispatchRequest,
-  _now: Timestamp,
+  now: Timestamp,
 ): Promise<NotificationPreflightResult> {
   if (request.type === 'EVOLUTION_APPROACHING') {
     return evolutionApproachingPreflight(db, request);
+  }
+  if (request.type === 'RE_ENGAGEMENT_EARLY' || request.type === 'RE_ENGAGEMENT_LATE') {
+    const context = await readReEngagementContext(
+      db,
+      request.uid,
+      now,
+      {},
+      { requireDailyWindow: false },
+    );
+    if (!context.allowed) return { allowed: false, reason: context.reason };
+    if (context.notificationType !== request.type) {
+      return { allowed: false, reason: 'REENGAGEMENT_STAGE_CHANGED' };
+    }
+    const rebuilt = request.type === 'RE_ENGAGEMENT_EARLY'
+      ? buildReEngagementEarlyNotification({
+          uid: request.uid,
+          episodeIdentity: context.episodeIdentity,
+          locale: 'pt-BR',
+        })
+      : buildReEngagementLateNotification({
+          uid: request.uid,
+          episodeIdentity: context.episodeIdentity,
+          locale: 'pt-BR',
+        });
+    if (rebuilt.sourceIdentity !== request.sourceIdentity) {
+      return { allowed: false, reason: 'REENGAGEMENT_EPISODE_CHANGED' };
+    }
   }
   return { allowed: true };
 }

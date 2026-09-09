@@ -91,6 +91,19 @@ Expo payload remains `type` + `notificationId`, exactly as in production.
 `EVOLUTION_UNLOCKED` uses the canonical `EVOLUTION` variant as its explicit QA
 fixture; no lifecycle event or pending evolution is created.
 
+The QA allowlist currently contains `QA_TEST`, `WORKOUT_DAY`, `RECOVERY_DAY`,
+`MISSED_WORKOUT`, `EVOLUTION_UNLOCKED`, `PROGRAM_UPDATED`,
+`EVOLUTION_APPROACHING`, `BILLING_ISSUE`, `PREMIUM_ENDED`,
+`RE_ENGAGEMENT_EARLY` and `RE_ENGAGEMENT_LATE`. The two re-engagement previews
+use an explicit hashed episode fixture only as builder input; they do not
+claim an episode milestone or product rate window and do not mutate workout
+state.
+
+The client payload parser now recognizes every implemented notification type,
+including these two. Product and QA-preview deliveries therefore expose the
+same structured `{ type, notificationId }` contract to the foreground/open
+handler; no new intent or deep link was invented.
+
 ## Device diagnostics
 
 The panel shows notification permission, existing device-registration result

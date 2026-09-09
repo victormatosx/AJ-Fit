@@ -79,3 +79,19 @@ export async function completeAchievementMilestone(
     return true;
   });
 }
+
+/** Releases only the caller's still-current claim when no dispatch occurred. */
+export async function releaseAchievementMilestoneClaim(
+  db: Firestore,
+  input: { milestoneId: string; claimToken: string },
+): Promise<boolean> {
+  const ref = db.collection(NOTIFICATION_ACHIEVEMENT_MILESTONES_COLLECTION).doc(input.milestoneId);
+  return db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    if (snapshot.data()?.status !== 'CLAIMED' || snapshot.data()?.claimToken !== input.claimToken) {
+      return false;
+    }
+    transaction.delete(ref);
+    return true;
+  });
+}

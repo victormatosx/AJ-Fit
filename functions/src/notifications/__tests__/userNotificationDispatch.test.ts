@@ -6,6 +6,8 @@ import {
   buildMissedWorkoutNotification,
   buildProgramUpdatedNotification,
   buildRecoveryDayNotification,
+  buildReEngagementEarlyNotification,
+  buildReEngagementLateNotification,
   buildWorkoutDayNotification,
 } from '../contentPolicy';
 import { dispatchUserNotificationCandidate } from '../userNotificationDispatch';
@@ -175,6 +177,12 @@ describe('event-driven notification policy orchestration', () => {
     })],
     ['MISSED_WORKOUT', (locale: 'pt-BR' | 'en' | 'es') => buildMissedWorkoutNotification({
       uid: 'uid-1', plannedSessionIdentity: 'wpi-1:2026-09-05:0', locale,
+    })],
+    ['RE_ENGAGEMENT_EARLY', (locale: 'pt-BR' | 'en' | 'es') => buildReEngagementEarlyNotification({
+      uid: 'uid-1', episodeIdentity: 'wpi-1:2026-09-01', locale,
+    })],
+    ['RE_ENGAGEMENT_LATE', (locale: 'pt-BR' | 'en' | 'es') => buildReEngagementLateNotification({
+      uid: 'uid-1', episodeIdentity: 'wpi-1:2026-09-01', locale,
     })],
   ] as const)('honors workoutsAndReminders ON/OFF for %s', async (_type, build) => {
     const workoutCandidate = {

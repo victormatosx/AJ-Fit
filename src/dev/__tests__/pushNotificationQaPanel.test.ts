@@ -37,6 +37,8 @@ describe('Push Notifications DEV/QA panel', () => {
       'Registro push',
       'Expo push token presente',
       'ATUALIZAR REGISTRO',
+      'Sentimos sua falta',
+      'Hora de voltar',
     ]) {
       expect(sheet).toContain(text);
     }

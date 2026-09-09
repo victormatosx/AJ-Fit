@@ -25,6 +25,8 @@ export const QA_PUSH_TYPE_LABELS: Record<QaPushNotificationType, string> = {
   EVOLUTION_APPROACHING: 'Próxima evolução',
   BILLING_ISSUE: 'Problema com assinatura',
   PREMIUM_ENDED: 'Premium encerrado',
+  RE_ENGAGEMENT_EARLY: 'Sentimos sua falta',
+  RE_ENGAGEMENT_LATE: 'Hora de voltar',
 };
 
 type DiagnosticState =

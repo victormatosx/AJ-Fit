@@ -16,6 +16,8 @@ export const QA_PREVIEW_NOTIFICATION_TYPES = [
   'EVOLUTION_APPROACHING',
   'BILLING_ISSUE',
   'PREMIUM_ENDED',
+  'RE_ENGAGEMENT_EARLY',
+  'RE_ENGAGEMENT_LATE',
 ] as const satisfies readonly NotificationType[];
 export type QaPreviewNotificationType = (typeof QA_PREVIEW_NOTIFICATION_TYPES)[number];
 
@@ -188,6 +190,36 @@ export const MISSED_WORKOUT_COPIES = {
   },
 } as const satisfies Readonly<Record<NotificationLocale, NotificationCopy>>;
 
+export const RE_ENGAGEMENT_EARLY_COPIES = {
+  'pt-BR': {
+    title: 'Sentimos sua falta 👋',
+    body: 'Seu próximo treino continua te esperando. Volte ao plano quando estiver pronto.',
+  },
+  en: {
+    title: 'We miss you 👋',
+    body: 'Your next workout is still waiting. Return to your plan when you’re ready.',
+  },
+  es: {
+    title: 'Te extrañamos 👋',
+    body: 'Tu próximo entrenamiento sigue esperándote. Retoma tu plan cuando estés listo.',
+  },
+} as const satisfies Readonly<Record<NotificationLocale, NotificationCopy>>;
+
+export const RE_ENGAGEMENT_LATE_COPIES = {
+  'pt-BR': {
+    title: 'Hora de voltar 💪',
+    body: 'Retome seu plano no seu ritmo. Um treino de cada vez já faz diferença.',
+  },
+  en: {
+    title: 'Time to come back 💪',
+    body: 'Return to your plan at your own pace. One workout at a time makes a difference.',
+  },
+  es: {
+    title: 'Hora de volver 💪',
+    body: 'Retoma tu plan a tu ritmo. Un entrenamiento a la vez ya marca la diferencia.',
+  },
+} as const satisfies Readonly<Record<NotificationLocale, NotificationCopy>>;
+
 function copies<T extends Record<NotificationLocale, NotificationCopy>>(localized: T) {
   return NOTIFICATION_LOCALES.map((locale) => localized[locale]);
 }
@@ -249,6 +281,18 @@ const TYPE_POLICIES: Readonly<Record<NotificationType, TypePolicy>> = {
     allowedDataKeys: [],
     allowedIntents: [],
     allowedCopies: copies(MISSED_WORKOUT_COPIES),
+  },
+  RE_ENGAGEMENT_EARLY: {
+    category: 'WORKOUTS_AND_REMINDERS',
+    allowedDataKeys: [],
+    allowedIntents: [],
+    allowedCopies: copies(RE_ENGAGEMENT_EARLY_COPIES),
+  },
+  RE_ENGAGEMENT_LATE: {
+    category: 'WORKOUTS_AND_REMINDERS',
+    allowedDataKeys: [],
+    allowedIntents: [],
+    allowedCopies: copies(RE_ENGAGEMENT_LATE_COPIES),
   },
 };
 
@@ -392,7 +436,12 @@ function eventIdentity(params: {
 
 function dailyIdentity(params: {
   uid: string;
-  type: 'WORKOUT_DAY' | 'RECOVERY_DAY' | 'MISSED_WORKOUT';
+  type:
+    | 'WORKOUT_DAY'
+    | 'RECOVERY_DAY'
+    | 'MISSED_WORKOUT'
+    | 'RE_ENGAGEMENT_EARLY'
+    | 'RE_ENGAGEMENT_LATE';
   sourceIdentity: string;
 }): Pick<NotificationDispatchRequest, 'notificationId' | 'sourceIdentity' | 'idempotencyKey'> {
   const sourceHash = createHash('sha256').update(params.sourceIdentity, 'utf8').digest('hex');
@@ -486,7 +535,12 @@ export function buildPremiumEndedNotification(params: {
 
 function buildDailyWorkoutNotification(params: {
   uid: string;
-  type: 'WORKOUT_DAY' | 'RECOVERY_DAY' | 'MISSED_WORKOUT';
+  type:
+    | 'WORKOUT_DAY'
+    | 'RECOVERY_DAY'
+    | 'MISSED_WORKOUT'
+    | 'RE_ENGAGEMENT_EARLY'
+    | 'RE_ENGAGEMENT_LATE';
   sourceIdentity: string;
   copy: NotificationCopy;
 }): NotificationDispatchRequest {
@@ -541,6 +595,39 @@ export function buildMissedWorkoutNotification(params: {
   });
 }
 
+function buildReEngagementNotification(params: {
+  uid: string;
+  type: 'RE_ENGAGEMENT_EARLY' | 'RE_ENGAGEMENT_LATE';
+  episodeIdentity: string;
+  locale: NotificationLocale;
+}): NotificationDispatchRequest {
+  assertSafeId(params.episodeIdentity, 'episodeIdentity');
+  return buildDailyWorkoutNotification({
+    uid: params.uid,
+    type: params.type,
+    sourceIdentity: params.episodeIdentity,
+    copy: params.type === 'RE_ENGAGEMENT_EARLY'
+      ? RE_ENGAGEMENT_EARLY_COPIES[params.locale]
+      : RE_ENGAGEMENT_LATE_COPIES[params.locale],
+  });
+}
+
+export function buildReEngagementEarlyNotification(params: {
+  uid: string;
+  episodeIdentity: string;
+  locale: NotificationLocale;
+}): NotificationDispatchRequest {
+  return buildReEngagementNotification({ ...params, type: 'RE_ENGAGEMENT_EARLY' });
+}
+
+export function buildReEngagementLateNotification(params: {
+  uid: string;
+  episodeIdentity: string;
+  locale: NotificationLocale;
+}): NotificationDispatchRequest {
+  return buildReEngagementNotification({ ...params, type: 'RE_ENGAGEMENT_LATE' });
+}
+
 /**
  * Builds a visual-only QA request by first invoking the exact canonical
  * product builder, then replacing only its domain identity with a QA-scoped
@@ -579,6 +666,16 @@ export function buildQaPreviewNotification(params: {
     case 'MISSED_WORKOUT':
       canonical = buildMissedWorkoutNotification({
         uid: params.uid, plannedSessionIdentity: fixtureIdentity, locale: params.locale,
+      });
+      break;
+    case 'RE_ENGAGEMENT_EARLY':
+      canonical = buildReEngagementEarlyNotification({
+        uid: params.uid, episodeIdentity: fixtureIdentity, locale: params.locale,
+      });
+      break;
+    case 'RE_ENGAGEMENT_LATE':
+      canonical = buildReEngagementLateNotification({
+        uid: params.uid, episodeIdentity: fixtureIdentity, locale: params.locale,
       });
       break;
     case 'EVOLUTION_UNLOCKED':
