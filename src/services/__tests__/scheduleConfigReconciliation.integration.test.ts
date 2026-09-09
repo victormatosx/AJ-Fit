@@ -21,6 +21,7 @@ import { collection, doc, getDoc, getDocs, setDoc, Timestamp } from 'firebase/fi
 
 import { buildSeedDocuments } from '../../../scripts/seedWorkoutTemplates';
 import { completeAnswers } from '../../workoutPrescription/__tests__/fixtures';
+import { legacyTrainingDays } from '../../workoutPrescription/weeklySchedule';
 import { toPersistedAnswers } from '../../lib/questionnaireAnswers';
 import { resolveWorkoutSchedule } from '../../scheduleEngine/resolver';
 import type { Weekday } from '../../state/AppState';
@@ -47,7 +48,12 @@ vi.mock('../../lib/firebase', () => ({
 }));
 
 import { generateAndPersistWorkoutProgram } from '../workoutPrograms';
-import { ensureScheduleConfigFromQuestionnaire, loadScheduleConfig, saveScheduleConfig } from '../workoutSchedule';
+import {
+  ensureScheduleConfigFromQuestionnaire,
+  loadScheduleConfig,
+  resolveTodaysSchedule,
+  saveScheduleConfig,
+} from '../workoutSchedule';
 import { startOrResumeWorkoutExecution } from '../workoutExecutions';
 import { enableWorkoutLifecycleRollout } from './workoutLifecycleRolloutFixture';
 import { installWorkoutLifecycleAuthorityFixture, resetWorkoutLifecycleAuthorityFixture } from './workoutLifecycleAuthorityFixture';
@@ -163,6 +169,49 @@ describe.skipIf(!enabled)('scheduleConfig reconciliation — real Firestore Emul
     const snapshot = await getDoc(doc(mocks.db as never, 'users', UID, 'workoutProgramState', 'scheduleConfig'));
     expect(snapshot.exists()).toBe(true);
     expect(snapshot.data()?.trainingDays).toEqual(TRAINING_DAYS);
+  });
+
+  it('clears a persisted miss decision that no longer exists in the current calendar walk', async () => {
+    const program = await createActiveProgram();
+    await ensureScheduleConfigFromQuestionnaire(UID, TRAINING_DAYS, TIMEZONE);
+    const programInstanceId = program.programInstanceId!;
+    const todayLocalDate = '2026-09-09'; // WED — not in the fixture schedule.
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(
+        ctx.firestore(), 'users', UID, 'workoutPrograms', program.programId,
+        'scheduleState', programInstanceId,
+      ), {
+        programId: program.programId,
+        programInstanceId,
+        nextSessionIndex: 0,
+        cursorDate: todayLocalDate,
+        lastCompletedAt: null,
+        pendingMissDecision: {
+          missedSessionIndex: 0,
+          calendarSessionIndex: 1,
+          missedScheduledDate: '2026-09-08',
+          detectedOnDate: todayLocalDate,
+        },
+        updatedAt: Timestamp.now(),
+      });
+    });
+
+    const resolution = await resolveTodaysSchedule({
+      uid: UID,
+      programId: program.programId,
+      programInstanceId,
+      sessionCount: program.prescribedTrainingFrequency ?? program.sessions.length,
+      activatedAtLocalDate: todayLocalDate,
+      todayLocalDate,
+      trainingDaysOverride: legacyTrainingDays(program),
+    });
+
+    expect(resolution.status).toBe('REST_DAY');
+    const state = await getDoc(doc(
+      mocks.db as never, 'users', UID, 'workoutPrograms', program.programId,
+      'scheduleState', programInstanceId,
+    ));
+    expect(state.data()?.pendingMissDecision).toBeNull();
   });
 
   it('(9)(10) once scheduleConfig exists, a training day resolves SESSION_READY — never SCHEDULE_SETUP_REQUIRED', async () => {

@@ -842,6 +842,32 @@ describe.skipIf(!enabled)('Workout Lifecycle authority — real Firestore Emulat
       expect(grant).toMatchObject({ targetNextSessionIndex: 1, targetCursorDate: today });
     });
 
+    it('uses the program weeklySchedule instead of broader questionnaire availability', async () => {
+      const today = todayLocalDate();
+      const otherWeekday = weekdayOfLocalDate(new Date(NOW_ONCE.getTime() + 86_400_000).toISOString().slice(0, 10));
+      await Promise.all([
+        db.collection('users').doc(UID).collection('workoutPrograms').doc('wpg_active').update({
+          prescribedTrainingFrequency: 2,
+          weeklySchedule: [
+            { weekday: FIXED_TODAY_WEEKDAY, state: 'TRAINING', sessionIndex: 0 },
+            { weekday: otherWeekday, state: 'TRAINING', sessionIndex: 1 },
+          ],
+        }),
+        db.collection('users').doc(UID).collection('programInstances').doc('wpi_active').update({
+          'prescriptionInputSnapshot.inputs.trainingDays': [otherWeekday],
+        }),
+      ]);
+      await seedFinishedExecution(0, today);
+
+      await expect(authorizeWorkoutLifecycleMutationHandler({
+        auth: { uid: UID },
+        data: {
+          operation: 'COMPLETE_SCHEDULE', sourceProgramInstanceId: 'wpi_active',
+          scheduledLocalDate: today, sessionIndex: 0,
+        },
+      } as never, db)).resolves.toMatchObject({ grantId: 'current' });
+    });
+
     it('rejects a historically backdated completion outside the offline-sync grace window', async () => {
       const stale = new Date(NOW_ONCE.getTime() - 10 * 86_400_000).toISOString().slice(0, 10);
       await seedFinishedExecution(0, stale);

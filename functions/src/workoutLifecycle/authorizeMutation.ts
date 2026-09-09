@@ -256,13 +256,31 @@ async function loadScheduleAuthorityContext(
   const snapshotInputs = plainObject(bundle.instance.prescriptionInputSnapshot?.inputs)
     ? bundle.instance.prescriptionInputSnapshot.inputs as Record<string, unknown>
     : {};
-  const configuredDays = Array.isArray(snapshotInputs.trainingDays) && snapshotInputs.trainingDays.length > 0
+  // Modern plans materialize the executable calendar in `weeklySchedule`.
+  // The questionnaire snapshot describes availability and can be broader
+  // than the prescribed schedule; using it here while the client uses the
+  // plan made the two resolvers disagree about whether a miss existed.
+  const prescribedTrainingDays = Array.isArray(bundle.program.weeklySchedule)
+    ? bundle.program.weeklySchedule.flatMap((item: unknown) =>
+      plainObject(item) && item.state === 'TRAINING' && typeof item.weekday === 'string'
+        ? [item.weekday]
+        : [])
+    : [];
+  const configuredDays = prescribedTrainingDays.length > 0
+    ? prescribedTrainingDays
+    : Array.isArray(snapshotInputs.trainingDays) && snapshotInputs.trainingDays.length > 0
     ? snapshotInputs.trainingDays
     : Array.isArray(scheduleConfigData.trainingDays) ? scheduleConfigData.trainingDays : [];
   const trainingDays = configuredDays.filter((item): item is Weekday => typeof item === 'string');
   const timezone = typeof scheduleConfigData.timezone === 'string' ? scheduleConfigData.timezone : 'UTC';
   const activatedAtLocalDate = localDate((bundle.instance.activatedAt as Timestamp).toDate(), timezone);
-  const sessionCount = Array.isArray(bundle.program.sessions) ? bundle.program.sessions.length : 0;
+  const sessionCount = Number.isInteger(bundle.program.prescribedTrainingFrequency)
+    && bundle.program.prescribedTrainingFrequency > 0
+    ? bundle.program.prescribedTrainingFrequency
+    : Number.isInteger(bundle.program.prescribedStructuredDays)
+      && bundle.program.prescribedStructuredDays > 0
+      ? bundle.program.prescribedStructuredDays
+      : Array.isArray(bundle.program.sessions) ? bundle.program.sessions.length : 0;
   const stateData = stateSnapshot.exists ? stateSnapshot.data()! : null;
   return {
     config: { trainingDays, timezone, scheduleVersion: 1 },

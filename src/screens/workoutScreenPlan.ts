@@ -45,6 +45,16 @@ export function pluralCountForReps(reps: string): number {
   return /^1$/.test(reps.trim()) ? 1 : 2;
 }
 
+/**
+ * An exercise may only be moved behind another one before the user starts
+ * it. Once one set is complete, keeping it current prevents a partially
+ * performed exercise from being silently deferred through either the main
+ * skip action or the workout queue.
+ */
+export function canSkipExercise(completedSets: number, remainingExerciseCount: number): boolean {
+  return completedSets === 0 && remainingExerciseCount > 1;
+}
+
 export function workoutExercisesFromPlan(plan: FinalWorkoutPlan, language: string, sessionIndex: number): Exercise[] {
   const session = plan.sessions[sessionIndex] ?? plan.sessions[0];
   if (!session) return [];

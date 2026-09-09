@@ -21,6 +21,10 @@ import type { Weekday } from '../state/AppState';
 // never drag in transitively (breaks Node-only test/tooling consumers).
 import { addDaysLocal } from '../scheduleEngine/calendar';
 import { detectMissedSessionGap, initialSessionIndexFor, resolveWorkoutSchedule } from '../scheduleEngine/resolver';
+import {
+  pendingMissMatchesGap,
+  reconcilePendingMissDecision,
+} from '../scheduleEngine/pendingMissReconciliation';
 import type {
   MissDecision,
   PendingMissDecision,
@@ -201,6 +205,44 @@ export async function resolveTodaysSchedule(input: {
     activatedAtLocalDate,
     todayLocalDate: input.todayLocalDate,
   };
+
+  // A pending payload is persisted so the question survives restarts, but
+  // the schedule or lifecycle may have changed since it was detected. The
+  // backend deliberately recomputes the gap and rejects stale payloads;
+  // converge the client state to that same current calendar before showing
+  // the modal, otherwise the user is trapped in a decision that can never
+  // be accepted (`no_pending_missed_session_decision`).
+  if (state?.pendingMissDecision) {
+    const currentGap = detectMissedSessionGap({
+      ...resolverInput,
+      state: { ...state, pendingMissDecision: null },
+    });
+    if (!pendingMissMatchesGap(state.pendingMissDecision, currentGap)) {
+      await runTransaction(db, async (transaction) => {
+        const ref = scheduleStateRef(input.uid, programId, input.programInstanceId ?? undefined);
+        const current = await transaction.get(ref);
+        if (!current.exists()) return;
+        const data = current.data();
+        const currentPending = data.pendingMissDecision as PendingMissDecision | null;
+        if (!currentPending) return;
+        const currentState = {
+          nextSessionIndex: data.nextSessionIndex as number,
+          cursorDate: data.cursorDate as string,
+          lastCompletedAt: (data.lastCompletedAt as string | null) ?? null,
+          pendingMissDecision: null,
+        };
+        const recalculatedGap = detectMissedSessionGap({ ...resolverInput, state: currentState });
+        const reconciled = reconcilePendingMissDecision(
+          currentPending,
+          recalculatedGap,
+          input.todayLocalDate,
+        );
+        if (reconciled === currentPending) return;
+        transaction.update(ref, { pendingMissDecision: reconciled, updatedAt: serverTimestamp() });
+      });
+      state = await loadScheduleState(input.uid, programId, input.programInstanceId ?? undefined);
+    }
+  }
 
   // `detectMissedSessionGap` is a pure calendar walk — it doesn't know
   // whether THIS exact gap (same sessionIndex + first occurrence) already

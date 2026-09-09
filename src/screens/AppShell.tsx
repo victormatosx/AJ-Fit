@@ -463,6 +463,7 @@ function AppShellContent({
             <WorkoutScreen
               plan={prescription.plan}
               sessionIndex={activeSessionIndex}
+              workoutStartedAtMs={execution.workoutStartedAtMs}
               onDone={finishWorkoutSession}
               onMinimize={() => setTab('home')}
               onAbandon={() => { void execution.abandon(); }}

@@ -40,7 +40,7 @@ describe('minimized active workout UX', () => {
     expect(home).toContain('fontSize: workoutInProgress ? 13 : 15');
   });
 
-  it('shows the timer inside the greeting row and swaps it for the next-step icon', () => {
+  it('shows the timer inside the greeting row and adds an arrow when rest finishes', () => {
     const greetingStart = home.indexOf('{/* greeting */}');
     const tickerStart = home.indexOf('{/* Real Training Level', greetingStart);
     const greeting = home.slice(greetingStart, tickerStart);
@@ -55,8 +55,10 @@ describe('minimized active workout UX', () => {
     expect(headerStatus).not.toContain('setNow((previous) => previous - 1)');
     expect(headerStatus).toContain("t('activeWorkout.nextExercise')");
     expect(headerStatus).toContain("t('activeWorkout.nextSet'");
-    expect(headerStatus).toContain("name={nextIsExercise ? 'dumbbell' : 'arrow-right'}");
-    expect(headerStatus).toContain('width: restFinished ? 42 : 86');
+    expect(headerStatus).toContain('{countdown}');
+    expect(headerStatus).toContain('{restFinished && (');
+    expect(headerStatus).toContain('name="arrow-right"');
+    expect(headerStatus).toContain('width: restFinished ? 106 : 86');
     expect(headerStatus).not.toContain('<LinearGradient');
     expect(headerStatus).not.toContain('shadowOpacity');
   });

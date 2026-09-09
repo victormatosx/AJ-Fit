@@ -36,7 +36,7 @@ describe('WorkoutScreen source — session state machine invariants', () => {
       'const [permSubs, setPermSubs]',
       'const [sessionSubs, setSessionSubs]',
       'const [finished, setFinished]',
-      'const [elapsed, setElapsed]',
+      'const [sessionNow, setSessionNow]',
     ]) {
       expect(WORKOUT_SRC).toContain(symbol);
     }
@@ -54,8 +54,17 @@ describe('WorkoutScreen source — session state machine invariants', () => {
     }
   });
 
-  it('ticks elapsed/display time without owning a decrementing rest counter', () => {
-    expect(WORKOUT_SRC).toMatch(/setElapsed\(\(e\)\s*=>\s*e\s*\+\s*1\)/);
+  it('ticks display time via setSessionNow/setRestNow — never an incrementing counter (background/lock-screen duration bug fix)', () => {
+    // `elapsed` used to be `setElapsed((e) => e + 1)` — a tick counter that
+    // silently stopped advancing whenever RN suspended JS in
+    // background/locked-screen, undercounting real session duration. It is
+    // now derived from `computeWorkoutElapsedSeconds(workoutStartedAtMs,
+    // sessionNow)` — the interval only forces a re-render.
+    expect(WORKOUT_SRC).not.toMatch(/setElapsed\(/);
+    expect(WORKOUT_SRC).toContain('const t = setInterval(() => setSessionNow(Date.now()), 1000);');
+    expect(WORKOUT_SRC).toContain(
+      'const elapsed = computeWorkoutElapsedSeconds(workoutStartedAtMs ?? sessionNow, sessionNow);',
+    );
     expect(WORKOUT_SRC).toContain('const tick = () => setRestNow(Date.now())');
     expect(WORKOUT_SRC).toContain('computeRemainingSeconds(rest, restNow)');
     expect(WORKOUT_SRC).not.toMatch(/setRestLeft\(\(r\)\s*=>\s*r\s*-\s*1\)/);
@@ -63,11 +72,19 @@ describe('WorkoutScreen source — session state machine invariants', () => {
 
   it('the session timer stops once finished — regression: WorkoutDone kept ticking "time" after the session ended', () => {
     const timerEffect = WORKOUT_SRC.slice(
-      WORKOUT_SRC.indexOf('// session timer'),
+      WORKOUT_SRC.indexOf('// Session duration is'),
       WORKOUT_SRC.indexOf('const ovr = (id: string)'),
     );
     expect(timerEffect).toContain('if (finished) return;');
     expect(timerEffect).toMatch(/}, \[finished\]\);/);
+  });
+
+  it('reconciles the displayed duration immediately on AppState foreground return, without adding a manual background-time offset', () => {
+    const appStateEffect = WORKOUT_SRC.slice(
+      WORKOUT_SRC.indexOf("AppState.addEventListener('change'") - 200,
+      WORKOUT_SRC.indexOf("AppState.addEventListener('change'") + 300,
+    );
+    expect(appStateEffect).toContain("if (next === 'active') setSessionNow(Date.now());");
   });
 });
 

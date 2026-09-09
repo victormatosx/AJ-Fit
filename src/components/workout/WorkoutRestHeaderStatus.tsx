@@ -61,10 +61,10 @@ export function WorkoutRestHeaderStatus({
         : t('activeWorkout.headerAccessibilityRest', { time: countdown, nextStep })}
       onPress={onPress}
       style={({ pressed }) => ({
-        width: restFinished ? 42 : 86,
+        width: restFinished ? 106 : 86,
         height: 42,
         marginRight: 10,
-        paddingHorizontal: restFinished ? 0 : 9,
+        paddingHorizontal: 9,
         borderRadius: 13,
         borderWidth: 1,
         borderColor: theme.colors.primaryBorderSoft,
@@ -76,32 +76,29 @@ export function WorkoutRestHeaderStatus({
         opacity: pressed ? 0.76 : 1,
       })}
     >
-      {restFinished ? (
+      <Icon
+        name="timer"
+        size={14}
+        stroke={1.9}
+        color={theme.colors.primaryEmphasis}
+      />
+      <Text
+        style={{
+          fontFamily: theme.fonts.monoBold,
+          fontSize: 13,
+          letterSpacing: 0.2,
+          color: theme.colors.textPrimary,
+        }}
+      >
+        {countdown}
+      </Text>
+      {restFinished && (
         <Icon
-          name={nextIsExercise ? 'dumbbell' : 'arrow-right'}
+          name="arrow-right"
           size={17}
           stroke={2.1}
           color={theme.colors.primaryEmphasis}
         />
-      ) : (
-        <>
-          <Icon
-            name="timer"
-            size={14}
-            stroke={1.9}
-            color={theme.colors.primaryEmphasis}
-          />
-          <Text
-            style={{
-              fontFamily: theme.fonts.monoBold,
-              fontSize: 13,
-              letterSpacing: 0.2,
-              color: theme.colors.textPrimary,
-            }}
-          >
-            {countdown}
-          </Text>
-        </>
       )}
     </Pressable>
   );

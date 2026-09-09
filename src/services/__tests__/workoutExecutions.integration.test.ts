@@ -156,6 +156,12 @@ describe.skipIf(!enabled)('Workout Execution & History — real Firestore Emulat
     expect(resumed.executionId).toBe(started.executionId);
     expect(resumed.status).toBe('IN_PROGRESS');
     expect(resumed.exercises[0].sets[0]).toMatchObject({ status: 'COMPLETED', actualReps: 10, weightKg: 30 });
+    // Duration audit: `startedAt` is the session-timer's canonical source
+    // (`useWorkoutExecution().workoutStartedAtMs`, WorkoutScreen elapsed
+    // calculation) — a resumed execution must never get a fresh timestamp,
+    // or a cold-start reopen would silently reset the visible duration to
+    // zero.
+    expect(resumed.startedAt.toMillis()).toBe(started.startedAt.toMillis());
   });
 
   it('§81/§82 each set reproduces exactly what was actually done, independent per-set loads — prescription (3x10) untouched', async () => {

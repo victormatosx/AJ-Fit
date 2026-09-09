@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AppState,
   View,
   Text,
   Pressable,
@@ -39,8 +40,16 @@ import {
 import { WORKOUT_SUBSTITUTIONS_STORAGE_KEY as SUBS_KEY } from '../services/workoutSubstitutionsStorage';
 import { resolveSessionDisplayName } from '../workoutPrescription/sessionPresentation';
 import { resolveCardioFinisherPresentation } from '../workoutPrescription/cardioPresentation';
-import { workoutExercisesFromPlan, pluralCountForReps, type Exercise, type SetData, type SubOption } from './workoutScreenPlan';
+import {
+  canSkipExercise,
+  workoutExercisesFromPlan,
+  pluralCountForReps,
+  type Exercise,
+  type SetData,
+  type SubOption,
+} from './workoutScreenPlan';
 import { computeRemainingSeconds, computeRestProgress } from '../lib/restTimer';
+import { computeWorkoutElapsedSeconds } from '../lib/workoutSessionTimer';
 import { useRestSession } from '../state/RestSessionContext';
 
 type Props = {
@@ -49,6 +58,17 @@ type Props = {
   onMinimize?: () => void;
   /** Which session in `plan.sessions` to run — decided by the Schedule Engine (docs/workout-lifecycle/03_SCHEDULE_ENGINE.md). Defaults to 0 for callers that haven't wired schedule resolution yet. */
   sessionIndex?: number;
+  /**
+   * Canonical start instant for THIS session's duration timer, epoch ms —
+   * from `useWorkoutExecution().workoutStartedAtMs` (backed by the persisted
+   * `PersistedWorkoutExecution.startedAt`, docs/workout-lifecycle/
+   * 09_WORKOUT_EXECUTION_AND_HISTORY.md). The displayed elapsed time is
+   * always `now - workoutStartedAtMs`, never a tick count, so it stays
+   * correct across background/lock/cold start. `null` only while the very
+   * first `start()` call hasn't produced even its local fallback yet —
+   * falls back to "now" for that one render.
+   */
+  workoutStartedAtMs?: number | null;
   /** Fires once, the moment every set is done — distinct from `onDone` (which also fires on an early exit/X tap). This is what the Schedule Engine listens to advance the rotation. */
   onSessionCompleted?: () => void;
   /** Fires once a set's weight is actually logged (docs/workout-lifecycle/09_WORKOUT_EXECUTION_AND_HISTORY.md) — `exerciseIndex` matches this exercise's position in `plan.sessions[sessionIndex].exercises`, the same identity the Execution record uses. */
@@ -86,7 +106,7 @@ function translateMuscleGroup(tLoose: LooseT, target: string): string {
   return target;
 }
 
-export function WorkoutScreen({ plan, onDone, onMinimize, sessionIndex = 0, onSessionCompleted, onSetLogged, onAbandon }: Props) {
+export function WorkoutScreen({ plan, onDone, onMinimize, sessionIndex = 0, workoutStartedAtMs, onSessionCompleted, onSetLogged, onAbandon }: Props) {
   const { theme } = useTheme();
   const { t, i18n } = useTranslation('workout');
   const exercises = useMemo(
@@ -186,7 +206,7 @@ export function WorkoutScreen({ plan, onDone, onMinimize, sessionIndex = 0, onSe
   const [finished, setFinished] = useState(false);
   const completionSignaledRef = useRef(false);
   const [showCardioFinisher, setShowCardioFinisher] = useState(false);
-  const [elapsed, setElapsed] = useState(0);
+  const [sessionNow, setSessionNow] = useState(Date.now);
   const [restNow, setRestNow] = useState(Date.now);
 
   const [permSubs, setPermSubs] = useState<Record<string, SubOption>>({});
@@ -211,15 +231,33 @@ export function WorkoutScreen({ plan, onDone, onMinimize, sessionIndex = 0, onSe
       });
   }, []);
 
-  // session timer — stops the instant the session finishes (`finished`
-  // dependency): without this, the interval kept running after the early
-  // return to `WorkoutDone` below, so the "time" metric on the completion
-  // screen kept counting up instead of showing the real final duration.
+  // Session duration is `sessionNow - workoutStartedAtMs` (wall clock), never
+  // a tick count — `workoutStartedAtMs` is the persisted execution's
+  // `startedAt`, so this stays correct across background/lock/cold start.
+  // The interval below only forces a re-render once a second; it never owns
+  // or increments the duration itself. It stops the instant the session
+  // finishes (`finished` dependency): without this, the interval kept
+  // running after the early return to `WorkoutDone` below, so the "time"
+  // metric on the completion screen kept counting up instead of freezing at
+  // the real final duration.
   useEffect(() => {
     if (finished) return;
-    const t = setInterval(() => setElapsed((e) => e + 1), 1000);
+    const t = setInterval(() => setSessionNow(Date.now()), 1000);
     return () => clearInterval(t);
   }, [finished]);
+
+  // Reconciles immediately on return to foreground instead of waiting up to
+  // 1s for the next interval tick — the absolute-timestamp math already
+  // makes the value correct either way, this just removes the visible lag.
+  useEffect(() => {
+    if (finished) return undefined;
+    const subscription = AppState.addEventListener('change', (next) => {
+      if (next === 'active') setSessionNow(Date.now());
+    });
+    return () => subscription.remove();
+  }, [finished]);
+
+  const elapsed = computeWorkoutElapsedSeconds(workoutStartedAtMs ?? sessionNow, sessionNow);
 
   // Foreground-only visual ticker. It never owns or decrements countdown
   // state; every render is derived from the single absolute `endsAt`.
@@ -247,6 +285,7 @@ export function WorkoutScreen({ plan, onDone, onMinimize, sessionIndex = 0, onSe
   const ex = resolve(baseEx);
   const setIdx = progress[exIdx] || 0;
   const exDone = (i: number) => (progress[i] || 0) >= exercises[i].sets.length;
+  const canSkipCurrentExercise = canSkipExercise(setIdx, order.length);
 
   const totalSets = exercises.reduce((a, e) => a + e.sets.length, 0);
   const doneSets = exercises.reduce(
@@ -377,13 +416,17 @@ export function WorkoutScreen({ plan, onDone, onMinimize, sessionIndex = 0, onSe
   };
 
   const skipExercise = () => {
-    if (order.length <= 1) return;
+    // Defense-in-depth: the action is hidden when false, but the transition
+    // itself also enforces the rule so another caller cannot bypass it.
+    if (!canSkipCurrentExercise) return;
     if (!skipped.includes(exIdx)) setSkipped((s) => [...s, exIdx]);
     setOrder((o) => [...o.slice(1), o[0]]);
   };
 
   const jumpTo = (i: number) => {
-    if (exDone(i)) return;
+    // Selecting another item in the queue is another way of moving the
+    // current exercise behind it, so it follows the same invariant.
+    if (exDone(i) || (i !== exIdx && !canSkipCurrentExercise)) return;
     setOrder((o) => [i, ...o.filter((x) => x !== i)]);
     setQueueOpen(false);
   };
@@ -874,7 +917,7 @@ export function WorkoutScreen({ plan, onDone, onMinimize, sessionIndex = 0, onSe
                 : t('actions.completeSet', { number: setIdx + 1 })}
             </Text>
           </CtaButton>
-          {order.length > 1 && (
+          {canSkipCurrentExercise && (
             <Pressable
               onPress={skipExercise}
               style={{
@@ -1292,10 +1335,13 @@ export function WorkoutScreen({ plan, onDone, onMinimize, sessionIndex = 0, onSe
                   const e = exercises[i];
                   const now = pos === 0;
                   const wasSkip = skipped.includes(i);
+                  const navigationLocked = !now && !canSkipCurrentExercise;
                   return (
                     <Pressable
                       key={e.id}
                       onPress={() => jumpTo(i)}
+                      disabled={navigationLocked}
+                      accessibilityState={{ disabled: navigationLocked }}
                       style={{
                         flexDirection: 'row',
                         alignItems: 'center',
@@ -1304,6 +1350,7 @@ export function WorkoutScreen({ plan, onDone, onMinimize, sessionIndex = 0, onSe
                         paddingHorizontal: 14,
                         borderRadius: 10,
                         marginBottom: 6,
+                        opacity: navigationLocked ? 0.45 : 1,
                         backgroundColor: now ? theme.colors.primarySurface : theme.colors.surface,
                         borderWidth: 1,
                         borderColor: now

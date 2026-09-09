@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { workoutExercisesFromPlan } from '../workoutScreenPlan';
+import { canSkipExercise, workoutExercisesFromPlan } from '../workoutScreenPlan';
 import { LEGACY_REST_SECONDS_FALLBACK, REST_SECONDS } from '../../workoutPrescription/restPrescription';
 import { generateWorkoutPrescription } from '../../workoutPrescription/engine';
 import { getTemplateById } from '../../workoutPrescription/catalog';
@@ -12,6 +12,15 @@ function realPlan(): FinalWorkoutPlan {
   if (result.status !== 'SUCCESS') throw new Error(`fixture setup failed: ${result.status}`);
   return result.plan;
 }
+
+describe('canSkipExercise', () => {
+  it('allows skipping only before the first set and when another exercise remains', () => {
+    expect(canSkipExercise(0, 2)).toBe(true);
+    expect(canSkipExercise(0, 1)).toBe(false);
+    expect(canSkipExercise(1, 2)).toBe(false);
+    expect(canSkipExercise(3, 4)).toBe(false);
+  });
+});
 
 describe('workoutExercisesFromPlan — Phase 2, Part D (Rest Timer source of truth)', () => {
   it('(11)(12) the Rest Timer field ("rest") comes directly from the prescription\'s restSeconds — never hardcoded', () => {
