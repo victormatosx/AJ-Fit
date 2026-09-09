@@ -63,6 +63,8 @@ function fixture(
       claimToken: 'claim-1',
     })),
     completeProductWindow: vi.fn(async () => true),
+    releaseProductWindow: vi.fn(async () => true),
+    resolvePolicy: vi.fn(async () => ({ allowed: true, reason: 'ALLOWED' })),
     ...overrides,
   };
   return { dependencies, requests };
@@ -197,18 +199,56 @@ describe('daily workout notification evaluator', () => {
     expect(requests.map((request) => request.type)).toEqual(['MISSED_WORKOUT']);
   });
 
-  it('persists normal preference and device outcomes without breaking the scheduler', async () => {
-    for (const outcome of [
-      { status: 'SUPPRESSED_BY_PREFERENCE' as const, dispatchId: 'suppressed' },
-      { status: 'NO_ELIGIBLE_DEVICE' as const, dispatchId: 'no-device' },
-    ]) {
-      const { dependencies } = fixture(context(), {
-        dispatchCandidate: vi.fn(async () => outcome),
-      });
-      await expect(evaluateDailyWorkoutNotification(UID, dependencies)).resolves.toMatchObject({
-        status: 'DISPATCHED', outcome: outcome.status,
-      });
-    }
+  it('persists a device-level outcome without breaking the scheduler', async () => {
+    const { dependencies } = fixture(context(), {
+      dispatchCandidate: vi.fn(async () => ({
+        status: 'NO_ELIGIBLE_DEVICE' as const, dispatchId: 'no-device',
+      })),
+    });
+    await expect(evaluateDailyWorkoutNotification(UID, dependencies)).resolves.toMatchObject({
+      status: 'DISPATCHED', outcome: 'NO_ELIGIBLE_DEVICE',
+    });
+    // A silenced device still consumed the user's product day.
+    expect(dependencies.completeProductWindow).toHaveBeenCalledTimes(1);
+    expect(dependencies.releaseProductWindow).not.toHaveBeenCalled();
+  });
+
+  it('never claims the shared daily slot when WORKOUTS_AND_REMINDERS is off', async () => {
+    const { dependencies, requests } = fixture(context(), {
+      resolvePolicy: vi.fn(async () => ({ allowed: false, reason: 'DISABLED_BY_USER' })),
+    });
+    await expect(evaluateDailyWorkoutNotification(UID, dependencies)).resolves.toMatchObject({
+      status: 'SUPPRESSED', reason: 'DISABLED_BY_USER',
+    });
+    expect(dependencies.claimProductWindow).not.toHaveBeenCalled();
+    expect(requests).toHaveLength(0);
+  });
+
+  it('releases the daily slot when the preference flips off between pre-check and dispatch', async () => {
+    const { dependencies } = fixture(context(), {
+      dispatchCandidate: vi.fn(async () => ({
+        status: 'SUPPRESSED_BY_PREFERENCE' as const, dispatchId: 'suppressed',
+      })),
+    });
+    await expect(evaluateDailyWorkoutNotification(UID, dependencies)).resolves.toMatchObject({
+      status: 'SUPPRESSED', reason: 'SUPPRESSED_BY_PREFERENCE',
+    });
+    expect(dependencies.releaseProductWindow).toHaveBeenCalledWith({
+      windowId: 'window-1', claimToken: 'claim-1',
+    });
+    expect(dependencies.completeProductWindow).not.toHaveBeenCalled();
+  });
+
+  it('releases the daily slot when the dispatcher preflight fences a stale fact', async () => {
+    const { dependencies } = fixture(context(), {
+      dispatchCandidate: vi.fn(async () => ({
+        status: 'SUPPRESSED_BY_POLICY' as const, dispatchId: 'stale',
+      })),
+    });
+    await expect(evaluateDailyWorkoutNotification(UID, dependencies)).resolves.toMatchObject({
+      status: 'SUPPRESSED', reason: 'SUPPRESSED_BY_POLICY',
+    });
+    expect(dependencies.releaseProductWindow).toHaveBeenCalledTimes(1);
   });
 
   it('absorbs dispatcher failure and never mutates the workout domain', async () => {

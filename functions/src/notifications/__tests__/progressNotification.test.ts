@@ -40,6 +40,8 @@ function fixture(overrides: Partial<ProgressNotificationDependencies> = {}) {
       outcome: 'CLAIMED' as const, windowId: 'window-1', claimToken: 'window-claim',
     })),
     completeProductWindow: vi.fn(async () => true),
+    releaseProductWindow: vi.fn(async () => true),
+    resolvePolicy: vi.fn(async () => ({ allowed: true, reason: 'ALLOWED' })),
     dispatchCandidate: vi.fn(async (candidate) => {
       requests.push(candidate.build('pt-BR'));
       return accepted();
@@ -71,18 +73,34 @@ describe('progress notification evaluator', () => {
     expect(requests[0]?.type).toBe('PHOTO_REMINDER');
   });
 
-  it('keeps preference handling inside the normal dispatcher path', async () => {
+  it('never claims the shared daily slot when PROGRESS is disabled', async () => {
+    const { dependencies } = fixture({
+      resolvePolicy: vi.fn(async () => ({ allowed: false, reason: 'DISABLED_BY_USER' })),
+    });
+    await expect(evaluateProgressNotification('uid-1', dependencies)).resolves.toMatchObject({
+      status: 'SUPPRESSED', reason: 'DISABLED_BY_USER',
+    });
+    expect(dependencies.claimMilestone).not.toHaveBeenCalled();
+    expect(dependencies.claimProductWindow).not.toHaveBeenCalled();
+    expect(dependencies.dispatchCandidate).not.toHaveBeenCalled();
+  });
+
+  it('keeps preference handling inside the normal dispatcher path and frees the day', async () => {
     const { dependencies } = fixture({
       dispatchCandidate: vi.fn(async () => ({
         status: 'SUPPRESSED_BY_PREFERENCE' as const, dispatchId: 'suppressed',
       })),
     });
     await expect(evaluateProgressNotification('uid-1', dependencies)).resolves.toMatchObject({
-      status: 'DISPATCHED', outcome: 'SUPPRESSED_BY_PREFERENCE',
+      status: 'SUPPRESSED', reason: 'SUPPRESSED_BY_PREFERENCE',
     });
     expect(dependencies.dispatchCandidate).toHaveBeenCalledWith(expect.objectContaining({
       category: 'PROGRESS',
     }));
+    expect(dependencies.releaseProductWindow).toHaveBeenCalledWith({
+      windowId: 'window-1', claimToken: 'window-claim',
+    });
+    expect(dependencies.completeProductWindow).not.toHaveBeenCalled();
   });
 
   it('does not duplicate a milestone on scheduler replay', async () => {

@@ -5,6 +5,7 @@ import { createFakeFirestore } from '../../accountDeletion/firestoreCleanup/__te
 import {
   claimAchievementMilestone,
   completeAchievementMilestone,
+  releaseAchievementMilestoneClaim,
 } from '../achievementMilestones';
 import { evaluateEvolutionApproaching } from '../evolutionApproachingNotification';
 import type { NotificationDispatchRequest } from '../schema';
@@ -28,6 +29,14 @@ function fixture() {
   const complete = vi.fn((input, now) => completeAchievementMilestone(
     harness.db as never, input, now,
   ));
+  const releaseMilestone = vi.fn((input) => releaseAchievementMilestoneClaim(
+    harness.db as never, input,
+  ));
+  const claimProductWindow = vi.fn(async () => ({
+    outcome: 'CLAIMED' as const, windowId: 'window-1', claimToken: 'window-claim',
+  }));
+  const completeProductWindow = vi.fn(async () => true);
+  const releaseProductWindow = vi.fn(async () => true);
   return {
     harness,
     dispatchCandidate,
@@ -38,6 +47,11 @@ function fixture() {
       claim: (request: NotificationDispatchRequest, now: Timestamp) =>
         claimAchievementMilestone(harness.db as never, request, now),
       complete,
+      releaseMilestone,
+      claimProductWindow,
+      completeProductWindow,
+      releaseProductWindow,
+      resolvePolicy: vi.fn(async () => ({ allowed: true, reason: 'ALLOWED' })),
       dispatchCandidate,
     },
   };
@@ -77,7 +91,21 @@ describe('EVOLUTION_APPROACHING observer', () => {
     expect(dispatchCandidate).not.toHaveBeenCalled();
   });
 
-  it('persists a preference suppression as the cycle outcome', async () => {
+  it('never claims a milestone or the daily slot when the category is disabled', async () => {
+    const { dependencies, dispatchCandidate } = fixture();
+    const claim = vi.fn();
+    const result = await evaluateEvolutionApproaching('uid-1', {
+      ...dependencies,
+      claim,
+      resolvePolicy: vi.fn(async () => ({ allowed: false, reason: 'DISABLED_BY_USER' })),
+    });
+    expect(result).toMatchObject({ status: 'SUPPRESSED', reason: 'DISABLED_BY_USER' });
+    expect(claim).not.toHaveBeenCalled();
+    expect(dependencies.claimProductWindow).not.toHaveBeenCalled();
+    expect(dispatchCandidate).not.toHaveBeenCalled();
+  });
+
+  it('persists a preference suppression as the cycle outcome and frees the day', async () => {
     const { dependencies, complete } = fixture();
     const result = await evaluateEvolutionApproaching('uid-1', {
       ...dependencies,
@@ -85,10 +113,31 @@ describe('EVOLUTION_APPROACHING observer', () => {
         status: 'SUPPRESSED_BY_PREFERENCE' as const, dispatchId: 'dispatch-pref',
       })),
     });
-    expect(result).toMatchObject({ status: 'DISPATCHED', outcome: 'SUPPRESSED_BY_PREFERENCE' });
+    expect(result).toMatchObject({ status: 'SUPPRESSED', reason: 'SUPPRESSED_BY_PREFERENCE' });
     expect(complete).toHaveBeenCalledWith(expect.objectContaining({
       outcome: 'SUPPRESSED_BY_PREFERENCE',
     }), NOW);
+    expect(dependencies.releaseProductWindow).toHaveBeenCalledWith({
+      windowId: 'window-1', claimToken: 'window-claim',
+    });
+    expect(dependencies.completeProductWindow).not.toHaveBeenCalled();
+  });
+
+  it('releases the milestone when another product notification already owns the day', async () => {
+    const { dependencies, dispatchCandidate } = fixture();
+    const result = await evaluateEvolutionApproaching('uid-1', {
+      ...dependencies,
+      claimProductWindow: vi.fn(async () => ({
+        outcome: 'RATE_LIMITED' as const, windowId: 'window-1',
+      })),
+    });
+    expect(result).toMatchObject({ status: 'SUPPRESSED', reason: 'PRODUCT_RATE_LIMIT' });
+    expect(dispatchCandidate).not.toHaveBeenCalled();
+    expect(dependencies.releaseMilestone).toHaveBeenCalledTimes(1);
+
+    // The released milestone must stay claimable on a later day.
+    const retry = await evaluateEvolutionApproaching('uid-1', dependencies);
+    expect(retry).toMatchObject({ status: 'DISPATCHED' });
   });
 
   it('does not mark the milestone completed when dispatcher fails', async () => {

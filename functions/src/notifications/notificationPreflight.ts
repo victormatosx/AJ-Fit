@@ -68,6 +68,16 @@ export async function runNotificationPreflight(
   request: NotificationDispatchRequest,
   now: Timestamp,
 ): Promise<NotificationPreflightResult> {
+  if (
+    request.type === 'WORKOUT_DAY'
+    || request.type === 'RECOVERY_DAY'
+    || request.type === 'MISSED_WORKOUT'
+  ) {
+    // Dynamic import avoids a module-initialization cycle: the evaluator's
+    // normal dispatch path reaches dispatcher -> this preflight module.
+    const { preflightDailyWorkoutNotification } = await import('./dailyWorkoutNotifications');
+    return preflightDailyWorkoutNotification(db, request, now);
+  }
   if (request.type === 'EVOLUTION_APPROACHING') {
     return evolutionApproachingPreflight(db, request);
   }

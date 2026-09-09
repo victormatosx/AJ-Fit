@@ -63,8 +63,31 @@ describe('notification dispatch preflight', () => {
   it('does not apply achievement collisions to unrelated product types', async () => {
     const { harness, uid } = fixture();
     harness.seed(`users/${uid}/pendingEvolutions/current`, { cycleId: 'cycle-1' });
-    const workout = buildWorkoutDayNotification({ uid, localDate: '2026-09-08', locale: 'pt-BR' });
-    await expect(runNotificationPreflight(harness.db as never, workout, NOW))
+    // A WORKOUT_DAY retry is revalidated against its own domain, so the
+    // pending evolution must not suppress it — but the workout fact itself
+    // still has to be true, which is what the seeded program below provides.
+    const monday = Timestamp.fromDate(new Date('2026-09-07T21:00:00.000Z'));
+    harness.seed(`users/${uid}/workoutProgramState/scheduleConfig`, { timezone: 'UTC' });
+    harness.seed(`users/${uid}/programInstances/instance-1`, {
+      activatedAt: Timestamp.fromDate(new Date('2026-09-07T00:00:00.000Z')),
+      contentIdentity: 'content-1',
+      supersededAt: null,
+    });
+    harness.seed(`users/${uid}/workoutLifecycleState/current`, {
+      currentCycleId: 'cycle-1',
+      activeProgramInstanceId: 'instance-1',
+      activeContentIdentity: 'content-1',
+    });
+    harness.seed(`users/${uid}/workoutPrograms/content-1`, {
+      status: 'active',
+      prescribedTrainingFrequency: 1,
+      weeklySchedule: (['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'] as const).map((weekday) => ({
+        weekday,
+        state: weekday === 'MON' ? 'TRAINING' : 'REST',
+      })),
+    });
+    const workout = buildWorkoutDayNotification({ uid, localDate: '2026-09-07', locale: 'pt-BR' });
+    await expect(runNotificationPreflight(harness.db as never, workout, monday))
       .resolves.toEqual({ allowed: true });
   });
 

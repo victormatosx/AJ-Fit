@@ -17,8 +17,10 @@ import {
 import {
   claimDailyProductWindow,
   completeDailyProductWindow,
+  releaseDailyProductWindowClaim,
   type DailyProductWindowClaim,
 } from './dailyProductRateLimit';
+import { resolveUserNotificationPolicy } from './preferences';
 import {
   readProgressNotificationContext,
   type ProgressCandidate,
@@ -66,6 +68,8 @@ export interface ProgressNotificationDependencies {
     claimToken: string;
     outcome: string;
   }, now: Timestamp): Promise<boolean>;
+  releaseProductWindow(input: { windowId: string; claimToken: string }): Promise<boolean>;
+  resolvePolicy(uid: string): Promise<{ allowed: boolean; reason: string }>;
   dispatchCandidate: typeof dispatchUserNotificationCandidate;
 }
 
@@ -78,6 +82,8 @@ function defaultDependencies(): ProgressNotificationDependencies {
     releaseMilestone: (input) => releaseAchievementMilestoneClaim(defaultDb, input),
     claimProductWindow: (input, now) => claimDailyProductWindow(defaultDb, input, now),
     completeProductWindow: (input, now) => completeDailyProductWindow(defaultDb, input, now),
+    releaseProductWindow: (input) => releaseDailyProductWindowClaim(defaultDb, input),
+    resolvePolicy: (uid) => resolveUserNotificationPolicy({ uid, category: 'PROGRESS' }, defaultDb),
     dispatchCandidate: dispatchUserNotificationCandidate,
   };
 }
@@ -116,6 +122,8 @@ export async function evaluateProgressNotification(
     timezone = context.timezone;
     localDate = context.localDate;
     if (!context.allowed) return suppress(context.reason, { timezone, localDate });
+    const policy = await dependencies.resolvePolicy(uid);
+    if (!policy.allowed) return suppress(policy.reason, { timezone, localDate });
 
     for (const candidate of context.candidates) {
       const sample = buildProgressRequest(uid, candidate, 'pt-BR');
@@ -142,6 +150,21 @@ export async function evaluateProgressNotification(
         category: 'PROGRESS',
         build: (locale) => buildProgressRequest(uid, candidate, locale),
       });
+      if (outcome.status === 'SUPPRESSED_BY_PREFERENCE' || outcome.status === 'SUPPRESSED_BY_POLICY') {
+        await Promise.all([
+          dependencies.completeMilestone({
+            milestoneId: claim.milestoneId,
+            claimToken: claim.claimToken,
+            outcome: outcome.status,
+          }, now),
+          dependencies.releaseProductWindow({
+            windowId: productWindow.windowId,
+            claimToken: productWindow.claimToken,
+          }),
+        ]);
+        activeClaim = null;
+        return suppress(outcome.status, { timezone, localDate });
+      }
       await Promise.all([
         dependencies.completeMilestone({
           milestoneId: claim.milestoneId,

@@ -39,6 +39,8 @@ function fixture(overrides: Partial<ReEngagementDependencies> = {}) {
       outcome: 'CLAIMED' as const, windowId: 'window-1', claimToken: 'window-claim',
     })),
     completeProductWindow: vi.fn(async () => true),
+    releaseProductWindow: vi.fn(async () => true),
+    resolvePolicy: vi.fn(async () => ({ allowed: true, reason: 'ALLOWED' })),
     dispatchCandidate: vi.fn(async (candidate) => {
       requests.push(candidate.build('pt-BR'));
       return accepted();
@@ -76,17 +78,42 @@ describe('workout re-engagement notification evaluator', () => {
     expect(requests[0]?.type).toBe('RE_ENGAGEMENT_LATE');
   });
 
-  it('respects workoutsAndReminders preference suppression and never bypasses dispatch policy', async () => {
+  it('never claims the shared daily slot when the category preference is off', async () => {
+    const { dependencies } = fixture({
+      resolvePolicy: vi.fn(async () => ({ allowed: false, reason: 'DISABLED_BY_USER' })),
+    });
+    await expect(evaluateReEngagementNotification('uid-1', dependencies)).resolves.toMatchObject({
+      status: 'SUPPRESSED',
+      reason: 'DISABLED_BY_USER',
+      // A disabled category must not consume the day for an enabled one.
+      blocksLowerPriorityNotifications: false,
+    });
+    expect(dependencies.claimMilestone).not.toHaveBeenCalled();
+    expect(dependencies.claimProductWindow).not.toHaveBeenCalled();
+    expect(dependencies.dispatchCandidate).not.toHaveBeenCalled();
+  });
+
+  it('releases the daily slot when the preference flips off between pre-check and dispatch', async () => {
     const dispatchCandidate = vi.fn(async () => ({
       status: 'SUPPRESSED_BY_PREFERENCE' as const, dispatchId: 'suppressed',
     }));
     const { dependencies } = fixture({ dispatchCandidate });
     await expect(evaluateReEngagementNotification('uid-1', dependencies)).resolves.toMatchObject({
-      status: 'DISPATCHED', outcome: 'SUPPRESSED_BY_PREFERENCE',
+      status: 'SUPPRESSED',
+      reason: 'SUPPRESSED_BY_PREFERENCE',
+      blocksLowerPriorityNotifications: false,
     });
     expect(dispatchCandidate).toHaveBeenCalledWith(expect.objectContaining({
       category: 'WORKOUTS_AND_REMINDERS',
     }));
+    expect(dependencies.releaseProductWindow).toHaveBeenCalledWith({
+      windowId: 'window-1', claimToken: 'window-claim',
+    });
+    expect(dependencies.completeProductWindow).not.toHaveBeenCalled();
+    // The dispatcher stays the final authority and already burned the fact.
+    expect(dependencies.completeMilestone).toHaveBeenCalledWith(expect.objectContaining({
+      outcome: 'SUPPRESSED_BY_PREFERENCE',
+    }), NOW);
   });
 
   it('does not dispatch again when the stage milestone already exists', async () => {

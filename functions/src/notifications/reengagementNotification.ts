@@ -15,8 +15,10 @@ import {
 import {
   claimDailyProductWindow,
   completeDailyProductWindow,
+  releaseDailyProductWindowClaim,
   type DailyProductWindowClaim,
 } from './dailyProductRateLimit';
+import { resolveUserNotificationPolicy } from './preferences';
 import {
   readReEngagementContext,
   type ReEngagementContext,
@@ -69,6 +71,8 @@ export interface ReEngagementDependencies {
     claimToken: string;
     outcome: string;
   }, now: Timestamp): Promise<boolean>;
+  releaseProductWindow(input: { windowId: string; claimToken: string }): Promise<boolean>;
+  resolvePolicy(uid: string): Promise<{ allowed: boolean; reason: string }>;
   dispatchCandidate: typeof dispatchUserNotificationCandidate;
 }
 
@@ -81,6 +85,11 @@ function defaultDependencies(): ReEngagementDependencies {
     releaseMilestone: (input) => releaseAchievementMilestoneClaim(defaultDb, input),
     claimProductWindow: (input, now) => claimDailyProductWindow(defaultDb, input, now),
     completeProductWindow: (input, now) => completeDailyProductWindow(defaultDb, input, now),
+    releaseProductWindow: (input) => releaseDailyProductWindowClaim(defaultDb, input),
+    resolvePolicy: (uid) => resolveUserNotificationPolicy({
+      uid,
+      category: 'WORKOUTS_AND_REMINDERS',
+    }, defaultDb),
     dispatchCandidate: dispatchUserNotificationCandidate,
   };
 }
@@ -119,6 +128,9 @@ export async function evaluateReEngagementNotification(
     localDate = context.localDate;
     if (!context.allowed) return suppress(context.reason, false, { timezone, localDate });
 
+    const policy = await dependencies.resolvePolicy(uid);
+    if (!policy.allowed) return suppress(policy.reason, false, { timezone, localDate });
+
     const sample = buildRequest(uid, context, 'pt-BR');
     const claim = await dependencies.claimMilestone(sample, now);
     if (claim.outcome !== 'CLAIMED') {
@@ -146,6 +158,21 @@ export async function evaluateReEngagementNotification(
       category: 'WORKOUTS_AND_REMINDERS',
       build: (locale) => buildRequest(uid, context, locale),
     });
+    if (outcome.status === 'SUPPRESSED_BY_PREFERENCE' || outcome.status === 'SUPPRESSED_BY_POLICY') {
+      await Promise.all([
+        dependencies.completeMilestone({
+          milestoneId: claim.milestoneId,
+          claimToken: claim.claimToken,
+          outcome: outcome.status,
+        }, now),
+        dependencies.releaseProductWindow({
+          windowId: productWindow.windowId,
+          claimToken: productWindow.claimToken,
+        }),
+      ]);
+      milestoneClaim = null;
+      return suppress(outcome.status, false, { timezone, localDate });
+    }
     await Promise.all([
       dependencies.completeMilestone({
         milestoneId: claim.milestoneId,

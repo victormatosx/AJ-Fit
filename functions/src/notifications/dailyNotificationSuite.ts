@@ -72,16 +72,31 @@ export async function evaluateDailyNotificationSuite(
     };
   }
 
-  const [workout, approaching] = await Promise.all([
-    dependencies.evaluateWorkout(uid),
-    dependencies.evaluateApproaching(uid),
-  ]);
+  // Same-tier candidates are evaluated sequentially so the winner consolidates
+  // the shared daily product slot before the next one is even derived. Running
+  // them concurrently let both cross their own fences and produce two product
+  // pushes on the same local day. EVOLUTION_APPROACHING goes first inside the
+  // tier because its milestone window is bounded and non-recurring, while the
+  // workout candidates recur on every prescribed day.
+  const approaching = await dependencies.evaluateApproaching(uid);
+  if (approaching.status === 'FAILED') {
+    return { status: 'FAILED', timezone: approaching.timezone, localDate: approaching.localDate };
+  }
+  if (approaching.status === 'DISPATCHED') {
+    return {
+      status: 'DISPATCHED',
+      timezone: approaching.timezone,
+      localDate: approaching.localDate,
+    };
+  }
+
+  const workout = await dependencies.evaluateWorkout(uid);
   const timezone = workout.timezone ?? approaching.timezone;
   const localDate = workout.localDate ?? approaching.localDate;
-  if (workout.status === 'FAILED' || approaching.status === 'FAILED') {
+  if (workout.status === 'FAILED') {
     return { status: 'FAILED', timezone, localDate };
   }
-  if (workout.status === 'DISPATCHED' || approaching.status === 'DISPATCHED') {
+  if (workout.status === 'DISPATCHED') {
     return { status: 'DISPATCHED', timezone, localDate };
   }
 

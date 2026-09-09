@@ -57,8 +57,9 @@ describe('daily notification suite', () => {
   });
 
   it('surfaces a progression candidate without changing workout semantics', async () => {
+    const evaluateWorkout = vi.fn(async () => suppressedWorkout);
     await expect(evaluateDailyNotificationSuite('uid-1', {
-      evaluateWorkout: vi.fn(async () => suppressedWorkout),
+      evaluateWorkout,
       evaluateApproaching: vi.fn(async () => ({
         status: 'DISPATCHED' as const,
         notificationType: 'EVOLUTION_APPROACHING' as const,
@@ -70,12 +71,65 @@ describe('daily notification suite', () => {
       evaluateProgress: vi.fn(async () => suppressedProgress),
       evaluateWeeklyAchievement: vi.fn(async () => suppressedWeeklyAchievement),
     })).resolves.toMatchObject({ status: 'DISPATCHED', timezone: 'UTC' });
+    // Same-tier candidates are never derived once the tier already has a winner.
+    expect(evaluateWorkout).not.toHaveBeenCalled();
+  });
+
+  it('never evaluates a workout candidate in parallel with an approaching candidate', async () => {
+    const order: string[] = [];
+    const evaluateApproaching = vi.fn(async () => {
+      order.push('approaching:start');
+      await Promise.resolve();
+      order.push('approaching:end');
+      return suppressedApproaching;
+    });
+    const evaluateWorkout = vi.fn(async () => {
+      order.push('workout:start');
+      return suppressedWorkout;
+    });
+    await evaluateDailyNotificationSuite('uid-1', {
+      evaluateWorkout,
+      evaluateApproaching,
+      evaluateReEngagement: vi.fn(async () => suppressedReengagement),
+      evaluateProgress: vi.fn(async () => suppressedProgress),
+      evaluateWeeklyAchievement: vi.fn(async () => suppressedWeeklyAchievement),
+    });
+    expect(order).toEqual(['approaching:start', 'approaching:end', 'workout:start']);
+  });
+
+  it('lets an enabled workout candidate win the day when approaching is preference-suppressed', async () => {
+    const evaluateWorkout = vi.fn(async () => ({
+      status: 'DISPATCHED' as const,
+      notificationType: 'WORKOUT_DAY' as const,
+      timezone: 'UTC',
+      localDate: '2026-09-08',
+      outcome: 'PENDING_RECEIPTS' as const,
+    }));
+    await expect(evaluateDailyNotificationSuite('uid-1', {
+      evaluateWorkout,
+      evaluateApproaching: vi.fn(async () => ({
+        ...suppressedApproaching,
+        reason: 'DISABLED_BY_USER',
+      })),
+      evaluateReEngagement: vi.fn(async () => suppressedReengagement),
+      evaluateProgress: vi.fn(async () => suppressedProgress),
+      evaluateWeeklyAchievement: vi.fn(async () => suppressedWeeklyAchievement),
+    })).resolves.toMatchObject({ status: 'DISPATCHED' });
+    expect(evaluateWorkout).toHaveBeenCalledWith('uid-1');
   });
 
   it('requests the scheduler retry if either independent observer fails', async () => {
     await expect(evaluateDailyNotificationSuite('uid-1', {
       evaluateWorkout: vi.fn(async () => suppressedWorkout),
       evaluateApproaching: vi.fn(async () => ({ status: 'FAILED' as const, timezone: 'UTC' })),
+      evaluateReEngagement: vi.fn(async () => suppressedReengagement),
+      evaluateProgress: vi.fn(async () => suppressedProgress),
+      evaluateWeeklyAchievement: vi.fn(async () => suppressedWeeklyAchievement),
+    })).resolves.toMatchObject({ status: 'FAILED', timezone: 'UTC' });
+
+    await expect(evaluateDailyNotificationSuite('uid-1', {
+      evaluateWorkout: vi.fn(async () => ({ status: 'FAILED' as const, timezone: 'UTC' })),
+      evaluateApproaching: vi.fn(async () => suppressedApproaching),
       evaluateReEngagement: vi.fn(async () => suppressedReengagement),
       evaluateProgress: vi.fn(async () => suppressedProgress),
       evaluateWeeklyAchievement: vi.fn(async () => suppressedWeeklyAchievement),

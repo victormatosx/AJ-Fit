@@ -22,8 +22,10 @@ import { dailyLocalClock } from './dailyTime';
 import {
   claimDailyProductWindow,
   completeDailyProductWindow,
+  releaseDailyProductWindowClaim,
   type DailyProductWindowClaim,
 } from './dailyProductRateLimit';
+import { resolveUserNotificationPolicy } from './preferences';
 import type { NotificationDispatchOutcome, NotificationDispatchRequest } from './schema';
 import { dispatchUserNotificationCandidate } from './userNotificationDispatch';
 
@@ -97,6 +99,8 @@ export interface DailyWorkoutNotificationDependencies {
     claimToken: string;
     outcome: string;
   }, now: Timestamp): Promise<boolean>;
+  releaseProductWindow(input: { windowId: string; claimToken: string }): Promise<boolean>;
+  resolvePolicy(uid: string): Promise<{ allowed: boolean; reason: string }>;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -330,6 +334,11 @@ function defaultDependencies(): DailyWorkoutNotificationDependencies {
     dispatchCandidate: dispatchUserNotificationCandidate,
     claimProductWindow: (input, now) => claimDailyProductWindow(defaultDb, input, now),
     completeProductWindow: (input, now) => completeDailyProductWindow(defaultDb, input, now),
+    releaseProductWindow: (input) => releaseDailyProductWindowClaim(defaultDb, input),
+    resolvePolicy: (uid) => resolveUserNotificationPolicy({
+      uid,
+      category: 'WORKOUTS_AND_REMINDERS',
+    }, defaultDb),
   };
 }
 
@@ -339,6 +348,105 @@ function suppress(
 ): DailyWorkoutEvaluation {
   logInfo(SCOPE, 'candidate_suppressed', { reason, ...input });
   return { status: 'SUPPRESSED', reason, ...input };
+}
+
+type DailyWorkoutCandidate = {
+  allowed: true;
+  notificationType: 'WORKOUT_DAY' | 'RECOVERY_DAY' | 'MISSED_WORKOUT';
+  build(locale: 'pt-BR' | 'en' | 'es'): NotificationDispatchRequest;
+} | { allowed: false; reason: string };
+
+/** Canonical candidate derivation shared by initial evaluation and retry preflight. */
+export async function resolveDailyWorkoutCandidate(
+  uid: string,
+  context: DailyWorkoutContext,
+  localDate: string,
+  hasFinishedExecution: DailyWorkoutNotificationDependencies['hasFinishedExecution'],
+): Promise<DailyWorkoutCandidate> {
+  const trainingDays = context.weeklySchedule
+    .filter((day) => day.state === 'TRAINING')
+    .map((day) => day.weekday);
+  const activeRecoveryDays = context.weeklySchedule
+    .filter((day) => day.state === 'ACTIVE_RECOVERY')
+    .map((day) => day.weekday);
+  const config: ScheduleConfig = {
+    trainingDays,
+    activeRecoveryDays,
+    timezone: context.timezone,
+    scheduleVersion: 1,
+  };
+  const input = {
+    hasActiveProgram: true,
+    sessionCount: context.sessionCount,
+    config,
+    state: context.scheduleState,
+    activatedAtLocalDate: context.activatedAtLocalDate,
+    todayLocalDate: localDate,
+    resolvedMissScheduledDate: context.resolvedMissScheduledDate,
+  };
+  const resolution = resolveWorkoutSchedule(input);
+  const gap = detectMissedSessionGap(input);
+
+  if (resolution.status === 'MISSED_SESSION_DECISION_REQUIRED') {
+    const pending = context.scheduleState?.pendingMissDecision;
+    const missedDate = pending?.missedScheduledDate ?? gap?.missedScheduledDate;
+    if (!missedDate) return { allowed: false, reason: 'MISSED_IDENTITY_UNAVAILABLE' };
+    const plannedSessionIdentity = [
+      context.programInstanceId,
+      missedDate,
+      resolution.missedSessionIndex,
+    ].join(':');
+    return {
+      allowed: true,
+      notificationType: 'MISSED_WORKOUT',
+      build: (locale) => buildMissedWorkoutNotification({ uid, plannedSessionIdentity, locale }),
+    };
+  }
+  if (resolution.status === 'SESSION_READY') {
+    if (!trainingDays.includes(weekdayOfLocalDate(localDate))) {
+      return { allowed: false, reason: 'NO_WORKOUT_TODAY' };
+    }
+    if (await hasFinishedExecution(uid, context, resolution.sessionIndex, localDate)) {
+      return { allowed: false, reason: 'ALREADY_COMPLETED' };
+    }
+    return {
+      allowed: true,
+      notificationType: 'WORKOUT_DAY',
+      build: (locale) => buildWorkoutDayNotification({ uid, localDate, locale }),
+    };
+  }
+  if (resolution.status === 'ACTIVE_RECOVERY_DAY') {
+    return {
+      allowed: true,
+      notificationType: 'RECOVERY_DAY',
+      build: (locale) => buildRecoveryDayNotification({ uid, localDate, locale }),
+    };
+  }
+  return { allowed: false, reason: resolution.status };
+}
+
+/** Revalidates a persisted daily workout fact without reapplying the send-hour window. */
+export async function preflightDailyWorkoutNotification(
+  db: Firestore,
+  request: NotificationDispatchRequest,
+  now: Timestamp,
+): Promise<{ allowed: true } | { allowed: false; reason: string }> {
+  const context = await loadDailyWorkoutContext(db, request.uid, now.toDate());
+  if (context.status !== 'READY') return { allowed: false, reason: context.status };
+  const localDate = localDateInTimezone(now.toDate(), context.timezone);
+  const candidate = await resolveDailyWorkoutCandidate(
+    request.uid,
+    context,
+    localDate,
+    (uid, current, sessionIndex, date) =>
+      hasFinishedWorkoutExecution(db, uid, current, sessionIndex, date),
+  );
+  if (!candidate.allowed) return candidate;
+  const rebuilt = candidate.build('pt-BR');
+  if (rebuilt.type !== request.type || rebuilt.sourceIdentity !== request.sourceIdentity) {
+    return { allowed: false, reason: 'DAILY_WORKOUT_FACT_CHANGED' };
+  }
+  return { allowed: true };
 }
 
 export async function evaluateDailyWorkoutNotification(
@@ -361,52 +469,16 @@ export async function evaluateDailyWorkoutNotification(
       return suppress('OUTSIDE_LOCAL_WINDOW', { timezone, localDate });
     }
 
-    const trainingDays = context.weeklySchedule
-      .filter((day) => day.state === 'TRAINING')
-      .map((day) => day.weekday);
-    const activeRecoveryDays = context.weeklySchedule
-      .filter((day) => day.state === 'ACTIVE_RECOVERY')
-      .map((day) => day.weekday);
-    const config: ScheduleConfig = {
-      trainingDays,
-      activeRecoveryDays,
-      timezone,
-      scheduleVersion: 1,
-    };
-    const input = {
-      hasActiveProgram: true,
-      sessionCount: context.sessionCount,
-      config,
-      state: context.scheduleState,
-      activatedAtLocalDate: context.activatedAtLocalDate,
-      todayLocalDate: localDate,
-      resolvedMissScheduledDate: context.resolvedMissScheduledDate,
-    };
-    const resolution = resolveWorkoutSchedule(input);
-    const gap = detectMissedSessionGap(input);
-    let build: ((locale: 'pt-BR' | 'en' | 'es') => NotificationDispatchRequest) | null = null;
-
-    if (resolution.status === 'MISSED_SESSION_DECISION_REQUIRED') {
-      const pending = context.scheduleState?.pendingMissDecision;
-      const missedDate = pending?.missedScheduledDate ?? gap?.missedScheduledDate;
-      if (!missedDate) return suppress('MISSED_IDENTITY_UNAVAILABLE', { timezone, localDate });
-      const plannedSessionIdentity = [context.programInstanceId, missedDate, resolution.missedSessionIndex].join(':');
-      build = (locale) => buildMissedWorkoutNotification({ uid, plannedSessionIdentity, locale });
-    } else if (resolution.status === 'SESSION_READY') {
-      if (!trainingDays.includes(weekdayOfLocalDate(localDate))) {
-        return suppress('NO_WORKOUT_TODAY', { timezone, localDate });
-      }
-      if (await dependencies.hasFinishedExecution(uid, context, resolution.sessionIndex, localDate)) {
-        return suppress('ALREADY_COMPLETED', { timezone, localDate });
-      }
-      build = (locale) => buildWorkoutDayNotification({ uid, localDate: localDate!, locale });
-    } else if (resolution.status === 'ACTIVE_RECOVERY_DAY') {
-      build = (locale) => buildRecoveryDayNotification({ uid, localDate: localDate!, locale });
-    } else {
-      return suppress(resolution.status, { timezone, localDate });
-    }
-
-    const sample = build('pt-BR');
+    const candidate = await resolveDailyWorkoutCandidate(
+      uid,
+      context,
+      localDate,
+      dependencies.hasFinishedExecution,
+    );
+    if (!candidate.allowed) return suppress(candidate.reason, { timezone, localDate });
+    const sample = candidate.build('pt-BR');
+    const policy = await dependencies.resolvePolicy(uid);
+    if (!policy.allowed) return suppress(policy.reason, { timezone, localDate });
     const productWindow = await dependencies.claimProductWindow({
       uid,
       localDate,
@@ -422,8 +494,15 @@ export async function evaluateDailyWorkoutNotification(
     const outcome = await dependencies.dispatchCandidate({
       uid,
       category: 'WORKOUTS_AND_REMINDERS',
-      build,
+      build: candidate.build,
     });
+    if (outcome.status === 'SUPPRESSED_BY_PREFERENCE' || outcome.status === 'SUPPRESSED_BY_POLICY') {
+      await dependencies.releaseProductWindow({
+        windowId: productWindow.windowId,
+        claimToken: productWindow.claimToken,
+      });
+      return suppress(outcome.status, { timezone, localDate });
+    }
     await dependencies.completeProductWindow({
       windowId: productWindow.windowId,
       claimToken: productWindow.claimToken,
@@ -438,7 +517,7 @@ export async function evaluateDailyWorkoutNotification(
     });
     return {
       status: 'DISPATCHED',
-      notificationType: sample.type as 'WORKOUT_DAY' | 'RECOVERY_DAY' | 'MISSED_WORKOUT',
+      notificationType: candidate.notificationType,
       localDate,
       timezone,
       outcome: outcome.status,
