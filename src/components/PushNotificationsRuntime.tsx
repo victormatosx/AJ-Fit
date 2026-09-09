@@ -5,17 +5,15 @@ import {
   requestPushTokenForDevelopment,
   type PushTokenSnapshot,
 } from '../services/pushNotifications';
-import {
-  sendQaPushNotification,
-  type QaPushDispatchResult,
-} from '../services/qaPushNotification';
 
 declare global {
-  // Development-build console hook. It is never installed in production.
+  // Development-build console hook for push *registration* diagnostics only.
+  // It is never installed in production and cannot send a notification: the
+  // in-app QA dispatch surface was removed, and `dispatchTestNotification`
+  // remains a backend-authorized callable with no client wrapper.
   var __AJFIT_PUSH_QA__:
     | {
         requestPermissionAndGetToken(): Promise<PushTokenSnapshot | null>;
-        sendSelfTestNotification(): Promise<QaPushDispatchResult>;
       }
     | undefined;
 }
@@ -31,7 +29,6 @@ export function PushNotificationsRuntime() {
     if (typeof __DEV__ !== 'undefined' && __DEV__) {
       globalThis.__AJFIT_PUSH_QA__ = {
         requestPermissionAndGetToken: requestPushTokenForDevelopment,
-        sendSelfTestNotification: () => sendQaPushNotification('QA_TEST'),
       };
     }
 

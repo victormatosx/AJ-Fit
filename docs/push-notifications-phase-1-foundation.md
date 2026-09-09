@@ -92,9 +92,11 @@ Use a development build; Android remote push is not available in Expo Go.
 - validate foreground/background/terminated receipt behavior on iOS/Android;
 - verify token refresh, reinstall, multiple devices and A→B account switch;
 - verify `rest_timer` still presents independently from `ajfit_general`;
-- run the fixed DEV console hooks only with an authenticated admin account:
-  `__AJFIT_PUSH_QA__.requestPermissionAndGetToken()`, then
-  `__AJFIT_PUSH_QA__.sendSelfTestNotification()`.
+- run the fixed DEV console hook only with an authenticated admin account:
+  `__AJFIT_PUSH_QA__.requestPermissionAndGetToken()`. The companion
+  `sendSelfTestNotification()` hook was removed together with the in-app QA
+  panel; sending a preview now requires calling `dispatchTestNotification`
+  from an authorized operator tool.
 
 No deployment, secret creation, TTL activation or real-user push belongs to
 this phase.

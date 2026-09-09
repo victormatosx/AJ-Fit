@@ -1,14 +1,24 @@
 # Push notification QA preview
 
+> **Status: the in-app QA panel was removed before merging to `main`.**
+> `Settings > Developer > Push Notifications`, the `PushNotificationQaSheet`
+> component and the `qaPushNotification` client service no longer exist, and
+> the app ships no client wrapper for the callable. The backend preview
+> pipeline below is intact and still authorized exactly as documented —
+> `dispatchTestNotification` remains callable from an authorized operator
+> tool. Everything from “The path is” onward describes the backend contract;
+> the sections about the panel’s UI are kept as a record of what was
+> validated during physical QA.
+
 ## Scope
 
-This is a development-only, self-targeted visual QA surface. It does not
+This is a development-only, self-targeted QA surface. It does not
 create workout, lifecycle, progression, billing, subscription, schedule or
 achievement facts. It does not write `notificationProductWindows`.
 
 The path is:
 
-`Settings > Developer > Push Notifications`
+authorized caller (no in-app UI ships)
 
 → `dispatchTestNotification` (Auth + verified-email policy + `pushQa`/admin authorization + App Check)
 
