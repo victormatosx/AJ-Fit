@@ -2,6 +2,7 @@ import { evaluateEvolutionApproaching } from './evolutionApproachingNotification
 import { evaluateDailyWorkoutNotification } from './dailyWorkoutNotifications';
 import { evaluateReEngagementNotification } from './reengagementNotification';
 import { evaluateProgressNotification } from './progressNotification';
+import { evaluateWeeklyAchievementNotification } from './weeklyAchievementNotification';
 
 export interface DailyNotificationSuiteResult {
   status: 'DISPATCHED' | 'SUPPRESSED' | 'FAILED';
@@ -15,6 +16,7 @@ export interface DailyNotificationSuiteDependencies {
   evaluateApproaching(uid: string): ReturnType<typeof evaluateEvolutionApproaching>;
   evaluateReEngagement(uid: string): ReturnType<typeof evaluateReEngagementNotification>;
   evaluateProgress(uid: string): ReturnType<typeof evaluateProgressNotification>;
+  evaluateWeeklyAchievement(uid: string): ReturnType<typeof evaluateWeeklyAchievementNotification>;
 }
 
 const defaultDependencies: DailyNotificationSuiteDependencies = {
@@ -22,6 +24,7 @@ const defaultDependencies: DailyNotificationSuiteDependencies = {
   evaluateApproaching: evaluateEvolutionApproaching,
   evaluateReEngagement: evaluateReEngagementNotification,
   evaluateProgress: evaluateProgressNotification,
+  evaluateWeeklyAchievement: evaluateWeeklyAchievementNotification,
 };
 
 /** One scheduler claim evaluates the ordered daily product observers. */
@@ -53,6 +56,22 @@ export async function evaluateDailyNotificationSuite(
     };
   }
 
+  const weeklyAchievement = await dependencies.evaluateWeeklyAchievement(uid);
+  if (weeklyAchievement.status === 'FAILED') {
+    return {
+      status: 'FAILED',
+      timezone: weeklyAchievement.timezone,
+      localDate: weeklyAchievement.localDate,
+    };
+  }
+  if (weeklyAchievement.status === 'DISPATCHED') {
+    return {
+      status: 'DISPATCHED',
+      timezone: weeklyAchievement.timezone,
+      localDate: weeklyAchievement.localDate,
+    };
+  }
+
   const [workout, approaching] = await Promise.all([
     dependencies.evaluateWorkout(uid),
     dependencies.evaluateApproaching(uid),
@@ -79,6 +98,7 @@ export async function evaluateDailyNotificationSuite(
     status: 'SUPPRESSED',
     reason:
       `REENGAGEMENT:${reengagement.reason}`
+      + `|WEEKLY_ACHIEVEMENT:${weeklyAchievement.reason}`
       + `|WORKOUT:${workout.reason}|APPROACHING:${approaching.reason}`
       + `|PROGRESS:${progress.reason}`,
     timezone: resolvedTimezone,

@@ -19,6 +19,8 @@ export const NOTIFICATION_TYPES = [
   'PHOTO_REMINDER',
   'ASSESSMENT_REMINDER',
   'COMPARE_PROGRESS',
+  'WEEK_COMPLETED',
+  'WEEK_STREAK',
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 

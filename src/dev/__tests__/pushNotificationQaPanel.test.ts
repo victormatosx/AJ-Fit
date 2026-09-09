@@ -42,6 +42,8 @@ describe('Push Notifications DEV/QA panel', () => {
       'Registrar evolução',
       'Atualizar avaliação',
       'Comparar evolução',
+      'Semana concluída',
+      'Sequência de semanas',
     ]) {
       expect(sheet).toContain(text);
     }

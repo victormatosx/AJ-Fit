@@ -6,10 +6,12 @@ import {
   buildMissedWorkoutNotification,
   buildWorkoutDayNotification,
   buildPhotoReminderNotification,
+  buildWeekCompletedNotification,
 } from '../contentPolicy';
 import {
   claimDailyProductWindow,
   completeDailyProductWindow,
+  releaseDailyProductWindowClaim,
 } from '../dailyProductRateLimit';
 
 const UID = 'uid-1';
@@ -103,6 +105,30 @@ describe('daily product rate limit', () => {
       localDate: DATE,
       type: 'PHOTO_REMINDER',
     });
+  });
+
+  it('shares the slot with achievements and releases only the current fenced claim', async () => {
+    const firestore = db();
+    const claim = await claimDailyProductWindow(firestore, {
+      uid: UID,
+      localDate: DATE,
+      request: buildWeekCompletedNotification({
+        uid: UID, achievementIdentity: 'week:2026-09-07:hash', locale: 'pt-BR',
+      }),
+    }, NOW);
+    expect(claim.outcome).toBe('CLAIMED');
+    if (claim.outcome !== 'CLAIMED') throw new Error('expected claim');
+    await expect(releaseDailyProductWindowClaim(firestore, {
+      windowId: claim.windowId, claimToken: 'stale',
+    })).resolves.toBe(false);
+    await expect(releaseDailyProductWindowClaim(firestore, {
+      windowId: claim.windowId, claimToken: claim.claimToken,
+    })).resolves.toBe(true);
+    await expect(claimDailyProductWindow(firestore, {
+      uid: UID,
+      localDate: DATE,
+      request: buildWorkoutDayNotification({ uid: UID, localDate: DATE, locale: 'pt-BR' }),
+    }, NOW)).resolves.toMatchObject({ outcome: 'CLAIMED' });
   });
 
   it('allows only the same semantic candidate to reclaim a stale worker', async () => {

@@ -36,6 +36,8 @@ export const QA_PUSH_NOTIFICATION_TYPES = [
   'PHOTO_REMINDER',
   'ASSESSMENT_REMINDER',
   'COMPARE_PROGRESS',
+  'WEEK_COMPLETED',
+  'WEEK_STREAK',
 ] as const satisfies readonly PushNotificationType[];
 export type QaPushNotificationType = (typeof QA_PUSH_NOTIFICATION_TYPES)[number];
 

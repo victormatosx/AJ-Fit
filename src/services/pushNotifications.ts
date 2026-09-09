@@ -46,6 +46,8 @@ export const PUSH_NOTIFICATION_TYPES = [
   'PHOTO_REMINDER',
   'ASSESSMENT_REMINDER',
   'COMPARE_PROGRESS',
+  'WEEK_COMPLETED',
+  'WEEK_STREAK',
 ] as const;
 export type PushNotificationType = (typeof PUSH_NOTIFICATION_TYPES)[number];
 

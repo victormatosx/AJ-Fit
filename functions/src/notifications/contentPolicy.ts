@@ -21,6 +21,8 @@ export const QA_PREVIEW_NOTIFICATION_TYPES = [
   'PHOTO_REMINDER',
   'ASSESSMENT_REMINDER',
   'COMPARE_PROGRESS',
+  'WEEK_COMPLETED',
+  'WEEK_STREAK',
 ] as const satisfies readonly NotificationType[];
 export type QaPreviewNotificationType = (typeof QA_PREVIEW_NOTIFICATION_TYPES)[number];
 
@@ -268,6 +270,48 @@ export const COMPARE_PROGRESS_COPIES = {
   },
 } as const satisfies Readonly<Record<NotificationLocale, NotificationCopy>>;
 
+export const WEEK_COMPLETED_COPIES = {
+  'pt-BR': {
+    title: 'Semana concluída 🏆',
+    body: 'Você completou todos os treinos planejados para esta semana. Excelente trabalho!',
+  },
+  en: {
+    title: 'Week completed 🏆',
+    body: 'You completed every workout planned for this week. Excellent work!',
+  },
+  es: {
+    title: 'Semana completada 🏆',
+    body: 'Completaste todos los entrenamientos planificados para esta semana. ¡Excelente trabajo!',
+  },
+} as const satisfies Readonly<Record<NotificationLocale, NotificationCopy>>;
+
+const STREAK_MILESTONES = [2, 4, 8, 12, 24, 52] as const;
+export type WeekStreakMilestone = (typeof STREAK_MILESTONES)[number];
+
+export function isWeekStreakMilestone(value: number): value is WeekStreakMilestone {
+  return (STREAK_MILESTONES as readonly number[]).includes(value);
+}
+
+export function weekStreakCopy(
+  locale: NotificationLocale,
+  weeks: WeekStreakMilestone,
+): NotificationCopy {
+  switch (locale) {
+    case 'en': return {
+      title: `${weeks} weeks in a row 🔥`,
+      body: `You completed every planned workout for ${weeks} consecutive weeks. Keep it going!`,
+    };
+    case 'es': return {
+      title: `${weeks} semanas seguidas 🔥`,
+      body: `Completaste todos los entrenamientos planificados durante ${weeks} semanas consecutivas. ¡Sigue así!`,
+    };
+    default: return {
+      title: `${weeks} semanas seguidas 🔥`,
+      body: `Você completou todos os treinos planejados por ${weeks} semanas consecutivas. Continue assim!`,
+    };
+  }
+}
+
 function copies<T extends Record<NotificationLocale, NotificationCopy>>(localized: T) {
   return NOTIFICATION_LOCALES.map((locale) => localized[locale]);
 }
@@ -359,6 +403,19 @@ const TYPE_POLICIES: Readonly<Record<NotificationType, TypePolicy>> = {
     allowedDataKeys: [],
     allowedIntents: [],
     allowedCopies: copies(COMPARE_PROGRESS_COPIES),
+  },
+  WEEK_COMPLETED: {
+    category: 'EVOLUTION_AND_ACHIEVEMENTS',
+    allowedDataKeys: [],
+    allowedIntents: [],
+    allowedCopies: copies(WEEK_COMPLETED_COPIES),
+  },
+  WEEK_STREAK: {
+    category: 'EVOLUTION_AND_ACHIEVEMENTS',
+    allowedDataKeys: [],
+    allowedIntents: [],
+    allowedCopies: NOTIFICATION_LOCALES.flatMap((locale) =>
+      STREAK_MILESTONES.map((milestone) => weekStreakCopy(locale, milestone))),
   },
 };
 
@@ -752,6 +809,56 @@ export function buildCompareProgressNotification(params: {
   });
 }
 
+function buildWeeklyAchievementNotification(params: {
+  uid: string;
+  type: 'WEEK_COMPLETED' | 'WEEK_STREAK';
+  achievementIdentity: string;
+  copy: NotificationCopy;
+}): NotificationDispatchRequest {
+  assertSafeId(params.achievementIdentity, 'achievementIdentity');
+  const sourceHash = createHash('sha256').update(params.achievementIdentity, 'utf8').digest('hex');
+  const request: NotificationDispatchRequest = {
+    uid: params.uid,
+    type: params.type,
+    category: 'EVOLUTION_AND_ACHIEVEMENTS',
+    notificationId: `${params.type}:${sourceHash}`,
+    sourceIdentity: `perfectWeek:${sourceHash}`,
+    idempotencyKey: `notification:${params.uid}:${params.type}:${sourceHash}`,
+    ...params.copy,
+    data: {},
+  };
+  assertValidDispatchRequest(request);
+  return request;
+}
+
+export function buildWeekCompletedNotification(params: {
+  uid: string;
+  achievementIdentity: string;
+  locale: NotificationLocale;
+}): NotificationDispatchRequest {
+  return buildWeeklyAchievementNotification({
+    ...params,
+    type: 'WEEK_COMPLETED',
+    copy: WEEK_COMPLETED_COPIES[params.locale],
+  });
+}
+
+export function buildWeekStreakNotification(params: {
+  uid: string;
+  achievementIdentity: string;
+  locale: NotificationLocale;
+  weeks: WeekStreakMilestone;
+}): NotificationDispatchRequest {
+  if (!isWeekStreakMilestone(params.weeks)) {
+    throw new NotificationContentPolicyError('week_streak_milestone_not_allowed');
+  }
+  return buildWeeklyAchievementNotification({
+    ...params,
+    type: 'WEEK_STREAK',
+    copy: weekStreakCopy(params.locale, params.weeks),
+  });
+}
+
 /**
  * Builds a visual-only QA request by first invoking the exact canonical
  * product builder, then replacing only its domain identity with a QA-scoped
@@ -815,6 +922,16 @@ export function buildQaPreviewNotification(params: {
     case 'COMPARE_PROGRESS':
       canonical = buildCompareProgressNotification({
         uid: params.uid, progressIdentity: fixtureIdentity, locale: params.locale,
+      });
+      break;
+    case 'WEEK_COMPLETED':
+      canonical = buildWeekCompletedNotification({
+        uid: params.uid, achievementIdentity: fixtureIdentity, locale: params.locale,
+      });
+      break;
+    case 'WEEK_STREAK':
+      canonical = buildWeekStreakNotification({
+        uid: params.uid, achievementIdentity: fixtureIdentity, locale: params.locale, weeks: 4,
       });
       break;
     case 'EVOLUTION_UNLOCKED':

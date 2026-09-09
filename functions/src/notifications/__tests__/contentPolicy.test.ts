@@ -32,6 +32,10 @@ import {
   buildPhotoReminderNotification,
   buildAssessmentReminderNotification,
   buildCompareProgressNotification,
+  buildWeekCompletedNotification,
+  buildWeekStreakNotification,
+  WEEK_COMPLETED_COPIES,
+  weekStreakCopy,
 } from '../contentPolicy';
 import type { NotificationDispatchRequest } from '../schema';
 
@@ -50,8 +54,6 @@ describe('notification content policy', () => {
   });
 
   it.each([
-    'WEEK_COMPLETED',
-    'WEEK_STREAK',
     'GOAL_PROXIMITY',
   ])('rejects out-of-phase product type %s', (type) => {
     expect(() => assertValidDispatchRequest({ ...request(), type } as NotificationDispatchRequest))
@@ -107,6 +109,8 @@ describe('notification content policy', () => {
       'buildWorkoutDayNotification',
       'buildRecoveryDayNotification',
       'buildMissedWorkoutNotification',
+      'buildWeekCompletedNotification',
+      'buildWeekStreakNotification',
     ].sort());
   });
 
@@ -126,6 +130,8 @@ describe('notification content policy', () => {
       'PHOTO_REMINDER',
       'ASSESSMENT_REMINDER',
       'COMPARE_PROGRESS',
+      'WEEK_COMPLETED',
+      'WEEK_STREAK',
     ].map((type) => [type, buildQaPreviewNotification({
       uid: 'user-123', type: type as never, qaRequestId, locale,
     })]));
@@ -143,6 +149,8 @@ describe('notification content policy', () => {
     expect(previews.PHOTO_REMINDER).toMatchObject(PHOTO_REMINDER_COPIES[locale]);
     expect(previews.ASSESSMENT_REMINDER).toMatchObject(ASSESSMENT_REMINDER_COPIES[locale]);
     expect(previews.COMPARE_PROGRESS).toMatchObject(COMPARE_PROGRESS_COPIES[locale]);
+    expect(previews.WEEK_COMPLETED).toMatchObject(WEEK_COMPLETED_COPIES[locale]);
+    expect(previews.WEEK_STREAK).toMatchObject(weekStreakCopy(locale, 4));
     for (const preview of Object.values(previews)) {
       expect(preview.data).toEqual({});
       expect(preview.intent).toBeUndefined();
@@ -209,6 +217,12 @@ describe('notification content policy', () => {
       }),
       buildCompareProgressNotification({
         uid: 'user-123', progressIdentity: 'photoComparison:2026-01-01:2026-04-01', locale,
+      }),
+      buildWeekCompletedNotification({
+        uid: 'user-123', achievementIdentity: 'week:2026-09-07:prescription', locale,
+      }),
+      buildWeekStreakNotification({
+        uid: 'user-123', achievementIdentity: 'streak:2026-08-17:2026-09-07:4', locale, weeks: 4,
       }),
     ];
     for (const item of requests) expect(() => assertValidDispatchRequest(item)).not.toThrow();
@@ -317,6 +331,17 @@ describe('notification content policy', () => {
     expect(first.sourceIdentity).not.toContain('instance.private-id');
     expect(first.data).toEqual({});
     expect(first.intent).toBeUndefined();
+  });
+
+  it('accepts only backend-defined streak milestones and keeps the count out of payload data', () => {
+    const streak = buildWeekStreakNotification({
+      uid: 'user-123', achievementIdentity: 'sequence:week:4', locale: 'pt-BR', weeks: 4,
+    });
+    expect(streak.title).toBe('4 semanas seguidas 🔥');
+    expect(streak.data).toEqual({});
+    expect(() => buildWeekStreakNotification({
+      uid: 'user-123', achievementIdentity: 'sequence:week:3', locale: 'pt-BR', weeks: 3 as never,
+    })).toThrow(/week_streak_milestone_not_allowed/);
   });
 
   it('rejects a valid title paired with another allowed body', () => {

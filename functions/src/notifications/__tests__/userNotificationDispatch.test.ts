@@ -12,6 +12,8 @@ import {
   buildPhotoReminderNotification,
   buildAssessmentReminderNotification,
   buildCompareProgressNotification,
+  buildWeekCompletedNotification,
+  buildWeekStreakNotification,
 } from '../contentPolicy';
 import { dispatchUserNotificationCandidate } from '../userNotificationDispatch';
 
@@ -228,6 +230,28 @@ describe('event-driven notification policy orchestration', () => {
     await expect(dispatchUserNotificationCandidate(
       candidate,
       dependencies({ preferences: { notificationPreferences: { progress: false } } }),
+    )).resolves.toEqual({ status: 'SUPPRESSED_BY_PREFERENCE', dispatchId: 'dispatch-1' });
+    expect(mocks.dispatchNotification).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['WEEK_COMPLETED', (locale: 'pt-BR' | 'en' | 'es') => buildWeekCompletedNotification({
+      uid: 'uid-1', achievementIdentity: 'week:2026-09-07:hash', locale,
+    })],
+    ['WEEK_STREAK', (locale: 'pt-BR' | 'en' | 'es') => buildWeekStreakNotification({
+      uid: 'uid-1', achievementIdentity: 'streak:2026-08-17:2026-09-07:4', locale, weeks: 4,
+    })],
+  ] as const)('honors evolutionAndAchievements ON/OFF for %s', async (_type, build) => {
+    const candidate = { uid: 'uid-1', category: 'EVOLUTION_AND_ACHIEVEMENTS' as const, build };
+    await expect(dispatchUserNotificationCandidate(
+      candidate,
+      dependencies({ preferences: { notificationPreferences: { evolutionAndAchievements: true } } }),
+    )).resolves.toMatchObject({ status: 'PENDING_RECEIPTS' });
+
+    mocks.dispatchNotification.mockClear();
+    await expect(dispatchUserNotificationCandidate(
+      candidate,
+      dependencies({ preferences: { notificationPreferences: { evolutionAndAchievements: false } } }),
     )).resolves.toEqual({ status: 'SUPPRESSED_BY_PREFERENCE', dispatchId: 'dispatch-1' });
     expect(mocks.dispatchNotification).not.toHaveBeenCalled();
   });

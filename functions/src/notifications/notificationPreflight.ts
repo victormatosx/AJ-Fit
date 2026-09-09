@@ -8,9 +8,12 @@ import {
   buildPhotoReminderNotification,
   buildReEngagementEarlyNotification,
   buildReEngagementLateNotification,
+  buildWeekCompletedNotification,
+  buildWeekStreakNotification,
 } from './contentPolicy';
 import { readProgressNotificationContext } from './progressNotificationContext';
 import { readReEngagementContext } from './reengagementContext';
+import { readWeeklyAchievementContext } from './weeklyAchievementContext';
 import type { NotificationDispatchRequest } from './schema';
 
 export type NotificationPreflightResult =
@@ -130,6 +133,28 @@ export async function runNotificationPreflight(
       return rebuilt.sourceIdentity === request.sourceIdentity;
     });
     if (!remainsValid) return { allowed: false, reason: 'PROGRESS_FACT_CHANGED' };
+  }
+  if (request.type === 'WEEK_COMPLETED' || request.type === 'WEEK_STREAK') {
+    const context = await readWeeklyAchievementContext(db, request.uid, now, { requireDailyWindow: false });
+    if (!context.allowed) return { allowed: false, reason: context.reason };
+    if (context.candidate.notificationType !== request.type) {
+      return { allowed: false, reason: 'WEEKLY_ACHIEVEMENT_PRIORITY_CHANGED' };
+    }
+    const rebuilt = context.candidate.notificationType === 'WEEK_STREAK'
+      ? buildWeekStreakNotification({
+          uid: request.uid,
+          achievementIdentity: context.candidate.achievementIdentity,
+          locale: 'pt-BR',
+          weeks: context.candidate.weeks,
+        })
+      : buildWeekCompletedNotification({
+          uid: request.uid,
+          achievementIdentity: context.candidate.achievementIdentity,
+          locale: 'pt-BR',
+        });
+    if (rebuilt.sourceIdentity !== request.sourceIdentity) {
+      return { allowed: false, reason: 'PERFECT_WEEK_FACT_CHANGED' };
+    }
   }
   return { allowed: true };
 }

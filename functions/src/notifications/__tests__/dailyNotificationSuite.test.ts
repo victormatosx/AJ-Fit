@@ -27,6 +27,12 @@ const suppressedProgress = {
   timezone: 'UTC',
   localDate: '2026-09-08',
 };
+const suppressedWeeklyAchievement = {
+  status: 'SUPPRESSED' as const,
+  reason: 'NO_WEEKLY_ACHIEVEMENT',
+  timezone: 'UTC',
+  localDate: '2026-09-08',
+};
 
 describe('daily notification suite', () => {
   it('evaluates workout and progression observers under the same scheduler claim', async () => {
@@ -39,9 +45,10 @@ describe('daily notification suite', () => {
       evaluateApproaching,
       evaluateReEngagement,
       evaluateProgress,
+      evaluateWeeklyAchievement: vi.fn(async () => suppressedWeeklyAchievement),
     })).resolves.toMatchObject({
       status: 'SUPPRESSED',
-      reason: 'REENGAGEMENT:INSUFFICIENT_MISSED_OPPORTUNITIES|WORKOUT:REST_DAY|APPROACHING:OUTSIDE_APPROACHING_WINDOW|PROGRESS:NO_PROGRESS_CANDIDATE',
+      reason: 'REENGAGEMENT:INSUFFICIENT_MISSED_OPPORTUNITIES|WEEKLY_ACHIEVEMENT:NO_WEEKLY_ACHIEVEMENT|WORKOUT:REST_DAY|APPROACHING:OUTSIDE_APPROACHING_WINDOW|PROGRESS:NO_PROGRESS_CANDIDATE',
     });
     expect(evaluateReEngagement).toHaveBeenCalledWith('uid-1');
     expect(evaluateWorkout).toHaveBeenCalledWith('uid-1');
@@ -61,6 +68,7 @@ describe('daily notification suite', () => {
       })),
       evaluateReEngagement: vi.fn(async () => suppressedReengagement),
       evaluateProgress: vi.fn(async () => suppressedProgress),
+      evaluateWeeklyAchievement: vi.fn(async () => suppressedWeeklyAchievement),
     })).resolves.toMatchObject({ status: 'DISPATCHED', timezone: 'UTC' });
   });
 
@@ -70,6 +78,7 @@ describe('daily notification suite', () => {
       evaluateApproaching: vi.fn(async () => ({ status: 'FAILED' as const, timezone: 'UTC' })),
       evaluateReEngagement: vi.fn(async () => suppressedReengagement),
       evaluateProgress: vi.fn(async () => suppressedProgress),
+      evaluateWeeklyAchievement: vi.fn(async () => suppressedWeeklyAchievement),
     })).resolves.toMatchObject({ status: 'FAILED', timezone: 'UTC' });
   });
 
@@ -90,6 +99,7 @@ describe('daily notification suite', () => {
           blocksLowerPriorityNotifications: true as const,
         })),
         evaluateProgress: vi.fn(async () => suppressedProgress),
+        evaluateWeeklyAchievement: vi.fn(async () => suppressedWeeklyAchievement),
       })).resolves.toMatchObject({ status: 'DISPATCHED' });
       expect(evaluateWorkout).not.toHaveBeenCalled();
       expect(evaluateApproaching).not.toHaveBeenCalled();
@@ -110,6 +120,7 @@ describe('daily notification suite', () => {
         blocksLowerPriorityNotifications: true,
       })),
       evaluateProgress: vi.fn(async () => suppressedProgress),
+      evaluateWeeklyAchievement: vi.fn(async () => suppressedWeeklyAchievement),
     })).resolves.toMatchObject({
       status: 'SUPPRESSED', reason: 'REENGAGEMENT:MILESTONE_DUPLICATE',
     });
@@ -130,7 +141,30 @@ describe('daily notification suite', () => {
       evaluateApproaching: vi.fn(async () => suppressedApproaching),
       evaluateReEngagement: vi.fn(async () => suppressedReengagement),
       evaluateProgress,
+      evaluateWeeklyAchievement: vi.fn(async () => suppressedWeeklyAchievement),
     })).resolves.toMatchObject({ status: 'DISPATCHED' });
     expect(evaluateProgress).toHaveBeenCalledWith('uid-1');
+  });
+
+  it('gives a weekly achievement priority over workout, approaching and progress candidates', async () => {
+    const evaluateWorkout = vi.fn(async () => suppressedWorkout);
+    const evaluateApproaching = vi.fn(async () => suppressedApproaching);
+    const evaluateProgress = vi.fn(async () => suppressedProgress);
+    await expect(evaluateDailyNotificationSuite('uid-1', {
+      evaluateWorkout,
+      evaluateApproaching,
+      evaluateReEngagement: vi.fn(async () => suppressedReengagement),
+      evaluateProgress,
+      evaluateWeeklyAchievement: vi.fn(async () => ({
+        status: 'DISPATCHED' as const,
+        notificationType: 'WEEK_STREAK' as const,
+        timezone: 'UTC',
+        localDate: '2026-09-08',
+        outcome: 'PENDING_RECEIPTS' as const,
+      })),
+    })).resolves.toMatchObject({ status: 'DISPATCHED' });
+    expect(evaluateWorkout).not.toHaveBeenCalled();
+    expect(evaluateApproaching).not.toHaveBeenCalled();
+    expect(evaluateProgress).not.toHaveBeenCalled();
   });
 });

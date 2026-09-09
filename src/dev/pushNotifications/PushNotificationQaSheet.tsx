@@ -30,6 +30,8 @@ export const QA_PUSH_TYPE_LABELS: Record<QaPushNotificationType, string> = {
   PHOTO_REMINDER: 'Registrar evolução',
   ASSESSMENT_REMINDER: 'Atualizar avaliação',
   COMPARE_PROGRESS: 'Comparar evolução',
+  WEEK_COMPLETED: 'Semana concluída',
+  WEEK_STREAK: 'Sequência de semanas',
 };
 
 type DiagnosticState =

@@ -237,6 +237,8 @@ describe('push payload parsing', () => {
     'PHOTO_REMINDER',
     'ASSESSMENT_REMINDER',
     'COMPARE_PROGRESS',
+    'WEEK_COMPLETED',
+    'WEEK_STREAK',
   ] as const)(
     'parses the structured payload for current notification type %s',
     (type) => {
@@ -247,7 +249,7 @@ describe('push payload parsing', () => {
   it('rejects malformed and nested-only payloads', () => {
     expect(parsePushPayload(null)).toBeNull();
     expect(parsePushPayload({ type: 'QA_TEST' })).toBeNull();
-    expect(parsePushPayload({ type: 'WEEK_COMPLETED', notificationId: 'id' })).toBeNull();
+    expect(parsePushPayload({ type: 'GOAL_PROXIMITY', notificationId: 'id' })).toBeNull();
     expect(parsePushPayload({ data: { type: 'QA_TEST', notificationId: 'qa' } })).toBeNull();
   });
 });

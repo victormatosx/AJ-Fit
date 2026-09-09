@@ -111,7 +111,7 @@ describe('QA push client boundary', () => {
     );
   });
 
-  it('contains exactly the fourteen implemented QA preview types', () => {
+  it('contains exactly the sixteen implemented QA preview types', () => {
     expect(QA_PUSH_NOTIFICATION_TYPES).toEqual([
       'QA_TEST',
       'WORKOUT_DAY',
@@ -127,6 +127,8 @@ describe('QA push client boundary', () => {
       'PHOTO_REMINDER',
       'ASSESSMENT_REMINDER',
       'COMPARE_PROGRESS',
+      'WEEK_COMPLETED',
+      'WEEK_STREAK',
     ]);
   });
 
@@ -192,13 +194,13 @@ describe('QA push client boundary', () => {
   });
 
   it('rejects an unsupported type explicitly before invoking the callable', async () => {
-    await expect(sendQaPushNotification('WEEK_COMPLETED' as never))
+    await expect(sendQaPushNotification('GOAL_PROXIMITY' as never))
       .rejects.toThrow('qa_push_type_unsupported');
     expect(mocks.callable).not.toHaveBeenCalled();
     expect(mocks.logInfo).toHaveBeenCalledWith(
       'qaPushNotification',
       'qa_push_callable_failed',
-      expect.objectContaining({ notificationType: 'WEEK_COMPLETED' }),
+      expect.objectContaining({ notificationType: 'GOAL_PROXIMITY' }),
     );
   });
 

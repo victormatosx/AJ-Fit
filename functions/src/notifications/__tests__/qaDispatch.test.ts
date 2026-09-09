@@ -82,7 +82,7 @@ describe('dispatchTestNotification QA preview', () => {
   });
 
   it.each([
-    { notificationType: 'WEEK_COMPLETED', qaRequestId: REQUEST_ID },
+    { notificationType: 'GOAL_PROXIMITY', qaRequestId: REQUEST_ID },
     { notificationType: 'NOT_IMPLEMENTED', qaRequestId: REQUEST_ID },
   ])('rejects unsupported/not implemented type %#', async (data) => {
     const { handler, dispatch } = fixture();

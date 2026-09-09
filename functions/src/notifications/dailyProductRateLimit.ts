@@ -91,3 +91,19 @@ export async function completeDailyProductWindow(
     return true;
   });
 }
+
+/** Releases only the caller's in-flight slot when no product push was sent. */
+export async function releaseDailyProductWindowClaim(
+  db: Firestore,
+  input: { windowId: string; claimToken: string },
+): Promise<boolean> {
+  const ref = db.collection(DAILY_PRODUCT_WINDOWS_COLLECTION).doc(input.windowId);
+  return db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    if (snapshot.data()?.status !== 'CLAIMED' || snapshot.data()?.claimToken !== input.claimToken) {
+      return false;
+    }
+    transaction.delete(ref);
+    return true;
+  });
+}
