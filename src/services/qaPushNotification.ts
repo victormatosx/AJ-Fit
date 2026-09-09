@@ -1,7 +1,9 @@
 import * as Crypto from 'expo-crypto';
 import { httpsCallable } from 'firebase/functions';
 
-import { functions } from '../lib/firebaseFunctions';
+import { auth } from '../lib/firebase';
+import { functions, FUNCTIONS_REGION } from '../lib/firebaseFunctions';
+import { errorCode, logInfo, sanitizeLogText } from '../lib/logger';
 import {
   getAuthenticatedPushUser,
   refreshCurrentDeviceToken,
@@ -31,6 +33,9 @@ export const QA_PUSH_NOTIFICATION_TYPES = [
 ] as const;
 export type QaPushNotificationType = (typeof QA_PUSH_NOTIFICATION_TYPES)[number];
 
+const QA_PUSH_LOG_SCOPE = 'qaPushNotification';
+export const QA_PUSH_CALLABLE_NAME = 'dispatchTestNotification';
+
 export type QaPushDispatchResult = {
   status: string;
   dispatchId: string;
@@ -57,24 +62,53 @@ function identityIsCurrent(uid: string): boolean {
 
 /**
  * DEV-only client surface. The backend independently requires App Check,
- * authenticated admin role, fixed content and self-targeting.
+ * an authenticated push-QA capability or admin role, fixed content and
+ * self-targeting.
  */
 export async function sendQaPushNotification(
   notificationType: QaPushNotificationType,
   qaRequestId = Crypto.randomUUID(),
 ): Promise<QaPushDispatchResult> {
-  assertDevelopment();
-  if (!(QA_PUSH_NOTIFICATION_TYPES as readonly string[]).includes(notificationType)) {
-    throw new Error('qa_push_type_unsupported');
+  const safeContext = {
+    notificationType,
+    authenticated: auth.currentUser !== null,
+    pushRegistered: getCurrentPushToken() !== null,
+  };
+
+  try {
+    assertDevelopment();
+    if (!(QA_PUSH_NOTIFICATION_TYPES as readonly string[]).includes(notificationType)) {
+      throw new Error('qa_push_type_unsupported');
+    }
+    logInfo(QA_PUSH_LOG_SCOPE, 'qa_push_callable_invoking', {
+      ...safeContext,
+      callableName: QA_PUSH_CALLABLE_NAME,
+      region: FUNCTIONS_REGION,
+    });
+    const callable = httpsCallable<
+      { notificationType: QaPushNotificationType; qaRequestId: string },
+      QaPushDispatchResult
+    >(
+      functions,
+      QA_PUSH_CALLABLE_NAME,
+    );
+    const result = (await callable({ notificationType, qaRequestId })).data;
+    logInfo(QA_PUSH_LOG_SCOPE, 'qa_push_callable_succeeded', {
+      ...safeContext,
+      status: result.status,
+      deviceCount: result.deviceCount,
+      acceptedCount: result.acceptedCount,
+    });
+    return result;
+  } catch (cause) {
+    const rawMessage = cause instanceof Error ? cause.message : String(cause);
+    logInfo(QA_PUSH_LOG_SCOPE, 'qa_push_callable_failed', {
+      ...safeContext,
+      errorCode: errorCode(cause) ?? 'UNCLASSIFIED',
+      errorMessage: sanitizeLogText(rawMessage),
+    });
+    throw cause;
   }
-  const callable = httpsCallable<
-    { notificationType: QaPushNotificationType; qaRequestId: string },
-    QaPushDispatchResult
-  >(
-    functions,
-    'dispatchTestNotification',
-  );
-  return (await callable({ notificationType, qaRequestId })).data;
 }
 
 /** Reads permission/token state and reuses the existing registration flow. */
@@ -172,12 +206,27 @@ export function qaPushUnavailableMessage(
 }
 
 export function qaPushErrorMessage(cause: unknown): string {
-  const code = typeof cause === 'object' && cause !== null && 'code' in cause
-    ? String((cause as { code?: unknown }).code)
-    : '';
-  if (code.endsWith('unauthenticated')) return 'Faça login novamente para usar o QA de push.';
-  if (code.endsWith('permission-denied')) return 'Esta conta não está autorizada para QA de push.';
-  if (code.endsWith('failed-precondition')) return 'A conta não está disponível para notificações.';
+  const code = errorCode(cause) ?? '';
+  const message = cause instanceof Error ? sanitizeLogText(cause.message) : '';
+  if (message === 'qa_push_type_unsupported') {
+    return 'Tipo de notificação não suportado pelo QA client.';
+  }
+  if (code.endsWith('unauthenticated')) {
+    return 'Faça login novamente para usar o QA de push (functions/unauthenticated).';
+  }
+  if (code.endsWith('permission-denied')) {
+    return 'Esta conta não está autorizada para QA de push (functions/permission-denied).';
+  }
+  if (code.endsWith('invalid-argument')) {
+    return 'A callable rejeitou o payload (functions/invalid-argument). O backend publicado pode estar desatualizado.';
+  }
+  if (code.endsWith('not-found')) {
+    return 'A callable dispatchTestNotification não foi encontrada em us-central1 (functions/not-found).';
+  }
+  if (code.endsWith('failed-precondition')) {
+    return 'A conta não está disponível para notificações (functions/failed-precondition).';
+  }
   if (code.includes('app-check')) return 'App Check rejeitou este development build.';
+  if (code) return `Falha na callable (${code}).`;
   return 'Não foi possível criar o dispatch. Verifique conexão, registro e logs das Functions.';
 }

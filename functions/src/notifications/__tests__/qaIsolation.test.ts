@@ -21,6 +21,7 @@ describe('QA preview isolation boundaries', () => {
     ]) {
       expect(source).not.toContain(forbidden);
     }
+    expect(source).toContain('requirePushQaUid');
     expect(source).toContain('dispatchNotification');
     expect(source).toContain("'QA_PREVIEW'");
     expect(source).not.toContain('exp.host');

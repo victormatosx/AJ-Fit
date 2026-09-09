@@ -10,7 +10,7 @@ The path is:
 
 `Settings > Developer > Push Notifications`
 
-→ `dispatchTestNotification` (Auth + verified-email policy + server-side admin role + App Check)
+→ `dispatchTestNotification` (Auth + verified-email policy + `pushQa`/admin authorization + App Check)
 
 → canonical notification builder/content policy
 
@@ -25,6 +25,44 @@ The path is:
 The callable accepts exactly `notificationType` and `qaRequestId`. The target
 is always `request.auth.uid`. Title, body, data, UID and push token are never
 accepted from the client.
+
+## Authorization
+
+The least-privilege authorization is the Firebase Auth custom claim
+`pushQa: true`. It grants access only to this self-targeted preview callable;
+it does not grant the broader Firestore admin role. Existing operators with
+`users/{uid}.metadata.role == "admin"` remain authorized for compatibility.
+Both paths still require Auth, the existing verified-email policy and App
+Check. The callable reads `pushQa` only from the Firebase-verified ID token;
+the request payload cannot grant it.
+
+Set the claim from a trusted operator environment with Application Default
+Credentials. Resolve the account by email so no UID is placed in source
+control, and preserve every existing custom claim because
+`setCustomUserClaims` replaces the complete claims object:
+
+```sh
+AJFIT_QA_EMAIL='qa-account@example.com' AJFIT_QA_PROJECT='ajfit-2f321' node -e '
+const { applicationDefault, initializeApp } = require("firebase-admin/app");
+const { getAuth } = require("firebase-admin/auth");
+(async () => {
+  const email = process.env.AJFIT_QA_EMAIL;
+  const projectId = process.env.AJFIT_QA_PROJECT;
+  if (!email || !projectId) throw new Error("AJFIT_QA_EMAIL/AJFIT_QA_PROJECT required");
+  initializeApp({ credential: applicationDefault(), projectId });
+  const auth = getAuth();
+  const user = await auth.getUserByEmail(email);
+  if (!user.emailVerified) throw new Error("QA account email must be verified");
+  await auth.setCustomUserClaims(user.uid, { ...(user.customClaims ?? {}), pushQa: true });
+  console.log("pushQa enabled");
+})().catch((error) => { console.error(error.message); process.exitCode = 1; });
+'
+```
+
+After setting the claim, sign out and sign back in on the development build,
+or explicitly force `currentUser.getIdToken(true)`. An already-issued ID token
+does not gain the claim immediately. Merely restarting the app is not a
+guaranteed token refresh.
 
 ## Behavior that intentionally differs from product dispatch
 
@@ -88,6 +126,13 @@ mode across a provider retry:
 
 ```sh
 firebase deploy --only functions:dispatchTestNotification,functions:retryNotificationDispatches
+```
+
+If the QA preview pipeline is already deployed and only this authorization
+change is pending, redeploy only the callable:
+
+```sh
+firebase deploy --only functions:dispatchTestNotification --project production
 ```
 
 No Firestore Rules, indexes, new scheduler, receipt-function deployment or

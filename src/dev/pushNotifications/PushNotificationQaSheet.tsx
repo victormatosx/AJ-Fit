@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, Text, View } from 'react-native';
 
 import { useTheme } from '../../theme';
+import { logInfo } from '../../lib/logger';
 import {
   loadQaPushDiagnostics,
   QA_PUSH_NOTIFICATION_TYPES,
@@ -117,6 +118,13 @@ export function PushNotificationQaSheet({
   };
 
   const send = async () => {
+    const safeContext = {
+      notificationType: selected,
+      authenticated: uid.trim().length > 0,
+      pushRegistered: diagnostics.status === 'ready' &&
+        diagnostics.value.expoPushTokenPresent,
+    };
+    logInfo('qaPushNotification', 'qa_push_send_started', safeContext);
     const unavailableMessage = diagnostics.status === 'ready'
       ? qaPushUnavailableMessage(diagnostics.value.support.reasonCode)
       : null;
@@ -286,7 +294,15 @@ export function PushNotificationQaSheet({
               accessibilityLabel="Enviar notificação"
               accessibilityState={{ disabled: sendDisabled }}
               disabled={sendDisabled}
-              onPress={() => void send()}
+              onPress={() => {
+                logInfo('qaPushNotification', 'qa_push_send_pressed', {
+                  notificationType: selected,
+                  authenticated: uid.trim().length > 0,
+                  pushRegistered: diagnostics.status === 'ready' &&
+                    diagnostics.value.expoPushTokenPresent,
+                });
+                void send();
+              }}
               style={({ pressed }) => ({
                 marginTop: 18,
                 minHeight: 48,
@@ -319,7 +335,7 @@ export function PushNotificationQaSheet({
             ) : null}
             {sendState.status === 'failed' ? (
               <Text accessibilityRole="alert" style={{ marginTop: 12, fontFamily: theme.fonts.ui, fontSize: 12, color: theme.colors.dangerText }}>
-                Falhou — {sendState.message}
+                Falha ao enviar — {sendState.message}
               </Text>
             ) : null}
           </ScrollView>

@@ -203,7 +203,8 @@ export const releasePushDevice = onCall(
 );
 
 /**
- * Canonical-copy, self-targeted admin QA preview. This is not a general
+ * Canonical-copy, self-targeted internal QA preview. Authorization requires
+ * the narrow `pushQa` claim or the existing admin role. This is not a general
  * notification API and accepts no target, title, body, category or data.
  */
 export const dispatchTestNotification = onCall(

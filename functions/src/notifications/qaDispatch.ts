@@ -1,6 +1,5 @@
 import { HttpsError, type CallableRequest } from 'firebase-functions/v2/https';
 
-import { requireAdminUid } from '../attribution/adminAuth';
 import {
   buildQaPreviewNotification,
   QA_PREVIEW_NOTIFICATION_TYPES,
@@ -9,6 +8,7 @@ import {
 import type { DispatcherDependencies } from './dispatcher';
 import { dispatchNotification } from './dispatcher';
 import { resolveQaPreviewNotificationPolicy } from './preferences';
+import { requirePushQaUid } from './qaAuthorization';
 import type { NotificationDispatchOutcome } from './schema';
 
 const QA_REQUEST_ID_PATTERN =
@@ -56,7 +56,7 @@ export function createDispatchTestNotificationHandler(
   overrides: QaDispatchOverrides = {},
 ) {
   return async (request: CallableRequest<unknown>): Promise<NotificationDispatchOutcome> => {
-    const uid = await (overrides.authorize ?? requireAdminUid)(request);
+    const uid = await (overrides.authorize ?? requirePushQaUid)(request);
     const input = parseInput(request.data);
     const policy = await (overrides.resolvePolicy ?? resolveQaPreviewNotificationPolicy)(
       uid,

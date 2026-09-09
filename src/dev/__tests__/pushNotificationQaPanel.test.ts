@@ -32,7 +32,7 @@ describe('Push Notifications DEV/QA panel', () => {
       'Enviar notificação',
       'Enviando...',
       'Enviada — Dispatch criado',
-      'Falhou —',
+      'Falha ao enviar —',
       'Permissão',
       'Registro push',
       'Expo push token presente',
@@ -41,6 +41,43 @@ describe('Push Notifications DEV/QA panel', () => {
       expect(sheet).toContain(text);
     }
     expect(sheet).toContain('QA_PUSH_NOTIFICATION_TYPES.map');
+  });
+
+  it('wires press, selected type, loading, success and failure to visible states', () => {
+    const sheet = read('src/dev/pushNotifications/PushNotificationQaSheet.tsx');
+    expect(sheet).toContain('onPress={() => {');
+    expect(sheet).toContain('void send();');
+    expect(sheet).toContain('sendQaPushNotification(selected)');
+    expect(sheet).toContain("setSendState({ status: 'sending' })");
+    expect(sheet).toContain("status: 'sent'");
+    expect(sheet).toContain("status: 'failed'");
+    expect(sheet).toContain('accessibilityRole="alert"');
+  });
+
+  it('emits every safe DEV client stage and never includes a uid/token field', () => {
+    const sheet = read('src/dev/pushNotifications/PushNotificationQaSheet.tsx');
+    const client = read('src/services/qaPushNotification.ts');
+    const eventSources = [
+      [sheet, 'qa_push_send_pressed'],
+      [sheet, 'qa_push_send_started'],
+      [client, 'qa_push_callable_invoking'],
+      [client, 'qa_push_callable_succeeded'],
+      [client, 'qa_push_callable_failed'],
+    ] as const;
+
+    for (const [source, event] of eventSources) {
+      const eventIndex = source.indexOf(`'${event}'`);
+      const callStart = source.lastIndexOf('logInfo(', eventIndex);
+      const callEnd = source.indexOf(');', eventIndex);
+      const logCall = source.slice(callStart, callEnd + 2);
+
+      expect(eventIndex).toBeGreaterThanOrEqual(0);
+      expect(callStart).toBeGreaterThanOrEqual(0);
+      expect(callEnd).toBeGreaterThan(eventIndex);
+      expect(logCall).not.toMatch(/\buid\s*:/);
+      expect(logCall).not.toMatch(/expoPushToken\s*:/);
+      expect(logCall).not.toMatch(/installationSecret\s*:/);
+    }
   });
 
   it('disables send and shows the concrete support failure instead of failing silently', () => {
