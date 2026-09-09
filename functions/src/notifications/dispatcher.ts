@@ -25,6 +25,7 @@ import {
   type NotificationDispatchOutcome,
   type NotificationDispatchRequest,
 } from './schema';
+import { runNotificationPreflight, type NotificationPreflightResult } from './notificationPreflight';
 import {
   applyDeliveryTokenInvalidation,
   readDeliveryOwnershipState,
@@ -39,6 +40,7 @@ export interface DispatcherDependencies {
   expoClient: ExpoPushClient;
   now(): Timestamp;
   random?(): number;
+  preflight?(request: NotificationDispatchRequest, now: Timestamp): Promise<NotificationPreflightResult>;
 }
 
 export function defaultDependencies(): DispatcherDependencies {
@@ -47,6 +49,7 @@ export function defaultDependencies(): DispatcherDependencies {
     expoClient: createExpoPushClient(),
     now: Timestamp.now,
     random: Math.random,
+    preflight: (request, now) => runNotificationPreflight(defaultDb, request, now),
   };
 }
 
@@ -290,6 +293,24 @@ export async function dispatchNotification(
   });
 
   try {
+    const preflight = await dependencies.preflight?.(request, now) ?? { allowed: true as const };
+    if (!preflight.allowed) {
+      const written = await markDispatchOutcome(
+        dependencies.db,
+        claim.dispatchId,
+        claim.claimToken,
+        { status: 'SUPPRESSED_BY_POLICY', terminalReason: preflight.reason },
+        now,
+      );
+      if (!written) return { status: 'DUPLICATE', dispatchId: claim.dispatchId };
+      logInfo(SCOPE, 'collision_suppressed', {
+        dispatchId: claim.dispatchId,
+        notificationType: request.type,
+        reason: preflight.reason,
+      });
+      return { status: 'SUPPRESSED_BY_POLICY', dispatchId: claim.dispatchId };
+    }
+
     const selection = await loadEligibleDevices(request.uid, dependencies.db, now);
     if (selection.scanLimitReached) {
       logWarn(SCOPE, 'device_scan_limit_reached', {

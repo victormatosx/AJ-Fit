@@ -10,9 +10,9 @@ import {
   DAILY_NOTIFICATION_USERS_COLLECTION,
 } from './dailyRegistration';
 import {
-  evaluateDailyWorkoutNotification,
-  type DailyWorkoutEvaluation,
-} from './dailyWorkoutNotifications';
+  evaluateDailyNotificationSuite,
+  type DailyNotificationSuiteResult,
+} from './dailyNotificationSuite';
 
 const SCOPE = 'notifications.dailyScheduler';
 export const DAILY_SCHEDULER_BATCH_SIZE = 100;
@@ -31,7 +31,7 @@ interface ClaimedRegistration {
 export interface DailySchedulerDependencies {
   db: Firestore;
   now(): Timestamp;
-  evaluate(uid: string): Promise<DailyWorkoutEvaluation>;
+  evaluate(uid: string): Promise<DailyNotificationSuiteResult>;
   randomUUID(): string;
 }
 
@@ -50,7 +50,7 @@ function defaultDependencies(): DailySchedulerDependencies {
   return {
     db: defaultDb,
     now: Timestamp.now,
-    evaluate: evaluateDailyWorkoutNotification,
+    evaluate: evaluateDailyNotificationSuite,
     randomUUID,
   };
 }
@@ -92,7 +92,7 @@ async function claimRegistration(
 }
 
 function nextEvaluation(
-  result: DailyWorkoutEvaluation,
+  result: DailyNotificationSuiteResult,
   claimedTimezone: string | null,
   now: Timestamp,
 ): Timestamp {
@@ -117,7 +117,7 @@ function nextEvaluation(
 async function finishRegistration(
   dependencies: DailySchedulerDependencies,
   claim: ClaimedRegistration,
-  result: DailyWorkoutEvaluation,
+  result: DailyNotificationSuiteResult,
   now: Timestamp,
 ): Promise<void> {
   await dependencies.db.runTransaction(async (transaction) => {
@@ -196,7 +196,7 @@ export async function runDailyWorkoutNotificationScheduler(
     summary.claimed += claims.length;
 
     await mapConcurrent(claims, DAILY_SCHEDULER_CONCURRENCY, async (claim) => {
-      let result: DailyWorkoutEvaluation;
+      let result: DailyNotificationSuiteResult;
       try {
         result = await dependencies.evaluate(claim.uid);
       } catch (error) {

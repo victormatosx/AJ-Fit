@@ -7,6 +7,7 @@ export const MAX_DISPATCH_ATTEMPTS = 5;
 export const NOTIFICATION_TYPES = [
   'QA_TEST',
   'EVOLUTION_UNLOCKED',
+  'EVOLUTION_APPROACHING',
   'PROGRAM_UPDATED',
   'BILLING_ISSUE',
   'PREMIUM_ENDED',
@@ -35,6 +36,7 @@ export const DISPATCH_STATUSES = [
   'RECEIPT_EXHAUSTED',
   'NO_ELIGIBLE_DEVICE',
   'SUPPRESSED_BY_PREFERENCE',
+  'SUPPRESSED_BY_POLICY',
 ] as const;
 export type DispatchStatus = (typeof DISPATCH_STATUSES)[number];
 
@@ -79,6 +81,7 @@ export type NotificationDispatchOutcome =
   | { status: 'IDEMPOTENCY_CONFLICT'; dispatchId: string }
   | { status: 'NO_ELIGIBLE_DEVICE'; dispatchId: string }
   | { status: 'SUPPRESSED_BY_PREFERENCE'; dispatchId: string }
+  | { status: 'SUPPRESSED_BY_POLICY'; dispatchId: string }
   | {
       status:
         | 'RETRY_SCHEDULED'

@@ -41,6 +41,7 @@ import {
 } from '../../notifications/schema';
 import { DAILY_NOTIFICATION_USERS_COLLECTION } from '../../notifications/dailyRegistration';
 import { DAILY_PRODUCT_WINDOWS_COLLECTION } from '../../notifications/dailyProductRateLimit';
+import { NOTIFICATION_ACHIEVEMENT_MILESTONES_COLLECTION } from '../../notifications/achievementMilestones';
 import { deleteCollectionDocuments } from './deleteCollectionDocuments';
 import type { ResourceCleanupResult } from './types';
 
@@ -274,6 +275,27 @@ export async function deleteUserNotificationProductWindows(
   );
   return {
     resource: 'notificationProductWindows',
+    deletedCount,
+    alreadyAbsent: deletedCount === 0,
+  };
+}
+
+export async function deleteUserNotificationAchievementMilestones(
+  uid: string,
+  db: Firestore = defaultDb,
+): Promise<ResourceCleanupResult> {
+  const deletedCount = await queryOwnedDocuments(
+    NOTIFICATION_ACHIEVEMENT_MILESTONES_COLLECTION,
+    uid,
+    db,
+    async (candidate) => {
+      await candidate.ref.delete();
+      return true;
+    },
+    'uid',
+  );
+  return {
+    resource: 'notificationAchievementMilestones',
     deletedCount,
     alreadyAbsent: deletedCount === 0,
   };

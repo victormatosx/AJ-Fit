@@ -37,6 +37,21 @@ const QA_TEST_COPY: NotificationCopy = {
   body: 'A infraestrutura de notificações está funcionando.',
 };
 
+export const EVOLUTION_APPROACHING_COPIES = {
+  'pt-BR': {
+    title: 'Sua próxima evolução está chegando 🚀',
+    body: 'Continue seguindo seu plano. Falta pouco para desbloquear a próxima etapa.',
+  },
+  en: {
+    title: 'Your next evolution is getting closer 🚀',
+    body: "Keep following your plan. You're getting close to your next stage.",
+  },
+  es: {
+    title: 'Tu próxima evolución está cerca 🚀',
+    body: 'Sigue con tu plan. Falta poco para desbloquear la próxima etapa.',
+  },
+} as const satisfies Readonly<Record<NotificationLocale, NotificationCopy>>;
+
 export const EVOLUTION_UNLOCKED_COPIES = {
   EVOLUTION: {
     'pt-BR': {
@@ -165,6 +180,12 @@ function copies<T extends Record<NotificationLocale, NotificationCopy>>(localize
 }
 
 const TYPE_POLICIES: Readonly<Record<NotificationType, TypePolicy>> = {
+  EVOLUTION_APPROACHING: {
+    category: 'EVOLUTION_AND_ACHIEVEMENTS',
+    allowedDataKeys: [],
+    allowedIntents: [],
+    allowedCopies: copies(EVOLUTION_APPROACHING_COPIES),
+  },
   QA_TEST: {
     category: 'OPERATIONAL',
     allowedDataKeys: [],
@@ -315,6 +336,27 @@ export function buildQaTestNotification(params: {
     type: 'QA_TEST',
     category: 'OPERATIONAL',
     ...QA_TEST_COPY,
+    data: {},
+  };
+  assertValidDispatchRequest(request);
+  return request;
+}
+
+export function buildEvolutionApproachingNotification(params: {
+  uid: string;
+  progressionWindowId: string;
+  locale: NotificationLocale;
+}): NotificationDispatchRequest {
+  assertSafeId(params.progressionWindowId, 'progressionWindowId');
+  const hash = createHash('sha256').update(params.progressionWindowId).digest('hex');
+  const request: NotificationDispatchRequest = {
+    uid: params.uid,
+    type: 'EVOLUTION_APPROACHING',
+    category: 'EVOLUTION_AND_ACHIEVEMENTS',
+    notificationId: `EVOLUTION_APPROACHING:${hash}`,
+    sourceIdentity: `progressionWindow:${hash}`,
+    idempotencyKey: `notification:${params.uid}:EVOLUTION_APPROACHING:${hash}`,
+    ...EVOLUTION_APPROACHING_COPIES[params.locale],
     data: {},
   };
   assertValidDispatchRequest(request);

@@ -40,7 +40,7 @@ describe('push notification structural boundaries', () => {
       .toContain('rest_timer');
   });
 
-  it('registers only QA_TEST and the Phase-2/Phase-3 product types', () => {
+  it('registers only QA_TEST and implemented Phase-2/Phase-3/Phase-4 product types', () => {
     const schema = read('functions/src/notifications/schema.ts');
     for (const type of [
       'QA_TEST',
@@ -51,13 +51,13 @@ describe('push notification structural boundaries', () => {
       'WORKOUT_DAY',
       'RECOVERY_DAY',
       'MISSED_WORKOUT',
+      'EVOLUTION_APPROACHING',
     ]) {
       expect(schema).toContain(`'${type}'`);
     }
     for (const type of [
       'RE_ENGAGEMENT_EARLY',
       'RE_ENGAGEMENT_LATE',
-      'EVOLUTION_APPROACHING',
       'WEEK_COMPLETED',
       'WEEK_STREAK',
       'GOAL_PROXIMITY',
@@ -82,6 +82,8 @@ describe('push notification structural boundaries', () => {
     expect(read('functions/src/notifications/dailyWorkoutNotifications.ts'))
       .not.toContain('exp.host');
     expect(read('functions/src/notifications/dailyScheduler.ts'))
+      .not.toContain('exp.host');
+    expect(read('functions/src/notifications/evolutionApproachingNotification.ts'))
       .not.toContain('exp.host');
   });
 

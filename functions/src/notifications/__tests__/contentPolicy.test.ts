@@ -4,6 +4,7 @@ import {
   assertValidDispatchRequest,
   BILLING_ISSUE_COPIES,
   buildBillingIssueNotification,
+  buildEvolutionApproachingNotification,
   buildEvolutionUnlockedNotification,
   buildPremiumEndedNotification,
   buildProgramUpdatedNotification,
@@ -12,6 +13,7 @@ import {
   buildMissedWorkoutNotification,
   buildQaTestNotification,
   EVOLUTION_UNLOCKED_COPIES,
+  EVOLUTION_APPROACHING_COPIES,
   NOTIFICATION_LOCALES,
   NotificationContentPolicyError,
   PREMIUM_ENDED_COPIES,
@@ -39,7 +41,6 @@ describe('notification content policy', () => {
   it.each([
     'RE_ENGAGEMENT_EARLY',
     'RE_ENGAGEMENT_LATE',
-    'EVOLUTION_APPROACHING',
     'WEEK_COMPLETED',
     'WEEK_STREAK',
     'GOAL_PROXIMITY',
@@ -82,10 +83,11 @@ describe('notification content policy', () => {
     })).toThrow(NotificationContentPolicyError);
   });
 
-  it('exposes only QA and the Phase-2/Phase-3 product builders', async () => {
+  it('exposes only QA and implemented product builders', async () => {
     const module = await import('../contentPolicy');
     expect(Object.keys(module).filter((key) => key.startsWith('build')).sort()).toEqual([
       'buildBillingIssueNotification',
+      'buildEvolutionApproachingNotification',
       'buildEvolutionUnlockedNotification',
       'buildPremiumEndedNotification',
       'buildProgramUpdatedNotification',
@@ -100,6 +102,9 @@ describe('notification content policy', () => {
     const requests = [
       buildEvolutionUnlockedNotification({
         uid: 'user-123', lifecycleEventId: 'event-earned', locale, variant: 'EVOLUTION',
+      }),
+      buildEvolutionApproachingNotification({
+        uid: 'user-123', progressionWindowId: 'instance-1', locale,
       }),
       buildEvolutionUnlockedNotification({
         uid: 'user-123', lifecycleEventId: 'event-renewal', locale, variant: 'MOTIVATIONAL_RENEWAL',
@@ -129,6 +134,9 @@ describe('notification content policy', () => {
     expect(buildEvolutionUnlockedNotification({
       uid: 'user-123', lifecycleEventId: 'renewal', locale, variant: 'MOTIVATIONAL_RENEWAL',
     })).toMatchObject(EVOLUTION_UNLOCKED_COPIES.MOTIVATIONAL_RENEWAL[locale]);
+    expect(buildEvolutionApproachingNotification({
+      uid: 'user-123', progressionWindowId: 'instance-1', locale,
+    })).toMatchObject(EVOLUTION_APPROACHING_COPIES[locale]);
     expect(buildProgramUpdatedNotification({
       uid: 'user-123', lifecycleEventId: 'adapted', locale,
     })).toMatchObject(PROGRAM_UPDATED_COPIES[locale]);
@@ -190,6 +198,23 @@ describe('notification content policy', () => {
     expect(recovery.idempotencyKey).not.toBe(workout.idempotencyKey);
     expect(anotherMiss.idempotencyKey).not.toBe(missed.idempotencyKey);
     expect(missed.sourceIdentity).not.toContain('wpi-1');
+  });
+
+  it('binds EVOLUTION_APPROACHING to uid, type and a hashed progression cycle', () => {
+    const first = buildEvolutionApproachingNotification({
+      uid: 'user-123', progressionWindowId: 'instance.private-id', locale: 'pt-BR',
+    });
+    const replayInEnglish = buildEvolutionApproachingNotification({
+      uid: 'user-123', progressionWindowId: 'instance.private-id', locale: 'en',
+    });
+    const nextCycle = buildEvolutionApproachingNotification({
+      uid: 'user-123', progressionWindowId: 'instance-2', locale: 'pt-BR',
+    });
+    expect(replayInEnglish.idempotencyKey).toBe(first.idempotencyKey);
+    expect(nextCycle.idempotencyKey).not.toBe(first.idempotencyKey);
+    expect(first.sourceIdentity).not.toContain('instance.private-id');
+    expect(first.data).toEqual({});
+    expect(first.intent).toBeUndefined();
   });
 
   it('rejects a valid title paired with another allowed body', () => {

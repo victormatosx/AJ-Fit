@@ -43,7 +43,10 @@ export interface FakeBulkWriter {
 }
 
 interface FakeTransaction {
-  get(ref: FakeDocRef): Promise<FakeSnapshot>;
+  get(ref: FakeDocRef | FakeQuery): Promise<
+    FakeSnapshot | { empty: boolean; size: number; docs: FakeSnapshotDoc[] }
+  >;
+  getAll(...refs: FakeDocRef[]): Promise<FakeSnapshot[]>;
   set(ref: FakeDocRef, data: Record<string, unknown>, options?: { merge?: boolean }): void;
   delete(ref: FakeDocRef): void;
   update(ref: FakeDocRef, data: Record<string, unknown>): void;
@@ -206,9 +209,12 @@ export function createFakeFirestore(): FakeFirestoreHarness {
         .forEach(remove);
     },
     async runTransaction(operation) {
-      const writes: Array<() => void> = [];
+      const writes: (() => void)[] = [];
       const result = await operation({
-        get: async (ref) => snapshot(ref.path),
+        get: async (ref: FakeDocRef | FakeQuery) => 'path' in ref
+          ? snapshot(ref.path)
+          : ref.get(),
+        getAll: async (...refs) => refs.map((ref) => snapshot(ref.path)),
         set: (ref, data, options) => {
           writes.push(() => write(ref.path, data, options?.merge === true));
         },

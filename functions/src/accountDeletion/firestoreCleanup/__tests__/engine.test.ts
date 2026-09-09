@@ -43,6 +43,7 @@ function seedFullUser(harness: ReturnType<typeof createFakeFirestore>, uid: stri
   harness.seed('notificationDispatches/dispatch1/deliveries/install1', { uid });
   harness.seed(`notificationDailyUsers/${uid}`, { timezone: 'UTC' });
   harness.seed(`notificationProductWindows/window-${uid}`, { uid });
+  harness.seed(`notificationAchievementMilestones/milestone-${uid}`, { uid });
   harness.seed(`users/${uid}/privateSecurity/photoVault`);
 }
 
@@ -90,6 +91,7 @@ describe('runFirestoreCleanup — happy path', () => {
     expect(harness.exists('notificationDispatches/dispatch1/deliveries/install1')).toBe(false);
     expect(harness.exists('notificationDailyUsers/uid-1')).toBe(false);
     expect(harness.exists('notificationProductWindows/window-uid-1')).toBe(false);
+    expect(harness.exists('notificationAchievementMilestones/milestone-uid-1')).toBe(false);
   });
 
   it('cleanup outcome is identical for a Free or Premium user (no subscription check exists here)', async () => {
@@ -183,7 +185,7 @@ describe('runFirestoreCleanup — ordering (Fase 6 §10)', () => {
     expect(order).toEqual([
       'questionnaires', 'assessments', 'progressPhotos',
       'pushTokenOwners', 'pushInstallations', 'pushDevices', 'notificationDispatches',
-      'notificationProductWindows', 'dailyNotificationRegistration',
+      'notificationProductWindows', 'notificationAchievementMilestones', 'dailyNotificationRegistration',
       'workoutProgramDescendants',
       'workoutLifecycleEvents', 'workoutLifecycleAuthorityGrants', 'workoutLifecycleTrustedTelemetryReceipts', 'pendingEvolutions', 'programInstances', 'trainingCycles', 'workoutLifecycleState',
       'workoutPrograms', 'workoutProgramState', 'workoutExecutions', 'userProfile',

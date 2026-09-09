@@ -46,6 +46,7 @@ import {
   deleteUserNotificationDispatches,
   deleteUserDailyNotificationRegistration,
   deleteUserNotificationProductWindows,
+  deleteUserNotificationAchievementMilestones,
   deleteUserPushDevices,
   deleteUserPushTokenOwners,
   deleteUserAssessments,
@@ -127,6 +128,7 @@ export async function runFirestoreCleanup(
     deleteUserPushDevices,
     deleteUserNotificationDispatches,
     deleteUserNotificationProductWindows,
+    deleteUserNotificationAchievementMilestones,
     deleteUserDailyNotificationRegistration,
     // Must run before deleteUserWorkoutPrograms — it enumerates program ids
     // to reach the explicit allowlist of nested collections, which a

@@ -8,7 +8,8 @@ import {
 } from './schema';
 
 export interface DeliveryAggregate {
-  status: Exclude<DispatchStatus, 'CLAIMED' | 'NO_ELIGIBLE_DEVICE' | 'SUPPRESSED_BY_PREFERENCE'>;
+  status: Exclude<DispatchStatus,
+    'CLAIMED' | 'NO_ELIGIBLE_DEVICE' | 'SUPPRESSED_BY_PREFERENCE' | 'SUPPRESSED_BY_POLICY'>;
   deviceCount: number;
   acceptedCount: number;
   confirmedCount: number;

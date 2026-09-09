@@ -84,6 +84,7 @@ const TERMINAL_STATUSES = new Set<DispatchStatus>([
   'RECEIPT_EXHAUSTED',
   'NO_ELIGIBLE_DEVICE',
   'SUPPRESSED_BY_PREFERENCE',
+  'SUPPRESSED_BY_POLICY',
 ]);
 
 export async function claimDispatch(

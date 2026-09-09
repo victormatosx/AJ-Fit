@@ -7,6 +7,7 @@ import { getFirestore, Timestamp, type Firestore } from 'firebase-admin/firestor
 import {
   buildBillingIssueNotification,
   buildEvolutionUnlockedNotification,
+  buildEvolutionApproachingNotification,
   buildPremiumEndedNotification,
   buildProgramUpdatedNotification,
   buildQaTestNotification,
@@ -33,6 +34,7 @@ import { dispatchUserNotificationCandidate } from '../userNotificationDispatch';
 import { createPushDeviceHandlers } from '../../pushDevices/pushDeviceRegistration';
 import { DAILY_NOTIFICATION_USERS_COLLECTION } from '../dailyRegistration';
 import { DAILY_PRODUCT_WINDOWS_COLLECTION } from '../dailyProductRateLimit';
+import { NOTIFICATION_ACHIEVEMENT_MILESTONES_COLLECTION } from '../achievementMilestones';
 import {
   hasFinishedWorkoutExecution,
   loadDailyWorkoutContext,
@@ -71,6 +73,7 @@ describe.skipIf(!enabled)('push foundation — Firestore Emulator', () => {
       'accountDeletionLocks',
       DAILY_NOTIFICATION_USERS_COLLECTION,
       DAILY_PRODUCT_WINDOWS_COLLECTION,
+      NOTIFICATION_ACHIEVEMENT_MILESTONES_COLLECTION,
     ]) {
       const snapshot = await db.collection(collectionName).get();
       await Promise.all(snapshot.docs.map((document) => db.recursiveDelete(document.ref)));
@@ -529,6 +532,9 @@ describe.skipIf(!enabled)('push foundation — Firestore Emulator', () => {
       ['EVOLUTION_UNLOCKED', buildEvolutionUnlockedNotification({
         uid: UID_A, lifecycleEventId: 'wle-earned-integration', locale: 'pt-BR', variant: 'EVOLUTION',
       })],
+      ['EVOLUTION_APPROACHING', buildEvolutionApproachingNotification({
+        uid: UID_A, progressionWindowId: 'instance-approaching-integration', locale: 'pt-BR',
+      })],
       ['PROGRAM_UPDATED', buildProgramUpdatedNotification({
         uid: UID_A, lifecycleEventId: 'wle-adapted-integration', locale: 'pt-BR',
       })],
@@ -629,6 +635,29 @@ describe.skipIf(!enabled)('push foundation — Firestore Emulator', () => {
       expect(dispatch.data()).toMatchObject({
         status: 'SUPPRESSED_BY_PREFERENCE',
         terminalReason: 'DISABLED_BY_USER',
+      });
+    });
+
+    it('persists an approaching/unlocked collision before reaching Expo', async () => {
+      await seedEligibleDevice();
+      const expo = fakeExpo();
+      const request = buildEvolutionApproachingNotification({
+        uid: UID_A, progressionWindowId: 'instance-race', locale: 'pt-BR',
+      });
+      const outcome = await dispatchNotification(request, {
+        ...dependencies(expo),
+        preflight: vi.fn(async () => ({
+          allowed: false as const,
+          reason: 'EVOLUTION_UNLOCKED_PRIORITY',
+        })),
+      });
+
+      expect(outcome.status).toBe('SUPPRESSED_BY_POLICY');
+      expect(expo.send).not.toHaveBeenCalled();
+      expect((await db.collection(NOTIFICATION_DISPATCHES_COLLECTION)
+        .doc(outcome.dispatchId).get()).data()).toMatchObject({
+        status: 'SUPPRESSED_BY_POLICY',
+        terminalReason: 'EVOLUTION_UNLOCKED_PRIORITY',
       });
     });
 
