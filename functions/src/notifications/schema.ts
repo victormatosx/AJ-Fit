@@ -17,6 +17,9 @@ export const NOTIFICATION_TYPES = [
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
+export const NOTIFICATION_DISPATCH_MODES = ['PRODUCT', 'QA_PREVIEW'] as const;
+export type NotificationDispatchMode = (typeof NOTIFICATION_DISPATCH_MODES)[number];
+
 export const NOTIFICATION_CATEGORIES = [
   'WORKOUTS_AND_REMINDERS',
   'EVOLUTION_AND_ACHIEVEMENTS',

@@ -22,6 +22,7 @@ import {
   NOTIFICATION_DISPATCHES_COLLECTION,
   NOTIFICATION_RETENTION_MS,
   type DeliveryStatus,
+  type NotificationDispatchMode,
   type NotificationDispatchOutcome,
   type NotificationDispatchRequest,
 } from './schema';
@@ -244,6 +245,7 @@ async function persistAttempt(
 export async function dispatchNotification(
   request: NotificationDispatchRequest,
   dependencies: DispatcherDependencies = defaultDependencies(),
+  dispatchMode: NotificationDispatchMode = 'PRODUCT',
 ): Promise<NotificationDispatchOutcome> {
   try {
     assertValidDispatchRequest(request);
@@ -257,7 +259,7 @@ export async function dispatchNotification(
   const now = dependencies.now();
   let claim;
   try {
-    claim = await claimDispatch(dependencies.db, request, now);
+    claim = await claimDispatch(dependencies.db, request, now, dispatchMode);
   } catch (error) {
     if (error instanceof NotificationIdempotencyConflictError) {
       logWarn(SCOPE, 'dispatch_idempotency_contract_conflict', {
@@ -293,7 +295,12 @@ export async function dispatchNotification(
   });
 
   try {
-    const preflight = await dependencies.preflight?.(request, now) ?? { allowed: true as const };
+    // QA preview deliberately has no product fact to preflight. This is the
+    // only bypass: content policy, device eligibility, Expo sending,
+    // deliveries, retries and receipts remain the central pipeline.
+    const preflight = dispatchMode === 'QA_PREVIEW'
+      ? { allowed: true as const }
+      : await dependencies.preflight?.(request, now) ?? { allowed: true as const };
     if (!preflight.allowed) {
       const written = await markDispatchOutcome(
         dependencies.db,

@@ -6,6 +6,19 @@ import type {
   NotificationType,
 } from './schema';
 
+export const QA_PREVIEW_NOTIFICATION_TYPES = [
+  'QA_TEST',
+  'WORKOUT_DAY',
+  'RECOVERY_DAY',
+  'MISSED_WORKOUT',
+  'EVOLUTION_UNLOCKED',
+  'PROGRAM_UPDATED',
+  'EVOLUTION_APPROACHING',
+  'BILLING_ISSUE',
+  'PREMIUM_ENDED',
+] as const satisfies readonly NotificationType[];
+export type QaPreviewNotificationType = (typeof QA_PREVIEW_NOTIFICATION_TYPES)[number];
+
 const MAX_TITLE_LENGTH = 120;
 const MAX_BODY_LENGTH = 240;
 const MAX_ID_LENGTH = 160;
@@ -526,4 +539,89 @@ export function buildMissedWorkoutNotification(params: {
     sourceIdentity: params.plannedSessionIdentity,
     copy: MISSED_WORKOUT_COPIES[params.locale],
   });
+}
+
+/**
+ * Builds a visual-only QA request by first invoking the exact canonical
+ * product builder, then replacing only its domain identity with a QA-scoped
+ * identity. Copy, locale, payload data and intent remain byte-for-byte the
+ * canonical builder output. The fixture never reads or writes domain facts.
+ */
+export function buildQaPreviewNotification(params: {
+  uid: string;
+  type: QaPreviewNotificationType;
+  qaRequestId: string;
+  locale: NotificationLocale;
+}): NotificationDispatchRequest {
+  assertSafeId(params.qaRequestId, 'qaRequestId', 64);
+  const fixtureIdentity = `qa-preview:${params.qaRequestId}`;
+  let canonical: NotificationDispatchRequest;
+
+  switch (params.type) {
+    case 'QA_TEST':
+      canonical = buildQaTestNotification({
+        uid: params.uid,
+        notificationId: `qa-preview:QA_TEST:${params.qaRequestId}`,
+        sourceIdentity: `qaPreview:QA_TEST:${params.qaRequestId}`,
+        idempotencyKey: `qa-preview:${params.uid}:QA_TEST:${params.qaRequestId}`,
+      });
+      break;
+    case 'WORKOUT_DAY':
+      canonical = buildWorkoutDayNotification({
+        uid: params.uid, localDate: fixtureIdentity, locale: params.locale,
+      });
+      break;
+    case 'RECOVERY_DAY':
+      canonical = buildRecoveryDayNotification({
+        uid: params.uid, localDate: fixtureIdentity, locale: params.locale,
+      });
+      break;
+    case 'MISSED_WORKOUT':
+      canonical = buildMissedWorkoutNotification({
+        uid: params.uid, plannedSessionIdentity: fixtureIdentity, locale: params.locale,
+      });
+      break;
+    case 'EVOLUTION_UNLOCKED':
+      canonical = buildEvolutionUnlockedNotification({
+        uid: params.uid,
+        lifecycleEventId: fixtureIdentity,
+        locale: params.locale,
+        variant: 'EVOLUTION',
+      });
+      break;
+    case 'PROGRAM_UPDATED':
+      canonical = buildProgramUpdatedNotification({
+        uid: params.uid, lifecycleEventId: fixtureIdentity, locale: params.locale,
+      });
+      break;
+    case 'EVOLUTION_APPROACHING':
+      canonical = buildEvolutionApproachingNotification({
+        uid: params.uid, progressionWindowId: fixtureIdentity, locale: params.locale,
+      });
+      break;
+    case 'BILLING_ISSUE':
+      canonical = buildBillingIssueNotification({
+        uid: params.uid, revenueCatEventId: fixtureIdentity, locale: params.locale,
+      });
+      break;
+    case 'PREMIUM_ENDED':
+      canonical = buildPremiumEndedNotification({
+        uid: params.uid, revenueCatEventId: fixtureIdentity, locale: params.locale,
+      });
+      break;
+    default: {
+      const exhaustive: never = params.type;
+      throw new NotificationContentPolicyError(`qa_type_not_implemented:${exhaustive}`);
+    }
+  }
+
+  if (params.type === 'QA_TEST') return canonical;
+  const request: NotificationDispatchRequest = {
+    ...canonical,
+    notificationId: `qa-preview:${params.type}:${params.qaRequestId}`,
+    sourceIdentity: `qaPreview:${params.type}:${params.qaRequestId}`,
+    idempotencyKey: `qa-preview:${params.uid}:${params.type}:${params.qaRequestId}`,
+  };
+  assertValidDispatchRequest(request);
+  return request;
 }

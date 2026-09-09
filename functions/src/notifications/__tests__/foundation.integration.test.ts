@@ -14,6 +14,7 @@ import {
   buildWorkoutDayNotification,
   buildRecoveryDayNotification,
   buildMissedWorkoutNotification,
+  buildQaPreviewNotification,
 } from '../contentPolicy';
 import { loadEligibleDevices } from '../deviceEligibility';
 import { dispatchNotification, type DispatcherDependencies } from '../dispatcher';
@@ -875,6 +876,46 @@ describe.skipIf(!enabled)('push foundation — Firestore Emulator', () => {
         status: 'PENDING_RECEIPTS',
         attemptCount: 2,
         nextAttemptAt: null,
+      });
+    });
+
+    it('retries a QA preview in QA_PREVIEW mode without requiring a product fact', async () => {
+      await seedEligibleDevice();
+      const request = buildQaPreviewNotification({
+        uid: UID_A,
+        type: 'EVOLUTION_APPROACHING',
+        qaRequestId: '10000000-0000-4000-8000-000000000001',
+        locale: 'pt-BR',
+      });
+      const productPreflight = vi.fn(async () => ({
+        allowed: false as const, reason: 'PROGRESSION_WINDOW_UNAVAILABLE',
+      }));
+      const firstExpo = fakeExpo({
+        send: vi.fn(async (): Promise<ExpoTicketResult[]> => [
+          { ok: false, errorCode: 'SERVER_ERROR' },
+        ]),
+      });
+      const first = await dispatchNotification(
+        request,
+        { ...dependencies(firstExpo), preflight: productPreflight },
+        'QA_PREVIEW',
+      );
+      expect(first.status).toBe('RETRY_SCHEDULED');
+      expect(productPreflight).not.toHaveBeenCalled();
+      const parent = db.collection(NOTIFICATION_DISPATCHES_COLLECTION).doc(first.dispatchId);
+      now = (await parent.get()).data()?.nextAttemptAt as Timestamp;
+
+      const retryExpo = fakeExpo();
+      const retried = await runDispatchRetries({
+        ...dependencies(retryExpo), preflight: productPreflight,
+      });
+      expect(retried).toMatchObject({ candidateCount: 1, processed: 1, failed: 0 });
+      expect(productPreflight).not.toHaveBeenCalled();
+      expect(retryExpo.send).toHaveBeenCalledOnce();
+      expect((await parent.get()).data()).toMatchObject({
+        dispatchMode: 'QA_PREVIEW',
+        status: 'PENDING_RECEIPTS',
+        attemptCount: 2,
       });
     });
 

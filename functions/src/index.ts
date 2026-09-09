@@ -203,8 +203,8 @@ export const releasePushDevice = onCall(
 );
 
 /**
- * Fixed-copy, self-targeted admin probe. This is not a general notification
- * API and accepts no target, title, body, category or data from the client.
+ * Canonical-copy, self-targeted admin QA preview. This is not a general
+ * notification API and accepts no target, title, body, category or data.
  */
 export const dispatchTestNotification = onCall(
   { enforceAppCheck: true },

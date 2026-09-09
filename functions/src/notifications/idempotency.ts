@@ -10,6 +10,7 @@ import {
   NOTIFICATION_RETENTION_MS,
   NOTIFICATION_TYPES,
   type DispatchStatus,
+  type NotificationDispatchMode,
   type NotificationDispatchRequest,
 } from './schema';
 
@@ -40,7 +41,10 @@ export function dispatchIdFor(idempotencyKey: string): string {
   return createHash('sha256').update(idempotencyKey, 'utf8').digest('hex');
 }
 
-export function contractHashFor(request: NotificationDispatchRequest): string {
+export function contractHashFor(
+  request: NotificationDispatchRequest,
+  dispatchMode: NotificationDispatchMode = 'PRODUCT',
+): string {
   const semanticContract = {
     uid: request.uid,
     type: request.type,
@@ -55,7 +59,7 @@ export function contractHashFor(request: NotificationDispatchRequest): string {
   // semantic notification and must deduplicate instead of conflicting. Keep
   // the Phase-1 QA hash byte-for-byte compatible with already-persisted probe
   // dispatches, while product types fence only identity-bearing fields.
-  const contract = JSON.stringify(request.type === 'QA_TEST'
+  const legacyCompatibleContract = request.type === 'QA_TEST'
     ? {
         uid: request.uid,
         type: request.type,
@@ -67,7 +71,12 @@ export function contractHashFor(request: NotificationDispatchRequest): string {
         intent: request.intent ?? null,
         data: request.data ?? null,
       }
-    : semanticContract);
+    : semanticContract;
+  // Preserve every pre-existing PRODUCT hash. QA preview identities use an
+  // independent namespace and additionally bind the dispatch mode.
+  const contract = JSON.stringify(dispatchMode === 'PRODUCT'
+    ? legacyCompatibleContract
+    : { dispatchMode, request: legacyCompatibleContract });
   return createHash('sha256').update(contract, 'utf8').digest('hex');
 }
 
@@ -91,10 +100,11 @@ export async function claimDispatch(
   db: Firestore,
   request: NotificationDispatchRequest,
   now: Timestamp = Timestamp.now(),
+  dispatchMode: NotificationDispatchMode = 'PRODUCT',
 ): Promise<DispatchClaimResult> {
   const dispatchId = dispatchIdFor(request.idempotencyKey);
   const ref = dispatchRef(db, dispatchId);
-  const expectedContractHash = contractHashFor(request);
+  const expectedContractHash = contractHashFor(request, dispatchMode);
 
   return db.runTransaction(async (tx) => {
     const snapshot = await tx.get(ref);
@@ -108,6 +118,7 @@ export async function claimDispatch(
         sourceIdentity: request.sourceIdentity,
         contractHash: expectedContractHash,
         idempotencyKeyHash: dispatchId,
+        dispatchMode,
         request: {
           uid: request.uid,
           notificationId: request.notificationId,
@@ -231,7 +242,7 @@ export async function markDispatchOutcome(
 export function persistedDispatchRequest(
   value: FirebaseFirestore.DocumentData,
   expectedDispatchId: string,
-): NotificationDispatchRequest | null {
+): { request: NotificationDispatchRequest; dispatchMode: NotificationDispatchMode } | null {
   const request = value.request;
   if (typeof request !== 'object' || request === null) return null;
   const record = request as Record<string, unknown>;
@@ -265,10 +276,13 @@ export function persistedDispatchRequest(
     ...(data ? { data } : {}),
     idempotencyKey: record.idempotencyKey,
   };
+  const dispatchMode: NotificationDispatchMode = value.dispatchMode === 'QA_PREVIEW'
+    ? 'QA_PREVIEW'
+    : 'PRODUCT';
   if (
     dispatchIdFor(parsed.idempotencyKey) !== expectedDispatchId ||
     value.idempotencyKeyHash !== expectedDispatchId ||
-    value.contractHash !== contractHashFor(parsed)
+    value.contractHash !== contractHashFor(parsed, dispatchMode)
   ) {
     return null;
   }
@@ -277,5 +291,5 @@ export function persistedDispatchRequest(
   } catch {
     return null;
   }
-  return parsed;
+  return { request: parsed, dispatchMode };
 }

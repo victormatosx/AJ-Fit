@@ -29,6 +29,8 @@ import {
 } from '../dev/DevSubscriptionOverridePickerSheet';
 import { isWorkoutLifecycleQaPanelAllowed } from '../dev/workoutLifecycle/qaPanelGate';
 import { WorkoutLifecycleQaSheet } from '../dev/workoutLifecycle/WorkoutLifecycleQaSheet';
+import { isPushNotificationQaPanelAllowed } from '../dev/pushNotifications/qaPanelGate';
+import { PushNotificationQaSheet } from '../dev/pushNotifications/PushNotificationQaSheet';
 
 type UnitsOptionCopy = {
   label: string;
@@ -73,6 +75,8 @@ export function SettingsScreen({
   const [devOverridePickerOpen, setDevOverridePickerOpen] = useState(false);
   const workoutLifecycleQaPanelAllowed = isWorkoutLifecycleQaPanelAllowed();
   const [workoutLifecycleQaSheetOpen, setWorkoutLifecycleQaSheetOpen] = useState(false);
+  const pushNotificationQaPanelAllowed = isPushNotificationQaPanelAllowed();
+  const [pushNotificationQaSheetOpen, setPushNotificationQaSheetOpen] = useState(false);
 
   // `i18n.language` is the runtime source of truth — DO NOT read
   // `profile.preferences.language` here. That field will diverge from the
@@ -325,7 +329,7 @@ export function SettingsScreen({
 
           {/* Dev/QA only — never rendered outside a development build (see
               `useDevSubscriptionOverrideContext`'s `allowed`). */}
-          {devOverrideAllowed || workoutLifecycleQaPanelAllowed ? (
+          {devOverrideAllowed || workoutLifecycleQaPanelAllowed || pushNotificationQaPanelAllowed ? (
             <SettingsSection
               title="DEVELOPER"
               items={[
@@ -339,6 +343,11 @@ export function SettingsScreen({
                   icon: 'chart' as const,
                   label: 'Workout Lifecycle',
                   onPress: () => setWorkoutLifecycleQaSheetOpen(true),
+                }] : []),
+                ...(pushNotificationQaPanelAllowed && user ? [{
+                  icon: 'bell' as const,
+                  label: 'Push Notifications',
+                  onPress: () => setPushNotificationQaSheetOpen(true),
                 }] : []),
               ]}
             />
@@ -393,6 +402,14 @@ export function SettingsScreen({
           visible={workoutLifecycleQaSheetOpen}
           uid={user.uid}
           onDismiss={() => setWorkoutLifecycleQaSheetOpen(false)}
+        />
+      ) : null}
+      {pushNotificationQaPanelAllowed && user ? (
+        <PushNotificationQaSheet
+          key={user.uid}
+          visible={pushNotificationQaSheetOpen}
+          uid={user.uid}
+          onDismiss={() => setPushNotificationQaSheetOpen(false)}
         />
       ) : null}
     </ScreenBg>

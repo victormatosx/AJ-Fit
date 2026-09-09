@@ -38,6 +38,8 @@ export interface NotificationEligibilityResult {
 export interface UserNotificationPolicyResult extends NotificationEligibilityResult {
   locale: NotificationLocale;
 }
+
+export type QaPreviewNotificationPolicyResult = UserNotificationPolicyResult;
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -84,4 +86,27 @@ export async function resolveUserNotificationPolicy(
   return allowed
     ? { allowed: true, reason: 'ALLOWED', locale }
     : { allowed: false, reason: 'DISABLED_BY_USER', locale };
+}
+
+/**
+ * Manual QA is an explicit user action, so product-category toggles do not
+ * suppress it. Account existence/deletion and locale still come from the
+ * same authoritative profile reads used by product notification policy.
+ */
+export async function resolveQaPreviewNotificationPolicy(
+  uid: string,
+  db: Firestore = defaultDb,
+): Promise<QaPreviewNotificationPolicyResult> {
+  const [user, deletionLock] = await Promise.all([
+    db.collection('users').doc(uid).get(),
+    db.collection('accountDeletionLocks').doc(uid).get(),
+  ]);
+  const language = user.data()?.preferences?.language;
+  const locale: NotificationLocale =
+    typeof language === 'string' && (NOTIFICATION_LOCALES as readonly string[]).includes(language)
+      ? language as NotificationLocale
+      : 'pt-BR';
+  if (!user.exists) return { allowed: false, reason: 'USER_NOT_FOUND', locale };
+  if (deletionLock.exists) return { allowed: false, reason: 'ACCOUNT_INACTIVE', locale };
+  return { allowed: true, reason: 'ALLOWED', locale };
 }

@@ -31,7 +31,7 @@ export function PushNotificationsRuntime() {
     if (typeof __DEV__ !== 'undefined' && __DEV__) {
       globalThis.__AJFIT_PUSH_QA__ = {
         requestPermissionAndGetToken: requestPushTokenForDevelopment,
-        sendSelfTestNotification: sendQaPushNotification,
+        sendSelfTestNotification: () => sendQaPushNotification('QA_TEST'),
       };
     }
 

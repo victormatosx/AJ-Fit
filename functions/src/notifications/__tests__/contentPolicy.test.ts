@@ -12,6 +12,7 @@ import {
   buildRecoveryDayNotification,
   buildMissedWorkoutNotification,
   buildQaTestNotification,
+  buildQaPreviewNotification,
   EVOLUTION_UNLOCKED_COPIES,
   EVOLUTION_APPROACHING_COPIES,
   NOTIFICATION_LOCALES,
@@ -92,10 +93,61 @@ describe('notification content policy', () => {
       'buildPremiumEndedNotification',
       'buildProgramUpdatedNotification',
       'buildQaTestNotification',
+      'buildQaPreviewNotification',
       'buildWorkoutDayNotification',
       'buildRecoveryDayNotification',
       'buildMissedWorkoutNotification',
     ].sort());
+  });
+
+  it.each(NOTIFICATION_LOCALES)('QA preview delegates all localized copy to canonical builders in %s', (locale) => {
+    const qaRequestId = '10000000-0000-4000-8000-000000000001';
+    const previews = Object.fromEntries([
+      'WORKOUT_DAY',
+      'RECOVERY_DAY',
+      'MISSED_WORKOUT',
+      'EVOLUTION_UNLOCKED',
+      'PROGRAM_UPDATED',
+      'EVOLUTION_APPROACHING',
+      'BILLING_ISSUE',
+      'PREMIUM_ENDED',
+    ].map((type) => [type, buildQaPreviewNotification({
+      uid: 'user-123', type: type as never, qaRequestId, locale,
+    })]));
+
+    expect(previews.WORKOUT_DAY).toMatchObject(WORKOUT_DAY_COPIES[locale]);
+    expect(previews.RECOVERY_DAY).toMatchObject(RECOVERY_DAY_COPIES[locale]);
+    expect(previews.MISSED_WORKOUT).toMatchObject(MISSED_WORKOUT_COPIES[locale]);
+    expect(previews.EVOLUTION_UNLOCKED).toMatchObject(EVOLUTION_UNLOCKED_COPIES.EVOLUTION[locale]);
+    expect(previews.PROGRAM_UPDATED).toMatchObject(PROGRAM_UPDATED_COPIES[locale]);
+    expect(previews.EVOLUTION_APPROACHING).toMatchObject(EVOLUTION_APPROACHING_COPIES[locale]);
+    expect(previews.BILLING_ISSUE).toMatchObject(BILLING_ISSUE_COPIES[locale]);
+    expect(previews.PREMIUM_ENDED).toMatchObject(PREMIUM_ENDED_COPIES[locale]);
+    for (const preview of Object.values(previews)) {
+      expect(preview.data).toEqual({});
+      expect(preview.intent).toBeUndefined();
+      expect(preview.idempotencyKey).toContain('qa-preview:user-123:');
+      expect(() => assertValidDispatchRequest(preview)).not.toThrow();
+    }
+  });
+
+  it('uses a new QA identity per click and a stable identity for a retry of that click', () => {
+    const base = {
+      uid: 'user-123', type: 'PROGRAM_UPDATED' as const, locale: 'pt-BR' as const,
+    };
+    const first = buildQaPreviewNotification({
+      ...base, qaRequestId: '10000000-0000-4000-8000-000000000001',
+    });
+    const retry = buildQaPreviewNotification({
+      ...base, qaRequestId: '10000000-0000-4000-8000-000000000001',
+    });
+    const nextClick = buildQaPreviewNotification({
+      ...base, qaRequestId: '10000000-0000-4000-8000-000000000002',
+    });
+    expect(retry.idempotencyKey).toBe(first.idempotencyKey);
+    expect(retry.notificationId).toBe(first.notificationId);
+    expect(nextClick.idempotencyKey).not.toBe(first.idempotencyKey);
+    expect(nextClick.notificationId).not.toBe(first.notificationId);
   });
 
   it.each(NOTIFICATION_LOCALES)('accepts every Phase-2 builder in %s', (locale) => {

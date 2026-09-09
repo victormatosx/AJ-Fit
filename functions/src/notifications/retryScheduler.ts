@@ -54,15 +54,15 @@ export async function runDispatchRetries(
   };
 
   for (const document of snapshot.docs) {
-    const request = persistedDispatchRequest(document.data(), document.id);
-    if (!request) {
+    const persisted = persistedDispatchRequest(document.data(), document.id);
+    if (!persisted) {
       result.malformed += 1;
       await markMalformed(dependencies.db, document.ref, now);
       logWarn(SCOPE, 'retry_contract_rejected', { dispatchId: document.id });
       continue;
     }
     try {
-      await dispatchNotification(request, dependencies);
+      await dispatchNotification(persisted.request, dependencies, persisted.dispatchMode);
       result.processed += 1;
     } catch (error) {
       result.failed += 1;
