@@ -33,6 +33,9 @@ export const QA_PUSH_NOTIFICATION_TYPES = [
   'PREMIUM_ENDED',
   'RE_ENGAGEMENT_EARLY',
   'RE_ENGAGEMENT_LATE',
+  'PHOTO_REMINDER',
+  'ASSESSMENT_REMINDER',
+  'COMPARE_PROGRESS',
 ] as const satisfies readonly PushNotificationType[];
 export type QaPushNotificationType = (typeof QA_PUSH_NOTIFICATION_TYPES)[number];
 

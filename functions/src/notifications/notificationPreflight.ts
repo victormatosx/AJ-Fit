@@ -2,7 +2,14 @@ import { createHash } from 'node:crypto';
 
 import { Timestamp, type Firestore } from 'firebase-admin/firestore';
 
-import { buildReEngagementEarlyNotification, buildReEngagementLateNotification } from './contentPolicy';
+import {
+  buildAssessmentReminderNotification,
+  buildCompareProgressNotification,
+  buildPhotoReminderNotification,
+  buildReEngagementEarlyNotification,
+  buildReEngagementLateNotification,
+} from './contentPolicy';
+import { readProgressNotificationContext } from './progressNotificationContext';
 import { readReEngagementContext } from './reengagementContext';
 import type { NotificationDispatchRequest } from './schema';
 
@@ -87,6 +94,42 @@ export async function runNotificationPreflight(
     if (rebuilt.sourceIdentity !== request.sourceIdentity) {
       return { allowed: false, reason: 'REENGAGEMENT_EPISODE_CHANGED' };
     }
+  }
+  if (
+    request.type === 'PHOTO_REMINDER'
+    || request.type === 'ASSESSMENT_REMINDER'
+    || request.type === 'COMPARE_PROGRESS'
+  ) {
+    const context = await readProgressNotificationContext(
+      db,
+      request.uid,
+      now,
+      {},
+      { requireDailyWindow: false },
+    );
+    if (!context.allowed) {
+      return {
+        allowed: false,
+        reason: context.reason === 'NO_PROGRESS_CANDIDATE'
+          ? 'PROGRESS_FACT_CHANGED'
+          : context.reason,
+      };
+    }
+    const remainsValid = context.candidates.some((candidate) => {
+      if (candidate.notificationType !== request.type) return false;
+      const params = {
+        uid: request.uid,
+        progressIdentity: candidate.progressIdentity,
+        locale: 'pt-BR' as const,
+      };
+      const rebuilt = candidate.notificationType === 'PHOTO_REMINDER'
+        ? buildPhotoReminderNotification(params)
+        : candidate.notificationType === 'ASSESSMENT_REMINDER'
+          ? buildAssessmentReminderNotification(params)
+          : buildCompareProgressNotification(params);
+      return rebuilt.sourceIdentity === request.sourceIdentity;
+    });
+    if (!remainsValid) return { allowed: false, reason: 'PROGRESS_FACT_CHANGED' };
   }
   return { allowed: true };
 }

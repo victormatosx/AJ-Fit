@@ -27,6 +27,9 @@ export const QA_PUSH_TYPE_LABELS: Record<QaPushNotificationType, string> = {
   PREMIUM_ENDED: 'Premium encerrado',
   RE_ENGAGEMENT_EARLY: 'Sentimos sua falta',
   RE_ENGAGEMENT_LATE: 'Hora de voltar',
+  PHOTO_REMINDER: 'Registrar evolução',
+  ASSESSMENT_REMINDER: 'Atualizar avaliação',
+  COMPARE_PROGRESS: 'Comparar evolução',
 };
 
 type DiagnosticState =

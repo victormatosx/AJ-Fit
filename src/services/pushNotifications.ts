@@ -43,6 +43,9 @@ export const PUSH_NOTIFICATION_TYPES = [
   'MISSED_WORKOUT',
   'RE_ENGAGEMENT_EARLY',
   'RE_ENGAGEMENT_LATE',
+  'PHOTO_REMINDER',
+  'ASSESSMENT_REMINDER',
+  'COMPARE_PROGRESS',
 ] as const;
 export type PushNotificationType = (typeof PUSH_NOTIFICATION_TYPES)[number];
 

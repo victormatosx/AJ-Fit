@@ -9,6 +9,9 @@ import {
   buildReEngagementEarlyNotification,
   buildReEngagementLateNotification,
   buildWorkoutDayNotification,
+  buildPhotoReminderNotification,
+  buildAssessmentReminderNotification,
+  buildCompareProgressNotification,
 } from '../contentPolicy';
 import { dispatchUserNotificationCandidate } from '../userNotificationDispatch';
 
@@ -200,6 +203,31 @@ describe('event-driven notification policy orchestration', () => {
     await expect(dispatchUserNotificationCandidate(
       workoutCandidate,
       dependencies({ preferences: { notificationPreferences: { workoutsAndReminders: false } } }),
+    )).resolves.toEqual({ status: 'SUPPRESSED_BY_PREFERENCE', dispatchId: 'dispatch-1' });
+    expect(mocks.dispatchNotification).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['PHOTO_REMINDER', (locale: 'pt-BR' | 'en' | 'es') => buildPhotoReminderNotification({
+      uid: 'uid-1', progressIdentity: 'photoCycle:2026-01-01:2026-01-31', locale,
+    })],
+    ['ASSESSMENT_REMINDER', (locale: 'pt-BR' | 'en' | 'es') => buildAssessmentReminderNotification({
+      uid: 'uid-1', progressIdentity: 'assessmentCycle:2026-01-01:2026-04-01', locale,
+    })],
+    ['COMPARE_PROGRESS', (locale: 'pt-BR' | 'en' | 'es') => buildCompareProgressNotification({
+      uid: 'uid-1', progressIdentity: 'photoComparison:2026-01-01:2026-04-01', locale,
+    })],
+  ] as const)('honors progress ON/OFF for %s', async (_type, build) => {
+    const candidate = { uid: 'uid-1', category: 'PROGRESS' as const, build };
+    await expect(dispatchUserNotificationCandidate(
+      candidate,
+      dependencies({ preferences: { notificationPreferences: { progress: true } } }),
+    )).resolves.toMatchObject({ status: 'PENDING_RECEIPTS' });
+
+    mocks.dispatchNotification.mockClear();
+    await expect(dispatchUserNotificationCandidate(
+      candidate,
+      dependencies({ preferences: { notificationPreferences: { progress: false } } }),
     )).resolves.toEqual({ status: 'SUPPRESSED_BY_PREFERENCE', dispatchId: 'dispatch-1' });
     expect(mocks.dispatchNotification).not.toHaveBeenCalled();
   });

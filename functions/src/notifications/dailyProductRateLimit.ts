@@ -53,7 +53,10 @@ export async function claimDailyProductWindow(
     const claimToken = randomUUID();
     transaction.set(ref, {
       uid: input.uid,
-      category: 'WORKOUTS_AND_REMINDERS',
+      // The document id intentionally keeps its original opaque namespace so
+      // existing workout windows retain their identity. The slot itself is a
+      // shared one-per-user/day product guard across engagement categories.
+      category: input.request.category,
       localDate: input.localDate,
       type: input.request.type,
       sourceIdentity: input.request.sourceIdentity,

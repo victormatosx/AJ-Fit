@@ -5,6 +5,7 @@ import { createFakeFirestore } from '../../accountDeletion/firestoreCleanup/__te
 import {
   buildMissedWorkoutNotification,
   buildWorkoutDayNotification,
+  buildPhotoReminderNotification,
 } from '../contentPolicy';
 import {
   claimDailyProductWindow,
@@ -65,6 +66,43 @@ describe('daily product rate limit', () => {
       localDate: DATE,
       request: buildWorkoutDayNotification({ uid: UID, localDate: DATE, locale: 'pt-BR' }),
     }, NOW)).resolves.toMatchObject({ outcome: 'RATE_LIMITED' });
+  });
+
+  it('shares the daily product slot across workout and progress categories', async () => {
+    const firestore = db();
+    await claimDailyProductWindow(firestore, {
+      uid: UID,
+      localDate: DATE,
+      request: buildWorkoutDayNotification({ uid: UID, localDate: DATE, locale: 'pt-BR' }),
+    }, NOW);
+    await expect(claimDailyProductWindow(firestore, {
+      uid: UID,
+      localDate: DATE,
+      request: buildPhotoReminderNotification({
+        uid: UID,
+        progressIdentity: 'photoCycle:2026-01-01:2026-01-31',
+        locale: 'pt-BR',
+      }),
+    }, NOW)).resolves.toMatchObject({ outcome: 'RATE_LIMITED' });
+  });
+
+  it('records the real PROGRESS category without changing the legacy window identity', async () => {
+    const harness = createFakeFirestore();
+    const claim = await claimDailyProductWindow(harness.db as never, {
+      uid: UID,
+      localDate: DATE,
+      request: buildPhotoReminderNotification({
+        uid: UID,
+        progressIdentity: 'photoCycle:2026-01-01:2026-01-31',
+        locale: 'pt-BR',
+      }),
+    }, NOW);
+    expect(claim.outcome).toBe('CLAIMED');
+    expect(harness.data(`notificationProductWindows/${claim.windowId}`)).toMatchObject({
+      category: 'PROGRESS',
+      localDate: DATE,
+      type: 'PHOTO_REMINDER',
+    });
   });
 
   it('allows only the same semantic candidate to reclaim a stale worker', async () => {

@@ -18,6 +18,9 @@ export const QA_PREVIEW_NOTIFICATION_TYPES = [
   'PREMIUM_ENDED',
   'RE_ENGAGEMENT_EARLY',
   'RE_ENGAGEMENT_LATE',
+  'PHOTO_REMINDER',
+  'ASSESSMENT_REMINDER',
+  'COMPARE_PROGRESS',
 ] as const satisfies readonly NotificationType[];
 export type QaPreviewNotificationType = (typeof QA_PREVIEW_NOTIFICATION_TYPES)[number];
 
@@ -220,6 +223,51 @@ export const RE_ENGAGEMENT_LATE_COPIES = {
   },
 } as const satisfies Readonly<Record<NotificationLocale, NotificationCopy>>;
 
+export const PHOTO_REMINDER_COPIES = {
+  'pt-BR': {
+    title: 'Hora de registrar sua evolução 📸',
+    body: 'Atualize suas fotos de progresso para acompanhar sua jornada.',
+  },
+  en: {
+    title: 'Time to record your progress 📸',
+    body: 'Update your progress photos to keep track of your journey.',
+  },
+  es: {
+    title: 'Hora de registrar tu evolución 📸',
+    body: 'Actualiza tus fotos de progreso para seguir tu recorrido.',
+  },
+} as const satisfies Readonly<Record<NotificationLocale, NotificationCopy>>;
+
+export const ASSESSMENT_REMINDER_COPIES = {
+  'pt-BR': {
+    title: 'Hora de atualizar sua avaliação 📊',
+    body: 'Registre uma nova avaliação para manter seu acompanhamento atualizado.',
+  },
+  en: {
+    title: 'Time to update your assessment 📊',
+    body: 'Record a new assessment to keep your progress tracking up to date.',
+  },
+  es: {
+    title: 'Hora de actualizar tu evaluación 📊',
+    body: 'Registra una nueva evaluación para mantener actualizado tu seguimiento.',
+  },
+} as const satisfies Readonly<Record<NotificationLocale, NotificationCopy>>;
+
+export const COMPARE_PROGRESS_COPIES = {
+  'pt-BR': {
+    title: 'Compare sua evolução ✨',
+    body: 'Seus registros já permitem uma comparação. Veja sua evolução lado a lado.',
+  },
+  en: {
+    title: 'Compare your progress ✨',
+    body: 'Your records are ready to compare. See your progress side by side.',
+  },
+  es: {
+    title: 'Compara tu evolución ✨',
+    body: 'Tus registros ya permiten una comparación. Mira tu evolución lado a lado.',
+  },
+} as const satisfies Readonly<Record<NotificationLocale, NotificationCopy>>;
+
 function copies<T extends Record<NotificationLocale, NotificationCopy>>(localized: T) {
   return NOTIFICATION_LOCALES.map((locale) => localized[locale]);
 }
@@ -293,6 +341,24 @@ const TYPE_POLICIES: Readonly<Record<NotificationType, TypePolicy>> = {
     allowedDataKeys: [],
     allowedIntents: [],
     allowedCopies: copies(RE_ENGAGEMENT_LATE_COPIES),
+  },
+  PHOTO_REMINDER: {
+    category: 'PROGRESS',
+    allowedDataKeys: [],
+    allowedIntents: [],
+    allowedCopies: copies(PHOTO_REMINDER_COPIES),
+  },
+  ASSESSMENT_REMINDER: {
+    category: 'PROGRESS',
+    allowedDataKeys: [],
+    allowedIntents: [],
+    allowedCopies: copies(ASSESSMENT_REMINDER_COPIES),
+  },
+  COMPARE_PROGRESS: {
+    category: 'PROGRESS',
+    allowedDataKeys: [],
+    allowedIntents: [],
+    allowedCopies: copies(COMPARE_PROGRESS_COPIES),
   },
 };
 
@@ -628,6 +694,64 @@ export function buildReEngagementLateNotification(params: {
   return buildReEngagementNotification({ ...params, type: 'RE_ENGAGEMENT_LATE' });
 }
 
+function buildProgressNotification(params: {
+  uid: string;
+  type: 'PHOTO_REMINDER' | 'ASSESSMENT_REMINDER' | 'COMPARE_PROGRESS';
+  progressIdentity: string;
+  copy: NotificationCopy;
+}): NotificationDispatchRequest {
+  assertSafeId(params.progressIdentity, 'progressIdentity');
+  const sourceHash = createHash('sha256').update(params.progressIdentity, 'utf8').digest('hex');
+  const request: NotificationDispatchRequest = {
+    uid: params.uid,
+    type: params.type,
+    category: 'PROGRESS',
+    notificationId: `${params.type}:${sourceHash}`,
+    sourceIdentity: `progressSnapshot:${sourceHash}`,
+    idempotencyKey: `notification:${params.uid}:${params.type}:${sourceHash}`,
+    ...params.copy,
+    data: {},
+  };
+  assertValidDispatchRequest(request);
+  return request;
+}
+
+export function buildPhotoReminderNotification(params: {
+  uid: string;
+  progressIdentity: string;
+  locale: NotificationLocale;
+}): NotificationDispatchRequest {
+  return buildProgressNotification({
+    ...params,
+    type: 'PHOTO_REMINDER',
+    copy: PHOTO_REMINDER_COPIES[params.locale],
+  });
+}
+
+export function buildAssessmentReminderNotification(params: {
+  uid: string;
+  progressIdentity: string;
+  locale: NotificationLocale;
+}): NotificationDispatchRequest {
+  return buildProgressNotification({
+    ...params,
+    type: 'ASSESSMENT_REMINDER',
+    copy: ASSESSMENT_REMINDER_COPIES[params.locale],
+  });
+}
+
+export function buildCompareProgressNotification(params: {
+  uid: string;
+  progressIdentity: string;
+  locale: NotificationLocale;
+}): NotificationDispatchRequest {
+  return buildProgressNotification({
+    ...params,
+    type: 'COMPARE_PROGRESS',
+    copy: COMPARE_PROGRESS_COPIES[params.locale],
+  });
+}
+
 /**
  * Builds a visual-only QA request by first invoking the exact canonical
  * product builder, then replacing only its domain identity with a QA-scoped
@@ -676,6 +800,21 @@ export function buildQaPreviewNotification(params: {
     case 'RE_ENGAGEMENT_LATE':
       canonical = buildReEngagementLateNotification({
         uid: params.uid, episodeIdentity: fixtureIdentity, locale: params.locale,
+      });
+      break;
+    case 'PHOTO_REMINDER':
+      canonical = buildPhotoReminderNotification({
+        uid: params.uid, progressIdentity: fixtureIdentity, locale: params.locale,
+      });
+      break;
+    case 'ASSESSMENT_REMINDER':
+      canonical = buildAssessmentReminderNotification({
+        uid: params.uid, progressIdentity: fixtureIdentity, locale: params.locale,
+      });
+      break;
+    case 'COMPARE_PROGRESS':
+      canonical = buildCompareProgressNotification({
+        uid: params.uid, progressIdentity: fixtureIdentity, locale: params.locale,
       });
       break;
     case 'EVOLUTION_UNLOCKED':

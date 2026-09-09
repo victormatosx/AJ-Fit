@@ -111,7 +111,7 @@ describe('QA push client boundary', () => {
     );
   });
 
-  it('contains exactly the eleven implemented QA preview types', () => {
+  it('contains exactly the fourteen implemented QA preview types', () => {
     expect(QA_PUSH_NOTIFICATION_TYPES).toEqual([
       'QA_TEST',
       'WORKOUT_DAY',
@@ -124,6 +124,9 @@ describe('QA push client boundary', () => {
       'PREMIUM_ENDED',
       'RE_ENGAGEMENT_EARLY',
       'RE_ENGAGEMENT_LATE',
+      'PHOTO_REMINDER',
+      'ASSESSMENT_REMINDER',
+      'COMPARE_PROGRESS',
     ]);
   });
 

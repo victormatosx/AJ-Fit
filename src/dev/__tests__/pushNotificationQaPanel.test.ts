@@ -39,6 +39,9 @@ describe('Push Notifications DEV/QA panel', () => {
       'ATUALIZAR REGISTRO',
       'Sentimos sua falta',
       'Hora de voltar',
+      'Registrar evolução',
+      'Atualizar avaliação',
+      'Comparar evolução',
     ]) {
       expect(sheet).toContain(text);
     }

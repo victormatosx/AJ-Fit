@@ -40,7 +40,7 @@ describe('push notification structural boundaries', () => {
       .toContain('rest_timer');
   });
 
-  it('registers only QA_TEST and implemented Phase-2 through Phase-5 product types', () => {
+  it('registers only QA_TEST and implemented Phase-2 through Phase-6 product types', () => {
     const schema = read('functions/src/notifications/schema.ts');
     for (const type of [
       'QA_TEST',
@@ -54,6 +54,9 @@ describe('push notification structural boundaries', () => {
       'EVOLUTION_APPROACHING',
       'RE_ENGAGEMENT_EARLY',
       'RE_ENGAGEMENT_LATE',
+      'PHOTO_REMINDER',
+      'ASSESSMENT_REMINDER',
+      'COMPARE_PROGRESS',
     ]) {
       expect(schema).toContain(`'${type}'`);
     }
@@ -61,9 +64,6 @@ describe('push notification structural boundaries', () => {
       'WEEK_COMPLETED',
       'WEEK_STREAK',
       'GOAL_PROXIMITY',
-      'PHOTO_REMINDER',
-      'ASSESSMENT_REMINDER',
-      'COMPARE_PROGRESS',
     ]) {
       expect(schema).not.toContain(type);
     }

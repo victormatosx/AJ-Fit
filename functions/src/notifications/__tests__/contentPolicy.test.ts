@@ -26,6 +26,12 @@ import {
   MISSED_WORKOUT_COPIES,
   RE_ENGAGEMENT_EARLY_COPIES,
   RE_ENGAGEMENT_LATE_COPIES,
+  PHOTO_REMINDER_COPIES,
+  ASSESSMENT_REMINDER_COPIES,
+  COMPARE_PROGRESS_COPIES,
+  buildPhotoReminderNotification,
+  buildAssessmentReminderNotification,
+  buildCompareProgressNotification,
 } from '../contentPolicy';
 import type { NotificationDispatchRequest } from '../schema';
 
@@ -47,9 +53,6 @@ describe('notification content policy', () => {
     'WEEK_COMPLETED',
     'WEEK_STREAK',
     'GOAL_PROXIMITY',
-    'PHOTO_REMINDER',
-    'ASSESSMENT_REMINDER',
-    'COMPARE_PROGRESS',
   ])('rejects out-of-phase product type %s', (type) => {
     expect(() => assertValidDispatchRequest({ ...request(), type } as NotificationDispatchRequest))
       .toThrow(NotificationContentPolicyError);
@@ -90,9 +93,12 @@ describe('notification content policy', () => {
     const module = await import('../contentPolicy');
     expect(Object.keys(module).filter((key) => key.startsWith('build')).sort()).toEqual([
       'buildBillingIssueNotification',
+      'buildAssessmentReminderNotification',
+      'buildCompareProgressNotification',
       'buildEvolutionApproachingNotification',
       'buildEvolutionUnlockedNotification',
       'buildPremiumEndedNotification',
+      'buildPhotoReminderNotification',
       'buildProgramUpdatedNotification',
       'buildQaTestNotification',
       'buildQaPreviewNotification',
@@ -117,6 +123,9 @@ describe('notification content policy', () => {
       'PREMIUM_ENDED',
       'RE_ENGAGEMENT_EARLY',
       'RE_ENGAGEMENT_LATE',
+      'PHOTO_REMINDER',
+      'ASSESSMENT_REMINDER',
+      'COMPARE_PROGRESS',
     ].map((type) => [type, buildQaPreviewNotification({
       uid: 'user-123', type: type as never, qaRequestId, locale,
     })]));
@@ -131,6 +140,9 @@ describe('notification content policy', () => {
     expect(previews.PREMIUM_ENDED).toMatchObject(PREMIUM_ENDED_COPIES[locale]);
     expect(previews.RE_ENGAGEMENT_EARLY).toMatchObject(RE_ENGAGEMENT_EARLY_COPIES[locale]);
     expect(previews.RE_ENGAGEMENT_LATE).toMatchObject(RE_ENGAGEMENT_LATE_COPIES[locale]);
+    expect(previews.PHOTO_REMINDER).toMatchObject(PHOTO_REMINDER_COPIES[locale]);
+    expect(previews.ASSESSMENT_REMINDER).toMatchObject(ASSESSMENT_REMINDER_COPIES[locale]);
+    expect(previews.COMPARE_PROGRESS).toMatchObject(COMPARE_PROGRESS_COPIES[locale]);
     for (const preview of Object.values(previews)) {
       expect(preview.data).toEqual({});
       expect(preview.intent).toBeUndefined();
@@ -189,6 +201,15 @@ describe('notification content policy', () => {
       buildReEngagementLateNotification({
         uid: 'user-123', episodeIdentity: 'instance:2026-09-05', locale,
       }),
+      buildPhotoReminderNotification({
+        uid: 'user-123', progressIdentity: 'photoCycle:2026-01-01:2026-01-31', locale,
+      }),
+      buildAssessmentReminderNotification({
+        uid: 'user-123', progressIdentity: 'assessmentCycle:2026-01-01:2026-04-01', locale,
+      }),
+      buildCompareProgressNotification({
+        uid: 'user-123', progressIdentity: 'photoComparison:2026-01-01:2026-04-01', locale,
+      }),
     ];
     for (const item of requests) expect(() => assertValidDispatchRequest(item)).not.toThrow();
   });
@@ -227,6 +248,15 @@ describe('notification content policy', () => {
     expect(buildReEngagementLateNotification({
       uid: 'user-123', episodeIdentity: 'instance:2026-09-05', locale,
     })).toMatchObject(RE_ENGAGEMENT_LATE_COPIES[locale]);
+    expect(buildPhotoReminderNotification({
+      uid: 'user-123', progressIdentity: 'photoCycle:2026-01-01:2026-01-31', locale,
+    })).toMatchObject(PHOTO_REMINDER_COPIES[locale]);
+    expect(buildAssessmentReminderNotification({
+      uid: 'user-123', progressIdentity: 'assessmentCycle:2026-01-01:2026-04-01', locale,
+    })).toMatchObject(ASSESSMENT_REMINDER_COPIES[locale]);
+    expect(buildCompareProgressNotification({
+      uid: 'user-123', progressIdentity: 'photoComparison:2026-01-01:2026-04-01', locale,
+    })).toMatchObject(COMPARE_PROGRESS_COPIES[locale]);
   });
 
   it('binds idempotency to uid, notification type and hashed source event identity', () => {

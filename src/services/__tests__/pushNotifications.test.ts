@@ -234,6 +234,9 @@ describe('push payload parsing', () => {
     'MISSED_WORKOUT',
     'RE_ENGAGEMENT_EARLY',
     'RE_ENGAGEMENT_LATE',
+    'PHOTO_REMINDER',
+    'ASSESSMENT_REMINDER',
+    'COMPARE_PROGRESS',
   ] as const)(
     'parses the structured payload for current notification type %s',
     (type) => {

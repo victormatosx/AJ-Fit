@@ -16,6 +16,9 @@ export const NOTIFICATION_TYPES = [
   'MISSED_WORKOUT',
   'RE_ENGAGEMENT_EARLY',
   'RE_ENGAGEMENT_LATE',
+  'PHOTO_REMINDER',
+  'ASSESSMENT_REMINDER',
+  'COMPARE_PROGRESS',
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 

@@ -21,23 +21,32 @@ const suppressedReengagement = {
   localDate: '2026-09-08',
   blocksLowerPriorityNotifications: false,
 };
+const suppressedProgress = {
+  status: 'SUPPRESSED' as const,
+  reason: 'NO_PROGRESS_CANDIDATE',
+  timezone: 'UTC',
+  localDate: '2026-09-08',
+};
 
 describe('daily notification suite', () => {
   it('evaluates workout and progression observers under the same scheduler claim', async () => {
     const evaluateWorkout = vi.fn(async () => suppressedWorkout);
     const evaluateApproaching = vi.fn(async () => suppressedApproaching);
     const evaluateReEngagement = vi.fn(async () => suppressedReengagement);
+    const evaluateProgress = vi.fn(async () => suppressedProgress);
     await expect(evaluateDailyNotificationSuite('uid-1', {
       evaluateWorkout,
       evaluateApproaching,
       evaluateReEngagement,
+      evaluateProgress,
     })).resolves.toMatchObject({
       status: 'SUPPRESSED',
-      reason: 'REENGAGEMENT:INSUFFICIENT_MISSED_OPPORTUNITIES|WORKOUT:REST_DAY|APPROACHING:OUTSIDE_APPROACHING_WINDOW',
+      reason: 'REENGAGEMENT:INSUFFICIENT_MISSED_OPPORTUNITIES|WORKOUT:REST_DAY|APPROACHING:OUTSIDE_APPROACHING_WINDOW|PROGRESS:NO_PROGRESS_CANDIDATE',
     });
     expect(evaluateReEngagement).toHaveBeenCalledWith('uid-1');
     expect(evaluateWorkout).toHaveBeenCalledWith('uid-1');
     expect(evaluateApproaching).toHaveBeenCalledWith('uid-1');
+    expect(evaluateProgress).toHaveBeenCalledWith('uid-1');
   });
 
   it('surfaces a progression candidate without changing workout semantics', async () => {
@@ -51,6 +60,7 @@ describe('daily notification suite', () => {
         outcome: 'PENDING_RECEIPTS' as const,
       })),
       evaluateReEngagement: vi.fn(async () => suppressedReengagement),
+      evaluateProgress: vi.fn(async () => suppressedProgress),
     })).resolves.toMatchObject({ status: 'DISPATCHED', timezone: 'UTC' });
   });
 
@@ -59,6 +69,7 @@ describe('daily notification suite', () => {
       evaluateWorkout: vi.fn(async () => suppressedWorkout),
       evaluateApproaching: vi.fn(async () => ({ status: 'FAILED' as const, timezone: 'UTC' })),
       evaluateReEngagement: vi.fn(async () => suppressedReengagement),
+      evaluateProgress: vi.fn(async () => suppressedProgress),
     })).resolves.toMatchObject({ status: 'FAILED', timezone: 'UTC' });
   });
 
@@ -78,6 +89,7 @@ describe('daily notification suite', () => {
           outcome: 'PENDING_RECEIPTS' as const,
           blocksLowerPriorityNotifications: true as const,
         })),
+        evaluateProgress: vi.fn(async () => suppressedProgress),
       })).resolves.toMatchObject({ status: 'DISPATCHED' });
       expect(evaluateWorkout).not.toHaveBeenCalled();
       expect(evaluateApproaching).not.toHaveBeenCalled();
@@ -97,10 +109,28 @@ describe('daily notification suite', () => {
         localDate: '2026-09-08',
         blocksLowerPriorityNotifications: true,
       })),
+      evaluateProgress: vi.fn(async () => suppressedProgress),
     })).resolves.toMatchObject({
       status: 'SUPPRESSED', reason: 'REENGAGEMENT:MILESTONE_DUPLICATE',
     });
     expect(evaluateWorkout).not.toHaveBeenCalled();
     expect(evaluateApproaching).not.toHaveBeenCalled();
+  });
+
+  it('evaluates progress only after workout, re-engagement and evolution are suppressed', async () => {
+    const evaluateProgress = vi.fn(async () => ({
+      status: 'DISPATCHED' as const,
+      notificationType: 'COMPARE_PROGRESS' as const,
+      timezone: 'UTC',
+      localDate: '2026-09-08',
+      outcome: 'PENDING_RECEIPTS' as const,
+    }));
+    await expect(evaluateDailyNotificationSuite('uid-1', {
+      evaluateWorkout: vi.fn(async () => suppressedWorkout),
+      evaluateApproaching: vi.fn(async () => suppressedApproaching),
+      evaluateReEngagement: vi.fn(async () => suppressedReengagement),
+      evaluateProgress,
+    })).resolves.toMatchObject({ status: 'DISPATCHED' });
+    expect(evaluateProgress).toHaveBeenCalledWith('uid-1');
   });
 });
