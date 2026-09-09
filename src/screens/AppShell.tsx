@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { StyleSheet, View, Text, Pressable, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
@@ -50,6 +50,7 @@ import {
   localDateInTimezone,
   useWorkoutSchedule,
   weekdayOfLocalDate,
+  type MissDecision,
   type ScheduleResolution,
 } from '../scheduleEngine';
 import { MissedSessionDecisionModal } from '../components/schedule/MissedSessionDecisionModal';
@@ -170,8 +171,14 @@ function AppShellContent({
   // canonical `workoutExecutions` completion source, own bounded/cached read.
   const frequencyWindow = useFrequencyWindow(schedule.config?.timezone ?? deviceTimezone());
   const { pendingIntent, consumeIntent } = useDeepLinkIntent();
-  const { beginWorkoutSession, endWorkoutSession } = useRestSession();
+  const {
+    status: restStatus,
+    rest: activeRest,
+    beginWorkoutSession,
+    endWorkoutSession,
+  } = useRestSession();
   const [activeSessionIndex, setActiveSessionIndex] = useState(0);
+  const [workoutInProgress, setWorkoutInProgress] = useState(false);
   const { isPremium } = useSubscription();
   const paywallPremiumReturnState = useRef(INITIAL_PAYWALL_PREMIUM_RETURN_STATE);
   // Single centralized prewarm schedule (docs/23_navegacao_e_lifecycle.md
@@ -187,7 +194,18 @@ function AppShellContent({
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showMyPlan, setShowMyPlan] = useState(false);
   const [showSubscriptionCenter, setShowSubscriptionCenter] = useState(false);
-  const [showWorkoutConfirmation, setShowWorkoutConfirmation] = useState(false);
+  // Single state machine for the whole "iniciar treino" flow — the Missed
+  // Session decision (when a decision is pending) and the Start
+  // confirmation are two steps of ONE flow, never two independently-toggled
+  // booleans. That construction makes MissedSessionDecisionModal and
+  // StartWorkoutConfirmation structurally unable to both be `visible` at
+  // once (previously possible: `showWorkoutConfirmation` had no relation to
+  // the Schedule Engine's resolution status, so a tap on the Workout tab
+  // while a miss decision was showing could mount a second native `Modal`
+  // on top of it — a documented cause of a stuck/unresponsive overlay).
+  const [startWorkoutFlow, setStartWorkoutFlow] = useState<'idle' | 'missedDecision' | 'confirmation'>('idle');
+  const [missedDecisionPending, setMissedDecisionPending] = useState<MissDecision | null>(null);
+  const [missedDecisionError, setMissedDecisionError] = useState(false);
   const [showEvolutionUnlock, setShowEvolutionUnlock] = useState(false);
   const [supportRoute, setSupportRoute] = useState<SupportRoute | null>(null);
   // HelpArticleScreen/SupportFormScreen are persistent+materialized but
@@ -212,27 +230,29 @@ function AppShellContent({
     showSubscriptionCenter ||
     showDeleteAccount ||
     showPremium ||
+    startWorkoutFlow !== 'idle' ||
     !!supportRoute;
-
   useEffect(() => {
     if (!canChangePassword) setShowChangePassword(false);
   }, [canChangePassword]);
 
   // Explain a persisted AUTO activation at the next safe app surface. Never
-  // interrupt a live workout, a confirmation, or another overlay.
+  // interrupt a live workout, a confirmation, or another overlay —
+  // `overlayOpen` already covers the whole start-workout flow (miss
+  // decision + confirmation), so a single check here is enough to keep this
+  // Modal from ever coexisting with either of those.
   useEffect(() => {
     if (
       evolution.viewModel.kind === 'AUTO_ACTIVATION_NOTICE'
       && tab !== 'workout'
       && !overlayOpen
-      && !showWorkoutConfirmation
     ) {
       // Hydrate the ProgramInstance that the persisted event says is active,
       // but only after leaving the live Workout surface.
       void reloadPrescription();
       setShowEvolutionUnlock(true);
     }
-  }, [evolution.viewModel.kind, overlayOpen, reloadPrescription, showWorkoutConfirmation, tab]);
+  }, [evolution.viewModel.kind, overlayOpen, reloadPrescription, tab]);
 
   // The root Paywall is closed by resolvePremiumGate, but this on-demand
   // Paywall is an AppShell overlay. Close that overlay only after the same
@@ -248,9 +268,30 @@ function AppShellContent({
     if (transition.shouldClose) setShowPremium(false);
   }, [isPremium, setShowPremium, showPremium]);
 
+  // Single real entry point into starting/resuming a workout (docs
+  // §Bloqueio real) — TabBar, Home's card, the deep-link intent effect and
+  // WorkoutRestHeaderStatus all funnel through this instead of setting
+  // `startWorkoutFlow` directly, so there is exactly one place that decides
+  // whether the flow opens on MISSED_SESSION_DECISION_REQUIRED first. The
+  // Schedule Engine resolution — not this function — is still what actually
+  // gates `execution.start` inside `startWorkout` below; this only decides
+  // which overlay step to show first.
+  const requestStartWorkout = useCallback(() => {
+    if (workoutInProgress) {
+      setTab('workout');
+      return;
+    }
+    if (schedule.resolution.status === 'MISSED_SESSION_DECISION_REQUIRED') {
+      setMissedDecisionError(false);
+      setStartWorkoutFlow('missedDecision');
+      return;
+    }
+    setStartWorkoutFlow('confirmation');
+  }, [workoutInProgress, schedule.resolution.status, setTab]);
+
   const selectTab = (nextTab: TabId) => {
     if (nextTab === 'workout' && tab !== 'workout') {
-      setShowWorkoutConfirmation(true);
+      requestStartWorkout();
       return;
     }
 
@@ -265,8 +306,8 @@ function AppShellContent({
     if (!pendingIntent || overlayOpen || showEvolutionUnlock) return;
 
     if (pendingIntent.type === 'active-workout') {
-      if (tab !== 'workout' && !showWorkoutConfirmation) {
-        setShowWorkoutConfirmation(true);
+      if (tab !== 'workout' && startWorkoutFlow === 'idle') {
+        requestStartWorkout();
       }
       consumeIntent(pendingIntent);
     }
@@ -274,10 +315,42 @@ function AppShellContent({
     consumeIntent,
     overlayOpen,
     pendingIntent,
+    requestStartWorkout,
     showEvolutionUnlock,
-    showWorkoutConfirmation,
+    startWorkoutFlow,
+    setTab,
     tab,
+    workoutInProgress,
   ]);
+
+  const handleMissDecision = async (decision: MissDecision) => {
+    if (missedDecisionPending) return; // re-entrancy guard: a second tap while one is in flight is a no-op, not a second resolution.
+    setMissedDecisionError(false);
+    setMissedDecisionPending(decision);
+    const resolved = await schedule.resolveMiss(decision);
+    setMissedDecisionPending(null);
+    if (resolved) {
+      // Decision landed and `schedule.resolution` has already been
+      // reloaded (resolveMiss awaits it internally) — continue straight
+      // into the normal start flow the user originally asked for, instead
+      // of dropping them back on Home to tap "Iniciar treino" again.
+      setStartWorkoutFlow('confirmation');
+    } else {
+      // Stay on the same step; the modal remains open, both options remain
+      // tappable, and the error banner explains what to do next.
+      setMissedDecisionError(true);
+    }
+  };
+
+  // Backdrop-tap dismissal only — there is no "not now" button, and this
+  // never resolves/skips the pending decision. It just returns to idle;
+  // `pendingMissDecision` is untouched, so the next "Iniciar treino" tap
+  // reopens the same modal.
+  const cancelMissDecision = () => {
+    if (missedDecisionPending) return;
+    setMissedDecisionError(false);
+    setStartWorkoutFlow('idle');
+  };
 
   // FASE 3→5 (docs/13_assinaturas_e_billing.md): START_WORKOUT is a Premium
   // capability. `selectTab` below always routes a tap on the Workout icon
@@ -291,7 +364,7 @@ function AppShellContent({
   // (see Fase 3 report, "Decisão sobre REGISTER_SET").
   const startWorkout = () => {
     if (prescription.status !== 'SUCCESS') return;
-    setShowWorkoutConfirmation(false);
+    setStartWorkoutFlow('idle');
     setTab('workout');
     // BLOQUEIO REAL (docs/workout-lifecycle/03_SCHEDULE_ENGINE.md §Bloqueio
     // real): the Schedule Engine resolution — not this button, not whatever
@@ -307,6 +380,7 @@ function AppShellContent({
     if (schedule.resolution.status === 'SESSION_READY') {
       const sessionIndex = schedule.resolution.sessionIndex;
       setActiveSessionIndex(sessionIndex);
+      setWorkoutInProgress(true);
       const executionScopeId = activeProgram?.programInstanceId ?? activeProgram?.programId;
       const scheduledLocalDate = localDateInTimezone(
         new Date(),
@@ -323,6 +397,7 @@ function AppShellContent({
 
   const finishWorkoutSession = () => {
     endWorkoutSession();
+    setWorkoutInProgress(false);
     setTab('home');
   };
 
@@ -337,10 +412,10 @@ function AppShellContent({
         toggling opacity/interactivity, so switching tabs back and forth
         never re-triggers a mount *or* a first-layout/paint cycle. Home
         needs no `prewarm` — it's active from the very first render, so it's
-        never in a "not yet laid out" state to begin with. Workout is the
-        deliberate exception (still plain conditional render) — it's a live
-        session screen; see the doc for why persisting it wasn't a safe
-        default. Do NOT change any of the three below back to a bare
+        never in a "not yet laid out" state to begin with. Workout uses a
+        narrower lifecycle: it mounts only for a real active session, then
+        remains mounted while minimized so its exercise/set state and timer
+        survive the trip to Home. Do NOT change any of the three below back to a bare
         `tab === 'x' && <Screen/>`, and do NOT give them `inactiveMode`
         `'detached'` — both are exactly the patterns that caused the
         intermittent entry flicker this architecture replaces.
@@ -352,7 +427,11 @@ function AppShellContent({
             loading={prescriptionLoading}
             generating={generatingWorkout}
             scheduleResolution={schedule.resolution}
-            onStart={() => setShowWorkoutConfirmation(true)}
+            workoutInProgress={workoutInProgress}
+            activeWorkoutSessionIndex={activeSessionIndex}
+            activeRest={activeRest}
+            restRunning={restStatus === 'running' && activeRest !== null}
+            onStart={requestStartWorkout}
             onOpenProfile={() => setTab('profile')}
             evolutionViewModel={evolution.viewModel}
             onOpenEvolution={() => setShowEvolutionUnlock(true)}
@@ -364,23 +443,32 @@ function AppShellContent({
             onFrequencyNext={frequencyWindow.goNext}
           />
         </PersistentScreen>
-        {tab === 'workout' && prescription.status === 'SUCCESS' && schedule.resolution.status !== 'SESSION_READY' && (
+        {tab === 'workout' && !workoutInProgress && prescription.status === 'SUCCESS' && schedule.resolution.status !== 'SESSION_READY' && (
           <WorkoutTabBlockedState
             resolution={schedule.resolution}
             plan={prescription.plan}
             onDone={finishWorkoutSession}
           />
         )}
-        {tab === 'workout' && prescription.status === 'SUCCESS' && schedule.resolution.status === 'SESSION_READY' && (
-          <WorkoutScreen
-            plan={prescription.plan}
-            sessionIndex={activeSessionIndex}
-            onDone={finishWorkoutSession}
-            onMinimize={() => setTab('home')}
-            onAbandon={() => { void execution.abandon(); }}
-            onSetLogged={(exerciseIndex, setIndex, weightKg) =>
-              execution.recordSet(exerciseIndex, setIndex, weightKg)}
-            onSessionCompleted={() => {
+        {workoutInProgress && prescription.status === 'SUCCESS' && (
+          <View
+            pointerEvents={tab === 'workout' ? 'auto' : 'none'}
+            accessibilityElementsHidden={tab !== 'workout'}
+            importantForAccessibility={tab === 'workout' ? 'auto' : 'no-hide-descendants'}
+            style={[
+              FULL_BLEED.tab,
+              { opacity: tab === 'workout' ? 1 : 0, zIndex: tab === 'workout' ? 1 : 0 },
+            ]}
+          >
+            <WorkoutScreen
+              plan={prescription.plan}
+              sessionIndex={activeSessionIndex}
+              onDone={finishWorkoutSession}
+              onMinimize={() => setTab('home')}
+              onAbandon={() => { void execution.abandon(); }}
+              onSetLogged={(exerciseIndex, setIndex, weightKg) =>
+                execution.recordSet(exerciseIndex, setIndex, weightKg)}
+              onSessionCompleted={() => {
               // The workout engine remains authoritative for completion and
               // evolution. The rest layer only closes its temporal surface
               // before those durable transitions start.
@@ -441,8 +529,9 @@ function AppShellContent({
                   logWarn('workout', 'workout_finish_incomplete', { programId, sessionIndex: activeSessionIndex, result });
                 }
               })();
-            }}
-          />
+              }}
+            />
+          </View>
         )}
         <PersistentScreen
           active={tab === 'progress'}
@@ -489,17 +578,34 @@ function AppShellContent({
         </View>
       )}
       <StartWorkoutConfirmation
-        visible={showWorkoutConfirmation}
+        visible={startWorkoutFlow === 'confirmation' && !workoutInProgress}
         prescription={prescription}
+        sessionIndex={schedule.resolution.status === 'SESSION_READY'
+          ? schedule.resolution.sessionIndex
+          : 0}
         loading={prescriptionLoading}
-        onCancel={() => setShowWorkoutConfirmation(false)}
+        onCancel={() => setStartWorkoutFlow('idle')}
         onConfirm={startWorkout}
         generating={generatingWorkout}
         onGenerate={() => { void generateWorkout(); }}
       />
+      {/*
+        Only ever opened from `requestStartWorkout` (a real "iniciar treino"
+        attempt) — never auto-shown on Home mount just because the Schedule
+        Engine detected a gap (docs/workout-lifecycle/03_SCHEDULE_ENGINE.md
+        §Sessão perdida). Detection/persistence of `pendingMissDecision`
+        still happens eagerly inside `resolveTodaysSchedule` regardless of
+        whether this is visible — only the DECISION's timing moved, not the
+        detection's. Same `startWorkoutFlow` state as
+        StartWorkoutConfirmation above, so the two can never both be
+        `visible` at once.
+      */}
       <MissedSessionDecisionModal
-        visible={tab !== 'workout' && schedule.resolution.status === 'MISSED_SESSION_DECISION_REQUIRED'}
-        onChoose={(decision) => { void schedule.resolveMiss(decision); }}
+        visible={startWorkoutFlow === 'missedDecision'}
+        pending={missedDecisionPending}
+        error={missedDecisionError}
+        onChoose={(decision) => { void handleMissDecision(decision); }}
+        onCancel={cancelMissDecision}
       />
       <Modal
         visible={showEvolutionUnlock
@@ -764,6 +870,7 @@ function AppShellContent({
 function StartWorkoutConfirmation({
   visible,
   prescription,
+  sessionIndex,
   loading,
   onCancel,
   onConfirm,
@@ -772,6 +879,8 @@ function StartWorkoutConfirmation({
 }: {
   visible: boolean;
   prescription: PrescriptionResult;
+  /** Same scheduled session displayed on the Home card. */
+  sessionIndex: number;
   /** Same meaning as `useWorkoutPrescription`'s `loading` — see HomeScreen's doc comment. Keeps this modal from ever reading `prescription.status` as a real outcome before the first resolution lands. */
   loading: boolean;
   onCancel: () => void;
@@ -786,7 +895,11 @@ function StartWorkoutConfirmation({
   // as the Today Workout poster, even when the surrounding app uses Light.
   const theme = darkTheme;
   const { t } = useTranslation('home');
+  const tLoose = t as unknown as LooseTranslate;
   const canStart = prescription.status === 'SUCCESS';
+  const session = canStart
+    ? prescription.plan.sessions[sessionIndex] ?? prescription.plan.sessions[0]
+    : null;
   const showLoadingState = loading && !canStart;
   const outcomeKey = showLoadingState
     ? 'loadingState'
@@ -888,7 +1001,14 @@ function StartWorkoutConfirmation({
                 marginTop: 1,
               }}
             >
-              {canStart ? `${prescription.plan.templateId} · ${prescription.plan.split}` : ''}
+              {session
+                ? resolveSessionDisplayName(
+                    tLoose,
+                    session.name,
+                    session.type,
+                    session.displayName,
+                  )
+                : ''}
             </Text>
 
             {/* FASE 5: <PremiumAction> is the entry-point gate — locked stays

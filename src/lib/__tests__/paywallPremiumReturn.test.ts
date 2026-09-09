@@ -71,7 +71,10 @@ describe('on-demand Paywall Premium return', () => {
   it('uses the existing overlay state to reveal the previous screen, with no Home redirect', () => {
     const appShell = readFileSync('src/screens/AppShell.tsx', 'utf8');
     const effectStart = appShell.indexOf('const transition = resolvePaywallPremiumReturn(');
-    const effectEnd = appShell.indexOf('const selectTab', effectStart);
+    const effectEnd = appShell.indexOf(
+      '}, [isPremium, setShowPremium, showPremium]);',
+      effectStart,
+    ) + '}, [isPremium, setShowPremium, showPremium]);'.length;
     const returnEffect = appShell.slice(effectStart, effectEnd);
 
     expect(returnEffect).toContain('setShowPremium(false)');

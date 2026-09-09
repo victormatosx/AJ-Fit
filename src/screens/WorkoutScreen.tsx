@@ -528,23 +528,32 @@ export function WorkoutScreen({ plan, onDone, onMinimize, sessionIndex = 0, onSe
           >
             <Icon name="x" size={15} color={theme.colors.iconEmphasis} />
           </Pressable>
-          <View style={{ flex: 1 }}>
+          <View style={{ flex: 1, minWidth: 0 }}>
             <SegBar value={pct} segs={totalSets} />
+            <MonoLabel
+              style={{ marginTop: 7, textAlign: 'center' }}
+            >
+              {(currentSession
+                ? resolveSessionDisplayName(
+                    tLoose,
+                    currentSession.name,
+                    currentSession.type,
+                    currentSession.displayName,
+                  )
+                : '').toUpperCase()}
+            </MonoLabel>
             <View
               style={{
                 flexDirection: 'row',
                 justifyContent: 'space-between',
-                marginTop: 7,
+                alignItems: 'center',
+                marginTop: 4,
               }}
             >
-              <MonoLabel>{plan.templateId} · {(() => {
-                const session = plan.sessions[sessionIndex] ?? plan.sessions[0];
-                return session
-                  ? resolveSessionDisplayName(tLoose, session.name, session.type, session.displayName)
-                  : '';
-              })()}</MonoLabel>
-              <MonoLabel color={theme.colors.primaryEmphasis}>{fmt(elapsed)}</MonoLabel>
-              <MonoLabel>
+              <MonoLabel color={theme.colors.primaryEmphasis}>
+                {fmt(elapsed)}
+              </MonoLabel>
+              <MonoLabel style={{ marginLeft: 8, textAlign: 'right' }}>
                 {t('sets.progress', {
                   done: doneSets,
                   total: totalSets,

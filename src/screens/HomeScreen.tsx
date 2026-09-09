@@ -1,4 +1,5 @@
-import { View, Text, ScrollView, Pressable, useWindowDimensions } from 'react-native';
+import { useRef, useState } from 'react';
+import { Modal, View, Text, ScrollView, Pressable, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
@@ -23,6 +24,8 @@ import { WeeklyOverview } from '../components/home/WeeklyOverview';
 import { FrequencyHeatmap } from '../components/home/FrequencyHeatmap';
 import type { WeekOverviewViewModel } from '../home/weekOverview';
 import type { FrequencyWindowViewModel } from '../home/frequencyHeatmap';
+import type { ActiveRest } from '../lib/restTimer';
+import { WorkoutRestHeaderStatus } from '../components/workout/WorkoutRestHeaderStatus';
 
 // Lifecycle claims on Home come from the shared EvolutionViewModel.
 
@@ -30,12 +33,17 @@ import type { FrequencyWindowViewModel } from '../home/frequencyHeatmap';
 // direction in both app themes. This is intentionally scoped to this card;
 // surrounding Home surfaces still follow the active theme.
 const TODAY_WORKOUT_THEME = darkTheme;
+const MISSED_INFO_POPOVER_WIDTH = 220;
 
 export function HomeScreen({
   prescription,
   loading,
   generating,
   scheduleResolution,
+  workoutInProgress = false,
+  activeWorkoutSessionIndex,
+  activeRest = null,
+  restRunning = false,
   onStart,
   onOpenProfile,
   evolutionViewModel,
@@ -62,6 +70,13 @@ export function HomeScreen({
   generating?: boolean;
   /** Schedule Engine's read on "what to train right now" (docs/workout-lifecycle/03_SCHEDULE_ENGINE.md). Optional — omitted callers keep the pre-Schedule-Engine behavior of always showing session 0. */
   scheduleResolution?: ScheduleResolution;
+  /** Switches the Today card from a start action to a direct resume action. */
+  workoutInProgress?: boolean;
+  /** Latched session being performed; it remains stable while the schedule reconciles. */
+  activeWorkoutSessionIndex?: number;
+  /** Canonical absolute-deadline rest state shared with the live workout. */
+  activeRest?: ActiveRest | null;
+  restRunning?: boolean;
   onStart: () => void;
   onOpenProfile: () => void;
   /** Real Training Level/Cycle/progress state, rendered as the compact `EvolutionTicker` marquee — the historical Home ticker's visual identity (commit d24319b) rebuilt on real data instead of its old hardcoded mock stats. Profile renders this same view model through its own card. */
@@ -80,6 +95,12 @@ export function HomeScreen({
 }) {
   const { theme } = useTheme();
   const { t, i18n } = useTranslation(['home', 'profile']);
+  const [showMissedPendingInfo, setShowMissedPendingInfo] = useState(false);
+  // Popover renders in a full-screen Modal (so a tap anywhere outside it can
+  // close it, unclipped by the poster's `overflow: hidden`) — its position is
+  // measured from the icon rather than laid out in-flow alongside it.
+  const missedInfoIconRef = useRef<View>(null);
+  const [missedInfoAnchor, setMissedInfoAnchor] = useState<{ top: number; left: number } | null>(null);
   const { width: windowWidth } = useWindowDimensions();
   // ~58px validated visually in the body-muscle-map spike; narrower devices
   // (compact iPhones, small Android) shrink it slightly rather than letting
@@ -113,7 +134,23 @@ export function HomeScreen({
       : prescription.status === 'SUCCESS'
         ? null
         : prescriptionOutcomeKey(prescription.status);
-  const scheduledSessionIndex = scheduleResolution?.status === 'SESSION_READY' ? scheduleResolution.sessionIndex : 0;
+  const scheduledSessionIndex = workoutInProgress
+    ? activeWorkoutSessionIndex ?? 0
+    : scheduleResolution?.status === 'SESSION_READY'
+      ? scheduleResolution.sessionIndex
+      : scheduleResolution?.status === 'MISSED_SESSION_DECISION_REQUIRED'
+        // No decision has been made yet, so there's no single "today's
+        // session" — CONTINUE_SEQUENCE (the primary option once the user
+        // taps "Iniciar treino") is what would run, so it previews best.
+        ? scheduleResolution.missedSessionIndex
+        : 0;
+  // Discreet, non-blocking indication only — MISSED_SESSION_DECISION_REQUIRED
+  // deliberately does NOT join `scheduleOverrideKey` below: the card keeps
+  // its normal actionable title/CTA, and the decision itself is only asked
+  // once the user actually taps "Iniciar treino" (AppShell's
+  // `requestStartWorkout`), never automatically here.
+  const showMissedPendingNotice = !workoutInProgress
+    && scheduleResolution?.status === 'MISSED_SESSION_DECISION_REQUIRED';
   const firstSession = prescription.status === 'SUCCESS'
     ? prescription.plan.sessions[scheduledSessionIndex] ?? prescription.plan.sessions[0]
     : null;
@@ -126,7 +163,9 @@ export function HomeScreen({
   // "próximo treino" info row instead (docs §Bloqueio real): the domain
   // layer (Schedule Engine resolution itself, not just this button) is what
   // actually prevents a second session the same day.
-  const scheduleOverrideKey = prescription.status !== 'SUCCESS'
+  const scheduleOverrideKey = workoutInProgress
+    ? null
+    : prescription.status !== 'SUCCESS'
     ? null
     : scheduleResolution?.status === 'REST_DAY'
       ? 'restDay'
@@ -137,9 +176,11 @@ export function HomeScreen({
         : scheduleResolution?.status === 'SCHEDULE_SETUP_REQUIRED'
           ? 'setupRequired'
           : null;
-  const isBlockedToday = scheduleResolution?.status === 'REST_DAY'
+  const isBlockedToday = !workoutInProgress && (
+    scheduleResolution?.status === 'REST_DAY'
     || scheduleResolution?.status === 'ACTIVE_RECOVERY_DAY'
-    || scheduleResolution?.status === 'TODAY_COMPLETED';
+    || scheduleResolution?.status === 'TODAY_COMPLETED'
+  );
   // BodyMuscleMap is a read-only visual projection of the session already
   // resolved above (`firstSession.exercises[].exerciseId` is the effective,
   // post-adaptation/substitution/omission id) — it never influences
@@ -198,6 +239,12 @@ export function HomeScreen({
                 {`${t('home:greeting.casual')} ${localizedFirstName}.`.toUpperCase()}
               </Display>
             </View>
+            <WorkoutRestHeaderStatus
+              workoutInProgress={workoutInProgress}
+              rest={activeRest}
+              resting={restRunning}
+              onPress={onStart}
+            />
             <Pressable onPress={onOpenProfile} hitSlop={8}>
               <ProfileAvatar
                 displayName={profile?.profile.name || firstName}
@@ -238,7 +285,9 @@ export function HomeScreen({
                   accentColor={TODAY_WORKOUT_THEME.colors.primaryEmphasis}
                   textColor={TODAY_WORKOUT_THEME.colors.textFaint}
                 >
-                  {t('home:todayCard.kicker').toUpperCase()}
+                  {t(workoutInProgress
+                    ? 'home:activeWorkout.kicker'
+                    : 'home:todayCard.kicker').toUpperCase()}
                 </Slash>
                 <Display
                   size={38}
@@ -256,11 +305,6 @@ export function HomeScreen({
                           : t(`home:prescription.${outcomeKey}.title` as 'home:prescription.unavailable.title')
                   ).toUpperCase()}
                 </Display>
-                {!scheduleOverrideKey && (
-                  <Display size={38} color={TODAY_WORKOUT_THEME.colors.textPrimary}>
-                    {(prescription.status === 'SUCCESS' ? prescription.plan.split : '').toUpperCase()}
-                  </Display>
-                )}
                 <View style={{ flexDirection: 'row', gap: 12, marginTop: 14 }}>
                   <Text
                     style={{
@@ -276,7 +320,9 @@ export function HomeScreen({
                         ? t('home:prescription.generatingState.body')
                         : scheduleOverrideKey
                           ? t(`home:schedule.${scheduleOverrideKey}.body`)
-                          : prescription.status === 'SUCCESS'
+                          : workoutInProgress
+                            ? t('home:activeWorkout.cardStatus')
+                            : prescription.status === 'SUCCESS'
                             ? t('home:todayCard.sessionMeta', {
                                 exercises: firstSession?.exercises.length ?? 0,
                                 sets: totalSets,
@@ -285,7 +331,36 @@ export function HomeScreen({
                     ).toUpperCase()}
                   </Text>
                 </View>
+
               </View>
+
+              {showMissedPendingNotice && (
+                <View style={{ position: 'absolute', top: 14, right: 14 }}>
+                  <Pressable
+                    ref={missedInfoIconRef}
+                    onPress={() => {
+                      missedInfoIconRef.current?.measureInWindow((x, y, width, height) => {
+                        setMissedInfoAnchor({
+                          top: y + height + 8,
+                          left: x + width - MISSED_INFO_POPOVER_WIDTH,
+                        });
+                      });
+                      setShowMissedPendingInfo(true);
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('home:schedule.missedPending.badge.title')}
+                    hitSlop={8}
+                    style={{
+                      width: 30,
+                      height: 30,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Icon name="alert-triangle" size={15} color={TODAY_WORKOUT_THEME.colors.warning} />
+                  </Pressable>
+                </View>
+              )}
 
               {/* CTA/next-workout row shares its row with BodyMuscleMap so the
                   title/meta block above always keeps the full card width —
@@ -333,9 +408,10 @@ export function HomeScreen({
                     onPress={onStart}
                     style={{
                       alignSelf: 'flex-start',
+                      flexShrink: 1,
                       marginTop: 20,
                       paddingVertical: 15,
-                      paddingHorizontal: 26,
+                      paddingHorizontal: workoutInProgress ? 16 : 26,
                       backgroundColor: TODAY_WORKOUT_THEME.colors.inverseSurface,
                       borderTopLeftRadius: 10,
                       borderTopRightRadius: 10,
@@ -349,23 +425,44 @@ export function HomeScreen({
                       shadowRadius: 20,
                       shadowOffset: { width: 0, height: 10 },
                       elevation: 8,
+                      ...(workoutInProgress ? {
+                        backgroundColor: TODAY_WORKOUT_THEME.colors.primary,
+                        shadowColor: TODAY_WORKOUT_THEME.colors.primary,
+                      } : {}),
                     }}
                   >
-                    <Icon
-                      name="play"
-                      size={13}
-                      color={TODAY_WORKOUT_THEME.colors.inverseForeground}
-                    />
+                    {workoutInProgress ? (
+                      <Icon
+                        name="arrow-right"
+                        size={13}
+                        color={TODAY_WORKOUT_THEME.colors.primaryForeground}
+                      />
+                    ) : (
+                      <Icon
+                        name="play"
+                        size={13}
+                        color={TODAY_WORKOUT_THEME.colors.inverseForeground}
+                      />
+                    )}
                     <Text
+                      numberOfLines={1}
                       style={{
+                        flexShrink: 1,
                         fontFamily: theme.fonts.display,
-                        fontSize: 15,
+                        fontSize: workoutInProgress ? 13 : 15,
                         letterSpacing: 1.5,
                         color: TODAY_WORKOUT_THEME.colors.inverseForeground,
                         textTransform: 'uppercase',
+                        ...(workoutInProgress ? {
+                          color: TODAY_WORKOUT_THEME.colors.primaryForeground,
+                        } : {}),
                       }}
                     >
-                      {t(prescription.status === 'SUCCESS' ? 'home:todayCard.start' : 'home:todayCard.review')}
+                      {t(workoutInProgress
+                        ? 'home:activeWorkout.return'
+                        : prescription.status === 'SUCCESS'
+                          ? 'home:todayCard.start'
+                          : 'home:todayCard.review')}
                     </Text>
                   </Pressable>
                 )}
@@ -410,6 +507,57 @@ export function HomeScreen({
           ) : null}
         </ScrollView>
       </SafeAreaView>
+
+      <Modal
+        visible={showMissedPendingInfo}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowMissedPendingInfo(false)}
+      >
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t('home:schedule.missedPending.badge.dismiss')}
+          onPress={() => setShowMissedPendingInfo(false)}
+          style={{ flex: 1 }}
+        >
+          {missedInfoAnchor && (
+            <Pressable
+              accessibilityRole="none"
+              onPress={(event) => {
+                event.stopPropagation();
+                setShowMissedPendingInfo(false);
+                onStart();
+              }}
+              style={{
+                position: 'absolute',
+                top: missedInfoAnchor.top,
+                left: missedInfoAnchor.left,
+                width: MISSED_INFO_POPOVER_WIDTH,
+                padding: 12,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: TODAY_WORKOUT_THEME.colors.warning,
+                backgroundColor: TODAY_WORKOUT_THEME.colors.sheetBackground,
+              }}
+            >
+              <MonoLabel color={TODAY_WORKOUT_THEME.colors.warning}>
+                {t('home:schedule.missedPending.badge.title').toUpperCase()}
+              </MonoLabel>
+              <Text
+                style={{
+                  fontFamily: theme.fonts.ui,
+                  fontSize: 12,
+                  lineHeight: 16,
+                  color: TODAY_WORKOUT_THEME.colors.textSecondary,
+                  marginTop: 3,
+                }}
+              >
+                {t('home:schedule.missedPending.badge.body')}
+              </Text>
+            </Pressable>
+          )}
+        </Pressable>
+      </Modal>
     </ScreenBg>
   );
 }

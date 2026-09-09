@@ -21,6 +21,17 @@
       "accessibilityConfirmLocked": "Confirmar inicio del entreno, función Premium"
     }
   },
+  "activeWorkout": {
+    "kicker": "Entreno en curso",
+    "cardStatus": "Tu sesión está activa · continúa donde la dejaste",
+    "return": "Volver al entreno",
+    "rest": "Descanso",
+    "restComplete": "Descanso completado",
+    "nextSet": "Siguiente serie · {{number}}",
+    "nextExercise": "Siguiente ejercicio",
+    "headerAccessibilityRest": "Descanso, quedan {{time}}. {{nextStep}}. Volver al entreno",
+    "headerAccessibilityFinished": "Descanso completado. {{nextStep}}. Volver al entreno"
+  },
   "progression": {
     "dismiss": "Entendido",
     "beginnerStage": {
@@ -53,16 +64,25 @@
       "title": "Configura tus días de entreno",
       "body": "Elige qué días sueles entrenar para organizar tu agenda."
     },
+    "missedPending": {
+      "badge": {
+        "title": "Entreno pendiente",
+        "body": "Dejaste un entreno atrás. Elige cómo continuar al iniciar tu entreno.",
+        "dismiss": "Cerrar aviso de entreno pendiente"
+      }
+    },
     "missedDecision": {
-      "title": "Perdiste tu último entreno",
-      "body": "No hay problema. ¿Cómo quieres continuar?",
+      "kicker": "Planificación",
+      "title": "Tienes un entreno pendiente",
+      "body": "¿Cómo quieres continuar tu planificación?",
+      "error": "No pudimos guardar tu elección. Inténtalo de nuevo.",
       "continueSequence": {
         "title": "Continuar secuencia",
-        "subtitle": "Hacer ahora el entreno pendiente"
+        "subtitle": "Haz primero el entreno pendiente"
       },
       "followSchedule": {
         "title": "Seguir planificación",
-        "subtitle": "Saltar el entreno perdido y seguir el de hoy"
+        "subtitle": "Salta el entreno pendiente y haz el de hoy"
       }
     }
   },

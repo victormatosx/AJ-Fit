@@ -65,16 +65,28 @@ describe('FASE 3 — START_WORKOUT boundary', () => {
     );
   });
 
-  it('selectTab never bypasses startWorkout() for the Workout tab', () => {
+  it('selectTab bypasses startWorkout() only when returning to an already-active workout', () => {
+    // selectTab itself now only decides tab vs. requestStartWorkout — the
+    // resume-vs-gated-confirmation decision lives in requestStartWorkout,
+    // which selectTab (and every other entry point) funnels through.
     const selectTabBody = appShellCode.slice(
       appShellCode.indexOf('const selectTab = (nextTab: TabId) => {'),
       appShellCode.indexOf('};', appShellCode.indexOf('const selectTab = (nextTab: TabId) => {')),
     );
-    // Tapping the tab only opens the confirmation modal — it never calls
-    // setTab('workout') directly, so startWorkout() (and its capability
-    // check) is the only path in.
-    expect(selectTabBody).toContain('setShowWorkoutConfirmation(true)');
-    expect(selectTabBody).not.toContain("setTab('workout')");
+    expect(selectTabBody).toContain('requestStartWorkout();');
+    const requestStartWorkoutBody = appShellCode.slice(
+      appShellCode.indexOf('const requestStartWorkout = useCallback(() => {'),
+      appShellCode.indexOf('}, [workoutInProgress', appShellCode.indexOf('const requestStartWorkout = useCallback(() => {')),
+    );
+    // A new session still opens the gated confirmation (or the miss
+    // decision first). A session that is already active was gated when it
+    // started and must resume directly.
+    const activeResume = requestStartWorkoutBody.slice(
+      requestStartWorkoutBody.indexOf('if (workoutInProgress)'),
+      requestStartWorkoutBody.indexOf("setStartWorkoutFlow('missedDecision')"),
+    );
+    expect(activeResume).toContain("setTab('workout')");
+    expect(requestStartWorkoutBody).toContain("setStartWorkoutFlow('confirmation')");
   });
 
   it('WorkoutScreen defends its own mount as well (defense-in-depth, not the primary gate)', () => {

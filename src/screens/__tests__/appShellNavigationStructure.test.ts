@@ -55,8 +55,10 @@ describe('AppShell main-tab lifecycle', () => {
     expect(APP_SHELL_CODE).not.toMatch(/\{tab === 'profile' &&/);
   });
 
-  it('keeps Workout as the documented conditional-mount exception', () => {
-    expect(APP_SHELL_CODE).toMatch(/\{tab === 'workout' &&/);
+  it('keeps an active Workout mounted while it is minimized', () => {
+    expect(APP_SHELL_CODE).toContain("{workoutInProgress && prescription.status === 'SUCCESS' && (");
+    expect(APP_SHELL_CODE).toContain("pointerEvents={tab === 'workout' ? 'auto' : 'none'}");
+    expect(APP_SHELL_CODE).toContain("{ opacity: tab === 'workout' ? 1 : 0");
     expect(APP_SHELL_CODE).not.toContain("active={tab === 'workout'}");
   });
 

@@ -21,6 +21,17 @@
       "accessibilityConfirmLocked": "Confirm workout start, Premium feature"
     }
   },
+  "activeWorkout": {
+    "kicker": "Workout in progress",
+    "cardStatus": "Your session is active · pick up where you left off",
+    "return": "Resume workout",
+    "rest": "Rest",
+    "restComplete": "Rest complete",
+    "nextSet": "Next set · {{number}}",
+    "nextExercise": "Next exercise",
+    "headerAccessibilityRest": "Rest, {{time}} remaining. {{nextStep}}. Return to workout",
+    "headerAccessibilityFinished": "Rest complete. {{nextStep}}. Return to workout"
+  },
   "progression": {
     "dismiss": "Got it",
     "beginnerStage": {
@@ -53,16 +64,25 @@
       "title": "Set up your training days",
       "body": "Choose which days you usually train so we can organize your schedule."
     },
+    "missedPending": {
+      "badge": {
+        "title": "Pending workout",
+        "body": "You left a workout behind. Choose how to continue when you start your workout.",
+        "dismiss": "Close pending workout notice"
+      }
+    },
     "missedDecision": {
-      "title": "You missed your last workout",
-      "body": "No problem. How do you want to continue?",
+      "kicker": "Schedule",
+      "title": "You have a pending workout",
+      "body": "How do you want to continue your schedule?",
+      "error": "We couldn't save your choice. Please try again.",
       "continueSequence": {
         "title": "Continue sequence",
-        "subtitle": "Do the pending workout now"
+        "subtitle": "Do the pending workout first"
       },
       "followSchedule": {
         "title": "Follow schedule",
-        "subtitle": "Skip the missed workout and follow today's"
+        "subtitle": "Skip the pending workout and do today's instead"
       }
     }
   },

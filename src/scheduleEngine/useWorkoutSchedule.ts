@@ -23,7 +23,8 @@ export interface WorkoutScheduleController {
   reload: () => Promise<void>;
   /** Call once the active WorkoutScreen session actually finishes. */
   completeSession: (sessionIndex: number) => Promise<boolean>;
-  resolveMiss: (decision: MissDecision) => Promise<void>;
+  /** Resolves a pending miss decision. Returns whether it actually succeeded — callers must not advance their own flow (e.g. opening the start confirmation) on a `false` result. */
+  resolveMiss: (decision: MissDecision) => Promise<boolean>;
 }
 
 function deviceTimezone(): string {
@@ -153,13 +154,15 @@ export function useWorkoutSchedule(program: WorkoutProgramSnapshot | null): Work
   }, [uid, programId, programInstanceId, sessionCount, config, activatedAtLocalDate, reload]);
 
   const resolveMiss = useCallback(async (decision: MissDecision) => {
-    if (!uid || !programId || sessionCount === 0) return;
+    if (!uid || !programId || sessionCount === 0) return false;
     const timezone = config?.timezone ?? deviceTimezone();
     const todayLocalDate = localDateInTimezone(new Date(), timezone);
     try {
       await resolveMissedSession({ uid, programId, ...(programInstanceId ? { programInstanceId } : {}), sessionCount, decision, todayLocalDate });
+      return true;
     } catch (error) {
       logWarn('workout_schedule', 'schedule_miss_resolution_failed', { error });
+      return false;
     } finally {
       await reload();
     }

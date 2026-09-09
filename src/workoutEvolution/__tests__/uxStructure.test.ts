@@ -44,7 +44,11 @@ describe('Evolution UX component contracts (Node structural fallback)', () => {
     expect(hook).toContain('onSnapshot(');
     expect(shell).toContain("tab !== 'workout'");
     expect(shell).toContain('!overlayOpen');
-    expect(shell).toContain('!showWorkoutConfirmation');
+    // `overlayOpen` now folds in the whole start-workout flow (miss decision
+    // + confirmation) — see missedWorkoutDecisionFlow.test.ts — so a
+    // separate `!showWorkoutConfirmation` guard here would be redundant.
+    const overlayOpenIdx = shell.indexOf('const overlayOpen =');
+    expect(shell.slice(overlayOpenIdx, overlayOpenIdx + 400)).toContain("startWorkoutFlow !== 'idle'");
   });
 
   it('uses a neutral unavailable state for rollout-off legacy accounts', () => {
