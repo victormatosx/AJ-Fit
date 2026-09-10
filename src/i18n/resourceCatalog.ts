@@ -40,6 +40,9 @@ import esMyPlan from './resources/es/myPlan.json';
 import ptBREvolution from './resources/pt-BR/evolution.json';
 import enEvolution from './resources/en/evolution.json';
 import esEvolution from './resources/es/evolution.json';
+import ptBRNotifications from './resources/pt-BR/notifications.json';
+import enNotifications from './resources/en/notifications.json';
+import esNotifications from './resources/es/notifications.json';
 
 /** Single runtime registry used by bootstrap, parity tests and audits. */
 export const resources = {
@@ -58,6 +61,7 @@ export const resources = {
     support: ptBRSupport,
     myPlan: ptBRMyPlan,
     evolution: ptBREvolution,
+    notifications: ptBRNotifications,
   },
   en: {
     common: enCommon,
@@ -74,6 +78,7 @@ export const resources = {
     support: enSupport,
     myPlan: enMyPlan,
     evolution: enEvolution,
+    notifications: enNotifications,
   },
   es: {
     common: esCommon,
@@ -90,6 +95,7 @@ export const resources = {
     support: esSupport,
     myPlan: esMyPlan,
     evolution: esEvolution,
+    notifications: esNotifications,
   },
 } as const;
 

@@ -65,6 +65,8 @@ describe.skipIf(!enabled)('Firestore Cleanup Engine — real Emulator integratio
       wipeCollectionGroup('workoutLifecycleAuthorityGrants'),
       wipeCollectionGroup('workoutLifecycleTrustedTelemetryReceipts'),
       wipeCollectionGroup('privateSecurity'),
+      wipeCollectionGroup('devices'),
+      wipeCollectionGroup('deliveries'),
     ]);
     const users = await db.collection('users').get();
     await Promise.all(users.docs.map((doc) => doc.ref.delete()));
@@ -76,6 +78,17 @@ describe.skipIf(!enabled)('Firestore Cleanup Engine — real Emulator integratio
     await Promise.all(locks.docs.map((doc) => doc.ref.delete()));
     const deletions = await db.collection('accountDeletions').get();
     await Promise.all(deletions.docs.map((doc) => doc.ref.delete()));
+    for (const collectionName of [
+      'pushInstallations',
+      'pushTokenOwners',
+      'notificationDispatches',
+      'notificationDailyUsers',
+      'notificationProductWindows',
+      'notificationAchievementMilestones',
+    ]) {
+      const snapshot = await db.collection(collectionName).get();
+      await Promise.all(snapshot.docs.map((doc) => db.recursiveDelete(doc.ref)));
+    }
   }
 
   async function seedFullUser(uid: string) {
@@ -151,6 +164,50 @@ describe.skipIf(!enabled)('Firestore Cleanup Engine — real Emulator integratio
         uid: 'test-uid-cleanup-A',
         status: 'PROCESSING',
       });
+      await db.collection('users').doc('test-uid-cleanup-A')
+        .collection('devices').doc('push-owned').set({ tokenHash: 'hash-owned' });
+      await db.collection('pushInstallations').doc('push-owned').set({
+        ownerUid: 'test-uid-cleanup-A',
+        tokenHash: 'hash-owned',
+        ownershipVersion: 1,
+      });
+      await db.collection('pushTokenOwners').doc('hash-owned').set({
+        ownerUid: 'test-uid-cleanup-A',
+        installationId: 'push-owned',
+        tokenHash: 'hash-owned',
+        ownershipVersion: 1,
+        expoPushToken: 'must-be-deleted',
+      });
+      await db.collection('notificationDispatches').doc('dispatch-owned').set({
+        uid: 'test-uid-cleanup-A',
+      });
+      await db.collection('notificationDispatches').doc('dispatch-owned')
+        .collection('deliveries').doc('push-owned').set({ uid: 'test-uid-cleanup-A' });
+      await db.collection('notificationDailyUsers').doc('test-uid-cleanup-A').set({
+        timezone: 'UTC', nextEvaluationAt: new Date(),
+      });
+      await db.collection('notificationProductWindows').doc('window-owned').set({
+        uid: 'test-uid-cleanup-A', localDate: '2026-09-07',
+      });
+      await db.collection('notificationAchievementMilestones').doc('milestone-owned').set({
+        uid: 'test-uid-cleanup-A',
+      });
+
+      // Transfer control: cleanup for A must not touch ownership now held by B.
+      await db.collection('users').doc('test-uid-cleanup-B')
+        .collection('devices').doc('push-transferred').set({ tokenHash: 'hash-transferred' });
+      await db.collection('pushInstallations').doc('push-transferred').set({
+        ownerUid: 'test-uid-cleanup-B',
+        tokenHash: 'hash-transferred',
+        ownershipVersion: 2,
+      });
+      await db.collection('pushTokenOwners').doc('hash-transferred').set({
+        ownerUid: 'test-uid-cleanup-B',
+        installationId: 'push-transferred',
+        tokenHash: 'hash-transferred',
+        ownershipVersion: 2,
+        expoPushToken: 'must-be-preserved',
+      });
 
       const outcome = await runFirestoreCleanup('test-uid-cleanup-A', { db });
       expect(outcome).toEqual({ kind: 'SUCCEEDED' });
@@ -191,6 +248,20 @@ describe.skipIf(!enabled)('Firestore Cleanup Engine — real Emulator integratio
       const workoutProgramState = await db
         .collection('users').doc('test-uid-cleanup-A').collection('workoutProgramState').get();
       expect(workoutProgramState.empty).toBe(true);
+      const pushDevices = await db
+        .collection('users').doc('test-uid-cleanup-A').collection('devices').get();
+      expect(pushDevices.empty).toBe(true);
+      expect((await db.collection('pushTokenOwners').doc('hash-owned').get()).exists).toBe(false);
+      expect((await db.collection('pushInstallations').doc('push-owned').get()).data())
+        .toMatchObject({ ownerUid: null, tokenHash: null, pushEnabled: false });
+      expect((await db.collection('notificationDispatches').doc('dispatch-owned').get()).exists)
+        .toBe(false);
+      expect((await db.collection('notificationDailyUsers').doc('test-uid-cleanup-A').get()).exists)
+        .toBe(false);
+      expect((await db.collection('notificationProductWindows').doc('window-owned').get()).exists)
+        .toBe(false);
+      expect((await db.collection('notificationAchievementMilestones').doc('milestone-owned').get()).exists)
+        .toBe(false);
       for (const collectionName of [
         'workoutExecutions',
         'workoutLifecycleState',
@@ -257,6 +328,10 @@ describe.skipIf(!enabled)('Firestore Cleanup Engine — real Emulator integratio
         .doc('photoVault')
         .get();
       expect(otherVault.exists).toBe(true);
+      expect((await db.collection('pushInstallations').doc('push-transferred').get()).data())
+        .toMatchObject({ ownerUid: 'test-uid-cleanup-B', ownershipVersion: 2 });
+      expect((await db.collection('pushTokenOwners').doc('hash-transferred').get()).exists)
+        .toBe(true);
 
       await resetEmulator();
     },

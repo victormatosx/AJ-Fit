@@ -43,6 +43,12 @@ import { db as defaultDb } from '../../lib/firebaseAdmin';
 import type { AccountDeletionStepOutcome, KnownErrorCode } from '../errors';
 import {
   deleteProgressPhotoDocuments,
+  deleteUserNotificationDispatches,
+  deleteUserDailyNotificationRegistration,
+  deleteUserNotificationProductWindows,
+  deleteUserNotificationAchievementMilestones,
+  deleteUserPushDevices,
+  deleteUserPushTokenOwners,
   deleteUserAssessments,
   deleteUserProfileDocument,
   deleteUserQuestionnaires,
@@ -57,6 +63,7 @@ import {
   deleteUserWorkoutPrograms,
   deleteUserWorkoutProgramState,
   deleteUserWorkoutProgramDescendants,
+  releaseUserPushInstallations,
 } from './resources';
 import type { ResourceCleanupResult } from './types';
 
@@ -114,6 +121,15 @@ export async function runFirestoreCleanup(
     deleteUserQuestionnaires,
     deleteUserAssessments,
     deleteProgressPhotoDocuments,
+    // Disable private raw-token ownership first. Every registry mutation
+    // re-checks ownerUid transactionally, preserving concurrent transfers.
+    deleteUserPushTokenOwners,
+    releaseUserPushInstallations,
+    deleteUserPushDevices,
+    deleteUserNotificationDispatches,
+    deleteUserNotificationProductWindows,
+    deleteUserNotificationAchievementMilestones,
+    deleteUserDailyNotificationRegistration,
     // Must run before deleteUserWorkoutPrograms — it enumerates program ids
     // to reach the explicit allowlist of nested collections, which a
     // one-level-only delete of the parent docs would otherwise orphan.

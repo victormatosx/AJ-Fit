@@ -66,9 +66,9 @@ describe('firestore.rules — structural contract', () => {
     );
   });
 
-  it('restricts preferences inner diff to language and units', () => {
+  it('restricts preferences inner diff to language, units and notification preferences', () => {
     expect(RULES).toMatch(
-      /preferences\.diff\(resource\.data\.preferences\)\.affectedKeys\(\)\s*\.hasOnly\(\[\s*'language'\s*,\s*'units'\s*\]\)/,
+      /preferences\.diff\(resource\.data\.preferences\)\.affectedKeys\(\)\s*\.hasOnly\(\[\s*'language'\s*,\s*'units'\s*,\s*'notificationPreferences'\s*\]\)/,
     );
   });
 
@@ -77,7 +77,7 @@ describe('firestore.rules — structural contract', () => {
       /data\.keys\(\)\.hasAll\(\[\s*'language'\s*,\s*'units'\s*,\s*'theme'\s*\]\)/,
     );
     expect(RULES).toMatch(
-      /data\.keys\(\)\.hasOnly\(\[\s*'language'\s*,\s*'units'\s*,\s*'theme'\s*\]\)/,
+      /data\.keys\(\)\.hasOnly\(\[\s*'language'\s*,\s*'units'\s*,\s*'theme'\s*,\s*'notificationPreferences'\s*\]\)/,
     );
   });
 

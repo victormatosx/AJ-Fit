@@ -1,0 +1,31 @@
+{
+  "screenTitle": "Notificações",
+  "groups": {
+    "workoutsAndReminders": {
+      "title": "Treinos e lembretes",
+      "description": "Receba lembretes sobre seus treinos e sua rotina."
+    },
+    "evolutionAndAchievements": {
+      "title": "Evolução e conquistas",
+      "description": "Acompanhe sua evolução, novas fases e conquistas."
+    },
+    "progress": {
+      "title": "Progresso",
+      "description": "Receba lembretes para registrar e acompanhar seu progresso."
+    }
+  },
+  "permission": {
+    "granted": "Notificações permitidas neste aparelho.",
+    "denied": "As notificações estão desativadas nas configurações do aparelho.",
+    "notDetermined": "Ative as notificações para acompanhar seus treinos e sua evolução.",
+    "unsupported": "Este aparelho não é compatível com notificações.",
+    "error": "Não foi possível verificar o status das notificações.",
+    "actions": {
+      "enable": "Ativar notificações",
+      "openSettings": "Abrir configurações do aparelho"
+    }
+  },
+  "errors": {
+    "changeFailed": "Não foi possível salvar. Tente novamente."
+  }
+}

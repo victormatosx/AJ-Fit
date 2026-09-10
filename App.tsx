@@ -57,6 +57,8 @@ import { logPhotoVaultIssue } from './src/lib/photoVaultErrors';
 import { logInfo } from './src/lib/logger';
 import { configureWorkoutLifecycleTelemetry } from './src/workoutLifecycle/telemetryProvider';
 import { DeepLinkProvider } from './src/state/DeepLinkContext';
+import { PushNotificationsRuntime } from './src/components/PushNotificationsRuntime';
+import { PushDeviceRegistrationRuntime } from './src/components/PushDeviceRegistrationRuntime';
 
 // Operational lifecycle events are delivered to an authenticated/App-Check
 // callable and then Cloud Logging. Installation is synchronous; delivery is
@@ -599,6 +601,10 @@ function AppContent() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <AuthProvider>
+          {/* Passive push listeners and identity binding never request OS
+              permission and never participate in startup readiness. */}
+          <PushNotificationsRuntime />
+          <PushDeviceRegistrationRuntime />
           {/* Nested inside AuthProvider so SubscriptionProvider can read
               useAuth()'s `user`/`initializing` and react to it (calling
               loginRevenueCat/logoutRevenueCat internally). AuthContext itself

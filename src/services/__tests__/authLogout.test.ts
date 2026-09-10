@@ -4,6 +4,8 @@ const mocks = vi.hoisted(() => ({
   clearSession: vi.fn(),
   signOut: vi.fn(),
   deleteVaultKey: vi.fn(),
+  queueNotificationDeviceRelease: vi.fn(),
+  clearNotificationAccountPreferenceState: vi.fn(),
 }));
 
 vi.mock('firebase/auth', () => ({
@@ -25,6 +27,11 @@ vi.mock('../../lib/photoVaultKeyStorage', () => ({
   deleteVaultKey: mocks.deleteVaultKey,
 }));
 
+vi.mock('../notificationAccountLifecycle', () => ({
+  queueNotificationDeviceRelease: mocks.queueNotificationDeviceRelease,
+  clearNotificationAccountPreferenceState: mocks.clearNotificationAccountPreferenceState,
+}));
+
 import { signOutUser } from '../auth';
 
 describe('verification-screen logout compatibility', () => {
@@ -33,6 +40,8 @@ describe('verification-screen logout compatibility', () => {
     mocks.signOut.mockResolvedValue(undefined);
     mocks.clearSession.mockResolvedValue(undefined);
     mocks.deleteVaultKey.mockResolvedValue(undefined);
+    mocks.queueNotificationDeviceRelease.mockResolvedValue(undefined);
+    mocks.clearNotificationAccountPreferenceState.mockResolvedValue(undefined);
   });
 
   it('signs out from Firebase before clearing secure session persistence', async () => {
@@ -56,6 +65,15 @@ describe('verification-screen logout compatibility', () => {
     mocks.deleteVaultKey.mockRejectedValue(new Error('keychain unavailable'));
 
     await expect(signOutUser()).resolves.toBeUndefined();
+    expect(mocks.signOut).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not wait for a slow push release before completing Firebase logout', async () => {
+    mocks.queueNotificationDeviceRelease.mockReturnValue(new Promise(() => {}));
+
+    await expect(signOutUser()).resolves.toBeUndefined();
+
+    expect(mocks.queueNotificationDeviceRelease).toHaveBeenCalledWith('alice');
     expect(mocks.signOut).toHaveBeenCalledTimes(1);
   });
 

@@ -18,12 +18,11 @@ import { userDocPath } from './constants';
  * write: if false` for every client, including admins (see that file's
  * comment) — the client is NEVER trusted to assert its own role.
  *
- * No custom-claims mechanism exists yet in this project (searched: zero
- * `setCustomUserClaims` calls anywhere in `functions/src`). Adopting one is
- * a bigger, separate architectural change (docs/firebase-permissions-report.md
- * §1 flags it as the recommended evolution) — out of scope here. Reading
- * `users/{uid}` per call is an extra read but this is a low-QPS admin
- * surface, not a hot path.
+ * The admin role itself is deliberately not inferred from a custom claim.
+ * Push visual QA has a separate, narrow `pushQa` claim
+ * (`notifications/qaAuthorization.ts`), but that capability must never be
+ * treated as administrative access. Reading `users/{uid}` per call is an
+ * extra read but this is a low-QPS admin surface, not a hot path.
  */
 
 export async function requireAdminUid(request: CallableRequest<unknown>): Promise<string> {

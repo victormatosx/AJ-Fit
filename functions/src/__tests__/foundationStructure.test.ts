@@ -98,12 +98,18 @@ describe('Photo Vault backend foundation — Phase 3 structural guarantees', () 
       'cleanupPhotoVaultOrphans',
       'confirmCommercialGate',
       'createVault',
+      'dispatchTestNotification',
+      'evaluateDailyWorkoutNotifications',
       'onAccountDeletionRequested',
       'onTrustedWorkoutLifecycleEventCreated',
+      'reconcileNotificationReceipts',
       'recordWorkoutLifecycleTelemetry',
       'recoverVaultKey',
+      'releasePushDevice',
       'requestAccountDeletion',
+      'retryNotificationDispatches',
       'revenueCatWebhook',
+      'syncPushDevice',
       'validatePromoCode',
     ]);
   });
@@ -198,7 +204,7 @@ describe('Photo Vault backend foundation — Phase 3 structural guarantees', () 
     expect(source).not.toContain('randomBytes');
   });
 
-  it('enforces App Check on exactly the eight approved mobile callables', () => {
+  it('enforces App Check on every approved mobile callable', () => {
     const protectedDefinitions = [
       ['src/index.ts', 'validatePromoCode'],
       ['src/index.ts', 'authorizePromoPurchase'],
@@ -208,6 +214,9 @@ describe('Photo Vault backend foundation — Phase 3 structural guarantees', () 
       ['src/photoVault/recoverVaultKey.ts', 'recoverVaultKey'],
       ['src/billing/confirmCommercialGate.ts', 'confirmCommercialGate'],
       ['src/accountDeletion/requestAccountDeletion.ts', 'requestAccountDeletion'],
+      ['src/index.ts', 'syncPushDevice'],
+      ['src/index.ts', 'releasePushDevice'],
+      ['src/index.ts', 'dispatchTestNotification'],
     ] as const;
 
     for (const [file, functionName] of protectedDefinitions) {
@@ -230,7 +239,7 @@ describe('Photo Vault backend foundation — Phase 3 structural guarantees', () 
       'src/accountDeletion/reconciliation/scheduler.ts',
     ].map(readCode).join('\n');
 
-    expect(allEndpointSources.match(/enforceAppCheck\s*:\s*true/g)).toHaveLength(8);
+    expect(allEndpointSources.match(/enforceAppCheck\s*:\s*true/g)).toHaveLength(11);
     expect(allEndpointSources).not.toMatch(/consumeAppCheckToken\s*:\s*true/);
   });
 

@@ -19,6 +19,10 @@ import {
   PASSWORD_POLICY_MAX_LENGTH,
   PASSWORD_POLICY_MIN_LENGTH,
 } from '../lib/passwordPolicy';
+import {
+  clearNotificationAccountPreferenceState,
+  queueNotificationDeviceRelease,
+} from './notificationAccountLifecycle';
 
 /**
  * Reusable, typed authentication service.
@@ -186,6 +190,15 @@ export function signOutUser(): Promise<void> {
     // Captured before signOut, which clears currentUser: the vault key is
     // namespaced per uid and cannot be removed without it.
     const uid = auth.currentUser?.uid;
+    if (uid) {
+      // Neither operation is allowed to delay Firebase Auth/RevenueCat
+      // lifecycle. Device release is fenced server-side; preference cleanup
+      // is identity-scoped and best-effort.
+      void queueNotificationDeviceRelease(uid).catch((err) => {
+        logError('auth:push-release', err, { uid });
+      });
+      void clearNotificationAccountPreferenceState(uid);
+    }
 
     try {
       await signOut(auth);

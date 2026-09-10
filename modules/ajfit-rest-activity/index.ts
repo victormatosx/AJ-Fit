@@ -12,6 +12,8 @@ export type AJFitRestActivityNativeModule = {
   end(sessionId: string, reason: RestActivityEndReason): void | Promise<void>;
   /** Optional for compatibility with binaries produced before Phase 7. */
   cleanup?(): void | Promise<void>;
+  /** Optional additive hook used only to deduplicate Android's system prompt. */
+  recordNotificationPermissionRequest?(): void | Promise<void>;
 };
 
 // This remains optional so older binaries and non-Android platforms keep the

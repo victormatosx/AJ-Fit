@@ -42,6 +42,7 @@ export function SettingsScreen({
   onBack,
   onOpenEditProfile,
   onOpenSecurity,
+  onOpenNotifications,
   onOpenHelpCenter,
   onReportProblem,
   onSendSuggestion,
@@ -50,6 +51,7 @@ export function SettingsScreen({
   onBack?: () => void;
   onOpenEditProfile?: () => void;
   onOpenSecurity?: () => void;
+  onOpenNotifications?: () => void;
   onOpenHelpCenter?: () => void;
   onReportProblem?: () => void;
   onSendSuggestion?: () => void;
@@ -262,7 +264,7 @@ export function SettingsScreen({
           <SettingsSection
             title={t('settings:sections.notifications').toUpperCase()}
             items={[
-              { icon: 'bell', label: t('settings:items.notifications'), onPress: () => {} },
+              { icon: 'bell', label: t('settings:items.notifications'), onPress: onOpenNotifications },
               { icon: 'timer', label: t('settings:items.timersAndSounds'), onPress: () => {} },
             ]}
           />

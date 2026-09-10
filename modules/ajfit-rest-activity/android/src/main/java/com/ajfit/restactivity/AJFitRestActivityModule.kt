@@ -41,6 +41,17 @@ class AJFitRestActivityModule : Module() {
       )
     }
 
+    // Shares only Android's system-prompt history with the app-wide push
+    // permission flow. No Rest Timer session/state crosses this boundary.
+    Function("recordNotificationPermissionRequest") {
+      appContext.reactContext?.applicationContext?.let { context ->
+        permissionPreferences(context)
+          .edit()
+          .putBoolean(PERMISSION_REQUESTED_KEY, true)
+          .apply()
+      }
+    }
+
     AsyncFunction("start") { state: RestActivityStateRecord, promise: Promise ->
       val context = appContext.reactContext?.applicationContext
       if (context == null) {
