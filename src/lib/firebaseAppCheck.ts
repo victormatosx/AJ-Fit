@@ -10,12 +10,26 @@ import {
   getNativeAppCheckToken,
   isNativeAppCheckAvailable,
 } from './nativeAppCheck';
-import { errorClass, errorCode, logWarn } from './logger';
+import { errorClass, errorCode, logWarn, sanitizeLogText } from './logger';
 
 type AppCheckGlobal = typeof globalThis & {
   __ajFitFirebaseAppCheck?: AppCheck;
   FIREBASE_APPCHECK_DEBUG_TOKEN?: boolean | string;
 };
+
+/**
+ * The Swift side (AJFitAppCheckModule.swift) already builds a detailed
+ * message — `"...: [domain#code] description"` — from the real native
+ * NSError. Nothing before this read it; both `@firebase/auth`'s own log
+ * line and our previous diagnostic only surfaced `error.code`, which is why
+ * "undefined reason" is all that historically reached the app's log stream.
+ * `sanitizeLogText` (src/lib/logger.ts) already redacts token/secret-shaped
+ * substrings generically — this never needs its own token-specific check.
+ */
+function nativeErrorMessage(error: unknown): string | undefined {
+  const message = error instanceof Error ? error.message : undefined;
+  return message ? sanitizeLogText(message) : undefined;
+}
 
 /**
  * DEV-only failure categorization — never changes behavior, only what gets
@@ -30,6 +44,7 @@ type AppCheckGlobal = typeof globalThis & {
  * Maps the real error codes this module and its native layer can throw:
  * - `ERR_APP_CHECK_MODULE_UNAVAILABLE` (modules/ajfit-app-check/index.ts) → MODULE_NOT_AVAILABLE
  * - `ERR_APP_CHECK_NOT_CONFIGURED` (AJFitAppCheckModule.swift)            → FIREBASE_NOT_CONFIGURED
+ * - `ERR_APP_CHECK_DEBUG_TOKEN_MISSING` (AJFitAppCheckModule.swift)       → DEBUG_TOKEN_NOT_CONFIGURED (unpinned local Development Build — see .env.example)
  * - `ERR_APP_CHECK_TOKEN` (AJFitAppCheckModule.swift)                    → NATIVE_ERROR (message now carries the real NSError domain/code/description)
  * - `ERR_APP_CHECK_INVALID_TOKEN` (nativeAppCheck.ts)                    → TOKEN_REJECTED (native returned a malformed/expired contract)
  * - anything else                                                        → UNKNOWN
@@ -38,6 +53,7 @@ function categorizeAppCheckFailure(error: unknown): string {
   switch (errorCode(error)) {
     case 'ERR_APP_CHECK_MODULE_UNAVAILABLE': return 'MODULE_NOT_AVAILABLE';
     case 'ERR_APP_CHECK_NOT_CONFIGURED': return 'FIREBASE_NOT_CONFIGURED';
+    case 'ERR_APP_CHECK_DEBUG_TOKEN_MISSING': return 'DEBUG_TOKEN_NOT_CONFIGURED';
     case 'ERR_APP_CHECK_TOKEN': return 'NATIVE_ERROR';
     case 'ERR_APP_CHECK_INVALID_TOKEN': return 'TOKEN_REJECTED';
     default: return 'UNKNOWN';
@@ -97,6 +113,7 @@ export function initializeFirebaseAppCheck(app: FirebaseApp): AppCheck | null {
           category: categorizeAppCheckFailure(error),
           errorClass: errorClass(error),
           errorCode: errorCode(error) ?? 'UNCLASSIFIED',
+          nativeMessage: nativeErrorMessage(error),
           nativeAvailable,
         });
       }
