@@ -31,6 +31,11 @@
     "title": "Não foi possível iniciar o treino",
     "body": "Algo deu errado ao iniciar o treino. Verifique sua conexão e tente novamente."
   },
+  "preparing": {
+    "kicker": "Sessão segura",
+    "title": "Preparando treino…",
+    "body": "Estamos confirmando sua sessão. Isso deve levar só um instante."
+  },
   "sessionRecovery": {
     "title": "Treino em andamento",
     "body": "Você tem um treino que ainda não foi finalizado.",

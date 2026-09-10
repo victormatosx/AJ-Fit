@@ -45,11 +45,10 @@ describe('FASE 3 — START_WORKOUT boundary', () => {
   const workoutScreen = source('src/screens/WorkoutScreen.tsx');
 
   it('FASE 5: startWorkout() is now a pure action — the gate moved to <PremiumAction> around its CTA', () => {
-    // P0 integrity fix (2026-09): startWorkout() became `async` — it now
-    // awaits the authoritative, persisted `execution.start()` before
-    // revealing the session (docs §9) — but the Premium-gate boundary this
-    // test protects is unchanged: it's still called with no capability
-    // check of its own.
+    // P0 integrity remains authoritative: the actionless workout surface is
+    // optimistic, but the real WorkoutScreen is revealed only after the
+    // persisted execution.start() resolves. The Premium boundary is
+    // unchanged: this function still has no capability check of its own.
     const startWorkoutBody = appShellCode.slice(
       appShellCode.indexOf('const startWorkout = async () => {'),
       appShellCode.indexOf('};', appShellCode.indexOf('const startWorkout = async () => {')),

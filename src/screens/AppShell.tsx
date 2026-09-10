@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { StyleSheet, View, Text, Pressable, Modal } from 'react-native';
+import { StyleSheet, View, Text, Pressable, Modal, Animated, Easing } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -56,6 +56,7 @@ import {
 } from '../scheduleEngine';
 import { MissedSessionDecisionModal } from '../components/schedule/MissedSessionDecisionModal';
 import { WorkoutExecutionPendingModal } from '../components/workout/WorkoutExecutionPendingModal';
+import { FullScreenLoading } from '../components/ui/FullScreenLoading';
 import { useWorkoutExecution, type WorkoutExecutionStartError } from '../workoutExecution/useWorkoutExecution';
 import { useWorkoutSessionRecovery } from '../workoutExecution/useWorkoutSessionRecovery';
 import { WorkoutSessionRecoveryModal } from '../components/workout/WorkoutSessionRecoveryModal';
@@ -77,6 +78,49 @@ type SupportRoute =
   | { name: 'article'; article: HelpArticle }
   | { name: 'form'; type: SupportTicketType; subject?: string }
   | { name: 'success' };
+
+/** Logs the first committed workout-tab surface for one confirm attempt. */
+function WorkoutStartVisibilityMetric({
+  attempt,
+  onMeasured,
+}: {
+  attempt: { id: number; requestedAtMs: number; sessionIndex: number };
+  onMeasured: () => void;
+}) {
+  useEffect(() => {
+    logInfo('workout_execution', 'start_surface_visible', {
+      attemptId: attempt.id,
+      sessionIndex: attempt.sessionIndex,
+      durationMs: Date.now() - attempt.requestedAtMs,
+    });
+    onMeasured();
+  }, [attempt.id, attempt.requestedAtMs, attempt.sessionIndex, onMeasured]);
+  return null;
+}
+
+// The loading spinner unmounts the instant the execution is confirmed, so
+// WorkoutScreen's very first frame is what the user sees next — with no
+// animation that first frame used to pop in abruptly (the reported entry
+// artifact). This fades it in once per mounted session instead of relying
+// on the parent's plain (non-animated) minimize/restore opacity toggle,
+// which must stay instant.
+function WorkoutEntranceFade({ children }: { children: React.ReactNode }) {
+  const reduceMotion = useReducedMotionPreference();
+  const opacity = useRef(new Animated.Value(reduceMotion ? 1 : 0)).current;
+  useEffect(() => {
+    if (reduceMotion) return;
+    Animated.timing(opacity, {
+      toValue: 1,
+      duration: 240,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+    // Entrance only ever needs to play once for the lifetime of this
+    // mount (WorkoutScreen stays mounted across minimize/restore).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return <Animated.View style={{ flex: 1, opacity }}>{children}</Animated.View>;
+}
 
 function deviceTimezone(): string {
   try {
@@ -133,6 +177,7 @@ function AppShellContent({
   setShowPremium: (value: boolean) => void;
 }) {
   const { theme } = useTheme();
+  const { t } = useTranslation('workout');
   const reduceMotion = useReducedMotionPreference();
   const { tab, setTab } = useAppState();
   const { user, linkedProviders } = useAuth();
@@ -189,6 +234,21 @@ function AppShellContent({
   } = useRestSession();
   const [activeSessionIndex, setActiveSessionIndex] = useState(0);
   const [workoutInProgress, setWorkoutInProgress] = useState(false);
+  // Visual-only optimistic entry state. The real WorkoutScreen is never
+  // mounted from this flag; it merely owns the actionless preparing surface
+  // while execution.start() acquires the durable Firestore mutex.
+  const [workoutStartPending, setWorkoutStartPending] = useState(false);
+  const [workoutStartAttempt, setWorkoutStartAttempt] = useState<{
+    id: number;
+    requestedAtMs: number;
+    sessionIndex: number;
+  } | null>(null);
+  const workoutStartAttemptSequenceRef = useRef(0);
+  const clearWorkoutStartAttempt = useCallback(() => setWorkoutStartAttempt(null), []);
+  // React state does not update synchronously. This ref is the same-tick
+  // re-entrancy guard that makes a double confirm a no-op before the first
+  // `workoutStartPending` render has committed.
+  const workoutStartInFlightRef = useRef(false);
   const [startWorkoutError, setStartWorkoutError] = useState<WorkoutExecutionStartError | null>(null);
   const [resolvingPendingExecution, setResolvingPendingExecution] = useState(false);
   // The visual completion screen renders as soon as its last set is done,
@@ -304,6 +364,7 @@ function AppShellContent({
   // gates `execution.start` inside `startWorkout` below; this only decides
   // which overlay step to show first.
   const requestStartWorkout = useCallback(() => {
+    if (workoutStartInFlightRef.current || workoutStartPending) return;
     if (workoutInProgress) {
       setTab('workout');
       return;
@@ -321,7 +382,7 @@ function AppShellContent({
       return;
     }
     setStartWorkoutFlow('confirmation');
-  }, [workoutInProgress, recoveryModalOpen, schedule.resolution.status, setTab]);
+  }, [workoutInProgress, workoutStartPending, recoveryModalOpen, schedule.resolution.status, setTab]);
 
   const selectTab = (nextTab: TabId) => {
     if (nextTab === 'workout' && tab !== 'workout') {
@@ -420,26 +481,68 @@ function AppShellContent({
     // already resolved (idempotent otherwise: a double tap or a cold-start
     // reopen resumes the same execution, docs §22-25).
     if (schedule.resolution.status !== 'SESSION_READY') return;
+    if (workoutStartInFlightRef.current) return;
+    workoutStartInFlightRef.current = true;
+    const requestedAtMs = Date.now();
+    const sessionIndex = schedule.resolution.sessionIndex;
+    const attemptId = ++workoutStartAttemptSequenceRef.current;
+    logInfo('workout_execution', 'start_user_confirmed', { attemptId, sessionIndex });
     workoutCompletionRef.current = null;
     setStartWorkoutFlow('idle');
     setStartWorkoutError(null);
-    const sessionIndex = schedule.resolution.sessionIndex;
-    const { execution: started, error } = await execution.start(sessionIndex);
-    if (!started) {
-      setStartWorkoutError(error);
-      return;
-    }
-    // Persisted start succeeded — only now does the session become visible
-    // (docs §9/§25 "Start").
     setActiveSessionIndex(sessionIndex);
-    setWorkoutInProgress(true);
+    setWorkoutStartAttempt({ id: attemptId, requestedAtMs, sessionIndex });
+    setWorkoutStartPending(true);
+    // Navigation is deliberately before the first await. Only the inert
+    // preparing surface can render until the authoritative start succeeds.
     setTab('workout');
-    const executionScopeId = activeProgram?.programInstanceId ?? activeProgram?.programId;
-    beginWorkoutSession(
-      executionScopeId
-        ? activeExecutionId(executionScopeId, sessionIndex, started.scheduledLocalDate)
-        : undefined,
-    );
+    try {
+      const { execution: started, error } = await execution.start(sessionIndex);
+      const durationMs = Date.now() - requestedAtMs;
+      if (!started) {
+        // Roll back the optimistic surface atomically. Since WorkoutScreen
+        // never mounted, there is no local set/rest/finish state to unwind.
+        setWorkoutStartPending(false);
+        setWorkoutInProgress(false);
+        setWorkoutStartAttempt(null);
+        setTab('home');
+        setStartWorkoutError(error);
+        logWarn('workout_execution', 'start_ui_rolled_back', {
+          attemptId,
+          sessionIndex,
+          durationMs,
+          errorCode: error.code,
+        });
+        return;
+      }
+      // Persisted start succeeded. This single render swaps the preparing
+      // surface for WorkoutScreen in place, without another navigation.
+      setWorkoutInProgress(true);
+      setWorkoutStartPending(false);
+      const executionScopeId = activeProgram?.programInstanceId ?? activeProgram?.programId;
+      beginWorkoutSession(
+        executionScopeId
+          ? activeExecutionId(executionScopeId, sessionIndex, started.scheduledLocalDate)
+          : undefined,
+      );
+      logInfo('workout_execution', 'start_ui_confirmed', { attemptId, sessionIndex, durationMs });
+    } catch (error) {
+      // useWorkoutExecution currently converts failures to typed results;
+      // this boundary keeps a future unexpected throw from stranding the UI.
+      setWorkoutStartPending(false);
+      setWorkoutInProgress(false);
+      setWorkoutStartAttempt(null);
+      setTab('home');
+      setStartWorkoutError({ code: 'UNKNOWN' });
+      logWarn('workout_execution', 'start_ui_rolled_back', {
+        attemptId,
+        sessionIndex,
+        durationMs: Date.now() - requestedAtMs,
+        error,
+      });
+    } finally {
+      workoutStartInFlightRef.current = false;
+    }
   };
 
   /** Resolves a CONFLICT/LEGACY_PENDING `startWorkoutError` by abandoning the offending pending execution, then retries `startWorkout` (docs §11/§12). Never offers "resume" — see `WorkoutExecutionPendingModal`'s doc comment. */
@@ -524,6 +627,7 @@ function AppShellContent({
     workoutCompletionRef.current = null;
     endWorkoutSession();
     setWorkoutInProgress(false);
+    setWorkoutStartAttempt(null);
     setTab('home');
   };
 
@@ -569,14 +673,24 @@ function AppShellContent({
             onFrequencyNext={frequencyWindow.goNext}
           />
         </PersistentScreen>
-        {tab === 'workout' && !workoutInProgress && prescription.status === 'SUCCESS' && schedule.resolution.status !== 'SESSION_READY' && (
+        {tab === 'workout' && workoutStartAttempt && (
+          <WorkoutStartVisibilityMetric
+            key={workoutStartAttempt.id}
+            attempt={workoutStartAttempt}
+            onMeasured={clearWorkoutStartAttempt}
+          />
+        )}
+        {tab === 'workout' && (workoutStartPending || execution.starting || (workoutInProgress && !execution.execution)) && (
+          <FullScreenLoading accessibilityLabel={t('preparing.title')} />
+        )}
+        {tab === 'workout' && !workoutStartPending && !workoutInProgress && prescription.status === 'SUCCESS' && schedule.resolution.status !== 'SESSION_READY' && (
           <WorkoutTabBlockedState
             resolution={schedule.resolution}
             plan={prescription.plan}
             onDone={finishWorkoutSession}
           />
         )}
-        {workoutInProgress && prescription.status === 'SUCCESS' && (
+        {workoutInProgress && !workoutStartPending && !execution.starting && execution.execution && prescription.status === 'SUCCESS' && (
           <View
             pointerEvents={tab === 'workout' ? 'auto' : 'none'}
             accessibilityElementsHidden={tab !== 'workout'}
@@ -586,6 +700,7 @@ function AppShellContent({
               { opacity: tab === 'workout' ? 1 : 0, zIndex: tab === 'workout' ? 1 : 0 },
             ]}
           >
+            <WorkoutEntranceFade>
             <WorkoutScreen
               plan={prescription.plan}
               sessionIndex={activeSessionIndex}
@@ -681,6 +796,7 @@ function AppShellContent({
               workoutCompletionRef.current = completion;
               }}
             />
+            </WorkoutEntranceFade>
           </View>
         )}
         <PersistentScreen

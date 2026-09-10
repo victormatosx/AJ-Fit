@@ -26,7 +26,7 @@ describe('minimized active workout UX', () => {
   });
 
   it('keeps WorkoutScreen mounted and makes it non-interactive only while hidden', () => {
-    expect(appShell).toContain("{workoutInProgress && prescription.status === 'SUCCESS' && (");
+    expect(appShell).toContain("{workoutInProgress && !workoutStartPending && !execution.starting && execution.execution && prescription.status === 'SUCCESS' && (");
     expect(appShell).toContain("pointerEvents={tab === 'workout' ? 'auto' : 'none'}");
     expect(appShell).toContain("accessibilityElementsHidden={tab !== 'workout'}");
   });

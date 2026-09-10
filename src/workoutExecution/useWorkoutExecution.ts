@@ -35,6 +35,10 @@ export type WorkoutExecutionStartError =
   | { code: 'LEGACY_PENDING'; executionIds: string[] }
   | { code: 'UNKNOWN' };
 
+export type WorkoutExecutionStartResult =
+  | { execution: PersistedWorkoutExecution; error: null }
+  | { execution: null; error: WorkoutExecutionStartError };
+
 export interface WorkoutExecutionController {
   execution: PersistedWorkoutExecution | null;
   starting: boolean;
@@ -58,10 +62,7 @@ export interface WorkoutExecutionController {
    * on the outcome — `startError` is React state and lags one render behind
    * this promise's resolution.
    */
-  start: (sessionIndex: number) => Promise<
-    | { execution: PersistedWorkoutExecution; error: null }
-    | { execution: null; error: WorkoutExecutionStartError }
-  >;
+  start: (sessionIndex: number) => Promise<WorkoutExecutionStartResult>;
   /**
    * Adopts an already-verified `IN_PROGRESS` execution directly into this
    * hook's state — used by Workout Recovery once the bootstrap check
@@ -108,38 +109,71 @@ export function useWorkoutExecution(program: WorkoutProgramSnapshot | null, time
   const [execution, setExecution] = useState<PersistedWorkoutExecution | null>(null);
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<WorkoutExecutionStartError | null>(null);
+  const startInFlightRef = useRef<{
+    key: string;
+    promise: Promise<WorkoutExecutionStartResult>;
+  } | null>(null);
   const mutationQueueRef = useRef(new WorkoutMutationQueue());
   // Fallback start instant for the in-flight `start()` call only — cleared
   // whenever `execution` resolves so `execution.startedAt` (the persisted,
   // canonical value) takes over as the single source of truth.
   const pendingStartedAtMsRef = useRef<number | null>(null);
 
-  const start = useCallback(async (sessionIndex: number) => {
+  const start = useCallback((sessionIndex: number): Promise<WorkoutExecutionStartResult> => {
     const unknownError = { execution: null, error: { code: 'UNKNOWN' as const } };
-    if (!uid || !program) return unknownError;
+    if (!uid || !program) return Promise.resolve(unknownError);
+    const scheduledLocalDate = localDateInTimezone(new Date(), timezone ?? deviceTimezone());
+    const executionScopeId = program.programInstanceId ?? program.programId;
+    const requestKey = `${uid}:${executionScopeId}:${sessionIndex}:${scheduledLocalDate}`;
+    const current = startInFlightRef.current;
+    if (current) {
+      if (current.key === requestKey) {
+        logInfo('workout_execution', 'start_single_flight_reused', { sessionIndex });
+        return current.promise;
+      }
+      // One hook instance cannot safely represent two different sessions in
+      // flight. The server mutex remains the ultimate guard; this prevents a
+      // second local request from being sent before it is needed.
+      logWarn('workout_execution', 'start_single_flight_rejected', { sessionIndex });
+      return Promise.resolve(unknownError);
+    }
     setStarting(true);
     setStartError(null);
     mutationQueueRef.current.reset();
     pendingStartedAtMsRef.current = Date.now();
-    try {
-      const scheduledLocalDate = localDateInTimezone(new Date(), timezone ?? deviceTimezone());
-      const result = await startOrResumeWorkoutExecution({ uid, program, sessionIndex, scheduledLocalDate });
-      setExecution(result);
-      return { execution: result, error: null };
-    } catch (error) {
-      logWarn('workout_execution', 'start_failed', { error });
-      setExecution(null);
-      pendingStartedAtMsRef.current = null;
-      const startError: WorkoutExecutionStartError = error instanceof WorkoutExecutionConflictError
-        ? { code: 'CONFLICT', active: error.active }
-        : error instanceof WorkoutExecutionLegacyPendingError
-          ? { code: 'LEGACY_PENDING', executionIds: error.executionIds }
-          : { code: 'UNKNOWN' };
-      setStartError(startError);
-      return { execution: null, error: startError };
-    } finally {
-      setStarting(false);
-    }
+    const startedAtMs = Date.now();
+    let operation!: Promise<WorkoutExecutionStartResult>;
+    operation = (async (): Promise<WorkoutExecutionStartResult> => {
+      try {
+        const result = await startOrResumeWorkoutExecution({ uid, program, sessionIndex, scheduledLocalDate });
+        setExecution(result);
+        logInfo('workout_execution', 'start_execution_confirmed', {
+          sessionIndex,
+          durationMs: Date.now() - startedAtMs,
+        });
+        return { execution: result, error: null };
+      } catch (error) {
+        logWarn('workout_execution', 'start_failed', {
+          error,
+          sessionIndex,
+          durationMs: Date.now() - startedAtMs,
+        });
+        setExecution(null);
+        pendingStartedAtMsRef.current = null;
+        const startError: WorkoutExecutionStartError = error instanceof WorkoutExecutionConflictError
+          ? { code: 'CONFLICT', active: error.active }
+          : error instanceof WorkoutExecutionLegacyPendingError
+            ? { code: 'LEGACY_PENDING', executionIds: error.executionIds }
+            : { code: 'UNKNOWN' };
+        setStartError(startError);
+        return { execution: null, error: startError };
+      } finally {
+        if (startInFlightRef.current?.promise === operation) startInFlightRef.current = null;
+        setStarting(false);
+      }
+    })();
+    startInFlightRef.current = { key: requestKey, promise: operation };
+    return operation;
   }, [uid, program, timezone]);
 
   const adoptExecution = useCallback((next: PersistedWorkoutExecution) => {

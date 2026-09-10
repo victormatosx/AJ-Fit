@@ -2,6 +2,7 @@ import {
   collection,
   doc,
   getDoc,
+  getDocFromCache,
   getDocs,
   limit as fsLimit,
   orderBy,
@@ -9,11 +10,11 @@ import {
   runTransaction,
   serverTimestamp,
   where,
-  type Timestamp,
+  Timestamp,
 } from 'firebase/firestore';
 
 import { db } from '../lib/firebase';
-import { logWarn } from '../lib/logger';
+import { logInfo, logWarn } from '../lib/logger';
 import type { WorkoutProgramSnapshot } from './workoutPrograms';
 import {
   authorizeWorkoutLifecycleMutation,
@@ -112,6 +113,12 @@ function fromDoc(executionId: string, data: Record<string, unknown>): PersistedW
   };
 }
 
+function hasResolvedExecutionTimestamps(execution: PersistedWorkoutExecution): boolean {
+  return execution.startedAt instanceof Timestamp
+    && execution.createdAt instanceof Timestamp
+    && execution.updatedAt instanceof Timestamp;
+}
+
 /**
  * Starts a new execution for `sessionIndex`, or resumes/restarts the one
  * already at the deterministic doc id for (programId, sessionIndex,
@@ -155,6 +162,7 @@ export async function startOrResumeWorkoutExecution(input: {
   sessionIndex: number;
   scheduledLocalDate: string;
 }): Promise<PersistedWorkoutExecution> {
+  const serviceStartedAtMs = Date.now();
   const { uid, program, sessionIndex, scheduledLocalDate } = input;
   const session = program.sessions[sessionIndex];
   if (!session) throw new Error('SESSION_INDEX_OUT_OF_RANGE');
@@ -167,10 +175,19 @@ export async function startOrResumeWorkoutExecution(input: {
   // cannot participate in a client-SDK transaction). This only matters for
   // data written before `current` existed: every write going forward is
   // gated by the transaction below, so this can never race against itself.
+  const legacyCheckStartedAtMs = Date.now();
   const legacySnapshot = await getDocs(query(executionsCollection(uid), where('status', '==', 'IN_PROGRESS'), fsLimit(5)));
+  logInfo('workout_execution', 'start_legacy_check_completed', {
+    durationMs: Date.now() - legacyCheckStartedAtMs,
+    resultCount: legacySnapshot.size,
+  });
   const legacyOrphans = legacySnapshot.docs.filter((item) => item.id !== executionId);
   if (legacyOrphans.length > 0) {
+    const legacyPointerCheckStartedAtMs = Date.now();
     const currentSnapshot = await getDoc(stateRef);
+    logInfo('workout_execution', 'start_legacy_pointer_check_completed', {
+      durationMs: Date.now() - legacyPointerCheckStartedAtMs,
+    });
     const trackedId = currentSnapshot.exists() ? (currentSnapshot.data().executionId as string) : null;
     const untracked = legacyOrphans.filter((item) => item.id !== trackedId);
     if (untracked.length > 0) {
@@ -214,8 +231,14 @@ export async function startOrResumeWorkoutExecution(input: {
     schemaVersion: WORKOUT_EXECUTION_STATE_SCHEMA_VERSION,
   };
 
+  const transactionStartedAtMs = Date.now();
+  type TransactionResult =
+    | { kind: 'existing'; execution: PersistedWorkoutExecution }
+    | { kind: 'created' }
+    | { kind: 'restarted' };
+  let transactionResult: TransactionResult | null = null;
   try {
-    await runTransaction(db, async (transaction) => {
+    transactionResult = await runTransaction(db, async (transaction): Promise<TransactionResult> => {
       const [snapshot, stateSnapshot] = await Promise.all([transaction.get(ref), transaction.get(stateRef)]);
 
       if (stateSnapshot.exists()) {
@@ -228,9 +251,16 @@ export async function startOrResumeWorkoutExecution(input: {
             scheduledLocalDate: tracked.scheduledLocalDate as string,
           });
         }
-        // Tracked execution matches this id: it must already be IN_PROGRESS —
-        // nothing to write, idempotent resume.
-        return;
+        // A pointer without its execution (or pointing at a terminal one) is
+        // inconsistent. Validate it inside the same authoritative read set;
+        // the old post-transaction server read used to catch only the missing
+        // document and added a full round trip to every healthy start.
+        if (!snapshot.exists()) throw new Error('EXECUTION_WRITE_FAILED');
+        const trackedExecution = fromDoc(executionId, snapshot.data());
+        if (trackedExecution.status !== 'IN_PROGRESS') throw new Error('EXECUTION_NOT_IN_PROGRESS');
+        // Idempotent resume needs no write and can return the transaction's
+        // already-authoritative snapshot directly.
+        return { kind: 'existing', execution: trackedExecution };
       }
 
       if (snapshot.exists()) {
@@ -240,7 +270,7 @@ export async function startOrResumeWorkoutExecution(input: {
           // being started, with no `current` pointer yet — safe, deterministic
           // adoption: only the pointer is created, execution data untouched.
           transaction.set(stateRef, { ...pointer, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
-          return;
+          return { kind: 'existing', execution: fromDoc(executionId, snapshot.data()) };
         }
         if (status !== 'ABANDONED') throw new Error('SESSION_ALREADY_FINISHED');
         // Restart after abandon: the abandoned attempt's logged sets are
@@ -248,11 +278,16 @@ export async function startOrResumeWorkoutExecution(input: {
         // (docs §13) since this is a genuinely new attempt; `createdAt` stays put.
         transaction.update(ref, { ...base, startedAt: serverTimestamp(), updatedAt: serverTimestamp() });
         transaction.set(stateRef, { ...pointer, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
-        return;
+        return { kind: 'restarted' };
       }
 
       transaction.set(ref, { ...base, startedAt: serverTimestamp(), createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
       transaction.set(stateRef, { ...pointer, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+      return { kind: 'created' };
+    });
+    logInfo('workout_execution', 'start_transaction_completed', {
+      durationMs: Date.now() - transactionStartedAtMs,
+      outcome: transactionResult.kind,
     });
   } catch (error) {
     // Observability (docs P0-C §12) — logged once per actual failure
@@ -262,11 +297,57 @@ export async function startOrResumeWorkoutExecution(input: {
     if (error instanceof WorkoutExecutionConflictError) {
       logWarn('workout_execution', 'mutex_conflict', { activeSessionIndex: error.active.sessionIndex });
     }
+    logWarn('workout_execution', 'start_transaction_failed', {
+      durationMs: Date.now() - transactionStartedAtMs,
+      error,
+    });
     throw error;
   }
 
-  const result = await loadWorkoutExecution(uid, executionId);
-  if (!result) throw new Error('EXECUTION_WRITE_FAILED');
+  if (transactionResult?.kind === 'existing') {
+    logInfo('workout_execution', 'start_service_succeeded', {
+      durationMs: Date.now() - serviceStartedAtMs,
+      materialization: 'transaction',
+    });
+    return transactionResult.execution;
+  }
+
+  // A committed transaction has already populated the SDK's local cache.
+  // Read the server-resolved timestamps there instead of issuing the former
+  // unconditional network getDoc. The server fallback is consistency-only:
+  // unusual cache configurations must never turn a committed start into an
+  // unusable execution object.
+  const materializationStartedAtMs = Date.now();
+  let result: PersistedWorkoutExecution | null = null;
+  let materialization: 'cache' | 'server-fallback' = 'cache';
+  // After ABANDONED -> IN_PROGRESS the cache may still hold the pre-update
+  // terminal snapshot even though runTransaction has resolved. That rarer
+  // restart path therefore keeps an authoritative read; a brand-new start
+  // can safely use the newly-created cached document.
+  if (transactionResult?.kind === 'created') {
+    try {
+      const cached = await getDocFromCache(ref);
+      if (cached.exists()) {
+        const candidate = fromDoc(executionId, cached.data());
+        if (candidate.status === 'IN_PROGRESS' && hasResolvedExecutionTimestamps(candidate)) result = candidate;
+      }
+    } catch {
+      // Fall through to the authoritative server read below.
+    }
+  }
+  if (!result) {
+    materialization = 'server-fallback';
+    result = await loadWorkoutExecution(uid, executionId);
+  }
+  logInfo('workout_execution', 'start_materialization_completed', {
+    durationMs: Date.now() - materializationStartedAtMs,
+    source: materialization,
+  });
+  if (!result || !hasResolvedExecutionTimestamps(result)) throw new Error('EXECUTION_WRITE_FAILED');
+  logInfo('workout_execution', 'start_service_succeeded', {
+    durationMs: Date.now() - serviceStartedAtMs,
+    materialization,
+  });
   return result;
 }
 

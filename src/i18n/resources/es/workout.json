@@ -31,6 +31,11 @@
     "title": "No se pudo iniciar el entrenamiento",
     "body": "Algo salió mal al iniciar el entrenamiento. Verifica tu conexión e inténtalo de nuevo."
   },
+  "preparing": {
+    "kicker": "Sesión segura",
+    "title": "Preparando entrenamiento…",
+    "body": "Estamos confirmando tu sesión. Esto solo debería tardar un instante."
+  },
   "sessionRecovery": {
     "title": "Entrenamiento en curso",
     "body": "Tienes un entrenamiento que aún no se ha finalizado.",
