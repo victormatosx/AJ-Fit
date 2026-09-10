@@ -2,11 +2,13 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const source = readFileSync(new URL('../WorkoutScreen.tsx', import.meta.url), 'utf8');
+const cardioContent = readFileSync(new URL('../../components/workout/CardioSessionContent.tsx', import.meta.url), 'utf8');
 
 describe('WorkoutScreen cardio finisher structure', () => {
   it('renders a post-strength prescription only when cardioFinisher exists', () => {
     expect(source).toContain('if (showCardioFinisher && cardioFinisher)');
-    expect(source).toContain("t('cardioFinisher.title')");
+    expect(source).toContain('<CardioSessionContent');
+    expect(cardioContent).toContain("t('cardioFinisher.title')");
     expect(source).toContain('resolveCardioFinisherPresentation');
   });
 

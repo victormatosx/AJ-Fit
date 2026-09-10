@@ -15929,7 +15929,7 @@
             },
             {
               "name": "Bicicleta Ergométrica",
-              "sets": "8-10 ciclos",
+              "cycles": 8,
               "duration": "30-45 s forte + 60-90 s leve",
               "catalog_status": "firestore_existing",
               "source_name_v1_1": "Intervalos",
@@ -16093,7 +16093,7 @@
             },
             {
               "name": "Bicicleta Ergométrica",
-              "sets": "8-10 ciclos",
+              "cycles": 8,
               "duration": "30-45 s forte + 60-90 s leve",
               "catalog_status": "firestore_existing",
               "source_name_v1_1": "Intervalos",
@@ -16353,7 +16353,7 @@
             },
             {
               "name": "Bicicleta Ergométrica",
-              "sets": "8-10 ciclos",
+              "cycles": 8,
               "duration": "30-45 s forte + 60-90 s leve",
               "catalog_status": "firestore_existing",
               "source_name_v1_1": "Intervalos",
@@ -16577,7 +16577,7 @@
             },
             {
               "name": "Bicicleta Ergométrica",
-              "sets": "8-10 ciclos",
+              "cycles": 8,
               "duration": "30-45 s forte + 60-90 s leve",
               "catalog_status": "firestore_existing",
               "source_name_v1_1": "Intervalos",
@@ -16864,7 +16864,7 @@
             },
             {
               "name": "Bicicleta Ergométrica",
-              "sets": "8-10 ciclos",
+              "cycles": 8,
               "duration": "30-45 s forte + 60-90 s leve",
               "catalog_status": "firestore_existing",
               "source_name_v1_1": "Intervalos",
@@ -17173,7 +17173,7 @@
             },
             {
               "name": "Bicicleta Ergométrica",
-              "sets": "8-10 ciclos",
+              "cycles": 8,
               "duration": "30-45 s forte + 60-90 s leve",
               "catalog_status": "firestore_existing",
               "source_name_v1_1": "Intervalos",
@@ -17472,7 +17472,7 @@
             },
             {
               "name": "Bicicleta Ergométrica",
-              "sets": "8-10 ciclos",
+              "cycles": 8,
               "duration": "30-45 s forte + 60-90 s leve",
               "catalog_status": "firestore_existing",
               "source_name_v1_1": "Intervalos",
@@ -17642,7 +17642,7 @@
             },
             {
               "name": "Bicicleta Ergométrica",
-              "sets": "8-10 ciclos",
+              "cycles": 8,
               "duration": "30-45 s forte + 60-90 s leve",
               "catalog_status": "firestore_existing",
               "source_name_v1_1": "Intervalos",
@@ -17916,7 +17916,7 @@
             },
             {
               "name": "Bicicleta Ergométrica",
-              "sets": "8-10 ciclos",
+              "cycles": 8,
               "duration": "30-45 s forte + 60-90 s leve",
               "catalog_status": "firestore_existing",
               "source_name_v1_1": "Intervalos",
@@ -18150,7 +18150,7 @@
             },
             {
               "name": "Bicicleta Ergométrica",
-              "sets": "8-10 ciclos",
+              "cycles": 8,
               "duration": "30-45 s forte + 60-90 s leve",
               "catalog_status": "firestore_existing",
               "source_name_v1_1": "Intervalos",
@@ -18447,7 +18447,7 @@
             },
             {
               "name": "Bicicleta Ergométrica",
-              "sets": "8-10 ciclos",
+              "cycles": 8,
               "duration": "30-45 s forte + 60-90 s leve",
               "catalog_status": "firestore_existing",
               "source_name_v1_1": "Intervalos",
@@ -18769,7 +18769,7 @@
             },
             {
               "name": "Bicicleta Ergométrica",
-              "sets": "8-10 ciclos",
+              "cycles": 8,
               "duration": "30-45 s forte + 60-90 s leve",
               "catalog_status": "firestore_existing",
               "source_name_v1_1": "Intervalos",
@@ -19095,7 +19095,7 @@
             },
             {
               "name": "Bicicleta Ergométrica",
-              "sets": "8-10 ciclos",
+              "cycles": 8,
               "duration": "30-45 s forte + 60-90 s leve",
               "catalog_status": "firestore_existing",
               "source_name_v1_1": "Intervalos",
@@ -19273,7 +19273,7 @@
             },
             {
               "name": "Bicicleta Ergométrica",
-              "sets": "8-10 ciclos",
+              "cycles": 8,
               "duration": "30-45 s forte + 60-90 s leve",
               "catalog_status": "firestore_existing",
               "source_name_v1_1": "Intervalos",
@@ -19575,7 +19575,7 @@
             },
             {
               "name": "Bicicleta Ergométrica",
-              "sets": "8-10 ciclos",
+              "cycles": 8,
               "duration": "30-45 s forte + 60-90 s leve",
               "catalog_status": "firestore_existing",
               "source_name_v1_1": "Intervalos",
@@ -19827,7 +19827,7 @@
             },
             {
               "name": "Bicicleta Ergométrica",
-              "sets": "8-10 ciclos",
+              "cycles": 8,
               "duration": "30-45 s forte + 60-90 s leve",
               "catalog_status": "firestore_existing",
               "source_name_v1_1": "Intervalos",
@@ -20142,7 +20142,7 @@
             },
             {
               "name": "Bicicleta Ergométrica",
-              "sets": "8-10 ciclos",
+              "cycles": 8,
               "duration": "30-45 s forte + 60-90 s leve",
               "catalog_status": "firestore_existing",
               "source_name_v1_1": "Intervalos",
@@ -20493,7 +20493,7 @@
             },
             {
               "name": "Bicicleta Ergométrica",
-              "sets": "8-10 ciclos",
+              "cycles": 8,
               "duration": "30-45 s forte + 60-90 s leve",
               "catalog_status": "firestore_existing",
               "source_name_v1_1": "Intervalos",
@@ -20838,7 +20838,7 @@
             },
             {
               "name": "Bicicleta Ergométrica",
-              "sets": "8-10 ciclos",
+              "cycles": 8,
               "duration": "30-45 s forte + 60-90 s leve",
               "catalog_status": "firestore_existing",
               "source_name_v1_1": "Intervalos",
@@ -21024,7 +21024,7 @@
             },
             {
               "name": "Bicicleta Ergométrica",
-              "sets": "8-10 ciclos",
+              "cycles": 8,
               "duration": "30-45 s forte + 60-90 s leve",
               "catalog_status": "firestore_existing",
               "source_name_v1_1": "Intervalos",
@@ -21346,7 +21346,7 @@
             },
             {
               "name": "Bicicleta Ergométrica",
-              "sets": "8-10 ciclos",
+              "cycles": 8,
               "duration": "30-45 s forte + 60-90 s leve",
               "catalog_status": "firestore_existing",
               "source_name_v1_1": "Intervalos",
@@ -21612,7 +21612,7 @@
             },
             {
               "name": "Bicicleta Ergométrica",
-              "sets": "8-10 ciclos",
+              "cycles": 8,
               "duration": "30-45 s forte + 60-90 s leve",
               "catalog_status": "firestore_existing",
               "source_name_v1_1": "Intervalos",
@@ -21941,7 +21941,7 @@
             },
             {
               "name": "Bicicleta Ergométrica",
-              "sets": "8-10 ciclos",
+              "cycles": 8,
               "duration": "30-45 s forte + 60-90 s leve",
               "catalog_status": "firestore_existing",
               "source_name_v1_1": "Intervalos",
@@ -22311,7 +22311,7 @@
             },
             {
               "name": "Bicicleta Ergométrica",
-              "sets": "8-10 ciclos",
+              "cycles": 8,
               "duration": "30-45 s forte + 60-90 s leve",
               "catalog_status": "firestore_existing",
               "source_name_v1_1": "Intervalos",

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ProgressionDecision } from '../../progressionEngineV2/types';
-import { buildEvolutionViewModel, proximityFromDecision, type LifecycleContext } from '../viewModel';
-import type { PendingEvolutionSummary } from '../types';
+import { buildEvolutionViewModel, isResolvedEvolutionViewModel, proximityFromDecision, type LifecycleContext } from '../viewModel';
+import type { EvolutionViewModel, PendingEvolutionSummary } from '../types';
 
 const NOW = new Date('2026-06-01T00:00:00.000Z');
 const NO_NOTICE = { autoActivationNotice: null } as const;
@@ -93,6 +93,33 @@ describe('earned, renewal, deferral and career state', () => {
     const vm = buildEvolutionViewModel({ now: new Date('2026-06-15T00:00:00Z'), lifecycle: lifecycle(), decision: null, ...NO_NOTICE,
       pending: pending({ deferralCount: 1, nextPromptAt: new Date('2026-06-15T00:00:00Z') }) });
     expect(vm.kind).toBe('EVOLUTION_READY');
+  });
+});
+
+describe('isResolvedEvolutionViewModel — resilience hardening', () => {
+  it('LOADING and ERROR are not resolved — nothing worth preserving over a fresh failure', () => {
+    expect(isResolvedEvolutionViewModel({ kind: 'LOADING' })).toBe(false);
+    expect(isResolvedEvolutionViewModel({ kind: 'ERROR', message: 'x' })).toBe(false);
+  });
+
+  it('UNAVAILABLE is resolved — a legitimate "no lifecycle" determination, not a failure', () => {
+    expect(isResolvedEvolutionViewModel({ kind: 'UNAVAILABLE' })).toBe(true);
+  });
+
+  it.each<EvolutionViewModel['kind']>([
+    'PROGRESSING', 'EVOLUTION_READY', 'EVOLUTION_DEFERRED', 'AUTO_ACTIVATION_NOTICE',
+  ])('%s is resolved — a refresh failure must preserve it, never fall back to ERROR', (kind) => {
+    const summary = { earnedLevel: 'BEGINNER', activeLevel: 'BEGINNER', cycleNumber: 1, isHistoryComplete: true,
+      proximity: null, activeDays: null, sessionsCompleted: null, adherenceQuality: null } as const;
+    const vm = (kind === 'PROGRESSING'
+      ? { kind, summary }
+      : kind === 'EVOLUTION_READY'
+        ? { kind, summary, pending: pending(), canDefer: true }
+        : kind === 'EVOLUTION_DEFERRED'
+          ? { kind, summary, pending: pending() }
+          : { kind, summary, activatedType: 'CYCLE_EVOLUTION', activationEventId: 'event-1' }
+    ) as EvolutionViewModel;
+    expect(isResolvedEvolutionViewModel(vm)).toBe(true);
   });
 });
 

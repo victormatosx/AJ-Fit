@@ -7,7 +7,7 @@ import {
   initializeTestEnvironment,
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing';
-import { deleteDoc, doc, getDoc, serverTimestamp, setDoc, Timestamp, updateDoc } from 'firebase/firestore';
+import { deleteDoc, doc, getDoc, serverTimestamp, setDoc, Timestamp, updateDoc, writeBatch } from 'firebase/firestore';
 
 const PROJECT_ID = 'ajfit-rules-test';
 const UID = 'alice';
@@ -269,5 +269,89 @@ describe('users/{uid}/workoutExecutions — exercise sets array bound (item 51)'
         { exerciseIndex: 1, exerciseId: 'squat', prescribedSets: 3, prescribedReps: '8-12', prescribedDuration: null, prescribedCycles: null, sets: setsOf(500) },
       ],
     })));
+  });
+});
+
+// P0 integrity fix (2026-09, docs/workout-lifecycle/): the persistent
+// mutex/pointer at `users/{uid}/workoutExecutionState/current` — see
+// `WorkoutExecutionStatePointer` (src/workoutExecution/types.ts) and the
+// Rules comment on the `workoutExecutionState` match block. These tests
+// prove the delete rule's `getAfter()` check directly at the Rules layer
+// (independent of `src/services/workoutExecutions.ts`'s own service-level
+// integration coverage), using a raw `writeBatch` exactly the way a
+// transaction commits two documents together.
+describe('users/{uid}/workoutExecutionState/current — mutex release tied to terminalization', () => {
+  function pointerDoc(overrides: Record<string, unknown> = {}) {
+    return {
+      executionId: EXECUTION_ID,
+      programId: PROGRAM_ID,
+      programInstanceId: null,
+      sessionIndex: 0,
+      scheduledLocalDate: '2026-08-25',
+      status: 'IN_PROGRESS',
+      schemaVersion: 1,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      ...overrides,
+    };
+  }
+
+  async function seedInProgressWithPointer() {
+    const db = dbFor(UID);
+    const executionRef = doc(db, 'users', UID, 'workoutExecutions', EXECUTION_ID);
+    const stateRef = doc(db, 'users', UID, 'workoutExecutionState', 'current');
+    await setDoc(executionRef, executionDoc());
+    await assertSucceeds(setDoc(stateRef, pointerDoc()));
+    return { db, executionRef, stateRef };
+  }
+
+  it('create validates only the pointer\'s OWN shape — it does NOT cross-check the referenced execution at all (no getAfter on this side; see the Rules comment on workoutExecutionStateValid)', async () => {
+    const db = dbFor(UID);
+    const stateRef = doc(db, 'users', UID, 'workoutExecutionState', 'current');
+    // No execution document exists at all for this pointer's executionId —
+    // this still succeeds, because `workoutExecutionStateValid` never reads
+    // `workoutExecutions`. This is the documented, deliberate asymmetry
+    // (task validation item #3/#4): the CREATE side of the mutex has no
+    // getAfter() cross-check (dropped — pairing it with `workoutExecutions`'
+    // update rule exceeded the Rules Emulator's expression-evaluation cap);
+    // only the DELETE side (below) uses getAfter(). Real-world protection
+    // against a fabricated/mismatched pointer comes from the CLIENT always
+    // writing both documents together in one transaction
+    // (`startOrResumeWorkoutExecution`) plus legacy-orphan detection on the
+    // next start — never from this Rule alone.
+    await assertSucceeds(setDoc(stateRef, pointerDoc({ executionId: 'exec_does_not_exist' })));
+  });
+
+  it('terminalizing the execution (COMPLETED) and deleting current in the SAME batch succeeds', async () => {
+    const { db, executionRef, stateRef } = await seedInProgressWithPointer();
+    const batch = writeBatch(db);
+    batch.update(executionRef, { status: 'COMPLETED', finishedAt: serverTimestamp(), updatedAt: serverTimestamp() });
+    batch.delete(stateRef);
+    await assertSucceeds(batch.commit());
+  });
+
+  it('terminalizing the execution (ABANDONED) and deleting current in the SAME batch succeeds', async () => {
+    const { db, executionRef, stateRef } = await seedInProgressWithPointer();
+    const batch = writeBatch(db);
+    batch.update(executionRef, { status: 'ABANDONED', finishedAt: serverTimestamp(), updatedAt: serverTimestamp() });
+    batch.delete(stateRef);
+    await assertSucceeds(batch.commit());
+  });
+
+  it('deleting current WITHOUT terminalizing the execution it tracks is denied — the execution is still IN_PROGRESS after the batch (getAfter, not the prior state)', async () => {
+    const { stateRef } = await seedInProgressWithPointer();
+    // No write to the execution at all — `getAfter()` on it resolves to its
+    // unchanged, still-IN_PROGRESS post-batch state.
+    await assertFails(deleteDoc(stateRef));
+  });
+
+  it('deleting current while separately (same batch) updating the execution but NOT away from IN_PROGRESS is still denied', async () => {
+    const { db, executionRef, stateRef } = await seedInProgressWithPointer();
+    const batch = writeBatch(db);
+    // A same-batch set mutation that keeps status IN_PROGRESS throughout —
+    // exactly the recordSet/skipSet shape, never a terminal transition.
+    batch.update(executionRef, { updatedAt: serverTimestamp() });
+    batch.delete(stateRef);
+    await assertFails(batch.commit());
   });
 });

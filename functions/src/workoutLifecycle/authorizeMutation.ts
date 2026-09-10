@@ -373,6 +373,17 @@ async function authoritativeEarnedFactWithCycleHistory(
   const start = localDate((instance.activatedAt as Timestamp).toDate(), timezone);
   const today = localDate(now, timezone);
   const executions = executionsSnapshot.docs.map((item) => item.data());
+  // P0 integrity fix (2026-09, docs/workout-lifecycle/): parity with the
+  // client resolver (`src/progressionEngineV2/resolver.ts`'s
+  // `hasInProgressExecution` check) — an IN_PROGRESS execution for the
+  // active instance always blocks a progression decision (docs §9/§42), and
+  // that rule must not depend solely on the client honoring it. Without this,
+  // a modified/old client (or a client racing a real IN_PROGRESS session)
+  // could call EARN directly and the backend would authorize a decision the
+  // client itself would have refused to compute.
+  if (executions.some((item) => item.status === 'IN_PROGRESS')) {
+    throw new HttpsError('failed-precondition', 'progression_blocked_by_in_progress_execution');
+  }
   const executionDates = new Set(executions.map((item) => item.scheduledLocalDate).filter((item): item is string => typeof item === 'string'));
   const countedDates = new Set<string>();
   let activeDays = 0;
@@ -522,6 +533,11 @@ async function assertPlanSafe(request: AuthorityRequest, firestore: Firestore): 
     if (restSeconds !== undefined
       && (typeof restSeconds !== 'number' || !Number.isInteger(restSeconds) || restSeconds < 0 || restSeconds > 600)) {
       throw new HttpsError('invalid-argument', 'invalid_authority_plan_exercise_rest');
+    }
+    const cycles = exercise.cycles;
+    if (cycles !== undefined
+      && (typeof cycles !== 'number' || !Number.isInteger(cycles) || cycles < 1 || cycles > 100)) {
+      throw new HttpsError('invalid-argument', 'invalid_authority_plan_exercise_cycles');
     }
   }
   const inputs = snapshot.inputs;

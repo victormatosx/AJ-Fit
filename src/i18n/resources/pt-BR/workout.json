@@ -6,6 +6,51 @@
       "openQueue": "Abrir fila de exercícios"
     }
   },
+  "exit": {
+    "title": "Sair do treino?",
+    "body": "Seu treino ainda está em andamento. Você pode minimizar e continuar depois, ou descartar.",
+    "minimize": "Minimizar treino",
+    "discard": "Descartar treino",
+    "cancel": "Cancelar",
+    "discardConfirmTitle": "Descartar treino?",
+    "discardConfirmBody": "O treino será encerrado e não contará como concluído. As séries já registradas continuam no seu histórico.",
+    "discardConfirmYes": "Descartar treino",
+    "discardConfirmBack": "Voltar",
+    "discarding": "Descartando…",
+    "discardError": "Não foi possível descartar o treino. Verifique sua conexão e tente novamente."
+  },
+  "pendingExecution": {
+    "title": "Sessão de treino pendente",
+    "conflictBody": "Já existe outra sessão de treino em andamento. Você pode abandoná-la para iniciar uma nova.",
+    "legacyBody": "Encontramos uma sessão de treino anterior que não foi encerrada corretamente. É necessário resolvê-la antes de iniciar uma nova.",
+    "abandonPrevious": "Abandonar sessão anterior",
+    "cancel": "Cancelar",
+    "resolving": "Resolvendo…"
+  },
+  "startError": {
+    "title": "Não foi possível iniciar o treino",
+    "body": "Algo deu errado ao iniciar o treino. Verifique sua conexão e tente novamente."
+  },
+  "sessionRecovery": {
+    "title": "Treino em andamento",
+    "body": "Você tem um treino que ainda não foi finalizado.",
+    "longSessionBody": "Seu treino está em andamento há {{duration}}. Você ainda está treinando?",
+    "programMismatchBody": "O programa mudou desde que este treino foi iniciado, então ele não pode ser retomado. Você ainda pode descartá-lo.",
+    "inconsistentTitle": "Sessão de treino desatualizada",
+    "inconsistentBody": "Não foi possível recuperar os detalhes dessa sessão automaticamente. Ela será ignorada até que nosso suporte possa ajudar.",
+    "inconsistentTerminalBody": "Essa sessão já havia sido finalizada em outro dispositivo. Você pode descartá-la com segurança.",
+    "resume": "Continuar treino",
+    "resuming": "Retomando…",
+    "discard": "Descartar treino",
+    "discardConfirmTitle": "Descartar este treino?",
+    "discardConfirmBody": "As séries já registradas permanecem no seu histórico, mas esse treino não contará como concluído.",
+    "discardConfirmYes": "Sim, descartar",
+    "discardConfirmBack": "Voltar",
+    "discarding": "Descartando…",
+    "discardError": "Não foi possível descartar. Tente novamente.",
+    "dismiss": "Entendi",
+    "later": "Agora não"
+  },
   "actions": {
     "viewExecution": "Ver execução",
     "swap": "Trocar",
@@ -26,6 +71,36 @@
       "lightModerate": "Leve a moderada",
       "comfortableLightModerate": "Leve a moderada, confortável",
       "moderate": "Moderada"
+    }
+  },
+  "cardioSession": {
+    "durationLabel": "Duração",
+    "intensityLabel": "Intensidade",
+    "readyLabel": "Tudo pronto para começar",
+    "runningLabel": "Cardio em andamento",
+    "targetLabel": "Meta de hoje",
+    "elapsedLabel": "Tempo realizado",
+    "start": "Iniciar cardio",
+    "skipAndFinish": "Pular e finalizar treino",
+    "readyHint": "O cronômetro só começa quando você tocar em iniciar.",
+    "of": "de {{target}}",
+    "remaining": "{{time}} restantes",
+    "overtimeLabel": "tempo extra",
+    "targetReachedTitle": "Meta concluída",
+    "targetReachedBody": "Você pode finalizar ou continuar.",
+    "extend": "+5 min",
+    "extendAccessibility": "Adicionar 5 minutos à meta do cardio",
+    "finish": "Finalizar cardio",
+    "finishConfirmTitle": "Finalizar cardio?",
+    "finishConfirmBeforeGoal": "Você realizou {{done}} de {{target}} planejados.",
+    "finishConfirmAfterGoal": "Você concluiu sua meta de {{target}}. Tempo realizado: {{done}}.",
+    "continueCardio": "Continuar cardio",
+    "confirmFinish": "Finalizar",
+    "exitConfirmTitle": "Sair do cardio?",
+    "exitConfirmBody": "Sua musculação já está completa. Ao sair agora finalizamos o treino com {{done}} de cardio registrados.",
+    "accessibility": {
+      "close": "Sair do cardio",
+      "timer": "Cronômetro do cardio"
     }
   },
   "badges": {

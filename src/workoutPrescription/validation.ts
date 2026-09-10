@@ -44,6 +44,16 @@ export function validateFinalWorkout(input: {
       if (exercise.sets == null && exercise.duration == null) {
         errors.push(`INVALID_EXERCISE_DOSE:${sessionIndex}:${exercise.exerciseId}`);
       }
+      if (exercise.sets !== undefined
+        && (typeof exercise.sets !== 'number' || !Number.isInteger(exercise.sets)
+          || exercise.sets < 1 || exercise.sets > 10)) {
+        errors.push(`INVALID_EXERCISE_SETS:${sessionIndex}:${exercise.exerciseId}`);
+      }
+      if (exercise.cycles !== undefined
+        && (typeof exercise.cycles !== 'number' || !Number.isInteger(exercise.cycles)
+          || exercise.cycles < 1 || exercise.cycles > 100)) {
+        errors.push(`INVALID_EXERCISE_CYCLES:${sessionIndex}:${exercise.exerciseId}`);
+      }
     }
   }
   for (const modifier of input.modifiers) {

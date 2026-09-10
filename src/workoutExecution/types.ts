@@ -42,6 +42,56 @@ export interface ExerciseExecution {
 export const WORKOUT_EXECUTION_SCHEMA_VERSION = 1;
 export const WORKOUT_EXECUTION_LIFECYCLE_SCHEMA_VERSION = 2;
 
+/**
+ * P0-C protocol marker (2026-09, docs/workout-lifecycle/ hardening plan):
+ * distinguishes a client that follows the `workoutExecutionState/current`
+ * mutex protocol from one that doesn't. Written on every NEW `IN_PROGRESS`
+ * creation by this module (`startOrResumeWorkoutExecution`) — never present
+ * on a pre-P0 client's write, since that code has no knowledge of this
+ * field. This is the only reliable "old vs new protocol" signal: it is NOT
+ * an app version number (the app version itself is never plumbed into
+ * Firestore Rules) — it is a fact about which write path produced this
+ * exact document. Used for (a) observability (how many executions are still
+ * being created by an unpatched client) and (b) as the value Firestore
+ * Rules check once the `workoutExecutionProtocolConfig/active` hardening
+ * flag is turned on (see `firestore.rules`'s `workoutExecutionMutexHardeningEnabled()`).
+ */
+export const WORKOUT_EXECUTION_MUTEX_PROTOCOL_VERSION = 1;
+
+/**
+ * P0 integrity fix (2026-09): `users/{uid}/workoutExecutionState/current` —
+ * a single, fixed-id document that acts as both a persistent mutex and a
+ * pointer to whichever WorkoutExecution is legitimately IN_PROGRESS.
+ * Existence of this document IS the authority: a user has an active
+ * execution iff this doc exists. Because Firestore allows only one document
+ * at a fixed path, "at most one active execution" is enforced by
+ * construction — never by a query-then-write race. Created/deleted
+ * atomically alongside the WorkoutExecution it tracks, in the SAME
+ * transaction that starts/finishes/abandons that execution (see
+ * `src/services/workoutExecutions.ts`). Delete is ALWAYS Rules-tied to the
+ * referenced execution actually being terminal via `getAfter()`. Create is
+ * Rules-tied to a real, matching, IN_PROGRESS execution via `getAfter()`
+ * only once the `workoutExecutionProtocolConfig/active` hardening flag is
+ * on (P0-C, 2026-09) — before that, a pre-P0 client can still write
+ * `workoutExecutions` directly without this pointer at all; see
+ * `WORKOUT_EXECUTION_MUTEX_PROTOCOL_VERSION`'s doc comment and
+ * `firestore.rules`'s `workoutExecutionMutexHardeningEnabled()`.
+ */
+export const WORKOUT_EXECUTION_STATE_SCHEMA_VERSION = 1;
+
+export interface WorkoutExecutionStatePointer {
+  executionId: string;
+  programId: string;
+  programInstanceId: string | null;
+  sessionIndex: number;
+  scheduledLocalDate: string;
+  /** Always 'IN_PROGRESS' while this document exists — its existence, not this field, is the authority. */
+  status: 'IN_PROGRESS';
+  schemaVersion: number;
+  createdAt: unknown;
+  updatedAt: unknown;
+}
+
 export interface WorkoutExecution {
   executionId: string;
   /** V1 content identity retained for prescription lookup/backward compatibility. */
@@ -58,6 +108,8 @@ export interface WorkoutExecution {
   finishedAt: unknown | null;
   exercises: ExerciseExecution[];
   executionSchemaVersion: number;
+  /** P0-C protocol marker — see `WORKOUT_EXECUTION_MUTEX_PROTOCOL_VERSION`'s doc comment. Absent on every pre-P0-C write. */
+  mutexProtocolVersion?: number;
   createdAt: unknown;
   updatedAt: unknown;
 }

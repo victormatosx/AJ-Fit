@@ -400,6 +400,44 @@ describe.skipIf(!enabled)('Workout Lifecycle authority — real Firestore Emulat
     } as never, db)).rejects.toMatchObject({ code: 'aborted', message: 'lifecycle_already_initialized' });
   });
 
+  it('INITIALIZE seals the three-day conditioning plan with typed interval cycles', async () => {
+    const root = db.collection('users').doc(UID);
+    await Promise.all([
+      root.collection('workoutLifecycleState').doc('current').delete(),
+      root.collection('programInstances').doc('wpi_active').delete(),
+      root.collection('trainingCycles').doc('cyc_active').delete(),
+      root.collection('workoutPrograms').doc('wpg_active').delete(),
+    ]);
+    const inputs = completeInputs({
+      goal: 'conditioning', level: 'intermediate', days: 3,
+      trainingDays: ['MON', 'WED', 'FRI'], duration: '60',
+    });
+    await root.collection('questionnaires').doc('q_conditioning').set({ answers: inputs, version: 1 });
+
+    const result = await authorizeWorkoutLifecycleMutationHandler({
+      auth: { uid: UID },
+      data: {
+        operation: 'INITIALIZE',
+        targetProgramInstanceId: 'wpi_conditioning', targetCycleId: 'cyc_conditioning',
+        questionnaireId: 'q_conditioning', questionnaireVersion: 1,
+        targetProgramSource: 'automatic_reconciliation',
+        targetPrescriptionInputSnapshot: {
+          snapshotId: snapshotIdFor('QUESTIONNAIRE_BASELINE', inputs),
+          schemaVersion: 1, source: 'QUESTIONNAIRE_BASELINE', inputs,
+        },
+      },
+    } as never, db);
+
+    expect(result.canonical?.targetPlan.templateId).toBe('T050');
+    const intervalBike = result.canonical?.targetPlan.sessions
+      .flatMap((session) => session.exercises)
+      .find((exercise) => exercise.exerciseId === 'stationary-bike' && exercise.cycles != null);
+    expect(intervalBike).toMatchObject({ cycles: 8 });
+    expect(intervalBike?.sets).toBeUndefined();
+    const sealed = await root.collection('workoutPrograms').doc(result.canonical!.targetContentIdentity).get();
+    expect(sealed.exists).toBe(true);
+  });
+
   describe('MIGRATE — bootstrap canonical authority for V1→V2 baseline', () => {
     beforeEach(async () => {
       const root = db.collection('users').doc(UID);
@@ -1133,6 +1171,46 @@ describe.skipIf(!enabled)('Workout Lifecycle authority — real Firestore Emulat
       await setQaMode('ACCELERATED');
       await expect(authoritativeEarnedFact(UID, db, new Date()))
         .rejects.toMatchObject({ message: 'progression_not_eligible' });
+    });
+
+    // P0 integrity fix (2026-09, docs/workout-lifecycle/ — production
+    // incident): parity with the client resolver
+    // (`src/progressionEngineV2/resolver.ts`'s `hasInProgressExecution`
+    // check) — an IN_PROGRESS execution for the active instance must block
+    // EARN authoritatively too, not just on the client. QA_TRANSITION
+    // deliberately used here BECAUSE it otherwise always succeeds (proven by
+    // the test below) — this isolates that the new IN_PROGRESS check runs
+    // independently of, and before, every other eligibility bypass.
+    it('an IN_PROGRESS execution for the active instance blocks EARN even under QA_TRANSITION', async () => {
+      await setQaMode('TRANSITION');
+      await db.collection('users').doc(UID).collection('workoutExecutions').doc('exec_pending').set({
+        status: 'IN_PROGRESS', programInstanceId: 'wpi_active', sessionIndex: 0,
+        scheduledLocalDate: '2026-01-01',
+      });
+      await expect(authoritativeEarnedFact(UID, db, new Date()))
+        .rejects.toMatchObject({ message: 'progression_blocked_by_in_progress_execution' });
+    });
+
+    it('once the blocking IN_PROGRESS execution resolves (COMPLETED), EARN succeeds again', async () => {
+      await setQaMode('TRANSITION');
+      const ref = db.collection('users').doc(UID).collection('workoutExecutions').doc('exec_pending');
+      await ref.set({
+        status: 'IN_PROGRESS', programInstanceId: 'wpi_active', sessionIndex: 0,
+        scheduledLocalDate: '2026-01-01',
+      });
+      await expect(authoritativeEarnedFact(UID, db, new Date()))
+        .rejects.toMatchObject({ message: 'progression_blocked_by_in_progress_execution' });
+      await ref.set({ status: 'COMPLETED', programInstanceId: 'wpi_active', sessionIndex: 0, scheduledLocalDate: '2026-01-01' });
+      await expect(authoritativeEarnedFact(UID, db, new Date())).resolves.toMatchObject({ qaForced: true });
+    });
+
+    it('an IN_PROGRESS execution for a DIFFERENT (superseded) program instance does NOT block EARN', async () => {
+      await setQaMode('TRANSITION');
+      await db.collection('users').doc(UID).collection('workoutExecutions').doc('exec_other').set({
+        status: 'IN_PROGRESS', programInstanceId: 'wpi_superseded', sessionIndex: 0,
+        scheduledLocalDate: '2026-01-01',
+      });
+      await expect(authoritativeEarnedFact(UID, db, new Date())).resolves.toMatchObject({ qaForced: true });
     });
 
     it('QA_TRANSITION account: EARN succeeds despite ~1 active day and 0% adherence, deriving the real BEGINNER -> INTERMEDIATE target', async () => {

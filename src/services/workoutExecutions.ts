@@ -13,6 +13,7 @@ import {
 } from 'firebase/firestore';
 
 import { db } from '../lib/firebase';
+import { logWarn } from '../lib/logger';
 import type { WorkoutProgramSnapshot } from './workoutPrograms';
 import {
   authorizeWorkoutLifecycleMutation,
@@ -21,6 +22,8 @@ import {
 import {
   WORKOUT_EXECUTION_SCHEMA_VERSION,
   WORKOUT_EXECUTION_LIFECYCLE_SCHEMA_VERSION,
+  WORKOUT_EXECUTION_STATE_SCHEMA_VERSION,
+  WORKOUT_EXECUTION_MUTEX_PROTOCOL_VERSION,
   buildInitialExerciseExecutions,
   deriveFinishStatus,
   sweepPendingSetsToSkipped,
@@ -28,11 +31,14 @@ import {
   type ExerciseExecution,
   type SetExecution,
   type WorkoutExecution,
+  type WorkoutExecutionStatePointer,
   type WorkoutExecutionStatus,
 } from '../workoutExecution/types';
 
 const USERS = 'users';
 const WORKOUT_EXECUTIONS = 'workoutExecutions';
+const WORKOUT_EXECUTION_STATE = 'workoutExecutionState';
+const WORKOUT_EXECUTION_STATE_DOC_ID = 'current';
 
 function executionsCollection(uid: string) {
   return collection(db, USERS, uid, WORKOUT_EXECUTIONS);
@@ -40,6 +46,44 @@ function executionsCollection(uid: string) {
 
 function executionRef(uid: string, executionId: string) {
   return doc(db, USERS, uid, WORKOUT_EXECUTIONS, executionId);
+}
+
+/**
+ * The persistent mutex/pointer doc (docs §P0 — see `workoutExecution/types.ts`'s
+ * `WorkoutExecutionStatePointer` doc comment). Fixed id: exactly one can ever
+ * exist per user.
+ */
+function executionStateRef(uid: string) {
+  return doc(db, USERS, uid, WORKOUT_EXECUTION_STATE, WORKOUT_EXECUTION_STATE_DOC_ID);
+}
+
+/** Another execution is already legitimately active — never resolvable by retrying the same call. */
+export class WorkoutExecutionConflictError extends Error {
+  readonly code = 'WORKOUT_EXECUTION_CONFLICT' as const;
+  readonly active: { executionId: string; sessionIndex: number; scheduledLocalDate: string };
+  constructor(active: { executionId: string; sessionIndex: number; scheduledLocalDate: string }) {
+    super('WORKOUT_EXECUTION_CONFLICT');
+    this.name = 'WorkoutExecutionConflictError';
+    this.active = active;
+  }
+}
+
+/**
+ * One or more `IN_PROGRESS` WorkoutExecutions exist from before the
+ * `workoutExecutionState/current` mutex was introduced (or from an
+ * inconsistency this P0 cannot yet self-heal) and none of them is the
+ * session being started. Never auto-resolved — the caller must offer
+ * "abandon" (via `abandonWorkoutExecution`) before a new session can start
+ * (docs §11/§12).
+ */
+export class WorkoutExecutionLegacyPendingError extends Error {
+  readonly code = 'WORKOUT_EXECUTION_LEGACY_PENDING' as const;
+  readonly executionIds: string[];
+  constructor(executionIds: string[]) {
+    super('WORKOUT_EXECUTION_LEGACY_PENDING');
+    this.name = 'WorkoutExecutionLegacyPendingError';
+    this.executionIds = executionIds;
+  }
 }
 
 interface PersistedWorkoutExecution extends Omit<WorkoutExecution, 'startedAt' | 'finishedAt' | 'createdAt' | 'updatedAt'> {
@@ -74,11 +118,36 @@ function fromDoc(executionId: string, data: Record<string, unknown>): PersistedW
  * scheduledLocalDate) — never creates a duplicate for a double tap, a
  * network retry, or a cold start reopening the app (docs §22–25).
  *
- * - `IN_PROGRESS` → returned as-is (resume with prior data intact).
+ * P0 integrity fix (2026-09, see `workoutExecution/types.ts`'s
+ * `WorkoutExecutionStatePointer` doc comment): the invariant
+ * `count(IN_PROGRESS executions for this user) <= 1` is now enforced
+ * persistently via `workoutExecutionState/current`, a single fixed-id mutex
+ * doc, created/adopted atomically in the SAME transaction that touches the
+ * execution doc. Two devices, a double tap, or a retry all serialize through
+ * Firestore's normal transaction contention (both read `current`; the
+ * loser's transaction is retried against the post-commit state and then
+ * correctly reports a conflict instead of creating a second execution).
+ *
+ * - `IN_PROGRESS` (same id as `current`) → returned as-is (resume with prior
+ *   data intact) — idempotent.
+ * - `IN_PROGRESS` (different id than `current`, or `current` present at all
+ *   while this id doesn't match it) → throws `WorkoutExecutionConflictError`.
+ *   Never creates a second execution.
  * - `ABANDONED` → restarted fresh (the abandoned attempt's logged sets are
- *   discarded; nothing counted from it anyway).
+ *   discarded; nothing counted from it anyway). `startedAt` is renewed —
+ *   this is semantically a NEW attempt, and the session timer
+ *   (`elapsed = Date.now() - startedAt`) must not show hours/days of stale
+ *   duration from the abandoned attempt (docs §13).
  * - `COMPLETED`/`PARTIALLY_COMPLETED` → this session is already done; throws
  *   rather than silently reopening a finished, immutable record.
+ *
+ * Legacy data predating this mutex (an `IN_PROGRESS` execution with no
+ * `current` pointer) is detected up front: if it's the exact execution being
+ * started, it's safely adopted (deterministic, single case, no execution
+ * data touched). Any OTHER `IN_PROGRESS` execution with no tracking pointer
+ * throws `WorkoutExecutionLegacyPendingError` — the caller must resolve it
+ * (offer `abandonWorkoutExecution`) before a new session can start (docs
+ * §11/§12). Never auto-picks a winner among multiple legacy executions.
  */
 export async function startOrResumeWorkoutExecution(input: {
   uid: string;
@@ -92,39 +161,109 @@ export async function startOrResumeWorkoutExecution(input: {
   const executionScopeId = program.programInstanceId ?? program.programId;
   const executionId = workoutExecutionId(executionScopeId, sessionIndex, scheduledLocalDate);
   const ref = executionRef(uid, executionId);
+  const stateRef = executionStateRef(uid);
 
-  await runTransaction(db, async (transaction) => {
-    const snapshot = await transaction.get(ref);
-    if (snapshot.exists()) {
-      const status = snapshot.data().status as WorkoutExecutionStatus;
-      if (status === 'IN_PROGRESS') return; // resume as-is, nothing to write.
-      if (status !== 'ABANDONED') throw new Error('SESSION_ALREADY_FINISHED');
+  // Legacy pre-check (best-effort, outside the transaction — a plain query
+  // cannot participate in a client-SDK transaction). This only matters for
+  // data written before `current` existed: every write going forward is
+  // gated by the transaction below, so this can never race against itself.
+  const legacySnapshot = await getDocs(query(executionsCollection(uid), where('status', '==', 'IN_PROGRESS'), fsLimit(5)));
+  const legacyOrphans = legacySnapshot.docs.filter((item) => item.id !== executionId);
+  if (legacyOrphans.length > 0) {
+    const currentSnapshot = await getDoc(stateRef);
+    const trackedId = currentSnapshot.exists() ? (currentSnapshot.data().executionId as string) : null;
+    const untracked = legacyOrphans.filter((item) => item.id !== trackedId);
+    if (untracked.length > 0) {
+      // Observability (docs P0-C §12): never logs uid/executionId content —
+      // just enough to size "how often does this still happen" without any
+      // personal data. This is the ONLY place a legacy-protocol write is
+      // ever detected on the client side — an old client's own write is
+      // invisible to us until a new-protocol client next tries to start.
+      logWarn('workout_execution', 'legacy_in_progress_execution_detected', { count: untracked.length });
+      throw new WorkoutExecutionLegacyPendingError(untracked.map((item) => item.id));
     }
+  }
 
-    const base = {
-      programId: program.programId,
-      ...(program.programInstanceId ? { programInstanceId: program.programInstanceId } : {}),
-      templateId: program.templateId,
-      sessionIndex,
-      sessionName: session.name,
-      scheduledLocalDate,
-      status: 'IN_PROGRESS' as const,
-      exercises: buildInitialExerciseExecutions(session),
-      executionSchemaVersion: program.programInstanceId
-        ? WORKOUT_EXECUTION_LIFECYCLE_SCHEMA_VERSION
-        : WORKOUT_EXECUTION_SCHEMA_VERSION,
-      finishedAt: null,
-    };
+  const base = {
+    programId: program.programId,
+    ...(program.programInstanceId ? { programInstanceId: program.programInstanceId } : {}),
+    templateId: program.templateId,
+    sessionIndex,
+    sessionName: session.name,
+    scheduledLocalDate,
+    status: 'IN_PROGRESS' as const,
+    exercises: buildInitialExerciseExecutions(session),
+    executionSchemaVersion: program.programInstanceId
+      ? WORKOUT_EXECUTION_LIFECYCLE_SCHEMA_VERSION
+      : WORKOUT_EXECUTION_SCHEMA_VERSION,
+    // P0-C (docs/workout-lifecycle/ hardening plan): marks this write as
+    // coming from a client that follows the `workoutExecutionState/current`
+    // mutex protocol — see `WORKOUT_EXECUTION_MUTEX_PROTOCOL_VERSION`'s doc
+    // comment. Never omit this; it's the only signal Rules/telemetry have
+    // to distinguish this write path from a pre-P0-C client's.
+    mutexProtocolVersion: WORKOUT_EXECUTION_MUTEX_PROTOCOL_VERSION,
+    finishedAt: null,
+  };
+  const pointer = {
+    executionId,
+    programId: program.programId,
+    programInstanceId: program.programInstanceId ?? null,
+    sessionIndex,
+    scheduledLocalDate,
+    status: 'IN_PROGRESS' as const,
+    schemaVersion: WORKOUT_EXECUTION_STATE_SCHEMA_VERSION,
+  };
 
-    if (snapshot.exists()) {
-      // Restart after abandon: the abandoned attempt's logged sets are
-      // discarded — nothing was counted from it. `startedAt`/`createdAt`
-      // stay put; only the fresh attempt's data changes.
-      transaction.update(ref, { ...base, updatedAt: serverTimestamp() });
-    } else {
+  try {
+    await runTransaction(db, async (transaction) => {
+      const [snapshot, stateSnapshot] = await Promise.all([transaction.get(ref), transaction.get(stateRef)]);
+
+      if (stateSnapshot.exists()) {
+        const trackedExecutionId = stateSnapshot.data().executionId as string;
+        if (trackedExecutionId !== executionId) {
+          const tracked = stateSnapshot.data();
+          throw new WorkoutExecutionConflictError({
+            executionId: trackedExecutionId,
+            sessionIndex: tracked.sessionIndex as number,
+            scheduledLocalDate: tracked.scheduledLocalDate as string,
+          });
+        }
+        // Tracked execution matches this id: it must already be IN_PROGRESS —
+        // nothing to write, idempotent resume.
+        return;
+      }
+
+      if (snapshot.exists()) {
+        const status = snapshot.data().status as WorkoutExecutionStatus;
+        if (status === 'IN_PROGRESS') {
+          // Legacy execution predating the mutex, matching exactly the id
+          // being started, with no `current` pointer yet — safe, deterministic
+          // adoption: only the pointer is created, execution data untouched.
+          transaction.set(stateRef, { ...pointer, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+          return;
+        }
+        if (status !== 'ABANDONED') throw new Error('SESSION_ALREADY_FINISHED');
+        // Restart after abandon: the abandoned attempt's logged sets are
+        // discarded — nothing was counted from it. `startedAt` is renewed
+        // (docs §13) since this is a genuinely new attempt; `createdAt` stays put.
+        transaction.update(ref, { ...base, startedAt: serverTimestamp(), updatedAt: serverTimestamp() });
+        transaction.set(stateRef, { ...pointer, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+        return;
+      }
+
       transaction.set(ref, { ...base, startedAt: serverTimestamp(), createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+      transaction.set(stateRef, { ...pointer, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+    });
+  } catch (error) {
+    // Observability (docs P0-C §12) — logged once per actual failure
+    // (outside the transaction callback, which Firestore may retry
+    // internally on contention) rather than inside it, to avoid
+    // double-counting retries as separate conflicts.
+    if (error instanceof WorkoutExecutionConflictError) {
+      logWarn('workout_execution', 'mutex_conflict', { activeSessionIndex: error.active.sessionIndex });
     }
-  });
+    throw error;
+  }
 
   const result = await loadWorkoutExecution(uid, executionId);
   if (!result) throw new Error('EXECUTION_WRITE_FAILED');
@@ -136,6 +275,31 @@ export async function loadWorkoutExecution(uid: string, executionId: string): Pr
   const snapshot = await getDoc(executionRef(uid, executionId));
   if (!snapshot.exists()) return null;
   return fromDoc(executionId, snapshot.data());
+}
+
+/**
+ * Read-only lookup of the persistent mutex pointer — the sole authority for
+ * "does this user have an active execution right now" (docs P0). Used by
+ * Workout Recovery to detect a pending session proactively at bootstrap,
+ * independent of the user ever tapping "Iniciar treino". Never writes; a
+ * caller that wants to resolve/clear it uses `abandonWorkoutExecution` or
+ * the normal start flow, both already Rules-gated the same way.
+ */
+export async function loadActiveExecutionPointer(uid: string): Promise<WorkoutExecutionStatePointer | null> {
+  const snapshot = await getDoc(executionStateRef(uid));
+  if (!snapshot.exists()) return null;
+  const data = snapshot.data();
+  return {
+    executionId: data.executionId as string,
+    programId: data.programId as string,
+    programInstanceId: (data.programInstanceId as string | null | undefined) ?? null,
+    sessionIndex: data.sessionIndex as number,
+    scheduledLocalDate: data.scheduledLocalDate as string,
+    status: 'IN_PROGRESS',
+    schemaVersion: data.schemaVersion as number,
+    createdAt: data.createdAt,
+    updatedAt: data.updatedAt,
+  };
 }
 
 /** Read-only convenience: the execution id for a session about to be started/resumed, without writing anything. */
@@ -232,6 +396,7 @@ export async function skipExerciseExecution(input: { uid: string; executionId: s
  */
 export async function finishWorkoutExecution(uid: string, executionId: string): Promise<{ status: 'COMPLETED' | 'PARTIALLY_COMPLETED' }> {
   const ref = executionRef(uid, executionId);
+  const stateRef = executionStateRef(uid);
   const existing = await getDoc(ref);
   if (existing.exists() && ['COMPLETED', 'PARTIALLY_COMPLETED'].includes(existing.data().status)) {
     return { status: existing.data().status as 'COMPLETED' | 'PARTIALLY_COMPLETED' };
@@ -242,7 +407,7 @@ export async function finishWorkoutExecution(uid: string, executionId: string): 
   }
   const grantRef = doc(db, USERS, uid, 'workoutLifecycleAuthorityGrants', WORKOUT_LIFECYCLE_AUTHORITY_GRANT_ID);
   return runTransaction(db, async (transaction) => {
-    const snapshot = await transaction.get(ref);
+    const [snapshot, stateSnapshot] = await Promise.all([transaction.get(ref), transaction.get(stateRef)]);
     if (!snapshot.exists()) throw new Error('EXECUTION_NOT_FOUND');
     const data = snapshot.data();
     if (data.status === 'COMPLETED' || data.status === 'PARTIALLY_COMPLETED') {
@@ -254,6 +419,12 @@ export async function finishWorkoutExecution(uid: string, executionId: string): 
     const exercises = sweepPendingSetsToSkipped(data.exercises as ExerciseExecution[]);
     const status = deriveFinishStatus(exercises);
     transaction.update(ref, { exercises, status, finishedAt: serverTimestamp(), updatedAt: serverTimestamp() });
+    // Terminalization and mutex release are one atomic write — there is
+    // never a window where the execution is terminal but `current` still
+    // points at it as active (docs §7).
+    if (stateSnapshot.exists() && stateSnapshot.data().executionId === executionId) {
+      transaction.delete(stateRef);
+    }
     if (requiresV2Authority) transaction.delete(grantRef);
     return { status };
   });
@@ -261,17 +432,29 @@ export async function finishWorkoutExecution(uid: string, executionId: string): 
 
 /**
  * Abandons an IN_PROGRESS execution — deliberately distinct from finishing:
- * the Schedule Engine must never advance because of this (docs §36). No-op
- * if the execution is already in a terminal state (idempotent retry).
+ * the Schedule Engine must never advance because of this (docs §36).
+ * Idempotent: a no-op rewrite if already ABANDONED, and never touches a
+ * COMPLETED/PARTIALLY_COMPLETED record. Also works on a legacy orphan
+ * execution never tracked by `current` (docs §12's "abandon a pending
+ * session" recovery path) — the pointer is only cleared if it actually
+ * points at this execution; otherwise it's left untouched.
  */
 export async function abandonWorkoutExecution(uid: string, executionId: string): Promise<void> {
   const ref = executionRef(uid, executionId);
+  const stateRef = executionStateRef(uid);
   await runTransaction(db, async (transaction) => {
-    const snapshot = await transaction.get(ref);
+    const [snapshot, stateSnapshot] = await Promise.all([transaction.get(ref), transaction.get(stateRef)]);
     if (!snapshot.exists()) return;
     const data = snapshot.data();
-    if (data.status !== 'IN_PROGRESS') return;
-    transaction.update(ref, { status: 'ABANDONED', finishedAt: serverTimestamp(), updatedAt: serverTimestamp() });
+    if (data.status === 'IN_PROGRESS') {
+      transaction.update(ref, { status: 'ABANDONED', finishedAt: serverTimestamp(), updatedAt: serverTimestamp() });
+    }
+    // Defensive self-heal: clear a lingering pointer even if the execution
+    // was already terminal by the time this ran (e.g. a retried abandon
+    // racing a finish) — the mutex must never be left dangling (docs §8).
+    if (stateSnapshot.exists() && stateSnapshot.data().executionId === executionId) {
+      transaction.delete(stateRef);
+    }
   });
 }
 

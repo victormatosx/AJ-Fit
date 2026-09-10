@@ -52,7 +52,7 @@ describe('Evolution UX component contracts (Node structural fallback)', () => {
   });
 
   it('uses a neutral unavailable state for rollout-off legacy accounts', () => {
-    expect(hook).toContain("setViewModel({ kind: 'UNAVAILABLE' })");
+    expect(hook).toContain("commitViewModel({ kind: 'UNAVAILABLE' })");
     expect(card).toContain("viewModel.kind === 'UNAVAILABLE'");
   });
 

@@ -86,7 +86,7 @@ describe('WorkoutScreen temporal integration', () => {
 
   it('reconnects a remounted screen to the active rest exercise and set', () => {
     expect(workout).toContain('candidate.id === rest.exerciseId');
-    expect(workout).toContain('{ [restingExerciseIndex]: rest.setIndex }');
+    expect(workout).toContain('[restingExerciseIndex]: rest.setIndex }');
     expect(workout).toContain('exId: rest.exerciseId, exIdx: restingExerciseIndex, setIdx: rest.setIndex');
   });
 

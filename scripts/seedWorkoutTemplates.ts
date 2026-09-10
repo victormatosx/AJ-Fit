@@ -62,6 +62,14 @@ export function validateCanonicalSnapshot(liveExerciseIds?: Set<string>): string
   for (const slot of slots) {
     if (!sourceIds.has(slot.exercise_id)) errors.push(`INVALID_SOURCE_EXERCISE:${slot.exercise_id}`);
     if (liveExerciseIds && !liveExerciseIds.has(slot.exercise_id)) errors.push(`INVALID_LIVE_EXERCISE:${slot.exercise_id}`);
+    if (slot.sets !== undefined
+      && (typeof slot.sets !== 'number' || !Number.isInteger(slot.sets) || slot.sets < 1 || slot.sets > 10)) {
+      errors.push(`INVALID_EXERCISE_SETS:${slot.exercise_id}`);
+    }
+    if (slot.cycles !== undefined
+      && (typeof slot.cycles !== 'number' || !Number.isInteger(slot.cycles) || slot.cycles < 1 || slot.cycles > 100)) {
+      errors.push(`INVALID_EXERCISE_CYCLES:${slot.exercise_id}`);
+    }
   }
   return [...new Set(errors)].sort();
 }

@@ -103,6 +103,14 @@ export function catalogInvariantErrors(): string[] {
       for (const slot of session.exercises) {
         const exercise = exercises.get(slot.exercise_id);
         if (!exercise) errors.push(`INVALID_EXERCISE_ID:${scope}:${slot.exercise_id}`);
+        if (slot.sets !== undefined
+          && (typeof slot.sets !== 'number' || !Number.isInteger(slot.sets) || slot.sets < 1 || slot.sets > 10)) {
+          errors.push(`INVALID_EXERCISE_SETS:${scope}:${slot.exercise_id}`);
+        }
+        if (slot.cycles !== undefined
+          && (typeof slot.cycles !== 'number' || !Number.isInteger(slot.cycles) || slot.cycles < 1 || slot.cycles > 100)) {
+          errors.push(`INVALID_EXERCISE_CYCLES:${scope}:${slot.exercise_id}`);
+        }
         if (duplicateSensitiveTypes.has(session.type) && seen.has(slot.exercise_id)) {
           errors.push(`DUPLICATE_EXERCISE:${scope}:${slot.exercise_id}`);
         }

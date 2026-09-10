@@ -59,6 +59,33 @@ describe('workout — header + accessibility per locale', () => {
   });
 });
 
+describe('workout — exit sheet (X → Minimizar/Descartar/Cancelar) per locale', () => {
+  it.each([
+    ['pt-BR', 'exit.minimize', /minimizar/i],
+    ['en', 'exit.minimize', /minimize/i],
+    ['es', 'exit.minimize', /minimizar/i],
+    ['pt-BR', 'exit.discard', /descartar/i],
+    ['en', 'exit.discard', /discard/i],
+    ['es', 'exit.discard', /descartar/i],
+    ['pt-BR', 'exit.cancel', /cancelar/i],
+    ['en', 'exit.cancel', /cancel/i],
+    ['es', 'exit.cancel', /cancelar/i],
+    ['pt-BR', 'exit.discardConfirmYes', /descartar/i],
+    ['en', 'exit.discardConfirmYes', /discard/i],
+    ['es', 'exit.discardConfirmYes', /descartar/i],
+    ['pt-BR', 'exit.discardConfirmBack', /voltar/i],
+    ['en', 'exit.discardConfirmBack', /back/i],
+    ['es', 'exit.discardConfirmBack', /volver/i],
+    ['pt-BR', 'exit.discardError', /não foi possível/i],
+    ['en', 'exit.discardError', /couldn.?t/i],
+    ['es', 'exit.discardError', /no se pudo/i],
+  ] as Array<[SupportedLanguage, string, RegExp]>)('[%s] workout:%s', async (lang, key, re) => {
+    const i18n = await freshI18nAt(lang);
+    const t = i18n.getFixedT(lang, 'workout' as 'workout') as unknown as LooseT;
+    expect(t(key)).toMatch(re);
+  });
+});
+
 describe('workout — main actions per locale', () => {
   it.each([
     ['pt-BR', 'actions.viewExecution', /ver execução/i],
