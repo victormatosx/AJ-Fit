@@ -66,6 +66,11 @@ import { useWorkoutEvolution } from '../workoutEvolution/useWorkoutEvolution';
 import { useWorkoutActivitySnapshot } from '../home/useWorkoutActivitySnapshot';
 import { useFrequencyWindow } from '../home/useFrequencyWindow';
 import { processWorkoutLifecycleAfterSession } from '../services/workoutLifecycleApplication';
+import {
+  applyExerciseSubstitution,
+  loadManualSubstitutionUserContext,
+} from '../services/exerciseSubstitution';
+import type { ManualSubstitutionUserContext } from '../services/exerciseSubstitutionCandidates';
 import { EvolutionUnlockScreen } from './EvolutionUnlockScreen';
 import { logInfo, logWarn } from '../lib/logger';
 import { resolveSessionDisplayName, type LooseTranslate } from '../workoutPrescription/sessionPresentation';
@@ -198,6 +203,23 @@ function AppShellContent({
     : null;
   const schedule = useWorkoutSchedule(activeProgram);
   const execution = useWorkoutExecution(activeProgram, schedule.config?.timezone);
+  // Manual Substitution (exercise-substitution architecture audit): the same
+  // declared-limitation-regions + equipment-context inputs the server-side
+  // resolver uses, loaded once per active program so the "trocar" action can
+  // compute a preview candidate list. `null` (action hidden) until loaded —
+  // never a fabricated default context.
+  const [manualSubstitutionContext, setManualSubstitutionContext] = useState<ManualSubstitutionUserContext | null>(null);
+  useEffect(() => {
+    if (!user || !activeProgram) {
+      setManualSubstitutionContext(null);
+      return;
+    }
+    let cancelled = false;
+    loadManualSubstitutionUserContext(user.uid, activeProgram.environment)
+      .then((context) => { if (!cancelled) setManualSubstitutionContext(context); })
+      .catch(() => { if (!cancelled) setManualSubstitutionContext(null); });
+    return () => { cancelled = true; };
+  }, [user, activeProgram]);
   // Workout Recovery / Resume após process death — proactive, uid-scoped
   // bootstrap check for `workoutExecutionState/current`, independent of the
   // user ever tapping "Iniciar treino" (docs §4/§13).
@@ -715,6 +737,40 @@ function AppShellContent({
               onAbandon={() => execution.abandon()}
               onSetLogged={(exerciseIndex, setIndex, weightKg) =>
                 execution.recordSet(exerciseIndex, setIndex, weightKg)}
+              manualSubstitutionContext={manualSubstitutionContext}
+              onApplySubstitution={async ({ exerciseIndex, requestedExerciseId, scope }) => {
+                if (!execution.execution) {
+                  return { ok: false, error: new Error('NO_ACTIVE_EXECUTION') };
+                }
+                try {
+                  await applyExerciseSubstitution({
+                    executionId: execution.execution.executionId,
+                    exerciseIndex,
+                    requestedExerciseId,
+                    scope,
+                  });
+                  return { ok: true };
+                } catch (error) {
+                  // Diagnostic hotfix (2026-09 QA): the previous log here
+                  // ({ exerciseIndex } only) hid the actual `httpsCallable`
+                  // failure reason behind a generic "exercise_substitution_failed"
+                  // — indistinguishable from a callable that doesn't exist yet
+                  // (functions/not-found), an App Check rejection, an auth
+                  // failure, or a genuine candidate rejection from the server
+                  // resolver. `code`/`message` are the Firebase Functions SDK's
+                  // own closed, non-PII error surface (same extraction pattern
+                  // as `accountDeletionReauth.ts`'s `getFirebaseErrorCode`) —
+                  // never the request payload, never a stack trace.
+                  const code = typeof error === 'object' && error !== null && 'code' in error
+                    ? String((error as { code: unknown }).code)
+                    : 'unknown';
+                  const message = typeof error === 'object' && error !== null && 'message' in error
+                    ? String((error as { message: unknown }).message)
+                    : 'unknown';
+                  logWarn('workout', 'exercise_substitution_failed', { exerciseIndex, scope, code, message });
+                  return { ok: false, error };
+                }
+              }}
               onSessionCompleted={() => {
               // The workout engine remains authoritative for completion and
               // evolution. The rest layer only closes its temporal surface

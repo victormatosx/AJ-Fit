@@ -25,6 +25,7 @@ import { adminGetCouponHandler, adminListCouponsHandler } from './adminCoupons/a
 import { recordWorkoutLifecycleTelemetryHandler } from './telemetry/workoutLifecycleTelemetry';
 import { onTrustedWorkoutLifecycleEventCreated } from './telemetry/trustedWorkoutLifecycleTelemetry';
 import { authorizeWorkoutLifecycleMutationHandler } from './workoutLifecycle/authorizeMutation';
+import { applyExerciseSubstitutionHandler } from './workoutLifecycle/exerciseSubstitution';
 import {
   releasePushDeviceHandler,
   syncPushDeviceHandler,
@@ -97,6 +98,18 @@ export const recordWorkoutLifecycleTelemetry = onCall(
 export const authorizeWorkoutLifecycleMutation = onCall(
   { enforceAppCheck: true },
   authorizeWorkoutLifecycleMutationHandler,
+);
+
+/**
+ * Manual exercise substitution during an active workout (exercise-
+ * substitution architecture audit). Performs the ENTIRE write via the Admin
+ * SDK inside a transaction — the client never writes `exercises[].exerciseId`/
+ * `substitution` directly, so a compromised client can never apply a
+ * candidate the manual resolver would reject.
+ */
+export const applyExerciseSubstitution = onCall(
+  { enforceAppCheck: true },
+  applyExerciseSubstitutionHandler,
 );
 
 /** Trusted operational projection sourced only from the immutable backend-authoritative domain ledger. */

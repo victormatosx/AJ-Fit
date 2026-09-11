@@ -207,7 +207,8 @@
     "badges": {
       "today": "Trocado hoje",
       "permanent": "Trocado fixo"
-    }
+    },
+    "error": "Não foi possível aplicar a substituição. Tente novamente."
   },
   "muscleGroups": {
     "chest": "Peitoral",

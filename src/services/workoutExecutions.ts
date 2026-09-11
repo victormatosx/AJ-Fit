@@ -30,11 +30,21 @@ import {
   sweepPendingSetsToSkipped,
   workoutExecutionId,
   type ExerciseExecution,
+  type ResolvedPermanentSubstitutionOverride,
   type SetExecution,
   type WorkoutExecution,
   type WorkoutExecutionStatePointer,
   type WorkoutExecutionStatus,
 } from '../workoutExecution/types';
+import type { FinalWorkoutSession } from '../workoutPrescription/types';
+import { MANUAL_SUBSTITUTION_CATALOG } from '../workoutPrescription/manualSubstitutionCatalog';
+import { resolvePermanentSubstitutionsForSession } from '../workoutPrescription/manualSubstitutionResolver';
+// Deliberately from `exerciseSubstitutionContext.ts`, NOT `exerciseSubstitution.ts`
+// — the latter imports `firebase/functions`, which calls `getFunctions()`
+// eagerly at module load time and broke every test importing this file
+// without a mocked Functions app. See that file's doc comment.
+import { loadManualSubstitutionUserContext } from './exerciseSubstitutionContext';
+import { loadPermanentExerciseSubstitutionPreferences } from './exerciseSubstitutionPreferences';
 
 const USERS = 'users';
 const WORKOUT_EXECUTIONS = 'workoutExecutions';
@@ -43,6 +53,84 @@ const WORKOUT_EXECUTION_STATE_DOC_ID = 'current';
 
 function executionsCollection(uid: string) {
   return collection(db, USERS, uid, WORKOUT_EXECUTIONS);
+}
+
+/**
+ * "Todos os próximos treinos" gap fix (exercise-substitution architecture
+ * audit). Only ever called right before a NEW execution's `exercises` are
+ * built (fresh start or restart-after-abandon) — never on resume of an
+ * existing one, since the caller (`startOrResumeWorkoutExecution`) only
+ * reaches this code path there. Loads the user's stored permanent
+ * preferences + current limitation/equipment context, then re-validates
+ * each preference through the SAME canonical resolver Manual Substitution
+ * itself uses — an invalid preference silently falls back to the prescribed
+ * exercise (never a fabricated third alternative), and is left stored for
+ * a future context where it might become valid again.
+ */
+/**
+ * Fail-open by design (2026-09 hotfix — real Development Build regression:
+ * a `permission-denied` on the `exerciseSubstitutionPreferences` `list`
+ * query, caused by a local Rules change not yet deployed to the real
+ * project, was propagating out of this function and aborting the ENTIRE
+ * workout start). A permanent substitution preference is a nice-to-have
+ * materialized at creation — never a precondition for starting a session at
+ * all. Any failure at any stage here must degrade to "no preference
+ * applied" (the plan's own prescribed exercises), never block the start.
+ */
+async function resolveExercisesForNewExecution(
+  uid: string,
+  program: WorkoutProgramSnapshot,
+  session: FinalWorkoutSession,
+): Promise<ExerciseExecution[]> {
+  const preferencesStartedAtMs = Date.now();
+  let preferences;
+  try {
+    preferences = await loadPermanentExerciseSubstitutionPreferences(uid);
+  } catch (error) {
+    logWarn('workout_execution', 'preferences_list_failed_fail_open', {
+      durationMs: Date.now() - preferencesStartedAtMs,
+      error,
+    });
+    return buildInitialExerciseExecutions(session);
+  }
+  logInfo('workout_execution', 'preferences_list_completed', {
+    durationMs: Date.now() - preferencesStartedAtMs,
+    resultCount: preferences.size,
+  });
+  if (preferences.size === 0) return buildInitialExerciseExecutions(session);
+
+  const userContextStartedAtMs = Date.now();
+  let userContext;
+  try {
+    userContext = await loadManualSubstitutionUserContext(uid, program.environment);
+  } catch (error) {
+    logWarn('workout_execution', 'preferences_user_context_failed_fail_open', {
+      durationMs: Date.now() - userContextStartedAtMs,
+      error,
+    });
+    return buildInitialExerciseExecutions(session);
+  }
+  logInfo('workout_execution', 'preferences_user_context_completed', {
+    durationMs: Date.now() - userContextStartedAtMs,
+    found: userContext != null,
+  });
+  // No usable questionnaire context -> never guess; materialize the
+  // prescribed plan unchanged, exactly as if no preference existed.
+  if (!userContext) return buildInitialExerciseExecutions(session);
+
+  const resolved = resolvePermanentSubstitutionsForSession({
+    sessionExerciseIds: session.exercises.map((exercise) => exercise.exerciseId),
+    preferences,
+    catalog: MANUAL_SUBSTITUTION_CATALOG,
+    regions: userContext.regions,
+    equipmentContext: userContext.equipmentContext,
+  });
+  if (resolved.size === 0) return buildInitialExerciseExecutions(session);
+
+  const appliedAt = Timestamp.now();
+  const overrides = new Map<number, ResolvedPermanentSubstitutionOverride>();
+  resolved.forEach((exerciseId, exerciseIndex) => overrides.set(exerciseIndex, { exerciseId, appliedAt }));
+  return buildInitialExerciseExecutions(session, overrides);
 }
 
 function executionRef(uid: string, executionId: string) {
@@ -201,6 +289,26 @@ export async function startOrResumeWorkoutExecution(input: {
     }
   }
 
+  // Best-effort pre-check (same non-transactional "peek" pattern as the
+  // legacy check above): if the mutex pointer already points at THIS
+  // executionId, this call is a resume — the "existing" transaction branch
+  // below never reads `base.exercises` at all, so permanent-preference
+  // resolution would be pure waste (and, per the hotfix below, a source of
+  // needless failure exposure) on that path. If this peek is stale (the
+  // pointer changes concurrently), the transaction's own atomic re-read of
+  // `stateRef` remains the sole authority — `resolvedExercises` is simply
+  // unused whenever the "existing" branch ends up winning anyway.
+  const pointerPeekStartedAtMs = Date.now();
+  const pointerPeek = await getDoc(stateRef);
+  const isLikelyResume = pointerPeek.exists() && pointerPeek.data().executionId === executionId;
+  logInfo('workout_execution', 'start_pointer_peek_completed', {
+    durationMs: Date.now() - pointerPeekStartedAtMs,
+    isLikelyResume,
+  });
+  const resolvedExercises = isLikelyResume
+    ? [] // never read by the "existing" transaction branch below
+    : await resolveExercisesForNewExecution(uid, program, session);
+
   const base = {
     programId: program.programId,
     ...(program.programInstanceId ? { programInstanceId: program.programInstanceId } : {}),
@@ -209,7 +317,7 @@ export async function startOrResumeWorkoutExecution(input: {
     sessionName: session.name,
     scheduledLocalDate,
     status: 'IN_PROGRESS' as const,
-    exercises: buildInitialExerciseExecutions(session),
+    exercises: resolvedExercises,
     executionSchemaVersion: program.programInstanceId
       ? WORKOUT_EXECUTION_LIFECYCLE_SCHEMA_VERSION
       : WORKOUT_EXECUTION_SCHEMA_VERSION,

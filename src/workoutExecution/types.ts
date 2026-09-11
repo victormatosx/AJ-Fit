@@ -28,16 +28,54 @@ export interface SetExecution {
  * broken by) a Program Snapshot that may later be superseded. Never the
  * source of truth for the prescription itself.
  */
+/**
+ * Exercise-substitution architecture audit / Manual Substitution feature:
+ * `scope: 'SESSION'` never survives past this one execution (the anchor's
+ * `prescribedExerciseId` is what any future execution re-materializes
+ * against); `'PERMANENT'` is only a record of WHY this slot's `exerciseId`
+ * changed — the durable preference itself lives in
+ * `users/{uid}/exerciseSubstitutionPreferences/{prescribedExerciseId}`, never
+ * only here. `appliedAt` is a plain `Timestamp` value (never
+ * `FieldValue.serverTimestamp()`), because Firestore does not support server
+ * timestamp sentinels inside array elements — `exercises` is a plain array.
+ */
+export interface ExerciseExecutionSubstitution {
+  scope: 'SESSION' | 'PERMANENT';
+  appliedAt: unknown;
+}
+
 export interface ExerciseExecution {
   /** Position in `session.exercises[]` at the time this Execution was created — the only stable slot identity the Prescription Engine provides. */
   exerciseIndex: number;
-  /** Final, post-substitution exercise id already prescribed to the user (never re-resolved via modifiers). */
+  /**
+   * The exercise this slot's sets are actually logged against right now —
+   * the engine's post-substitution id at creation time, and (Manual
+   * Substitution feature) mutable afterward via `applyExerciseSubstitution`
+   * ONLY while no set in this slot has been recorded yet. Never re-resolved
+   * by prescription modifiers after creation.
+   */
   exerciseId: string;
+  /**
+   * The exercise originally prescribed for this slot at creation time —
+   * immutable for the lifetime of this execution. Absent on every execution
+   * created before the Manual Substitution feature existed; callers needing
+   * "what was prescribed" on a legacy execution must fall back to `exerciseId`
+   * (see `prescribedExerciseIdOf`), since pre-feature `exerciseId` never
+   * changed after creation anyway.
+   */
+  prescribedExerciseId?: string;
+  /** Present only once a manual substitution has been applied to this slot. */
+  substitution?: ExerciseExecutionSubstitution;
   prescribedSets: number | null;
   prescribedReps: string | null;
   prescribedDuration: string | null;
   prescribedCycles: number | null;
   sets: SetExecution[];
+}
+
+/** "Foi prescrito A e executado B" — the single place that answers this for both legacy (no `prescribedExerciseId`) and current executions. */
+export function prescribedExerciseIdOf(exercise: Pick<ExerciseExecution, 'exerciseId' | 'prescribedExerciseId'>): string {
+  return exercise.prescribedExerciseId ?? exercise.exerciseId;
 }
 
 export const WORKOUT_EXECUTION_SCHEMA_VERSION = 1;
@@ -120,18 +158,40 @@ export function workoutExecutionId(programOrInstanceId: string, sessionIndex: nu
   return workoutExecutionDocumentId(programOrInstanceId, sessionIndex, scheduledLocalDate);
 }
 
+/** A permanent substitution preference already resolved/validated by the caller for one slot — see `resolvePermanentSubstitutionsForSession` (`workoutPrescription/manualSubstitutionResolver.ts`). */
+export interface ResolvedPermanentSubstitutionOverride {
+  exerciseId: string;
+  /** Plain `Timestamp` value supplied by the caller — never `FieldValue.serverTimestamp()` (unsupported inside array elements). */
+  appliedAt: unknown;
+}
+
 /**
  * Builds the initial, all-PENDING exercise/set snapshot for a freshly
  * started (or restarted-after-abandon) execution. Set count mirrors
  * `WorkoutScreen`'s existing materialization (`prescribed.sets ?? 1`) so both
  * layers agree on how many sets a duration/cycles-based exercise has.
+ *
+ * `permanentOverrides` (exercise-substitution architecture audit, "Todos os
+ * próximos treinos" gap fix): only ever supplied by the orchestration layer
+ * immediately before a NEW execution is created (`startOrResumeWorkoutExecution`
+ * in `services/workoutExecutions.ts`), never by this function itself — it
+ * stays pure (no Firestore, no resolving) and never re-derives anything on
+ * RESUME of an existing execution (the caller simply never passes overrides
+ * on that path). `prescribedExerciseId` always reflects the plan's own id,
+ * regardless of any override — "prescrito A, executado B" stays intact.
  */
-export function buildInitialExerciseExecutions(session: FinalWorkoutSession): ExerciseExecution[] {
+export function buildInitialExerciseExecutions(
+  session: FinalWorkoutSession,
+  permanentOverrides?: ReadonlyMap<number, ResolvedPermanentSubstitutionOverride>,
+): ExerciseExecution[] {
   return session.exercises.map((exercise, exerciseIndex) => {
     const setCount = exercise.sets ?? 1;
+    const override = permanentOverrides?.get(exerciseIndex);
     return {
       exerciseIndex,
-      exerciseId: exercise.exerciseId,
+      exerciseId: override?.exerciseId ?? exercise.exerciseId,
+      prescribedExerciseId: exercise.exerciseId,
+      ...(override ? { substitution: { scope: 'PERMANENT' as const, appliedAt: override.appliedAt } } : {}),
       prescribedSets: exercise.sets ?? null,
       prescribedReps: exercise.reps ?? null,
       prescribedDuration: exercise.duration ?? null,

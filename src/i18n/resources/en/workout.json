@@ -207,7 +207,8 @@
     "badges": {
       "today": "Swapped today",
       "permanent": "Swap saved"
-    }
+    },
+    "error": "Couldn't apply the swap. Please try again."
   },
   "muscleGroups": {
     "chest": "Chest",

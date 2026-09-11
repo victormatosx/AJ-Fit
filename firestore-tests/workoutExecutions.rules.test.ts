@@ -184,6 +184,206 @@ describe('users/{uid}/workoutExecutions — update while IN_PROGRESS', () => {
   });
 });
 
+describe('users/{uid}/workoutExecutions — exercise identity fields are immutable to the client (exercise-substitution architecture audit, Fase 7)', () => {
+  function substitutedExecutionDoc(overrides: Record<string, unknown> = {}) {
+    return executionDoc({
+      exercises: [
+        {
+          exerciseIndex: 0,
+          exerciseId: 'machine_chest_press',
+          prescribedExerciseId: 'bench_press',
+          substitution: { scope: 'PERMANENT', appliedAt: Timestamp.now() },
+          prescribedSets: 3,
+          prescribedReps: '8-12',
+          prescribedDuration: null,
+          prescribedCycles: null,
+          sets: oneSet(),
+        },
+      ],
+      ...overrides,
+    });
+  }
+
+  it('denies a client update changing exerciseId directly', async () => {
+    const db = dbFor(UID);
+    const ref = doc(db, 'users', UID, 'workoutExecutions', EXECUTION_ID);
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'users', UID, 'workoutExecutions', EXECUTION_ID), substitutedExecutionDoc());
+    });
+    const tampered = [{
+      exerciseIndex: 0, exerciseId: 'attacker_chosen_exercise', prescribedExerciseId: 'bench_press',
+      substitution: { scope: 'PERMANENT', appliedAt: Timestamp.now() },
+      prescribedSets: 3, prescribedReps: '8-12', prescribedDuration: null, prescribedCycles: null, sets: oneSet(),
+    }];
+    await assertFails(updateDoc(ref, { exercises: tampered, updatedAt: serverTimestamp() }));
+  });
+
+  it('denies a client update changing prescribedExerciseId directly', async () => {
+    const db = dbFor(UID);
+    const ref = doc(db, 'users', UID, 'workoutExecutions', EXECUTION_ID);
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'users', UID, 'workoutExecutions', EXECUTION_ID), substitutedExecutionDoc());
+    });
+    const tampered = [{
+      exerciseIndex: 0, exerciseId: 'machine_chest_press', prescribedExerciseId: 'attacker_chosen_anchor',
+      substitution: { scope: 'PERMANENT', appliedAt: Timestamp.now() },
+      prescribedSets: 3, prescribedReps: '8-12', prescribedDuration: null, prescribedCycles: null, sets: oneSet(),
+    }];
+    await assertFails(updateDoc(ref, { exercises: tampered, updatedAt: serverTimestamp() }));
+  });
+
+  it('denies a client update creating, changing, or removing the substitution marker', async () => {
+    const db = dbFor(UID);
+
+    // Create: a plain (non-substituted) doc where the client tries to sneak in `substitution` via an ordinary update.
+    const plainRef = doc(db, 'users', UID, 'workoutExecutions', 'e-plain');
+    await setDoc(plainRef, executionDoc());
+    const forgedSubstitution = [{
+      exerciseIndex: 0, exerciseId: 'bench_press', prescribedExerciseId: 'bench_press',
+      substitution: { scope: 'PERMANENT', appliedAt: Timestamp.now() },
+      prescribedSets: 3, prescribedReps: '8-12', prescribedDuration: null, prescribedCycles: null, sets: oneSet(),
+    }];
+    await assertFails(updateDoc(plainRef, { exercises: forgedSubstitution, updatedAt: serverTimestamp() }));
+
+    // Change: an already-substituted doc where the client tries to change the scope.
+    const subRef = doc(db, 'users', UID, 'workoutExecutions', 'e-sub');
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'users', UID, 'workoutExecutions', 'e-sub'), substitutedExecutionDoc());
+    });
+    const changedScope = [{
+      exerciseIndex: 0, exerciseId: 'machine_chest_press', prescribedExerciseId: 'bench_press',
+      substitution: { scope: 'SESSION', appliedAt: Timestamp.now() },
+      prescribedSets: 3, prescribedReps: '8-12', prescribedDuration: null, prescribedCycles: null, sets: oneSet(),
+    }];
+    await assertFails(updateDoc(subRef, { exercises: changedScope, updatedAt: serverTimestamp() }));
+
+    // Remove: the client tries to strip `substitution` back off (a fake "revert").
+    const removed = [{
+      exerciseIndex: 0, exerciseId: 'machine_chest_press', prescribedExerciseId: 'bench_press',
+      prescribedSets: 3, prescribedReps: '8-12', prescribedDuration: null, prescribedCycles: null, sets: oneSet(),
+    }];
+    await assertFails(updateDoc(subRef, { exercises: removed, updatedAt: serverTimestamp() }));
+  });
+
+  it('allows a legitimate recordSetExecution-shaped update on a substituted exercise (identity fields unchanged, only sets change)', async () => {
+    const db = dbFor(UID);
+    const ref = doc(db, 'users', UID, 'workoutExecutions', EXECUTION_ID);
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'users', UID, 'workoutExecutions', EXECUTION_ID), substitutedExecutionDoc());
+    });
+    const loggedSet = await getDoc(ref).then((snap) => snap.data()!.exercises[0].substitution);
+    const legitimateUpdate = [{
+      exerciseIndex: 0, exerciseId: 'machine_chest_press', prescribedExerciseId: 'bench_press',
+      substitution: loggedSet,
+      prescribedSets: 3, prescribedReps: '8-12', prescribedDuration: null, prescribedCycles: null,
+      sets: [{ setIndex: 0, status: 'COMPLETED', actualReps: 10, weightKg: 40, actualDurationSeconds: null }],
+    }];
+    await assertSucceeds(updateDoc(ref, { exercises: legitimateUpdate, updatedAt: serverTimestamp() }));
+  });
+
+  it('allows a legitimate skipExerciseExecution-shaped update on a substituted exercise', async () => {
+    const db = dbFor(UID);
+    const ref = doc(db, 'users', UID, 'workoutExecutions', EXECUTION_ID);
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'users', UID, 'workoutExecutions', EXECUTION_ID), substitutedExecutionDoc());
+    });
+    const loggedSubstitution = await getDoc(ref).then((snap) => snap.data()!.exercises[0].substitution);
+    const skipUpdate = [{
+      exerciseIndex: 0, exerciseId: 'machine_chest_press', prescribedExerciseId: 'bench_press',
+      substitution: loggedSubstitution,
+      prescribedSets: 3, prescribedReps: '8-12', prescribedDuration: null, prescribedCycles: null,
+      sets: [{ setIndex: 0, status: 'SKIPPED', actualReps: null, weightKg: null, actualDurationSeconds: null }],
+    }];
+    await assertSucceeds(updateDoc(ref, { exercises: skipUpdate, updatedAt: serverTimestamp() }));
+  });
+
+  it('allows a legitimate finish (sweep-to-SKIPPED + terminal status) on a substituted exercise', async () => {
+    const db = dbFor(UID);
+    const ref = doc(db, 'users', UID, 'workoutExecutions', EXECUTION_ID);
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'users', UID, 'workoutExecutions', EXECUTION_ID), substitutedExecutionDoc());
+    });
+    const loggedSubstitution = await getDoc(ref).then((snap) => snap.data()!.exercises[0].substitution);
+    const finishedExercises = [{
+      exerciseIndex: 0, exerciseId: 'machine_chest_press', prescribedExerciseId: 'bench_press',
+      substitution: loggedSubstitution,
+      prescribedSets: 3, prescribedReps: '8-12', prescribedDuration: null, prescribedCycles: null,
+      sets: [{ setIndex: 0, status: 'SKIPPED', actualReps: null, weightKg: null, actualDurationSeconds: null }],
+    }];
+    await assertSucceeds(updateDoc(ref, {
+      exercises: finishedExercises, status: 'PARTIALLY_COMPLETED', finishedAt: serverTimestamp(), updatedAt: serverTimestamp(),
+    }));
+  });
+
+  it('a legacy document with neither prescribedExerciseId nor substitution stays updatable by legitimate operations', async () => {
+    const db = dbFor(UID);
+    const ref = doc(db, 'users', UID, 'workoutExecutions', EXECUTION_ID);
+    // executionDoc()'s default exercise has neither field — exactly a legacy shape.
+    await setDoc(ref, executionDoc());
+    const legitimateUpdate = [{
+      exerciseIndex: 0, exerciseId: 'bench_press', prescribedSets: 3, prescribedReps: '8-12',
+      prescribedDuration: null, prescribedCycles: null,
+      sets: [{ setIndex: 0, status: 'COMPLETED', actualReps: 10, weightKg: 40, actualDurationSeconds: null }],
+    }];
+    await assertSucceeds(updateDoc(ref, { exercises: legitimateUpdate, updatedAt: serverTimestamp() }));
+  });
+
+  it('Admin SDK (Cloud Function trust boundary, simulated via withSecurityRulesDisabled) can still apply a substitution — this Rule only restricts the CLIENT SDK', async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const ref = doc(context.firestore(), 'users', UID, 'workoutExecutions', EXECUTION_ID);
+      await setDoc(ref, executionDoc());
+      const applied = [{
+        exerciseIndex: 0, exerciseId: 'machine_chest_press', prescribedExerciseId: 'bench_press',
+        substitution: { scope: 'PERMANENT', appliedAt: Timestamp.now() },
+        prescribedSets: 3, prescribedReps: '8-12', prescribedDuration: null, prescribedCycles: null, sets: oneSet(),
+      }];
+      await updateDoc(ref, { exercises: applied, updatedAt: serverTimestamp() });
+      const snap = await getDoc(ref);
+      expect(snap.data()?.exercises[0].exerciseId).toBe('machine_chest_press');
+    });
+  });
+});
+
+describe('users/{uid}/exerciseSubstitutionPreferences — read-only to the owning client', () => {
+  it('lets the owner read their own preference', async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'users', UID, 'exerciseSubstitutionPreferences', 'bench_press'), {
+        prescribedExerciseId: 'bench_press', preferredExerciseId: 'machine_chest_press',
+        createdAt: Timestamp.now(), updatedAt: Timestamp.now(),
+      });
+    });
+    await assertSucceeds(getDoc(doc(dbFor(UID), 'users', UID, 'exerciseSubstitutionPreferences', 'bench_press')));
+  });
+
+  it('denies cross-user read', async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'users', UID, 'exerciseSubstitutionPreferences', 'bench_press'), {
+        prescribedExerciseId: 'bench_press', preferredExerciseId: 'machine_chest_press',
+        createdAt: Timestamp.now(), updatedAt: Timestamp.now(),
+      });
+    });
+    await assertFails(getDoc(doc(dbFor(OTHER_UID), 'users', UID, 'exerciseSubstitutionPreferences', 'bench_press')));
+  });
+
+  it('denies the client from creating, updating, or deleting a preference directly — only the Cloud Function (Admin SDK) may', async () => {
+    const db = dbFor(UID);
+    await assertFails(setDoc(doc(db, 'users', UID, 'exerciseSubstitutionPreferences', 'bench_press'), {
+      prescribedExerciseId: 'bench_press', preferredExerciseId: 'attacker_chosen_exercise',
+      createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+    }));
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'users', UID, 'exerciseSubstitutionPreferences', 'bench_press'), {
+        prescribedExerciseId: 'bench_press', preferredExerciseId: 'machine_chest_press',
+        createdAt: Timestamp.now(), updatedAt: Timestamp.now(),
+      });
+    });
+    await assertFails(updateDoc(doc(db, 'users', UID, 'exerciseSubstitutionPreferences', 'bench_press'), {
+      preferredExerciseId: 'attacker_chosen_exercise',
+    }));
+    await assertFails(deleteDoc(doc(db, 'users', UID, 'exerciseSubstitutionPreferences', 'bench_press')));
+  });
+});
+
 describe('users/{uid}/workoutExecutions — immutability after finish (item 53)', () => {
   it('rejects any further update once COMPLETED', async () => {
     const db = dbFor(UID);

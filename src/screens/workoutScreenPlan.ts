@@ -16,6 +16,10 @@ export type SetData = { r: string; w: number };
 export type SubOption = { name: string; target: string; db: string };
 export type Exercise = {
   id: string;
+  /** Canonical identity of this slot in FinalWorkoutPlan. */
+  prescribedExerciseId: string;
+  /** Exercise whose visual metadata is being presented. */
+  effectiveExerciseId: string;
   name: string;
   target: string;
   db: string;
@@ -55,19 +59,27 @@ export function canSkipExercise(completedSets: number, remainingExerciseCount: n
   return completedSets === 0 && remainingExerciseCount > 1;
 }
 
-export function workoutExercisesFromPlan(plan: FinalWorkoutPlan, language: string, sessionIndex: number): Exercise[] {
+export function workoutExercisesFromPlan(
+  plan: FinalWorkoutPlan,
+  language: string,
+  sessionIndex: number,
+  effectiveExerciseIds?: ReadonlyMap<number, string>,
+): Exercise[] {
   const session = plan.sessions[sessionIndex] ?? plan.sessions[0];
   if (!session) return [];
   const locale = language === 'pt-BR' ? 'ptBR' : language === 'es' ? 'es' : 'en';
-  return session.exercises.map((prescribed) => {
-    const catalog = catalogExerciseById.get(prescribed.exerciseId);
-    if (!catalog) throw new Error(`Missing catalog exercise ${prescribed.exerciseId}`);
+  return session.exercises.map((prescribed, exerciseIndex) => {
+    const effectiveExerciseId = effectiveExerciseIds?.get(exerciseIndex) ?? prescribed.exerciseId;
+    const catalog = catalogExerciseById.get(effectiveExerciseId);
+    if (!catalog) throw new Error(`Missing catalog exercise ${effectiveExerciseId}`);
     const count = prescribed.sets ?? 1;
     return {
-      id: prescribed.exerciseId,
+      id: effectiveExerciseId,
+      prescribedExerciseId: prescribed.exerciseId,
+      effectiveExerciseId,
       name: catalog.name[locale],
       target: catalog.target.primaryMuscle,
-      db: prescribed.exerciseId,
+      db: effectiveExerciseId,
       // Keep the canonical range/duration verbatim. Rendering only the lower
       // bound would silently change "8-12" into a prescription of 8.
       sets: Array.from({ length: count }, () => ({

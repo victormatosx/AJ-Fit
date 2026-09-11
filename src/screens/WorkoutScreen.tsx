@@ -12,7 +12,6 @@ import {
   Keyboard,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
 import { ScreenBg } from '../components/ui/ScreenBg';
@@ -38,8 +37,15 @@ import {
   workoutLoadToKg,
   workoutLoadUnit,
 } from '../units/workoutLoadConversions';
-import { WORKOUT_SUBSTITUTIONS_STORAGE_KEY as SUBS_KEY } from '../services/workoutSubstitutionsStorage';
 import { resolveSessionDisplayName } from '../workoutPrescription/sessionPresentation';
+import {
+  canRevertToAnchor,
+  exerciseDisplayName,
+  exerciseDisplayTarget,
+  resolveDisplayCandidates,
+  type ManualSubstitutionUserContext,
+} from '../services/exerciseSubstitutionCandidates';
+import type { ExerciseSubstitutionScope } from '../services/exerciseSubstitution';
 import { resolveCardioFinisherPresentation } from '../workoutPrescription/cardioPresentation';
 import {
   canSkipExercise,
@@ -118,6 +124,27 @@ type Props = {
    * navigation, and a failed abandon must never be silently treated as one.
    */
   onAbandon?: () => Promise<{ ok: true } | { ok: false; error: unknown }>;
+  /**
+   * The user's current declared limitation regions + equipment context —
+   * exactly what the server-side manual-substitution resolver uses too
+   * (`loadManualSubstitutionUserContext`, `src/services/exerciseSubstitution.ts`).
+   * `null` while loading or when there is no usable questionnaire yet: the
+   * "trocar" action stays hidden rather than showing candidates computed
+   * against a fabricated default context.
+   */
+  manualSubstitutionContext?: ManualSubstitutionUserContext | null;
+  /**
+   * The ONLY path a manual substitution is ever applied through — always
+   * calls the `applyExerciseSubstitution` Cloud Function, which independently
+   * re-validates against live Firestore data before writing anything. A
+   * `requestedExerciseId` equal to the slot's prescribed exercise is a
+   * "voltar ao original" request, handled the same way server-side.
+   */
+  onApplySubstitution?: (input: {
+    exerciseIndex: number;
+    requestedExerciseId: string;
+    scope: ExerciseSubstitutionScope;
+  }) => Promise<{ ok: true } | { ok: false; error: unknown }>;
 };
 
 /**
@@ -149,7 +176,7 @@ function translateMuscleGroup(tLoose: LooseT, target: string): string {
   return target;
 }
 
-export function WorkoutScreen({ plan, onDone, onMinimize, sessionIndex = 0, execution, workoutStartedAtMs, onSessionCompleted, onSetLogged, onAbandon }: Props) {
+export function WorkoutScreen({ plan, onDone, onMinimize, sessionIndex = 0, execution, workoutStartedAtMs, onSessionCompleted, onSetLogged, onAbandon, manualSubstitutionContext, onApplySubstitution }: Props) {
   const { theme } = useTheme();
   const { t, i18n } = useTranslation('workout');
   const insets = useSafeAreaInsets();
@@ -295,27 +322,26 @@ export function WorkoutScreen({ plan, onDone, onMinimize, sessionIndex = 0, exec
   const [sessionNow, setSessionNow] = useState(Date.now);
   const [restNow, setRestNow] = useState(Date.now);
 
-  const [permSubs, setPermSubs] = useState<Record<string, SubOption>>({});
-  const [sessionSubs, setSessionSubs] = useState<Record<string, SubOption>>({});
+  // exerciseIndex -> currently effective manual substitution. Hydrated ONCE
+  // from the persisted `execution` snapshot (same "never re-derive mid-session"
+  // rule `hydration` above already follows) — never AsyncStorage, and never
+  // client-computed: this only ever reflects what `applyExerciseSubstitution`
+  // has already confirmed server-side, either in a prior session (SESSION
+  // scope on resume) or via a PERMANENT preference already materialized into
+  // this execution when it was created.
+  const [substitutions, setSubstitutions] = useState<Record<number, { exerciseId: string; scope: ExerciseSubstitutionScope }>>(() => {
+    const map: Record<number, { exerciseId: string; scope: ExerciseSubstitutionScope }> = {};
+    execution?.exercises.forEach((entry) => {
+      if (entry.substitution) map[entry.exerciseIndex] = { exerciseId: entry.exerciseId, scope: entry.substitution.scope };
+    });
+    return map;
+  });
+  const [substitutionError, setSubstitutionError] = useState(false);
+  const [substitutionPending, setSubstitutionPending] = useState(false);
+  const locale = i18n.language === 'pt-BR' ? 'ptBR' : i18n.language === 'es' ? 'es' : 'en';
 
   const [pr, setPr] = useState<{ weight: number; exName: string; prev: number } | null>(null);
   const [exComplete, setExComplete] = useState<{ name: string; nextName: string } | null>(null);
-
-  // load persisted subs
-  useEffect(() => {
-    AsyncStorage.getItem(SUBS_KEY)
-      .then((raw) => {
-        if (!raw) return;
-        try {
-          setPermSubs(JSON.parse(raw));
-        } catch {
-          /* ignore malformed */
-        }
-      })
-      .catch(() => {
-        /* ignore */
-      });
-  }, []);
 
   // Session duration is `sessionNow - workoutStartedAtMs` (wall clock), never
   // a tick count — `workoutStartedAtMs` is the persisted execution's
@@ -355,23 +381,36 @@ export function WorkoutScreen({ plan, onDone, onMinimize, sessionIndex = 0, exec
     return () => clearInterval(timer);
   }, [restStatus, rest?.endsAt, rest?.restId]);
 
-  const ovr = (id: string): SubOption | null => {
-    const candidate = sessionSubs[id] || permSubs[id] || null;
-    const allowed = exercises.find((exercise) => exercise.id === id)?.subs
-      .some((option) => option.db === candidate?.db);
-    return allowed ? candidate : null;
+  const ovr = (index: number): SubOption | null => {
+    const applied = substitutions[index];
+    if (!applied) return null;
+    return {
+      name: exerciseDisplayName(applied.exerciseId, locale),
+      target: exerciseDisplayTarget(applied.exerciseId),
+      db: applied.exerciseId,
+    };
   };
-  const resolve = (base: Exercise): Exercise => {
-    const o = ovr(base.id);
+  // `.id` is deliberately NEVER overwritten by a substitution — it stays the
+  // anchor/prescribed exercise id for the lifetime of this screen, so the
+  // manual resolver always re-resolves candidates against the same anchor
+  // (Decision #5: no A->B->C chaining) no matter how many times this slot is
+  // re-substituted.
+  const resolve = (base: Exercise, index: number): Exercise => {
+    const o = ovr(index);
     return o ? { ...base, name: o.name, target: o.target, db: o.db } : base;
   };
 
   const exIdx = order.length > 0 ? order[0] : 0;
   const baseEx = exercises[exIdx];
-  const ex = resolve(baseEx);
+  const ex = resolve(baseEx, exIdx);
   const setIdx = progress[exIdx] || 0;
   const exDone = (i: number) => (progress[i] || 0) >= exercises[i].sets.length;
   const canSkipCurrentExercise = canSkipExercise(setIdx, order.length);
+  // Manual Substitution is only ever offered before any set of the CURRENT
+  // exercise has been logged — the same "0 completed sets" gate `canSkipExercise`
+  // already uses for skip, applied here so retroactively re-typing an already
+  // logged set's exercise identity is never possible from the UI.
+  const canSubstituteCurrentExercise = setIdx === 0;
 
   const totalSets = exercises.reduce((a, e) => a + e.sets.length, 0);
   const doneSets = exercises.reduce(
@@ -380,7 +419,7 @@ export function WorkoutScreen({ plan, onDone, onMinimize, sessionIndex = 0, exec
   );
   const pct = doneSets / totalSets;
   const wasSkipped = skipped.includes(exIdx);
-  const isSubbed = !!ovr(baseEx.id);
+  const isSubbed = !!ovr(exIdx);
   const isLastOverall = order.length === 1 && setIdx === ex.sets.length - 1;
   const resting = restStatus === 'running' && rest !== null;
   const remainingRestSeconds = resting ? computeRemainingSeconds(rest, restNow) : 0;
@@ -449,7 +488,7 @@ export function WorkoutScreen({ plan, onDone, onMinimize, sessionIndex = 0, exec
         else setFinished(true);
         return;
       }
-      const nextEx = resolve(exercises[nextOrder[0]]);
+      const nextEx = resolve(exercises[nextOrder[0]], nextOrder[0]);
       setExComplete({
         name: completedName,
         nextName: nextEx.name,
@@ -518,33 +557,73 @@ export function WorkoutScreen({ plan, onDone, onMinimize, sessionIndex = 0, exec
   };
 
   const applySub = async (option: SubOption, scope: 'once' | 'all') => {
-    const baseId = exercises[exIdx].id;
-    if (scope === 'all') {
-      const next = { ...permSubs, [baseId]: option };
-      setPermSubs(next);
-      try {
-        await AsyncStorage.setItem(SUBS_KEY, JSON.stringify(next));
-      } catch {
-        /* ignore */
-      }
-      setSessionSubs((s) => {
-        const c = { ...s };
-        delete c[baseId];
-        return c;
-      });
-    } else {
-      setSessionSubs((s) => ({ ...s, [baseId]: option }));
-    }
     setPendingSub(null);
     setSubSheet(false);
+    if (!onApplySubstitution) return;
+    const isRevertToOriginal = option.db === baseEx.id;
+    const requestedScope: ExerciseSubstitutionScope = scope === 'all' ? 'PERMANENT' : 'SESSION';
+    setSubstitutionError(false);
+    setSubstitutionPending(true);
+    const result = await onApplySubstitution({
+      exerciseIndex: exIdx,
+      requestedExerciseId: option.db,
+      scope: requestedScope,
+    });
+    setSubstitutionPending(false);
+    if (!result.ok) {
+      setSubstitutionError(true);
+      return;
+    }
+    setSubstitutions((current) => {
+      const next = { ...current };
+      if (isRevertToOriginal) delete next[exIdx];
+      else next[exIdx] = { exerciseId: option.db, scope: requestedScope };
+      return next;
+    });
   };
 
+  // Every OTHER slot's currently effective exercise id — never this slot's
+  // own (Decision #7/Caso 2-4 of the audit): a candidate already resolved
+  // elsewhere in the session can never be offered here.
+  const effectiveExerciseIdsInSession = useMemo(() => {
+    const ids = new Set<string>();
+    exercises.forEach((exercise, index) => {
+      if (index === exIdx) return;
+      ids.add(ovr(index)?.db ?? exercise.id);
+    });
+    return ids;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [exercises, exIdx, substitutions]);
+
+  const canOfferSubstitution = canSubstituteCurrentExercise && !!manualSubstitutionContext;
+  const rankedCandidates = useMemo(
+    () => (canOfferSubstitution
+      ? resolveDisplayCandidates({
+        anchorExerciseId: baseEx.id,
+        userContext: manualSubstitutionContext!,
+        effectiveExerciseIdsInSession,
+      })
+      : []),
+    [canOfferSubstitution, baseEx.id, manualSubstitutionContext, effectiveExerciseIdsInSession],
+  );
+  const canRevert = isSubbed && canOfferSubstitution && canRevertToAnchor({
+    anchorExerciseId: baseEx.id,
+    userContext: manualSubstitutionContext ?? { regions: [], equipmentContext: { environment: 'gym', availableEquipment: new Set() } },
+    effectiveExerciseIdsInSession,
+  });
+
   const subOptions: (SubOption & { _base?: boolean })[] = useMemo(
-    () => [
-      { name: baseEx.name, target: baseEx.target, db: baseEx.db, _base: true },
-      ...baseEx.subs,
-    ],
-    [baseEx]
+    () => (canRevert || rankedCandidates.length > 0
+      ? [
+        { name: baseEx.name, target: baseEx.target, db: baseEx.id, _base: true },
+        ...rankedCandidates.map((candidate) => ({
+          name: exerciseDisplayName(candidate.exerciseId, locale),
+          target: exerciseDisplayTarget(candidate.exerciseId),
+          db: candidate.exerciseId,
+        })),
+      ]
+      : []),
+    [canRevert, rankedCandidates, baseEx, locale]
   );
 
   // Mount-once-per-finish signal for the Schedule Engine — separate from
@@ -808,9 +887,9 @@ export function WorkoutScreen({ plan, onDone, onMinimize, sessionIndex = 0, exec
                   border={theme.colors.badgeBorder}
                   color={theme.colors.choiceTextSecondary}
                 >
-                  {(sessionSubs[baseEx.id]
-                    ? t('substitution.badges.today')
-                    : t('substitution.badges.permanent')
+                  {(substitutions[exIdx]?.scope === 'PERMANENT'
+                    ? t('substitution.badges.permanent')
+                    : t('substitution.badges.today')
                   ).toUpperCase()}
                 </Badge>
               )}
@@ -819,7 +898,7 @@ export function WorkoutScreen({ plan, onDone, onMinimize, sessionIndex = 0, exec
               {ex.name}
             </Display>
           </View>
-          {baseEx.subs.length > 0 && <Pressable
+          {(rankedCandidates.length > 0 || canRevert) && <Pressable
             onPress={() => setSubSheet(true)}
             style={{
               flexDirection: 'row',
@@ -1338,8 +1417,14 @@ export function WorkoutScreen({ plan, onDone, onMinimize, sessionIndex = 0, exec
                   original: baseEx.name,
                 })}
               </Text>
-              <View style={{ marginTop: 22, gap: 10 }}>
+              {substitutionError && (
+                <Text style={{ fontSize: 12.5, color: theme.colors.dangerText, marginTop: 10 }}>
+                  {t('substitution.error')}
+                </Text>
+              )}
+              <View style={{ marginTop: 22, gap: 10, opacity: substitutionPending ? 0.6 : 1 }}>
                 <Pressable
+                  disabled={substitutionPending}
                   onPress={() => pendingSub && applySub(pendingSub, 'once')}
                   style={{
                     paddingVertical: 15,
@@ -1355,6 +1440,7 @@ export function WorkoutScreen({ plan, onDone, onMinimize, sessionIndex = 0, exec
                   </Text>
                 </Pressable>
                 <Pressable
+                  disabled={substitutionPending}
                   onPress={() => pendingSub && applySub(pendingSub, 'all')}
                   style={{
                     paddingVertical: 15,
@@ -1373,6 +1459,7 @@ export function WorkoutScreen({ plan, onDone, onMinimize, sessionIndex = 0, exec
                   </Text>
                 </Pressable>
                 <Pressable
+                  disabled={substitutionPending}
                   onPress={() => setPendingSub(null)}
                   style={{ paddingVertical: 11, alignItems: 'center' }}
                 >
@@ -1463,7 +1550,7 @@ export function WorkoutScreen({ plan, onDone, onMinimize, sessionIndex = 0, exec
                       </Text>
                       <View style={{ flex: 1 }}>
                         <Text style={{ fontFamily: theme.fonts.uiBold, fontSize: 14, color: theme.colors.textPrimary }}>
-                          {resolve(e).name}
+                          {resolve(e, i).name}
                         </Text>
                         <Text
                           style={{
@@ -1475,7 +1562,7 @@ export function WorkoutScreen({ plan, onDone, onMinimize, sessionIndex = 0, exec
                           }}
                         >
                           {t('queue.activeItem', {
-                            target: translateMuscleGroup(tLoose, resolve(e).target),
+                            target: translateMuscleGroup(tLoose, resolve(e, i).target),
                             done: Math.min(progress[i] || 0, e.sets.length),
                             total: e.sets.length,
                             count: e.sets.length,
@@ -1526,7 +1613,7 @@ export function WorkoutScreen({ plan, onDone, onMinimize, sessionIndex = 0, exec
                       </Text>
                       <View style={{ flex: 1 }}>
                         <Text style={{ fontFamily: theme.fonts.uiBold, fontSize: 14, color: theme.colors.textPrimary }}>
-                          {resolve(e).name}
+                          {resolve(e, i).name}
                         </Text>
                         <Text
                           style={{

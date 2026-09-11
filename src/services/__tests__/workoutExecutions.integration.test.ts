@@ -9,14 +9,16 @@
  * Skipped by default — only runs when `WORKOUT_EXECUTION_INTEGRATION=1` is
  * set (see the `test:integration:workoutExecution` npm script).
  */
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
   initializeTestEnvironment,
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing';
-import { doc, getDoc, serverTimestamp, setDoc, Timestamp, updateDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, serverTimestamp, setDoc, Timestamp, updateDoc } from 'firebase/firestore';
+import { toPersistedAnswers } from '../../lib/questionnaireAnswers';
+import { defaultQuiz } from '../../state/AppState';
 
 import {
   abandonWorkoutExecution,
@@ -149,6 +151,159 @@ describe.skipIf(!enabled)('Workout Execution & History — real Firestore Emulat
     expect(result.exercises[1].sets).toHaveLength(1); // duration/cycles exercise, no `sets` -> 1
   });
 
+  describe('Manual Substitution — permanent preference materialization at execution creation (2026-09 Development Build regression repro + fix)', () => {
+    // Real catalog ids (unlike the toy `bench_press`/`squat` ids `program()`
+    // uses elsewhere in this file) — `resolvePermanentSubstitutionsForSession`
+    // needs a real `EXERCISES_SEED` entry to resolve a preference at all.
+    function squatProgram(overrides: Partial<WorkoutProgramSnapshot> = {}): WorkoutProgramSnapshot {
+      return program({
+        environment: 'gym',
+        sessions: [
+          { name: 'A', type: 'strength', exercises: [{ exerciseId: 'barbell-back-squat', sourceExerciseId: 'barbell-back-squat', sets: 3, reps: '8-12' }] },
+        ],
+        ...overrides,
+      });
+    }
+
+    async function seedQuestionnaire(place: 'gym' | 'home' = 'gym') {
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(collection(ctx.firestore(), `users/${UID}/questionnaires`), 'q1'), {
+          answers: toPersistedAnswers({ ...defaultQuiz, place, specialConditions: [] }),
+          version: 1,
+          createdAt: Timestamp.now(),
+        });
+      });
+    }
+
+    async function seedPreference(prescribedExerciseId: string, preferredExerciseId: string) {
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'users', UID, 'exerciseSubstitutionPreferences', prescribedExerciseId), {
+          prescribedExerciseId, preferredExerciseId, createdAt: Timestamp.now(), updatedAt: Timestamp.now(),
+        });
+      });
+    }
+
+    it('reproduces the real regression: starting a brand-new execution with ZERO preferences succeeds under the real Rules (this failed with permission-denied before the fix)', async () => {
+      const result = await startOrResumeWorkoutExecution({ uid: UID, program: squatProgram(), sessionIndex: 0, scheduledLocalDate: '2026-08-25' });
+      expect(result.status).toBe('IN_PROGRESS');
+      expect(result.exercises[0].exerciseId).toBe('barbell-back-squat');
+      expect(result.exercises[0]).not.toHaveProperty('substitution');
+    });
+
+    it('a valid permanent preference is applied automatically on creation', async () => {
+      await seedQuestionnaire('gym');
+      await seedPreference('barbell-back-squat', 'goblet-squat');
+      const result = await startOrResumeWorkoutExecution({ uid: UID, program: squatProgram(), sessionIndex: 0, scheduledLocalDate: '2026-08-25' });
+      expect(result.exercises[0].exerciseId).toBe('goblet-squat');
+      expect(result.exercises[0].prescribedExerciseId).toBe('barbell-back-squat');
+      expect(result.exercises[0].substitution).toMatchObject({ scope: 'PERMANENT' });
+    });
+
+    it('an equipment-invalid preference falls back to the prescribed exercise, never blocking start', async () => {
+      await seedQuestionnaire('home'); // no equipment answered -> only bodyweight executable at home
+      await seedPreference('barbell-back-squat', 'hack-squat-machine-variation'); // needs hack_machine
+      const result = await startOrResumeWorkoutExecution({ uid: UID, program: squatProgram({ environment: 'home' }), sessionIndex: 0, scheduledLocalDate: '2026-08-25' });
+      expect(result.status).toBe('IN_PROGRESS');
+      expect(result.exercises[0].exerciseId).toBe('barbell-back-squat');
+      expect(result.exercises[0]).not.toHaveProperty('substitution');
+    });
+
+    it('resume of an existing execution never re-resolves — a preference stored AFTER creation has no effect on the already-materialized session', async () => {
+      const first = await startOrResumeWorkoutExecution({ uid: UID, program: squatProgram(), sessionIndex: 0, scheduledLocalDate: '2026-08-25' });
+      expect(first.exercises[0].exerciseId).toBe('barbell-back-squat');
+
+      await seedQuestionnaire('gym');
+      await seedPreference('barbell-back-squat', 'goblet-squat');
+
+      const resumed = await startOrResumeWorkoutExecution({ uid: UID, program: squatProgram(), sessionIndex: 0, scheduledLocalDate: '2026-08-25' });
+      expect(resumed.executionId).toBe(first.executionId);
+      expect(resumed.exercises[0].exerciseId).toBe('barbell-back-squat'); // unchanged — never re-resolved
+    });
+
+    it('security: a client cannot change exerciseId directly on an existing execution', async () => {
+      const started = await startOrResumeWorkoutExecution({ uid: UID, program: squatProgram(), sessionIndex: 0, scheduledLocalDate: '2026-08-25' });
+      const ref = doc(mocks.db as never, 'users', UID, 'workoutExecutions', started.executionId);
+      const tampered = started.exercises.map((exercise) => ({ ...exercise, exerciseId: 'attacker_chosen_exercise' }));
+      await expect(updateDoc(ref, { exercises: tampered, updatedAt: serverTimestamp() })).rejects.toThrow();
+    });
+
+    it('security: a client cannot change prescribedExerciseId directly', async () => {
+      const started = await startOrResumeWorkoutExecution({ uid: UID, program: squatProgram(), sessionIndex: 0, scheduledLocalDate: '2026-08-25' });
+      const ref = doc(mocks.db as never, 'users', UID, 'workoutExecutions', started.executionId);
+      const tampered = started.exercises.map((exercise) => ({ ...exercise, prescribedExerciseId: 'attacker_chosen_anchor' }));
+      await expect(updateDoc(ref, { exercises: tampered, updatedAt: serverTimestamp() })).rejects.toThrow();
+    });
+
+    it('security: a client cannot fabricate a substitution marker directly', async () => {
+      const started = await startOrResumeWorkoutExecution({ uid: UID, program: squatProgram(), sessionIndex: 0, scheduledLocalDate: '2026-08-25' });
+      const ref = doc(mocks.db as never, 'users', UID, 'workoutExecutions', started.executionId);
+      const tampered = started.exercises.map((exercise) => ({ ...exercise, substitution: { scope: 'PERMANENT', appliedAt: Timestamp.now() } }));
+      await expect(updateDoc(ref, { exercises: tampered, updatedAt: serverTimestamp() })).rejects.toThrow();
+    });
+
+    // Direct reproduction of the real Development Build regression: a Rules
+    // deploy lagging behind a client release. This does NOT use the
+    // project's real `firestore.rules` file — it deliberately loads an
+    // "old" ruleset with the `exerciseSubstitutionPreferences` match block
+    // stripped out (the collection falls through to the deny-all catch-all,
+    // `permission-denied` on `list`), then proves the fail-open hotfix in
+    // `resolveExercisesForNewExecution` still lets the workout start.
+    // A SEPARATE emulator project id — never the shared `PROJECT_ID` — so
+    // installing an intentionally-stale ruleset here can never leak into
+    // (or race with) the outer suite's own `testEnv`/rules/data.
+    describe('resilience to an UNDEPLOYED Rules change (simulates the real incident)', () => {
+      const STALE_PROJECT_ID = 'ajfit-rules-test-stale-preferences';
+      let staleEnv: RulesTestEnvironment;
+      let realDb: unknown;
+
+      beforeAll(async () => {
+        const currentRules = readFileSync(resolve(__dirname, '../../../firestore.rules'), 'utf8');
+        const staleRules = currentRules.replace(
+          /\s*match \/exerciseSubstitutionPreferences\/\{prescribedExerciseId\} \{[\s\S]*?\n {6}\}\n/,
+          '\n',
+        );
+        // Guards the test itself: if this ever stops matching (the block's
+        // shape changed), fail loudly here instead of silently testing
+        // against rules identical to the real ones.
+        expect(staleRules).not.toContain('exerciseSubstitutionPreferences');
+        staleEnv = await initializeTestEnvironment({ projectId: STALE_PROJECT_ID, firestore: { rules: staleRules } });
+        await staleEnv.withSecurityRulesDisabled(async (ctx) => {
+          const db = ctx.firestore();
+          await setDoc(doc(db, 'users', UID), {
+            profile: { name: 'Alice', email: 'alice@example.com' },
+            preferences: { language: 'pt-BR', units: 'system', theme: 'dark' },
+            subscription: {},
+            metadata: { role: 'user', createdAt: Timestamp.now(), updatedAt: Timestamp.now() },
+          });
+          await setDoc(doc(db, 'users', UID, 'workoutPrograms', 'wpg_test1'), { programId: 'wpg_test1', status: 'active' });
+        });
+      });
+
+      afterAll(async () => staleEnv.cleanup());
+
+      beforeEach(() => {
+        realDb = mocks.db;
+        mocks.db = staleEnv.authenticatedContext(UID, { email: 'alice@example.com', email_verified: true }).firestore();
+      });
+
+      afterEach(() => {
+        mocks.db = realDb;
+      });
+
+      it('a "list" query against exerciseSubstitutionPreferences is denied under the stale rules (proves the simulation is real)', async () => {
+        const { getDocs, collection: firestoreCollection } = await import('firebase/firestore');
+        await expect(getDocs(firestoreCollection(mocks.db as never, 'users', UID, 'exerciseSubstitutionPreferences')))
+          .rejects.toThrow();
+      });
+
+      it('startOrResumeWorkoutExecution still succeeds — fails open instead of blocking the workout (exact regression repro)', async () => {
+        const result = await startOrResumeWorkoutExecution({ uid: UID, program: squatProgram(), sessionIndex: 0, scheduledLocalDate: '2026-08-25' });
+        expect(result.status).toBe('IN_PROGRESS');
+        expect(result.exercises[0].exerciseId).toBe('barbell-back-squat');
+      });
+    });
+  });
+
   it('§79 double start (double tap / retry) lands on the same execution, never a duplicate', async () => {
     const a = await startOrResumeWorkoutExecution({ uid: UID, program: program(), sessionIndex: 0, scheduledLocalDate: '2026-08-25' });
     const b = await startOrResumeWorkoutExecution({ uid: UID, program: program(), sessionIndex: 0, scheduledLocalDate: '2026-08-25' });
@@ -247,6 +402,123 @@ describe.skipIf(!enabled)('Workout Execution & History — real Firestore Emulat
     expect(loaded?.status).toBe('ABANDONED');
     const state = await getDoc(doc(mocks.db as never, 'users', UID, 'workoutPrograms', 'wpg_test1', 'scheduleState', 'current'));
     expect(state.data()?.nextSessionIndex).toBe(0); // untouched
+  });
+
+  describe('DIAGNOSTIC — abandon on a genuinely LEGACY execution (2026-09 production regression report)', () => {
+    // Deliberately NOT created via `startOrResumeWorkoutExecution` (which,
+    // since the Manual Substitution feature, always populates
+    // `prescribedExerciseId`) — this reproduces a document that predates the
+    // feature entirely: no `prescribedExerciseId`, no `substitution`, no
+    // `mutexProtocolVersion` at all (older than even the P0-C hardening).
+    async function seedLegacyInProgressWithPointer(executionId: string) {
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        await setDoc(doc(db, 'users', UID, 'workoutExecutions', executionId), {
+          programId: 'wpg_test1',
+          templateId: 'T003',
+          sessionIndex: 0,
+          sessionName: 'A',
+          scheduledLocalDate: '2026-08-25',
+          status: 'IN_PROGRESS',
+          startedAt: Timestamp.now(),
+          finishedAt: null,
+          exercises: [
+            {
+              exerciseIndex: 0, exerciseId: 'bench_press', prescribedSets: 3, prescribedReps: '8-12',
+              prescribedDuration: null, prescribedCycles: null,
+              sets: [{ setIndex: 0, status: 'PENDING', actualReps: null, weightKg: null, actualDurationSeconds: null }],
+            },
+            {
+              exerciseIndex: 1, exerciseId: 'plank', prescribedSets: null, prescribedReps: null,
+              prescribedDuration: '30s', prescribedCycles: 2,
+              sets: [{ setIndex: 0, status: 'PENDING', actualReps: null, weightKg: null, actualDurationSeconds: null }],
+            },
+          ],
+          executionSchemaVersion: 1,
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+          // NOTE: no `mutexProtocolVersion` key at all — pre-P0-C document.
+        });
+        await setDoc(doc(db, 'users', UID, 'workoutExecutionState', 'current'), {
+          executionId, programId: 'wpg_test1', programInstanceId: null, sessionIndex: 0,
+          scheduledLocalDate: '2026-08-25', status: 'IN_PROGRESS', schemaVersion: 1,
+          createdAt: Timestamp.now(), updatedAt: Timestamp.now(),
+        });
+      });
+    }
+
+    it('reproduces (or rules out) the reported permission-denied on abandoning a legacy IN_PROGRESS execution', async () => {
+      const executionId = 'exec_legacy_wpg_test1_0_2026-08-25';
+      await seedLegacyInProgressWithPointer(executionId);
+      await expect(abandonWorkoutExecution(UID, executionId)).resolves.toBeUndefined();
+      const loaded = await loadWorkoutExecution(UID, executionId);
+      expect(loaded?.status).toBe('ABANDONED');
+      const pointer = await getDoc(doc(mocks.db as never, 'users', UID, 'workoutExecutionState', 'current'));
+      expect(pointer.exists()).toBe(false);
+    });
+
+    it('also reproduces record + skip + abandon on the SAME legacy execution (closer to a real session)', async () => {
+      const executionId = 'exec_legacy2_wpg_test1_0_2026-08-25';
+      await seedLegacyInProgressWithPointer(executionId);
+      await recordSetExecution({ uid: UID, executionId, exerciseIndex: 0, setIndex: 0, actualReps: 10, weightKg: 40 });
+      await skipExerciseExecution({ uid: UID, executionId, exerciseIndex: 1 });
+      await expect(abandonWorkoutExecution(UID, executionId)).resolves.toBeUndefined();
+      const loaded = await loadWorkoutExecution(UID, executionId);
+      expect(loaded?.status).toBe('ABANDONED');
+    });
+
+    // Closer to a REAL currently-active account: post-P0-C (`mutexProtocolVersion: 1`
+    // present) AND on the V2 lifecycle (`programInstanceId` set,
+    // `executionSchemaVersion: 2`) — most real users are on this combination
+    // today. `prescribedExerciseId`/`substitution` are still absent (this
+    // account never touched Manual Substitution) — that is the actual
+    // "legacy relative to THIS feature" shape, independent of P0-C/V2 age.
+    it('reproduces abandon on a V2, post-P0-C execution that has never been touched by Manual Substitution', async () => {
+      const executionId = 'exec_v2_wpg_test1_0_2026-08-25';
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        await setDoc(doc(db, 'users', UID, 'workoutExecutions', executionId), {
+          programId: 'wpg_test1',
+          programInstanceId: 'wpi_test1',
+          templateId: 'T003',
+          sessionIndex: 0,
+          sessionName: 'A',
+          scheduledLocalDate: '2026-08-25',
+          status: 'IN_PROGRESS',
+          startedAt: Timestamp.now(),
+          finishedAt: null,
+          exercises: [
+            {
+              exerciseIndex: 0, exerciseId: 'bench_press', prescribedSets: 3, prescribedReps: '8-12',
+              prescribedDuration: null, prescribedCycles: null,
+              sets: [{ setIndex: 0, status: 'PENDING', actualReps: null, weightKg: null, actualDurationSeconds: null }],
+            },
+          ],
+          executionSchemaVersion: 2,
+          mutexProtocolVersion: 1,
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        });
+        await setDoc(doc(db, 'users', UID, 'workoutExecutionState', 'current'), {
+          executionId, programId: 'wpg_test1', programInstanceId: 'wpi_test1', sessionIndex: 0,
+          scheduledLocalDate: '2026-08-25', status: 'IN_PROGRESS', schemaVersion: 1,
+          createdAt: Timestamp.now(), updatedAt: Timestamp.now(),
+        });
+        // Required by `workoutExecutionCommonValid`'s V2 branch:
+        // `get(.../programInstances/$(programInstanceId)).data.contentIdentity == programId`.
+        // Missing this document entirely (as an earlier version of this test
+        // did) makes `.data` resolve to null, and `.contentIdentity` on that
+        // throws its OWN Rules evaluation error ("Null value error") — a
+        // distinct failure mode from the real 1000-expression-cap incident,
+        // easy to conflate if this seed is forgotten.
+        await setDoc(doc(db, 'users', UID, 'programInstances', 'wpi_test1'), {
+          contentIdentity: 'wpg_test1',
+        });
+      });
+      await expect(abandonWorkoutExecution(UID, executionId)).resolves.toBeUndefined();
+      const loaded = await loadWorkoutExecution(UID, executionId);
+      expect(loaded?.status).toBe('ABANDONED');
+    });
   });
 
   it('§88 double finish is idempotent — the second call is a no-op, and a doubled completion call never double-advances the Schedule', async () => {

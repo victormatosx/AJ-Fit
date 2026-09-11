@@ -12,9 +12,15 @@ import { useAuth } from '../state/AuthContext';
 import { localDateInTimezone, weekdayOfLocalDate, type WorkoutScheduleController } from '../scheduleEngine';
 import { workoutExercisesFromPlan } from './workoutScreenPlan';
 import { resolveSessionDisplayName } from '../workoutPrescription/sessionPresentation';
-import { buildAdaptationFlags, buildWeekView, hasAnyAdaptation } from './myPlanPresentation';
+import { buildAdaptationFlags, buildMyPlanEffectiveSessions, buildWeekView, hasAnyAdaptation } from './myPlanPresentation';
 import type { PrescriptionResult } from '../workoutPrescription/types';
 import type { WorkoutProgramSnapshot } from '../services/workoutPrograms';
+import type { ManualSubstitutionUserContext } from '../services/exerciseSubstitutionCandidates';
+import { loadManualSubstitutionUserContext } from '../services/exerciseSubstitutionContext';
+import { subscribeToPermanentExerciseSubstitutionPreferences } from '../services/exerciseSubstitutionPreferences';
+import { MANUAL_SUBSTITUTION_CATALOG } from '../workoutPrescription/manualSubstitutionCatalog';
+import { useIsScreenActive } from '../state/ScreenActivity';
+import { logWarn } from '../lib/logger';
 
 type LooseT = (key: string, opts?: Record<string, unknown>) => string;
 
@@ -53,11 +59,44 @@ export function MyPlanScreen({
   const { theme } = useTheme();
   const { t, i18n } = useTranslation('myPlan');
   const tLoose = t as unknown as LooseT;
-  const { questionnaire } = useAuth();
+  const { user, questionnaire } = useAuth();
+  const active = useIsScreenActive();
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
+  const [permanentPreferences, setPermanentPreferences] = useState<ReadonlyMap<string, string>>(() => new Map());
+  const [effectiveViewContext, setEffectiveViewContext] = useState<ManualSubstitutionUserContext | null>(null);
 
   const plan = prescription.status === 'SUCCESS' ? (prescription.plan as WorkoutProgramSnapshot) : null;
   const answers = questionnaire?.answers ?? null;
+
+  // PersistentScreen keeps this component mounted. On every real entry,
+  // discard cached effective state, subscribe to the complete preferences
+  // collection, and reload the exact same current user context service used
+  // by new-execution materialization. Until both are valid the canonical plan
+  // remains visible, so neither latency nor either read failing blocks Meu Plano.
+  useEffect(() => {
+    if (!active || !user?.uid || !plan) return;
+    let cancelled = false;
+    setPermanentPreferences(new Map());
+    setEffectiveViewContext(null);
+    const unsubscribe = subscribeToPermanentExerciseSubstitutionPreferences(
+      user.uid,
+      (preferences) => { if (!cancelled) setPermanentPreferences(preferences); },
+    );
+    loadManualSubstitutionUserContext(user.uid, plan.environment)
+      .then((context) => { if (!cancelled) setEffectiveViewContext(context); })
+      .catch((error) => {
+        if (cancelled) return;
+        const code = typeof error === 'object' && error !== null && 'code' in error
+          ? String((error as { code: unknown }).code)
+          : 'unknown';
+        logWarn('my_plan', 'substitution_context_failed_fail_open', { code });
+        setEffectiveViewContext(null);
+      });
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, [active, plan, user?.uid]);
 
   const timezone = schedule.config?.timezone ?? deviceTimezone();
   const todayWeekday = useMemo(() => weekdayOfLocalDate(localDateInTimezone(new Date(), timezone)), [timezone]);
@@ -66,6 +105,17 @@ export function MyPlanScreen({
     [schedule.config, schedule.resolution, todayWeekday, plan?.weeklySchedule],
   );
   const adaptations = useMemo(() => (plan ? buildAdaptationFlags(plan.trace) : null), [plan]);
+  const effectiveSessions = useMemo(
+    () => (plan
+      ? buildMyPlanEffectiveSessions({
+          plan,
+          preferences: permanentPreferences,
+          userContext: effectiveViewContext,
+          catalog: MANUAL_SUBSTITUTION_CATALOG,
+        })
+      : []),
+    [effectiveViewContext, permanentPreferences, plan],
+  );
 
   const dueToday = weekView.find((day) => day.isToday && day.dueSessionIndex !== null) ?? null;
   const dueTodaySessionName = useMemo(() => {
@@ -436,7 +486,12 @@ export function MyPlanScreen({
                     onToggle={() => setExpandedIndex(expandedIndex === index ? null : index)}
                     isDueToday={dueToday?.dueSessionIndex === index}
                     tLoose={tLoose}
-                    exercises={workoutExercisesFromPlan(plan, i18n.language, index)}
+                    exercises={workoutExercisesFromPlan(
+                      plan,
+                      i18n.language,
+                      index,
+                      effectiveSessions[index]?.effectiveExerciseIds,
+                    )}
                   />
                 ))}
               </View>

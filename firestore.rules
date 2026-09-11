@@ -447,6 +447,76 @@ service cloud.firestore {
         && (exercises.size() <= 19 || !('sets' in exercises[19]) || (exercises[19].sets is list && exercises[19].sets.size() <= 15));
     }
 
+    // Exercise-substitution architecture audit, Fase 7 (security hardening),
+    // Fase 8 hotfix (2026-09 production regression — see the incident note
+    // below): `exerciseId`/`prescribedExerciseId`/`substitution` identify
+    // WHICH exercise a slot's sets belong to — a client that could rewrite
+    // these on an ordinary update would be able to silently redirect the
+    // identity of an in-progress slot's history without ever going through
+    // `applyExerciseSubstitution` (the only trusted, fully-revalidating
+    // path — Admin SDK, bypasses these Rules entirely, so this restriction
+    // has zero effect on it). `record/skip/finish` never touch these three
+    // fields — only `sets[]`/`status`/`finishedAt` — so this never blocks a
+    // legitimate mutation.
+    //
+    // Uses `diff().affectedKeys()` instead of one `==`/`.get()` comparison
+    // per identity field — a single MapDiff call per exercise slot instead
+    // of three separate field reads/comparisons. This is not just cheaper:
+    // a real production incident (2026-09) proved the per-field version,
+    // stacked on top of `executionExerciseSetsWithinBound`'s own 20-way
+    // unrolling plus `workoutExecutionCommonValid`'s V2 branch (which reads
+    // `programInstanceId`/`executionSchemaVersion` and calls `get()` on the
+    // referenced program), pushed a V2 `abandon` update over Firestore's
+    // hard 1000-expression-per-request evaluation ceiling —
+    // `PERMISSION_DENIED: Unable to evaluate the expression as the maximum
+    // of 1000 expressions to evaluate has been reached`, indistinguishable
+    // from a real Rules rejection in the client's `permission-denied`. V1
+    // executions stayed just under the ceiling (fewer checks in that OR
+    // branch), which is why the original version passed every V1-shaped
+    // reproduction but broke on the very next V2 account. `hasOnly(['sets'])`
+    // is also STRICTER than the field-by-field version: it rejects ANY new
+    // key added to an exercise slot, not just the three named ones.
+    // Never applied without first bounding `before.size()`/`after.size()`
+    // (see `exerciseIdentityFieldsImmutable` below) — indexing past either
+    // array's length is what `diff()` itself would otherwise error on.
+    function exerciseIdentityUnchanged(before, after) {
+      // Whole-map equality first: `abandon`/`finish`'s own payload never
+      // touches `exercises` (finish sweeps `sets`, but for any slot with no
+      // PENDING set left the slot is genuinely byte-identical) and
+      // `recordSet`/`skipSet`/`skipExercise` only ever touch ONE slot's index
+      // at a time — so most slots, most of the time, are truly unchanged and
+      // never pay for the (real production-incident-causing, see
+      // `exerciseIdentityFieldsImmutable`'s doc comment) `.diff()` call below
+      // at all.
+      return before == after || before.diff(after).affectedKeys().hasOnly(['sets']);
+    }
+
+    // Unrolled to the same 20-exercise cap `executionExerciseSetsWithinBound`
+    // already uses — no `get()`/`getAfter()` cross-document read here (only
+    // local array indexing/diffing).
+    function exerciseIdentityFieldsImmutable(before, after) {
+      return (before.size() <= 0 || after.size() <= 0 || exerciseIdentityUnchanged(before[0], after[0]))
+        && (before.size() <= 1 || after.size() <= 1 || exerciseIdentityUnchanged(before[1], after[1]))
+        && (before.size() <= 2 || after.size() <= 2 || exerciseIdentityUnchanged(before[2], after[2]))
+        && (before.size() <= 3 || after.size() <= 3 || exerciseIdentityUnchanged(before[3], after[3]))
+        && (before.size() <= 4 || after.size() <= 4 || exerciseIdentityUnchanged(before[4], after[4]))
+        && (before.size() <= 5 || after.size() <= 5 || exerciseIdentityUnchanged(before[5], after[5]))
+        && (before.size() <= 6 || after.size() <= 6 || exerciseIdentityUnchanged(before[6], after[6]))
+        && (before.size() <= 7 || after.size() <= 7 || exerciseIdentityUnchanged(before[7], after[7]))
+        && (before.size() <= 8 || after.size() <= 8 || exerciseIdentityUnchanged(before[8], after[8]))
+        && (before.size() <= 9 || after.size() <= 9 || exerciseIdentityUnchanged(before[9], after[9]))
+        && (before.size() <= 10 || after.size() <= 10 || exerciseIdentityUnchanged(before[10], after[10]))
+        && (before.size() <= 11 || after.size() <= 11 || exerciseIdentityUnchanged(before[11], after[11]))
+        && (before.size() <= 12 || after.size() <= 12 || exerciseIdentityUnchanged(before[12], after[12]))
+        && (before.size() <= 13 || after.size() <= 13 || exerciseIdentityUnchanged(before[13], after[13]))
+        && (before.size() <= 14 || after.size() <= 14 || exerciseIdentityUnchanged(before[14], after[14]))
+        && (before.size() <= 15 || after.size() <= 15 || exerciseIdentityUnchanged(before[15], after[15]))
+        && (before.size() <= 16 || after.size() <= 16 || exerciseIdentityUnchanged(before[16], after[16]))
+        && (before.size() <= 17 || after.size() <= 17 || exerciseIdentityUnchanged(before[17], after[17]))
+        && (before.size() <= 18 || after.size() <= 18 || exerciseIdentityUnchanged(before[18], after[18]))
+        && (before.size() <= 19 || after.size() <= 19 || exerciseIdentityUnchanged(before[19], after[19]));
+    }
+
     // Workout Execution & History V1 (docs/workout-lifecycle/
     // 09_WORKOUT_EXECUTION_AND_HISTORY.md). `exercises` is validated only for
     // shape/bounds here, the same precedent `workoutProgramCommonValid` sets
@@ -1905,6 +1975,29 @@ service cloud.firestore {
           && request.resource.data.programId == resource.data.programId
           && request.resource.data.sessionIndex == resource.data.sessionIndex
           && request.resource.data.scheduledLocalDate == resource.data.scheduledLocalDate
+          // Fase 7 security hardening: a client update may never change which
+          // exercise a slot identifies as (`exerciseId`/`prescribedExerciseId`/
+          // `substitution`) — record/skip/finish never do. EXCEPT
+          // restart-after-abandon, which legitimately re-materializes the
+          // whole `exercises` array fresh (same trust model as `create`,
+          // just via `update` because the doc id is reused) — gated the same
+          // way the `startedAt` renewal exception right below already is.
+          //
+          // Fase 8 hotfix (2026-09 production incident): `abandon`'s own
+          // payload never touches `exercises` at all — a single whole-list
+          // equality check is enough to prove that (ONE expression) and
+          // short-circuits the 20-way-unrolled `exerciseIdentityFieldsImmutable`
+          // entirely for that case, WITHOUT reducing what it protects for any
+          // update that actually changes `exercises` (record/skip/finish still
+          // run the full per-slot check exactly as before). This is what
+          // fixed the real `PERMISSION_DENIED: ... maximum of 1000 expressions
+          // ... has been reached` failure on V2 executions (which already pay
+          // for two `get()` cross-document reads in `workoutExecutionCommonValid`,
+          // leaving far less headroom than V1) — see that function's doc
+          // comment for the full incident trace.
+          && (resource.data.status == 'ABANDONED'
+              || resource.data.exercises == request.resource.data.exercises
+              || exerciseIdentityFieldsImmutable(resource.data.exercises, request.resource.data.exercises))
           // P0 fix (2026-09, docs §13): `startedAt` must stay fixed for every
           // update EXCEPT a restart-after-abandon (ABANDONED -> IN_PROGRESS)
           // — that transition is semantically a NEW attempt, and the session
@@ -1928,6 +2021,18 @@ service cloud.firestore {
                 && lifecycleAuthorityGrant(userId).executionId == executionId));
 
         allow delete: if false;
+      }
+
+      // Exercise-substitution architecture audit: "todos os próximos
+      // treinos" preferences. Written EXCLUSIVELY by `applyExerciseSubstitution`
+      // (Admin SDK, bypasses these Rules entirely) — the client only ever
+      // reads its own preferences (to materialize them into a new execution,
+      // `services/workoutExecutions.ts`'s `resolveExercisesForNewExecution`).
+      // No client create/update/delete path exists for this feature, so none
+      // is granted here.
+      match /exerciseSubstitutionPreferences/{prescribedExerciseId} {
+        allow read: if isOwner(userId) && accountActive(userId);
+        allow write: if false;
       }
 
       // P0 integrity fix (2026-09): the persistent mutex/pointer for "which

@@ -207,7 +207,8 @@
     "badges": {
       "today": "Cambiado hoy",
       "permanent": "Cambio fijo"
-    }
+    },
+    "error": "No se pudo aplicar el cambio. Inténtalo de nuevo."
   },
   "muscleGroups": {
     "chest": "Pecho",
