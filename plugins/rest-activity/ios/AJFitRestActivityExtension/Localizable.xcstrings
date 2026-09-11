@@ -15,6 +15,34 @@
         "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "DESCANSO" } }
       }
     },
+    "rest_activity_next_exercise" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "NEXT EXERCISE" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "SIGUIENTE EJERCICIO" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "PRÓXIMO EXERCÍCIO" } }
+      }
+    },
+    "rest_activity_next_exercise_compact" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "NEXT EX." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "SIG. EJ." } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "PRÓX. EX." } }
+      }
+    },
+    "rest_activity_next_set" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "NEXT SET" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "SIGUIENTE SERIE" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "PRÓXIMA SÉRIE" } }
+      }
+    },
+    "rest_activity_next_set_compact" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "NEXT SET" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "SIG. SERIE" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "PRÓX. SÉRIE" } }
+      }
+    },
     "rest_activity_return_to_workout" : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Tap to return to workout" } },
@@ -27,6 +55,13 @@
         "en" : { "stringUnit" : { "state" : "translated", "value" : "SET %1$lld / %2$lld" } },
         "es" : { "stringUnit" : { "state" : "translated", "value" : "SERIE %1$lld / %2$lld" } },
         "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "SÉRIE %1$lld / %2$lld" } }
+      }
+    },
+    "rest_activity_tap_to_continue" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Tap to continue" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Toca para continuar" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Toque para continuar" } }
       }
     },
     "rest_activity_time_accessibility" : {

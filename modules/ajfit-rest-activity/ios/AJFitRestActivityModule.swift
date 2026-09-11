@@ -15,15 +15,40 @@ private struct RestActivityStateRecord: Record {
   @Field var exerciseName: String = ""
   @Field var setIndex: Int = 0
   @Field var totalSets: Int = 0
+  @Field var phase: String = ""
+  @Field var nextAction: String = ""
+  @Field var nextSetIndex: Int?
+  @Field var nextExerciseName: String?
 
   func materializedState() -> MaterializedRestActivityState? {
+    guard
+      let materializedPhase = RestActivityPhase(rawValue: phase),
+      let materializedNextAction = RestActivityNextAction(rawValue: nextAction)
+    else {
+      return nil
+    }
+    let trimmedNextExerciseName = nextExerciseName?
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+    let hasValidNextAction = switch materializedNextAction {
+    case .nextSet:
+      nextSetIndex != nil &&
+        nextSetIndex! > setIndex &&
+        nextSetIndex! <= totalSets &&
+        trimmedNextExerciseName == nil
+    case .nextExercise:
+      nextSetIndex == nil &&
+        setIndex == totalSets &&
+        !(trimmedNextExerciseName ?? "").isEmpty
+    }
     guard
       !sessionId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
       startedAt >= 0,
       endsAt > startedAt,
       !exerciseName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
       setIndex >= 1,
-      totalSets >= setIndex
+      totalSets >= setIndex,
+      materializedPhase == .resting || materializedPhase == materializedNextAction.phase,
+      hasValidNextAction
     else {
       return nil
     }
@@ -34,7 +59,11 @@ private struct RestActivityStateRecord: Record {
       endsAt: Date(timeIntervalSince1970: Double(endsAt) / 1_000),
       exerciseName: exerciseName,
       setIndex: setIndex,
-      totalSets: totalSets
+      totalSets: totalSets,
+      phase: materializedPhase,
+      nextAction: materializedNextAction,
+      nextSetIndex: nextSetIndex,
+      nextExerciseName: trimmedNextExerciseName
     )
   }
 }
@@ -46,6 +75,10 @@ private struct MaterializedRestActivityState: Sendable {
   let exerciseName: String
   let setIndex: Int
   let totalSets: Int
+  let phase: RestActivityPhase
+  let nextAction: RestActivityNextAction
+  let nextSetIndex: Int?
+  let nextExerciseName: String?
 
   var contentState: AJFitRestActivityAttributes.ContentState {
     AJFitRestActivityAttributes.ContentState(
@@ -54,7 +87,10 @@ private struct MaterializedRestActivityState: Sendable {
       exerciseName: exerciseName,
       setIndex: setIndex,
       totalSets: totalSets,
-      isResting: true
+      phase: phase,
+      nextAction: nextAction,
+      nextSetIndex: nextSetIndex,
+      nextExerciseName: nextExerciseName
     )
   }
 }
@@ -65,11 +101,11 @@ private actor RestLiveActivityController {
   typealias RestActivity = Activity<AJFitRestActivityAttributes>
 
   func start(_ state: MaterializedRestActivityState) async {
-    await upsert(state, operation: "start")
+    await upsert(state, operation: "start", shouldAlert: false)
   }
 
-  func update(_ state: MaterializedRestActivityState) async {
-    await upsert(state, operation: "update")
+  func update(_ state: MaterializedRestActivityState, shouldAlert: Bool) async {
+    await upsert(state, operation: "update", shouldAlert: shouldAlert)
   }
 
   func end(sessionId: String, reason: String) async {
@@ -105,7 +141,11 @@ private actor RestLiveActivityController {
     }
   }
 
-  private func upsert(_ state: MaterializedRestActivityState, operation: String) async {
+  private func upsert(
+    _ state: MaterializedRestActivityState,
+    operation: String,
+    shouldAlert: Bool
+  ) async {
     guard ActivityAuthorizationInfo().areActivitiesEnabled else {
       restLiveLogger.info("[rest-live:ios] unsupported reason=activities_disabled operation=\(operation, privacy: .public)")
       return
@@ -113,7 +153,13 @@ private actor RestLiveActivityController {
 
     let content = activeContent(for: state)
     if let existingActivity = activity(for: state.sessionId) {
-      await existingActivity.update(content)
+      let isRelevantTransition =
+        existingActivity.content.state.phase == .resting &&
+        state.phase == state.nextAction.phase
+      let alert = shouldAlert && isRelevantTransition
+        ? alertConfiguration(for: state)
+        : nil
+      await existingActivity.update(content, alertConfiguration: alert)
       let event = operation == "start" ? "started" : "updated"
       restLiveLogger.info("[rest-live:ios] \(event, privacy: .public) reused=true")
       return
@@ -149,7 +195,7 @@ private actor RestLiveActivityController {
   ) -> ActivityContent<AJFitRestActivityAttributes.ContentState> {
     ActivityContent(
       state: state.contentState,
-      staleDate: state.endsAt,
+      staleDate: state.phase == .resting ? state.endsAt : nil,
       relevanceScore: 100
     )
   }
@@ -162,9 +208,23 @@ private actor RestLiveActivityController {
     var state = activity.content.state
     state.startedAt = now
     state.endsAt = now
-    state.isResting = false
-    state.endReason = reason
+    state.phase = state.nextAction.phase
     return ActivityContent(state: state, staleDate: now, relevanceScore: 10)
+  }
+
+  private func alertConfiguration(
+    for state: MaterializedRestActivityState
+  ) -> AlertConfiguration {
+    let body = state.nextAction == .nextExercise
+      ? state.nextExerciseName ?? state.exerciseName
+      : state.exerciseName
+    return AlertConfiguration(
+      title: "AJ Fit",
+      body: LocalizedStringResource(stringLiteral: body),
+      // ActivityKit requires an AlertSound when emphasis is requested. Use
+      // only the system default; no custom/aggressive sound is introduced.
+      sound: .default
+    )
   }
 }
 
@@ -191,12 +251,13 @@ public final class AJFitRestActivityModule: Module {
       await RestLiveActivityController.shared.start(state)
     }
 
-    AsyncFunction("update") { (record: RestActivityStateRecord) async -> Void in
+    AsyncFunction("update") {
+      (record: RestActivityStateRecord, shouldAlert: Bool) async -> Void in
       guard let state = record.materializedState() else {
         restLiveLogger.error("[rest-live:ios] native_error operation=update reason=invalid_payload")
         return
       }
-      await RestLiveActivityController.shared.update(state)
+      await RestLiveActivityController.shared.update(state, shouldAlert: shouldAlert)
     }
 
     AsyncFunction("end") { (sessionId: String, reason: String) async -> Void in

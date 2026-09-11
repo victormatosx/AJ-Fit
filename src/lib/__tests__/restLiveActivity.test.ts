@@ -4,11 +4,17 @@ import type {
   RestActivityState,
   RestLiveCapabilities,
 } from '../../types/restLiveActivity';
+import {
+  REST_ACTIVITY_NEXT_ACTION,
+  REST_ACTIVITY_PHASE,
+} from '../../types/restLiveActivity';
 
 type NativeModuleMock = {
   getCapabilities: ReturnType<typeof vi.fn<() => Promise<RestLiveCapabilities>>>;
   start: ReturnType<typeof vi.fn<(state: RestActivityState) => Promise<void>>>;
-  update: ReturnType<typeof vi.fn<(state: RestActivityState) => Promise<void>>>;
+  update: ReturnType<
+    typeof vi.fn<(state: RestActivityState, shouldAlert: boolean) => Promise<void>>
+  >;
   cleanup?: ReturnType<typeof vi.fn<() => Promise<void>>>;
   end: ReturnType<
     typeof vi.fn<(sessionId: string, reason: RestActivityEndReason) => Promise<void>>
@@ -40,6 +46,9 @@ const BASE_STATE: RestActivityState = {
   exerciseName: 'Supino reto',
   setIndex: 1,
   totalSets: 4,
+  phase: REST_ACTIVITY_PHASE.RESTING,
+  nextAction: REST_ACTIVITY_NEXT_ACTION.NEXT_SET,
+  nextSetIndex: 2,
 };
 
 function installNativeModule(
@@ -138,8 +147,43 @@ describe('restLiveActivity temporal contract', () => {
     await facade.start(BASE_STATE);
     await facade.update(extended);
 
-    expect(nativeModule.update).toHaveBeenLastCalledWith(extended);
+    expect(nativeModule.update).toHaveBeenLastCalledWith(extended, false);
     expect(nativeModule.update.mock.calls.at(-1)?.[0].endsAt).toBe(205_000);
+  });
+
+  it('forwards emphasis only when explicitly requested for a semantic transition', async () => {
+    const nativeModule = installNativeModule({
+      available: true,
+      surface: 'ios-live-activity',
+    });
+    const facade = await loadFacade();
+    const nextSetState: RestActivityState = {
+      ...BASE_STATE,
+      phase: REST_ACTIVITY_PHASE.NEXT_SET,
+    };
+
+    await facade.start(BASE_STATE);
+    await facade.update(nextSetState, { alert: true });
+
+    expect(nativeModule.update).toHaveBeenLastCalledWith(nextSetState, true);
+  });
+
+  it('rejects inconsistent phase and next-action payloads before native', async () => {
+    const nativeModule = installNativeModule();
+    const facade = await loadFacade();
+    const invalidState = {
+      ...BASE_STATE,
+      phase: REST_ACTIVITY_PHASE.NEXT_EXERCISE,
+    } as unknown as RestActivityState;
+
+    await facade.start(invalidState);
+
+    expect(nativeModule.start).not.toHaveBeenCalled();
+    expect(logs.warn).toHaveBeenCalledWith(
+      'restLiveActivity',
+      'rest_live_native_error',
+      expect.objectContaining({ operation: 'start', reason: 'invalid-state' }),
+    );
   });
 
   it('reuses one logical native surface for later rests in the same workout session', async () => {
@@ -150,6 +194,7 @@ describe('restLiveActivity temporal contract', () => {
       startedAt: 250_000,
       endsAt: 310_000,
       setIndex: 2,
+      nextSetIndex: 3,
     };
 
     await facade.start(BASE_STATE);
@@ -157,7 +202,7 @@ describe('restLiveActivity temporal contract', () => {
     await facade.start(nextRest);
 
     expect(nativeModule.start).toHaveBeenCalledTimes(1);
-    expect(nativeModule.update).toHaveBeenCalledWith(nextRest);
+    expect(nativeModule.update).toHaveBeenCalledWith(nextRest, false);
     expect(nativeModule.end).toHaveBeenCalledWith(BASE_STATE.sessionId, 'completed');
   });
 });

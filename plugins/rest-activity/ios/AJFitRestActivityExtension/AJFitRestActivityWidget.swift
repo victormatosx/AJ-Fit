@@ -7,19 +7,18 @@ private let ajFitBlue = Color(red: 0.16, green: 0.50, blue: 1.00)
 private let ajFitBackground = Color(red: 0.01, green: 0.00, blue: 0.07)
 
 private enum RestActivityCopy {
-  static let title: LocalizedStringKey = "rest_activity_title"
-  static let lockScreenTitle: LocalizedStringKey = "rest_activity_lock_screen_title"
+  static let restTitle: LocalizedStringKey = "rest_activity_lock_screen_title"
+  static let expandedRestTitle: LocalizedStringKey = "rest_activity_title"
+  static let nextSet: LocalizedStringKey = "rest_activity_next_set"
+  static let nextSetCompact: LocalizedStringKey = "rest_activity_next_set_compact"
+  static let nextExercise: LocalizedStringKey = "rest_activity_next_exercise"
+  static let nextExerciseCompact: LocalizedStringKey = "rest_activity_next_exercise_compact"
   static let returnToWorkout: LocalizedStringKey = "rest_activity_return_to_workout"
+  static let tapToContinue: LocalizedStringKey = "rest_activity_tap_to_continue"
   static let timeAccessibility: LocalizedStringKey = "rest_activity_time_accessibility"
-  static let completedAccessibility: LocalizedStringKey =
-    "rest_activity_completed_accessibility"
 
   static func series(_ setIndex: Int, _ totalSets: Int) -> String {
-    String(
-      format: String(localized: "rest_activity_series_format"),
-      setIndex,
-      totalSets
-    )
+    String(format: String(localized: "rest_activity_series_format"), setIndex, totalSets)
   }
 }
 
@@ -38,21 +37,11 @@ private struct RestSetProgressRing: View {
   let currentSet: Int
   let totalSets: Int
   let size: CGFloat
-
   private let maximumDiscreteSegments = 8
 
-  private var safeTotalSets: Int {
-    max(totalSets, 1)
-  }
-
-  private var safeCurrentSet: Int {
-    min(max(currentSet, 0), safeTotalSets)
-  }
-
-  private var lineWidth: CGFloat {
-    max(1.5, size * 0.09)
-  }
-
+  private var safeTotalSets: Int { max(totalSets, 1) }
+  private var safeCurrentSet: Int { min(max(currentSet, 0), safeTotalSets) }
+  private var lineWidth: CGFloat { max(1.5, size * 0.09) }
   private var proportionalProgress: CGFloat {
     CGFloat(safeCurrentSet) / CGFloat(safeTotalSets)
   }
@@ -70,12 +59,8 @@ private struct RestSetProgressRing: View {
   }
 
   private func segmentColor(_ index: Int) -> Color {
-    if index + 1 == safeCurrentSet {
-      return ajFitBlue
-    }
-    if index < safeCurrentSet {
-      return ajFitBlue.opacity(0.68)
-    }
+    if index + 1 == safeCurrentSet { return ajFitBlue }
+    if index < safeCurrentSet { return ajFitBlue.opacity(0.68) }
     return .white.opacity(0.18)
   }
 
@@ -105,7 +90,6 @@ private struct RestSetProgressRing: View {
           )
           .rotationEffect(.degrees(-90))
       }
-
       Image(systemName: "stopwatch")
         .font(.system(size: size * 0.39, weight: .semibold))
         .foregroundStyle(.white)
@@ -119,155 +103,379 @@ private struct RestCountdownText: View {
   let state: AJFitRestActivityAttributes.ContentState
 
   var body: some View {
-    Group {
-      if state.isResting {
-        Text(
-          timerInterval: state.startedAt...state.endsAt,
-          countsDown: true,
-          showsHours: false
-        )
-      } else {
-        Text("0:00")
-      }
-    }
-    .font(
-      .system(
-        size: 42,
-        weight: .bold,
-        design: .monospaced
-      )
+    Text(
+      timerInterval: state.startedAt...state.endsAt,
+      countsDown: true,
+      showsHours: false
     )
+    .font(.system(size: 42, weight: .bold, design: .monospaced))
     .monospacedDigit()
     .foregroundStyle(.white)
-    .accessibilityLabel(
-      Text(
-        state.isResting
-          ? RestActivityCopy.timeAccessibility
-          : RestActivityCopy.completedAccessibility
-      )
+    .accessibilityLabel(Text(RestActivityCopy.timeAccessibility))
+  }
+}
+
+private struct RestAdvanceIndicator: View {
+  let size: CGFloat
+  let accessibilityLabel: LocalizedStringKey
+
+  private var lineWidth: CGFloat { max(1.5, size * 0.09) }
+
+  var body: some View {
+    ZStack {
+      Circle()
+        .strokeBorder(ajFitBlue, lineWidth: lineWidth)
+      Image(systemName: "forward.end.fill")
+        .font(.system(size: size * 0.42, weight: .bold))
+        .foregroundStyle(.white)
+    }
+    .frame(width: size, height: size)
+    .accessibilityLabel(Text(accessibilityLabel))
+  }
+}
+
+private struct RestingCompactLeadingView: View {
+  let state: AJFitRestActivityAttributes.ContentState
+
+  var body: some View {
+    Text(
+      timerInterval: state.startedAt...state.endsAt,
+      countsDown: true,
+      showsHours: false
+    )
+    .font(.system(size: 16, weight: .semibold, design: .monospaced))
+    .monospacedDigit()
+    .lineLimit(1)
+    // Keep only the width needed by the supported compact formats (0:00–12:34).
+    // `fixedSize(horizontal:)` made this timer refuse the compact region's
+    // proposal and could cause iOS to drop compactLeading altogether.
+    .frame(width: 48, alignment: .leading)
+    .minimumScaleFactor(0.78)
+    .foregroundStyle(.white)
+    .accessibilityLabel(Text(RestActivityCopy.timeAccessibility))
+  }
+}
+
+private struct RestingCompactTrailingView: View {
+  let state: AJFitRestActivityAttributes.ContentState
+
+  var body: some View {
+    RestSetProgressRing(currentSet: state.setIndex, totalSets: state.totalSets, size: 20)
+      .fixedSize()
+  }
+}
+
+private struct RestingMinimalView: View {
+  let state: AJFitRestActivityAttributes.ContentState
+
+  var body: some View {
+    Text(
+      timerInterval: state.startedAt...state.endsAt,
+      countsDown: true,
+      showsHours: false
+    )
+    .font(.system(size: 13, weight: .bold, design: .monospaced))
+    .monospacedDigit()
+    .lineLimit(1)
+    .minimumScaleFactor(0.72)
+    .foregroundStyle(.white)
+    .accessibilityLabel(Text(RestActivityCopy.timeAccessibility))
+  }
+}
+
+private struct NextSetCompactLeadingView: View {
+  var body: some View {
+    Text(RestActivityCopy.nextSetCompact)
+      .font(.system(size: 10, weight: .bold, design: .rounded))
+      .lineLimit(1)
+      .minimumScaleFactor(0.7)
+      .foregroundStyle(ajFitBlue)
+  }
+}
+
+private struct NextSetCompactTrailingView: View {
+  var body: some View {
+    RestAdvanceIndicator(size: 20, accessibilityLabel: RestActivityCopy.nextSet)
+  }
+}
+
+private struct NextExerciseCompactLeadingView: View {
+  var body: some View {
+    Text(RestActivityCopy.nextExerciseCompact)
+      .font(.system(size: 9.5, weight: .bold, design: .rounded))
+      .lineLimit(1)
+      .minimumScaleFactor(0.68)
+      .foregroundStyle(ajFitBlue)
+  }
+}
+
+private struct NextExerciseCompactTrailingView: View {
+  var body: some View {
+    RestAdvanceIndicator(size: 20, accessibilityLabel: RestActivityCopy.nextExercise)
+  }
+}
+
+private struct NextActionMinimalView: View {
+  let phase: RestActivityPhase
+
+  var body: some View {
+    RestAdvanceIndicator(
+      size: 20,
+      accessibilityLabel: phase == .nextSet
+        ? RestActivityCopy.nextSet
+        : RestActivityCopy.nextExercise
     )
   }
 }
 
-private struct RestLockScreenView: View {
-  let context: ActivityViewContext<AJFitRestActivityAttributes>
+private struct ReturnToWorkoutView: View {
+  let copy: LocalizedStringKey
+
+  var body: some View {
+    HStack(spacing: 6) {
+      Image(systemName: "arrow.up.right.circle.fill")
+      Text(copy)
+    }
+    .font(.system(size: 12, weight: .medium, design: .rounded))
+    .foregroundStyle(.white.opacity(0.62))
+  }
+}
+
+private struct RestingLockScreenView: View {
+  let state: AJFitRestActivityAttributes.ContentState
 
   var body: some View {
     VStack(alignment: .leading, spacing: 10) {
       HStack {
         AJFitLogo()
-        Text(RestActivityCopy.lockScreenTitle)
+        Text(RestActivityCopy.restTitle)
           .font(.system(size: 13, weight: .bold, design: .rounded))
           .foregroundStyle(ajFitBlue)
         Spacer()
-        RestSetProgressRing(
-          currentSet: context.state.setIndex,
-          totalSets: context.state.totalSets,
-          size: 20
-        )
-        Text(RestActivityCopy.series(context.state.setIndex, context.state.totalSets))
+        RestSetProgressRing(currentSet: state.setIndex, totalSets: state.totalSets, size: 20)
+        Text(RestActivityCopy.series(state.setIndex, state.totalSets))
           .font(.system(size: 12, weight: .semibold, design: .rounded))
           .foregroundStyle(.white.opacity(0.72))
       }
-
-      RestCountdownText(state: context.state)
-
-      Text(context.state.exerciseName)
+      RestCountdownText(state: state)
+      Text(state.exerciseName)
         .font(.system(size: 17, weight: .semibold, design: .rounded))
         .foregroundStyle(.white)
         .lineLimit(1)
         .minimumScaleFactor(0.75)
+      ReturnToWorkoutView(copy: RestActivityCopy.returnToWorkout)
+    }
+  }
+}
 
-      HStack(spacing: 6) {
-        Image(systemName: "arrow.up.right.circle.fill")
-        Text(RestActivityCopy.returnToWorkout)
+private struct NextSetLockScreenView: View {
+  let state: AJFitRestActivityAttributes.ContentState
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 10) {
+      HStack {
+        AJFitLogo()
+        Text(RestActivityCopy.nextSet)
+          .font(.system(size: 13, weight: .bold, design: .rounded))
+          .foregroundStyle(ajFitBlue)
+        Spacer()
+        RestAdvanceIndicator(size: 24, accessibilityLabel: RestActivityCopy.nextSet)
       }
-      .font(.system(size: 12, weight: .medium, design: .rounded))
-      .foregroundStyle(.white.opacity(0.62))
+      if let nextSetIndex = state.nextSetIndex {
+        Text(RestActivityCopy.series(nextSetIndex, state.totalSets))
+          .font(.system(size: 22, weight: .bold, design: .rounded))
+          .foregroundStyle(.white)
+      }
+      Text(state.exerciseName)
+        .font(.system(size: 17, weight: .semibold, design: .rounded))
+        .foregroundStyle(.white)
+        .lineLimit(1)
+        .minimumScaleFactor(0.75)
+      ReturnToWorkoutView(copy: RestActivityCopy.tapToContinue)
+    }
+  }
+}
+
+private struct NextExerciseLockScreenView: View {
+  let state: AJFitRestActivityAttributes.ContentState
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 10) {
+      HStack(spacing: 8) {
+        AJFitLogo()
+        Text(RestActivityCopy.nextExercise)
+          .font(.system(size: 13, weight: .bold, design: .rounded))
+          .foregroundStyle(ajFitBlue)
+        Spacer()
+        RestAdvanceIndicator(size: 24, accessibilityLabel: RestActivityCopy.nextExercise)
+      }
+      Text(state.nextExerciseName ?? "")
+        .font(.system(size: 24, weight: .bold, design: .rounded))
+        .foregroundStyle(.white)
+        .lineLimit(2)
+        .minimumScaleFactor(0.72)
+      ReturnToWorkoutView(copy: RestActivityCopy.tapToContinue)
+    }
+  }
+}
+
+private struct RestLockScreenView: View {
+  let state: AJFitRestActivityAttributes.ContentState
+  let phase: RestActivityPhase
+
+  var body: some View {
+    Group {
+      switch phase {
+      case .resting: RestingLockScreenView(state: state)
+      case .nextSet: NextSetLockScreenView(state: state)
+      case .nextExercise: NextExerciseLockScreenView(state: state)
+      }
     }
     .padding(16)
     .widgetURL(activeWorkoutURL)
   }
 }
 
+private struct ExpandedLeadingView: View {
+  let state: AJFitRestActivityAttributes.ContentState
+  let phase: RestActivityPhase
+
+  var body: some View {
+    Group {
+      if phase == .resting {
+        HStack(spacing: 7) {
+          RestSetProgressRing(currentSet: state.setIndex, totalSets: state.totalSets, size: 24)
+          Text(RestActivityCopy.expandedRestTitle)
+            .font(.system(size: 12, weight: .bold, design: .rounded))
+            .foregroundStyle(ajFitBlue)
+        }
+      } else {
+        HStack(spacing: 7) {
+          AJFitLogo()
+          Text("AJ FIT")
+            .font(.system(size: 12, weight: .bold, design: .rounded))
+            .foregroundStyle(ajFitBlue)
+        }
+      }
+    }
+  }
+}
+
+private struct ExpandedTrailingView: View {
+  let state: AJFitRestActivityAttributes.ContentState
+  let phase: RestActivityPhase
+
+  var body: some View {
+    Group {
+      switch phase {
+      case .resting:
+        Text(RestActivityCopy.series(state.setIndex, state.totalSets))
+      case .nextSet:
+        HStack(spacing: 5) {
+          if let nextSetIndex = state.nextSetIndex {
+            Text(RestActivityCopy.series(nextSetIndex, state.totalSets))
+          }
+          RestAdvanceIndicator(size: 22, accessibilityLabel: RestActivityCopy.nextSet)
+        }
+      case .nextExercise:
+        RestAdvanceIndicator(size: 22, accessibilityLabel: RestActivityCopy.nextExercise)
+      }
+    }
+    .font(.system(size: 12, weight: .semibold, design: .rounded))
+    .foregroundStyle(.white.opacity(0.72))
+  }
+}
+
+private struct ExpandedCenterView: View {
+  let state: AJFitRestActivityAttributes.ContentState
+  let phase: RestActivityPhase
+
+  var body: some View {
+    Group {
+      switch phase {
+      case .resting:
+        RestCountdownText(state: state)
+      case .nextSet:
+        Text(RestActivityCopy.nextSet)
+          .font(.system(size: 24, weight: .bold, design: .rounded))
+          .foregroundStyle(.white)
+      case .nextExercise:
+        Text(RestActivityCopy.nextExercise)
+          .font(.system(size: 22, weight: .bold, design: .rounded))
+          .foregroundStyle(.white)
+      }
+    }
+  }
+}
+
+private struct ExpandedBottomView: View {
+  let state: AJFitRestActivityAttributes.ContentState
+  let phase: RestActivityPhase
+  private var exerciseName: String {
+    phase == .nextExercise ? state.nextExerciseName ?? "" : state.exerciseName
+  }
+
+  var body: some View {
+    VStack(spacing: 5) {
+      if phase == .nextSet {
+        if let nextSetIndex = state.nextSetIndex {
+          Text(RestActivityCopy.series(nextSetIndex, state.totalSets))
+            .font(.system(size: 12, weight: .semibold, design: .rounded))
+            .foregroundStyle(ajFitBlue)
+        }
+      }
+      Text(exerciseName)
+        .font(.system(size: 16, weight: .semibold, design: .rounded))
+        .foregroundStyle(.white)
+        .lineLimit(1)
+        .minimumScaleFactor(0.72)
+      Text(phase == .resting ? RestActivityCopy.returnToWorkout : RestActivityCopy.tapToContinue)
+        .font(.system(size: 11, weight: .medium, design: .rounded))
+        .foregroundStyle(.white.opacity(0.58))
+    }
+  }
+}
+
 struct AJFitRestActivityWidget: Widget {
   var body: some WidgetConfiguration {
     ActivityConfiguration(for: AJFitRestActivityAttributes.self) { context in
-      RestLockScreenView(context: context)
+      let phase = context.state.presentationPhase(isStale: context.isStale)
+      RestLockScreenView(state: context.state, phase: phase)
         .activityBackgroundTint(ajFitBackground)
         .activitySystemActionForegroundColor(.white)
     } dynamicIsland: { context in
-      DynamicIsland {
+      let phase = context.state.presentationPhase(isStale: context.isStale)
+      return DynamicIsland {
         DynamicIslandExpandedRegion(.leading) {
-          HStack(spacing: 7) {
-            RestSetProgressRing(
-              currentSet: context.state.setIndex,
-              totalSets: context.state.totalSets,
-              size: 24
-            )
-            Text(RestActivityCopy.title)
-              .font(.system(size: 12, weight: .bold, design: .rounded))
-              .foregroundStyle(ajFitBlue)
-          }
+          ExpandedLeadingView(state: context.state, phase: phase)
         }
         DynamicIslandExpandedRegion(.trailing) {
-          Text(RestActivityCopy.series(context.state.setIndex, context.state.totalSets))
-            .font(.system(size: 12, weight: .semibold, design: .rounded))
-            .foregroundStyle(.white.opacity(0.72))
+          ExpandedTrailingView(state: context.state, phase: phase)
         }
         DynamicIslandExpandedRegion(.center) {
-          RestCountdownText(state: context.state)
+          ExpandedCenterView(state: context.state, phase: phase)
         }
         DynamicIslandExpandedRegion(.bottom) {
-          VStack(spacing: 5) {
-            Text(context.state.exerciseName)
-              .font(.system(size: 16, weight: .semibold, design: .rounded))
-              .foregroundStyle(.white)
-              .lineLimit(1)
-              .minimumScaleFactor(0.72)
-            Text(RestActivityCopy.returnToWorkout)
-              .font(.system(size: 11, weight: .medium, design: .rounded))
-              .foregroundStyle(.white.opacity(0.58))
-          }
+          ExpandedBottomView(state: context.state, phase: phase)
         }
       } compactLeading: {
-        RestSetProgressRing(
-          currentSet: context.state.setIndex,
-          totalSets: context.state.totalSets,
-          size: 24
-        )
-      } compactTrailing: {
-        Group {
-          if context.state.isResting {
-            Text(
-              timerInterval: context.state.startedAt...context.state.endsAt,
-              countsDown: true,
-              showsHours: false
-            )
-          } else {
-            Text("0:00")
-          }
+        switch phase {
+        case .resting: RestingCompactLeadingView(state: context.state)
+        case .nextSet: NextSetCompactLeadingView()
+        case .nextExercise: NextExerciseCompactLeadingView()
         }
-        .font(.system(size: 16, weight: .semibold, design: .monospaced))
-        .monospacedDigit()
-        .lineLimit(1)
-        .minimumScaleFactor(0.8)
-        .multilineTextAlignment(.trailing)
-        .frame(maxWidth: 40, alignment: .trailing)
-        .foregroundStyle(.white)
-        .accessibilityLabel(
-          Text(
-            context.state.isResting
-              ? RestActivityCopy.timeAccessibility
-              : RestActivityCopy.completedAccessibility
-          )
-        )
+      } compactTrailing: {
+        switch phase {
+        case .resting: RestingCompactTrailingView(state: context.state)
+        case .nextSet: NextSetCompactTrailingView()
+        case .nextExercise: NextExerciseCompactTrailingView()
+        }
       } minimal: {
-        RestSetProgressRing(
-          currentSet: context.state.setIndex,
-          totalSets: context.state.totalSets,
-          size: 20
-        )
+        if phase == .resting {
+          RestingMinimalView(state: context.state)
+        } else {
+          NextActionMinimalView(phase: phase)
+        }
       }
       .widgetURL(activeWorkoutURL)
     }
@@ -275,33 +483,200 @@ struct AJFitRestActivityWidget: Widget {
 }
 
 #if DEBUG
-private struct RestSetProgressRingPreviews: PreviewProvider {
-  static var previews: some View {
-    Group {
-      preview(currentSet: 1, totalSets: 4)
-        .previewDisplayName("1 / 4")
-      preview(currentSet: 2, totalSets: 4)
-        .previewDisplayName("2 / 4")
-      preview(currentSet: 3, totalSets: 4)
-        .previewDisplayName("3 / 4")
-      preview(currentSet: 4, totalSets: 4)
-        .previewDisplayName("4 / 4")
-      preview(currentSet: 1, totalSets: 3)
-        .previewDisplayName("1 / 3")
-      preview(currentSet: 3, totalSets: 3)
-        .previewDisplayName("3 / 3")
+private enum RestActivityPreviewData {
+  private static let start = Date(timeIntervalSinceNow: -18)
+  private static let end = Date(timeIntervalSinceNow: 42)
+
+  static func restingNextSet(
+    setIndex: Int,
+    totalSets: Int,
+    nextSetIndex: Int
+  ) -> AJFitRestActivityAttributes.ContentState {
+    .init(
+      startedAt: start, endsAt: end, exerciseName: "Supino reto máquina",
+      setIndex: setIndex, totalSets: totalSets, phase: .resting,
+      nextAction: .nextSet, nextSetIndex: nextSetIndex
+    )
+  }
+
+  static let restingNextExercise = AJFitRestActivityAttributes.ContentState(
+      startedAt: start, endsAt: end, exerciseName: "Supino reto máquina",
+      setIndex: 4, totalSets: 4, phase: .resting,
+      nextAction: .nextExercise, nextExerciseName: "Puxada alta"
+    )
+
+  static func nextSet(setIndex: Int, totalSets: Int) -> AJFitRestActivityAttributes.ContentState {
+    .init(
+      startedAt: start, endsAt: end, exerciseName: "Supino reto máquina",
+      setIndex: setIndex - 1, totalSets: totalSets, phase: .nextSet,
+      nextAction: .nextSet, nextSetIndex: setIndex
+    )
+  }
+
+  static let nextExercise = AJFitRestActivityAttributes.ContentState(
+    startedAt: start, endsAt: end, exerciseName: "Supino reto máquina",
+    setIndex: 4, totalSets: 4, phase: .nextExercise,
+    nextAction: .nextExercise, nextExerciseName: "Puxada alta"
+  )
+}
+
+private struct CompactPreview: View {
+  let state: AJFitRestActivityAttributes.ContentState
+  let phase: RestActivityPhase
+
+  var body: some View {
+    HStack(spacing: 42) {
+      switch phase {
+      case .resting: RestingCompactLeadingView(state: state)
+      case .nextSet: NextSetCompactLeadingView()
+      case .nextExercise: NextExerciseCompactLeadingView()
+      }
+      switch phase {
+      case .resting: RestingCompactTrailingView(state: state)
+      case .nextSet: NextSetCompactTrailingView()
+      case .nextExercise: NextExerciseCompactTrailingView()
+      }
+    }
+    .padding(8)
+    .background(ajFitBackground)
+  }
+}
+
+private struct CompactComparisonPreview: View {
+  let resting: AJFitRestActivityAttributes.ContentState
+  let nextSet: AJFitRestActivityAttributes.ContentState
+
+  private struct Sample: View {
+    let title: LocalizedStringKey
+    let leading: AnyView
+    let trailing: AnyView
+
+    var body: some View {
+      VStack(alignment: .leading, spacing: 5) {
+        Text(title)
+          .font(.caption2)
+          .foregroundStyle(.white.opacity(0.6))
+        HStack(spacing: 8) {
+          leading
+          trailing
+        }
+        .padding(6)
+        .background(ajFitBackground)
+      }
     }
   }
 
-  private static func preview(currentSet: Int, totalSets: Int) -> some View {
-    RestSetProgressRing(
-      currentSet: currentSet,
-      totalSets: totalSets,
-      size: 40
-    )
-    .padding(12)
+  var body: some View {
+    HStack(alignment: .top, spacing: 14) {
+      Sample(
+        title: "resting",
+        leading: AnyView(RestingCompactLeadingView(state: resting)),
+        trailing: AnyView(RestingCompactTrailingView(state: resting))
+      )
+      Sample(
+        title: "next_set",
+        leading: AnyView(NextSetCompactLeadingView()),
+        trailing: AnyView(NextSetCompactTrailingView())
+      )
+    }
+    .padding(8)
     .background(ajFitBackground)
+  }
+}
+
+private struct ExpandedPreview: View {
+  let state: AJFitRestActivityAttributes.ContentState
+  let phase: RestActivityPhase
+
+  var body: some View {
+    VStack(spacing: 10) {
+      HStack {
+        ExpandedLeadingView(state: state, phase: phase)
+        Spacer()
+        ExpandedTrailingView(state: state, phase: phase)
+      }
+      ExpandedCenterView(state: state, phase: phase)
+      ExpandedBottomView(state: state, phase: phase)
+    }
+    .padding(14)
+    .background(ajFitBackground)
+  }
+}
+
+private struct RestActivityStatePreviews: PreviewProvider {
+  static var previews: some View {
+    Group {
+      RestLockScreenView(
+        state: RestActivityPreviewData.restingNextSet(
+          setIndex: 1, totalSets: 4, nextSetIndex: 2
+        ),
+        phase: .resting
+      ).background(ajFitBackground).previewDisplayName("resting 1/4")
+      RestLockScreenView(
+        state: RestActivityPreviewData.restingNextSet(
+          setIndex: 3, totalSets: 4, nextSetIndex: 4
+        ),
+        phase: .resting
+      ).background(ajFitBackground).previewDisplayName("resting 3/4")
+      RestLockScreenView(state: RestActivityPreviewData.restingNextExercise, phase: .resting)
+        .background(ajFitBackground).previewDisplayName("resting 4/4")
+      RestLockScreenView(
+        state: RestActivityPreviewData.nextSet(setIndex: 2, totalSets: 4),
+        phase: .nextSet
+      ).background(ajFitBackground).previewDisplayName("next_set 2/4")
+      RestLockScreenView(
+        state: RestActivityPreviewData.nextSet(setIndex: 3, totalSets: 4),
+        phase: .nextSet
+      ).background(ajFitBackground).previewDisplayName("next_set 3/4")
+      CompactPreview(
+        state: RestActivityPreviewData.restingNextSet(
+          setIndex: 1, totalSets: 4, nextSetIndex: 2
+        ),
+        phase: .resting
+      )
+        .previewDisplayName("compact resting")
+      CompactComparisonPreview(
+        resting: RestActivityPreviewData.restingNextSet(
+          setIndex: 1, totalSets: 4, nextSetIndex: 2
+        ),
+        nextSet: RestActivityPreviewData.nextSet(setIndex: 2, totalSets: 4)
+      )
+        .previewDisplayName("compact resting vs next_set")
+      RestingMinimalView(
+        state: RestActivityPreviewData.restingNextSet(
+          setIndex: 1, totalSets: 4, nextSetIndex: 2
+        )
+      )
+        .padding(8).background(ajFitBackground).previewDisplayName("minimal resting")
+      ExpandedPreview(
+        state: RestActivityPreviewData.restingNextSet(
+          setIndex: 3, totalSets: 4, nextSetIndex: 4
+        ),
+        phase: .resting
+      )
+        .previewDisplayName("expanded resting")
+      CompactPreview(state: RestActivityPreviewData.nextSet(setIndex: 3, totalSets: 4), phase: .nextSet)
+        .previewDisplayName("compact next_set")
+      ExpandedPreview(state: RestActivityPreviewData.nextSet(setIndex: 3, totalSets: 4), phase: .nextSet)
+        .previewDisplayName("expanded next_set")
+      CompactPreview(state: RestActivityPreviewData.nextExercise, phase: .nextExercise)
+        .previewDisplayName("compact next_exercise")
+      ExpandedPreview(state: RestActivityPreviewData.nextExercise, phase: .nextExercise)
+        .previewDisplayName("expanded next_exercise")
+      RestLockScreenView(
+        state: RestActivityPreviewData.restingNextSet(
+          setIndex: 3, totalSets: 4, nextSetIndex: 4
+        ),
+        phase: .resting
+      )
+        .background(ajFitBackground).previewDisplayName("Lock Screen resting")
+      RestLockScreenView(state: RestActivityPreviewData.nextSet(setIndex: 3, totalSets: 4), phase: .nextSet)
+        .background(ajFitBackground).previewDisplayName("Lock Screen next_set")
+      RestLockScreenView(state: RestActivityPreviewData.nextExercise, phase: .nextExercise)
+        .background(ajFitBackground).previewDisplayName("Lock Screen next_exercise")
+    }
     .previewLayout(.sizeThatFits)
   }
+
 }
 #endif

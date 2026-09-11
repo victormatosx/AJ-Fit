@@ -5,4 +5,11 @@
   <string name="ajfit_rest_live_update_title">Descanso</string>
   <string name="ajfit_rest_series_format">Serie %1$d/%2$d</string>
   <string name="ajfit_rest_short_critical_text">REST</string>
+  <string name="ajfit_rest_next_set_title">AJ Fit · Siguiente serie</string>
+  <string name="ajfit_rest_next_set_live_update_title">Siguiente serie</string>
+  <string name="ajfit_rest_next_set_short_critical_text">SERIE</string>
+  <string name="ajfit_rest_next_exercise_title">AJ Fit · Siguiente ejercicio</string>
+  <string name="ajfit_rest_next_exercise_live_update_title">Siguiente ejercicio</string>
+  <string name="ajfit_rest_next_exercise_short_critical_text">SIG.</string>
+  <string name="ajfit_rest_tap_to_continue">Toca para continuar</string>
 </resources>

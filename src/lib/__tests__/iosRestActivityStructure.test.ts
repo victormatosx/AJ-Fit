@@ -77,13 +77,17 @@ describe('AJFitRestActivity Apple module', () => {
       'activity.attributes.sessionId == sessionId',
     );
     expect(moduleSource).toContain('RestActivity.request(');
-    expect(moduleSource).toContain('existingActivity.update(content)');
+    expect(moduleSource).toContain(
+      'existingActivity.update(content, alertConfiguration: alert)',
+    );
   });
 
   it('uses absolute dates and staleDate without a ticking native value', () => {
     expect(attributesSource).toContain('public var startedAt: Date');
     expect(attributesSource).toContain('public var endsAt: Date');
-    expect(moduleSource).toContain('staleDate: state.endsAt');
+    expect(moduleSource).toContain(
+      'staleDate: state.phase == .resting ? state.endsAt : nil',
+    );
     expect(`${moduleSource}\n${attributesSource}`).not.toContain(
       'remainingSeconds',
     );
@@ -159,7 +163,9 @@ describe('versioned Live Activity extension', () => {
   });
 
   it('defines Lock Screen plus compact, minimal and expanded Dynamic Island UI', () => {
-    expect(widgetSource).toContain('RestLockScreenView(context: context)');
+    expect(widgetSource).toContain(
+      'RestLockScreenView(state: context.state, phase: phase)',
+    );
     expect(widgetSource).toContain('DynamicIsland {');
     expect(widgetSource).toContain('DynamicIslandExpandedRegion(.leading)');
     expect(widgetSource).toContain('DynamicIslandExpandedRegion(.trailing)');
@@ -170,38 +176,38 @@ describe('versioned Live Activity extension', () => {
     expect(widgetSource).toContain('minimal:');
   });
 
-  it('adds set progress to compact and minimal without changing the system countdown', () => {
+  it('puts countdown in compact leading, progress in trailing, and countdown in minimal', () => {
     expect(widgetSource).toContain('Image(systemName: "stopwatch")');
     expect(widgetSource).toContain('private struct RestSetProgressRing: View');
 
-    const compactStart = widgetSource.indexOf('} compactLeading: {');
+    const leading = widgetSource.slice(
+      widgetSource.indexOf('private struct RestingCompactLeadingView'),
+      widgetSource.indexOf('private struct RestingCompactTrailingView'),
+    );
+    const trailing = widgetSource.slice(
+      widgetSource.indexOf('private struct RestingCompactTrailingView'),
+      widgetSource.indexOf('private struct RestingMinimalView'),
+    );
+    const minimal = widgetSource.slice(
+      widgetSource.indexOf('private struct RestingMinimalView'),
+      widgetSource.indexOf('private struct NextSetCompactLeadingView'),
+    );
+    expect(leading).toContain('timerInterval: state.startedAt...state.endsAt');
+    expect(leading).toContain('countsDown: true');
+    expect(leading).not.toContain('RestSetProgressRing');
+    expect(trailing).toContain('RestSetProgressRing(');
+    expect(trailing).toContain('currentSet: state.setIndex');
+    expect(minimal).toContain('timerInterval: state.startedAt...state.endsAt');
+    expect(minimal).toContain('countsDown: true');
+    expect(minimal).not.toContain('RestSetProgressRing');
     const compactPresentation = widgetSource.slice(
-      compactStart,
-      widgetSource.indexOf('.widgetURL(activeWorkoutURL)', compactStart),
+      widgetSource.indexOf('} compactLeading: {'),
+      widgetSource.indexOf('.widgetURL(activeWorkoutURL)'),
     );
-    expect(compactPresentation).toContain(
-      'timerInterval: context.state.startedAt...context.state.endsAt',
-    );
-    expect(compactPresentation).toContain('countsDown: true');
-    expect(compactPresentation).toContain('.lineLimit(1)');
-    expect(compactPresentation).toContain('.minimumScaleFactor(0.8)');
-    expect(compactPresentation).toContain(
-      '.frame(maxWidth: 40, alignment: .trailing)',
-    );
-    expect(compactPresentation).toContain('RestSetProgressRing(');
-    expect(compactPresentation).toContain(
-      'currentSet: context.state.setIndex',
-    );
-    expect(compactPresentation).toContain(
-      'totalSets: context.state.totalSets',
-    );
-    expect(compactPresentation).not.toContain('RestCompactTimerGlyph');
-    expect(compactPresentation).not.toContain('RestCompactTrailingView');
-    expect(compactPresentation).not.toContain('RestCountdownText');
-    expect(compactPresentation).not.toContain('AJFitGlyph()');
-    expect(compactPresentation).not.toContain('RestActivityCopy.title');
-    expect(compactPresentation).not.toContain('.frame(minWidth:');
-    expect(widgetSource).not.toContain('.fixedSize(');
+    expect(leading).toContain('.frame(width: 48, alignment: .leading)');
+    expect(leading).toContain('.minimumScaleFactor(0.78)');
+    expect(trailing).toContain('.fixedSize()');
+    expect(widgetSource).not.toContain('.fixedSize(maxWidth:');
     expect(widgetSource).not.toContain('.keylineTint(');
     for (const expansiveModifier of [
       'frame(maxWidth: .infinity)',
@@ -214,6 +220,18 @@ describe('versioned Live Activity extension', () => {
     expect(compactPresentation).not.toContain('Spacer()');
     expect(compactPresentation).not.toContain('Capsule()');
     expect(compactPresentation).not.toContain('RoundedRectangle');
+  });
+
+  it('uses one static blue advance affordance for the next-action surfaces', () => {
+    expect(widgetSource).toContain('private struct RestAdvanceIndicator: View');
+    expect(widgetSource).toContain('Image(systemName: "forward.end.fill")');
+    expect(widgetSource).toContain('.strokeBorder(ajFitBlue');
+    expect(widgetSource).toContain('RestAdvanceIndicator(size: 20');
+    expect(widgetSource).toContain('RestAdvanceIndicator(size: 24');
+    expect(widgetSource).toContain('RestAdvanceIndicator(size: 22');
+    expect(widgetSource).not.toContain('Text("S\\(nextSetIndex)")');
+    expect(widgetSource).not.toContain('Timer(');
+    expect(widgetSource).not.toContain('withAnimation');
   });
 
   it('derives lightweight segmented progress locally from one-based set state', () => {
@@ -235,20 +253,29 @@ describe('versioned Live Activity extension', () => {
     expect(progressView).not.toContain('Timer');
   });
 
-  it('previews the requested three- and four-set progress states', () => {
+  it('previews every requested semantic surface state', () => {
     for (const state of [
-      'currentSet: 1, totalSets: 4',
-      'currentSet: 2, totalSets: 4',
-      'currentSet: 3, totalSets: 4',
-      'currentSet: 4, totalSets: 4',
-      'currentSet: 1, totalSets: 3',
-      'currentSet: 3, totalSets: 3',
+      'resting 1/4',
+      'resting 3/4',
+      'resting 4/4',
+      'next_set 2/4',
+      'next_set 3/4',
+      'compact resting',
+      'minimal resting',
+      'expanded resting',
+      'compact next_set',
+      'expanded next_set',
+      'compact next_exercise',
+      'expanded next_exercise',
+      'Lock Screen resting',
+      'Lock Screen next_set',
+      'Lock Screen next_exercise',
     ]) {
       expect(widgetSource).toContain(state);
     }
   });
 
-  it('uses the official app logo and rest-only title on the Lock Screen', () => {
+  it('uses the official app logo in every Lock Screen state', () => {
     expect(existsSync('assets/aj-logo.png')).toBe(true);
     expect(
       existsSync(
@@ -277,34 +304,35 @@ describe('versioned Live Activity extension', () => {
     expect(officialLogoView).not.toContain('Circle()');
 
     const lockScreenPresentation = widgetSource.slice(
-      widgetSource.indexOf('private struct RestLockScreenView'),
-      widgetSource.indexOf('struct AJFitRestActivityWidget'),
+      widgetSource.indexOf('private struct RestingLockScreenView'),
+      widgetSource.indexOf('private struct ExpandedLeadingView'),
     );
     expect(lockScreenPresentation).toContain('AJFitLogo()');
-    expect(lockScreenPresentation).toContain(
-      'Text(RestActivityCopy.lockScreenTitle)',
-    );
+    expect(lockScreenPresentation).toContain('RestActivityCopy.restTitle');
+    expect(lockScreenPresentation).toContain('RestActivityCopy.nextSet');
+    expect(lockScreenPresentation).toContain('RestActivityCopy.nextExercise');
     expect(lockScreenPresentation).not.toContain('AJFitGlyph()');
     expect(lockScreenPresentation).not.toContain('Text(RestActivityCopy.title)');
     expect(lockScreenPresentation).not.toContain('Text("AJ")');
     expect(lockScreenPresentation).not.toContain('Circle()');
   });
 
-  it('retains branded information in the expanded Dynamic Island', () => {
+  it('renders all phases from the same typed state in expanded Dynamic Island', () => {
     const informationalPresentation = widgetSource.slice(
       widgetSource.indexOf('DynamicIsland {'),
       widgetSource.indexOf('} compactLeading: {'),
     );
-    expect(informationalPresentation).toContain('RestSetProgressRing(');
-    expect(informationalPresentation).toContain('RestActivityCopy.title');
-    expect(informationalPresentation).toContain('context.state.exerciseName');
-    expect(informationalPresentation).toContain(
-      'RestActivityCopy.series(context.state.setIndex, context.state.totalSets)',
-    );
+    expect(informationalPresentation).toContain('ExpandedLeadingView(');
+    expect(informationalPresentation).toContain('ExpandedTrailingView(');
+    expect(informationalPresentation).toContain('ExpandedCenterView(');
+    expect(informationalPresentation).toContain('ExpandedBottomView(');
+    expect(attributesSource).toContain('public enum RestActivityPhase');
+    expect(attributesSource).toContain('public var nextExerciseName: String?');
+    expect(widgetSource).toContain('state.nextExerciseName ?? ""');
   });
 
   it('renders the system countdown and deep-links to the allowlisted workout route', () => {
-    expect(widgetSource).toContain('Text(\n          timerInterval:');
+    expect(widgetSource).toContain('timerInterval: state.startedAt...state.endsAt');
     expect(widgetSource).toContain('countsDown: true');
     expect(widgetSource).toContain('"ajfit://workout/active"');
     expect(widgetSource).toContain('.widgetURL(activeWorkoutURL)');
@@ -317,7 +345,11 @@ describe('versioned Live Activity extension', () => {
       'rest_activity_series_format',
       'rest_activity_return_to_workout',
       'rest_activity_time_accessibility',
-      'rest_activity_completed_accessibility',
+      'rest_activity_next_set',
+      'rest_activity_next_set_compact',
+      'rest_activity_next_exercise',
+      'rest_activity_next_exercise_compact',
+      'rest_activity_tap_to_continue',
     ]) {
       expect(Object.keys(localizationCatalog.strings[key].localizations).sort()).toEqual([
         'en',
@@ -328,6 +360,24 @@ describe('versioned Live Activity extension', () => {
     }
     expect(widgetSource).not.toContain('AJ FIT · DESCANSO');
     expect(widgetSource).not.toContain('Toque para voltar ao treino');
+  });
+
+  it('uses one presentation phase for Lock Screen and Dynamic Island without set inference', () => {
+    const productionWidget = widgetSource.slice(0, widgetSource.indexOf('#if DEBUG'));
+    expect(widgetSource.match(/presentationPhase\(isStale: context\.isStale\)/g)).toHaveLength(2);
+    expect(attributesSource).toContain('return nextAction.phase');
+    expect(productionWidget).not.toMatch(/state\.setIndex\s*</);
+    expect(productionWidget).not.toMatch(/state\.setIndex\s*\+/);
+    expect(productionWidget).not.toContain('nextSetIndex ?? state.setIndex');
+  });
+
+  it('requests ActivityKit emphasis only behind explicit and semantic transition guards', () => {
+    expect(moduleSource).toContain('shouldAlert && isRelevantTransition');
+    expect(moduleSource).toContain('existingActivity.content.state.phase == .resting');
+    expect(moduleSource).toContain('state.phase == state.nextAction.phase');
+    expect(moduleSource).toContain('AlertConfiguration(');
+    expect(moduleSource).toContain('sound: .default');
+    expect(moduleSource).toContain('operation: "start", shouldAlert: false');
   });
 
   it('contains no Swift timer, second loop or background countdown task', () => {

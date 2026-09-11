@@ -8,7 +8,7 @@ import type {
 export type AJFitRestActivityNativeModule = {
   getCapabilities(): RestLiveCapabilities | Promise<RestLiveCapabilities>;
   start(state: RestActivityState): void | Promise<void>;
-  update(state: RestActivityState): void | Promise<void>;
+  update(state: RestActivityState, shouldAlert: boolean): void | Promise<void>;
   end(sessionId: string, reason: RestActivityEndReason): void | Promise<void>;
   /** Optional for compatibility with binaries produced before Phase 7. */
   cleanup?(): void | Promise<void>;

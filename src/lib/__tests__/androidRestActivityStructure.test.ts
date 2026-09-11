@@ -207,17 +207,38 @@ describe('Android rest countdown notification', () => {
   });
 
   it('removes large branding only from the API 36 promoted presentation', () => {
+    expect(builderSource).toContain('.setContentTitle(title)');
+    expect(builderSource).toContain('R.string.ajfit_rest_notification_title');
     expect(builderSource).toContain(
-      'setContentTitle(context.getString(R.string.ajfit_rest_notification_title))',
-    );
-    expect(builderSource).toContain(
-      'contextTitle = context.getString(R.string.ajfit_rest_live_update_title)',
+      'RestActivityPhase.RESTING -> R.string.ajfit_rest_live_update_title',
     );
     expect(liveUpdateSource).toContain('.setContentTitle(contextTitle)');
     expect(liveUpdateSource).toContain(
       '.setShortCriticalText(contextShortCriticalText)',
     );
     expect(liveUpdateSource).not.toContain('remainingSeconds');
+  });
+
+  it('renders typed resting, next-set and next-exercise semantics with one id', () => {
+    for (const phase of ['RESTING("resting")', 'NEXT_SET("next_set")', 'NEXT_EXERCISE("next_exercise")']) {
+      expect(moduleSource).toContain(phase);
+    }
+    expect(builderSource).toContain('R.string.ajfit_rest_next_set_title');
+    expect(builderSource).toContain('R.string.ajfit_rest_next_exercise_title');
+    expect(builderSource).toContain('state.nextExerciseName.orEmpty()');
+    expect(builderSource).toContain('requireNotNull(state.nextSetIndex)');
+    expect(builderSource).not.toContain('state.nextSetIndex ?: state.setIndex');
+    expect(builderSource).toContain('.setUsesChronometer(false)');
+    expect(moduleSource).toContain(
+      'state.phaseValue == RestActivityPhase.RESTING && state.endsAt <= now',
+    );
+  });
+
+  it('keeps Android silent when iOS requests transition emphasis', () => {
+    expect(moduleSource).toContain('shouldAlert: Boolean');
+    expect(builderSource).toContain('.setOnlyAlertOnce(true)');
+    expect(channelSource).toContain('setSound(null, null)');
+    expect(channelSource).toContain('enableVibration(false)');
   });
 
   it('keeps promotion optional in the pure surface resolver', () => {

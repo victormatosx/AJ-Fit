@@ -51,6 +51,7 @@ import {
 import { computeRemainingSeconds, computeRestProgress } from '../lib/restTimer';
 import { computeWorkoutElapsedSeconds } from '../lib/workoutSessionTimer';
 import { useRestSession } from '../state/RestSessionContext';
+import { materializeRestNextAction } from '../workoutExecution/restActivityProjection';
 
 type Props = {
   plan: FinalWorkoutPlan;
@@ -147,6 +148,7 @@ export function WorkoutScreen({ plan, onDone, onMinimize, sessionIndex = 0, work
     addSeconds: addRestSeconds,
     cancelRest,
     consumeExpiration,
+    publishNextAction,
   } = useRestSession();
   const restingExerciseIndex = rest
     ? exercises.findIndex((candidate) => candidate.id === rest.exerciseId)
@@ -377,9 +379,12 @@ export function WorkoutScreen({ plan, onDone, onMinimize, sessionIndex = 0, work
     // Deadline wake-up, foreground reconciliation and delayed renders can all
     // observe one expiry. Only the single successful consumer may advance the
     // workout engine.
-    if (consumeExpiration(rest.restId)) advanceAfterRest();
+    if (consumeExpiration(rest.restId)) {
+      advanceAfterRest();
+      publishNextAction(rest.restId);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [consumeExpiration, rest?.restId, restStatus]);
+  }, [consumeExpiration, publishNextAction, rest?.restId, restStatus]);
 
   const completeSet = () => {
     if (isLastOverall) {
@@ -401,18 +406,30 @@ export function WorkoutScreen({ plan, onDone, onMinimize, sessionIndex = 0, work
       return;
     }
 
+    const nextAction = materializeRestNextAction({
+      completedSetIndex: setIdx,
+      totalSets: ex.sets.length,
+      nextExerciseName:
+        setIdx + 1 >= ex.sets.length && order.length > 1
+          ? resolve(exercises[order[1]]).name
+          : null,
+    });
     startRest({
       durationSeconds: ex.rest,
       exerciseId: ex.id,
       exerciseName: ex.name,
       setIndex: setIdx,
       totalSets: ex.sets.length,
+      ...nextAction,
     });
   };
 
   const skipRest = () => {
     if (!rest || rest.workoutSessionId !== workoutSessionId) return;
-    if (cancelRest(rest.restId)) advanceAfterRest();
+    if (cancelRest(rest.restId)) {
+      advanceAfterRest();
+      publishNextAction(rest.restId);
+    }
   };
 
   const skipExercise = () => {

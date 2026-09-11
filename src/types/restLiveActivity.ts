@@ -9,11 +9,42 @@ export type RestLiveCapabilities = Readonly<{
   surface: RestLiveSurface;
 }>;
 
+export const REST_ACTIVITY_PHASE = Object.freeze({
+  RESTING: 'resting',
+  NEXT_SET: 'next_set',
+  NEXT_EXERCISE: 'next_exercise',
+} as const);
+
+export type RestActivityPhase =
+  typeof REST_ACTIVITY_PHASE[keyof typeof REST_ACTIVITY_PHASE];
+
+export const REST_ACTIVITY_NEXT_ACTION = Object.freeze({
+  NEXT_SET: REST_ACTIVITY_PHASE.NEXT_SET,
+  NEXT_EXERCISE: REST_ACTIVITY_PHASE.NEXT_EXERCISE,
+} as const);
+
+export type RestActivityNextAction =
+  typeof REST_ACTIVITY_NEXT_ACTION[keyof typeof REST_ACTIVITY_NEXT_ACTION];
+
+export type MaterializedRestNextAction =
+  | Readonly<{
+      nextAction: typeof REST_ACTIVITY_NEXT_ACTION.NEXT_SET;
+      /** One-based upcoming set decided by the workout session. */
+      nextSetIndex: number;
+      nextExerciseName?: never;
+    }>
+  | Readonly<{
+      nextAction: typeof REST_ACTIVITY_NEXT_ACTION.NEXT_EXERCISE;
+      nextSetIndex?: never;
+      /** Already localized/materialized by the workout session. */
+      nextExerciseName: string;
+    }>;
+
 /**
  * Presentation-ready snapshot shared with optional native rest surfaces.
  * Time is absolute; native consumers render the countdown from `endsAt`.
  */
-export type RestActivityState = Readonly<{
+type RestActivityStateBase = Readonly<{
   /** Concrete workout execution id, never a T001-T090 template id. */
   sessionId: string;
   /** Epoch milliseconds. */
@@ -25,6 +56,34 @@ export type RestActivityState = Readonly<{
   /** One-based presentation index. */
   setIndex: number;
   totalSets: number;
+}>;
+
+export type RestActivityState = Readonly<
+  RestActivityStateBase & (
+    | (Extract<
+        MaterializedRestNextAction,
+        { nextAction: typeof REST_ACTIVITY_NEXT_ACTION.NEXT_SET }
+      > & {
+        /** Current semantic presentation state; never inferred by native set math. */
+        phase:
+          | typeof REST_ACTIVITY_PHASE.RESTING
+          | typeof REST_ACTIVITY_PHASE.NEXT_SET;
+      })
+    | (Extract<
+        MaterializedRestNextAction,
+        { nextAction: typeof REST_ACTIVITY_NEXT_ACTION.NEXT_EXERCISE }
+      > & {
+        /** Current semantic presentation state; never inferred by native set math. */
+        phase:
+          | typeof REST_ACTIVITY_PHASE.RESTING
+          | typeof REST_ACTIVITY_PHASE.NEXT_EXERCISE;
+      })
+  )
+>;
+
+export type RestActivityUpdateOptions = Readonly<{
+  /** Requests system emphasis only for an on-time, natural rest completion. */
+  alert?: boolean;
 }>;
 
 export type RestActivityEndReason =
