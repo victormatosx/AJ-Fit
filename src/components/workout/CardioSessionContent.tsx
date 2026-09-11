@@ -1,5 +1,5 @@
-import { useEffect, useRef, type ReactNode } from 'react';
-import { ActivityIndicator, Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import type { ReactNode } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../theme';
 import { displayLineHeight } from '../../theme/tokens';
@@ -50,24 +50,6 @@ export function CardioSessionContent({
         : 'cardioSession.runningLabel',
   );
   const statusColor = targetReached ? theme.colors.success : theme.colors.primaryEmphasis;
-  const runningReveal = useRef(new Animated.Value(ready ? 0 : 1)).current;
-
-  useEffect(() => {
-    if (ready) {
-      runningReveal.setValue(0);
-      return undefined;
-    }
-
-    runningReveal.setValue(0);
-    const animation = Animated.timing(runningReveal, {
-      toValue: 1,
-      duration: 180,
-      easing: Easing.out(Easing.quad),
-      useNativeDriver: true,
-    });
-    animation.start();
-    return () => animation.stop();
-  }, [ready, runningReveal]);
 
   return (
     <View style={styles.screen}>
@@ -103,15 +85,7 @@ export function CardioSessionContent({
         contentContainerStyle={[styles.content, compact && styles.contentCompact]}
         showsVerticalScrollIndicator={false}
       >
-        <Animated.View
-          style={[
-            styles.timer,
-            !ready && {
-              opacity: runningReveal,
-              transform: [{ translateY: runningReveal.interpolate({ inputRange: [0, 1], outputRange: [3, 0] }) }],
-            },
-          ]}
-        >
+        <View style={styles.timer}>
           <Slash style={styles.timerLabel}>
             {t(ready ? 'cardioSession.targetLabel' : 'cardioSession.remainingLabel').toUpperCase()}
           </Slash>
@@ -139,7 +113,7 @@ export function CardioSessionContent({
               {status}
             </Text>
           </View>
-        </Animated.View>
+        </View>
       </ScrollView>
 
       <View style={[styles.footer, compact && styles.footerCompact]}>
@@ -162,17 +136,12 @@ export function CardioSessionContent({
             {finishing && !ready ? (
               <ActivityIndicator color={theme.colors.primaryForeground} />
             ) : (
-              <Animated.View
-                style={[
-                  styles.primaryContent,
-                  !ready && { opacity: runningReveal },
-                ]}
-              >
+              <View style={styles.primaryContent}>
                 <Icon name={ready ? 'play' : 'check'} size={14} color={theme.colors.primaryForeground} />
                 <Text style={{ color: theme.colors.primaryForeground, fontFamily: theme.fonts.display, fontSize: 14, letterSpacing: 1.4, textTransform: 'uppercase' }}>
                   {t(ready ? 'cardioSession.start' : 'cardioSession.finish')}
                 </Text>
-              </Animated.View>
+              </View>
             )}
           </Pressable>
           <Pressable

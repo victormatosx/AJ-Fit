@@ -60,12 +60,13 @@ describe('WorkoutScreen cardio finisher structure', () => {
     expect(cardioContent).toContain('cardio.intensity');
   });
 
-  it('keeps controls stable while entering the running state', () => {
+  it('keeps the same surface stable and only starts the clock when entering the running state', () => {
     expect(cardioContent).toContain('styles.secondary');
     expect(cardioContent).toContain("onPress={ready ? onSkip : onExtend}");
     expect(cardioContent).toContain("t(ready ? 'cardioSession.skip' : 'cardioSession.extend')");
-    expect(cardioContent).toContain('duration: 180');
-    expect(cardioContent).toContain('useNativeDriver: true');
+    expect(cardioContent).toContain('<View style={styles.timer}>');
+    expect(cardioContent).not.toContain('runningReveal');
+    expect(cardioContent).not.toContain('translateY');
     expect(cardioContent).not.toContain('styles.skipSlot');
   });
 
