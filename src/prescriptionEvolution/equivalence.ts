@@ -1,22 +1,13 @@
 import type { LimitationRegionId } from '../types/exercise';
 import { validateLimitationProfile, type LimitationCatalogExercise } from '../workoutPrescription/limitationResolver';
 import { isExerciseExecutable, type EquipmentContext } from '../workoutPrescription/equipment';
+import { DIFFICULTY_RANK, purposePreserved } from '../workoutPrescription/equivalenceShared';
 
-/**
- * Hard equivalence gate (docs prescription/03 — "same primary muscle" alone
- * is never equivalence). A candidate must share the source's movement
- * pattern AND either share its primary muscle or be an explicitly declared
- * limitation variant of it.
- */
-export function purposePreserved(
-  source: LimitationCatalogExercise,
-  candidate: LimitationCatalogExercise,
-): boolean {
-  const samePattern = candidate.movement.pattern === source.movement.pattern;
-  const samePrimaryMuscle = candidate.target.primaryMuscle === source.target.primaryMuscle;
-  const explicitlyApprovedVariant = source.substitution.limitationVariantIds?.includes(candidate.id) ?? false;
-  return samePattern && (samePrimaryMuscle || explicitlyApprovedVariant);
-}
+// Re-exported for backward compatibility — call sites/tests that import
+// `purposePreserved`/`DIFFICULTY_RANK` from this module keep working
+// unchanged after the Fase 1 behavior-preserving extraction (see
+// `equivalenceShared.ts`).
+export { purposePreserved };
 
 /**
  * Safety gate against the user's declared limitation regions. With no
@@ -71,8 +62,6 @@ export function candidatePoolFor(
   pool.delete(source.id);
   return [...pool];
 }
-
-const DIFFICULTY_RANK = { beginner: 0, intermediate: 1, advanced: 2 } as const;
 
 export interface EquivalenceCandidateEvaluation {
   exerciseId: string;

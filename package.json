@@ -111,6 +111,8 @@
     "seed:workout-templates": "tsx scripts/seedWorkoutTemplates.ts",
     "audit:workout-exercises": "tsx scripts/auditWorkoutExercises.ts",
     "audit:workout-frequency": "tsx scripts/auditWorkoutFrequency.ts",
+    "audit:workout-execution-mutex": "tsx scripts/auditWorkoutExecutionMutex.ts",
+    "regularize:orphan-workout-execution": "tsx scripts/regularizeOrphanWorkoutExecution.ts",
     "i18n:check": "vitest run src/i18n/__tests__",
     "i18n:audit": "node scripts/audit-i18n.mjs",
     "quality:static": "npm run typecheck && npm run lint:affected && npm run i18n:audit && npm run ci:audit",

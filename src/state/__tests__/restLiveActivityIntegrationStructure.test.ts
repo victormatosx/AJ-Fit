@@ -58,7 +58,7 @@ describe('rest live presentation boundary', () => {
     expect(workout).toContain('workoutExercisesFromPlan(plan, i18n.language, sessionIndex)');
     expect(codeOnly(context)).not.toContain('EXERCISES');
     expect(workout).toContain('materializeRestNextAction({');
-    expect(workout).toContain('resolve(exercises[order[1]]).name');
+    expect(workout).toContain('resolve(exercises[order[1]], order[1]).name');
   });
 
   it('maps absolute time and converts the set index to one-based presentation', () => {

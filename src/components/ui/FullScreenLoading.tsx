@@ -1,8 +1,8 @@
 import { ActivityIndicator, View } from 'react-native';
 import { useTheme } from '../../theme';
 
-/** One neutral loading surface shared by bootstrap and Paywall preparation. */
-export function FullScreenLoading() {
+/** One neutral loading surface shared by bootstrap, workout start and Paywall preparation. */
+export function FullScreenLoading({ accessibilityLabel }: { accessibilityLabel?: string }) {
   const { theme } = useTheme();
 
   return (
@@ -13,6 +13,11 @@ export function FullScreenLoading() {
         alignItems: 'center',
         justifyContent: 'center',
       }}
+      accessible
+      accessibilityRole="progressbar"
+      accessibilityState={{ busy: true }}
+      accessibilityLiveRegion="polite"
+      accessibilityLabel={accessibilityLabel}
     >
       <ActivityIndicator color={theme.colors.primaryEmphasis} />
     </View>

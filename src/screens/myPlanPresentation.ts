@@ -8,7 +8,53 @@
  */
 import { WEEKDAY_ORDER, type Weekday } from '../state/AppState';
 import type { ScheduleResolution } from '../scheduleEngine/types';
-import type { CompositionReasonCode, PrescriptionTrace, WorkoutDayState, WorkoutWeekdayPrescription } from '../workoutPrescription/types';
+import type { ManualSubstitutionUserContext } from '../services/exerciseSubstitutionCandidates';
+import type { LimitationCatalog } from '../workoutPrescription/limitationResolver';
+import { resolvePermanentSubstitutionsForSession } from '../workoutPrescription/manualSubstitutionResolver';
+import type { CompositionReasonCode, FinalWorkoutPlan, PrescriptionTrace, WorkoutDayState, WorkoutWeekdayPrescription } from '../workoutPrescription/types';
+
+export interface MyPlanEffectiveExerciseIdentity {
+  prescribedExerciseId: string;
+  effectiveExerciseId: string;
+}
+
+export interface MyPlanEffectiveSession {
+  exercises: MyPlanEffectiveExerciseIdentity[];
+  /** Only effective overrides, keyed by the stable slot index. */
+  effectiveExerciseIds: ReadonlyMap<number, string>;
+}
+
+/**
+ * Builds Meu Plano's non-persisted effective view with the exact resolver
+ * used for a new WorkoutExecution. It never reads an active execution and
+ * never changes exerciseId/sourceExerciseId or any prescription parameter.
+ */
+export function buildMyPlanEffectiveSessions(input: {
+  plan: FinalWorkoutPlan;
+  preferences: ReadonlyMap<string, string>;
+  userContext: ManualSubstitutionUserContext | null;
+  catalog: LimitationCatalog;
+}): MyPlanEffectiveSession[] {
+  return input.plan.sessions.map((session) => {
+    const prescribedExerciseIds = session.exercises.map((exercise) => exercise.exerciseId);
+    const effectiveExerciseIds = input.userContext
+      ? resolvePermanentSubstitutionsForSession({
+          sessionExerciseIds: prescribedExerciseIds,
+          preferences: input.preferences,
+          catalog: input.catalog,
+          regions: input.userContext.regions,
+          equipmentContext: input.userContext.equipmentContext,
+        })
+      : new Map<number, string>();
+    return {
+      effectiveExerciseIds,
+      exercises: prescribedExerciseIds.map((prescribedExerciseId, exerciseIndex) => ({
+        prescribedExerciseId,
+        effectiveExerciseId: effectiveExerciseIds.get(exerciseIndex) ?? prescribedExerciseId,
+      })),
+    };
+  });
+}
 
 export interface WeekDayViewModel {
   weekday: Weekday;

@@ -26,6 +26,7 @@ import type { PendingEvolution } from '../workoutLifecycle/types';
 import type { FinalWorkoutPlan } from '../workoutPrescription/types';
 import { computePrescriptionDiff, type PrescriptionDiffSummary } from './diff';
 import { buildEvolutionViewModel, type LifecycleContext } from './viewModel';
+import { nextViewModelAfterLoad } from './loadReducer';
 import type { EvolutionViewModel, PendingEvolutionSummary } from './types';
 import {
   acknowledgeAutoActivationNotice,
@@ -82,6 +83,17 @@ export function useWorkoutEvolution(): WorkoutEvolutionController {
   const [diff, setDiff] = useState<PrescriptionDiffSummary | null>(null);
   const hasLoadedOnce = useRef(false);
   const actionInFlight = useRef(false);
+  // Mirrors `viewModel` synchronously (state updates are async/batched) so a
+  // `load()` failure can decide "do I have a resolved snapshot worth
+  // preserving?" against the actual current value, not a stale closure —
+  // and so the foreground listener can read it without depending on
+  // `viewModel` itself (which would re-subscribe AppState/Firestore
+  // listeners below on every state change).
+  const viewModelRef = useRef<EvolutionViewModel>(viewModel);
+  const commitViewModel = useCallback((next: EvolutionViewModel) => {
+    viewModelRef.current = next;
+    setViewModel(next);
+  }, []);
   // Foreground-resume trigger bookkeeping (docs: foreground reconcile gap).
   // `reconcileInFlight` covers ANY `load()` caller — COLD_START, the
   // Firestore realtime listeners below, a user action's own refresh, or a
@@ -92,11 +104,21 @@ export function useWorkoutEvolution(): WorkoutEvolutionController {
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
   const reconcileInFlight = useRef(false);
   const lastForegroundReconcileAtRef = useRef<number | null>(null);
+  // Stale-result guard (docs: resilience hardening, 2026-09) — `load()` can
+  // legitimately run concurrently (COLD_START racing a Firestore listener
+  // refresh, a manual action's own `load()`, etc.); nothing upstream
+  // serializes those calls. Each call captures the generation counter at
+  // start and only commits state if it's still the newest call by the time
+  // its awaits resolve — an older call that resolves later (success OR
+  // failure) can never clobber a newer call's already-applied result.
+  const loadGenerationRef = useRef(0);
 
   const load = useCallback(async (options?: { trigger?: 'FOREGROUND' }) => {
     if (!user) return;
     if (!hasLoadedOnce.current) setLoading(true);
     reconcileInFlight.current = true;
+    const generation = ++loadGenerationRef.current;
+    const isCurrent = () => loadGenerationRef.current === generation;
     try {
       await reconcileWorkoutLifecycle({
         uid: user.uid,
@@ -110,8 +132,10 @@ export function useWorkoutEvolution(): WorkoutEvolutionController {
       ]);
 
       if (!lifecycle) {
-        setViewModel({ kind: 'UNAVAILABLE' });
-        setDiff(null);
+        if (isCurrent()) {
+          commitViewModel({ kind: 'UNAVAILABLE' });
+          setDiff(null);
+        }
         return;
       }
       const instanceEvents = await listWorkoutLifecycleEventsForProgramInstance(
@@ -130,20 +154,24 @@ export function useWorkoutEvolution(): WorkoutEvolutionController {
         cycleNumber: lifecycle.cycle.cycleNumber,
         isHistoryComplete: lifecycle.lifecycle.initializationOrigin !== 'V1_MIGRATION_BASELINE',
       };
-      setViewModel(buildEvolutionViewModel({
-        now: new Date(),
-        lifecycle: lifecycleContext,
-        decision,
-        pending: pendingAfter ? toPendingSummary(pendingAfter) : null,
-        autoActivationNotice,
-      }));
+      if (isCurrent()) {
+        commitViewModel(buildEvolutionViewModel({
+          now: new Date(),
+          lifecycle: lifecycleContext,
+          decision,
+          pending: pendingAfter ? toPendingSummary(pendingAfter) : null,
+          autoActivationNotice,
+        }));
+      }
 
       if (pendingAfter) {
         const currentProgram = await loadActiveWorkoutProgram(user.uid);
         const pendingPlan = pendingAfter.plan as FinalWorkoutPlan;
-        setDiff(currentProgram?.programInstanceId === pendingAfter.sourceProgramInstanceId
-          ? computePrescriptionDiff({ current: currentProgram, pending: pendingPlan })
-          : null);
+        if (isCurrent()) {
+          setDiff(currentProgram?.programInstanceId === pendingAfter.sourceProgramInstanceId
+            ? computePrescriptionDiff({ current: currentProgram, pending: pendingPlan })
+            : null);
+        }
       } else if (autoActivationNotice && lifecycle.programInstance.previousProgramInstanceId) {
         const [currentProgram, previousInstance] = await Promise.all([
           loadActiveWorkoutProgram(user.uid),
@@ -152,21 +180,39 @@ export function useWorkoutEvolution(): WorkoutEvolutionController {
         const previousProgram = previousInstance
           ? await loadWorkoutProgramSnapshot(user.uid, previousInstance.contentIdentity)
           : null;
-        setDiff(currentProgram?.programInstanceId === lifecycle.programInstance.programInstanceId && previousProgram
-          ? computePrescriptionDiff({ current: previousProgram, pending: currentProgram })
-          : null);
-      } else {
+        if (isCurrent()) {
+          setDiff(currentProgram?.programInstanceId === lifecycle.programInstance.programInstanceId && previousProgram
+            ? computePrescriptionDiff({ current: previousProgram, pending: currentProgram })
+            : null);
+        }
+      } else if (isCurrent()) {
         setDiff(null);
       }
     } catch (error) {
       logWarn('workout_evolution', 'load_failed', { error });
-      setViewModel({ kind: 'ERROR', message: 'WORKOUT_EVOLUTION_LOAD_FAILED' });
+      if (isCurrent()) {
+        // Resilience hardening (docs 2026-09): `nextViewModelAfterLoad` is
+        // the pure state machine — a failed REFRESH preserves whatever
+        // resolved view model was already on screen (never downgraded to
+        // `ERROR` by a merely transient failure); only a failure with
+        // nothing resolved yet, or piling on an already-failed attempt,
+        // actually produces `ERROR`.
+        const previous = viewModelRef.current;
+        const next = nextViewModelAfterLoad(previous, { status: 'failure' });
+        if (next === previous) {
+          logWarn('workout_evolution', 'load_failed_preserved_previous_view_model', {
+            previousKind: previous.kind,
+          });
+        } else {
+          commitViewModel(next);
+        }
+      }
     } finally {
       hasLoadedOnce.current = true;
       setLoading(false);
       reconcileInFlight.current = false;
     }
-  }, [user]);
+  }, [user, commitViewModel]);
 
   useEffect(() => {
     load();
@@ -196,14 +242,21 @@ export function useWorkoutEvolution(): WorkoutEvolutionController {
         now,
         lastForegroundReconcileAtMs: lastForegroundReconcileAtRef.current,
         throttleMs: FOREGROUND_RECONCILE_THROTTLE_MS,
+        // A broken state gets the next genuine resume as an immediate retry
+        // opportunity instead of waiting out the healthy-state cooldown —
+        // there is nothing good on screen for the throttle to protect.
+        isRecoveringFromError: viewModelRef.current.kind === 'ERROR',
       });
       if (!shouldReconcile) return;
       lastForegroundReconcileAtRef.current = now;
-      // `load()` already has its own try/catch (see above) that logs and
-      // falls back to an ERROR view-model on a transient failure without
-      // throwing — this `.catch` is only a defensive backstop, matching the
-      // same non-blocking contract COLD_START already relies on. The next
-      // foreground resume or POST_WORKOUT is what actually retries.
+      // `load()` already has its own try/catch (see above) that logs and, on
+      // a genuine initial-load failure (nothing resolved yet), falls back to
+      // an ERROR view-model without throwing — a refresh failure with a
+      // resolved view model already on screen instead preserves it (see
+      // `isResolvedEvolutionViewModel`). This `.catch` is only a defensive
+      // backstop, matching the same non-blocking contract COLD_START already
+      // relies on. The next foreground resume or POST_WORKOUT is what
+      // actually retries.
       void load({ trigger: 'FOREGROUND' }).catch((error) => {
         logWarn('workout_evolution', 'foreground_reconcile_failed', { error });
       });
@@ -300,9 +353,9 @@ export function useWorkoutEvolution(): WorkoutEvolutionController {
       // start, but lifecycle and navigation remain usable.
       logWarn('workout_evolution', 'auto_activation_ack_failed', { error });
     }
-    setViewModel({ kind: 'PROGRESSING', summary });
+    commitViewModel({ kind: 'PROGRESSING', summary });
     setDiff(null);
-  }, [user, viewModel]);
+  }, [user, viewModel, commitViewModel]);
 
   return {
     viewModel, loading, actionPending, actionError, diff, start, defer,

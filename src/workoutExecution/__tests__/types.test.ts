@@ -55,6 +55,27 @@ describe('buildInitialExerciseExecutions', () => {
     });
     expect(exercises[1].sets).toHaveLength(1);
   });
+
+  it('applies a permanent-substitution override to exerciseId while prescribedExerciseId still reflects the plan', () => {
+    const appliedAt = { seconds: 1, nanoseconds: 0 };
+    const exercises = buildInitialExerciseExecutions(REP_SESSION, new Map([
+      [0, { exerciseId: 'machine-flat-bench-press', appliedAt }],
+    ]));
+    expect(exercises[0]).toMatchObject({
+      exerciseIndex: 0,
+      exerciseId: 'machine-flat-bench-press',
+      prescribedExerciseId: 'bench_press',
+      substitution: { scope: 'PERMANENT', appliedAt },
+    });
+    // Untouched slot: no override applied, no `substitution` field at all.
+    expect(exercises[1].exerciseId).toBe('plank');
+    expect(exercises[1].prescribedExerciseId).toBe('plank');
+    expect(exercises[1]).not.toHaveProperty('substitution');
+  });
+
+  it('is unaffected by omitting permanentOverrides — identical to the pre-existing 2-arg-less call', () => {
+    expect(buildInitialExerciseExecutions(REP_SESSION)).toEqual(buildInitialExerciseExecutions(REP_SESSION, new Map()));
+  });
 });
 
 describe('sweepPendingSetsToSkipped / deriveFinishStatus / hasPendingSets', () => {

@@ -165,11 +165,56 @@ describe('Firebase JS CustomProvider bridge', () => {
       expect(JSON.stringify(loggedContext)).not.toMatch(/opaque|token.{0,20}[a-f0-9]{20}/i);
     });
 
-    it('categorizes MODULE_NOT_AVAILABLE / FIREBASE_NOT_CONFIGURED / TOKEN_REJECTED / UNKNOWN distinctly', async () => {
+    it('preserves the real NSError domain/code/description (sanitized) instead of a bare code — closes the "undefined reason" gap', async () => {
+      globalWithDev.__DEV__ = true;
+      const nativeError = Object.assign(
+        new Error(
+          'Firebase App Check token request failed: [FIRAppCheckErrorDomain#1] server rejected debug token',
+        ),
+        { code: 'ERR_APP_CHECK_TOKEN' },
+      );
+      mocks.nativeToken.mockRejectedValue(nativeError);
+
+      initializeFirebaseAppCheck({} as never);
+      await mocks.providerOptions!.getToken().catch(() => {});
+
+      const loggedContext = mocks.logWarn.mock.calls[0][2] as Record<string, unknown>;
+      // The literal word "token" is itself redacted by sanitizeLogText's
+      // generic secret-word rule — including the domain/code and the rest
+      // of the description is the point; the previous behavior lost this
+      // entirely, only ever surfacing the bare `ERR_APP_CHECK_TOKEN` code.
+      expect(loggedContext.nativeMessage).toContain('FIRAppCheckErrorDomain#1');
+      expect(loggedContext.nativeMessage).toContain('server rejected debug');
+      expect(loggedContext.nativeMessage).toContain('[redacted]');
+    });
+
+    it('never logs an App Check/debug token value even if one leaks into the native error message', async () => {
+      globalWithDev.__DEV__ = true;
+      // Shaped like a real debug token (UUID) and like an Expo/Firebase App
+      // Check JWT-ish opaque token, to exercise sanitizeLogText's patterns.
+      const nativeError = Object.assign(
+        new Error(
+          'token rejected: 0F38934A-1C2C-4D65-8689-8FAD66E31734 / eyJhbGciOiJIUzI1NiJ9.eyJmb28iOiJiYXIifQ.dGVzdC1zaWduYXR1cmU',
+        ),
+        { code: 'ERR_APP_CHECK_TOKEN' },
+      );
+      mocks.nativeToken.mockRejectedValue(nativeError);
+
+      initializeFirebaseAppCheck({} as never);
+      await mocks.providerOptions!.getToken().catch(() => {});
+
+      const loggedContext = mocks.logWarn.mock.calls[0][2] as Record<string, unknown>;
+      const serialized = JSON.stringify(loggedContext);
+      expect(serialized).not.toContain('0F38934A-1C2C-4D65-8689-8FAD66E31734');
+      expect(serialized).not.toMatch(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/);
+    });
+
+    it('categorizes MODULE_NOT_AVAILABLE / FIREBASE_NOT_CONFIGURED / DEBUG_TOKEN_NOT_CONFIGURED / TOKEN_REJECTED / UNKNOWN distinctly', async () => {
       globalWithDev.__DEV__ = true;
       const cases: [string | undefined, string][] = [
         ['ERR_APP_CHECK_MODULE_UNAVAILABLE', 'MODULE_NOT_AVAILABLE'],
         ['ERR_APP_CHECK_NOT_CONFIGURED', 'FIREBASE_NOT_CONFIGURED'],
+        ['ERR_APP_CHECK_DEBUG_TOKEN_MISSING', 'DEBUG_TOKEN_NOT_CONFIGURED'],
         ['ERR_APP_CHECK_INVALID_TOKEN', 'TOKEN_REJECTED'],
         [undefined, 'UNKNOWN'],
       ];

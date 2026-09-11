@@ -56,7 +56,7 @@ describe('AppShell main-tab lifecycle', () => {
   });
 
   it('keeps an active Workout mounted while it is minimized', () => {
-    expect(APP_SHELL_CODE).toContain("{workoutInProgress && prescription.status === 'SUCCESS' && (");
+    expect(APP_SHELL_CODE).toContain("{workoutInProgress && !workoutStartPending && !execution.starting && execution.execution && prescription.status === 'SUCCESS' && (");
     expect(APP_SHELL_CODE).toContain("pointerEvents={tab === 'workout' ? 'auto' : 'none'}");
     expect(APP_SHELL_CODE).toContain("{ opacity: tab === 'workout' ? 1 : 0");
     expect(APP_SHELL_CODE).not.toContain("active={tab === 'workout'}");

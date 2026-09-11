@@ -1,14 +1,17 @@
 import { useCallback, useRef, useState } from 'react';
 import { useAuth } from '../state/AuthContext';
-import { errorClass, errorCode, logInfo, logWarn } from '../lib/logger';
+import { errorClass, errorCode, errorReason, logInfo, logWarn } from '../lib/logger';
 import { localDateInTimezone } from '../scheduleEngine/localDate';
 import {
   abandonWorkoutExecution,
+  completeCardioExecution,
   finishWorkoutExecution,
   recordSetExecution,
   skipExerciseExecution,
   skipSetExecution,
   startOrResumeWorkoutExecution,
+  WorkoutExecutionConflictError,
+  WorkoutExecutionLegacyPendingError,
   type PersistedWorkoutExecution,
 } from '../services/workoutExecutions';
 import type { WorkoutProgramSnapshot } from '../services/workoutPrograms';
@@ -22,9 +25,26 @@ function deviceTimezone(): string {
   }
 }
 
+/**
+ * Surfaced when `start()` fails to acquire the persistent
+ * `workoutExecutionState/current` mutex (docs P0) — lets the caller show a
+ * targeted recovery UI instead of a generic failure. Never inferred from a
+ * generic catch; only set from the two typed errors the service throws.
+ */
+export type WorkoutExecutionStartError =
+  | { code: 'CONFLICT'; active: { executionId: string; sessionIndex: number; scheduledLocalDate: string } }
+  | { code: 'LEGACY_PENDING'; executionIds: string[] }
+  | { code: 'UNKNOWN' };
+
+export type WorkoutExecutionStartResult =
+  | { execution: PersistedWorkoutExecution; error: null }
+  | { execution: null; error: WorkoutExecutionStartError };
+
 export interface WorkoutExecutionController {
   execution: PersistedWorkoutExecution | null;
   starting: boolean;
+  /** Set only when the most recent `start()` call failed — cleared at the start of every new `start()` call. */
+  startError: WorkoutExecutionStartError | null;
   /**
    * Canonical start instant for the session's duration timer, epoch ms.
    * Backed by `execution.startedAt` (the persisted, `serverTimestamp()`-based
@@ -36,15 +56,58 @@ export interface WorkoutExecutionController {
    * foreground transition, only by a genuinely new `start()` call.
    */
   workoutStartedAtMs: number | null;
-  /** Starts (or resumes, or restarts after abandon) the execution for `sessionIndex` — idempotent (docs §22–25). */
-  start: (sessionIndex: number) => Promise<PersistedWorkoutExecution | null>;
+  /**
+   * Starts (or resumes, or restarts after abandon) the execution for
+   * `sessionIndex` — idempotent (docs §22–25). Read the error straight off
+   * this resolved result, not off `startError`, when branching immediately
+   * on the outcome — `startError` is React state and lags one render behind
+   * this promise's resolution.
+   */
+  start: (sessionIndex: number) => Promise<WorkoutExecutionStartResult>;
+  /**
+   * Adopts an already-verified `IN_PROGRESS` execution directly into this
+   * hook's state — used by Workout Recovery once the bootstrap check
+   * (`useWorkoutSessionRecovery`) has loaded and validated it. Never writes
+   * to Firestore (the execution and its `current` pointer already exist and
+   * are already consistent) and never renews `startedAt` — this is resume,
+   * not restart, so the session timer keeps counting from the original
+   * instant.
+   */
+  adoptExecution: (execution: PersistedWorkoutExecution) => void;
   recordSet: (exerciseIndex: number, setIndex: number, weightKg: number | null, actualReps?: number | null) => Promise<void>;
   skipSet: (exerciseIndex: number, setIndex: number) => Promise<void>;
   skipExercise: (exerciseIndex: number) => Promise<void>;
+  /**
+   * Cardio Finisher Completion Recovery hardening (2026-09): persists the
+   * cardio finisher's completion durably on the execution BEFORE the caller
+   * advances to `finish()` — see `completeCardioExecution`'s doc comment
+   * (`services/workoutExecutions.ts`) for why this is a separate recoverable
+   * step rather than folded into `finish()`. Returns a typed result, never
+   * throws: a network/transaction failure must never be read as "cardio is
+   * confirmed done" by the caller (docs — a false-positive here is exactly
+   * the bug this hardening fixes). `{ ok: true }` also covers the idempotent
+   * "already completed" case — the caller always proceeds to `finish()`
+   * next either way.
+   */
+  completeCardio: (actualDurationSeconds: number) => Promise<{ ok: true } | { ok: false; error: unknown }>;
   /** Sweeps any pending sets to SKIPPED and marks the execution COMPLETED/PARTIALLY_COMPLETED. Does not touch the Schedule Engine — the caller advances it afterward (docs §40). */
   finish: () => Promise<'COMPLETED' | 'PARTIALLY_COMPLETED' | null>;
-  /** Distinct from `finish` — never advances the Schedule Engine (docs §36). */
-  abandon: () => Promise<void>;
+  /**
+   * Distinct from `finish` — never advances the Schedule Engine (docs §36).
+   * Abandons the currently-tracked execution. Returns a typed result instead
+   * of throwing/swallowing: the caller (WorkoutScreen's discard flow) must be
+   * able to tell success from failure to decide whether it's safe to
+   * navigate away — Firestore, not this promise resolving, is the authority
+   * on whether the execution actually left IN_PROGRESS.
+   */
+  abandon: () => Promise<{ ok: true } | { ok: false; error: unknown }>;
+  /**
+   * Abandons an arbitrary execution by id — used to resolve a `CONFLICT`/
+   * `LEGACY_PENDING` `startError` (a pending session this hook isn't
+   * currently tracking) before retrying `start()` (docs §11/§12). Clears
+   * `startError` on success so the caller can immediately retry.
+   */
+  abandonExecutionById: (executionId: string) => Promise<void>;
 }
 
 /**
@@ -59,30 +122,80 @@ export function useWorkoutExecution(program: WorkoutProgramSnapshot | null, time
   const uid = user?.uid ?? null;
   const [execution, setExecution] = useState<PersistedWorkoutExecution | null>(null);
   const [starting, setStarting] = useState(false);
+  const [startError, setStartError] = useState<WorkoutExecutionStartError | null>(null);
+  const startInFlightRef = useRef<{
+    key: string;
+    promise: Promise<WorkoutExecutionStartResult>;
+  } | null>(null);
   const mutationQueueRef = useRef(new WorkoutMutationQueue());
   // Fallback start instant for the in-flight `start()` call only — cleared
   // whenever `execution` resolves so `execution.startedAt` (the persisted,
   // canonical value) takes over as the single source of truth.
   const pendingStartedAtMsRef = useRef<number | null>(null);
 
-  const start = useCallback(async (sessionIndex: number) => {
-    if (!uid || !program) return null;
+  const start = useCallback((sessionIndex: number): Promise<WorkoutExecutionStartResult> => {
+    const unknownError = { execution: null, error: { code: 'UNKNOWN' as const } };
+    if (!uid || !program) return Promise.resolve(unknownError);
+    const scheduledLocalDate = localDateInTimezone(new Date(), timezone ?? deviceTimezone());
+    const executionScopeId = program.programInstanceId ?? program.programId;
+    const requestKey = `${uid}:${executionScopeId}:${sessionIndex}:${scheduledLocalDate}`;
+    const current = startInFlightRef.current;
+    if (current) {
+      if (current.key === requestKey) {
+        logInfo('workout_execution', 'start_single_flight_reused', { sessionIndex });
+        return current.promise;
+      }
+      // One hook instance cannot safely represent two different sessions in
+      // flight. The server mutex remains the ultimate guard; this prevents a
+      // second local request from being sent before it is needed.
+      logWarn('workout_execution', 'start_single_flight_rejected', { sessionIndex });
+      return Promise.resolve(unknownError);
+    }
     setStarting(true);
+    setStartError(null);
     mutationQueueRef.current.reset();
     pendingStartedAtMsRef.current = Date.now();
-    try {
-      const scheduledLocalDate = localDateInTimezone(new Date(), timezone ?? deviceTimezone());
-      const result = await startOrResumeWorkoutExecution({ uid, program, sessionIndex, scheduledLocalDate });
-      setExecution(result);
-      return result;
-    } catch (error) {
-      logWarn('workout_execution', 'start_failed', { error });
-      setExecution(null);
-      return null;
-    } finally {
-      setStarting(false);
-    }
+    const startedAtMs = Date.now();
+    let operation!: Promise<WorkoutExecutionStartResult>;
+    operation = (async (): Promise<WorkoutExecutionStartResult> => {
+      try {
+        const result = await startOrResumeWorkoutExecution({ uid, program, sessionIndex, scheduledLocalDate });
+        setExecution(result);
+        logInfo('workout_execution', 'start_execution_confirmed', {
+          sessionIndex,
+          durationMs: Date.now() - startedAtMs,
+        });
+        return { execution: result, error: null };
+      } catch (error) {
+        logWarn('workout_execution', 'start_failed', {
+          error,
+          sessionIndex,
+          durationMs: Date.now() - startedAtMs,
+        });
+        setExecution(null);
+        pendingStartedAtMsRef.current = null;
+        const startError: WorkoutExecutionStartError = error instanceof WorkoutExecutionConflictError
+          ? { code: 'CONFLICT', active: error.active }
+          : error instanceof WorkoutExecutionLegacyPendingError
+            ? { code: 'LEGACY_PENDING', executionIds: error.executionIds }
+            : { code: 'UNKNOWN' };
+        setStartError(startError);
+        return { execution: null, error: startError };
+      } finally {
+        if (startInFlightRef.current?.promise === operation) startInFlightRef.current = null;
+        setStarting(false);
+      }
+    })();
+    startInFlightRef.current = { key: requestKey, promise: operation };
+    return operation;
   }, [uid, program, timezone]);
+
+  const adoptExecution = useCallback((next: PersistedWorkoutExecution) => {
+    pendingStartedAtMsRef.current = null;
+    mutationQueueRef.current.reset();
+    setStartError(null);
+    setExecution(next);
+  }, []);
 
   const recordSet = useCallback(async (exerciseIndex: number, setIndex: number, weightKg: number | null, actualReps: number | null = null) => {
     if (!uid || !execution) return;
@@ -120,6 +233,17 @@ export function useWorkoutExecution(program: WorkoutProgramSnapshot | null, time
     }
   }, [uid, execution]);
 
+  const completeCardio = useCallback(async (actualDurationSeconds: number): Promise<{ ok: true } | { ok: false; error: unknown }> => {
+    if (!uid || !execution) return { ok: false, error: new Error('no_active_execution') };
+    try {
+      await completeCardioExecution(uid, execution.executionId, actualDurationSeconds);
+      return { ok: true };
+    } catch (error) {
+      logWarn('workout_execution', 'cardio_complete_failed', { error });
+      return { ok: false, error };
+    }
+  }, [uid, execution]);
+
   const finish = useCallback(async () => {
     if (!uid || !execution) return null;
     // Diagnostic instrumentation (Phase 2, Part F) — technical fields only
@@ -151,25 +275,42 @@ export function useWorkoutExecution(program: WorkoutProgramSnapshot | null, time
         executionId: execution.executionId,
         sessionIndex: execution.sessionIndex,
         errorCode: errorCode(error),
+        reason: errorReason(error),
         errorClass: errorClass(error),
       });
       return null;
     }
   }, [uid, execution]);
 
-  const abandon = useCallback(async () => {
-    if (!uid || !execution) return;
+  const abandon = useCallback(async (): Promise<{ ok: true } | { ok: false; error: unknown }> => {
+    if (!uid || !execution) return { ok: false, error: new Error('no_active_execution') };
     try {
       await abandonWorkoutExecution(uid, execution.executionId);
       mutationQueueRef.current.reset();
+      return { ok: true };
     } catch (error) {
       logWarn('workout_execution', 'abandon_failed', { error });
+      return { ok: false, error };
     }
   }, [uid, execution]);
+
+  const abandonExecutionById = useCallback(async (executionId: string) => {
+    if (!uid) return;
+    try {
+      await abandonWorkoutExecution(uid, executionId);
+      setStartError(null);
+    } catch (error) {
+      logWarn('workout_execution', 'abandon_by_id_failed', { error });
+      throw error;
+    }
+  }, [uid]);
 
   const workoutStartedAtMs = execution
     ? execution.startedAt.toMillis()
     : pendingStartedAtMsRef.current;
 
-  return { execution, starting, workoutStartedAtMs, start, recordSet, skipSet, skipExercise, finish, abandon };
+  return {
+    execution, starting, startError, workoutStartedAtMs,
+    start, adoptExecution, recordSet, skipSet, skipExercise, completeCardio, finish, abandon, abandonExecutionById,
+  };
 }

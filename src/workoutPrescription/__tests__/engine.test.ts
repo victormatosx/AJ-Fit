@@ -27,9 +27,25 @@ describe('prescription pipeline and invariants', () => {
     const runtime = structuredClone(original);
     runtime.sessions[0].exercises[0].sets = 99;
     const generated = generateWorkoutPrescription(answers, { template: runtime });
-    expect(generated.status).toBe('SUCCESS');
-    if (generated.status === 'SUCCESS') expect(generated.plan.sessions[0].exercises[0].sets).toBe(99);
+    expect(generated).toEqual(expect.objectContaining({
+      status: 'INVALID_CONFIGURATION',
+      reasonCodes: expect.arrayContaining([expect.stringContaining('INVALID_EXERCISE_SETS')]),
+    }));
     expect(original.sessions[0].exercises[0].sets).not.toBe(99);
+  });
+
+  it('generates the three-day conditioning plan with typed interval cycles', () => {
+    const result = generateWorkoutPrescription(completeAnswers({
+      sex: 'm', goal: 'conditioning', level: 'intermediate', days: 3,
+      trainingDays: ['MON', 'WED', 'FRI'], duration: '60', place: 'gym',
+    }));
+    expect(result.status).toBe('SUCCESS');
+    if (result.status !== 'SUCCESS') return;
+    expect(result.plan.templateId).toBe('T050');
+    const intervalBike = result.plan.sessions
+      .flatMap((session) => session.exercises)
+      .find((exercise) => exercise.exerciseId === 'stationary-bike' && exercise.cycles != null);
+    expect(intervalBike).toMatchObject({ cycles: 8, sets: undefined });
   });
 
   it('produces the same versioned snapshot for the same input', () => {

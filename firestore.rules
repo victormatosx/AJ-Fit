@@ -125,6 +125,18 @@ service cloud.firestore {
         );
     }
 
+    // P0-C — workoutExecutions mutex hardening gate (docs/workout-lifecycle/
+    // hardening plan, 2026-09). Global (not per-user) — see the
+    // `workoutExecutionProtocolConfig` match block for the doc shape and
+    // write-access rationale (Admin-SDK-only). Absence of the config
+    // document, or `requireMutexOnCreate` absent/false, means "compatible
+    // mode" — the default, safe-for-old-clients state. Consulted by the
+    // `workoutExecutions` create rule.
+    function workoutExecutionMutexHardeningEnabled() {
+      return exists(/databases/$(database)/documents/workoutExecutionProtocolConfig/active)
+        && get(/databases/$(database)/documents/workoutExecutionProtocolConfig/active).data.get('requireMutexOnCreate', false) == true;
+    }
+
     function profileValid(data) {
       return data is map
         && data.keys().hasAll(['name', 'email'])
@@ -435,6 +447,61 @@ service cloud.firestore {
         && (exercises.size() <= 19 || !('sets' in exercises[19]) || (exercises[19].sets is list && exercises[19].sets.size() <= 15));
     }
 
+    // Exercise-substitution architecture audit, Fase 7 (security hardening),
+    // Fase 8 hotfix (2026-09 production regression — see the incident note
+    // below): `exerciseId`/`prescribedExerciseId`/`substitution` identify
+    // WHICH exercise a slot's sets belong to — a client that could rewrite
+    // these on an ordinary update would be able to silently redirect the
+    // identity of an in-progress slot's history without ever going through
+    // `applyExerciseSubstitution` (the only trusted, fully-revalidating
+    // path — Admin SDK, bypasses these Rules entirely, so this restriction
+    // has zero effect on it). `record/skip/finish` never touch these three
+    // fields — only `sets[]`/`status`/`finishedAt` — so this never blocks a
+    // legitimate mutation.
+    //
+    // Do not use whole-map equality or `diff()` here. Both deeply inspect the
+    // nested `sets` arrays before discovering that a record/skip/finish only
+    // changed set facts; on a real seven-exercise V2 session that exceeded
+    // Firestore's hard 1000-expression ceiling once authority and mutex
+    // checks were added. Compare only the slot/clinical identity fields this
+    // guard exists to freeze. The execution envelope and set bounds remain
+    // independently validated by `workoutExecutionCommonValid` and
+    // `executionExerciseSetsWithinBound`.
+    function exerciseIdentityUnchanged(before, after) {
+      return after.sets is list
+        && after.sets.size() <= 15
+        && before.exerciseIndex == after.exerciseIndex
+        && before.exerciseId == after.exerciseId
+        && before.get('prescribedExerciseId', null) == after.get('prescribedExerciseId', null)
+        && before.get('substitution', null) == after.get('substitution', null);
+    }
+
+    // Unrolled to the same 20-exercise cap `executionExerciseSetsWithinBound`
+    // already uses — no `get()`/`getAfter()` cross-document read here (only
+    // local array indexing/diffing).
+    function exerciseIdentityFieldsImmutable(before, after) {
+      return (before.size() <= 0 || after.size() <= 0 || exerciseIdentityUnchanged(before[0], after[0]))
+        && (before.size() <= 1 || after.size() <= 1 || exerciseIdentityUnchanged(before[1], after[1]))
+        && (before.size() <= 2 || after.size() <= 2 || exerciseIdentityUnchanged(before[2], after[2]))
+        && (before.size() <= 3 || after.size() <= 3 || exerciseIdentityUnchanged(before[3], after[3]))
+        && (before.size() <= 4 || after.size() <= 4 || exerciseIdentityUnchanged(before[4], after[4]))
+        && (before.size() <= 5 || after.size() <= 5 || exerciseIdentityUnchanged(before[5], after[5]))
+        && (before.size() <= 6 || after.size() <= 6 || exerciseIdentityUnchanged(before[6], after[6]))
+        && (before.size() <= 7 || after.size() <= 7 || exerciseIdentityUnchanged(before[7], after[7]))
+        && (before.size() <= 8 || after.size() <= 8 || exerciseIdentityUnchanged(before[8], after[8]))
+        && (before.size() <= 9 || after.size() <= 9 || exerciseIdentityUnchanged(before[9], after[9]))
+        && (before.size() <= 10 || after.size() <= 10 || exerciseIdentityUnchanged(before[10], after[10]))
+        && (before.size() <= 11 || after.size() <= 11 || exerciseIdentityUnchanged(before[11], after[11]))
+        && (before.size() <= 12 || after.size() <= 12 || exerciseIdentityUnchanged(before[12], after[12]))
+        && (before.size() <= 13 || after.size() <= 13 || exerciseIdentityUnchanged(before[13], after[13]))
+        && (before.size() <= 14 || after.size() <= 14 || exerciseIdentityUnchanged(before[14], after[14]))
+        && (before.size() <= 15 || after.size() <= 15 || exerciseIdentityUnchanged(before[15], after[15]))
+        && (before.size() <= 16 || after.size() <= 16 || exerciseIdentityUnchanged(before[16], after[16]))
+        && (before.size() <= 17 || after.size() <= 17 || exerciseIdentityUnchanged(before[17], after[17]))
+        && (before.size() <= 18 || after.size() <= 18 || exerciseIdentityUnchanged(before[18], after[18]))
+        && (before.size() <= 19 || after.size() <= 19 || exerciseIdentityUnchanged(before[19], after[19]));
+    }
+
     // Workout Execution & History V1 (docs/workout-lifecycle/
     // 09_WORKOUT_EXECUTION_AND_HISTORY.md). `exercises` is validated only for
     // shape/bounds here, the same precedent `workoutProgramCommonValid` sets
@@ -454,8 +521,13 @@ service cloud.firestore {
              'programId', 'templateId', 'sessionIndex', 'sessionName',
              'scheduledLocalDate', 'status', 'startedAt', 'finishedAt',
              'exercises', 'executionSchemaVersion', 'createdAt', 'updatedAt',
-             'programInstanceId'
+             'programInstanceId', 'mutexProtocolVersion', 'cardio'
            ])
+        // P0-C protocol marker (docs/workout-lifecycle/ hardening plan) —
+        // optional so a pre-hardening client omitting it is still valid;
+        // once present it must be the real, current value. See
+        // `WORKOUT_EXECUTION_MUTEX_PROTOCOL_VERSION` (src/workoutExecution/types.ts).
+        && (!('mutexProtocolVersion' in data) || data.mutexProtocolVersion == 1)
         && data.programId is string
         && program.data.programId == data.programId
         && data.templateId is string
@@ -467,7 +539,6 @@ service cloud.firestore {
         && data.startedAt is timestamp
         && (data.finishedAt == null || data.finishedAt is timestamp)
         && data.exercises is list && data.exercises.size() >= 1 && data.exercises.size() <= 20
-        && executionExerciseSetsWithinBound(data.exercises)
         && data.executionSchemaVersion in [1, 2]
         && (
           (data.executionSchemaVersion == 1 && !('programInstanceId' in data))
@@ -1319,6 +1390,26 @@ service cloud.firestore {
           && !existsAfter(lifecycleAuthorityGrantPath(userId));
       }
 
+      // Hot path for WorkoutExecution V2 terminalization. The generic helper
+      // above intentionally supports several operations and its callers then
+      // perform their own target checks. A finish validates only one operation
+      // and one execution id, so bind the path/document once and perform the
+      // complete replay-safe check here. This is semantically identical but
+      // stays below Firestore's expression ceiling when combined with a real
+      // multi-exercise execution update and mutex deletion.
+      function consumesFinishExecutionAuthorityGrant(userId, executionId) {
+        let grantPath = lifecycleAuthorityGrantPath(userId);
+        let grant = get(grantPath).data;
+        return exists(grantPath)
+          && grant.uid == userId
+          && grant.schemaVersion == 1
+          && grant.operation == 'FINISH_EXECUTION'
+          && grant.executionId == executionId
+          && grant.expiresAt is timestamp
+          && grant.expiresAt >= request.time
+          && !existsAfter(grantPath);
+      }
+
       function grantSourceMatches(userId, cycleId, programInstanceId) {
         return lifecycleAuthorityGrant(userId).sourceCycleId == cycleId
           && lifecycleAuthorityGrant(userId).sourceProgramInstanceId == programInstanceId;
@@ -1828,37 +1919,295 @@ service cloud.firestore {
       match /workoutExecutions/{executionId} {
         allow read: if isOwner(userId) && accountActive(userId);
 
+        // P0 integrity fix (2026-09, docs/workout-lifecycle/ — production
+        // incident: two same-user IN_PROGRESS executions for the same
+        // session on different `scheduledLocalDate`s, one abandoned by the
+        // other without ever being terminalized). `workoutExecutionState/
+        // current` (see the match block below) is a single fixed-id mutex —
+        // Firestore itself can only ever hold one document at that path, so
+        // "at most one active execution" is guaranteed by construction FOR
+        // A CLIENT THAT WRITES BOTH DOCUMENTS TOGETHER.
+        //
+        // P0-C hardening (2026-09, docs/workout-lifecycle/ hardening plan):
+        // that assumption doesn't hold for a pre-P0 client, which can still
+        // create `workoutExecutions` directly with no knowledge of `current`
+        // at all — reproduced empirically against this exact ruleset. The
+        // fix is this last `create` clause: once
+        // `workoutExecutionMutexHardeningEnabled()` is on (an
+        // Admin-SDK-only, client-readable flag — see the
+        // `workoutExecutionProtocolConfig` match block above), a brand-new
+        // IN_PROGRESS execution must (a) declare
+        // `mutexProtocolVersion` (proves the WRITER knows this protocol
+        // exists at all — a pre-P0-C client literally cannot produce this
+        // field) and (b) land in the SAME transaction as a `current` write
+        // pointing at exactly this `executionId`, checked via `getAfter()`
+        // (this transaction's OWN pending write, not just already-committed
+        // state). Before the flag is on, this clause is skipped entirely —
+        // a pre-P0-C client keeps working exactly as it does today, which is
+        // the whole point of gating this behind a flag instead of shipping
+        // it directly (see docs §10 rollout phases).
+        //
+        // This check does NOT extend to the update path (restart-after-
+        // abandon, `status: ABANDONED -> IN_PROGRESS`) — pairing `getAfter()`
+        // with THAT particular update rule (already expensive: grant-
+        // consumption checks, bounds-checked exercises) was proven, in this
+        // exact Rules Emulator, to exceed its "maximum expressions"
+        // evaluation cap. That transition remains an open gap even once
+        // hardening is on — see the hardening plan's rollout report for the
+        // options considered and why none were applied yet without further
+        // work.
         allow create: if isOwner(userId)
           && accountActive(userId)
           && workoutExecutionCommonValid(userId, request.resource.data)
+          && executionExerciseSetsWithinBound(request.resource.data.exercises)
           && request.resource.data.status == 'IN_PROGRESS'
           && request.resource.data.finishedAt == null
           && request.resource.data.startedAt == request.time
           && request.resource.data.createdAt == request.time
-          && request.resource.data.updatedAt == request.time;
+          && request.resource.data.updatedAt == request.time
+          // Cardio Finisher Completion Recovery hardening, Architecture B
+          // (2026-09 security audit): a client-created execution must always
+          // be born with `cardio` absent/null — never already COMPLETED.
+          // Only the `completeWorkoutCardio` callable (Admin SDK, bypasses
+          // Rules entirely) may ever write a non-null `cardio`.
+          && request.resource.data.get('cardio', null) == null
+          && (
+            !workoutExecutionMutexHardeningEnabled()
+            || (
+              request.resource.data.get('mutexProtocolVersion', 0) == 1
+              && getAfter(/databases/$(database)/documents/users/$(userId)/workoutExecutionState/current).data.executionId == executionId
+            )
+          );
+
+        // Terminalization is the hottest V2 update path: besides this
+        // document it atomically deletes both the active-execution mutex and
+        // the one-shot lifecycle grant. Re-running the full create-oriented
+        // validator here (including two program lookups) pushed a legitimate
+        // seven-exercise finish beyond Firestore's 1000-expression ceiling.
+        //
+        // A terminal update may change only sets plus the three terminal
+        // fields. Every other top-level identity/schema field is compared to
+        // the already-valid existing execution, exercise identities and set
+        // bounds are checked shallowly, and V2 still consumes the exact
+        // execution-scoped grant. This is a cheaper equivalent validation,
+        // not an authority bypass.
+        function workoutExecutionTerminalUpdateValid(userId, executionId, before, after) {
+          return before.status == 'IN_PROGRESS'
+            && after.status in ['COMPLETED', 'PARTIALLY_COMPLETED']
+            && after.finishedAt == request.time
+            && after.updatedAt == request.time
+            && after.keys().hasAll([
+                 'programId', 'templateId', 'sessionIndex', 'sessionName',
+                 'scheduledLocalDate', 'status', 'startedAt', 'finishedAt',
+                 'exercises', 'executionSchemaVersion', 'createdAt', 'updatedAt'
+               ])
+            && after.keys().hasOnly([
+                 'programId', 'templateId', 'sessionIndex', 'sessionName',
+                 'scheduledLocalDate', 'status', 'startedAt', 'finishedAt',
+                 'exercises', 'executionSchemaVersion', 'createdAt', 'updatedAt',
+                 'programInstanceId', 'mutexProtocolVersion', 'cardio'
+               ])
+            && after.programId == before.programId
+            && after.templateId == before.templateId
+            && after.sessionIndex == before.sessionIndex
+            && after.sessionName == before.sessionName
+            && after.scheduledLocalDate == before.scheduledLocalDate
+            && after.startedAt == before.startedAt
+            && after.createdAt == before.createdAt
+            && after.executionSchemaVersion == before.executionSchemaVersion
+            && ('programInstanceId' in after) == ('programInstanceId' in before)
+            && ('mutexProtocolVersion' in after) == ('mutexProtocolVersion' in before)
+            && ('cardio' in after) == ('cardio' in before)
+            && after.get('programInstanceId', null) == before.get('programInstanceId', null)
+            && after.get('mutexProtocolVersion', null) == before.get('mutexProtocolVersion', null)
+            && after.get('cardio', null) == before.get('cardio', null)
+            && after.exercises is list
+            && after.exercises.size() == before.exercises.size()
+            && after.exercises.size() >= 1
+            && after.exercises.size() <= 20
+            && exerciseIdentityFieldsImmutable(before.exercises, after.exercises)
+            && (after.executionSchemaVersion == 1
+                || consumesFinishExecutionAuthorityGrant(userId, executionId));
+        }
 
         allow update: if isOwner(userId)
           && accountActive(userId)
-          && workoutExecutionCommonValid(userId, request.resource.data)
-          && resource.data.status in ['IN_PROGRESS', 'ABANDONED']
-          && request.resource.data.programId == resource.data.programId
-          && request.resource.data.sessionIndex == resource.data.sessionIndex
-          && request.resource.data.scheduledLocalDate == resource.data.scheduledLocalDate
-          && request.resource.data.startedAt == resource.data.startedAt
-          && request.resource.data.createdAt == resource.data.createdAt
-          && request.resource.data.updatedAt == request.time
           && (
-            (request.resource.data.status == 'IN_PROGRESS' && request.resource.data.finishedAt == null)
-            || (request.resource.data.status in ['COMPLETED', 'PARTIALLY_COMPLETED', 'ABANDONED']
-                && request.resource.data.finishedAt == request.time)
-          )
-          && (request.resource.data.status == 'IN_PROGRESS'
-              || request.resource.data.status == 'ABANDONED'
-              || request.resource.data.executionSchemaVersion == 1
-              || (consumesLifecycleAuthorityGrant(userId, ['FINISH_EXECUTION'])
-                && lifecycleAuthorityGrant(userId).executionId == executionId));
+            (
+              request.resource.data.status in ['IN_PROGRESS', 'ABANDONED']
+              && workoutExecutionCommonValid(userId, request.resource.data)
+              && resource.data.status in ['IN_PROGRESS', 'ABANDONED']
+              && request.resource.data.programId == resource.data.programId
+              && request.resource.data.sessionIndex == resource.data.sessionIndex
+              && request.resource.data.scheduledLocalDate == resource.data.scheduledLocalDate
+          // Fase 7 security hardening: a client update may never change which
+          // exercise a slot identifies as (`exerciseId`/`prescribedExerciseId`/
+          // `substitution`) — record/skip/finish never do. EXCEPT
+          // restart-after-abandon, which legitimately re-materializes the
+          // whole `exercises` array fresh (same trust model as `create`,
+          // just via `update` because the doc id is reused) — gated the same
+          // way the `startedAt` renewal exception right below already is.
+          //
+          // `abandon` never touches exercises, so it short-circuits the
+          // per-slot checks entirely. Every operation that can write the
+          // exercises array uses the bounded, shallow envelope comparison
+          // above. Do NOT add a whole-list equality fast path here: for a
+          // record/skip/finish that really changes sets, Firestore must deeply
+          // compare the entire nested list before discovering inequality;
+          // that wasted work was enough to push real V2 executions over the
+          // 1000-expression ceiling before the shallow checks even ran.
+              && ((resource.data.status == 'ABANDONED'
+                && executionExerciseSetsWithinBound(request.resource.data.exercises))
+                || (request.resource.data.status == 'ABANDONED'
+                  && resource.data.exercises == request.resource.data.exercises)
+                || exerciseIdentityFieldsImmutable(resource.data.exercises, request.resource.data.exercises))
+          // P0 fix (2026-09, docs §13): `startedAt` must stay fixed for every
+          // update EXCEPT a restart-after-abandon (ABANDONED -> IN_PROGRESS)
+          // — that transition is semantically a NEW attempt, and the session
+          // timer (`elapsed = Date.now() - startedAt`) must not keep showing
+          // the abandoned attempt's stale duration. Every other transition
+          // (recordSet/skipSet/finish/abandon) still can't touch it.
+              && (request.resource.data.startedAt == resource.data.startedAt
+              || (resource.data.status == 'ABANDONED' && request.resource.data.status == 'IN_PROGRESS'
+                  && request.resource.data.startedAt == request.time))
+          // Cardio Finisher Completion Recovery hardening, Architecture B
+          // (2026-09 security audit — supersedes the original "shape only"
+          // version of this check, which a characterization test suite
+          // proved let the client forge an arbitrary completion/duration/
+          // timestamp directly, bypassing `completeCardioExecution`
+          // entirely). The client can NEVER change `cardio` via a direct
+          // Firestore write, full stop — a single field-equality, cheaper
+          // than the `startedAt` immutability check right above (no `.get()`,
+          // no `.diff()`, no branching on `status`). Only the
+          // `completeWorkoutCardio` callable (Admin SDK, bypasses Rules
+          // entirely) may ever move it away from whatever it already is —
+          // see that callable's own idempotent transaction
+          // (`functions/src/workoutLifecycle/completeWorkoutCardio.ts`) for
+          // the real integrity guarantee (ownership + IN_PROGRESS + the
+          // session actually prescribing a cardio finisher, all re-verified
+          // server-side, never trusted from the request payload). The ONE
+          // exception mirrors `startedAt`/`exercises` right above: a
+          // restart-after-abandon is semantically a new attempt, so the
+          // client legitimately resets a stale COMPLETED record back to
+          // null then too (`services/workoutExecutions.ts`'s `base` object
+          // always sends `cardio: null` on that path) — it can never smuggle
+          // a non-null value back in through this exception.
+              && (request.resource.data.get('cardio', null) == resource.data.get('cardio', null)
+              || (resource.data.status == 'ABANDONED' && request.resource.data.status == 'IN_PROGRESS'
+                  && request.resource.data.get('cardio', null) == null))
+              && request.resource.data.createdAt == resource.data.createdAt
+              && request.resource.data.updatedAt == request.time
+              && (
+                (request.resource.data.status == 'IN_PROGRESS'
+                  && request.resource.data.finishedAt == null)
+                || (request.resource.data.status == 'ABANDONED'
+                  && request.resource.data.finishedAt == request.time)
+              )
+            )
+            || workoutExecutionTerminalUpdateValid(
+              userId, executionId, resource.data, request.resource.data
+            )
+          );
 
         allow delete: if false;
+      }
+
+      // Exercise-substitution architecture audit: "todos os próximos
+      // treinos" preferences. Written EXCLUSIVELY by `applyExerciseSubstitution`
+      // (Admin SDK, bypasses these Rules entirely) — the client only ever
+      // reads its own preferences (to materialize them into a new execution,
+      // `services/workoutExecutions.ts`'s `resolveExercisesForNewExecution`).
+      // No client create/update/delete path exists for this feature, so none
+      // is granted here.
+      match /exerciseSubstitutionPreferences/{prescribedExerciseId} {
+        allow read: if isOwner(userId) && accountActive(userId);
+        allow write: if false;
+      }
+
+      // P0 integrity fix (2026-09): the persistent mutex/pointer for "which
+      // WorkoutExecution, if any, is legitimately IN_PROGRESS right now" —
+      // see the doc comment on `WorkoutExecutionStatePointer`
+      // (src/workoutExecution/types.ts). Existence of this fixed-id ('current')
+      // document IS the authority; there is deliberately no other value this
+      // collection can hold.
+      //
+      // This validates only the pointer's OWN shape/ownership. The
+      // real P0 mutex guarantee never depended on cross-referencing
+      // `workoutExecutions` here — `current`'s fixed doc id plus
+      // `startOrResumeWorkoutExecution` always writing both documents in one
+      // transaction is what serializes two devices/a double tap/a retry
+      // (Firestore's transaction protocol, not Rules).
+      //
+      // P0-C hardening (2026-09, docs/workout-lifecycle/ hardening plan):
+      // `workoutExecutionStatePointsAtRealExecution()` below is the
+      // cross-check — gated behind `workoutExecutionMutexHardeningEnabled()`
+      // in the `create` rule, same flag as the `workoutExecutions` create
+      // rule. It's a SEPARATE function (not folded into
+      // `workoutExecutionStateValid`) specifically so it can be gated
+      // independently — pairing it unconditionally with the
+      // restart-after-abandon transaction (which updates `workoutExecutions`,
+      // an already-expensive rule, in the SAME transaction as this create)
+      // was verified to risk exceeding the Rules Emulator's expression cap,
+      // same as the `workoutExecutions` side (see that match block's
+      // comment). Gating it keeps compatible-mode's cost profile unchanged.
+      function workoutExecutionStateValid(userId, data) {
+        return data is map
+          && data.keys().hasAll([
+               'executionId', 'programId', 'programInstanceId', 'sessionIndex',
+               'scheduledLocalDate', 'status', 'schemaVersion', 'createdAt', 'updatedAt'
+             ])
+          && data.keys().hasOnly([
+               'executionId', 'programId', 'programInstanceId', 'sessionIndex',
+               'scheduledLocalDate', 'status', 'schemaVersion', 'createdAt', 'updatedAt'
+             ])
+          && data.executionId is string
+          && data.programId is string
+          && (data.programInstanceId == null || data.programInstanceId is string)
+          && data.sessionIndex is int && data.sessionIndex >= 0
+          && data.scheduledLocalDate is string
+          && data.scheduledLocalDate.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+          && data.status == 'IN_PROGRESS'
+          && data.schemaVersion == 1
+          && data.createdAt == request.time
+          && data.updatedAt == request.time;
+      }
+
+      function workoutExecutionStatePointsAtRealExecution(userId, data) {
+        let execution = getAfter(/databases/$(database)/documents/users/$(userId)/workoutExecutions/$(data.executionId));
+        return execution.data.status == 'IN_PROGRESS'
+          && execution.data.programId == data.programId
+          && execution.data.sessionIndex == data.sessionIndex
+          && execution.data.scheduledLocalDate == data.scheduledLocalDate
+          && ((data.programInstanceId == null && !('programInstanceId' in execution.data))
+              || execution.data.programInstanceId == data.programInstanceId);
+      }
+
+      match /workoutExecutionState/{stateId} {
+        allow read: if isOwner(userId) && accountActive(userId);
+
+        allow create: if isOwner(userId)
+          && accountActive(userId)
+          && stateId == 'current'
+          && workoutExecutionStateValid(userId, request.resource.data)
+          && (
+            !workoutExecutionMutexHardeningEnabled()
+            || workoutExecutionStatePointsAtRealExecution(userId, request.resource.data)
+          );
+
+        // Never updated in place — only created (while absent) or deleted
+        // (once the tracked execution becomes terminal). A client wanting to
+        // point the mutex at a different execution must go through a delete
+        // + create pair, each independently validated above/below.
+        allow update: if false;
+
+        // Deleting the mutex is only valid in the SAME transaction that
+        // actually terminalizes the execution it was tracking — a client
+        // can never "release" the mutex while the tracked execution is
+        // still IN_PROGRESS.
+        allow delete: if isOwner(userId)
+          && accountActive(userId)
+          && stateId == 'current'
+          && getAfter(/databases/$(database)/documents/users/$(userId)/workoutExecutions/$(resource.data.executionId)).data.status != 'IN_PROGRESS';
       }
 
       // Avaliações físicas do usuário (guiadas ou importadas). Cada documento
@@ -2167,6 +2516,20 @@ service cloud.firestore {
     // Admin-SDK-write-only, same pattern as limitationDatasetState above:
     // the client can never edit its own rollout eligibility.
     match /workoutLifecycleRolloutConfig/{configId} {
+      allow read: if configId == 'active' && isSignedIn();
+      allow write: if false;
+    }
+
+    // P0-C — workoutExecutions mutex hardening gate (docs/workout-lifecycle/
+    // hardening plan, 2026-09). Same pattern as `workoutLifecycleRolloutConfig`
+    // above: Admin-SDK-write-only (see `scripts/toggleWorkoutExecutionMutexHardening.ts`,
+    // not executed as part of this change), client-readable so the app can
+    // show accurate copy/telemetry, never client-writable. Turning
+    // `requireMutexOnCreate` on is what makes `workoutExecutionMutexHardeningEnabled()`
+    // (below) start requiring every new IN_PROGRESS `workoutExecutions` create
+    // to arrive paired with a matching `workoutExecutionState/current` write —
+    // see the `workoutExecutions` match block's create rule.
+    match /workoutExecutionProtocolConfig/{configId} {
       allow read: if configId == 'active' && isSignedIn();
       allow write: if false;
     }

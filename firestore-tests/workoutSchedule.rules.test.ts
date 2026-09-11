@@ -13,6 +13,7 @@ const PROJECT_ID = 'ajfit-rules-test';
 const UID = 'alice';
 const OTHER_UID = 'mallory';
 const PROGRAM_ID = 'wpg_12345678';
+const FABRICATED_TIMESTAMP = Timestamp.fromMillis(1);
 let testEnv: RulesTestEnvironment;
 
 function dbFor(uid: string) {
@@ -99,7 +100,7 @@ describe('workoutProgramState/scheduleConfig', () => {
   });
 
   it('rejects a fabricated updatedAt', async () => {
-    await assertFails(setDoc(doc(dbFor(UID), 'users', UID, 'workoutProgramState', 'scheduleConfig'), scheduleConfigDoc({ updatedAt: Timestamp.now() })));
+    await assertFails(setDoc(doc(dbFor(UID), 'users', UID, 'workoutProgramState', 'scheduleConfig'), scheduleConfigDoc({ updatedAt: FABRICATED_TIMESTAMP })));
   });
 });
 
@@ -166,7 +167,7 @@ describe('workoutPrograms/{programId}/scheduleEvents', () => {
     ));
     await assertFails(setDoc(
       doc(db, 'users', UID, 'workoutPrograms', PROGRAM_ID, 'scheduleEvents', 'bad2'),
-      completedEventDoc({ occurredAt: Timestamp.now() }),
+      completedEventDoc({ occurredAt: FABRICATED_TIMESTAMP }),
     ));
   });
 

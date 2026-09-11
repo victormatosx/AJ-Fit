@@ -6,6 +6,57 @@
       "openQueue": "Open exercise queue"
     }
   },
+  "exit": {
+    "kicker": "Workout in progress",
+    "title": "Exit workout?",
+    "body": "Your workout is still in progress. You can minimize it and continue later, or discard it.",
+    "minimize": "Minimize workout",
+    "discard": "Discard workout",
+    "cancel": "Cancel",
+    "discardConfirmTitle": "Discard workout?",
+    "discardConfirmBody": "This workout will end and won't count as completed. Sets already logged stay in your history.",
+    "discardConfirmYes": "Discard workout",
+    "discardConfirmBack": "Back",
+    "discarding": "Discarding…",
+    "discardError": "Couldn't discard the workout. Check your connection and try again."
+  },
+  "pendingExecution": {
+    "title": "Pending workout session",
+    "conflictBody": "Another workout session is already in progress. You can abandon it to start a new one.",
+    "legacyBody": "We found a previous workout session that wasn't properly closed. It needs to be resolved before you can start a new one.",
+    "abandonPrevious": "Abandon previous session",
+    "cancel": "Cancel",
+    "resolving": "Resolving…"
+  },
+  "startError": {
+    "title": "Couldn't start workout",
+    "body": "Something went wrong starting your workout. Check your connection and try again."
+  },
+  "preparing": {
+    "kicker": "Secure session",
+    "title": "Preparing workout…",
+    "body": "We're confirming your session. This should only take a moment."
+  },
+  "sessionRecovery": {
+    "title": "Workout in progress",
+    "body": "You have a workout that hasn't been finished yet.",
+    "longSessionBody": "Your workout has been in progress for {{duration}}. Are you still training?",
+    "programMismatchBody": "Your program changed since this workout started, so it can't be resumed. You can still discard it.",
+    "inconsistentTitle": "Outdated workout session",
+    "inconsistentBody": "We couldn't automatically recover this session's details. It will be ignored until our support team can help.",
+    "inconsistentTerminalBody": "This session was already finished on another device. You can safely discard it.",
+    "resume": "Continue workout",
+    "resuming": "Resuming…",
+    "discard": "Discard workout",
+    "discardConfirmTitle": "Discard this workout?",
+    "discardConfirmBody": "Sets already logged stay in your history, but this session won't count as completed.",
+    "discardConfirmYes": "Yes, discard",
+    "discardConfirmBack": "Back",
+    "discarding": "Discarding…",
+    "discardError": "Couldn't discard it. Please try again.",
+    "dismiss": "Got it",
+    "later": "Not now"
+  },
   "actions": {
     "viewExecution": "See how to",
     "swap": "Swap",
@@ -26,6 +77,43 @@
       "lightModerate": "Light to moderate",
       "comfortableLightModerate": "Comfortable, light to moderate",
       "moderate": "Moderate"
+    }
+  },
+  "cardioSession": {
+    "durationLabel": "Duration",
+    "intensityLabel": "Intensity",
+    "readyLabel": "Ready when you are",
+    "runningLabel": "Cardio in progress",
+    "targetLabel": "Today's target",
+    "remainingLabel": "Time remaining",
+    "elapsedLabel": "Elapsed time",
+    "start": "Start cardio",
+    "skip": "Skip cardio",
+    "skipAndFinish": "Skip and finish workout",
+    "readyHint": "The clock only starts once you tap start.",
+    "of": "of {{target}}",
+    "remaining": "{{time}} remaining",
+    "overtimeLabel": "extra time",
+    "targetReachedTitle": "Goal reached",
+    "targetReachedBody": "You can finish now or keep going.",
+    "extend": "+5 min",
+    "extendAccessibility": "Add 5 minutes to the cardio goal",
+    "finish": "Finish cardio",
+    "finishConfirmTitle": "Finish cardio?",
+    "finishConfirmBeforeGoal": "You did {{done}} of the planned {{target}}.",
+    "finishConfirmAfterGoal": "You reached your {{target}} goal. Time done: {{done}}.",
+    "continueCardio": "Keep going",
+    "confirmFinish": "Finish",
+    "finishSavingTitle": "Saving cardio…",
+    "finishSavingBody": "Hang on a moment — we're confirming your cardio before finishing the workout.",
+    "finishErrorTitle": "Couldn't save cardio",
+    "finishErrorBody": "Check your connection and try again. Your workout stays open until this is confirmed — nothing is lost.",
+    "finishRetry": "Try again",
+    "exitConfirmTitle": "Leave cardio?",
+    "exitConfirmBody": "Your strength work is already complete. Leaving now finishes the workout with {{done}} of cardio logged.",
+    "accessibility": {
+      "close": "Exit cardio",
+      "timer": "Cardio timer"
     }
   },
   "badges": {
@@ -82,6 +170,8 @@
     "logLoad": "Log load · Set {{setNumber}}",
     "optional": "optional",
     "inputHint": "Tap the number to type",
+    "continueToCardio": "Go to cardio",
+    "finishWorkout": "Finish workout",
     "addSecondsAccessibility": "Add {{seconds}} seconds",
     "nextSet": "Next set"
   },
@@ -95,6 +185,9 @@
     "titleLine1": "Done.",
     "titleLine2": "Stronger.",
     "backHome": "Back to home",
+    "finishing": "Finishing workout…",
+    "finishFailed": "We couldn't finish the workout.",
+    "retry": "Try again",
     "metrics": {
       "time": "Time",
       "volume": "Volume",
@@ -127,7 +220,8 @@
     "badges": {
       "today": "Swapped today",
       "permanent": "Swap saved"
-    }
+    },
+    "error": "Couldn't apply the swap. Please try again."
   },
   "muscleGroups": {
     "chest": "Chest",

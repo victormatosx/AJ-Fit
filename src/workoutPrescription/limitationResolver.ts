@@ -7,6 +7,7 @@ import {
   type LimitationReviewBasis,
 } from '../types/exercise';
 import type { QuestionnaireAnswers } from './types';
+import { DIFFICULTY_RANK, purposePreserved } from './equivalenceShared';
 
 export const LIMITATION_RESOLVER_VERSION = 1 as const;
 
@@ -180,18 +181,6 @@ function exerciseOperationallyValid(exercise: LimitationCatalogExercise | undefi
   );
 }
 
-function purposePreserved(
-  source: LimitationCatalogExercise,
-  candidate: LimitationCatalogExercise,
-): boolean {
-  const samePattern = candidate.movement.pattern === source.movement.pattern;
-  const samePrimaryMuscle = candidate.target.primaryMuscle === source.target.primaryMuscle;
-  const explicitlyApprovedVariant = source.substitution.limitationVariantIds
-    ?.includes(candidate.id) ?? false;
-  return samePattern && (samePrimaryMuscle || explicitlyApprovedVariant);
-}
-
-const DIFFICULTY_RANK = { beginner: 0, intermediate: 1, advanced: 2 } as const;
 const POSITION_STABILITY_RANK = {
   lying: 0,
   seated: 1,

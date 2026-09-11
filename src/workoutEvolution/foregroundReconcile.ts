@@ -30,6 +30,15 @@ export interface ForegroundReconcileGuardInput {
   now: number;
   lastForegroundReconcileAtMs: number | null;
   throttleMs?: number;
+  /**
+   * True when the current view model is `ERROR` — a broken state gets an
+   * immediate retry opportunity on the next real resume instead of waiting
+   * out the healthy-state throttle (docs: resilience hardening, 2026-09).
+   * The event-storm protections (`isRealResume`, `reconcileInFlight`) still
+   * apply in full — this only skips the time-based cooldown, and only while
+   * there is nothing good on screen to protect from being reconciled again.
+   */
+  isRecoveringFromError?: boolean;
 }
 
 /**
@@ -39,7 +48,10 @@ export interface ForegroundReconcileGuardInput {
  * useful: cold start already owns the first load, nothing else is already
  * reconciling, and the last foreground reconcile wasn't just a moment ago
  * (event storm: active→inactive→active→background→active in quick
- * succession must still produce at most one reconcile).
+ * succession must still produce at most one reconcile) — unless the caller
+ * is currently sitting on `ERROR` (`isRecoveringFromError`), in which case
+ * the last-reconcile cooldown is skipped so a broken state gets its next
+ * genuine resume as a retry opportunity, not a wait.
  */
 export function shouldReconcileOnForeground(input: ForegroundReconcileGuardInput): boolean {
   const isRealResume =
@@ -48,6 +60,7 @@ export function shouldReconcileOnForeground(input: ForegroundReconcileGuardInput
   if (!isRealResume) return false;
   if (!input.hasLoadedOnce) return false;
   if (input.reconcileInFlight) return false;
+  if (input.isRecoveringFromError) return true;
 
   const throttleMs = input.throttleMs ?? FOREGROUND_RECONCILE_THROTTLE_MS;
   if (

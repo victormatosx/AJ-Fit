@@ -79,6 +79,32 @@ describe('shouldReconcileOnForeground', () => {
     }))).toBe(false);
   });
 
+  it('skips the throttle when recovering from ERROR — a resume inside the cooldown window still reconciles', () => {
+    const lastAt = 1_000_000;
+    const tooSoon = lastAt + FOREGROUND_RECONCILE_THROTTLE_MS - 1;
+    expect(shouldReconcileOnForeground(baseInput({
+      now: tooSoon,
+      lastForegroundReconcileAtMs: lastAt,
+      isRecoveringFromError: true,
+    }))).toBe(true);
+  });
+
+  it('ERROR recovery still respects the real-resume/in-flight/cold-start guards — it only skips the time cooldown', () => {
+    expect(shouldReconcileOnForeground(baseInput({ previousState: 'active', nextState: 'active', isRecoveringFromError: true }))).toBe(false);
+    expect(shouldReconcileOnForeground(baseInput({ reconcileInFlight: true, isRecoveringFromError: true }))).toBe(false);
+    expect(shouldReconcileOnForeground(baseInput({ hasLoadedOnce: false, isRecoveringFromError: true }))).toBe(false);
+  });
+
+  it('a healthy (non-ERROR) state keeps being throttled normally', () => {
+    const lastAt = 1_000_000;
+    const tooSoon = lastAt + FOREGROUND_RECONCILE_THROTTLE_MS - 1;
+    expect(shouldReconcileOnForeground(baseInput({
+      now: tooSoon,
+      lastForegroundReconcileAtMs: lastAt,
+      isRecoveringFromError: false,
+    }))).toBe(false);
+  });
+
   it('event storm: only the first real resume in a rapid sequence reconciles', () => {
     // active -> inactive -> active -> background -> active, all within one
     // throttle window — simulates a fast app-switcher fling.

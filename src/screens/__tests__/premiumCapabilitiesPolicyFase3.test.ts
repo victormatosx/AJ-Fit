@@ -45,9 +45,13 @@ describe('FASE 3 — START_WORKOUT boundary', () => {
   const workoutScreen = source('src/screens/WorkoutScreen.tsx');
 
   it('FASE 5: startWorkout() is now a pure action — the gate moved to <PremiumAction> around its CTA', () => {
+    // P0 integrity remains authoritative: the actionless workout surface is
+    // optimistic, but the real WorkoutScreen is revealed only after the
+    // persisted execution.start() resolves. The Premium boundary is
+    // unchanged: this function still has no capability check of its own.
     const startWorkoutBody = appShellCode.slice(
-      appShellCode.indexOf('const startWorkout = () => {'),
-      appShellCode.indexOf('};', appShellCode.indexOf('const startWorkout = () => {')),
+      appShellCode.indexOf('const startWorkout = async () => {'),
+      appShellCode.indexOf('};', appShellCode.indexOf('const startWorkout = async () => {')),
     );
     expect(startWorkoutBody).not.toContain('canPerform');
     expect(startWorkoutBody).not.toContain('requestPremiumAction');

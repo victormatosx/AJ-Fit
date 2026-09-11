@@ -108,6 +108,7 @@
       ],
       "expo-system-ui",
       "./plugins/rest-activity",
+      "./plugins/app-check-debug-token",
       [
         "expo-navigation-bar",
         {

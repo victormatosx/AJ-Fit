@@ -25,6 +25,8 @@ import { adminGetCouponHandler, adminListCouponsHandler } from './adminCoupons/a
 import { recordWorkoutLifecycleTelemetryHandler } from './telemetry/workoutLifecycleTelemetry';
 import { onTrustedWorkoutLifecycleEventCreated } from './telemetry/trustedWorkoutLifecycleTelemetry';
 import { authorizeWorkoutLifecycleMutationHandler } from './workoutLifecycle/authorizeMutation';
+import { applyExerciseSubstitutionHandler } from './workoutLifecycle/exerciseSubstitution';
+import { completeWorkoutCardioHandler } from './workoutLifecycle/completeWorkoutCardio';
 import {
   releasePushDeviceHandler,
   syncPushDeviceHandler,
@@ -97,6 +99,31 @@ export const recordWorkoutLifecycleTelemetry = onCall(
 export const authorizeWorkoutLifecycleMutation = onCall(
   { enforceAppCheck: true },
   authorizeWorkoutLifecycleMutationHandler,
+);
+
+/**
+ * Manual exercise substitution during an active workout (exercise-
+ * substitution architecture audit). Performs the ENTIRE write via the Admin
+ * SDK inside a transaction — the client never writes `exercises[].exerciseId`/
+ * `substitution` directly, so a compromised client can never apply a
+ * candidate the manual resolver would reject.
+ */
+export const applyExerciseSubstitution = onCall(
+  { enforceAppCheck: true },
+  applyExerciseSubstitutionHandler,
+);
+
+/**
+ * Cardio Finisher completion (Cardio Finisher Completion Recovery
+ * hardening, Architecture B — 2026-09 security audit). Performs the ENTIRE
+ * write to `WorkoutExecution.cardio` via the Admin SDK inside a
+ * transaction — Firestore Rules deny the client from ever writing that
+ * field directly (`firestore.rules`'s `workoutExecutions` create/update
+ * rules), so this callable is the only way it is ever set.
+ */
+export const completeWorkoutCardio = onCall(
+  { enforceAppCheck: true },
+  completeWorkoutCardioHandler,
 );
 
 /** Trusted operational projection sourced only from the immutable backend-authoritative domain ledger. */

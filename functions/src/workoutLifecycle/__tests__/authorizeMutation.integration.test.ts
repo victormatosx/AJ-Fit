@@ -158,6 +158,86 @@ describe.skipIf(!enabled)('Workout Lifecycle authority — real Firestore Emulat
     expect(grant).toMatchObject({ uid: UID, operation: 'FINISH_EXECUTION', executionId: 'exec_1', schemaVersion: 1 });
   });
 
+  it.each([
+    ['NONE', false],
+    ['NONE', true],
+    ['SESSION', false],
+    ['SESSION', true],
+    ['PERMANENT', false],
+    ['PERMANENT', true],
+  ] as const)('authorizes V2 finish with substitution=%s and cardio=%s', async (scope, withCardio) => {
+    const root = db.collection('users').doc(UID);
+    await Promise.all([
+      root.collection('programInstances').doc('wpi_active').update({
+        prescriptionInputSnapshot: {
+          snapshotId: 'pis_active', schemaVersion: 1, source: 'QUESTIONNAIRE_BASELINE',
+          inputs: completeInputs({ place: 'home', primaryPlace: 'home', equipment: ['bodyweight'] }),
+        },
+      }),
+      root.collection('workoutPrograms').doc('wpg_active').update({
+        environment: 'home',
+        sessions: [{ name: 'Legs', exercises: [{ exerciseId: 'barbell-back-squat', sets: 3 }] }],
+      }),
+    ]);
+    const record = exercise(
+      0,
+      scope === 'NONE' ? 'barbell-back-squat' : 'bodyweight-squat',
+      ['COMPLETED', 'COMPLETED', 'COMPLETED'],
+    );
+    await root.collection('workoutExecutions').doc('exec_1').set({
+      status: 'IN_PROGRESS', programId: 'wpg_active', programInstanceId: 'wpi_active', sessionIndex: 0,
+      exercises: [{
+        ...record,
+        prescribedExerciseId: 'barbell-back-squat',
+        ...(scope === 'NONE' ? {} : { substitution: { scope, appliedAt: Timestamp.now() } }),
+      }],
+      ...(withCardio ? { cardio: { status: 'COMPLETED', actualDurationSeconds: 600, completedAt: Timestamp.now() } } : {}),
+    });
+    await expect(finishRequest()).resolves.toMatchObject({ grantId: 'current' });
+  });
+
+  it('denies a changed effective exercise that lacks server-valid substitution evidence', async () => {
+    const root = db.collection('users').doc(UID);
+    await root.collection('workoutPrograms').doc('wpg_active').update({
+      sessions: [{ name: 'Legs', exercises: [{ exerciseId: 'barbell-back-squat', sets: 3 }] }],
+    });
+    await root.collection('workoutExecutions').doc('exec_1').set({
+      status: 'IN_PROGRESS', programId: 'wpg_active', programInstanceId: 'wpi_active', sessionIndex: 0,
+      exercises: [{
+        ...exercise(0, 'goblet-squat', ['COMPLETED', 'COMPLETED', 'COMPLETED']),
+        prescribedExerciseId: 'barbell-back-squat',
+      }],
+    });
+    await expect(finishRequest()).rejects.toMatchObject({
+      code: 'permission-denied', message: 'execution_substitution_not_authoritative',
+      details: { reason: 'substitution_marker_missing' },
+    });
+  });
+
+  it('finishes against the execution-bound prescription after a later active-program adaptation', async () => {
+    const root = db.collection('users').doc(UID);
+    await root.collection('workoutExecutions').doc('exec_1').set({
+      status: 'IN_PROGRESS', programId: 'wpg_active', programInstanceId: 'wpi_active', sessionIndex: 0,
+      exercises: [
+        exercise(0, 'squat', ['COMPLETED', 'COMPLETED', 'COMPLETED']),
+        exercise(1, 'row', ['COMPLETED', 'COMPLETED', 'COMPLETED']),
+      ],
+    });
+    await Promise.all([
+      root.collection('workoutLifecycleState').doc('current').update({
+        activeProgramInstanceId: 'wpi_future', activeContentIdentity: 'wpg_future', activePrescriptionIdentity: 'rx_future',
+      }),
+      root.collection('programInstances').doc('wpi_future').set({
+        programInstanceId: 'wpi_future', contentIdentity: 'wpg_future', prescriptionIdentity: 'rx_future',
+      }),
+      root.collection('workoutPrograms').doc('wpg_future').set({
+        programId: 'wpg_future', prescriptionId: 'rx_future',
+        sessions: [{ name: 'Future', exercises: [{ exerciseId: 'different', sets: 1 }] }],
+      }),
+    ]);
+    await expect(finishRequest()).resolves.toMatchObject({ grantId: 'current' });
+  });
+
   it('rejects activation without an authoritative pending evolution', async () => {
     await expect(authorizeWorkoutLifecycleMutationHandler({
       auth: { uid: UID },
@@ -398,6 +478,44 @@ describe.skipIf(!enabled)('Workout Lifecycle authority — real Firestore Emulat
         },
       },
     } as never, db)).rejects.toMatchObject({ code: 'aborted', message: 'lifecycle_already_initialized' });
+  });
+
+  it('INITIALIZE seals the three-day conditioning plan with typed interval cycles', async () => {
+    const root = db.collection('users').doc(UID);
+    await Promise.all([
+      root.collection('workoutLifecycleState').doc('current').delete(),
+      root.collection('programInstances').doc('wpi_active').delete(),
+      root.collection('trainingCycles').doc('cyc_active').delete(),
+      root.collection('workoutPrograms').doc('wpg_active').delete(),
+    ]);
+    const inputs = completeInputs({
+      goal: 'conditioning', level: 'intermediate', days: 3,
+      trainingDays: ['MON', 'WED', 'FRI'], duration: '60',
+    });
+    await root.collection('questionnaires').doc('q_conditioning').set({ answers: inputs, version: 1 });
+
+    const result = await authorizeWorkoutLifecycleMutationHandler({
+      auth: { uid: UID },
+      data: {
+        operation: 'INITIALIZE',
+        targetProgramInstanceId: 'wpi_conditioning', targetCycleId: 'cyc_conditioning',
+        questionnaireId: 'q_conditioning', questionnaireVersion: 1,
+        targetProgramSource: 'automatic_reconciliation',
+        targetPrescriptionInputSnapshot: {
+          snapshotId: snapshotIdFor('QUESTIONNAIRE_BASELINE', inputs),
+          schemaVersion: 1, source: 'QUESTIONNAIRE_BASELINE', inputs,
+        },
+      },
+    } as never, db);
+
+    expect(result.canonical?.targetPlan.templateId).toBe('T050');
+    const intervalBike = result.canonical?.targetPlan.sessions
+      .flatMap((session) => session.exercises)
+      .find((exercise) => exercise.exerciseId === 'stationary-bike' && exercise.cycles != null);
+    expect(intervalBike).toMatchObject({ cycles: 8 });
+    expect(intervalBike?.sets).toBeUndefined();
+    const sealed = await root.collection('workoutPrograms').doc(result.canonical!.targetContentIdentity).get();
+    expect(sealed.exists).toBe(true);
   });
 
   describe('MIGRATE — bootstrap canonical authority for V1→V2 baseline', () => {
@@ -1133,6 +1251,46 @@ describe.skipIf(!enabled)('Workout Lifecycle authority — real Firestore Emulat
       await setQaMode('ACCELERATED');
       await expect(authoritativeEarnedFact(UID, db, new Date()))
         .rejects.toMatchObject({ message: 'progression_not_eligible' });
+    });
+
+    // P0 integrity fix (2026-09, docs/workout-lifecycle/ — production
+    // incident): parity with the client resolver
+    // (`src/progressionEngineV2/resolver.ts`'s `hasInProgressExecution`
+    // check) — an IN_PROGRESS execution for the active instance must block
+    // EARN authoritatively too, not just on the client. QA_TRANSITION
+    // deliberately used here BECAUSE it otherwise always succeeds (proven by
+    // the test below) — this isolates that the new IN_PROGRESS check runs
+    // independently of, and before, every other eligibility bypass.
+    it('an IN_PROGRESS execution for the active instance blocks EARN even under QA_TRANSITION', async () => {
+      await setQaMode('TRANSITION');
+      await db.collection('users').doc(UID).collection('workoutExecutions').doc('exec_pending').set({
+        status: 'IN_PROGRESS', programInstanceId: 'wpi_active', sessionIndex: 0,
+        scheduledLocalDate: '2026-01-01',
+      });
+      await expect(authoritativeEarnedFact(UID, db, new Date()))
+        .rejects.toMatchObject({ message: 'progression_blocked_by_in_progress_execution' });
+    });
+
+    it('once the blocking IN_PROGRESS execution resolves (COMPLETED), EARN succeeds again', async () => {
+      await setQaMode('TRANSITION');
+      const ref = db.collection('users').doc(UID).collection('workoutExecutions').doc('exec_pending');
+      await ref.set({
+        status: 'IN_PROGRESS', programInstanceId: 'wpi_active', sessionIndex: 0,
+        scheduledLocalDate: '2026-01-01',
+      });
+      await expect(authoritativeEarnedFact(UID, db, new Date()))
+        .rejects.toMatchObject({ message: 'progression_blocked_by_in_progress_execution' });
+      await ref.set({ status: 'COMPLETED', programInstanceId: 'wpi_active', sessionIndex: 0, scheduledLocalDate: '2026-01-01' });
+      await expect(authoritativeEarnedFact(UID, db, new Date())).resolves.toMatchObject({ qaForced: true });
+    });
+
+    it('an IN_PROGRESS execution for a DIFFERENT (superseded) program instance does NOT block EARN', async () => {
+      await setQaMode('TRANSITION');
+      await db.collection('users').doc(UID).collection('workoutExecutions').doc('exec_other').set({
+        status: 'IN_PROGRESS', programInstanceId: 'wpi_superseded', sessionIndex: 0,
+        scheduledLocalDate: '2026-01-01',
+      });
+      await expect(authoritativeEarnedFact(UID, db, new Date())).resolves.toMatchObject({ qaForced: true });
     });
 
     it('QA_TRANSITION account: EARN succeeds despite ~1 active day and 0% adherence, deriving the real BEGINNER -> INTERMEDIATE target', async () => {

@@ -22,6 +22,19 @@ const NEUTRAL_STRENGTH_NOTE = 'Após treinos de força, mantenha intensidade lev
 const UPPER_ONLY_SESSION_NAMES = new Set(['Bench', 'Upper Press', 'Upper Pull / técnico', 'Upper A', 'Upper B']);
 
 describe('catalog content — strength cardio finisher notes', () => {
+  it('uses typed cycle doses for every interval bike block, never localized text in sets', () => {
+    const intervalBikeSlots = WORKOUT_TEMPLATES.flatMap((template) =>
+      template.sessions.flatMap((session) => session.exercises.map((exercise) => ({ template, session, exercise }))))
+      .filter(({ exercise }) => exercise.exercise_id === 'stationary-bike'
+        && exercise.duration === '30-45 s forte + 60-90 s leve');
+
+    expect(intervalBikeSlots).toHaveLength(24);
+    for (const { template, session, exercise } of intervalBikeSlots) {
+      expect(exercise.sets, `${template.id}:${session.name}`).toBeUndefined();
+      expect(exercise.cycles, `${template.id}:${session.name}`).toBe(8);
+    }
+  });
+
   it('no upper-only session (0% leg exercises) in the strength catalog uses the leg-specific cardio note', () => {
     const offenders: string[] = [];
     for (const template of WORKOUT_TEMPLATES) {

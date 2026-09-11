@@ -95,4 +95,26 @@ describe('workoutExercisesFromPlan — Phase 2, Part D (Rest Timer source of tru
     const plan = realPlan();
     expect(() => workoutExercisesFromPlan(plan, 'en', 0)).not.toThrow();
   });
+
+  it('uses effective exercise metadata but retains prescribed sets/reps/rest and explicit slot identities', () => {
+    const plan = realPlan();
+    plan.sessions[0].exercises[0] = {
+      exerciseId: 'barbell-back-squat',
+      sourceExerciseId: 'barbell-back-squat',
+      sets: 4,
+      reps: '6-8',
+      restSeconds: 123,
+    };
+    const exercises = workoutExercisesFromPlan(plan, 'pt-BR', 0, new Map([[0, 'goblet-squat']]));
+    expect(exercises[0]).toMatchObject({
+      id: 'goblet-squat',
+      db: 'goblet-squat',
+      name: 'Agachamento Goblet',
+      prescribedExerciseId: 'barbell-back-squat',
+      effectiveExerciseId: 'goblet-squat',
+      rest: 123,
+    });
+    expect(exercises[0].sets).toHaveLength(4);
+    expect(exercises[0].sets[0].r).toBe('6-8');
+  });
 });

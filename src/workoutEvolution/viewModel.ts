@@ -49,6 +49,21 @@ export interface EvolutionViewModelInput {
   error?: string;
 }
 
+/**
+ * True for any `EvolutionViewModel.kind` that reflects a completed,
+ * successfully-resolved read — `LOADING` (nothing resolved yet) and `ERROR`
+ * (the read itself failed) are the only two that are NOT one. `UNAVAILABLE`
+ * counts as resolved too: it's a legitimate, successfully-determined outcome
+ * ("no lifecycle exists yet"), not a failure. A transient refresh failure
+ * must never discard a resolved view model in favor of `ERROR` — the caller
+ * (`useWorkoutEvolution`) uses this to decide whether a failed `load()` may
+ * overwrite the current state or must preserve it (docs: Workout Evolution
+ * resilience hardening, 2026-09).
+ */
+export function isResolvedEvolutionViewModel(viewModel: EvolutionViewModel): boolean {
+  return viewModel.kind !== 'LOADING' && viewModel.kind !== 'ERROR';
+}
+
 export function buildEvolutionViewModel(input: EvolutionViewModelInput): EvolutionViewModel {
   if (input.error) return { kind: 'ERROR', message: input.error };
   if (!input.lifecycle) return { kind: 'LOADING' };

@@ -7,12 +7,9 @@
  * `src/state/__tests__/appStateIdentityScope.test.ts`), this pins the exact
  * control-flow invariant that fixes it, straight from the source.
  *
- * Root cause: `order` (and the `exIdx`/`setIdx` derived from it) is only
- * ever left pointing at an exercise with sets remaining while `finished` is
- * false — both completion paths (`advanceAfterRest`'s last-exercise branch
- * and `completeSet`'s `isLastOverall` branch) flip `finished` to `true` in
- * the SAME update as the progress/order change that would otherwise leave
- * `setIdx` pointing past the end of `ex.sets`. The crash happened because
+ * Root cause: `order` (and the `exIdx`/`setIdx` derived from it) must only be
+ * emptied by `advanceAfterRest`, which also opens cardio or flips `finished`
+ * in the same update. The crash happened because
  * `const curReps = ex.sets[setIdx].r` was computed BEFORE the component's
  * `if (finished) return <WorkoutDone/>` early return, so the render that
  * landed right after `finished` became true still evaluated it with a
@@ -32,17 +29,16 @@ describe('WorkoutScreen — finish-workout crash (ex.sets[setIdx].r of undefined
     expect(curRepsIdx).toBeGreaterThan(finishedReturnIdx);
   });
 
-  it('completeSet\'s last-set branch sets progress and finished in the same synchronous call, before any other state can be read', () => {
+  it('completeSet keeps the final set pending; only advanceAfterRest mutates final progress', () => {
     const completeSetBody = source.slice(
       source.indexOf('const completeSet = () => {'),
       source.indexOf('const skipRest = () => {'),
     );
-    const isLastOverallBranch = completeSetBody.slice(
-      completeSetBody.indexOf('if (isLastOverall) {'),
-      completeSetBody.indexOf('const completedSet ='),
-    );
-    expect(isLastOverallBranch).toContain('setProgress');
-    expect(isLastOverallBranch).toContain('setFinished(true)');
+    const finalEntryBranch = completeSetBody.slice(0, completeSetBody.indexOf('// `0` is a deliberate'));
+    expect(finalEntryBranch).toContain('setPending(completedSet)');
+    expect(finalEntryBranch).toContain('if (isLastOverall) return;');
+    expect(finalEntryBranch).not.toContain('setProgress');
+    expect(finalEntryBranch).not.toContain('setFinished(true)');
   });
 
   it('advanceAfterRest flips finished to true in the same call that empties `order`, never leaving a stale non-empty order with finished still false', () => {

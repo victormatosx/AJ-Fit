@@ -21,8 +21,14 @@ export interface WorkoutScheduleController {
   config: ScheduleConfig | null;
   loading: boolean;
   reload: () => Promise<void>;
-  /** Call once the active WorkoutScreen session actually finishes. */
-  completeSession: (sessionIndex: number) => Promise<boolean>;
+  /**
+   * Call once the active WorkoutScreen session actually finishes.
+   * `scheduledLocalDate` must be the FINISHED execution's own
+   * `scheduledLocalDate` (docs §14) — never recomputed as "today" here,
+   * otherwise a session started on one calendar day and finished after local
+   * midnight (or reconciled later) would silently credit the wrong day.
+   */
+  completeSession: (sessionIndex: number, scheduledLocalDate: string) => Promise<boolean>;
   /** Resolves a pending miss decision. Returns whether it actually succeeded — callers must not advance their own flow (e.g. opening the start confirmation) on a `false` result. */
   resolveMiss: (decision: MissDecision) => Promise<boolean>;
 }
@@ -121,15 +127,13 @@ export function useWorkoutSchedule(program: WorkoutProgramSnapshot | null): Work
 
   useEffect(() => { void reload(); }, [reload]);
 
-  const completeSession = useCallback(async (sessionIndex: number) => {
+  const completeSession = useCallback(async (sessionIndex: number, scheduledLocalDate: string) => {
     if (!uid || !programId || sessionCount === 0) return false;
     // Both required by `completeScheduledSession` to derive the expected
     // first-ever session correctly (no silent `?? 0` fallback there
     // anymore) — without them there is no valid resolved schedule to
     // complete against, so fail closed exactly like the guards above.
     if (!activatedAtLocalDate || !config?.trainingDays?.length) return false;
-    const timezone = config?.timezone ?? deviceTimezone();
-    const scheduledLocalDate = localDateInTimezone(new Date(), timezone);
     // Diagnostic instrumentation (Phase 2, Part F) — technical fields only.
     logInfo('workout_schedule', 'schedule_completion_started', { programId, sessionIndex });
     try {

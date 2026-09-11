@@ -5,7 +5,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -452,11 +451,7 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
             <View style={styles.headerSpacer} />
           </View>
 
-          <ScrollView
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.content}
-          >
+          <View style={styles.content}>
             <View style={styles.identityCard}>
               <ProfileAvatar
                 displayName={normalizedName || athleteFallback}
@@ -707,7 +702,7 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
                 </LinearGradient>
               </Pressable>
             </View>
-          </ScrollView>
+          </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
     </ScreenBg>
@@ -778,8 +773,8 @@ function createStyles(theme: AppTheme) {
   safeArea: { flex: 1 },
   header: {
     paddingHorizontal: 22,
-    paddingTop: 12,
-    paddingBottom: 8,
+    paddingTop: 6,
+    paddingBottom: 4,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
@@ -799,19 +794,19 @@ function createStyles(theme: AppTheme) {
   headerTitle: { flex: 1, alignItems: 'center' },
   headerSpacer: { width: 38 },
   content: {
-    flexGrow: 1,
+    flex: 1,
     paddingHorizontal: 22,
-    paddingTop: 18,
-    paddingBottom: 22,
+    paddingTop: 6,
+    paddingBottom: 10,
   },
   identityCard: {
-    minHeight: 82,
+    minHeight: 70,
     borderRadius: 14,
     borderBottomRightRadius: 0,
     borderWidth: 1,
     borderColor: theme.colors.primaryBorderSoft,
     backgroundColor: theme.colors.primarySurfaceSubtle,
-    padding: 12,
+    padding: 8,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 13,
@@ -834,9 +829,9 @@ function createStyles(theme: AppTheme) {
     height: 2,
     backgroundColor: theme.colors.primaryEmphasis,
   },
-  formSection: { marginTop: 27 },
-  accountSection: { marginTop: 20 },
-  sectionTitle: { marginBottom: 10 },
+  formSection: { marginTop: 12 },
+  accountSection: { marginTop: 10 },
+  sectionTitle: { marginBottom: 6 },
   formCard: {
     borderRadius: 14,
     borderWidth: 1,
@@ -844,7 +839,7 @@ function createStyles(theme: AppTheme) {
     backgroundColor: theme.colors.surfaceQuiet,
     paddingHorizontal: 14,
   },
-  fieldBlock: { paddingVertical: 14 },
+  fieldBlock: { paddingVertical: 8 },
   fieldLabelRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -864,7 +859,7 @@ function createStyles(theme: AppTheme) {
     marginBottom: 7,
   },
   inputShell: {
-    height: 46,
+    height: 42,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: theme.colors.inputBorderSubtle,
@@ -899,7 +894,7 @@ function createStyles(theme: AppTheme) {
   dateRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   datePart: {
     flex: 1,
-    height: 48,
+    height: 42,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: theme.colors.inputBorderSubtle,
@@ -932,7 +927,7 @@ function createStyles(theme: AppTheme) {
   },
   divider: { height: 1, backgroundColor: theme.colors.settingsDivider },
   securityNote: {
-    marginTop: 11,
+    marginTop: 6,
     paddingHorizontal: 2,
     flexDirection: 'row',
     alignItems: 'center',
@@ -946,9 +941,9 @@ function createStyles(theme: AppTheme) {
   },
   footer: {
     flex: 1,
-    minHeight: 120,
+    minHeight: 62,
     justifyContent: 'flex-end',
-    paddingTop: 24,
+    paddingTop: 8,
   },
   errorBox: {
     marginBottom: 12,
@@ -968,7 +963,7 @@ function createStyles(theme: AppTheme) {
     fontSize: 11.5,
   },
   saveButton: {
-    height: 50,
+    height: 48,
     borderRadius: 11,
     borderBottomRightRadius: 0,
     overflow: 'hidden',

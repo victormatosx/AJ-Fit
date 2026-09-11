@@ -34,7 +34,8 @@ const HEADER = `// GENERATED FILE — do not edit directly.
 // files resolves without any rewriting.
 const TS_FILES = [
   ['workoutPrescription', ['types', 'input', 'personalization', 'catalog', 'safety', 'selection',
-    'modifiers', 'conflicts', 'composition', 'equipment', 'limitationResolver', 'validation',
+    'modifiers', 'conflicts', 'composition', 'equipment', 'equivalenceShared', 'limitationResolver',
+    'manualSubstitutionResolver', 'validation',
     'engine', 'templateDocument', 'generationPolicy', 'weeklySchedule', 'frequency',
     'restPrescription', 'limitationDataset', 'localLimitationCatalog', 'index']],
   ['data', ['exercisesSeedData']],

@@ -56,7 +56,7 @@ describe('workout session duration — wall-clock, not a tick counter', () => {
 
   it('accepts workoutStartedAtMs as a prop instead of owning its own start instant', () => {
     expect(source).toMatch(/workoutStartedAtMs\?\s*:\s*number\s*\|\s*null/);
-    expect(source).toContain('sessionIndex = 0, workoutStartedAtMs,');
+    expect(source).toContain('sessionIndex = 0, execution, workoutStartedAtMs,');
   });
 });
 

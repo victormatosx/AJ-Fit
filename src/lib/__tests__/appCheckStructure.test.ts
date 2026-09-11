@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 function read(path: string): string {
@@ -97,6 +97,114 @@ describe('App Check structural security', () => {
     expect(source).toContain('ERR_APP_CHECK_NOT_CONFIGURED');
     // Still never logs/exposes an actual token value.
     expect(source).not.toMatch(/print\(.*token/i);
+  });
+
+  /**
+   * Simulates the Swift compiler's conditional-compilation stripping for a
+   * Release build: `#if DEBUG ... #endif` is removed entirely, and
+   * `#if DEBUG ... #else X #endif` becomes just `X`. This is what actually
+   * ships in a Release/TestFlight/App Store binary — asserting on it (not
+   * just "the #else branch of the first #if") is what makes this a real
+   * proof rather than a guess, given the token-pin logic lives in a SECOND,
+   * separate `#if DEBUG` block (inside the AsyncFunction) with no `#else`.
+   */
+  function compileForRelease(source: string): string {
+    const output: string[] = [];
+    let mode: 'normal' | 'debug-then' | 'debug-else' = 'normal';
+    for (const line of source.split('\n')) {
+      const trimmed = line.trim();
+      if (trimmed === '#if DEBUG') {
+        mode = 'debug-then';
+        continue;
+      }
+      if (trimmed === '#else' && mode === 'debug-then') {
+        mode = 'debug-else';
+        continue;
+      }
+      if (trimmed === '#endif' && mode !== 'normal') {
+        mode = 'normal';
+        continue;
+      }
+      if (mode === 'normal' || mode === 'debug-else') output.push(line);
+    }
+    return output.join('\n');
+  }
+
+  it('DEBUG pins the token via the confirmed AppCheckCore process-env mechanism, with no silent fallback and no native crash', () => {
+    const source = read('modules/ajfit-app-check/ios/AJFitAppCheckModule.swift');
+
+    expect(source).toContain('AppCheckDebugProviderFactory');
+    // Comes from the generated file (plugins/app-check-debug-token), never
+    // hand-written here or read from Info.plist.
+    expect(source).toContain('ajfitPinnedAppCheckDebugToken');
+    expect(source).toContain('setenv("AppCheckDebugToken"');
+    // Fails the specific operation clearly instead of a native fatalError —
+    // see Etapa 4: a boot-time crash blocks the whole app for unrelated work.
+    expect(source).toContain('ERR_APP_CHECK_DEBUG_TOKEN_MISSING');
+    expect(source).not.toContain('fatalError');
+    // Never reads Info.plist for this anymore (see plugins/app-check-debug-token).
+    expect(source).not.toContain('infoDictionary');
+  });
+
+  it('is release-safe: compiling out every #if DEBUG block leaves zero reference to the debug-token mechanism', () => {
+    const source = read('modules/ajfit-app-check/ios/AJFitAppCheckModule.swift');
+    const releaseCompiled = compileForRelease(source);
+
+    expect(releaseCompiled).toContain('AppAttestProviderFactory');
+    expect(releaseCompiled).not.toContain('AppCheckDebugProviderFactory');
+    expect(releaseCompiled).not.toContain('ajfitPinnedAppCheckDebugToken');
+    expect(releaseCompiled).not.toContain('setenv');
+    expect(releaseCompiled).not.toContain('ERR_APP_CHECK_DEBUG_TOKEN_MISSING');
+    expect(releaseCompiled).not.toContain('AppCheckDebugToken');
+  });
+
+  it('generates the local debug token as a #if DEBUG-wrapped Swift source file, not an Info.plist key (Debug/Release share one physical Info.plist)', () => {
+    const pluginSource = read('plugins/app-check-debug-token/index.js');
+
+    expect(pluginSource).toContain("ENV_VAR_NAME = 'AJFIT_APP_CHECK_DEBUG_TOKEN'");
+    expect(pluginSource).toContain("GENERATED_FILE_NAME = 'AJFitAppCheckDebugTokenLocal.swift'");
+    expect(pluginSource).toContain('process.env');
+    expect(pluginSource).toContain('#if DEBUG');
+    expect(pluginSource).not.toContain('withInfoPlist');
+    // No plausible real token value (UUID-shaped or otherwise) is baked
+    // into the plugin itself.
+    expect(pluginSource).not.toMatch(/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/);
+
+    const appJson = JSON.parse(read('app.json'));
+    expect(appJson.expo.plugins).toContain('./plugins/app-check-debug-token');
+  });
+
+  // `ios/` is prebuild-generated and gitignored — absent on a fresh clone
+  // before the first `expo prebuild`. This is a one-time environmental
+  // confirmation (documented in the audit report), not a repo invariant we
+  // can assert unconditionally in CI, so it only runs when the directory
+  // happens to exist locally.
+  it.skipIf(!existsSync('ios/AJFit.xcodeproj/project.pbxproj'))(
+    'confirms Debug and Release actually share one physical Info.plist for this target (the reason the token cannot live there)',
+    () => {
+      const pbxproj = read('ios/AJFit.xcodeproj/project.pbxproj');
+      const infoplistLines = pbxproj
+        .split('\n')
+        .filter((line) => line.includes('INFOPLIST_FILE = AJFit/Info.plist'));
+      // Exactly the main target's Debug and Release XCBuildConfiguration
+      // blocks, both pointing at the same file.
+      expect(infoplistLines.length).toBe(2);
+    },
+  );
+
+  it('never commits a real App Check debug token in .env.example or app.json', () => {
+    const envExampleLines = read('.env.example').split('\n');
+    const tokenLine = envExampleLines.find((line) => line.startsWith('AJFIT_APP_CHECK_DEBUG_TOKEN='));
+
+    // Placeholder only — exactly "KEY=" with nothing after it, never a
+    // filled-in value (UUID-shaped or otherwise).
+    expect(tokenLine).toBe('AJFIT_APP_CHECK_DEBUG_TOKEN=');
+
+    // app.json never references this variable at all — it is Node-only
+    // config-plugin input (plugins/app-check-debug-token), never JSON config.
+    const appJson = read('app.json');
+    expect(appJson).not.toContain('AJFIT_APP_CHECK_DEBUG_TOKEN');
+    expect(appJson).not.toContain('AJFitAppCheckDebugToken');
   });
 
   it('preserves mobile identity and the corrected Google iOS callback', () => {

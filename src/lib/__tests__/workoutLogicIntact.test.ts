@@ -33,8 +33,7 @@ describe('WorkoutScreen source — session state machine invariants', () => {
       'const [logged, setLogged]',
       'const [pending, setPending]',
       'const [regWeight, setRegWeight]',
-      'const [permSubs, setPermSubs]',
-      'const [sessionSubs, setSessionSubs]',
+      'const [substitutions, setSubstitutions]',
       'const [finished, setFinished]',
       'const [sessionNow, setSessionNow]',
     ]) {
@@ -73,7 +72,7 @@ describe('WorkoutScreen source — session state machine invariants', () => {
   it('the session timer stops once finished — regression: WorkoutDone kept ticking "time" after the session ended', () => {
     const timerEffect = WORKOUT_SRC.slice(
       WORKOUT_SRC.indexOf('// Session duration is'),
-      WORKOUT_SRC.indexOf('const ovr = (id: string)'),
+      WORKOUT_SRC.indexOf('const ovr = (index: number)'),
     );
     expect(timerEffect).toContain('if (finished) return;');
     expect(timerEffect).toMatch(/}, \[finished\]\);/);
@@ -89,31 +88,48 @@ describe('WorkoutScreen source — session state machine invariants', () => {
 });
 
 describe('WorkoutScreen source — plan-driven IDs and constrained substitutions', () => {
-  it('still reads/writes AsyncStorage under the same key', () => {
-    // Fase 11 audit fix: the key constant moved to a shared module
-    // (`workoutSubstitutionsStorage.ts`) so the account-deletion shutdown
-    // routine can clear it too — same literal key value, same AsyncStorage
-    // calls in the screen, just a single source of truth for the key.
-    expect(WORKOUT_SRC).toContain(
-      "import { WORKOUT_SUBSTITUTIONS_STORAGE_KEY as SUBS_KEY } from '../services/workoutSubstitutionsStorage'",
-    );
-    expect(WORKOUT_SRC).toContain('AsyncStorage.getItem(SUBS_KEY)');
-    expect(WORKOUT_SRC).toContain('AsyncStorage.setItem(SUBS_KEY');
+  // Exercise-substitution architecture audit (Manual Substitution feature):
+  // AsyncStorage is no longer the substitution store — Firestore, via the
+  // `applyExerciseSubstitution` Cloud Function, is now the sole source of
+  // truth (product Decision #6). This guard now protects the OPPOSITE
+  // invariant: the screen must never regress back to a client-only,
+  // unauthoritative substitution store.
+  it('never reads/writes exercise substitutions through AsyncStorage', () => {
+    // `workoutSubstitutionsStorage` (the old `ajfit-subs` AsyncStorage key)
+    // must no longer be imported/used by the screen at all — a plain
+    // "AsyncStorage" text ban would be too broad (cardioSessionStorage is an
+    // unrelated, still-legitimate AsyncStorage use documented elsewhere in
+    // this file).
+    expect(WORKOUT_SRC).not.toContain('workoutSubstitutionsStorage');
+    expect(WORKOUT_SRC).not.toMatch(/AsyncStorage\.(get|set)Item\(SUBS_KEY/);
+    expect(WORKOUT_SRC).not.toContain("import AsyncStorage from '@react-native-async-storage/async-storage'");
   });
 
-  it('resolves runtime identity from the final plan and canonical exercise catalog', () => {
-    expect(WORKOUT_PLAN_SRC).toContain('function workoutExercisesFromPlan(plan: FinalWorkoutPlan');
-    expect(WORKOUT_PLAN_SRC).toContain('catalogExerciseById.get(prescribed.exerciseId)');
-    expect(WORKOUT_PLAN_SRC).toContain('id: prescribed.exerciseId');
+  it('resolves runtime identity from the final plan by default and supports an explicit effective presentation identity', () => {
+    expect(WORKOUT_PLAN_SRC).toContain('export function workoutExercisesFromPlan(');
+    expect(WORKOUT_PLAN_SRC).toContain('effectiveExerciseIds?.get(exerciseIndex) ?? prescribed.exerciseId');
+    expect(WORKOUT_PLAN_SRC).toContain('catalogExerciseById.get(effectiveExerciseId)');
+    expect(WORKOUT_PLAN_SRC).toContain('prescribedExerciseId: prescribed.exerciseId');
+    expect(WORKOUT_PLAN_SRC).toContain('effectiveExerciseId,');
     expect(WORKOUT_SRC).not.toContain("id: 'supino-reto'");
     expect(WORKOUT_PLAN_SRC).not.toContain("id: 'supino-reto'");
   });
 
-  it('never applies a persisted/manual substitution unless the current plan explicitly allows it', () => {
-    expect(WORKOUT_SRC).toContain('const candidate = sessionSubs[id] || permSubs[id] || null;');
-    expect(WORKOUT_SRC).toContain('.some((option) => option.db === candidate?.db)');
-    expect(WORKOUT_SRC).toContain('return allowed ? candidate : null;');
-    expect(WORKOUT_PLAN_SRC).toContain('subs: []');
+  // The screen's own `ovr()` only ever reflects a substitution the backend
+  // has already confirmed (via `execution.exercises[].substitution`, seeded
+  // once at mount, or a fresh `onApplySubstitution` success) — it can never
+  // itself decide an id is a valid substitution. `.id` is never mutated by a
+  // substitution either (see `resolve`'s doc comment) — the manual resolver
+  // always re-resolves against the same fixed anchor.
+  it('never applies a substitution the backend has not confirmed — no local override map keyed by exercise id', () => {
+    expect(WORKOUT_SRC).toContain('const applied = substitutions[index];');
+    expect(WORKOUT_SRC).not.toMatch(/const candidate = sessionSubs\[id\] \|\| permSubs\[id\]/);
+    expect(WORKOUT_SRC).toContain('if (!onApplySubstitution) return;');
+  });
+
+  it('substitution eligibility is always re-validated server-side before applySub updates local state', () => {
+    expect(WORKOUT_SRC).toContain('const result = await onApplySubstitution({');
+    expect(WORKOUT_SRC).toContain('if (!result.ok) {\n      setSubstitutionError(true);\n      return;\n    }');
   });
 });
 
@@ -285,7 +301,7 @@ describe('WorkoutScreen source — exercise names render straight from the catal
     '{ex.name}',
     'name={o.name}',
     '{o.name}',
-    '{resolve(e).name}',
+    '{resolve(e, i).name}',
   ]) {
     it(`renders "${call}" directly, no translate lookup`, () => {
       expect(WORKOUT_SRC).toContain(call);
@@ -328,6 +344,16 @@ describe('WorkoutScreen source — rest overlay keyboard dismisses on outside ta
     expect(restOverlayBody).toContain('<TextInput');
     expect(restOverlayBody).toContain('onPress={onAdd15}');
     expect(restOverlayBody).toContain('onPress={onSkip}');
+  });
+
+  it('renders the rest timer number without a blue text glow', () => {
+    const restOverlayBody = WORKOUT_SRC.slice(
+      WORKOUT_SRC.indexOf('function RestOverlay('),
+      WORKOUT_SRC.indexOf('\nfunction PROverlay('),
+    );
+    expect(restOverlayBody).not.toContain('textShadowColor');
+    expect(restOverlayBody).not.toContain('textShadowRadius');
+    expect(restOverlayBody).not.toContain('textShadowOffset');
   });
 });
 
