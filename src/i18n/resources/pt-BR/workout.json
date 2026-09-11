@@ -7,6 +7,7 @@
     }
   },
   "exit": {
+    "kicker": "Treino em andamento",
     "title": "Sair do treino?",
     "body": "Seu treino ainda está em andamento. Você pode minimizar e continuar depois, ou descartar.",
     "minimize": "Minimizar treino",
@@ -84,8 +85,10 @@
     "readyLabel": "Tudo pronto para começar",
     "runningLabel": "Cardio em andamento",
     "targetLabel": "Meta de hoje",
+    "remainingLabel": "Tempo restante",
     "elapsedLabel": "Tempo realizado",
     "start": "Iniciar cardio",
+    "skip": "Pular cardio",
     "skipAndFinish": "Pular e finalizar treino",
     "readyHint": "O cronômetro só começa quando você tocar em iniciar.",
     "of": "de {{target}}",
@@ -101,6 +104,11 @@
     "finishConfirmAfterGoal": "Você concluiu sua meta de {{target}}. Tempo realizado: {{done}}.",
     "continueCardio": "Continuar cardio",
     "confirmFinish": "Finalizar",
+    "finishSavingTitle": "Salvando cardio…",
+    "finishSavingBody": "Só um instante — estamos confirmando seu cardio antes de finalizar o treino.",
+    "finishErrorTitle": "Não foi possível salvar",
+    "finishErrorBody": "Verifique sua conexão e tente novamente. Seu treino continua aberto até isso ser confirmado — nada é perdido.",
+    "finishRetry": "Tentar novamente",
     "exitConfirmTitle": "Sair do cardio?",
     "exitConfirmBody": "Sua musculação já está completa. Ao sair agora finalizamos o treino com {{done}} de cardio registrados.",
     "accessibility": {
@@ -162,6 +170,8 @@
     "logLoad": "Registrar carga · Série {{setNumber}}",
     "optional": "opcional",
     "inputHint": "Toque no número para digitar",
+    "continueToCardio": "Ir para o cardio",
+    "finishWorkout": "Finalizar treino",
     "addSecondsAccessibility": "Adicionar {{seconds}} segundos",
     "nextSet": "Próxima série"
   },
@@ -175,6 +185,9 @@
     "titleLine1": "Feito.",
     "titleLine2": "Mais forte.",
     "backHome": "Voltar para home",
+    "finishing": "Finalizando treino…",
+    "finishFailed": "Não foi possível finalizar o treino.",
+    "retry": "Tentar novamente",
     "metrics": {
       "time": "Tempo",
       "volume": "Volume",

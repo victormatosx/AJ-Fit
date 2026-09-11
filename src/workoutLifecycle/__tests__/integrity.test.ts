@@ -36,6 +36,22 @@ describe('Execution → Schedule integrity', () => {
     expect(completeSchedule).toHaveBeenCalledTimes(1);
     expect(afterSchedule).toHaveBeenCalledTimes(1);
   });
+
+  it('reports a schedule failure only after Execution is already durable and retries idempotently', async () => {
+    const finishExecution = vi.fn(async () => 'COMPLETED' as const);
+    let scheduleAttempt = 0;
+    const completeSchedule = vi.fn(async () => {
+      scheduleAttempt += 1;
+      return scheduleAttempt > 1;
+    });
+
+    await expect(completeWorkoutSessionFlow({ finishExecution, completeSchedule }))
+      .resolves.toBe('SCHEDULE_FAILED');
+    await expect(completeWorkoutSessionFlow({ finishExecution, completeSchedule }))
+      .resolves.toBe('COMPLETED');
+    expect(finishExecution).toHaveBeenCalledTimes(2);
+    expect(completeSchedule).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe('recordSet → finish barrier', () => {

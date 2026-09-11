@@ -1,39 +1,73 @@
-import type { ReactNode } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { useEffect, useRef, type ReactNode } from 'react';
+import { ActivityIndicator, Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../theme';
-import { Card } from '../ui/Card';
-import { CtaButton } from '../ui/CtaButton';
-import { Display, MonoLabel } from '../ui/Display';
+import { displayLineHeight } from '../../theme/tokens';
+import { MonoLabel, Slash } from '../ui/Display';
 import { Icon } from '../ui/Icon';
+import { SegBar } from '../ui/SegBar';
 
 type Props = {
   cardio: { mode: string; duration: string; intensity: string };
   ready: boolean;
   targetReached: boolean;
-  doneClock: string;
   targetClock: string;
   remainingClock: string;
   progress: number;
   celebration?: ReactNode;
+  /**
+   * True while a "Pular"/"Finalizar" tap is persisting the cardio
+   * completion to the durable execution record — both footer buttons
+   * become non-interactive (never just visually dimmed) so a slow network
+   * can never be raced by a second tap (docs — Cardio Finisher Completion
+   * Recovery hardening).
+   */
+  finishing?: boolean;
   onClose: () => void;
+  onSkip: () => void;
   onStart: () => void;
   onExtend: () => void;
   onFinish: () => void;
 };
 
-/** Shared layout for the ready, running and goal-reached cardio states. */
+/** A restrained cardio adaptation of RestOverlay: stable clock, segmented
+ * progress, one information card, and controls in a fixed footer. */
 export function CardioSessionContent({
-  cardio, ready, targetReached, doneClock, targetClock, remainingClock,
-  progress, celebration, onClose, onStart, onExtend, onFinish,
+  cardio, ready, targetReached, targetClock, remainingClock,
+  progress, celebration, finishing, onClose, onSkip, onStart, onExtend, onFinish,
 }: Props) {
   const { theme } = useTheme();
   const { t } = useTranslation('workout');
   const { height, fontScale } = useWindowDimensions();
-  const compact = height < 700 && fontScale <= 1.2;
-  const accent = targetReached ? theme.colors.success : theme.colors.primaryEmphasis;
+  const compact = height < 720 || fontScale > 1.2;
   const progressPercent = Math.round(Math.max(0, Math.min(1, progress)) * 100);
+  const clock = ready ? targetClock : remainingClock;
+  const status = t(
+    ready
+      ? 'cardioSession.readyLabel'
+      : targetReached
+        ? 'cardioSession.targetReachedTitle'
+        : 'cardioSession.runningLabel',
+  );
+  const statusColor = targetReached ? theme.colors.success : theme.colors.primaryEmphasis;
+  const runningReveal = useRef(new Animated.Value(ready ? 0 : 1)).current;
+
+  useEffect(() => {
+    if (ready) {
+      runningReveal.setValue(0);
+      return undefined;
+    }
+
+    runningReveal.setValue(0);
+    const animation = Animated.timing(runningReveal, {
+      toValue: 1,
+      duration: 180,
+      easing: Easing.out(Easing.quad),
+      useNativeDriver: true,
+    });
+    animation.start();
+    return () => animation.stop();
+  }, [ready, runningReveal]);
 
   return (
     <View style={styles.screen}>
@@ -42,20 +76,26 @@ export function CardioSessionContent({
           accessibilityRole="button"
           accessibilityLabel={t('cardioSession.accessibility.close')}
           onPress={onClose}
-          style={({ pressed }) => [styles.close, {
-            backgroundColor: theme.colors.controlBackground,
-            borderColor: theme.colors.controlBorder,
-            opacity: pressed ? theme.opacity.pressed : 1,
-          }]}
+          style={({ pressed }) => [
+            styles.close,
+            {
+              backgroundColor: theme.colors.surfacePressed,
+              borderColor: theme.colors.borderStrong,
+              opacity: pressed ? theme.opacity.pressed : 1,
+            },
+          ]}
         >
-          <Icon name="x" size={18} color={theme.colors.iconEmphasis} />
+          <Icon name="x" size={15} color={theme.colors.iconEmphasis} />
         </Pressable>
-        <View style={styles.headerCopy}>
-          <MonoLabel color={theme.colors.primaryEmphasis} style={styles.eyebrow}>
-            {t('cardioFinisher.kicker')}
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <MonoLabel style={styles.headerName}>
+            {cardio.mode.toUpperCase()}
           </MonoLabel>
-          <Display size={compact ? 22 : 26} skew={false}>{t('cardioFinisher.title')}</Display>
+          <MonoLabel style={styles.headerMeta}>
+            {`${cardio.duration} • ${cardio.intensity}`.toUpperCase()}
+          </MonoLabel>
         </View>
+        <View style={[styles.close, styles.closeSpacer]} />
       </View>
 
       <ScrollView
@@ -63,162 +103,156 @@ export function CardioSessionContent({
         contentContainerStyle={[styles.content, compact && styles.contentCompact]}
         showsVerticalScrollIndicator={false}
       >
-        <Card style={[styles.prescription, compact && styles.prescriptionCompact]}>
-          <View style={styles.prescriptionHeading}>
-            <View style={[styles.iconTile, { backgroundColor: theme.colors.primarySoft }]}>
-              <Icon name="heart" size={22} color={theme.colors.primaryEmphasis} />
-            </View>
-            <Text style={[theme.typography.title, styles.mode, compact && styles.modeCompact, { color: theme.colors.textPrimary }]}>
-              {cardio.mode}
-            </Text>
-          </View>
-          <View style={[styles.prescriptionDetails, compact && styles.detailsCompact, { borderTopColor: theme.colors.divider }]}>
-            <View style={[styles.detail, compact && styles.durationCompact]}>
-              {!compact && <MonoLabel color={theme.colors.textMuted} style={styles.eyebrow}>
-                {t('cardioSession.durationLabel')}
-              </MonoLabel>}
-              <Text style={[compact ? theme.typography.bodySmall : theme.typography.subtitle, { color: theme.colors.textPrimary }]}>{cardio.duration}</Text>
-            </View>
-            <View style={styles.detail}>
-              {!compact && <MonoLabel color={theme.colors.textMuted} style={styles.eyebrow}>
-                {t('cardioSession.intensityLabel')}
-              </MonoLabel>}
-              <Text style={[compact ? theme.typography.bodySmall : theme.typography.subtitle, { color: theme.colors.textPrimary }]}>{cardio.intensity}</Text>
-            </View>
-          </View>
-        </Card>
-
-        <LinearGradient
-          colors={theme.gradients.accentSummary}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={[styles.timerCard, compact && styles.timerCompact, { borderColor: theme.colors.primaryBorderSoft }]}
+        <Animated.View
+          style={[
+            styles.timer,
+            !ready && {
+              opacity: runningReveal,
+              transform: [{ translateY: runningReveal.interpolate({ inputRange: [0, 1], outputRange: [3, 0] }) }],
+            },
+          ]}
         >
-          <View style={styles.statusRow}>
-            <View style={[styles.statusDot, { backgroundColor: accent }]} />
-            <Text accessibilityLiveRegion="polite" style={[theme.typography.bodySmall, styles.statusText, { color: accent }]}>
-              {t(ready ? 'cardioSession.readyLabel' : targetReached ? 'cardioSession.targetReachedTitle' : 'cardioSession.runningLabel')}
-            </Text>
-          </View>
-          <View style={styles.clockBlock}>
-            <MonoLabel color={theme.colors.textSecondary} style={styles.eyebrow}>
-              {t(ready ? 'cardioSession.targetLabel' : 'cardioSession.elapsedLabel')}
-            </MonoLabel>
-            <Text
-              accessibilityLabel={ready ? t('cardioSession.targetLabel') : t('cardioSession.accessibility.timer')}
-              numberOfLines={1}
-              adjustsFontSizeToFit
-              minimumFontScale={0.5}
-              style={[styles.clock, compact && styles.clockCompact, { fontFamily: theme.fonts.monoBold, color: targetReached ? accent : theme.colors.textPrimary }]}
-            >
-              {ready ? targetClock : doneClock}
-            </Text>
-            {!ready && (
-              <Text style={[theme.typography.bodySmall, styles.target, { color: theme.colors.textSecondary }]}>
-                {t('cardioSession.of', { target: targetClock })}
-              </Text>
-            )}
-          </View>
-
+          <Slash style={styles.timerLabel}>
+            {t(ready ? 'cardioSession.targetLabel' : 'cardioSession.remainingLabel').toUpperCase()}
+          </Slash>
+          <Text
+            accessibilityLabel={t('cardioSession.accessibility.timer')}
+            style={[
+              styles.clock,
+              compact && styles.clockCompact,
+              { color: theme.colors.textPrimary, fontFamily: theme.fonts.display },
+            ]}
+          >
+            {clock}
+          </Text>
           <View
             accessibilityRole="progressbar"
             accessibilityLabel={t('cardioSession.accessibility.timer')}
             accessibilityValue={{ min: 0, max: 100, now: progressPercent }}
-            style={[styles.progressTrack, { backgroundColor: theme.colors.progressTrack }]}
+            style={styles.progress}
           >
-            <View style={[styles.progressFill, { width: `${progressPercent}%`, backgroundColor: accent }]} />
+            <SegBar value={progress} segs={14} />
           </View>
-
-          {ready ? (
-            <Text style={[theme.typography.bodySmall, styles.hint, { color: theme.colors.textSecondary }]}>
-              {t('cardioSession.readyHint')}
+          <View style={styles.statusRow}>
+            <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+            <Text accessibilityLiveRegion="polite" style={{ color: statusColor, fontFamily: theme.fonts.ui, fontSize: 13 }}>
+              {status}
             </Text>
-          ) : (
-            <View style={styles.timerBottom}>
-              <Text style={[theme.typography.bodySmall, styles.remaining, { color: theme.colors.textSecondary }]}>
-                {targetReached
-                  ? t('cardioSession.targetReachedBody')
-                  : t('cardioSession.remaining', { time: remainingClock })}
-              </Text>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={t('cardioSession.extendAccessibility')}
-                onPress={onExtend}
-                style={({ pressed }) => [styles.extend, {
-                  backgroundColor: theme.colors.controlBackground,
-                  borderColor: theme.colors.controlBorder,
-                  opacity: pressed ? theme.opacity.pressed : 1,
-                }]}
-              >
-                <Text style={[theme.typography.subtitle, { color: theme.colors.textPrimary }]}>{t('cardioSession.extend')}</Text>
-              </Pressable>
-            </View>
-          )}
-          {celebration}
-        </LinearGradient>
+          </View>
+        </Animated.View>
       </ScrollView>
 
-      <View style={[styles.footer, { borderTopColor: theme.colors.divider }]}>
-        <CtaButton
-          onPress={ready ? onStart : onFinish}
-          accessibilityLabel={t(ready ? 'cardioSession.start' : 'cardioSession.finish')}
-          style={styles.fullWidth}
-        >
-          {t(ready ? 'cardioSession.start' : 'cardioSession.finish')}
-        </CtaButton>
-        {ready && (
+      <View style={[styles.footer, compact && styles.footerCompact]}>
+        <View style={styles.actions}>
           <Pressable
             accessibilityRole="button"
-            onPress={onClose}
-            style={({ pressed }) => [styles.skip, { opacity: pressed ? theme.opacity.pressed : 1 }]}
+            accessibilityLabel={t(ready ? 'cardioSession.start' : 'cardioSession.finish')}
+            accessibilityState={{ disabled: !!finishing, busy: !!finishing }}
+            disabled={finishing}
+            onPress={ready ? onStart : onFinish}
+            style={({ pressed }) => [
+              styles.primary,
+              {
+                backgroundColor: theme.colors.primary,
+                shadowColor: theme.colors.primary,
+                opacity: pressed || finishing ? theme.opacity.pressed : 1,
+              },
+            ]}
           >
-            <Text style={[theme.typography.bodySmall, styles.skipText, { color: theme.colors.textSecondary }]}>
-              {t('cardioSession.skipAndFinish')}
-            </Text>
+            {finishing && !ready ? (
+              <ActivityIndicator color={theme.colors.primaryForeground} />
+            ) : (
+              <Animated.View
+                style={[
+                  styles.primaryContent,
+                  !ready && { opacity: runningReveal },
+                ]}
+              >
+                <Icon name={ready ? 'play' : 'check'} size={14} color={theme.colors.primaryForeground} />
+                <Text style={{ color: theme.colors.primaryForeground, fontFamily: theme.fonts.display, fontSize: 14, letterSpacing: 1.4, textTransform: 'uppercase' }}>
+                  {t(ready ? 'cardioSession.start' : 'cardioSession.finish')}
+                </Text>
+              </Animated.View>
+            )}
           </Pressable>
-        )}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t(ready ? 'cardioSession.skipAndFinish' : 'cardioSession.extendAccessibility')}
+            accessibilityState={{ disabled: !!finishing, busy: ready && !!finishing }}
+            disabled={finishing}
+            onPress={ready ? onSkip : onExtend}
+            style={({ pressed }) => [
+              styles.secondary,
+              {
+                backgroundColor: theme.colors.surfacePressed,
+                borderColor: theme.colors.borderStrong,
+                opacity: pressed || finishing ? theme.opacity.pressed : 1,
+              },
+            ]}
+          >
+            {finishing && ready ? (
+              <ActivityIndicator color={theme.colors.textPrimary} />
+            ) : (
+              <Text
+                numberOfLines={2}
+                style={[
+                  styles.secondaryText,
+                  { color: theme.colors.textPrimary, fontFamily: theme.fonts.mono },
+                ]}
+              >
+                {t(ready ? 'cardioSession.skip' : 'cardioSession.extend')}
+              </Text>
+            )}
+          </Pressable>
+        </View>
       </View>
+
+      {celebration}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, width: '100%', maxWidth: 464, alignSelf: 'center' },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 22, paddingTop: 12, paddingBottom: 20 },
-  headerCompact: { paddingTop: 8, paddingBottom: 12 },
-  close: { width: 44, height: 44, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  headerCopy: { flex: 1, minWidth: 0 },
-  eyebrow: { letterSpacing: 1.2, lineHeight: 16 },
+  screen: { flex: 1, width: '100%', maxWidth: 464, alignSelf: 'center', position: 'relative' },
+  header: {
+    paddingHorizontal: 20, paddingTop: 10, paddingBottom: 10,
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+  },
+  headerCompact: { paddingTop: 6, paddingBottom: 6 },
+  headerName: { textAlign: 'center' },
+  headerMeta: { textAlign: 'center', marginTop: 4 },
+  close: {
+    width: 44, height: 44, borderRadius: 12, borderWidth: 1,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  closeSpacer: { borderWidth: 0, opacity: 0 },
   scroll: { flex: 1 },
-  content: { paddingHorizontal: 22, paddingBottom: 24, gap: 20 },
-  contentCompact: { paddingBottom: 16, gap: 12 },
-  prescription: { padding: 18, gap: 18 },
-  prescriptionCompact: { padding: 12, gap: 10 },
-  prescriptionHeading: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  iconTile: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  mode: { flex: 1, minWidth: 0 },
-  modeCompact: { fontSize: 15, lineHeight: 20 },
-  prescriptionDetails: { flexDirection: 'row', flexWrap: 'wrap', gap: 16, borderTopWidth: 1, paddingTop: 16 },
-  detail: { flexGrow: 1, flexBasis: 110, gap: 5 },
-  detailsCompact: { paddingTop: 8, gap: 12 },
-  durationCompact: { flexGrow: 0, flexBasis: 70 },
-  timerCard: { borderRadius: 20, borderWidth: 1, padding: 22, gap: 22 },
-  timerCompact: { padding: 14, gap: 10 },
-  statusRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
-  statusText: { flexShrink: 1, textAlign: 'center' },
+  content: {
+    flexGrow: 1, alignItems: 'center', justifyContent: 'center',
+    paddingHorizontal: 28, paddingVertical: 24,
+  },
+  contentCompact: { paddingVertical: 14 },
+  timer: { width: '100%', alignItems: 'center' },
+  timerLabel: { marginBottom: 14 },
+  clock: {
+    fontSize: 104, lineHeight: displayLineHeight(104), color: '#fff',
+    textAlign: 'center', includeFontPadding: false, fontVariant: ['tabular-nums'],
+    transform: [{ skewX: '-8deg' }],
+  },
+  clockCompact: { fontSize: 88, lineHeight: displayLineHeight(88) },
+  progress: { width: 220, marginTop: 22 },
+  statusRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 14 },
   statusDot: { width: 6, height: 6, borderRadius: 3 },
-  clockBlock: { alignItems: 'center', width: '100%' },
-  clock: { width: '100%', fontSize: 64, lineHeight: 86, textAlign: 'center', includeFontPadding: false, fontVariant: ['tabular-nums'], letterSpacing: -2 },
-  clockCompact: { fontSize: 48, lineHeight: 58 },
-  target: { textAlign: 'center' },
-  progressTrack: { height: 5, borderRadius: 3, overflow: 'hidden' },
-  progressFill: { height: '100%', borderRadius: 3 },
-  hint: { textAlign: 'center' },
-  timerBottom: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 12 },
-  remaining: { flexGrow: 1, flexBasis: 130 },
-  extend: { minHeight: 44, paddingHorizontal: 16, paddingVertical: 10, borderWidth: 1, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
-  footer: { paddingHorizontal: 22, paddingTop: 16, paddingBottom: 12, borderTopWidth: 1, gap: 4 },
-  fullWidth: { width: '100%' },
-  skip: { minHeight: 44, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 10 },
-  skipText: { textAlign: 'center' },
+  footer: { paddingHorizontal: 22, paddingTop: 14, paddingBottom: 12 },
+  footerCompact: { paddingTop: 10, paddingBottom: 8 },
+  actions: { width: '100%', flexDirection: 'column', gap: 10 },
+  secondary: { width: '100%', height: 52, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8 },
+  secondaryText: { fontSize: 11, lineHeight: 15, letterSpacing: 0.8, textAlign: 'center', textTransform: 'uppercase' },
+  primary: {
+    width: '100%', height: 52, paddingHorizontal: 14,
+    borderRadius: 12, flexDirection: 'row',
+    alignItems: 'center', justifyContent: 'center', gap: 9,
+    shadowOpacity: 0.4, shadowRadius: 18, shadowOffset: { width: 0, height: 7 }, elevation: 7,
+  },
+  primaryContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9 },
 });

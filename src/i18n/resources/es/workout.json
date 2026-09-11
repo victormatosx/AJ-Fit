@@ -7,6 +7,7 @@
     }
   },
   "exit": {
+    "kicker": "Entreno en curso",
     "title": "¿Salir del entreno?",
     "body": "Tu entreno todavía está en curso. Puedes minimizarlo y continuar después, o descartarlo.",
     "minimize": "Minimizar entreno",
@@ -84,8 +85,10 @@
     "readyLabel": "Todo listo para empezar",
     "runningLabel": "Cardio en curso",
     "targetLabel": "Meta de hoy",
+    "remainingLabel": "Tiempo restante",
     "elapsedLabel": "Tiempo realizado",
     "start": "Iniciar cardio",
+    "skip": "Omitir cardio",
     "skipAndFinish": "Saltar y finalizar entreno",
     "readyHint": "El cronómetro solo empieza cuando toques iniciar.",
     "of": "de {{target}}",
@@ -101,6 +104,11 @@
     "finishConfirmAfterGoal": "Completaste tu meta de {{target}}. Tiempo realizado: {{done}}.",
     "continueCardio": "Continuar cardio",
     "confirmFinish": "Finalizar",
+    "finishSavingTitle": "Guardando cardio…",
+    "finishSavingBody": "Un momento — estamos confirmando tu cardio antes de finalizar el entreno.",
+    "finishErrorTitle": "No se pudo guardar",
+    "finishErrorBody": "Verifica tu conexión e intenta de nuevo. Tu entreno sigue abierto hasta que esto se confirme — no se pierde nada.",
+    "finishRetry": "Intentar de nuevo",
     "exitConfirmTitle": "¿Salir del cardio?",
     "exitConfirmBody": "Tu fuerza ya está completa. Si sales ahora finalizamos el entreno con {{done}} de cardio registrados.",
     "accessibility": {
@@ -162,6 +170,8 @@
     "logLoad": "Registrar carga · Serie {{setNumber}}",
     "optional": "opcional",
     "inputHint": "Toca el número para escribir",
+    "continueToCardio": "Ir al cardio",
+    "finishWorkout": "Finalizar entreno",
     "addSecondsAccessibility": "Añadir {{seconds}} segundos",
     "nextSet": "Próxima serie"
   },
@@ -175,6 +185,9 @@
     "titleLine1": "Hecho.",
     "titleLine2": "Más fuerte.",
     "backHome": "Volver al inicio",
+    "finishing": "Finalizando entreno…",
+    "finishFailed": "No se pudo finalizar el entreno.",
+    "retry": "Intentar de nuevo",
     "metrics": {
       "time": "Tiempo",
       "volume": "Volumen",

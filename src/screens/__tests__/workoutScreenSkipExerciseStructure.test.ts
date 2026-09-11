@@ -12,4 +12,16 @@ describe('WorkoutScreen — skipping a started exercise', () => {
     expect(source).toContain('disabled={navigationLocked}');
     expect(source).toContain('accessibilityState={{ disabled: navigationLocked }}');
   });
+
+  it('reserves the skip-action slot so the complete-set CTA never moves', () => {
+    const ctaBlock = source.slice(
+      source.indexOf('{/* CTAs */}'),
+      source.indexOf('{/* REST OVERLAY */}'),
+    );
+    expect(ctaBlock).toContain('<View style={{ height: 54 }}>');
+    expect(ctaBlock).toContain('height: 44');
+    expect(ctaBlock.indexOf('<View style={{ height: 54 }}>')).toBeLessThan(
+      ctaBlock.indexOf('{canSkipCurrentExercise && ('),
+    );
+  });
 });

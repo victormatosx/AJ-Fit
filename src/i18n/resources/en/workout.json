@@ -7,6 +7,7 @@
     }
   },
   "exit": {
+    "kicker": "Workout in progress",
     "title": "Exit workout?",
     "body": "Your workout is still in progress. You can minimize it and continue later, or discard it.",
     "minimize": "Minimize workout",
@@ -84,8 +85,10 @@
     "readyLabel": "Ready when you are",
     "runningLabel": "Cardio in progress",
     "targetLabel": "Today's target",
+    "remainingLabel": "Time remaining",
     "elapsedLabel": "Elapsed time",
     "start": "Start cardio",
+    "skip": "Skip cardio",
     "skipAndFinish": "Skip and finish workout",
     "readyHint": "The clock only starts once you tap start.",
     "of": "of {{target}}",
@@ -101,6 +104,11 @@
     "finishConfirmAfterGoal": "You reached your {{target}} goal. Time done: {{done}}.",
     "continueCardio": "Keep going",
     "confirmFinish": "Finish",
+    "finishSavingTitle": "Saving cardio…",
+    "finishSavingBody": "Hang on a moment — we're confirming your cardio before finishing the workout.",
+    "finishErrorTitle": "Couldn't save cardio",
+    "finishErrorBody": "Check your connection and try again. Your workout stays open until this is confirmed — nothing is lost.",
+    "finishRetry": "Try again",
     "exitConfirmTitle": "Leave cardio?",
     "exitConfirmBody": "Your strength work is already complete. Leaving now finishes the workout with {{done}} of cardio logged.",
     "accessibility": {
@@ -162,6 +170,8 @@
     "logLoad": "Log load · Set {{setNumber}}",
     "optional": "optional",
     "inputHint": "Tap the number to type",
+    "continueToCardio": "Go to cardio",
+    "finishWorkout": "Finish workout",
     "addSecondsAccessibility": "Add {{seconds}} seconds",
     "nextSet": "Next set"
   },
@@ -175,6 +185,9 @@
     "titleLine1": "Done.",
     "titleLine2": "Stronger.",
     "backHome": "Back to home",
+    "finishing": "Finishing workout…",
+    "finishFailed": "We couldn't finish the workout.",
+    "retry": "Try again",
     "metrics": {
       "time": "Time",
       "volume": "Volume",

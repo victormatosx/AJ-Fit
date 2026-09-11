@@ -1,9 +1,10 @@
 import { useCallback, useRef, useState } from 'react';
 import { useAuth } from '../state/AuthContext';
-import { errorClass, errorCode, logInfo, logWarn } from '../lib/logger';
+import { errorClass, errorCode, errorReason, logInfo, logWarn } from '../lib/logger';
 import { localDateInTimezone } from '../scheduleEngine/localDate';
 import {
   abandonWorkoutExecution,
+  completeCardioExecution,
   finishWorkoutExecution,
   recordSetExecution,
   skipExerciseExecution,
@@ -76,6 +77,19 @@ export interface WorkoutExecutionController {
   recordSet: (exerciseIndex: number, setIndex: number, weightKg: number | null, actualReps?: number | null) => Promise<void>;
   skipSet: (exerciseIndex: number, setIndex: number) => Promise<void>;
   skipExercise: (exerciseIndex: number) => Promise<void>;
+  /**
+   * Cardio Finisher Completion Recovery hardening (2026-09): persists the
+   * cardio finisher's completion durably on the execution BEFORE the caller
+   * advances to `finish()` — see `completeCardioExecution`'s doc comment
+   * (`services/workoutExecutions.ts`) for why this is a separate recoverable
+   * step rather than folded into `finish()`. Returns a typed result, never
+   * throws: a network/transaction failure must never be read as "cardio is
+   * confirmed done" by the caller (docs — a false-positive here is exactly
+   * the bug this hardening fixes). `{ ok: true }` also covers the idempotent
+   * "already completed" case — the caller always proceeds to `finish()`
+   * next either way.
+   */
+  completeCardio: (actualDurationSeconds: number) => Promise<{ ok: true } | { ok: false; error: unknown }>;
   /** Sweeps any pending sets to SKIPPED and marks the execution COMPLETED/PARTIALLY_COMPLETED. Does not touch the Schedule Engine — the caller advances it afterward (docs §40). */
   finish: () => Promise<'COMPLETED' | 'PARTIALLY_COMPLETED' | null>;
   /**
@@ -219,6 +233,17 @@ export function useWorkoutExecution(program: WorkoutProgramSnapshot | null, time
     }
   }, [uid, execution]);
 
+  const completeCardio = useCallback(async (actualDurationSeconds: number): Promise<{ ok: true } | { ok: false; error: unknown }> => {
+    if (!uid || !execution) return { ok: false, error: new Error('no_active_execution') };
+    try {
+      await completeCardioExecution(uid, execution.executionId, actualDurationSeconds);
+      return { ok: true };
+    } catch (error) {
+      logWarn('workout_execution', 'cardio_complete_failed', { error });
+      return { ok: false, error };
+    }
+  }, [uid, execution]);
+
   const finish = useCallback(async () => {
     if (!uid || !execution) return null;
     // Diagnostic instrumentation (Phase 2, Part F) — technical fields only
@@ -250,6 +275,7 @@ export function useWorkoutExecution(program: WorkoutProgramSnapshot | null, time
         executionId: execution.executionId,
         sessionIndex: execution.sessionIndex,
         errorCode: errorCode(error),
+        reason: errorReason(error),
         errorClass: errorClass(error),
       });
       return null;
@@ -285,6 +311,6 @@ export function useWorkoutExecution(program: WorkoutProgramSnapshot | null, time
 
   return {
     execution, starting, startError, workoutStartedAtMs,
-    start, adoptExecution, recordSet, skipSet, skipExercise, finish, abandon, abandonExecutionById,
+    start, adoptExecution, recordSet, skipSet, skipExercise, completeCardio, finish, abandon, abandonExecutionById,
   };
 }

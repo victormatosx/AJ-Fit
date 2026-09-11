@@ -22,6 +22,7 @@ import type { TrainingCycle } from './prescriptionEngine/workoutLifecycle/types'
 import { isOperationBlockedByCircuitBreaker, loadWorkoutLifecycleCircuitBreakerConfig } from './circuitBreaker';
 import { progressionPolicyModeFor, resolveWorkoutLifecycleQaMode } from './qaPolicy';
 import { logWarn } from '../lib/logger';
+import { validateMaterializedExecutionSubstitutions } from './exerciseSubstitution';
 
 export const WORKOUT_LIFECYCLE_AUTHORITY_GRANT_ID = 'current';
 
@@ -310,7 +311,9 @@ function prescribedExecutionCounts(
     if (!plainObject(record) || !Number.isInteger(record.exerciseIndex) || seenExercises.has(record.exerciseIndex as number)) return null;
     const index = record.exerciseIndex as number;
     const expected = session.exercises[index];
-    if (!expected || record.exerciseId !== expected.exerciseId || !Array.isArray(record.sets)) return null;
+    const prescribedExerciseId = typeof record.prescribedExerciseId === 'string'
+      ? record.prescribedExerciseId : record.exerciseId;
+    if (!expected || prescribedExerciseId !== expected.exerciseId || !Array.isArray(record.sets)) return null;
     seenExercises.add(index);
     const setCount = Number.isInteger(expected.sets) ? expected.sets : 1;
     if (record.sets.length !== setCount) return null;
@@ -731,6 +734,87 @@ async function sealTargetProgram(uid: string, request: AuthorityRequest, firesto
   });
 }
 
+async function validateFinishExecution(
+  uid: string,
+  request: AuthorityRequest,
+  firestore: Firestore,
+): Promise<Record<string, unknown>> {
+  if (!boundedId(request.executionId)) throw new HttpsError('invalid-argument', 'invalid_execution_id');
+  const root = firestore.collection('users').doc(uid);
+  const executionSnapshot = await root.collection('workoutExecutions').doc(request.executionId).get();
+  const execution = executionSnapshot.data();
+  if (!executionSnapshot.exists || execution?.status !== 'IN_PROGRESS'
+    || !boundedId(execution?.programInstanceId)) {
+    throw new HttpsError('failed-precondition', 'execution_not_finishable');
+  }
+
+  // Bind finish authority to the immutable ProgramInstance carried by this
+  // execution, not to whichever program happens to be active later. An
+  // adaptation/evolution racing a long workout may supersede the active
+  // pointer, but it must not make already-started evidence impossible to
+  // terminalize against its own prescription snapshot.
+  const instanceSnapshot = await root.collection('programInstances').doc(execution.programInstanceId).get();
+  const instance = instanceSnapshot.data();
+  const executionProgramId = boundedId(execution.programId) ? execution.programId : instance?.contentIdentity;
+  if (!boundedId(executionProgramId)) {
+    throw new HttpsError('failed-precondition', 'execution_prescription_referent_missing');
+  }
+  const programSnapshot = await root.collection('workoutPrograms').doc(executionProgramId).get();
+  const program = programSnapshot.data();
+  if (!instanceSnapshot.exists || !programSnapshot.exists
+    || instance?.contentIdentity !== executionProgramId) {
+    throw new HttpsError('failed-precondition', 'execution_prescription_referent_missing');
+  }
+  const session = Number.isInteger(execution.sessionIndex) && Array.isArray(program?.sessions)
+    ? program.sessions[execution.sessionIndex]
+    : null;
+  if (!session || prescribedExecutionCounts(execution, session, execution.programInstanceId) === null) {
+    const actual = Array.isArray(execution.exercises)
+      ? execution.exercises.map((record: DocumentData) => ({
+        exerciseIndex: record?.exerciseIndex ?? null,
+        prescribedExerciseId: record?.prescribedExerciseId ?? record?.exerciseId ?? null,
+        exerciseId: record?.exerciseId ?? null,
+        setCount: Array.isArray(record?.sets) ? record.sets.length : null,
+      })) : null;
+    const expected = Array.isArray(session?.exercises)
+      ? session.exercises.map((record: DocumentData, exerciseIndex: number) => ({
+        exerciseIndex,
+        exerciseId: record?.exerciseId ?? null,
+        setCount: Number.isInteger(record?.sets) ? record.sets : 1,
+      })) : null;
+    logWarn('workoutLifecycle.authorize', 'execution_does_not_match_authoritative_prescription', {
+      executionId: request.executionId,
+      programInstanceId: execution.programInstanceId,
+      sessionIndex: execution.sessionIndex ?? null,
+      expected: expected?.map((item: unknown) => canonical(item)) ?? null,
+      actual: actual?.map((item: unknown) => canonical(item)) ?? null,
+    });
+    throw new HttpsError(
+      'permission-denied',
+      'execution_does_not_match_authoritative_prescription',
+      { reason: 'execution_does_not_match_authoritative_prescription' },
+    );
+  }
+  const substitution = await validateMaterializedExecutionSubstitutions(uid, execution, firestore);
+  if (!substitution.valid) {
+    logWarn('workoutLifecycle.authorize', 'execution_substitution_not_authoritative', {
+      executionId: request.executionId,
+      programInstanceId: execution.programInstanceId,
+      sessionIndex: execution.sessionIndex,
+      reason: substitution.reason,
+      exerciseIndex: substitution.exerciseIndex,
+      prescribedExerciseId: substitution.prescribedExerciseId,
+      exerciseId: substitution.exerciseId,
+    });
+    throw new HttpsError(
+      'permission-denied',
+      'execution_substitution_not_authoritative',
+      { reason: substitution.reason },
+    );
+  }
+  return { sourceProgramInstanceId: execution.programInstanceId };
+}
+
 async function validateRequest(uid: string, request: AuthorityRequest, firestore: Firestore): Promise<Record<string, unknown>> {
   if (request.operation === 'INITIALIZE' || request.operation === 'MIGRATE') {
     if (!boundedId(request.targetProgramInstanceId) || !boundedId(request.targetCycleId)
@@ -870,6 +954,9 @@ async function validateRequest(uid: string, request: AuthorityRequest, firestore
       targetTrainingLevel: pairs[0].cycle.data().level,
       targetCycleNumber: pairs[0].cycle.data().cycleNumber,
     };
+  }
+  if (request.operation === 'FINISH_EXECUTION') {
+    return validateFinishExecution(uid, request, firestore);
   }
   const bundle = await activeBundle(uid, firestore);
   assertSource(request, bundle.state);
@@ -1027,21 +1114,6 @@ async function validateRequest(uid: string, request: AuthorityRequest, firestore
       throw new HttpsError('permission-denied', 'activation_cycle_semantics_not_authoritative');
     }
     await assertPlanSafe(request, firestore);
-  }
-  if (request.operation === 'FINISH_EXECUTION') {
-    if (!boundedId(request.executionId)) throw new HttpsError('invalid-argument', 'invalid_execution_id');
-    const execution = await firestore.collection('users').doc(uid).collection('workoutExecutions').doc(request.executionId).get();
-    if (!execution.exists || execution.data()?.status !== 'IN_PROGRESS'
-      || execution.data()?.programInstanceId !== bundle.state.activeProgramInstanceId) {
-      throw new HttpsError('failed-precondition', 'execution_not_finishable');
-    }
-    const executionData = execution.data()!;
-    const session = Array.isArray(bundle.program.sessions)
-      ? bundle.program.sessions[executionData.sessionIndex]
-      : null;
-    if (!session || prescribedExecutionCounts(executionData, session, bundle.state.activeProgramInstanceId) === null) {
-      throw new HttpsError('permission-denied', 'execution_does_not_match_authoritative_prescription');
-    }
   }
   let scheduleAuthorityFields: Record<string, unknown> = {};
   if (request.operation === 'COMPLETE_SCHEDULE') {

@@ -11,6 +11,33 @@ import { workoutExecutionDocumentId } from '../scheduleEngine/identities';
 export type WorkoutExecutionStatus = 'IN_PROGRESS' | 'COMPLETED' | 'PARTIALLY_COMPLETED' | 'ABANDONED';
 export type SetExecutionStatus = 'PENDING' | 'COMPLETED' | 'SKIPPED';
 
+/**
+ * Cardio Finisher Completion Recovery hardening (2026-09): the durable,
+ * server-side answer to "was this execution's cardio finisher completed" —
+ * never derived from the local timer (`lib/cardioTimer.ts`'s `CardioSession`,
+ * AsyncStorage-only) or from transient React state. Deliberately only ONE
+ * meaningful status: this record is written exactly once, the instant the
+ * user confirms "Finalizar cardio" (`completeCardioExecution`), and never
+ * again — there is no persisted `NOT_STARTED`/`IN_PROGRESS` value because
+ * nothing durable needs to distinguish them (a cardio attempt that never
+ * reached completion resumes fine from local timer state the same way it
+ * always has; only "already completed" needs to survive a process death, so
+ * WorkoutScreen's hydration never re-offers a finished cardio finisher as
+ * fresh — see `hydration.ts`'s `cardioCompleted`). Absent (`null`, the field
+ * always exists once this schema is in effect) is the "not completed yet"
+ * state, and is also what every execution written before this field existed
+ * degrades to (`fromDoc` in `services/workoutExecutions.ts`).
+ */
+export type CardioExecutionStatus = 'COMPLETED';
+
+export interface CardioExecutionRecord {
+  status: CardioExecutionStatus;
+  /** Frozen the instant cardio was marked complete — same semantics as `CardioSession.actualDurationSeconds` (`lib/cardioTimer.ts`). Never a tick count. */
+  actualDurationSeconds: number;
+  /** `FieldValue.serverTimestamp()` sentinel when writing, a resolved `Timestamp` when read back. */
+  completedAt: unknown;
+}
+
 export interface SetExecution {
   setIndex: number;
   status: SetExecutionStatus;
@@ -146,6 +173,16 @@ export interface WorkoutExecution {
   startedAt: unknown;
   finishedAt: unknown | null;
   exercises: ExerciseExecution[];
+  /**
+   * Durable cardio-finisher completion record for this execution — see
+   * `CardioExecutionRecord`'s doc comment. `null` until
+   * `completeCardioExecution` runs, including forever on an execution whose
+   * session has no cardio finisher at all (nothing ever writes it). Never
+   * read as "this session has a cardio finisher" — that fact comes only
+   * from `FinalWorkoutSession.cardioFinisher` (the plan), never from this
+   * execution record.
+   */
+  cardio: CardioExecutionRecord | null;
   executionSchemaVersion: number;
   /** P0-C protocol marker — see `WORKOUT_EXECUTION_MUTEX_PROTOCOL_VERSION`'s doc comment. Absent on every pre-P0-C write. */
   mutexProtocolVersion?: number;

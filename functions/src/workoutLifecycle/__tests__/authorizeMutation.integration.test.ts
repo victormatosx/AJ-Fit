@@ -158,6 +158,86 @@ describe.skipIf(!enabled)('Workout Lifecycle authority — real Firestore Emulat
     expect(grant).toMatchObject({ uid: UID, operation: 'FINISH_EXECUTION', executionId: 'exec_1', schemaVersion: 1 });
   });
 
+  it.each([
+    ['NONE', false],
+    ['NONE', true],
+    ['SESSION', false],
+    ['SESSION', true],
+    ['PERMANENT', false],
+    ['PERMANENT', true],
+  ] as const)('authorizes V2 finish with substitution=%s and cardio=%s', async (scope, withCardio) => {
+    const root = db.collection('users').doc(UID);
+    await Promise.all([
+      root.collection('programInstances').doc('wpi_active').update({
+        prescriptionInputSnapshot: {
+          snapshotId: 'pis_active', schemaVersion: 1, source: 'QUESTIONNAIRE_BASELINE',
+          inputs: completeInputs({ place: 'home', primaryPlace: 'home', equipment: ['bodyweight'] }),
+        },
+      }),
+      root.collection('workoutPrograms').doc('wpg_active').update({
+        environment: 'home',
+        sessions: [{ name: 'Legs', exercises: [{ exerciseId: 'barbell-back-squat', sets: 3 }] }],
+      }),
+    ]);
+    const record = exercise(
+      0,
+      scope === 'NONE' ? 'barbell-back-squat' : 'bodyweight-squat',
+      ['COMPLETED', 'COMPLETED', 'COMPLETED'],
+    );
+    await root.collection('workoutExecutions').doc('exec_1').set({
+      status: 'IN_PROGRESS', programId: 'wpg_active', programInstanceId: 'wpi_active', sessionIndex: 0,
+      exercises: [{
+        ...record,
+        prescribedExerciseId: 'barbell-back-squat',
+        ...(scope === 'NONE' ? {} : { substitution: { scope, appliedAt: Timestamp.now() } }),
+      }],
+      ...(withCardio ? { cardio: { status: 'COMPLETED', actualDurationSeconds: 600, completedAt: Timestamp.now() } } : {}),
+    });
+    await expect(finishRequest()).resolves.toMatchObject({ grantId: 'current' });
+  });
+
+  it('denies a changed effective exercise that lacks server-valid substitution evidence', async () => {
+    const root = db.collection('users').doc(UID);
+    await root.collection('workoutPrograms').doc('wpg_active').update({
+      sessions: [{ name: 'Legs', exercises: [{ exerciseId: 'barbell-back-squat', sets: 3 }] }],
+    });
+    await root.collection('workoutExecutions').doc('exec_1').set({
+      status: 'IN_PROGRESS', programId: 'wpg_active', programInstanceId: 'wpi_active', sessionIndex: 0,
+      exercises: [{
+        ...exercise(0, 'goblet-squat', ['COMPLETED', 'COMPLETED', 'COMPLETED']),
+        prescribedExerciseId: 'barbell-back-squat',
+      }],
+    });
+    await expect(finishRequest()).rejects.toMatchObject({
+      code: 'permission-denied', message: 'execution_substitution_not_authoritative',
+      details: { reason: 'substitution_marker_missing' },
+    });
+  });
+
+  it('finishes against the execution-bound prescription after a later active-program adaptation', async () => {
+    const root = db.collection('users').doc(UID);
+    await root.collection('workoutExecutions').doc('exec_1').set({
+      status: 'IN_PROGRESS', programId: 'wpg_active', programInstanceId: 'wpi_active', sessionIndex: 0,
+      exercises: [
+        exercise(0, 'squat', ['COMPLETED', 'COMPLETED', 'COMPLETED']),
+        exercise(1, 'row', ['COMPLETED', 'COMPLETED', 'COMPLETED']),
+      ],
+    });
+    await Promise.all([
+      root.collection('workoutLifecycleState').doc('current').update({
+        activeProgramInstanceId: 'wpi_future', activeContentIdentity: 'wpg_future', activePrescriptionIdentity: 'rx_future',
+      }),
+      root.collection('programInstances').doc('wpi_future').set({
+        programInstanceId: 'wpi_future', contentIdentity: 'wpg_future', prescriptionIdentity: 'rx_future',
+      }),
+      root.collection('workoutPrograms').doc('wpg_future').set({
+        programId: 'wpg_future', prescriptionId: 'rx_future',
+        sessions: [{ name: 'Future', exercises: [{ exerciseId: 'different', sets: 1 }] }],
+      }),
+    ]);
+    await expect(finishRequest()).resolves.toMatchObject({ grantId: 'current' });
+  });
+
   it('rejects activation without an authoritative pending evolution', async () => {
     await expect(authorizeWorkoutLifecycleMutationHandler({
       auth: { uid: UID },

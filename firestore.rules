@@ -536,7 +536,7 @@ service cloud.firestore {
              'programId', 'templateId', 'sessionIndex', 'sessionName',
              'scheduledLocalDate', 'status', 'startedAt', 'finishedAt',
              'exercises', 'executionSchemaVersion', 'createdAt', 'updatedAt',
-             'programInstanceId', 'mutexProtocolVersion'
+             'programInstanceId', 'mutexProtocolVersion', 'cardio'
            ])
         // P0-C protocol marker (docs/workout-lifecycle/ hardening plan) —
         // optional so a pre-hardening client omitting it is still valid;
@@ -1960,6 +1960,12 @@ service cloud.firestore {
           && request.resource.data.startedAt == request.time
           && request.resource.data.createdAt == request.time
           && request.resource.data.updatedAt == request.time
+          // Cardio Finisher Completion Recovery hardening, Architecture B
+          // (2026-09 security audit): a client-created execution must always
+          // be born with `cardio` absent/null — never already COMPLETED.
+          // Only the `completeWorkoutCardio` callable (Admin SDK, bypasses
+          // Rules entirely) may ever write a non-null `cardio`.
+          && request.resource.data.get('cardio', null) == null
           && (
             !workoutExecutionMutexHardeningEnabled()
             || (
@@ -2007,6 +2013,31 @@ service cloud.firestore {
           && (request.resource.data.startedAt == resource.data.startedAt
               || (resource.data.status == 'ABANDONED' && request.resource.data.status == 'IN_PROGRESS'
                   && request.resource.data.startedAt == request.time))
+          // Cardio Finisher Completion Recovery hardening, Architecture B
+          // (2026-09 security audit — supersedes the original "shape only"
+          // version of this check, which a characterization test suite
+          // proved let the client forge an arbitrary completion/duration/
+          // timestamp directly, bypassing `completeCardioExecution`
+          // entirely). The client can NEVER change `cardio` via a direct
+          // Firestore write, full stop — a single field-equality, cheaper
+          // than the `startedAt` immutability check right above (no `.get()`,
+          // no `.diff()`, no branching on `status`). Only the
+          // `completeWorkoutCardio` callable (Admin SDK, bypasses Rules
+          // entirely) may ever move it away from whatever it already is —
+          // see that callable's own idempotent transaction
+          // (`functions/src/workoutLifecycle/completeWorkoutCardio.ts`) for
+          // the real integrity guarantee (ownership + IN_PROGRESS + the
+          // session actually prescribing a cardio finisher, all re-verified
+          // server-side, never trusted from the request payload). The ONE
+          // exception mirrors `startedAt`/`exercises` right above: a
+          // restart-after-abandon is semantically a new attempt, so the
+          // client legitimately resets a stale COMPLETED record back to
+          // null then too (`services/workoutExecutions.ts`'s `base` object
+          // always sends `cardio: null` on that path) — it can never smuggle
+          // a non-null value back in through this exception.
+          && (request.resource.data.get('cardio', null) == resource.data.get('cardio', null)
+              || (resource.data.status == 'ABANDONED' && request.resource.data.status == 'IN_PROGRESS'
+                  && request.resource.data.get('cardio', null) == null))
           && request.resource.data.createdAt == resource.data.createdAt
           && request.resource.data.updatedAt == request.time
           && (

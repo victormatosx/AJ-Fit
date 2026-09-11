@@ -345,6 +345,16 @@ describe('WorkoutScreen source — rest overlay keyboard dismisses on outside ta
     expect(restOverlayBody).toContain('onPress={onAdd15}');
     expect(restOverlayBody).toContain('onPress={onSkip}');
   });
+
+  it('renders the rest timer number without a blue text glow', () => {
+    const restOverlayBody = WORKOUT_SRC.slice(
+      WORKOUT_SRC.indexOf('function RestOverlay('),
+      WORKOUT_SRC.indexOf('\nfunction PROverlay('),
+    );
+    expect(restOverlayBody).not.toContain('textShadowColor');
+    expect(restOverlayBody).not.toContain('textShadowRadius');
+    expect(restOverlayBody).not.toContain('textShadowOffset');
+  });
 });
 
 describe('WorkoutScreen source — sub-sheet and confirm modal are never both visible', () => {

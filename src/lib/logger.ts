@@ -71,6 +71,15 @@ export function errorCode(err: unknown): string | undefined {
   return /^[a-z0-9/_-]{1,64}$/i.test(raw) ? raw : undefined;
 }
 
+/** Safe callable `details.reason` enum; arbitrary details payloads are never logged. */
+export function errorReason(err: unknown): string | undefined {
+  const details = typeof err === 'object' && err !== null && 'details' in err
+    ? (err as { details?: unknown }).details : null;
+  const raw = typeof details === 'object' && details !== null && 'reason' in details
+    ? String((details as { reason?: unknown }).reason) : '';
+  return /^[a-z0-9_/-]{1,96}$/i.test(raw) ? raw : undefined;
+}
+
 /** Constructor name only (e.g. `FirebaseError`, `TypeError`) — never the message/stack. */
 export function errorClass(err: unknown): string {
   if (err instanceof Error) return err.constructor.name || 'Error';

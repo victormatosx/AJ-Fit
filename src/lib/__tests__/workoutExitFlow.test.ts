@@ -35,6 +35,23 @@ describe('WorkoutScreen source — X opens a choice sheet, never abandons direct
     expect(WORKOUT_SRC).toContain("useState<'choice' | 'discard' | null>(null)");
     expect(WORKOUT_SRC).toContain('const [discardError, setDiscardError] = useState(false);');
   });
+
+  it('renders the exit choice as the app-standard floating dialog', () => {
+    const dialogBlock = WORKOUT_SRC.slice(
+      WORKOUT_SRC.indexOf('{/* EXIT DIALOG'),
+      WORKOUT_SRC.indexOf('</Modal>', WORKOUT_SRC.indexOf('{/* EXIT DIALOG')),
+    );
+    expect(dialogBlock).toContain("backgroundColor: exitDialogTheme.colors.overlayStrong");
+    expect(dialogBlock).toContain("justifyContent: 'center'");
+    expect(dialogBlock).toContain('maxWidth: sizes.modalMaxWidth');
+    expect(dialogBlock).toContain('borderRadius: radii.xl');
+    expect(dialogBlock).toContain('<HudCorners');
+    expect(dialogBlock).toContain("{t('exit.kicker').toUpperCase()}");
+    expect(dialogBlock).toContain('<Display size={26}');
+    expect(dialogBlock).toContain('height: 48');
+    expect(dialogBlock).toContain('backgroundColor: exitDialogTheme.colors.inverseSurface');
+    expect(dialogBlock).not.toContain("justifyContent: 'flex-end'");
+  });
 });
 
 describe('WorkoutScreen source — Minimizar performs zero domain mutation', () => {
@@ -95,10 +112,15 @@ describe('WorkoutScreen source — Descartar requires confirmation and gates onD
 
 describe('WorkoutScreen source — Cancelar paths never mutate', () => {
   it('closing the choice sheet or backing out of the discard sheet never calls onAbandon/onDone', () => {
-    const cancelChoice = "onPress={() => setExitSheet(null)} accessibilityLabel={t('exit.cancel')}";
-    const backDiscard = "setDiscardError(false);\n                        setExitSheet('choice');";
-    expect(WORKOUT_SRC).toContain(cancelChoice);
-    expect(WORKOUT_SRC).toContain(backDiscard);
+    const choiceBlock = WORKOUT_SRC.slice(
+      WORKOUT_SRC.indexOf("exitSheet === 'choice'"),
+      WORKOUT_SRC.indexOf("exitSheet === 'discard'"),
+    );
+    expect(choiceBlock).toContain("accessibilityLabel={t('exit.cancel')}");
+    expect(choiceBlock).toContain('onPress={() => setExitSheet(null)}');
+    expect(choiceBlock).not.toContain('onAbandon');
+    expect(choiceBlock).not.toContain('onDone()');
+    expect(WORKOUT_SRC).toMatch(/setDiscardError\(false\);\s+setExitSheet\('choice'\);/);
   });
 });
 

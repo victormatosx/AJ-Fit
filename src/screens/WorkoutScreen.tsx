@@ -10,13 +10,14 @@ import {
   Animated,
   Easing,
   Keyboard,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
 import { ScreenBg } from '../components/ui/ScreenBg';
 import { Display, Slash, MonoLabel } from '../components/ui/Display';
-import { Card } from '../components/ui/Card';
+import { Card, HudCorners } from '../components/ui/Card';
 import { CtaButton } from '../components/ui/CtaButton';
 import { CardioSessionContent } from '../components/workout/CardioSessionContent';
 import { SegBar } from '../components/ui/SegBar';
@@ -24,8 +25,8 @@ import { Icon } from '../components/ui/Icon';
 import { OutlineNumber } from '../components/ui/OutlineNumber';
 import { ExerciseGif } from '../components/fitness/ExerciseGif';
 import { useExerciseExecutionMedia } from '../workoutExecution/useExerciseExecutionMedia';
-import { displayLineHeight } from '../theme/tokens';
-import { useTheme } from '../theme';
+import { displayLineHeight, radii, sizes, spacing } from '../theme/tokens';
+import { darkTheme, useTheme } from '../theme';
 import { logInfo, logWarn } from '../lib/logger';
 import type { FinalCardioFinisher, FinalWorkoutPlan } from '../workoutPrescription/types';
 import { useUnits } from '../state/UnitsContext';
@@ -110,8 +111,28 @@ type Props = {
    * falls back to "now" for that one render.
    */
   workoutStartedAtMs?: number | null;
-  /** Fires once, the moment every set is done — distinct from `onDone` (which also fires on an early exit/X tap). This is what the Schedule Engine listens to advance the rotation. */
-  onSessionCompleted?: () => void;
+  /**
+   * Fires once, the moment the session is ready for the durable finish chain
+   * (`execution.finish()` -> `completeScheduledSession()` -> lifecycle) —
+   * distinct from `onDone` (which also fires on an early exit/X tap). This is
+   * what the Schedule Engine listens to advance the rotation. `recovery: true`
+   * means this fired from this screen's INITIAL mount state (a resumed
+   * session that was already fully done — strength-only, or cardio already
+   * durably COMPLETED — when the app died before `finish()` ran last time),
+   * not from a fresh user action just now (docs — Cardio Finisher Completion
+   * Recovery hardening; used only for observability, never changes behavior).
+   */
+  onSessionCompleted?: (context: { recovery: boolean }) => void;
+  /**
+   * True while `onSessionCompleted`'s durable finish chain is still in
+   * flight — drives `WorkoutDone`'s "Finalizando treino..." state so the
+   * success screen never lets the user believe the session is durably done,
+   * or navigate away, before it actually is (docs — Cardio Finisher
+   * Completion Recovery hardening).
+   */
+  finishing?: boolean;
+  /** Durable finish or schedule completion failed; keep this screen mounted and turn the CTA into an explicit retry. */
+  completionFailed?: boolean;
   /** Fires once a set's weight is actually logged (docs/workout-lifecycle/09_WORKOUT_EXECUTION_AND_HISTORY.md) — `exerciseIndex` matches this exercise's position in `plan.sessions[sessionIndex].exercises`, the same identity the Execution record uses. */
   onSetLogged?: (exerciseIndex: number, setIndex: number, weightKg: number) => void | Promise<void>;
   /**
@@ -124,6 +145,15 @@ type Props = {
    * navigation, and a failed abandon must never be silently treated as one.
    */
   onAbandon?: () => Promise<{ ok: true } | { ok: false; error: unknown }>;
+  /**
+   * Persists the cardio finisher's completion on the Firestore execution —
+   * `useWorkoutExecution().completeCardio` — BEFORE the local UI treats
+   * cardio as done (docs — Cardio Finisher Completion Recovery hardening).
+   * Returns a typed result, never throws: a network/transaction failure must
+   * never be read as "cardio is confirmed done". `CardioSessionContent`
+   * only advances to `finished` once this resolves `{ ok: true }`.
+   */
+  onCardioCompleted?: (actualDurationSeconds: number) => Promise<{ ok: true } | { ok: false; error: unknown }>;
   /**
    * The user's current declared limitation regions + equipment context —
    * exactly what the server-side manual-substitution resolver uses too
@@ -176,10 +206,10 @@ function translateMuscleGroup(tLoose: LooseT, target: string): string {
   return target;
 }
 
-export function WorkoutScreen({ plan, onDone, onMinimize, sessionIndex = 0, execution, workoutStartedAtMs, onSessionCompleted, onSetLogged, onAbandon, manualSubstitutionContext, onApplySubstitution }: Props) {
+export function WorkoutScreen({ plan, onDone, onMinimize, sessionIndex = 0, execution, workoutStartedAtMs, onSessionCompleted, finishing, completionFailed, onSetLogged, onAbandon, onCardioCompleted, manualSubstitutionContext, onApplySubstitution }: Props) {
   const { theme } = useTheme();
+  const exitDialogTheme = darkTheme;
   const { t, i18n } = useTranslation('workout');
-  const insets = useSafeAreaInsets();
   // Exit sheet ('choice' = Minimizar/Descartar/Cancelar, 'discard' = the
   // destructive confirmation) — X no longer abandons directly (docs §8 P0
   // follow-up: the X used to fire `abandon()` immediately, which could fail
@@ -316,9 +346,28 @@ export function WorkoutScreen({ plan, onDone, onMinimize, sessionIndex = 0, exec
   // (execution.finish -> schedule.completeSession -> lifecycle) re-runs and
   // self-heals regardless of how far it got before the process died
   // (finishWorkoutExecution/completeScheduledSession are both idempotent).
-  const [finished, setFinished] = useState(() => !!hydration?.allDone && !cardioFinisher);
+  //
+  // Cardio Finisher Completion Recovery hardening (2026-09): the same
+  // self-heal must also cover "cardio was durably marked COMPLETED
+  // (`hydration.cardioCompleted`) but the app died before `finish()` ran" —
+  // never re-show a blank/ready cardio timer for an already-finished cardio
+  // attempt. `!cardioFinisher` (no cardio on this plan at all) and
+  // `cardioAlreadyCompleted` (cardio done, only `finish()` is pending) are
+  // the two cases that go straight to `finished`; only "cardio exists on
+  // this plan and genuinely hasn't been completed yet" goes to
+  // `showCardioFinisher`.
+  const cardioAlreadyCompleted = !!hydration?.cardioCompleted;
+  const [finished, setFinished] = useState(() => !!hydration?.allDone && (!cardioFinisher || cardioAlreadyCompleted));
   const completionSignaledRef = useRef(false);
-  const [showCardioFinisher, setShowCardioFinisher] = useState(() => !!hydration?.allDone && !!cardioFinisher);
+  // Captured once at mount — never re-evaluated as `finished ping-pongs`
+  // later in the session, so observability can tell "this finish chain
+  // started from a resumed-already-done session" apart from "the user just
+  // finished it right now" (docs — Cardio Finisher Completion Recovery
+  // hardening; `onSessionCompleted`'s `recovery` context).
+  const finishedViaRecoveryRef = useRef(!!hydration?.allDone && (!cardioFinisher || cardioAlreadyCompleted));
+  const [showCardioFinisher, setShowCardioFinisher] = useState(
+    () => !!hydration?.allDone && !!cardioFinisher && !cardioAlreadyCompleted,
+  );
   const [sessionNow, setSessionNow] = useState(Date.now);
   const [restNow, setRestNow] = useState(Date.now);
 
@@ -357,6 +406,25 @@ export function WorkoutScreen({ plan, onDone, onMinimize, sessionIndex = 0, exec
     const t = setInterval(() => setSessionNow(Date.now()), 1000);
     return () => clearInterval(t);
   }, [finished]);
+
+  // Shared by strength exercises and the cardio finisher. The X never
+  // completes a workout; it only opens the same minimize/discard decision.
+  const confirmDiscard = () => {
+    if (abandoning) return;
+    setDiscardError(false);
+    setAbandoning(true);
+    void (async () => {
+      const result = await onAbandon?.();
+      setAbandoning(false);
+      if (!result || result.ok) {
+        setExitSheet(null);
+        void clearCardioSession();
+        onDone();
+      } else {
+        setDiscardError(true);
+      }
+    })();
+  };
 
   // Reconciles immediately on return to foreground instead of waiting up to
   // 1s for the next interval tick — the absolute-timestamp math already
@@ -422,6 +490,7 @@ export function WorkoutScreen({ plan, onDone, onMinimize, sessionIndex = 0, exec
   const isSubbed = !!ovr(exIdx);
   const isLastOverall = order.length === 1 && setIdx === ex.sets.length - 1;
   const resting = restStatus === 'running' && rest !== null;
+  const finalSetLoadEntry = isLastOverall && pending !== null && !resting;
   const remainingRestSeconds = resting ? computeRemainingSeconds(rest, restNow) : 0;
   const restProgress = resting ? computeRestProgress(rest, restNow) : 0;
 
@@ -507,17 +576,16 @@ export function WorkoutScreen({ plan, onDone, onMinimize, sessionIndex = 0, exec
   }, [consumeExpiration, rest?.restId, restStatus]);
 
   const completeSet = () => {
-    if (isLastOverall) {
-      onSetLogged?.(exIdx, setIdx, lastWeight(ex, setIdx));
-      setProgress((p) => ({ ...p, [exIdx]: setIdx + 1 }));
-      if (cardioFinisher) setShowCardioFinisher(true);
-      else setFinished(true);
-      return;
-    }
     const completedSet = { exId: ex.id, exIdx, setIdx };
     const completedWeight = lastWeight(ex, setIdx);
     setPending(completedSet);
     setRegWeight(completedWeight);
+
+    // The last set has no recovery countdown, but it still needs the same
+    // load-entry step as every other set. Keep progress pending until the
+    // user confirms the load in RestOverlay, then advance straight to cardio
+    // (or workout completion) through advanceAfterRest.
+    if (isLastOverall) return;
 
     // `0` is a deliberate no-rest prescription. Preserve the new engine's
     // semantics and advance synchronously without creating a fake timer.
@@ -632,7 +700,7 @@ export function WorkoutScreen({ plan, onDone, onMinimize, sessionIndex = 0, exec
   useEffect(() => {
     if (finished && !completionSignaledRef.current) {
       completionSignaledRef.current = true;
-      onSessionCompleted?.();
+      onSessionCompleted?.({ recovery: finishedViaRecoveryRef.current });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [finished]);
@@ -643,12 +711,14 @@ export function WorkoutScreen({ plan, onDone, onMinimize, sessionIndex = 0, exec
         elapsed={elapsed}
         doneSets={doneSets}
         totalSets={totalSets}
+        finishing={!!finishing}
+        completionFailed={!!completionFailed}
         onDone={() => {
           // Diagnostic instrumentation (Phase 2, Part F) — only the true
           // post-completion navigation (this branch only renders once
           // `finished` is true), never the early-exit/abandon path, which
           // reuses the same `onDone` prop from a different call site.
-          logInfo('workout', 'workout_done_navigation', {
+          logInfo('workout', 'workout_done_cta_pressed', {
             templateId: plan.templateId,
             sessionIndex,
           });
@@ -663,6 +733,32 @@ export function WorkoutScreen({ plan, onDone, onMinimize, sessionIndex = 0, exec
       <CardioScreen
         cardioFinisher={cardioFinisher}
         ownerKey={String(workoutStartedAtMs ?? `${plan.templateId}-${sessionIndex}`)}
+        onRequestExit={() => {
+          setDiscardError(false);
+          setExitSheet('choice');
+        }}
+        exitDialog={(
+          <WorkoutExitDialog
+            step={exitSheet}
+            abandoning={abandoning}
+            discardError={discardError}
+            onDismiss={() => setExitSheet(null)}
+            onMinimize={() => {
+              setExitSheet(null);
+              onMinimize?.();
+            }}
+            onRequestDiscard={() => {
+              setDiscardError(false);
+              setExitSheet('discard');
+            }}
+            onConfirmDiscard={confirmDiscard}
+            onBack={() => {
+              setDiscardError(false);
+              setExitSheet('choice');
+            }}
+          />
+        )}
+        onCardioCompleted={onCardioCompleted}
         onFinish={(actualDurationSeconds) => {
           logInfo('workout', 'cardio_finished', {
             templateId: plan.templateId,
@@ -688,27 +784,6 @@ export function WorkoutScreen({ plan, onDone, onMinimize, sessionIndex = 0, exec
   // still fell through to here with a stale/out-of-range `setIdx`.
   const curReps = ex.sets[setIdx].r;
   const curLast = lastWeight(ex, setIdx);
-
-  // Runs only from the destructive confirmation, never from the X itself.
-  // `abandoning` is the single gate on `onDone()` firing — a failed abandon
-  // leaves it false-only-after-reporting-the-error, so the screen never
-  // closes on a mutation Firestore didn't actually apply (docs §8 P0
-  // follow-up).
-  const confirmDiscard = () => {
-    if (abandoning) return;
-    setDiscardError(false);
-    setAbandoning(true);
-    void (async () => {
-      const result = await onAbandon?.();
-      setAbandoning(false);
-      if (!result || result.ok) {
-        setExitSheet(null);
-        onDone();
-      } else {
-        setDiscardError(true);
-      }
-    })();
-  };
 
   return (
     <ScreenBg>
@@ -1088,33 +1163,37 @@ export function WorkoutScreen({ plan, onDone, onMinimize, sessionIndex = 0, exec
                 : t('actions.completeSet', { number: setIdx + 1 })}
             </Text>
           </CtaButton>
-          {canSkipCurrentExercise && (
-            <Pressable
-              onPress={skipExercise}
-              style={{
-                width: '100%',
-                marginTop: 10,
-                paddingVertical: 13,
-                borderRadius: 14,
-                backgroundColor: theme.colors.inputBackgroundSubtle,
-                borderWidth: 1,
-                borderColor: theme.colors.dividerStrong,
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 9,
-              }}
-            >
-              <Icon name="swap" size={15} color={theme.colors.primaryEmphasis} />
-              <Text style={{ fontSize: 13.5, fontFamily: theme.fonts.uiSemi, color: theme.colors.textEmphasis }}>
-                {t('actions.skipBusy')}
-              </Text>
-            </Pressable>
-          )}
+          {/* Keep this slot mounted after the first completed set. The skip
+              action disappears, but the primary CTA must not shift vertically. */}
+          <View style={{ height: 54 }}>
+            {canSkipCurrentExercise && (
+              <Pressable
+                onPress={skipExercise}
+                style={{
+                  width: '100%',
+                  height: 44,
+                  marginTop: 10,
+                  borderRadius: 14,
+                  backgroundColor: theme.colors.inputBackgroundSubtle,
+                  borderWidth: 1,
+                  borderColor: theme.colors.dividerStrong,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 9,
+                }}
+              >
+                <Icon name="swap" size={15} color={theme.colors.primaryEmphasis} />
+                <Text style={{ fontSize: 13.5, fontFamily: theme.fonts.uiSemi, color: theme.colors.textEmphasis }}>
+                  {t('actions.skipBusy')}
+                </Text>
+              </Pressable>
+            )}
+          </View>
         </View>
 
         {/* REST OVERLAY */}
-        {resting && (
+        {(resting || finalSetLoadEntry) && (
           <RestOverlay
             remainingSeconds={remainingRestSeconds}
             progress={restProgress}
@@ -1122,8 +1201,10 @@ export function WorkoutScreen({ plan, onDone, onMinimize, sessionIndex = 0, exec
             regWeight={regWeight}
             setRegWeight={setRegWeight}
             setNumber={(pending ? pending.setIdx : setIdx) + 1}
+            finalSetLoadEntry={finalSetLoadEntry}
+            continuesToCardio={!!cardioFinisher}
             onAdd15={() => addRestSeconds(15)}
-            onSkip={skipRest}
+            onSkip={finalSetLoadEntry ? () => advanceAfterRest() : skipRest}
             onMinimize={onMinimize}
           />
         )}
@@ -1639,11 +1720,12 @@ export function WorkoutScreen({ plan, onDone, onMinimize, sessionIndex = 0, exec
           </Pressable>
         </Modal>
 
-        {/* EXIT SHEET — Minimizar / Descartar / Cancelar (docs §8 P0 follow-up) */}
+        {/* EXIT DIALOG — Minimizar / Descartar / Cancelar (docs §8 P0 follow-up) */}
         <Modal
           visible={exitSheet !== null}
           transparent
           animationType="fade"
+          statusBarTranslucent
           onRequestClose={() => {
             if (abandoning) return;
             setExitSheet(null);
@@ -1654,83 +1736,148 @@ export function WorkoutScreen({ plan, onDone, onMinimize, sessionIndex = 0, exec
               if (abandoning) return;
               setExitSheet(null);
             }}
-            style={{ flex: 1, backgroundColor: theme.colors.workoutSheetBackdrop, justifyContent: 'flex-end' }}
+            accessibilityRole="button"
+            accessibilityLabel={t('exit.cancel')}
+            style={{
+              flex: 1,
+              backgroundColor: exitDialogTheme.colors.overlayStrong,
+              justifyContent: 'center',
+              paddingHorizontal: spacing[6],
+            }}
           >
             <Pressable
+              accessibilityRole="none"
               onPress={(e) => e.stopPropagation()}
               style={{
-                backgroundColor: theme.colors.workoutSheetBackground,
-                borderTopWidth: 1,
-                borderTopColor: theme.colors.primaryBorderMuted,
-                borderTopLeftRadius: 20,
-                borderTopRightRadius: 20,
-                padding: 22,
-                paddingBottom: Math.max(22, insets.bottom + 12),
                 width: '100%',
-                maxWidth: 464,
+                maxWidth: sizes.modalMaxWidth,
                 alignSelf: 'center',
+                borderRadius: radii.xl,
+                borderBottomRightRadius: 0,
+                overflow: 'hidden',
+                borderWidth: 1,
+                borderColor: exitDialogTheme.colors.primaryBorderQuiet,
+                backgroundColor: exitDialogTheme.colors.background,
+                shadowColor: exitDialogTheme.colors.primary,
+                shadowOpacity: 0.18,
+                shadowRadius: 20,
+                shadowOffset: { width: 0, height: 10 },
+                elevation: 10,
               }}
             >
-              <View
+              <LinearGradient
+                colors={exitDialogTheme.gradients.poster}
+                locations={[0, 0.45, 1]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
                 style={{
-                  width: 36,
-                  height: 4,
-                  borderRadius: 2,
-                  backgroundColor: theme.colors.equipmentCheckboxBorder,
-                  alignSelf: 'center',
-                  marginBottom: 16,
+                  padding: spacing[5],
                 }}
-              />
-              {exitSheet === 'choice' && (
-                <>
-                  <Display size={22} skew={false}>{t('exit.title')}</Display>
-                  <Text style={{ marginTop: 12, fontFamily: theme.fonts.ui, fontSize: 14, color: theme.colors.textEmphasis, lineHeight: 20 }}>
-                    {t('exit.body')}
-                  </Text>
-                  <View style={{ marginTop: 22, gap: 10 }}>
-                    <CtaButton
+              >
+                <HudCorners color={exitDialogTheme.colors.hudCorner} />
+                {exitSheet === 'choice' && (
+                  <>
+                    <Slash
+                      accentColor={exitDialogTheme.colors.primaryEmphasis}
+                      textColor={exitDialogTheme.colors.textFaint}
+                    >
+                      {t('exit.kicker').toUpperCase()}
+                    </Slash>
+                    <Display size={26} color={exitDialogTheme.colors.textPrimary} style={{ marginTop: 9 }}>
+                      {t('exit.title').toUpperCase()}
+                    </Display>
+                    <Text style={{ marginTop: 8, fontFamily: exitDialogTheme.fonts.ui, fontSize: 13, color: exitDialogTheme.colors.textSecondaryStrong, lineHeight: 19 }}>
+                      {t('exit.body')}
+                    </Text>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={t('exit.minimize')}
                       onPress={() => {
                         setExitSheet(null);
                         onMinimize?.();
                       }}
-                      accessibilityLabel={t('exit.minimize')}
+                      style={{
+                        height: 48,
+                        marginTop: 18,
+                        borderRadius: 10,
+                        borderBottomRightRadius: 0,
+                        backgroundColor: exitDialogTheme.colors.inverseSurface,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 9,
+                      }}
                     >
-                      {t('exit.minimize')}
-                    </CtaButton>
-                    <CtaButton
-                      ghost
+                      <Icon name="minus" size={12} color={exitDialogTheme.colors.inverseForeground} />
+                      <Text
+                        style={{
+                          color: exitDialogTheme.colors.inverseForeground,
+                          fontFamily: exitDialogTheme.fonts.display,
+                          fontSize: 15,
+                          letterSpacing: 1.4,
+                          textTransform: 'uppercase',
+                        }}
+                      >
+                        {t('exit.minimize')}
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={t('exit.discard')}
                       onPress={() => {
                         setDiscardError(false);
                         setExitSheet('discard');
                       }}
-                      accessibilityLabel={t('exit.discard')}
-                      style={{ borderColor: theme.colors.danger }}
+                      style={{
+                        height: 48,
+                        marginTop: 10,
+                        paddingHorizontal: 14,
+                        borderRadius: 10,
+                        borderBottomRightRadius: 0,
+                        borderWidth: 1,
+                        borderColor: exitDialogTheme.colors.controlBorder,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
                     >
-                      <Text style={{ color: theme.colors.dangerText, fontFamily: theme.fonts.uiSemi, fontSize: 15 }}>
+                      <Text style={{ color: exitDialogTheme.colors.textSecondaryStrong, fontFamily: exitDialogTheme.fonts.ui, fontSize: 13 }}>
                         {t('exit.discard')}
                       </Text>
-                    </CtaButton>
-                    <CtaButton ghost onPress={() => setExitSheet(null)} accessibilityLabel={t('exit.cancel')}>
-                      {t('exit.cancel')}
-                    </CtaButton>
-                  </View>
-                </>
-              )}
-              {exitSheet === 'discard' && (
-                <>
-                  <Display size={22} skew={false}>{t('exit.discardConfirmTitle')}</Display>
-                  <Text style={{ marginTop: 12, fontFamily: theme.fonts.ui, fontSize: 14, color: theme.colors.textEmphasis, lineHeight: 20 }}>
-                    {t('exit.discardConfirmBody')}
-                  </Text>
-                  {discardError && (
-                    <Text
-                      accessibilityRole="alert"
-                      style={{ color: theme.colors.warning, fontFamily: theme.fonts.ui, fontSize: 12, lineHeight: 17, marginTop: 10 }}
+                    </Pressable>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={t('exit.cancel')}
+                      onPress={() => setExitSheet(null)}
+                      style={{ alignSelf: 'center', paddingHorizontal: 18, paddingTop: 13, paddingBottom: 2 }}
                     >
-                      {t('exit.discardError')}
+                      <Text style={{ color: exitDialogTheme.colors.textMuted, fontFamily: exitDialogTheme.fonts.ui, fontSize: 13 }}>
+                        {t('exit.cancel')}
+                      </Text>
+                    </Pressable>
+                  </>
+                )}
+                {exitSheet === 'discard' && (
+                  <>
+                    <Slash
+                      accentColor={exitDialogTheme.colors.primaryEmphasis}
+                      textColor={exitDialogTheme.colors.textFaint}
+                    >
+                      {t('exit.kicker').toUpperCase()}
+                    </Slash>
+                    <Display size={26} color={exitDialogTheme.colors.textPrimary} style={{ marginTop: 9 }}>
+                      {t('exit.discardConfirmTitle').toUpperCase()}
+                    </Display>
+                    <Text style={{ marginTop: 8, fontFamily: exitDialogTheme.fonts.ui, fontSize: 13, color: exitDialogTheme.colors.textSecondaryStrong, lineHeight: 19 }}>
+                      {t('exit.discardConfirmBody')}
                     </Text>
-                  )}
-                  <View style={{ marginTop: 22, gap: 10 }}>
+                    {discardError && (
+                      <Text
+                        accessibilityRole="alert"
+                        style={{ color: exitDialogTheme.colors.warning, fontFamily: exitDialogTheme.fonts.ui, fontSize: 12, lineHeight: 17, marginTop: 8 }}
+                      >
+                        {t('exit.discardError')}
+                      </Text>
+                    )}
                     <Pressable
                       accessibilityRole="button"
                       accessibilityLabel={t('exit.discardConfirmYes')}
@@ -1738,39 +1885,257 @@ export function WorkoutScreen({ plan, onDone, onMinimize, sessionIndex = 0, exec
                       disabled={abandoning}
                       onPress={confirmDiscard}
                       style={{
-                        width: '100%',
-                        height: 58,
-                        borderRadius: 14,
-                        backgroundColor: theme.colors.danger,
+                        height: 48,
+                        marginTop: 18,
+                        borderRadius: 10,
+                        borderBottomRightRadius: 0,
+                        backgroundColor: exitDialogTheme.colors.inverseSurface,
+                        flexDirection: 'row',
                         alignItems: 'center',
                         justifyContent: 'center',
+                        gap: 9,
                         opacity: abandoning ? 0.6 : 1,
                       }}
                     >
-                      <Text style={{ fontFamily: theme.fonts.uiBold, fontSize: 15, color: theme.colors.primaryForeground }}>
+                      {abandoning ? (
+                        <ActivityIndicator color={exitDialogTheme.colors.inverseForeground} />
+                      ) : (
+                        <Icon name="x" size={12} color={exitDialogTheme.colors.inverseForeground} />
+                      )}
+                      <Text
+                        style={{
+                          color: exitDialogTheme.colors.inverseForeground,
+                          fontFamily: exitDialogTheme.fonts.display,
+                          fontSize: 14,
+                          letterSpacing: 1.2,
+                          textTransform: 'uppercase',
+                        }}
+                      >
                         {abandoning ? t('exit.discarding') : t('exit.discardConfirmYes')}
                       </Text>
                     </Pressable>
-                    <CtaButton
-                      ghost
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={t('exit.discardConfirmBack')}
+                      accessibilityState={{ disabled: abandoning }}
                       disabled={abandoning}
                       onPress={() => {
                         if (abandoning) return;
                         setDiscardError(false);
                         setExitSheet('choice');
                       }}
-                      accessibilityLabel={t('exit.discardConfirmBack')}
+                      style={{ alignSelf: 'center', marginTop: 10, paddingVertical: 10, paddingHorizontal: 18 }}
                     >
-                      {t('exit.discardConfirmBack')}
-                    </CtaButton>
-                  </View>
-                </>
-              )}
+                      <Text style={{ color: exitDialogTheme.colors.textMuted, fontFamily: exitDialogTheme.fonts.ui, fontSize: 13 }}>
+                        {t('exit.discardConfirmBack')}
+                      </Text>
+                    </Pressable>
+                  </>
+                )}
+              </LinearGradient>
             </Pressable>
           </Pressable>
         </Modal>
       </SafeAreaView>
     </ScreenBg>
+  );
+}
+
+function WorkoutExitDialog({
+  step,
+  abandoning,
+  discardError,
+  onDismiss,
+  onMinimize,
+  onRequestDiscard,
+  onConfirmDiscard,
+  onBack,
+}: {
+  step: 'choice' | 'discard' | null;
+  abandoning: boolean;
+  discardError: boolean;
+  onDismiss: () => void;
+  onMinimize: () => void;
+  onRequestDiscard: () => void;
+  onConfirmDiscard: () => void;
+  onBack: () => void;
+}) {
+  const { t } = useTranslation('workout');
+  const theme = darkTheme;
+  const close = () => {
+    if (!abandoning) onDismiss();
+  };
+
+  return (
+    <Modal
+      visible={step !== null}
+      transparent
+      animationType="fade"
+      statusBarTranslucent
+      onRequestClose={close}
+    >
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={t('exit.cancel')}
+        onPress={close}
+        style={{
+          flex: 1,
+          backgroundColor: theme.colors.overlayStrong,
+          justifyContent: 'center',
+          paddingHorizontal: spacing[6],
+        }}
+      >
+        <Pressable
+          accessibilityRole="none"
+          onPress={(event) => event.stopPropagation()}
+          style={{
+            width: '100%',
+            maxWidth: sizes.modalMaxWidth,
+            alignSelf: 'center',
+            borderRadius: radii.xl,
+            borderBottomRightRadius: 0,
+            overflow: 'hidden',
+            borderWidth: 1,
+            borderColor: theme.colors.primaryBorderQuiet,
+            backgroundColor: theme.colors.background,
+            shadowColor: theme.colors.primary,
+            shadowOpacity: 0.18,
+            shadowRadius: 20,
+            shadowOffset: { width: 0, height: 10 },
+            elevation: 10,
+          }}
+        >
+          <LinearGradient
+            colors={theme.gradients.poster}
+            locations={[0, 0.45, 1]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={{ padding: spacing[5] }}
+          >
+            <HudCorners color={theme.colors.hudCorner} />
+            <Slash accentColor={theme.colors.primaryEmphasis} textColor={theme.colors.textFaint}>
+              {t('exit.kicker').toUpperCase()}
+            </Slash>
+
+            {step === 'choice' ? (
+              <>
+                <Display size={26} color={theme.colors.textPrimary} style={{ marginTop: 9 }}>
+                  {t('exit.title').toUpperCase()}
+                </Display>
+                <Text style={{ marginTop: 8, fontFamily: theme.fonts.ui, fontSize: 13, color: theme.colors.textSecondaryStrong, lineHeight: 19 }}>
+                  {t('exit.body')}
+                </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={t('exit.minimize')}
+                  onPress={onMinimize}
+                  style={{
+                    height: 48,
+                    marginTop: 18,
+                    borderRadius: 10,
+                    borderBottomRightRadius: 0,
+                    backgroundColor: theme.colors.inverseSurface,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 9,
+                  }}
+                >
+                  <Icon name="minus" size={12} color={theme.colors.inverseForeground} />
+                  <Text style={{ color: theme.colors.inverseForeground, fontFamily: theme.fonts.display, fontSize: 15, letterSpacing: 1.4, textTransform: 'uppercase' }}>
+                    {t('exit.minimize')}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={t('exit.discard')}
+                  onPress={onRequestDiscard}
+                  style={{
+                    height: 48,
+                    marginTop: 10,
+                    paddingHorizontal: 14,
+                    borderRadius: 10,
+                    borderBottomRightRadius: 0,
+                    borderWidth: 1,
+                    borderColor: theme.colors.controlBorder,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Text style={{ color: theme.colors.textSecondaryStrong, fontFamily: theme.fonts.ui, fontSize: 13 }}>
+                    {t('exit.discard')}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={t('exit.cancel')}
+                  onPress={onDismiss}
+                  style={{ alignSelf: 'center', paddingHorizontal: 18, paddingTop: 13, paddingBottom: 2 }}
+                >
+                  <Text style={{ color: theme.colors.textMuted, fontFamily: theme.fonts.ui, fontSize: 13 }}>
+                    {t('exit.cancel')}
+                  </Text>
+                </Pressable>
+              </>
+            ) : (
+              <>
+                <Display size={26} color={theme.colors.textPrimary} style={{ marginTop: 9 }}>
+                  {t('exit.discardConfirmTitle').toUpperCase()}
+                </Display>
+                <Text style={{ marginTop: 8, fontFamily: theme.fonts.ui, fontSize: 13, color: theme.colors.textSecondaryStrong, lineHeight: 19 }}>
+                  {t('exit.discardConfirmBody')}
+                </Text>
+                {discardError && (
+                  <Text accessibilityRole="alert" style={{ color: theme.colors.warning, fontFamily: theme.fonts.ui, fontSize: 12, lineHeight: 17, marginTop: 8 }}>
+                    {t('exit.discardError')}
+                  </Text>
+                )}
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={t('exit.discardConfirmYes')}
+                  accessibilityState={{ disabled: abandoning }}
+                  disabled={abandoning}
+                  onPress={onConfirmDiscard}
+                  style={{
+                    height: 48,
+                    marginTop: 18,
+                    borderRadius: 10,
+                    borderBottomRightRadius: 0,
+                    backgroundColor: theme.colors.inverseSurface,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 9,
+                    opacity: abandoning ? 0.6 : 1,
+                  }}
+                >
+                  {abandoning ? (
+                    <ActivityIndicator color={theme.colors.inverseForeground} />
+                  ) : (
+                    <Icon name="x" size={12} color={theme.colors.inverseForeground} />
+                  )}
+                  <Text style={{ color: theme.colors.inverseForeground, fontFamily: theme.fonts.display, fontSize: 14, letterSpacing: 1.2, textTransform: 'uppercase' }}>
+                    {abandoning ? t('exit.discarding') : t('exit.discardConfirmYes')}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={t('exit.discardConfirmBack')}
+                  accessibilityState={{ disabled: abandoning }}
+                  disabled={abandoning}
+                  onPress={onBack}
+                  style={{ alignSelf: 'center', marginTop: 10, paddingVertical: 10, paddingHorizontal: 18 }}
+                >
+                  <Text style={{ color: theme.colors.textMuted, fontFamily: theme.fonts.ui, fontSize: 13 }}>
+                    {t('exit.discardConfirmBack')}
+                  </Text>
+                </Pressable>
+              </>
+            )}
+          </LinearGradient>
+        </Pressable>
+      </Pressable>
+    </Modal>
   );
 }
 
@@ -1835,18 +2200,24 @@ function Badge({
 function CardioScreen({
   cardioFinisher,
   ownerKey,
+  onRequestExit,
+  exitDialog,
+  onCardioCompleted,
   onFinish,
 }: {
   cardioFinisher: FinalCardioFinisher;
   /** Identifies this workout attempt — from `workoutStartedAtMs`, so a stale persisted session from a previous attempt is never mistakenly restored. */
   ownerKey: string;
+  onRequestExit: () => void;
+  exitDialog: React.ReactNode;
+  /** See `Props.onCardioCompleted`'s doc comment above. */
+  onCardioCompleted?: (actualDurationSeconds: number) => Promise<{ ok: true } | { ok: false; error: unknown }>;
   onFinish: (actualDurationSeconds: number) => void;
 }) {
   const { theme } = useTheme();
   const { t } = useTranslation('workout');
   const tLoose = t as unknown as LooseT;
   const cardio = resolveCardioFinisherPresentation(tLoose, cardioFinisher);
-  const insets = useSafeAreaInsets();
   const plannedDurationSeconds = useMemo(
     () => parsePrescribedCardioDurationSeconds(cardioFinisher.duration),
     [cardioFinisher.duration],
@@ -1937,21 +2308,52 @@ function CardioScreen({
 
   const handleStart = () => publish(startCardio(session, Date.now()));
 
-  const finalizeNow = () => {
+  // Cardio Finisher Completion Recovery hardening (2026-09): the local
+  // `session` never flips to FINISHED (and AsyncStorage is never cleared)
+  // until `onCardioCompleted` has durably persisted the completion on the
+  // Firestore execution — a network/transaction failure must never be read
+  // as "cardio is confirmed done" (docs — this is the exact bug class that
+  // motivated this hardening: a fire-and-forget local "done" that outran the
+  // durable write). `idle -> persisting -> idle` (success) or `-> error`
+  // (retryable, never silently swallowed as success).
+  const [finishState, setFinishState] = useState<'idle' | 'persisting' | 'error'>('idle');
+  const finishingRef = useRef(false);
+
+  const finalizeNow = async () => {
+    // Re-entrancy guard via ref (not just `finishState`, which lags a render
+    // behind) — a double tap (footer "Pular cardio" + accidental second tap,
+    // or the modal's "Tentar novamente" pressed twice) can never fire two
+    // concurrent `completeCardioExecution` calls.
+    if (finishingRef.current) return;
+    finishingRef.current = true;
+    setFinishState('persisting');
+    logInfo('workout', 'cardio_finish_requested', {});
+    // Frozen once, here — a retry after a failure recomputes fresh (the user
+    // was still legitimately doing cardio while stuck on the error state),
+    // but a single attempt always persists and locally freezes the exact
+    // same duration, never two different values for one confirmed tap.
     const finishedSession = finishCardio(session, Date.now());
-    publish(finishedSession);
-    void clearCardioSession();
-    onFinish(finishedSession.actualDurationSeconds ?? 0);
-  };
-
-  const [confirmSheet, setConfirmSheet] = useState<'finish' | 'exit' | null>(null);
-
-  const handleHeaderClose = () => {
-    if (session.status === 'READY') {
-      finalizeNow();
+    const actualDurationSeconds = finishedSession.actualDurationSeconds ?? 0;
+    const result = onCardioCompleted
+      ? await onCardioCompleted(actualDurationSeconds)
+      : ({ ok: true } as const);
+    finishingRef.current = false;
+    if (!result.ok) {
+      logWarn('workout', 'cardio_finish_ui_failed', {});
+      setFinishState('error');
       return;
     }
-    setConfirmSheet('exit');
+    publish(finishedSession);
+    void clearCardioSession();
+    setFinishState('idle');
+    onFinish(actualDurationSeconds);
+  };
+
+  const [confirmSheet, setConfirmSheet] = useState<'finish' | null>(null);
+  const finishModalVisible = confirmSheet === 'finish' || finishState !== 'idle';
+
+  const handleHeaderClose = () => {
+    onRequestExit();
   };
 
   const doneClock = formatCardioClock(elapsed);
@@ -1964,11 +2366,12 @@ function CardioScreen({
           cardio={cardio}
           ready={session.status === 'READY'}
           targetReached={targetReached}
-          doneClock={doneClock}
           targetClock={targetClock}
           remainingClock={formatCardioClock(remaining)}
           progress={progress}
+          finishing={finishState === 'persisting'}
           onClose={handleHeaderClose}
+          onSkip={() => void finalizeNow()}
           onStart={handleStart}
           onExtend={handleExtend}
           onFinish={() => setConfirmSheet('finish')}
@@ -1995,60 +2398,171 @@ function CardioScreen({
         />
       </SafeAreaView>
 
+      {exitDialog}
+
       <Modal
-        visible={confirmSheet !== null}
+        visible={finishModalVisible}
         transparent
         animationType="fade"
-        onRequestClose={() => setConfirmSheet(null)}
+        statusBarTranslucent
+        onRequestClose={() => {
+          if (finishState === 'persisting') return; // no dismiss mid-flight — see the backdrop Pressable below
+          setConfirmSheet(null);
+          setFinishState('idle');
+        }}
       >
         <Pressable
-          onPress={() => setConfirmSheet(null)}
-          style={{ flex: 1, backgroundColor: theme.colors.workoutSheetBackdrop, justifyContent: 'flex-end' }}
+          accessibilityRole="button"
+          accessibilityLabel={t('cardioSession.continueCardio')}
+          onPress={() => {
+            // A tap on the backdrop while a request is in flight must never
+            // dismiss the modal — the user would lose the only surface that
+            // tells them whether it succeeded (docs — Cardio Finisher
+            // Completion Recovery hardening: never let the UI look done
+            // before the durable write actually is).
+            if (finishState === 'persisting') return;
+            setConfirmSheet(null);
+            setFinishState('idle');
+          }}
+          style={{
+            flex: 1,
+            backgroundColor: theme.colors.overlayStrong,
+            justifyContent: 'center',
+            paddingHorizontal: spacing[6],
+          }}
         >
           <Pressable
-            onPress={(e) => e.stopPropagation()}
+            accessibilityRole="none"
+            onPress={(event) => event.stopPropagation()}
             style={{
-              backgroundColor: theme.colors.workoutSheetBackground,
-              borderTopWidth: 1,
-              borderTopColor: theme.colors.primaryBorderMuted,
-              borderTopLeftRadius: 20,
-              borderTopRightRadius: 20,
-              padding: 22,
-              paddingBottom: Math.max(22, insets.bottom + 12),
               width: '100%',
-              maxWidth: 464,
+              maxWidth: sizes.modalMaxWidth,
               alignSelf: 'center',
+              borderRadius: radii.xl,
+              borderBottomRightRadius: 0,
+              overflow: 'hidden',
+              borderWidth: 1,
+              borderColor: theme.colors.primaryBorderQuiet,
+              backgroundColor: theme.colors.background,
+              shadowColor: theme.colors.primary,
+              shadowOpacity: 0.18,
+              shadowRadius: 20,
+              shadowOffset: { width: 0, height: 10 },
+              elevation: 10,
             }}
           >
-            <View
-              style={{
-                width: 36,
-                height: 4,
-                borderRadius: 2,
-                backgroundColor: theme.colors.equipmentCheckboxBorder,
-                alignSelf: 'center',
-                marginBottom: 16,
-              }}
-            />
-            <Display size={22} skew={false}>
-              {t(confirmSheet === 'exit' ? 'cardioSession.exitConfirmTitle' : 'cardioSession.finishConfirmTitle')}
-            </Display>
-            <Text style={{ marginTop: 12, fontFamily: theme.fonts.ui, fontSize: 14, color: theme.colors.textEmphasis, lineHeight: 20 }}>
-              {confirmSheet === 'exit'
-                ? t('cardioSession.exitConfirmBody', { done: doneClock })
-                : t(targetReached ? 'cardioSession.finishConfirmAfterGoal' : 'cardioSession.finishConfirmBeforeGoal', {
-                    done: doneClock,
-                    target: targetClock,
-                  })}
-            </Text>
-            <View style={{ marginTop: 22, gap: 10 }}>
-              <CtaButton onPress={finalizeNow} accessibilityLabel={t('cardioSession.confirmFinish')}>
-                {t('cardioSession.confirmFinish')}
-              </CtaButton>
-              <CtaButton ghost onPress={() => setConfirmSheet(null)} accessibilityLabel={t('cardioSession.continueCardio')}>
-                {t('cardioSession.continueCardio')}
-              </CtaButton>
-            </View>
+            <LinearGradient
+              colors={theme.gradients.poster}
+              locations={[0, 0.45, 1]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={{ padding: spacing[5] }}
+            >
+              <HudCorners color={theme.colors.hudCorner} />
+              <Slash accentColor={theme.colors.primaryEmphasis} textColor={theme.colors.textFaint}>
+                {t('cardioFinisher.title').toUpperCase()}
+              </Slash>
+
+              {finishState === 'persisting' ? (
+                <>
+                  <Display size={26} color={theme.colors.textPrimary} style={{ marginTop: 9 }}>
+                    {t('cardioSession.finishSavingTitle').toUpperCase()}
+                  </Display>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 18 }}>
+                    <ActivityIndicator color={theme.colors.primaryEmphasis} />
+                    <Text style={{ fontFamily: theme.fonts.ui, fontSize: 13, color: theme.colors.textSecondaryStrong, flex: 1 }}>
+                      {t('cardioSession.finishSavingBody')}
+                    </Text>
+                  </View>
+                </>
+              ) : finishState === 'error' ? (
+                <>
+                  <Display size={26} color={theme.colors.textPrimary} style={{ marginTop: 9 }}>
+                    {t('cardioSession.finishErrorTitle').toUpperCase()}
+                  </Display>
+                  <Text style={{ marginTop: 8, fontFamily: theme.fonts.ui, fontSize: 13, color: theme.colors.textSecondaryStrong, lineHeight: 19 }}>
+                    {t('cardioSession.finishErrorBody')}
+                  </Text>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={t('cardioSession.finishRetry')}
+                    onPress={() => void finalizeNow()}
+                    style={{
+                      height: 48,
+                      marginTop: 18,
+                      borderRadius: 10,
+                      borderBottomRightRadius: 0,
+                      backgroundColor: theme.colors.inverseSurface,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 9,
+                    }}
+                  >
+                    <Icon name="swap" size={12} color={theme.colors.inverseForeground} />
+                    <Text style={{ color: theme.colors.inverseForeground, fontFamily: theme.fonts.display, fontSize: 15, letterSpacing: 1.4, textTransform: 'uppercase' }}>
+                      {t('cardioSession.finishRetry')}
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={t('cardioSession.continueCardio')}
+                    onPress={() => {
+                      setConfirmSheet(null);
+                      setFinishState('idle');
+                    }}
+                    style={{ alignSelf: 'center', marginTop: 10, paddingVertical: 10, paddingHorizontal: 18 }}
+                  >
+                    <Text style={{ color: theme.colors.textMuted, fontFamily: theme.fonts.ui, fontSize: 13 }}>
+                      {t('cardioSession.continueCardio')}
+                    </Text>
+                  </Pressable>
+                </>
+              ) : (
+                <>
+                  <Display size={26} color={theme.colors.textPrimary} style={{ marginTop: 9 }}>
+                    {t('cardioSession.finishConfirmTitle').toUpperCase()}
+                  </Display>
+                  <Text style={{ marginTop: 8, fontFamily: theme.fonts.ui, fontSize: 13, color: theme.colors.textSecondaryStrong, lineHeight: 19 }}>
+                    {t(targetReached ? 'cardioSession.finishConfirmAfterGoal' : 'cardioSession.finishConfirmBeforeGoal', {
+                      done: doneClock,
+                      target: targetClock,
+                    })}
+                  </Text>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={t('cardioSession.confirmFinish')}
+                    onPress={() => void finalizeNow()}
+                    style={{
+                      height: 48,
+                      marginTop: 18,
+                      borderRadius: 10,
+                      borderBottomRightRadius: 0,
+                      backgroundColor: theme.colors.inverseSurface,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 9,
+                    }}
+                  >
+                    <Icon name="check" size={12} color={theme.colors.inverseForeground} />
+                    <Text style={{ color: theme.colors.inverseForeground, fontFamily: theme.fonts.display, fontSize: 15, letterSpacing: 1.4, textTransform: 'uppercase' }}>
+                      {t('cardioSession.confirmFinish')}
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={t('cardioSession.continueCardio')}
+                    onPress={() => setConfirmSheet(null)}
+                    style={{ alignSelf: 'center', marginTop: 10, paddingVertical: 10, paddingHorizontal: 18 }}
+                  >
+                    <Text style={{ color: theme.colors.textMuted, fontFamily: theme.fonts.ui, fontSize: 13 }}>
+                      {t('cardioSession.continueCardio')}
+                    </Text>
+                  </Pressable>
+                </>
+              )}
+            </LinearGradient>
           </Pressable>
         </Pressable>
       </Modal>
@@ -2065,6 +2579,8 @@ function RestOverlay({
   regWeight,
   setRegWeight,
   setNumber,
+  finalSetLoadEntry,
+  continuesToCardio,
   onAdd15,
   onSkip,
   onMinimize,
@@ -2075,6 +2591,8 @@ function RestOverlay({
   regWeight: number;
   setRegWeight: (fn: number | ((prev: number) => number)) => void;
   setNumber: number;
+  finalSetLoadEntry?: boolean;
+  continuesToCardio?: boolean;
   onAdd15: () => void;
   onSkip: () => void;
   onMinimize?: () => void;
@@ -2149,9 +2667,6 @@ function RestOverlay({
           color: theme.colors.textPrimary,
           lineHeight: displayLineHeight(104),
           transform: [{ skewX: '-8deg' }],
-          textShadowColor: theme.colors.primaryGlowStrong,
-          textShadowRadius: 40,
-          textShadowOffset: { width: 0, height: 0 },
         }}
       >
         {fmt(remainingSeconds)}
@@ -2255,32 +2770,35 @@ function RestOverlay({
       </View>
 
       <View style={{ flexDirection: 'row', gap: 10, marginTop: 28 }}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t('rest.addSecondsAccessibility', { seconds: 15 })}
-          onPress={onAdd15}
-          style={{
-            paddingVertical: 14,
-            paddingHorizontal: 22,
-            borderRadius: 12,
-            backgroundColor: theme.colors.surfacePressed,
-            borderWidth: 1,
-            borderColor: theme.colors.borderStrong,
-          }}
-        >
-          {/* "+15s" is a universal compact glyph — kept verbatim across
-              locales; the semantic label lives in `accessibilityLabel`
-              (rest.addSecondsAccessibility) so screen readers announce
-              "Add 15 seconds" in the active language. */}
-          <Text style={{ fontFamily: theme.fonts.mono, fontSize: 12, letterSpacing: 1, color: theme.colors.textPrimary }}>
-            +15s
-          </Text>
-        </Pressable>
+        {!finalSetLoadEntry && (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('rest.addSecondsAccessibility', { seconds: 15 })}
+            onPress={onAdd15}
+            style={{
+              paddingVertical: 14,
+              paddingHorizontal: 22,
+              borderRadius: 12,
+              backgroundColor: theme.colors.surfacePressed,
+              borderWidth: 1,
+              borderColor: theme.colors.borderStrong,
+            }}
+          >
+            {/* "+15s" is a universal compact glyph — kept verbatim across
+                locales; the semantic label lives in `accessibilityLabel`
+                (rest.addSecondsAccessibility) so screen readers announce
+                "Add 15 seconds" in the active language. */}
+            <Text style={{ fontFamily: theme.fonts.mono, fontSize: 12, letterSpacing: 1, color: theme.colors.textPrimary }}>
+              +15s
+            </Text>
+          </Pressable>
+        )}
         <Pressable
           onPress={onSkip}
           style={{
             paddingVertical: 14,
             paddingHorizontal: 28,
+            minWidth: finalSetLoadEntry ? 220 : undefined,
             borderRadius: 12,
             backgroundColor: theme.colors.primary,
             shadowColor: theme.colors.primary,
@@ -2288,6 +2806,8 @@ function RestOverlay({
             shadowRadius: 24,
             shadowOffset: { width: 0, height: 8 },
             elevation: 8,
+            alignItems: 'center',
+            justifyContent: 'center',
           }}
         >
           <Text
@@ -2299,7 +2819,11 @@ function RestOverlay({
               textTransform: 'uppercase',
             }}
           >
-            {t('rest.nextSet')}
+            {finalSetLoadEntry
+              ? continuesToCardio
+                ? t('rest.continueToCardio')
+                : t('rest.finishWorkout')
+              : t('rest.nextSet')}
           </Text>
         </Pressable>
       </View>
@@ -2615,11 +3139,16 @@ function WorkoutDone({
   elapsed,
   doneSets,
   totalSets,
+  finishing,
+  completionFailed,
   onDone,
 }: {
   elapsed: number;
   doneSets: number;
   totalSets: number;
+  /** True while the durable finish chain is still in flight — see `Props.finishing`'s doc comment above. */
+  finishing: boolean;
+  completionFailed: boolean;
   onDone: () => void;
 }) {
   const { theme } = useTheme();
@@ -2696,19 +3225,46 @@ function WorkoutDone({
           */}
 
           <View style={{ flex: 1 }} />
-          <CtaButton onPress={onDone}>
+          {finishing && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 12 }}>
+              <ActivityIndicator color={theme.colors.textSecondaryStrong} />
+              <Text style={{ color: theme.colors.textSecondaryStrong, fontFamily: theme.fonts.ui, fontSize: 13 }}>
+                {t('done.finishing')}
+              </Text>
+            </View>
+          )}
+          {completionFailed && !finishing && (
             <Text
-              style={{
-                color: theme.colors.primaryForeground,
-                fontFamily: theme.fonts.display,
-                fontSize: 17,
-                letterSpacing: 1.5,
-                textTransform: 'uppercase',
-              }}
+              accessibilityRole="alert"
+              style={{ color: theme.colors.danger, fontFamily: theme.fonts.ui, fontSize: 14, textAlign: 'center', marginBottom: 12 }}
             >
-              {t('done.backHome')}
+              {t('done.finishFailed')}
             </Text>
-            <Icon name="arrow-right" size={18} color={theme.colors.primaryForeground} />
+          )}
+          <CtaButton
+            onPress={onDone}
+            disabled={finishing}
+            accessibilityLabel={finishing ? t('done.finishing') : completionFailed ? t('done.retry') : t('done.backHome')}
+            accessibilityState={{ disabled: finishing, busy: finishing }}
+          >
+            {finishing ? (
+              <ActivityIndicator color={theme.colors.primaryForeground} />
+            ) : (
+              <>
+                <Text
+                  style={{
+                    color: theme.colors.primaryForeground,
+                    fontFamily: theme.fonts.display,
+                    fontSize: 17,
+                    letterSpacing: 1.5,
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  {completionFailed ? t('done.retry') : t('done.backHome')}
+                </Text>
+                <Icon name="arrow-right" size={18} color={theme.colors.primaryForeground} />
+              </>
+            )}
           </CtaButton>
         </View>
       </SafeAreaView>

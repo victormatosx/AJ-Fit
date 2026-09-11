@@ -419,6 +419,63 @@ describe('users/{uid}/workoutExecutions — immutability after finish (item 53)'
   });
 });
 
+// Cardio Finisher Completion Recovery hardening (2026-09,
+// docs/workout-lifecycle/): the durable `cardio` field on `workoutExecutions`
+// — see `CardioExecutionRecord` (src/workoutExecution/types.ts) and
+// `completeCardioExecution` (src/services/workoutExecutions.ts).
+// Cardio Finisher Completion Recovery hardening, Architecture B (2026-09
+// security audit): `cardio` is now written EXCLUSIVELY by the
+// `completeWorkoutCardio` Cloud Function (Admin SDK, bypasses these Rules
+// entirely) — the client can never write it directly, full stop. The
+// exhaustive allow/deny matrix (every mutation shape, every transition,
+// create vs update, the Admin-SDK bypass proof, and the one legitimate
+// restart-after-abandon exception) lives in the dedicated regression suite:
+// `firestore-tests/workoutExecutionCardioSecurityAudit.rules.test.ts`. This
+// block keeps only the two cases specific to ordinary execution mutation
+// (legacy docs, and a plain recordSet never touching cardio).
+describe('users/{uid}/workoutExecutions — cardio completion record', () => {
+  it('a legacy document with no `cardio` field at all stays updatable by legitimate operations (record/skip/finish)', async () => {
+    const db = dbFor(UID);
+    const ref = doc(db, 'users', UID, 'workoutExecutions', EXECUTION_ID);
+    // executionDoc() has no `cardio` key at all — exactly a pre-hardening/legacy shape.
+    await setDoc(ref, executionDoc());
+    const loggedExercises = [{
+      exerciseIndex: 0, exerciseId: 'bench_press', prescribedSets: 3, prescribedReps: '8-12',
+      prescribedDuration: null, prescribedCycles: null,
+      sets: [{ setIndex: 0, status: 'COMPLETED', actualReps: 10, weightKg: 40, actualDurationSeconds: null }],
+    }];
+    await assertSucceeds(updateDoc(ref, { exercises: loggedExercises, updatedAt: serverTimestamp() }));
+    await assertSucceeds(updateDoc(ref, { status: 'COMPLETED', finishedAt: serverTimestamp(), updatedAt: serverTimestamp() }));
+  });
+
+  it('accepts an explicit `cardio: null` on create (not-yet-completed, written up front by startOrResumeWorkoutExecution)', async () => {
+    const db = dbFor(UID);
+    await assertSucceeds(setDoc(
+      doc(db, 'users', UID, 'workoutExecutions', 'e-cardio-null'),
+      executionDoc({ cardio: null }),
+    ));
+  });
+
+  it('a legitimate finish (status -> COMPLETED) leaves an already-persisted cardio record untouched and succeeds', async () => {
+    const db = dbFor(UID);
+    const ref = doc(db, 'users', UID, 'workoutExecutions', EXECUTION_ID);
+    await setDoc(ref, executionDoc());
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'users', UID, 'workoutExecutions', EXECUTION_ID), executionDoc({
+        cardio: { status: 'COMPLETED', actualDurationSeconds: 900, completedAt: Timestamp.now() },
+      }));
+    });
+    const cardioBefore = await getDoc(ref).then((snap) => snap.data()!.cardio);
+    await assertSucceeds(updateDoc(ref, {
+      exercises: executionDoc().exercises,
+      cardio: cardioBefore,
+      status: 'PARTIALLY_COMPLETED',
+      finishedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }));
+  });
+});
+
 // Phase 10E (P3, docs/workout-lifecycle/v2/architecture/
 // 26_FINAL_INDEPENDENT_ADVERSARIAL_AUDIT_2.md §51): `exercises.size()` was
 // bounded but each exercise's own `sets` array was not — capped only by

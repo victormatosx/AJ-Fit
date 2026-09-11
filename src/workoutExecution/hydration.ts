@@ -1,4 +1,5 @@
 import type { PersistedWorkoutExecution } from '../services/workoutExecutions';
+import type { CardioExecutionRecord } from './types';
 
 /**
  * Workout Recovery / Resume após process death — WorkoutScreen's own local
@@ -26,6 +27,19 @@ export interface WorkoutHydrationSnapshot {
   logged: Record<string, number>;
   /** True once no exercise has a PENDING set left — the resumed screen should open directly on the cardio finisher / completion screen rather than replaying an already-finished exercise list. */
   allDone: boolean;
+  /**
+   * Cardio Finisher Completion Recovery hardening (2026-09): true iff the
+   * persisted execution's `cardio` record is `{ status: 'COMPLETED' }` —
+   * never derived from local timer/AsyncStorage state. `WorkoutScreen` uses
+   * this (together with `allDone`) to distinguish "cardio not done yet,
+   * resume the timer" from "cardio already done, only the terminal
+   * `finish()` chain is still pending" — the latter must never re-show a
+   * blank/ready cardio screen. Always `false` for an execution whose session
+   * has no cardio finisher at all (nothing ever writes this record), which
+   * is harmless: `WorkoutScreen` only ever consults this when the plan says
+   * the session HAS one.
+   */
+  cardioCompleted: boolean;
 }
 
 /**
@@ -40,7 +54,7 @@ export interface WorkoutHydrationSnapshot {
  * needed anywhere else.
  */
 export function deriveWorkoutHydration(
-  execution: Pick<PersistedWorkoutExecution, 'exercises'>,
+  execution: Pick<PersistedWorkoutExecution, 'exercises'> & { cardio?: CardioExecutionRecord | null },
   exerciseIds: readonly string[],
 ): WorkoutHydrationSnapshot {
   const progress: Record<number, number> = {};
@@ -72,5 +86,11 @@ export function deriveWorkoutHydration(
     });
   }
 
-  return { order, progress, logged, allDone: order.length === 0 };
+  return {
+    order,
+    progress,
+    logged,
+    allDone: order.length === 0,
+    cardioCompleted: execution.cardio?.status === 'COMPLETED',
+  };
 }

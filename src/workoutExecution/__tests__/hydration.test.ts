@@ -34,6 +34,7 @@ describe('deriveWorkoutHydration', () => {
       progress: { 0: 0, 1: 0, 2: 0 },
       logged: {},
       allDone: false,
+      cardioCompleted: false,
     });
   });
 
@@ -102,5 +103,40 @@ describe('deriveWorkoutHydration', () => {
     const hydration = deriveWorkoutHydration({ exercises }, EXERCISE_IDS);
     expect(hydration.progress[0]).toBe(0); // set 0 is still PENDING — that's the resume point
     expect(hydration.logged['bench_press-1']).toBe(60); // the out-of-order logged weight is still preserved for display
+  });
+});
+
+// Cardio Finisher Completion Recovery hardening (2026-09).
+describe('deriveWorkoutHydration — cardioCompleted', () => {
+  const allDoneExercises = () => {
+    let exercises = buildInitialExerciseExecutions(SESSION);
+    for (let exIdx = 0; exIdx < exercises.length; exIdx += 1) {
+      for (let setIdx = 0; setIdx < exercises[exIdx].sets.length; setIdx += 1) {
+        exercises = withSet(exercises, exIdx, setIdx, { status: 'COMPLETED', weightKg: 20 });
+      }
+    }
+    return exercises;
+  };
+
+  it('is false when `cardio` is absent (legacy execution / no cardio finisher on this plan)', () => {
+    const exercises = buildInitialExerciseExecutions(SESSION);
+    const hydration = deriveWorkoutHydration({ exercises }, EXERCISE_IDS);
+    expect(hydration.cardioCompleted).toBe(false);
+  });
+
+  it('is false when `cardio` is explicitly null (not started/not finished yet)', () => {
+    const exercises = buildInitialExerciseExecutions(SESSION);
+    const hydration = deriveWorkoutHydration({ exercises, cardio: null }, EXERCISE_IDS);
+    expect(hydration.cardioCompleted).toBe(false);
+  });
+
+  it('is true only once the persisted record is COMPLETED — independent of local timer state, which this function never sees', () => {
+    const exercises = allDoneExercises();
+    const hydration = deriveWorkoutHydration(
+      { exercises, cardio: { status: 'COMPLETED', actualDurationSeconds: 900, completedAt: null } },
+      EXERCISE_IDS,
+    );
+    expect(hydration.allDone).toBe(true);
+    expect(hydration.cardioCompleted).toBe(true);
   });
 });

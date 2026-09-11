@@ -23,6 +23,7 @@ import { defaultQuiz } from '../../state/AppState';
 import {
   abandonWorkoutExecution,
   activeExecutionId,
+  completeCardioExecution,
   finishWorkoutExecution,
   listExecutionsForProgram,
   listRecentWorkoutExecutions,
@@ -45,6 +46,7 @@ import {
 import { completeScheduledSession } from '../workoutSchedule';
 import { resolveWorkoutSchedule } from '../../scheduleEngine/resolver';
 import type { WorkoutProgramSnapshot } from '../workoutPrograms';
+import { installCompleteCardioFixture, resetCompleteCardioFixture } from './completeCardioFixture';
 
 const PROJECT_ID = 'ajfit-rules-test';
 const UID = 'alice';
@@ -124,9 +126,19 @@ describe.skipIf(!enabled)('Workout Execution & History — real Firestore Emulat
       firestore: { rules: readFileSync(resolve(__dirname, '../../../firestore.rules'), 'utf8') },
     });
     mocks.db = testEnv.authenticatedContext(UID, { email: 'alice@example.com', email_verified: true }).firestore();
+    // Cardio Finisher Completion Recovery hardening, Architecture B: Rules
+    // now deny the client from ever writing `cardio` directly (see
+    // `completeCardioFixture.ts`'s doc comment) — this impersonates only
+    // the already-validated `completeWorkoutCardio` callable's own
+    // idempotent output, exactly the way `installWorkoutLifecycleAuthorityFixture`
+    // already impersonates `authorizeWorkoutLifecycleMutation` elsewhere.
+    installCompleteCardioFixture(testEnv, UID);
   });
 
-  afterAll(async () => testEnv.cleanup());
+  afterAll(async () => {
+    resetCompleteCardioFixture();
+    await testEnv.cleanup();
+  });
 
   beforeEach(async () => {
     await testEnv.clearFirestore();
@@ -402,6 +414,157 @@ describe.skipIf(!enabled)('Workout Execution & History — real Firestore Emulat
     expect(loaded?.status).toBe('ABANDONED');
     const state = await getDoc(doc(mocks.db as never, 'users', UID, 'workoutPrograms', 'wpg_test1', 'scheduleState', 'current'));
     expect(state.data()?.nextSessionIndex).toBe(0); // untouched
+  });
+
+  // Cardio Finisher Completion Recovery hardening (2026-09,
+  // docs/workout-lifecycle/): `completeCardioExecution` — proves it against
+  // the REAL Firestore Emulator + real Rules, same trust level as every
+  // other test in this file.
+  describe('completeCardioExecution — Cardio Finisher Completion Recovery hardening', () => {
+    it('persists a COMPLETED cardio record while the execution stays IN_PROGRESS', async () => {
+      const started = await startOrResumeWorkoutExecution({ uid: UID, program: program(), sessionIndex: 0, scheduledLocalDate: '2026-08-25' });
+      expect(started.cardio).toBeNull(); // fresh start always writes `cardio: null` up front
+      const result = await completeCardioExecution(UID, started.executionId, 900);
+      expect(result).toEqual({ status: 'COMPLETED', actualDurationSeconds: 900 });
+      const loaded = await loadWorkoutExecution(UID, started.executionId);
+      expect(loaded?.status).toBe('IN_PROGRESS'); // finish() was never called — completing cardio never terminalizes the execution
+      expect(loaded?.cardio).toMatchObject({ status: 'COMPLETED', actualDurationSeconds: 900 });
+      expect(loaded?.cardio?.completedAt).toBeInstanceOf(Timestamp);
+    });
+
+    it('is idempotent: a second call (double tap / retry) returns the SAME record and never rewrites completedAt or actualDurationSeconds', async () => {
+      const started = await startOrResumeWorkoutExecution({ uid: UID, program: program(), sessionIndex: 0, scheduledLocalDate: '2026-08-25' });
+      const first = await completeCardioExecution(UID, started.executionId, 900);
+      const firstLoaded = await loadWorkoutExecution(UID, started.executionId);
+      const firstCompletedAtMs = (firstLoaded?.cardio?.completedAt as Timestamp).toMillis();
+
+      // A later retry with a DIFFERENT (larger) duration — simulates a user
+      // that kept exercising while stuck on a failed first attempt, then
+      // successfully retried; the server must keep the FIRST confirmed
+      // value, never the retry's.
+      const second = await completeCardioExecution(UID, started.executionId, 1200);
+      expect(second).toEqual(first);
+      const secondLoaded = await loadWorkoutExecution(UID, started.executionId);
+      expect(secondLoaded?.cardio?.actualDurationSeconds).toBe(900);
+      expect((secondLoaded?.cardio?.completedAt as Timestamp).toMillis()).toBe(firstCompletedAtMs);
+    });
+
+    it('rejects completing cardio on an execution that does not exist', async () => {
+      await expect(completeCardioExecution(UID, 'exec_does_not_exist', 900)).rejects.toThrow('execution_not_found');
+    });
+
+    it('rejects completing cardio on an execution that is no longer IN_PROGRESS (never fabricates a false completion on a dead session)', async () => {
+      const started = await startOrResumeWorkoutExecution({ uid: UID, program: program(), sessionIndex: 0, scheduledLocalDate: '2026-08-25' });
+      await abandonWorkoutExecution(UID, started.executionId);
+      await expect(completeCardioExecution(UID, started.executionId, 900)).rejects.toThrow('execution_not_in_progress');
+      const loaded = await loadWorkoutExecution(UID, started.executionId);
+      expect(loaded?.cardio).toBeNull(); // the failed attempt left no trace
+    });
+
+    it('a terminal execution already COMPLETED with a cardio record stays idempotent on a late retry (never throws, never rewrites)', async () => {
+      const started = await startOrResumeWorkoutExecution({ uid: UID, program: program(), sessionIndex: 0, scheduledLocalDate: '2026-08-25' });
+      await completeCardioExecution(UID, started.executionId, 900);
+      await finishWorkoutExecution(UID, started.executionId);
+      // A very-delayed retry landing after the session is already fully
+      // terminal — still returns the original record, not an error.
+      const retry = await completeCardioExecution(UID, started.executionId, 1200);
+      expect(retry).toEqual({ status: 'COMPLETED', actualDurationSeconds: 900 });
+    });
+
+    it('KILL/RECOVERY — cardio COMPLETED but the app died before finish() ran: recovery sees the execution IN_PROGRESS with cardio already COMPLETED, never a blank cardio state', async () => {
+      const started = await startOrResumeWorkoutExecution({ uid: UID, program: program(), sessionIndex: 0, scheduledLocalDate: '2026-08-25' });
+      await completeCardioExecution(UID, started.executionId, 900);
+      // finish() deliberately never called — simulates the app dying right
+      // after cardio persisted but before the durable finish chain ran.
+      const recovery = await resolveWorkoutSessionRecoveryState(UID);
+      expect(recovery.status).toBe('pending');
+      if (recovery.status === 'pending') {
+        expect(recovery.execution.status).toBe('IN_PROGRESS');
+        expect(recovery.execution.cardio).toMatchObject({ status: 'COMPLETED', actualDurationSeconds: 900 });
+      }
+    });
+
+    it('KILL/RECOVERY (earlier) — the app died BEFORE cardio persistence ever confirmed: recovery follows the last durable state (cardio null), never assumes completion', async () => {
+      const started = await startOrResumeWorkoutExecution({ uid: UID, program: program(), sessionIndex: 0, scheduledLocalDate: '2026-08-25' });
+      // completeCardioExecution deliberately never called — simulates the
+      // app dying before the write was even attempted/confirmed.
+      const recovery = await resolveWorkoutSessionRecoveryState(UID);
+      expect(recovery.status).toBe('pending');
+      if (recovery.status === 'pending') {
+        expect(recovery.execution.cardio).toBeNull();
+      }
+    });
+
+    it('completing cardio then finishing normally leaves both facts intact — finish never touches the cardio record', async () => {
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'users', UID, 'workoutPrograms', 'wpg_test1', 'scheduleState', 'current'), scheduleStateDoc());
+      });
+      const started = await startOrResumeWorkoutExecution({ uid: UID, program: program(), sessionIndex: 0, scheduledLocalDate: '2026-08-25' });
+      await completeCardioExecution(UID, started.executionId, 900);
+      for (let exerciseIndex = 0; exerciseIndex < 2; exerciseIndex++) {
+        const setCount = exerciseIndex === 0 ? 3 : 1;
+        for (let setIndex = 0; setIndex < setCount; setIndex++) {
+          await recordSetExecution({ uid: UID, executionId: started.executionId, exerciseIndex, setIndex, actualReps: 10, weightKg: 30 });
+        }
+      }
+      const finish = await finishWorkoutExecution(UID, started.executionId);
+      expect(finish.status).toBe('COMPLETED');
+      await completeScheduledSession({ uid: UID, programId: 'wpg_test1', sessionIndex: 0, sessionCount: 2, scheduledLocalDate: '2026-08-25', trainingDays: ['MON', 'TUE'], activatedAtLocalDate: '2026-08-24' });
+      const loaded = await loadWorkoutExecution(UID, started.executionId);
+      expect(loaded?.status).toBe('COMPLETED');
+      expect(loaded?.cardio).toMatchObject({ status: 'COMPLETED', actualDurationSeconds: 900 });
+      const pointer = await loadActiveExecutionPointer(UID);
+      expect(pointer).toBeNull(); // mutex released exactly like any other finish
+    });
+
+    it('a legacy document with no `cardio` field at all resolves it as null, not a crash', async () => {
+      const executionId = 'exec_legacy_cardio_wpg_test1_0_2026-08-25';
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        await setDoc(doc(db, 'users', UID, 'workoutExecutions', executionId), {
+          programId: 'wpg_test1', templateId: 'T003', sessionIndex: 0, sessionName: 'A',
+          scheduledLocalDate: '2026-08-25', status: 'IN_PROGRESS', startedAt: Timestamp.now(), finishedAt: null,
+          exercises: [{
+            exerciseIndex: 0, exerciseId: 'bench_press', prescribedSets: 3, prescribedReps: '8-12',
+            prescribedDuration: null, prescribedCycles: null,
+            sets: [{ setIndex: 0, status: 'PENDING', actualReps: null, weightKg: null, actualDurationSeconds: null }],
+          }],
+          executionSchemaVersion: 1, createdAt: Timestamp.now(), updatedAt: Timestamp.now(),
+          // Deliberately no `cardio` key — a pre-hardening document.
+        });
+      });
+      const loaded = await loadWorkoutExecution(UID, executionId);
+      expect(loaded?.cardio).toBeNull();
+      // And it can still be completed for the first time going forward.
+      const result = await completeCardioExecution(UID, executionId, 300);
+      expect(result).toEqual({ status: 'COMPLETED', actualDurationSeconds: 300 });
+    });
+
+    // V2 lifecycle (`programInstanceId` set) — proves `completeCardioExecution`
+    // needs NO lifecycle authority grant (unlike `finishWorkoutExecution`'s
+    // `FINISH_EXECUTION` consumption): it never transitions `status`, so it
+    // is not gated the same way. Same raw-seed pattern as the other V2 test
+    // above in this file.
+    it('works on a V2 execution without requiring a lifecycle authority grant', async () => {
+      const executionId = 'exec_v2_cardio_wpg_test1_0_2026-08-25';
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        const db = ctx.firestore();
+        await setDoc(doc(db, 'users', UID, 'workoutExecutions', executionId), {
+          programId: 'wpg_test1', programInstanceId: 'wpi_test1', templateId: 'T003', sessionIndex: 0, sessionName: 'A',
+          scheduledLocalDate: '2026-08-25', status: 'IN_PROGRESS', startedAt: Timestamp.now(), finishedAt: null,
+          exercises: [{
+            exerciseIndex: 0, exerciseId: 'bench_press', prescribedSets: 3, prescribedReps: '8-12',
+            prescribedDuration: null, prescribedCycles: null,
+            sets: [{ setIndex: 0, status: 'PENDING', actualReps: null, weightKg: null, actualDurationSeconds: null }],
+          }],
+          executionSchemaVersion: 2, mutexProtocolVersion: 1,
+          createdAt: Timestamp.now(), updatedAt: Timestamp.now(),
+        });
+        await setDoc(doc(db, 'users', UID, 'programInstances', 'wpi_test1'), { contentIdentity: 'wpg_test1' });
+      });
+      const result = await completeCardioExecution(UID, executionId, 600);
+      expect(result).toEqual({ status: 'COMPLETED', actualDurationSeconds: 600 });
+    });
   });
 
   describe('DIAGNOSTIC — abandon on a genuinely LEGACY execution (2026-09 production regression report)', () => {

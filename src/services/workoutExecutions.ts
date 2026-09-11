@@ -29,6 +29,7 @@ import {
   deriveFinishStatus,
   sweepPendingSetsToSkipped,
   workoutExecutionId,
+  type CardioExecutionRecord,
   type ExerciseExecution,
   type ResolvedPermanentSubstitutionOverride,
   type SetExecution,
@@ -195,6 +196,10 @@ function fromDoc(executionId: string, data: Record<string, unknown>): PersistedW
     startedAt: data.startedAt as Timestamp,
     finishedAt: (data.finishedAt as Timestamp | null) ?? null,
     exercises: data.exercises as ExerciseExecution[],
+    // Absent on every execution written before this field existed, and on
+    // every execution whose session has no cardio finisher — both degrade
+    // identically to "not completed" (docs — `CardioExecutionRecord`).
+    cardio: (data.cardio as CardioExecutionRecord | null | undefined) ?? null,
     executionSchemaVersion: data.executionSchemaVersion as number,
     createdAt: data.createdAt as Timestamp,
     updatedAt: data.updatedAt as Timestamp,
@@ -318,6 +323,11 @@ export async function startOrResumeWorkoutExecution(input: {
     scheduledLocalDate,
     status: 'IN_PROGRESS' as const,
     exercises: resolvedExercises,
+    // Always reset on a fresh start AND on a restart-after-abandon — the
+    // latter is semantically a new attempt (same rationale as `startedAt`
+    // renewal just below), so a cardio completion recorded on the abandoned
+    // attempt must never leak into the new one.
+    cardio: null,
     executionSchemaVersion: program.programInstanceId
       ? WORKOUT_EXECUTION_LIFECYCLE_SCHEMA_VERSION
       : WORKOUT_EXECUTION_SCHEMA_VERSION,
@@ -570,6 +580,112 @@ export async function skipExerciseExecution(input: { uid: string; executionId: s
       };
     }),
   );
+}
+
+/**
+ * Cardio Finisher Completion Recovery hardening, Architecture B (2026-09
+ * security audit): marks this execution's cardio finisher as durably
+ * COMPLETED — persisted independently of, and always BEFORE,
+ * `finishWorkoutExecution`. Two recoverable steps, deliberately not one
+ * combined transaction with `finishWorkoutExecution`: this module's
+ * existing terminal-write chain (`finishWorkoutExecution` ->
+ * `completeScheduledSession` -> lifecycle reconciliation, orchestrated by
+ * `AppShell`/`finishFlow.ts`) is ALREADY three separate, independently
+ * idempotent steps rather than one atomic write — folding cardio completion
+ * into `finishWorkoutExecution`'s own transaction would conflate two
+ * different business facts ("the user finished their cardio" vs "this
+ * execution record is terminal") and require a parallel completion pipeline
+ * for the strength-only case (no cardio finisher at all), which never needs
+ * this step. Keeping the same shape means the exact same self-heal path
+ * WorkoutScreen already used for a died-before-`finish()` session (docs —
+ * see `WorkoutScreen.tsx`'s `finished` initial-state comment) now also
+ * covers "died after cardio persisted but before `finish()` ran": on resume,
+ * hydration reads this record as COMPLETED and skips straight to
+ * re-triggering `onSessionCompleted`, never back into a blank cardio timer.
+ *
+ * The actual Firestore write happens entirely server-side — see the
+ * `completeCardioTransport` doc comment just below for why, and
+ * `functions/src/workoutLifecycle/completeWorkoutCardio.ts` for the
+ * authority (ownership, execution state, and "this session really has a
+ * cardio finisher") this call is validated against. Idempotent from the
+ * caller's perspective either way: if `cardio` is already
+ * `{ status: 'COMPLETED' }`, the callable is a no-op that returns the
+ * EXISTING record unchanged — a double tap, a retry after a network
+ * failure, or the mount-time self-heal path can never overwrite an
+ * already-recorded `completedAt`/`actualDurationSeconds` with a later
+ * call's value.
+ */
+export type CompleteCardioTransport = (input: {
+  executionId: string;
+  actualDurationSeconds: number;
+}) => Promise<{ status: 'COMPLETED'; actualDurationSeconds: number }>;
+
+const COMPLETE_WORKOUT_CARDIO_CALLABLE = 'completeWorkoutCardio';
+
+/**
+ * Dynamic import (not a top-level `import ... from 'firebase/functions'`)
+ * for the exact same reason `workoutLifecycle/authorityProvider.ts`'s own
+ * `cloudAuthorizer` uses one, and the exact same reason this file already
+ * avoids importing `services/exerciseSubstitution.ts` directly (see the
+ * comment on that import above): `firebase/functions`'s `getFunctions()`
+ * runs eagerly at module load time and broke every test importing this
+ * file without a mocked Functions app.
+ */
+const cloudCompleteCardio: CompleteCardioTransport = async (input) => {
+  const [{ httpsCallable }, { functions }] = await Promise.all([
+    import('firebase/functions'),
+    import('../lib/firebaseFunctions'),
+  ]);
+  const callable = httpsCallable<
+    { executionId: string; actualDurationSeconds: number },
+    { status: 'COMPLETED'; actualDurationSeconds: number }
+  >(functions, COMPLETE_WORKOUT_CARDIO_CALLABLE);
+  return (await callable(input)).data;
+};
+
+let completeCardioTransport: CompleteCardioTransport = cloudCompleteCardio;
+
+/** Test-only dependency injection — mirrors `authorityProvider.ts`'s `setWorkoutLifecycleAuthorityAuthorizerForTests`. Production always uses the App-Check-enforced callable. */
+export function setCompleteCardioTransportForTests(value: CompleteCardioTransport): void {
+  completeCardioTransport = value;
+}
+
+export function resetCompleteCardioTransportForTests(): void {
+  completeCardioTransport = cloudCompleteCardio;
+}
+
+/**
+ * `uid` is kept in the public signature for backward compatibility (every
+ * call site already threads it through, and `useWorkoutExecution.ts` never
+ * needs to know the transport changed) but is NOT used to build the
+ * Firestore path anymore — the callable derives the authoritative uid
+ * exclusively from the caller's verified ID token
+ * (`context.auth.uid`/`requireAuth`, never trusted from a request payload).
+ * A client can never claim to act as a different uid by passing one here.
+ */
+export async function completeCardioExecution(
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- kept for API/call-site compatibility; see doc comment.
+  uid: string,
+  executionId: string,
+  actualDurationSeconds: number,
+): Promise<{ status: 'COMPLETED'; actualDurationSeconds: number }> {
+  logInfo('workout_execution', 'cardio_finish_requested', { executionId });
+  const startedAtMs = Date.now();
+  try {
+    const result = await completeCardioTransport({ executionId, actualDurationSeconds });
+    logInfo('workout_execution', 'cardio_persist_completed', {
+      executionId,
+      durationMs: Date.now() - startedAtMs,
+    });
+    return result;
+  } catch (error) {
+    logWarn('workout_execution', 'cardio_persist_failed', {
+      executionId,
+      durationMs: Date.now() - startedAtMs,
+      error,
+    });
+    throw error;
+  }
 }
 
 /**

@@ -61,7 +61,12 @@ import { useWorkoutExecution, type WorkoutExecutionStartError } from '../workout
 import { useWorkoutSessionRecovery } from '../workoutExecution/useWorkoutSessionRecovery';
 import { WorkoutSessionRecoveryModal } from '../components/workout/WorkoutSessionRecoveryModal';
 import { activeExecutionId, abandonWorkoutExecution, loadWorkoutExecution } from '../services/workoutExecutions';
-import { completeWorkoutSessionFlow } from '../workoutLifecycle/finishFlow';
+import {
+  applyWorkoutCompletionNavigation,
+  completeWorkoutSessionFlow,
+  runWorkoutCompletionSingleFlight,
+  type WorkoutCompletionResult,
+} from '../workoutLifecycle/finishFlow';
 import { useWorkoutEvolution } from '../workoutEvolution/useWorkoutEvolution';
 import { useWorkoutActivitySnapshot } from '../home/useWorkoutActivitySnapshot';
 import { useFrequencyWindow } from '../home/useFrequencyWindow';
@@ -277,7 +282,21 @@ function AppShellContent({
   // before the durable Execution -> Schedule -> Lifecycle chain necessarily
   // finishes. Keep that chain available to the Done CTA so Profile can never
   // open with the previous IN_PROGRESS evaluation still cached.
-  const workoutCompletionRef = useRef<Promise<void> | null>(null);
+  const workoutCompletionRef = useRef<Promise<WorkoutCompletionResult> | null>(null);
+  // True from the instant `onSessionCompleted` fires until the durable
+  // finish chain (execution.finish -> completeScheduledSession -> lifecycle)
+  // settles — drives `WorkoutDone`'s "Finalizando treino..." state so the
+  // success screen never lets the user believe (or navigate away on) an
+  // unconfirmed completion (docs — Cardio Finisher Completion Recovery
+  // hardening). Deliberately separate from `workoutCompletionRef` (a plain
+  // ref, not observable by React) even though they're set/cleared together.
+  const [finishingSession, setFinishingSession] = useState(false);
+  const [workoutCompletionResult, setWorkoutCompletionResult] = useState<WorkoutCompletionResult | null>(null);
+  const workoutCompletionInFlightRef = useRef(false);
+  // Re-entrancy guard for `finishWorkoutSession` — `WorkoutDone`'s CTA is
+  // already disabled while `finishingSession`/awaiting, but this closes the
+  // same-tick gap between a tap and that state committing.
+  const finishSessionInFlightRef = useRef(false);
   const { isPremium } = useSubscription();
   const paywallPremiumReturnState = useRef(INITIAL_PAYWALL_PREMIUM_RETURN_STATE);
   // Single centralized prewarm schedule (docs/23_navegacao_e_lifecycle.md
@@ -510,6 +529,8 @@ function AppShellContent({
     const attemptId = ++workoutStartAttemptSequenceRef.current;
     logInfo('workout_execution', 'start_user_confirmed', { attemptId, sessionIndex });
     workoutCompletionRef.current = null;
+    setWorkoutCompletionResult(null);
+    setFinishingSession(false);
     setStartWorkoutFlow('idle');
     setStartWorkoutError(null);
     setActiveSessionIndex(sessionIndex);
@@ -606,6 +627,9 @@ function AppShellContent({
         return;
       }
       execution.adoptExecution(fresh);
+      workoutCompletionRef.current = null;
+      setWorkoutCompletionResult(null);
+      setFinishingSession(false);
       setActiveSessionIndex(fresh.sessionIndex);
       setWorkoutInProgress(true);
       setTab('workout');
@@ -644,13 +668,107 @@ function AppShellContent({
     recovery.resolve();
   };
 
-  const finishWorkoutSession = async () => {
-    await workoutCompletionRef.current;
-    workoutCompletionRef.current = null;
+  const runWorkoutCompletion = (recovery: boolean): Promise<WorkoutCompletionResult> => {
+    if (workoutCompletionInFlightRef.current && workoutCompletionRef.current) {
+      return workoutCompletionRef.current;
+    }
+    workoutCompletionInFlightRef.current = true;
+    setWorkoutCompletionResult(null);
+    setFinishingSession(true);
     endWorkoutSession();
-    setWorkoutInProgress(false);
-    setWorkoutStartAttempt(null);
-    setTab('home');
+    const programId = activeProgram?.programId;
+    const executionId = execution.execution?.executionId;
+    logInfo('workout', 'workout_finish_requested', {
+      executionId,
+      programId,
+      sessionIndex: activeSessionIndex,
+      recovery,
+      stage: 'EXECUTION',
+    });
+    logInfo('workout', recovery ? 'workout_finish_recovery_started' : 'workout_finish_started', {
+      executionId,
+      programId,
+      sessionIndex: activeSessionIndex,
+    });
+
+    const completion = (async (): Promise<WorkoutCompletionResult> => {
+      try {
+        const finishedScheduledLocalDate = execution.execution?.scheduledLocalDate ?? null;
+        const result = await completeWorkoutSessionFlow({
+          finishExecution: execution.finish,
+          completeSchedule: () => (finishedScheduledLocalDate
+            ? schedule.completeSession(activeSessionIndex, finishedScheduledLocalDate)
+            : Promise.resolve(false)),
+          afterSchedule: async () => {
+            try {
+              if (!user) return;
+              const lifecycleResult = await processWorkoutLifecycleAfterSession({ uid: user.uid });
+              if (lifecycleResult.autoActivated) await reloadPrescription();
+            } finally {
+              await Promise.allSettled([
+                evolution.refresh(),
+                activitySnapshot.reload(),
+                frequencyWindow.reload(),
+              ]);
+            }
+          },
+        });
+        setWorkoutCompletionResult(result);
+        if (result === 'COMPLETED') {
+          logInfo('workout', 'workout_finish_succeeded', {
+            executionId, programId, sessionIndex: activeSessionIndex, stage: 'COMPLETE', result,
+          });
+          logInfo('workout', recovery ? 'workout_finish_recovery_completed' : 'workout_finish_completed', {
+            executionId, programId, sessionIndex: activeSessionIndex, result,
+          });
+        } else {
+          const stage = result === 'EXECUTION_FAILED'
+            ? 'EXECUTION'
+            : result === 'SCHEDULE_FAILED' ? 'SCHEDULE' : 'LIFECYCLE_FOLLOW_UP';
+          logWarn('workout', 'workout_finish_incomplete', {
+            executionId, programId, sessionIndex: activeSessionIndex, stage, result,
+          });
+          logWarn('workout', recovery ? 'workout_finish_recovery_failed' : 'workout_finish_failed', {
+            executionId, programId, sessionIndex: activeSessionIndex, stage, result,
+          });
+        }
+        return result;
+      } finally {
+        workoutCompletionInFlightRef.current = false;
+        setFinishingSession(false);
+      }
+    })();
+    workoutCompletionRef.current = completion;
+    return completion;
+  };
+
+  const finishWorkoutSession = async () => {
+    await runWorkoutCompletionSingleFlight(finishSessionInFlightRef, async () => {
+      if (!workoutInProgress) {
+        setTab('home');
+        return;
+      }
+      const result = workoutCompletionResult === 'EXECUTION_FAILED' || workoutCompletionResult === 'SCHEDULE_FAILED'
+        ? await runWorkoutCompletion(false)
+        : workoutCompletionRef.current
+          ? await workoutCompletionRef.current
+          : await runWorkoutCompletion(false);
+      const navigated = applyWorkoutCompletionNavigation(result, () => {
+        logInfo('workout', 'workout_done_navigation_allowed', {
+          executionId: execution.execution?.executionId,
+          sessionIndex: activeSessionIndex,
+          result,
+        });
+        endWorkoutSession();
+        setWorkoutInProgress(false);
+        setWorkoutStartAttempt(null);
+        setTab('home');
+      });
+      if (navigated) {
+        workoutCompletionRef.current = null;
+        setWorkoutCompletionResult(null);
+      }
+    });
   };
 
   return (
@@ -735,6 +853,7 @@ function AppShellContent({
               // durable, persisted fact before the UI treats the session as
               // gone. Never fire-and-forget here.
               onAbandon={() => execution.abandon()}
+              onCardioCompleted={(actualDurationSeconds) => execution.completeCardio(actualDurationSeconds)}
               onSetLogged={(exerciseIndex, setIndex, weightKg) =>
                 execution.recordSet(exerciseIndex, setIndex, weightKg)}
               manualSubstitutionContext={manualSubstitutionContext}
@@ -771,85 +890,11 @@ function AppShellContent({
                   return { ok: false, error };
                 }
               }}
-              onSessionCompleted={() => {
-              // The workout engine remains authoritative for completion and
-              // evolution. The rest layer only closes its temporal surface
-              // before those durable transitions start.
-              endWorkoutSession();
-              // Execution finishes first (COMPLETED/PARTIALLY_COMPLETED),
-              // then the Schedule Engine advances via its own existing,
-              // already-idempotent completion mechanism — no parallel
-              // "advance the rotation" logic here (docs §40). Progression is
-              // only ever checked AFTER the session has fully ended — never
-              // while one is IN_PROGRESS (docs/workout-lifecycle/
-              // 04_PROGRESSION_ENGINE.md §23-25).
-              const programId = activeProgram?.programId;
-              // Diagnostic instrumentation (Phase 2, Part F) — a prior E2E
-              // reported a crash on finishing a workout. That report was
-              // later traced to a separate, now-fixed cause (Schedule stuck
-              // in SCHEDULE_SETUP_REQUIRED, so Workout Execution never
-              // actually started — Phase 1). No uncaught-throw path was
-              // found in this chain on audit (`execution.finish`/
-              // `schedule.completeSession` are both already internally
-              // try/caught) — this logs the boundary so the next real E2E
-              // either confirms it's clean or pinpoints exactly where it
-              // isn't.
-              logInfo('workout', 'workout_finish_requested', {
-                programId,
-                sessionIndex: activeSessionIndex,
-              });
-              const completion = (async () => {
-                // Docs §14: credit the Schedule Engine with the FINISHED
-                // execution's own `scheduledLocalDate`, never a freshly
-                // recomputed "today" — a session started on one calendar day
-                // and finished after local midnight (or reconciled later)
-                // must never silently credit the wrong day.
-                const finishedScheduledLocalDate = execution.execution?.scheduledLocalDate ?? null;
-                const result = await completeWorkoutSessionFlow({
-                  finishExecution: execution.finish,
-                  completeSchedule: () => (finishedScheduledLocalDate
-                    ? schedule.completeSession(activeSessionIndex, finishedScheduledLocalDate)
-                    : Promise.resolve(false)),
-                  afterSchedule: async () => {
-                    try {
-                      if (!user) return;
-                      const lifecycleResult = await processWorkoutLifecycleAfterSession({ uid: user.uid });
-                      if (lifecycleResult.autoActivated) await reloadPrescription();
-                    } finally {
-                      // These views depend on the now-terminal execution.
-                      // Refresh them even when lifecycle reconciliation or
-                      // prescription hydration fails, otherwise Profile can
-                      // retain the old IN_PROGRESS presentation indefinitely.
-                      await Promise.allSettled([
-                        evolution.refresh(),
-                        activitySnapshot.reload(),
-                        frequencyWindow.reload(),
-                      ]);
-                    }
-                  },
-                });
-                // The "treino concluído" screen (WorkoutScreen's own
-                // `finished` local state) already rendered by this point,
-                // independent of this result — so a non-COMPLETED outcome
-                // can never be silently indistinguishable from success in
-                // the logs. `EXECUTION_FAILED`/`SCHEDULE_FAILED` mean the
-                // WorkoutExecution finished but the Schedule Engine never
-                // advanced (no scheduleEvent COMPLETED, Home keeps offering
-                // the same session) — never masked as
-                // `workout_finish_succeeded` the way it was before this was
-                // logged. Deliberately not attempting any rollback/retry
-                // here: the execution is already a durable terminal fact
-                // (docs — `finishFlow.ts`'s own doc comment), and the next
-                // trusted reconciliation entry point (cold start/readiness
-                // gate) is the safe place to retry, not this fire-and-forget
-                // handler.
-                if (result === 'COMPLETED') {
-                  logInfo('workout', 'workout_finish_succeeded', { programId, sessionIndex: activeSessionIndex });
-                } else {
-                  logWarn('workout', 'workout_finish_incomplete', { programId, sessionIndex: activeSessionIndex, result });
-                }
-              })();
-              workoutCompletionRef.current = completion;
+              finishing={finishingSession}
+              completionFailed={workoutCompletionResult === 'EXECUTION_FAILED'
+                || workoutCompletionResult === 'SCHEDULE_FAILED'}
+              onSessionCompleted={({ recovery }) => {
+                void runWorkoutCompletion(recovery);
               }}
             />
             </WorkoutEntranceFade>

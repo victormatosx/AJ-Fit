@@ -168,6 +168,94 @@ export function isRequestedSubstitutionEligible(input: {
   }).eligible;
 }
 
+export type MaterializedSubstitutionValidation =
+  | { valid: true }
+  | {
+    valid: false;
+    reason: 'substitution_marker_missing' | 'substitution_marker_invalid'
+      | 'substitution_marker_on_prescribed_exercise' | 'substitution_not_eligible';
+    exerciseIndex: number;
+    prescribedExerciseId: string;
+    exerciseId: string;
+  };
+
+/**
+ * Re-validates the effective identity of every substituted execution slot
+ * against the same server-side resolver used by applyExerciseSubstitution.
+ * The prescribed anchor remains the structural link to the immutable plan;
+ * this check proves that a different effective exercise is authorized, not
+ * merely accompanied by a client-fabricated marker.
+ */
+export async function validateMaterializedExecutionSubstitutions(
+  uid: string,
+  execution: DocumentData,
+  firestore: Firestore,
+): Promise<MaterializedSubstitutionValidation> {
+  const exercises: DocumentData[] = Array.isArray(execution.exercises) ? execution.exercises : [];
+  const hasEffectiveSubstitution = exercises.some((slot) =>
+    typeof slot?.prescribedExerciseId === 'string'
+      && typeof slot?.exerciseId === 'string'
+      && slot.prescribedExerciseId !== slot.exerciseId);
+  if (!hasEffectiveSubstitution) {
+    const markerIndex = exercises.findIndex((slot) => slot?.substitution != null);
+    if (markerIndex < 0) return { valid: true };
+    const slot = exercises[markerIndex];
+    return {
+      valid: false,
+      reason: 'substitution_marker_on_prescribed_exercise',
+      exerciseIndex: markerIndex,
+      prescribedExerciseId: String(slot?.prescribedExerciseId ?? slot?.exerciseId ?? ''),
+      exerciseId: String(slot?.exerciseId ?? ''),
+    };
+  }
+
+  for (let exerciseIndex = 0; exerciseIndex < exercises.length; exerciseIndex += 1) {
+    const slot = exercises[exerciseIndex];
+    const prescribedExerciseId = typeof slot?.prescribedExerciseId === 'string'
+      ? slot.prescribedExerciseId : slot?.exerciseId;
+    const exerciseId = slot?.exerciseId;
+    if (typeof prescribedExerciseId !== 'string' || typeof exerciseId !== 'string'
+      || prescribedExerciseId === exerciseId) continue;
+    if (!plainObject(slot.substitution)) {
+      return { valid: false, reason: 'substitution_marker_missing', exerciseIndex, prescribedExerciseId, exerciseId };
+    }
+    if (!['SESSION', 'PERMANENT'].includes(String(slot.substitution.scope))
+      || !(slot.substitution.appliedAt instanceof Timestamp)) {
+      return { valid: false, reason: 'substitution_marker_invalid', exerciseIndex, prescribedExerciseId, exerciseId };
+    }
+  }
+
+  const { catalog, regions, equipmentContext } = await loadSubstitutionResolutionContext(uid, execution, firestore);
+  for (let exerciseIndex = 0; exerciseIndex < exercises.length; exerciseIndex += 1) {
+    const slot = exercises[exerciseIndex];
+    const prescribedExerciseId = typeof slot?.prescribedExerciseId === 'string'
+      ? slot.prescribedExerciseId : slot?.exerciseId;
+    const exerciseId = slot?.exerciseId;
+    if (typeof prescribedExerciseId !== 'string' || typeof exerciseId !== 'string') continue;
+    if (prescribedExerciseId === exerciseId) {
+      if (slot.substitution != null) {
+        return { valid: false, reason: 'substitution_marker_on_prescribed_exercise', exerciseIndex, prescribedExerciseId, exerciseId };
+      }
+      continue;
+    }
+    const effectiveExerciseIdsInSession = new Set<string>(exercises
+      .filter((_, index) => index !== exerciseIndex)
+      .map((other) => other?.exerciseId)
+      .filter((id): id is string => typeof id === 'string'));
+    if (!isRequestedSubstitutionEligible({
+      anchorExerciseId: prescribedExerciseId,
+      requestedExerciseId: exerciseId,
+      catalog,
+      regions,
+      equipmentContext,
+      effectiveExerciseIdsInSession,
+    })) {
+      return { valid: false, reason: 'substitution_not_eligible', exerciseIndex, prescribedExerciseId, exerciseId };
+    }
+  }
+  return { valid: true };
+}
+
 export async function applyExerciseSubstitutionHandler(
   request: CallableRequest,
   firestore: Firestore = defaultDb,

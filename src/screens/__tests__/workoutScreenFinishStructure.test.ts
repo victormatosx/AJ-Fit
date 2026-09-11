@@ -3,31 +3,41 @@ import { describe, expect, it } from 'vitest';
 
 const source = readFileSync(new URL('../WorkoutScreen.tsx', import.meta.url), 'utf8');
 
-/**
- * `WorkoutScreen.tsx` cannot be rendered in this project's test suite (no
- * React Native test renderer — `vitest.config.mts` only collects `.test.ts`
- * in a Node environment). This locks the one behavioral invariant Phase 2
- * Part D explicitly required auditing textually: the LAST set of the WHOLE
- * workout must skip the rest screen entirely, not open a useless
- * post-finish countdown — pre-existing behavior, confirmed unchanged by
- * this phase's `restSeconds` wiring.
- */
-describe('WorkoutScreen.completeSet — last set of the whole workout never opens a rest screen (structural)', () => {
-  it('(13) `isLastOverall` short-circuits to `setFinished(true)` before starting a rest', () => {
+/** The final set has no recovery countdown, but still needs the same load
+ * registration surface as every other set before workout completion/cardio. */
+describe('WorkoutScreen.completeSet — final set load registration', () => {
+  it('keeps the final set pending without starting a recovery countdown', () => {
     const fnStart = source.indexOf('const completeSet = () => {');
-    expect(fnStart).toBeGreaterThan(-1);
     const fnBody = source.slice(fnStart, source.indexOf('const skipRest = () => {', fnStart));
-
     const isLastOverallCheck = fnBody.indexOf('if (isLastOverall)');
-    const setFinishedCall = fnBody.indexOf('setFinished(true);');
-    const restingBranchIndex = fnBody.indexOf('startRest({');
+    const setPendingCall = fnBody.indexOf('setPending(completedSet);');
+    const startRestCall = fnBody.indexOf('startRest({');
 
-    expect(isLastOverallCheck).toBeGreaterThan(-1);
-    expect(setFinishedCall).toBeGreaterThan(-1);
-    expect(restingBranchIndex).toBeGreaterThan(-1);
-    // `setFinished(true)` must be reached (and return) BEFORE the resting
-    // branch further down the function body.
-    expect(setFinishedCall).toBeLessThan(restingBranchIndex);
-    expect(fnBody.indexOf('return;', setFinishedCall)).toBeLessThan(restingBranchIndex);
+    expect(fnStart).toBeGreaterThan(-1);
+    expect(setPendingCall).toBeGreaterThan(-1);
+    expect(isLastOverallCheck).toBeGreaterThan(setPendingCall);
+    expect(fnBody).toContain('if (isLastOverall) return;');
+    expect(startRestCall).toBeGreaterThan(isLastOverallCheck);
+  });
+
+  it('renders RestOverlay in final-load mode and advances through the shared transition', () => {
+    expect(source).toContain('const finalSetLoadEntry = isLastOverall && pending !== null && !resting;');
+    expect(source).toContain('const remainingRestSeconds = resting ? computeRemainingSeconds(rest, restNow) : 0;');
+    expect(source).toContain('{(resting || finalSetLoadEntry) && (');
+    expect(source).toContain('remainingSeconds={remainingRestSeconds}');
+    expect(source).toContain('finalSetLoadEntry={finalSetLoadEntry}');
+    expect(source).toContain('continuesToCardio={!!cardioFinisher}');
+    expect(source).toContain('onSkip={finalSetLoadEntry ? () => advanceAfterRest() : skipRest}');
+  });
+
+  it('reuses the regular rest presentation with a zeroed timer for the final set', () => {
+    const overlayStart = source.indexOf('function RestOverlay({');
+    const overlayBody = source.slice(overlayStart, source.indexOf('function PROverlay({', overlayStart));
+
+    expect(overlayStart).toBeGreaterThan(-1);
+    expect(overlayBody).toContain("{t('rest.title').toUpperCase()}");
+    expect(overlayBody).toContain('{fmt(remainingSeconds)}');
+    expect(overlayBody).toContain("? t('rest.continueToCardio')");
+    expect(overlayBody).toContain(": t('rest.finishWorkout')");
   });
 });
