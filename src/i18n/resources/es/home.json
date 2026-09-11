@@ -382,6 +382,25 @@
       "next": "Período de 30 días siguiente"
     }
   },
+  "upcoming": {
+    "title": "Próximos entrenamientos",
+    "meta_one": "~{{minutes}} min · {{count}} ejercicio",
+    "meta_other": "~{{minutes}} min · {{count}} ejercicios",
+    "metaNoEstimate_one": "{{count}} ejercicio",
+    "metaNoEstimate_other": "{{count}} ejercicios",
+    "open": "Ver detalles del entrenamiento del {{weekday}}: {{session}}",
+    "detail": {
+      "kicker": "Próximo entrenamiento",
+      "close": "Cerrar detalles del entrenamiento",
+      "scheduledFor": "{{weekday}} · {{date}}",
+      "exercises": "Ejercicios",
+      "setsReps": "{{sets}} series × {{reps}}",
+      "setsDuration": "{{sets}} series × {{duration}}",
+      "rest": "Descanso: {{seconds}}s",
+      "estimateNote": "Duración estimada a partir de tu prescripción.",
+      "unavailable": "Los ejercicios de este entrenamiento aún no se pueden mostrar."
+    }
+  },
   "consistencyUnavailable": {
     "title": "El historial de constancia aún no está disponible",
     "body": "AJ Fit no muestra un calendario hasta que el historial de entrenamientos completados pueda respaldarlo.",

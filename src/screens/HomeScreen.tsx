@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Modal, View, Text, ScrollView, Pressable, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -14,7 +14,7 @@ import { ProfileAvatar } from '../components/ui/ProfileAvatar';
 import type { PrescriptionResult } from '../workoutPrescription/types';
 import { prescriptionOutcomeKey } from '../workoutPrescription/uiOutcome';
 import { resolveSessionDisplayName, type LooseTranslate } from '../workoutPrescription/sessionPresentation';
-import { weekdayOfLocalDate, type ScheduleResolution } from '../scheduleEngine';
+import { localDateInTimezone, weekdayOfLocalDate, type ScheduleConfig, type ScheduleResolution } from '../scheduleEngine';
 import { EvolutionTicker } from '../components/evolution/EvolutionTicker';
 import type { EvolutionViewModel } from '../workoutEvolution/types';
 import { BodyMuscleMap } from '../components/fitness/BodyMuscleMap';
@@ -22,6 +22,9 @@ import { deriveSessionMuscles } from '../lib/sessionMuscles';
 import { ProgramProgressStrip } from '../components/home/ProgramProgressStrip';
 import { WeeklyOverview } from '../components/home/WeeklyOverview';
 import { FrequencyHeatmap } from '../components/home/FrequencyHeatmap';
+import { UpcomingWorkouts } from '../components/home/UpcomingWorkouts';
+import { UpcomingWorkoutDetailModal } from '../components/home/UpcomingWorkoutDetailModal';
+import { buildUpcomingWorkouts, type UpcomingWorkoutViewModel } from '../home/upcomingWorkouts';
 import type { WeekOverviewViewModel } from '../home/weekOverview';
 import type { FrequencyWindowViewModel } from '../home/frequencyHeatmap';
 import type { ActiveRest } from '../lib/restTimer';
@@ -40,6 +43,7 @@ export function HomeScreen({
   loading,
   generating,
   scheduleResolution,
+  scheduleConfig,
   workoutInProgress = false,
   activeWorkoutSessionIndex,
   activeRest = null,
@@ -70,6 +74,13 @@ export function HomeScreen({
   generating?: boolean;
   /** Schedule Engine's read on "what to train right now" (docs/workout-lifecycle/03_SCHEDULE_ENGINE.md). Optional — omitted callers keep the pre-Schedule-Engine behavior of always showing session 0. */
   scheduleResolution?: ScheduleResolution;
+  /**
+   * The user's real `trainingDays`/`timezone` (same object `useWorkoutSchedule`
+   * resolved). Only used to project the "próximos treinos" list forward from
+   * `scheduleResolution` — never to re-decide what may be trained today.
+   * Omitted/null simply omits that section.
+   */
+  scheduleConfig?: ScheduleConfig | null;
   /** Switches the Today card from a start action to a direct resume action. */
   workoutInProgress?: boolean;
   /** Latched session being performed; it remains stable while the schedule reconciles. */
@@ -96,6 +107,7 @@ export function HomeScreen({
   const { theme } = useTheme();
   const { t, i18n } = useTranslation(['home', 'profile']);
   const [showMissedPendingInfo, setShowMissedPendingInfo] = useState(false);
+  const [selectedUpcoming, setSelectedUpcoming] = useState<UpcomingWorkoutViewModel | null>(null);
   // Popover renders in a full-screen Modal (so a tap anywhere outside it can
   // close it, unclipped by the poster's `overflow: hidden`) — its position is
   // measured from the icon rather than laid out in-flow alongside it.
@@ -205,6 +217,28 @@ export function HomeScreen({
         session: resolveSessionDisplayName(tLoose, nextSession.name, nextSession.type),
       })
     : null;
+
+  // "Próximos treinos" — the forward view the Today poster deliberately
+  // doesn't show. It extends `scheduleResolution` (the engine's own answer
+  // for today) over the user's real trainingDays; it never re-decides what
+  // may be trained today, and is simply omitted while there's no schedule
+  // or no ready program. `localDateInTimezone` is cheap and returns a plain
+  // string, so it is a stable `useMemo` dependency across renders.
+  const scheduleTimezone = scheduleConfig?.timezone ?? null;
+  const todayLocalDate = scheduleTimezone
+    ? localDateInTimezone(new Date(), scheduleTimezone)
+    : null;
+  const upcomingWorkouts = useMemo(
+    () => (todayLocalDate && scheduleConfig && prescription.status === 'SUCCESS'
+      ? buildUpcomingWorkouts({
+          todayLocalDate,
+          trainingDays: scheduleConfig.trainingDays,
+          sessions: prescription.plan.sessions,
+          resolution: scheduleResolution,
+        })
+      : []),
+    [todayLocalDate, scheduleConfig, prescription, scheduleResolution],
+  );
 
   // Today's real locale-formatted calendar date. There is no fixed
   // week-of-program countdown because the lifecycle has no such fact.
@@ -482,7 +516,7 @@ export function HomeScreen({
           </View>
 
           {/* Below the Today card, in "hoje → progresso → semana →
-              histórico" order. Each section is a real projection of state
+              histórico → próximos" order. Each section is a real projection of state
               Home (or AppShell) already holds — no new claims, no fabricated
               numbers — and is simply omitted while its data isn't loaded yet
               instead of showing a fake skeleton (docs task §11/§12). */}
@@ -505,8 +539,19 @@ export function HomeScreen({
               />
             </View>
           ) : null}
+
+          {/* Last section, after calendário/frequência: what comes NEXT.
+              Tapping a row only ever opens its details — starting a session
+              stays exclusively with the Today card + Schedule Engine. */}
+          <UpcomingWorkouts workouts={upcomingWorkouts} onSelect={setSelectedUpcoming} />
         </ScrollView>
       </SafeAreaView>
+
+      <UpcomingWorkoutDetailModal
+        workout={selectedUpcoming}
+        plan={prescription.status === 'SUCCESS' ? prescription.plan : null}
+        onClose={() => setSelectedUpcoming(null)}
+      />
 
       <Modal
         visible={showMissedPendingInfo}

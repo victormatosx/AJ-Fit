@@ -382,6 +382,25 @@
       "next": "Next 30-day period"
     }
   },
+  "upcoming": {
+    "title": "Upcoming workouts",
+    "meta_one": "~{{minutes}} min · {{count}} exercise",
+    "meta_other": "~{{minutes}} min · {{count}} exercises",
+    "metaNoEstimate_one": "{{count}} exercise",
+    "metaNoEstimate_other": "{{count}} exercises",
+    "open": "See details for {{weekday}}'s workout: {{session}}",
+    "detail": {
+      "kicker": "Upcoming workout",
+      "close": "Close workout details",
+      "scheduledFor": "{{weekday}} · {{date}}",
+      "exercises": "Exercises",
+      "setsReps": "{{sets}} sets × {{reps}}",
+      "setsDuration": "{{sets}} sets × {{duration}}",
+      "rest": "Rest: {{seconds}}s",
+      "estimateNote": "Duration estimated from your prescription.",
+      "unavailable": "This workout's exercises can't be shown yet."
+    }
+  },
   "consistencyUnavailable": {
     "title": "Consistency history isn't available yet",
     "body": "AJ Fit does not show a calendar until completed workout history can support it.",
