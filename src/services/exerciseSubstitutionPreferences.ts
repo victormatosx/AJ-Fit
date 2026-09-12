@@ -55,7 +55,8 @@ export async function loadPermanentExerciseSubstitutionPreferences(
  */
 export function subscribeToPermanentExerciseSubstitutionPreferences(
   uid: string,
-  onPreferences: (preferences: Map<string, string>) => void,
+  onPreferences: (preferences: Map<string, string>, metadata?: { fromCache: boolean }) => void,
+  onError?: (error: unknown) => void,
 ): Unsubscribe {
   const startedAtMs = Date.now();
   return onSnapshot(
@@ -66,14 +67,15 @@ export function subscribeToPermanentExerciseSubstitutionPreferences(
         durationMs: Date.now() - startedAtMs,
         resultCount: snapshot.size,
       });
-      onPreferences(preferences);
+      onPreferences(preferences, { fromCache: snapshot.metadata.fromCache });
     },
     (error) => {
       logWarn('my_plan', 'substitution_preferences_failed_fail_open', {
         durationMs: Date.now() - startedAtMs,
         code: error.code,
       });
-      onPreferences(new Map());
+      onError?.(error);
+      onPreferences(new Map(), { fromCache: true });
     },
   );
 }

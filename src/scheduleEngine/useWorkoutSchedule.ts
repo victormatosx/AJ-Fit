@@ -16,6 +16,11 @@ import { localDateInTimezone } from './localDate';
 import type { MissDecision, ScheduleConfig, ScheduleResolution } from './types';
 import type { WorkoutProgramSnapshot } from '../services/workoutPrograms';
 import { legacyTrainingDays } from '../workoutPrescription/weeklySchedule';
+import {
+  applyScheduleReloadOutcome,
+  type ScheduleRefreshError,
+  type ScheduleRefreshProjection,
+} from './scheduleRefreshState';
 
 const notAvailable: ScheduleResolution = { status: 'PROGRAM_NOT_AVAILABLE' };
 
@@ -39,6 +44,8 @@ export interface WorkoutScheduleController {
   resolution: ScheduleResolution;
   config: ScheduleConfig | null;
   loading: boolean;
+  /** Last refresh failure, separate from the last authoritative resolution. */
+  refreshError: ScheduleRefreshError | null;
   reload: () => Promise<void>;
   /** Resolves a pending miss decision. Returns whether it actually succeeded — callers must not advance their own flow (e.g. opening the start confirmation) on a `false` result. */
   resolveMiss: (decision: MissDecision) => Promise<boolean>;
@@ -76,17 +83,33 @@ export function useWorkoutSchedule(program: WorkoutProgramSnapshot | null): Work
     ? localDateInTimezone(authoritativeActivatedAt.toDate(), deviceTimezone())
     : null;
 
-  const [resolution, setResolution] = useState<ScheduleResolution>(notAvailable);
+  const [projection, setProjection] = useState<ScheduleRefreshProjection>({
+    resolution: notAvailable,
+    refreshError: null,
+  });
   const [config, setConfig] = useState<ScheduleConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+  const reloadSequenceRef = useRef(0);
+  const scheduleScopeKey = uid
+    ? `${uid}:${programInstanceId ?? programId ?? 'no-program'}`
+    : null;
+  const scheduleScopeRef = useRef(scheduleScopeKey);
   // Retains the background refresh Promise so post-durable Schedule
   // projection work is explicit and never an unhandled fire-and-forget.
   const completionReloadRef = useRef<Promise<void> | null>(null);
 
   const reload = useCallback(async () => {
+    const reloadId = ++reloadSequenceRef.current;
+    const reloadStartedAtMs = Date.now();
+    if (scheduleScopeRef.current !== scheduleScopeKey) {
+      scheduleScopeRef.current = scheduleScopeKey;
+      setProjection({ resolution: notAvailable, refreshError: null });
+      setConfig(null);
+    }
     if (!uid) {
-      setResolution(notAvailable);
+      setProjection({ resolution: notAvailable, refreshError: null });
+      setConfig(null);
       setLoading(false);
       return;
     }
@@ -117,7 +140,6 @@ export function useWorkoutSchedule(program: WorkoutProgramSnapshot | null): Work
       const effectiveConfig = loadedConfig && prescribedProgramDays.length > 0
         ? { ...loadedConfig, trainingDays: prescribedProgramDays, activeRecoveryDays: prescribedRecoveryDays }
         : loadedConfig;
-      setConfig(effectiveConfig);
 
       // Process-death recovery, case B: finishWorkoutExecution atomically
       // terminalizes the execution and clears the active mutex, so `current`
@@ -162,15 +184,40 @@ export function useWorkoutSchedule(program: WorkoutProgramSnapshot | null): Work
         trainingDaysOverride: prescribedProgramDays,
         activeRecoveryDaysOverride: prescribedRecoveryDays,
       });
-      setResolution(result);
-      logInfo('workout_schedule', 'schedule_resolved', { status: result.status });
+      if (reloadId === reloadSequenceRef.current) setConfig(effectiveConfig);
+      setProjection((current) => applyScheduleReloadOutcome(current, reloadSequenceRef.current, {
+        kind: 'success',
+        reloadId,
+        resolution: result,
+      }));
+      logInfo('workout_schedule', 'schedule_resolved', {
+        status: result.status,
+        durationMs: Date.now() - reloadStartedAtMs,
+        reloadId,
+        applied: reloadId === reloadSequenceRef.current,
+      });
     } catch (error) {
-      logWarn('workout_schedule', 'schedule_resolve_failed', { error });
-      setResolution(notAvailable);
+      const refreshError = {
+        code: errorCode(error),
+        errorClass: errorClass(error),
+      };
+      setProjection((current) => applyScheduleReloadOutcome(current, reloadSequenceRef.current, {
+        kind: 'failure',
+        reloadId,
+        error: refreshError,
+      }));
+      logWarn('workout_schedule', 'schedule_resolve_failed', {
+        durationMs: Date.now() - reloadStartedAtMs,
+        reloadId,
+        errorCode: refreshError.code,
+        errorClass: refreshError.errorClass,
+        resolutionPreserved: true,
+        ignoredAsStale: reloadId !== reloadSequenceRef.current,
+      });
     } finally {
-      setLoading(false);
+      if (reloadId === reloadSequenceRef.current) setLoading(false);
     }
-  }, [uid, programId, programInstanceId, sessionCount, activatedAtLocalDate, questionnaire, prescribedProgramDays, prescribedRecoveryDays]);
+  }, [uid, programId, programInstanceId, sessionCount, activatedAtLocalDate, questionnaire, prescribedProgramDays, prescribedRecoveryDays, scheduleScopeKey]);
 
   useEffect(() => { void reload(); }, [reload]);
 
@@ -222,5 +269,12 @@ export function useWorkoutSchedule(program: WorkoutProgramSnapshot | null): Work
     }
   }, [uid, programId, programInstanceId, sessionCount, config, reload]);
 
-  return { resolution, config, loading, reload, resolveMiss };
+  return {
+    resolution: projection.resolution,
+    config,
+    loading,
+    refreshError: projection.refreshError,
+    reload,
+    resolveMiss,
+  };
 }

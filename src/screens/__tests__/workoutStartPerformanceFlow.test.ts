@@ -11,6 +11,11 @@ const executionService = readFileSync(
   new URL('../../services/workoutExecutions.ts', import.meta.url),
   'utf8',
 );
+const workoutScreen = readFileSync(new URL('../WorkoutScreen.tsx', import.meta.url), 'utf8');
+const startSingleFlight = readFileSync(
+  new URL('../../workoutExecution/startSingleFlight.ts', import.meta.url),
+  'utf8',
+);
 const fullScreenLoading = readFileSync(
   new URL('../../components/ui/FullScreenLoading.tsx', import.meta.url),
   'utf8',
@@ -37,7 +42,7 @@ describe('start workout performance and integrity flow', () => {
 
   it('navigates to the workout surface before waiting for Firestore', () => {
     const navigate = startBody.indexOf("setTab('workout')");
-    const remoteStart = startBody.indexOf('await execution.start(sessionIndex)');
+    const remoteStart = startBody.indexOf('await execution.start(sessionIndex, {');
     expect(navigate).toBeGreaterThanOrEqual(0);
     expect(remoteStart).toBeGreaterThan(navigate);
     expect(startBody.indexOf('setWorkoutStartPending(true)')).toBeLessThan(remoteStart);
@@ -65,7 +70,7 @@ describe('start workout performance and integrity flow', () => {
   });
 
   it('swaps preparation for the normal workout in place after success', () => {
-    const afterAwait = startBody.slice(startBody.indexOf('await execution.start(sessionIndex)'));
+    const afterAwait = startBody.slice(startBody.indexOf('await execution.start(sessionIndex, {'));
     expect(afterAwait).toContain('setWorkoutInProgress(true)');
     expect(afterAwait).toContain('setWorkoutStartPending(false)');
     // The only workout navigation is the optimistic one before the await.
@@ -82,13 +87,22 @@ describe('start workout performance and integrity flow', () => {
   });
 
   it('guards same-tick double confirm and reuses a same-session request in the hook', () => {
-    expect(startBody).toContain('if (workoutStartInFlightRef.current) return;');
+    expect(startBody).toContain('if (workoutStartInFlightRef.current) {');
     expect(startBody.indexOf('workoutStartInFlightRef.current = true')).toBeLessThan(
-      startBody.indexOf('await execution.start(sessionIndex)'),
+      startBody.indexOf('await execution.start(sessionIndex, {'),
     );
-    expect(executionHook).toContain('if (current.key === requestKey)');
-    expect(executionHook).toContain('return current.promise;');
+    expect(executionHook).toContain('beginWorkoutStartFlight(startInFlightRef, requestKey');
+    expect(executionHook).toContain("flight.kind === 'reused'");
+    expect(startSingleFlight).toContain("{ kind: 'reused', promise: current.promise }");
     expect(executionHook).toContain("'start_single_flight_rejected'");
+  });
+
+  it('installs the hook flight before its task can synchronously reject and always clears it after settlement', () => {
+    expect(startSingleFlight.indexOf('ref.current = flight')).toBeLessThan(
+      startSingleFlight.indexOf('.then(task)'),
+    );
+    expect(startSingleFlight).toContain('if (ref.current === flight) ref.current = null;');
+    expect(executionHook).not.toContain("startInFlightRef.current = { key: requestKey, promise: operation }");
   });
 
   it('does not cancel a pending durable start on background/foreground transitions', () => {
@@ -103,6 +117,7 @@ describe('start workout performance and integrity flow', () => {
 
   it('keeps the legacy safety check and durable transaction mutex', () => {
     expect(executionService).toContain("where('status', '==', 'IN_PROGRESS')");
+    expect(executionHook).toContain('subscribeToInProgressWorkoutExecutionIds');
     expect(executionService).toContain('await runTransaction(db');
     expect(executionService).toContain('transaction.get(stateRef)');
     expect(executionService).toContain('transaction.set(stateRef');
@@ -115,9 +130,31 @@ describe('start workout performance and integrity flow', () => {
       '/** Loads an execution by id',
     );
     expect(serviceStart).toContain("{ kind: 'existing', execution: trackedExecution }");
-    expect(serviceStart).toContain('getDocFromCache(ref)');
-    expect(serviceStart).toContain("materialization = 'server-fallback'");
-    expect(serviceStart).not.toContain('const result = await loadWorkoutExecution(uid, executionId);');
+    expect(serviceStart).toContain("timestampAuthority: 'LOCAL_UI_PROJECTION'");
+    expect(serviceStart).toContain("source: 'committed-write-projection'");
+    expect(serviceStart).not.toContain('getDocFromCache(ref)');
+    expect(serviceStart).not.toContain('await loadWorkoutExecution(uid, executionId)');
+    expect(executionHook).toContain('void loadWorkoutExecution(uid, result.executionId)');
+  });
+
+  it('removes the pointer peek and reuses prefetched preferences plus AppShell context', () => {
+    expect(executionService).not.toContain("'start_pointer_peek_completed'");
+    expect(executionService).not.toContain('const pointerPeek');
+    expect(executionHook).toContain('subscribeToPermanentExerciseSubstitutionPreferences');
+    expect(startBody).toContain('manualSubstitutionContext: manualSubstitutionContextState.context');
+    expect(startBody).toContain('manualSubstitutionContextStatus: manualSubstitutionContextState.status');
+  });
+
+  it('does not delay the first usable frame with the old 240ms entrance fade', () => {
+    expect(appShell).not.toContain('function WorkoutEntranceFade');
+    expect(appShell).not.toContain('<WorkoutEntranceFade>');
+  });
+
+  it('keeps SESSION substitution as a post-start authoritative mutation and PERMANENT as creation-only materialization', () => {
+    expect(executionService).toContain('resolvePermanentSubstitutionsForSession');
+    expect(appShell).toContain('applyExerciseSubstitution({');
+    expect(appShell).toContain('scope,');
+    expect(appShell).toContain('await applyExerciseSubstitution');
   });
 
   it('instruments visible navigation, transaction, materialization and final outcome', () => {
@@ -128,5 +165,16 @@ describe('start workout performance and integrity flow', () => {
     expect(executionService).toContain("'start_transaction_completed'");
     expect(executionService).toContain("'start_materialization_completed'");
     expect(executionService).toContain("'start_legacy_check_completed'");
+    for (const marker of [
+      'start_workout_confirmed',
+      'preparing_visible',
+      'execution_start',
+      'transaction_start',
+      'transaction_end',
+      'execution_ready',
+      'workout_screen_mount',
+      'workout_screen_ready',
+    ]) expect(`${appShell}\n${executionHook}\n${executionService}\n${workoutScreen}`).toContain(`'${marker}'`);
   });
+
 });

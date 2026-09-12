@@ -16,7 +16,18 @@ import {
   initializeTestEnvironment,
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing';
-import { collection, doc, getDoc, serverTimestamp, setDoc, Timestamp, updateDoc } from 'firebase/firestore';
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  serverTimestamp,
+  setDoc,
+  Timestamp,
+  updateDoc,
+  where,
+} from 'firebase/firestore';
 import { toPersistedAnswers } from '../../lib/questionnaireAnswers';
 import { defaultQuiz } from '../../state/AppState';
 
@@ -47,6 +58,14 @@ import { completeScheduledSession } from '../workoutSchedule';
 import { resolveWorkoutSchedule } from '../../scheduleEngine/resolver';
 import type { WorkoutProgramSnapshot } from '../workoutPrograms';
 import { installCompleteCardioFixture, resetCompleteCardioFixture } from './completeCardioFixture';
+import {
+  beginWorkoutStartFlight,
+  type WorkoutStartFlight,
+} from '../../workoutExecution/startSingleFlight';
+import {
+  applyScheduleReloadOutcome,
+  type ScheduleRefreshProjection,
+} from '../../scheduleEngine/scheduleRefreshState';
 
 const PROJECT_ID = 'ajfit-rules-test';
 const UID = 'alice';
@@ -159,8 +178,13 @@ describe.skipIf(!enabled)('Workout Execution & History — real Firestore Emulat
     expect(result.status).toBe('IN_PROGRESS');
     expect(result.sessionName).toBe('A');
     expect(result.exercises).toHaveLength(2);
+    expect(result.timestampAuthority).toBe('LOCAL_UI_PROJECTION');
     expect(result.exercises[0].sets).toHaveLength(3); // sets: 3
     expect(result.exercises[1].sets).toHaveLength(1); // duration/cycles exercise, no `sets` -> 1
+    const durable = await loadWorkoutExecution(UID, result.executionId);
+    expect(durable?.status).toBe('IN_PROGRESS');
+    expect(durable?.timestampAuthority).toBe('SERVER');
+    expect((await loadActiveExecutionPointer(UID))?.executionId).toBe(result.executionId);
   });
 
   describe('Manual Substitution — permanent preference materialization at execution creation (2026-09 Development Build regression repro + fix)', () => {
@@ -208,6 +232,26 @@ describe.skipIf(!enabled)('Workout Execution & History — real Firestore Emulat
       const result = await startOrResumeWorkoutExecution({ uid: UID, program: squatProgram(), sessionIndex: 0, scheduledLocalDate: '2026-08-25' });
       expect(result.exercises[0].exerciseId).toBe('goblet-squat');
       expect(result.exercises[0].prescribedExerciseId).toBe('barbell-back-squat');
+      expect(result.exercises[0].substitution).toMatchObject({ scope: 'PERMANENT' });
+    });
+
+    it('reuses prefetched permanent preferences and AppShell context without requiring a questionnaire reread', async () => {
+      const result = await startOrResumeWorkoutExecution({
+        uid: UID,
+        program: squatProgram(),
+        sessionIndex: 0,
+        scheduledLocalDate: '2026-08-25',
+        preparation: {
+          legacyInProgressExecutionIds: [],
+          permanentPreferences: new Map([['barbell-back-squat', 'goblet-squat']]),
+          manualSubstitutionContextStatus: 'ready',
+          manualSubstitutionContext: {
+            regions: [],
+            equipmentContext: { environment: 'gym', availableEquipment: new Set(['dumbbell', 'barbell']) },
+          },
+        },
+      });
+      expect(result.exercises[0].exerciseId).toBe('goblet-squat');
       expect(result.exercises[0].substitution).toMatchObject({ scope: 'PERMANENT' });
     });
 
@@ -324,6 +368,69 @@ describe.skipIf(!enabled)('Workout Execution & History — real Firestore Emulat
     expect(recent).toHaveLength(0);
   });
 
+  it('offline failure fully releases single-flight; reconnect starts the same session with one execution and the correct mutex', async () => {
+    const key = 'alice:wpg_test1:0:2026-08-25';
+    const flightRef: { current: WorkoutStartFlight<Awaited<ReturnType<typeof startOrResumeWorkoutExecution>>> | null } = {
+      current: null,
+    };
+    const start = vi.fn(() => startOrResumeWorkoutExecution({
+      uid: UID,
+      program: program(),
+      sessionIndex: 0,
+      scheduledLocalDate: '2026-08-25',
+    }));
+
+    // `disableNetwork()` is intentionally not used here: the Web SDK can
+    // resolve writes against its local emulator cache. The production repro
+    // is the synchronous `unavailable` throw while constructing the offline
+    // fallback, so inject that exact failure shape before any Firestore write.
+    const offline = beginWorkoutStartFlight(flightRef, key, () => {
+      throw Object.assign(new Error('unavailable'), { code: 'unavailable' });
+    });
+    expect(offline.kind).toBe('started');
+    if (offline.kind === 'busy') throw new Error('unexpected busy result');
+    await expect(offline.promise).rejects.toMatchObject({ code: 'unavailable' });
+    expect(flightRef.current).toBeNull();
+
+    const afterFailedStart = await getDocs(query(
+      collection(mocks.db as never, 'users', UID, 'workoutExecutions'),
+      where('status', '==', 'IN_PROGRESS'),
+    ));
+    expect(afterFailedStart.empty).toBe(true);
+    expect(await loadActiveExecutionPointer(UID)).toBeNull();
+
+    const validSchedule: ScheduleRefreshProjection = {
+      resolution: { status: 'SESSION_READY', sessionIndex: 0 },
+      refreshError: null,
+    };
+    const afterOfflineForegroundReload = applyScheduleReloadOutcome(validSchedule, 2, {
+      kind: 'failure',
+      reloadId: 2,
+      error: { code: 'unavailable', errorClass: 'FirebaseError' },
+    });
+    expect(afterOfflineForegroundReload.resolution).toEqual(validSchedule.resolution);
+    if (afterOfflineForegroundReload.resolution.status !== 'SESSION_READY') {
+      throw new Error('valid Schedule was incorrectly degraded by the offline refresh');
+    }
+
+    // This is the AppShell guard: the preserved authoritative resolution
+    // reaches execution.start after connectivity returns; no bypass exists.
+    const online = beginWorkoutStartFlight(flightRef, key, start);
+    expect(online.kind).toBe('started');
+    if (online.kind === 'busy') throw new Error('unexpected busy result');
+    const started = await online.promise;
+    expect(start).toHaveBeenCalledTimes(1);
+    expect(started.status).toBe('IN_PROGRESS');
+    expect(flightRef.current).toBeNull();
+
+    const inProgress = await getDocs(query(
+      collection(mocks.db as never, 'users', UID, 'workoutExecutions'),
+      where('status', '==', 'IN_PROGRESS'),
+    ));
+    expect(inProgress.docs.map((item) => item.id)).toEqual([started.executionId]);
+    expect((await loadActiveExecutionPointer(UID))?.executionId).toBe(started.executionId);
+  });
+
   it('§80/§89 resume / cold start: data persisted before a "reload" survives a second start() call', async () => {
     const started = await startOrResumeWorkoutExecution({ uid: UID, program: program(), sessionIndex: 0, scheduledLocalDate: '2026-08-25' });
     await recordSetExecution({ uid: UID, executionId: started.executionId, exerciseIndex: 0, setIndex: 0, actualReps: 10, weightKg: 30 });
@@ -339,7 +446,9 @@ describe.skipIf(!enabled)('Workout Execution & History — real Firestore Emulat
     // calculation) — a resumed execution must never get a fresh timestamp,
     // or a cold-start reopen would silently reset the visible duration to
     // zero.
-    expect(resumed.startedAt.toMillis()).toBe(started.startedAt.toMillis());
+    const canonicalStarted = await loadWorkoutExecution(UID, started.executionId);
+    expect(resumed.startedAt.toMillis()).toBe(canonicalStarted?.startedAt.toMillis());
+    expect(resumed.timestampAuthority).toBe('SERVER');
   });
 
   it('§81/§82 each set reproduces exactly what was actually done, independent per-set loads — prescription (3x10) untouched', async () => {
@@ -905,7 +1014,8 @@ describe.skipIf(!enabled)('Workout Execution & History — real Firestore Emulat
       expect(state.execution.status).toBe('IN_PROGRESS');
       // The exact instant the mutex was created — never a fresh one; resume
       // must never look like a restart (docs §9 timer, §13).
-      expect(state.execution.startedAt.toMillis()).toBe(started.startedAt.toMillis());
+      const canonicalStarted = await loadWorkoutExecution(UID, started.executionId);
+      expect(state.execution.startedAt.toMillis()).toBe(canonicalStarted?.startedAt.toMillis());
     }
   });
 
@@ -1272,7 +1382,8 @@ describe('P0-C §13 — mixed old-protocol/new-protocol device scenarios (compat
     await expect(
       startOrResumeWorkoutExecution({ uid: UID, program: program(), sessionIndex: 1, scheduledLocalDate: '2026-08-25' }),
     ).rejects.toThrow(WorkoutExecutionLegacyPendingError);
-    // No `current` was created — the new client's transaction never ran.
+    // No `current` was created — the transaction's authoritative reads ran,
+    // but it aborted before any write.
     const state = await getDoc(doc(mocks.db as never, 'users', UID, 'workoutExecutionState', 'current'));
     expect(state.exists()).toBe(false);
   });

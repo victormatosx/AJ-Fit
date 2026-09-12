@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { StyleSheet, View, Text, Pressable, Modal, Animated, Easing } from 'react-native';
+import { StyleSheet, View, Text, Pressable, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -102,38 +102,23 @@ function WorkoutStartVisibilityMetric({
   onMeasured: () => void;
 }) {
   useEffect(() => {
+    const visibleAtMs = Date.now();
     logInfo('workout_execution', 'start_surface_visible', {
       attemptId: attempt.id,
       sessionIndex: attempt.sessionIndex,
-      durationMs: Date.now() - attempt.requestedAtMs,
+      durationMs: visibleAtMs - attempt.requestedAtMs,
     });
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      logInfo('workout_performance', 'preparing_visible', {
+        timestampMs: visibleAtMs,
+        attemptId: attempt.id,
+        sessionIndex: attempt.sessionIndex,
+        durationMs: visibleAtMs - attempt.requestedAtMs,
+      });
+    }
     onMeasured();
   }, [attempt.id, attempt.requestedAtMs, attempt.sessionIndex, onMeasured]);
   return null;
-}
-
-// The loading spinner unmounts the instant the execution is confirmed, so
-// WorkoutScreen's very first frame is what the user sees next — with no
-// animation that first frame used to pop in abruptly (the reported entry
-// artifact). This fades it in once per mounted session instead of relying
-// on the parent's plain (non-animated) minimize/restore opacity toggle,
-// which must stay instant.
-function WorkoutEntranceFade({ children }: { children: React.ReactNode }) {
-  const reduceMotion = useReducedMotionPreference();
-  const opacity = useRef(new Animated.Value(reduceMotion ? 1 : 0)).current;
-  useEffect(() => {
-    if (reduceMotion) return;
-    Animated.timing(opacity, {
-      toValue: 1,
-      duration: 240,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    }).start();
-    // Entrance only ever needs to play once for the lifetime of this
-    // mount (WorkoutScreen stays mounted across minimize/restore).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  return <Animated.View style={{ flex: 1, opacity }}>{children}</Animated.View>;
 }
 
 function deviceTimezone(): string {
@@ -527,10 +512,23 @@ function AppShellContent({
   // function's control flow). If that persisted start failed (offline, a
   // conflict, a legacy pending execution), the user still landed on a live
   // WorkoutScreen with no durable execution behind it — a "phantom" session
-  // (docs §9). `startWorkout` is now async and strictly sequential: the
-  // authoritative start must SUCCEED before anything becomes visible.
+  // (docs §9). `startWorkout` is now async and strictly sequential: an inert
+  // Preparing surface may appear immediately, but the authoritative start
+  // must SUCCEED before the mutable WorkoutScreen can mount.
   const startWorkout = async () => {
-    if (prescription.status !== 'SUCCESS') return;
+    if (prescription.status !== 'SUCCESS') {
+      if (typeof __DEV__ !== 'undefined' && __DEV__) {
+        logInfo('workout_performance', 'start_workout_guard_exit', {
+          reason: 'PRESCRIPTION_NOT_READY',
+          prescriptionStatus: prescription.status,
+          scheduleStatus: schedule.resolution.status,
+          scheduleLoading: schedule.loading,
+          workoutStartPending,
+          hasAppShellActiveAttempt: workoutStartInFlightRef.current,
+        });
+      }
+      return;
+    }
     // BLOQUEIO REAL (docs/workout-lifecycle/03_SCHEDULE_ENGINE.md §Bloqueio
     // real): the Schedule Engine resolution — not this button, not whatever
     // tab the user happened to land on — is what decides whether a session
@@ -542,13 +540,44 @@ function AppShellContent({
     // of those states and still can never open a second session for a day
     // already resolved (idempotent otherwise: a double tap or a cold-start
     // reopen resumes the same execution, docs §22-25).
-    if (schedule.resolution.status !== 'SESSION_READY') return;
-    if (workoutStartInFlightRef.current) return;
+    if (schedule.resolution.status !== 'SESSION_READY') {
+      if (typeof __DEV__ !== 'undefined' && __DEV__) {
+        logInfo('workout_performance', 'start_workout_guard_exit', {
+          reason: 'SCHEDULE_NOT_READY',
+          prescriptionStatus: prescription.status,
+          scheduleStatus: schedule.resolution.status,
+          scheduleLoading: schedule.loading,
+          workoutStartPending,
+          hasAppShellActiveAttempt: workoutStartInFlightRef.current,
+        });
+      }
+      return;
+    }
+    if (workoutStartInFlightRef.current) {
+      if (typeof __DEV__ !== 'undefined' && __DEV__) {
+        logInfo('workout_performance', 'start_workout_guard_exit', {
+          reason: 'ATTEMPT_ACTIVE',
+          prescriptionStatus: prescription.status,
+          scheduleStatus: schedule.resolution.status,
+          scheduleLoading: schedule.loading,
+          workoutStartPending,
+          hasAppShellActiveAttempt: workoutStartInFlightRef.current,
+        });
+      }
+      return;
+    }
     workoutStartInFlightRef.current = true;
     const requestedAtMs = Date.now();
     const sessionIndex = schedule.resolution.sessionIndex;
     const attemptId = ++workoutStartAttemptSequenceRef.current;
     logInfo('workout_execution', 'start_user_confirmed', { attemptId, sessionIndex });
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      logInfo('workout_performance', 'start_workout_confirmed', {
+        timestampMs: requestedAtMs,
+        attemptId,
+        sessionIndex,
+      });
+    }
     workoutCompletionRef.current = null;
     workoutHomeSyncRef.current = null;
     setWorkoutCompletionResult(null);
@@ -563,7 +592,10 @@ function AppShellContent({
     // preparing surface can render until the authoritative start succeeds.
     setTab('workout');
     try {
-      const { execution: started, error } = await execution.start(sessionIndex);
+      const { execution: started, error } = await execution.start(sessionIndex, {
+        manualSubstitutionContext: manualSubstitutionContextState.context,
+        manualSubstitutionContextStatus: manualSubstitutionContextState.status,
+      });
       const durationMs = Date.now() - requestedAtMs;
       if (!started) {
         // Roll back the optimistic surface atomically. Since WorkoutScreen
@@ -1012,7 +1044,6 @@ function AppShellContent({
               { opacity: tab === 'workout' ? 1 : 0, zIndex: tab === 'workout' ? 1 : 0 },
             ]}
           >
-            <WorkoutEntranceFade>
             <WorkoutScreen
               plan={prescription.plan}
               sessionIndex={activeSessionIndex}
@@ -1081,7 +1112,6 @@ function AppShellContent({
                 void runWorkoutCompletion(recovery);
               }}
             />
-            </WorkoutEntranceFade>
           </View>
         )}
         <PersistentScreen

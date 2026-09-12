@@ -67,14 +67,14 @@ describe('workoutStartedAtMs wiring — AppShell to WorkoutScreen', () => {
 });
 
 describe('useWorkoutExecution — canonical startedAt source', () => {
-  it('prefers the persisted execution.startedAt over the local fallback once resolved', () => {
-    expect(useWorkoutExecution).toMatch(
-      /const workoutStartedAtMs = execution\s*\n?\s*\?\s*execution\.startedAt\.toMillis\(\)\s*\n?\s*:\s*pendingStartedAtMsRef\.current;/,
-    );
+  it('uses persisted startedAt only when server-authoritative and keeps the local UI instant during reconciliation', () => {
+    expect(useWorkoutExecution).toContain("execution.timestampAuthority === 'SERVER'");
+    expect(useWorkoutExecution).toContain('? execution.startedAt.toMillis()');
+    expect(useWorkoutExecution).toContain(': pendingStartedAtMsRef.current');
   });
 
   it('captures the local fallback synchronously inside start(), before any await', () => {
-    const startFnStart = useWorkoutExecution.indexOf('const start = useCallback(async (sessionIndex: number) => {');
+    const startFnStart = useWorkoutExecution.indexOf('const start = useCallback((sessionIndex: number');
     const firstAwait = useWorkoutExecution.indexOf('await', startFnStart);
     const fallbackAssignment = useWorkoutExecution.indexOf('pendingStartedAtMsRef.current = Date.now();', startFnStart);
     expect(fallbackAssignment).toBeGreaterThan(startFnStart);

@@ -222,6 +222,23 @@ function translateMuscleGroup(tLoose: LooseT, target: string): string {
 }
 
 export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, onMinimize, sessionIndex = 0, execution, workoutStartedAtMs, onSessionCompleted, finishing, completionConfirmed, durableCompletionReachedAtMs, completionFailed, onSetLogged, onAbandon, onCardioCompleted, manualSubstitutionContext, manualSubstitutionContextStatus, onRetryManualSubstitutionContext, onApplySubstitution }: Props) {
+  useEffect(() => {
+    if (typeof __DEV__ === 'undefined' || !__DEV__) return undefined;
+    logInfo('workout_performance', 'workout_screen_mount', {
+      timestampMs: Date.now(),
+      executionId: execution?.executionId ?? null,
+      sessionIndex,
+    });
+    const frame = requestAnimationFrame(() => {
+      logInfo('workout_performance', 'workout_screen_ready', {
+        timestampMs: Date.now(),
+        executionId: execution?.executionId ?? null,
+        sessionIndex,
+      });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [execution?.executionId, sessionIndex]);
+
   const { theme } = useTheme();
   const exitDialogTheme = darkTheme;
   const { t, i18n } = useTranslation('workout');

@@ -4,7 +4,11 @@ const mocks = vi.hoisted(() => ({
   collection: vi.fn(() => ({ path: 'preferences' })),
   getDocs: vi.fn(),
   onSnapshot: vi.fn(),
-  next: null as null | ((snapshot: { docs: { id: string; data: () => Record<string, unknown> }[]; size: number }) => void),
+  next: null as null | ((snapshot: {
+    docs: { id: string; data: () => Record<string, unknown> }[];
+    size: number;
+    metadata: { fromCache: boolean };
+  }) => void),
   error: null as null | ((error: { code: string }) => void),
   unsubscribe: vi.fn(),
   logWarn: vi.fn(),
@@ -33,6 +37,7 @@ function snapshot(entries: [string, unknown][]) {
       data: () => ({ preferredExerciseId }),
     })),
     size: entries.length,
+    metadata: { fromCache: false },
   };
 }
 
