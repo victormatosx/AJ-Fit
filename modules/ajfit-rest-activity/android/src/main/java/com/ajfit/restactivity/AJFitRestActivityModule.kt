@@ -17,6 +17,29 @@ import expo.modules.kotlin.types.OptimizedRecord
 private const val PERMISSION_PREFERENCES = "ajfit_rest_activity_permissions"
 private const val PERMISSION_REQUESTED_KEY = "post_notifications_requested"
 
+internal enum class RestActivityPhase(val wireValue: String) {
+  RESTING("resting"),
+  NEXT_SET("next_set"),
+  NEXT_EXERCISE("next_exercise");
+
+  companion object {
+    fun fromWire(value: String): RestActivityPhase? = entries.firstOrNull {
+      it.wireValue == value
+    }
+  }
+}
+
+internal enum class RestActivityNextAction(val wireValue: String) {
+  NEXT_SET("next_set"),
+  NEXT_EXERCISE("next_exercise");
+
+  companion object {
+    fun fromWire(value: String): RestActivityNextAction? = entries.firstOrNull {
+      it.wireValue == value
+    }
+  }
+}
+
 @OptimizedRecord
 data class RestActivityStateRecord(
   @Field val sessionId: String,
@@ -25,6 +48,10 @@ data class RestActivityStateRecord(
   @Field val exerciseName: String,
   @Field val setIndex: Int,
   @Field val totalSets: Int,
+  @Field val phase: String,
+  @Field val nextAction: String,
+  @Field val nextSetIndex: Int? = null,
+  @Field val nextExerciseName: String? = null,
 ) : Record
 
 class AJFitRestActivityModule : Module() {
@@ -76,7 +103,8 @@ class AJFitRestActivityModule : Module() {
       requestPermissionOnFirstUse(context, state, promise)
     }
 
-    AsyncFunction("update") { state: RestActivityStateRecord, promise: Promise ->
+    AsyncFunction("update") {
+      state: RestActivityStateRecord, shouldAlert: Boolean, promise: Promise ->
       val context = appContext.reactContext?.applicationContext
       if (context == null || !state.isValid()) {
         Log.w(REST_NOTIFICATION_LOG_TAG, "[rest-live:android] native_error operation=update reason=context_or_payload")
@@ -90,6 +118,9 @@ class AJFitRestActivityModule : Module() {
       }
 
       safelyResolve(promise, "update") {
+        // Android's channel is intentionally silent and setOnlyAlertOnce is
+        // preserved. The iOS-only emphasis hint must not change that policy.
+        @Suppress("UNUSED_VARIABLE") val ignoredAlertHint = shouldAlert
         postNotification(context, state, "updated")
       }
     }
@@ -194,7 +225,7 @@ class AJFitRestActivityModule : Module() {
   ) {
     val now = System.currentTimeMillis()
     val manager = RestNotificationChannel.ensureCreated(context)
-    if (state.endsAt <= now) {
+    if (state.phaseValue == RestActivityPhase.RESTING && state.endsAt <= now) {
       manager.cancel(REST_NOTIFICATION_ID)
       return
     }
@@ -248,6 +279,9 @@ class AJFitRestActivityModule : Module() {
         exerciseName = context.getString(R.string.ajfit_rest_notification_title),
         setIndex = 1,
         totalSets = 1,
+        phase = RestActivityPhase.RESTING.wireValue,
+        nextAction = RestActivityNextAction.NEXT_EXERCISE.wireValue,
+        nextExerciseName = context.getString(R.string.ajfit_rest_notification_title),
       )
       resolveBuiltSurface(
         manager = RestNotificationChannel.manager(context),
@@ -334,13 +368,36 @@ class AJFitRestActivityModule : Module() {
   private fun permissionPreferences(context: Context) =
     context.getSharedPreferences(PERMISSION_PREFERENCES, Context.MODE_PRIVATE)
 
-  private fun RestActivityStateRecord.isValid(): Boolean =
-    sessionId.isNotBlank() &&
+  private val RestActivityStateRecord.phaseValue: RestActivityPhase?
+    get() = RestActivityPhase.fromWire(phase)
+
+  private fun RestActivityStateRecord.isValid(): Boolean {
+    val materializedPhase = phaseValue ?: return false
+    val materializedNextAction = RestActivityNextAction.fromWire(nextAction) ?: return false
+    val validNextAction = when (materializedNextAction) {
+      RestActivityNextAction.NEXT_SET ->
+        nextSetIndex != null &&
+          nextSetIndex > setIndex &&
+          nextSetIndex <= totalSets &&
+          nextExerciseName == null
+      RestActivityNextAction.NEXT_EXERCISE ->
+        nextSetIndex == null &&
+          setIndex == totalSets &&
+          !nextExerciseName.isNullOrBlank()
+    }
+    val phaseMatchesAction = when (materializedNextAction) {
+      RestActivityNextAction.NEXT_SET -> materializedPhase == RestActivityPhase.NEXT_SET
+      RestActivityNextAction.NEXT_EXERCISE -> materializedPhase == RestActivityPhase.NEXT_EXERCISE
+    }
+    return sessionId.isNotBlank() &&
       startedAt >= 0L &&
       endsAt > startedAt &&
       exerciseName.isNotBlank() &&
       setIndex >= 1 &&
-      totalSets >= setIndex
+      totalSets >= setIndex &&
+      (materializedPhase == RestActivityPhase.RESTING || phaseMatchesAction) &&
+      validNextAction
+  }
 
   private inline fun safelyResolve(
     promise: Promise,

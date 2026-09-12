@@ -315,6 +315,35 @@ describe('users/{uid}/workoutExecutions — exercise identity fields are immutab
     }));
   });
 
+  it('denies changing exercise identity through the terminal-update fast path', async () => {
+    const db = dbFor(UID);
+    const ref = doc(db, 'users', UID, 'workoutExecutions', EXECUTION_ID);
+    await setDoc(ref, executionDoc());
+    const tamperedExercises = [{
+      exerciseIndex: 0, exerciseId: 'attacker_chosen_exercise', prescribedSets: 3,
+      prescribedReps: '8-12', prescribedDuration: null, prescribedCycles: null,
+      sets: [{ setIndex: 0, status: 'SKIPPED', actualReps: null, weightKg: null, actualDurationSeconds: null }],
+    }];
+    await assertFails(updateDoc(ref, {
+      exercises: tamperedExercises,
+      status: 'PARTIALLY_COMPLETED',
+      finishedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }));
+  });
+
+  it('denies changing immutable execution metadata through the terminal-update fast path', async () => {
+    const db = dbFor(UID);
+    const ref = doc(db, 'users', UID, 'workoutExecutions', EXECUTION_ID);
+    await setDoc(ref, executionDoc());
+    await assertFails(updateDoc(ref, {
+      templateId: 'T999',
+      status: 'COMPLETED',
+      finishedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }));
+  });
+
   it('a legacy document with neither prescribedExerciseId nor substitution stays updatable by legitimate operations', async () => {
     const db = dbFor(UID);
     const ref = doc(db, 'users', UID, 'workoutExecutions', EXECUTION_ID);

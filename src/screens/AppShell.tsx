@@ -950,6 +950,7 @@ function AppShellContent({
             loading={prescriptionLoading}
             generating={generatingWorkout}
             scheduleResolution={schedule.resolution}
+            scheduleConfig={schedule.config}
             workoutInProgress={workoutInProgress}
             activeWorkoutSessionIndex={activeSessionIndex}
             activeRest={activeRest}

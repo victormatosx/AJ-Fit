@@ -35,7 +35,9 @@ describe('RestSessionProvider ownership and lifecycle', () => {
 
   it('uses one absolute deadline wake-up, never a decrementing Context ticker', () => {
     expect(contextCode).toContain('current.rest.endsAt - Date.now()');
-    expect(contextCode).toContain("reconcileExpiration(Date.now(), 'deadline')");
+    expect(contextCode).toContain('REST_DEADLINE_ALERT_GRACE_MS');
+    expect(contextCode).toContain("? 'deadline'");
+    expect(contextCode).toContain(": 'delayed'");
     expect(contextCode).not.toContain('setInterval(');
     expect(contextCode).not.toContain('setRestLeft');
   });
@@ -65,6 +67,7 @@ describe('RestSessionProvider ownership and lifecycle', () => {
       'addSeconds',
       'cancelRest',
       'consumeExpiration',
+      'publishNextAction',
     ]) expect(publicApi).toContain(operation);
     for (const forbidden of ['setEndsAt', 'setStartedAt', 'setStatus', 'setSessionId']) {
       expect(publicApi).not.toContain(forbidden);
@@ -81,7 +84,8 @@ describe('WorkoutScreen temporal integration', () => {
 
   it('+15 and skip use the Context domain operations', () => {
     expect(workout).toContain('onAdd15={() => addRestSeconds(15)}');
-    expect(workout).toContain('if (cancelRest(rest.restId)) advanceAfterRest();');
+    expect(workout).toContain('if (cancelRest(rest.restId)) {');
+    expect(workout).toContain('publishNextAction(rest.restId);');
   });
 
   it('reconnects a remounted screen to the active rest exercise and set', () => {

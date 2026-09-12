@@ -28,6 +28,11 @@ import {
 import { cleanupRestSessionArtifacts } from '../services/restSessionCleanup';
 import { logInfo } from '../lib/logger';
 import { restLiveActivity, type RestActivityState } from '../lib/restLiveActivity';
+import {
+  REST_ACTIVITY_NEXT_ACTION,
+  REST_ACTIVITY_PHASE,
+  type MaterializedRestNextAction,
+} from '../types/restLiveActivity';
 
 type StartRestInput = Readonly<{
   durationSeconds: number;
@@ -36,7 +41,7 @@ type StartRestInput = Readonly<{
   exerciseName: string;
   setIndex: number;
   totalSets: number;
-}>;
+}> & MaterializedRestNextAction;
 
 interface RestSessionContextValue {
   workoutSessionId: string | null;
@@ -48,13 +53,20 @@ interface RestSessionContextValue {
   addSeconds: (seconds: number) => ActiveRest | null;
   cancelRest: (restId: string) => boolean;
   consumeExpiration: (restId: string) => boolean;
+  publishNextAction: (restId: string) => boolean;
 }
 
 const RestSessionContext = createContext<RestSessionContextValue | null>(null);
 
-type ReconcileSource = 'deadline' | 'foreground';
+type ReconcileSource = 'deadline' | 'delayed' | 'foreground';
 
-function toRestActivityState(rest: ActiveRest, exerciseName: string): RestActivityState {
+const REST_DEADLINE_ALERT_GRACE_MS = 5_000;
+
+function toRestActivityState(
+  rest: ActiveRest,
+  exerciseName: string,
+  nextAction: MaterializedRestNextAction,
+): RestActivityState {
   return {
     sessionId: rest.workoutSessionId,
     startedAt: rest.startedAt,
@@ -62,8 +74,15 @@ function toRestActivityState(rest: ActiveRest, exerciseName: string): RestActivi
     exerciseName,
     setIndex: rest.setIndex + 1,
     totalSets: rest.totalSets,
+    phase: REST_ACTIVITY_PHASE.RESTING,
+    ...nextAction,
   };
 }
+
+type RestActivitySnapshot = Readonly<{
+  restId: string;
+  state: RestActivityState;
+}>;
 
 /**
  * Owns only workout/rest identity and absolute rest time. Exercise order,
@@ -76,8 +95,9 @@ export function RestSessionProvider({ children }: { children: React.ReactNode })
   const timerStateRef = useRef<RestTimerState>(IDLE_REST_TIMER_STATE);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
   const storageRevisionRef = useRef(0);
-  const restActivityStateRef = useRef<RestActivityState | null>(null);
+  const restActivityStateRef = useRef<RestActivitySnapshot | null>(null);
   const restActivitySessionStartedRef = useRef(false);
+  const expirationSourceRef = useRef<ReconcileSource | null>(null);
 
   const publishTimerState = useCallback((next: RestTimerState) => {
     timerStateRef.current = next;
@@ -116,6 +136,7 @@ export function RestSessionProvider({ children }: { children: React.ReactNode })
     }
     restActivityStateRef.current = null;
     restActivitySessionStartedRef.current = false;
+    expirationSourceRef.current = null;
     workoutSessionIdRef.current = null;
     setWorkoutSessionId(null);
     clearPersistedTransition();
@@ -125,9 +146,12 @@ export function RestSessionProvider({ children }: { children: React.ReactNode })
     const current = timerStateRef.current;
     if (current.status !== 'idle') return current.rest;
 
-    const { exerciseName, ...restInput } = input;
+    const { durationSeconds, exerciseId, exerciseName, setIndex, totalSets } = input;
     const rest = createRest({
-      ...restInput,
+      durationSeconds,
+      exerciseId,
+      setIndex,
+      totalSets,
       restId: randomUUID(),
       workoutSessionId: ensureSessionId(),
       startedAt: Date.now(),
@@ -136,9 +160,20 @@ export function RestSessionProvider({ children }: { children: React.ReactNode })
     publishTimerState(next);
     storageRevisionRef.current += 1;
     void persistRestSession(rest);
-    const activityState = toRestActivityState(rest, exerciseName);
-    restActivityStateRef.current = activityState;
+    const materializedNextAction: MaterializedRestNextAction =
+      input.nextAction === REST_ACTIVITY_NEXT_ACTION.NEXT_SET
+        ? {
+            nextAction: input.nextAction,
+            nextSetIndex: input.nextSetIndex,
+          }
+        : {
+            nextAction: input.nextAction,
+            nextExerciseName: input.nextExerciseName,
+          };
+    const activityState = toRestActivityState(rest, exerciseName, materializedNextAction);
+    restActivityStateRef.current = { restId: rest.restId, state: activityState };
     restActivitySessionStartedRef.current = true;
+    expirationSourceRef.current = null;
     void restLiveActivity.start(activityState);
     logInfo('restSession', 'rest_started', {
       durationSeconds: rest.initialDurationSeconds,
@@ -155,9 +190,9 @@ export function RestSessionProvider({ children }: { children: React.ReactNode })
     storageRevisionRef.current += 1;
     void persistRestSession(rest);
     const currentActivityState = restActivityStateRef.current;
-    if (currentActivityState?.sessionId === rest.workoutSessionId) {
-      const activityState = { ...currentActivityState, endsAt: rest.endsAt };
-      restActivityStateRef.current = activityState;
+    if (currentActivityState?.state.sessionId === rest.workoutSessionId) {
+      const activityState = { ...currentActivityState.state, endsAt: rest.endsAt };
+      restActivityStateRef.current = { ...currentActivityState, state: activityState };
       void restLiveActivity.update(activityState);
     }
     logInfo('restSession', 'rest_updated', { addedSeconds: seconds });
@@ -169,6 +204,7 @@ export function RestSessionProvider({ children }: { children: React.ReactNode })
     const next = reconcileRestExpiration(current, now);
     if (next === current) return false;
 
+    expirationSourceRef.current = source;
     publishTimerState(next);
     clearPersistedTransition();
     logInfo('restSession', 'rest_expired', { source });
@@ -181,8 +217,7 @@ export function RestSessionProvider({ children }: { children: React.ReactNode })
 
     publishTimerState(transition.state);
     clearPersistedTransition();
-    restActivityStateRef.current = null;
-    void restLiveActivity.end('cancelled');
+    expirationSourceRef.current = null;
     logInfo('restSession', 'rest_ended', { reason: 'skipped' });
     return true;
   }, [clearPersistedTransition, publishTimerState]);
@@ -192,11 +227,32 @@ export function RestSessionProvider({ children }: { children: React.ReactNode })
     if (!transition.consumed) return false;
 
     publishTimerState(transition.state);
-    restActivityStateRef.current = null;
-    void restLiveActivity.end('completed');
     logInfo('restSession', 'rest_ended', { reason: 'completed' });
     return true;
   }, [publishTimerState]);
+
+  const publishNextAction = useCallback((restId: string) => {
+    const current = restActivityStateRef.current;
+    if (
+      !current ||
+      current.restId !== restId ||
+      current.state.phase !== REST_ACTIVITY_PHASE.RESTING
+    ) return false;
+
+    const activityState: RestActivityState =
+      current.state.nextAction === REST_ACTIVITY_NEXT_ACTION.NEXT_SET
+        ? { ...current.state, phase: REST_ACTIVITY_PHASE.NEXT_SET }
+        : { ...current.state, phase: REST_ACTIVITY_PHASE.NEXT_EXERCISE };
+    restActivityStateRef.current = { ...current, state: activityState };
+    const shouldAlert = expirationSourceRef.current === 'deadline';
+    expirationSourceRef.current = null;
+    void restLiveActivity.update(activityState, { alert: shouldAlert });
+    logInfo('restSession', 'rest_next_action_published', {
+      nextAction: activityState.nextAction,
+      alert: shouldAlert,
+    });
+    return true;
+  }, []);
 
   // A single absolute deadline wake-up survives WorkoutScreen unmounts. It is
   // not a countdown ticker: delayed execution always reconciles with Date.now().
@@ -211,7 +267,12 @@ export function RestSessionProvider({ children }: { children: React.ReactNode })
       if (current.status !== 'running' || current.rest.restId !== timerState.rest.restId) return;
       const delay = Math.max(0, current.rest.endsAt - Date.now());
       timeout = setTimeout(() => {
-        if (!reconcileExpiration(Date.now(), 'deadline')) schedule();
+        const now = Date.now();
+        const source: ReconcileSource =
+          now <= current.rest.endsAt + REST_DEADLINE_ALERT_GRACE_MS
+            ? 'deadline'
+            : 'delayed';
+        if (!reconcileExpiration(now, source)) schedule();
       }, Math.min(delay, 2_147_483_647));
     };
 
@@ -277,12 +338,14 @@ export function RestSessionProvider({ children }: { children: React.ReactNode })
     addSeconds,
     cancelRest,
     consumeExpiration,
+    publishNextAction,
   }), [
     addSeconds,
     beginWorkoutSession,
     cancelRest,
     consumeExpiration,
     endWorkoutSession,
+    publishNextAction,
     startRest,
     timerState,
     workoutSessionId,

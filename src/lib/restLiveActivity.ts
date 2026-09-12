@@ -3,13 +3,19 @@ import { logInfo, logWarn } from './logger';
 import type {
   RestActivityEndReason,
   RestActivityState,
+  RestActivityUpdateOptions,
   RestLiveCapabilities,
   RestLiveSurface,
+} from '../types/restLiveActivity';
+import {
+  REST_ACTIVITY_NEXT_ACTION,
+  REST_ACTIVITY_PHASE,
 } from '../types/restLiveActivity';
 
 export type {
   RestActivityEndReason,
   RestActivityState,
+  RestActivityUpdateOptions,
   RestLiveCapabilities,
   RestLiveSurface,
 } from '../types/restLiveActivity';
@@ -45,6 +51,18 @@ function normalizeCapabilities(value: unknown): RestLiveCapabilities {
 }
 
 function isValidState(state: RestActivityState): boolean {
+  const hasValidNextAction =
+    state.nextAction === REST_ACTIVITY_NEXT_ACTION.NEXT_SET
+      ? Number.isInteger(state.nextSetIndex) &&
+        state.nextSetIndex > state.setIndex &&
+        state.nextSetIndex <= state.totalSets &&
+        state.nextExerciseName === undefined
+      : state.nextAction === REST_ACTIVITY_NEXT_ACTION.NEXT_EXERCISE &&
+        state.nextSetIndex === undefined &&
+        state.setIndex === state.totalSets &&
+        typeof state.nextExerciseName === 'string' &&
+        state.nextExerciseName.trim().length > 0;
+
   return (
     !!state &&
     typeof state.sessionId === 'string' &&
@@ -58,7 +76,10 @@ function isValidState(state: RestActivityState): boolean {
     Number.isInteger(state.setIndex) &&
     state.setIndex >= 1 &&
     Number.isInteger(state.totalSets) &&
-    state.totalSets >= state.setIndex
+    state.totalSets >= state.setIndex &&
+    Object.values(REST_ACTIVITY_PHASE).includes(state.phase) &&
+    (state.phase === REST_ACTIVITY_PHASE.RESTING || state.phase === state.nextAction) &&
+    hasValidNextAction
   );
 }
 
@@ -128,7 +149,7 @@ function start(state: RestActivityState): Promise<void> {
     if (!nativeModule) return;
 
     if (logicalSessionId === state.sessionId) {
-      await nativeModule.update(state);
+      await nativeModule.update(state, false);
       nativeCleanupRequired = true;
       logInfo('restLiveActivity', 'rest_live_started', { reused: true });
       return;
@@ -141,7 +162,10 @@ function start(state: RestActivityState): Promise<void> {
   });
 }
 
-function update(state: RestActivityState): Promise<void> {
+function update(
+  state: RestActivityState,
+  options: RestActivityUpdateOptions = {},
+): Promise<void> {
   if (!isValidState(state)) {
     logWarn('restLiveActivity', 'rest_live_native_error', {
       operation: 'update',
@@ -153,7 +177,7 @@ function update(state: RestActivityState): Promise<void> {
   return enqueueNativeOperation('update', async () => {
     const nativeModule = await getSupportedNativeModule();
     if (!nativeModule || logicalSessionId !== state.sessionId) return;
-    await nativeModule.update(state);
+    await nativeModule.update(state, options.alert === true);
     nativeCleanupRequired = true;
     logInfo('restLiveActivity', 'rest_live_updated');
   });

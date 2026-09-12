@@ -63,6 +63,7 @@ import { deriveWorkoutHydration } from '../workoutExecution/hydration';
 import type { PersistedWorkoutExecution } from '../services/workoutExecutions';
 import { computeWorkoutElapsedSeconds } from '../lib/workoutSessionTimer';
 import { useRestSession } from '../state/RestSessionContext';
+import { materializeRestNextAction } from '../workoutExecution/restActivityProjection';
 import {
   cardioProgressRatio,
   computeCardioElapsedSeconds,
@@ -285,6 +286,7 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
     addSeconds: addRestSeconds,
     cancelRest,
     consumeExpiration,
+    publishNextAction,
   } = useRestSession();
   const restingExerciseIndex = rest
     ? exercises.findIndex((candidate) => candidate.id === rest.exerciseId)
@@ -581,9 +583,12 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
     // Deadline wake-up, foreground reconciliation and delayed renders can all
     // observe one expiry. Only the single successful consumer may advance the
     // workout engine.
-    if (consumeExpiration(rest.restId)) advanceAfterRest();
+    if (consumeExpiration(rest.restId)) {
+      advanceAfterRest();
+      publishNextAction(rest.restId);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [consumeExpiration, rest?.restId, restStatus]);
+  }, [consumeExpiration, publishNextAction, rest?.restId, restStatus]);
 
   const completeSet = () => {
     const completedSet = { exId: ex.id, exIdx, setIdx };
@@ -604,18 +609,30 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
       return;
     }
 
+    const nextAction = materializeRestNextAction({
+      completedSetIndex: setIdx,
+      totalSets: ex.sets.length,
+      nextExerciseName:
+        setIdx + 1 >= ex.sets.length && order.length > 1
+          ? resolve(exercises[order[1]], order[1]).name
+          : null,
+    });
     startRest({
       durationSeconds: ex.rest,
       exerciseId: ex.id,
       exerciseName: ex.name,
       setIndex: setIdx,
       totalSets: ex.sets.length,
+      ...nextAction,
     });
   };
 
   const skipRest = () => {
     if (!rest || rest.workoutSessionId !== workoutSessionId) return;
-    if (cancelRest(rest.restId)) advanceAfterRest();
+    if (cancelRest(rest.restId)) {
+      advanceAfterRest();
+      publishNextAction(rest.restId);
+    }
   };
 
   const skipExercise = () => {

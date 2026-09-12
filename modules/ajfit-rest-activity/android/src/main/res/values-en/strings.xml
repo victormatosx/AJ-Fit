@@ -5,4 +5,11 @@
   <string name="ajfit_rest_live_update_title">Rest</string>
   <string name="ajfit_rest_series_format">Set %1$d/%2$d</string>
   <string name="ajfit_rest_short_critical_text">REST</string>
+  <string name="ajfit_rest_next_set_title">AJ Fit · Next set</string>
+  <string name="ajfit_rest_next_set_live_update_title">Next set</string>
+  <string name="ajfit_rest_next_set_short_critical_text">SET</string>
+  <string name="ajfit_rest_next_exercise_title">AJ Fit · Next exercise</string>
+  <string name="ajfit_rest_next_exercise_live_update_title">Next exercise</string>
+  <string name="ajfit_rest_next_exercise_short_critical_text">NEXT</string>
+  <string name="ajfit_rest_tap_to_continue">Tap to continue</string>
 </resources>

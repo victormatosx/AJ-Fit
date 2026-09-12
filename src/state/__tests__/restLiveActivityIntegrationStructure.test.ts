@@ -13,10 +13,7 @@ function codeOnly(source: string): string {
 
 describe('rest live presentation boundary', () => {
   it('keeps a small absolute presentation contract', () => {
-    const stateContract = contract.slice(
-      contract.indexOf('export type RestActivityState'),
-      contract.indexOf('export type RestActivityEndReason'),
-    );
+    const stateContract = contract.slice(0, contract.indexOf('export type RestActivityEndReason'));
     for (const field of [
       'sessionId',
       'startedAt',
@@ -24,6 +21,10 @@ describe('rest live presentation boundary', () => {
       'exerciseName',
       'setIndex',
       'totalSets',
+      'phase',
+      'nextAction',
+      'nextSetIndex',
+      'nextExerciseName',
     ]) expect(stateContract).toContain(field);
     for (const forbidden of [
       'remainingSeconds',
@@ -56,12 +57,15 @@ describe('rest live presentation boundary', () => {
     expect(workout).toContain('exerciseName: ex.name');
     expect(workout).toContain('workoutExercisesFromPlan(plan, i18n.language, sessionIndex)');
     expect(codeOnly(context)).not.toContain('EXERCISES');
+    expect(workout).toContain('materializeRestNextAction({');
+    expect(workout).toContain('resolve(exercises[order[1]], order[1]).name');
   });
 
   it('maps absolute time and converts the set index to one-based presentation', () => {
     expect(context).toContain('startedAt: rest.startedAt');
     expect(context).toContain('endsAt: rest.endsAt');
     expect(context).toContain('setIndex: rest.setIndex + 1');
+    expect(context).toContain('phase: REST_ACTIVITY_PHASE.RESTING');
   });
 });
 
@@ -83,25 +87,53 @@ describe('RestSessionContext live transition wiring', () => {
       context.indexOf('const reconcileExpiration ='),
     );
     expect(updateBlock).toContain('const rest = addRestSeconds(current.rest, seconds)');
-    expect(updateBlock).toContain('const activityState = { ...currentActivityState, endsAt: rest.endsAt }');
+    expect(updateBlock).toContain('const activityState = { ...currentActivityState.state, endsAt: rest.endsAt }');
     expect(updateBlock).toContain('void restLiveActivity.update(activityState)');
+    expect(updateBlock).not.toContain('alert: true');
   });
 
-  it('ends only after the domain claims expiry or cancellation', () => {
+  it('publishes a next action only after the domain claims expiry or cancellation', () => {
     const cancelBlock = context.slice(
       context.indexOf('const cancelRest ='),
       context.indexOf('const consumeExpiration ='),
     );
     const consumeBlock = context.slice(
       context.indexOf('const consumeExpiration ='),
+      context.indexOf('const publishNextAction ='),
+    );
+    expect(cancelBlock).not.toContain('restLiveActivity.update');
+    expect(consumeBlock).not.toContain('restLiveActivity.update');
+    const expirationTransition = workout.slice(
+      workout.indexOf("if (restStatus !== 'expired'"),
+      workout.indexOf('const completeSet ='),
+    );
+    expect(expirationTransition.indexOf('advanceAfterRest();')).toBeLessThan(
+      expirationTransition.indexOf('publishNextAction(rest.restId);'),
+    );
+    const skipTransition = workout.slice(
+      workout.indexOf('const skipRest ='),
+      workout.indexOf('const skipExercise ='),
+    );
+    expect(skipTransition.indexOf('advanceAfterRest();')).toBeLessThan(
+      skipTransition.indexOf('publishNextAction(rest.restId);'),
+    );
+  });
+
+  it('alerts only an on-time deadline transition, never +15, skip or foreground reconciliation', () => {
+    const publishBlock = context.slice(
+      context.indexOf('const publishNextAction ='),
       context.indexOf('// A single absolute deadline'),
     );
-    expect(cancelBlock.indexOf('if (!transition.consumed) return false')).toBeLessThan(
-      cancelBlock.indexOf("void restLiveActivity.end('cancelled')"),
+    expect(publishBlock).toContain("expirationSourceRef.current === 'deadline'");
+    expect(publishBlock).toContain('{ alert: shouldAlert }');
+    expect(context).toContain('REST_DEADLINE_ALERT_GRACE_MS');
+    expect(context).toContain(": 'delayed'");
+    expect(context).toContain("reconcileExpiration(Date.now(), 'foreground')");
+    const cancelBlock = context.slice(
+      context.indexOf('const cancelRest ='),
+      context.indexOf('const consumeExpiration ='),
     );
-    expect(consumeBlock.indexOf('if (!transition.consumed) return false')).toBeLessThan(
-      consumeBlock.indexOf("void restLiveActivity.end('completed')"),
-    );
+    expect(cancelBlock).toContain('expirationSourceRef.current = null');
   });
 
   it('ends a relevant logical surface once when the workout session ends', () => {

@@ -35,6 +35,38 @@ internal object RestNotificationBuilder {
     state: RestActivityStateRecord,
     now: Long,
   ): RestNotificationBuildResult {
+    val phase = requireNotNull(RestActivityPhase.fromWire(state.phase)) {
+      "rest activity phase must be validated before rendering"
+    }
+    val title = context.getString(when (phase) {
+      RestActivityPhase.RESTING -> R.string.ajfit_rest_notification_title
+      RestActivityPhase.NEXT_SET -> R.string.ajfit_rest_next_set_title
+      RestActivityPhase.NEXT_EXERCISE -> R.string.ajfit_rest_next_exercise_title
+    })
+    val contentText = sanitizeRestNotificationText(
+      if (phase == RestActivityPhase.NEXT_EXERCISE) {
+        state.nextExerciseName.orEmpty()
+      } else {
+        state.exerciseName
+      },
+    )
+    val subText = when (phase) {
+      RestActivityPhase.RESTING -> context.getString(
+        R.string.ajfit_rest_series_format,
+        state.setIndex,
+        state.totalSets,
+      )
+      RestActivityPhase.NEXT_SET -> context.getString(
+        R.string.ajfit_rest_series_format,
+        requireNotNull(state.nextSetIndex) {
+          "next set must be materialized before rendering"
+        },
+        state.totalSets,
+      )
+      RestActivityPhase.NEXT_EXERCISE -> context.getString(
+        R.string.ajfit_rest_tap_to_continue,
+      )
+    }
     val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
       Notification.Builder(context, REST_NOTIFICATION_CHANNEL_ID)
     } else {
@@ -44,29 +76,32 @@ internal object RestNotificationBuilder {
 
     builder
       .setSmallIcon(R.drawable.ic_ajfit_rest_notification)
-      .setContentTitle(context.getString(R.string.ajfit_rest_notification_title))
-      .setContentText(sanitizeRestNotificationText(state.exerciseName))
-      .setSubText(
-        context.getString(
-          R.string.ajfit_rest_series_format,
-          state.setIndex,
-          state.totalSets,
-        ),
-      )
+      .setContentTitle(title)
+      .setContentText(contentText)
+      .setSubText(subText)
       .setContentIntent(activeWorkoutPendingIntent(context))
       .setCategory(Notification.CATEGORY_PROGRESS)
       .setVisibility(Notification.VISIBILITY_PUBLIC)
-      .setWhen(state.endsAt)
-      .setShowWhen(true)
-      .setUsesChronometer(true)
-      .setChronometerCountDown(true)
       .setOngoing(true)
       .setAutoCancel(false)
       .setOnlyAlertOnce(true)
 
+    if (phase == RestActivityPhase.RESTING) {
+      builder
+        .setWhen(state.endsAt)
+        .setShowWhen(true)
+        .setUsesChronometer(true)
+        .setChronometerCountDown(true)
+    } else {
+      builder
+        .setShowWhen(false)
+        .setUsesChronometer(false)
+        .setChronometerCountDown(false)
+    }
+
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
       configureLegacySilentNotification(builder)
-    } else {
+    } else if (phase == RestActivityPhase.RESTING) {
       builder.setTimeoutAfter(calculateRestNotificationTimeout(state.endsAt, now))
     }
 
@@ -81,9 +116,17 @@ internal object RestNotificationBuilder {
 
     val notification = RestLiveUpdateApi36.enrich(
       builder = builder,
-      contextTitle = context.getString(R.string.ajfit_rest_live_update_title),
+      contextTitle = context.getString(when (phase) {
+        RestActivityPhase.RESTING -> R.string.ajfit_rest_live_update_title
+        RestActivityPhase.NEXT_SET -> R.string.ajfit_rest_next_set_live_update_title
+        RestActivityPhase.NEXT_EXERCISE -> R.string.ajfit_rest_next_exercise_live_update_title
+      }),
       contextShortCriticalText = context.getString(
-        R.string.ajfit_rest_short_critical_text,
+        when (phase) {
+          RestActivityPhase.RESTING -> R.string.ajfit_rest_short_critical_text
+          RestActivityPhase.NEXT_SET -> R.string.ajfit_rest_next_set_short_critical_text
+          RestActivityPhase.NEXT_EXERCISE -> R.string.ajfit_rest_next_exercise_short_critical_text
+        },
       ),
       state = state,
       now = now,
