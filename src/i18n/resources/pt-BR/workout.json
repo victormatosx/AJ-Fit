@@ -207,6 +207,9 @@
   "substitution": {
     "sheetTitle": "Trocar exercício",
     "sheetSubtitle": "Mesmo grupo muscular · escolha uma variação",
+    "loading": "Carregando substituições...",
+    "empty": "Não há substituições disponíveis para este exercício.",
+    "loadError": "Não foi possível carregar as substituições.",
     "labels": {
       "original": "Original",
       "replacement": "Substituição",
@@ -217,6 +220,7 @@
     "actions": {
       "once": "Trocar só dessa vez",
       "permanent": "Trocar em todo o treino",
+      "retry": "Tentar novamente",
       "cancel": "Cancelar"
     },
     "badges": {

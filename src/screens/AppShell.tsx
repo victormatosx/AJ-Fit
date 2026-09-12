@@ -79,6 +79,7 @@ import {
   loadManualSubstitutionUserContext,
 } from '../services/exerciseSubstitution';
 import type { ManualSubstitutionUserContext } from '../services/exerciseSubstitutionCandidates';
+import type { ManualSubstitutionContextStatus } from './workoutScreenPlan';
 import { EvolutionUnlockScreen } from './EvolutionUnlockScreen';
 import { errorCode, logInfo, logWarn } from '../lib/logger';
 import { resolveSessionDisplayName, type LooseTranslate } from '../workoutPrescription/sessionPresentation';
@@ -214,20 +215,35 @@ function AppShellContent({
   // Manual Substitution (exercise-substitution architecture audit): the same
   // declared-limitation-regions + equipment-context inputs the server-side
   // resolver uses, loaded once per active program so the "trocar" action can
-  // compute a preview candidate list. `null` (action hidden) until loaded —
-  // never a fabricated default context.
-  const [manualSubstitutionContext, setManualSubstitutionContext] = useState<ManualSubstitutionUserContext | null>(null);
+  // compute a preview candidate list. Loading/error remain explicit UI states;
+  // neither is allowed to hide the action or fabricate a default context.
+  const [manualSubstitutionContextState, setManualSubstitutionContextState] = useState<{
+    status: ManualSubstitutionContextStatus;
+    context: ManualSubstitutionUserContext | null;
+  }>({ status: 'loading', context: null });
+  const [manualSubstitutionContextRetry, setManualSubstitutionContextRetry] = useState(0);
+  const retryManualSubstitutionContext = useCallback(() => {
+    setManualSubstitutionContextState({ status: 'loading', context: null });
+    setManualSubstitutionContextRetry((current) => current + 1);
+  }, []);
   useEffect(() => {
     if (!user || !activeProgram) {
-      setManualSubstitutionContext(null);
+      setManualSubstitutionContextState({ status: 'loading', context: null });
       return;
     }
     let cancelled = false;
+    setManualSubstitutionContextState({ status: 'loading', context: null });
     loadManualSubstitutionUserContext(user.uid, activeProgram.environment)
-      .then((context) => { if (!cancelled) setManualSubstitutionContext(context); })
-      .catch(() => { if (!cancelled) setManualSubstitutionContext(null); });
+      .then((context) => {
+        if (!cancelled) setManualSubstitutionContextState(
+          context ? { status: 'ready', context } : { status: 'error', context: null },
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setManualSubstitutionContextState({ status: 'error', context: null });
+      });
     return () => { cancelled = true; };
-  }, [user, activeProgram]);
+  }, [user, activeProgram, manualSubstitutionContextRetry]);
   // Workout Recovery / Resume após process death — proactive, uid-scoped
   // bootstrap check for `workoutExecutionState/current`, independent of the
   // user ever tapping "Iniciar treino" (docs §4/§13).
@@ -1019,7 +1035,9 @@ function AppShellContent({
               }}
               onSetLogged={(exerciseIndex, setIndex, weightKg) =>
                 execution.recordSet(exerciseIndex, setIndex, weightKg)}
-              manualSubstitutionContext={manualSubstitutionContext}
+              manualSubstitutionContext={manualSubstitutionContextState.context}
+              manualSubstitutionContextStatus={manualSubstitutionContextState.status}
+              onRetryManualSubstitutionContext={retryManualSubstitutionContext}
               onApplySubstitution={async ({ exerciseIndex, requestedExerciseId, scope }) => {
                 if (!execution.execution) {
                   return { ok: false, error: new Error('NO_ACTIVE_EXECUTION') };

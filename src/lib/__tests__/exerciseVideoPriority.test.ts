@@ -91,19 +91,24 @@ describe('ExerciseGif — own video > fallback library > unavailable', () => {
 });
 
 describe('WorkoutScreen — wires the session\'s own-video lookup into every ExerciseGif', () => {
-  it('fetches media for exactly this session\'s exercise ids via the dedicated hook', () => {
+  it('fetches media for the effective exercise in every slot, including persisted/manual substitutions', () => {
     expect(WORKOUT_SRC).toContain(
       "import { useExerciseExecutionMedia } from '../workoutExecution/useExerciseExecutionMedia';",
     );
     expect(WORKOUT_SRC).toContain(
+      '() => exercises.map((exercise, index) => substitutions[index]?.exerciseId ?? exercise.id),',
+    );
+    expect(WORKOUT_SRC).toContain(
       'const { media: exerciseExecutionMedia, loading: exerciseMediaLoading } = useExerciseExecutionMedia(',
     );
-    expect(WORKOUT_SRC).toContain('useMemo(() => exercises.map((e) => e.id), [exercises]),');
+    expect(WORKOUT_SRC).toContain('exerciseMediaIds,');
   });
 
   it('passes ownVideo through at all three ExerciseGif call sites (banner, fullscreen modal, sub-option thumbnail)', () => {
     const occurrences = WORKOUT_SRC.match(/ownVideo={exerciseExecutionMedia\[[^\]]+\]\?\.videos}/g) ?? [];
     expect(occurrences.length).toBe(3);
+    expect(WORKOUT_SRC.match(/ownVideo={exerciseExecutionMedia\[ex\.db\]\?\.videos}/g)).toHaveLength(2);
+    expect(WORKOUT_SRC).not.toContain('ownVideo={exerciseExecutionMedia[ex.id]?.videos}');
   });
 
   it('passes ownVideoLoading through at all three ExerciseGif call sites too — without it the fallback library would flash ahead of a real own video', () => {

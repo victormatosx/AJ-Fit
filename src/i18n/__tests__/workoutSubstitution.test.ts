@@ -52,10 +52,20 @@ describe('workout — substitution sheet copy per locale', () => {
     ['pt-BR', 'substitution.confirmTitle', /aplicar troca/i],
     ['en', 'substitution.confirmTitle', /apply swap/i],
     ['es', 'substitution.confirmTitle', /aplicar cambio/i],
-  ] as Array<[SupportedLanguage, string, RegExp]>)('[%s] workout:%s', async (lang, key, re) => {
+    ['pt-BR', 'substitution.loading', 'Carregando substituições...'],
+    ['en', 'substitution.loading', 'Loading substitutions...'],
+    ['es', 'substitution.loading', 'Cargando sustituciones...'],
+    ['pt-BR', 'substitution.empty', 'Não há substituições disponíveis para este exercício.'],
+    ['en', 'substitution.empty', 'No substitutions are available for this exercise.'],
+    ['es', 'substitution.empty', 'No hay sustituciones disponibles para este ejercicio.'],
+    ['pt-BR', 'substitution.loadError', 'Não foi possível carregar as substituições.'],
+    ['en', 'substitution.loadError', "Couldn't load substitutions."],
+    ['es', 'substitution.loadError', 'No se pudieron cargar las sustituciones.'],
+  ] as Array<[SupportedLanguage, string, string | RegExp]>)('[%s] workout:%s', async (lang, key, expected) => {
     const i18n = await freshI18nAt(lang);
     const t = i18n.getFixedT(lang, 'workout' as 'workout') as unknown as LooseT;
-    expect(t(key)).toMatch(re);
+    if (typeof expected === 'string') expect(t(key)).toBe(expected);
+    else expect(t(key)).toMatch(expected);
   });
 });
 
@@ -76,6 +86,9 @@ describe('workout — substitution labels + actions per locale', () => {
     ['pt-BR', 'substitution.actions.permanent', 'Trocar em todo o treino'],
     ['en', 'substitution.actions.permanent', 'Swap for the whole plan'],
     ['es', 'substitution.actions.permanent', 'Cambiar en todo el plan'],
+    ['pt-BR', 'substitution.actions.retry', 'Tentar novamente'],
+    ['en', 'substitution.actions.retry', 'Try again'],
+    ['es', 'substitution.actions.retry', 'Intentar de nuevo'],
     ['pt-BR', 'substitution.actions.cancel', 'Cancelar'],
     ['en', 'substitution.actions.cancel', 'Cancel'],
     ['es', 'substitution.actions.cancel', 'Cancelar'],

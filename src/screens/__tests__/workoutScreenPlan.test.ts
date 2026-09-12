@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { canSkipExercise, workoutExercisesFromPlan } from '../workoutScreenPlan';
+import { readFileSync } from 'node:fs';
+import {
+  canSkipExercise,
+  resolveManualSubstitutionPresentation,
+  workoutExercisesFromPlan,
+} from '../workoutScreenPlan';
 import { LEGACY_REST_SECONDS_FALLBACK, REST_SECONDS } from '../../workoutPrescription/restPrescription';
 import { generateWorkoutPrescription } from '../../workoutPrescription/engine';
 import { getTemplateById } from '../../workoutPrescription/catalog';
@@ -19,6 +24,54 @@ describe('canSkipExercise', () => {
     expect(canSkipExercise(0, 1)).toBe(false);
     expect(canSkipExercise(1, 2)).toBe(false);
     expect(canSkipExercise(3, 4)).toBe(false);
+  });
+});
+
+describe('resolveManualSubstitutionPresentation', () => {
+  it('keeps the button visible while the context is loading', () => {
+    expect(resolveManualSubstitutionPresentation({
+      completedSets: 0, contextStatus: 'loading', candidateCount: 0, canRevert: false,
+    })).toEqual({ buttonVisible: true, sheetState: 'loading' });
+  });
+
+  it('opens the existing options flow when candidates are available', () => {
+    expect(resolveManualSubstitutionPresentation({
+      completedSets: 0, contextStatus: 'ready', candidateCount: 2, canRevert: false,
+    })).toEqual({ buttonVisible: true, sheetState: 'options' });
+  });
+
+  it('keeps the button visible and exposes the empty state with zero candidates', () => {
+    expect(resolveManualSubstitutionPresentation({
+      completedSets: 0, contextStatus: 'ready', candidateCount: 0, canRevert: false,
+    })).toEqual({ buttonVisible: true, sheetState: 'empty' });
+  });
+
+  it('keeps the button visible and exposes a retryable context error', () => {
+    expect(resolveManualSubstitutionPresentation({
+      completedSets: 0, contextStatus: 'error', candidateCount: 0, canRevert: false,
+    })).toEqual({ buttonVisible: true, sheetState: 'error' });
+  });
+
+  it('preserves revert as an available option even with zero replacement candidates', () => {
+    expect(resolveManualSubstitutionPresentation({
+      completedSets: 0, contextStatus: 'ready', candidateCount: 0, canRevert: true,
+    })).toEqual({ buttonVisible: true, sheetState: 'options' });
+  });
+
+  it('hides the button after the current exercise has started', () => {
+    expect(resolveManualSubstitutionPresentation({
+      completedSets: 1, contextStatus: 'ready', candidateCount: 3, canRevert: true,
+    })).toEqual({ buttonVisible: false, sheetState: 'unavailable' });
+  });
+
+  it('wires button visibility to presentation state, never candidate existence', () => {
+    const source = readFileSync(new URL('../WorkoutScreen.tsx', import.meta.url), 'utf8');
+    expect(source).toContain('{substitutionPresentation.buttonVisible && <Pressable');
+    expect(source).not.toContain('{(rankedCandidates.length > 0 || canRevert) && <Pressable');
+    expect(source).toContain("substitutionPresentation.sheetState === 'loading'");
+    expect(source).toContain("substitutionPresentation.sheetState === 'empty'");
+    expect(source).toContain("substitutionPresentation.sheetState === 'error'");
+    expect(source).toContain('onPress={onRetryManualSubstitutionContext}');
   });
 });
 

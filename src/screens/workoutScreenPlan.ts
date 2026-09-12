@@ -14,6 +14,24 @@ import type { FinalWorkoutPlan } from '../workoutPrescription/types';
 
 export type SetData = { r: string; w: number };
 export type SubOption = { name: string; target: string; db: string };
+export type ManualSubstitutionContextStatus = 'loading' | 'ready' | 'error';
+export type ManualSubstitutionSheetState = 'unavailable' | 'loading' | 'options' | 'empty' | 'error';
+
+export function resolveManualSubstitutionPresentation(input: {
+  completedSets: number;
+  contextStatus: ManualSubstitutionContextStatus;
+  candidateCount: number;
+  canRevert: boolean;
+}): { buttonVisible: boolean; sheetState: ManualSubstitutionSheetState } {
+  if (input.completedSets !== 0) return { buttonVisible: false, sheetState: 'unavailable' };
+  if (input.contextStatus === 'loading') return { buttonVisible: true, sheetState: 'loading' };
+  if (input.contextStatus === 'error') return { buttonVisible: true, sheetState: 'error' };
+  return {
+    buttonVisible: true,
+    sheetState: input.candidateCount > 0 || input.canRevert ? 'options' : 'empty',
+  };
+}
+
 export type Exercise = {
   id: string;
   /** Canonical identity of this slot in FinalWorkoutPlan. */

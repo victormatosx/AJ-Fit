@@ -207,6 +207,9 @@
   "substitution": {
     "sheetTitle": "Swap exercise",
     "sheetSubtitle": "Same muscle group · pick a variation",
+    "loading": "Loading substitutions...",
+    "empty": "No substitutions are available for this exercise.",
+    "loadError": "Couldn't load substitutions.",
     "labels": {
       "original": "Original",
       "replacement": "Substitution",
@@ -217,6 +220,7 @@
     "actions": {
       "once": "Swap just this time",
       "permanent": "Swap for the whole plan",
+      "retry": "Try again",
       "cancel": "Cancel"
     },
     "badges": {

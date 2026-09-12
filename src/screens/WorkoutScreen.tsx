@@ -54,7 +54,9 @@ import {
   canSkipExercise,
   workoutExercisesFromPlan,
   pluralCountForReps,
+  resolveManualSubstitutionPresentation,
   type Exercise,
+  type ManualSubstitutionContextStatus,
   type SetData,
   type SubOption,
 } from './workoutScreenPlan';
@@ -169,11 +171,13 @@ type Props = {
    * The user's current declared limitation regions + equipment context —
    * exactly what the server-side manual-substitution resolver uses too
    * (`loadManualSubstitutionUserContext`, `src/services/exerciseSubstitution.ts`).
-   * `null` while loading or when there is no usable questionnaire yet: the
-   * "trocar" action stays hidden rather than showing candidates computed
-   * against a fabricated default context.
+   * `null` while loading or when there is no usable questionnaire yet. The
+   * action remains visible and the sheet presents loading/error explicitly,
+   * without computing candidates against a fabricated default context.
    */
   manualSubstitutionContext?: ManualSubstitutionUserContext | null;
+  manualSubstitutionContextStatus?: ManualSubstitutionContextStatus;
+  onRetryManualSubstitutionContext?: () => void;
   /**
    * The ONLY path a manual substitution is ever applied through — always
    * calls the `applyExerciseSubstitution` Cloud Function, which independently
@@ -217,7 +221,7 @@ function translateMuscleGroup(tLoose: LooseT, target: string): string {
   return target;
 }
 
-export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, onMinimize, sessionIndex = 0, execution, workoutStartedAtMs, onSessionCompleted, finishing, completionConfirmed, durableCompletionReachedAtMs, completionFailed, onSetLogged, onAbandon, onCardioCompleted, manualSubstitutionContext, onApplySubstitution }: Props) {
+export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, onMinimize, sessionIndex = 0, execution, workoutStartedAtMs, onSessionCompleted, finishing, completionConfirmed, durableCompletionReachedAtMs, completionFailed, onSetLogged, onAbandon, onCardioCompleted, manualSubstitutionContext, manualSubstitutionContextStatus, onRetryManualSubstitutionContext, onApplySubstitution }: Props) {
   const { theme } = useTheme();
   const exitDialogTheme = darkTheme;
   const { t, i18n } = useTranslation('workout');
@@ -251,16 +255,6 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
     () => (execution ? deriveWorkoutHydration(execution, exercises.map((e) => e.id)) : null),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [execution?.executionId],
-  );
-  // Own-video priority (item #7): a small, targeted Firestore lookup for
-  // exactly this session's exercise ids — never the whole catalog, never on
-  // the generation path. `ExerciseGif` falls back to its own library/
-  // unavailable state for any id this resolves nothing for — but only once
-  // `exerciseMediaLoading` confirms the lookup actually landed, so the
-  // fallback library never flashes on screen first for an exercise that
-  // does have an own video.
-  const { media: exerciseExecutionMedia, loading: exerciseMediaLoading } = useExerciseExecutionMedia(
-    useMemo(() => exercises.map((e) => e.id), [exercises]),
   );
   const headerButtonStyle = {
     width: 38,
@@ -398,6 +392,21 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
   const [substitutionError, setSubstitutionError] = useState(false);
   const [substitutionPending, setSubstitutionPending] = useState(false);
   const locale = i18n.language === 'pt-BR' ? 'ptBR' : i18n.language === 'es' ? 'es' : 'en';
+
+  // Own-video priority (item #7): fetch the exercise that is ACTUALLY being
+  // performed in every slot. A manual/permanent substitution keeps `id` as
+  // the prescribed anchor and changes the visual/execution identity to
+  // `substitutions[index].exerciseId`; querying only `exercise.id` made a
+  // substituted exercise (for example machine-flat-bench-press) render its
+  // automatic-library fallback even when that exact Firestore document had
+  // both admin videos registered.
+  const exerciseMediaIds = useMemo(
+    () => exercises.map((exercise, index) => substitutions[index]?.exerciseId ?? exercise.id),
+    [exercises, substitutions],
+  );
+  const { media: exerciseExecutionMedia, loading: exerciseMediaLoading } = useExerciseExecutionMedia(
+    exerciseMediaIds,
+  );
 
   const [pr, setPr] = useState<{ weight: number; exName: string; prev: number } | null>(null);
   const [exComplete, setExComplete] = useState<{ name: string; nextName: string } | null>(null);
@@ -688,7 +697,11 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [exercises, exIdx, substitutions]);
 
-  const canOfferSubstitution = canSubstituteCurrentExercise && !!manualSubstitutionContext;
+  const effectiveSubstitutionContextStatus: ManualSubstitutionContextStatus =
+    manualSubstitutionContextStatus ?? (manualSubstitutionContext ? 'ready' : 'loading');
+  const canOfferSubstitution = canSubstituteCurrentExercise
+    && effectiveSubstitutionContextStatus === 'ready'
+    && !!manualSubstitutionContext;
   const rankedCandidates = useMemo(
     () => (canOfferSubstitution
       ? resolveDisplayCandidates({
@@ -718,6 +731,12 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
       : []),
     [canRevert, rankedCandidates, baseEx, locale]
   );
+  const substitutionPresentation = resolveManualSubstitutionPresentation({
+    completedSets: setIdx,
+    contextStatus: effectiveSubstitutionContextStatus,
+    candidateCount: rankedCandidates.length,
+    canRevert,
+  });
 
   // Mount-once-per-finish signal for the Schedule Engine — separate from
   // `onDone`, which is only the completed-workout CTA, and from the
@@ -926,7 +945,7 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
               name={ex.name}
               height={224}
               radius={20}
-              ownVideo={exerciseExecutionMedia[ex.id]?.videos}
+              ownVideo={exerciseExecutionMedia[ex.db]?.videos}
               ownVideoLoading={exerciseMediaLoading}
             />
             {/* gradient overlay for legibility */}
@@ -1030,7 +1049,7 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
               {ex.name}
             </Display>
           </View>
-          {(rankedCandidates.length > 0 || canRevert) && <Pressable
+          {substitutionPresentation.buttonVisible && <Pressable
             onPress={() => setSubSheet(true)}
             style={{
               flexDirection: 'row',
@@ -1298,7 +1317,7 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
                 name={ex.name}
                 aspectRatio={9 / 16}
                 radius={20}
-                ownVideo={exerciseExecutionMedia[ex.id]?.videos}
+                ownVideo={exerciseExecutionMedia[ex.db]?.videos}
                 ownVideoLoading={exerciseMediaLoading}
               />
 
@@ -1426,7 +1445,37 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
               <Text style={{ fontSize: 12.5, color: theme.colors.textMuted, marginBottom: 16 }}>
                 {t('substitution.sheetSubtitle')}
               </Text>
-              <ScrollView showsVerticalScrollIndicator={false}>
+              {substitutionPresentation.sheetState === 'loading' && (
+                <View style={{ alignItems: 'center', paddingVertical: 28, gap: 12 }}>
+                  <ActivityIndicator color={theme.colors.primary} />
+                  <Text style={{ fontSize: 13, color: theme.colors.textMuted }}>
+                    {t('substitution.loading')}
+                  </Text>
+                </View>
+              )}
+              {substitutionPresentation.sheetState === 'error' && (
+                <View style={{ alignItems: 'center', paddingVertical: 22, gap: 14 }}>
+                  <Text accessibilityRole="alert" style={{ fontSize: 13, lineHeight: 19, color: theme.colors.dangerText, textAlign: 'center' }}>
+                    {t('substitution.loadError')}
+                  </Text>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={t('substitution.actions.retry')}
+                    onPress={onRetryManualSubstitutionContext}
+                    style={{ paddingVertical: 12, paddingHorizontal: 20, borderRadius: 12, backgroundColor: theme.colors.primary }}
+                  >
+                    <Text style={{ fontSize: 13, fontFamily: theme.fonts.uiBold, color: theme.colors.primaryForeground }}>
+                      {t('substitution.actions.retry')}
+                    </Text>
+                  </Pressable>
+                </View>
+              )}
+              {substitutionPresentation.sheetState === 'empty' && (
+                <Text style={{ fontSize: 13, lineHeight: 19, color: theme.colors.textMuted, textAlign: 'center', paddingVertical: 28 }}>
+                  {t('substitution.empty')}
+                </Text>
+              )}
+              {substitutionPresentation.sheetState === 'options' && <ScrollView showsVerticalScrollIndicator={false}>
                 {subOptions.map((o) => {
                   const active = o.db === ex.db;
                   return (
@@ -1495,7 +1544,7 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
                     </Pressable>
                   );
                 })}
-              </ScrollView>
+              </ScrollView>}
             </Pressable>
           </Pressable>
         </Modal>
