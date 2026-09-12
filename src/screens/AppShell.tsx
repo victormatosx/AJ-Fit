@@ -63,12 +63,12 @@ import { WorkoutSessionRecoveryModal } from '../components/workout/WorkoutSessio
 import { activeExecutionId, abandonWorkoutExecution, loadWorkoutExecution } from '../services/workoutExecutions';
 import {
   applyWorkoutCompletionNavigation,
-  completeWorkoutSessionFlow,
   runWorkoutCompletionFollowUp,
   runWorkoutCompletionAttempt,
   runWorkoutCompletionSingleFlight,
   type WorkoutCompletionResult,
 } from '../workoutLifecycle/finishFlow';
+import { workoutFinalizationFailureStage } from '../services/finalizeWorkoutSession';
 import { useWorkoutEvolution } from '../workoutEvolution/useWorkoutEvolution';
 import { useWorkoutActivitySnapshot } from '../home/useWorkoutActivitySnapshot';
 import { useFrequencyWindow } from '../home/useFrequencyWindow';
@@ -287,8 +287,8 @@ function AppShellContent({
   const workoutCompletionRef = useRef<Promise<WorkoutCompletionResult> | null>(null);
   const workoutCompletionFollowUpRef = useRef<Promise<unknown> | null>(null);
   // True from the instant `onSessionCompleted` fires until the durable
-  // finish chain (execution.finish -> completeScheduledSession -> lifecycle)
-  // settles — drives `WorkoutDone`'s "Finalizando treino..." state so the
+  // atomic finalizer settles (lifecycle remains a later follow-up) — drives
+  // `WorkoutDone`'s "Finalizando treino..." state so the
   // success screen never lets the user believe (or navigate away on) an
   // unconfirmed completion (docs — Cardio Finisher Completion Recovery
   // hardening). Deliberately separate from `workoutCompletionRef` (a plain
@@ -673,13 +673,17 @@ function AppShellContent({
     recovery.resolve();
   };
 
-  const runWorkoutCompletion = (recovery: boolean): Promise<WorkoutCompletionResult> => {
+  const runWorkoutCompletion = (
+    recovery: boolean,
+    actualCardioDurationSeconds?: number,
+  ): Promise<WorkoutCompletionResult> => {
     if (workoutCompletionRef.current) {
       return workoutCompletionRef.current;
     }
     setWorkoutCompletionResult(null);
     setDurableCompletionReachedAtMs(null);
     setFinishingSession(true);
+    logInfo('workout_performance', 'loading_started', { timestampMs: Date.now() });
     if (!activeProgram?.sessions[activeSessionIndex]?.cardioFinisher) {
       logInfo('workout_performance', 'finish_ui_loading_started', { timestampMs: Date.now(), source: 'strength' });
     }
@@ -701,45 +705,13 @@ function AppShellContent({
 
     return runWorkoutCompletionAttempt(workoutCompletionRef, async (): Promise<WorkoutCompletionResult> => {
       const finishFlowStartedAtMs = Date.now();
-      logInfo('workout_performance', 'finish_flow_start', { timestampMs: finishFlowStartedAtMs });
+      logInfo('workout_performance', 'finalize_request_start', { timestampMs: finishFlowStartedAtMs });
       try {
-        const finishedScheduledLocalDate = execution.execution?.scheduledLocalDate ?? null;
-        const result = await completeWorkoutSessionFlow({
-          finishExecution: async () => {
-            const startedAtMs = Date.now();
-            if (recovery) logInfo('workout_retry', 'retry_finish_started', {
-              timestamp: startedAtMs, executionId, etapa: 'EXECUTION', durationMs: 0,
-            });
-            const status = await execution.finish();
-            if (recovery) logInfo('workout_retry', 'retry_finish_end', {
-              timestamp: Date.now(), executionId, etapa: 'EXECUTION',
-              durationMs: Date.now() - startedAtMs, status: status ?? 'FAILED',
-              errorCode: status ? undefined : 'EXECUTION_FAILED',
-            });
-            return status;
-          },
-          completeSchedule: async () => {
-            const startedAtMs = Date.now();
-            if (recovery) logInfo('workout_retry', 'retry_schedule_started', {
-              timestamp: startedAtMs, executionId, etapa: 'SCHEDULE', durationMs: 0,
-            });
-            const completed = finishedScheduledLocalDate
-              ? await schedule.completeSession(activeSessionIndex, finishedScheduledLocalDate)
-              : false;
-            if (recovery) {
-              logInfo('workout_retry', 'retry_schedule_status', {
-                timestamp: Date.now(), executionId, etapa: 'SCHEDULE',
-                durationMs: Date.now() - startedAtMs, status: completed ? 'COMPLETED' : 'FAILED',
-              });
-              logInfo('workout_retry', 'retry_schedule_end', {
-                timestamp: Date.now(), executionId, etapa: 'SCHEDULE',
-                durationMs: Date.now() - startedAtMs, success: completed,
-                errorCode: completed ? undefined : 'SCHEDULE_FAILED',
-              });
-            }
-            return completed;
-          },
-        });
+        const finalized = await execution.finalize(actualCardioDurationSeconds);
+        const result: WorkoutCompletionResult = finalized.ok
+          ? 'COMPLETED'
+          : workoutFinalizationFailureStage(finalized.error) === 'SCHEDULE'
+            ? 'SCHEDULE_FAILED' : 'EXECUTION_FAILED';
         if (result === 'COMPLETED') {
           const durableReachedAtMs = Date.now();
           setDurableCompletionReachedAtMs(durableReachedAtMs);
@@ -796,7 +768,7 @@ function AppShellContent({
             },
           });
         }
-        logInfo('workout_performance', 'finish_flow_end', {
+        logInfo('workout_performance', 'finalize_request_end', {
           timestampMs: Date.now(),
           durationMs: Date.now() - finishFlowStartedAtMs,
           result,
@@ -911,8 +883,8 @@ function AppShellContent({
 
   // Abandon is already the terminal domain mutation. It must only tear down
   // the local workout surface; routing it through finishWorkoutSession would
-  // ask FINISH_EXECUTION to finish an ABANDONED record and the authority
-  // callable correctly rejects that as execution_not_finishable.
+  // ask the finalizer to finish an ABANDONED record; server authority
+  // correctly rejects that as execution_not_finishable.
   const leaveDiscardedWorkout = () => {
     endWorkoutSession();
     setWorkoutInProgress(false);
@@ -1009,7 +981,12 @@ function AppShellContent({
               // abandon must be a durable, persisted fact before the UI
               // treats the session as gone. Never fire-and-forget here.
               onAbandon={() => execution.abandon()}
-              onCardioCompleted={(actualDurationSeconds) => execution.completeCardio(actualDurationSeconds)}
+              onCardioCompleted={async (actualDurationSeconds) => {
+                const result = await runWorkoutCompletion(false, actualDurationSeconds);
+                return result === 'COMPLETED'
+                  ? { ok: true as const }
+                  : { ok: false as const, error: new Error(result) };
+              }}
               onSetLogged={(exerciseIndex, setIndex, weightKg) =>
                 execution.recordSet(exerciseIndex, setIndex, weightKg)}
               manualSubstitutionContext={manualSubstitutionContext}

@@ -4,8 +4,6 @@ import { errorClass, errorCode, errorReason, logInfo, logWarn } from '../lib/log
 import { localDateInTimezone } from '../scheduleEngine/localDate';
 import {
   abandonWorkoutExecution,
-  completeCardioExecution,
-  finishWorkoutExecution,
   recordSetExecution,
   skipExerciseExecution,
   skipSetExecution,
@@ -14,6 +12,10 @@ import {
   WorkoutExecutionLegacyPendingError,
   type PersistedWorkoutExecution,
 } from '../services/workoutExecutions';
+import {
+  finalizeWorkoutSession,
+  type FinalizeWorkoutSessionResult,
+} from '../services/finalizeWorkoutSession';
 import type { WorkoutProgramSnapshot } from '../services/workoutPrograms';
 import { WorkoutMutationQueue } from '../workoutLifecycle/mutationQueue';
 
@@ -89,9 +91,10 @@ export interface WorkoutExecutionController {
    * "already completed" case — the caller always proceeds to `finish()`
    * next either way.
    */
-  completeCardio: (actualDurationSeconds: number) => Promise<{ ok: true } | { ok: false; error: unknown }>;
-  /** Sweeps any pending sets to SKIPPED and marks the execution COMPLETED/PARTIALLY_COMPLETED. Does not touch the Schedule Engine — the caller advances it afterward (docs §40). */
-  finish: () => Promise<'COMPLETED' | 'PARTIALLY_COMPLETED' | null>;
+  /** Flushes queued set writes, then atomically finalizes cardio (if supplied), Execution and Schedule server-side. */
+  finalize: (actualCardioDurationSeconds?: number) => Promise<
+    { ok: true; result: FinalizeWorkoutSessionResult } | { ok: false; error: unknown }
+  >;
   /**
    * Distinct from `finish` — never advances the Schedule Engine (docs §36).
    * Abandons the currently-tracked execution. Returns a typed result instead
@@ -233,26 +236,11 @@ export function useWorkoutExecution(program: WorkoutProgramSnapshot | null, time
     }
   }, [uid, execution]);
 
-  const completeCardio = useCallback(async (actualDurationSeconds: number): Promise<{ ok: true } | { ok: false; error: unknown }> => {
+  const finalize = useCallback(async (actualCardioDurationSeconds?: number): Promise<
+    { ok: true; result: FinalizeWorkoutSessionResult } | { ok: false; error: unknown }
+  > => {
     if (!uid || !execution) return { ok: false, error: new Error('no_active_execution') };
-    try {
-      await completeCardioExecution(uid, execution.executionId, actualDurationSeconds);
-      return { ok: true };
-    } catch (error) {
-      logWarn('workout_execution', 'cardio_complete_failed', { error });
-      return { ok: false, error };
-    }
-  }, [uid, execution]);
-
-  const finish = useCallback(async () => {
-    if (!uid || !execution) return null;
-    // Diagnostic instrumentation (Phase 2, Part F) — technical fields only
-    // (never questionnaire/personal data), added to trace the exact point a
-    // prior E2E crash was reported at. That crash was later explained by a
-    // separate cause (Schedule stuck in SCHEDULE_SETUP_REQUIRED, fixed in
-    // Phase 1) — this instrumentation is precautionary for the next E2E,
-    // not a fix for a confirmed bug in this function.
-    logInfo('workout_execution', 'execution_finish_started', {
+    logInfo('workout_execution', 'execution_finalization_started', {
       programId: execution.programId,
       executionId: execution.executionId,
       sessionIndex: execution.sessionIndex,
@@ -275,18 +263,22 @@ export function useWorkoutExecution(program: WorkoutProgramSnapshot | null, time
         });
         throw error;
       }
-      const result = await finishWorkoutExecution(uid, execution.executionId);
-      setExecution((prev) => (prev ? { ...prev, status: result.status, finishedAt: prev.finishedAt } : prev));
-      logInfo('workout_execution', 'execution_finish_succeeded', {
+      const result = await finalizeWorkoutSession({
+        executionId: execution.executionId,
+        ...(actualCardioDurationSeconds === undefined ? {} : {
+          cardio: { actualDurationSeconds: actualCardioDurationSeconds },
+        }),
+      });
+      setExecution((prev) => (prev ? { ...prev, status: result.executionStatus, finishedAt: prev.finishedAt } : prev));
+      logInfo('workout_execution', 'execution_finalization_succeeded', {
         programId: execution.programId,
         executionId: execution.executionId,
         sessionIndex: execution.sessionIndex,
-        status: result.status,
+        status: result.executionStatus,
       });
-      return result.status;
+      return { ok: true, result };
     } catch (error) {
-      logWarn('workout_execution', 'finish_failed', { error });
-      logWarn('workout_execution', 'execution_finish_failed', {
+      logWarn('workout_execution', 'execution_finalization_failed', {
         programId: execution.programId,
         executionId: execution.executionId,
         sessionIndex: execution.sessionIndex,
@@ -294,7 +286,7 @@ export function useWorkoutExecution(program: WorkoutProgramSnapshot | null, time
         reason: errorReason(error),
         errorClass: errorClass(error),
       });
-      return null;
+      return { ok: false, error };
     }
   }, [uid, execution]);
 
@@ -327,6 +319,6 @@ export function useWorkoutExecution(program: WorkoutProgramSnapshot | null, time
 
   return {
     execution, starting, startError, workoutStartedAtMs,
-    start, adoptExecution, recordSet, skipSet, skipExercise, completeCardio, finish, abandon, abandonExecutionById,
+    start, adoptExecution, recordSet, skipSet, skipExercise, finalize, abandon, abandonExecutionById,
   };
 }

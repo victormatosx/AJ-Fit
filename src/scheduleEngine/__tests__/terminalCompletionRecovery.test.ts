@@ -24,7 +24,7 @@ describe('terminal Execution -> pending Schedule process-death recovery', () => 
   it('checks the exact durable Schedule event before idempotently resuming completion', () => {
     expect(service).toContain('export async function hasScheduledSessionCompletion');
     const recovery = hook.slice(hook.indexOf('// Process-death recovery, case B:'), hook.indexOf('const timezone ='));
-    expect(recovery).toContain('await completeScheduledSession');
+    expect(recovery).toContain('await finalizeWorkoutSession({ executionId: candidate.executionId })');
     expect(recovery).toContain('candidate.scheduledLocalDate');
     expect(recovery).toContain('candidate.sessionIndex');
   });
@@ -35,21 +35,14 @@ describe('terminal Execution -> pending Schedule process-death recovery', () => 
     expect(hook).toContain("AppState.addEventListener('change'");
   });
 
-  it('coalesces foreground recovery with an explicit retry only while the same Schedule fact is in flight', () => {
-    expect(service).toContain('scheduledSessionCompletionsInFlight.get(key)');
-    expect(service).toContain('scheduledSessionCompletionsInFlight.set(key, operation)');
-    expect(service).toContain('scheduledSessionCompletionsInFlight.delete(key)');
-    expect(service).toContain('void operation.then(release, release)');
+  it('uses the atomic finalizer instead of the legacy Schedule grant pipeline', () => {
+    const recovery = hook.slice(hook.indexOf('// Process-death recovery, case B:'), hook.indexOf('const timezone ='));
+    expect(recovery).toContain('finalizeWorkoutSession');
+    expect(recovery).not.toContain('authorizeWorkoutLifecycleMutation');
   });
 
-  it('recognizes a committed Schedule event before requesting another one-time grant', () => {
-    const attempt = service.slice(
-      service.indexOf('async function completeScheduledSessionAttempt'),
-      service.indexOf('export async function resolveMissedSession'),
-    );
-    expect(attempt.indexOf('await getDoc(eventRef)')).toBeLessThan(
-      attempt.indexOf('await authorizeWorkoutLifecycleMutation'),
-    );
-    expect(attempt).toContain('if ((await getDoc(eventRef)).exists()) return;');
+  it('recognizes a committed Schedule event before invoking recovery', () => {
+    const recovery = hook.slice(hook.indexOf('// Process-death recovery, case B:'), hook.indexOf('const timezone ='));
+    expect(recovery.indexOf('hasScheduledSessionCompletion')).toBeLessThan(recovery.indexOf('finalizeWorkoutSession'));
   });
 });

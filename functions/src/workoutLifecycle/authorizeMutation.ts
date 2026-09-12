@@ -6,8 +6,8 @@ import { HttpsError, type CallableRequest } from 'firebase-functions/v2/https';
 import { db as defaultDb } from '../lib/firebaseAdmin';
 import { requireAuth } from '../lib/auth';
 import { detectMissedSessionGap, resolveWorkoutSchedule } from './scheduleEngine/resolver';
-import type { PendingMissDecision, ScheduleConfig } from './scheduleEngine/types';
-import type { Weekday } from './scheduleEngine/weekday';
+import type { ScheduleAuthorityContext } from './finalizationAuthority';
+import { buildScheduleAuthorityContext, prescribedExecutionCounts } from './finalizationAuthority';
 import { generateWorkoutPrescription } from './prescriptionEngine/workoutPrescription/engine';
 import type { FinalWorkoutPlan, QuestionnaireAnswers } from './prescriptionEngine/workoutPrescription/types';
 import { buildPrescriptionGenerationContext } from './prescriptionContext';
@@ -235,13 +235,6 @@ function assertNotBackdated(scheduledLocalDate: string, timezone: string, now: D
   }
 }
 
-interface ScheduleAuthorityContext {
-  config: ScheduleConfig;
-  state: { nextSessionIndex: number; cursorDate: string; pendingMissDecision: PendingMissDecision | null; lastCompletedAt: string | null } | null;
-  activatedAtLocalDate: string;
-  sessionCount: number;
-}
-
 async function loadScheduleAuthorityContext(
   uid: string,
   bundle: Awaited<ReturnType<typeof activeBundle>>,
@@ -253,81 +246,12 @@ async function loadScheduleAuthorityContext(
     root.collection('workoutPrograms').doc(bundle.state.activeContentIdentity)
       .collection('scheduleState').doc(bundle.state.activeProgramInstanceId).get(),
   ]);
-  const scheduleConfigData = scheduleConfigSnapshot.data() ?? {};
-  const snapshotInputs = plainObject(bundle.instance.prescriptionInputSnapshot?.inputs)
-    ? bundle.instance.prescriptionInputSnapshot.inputs as Record<string, unknown>
-    : {};
-  // Modern plans materialize the executable calendar in `weeklySchedule`.
-  // The questionnaire snapshot describes availability and can be broader
-  // than the prescribed schedule; using it here while the client uses the
-  // plan made the two resolvers disagree about whether a miss existed.
-  const prescribedTrainingDays = Array.isArray(bundle.program.weeklySchedule)
-    ? bundle.program.weeklySchedule.flatMap((item: unknown) =>
-      plainObject(item) && item.state === 'TRAINING' && typeof item.weekday === 'string'
-        ? [item.weekday]
-        : [])
-    : [];
-  const configuredDays = prescribedTrainingDays.length > 0
-    ? prescribedTrainingDays
-    : Array.isArray(snapshotInputs.trainingDays) && snapshotInputs.trainingDays.length > 0
-    ? snapshotInputs.trainingDays
-    : Array.isArray(scheduleConfigData.trainingDays) ? scheduleConfigData.trainingDays : [];
-  const trainingDays = configuredDays.filter((item): item is Weekday => typeof item === 'string');
-  const timezone = typeof scheduleConfigData.timezone === 'string' ? scheduleConfigData.timezone : 'UTC';
-  const activatedAtLocalDate = localDate((bundle.instance.activatedAt as Timestamp).toDate(), timezone);
-  const sessionCount = Number.isInteger(bundle.program.prescribedTrainingFrequency)
-    && bundle.program.prescribedTrainingFrequency > 0
-    ? bundle.program.prescribedTrainingFrequency
-    : Number.isInteger(bundle.program.prescribedStructuredDays)
-      && bundle.program.prescribedStructuredDays > 0
-      ? bundle.program.prescribedStructuredDays
-      : Array.isArray(bundle.program.sessions) ? bundle.program.sessions.length : 0;
-  const stateData = stateSnapshot.exists ? stateSnapshot.data()! : null;
-  return {
-    config: { trainingDays, timezone, scheduleVersion: 1 },
-    state: stateData ? {
-      nextSessionIndex: stateData.nextSessionIndex,
-      cursorDate: stateData.cursorDate,
-      pendingMissDecision: stateData.pendingMissDecision ?? null,
-      lastCompletedAt: stateData.lastCompletedAt ?? null,
-    } : null,
-    activatedAtLocalDate,
-    sessionCount,
-  };
-}
-
-function prescribedExecutionCounts(
-  execution: DocumentData,
-  session: DocumentData,
-  expectedInstanceId: string,
-): { completed: number; prescribed: number } | null {
-  if (execution.programInstanceId !== expectedInstanceId || !Number.isInteger(execution.sessionIndex)) return null;
-  if (!Array.isArray(session?.exercises) || !Array.isArray(execution.exercises)) return null;
-  if (execution.exercises.length !== session.exercises.length || session.exercises.length === 0) return null;
-  let completed = 0;
-  let prescribed = 0;
-  const seenExercises = new Set<number>();
-  for (const record of execution.exercises) {
-    if (!plainObject(record) || !Number.isInteger(record.exerciseIndex) || seenExercises.has(record.exerciseIndex as number)) return null;
-    const index = record.exerciseIndex as number;
-    const expected = session.exercises[index];
-    const prescribedExerciseId = typeof record.prescribedExerciseId === 'string'
-      ? record.prescribedExerciseId : record.exerciseId;
-    if (!expected || prescribedExerciseId !== expected.exerciseId || !Array.isArray(record.sets)) return null;
-    seenExercises.add(index);
-    const setCount = Number.isInteger(expected.sets) ? expected.sets : 1;
-    if (record.sets.length !== setCount) return null;
-    prescribed += setCount;
-    const seenSets = new Set<number>();
-    for (const set of record.sets) {
-      if (!plainObject(set) || !Number.isInteger(set.setIndex) || seenSets.has(set.setIndex as number)) return null;
-      const setIndex = set.setIndex as number;
-      if (setIndex < 0 || setIndex >= setCount || !['PENDING', 'COMPLETED', 'SKIPPED'].includes(String(set.status))) return null;
-      seenSets.add(setIndex);
-      if (set.status === 'COMPLETED') completed += 1;
-    }
-  }
-  return prescribed > 0 ? { completed, prescribed } : null;
+  return buildScheduleAuthorityContext({
+    scheduleConfigData: scheduleConfigSnapshot.data() ?? {},
+    stateData: stateSnapshot.exists ? stateSnapshot.data()! : null,
+    instance: bundle.instance,
+    program: bundle.program,
+  });
 }
 
 function qualifyingExecution(execution: DocumentData, session: DocumentData, expectedInstanceId: string): boolean {

@@ -28,9 +28,9 @@ describe('workout durable-completion visual contract', () => {
   });
 
   it('Execution and Schedule are both awaited before success is confirmed', () => {
-    const completion = shell.slice(shell.indexOf('completeWorkoutSessionFlow({'), shell.indexOf("logInfo('workout_performance', 'finish_flow_end'"));
-    expect(completion).toContain('await execution.finish()');
-    expect(completion).toContain('schedule.completeSession');
+    const completion = shell.slice(shell.indexOf('const finalized = await execution.finalize'), shell.indexOf("logInfo('workout_performance', 'finalize_request_end'"));
+    expect(completion).toContain('await execution.finalize(actualCardioDurationSeconds)');
+    expect(completion).not.toContain('schedule.completeSession');
     expect(completion).toContain("if (result === 'COMPLETED')");
     expect(shell).toContain("completionConfirmed={workoutCompletionResult === 'COMPLETED'");
   });

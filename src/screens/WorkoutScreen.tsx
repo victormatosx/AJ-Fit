@@ -119,13 +119,13 @@ type Props = {
    */
   workoutStartedAtMs?: number | null;
   /**
-   * Fires once, the moment the session is ready for the durable finish chain
-   * (`execution.finish()` -> `completeScheduledSession()` -> lifecycle) —
+   * Fires once, the moment the session is ready for the atomic server-side
+   * `finalizeWorkoutSession` durable boundary —
    * distinct from `onDone` (which also fires on an early exit/X tap). This is
    * what the Schedule Engine listens to advance the rotation. `recovery: true`
    * means this fired from this screen's INITIAL mount state (a resumed
    * session that was already fully done — strength-only, or cardio already
-   * durably COMPLETED — when the app died before `finish()` ran last time),
+   * durably COMPLETED — when the app died before finalization returned),
    * not from a fresh user action just now (docs — Cardio Finisher Completion
    * Recovery hardening; used only for observability, never changes behavior).
    */
@@ -354,14 +354,12 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
   // died (only `finish()` itself never ran) opens straight on the
   // finisher/completion screen instead of replaying finished exercises —
   // the `finished` effect below still fires `onSessionCompleted` exactly
-  // once from this initial state, so the durable finish chain
-  // (execution.finish -> schedule.completeSession -> lifecycle) re-runs and
-  // self-heals regardless of how far it got before the process died
-  // (finishWorkoutExecution/completeScheduledSession are both idempotent).
+  // once from this initial state, so `finalizeWorkoutSession` re-runs and
+  // self-heals atomically and idempotently after process death.
   //
   // Cardio Finisher Completion Recovery hardening (2026-09): the same
   // self-heal must also cover "cardio was durably marked COMPLETED
-  // (`hydration.cardioCompleted`) but the app died before `finish()` ran" —
+  // (`hydration.cardioCompleted`) but the app died before finalization" —
   // never re-show a blank/ready cardio timer for an already-finished cardio
   // attempt. `!cardioFinisher` (no cardio on this plan at all) and
   // `cardioAlreadyCompleted` (cardio done, only `finish()` is pending) are
@@ -811,7 +809,13 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
             }}
           />
         )}
-        onCardioCompleted={onCardioCompleted}
+        onCardioCompleted={onCardioCompleted ? async (actualDurationSeconds) => {
+          const result = await onCardioCompleted(actualDurationSeconds);
+          // Cardio now crosses the complete durable boundary itself. Prevent
+          // the generic `finished` effect from issuing a second request.
+          if (result.ok) completionSignaledRef.current = true;
+          return result;
+        } : undefined}
         onFinish={(actualDurationSeconds) => {
           logInfo('workout', 'cardio_finished', {
             templateId: plan.templateId,

@@ -27,6 +27,7 @@ import { onTrustedWorkoutLifecycleEventCreated } from './telemetry/trustedWorkou
 import { authorizeWorkoutLifecycleMutationHandler } from './workoutLifecycle/authorizeMutation';
 import { applyExerciseSubstitutionHandler } from './workoutLifecycle/exerciseSubstitution';
 import { completeWorkoutCardioHandler } from './workoutLifecycle/completeWorkoutCardio';
+import { finalizeWorkoutSessionHandler } from './workoutLifecycle/finalizeWorkoutSession';
 import {
   releasePushDeviceHandler,
   syncPushDeviceHandler,
@@ -124,6 +125,12 @@ export const applyExerciseSubstitution = onCall(
 export const completeWorkoutCardio = onCall(
   { enforceAppCheck: true },
   completeWorkoutCardioHandler,
+);
+
+/** Atomic durable boundary for cardio (when prescribed), Execution and Schedule. */
+export const finalizeWorkoutSession = onCall(
+  { enforceAppCheck: true },
+  finalizeWorkoutSessionHandler,
 );
 
 /** Trusted operational projection sourced only from the immutable backend-authoritative domain ledger. */

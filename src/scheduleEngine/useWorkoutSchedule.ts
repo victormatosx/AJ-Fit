@@ -3,13 +3,13 @@ import { AppState, type AppStateStatus } from 'react-native';
 import { useAuth } from '../state/AuthContext';
 import { errorClass, errorCode, logInfo, logWarn } from '../lib/logger';
 import {
-  completeScheduledSession,
   ensureScheduleConfigFromQuestionnaire,
   hasScheduledSessionCompletion,
   loadScheduleConfig,
   resolveMissedSession,
   resolveTodaysSchedule,
 } from '../services/workoutSchedule';
+import { finalizeWorkoutSession } from '../services/finalizeWorkoutSession';
 import { listExecutionsForProgram, type PersistedWorkoutExecution } from '../services/workoutExecutions';
 import { normalizeWeekdays, trainingDaysValid } from '../lib/questionnaireSchema';
 import { localDateInTimezone } from './localDate';
@@ -40,14 +40,6 @@ export interface WorkoutScheduleController {
   config: ScheduleConfig | null;
   loading: boolean;
   reload: () => Promise<void>;
-  /**
-   * Call once the active WorkoutScreen session actually finishes.
-   * `scheduledLocalDate` must be the FINISHED execution's own
-   * `scheduledLocalDate` (docs §14) — never recomputed as "today" here,
-   * otherwise a session started on one calendar day and finished after local
-   * midnight (or reconciled later) would silently credit the wrong day.
-   */
-  completeSession: (sessionIndex: number, scheduledLocalDate: string) => Promise<boolean>;
   /** Resolves a pending miss decision. Returns whether it actually succeeded — callers must not advance their own flow (e.g. opening the start confirmation) on a `false` result. */
   resolveMiss: (decision: MissDecision) => Promise<boolean>;
 }
@@ -146,16 +138,7 @@ export function useWorkoutSchedule(program: WorkoutProgramSnapshot | null): Work
             scheduledLocalDate: candidate.scheduledLocalDate,
           }))) {
             logInfo('workout_schedule', 'terminal_execution_schedule_recovery_started', {});
-            await completeScheduledSession({
-              uid,
-              programId,
-              ...(programInstanceId ? { programInstanceId } : {}),
-              sessionIndex: candidate.sessionIndex,
-              sessionCount,
-              scheduledLocalDate: candidate.scheduledLocalDate,
-              trainingDays: effectiveConfig.trainingDays,
-              activatedAtLocalDate,
-            });
+            await finalizeWorkoutSession({ executionId: candidate.executionId });
             logInfo('workout_schedule', 'terminal_execution_schedule_recovery_completed', {});
           }
         } catch (error) {
@@ -224,48 +207,6 @@ export function useWorkoutSchedule(program: WorkoutProgramSnapshot | null): Work
     return () => subscription.remove();
   }, [reloadAfterCompletion]);
 
-  const completeSession = useCallback(async (sessionIndex: number, scheduledLocalDate: string) => {
-    if (!uid || !programId || sessionCount === 0) return false;
-    // Both required by `completeScheduledSession` to derive the expected
-    // first-ever session correctly (no silent `?? 0` fallback there
-    // anymore) — without them there is no valid resolved schedule to
-    // complete against, so fail closed exactly like the guards above.
-    if (!activatedAtLocalDate || !config?.trainingDays?.length) return false;
-    // Diagnostic instrumentation (Phase 2, Part F) — technical fields only.
-    logInfo('workout_schedule', 'schedule_completion_started', { programId, sessionIndex });
-    const scheduleStartedAtMs = Date.now();
-    logInfo('workout_performance', 'schedule_start', { timestampMs: scheduleStartedAtMs });
-    try {
-      await completeScheduledSession({
-        uid, programId, ...(programInstanceId ? { programInstanceId } : {}), sessionIndex, sessionCount,
-        scheduledLocalDate, trainingDays: config.trainingDays, activatedAtLocalDate,
-      });
-      logInfo('workout_performance', 'schedule_end', {
-        timestampMs: Date.now(),
-        durationMs: Date.now() - scheduleStartedAtMs,
-        success: true,
-      });
-      logInfo('workout_schedule', 'schedule_completion_succeeded', { programId, sessionIndex });
-      reloadAfterCompletion();
-      return true;
-    } catch (error) {
-      logInfo('workout_performance', 'schedule_end', {
-        timestampMs: Date.now(),
-        durationMs: Date.now() - scheduleStartedAtMs,
-        success: false,
-      });
-      logWarn('workout_schedule', 'schedule_complete_failed', { error });
-      logWarn('workout_schedule', 'schedule_completion_failed', {
-        programId,
-        sessionIndex,
-        errorCode: errorCode(error),
-        errorClass: errorClass(error),
-      });
-      reloadAfterCompletion();
-      return false;
-    }
-  }, [uid, programId, programInstanceId, sessionCount, config, activatedAtLocalDate, reloadAfterCompletion]);
-
   const resolveMiss = useCallback(async (decision: MissDecision) => {
     if (!uid || !programId || sessionCount === 0) return false;
     const timezone = config?.timezone ?? deviceTimezone();
@@ -281,5 +222,5 @@ export function useWorkoutSchedule(program: WorkoutProgramSnapshot | null): Work
     }
   }, [uid, programId, programInstanceId, sessionCount, config, reload]);
 
-  return { resolution, config, loading, reload, completeSession, resolveMiss };
+  return { resolution, config, loading, reload, resolveMiss };
 }

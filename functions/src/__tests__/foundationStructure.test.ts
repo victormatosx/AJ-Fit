@@ -102,6 +102,7 @@ describe('Photo Vault backend foundation — Phase 3 structural guarantees', () 
       'createVault',
       'dispatchTestNotification',
       'evaluateDailyWorkoutNotifications',
+      'finalizeWorkoutSession',
       'onAccountDeletionRequested',
       'onTrustedWorkoutLifecycleEventCreated',
       'reconcileNotificationReceipts',
@@ -243,7 +244,7 @@ describe('Photo Vault backend foundation — Phase 3 structural guarantees', () 
       'src/accountDeletion/reconciliation/scheduler.ts',
     ].map(readCode).join('\n');
 
-    expect(allEndpointSources.match(/enforceAppCheck\s*:\s*true/g)).toHaveLength(13);
+    expect(allEndpointSources.match(/enforceAppCheck\s*:\s*true/g)).toHaveLength(14);
     expect(allEndpointSources).not.toMatch(/consumeAppCheckToken\s*:\s*true/);
   });
 

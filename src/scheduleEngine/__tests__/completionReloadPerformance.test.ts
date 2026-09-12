@@ -5,20 +5,15 @@ const hook = readFileSync(new URL('../useWorkoutSchedule.ts', import.meta.url), 
 const code = hook.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
 
 describe('useWorkoutSchedule — post-completion reload boundary', () => {
-  it('returns durable Schedule success without awaiting its React projection reload', () => {
-    const start = code.indexOf('const completeSession = useCallback');
-    const end = code.indexOf('const resolveMiss = useCallback', start);
-    const completeSession = code.slice(start, end);
-
-    expect(completeSession).toContain('await completeScheduledSession');
-    expect(completeSession).toMatch(/reloadAfterCompletion\(\);\s*return true;/);
-    expect(completeSession).not.toContain('await reloadAfterCompletion()');
-    expect(completeSession).not.toMatch(/finally\s*\{[\s\S]*await reload\(\)/);
+  it('has no client-side normal Schedule completion mutation', () => {
+    expect(code).not.toContain('const completeSession = useCallback');
+    expect(code).not.toContain('completeScheduledSession');
+    expect(code).toContain('await finalizeWorkoutSession({ executionId: candidate.executionId })');
   });
 
   it('retains the background reload Promise and handles its rejection', () => {
     const start = code.indexOf('const reloadAfterCompletion = useCallback');
-    const end = code.indexOf('const completeSession = useCallback', start);
+    const end = code.indexOf('const resolveMiss = useCallback', start);
     const reload = code.slice(start, end);
 
     expect(reload).toContain('completionReloadRef.current = operation');
