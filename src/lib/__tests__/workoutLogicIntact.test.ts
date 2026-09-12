@@ -378,9 +378,16 @@ describe('WorkoutScreen source — sub-sheet and confirm modal are never both vi
   });
 
   it('advances the confirmation modal to blocking feedback and closes it only after success', () => {
+    // Loading is presented on the pressed confirm button itself (same
+    // pattern as the discard confirm button) rather than swapping the whole
+    // dialog for a centered spinner — the title/body/buttons stay mounted
+    // and only the pressed button's icon/text switch to the spinner state.
     expect(WORKOUT_SRC).toContain("t('substitution.applying')");
     expect(WORKOUT_SRC).toContain('if (!substitutionPending) setPendingSub(null);');
-    expect(WORKOUT_SRC).toContain('accessibilityState={{ busy: true }}');
+    expect(WORKOUT_SRC).toContain("substitutionPendingScope === 'all'");
+    expect(WORKOUT_SRC).toContain("substitutionPendingScope === 'once'");
+    expect(WORKOUT_SRC).toContain('opacity: substitutionPending ? 0.6 : 1');
+    expect(WORKOUT_SRC).toContain('disabled={substitutionPending}');
     expect(WORKOUT_SRC.indexOf('if (!result.ok) {')).toBeLessThan(
       WORKOUT_SRC.indexOf('setPendingSub(null);', WORKOUT_SRC.indexOf('if (!result.ok) {')),
     );
