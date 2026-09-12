@@ -3,7 +3,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { initializeTestEnvironment, type RulesTestEnvironment } from '@firebase/rules-unit-testing';
-import { doc, setDoc, Timestamp } from 'firebase/firestore';
+import { doc, setDoc, Timestamp, updateDoc } from 'firebase/firestore';
 
 const enabled = process.env.PROGRESSION_V2_INTEGRATION === '1';
 const PROJECT_ID = 'ajfit-rules-test';
@@ -152,6 +152,16 @@ describe.skipIf(!enabled)('Progression Engine V2 — real Firestore Emulator int
     const now = new Date(ACTIVATED_AT_MS + 30 * MS_PER_DAY);
     const decision = await evaluateProgressionV2ForUser(UID, now);
     expect(decision).toEqual({ type: 'NO_ACTION', reason: 'IN_PROGRESS_EXECUTION' });
+
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await updateDoc(doc(ctx.firestore(), 'users', UID, 'workoutExecutions', 'exec-in-progress'), {
+        status: 'ABANDONED',
+        finishedAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
+      });
+    });
+    const refreshedDecision = await evaluateProgressionV2ForUser(UID, now);
+    expect(refreshedDecision).not.toEqual({ type: 'NO_ACTION', reason: 'IN_PROGRESS_EXECUTION' });
   });
 
   it('executions from a Program Instance outside the current cycle never count toward eligibility', async () => {

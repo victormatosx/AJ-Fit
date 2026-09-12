@@ -121,6 +121,19 @@ describe('buildEvolutionTickerContent — PROGRESSING marquee', () => {
     if (content.mode !== 'MARQUEE') return;
     expect(content.items).toContainEqual({ label: '', value: 'state.evaluationPaused' });
   });
+
+  it('drops the in-progress copy once a post-discard projection has real progression data', () => {
+    const before = buildEvolutionTickerContent({
+      kind: 'PROGRESSING',
+      summary: summary({ proximity: null, activeDays: null, sessionsCompleted: null, adherenceQuality: null }),
+    }, t);
+    const after = buildEvolutionTickerContent({
+      kind: 'PROGRESSING',
+      summary: summary({ proximity: 'BUILDING', activeDays: 3, sessionsCompleted: 1 }),
+    }, t);
+    expect(JSON.stringify(before)).toContain('state.evaluationPaused');
+    expect(JSON.stringify(after)).not.toContain('state.evaluationPaused');
+  });
 });
 
 describe('buildEvolutionTickerContent — ACTION states reach the same unlock flow', () => {

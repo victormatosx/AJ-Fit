@@ -23,6 +23,10 @@ const APP_SHELL_SRC = readFileSync(
   resolve(__dirname, '../../screens/AppShell.tsx'),
   'utf8',
 );
+const EVOLUTION_HOOK_SRC = readFileSync(
+  resolve(__dirname, '../../workoutEvolution/useWorkoutEvolution.ts'),
+  'utf8',
+);
 
 describe('WorkoutScreen source — X opens a choice sheet, never abandons directly', () => {
   it('the header close Pressable only opens the exit sheet — no onAbandon/abandon call in its onPress', () => {
@@ -79,9 +83,11 @@ describe('WorkoutScreen source — Descartar requires confirmation and bypasses 
       WORKOUT_SRC.indexOf('\n\n  // Reconciles immediately on return to foreground'),
     );
     expect(confirmDiscardBlock).toContain('await onAbandon?.()');
+    expect(confirmDiscardBlock).toContain('await onDiscarded();');
     expect(confirmDiscardBlock).toContain('setAbandoning(false);');
     expect(confirmDiscardBlock).toContain('if (!result || result.ok) {');
-    expect(confirmDiscardBlock).toContain('onDiscarded();');
+    expect(confirmDiscardBlock.indexOf('await onAbandon?.()'))
+      .toBeLessThan(confirmDiscardBlock.indexOf('await onDiscarded();'));
     expect(confirmDiscardBlock).not.toContain('onDone();');
     expect(confirmDiscardBlock).toContain('setDiscardError(true);');
     // The older bug: navigation living in an unconditional `finally`.
@@ -90,13 +96,30 @@ describe('WorkoutScreen source — Descartar requires confirmation and bypasses 
 
   it('AppShell gives discard a local teardown callback, never the finish callback', () => {
     const discardHandler = APP_SHELL_SRC.slice(
-      APP_SHELL_SRC.indexOf('const leaveDiscardedWorkout = () => {'),
-      APP_SHELL_SRC.indexOf('\n\n  return (', APP_SHELL_SRC.indexOf('const leaveDiscardedWorkout = () => {')),
+      APP_SHELL_SRC.indexOf('const leaveDiscardedWorkout = async () => {'),
+      APP_SHELL_SRC.indexOf('\n\n  return (', APP_SHELL_SRC.indexOf('const leaveDiscardedWorkout = async () => {')),
     );
     expect(discardHandler).toContain('setWorkoutInProgress(false);');
     expect(discardHandler).toContain("setTab('home');");
+    const discardFlow = APP_SHELL_SRC.slice(
+      APP_SHELL_SRC.indexOf('const discardWorkout = () =>'),
+      APP_SHELL_SRC.indexOf('const leaveDiscardedWorkout = async () =>'),
+    );
+    expect(discardFlow).toContain('runWorkoutDiscardFlow');
+    expect(discardFlow).toContain('abandon: execution.abandon');
+    expect(discardFlow).toContain('refreshProjection: evolution.refreshProjection');
+    expect(APP_SHELL_SRC).toContain('onAbandon={discardWorkout}');
     expect(discardHandler).not.toContain('runWorkoutCompletion');
+    expect(discardHandler).not.toContain('schedule.reload');
+    expect(discardHandler).not.toContain('activitySnapshot.reload');
+    expect(discardHandler).not.toContain('frequencyWindow.reload');
+    expect(discardHandler).not.toContain('processWorkoutLifecycleAfterSession');
     expect(APP_SHELL_SRC).toContain('onDiscarded={leaveDiscardedWorkout}');
+  });
+
+  it('the explicit projection barrier propagates read failure to the safe discard orchestrator', () => {
+    expect(EVOLUTION_HOOK_SRC).toContain("load({ skipReconcile: true, propagateError: true })");
+    expect(EVOLUTION_HOOK_SRC).toContain('if (options?.propagateError) throw error;');
   });
 
   it('the discard confirm sheet renders the error and never auto-navigates on failure', () => {

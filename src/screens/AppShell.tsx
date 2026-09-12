@@ -67,6 +67,7 @@ import {
   runWorkoutCompletionFollowUp,
   runWorkoutCompletionAttempt,
   runWorkoutCompletionSingleFlight,
+  runWorkoutDiscardFlow,
   type WorkoutCompletionResult,
 } from '../workoutLifecycle/finishFlow';
 import { workoutFinalizationFailureStage } from '../services/finalizeWorkoutSession';
@@ -962,7 +963,17 @@ function AppShellContent({
   // the local workout surface; routing it through finishWorkoutSession would
   // ask the finalizer to finish an ABANDONED record; server authority
   // correctly rejects that as execution_not_finishable.
-  const leaveDiscardedWorkout = () => {
+  const discardWorkout = () => runWorkoutDiscardFlow({
+      abandon: execution.abandon,
+      refreshProjection: evolution.refreshProjection,
+      onProjectionFailure: (error) => {
+        logWarn('workout_evolution', 'discard_projection_refresh_failed', {
+          errorCode: errorCode(error),
+        });
+      },
+    });
+
+  const leaveDiscardedWorkout = async () => {
     endWorkoutSession();
     setWorkoutInProgress(false);
     setWorkoutStartAttempt(null);
@@ -1057,7 +1068,7 @@ function AppShellContent({
               // (then calls `onDiscarded`, never the finish callback) —
               // abandon must be a durable, persisted fact before the UI
               // treats the session as gone. Never fire-and-forget here.
-              onAbandon={() => execution.abandon()}
+              onAbandon={discardWorkout}
               onCardioCompleted={async (actualDurationSeconds) => {
                 const result = await runWorkoutCompletion(false, actualDurationSeconds);
                 return result === 'COMPLETED'

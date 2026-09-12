@@ -115,7 +115,11 @@ export function useWorkoutEvolution(): WorkoutEvolutionController {
   // failure) can never clobber a newer call's already-applied result.
   const loadGenerationRef = useRef(0);
 
-  const load = useCallback(async (options?: { trigger?: 'FOREGROUND'; skipReconcile?: boolean }) => {
+  const load = useCallback(async (options?: {
+    trigger?: 'FOREGROUND';
+    skipReconcile?: boolean;
+    propagateError?: boolean;
+  }) => {
     if (!user) return;
     if (!hasLoadedOnce.current) setLoading(true);
     reconcileInFlight.current = true;
@@ -211,6 +215,10 @@ export function useWorkoutEvolution(): WorkoutEvolutionController {
           commitViewModel(next);
         }
       }
+      // Background/cold-start refreshes remain self-contained. Explicit
+      // projection barriers (finish/discard) opt in so their orchestrator can
+      // diagnose the secondary failure and choose safe navigation behavior.
+      if (options?.propagateError) throw error;
     } finally {
       hasLoadedOnce.current = true;
       setLoading(false);
@@ -362,7 +370,7 @@ export function useWorkoutEvolution(): WorkoutEvolutionController {
   }, [user, viewModel, commitViewModel]);
 
   const refreshProjection = useCallback(
-    () => load({ skipReconcile: true }),
+    () => load({ skipReconcile: true, propagateError: true }),
     [load],
   );
 

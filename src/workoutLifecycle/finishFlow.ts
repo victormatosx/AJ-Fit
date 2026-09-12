@@ -60,6 +60,53 @@ export interface WorkoutHomeProjectionSyncOutcome {
   frequency: 'COMPLETED' | 'FAILED';
 }
 
+export type WorkoutDiscardProjectionSyncOutcome = 'COMPLETED' | 'FAILED';
+export type WorkoutDiscardResult = { ok: true } | { ok: false; error: unknown };
+
+/**
+ * Recomputes the one client projection that depends on an execution being
+ * IN_PROGRESS after abandon has already committed. A projection failure is
+ * secondary: report it, preserve the durable ABANDONED fact, and let the
+ * caller leave WorkoutScreen. Cold-start/foreground reconciliation remains
+ * the retry path for the retained projection.
+ */
+export async function runWorkoutDiscardProjectionSync(input: {
+  refreshProjection: () => Promise<void>;
+  onFailure?: (error: unknown) => void;
+}): Promise<WorkoutDiscardProjectionSyncOutcome> {
+  try {
+    await input.refreshProjection();
+    return 'COMPLETED';
+  } catch (error) {
+    try {
+      input.onFailure?.(error);
+    } catch {
+      // Diagnostics must never turn a handled projection failure into a
+      // navigation blocker after abandon is already durable.
+    }
+    return 'FAILED';
+  }
+}
+
+/**
+ * Durable discard boundary. Projection work is never attempted when abandon
+ * fails; once abandon succeeds, projection failure is deliberately absorbed
+ * so the caller can navigate without undoing or contradicting Firestore.
+ */
+export async function runWorkoutDiscardFlow(input: {
+  abandon: () => Promise<WorkoutDiscardResult>;
+  refreshProjection: () => Promise<void>;
+  onProjectionFailure?: (error: unknown) => void;
+}): Promise<WorkoutDiscardResult> {
+  const abandoned = await input.abandon();
+  if (!abandoned.ok) return abandoned;
+  await runWorkoutDiscardProjectionSync({
+    refreshProjection: input.refreshProjection,
+    onFailure: input.onProjectionFailure,
+  });
+  return abandoned;
+}
+
 /**
  * Refreshes only the three projections that must be coherent before the
  * persistent Home surface becomes visible again. Callers start this after

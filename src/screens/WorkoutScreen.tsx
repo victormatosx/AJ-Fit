@@ -95,7 +95,7 @@ type Props = {
   onDone: () => void;
   onRetryCompletion: () => void;
   /** Leaves an execution that was durably abandoned, without running the finish chain. */
-  onDiscarded: () => void;
+  onDiscarded: () => Promise<void>;
   onMinimize?: () => void;
   /** Which session in `plan.sessions` to run — decided by the Schedule Engine (docs/workout-lifecycle/03_SCHEDULE_ENGINE.md). Defaults to 0 for callers that haven't wired schedule resolution yet. */
   sessionIndex?: number;
@@ -459,14 +459,14 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
     setAbandoning(true);
     void (async () => {
       const result = await onAbandon?.();
-      setAbandoning(false);
       if (!result || result.ok) {
         setExitSheet(null);
         void clearCardioSession();
-        onDiscarded();
+        await onDiscarded();
       } else {
         setDiscardError(true);
       }
+      setAbandoning(false);
     })();
   };
 

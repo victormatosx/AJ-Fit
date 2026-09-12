@@ -4,6 +4,8 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   applyWorkoutCompletionNavigation,
   runWorkoutHomeProjectionSync,
+  runWorkoutDiscardFlow,
+  runWorkoutDiscardProjectionSync,
   runWorkoutCompletionSingleFlight,
   type WorkoutCompletionResult,
 } from '../../workoutLifecycle/finishFlow';
@@ -120,5 +122,62 @@ describe('completed workout -> Profile synchronization', () => {
     const finish = appShell.slice(start, appShell.indexOf('// Abandon is already', start));
     expect(finish).toContain('const result = workoutCompletionResult');
     expect(finish).toContain('?? (workoutCompletionRef.current');
+  });
+});
+
+describe('discarded workout -> evolution projection synchronization', () => {
+  it('awaits exactly one projection refresh before the caller may reveal Home', async () => {
+    const calls: string[] = [];
+    let release!: () => void;
+    const pending = new Promise<void>((resolve) => { release = resolve; });
+    const refreshProjection = vi.fn(async () => {
+      calls.push('refresh:start');
+      await pending;
+      calls.push('refresh:end');
+    });
+
+    const sync = runWorkoutDiscardProjectionSync({ refreshProjection });
+    await Promise.resolve();
+    expect(calls).toEqual(['refresh:start']);
+    expect(refreshProjection).toHaveBeenCalledOnce();
+
+    release();
+    await expect(sync).resolves.toBe('COMPLETED');
+    expect(calls).toEqual(['refresh:start', 'refresh:end']);
+  });
+
+  it('treats projection failure as secondary and reports it without rejecting', async () => {
+    const error = new Error('projection unavailable');
+    const onFailure = vi.fn();
+    await expect(runWorkoutDiscardProjectionSync({
+      refreshProjection: async () => { throw error; },
+      onFailure,
+    })).resolves.toBe('FAILED');
+    expect(onFailure).toHaveBeenCalledOnce();
+    expect(onFailure).toHaveBeenCalledWith(error);
+  });
+
+  it('does not refresh when durable abandon fails', async () => {
+    const error = new Error('abandon failed');
+    const refreshProjection = vi.fn(async () => undefined);
+    await expect(runWorkoutDiscardFlow({
+      abandon: async () => ({ ok: false, error }),
+      refreshProjection,
+    })).resolves.toEqual({ ok: false, error });
+    expect(refreshProjection).not.toHaveBeenCalled();
+  });
+
+  it('refreshes exactly once after abandon and preserves success when projection fails', async () => {
+    const calls: string[] = [];
+    const error = new Error('projection failed');
+    const onProjectionFailure = vi.fn();
+    const result = await runWorkoutDiscardFlow({
+      abandon: async () => { calls.push('abandon'); return { ok: true }; },
+      refreshProjection: async () => { calls.push('refresh'); throw error; },
+      onProjectionFailure,
+    });
+    expect(result).toEqual({ ok: true });
+    expect(calls).toEqual(['abandon', 'refresh']);
+    expect(onProjectionFailure).toHaveBeenCalledWith(error);
   });
 });

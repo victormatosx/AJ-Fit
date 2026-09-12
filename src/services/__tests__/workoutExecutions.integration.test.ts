@@ -521,8 +521,19 @@ describe.skipIf(!enabled)('Workout Execution & History — real Firestore Emulat
     await abandonWorkoutExecution(UID, started.executionId);
     const loaded = await loadWorkoutExecution(UID, started.executionId);
     expect(loaded?.status).toBe('ABANDONED');
+    const pointer = await loadActiveExecutionPointer(UID);
+    expect(pointer).toBeNull();
+    const inProgress = await getDocs(query(
+      collection(mocks.db as never, 'users', UID, 'workoutExecutions'),
+      where('status', '==', 'IN_PROGRESS'),
+    ));
+    expect(inProgress.empty).toBe(true);
     const state = await getDoc(doc(mocks.db as never, 'users', UID, 'workoutPrograms', 'wpg_test1', 'scheduleState', 'current'));
     expect(state.data()?.nextSessionIndex).toBe(0); // untouched
+    const scheduleEvents = await getDocs(collection(
+      mocks.db as never, 'users', UID, 'workoutPrograms', 'wpg_test1', 'scheduleEvents',
+    ));
+    expect(scheduleEvents.empty).toBe(true);
   });
 
   // Cardio Finisher Completion Recovery hardening (2026-09,
@@ -956,8 +967,15 @@ describe.skipIf(!enabled)('Workout Execution & History — real Firestore Emulat
     await abandonWorkoutExecution(UID, started.executionId);
 
     const restarted = await startOrResumeWorkoutExecution({ uid: UID, program: program(), sessionIndex: 0, scheduledLocalDate: '2026-08-25' });
+    expect(restarted.executionId).toBe(started.executionId);
     expect(restarted.status).toBe('IN_PROGRESS');
     expect(restarted.exercises[0].sets[0]).toMatchObject({ status: 'PENDING', actualReps: null, weightKg: null });
+    const inProgress = await getDocs(query(
+      collection(mocks.db as never, 'users', UID, 'workoutExecutions'),
+      where('status', '==', 'IN_PROGRESS'),
+    ));
+    expect(inProgress.docs.map((item) => item.id)).toEqual([restarted.executionId]);
+    expect((await loadActiveExecutionPointer(UID))?.executionId).toBe(restarted.executionId);
   });
 
   // ── P0 integrity fix (2026-09) — workoutExecutionState/current mutex ────
