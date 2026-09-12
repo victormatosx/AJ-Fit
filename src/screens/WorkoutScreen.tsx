@@ -84,6 +84,10 @@ import {
   persistCardioSession,
   readCardioSession,
 } from '../services/cardioSessionStorage';
+import {
+  beginSubstitutionFlight,
+  commitConfirmedSubstitution,
+} from '../workoutExecution/substitutionSingleFlight';
 
 type Props = {
   plan: FinalWorkoutPlan;
@@ -241,6 +245,7 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
 
   const { theme } = useTheme();
   const exitDialogTheme = darkTheme;
+  const substitutionDialogTheme = darkTheme;
   const { t, i18n } = useTranslation('workout');
   // Exit sheet ('choice' = Minimizar/Descartar/Cancelar, 'discard' = the
   // destructive confirmation) — X no longer abandons directly (docs §8 P0
@@ -408,6 +413,9 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
   });
   const [substitutionError, setSubstitutionError] = useState(false);
   const [substitutionPending, setSubstitutionPending] = useState(false);
+  const substitutionFlightRef = useRef<Promise<
+    { ok: true } | { ok: false; error: unknown }
+  > | null>(null);
   const locale = i18n.language === 'pt-BR' ? 'ptBR' : i18n.language === 'es' ? 'es' : 'en';
 
   // Own-video priority (item #7): fetch the exercise that is ACTUALLY being
@@ -676,28 +684,81 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
   };
 
   const applySub = async (option: SubOption, scope: 'once' | 'all') => {
-    setPendingSub(null);
     setSubSheet(false);
-    if (!onApplySubstitution) return;
-    const isRevertToOriginal = option.db === baseEx.id;
+    const exerciseIndex = exIdx;
+    const prescribedExerciseId = baseEx.id;
     const requestedScope: ExerciseSubstitutionScope = scope === 'all' ? 'PERMANENT' : 'SESSION';
+    const confirmedAtMs = Date.now();
+    let requestStartedAtMs = confirmedAtMs;
+    const flight = beginSubstitutionFlight(substitutionFlightRef, async () => {
+      requestStartedAtMs = Date.now();
+      logInfo('workout_substitution_performance', 'substitution_request_start', {
+        timestampMs: requestStartedAtMs,
+        durationFromConfirmedMs: requestStartedAtMs - confirmedAtMs,
+        scope: requestedScope,
+      });
+      if (!onApplySubstitution) {
+        return { ok: false as const, error: new Error('SUBSTITUTION_HANDLER_UNAVAILABLE') };
+      }
+      return onApplySubstitution({
+        exerciseIndex,
+        requestedExerciseId: option.db,
+        scope: requestedScope,
+      });
+    });
+    // A synchronous ref, rather than React state, is the concurrency gate.
+    // `disabled` remains useful feedback, but is not relied upon for safety.
+    if (flight.kind === 'reused') return;
+
     setSubstitutionError(false);
     setSubstitutionPending(true);
-    const result = await onApplySubstitution({
-      exerciseIndex: exIdx,
-      requestedExerciseId: option.db,
+    logInfo('workout_substitution_performance', 'substitution_confirmed', {
+      timestampMs: confirmedAtMs,
+      scope: requestedScope,
+    });
+    let result: { ok: true } | { ok: false; error: unknown };
+    try {
+      result = await flight.promise;
+    } catch (error) {
+      result = { ok: false, error };
+    }
+    const requestEndedAtMs = Date.now();
+    logInfo('workout_substitution_performance', 'substitution_request_end', {
+      timestampMs: requestEndedAtMs,
+      requestDurationMs: requestEndedAtMs - requestStartedAtMs,
+      totalDurationMs: requestEndedAtMs - confirmedAtMs,
+      outcome: result.ok ? 'success' : 'failure',
       scope: requestedScope,
     });
     setSubstitutionPending(false);
     if (!result.ok) {
       setSubstitutionError(true);
+      requestAnimationFrame(() => {
+        const updatedAtMs = Date.now();
+        logInfo('workout_substitution_performance', 'substitution_ui_updated', {
+          timestampMs: updatedAtMs,
+          totalDurationMs: updatedAtMs - confirmedAtMs,
+          outcome: 'failure',
+          scope: requestedScope,
+        });
+      });
       return;
     }
-    setSubstitutions((current) => {
-      const next = { ...current };
-      if (isRevertToOriginal) delete next[exIdx];
-      else next[exIdx] = { exerciseId: option.db, scope: requestedScope };
-      return next;
+    setSubstitutions((current) => commitConfirmedSubstitution(current, {
+      exerciseIndex,
+      prescribedExerciseId,
+      requestedExerciseId: option.db,
+      scope: requestedScope,
+    }));
+    setPendingSub(null);
+    requestAnimationFrame(() => {
+      const updatedAtMs = Date.now();
+      logInfo('workout_substitution_performance', 'substitution_ui_updated', {
+        timestampMs: updatedAtMs,
+        totalDurationMs: updatedAtMs - confirmedAtMs,
+        outcome: 'success',
+        scope: requestedScope,
+      });
     });
   };
 
@@ -1570,108 +1631,186 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
         <Modal
           visible={!!pendingSub}
           transparent
-          animationType="fade"
-          onRequestClose={() => setPendingSub(null)}
+          animationType="none"
+          statusBarTranslucent
+          onRequestClose={() => {
+            if (!substitutionPending) setPendingSub(null);
+          }}
         >
           <Pressable
-            onPress={() => setPendingSub(null)}
+            accessibilityRole="button"
+            accessibilityLabel={t('substitution.actions.cancel')}
+            onPress={() => {
+              if (!substitutionPending) setPendingSub(null);
+            }}
             style={{
               flex: 1,
-              backgroundColor: theme.colors.workoutDialogBackdrop,
-              alignItems: 'center',
+              backgroundColor: substitutionDialogTheme.colors.overlayStrong,
               justifyContent: 'center',
-              paddingHorizontal: 28,
+              paddingHorizontal: spacing[6],
             }}
           >
             <Pressable
+              accessibilityRole="none"
               onPress={(e) => e.stopPropagation()}
               style={{
                 width: '100%',
-                borderRadius: 20,
-                padding: 24,
-                backgroundColor: theme.colors.workoutDialogBackground,
+                maxWidth: sizes.modalMaxWidth,
+                alignSelf: 'center',
+                borderRadius: radii.xl,
+                borderBottomRightRadius: 0,
+                overflow: 'hidden',
                 borderWidth: 1,
-                borderColor: theme.colors.primaryBorderMuted,
-                shadowColor: theme.colors.primary,
-                shadowOpacity: 0.25,
-                shadowRadius: 40,
-                shadowOffset: { width: 0, height: 0 },
-                elevation: 12,
+                borderColor: substitutionDialogTheme.colors.primaryBorderQuiet,
+                backgroundColor: substitutionDialogTheme.colors.background,
+                shadowColor: substitutionDialogTheme.colors.primary,
+                shadowOpacity: 0.18,
+                shadowRadius: 20,
+                shadowOffset: { width: 0, height: 10 },
+                elevation: 10,
               }}
             >
-              <Slash style={{ marginBottom: 12 }}>
-                {t('substitution.confirmTitle').toUpperCase()}
-              </Slash>
-              {/* The full sentence lives in a single i18n key with two
-                  placeholders so word order matches each locale (e.g.
-                  "X in place of Y" in EN). Bold styling is applied via the
-                  outer Text style so it wraps around the interpolated names. */}
-              <Text
-                style={{
-                  fontSize: 15,
-                  lineHeight: 22,
-                  color: theme.colors.textStrong,
-                  fontFamily: theme.fonts.uiBold,
-                }}
+              <LinearGradient
+                colors={substitutionDialogTheme.gradients.poster}
+                locations={[0, 0.45, 1]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={{ padding: spacing[5] }}
               >
-                {t('substitution.replaceQuestion', {
-                  replacement: pendingSub
-                    ? pendingSub.name
-                    : '',
-                  original: baseEx.name,
-                })}
-              </Text>
-              {substitutionError && (
-                <Text style={{ fontSize: 12.5, color: theme.colors.dangerText, marginTop: 10 }}>
-                  {t('substitution.error')}
-                </Text>
-              )}
-              <View style={{ marginTop: 22, gap: 10, opacity: substitutionPending ? 0.6 : 1 }}>
-                <Pressable
-                  disabled={substitutionPending}
-                  onPress={() => pendingSub && applySub(pendingSub, 'once')}
-                  style={{
-                    paddingVertical: 15,
-                    borderRadius: 14,
-                    backgroundColor: theme.colors.controlBackground,
-                    borderWidth: 1,
-                    borderColor: theme.colors.borderStrong,
-                    alignItems: 'center',
-                  }}
+                <HudCorners color={substitutionDialogTheme.colors.hudCorner} />
+                <OutlineNumber
+                  size={118}
+                  color={substitutionDialogTheme.colors.decorativeOutline}
+                  style={{ position: 'absolute', top: -28, right: -8, opacity: 0.28 }}
                 >
-                  <Text style={{ fontSize: 14.5, fontFamily: theme.fonts.uiSemi, color: theme.colors.textPrimary }}>
-                    {t('substitution.actions.once')}
-                  </Text>
-                </Pressable>
-                <Pressable
-                  disabled={substitutionPending}
-                  onPress={() => pendingSub && applySub(pendingSub, 'all')}
-                  style={{
-                    paddingVertical: 15,
-                    borderRadius: 14,
-                    backgroundColor: theme.colors.primary,
-                    alignItems: 'center',
-                    shadowColor: theme.colors.primary,
-                    shadowOpacity: 0.45,
-                    shadowRadius: 24,
-                    shadowOffset: { width: 0, height: 8 },
-                    elevation: 8,
-                  }}
-                >
-                  <Text style={{ fontSize: 14.5, fontFamily: theme.fonts.uiBold, color: theme.colors.primaryForeground }}>
-                    {t('substitution.actions.permanent')}
-                  </Text>
-                </Pressable>
-                <Pressable
-                  disabled={substitutionPending}
-                  onPress={() => setPendingSub(null)}
-                  style={{ paddingVertical: 11, alignItems: 'center' }}
-                >
-                  <Text style={{ fontSize: 13, color: theme.colors.textMuted, fontFamily: theme.fonts.uiMed }}>
-                    {t('substitution.actions.cancel')}
-                  </Text>
-                </Pressable>
-              </View>
+                  {String(exIdx + 1).padStart(2, '0')}
+                </OutlineNumber>
+                {substitutionPending ? (
+                  <View
+                    accessibilityRole="progressbar"
+                    accessibilityLabel={t('substitution.applying')}
+                    accessibilityState={{ busy: true }}
+                    style={{ alignItems: 'center', paddingVertical: spacing[6], gap: 14 }}
+                  >
+                    <ActivityIndicator color={substitutionDialogTheme.colors.primaryEmphasis} />
+                    <Display size={22} color={substitutionDialogTheme.colors.textPrimary}>
+                      {t('substitution.applying').toUpperCase()}
+                    </Display>
+                  </View>
+                ) : (
+                  <>
+                    <Slash
+                      accentColor={substitutionDialogTheme.colors.primaryEmphasis}
+                      textColor={substitutionDialogTheme.colors.textFaint}
+                    >
+                      {t('substitution.sheetTitle').toUpperCase()}
+                    </Slash>
+                    <Display
+                      size={26}
+                      color={substitutionDialogTheme.colors.textPrimary}
+                      style={{ marginTop: 9 }}
+                    >
+                      {t('substitution.confirmTitle').toUpperCase()}
+                    </Display>
+                    <Text
+                      style={{
+                        marginTop: 8,
+                        fontFamily: substitutionDialogTheme.fonts.ui,
+                        fontSize: 13,
+                        lineHeight: 19,
+                        color: substitutionDialogTheme.colors.textSecondaryStrong,
+                      }}
+                    >
+                      {t('substitution.replaceQuestion', {
+                        replacement: pendingSub ? pendingSub.name : '',
+                        original: baseEx.name,
+                      })}
+                    </Text>
+                    {substitutionError && (
+                      <Text
+                        accessibilityRole="alert"
+                        style={{
+                          marginTop: 8,
+                          fontFamily: substitutionDialogTheme.fonts.ui,
+                          fontSize: 12,
+                          lineHeight: 17,
+                          color: substitutionDialogTheme.colors.warning,
+                        }}
+                      >
+                        {t('substitution.error')}
+                      </Text>
+                    )}
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={t('substitution.actions.permanent')}
+                      disabled={substitutionPending}
+                      onPress={() => pendingSub && applySub(pendingSub, 'all')}
+                      style={{
+                        height: 48,
+                        marginTop: 18,
+                        borderRadius: 10,
+                        borderBottomRightRadius: 0,
+                        backgroundColor: substitutionDialogTheme.colors.inverseSurface,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 9,
+                      }}
+                    >
+                      <Icon name="swap" size={12} color={substitutionDialogTheme.colors.inverseForeground} />
+                      <Text style={{
+                        color: substitutionDialogTheme.colors.inverseForeground,
+                        fontFamily: substitutionDialogTheme.fonts.display,
+                        fontSize: 15,
+                        letterSpacing: 1.4,
+                        textTransform: 'uppercase',
+                      }}>
+                        {t('substitution.actions.permanent')}
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={t('substitution.actions.once')}
+                      disabled={substitutionPending}
+                      onPress={() => pendingSub && applySub(pendingSub, 'once')}
+                      style={{
+                        height: 48,
+                        marginTop: 10,
+                        paddingHorizontal: 14,
+                        borderRadius: 10,
+                        borderBottomRightRadius: 0,
+                        borderWidth: 1,
+                        borderColor: substitutionDialogTheme.colors.controlBorder,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Text style={{
+                        color: substitutionDialogTheme.colors.textSecondaryStrong,
+                        fontFamily: substitutionDialogTheme.fonts.ui,
+                        fontSize: 13,
+                      }}>
+                        {t('substitution.actions.once')}
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={t('substitution.actions.cancel')}
+                      disabled={substitutionPending}
+                      onPress={() => setPendingSub(null)}
+                      style={{ alignSelf: 'center', paddingHorizontal: 18, paddingTop: 13, paddingBottom: 2 }}
+                    >
+                      <Text style={{
+                        color: substitutionDialogTheme.colors.textMuted,
+                        fontFamily: substitutionDialogTheme.fonts.ui,
+                        fontSize: 13,
+                      }}>
+                        {t('substitution.actions.cancel')}
+                      </Text>
+                    </Pressable>
+                  </>
+                )}
+              </LinearGradient>
             </Pressable>
           </Pressable>
         </Modal>

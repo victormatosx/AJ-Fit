@@ -208,6 +208,7 @@
     "sheetTitle": "Swap exercise",
     "sheetSubtitle": "Same muscle group · pick a variation",
     "loading": "Loading substitutions...",
+    "applying": "Swapping exercise...",
     "empty": "No substitutions are available for this exercise.",
     "loadError": "Couldn't load substitutions.",
     "labels": {

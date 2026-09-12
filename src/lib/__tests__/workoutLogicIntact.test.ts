@@ -124,12 +124,16 @@ describe('WorkoutScreen source — plan-driven IDs and constrained substitutions
   it('never applies a substitution the backend has not confirmed — no local override map keyed by exercise id', () => {
     expect(WORKOUT_SRC).toContain('const applied = substitutions[index];');
     expect(WORKOUT_SRC).not.toMatch(/const candidate = sessionSubs\[id\] \|\| permSubs\[id\]/);
-    expect(WORKOUT_SRC).toContain('if (!onApplySubstitution) return;');
+    expect(WORKOUT_SRC).toContain("error: new Error('SUBSTITUTION_HANDLER_UNAVAILABLE')");
   });
 
   it('substitution eligibility is always re-validated server-side before applySub updates local state', () => {
-    expect(WORKOUT_SRC).toContain('const result = await onApplySubstitution({');
-    expect(WORKOUT_SRC).toContain('if (!result.ok) {\n      setSubstitutionError(true);\n      return;\n    }');
+    const handlerCall = WORKOUT_SRC.indexOf('return onApplySubstitution({');
+    const resultCheck = WORKOUT_SRC.indexOf('if (!result.ok) {', handlerCall);
+    const localCommit = WORKOUT_SRC.indexOf('commitConfirmedSubstitution(current, {', resultCheck);
+    expect(handlerCall).toBeGreaterThanOrEqual(0);
+    expect(resultCheck).toBeGreaterThan(handlerCall);
+    expect(localCommit).toBeGreaterThan(resultCheck);
   });
 });
 
@@ -373,10 +377,36 @@ describe('WorkoutScreen source — sub-sheet and confirm modal are never both vi
     expect(handlerMatch).not.toBeNull();
   });
 
-  it('applySub still closes both modals together when a substitution is confirmed', () => {
-    expect(WORKOUT_SRC).toMatch(
-      /setPendingSub\(null\);\s*\n\s*setSubSheet\(false\);/,
+  it('advances the confirmation modal to blocking feedback and closes it only after success', () => {
+    expect(WORKOUT_SRC).toContain("t('substitution.applying')");
+    expect(WORKOUT_SRC).toContain('if (!substitutionPending) setPendingSub(null);');
+    expect(WORKOUT_SRC).toContain('accessibilityState={{ busy: true }}');
+    expect(WORKOUT_SRC.indexOf('if (!result.ok) {')).toBeLessThan(
+      WORKOUT_SRC.indexOf('setPendingSub(null);', WORKOUT_SRC.indexOf('if (!result.ok) {')),
     );
+  });
+
+  it('uses the same dark poster modal pattern as Start Workout confirmation', () => {
+    const modal = WORKOUT_SRC.slice(
+      WORKOUT_SRC.indexOf('{/* PENDING SUB CONFIRM */}'),
+      WORKOUT_SRC.indexOf('{/* QUEUE SHEET */}'),
+    );
+    expect(modal).toContain('animationType="none"');
+    expect(modal).toContain('substitutionDialogTheme.gradients.poster');
+    expect(modal).toContain('<HudCorners color={substitutionDialogTheme.colors.hudCorner} />');
+    expect(modal).toContain('borderBottomRightRadius: 0');
+    expect(modal).toContain('backgroundColor: substitutionDialogTheme.colors.inverseSurface');
+    expect(modal).toContain('fontFamily: substitutionDialogTheme.fonts.display');
+  });
+
+  it('instruments the full confirm-to-render substitution timeline without exercise ids', () => {
+    for (const marker of [
+      'substitution_confirmed',
+      'substitution_request_start',
+      'substitution_request_end',
+      'substitution_ui_updated',
+    ]) expect(WORKOUT_SRC).toContain(`'${marker}'`);
+    expect(WORKOUT_SRC).toContain('totalDurationMs: updatedAtMs - confirmedAtMs');
   });
 });
 
