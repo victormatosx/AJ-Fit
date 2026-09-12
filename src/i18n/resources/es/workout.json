@@ -185,6 +185,8 @@
     "titleLine1": "Hecho.",
     "titleLine2": "Más fuerte.",
     "backHome": "Volver al inicio",
+    "share": "Compartir",
+    "shareMessage": "Entreno completado en AJ Fit — {{time}} de entreno, {{sets}} series.",
     "finishing": "Finalizando entreno…",
     "finishFailed": "No se pudo finalizar el entreno.",
     "retry": "Intentar de nuevo",

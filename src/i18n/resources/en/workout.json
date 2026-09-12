@@ -185,6 +185,8 @@
     "titleLine1": "Done.",
     "titleLine2": "Stronger.",
     "backHome": "Back to home",
+    "share": "Share",
+    "shareMessage": "Workout completed in AJ Fit — {{time}} trained, {{sets}} sets.",
     "finishing": "Finishing workout…",
     "finishFailed": "We couldn't finish the workout.",
     "retry": "Try again",

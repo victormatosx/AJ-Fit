@@ -8,24 +8,88 @@ export type WorkoutCompletionResult =
   | 'LIFECYCLE_FOLLOW_UP_FAILED'
   | 'COMPLETED';
 
+export interface WorkoutCompletionAttemptRef {
+  current: Promise<WorkoutCompletionResult> | null;
+}
+
+/**
+ * Keeps exactly one completion attempt in flight. A settled Promise is never
+ * retained: a recoverable result must permit a genuinely new attempt over the
+ * same durable Execution, while a double tap during the attempt reuses it.
+ */
+export function runWorkoutCompletionAttempt(
+  ref: WorkoutCompletionAttemptRef,
+  task: () => Promise<WorkoutCompletionResult>,
+): Promise<WorkoutCompletionResult> {
+  if (ref.current) return ref.current;
+
+  // Start on the next microtask so the ref is installed before any callback
+  // can settle (including a synchronous test double or an immediate failure).
+  const attempt = Promise.resolve().then(task);
+  ref.current = attempt;
+  const release = () => {
+    if (ref.current === attempt) ref.current = null;
+  };
+  void attempt.then(release, release);
+  return attempt;
+}
+
 export async function completeWorkoutSessionFlow(input: {
   finishExecution: () => Promise<'COMPLETED' | 'PARTIALLY_COMPLETED' | null>;
   completeSchedule: () => Promise<boolean>;
-  afterSchedule?: () => Promise<void>;
 }): Promise<WorkoutCompletionResult> {
   const executionStatus = await input.finishExecution();
   if (!executionStatus) return 'EXECUTION_FAILED';
   const scheduleCompleted = await input.completeSchedule();
   if (!scheduleCompleted) return 'SCHEDULE_FAILED';
-  try {
-    await input.afterSchedule?.();
-  } catch {
-    // Execution and Schedule are durable facts by this point. A lifecycle
-    // follow-up is deliberately retryable and must never make a completed
-    // workout look unfinished to the caller.
-    return 'LIFECYCLE_FOLLOW_UP_FAILED';
-  }
+  // This is the durable-completion boundary: finishExecution has committed
+  // the terminal Execution + mutex release, and completeSchedule has
+  // committed the Schedule event/state. Lifecycle reconciliation and UI
+  // projections are intentionally orchestrated after this Promise resolves.
   return 'COMPLETED';
+}
+
+export interface WorkoutCompletionFollowUpOutcome {
+  lifecycle: 'COMPLETED' | 'FAILED';
+  projections: 'COMPLETED' | 'FAILED';
+}
+
+/**
+ * Runs the single post-workout lifecycle pipeline outside the durable finish
+ * critical path. Every rejection is consumed and reported through the
+ * optional callbacks, so callers can retain the returned Promise without an
+ * unhandled rejection. Cold-start/foreground reconciliation remains the
+ * durable retry mechanism if this best-effort in-process attempt fails or
+ * the process is terminated.
+ */
+export async function runWorkoutCompletionFollowUp(input: {
+  reconcileLifecycle: () => Promise<void>;
+  refreshProjections: () => Promise<void>;
+  onLifecycleFailure?: (error: unknown) => void;
+  onProjectionFailure?: (error: unknown) => void;
+}): Promise<WorkoutCompletionFollowUpOutcome> {
+  const reportFailure = (handler: ((error: unknown) => void) | undefined, error: unknown) => {
+    try {
+      handler?.(error);
+    } catch {
+      // Observability must never resurrect a handled background rejection.
+    }
+  };
+  let lifecycle: WorkoutCompletionFollowUpOutcome['lifecycle'] = 'COMPLETED';
+  let projections: WorkoutCompletionFollowUpOutcome['projections'] = 'COMPLETED';
+  try {
+    await input.reconcileLifecycle();
+  } catch (error) {
+    lifecycle = 'FAILED';
+    reportFailure(input.onLifecycleFailure, error);
+  }
+  try {
+    await input.refreshProjections();
+  } catch (error) {
+    projections = 'FAILED';
+    reportFailure(input.onProjectionFailure, error);
+  }
+  return { lifecycle, projections };
 }
 
 /**

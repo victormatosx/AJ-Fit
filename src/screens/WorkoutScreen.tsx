@@ -11,6 +11,7 @@ import {
   Easing,
   Keyboard,
   ActivityIndicator,
+  Share,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -19,6 +20,7 @@ import { ScreenBg } from '../components/ui/ScreenBg';
 import { Display, Slash, MonoLabel } from '../components/ui/Display';
 import { Card, HudCorners } from '../components/ui/Card';
 import { CtaButton } from '../components/ui/CtaButton';
+import { FullScreenLoading } from '../components/ui/FullScreenLoading';
 import { CardioSessionContent } from '../components/workout/CardioSessionContent';
 import { SegBar } from '../components/ui/SegBar';
 import { Icon } from '../components/ui/Icon';
@@ -82,7 +84,11 @@ import {
 
 type Props = {
   plan: FinalWorkoutPlan;
+  /** Leaves the completion screen only after the durable finish chain succeeds. */
   onDone: () => void;
+  onRetryCompletion: () => void;
+  /** Leaves an execution that was durably abandoned, without running the finish chain. */
+  onDiscarded: () => void;
   onMinimize?: () => void;
   /** Which session in `plan.sessions` to run — decided by the Schedule Engine (docs/workout-lifecycle/03_SCHEDULE_ENGINE.md). Defaults to 0 for callers that haven't wired schedule resolution yet. */
   sessionIndex?: number;
@@ -131,6 +137,10 @@ type Props = {
    * Completion Recovery hardening).
    */
   finishing?: boolean;
+  /** True only after Execution terminal + Schedule completion are both durable. */
+  completionConfirmed?: boolean;
+  /** Timestamp captured at the durable boundary, used only for DEV performance telemetry. */
+  durableCompletionReachedAtMs?: number | null;
   /** Durable finish or schedule completion failed; keep this screen mounted and turn the CTA into an explicit retry. */
   completionFailed?: boolean;
   /** Fires once a set's weight is actually logged (docs/workout-lifecycle/09_WORKOUT_EXECUTION_AND_HISTORY.md) — `exerciseIndex` matches this exercise's position in `plan.sessions[sessionIndex].exercises`, the same identity the Execution record uses. */
@@ -139,7 +149,7 @@ type Props = {
    * Fires when the user confirms "discard" from the exit sheet — distinct
    * from a normal finish; the Schedule Engine must never advance because of
    * this (docs §36). Returns a typed result so this screen can tell success
-   * from failure: `onDone` may only run after `{ ok: true }` (docs §8) —
+   * from failure: `onDiscarded` may only run after `{ ok: true }` (docs §8) —
    * abandon must be a durable, persisted fact before the UI treats the
    * session as gone, never a fire-and-forget best effort racing the
    * navigation, and a failed abandon must never be silently treated as one.
@@ -206,7 +216,7 @@ function translateMuscleGroup(tLoose: LooseT, target: string): string {
   return target;
 }
 
-export function WorkoutScreen({ plan, onDone, onMinimize, sessionIndex = 0, execution, workoutStartedAtMs, onSessionCompleted, finishing, completionFailed, onSetLogged, onAbandon, onCardioCompleted, manualSubstitutionContext, onApplySubstitution }: Props) {
+export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, onMinimize, sessionIndex = 0, execution, workoutStartedAtMs, onSessionCompleted, finishing, completionConfirmed, durableCompletionReachedAtMs, completionFailed, onSetLogged, onAbandon, onCardioCompleted, manualSubstitutionContext, onApplySubstitution }: Props) {
   const { theme } = useTheme();
   const exitDialogTheme = darkTheme;
   const { t, i18n } = useTranslation('workout');
@@ -419,7 +429,7 @@ export function WorkoutScreen({ plan, onDone, onMinimize, sessionIndex = 0, exec
       if (!result || result.ok) {
         setExitSheet(null);
         void clearCardioSession();
-        onDone();
+        onDiscarded();
       } else {
         setDiscardError(true);
       }
@@ -695,8 +705,8 @@ export function WorkoutScreen({ plan, onDone, onMinimize, sessionIndex = 0, exec
   );
 
   // Mount-once-per-finish signal for the Schedule Engine — separate from
-  // `onDone`, which also fires on an early exit (the X button) and must
-  // never be read as a completion.
+  // `onDone`, which is only the completed-workout CTA, and from the
+  // early-exit `onDiscarded` teardown.
   useEffect(() => {
     if (finished && !completionSignaledRef.current) {
       completionSignaledRef.current = true;
@@ -705,19 +715,45 @@ export function WorkoutScreen({ plan, onDone, onMinimize, sessionIndex = 0, exec
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [finished]);
 
+  const successVisibleRef = useRef(false);
+  useEffect(() => {
+    const visible = finished && !!completionConfirmed && !completionFailed;
+    if (visible && !successVisibleRef.current) {
+      const visibleAtMs = Date.now();
+      logInfo('workout_performance', 'success_screen_visible', {
+        timestampMs: visibleAtMs,
+        durationFromDurableMs: durableCompletionReachedAtMs == null
+          ? null
+          : Math.max(0, visibleAtMs - durableCompletionReachedAtMs),
+      });
+    }
+    successVisibleRef.current = visible;
+  }, [completionConfirmed, completionFailed, durableCompletionReachedAtMs, finished]);
+
   if (finished) {
+    // `finished` is local workout progress, not a persistence fact. The very
+    // first render after the last set/cardio must therefore be loading even
+    // before AppShell's completion effect has had a chance to run.
+    if (!completionConfirmed && !completionFailed) {
+      return (
+        <FullScreenLoading
+          accessibilityLabel={t('done.finishing')}
+          message={t('done.finishing')}
+        />
+      );
+    }
+    if (completionFailed) {
+      return <WorkoutCompletionError retrying={!!finishing} onRetry={onRetryCompletion} />;
+    }
     return (
       <WorkoutDone
         elapsed={elapsed}
         doneSets={doneSets}
         totalSets={totalSets}
-        finishing={!!finishing}
-        completionFailed={!!completionFailed}
         onDone={() => {
           // Diagnostic instrumentation (Phase 2, Part F) — only the true
           // post-completion navigation (this branch only renders once
-          // `finished` is true), never the early-exit/abandon path, which
-          // reuses the same `onDone` prop from a different call site.
+          // `finished` is true), never the early-exit/abandon path.
           logInfo('workout', 'workout_done_cta_pressed', {
             templateId: plan.templateId,
             sessionIndex,
@@ -2327,6 +2363,9 @@ function CardioScreen({
     if (finishingRef.current) return;
     finishingRef.current = true;
     setFinishState('persisting');
+    logInfo('workout_performance', 'finish_ui_loading_started', { timestampMs: Date.now(), source: 'cardio' });
+    const cardioPersistStartedAtMs = Date.now();
+    logInfo('workout_performance', 'cardio_persist_start', { timestampMs: cardioPersistStartedAtMs });
     logInfo('workout', 'cardio_finish_requested', {});
     // Frozen once, here — a retry after a failure recomputes fresh (the user
     // was still legitimately doing cardio while stuck on the error state),
@@ -2337,6 +2376,11 @@ function CardioScreen({
     const result = onCardioCompleted
       ? await onCardioCompleted(actualDurationSeconds)
       : ({ ok: true } as const);
+    logInfo('workout_performance', 'cardio_persist_end', {
+      timestampMs: Date.now(),
+      durationMs: Date.now() - cardioPersistStartedAtMs,
+      success: result.ok,
+    });
     finishingRef.current = false;
     if (!result.ok) {
       logWarn('workout', 'cardio_finish_ui_failed', {});
@@ -2359,6 +2403,15 @@ function CardioScreen({
   const doneClock = formatCardioClock(elapsed);
   const targetClock = formatCardioClock(session.targetDurationSeconds);
 
+  if (finishState === 'persisting') {
+    return (
+      <FullScreenLoading
+        accessibilityLabel={t('done.finishing')}
+        message={t('done.finishing')}
+      />
+    );
+  }
+
   return (
     <ScreenBg>
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
@@ -2369,7 +2422,7 @@ function CardioScreen({
           targetClock={targetClock}
           remainingClock={formatCardioClock(remaining)}
           progress={progress}
-          finishing={finishState === 'persisting'}
+          finishing={false}
           onClose={handleHeaderClose}
           onSkip={() => void finalizeNow()}
           onStart={handleStart}
@@ -2406,7 +2459,6 @@ function CardioScreen({
         animationType="fade"
         statusBarTranslucent
         onRequestClose={() => {
-          if (finishState === 'persisting') return; // no dismiss mid-flight — see the backdrop Pressable below
           setConfirmSheet(null);
           setFinishState('idle');
         }}
@@ -2415,12 +2467,6 @@ function CardioScreen({
           accessibilityRole="button"
           accessibilityLabel={t('cardioSession.continueCardio')}
           onPress={() => {
-            // A tap on the backdrop while a request is in flight must never
-            // dismiss the modal — the user would lose the only surface that
-            // tells them whether it succeeded (docs — Cardio Finisher
-            // Completion Recovery hardening: never let the UI look done
-            // before the durable write actually is).
-            if (finishState === 'persisting') return;
             setConfirmSheet(null);
             setFinishState('idle');
           }}
@@ -2463,19 +2509,7 @@ function CardioScreen({
                 {t('cardioFinisher.title').toUpperCase()}
               </Slash>
 
-              {finishState === 'persisting' ? (
-                <>
-                  <Display size={26} color={theme.colors.textPrimary} style={{ marginTop: 9 }}>
-                    {t('cardioSession.finishSavingTitle').toUpperCase()}
-                  </Display>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 18 }}>
-                    <ActivityIndicator color={theme.colors.primaryEmphasis} />
-                    <Text style={{ fontFamily: theme.fonts.ui, fontSize: 13, color: theme.colors.textSecondaryStrong, flex: 1 }}>
-                      {t('cardioSession.finishSavingBody')}
-                    </Text>
-                  </View>
-                </>
-              ) : finishState === 'error' ? (
+              {finishState === 'error' ? (
                 <>
                   <Display size={26} color={theme.colors.textPrimary} style={{ marginTop: 9 }}>
                     {t('cardioSession.finishErrorTitle').toUpperCase()}
@@ -3139,21 +3173,20 @@ function WorkoutDone({
   elapsed,
   doneSets,
   totalSets,
-  finishing,
-  completionFailed,
   onDone,
 }: {
   elapsed: number;
   doneSets: number;
   totalSets: number;
-  /** True while the durable finish chain is still in flight — see `Props.finishing`'s doc comment above. */
-  finishing: boolean;
-  completionFailed: boolean;
   onDone: () => void;
 }) {
   const { theme } = useTheme();
   const { t } = useTranslation('workout');
   const fmt = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  const shareWorkout = () => {
+    void Share.share({ message: t('done.shareMessage', { time: fmt(elapsed), sets: `${doneSets}/${totalSets}` }) })
+      .catch((error) => logWarn('workout', 'workout_share_failed', { error }));
+  };
   return (
     <ScreenBg>
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
@@ -3225,46 +3258,69 @@ function WorkoutDone({
           */}
 
           <View style={{ flex: 1 }} />
-          {finishing && (
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 12 }}>
-              <ActivityIndicator color={theme.colors.textSecondaryStrong} />
-              <Text style={{ color: theme.colors.textSecondaryStrong, fontFamily: theme.fonts.ui, fontSize: 13 }}>
-                {t('done.finishing')}
-              </Text>
-            </View>
-          )}
-          {completionFailed && !finishing && (
-            <Text
-              accessibilityRole="alert"
-              style={{ color: theme.colors.danger, fontFamily: theme.fonts.ui, fontSize: 14, textAlign: 'center', marginBottom: 12 }}
-            >
-              {t('done.finishFailed')}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('done.share')}
+            onPress={shareWorkout}
+            style={{
+              minHeight: 50,
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: 10,
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: theme.colors.primaryBorderInteractive,
+              backgroundColor: theme.colors.controlBackground,
+            }}
+          >
+            <Text style={{ color: theme.colors.primaryEmphasis, fontFamily: theme.fonts.display, fontSize: 16, letterSpacing: 1.3, textTransform: 'uppercase' }}>
+              {t('done.share')}
             </Text>
-          )}
+          </Pressable>
           <CtaButton
             onPress={onDone}
-            disabled={finishing}
-            accessibilityLabel={finishing ? t('done.finishing') : completionFailed ? t('done.retry') : t('done.backHome')}
-            accessibilityState={{ disabled: finishing, busy: finishing }}
+            accessibilityLabel={t('done.backHome')}
           >
-            {finishing ? (
-              <ActivityIndicator color={theme.colors.primaryForeground} />
-            ) : (
-              <>
-                <Text
-                  style={{
-                    color: theme.colors.primaryForeground,
-                    fontFamily: theme.fonts.display,
-                    fontSize: 17,
-                    letterSpacing: 1.5,
-                    textTransform: 'uppercase',
-                  }}
-                >
-                  {completionFailed ? t('done.retry') : t('done.backHome')}
-                </Text>
-                <Icon name="arrow-right" size={18} color={theme.colors.primaryForeground} />
-              </>
-            )}
+            <Text
+              style={{
+                color: theme.colors.primaryForeground,
+                fontFamily: theme.fonts.display,
+                fontSize: 17,
+                letterSpacing: 1.5,
+                textTransform: 'uppercase',
+              }}
+            >
+              {t('done.backHome')}
+            </Text>
+            <Icon name="arrow-right" size={18} color={theme.colors.primaryForeground} />
+          </CtaButton>
+        </View>
+      </SafeAreaView>
+    </ScreenBg>
+  );
+}
+
+function WorkoutCompletionError({ retrying, onRetry }: { retrying: boolean; onRetry: () => void }) {
+  const { theme } = useTheme();
+  const { t } = useTranslation('workout');
+  if (retrying) {
+    return <FullScreenLoading accessibilityLabel={t('done.finishing')} message={t('done.finishing')} />;
+  }
+  return (
+    <ScreenBg>
+      <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
+        <View style={{ flex: 1, justifyContent: 'center', paddingHorizontal: 26, gap: 20 }}>
+          <Text
+            accessibilityRole="alert"
+            style={{ color: theme.colors.textPrimary, fontFamily: theme.fonts.uiBold, fontSize: 18, textAlign: 'center' }}
+          >
+            {t('done.finishFailed')}
+          </Text>
+          <CtaButton onPress={onRetry} accessibilityLabel={t('done.retry')}>
+            <Text style={{ color: theme.colors.primaryForeground, fontFamily: theme.fonts.display, fontSize: 17, letterSpacing: 1.5, textTransform: 'uppercase' }}>
+              {t('done.retry')}
+            </Text>
+            <Icon name="swap" size={18} color={theme.colors.primaryForeground} />
           </CtaButton>
         </View>
       </SafeAreaView>

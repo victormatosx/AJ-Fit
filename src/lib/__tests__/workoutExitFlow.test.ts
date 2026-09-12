@@ -19,6 +19,10 @@ const HOOK_SRC = readFileSync(
   resolve(__dirname, '../../workoutExecution/useWorkoutExecution.ts'),
   'utf8',
 );
+const APP_SHELL_SRC = readFileSync(
+  resolve(__dirname, '../../screens/AppShell.tsx'),
+  'utf8',
+);
 
 describe('WorkoutScreen source — X opens a choice sheet, never abandons directly', () => {
   it('the header close Pressable only opens the exit sheet — no onAbandon/abandon call in its onPress', () => {
@@ -68,19 +72,31 @@ describe('WorkoutScreen source — Minimizar performs zero domain mutation', () 
   });
 });
 
-describe('WorkoutScreen source — Descartar requires confirmation and gates onDone on success', () => {
-  it('confirmDiscard awaits onAbandon and only calls onDone when the result is ok', () => {
+describe('WorkoutScreen source — Descartar requires confirmation and bypasses finish', () => {
+  it('confirmDiscard awaits onAbandon and only calls onDiscarded when the result is ok', () => {
     const confirmDiscardBlock = WORKOUT_SRC.slice(
       WORKOUT_SRC.indexOf('const confirmDiscard = () => {'),
-      WORKOUT_SRC.indexOf('return (\n    <ScreenBg>'),
+      WORKOUT_SRC.indexOf('\n\n  // Reconciles immediately on return to foreground'),
     );
     expect(confirmDiscardBlock).toContain('await onAbandon?.()');
     expect(confirmDiscardBlock).toContain('setAbandoning(false);');
     expect(confirmDiscardBlock).toContain('if (!result || result.ok) {');
-    expect(confirmDiscardBlock).toContain('onDone();');
+    expect(confirmDiscardBlock).toContain('onDiscarded();');
+    expect(confirmDiscardBlock).not.toContain('onDone();');
     expect(confirmDiscardBlock).toContain('setDiscardError(true);');
-    // The bug this replaces: onDone() living in an unconditional `finally`.
-    expect(confirmDiscardBlock).not.toMatch(/finally\s*{\s*setAbandoning\(false\);\s*onDone\(\);/);
+    // The older bug: navigation living in an unconditional `finally`.
+    expect(confirmDiscardBlock).not.toMatch(/finally\s*{\s*setAbandoning\(false\);\s*onDiscarded\(\);/);
+  });
+
+  it('AppShell gives discard a local teardown callback, never the finish callback', () => {
+    const discardHandler = APP_SHELL_SRC.slice(
+      APP_SHELL_SRC.indexOf('const leaveDiscardedWorkout = () => {'),
+      APP_SHELL_SRC.indexOf('\n\n  return (', APP_SHELL_SRC.indexOf('const leaveDiscardedWorkout = () => {')),
+    );
+    expect(discardHandler).toContain('setWorkoutInProgress(false);');
+    expect(discardHandler).toContain("setTab('home');");
+    expect(discardHandler).not.toContain('runWorkoutCompletion');
+    expect(APP_SHELL_SRC).toContain('onDiscarded={leaveDiscardedWorkout}');
   });
 
   it('the discard confirm sheet renders the error and never auto-navigates on failure', () => {
@@ -96,7 +112,7 @@ describe('WorkoutScreen source — Descartar requires confirmation and gates onD
   it('re-tapping discard while a previous attempt is pending is a no-op (guards double tap/race)', () => {
     const confirmDiscardBlock = WORKOUT_SRC.slice(
       WORKOUT_SRC.indexOf('const confirmDiscard = () => {'),
-      WORKOUT_SRC.indexOf('return (\n    <ScreenBg>'),
+      WORKOUT_SRC.indexOf('\n\n  // Reconciles immediately on return to foreground'),
     );
     expect(confirmDiscardBlock).toContain('if (abandoning) return;');
   });

@@ -61,6 +61,8 @@ export interface WorkoutEvolutionController {
   /** Device-local UX acknowledgement; never mutates the immutable domain event. */
   acknowledgeAutoActivation: () => Promise<void>;
   refresh: () => Promise<void>;
+  /** Refreshes the React projection only; caller already ran the canonical reconciler. */
+  refreshProjection: () => Promise<void>;
 }
 
 /**
@@ -70,9 +72,9 @@ export interface WorkoutEvolutionController {
  * into one `EvolutionViewModel` via the pure presenter
  * (`buildEvolutionViewModel`). Never recomputes eligibility itself (docs §4/§B).
  *
- * Every initial/realtime/manual refresh delegates to the same idempotent
- * `reconcileWorkoutLifecycle` entry point. Screens never run reconciliation
- * independently.
+ * Cold-start, foreground, and manual recovery delegate to the same idempotent
+ * `reconcileWorkoutLifecycle` entry point. Realtime listeners may refresh only
+ * the projection when their caller already owns reconciliation.
  */
 export function useWorkoutEvolution(): WorkoutEvolutionController {
   const { user } = useAuth();
@@ -113,17 +115,19 @@ export function useWorkoutEvolution(): WorkoutEvolutionController {
   // failure) can never clobber a newer call's already-applied result.
   const loadGenerationRef = useRef(0);
 
-  const load = useCallback(async (options?: { trigger?: 'FOREGROUND' }) => {
+  const load = useCallback(async (options?: { trigger?: 'FOREGROUND'; skipReconcile?: boolean }) => {
     if (!user) return;
     if (!hasLoadedOnce.current) setLoading(true);
     reconcileInFlight.current = true;
     const generation = ++loadGenerationRef.current;
     const isCurrent = () => loadGenerationRef.current === generation;
     try {
-      await reconcileWorkoutLifecycle({
-        uid: user.uid,
-        trigger: options?.trigger ?? (hasLoadedOnce.current ? 'RECOVERY' : 'COLD_START'),
-      });
+      if (!options?.skipReconcile) {
+        await reconcileWorkoutLifecycle({
+          uid: user.uid,
+          trigger: options?.trigger ?? (hasLoadedOnce.current ? 'RECOVERY' : 'COLD_START'),
+        });
+      }
 
       const [lifecycle, pendingAfter, decision] = await Promise.all([
         loadWorkoutLifecycle(user.uid),
@@ -277,7 +281,7 @@ export function useWorkoutEvolution(): WorkoutEvolutionController {
         pendingInitial = false;
         return;
       }
-      void load();
+      void load({ skipReconcile: true });
     };
     const unsubscribeLifecycle = onSnapshot(
       lifecycleRef(user.uid),
@@ -357,8 +361,13 @@ export function useWorkoutEvolution(): WorkoutEvolutionController {
     setDiff(null);
   }, [user, viewModel, commitViewModel]);
 
+  const refreshProjection = useCallback(
+    () => load({ skipReconcile: true }),
+    [load],
+  );
+
   return {
     viewModel, loading, actionPending, actionError, diff, start, defer,
-    acknowledgeAutoActivation, refresh: load,
+    acknowledgeAutoActivation, refresh: load, refreshProjection,
   };
 }

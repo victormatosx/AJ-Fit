@@ -693,8 +693,12 @@ describe.skipIf(!enabled)('Workout Execution & History — real Firestore Emulat
     const second = await finishWorkoutExecution(UID, started.executionId); // double tap
     expect(first.status).toBe(second.status);
 
-    await completeScheduledSession({ uid: UID, programId: 'wpg_test1', sessionIndex: 0, sessionCount: 2, scheduledLocalDate: '2026-08-25', trainingDays: ['MON', 'TUE'], activatedAtLocalDate: '2026-08-24' });
-    await completeScheduledSession({ uid: UID, programId: 'wpg_test1', sessionIndex: 0, sessionCount: 2, scheduledLocalDate: '2026-08-25', trainingDays: ['MON', 'TUE'], activatedAtLocalDate: '2026-08-24' }); // double tap
+    const scheduleInput = { uid: UID, programId: 'wpg_test1', sessionIndex: 0, sessionCount: 2, scheduledLocalDate: '2026-08-25', trainingDays: ['MON', 'TUE'] as const, activatedAtLocalDate: '2026-08-24' };
+    const firstSchedule = completeScheduledSession(scheduleInput);
+    const overlappingRecovery = completeScheduledSession(scheduleInput);
+    expect(overlappingRecovery).toBe(firstSchedule); // foreground recovery + retry share only the active attempt
+    await Promise.all([firstSchedule, overlappingRecovery]);
+    await completeScheduledSession(scheduleInput); // settled response-loss retry reads the immutable event
     const state = await getDoc(doc(mocks.db as never, 'users', UID, 'workoutPrograms', 'wpg_test1', 'scheduleState', 'current'));
     expect(state.data()?.nextSessionIndex).toBe(1); // advanced exactly once, not twice
   });

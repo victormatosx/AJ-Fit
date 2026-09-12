@@ -59,6 +59,9 @@ describe('minimized active workout UX', () => {
     expect(headerStatus).toContain('{restFinished && (');
     expect(headerStatus).toContain('name="arrow-right"');
     expect(headerStatus).toContain('width: restFinished ? 106 : 86');
+    expect(headerStatus).toContain("backgroundColor: 'transparent'");
+    expect(headerStatus).toContain('borderColor: theme.colors.primaryBorderSoft');
+    expect(headerStatus).not.toContain('backgroundColor: theme.colors.primarySurfaceSubtle');
     expect(headerStatus).not.toContain('<LinearGradient');
     expect(headerStatus).not.toContain('shadowOpacity');
   });

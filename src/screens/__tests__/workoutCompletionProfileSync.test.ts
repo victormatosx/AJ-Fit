@@ -15,7 +15,7 @@ describe('completed workout -> Profile synchronization', () => {
     ['EXECUTION_FAILED', false],
     ['SCHEDULE_FAILED', false],
     ['LIFECYCLE_FOLLOW_UP_FAILED', true],
-  ] satisfies Array<[WorkoutCompletionResult, boolean]>)('%s -> Home allowed: %s', (result, allowed) => {
+  ] satisfies [WorkoutCompletionResult, boolean][])('%s -> Home allowed: %s', (result, allowed) => {
     const leaveWorkout = vi.fn();
     expect(applyWorkoutCompletionNavigation(result, leaveWorkout)).toBe(allowed);
     expect(leaveWorkout).toHaveBeenCalledTimes(allowed ? 1 : 0);
@@ -46,15 +46,36 @@ describe('completed workout -> Profile synchronization', () => {
     await expect(runWorkoutCompletionSingleFlight(guard, async () => undefined)).resolves.toBe(true);
   });
 
-  it('refreshes Profile evolution data even when another post-workout follow-up fails', () => {
-    const afterSchedule = appShell.slice(
-      appShell.indexOf('afterSchedule: async () => {'),
-      appShell.indexOf("if (result === 'COMPLETED')"),
+  it('runs one handled background lifecycle follow-up and refreshes projections without a second reconcile', () => {
+    const start = appShell.indexOf('runWorkoutCompletionFollowUp({');
+    const followUp = appShell.slice(
+      start,
+      appShell.indexOf("logInfo('workout_performance', 'finish_flow_end'", start),
     );
 
-    expect(afterSchedule).toContain('finally {');
-    expect(afterSchedule).toContain('evolution.refresh()');
-    expect(afterSchedule).toContain('activitySnapshot.reload()');
-    expect(afterSchedule).toContain('frequencyWindow.reload()');
+    expect(followUp).toContain('processWorkoutLifecycleAfterSession');
+    expect(followUp).toContain('evolution.refreshProjection()');
+    expect(followUp).toContain('activitySnapshot.reload()');
+    expect(followUp).toContain('frequencyWindow.reload()');
+    expect(followUp).not.toContain('evolution.refresh()');
+    expect(followUp).toContain('onLifecycleFailure:');
+    expect(followUp).toContain('onProjectionFailure:');
+  });
+
+  it('marks the durable boundary and retains, but does not await, the background follow-up', () => {
+    const start = appShell.indexOf("if (result === 'COMPLETED')");
+    const end = appShell.indexOf("logInfo('workout_performance', 'finish_flow_end'", start);
+    const durableBranch = appShell.slice(start, end);
+
+    expect(durableBranch).toContain("'durable_completion_reached'");
+    expect(durableBranch).toContain('workoutCompletionFollowUpRef.current = runWorkoutCompletionFollowUp');
+    expect(durableBranch).not.toContain('await runWorkoutCompletionFollowUp');
+  });
+
+  it('uses the settled durable result for Home instead of rerunning completion', () => {
+    const start = appShell.indexOf('const finishWorkoutSession = async () =>');
+    const finish = appShell.slice(start, appShell.indexOf('// Abandon is already', start));
+    expect(finish).toContain('const result = workoutCompletionResult');
+    expect(finish).toContain('?? (workoutCompletionRef.current');
   });
 });

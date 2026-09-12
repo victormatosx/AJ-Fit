@@ -68,7 +68,7 @@ export function WorkoutRestHeaderStatus({
         borderRadius: 13,
         borderWidth: 1,
         borderColor: theme.colors.primaryBorderSoft,
-        backgroundColor: theme.colors.primarySurfaceSubtle,
+        backgroundColor: 'transparent',
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',

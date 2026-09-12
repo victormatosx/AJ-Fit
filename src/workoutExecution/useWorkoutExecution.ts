@@ -258,7 +258,23 @@ export function useWorkoutExecution(program: WorkoutProgramSnapshot | null, time
       sessionIndex: execution.sessionIndex,
     });
     try {
-      await mutationQueueRef.current.flush();
+      const flushStartedAtMs = Date.now();
+      logInfo('workout_performance', 'finish_mutation_flush_start', { timestampMs: flushStartedAtMs });
+      try {
+        await mutationQueueRef.current.flush();
+        logInfo('workout_performance', 'finish_mutation_flush_end', {
+          timestampMs: Date.now(),
+          durationMs: Date.now() - flushStartedAtMs,
+          success: true,
+        });
+      } catch (error) {
+        logInfo('workout_performance', 'finish_mutation_flush_end', {
+          timestampMs: Date.now(),
+          durationMs: Date.now() - flushStartedAtMs,
+          success: false,
+        });
+        throw error;
+      }
       const result = await finishWorkoutExecution(uid, execution.executionId);
       setExecution((prev) => (prev ? { ...prev, status: result.status, finishedAt: prev.finishedAt } : prev));
       logInfo('workout_execution', 'execution_finish_succeeded', {

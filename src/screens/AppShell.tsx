@@ -64,6 +64,8 @@ import { activeExecutionId, abandonWorkoutExecution, loadWorkoutExecution } from
 import {
   applyWorkoutCompletionNavigation,
   completeWorkoutSessionFlow,
+  runWorkoutCompletionFollowUp,
+  runWorkoutCompletionAttempt,
   runWorkoutCompletionSingleFlight,
   type WorkoutCompletionResult,
 } from '../workoutLifecycle/finishFlow';
@@ -77,7 +79,7 @@ import {
 } from '../services/exerciseSubstitution';
 import type { ManualSubstitutionUserContext } from '../services/exerciseSubstitutionCandidates';
 import { EvolutionUnlockScreen } from './EvolutionUnlockScreen';
-import { logInfo, logWarn } from '../lib/logger';
+import { errorCode, logInfo, logWarn } from '../lib/logger';
 import { resolveSessionDisplayName, type LooseTranslate } from '../workoutPrescription/sessionPresentation';
 import { useReducedMotionPreference } from '../lib/reducedMotion';
 import { useDeepLinkIntent } from '../state/DeepLinkContext';
@@ -283,6 +285,7 @@ function AppShellContent({
   // finishes. Keep that chain available to the Done CTA so Profile can never
   // open with the previous IN_PROGRESS evaluation still cached.
   const workoutCompletionRef = useRef<Promise<WorkoutCompletionResult> | null>(null);
+  const workoutCompletionFollowUpRef = useRef<Promise<unknown> | null>(null);
   // True from the instant `onSessionCompleted` fires until the durable
   // finish chain (execution.finish -> completeScheduledSession -> lifecycle)
   // settles — drives `WorkoutDone`'s "Finalizando treino..." state so the
@@ -292,7 +295,7 @@ function AppShellContent({
   // ref, not observable by React) even though they're set/cleared together.
   const [finishingSession, setFinishingSession] = useState(false);
   const [workoutCompletionResult, setWorkoutCompletionResult] = useState<WorkoutCompletionResult | null>(null);
-  const workoutCompletionInFlightRef = useRef(false);
+  const [durableCompletionReachedAtMs, setDurableCompletionReachedAtMs] = useState<number | null>(null);
   // Re-entrancy guard for `finishWorkoutSession` — `WorkoutDone`'s CTA is
   // already disabled while `finishingSession`/awaiting, but this closes the
   // same-tick gap between a tap and that state committing.
@@ -530,6 +533,7 @@ function AppShellContent({
     logInfo('workout_execution', 'start_user_confirmed', { attemptId, sessionIndex });
     workoutCompletionRef.current = null;
     setWorkoutCompletionResult(null);
+    setDurableCompletionReachedAtMs(null);
     setFinishingSession(false);
     setStartWorkoutFlow('idle');
     setStartWorkoutError(null);
@@ -629,6 +633,7 @@ function AppShellContent({
       execution.adoptExecution(fresh);
       workoutCompletionRef.current = null;
       setWorkoutCompletionResult(null);
+      setDurableCompletionReachedAtMs(null);
       setFinishingSession(false);
       setActiveSessionIndex(fresh.sessionIndex);
       setWorkoutInProgress(true);
@@ -669,12 +674,15 @@ function AppShellContent({
   };
 
   const runWorkoutCompletion = (recovery: boolean): Promise<WorkoutCompletionResult> => {
-    if (workoutCompletionInFlightRef.current && workoutCompletionRef.current) {
+    if (workoutCompletionRef.current) {
       return workoutCompletionRef.current;
     }
-    workoutCompletionInFlightRef.current = true;
     setWorkoutCompletionResult(null);
+    setDurableCompletionReachedAtMs(null);
     setFinishingSession(true);
+    if (!activeProgram?.sessions[activeSessionIndex]?.cardioFinisher) {
+      logInfo('workout_performance', 'finish_ui_loading_started', { timestampMs: Date.now(), source: 'strength' });
+    }
     endWorkoutSession();
     const programId = activeProgram?.programId;
     const executionId = execution.execution?.executionId;
@@ -691,27 +699,107 @@ function AppShellContent({
       sessionIndex: activeSessionIndex,
     });
 
-    const completion = (async (): Promise<WorkoutCompletionResult> => {
+    return runWorkoutCompletionAttempt(workoutCompletionRef, async (): Promise<WorkoutCompletionResult> => {
+      const finishFlowStartedAtMs = Date.now();
+      logInfo('workout_performance', 'finish_flow_start', { timestampMs: finishFlowStartedAtMs });
       try {
         const finishedScheduledLocalDate = execution.execution?.scheduledLocalDate ?? null;
         const result = await completeWorkoutSessionFlow({
-          finishExecution: execution.finish,
-          completeSchedule: () => (finishedScheduledLocalDate
-            ? schedule.completeSession(activeSessionIndex, finishedScheduledLocalDate)
-            : Promise.resolve(false)),
-          afterSchedule: async () => {
-            try {
+          finishExecution: async () => {
+            const startedAtMs = Date.now();
+            if (recovery) logInfo('workout_retry', 'retry_finish_started', {
+              timestamp: startedAtMs, executionId, etapa: 'EXECUTION', durationMs: 0,
+            });
+            const status = await execution.finish();
+            if (recovery) logInfo('workout_retry', 'retry_finish_end', {
+              timestamp: Date.now(), executionId, etapa: 'EXECUTION',
+              durationMs: Date.now() - startedAtMs, status: status ?? 'FAILED',
+              errorCode: status ? undefined : 'EXECUTION_FAILED',
+            });
+            return status;
+          },
+          completeSchedule: async () => {
+            const startedAtMs = Date.now();
+            if (recovery) logInfo('workout_retry', 'retry_schedule_started', {
+              timestamp: startedAtMs, executionId, etapa: 'SCHEDULE', durationMs: 0,
+            });
+            const completed = finishedScheduledLocalDate
+              ? await schedule.completeSession(activeSessionIndex, finishedScheduledLocalDate)
+              : false;
+            if (recovery) {
+              logInfo('workout_retry', 'retry_schedule_status', {
+                timestamp: Date.now(), executionId, etapa: 'SCHEDULE',
+                durationMs: Date.now() - startedAtMs, status: completed ? 'COMPLETED' : 'FAILED',
+              });
+              logInfo('workout_retry', 'retry_schedule_end', {
+                timestamp: Date.now(), executionId, etapa: 'SCHEDULE',
+                durationMs: Date.now() - startedAtMs, success: completed,
+                errorCode: completed ? undefined : 'SCHEDULE_FAILED',
+              });
+            }
+            return completed;
+          },
+        });
+        if (result === 'COMPLETED') {
+          const durableReachedAtMs = Date.now();
+          setDurableCompletionReachedAtMs(durableReachedAtMs);
+          logInfo('workout_performance', 'durable_completion_reached', {
+            timestampMs: durableReachedAtMs,
+            durationMs: durableReachedAtMs - finishFlowStartedAtMs,
+          });
+          let autoActivated = false;
+          workoutCompletionFollowUpRef.current = runWorkoutCompletionFollowUp({
+            reconcileLifecycle: async () => {
               if (!user) return;
-              const lifecycleResult = await processWorkoutLifecycleAfterSession({ uid: user.uid });
-              if (lifecycleResult.autoActivated) await reloadPrescription();
-            } finally {
-              await Promise.allSettled([
-                evolution.refresh(),
+              const lifecycleStartedAtMs = Date.now();
+              logInfo('workout_performance', 'lifecycle_start', { timestampMs: lifecycleStartedAtMs });
+              try {
+                const lifecycleResult = await processWorkoutLifecycleAfterSession({ uid: user.uid });
+                autoActivated = lifecycleResult.autoActivated;
+                logInfo('workout_performance', 'lifecycle_end', {
+                  timestampMs: Date.now(),
+                  durationMs: Date.now() - lifecycleStartedAtMs,
+                  success: true,
+                });
+              } catch (error) {
+                logInfo('workout_performance', 'lifecycle_end', {
+                  timestampMs: Date.now(),
+                  durationMs: Date.now() - lifecycleStartedAtMs,
+                  success: false,
+                });
+                throw error;
+              }
+            },
+            refreshProjections: async () => {
+              const refreshStartedAtMs = Date.now();
+              logInfo('workout_performance', 'post_finish_refresh_start', { timestampMs: refreshStartedAtMs });
+              const refreshes = [
+                evolution.refreshProjection(),
                 activitySnapshot.reload(),
                 frequencyWindow.reload(),
-              ]);
-            }
-          },
+                ...(autoActivated ? [reloadPrescription()] : []),
+              ];
+              const outcomes = await Promise.allSettled(refreshes);
+              const failure = outcomes.find((outcome) => outcome.status === 'rejected');
+              logInfo('workout_performance', 'post_finish_refresh_end', {
+                timestampMs: Date.now(),
+                durationMs: Date.now() - refreshStartedAtMs,
+                success: !failure,
+              });
+              if (failure?.status === 'rejected') throw failure.reason;
+            },
+            onLifecycleFailure: (error) => {
+              logWarn('workout', 'workout_finish_lifecycle_follow_up_failed', { error });
+            },
+            onProjectionFailure: (error) => {
+              logWarn('workout', 'workout_finish_projection_refresh_failed', { error });
+            },
+          });
+        }
+        logInfo('workout_performance', 'finish_flow_end', {
+          timestampMs: Date.now(),
+          durationMs: Date.now() - finishFlowStartedAtMs,
+          result,
         });
         setWorkoutCompletionResult(result);
         if (result === 'COMPLETED') {
@@ -734,12 +822,59 @@ function AppShellContent({
         }
         return result;
       } finally {
-        workoutCompletionInFlightRef.current = false;
         setFinishingSession(false);
       }
-    })();
-    workoutCompletionRef.current = completion;
-    return completion;
+    });
+  };
+
+  const retryWorkoutCompletion = async () => {
+    const retryStartedAtMs = Date.now();
+    const executionId = execution.execution?.executionId;
+    logInfo('workout_retry', 'retry_pressed', {
+      timestamp: retryStartedAtMs,
+      executionId,
+      etapa: 'RETRY',
+      durationMs: 0,
+    });
+    logInfo('workout_retry', 'retry_existing_completion_ref', {
+      timestamp: Date.now(),
+      executionId,
+      etapa: 'SINGLE_FLIGHT',
+      durationMs: Date.now() - retryStartedAtMs,
+      existing: workoutCompletionRef.current !== null,
+    });
+    logInfo('workout_retry', 'retry_execution_status', {
+      timestamp: Date.now(),
+      executionId,
+      etapa: 'EXECUTION',
+      durationMs: Date.now() - retryStartedAtMs,
+      status: execution.execution?.status ?? 'UNKNOWN',
+    });
+    logInfo('workout_retry', 'retry_flow_started', {
+      timestamp: Date.now(),
+      executionId,
+      etapa: 'FLOW',
+      durationMs: Date.now() - retryStartedAtMs,
+    });
+    try {
+      const result = await runWorkoutCompletion(true);
+      logInfo('workout_retry', 'retry_result', {
+        timestamp: Date.now(),
+        executionId,
+        etapa: 'COMPLETE',
+        durationMs: Date.now() - retryStartedAtMs,
+        result,
+        errorCode: result === 'COMPLETED' ? undefined : result,
+      });
+    } catch (error) {
+      logInfo('workout_retry', 'retry_error', {
+        timestamp: Date.now(),
+        executionId,
+        etapa: 'COMPLETE',
+        durationMs: Date.now() - retryStartedAtMs,
+        errorCode: errorCode(error),
+      });
+    }
   };
 
   const finishWorkoutSession = async () => {
@@ -748,11 +883,13 @@ function AppShellContent({
         setTab('home');
         return;
       }
-      const result = workoutCompletionResult === 'EXECUTION_FAILED' || workoutCompletionResult === 'SCHEDULE_FAILED'
-        ? await runWorkoutCompletion(false)
-        : workoutCompletionRef.current
+      // On the success surface the durable result is already authoritative;
+      // the Home CTA must not start a second completion merely because the
+      // in-flight-only ref was correctly released after settlement.
+      const result = workoutCompletionResult
+        ?? (workoutCompletionRef.current
           ? await workoutCompletionRef.current
-          : await runWorkoutCompletion(false);
+          : await runWorkoutCompletion(false));
       const navigated = applyWorkoutCompletionNavigation(result, () => {
         logInfo('workout', 'workout_done_navigation_allowed', {
           executionId: execution.execution?.executionId,
@@ -767,8 +904,24 @@ function AppShellContent({
       if (navigated) {
         workoutCompletionRef.current = null;
         setWorkoutCompletionResult(null);
+        setDurableCompletionReachedAtMs(null);
       }
     });
+  };
+
+  // Abandon is already the terminal domain mutation. It must only tear down
+  // the local workout surface; routing it through finishWorkoutSession would
+  // ask FINISH_EXECUTION to finish an ABANDONED record and the authority
+  // callable correctly rejects that as execution_not_finishable.
+  const leaveDiscardedWorkout = () => {
+    endWorkoutSession();
+    setWorkoutInProgress(false);
+    setWorkoutStartAttempt(null);
+    workoutCompletionRef.current = null;
+    setWorkoutCompletionResult(null);
+    setDurableCompletionReachedAtMs(null);
+    setFinishingSession(false);
+    setTab('home');
   };
 
   return (
@@ -847,11 +1000,13 @@ function AppShellContent({
               execution={execution.execution}
               workoutStartedAtMs={execution.workoutStartedAtMs}
               onDone={finishWorkoutSession}
+              onRetryCompletion={() => { void retryWorkoutCompletion(); }}
+              onDiscarded={leaveDiscardedWorkout}
               onMinimize={() => setTab('home')}
               // Docs §8: `WorkoutScreen` awaits this before navigating away
-              // (it calls its own `onDone` right after) — abandon must be a
-              // durable, persisted fact before the UI treats the session as
-              // gone. Never fire-and-forget here.
+              // (then calls `onDiscarded`, never the finish callback) —
+              // abandon must be a durable, persisted fact before the UI
+              // treats the session as gone. Never fire-and-forget here.
               onAbandon={() => execution.abandon()}
               onCardioCompleted={(actualDurationSeconds) => execution.completeCardio(actualDurationSeconds)}
               onSetLogged={(exerciseIndex, setIndex, weightKg) =>
@@ -891,6 +1046,9 @@ function AppShellContent({
                 }
               }}
               finishing={finishingSession}
+              completionConfirmed={workoutCompletionResult === 'COMPLETED'
+                || workoutCompletionResult === 'LIFECYCLE_FOLLOW_UP_FAILED'}
+              durableCompletionReachedAtMs={durableCompletionReachedAtMs}
               completionFailed={workoutCompletionResult === 'EXECUTION_FAILED'
                 || workoutCompletionResult === 'SCHEDULE_FAILED'}
               onSessionCompleted={({ recovery }) => {

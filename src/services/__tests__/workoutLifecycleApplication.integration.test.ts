@@ -249,10 +249,10 @@ describe.skipIf(!enabled)('Fase 4 Lifecycle Orchestrator — real Firestore Emul
         });
         return true;
       },
-      afterSchedule: async () => { await processWorkoutLifecycleAfterSession({ uid: UID }); },
     });
 
     expect(flow).toBe('COMPLETED');
+    await processWorkoutLifecycleAfterSession({ uid: UID });
     expect((await loadPendingEvolution(UID))?.type).toBe('LEVEL_PROMOTION');
     const v1Events = await getDocs(collection(
       mocks.db as never, 'users', UID, 'workoutPrograms', generated.program.programId, 'progressionEvents',
@@ -414,9 +414,9 @@ describe.skipIf(!enabled)('Fase 4 Lifecycle Orchestrator — real Firestore Emul
         });
         return true;
       },
-      afterSchedule: async () => { await processWorkoutLifecycleAfterSession({ uid: UID }); },
     });
     expect(flow).toBe('COMPLETED');
+    await processWorkoutLifecycleAfterSession({ uid: UID });
     expect((await loadPendingEvolution(UID))?.type).toBe('LEVEL_PROMOTION');
     const v1Events = await getDocs(collection(
       mocks.db as never, 'users', UID, 'workoutPrograms', active.programId, 'progressionEvents',

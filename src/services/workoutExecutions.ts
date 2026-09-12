@@ -671,14 +671,27 @@ export async function completeCardioExecution(
 ): Promise<{ status: 'COMPLETED'; actualDurationSeconds: number }> {
   logInfo('workout_execution', 'cardio_finish_requested', { executionId });
   const startedAtMs = Date.now();
+  // Temporary local performance trace (2026-09-11 latency audit). Technical
+  // timing only; deliberately excludes uid, executionId and workout data.
+  logInfo('workout_performance', 'cardio_callable_start', { timestampMs: startedAtMs });
   try {
     const result = await completeCardioTransport({ executionId, actualDurationSeconds });
+    logInfo('workout_performance', 'cardio_callable_end', {
+      timestampMs: Date.now(),
+      durationMs: Date.now() - startedAtMs,
+      success: true,
+    });
     logInfo('workout_execution', 'cardio_persist_completed', {
       executionId,
       durationMs: Date.now() - startedAtMs,
     });
     return result;
   } catch (error) {
+    logInfo('workout_performance', 'cardio_callable_end', {
+      timestampMs: Date.now(),
+      durationMs: Date.now() - startedAtMs,
+      success: false,
+    });
     logWarn('workout_execution', 'cardio_persist_failed', {
       executionId,
       durationMs: Date.now() - startedAtMs,
@@ -702,37 +715,87 @@ export async function completeCardioExecution(
 export async function finishWorkoutExecution(uid: string, executionId: string): Promise<{ status: 'COMPLETED' | 'PARTIALLY_COMPLETED' }> {
   const ref = executionRef(uid, executionId);
   const stateRef = executionStateRef(uid);
-  const existing = await getDoc(ref);
+  const preflightStartedAtMs = Date.now();
+  logInfo('workout_performance', 'finish_preflight_read_start', { timestampMs: preflightStartedAtMs });
+  let existing;
+  try {
+    existing = await getDoc(ref);
+    logInfo('workout_performance', 'finish_preflight_read_end', {
+      timestampMs: Date.now(),
+      durationMs: Date.now() - preflightStartedAtMs,
+      success: true,
+    });
+  } catch (error) {
+    logInfo('workout_performance', 'finish_preflight_read_end', {
+      timestampMs: Date.now(),
+      durationMs: Date.now() - preflightStartedAtMs,
+      success: false,
+    });
+    throw error;
+  }
   if (existing.exists() && ['COMPLETED', 'PARTIALLY_COMPLETED'].includes(existing.data().status)) {
     return { status: existing.data().status as 'COMPLETED' | 'PARTIALLY_COMPLETED' };
   }
   const requiresV2Authority = typeof existing.data()?.programInstanceId === 'string';
   if (requiresV2Authority) {
-    await authorizeWorkoutLifecycleMutation({ operation: 'FINISH_EXECUTION', executionId });
+    const authorizationStartedAtMs = Date.now();
+    logInfo('workout_performance', 'finish_authorization_start', { timestampMs: authorizationStartedAtMs });
+    try {
+      await authorizeWorkoutLifecycleMutation({ operation: 'FINISH_EXECUTION', executionId });
+      logInfo('workout_performance', 'finish_authorization_end', {
+        timestampMs: Date.now(),
+        durationMs: Date.now() - authorizationStartedAtMs,
+        success: true,
+      });
+    } catch (error) {
+      logInfo('workout_performance', 'finish_authorization_end', {
+        timestampMs: Date.now(),
+        durationMs: Date.now() - authorizationStartedAtMs,
+        success: false,
+      });
+      throw error;
+    }
   }
   const grantRef = doc(db, USERS, uid, 'workoutLifecycleAuthorityGrants', WORKOUT_LIFECYCLE_AUTHORITY_GRANT_ID);
-  return runTransaction(db, async (transaction) => {
-    const [snapshot, stateSnapshot] = await Promise.all([transaction.get(ref), transaction.get(stateRef)]);
-    if (!snapshot.exists()) throw new Error('EXECUTION_NOT_FOUND');
-    const data = snapshot.data();
-    if (data.status === 'COMPLETED' || data.status === 'PARTIALLY_COMPLETED') {
-      if (requiresV2Authority) transaction.delete(grantRef);
-      return { status: data.status as 'COMPLETED' | 'PARTIALLY_COMPLETED' };
-    }
-    if (data.status !== 'IN_PROGRESS') throw new Error('EXECUTION_NOT_IN_PROGRESS');
+  const transactionStartedAtMs = Date.now();
+  logInfo('workout_performance', 'finish_transaction_start', { timestampMs: transactionStartedAtMs });
+  try {
+    const result = await runTransaction(db, async (transaction) => {
+      const [snapshot, stateSnapshot] = await Promise.all([transaction.get(ref), transaction.get(stateRef)]);
+      if (!snapshot.exists()) throw new Error('EXECUTION_NOT_FOUND');
+      const data = snapshot.data();
+      if (data.status === 'COMPLETED' || data.status === 'PARTIALLY_COMPLETED') {
+        if (requiresV2Authority) transaction.delete(grantRef);
+        return { status: data.status as 'COMPLETED' | 'PARTIALLY_COMPLETED' };
+      }
+      if (data.status !== 'IN_PROGRESS') throw new Error('EXECUTION_NOT_IN_PROGRESS');
 
-    const exercises = sweepPendingSetsToSkipped(data.exercises as ExerciseExecution[]);
-    const status = deriveFinishStatus(exercises);
-    transaction.update(ref, { exercises, status, finishedAt: serverTimestamp(), updatedAt: serverTimestamp() });
-    // Terminalization and mutex release are one atomic write — there is
-    // never a window where the execution is terminal but `current` still
-    // points at it as active (docs §7).
-    if (stateSnapshot.exists() && stateSnapshot.data().executionId === executionId) {
-      transaction.delete(stateRef);
-    }
-    if (requiresV2Authority) transaction.delete(grantRef);
-    return { status };
-  });
+      const exercises = sweepPendingSetsToSkipped(data.exercises as ExerciseExecution[]);
+      const status = deriveFinishStatus(exercises);
+      transaction.update(ref, { exercises, status, finishedAt: serverTimestamp(), updatedAt: serverTimestamp() });
+      // Terminalization and mutex release are one atomic write — there is
+      // never a window where the execution is terminal but `current` still
+      // points at it as active (docs §7).
+      if (stateSnapshot.exists() && stateSnapshot.data().executionId === executionId) {
+        transaction.delete(stateRef);
+      }
+      if (requiresV2Authority) transaction.delete(grantRef);
+      return { status };
+    });
+    logInfo('workout_performance', 'finish_transaction_end', {
+      timestampMs: Date.now(),
+      durationMs: Date.now() - transactionStartedAtMs,
+      success: true,
+    });
+    return result;
+  } catch (error) {
+    logInfo('workout_performance', 'finish_transaction_end', {
+      timestampMs: Date.now(),
+      durationMs: Date.now() - transactionStartedAtMs,
+      success: false,
+    });
+    throw error;
+  }
 }
 
 /**

@@ -71,6 +71,24 @@ function scheduleEventId(event: Pick<ScheduleEvent, 'type' | 'sessionIndex' | 's
   return scheduleEventDocumentId({ ...event, ...(programInstanceId ? { programInstanceId } : {}) });
 }
 
+/** Read-only durable fact used by cold-start completion recovery. */
+export async function hasScheduledSessionCompletion(input: {
+  uid: string;
+  programId: string;
+  programInstanceId?: string;
+  sessionIndex: number;
+  scheduledLocalDate: string;
+}): Promise<boolean> {
+  const snapshot = await getDoc(doc(
+    scheduleEventsCollection(input.uid, input.programId),
+    scheduleEventId(
+      { type: 'COMPLETED', sessionIndex: input.sessionIndex, scheduledDate: input.scheduledLocalDate },
+      input.programInstanceId,
+    ),
+  ));
+  return snapshot.exists();
+}
+
 export async function loadScheduleConfig(uid: string): Promise<ScheduleConfig | null> {
   const snapshot = await getDoc(scheduleConfigRef(uid));
   if (!snapshot.exists()) return null;
@@ -303,7 +321,7 @@ export async function resolveTodaysSchedule(input: {
  * rotation. Rejected while a miss decision is pending — the UI must resolve
  * that first (docs §33/§34, decision is an event, not silently overridden).
  */
-export async function completeScheduledSession(input: {
+export interface CompleteScheduledSessionInput {
   uid: string;
   programId: string;
   programInstanceId?: string;
@@ -324,12 +342,52 @@ export async function completeScheduledSession(input: {
    */
   trainingDays: readonly Weekday[];
   activatedAtLocalDate: string;
-}): Promise<void> {
+}
+
+const scheduledSessionCompletionsInFlight = new Map<string, Promise<void>>();
+
+function scheduledSessionCompletionKey(input: CompleteScheduledSessionInput): string {
+  return [
+    input.uid,
+    input.programId,
+    input.programInstanceId ?? 'legacy',
+    input.sessionIndex,
+    input.scheduledLocalDate,
+  ].join(':');
+}
+
+/**
+ * Single-flight is scoped to one exact durable Schedule fact. This prevents a
+ * foreground recovery and an explicit retry from racing for the one-time
+ * lifecycle grant, while a settled failure is always evicted for later retry.
+ */
+export function completeScheduledSession(input: CompleteScheduledSessionInput): Promise<void> {
+  const key = scheduledSessionCompletionKey(input);
+  const existing = scheduledSessionCompletionsInFlight.get(key);
+  if (existing) return existing;
+
+  const operation = completeScheduledSessionAttempt(input);
+  scheduledSessionCompletionsInFlight.set(key, operation);
+  const release = () => {
+    if (scheduledSessionCompletionsInFlight.get(key) === operation) {
+      scheduledSessionCompletionsInFlight.delete(key);
+    }
+  };
+  void operation.then(release, release);
+  return operation;
+}
+
+async function completeScheduledSessionAttempt(input: CompleteScheduledSessionInput): Promise<void> {
   const eventRef = doc(
     scheduleEventsCollection(input.uid, input.programId),
     scheduleEventId({ type: 'COMPLETED', sessionIndex: input.sessionIndex, scheduledDate: input.scheduledLocalDate }, input.programInstanceId),
   );
   const stateRef = scheduleStateRef(input.uid, input.programId, input.programInstanceId);
+
+  // Response-loss recovery: if the transaction committed but its response was
+  // lost, the immutable event is sufficient authority for idempotent success.
+  // Do this before requesting a fresh one-time grant.
+  if ((await getDoc(eventRef)).exists()) return;
 
   if (input.programInstanceId) {
     await authorizeWorkoutLifecycleMutation({
