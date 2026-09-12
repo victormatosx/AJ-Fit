@@ -6,6 +6,7 @@ import { localDateInTimezone } from '../scheduleEngine/localDate';
 import { listCompletedWorkoutDatesInRange } from '../services/workoutExecutions';
 import {
   buildFrequencyWindow,
+  frequencyWindowNeedsPromotion,
   frequencyWindowBounds,
   mergeCoveredFrom,
   type FrequencyWindowViewModel,
@@ -68,6 +69,7 @@ export function useFrequencyWindow(timezone: string): FrequencyWindowState {
   const [completedDates, setCompletedDates] = useState<ReadonlySet<LocalDate>>(new Set());
   const [displayedOffset, setDisplayedOffset] = useState<number | null>(null);
   const [displayedViewModel, setDisplayedViewModel] = useState<FrequencyWindowViewModel | null>(null);
+  const [displayedDates, setDisplayedDates] = useState<ReadonlySet<LocalDate> | null>(null);
   // Oldest local date already covered by a fetch; the covered range's upper
   // bound is implicitly always "today" (never null once uid resolves).
   // Only ever moves backward (see `ensureCovered`) — a slower request that
@@ -115,8 +117,15 @@ export function useFrequencyWindow(timezone: string): FrequencyWindowState {
   if (today) {
     const { startLocalDate } = frequencyWindowBounds(today, offsetWindows);
     const isCovered = coveredFromRef.current !== null && startLocalDate >= coveredFromRef.current;
-    if (isCovered && displayedOffset !== offsetWindows) {
+    if (frequencyWindowNeedsPromotion({
+      isCovered,
+      displayedOffset,
+      selectedOffset: offsetWindows,
+      displayedDates,
+      completedDates,
+    })) {
       setDisplayedOffset(offsetWindows);
+      setDisplayedDates(completedDates);
       setDisplayedViewModel(buildFrequencyWindow({ todayLocalDate: today, offsetWindows, completedDates }));
     }
   }

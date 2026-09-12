@@ -40,7 +40,7 @@ describe('minimized active workout UX', () => {
     expect(home).toContain('fontSize: workoutInProgress ? 13 : 15');
   });
 
-  it('shows the timer inside the greeting row and adds an arrow when rest finishes', () => {
+  it('shows the active-workout control before the first set, during rest, and between rests', () => {
     const greetingStart = home.indexOf('{/* greeting */}');
     const tickerStart = home.indexOf('{/* Real Training Level', greetingStart);
     const greeting = home.slice(greetingStart, tickerStart);
@@ -56,9 +56,12 @@ describe('minimized active workout UX', () => {
     expect(headerStatus).toContain("t('activeWorkout.nextExercise')");
     expect(headerStatus).toContain("t('activeWorkout.nextSet'");
     expect(headerStatus).toContain('{countdown}');
-    expect(headerStatus).toContain('{restFinished && (');
+    expect(headerStatus).toContain('if (!workoutInProgress) return null;');
+    expect(headerStatus).not.toContain('lastRestRef');
+    expect(headerStatus).toContain('{rest !== null && (');
+    expect(headerStatus).toContain('{!resting && (');
     expect(headerStatus).toContain('name="arrow-right"');
-    expect(headerStatus).toContain('width: restFinished ? 106 : 86');
+    expect(headerStatus).toContain('width: rest === null ? 42 : restFinished ? 106 : 86');
     expect(headerStatus).toContain("backgroundColor: 'transparent'");
     expect(headerStatus).toContain('borderColor: theme.colors.primaryBorderSoft');
     expect(headerStatus).not.toContain('backgroundColor: theme.colors.primarySurfaceSubtle');

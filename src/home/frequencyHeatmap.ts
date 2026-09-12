@@ -45,6 +45,20 @@ export interface FrequencyWindowViewModel {
   isCurrentWindow: boolean;
 }
 
+/** Pure invalidation rule for the kept-alive frequency projection. */
+export function frequencyWindowNeedsPromotion(input: {
+  isCovered: boolean;
+  displayedOffset: number | null;
+  selectedOffset: number;
+  displayedDates: ReadonlySet<LocalDate> | null;
+  completedDates: ReadonlySet<LocalDate>;
+}): boolean {
+  return input.isCovered && (
+    input.displayedOffset !== input.selectedOffset
+    || input.displayedDates !== input.completedDates
+  );
+}
+
 /**
  * Start/end local dates of consecutive, non-overlapping 30-day blocks
  * counting back from today. `offsetWindows` 0 is `[today - 29, today]`; 1 is

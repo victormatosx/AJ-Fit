@@ -63,6 +63,7 @@ import { WorkoutSessionRecoveryModal } from '../components/workout/WorkoutSessio
 import { activeExecutionId, abandonWorkoutExecution, loadWorkoutExecution } from '../services/workoutExecutions';
 import {
   applyWorkoutCompletionNavigation,
+  runWorkoutHomeProjectionSync,
   runWorkoutCompletionFollowUp,
   runWorkoutCompletionAttempt,
   runWorkoutCompletionSingleFlight,
@@ -286,6 +287,7 @@ function AppShellContent({
   // open with the previous IN_PROGRESS evaluation still cached.
   const workoutCompletionRef = useRef<Promise<WorkoutCompletionResult> | null>(null);
   const workoutCompletionFollowUpRef = useRef<Promise<unknown> | null>(null);
+  const workoutHomeSyncRef = useRef<Promise<unknown> | null>(null);
   // True from the instant `onSessionCompleted` fires until the durable
   // atomic finalizer settles (lifecycle remains a later follow-up) — drives
   // `WorkoutDone`'s "Finalizando treino..." state so the
@@ -532,6 +534,7 @@ function AppShellContent({
     const attemptId = ++workoutStartAttemptSequenceRef.current;
     logInfo('workout_execution', 'start_user_confirmed', { attemptId, sessionIndex });
     workoutCompletionRef.current = null;
+    workoutHomeSyncRef.current = null;
     setWorkoutCompletionResult(null);
     setDurableCompletionReachedAtMs(null);
     setFinishingSession(false);
@@ -632,6 +635,7 @@ function AppShellContent({
       }
       execution.adoptExecution(fresh);
       workoutCompletionRef.current = null;
+      workoutHomeSyncRef.current = null;
       setWorkoutCompletionResult(null);
       setDurableCompletionReachedAtMs(null);
       setFinishingSession(false);
@@ -719,6 +723,20 @@ function AppShellContent({
             timestampMs: durableReachedAtMs,
             durationMs: durableReachedAtMs - finishFlowStartedAtMs,
           });
+          const homeSyncStartedAtMs = Date.now();
+          logInfo('workout_performance', 'home_sync_start', { timestampMs: homeSyncStartedAtMs });
+          workoutHomeSyncRef.current = runWorkoutHomeProjectionSync({
+            refreshSchedule: schedule.reload,
+            refreshWeek: activitySnapshot.reload,
+            refreshFrequency: frequencyWindow.reload,
+          }).then((outcome) => {
+            logInfo('workout_performance', 'home_sync_end', {
+              timestampMs: Date.now(),
+              durationMs: Date.now() - homeSyncStartedAtMs,
+              success: Object.values(outcome).every((status) => status === 'COMPLETED'),
+            });
+            return outcome;
+          });
           let autoActivated = false;
           workoutCompletionFollowUpRef.current = runWorkoutCompletionFollowUp({
             reconcileLifecycle: async () => {
@@ -747,8 +765,6 @@ function AppShellContent({
               logInfo('workout_performance', 'post_finish_refresh_start', { timestampMs: refreshStartedAtMs });
               const refreshes = [
                 evolution.refreshProjection(),
-                activitySnapshot.reload(),
-                frequencyWindow.reload(),
                 ...(autoActivated ? [reloadPrescription()] : []),
               ];
               const outcomes = await Promise.allSettled(refreshes);
@@ -862,6 +878,18 @@ function AppShellContent({
         ?? (workoutCompletionRef.current
           ? await workoutCompletionRef.current
           : await runWorkoutCompletion(false));
+      if (result === 'COMPLETED' || result === 'LIFECYCLE_FOLLOW_UP_FAILED') {
+        await Promise.all([
+          workoutHomeSyncRef.current,
+          workoutCompletionFollowUpRef.current,
+        ]);
+        logInfo('workout_performance', 'home_ready_after_completion', {
+          timestampMs: Date.now(),
+          durationFromDurableMs: durableCompletionReachedAtMs === null
+            ? null
+            : Date.now() - durableCompletionReachedAtMs,
+        });
+      }
       const navigated = applyWorkoutCompletionNavigation(result, () => {
         logInfo('workout', 'workout_done_navigation_allowed', {
           executionId: execution.execution?.executionId,
@@ -875,6 +903,7 @@ function AppShellContent({
       });
       if (navigated) {
         workoutCompletionRef.current = null;
+        workoutHomeSyncRef.current = null;
         setWorkoutCompletionResult(null);
         setDurableCompletionReachedAtMs(null);
       }
@@ -890,6 +919,7 @@ function AppShellContent({
     setWorkoutInProgress(false);
     setWorkoutStartAttempt(null);
     workoutCompletionRef.current = null;
+    workoutHomeSyncRef.current = null;
     setWorkoutCompletionResult(null);
     setDurableCompletionReachedAtMs(null);
     setFinishingSession(false);
@@ -1444,7 +1474,10 @@ function StartWorkoutConfirmation({
     <Modal
       visible={visible}
       transparent
-      animationType="fade"
+      // Keep the confirmation interactive from its first rendered frame.
+      // Native modal presentation animations can swallow a quick follow-up
+      // tap while the new window is still transitioning onto the screen.
+      animationType="none"
       onRequestClose={onCancel}
       statusBarTranslucent
     >

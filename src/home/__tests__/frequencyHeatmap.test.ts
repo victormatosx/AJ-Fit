@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildFrequencyWindow,
+  frequencyWindowNeedsPromotion,
   frequencyWindowBounds,
   mergeCoveredFrom,
   FREQUENCY_WINDOW_DAYS,
@@ -192,5 +193,37 @@ describe('mergeCoveredFrom', () => {
 
   it('is idempotent for the same date resolving twice (duplicate/retried request)', () => {
     expect(mergeCoveredFrom('2026-07-10', '2026-07-10')).toBe('2026-07-10');
+  });
+});
+
+describe('frequencyWindowNeedsPromotion', () => {
+  it('rebuilds the current window when a completion reload replaces its date snapshot', () => {
+    const previous = new Set<string>();
+    const reloaded = new Set<string>(['2026-09-07']);
+    expect(frequencyWindowNeedsPromotion({
+      isCovered: true,
+      displayedOffset: 0,
+      selectedOffset: 0,
+      displayedDates: previous,
+      completedDates: reloaded,
+    })).toBe(true);
+  });
+
+  it('does not promote uncovered data or rebuild an unchanged snapshot', () => {
+    const dates = new Set<string>(['2026-09-07']);
+    expect(frequencyWindowNeedsPromotion({
+      isCovered: false,
+      displayedOffset: 0,
+      selectedOffset: 0,
+      displayedDates: dates,
+      completedDates: new Set(dates),
+    })).toBe(false);
+    expect(frequencyWindowNeedsPromotion({
+      isCovered: true,
+      displayedOffset: 0,
+      selectedOffset: 0,
+      displayedDates: dates,
+      completedDates: dates,
+    })).toBe(false);
   });
 });

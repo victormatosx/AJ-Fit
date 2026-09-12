@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, Text } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../theme';
@@ -23,15 +23,7 @@ export function WorkoutRestHeaderStatus({
 }) {
   const { theme } = useTheme();
   const { t } = useTranslation('home');
-  const lastRestRef = useRef<ActiveRest | null>(null);
   const [now, setNow] = useState(Date.now);
-
-  if (rest) lastRestRef.current = rest;
-
-  useEffect(() => {
-    if (workoutInProgress) return;
-    lastRestRef.current = null;
-  }, [workoutInProgress]);
 
   useEffect(() => {
     if (!resting || !rest) return undefined;
@@ -41,27 +33,30 @@ export function WorkoutRestHeaderStatus({
     return () => clearInterval(timer);
   }, [rest, resting]);
 
-  const displayedRest = rest ?? lastRestRef.current;
-  if (!workoutInProgress || !displayedRest) return null;
+  if (!workoutInProgress) return null;
 
-  const restFinished = !resting;
-  const nextIsExercise = displayedRest.setIndex + 1 >= displayedRest.totalSets;
+  const restFinished = rest !== null && !resting;
+  const nextIsExercise = rest !== null && rest.setIndex + 1 >= rest.totalSets;
   const nextStep = nextIsExercise
     ? t('activeWorkout.nextExercise')
-    : t('activeWorkout.nextSet', { number: displayedRest.setIndex + 2 });
-  const countdown = formatCountdown(
-    resting && rest ? computeRemainingSeconds(rest, now) : 0,
-  );
+    : rest !== null
+      ? t('activeWorkout.nextSet', { number: rest.setIndex + 2 })
+      : null;
+  const countdown = rest === null
+    ? null
+    : formatCountdown(resting ? computeRemainingSeconds(rest, now) : 0);
 
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={restFinished
-        ? t('activeWorkout.headerAccessibilityFinished', { nextStep })
-        : t('activeWorkout.headerAccessibilityRest', { time: countdown, nextStep })}
+      accessibilityLabel={resting
+        ? t('activeWorkout.headerAccessibilityRest', { time: countdown, nextStep })
+        : restFinished
+          ? t('activeWorkout.headerAccessibilityFinished', { nextStep })
+          : t('activeWorkout.return')}
       onPress={onPress}
       style={({ pressed }) => ({
-        width: restFinished ? 106 : 86,
+        width: rest === null ? 42 : restFinished ? 106 : 86,
         height: 42,
         marginRight: 10,
         paddingHorizontal: 9,
@@ -76,23 +71,27 @@ export function WorkoutRestHeaderStatus({
         opacity: pressed ? 0.76 : 1,
       })}
     >
-      <Icon
-        name="timer"
-        size={14}
-        stroke={1.9}
-        color={theme.colors.primaryEmphasis}
-      />
-      <Text
-        style={{
-          fontFamily: theme.fonts.monoBold,
-          fontSize: 13,
-          letterSpacing: 0.2,
-          color: theme.colors.textPrimary,
-        }}
-      >
-        {countdown}
-      </Text>
-      {restFinished && (
+      {rest !== null && (
+        <>
+          <Icon
+            name="timer"
+            size={14}
+            stroke={1.9}
+            color={theme.colors.primaryEmphasis}
+          />
+          <Text
+            style={{
+              fontFamily: theme.fonts.monoBold,
+              fontSize: 13,
+              letterSpacing: 0.2,
+              color: theme.colors.textPrimary,
+            }}
+          >
+            {countdown}
+          </Text>
+        </>
+      )}
+      {!resting && (
         <Icon
           name="arrow-right"
           size={17}

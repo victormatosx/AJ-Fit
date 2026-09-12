@@ -54,6 +54,35 @@ export interface WorkoutCompletionFollowUpOutcome {
   projections: 'COMPLETED' | 'FAILED';
 }
 
+export interface WorkoutHomeProjectionSyncOutcome {
+  schedule: 'COMPLETED' | 'FAILED';
+  week: 'COMPLETED' | 'FAILED';
+  frequency: 'COMPLETED' | 'FAILED';
+}
+
+/**
+ * Refreshes only the three projections that must be coherent before the
+ * persistent Home surface becomes visible again. Callers start this after
+ * durable completion and may await the same Promise at the success -> Home
+ * boundary; it is deliberately independent from lifecycle/evolution work.
+ */
+export async function runWorkoutHomeProjectionSync(input: {
+  refreshSchedule: () => Promise<void>;
+  refreshWeek: () => Promise<void>;
+  refreshFrequency: () => Promise<void>;
+}): Promise<WorkoutHomeProjectionSyncOutcome> {
+  const [schedule, week, frequency] = await Promise.allSettled([
+    input.refreshSchedule(),
+    input.refreshWeek(),
+    input.refreshFrequency(),
+  ]);
+  return {
+    schedule: schedule.status === 'fulfilled' ? 'COMPLETED' : 'FAILED',
+    week: week.status === 'fulfilled' ? 'COMPLETED' : 'FAILED',
+    frequency: frequency.status === 'fulfilled' ? 'COMPLETED' : 'FAILED',
+  };
+}
+
 /**
  * Runs the single post-workout lifecycle pipeline outside the durable finish
  * critical path. Every rejection is consumed and reported through the
