@@ -159,9 +159,9 @@ describe('profile — edit validation messages are interpolable per locale', () 
     ['pt-BR', 'edit.validation.nameTooLong', { max: 50 }, /50 caracteres/],
     ['en', 'edit.validation.nameTooLong', { max: 50 }, /at most 50 characters/i],
     ['es', 'edit.validation.nameTooLong', { max: 50 }, /50 caracteres/i],
-    ['pt-BR', 'edit.validation.birthDateAgeRange', { min: 16, max: 75 }, /16 e 75 anos/],
-    ['en', 'edit.validation.birthDateAgeRange', { min: 16, max: 75 }, /16 and 75 years/i],
-    ['es', 'edit.validation.birthDateAgeRange', { min: 16, max: 75 }, /16 y 75 años/i],
+    ['pt-BR', 'edit.validation.birthDateAgeRange', { min: 18, max: 75 }, /18 e 75 anos/],
+    ['en', 'edit.validation.birthDateAgeRange', { min: 18, max: 75 }, /18 and 75 years/i],
+    ['es', 'edit.validation.birthDateAgeRange', { min: 18, max: 75 }, /18 y 75 años/i],
   ] as Array<[SupportedLanguage, string, Record<string, unknown>, RegExp]>)(
     '[%s] profile:%s',
     async (lang, key, params, re) => {

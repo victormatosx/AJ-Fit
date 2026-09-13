@@ -14,19 +14,19 @@ describe('AuthContext concurrency wiring', () => {
   it('guards every complete identity-changing workflow with one shared flight', () => {
     expect(authContext.match(/identityOperationFlight\.run/g)).toHaveLength(6);
     expect(authContext).toMatch(
-      /signUp: \(email, password, name, answers, prepared\) =>\s+identityOperationFlight\.run/,
+      /signUp: \(email, password, name, answers, legalAccepted, prepared\) =>\s+identityOperationFlight\.run/,
     );
     expect(authContext).toContain(
       'signIn: (email, password) => identityOperationFlight.run',
     );
     expect(authContext).toMatch(
-      /signInWithProvider: \(provider, answers, name\) =>\s+identityOperationFlight\.run/,
+      /signInWithProvider: \(provider, answers, name, legalAccepted\) =>\s+identityOperationFlight\.run/,
     );
     expect(authContext).toMatch(
-      /completeLinkingWithPassword: \(email, password, answers, name\) =>\s+identityOperationFlight\.run/,
+      /completeLinkingWithPassword: \(email, password, answers, name, legalAccepted\) =>\s+identityOperationFlight\.run/,
     );
     expect(authContext).toMatch(
-      /completeLinkingWithProvider: \(provider, answers, name\) =>\s+identityOperationFlight\.run/,
+      /completeLinkingWithProvider: \(provider, answers, name, legalAccepted\) =>\s+identityOperationFlight\.run/,
     );
     const logoutStart = authContext.lastIndexOf('logout: () =>');
     const logout = authContext.slice(

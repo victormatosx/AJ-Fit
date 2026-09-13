@@ -5,6 +5,19 @@
   "actions": {
     "generatePlan": "Generate my plan"
   },
+  "safety": {
+    "kicker": "Safety first",
+    "clearanceRequired": {
+      "title": "Professional clearance required",
+      "body": "Exercising without appropriate clearance can be dangerous: it may worsen symptoms, cause injury, or compromise your recovery. Before continuing, contact the professional responsible for your care and obtain authorization to exercise."
+    },
+    "blocked": {
+      "title": "It is not safe to continue now",
+      "body": "Your answers indicate a situation in which exercising now may put your health at risk. Contact the responsible professional before resuming."
+    },
+    "action": "I understand, I'll seek guidance",
+    "dismissAccessibility": "Close safety notice"
+  },
   "sex": {
     "title": "What's your sex?",
     "sub": "Calibrates volume and recovery.",
@@ -17,7 +30,8 @@
     "title": "When were you born?",
     "sub": "Affects intensity and rest — your age is always recalculated from here.",
     "age_one": "{{count}} year",
-    "age_other": "{{count}} years"
+    "age_other": "{{count}} years",
+    "minimumAge": "AJ Fit is only available to people aged 18 or older."
   },
   "height": {
     "title": "Your height?",

@@ -24,6 +24,10 @@
     "month": "Month",
     "year": "Year"
   },
+  "legal": {
+    "placeholderTitle": "Legal content pending",
+    "placeholderBody": "PLACEHOLDER — the final legal content will be added here later."
+  },
   "navigation": {
     "home": "Home",
     "workout": "Workout",

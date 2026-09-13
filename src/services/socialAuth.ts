@@ -1,8 +1,11 @@
 import {
+  deleteUser,
   signInWithCredential,
   signInWithEmailAndPassword,
   linkWithCredential,
   fetchSignInMethodsForEmail,
+  getAdditionalUserInfo,
+  signOut,
   updateProfile,
   type AuthCredential,
   type User,
@@ -23,6 +26,12 @@ import { createSingleFlight } from '../lib/singleFlight';
  */
 
 export type SocialProvider = 'google' | 'apple';
+
+export type SocialSignInResult = {
+  user: User;
+  /** Firebase's authoritative classification for this credential sign-in. */
+  isNewUser: boolean;
+};
 
 export { SocialAuthCancelledError, isAppleAuthAvailable, isGoogleSigninAvailable };
 
@@ -71,7 +80,7 @@ let pendingCredential: AuthCredential | null = null;
 // Google, Apple and account-linking all mutate the same Firebase Auth identity
 // and share process-memory linking state. One common flight prevents two native
 // provider sheets or two competing identity transitions from running together.
-const socialIdentityFlight = createSingleFlight<User>();
+const socialIdentityFlight = createSingleFlight<SocialSignInResult | User>();
 
 async function applyDisplayName(user: User, displayName?: string | null) {
   if (!user.displayName && displayName?.trim()) {
@@ -90,11 +99,13 @@ function errorCode(err: unknown): string {
  * Throws `SocialAuthCancelledError` on cancel, or `AccountLinkingRequiredError`
  * when the email already exists under another provider.
  */
-export function signInWithProvider(provider: SocialProvider): Promise<User> {
-  return socialIdentityFlight.run(() => performSignInWithProvider(provider));
+export function signInWithProvider(provider: SocialProvider): Promise<SocialSignInResult> {
+  return socialIdentityFlight.run(
+    () => performSignInWithProvider(provider),
+  ) as Promise<SocialSignInResult>;
 }
 
-async function performSignInWithProvider(provider: SocialProvider): Promise<User> {
+async function performSignInWithProvider(provider: SocialProvider): Promise<SocialSignInResult> {
   let result: ProviderResult;
   try {
     result = await acquireCredential[provider]();
@@ -105,9 +116,19 @@ async function performSignInWithProvider(provider: SocialProvider): Promise<User
   }
 
   try {
-    const { user } = await signInWithCredential(auth, result.credential);
-    await applyDisplayName(user, result.displayName);
-    return user;
+    const userCredential = await signInWithCredential(auth, result.credential);
+    const { user } = userCredential;
+    try {
+      await applyDisplayName(user, result.displayName);
+    } catch (displayNameError) {
+      // A cosmetic profile update must not hide the UserCredential metadata
+      // needed to classify and, when required, roll back a new identity.
+      logAuthError(`${provider}:display-name`, displayNameError);
+    }
+    return {
+      user,
+      isNewUser: getAdditionalUserInfo(userCredential)?.isNewUser === true,
+    };
   } catch (err) {
     if (errorCode(err) === 'auth/account-exists-with-different-credential') {
       pendingCredential = result.credential;
@@ -124,6 +145,28 @@ async function performSignInWithProvider(provider: SocialProvider): Promise<User
 }
 
 /**
+ * Rolls back a federated identity that Firebase created before the app could
+ * learn that legal acceptance was still missing. A first social sign-in is a
+ * recent authentication, so `deleteUser` is the correct cleanup operation.
+ * If deletion fails, signing out still prevents the incomplete identity from
+ * becoming an app session; a later attempt remains gated by its missing
+ * Firestore profile.
+ */
+export async function discardNewSocialIdentity(user: User): Promise<void> {
+  try {
+    await deleteUser(user);
+  } catch (deletionError) {
+    logAuthError('social-new-user:delete', deletionError);
+    try {
+      await signOut(auth);
+    } catch (signOutError) {
+      logAuthError('social-new-user:signout', signOutError);
+    }
+    throw toAuthError(deletionError);
+  }
+}
+
+/**
  * Completes a pending link by re-authenticating with the existing email/password
  * account and attaching the pending social credential to the SAME user.
  */
@@ -131,7 +174,9 @@ export function completeLinkingWithPassword(
   email: string,
   password: string,
 ): Promise<User> {
-  return socialIdentityFlight.run(() => performLinkingWithPassword(email, password));
+  return socialIdentityFlight.run(
+    () => performLinkingWithPassword(email, password),
+  ) as Promise<User>;
 }
 
 async function performLinkingWithPassword(
@@ -159,7 +204,9 @@ async function performLinkingWithPassword(
 export function completeLinkingWithProvider(
   provider: SocialProvider,
 ): Promise<User> {
-  return socialIdentityFlight.run(() => performLinkingWithProvider(provider));
+  return socialIdentityFlight.run(
+    () => performLinkingWithProvider(provider),
+  ) as Promise<User>;
 }
 
 async function performLinkingWithProvider(

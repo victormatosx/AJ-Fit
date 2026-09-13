@@ -2,25 +2,30 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   appleCredential: { providerId: 'apple.com' },
+  deleteUser: vi.fn(),
   fetchMethods: vi.fn(),
+  getAdditionalUserInfo: vi.fn(),
   getAppleCredential: vi.fn(),
   getGoogleCredential: vi.fn(),
   googleCredential: { providerId: 'google.com' },
   linkWithCredential: vi.fn(),
   signInWithCredential: vi.fn(),
   signInWithEmailAndPassword: vi.fn(),
+  signOut: vi.fn(),
   updateProfile: vi.fn(),
 }));
 
 vi.mock('firebase/auth', () => ({
   createUserWithEmailAndPassword: vi.fn(),
+  deleteUser: mocks.deleteUser,
   fetchSignInMethodsForEmail: mocks.fetchMethods,
+  getAdditionalUserInfo: mocks.getAdditionalUserInfo,
   linkWithCredential: mocks.linkWithCredential,
   onAuthStateChanged: vi.fn(),
   sendPasswordResetEmail: vi.fn(),
   signInWithCredential: mocks.signInWithCredential,
   signInWithEmailAndPassword: mocks.signInWithEmailAndPassword,
-  signOut: vi.fn(),
+  signOut: mocks.signOut,
   updateProfile: mocks.updateProfile,
 }));
 vi.mock('../../lib/firebase', () => ({ auth: { currentUser: null } }));
@@ -40,6 +45,7 @@ import {
   clearPendingSocialAuthState,
   completeLinkingWithPassword,
   completeLinkingWithProvider,
+  discardNewSocialIdentity,
   signInWithProvider,
 } from '../socialAuth';
 
@@ -78,6 +84,7 @@ describe('Google/Apple sign-in and account linking', () => {
     mocks.linkWithCredential.mockImplementation(async (linkedUser) => ({
       user: linkedUser,
     }));
+    mocks.getAdditionalUserInfo.mockReturnValue({ isNewUser: false });
   });
 
   it.each([
@@ -87,9 +94,28 @@ describe('Google/Apple sign-in and account linking', () => {
     const signedInUser = user();
     mocks.signInWithCredential.mockResolvedValueOnce({ user: signedInUser });
 
-    await expect(signInWithProvider(provider)).resolves.toBe(signedInUser);
+    await expect(signInWithProvider(provider)).resolves.toEqual({
+      user: signedInUser,
+      isNewUser: false,
+    });
     expect(mocks.signInWithCredential).toHaveBeenCalledWith(expect.anything(), credential);
   });
+
+  it.each(['google', 'apple'] as const)(
+    'reports a first %s credential sign-in as a new Firebase user',
+    async (provider) => {
+      const signedInUser = user();
+      const userCredential = { user: signedInUser };
+      mocks.signInWithCredential.mockResolvedValueOnce(userCredential);
+      mocks.getAdditionalUserInfo.mockReturnValueOnce({ isNewUser: true });
+
+      await expect(signInWithProvider(provider)).resolves.toEqual({
+        user: signedInUser,
+        isNewUser: true,
+      });
+      expect(mocks.getAdditionalUserInfo).toHaveBeenCalledWith(userCredential);
+    },
+  );
 
   it('keeps account-exists detection and method discovery intact', async () => {
     await startPendingGoogleLink();
@@ -145,5 +171,37 @@ describe('Google/Apple sign-in and account linking', () => {
     expect(mocks.updateProfile).toHaveBeenCalledWith(signedInUser, {
       displayName: 'Apple Person',
     });
+  });
+
+  it('still classifies a new identity when the optional display-name update fails', async () => {
+    const signedInUser = user({ displayName: null });
+    mocks.signInWithCredential.mockResolvedValueOnce({ user: signedInUser });
+    mocks.getAdditionalUserInfo.mockReturnValueOnce({ isNewUser: true });
+    mocks.updateProfile.mockRejectedValueOnce(new Error('profile update failed'));
+
+    await expect(signInWithProvider('apple')).resolves.toEqual({
+      user: signedInUser,
+      isNewUser: true,
+    });
+  });
+
+  it('deletes a newly-created social identity when registration is abandoned', async () => {
+    const incompleteUser = user();
+
+    await discardNewSocialIdentity(incompleteUser as never);
+
+    expect(mocks.deleteUser).toHaveBeenCalledWith(incompleteUser);
+    expect(mocks.signOut).not.toHaveBeenCalled();
+  });
+
+  it('signs out and surfaces cleanup failure when deleting the new identity fails', async () => {
+    const incompleteUser = user();
+    mocks.deleteUser.mockRejectedValueOnce({ code: 'auth/network-request-failed' });
+
+    await expect(discardNewSocialIdentity(incompleteUser as never)).rejects.toMatchObject({
+      code: 'auth/network-request-failed',
+    });
+
+    expect(mocks.signOut).toHaveBeenCalled();
   });
 });

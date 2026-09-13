@@ -5,6 +5,19 @@
   "actions": {
     "generatePlan": "Gerar meu plano"
   },
+  "safety": {
+    "kicker": "Segurança em primeiro lugar",
+    "clearanceRequired": {
+      "title": "Liberação profissional necessária",
+      "body": "Fazer exercícios sem a liberação adequada pode ser perigoso: pode agravar sintomas, causar lesões ou comprometer sua recuperação. Antes de continuar, procure o profissional responsável pelo seu acompanhamento e obtenha autorização para se exercitar."
+    },
+    "blocked": {
+      "title": "Não é seguro continuar agora",
+      "body": "Suas respostas indicam uma situação em que fazer exercícios agora pode colocar sua saúde em risco. Procure o profissional responsável antes de retomar."
+    },
+    "action": "Entendi, vou buscar orientação",
+    "dismissAccessibility": "Fechar aviso de segurança"
+  },
   "sex": {
     "title": "Qual seu sexo?",
     "sub": "Calibra volume e recuperação.",
@@ -17,7 +30,8 @@
     "title": "Quando você nasceu?",
     "sub": "Afeta intensidade e descanso — sua idade é recalculada sempre a partir daqui.",
     "age_one": "{{count}} ano",
-    "age_other": "{{count}} anos"
+    "age_other": "{{count}} anos",
+    "minimumAge": "O AJ Fit é exclusivo para pessoas com 18 anos ou mais."
   },
   "height": {
     "title": "Sua altura?",

@@ -32,6 +32,7 @@ import { WorkoutLifecycleQaSheet } from '../dev/workoutLifecycle/WorkoutLifecycl
 import { useSubscription } from '../hooks/useSubscription';
 import { PREMIUM_ENTITLEMENT_ID } from '../lib/subscriptionConstants';
 import type { CustomerInfo } from 'react-native-purchases';
+import { LegalDocumentModal, type LegalDocumentKind } from '../components/legal/LegalDocumentModal';
 
 type UnitsOptionCopy = {
   label: string;
@@ -82,6 +83,7 @@ export function SettingsScreen({
   const [devOverridePickerOpen, setDevOverridePickerOpen] = useState(false);
   const workoutLifecycleQaPanelAllowed = isWorkoutLifecycleQaPanelAllowed();
   const [workoutLifecycleQaSheetOpen, setWorkoutLifecycleQaSheetOpen] = useState(false);
+  const [legalDocument, setLegalDocument] = useState<LegalDocumentKind | null>(null);
 
   // `i18n.language` is the runtime source of truth — DO NOT read
   // `profile.preferences.language` here. That field will diverge from the
@@ -302,8 +304,8 @@ export function SettingsScreen({
           <SettingsSection
             title={t('settings:sections.privacyAndData').toUpperCase()}
             items={[
-              { icon: 'shield', label: t('settings:items.privacyPolicy'), onPress: () => {} },
-              { icon: 'file-text', label: t('settings:items.termsOfUse'), onPress: () => {} },
+              { icon: 'shield', label: t('settings:items.privacyPolicy'), onPress: () => setLegalDocument('privacy') },
+              { icon: 'file-text', label: t('settings:items.termsOfUse'), onPress: () => setLegalDocument('terms') },
               { icon: 'check', label: t('settings:items.acceptedConsents'), onPress: () => {} },
               { icon: 'download', label: t('settings:items.exportData'), onPress: () => {} },
               {
@@ -328,7 +330,7 @@ export function SettingsScreen({
             title={t('settings:sections.about').toUpperCase()}
             items={[
               { icon: 'info', label: t('settings:items.version'), value: appVersionLabel },
-              { icon: 'file-text', label: t('settings:items.licenses'), onPress: () => {} },
+              { icon: 'file-text', label: t('settings:items.licenses'), onPress: () => setLegalDocument('licenses') },
             ]}
           />
 
@@ -419,6 +421,7 @@ export function SettingsScreen({
           onDismiss={() => setWorkoutLifecycleQaSheetOpen(false)}
         />
       ) : null}
+      <LegalDocumentModal document={legalDocument} onClose={() => setLegalDocument(null)} />
     </ScreenBg>
   );
 }

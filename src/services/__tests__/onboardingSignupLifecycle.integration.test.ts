@@ -63,6 +63,7 @@ if (!T003_SEED) throw new Error('T003 fixture missing — cannot run this integr
 
 const ANSWERS = completeAnswers({
   level: 'intermediate', days: 4, place: 'gym', sex: 'm', goal: 'gain_muscle',
+  birthDate: new Date('1990-01-01T12:00:00.000Z'),
   trainingDays: ['MON', 'TUE', 'THU', 'FRI'],
 });
 
@@ -101,7 +102,7 @@ describe.skipIf(!enabled)('Onboarding → signup lifecycle (conceptual E2E) — 
     expect(prepared.status).toBe('SUCCESS');
 
     // ── "Create Account" (AuthContext.signUp, exact same sequence) ──
-    const questionnaireId = await provisionNewUser(fakeUser, { name: 'Fiona', answers: ANSWERS });
+    const questionnaireId = await provisionNewUser(fakeUser, { name: 'Fiona', answers: ANSWERS, legalAccepted: true });
     expect(questionnaireId).not.toBeNull();
     if (!questionnaireId) return;
 
@@ -153,7 +154,7 @@ describe.skipIf(!enabled)('Onboarding → signup lifecycle (conceptual E2E) — 
   it('(H)(K) once the readiness gate resolves, AppShell/useWorkoutPrescription\'s OWN mount-time read finds the program immediately — no second generation, no false "loading placeholder" outcome', async () => {
     const prepared = await prepareWorkoutProgramLocally(ANSWERS);
     expect(prepared.status).toBe('SUCCESS');
-    const questionnaireId = await provisionNewUser(fakeUser, { name: 'Fiona', answers: ANSWERS });
+    const questionnaireId = await provisionNewUser(fakeUser, { name: 'Fiona', answers: ANSWERS, legalAccepted: true });
     expect(questionnaireId).not.toBeNull();
     if (!questionnaireId) return;
 

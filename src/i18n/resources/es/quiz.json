@@ -5,6 +5,19 @@
   "actions": {
     "generatePlan": "Generar mi plan"
   },
+  "safety": {
+    "kicker": "La seguridad es lo primero",
+    "clearanceRequired": {
+      "title": "Se requiere autorización profesional",
+      "body": "Hacer ejercicio sin la autorización adecuada puede ser peligroso: puede agravar síntomas, causar lesiones o comprometer tu recuperación. Antes de continuar, consulta al profesional responsable de tu seguimiento y obtén autorización para ejercitarte."
+    },
+    "blocked": {
+      "title": "No es seguro continuar ahora",
+      "body": "Tus respuestas indican una situación en la que hacer ejercicio ahora puede poner en riesgo tu salud. Consulta al profesional responsable antes de retomar."
+    },
+    "action": "Entiendo, buscaré orientación",
+    "dismissAccessibility": "Cerrar aviso de seguridad"
+  },
   "sex": {
     "title": "¿Cuál es tu sexo?",
     "sub": "Calibra volumen y recuperación.",
@@ -17,7 +30,8 @@
     "title": "¿Cuándo naciste?",
     "sub": "Afecta intensidad y descanso — tu edad se recalcula siempre desde aquí.",
     "age_one": "{{count}} año",
-    "age_other": "{{count}} años"
+    "age_other": "{{count}} años",
+    "minimumAge": "AJ Fit es exclusivo para personas de 18 años o más."
   },
   "height": {
     "title": "¿Tu altura?",

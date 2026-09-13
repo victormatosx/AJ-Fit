@@ -24,6 +24,10 @@
     "month": "Mês",
     "year": "Ano"
   },
+  "legal": {
+    "placeholderTitle": "Conteúdo jurídico pendente",
+    "placeholderBody": "PLACEHOLDER — o conteúdo jurídico definitivo será inserido aqui posteriormente."
+  },
   "navigation": {
     "home": "Home",
     "workout": "Treino",

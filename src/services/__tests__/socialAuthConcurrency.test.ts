@@ -1,16 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
+  getAdditionalUserInfo: vi.fn(() => ({ isNewUser: false })),
   getAppleCredential: vi.fn(),
   getGoogleCredential: vi.fn(),
   signInWithCredential: vi.fn(),
 }));
 
 vi.mock('firebase/auth', () => ({
+  deleteUser: vi.fn(),
   fetchSignInMethodsForEmail: vi.fn(),
+  getAdditionalUserInfo: mocks.getAdditionalUserInfo,
   linkWithCredential: vi.fn(),
   signInWithCredential: mocks.signInWithCredential,
   signInWithEmailAndPassword: vi.fn(),
+  signOut: vi.fn(),
   updateProfile: vi.fn(),
 }));
 vi.mock('../../lib/firebase', () => ({ auth: { currentUser: null } }));
@@ -71,7 +75,10 @@ describe('social authentication concurrency', () => {
     await expect(signInWithProvider('apple')).rejects.toBeInstanceOf(
       SocialAuthCancelledError,
     );
-    await expect(signInWithProvider('apple')).resolves.toMatchObject({ uid: 'user-1' });
+    await expect(signInWithProvider('apple')).resolves.toMatchObject({
+      user: { uid: 'user-1' },
+      isNewUser: false,
+    });
 
     expect(mocks.getAppleCredential).toHaveBeenCalledTimes(2);
   });
@@ -83,7 +90,10 @@ describe('social authentication concurrency', () => {
       .mockResolvedValueOnce({ credential: { provider: 'google' }, displayName: 'Person' });
 
     await expect(signInWithProvider('google')).rejects.toBe(failure);
-    await expect(signInWithProvider('google')).resolves.toMatchObject({ uid: 'user-1' });
+    await expect(signInWithProvider('google')).resolves.toMatchObject({
+      user: { uid: 'user-1' },
+      isNewUser: false,
+    });
 
     expect(mocks.getGoogleCredential).toHaveBeenCalledTimes(2);
   });

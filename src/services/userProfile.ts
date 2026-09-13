@@ -36,6 +36,7 @@ import {
   type UnitsPreference,
 } from '../types/units';
 import type { NotificationPreferences } from '../types/notificationPreferences';
+import { assertNewAccountEligibility } from '../lib/registrationEligibility';
 
 /**
  * User repository — the only place that touches `users/{userId}` and its
@@ -262,14 +263,21 @@ export function hasMeaningfulAnswers(answers?: QuestionnaireAnswers | null): boo
 
 /**
  * Creates a brand-new user: the main `users/{uid}` document plus the initial
- * questionnaire, atomically, in a single batch. This is the ONLY place that
- * creates the user document, and it runs exactly once per account (from
- * `signUp`), so there is no race and no duplication.
+ * questionnaire, atomically, in a single batch. Email/password and confirmed
+ * new social registrations enter here only after passing eligibility.
  *
  * The main doc is keyed by uid (setDoc). The questionnaire id is generated once
  * up-front via `doc(collection(...))` — a single deterministic ref, no addDoc.
  */
 export async function provisionNewUser(
+  user: User,
+  input: { name?: string; answers?: QuestionnaireAnswers | null; legalAccepted?: boolean },
+): Promise<string | null> {
+  assertNewAccountEligibility(input);
+  return writeInitialUserDocuments(user, input);
+}
+
+async function writeInitialUserDocuments(
   user: User,
   input: { name?: string; answers?: QuestionnaireAnswers | null },
 ): Promise<string | null> {
@@ -299,8 +307,8 @@ export async function provisionNewUser(
         // Explicit `null`, never omitted: this is what marks the account as
         // "new, initial commercial gate pending" (see the `UserProfile`
         // type doc comment). Written identically regardless of provider
-        // (email/password, Apple, Google) — `provisionNewUser` is the only
-        // place any of them create this document.
+        // (email/password, Apple, Google) across the explicit provisioning
+        // paths in this repository.
         commercialGateResolvedAt: null,
       },
     },
@@ -324,17 +332,26 @@ export async function provisionNewUser(
 
 /**
  * Provisions the user document (+ first questionnaire) ONLY when it does not
- * exist yet. Used by every sign-in path that may be a first login (social,
- * or account creation). Never recreates or overwrites an existing user.
+ * exist yet. New-account callers keep the eligibility boundary; linking may
+ * explicitly repair an already-existing identity without being reclassified
+ * as a registration. Never recreates or overwrites an existing user.
  * Returns true when a new user was created.
  */
 export async function ensureUserProvisioned(
   user: User,
-  input: { name?: string; answers?: QuestionnaireAnswers | null } = {},
+  input: { name?: string; answers?: QuestionnaireAnswers | null; legalAccepted?: boolean } = {},
+  accountKind: 'new' | 'existing' = 'new',
 ): Promise<boolean> {
   const existing = await getUserProfile(user.uid);
   if (existing) return false;
-  await provisionNewUser(user, input);
+  if (accountKind === 'new') {
+    await provisionNewUser(user, input);
+  } else {
+    // Linking authenticates an identity that already existed before the
+    // current operation. Preserve the legacy repair behavior for an absent
+    // profile without reclassifying linking as a new registration.
+    await writeInitialUserDocuments(user, input);
+  }
   return true;
 }
 

@@ -31,6 +31,7 @@ import {
   signInWithProvider as socialSignIn,
   completeLinkingWithPassword as socialLinkPassword,
   completeLinkingWithProvider as socialLinkProvider,
+  discardNewSocialIdentity,
   getLinkedProviders,
   type SocialProvider,
 } from '../services/socialAuth';
@@ -53,6 +54,11 @@ import {
   type PrepareWorkoutProgramResult,
 } from '../services/workoutPrograms';
 import { ensureScheduleConfigFromQuestionnaire } from '../services/workoutSchedule';
+import {
+  assertNewAccountEligibility,
+  RegistrationEligibilityError,
+  resolveSocialAccountAdmission,
+} from '../lib/registrationEligibility';
 
 function deviceTimezone(): string {
   try {
@@ -88,6 +94,7 @@ type AuthCtx = {
     password: string,
     name: string,
     answers: QuestionnaireAnswers,
+    legalAccepted: boolean,
     /**
      * Phase 3 — the Analysis screen's pre-auth `prepareWorkoutProgram`
      * result (the onboarding funnel's own `preparedWorkoutProgram` state),
@@ -109,6 +116,7 @@ type AuthCtx = {
     provider: SocialProvider,
     answers?: QuestionnaireAnswers | null,
     name?: string | null,
+    legalAccepted?: boolean,
   ) => Promise<void>;
   /** Complete a pending link using the existing email/password account. */
   completeLinkingWithPassword: (
@@ -116,12 +124,14 @@ type AuthCtx = {
     password: string,
     answers?: QuestionnaireAnswers | null,
     name?: string | null,
+    legalAccepted?: boolean,
   ) => Promise<void>;
   /** Complete a pending link using another social provider. */
   completeLinkingWithProvider: (
     provider: SocialProvider,
     answers?: QuestionnaireAnswers | null,
     name?: string | null,
+    legalAccepted?: boolean,
   ) => Promise<void>;
   reset: (email: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -276,18 +286,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     dispatchLoad({ type: 'identity-cleared' });
   }, []);
 
+  const rollbackIncompleteSocialIdentity = useCallback(async (
+    incompleteUser: User,
+    firebaseCreatedNow: boolean,
+  ) => {
+    try {
+      if (firebaseCreatedNow) {
+        await discardNewSocialIdentity(incompleteUser);
+      } else {
+        await signOutUser();
+      }
+    } catch (rollbackError) {
+      logAuthError('registration-eligibility:rollback', rollbackError);
+    } finally {
+      setUser(null);
+      clearUserState();
+    }
+  }, [clearUserState]);
+
   // The auth listener never creates documents. The repository may atomically
-  // migrate an existing legacy document; account creation stays in signUp.
+  // migrate an existing legacy document; account creation stays in the
+  // explicit email/social operations below.
   useEffect(() => {
     const unsubscribe = subscribeToAuthState(async (nextUser) => {
       const authSeq = ++authStateSeq.current;
-      setUser(nextUser);
       logInfo('auth', 'auth_state_resolved', {
         uid: nextUser?.uid,
         authenticated: Boolean(nextUser),
       });
 
       if (!nextUser) {
+        setUser(null);
         clearUserState();
         setInitializing(false);
         return;
@@ -324,6 +353,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
+      setUser(nextUser);
+
       // `loadUserState` marks profileLoading synchronously. Releasing
       // `initializing` immediately after starting it lets SubscriptionContext
       // synchronize the same UID with RevenueCat in parallel with the two
@@ -346,7 +377,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     });
     return unsubscribe;
-  }, [loadUserState, clearUserState]);
+  }, [loadUserState, clearUserState, identityOperationFlight]);
 
   const value = useMemo<AuthCtx>(
     () => ({
@@ -357,13 +388,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       linkedProviders: user ? getLinkedProviders(user) : [],
       initializing,
       profileLoading: loadState.loading,
-      signUp: (email, password, name, answers, prepared) =>
+      signUp: (email, password, name, answers, legalAccepted, prepared) =>
         identityOperationFlight.run(async () => {
           // Timing instrumentation (audit: onboarding→Home lifecycle report,
           // item 9) — never logs questionnaire content, only durations/ids/
           // status, matching the pattern `onboarding_workout_generation_*`
           // already established in AnalyzingScreen.
           const signUpStartedAt = Date.now();
+          assertNewAccountEligibility({ answers, legalAccepted });
           // Single, authoritative creation flow — runs exactly once per account.
           const newUser = await signUpWithEmail(email, password, name);
           // Start delivery immediately after Firebase Auth creates the password
@@ -374,7 +406,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             .catch((error: unknown) => error);
           try {
             const provisionStartedAt = Date.now();
-            const questionnaireId = await provisionNewUser(newUser, { name, answers });
+            const questionnaireId = await provisionNewUser(newUser, { name, answers, legalAccepted });
             logInfo('auth', 'signup_provision_completed', {
               durationMs: Date.now() - provisionStartedAt,
               found: Boolean(questionnaireId),
@@ -467,25 +499,52 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           throw toAuthError(err);
         }
       }),
-      signInWithProvider: (provider, answers, name) =>
+      signInWithProvider: (provider, answers, name, legalAccepted) =>
         identityOperationFlight.run(async () => {
           // The credential sign-in triggers the auth-state listener; provisioning
-          // stays here (explicit flow) and only creates the doc on first login.
-          const authedUser = await socialSignIn(provider);
+          // stays here (explicit flow). Firebase's UserCredential tells us
+          // whether this provider sign-in created the Auth identity.
+          const socialResult = await socialSignIn(provider);
+          const authedUser = socialResult.user;
           try {
-            await ensureUserProvisioned(authedUser, { answers, name: name ?? undefined });
+            const existingProfile = socialResult.isNewUser
+              ? null
+              : await getUserProfile(authedUser.uid);
+            const admission = resolveSocialAccountAdmission({
+              isNewUser: socialResult.isNewUser,
+              hasProfile: existingProfile !== null,
+              answers,
+              legalAccepted,
+            });
+            if (admission === 'requires-provisioning') {
+              await provisionNewUser(authedUser, {
+                answers,
+                name: name ?? undefined,
+                legalAccepted,
+              });
+            }
             setUser(authedUser);
             await loadUserState(authedUser.uid);
           } catch (err) {
+            if (err instanceof RegistrationEligibilityError) {
+              await rollbackIncompleteSocialIdentity(
+                authedUser,
+                socialResult.isNewUser,
+              );
+            }
             logAuthError(`${provider}:firestore-profile`, err);
-            throw toAuthError(err);
+            throw err instanceof RegistrationEligibilityError ? err : toAuthError(err);
           }
         }),
-      completeLinkingWithPassword: (email, password, answers, name) =>
+      completeLinkingWithPassword: (email, password, answers, name, legalAccepted) =>
         identityOperationFlight.run(async () => {
           const linkedUser = await socialLinkPassword(email, password);
           try {
-            await ensureUserProvisioned(linkedUser, { answers, name: name ?? undefined });
+            await ensureUserProvisioned(
+              linkedUser,
+              { answers, name: name ?? undefined, legalAccepted },
+              'existing',
+            );
             setUser(linkedUser);
             await loadUserState(linkedUser.uid);
           } catch (err) {
@@ -493,11 +552,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             throw toAuthError(err);
           }
         }),
-      completeLinkingWithProvider: (provider, answers, name) =>
+      completeLinkingWithProvider: (provider, answers, name, legalAccepted) =>
         identityOperationFlight.run(async () => {
           const linkedUser = await socialLinkProvider(provider);
           try {
-            await ensureUserProvisioned(linkedUser, { answers, name: name ?? undefined });
+            await ensureUserProvisioned(
+              linkedUser,
+              { answers, name: name ?? undefined, legalAccepted },
+              'existing',
+            );
             setUser(linkedUser);
             await loadUserState(linkedUser.uid);
           } catch (err) {
@@ -528,6 +591,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       authRevision,
       identityOperationFlight,
       resetOperationFlight,
+      rollbackIncompleteSocialIdentity,
     ],
   );
 

@@ -28,6 +28,7 @@ import { MethodologyInterstitialScreen } from './onboarding/MethodologyInterstit
 import { GuidedWorkoutInterstitialScreen } from './onboarding/GuidedWorkoutInterstitialScreen';
 import { AjFitProgressInterstitialScreen } from './onboarding/AjFitProgressInterstitialScreen';
 import { answerValueForStep, updateQuizAnswer } from '../lib/questionnaireSchema';
+import { onboardingSafetyBlock } from '../onboarding/onboardingSafetyGate';
 
 export function OnboardingFunnelScreen({
   mode,
@@ -131,6 +132,7 @@ export function OnboardingFunnelScreen({
         stepNumber={progress.current}
         totalSteps={progress.total}
         ctaLabel={isLastQuestion ? t('actions.generatePlan') : undefined}
+        validateBeforeNext={() => onboardingSafetyBlock(currentStepId, quiz)}
       />
     );
   };

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, Pressable, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Text as SvgText } from 'react-native-svg';
@@ -10,6 +10,11 @@ import { Icon } from '../ui/Icon';
 import { ImperialHeightInput } from '../ui/ImperialHeightInput';
 import { useTheme } from '../../theme';
 import { useUnits } from '../../state/UnitsContext';
+import { computeAge } from '../../lib/ageCalculator';
+import {
+  ProfessionalClearanceModal,
+  type OnboardingSafetyBlockStatus,
+} from './ProfessionalClearanceModal';
 import {
   BirthDateWheel,
   canContinueQuestion,
@@ -47,6 +52,7 @@ export function QuestionStepScreen({
   stepNumber,
   totalSteps,
   ctaLabel,
+  validateBeforeNext,
 }: {
   question: Question;
   value: unknown;
@@ -56,15 +62,22 @@ export function QuestionStepScreen({
   stepNumber: number;
   totalSteps: number;
   ctaLabel?: string;
+  validateBeforeNext?: () => OnboardingSafetyBlockStatus | null;
 }) {
   const { t, i18n } = useTranslation(['quiz', 'common']);
   const { theme } = useTheme();
   const tLoose = t as unknown as LooseT;
   const { resolvedUnits } = useUnits();
+  const [safetyBlock, setSafetyBlock] = useState<OnboardingSafetyBlockStatus | null>(null);
   const canContinue = canContinueQuestion(question, value);
   const handleNext = () => {
     if (question.kind === 'wheel' && typeof value !== 'number') {
       onChange(question.default);
+    }
+    const nextSafetyBlock = validateBeforeNext?.() ?? null;
+    if (nextSafetyBlock) {
+      setSafetyBlock(nextSafetyBlock);
+      return;
     }
     onNext();
   };
@@ -220,11 +233,21 @@ export function QuestionStepScreen({
             </ScrollView>
           )}
 
+          {question.kind === 'date' && value instanceof Date && computeAge(value) < question.minAge ? (
+            <Text
+              accessibilityRole="alert"
+              style={{ marginTop: 12, color: theme.colors.feedbackErrorText, fontFamily: theme.fonts.ui, fontSize: 13, textAlign: 'center' }}
+            >
+              {t('quiz:birthDate.minimumAge', { min: question.minAge })}
+            </Text>
+          ) : null}
+
           <CtaButton onPress={handleNext} disabled={!canContinue} style={{ marginTop: 14 }}>
             <CtaText>{ctaLabel ?? t('common:actions.continue')}</CtaText>
           </CtaButton>
         </View>
       </SafeAreaView>
+      <ProfessionalClearanceModal status={safetyBlock} onDismiss={() => setSafetyBlock(null)} />
     </View>
   );
 }

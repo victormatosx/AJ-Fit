@@ -45,6 +45,7 @@ import {
   PASSWORD_POLICY_MIN_LENGTH,
   validateAuthFormPasswordPolicy,
 } from '../lib/passwordPolicy';
+import { LegalDocumentModal, type LegalDocumentKind } from '../components/legal/LegalDocumentModal';
 
 type Mode = 'signup' | 'login' | 'reset';
 
@@ -77,6 +78,10 @@ const AUTH_ERROR_KEY_BY_CODE = {
   'auth/provider-already-linked': 'errors.providerLinked',
   'permission-denied': 'errors.permissionDenied',
   unavailable: 'errors.unavailable',
+  registrationBirthDateRequired: 'validation.birthDateRequired',
+  registrationUnderage: 'validation.minimumAge',
+  registrationBirthDateInvalid: 'validation.birthDateInvalid',
+  registrationLegalAcceptanceRequired: 'validation.legalAcceptanceRequired',
 } as const;
 
 function localizedAuthError(
@@ -154,6 +159,10 @@ export function AuthScreen({
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [showPass, setShowPass] = useState(false);
+  const [legalAccepted, setLegalAccepted] = useState(false);
+  const [legalDocument, setLegalDocument] = useState<LegalDocumentKind | null>(null);
+  const [pendingNewSocialProvider, setPendingNewSocialProvider] =
+    useState<SocialProvider | null>(null);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -247,8 +256,20 @@ export function AuthScreen({
     setConfirm('');
     setLinking(null);
     setLinkPassword('');
+    setPendingNewSocialProvider(null);
+    setLegalAccepted(false);
     if (next === 'reset') {
       setResetCooldownSeconds(resetCooldown.remainingSeconds());
+    }
+  }
+
+  function handleLegalAcceptanceToggle() {
+    const nextAccepted = !legalAccepted;
+    setLegalAccepted(nextAccepted);
+    if (nextAccepted) {
+      setError((currentError) =>
+        currentError === t('validation.legalAcceptanceRequired') ? null : currentError,
+      );
     }
   }
 
@@ -258,6 +279,10 @@ export function AuthScreen({
       setGoogleUnavailableNotice(true);
       return;
     }
+    if (mode === 'signup' && !legalAccepted) {
+      setError(t('validation.legalAcceptanceRequired'));
+      return;
+    }
     operationLock.current = true;
     clearPendingSocialAuthState();
     setError(null);
@@ -265,15 +290,31 @@ export function AuthScreen({
     setLinking(null);
     setSocialBusy(provider);
     try {
-      await signInWithProvider(provider, quiz, name);
+      const isSocialRegistrationAttempt =
+        mode === 'signup' || pendingNewSocialProvider === provider;
+      await signInWithProvider(
+        provider,
+        isSocialRegistrationAttempt ? quiz : null,
+        isSocialRegistrationAttempt ? name : null,
+        isSocialRegistrationAttempt ? legalAccepted : undefined,
+      );
       // Navigation is decided centrally by RootNavigator from the resulting
       // auth/questionnaire state — this screen doesn't pick a destination.
     } catch (err) {
       if (err instanceof SocialAuthCancelledError) {
         // user dismissed the native sheet — no error message
       } else if (err instanceof AccountLinkingRequiredError) {
+        setPendingNewSocialProvider(null);
         setLinking({ email: err.email, methods: err.methods, attempted: err.attempted });
       } else {
+        const code =
+          typeof err === 'object' && err !== null && 'code' in err
+            ? String((err as { code: unknown }).code)
+            : '';
+        if (code === 'registrationLegalAcceptanceRequired') {
+          setPendingNewSocialProvider(provider);
+          setLegalAccepted(false);
+        }
         setError(localizedAuthError(err, t, 'errors.signInFailed'));
       }
     } finally {
@@ -292,7 +333,13 @@ export function AuthScreen({
     setError(null);
     setSocialBusy(linking.attempted);
     try {
-      await completeLinkingWithPassword(linking.email, linkPassword, quiz, name);
+      await completeLinkingWithPassword(
+        linking.email,
+        linkPassword,
+        mode === 'signup' ? quiz : null,
+        mode === 'signup' ? name : null,
+        mode === 'signup' ? legalAccepted : undefined,
+      );
     } catch (err) {
       setError(localizedAuthError(err, t, 'errors.linkFailed'));
     } finally {
@@ -307,7 +354,12 @@ export function AuthScreen({
     setError(null);
     setSocialBusy(existing);
     try {
-      await completeLinkingWithProvider(existing, quiz, name);
+      await completeLinkingWithProvider(
+        existing,
+        mode === 'signup' ? quiz : null,
+        mode === 'signup' ? name : null,
+        mode === 'signup' ? legalAccepted : undefined,
+      );
     } catch (err) {
       if (err instanceof SocialAuthCancelledError) {
         // user dismissed the native sheet
@@ -337,6 +389,8 @@ export function AuthScreen({
     if (passwordPolicyIssue) return t('errors.passwordPolicy');
     if (mode === 'signup' && password !== confirm)
       return t('validation.passwordMismatch');
+    if (mode === 'signup' && !legalAccepted)
+      return t('validation.legalAcceptanceRequired');
     return null;
   }
 
@@ -359,7 +413,7 @@ export function AuthScreen({
     setLoading(true);
     try {
       if (mode === 'signup') {
-        await signUp(email, password, name, quiz, preparedWorkoutProgram);
+        await signUp(email, password, name, quiz, legalAccepted, preparedWorkoutProgram);
       } else if (mode === 'login') {
         clearPendingSocialAuthState();
         await signIn(email, password);
@@ -522,6 +576,49 @@ export function AuthScreen({
                       min: PASSWORD_POLICY_MIN_LENGTH,
                     })}
                   </Text>
+                )}
+
+                {(mode === 'signup' || pendingNewSocialProvider !== null) && (
+                  <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
+                    <Pressable
+                      onPress={handleLegalAcceptanceToggle}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: legalAccepted }}
+                      accessibilityLabel={t('legal.acceptanceLabel')}
+                      hitSlop={8}
+                      style={{
+                        width: 22,
+                        height: 22,
+                        borderRadius: 5,
+                        borderWidth: 1,
+                        borderColor: legalAccepted ? theme.colors.primaryEmphasis : theme.colors.inputBorderSubtle,
+                        backgroundColor: legalAccepted ? theme.colors.primary : theme.colors.inputBackgroundSubtle,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      {legalAccepted ? <Icon name="check" size={15} color={theme.colors.primaryForeground} stroke={2.5} /> : null}
+                    </Pressable>
+                    <Text style={{ flex: 1, color: theme.colors.textMuted, fontFamily: theme.fonts.ui, fontSize: 12.5, lineHeight: 19 }}>
+                      {t('legal.acceptancePrefix')}{' '}
+                      <Text
+                        accessibilityRole="link"
+                        onPress={() => setLegalDocument('terms')}
+                        style={{ color: theme.colors.primaryEmphasis, textDecorationLine: 'underline', fontFamily: theme.fonts.uiSemi }}
+                      >
+                        {t('legal.terms')}
+                      </Text>{' '}
+                      {t('legal.acceptanceMiddle')}{' '}
+                      <Text
+                        accessibilityRole="link"
+                        onPress={() => setLegalDocument('privacy')}
+                        style={{ color: theme.colors.primaryEmphasis, textDecorationLine: 'underline', fontFamily: theme.fonts.uiSemi }}
+                      >
+                        {t('legal.privacy')}
+                      </Text>
+                      {t('legal.acceptanceSuffix')}
+                    </Text>
+                  </View>
                 )}
 
                 {mode === 'login' && (
@@ -715,6 +812,7 @@ export function AuthScreen({
           </View>
         </View>
       </Modal>
+      <LegalDocumentModal document={legalDocument} onClose={() => setLegalDocument(null)} />
     </ScreenBg>
   );
 }

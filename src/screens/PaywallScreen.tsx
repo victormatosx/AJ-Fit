@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -13,7 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
 import type { PurchasesPackage } from 'react-native-purchases';
-import { logError, logInfo, logWarn } from '../lib/logger';
+import { logInfo, logWarn } from '../lib/logger';
 import { requestCommercialGateConfirmation } from '../services/commercialGate';
 import type { OnboardingAuthContext } from '../onboarding/authContext';
 import { ScreenBg } from '../components/ui/ScreenBg';
@@ -70,6 +69,7 @@ import {
   DevSubscriptionOverridePickerSheet,
   DEV_OVERRIDE_LABELS,
 } from '../dev/DevSubscriptionOverridePickerSheet';
+import { LegalDocumentModal, type LegalDocumentKind } from '../components/legal/LegalDocumentModal';
 
 /**
  * FASE iOS-3 — derived from `isPromoCodeUiSupported` (see its doc comment,
@@ -81,10 +81,6 @@ import {
  * standard package flow remains authoritative.
  */
 const PROMO_CODE_SUPPORTED_PLATFORM = isPromoCodeUiSupported(Platform.OS);
-
-// Existing legal destinations from the previous real RevenueCat screen.
-const PRIVACY_POLICY_URL = 'https://ajfit.com.br/privacidade';
-const TERMS_OF_USE_URL = 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/';
 
 type PurchaseUiState =
   | { kind: 'idle' }
@@ -146,6 +142,7 @@ export function PaywallScreen({
     setOverride: setDevOverride,
   } = useDevSubscriptionOverrideContext();
   const [devOverridePickerOpen, setDevOverridePickerOpen] = useState(false);
+  const [legalDocument, setLegalDocument] = useState<LegalDocumentKind | null>(null);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [purchaseState, setPurchaseState] = useState<PurchaseUiState>({ kind: 'idle' });
@@ -695,10 +692,6 @@ export function PaywallScreen({
     }
   }, [restore]);
 
-  const openLink = useCallback((url: string) => {
-    Linking.openURL(url).catch((err) => logError('paywallScreen:open-link', err));
-  }, []);
-
   const isPurchasing = purchaseState.kind === 'purchasing';
   const isRestoring = restoreState.kind === 'restoring';
   const busy = isPurchasing || isRestoring || closing;
@@ -763,7 +756,7 @@ export function PaywallScreen({
                 onPress={handleRestore}
               />
               <ActionNotices purchaseState={purchaseState} restoreState={restoreState} />
-              <LegalLinks openLink={openLink} />
+              <LegalLinks onOpen={setLegalDocument} />
             </View>
           </View>
         ) : (
@@ -883,7 +876,7 @@ export function PaywallScreen({
                 disabled={busy}
                 onPress={handleRestore}
               />
-              <LegalLinks openLink={openLink} />
+              <LegalLinks onOpen={setLegalDocument} />
             </View>
           </ScrollView>
         )}
@@ -899,6 +892,7 @@ export function PaywallScreen({
           onDismiss={() => setDevOverridePickerOpen(false)}
         />
       ) : null}
+      <LegalDocumentModal document={legalDocument} onClose={() => setLegalDocument(null)} />
     </ScreenBg>
   );
 }
@@ -1415,8 +1409,9 @@ function CenteredState({
   );
 }
 
-function LegalLinks({ openLink }: { openLink: (url: string) => void }) {
+function LegalLinks({ onOpen }: { onOpen: (document: LegalDocumentKind) => void }) {
   const { theme } = useTheme();
+  const { t } = useTranslation('settings');
   const linkStyle = {
     fontFamily: theme.fonts.uiMed,
     fontSize: 12,
@@ -1425,11 +1420,11 @@ function LegalLinks({ openLink }: { openLink: (url: string) => void }) {
   };
   return (
     <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 22, marginTop: 20 }}>
-      <Pressable onPress={() => openLink(PRIVACY_POLICY_URL)}>
-        <Text style={linkStyle}>Política de Privacidade</Text>
+      <Pressable onPress={() => onOpen('privacy')}>
+        <Text style={linkStyle}>{t('items.privacyPolicy')}</Text>
       </Pressable>
-      <Pressable onPress={() => openLink(TERMS_OF_USE_URL)}>
-        <Text style={linkStyle}>Termos de Uso</Text>
+      <Pressable onPress={() => onOpen('terms')}>
+        <Text style={linkStyle}>{t('items.termsOfUse')}</Text>
       </Pressable>
     </View>
   );

@@ -43,7 +43,7 @@ export const FUNNEL_QUESTIONS: Partial<Record<OnboardingStepId, Question>> = {
     ],
   },
   sex: { id: 'sex', kind: 'choice', options: [{ v: 'm' }, { v: 'f' }] },
-  birthDate: { id: 'birthDate', kind: 'date', minAge: 16, maxAge: 75 },
+  birthDate: { id: 'birthDate', kind: 'date', minAge: 18, maxAge: 75 },
   height: { id: 'height', kind: 'wheel', min: 140, max: 220, default: 178, digits: { min: 3, max: 3 } },
   weight: { id: 'weight', kind: 'wheel', min: 40, max: 180, default: 78, digits: { min: 2, max: 3 } },
   days: {

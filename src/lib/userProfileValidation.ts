@@ -3,7 +3,7 @@ import { isFutureDate } from './dateUtils';
 
 export const DISPLAY_NAME_MIN_LENGTH = 2;
 export const DISPLAY_NAME_MAX_LENGTH = 50;
-export const PROFILE_MIN_AGE = 16;
+export const PROFILE_MIN_AGE = 18;
 export const PROFILE_MAX_AGE = 75;
 // Matches the onboarding height wheel's range (src/onboarding/questionDefs.ts).
 export const PROFILE_MIN_HEIGHT_CM = 140;
