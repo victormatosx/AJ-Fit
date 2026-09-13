@@ -10,6 +10,7 @@ import { SegBar } from '../ui/SegBar';
 type Props = {
   cardio: { mode: string; duration: string; intensity: string };
   ready: boolean;
+  paused: boolean;
   targetReached: boolean;
   targetClock: string;
   remainingClock: string;
@@ -27,14 +28,15 @@ type Props = {
   onSkip: () => void;
   onStart: () => void;
   onExtend: () => void;
+  onPauseToggle: () => void;
   onFinish: () => void;
 };
 
 /** A restrained cardio adaptation of RestOverlay: stable clock, segmented
  * progress, one information card, and controls in a fixed footer. */
 export function CardioSessionContent({
-  cardio, ready, targetReached, targetClock, remainingClock,
-  progress, celebration, finishing, onClose, onSkip, onStart, onExtend, onFinish,
+  cardio, ready, paused, targetReached, targetClock, remainingClock,
+  progress, celebration, finishing, onClose, onSkip, onStart, onExtend, onPauseToggle, onFinish,
 }: Props) {
   const { theme } = useTheme();
   const { t } = useTranslation('workout');
@@ -47,7 +49,9 @@ export function CardioSessionContent({
       ? 'cardioSession.readyLabel'
       : targetReached
         ? 'cardioSession.targetReachedTitle'
-        : 'cardioSession.runningLabel',
+        : paused
+          ? 'cardioSession.pausedLabel'
+          : 'cardioSession.runningLabel',
   );
   const statusColor = targetReached ? theme.colors.success : theme.colors.primaryEmphasis;
 
@@ -144,35 +148,58 @@ export function CardioSessionContent({
               </View>
             )}
           </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={t(ready ? 'cardioSession.skipAndFinish' : 'cardioSession.extendAccessibility')}
-            accessibilityState={{ disabled: !!finishing, busy: ready && !!finishing }}
-            disabled={finishing}
-            onPress={ready ? onSkip : onExtend}
-            style={({ pressed }) => [
-              styles.secondary,
-              {
-                backgroundColor: theme.colors.surfacePressed,
-                borderColor: theme.colors.borderStrong,
-                opacity: pressed || finishing ? theme.opacity.pressed : 1,
-              },
-            ]}
-          >
-            {finishing && ready ? (
-              <ActivityIndicator color={theme.colors.textPrimary} />
-            ) : (
-              <Text
-                numberOfLines={2}
-                style={[
-                  styles.secondaryText,
-                  { color: theme.colors.textPrimary, fontFamily: theme.fonts.mono },
+          <View style={styles.secondaryActions}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t(ready ? 'cardioSession.skipAndFinish' : 'cardioSession.extendAccessibility')}
+              accessibilityState={{ disabled: !!finishing, busy: ready && !!finishing }}
+              disabled={finishing}
+              onPress={ready ? onSkip : onExtend}
+              style={({ pressed }) => [
+                styles.secondaryHalf,
+                {
+                  backgroundColor: theme.colors.surfacePressed,
+                  borderColor: theme.colors.borderStrong,
+                  opacity: pressed || finishing ? theme.opacity.pressed : 1,
+                },
+              ]}
+            >
+              {finishing && ready ? (
+                <ActivityIndicator color={theme.colors.textPrimary} />
+              ) : (
+                <Text
+                  numberOfLines={2}
+                  style={[
+                    styles.secondaryText,
+                    { color: theme.colors.textPrimary, fontFamily: theme.fonts.mono },
+                  ]}
+                >
+                  {t(ready ? 'cardioSession.skip' : 'cardioSession.extend')}
+                </Text>
+              )}
+            </Pressable>
+            {!ready && (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t(paused ? 'cardioSession.resume' : 'cardioSession.pause')}
+                accessibilityState={{ disabled: !!finishing }}
+                disabled={finishing}
+                onPress={onPauseToggle}
+                style={({ pressed }) => [
+                  styles.secondaryHalf,
+                  {
+                    backgroundColor: theme.colors.surfacePressed,
+                    borderColor: theme.colors.borderStrong,
+                    opacity: pressed || finishing ? theme.opacity.pressed : 1,
+                  },
                 ]}
               >
-                {t(ready ? 'cardioSession.skip' : 'cardioSession.extend')}
-              </Text>
+                <Text style={[styles.secondaryText, { color: theme.colors.textPrimary, fontFamily: theme.fonts.mono }]}>
+                  {t(paused ? 'cardioSession.resume' : 'cardioSession.pause')}
+                </Text>
+              </Pressable>
             )}
-          </Pressable>
+          </View>
         </View>
       </View>
 
@@ -215,7 +242,8 @@ const styles = StyleSheet.create({
   footer: { paddingHorizontal: 22, paddingTop: 14, paddingBottom: 12 },
   footerCompact: { paddingTop: 10, paddingBottom: 8 },
   actions: { width: '100%', flexDirection: 'column', gap: 10 },
-  secondary: { width: '100%', height: 52, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8 },
+  secondaryActions: { width: '100%', flexDirection: 'row', gap: 10 },
+  secondaryHalf: { flex: 1, height: 52, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8 },
   secondaryText: { fontSize: 11, lineHeight: 15, letterSpacing: 0.8, textAlign: 'center', textTransform: 'uppercase' },
   primary: {
     width: '100%', height: 52, paddingHorizontal: 14,

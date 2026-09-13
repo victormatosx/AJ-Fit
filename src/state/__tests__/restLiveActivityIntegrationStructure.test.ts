@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 const context = readFileSync('src/state/RestSessionContext.tsx', 'utf8');
 const workout = readFileSync('src/screens/WorkoutScreen.tsx', 'utf8');
+const appShell = readFileSync('src/screens/AppShell.tsx', 'utf8');
 const facade = readFileSync('src/lib/restLiveActivity.ts', 'utf8');
 const contract = readFileSync('src/types/restLiveActivity.ts', 'utf8');
 const bridge = readFileSync('modules/ajfit-rest-activity/index.ts', 'utf8');
@@ -144,6 +145,21 @@ describe('RestSessionContext live transition wiring', () => {
     expect(endBlock).toContain('if (restActivitySessionStartedRef.current)');
     expect(endBlock).toContain("void restLiveActivity.end('workout_ended')");
     expect(endBlock).toContain('restActivitySessionStartedRef.current = false');
+  });
+
+  it('keeps completed cardio visible until the final workout CTA', () => {
+    const completionBlock = appShell.slice(
+      appShell.indexOf('const runWorkoutCompletion ='),
+      appShell.indexOf('const retryWorkoutCompletion ='),
+    );
+    const finalCtaBlock = appShell.slice(
+      appShell.indexOf('const finishWorkoutSession ='),
+      appShell.indexOf('const discardWorkoutSession ='),
+    );
+    expect(completionBlock).toContain(
+      'if (!hasCardioFinisher) endWorkoutSession()',
+    );
+    expect(finalCtaBlock).toContain('endWorkoutSession()');
   });
 
   it('cleans storage and native orphans together on cold start', () => {

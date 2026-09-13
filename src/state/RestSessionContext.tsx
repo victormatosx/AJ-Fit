@@ -54,6 +54,8 @@ interface RestSessionContextValue {
   cancelRest: (restId: string) => boolean;
   consumeExpiration: (restId: string) => boolean;
   publishNextAction: (restId: string) => boolean;
+  /** Registers cardio publication so the workout boundary always dismisses it. */
+  registerLiveActivity: () => void;
 }
 
 const RestSessionContext = createContext<RestSessionContextValue | null>(null);
@@ -124,6 +126,10 @@ export function RestSessionProvider({ children }: { children: React.ReactNode })
     (executionId?: string) => ensureSessionId(executionId),
     [ensureSessionId],
   );
+
+  const registerLiveActivity = useCallback(() => {
+    restActivitySessionStartedRef.current = true;
+  }, []);
 
   const endWorkoutSession = useCallback(() => {
     const current = timerStateRef.current;
@@ -339,6 +345,7 @@ export function RestSessionProvider({ children }: { children: React.ReactNode })
     cancelRest,
     consumeExpiration,
     publishNextAction,
+    registerLiveActivity,
   }), [
     addSeconds,
     beginWorkoutSession,
@@ -346,6 +353,7 @@ export function RestSessionProvider({ children }: { children: React.ReactNode })
     consumeExpiration,
     endWorkoutSession,
     publishNextAction,
+    registerLiveActivity,
     startRest,
     timerState,
     workoutSessionId,

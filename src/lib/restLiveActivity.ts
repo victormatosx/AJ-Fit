@@ -2,10 +2,10 @@ import { getAJFitRestActivityNativeModule } from '../../modules/ajfit-rest-activ
 import { logInfo, logWarn } from './logger';
 import type {
   RestActivityEndReason,
-  RestActivityState,
   RestActivityUpdateOptions,
   RestLiveCapabilities,
   RestLiveSurface,
+  WorkoutActivityState,
 } from '../types/restLiveActivity';
 import {
   REST_ACTIVITY_NEXT_ACTION,
@@ -18,6 +18,7 @@ export type {
   RestActivityUpdateOptions,
   RestLiveCapabilities,
   RestLiveSurface,
+  WorkoutActivityState,
 } from '../types/restLiveActivity';
 
 const NO_REST_LIVE_CAPABILITIES: RestLiveCapabilities = {
@@ -50,20 +51,8 @@ function normalizeCapabilities(value: unknown): RestLiveCapabilities {
   return { available: true, surface: candidate.surface as RestLiveSurface };
 }
 
-function isValidState(state: RestActivityState): boolean {
-  const hasValidNextAction =
-    state.nextAction === REST_ACTIVITY_NEXT_ACTION.NEXT_SET
-      ? Number.isInteger(state.nextSetIndex) &&
-        state.nextSetIndex > state.setIndex &&
-        state.nextSetIndex <= state.totalSets &&
-        state.nextExerciseName === undefined
-      : state.nextAction === REST_ACTIVITY_NEXT_ACTION.NEXT_EXERCISE &&
-        state.nextSetIndex === undefined &&
-        state.setIndex === state.totalSets &&
-        typeof state.nextExerciseName === 'string' &&
-        state.nextExerciseName.trim().length > 0;
-
-  return (
+function isValidState(state: WorkoutActivityState): boolean {
+  const hasValidBase =
     !!state &&
     typeof state.sessionId === 'string' &&
     state.sessionId.trim().length > 0 &&
@@ -77,7 +66,32 @@ function isValidState(state: RestActivityState): boolean {
     state.setIndex >= 1 &&
     Number.isInteger(state.totalSets) &&
     state.totalSets >= state.setIndex &&
-    Object.values(REST_ACTIVITY_PHASE).includes(state.phase) &&
+    Object.values(REST_ACTIVITY_PHASE).includes(state.phase);
+  if (!hasValidBase) return false;
+
+  if (
+    state.phase === REST_ACTIVITY_PHASE.CARDIO_RUNNING ||
+    state.phase === REST_ACTIVITY_PHASE.CARDIO_PAUSED ||
+    state.phase === REST_ACTIVITY_PHASE.CARDIO_COMPLETED
+  ) {
+    return state.nextAction === REST_ACTIVITY_NEXT_ACTION.FINISH_WORKOUT &&
+      state.nextSetIndex === undefined &&
+      state.nextExerciseName === undefined;
+  }
+
+  const hasValidNextAction =
+    state.nextAction === REST_ACTIVITY_NEXT_ACTION.NEXT_SET
+      ? Number.isInteger(state.nextSetIndex) &&
+        state.nextSetIndex > state.setIndex &&
+        state.nextSetIndex <= state.totalSets &&
+        state.nextExerciseName === undefined
+      : state.nextAction === REST_ACTIVITY_NEXT_ACTION.NEXT_EXERCISE &&
+        state.nextSetIndex === undefined &&
+        state.setIndex === state.totalSets &&
+        typeof state.nextExerciseName === 'string' &&
+        state.nextExerciseName.trim().length > 0;
+
+  return (
     (state.phase === REST_ACTIVITY_PHASE.RESTING || state.phase === state.nextAction) &&
     hasValidNextAction
   );
@@ -98,7 +112,7 @@ function enqueueNativeOperation(
   return next;
 }
 
-async function getSupportedNativeModule() {
+async function getSupportedNativeModule(requiredSurface?: RestLiveSurface) {
   const nativeModule = getAJFitRestActivityNativeModule();
   if (!nativeModule) {
     logInfo('restLiveActivity', 'rest_live_unsupported', { reason: 'module-unavailable' });
@@ -110,7 +124,18 @@ async function getSupportedNativeModule() {
     logInfo('restLiveActivity', 'rest_live_unsupported', { reason: 'surface-unavailable' });
     return null;
   }
+  if (requiredSurface && capabilities.surface !== requiredSurface) {
+    logInfo('restLiveActivity', 'rest_live_unsupported', {
+      reason: 'surface-mismatch',
+      requiredSurface,
+    });
+    return null;
+  }
   return nativeModule;
+}
+
+function isCardioState(state: WorkoutActivityState): boolean {
+  return state.nextAction === REST_ACTIVITY_NEXT_ACTION.FINISH_WORKOUT;
 }
 
 async function getCapabilities(): Promise<RestLiveCapabilities> {
@@ -135,7 +160,7 @@ async function getCapabilities(): Promise<RestLiveCapabilities> {
   }
 }
 
-function start(state: RestActivityState): Promise<void> {
+function start(state: WorkoutActivityState): Promise<void> {
   if (!isValidState(state)) {
     logWarn('restLiveActivity', 'rest_live_native_error', {
       operation: 'start',
@@ -145,7 +170,9 @@ function start(state: RestActivityState): Promise<void> {
   }
 
   return enqueueNativeOperation('start', async () => {
-    const nativeModule = await getSupportedNativeModule();
+    const nativeModule = await getSupportedNativeModule(
+      isCardioState(state) ? 'ios-live-activity' : undefined,
+    );
     if (!nativeModule) return;
 
     if (logicalSessionId === state.sessionId) {
@@ -163,7 +190,7 @@ function start(state: RestActivityState): Promise<void> {
 }
 
 function update(
-  state: RestActivityState,
+  state: WorkoutActivityState,
   options: RestActivityUpdateOptions = {},
 ): Promise<void> {
   if (!isValidState(state)) {
@@ -175,7 +202,9 @@ function update(
   }
 
   return enqueueNativeOperation('update', async () => {
-    const nativeModule = await getSupportedNativeModule();
+    const nativeModule = await getSupportedNativeModule(
+      isCardioState(state) ? 'ios-live-activity' : undefined,
+    );
     if (!nativeModule || logicalSessionId !== state.sessionId) return;
     await nativeModule.update(state, options.alert === true);
     nativeCleanupRequired = true;

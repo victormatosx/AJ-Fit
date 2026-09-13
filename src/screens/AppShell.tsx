@@ -737,10 +737,14 @@ function AppShellContent({
     setDurableCompletionReachedAtMs(null);
     setFinishingSession(true);
     logInfo('workout_performance', 'loading_started', { timestampMs: Date.now() });
-    if (!activeProgram?.sessions[activeSessionIndex]?.cardioFinisher) {
+    const hasCardioFinisher = !!activeProgram?.sessions[activeSessionIndex]?.cardioFinisher;
+    if (!hasCardioFinisher) {
       logInfo('workout_performance', 'finish_ui_loading_started', { timestampMs: Date.now(), source: 'strength' });
     }
-    endWorkoutSession();
+    // Cardio keeps the shared Live Activity in its completed state until the
+    // user leaves the success screen, including completion recovery after a
+    // process restart. Strength-only behavior is unchanged.
+    if (!hasCardioFinisher) endWorkoutSession();
     const programId = activeProgram?.programId;
     const executionId = execution.execution?.executionId;
     logInfo('workout', 'workout_finish_requested', {

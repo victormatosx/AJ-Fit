@@ -74,8 +74,10 @@ import {
   extendCardioTarget,
   finishCardio,
   formatCardioClock,
+  pauseCardio,
   parsePrescribedCardioDurationSeconds,
   remainingCardioSeconds,
+  resumeCardio,
   startCardio,
   type CardioSession,
 } from '../lib/cardioTimer';
@@ -84,6 +86,8 @@ import {
   persistCardioSession,
   readCardioSession,
 } from '../services/cardioSessionStorage';
+import { restLiveActivity } from '../lib/restLiveActivity';
+import { projectCardioActivityState } from '../workoutExecution/cardioActivityProjection';
 import {
   beginSubstitutionFlight,
   commitConfirmedSubstitution,
@@ -2461,7 +2465,7 @@ function Badge({
  * principle as the main workout timer and the rest timer: correct across
  * background/lock, never a tick counter.
  *
- * State lives locally (READY/RUNNING/FINISHED, `CardioSession`) because
+ * State lives locally (READY/RUNNING/PAUSED/FINISHED, `CardioSession`) because
  * `WorkoutScreen` itself is never unmounted while minimized to another tab
  * (AppShell keeps it mounted with `pointerEvents`/opacity toggling) — a
  * React Context mirroring `RestSessionContext` isn't needed for that case.
@@ -2494,6 +2498,7 @@ function CardioScreen({
   const { t } = useTranslation('workout');
   const tLoose = t as unknown as LooseT;
   const cardio = resolveCardioFinisherPresentation(tLoose, cardioFinisher);
+  const { workoutSessionId, registerLiveActivity } = useRestSession();
   const plannedDurationSeconds = useMemo(
     () => parsePrescribedCardioDurationSeconds(cardioFinisher.duration),
     [cardioFinisher.duration],
@@ -2513,6 +2518,21 @@ function CardioScreen({
     void persistCardioSession(next);
   };
 
+  const publishLiveActivity = (
+    next: CardioSession,
+    operation: 'start' | 'update',
+    nowMs: number,
+  ) => {
+    registerLiveActivity();
+    const state = projectCardioActivityState({
+      session: next,
+      workoutSessionId: workoutSessionId ?? ownerKey,
+      cardioName: cardio.mode,
+      nowMs,
+    });
+    void restLiveActivity[operation](state);
+  };
+
   // Restores a same-process JS remount (see doc comment above) — a
   // different `ownerKey` (a genuinely different workout attempt) never
   // adopts another attempt's persisted clock.
@@ -2523,6 +2543,9 @@ function CardioScreen({
       if (persisted && persisted.workoutSessionId === ownerKey && persisted.status !== 'FINISHED') {
         sessionRef.current = persisted;
         setSession(persisted);
+        if (persisted.status === 'RUNNING' || persisted.status === 'PAUSED') {
+          publishLiveActivity(persisted, 'start', Date.now());
+        }
       } else if (persisted) {
         void clearCardioSession();
       }
@@ -2579,10 +2602,28 @@ function CardioScreen({
     const tapAt = Date.now();
     if (tapAt - lastExtendAtRef.current < 500) return; // guards an accidental double-tap
     lastExtendAtRef.current = tapAt;
-    publish(extendCardioTarget(session, 300));
+    const nowMs = Date.now();
+    const next = extendCardioTarget(session, 300);
+    publish(next);
+    publishLiveActivity(next, 'update', nowMs);
   };
 
-  const handleStart = () => publish(startCardio(session, Date.now()));
+  const handleStart = () => {
+    const nowMs = Date.now();
+    const next = startCardio(session, nowMs);
+    publish(next);
+    publishLiveActivity(next, 'start', nowMs);
+  };
+
+  const handlePauseToggle = () => {
+    const nowMs = Date.now();
+    const next = session.status === 'PAUSED'
+      ? resumeCardio(session, nowMs)
+      : pauseCardio(session, nowMs);
+    publish(next);
+    publishLiveActivity(next, 'update', nowMs);
+    setNow(nowMs);
+  };
 
   // Cardio Finisher Completion Recovery hardening (2026-09): the local
   // `session` never flips to FINISHED (and AsyncStorage is never cleared)
@@ -2628,6 +2669,11 @@ function CardioScreen({
       return;
     }
     publish(finishedSession);
+    publishLiveActivity(
+      finishedSession,
+      session.status === 'READY' ? 'start' : 'update',
+      finishedSession.cardioFinishedAt ?? Date.now(),
+    );
     void clearCardioSession();
     setFinishState('idle');
     onFinish(actualDurationSeconds);
@@ -2658,6 +2704,7 @@ function CardioScreen({
         <CardioSessionContent
           cardio={cardio}
           ready={session.status === 'READY'}
+          paused={session.status === 'PAUSED'}
           targetReached={targetReached}
           targetClock={targetClock}
           remainingClock={formatCardioClock(remaining)}
@@ -2667,6 +2714,7 @@ function CardioScreen({
           onSkip={() => void finalizeNow()}
           onStart={handleStart}
           onExtend={handleExtend}
+          onPauseToggle={handlePauseToggle}
           onFinish={() => setConfirmSheet('finish')}
           celebration={justReachedTarget ? (
             <Animated.View

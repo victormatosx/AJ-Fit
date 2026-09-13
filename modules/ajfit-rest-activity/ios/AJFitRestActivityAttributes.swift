@@ -5,16 +5,21 @@ public enum RestActivityPhase: String, Codable, Hashable, Sendable {
   case resting
   case nextSet = "next_set"
   case nextExercise = "next_exercise"
+  case cardioRunning = "cardio_running"
+  case cardioPaused = "cardio_paused"
+  case cardioCompleted = "cardio_completed"
 }
 
 public enum RestActivityNextAction: String, Codable, Hashable, Sendable {
   case nextSet = "next_set"
   case nextExercise = "next_exercise"
+  case finishWorkout = "finish_workout"
 
   public var phase: RestActivityPhase {
     switch self {
     case .nextSet: return .nextSet
     case .nextExercise: return .nextExercise
+    case .finishWorkout: return .cardioCompleted
     }
   }
 }
@@ -61,6 +66,9 @@ public struct AJFitRestActivityAttributes: ActivityAttributes {
     public func presentationPhase(isStale: Bool) -> RestActivityPhase {
       if phase == .resting && isStale {
         return nextAction.phase
+      }
+      if phase == .cardioRunning && isStale {
+        return .cardioCompleted
       }
       return phase
     }

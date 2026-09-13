@@ -16,10 +16,27 @@ private enum RestActivityCopy {
   static let returnToWorkout: LocalizedStringKey = "rest_activity_return_to_workout"
   static let tapToContinue: LocalizedStringKey = "rest_activity_tap_to_continue"
   static let timeAccessibility: LocalizedStringKey = "rest_activity_time_accessibility"
+  static let cardioTitle: LocalizedStringKey = "cardio_activity_title"
+  static let cardioPaused: LocalizedStringKey = "cardio_activity_paused"
+  static let cardioCompleted: LocalizedStringKey = "cardio_activity_completed"
+  static let finishWorkout: LocalizedStringKey = "cardio_activity_finish_workout"
+  static let cardioTimeAccessibility: LocalizedStringKey = "cardio_activity_time_accessibility"
 
   static func series(_ setIndex: Int, _ totalSets: Int) -> String {
     String(format: String(localized: "rest_activity_series_format"), setIndex, totalSets)
   }
+}
+
+private func cardioRemainingText(
+  _ state: AJFitRestActivityAttributes.ContentState
+) -> String {
+  let seconds = max(0, Int(state.endsAt.timeIntervalSince(state.startedAt).rounded(.down)))
+  let hours = seconds / 3_600
+  let minutes = (seconds % 3_600) / 60
+  let remainder = seconds % 60
+  return hours > 0
+    ? String(format: "%d:%02d:%02d", hours, minutes, remainder)
+    : String(format: "%d:%02d", minutes, remainder)
 }
 
 private struct AJFitLogo: View {
@@ -183,6 +200,77 @@ private struct RestingMinimalView: View {
   }
 }
 
+private struct CardioTimerText: View {
+  let state: AJFitRestActivityAttributes.ContentState
+  let compact: Bool
+
+  var body: some View {
+    Group {
+      if state.phase == .cardioRunning {
+        Text(timerInterval: state.startedAt...state.endsAt, countsDown: true, showsHours: false)
+      } else {
+        Text(cardioRemainingText(state))
+      }
+    }
+    .font(.system(size: compact ? 16 : 42, weight: .bold, design: .monospaced))
+    .monospacedDigit()
+    .lineLimit(1)
+    .minimumScaleFactor(0.72)
+    .foregroundStyle(.white)
+    .accessibilityLabel(Text(RestActivityCopy.cardioTimeAccessibility))
+  }
+}
+
+private struct CardioStatusIcon: View {
+  let phase: RestActivityPhase
+  let size: CGFloat
+
+  var body: some View {
+    Image(systemName: phase == .cardioCompleted
+      ? "checkmark.circle.fill"
+      : phase == .cardioPaused ? "pause.circle.fill" : "heart.fill")
+      .font(.system(size: size, weight: .semibold))
+      .foregroundStyle(ajFitBlue)
+      .accessibilityHidden(true)
+  }
+}
+
+private struct CardioLockScreenView: View {
+  let state: AJFitRestActivityAttributes.ContentState
+  let phase: RestActivityPhase
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 10) {
+      HStack {
+        AJFitLogo()
+        Text(RestActivityCopy.cardioTitle)
+          .font(.system(size: 13, weight: .bold, design: .rounded))
+          .foregroundStyle(ajFitBlue)
+        Spacer()
+        CardioStatusIcon(phase: phase, size: 22)
+      }
+      if phase == .cardioCompleted {
+        Text(RestActivityCopy.cardioCompleted)
+          .font(.system(size: 24, weight: .bold, design: .rounded))
+          .foregroundStyle(.white)
+        Text(RestActivityCopy.finishWorkout)
+          .font(.system(size: 15, weight: .semibold, design: .rounded))
+          .foregroundStyle(ajFitBlue)
+      } else {
+        CardioTimerText(state: state, compact: false)
+        Text(phase == .cardioPaused ? RestActivityCopy.cardioPaused : RestActivityCopy.returnToWorkout)
+          .font(.system(size: 13, weight: .medium, design: .rounded))
+          .foregroundStyle(.white.opacity(0.68))
+      }
+      Text(state.exerciseName)
+        .font(.system(size: 16, weight: .semibold, design: .rounded))
+        .foregroundStyle(.white)
+        .lineLimit(1)
+        .minimumScaleFactor(0.75)
+    }
+  }
+}
+
 private struct NextSetCompactLeadingView: View {
   var body: some View {
     Text(RestActivityCopy.nextSetCompact)
@@ -329,6 +417,8 @@ private struct RestLockScreenView: View {
       case .resting: RestingLockScreenView(state: state)
       case .nextSet: NextSetLockScreenView(state: state)
       case .nextExercise: NextExerciseLockScreenView(state: state)
+      case .cardioRunning, .cardioPaused, .cardioCompleted:
+        CardioLockScreenView(state: state, phase: phase)
       }
     }
     .padding(16)
@@ -379,6 +469,8 @@ private struct ExpandedTrailingView: View {
         }
       case .nextExercise:
         RestAdvanceIndicator(size: 22, accessibilityLabel: RestActivityCopy.nextExercise)
+      case .cardioRunning, .cardioPaused, .cardioCompleted:
+        CardioStatusIcon(phase: phase, size: 22)
       }
     }
     .font(.system(size: 12, weight: .semibold, design: .rounded))
@@ -401,6 +493,12 @@ private struct ExpandedCenterView: View {
           .foregroundStyle(.white)
       case .nextExercise:
         Text(RestActivityCopy.nextExercise)
+          .font(.system(size: 22, weight: .bold, design: .rounded))
+          .foregroundStyle(.white)
+      case .cardioRunning, .cardioPaused:
+        CardioTimerText(state: state, compact: false)
+      case .cardioCompleted:
+        Text(RestActivityCopy.cardioCompleted)
           .font(.system(size: 22, weight: .bold, design: .rounded))
           .foregroundStyle(.white)
       }
@@ -429,7 +527,15 @@ private struct ExpandedBottomView: View {
         .foregroundStyle(.white)
         .lineLimit(1)
         .minimumScaleFactor(0.72)
-      Text(phase == .resting ? RestActivityCopy.returnToWorkout : RestActivityCopy.tapToContinue)
+      Text(
+        phase == .resting || phase == .cardioRunning
+          ? RestActivityCopy.returnToWorkout
+          : phase == .cardioPaused
+            ? RestActivityCopy.cardioPaused
+            : phase == .cardioCompleted
+              ? RestActivityCopy.finishWorkout
+              : RestActivityCopy.tapToContinue
+      )
         .font(.system(size: 11, weight: .medium, design: .rounded))
         .foregroundStyle(.white.opacity(0.58))
     }
@@ -463,16 +569,29 @@ struct AJFitRestActivityWidget: Widget {
         case .resting: RestingCompactLeadingView(state: context.state)
         case .nextSet: NextSetCompactLeadingView()
         case .nextExercise: NextExerciseCompactLeadingView()
+        case .cardioRunning, .cardioPaused:
+          CardioTimerText(state: context.state, compact: true)
+            .frame(width: 48, alignment: .leading)
+        case .cardioCompleted:
+          Text(RestActivityCopy.cardioCompleted)
+            .font(.system(size: 9, weight: .bold, design: .rounded))
+            .foregroundStyle(ajFitBlue)
         }
       } compactTrailing: {
         switch phase {
         case .resting: RestingCompactTrailingView(state: context.state)
         case .nextSet: NextSetCompactTrailingView()
         case .nextExercise: NextExerciseCompactTrailingView()
+        case .cardioRunning, .cardioPaused, .cardioCompleted:
+          CardioStatusIcon(phase: phase, size: 19)
         }
       } minimal: {
         if phase == .resting {
           RestingMinimalView(state: context.state)
+        } else if phase == .cardioRunning || phase == .cardioPaused {
+          CardioTimerText(state: context.state, compact: true)
+        } else if phase == .cardioCompleted {
+          CardioStatusIcon(phase: phase, size: 19)
         } else {
           NextActionMinimalView(phase: phase)
         }
@@ -530,11 +649,17 @@ private struct CompactPreview: View {
       case .resting: RestingCompactLeadingView(state: state)
       case .nextSet: NextSetCompactLeadingView()
       case .nextExercise: NextExerciseCompactLeadingView()
+      case .cardioRunning, .cardioPaused:
+        CardioTimerText(state: state, compact: true)
+      case .cardioCompleted:
+        Text(RestActivityCopy.cardioCompleted)
       }
       switch phase {
       case .resting: RestingCompactTrailingView(state: state)
       case .nextSet: NextSetCompactTrailingView()
       case .nextExercise: NextExerciseCompactTrailingView()
+      case .cardioRunning, .cardioPaused, .cardioCompleted:
+        CardioStatusIcon(phase: phase, size: 19)
       }
     }
     .padding(8)

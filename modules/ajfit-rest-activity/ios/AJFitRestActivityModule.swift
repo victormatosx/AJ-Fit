@@ -39,6 +39,10 @@ private struct RestActivityStateRecord: Record {
       nextSetIndex == nil &&
         setIndex == totalSets &&
         !(trimmedNextExerciseName ?? "").isEmpty
+    case .finishWorkout:
+      nextSetIndex == nil &&
+        trimmedNextExerciseName == nil &&
+        [.cardioRunning, .cardioPaused, .cardioCompleted].contains(materializedPhase)
     }
     guard
       !sessionId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
@@ -47,7 +51,10 @@ private struct RestActivityStateRecord: Record {
       !exerciseName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
       setIndex >= 1,
       totalSets >= setIndex,
-      materializedPhase == .resting || materializedPhase == materializedNextAction.phase,
+      materializedPhase == .resting ||
+        materializedPhase == materializedNextAction.phase ||
+        (materializedNextAction == .finishWorkout && materializedPhase == .cardioRunning) ||
+        (materializedNextAction == .finishWorkout && materializedPhase == .cardioPaused),
       hasValidNextAction
     else {
       return nil
@@ -195,7 +202,9 @@ private actor RestLiveActivityController {
   ) -> ActivityContent<AJFitRestActivityAttributes.ContentState> {
     ActivityContent(
       state: state.contentState,
-      staleDate: state.phase == .resting ? state.endsAt : nil,
+      staleDate: state.phase == .resting || state.phase == .cardioRunning
+        ? state.endsAt
+        : nil,
       relevanceScore: 100
     )
   }

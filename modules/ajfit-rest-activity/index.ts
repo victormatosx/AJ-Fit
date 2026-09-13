@@ -1,14 +1,14 @@
 import { requireOptionalNativeModule } from 'expo-modules-core';
 import type {
   RestActivityEndReason,
-  RestActivityState,
   RestLiveCapabilities,
+  WorkoutActivityState,
 } from '../../src/types/restLiveActivity';
 
 export type AJFitRestActivityNativeModule = {
   getCapabilities(): RestLiveCapabilities | Promise<RestLiveCapabilities>;
-  start(state: RestActivityState): void | Promise<void>;
-  update(state: RestActivityState, shouldAlert: boolean): void | Promise<void>;
+  start(state: WorkoutActivityState): void | Promise<void>;
+  update(state: WorkoutActivityState, shouldAlert: boolean): void | Promise<void>;
   end(sessionId: string, reason: RestActivityEndReason): void | Promise<void>;
   /** Optional for compatibility with binaries produced before Phase 7. */
   cleanup?(): void | Promise<void>;

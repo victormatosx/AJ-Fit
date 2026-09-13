@@ -8,7 +8,7 @@
  * or with the JS runtime suspended.
  */
 
-export type CardioStatus = 'READY' | 'RUNNING' | 'FINISHED';
+export type CardioStatus = 'READY' | 'RUNNING' | 'PAUSED' | 'FINISHED';
 
 export type CardioSession = Readonly<{
   /** Identifies one concrete cardio attempt, independent of the workout session. */
@@ -20,6 +20,10 @@ export type CardioSession = Readonly<{
   cardioStartedAt: number | null;
   /** Epoch ms. `null` until `finishCardio` runs. */
   cardioFinishedAt: number | null;
+  /** Epoch ms for the current pause, otherwise null. */
+  cardioPausedAt: number | null;
+  /** Accumulated completed pause intervals. Running time never includes it. */
+  accumulatedPausedMs: number;
   /** Original prescription-derived target, in seconds — never mutated after creation. */
   plannedDurationSeconds: number;
   /** `plannedDurationSeconds` plus any `extendCardioTarget` calls — this attempt's live goal. */
@@ -58,6 +62,8 @@ export function createCardioSession(input: CreateCardioSessionInput): CardioSess
     status: 'READY',
     cardioStartedAt: null,
     cardioFinishedAt: null,
+    cardioPausedAt: null,
+    accumulatedPausedMs: 0,
     plannedDurationSeconds: input.plannedDurationSeconds,
     targetDurationSeconds: input.plannedDurationSeconds,
     actualDurationSeconds: null,
@@ -74,7 +80,30 @@ export function startCardio(session: CardioSession, nowMs: number): CardioSessio
 export function computeCardioElapsedSeconds(session: CardioSession, nowMs: number): number {
   if (session.status === 'READY') return 0;
   if (session.status === 'FINISHED') return session.actualDurationSeconds ?? 0;
-  return Math.max(0, Math.floor((nowMs - (session.cardioStartedAt ?? nowMs)) / 1000));
+  const effectiveNow = session.status === 'PAUSED'
+    ? session.cardioPausedAt ?? nowMs
+    : nowMs;
+  return Math.max(0, Math.floor(
+    (effectiveNow - (session.cardioStartedAt ?? effectiveNow) - session.accumulatedPausedMs) / 1000,
+  ));
+}
+
+/** Manual pause; backgrounding the app deliberately does not pause cardio. */
+export function pauseCardio(session: CardioSession, nowMs: number): CardioSession {
+  if (session.status !== 'RUNNING') return session;
+  return { ...session, status: 'PAUSED', cardioPausedAt: nowMs };
+}
+
+/** Resumes from the same elapsed timestamp without counting paused wall time. */
+export function resumeCardio(session: CardioSession, nowMs: number): CardioSession {
+  if (session.status !== 'PAUSED' || session.cardioPausedAt === null) return session;
+  return {
+    ...session,
+    status: 'RUNNING',
+    cardioPausedAt: null,
+    accumulatedPausedMs:
+      session.accumulatedPausedMs + Math.max(0, nowMs - session.cardioPausedAt),
+  };
 }
 
 export function remainingCardioSeconds(elapsedSeconds: number, targetDurationSeconds: number): number {
@@ -94,7 +123,7 @@ export function cardioProgressRatio(elapsedSeconds: number, targetDurationSecond
  */
 export function extendCardioTarget(session: CardioSession, addSeconds: number): CardioSession {
   assertFiniteInteger(addSeconds, 'addSeconds', 1);
-  if (session.status !== 'RUNNING') return session;
+  if (session.status !== 'RUNNING' && session.status !== 'PAUSED') return session;
   const nextTarget = Math.min(MAX_CARDIO_TARGET_SECONDS, session.targetDurationSeconds + addSeconds);
   if (nextTarget === session.targetDurationSeconds) return session;
   return { ...session, targetDurationSeconds: nextTarget };
@@ -112,6 +141,7 @@ export function finishCardio(session: CardioSession, nowMs: number): CardioSessi
     ...session,
     status: 'FINISHED',
     cardioFinishedAt: nowMs,
+    cardioPausedAt: null,
     actualDurationSeconds,
   };
 }
@@ -172,7 +202,12 @@ export function parseCardioSession(value: unknown): CardioSession | null {
     typeof candidate[field] !== 'string' || (candidate[field] as string).trim().length === 0
   )) return null;
 
-  if (candidate.status !== 'READY' && candidate.status !== 'RUNNING' && candidate.status !== 'FINISHED') {
+  if (
+    candidate.status !== 'READY' &&
+    candidate.status !== 'RUNNING' &&
+    candidate.status !== 'PAUSED' &&
+    candidate.status !== 'FINISHED'
+  ) {
     return null;
   }
 
@@ -187,8 +222,26 @@ export function parseCardioSession(value: unknown): CardioSession | null {
     typeof candidate[field] !== 'number' || !Number.isFinite(candidate[field]) || (candidate[field] as number) <= 0
   )) return null;
 
-  const session = candidate as unknown as CardioSession;
+  const cardioPausedAt = candidate.cardioPausedAt ?? null;
+  const accumulatedPausedMs = candidate.accumulatedPausedMs ?? 0;
+  if (
+    cardioPausedAt !== null &&
+    (typeof cardioPausedAt !== 'number' || !Number.isInteger(cardioPausedAt) || cardioPausedAt < 0)
+  ) return null;
+  if (
+    typeof accumulatedPausedMs !== 'number' ||
+    !Number.isInteger(accumulatedPausedMs) ||
+    accumulatedPausedMs < 0
+  ) return null;
+
+  const session = {
+    ...candidate,
+    cardioPausedAt,
+    accumulatedPausedMs,
+  } as unknown as CardioSession;
   if (session.status !== 'READY' && session.cardioStartedAt === null) return null;
+  if (session.status === 'PAUSED' && session.cardioPausedAt === null) return null;
+  if (session.status !== 'PAUSED' && session.cardioPausedAt !== null) return null;
   if (session.status === 'FINISHED' && session.cardioFinishedAt === null) return null;
   if (session.targetDurationSeconds < session.plannedDurationSeconds) return null;
 

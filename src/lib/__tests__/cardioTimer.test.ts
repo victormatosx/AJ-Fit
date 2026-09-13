@@ -10,8 +10,10 @@ import {
   formatCardioClock,
   parseCardioSession,
   parsePrescribedCardioDurationSeconds,
+  pauseCardio,
   remainingCardioSeconds,
   startCardio,
+  resumeCardio,
   type CardioSession,
 } from '../cardioTimer';
 
@@ -66,6 +68,27 @@ describe('computeCardioElapsedSeconds — wall clock, not a tick count', () => {
     const session = startCardio(createCardioSession(BASE_INPUT), 0);
     const finished = finishCardio(session, 90_000);
     expect(computeCardioElapsedSeconds(finished, 999_000)).toBe(90);
+  });
+});
+
+describe('pauseCardio / resumeCardio', () => {
+  it('freezes while paused and excludes the paused wall time after resume', () => {
+    const running = startCardio(createCardioSession(BASE_INPUT), 10_000);
+    const paused = pauseCardio(running, 70_000);
+    expect(paused.status).toBe('PAUSED');
+    expect(computeCardioElapsedSeconds(paused, 370_000)).toBe(60);
+
+    const resumed = resumeCardio(paused, 370_000);
+    expect(resumed.status).toBe('RUNNING');
+    expect(resumed.accumulatedPausedMs).toBe(300_000);
+    expect(computeCardioElapsedSeconds(resumed, 400_000)).toBe(90);
+  });
+
+  it('finishes a paused session at its frozen elapsed duration', () => {
+    const running = startCardio(createCardioSession(BASE_INPUT), 0);
+    const paused = pauseCardio(running, 90_000);
+    const finished = finishCardio(paused, 500_000);
+    expect(finished.actualDurationSeconds).toBe(90);
   });
 });
 
@@ -205,6 +228,19 @@ describe('parseCardioSession — restore/remount', () => {
     const session = startCardio(createCardioSession(BASE_INPUT), 42_000);
     const restored = parseCardioSession(JSON.parse(JSON.stringify(session)));
     expect(restored).toEqual(session);
+  });
+
+  it('round-trips a PAUSED session and migrates legacy sessions with pause defaults', () => {
+    const paused = pauseCardio(startCardio(createCardioSession(BASE_INPUT), 0), 30_000);
+    expect(parseCardioSession(JSON.parse(JSON.stringify(paused)))).toEqual(paused);
+
+    const legacy = { ...startCardio(createCardioSession(BASE_INPUT), 0) } as Record<string, unknown>;
+    delete legacy.cardioPausedAt;
+    delete legacy.accumulatedPausedMs;
+    expect(parseCardioSession(legacy)).toMatchObject({
+      cardioPausedAt: null,
+      accumulatedPausedMs: 0,
+    });
   });
 
   it('rejects malformed/garbage input', () => {

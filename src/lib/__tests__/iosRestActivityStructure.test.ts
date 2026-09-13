@@ -86,11 +86,24 @@ describe('AJFitRestActivity Apple module', () => {
     expect(attributesSource).toContain('public var startedAt: Date');
     expect(attributesSource).toContain('public var endsAt: Date');
     expect(moduleSource).toContain(
-      'staleDate: state.phase == .resting ? state.endsAt : nil',
+      'staleDate: state.phase == .resting || state.phase == .cardioRunning',
     );
     expect(`${moduleSource}\n${attributesSource}`).not.toContain(
       'remainingSeconds',
     );
+  });
+
+  it('extends the same ActivityKit schema and widget with cardio states', () => {
+    expect(attributesSource).toContain('case cardioRunning = "cardio_running"');
+    expect(attributesSource).toContain('case cardioPaused = "cardio_paused"');
+    expect(attributesSource).toContain('case cardioCompleted = "cardio_completed"');
+    expect(attributesSource).toContain('case finishWorkout = "finish_workout"');
+    expect(attributesSource).toContain('phase == .cardioRunning && isStale');
+    expect(moduleSource).toContain('materializedNextAction == .finishWorkout');
+    expect(widgetSource).toContain('private struct CardioLockScreenView: View');
+    expect(widgetSource).toContain('CardioTimerText(state: context.state');
+    expect(localizationCatalog.strings.cardio_activity_completed).toBeDefined();
+    expect(localizationCatalog.strings.cardio_activity_finish_workout).toBeDefined();
   });
 
   it('keeps the system activity reusable between rests and ends it with the workout', () => {

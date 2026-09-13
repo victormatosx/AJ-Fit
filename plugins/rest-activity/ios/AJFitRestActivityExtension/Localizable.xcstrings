@@ -1,6 +1,41 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "cardio_activity_completed" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "CARDIO COMPLETE" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "CARDIO COMPLETADO" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "CARDIO CONCLUÍDO" } }
+      }
+    },
+    "cardio_activity_finish_workout" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Open AJ Fit to finish the workout" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Abre AJ Fit para finalizar el entreno" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Abra o AJ Fit para finalizar o treino" } }
+      }
+    },
+    "cardio_activity_paused" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Cardio paused" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Cardio pausado" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Cardio pausado" } }
+      }
+    },
+    "cardio_activity_time_accessibility" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Cardio time remaining" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Tiempo restante de cardio" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "Tempo restante do cardio" } }
+      }
+    },
+    "cardio_activity_title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "AJ FIT · CARDIO" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "AJ FIT · CARDIO" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "AJ FIT · CARDIO" } }
+      }
+    },
     "rest_activity_completed_accessibility" : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Rest completed" } },

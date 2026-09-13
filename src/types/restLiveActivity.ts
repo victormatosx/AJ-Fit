@@ -13,6 +13,9 @@ export const REST_ACTIVITY_PHASE = Object.freeze({
   RESTING: 'resting',
   NEXT_SET: 'next_set',
   NEXT_EXERCISE: 'next_exercise',
+  CARDIO_RUNNING: 'cardio_running',
+  CARDIO_PAUSED: 'cardio_paused',
+  CARDIO_COMPLETED: 'cardio_completed',
 } as const);
 
 export type RestActivityPhase =
@@ -21,6 +24,7 @@ export type RestActivityPhase =
 export const REST_ACTIVITY_NEXT_ACTION = Object.freeze({
   NEXT_SET: REST_ACTIVITY_PHASE.NEXT_SET,
   NEXT_EXERCISE: REST_ACTIVITY_PHASE.NEXT_EXERCISE,
+  FINISH_WORKOUT: 'finish_workout',
 } as const);
 
 export type RestActivityNextAction =
@@ -80,6 +84,26 @@ export type RestActivityState = Readonly<
       })
   )
 >;
+
+/**
+ * Cardio reuses the workout's existing ActivityKit activity and wire shape.
+ * `startedAt...endsAt` is the effective absolute countdown interval while
+ * running; while paused its duration is the frozen remaining time. No native
+ * timer owns cardio state.
+ */
+export type CardioActivityState = Readonly<
+  RestActivityStateBase & {
+    phase:
+      | typeof REST_ACTIVITY_PHASE.CARDIO_RUNNING
+      | typeof REST_ACTIVITY_PHASE.CARDIO_PAUSED
+      | typeof REST_ACTIVITY_PHASE.CARDIO_COMPLETED;
+    nextAction: typeof REST_ACTIVITY_NEXT_ACTION.FINISH_WORKOUT;
+    nextSetIndex?: never;
+    nextExerciseName?: never;
+  }
+>;
+
+export type WorkoutActivityState = RestActivityState | CardioActivityState;
 
 export type RestActivityUpdateOptions = Readonly<{
   /** Requests system emphasis only for an on-time, natural rest completion. */

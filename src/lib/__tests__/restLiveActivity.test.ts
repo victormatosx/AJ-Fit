@@ -122,6 +122,60 @@ describe('restLiveActivity optional capabilities', () => {
 });
 
 describe('restLiveActivity temporal contract', () => {
+  it('accepts cardio states through the same native start/update queue', async () => {
+    const nativeModule = installNativeModule({
+      available: true,
+      surface: 'ios-live-activity',
+    });
+    const facade = await loadFacade();
+    const cardioState = {
+      sessionId: BASE_STATE.sessionId,
+      startedAt: 100_000,
+      endsAt: 700_000,
+      exerciseName: 'Esteira',
+      setIndex: 1,
+      totalSets: 1,
+      phase: REST_ACTIVITY_PHASE.CARDIO_RUNNING,
+      nextAction: REST_ACTIVITY_NEXT_ACTION.FINISH_WORKOUT,
+    } as const;
+
+    await facade.start(cardioState);
+    await facade.update({ ...cardioState, phase: REST_ACTIVITY_PHASE.CARDIO_PAUSED });
+
+    expect(nativeModule.start).toHaveBeenCalledWith(cardioState);
+    expect(nativeModule.update).toHaveBeenLastCalledWith(
+      expect.objectContaining({ phase: REST_ACTIVITY_PHASE.CARDIO_PAUSED }),
+      false,
+    );
+  });
+
+  it('keeps the Android rest fallback unchanged by ignoring cardio payloads', async () => {
+    const nativeModule = installNativeModule({
+      available: true,
+      surface: 'android-notification',
+    });
+    const facade = await loadFacade();
+    const cardioState = {
+      sessionId: BASE_STATE.sessionId,
+      startedAt: 100_000,
+      endsAt: 700_000,
+      exerciseName: 'Esteira',
+      setIndex: 1,
+      totalSets: 1,
+      phase: REST_ACTIVITY_PHASE.CARDIO_RUNNING,
+      nextAction: REST_ACTIVITY_NEXT_ACTION.FINISH_WORKOUT,
+    } as const;
+
+    await facade.start(cardioState);
+
+    expect(nativeModule.start).not.toHaveBeenCalled();
+    expect(logs.info).toHaveBeenCalledWith(
+      'restLiveActivity',
+      'rest_live_unsupported',
+      expect.objectContaining({ reason: 'surface-mismatch' }),
+    );
+  });
+
   it('sends absolute time and presentation fields without a ticking remaining value', async () => {
     const nativeModule = installNativeModule();
     const facade = await loadFacade();
