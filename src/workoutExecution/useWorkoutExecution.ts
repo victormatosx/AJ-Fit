@@ -329,7 +329,24 @@ export function useWorkoutExecution(program: WorkoutProgramSnapshot | null, time
     try {
       await mutationQueueRef.current.enqueue(
         `set:${exerciseIndex}:${setIndex}`,
-        () => recordSetExecution({ uid, executionId: execution.executionId, exerciseIndex, setIndex, weightKg, actualReps }),
+        async () => {
+          await recordSetExecution({ uid, executionId: execution.executionId, exerciseIndex, setIndex, weightKg, actualReps });
+          // Keep this projection inside the queued operation so a successful
+          // finish-barrier retry projects the same committed status too.
+          setExecution((current) => current && current.executionId === execution.executionId ? {
+            ...current,
+            exercises: current.exercises.map((exercise, index) => index !== exerciseIndex ? exercise : {
+              ...exercise,
+              sets: exercise.sets.map((set) => set.setIndex !== setIndex ? set : {
+                ...set,
+                status: 'COMPLETED' as const,
+                weightKg,
+                actualReps,
+                actualDurationSeconds: null,
+              }),
+            }),
+          } : current);
+        },
       );
     } catch (error) {
       logWarn('workout_execution', 'record_set_failed', { error });
@@ -341,7 +358,22 @@ export function useWorkoutExecution(program: WorkoutProgramSnapshot | null, time
     try {
       await mutationQueueRef.current.enqueue(
         `set:${exerciseIndex}:${setIndex}`,
-        () => skipSetExecution({ uid, executionId: execution.executionId, exerciseIndex, setIndex }),
+        async () => {
+          await skipSetExecution({ uid, executionId: execution.executionId, exerciseIndex, setIndex });
+          setExecution((current) => current && current.executionId === execution.executionId ? {
+            ...current,
+            exercises: current.exercises.map((exercise, index) => index !== exerciseIndex ? exercise : {
+              ...exercise,
+              sets: exercise.sets.map((set) => set.setIndex !== setIndex ? set : {
+                ...set,
+                status: 'SKIPPED' as const,
+                weightKg: null,
+                actualReps: null,
+                actualDurationSeconds: null,
+              }),
+            }),
+          } : current);
+        },
       );
     } catch (error) {
       logWarn('workout_execution', 'skip_set_failed', { error });
@@ -353,7 +385,19 @@ export function useWorkoutExecution(program: WorkoutProgramSnapshot | null, time
     try {
       await mutationQueueRef.current.enqueue(
         `exercise:${exerciseIndex}`,
-        () => skipExerciseExecution({ uid, executionId: execution.executionId, exerciseIndex }),
+        async () => {
+          await skipExerciseExecution({ uid, executionId: execution.executionId, exerciseIndex });
+          setExecution((current) => current && current.executionId === execution.executionId ? {
+            ...current,
+            exercises: current.exercises.map((exercise, index) => index !== exerciseIndex ? exercise : {
+              ...exercise,
+              sets: exercise.sets.map((set) => set.status === 'PENDING' ? {
+                ...set,
+                status: 'SKIPPED' as const,
+              } : set),
+            }),
+          } : current);
+        },
       );
     } catch (error) {
       logWarn('workout_execution', 'skip_exercise_failed', { error });

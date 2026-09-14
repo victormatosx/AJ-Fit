@@ -1,0 +1,9 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": {
+    "modules": ["AJFitInstagramStoriesModule"]
+  },
+  "android": {
+    "modules": ["com.ajfit.instagramstories.AJFitInstagramStoriesModule"]
+  }
+}

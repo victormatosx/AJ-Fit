@@ -89,16 +89,19 @@ export function MonoLabel({
   color,
   size = 10,
   style,
+  numberOfLines,
 }: {
   children: React.ReactNode;
   color?: string;
   size?: number;
   style?: StyleProp<TextStyle>;
+  numberOfLines?: number;
 }) {
   const { theme } = useTheme();
 
   return (
     <Text
+      numberOfLines={numberOfLines}
       style={[
         {
           fontFamily: theme.fonts.mono,

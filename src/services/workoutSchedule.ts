@@ -28,6 +28,7 @@ import {
 } from '../scheduleEngine/pendingMissReconciliation';
 import type {
   MissDecision,
+  MissedSessionDecisionIdentity,
   PendingMissDecision,
   ScheduleConfig,
   ScheduleEvent,
@@ -452,7 +453,8 @@ async function completeScheduledSessionAttempt(input: CompleteScheduledSessionIn
  * leaves `nextSessionIndex` on the missed session (today performs it, cursor
  * jumps to today once that completion lands); `FOLLOW_SCHEDULE` records the
  * skipped session(s) and jumps the cursor straight to today's calendar slot.
- * Re-running with nothing pending is a no-op (idempotent retry).
+ * Re-running is a no-op only when the immutable event proves the same
+ * occurrence already received the same choice (idempotent retry).
  */
 export async function resolveMissedSession(input: {
   uid: string;
@@ -461,8 +463,26 @@ export async function resolveMissedSession(input: {
   sessionCount: number;
   decision: MissDecision;
   todayLocalDate: string;
+  expected: MissedSessionDecisionIdentity;
 }): Promise<void> {
   const stateRef = scheduleStateRef(input.uid, input.programId, input.programInstanceId);
+  const resolvedEventRef = doc(
+    scheduleEventsCollection(input.uid, input.programId),
+    scheduleEventId({
+      type: 'MISS_RESOLVED',
+      sessionIndex: input.expected.missedSessionIndex,
+      scheduledDate: input.expected.missedScheduledDate,
+    }, input.programInstanceId),
+  );
+
+  // Response-loss/idempotent retry: the immutable event proves both which
+  // occurrence was resolved and which choice won. Do this before asking for
+  // another one-time authority grant.
+  const existingEvent = await getDoc(resolvedEventRef);
+  if (existingEvent.exists()) {
+    if (existingEvent.data().decision === input.decision) return;
+    throw new Error('STALE_MISSED_SESSION_DECISION');
+  }
 
   if (input.programInstanceId) {
     await authorizeWorkoutLifecycleMutation({
@@ -470,6 +490,9 @@ export async function resolveMissedSession(input: {
       sourceProgramInstanceId: input.programInstanceId,
       scheduledLocalDate: input.todayLocalDate,
       decision: input.decision,
+      expectedMissedSessionIndex: input.expected.missedSessionIndex,
+      expectedCalendarSessionIndex: input.expected.calendarSessionIndex,
+      expectedMissedScheduledDate: input.expected.missedScheduledDate,
     });
   }
   const grantRef = doc(
@@ -477,20 +500,31 @@ export async function resolveMissedSession(input: {
   );
 
   await runTransaction(db, async (transaction) => {
-    const stateSnapshot = await transaction.get(stateRef);
-    if (!stateSnapshot.exists()) return;
+    const [stateSnapshot, eventSnapshot] = await Promise.all([
+      transaction.get(stateRef),
+      transaction.get(resolvedEventRef),
+    ]);
+    if (!stateSnapshot.exists()) {
+      if (eventSnapshot.exists() && eventSnapshot.data().decision === input.decision) {
+        if (input.programInstanceId) transaction.delete(grantRef);
+        return;
+      }
+      throw new Error('STALE_MISSED_SESSION_DECISION');
+    }
     const data = stateSnapshot.data();
     const pending = data.pendingMissDecision as PendingMissDecision | null;
     if (!pending) {
-      // Already resolved — idempotent retry.
-      if (input.programInstanceId) transaction.delete(grantRef);
-      return;
+      if (eventSnapshot.exists() && eventSnapshot.data().decision === input.decision) {
+        if (input.programInstanceId) transaction.delete(grantRef);
+        return;
+      }
+      throw new Error('STALE_MISSED_SESSION_DECISION');
+    }
+    if (!pendingMissMatchesGap(pending, input.expected)) {
+      // A new pending decision must never receive the old modal's choice.
+      throw new Error('STALE_MISSED_SESSION_DECISION');
     }
 
-    const resolvedEventRef = doc(
-      scheduleEventsCollection(input.uid, input.programId),
-      scheduleEventId({ type: 'MISS_RESOLVED', sessionIndex: pending.missedSessionIndex, scheduledDate: pending.missedScheduledDate }, input.programInstanceId),
-    );
     transaction.set(resolvedEventRef, {
       type: 'MISS_RESOLVED',
       ...(input.programInstanceId ? { programInstanceId: input.programInstanceId } : {}),

@@ -1138,6 +1138,78 @@ describe.skipIf(!enabled)('Workout Lifecycle authority — real Firestore Emulat
     });
   });
 
+  describe('RESOLVE_MISSED_SESSION — displayed decision identity', () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const shift = (days: number) => new Date(Date.parse(`${today}T00:00:00.000Z`) + days * 86_400_000)
+      .toISOString().slice(0, 10);
+    const missedScheduledDate = shift(-1);
+
+    beforeEach(async () => {
+      await Promise.all([
+        db.collection('users').doc(UID).collection('workoutPrograms').doc('wpg_active').update({
+          sessions: [{ name: 'A', exercises: [] }, { name: 'B', exercises: [] }],
+        }),
+        db.collection('users').doc(UID).collection('workoutProgramState').doc('scheduleConfig').set({
+          trainingDays: ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'], timezone: 'UTC',
+        }),
+        db.collection('users').doc(UID).collection('programInstances').doc('wpi_active').update({
+          activatedAt: Timestamp.fromDate(new Date(`${shift(-3)}T00:00:00.000Z`)),
+          'prescriptionInputSnapshot.inputs.trainingDays': ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'],
+        }),
+        db.collection('users').doc(UID).collection('workoutPrograms').doc('wpg_active')
+          .collection('scheduleState').doc('wpi_active').set({
+            programId: 'wpg_active', programInstanceId: 'wpi_active',
+            nextSessionIndex: 0, cursorDate: shift(-2), lastCompletedAt: shift(-2),
+            pendingMissDecision: {
+              missedSessionIndex: 0, calendarSessionIndex: 1,
+              missedScheduledDate, detectedOnDate: today,
+            },
+          }),
+      ]);
+    });
+
+    const request = (overrides: Record<string, unknown> = {}) => ({
+      auth: { uid: UID },
+      data: {
+        operation: 'RESOLVE_MISSED_SESSION', sourceProgramInstanceId: 'wpi_active',
+        scheduledLocalDate: today, decision: 'CONTINUE_SEQUENCE',
+        expectedMissedSessionIndex: 0, expectedCalendarSessionIndex: 1,
+        expectedMissedScheduledDate: missedScheduledDate,
+        ...overrides,
+      },
+    });
+
+    it('authorizes the exact pending occurrence shown by the client', async () => {
+      await expect(authorizeWorkoutLifecycleMutationHandler(request() as never, db))
+        .resolves.toMatchObject({ grantId: 'current' });
+    });
+
+    it('rejects an old modal identity when a different decision is now canonical', async () => {
+      await expect(authorizeWorkoutLifecycleMutationHandler(request({
+        expectedMissedScheduledDate: shift(-2),
+      }) as never, db)).rejects.toMatchObject({ code: 'aborted', message: 'stale_missed_session_decision' });
+    });
+
+    it('keeps no-pending distinct when the authoritative calendar has no gap', async () => {
+      await db.collection('users').doc(UID).collection('workoutPrograms').doc('wpg_active')
+        .collection('scheduleState').doc('wpi_active').update({ cursorDate: missedScheduledDate });
+      await expect(authorizeWorkoutLifecycleMutationHandler(request() as never, db))
+        .rejects.toMatchObject({ code: 'failed-precondition', message: 'no_pending_missed_session_decision' });
+    });
+
+    it('rejects calls that omit decision identity instead of authorizing an unversioned choice', async () => {
+      await expect(authorizeWorkoutLifecycleMutationHandler({
+        auth: { uid: UID },
+        data: {
+          operation: 'RESOLVE_MISSED_SESSION', sourceProgramInstanceId: 'wpi_active',
+          scheduledLocalDate: today, decision: 'CONTINUE_SEQUENCE',
+        },
+      } as never, db)).rejects.toMatchObject({
+        code: 'invalid-argument', message: 'missing_missed_session_decision_identity',
+      });
+    });
+  });
+
   // Phase 10E circuit breaker (docs/workout-lifecycle/v2/architecture/
   // 26_FINAL_INDEPENDENT_ADVERSARIAL_AUDIT_2.md §50, 27_PHASE_10E_FINAL_
   // STAGED_ROLLOUT_CLOSURE.md §16-21). Deliberately separate from

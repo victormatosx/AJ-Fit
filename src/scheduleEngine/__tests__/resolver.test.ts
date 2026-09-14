@@ -127,6 +127,7 @@ describe('resolveWorkoutSchedule — missed session detection', () => {
       status: 'MISSED_SESSION_DECISION_REQUIRED',
       missedSessionIndex: 1, // B
       calendarSessionIndex: 2, // C — one occurrence skipped
+      missedScheduledDate: '2026-08-06',
     });
   });
 
@@ -143,7 +144,7 @@ describe('resolveWorkoutSchedule — missed session detection', () => {
       },
     };
     expect(resolveWorkoutSchedule(base({ state, todayLocalDate: '2026-08-11' })))
-      .toEqual({ status: 'MISSED_SESSION_DECISION_REQUIRED', missedSessionIndex: 1, calendarSessionIndex: 2 });
+      .toEqual({ status: 'MISSED_SESSION_DECISION_REQUIRED', missedSessionIndex: 1, calendarSessionIndex: 2, missedScheduledDate: '2026-08-06' });
   });
 
   it('collapses multiple missed days into a single decision, not one per day', () => {
@@ -322,6 +323,7 @@ describe('resolveWorkoutSchedule — FOLLOW_SCHEDULE stability for the rest of t
       status: 'MISSED_SESSION_DECISION_REQUIRED',
       missedSessionIndex: 4, // E, still owed from Friday
       calendarSessionIndex: 0, // A, today's calendar slot
+      missedScheduledDate: '2026-08-07',
     });
   });
 
@@ -346,7 +348,7 @@ describe('resolveWorkoutSchedule — FOLLOW_SCHEDULE stability for the rest of t
       lastCompletedAt: '2026-08-03',
     };
     expect(resolveWorkoutSchedule(base({ config: MON_TO_FRI, sessionCount: 5, state: continueSequenceState, todayLocalDate: TODAY })))
-      .toEqual({ status: 'MISSED_SESSION_DECISION_REQUIRED', missedSessionIndex: 1, calendarSessionIndex: 2 });
+      .toEqual({ status: 'MISSED_SESSION_DECISION_REQUIRED', missedSessionIndex: 1, calendarSessionIndex: 2, missedScheduledDate: '2026-08-04' });
   });
 
   it('7b. once the user actually completes the CONTINUE_SEQUENCE session, progression resumes normally', () => {
@@ -441,7 +443,7 @@ describe('resolveWorkoutSchedule — CONTINUE_SEQUENCE decision is idempotent fo
   it('6. a first, still-undecided miss keeps asking normally (no resolvedMissScheduledDate supplied)', () => {
     const state = { nextSessionIndex: 1, cursorDate: '2026-08-03', pendingMissDecision: null, lastCompletedAt: '2026-08-03' };
     expect(resolveWorkoutSchedule(base({ config: MON_TO_FRI, sessionCount: 5, state, todayLocalDate: WEDNESDAY })))
-      .toEqual({ status: 'MISSED_SESSION_DECISION_REQUIRED', missedSessionIndex: 1, calendarSessionIndex: 2 });
+      .toEqual({ status: 'MISSED_SESSION_DECISION_REQUIRED', missedSessionIndex: 1, calendarSessionIndex: 2, missedScheduledDate: '2026-08-04' });
   });
 
   it('7. a genuinely NEW future miss (different occurrence) still asks for a fresh decision', () => {
@@ -453,6 +455,7 @@ describe('resolveWorkoutSchedule — CONTINUE_SEQUENCE decision is idempotent fo
       status: 'MISSED_SESSION_DECISION_REQUIRED',
       missedSessionIndex: 2, // C
       calendarSessionIndex: 4, // E — 2 occurrences skipped (Thu, Fri)
+      missedScheduledDate: '2026-08-06',
     });
   });
 
@@ -469,6 +472,7 @@ describe('resolveWorkoutSchedule — CONTINUE_SEQUENCE decision is idempotent fo
       status: 'MISSED_SESSION_DECISION_REQUIRED',
       missedSessionIndex: 2,
       calendarSessionIndex: 4,
+      missedScheduledDate: '2026-08-06',
     });
   });
 

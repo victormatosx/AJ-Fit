@@ -11,7 +11,7 @@
  * emptied by `advanceAfterRest`, which also opens cardio or flips `finished`
  * in the same update. The crash happened because
  * `const curReps = ex.sets[setIdx].r` was computed BEFORE the component's
- * `if (finished) return <WorkoutDone/>` early return, so the render that
+ * `if (finished) return <WorkoutShareComposer/>` early return, so the render that
  * landed right after `finished` became true still evaluated it with a
  * stale/out-of-range `setIdx`.
  */

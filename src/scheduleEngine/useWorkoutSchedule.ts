@@ -13,7 +13,16 @@ import { finalizeWorkoutSession } from '../services/finalizeWorkoutSession';
 import { listExecutionsForProgram, type PersistedWorkoutExecution } from '../services/workoutExecutions';
 import { normalizeWeekdays, trainingDaysValid } from '../lib/questionnaireSchema';
 import { localDateInTimezone } from './localDate';
-import type { MissDecision, ScheduleConfig, ScheduleResolution } from './types';
+import type {
+  MissDecision,
+  MissedSessionDecisionIdentity,
+  ScheduleConfig,
+  ScheduleResolution,
+} from './types';
+import {
+  classifyMissResolutionOutcome,
+  type MissResolutionOutcome,
+} from './missedDecisionResolution';
 import type { WorkoutProgramSnapshot } from '../services/workoutPrograms';
 import { legacyTrainingDays } from '../workoutPrescription/weeklySchedule';
 import {
@@ -46,9 +55,12 @@ export interface WorkoutScheduleController {
   loading: boolean;
   /** Last refresh failure, separate from the last authoritative resolution. */
   refreshError: ScheduleRefreshError | null;
-  reload: () => Promise<void>;
-  /** Resolves a pending miss decision. Returns whether it actually succeeded — callers must not advance their own flow (e.g. opening the start confirmation) on a `false` result. */
-  resolveMiss: (decision: MissDecision) => Promise<boolean>;
+  reload: () => Promise<ScheduleResolution | null>;
+  /** Resolves only the exact missed occurrence captured when the modal opened. */
+  resolveMiss: (
+    decision: MissDecision,
+    expected: MissedSessionDecisionIdentity,
+  ) => Promise<MissResolutionOutcome>;
 }
 
 function deviceTimezone(): string {
@@ -97,7 +109,7 @@ export function useWorkoutSchedule(program: WorkoutProgramSnapshot | null): Work
   const scheduleScopeRef = useRef(scheduleScopeKey);
   // Retains the background refresh Promise so post-durable Schedule
   // projection work is explicit and never an unhandled fire-and-forget.
-  const completionReloadRef = useRef<Promise<void> | null>(null);
+  const completionReloadRef = useRef<Promise<unknown> | null>(null);
 
   const reload = useCallback(async () => {
     const reloadId = ++reloadSequenceRef.current;
@@ -111,7 +123,7 @@ export function useWorkoutSchedule(program: WorkoutProgramSnapshot | null): Work
       setProjection({ resolution: notAvailable, refreshError: null });
       setConfig(null);
       setLoading(false);
-      return;
+      return notAvailable;
     }
     setLoading(true);
     try {
@@ -196,6 +208,7 @@ export function useWorkoutSchedule(program: WorkoutProgramSnapshot | null): Work
         reloadId,
         applied: reloadId === reloadSequenceRef.current,
       });
+      return reloadId === reloadSequenceRef.current ? result : null;
     } catch (error) {
       const refreshError = {
         code: errorCode(error),
@@ -214,6 +227,7 @@ export function useWorkoutSchedule(program: WorkoutProgramSnapshot | null): Work
         resolutionPreserved: true,
         ignoredAsStale: reloadId !== reloadSequenceRef.current,
       });
+      return null;
     } finally {
       if (reloadId === reloadSequenceRef.current) setLoading(false);
     }
@@ -254,19 +268,42 @@ export function useWorkoutSchedule(program: WorkoutProgramSnapshot | null): Work
     return () => subscription.remove();
   }, [reloadAfterCompletion]);
 
-  const resolveMiss = useCallback(async (decision: MissDecision) => {
-    if (!uid || !programId || sessionCount === 0) return false;
+  const missResolutionInFlightRef = useRef<Promise<MissResolutionOutcome> | null>(null);
+  const resolveMiss = useCallback((
+    decision: MissDecision,
+    expected: MissedSessionDecisionIdentity,
+  ): Promise<MissResolutionOutcome> => {
+    if (missResolutionInFlightRef.current) return missResolutionInFlightRef.current;
+    if (!uid || !programId || sessionCount === 0) {
+      return Promise.resolve({ status: 'FAILED', resolution: null });
+    }
     const timezone = config?.timezone ?? deviceTimezone();
     const todayLocalDate = localDateInTimezone(new Date(), timezone);
-    try {
-      await resolveMissedSession({ uid, programId, ...(programInstanceId ? { programInstanceId } : {}), sessionCount, decision, todayLocalDate });
-      return true;
-    } catch (error) {
-      logWarn('workout_schedule', 'schedule_miss_resolution_failed', { error });
-      return false;
-    } finally {
-      await reload();
-    }
+    const operation = (async (): Promise<MissResolutionOutcome> => {
+      let failure: unknown | null = null;
+      try {
+        await resolveMissedSession({
+          uid,
+          programId,
+          ...(programInstanceId ? { programInstanceId } : {}),
+          sessionCount,
+          decision,
+          todayLocalDate,
+          expected,
+        });
+      } catch (error) {
+        failure = error;
+        logWarn('workout_schedule', 'schedule_miss_resolution_failed', { error });
+      }
+      const resolution = await reload();
+      return classifyMissResolutionOutcome({ error: failure, expected, resolution });
+    })();
+    missResolutionInFlightRef.current = operation;
+    const release = () => {
+      if (missResolutionInFlightRef.current === operation) missResolutionInFlightRef.current = null;
+    };
+    void operation.then(release, release);
+    return operation;
   }, [uid, programId, programInstanceId, sessionCount, config, reload]);
 
   return {

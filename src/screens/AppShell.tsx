@@ -52,8 +52,13 @@ import {
   useWorkoutSchedule,
   weekdayOfLocalDate,
   type MissDecision,
+  type MissedSessionDecisionIdentity,
   type ScheduleResolution,
 } from '../scheduleEngine';
+import {
+  missedDecisionIdentity,
+  sameMissedDecision,
+} from '../scheduleEngine/missedDecisionResolution';
 import { MissedSessionDecisionModal } from '../components/schedule/MissedSessionDecisionModal';
 import { WorkoutExecutionPendingModal } from '../components/workout/WorkoutExecutionPendingModal';
 import { FullScreenLoading } from '../components/ui/FullScreenLoading';
@@ -292,7 +297,7 @@ function AppShellContent({
   const workoutHomeSyncRef = useRef<Promise<unknown> | null>(null);
   // True from the instant `onSessionCompleted` fires until the durable
   // atomic finalizer settles (lifecycle remains a later follow-up) — drives
-  // `WorkoutDone`'s "Finalizando treino..." state so the
+  // the "Finalizando treino..." state so the
   // success screen never lets the user believe (or navigate away on) an
   // unconfirmed completion (docs — Cardio Finisher Completion Recovery
   // hardening). Deliberately separate from `workoutCompletionRef` (a plain
@@ -300,8 +305,8 @@ function AppShellContent({
   const [finishingSession, setFinishingSession] = useState(false);
   const [workoutCompletionResult, setWorkoutCompletionResult] = useState<WorkoutCompletionResult | null>(null);
   const [durableCompletionReachedAtMs, setDurableCompletionReachedAtMs] = useState<number | null>(null);
-  // Re-entrancy guard for `finishWorkoutSession` — `WorkoutDone`'s CTA is
-  // already disabled while `finishingSession`/awaiting, but this closes the
+  // Re-entrancy guard for `finishWorkoutSession` — the composer's "Back to
+  // home" CTA is already disabled while `finishingSession`/awaiting, but this closes the
   // same-tick gap between a tap and that state committing.
   const finishSessionInFlightRef = useRef(false);
   const { isPremium } = useSubscription();
@@ -332,6 +337,8 @@ function AppShellContent({
   const [startWorkoutFlow, setStartWorkoutFlow] = useState<'idle' | 'missedDecision' | 'confirmation'>('idle');
   const [missedDecisionPending, setMissedDecisionPending] = useState<MissDecision | null>(null);
   const [missedDecisionError, setMissedDecisionError] = useState(false);
+  const [missedDecisionContext, setMissedDecisionContext] = useState<MissedSessionDecisionIdentity | null>(null);
+  const missDecisionTapInFlightRef = useRef(false);
   const [showEvolutionUnlock, setShowEvolutionUnlock] = useState(false);
   const [supportRoute, setSupportRoute] = useState<SupportRoute | null>(null);
   // HelpArticleScreen/SupportFormScreen are persistent+materialized but
@@ -426,11 +433,12 @@ function AppShellContent({
     if (recoveryModalOpen) return;
     if (schedule.resolution.status === 'MISSED_SESSION_DECISION_REQUIRED') {
       setMissedDecisionError(false);
+      setMissedDecisionContext(missedDecisionIdentity(schedule.resolution));
       setStartWorkoutFlow('missedDecision');
       return;
     }
     setStartWorkoutFlow('confirmation');
-  }, [workoutInProgress, workoutStartPending, recoveryModalOpen, schedule.resolution.status, setTab]);
+  }, [workoutInProgress, workoutStartPending, recoveryModalOpen, schedule.resolution, setTab]);
 
   const selectTab = (nextTab: TabId) => {
     if (nextTab === 'workout' && tab !== 'workout') {
@@ -467,23 +475,56 @@ function AppShellContent({
   ]);
 
   const handleMissDecision = async (decision: MissDecision) => {
-    if (missedDecisionPending) return; // re-entrancy guard: a second tap while one is in flight is a no-op, not a second resolution.
+    if (missDecisionTapInFlightRef.current || missedDecisionPending || schedule.loading) return;
+    if (!missedDecisionContext) return;
+    missDecisionTapInFlightRef.current = true;
+    const expected = missedDecisionContext;
     setMissedDecisionError(false);
     setMissedDecisionPending(decision);
-    const resolved = await schedule.resolveMiss(decision);
-    setMissedDecisionPending(null);
-    if (resolved) {
-      // Decision landed and `schedule.resolution` has already been
-      // reloaded (resolveMiss awaits it internally) — continue straight
-      // into the normal start flow the user originally asked for, instead
-      // of dropping them back on Home to tap "Iniciar treino" again.
-      setStartWorkoutFlow('confirmation');
-    } else {
-      // Stay on the same step; the modal remains open, both options remain
-      // tappable, and the error banner explains what to do next.
-      setMissedDecisionError(true);
+    try {
+      const outcome = await schedule.resolveMiss(decision, expected);
+      const currentDecision = outcome.resolution
+        ? missedDecisionIdentity(outcome.resolution)
+        : null;
+      if (currentDecision && !sameMissedDecision(expected, currentDecision)) {
+        // The old choice was scoped to `expected`; keep the modal on the new
+        // canonical decision without ever applying that choice to it.
+        setMissedDecisionContext(currentDecision);
+        setMissedDecisionError(false);
+        setStartWorkoutFlow('missedDecision');
+      } else if (outcome.status === 'FAILED') {
+        // A real transport/backend failure, or the server still reporting
+        // the exact same decision after rejecting it, remains retryable.
+        setMissedDecisionError(true);
+      } else if (outcome.resolution.status === 'SESSION_READY') {
+        setMissedDecisionContext(null);
+        setStartWorkoutFlow('confirmation');
+      } else {
+        setMissedDecisionContext(null);
+        setStartWorkoutFlow('idle');
+      }
+    } finally {
+      missDecisionTapInFlightRef.current = false;
+      setMissedDecisionPending(null);
     }
   };
+
+  // A foreground/completion reload may invalidate the displayed decision
+  // before the user taps. Reconcile the open modal as soon as the newest
+  // server-authoritative projection publishes; do not leave a stale modal
+  // interactive between reload completion and the next start attempt.
+  useEffect(() => {
+    if (startWorkoutFlow !== 'missedDecision' || missedDecisionPending) return;
+    const currentDecision = missedDecisionIdentity(schedule.resolution);
+    if (sameMissedDecision(missedDecisionContext, currentDecision)) return;
+    setMissedDecisionError(false);
+    if (currentDecision) {
+      setMissedDecisionContext(currentDecision);
+    } else {
+      setMissedDecisionContext(null);
+      setStartWorkoutFlow(schedule.resolution.status === 'SESSION_READY' ? 'confirmation' : 'idle');
+    }
+  }, [missedDecisionContext, missedDecisionPending, schedule.resolution, startWorkoutFlow]);
 
   // Backdrop-tap dismissal only — there is no "not now" button, and this
   // never resolves/skips the pending decision. It just returns to idle;
@@ -492,6 +533,7 @@ function AppShellContent({
   const cancelMissDecision = () => {
     if (missedDecisionPending) return;
     setMissedDecisionError(false);
+    setMissedDecisionContext(null);
     setStartWorkoutFlow('idle');
   };
 
@@ -1222,6 +1264,7 @@ function AppShellContent({
       <MissedSessionDecisionModal
         visible={startWorkoutFlow === 'missedDecision'}
         pending={missedDecisionPending}
+        refreshing={schedule.loading}
         error={missedDecisionError}
         onChoose={(decision) => { void handleMissDecision(decision); }}
         onCancel={cancelMissDecision}

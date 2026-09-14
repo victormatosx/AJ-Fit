@@ -267,7 +267,6 @@ export function SettingsScreen({
             title={t('settings:sections.notifications').toUpperCase()}
             items={[
               { icon: 'bell', label: t('settings:items.notifications'), onPress: onOpenNotifications },
-              { icon: 'timer', label: t('settings:items.timersAndSounds'), onPress: () => {} },
             ]}
           />
 
@@ -306,8 +305,6 @@ export function SettingsScreen({
             items={[
               { icon: 'shield', label: t('settings:items.privacyPolicy'), onPress: () => setLegalDocument('privacy') },
               { icon: 'file-text', label: t('settings:items.termsOfUse'), onPress: () => setLegalDocument('terms') },
-              { icon: 'check', label: t('settings:items.acceptedConsents'), onPress: () => {} },
-              { icon: 'download', label: t('settings:items.exportData'), onPress: () => {} },
               {
                 icon: 'trash',
                 label: t('settings:items.deleteAccount'),

@@ -114,7 +114,7 @@ export async function runWorkoutDiscardFlow(input: {
  * boundary; it is deliberately independent from lifecycle/evolution work.
  */
 export async function runWorkoutHomeProjectionSync(input: {
-  refreshSchedule: () => Promise<void>;
+  refreshSchedule: () => Promise<unknown>;
   refreshWeek: () => Promise<void>;
   refreshFrequency: () => Promise<void>;
 }): Promise<WorkoutHomeProjectionSyncOutcome> {

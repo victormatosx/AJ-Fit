@@ -67,6 +67,7 @@ export function resolveWorkoutSchedule(input: ResolveWorkoutScheduleInput): Sche
       status: 'MISSED_SESSION_DECISION_REQUIRED',
       missedSessionIndex: state.pendingMissDecision.missedSessionIndex,
       calendarSessionIndex: state.pendingMissDecision.calendarSessionIndex,
+      missedScheduledDate: state.pendingMissDecision.missedScheduledDate,
     };
   }
 
@@ -131,6 +132,7 @@ export function resolveWorkoutSchedule(input: ResolveWorkoutScheduleInput): Sche
     status: 'MISSED_SESSION_DECISION_REQUIRED',
     missedSessionIndex: nextSessionIndex,
     calendarSessionIndex: (nextSessionIndex + missedCount) % sessionCount,
+    missedScheduledDate: occurrences[0],
   };
 }
 

@@ -11,14 +11,13 @@ import {
   Easing,
   Keyboard,
   ActivityIndicator,
-  Share,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
 import { ScreenBg } from '../components/ui/ScreenBg';
 import { Display, Slash, MonoLabel } from '../components/ui/Display';
-import { Card, HudCorners } from '../components/ui/Card';
+import { HudCorners } from '../components/ui/Card';
 import { CtaButton } from '../components/ui/CtaButton';
 import { FullScreenLoading } from '../components/ui/FullScreenLoading';
 import { CardioSessionContent } from '../components/workout/CardioSessionContent';
@@ -92,6 +91,8 @@ import {
   beginSubstitutionFlight,
   commitConfirmedSubstitution,
 } from '../workoutExecution/substitutionSingleFlight';
+import { WorkoutShareComposer } from '../components/workoutShare/WorkoutShareComposer';
+import { buildWorkoutShareData } from '../workoutShare/data';
 
 type Props = {
   plan: FinalWorkoutPlan;
@@ -142,7 +143,7 @@ type Props = {
   onSessionCompleted?: (context: { recovery: boolean }) => void;
   /**
    * True while `onSessionCompleted`'s durable finish chain is still in
-   * flight — drives `WorkoutDone`'s "Finalizando treino..." state so the
+   * flight — drives the "Finalizando treino..." state so the
    * success screen never lets the user believe the session is durably done,
    * or navigate away, before it actually is (docs — Cardio Finisher
    * Completion Recovery hardening).
@@ -450,9 +451,9 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
   // The interval below only forces a re-render once a second; it never owns
   // or increments the duration itself. It stops the instant the session
   // finishes (`finished` dependency): without this, the interval kept
-  // running after the early return to `WorkoutDone` below, so the "time"
-  // metric on the completion screen kept counting up instead of freezing at
-  // the real final duration.
+  // running after the early return to the completion screen below, so the
+  // "time" metric baked into the share poster kept counting up instead of
+  // freezing at the real final duration.
   useEffect(() => {
     if (finished) return;
     const t = setInterval(() => setSessionNow(Date.now()), 1000);
@@ -868,14 +869,27 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
       return <WorkoutCompletionError retrying={!!finishing} onRetry={onRetryCompletion} />;
     }
     return (
-      <WorkoutDone
-        elapsed={elapsed}
-        doneSets={doneSets}
-        totalSets={totalSets}
+      <WorkoutShareComposer
+        data={buildWorkoutShareData({
+          workoutName: currentSession
+            ? resolveSessionDisplayName(
+                tLoose,
+                currentSession.name,
+                currentSession.type,
+                currentSession.displayName,
+              )
+            : '',
+          exerciseCount: currentSession?.exercises.length ?? 0,
+          execution,
+          durationSeconds: elapsed,
+        })}
         onDone={() => {
           // Diagnostic instrumentation (Phase 2, Part F) — only the true
           // post-completion navigation (this branch only renders once
-          // `finished` is true), never the early-exit/abandon path.
+          // `finished` is true), never the early-exit/abandon path. This is
+          // the same finish/cleanup callback WorkoutDone's "Back to home"
+          // CTA used to invoke — the composer is now the terminal screen, so
+          // both its header close and its own "Back to home" CTA reach here.
           logInfo('workout', 'workout_done_cta_pressed', {
             templateId: plan.templateId,
             sessionIndex,
@@ -970,7 +984,7 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
             disabled={abandoning}
             onPress={() => {
               // Reaching this button at all means `finished` is false (the
-              // component early-returns to `WorkoutDone` otherwise). The X no
+              // component early-returns to the completion screen otherwise). The X no
               // longer abandons directly — it just opens the exit sheet;
               // every domain mutation (discard) happens only from an
               // explicit confirmation below.
@@ -1173,12 +1187,12 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
               gap: 18,
             }}
           >
-            <View style={{ flex: 1 }}>
-              <MonoLabel color={theme.colors.primaryEmphasis}>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <MonoLabel color={theme.colors.primaryEmphasis} numberOfLines={1}>
                 {t('sets.next').toUpperCase()}
               </MonoLabel>
               <View style={{ flexDirection: 'row', alignItems: 'baseline', marginTop: 6 }}>
-                <Display size={28}>
+                <Display size={28} numberOfLines={1}>
                   {t('sets.number', { number: setIdx + 1 }).toUpperCase()}
                 </Display>
                 <Text
@@ -1194,7 +1208,7 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
                 </Text>
               </View>
             </View>
-            <View style={{ alignItems: 'center', minWidth: 60 }}>
+            <View style={{ alignItems: 'center', minWidth: 60, maxWidth: 110, flexShrink: 0 }}>
               <Text
                 style={{
                   fontFamily: theme.fonts.display,
@@ -1203,15 +1217,18 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
                   lineHeight: displayLineHeight(40),
                   transform: [{ skewX: '-8deg' }],
                 }}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.5}
               >
                 {curReps}
               </Text>
-              <MonoLabel style={{ marginTop: 4 }}>
+              <MonoLabel style={{ marginTop: 4 }} numberOfLines={1}>
                 {t('reps.label').toUpperCase()}
               </MonoLabel>
             </View>
             <View style={{ width: 1, alignSelf: 'stretch', backgroundColor: theme.colors.dividerStrong }} />
-            <View style={{ alignItems: 'center', minWidth: 66 }}>
+            <View style={{ alignItems: 'center', minWidth: 66, maxWidth: 100, flexShrink: 0 }}>
               <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
                 <Text
                   style={{
@@ -1221,6 +1238,9 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
                     lineHeight: displayLineHeight(28),
                     transform: [{ skewX: '-8deg' }],
                   }}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.5}
                 >
                   {curLast > 0 ? formatWorkoutLoadFromKg(curLast, resolvedUnits) : '—'}
                 </Text>
@@ -1230,7 +1250,7 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
                   </Text>
                 )}
               </View>
-              <MonoLabel size={8.5} style={{ marginTop: 6 }}>
+              <MonoLabel size={8.5} style={{ marginTop: 6 }} numberOfLines={1}>
                 {t('sets.lastTime').toUpperCase()}
               </MonoLabel>
             </View>
@@ -3452,139 +3472,6 @@ function ExerciseDoneOverlay({ name, nextName }: { name: string; nextName: strin
         <Text style={{ fontSize: 15, fontFamily: theme.fonts.uiBold, color: theme.colors.textPrimary }}>{nextName}</Text>
       </View>
     </View>
-  );
-}
-
-/* ─────────────────────────── WORKOUT DONE ─────────────────────────── */
-
-function WorkoutDone({
-  elapsed,
-  doneSets,
-  totalSets,
-  onDone,
-}: {
-  elapsed: number;
-  doneSets: number;
-  totalSets: number;
-  onDone: () => void;
-}) {
-  const { theme } = useTheme();
-  const { t } = useTranslation('workout');
-  const fmt = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-  const shareWorkout = () => {
-    void Share.share({ message: t('done.shareMessage', { time: fmt(elapsed), sets: `${doneSets}/${totalSets}` }) })
-      .catch((error) => logWarn('workout', 'workout_share_failed', { error }));
-  };
-  return (
-    <ScreenBg>
-      <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
-        <View style={{ flex: 1, paddingHorizontal: 26, paddingTop: 20, paddingBottom: 36 }}>
-          <OutlineNumber
-            size={300}
-            style={{ position: 'absolute', top: -50, right: -60, opacity: 0.4 }}
-          >
-            ✓
-          </OutlineNumber>
-
-          <Slash style={{ marginBottom: 14 }}>
-            {t('done.kicker').toUpperCase()}
-          </Slash>
-          <Display size={46}>{t('done.titleLine1').toUpperCase()}</Display>
-          <Display size={46} color={theme.colors.primaryEmphasis}>
-            {t('done.titleLine2').toUpperCase()}
-          </Display>
-
-          <View
-            style={{
-              flexDirection: 'row',
-              flexWrap: 'wrap',
-              gap: 12,
-              marginTop: 30,
-            }}
-          >
-            {(
-              // Phase 2, Part G: `volume` and `newPr` were hardcoded demo
-              // values (always "8.2t" / "+1") shown as if they were real
-              // results — removed rather than left presenting fabricated
-              // data as fact. No reliable infrastructure exists yet to
-              // compute either for real (actual reps performed per set
-              // isn't logged today, only weight; PR detection exists
-              // per-set during the session but nothing aggregates a count
-              // across the workout) — this phase does not add a
-              // Progression/PR Engine to manufacture one. `time` and `sets`
-              // are both real, already-tracked session state.
-              [
-                { key: 'time', v: fmt(elapsed) },
-                { key: 'sets', v: `${doneSets}/${totalSets}` },
-              ] as const
-            ).map((s) => (
-              <Card key={s.key} style={{ width: '47%', padding: 16 }}>
-                <MonoLabel>{t(`done.metrics.${s.key}`).toUpperCase()}</MonoLabel>
-                <Text
-                  style={{
-                    fontFamily: theme.fonts.display,
-                    fontSize: 30,
-                    color: theme.colors.textPrimary,
-                    marginTop: 8,
-                    transform: [{ skewX: '-8deg' }],
-                    textTransform: 'uppercase',
-                  }}
-                >
-                  {s.v}
-                </Text>
-              </Card>
-            ))}
-          </View>
-
-          {/*
-            Phase 2, Part G: this card showed a hardcoded "15 day streak,
-            6 until a record" regardless of the user's real history — no
-            streak-tracking infrastructure exists yet to compute either
-            value for real. Removed rather than left
-            presenting fabricated data as fact; not replaced with a Streak
-            Engine in this phase.
-          */}
-
-          <View style={{ flex: 1 }} />
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={t('done.share')}
-            onPress={shareWorkout}
-            style={{
-              minHeight: 50,
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginBottom: 10,
-              borderRadius: 12,
-              borderWidth: 1,
-              borderColor: theme.colors.primaryBorderInteractive,
-              backgroundColor: theme.colors.controlBackground,
-            }}
-          >
-            <Text style={{ color: theme.colors.primaryEmphasis, fontFamily: theme.fonts.display, fontSize: 16, letterSpacing: 1.3, textTransform: 'uppercase' }}>
-              {t('done.share')}
-            </Text>
-          </Pressable>
-          <CtaButton
-            onPress={onDone}
-            accessibilityLabel={t('done.backHome')}
-          >
-            <Text
-              style={{
-                color: theme.colors.primaryForeground,
-                fontFamily: theme.fonts.display,
-                fontSize: 17,
-                letterSpacing: 1.5,
-                textTransform: 'uppercase',
-              }}
-            >
-              {t('done.backHome')}
-            </Text>
-            <Icon name="arrow-right" size={18} color={theme.colors.primaryForeground} />
-          </CtaButton>
-        </View>
-      </SafeAreaView>
-    </ScreenBg>
   );
 }
 

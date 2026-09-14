@@ -60,7 +60,12 @@ describe('buildUpcomingWorkouts', () => {
       todayLocalDate: '2026-09-09',
       trainingDays,
       sessions: sessions(3),
-      resolution: { status: 'MISSED_SESSION_DECISION_REQUIRED', missedSessionIndex: 2, calendarSessionIndex: 0 },
+      resolution: {
+        status: 'MISSED_SESSION_DECISION_REQUIRED',
+        missedSessionIndex: 2,
+        calendarSessionIndex: 0,
+        missedScheduledDate: '2026-09-08',
+      },
     });
 
     expect(upcoming[0]).toMatchObject({ localDate: '2026-09-11', sessionIndex: 0 });

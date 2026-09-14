@@ -32,6 +32,9 @@ export interface WorkoutLifecycleAuthorityRequest {
   scheduledLocalDate?: string;
   sessionIndex?: number;
   decision?: 'CONTINUE_SEQUENCE' | 'FOLLOW_SCHEDULE';
+  expectedMissedSessionIndex?: number;
+  expectedCalendarSessionIndex?: number;
+  expectedMissedScheduledDate?: string;
   targetPlan?: Record<string, unknown>;
   targetPrescriptionInputSnapshot?: Record<string, unknown>;
   updatedFields?: Record<string, unknown>;

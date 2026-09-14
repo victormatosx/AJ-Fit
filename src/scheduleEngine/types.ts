@@ -44,6 +44,12 @@ export interface PendingMissDecision {
   detectedOnDate: string;
 }
 
+/** Immutable identity captured by the UI when a missed-session modal opens. */
+export type MissedSessionDecisionIdentity = Pick<
+  PendingMissDecision,
+  'missedSessionIndex' | 'calendarSessionIndex' | 'missedScheduledDate'
+>;
+
 /** Runtime cursor. Scoped to a single programId — never carried over to a new program (docs §Troca de programa). */
 export interface ScheduleState {
   programId: string;
@@ -68,6 +74,8 @@ export type ScheduleResolution =
       status: 'MISSED_SESSION_DECISION_REQUIRED';
       missedSessionIndex: number;
       calendarSessionIndex: number;
+      /** Stable occurrence identity; choices must be authorized against this exact miss. */
+      missedScheduledDate: string;
     };
 
 export interface ResolveWorkoutScheduleInput {

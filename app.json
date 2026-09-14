@@ -63,8 +63,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "O AJ Fit acessa suas fotos para você escolher imagens de perfil, suporte ou do seu cofre privado.",
-          "cameraPermission": "O AJ Fit acessa sua câmera para você tirar fotos de perfil, suporte ou do seu cofre privado.",
+          "photosPermission": "O AJ Fit acessa suas fotos para você escolher imagens de perfil, suporte, do seu cofre privado ou para compartilhar seu treino.",
+          "cameraPermission": "O AJ Fit acessa sua câmera para você tirar fotos de perfil, suporte, do seu cofre privado ou para compartilhar seu treino.",
           "microphonePermission": false
         }
       ],
@@ -109,6 +109,13 @@
       "expo-system-ui",
       "./plugins/rest-activity",
       "./plugins/app-check-debug-token",
+      [
+        "./plugins/instagram-stories",
+        {
+          "metaAppId": "1566726211857054",
+          "androidEnabled": false
+        }
+      ],
       [
         "expo-navigation-bar",
         {

@@ -56,10 +56,8 @@ describe('Profile and Settings organization', () => {
     expect(settingsSource).not.toContain("t('settings:items.loginMethods')");
     expect(settingsSource).not.toContain("t('settings:items.workoutPreferences')");
 
-    const notifications = settingsSource.indexOf("t('settings:items.notifications')");
-    const timers = settingsSource.indexOf("t('settings:items.timersAndSounds')");
-    expect(notifications).toBeGreaterThan(-1);
-    expect(timers).toBeGreaterThan(notifications);
+    expect(settingsSource).toContain("t('settings:items.notifications')");
+    expect(settingsSource).not.toContain("t('settings:items.timersAndSounds')");
 
     expect(settingsSource).toContain('setLangPickerOpen(true)');
     expect(settingsSource).toContain('changeLanguageForUser({ uid: user.uid, next })');
@@ -74,16 +72,16 @@ describe('Profile and Settings organization', () => {
     expect(settingsSource).not.toContain("value: 'v1.0.0'");
   });
 
-  it('exposes the complete Privacy and Data structure and preserves Support', () => {
+  it('keeps the requested Privacy and Data actions and preserves Support', () => {
     for (const key of [
       'privacyPolicy',
       'termsOfUse',
-      'acceptedConsents',
-      'exportData',
       'deleteAccount',
     ]) {
       expect(settingsSource).toContain(`t('settings:items.${key}')`);
     }
+    expect(settingsSource).not.toContain("t('settings:items.acceptedConsents')");
+    expect(settingsSource).not.toContain("t('settings:items.exportData')");
 
     expect(settingsSource).toContain('onPress: onOpenHelpCenter');
     expect(settingsSource).toContain('onPress: onReportProblem');

@@ -130,6 +130,7 @@ describe('Phase 2 availability, frequency and calendar quality gates', () => {
     });
     expect(missedAfterRecovery).toEqual({
       status: 'MISSED_SESSION_DECISION_REQUIRED', missedSessionIndex: 0, calendarSessionIndex: 1,
+      missedScheduledDate: '2026-08-03',
     });
   });
 

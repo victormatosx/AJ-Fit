@@ -29,6 +29,7 @@ import type { MissDecision } from '../../scheduleEngine';
 export function MissedSessionDecisionModal({
   visible,
   pending,
+  refreshing,
   error,
   onChoose,
   onCancel,
@@ -36,6 +37,8 @@ export function MissedSessionDecisionModal({
   visible: boolean;
   /** Decision currently being resolved, or null when idle. Both options are disabled while this is set — a second tap must never fire a second resolution. */
   pending: MissDecision | null;
+  /** A newer authoritative schedule is loading; old choices are temporarily inert. */
+  refreshing: boolean;
   /** True when the last attempt failed — the modal stays open and both options remain retryable. */
   error: boolean;
   onChoose: (decision: MissDecision) => void;
@@ -47,7 +50,7 @@ export function MissedSessionDecisionModal({
   // separate surface.
   const theme = darkTheme;
   const { t } = useTranslation('home');
-  const busy = pending !== null;
+  const busy = pending !== null || refreshing;
   return (
     <Modal
       visible={visible}

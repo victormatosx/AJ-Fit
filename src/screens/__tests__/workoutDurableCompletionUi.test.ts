@@ -4,6 +4,10 @@ import { describe, expect, it } from 'vitest';
 const workout = readFileSync(new URL('../WorkoutScreen.tsx', import.meta.url), 'utf8');
 const shell = readFileSync(new URL('../AppShell.tsx', import.meta.url), 'utf8');
 const loading = readFileSync(new URL('../../components/ui/FullScreenLoading.tsx', import.meta.url), 'utf8');
+const composer = readFileSync(
+  new URL('../../components/workoutShare/WorkoutShareComposer.tsx', import.meta.url),
+  'utf8',
+);
 
 describe('workout durable-completion visual contract', () => {
   it('uses the existing app-wide FullScreenLoading with localized visible copy', () => {
@@ -14,12 +18,12 @@ describe('workout durable-completion visual contract', () => {
 
   it('last-set completion renders loading before AppShell effects can confirm durability', () => {
     const finishedBranch = workout.slice(workout.indexOf('if (finished) {'), workout.indexOf('if (showCardioFinisher'));
-    expect(finishedBranch.indexOf('if (!completionConfirmed && !completionFailed)')).toBeLessThan(finishedBranch.indexOf('<WorkoutDone'));
+    expect(finishedBranch.indexOf('if (!completionConfirmed && !completionFailed)')).toBeLessThan(finishedBranch.indexOf('<WorkoutShareComposer'));
     expect(finishedBranch).toContain('<FullScreenLoading');
   });
 
   it('cardio enters that same loading surface while server-authoritative persistence is pending', () => {
-    const cardio = workout.slice(workout.indexOf('const finalizeNow = async () => {'), workout.indexOf('function WorkoutDone'));
+    const cardio = workout.slice(workout.indexOf('const finalizeNow = async () => {'), workout.indexOf('function WorkoutCompletionError'));
     expect(cardio).toContain("setFinishState('persisting')");
     expect(cardio).toContain("'cardio_persist_start'");
     expect(cardio).toContain("'cardio_persist_end'");
@@ -43,12 +47,11 @@ describe('workout durable-completion visual contract', () => {
     expect(shell).toContain("workoutCompletionResult === 'SCHEDULE_FAILED'");
   });
 
-  it('share and Home exist only inside the post-durable WorkoutDone surface', () => {
-    const done = workout.slice(workout.indexOf('function WorkoutDone('), workout.indexOf('function WorkoutCompletionError'));
+  it('share and Home exist only inside the post-durable composer surface, never the error surface', () => {
     const error = workout.slice(workout.indexOf('function WorkoutCompletionError'));
-    expect(done).toContain("t('done.share')");
-    expect(done).toContain("t('done.backHome')");
-    expect(error).not.toContain("t('done.share')");
+    expect(composer).toContain("t('done.shareComposer.instagram')");
+    expect(composer).toContain("t('done.backHome')");
+    expect(error).not.toContain("t('done.shareComposer.instagram')");
     expect(error).not.toContain("t('done.backHome')");
   });
 

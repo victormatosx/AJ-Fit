@@ -82,7 +82,8 @@ describe('AppShell missed-decision resolution — concurrency and error handling
     const start = APP_SHELL_CODE.indexOf('const handleMissDecision = async');
     const end = APP_SHELL_CODE.indexOf('};', start);
     const fn = APP_SHELL_CODE.slice(start, end);
-    expect(fn).toContain('if (missedDecisionPending) return;');
+    expect(fn).toContain('if (missDecisionTapInFlightRef.current || missedDecisionPending || schedule.loading) return;');
+    expect(fn).toContain('missDecisionTapInFlightRef.current = true;');
     expect(fn).toContain('setMissedDecisionPending(decision)');
     expect(fn).toContain('setMissedDecisionPending(null)');
   });
@@ -91,9 +92,9 @@ describe('AppShell missed-decision resolution — concurrency and error handling
     const start = APP_SHELL_CODE.indexOf('const handleMissDecision = async');
     const end = APP_SHELL_CODE.indexOf('};', start);
     const fn = APP_SHELL_CODE.slice(start, end);
-    expect(fn).toContain('const resolved = await schedule.resolveMiss(decision);');
-    expect(fn).toMatch(/if \(resolved\) \{[\s\S]*setStartWorkoutFlow\('confirmation'\)/);
-    expect(fn).toMatch(/\} else \{[\s\S]*setMissedDecisionError\(true\)/);
+    expect(fn).toContain('const outcome = await schedule.resolveMiss(decision, expected);');
+    expect(fn).toMatch(/outcome\.status === 'FAILED'[\s\S]*setMissedDecisionError\(true\)/);
+    expect(fn).toMatch(/outcome\.resolution\.status === 'SESSION_READY'[\s\S]*setStartWorkoutFlow\('confirmation'\)/);
   });
 
   it('never opens StartWorkoutConfirmation before resolveMiss has actually resolved', () => {
@@ -101,11 +102,24 @@ describe('AppShell missed-decision resolution — concurrency and error handling
     // conditioned on `resolved`, not called unconditionally right after the
     // await.
     const start = APP_SHELL_CODE.indexOf('const handleMissDecision = async');
-    const afterAwait = APP_SHELL_CODE.indexOf('setMissedDecisionPending(null);', start);
-    const nextConfirmation = APP_SHELL_CODE.indexOf("setStartWorkoutFlow('confirmation')", afterAwait);
-    const ifResolved = APP_SHELL_CODE.indexOf('if (resolved)', afterAwait);
-    expect(ifResolved).toBeGreaterThan(-1);
-    expect(nextConfirmation).toBeGreaterThan(ifResolved);
+    const awaitResolution = APP_SHELL_CODE.indexOf('await schedule.resolveMiss(decision, expected)', start);
+    const nextConfirmation = APP_SHELL_CODE.indexOf("setStartWorkoutFlow('confirmation')", awaitResolution);
+    const sessionReadyGuard = APP_SHELL_CODE.indexOf("outcome.resolution.status === 'SESSION_READY'", awaitResolution);
+    expect(awaitResolution).toBeGreaterThan(-1);
+    expect(sessionReadyGuard).toBeGreaterThan(awaitResolution);
+    expect(nextConfirmation).toBeGreaterThan(sessionReadyGuard);
+  });
+
+  it('latches a full decision identity and replaces a stale modal with a new canonical decision', () => {
+    expect(APP_SHELL_CODE).toContain('setMissedDecisionContext(missedDecisionIdentity(schedule.resolution))');
+    expect(APP_SHELL_CODE).toContain('!sameMissedDecision(expected, currentDecision)');
+    expect(APP_SHELL_CODE).toContain('setMissedDecisionContext(currentDecision)');
+  });
+
+  it('disables choices during a concurrent schedule reload', () => {
+    const missedModalStart = APP_SHELL_CODE.indexOf('<MissedSessionDecisionModal');
+    const missedModalEnd = APP_SHELL_CODE.indexOf('/>', missedModalStart);
+    expect(APP_SHELL_CODE.slice(missedModalStart, missedModalEnd)).toContain('refreshing={schedule.loading}');
   });
 
   it('has no explicit "not now" button — CONTINUE_SEQUENCE/FOLLOW_SCHEDULE are the only two domain decisions offered', () => {

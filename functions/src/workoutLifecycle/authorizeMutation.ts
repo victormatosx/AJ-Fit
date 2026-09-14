@@ -57,6 +57,9 @@ interface AuthorityRequest {
   scheduledLocalDate?: string;
   sessionIndex?: number;
   decision?: 'CONTINUE_SEQUENCE' | 'FOLLOW_SCHEDULE';
+  expectedMissedSessionIndex?: number;
+  expectedCalendarSessionIndex?: number;
+  expectedMissedScheduledDate?: string;
   targetPlan?: Record<string, unknown>;
   targetPrescriptionInputSnapshot?: Record<string, unknown>;
   updatedFields?: Record<string, unknown>;
@@ -1080,6 +1083,13 @@ async function validateRequest(uid: string, request: AuthorityRequest, firestore
       throw new HttpsError('invalid-argument', 'invalid_miss_resolution_decision');
     }
     if (!request.scheduledLocalDate) throw new HttpsError('invalid-argument', 'invalid_miss_resolution_date');
+    if (
+      !Number.isInteger(request.expectedMissedSessionIndex)
+      || !Number.isInteger(request.expectedCalendarSessionIndex)
+      || typeof request.expectedMissedScheduledDate !== 'string'
+    ) {
+      throw new HttpsError('invalid-argument', 'missing_missed_session_decision_identity');
+    }
     const context = await loadScheduleAuthorityContext(uid, bundle, firestore);
     if (context.sessionCount <= 0 || context.config.trainingDays.length === 0) {
       throw new HttpsError('failed-precondition', 'schedule_not_configured');
@@ -1097,6 +1107,13 @@ async function validateRequest(uid: string, request: AuthorityRequest, firestore
       todayLocalDate: request.scheduledLocalDate,
     });
     if (!gap) throw new HttpsError('failed-precondition', 'no_pending_missed_session_decision');
+    if (
+      gap.missedSessionIndex !== request.expectedMissedSessionIndex
+      || gap.calendarSessionIndex !== request.expectedCalendarSessionIndex
+      || gap.missedScheduledDate !== request.expectedMissedScheduledDate
+    ) {
+      throw new HttpsError('aborted', 'stale_missed_session_decision');
+    }
     const targetScheduleEvents: Array<{ type: string; sessionIndex: number; scheduledDate: string }> = [
       { type: 'MISS_RESOLVED', sessionIndex: gap.missedSessionIndex, scheduledDate: gap.missedScheduledDate },
     ];
