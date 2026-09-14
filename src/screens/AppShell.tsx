@@ -24,6 +24,7 @@ import { ProfileScreen } from './ProfileScreen';
 import { AssessmentScreen } from './AssessmentScreen';
 import { SettingsScreen } from './SettingsScreen';
 import { NotificationSettingsScreen } from './NotificationSettingsScreen';
+import { AccountSettingsScreen } from './AccountSettingsScreen';
 import { SecurityScreen } from './SecurityScreen';
 import { ChangePasswordScreen } from './ChangePasswordScreen';
 import { DeleteAccountScreen } from './DeleteAccountScreen';
@@ -320,6 +321,7 @@ function AppShellContent({
   const [showSettings, setShowSettings] = useState(false);
   const [showSecurity, setShowSecurity] = useState(false);
   const [showNotificationSettings, setShowNotificationSettings] = useState(false);
+  const [showAccountSettings, setShowAccountSettings] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [showDeleteAccount, setShowDeleteAccount] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
@@ -364,6 +366,7 @@ function AppShellContent({
     showSettings ||
     showSecurity ||
     showNotificationSettings ||
+    showAccountSettings ||
     showChangePassword ||
     showEditProfile ||
     showMyPlan ||
@@ -1189,7 +1192,6 @@ function AppShellContent({
             onOpenAssessment={() => setShowAssessment(true)}
             onOpenEditProfile={() => setShowEditProfile(true)}
             onOpenSettings={() => setShowSettings(true)}
-            onOpenSubscription={() => setShowSubscriptionCenter(true)}
             onOpenMyPlan={() => setShowMyPlan(true)}
             evolutionViewModel={evolution.viewModel}
             onOpenEvolution={() => setShowEvolutionUnlock(true)}
@@ -1343,6 +1345,7 @@ function AppShellContent({
           onOpenEditProfile={() => setShowEditProfile(true)}
           onOpenSecurity={() => setShowSecurity(true)}
           onOpenNotifications={() => setShowNotificationSettings(true)}
+          onOpenAccount={() => setShowAccountSettings(true)}
           onOpenHelpCenter={() => setSupportRoute({ name: 'help' })}
           onReportProblem={() => {
             setLastFormRoute({ type: 'BUG' });
@@ -1352,12 +1355,20 @@ function AppShellContent({
             setLastFormRoute({ type: 'FEEDBACK' });
             setSupportRoute({ name: 'form', type: 'FEEDBACK' });
           }}
-          onOpenDeleteAccount={() => setShowDeleteAccount(true)}
         />
       </PersistentScreen>
       {showNotificationSettings ? (
         <View style={FULL_BLEED.overlayZ50}>
           <NotificationSettingsScreen onBack={() => setShowNotificationSettings(false)} />
+        </View>
+      ) : null}
+      {showAccountSettings ? (
+        <View style={FULL_BLEED.overlayZ50}>
+          <AccountSettingsScreen
+            onBack={() => setShowAccountSettings(false)}
+            onOpenSubscription={() => setShowSubscriptionCenter(true)}
+            onOpenDeleteAccount={() => setShowDeleteAccount(true)}
+          />
         </View>
       ) : null}
       <PersistentScreen
@@ -1369,7 +1380,6 @@ function AppShellContent({
         <SecurityScreen
           onBack={() => setShowSecurity(false)}
           onOpenChangePassword={canChangePassword ? () => setShowChangePassword(true) : undefined}
-          onOpenDeleteAccount={() => setShowDeleteAccount(true)}
         />
       </PersistentScreen>
       {/*
@@ -1435,7 +1445,7 @@ function AppShellContent({
       <PersistentScreen
         active={showSubscriptionCenter}
         prewarm={prewarmed.SUBSCRIPTION_CENTER}
-        activeStyle={FULL_BLEED.overlayZ50}
+        activeStyle={FULL_BLEED.overlayZ60}
         inactiveMode="materialized"
       >
         <SubscriptionCenterScreen

@@ -10,6 +10,10 @@ const settingsSource = readFileSync(
   resolve(__dirname, '../../screens/SettingsScreen.tsx'),
   'utf8',
 );
+const accountSettingsSource = readFileSync(
+  resolve(__dirname, '../../screens/AccountSettingsScreen.tsx'),
+  'utf8',
+);
 const smartAlertsSource = readFileSync(
   resolve(__dirname, '../../components/ui/SmartAlertsSection.tsx'),
   'utf8',
@@ -22,10 +26,10 @@ describe('Profile and Settings organization', () => {
     expect(profileSource).toContain('onPress: onOpenAssessment');
     expect(profileSource).toContain("label: t('groups.goalsPlan.items.viewPlan')");
     expect(profileSource).toContain("label: t('groups.account.items.editProfile')");
-    expect(profileSource).toContain("label: t('groups.account.items.subscription')");
-    expect(profileSource).toContain('value: subscriptionLabel');
     expect(profileSource).toContain("label: t('groups.account.items.settings')");
     expect(profileSource).toContain('onPress: onOpenSettings');
+    expect(profileSource).not.toContain("label: t('groups.account.items.subscription')");
+    expect(profileSource).not.toContain('onOpenSubscription');
 
     expect(profileSource).not.toContain("t('groups.goalsPlan.items.goal.label')");
     expect(profileSource).not.toContain("t('groups.goalsPlan.items.plan.label')");
@@ -72,19 +76,28 @@ describe('Profile and Settings organization', () => {
     expect(settingsSource).not.toContain("value: 'v1.0.0'");
   });
 
-  it('keeps the requested Privacy and Data actions and preserves Support', () => {
+  it('opens Account from Privacy and Data and preserves the legal and Support actions', () => {
     for (const key of [
+      'account',
       'privacyPolicy',
       'termsOfUse',
-      'deleteAccount',
     ]) {
       expect(settingsSource).toContain(`t('settings:items.${key}')`);
     }
+    expect(settingsSource).not.toContain("t('settings:items.deleteAccount')");
     expect(settingsSource).not.toContain("t('settings:items.acceptedConsents')");
     expect(settingsSource).not.toContain("t('settings:items.exportData')");
 
     expect(settingsSource).toContain('onPress: onOpenHelpCenter');
     expect(settingsSource).toContain('onPress: onReportProblem');
     expect(settingsSource).toContain('onPress: onSendSuggestion');
+  });
+
+  it('centralizes Subscription and Delete account in the Account sub-screen', () => {
+    expect(accountSettingsSource).toContain("label: t('items.subscription')");
+    expect(accountSettingsSource).toContain('onPress: onOpenSubscription');
+    expect(accountSettingsSource).toContain("label: t('items.deleteAccount')");
+    expect(accountSettingsSource).toContain('onPress: onOpenDeleteAccount');
+    expect(accountSettingsSource).toContain('danger: true');
   });
 });

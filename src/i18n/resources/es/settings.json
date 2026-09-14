@@ -10,6 +10,7 @@
     "about": "Acerca de"
   },
   "items": {
+    "account": "Cuenta",
     "editProfile": "Editar perfil",
     "subscription": "Suscripción",
     "loginMethods": "Métodos de inicio de sesión",

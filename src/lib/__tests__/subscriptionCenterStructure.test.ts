@@ -8,11 +8,13 @@ function source(path: string): string {
 describe('Subscription Center integration', () => {
   const appShell = source('src/screens/AppShell.tsx');
   const profile = source('src/screens/ProfileScreen.tsx');
+  const account = source('src/screens/AccountSettingsScreen.tsx');
   const center = source('src/screens/SubscriptionCenterScreen.tsx');
   const gate = source('src/lib/premiumGate.ts');
 
-  it('opens the Subscription Center from Profile instead of opening Paywall directly', () => {
-    expect(profile).toContain('onPress: onOpenSubscription');
+  it('opens the Subscription Center only from the Account settings sub-screen', () => {
+    expect(account).toContain('onPress: onOpenSubscription');
+    expect(profile).not.toContain('onOpenSubscription');
     expect(appShell).toContain('onOpenSubscription={() => setShowSubscriptionCenter(true)}');
     expect(appShell).toContain('<SubscriptionCenterScreen');
   });
@@ -23,6 +25,13 @@ describe('Subscription Center integration', () => {
     expect(appShell).toContain('<PaywallScreen');
     expect(center).toContain("model.status === 'expired'");
     expect(center).toContain('onPress={onRenew}');
+  });
+
+  it('opens subscription management from the status card without a separate section', () => {
+    expect(center).toContain('onPress={() => void handleManage()}');
+    expect(center).toContain('accessibilityRole="button"');
+    expect(center).not.toContain('function SubscriptionActions');
+    expect(center).not.toContain("title={t('subscriptionCenter.section.manage')}");
   });
 
   it('reuses context restore and live CustomerInfo rather than caching a screen snapshot', () => {

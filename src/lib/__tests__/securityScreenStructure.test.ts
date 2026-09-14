@@ -13,6 +13,10 @@ const settingsSource = readFileSync(
   resolve(__dirname, '../../screens/SettingsScreen.tsx'),
   'utf8',
 );
+const accountSettingsSource = readFileSync(
+  resolve(__dirname, '../../screens/AccountSettingsScreen.tsx'),
+  'utf8',
+);
 const appShellSource = readFileSync(
   resolve(__dirname, '../../screens/AppShell.tsx'),
   'utf8',
@@ -31,8 +35,8 @@ const passwordServiceSource = readFileSync(
 );
 
 describe('SecurityScreen structure', () => {
-  it('renders the three required sections in order', () => {
-    const sectionKeys = ['account', 'access', 'safetyZone'];
+  it('renders the account protection and access sections in order', () => {
+    const sectionKeys = ['account', 'access'];
     const positions = sectionKeys.map((key) =>
       securitySource.indexOf(`t('security.sections.${key}')`),
     );
@@ -97,9 +101,11 @@ describe('SecurityScreen structure', () => {
     expect(appShellSource).toContain('onBack={() => setShowSecurity(false)}');
   });
 
-  it('still navigates to account deletion through the existing overlay pattern', () => {
-    expect(securitySource).toContain('onOpenDeleteAccount?: () => void;');
-    expect(securitySource).toContain('onPress: onOpenDeleteAccount ?? (() => {})');
+  it('moves account deletion out of Security and into the Account settings sub-screen', () => {
+    expect(securitySource).not.toContain('onOpenDeleteAccount');
+    expect(securitySource).not.toContain("t('security.items.deleteAccount')");
+    expect(accountSettingsSource).toContain('onOpenDeleteAccount?: () => void;');
+    expect(accountSettingsSource).toContain('onPress: onOpenDeleteAccount');
     expect(appShellSource).toContain('onOpenDeleteAccount={() => setShowDeleteAccount(true)}');
     expect(appShellSource).toContain('<DeleteAccountScreen');
   });

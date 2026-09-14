@@ -24,11 +24,9 @@ const ACCESS_METHOD_LABEL_KEY: Record<ReauthenticationProvider, string> = {
 export function SecurityScreen({
   onBack,
   onOpenChangePassword,
-  onOpenDeleteAccount,
 }: {
   onBack: () => void;
   onOpenChangePassword?: () => void;
-  onOpenDeleteAccount?: () => void;
 }) {
   const { t, i18n } = useTranslation('settings');
   const { user, linkedProviders } = useAuth();
@@ -106,19 +104,6 @@ export function SecurityScreen({
               items={accessItems}
             />
           )}
-
-          <SettingsSection
-            title={t('security.sections.safetyZone').toUpperCase()}
-            description={t('security.safetyZoneDescription')}
-            items={[
-              {
-                icon: 'trash',
-                label: t('security.items.deleteAccount'),
-                danger: true,
-                onPress: onOpenDeleteAccount ?? (() => {}),
-              },
-            ]}
-          />
         </ScrollView>
       </SafeAreaView>
     </ScreenBg>

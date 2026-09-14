@@ -4,7 +4,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { ScreenBg } from '../components/ui/ScreenBg';
 import { Display, Slash, MonoLabel } from '../components/ui/Display';
-import { Card } from '../components/ui/Card';
 import { Icon, IconName } from '../components/ui/Icon';
 import { OutlineNumber } from '../components/ui/OutlineNumber';
 import { ProfileAvatar } from '../components/ui/ProfileAvatar';
@@ -13,8 +12,6 @@ import { SmartAlertsSection } from '../components/ui/SmartAlertsSection';
 import { EvolutionCard } from '../components/evolution/EvolutionCard';
 import { useTheme } from '../theme';
 import { useAuth } from '../state/AuthContext';
-import { useSubscription } from '../hooks/useSubscription';
-import { resolveSubscriptionCenterModel } from '../lib/subscriptionCenter';
 import type { EvolutionViewModel } from '../workoutEvolution/types';
 
 /** Provider ids come from Firebase Auth and MUST NOT be renamed here —
@@ -29,7 +26,6 @@ export function ProfileScreen({
   onOpenAssessment,
   onOpenEditProfile,
   onOpenSettings,
-  onOpenSubscription,
   onOpenMyPlan,
   evolutionViewModel,
   onOpenEvolution,
@@ -37,7 +33,6 @@ export function ProfileScreen({
   onOpenAssessment?: () => void;
   onOpenEditProfile?: () => void;
   onOpenSettings?: () => void;
-  onOpenSubscription?: () => void;
   onOpenMyPlan?: () => void;
   /** Fase 5 — real Training Level/Cycle state; replaces the old hardcoded XP/level bar (docs product §57/§AP-AR). */
   evolutionViewModel: EvolutionViewModel;
@@ -46,7 +41,6 @@ export function ProfileScreen({
   const { t } = useTranslation('profile');
   const { theme } = useTheme();
   const { user, profile, linkedProviders, logout } = useAuth();
-  const { customerInfo } = useSubscription();
 
   const email = profile?.profile.email ?? user?.email ?? '';
   const athleteFallback = t('fallback.athlete');
@@ -57,26 +51,6 @@ export function ProfileScreen({
   const sinceYear = profile?.metadata.createdAt
     ? String(profile.metadata.createdAt.toDate().getFullYear())
     : '—';
-
-  const subscriptionState = resolveSubscriptionCenterModel({
-    customerInfo,
-    offerings: null,
-    mirror: profile?.subscription ?? null,
-  }).status;
-  const subscriptionStatus = {
-    active: 'ACTIVE',
-    trial: 'TRIAL',
-    canceled: 'CANCELED',
-    billing_issue: 'BILLING_ISSUE',
-    grace_period: 'BILLING_ISSUE',
-    expired: 'EXPIRED',
-    unknown: null,
-  }[subscriptionState];
-  const subscriptionLabel = subscriptionStatus
-    ? t(`subscription.labels.${subscriptionStatus}`, {
-        defaultValue: t('subscription.labels.unknown'),
-      })
-    : t('subscription.labels.none');
 
   function confirmLogout() {
     Alert.alert(t('logout.confirmTitle'), t('logout.confirmMessage'), [
@@ -171,12 +145,6 @@ export function ProfileScreen({
                 icon: 'user',
                 label: t('groups.account.items.editProfile'),
                 onPress: onOpenEditProfile,
-              },
-              {
-                icon: 'crown',
-                label: t('groups.account.items.subscription'),
-                value: subscriptionLabel,
-                onPress: onOpenSubscription,
               },
               {
                 icon: 'settings',

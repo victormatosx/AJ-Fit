@@ -44,19 +44,19 @@ export function SettingsScreen({
   onOpenEditProfile,
   onOpenSecurity,
   onOpenNotifications,
+  onOpenAccount,
   onOpenHelpCenter,
   onReportProblem,
   onSendSuggestion,
-  onOpenDeleteAccount,
 }: {
   onBack?: () => void;
   onOpenEditProfile?: () => void;
   onOpenSecurity?: () => void;
   onOpenNotifications?: () => void;
+  onOpenAccount?: () => void;
   onOpenHelpCenter?: () => void;
   onReportProblem?: () => void;
   onSendSuggestion?: () => void;
-  onOpenDeleteAccount?: () => void;
 }) {
   const { theme, mode: currentTheme, setTheme } = useTheme();
   const { user } = useAuth();
@@ -303,14 +303,9 @@ export function SettingsScreen({
           <SettingsSection
             title={t('settings:sections.privacyAndData').toUpperCase()}
             items={[
+              { icon: 'user', label: t('settings:items.account'), onPress: onOpenAccount },
               { icon: 'shield', label: t('settings:items.privacyPolicy'), onPress: () => setLegalDocument('privacy') },
               { icon: 'file-text', label: t('settings:items.termsOfUse'), onPress: () => setLegalDocument('terms') },
-              {
-                icon: 'trash',
-                label: t('settings:items.deleteAccount'),
-                danger: true,
-                onPress: onOpenDeleteAccount ?? (() => {}),
-              },
             ]}
           />
 

@@ -8,18 +8,15 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
 import type { Store } from 'react-native-purchases';
 import { ScreenBg } from '../components/ui/ScreenBg';
 import { CtaButton, CtaText } from '../components/ui/CtaButton';
-import { Display, MonoLabel, Slash } from '../components/ui/Display';
-import { Icon, type IconName } from '../components/ui/Icon';
-import { SettingsSection, type SettingsItemData } from '../components/ui/SettingsSection';
+import { MonoLabel, Slash } from '../components/ui/Display';
+import { Icon } from '../components/ui/Icon';
 import { useAuth } from '../state/AuthContext';
 import { useSubscription } from '../hooks/useSubscription';
 import {
-  isRestoreVisible,
   resolveSubscriptionCenterModel,
   resolveSubscriptionCenterViewState,
   type SubscriptionCenterModel,
@@ -58,16 +55,6 @@ function tierTones(theme: AppTheme): Record<StatusTier, { color: string; bg: str
     off: { color: theme.colors.statusOffText, bg: theme.colors.statusOffBackground },
   };
 }
-
-const STATUS_ICON: Record<SubscriptionCenterStatus, IconName> = {
-  active: 'crown',
-  trial: 'crown',
-  canceled: 'crown',
-  billing_issue: 'alert-triangle',
-  grace_period: 'alert-triangle',
-  expired: 'lock',
-  unknown: 'help-circle',
-};
 
 export function SubscriptionCenterScreen({
   onBack,
@@ -193,7 +180,13 @@ export function SubscriptionCenterScreen({
             }
           >
             <View style={{ paddingHorizontal: 22 }}>
-              <StatusCard model={model} formatDate={formatDate} />
+              <StatusCard
+                model={model}
+                formatDate={formatDate}
+                onPress={() => void handleManage()}
+                disabled={action !== null}
+                managing={action === 'manage'}
+              />
               <DetailsCard model={model} formatDate={formatDate} />
 
               {(offeringsError || offeringsUnavailable) && !model.localizedPrice ? (
@@ -223,16 +216,6 @@ export function SubscriptionCenterScreen({
               ) : null}
             </View>
 
-            {model.status !== 'expired' ? (
-              <SubscriptionActions
-                model={model}
-                busy={action !== null}
-                restoring={action === 'restore'}
-                managing={action === 'manage'}
-                onManage={() => void handleManage()}
-                onRestore={() => void handleRestore()}
-              />
-            ) : null}
           </ScrollView>
         ) : (
           <CenteredState
@@ -286,20 +269,20 @@ function SubscriptionHeader({ onBack }: { onBack: () => void }) {
 function StatusCard({
   model,
   formatDate,
+  onPress,
+  disabled,
+  managing,
 }: {
   model: SubscriptionCenterModel;
   formatDate: (date: Date) => string;
+  onPress: () => void;
+  disabled: boolean;
+  managing: boolean;
 }) {
   const { theme } = useTheme();
   const { t } = useTranslation('profile');
   const tier = STATUS_TIER[model.status];
   const tone = tierTones(theme)[tier];
-  const icon = STATUS_ICON[model.status];
-  // Icon glyph shifts to the tone color only for tiers that need urgency
-  // (attention) or that no longer carry Premium (off); "still fine" tiers
-  // (success/info/caution) keep the brand blue so the card doesn't turn
-  // into a mixed-color badge for states the user shouldn't worry about.
-  const iconColor = tier === 'attention' || tier === 'off' ? tone.color : theme.colors.primaryEmphasis;
   const badge = statusBadge(model.status, t);
   const description = statusDescription(model, formatDate, t);
   const primary = primaryFact(model, formatDate, t);
@@ -310,76 +293,90 @@ function StatusCard({
   const showDescription = model.status !== 'active';
 
   return (
-    <LinearGradient
-      colors={theme.gradients.subscriptionStatus}
-      locations={[0, 0.6, 1]}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={{
-        borderRadius: 18,
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={t('subscriptionCenter.actions.manage')}
+      accessibilityState={{ disabled, busy: managing }}
+      onPress={onPress}
+      disabled={disabled}
+      style={({ pressed }) => ({
+        borderRadius: 14,
         borderWidth: 1,
-        borderColor: theme.colors.primaryBorderHighlight,
-        padding: 16,
-      }}
+        borderColor: theme.colors.settingsGroupBorder,
+        backgroundColor: pressed
+          ? theme.colors.surfacePressed
+          : theme.colors.settingsGroupBackground,
+        padding: 18,
+        opacity: disabled && !managing ? 0.55 : 1,
+      })}
     >
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-        <View
-          style={{
-            width: 40,
-            height: 40,
-            borderRadius: 12,
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: theme.colors.surfacePressed,
-            borderWidth: 1,
-            borderColor: theme.colors.dividerStrong,
-          }}
-        >
-          <Icon name={icon} size={19} color={iconColor} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Display size={18}>{t('subscriptionCenter.brand')}</Display>
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 12,
+        }}
+      >
+        <MonoLabel numberOfLines={1}>{t('subscriptionCenter.brand')}</MonoLabel>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 6,
+              paddingHorizontal: 8,
+              paddingVertical: 4,
+              borderRadius: 999,
+              backgroundColor: tone.bg,
+            }}
+          >
             <View
               style={{
-                paddingHorizontal: 8,
-                paddingVertical: 3,
+                width: 5,
+                height: 5,
                 borderRadius: 999,
-                backgroundColor: tone.bg,
+                backgroundColor: tone.color,
               }}
-            >
-              <Text
-                style={{
-                  color: tone.color,
-                  fontFamily: theme.fonts.monoBold,
-                  fontSize: 9,
-                  letterSpacing: 1.2,
-                  textTransform: 'uppercase',
-                }}
-              >
-                {badge}
-              </Text>
-            </View>
-          </View>
-          {planLine ? (
+            />
             <Text
               style={{
-                marginTop: 4,
-                color: theme.colors.textSecondary,
-                fontFamily: theme.fonts.uiMed,
-                fontSize: 12.5,
+                color: tone.color,
+                fontFamily: theme.fonts.monoBold,
+                fontSize: 9,
+                letterSpacing: 1,
+                textTransform: 'uppercase',
               }}
             >
-              {planLine}
+              {badge}
             </Text>
-          ) : null}
+          </View>
+          {managing ? (
+            <ActivityIndicator size="small" color={theme.colors.textMuted} />
+          ) : (
+            <Icon name="chevron-right" size={14} color={theme.colors.textFaint} />
+          )}
         </View>
       </View>
+
+      {planLine ? (
+        <Text
+          style={{
+            marginTop: 18,
+            color: theme.colors.textPrimary,
+            fontFamily: theme.fonts.uiSemi,
+            fontSize: 17,
+            lineHeight: 23,
+          }}
+        >
+          {planLine}
+        </Text>
+      ) : null}
 
       {showDescription ? (
         <Text
           style={{
-            marginTop: 14,
+            marginTop: 8,
             color: theme.colors.textSecondary,
             fontFamily: theme.fonts.ui,
             fontSize: 13,
@@ -393,26 +390,30 @@ function StatusCard({
       {primary ? (
         <View
           style={{
-            marginTop: 14,
+            marginTop: 18,
             paddingTop: 14,
             borderTopWidth: 1,
             borderTopColor: theme.colors.divider,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 16,
           }}
         >
-          <MonoLabel>{primary.label}</MonoLabel>
+          <MonoLabel style={{ flex: 1 }}>{primary.label}</MonoLabel>
           <Text
             style={{
-              marginTop: 6,
               color: theme.colors.textPrimary,
-              fontFamily: theme.fonts.uiBold,
-              fontSize: 19,
+              fontFamily: theme.fonts.uiSemi,
+              fontSize: 14,
+              textAlign: 'right',
             }}
           >
             {primary.value}
           </Text>
         </View>
       ) : null}
-    </LinearGradient>
+    </Pressable>
   );
 }
 
@@ -517,63 +518,6 @@ function DetailsCard({
         </View>
       ))}
     </View>
-  );
-}
-
-function SubscriptionActions({
-  model,
-  busy,
-  restoring,
-  managing,
-  onManage,
-  onRestore,
-}: {
-  model: SubscriptionCenterModel;
-  busy: boolean;
-  restoring: boolean;
-  managing: boolean;
-  onManage: () => void;
-  onRestore: () => void;
-}) {
-  const { t } = useTranslation('profile');
-  const manageable = ['active', 'trial', 'canceled', 'billing_issue', 'grace_period'].includes(
-    model.status,
-  );
-  // This component never renders for 'expired' (see ExpiredActions below),
-  // so in practice isRestoreVisible only turns this on for 'unknown'.
-  const restoreVisible = isRestoreVisible(model.status);
-
-  const items: SettingsItemData[] = [];
-  if (manageable) {
-    items.push({
-      icon: 'settings',
-      label:
-        model.status === 'billing_issue' || model.status === 'grace_period'
-          ? t('subscriptionCenter.actions.managePayment')
-          : t('subscriptionCenter.actions.manage'),
-      onPress: onManage,
-      disabled: busy,
-      loading: managing,
-    });
-  }
-  if (restoreVisible) {
-    items.push({
-      icon: 'swap',
-      label: t('subscriptionCenter.actions.restore'),
-      onPress: onRestore,
-      disabled: busy,
-      loading: restoring,
-    });
-  }
-
-  if (items.length === 0) return null;
-
-  return (
-    <SettingsSection
-      title={t('subscriptionCenter.section.manage')}
-      items={items}
-      style={{ marginTop: 26, paddingBottom: 0 }}
-    />
   );
 }
 
