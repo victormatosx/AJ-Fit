@@ -81,18 +81,30 @@ export type GooglePlayOfferCorrelationResult =
   | { status: 'not_matched' };
 
 /**
- * THE correlation algorithm (Fase 4C.3A rule 9/12). Pure — zero Firestore/
- * RevenueCat SDK dependency, so it's fully unit-testable.
+ * THE correlation algorithm (Fase 4C.3A rule 9/12, revised FASE 5.3). Pure —
+ * zero Firestore/RevenueCat SDK dependency, so it's fully unit-testable.
  *
- * Matches ONLY on exact equality of BOTH `basePlanId` AND `offerId` against
- * the SAME plan's authorized pair — a `monthly` offerId can never satisfy
- * an `annual` basePlanId or vice versa (rule 12: "nunca casar offerId de um
- * plano com basePlanId de outro"). Returns `not_matched` (never guesses/
- * picks a "closest" plan) whenever:
+ * Two authorized shapes per plan, both matched against the SAME plan only —
+ * a `monthly` authorization can never satisfy an `annual` purchase or vice
+ * versa (rule 12: "nunca casar offerId de um plano com basePlanId de
+ * outro"):
+ *
+ * - LEGACY (`authorized.offerId` is a string): unchanged since Fase 4C.3A —
+ *   requires exact equality of BOTH `basePlanId` AND `offerId`/`offerCode`.
+ *   `offerCode === null` (no offer reported by the store) can never satisfy
+ *   this shape, exactly as before.
+ * - NEW (`authorized.offerId` is `null`, Fase 5.3): the coupon only
+ *   authorized a promotional BASE PLAN, not a specific offer — matches on
+ *   `basePlanId` alone, regardless of `offerCode` (Google Play/RevenueCat's
+ *   own automatic offer selection decided whether `trial-7d-new-subscriber`
+ *   or the bare base plan applied; this backend never asserts an opinion on
+ *   that choice).
+ *
+ * Returns `not_matched` (never guesses/picks a "closest" plan) whenever:
  * - `androidOffer` itself is `null` (no Android config was ever stored for
  *   this redemption — includes legacy pre-4C.3A records, rule 20);
- * - `basePlanId`/`offerCode` couldn't be determined (`null`);
- * - neither plan's authorized pair matches exactly.
+ * - `basePlanId` couldn't be determined (`null`);
+ * - neither plan's authorized pair matches under its own shape's rule above.
  *
  * Does not know anything about `store` — callers must only invoke this for
  * a confirmed Google Play (`PLAY_STORE`) event; a non-Google event should
@@ -103,14 +115,22 @@ export function correlateGooglePlayOffer(
   offerCode: string | null,
   androidOffer: PromoCodeAndroidOfferSnapshot | null,
 ): GooglePlayOfferCorrelationResult {
-  if (androidOffer === null || basePlanId === null || offerCode === null) {
+  if (androidOffer === null || basePlanId === null) {
     return { status: 'not_matched' };
   }
 
   const plans: Array<'monthly' | 'annual'> = ['monthly', 'annual'];
   for (const plan of plans) {
     const authorized = androidOffer[plan];
-    if (authorized && authorized.basePlanId === basePlanId && authorized.offerId === offerCode) {
+    if (!authorized || authorized.basePlanId !== basePlanId) continue;
+
+    if (authorized.offerId === null) {
+      // FASE 5.3 — new-style config: base plan alone is the whole
+      // authorization; the store's own offer choice is irrelevant here.
+      return { status: 'matched', plan };
+    }
+
+    if (offerCode !== null && authorized.offerId === offerCode) {
       return { status: 'matched', plan };
     }
   }

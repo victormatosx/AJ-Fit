@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   createInitialPromoCodeState,
+  parseAndroidSubscriptionOfferConfig,
+  parsePromoCodeAndroidStoreConfig,
   reducePromoCodeState,
   type PromoCodeAndroidStoreConfig,
   type PromoCodeBenefit,
@@ -20,8 +22,8 @@ const HELLLEN_BENEFIT: PromoCodeBenefit = {
 };
 
 const STORE_CONFIG: PromoCodeAndroidStoreConfig = {
-  monthly: { basePlanId: 'monthly', offerId: 'influencer-trial-7d' },
-  annual: { basePlanId: 'annual', offerId: 'influencer-trial-7d-annual' },
+  monthly: { kind: 'legacy', basePlanId: 'monthly', offerId: 'influencer-trial-7d' },
+  annual: { kind: 'legacy', basePlanId: 'annual', offerId: 'influencer-trial-7d-annual' },
 };
 
 const IOS_PROMOTION: IOSPromotionAuthorization = {
@@ -423,5 +425,196 @@ describe('promoCodeState — FASE 4 iOS promotion authorization lifecycle', () =
     state = reducePromoCodeState(state, { type: 'identity-changed', uid: UID_B, generation: 3 });
     expect(state.uid).toBe(UID_B);
     expect(state.applied).toBeNull();
+  });
+});
+
+// FASE 6.2 — client-side fail-closed parser for storeConfig.android.
+describe('parseAndroidSubscriptionOfferConfig', () => {
+  it('absent (null) parses as absent', () => {
+    expect(parseAndroidSubscriptionOfferConfig(null)).toEqual({ status: 'absent' });
+  });
+
+  it('accepts the LEGACY shape (basePlanId + offerId)', () => {
+    expect(
+      parseAndroidSubscriptionOfferConfig({ basePlanId: 'monthly', offerId: 'influencer-trial-7d' }),
+    ).toEqual({
+      status: 'valid',
+      config: { kind: 'legacy', basePlanId: 'monthly', offerId: 'influencer-trial-7d' },
+    });
+  });
+
+  it('accepts the NEW shape (basePlanId + offeringIdentifier)', () => {
+    expect(
+      parseAndroidSubscriptionOfferConfig({
+        basePlanId: 'monthly-promo',
+        offeringIdentifier: 'coupon_discount',
+      }),
+    ).toEqual({
+      status: 'valid',
+      config: { kind: 'new', basePlanId: 'monthly-promo', offeringIdentifier: 'coupon_discount' },
+    });
+  });
+
+  it('rejects basePlanId alone (incomplete — neither shape)', () => {
+    expect(parseAndroidSubscriptionOfferConfig({ basePlanId: 'monthly' })).toEqual({
+      status: 'invalid',
+    });
+  });
+
+  it('rejects offerId alone (missing basePlanId)', () => {
+    expect(parseAndroidSubscriptionOfferConfig({ offerId: 'influencer-trial-7d' })).toEqual({
+      status: 'invalid',
+    });
+  });
+
+  it('rejects offeringIdentifier alone (missing basePlanId)', () => {
+    expect(parseAndroidSubscriptionOfferConfig({ offeringIdentifier: 'coupon_discount' })).toEqual({
+      status: 'invalid',
+    });
+  });
+
+  it('rejects offerId AND offeringIdentifier together (ambiguous — which shape?)', () => {
+    expect(
+      parseAndroidSubscriptionOfferConfig({
+        basePlanId: 'monthly',
+        offerId: 'influencer-trial-7d',
+        offeringIdentifier: 'coupon_discount',
+      }),
+    ).toEqual({ status: 'invalid' });
+  });
+
+  it('rejects an empty object', () => {
+    expect(parseAndroidSubscriptionOfferConfig({})).toEqual({ status: 'invalid' });
+  });
+
+  it.each([
+    ['empty string basePlanId', { basePlanId: '', offerId: 'x' }],
+    ['empty string offerId', { basePlanId: 'monthly', offerId: '' }],
+    ['non-string basePlanId', { basePlanId: 42, offerId: 'x' }],
+    ['non-string offeringIdentifier', { basePlanId: 'monthly', offeringIdentifier: 42 }],
+    ['whitespace-only offerId', { basePlanId: 'monthly', offerId: '   ' }],
+    ['untrimmed offeringIdentifier', { basePlanId: 'monthly', offeringIdentifier: ' coupon_discount ' }],
+  ])('rejects invalid field types/values: %s', (_label, value) => {
+    expect(parseAndroidSubscriptionOfferConfig(value)).toEqual({ status: 'invalid' });
+  });
+
+  it('rejects an array', () => {
+    expect(parseAndroidSubscriptionOfferConfig(['monthly', 'x'])).toEqual({ status: 'invalid' });
+  });
+
+  it('rejects a string/number/boolean', () => {
+    expect(parseAndroidSubscriptionOfferConfig('monthly')).toEqual({ status: 'invalid' });
+    expect(parseAndroidSubscriptionOfferConfig(42)).toEqual({ status: 'invalid' });
+    expect(parseAndroidSubscriptionOfferConfig(true)).toEqual({ status: 'invalid' });
+  });
+
+  it('rejects an unknown extra key alongside a valid legacy pair', () => {
+    expect(
+      parseAndroidSubscriptionOfferConfig({
+        basePlanId: 'monthly',
+        offerId: 'influencer-trial-7d',
+        extra: 'x',
+      }),
+    ).toEqual({ status: 'invalid' });
+  });
+});
+
+describe('parsePromoCodeAndroidStoreConfig', () => {
+  it('absent (null) parses as absent', () => {
+    expect(parsePromoCodeAndroidStoreConfig(null)).toEqual({ status: 'absent' });
+  });
+
+  it('accepts both plans in the LEGACY shape (ARNALDO today)', () => {
+    expect(
+      parsePromoCodeAndroidStoreConfig({
+        monthly: { basePlanId: 'monthly', offerId: 'influencer-trial-7d' },
+        annual: { basePlanId: 'annual', offerId: 'influencer-trial-7d-annual' },
+      }),
+    ).toEqual({
+      status: 'valid',
+      config: {
+        monthly: { kind: 'legacy', basePlanId: 'monthly', offerId: 'influencer-trial-7d' },
+        annual: { kind: 'legacy', basePlanId: 'annual', offerId: 'influencer-trial-7d-annual' },
+      },
+    });
+  });
+
+  it('accepts both plans in the NEW shape (ARNALDO future)', () => {
+    expect(
+      parsePromoCodeAndroidStoreConfig({
+        monthly: { basePlanId: 'monthly-promo', offeringIdentifier: 'coupon_discount' },
+        annual: { basePlanId: 'annual-promo', offeringIdentifier: 'coupon_discount' },
+      }),
+    ).toEqual({
+      status: 'valid',
+      config: {
+        monthly: { kind: 'new', basePlanId: 'monthly-promo', offeringIdentifier: 'coupon_discount' },
+        annual: { kind: 'new', basePlanId: 'annual-promo', offeringIdentifier: 'coupon_discount' },
+      },
+    });
+  });
+
+  it('accepts a mixed catalog — one plan legacy, the other new (transition period)', () => {
+    expect(
+      parsePromoCodeAndroidStoreConfig({
+        monthly: { basePlanId: 'monthly', offerId: 'influencer-trial-7d' },
+        annual: { basePlanId: 'annual-promo', offeringIdentifier: 'coupon_discount' },
+      }),
+    ).toEqual({
+      status: 'valid',
+      config: {
+        monthly: { kind: 'legacy', basePlanId: 'monthly', offerId: 'influencer-trial-7d' },
+        annual: { kind: 'new', basePlanId: 'annual-promo', offeringIdentifier: 'coupon_discount' },
+      },
+    });
+  });
+
+  it('accepts one plan configured and the other absent (null)', () => {
+    expect(
+      parsePromoCodeAndroidStoreConfig({
+        monthly: { basePlanId: 'monthly', offerId: 'influencer-trial-7d' },
+        annual: null,
+      }),
+    ).toEqual({
+      status: 'valid',
+      config: {
+        monthly: { kind: 'legacy', basePlanId: 'monthly', offerId: 'influencer-trial-7d' },
+        annual: null,
+      },
+    });
+  });
+
+  it('accepts both plans absent (null)', () => {
+    expect(parsePromoCodeAndroidStoreConfig({ monthly: null, annual: null })).toEqual({
+      status: 'valid',
+      config: { monthly: null, annual: null },
+    });
+  });
+
+  it('rejects the WHOLE object when only one plan is malformed — never exposes the other plan alone', () => {
+    expect(
+      parsePromoCodeAndroidStoreConfig({
+        monthly: { basePlanId: 'monthly' }, // incomplete
+        annual: { basePlanId: 'annual', offerId: 'influencer-trial-7d-annual' }, // valid
+      }),
+    ).toEqual({ status: 'invalid' });
+  });
+
+  it('rejects a missing plan key entirely (not even null)', () => {
+    expect(
+      parsePromoCodeAndroidStoreConfig({ monthly: { basePlanId: 'monthly', offerId: 'x' } }),
+    ).toEqual({ status: 'invalid' });
+  });
+
+  it('rejects an unknown top-level key', () => {
+    expect(
+      parsePromoCodeAndroidStoreConfig({ monthly: null, annual: null, extra: 'x' }),
+    ).toEqual({ status: 'invalid' });
+  });
+
+  it('rejects an array/string/number', () => {
+    expect(parsePromoCodeAndroidStoreConfig([])).toEqual({ status: 'invalid' });
+    expect(parsePromoCodeAndroidStoreConfig('x')).toEqual({ status: 'invalid' });
+    expect(parsePromoCodeAndroidStoreConfig(1)).toEqual({ status: 'invalid' });
   });
 });

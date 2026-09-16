@@ -37,8 +37,8 @@ const REDEMPTION_PATH = `couponRedemptions/${UID}`;
 const T1 = 1_786_400_000_000;
 
 const ARNALDO_ANDROID_OFFER: PromoCodeAndroidOfferSnapshot = {
-  monthly: { basePlanId: 'monthly', offerId: 'influencer-trial-7d' },
-  annual: { basePlanId: 'annual', offerId: 'influencer-trial-7d-annual' },
+  monthly: { basePlanId: 'monthly', offerId: 'influencer-trial-7d', offeringIdentifier: null },
+  annual: { basePlanId: 'annual', offerId: 'influencer-trial-7d-annual', offeringIdentifier: null },
 };
 
 const IOS_PROMOTION = {
@@ -271,6 +271,131 @@ describe('applyAttributionRevenueCatEvent — INITIAL_PURCHASE', () => {
       convertedAt: expect.any(Timestamp),
     });
     expect(payload).not.toHaveProperty('trialStartedAt');
+  });
+
+  // ===========================================================================
+  // FASE 5.3 — new-style Android config (offerId absent): the coupon only
+  // authorizes the promotional base plan; Google Play/RevenueCat's own
+  // automatic offer selection decides trial vs. bare base plan, and that
+  // choice must not affect whether the sale is attributed to the coupon.
+  // ===========================================================================
+
+  const COUPON_DISCOUNT_ANDROID_OFFER: PromoCodeAndroidOfferSnapshot = {
+    monthly: { basePlanId: 'monthly-promo', offerId: null, offeringIdentifier: 'coupon_discount' },
+    annual: { basePlanId: 'annual-promo', offerId: null, offeringIdentifier: 'coupon_discount' },
+  };
+
+  it('FASE 5.3: new-style monthly + Store granted TRIAL (trial-7d-new-subscriber) → confirms, locks and sets trialStartedAt', async () => {
+    mockRedemptionSnapshot(true, redemption({ androidOffer: COUPON_DISCOUNT_ANDROID_OFFER }));
+
+    const result = await applyAttributionRevenueCatEvent(
+      UID,
+      initialPurchaseInput({
+        periodType: 'TRIAL',
+        productId: 'ajfit_premium:monthly-promo',
+        offerCode: 'trial-7d-new-subscriber',
+      }),
+    );
+
+    expect(result).toEqual({ status: 'confirmed' });
+    const [, payload] = transactionMocks.set.mock.calls[0];
+    expect(payload).toMatchObject({
+      lockedAt: expect.any(Timestamp),
+      trialStartedAt: expect.any(Timestamp),
+    });
+    expect(payload).not.toHaveProperty('convertedAt');
+  });
+
+  it('FASE 5.3: new-style monthly + Store denied trial (no offer_code, bare base plan) → still confirms as a paid conversion', async () => {
+    mockRedemptionSnapshot(true, redemption({ androidOffer: COUPON_DISCOUNT_ANDROID_OFFER }));
+
+    const result = await applyAttributionRevenueCatEvent(
+      UID,
+      initialPurchaseInput({
+        periodType: 'NORMAL',
+        productId: 'ajfit_premium:monthly-promo',
+        offerCode: null,
+      }),
+    );
+
+    expect(result).toEqual({ status: 'confirmed' });
+    const [, payload] = transactionMocks.set.mock.calls[0];
+    expect(payload).toMatchObject({
+      lockedAt: expect.any(Timestamp),
+      convertedAt: expect.any(Timestamp),
+    });
+    expect(payload).not.toHaveProperty('trialStartedAt');
+  });
+
+  it('FASE 5.3: new-style annual, any offer_code the Store reports → confirms the same way', async () => {
+    mockRedemptionSnapshot(true, redemption({ androidOffer: COUPON_DISCOUNT_ANDROID_OFFER }));
+
+    const result = await applyAttributionRevenueCatEvent(
+      UID,
+      initialPurchaseInput({
+        periodType: 'TRIAL',
+        productId: 'ajfit_premium:annual-promo',
+        offerCode: 'some-future-store-offer-id',
+      }),
+    );
+
+    expect(result).toEqual({ status: 'confirmed' });
+  });
+
+  it('FASE 5.3: new-style config never matches a purchase of a different base plan (e.g. the non-promo default product)', async () => {
+    mockRedemptionSnapshot(true, redemption({ androidOffer: COUPON_DISCOUNT_ANDROID_OFFER }));
+
+    const result = await applyAttributionRevenueCatEvent(
+      UID,
+      initialPurchaseInput({
+        periodType: 'TRIAL',
+        productId: 'ajfit_premium:monthly',
+        offerCode: 'trial-7d-new-subscriber',
+      }),
+    );
+
+    expect(result).toEqual({ status: 'skipped', reason: 'offer_not_matched' });
+    expect(transactionMocks.set).not.toHaveBeenCalled();
+  });
+
+  it('legacy regression: a legacy (offerId present) redemption is unaffected by FASE 5.3 — still requires the exact offer code', async () => {
+    mockRedemptionSnapshot(true, redemption()); // ARNALDO_ANDROID_OFFER, offerId present
+
+    const result = await applyAttributionRevenueCatEvent(
+      UID,
+      initialPurchaseInput({
+        periodType: 'TRIAL',
+        productId: 'ajfit_premium:monthly',
+        offerCode: null,
+      }),
+    );
+
+    expect(result).toEqual({ status: 'skipped', reason: 'offer_not_matched' });
+    expect(transactionMocks.set).not.toHaveBeenCalled();
+  });
+
+  it('FASE 5.7 snapshot backward compat: a raw pre-5.7 Firestore document (androidOffer.monthly with NO offeringIdentifier key at all, not even null) still correlates exactly like today', async () => {
+    // Deliberately a plain object, not the typed ARNALDO_ANDROID_OFFER
+    // fixture — this is what a real redemption frozen before FASE 5.7
+    // actually looks like in Firestore: the key was never written.
+    mockRedemptionSnapshot(
+      true,
+      redemption({
+        androidOffer: {
+          monthly: { basePlanId: 'monthly', offerId: 'influencer-trial-7d' },
+          annual: { basePlanId: 'annual', offerId: 'influencer-trial-7d-annual' },
+        },
+      }),
+    );
+
+    const result = await applyAttributionRevenueCatEvent(
+      UID,
+      initialPurchaseInput({ periodType: 'TRIAL', productId: 'ajfit_premium:monthly', offerCode: 'influencer-trial-7d' }),
+    );
+
+    expect(result).toEqual({ status: 'confirmed' });
+    const [, payload] = transactionMocks.set.mock.calls[0];
+    expect(payload).toMatchObject({ lockedAt: expect.any(Timestamp), trialStartedAt: expect.any(Timestamp) });
   });
 
   it('sem attribution: no-op, follows along normally', async () => {

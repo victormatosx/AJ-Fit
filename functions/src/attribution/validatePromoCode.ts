@@ -6,6 +6,7 @@ import { PROMO_CODE_PLATFORMS, type PromoCodePlatform } from './constants';
 import { isPromoCodeCurrentlyEligible } from './eligibility';
 import { normalizePromoCode } from './normalize';
 import { lookupPromoCode, resolveAndroidOfferPair } from './promoCodeCatalog';
+import { serializeAndroidStoreConfigForWire } from './promoCodeWire';
 import type {
   IOSPromotionConfig,
   PromoCodeAndroidOfferSnapshot,
@@ -93,10 +94,12 @@ export async function validatePromoCodeHandler(
     monthly: resolveAndroidOfferPair(
       promoCode.androidBasePlanIdMonthly,
       promoCode.androidOfferIdMonthly,
+      promoCode.androidOfferingIdentifierMonthly,
     ),
     annual: resolveAndroidOfferPair(
       promoCode.androidBasePlanIdAnnual,
       promoCode.androidOfferIdAnnual,
+      promoCode.androidOfferingIdentifierAnnual,
     ),
   };
 
@@ -149,7 +152,9 @@ export async function validatePromoCodeHandler(
   // above (`androidOfferSnapshot`) — `platform` only decides whether the
   // RESPONSE echoes it back, never recomputed differently here.
   const androidConfig =
-    requestedPlatform === undefined || requestedPlatform === 'ANDROID' ? androidOfferSnapshot : null;
+    requestedPlatform === undefined || requestedPlatform === 'ANDROID'
+      ? serializeAndroidStoreConfigForWire(androidOfferSnapshot)
+      : null;
 
   // FASE 1 — an Android-only request never
   // receives the iOS promotional authorization, and vice versa is symmetric

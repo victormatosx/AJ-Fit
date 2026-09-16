@@ -269,11 +269,72 @@ describe('adminCreatePromoCodeHandler', () => {
     );
   });
 
-  it('rejects a partial Android monthly pair (basePlanId without offerId)', async () => {
+  it('FASE 5.7: rejects basePlanId alone (no offerId, no offeringIdentifier) — incomplete since the client now needs an Offering to search', async () => {
     await expectHttpsError(
       adminCreatePromoCodeHandler(
         request(
-          { ...BASE_CREATE_PAYLOAD, android: { monthly: { basePlanId: 'monthly' } } },
+          { ...BASE_CREATE_PAYLOAD, android: { monthly: { basePlanId: 'monthly-promo' } } },
+          ADMIN_UID,
+        ),
+      ),
+      'invalid-argument',
+      'android_monthly_partial',
+    );
+    expect(promoCreateMock).not.toHaveBeenCalled();
+  });
+
+  it('FASE 5.7: creates with basePlanId + offeringIdentifier (no offerId) — new-style, let the Store pick the offer', async () => {
+    promoCreateMock.mockResolvedValue(undefined);
+    await adminCreatePromoCodeHandler(
+      request(
+        {
+          ...BASE_CREATE_PAYLOAD,
+          android: { monthly: { basePlanId: 'monthly-promo', offeringIdentifier: 'coupon_discount' } },
+        },
+        ADMIN_UID,
+      ),
+    );
+
+    expect(promoCreateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        androidBasePlanIdMonthly: 'monthly-promo',
+        androidOfferIdMonthly: null,
+        androidOfferingIdentifierMonthly: 'coupon_discount',
+        androidBasePlanIdAnnual: null,
+        androidOfferIdAnnual: null,
+        androidOfferingIdentifierAnnual: null,
+      }),
+    );
+  });
+
+  it('FASE 5.7: rejects basePlanId + offerId + offeringIdentifier together (ambiguous)', async () => {
+    await expectHttpsError(
+      adminCreatePromoCodeHandler(
+        request(
+          {
+            ...BASE_CREATE_PAYLOAD,
+            android: {
+              monthly: {
+                basePlanId: 'monthly',
+                offerId: 'influencer-trial-7d',
+                offeringIdentifier: 'coupon_discount',
+              },
+            },
+          },
+          ADMIN_UID,
+        ),
+      ),
+      'invalid-argument',
+      'android_monthly_partial',
+    );
+    expect(promoCreateMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects offerId without basePlanId (still invalid — an offer id can never identify a plan on its own)', async () => {
+    await expectHttpsError(
+      adminCreatePromoCodeHandler(
+        request(
+          { ...BASE_CREATE_PAYLOAD, android: { monthly: { offerId: 'influencer-trial-7d' } } },
           ADMIN_UID,
         ),
       ),
@@ -371,8 +432,10 @@ describe('adminCreatePromoCodeHandler', () => {
         'internalName',
         'androidBasePlanIdMonthly',
         'androidOfferIdMonthly',
+        'androidOfferingIdentifierMonthly',
         'androidBasePlanIdAnnual',
         'androidOfferIdAnnual',
+        'androidOfferingIdentifierAnnual',
         'iosPromotion',
         'appleConfigurationConfirmedAt',
         'appleConfigurationConfirmedBy',

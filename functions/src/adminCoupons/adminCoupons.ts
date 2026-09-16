@@ -3,7 +3,7 @@ import type { DocumentSnapshot } from 'firebase-admin/firestore';
 import type { UserRecord } from 'firebase-admin/auth';
 import { requireAdminUid } from '../attribution/adminAuth';
 import { PROMO_CODES_COLLECTION } from '../attribution/constants';
-import { parsePromoCodeDocument } from '../attribution/promoCodeCatalog';
+import { parsePromoCodeDocument, resolveAndroidOfferPair } from '../attribution/promoCodeCatalog';
 import { normalizePromoCode } from '../attribution/normalize';
 import { auth, db } from '../lib/firebaseAdmin';
 import { logFunctionError, logInfo } from '../lib/logger';
@@ -78,8 +78,16 @@ function catalogView(id: string, value: unknown) {
     updatedAt: isoDate(parsed.updatedAt),
     createdBy: parsed.createdBy,
     android: {
-      monthly: parsed.androidBasePlanIdMonthly && parsed.androidOfferIdMonthly ? { basePlanId: parsed.androidBasePlanIdMonthly, offerId: parsed.androidOfferIdMonthly } : null,
-      annual: parsed.androidBasePlanIdAnnual && parsed.androidOfferIdAnnual ? { basePlanId: parsed.androidBasePlanIdAnnual, offerId: parsed.androidOfferIdAnnual } : null,
+      monthly: resolveAndroidOfferPair(
+        parsed.androidBasePlanIdMonthly,
+        parsed.androidOfferIdMonthly,
+        parsed.androidOfferingIdentifierMonthly,
+      ),
+      annual: resolveAndroidOfferPair(
+        parsed.androidBasePlanIdAnnual,
+        parsed.androidOfferIdAnnual,
+        parsed.androidOfferingIdentifierAnnual,
+      ),
     },
     iosPromotion: parsed.iosPromotion,
     appleConfiguration: {

@@ -107,7 +107,7 @@ describe('validatePromoCode', () => {
     }
   });
 
-  it('returns an applied outcome for a valid Android response (storeConfig.android populated)', async () => {
+  it('returns an applied outcome for a valid Android response — LEGACY shape (storeConfig.android populated)', async () => {
     mockPlatform.OS = 'android';
     mockCallable.mockResolvedValue({
       data: {
@@ -128,11 +128,105 @@ describe('validatePromoCode', () => {
     expect(outcome.status).toBe('applied');
     if (outcome.status === 'applied') {
       expect(outcome.response.storeConfig.android?.monthly).toEqual({
+        kind: 'legacy',
         basePlanId: 'monthly',
         offerId: 'o1',
       });
+      expect(outcome.response.storeConfig.android?.annual).toBeNull();
       expect(outcome.response.iosPromotion).toBeNull();
     }
+  });
+
+  it('FASE 6.2: returns an applied outcome for a valid Android response — NEW shape (basePlanId + offeringIdentifier)', async () => {
+    mockPlatform.OS = 'android';
+    mockCallable.mockResolvedValue({
+      data: {
+        valid: true,
+        code: 'ARNALDO',
+        benefit: { campaignId: 'c2', influencerId: 'i2', kind: 'promotional_campaign' },
+        storeConfig: {
+          android: {
+            monthly: { basePlanId: 'monthly-promo', offeringIdentifier: 'coupon_discount' },
+            annual: { basePlanId: 'annual-promo', offeringIdentifier: 'coupon_discount' },
+          },
+        },
+        iosPromotion: null,
+        eligibility: { determinedBy: 'store', guaranteed: false, disclaimer: 'x' },
+      },
+    });
+
+    const outcome = await validatePromoCode('ARNALDO');
+
+    expect(outcome.status).toBe('applied');
+    if (outcome.status === 'applied') {
+      expect(outcome.response.storeConfig.android).toEqual({
+        monthly: { kind: 'new', basePlanId: 'monthly-promo', offeringIdentifier: 'coupon_discount' },
+        annual: { kind: 'new', basePlanId: 'annual-promo', offeringIdentifier: 'coupon_discount' },
+      });
+    }
+  });
+
+  it('FASE 6.2: fails closed on Android when storeConfig.android is malformed (basePlanId alone, incomplete)', async () => {
+    mockPlatform.OS = 'android';
+    mockCallable.mockResolvedValue({
+      data: {
+        valid: true,
+        code: 'BROKEN',
+        benefit: { campaignId: 'c3', influencerId: 'i3', kind: 'promotional_campaign' },
+        storeConfig: { android: { monthly: { basePlanId: 'monthly' }, annual: null } },
+        iosPromotion: null,
+        eligibility: { determinedBy: 'store', guaranteed: false, disclaimer: 'x' },
+      },
+    });
+
+    const outcome = await validatePromoCode('BROKEN');
+
+    expect(outcome.status).toBe('failed');
+    if (outcome.status === 'failed') {
+      expect(outcome.reason).toBe('temporary');
+    }
+  });
+
+  it('FASE 6.2: fails closed on Android when storeConfig.android mixes offerId AND offeringIdentifier (ambiguous)', async () => {
+    mockPlatform.OS = 'android';
+    mockCallable.mockResolvedValue({
+      data: {
+        valid: true,
+        code: 'BROKEN2',
+        benefit: { campaignId: 'c4', influencerId: 'i4', kind: 'promotional_campaign' },
+        storeConfig: {
+          android: {
+            monthly: { basePlanId: 'monthly', offerId: 'o1', offeringIdentifier: 'coupon_discount' },
+            annual: null,
+          },
+        },
+        iosPromotion: null,
+        eligibility: { determinedBy: 'store', guaranteed: false, disclaimer: 'x' },
+      },
+    });
+
+    const outcome = await validatePromoCode('BROKEN2');
+
+    expect(outcome.status).toBe('failed');
+  });
+
+  it('FASE 6.2: never validates storeConfig.android shape when platform is IOS — backend always forces it null there', async () => {
+    mockPlatform.OS = 'ios';
+    mockCallable.mockResolvedValue({
+      data: {
+        valid: true,
+        code: 'IOSONLY',
+        benefit: { campaignId: 'c5', influencerId: 'i5', kind: 'promotional_campaign' },
+        // Malformed on the wire, but irrelevant on iOS — must not fail the request.
+        storeConfig: { android: { monthly: { basePlanId: 'monthly' }, annual: null } },
+        iosPromotion: null,
+        eligibility: { determinedBy: 'store', guaranteed: false, disclaimer: 'x' },
+      },
+    });
+
+    const outcome = await validatePromoCode('IOSONLY');
+
+    expect(outcome.status).toBe('applied');
   });
 
   it('accepts explicit iosPromotion: null on iOS without fabricating a route', async () => {

@@ -1,9 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import type { CustomerInfo, PACKAGE_TYPE, PurchasesPackage, SubscriptionOption } from 'react-native-purchases';
+import type {
+  CustomerInfo,
+  PACKAGE_TYPE,
+  PurchasesOffering,
+  PurchasesOfferings,
+  PurchasesPackage,
+  SubscriptionOption,
+} from 'react-native-purchases';
 import {
+  applyAndroidPromoPackageOverrides,
   classifyPurchaseResult,
   findAuthorizedSubscriptionOption,
+  packagePriceString,
+  resolveAndroidNewOfferPackage,
   resolveAndroidPlanKind,
+  resolveAndroidPurchaseRoute,
+  resolveAndroidTrialSignal,
   resolveAuthorizedAndroidOffer,
   resolvePurchaseRoute,
   subscriptionOptionHasFreeTrial,
@@ -12,8 +24,13 @@ import {
 
 const PRODUCT_ID = 'ajfit_premium';
 
-const MONTHLY_OFFER: AuthorizedAndroidOffer = { basePlanId: 'monthly', offerId: 'influencer-trial-7d' };
+const MONTHLY_OFFER: AuthorizedAndroidOffer = {
+  kind: 'legacy',
+  basePlanId: 'monthly',
+  offerId: 'influencer-trial-7d',
+};
 const ANNUAL_OFFER: AuthorizedAndroidOffer = {
+  kind: 'legacy',
   basePlanId: 'annual',
   offerId: 'influencer-trial-7d-annual',
 };
@@ -38,12 +55,14 @@ function makeOption({
   storeProductId,
   tags = [],
   freePhase = null,
+  fullPricePhase = null,
 }: {
   id: string;
   productId?: string;
   storeProductId?: string;
   tags?: string[];
   freePhase?: unknown;
+  fullPricePhase?: unknown;
 }): SubscriptionOption {
   return {
     id,
@@ -53,13 +72,18 @@ function makeOption({
     isBasePlan: !id.includes(':'),
     billingPeriod: null,
     isPrepaid: false,
-    fullPricePhase: null,
+    fullPricePhase,
     freePhase,
     introPhase: null,
     presentedOfferingIdentifier: null,
     presentedOfferingContext: null,
     installmentsInfo: null,
   } as unknown as SubscriptionOption;
+}
+
+/** FASE 6.4 — a base-plan option's own recurring-price pricing phase, as `SubscriptionOption.fullPricePhase` documents it. */
+function makeFullPricePhase(formatted: string): unknown {
+  return { price: { formatted, amountMicros: 0, currencyCode: 'BRL' } };
 }
 
 /**
@@ -76,10 +100,12 @@ function makePackage({
   packageType,
   subscriptionOptions,
   productIdentifier,
+  priceString = 'R$ 0,00 (product.priceString, not the source of truth for FASE 6.4)',
 }: {
   packageType: PACKAGE_TYPE;
   subscriptionOptions: SubscriptionOption[] | null;
   productIdentifier?: string;
+  priceString?: string;
 }): PurchasesPackage {
   const basePlanId = packageType === 'MONTHLY' ? 'monthly' : 'annual';
   return {
@@ -88,6 +114,7 @@ function makePackage({
     product: {
       identifier: productIdentifier ?? `${PRODUCT_ID}:${basePlanId}`,
       subscriptionOptions,
+      priceString,
     },
   } as unknown as PurchasesPackage;
 }
@@ -124,6 +151,24 @@ describe('findAuthorizedSubscriptionOption', () => {
     });
 
     expect(findAuthorizedSubscriptionOption(pkg, MONTHLY_OFFER)).toEqual({ status: 'not_found' });
+  });
+
+  it("FASE 6.2: a 'new'-shape offer fails closed to not_found — never guessed/forced through the legacy id match, never falls back to standard", () => {
+    const pkg = makePackage({
+      packageType: 'MONTHLY' as PACKAGE_TYPE,
+      // Even if a SubscriptionOption happens to exist with an id equal to
+      // just the basePlanId, a 'new'-shape offer must never be routed
+      // through this function at all — resolving it is Offering/Package
+      // work (FASE 6.3), not a SubscriptionOption lookup.
+      subscriptionOptions: [makeOption({ id: 'monthly-promo' })],
+    });
+    const newOffer: AuthorizedAndroidOffer = {
+      kind: 'new',
+      basePlanId: 'monthly-promo',
+      offeringIdentifier: 'coupon_discount',
+    };
+
+    expect(findAuthorizedSubscriptionOption(pkg, newOffer)).toEqual({ status: 'not_found' });
   });
 
   it('P: returns ambiguous (fail-closed) for more than one match', () => {
@@ -304,6 +349,22 @@ describe('resolvePurchaseRoute', () => {
     const route = resolvePurchaseRoute(pkg, true, ANNUAL_OFFER);
 
     expect(route).toEqual({ kind: 'subscription_option', option: annualOption });
+  });
+
+  it("FASE 6.2: promo aplicado + offer 'new'-shape → blocked (nunca cai para package standard, resolução ainda não implementada)", () => {
+    const pkg = makePackage({
+      packageType: 'MONTHLY' as PACKAGE_TYPE,
+      subscriptionOptions: [makeOption({ id: 'monthly-promo' })],
+    });
+    const newOffer: AuthorizedAndroidOffer = {
+      kind: 'new',
+      basePlanId: 'monthly-promo',
+      offeringIdentifier: 'coupon_discount',
+    };
+
+    const route = resolvePurchaseRoute(pkg, true, newOffer);
+
+    expect(route).toEqual({ kind: 'blocked', reason: 'promo_not_found' });
   });
 
   it('D: promo aplicado + not_found → blocked (nunca cai para package)', () => {
@@ -633,4 +694,643 @@ describe('Android routing remains isolated and fail-closed', () => {
       expect(resolvePurchaseRoute(pkg, false, null)).toEqual({ kind: 'package', package: pkg });
     },
   );
+});
+
+// ---------------------------------------------------------------------------
+// FASE 6.3 — Android 'new'-shape (offeringIdentifier) resolution, route, and
+// Paywall display-override tests. Mirrors the iOS resolution tests
+// (`iosOfferingResolution.test.ts`) in spirit: pure functions, no fallback
+// to `offerings.current`/the standard package ever asserted as acceptable.
+// ---------------------------------------------------------------------------
+
+function makeOffering(identifier: string, availablePackages: PurchasesPackage[]): PurchasesOffering {
+  return { identifier, availablePackages } as unknown as PurchasesOffering;
+}
+
+function makeOfferings(
+  all: Record<string, PurchasesOffering>,
+  current: PurchasesOffering | null = null,
+): PurchasesOfferings {
+  return { all, current } as unknown as PurchasesOfferings;
+}
+
+/** A base-plan option: `trial-7d-new-subscriber` is what RevenueCat/Google Play would pick automatically for an eligible user — never selected manually by this client. */
+function makeBasePlanOption(
+  basePlanId: string,
+  freePhase: unknown = null,
+  fullPricePhase: unknown = null,
+): SubscriptionOption {
+  return makeOption({ id: basePlanId, freePhase, fullPricePhase });
+}
+
+const COUPON_DISCOUNT_OFFERING_ID = 'coupon_discount';
+
+describe('resolveAndroidNewOfferPackage', () => {
+  it('resolves the exact package by basePlanId within the exact offeringIdentifier — never offerings.current', () => {
+    const promoPackage = makePackage({
+      packageType: 'MONTHLY' as PACKAGE_TYPE,
+      productIdentifier: 'ajfit_premium:monthly-promo',
+      subscriptionOptions: [
+        makeBasePlanOption('monthly-promo'),
+        makeOption({ id: 'monthly-promo:trial-7d-new-subscriber' }),
+      ],
+    });
+    const standardPackage = makePackage({
+      packageType: 'MONTHLY' as PACKAGE_TYPE,
+      subscriptionOptions: [makeBasePlanOption('monthly')],
+    });
+    const offerings = makeOfferings(
+      { [COUPON_DISCOUNT_OFFERING_ID]: makeOffering(COUPON_DISCOUNT_OFFERING_ID, [promoPackage]) },
+      makeOffering('default', [standardPackage]), // current — must never be searched
+    );
+
+    const result = resolveAndroidNewOfferPackage(offerings, {
+      kind: 'new',
+      basePlanId: 'monthly-promo',
+      offeringIdentifier: COUPON_DISCOUNT_OFFERING_ID,
+    });
+
+    expect(result).toEqual({
+      status: 'resolved',
+      offering: offerings.all[COUPON_DISCOUNT_OFFERING_ID],
+      package: promoPackage,
+    });
+  });
+
+  it('resolves the annual promo package the same way', () => {
+    const annualPromo = makePackage({
+      packageType: 'ANNUAL' as PACKAGE_TYPE,
+      productIdentifier: 'ajfit_premium:annual-promo',
+      subscriptionOptions: [makeBasePlanOption('annual-promo')],
+    });
+    const offerings = makeOfferings({
+      [COUPON_DISCOUNT_OFFERING_ID]: makeOffering(COUPON_DISCOUNT_OFFERING_ID, [annualPromo]),
+    });
+
+    const result = resolveAndroidNewOfferPackage(offerings, {
+      kind: 'new',
+      basePlanId: 'annual-promo',
+      offeringIdentifier: COUPON_DISCOUNT_OFFERING_ID,
+    });
+
+    expect(result).toEqual({
+      status: 'resolved',
+      offering: offerings.all[COUPON_DISCOUNT_OFFERING_ID],
+      package: annualPromo,
+    });
+  });
+
+  it('blocked: offering does not exist — never falls back to offerings.current', () => {
+    const standardPackage = makePackage({
+      packageType: 'MONTHLY' as PACKAGE_TYPE,
+      subscriptionOptions: [makeBasePlanOption('monthly')],
+    });
+    const offerings = makeOfferings({}, makeOffering('default', [standardPackage]));
+
+    const result = resolveAndroidNewOfferPackage(offerings, {
+      kind: 'new',
+      basePlanId: 'monthly-promo',
+      offeringIdentifier: COUPON_DISCOUNT_OFFERING_ID,
+    });
+
+    expect(result).toEqual({ status: 'error', reason: 'promo_offering_missing' });
+  });
+
+  it('blocked: offering exists but the authorized basePlan does not', () => {
+    const wrongPlanPackage = makePackage({
+      packageType: 'MONTHLY' as PACKAGE_TYPE,
+      productIdentifier: 'ajfit_premium:monthly',
+      subscriptionOptions: [makeBasePlanOption('monthly')], // not "monthly-promo"
+    });
+    const offerings = makeOfferings({
+      [COUPON_DISCOUNT_OFFERING_ID]: makeOffering(COUPON_DISCOUNT_OFFERING_ID, [wrongPlanPackage]),
+    });
+
+    const result = resolveAndroidNewOfferPackage(offerings, {
+      kind: 'new',
+      basePlanId: 'monthly-promo',
+      offeringIdentifier: COUPON_DISCOUNT_OFFERING_ID,
+    });
+
+    expect(result).toEqual({ status: 'error', reason: 'promo_package_missing' });
+  });
+
+  it('blocked: offering containing BOTH standard and promo packages still resolves only the exact basePlan match', () => {
+    const standardInSameOffering = makePackage({
+      packageType: 'MONTHLY' as PACKAGE_TYPE,
+      productIdentifier: 'ajfit_premium:monthly',
+      subscriptionOptions: [makeBasePlanOption('monthly')],
+    });
+    const promoPackage = makePackage({
+      packageType: 'MONTHLY' as PACKAGE_TYPE,
+      productIdentifier: 'ajfit_premium:monthly-promo',
+      subscriptionOptions: [makeBasePlanOption('monthly-promo')],
+    });
+    const offerings = makeOfferings({
+      [COUPON_DISCOUNT_OFFERING_ID]: makeOffering(COUPON_DISCOUNT_OFFERING_ID, [
+        standardInSameOffering,
+        promoPackage,
+      ]),
+    });
+
+    const result = resolveAndroidNewOfferPackage(offerings, {
+      kind: 'new',
+      basePlanId: 'monthly-promo',
+      offeringIdentifier: COUPON_DISCOUNT_OFFERING_ID,
+    });
+
+    expect(result).toEqual({
+      status: 'resolved',
+      offering: offerings.all[COUPON_DISCOUNT_OFFERING_ID],
+      package: promoPackage,
+    });
+  });
+
+  it('blocked: ambiguous catalog — two packages both claim the same basePlanId', () => {
+    const dup1 = makePackage({
+      packageType: 'MONTHLY' as PACKAGE_TYPE,
+      productIdentifier: 'ajfit_premium:monthly-promo',
+      subscriptionOptions: [makeBasePlanOption('monthly-promo')],
+    });
+    const dup2 = makePackage({
+      packageType: 'MONTHLY' as PACKAGE_TYPE,
+      productIdentifier: 'ajfit_premium_alt:monthly-promo',
+      subscriptionOptions: [makeBasePlanOption('monthly-promo')],
+    });
+    const offerings = makeOfferings({
+      [COUPON_DISCOUNT_OFFERING_ID]: makeOffering(COUPON_DISCOUNT_OFFERING_ID, [dup1, dup2]),
+    });
+
+    const result = resolveAndroidNewOfferPackage(offerings, {
+      kind: 'new',
+      basePlanId: 'monthly-promo',
+      offeringIdentifier: COUPON_DISCOUNT_OFFERING_ID,
+    });
+
+    expect(result).toEqual({ status: 'error', reason: 'promo_package_ambiguous' });
+  });
+
+  it('blocked: a package with no subscriptionOptions at all never matches', () => {
+    const malformed = makePackage({
+      packageType: 'MONTHLY' as PACKAGE_TYPE,
+      productIdentifier: 'ajfit_premium:monthly-promo',
+      subscriptionOptions: null,
+    });
+    const offerings = makeOfferings({
+      [COUPON_DISCOUNT_OFFERING_ID]: makeOffering(COUPON_DISCOUNT_OFFERING_ID, [malformed]),
+    });
+
+    const result = resolveAndroidNewOfferPackage(offerings, {
+      kind: 'new',
+      basePlanId: 'monthly-promo',
+      offeringIdentifier: COUPON_DISCOUNT_OFFERING_ID,
+    });
+
+    expect(result).toEqual({ status: 'error', reason: 'promo_package_missing' });
+  });
+
+  it('never mistakes an OFFER suboption (basePlanId:offerId, isBasePlan=false) for the base plan itself', () => {
+    const pkgWithOnlyOfferSuboption = makePackage({
+      packageType: 'MONTHLY' as PACKAGE_TYPE,
+      productIdentifier: 'ajfit_premium:monthly-promo',
+      // Only the offer suboption exists here, not the base plan option —
+      // isBasePlan is false because the id contains ':'.
+      subscriptionOptions: [makeOption({ id: 'monthly-promo:trial-7d-new-subscriber' })],
+    });
+    const offerings = makeOfferings({
+      [COUPON_DISCOUNT_OFFERING_ID]: makeOffering(COUPON_DISCOUNT_OFFERING_ID, [pkgWithOnlyOfferSuboption]),
+    });
+
+    const result = resolveAndroidNewOfferPackage(offerings, {
+      kind: 'new',
+      basePlanId: 'monthly-promo',
+      offeringIdentifier: COUPON_DISCOUNT_OFFERING_ID,
+    });
+
+    expect(result).toEqual({ status: 'error', reason: 'promo_package_missing' });
+  });
+
+  it('null offerings never resolves — no crash, fails closed', () => {
+    const result = resolveAndroidNewOfferPackage(null, {
+      kind: 'new',
+      basePlanId: 'monthly-promo',
+      offeringIdentifier: COUPON_DISCOUNT_OFFERING_ID,
+    });
+
+    expect(result).toEqual({ status: 'error', reason: 'promo_offering_missing' });
+  });
+});
+
+describe('resolveAndroidPurchaseRoute', () => {
+  it('no promo applied → package route, exactly like resolvePurchaseRoute', () => {
+    const pkg = makePackage({
+      packageType: 'MONTHLY' as PACKAGE_TYPE,
+      subscriptionOptions: [makeBasePlanOption('monthly')],
+    });
+
+    expect(resolveAndroidPurchaseRoute(pkg, false, null, null)).toEqual({
+      kind: 'package',
+      package: pkg,
+    });
+  });
+
+  it('LEGACY offer delegates verbatim to resolvePurchaseRoute (option match)', () => {
+    const monthlyOption = makeOption({ id: 'monthly:influencer-trial-7d' });
+    const pkg = makePackage({
+      packageType: 'MONTHLY' as PACKAGE_TYPE,
+      subscriptionOptions: [monthlyOption],
+    });
+
+    const route = resolveAndroidPurchaseRoute(pkg, true, MONTHLY_OFFER, null);
+
+    expect(route).toEqual({ kind: 'subscription_option', option: monthlyOption });
+  });
+
+  it('LEGACY offer still blocks on not_found — offerings param is irrelevant to this shape', () => {
+    const pkg = makePackage({
+      packageType: 'MONTHLY' as PACKAGE_TYPE,
+      subscriptionOptions: [makeBasePlanOption('monthly')],
+    });
+
+    expect(resolveAndroidPurchaseRoute(pkg, true, MONTHLY_OFFER, null)).toEqual({
+      kind: 'blocked',
+      reason: 'promo_not_found',
+    });
+  });
+
+  it('NEW offer, eligible user (Store selects the trial suboption automatically) → package route with the RESOLVED promo package, never the standard one', () => {
+    const standardPackage = makePackage({
+      packageType: 'MONTHLY' as PACKAGE_TYPE,
+      subscriptionOptions: [makeBasePlanOption('monthly')],
+    });
+    const promoPackage = makePackage({
+      packageType: 'MONTHLY' as PACKAGE_TYPE,
+      productIdentifier: 'ajfit_premium:monthly-promo',
+      subscriptionOptions: [
+        makeBasePlanOption('monthly-promo'),
+        // The trial suboption exists on the product — the CLIENT never
+        // selects it; purchasePackage lets RevenueCat/Google Play do that.
+        makeOption({
+          id: 'monthly-promo:trial-7d-new-subscriber',
+          freePhase: { billingPeriod: { iso8601: 'P7D' } },
+        }),
+      ],
+    });
+    const offerings = makeOfferings({
+      [COUPON_DISCOUNT_OFFERING_ID]: makeOffering(COUPON_DISCOUNT_OFFERING_ID, [promoPackage]),
+    });
+    const newOffer: AuthorizedAndroidOffer = {
+      kind: 'new',
+      basePlanId: 'monthly-promo',
+      offeringIdentifier: COUPON_DISCOUNT_OFFERING_ID,
+    };
+
+    const route = resolveAndroidPurchaseRoute(standardPackage, true, newOffer, offerings);
+
+    expect(route).toEqual({ kind: 'package', package: promoPackage });
+    expect(route.kind === 'package' && route.package).not.toBe(standardPackage);
+  });
+
+  it('NEW offer, ineligible user — resolution is identical regardless of Store eligibility (client never checks eligibility itself)', () => {
+    // Ineligible users still purchase the SAME package/base plan; only the
+    // Store's automatic offer selection differs at purchase time, which is
+    // entirely outside this client's resolution logic.
+    const promoPackage = makePackage({
+      packageType: 'ANNUAL' as PACKAGE_TYPE,
+      productIdentifier: 'ajfit_premium:annual-promo',
+      subscriptionOptions: [makeBasePlanOption('annual-promo')], // no trial suboption at all
+    });
+    const offerings = makeOfferings({
+      [COUPON_DISCOUNT_OFFERING_ID]: makeOffering(COUPON_DISCOUNT_OFFERING_ID, [promoPackage]),
+    });
+    const newOffer: AuthorizedAndroidOffer = {
+      kind: 'new',
+      basePlanId: 'annual-promo',
+      offeringIdentifier: COUPON_DISCOUNT_OFFERING_ID,
+    };
+    const standardPackage = makePackage({
+      packageType: 'ANNUAL' as PACKAGE_TYPE,
+      subscriptionOptions: [makeBasePlanOption('annual')],
+    });
+
+    const route = resolveAndroidPurchaseRoute(standardPackage, true, newOffer, offerings);
+
+    expect(route).toEqual({ kind: 'package', package: promoPackage });
+  });
+
+  it('NEW offer, offering missing → blocked, never falls back to the standard package', () => {
+    const standardPackage = makePackage({
+      packageType: 'MONTHLY' as PACKAGE_TYPE,
+      subscriptionOptions: [makeBasePlanOption('monthly')],
+    });
+    const offerings = makeOfferings({});
+    const newOffer: AuthorizedAndroidOffer = {
+      kind: 'new',
+      basePlanId: 'monthly-promo',
+      offeringIdentifier: COUPON_DISCOUNT_OFFERING_ID,
+    };
+
+    expect(resolveAndroidPurchaseRoute(standardPackage, true, newOffer, offerings)).toEqual({
+      kind: 'blocked',
+      reason: 'promo_offering_missing',
+    });
+  });
+
+  it('NEW offer, basePlan missing in the (existing) offering → blocked', () => {
+    const standardPackage = makePackage({
+      packageType: 'MONTHLY' as PACKAGE_TYPE,
+      subscriptionOptions: [makeBasePlanOption('monthly')],
+    });
+    const offerings = makeOfferings({
+      [COUPON_DISCOUNT_OFFERING_ID]: makeOffering(COUPON_DISCOUNT_OFFERING_ID, []),
+    });
+    const newOffer: AuthorizedAndroidOffer = {
+      kind: 'new',
+      basePlanId: 'monthly-promo',
+      offeringIdentifier: COUPON_DISCOUNT_OFFERING_ID,
+    };
+
+    expect(resolveAndroidPurchaseRoute(standardPackage, true, newOffer, offerings)).toEqual({
+      kind: 'blocked',
+      reason: 'promo_package_missing',
+    });
+  });
+
+  it('NEW offer, ambiguous catalog → blocked', () => {
+    const standardPackage = makePackage({
+      packageType: 'MONTHLY' as PACKAGE_TYPE,
+      subscriptionOptions: [makeBasePlanOption('monthly')],
+    });
+    const dup1 = makePackage({
+      packageType: 'MONTHLY' as PACKAGE_TYPE,
+      productIdentifier: 'a:monthly-promo',
+      subscriptionOptions: [makeBasePlanOption('monthly-promo')],
+    });
+    const dup2 = makePackage({
+      packageType: 'MONTHLY' as PACKAGE_TYPE,
+      productIdentifier: 'b:monthly-promo',
+      subscriptionOptions: [makeBasePlanOption('monthly-promo')],
+    });
+    const offerings = makeOfferings({
+      [COUPON_DISCOUNT_OFFERING_ID]: makeOffering(COUPON_DISCOUNT_OFFERING_ID, [dup1, dup2]),
+    });
+    const newOffer: AuthorizedAndroidOffer = {
+      kind: 'new',
+      basePlanId: 'monthly-promo',
+      offeringIdentifier: COUPON_DISCOUNT_OFFERING_ID,
+    };
+
+    expect(resolveAndroidPurchaseRoute(standardPackage, true, newOffer, offerings)).toEqual({
+      kind: 'blocked',
+      reason: 'promo_package_ambiguous',
+    });
+  });
+
+  it('never selects a SubscriptionOption manually for the NEW shape — route is always "package", never "subscription_option"', () => {
+    const promoPackage = makePackage({
+      packageType: 'MONTHLY' as PACKAGE_TYPE,
+      productIdentifier: 'ajfit_premium:monthly-promo',
+      subscriptionOptions: [
+        makeBasePlanOption('monthly-promo'),
+        makeOption({ id: 'monthly-promo:trial-7d-new-subscriber' }),
+      ],
+    });
+    const offerings = makeOfferings({
+      [COUPON_DISCOUNT_OFFERING_ID]: makeOffering(COUPON_DISCOUNT_OFFERING_ID, [promoPackage]),
+    });
+    const newOffer: AuthorizedAndroidOffer = {
+      kind: 'new',
+      basePlanId: 'monthly-promo',
+      offeringIdentifier: COUPON_DISCOUNT_OFFERING_ID,
+    };
+    const standardPackage = makePackage({
+      packageType: 'MONTHLY' as PACKAGE_TYPE,
+      subscriptionOptions: [makeBasePlanOption('monthly')],
+    });
+
+    const route = resolveAndroidPurchaseRoute(standardPackage, true, newOffer, offerings);
+
+    expect(route.kind).toBe('package');
+  });
+});
+
+describe('applyAndroidPromoPackageOverrides', () => {
+  it('null androidStoreConfig → returns standardPackages unchanged', () => {
+    const standardPackages = [
+      makePackage({ packageType: 'MONTHLY' as PACKAGE_TYPE, subscriptionOptions: [makeBasePlanOption('monthly')] }),
+    ];
+
+    expect(applyAndroidPromoPackageOverrides(standardPackages, null, null)).toBe(standardPackages);
+  });
+
+  it('substitutes ONLY the plan with a resolved NEW-shape authorization, leaves the other plan (unconfigured) untouched', () => {
+    const standardMonthly = makePackage({
+      packageType: 'MONTHLY' as PACKAGE_TYPE,
+      subscriptionOptions: [makeBasePlanOption('monthly')],
+    });
+    const standardAnnual = makePackage({
+      packageType: 'ANNUAL' as PACKAGE_TYPE,
+      subscriptionOptions: [makeBasePlanOption('annual')],
+    });
+    const promoMonthly = makePackage({
+      packageType: 'MONTHLY' as PACKAGE_TYPE,
+      productIdentifier: 'ajfit_premium:monthly-promo',
+      subscriptionOptions: [makeBasePlanOption('monthly-promo')],
+    });
+    const offerings = makeOfferings({
+      [COUPON_DISCOUNT_OFFERING_ID]: makeOffering(COUPON_DISCOUNT_OFFERING_ID, [promoMonthly]),
+    });
+
+    const result = applyAndroidPromoPackageOverrides(
+      [standardMonthly, standardAnnual],
+      offerings,
+      {
+        monthly: { kind: 'new', basePlanId: 'monthly-promo', offeringIdentifier: COUPON_DISCOUNT_OFFERING_ID },
+        annual: null,
+      },
+    );
+
+    expect(result).toEqual([promoMonthly, standardAnnual]);
+  });
+
+  it('substitutes both plans when both are resolved NEW-shape authorizations', () => {
+    const standardMonthly = makePackage({
+      packageType: 'MONTHLY' as PACKAGE_TYPE,
+      subscriptionOptions: [makeBasePlanOption('monthly')],
+    });
+    const standardAnnual = makePackage({
+      packageType: 'ANNUAL' as PACKAGE_TYPE,
+      subscriptionOptions: [makeBasePlanOption('annual')],
+    });
+    const promoMonthly = makePackage({
+      packageType: 'MONTHLY' as PACKAGE_TYPE,
+      productIdentifier: 'ajfit_premium:monthly-promo',
+      subscriptionOptions: [makeBasePlanOption('monthly-promo')],
+    });
+    const promoAnnual = makePackage({
+      packageType: 'ANNUAL' as PACKAGE_TYPE,
+      productIdentifier: 'ajfit_premium:annual-promo',
+      subscriptionOptions: [makeBasePlanOption('annual-promo')],
+    });
+    const offerings = makeOfferings({
+      [COUPON_DISCOUNT_OFFERING_ID]: makeOffering(COUPON_DISCOUNT_OFFERING_ID, [promoMonthly, promoAnnual]),
+    });
+
+    const result = applyAndroidPromoPackageOverrides(
+      [standardMonthly, standardAnnual],
+      offerings,
+      {
+        monthly: { kind: 'new', basePlanId: 'monthly-promo', offeringIdentifier: COUPON_DISCOUNT_OFFERING_ID },
+        annual: { kind: 'new', basePlanId: 'annual-promo', offeringIdentifier: COUPON_DISCOUNT_OFFERING_ID },
+      },
+    );
+
+    expect(result).toEqual([promoMonthly, promoAnnual]);
+  });
+
+  it('LEGACY-shape plan is never touched by the override (kept as the standard package)', () => {
+    const standardMonthly = makePackage({
+      packageType: 'MONTHLY' as PACKAGE_TYPE,
+      subscriptionOptions: [makeBasePlanOption('monthly')],
+    });
+
+    const result = applyAndroidPromoPackageOverrides([standardMonthly], null, {
+      monthly: { kind: 'legacy', basePlanId: 'monthly', offerId: 'influencer-trial-7d' },
+      annual: null,
+    });
+
+    expect(result).toEqual([standardMonthly]);
+  });
+
+  it('resolution failure degrades to the standard package for DISPLAY only — never throws, never blanks the list', () => {
+    const standardMonthly = makePackage({
+      packageType: 'MONTHLY' as PACKAGE_TYPE,
+      subscriptionOptions: [makeBasePlanOption('monthly')],
+    });
+    const offerings = makeOfferings({}); // coupon_discount missing entirely
+
+    const result = applyAndroidPromoPackageOverrides([standardMonthly], offerings, {
+      monthly: { kind: 'new', basePlanId: 'monthly-promo', offeringIdentifier: COUPON_DISCOUNT_OFFERING_ID },
+      annual: null,
+    });
+
+    expect(result).toEqual([standardMonthly]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// FASE 6.4 — Android trial signal (rule 3) and real-price display (rule 2/8).
+// Trial is computed identically for standard and promotional packages, never
+// derived from whether a coupon is applied — and price always comes from a
+// real SDK-reported pricing phase, never a computed percentage.
+// ---------------------------------------------------------------------------
+
+describe('resolveAndroidTrialSignal', () => {
+  it("'none' when the base plan has no linked offer at all", () => {
+    const pkg = makePackage({
+      packageType: 'MONTHLY' as PACKAGE_TYPE,
+      subscriptionOptions: [makeBasePlanOption('monthly')],
+    });
+
+    expect(resolveAndroidTrialSignal(pkg)).toBe('none');
+  });
+
+  it("'possible' when an offer suboption on the SAME base plan carries a free trial phase — computed the same way for a STANDARD package (no coupon involved)", () => {
+    const pkg = makePackage({
+      packageType: 'MONTHLY' as PACKAGE_TYPE,
+      subscriptionOptions: [
+        makeBasePlanOption('monthly'),
+        makeOption({ id: 'monthly:trial-7d-new-subscriber', freePhase: { billingPeriod: { iso8601: 'P7D' } } }),
+      ],
+    });
+
+    expect(resolveAndroidTrialSignal(pkg)).toBe('possible');
+  });
+
+  it("'possible' identically for a PROMOTIONAL package — the signal never depends on the coupon, only on the package's own subscriptionOptions", () => {
+    const promoPackage = makePackage({
+      packageType: 'MONTHLY' as PACKAGE_TYPE,
+      productIdentifier: 'ajfit_premium:monthly-promo',
+      subscriptionOptions: [
+        makeBasePlanOption('monthly-promo'),
+        makeOption({
+          id: 'monthly-promo:trial-7d-new-subscriber',
+          freePhase: { billingPeriod: { iso8601: 'P7D' } },
+        }),
+      ],
+    });
+
+    expect(resolveAndroidTrialSignal(promoPackage)).toBe('possible');
+  });
+
+  it("'none' when subscriptionOptions is null (defensive — never throws)", () => {
+    const pkg = makePackage({
+      packageType: 'MONTHLY' as PACKAGE_TYPE,
+      subscriptionOptions: null,
+    });
+
+    expect(resolveAndroidTrialSignal(pkg)).toBe('none');
+  });
+
+  it("never treats the base plan option ITSELF as a trial signal, even if (incorrectly) it had a freePhase — only offer suboptions (!isBasePlan) count", () => {
+    const pkg = makePackage({
+      packageType: 'MONTHLY' as PACKAGE_TYPE,
+      subscriptionOptions: [makeBasePlanOption('monthly', { billingPeriod: { iso8601: 'P7D' } })],
+    });
+
+    expect(resolveAndroidTrialSignal(pkg)).toBe('none');
+  });
+});
+
+describe('packagePriceString — Android base-plan real price (FASE 6.4)', () => {
+  it('reads the price from the BASE PLAN SubscriptionOption.fullPricePhase, never product.priceString, when subscriptionOptions exist', () => {
+    const pkg = makePackage({
+      packageType: 'MONTHLY' as PACKAGE_TYPE,
+      priceString: 'R$ 0,00', // what product.priceString would show if defaultOption were the trial offer
+      subscriptionOptions: [
+        makeBasePlanOption('monthly', undefined, makeFullPricePhase('R$ 39,90')),
+        makeOption({ id: 'monthly:trial-7d-new-subscriber', freePhase: { billingPeriod: { iso8601: 'P7D' } } }),
+      ],
+    });
+
+    expect(packagePriceString(pkg)).toBe('R$ 39,90');
+  });
+
+  it('falls back to product.priceString when there is no base-plan option at all (iOS — subscriptionOptions is always null there)', () => {
+    const pkg = makePackage({
+      packageType: 'MONTHLY' as PACKAGE_TYPE,
+      priceString: 'US$ 9.99',
+      subscriptionOptions: null,
+    });
+
+    expect(packagePriceString(pkg)).toBe('US$ 9.99');
+  });
+
+  it('falls back to product.priceString when the base-plan option has no fullPricePhase set', () => {
+    const pkg = makePackage({
+      packageType: 'MONTHLY' as PACKAGE_TYPE,
+      priceString: 'R$ 39,90',
+      subscriptionOptions: [makeBasePlanOption('monthly')],
+    });
+
+    expect(packagePriceString(pkg)).toBe('R$ 39,90');
+  });
+
+  it('never computes a promotional price as a percentage of the standard price — reads the promo package own fullPricePhase verbatim', () => {
+    const standardPackage = makePackage({
+      packageType: 'MONTHLY' as PACKAGE_TYPE,
+      subscriptionOptions: [makeBasePlanOption('monthly', undefined, makeFullPricePhase('R$ 39,90'))],
+    });
+    const promoPackage = makePackage({
+      packageType: 'MONTHLY' as PACKAGE_TYPE,
+      productIdentifier: 'ajfit_premium:monthly-promo',
+      // Deliberately NOT 90% of R$ 39,90 (R$ 35,91) — a real, independently
+      // configured Store price, proving this is read, never derived.
+      subscriptionOptions: [makeBasePlanOption('monthly-promo', undefined, makeFullPricePhase('R$ 24,90'))],
+    });
+
+    expect(packagePriceString(standardPackage)).toBe('R$ 39,90');
+    expect(packagePriceString(promoPackage)).toBe('R$ 24,90');
+    expect(packagePriceString(promoPackage)).not.toBe('R$ 35,91');
+  });
 });

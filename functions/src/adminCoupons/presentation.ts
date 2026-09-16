@@ -87,6 +87,29 @@ export function couponJourneyRecord(
   };
 }
 
+/**
+ * FASE 5.5 — `trialsStarted`/`trialsActive` are scoped EXCLUSIVELY to
+ * `records` (this influencer/campaign's coupon-attributed redemptions).
+ * They are historical/informational counts of "how many sales attributed to
+ * this coupon happened to start (or currently sit) in a Store trial
+ * period" — never a measure of the coupon CAUSING or GRANTING those trials
+ * (a subscriber with no coupon at all has the exact same trial eligibility;
+ * see docs §34's FASE 5.5 update). These fields must NEVER be read as, or
+ * extrapolated into, AJ Fit's app-wide trial totals — that number would
+ * require querying `users/*.subscription` directly (`SubscriptionMirror`,
+ * `../billing/types.ts`), entirely outside this coupon-scoped summary.
+ *
+ * - `trialsStarted`: count of `record.trialStartedAt !== null` —
+ *   `couponRedemptions/{uid}.trialStartedAt` is itself already
+ *   historical/informational (see `CouponRedemption`'s doc comment in
+ *   `../attribution/types.ts`), so this is "attributed sales whose first
+ *   correlated purchase was a Store trial", a closed historical fact.
+ * - `trialsActive`: count of `record.state === 'TRIAL'` — this one reads
+ *   the LIVE `SubscriptionMirror`-derived `state` (via
+ *   `resolveCouponSubscriptionState`), so it reflects the CURRENT trial
+ *   status of this coupon's attributed users right now, not a frozen
+ *   historical count.
+ */
 export function summarizeCouponJourney(records: readonly CouponJourneyRecord[]) {
   const converted = records.filter((record) => record.convertedAt !== null);
   return {

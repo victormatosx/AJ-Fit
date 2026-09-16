@@ -6,12 +6,14 @@ const MONTHLY_PRODUCT_IDS = new Set([
   'ajfit_premium_monthly',
   'ajfit_premium_monthly_promo',
   'ajfit_premium:monthly',
+  'ajfit_premium:monthly-promo',
 ]);
 
 const ANNUAL_PRODUCT_IDS = new Set([
   'ajfit_premium_annual',
   'ajfit_premium_annual_promo',
   'ajfit_premium:annual',
+  'ajfit_premium:annual-promo',
 ]);
 
 export function resolveSubscriptionPlan(productId: unknown): AdminSubscriptionPlan {

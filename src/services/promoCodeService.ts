@@ -9,7 +9,10 @@ import type {
   PromoCodeAndroidStoreConfig,
   PromoCodeBenefit,
 } from '../lib/promoCodeState';
-import { parseIOSPromotionAuthorization } from '../lib/promoCodeState';
+import {
+  parseIOSPromotionAuthorization,
+  parsePromoCodeAndroidStoreConfig,
+} from '../lib/promoCodeState';
 import {
   classifyPromoPurchaseAuthorizationError,
   parsePromoPurchaseIntentAuthorization,
@@ -58,9 +61,14 @@ export interface ValidatePromoCodeResponse {
   };
 }
 
-type ValidatePromoCodeWireResponse = Omit<ValidatePromoCodeResponse, 'iosPromotion'> & {
+type ValidatePromoCodeWireResponse = Omit<
+  ValidatePromoCodeResponse,
+  'iosPromotion' | 'storeConfig'
+> & {
   /** Untrusted until parsed at the callable boundary. */
   iosPromotion: unknown;
+  /** FASE 6.2 — untrusted until parsed by `parsePromoCodeAndroidStoreConfig`, same rigor as `iosPromotion`. */
+  storeConfig: { android: unknown };
 };
 
 export type ValidatePromoCodeOutcome =
@@ -179,11 +187,25 @@ export async function validatePromoCode(code: string): Promise<ValidatePromoCode
       logWarn('promoCode', 'promo_authorization_invalid');
       throw new Error('promo_authorization_invalid');
     }
+    // FASE 6.2 — same fail-closed rigor as iOS above, mirrored for Android:
+    // `storeConfig.android` is untrusted wire data until parsed. Checked
+    // only when `platform === 'ANDROID'` (mirroring the iOS check above),
+    // since on iOS the backend forces `storeConfig.android` to `null`
+    // regardless of the catalog (`validatePromoCode.ts`'s `androidConfig`
+    // derivation) — `parsePromoCodeAndroidStoreConfig` would only ever see
+    // `'absent'` there, never a real payload to validate.
+    const parsedAndroidStoreConfig = parsePromoCodeAndroidStoreConfig(
+      result.data?.storeConfig?.android ?? null,
+    );
+    if (platform === 'ANDROID' && parsedAndroidStoreConfig.status === 'invalid') {
+      logWarn('promoCode', 'android_store_config_invalid');
+      throw new Error('android_store_config_invalid');
+    }
     logPromoCodeDiagnostic('response', {
       valid: result.data?.valid ?? null,
       codePresent: typeof result.data?.code === 'string',
       benefitPresent: result.data?.benefit != null,
-      androidConfigPresent: result.data?.storeConfig?.android != null,
+      androidConfigStatus: parsedAndroidStoreConfig.status,
       iosPromotionStatus: parsedIOSPromotion.status,
       eligibilityPresent: result.data?.eligibility != null,
     });
@@ -191,6 +213,10 @@ export async function validatePromoCode(code: string): Promise<ValidatePromoCode
       status: 'applied',
       response: {
         ...result.data,
+        storeConfig: {
+          android:
+            parsedAndroidStoreConfig.status === 'valid' ? parsedAndroidStoreConfig.config : null,
+        },
         iosPromotion:
           parsedIOSPromotion.status === 'valid'
             ? parsedIOSPromotion.authorization

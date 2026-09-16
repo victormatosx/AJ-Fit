@@ -1581,6 +1581,22 @@ Seção adicionada na Sprint 3.6, a pedido de negócio: usuários que utilizarem
 um cupom de influenciador devem receber acesso a uma campanha promocional de
 7 dias.
 
+> **Atualização (FASE 5.5):** a premissa de negócio acima ("cupom = acesso a
+> uma campanha de 7 dias") foi a motivação original desta seção, mas nunca
+> foi o que o backend implementa — as regras abaixo (inalteradas desde a
+> Sprint 3.6) já deixam explícito que só a loja decide trial. A FASE 5.2/5.3
+> tornou essa separação também estrutural no catálogo Android: o cupom
+> autoriza no máximo um **base plan promocional** (preço com desconto —
+> `monthly-promo`/`annual-promo`), nunca uma offer de trial específica. A
+> offer `trial-7d-new-subscriber` está configurada nos 4 base plans do
+> Google Play (com ou sem cupom) e é escolhida automaticamente pela
+> loja/RevenueCat quando o usuário é elegível — um novo assinante SEM cupom
+> algum tem exatamente a mesma chance de trial que um com cupom. Ou seja:
+> **cupom = benefício de preço promocional; trial = propriedade do
+> base plan, determinada pela Store, independente de cupom.** Reler
+> "Elegibilidade de Trial via Cupom de Campanha" como título histórico da
+> seção, não como declaração de que o cupom concede ou influencia o trial.
+
 ---
 
 ## Regra obrigatória — quem decide o quê
@@ -1626,8 +1642,9 @@ Nenhuma tela, texto ou notificação pode prometer "7 dias grátis garantidos"
 por ter usado um cupom antes da confirmação real da elegibilidade pela loja.
 ```
 
-O cupom pode, no máximo, comunicar "campanha com possibilidade de teste
-gratuito estendido, sujeita à elegibilidade da loja" — a redação final do
+O cupom pode, no máximo, comunicar "preço promocional" — nunca uma promessa
+de trial, estendido ou não (ver Atualização FASE 5.5 acima: o trial é
+propriedade do base plan/Store, igual com ou sem cupom). A redação final do
 Paywall é responsabilidade de uma sprint futura (fora do escopo desta
 consolidação), mas deve respeitar esta regra.
 

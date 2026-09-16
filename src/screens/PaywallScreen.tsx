@@ -23,18 +23,21 @@ import { Icon } from '../components/ui/Icon';
 import { useSubscription } from '../hooks/useSubscription';
 import { usePromoCode } from '../hooks/usePromoCode';
 import {
+  applyAndroidPromoPackageOverrides,
   classifyPurchaseResult,
   classifyRestoreResult,
   getCurrentOfferingPackages,
   packagePeriodLabel,
   packagePriceString,
   packageTitle,
+  resolveAndroidPlanKind,
+  resolveAndroidPurchaseRoute,
+  resolveAndroidTrialSignal,
   resolveAuthorizedAndroidOffer,
   resolveIOSOfferingRoute,
   resolveIOSPlanKind,
   resolveIOSPromotionalCatalog,
   resolveOfferingViewState,
-  resolvePurchaseRoute,
   resolveSelectedPackage,
   type PurchaseRoute,
 } from '../lib/subscriptionOffer';
@@ -55,6 +58,7 @@ import type { PromoCodeState } from '../lib/promoCodeState';
 import {
   logSubscriptionDiagnostic,
   logSubscriptionPurchaseOutcome,
+  normalizeBlockedReasonForDiagnostic,
   normalizeIntroEligibilityForDiagnostic,
   type SubscriptionPurchaseContext,
 } from '../lib/subscriptionDiagnostics';
@@ -161,6 +165,13 @@ export function PaywallScreen({
   const { state: promoState, applyCode } = usePromoCode();
   const [promoInput, setPromoInput] = useState('');
 
+  // Fase 4C.3 §4/§6: the single source of truth for "is a promo code
+  // currently authorized" — derived fresh on every render (see
+  // `resolveAuthorizedAndroidOffer`'s/`resolveAndroidPurchaseRoute`'s doc
+  // comments, subscriptionOffer.ts), moved above `packages` so the Android
+  // promo-package display override (FASE 6.3) can depend on it too.
+  const promoApplied = PROMO_CODE_SUPPORTED_PLATFORM && promoState.phase === 'applied' && promoState.applied !== null;
+
   useEffect(() => {
     loadOfferings();
   }, [loadOfferings]);
@@ -187,32 +198,46 @@ export function PaywallScreen({
     if (!iosOfferingRoute || iosOfferingRoute.kind !== 'promotional') return null;
     return resolveIOSPromotionalCatalog(offerings, iosOfferingRoute);
   }, [iosOfferingRoute, offerings]);
+  // FASE 6.3 — Android 'new'-shape display override: replaces each standard
+  // package with its resolved promotional package for whichever plan has a
+  // successfully-resolved 'new'-shape authorization, so the price/plan card
+  // shown never diverges from what `purchasePackage` will actually buy (see
+  // `applyAndroidPromoPackageOverrides`'s doc comment). LEGACY-shape plans
+  // are untouched here — legacy's price display gap is pre-existing and out
+  // of scope for this change.
+  const androidPackages = useMemo(() => {
+    if (Platform.OS !== 'android' || !promoApplied || !promoState.applied) return standardPackages;
+    return applyAndroidPromoPackageOverrides(
+      standardPackages,
+      offerings,
+      promoState.applied.androidStoreConfig,
+    );
+  }, [offerings, promoApplied, promoState.applied, standardPackages]);
   const packages = useMemo(() => {
-    if (iosOfferingRoute?.kind !== 'promotional') return standardPackages;
-    if (iosCatalogResolution?.status !== 'resolved') return [];
-    return [iosCatalogResolution.monthlyPackage, iosCatalogResolution.annualPackage];
-  }, [iosCatalogResolution, iosOfferingRoute, standardPackages]);
+    if (iosOfferingRoute?.kind === 'promotional') {
+      return iosCatalogResolution?.status === 'resolved'
+        ? [iosCatalogResolution.monthlyPackage, iosCatalogResolution.annualPackage]
+        : [];
+    }
+    return Platform.OS === 'android' ? androidPackages : standardPackages;
+  }, [androidPackages, iosCatalogResolution, iosOfferingRoute, standardPackages]);
   const selectedPackage = useMemo(
     () => resolveSelectedPackage(packages, selectedId),
     [packages, selectedId],
   );
 
+  // FASE 6.4 -- scoped to whatever `packages` currently is (standard OR
+  // promotional), not just the promotional catalog: rule 1 requires trial
+  // to be communicated from real Store eligibility EVEN without a coupon,
+  // so this must run for the standard catalog too. `checkIOSIntroEligibility`
+  // itself already no-ops (returns 'unknown' for every product) on Android
+  // (`revenueCatService.ts`), so running this unconditionally is harmless
+  // there -- the Android-specific trial signal is entirely separate
+  // (`resolveAndroidTrialSignal`, never derived from this iOS-only check).
   const eligibilityScopeKey = useMemo(() => {
-    if (
-      iosCatalogResolution?.status !== 'resolved' ||
-      !promoState.applied
-    ) {
-      return null;
-    }
-    return [
-      promoState.applied.uid,
-      promoState.applied.generation,
-      promoState.applied.code,
-      iosCatalogResolution.route.authorization.offeringIdentifier,
-      iosCatalogResolution.monthlyPackage.product.identifier,
-      iosCatalogResolution.annualPackage.product.identifier,
-    ].join('\u001f');
-  }, [iosCatalogResolution, promoState.applied]);
+    if (packages.length === 0) return null;
+    return packages.map((pkg) => pkg.product.identifier).join('\u001f');
+  }, [packages]);
 
   const [iosEligibilitySnapshot, setIOSEligibilitySnapshot] = useState<{
     scopeKey: string | null;
@@ -221,14 +246,11 @@ export function PaywallScreen({
 
   useEffect(() => {
     const seq = ++eligibilityRequestSeq.current;
-    if (!eligibilityScopeKey || iosCatalogResolution?.status !== 'resolved') {
+    if (!eligibilityScopeKey || packages.length === 0) {
       setIOSEligibilitySnapshot({ scopeKey: null, byProductId: {} });
       return;
     }
-    const productIds = [
-      iosCatalogResolution.monthlyPackage.product.identifier,
-      iosCatalogResolution.annualPackage.product.identifier,
-    ];
+    const productIds = packages.map((pkg) => pkg.product.identifier);
     setIOSEligibilitySnapshot({
       scopeKey: eligibilityScopeKey,
       byProductId: Object.fromEntries(
@@ -240,10 +262,7 @@ export function PaywallScreen({
       .then((result) => {
         if (cancelled || !mounted.current || seq !== eligibilityRequestSeq.current) return;
         setIOSEligibilitySnapshot({ scopeKey: eligibilityScopeKey, byProductId: result });
-        [
-          iosCatalogResolution.monthlyPackage,
-          iosCatalogResolution.annualPackage,
-        ].forEach((pkg) => {
+        packages.forEach((pkg) => {
           const plan = resolveIOSPlanKind(pkg);
           if (!plan) return;
           const state = result[pkg.product.identifier] ?? { status: 'unknown' as const };
@@ -264,10 +283,7 @@ export function PaywallScreen({
             productIds.map((id) => [id, { status: 'error' } as const]),
           ),
         });
-        [
-          iosCatalogResolution.monthlyPackage,
-          iosCatalogResolution.annualPackage,
-        ].forEach((pkg) => {
+        packages.forEach((pkg) => {
           const plan = resolveIOSPlanKind(pkg);
           if (!plan) return;
           logSubscriptionDiagnostic({
@@ -281,7 +297,7 @@ export function PaywallScreen({
     return () => {
       cancelled = true;
     };
-  }, [eligibilityScopeKey, iosCatalogResolution]);
+  }, [eligibilityScopeKey, packages]);
 
   useEffect(() => {
     if (
@@ -301,6 +317,10 @@ export function PaywallScreen({
     if (nextId !== selectedId) setSelectedId(nextId);
   }, [selectedId, selectedPackage]);
 
+  // FASE 6.4 — always 'checking' (never the old promo-only 'idle' default)
+  // while the scoped eligibility snapshot hasn't caught up yet: this now
+  // runs for the standard catalog too (see `eligibilityScopeKey` above), so
+  // there's no "irrelevant, don't bother" case left to special-case.
   const introPresentations = useMemo<Record<string, IOSIntroOfferPresentation>>(
     () =>
       Object.fromEntries(
@@ -310,13 +330,11 @@ export function PaywallScreen({
             pkg,
             eligibilityScopeKey && iosEligibilitySnapshot.scopeKey === eligibilityScopeKey
               ? iosEligibilitySnapshot.byProductId[pkg.product.identifier] ?? { status: 'unknown' }
-              : iosOfferingRoute?.kind === 'promotional'
-                ? { status: 'checking' }
-                : { status: 'idle' },
+              : { status: 'checking' },
           ),
         ]),
       ),
-    [eligibilityScopeKey, iosEligibilitySnapshot, iosOfferingRoute, packages],
+    [eligibilityScopeKey, iosEligibilitySnapshot, packages],
   );
   const selectedIntroPresentation = selectedPackage
     ? introPresentations[selectedPackage.product.identifier] ?? null
@@ -386,27 +404,24 @@ export function PaywallScreen({
   );
   const selectedIntroText = introText(selectedIntroPresentation, selectedPackage);
 
-  // Fase 4C.3 §4/§6: the single source of truth for "what does the CTA
-  // actually do" — derived fresh from `selectedPackage`/`promoState.applied`
-  // on every render, never cached, so a plan switch (mensal ⇄ anual) or a
-  // code swap invalidates itself automatically (see
-  // `resolveAuthorizedAndroidOffer`'s/`resolvePurchaseRoute`'s doc
-  // comments, subscriptionOffer.ts). `null` only when there's no package
-  // selected yet (Offerings still loading/empty) — the CTA is already
-  // disabled in that state.
-  const promoApplied = PROMO_CODE_SUPPORTED_PLATFORM && promoState.phase === 'applied' && promoState.applied !== null;
-
   // Android only — `null` on iOS (guarded so `promoState.applied.androidStoreConfig`,
   // which is always `null` for an iOS-platform validation response per the
   // backend contract, is never fed into Android's live-catalog matching).
+  // `selectedPackage` may already be a FASE 6.3 promo-package override (see
+  // `androidPackages` above) when the authorized offer is 'new'-shape and
+  // resolved successfully — `resolveAndroidPurchaseRoute` re-resolves the
+  // 'new' case independently from `offerings` regardless, so it never
+  // trusts `selectedPackage`'s identity as the purchase target for that
+  // shape; it's only used here (and inside `resolveAuthorizedAndroidOffer`)
+  // to determine which plan (monthly/annual) is currently selected.
   const purchaseRoute: PurchaseRoute | null = useMemo(() => {
     if (!selectedPackage || Platform.OS !== 'android') return null;
     const authorizedOffer =
       promoApplied && promoState.applied
         ? resolveAuthorizedAndroidOffer(selectedPackage, promoState.applied.androidStoreConfig)
         : null;
-    return resolvePurchaseRoute(selectedPackage, promoApplied, authorizedOffer);
-  }, [selectedPackage, promoApplied, promoState.applied]);
+    return resolveAndroidPurchaseRoute(selectedPackage, promoApplied, authorizedOffer, offerings);
+  }, [selectedPackage, promoApplied, promoState.applied, offerings]);
 
   // FASE 6 — the ordinary iOS route is the selected package itself. A
   // validated coupon never changes this route unless the backend supplied a
@@ -456,23 +471,62 @@ export function PaywallScreen({
     standardIOSRoute,
   ]);
 
-  const iosPurchaseDiagnosticContext = useMemo<SubscriptionPurchaseContext | null>(() => {
-    if (Platform.OS !== 'ios' || !effectiveRoute || effectiveRoute.kind === 'blocked') return null;
+  // FASE 6.5 — cross-platform now (was iOS-only): Android's purchase route
+  // is equally observable, using the SAME event schema
+  // (`subscriptionDiagnostics.ts`'s `SubscriptionPurchaseRoute` now spans
+  // both platforms — see its doc comment). Never derives `route`/`plan`
+  // from the coupon code/campaign/offering identity — only from which SDK
+  // call `effectiveRoute` actually leads to.
+  const purchaseDiagnosticContext = useMemo<SubscriptionPurchaseContext | null>(() => {
+    if (!effectiveRoute || effectiveRoute.kind === 'blocked') return null;
     if (effectiveRoute.kind === 'ios_promo_package') {
-      return { route: 'promo', plan: effectiveRoute.attempt.plan };
+      return { route: 'promo_package', plan: effectiveRoute.attempt.plan };
+    }
+    if (effectiveRoute.kind === 'subscription_option') {
+      // Android LEGACY: the option itself carries no packageType — the plan
+      // comes from whichever (standard) package is currently selected.
+      const plan = selectedPackage ? resolveAndroidPlanKind(selectedPackage) : null;
+      return plan ? { route: 'legacy_subscription_option', plan } : null;
     }
     if (effectiveRoute.kind !== 'package') return null;
-    const plan = resolveIOSPlanKind(effectiveRoute.package);
-    return plan ? { route: 'standard', plan } : null;
-  }, [effectiveRoute]);
+    const plan =
+      Platform.OS === 'ios'
+        ? resolveIOSPlanKind(effectiveRoute.package)
+        : resolveAndroidPlanKind(effectiveRoute.package);
+    if (!plan) return null;
+    // On Android, `{kind:'package'}` means either "no promo" (standard) or
+    // a resolved FASE 5.7/6.3 NEW-shape promo — `promoApplied` is the only
+    // way to distinguish them, since both produce the same route shape.
+    const route = Platform.OS === 'android' && promoApplied ? 'promo_package' : 'standard';
+    return { route, plan };
+  }, [effectiveRoute, promoApplied, selectedPackage]);
 
   useEffect(() => {
-    if (!iosPurchaseDiagnosticContext) return;
+    if (!purchaseDiagnosticContext) return;
     logSubscriptionDiagnostic({
       event: 'subscription_purchase_route_resolved',
-      ...iosPurchaseDiagnosticContext,
+      ...purchaseDiagnosticContext,
     });
-  }, [iosPurchaseDiagnosticContext?.plan, iosPurchaseDiagnosticContext?.route]);
+  }, [purchaseDiagnosticContext?.plan, purchaseDiagnosticContext?.route]);
+
+  // FASE 6.5 — the blocked counterpart: fires whenever the route is a
+  // fail-closed stop (invalid/unresolvable offering, package, or base plan)
+  // on EITHER platform. `plan` is best-effort from `selectedPackage` (still
+  // meaningful even though no purchase target exists); `reason` is
+  // allowlisted — never the raw blocked-reason string transported verbatim.
+  useEffect(() => {
+    if (!effectiveRoute || effectiveRoute.kind !== 'blocked') return;
+    const plan = selectedPackage
+      ? Platform.OS === 'ios'
+        ? resolveIOSPlanKind(selectedPackage)
+        : resolveAndroidPlanKind(selectedPackage)
+      : null;
+    logSubscriptionDiagnostic({
+      event: 'subscription_purchase_route_blocked',
+      plan,
+      reason: normalizeBlockedReasonForDiagnostic(effectiveRoute.reason),
+    });
+  }, [effectiveRoute, selectedPackage]);
 
   const currentPromoSnapshot = useMemo<IOSPromoPurchaseSnapshot | null>(() => {
     if (effectiveRoute?.kind !== 'ios_promo_package' || !promoState.applied) return null;
@@ -583,19 +637,22 @@ export function PaywallScreen({
         }
         outcome = execution.result;
       } else {
-        if (effectiveRoute.kind === 'package' && iosPurchaseDiagnosticContext) {
+        if (
+          (effectiveRoute.kind === 'package' || effectiveRoute.kind === 'subscription_option') &&
+          purchaseDiagnosticContext
+        ) {
           logSubscriptionDiagnostic({
             event: 'subscription_purchase_started',
-            ...iosPurchaseDiagnosticContext,
+            ...purchaseDiagnosticContext,
           });
         }
         outcome = effectiveRoute.kind === 'package'
           ? await purchase(effectiveRoute.package)
           : await purchaseOption(effectiveRoute.option);
       }
-      if (iosPurchaseDiagnosticContext) {
+      if (purchaseDiagnosticContext) {
         logSubscriptionPurchaseOutcome(
-          iosPurchaseDiagnosticContext,
+          purchaseDiagnosticContext,
           outcome,
           PREMIUM_ENTITLEMENT_ID,
         );
@@ -644,7 +701,7 @@ export function PaywallScreen({
   }, [
     currentPromoSnapshot,
     effectiveRoute,
-    iosPurchaseDiagnosticContext,
+    purchaseDiagnosticContext,
     purchase,
     purchaseOption,
     selectedIntroReadiness.status,
@@ -816,9 +873,11 @@ export function PaywallScreen({
                   selected={pkg.identifier === selectedPackage?.identifier}
                   disabled={busy}
                   promotionalTerms={
-                    iosOfferingRoute?.kind === 'promotional'
+                    Platform.OS === 'ios'
                       ? introText(introPresentations[pkg.product.identifier] ?? null, pkg)?.badge
-                      : null
+                      : Platform.OS === 'android' && resolveAndroidTrialSignal(pkg) === 'possible'
+                        ? t('paywall.promo.androidTrialBadge')
+                        : null
                   }
                   onSelect={() => setSelectedId(pkg.identifier)}
                 />
@@ -1128,9 +1187,17 @@ function PromoCodeCard({
   disabled: boolean;
 }) {
   const { theme } = useTheme();
+  const { t } = useTranslation('common');
   const validating = promoState.phase === 'validating';
   const applied = promoState.phase === 'applied' && promoState.applied;
-  const hasMatchedOption = purchaseRoute?.kind === 'subscription_option';
+  // FASE 6.4 — 'package' now also means a resolved Android NEW-shape
+  // (offeringIdentifier) promo: `purchaseRoute` here is `effectiveRoute`,
+  // which on Android only ever reaches 'package' while a code is applied
+  // (`applied` above) when `resolveAndroidPurchaseRoute` successfully
+  // resolved the promotional catalog — `resolveAndroidPurchaseRoute`
+  // returns 'blocked' for every unresolved/no-authorization case instead.
+  const hasMatchedOption =
+    purchaseRoute?.kind === 'subscription_option' || purchaseRoute?.kind === 'package';
   // Fase 4C.3 §15/§16: never says the code is invalid — it isn't; the
   // catalog authorized it, but the live RevenueCat/Store catalog can't
   // currently prove the exact promotional offer for the selected plan
@@ -1142,22 +1209,22 @@ function PromoCodeCard({
   // used for `validatePromoCode`'s own errors.
   const promoBlockedMessage =
     applied && !iosPromoNotice && purchaseRoute?.kind === 'blocked'
-      ? 'Não foi possível disponibilizar esta oferta promocional no momento para o plano selecionado. Tente novamente ou escolha outro plano.'
+      ? t('paywall.promo.blockedGeneric')
       : null;
 
   return (
     <View style={{ marginTop: 18 }}>
-      <MonoLabel color={theme.colors.textMuted}>CÓDIGO PROMOCIONAL</MonoLabel>
+      <MonoLabel color={theme.colors.textMuted}>{t('paywall.promo.label')}</MonoLabel>
       <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
         <TextInput
           value={value}
           onChangeText={onChangeValue}
           editable={!disabled && !validating}
-          placeholder="Ex.: ARNALDO"
+          placeholder={t('paywall.promo.placeholder')}
           placeholderTextColor={theme.colors.inputPlaceholder}
           autoCapitalize="characters"
           autoCorrect={false}
-          accessibilityLabel="Código promocional"
+          accessibilityLabel={t('paywall.promo.inputAccessibilityLabel')}
           style={{
             flex: 1,
             height: 46,
@@ -1173,7 +1240,7 @@ function PromoCodeCard({
         />
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Aplicar código promocional"
+          accessibilityLabel={t('paywall.promo.applyAccessibilityLabel')}
           onPress={onApply}
           disabled={disabled || validating || !value.trim()}
           style={{
@@ -1191,7 +1258,9 @@ function PromoCodeCard({
           {validating ? (
             <ActivityIndicator color={theme.colors.textPrimary} />
           ) : (
-            <Text style={{ fontFamily: theme.fonts.uiSemi, fontSize: 13, color: theme.colors.textPrimary }}>Aplicar</Text>
+            <Text style={{ fontFamily: theme.fonts.uiSemi, fontSize: 13, color: theme.colors.textPrimary }}>
+              {t('paywall.promo.applyButton')}
+            </Text>
           )}
         </Pressable>
       </View>
@@ -1201,8 +1270,8 @@ function PromoCodeCard({
           tone="neutral"
           text={
             hasMatchedOption
-              ? 'Código aplicado. Oferta promocional disponível.'
-              : 'Código aplicado.'
+              ? t('paywall.promo.appliedWithOffer')
+              : t('paywall.promo.appliedGeneric')
           }
         />
       )}

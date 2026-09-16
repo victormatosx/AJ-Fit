@@ -58,32 +58,66 @@ function isBlank(value: unknown): boolean {
   return value === undefined || value === null || (typeof value === 'string' && value.trim().length === 0);
 }
 
-interface PairResult {
+interface AndroidPlanResult {
   ok: boolean;
-  value: { first: string; second: string } | null;
+  value: { basePlanId: string; offerId: string | null; offeringIdentifier: string | null } | null;
 }
 
 /**
- * Fail-closed WRITE-time pair validation — the admin-facing counterpart of
- * `promoCodeCatalog.ts`'s `resolveAndroidOfferPair`, which fails closed to
- * `null` on READ. Here a partial pair is a rejected
- * write (`ok: false`), never silently accepted as one field with the other
- * `null` — an admin submitting a half-filled platform config almost
- * certainly made a mistake, and the catalog document should never be
- * allowed to encode it silently.
+ * WRITE-time validation for one Android plan's `(basePlanId, offerId,
+ * offeringIdentifier)` triple — the admin-facing counterpart of
+ * `promoCodeCatalog.ts`'s `resolveAndroidOfferPair` (which resolves on
+ * READ).
+ *
+ * `basePlanId` is required whenever the plan is configured at all — never
+ * inferred, `offerId`/`offeringIdentifier` present without it is always
+ * rejected.
+ *
+ * With `basePlanId` present, exactly ONE of `offerId`/`offeringIdentifier`
+ * must also be present:
+ * - `offerId` alone (FASE 4C.3A LEGACY shape) — identifies one exact
+ *   `SubscriptionOption`.
+ * - `offeringIdentifier` alone (FASE 5.7 NEW shape) — the coupon selects
+ *   only the promotional base plan plus which RevenueCat Offering the
+ *   client resolves its package from; the offer itself (trial or not) is
+ *   left to Google Play/RevenueCat.
+ * - BOTH present (ambiguous — which shape?) or NEITHER present alongside a
+ *   `basePlanId` (incomplete — `basePlanId` alone no longer identifies a
+ *   usable config since FASE 5.7) are both rejected (`ok: false`) — an
+ *   admin submitting either almost certainly made a mistake, and the
+ *   catalog document should never be allowed to encode an ambiguous or
+ *   incomplete state silently.
  */
-function validatePair(firstRaw: unknown, secondRaw: unknown, maxLength: number): PairResult {
-  const firstBlank = isBlank(firstRaw);
-  const secondBlank = isBlank(secondRaw);
+function validateAndroidPlanPair(
+  basePlanIdRaw: unknown,
+  offerIdRaw: unknown,
+  offeringIdentifierRaw: unknown,
+  maxLength: number,
+): AndroidPlanResult {
+  const basePlanIdBlank = isBlank(basePlanIdRaw);
+  const offerIdBlank = isBlank(offerIdRaw);
+  const offeringIdentifierBlank = isBlank(offeringIdentifierRaw);
 
-  if (firstBlank && secondBlank) return { ok: true, value: null };
-  if (firstBlank !== secondBlank) return { ok: false, value: null };
+  if (basePlanIdBlank && offerIdBlank && offeringIdentifierBlank) return { ok: true, value: null };
+  if (basePlanIdBlank) return { ok: false, value: null };
 
-  const first = trimmedNonEmpty(firstRaw, maxLength);
-  const second = trimmedNonEmpty(secondRaw, maxLength);
-  if (first === null || second === null) return { ok: false, value: null };
+  const basePlanId = trimmedNonEmpty(basePlanIdRaw, maxLength);
+  if (basePlanId === null) return { ok: false, value: null };
 
-  return { ok: true, value: { first, second } };
+  if (offerIdBlank === offeringIdentifierBlank) {
+    // Both present (ambiguous) or both absent (incomplete) — reject either way.
+    return { ok: false, value: null };
+  }
+
+  if (!offerIdBlank) {
+    const offerId = trimmedNonEmpty(offerIdRaw, maxLength);
+    if (offerId === null) return { ok: false, value: null };
+    return { ok: true, value: { basePlanId, offerId, offeringIdentifier: null } };
+  }
+
+  const offeringIdentifier = trimmedNonEmpty(offeringIdentifierRaw, maxLength);
+  if (offeringIdentifier === null) return { ok: false, value: null };
+  return { ok: true, value: { basePlanId, offerId: null, offeringIdentifier } };
 }
 
 interface IOSPromotionResult {
@@ -136,7 +170,10 @@ function parseNullableTimestamp(value: unknown): { ok: true; value: Timestamp | 
 
 interface AndroidPlanInput {
   basePlanId?: unknown;
+  /** LEGACY shape — mutually exclusive with `offeringIdentifier` (FASE 5.7). */
   offerId?: unknown;
+  /** NEW shape (FASE 5.7) — mutually exclusive with `offerId`. */
+  offeringIdentifier?: unknown;
 }
 
 export interface AdminPromoCodeWriteInput {
@@ -227,16 +264,18 @@ export function validateAdminPromoCodeWrite(
     if (notes === null) return { ok: false, error: 'invalid_notes' };
   }
 
-  const androidMonthly = validatePair(
+  const androidMonthly = validateAndroidPlanPair(
     input.android?.monthly?.basePlanId,
     input.android?.monthly?.offerId,
+    input.android?.monthly?.offeringIdentifier,
     IDENTIFIER_MAX_LENGTH,
   );
   if (!androidMonthly.ok) return { ok: false, error: 'android_monthly_partial' };
 
-  const androidAnnual = validatePair(
+  const androidAnnual = validateAndroidPlanPair(
     input.android?.annual?.basePlanId,
     input.android?.annual?.offerId,
+    input.android?.annual?.offeringIdentifier,
     IDENTIFIER_MAX_LENGTH,
   );
   if (!androidAnnual.ok) return { ok: false, error: 'android_annual_partial' };
@@ -257,10 +296,12 @@ export function validateAdminPromoCodeWrite(
       influencerId,
       campaignId,
       internalName,
-      androidBasePlanIdMonthly: androidMonthly.value?.first ?? null,
-      androidOfferIdMonthly: androidMonthly.value?.second ?? null,
-      androidBasePlanIdAnnual: androidAnnual.value?.first ?? null,
-      androidOfferIdAnnual: androidAnnual.value?.second ?? null,
+      androidBasePlanIdMonthly: androidMonthly.value?.basePlanId ?? null,
+      androidOfferIdMonthly: androidMonthly.value?.offerId ?? null,
+      androidOfferingIdentifierMonthly: androidMonthly.value?.offeringIdentifier ?? null,
+      androidBasePlanIdAnnual: androidAnnual.value?.basePlanId ?? null,
+      androidOfferIdAnnual: androidAnnual.value?.offerId ?? null,
+      androidOfferingIdentifierAnnual: androidAnnual.value?.offeringIdentifier ?? null,
       iosPromotion: iosPromotion.value,
       appleConfigurationConfirmed: input.appleConfigurationConfirmed,
       notes,

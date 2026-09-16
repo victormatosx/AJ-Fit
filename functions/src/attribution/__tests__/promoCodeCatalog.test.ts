@@ -42,11 +42,23 @@ const NORMALIZED_IOS_PROMOTION_FIELD = {
   iosPromotion: null,
 };
 
+/**
+ * FASE 5.7 — `validRawDocument()` deliberately omits
+ * `androidOfferingIdentifierMonthly`/`androidOfferingIdentifierAnnual`
+ * entirely (simulating every real `promoCodes` document written before this
+ * phase, including ARNALDO) — this is what that absence normalizes to.
+ */
+const NORMALIZED_ANDROID_OFFERING_IDENTIFIER_FIELDS = {
+  androidOfferingIdentifierMonthly: null,
+  androidOfferingIdentifierAnnual: null,
+};
+
 describe('parsePromoCodeDocument', () => {
   it('accepts a fully valid document', () => {
     expect(parsePromoCodeDocument(validRawDocument())).toEqual({
       ...validRawDocument(),
       ...NORMALIZED_IOS_PROMOTION_FIELD,
+      ...NORMALIZED_ANDROID_OFFERING_IDENTIFIER_FIELDS,
     });
   });
 
@@ -60,7 +72,11 @@ describe('parsePromoCodeDocument', () => {
       appleOfferReferenceAnnual: null,
     });
     const parsed = parsePromoCodeDocument(raw);
-    expect(parsed).toEqual({ ...validRawDocument(), iosPromotion: null });
+    expect(parsed).toEqual({
+      ...validRawDocument(),
+      iosPromotion: null,
+      ...NORMALIZED_ANDROID_OFFERING_IDENTIFIER_FIELDS,
+    });
     expect(parsed).not.toHaveProperty('appleOfferCodeMonthly');
     expect(parsed).not.toHaveProperty('appleOfferCorrelation');
   });
@@ -176,7 +192,7 @@ describe('lookupPromoCode', () => {
 
     expect(result).toEqual({
       status: 'found',
-      promoCode: { ...raw, ...NORMALIZED_IOS_PROMOTION_FIELD },
+      promoCode: { ...raw, ...NORMALIZED_IOS_PROMOTION_FIELD, ...NORMALIZED_ANDROID_OFFERING_IDENTIFIER_FIELDS },
     });
   });
 
@@ -191,35 +207,55 @@ describe('lookupPromoCode', () => {
   });
 });
 
-// FASE 4C.1
+// FASE 4C.1, revised FASE 5.3/5.7
 describe('resolveAndroidOfferPair', () => {
-  it('A/B: returns the complete pair when both basePlanId and offerId are set', () => {
-    expect(resolveAndroidOfferPair('monthly', 'influencer-trial-7d')).toEqual({
+  it('A/B: returns the complete LEGACY shape when basePlanId + offerId are set (offeringIdentifier absent)', () => {
+    expect(resolveAndroidOfferPair('monthly', 'influencer-trial-7d', null)).toEqual({
       basePlanId: 'monthly',
       offerId: 'influencer-trial-7d',
+      offeringIdentifier: null,
     });
-    expect(resolveAndroidOfferPair('annual', 'influencer-trial-7d-annual')).toEqual({
+    expect(resolveAndroidOfferPair('annual', 'influencer-trial-7d-annual', null)).toEqual({
       basePlanId: 'annual',
       offerId: 'influencer-trial-7d-annual',
+      offeringIdentifier: null,
     });
   });
 
-  it('D/E: returns null when both fields are null', () => {
-    expect(resolveAndroidOfferPair(null, null)).toBeNull();
+  it('FASE 5.7: returns the complete NEW shape when basePlanId + offeringIdentifier are set (offerId absent)', () => {
+    expect(resolveAndroidOfferPair('monthly-promo', null, 'coupon_discount')).toEqual({
+      basePlanId: 'monthly-promo',
+      offerId: null,
+      offeringIdentifier: 'coupon_discount',
+    });
+    expect(resolveAndroidOfferPair('annual-promo', null, 'coupon_discount')).toEqual({
+      basePlanId: 'annual-promo',
+      offerId: null,
+      offeringIdentifier: 'coupon_discount',
+    });
   });
 
-  it('F: returns null (fail-closed) when basePlanId is set but offerId is null', () => {
-    expect(resolveAndroidOfferPair('monthly', null)).toBeNull();
+  it('D/E: returns null when all three fields are null', () => {
+    expect(resolveAndroidOfferPair(null, null, null)).toBeNull();
+  });
+
+  it('FASE 5.7: returns null (fail-closed, incomplete) when basePlanId is set but BOTH offerId and offeringIdentifier are null', () => {
+    expect(resolveAndroidOfferPair('monthly-promo', null, null)).toBeNull();
+  });
+
+  it('FASE 5.7: returns null (fail-closed, ambiguous) when basePlanId, offerId, AND offeringIdentifier are all set', () => {
+    expect(resolveAndroidOfferPair('monthly', 'influencer-trial-7d', 'coupon_discount')).toBeNull();
   });
 
   it('G: returns null (fail-closed) when offerId is set but basePlanId is null', () => {
-    expect(resolveAndroidOfferPair(null, 'influencer-trial-7d')).toBeNull();
+    expect(resolveAndroidOfferPair(null, 'influencer-trial-7d', null)).toBeNull();
   });
 
-  it('never fabricates/infers a missing half from the one that is present', () => {
-    // basePlanId "monthly" must never be inferred from an offerId alone —
-    // confirms the function looks at nothing but its two explicit inputs.
-    expect(resolveAndroidOfferPair(null, 'influencer-trial-7d')).toBeNull();
-    expect(resolveAndroidOfferPair('monthly', null)).toBeNull();
+  it('FASE 5.7: returns null (fail-closed) when offeringIdentifier is set but basePlanId is null', () => {
+    expect(resolveAndroidOfferPair(null, null, 'coupon_discount')).toBeNull();
+  });
+
+  it('never fabricates/infers a basePlanId from an offerId alone', () => {
+    expect(resolveAndroidOfferPair(null, 'influencer-trial-7d', null)).toBeNull();
   });
 });

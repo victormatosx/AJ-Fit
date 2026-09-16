@@ -77,9 +77,9 @@ describe('validateAdminPromoCodeWrite', () => {
   });
 
   describe('android pair fail-closed rejection', () => {
-    it('rejects basePlanId without offerId', () => {
+    it('FASE 5.7: rejects basePlanId alone — no longer a complete config now that the client needs an Offering to search', () => {
       const result = validateAdminPromoCodeWrite(
-        { ...BASE, android: { monthly: { basePlanId: 'monthly' } } },
+        { ...BASE, android: { monthly: { basePlanId: 'monthly-promo' } } },
         { requireCode: true },
       );
       expect(result).toEqual({ ok: false, error: 'android_monthly_partial' });
@@ -93,7 +93,15 @@ describe('validateAdminPromoCodeWrite', () => {
       expect(result).toEqual({ ok: false, error: 'android_annual_partial' });
     });
 
-    it('accepts a complete pair', () => {
+    it('FASE 5.7: rejects offeringIdentifier without basePlanId', () => {
+      const result = validateAdminPromoCodeWrite(
+        { ...BASE, android: { annual: { offeringIdentifier: 'coupon_discount' } } },
+        { requireCode: true },
+      );
+      expect(result).toEqual({ ok: false, error: 'android_annual_partial' });
+    });
+
+    it('accepts a complete LEGACY pair (basePlanId + offerId, no offeringIdentifier)', () => {
       const result = validateAdminPromoCodeWrite(
         { ...BASE, android: { monthly: { basePlanId: 'monthly', offerId: 'influencer-trial-7d' } } },
         { requireCode: true },
@@ -101,6 +109,44 @@ describe('validateAdminPromoCodeWrite', () => {
       expect(result.ok).toBe(true);
       expect(result.ok && result.fields.androidBasePlanIdMonthly).toBe('monthly');
       expect(result.ok && result.fields.androidOfferIdMonthly).toBe('influencer-trial-7d');
+      expect(result.ok && result.fields.androidOfferingIdentifierMonthly).toBeNull();
+    });
+
+    it('FASE 5.7: accepts a complete NEW pair (basePlanId + offeringIdentifier, no offerId)', () => {
+      const result = validateAdminPromoCodeWrite(
+        {
+          ...BASE,
+          android: {
+            monthly: { basePlanId: 'monthly-promo', offeringIdentifier: 'coupon_discount' },
+            annual: { basePlanId: 'annual-promo', offeringIdentifier: 'coupon_discount' },
+          },
+        },
+        { requireCode: true },
+      );
+      expect(result.ok).toBe(true);
+      expect(result.ok && result.fields.androidBasePlanIdMonthly).toBe('monthly-promo');
+      expect(result.ok && result.fields.androidOfferIdMonthly).toBeNull();
+      expect(result.ok && result.fields.androidOfferingIdentifierMonthly).toBe('coupon_discount');
+      expect(result.ok && result.fields.androidBasePlanIdAnnual).toBe('annual-promo');
+      expect(result.ok && result.fields.androidOfferIdAnnual).toBeNull();
+      expect(result.ok && result.fields.androidOfferingIdentifierAnnual).toBe('coupon_discount');
+    });
+
+    it('FASE 5.7: rejects basePlanId + offerId + offeringIdentifier all set together (ambiguous)', () => {
+      const result = validateAdminPromoCodeWrite(
+        {
+          ...BASE,
+          android: {
+            monthly: {
+              basePlanId: 'monthly',
+              offerId: 'influencer-trial-7d',
+              offeringIdentifier: 'coupon_discount',
+            },
+          },
+        },
+        { requireCode: true },
+      );
+      expect(result).toEqual({ ok: false, error: 'android_monthly_partial' });
     });
 
     it('a plan with neither field present resolves to null, not an error', () => {
@@ -108,6 +154,7 @@ describe('validateAdminPromoCodeWrite', () => {
       expect(result.ok).toBe(true);
       expect(result.ok && result.fields.androidBasePlanIdMonthly).toBeNull();
       expect(result.ok && result.fields.androidOfferIdMonthly).toBeNull();
+      expect(result.ok && result.fields.androidOfferingIdentifierMonthly).toBeNull();
     });
   });
 

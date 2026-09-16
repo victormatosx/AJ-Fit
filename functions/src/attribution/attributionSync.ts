@@ -16,6 +16,7 @@ import {
   type GooglePlayOfferCorrelationResult,
 } from './googlePlayOfferCorrelation';
 import type {
+  AndroidSubscriptionOfferConfig,
   IOSPromotionConfig,
   PromoCodeAndroidOfferSnapshot,
 } from './types';
@@ -86,10 +87,11 @@ export type PromoCodeAttributionDecision =
  * `undefined` when this is the uid's first-ever promo code application (no
  * `couponRedemptions/{uid}` document yet). A locked attribution can never be
  * replaced, regardless of whether the incoming code is the same one or a
- * different one — docs §8: once the store confirms trial/subscription
- * start, "atribuição comercial definitiva" applies and this app never
- * revisits it (the "unlock" itself is out of scope for this phase — no code
- * anywhere sets `lockedAt` to a non-null value yet).
+ * different one — docs §8: once the store confirms a real, correlated
+ * purchase happened (trial or paid — FASE 5.5: never conditioned on trial
+ * specifically), "atribuição comercial definitiva" applies and this app
+ * never revisits it (the "unlock" itself is out of scope for this phase —
+ * no code anywhere sets `lockedAt` to a non-null value yet).
  */
 export function decidePromoCodeAttributionOutcome(
   current: CurrentAttributionState | undefined,
@@ -429,11 +431,27 @@ export type AttributionConfirmationResult =
   | { status: 'confirmed' }
   | { status: 'skipped'; reason: AttributionConfirmationSkipReason };
 
-function parseAndroidOfferPair(value: unknown): { basePlanId: string; offerId: string } | null {
+function parseAndroidOfferPair(value: unknown): AndroidSubscriptionOfferConfig | null {
   if (value === null || typeof value !== 'object') return null;
   const v = value as Record<string, unknown>;
-  if (typeof v.basePlanId !== 'string' || typeof v.offerId !== 'string') return null;
-  return { basePlanId: v.basePlanId, offerId: v.offerId };
+  if (typeof v.basePlanId !== 'string') return null;
+  if (v.offerId !== null && v.offerId !== undefined && typeof v.offerId !== 'string') return null;
+  // FASE 5.7 — absent (every snapshot frozen before this phase, including
+  // every LEGACY offerId-bearing one) parses as null, same treatment as
+  // `offerId`. Never used by webhook correlation (client-only concern), but
+  // read through so the snapshot round-trips the full stored shape.
+  if (
+    v.offeringIdentifier !== null &&
+    v.offeringIdentifier !== undefined &&
+    typeof v.offeringIdentifier !== 'string'
+  ) {
+    return null;
+  }
+  return {
+    basePlanId: v.basePlanId,
+    offerId: (v.offerId as string | undefined) ?? null,
+    offeringIdentifier: (v.offeringIdentifier as string | undefined) ?? null,
+  };
 }
 
 /**

@@ -27,8 +27,12 @@ const PROMO_CODE_DOCUMENT_KEYS = [
   'internalName',
   'androidBasePlanIdMonthly',
   'androidOfferIdMonthly',
+  // FASE 5.7 — optional-on-read for documents created before this phase.
+  'androidOfferingIdentifierMonthly',
   'androidBasePlanIdAnnual',
   'androidOfferIdAnnual',
+  // FASE 5.7 — optional-on-read for documents created before this phase.
+  'androidOfferingIdentifierAnnual',
   // FASE 1 — optional-on-read for documents created before Promo SKU.
   'iosPromotion',
   'appleConfigurationConfirmedAt',
@@ -144,8 +148,10 @@ export function parsePromoCodeDocument(data: unknown): PromoCodeDocument | null 
     !(d.internalName === undefined || isNullableString(d.internalName)) ||
     !isNullableString(d.androidBasePlanIdMonthly) ||
     !isNullableString(d.androidOfferIdMonthly) ||
+    !(d.androidOfferingIdentifierMonthly === undefined || isNullableString(d.androidOfferingIdentifierMonthly)) ||
     !isNullableString(d.androidBasePlanIdAnnual) ||
     !isNullableString(d.androidOfferIdAnnual) ||
+    !(d.androidOfferingIdentifierAnnual === undefined || isNullableString(d.androidOfferingIdentifierAnnual)) ||
     !isOptionalNullableIOSPromotion(d.iosPromotion) ||
     !(d.appleConfigurationConfirmedAt === undefined || isNullableTimestamp(d.appleConfigurationConfirmedAt)) ||
     !(d.appleConfigurationConfirmedBy === undefined || isNullableString(d.appleConfigurationConfirmedBy)) ||
@@ -167,8 +173,10 @@ export function parsePromoCodeDocument(data: unknown): PromoCodeDocument | null 
     ...(d.internalName !== undefined ? { internalName: d.internalName as string | null } : {}),
     androidBasePlanIdMonthly: d.androidBasePlanIdMonthly,
     androidOfferIdMonthly: d.androidOfferIdMonthly,
+    androidOfferingIdentifierMonthly: (d.androidOfferingIdentifierMonthly as string | null | undefined) ?? null,
     androidBasePlanIdAnnual: d.androidBasePlanIdAnnual,
     androidOfferIdAnnual: d.androidOfferIdAnnual,
+    androidOfferingIdentifierAnnual: (d.androidOfferingIdentifierAnnual as string | null | undefined) ?? null,
     iosPromotion: (d.iosPromotion as IOSPromotionConfig | null | undefined) ?? null,
     ...(d.appleConfigurationConfirmedAt !== undefined ? { appleConfigurationConfirmedAt: d.appleConfigurationConfirmedAt as Timestamp | null } : {}),
     ...(d.appleConfigurationConfirmedBy !== undefined ? { appleConfigurationConfirmedBy: d.appleConfigurationConfirmedBy as string | null } : {}),
@@ -180,25 +188,41 @@ export function parsePromoCodeDocument(data: unknown): PromoCodeDocument | null 
 }
 
 /**
- * FASE 4C.1 — resolves one Android plan's `(basePlanId, offerId)` pair into
- * a complete, unambiguous `AndroidSubscriptionOfferConfig`, or `null`.
+ * FASE 4C.1, revised FASE 5.3/5.7 — resolves one Android plan's
+ * `(basePlanId, offerId, offeringIdentifier)` triple into an
+ * `AndroidSubscriptionOfferConfig`, or `null`.
  *
- * FAIL-CLOSED POLICY for a partial pair (rule 4 of the Fase 4C.1 task): if
- * exactly one of the two fields is set and the other is `null` — a data
- * inconsistency (e.g. an admin typo, or a half-finished catalog edit) —
- * this returns `null` for the WHOLE plan rather than exposing the one field
- * that happens to be present. `validatePromoCode` must never construct a
- * `SubscriptionOption` id from only half of the identifying pair, and this
- * function never guesses/infers the missing half (e.g. never derives
- * `basePlanId` from `offerId`) — that would be fabricating store
- * configuration the backend was never actually told.
+ * `basePlanId === null` means the plan isn't configured for Android at all —
+ * always `null` for the whole plan, regardless of the other two fields (an
+ * `offerId`/`offeringIdentifier` present without a `basePlanId` is a
+ * data-integrity problem, never a valid partial config; this function never
+ * guesses/infers a missing `basePlanId`, which would be fabricating store
+ * configuration the backend was never actually told).
+ *
+ * With `basePlanId !== null`, exactly ONE of `offerId`/`offeringIdentifier`
+ * must be set:
+ * - `offerId !== null`, `offeringIdentifier === null` — pre-5.3 LEGACY
+ *   shape, preserved byte-for-byte: `validatePromoCode`/the webhook
+ *   correlation continue to treat it as an exact `SubscriptionOption`
+ *   identifier.
+ * - `offeringIdentifier !== null`, `offerId === null` — FASE 5.7 NEW shape:
+ *   the coupon selects only the promotional base plan plus the Offering the
+ *   client must resolve its package from; Google Play/RevenueCat decides
+ *   which `SubscriptionOption` (trial or not) applies.
+ * - BOTH set (ambiguous) or BOTH null (incomplete — the FASE 5.3-only
+ *   `basePlanId`-alone shape is no longer a complete config now that the
+ *   client needs an Offering to search) — fail-closed to `null` for the
+ *   whole plan; see `AndroidSubscriptionOfferConfig`'s doc comment.
  */
 export function resolveAndroidOfferPair(
   basePlanId: string | null,
   offerId: string | null,
+  offeringIdentifier: string | null,
 ): AndroidSubscriptionOfferConfig | null {
-  if (basePlanId === null || offerId === null) return null;
-  return { basePlanId, offerId };
+  if (basePlanId === null) return null;
+  if (offerId !== null && offeringIdentifier !== null) return null;
+  if (offerId === null && offeringIdentifier === null) return null;
+  return { basePlanId, offerId, offeringIdentifier };
 }
 
 export type PromoCodeLookupResult =

@@ -12,16 +12,39 @@ import type { PromoCodePlatform, PromoPurchasePlan } from './constants';
  */
 
 /**
- * A complete, unambiguous identifier for one Google Play `SubscriptionOption`
- * (FASE 4C.1) — the exact pair the client needs to compute
- * `` `${basePlanId}:${offerId}` `` and match it by equality against
- * `product.subscriptionOptions`. Never a pre-composed string: keeping the
- * `basePlanId:offerId` composition convention in ONE place (the future
- * client-side matching utility) instead of baked into stored strings.
+ * A Google Play base plan authorization for one promotional plan. Exactly
+ * TWO valid non-null shapes exist (FASE 5.3/5.7) — `basePlanId` is always
+ * required, and `offerId`/`offeringIdentifier` are mutually exclusive:
+ *
+ * - LEGACY (`offerId` set, `offeringIdentifier` null) — pre-5.3 influencer
+ *   coupons: identifies one exact `SubscriptionOption`
+ *   (`` `${basePlanId}:${offerId}` ``) the client must purchase explicitly
+ *   via `purchaseSubscriptionOption`, and the webhook must correlate
+ *   exactly on both fields — unchanged behavior, preserved byte-for-byte
+ *   for every existing catalog/redemption document.
+ * - NEW (`offeringIdentifier` set, `offerId` null) — FASE 5.7: the coupon
+ *   selects only the promotional BASE PLAN (e.g. `monthly-promo`/
+ *   `annual-promo`) and the RevenueCat Offering the client must resolve
+ *   that base plan's `PurchasesPackage` from (e.g. `coupon_discount` — a
+ *   catalog value, never hardcoded here or assumed universal). The client
+ *   purchases via `purchasePackage`, never forcing a specific
+ *   `SubscriptionOption`; which one applies (the `trial-7d-new-subscriber`
+ *   offer if the user is eligible, or the bare base plan otherwise) is
+ *   decided entirely by Google Play/RevenueCat. Correlation matches on
+ *   `basePlanId` alone (see `googlePlayOfferCorrelation.ts`) —
+ *   `offeringIdentifier` is a CLIENT-side concern only (which Offering to
+ *   search), irrelevant to the webhook, which never receives it.
+ *
+ * `offerId` and `offeringIdentifier` both set, or both null while
+ * `basePlanId` is set, are REJECTED at admin write time
+ * (`promoCodeAdminValidation.ts`) and resolve to `null` for the whole plan
+ * at catalog read time (`promoCodeCatalog.ts`'s `resolveAndroidOfferPair`)
+ * — an ambiguous or incomplete config is never partially trusted.
  */
 export interface AndroidSubscriptionOfferConfig {
   basePlanId: string;
-  offerId: string;
+  offerId: string | null;
+  offeringIdentifier: string | null;
 }
 
 /**
@@ -174,19 +197,31 @@ export interface CouponRedemption {
   /** Server timestamp of the most recent write to this document. */
   updatedAt: Timestamp;
   /**
-   * Set only by `applyAttributionRevenueCatEvent` once the store confirms
-   * trial start for `couponCode` AND (Fase 4C.3A) the purchase is proven
-   * to have used the exact offer in `androidOffer`.
+   * FASE 5.5 — HISTORICAL/INFORMATIONAL ONLY, never a business condition:
+   * set once by `applyAttributionRevenueCatEvent` when the purchase this
+   * `couponCode` is attributed to (correlation matched — see
+   * `googlePlayOfferCorrelation.ts`/Apple purchase-intent correlation)
+   * happened to be reported by the Store as `period_type === 'TRIAL'`. The
+   * coupon never causes, grants, or influences whether a trial occurs — the
+   * Store decides that identically for every subscriber, coupon or not (see
+   * docs §34's FASE 5.5 update). This field only records, for this one
+   * attributed sale, which kind of period it started with. The live/current
+   * trial state of the account is `SubscriptionMirror.trialEndsAt`
+   * (`../billing/types.ts`), never this field.
    */
   trialStartedAt: Timestamp | null;
-  /** Set only by `applyAttributionRevenueCatEvent`, once the store confirms a paid conversion correlated to `androidOffer` (or a later trial-conversion `RENEWAL` — see that module's doc comment). */
+  /** Set only by `applyAttributionRevenueCatEvent`, once the store confirms a paid conversion correlated to `androidOffer` (or a later trial-conversion `RENEWAL` — see that module's doc comment). Means "this attributed sale converted to paid", nothing about trial. */
   convertedAt: Timestamp | null;
   /**
-   * Non-null means this uid's attribution is LOCKED —
-   * `applyPromoCodeAttributionTransactionally` refuses to replace
+   * Non-null means this uid's attribution is LOCKED — the sale is
+   * commercially attributed to `couponCode` for commission/analytics
+   * purposes. `applyPromoCodeAttributionTransactionally` refuses to replace
    * `couponCode`/`androidOffer` once this is set (docs §8: "atribuição
-   * comercial definitiva" only after the store proves trial/subscription
-   * start AND (Fase 4C.3A) offer correlation).
+   * comercial definitiva" only after the store proves a real purchase
+   * happened AND (Fase 4C.3A) offer correlation matched). Set for ANY
+   * correlated `INITIAL_PURCHASE` — trial or paid — never conditioned on
+   * `trialStartedAt`; this is purely about "was this sale attributed to
+   * this coupon", never about trial.
    */
   lockedAt: Timestamp | null;
 }
@@ -231,10 +266,30 @@ export interface AttributionSnapshot {
  * `SubscriptionOption.id` is `basePlanId:offerId` — the `offerId` alone
  * (the pre-4C.1 shape) cannot unambiguously identify one, since the same
  * `offerId` string could in principle exist under a different base plan.
- * Each plan's pair is validated for completeness by
- * `promoCodeCatalog.ts`'s `resolveAndroidOfferPair` — see that function's
- * doc comment for the fail-closed policy on a partial pair (one field set,
- * the other `null`).
+ *
+ * FASE 5.3: `androidOfferIdMonthly`/`androidOfferIdAnnual` became OPTIONAL.
+ * `androidBasePlanIdMonthly`/`androidBasePlanIdAnnual` remain required
+ * whenever a plan is configured for Android — `offerId` alone without a
+ * `basePlanId` is still rejected as a data-integrity problem (never valid).
+ * A `basePlanId` with NO `offerId` is now a fully valid, INTENTIONAL config:
+ * it means the coupon only selects the promotional base plan, leaving offer
+ * selection (trial or not) to Google Play/RevenueCat. See
+ * `AndroidSubscriptionOfferConfig`'s doc comment. Each plan's pair is
+ * resolved by `promoCodeCatalog.ts`'s `resolveAndroidOfferPair` — see that
+ * function's doc comment for the exact fail-closed policy.
+ *
+ * FASE 5.7: `androidOfferingIdentifierMonthly`/`androidOfferingIdentifierAnnual`
+ * were added alongside `androidOfferIdMonthly`/`androidOfferIdAnnual` — a
+ * `basePlanId` alone (FASE 5.3's original new-style shape) told the webhook
+ * enough to correlate a purchase, but never told the CLIENT which
+ * RevenueCat Offering to search for that base plan's `PurchasesPackage` in.
+ * Optional on read for backward compatibility — every `promoCodes` document
+ * written before this phase lacks these fields entirely, and that absence
+ * must parse as `null`. Mutually exclusive with the corresponding
+ * `androidOfferId*` field per plan — see `AndroidSubscriptionOfferConfig`'s
+ * doc comment for the exact two valid shapes and `resolveAndroidOfferPair`
+ * for the fail-closed policy on an ambiguous (both set) or incomplete
+ * (neither set, `basePlanId` alone) pair.
  */
 export interface PromoCodeDocument {
   /** Normalized code — identical to the document ID, kept as a field too for exports/queries that read documents without their ID. */
@@ -249,12 +304,18 @@ export interface PromoCodeDocument {
   campaignId: string;
   /** Optional human-facing label used only by the admin surface. Never participates in store routing or attribution. */
   internalName?: string | null;
-  /** Google Play base plan ID for the monthly plan (e.g. `"monthly"`) — half of the pair identifying a `SubscriptionOption`. */
+  /** Google Play base plan ID for the monthly plan (e.g. `"monthly"`, or `"monthly-promo"` under the FASE 5.7 new shape). */
   androidBasePlanIdMonthly: string | null;
+  /** LEGACY shape half-pair — mutually exclusive with `androidOfferingIdentifierMonthly` (FASE 5.7). */
   androidOfferIdMonthly: string | null;
-  /** Google Play base plan ID for the annual plan (e.g. `"annual"`). */
+  /** NEW shape half-pair (FASE 5.7) — the RevenueCat Offering identifier to resolve the monthly promotional base plan's package from (e.g. `"coupon_discount"`, a catalog value, never assumed/hardcoded). Mutually exclusive with `androidOfferIdMonthly`. */
+  androidOfferingIdentifierMonthly: string | null;
+  /** Google Play base plan ID for the annual plan (e.g. `"annual"`, or `"annual-promo"` under the FASE 5.7 new shape). */
   androidBasePlanIdAnnual: string | null;
+  /** LEGACY shape half-pair — mutually exclusive with `androidOfferingIdentifierAnnual` (FASE 5.7). */
   androidOfferIdAnnual: string | null;
+  /** NEW shape half-pair (FASE 5.7) — the RevenueCat Offering identifier to resolve the annual promotional base plan's package from. Mutually exclusive with `androidOfferIdAnnual`. */
+  androidOfferingIdentifierAnnual: string | null;
   /**
    * FASE 1 — see `IOSPromotionConfig`'s doc comment. `null` until an admin
    * configures the iOS promotional Offering/SKU for this campaign. NEW
@@ -287,16 +348,25 @@ export interface ValidatePromoCodeRequestData {
 }
 
 /**
- * Store configuration for Android returned to the CLIENT by
- * `validatePromoCode` — structurally identical to `PromoCodeAndroidOfferSnapshot`
- * (the same shape is also what gets snapshotted into `couponRedemptions/{uid}.androidOffer`),
- * kept as a distinct type name because the two serve different audiences
- * (one is a wire response contract, the other a Firestore document field) —
- * `null` per plan means that plan/offer isn't configured (or isn't a
- * complete, unambiguous pair — see `resolveAndroidOfferPair` in
- * `promoCodeCatalog.ts`) for this code.
+ * Public Android contract returned by `validatePromoCode`. Unlike the
+ * persisted `AndroidSubscriptionOfferConfig`, the inactive variant key is
+ * ABSENT rather than serialized as `null`, so the client can discriminate
+ * the two mutually-exclusive purchase routes by exact object shape.
  */
-export type PromoCodePlatformStoreConfig = PromoCodeAndroidOfferSnapshot;
+export type AndroidSubscriptionOfferWireConfig =
+  | { basePlanId: string; offerId: string }
+  | { basePlanId: string; offeringIdentifier: string };
+
+/**
+ * Store configuration returned to the Android client. This is deliberately
+ * distinct from `PromoCodeAndroidOfferSnapshot`: storage keeps both nullable
+ * keys for historical/webhook correlation, while the wire emits only the
+ * keys belonging to the active LEGACY or NEW variant.
+ */
+export interface PromoCodePlatformStoreConfig {
+  monthly: AndroidSubscriptionOfferWireConfig | null;
+  annual: AndroidSubscriptionOfferWireConfig | null;
+}
 
 /**
  * Successful response contract for `validatePromoCode`. Deliberately does

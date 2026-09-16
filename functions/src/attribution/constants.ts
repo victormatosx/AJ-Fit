@@ -32,8 +32,10 @@ export const ATTRIBUTION_FIELD = 'attribution';
  * The promo-codes foundation task explicitly redefines it as a
  * server-managed LIFECYCLE record instead: one mutable document per uid,
  * updated in place as the attribution moves from "pending" (just applied,
- * swappable) to "locked" (trial/subscription confirmed — a FUTURE phase, via
- * the RevenueCat webhook; not implemented by this change). Keying by uid
+ * swappable) to "locked" (a real, correlated purchase confirmed by the
+ * RevenueCat webhook — trial or paid, FASE 5.5: never conditioned on trial
+ * specifically; a FUTURE phase at the time of this comment, not implemented
+ * by this change). Keying by uid
  * (rather than an event id) is what makes "is this uid's attribution already
  * locked" and "replace uid's pending code" both a direct, transactional
  * document read+write with no query — see `attributionSync.ts`.

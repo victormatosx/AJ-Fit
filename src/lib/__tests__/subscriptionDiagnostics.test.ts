@@ -5,6 +5,7 @@ import { executeIOSPromoPurchase, type IOSPromoPurchaseAttempt } from '../iosPro
 import {
   logSubscriptionDiagnostic,
   logSubscriptionPurchaseOutcome,
+  normalizeBlockedReasonForDiagnostic,
   normalizeIntroEligibilityForDiagnostic,
 } from '../subscriptionDiagnostics';
 
@@ -89,7 +90,7 @@ describe('sanitized subscription diagnostics', () => {
 
       logSubscriptionDiagnostic({
         event: 'subscription_purchase_route_resolved',
-        route: 'promo',
+        route: 'promo_package',
         plan,
       });
       logSubscriptionDiagnostic({
@@ -118,7 +119,7 @@ describe('sanitized subscription diagnostics', () => {
         now: () => Date.parse(expiresAt) - 1,
       });
       expect(execution).toEqual({ status: 'purchased', result: outcome });
-      logSubscriptionPurchaseOutcome({ route: 'promo', plan }, outcome, 'premium');
+      logSubscriptionPurchaseOutcome({ route: 'promo_package', plan }, outcome, 'premium');
 
       expect(diagnosticEvents(info).map(({ event }) => event)).toEqual([
         'subscription_purchase_route_resolved',
@@ -150,14 +151,14 @@ describe('sanitized subscription diagnostics', () => {
   ] as const)('logs only a symbolic failure category (offline=%s)', (offline, errorCategory) => {
     const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
     logSubscriptionPurchaseOutcome(
-      { route: 'promo', plan: 'annual' },
+      { route: 'promo_package', plan: 'annual' },
       { status: 'error', offline },
       'premium',
     );
     expect(diagnosticEvents(info)).toEqual([
       {
         event: 'subscription_purchase_failed',
-        route: 'promo',
+        route: 'promo_package',
         plan: 'annual',
         errorCategory,
       },
@@ -169,14 +170,14 @@ describe('sanitized subscription diagnostics', () => {
     (premiumActive) => {
       const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
       logSubscriptionPurchaseOutcome(
-        { route: 'promo', plan: 'monthly' },
+        { route: 'promo_package', plan: 'monthly' },
         { status: 'purchased', customerInfo: customerInfo(premiumActive) },
         'premium',
       );
       expect(diagnosticEvents(info)).toEqual([
         {
           event: 'subscription_purchase_completed',
-          route: 'promo',
+          route: 'promo_package',
           plan: 'monthly',
           premiumActive,
         },
@@ -198,7 +199,7 @@ describe('sanitized subscription diagnostics', () => {
     const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
     logSubscriptionDiagnostic({
       event: 'subscription_purchase_completed',
-      route: 'promo',
+      route: 'promo_package',
       plan: 'annual',
       premiumActive: true,
     });
@@ -253,15 +254,101 @@ describe('sanitized subscription diagnostics', () => {
     expect(purchase).toHaveBeenCalledOnce();
   });
 
-  it('keeps production call sites on the existing iOS flow only', () => {
+  it('keeps production call sites wired for the shared cross-platform route/eligibility events', () => {
     for (const event of [
       'subscription_purchase_route_resolved',
+      'subscription_purchase_route_blocked',
       'subscription_intro_eligibility',
       'promo_purchase_intent_failed',
     ]) expect(paywallSource).toContain(event);
     expect(paywallSource).toContain('logSubscriptionPurchaseOutcome');
-    expect(paywallSource).toContain("Platform.OS !== 'ios'");
     expect(promoPurchaseSource).toContain('promo_purchase_intent_authorized');
     expect(promoPurchaseSource).toContain('subscription_purchase_started');
+  });
+
+  // FASE 6.5 — route resolution/blocking is no longer iOS-only.
+  it("FASE 6.5: purchaseDiagnosticContext/route resolution is computed for BOTH platforms, no longer gated by Platform.OS !== 'ios'", () => {
+    const contextFn = paywallSource.slice(
+      paywallSource.indexOf('const purchaseDiagnosticContext = useMemo'),
+      paywallSource.indexOf('}, [effectiveRoute, promoApplied, selectedPackage]);') +
+        '}, [effectiveRoute, promoApplied, selectedPackage]);'.length,
+    );
+    expect(contextFn).not.toContain("Platform.OS !== 'ios'");
+    expect(contextFn).toContain("route: 'legacy_subscription_option'");
+    expect(contextFn).toContain("route: 'promo_package'");
+    expect(contextFn).toContain("'promo_package' : 'standard'");
+  });
+
+  it('FASE 6.5: the blocked reason is normalized through an allowlist before logging — never the raw reason string', () => {
+    expect(paywallSource).toContain('normalizeBlockedReasonForDiagnostic(effectiveRoute.reason)');
+  });
+
+  it('FASE 6.5: emits distinct route values for Android legacy vs new-shape vs standard, and iOS standard vs promo', () => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    logSubscriptionDiagnostic({ event: 'subscription_purchase_route_resolved', route: 'standard', plan: 'monthly' });
+    logSubscriptionDiagnostic({
+      event: 'subscription_purchase_route_resolved',
+      route: 'legacy_subscription_option',
+      plan: 'monthly',
+    });
+    logSubscriptionDiagnostic({ event: 'subscription_purchase_route_resolved', route: 'promo_package', plan: 'annual' });
+
+    expect(diagnosticEvents(info)).toEqual([
+      { event: 'subscription_purchase_route_resolved', route: 'standard', plan: 'monthly' },
+      { event: 'subscription_purchase_route_resolved', route: 'legacy_subscription_option', plan: 'monthly' },
+      { event: 'subscription_purchase_route_resolved', route: 'promo_package', plan: 'annual' },
+    ]);
+  });
+
+  it('FASE 6.5: subscription_purchase_route_blocked carries only plan + allowlisted reason — never coupon/offering/product identity', () => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    logSubscriptionDiagnostic({
+      event: 'subscription_purchase_route_blocked',
+      plan: 'monthly',
+      reason: 'promo_offering_missing',
+    });
+
+    const events = diagnosticEvents(info);
+    expect(events).toEqual([
+      { event: 'subscription_purchase_route_blocked', plan: 'monthly', reason: 'promo_offering_missing' },
+    ]);
+    const payload = events[0] as unknown as Record<string, unknown>;
+    expect(Object.keys(payload).sort()).toEqual(['event', 'plan', 'reason']);
+  });
+
+  it('FASE 6.5: normalizeBlockedReasonForDiagnostic passes through every known reason unchanged', () => {
+    for (const reason of [
+      'promo_not_found',
+      'promo_ambiguous',
+      'promo_no_options',
+      'promo_plan_unavailable',
+      'promo_offering_missing',
+      'promo_package_missing',
+      'promo_package_ambiguous',
+      'promo_ios_unavailable',
+      'promo_authorization_invalid',
+      'promo_catalog_error',
+    ] as const) {
+      expect(normalizeBlockedReasonForDiagnostic(reason)).toBe(reason);
+    }
+  });
+
+  it('FASE 6.5: normalizeBlockedReasonForDiagnostic fails closed to "unknown" for anything unrecognized — never transports an arbitrary string', () => {
+    expect(normalizeBlockedReasonForDiagnostic('some_future_reason_not_in_the_allowlist')).toBe('unknown');
+    expect(normalizeBlockedReasonForDiagnostic('ARNALDO')).toBe('unknown');
+    expect(normalizeBlockedReasonForDiagnostic('')).toBe('unknown');
+  });
+
+  it('FASE 6.5: blocked event payload never contains a forbidden identifier even under a malicious/unexpected raw reason', () => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    logSubscriptionDiagnostic({
+      event: 'subscription_purchase_route_blocked',
+      plan: null,
+      reason: normalizeBlockedReasonForDiagnostic('uid:abc123;coupon:ARNALDO'),
+    });
+    const payload = JSON.stringify(diagnosticEvents(info));
+    expect(payload).not.toContain('ARNALDO');
+    expect(payload).not.toContain('abc123');
+    expect(payload).toContain('"reason":"unknown"');
   });
 });

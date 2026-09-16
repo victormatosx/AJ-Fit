@@ -164,8 +164,10 @@ export async function adminUpdatePromoCodeHandler(
     internalName: fields.internalName,
     androidBasePlanIdMonthly: fields.androidBasePlanIdMonthly,
     androidOfferIdMonthly: fields.androidOfferIdMonthly,
+    androidOfferingIdentifierMonthly: fields.androidOfferingIdentifierMonthly,
     androidBasePlanIdAnnual: fields.androidBasePlanIdAnnual,
     androidOfferIdAnnual: fields.androidOfferIdAnnual,
+    androidOfferingIdentifierAnnual: fields.androidOfferingIdentifierAnnual,
     iosPromotion: fields.iosPromotion,
     notes: fields.notes,
   };

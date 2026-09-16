@@ -6,9 +6,11 @@ describe('admin user subscription presentation', () => {
     ['ajfit_premium_monthly', 'monthly'],
     ['ajfit_premium_monthly_promo', 'monthly'],
     ['ajfit_premium:monthly', 'monthly'],
+    ['ajfit_premium:monthly-promo', 'monthly'],
     ['ajfit_premium_annual', 'annual'],
     ['ajfit_premium_annual_promo', 'annual'],
     ['ajfit_premium:annual', 'annual'],
+    ['ajfit_premium:annual-promo', 'annual'],
     ['future_product', 'unknown'],
     [null, 'unknown'],
   ])('maps only documented product IDs (%s)', (productId, expected) => {

@@ -7,8 +7,8 @@ import {
 import type { PromoCodeAndroidOfferSnapshot } from '../types';
 
 const ARNALDO_OFFER: PromoCodeAndroidOfferSnapshot = {
-  monthly: { basePlanId: 'monthly', offerId: 'influencer-trial-7d' },
-  annual: { basePlanId: 'annual', offerId: 'influencer-trial-7d-annual' },
+  monthly: { basePlanId: 'monthly', offerId: 'influencer-trial-7d', offeringIdentifier: null },
+  annual: { basePlanId: 'annual', offerId: 'influencer-trial-7d-annual', offeringIdentifier: null },
 };
 
 describe('parseGooglePlayProductId', () => {
@@ -127,5 +127,107 @@ describe('correlateGooglePlayOffer', () => {
 
   it('never matches when both basePlanId and offerCode are null', () => {
     expect(correlateGooglePlayOffer(null, null, ARNALDO_OFFER)).toEqual({ status: 'not_matched' });
+  });
+
+  // FASE 5.3 — new-style config: offerId is null/absent, coupon only selects
+  // the promotional base plan; Google Play/RevenueCat's own automatic offer
+  // selection decides whether a trial applied, and that choice is irrelevant
+  // to correlation.
+  describe('FASE 5.3: new-style (offerId absent) — basePlanId-only correlation', () => {
+    const COUPON_DISCOUNT_OFFER: PromoCodeAndroidOfferSnapshot = {
+      monthly: { basePlanId: 'monthly-promo', offerId: null, offeringIdentifier: 'coupon_discount' },
+      annual: { basePlanId: 'annual-promo', offerId: null, offeringIdentifier: 'coupon_discount' },
+    };
+
+    it('O: matches when the real purchase carries the store-selected trial offer code', () => {
+      expect(
+        correlateGooglePlayOffer('monthly-promo', 'trial-7d-new-subscriber', COUPON_DISCOUNT_OFFER),
+      ).toEqual({ status: 'matched', plan: 'monthly' });
+    });
+
+    it('P: matches when the real purchase carries NO offer code (user not eligible, bare base plan)', () => {
+      expect(correlateGooglePlayOffer('monthly-promo', null, COUPON_DISCOUNT_OFFER)).toEqual({
+        status: 'matched',
+        plan: 'monthly',
+      });
+    });
+
+    it('Q: matches the annual base plan the same way, independent of offer code', () => {
+      expect(
+        correlateGooglePlayOffer('annual-promo', 'trial-7d-new-subscriber', COUPON_DISCOUNT_OFFER),
+      ).toEqual({ status: 'matched', plan: 'annual' });
+      expect(correlateGooglePlayOffer('annual-promo', null, COUPON_DISCOUNT_OFFER)).toEqual({
+        status: 'matched',
+        plan: 'annual',
+      });
+    });
+
+    it('R: still no match for a different base plan entirely', () => {
+      expect(correlateGooglePlayOffer('monthly', 'trial-7d-new-subscriber', COUPON_DISCOUNT_OFFER)).toEqual({
+        status: 'not_matched',
+      });
+    });
+
+    it('S: still never matches cross-plan (monthly-promo basePlanId can never satisfy the annual-promo slot)', () => {
+      const mixed: PromoCodeAndroidOfferSnapshot = {
+        monthly: { basePlanId: 'monthly-promo', offerId: null, offeringIdentifier: 'coupon_discount' },
+        annual: null,
+      };
+      expect(correlateGooglePlayOffer('annual-promo', null, mixed)).toEqual({ status: 'not_matched' });
+    });
+  });
+
+  describe('legacy (offerId present) regression — unchanged after FASE 5.3', () => {
+    it('T: a legacy pair with offerId set still requires the exact offer code, even under the new correlation branch', () => {
+      expect(correlateGooglePlayOffer('monthly', null, ARNALDO_OFFER)).toEqual({ status: 'not_matched' });
+      expect(correlateGooglePlayOffer('monthly', 'trial-7d-new-subscriber', ARNALDO_OFFER)).toEqual({
+        status: 'not_matched',
+      });
+      expect(correlateGooglePlayOffer('monthly', 'influencer-trial-7d', ARNALDO_OFFER)).toEqual({
+        status: 'matched',
+        plan: 'monthly',
+      });
+    });
+
+    it('U: a redemption mixing one legacy plan and one new-style plan correlates each independently', () => {
+      const mixed: PromoCodeAndroidOfferSnapshot = {
+        monthly: { basePlanId: 'monthly', offerId: 'influencer-trial-7d', offeringIdentifier: null },
+        annual: { basePlanId: 'annual-promo', offerId: null, offeringIdentifier: 'coupon_discount' },
+      };
+      expect(correlateGooglePlayOffer('monthly', null, mixed)).toEqual({ status: 'not_matched' });
+      expect(correlateGooglePlayOffer('monthly', 'influencer-trial-7d', mixed)).toEqual({
+        status: 'matched',
+        plan: 'monthly',
+      });
+      expect(correlateGooglePlayOffer('annual-promo', null, mixed)).toEqual({
+        status: 'matched',
+        plan: 'annual',
+      });
+      expect(correlateGooglePlayOffer('annual-promo', 'trial-7d-new-subscriber', mixed)).toEqual({
+        status: 'matched',
+        plan: 'annual',
+      });
+    });
+  });
+
+  describe('FASE 5.7: offeringIdentifier is a client-side concern only — never read by correlation', () => {
+    it('V: matches identically regardless of which offeringIdentifier (or none) is on the snapshot — the webhook event never carries it', () => {
+      const withOffering: PromoCodeAndroidOfferSnapshot = {
+        monthly: { basePlanId: 'monthly-promo', offerId: null, offeringIdentifier: 'coupon_discount' },
+        annual: null,
+      };
+      const withDifferentOffering: PromoCodeAndroidOfferSnapshot = {
+        monthly: { basePlanId: 'monthly-promo', offerId: null, offeringIdentifier: 'some_other_offering' },
+        annual: null,
+      };
+      expect(correlateGooglePlayOffer('monthly-promo', 'trial-7d-new-subscriber', withOffering)).toEqual({
+        status: 'matched',
+        plan: 'monthly',
+      });
+      expect(correlateGooglePlayOffer('monthly-promo', 'trial-7d-new-subscriber', withDifferentOffering)).toEqual({
+        status: 'matched',
+        plan: 'monthly',
+      });
+    });
   });
 });

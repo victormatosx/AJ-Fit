@@ -278,8 +278,23 @@ export function packagePeriodLabel(pkg: PurchasesPackage): string {
   return amount === 1 ? `por ${singular}` : `a cada ${amount} ${plural}`;
 }
 
+/**
+ * FASE 6.4 — the price actually charged going forward, never a computed
+ * estimate. `pkg.product.priceString` is documented as "the price value of
+ * defaultOption for Google Play" — for Android, `defaultOption` can BE a
+ * trial/introductory SubscriptionOption when the store deems the account
+ * eligible, which would show the intro/zero price instead of the ongoing
+ * recurring price. To avoid that, this prefers the BASE PLAN
+ * SubscriptionOption's own `fullPricePhase` (documented: "the full price
+ * PricingPhase... after free and intro trials") when one exists —
+ * unambiguous regardless of which option ends up as `defaultOption`. iOS
+ * products never populate `subscriptionOptions` (Google Play only per the
+ * SDK), so this falls through to `product.priceString` there exactly as
+ * before — no behavior change on iOS.
+ */
 export function packagePriceString(pkg: PurchasesPackage): string {
-  return pkg.product.priceString;
+  const basePlanOption = pkg.product.subscriptionOptions?.find((option) => option.isBasePlan);
+  return basePlanOption?.fullPricePhase?.price.formatted ?? pkg.product.priceString;
 }
 
 type PurchaseResult =
@@ -337,11 +352,26 @@ export function classifyRestoreResult(
 // the Fase 4C.4E fix to the (non-primary) `storeProductId` defense check.
 // ---------------------------------------------------------------------------
 
-/** The backend-authorized identity of one Google Play offer (functions/src/attribution/types.ts's `AndroidSubscriptionOfferConfig`, duplicated client-side — see `promoCodeService.ts`). */
-export interface AuthorizedAndroidOffer {
-  basePlanId: string;
-  offerId: string;
-}
+/**
+ * The backend-authorized identity of one Google Play offer
+ * (`functions/src/attribution/types.ts`'s `AndroidSubscriptionOfferConfig`,
+ * FASE 5.7 — same type as `promoCodeState.ts`'s `AndroidSubscriptionOfferConfig`,
+ * re-exported under this name for this module's existing call sites).
+ *
+ * FASE 6.2: `findAuthorizedSubscriptionOption`/`resolvePurchaseRoute` below
+ * only implement the `'legacy'` shape (unchanged behavior, preserved
+ * byte-for-byte). A `'new'`-shape offer is a valid, successfully-parsed
+ * authorization — NOT malformed — but this module deliberately does not yet
+ * resolve an Offering/package for it (that requires searching
+ * `offerings.all` by `offeringIdentifier`+`basePlanId`, analogous to the iOS
+ * promotional resolution above, and purchasing via `purchasePackage` —
+ * FASE 6.3, not implemented here). Until then, routing a `'new'`-shape offer
+ * through `findAuthorizedSubscriptionOption` fails closed to `not_found`
+ * (blocked) rather than guessing or falling back to the standard package.
+ */
+export type AuthorizedAndroidOffer =
+  | { kind: 'legacy'; basePlanId: string; offerId: string }
+  | { kind: 'new'; basePlanId: string; offeringIdentifier: string };
 
 export type SubscriptionOptionMatchResult =
   | { status: 'match'; option: SubscriptionOption }
@@ -399,6 +429,12 @@ export function findAuthorizedSubscriptionOption(
   authorized: AuthorizedAndroidOffer | null,
 ): SubscriptionOptionMatchResult {
   if (!authorized) return { status: 'not_found' };
+  // FASE 6.2: a 'new'-shape offer is a valid authorization, but resolving
+  // it is a Package-level operation (Offering + basePlanId), not a
+  // SubscriptionOption lookup inside an already-selected package — see this
+  // function's doc comment. Never guessed/forced through the legacy id
+  // match below; fails closed exactly like "no authorization at all".
+  if (authorized.kind !== 'legacy') return { status: 'not_found' };
 
   const options = pkg.product.subscriptionOptions;
   if (!options || options.length === 0) return { status: 'no_options' };
@@ -422,6 +458,32 @@ export function findAuthorizedSubscriptionOption(
  */
 export function subscriptionOptionHasFreeTrial(option: SubscriptionOption): boolean {
   return option.freePhase !== null;
+}
+
+export type AndroidTrialSignal = 'none' | 'possible';
+
+/**
+ * FASE 6.4 — whether the STORE currently exposes a free-trial offer for
+ * this specific package's product, independent of any coupon. Google Play
+ * Billing (unlike StoreKit) only returns `SubscriptionOfferDetails` the
+ * querying account is eligible for — so an offer suboption
+ * (`!isBasePlan`) with a non-null `freePhase` being present at all is
+ * already a store-side signal, not something this client invents. Even so,
+ * this deliberately returns a non-committal `'possible'`, never a
+ * guaranteed `'eligible'`: there is no Android equivalent of iOS's
+ * `checkTrialOrIntroductoryPriceEligibility` this client can call to
+ * independently confirm it, and the definitive decision always happens at
+ * `purchasePackage` time, decided entirely by Google Play/RevenueCat. Never
+ * derived from whether a coupon is applied — computed identically for the
+ * standard and any promotional package.
+ */
+export function resolveAndroidTrialSignal(pkg: PurchasesPackage): AndroidTrialSignal {
+  const options = pkg.product.subscriptionOptions;
+  if (!options) return 'none';
+  const hasTrialOffer = options.some(
+    (option) => !option.isBasePlan && subscriptionOptionHasFreeTrial(option),
+  );
+  return hasTrialOffer ? 'possible' : 'none';
 }
 
 export type AndroidPlanKind = 'monthly' | 'annual';
@@ -480,7 +542,16 @@ export type PurchaseRoute =
   | { kind: 'subscription_option'; option: SubscriptionOption }
   | {
       kind: 'blocked';
-      reason: 'promo_not_found' | 'promo_ambiguous' | 'promo_no_options' | 'promo_plan_unavailable';
+      reason:
+        | 'promo_not_found'
+        | 'promo_ambiguous'
+        | 'promo_no_options'
+        | 'promo_plan_unavailable'
+        // FASE 6.3 — 'new'-shape Android resolution failures, see
+        // `resolveAndroidNewOfferPackage`.
+        | 'promo_offering_missing'
+        | 'promo_package_missing'
+        | 'promo_package_ambiguous';
     };
 
 /**
@@ -520,4 +591,148 @@ export function resolvePurchaseRoute(
     case 'no_options':
       return { kind: 'blocked', reason: 'promo_no_options' };
   }
+}
+
+// ---------------------------------------------------------------------------
+// FASE 6.3 — Android 'new'-shape (offeringIdentifier) resolution.
+//
+// Unlike LEGACY (a SubscriptionOption lookup inside the already-selected
+// STANDARD package), a 'new'-shape offer names a DIFFERENT RevenueCat
+// Offering entirely. This layer never touches `offerings.current`, never
+// reuses the standard/selected package as the purchase target, and never
+// selects a SubscriptionOption manually — `purchasePackage` on the resolved
+// package lets Google Play/RevenueCat decide automatically whether
+// `trial-7d-new-subscriber` (or any other configured offer) applies. No
+// Offering/product-id/offer-id string is ever hardcoded here: everything
+// comes from the backend authorization (`AuthorizedAndroidOffer`) and the
+// live `PurchasesOfferings` catalog.
+// ---------------------------------------------------------------------------
+
+export type AndroidNewOfferCatalogError =
+  | 'promo_offering_missing'
+  | 'promo_package_missing'
+  | 'promo_package_ambiguous';
+
+export type AndroidNewOfferPackageResolution =
+  | { status: 'resolved'; offering: PurchasesOffering; package: PurchasesPackage }
+  | { status: 'error'; reason: AndroidNewOfferCatalogError };
+
+/**
+ * Identifies whether `pkg`'s product has a BASE PLAN `SubscriptionOption`
+ * (`isBasePlan: true`, the SDK's own explicit, documented flag — never
+ * inferred from `product.identifier`'s naming convention, which is a
+ * `subId:basePlanId` string format that happens to be true today but is
+ * not the primary identity contract) whose `id` equals the authorized
+ * `basePlanId`. Per the SDK's `SubscriptionOption.id` doc comment: "If this
+ * SubscriptionOption represents a base plan, this will be the basePlanId" —
+ * so `isBasePlan && id === basePlanId` is the most direct, documented way
+ * to confirm a package corresponds to a specific base plan, immune to any
+ * offer-suboption (`basePlanId:offerId`) being mistaken for the base plan
+ * itself.
+ */
+function packageMatchesBasePlan(pkg: PurchasesPackage, basePlanId: string): boolean {
+  const options = pkg.product.subscriptionOptions;
+  if (!options) return false;
+  return options.some((option) => option.isBasePlan && option.id === basePlanId);
+}
+
+/**
+ * FASE 6.3 — resolves the EXACT `PurchasesPackage` for a 'new'-shape Android
+ * authorization:
+ * 1. Looks up `offeringIdentifier` in `offerings.all` EXACTLY — never
+ *    `offerings.current`, regardless of whether a "Current" Offering
+ *    exists or what it contains.
+ * 2. Within that Offering's `availablePackages` (never any other
+ *    Offering's), finds every package whose product has the authorized
+ *    `basePlanId` as a base plan (`packageMatchesBasePlan`).
+ * 3. Fails closed to a distinct, typed `error` — never guesses, never
+ *    falls back to the standard/current package — when: the Offering
+ *    doesn't exist (`promo_offering_missing`); zero packages match
+ *    (`promo_package_missing`); more than one package matches
+ *    (`promo_package_ambiguous`, a catalog misconfiguration — e.g. the same
+ *    base plan id accidentally present on two products in the same
+ *    Offering).
+ */
+export function resolveAndroidNewOfferPackage(
+  offerings: PurchasesOfferings | null,
+  authorized: Extract<AuthorizedAndroidOffer, { kind: 'new' }>,
+): AndroidNewOfferPackageResolution {
+  const offering = offerings?.all?.[authorized.offeringIdentifier];
+  if (!offering) return { status: 'error', reason: 'promo_offering_missing' };
+
+  const matches = offering.availablePackages.filter((pkg) =>
+    packageMatchesBasePlan(pkg, authorized.basePlanId),
+  );
+
+  if (matches.length === 0) return { status: 'error', reason: 'promo_package_missing' };
+  if (matches.length > 1) return { status: 'error', reason: 'promo_package_ambiguous' };
+
+  return { status: 'resolved', offering, package: matches[0] };
+}
+
+/**
+ * FASE 6.3 — THE full Android purchase-routing decision for BOTH shapes,
+ * built on top of (never replacing) `resolvePurchaseRoute`:
+ *
+ * - LEGACY (`authorizedOffer.kind === 'legacy'`): delegates verbatim to
+ *   `resolvePurchaseRoute` — byte-for-byte unchanged behavior, `pkg` (the
+ *   standard/selected package) remains the purchase target via
+ *   `purchaseSubscriptionOption`.
+ * - NEW (`authorizedOffer.kind === 'new'`): `pkg` is used ONLY upstream (by
+ *   the caller) to determine which plan is selected — it is NEVER the
+ *   purchase target here. The purchase target is whatever
+ *   `resolveAndroidNewOfferPackage` resolves from `offerings`, independent
+ *   of `pkg`. A resolution failure blocks the route; it never falls back
+ *   to `pkg`.
+ */
+export function resolveAndroidPurchaseRoute(
+  pkg: PurchasesPackage,
+  promoApplied: boolean,
+  authorizedOffer: AuthorizedAndroidOffer | null,
+  offerings: PurchasesOfferings | null,
+): PurchaseRoute {
+  if (!promoApplied) return { kind: 'package', package: pkg };
+  if (!authorizedOffer) return { kind: 'blocked', reason: 'promo_plan_unavailable' };
+
+  if (authorizedOffer.kind === 'legacy') {
+    return resolvePurchaseRoute(pkg, promoApplied, authorizedOffer);
+  }
+
+  const resolution = resolveAndroidNewOfferPackage(offerings, authorizedOffer);
+  if (resolution.status === 'error') {
+    return { kind: 'blocked', reason: resolution.reason };
+  }
+  return { kind: 'package', package: resolution.package };
+}
+
+/**
+ * FASE 6.3 — Paywall DISPLAY override so a 'new'-shape plan never shows the
+ * STANDARD package's price/terms while `purchasePackage` would actually buy
+ * a different (promotional) product. For each standard package, if its plan
+ * (monthly/annual) has a successfully-resolved 'new'-shape authorization,
+ * the resolved promotional package REPLACES it in the returned list; every
+ * other entry (unconfigured, or a resolution failure) is returned
+ * unchanged. A resolution failure here is NOT a purchase decision — it only
+ * means the browsing UI keeps showing the standard price for that plan; the
+ * actual purchase is independently and always blocked by
+ * `resolveAndroidPurchaseRoute` in that same failure case, so this function
+ * degrading to the standard package on error can never result in buying the
+ * wrong product.
+ */
+export function applyAndroidPromoPackageOverrides(
+  standardPackages: PurchasesPackage[],
+  offerings: PurchasesOfferings | null,
+  androidStoreConfig: {
+    monthly: AuthorizedAndroidOffer | null;
+    annual: AuthorizedAndroidOffer | null;
+  } | null,
+): PurchasesPackage[] {
+  if (!androidStoreConfig) return standardPackages;
+  return standardPackages.map((pkg) => {
+    const planKind = resolveAndroidPlanKind(pkg);
+    const authorized = planKind ? androidStoreConfig[planKind] : null;
+    if (!authorized || authorized.kind !== 'new') return pkg;
+    const resolution = resolveAndroidNewOfferPackage(offerings, authorized);
+    return resolution.status === 'resolved' ? resolution.package : pkg;
+  });
 }

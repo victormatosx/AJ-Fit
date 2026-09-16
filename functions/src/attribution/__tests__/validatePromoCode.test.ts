@@ -32,8 +32,10 @@ function promoCode(overrides: Partial<PromoCodeDocument> = {}): PromoCodeDocumen
     internalName: null,
     androidBasePlanIdMonthly: 'monthly',
     androidOfferIdMonthly: 'influencer-trial-7d',
+    androidOfferingIdentifierMonthly: null,
     androidBasePlanIdAnnual: 'annual',
     androidOfferIdAnnual: 'influencer-trial-7d-annual',
+    androidOfferingIdentifierAnnual: null,
     iosPromotion: null,
     appleConfigurationConfirmedAt: null,
     appleConfigurationConfirmedBy: null,
@@ -263,6 +265,8 @@ describe('validatePromoCodeHandler', () => {
       monthly: { basePlanId: 'monthly', offerId: 'influencer-trial-7d' },
       annual: { basePlanId: 'annual', offerId: 'influencer-trial-7d-annual' },
     });
+    expect(result.storeConfig.android?.monthly).not.toHaveProperty('offeringIdentifier');
+    expect(result.storeConfig.android?.annual).not.toHaveProperty('offeringIdentifier');
   });
 
   it('FASE 4C.3A: snapshots androidOffer into the transaction unconditionally, even when platform=IOS was requested', async () => {
@@ -275,8 +279,8 @@ describe('validatePromoCodeHandler', () => {
       UID,
       expect.objectContaining({
         androidOffer: {
-          monthly: { basePlanId: 'monthly', offerId: 'influencer-trial-7d' },
-          annual: { basePlanId: 'annual', offerId: 'influencer-trial-7d-annual' },
+          monthly: { basePlanId: 'monthly', offerId: 'influencer-trial-7d', offeringIdentifier: null },
+          annual: { basePlanId: 'annual', offerId: 'influencer-trial-7d-annual', offeringIdentifier: null },
         },
       }),
     );
@@ -346,6 +350,7 @@ describe('validatePromoCodeHandler — Fase 4C.1 android storeConfig', () => {
       basePlanId: 'monthly',
       offerId: 'influencer-trial-7d',
     });
+    expect(result.storeConfig.android?.monthly).not.toHaveProperty('offeringIdentifier');
   });
 
   it('B: annual complete → returns basePlanId + offerId for annual', async () => {
@@ -360,6 +365,7 @@ describe('validatePromoCodeHandler — Fase 4C.1 android storeConfig', () => {
       basePlanId: 'annual',
       offerId: 'influencer-trial-7d-annual',
     });
+    expect(result.storeConfig.android?.annual).not.toHaveProperty('offeringIdentifier');
   });
 
   it('C: both complete → both returned', async () => {
@@ -387,7 +393,10 @@ describe('validatePromoCodeHandler — Fase 4C.1 android storeConfig', () => {
     });
     expect(result.iosPromotion).toBeNull();
     const [, snapshot] = syncMocks.applyPromoCodeAttributionTransactionally.mock.calls[0];
-    expect(snapshot.androidOffer).toEqual(result.storeConfig.android);
+    expect(snapshot.androidOffer).toEqual({
+      monthly: { basePlanId: 'monthly', offerId: 'influencer-trial-7d', offeringIdentifier: null },
+      annual: { basePlanId: 'annual', offerId: 'influencer-trial-7d-annual', offeringIdentifier: null },
+    });
     expect(snapshot.iosPromotion).toBeNull();
     expect(snapshot).not.toHaveProperty('purchaseIntent');
   });
@@ -414,7 +423,7 @@ describe('validatePromoCodeHandler — Fase 4C.1 android storeConfig', () => {
     expect(result.storeConfig.android?.annual).toBeNull();
   });
 
-  it('F: monthly basePlanId present, offerId absent → monthly null (fail-closed, never half-filled)', async () => {
+  it('F (FASE 5.7): monthly basePlanId present, offerId AND offeringIdentifier both absent → monthly null (incomplete, fail-closed)', async () => {
     catalogMocks.lookupPromoCode.mockResolvedValue({
       status: 'found',
       promoCode: promoCode({ androidOfferIdMonthly: null }),
@@ -423,6 +432,31 @@ describe('validatePromoCodeHandler — Fase 4C.1 android storeConfig', () => {
     const result = await validatePromoCodeHandler(request({ code: 'ARNALDO' }));
 
     expect(result.storeConfig.android?.monthly).toBeNull();
+  });
+
+  it('F2 (FASE 5.7): monthly basePlanId + offeringIdentifier, offerId absent → returns the NEW shape', async () => {
+    catalogMocks.lookupPromoCode.mockResolvedValue({
+      status: 'found',
+      promoCode: promoCode({
+        androidBasePlanIdMonthly: 'monthly-promo',
+        androidOfferIdMonthly: null,
+        androidOfferingIdentifierMonthly: 'coupon_discount',
+      }),
+    });
+
+    const result = await validatePromoCodeHandler(request({ code: 'ARNALDO' }));
+
+    expect(result.storeConfig.android?.monthly).toEqual({
+      basePlanId: 'monthly-promo',
+      offeringIdentifier: 'coupon_discount',
+    });
+    expect(result.storeConfig.android?.monthly).not.toHaveProperty('offerId');
+    const [, snapshot] = syncMocks.applyPromoCodeAttributionTransactionally.mock.calls[0];
+    expect(snapshot.androidOffer.monthly).toEqual({
+      basePlanId: 'monthly-promo',
+      offerId: null,
+      offeringIdentifier: 'coupon_discount',
+    });
   });
 
   it('G: monthly offerId present, basePlanId absent → monthly null (fail-closed, never guessed)', async () => {
@@ -436,7 +470,7 @@ describe('validatePromoCodeHandler — Fase 4C.1 android storeConfig', () => {
     expect(result.storeConfig.android?.monthly).toBeNull();
   });
 
-  it('H: annual basePlanId present, offerId absent → annual null', async () => {
+  it('H (FASE 5.7): annual basePlanId present, offerId AND offeringIdentifier both absent → annual null (incomplete, fail-closed)', async () => {
     catalogMocks.lookupPromoCode.mockResolvedValue({
       status: 'found',
       promoCode: promoCode({ androidOfferIdAnnual: null }),
@@ -445,6 +479,42 @@ describe('validatePromoCodeHandler — Fase 4C.1 android storeConfig', () => {
     const result = await validatePromoCodeHandler(request({ code: 'ARNALDO' }));
 
     expect(result.storeConfig.android?.annual).toBeNull();
+  });
+
+  it('H2 (FASE 5.7): annual basePlanId + offeringIdentifier, offerId absent → returns the NEW shape', async () => {
+    catalogMocks.lookupPromoCode.mockResolvedValue({
+      status: 'found',
+      promoCode: promoCode({
+        androidBasePlanIdAnnual: 'annual-promo',
+        androidOfferIdAnnual: null,
+        androidOfferingIdentifierAnnual: 'coupon_discount',
+      }),
+    });
+
+    const result = await validatePromoCodeHandler(request({ code: 'ARNALDO' }));
+
+    expect(result.storeConfig.android?.annual).toEqual({
+      basePlanId: 'annual-promo',
+      offeringIdentifier: 'coupon_discount',
+    });
+    expect(result.storeConfig.android?.annual).not.toHaveProperty('offerId');
+    const [, snapshot] = syncMocks.applyPromoCodeAttributionTransactionally.mock.calls[0];
+    expect(snapshot.androidOffer.annual).toEqual({
+      basePlanId: 'annual-promo',
+      offerId: null,
+      offeringIdentifier: 'coupon_discount',
+    });
+  });
+
+  it('FASE 5.7: rejects ambiguous config (basePlanId + offerId + offeringIdentifier all set) — monthly resolves to null', async () => {
+    catalogMocks.lookupPromoCode.mockResolvedValue({
+      status: 'found',
+      promoCode: promoCode({ androidOfferingIdentifierMonthly: 'coupon_discount' }), // offerId also still set from base fixture
+    });
+
+    const result = await validatePromoCodeHandler(request({ code: 'ARNALDO' }));
+
+    expect(result.storeConfig.android?.monthly).toBeNull();
   });
 
   it('H: annual offerId present, basePlanId absent → annual null', async () => {

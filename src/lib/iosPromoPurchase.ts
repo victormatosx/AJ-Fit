@@ -190,7 +190,7 @@ export async function executeIOSPromoPurchase<P>({
   });
   logSubscriptionDiagnostic({
     event: 'subscription_purchase_started',
-    route: 'promo',
+    route: 'promo_package',
     plan: attempt.plan,
   });
   return { status: 'purchased', result: await purchase(attempt.package) };

@@ -29,11 +29,11 @@ import {
 
 const UID = 'firebase-uid-001';
 const ARNALDO_ANDROID_OFFER = {
-  monthly: { basePlanId: 'monthly', offerId: 'influencer-trial-7d' },
-  annual: { basePlanId: 'annual', offerId: 'influencer-trial-7d-annual' },
+  monthly: { basePlanId: 'monthly', offerId: 'influencer-trial-7d', offeringIdentifier: null },
+  annual: { basePlanId: 'annual', offerId: 'influencer-trial-7d-annual', offeringIdentifier: null },
 };
 const HELLLEN_ANDROID_OFFER = {
-  monthly: { basePlanId: 'monthly', offerId: 'helllen-trial-7d' },
+  monthly: { basePlanId: 'monthly', offerId: 'helllen-trial-7d', offeringIdentifier: null },
   annual: null,
 };
 // FASE 1 — the new Promo SKU authorization. ARNALDO is configured for it;

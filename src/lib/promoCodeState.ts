@@ -33,14 +33,151 @@ export interface PromoCodeBenefit {
   kind: 'promotional_campaign';
 }
 
-export interface AndroidSubscriptionOfferConfig {
-  basePlanId: string;
-  offerId: string;
-}
+/**
+ * Client mirror of the backend-authored per-plan Android authorization
+ * (`functions/src/attribution/types.ts`'s `AndroidSubscriptionOfferConfig`,
+ * FASE 5.7). Exactly two valid non-null shapes, discriminated by `kind` so
+ * the compiler — not a runtime `basePlanId`/`offerId` presence check —
+ * enforces which fields exist together:
+ *
+ * - `'legacy'` (pre-5.3 influencer coupons): `basePlanId` + `offerId`
+ *   identify one exact Google Play `SubscriptionOption`
+ *   (`` `${basePlanId}:${offerId}` ``) the client purchases explicitly via
+ *   `purchaseSubscriptionOption`.
+ * - `'new'` (FASE 5.7): `basePlanId` + `offeringIdentifier` — the coupon
+ *   selects only the promotional base plan and which RevenueCat Offering to
+ *   resolve its package from; the offer itself (trial or not) is left to
+ *   Google Play/RevenueCat. Resolving that Offering/package and purchasing
+ *   via `purchasePackage` is NOT implemented by this type or its parser —
+ *   see `subscriptionOffer.ts`/the Paywall for that future work (FASE 6.3).
+ *
+ * There is no third "both" or "neither" shape: `parseAndroidSubscriptionOfferConfig`
+ * below rejects anything else as malformed rather than exposing a partial
+ * object with optional fields that could be misread as complete.
+ */
+export type AndroidSubscriptionOfferConfig =
+  | { kind: 'legacy'; basePlanId: string; offerId: string }
+  | { kind: 'new'; basePlanId: string; offeringIdentifier: string };
 
 export interface PromoCodeAndroidStoreConfig {
   monthly: AndroidSubscriptionOfferConfig | null;
   annual: AndroidSubscriptionOfferConfig | null;
+}
+
+export type AndroidSubscriptionOfferConfigParseResult =
+  | { status: 'absent' }
+  | { status: 'valid'; config: AndroidSubscriptionOfferConfig }
+  | { status: 'invalid' };
+
+const ANDROID_LEGACY_OFFER_KEYS = ['basePlanId', 'offerId'] as const;
+const ANDROID_NEW_OFFER_KEYS = ['basePlanId', 'offeringIdentifier'] as const;
+
+function isExactNonEmptyString(field: unknown): field is string {
+  return typeof field === 'string' && field.length > 0 && field.trim() === field;
+}
+
+function sortedKeysMatch(keys: readonly string[], expected: readonly string[]): boolean {
+  return keys.length === expected.length && keys.every((key, index) => key === expected[index]);
+}
+
+/**
+ * Runtime boundary for ONE plan's `storeConfig.android.{monthly,annual}`
+ * entry — same rigor as `parseIOSPromotionAuthorization`. `null` is the
+ * backend's explicit "not configured for this plan" value. Every other
+ * shape must match EXACTLY one of the two valid key sets (never a superset,
+ * never a subset) with non-empty string values, or it's rejected outright:
+ *
+ * - `{basePlanId}` alone (either key set incomplete) → invalid.
+ * - `{offerId}` alone or `{offeringIdentifier}` alone (missing `basePlanId`)
+ *   → invalid.
+ * - `{basePlanId, offerId, offeringIdentifier}` all three together
+ *   (ambiguous — which shape?) → invalid.
+ * - Empty strings, non-string values, arrays, `undefined` → invalid.
+ *
+ * Never silently coerces a partial/ambiguous object into one shape by
+ * picking whichever fields happen to be present — an admin/backend bug that
+ * produces a malformed config must fail closed on the client exactly like a
+ * malformed `promoCodes` document already fails closed on the backend
+ * (`promoCodeCatalog.ts`'s `parsePromoCodeDocument`).
+ */
+export function parseAndroidSubscriptionOfferConfig(
+  value: unknown,
+): AndroidSubscriptionOfferConfigParseResult {
+  if (value === null) return { status: 'absent' };
+  if (typeof value !== 'object' || Array.isArray(value)) return { status: 'invalid' };
+
+  const record = value as Record<string, unknown>;
+  const keys = Object.keys(record).sort();
+
+  if (sortedKeysMatch(keys, ANDROID_LEGACY_OFFER_KEYS)) {
+    if (!isExactNonEmptyString(record.basePlanId) || !isExactNonEmptyString(record.offerId)) {
+      return { status: 'invalid' };
+    }
+    return {
+      status: 'valid',
+      config: { kind: 'legacy', basePlanId: record.basePlanId, offerId: record.offerId },
+    };
+  }
+
+  if (sortedKeysMatch(keys, ANDROID_NEW_OFFER_KEYS)) {
+    if (
+      !isExactNonEmptyString(record.basePlanId) ||
+      !isExactNonEmptyString(record.offeringIdentifier)
+    ) {
+      return { status: 'invalid' };
+    }
+    return {
+      status: 'valid',
+      config: {
+        kind: 'new',
+        basePlanId: record.basePlanId,
+        offeringIdentifier: record.offeringIdentifier,
+      },
+    };
+  }
+
+  return { status: 'invalid' };
+}
+
+export type PromoCodeAndroidStoreConfigParseResult =
+  | { status: 'absent' }
+  | { status: 'valid'; config: PromoCodeAndroidStoreConfig }
+  | { status: 'invalid' };
+
+const ANDROID_STORE_CONFIG_KEYS = ['annual', 'monthly'] as const;
+
+/**
+ * Runtime boundary for the callable response's `storeConfig.android` field
+ * as a whole — same rigor/shape as `parseIOSPromotionAuthorization`. `null`
+ * is the backend's explicit "no Android config at all for this code" value.
+ * Any other shape must have EXACTLY the two keys `monthly`/`annual`, each
+ * independently parsed by `parseAndroidSubscriptionOfferConfig` — if EITHER
+ * plan is malformed, the WHOLE object is rejected (never expose one valid
+ * plan alongside a silently-dropped malformed one).
+ */
+export function parsePromoCodeAndroidStoreConfig(
+  value: unknown,
+): PromoCodeAndroidStoreConfigParseResult {
+  if (value === null) return { status: 'absent' };
+  if (typeof value !== 'object' || Array.isArray(value)) return { status: 'invalid' };
+
+  const record = value as Record<string, unknown>;
+  const keys = Object.keys(record).sort();
+  if (!sortedKeysMatch(keys, ANDROID_STORE_CONFIG_KEYS)) return { status: 'invalid' };
+
+  const monthly = parseAndroidSubscriptionOfferConfig(record.monthly);
+  if (monthly.status === 'invalid') return { status: 'invalid' };
+
+  const annual = parseAndroidSubscriptionOfferConfig(record.annual);
+  if (annual.status === 'invalid') return { status: 'invalid' };
+
+  return {
+    status: 'valid',
+    config: {
+      monthly: monthly.status === 'valid' ? monthly.config : null,
+      annual: annual.status === 'valid' ? annual.config : null,
+    },
+  };
 }
 
 /**
