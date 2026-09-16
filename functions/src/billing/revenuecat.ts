@@ -237,6 +237,7 @@ export interface RawRevenueCatEvent {
   tax_percentage?: unknown;
   commission_percentage?: unknown;
   takehome_percentage?: unknown;
+  cancel_reason?: unknown;
 }
 
 function stringArray(value: unknown): string[] {
@@ -1138,7 +1139,9 @@ export async function handleRevenueCatWebhook(req: Request, res: Response): Prom
     return;
   }
 
-  if (!isSupportedEventType(eventType)) {
+  const supportedEventType = isSupportedEventType(eventType) ? eventType : null;
+  const isFinancialOnlyEvent = eventType === 'REFUND_REVERSED';
+  if (!supportedEventType && !isFinancialOnlyEvent) {
     // Recognized-but-unhandled (currently UNCANCELLATION) and truly unknown
     // future event types both land here. TRANSFER is handled above as a
     // separate identity-only signal.
@@ -1221,8 +1224,43 @@ export async function handleRevenueCatWebhook(req: Request, res: Response): Prom
     { eventId, eventType, uid: maskedUid, identitySource: identity.source },
   );
 
+  // REFUND_REVERSED is a ledger-only signal. It must never mutate the
+  // subscription mirror, entitlement, attribution latch, or notifications.
+  if (isFinancialOnlyEvent) {
+    try {
+      const financial = await persistAttributedFinancialTransaction(uid, event);
+      if (financial === 'invalid_financial_event') {
+        logWarn(SCOPE, 'financial_transaction_not_recorded', {
+          eventId,
+          eventType,
+          uid: maskedUid,
+          reason: financial,
+        });
+      } else {
+        logInfo(SCOPE, 'attributed_financial_transaction', {
+          eventId,
+          eventType,
+          uid: maskedUid,
+          outcome: financial,
+        });
+      }
+      res.status(200).json({ status: financial === 'duplicate' ? 'duplicate' : 'processed' });
+    } catch (err) {
+      logFunctionError(SCOPE, err, { eventId, eventType, uid: maskedUid, operation: 'financial_transaction' });
+      res.status(503).json({ error: 'financial_transaction_temporary_failure' });
+    }
+    return;
+  }
+
+  // All unsupported types returned above and REFUND_REVERSED returned from
+  // its ledger-only branch, so this is necessarily a mirror event.
+  if (!supportedEventType) {
+    res.status(500).json({ error: 'unsupported_internal_event_type' });
+    return;
+  }
+
   try {
-    const partial = normalizeSubscription(event, eventType, eventTimestampMs);
+    const partial = normalizeSubscription(event, supportedEventType, eventTimestampMs);
     const validation = validateSubscriptionPayload(partial);
     if (!validation.ok) {
       // Our own normalization produced something `validateSubscriptionPayload`
@@ -1246,7 +1284,7 @@ export async function handleRevenueCatWebhook(req: Request, res: Response): Prom
       await dispatchRevenueCatNotificationAfterSubscription({
         uid,
         eventId,
-        eventType,
+        eventType: supportedEventType,
         event,
         // normalizeSubscription always resolves this field. Keep the check
         // explicit so an impossible malformed internal result fails closed.
@@ -1258,14 +1296,14 @@ export async function handleRevenueCatWebhook(req: Request, res: Response): Prom
       case 'processed':
         logInfo(SCOPE, 'subscription updated from webhook event', {
           eventId,
-          eventType,
+          eventType: supportedEventType,
           uid: maskedUid,
         });
         await respondConsideringAttribution(
           res,
           'processed',
           event,
-          eventType,
+          supportedEventType,
           eventId,
           uid,
           maskedUid,
@@ -1279,14 +1317,14 @@ export async function handleRevenueCatWebhook(req: Request, res: Response): Prom
         // chance — see this file's top doc comment.
         logInfo(SCOPE, 'event ignored: duplicate (already applied)', {
           eventId,
-          eventType,
+          eventType: supportedEventType,
           uid: maskedUid,
         });
         await respondConsideringAttribution(
           res,
           'duplicate',
           event,
-          eventType,
+          supportedEventType,
           eventId,
           uid,
           maskedUid,
@@ -1310,7 +1348,7 @@ export async function handleRevenueCatWebhook(req: Request, res: Response): Prom
           res,
           'stale',
           event,
-          eventType,
+          supportedEventType,
           eventId,
           uid,
           maskedUid,

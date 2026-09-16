@@ -46,6 +46,10 @@ const notificationMocks = vi.hoisted(() => ({
   }),
 }));
 
+const financialMocks = vi.hoisted(() => ({
+  persistAttributedFinancialTransaction: vi.fn().mockResolvedValue('not_paid_event'),
+}));
+
 vi.mock('../subscriptionSync', () => subscriptionSyncMocks);
 vi.mock('../revenueCatIdentity', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../revenueCatIdentity')>();
@@ -60,6 +64,7 @@ vi.mock('../revenueCatApi', async (importOriginal) => {
 });
 vi.mock('../../attribution/attributionSync', () => attributionSyncMocks);
 vi.mock('../../notifications/revenueCatNotifications', () => notificationMocks);
+vi.mock('../subscriptionTransactions', () => financialMocks);
 
 const SECRET = 'test-signing-secret';
 const ORIGINAL_SECRET = process.env.REVENUECAT_WEBHOOK_SECRET;
@@ -201,6 +206,7 @@ describe('handleRevenueCatWebhook validation order', () => {
     notificationMocks.dispatchRevenueCatNotification.mockResolvedValue({
       status: 'NO_ELIGIBLE_DEVICE', dispatchId: 'notification-dispatch',
     });
+    financialMocks.persistAttributedFinancialTransaction.mockResolvedValue('not_paid_event');
     identityMocks.resolveRevenueCatFirebaseUid.mockResolvedValue({
       status: 'resolved',
       uid: completeRenewalEvent.app_user_id,
@@ -811,6 +817,80 @@ describe('handleRevenueCatWebhook validation order', () => {
     expect(result.body()).toEqual({ status: 'ignored', reason: 'unsupported_event_type' });
     expect(identityMocks.resolveRevenueCatFirebaseUid).not.toHaveBeenCalled();
     expect(subscriptionSyncMocks.applySubscriptionEventAtomically).not.toHaveBeenCalled();
+  });
+
+  it('recognizes REFUND_REVERSED as ledger-only and never changes subscription or Premium', async () => {
+    financialMocks.persistAttributedFinancialTransaction.mockResolvedValue('recorded');
+    const event = {
+      ...completeRenewalEvent,
+      id: 'evt_refund_reversed_001',
+      type: 'REFUND_REVERSED',
+      transaction_id: 'tx_refunded_001',
+      original_transaction_id: 'original_001',
+      purchased_at_ms: completeRenewalEvent.event_timestamp_ms - 1_000,
+    };
+
+    const result = await invoke({ api_version: '1.0', event });
+
+    expect(result.statusCode()).toBe(200);
+    expect(result.body()).toEqual({ status: 'processed' });
+    expect(financialMocks.persistAttributedFinancialTransaction).toHaveBeenCalledWith(
+      completeRenewalEvent.app_user_id,
+      event,
+    );
+    expect(subscriptionSyncMocks.applySubscriptionEventAtomically).not.toHaveBeenCalled();
+    expect(attributionSyncMocks.applyAttributionRevenueCatEvent).not.toHaveBeenCalled();
+    expect(notificationMocks.dispatchRevenueCatNotification).not.toHaveBeenCalled();
+  });
+
+  it('returns 503 when ledger persistence for REFUND_REVERSED fails transiently', async () => {
+    financialMocks.persistAttributedFinancialTransaction.mockRejectedValue(new Error('firestore unavailable'));
+    const result = await invoke({
+      api_version: '1.0',
+      event: { ...completeRenewalEvent, id: 'evt_refund_reversed_failure', type: 'REFUND_REVERSED' },
+    });
+
+    expect(result.statusCode()).toBe(503);
+    expect(result.body()).toEqual({ error: 'financial_transaction_temporary_failure' });
+    expect(subscriptionSyncMocks.applySubscriptionEventAtomically).not.toHaveBeenCalled();
+  });
+
+  it('passes a customer-support cancellation to the ledger after normal subscription processing', async () => {
+    financialMocks.persistAttributedFinancialTransaction.mockResolvedValue('recorded');
+    const event = {
+      ...completeRenewalEvent,
+      id: 'evt_refund_001',
+      type: 'CANCELLATION',
+      cancel_reason: 'CUSTOMER_SUPPORT',
+    };
+    await invoke({ api_version: '1.0', event });
+    expect(subscriptionSyncMocks.applySubscriptionEventAtomically).toHaveBeenCalledOnce();
+    expect(financialMocks.persistAttributedFinancialTransaction).toHaveBeenCalledWith(
+      completeRenewalEvent.app_user_id,
+      event,
+    );
+  });
+
+  it.each(['CANCELLATION', 'EXPIRATION'])('does not report a movement for common %s', async (type) => {
+    const event = {
+      ...completeRenewalEvent,
+      id: `evt_no_movement_${type}`,
+      type,
+      cancel_reason: type === 'CANCELLATION' ? 'UNSUBSCRIBE' : undefined,
+    };
+    const result = await invoke({ api_version: '1.0', event });
+    expect(result.body()).toEqual({ status: 'processed' });
+    expect(financialMocks.persistAttributedFinancialTransaction).toHaveBeenCalledWith(
+      completeRenewalEvent.app_user_id,
+      event,
+    );
+  });
+
+  it('keeps a financial persistence failure retryable after subscription processing', async () => {
+    financialMocks.persistAttributedFinancialTransaction.mockRejectedValue(new Error('firestore unavailable'));
+    const result = await invoke({ api_version: '1.0', event: completeRenewalEvent });
+    expect(result.statusCode()).toBe(503);
+    expect(result.body()).toEqual({ error: 'financial_transaction_temporary_failure' });
   });
 
   it('C/L: acknowledges an ambiguous commercial identity without writing', async () => {

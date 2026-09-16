@@ -11,7 +11,7 @@ O Firebase UID é o App User ID configurado no RevenueCat. O webhook também res
 - `promoCodes`: catálogo backend-only, com código, ativação, janela de validade, influencer/campanha e configuração de ofertas Android/iOS.
 - `couponRedemptions`: uma atribuição comercial por UID; contém snapshots da oferta, intent iOS, confirmação de trial/conversão e, para novos eventos, a identidade imutável `subscriptionOrigin`.
 - `users`: espelhos `attribution` e `subscription`; o Admin nunca os altera para conceder Premium.
-- `subscriptionTransactions`: ledger backend-only e imutável de cobranças atribuídas capturadas após seu deploy.
+- `subscriptionTransactions`: ledger backend-only, append-only e imutável de vendas, refunds e reversões capturados após seu deploy.
 
 Não foi criada uma collection `influencers`: o modelo existente já usa `influencerId` como dimensão em catálogo, redemption e ledger. Uma entidade separada só deve nascer quando houver dados próprios/contrato do influenciador.
 
@@ -26,13 +26,17 @@ Não foi criada uma collection `influencers`: o modelo existente já usa `influe
 - billing issue: `BILLING_ISSUE`; a expiração efetiva usa grace period quando presente, mas o fim de grace não é armazenado separadamente.
 - renovação: cada novo `RENEWAL` atribuído entra no ledger; `lastRenewedAt` continua como resumo do estado atual.
 
-Eventos comerciais processados: `INITIAL_PURCHASE`, `RENEWAL`, `CANCELLATION`, `EXPIRATION`, `BILLING_ISSUE` e `PRODUCT_CHANGE`. `TRANSFER` usa reconciliação V2 separada. `UNCANCELLATION` e eventos futuros desconhecidos são reconhecidos como não suportados e ignorados; `SUBSCRIPTION_PAUSED` não está na allowlist atual.
+Eventos comerciais do espelho: `INITIAL_PURCHASE`, `RENEWAL`, `CANCELLATION`, `EXPIRATION`, `BILLING_ISSUE` e `PRODUCT_CHANGE`. `REFUND_REVERSED` é reconhecido somente pelo ledger e nunca altera assinatura/entitlement. `TRANSFER` usa reconciliação V2 separada. `UNCANCELLATION` e eventos futuros desconhecidos são reconhecidos como não suportados e ignorados; `SUBSCRIPTION_PAUSED` não está na allowlist atual.
 
 ## Receita e comissão
 
-O ledger usa `price_in_purchased_currency` e `currency` do evento real, além de `price` (USD, quando presente), percentuais estimados de imposto/comissão da loja e proceeds estimados. Preço atual/hardcoded nunca é usado para história.
+O ledger usa `movementType=sale|refund|refund_reversal`. `INITIAL_PURCHASE` paga e `RENEWAL` são vendas; somente `CANCELLATION` com `cancel_reason=CUSTOMER_SUPPORT` é refund; `REFUND_REVERSED` é reversão. Cancelamento comum, expiração e trial não criam movimento financeiro.
 
-O documento é deduplicado pelo hash de `store + transaction_id`. A origem é localizada por `store + original_transaction_id`, preservada na redemption confirmada. Assim, retry/restore não duplica receita e uma transferência de ownership não move a origem comercial.
+O ledger usa `price_in_purchased_currency` e `currency` do evento real, além de `price` (USD, quando presente), percentuais estimados de imposto/comissão da loja e proceeds estimados. Preço atual/hardcoded nunca é usado para história. Campos financeiros ausentes ou incoerentes permanecem `null`, nunca zero. `estimatedProceeds` só existe quando gross, imposto e comissão da loja estão presentes e continua sendo estimativa, não settlement real.
+
+Vendas preservam o ID histórico derivado do hash de `store + transaction_id`; ajustes usam o hash de `revenuecat-event:` + `event.id`. A origem é localizada por `store + original_transaction_id`, preservada na redemption confirmada, com fallback para a venda determinística. Assim, retry/restore não duplica movimentos e uma transferência de ownership não move a origem comercial. Refund/reversão sem origem resolvida continua registrado com atribuição nula e `attributionStatus=unresolved`; não é atribuído arbitrariamente a um cupom.
+
+No Admin, `paidTransactions`, `initialPaidTransactions`, `renewals`, `revenueByCurrency` e `estimatedProceedsByCurrency` continuam significando somente vendas gross. Refunds e reversões aparecem separadamente e alimentam `netRevenueByCurrency`/`netEstimatedProceedsByCurrency`. Contadores explícitos informam ajustes observados, atribuição não resolvida e gross/proceeds desconhecidos. Valores nulos, `NaN`, infinitos ou sem moeda nunca entram em buckets monetários; moedas não são misturadas. Documentos históricos sem `movementType` são tratados como vendas quando o evento é compra inicial/renovação.
 
 `commissionEligible`, `commissionRuleId` e `commissionAmount` ficam nulos. Isso separa fatos de receita da futura decisão de comissão e permite ligar uma regra versionada depois, sem reescrever o evento financeiro. Nenhum payout foi implementado.
 

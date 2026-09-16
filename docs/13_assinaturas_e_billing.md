@@ -799,6 +799,42 @@ tipicamente já vem com `expiration_at_ms` no passado/presente, o que resulta
 em `entitlementActive = false` mesmo sendo o mesmo tipo de evento
 (`CANCELLATION`) de um cancelamento voluntário comum.
 
+### Ledger financeiro de atribuição (Passo 8.2.1.2)
+
+`subscriptionTransactions` é um ledger append-only de movimentos atribuídos,
+não um settlement contábil. O campo `movementType` distingue `sale`, `refund`
+e `refund_reversal`. Documentos históricos sem esse campo continuam sendo
+lidos como `sale` quando `eventType` é `INITIAL_PURCHASE` ou `RENEWAL`; não há
+migração ou backfill.
+
+O mapeamento mínimo é:
+
+* `INITIAL_PURCHASE` paga e `RENEWAL` → `sale`;
+* `CANCELLATION` + `cancel_reason=CUSTOMER_SUPPORT` → `refund`;
+* `REFUND_REVERSED` → `refund_reversal`;
+* trial, cancelamento comum e `EXPIRATION` → nenhum movimento financeiro.
+
+Vendas preservam o ID histórico `sha256(store + ":" + transaction_id)`.
+Refunds e reversões usam `sha256("revenuecat-event:" + event.id)`, portanto
+retries são idempotentes e ajustes nunca sobrescrevem a venda original. Cada
+ajuste guarda `subscriptionOriginTransactionKey` e
+`relatedSaleDocumentId`. A atribuição é procurada na redemption do UID atual,
+pela identidade imutável da origem e, por último, na venda determinística. Se
+nenhuma origem for encontrada, o ajuste ainda é preservado com
+`attributionStatus=unresolved` e dimensões de atribuição nulas.
+
+`currency`, `grossRevenue`, `grossRevenueUsd`, `taxPercentage`,
+`storeCommissionPercentage` e `estimatedProceeds` podem ser `null`.
+Ausência nunca vira zero; USD nunca substitui o valor na moeda comprada; e
+um sinal incompatível com o movimento vira desconhecido. `estimatedProceeds`
+só é calculado quando gross, imposto e comissão estimada da loja estão todos
+presentes. Ele permanece uma estimativa do RevenueCat, não receita líquida
+contábil.
+
+`REFUND_REVERSED` é processado exclusivamente pelo ledger: não atualiza
+`users/{uid}.subscription`, entitlement, notificações ou Premium. O RevenueCat
+continua sendo a única autoridade de acesso Premium.
+
 ---
 
 ## Regra obrigatória

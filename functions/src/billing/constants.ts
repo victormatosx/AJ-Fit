@@ -48,11 +48,9 @@ export type SubscriptionStore = (typeof SUBSCRIPTION_STORES)[number];
  * `REFUND` was REMOVED in Sprint 4: it does not exist as a standalone
  * RevenueCat webhook event (verified against RevenueCat's official webhook
  * docs — revenuecat.com/docs/integrations/webhooks/event-types-and-fields).
- * Refunds arrive as a `CANCELLATION` event with `cancel_reason` describing
- * why (e.g. `CUSTOMER_SUPPORT`). `docs/13_assinaturas_e_billing.md` §25 was
- * updated to match — see that section for the full explanation. If any
- * analytics need ever have to distinguish "canceled" from "refunded", derive
- * it from `CANCELLATION` + `cancel_reason`, never from a `REFUND` event.
+ * Refunds arrive as `CANCELLATION` + `cancel_reason=CUSTOMER_SUPPORT`.
+ * `REFUND_REVERSED` is a real, separate RevenueCat event and is recognized
+ * for the financial ledger without changing the subscription mirror.
  */
 export const REVENUECAT_WEBHOOK_EVENT_TYPES = [
   'INITIAL_PURCHASE',
@@ -63,6 +61,7 @@ export const REVENUECAT_WEBHOOK_EVENT_TYPES = [
   'PRODUCT_CHANGE',
   'UNCANCELLATION',
   'TRANSFER',
+  'REFUND_REVERSED',
 ] as const;
 
 export type RevenueCatWebhookEventType = (typeof REVENUECAT_WEBHOOK_EVENT_TYPES)[number];

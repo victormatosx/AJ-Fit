@@ -74,6 +74,14 @@ export const cancellationRefundEvent = {
   app_user_id: UID,
   product_id: PRODUCT_MONTHLY,
   period_type: 'NORMAL',
+  transaction_id: 'tx_refunded_period_001',
+  original_transaction_id: 'original_subscription_001',
+  purchased_at_ms: NOW_MS - 30 * DAY_MS,
+  currency: 'BRL',
+  price: -19.99,
+  price_in_purchased_currency: -99.9,
+  tax_percentage: 0.1,
+  commission_percentage: 0.15,
   // A refund typically ends access immediately — RevenueCat reflects this by
   // reporting an expiration at/before the event time, not the original
   // period end.
@@ -81,6 +89,27 @@ export const cancellationRefundEvent = {
   store: 'APP_STORE',
   entitlement_ids: ['premium'],
   cancel_reason: 'CUSTOMER_SUPPORT',
+};
+
+/** App Store refund that RevenueCat later reported as reversed. */
+export const refundReversedEvent = {
+  id: 'evt_refund_reversed_001',
+  type: 'REFUND_REVERSED',
+  event_timestamp_ms: NOW_MS,
+  app_user_id: UID,
+  product_id: PRODUCT_MONTHLY,
+  period_type: 'NORMAL',
+  transaction_id: 'tx_refunded_period_001',
+  original_transaction_id: 'original_subscription_001',
+  purchased_at_ms: NOW_MS - 30 * DAY_MS,
+  store: 'APP_STORE',
+  environment: 'PRODUCTION',
+  currency: 'BRL',
+  price: 19.99,
+  price_in_purchased_currency: 99.9,
+  tax_percentage: 0.1,
+  commission_percentage: 0.15,
+  entitlement_ids: ['premium'],
 };
 
 export const expirationEvent = {

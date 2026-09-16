@@ -152,23 +152,87 @@ function profileView(userSnapshot: DocumentSnapshot | undefined, authUser: UserR
   };
 }
 
-function financialSummary(documents: readonly DocumentSnapshot[]) {
+type FinancialMovementType = 'sale' | 'refund' | 'refund_reversal';
+
+function financialMovementType(snapshot: DocumentSnapshot): FinancialMovementType | null {
+  const explicit = snapshot.get('movementType');
+  if (explicit === 'sale' || explicit === 'refund' || explicit === 'refund_reversal') return explicit;
+  const eventType = snapshot.get('eventType');
+  if (explicit == null && (eventType === 'INITIAL_PURCHASE' || eventType === 'RENEWAL')) return 'sale';
+  return null;
+}
+
+function addAmount(target: Record<string, number>, currency: string | null, amount: unknown): boolean {
+  if (typeof amount !== 'number' || !Number.isFinite(amount)) return false;
+  if (currency) target[currency] = (target[currency] ?? 0) + amount;
+  return true;
+}
+
+export function financialSummary(documents: readonly DocumentSnapshot[]) {
   const revenueByCurrency: Record<string, number> = {};
   const estimatedProceedsByCurrency: Record<string, number> = {};
+  const refundsByCurrency: Record<string, number> = {};
+  const refundReversalsByCurrency: Record<string, number> = {};
+  const netRevenueByCurrency: Record<string, number> = {};
+  const netEstimatedProceedsByCurrency: Record<string, number> = {};
+  let paidTransactions = 0;
+  let initialPaidTransactions = 0;
+  let renewals = 0;
+  let refundsObserved = 0;
+  let refundReversalsObserved = 0;
+  let unresolvedAttributionMovements = 0;
+  let unknownGrossRevenueMovements = 0;
+  let unknownEstimatedProceedsMovements = 0;
+
   for (const snapshot of documents) {
+    const movementType = financialMovementType(snapshot);
+    if (!movementType) continue;
     const currency = safeString(snapshot.get('currency'));
     const gross = snapshot.get('grossRevenue');
     const proceeds = snapshot.get('estimatedProceeds');
-    if (!currency || typeof gross !== 'number' || !Number.isFinite(gross)) continue;
-    revenueByCurrency[currency] = (revenueByCurrency[currency] ?? 0) + gross;
-    if (typeof proceeds === 'number' && Number.isFinite(proceeds)) estimatedProceedsByCurrency[currency] = (estimatedProceedsByCurrency[currency] ?? 0) + proceeds;
+    const taxPercentage = snapshot.get('taxPercentage');
+    const storeCommissionPercentage = snapshot.get('storeCommissionPercentage');
+    const hasCalculableProceeds = typeof taxPercentage === 'number'
+      && Number.isFinite(taxPercentage)
+      && typeof storeCommissionPercentage === 'number'
+      && Number.isFinite(storeCommissionPercentage)
+      && typeof proceeds === 'number'
+      && Number.isFinite(proceeds);
+
+    if (snapshot.get('attributionStatus') === 'unresolved') unresolvedAttributionMovements += 1;
+    if (!addAmount(netRevenueByCurrency, currency, gross)) unknownGrossRevenueMovements += 1;
+    if (!hasCalculableProceeds) unknownEstimatedProceedsMovements += 1;
+    else addAmount(netEstimatedProceedsByCurrency, currency, proceeds);
+
+    if (movementType === 'sale') {
+      paidTransactions += 1;
+      if (snapshot.get('eventType') === 'INITIAL_PURCHASE') initialPaidTransactions += 1;
+      if (snapshot.get('eventType') === 'RENEWAL') renewals += 1;
+      addAmount(revenueByCurrency, currency, gross);
+      if (hasCalculableProceeds) addAmount(estimatedProceedsByCurrency, currency, proceeds);
+    } else if (movementType === 'refund') {
+      refundsObserved += 1;
+      addAmount(refundsByCurrency, currency, gross);
+    } else {
+      refundReversalsObserved += 1;
+      addAmount(refundReversalsByCurrency, currency, gross);
+    }
   }
   return {
-    paidTransactions: documents.length,
-    initialPaidTransactions: documents.filter((snapshot) => snapshot.get('eventType') === 'INITIAL_PURCHASE').length,
-    renewals: documents.filter((snapshot) => snapshot.get('eventType') === 'RENEWAL').length,
+    paidTransactions,
+    initialPaidTransactions,
+    renewals,
+    refundsObserved,
+    refundReversalsObserved,
+    unresolvedAttributionMovements,
+    unknownGrossRevenueMovements,
+    unknownEstimatedProceedsMovements,
     revenueByCurrency,
     estimatedProceedsByCurrency,
+    refundsByCurrency,
+    refundReversalsByCurrency,
+    netRevenueByCurrency,
+    netEstimatedProceedsByCurrency,
     commission: null,
   };
 }
@@ -221,9 +285,21 @@ export async function adminListCouponsHandler(request: CallableRequest<PlainDocu
     const influencers = [...new Set(catalog.map((coupon) => coupon.influencerId))].sort();
     const visibleCodes = new Set(coupons.map((coupon) => coupon.code));
     const visibleTransactions = [...transactionsByCode.entries()].filter(([transactionCode]) => visibleCodes.has(transactionCode)).flatMap(([, documents]) => documents);
+    // Unresolved adjustments have no coupon dimension by definition. Include
+    // them only in an unscoped overview, never under an arbitrary coupon.
+    const canShowUnresolvedLedgerQuality = !filters.search
+      && filters.couponStatus === 'ALL'
+      && !filters.influencerId
+      && filters.subscriptionState === 'ALL';
+    const visibleTransactionIds = new Set(visibleTransactions.map((doc) => doc.id));
+    const unresolvedTransactions = canShowUnresolvedLedgerQuality
+      ? transactionSnapshot.docs.filter((doc) => financialMatches(doc, filters)
+        && doc.get('attributionStatus') === 'unresolved'
+        && !visibleTransactionIds.has(doc.id))
+      : [];
     const overview = {
       ...summarizeCouponJourney(filteredRecords.filter((record) => record.couponCode !== null && visibleCodes.has(record.couponCode))),
-      ...financialSummary(visibleTransactions),
+      ...financialSummary([...visibleTransactions, ...unresolvedTransactions]),
       activeCoupons: coupons.filter((coupon) => coupon.status === 'ACTIVE').length,
     };
     logInfo(SCOPE, 'coupon intelligence listed', { adminUid, couponCount: coupons.length, redemptionCount: filteredRecords.length });
