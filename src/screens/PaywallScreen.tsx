@@ -1,20 +1,24 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Image,
   Platform,
   Pressable,
   ScrollView,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import type { PurchasesPackage } from 'react-native-purchases';
 import { logInfo, logWarn } from '../lib/logger';
 import { requestCommercialGateConfirmation } from '../services/commercialGate';
 import type { OnboardingAuthContext } from '../onboarding/authContext';
+import { useAuth } from '../state/AuthContext';
 import { ScreenBg } from '../components/ui/ScreenBg';
 import { CtaButton, CtaText } from '../components/ui/CtaButton';
 import { Display, MonoLabel } from '../components/ui/Display';
@@ -86,6 +90,82 @@ import { LegalDocumentModal, type LegalDocumentKind } from '../components/legal/
  */
 const PROMO_CODE_SUPPORTED_PLATFORM = isPromoCodeUiSupported(Platform.OS);
 
+/**
+ * Temporary UI-only kill switch for the Dev/QA Subscription Override row on
+ * this screen (see its render site below). Does not touch
+ * DevSubscriptionOverrideContext or Settings > Developer — flip back to
+ * `false` to restore this screen's entry point into that same logic.
+ */
+const HIDE_DEV_OVERRIDE_ROW = true;
+
+/**
+ * Reused by the trial highlight and the existing promo detail so the two
+ * never drift on how a trial duration is worded.
+ */
+const INTRO_DURATION_UNIT_KEY = {
+  day: 'paywall.promo.duration.day',
+  week: 'paywall.promo.duration.week',
+  month: 'paywall.promo.duration.month',
+  year: 'paywall.promo.duration.year',
+} as const;
+
+function formatIntroDuration(
+  t: TFunction,
+  duration: { count: number; unit: keyof typeof INTRO_DURATION_UNIT_KEY },
+): string {
+  return t(INTRO_DURATION_UNIT_KEY[duration.unit], { count: duration.count });
+}
+
+type TrialDuration = { count: number; unit: keyof typeof INTRO_DURATION_UNIT_KEY };
+
+/** Presentation-only conversion: a Store-reported week becomes seven days. */
+function marketingTrialDuration(duration: TrialDuration): TrialDuration {
+  return duration.unit === 'week'
+    ? { count: duration.count * 7, unit: 'day' }
+    : duration;
+}
+
+/**
+ * Reads the real Google Play free phase without changing Android's existing
+ * non-committal eligibility signal. If multiple visible trial offers disagree
+ * on duration, the UI deliberately falls back to generic conditional copy.
+ */
+function androidFreeTrialDuration(pkg: PurchasesPackage): TrialDuration | null {
+  const durations = (pkg.product.subscriptionOptions ?? [])
+    .filter((option) => !option.isBasePlan && option.freePhase !== null)
+    .map((option): TrialDuration | null => {
+      const phase = option.freePhase;
+      if (!phase) return null;
+      const rawUnit = phase.billingPeriod.unit.toLowerCase();
+      if (!(rawUnit in INTRO_DURATION_UNIT_KEY)) return null;
+      const cycles = phase.billingCycleCount && phase.billingCycleCount > 0
+        ? phase.billingCycleCount
+        : 1;
+      const count = phase.billingPeriod.value * cycles;
+      if (!Number.isInteger(count) || count <= 0) return null;
+      return { count, unit: rawUnit as TrialDuration['unit'] };
+    })
+    .filter((duration): duration is TrialDuration => duration !== null);
+  if (durations.length === 0) return null;
+  const [first] = durations;
+  return durations.every(
+    (duration) => duration.count === first.count && duration.unit === first.unit,
+  )
+    ? marketingTrialDuration(first)
+    : null;
+}
+
+const PAYWALL_HERO_IMAGE_DEFAULT = require('../../assets/paywall/paywall-asset.webp');
+const PAYWALL_HERO_IMAGE_MASCULINO = require('../../assets/paywall/paywall-asset-mas.webp');
+const PAYWALL_HERO_IMAGE_FEMININO = require('../../assets/paywall/paywall-asset-fem.webp');
+
+/** `sex` comes from the user's questionnaire answers (`Quiz['sex']`) — `null` covers both "not answered yet" and any flow that skipped it, and always falls back to the neutral asset. */
+function resolvePaywallHeroImage(sex: 'm' | 'f' | null | undefined) {
+  if (sex === 'm') return PAYWALL_HERO_IMAGE_MASCULINO;
+  if (sex === 'f') return PAYWALL_HERO_IMAGE_FEMININO;
+  return PAYWALL_HERO_IMAGE_DEFAULT;
+}
+
 type PurchaseUiState =
   | { kind: 'idle' }
   | { kind: 'purchasing' }
@@ -132,6 +212,8 @@ export function PaywallScreen({
     purchaseOption,
     restore,
   } = useSubscription();
+  const { questionnaire } = useAuth();
+  const heroImage = resolvePaywallHeroImage(questionnaire?.answers.sex);
 
   // Dev/QA only — same DevSubscriptionOverrideContext as Settings > Developer
   // (see docs/13_assinaturas_e_billing.md). Lets a brand-new account, which
@@ -215,9 +297,23 @@ export function PaywallScreen({
   }, [offerings, promoApplied, promoState.applied, standardPackages]);
   const packages = useMemo(() => {
     if (iosOfferingRoute?.kind === 'promotional') {
-      return iosCatalogResolution?.status === 'resolved'
-        ? [iosCatalogResolution.monthlyPackage, iosCatalogResolution.annualPackage]
-        : [];
+      if (iosCatalogResolution?.status !== 'resolved') return [];
+      const { monthlyPackage, annualPackage } = iosCatalogResolution;
+      // Keep the same plan order the standard (non-promotional) catalog
+      // uses — the promotional resolution only picks WHICH packages back
+      // each plan, never the display order, so the card list must not
+      // reshuffle (e.g. Annual dropping below Monthly) just because a
+      // coupon got applied.
+      const byType: Partial<Record<string, PurchasesPackage>> = {
+        MONTHLY: monthlyPackage,
+        ANNUAL: annualPackage,
+      };
+      const orderedFromStandard = standardPackages
+        .map((pkg) => byType[pkg.packageType])
+        .filter((pkg): pkg is PurchasesPackage => !!pkg);
+      return orderedFromStandard.length === 2
+        ? orderedFromStandard
+        : [monthlyPackage, annualPackage];
     }
     return Platform.OS === 'android' ? androidPackages : standardPackages;
   }, [androidPackages, iosCatalogResolution, iosOfferingRoute, standardPackages]);
@@ -348,15 +444,7 @@ export function PaywallScreen({
       const plan = resolveIOSPlanKind(pkg);
       const period = plan ? t(`paywall.promo.period.${plan}`) : '';
       if (presentation.kind === 'free_trial') {
-        const keyByUnit = {
-          day: 'paywall.promo.duration.day',
-          week: 'paywall.promo.duration.week',
-          month: 'paywall.promo.duration.month',
-          year: 'paywall.promo.duration.year',
-        } as const;
-        const duration = t(keyByUnit[presentation.terms.duration.unit], {
-          count: presentation.terms.duration.count,
-        });
+        const duration = formatIntroDuration(t, presentation.terms.duration);
         return {
           tone: 'neutral' as const,
           message: t('paywall.promo.freeTrial', {
@@ -403,6 +491,48 @@ export function PaywallScreen({
     [t],
   );
   const selectedIntroText = introText(selectedIntroPresentation, selectedPackage);
+
+  const trialEligibilityChecking =
+    Platform.OS === 'ios' &&
+    (selectedIntroPresentation?.kind === 'checking' ||
+      selectedIntroPresentation?.kind === 'neutral');
+
+  type TrialHighlightPresentation =
+    | { kind: 'ios_confirmed'; duration: TrialDuration }
+    | { kind: 'android_possible'; duration: TrialDuration | null };
+  const trialHighlight = useMemo<TrialHighlightPresentation | null>(() => {
+    if (!selectedPackage) return null;
+    if (
+      Platform.OS === 'ios' &&
+      selectedIntroPresentation?.kind === 'free_trial'
+    ) {
+      return {
+        kind: 'ios_confirmed',
+        duration: marketingTrialDuration(selectedIntroPresentation.terms.duration),
+      };
+    }
+    if (
+      Platform.OS === 'android' &&
+      resolveAndroidTrialSignal(selectedPackage) === 'possible'
+    ) {
+      return {
+        kind: 'android_possible',
+        duration: androidFreeTrialDuration(selectedPackage),
+      };
+    }
+    return null;
+  }, [selectedIntroPresentation, selectedPackage]);
+  const trialHeroTitle = trialHighlight
+    ? trialHighlight.kind === 'ios_confirmed'
+      ? t('paywall.trial.confirmedTitle', {
+          duration: formatIntroDuration(t, trialHighlight.duration),
+        })
+      : trialHighlight.duration
+        ? t('paywall.trial.androidConditionalTitle', {
+            duration: formatIntroDuration(t, trialHighlight.duration),
+          })
+        : t('paywall.trial.androidConditionalTitleGeneric')
+    : null;
 
   // Android only — `null` on iOS (guarded so `promoState.applied.androidStoreConfig`,
   // which is always `null` for an iOS-platform validation response per the
@@ -781,18 +911,12 @@ export function PaywallScreen({
   return (
     <ScreenBg>
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
-        <PaywallHeader
-          onClose={handleClose}
-          disabled={busy}
-          accessibilityLabel={closeAccessibilityLabel}
-        />
-
-        {/* Dev/QA only — never rendered outside a development build (see
-            `useDevSubscriptionOverrideContext`'s `allowed`). Second UI over
-            the exact same DevSubscriptionOverrideContext as Settings >
-            Developer, so a brand-new account can simulate Premium here
-            before Settings is reachable. */}
-        {devOverrideAllowed ? (
+        {/* Dev/QA only — temporarily hidden from the Paywall UI per request
+            while the paywall UI/UX is redesigned. The underlying
+            DevSubscriptionOverrideContext logic (Settings > Developer) is
+            untouched — only this screen's entry point into it is hidden.
+            Flip HIDE_DEV_OVERRIDE_ROW back to re-enable. */}
+        {devOverrideAllowed && !HIDE_DEV_OVERRIDE_ROW ? (
           <DevSubscriptionOverrideRow
             current={devOverride}
             onPress={() => setDevOverridePickerOpen(true)}
@@ -801,17 +925,19 @@ export function PaywallScreen({
 
         {centerState ? (
           <View style={{ flex: 1 }}>
+            <PaywallHeader
+              onClose={handleClose}
+              onRestore={handleRestore}
+              isRestoring={isRestoring}
+              disabled={busy}
+              closeAccessibilityLabel={closeAccessibilityLabel}
+            />
             <CenteredState
               kind={centerState}
               message={offeringsError}
               onRetry={loadOfferings}
             />
             <View style={{ paddingHorizontal: 22, paddingBottom: 16 }}>
-              <RestoreButton
-                isRestoring={isRestoring}
-                disabled={busy}
-                onPress={handleRestore}
-              />
               <ActionNotices purchaseState={purchaseState} restoreState={restoreState} />
               <LegalLinks onOpen={setLegalDocument} />
             </View>
@@ -820,92 +946,106 @@ export function PaywallScreen({
           <ScrollView
             contentContainerStyle={{
               paddingHorizontal: 22,
-              paddingTop: 18,
+              paddingTop: 6,
               paddingBottom: 22,
               flexGrow: 1,
             }}
             showsVerticalScrollIndicator={false}
           >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-              <LinearGradient
-                colors={theme.gradients.sheetAccent}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
+            <PaywallHeroVisual
+              onClose={handleClose}
+              onRestore={handleRestore}
+              isRestoring={isRestoring}
+              disabled={busy}
+              closeAccessibilityLabel={closeAccessibilityLabel}
+              trialTitle={trialHeroTitle}
+              heroImage={heroImage}
+            />
+
+            {!trialHighlight ? (
+              <Text
                 style={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: 14,
-                  borderWidth: 1,
-                  borderColor: theme.colors.primaryBorder,
-                  alignItems: 'center',
-                  justifyContent: 'center',
+                  marginTop: 10,
+                  fontFamily: theme.fonts.uiMed,
+                  fontSize: 12.5,
+                  lineHeight: 17,
+                  color: theme.colors.textMuted,
                 }}
               >
-                <Icon name="crown" size={22} color={theme.colors.primaryEmphasis} />
-              </LinearGradient>
-              <View style={{ flex: 1 }}>
-                <MonoLabel color={theme.colors.primaryEmphasis}>AJ FIT PREMIUM</MonoLabel>
-                <Display size={27} style={{ marginTop: 4 }}>
-                  Escolha seu plano
-                </Display>
-              </View>
+                {trialEligibilityChecking
+                  ? t('paywall.trial.checking')
+                  : entryContext?.origin === 'planCompleted'
+                    ? t('paywall.plans.subtitlePlanCompleted')
+                    : t('paywall.plans.subtitleDefault')}
+              </Text>
+            ) : null}
+
+            <View style={{ gap: 8, marginTop: 8 }}>
+              {packages.map((pkg) => {
+                const presentation = introPresentations[pkg.product.identifier] ?? null;
+                const trialDuration =
+                  presentation?.kind === 'free_trial'
+                    ? marketingTrialDuration(presentation.terms.duration)
+                    : null;
+                const title =
+                  Platform.OS === 'ios' &&
+                  trialDuration?.unit === 'day' &&
+                  trialDuration.count === 7
+                    ? t('paywall.plans.trialTitle', { plan: packageTitle(pkg) })
+                    : packageTitle(pkg);
+                const offerLine =
+                  Platform.OS === 'ios'
+                    ? presentation?.kind === 'free_trial'
+                      ? t('paywall.trial.afterTrial')
+                      : packagePeriodLabel(pkg)
+                    : Platform.OS === 'android' && resolveAndroidTrialSignal(pkg) === 'possible'
+                      ? t('paywall.trial.afterTrial')
+                      : packagePeriodLabel(pkg);
+                const bestValue = pkg.packageType === 'ANNUAL';
+                const valueLine =
+                  bestValue && pkg.product.pricePerMonthString
+                    ? t('paywall.plans.annualValueLine', {
+                        price: pkg.product.pricePerMonthString,
+                      })
+                    : null;
+                return (
+                  <PackageCard
+                    key={pkg.identifier}
+                    pkg={pkg}
+                    title={title}
+                    selected={pkg.identifier === selectedPackage?.identifier}
+                    disabled={busy}
+                    offerLine={offerLine}
+                    bestValue={bestValue}
+                    valueLine={valueLine}
+                    onSelect={() => setSelectedId(pkg.identifier)}
+                  />
+                );
+              })}
             </View>
-
-            <Text
-              style={{
-                marginTop: 14,
-                fontFamily: theme.fonts.ui,
-                fontSize: 14,
-                lineHeight: 21,
-                color: theme.colors.textMuted,
-              }}
-            >
-              {entryContext?.origin === 'planCompleted'
-                ? 'Seu plano está pronto. Agora é hora de colocá-lo em prática — selecione uma das opções abaixo.'
-                : 'Selecione uma das opções disponíveis para liberar todos os recursos do AJ Fit.'}
-            </Text>
-
-            <View style={{ gap: 10, marginTop: 24 }}>
-              {packages.map((pkg) => (
-                <PackageCard
-                  key={pkg.identifier}
-                  pkg={pkg}
-                  selected={pkg.identifier === selectedPackage?.identifier}
-                  disabled={busy}
-                  promotionalTerms={
-                    Platform.OS === 'ios'
-                      ? introText(introPresentations[pkg.product.identifier] ?? null, pkg)?.badge
-                      : Platform.OS === 'android' && resolveAndroidTrialSignal(pkg) === 'possible'
-                        ? t('paywall.promo.androidTrialBadge')
-                        : null
-                  }
-                  onSelect={() => setSelectedId(pkg.identifier)}
-                />
-              ))}
-            </View>
-
-            {PROMO_CODE_SUPPORTED_PLATFORM && (
-              <PromoCodeCard
-                value={promoInput}
-                onChangeValue={setPromoInput}
-                onApply={handleApplyPromoCode}
-                promoState={promoState}
-                purchaseRoute={effectiveRoute}
-                iosPromoNotice={
-                  iosOfferingRoute?.kind === 'promotional'
-                    ? iosCatalogResolution?.status === 'error'
-                      ? { tone: 'error' as const, message: t('paywall.promo.catalogUnavailable') }
-                      : selectedIntroText
-                    : null
-                }
-                disabled={busy}
-              />
-            )}
 
             <ActionNotices purchaseState={purchaseState} restoreState={restoreState} />
 
-            <View style={{ marginTop: 'auto', paddingTop: 24 }}>
+            <View style={{ marginTop: 'auto', paddingTop: 14 }}>
+              {PROMO_CODE_SUPPORTED_PLATFORM && (
+                <PromoCodeCard
+                  value={promoInput}
+                  onChangeValue={setPromoInput}
+                  onApply={handleApplyPromoCode}
+                  promoState={promoState}
+                  purchaseRoute={effectiveRoute}
+                  iosPromoNotice={
+                    iosOfferingRoute?.kind === 'promotional'
+                      ? iosCatalogResolution?.status === 'error'
+                        ? { tone: 'error' as const, message: t('paywall.promo.catalogUnavailable') }
+                        : selectedIntroText
+                      : null
+                  }
+                  disabled={busy}
+                />
+              )}
               <CtaButton
+                style={PROMO_CODE_SUPPORTED_PLATFORM ? { marginTop: 16 } : undefined}
                 onPress={handlePurchase}
                 accessibilityState={{
                   disabled:
@@ -927,20 +1067,41 @@ export function PaywallScreen({
                 {isPurchasing ? (
                   <ActivityIndicator color={theme.colors.primaryForeground} />
                 ) : (
-                  <CtaText>Continuar</CtaText>
+                  <CtaText>{t('actions.continue')}</CtaText>
                 )}
               </CtaButton>
-              <RestoreButton
-                isRestoring={isRestoring}
-                disabled={busy}
-                onPress={handleRestore}
-              />
+              <Text
+                style={{
+                  marginTop: 10,
+                  fontFamily: theme.fonts.ui,
+                  fontSize: 10.5,
+                  lineHeight: 15,
+                  color: theme.colors.textFaint,
+                  textAlign: 'center',
+                }}
+              >
+                {t('paywall.legal.renewalDisclosure')}
+              </Text>
+              {trialHighlight?.kind === 'android_possible' ? (
+                <Text
+                  style={{
+                    marginTop: 6,
+                    fontFamily: theme.fonts.ui,
+                    fontSize: 10.5,
+                    lineHeight: 15,
+                    color: theme.colors.textFaint,
+                    textAlign: 'center',
+                  }}
+                >
+                  {t('paywall.legal.androidTrialDisclosure')}
+                </Text>
+              ) : null}
               <LegalLinks onOpen={setLegalDocument} />
             </View>
           </ScrollView>
         )}
       </SafeAreaView>
-      {devOverrideAllowed ? (
+      {devOverrideAllowed && !HIDE_DEV_OVERRIDE_ROW ? (
         <DevSubscriptionOverridePickerSheet
           visible={devOverridePickerOpen}
           current={devOverride}
@@ -1018,14 +1179,21 @@ function DevSubscriptionOverrideRow({
 
 function PaywallHeader({
   onClose,
+  onRestore,
+  isRestoring,
   disabled,
-  accessibilityLabel,
+  closeAccessibilityLabel,
+  overlay = false,
 }: {
   onClose: () => void;
+  onRestore: () => void;
+  isRestoring: boolean;
   disabled: boolean;
-  accessibilityLabel: string;
+  closeAccessibilityLabel: string;
+  overlay?: boolean;
 }) {
   const { theme } = useTheme();
+  const { t } = useTranslation('common');
   return (
     <View
       style={{
@@ -1034,51 +1202,218 @@ function PaywallHeader({
         paddingBottom: 8,
         flexDirection: 'row',
         alignItems: 'center',
+        justifyContent: 'space-between',
         gap: 12,
+        ...(overlay
+          ? { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 3 }
+          : null),
       }}
     >
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={accessibilityLabel}
+        accessibilityLabel={closeAccessibilityLabel}
         onPress={onClose}
         disabled={disabled}
         style={{
           width: 42,
           height: 42,
-          borderRadius: 12,
-          backgroundColor: theme.colors.cardBackgroundElevated,
+          borderRadius: 21,
+          backgroundColor: overlay ? 'rgba(0,0,0,0.38)' : theme.colors.cardBackgroundElevated,
           borderWidth: 1,
-          borderColor: theme.colors.divider,
+          borderColor: overlay ? 'rgba(255,255,255,0.18)' : theme.colors.divider,
           alignItems: 'center',
           justifyContent: 'center',
           opacity: disabled ? 0.4 : 1,
         }}
       >
-        <Icon name="x" size={18} color={theme.colors.textPrimary} />
+        <Icon name="x" size={18} color={overlay ? '#FFFFFF' : theme.colors.textPrimary} />
       </Pressable>
-      <View style={{ flex: 1, alignItems: 'center' }}>
-        <MonoLabel>ASSINATURA</MonoLabel>
-      </View>
-      <View style={{ width: 42 }} />
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={t('paywall.header.restoreAccessibilityLabel')}
+        onPress={onRestore}
+        disabled={disabled}
+        hitSlop={8}
+        style={{
+          paddingVertical: 8,
+          paddingHorizontal: overlay ? 12 : 4,
+          borderRadius: 18,
+          backgroundColor: overlay ? 'rgba(0,0,0,0.38)' : 'transparent',
+          opacity: disabled && !isRestoring ? 0.4 : 1,
+        }}
+      >
+        {isRestoring ? (
+          <ActivityIndicator size="small" color={overlay ? '#FFFFFF' : theme.colors.textMuted} />
+        ) : (
+          <Text
+            style={{
+              fontFamily: theme.fonts.uiSemi,
+              fontSize: 13,
+              color: overlay ? '#FFFFFF' : theme.colors.textMuted,
+            }}
+          >
+            {t('paywall.header.restore')}
+          </Text>
+        )}
+      </Pressable>
     </View>
   );
 }
 
+/**
+ * Static, edge-to-edge hero image whose lower gradient merges the photography
+ * into the Paywall surface rather than ending on a hard seam.
+ */
+function PaywallHeroVisual({
+  onClose,
+  onRestore,
+  isRestoring,
+  disabled,
+  closeAccessibilityLabel,
+  trialTitle,
+  heroImage,
+}: {
+  onClose: () => void;
+  onRestore: () => void;
+  isRestoring: boolean;
+  disabled: boolean;
+  closeAccessibilityLabel: string;
+  trialTitle: string | null;
+  heroImage: ReturnType<typeof resolvePaywallHeroImage>;
+}) {
+  const { theme } = useTheme();
+  const { t } = useTranslation('common');
+  const { width, height } = useWindowDimensions();
+  const heroHeight = Math.min(310, Math.max(240, height * 0.32));
+
+  return (
+    <View
+      style={{
+        width,
+        height: heroHeight,
+        marginHorizontal: -22,
+        marginTop: -6,
+        overflow: 'hidden',
+        backgroundColor: theme.colors.background,
+      }}
+    >
+      <View
+        accessible
+        accessibilityRole="image"
+        accessibilityLabel={t('paywall.hero.imageAccessibilityLabel')}
+        pointerEvents="none"
+        style={{ flex: 1 }}
+      >
+        <Image
+          source={heroImage}
+          resizeMode="cover"
+          accessible={false}
+          style={{ width: '100%', height: '100%' }}
+        />
+      </View>
+      <LinearGradient
+        pointerEvents="none"
+        colors={[
+          'rgba(0,0,0,0.42)',
+          'rgba(0,0,0,0.04)',
+          'rgba(0,0,0,0.62)',
+          'rgba(0,0,0,0.84)',
+          theme.colors.background,
+        ]}
+        locations={[0, 0.28, 0.58, 0.82, 1]}
+        style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+      />
+      <PaywallHeader
+        onClose={onClose}
+        onRestore={onRestore}
+        isRestoring={isRestoring}
+        disabled={disabled}
+        closeAccessibilityLabel={closeAccessibilityLabel}
+        overlay
+      />
+      <View
+        pointerEvents="none"
+        style={{ position: 'absolute', left: 22, right: 22, bottom: 44 }}
+      >
+        <MonoLabel color="#FFFFFF" size={9.5}>
+          {t('paywall.hero.eyebrow')}
+        </MonoLabel>
+        <Display size={30} color="#FFFFFF" style={{ marginTop: 4, maxWidth: 310 }}>
+          {t('paywall.hero.title')}
+        </Display>
+        {trialTitle ? (
+          <Display size={18} color="#FFFFFF" style={{ marginTop: 5, opacity: 0.9 }}>
+            <TrialHeroTitle
+              title={trialTitle}
+              accentColor={theme.colors.primaryEmphasis}
+            />
+          </Display>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
+function TrialHeroTitle({ title, accentColor }: { title: string; accentColor: string }) {
+  const match = title.match(/grátis|gratis|free/i);
+  if (!match || match.index === undefined) return title;
+  const start = match.index;
+  const end = start + match[0].length;
+  return (
+    <>
+      {title.slice(0, start)}
+      <Text style={{ color: accentColor, textTransform: 'uppercase' }}>
+        {title.slice(start, end)}
+      </Text>
+      {title.slice(end)}
+    </>
+  );
+}
+
+function PlanCardTitle({ title, accentColor }: { title: string; accentColor: string }) {
+  const match = title.match(/grátis|gratis|free/i);
+  if (!match || match.index === undefined) return title;
+  const start = match.index;
+  const end = start + match[0].length;
+  return (
+    <>
+      {title.slice(0, start)}
+      <Text style={{ color: accentColor, textTransform: 'uppercase' }}>
+        {title.slice(start, end)}
+      </Text>
+      {title.slice(end)}
+    </>
+  );
+}
+
+/**
+ * Compact row (~70px, well above the 44pt touch-target minimum), not the
+ * previous ~110px+ card. `offerLine` is the ONLY secondary text — a single
+ * short phrase (post-trial note, or the plain period) — deliberately never
+ * repeats `packagePriceString(pkg)`, which already renders once on the
+ * title row.
+ */
 function PackageCard({
   pkg,
+  title,
   selected,
   disabled,
-  promotionalTerms,
+  offerLine,
+  bestValue,
+  valueLine,
   onSelect,
 }: {
   pkg: PurchasesPackage;
+  title: string;
   selected: boolean;
   disabled: boolean;
-  promotionalTerms?: string | null;
+  offerLine?: string | null;
+  bestValue?: boolean;
+  valueLine?: string | null;
   onSelect: () => void;
 }) {
   const { theme } = useTheme();
-  const period = packagePeriodLabel(pkg);
+  const { t } = useTranslation('common');
   return (
     <Pressable
       accessibilityRole="radio"
@@ -1086,79 +1421,133 @@ function PackageCard({
       onPress={onSelect}
       disabled={disabled}
       style={{
-        minHeight: 76,
-        paddingVertical: 16,
-        paddingHorizontal: 16,
-        borderRadius: 16,
+        minHeight: 70,
+        paddingVertical: 12,
+        paddingHorizontal: 14,
+        borderRadius: 10,
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 14,
+        gap: 12,
         backgroundColor: selected ? theme.colors.primarySurfaceSelected : theme.colors.cardBackground,
         borderWidth: selected ? 1.5 : 1,
-        borderColor: selected ? theme.colors.primaryEmphasis : theme.colors.cardBorder,
+        borderColor: bestValue
+          ? theme.colors.primaryEmphasis
+          : selected
+            ? theme.colors.primaryEmphasis
+            : theme.colors.cardBorder,
         opacity: disabled ? 0.55 : 1,
       }}
     >
-      <View
-        style={{
-          width: 22,
-          height: 22,
-          borderRadius: 11,
-          borderWidth: 1.5,
-          borderColor: selected ? theme.colors.primaryEmphasis : theme.colors.textFaint,
-          backgroundColor: selected ? theme.colors.primary : 'transparent',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        {selected && <Icon name="check" size={13} color={theme.colors.primaryForeground} />}
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text
-          style={{
-            fontFamily: theme.fonts.uiBold,
-            fontSize: 15,
-            color: theme.colors.textPrimary,
-          }}
-        >
-          {packageTitle(pkg)}
-        </Text>
-        {!!period && (
-          <Text
-            style={{
-              marginTop: 4,
-              fontFamily: theme.fonts.ui,
-              fontSize: 12,
-              color: theme.colors.textMuted,
-            }}
-          >
-            {period}
-          </Text>
-        )}
-        {!!promotionalTerms && (
-          <Text
-            style={{
-              marginTop: 5,
-              fontFamily: theme.fonts.uiSemi,
-              fontSize: 12,
-              lineHeight: 17,
-              color: theme.colors.primaryEmphasis,
-            }}
-          >
-            {promotionalTerms}
-          </Text>
-        )}
-      </View>
       <Text
         style={{
           fontFamily: theme.fonts.monoBold,
           fontSize: 13,
-          color: selected ? theme.colors.primaryEmphasis : theme.colors.textPrimary,
-          textAlign: 'right',
+          letterSpacing: -1.2,
+          color: selected ? theme.colors.primaryEmphasis : theme.colors.textFaint,
         }}
       >
-        {packagePriceString(pkg)}
+        {'//'}
       </Text>
+      <View style={{ flex: 1 }}>
+        {bestValue ? (
+          <View
+            style={{
+              alignSelf: 'flex-start',
+              marginBottom: 3,
+              paddingHorizontal: 6,
+              paddingVertical: 2,
+              borderRadius: 6,
+              backgroundColor: theme.colors.primaryEmphasis,
+            }}
+          >
+            <Text
+              style={{
+                fontFamily: theme.fonts.uiBold,
+                fontSize: 9,
+                letterSpacing: 0.3,
+                color: theme.colors.primaryForeground,
+              }}
+            >
+              {t('paywall.plans.bestValueBadge')}
+            </Text>
+          </View>
+        ) : null}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+          <Text
+            numberOfLines={1}
+            style={{
+              flex: 1,
+              fontFamily: theme.fonts.uiBold,
+              fontSize: 14.5,
+              lineHeight: 19,
+              color: theme.colors.textPrimary,
+            }}
+          >
+            <PlanCardTitle title={title} accentColor={theme.colors.primaryEmphasis} />
+          </Text>
+          <Text
+            style={{
+              fontFamily: theme.fonts.monoBold,
+              fontSize: 13,
+              lineHeight: 19,
+              color: selected ? theme.colors.primaryEmphasis : theme.colors.textPrimary,
+            }}
+          >
+            {packagePriceString(pkg)}
+          </Text>
+        </View>
+        {!!valueLine && (
+          <Text
+            style={{
+              marginTop: 2,
+              fontFamily: theme.fonts.uiSemi,
+              fontSize: 11.5,
+              lineHeight: 16,
+              color: theme.colors.primaryEmphasis,
+            }}
+            numberOfLines={1}
+          >
+            {valueLine}
+          </Text>
+        )}
+        {!!offerLine && (
+          <Text
+            style={{
+              marginTop: 2,
+              fontFamily: theme.fonts.uiMed,
+              fontSize: 11.5,
+              lineHeight: 16,
+              color: theme.colors.textMuted,
+            }}
+            numberOfLines={2}
+          >
+            {offerLine}
+          </Text>
+        )}
+      </View>
+      <View
+        style={{
+          width: 18,
+          height: 18,
+          borderRadius: 9,
+          borderWidth: 1.5,
+          borderColor: selected ? theme.colors.primaryEmphasis : theme.colors.textFaint,
+          backgroundColor: 'transparent',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        {selected ? (
+          <View
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: 4,
+              backgroundColor: theme.colors.primaryEmphasis,
+            }}
+          />
+        ) : null}
+      </View>
     </Pressable>
   );
 }
@@ -1213,9 +1602,11 @@ function PromoCodeCard({
       : null;
 
   return (
-    <View style={{ marginTop: 18 }}>
-      <MonoLabel color={theme.colors.textMuted}>{t('paywall.promo.label')}</MonoLabel>
-      <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
+    <View style={{ marginTop: 12 }}>
+      <MonoLabel color={theme.colors.textMuted} size={9.5}>
+        {t('paywall.promo.label')}
+      </MonoLabel>
+      <View style={{ flexDirection: 'row', gap: 8, marginTop: 6 }}>
         <TextInput
           value={value}
           onChangeText={onChangeValue}
@@ -1227,14 +1618,14 @@ function PromoCodeCard({
           accessibilityLabel={t('paywall.promo.inputAccessibilityLabel')}
           style={{
             flex: 1,
-            height: 46,
-            borderRadius: 12,
+            height: 42,
+            borderRadius: 11,
             borderWidth: 1,
             borderColor: theme.colors.cardBorder,
             backgroundColor: theme.colors.cardBackground,
-            paddingHorizontal: 14,
+            paddingHorizontal: 12,
             fontFamily: theme.fonts.uiMed,
-            fontSize: 14,
+            fontSize: 13,
             color: theme.colors.inputText,
           }}
         />
@@ -1244,9 +1635,9 @@ function PromoCodeCard({
           onPress={onApply}
           disabled={disabled || validating || !value.trim()}
           style={{
-            paddingHorizontal: 18,
-            height: 46,
-            borderRadius: 12,
+            paddingHorizontal: 16,
+            height: 42,
+            borderRadius: 11,
             alignItems: 'center',
             justifyContent: 'center',
             backgroundColor: theme.colors.controlBackground,
@@ -1289,23 +1680,6 @@ function PromoCodeCard({
         <InlineNotice tone="error" text={promoState.message} />
       )}
     </View>
-  );
-}
-
-function RestoreButton({
-  isRestoring,
-  disabled,
-  onPress,
-}: {
-  isRestoring: boolean;
-  disabled: boolean;
-  onPress: () => void;
-}) {
-  const { theme } = useTheme();
-  return (
-    <CtaButton ghost onPress={onPress} disabled={disabled} style={{ marginTop: 12 }}>
-      {isRestoring ? <ActivityIndicator color={theme.colors.textPrimary} /> : 'Restaurar compras'}
-    </CtaButton>
   );
 }
 
@@ -1488,7 +1862,7 @@ function LegalLinks({ onOpen }: { onOpen: (document: LegalDocumentKind) => void 
     textDecorationLine: 'underline' as const,
   };
   return (
-    <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 22, marginTop: 20 }}>
+    <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 20, marginTop: 10 }}>
       <Pressable onPress={() => onOpen('privacy')}>
         <Text style={linkStyle}>{t('items.privacyPolicy')}</Text>
       </Pressable>

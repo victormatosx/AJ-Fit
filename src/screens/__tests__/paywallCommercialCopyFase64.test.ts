@@ -54,9 +54,9 @@ describe('FASE 6.4 — trial eligibility runs for the STANDARD catalog too (rule
     expect(effectSource).toContain('packages.map((pkg) => pkg.product.identifier)');
   });
 
-  it('the per-package trial badge is computed for iOS unconditionally (Platform.OS check), not gated to an active promo', () => {
-    expect(PAYWALL_CODE).toMatch(/promotionalTerms=\{\s*Platform\.OS === 'ios'/);
-    expect(PAYWALL_CODE).not.toMatch(/promotionalTerms=\{\s*iosOfferingRoute\?\.kind === 'promotional'/);
+  it('the per-package trial badge (offerLine) is computed for iOS unconditionally (Platform.OS check), not gated to an active promo', () => {
+    expect(PAYWALL_CODE).toMatch(/const offerLine =\s*Platform\.OS === 'ios'/);
+    expect(PAYWALL_CODE).not.toMatch(/offerLine =\s*iosOfferingRoute\?\.kind === 'promotional'/);
   });
 });
 
@@ -77,12 +77,17 @@ describe("FASE 6.4 — Android trial signal is independent of the coupon (rule 3
     expect(SUBSCRIPTION_OFFER_CODE).not.toMatch(/AndroidTrialSignal\s*=\s*['"]none['"]\s*\|\s*['"]eligible['"]/);
   });
 
-  it('the Android trial badge copy key exists and is wired into the Paywall', () => {
-    expect(PAYWALL_CODE).toContain("t('paywall.promo.androidTrialBadge')");
-    expect(PT.paywall as unknown).toBeTruthy();
-    expect(promoStrings(PT).androidTrialBadge).toBeTruthy();
-    expect(promoStrings(EN).androidTrialBadge).toBeTruthy();
-    expect(promoStrings(ES).androidTrialBadge).toBeTruthy();
+  it('the Android trial marketing remains conditional and carries a Google Play disclosure', () => {
+    expect(PAYWALL_CODE).toContain("t('paywall.trial.androidConditionalTitle'");
+    expect(PAYWALL_CODE).toContain("t('paywall.legal.androidTrialDisclosure')");
+    for (const root of [PT, EN, ES]) {
+      const paywall = root.paywall as {
+        trial: Record<string, string>;
+        legal: Record<string, string>;
+      };
+      expect(paywall.trial.androidConditionalTitle).toBeTruthy();
+      expect(paywall.legal.androidTrialDisclosure).toBeTruthy();
+    }
   });
 });
 
@@ -100,6 +105,7 @@ describe('FASE 6.4 — coupon copy never frames itself as the origin of the tria
     // separate, store-determined clause.
     expect(strings.freeTrial.toLowerCase()).not.toMatch(/^(código|code|codigo)\b/);
     expect(strings.ineligible.toLowerCase()).not.toMatch(/^(código|code|codigo)\b/);
+    expect(strings.ineligible.toLowerCase()).not.toMatch(/teste|trial|prueba/);
   });
 
   it.each([

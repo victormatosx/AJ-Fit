@@ -28,8 +28,12 @@ describe('Paywall dev subscription override wiring', () => {
   });
 
   it('the row and the sheet are both gated by `devOverrideAllowed`', () => {
-    expect(SOURCE).toMatch(/\{devOverrideAllowed \? \(\s*<DevSubscriptionOverrideRow/);
-    expect(SOURCE).toMatch(/\{devOverrideAllowed \? \(\s*<DevSubscriptionOverridePickerSheet/);
+    // `HIDE_DEV_OVERRIDE_ROW` is a UI-only kill switch layered on top of the
+    // same `devOverrideAllowed` gate (see its doc comment in
+    // PaywallScreen.tsx) — both conditions must still include
+    // `devOverrideAllowed` itself.
+    expect(SOURCE).toMatch(/\{devOverrideAllowed && !HIDE_DEV_OVERRIDE_ROW \? \(\s*<DevSubscriptionOverrideRow/);
+    expect(SOURCE).toMatch(/\{devOverrideAllowed && !HIDE_DEV_OVERRIDE_ROW \? \(\s*<DevSubscriptionOverridePickerSheet/);
   });
 
   it('selecting an option forwards straight to the context setter — no local override state', () => {

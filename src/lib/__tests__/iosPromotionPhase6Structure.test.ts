@@ -44,6 +44,6 @@ describe('FASE 6 — retired Apple Offer Code client path stays absent', () => {
     expect(paywall).toContain('executeIOSPromoPurchase');
     expect(paywall).toContain('await purchase(effectiveRoute.package)');
     expect(paywall).toContain('await purchaseOption(effectiveRoute.option)');
-    expect(paywall).toContain('<CtaText>Continuar</CtaText>');
+    expect(paywall).toContain("<CtaText>{t('actions.continue')}</CtaText>");
   });
 });

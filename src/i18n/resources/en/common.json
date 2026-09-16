@@ -35,9 +35,47 @@
     "profile": "Profile"
   },
   "paywall": {
+    "header": {
+      "restore": "Restore",
+      "restoreAccessibilityLabel": "Restore previous purchases"
+    },
+    "hero": {
+      "eyebrow": "AJ FIT PREMIUM",
+      "title": "Your plan is ready",
+      "imageAccessibilityLabel": "Athlete training at a gym"
+    },
+    "trial": {
+      "title": "{{duration}} free",
+      "subtitle": "to start your transformation",
+      "checking": "Checking your free trial eligibility…",
+      "androidTitle": "Free trial may be available",
+      "compactBadge": "{{duration}} free · then billed {{cadence}}",
+      "confirmedTitle": "Try it free for {{duration}}",
+      "androidConditionalTitle": "Try it free for up to {{duration}}*",
+      "androidConditionalTitleGeneric": "Try it free*",
+      "afterTrial": "You will only be charged after the free period."
+    },
+    "plans": {
+      "title": "Choose your plan",
+      "selectorPrompt": "Choose your ideal plan",
+      "trialTitle": "7 days free + {{plan}}",
+      "introAfterTrial": "Then, choose your plan:",
+      "subtitleDefault": "Select a plan to continue.",
+      "subtitlePlanCompleted": "Your plan is ready — select an option.",
+      "bestValueBadge": "BEST VALUE",
+      "annualValueLine": "Equivalent to {{price}}/month",
+      "cadence": {
+        "monthly": "monthly",
+        "annual": "annually"
+      }
+    },
+    "legal": {
+      "renewalDisclosure": "Auto-renewing subscription, billed by the store each cycle. Cancel anytime before renewal in your store account settings.",
+      "androidTrialDisclosure": "*The free trial is available only to eligible accounts. Anyone who has already used the offer may not qualify again. Google Play determines final eligibility and terms, which are shown before the subscription is confirmed."
+    },
     "promo": {
       "label": "PROMO CODE",
-      "placeholder": "e.g.: ARNALDO",
+      "placeholder": "e.g.: CUPOM10",
       "inputAccessibilityLabel": "Promo code",
       "applyAccessibilityLabel": "Apply promo code",
       "applyButton": "Apply",
@@ -47,12 +85,12 @@
       "applied": "Code applied. Checking App Store terms.",
       "checking": "Checking your eligibility and the actual App Store terms…",
       "freeTrial": "Promotional price applied. The store also included {{duration}} free before the first charge; then {{price}} {{period}}.",
-      "ineligible": "Promotional price applied: {{price}} {{period}}. The free trial period isn't available for this account, per the store.",
+      "ineligible": "Promotional price applied: {{price}} {{period}}.",
       "eligibilityUnavailable": "We couldn't confirm the App Store terms. Please try again before continuing.",
       "configurationUnavailable": "The promotional offer is not available with verifiable terms right now. Please try again.",
       "catalogUnavailable": "We couldn't safely load the promotional plans. Please try again.",
       "trialBadge": "{{duration}} free, then {{price}} {{period}}",
-      "androidTrialBadge": "May include a free trial period, subject to store eligibility",
+      "androidTrialBadge": "May include a free trial, subject to store eligibility",
       "duration": {
         "day_one": "{{count}} day",
         "day_other": "{{count}} days",

@@ -35,9 +35,47 @@
     "profile": "Perfil"
   },
   "paywall": {
+    "header": {
+      "restore": "Restaurar",
+      "restoreAccessibilityLabel": "Restaurar compras anteriores"
+    },
+    "hero": {
+      "eyebrow": "AJ FIT PREMIUM",
+      "title": "Seu plano está pronto",
+      "imageAccessibilityLabel": "Atleta treinando em uma academia"
+    },
+    "trial": {
+      "title": "{{duration}} grátis",
+      "subtitle": "para começar sua evolução",
+      "checking": "Verificando sua elegibilidade para o teste grátis…",
+      "androidTitle": "Teste grátis pode estar disponível",
+      "compactBadge": "{{duration}} grátis · depois cobrança {{cadence}}",
+      "confirmedTitle": "Experimente por {{duration}} grátis",
+      "androidConditionalTitle": "Experimente por até {{duration}} grátis*",
+      "androidConditionalTitleGeneric": "Experimente grátis*",
+      "afterTrial": "Será cobrado apenas após o período gratuito."
+    },
+    "plans": {
+      "title": "Escolha seu plano",
+      "selectorPrompt": "Escolha seu plano ideal",
+      "trialTitle": "7 dias grátis + {{plan}}",
+      "introAfterTrial": "Depois, escolha seu plano:",
+      "subtitleDefault": "Selecione um plano para continuar.",
+      "subtitlePlanCompleted": "Seu plano está pronto — selecione uma opção.",
+      "bestValueBadge": "MAIS VANTAJOSO",
+      "annualValueLine": "Equivalente a {{price}}/mês",
+      "cadence": {
+        "monthly": "mensal",
+        "annual": "anual"
+      }
+    },
+    "legal": {
+      "renewalDisclosure": "Renovação automática, cobrada pela loja a cada ciclo. Cancele quando quiser, antes da renovação, nas configurações da sua conta.",
+      "androidTrialDisclosure": "*O teste grátis está disponível apenas para contas elegíveis. Quem já utilizou a oferta pode não ter direito novamente. A Google Play determina a elegibilidade e as condições finais, exibidas antes da confirmação da assinatura."
+    },
     "promo": {
       "label": "CÓDIGO PROMOCIONAL",
-      "placeholder": "Ex.: ARNALDO",
+      "placeholder": "Ex.: CUPOM10",
       "inputAccessibilityLabel": "Código promocional",
       "applyAccessibilityLabel": "Aplicar código promocional",
       "applyButton": "Aplicar",
@@ -47,12 +85,12 @@
       "applied": "Código aplicado. Verificando as condições da App Store.",
       "checking": "Verificando sua elegibilidade e as condições reais na App Store…",
       "freeTrial": "Preço promocional aplicado. A loja também liberou {{duration}} grátis antes da primeira cobrança; depois {{price}} {{period}}.",
-      "ineligible": "Preço promocional aplicado: {{price}} {{period}}. O período de teste gratuito não está disponível para esta conta, conforme a loja.",
+      "ineligible": "Preço promocional aplicado: {{price}} {{period}}.",
       "eligibilityUnavailable": "Não foi possível confirmar as condições da App Store. Tente novamente antes de continuar.",
       "configurationUnavailable": "A oferta promocional não está disponível com condições verificáveis neste momento. Tente novamente.",
       "catalogUnavailable": "Não foi possível carregar com segurança os planos promocionais. Tente novamente.",
       "trialBadge": "{{duration}} grátis, depois {{price}} {{period}}",
-      "androidTrialBadge": "Pode incluir período de teste gratuito, conforme elegibilidade da loja",
+      "androidTrialBadge": "Pode incluir teste grátis, conforme elegibilidade da loja",
       "duration": {
         "day_one": "{{count}} dia",
         "day_other": "{{count}} dias",
