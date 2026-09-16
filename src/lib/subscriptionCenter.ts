@@ -41,6 +41,22 @@ export type SubscriptionMirrorSnapshot = {
 export type SubscriptionCenterModel = {
   status: SubscriptionCenterStatus;
   hasPremiumAccess: boolean;
+  /**
+   * True only when the CURRENTLY ACTIVE `premium` entitlement's own `store`
+   * field (as reported live by CustomerInfo — never Firestore) is
+   * `'PROMOTIONAL'`, RevenueCat's own signal for an entitlement granted via
+   * the promotional/grant API rather than a store purchase (verified
+   * against `Store` in `@revenuecat/purchases-typescript-internal`, which
+   * `react-native-purchases` re-exports — see subscriptionCenter's own
+   * audit report). This is presentation-only: it never feeds
+   * `hasPremiumAccess`, and it does not invent knowledge about a
+   * SIMULTANEOUS paid subscription — `entitlements.active['premium']` is a
+   * single merged entitlement per RevenueCat's own data model, so if a real
+   * subscription is the one RevenueCat currently surfaces as active, `store`
+   * reports that instead and this stays `false`, exactly reflecting what
+   * CustomerInfo says right now.
+   */
+  isAdministrativeGrant: boolean;
   productIdentifier: string | null;
   productPackage: PurchasesPackage | null;
   planKind: SubscriptionPlanKind;
@@ -265,6 +281,7 @@ export function resolveSubscriptionCenterModel({
   return {
     status,
     hasPremiumAccess: Boolean(activeEntitlement),
+    isAdministrativeGrant: activeEntitlement?.store === 'PROMOTIONAL',
     productIdentifier,
     productPackage,
     planKind: resolvePlanKind(productPackage),

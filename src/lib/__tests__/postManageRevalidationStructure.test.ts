@@ -62,8 +62,17 @@ describe('post-manage revalidation window — late attempts never survive an ide
   });
 
   it('identity-sync effect and unmount both clear the window — no orphaned timers on account switch', () => {
-    expect(subscriptionContext).toContain('detachCustomerInfoListener();\n      clearPostManageWindow();');
-    expect(subscriptionContext).toContain('detachCustomerInfoListener();\n    clearPostManageWindow();');
+    // `detachEntitlementSignalListener()` now runs alongside
+    // `detachCustomerInfoListener()` at every one of these same three spots
+    // (auth-waiting branch, identity-changed branch, unmount) — both
+    // listeners share an identical lifecycle, so this checks they were
+    // never detached independently/inconsistently.
+    expect(subscriptionContext).toContain(
+      'detachCustomerInfoListener();\n      detachEntitlementSignalListener();\n      clearPostManageWindow();',
+    );
+    expect(subscriptionContext).toContain(
+      'detachCustomerInfoListener();\n    detachEntitlementSignalListener();\n    clearPostManageWindow();',
+    );
     expect(subscriptionContext).toContain('clearTimeout(timer)');
   });
 });
@@ -87,11 +96,24 @@ describe('post-manage revalidation window — shared, guarded refresh core', () 
 });
 
 describe('RevenueCat stays the only entitlement source of truth', () => {
-  it('SubscriptionContext never reads Firestore/mirror for entitlement', () => {
-    expect(subscriptionContext).not.toMatch(/from ['"]firebase\/firestore['"]/);
+  it('SubscriptionContext never reads a Firestore field to decide entitlement', () => {
+    // `entitlementSignals/{uid}` (Acesso Premium Gratuito Administrativo) is
+    // a deliberate, narrow exception: a realtime INVALIDATION signal, never
+    // an entitlement source. The guard below proves that exception stays
+    // narrow — no other Firestore read/mirror field feeds entitlement, and
+    // the signal listener itself never inspects the snapshot's data.
     expect(subscriptionContext).not.toContain('getFirestore(');
-    expect(subscriptionContext).not.toContain('onSnapshot(');
     expect(subscriptionContext).not.toContain('.subscription?.');
+    expect(subscriptionContext).not.toContain('.data()');
+  });
+
+  it('the only Firestore read is entitlementSignals, and only used as an opaque invalidation trigger', () => {
+    const onSnapshotCalls = subscriptionContext.match(/onSnapshot\(/g) ?? [];
+    expect(onSnapshotCalls.length).toBe(1);
+    expect(subscriptionContext).toContain("doc(db, 'entitlementSignals', listenerUid)");
+    // The snapshot callback takes no parameter — nothing from the document
+    // is ever read, only the fact that a new snapshot arrived.
+    expect(subscriptionContext).toMatch(/onSnapshot\(\s*doc\(db, 'entitlementSignals', listenerUid\),\s*\(\) => \{/);
   });
 
   it('isPremium is still derived only from CustomerInfo.entitlements.active', () => {

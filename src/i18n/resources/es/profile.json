@@ -40,10 +40,12 @@
       "billingIssue": "Problema de pago",
       "gracePeriod": "Pago pendiente",
       "expired": "Premium expirado",
-      "unknown": "No disponible"
+      "unknown": "No disponible",
+      "administrativeGrant": "Acceso gratuito"
     },
     "message": {
       "active": "Tu acceso Premium está activo.",
+      "administrativeGrant": "Tu acceso Premium fue otorgado por el equipo de AJ Fit y no genera ningún cobro.",
       "trial": "Tu Premium está activo durante el período de prueba.",
       "canceled": "Tu Premium sigue activo hasta el {{date}}. La renovación automática está desactivada.",
       "canceledNoDate": "La renovación automática está desactivada, pero tu Premium sigue activo.",
@@ -76,7 +78,8 @@
     "plan": {
       "monthly": "Premium Mensual",
       "annual": "Premium Anual",
-      "unknown": "AJ Fit Premium"
+      "unknown": "AJ Fit Premium",
+      "administrativeGrant": "Acceso gratuito"
     },
     "period": {
       "month": "mes",

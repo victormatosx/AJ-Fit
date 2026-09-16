@@ -373,6 +373,61 @@ describe('resolveSubscriptionCenterModel', () => {
     expect(active.status).toBe('active');
     expect(canceled.status).toBe('canceled');
   });
+
+  it('flags an administrative grant only from the active entitlement store, never from Firestore', () => {
+    const granted = entitlement({ store: 'PROMOTIONAL', productIdentifier: 'rc_promo_premium_lifetime' });
+    const model = resolveSubscriptionCenterModel({
+      customerInfo: customerInfo({ premium: granted, subscriptionInfo: null }),
+      offerings: null,
+      now: NOW,
+    });
+
+    expect(model.isAdministrativeGrant).toBe(true);
+    expect(model.hasPremiumAccess).toBe(true);
+    expect(model.status).toBe('active');
+    // No store package exists for a promotional product id — the model
+    // must not invent a price/plan for it.
+    expect(model.localizedPrice).toBeNull();
+    expect(model.productPackage).toBeNull();
+  });
+
+  it('does not flag a real paid subscription as an administrative grant', () => {
+    const model = resolveSubscriptionCenterModel({
+      customerInfo: customerInfo(),
+      offerings: null,
+      now: NOW,
+    });
+    expect(model.isAdministrativeGrant).toBe(false);
+  });
+
+  it('does not flag a real free trial as an administrative grant', () => {
+    const trialEntitlement = entitlement({ periodType: 'TRIAL' });
+    const model = resolveSubscriptionCenterModel({
+      customerInfo: customerInfo({
+        premium: trialEntitlement,
+        subscriptionInfo: subscription(trialEntitlement.productIdentifier, { periodType: 'TRIAL' }),
+      }),
+      offerings: null,
+      now: NOW,
+    });
+    expect(model.isAdministrativeGrant).toBe(false);
+    expect(model.status).toBe('trial');
+  });
+
+  it('does not flag a historical (no longer active) promotional entitlement', () => {
+    const expiredGrant = entitlement({
+      store: 'PROMOTIONAL',
+      isActive: false,
+      expirationDate: '2026-08-01T12:00:00.000Z',
+    });
+    const model = resolveSubscriptionCenterModel({
+      customerInfo: customerInfo({ premium: expiredGrant, active: false, subscriptionInfo: null }),
+      offerings: null,
+      now: NOW,
+    });
+    expect(model.isAdministrativeGrant).toBe(false);
+    expect(model.hasPremiumAccess).toBe(false);
+  });
 });
 
 describe('isRestoreVisible', () => {

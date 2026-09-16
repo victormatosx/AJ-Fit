@@ -275,6 +275,34 @@ export async function getCustomerInfo(): Promise<CustomerInfo> {
 }
 
 /**
+ * Marks the SDK's local CustomerInfo cache as stale so the NEXT read hits
+ * RevenueCat's network instead of returning a cached snapshot. This is the
+ * exact, officially-documented use case in `react-native-purchases`' own
+ * type declarations (`Purchases.invalidateCustomerInfoCache`): "useful for
+ * cases where customer information might have been updated outside of the
+ * app, like if a promotional subscription is granted through the RevenueCat
+ * dashboard" — precisely the Acesso Premium Gratuito Administrativo flow.
+ *
+ * Deliberately best-effort and fire-and-forget at every call site: it never
+ * blocks bootstrap, and if the device is offline the SDK simply keeps
+ * serving the last-known CustomerInfo (unaffected — this only changes what
+ * happens on the NEXT successful network read, it doesn't force one or fail
+ * without connectivity). Failures are logged, never thrown, since callers
+ * treat this as an optimization, not a correctness requirement — the
+ * existing login/foreground refresh + listener flow already converges on
+ * the correct CustomerInfo without it, just not necessarily on the very
+ * first cold-start read after an out-of-app grant/revoke.
+ */
+export async function invalidateCustomerInfoCache(): Promise<void> {
+  try {
+    await ensureConfigured();
+    await Purchases.invalidateCustomerInfoCache();
+  } catch (err) {
+    logRevenueCatError('invalidateCustomerInfoCache', err);
+  }
+}
+
+/**
  * Re-fetches CustomerInfo at the sync points required by
  * docs/13_assinaturas_e_billing.md §6 (login, logout, explicit refresh).
  * Delegates to `getCustomerInfo` — same SDK call, kept as a distinct export
@@ -313,10 +341,19 @@ export function extractSubscriptionSignal(info: CustomerInfo | null): Subscripti
 }
 
 /**
- * Subscribes to CustomerInfo pushed by the SDK outside of an explicit call
- * in this file (renewals, cancellations, promotional grants, cross-device
- * changes) — RevenueCat's documented pattern for React Native so entitlement
- * state stays live without requiring an app restart or a manual refresh.
+ * Subscribes to CustomerInfo changes the SDK becomes aware of on THIS
+ * device. Per RevenueCat's own docs (revenuecat.com/docs/customers/
+ * customer-info): "CustomerInfo updates are not pushed to your app from the
+ * RevenueCat backend, updates can only happen from an outbound network
+ * request to RevenueCat" — i.e. this listener fires as a result of THIS
+ * app's own `getCustomerInfo()` calls, purchases, or restores actually
+ * reaching the RevenueCat backend and returning a changed snapshot. It is
+ * NOT a realtime push channel: a promotional grant/revoke made externally
+ * (RevenueCat dashboard/API) does not reach an already-open, idle app on
+ * its own — something in this app must first issue one of those outbound
+ * calls (see `invalidateCustomerInfoCache`/`refreshCustomerInfo`,
+ * `SubscriptionContext.tsx`'s AppState foreground refresh and its
+ * `entitlementSignals/{uid}` Firestore listener) before this fires.
  * Callers must hold onto `listener` and pass the same reference to
  * `removeCustomerInfoListener` on cleanup.
  */

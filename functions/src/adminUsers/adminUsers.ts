@@ -5,6 +5,7 @@ import { requireAdminUid } from '../attribution/adminAuth';
 import { auth, db } from '../lib/firebaseAdmin';
 import { logFunctionError, logInfo } from '../lib/logger';
 import { epochDate, isoDate, resolveSubscriptionPlan, safeBoolean, safeString } from './presentation';
+import { readFreeAccessView } from './adminFreeAccess';
 
 const SCOPE = 'admin:users';
 const USERS = 'users';
@@ -334,7 +335,7 @@ export async function adminGetUserHandler(request: CallableRequest<DetailInput>)
   try {
     const userRef = db.collection(USERS).doc(uid);
     const questionnaireQuery = userRef.collection('questionnaires').orderBy('createdAt', 'desc').limit(1);
-    const [authResult, userSnapshot, questionnaireSnapshot, lockSnapshot, redemptionSnapshot] = await Promise.all([
+    const [authResult, userSnapshot, questionnaireSnapshot, lockSnapshot, redemptionSnapshot, freeAccess] = await Promise.all([
       auth.getUser(uid).catch((error: unknown) => {
         const code = typeof error === 'object' && error !== null && 'code' in error ? String((error as { code: unknown }).code) : '';
         if (code === 'auth/user-not-found') return null;
@@ -344,6 +345,7 @@ export async function adminGetUserHandler(request: CallableRequest<DetailInput>)
       questionnaireQuery.get(),
       db.collection('accountDeletionLocks').doc(uid).get(),
       db.collection('couponRedemptions').doc(uid).get(),
+      readFreeAccessView(uid),
     ]);
     if (!authResult && !userSnapshot.exists) throw new HttpsError('not-found', 'user_not_found');
 
@@ -382,6 +384,7 @@ export async function adminGetUserHandler(request: CallableRequest<DetailInput>)
       },
       subscription: subscriptionView(document),
       revenueCat: { configuredAppUserId: uid, entitlementId: 'premium' },
+      freeAccess,
       questionnaire: questionnaireView(questionnaireSnapshot.docs[0] ?? null),
       attribution: redemptionView(redemptionSnapshot),
       accountDeletion: deletion ? {

@@ -8,6 +8,7 @@ import React, {
   useState,
 } from 'react';
 import { AppState as NativeAppState, type AppStateStatus } from 'react-native';
+import { doc, onSnapshot } from 'firebase/firestore';
 import type {
   CustomerInfo,
   PurchasesOfferings,
@@ -15,12 +16,14 @@ import type {
   SubscriptionOption,
 } from 'react-native-purchases';
 import { useAuth } from './AuthContext';
+import { db } from '../lib/firebase';
 import {
   addCustomerInfoListener,
   removeCustomerInfoListener,
   configureRevenueCat,
   loginRevenueCat,
   logoutRevenueCat,
+  invalidateCustomerInfoCache,
   refreshCustomerInfo as fetchCustomerInfo,
   getOfferings as fetchOfferings,
   purchasePackage as purchasePackageService,
@@ -264,6 +267,90 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     [applyLifecycleEvent, detachCustomerInfoListener],
   );
 
+  const activeEntitlementSignal = useRef<{
+    uid: string;
+    generation: number;
+    unsubscribe: () => void;
+  } | null>(null);
+
+  const detachEntitlementSignalListener = useCallback(() => {
+    if (!activeEntitlementSignal.current) return;
+    activeEntitlementSignal.current.unsubscribe();
+    activeEntitlementSignal.current = null;
+  }, []);
+
+  /**
+   * Realtime invalidation signal ONLY — `entitlementSignals/{uid}` (written
+   * exclusively by `adminGrantFreeAccess`/`adminRevokeFreeAccess` once a
+   * grant/revoke is actually confirmed by RevenueCat AND durably recorded,
+   * see `functions/src/adminUsers/adminFreeAccess.ts`'s `touchEntitlementSignal`)
+   * carries no Premium data whatsoever. This listener never reads a field
+   * from the snapshot and never calls `applyLifecycleEvent` itself — its
+   * only job is deciding WHEN to ask RevenueCat again. `entitlements.active
+   * ['premium']`, read via the existing `invalidateCustomerInfoCache` +
+   * `fetchCustomerInfo` pair below, remains the only thing that can change
+   * `isPremium` — that already happens through `attachCustomerInfoListener`
+   * above (the native SDK's own update listener), exactly like the
+   * cold-start invalidate-then-fetch a few lines down. No new state path.
+   */
+  const attachEntitlementSignalListener = useCallback(
+    (listenerUid: string, generation: number) => {
+      detachEntitlementSignalListener();
+      // The FIRST snapshot after attaching only reflects whatever the
+      // document already contained when the listener was set up (from
+      // cache or an immediate server read) — never a NEW administrative
+      // event that happened while THIS session was already watching. It is
+      // deliberately ignored so every cold start/login doesn't force a
+      // redundant RevenueCat round-trip on top of the one already issued a
+      // few lines below in the identity-sync effect.
+      let receivedFirstSnapshot = false;
+      const unsubscribe = onSnapshot(
+        doc(db, 'entitlementSignals', listenerUid),
+        () => {
+          if (
+            !mounted.current ||
+            identityGeneration.current !== generation ||
+            currentUid.current !== listenerUid ||
+            syncedUid.current !== listenerUid
+          ) {
+            return;
+          }
+          if (!receivedFirstSnapshot) {
+            receivedFirstSnapshot = true;
+            return;
+          }
+          logSubscriptionEvent('subscription_entitlement_signal_received', listenerUid);
+          // Fire-and-forget, same shape as the cold-start invalidate-then-
+          // fetch below: never blocks anything, never surfaces an error (a
+          // missed signal simply falls back to the existing AppState
+          // foreground refresh), and re-checks identity/generation before
+          // applying the network round-trip's side effect, since Firestore
+          // and RevenueCat calls resolve independently and an
+          // identity/logout switch can complete while either is in flight.
+          void invalidateCustomerInfoCache().then(() => {
+            if (
+              !mounted.current ||
+              identityGeneration.current !== generation ||
+              currentUid.current !== listenerUid ||
+              syncedUid.current !== listenerUid
+            ) {
+              return undefined;
+            }
+            return fetchCustomerInfo().catch(() => {});
+          });
+        },
+        () => {
+          // Permission-denied (e.g. mid-logout) or transient offline errors
+          // are expected here and never surfaced — the AppState foreground
+          // refresh remains the fallback path regardless of this listener's
+          // health.
+        },
+      );
+      activeEntitlementSignal.current = { uid: listenerUid, generation, unsubscribe };
+    },
+    [detachEntitlementSignalListener],
+  );
+
   // The one and only place `loginRevenueCat`/`logoutRevenueCat` are called.
   // Waits for Firebase to settle (`initializing`) so a cold start with a
   // persisted session doesn't fire a spurious logout before the real uid
@@ -275,6 +362,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
       syncedUid.current = undefined;
       refreshSeq.current += 1;
       detachCustomerInfoListener();
+      detachEntitlementSignalListener();
       clearPostManageWindow();
       applyLifecycleEvent({ type: 'auth-waiting', generation });
       return;
@@ -285,6 +373,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     syncedUid.current = undefined;
     refreshSeq.current += 1;
     detachCustomerInfoListener();
+    detachEntitlementSignalListener();
     clearPostManageWindow();
     applyLifecycleEvent({ type: 'identity-changed', uid: identityUid, generation });
     logSubscriptionEvent('subscription_identity_sync_started', identityUid);
@@ -350,6 +439,43 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
             customerInfo: info,
           });
           attachCustomerInfoListener(identityUid, generation);
+          attachEntitlementSignalListener(identityUid, generation);
+
+          // Fire-and-forget: an administrative grant/revoke (Acesso Premium
+          // Gratuito Administrativo) can happen while the app is closed.
+          // `logIn` above may have returned a cached CustomerInfo snapshot
+          // predating that change. Invalidating the SDK cache and reading
+          // once more — right after the listener above is attached — lets
+          // that SAME listener's own generation/uid-checked handler pick up
+          // a fresher CustomerInfo on THIS cold start if one is available,
+          // instead of only on the next foreground transition. Never
+          // awaited (must not delay bootstrap) and never surfaced as an
+          // error (see `invalidateCustomerInfoCache`'s doc comment — this is
+          // an optimization, not a correctness requirement, and offline
+          // devices simply keep whatever `info` was already applied above).
+          //
+          // This chain runs OUTSIDE `enqueueSdkOperation`'s serialization
+          // (it is deliberately not awaited, so it does not block the
+          // queue) — a logout/re-login for a DIFFERENT uid can start and
+          // finish while this is still in flight, since `Purchases` is a
+          // single native-module-wide identity. The re-check below,
+          // mirroring every other resume point in this effect
+          // (`mounted`/`identityGeneration`/`currentUid`), ensures the
+          // extra `getCustomerInfo()` is only issued if this cold start's
+          // identity is STILL the current one by the time the cache
+          // invalidation round-trip completes — otherwise it would query
+          // CustomerInfo for whichever uid the SDK has since switched to,
+          // wastefully and outside this identity's own listener/generation.
+          void invalidateCustomerInfoCache().then(() => {
+            if (
+              !mounted.current ||
+              generation !== identityGeneration.current ||
+              identityUid !== currentUid.current
+            ) {
+              return undefined;
+            }
+            return fetchCustomerInfo().catch(() => {});
+          });
         } else {
           await logoutRevenueCat();
           if (
@@ -393,6 +519,8 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     applyLifecycleEvent,
     attachCustomerInfoListener,
     detachCustomerInfoListener,
+    attachEntitlementSignalListener,
+    detachEntitlementSignalListener,
     clearPostManageWindow,
     enqueueSdkOperation,
   ]);
@@ -404,9 +532,10 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
       identityGeneration.current += 1;
       refreshSeq.current += 1;
       detachCustomerInfoListener();
+      detachEntitlementSignalListener();
       clearPostManageWindow();
     };
-  }, [detachCustomerInfoListener, clearPostManageWindow]);
+  }, [detachCustomerInfoListener, detachEntitlementSignalListener, clearPostManageWindow]);
 
   const refreshSingleFlight = useRef(createIdentityScopedSingleFlight()).current;
 

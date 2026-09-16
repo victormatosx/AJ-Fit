@@ -281,29 +281,50 @@ function StatusCard({
 }) {
   const { theme } = useTheme();
   const { t } = useTranslation('profile');
-  const tier = STATUS_TIER[model.status];
+  // An administrative grant is a presentation-only overlay on top of
+  // whatever `resolveStatus` already computed from CustomerInfo (almost
+  // always `active`, since there's no store subscription/cancellation
+  // signal to react to) — it never introduces a new authorization status,
+  // only replaces how this one gets shown, per `subscriptionCenter.ts`'s
+  // `isAdministrativeGrant` doc comment.
+  const tier: StatusTier = model.isAdministrativeGrant ? 'info' : STATUS_TIER[model.status];
   const tone = tierTones(theme)[tier];
-  const badge = statusBadge(model.status, t);
-  const description = statusDescription(model, formatDate, t);
-  const primary = primaryFact(model, formatDate, t);
-  const planLine = planPriceLine(model, t);
+  const badge = model.isAdministrativeGrant
+    ? t('subscriptionCenter.badge.administrativeGrant')
+    : statusBadge(model.status, t);
+  const description = model.isAdministrativeGrant
+    ? t('subscriptionCenter.message.administrativeGrant')
+    : statusDescription(model, formatDate, t);
+  // No renewal/access-until/lifetime date is ever shown for an
+  // administrative grant — there is no billing period to describe, and the
+  // underlying `currentPeriodEndsAt` for a "lifetime" grant is a ~100-year
+  // placeholder (billing/revenueCatGrants.ts), never a real commercial date.
+  const primary = model.isAdministrativeGrant ? null : primaryFact(model, formatDate, t);
+  const planLine = model.isAdministrativeGrant
+    ? t('subscriptionCenter.plan.administrativeGrant')
+    : planPriceLine(model, t);
   // "Active" is self-evident from the badge + next-renewal date, so the
   // longer explanatory sentence is reserved for states that actually need
   // context the user can't get from a glance (canceled, billing issues...).
-  const showDescription = model.status !== 'active';
+  // An administrative grant always needs that context — there's no
+  // renewal date at all to fall back on for a glance-level understanding.
+  const showDescription = model.isAdministrativeGrant || model.status !== 'active';
+  const manageable = !model.isAdministrativeGrant;
 
   return (
     <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={t('subscriptionCenter.actions.manage')}
-      accessibilityState={{ disabled, busy: managing }}
-      onPress={onPress}
-      disabled={disabled}
+      accessibilityRole={manageable ? 'button' : 'text'}
+      accessibilityLabel={
+        manageable ? t('subscriptionCenter.actions.manage') : t('subscriptionCenter.brand')
+      }
+      accessibilityState={{ disabled: disabled || !manageable, busy: managing }}
+      onPress={manageable ? onPress : undefined}
+      disabled={disabled || !manageable}
       style={({ pressed }) => ({
         borderRadius: 14,
         borderWidth: 1,
         borderColor: theme.colors.settingsGroupBorder,
-        backgroundColor: pressed
+        backgroundColor: pressed && manageable
           ? theme.colors.surfacePressed
           : theme.colors.settingsGroupBackground,
         padding: 18,
@@ -353,9 +374,9 @@ function StatusCard({
           </View>
           {managing ? (
             <ActivityIndicator size="small" color={theme.colors.textMuted} />
-          ) : (
+          ) : manageable ? (
             <Icon name="chevron-right" size={14} color={theme.colors.textFaint} />
-          )}
+          ) : null}
         </View>
       </View>
 
@@ -446,13 +467,17 @@ function DetailsCard({
       value: formatDate(model.startedAt),
     });
   }
-  if (model.store) {
+  // "Loja: RevenueCat" would be a meaningless/confusing label for an
+  // administrative grant (there is no store involved) — the row is omitted
+  // entirely rather than relabeled, per the feature's UX requirements.
+  if (model.store && !model.isAdministrativeGrant) {
     rows.push({
       label: t('subscriptionCenter.field.store'),
       value: storeLabel(model.store, t),
     });
   }
   if (
+    !model.isAdministrativeGrant &&
     model.latestPurchaseAt &&
     (!model.startedAt || model.latestPurchaseAt.getTime() > model.startedAt.getTime() + 60_000) &&
     model.status !== 'trial'
@@ -462,13 +487,19 @@ function DetailsCard({
       value: formatDate(model.latestPurchaseAt),
     });
   }
-  if (model.canceledAt) {
+  // A promotional grant has no store transaction to cancel and no payment
+  // to fail — these fields should already be null for it (they come from
+  // `entitlement.unsubscribeDetectedAt`/`billingIssueDetectedAt`, which
+  // RevenueCat has no reason to set on a promotional entitlement), but the
+  // guard is kept explicit so this card can never narrate a commercial
+  // cancellation/billing story for an access that was never a subscription.
+  if (model.canceledAt && !model.isAdministrativeGrant) {
     rows.push({
       label: t('subscriptionCenter.field.canceledOn'),
       value: formatDate(model.canceledAt),
     });
   }
-  if (model.billingIssueDetectedAt) {
+  if (model.billingIssueDetectedAt && !model.isAdministrativeGrant) {
     rows.push({
       label: t('subscriptionCenter.field.paymentIssueSince'),
       value: formatDate(model.billingIssueDetectedAt),

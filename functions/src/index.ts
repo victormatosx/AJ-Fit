@@ -21,6 +21,8 @@ import { requestAccountDeletion } from './accountDeletion/requestAccountDeletion
 import { cleanupPendingAccountDeletions } from './accountDeletion/reconciliation/scheduler';
 import { onAccountDeletionRequested } from './accountDeletion/immediateDispatch';
 import { adminGetUserHandler, adminListUsersHandler } from './adminUsers/adminUsers';
+import { adminGrantFreeAccessHandler, adminRevokeFreeAccessHandler } from './adminUsers/adminFreeAccess';
+import { REVENUECAT_ADMIN_GRANTS_API_KEY } from './billing/revenueCatGrants';
 import { adminGetCouponHandler, adminListCouponsHandler } from './adminCoupons/adminCoupons';
 import { recordWorkoutLifecycleTelemetryHandler } from './telemetry/workoutLifecycleTelemetry';
 import { onTrustedWorkoutLifecycleEventCreated } from './telemetry/trustedWorkoutLifecycleTelemetry';
@@ -162,6 +164,38 @@ export const adminSetPromoCodeActive = onCall(adminSetPromoCodeActiveHandler);
  */
 export const adminListUsers = onCall(adminListUsersHandler);
 export const adminGetUser = onCall(adminGetUserHandler);
+
+/**
+ * Administrative "free Premium access" surface (docs: Acesso Premium
+ * Gratuito Administrativo). `requireAdminUid` re-verifies the caller on
+ * every invocation (see `attribution/adminAuth.ts`); the target uid always
+ * comes from `request.data`, the acting admin always from
+ * `request.auth.uid` (adminFreeAccess.ts never trusts a caller-supplied
+ * admin identity).
+ *
+ * `REVENUECAT_ADMIN_GRANTS_API_KEY` is bound here — a DEDICATED Secret API
+ * Key ("AJ Fit Administrative Grants", API Version V1 in the RevenueCat
+ * dashboard), separate from `REVENUECAT_API_SECRET_KEY` (the V2 key
+ * `revenueCatWebhook`/`RevenueCatV2Client` use for read-only calls). Only
+ * these two callables depend on it; `billing/revenueCatGrants.ts` reads it
+ * exclusively. This key never reaches `ajfit-admin` or the mobile client.
+ *
+ * App Check is intentionally NOT enabled here yet: `ajfit-admin` has no
+ * App Check provider configured client-side today (verified — no
+ * `initializeAppCheck` call anywhere in that repo), so enforcing it would
+ * reject every call from the panel outright. This mirrors the existing gap
+ * on every other `adminX` callable in this file and is called out as a
+ * known security debt item in the feature's audit report, not silently
+ * fixed here (which would be a behavior change outside this task's scope).
+ */
+export const adminGrantFreeAccess = onCall(
+  { secrets: [REVENUECAT_ADMIN_GRANTS_API_KEY] },
+  adminGrantFreeAccessHandler,
+);
+export const adminRevokeFreeAccess = onCall(
+  { secrets: [REVENUECAT_ADMIN_GRANTS_API_KEY] },
+  adminRevokeFreeAccessHandler,
+);
 
 /** Commercial intelligence over the existing promo attribution + subscription mirrors. */
 export const adminListCoupons = onCall(adminListCouponsHandler);

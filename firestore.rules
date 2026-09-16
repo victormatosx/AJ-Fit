@@ -2304,6 +2304,45 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Administrative "free Premium access" audit trail
+    // (functions/src/adminUsers/adminFreeAccess.ts) — current grant/revoke
+    // state per uid plus its full event history in the `events`
+    // subcollection. Written EXCLUSIVELY by `adminGrantFreeAccessHandler`/
+    // `adminRevokeFreeAccessHandler` via the Admin SDK, which bypasses these
+    // rules by design (see `promoCodes` above for the same pattern). This
+    // collection is NEVER the source of truth for Premium access — the
+    // mobile app never reads it and must keep using
+    // `customerInfo.entitlements.active['premium']` exclusively. It exists
+    // only so `ajfit-admin` can display and audit administrative grants.
+    // `allow read, write: if false` for every client, including the target
+    // user themselves and admins reading through the client SDK — the panel
+    // only ever sees this data through the `adminGetUser` callable.
+    match /adminAccessGrants/{uid} {
+      allow read, write: if false;
+
+      match /events/{eventId} {
+        allow read, write: if false;
+      }
+    }
+
+    // Minimal, non-sensitive realtime invalidation signal for the
+    // administrative free-access feature
+    // (functions/src/adminUsers/adminFreeAccess.ts's `touchEntitlementSignal`
+    // — the ONLY writer, via Admin SDK). Contains nothing but a timestamp —
+    // no grant state, no admin uid, no reason, no history (all of that stays
+    // in `adminAccessGrants` above, which the client can never read). The
+    // mobile client is allowed to read ONLY its own uid's document so
+    // `SubscriptionContext` can react to an administrative grant/revoke by
+    // invalidating its RevenueCat cache and re-fetching CustomerInfo — it
+    // never reads any field here to decide Premium access; RevenueCat's
+    // `entitlements.active['premium']` remains the only authority. Write
+    // stays backend-only in every case, matching every other collection in
+    // this file.
+    match /entitlementSignals/{uid} {
+      allow read: if isOwner(uid);
+      allow write: if false;
+    }
+
     // Fase 4/5 account-deletion workflow state
     // (functions/src/accountDeletion/{repository,activeAccountGuard}.ts).
     // Backend-only in both directions: the client never creates, reads, or
