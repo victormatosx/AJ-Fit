@@ -53,12 +53,17 @@ import {
   cleanupPhotoVaultShareFiles,
   cleanupPhotoVaultTempFiles,
 } from './src/services/photoVaultFileCrypto';
+import {
+  kickPhotoVaultUploadQueue,
+  reconcilePhotoVaultUploadQueue,
+} from './src/services/photoVaultUploadQueue';
 import { logPhotoVaultIssue } from './src/lib/photoVaultErrors';
 import { logInfo } from './src/lib/logger';
 import { configureWorkoutLifecycleTelemetry } from './src/workoutLifecycle/telemetryProvider';
 import { DeepLinkProvider } from './src/state/DeepLinkContext';
 import { PushNotificationsRuntime } from './src/components/PushNotificationsRuntime';
 import { PushDeviceRegistrationRuntime } from './src/components/PushDeviceRegistrationRuntime';
+import { SubscriptionCelebrationRuntime } from './src/components/subscription/SubscriptionCelebrationRuntime';
 
 // Operational lifecycle events are delivered to an authenticated/App-Check
 // callable and then Cloud Logging. Installation is synchronous; delivery is
@@ -567,9 +572,30 @@ function AppContent() {
     // private screen can be unlocked. Failure is observable but never blocks
     // the public app bootstrap.
     try {
-      // A cold process has no resumable local upload queue. Both plaintext
-      // and abandoned ciphertext staging files are therefore safe to remove.
+      // Both swept directories live under the CACHE root and hold only
+      // transient work: staged plaintext, and ciphertext staged for a transfer
+      // that was meant to finish inside a single call.
+      //
+      // This used to be justified by "a cold process has no resumable local
+      // upload queue". That is no longer true — a prepared photo now survives
+      // a force-kill — but the sweep stays correct, because the durable queue
+      // deliberately does NOT live here: its ciphertext is in the DOCUMENT
+      // directory (`services/photoVaultDurableStore`), which nothing in this
+      // sweep can reach. Reconciling that queue is a separate step below, and
+      // it is the only thing allowed to delete a pending photo.
       cleanupPhotoVaultTempFiles({ includeEncrypted: true });
+    } catch {
+      logPhotoVaultIssue('startupCleanup', 'vaultTempCleanupFailed');
+    }
+    try {
+      // Matches the persisted queue against the ciphertext actually on disk.
+      // Drops only what is PROVEN unusable and reclaims only blobs no job
+      // claims; anything ambiguous is kept, because the cost of keeping it is
+      // disk and the cost of dropping it is a photo the user believes is
+      // saved. Needs no vault session: it reads records and file sizes only.
+      void reconcilePhotoVaultUploadQueue().then(() => {
+        kickPhotoVaultUploadQueue('cold-start');
+      });
     } catch {
       logPhotoVaultIssue('startupCleanup', 'vaultTempCleanupFailed');
     }
@@ -636,9 +662,12 @@ function AppContent() {
                             Only the definitive UI is held behind this visual gate,
                             preventing a stored Light preference from first painting
                             the real app in Dark. */}
-                        {themeHydrated && fontsLoaded && i18nReady
-                          ? <RootNavigator />
-                          : <FullScreenLoading />}
+                        {themeHydrated && fontsLoaded && i18nReady ? (
+                          <>
+                            <RootNavigator />
+                            <SubscriptionCelebrationRuntime />
+                          </>
+                        ) : <FullScreenLoading />}
                       </DeepLinkProvider>
                     </PhotoVaultProvider>
                   </AppStateProviderConnected>

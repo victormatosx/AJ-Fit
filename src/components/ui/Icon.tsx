@@ -6,11 +6,11 @@ export type IconName =
   | 'bolt' | 'dumbbell' | 'home' | 'chart' | 'user' | 'play'
   | 'arrow-right' | 'arrow-left' | 'check' | 'plus' | 'minus'
   | 'calendar' | 'sparkles' | 'target' | 'flame' | 'timer'
-  | 'heart' | 'apple' | 'lock' | 'mail' | 'eye' | 'settings'
+  | 'heart' | 'apple' | 'lock' | 'lock-open' | 'mail' | 'eye' | 'settings'
   | 'crown' | 'chevron-right' | 'chevron-down' | 'x' | 'swap' | 'list' | 'shield'
   | 'trophy' | 'camera' | 'google' | 'instagram' | 'share'
   | 'bell' | 'moon' | 'globe' | 'ruler' | 'download' | 'trash' | 'help-circle'
-  | 'message' | 'alert-triangle' | 'info' | 'file-text' | 'key' | 'star';
+  | 'message' | 'alert-triangle' | 'info' | 'file-text' | 'key' | 'star' | 'search';
 
 type Props = {
   name: IconName;
@@ -116,6 +116,8 @@ export function Icon({ name, size = 22, color: colorProp, stroke = 1.7, filled =
       return <Svg {...common}><Path {...p} d="M12 3v12M8 7l4-4 4 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" /></Svg>;
     case 'lock':
       return <Svg {...common}><Rect {...p} x="4" y="11" width="16" height="10" rx="2" /><Path {...p} d="M8 11V7a4 4 0 018 0v4" /></Svg>;
+    case 'lock-open':
+      return <Svg {...common}><Rect {...p} x="4" y="11" width="16" height="10" rx="2" /><Path {...p} d="M8 11V7a4 4 0 017.9-1" /></Svg>;
     case 'mail':
       return <Svg {...common}><Rect {...p} x="3" y="5" width="18" height="14" rx="2" /><Path {...p} d="M3 7l9 7 9-7" /></Svg>;
     case 'eye':
@@ -166,6 +168,8 @@ export function Icon({ name, size = 22, color: colorProp, stroke = 1.7, filled =
       return <Svg {...common}><Circle {...p} cx="8" cy="14" r="4" /><Path {...p} d="M11 11l9-9M17 5l3 3M14 8l2 2" /></Svg>;
     case 'star':
       return <Svg {...common}><Path d="M12 2.5l2.9 6.2 6.6.7-4.9 4.6 1.3 6.6L12 17.9l-5.9 3.3L7.4 14 2.5 9.4l6.6-.7L12 2.5z" fill={color} stroke={color} strokeWidth={stroke} strokeLinejoin="round" /></Svg>;
+    case 'search':
+      return <Svg {...common}><Circle {...p} cx="10.5" cy="10.5" r="6.5" /><Path {...p} d="M15.5 15.5L21 21" /></Svg>;
     default:
       return null;
   }
