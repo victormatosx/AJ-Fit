@@ -54,6 +54,9 @@ export function passwordChangeIssueFromError(error: unknown): PasswordChangeIssu
     code === 'passwordUnchanged' ||
     code === 'passwordTooShort' ||
     code === 'passwordTooLong' ||
+    code === 'passwordMissingUppercase' ||
+    code === 'passwordMissingNumber' ||
+    code === 'passwordMissingSpecialChar' ||
     code === 'passwordPolicyMismatch'
   ) {
     return code;

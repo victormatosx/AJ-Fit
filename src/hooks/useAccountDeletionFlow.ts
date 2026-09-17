@@ -32,7 +32,7 @@ import { useAuth } from '../state/AuthContext';
  *     called exactly once, only after the backend accepts the request.
  */
 
-export type AccountDeletionFlowStep = 'intro' | 'reauth' | 'confirm' | 'submitting';
+export type AccountDeletionFlowStep = 'intro' | 'reauth' | 'confirm' | 'submitting' | 'reconciliation';
 
 export type AccountDeletionFlowIssue =
   | AccountDeletionReauthErrorCode
@@ -79,6 +79,24 @@ export function useAccountDeletionFlow() {
     setReauthPasswordState('');
     setReauthProvider(null);
   }, []);
+
+  const shutdownAcceptedDeletion = useCallback(async () => {
+    if (!user) return;
+    await finalizeAccountDeletionClientShutdown(user.uid, logout).catch(() => {
+      // The accepted backend request remains authoritative even if local
+      // cleanup cannot finish completely.
+    });
+  }, [user, logout]);
+
+  const completeAcceptedDeletion = useCallback(async () => {
+    if (operationLock.current) return;
+    operationLock.current = true;
+    try {
+      await shutdownAcceptedDeletion();
+    } finally {
+      operationLock.current = false;
+    }
+  }, [shutdownAcceptedDeletion]);
 
   /** Called by the screen's `useScreenFocusEffect` cleanup — wipes everything transient, same discipline as `ChangePasswordScreen`. */
   const reset = useCallback(() => {
@@ -169,12 +187,13 @@ export function useAccountDeletionFlow() {
             // but this is surfaced, never silently promised as a fresh
             // success.
             setIssue('reconciliationRequired');
+            setStepState('reconciliation');
+            return;
           }
           if (user) {
             await finalizeAccountDeletionClientShutdown(user.uid, logout).catch(() => {
-              // Best-effort — the backend is already authoritative
-              // (Fase 5 §63/Fase 12 §25). Local cleanup failing here must
-              // never "cancel" an accepted deletion.
+              // The accepted backend request remains authoritative even if local
+              // cleanup cannot complete immediately.
             });
           }
           return;
@@ -231,6 +250,7 @@ export function useAccountDeletionFlow() {
 
   return {
     accepted,
+    completeAcceptedDeletion,
     confirmDeletion,
     continueToNextStep,
     issue,

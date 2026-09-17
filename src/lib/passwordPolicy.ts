@@ -1,9 +1,36 @@
-export const PASSWORD_POLICY_MIN_LENGTH = 15;
+export const PASSWORD_POLICY_MIN_LENGTH = 8;
 export const PASSWORD_POLICY_MAX_LENGTH = 4096;
+
+const UPPERCASE_RE = /[A-Z]/;
+const NUMBER_RE = /[0-9]/;
+
+/**
+ * Exact non-alphanumeric character set Firebase's remote Identity Platform
+ * password policy accepts for this project (`allowedNonAlphanumericCharacters`
+ * in the `validatePassword` response). A generic "anything non-alphanumeric"
+ * regex would accept characters (space, `+`, `=`, emoji, accents, ...) that
+ * Firebase's own policy does not recognize as special — a password approved
+ * locally could then still be rejected remotely. Checked via a `Set`, never a
+ * regex character class, so nothing needs escaping and nothing can silently
+ * admit a character outside this exact list.
+ */
+export const PASSWORD_POLICY_ALLOWED_SPECIAL_CHARACTERS = '^$*.[]{}()?"!@#%&/\\,><\':;|_~`-';
+
+const ALLOWED_SPECIAL_CHARACTER_SET = new Set(PASSWORD_POLICY_ALLOWED_SPECIAL_CHARACTERS);
+
+function containsAllowedSpecialCharacter(password: string): boolean {
+  for (const character of password) {
+    if (ALLOWED_SPECIAL_CHARACTER_SET.has(character)) return true;
+  }
+  return false;
+}
 
 export type NewPasswordPolicyIssue =
   | 'passwordTooShort'
   | 'passwordTooLong'
+  | 'passwordMissingUppercase'
+  | 'passwordMissingNumber'
+  | 'passwordMissingSpecialChar'
   | 'passwordPolicyMismatch';
 
 /**
@@ -16,6 +43,9 @@ export function validateNewPasswordLocally(
 ): NewPasswordPolicyIssue | null {
   if (password.length < PASSWORD_POLICY_MIN_LENGTH) return 'passwordTooShort';
   if (password.length > PASSWORD_POLICY_MAX_LENGTH) return 'passwordTooLong';
+  if (!UPPERCASE_RE.test(password)) return 'passwordMissingUppercase';
+  if (!NUMBER_RE.test(password)) return 'passwordMissingNumber';
+  if (!containsAllowedSpecialCharacter(password)) return 'passwordMissingSpecialChar';
   return null;
 }
 
@@ -49,6 +79,9 @@ export async function validateNewPasswordAgainstFirebase(
     if (status.isValid) return null;
     if (status.meetsMinPasswordLength === false) return 'passwordTooShort';
     if (status.meetsMaxPasswordLength === false) return 'passwordTooLong';
+    if (status.containsUppercaseLetter === false) return 'passwordMissingUppercase';
+    if (status.containsNumericCharacter === false) return 'passwordMissingNumber';
+    if (status.containsNonAlphanumericCharacter === false) return 'passwordMissingSpecialChar';
     return 'passwordPolicyMismatch';
   } catch {
     return null;

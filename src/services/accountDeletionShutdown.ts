@@ -1,5 +1,7 @@
 import { clearOnboardingDraft } from '../onboarding/draftStorage';
-import { removeCachedThumbnailsForUser } from './photoVaultEncryptedCache';
+import { removePhotoVaultCiphertextForUser } from './photoVaultEncryptedCache';
+import { removeLockedPreviewDerivativesForUser } from './photoVaultLockedPreviewCache';
+import { purgePhotoVaultUploadsForUser } from './photoVaultUploadQueue';
 import { clearWorkoutSubstitutionPreferences } from './workoutSubstitutionsStorage';
 import { clearStoredUnitsPreference } from '../units/unitsStorage';
 import { clearPrescriptionSnapshotsForUser } from '../workoutPrescription/storage';
@@ -30,12 +32,13 @@ import { clearNotificationAccountPreferenceState } from './notificationAccountLi
  *     route left for back-navigation to return to; nothing new to build.
  *
  * What was NOT already covered, and is genuinely new here: the encrypted
- * Photo Vault THUMBNAIL cache (a separate on-disk cache from the vault key
- * itself, see `photoVaultEncryptedCache.ts`) and the onboarding draft are
- * not cleared by ordinary logout (correctly — logout is not "this account
- * is being permanently deleted"). For an ACCEPTED deletion specifically,
- * clearing them now, on the device, rather than waiting for the remote
- * hard-delete phases, is strictly more defensive.
+ * Photo Vault CIPHERTEXT caches — both the thumbnail and the full namespace,
+ * separate on-disk caches from the vault key itself, see
+ * `photoVaultEncryptedCache.ts` — and the onboarding draft are not cleared by
+ * ordinary logout (correctly — logout is not "this account is being
+ * permanently deleted"). For an ACCEPTED deletion specifically, clearing them
+ * now, on the device, rather than waiting for the remote hard-delete phases,
+ * is strictly more defensive.
  *
  * Fase 11 audit finding: `WorkoutScreen`'s "permanent" exercise-substitution
  * preferences (`ajfit-subs`, `workoutSubstitutionsStorage.ts`) are stored
@@ -82,7 +85,20 @@ export async function finalizeAccountDeletionClientShutdown(
   logout: () => Promise<void>,
 ): Promise<void> {
   await Promise.allSettled([
-    Promise.resolve().then(() => removeCachedThumbnailsForUser(uid)),
+    Promise.resolve().then(() => removePhotoVaultCiphertextForUser(uid)),
+    Promise.resolve().then(() => removeLockedPreviewDerivativesForUser(uid)),
+    /*
+     * Pending photo uploads are the one Photo Vault artifact a mere logout
+     * deliberately KEEPS — see `isolatePhotoVaultUploadsFor`. Signing out
+     * only parks them, because they hold the sole copy of a photo the user
+     * was told had been saved, and they resume if that account signs back in.
+     *
+     * An accepted deletion is the opposite situation: the user asked for the
+     * account to be gone, so the durable ciphertext must go with it rather
+     * than sit in the document directory waiting for a sign-in that will
+     * never come. This is the only caller allowed to destroy them.
+     */
+    purgePhotoVaultUploadsForUser(uid),
     clearOnboardingDraft(),
     clearWorkoutSubstitutionPreferences(),
     clearStoredUnitsPreference(),

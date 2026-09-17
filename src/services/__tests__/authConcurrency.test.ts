@@ -69,7 +69,7 @@ describe('email authentication concurrency', () => {
     mocks.createUser.mockReturnValueOnce(pending.promise);
 
     const calls = Array.from({ length: 20 }, () =>
-      signUpWithEmail('person@example.com', 'valid-passphrase', 'Person'),
+      signUpWithEmail('person@example.com', 'Valid-Passphrase1', 'Person'),
     );
     await vi.waitFor(() => expect(mocks.createUser).toHaveBeenCalledTimes(1));
     pending.resolve({ user: { uid: 'user-1' } });
@@ -78,23 +78,30 @@ describe('email authentication concurrency', () => {
     expect(mocks.updateProfile).toHaveBeenCalledTimes(1);
   });
 
-  it('rejects a 14-character signup password before account creation', async () => {
+  it('rejects a 7-character signup password before account creation', async () => {
     await expect(
-      signUpWithEmail('person@example.com', 'a'.repeat(14), 'Person'),
+      signUpWithEmail('person@example.com', 'a'.repeat(7), 'Person'),
     ).rejects.toMatchObject({ code: 'passwordTooShort' });
     expect(mocks.createUser).not.toHaveBeenCalled();
   });
 
-  it('allows a 15-character lowercase signup password to reach Firebase', async () => {
-    mocks.createUser.mockResolvedValueOnce({ user: { uid: 'user-15' } });
+  it('rejects an 8-character signup password missing composition rules before account creation', async () => {
+    await expect(
+      signUpWithEmail('person@example.com', 'a'.repeat(8), 'Person'),
+    ).rejects.toMatchObject({ code: 'passwordMissingUppercase' });
+    expect(mocks.createUser).not.toHaveBeenCalled();
+  });
+
+  it('allows an 8-character signup password meeting every composition rule to reach Firebase', async () => {
+    mocks.createUser.mockResolvedValueOnce({ user: { uid: 'user-8' } });
 
     await expect(
-      signUpWithEmail('person@example.com', 'a'.repeat(15), 'Person'),
-    ).resolves.toMatchObject({ uid: 'user-15' });
+      signUpWithEmail('person@example.com', 'Abcdef1!', 'Person'),
+    ).resolves.toMatchObject({ uid: 'user-8' });
     expect(mocks.createUser).toHaveBeenCalledWith(
       expect.anything(),
       'person@example.com',
-      'a'.repeat(15),
+      'Abcdef1!',
     );
   });
 
@@ -135,7 +142,7 @@ describe('email authentication concurrency', () => {
     mocks.createUser.mockRejectedValueOnce({ code: 'auth/email-already-in-use' });
 
     await expect(
-      signUpWithEmail('person@example.com', 'valid-passphrase', 'Person'),
+      signUpWithEmail('person@example.com', 'Valid-Passphrase1', 'Person'),
     ).rejects.toMatchObject({
       code: 'auth/email-already-in-use',
       message:
@@ -202,10 +209,10 @@ describe('email authentication concurrency', () => {
       .mockResolvedValueOnce(undefined);
 
     await expect(
-      signUpWithEmail('person@example.com', 'valid-passphrase', 'Person'),
+      signUpWithEmail('person@example.com', 'Valid-Passphrase1', 'Person'),
     ).rejects.toMatchObject({ code: 'auth/network-request-failed' });
     await expect(
-      signUpWithEmail('person@example.com', 'valid-passphrase', 'Person'),
+      signUpWithEmail('person@example.com', 'Valid-Passphrase1', 'Person'),
     ).resolves.toMatchObject({ uid: 'user-1' });
 
     await expect(resetPassword('person@example.com')).rejects.toMatchObject({

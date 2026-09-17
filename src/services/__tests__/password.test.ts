@@ -37,8 +37,8 @@ import { changePasswordWithReauthentication } from '../password';
 
 const input = {
   currentPassword: '123456',
-  newPassword: 'new-passphrase-valid',
-  confirmation: 'new-passphrase-valid',
+  newPassword: 'Passphrase1!',
+  confirmation: 'Passphrase1!',
 };
 
 function user(providers = ['password']): TestUser {
@@ -76,7 +76,7 @@ describe('changePasswordWithReauthentication', () => {
     );
     expect(mocks.update).toHaveBeenCalledWith(
       mocks.auth.currentUser,
-      'new-passphrase-valid',
+      'Passphrase1!',
     );
     expect(mocks.reauthenticate.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.update.mock.invocationCallOrder[0],
@@ -131,7 +131,7 @@ describe('changePasswordWithReauthentication', () => {
   it('checks only the new password against Firebase policy before reauth', async () => {
     await changePasswordWithReauthentication(input);
 
-    expect(mocks.policy).toHaveBeenCalledWith('new-passphrase-valid');
+    expect(mocks.policy).toHaveBeenCalledWith('Passphrase1!');
     expect(mocks.policy).not.toHaveBeenCalledWith('123456');
   });
 });

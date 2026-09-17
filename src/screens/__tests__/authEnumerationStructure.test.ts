@@ -12,7 +12,7 @@ describe('authentication enumeration boundaries', () => {
   it('routes password login through the private sign-in error mapper', () => {
     const screen = read('src/screens/AuthScreen.tsx');
 
-    expect(screen).toContain("return t('errors.invalidLogin')");
+    expect(screen).toContain('authErrorTranslationKey');
     expect(screen).toContain("mode === 'login'");
     expect(screen).toContain('localizedSignInError(err, t)');
   });
