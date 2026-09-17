@@ -1,4 +1,4 @@
-import type { LocalDate } from '../scheduleEngine/calendar';
+import { addDaysLocal, type LocalDate } from '../scheduleEngine/calendar';
 import type { Weekday } from '../state/AppState';
 import { weekdayOfLocalDate } from '../scheduleEngine/calendar';
 import { buildExpectedSessionIndexByDate } from './expectedSessionIndex';
@@ -12,11 +12,11 @@ interface OpportunityExecution {
   sessionIndex: number;
   scheduledLocalDate: string;
   status: 'IN_PROGRESS' | 'COMPLETED' | 'PARTIALLY_COMPLETED' | 'ABANDONED';
-  exercises: ReadonlyArray<{
+  exercises: readonly {
     exerciseIndex?: number;
     exerciseId?: string;
-    sets: ReadonlyArray<{ setIndex?: number; status: 'PENDING' | 'COMPLETED' | 'SKIPPED' }>;
-  }>;
+    sets: readonly { setIndex?: number; status: 'PENDING' | 'COMPLETED' | 'SKIPPED' }[];
+  }[];
 }
 
 export interface PrescribedOpportunity {
@@ -33,6 +33,69 @@ interface OpportunityEvent {
 
 function opportunityKey(sessionIndex: number, localDate: string): string {
   return `${localDate}:${sessionIndex}`;
+}
+
+const WEEKDAY_OFFSET_FROM_MONDAY: Record<Weekday, number> = {
+  MON: 0, TUE: 1, WED: 2, THU: 3, FRI: 4, SAT: 5, SUN: 6,
+};
+
+function mondayOf(date: LocalDate): LocalDate {
+  return addDaysLocal(date, -WEEKDAY_OFFSET_FROM_MONDAY[weekdayOfLocalDate(date)]);
+}
+
+/** Weekly prescription targets for flexible plans. Dates only delimit local
+ * weeks; they never make a particular weekday mandatory. The current partial
+ * week expects at most one opportunity per elapsed active day. */
+export function buildFlexibleWeeklyTargets(input: {
+  countedActiveDates: ReadonlySet<LocalDate>;
+  prescribedTrainingFrequency: number;
+}): ReadonlyMap<LocalDate, number> {
+  const activeDaysByWeek = new Map<LocalDate, number>();
+  for (const date of input.countedActiveDates) {
+    const week = mondayOf(date);
+    activeDaysByWeek.set(week, (activeDaysByWeek.get(week) ?? 0) + 1);
+  }
+  return new Map([...activeDaysByWeek.entries()].map(([week, activeDays]) => [
+    week,
+    Math.min(input.prescribedTrainingFrequency, activeDays),
+  ]));
+}
+
+/** Counts real qualifying flexible completions, capped by each week's target.
+ * A COMPLETED ledger fact is still required, so client-only/fabricated
+ * executions never influence progression. */
+export function countFulfilledFlexibleWeeklyTargets(input: {
+  programInstanceId: string;
+  executions: readonly OpportunityExecution[];
+  scheduleEvents: readonly OpportunityEvent[];
+  prescribedSessions: readonly PrescribedSessionShape[];
+  weeklyTargets: ReadonlyMap<LocalDate, number>;
+}): number {
+  const completedLedger = new Set(input.scheduleEvents
+    .filter((event) => event.type === 'COMPLETED' && event.programInstanceId === input.programInstanceId)
+    .map((event) => opportunityKey(event.sessionIndex, event.scheduledDate)));
+  const fulfilledByWeek = new Map<LocalDate, Set<string>>();
+  for (const execution of input.executions) {
+    const week = mondayOf(execution.scheduledLocalDate);
+    if (!input.weeklyTargets.has(week)) continue;
+    const prescribedSession = input.prescribedSessions[execution.sessionIndex];
+    const key = opportunityKey(execution.sessionIndex, execution.scheduledLocalDate);
+    if (!completedLedger.has(key) || !prescribedSession) continue;
+    if (!isValidProgressionSessionAgainstPrescription({
+      execution,
+      prescribedSession,
+      expectedProgramInstanceId: input.programInstanceId,
+      expectedSessionIndex: execution.sessionIndex,
+    })) continue;
+    const fulfilled = fulfilledByWeek.get(week) ?? new Set<string>();
+    fulfilled.add(key);
+    fulfilledByWeek.set(week, fulfilled);
+  }
+  let total = 0;
+  for (const [week, target] of input.weeklyTargets) {
+    total += Math.min(target, fulfilledByWeek.get(week)?.size ?? 0);
+  }
+  return total;
 }
 
 /**

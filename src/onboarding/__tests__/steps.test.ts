@@ -14,10 +14,10 @@ import {
 } from '../steps';
 
 describe('ONBOARDING_STEPS', () => {
-  it('has 41 unique step ids', () => {
+  it('has 42 unique step ids', () => {
     const ids = ONBOARDING_STEPS.map((s) => s.id);
-    expect(ids).toHaveLength(41);
-    expect(new Set(ids).size).toBe(41);
+    expect(ids).toHaveLength(42);
+    expect(new Set(ids).size).toBe(42);
   });
 
   it('never lets auth/paywall be dev-jumpable', () => {
@@ -146,7 +146,7 @@ describe('conditional questionnaire branches', () => {
     const male = getStepSequence('anonymous', { ...standard, sex: 'm' });
     const female = getStepSequence('anonymous', { ...standard, sex: 'f' });
     expect(female).toEqual(male);
-    expect(female.filter((id) => getStepDef(id).kind === 'question')).toHaveLength(14);
+    expect(female.filter((id) => getStepDef(id).kind === 'question')).toHaveLength(15);
   });
 
   it('adds home equipment and both-environment resolution only when applicable', () => {
@@ -228,6 +228,15 @@ describe('trainingDays applicability', () => {
 
   it('is skipped when days has not been answered yet', () => {
     expect(getStepSequence('anonymous', { ...base, days: null })).not.toContain('trainingDays');
+  });
+
+  it('always asks schedule mode after frequency, including 7 days/week', () => {
+    expect(getStepSequence('anonymous', { ...base, days: 7 })).toContain('scheduleMode');
+  });
+
+  it('keeps weekdays for fixed and skips them for flexible', () => {
+    expect(getStepSequence('anonymous', { ...base, days: 3, scheduleMode: 'fixed' })).toContain('trainingDays');
+    expect(getStepSequence('anonymous', { ...base, days: 3, scheduleMode: 'flexible' })).not.toContain('trainingDays');
   });
 });
 

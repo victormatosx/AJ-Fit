@@ -31,6 +31,8 @@
   },
   "week": {
     "title": "Tu semana",
+    "flexibleTitle": "Entrenamiento libre",
+    "flexibleBody": "Meta de {{count}} entrenamientos por semana, los días que prefieras. Se mantiene la secuencia.",
     "trainingDay": "Entrenamiento",
     "activeRecovery": "Recuperación",
     "restDay": "Descanso",

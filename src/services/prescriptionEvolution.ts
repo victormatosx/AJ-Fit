@@ -124,14 +124,15 @@ export async function evolvePrescription(request: PrescriptionEvolutionRequest):
 
   if (request.mode === 'LEVEL_PROMOTION') {
     const pinnedFrequency = program.prescribedTrainingFrequency ?? program.prescribedStructuredDays;
-    const pinnedTrainingDays = program.availability?.weekdays?.length === pinnedFrequency
-      ? program.availability.weekdays
+    const pinnedTrainingDays = (program.scheduleMode ?? 'fixed') === 'fixed'
+      ? program.weeklySchedule?.filter((day) => day.state === 'TRAINING').map((day) => day.weekday) ?? []
       : [];
     const syntheticAnswers = buildLevelPromotionAnswers({
       currentAnswers,
       targetLevel: request.targetLevel,
       pinnedFrequency,
       pinnedTrainingDays,
+      scheduleMode: program.scheduleMode ?? 'fixed',
     });
 
     const prepared = await prepareWorkoutProgram({
@@ -212,6 +213,7 @@ export async function evolvePrescription(request: PrescriptionEvolutionRequest):
     requestedDays: program.requestedDays,
     prescribedStructuredDays: program.prescribedStructuredDays,
     prescribedTrainingFrequency: program.prescribedTrainingFrequency,
+    scheduleMode: program.scheduleMode ?? 'fixed',
     availability: program.availability,
     weeklySchedule: program.weeklySchedule,
     population: program.population,

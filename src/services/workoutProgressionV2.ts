@@ -3,6 +3,8 @@ import { computeAdherence } from '../progressionEngineV2/adherence';
 import { countEarnedIntermediateCycles } from '../progressionEngineV2/earnedCycles';
 import {
   buildPrescribedOpportunities,
+  buildFlexibleWeeklyTargets,
+  countFulfilledFlexibleWeeklyTargets,
   countFulfilledPrescribedOpportunities,
 } from '../progressionEngineV2/prescribedOpportunities';
 import { evaluateProgressionV2 } from '../progressionEngineV2/resolver';
@@ -20,16 +22,18 @@ import {
 } from './workoutLifecycle';
 import { loadAuthoritativePrescriptionInputs } from './prescriptionInputs';
 import { resolveWorkoutLifecycleProgressionPolicy } from '../workoutLifecycle/qaPolicy';
+import type { ScheduleMode, Weekday } from '../state/AppState';
 
 async function loadAuthoritativePrescribedSessions(uid: string, contentIdentity: string) {
   const snapshot = await getDoc(doc(db, 'users', uid, 'workoutPrograms', contentIdentity));
   if (!snapshot.exists()) return null;
-  const sessions = snapshot.data().sessions;
+  const data = snapshot.data();
+  const sessions = data.sessions;
   if (!Array.isArray(sessions) || sessions.length === 0) return null;
-  const result: Array<{ exercises: Array<{ exerciseId: string; setCount: number }> }> = [];
+  const result: { exercises: { exerciseId: string; setCount: number }[] }[] = [];
   for (const session of sessions) {
     if (!session || !Array.isArray(session.exercises) || session.exercises.length === 0) return null;
-    const exercises: Array<{ exerciseId: string; setCount: number }> = [];
+    const exercises: { exerciseId: string; setCount: number }[] = [];
     for (const exercise of session.exercises) {
       const setCount = Number.isInteger(exercise?.sets) ? exercise.sets : 1;
       if (typeof exercise?.exerciseId !== 'string' || setCount < 1) return null;
@@ -37,7 +41,15 @@ async function loadAuthoritativePrescribedSessions(uid: string, contentIdentity:
     }
     result.push({ exercises });
   }
-  return result;
+  const scheduleMode: ScheduleMode = data.scheduleMode === 'flexible' ? 'flexible' : 'fixed';
+  const trainingDays: Weekday[] = scheduleMode === 'fixed' && Array.isArray(data.weeklySchedule)
+    ? data.weeklySchedule.flatMap((day: { state?: unknown; weekday?: unknown }) =>
+      day.state === 'TRAINING' && typeof day.weekday === 'string' ? [day.weekday as Weekday] : [])
+    : [];
+  const prescribedTrainingFrequency = Number.isInteger(data.prescribedTrainingFrequency)
+    ? data.prescribedTrainingFrequency
+    : data.prescribedStructuredDays;
+  return { sessions: result, scheduleMode, trainingDays, prescribedTrainingFrequency };
 }
 
 function deviceTimezone(): string {
@@ -111,31 +123,60 @@ export async function evaluateProgressionV2ForUserFull(
   const timezone = config?.timezone ?? deviceTimezone();
   const todayLocalDate = localDateInTimezone(now, timezone);
   const progressionWindowStartLocalDate = localDateInTimezone(bundle.programInstance.activatedAt.toDate(), timezone);
-  const trainingDays = authoritativeInputs.snapshot.inputs.trainingDays?.length
-    ? authoritativeInputs.snapshot.inputs.trainingDays
-    : config?.trainingDays ?? [];
+  // The active program's TRAINING subset is the fixed-mode prescription.
+  // Questionnaire availability may be broader and must never inflate the
+  // adherence denominator. Legacy programs predate weeklySchedule, so only
+  // those fall back to their immutable input snapshot/config. Flexible uses
+  // a weekly numeric target instead.
+  const scheduleMode = prescribedSessions.scheduleMode;
+  const trainingDays = scheduleMode === 'fixed'
+    ? prescribedSessions.trainingDays.length > 0
+      ? prescribedSessions.trainingDays
+      : authoritativeInputs.snapshot.inputs.trainingDays?.length
+        ? authoritativeInputs.snapshot.inputs.trainingDays
+        : config?.trainingDays ?? []
+    : [];
   const executionDates = new Set(executions.map((execution) => execution.scheduledLocalDate));
   const activeTrace = computeActiveTimeTrace({
     startDateInclusive: progressionWindowStartLocalDate,
     todayLocalDate,
     trainingDays,
+    scheduleMode,
     executionDates,
   });
   const activeTime = activeTrace.activeTime;
-  const prescribedOpportunities = buildPrescribedOpportunities({
-    programInstanceId: bundle.programInstance.programInstanceId,
-    trainingDays,
-    countedActiveDates: activeTrace.countedDates,
-  });
-  const validSessionCount = countFulfilledPrescribedOpportunities({
-    programInstanceId: bundle.programInstance.programInstanceId,
-    executions,
-    scheduleEvents,
-    prescribedOpportunities,
-    prescribedSessions,
-    trainingDays,
-  });
-  const expectedSessions = prescribedOpportunities.length;
+  const flexibleTargets = scheduleMode === 'flexible'
+    ? buildFlexibleWeeklyTargets({
+        countedActiveDates: activeTrace.countedDates,
+        prescribedTrainingFrequency: prescribedSessions.prescribedTrainingFrequency,
+      })
+    : null;
+  const prescribedOpportunities = scheduleMode === 'fixed'
+    ? buildPrescribedOpportunities({
+        programInstanceId: bundle.programInstance.programInstanceId,
+        trainingDays,
+        countedActiveDates: activeTrace.countedDates,
+      })
+    : [];
+  const validSessionCount = flexibleTargets
+    ? countFulfilledFlexibleWeeklyTargets({
+        programInstanceId: bundle.programInstance.programInstanceId,
+        executions,
+        scheduleEvents,
+        weeklyTargets: flexibleTargets,
+        prescribedSessions: prescribedSessions.sessions,
+      })
+    : countFulfilledPrescribedOpportunities({
+        programInstanceId: bundle.programInstance.programInstanceId,
+        executions,
+        scheduleEvents,
+        prescribedOpportunities,
+        prescribedSessions: prescribedSessions.sessions,
+        trainingDays,
+      });
+  const expectedSessions = flexibleTargets
+    ? [...flexibleTargets.values()].reduce((sum, count) => sum + count, 0)
+    : prescribedOpportunities.length;
   const adherence = computeAdherence(validSessionCount, expectedSessions);
 
   const earnedIntermediateCycleCount =

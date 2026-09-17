@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { addDaysLocal, type LocalDate } from '../../scheduleEngine/calendar';
 import { computeActiveTimeTrace } from '../activeTime';
 import {
+  buildFlexibleWeeklyTargets,
   buildPrescribedOpportunities,
+  countFulfilledFlexibleWeeklyTargets,
   countFulfilledPrescribedOpportunities,
 } from '../prescribedOpportunities';
 
@@ -42,6 +44,18 @@ describe('countFulfilledPrescribedOpportunities', () => {
     expect(countFulfilledPrescribedOpportunities({
       programInstanceId: 'wpi-a', executions: [one, { ...one }], scheduleEvents: [completed, { ...completed }],
       prescribedOpportunities: opportunities('2026-01-05'), prescribedSessions, trainingDays: ALL_DAYS,
+    })).toBe(1);
+  });
+
+  it('credits the prescribed Friday opportunity even when it was performed on Thursday', () => {
+    const advanced = { ...execution('2026-09-18'), performedLocalDate: '2026-09-17' };
+    expect(countFulfilledPrescribedOpportunities({
+      programInstanceId: 'wpi-a',
+      executions: [advanced],
+      scheduleEvents: [event('2026-09-18')],
+      prescribedOpportunities: opportunities('2026-09-18'),
+      prescribedSessions,
+      trainingDays: ['FRI'],
     })).toBe(1);
   });
 
@@ -163,5 +177,40 @@ describe('buildPrescribedOpportunities calendar boundaries', () => {
         { scheduledLocalDate: '2026-08-05', programInstanceId: 'wpi-adapted' },
         { scheduledLocalDate: '2026-08-07', programInstanceId: 'wpi-adapted' },
       ]);
+  });
+});
+
+describe('flexible weekly prescription targets', () => {
+  it('uses the numeric weekly frequency without assigning required weekdays', () => {
+    const targets = buildFlexibleWeeklyTargets({
+      countedActiveDates: new Set([
+        '2026-09-07', '2026-09-08', '2026-09-09', '2026-09-10', '2026-09-11', '2026-09-12', '2026-09-13',
+      ]),
+      prescribedTrainingFrequency: 3,
+    });
+    expect([...targets.entries()]).toEqual([['2026-09-07', 3]]);
+  });
+
+  it('counts three qualifying sessions on any three dates as 3/3 and caps extras at the target', () => {
+    const dates = ['2026-09-08', '2026-09-10', '2026-09-12', '2026-09-13'];
+    const targets = new Map<LocalDate, number>([['2026-09-07', 3]]);
+    expect(countFulfilledFlexibleWeeklyTargets({
+      programInstanceId: 'wpi-a',
+      executions: dates.map((date) => execution(date)),
+      scheduleEvents: dates.map((date) => event(date)),
+      prescribedSessions,
+      weeklyTargets: targets,
+    })).toBe(3);
+  });
+
+  it('reports two qualifying sessions against a three-session target as 2/3', () => {
+    const dates = ['2026-09-08', '2026-09-10'];
+    expect(countFulfilledFlexibleWeeklyTargets({
+      programInstanceId: 'wpi-a',
+      executions: dates.map((date) => execution(date)),
+      scheduleEvents: dates.map((date) => event(date)),
+      prescribedSessions,
+      weeklyTargets: new Map<LocalDate, number>([['2026-09-07', 3]]),
+    })).toBe(2);
   });
 });

@@ -1,4 +1,4 @@
-import type { Weekday } from '../state/AppState';
+import type { ScheduleMode, Weekday } from '../state/AppState';
 import type { CurrentTrainingLevel } from '../workoutLifecycle/types';
 import type { QuestionnaireAnswers } from '../workoutPrescription/types';
 
@@ -25,11 +25,13 @@ export function buildLevelPromotionAnswers(input: {
   targetLevel: LevelPromotionTarget;
   pinnedFrequency: number;
   pinnedTrainingDays: readonly Weekday[];
+  scheduleMode?: ScheduleMode;
 }): QuestionnaireAnswers {
   return {
     ...input.currentAnswers,
     level: targetLevelToAnswersLevel(input.targetLevel),
     days: input.pinnedFrequency,
+    scheduleMode: input.scheduleMode ?? 'fixed',
     trainingDays: [...input.pinnedTrainingDays],
   };
 }

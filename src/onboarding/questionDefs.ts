@@ -51,10 +51,15 @@ export const FUNNEL_QUESTIONS: Partial<Record<OnboardingStepId, Question>> = {
     kind: 'choice',
     options: [{ v: '2' }, { v: '3' }, { v: '4' }, { v: '5' }, { v: '6' }, { v: '7' }],
   },
+  scheduleMode: {
+    id: 'scheduleMode',
+    kind: 'choice-large',
+    options: [{ v: 'fixed', icon: 'calendar' }, { v: 'flexible', icon: 'bolt' }],
+  },
   // `count` is a placeholder — OnboardingFunnelScreen overrides it per-render
   // from `quiz.days` before passing this to QuestionStepScreen, the same
   // pattern used for `specialConditions`' sex-based option filtering. Skipped
-  // entirely for days === 7 (see `isApplicableStep` in steps.ts).
+  // for fixed days === 7 and for every flexible plan (see `isApplicableStep`).
   trainingDays: {
     id: 'trainingDays',
     kind: 'multi-exact',

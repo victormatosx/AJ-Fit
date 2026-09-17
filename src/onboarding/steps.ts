@@ -34,6 +34,7 @@ export type OnboardingStepId =
   | 'weight'
   | 'interstitial_methodology'
   | 'days'
+  | 'scheduleMode'
   | 'trainingDays'
   | 'duration'
   | 'place'
@@ -91,6 +92,7 @@ export const ONBOARDING_STEPS: readonly OnboardingStepDef[] = [
   { id: 'interstitial_evolution', kind: 'interstitial', countsTowardProgress: false, persistsToDraft: false, devJumpable: true },
   { id: 'interstitial_methodology', kind: 'interstitial', countsTowardProgress: false, persistsToDraft: false, devJumpable: true },
   { id: 'days', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
+  { id: 'scheduleMode', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
   { id: 'trainingDays', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
   { id: 'duration', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
   { id: 'place', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
@@ -139,6 +141,7 @@ export const FORCED_QUESTIONNAIRE_STEP_IDS: readonly OnboardingStepId[] = [
   'interstitial_evolution',
   'interstitial_methodology',
   'days',
+  'scheduleMode',
   'trainingDays',
   'duration',
   'place',
@@ -189,13 +192,20 @@ export type OnboardingFlowAnswers = {
   limits?: string[];
   specialConditions?: string[];
   days?: number | null;
+  scheduleMode?: 'fixed' | 'flexible' | null;
 };
 
 function isApplicableStep(id: OnboardingStepId, answers?: OnboardingFlowAnswers): boolean {
   if (!answers) return true;
-  // 7 days requires no preference screen — all seven weekdays are implied
-  // (docs/workout-lifecycle/03_SCHEDULE_ENGINE.md §Coleta futura).
-  if (id === 'trainingDays') return answers?.days != null && answers.days >= 2 && answers.days <= 6;
+  // The schedule-mode question is always shown, including for 7 days. A
+  // fixed seven-day plan still implies every weekday, preserving the prior
+  // UX; flexible never asks for or invents weekdays.
+  if (id === 'trainingDays') {
+    return (answers?.scheduleMode ?? 'fixed') === 'fixed'
+      && answers?.days != null
+      && answers.days >= 2
+      && answers.days <= 6;
+  }
   if (id === 'primaryPlace') return answers?.place === 'both';
   if (id === 'equipment') return answers?.place === 'home' || answers?.place === 'both';
   if (id === 'limits') {

@@ -31,6 +31,8 @@
   },
   "week": {
     "title": "Your week",
+    "flexibleTitle": "Flexible training",
+    "flexibleBody": "A target of {{count}} workouts per week, on the days you prefer. Session order is preserved.",
     "trainingDay": "Workout",
     "activeRecovery": "Recovery",
     "restDay": "Rest",

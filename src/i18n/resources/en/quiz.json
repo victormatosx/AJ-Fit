@@ -96,6 +96,14 @@
       "6": { "label": "6 days", "short": "6" }, "7": { "label": "7 days", "short": "7" }
     }
   },
+  "scheduleMode": {
+    "title": "How do you prefer to organize your workouts?",
+    "sub": "Choose the routine that works best for you.",
+    "options": {
+      "fixed": { "label": "Fixed days", "description": "Choose the weekdays when you plan to train." },
+      "flexible": { "label": "Flexible training", "description": "Train whenever you want while following your plan sequence." }
+    }
+  },
   "trainingDays": {
     "title": "Which days do you usually train?",
     "sub": "Pick the days that best fit your routine.",
