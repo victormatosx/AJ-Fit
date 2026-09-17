@@ -71,6 +71,24 @@ function fixture(
 }
 
 describe('daily workout notification evaluator', () => {
+  it('does not send weekday-based workout or missed notifications for flexible plans', async () => {
+    const { dependencies, requests } = fixture(context({
+      scheduleMode: 'flexible',
+      prescribedTrainingFrequency: 3,
+      weeklySchedule: [],
+      scheduleState: {
+        nextSessionIndex: 1,
+        cursorDate: '2026-08-28',
+        lastCompletedAt: '2026-08-28',
+        pendingMissDecision: null,
+      },
+    }));
+    await expect(evaluateDailyWorkoutNotification(UID, dependencies)).resolves.toMatchObject({
+      status: 'SUPPRESSED', reason: 'FLEXIBLE_NO_CALENDAR_NOTIFICATION',
+    });
+    expect(requests).toHaveLength(0);
+  });
+
   it('creates WORKOUT_DAY for the current prescribed training day', async () => {
     const { dependencies, requests } = fixture(context());
     await expect(evaluateDailyWorkoutNotification(UID, dependencies)).resolves.toMatchObject({
@@ -109,6 +127,26 @@ describe('daily workout notification evaluator', () => {
       status: 'SUPPRESSED', reason: 'TODAY_COMPLETED',
     });
     expect(requests).toHaveLength(0);
+  });
+
+  it('does not notify Friday after its opportunity was completed early on Thursday', async () => {
+    const friday = Timestamp.fromDate(new Date('2026-09-18T08:30:00.000Z'));
+    const { dependencies, requests } = fixture(context({
+      activatedAtLocalDate: '2026-09-14',
+      weeklySchedule: week({ MON: 'TRAINING', TUE: 'TRAINING', WED: 'TRAINING', FRI: 'TRAINING' }),
+      sessionCount: 4,
+      scheduleState: {
+        nextSessionIndex: 0,
+        cursorDate: '2026-09-18',
+        lastCompletedAt: '2026-09-18',
+        pendingMissDecision: null,
+      },
+    }), { now: () => friday });
+    await expect(evaluateDailyWorkoutNotification(UID, dependencies)).resolves.toMatchObject({
+      status: 'SUPPRESSED', reason: 'TODAY_COMPLETED',
+    });
+    expect(requests).toHaveLength(0);
+    expect(dependencies.hasFinishedExecution).not.toHaveBeenCalled();
   });
 
   it('uses the current adapted schedule rather than an obsolete weekday', async () => {

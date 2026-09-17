@@ -176,6 +176,90 @@ describe('weekly fact loader', () => {
     });
   });
 
+  it('keeps the Friday prescription fulfilled when its execution happened on Thursday', async () => {
+    const harness = seededHistory();
+    harness.seed('users/uid-week/workoutPrograms/program-1/scheduleEvents/event-2', {
+      type: 'COMPLETED', programInstanceId: 'instance-1', sessionIndex: 2,
+      scheduledDate: '2026-09-11', performedLocalDate: '2026-09-10',
+      occurredAt: Timestamp.fromDate(new Date('2026-09-10T07:00:00Z')),
+    });
+    harness.seed('users/uid-week/workoutExecutions/execution-2', {
+      programInstanceId: 'instance-1', sessionIndex: 2,
+      scheduledLocalDate: '2026-09-11', performedLocalDate: '2026-09-10', status: 'COMPLETED',
+      exercises: [{
+        exerciseIndex: 0, exerciseId: 'exercise-2', sets: [{ setIndex: 0, status: 'COMPLETED' }],
+      }],
+    });
+    await expect(readWeeklyAchievementContext(
+      harness.db as never,
+      'uid-week',
+      Timestamp.fromDate(new Date('2026-09-10T08:30:00Z')),
+    )).resolves.toMatchObject({
+      allowed: true,
+      candidate: { week: { opportunityCount: 3, fulfilledCount: 3, perfect: true } },
+    });
+  });
+
+  it('treats flexible as a numeric weekly target and not as weekday misses', async () => {
+    const harness = seededHistory();
+    harness.seed('users/uid-week/programInstances/instance-1', {
+      programInstanceId: 'instance-1',
+      prescriptionIdentity: 'prescription-1',
+      contentIdentity: 'program-1',
+      previousProgramInstanceId: null,
+      activatedAt: Timestamp.fromDate(new Date('2026-09-07T00:00:00Z')),
+      supersededAt: null,
+      prescriptionInputSnapshot: { inputs: { scheduleMode: 'flexible', trainingDays: null } },
+    });
+    harness.seed('users/uid-week/workoutPrograms/program-1', {
+      scheduleMode: 'flexible',
+      prescribedTrainingFrequency: 3,
+      weeklySchedule: [],
+      sessions: [0, 1, 2].map((index) => ({
+        exercises: [{ exerciseId: `exercise-${index}`, sets: 1 }],
+      })),
+    });
+    const result = await readWeeklyAchievementContext(
+      harness.db as never,
+      'uid-week',
+      Timestamp.fromDate(new Date('2026-09-11T08:30:00Z')),
+    );
+    expect(result).toMatchObject({
+      allowed: true,
+      candidate: { week: { opportunityCount: 3, fulfilledCount: 3, perfect: true } },
+    });
+  });
+
+  it('counts distinct flexible sequence sessions even when performed on the same day', async () => {
+    const harness = seededHistory();
+    const activated = Timestamp.fromDate(new Date('2026-09-07T00:00:00Z'));
+    harness.seed('users/uid-week/programInstances/instance-1', {
+      programInstanceId: 'instance-1', prescriptionIdentity: 'prescription-1', contentIdentity: 'program-1',
+      previousProgramInstanceId: null, activatedAt: activated, supersededAt: null,
+      prescriptionInputSnapshot: { inputs: { scheduleMode: 'flexible', trainingDays: null } },
+    });
+    harness.seed('users/uid-week/workoutPrograms/program-1', {
+      scheduleMode: 'flexible', prescribedTrainingFrequency: 3, weeklySchedule: [],
+      sessions: [0, 1, 2].map((index) => ({ exercises: [{ exerciseId: `exercise-${index}`, sets: 1 }] })),
+    });
+    for (const index of [0, 1, 2]) {
+      harness.seed(`users/uid-week/workoutPrograms/program-1/scheduleEvents/event-${index}`, {
+        type: 'COMPLETED', programInstanceId: 'instance-1', sessionIndex: index,
+        scheduledDate: '2026-09-07', occurredAt: Timestamp.fromDate(new Date('2026-09-07T07:00:00Z')),
+      });
+      harness.seed(`users/uid-week/workoutExecutions/execution-${index}`, {
+        programInstanceId: 'instance-1', sessionIndex: index, scheduledLocalDate: '2026-09-07', status: 'COMPLETED',
+        exercises: [{ exerciseIndex: 0, exerciseId: `exercise-${index}`, sets: [{ setIndex: 0, status: 'COMPLETED' }] }],
+      });
+    }
+    await expect(readWeeklyAchievementContext(
+      harness.db as never, 'uid-week', Timestamp.fromDate(new Date('2026-09-11T08:30:00Z')),
+    )).resolves.toMatchObject({
+      allowed: true,
+      candidate: { week: { opportunityCount: 3, fulfilledCount: 3, perfect: true } },
+    });
+  });
+
   it('fails closed when a terminal execution does not meet Progression V2 qualification', async () => {
     const harness = seededHistory('PENDING');
     await expect(readWeeklyAchievementContext(

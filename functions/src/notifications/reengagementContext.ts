@@ -51,6 +51,8 @@ export interface ReEngagementEpisodeInput {
   activatedAtLocalDate: string;
   lastCompletedAt: string | null;
   trainingDays: readonly Weekday[];
+  scheduleMode?: 'fixed' | 'flexible';
+  prescribedTrainingFrequency?: number;
   todayLocalDate: string;
 }
 
@@ -71,7 +73,10 @@ export function deriveReEngagementEpisode(
     input.lastCompletedAt !== null
     && (
       compareLocalDates(input.lastCompletedAt, input.activatedAtLocalDate) < 0
-      || compareLocalDates(input.lastCompletedAt, input.todayLocalDate) > 0
+      // A fixed session may be completed one civil day early. Its schedule
+      // cursor legitimately points at tomorrow until that opportunity's day
+      // arrives; anything farther ahead remains invalid history.
+      || compareLocalDates(input.lastCompletedAt, addDaysLocal(input.todayLocalDate, 1)) > 0
     )
   ) {
     return { allowed: false, reason: 'HISTORY_UNAVAILABLE' };
@@ -80,11 +85,23 @@ export function deriveReEngagementEpisode(
   const yesterday = addDaysLocal(input.todayLocalDate, -1);
   const fromDateExclusive = input.lastCompletedAt
     ?? addDaysLocal(input.activatedAtLocalDate, -1);
-  const missedOpportunities = trainingDayOccurrences(
-    input.trainingDays,
-    fromDateExclusive,
-    yesterday,
-  );
+  let missedOpportunities: string[];
+  if (input.scheduleMode === 'flexible') {
+    // No weekday is ever "missed". Approximate the same existing
+    // re-engagement thresholds from elapsed days since the last workout and
+    // the numeric weekly prescription, without assigning debt to a date.
+    const frequency = Math.max(1, input.prescribedTrainingFrequency ?? 1);
+    const daysPerOpportunity = 7 / frequency;
+    let elapsedDays = 0;
+    for (let cursor = addDaysLocal(fromDateExclusive, 1); compareLocalDates(cursor, yesterday) <= 0; cursor = addDaysLocal(cursor, 1)) {
+      elapsedDays += 1;
+    }
+    const count = Math.floor(elapsedDays / daysPerOpportunity);
+    missedOpportunities = Array.from({ length: count }, (_, index) =>
+      addDaysLocal(fromDateExclusive, Math.max(1, Math.ceil((index + 1) * daysPerOpportunity))));
+  } else {
+    missedOpportunities = trainingDayOccurrences(input.trainingDays, fromDateExclusive, yesterday);
+  }
   if (missedOpportunities.length < RE_ENGAGEMENT_EARLY_MISSED_OPPORTUNITIES) {
     return { allowed: false, reason: 'INSUFFICIENT_MISSED_OPPORTUNITIES' };
   }
@@ -146,6 +163,8 @@ export async function readReEngagementContext(
     activatedAtLocalDate: workout.activatedAtLocalDate,
     lastCompletedAt: workout.scheduleState?.lastCompletedAt ?? null,
     trainingDays,
+    scheduleMode: workout.scheduleMode,
+    prescribedTrainingFrequency: workout.prescribedTrainingFrequency,
     todayLocalDate: clock.localDate,
   });
   return { ...episode, timezone: clock.timezone, localDate: clock.localDate };

@@ -7,6 +7,8 @@ import { computeAdherence } from '../workoutLifecycle/prescriptionEngine/progres
 import { PROGRESSION_V2_CONFIG } from '../workoutLifecycle/prescriptionEngine/progressionEngineV2/config';
 import {
   buildPrescribedOpportunities,
+  buildFlexibleWeeklyTargets,
+  countFulfilledFlexibleWeeklyTargets,
   countFulfilledPrescribedOpportunities,
 } from '../workoutLifecycle/prescriptionEngine/progressionEngineV2/prescribedOpportunities';
 import { evaluateProgressionV2 } from '../workoutLifecycle/prescriptionEngine/progressionEngineV2/resolver';
@@ -94,15 +96,28 @@ export async function readApproachingContext(db: Firestore, uid: string, now: Ti
     );
     const instanceData = instance.data();
     const programData = program.data();
-    const trainingDays = instanceData?.prescriptionInputSnapshot?.inputs?.trainingDays;
+    const scheduleMode = programData?.scheduleMode === 'flexible' ? 'flexible' : 'fixed';
+    const programTrainingDays = Array.isArray(programData?.weeklySchedule)
+      ? programData.weeklySchedule.flatMap((day: DocumentData) =>
+        day?.state === 'TRAINING' && typeof day.weekday === 'string' ? [day.weekday] : [])
+      : [];
+    const legacySnapshotDays = Array.isArray(instanceData?.prescriptionInputSnapshot?.inputs?.trainingDays)
+      ? instanceData.prescriptionInputSnapshot.inputs.trainingDays
+      : [];
+    // New fixed plans use the actual TRAINING subset sealed in the program.
+    // Older snapshots had no weeklySchedule, so retain their former
+    // questionnaire-day semantics instead of changing existing users.
+    const trainingDays = scheduleMode === 'fixed'
+      ? (programTrainingDays.length > 0 ? programTrainingDays : legacySnapshotDays)
+      : [];
     if (!instanceData || !programData || cycle.data()?.status !== 'ACTIVE'
       || cycle.data()?.eligibleAt != null
       || instanceData.cycleId !== state.currentCycleId
       || instanceData.contentIdentity !== state.activeContentIdentity
       || instanceData.supersededAt !== null || programData.status !== 'active'
       || !(instanceData.activatedAt instanceof Timestamp)
-      || !Array.isArray(trainingDays) || !trainingDays.length
-      || !trainingDays.every((day: unknown) => typeof day === 'string' && WEEKDAYS.has(day))) {
+      || (scheduleMode === 'fixed' && (!trainingDays.length
+        || !trainingDays.every((day: unknown) => typeof day === 'string' && WEEKDAYS.has(day))))) {
       return deny('PROGRAM_UNAVAILABLE');
     }
     const startClock = dailyLocalClock(instanceData.activatedAt.toDate(), clock.timezone);
@@ -137,30 +152,49 @@ export async function readApproachingContext(db: Firestore, uid: string, now: Ti
       startDateInclusive: startClock.localDate,
       todayLocalDate: clock.localDate,
       trainingDays: trainingDays as Weekday[],
+      scheduleMode,
       executionDates: new Set(executionData.map((execution) => execution.scheduledLocalDate as string)),
     });
-    const opportunities = buildPrescribedOpportunities({
-      programInstanceId: state.activeProgramInstanceId,
-      trainingDays: trainingDays as Weekday[],
-      countedActiveDates: trace.countedDates,
-    });
-    const validSessionCount = countFulfilledPrescribedOpportunities({
-      programInstanceId: state.activeProgramInstanceId,
-      executions: executionData as unknown as Parameters<typeof countFulfilledPrescribedOpportunities>[0]['executions'],
-      scheduleEvents: events.docs.map((event) => event.data()) as unknown as Parameters<typeof countFulfilledPrescribedOpportunities>[0]['scheduleEvents'],
-      prescribedOpportunities: opportunities,
-      prescribedSessions: programData.sessions.map((session: DocumentData) => ({
+    const prescribedSessions = programData.sessions.map((session: DocumentData) => ({
         exercises: session.exercises.map((exercise: DocumentData) => ({
           exerciseId: exercise.exerciseId,
           setCount: Number.isInteger(exercise.sets) ? exercise.sets : 1,
         })),
-      })),
+      }));
+    const flexibleTargets = scheduleMode === 'flexible'
+      ? buildFlexibleWeeklyTargets({
+          countedActiveDates: trace.countedDates,
+          prescribedTrainingFrequency: programData.prescribedTrainingFrequency ?? programData.prescribedStructuredDays,
+        })
+      : null;
+    const opportunities = scheduleMode === 'fixed' ? buildPrescribedOpportunities({
+      programInstanceId: state.activeProgramInstanceId,
       trainingDays: trainingDays as Weekday[],
-    });
+      countedActiveDates: trace.countedDates,
+    }) : [];
+    const validSessionCount = flexibleTargets
+      ? countFulfilledFlexibleWeeklyTargets({
+          programInstanceId: state.activeProgramInstanceId,
+          executions: executionData as unknown as Parameters<typeof countFulfilledFlexibleWeeklyTargets>[0]['executions'],
+          scheduleEvents: events.docs.map((event) => event.data()) as unknown as Parameters<typeof countFulfilledFlexibleWeeklyTargets>[0]['scheduleEvents'],
+          prescribedSessions,
+          weeklyTargets: flexibleTargets,
+        })
+      : countFulfilledPrescribedOpportunities({
+          programInstanceId: state.activeProgramInstanceId,
+          executions: executionData as unknown as Parameters<typeof countFulfilledPrescribedOpportunities>[0]['executions'],
+          scheduleEvents: events.docs.map((event) => event.data()) as unknown as Parameters<typeof countFulfilledPrescribedOpportunities>[0]['scheduleEvents'],
+          prescribedOpportunities: opportunities,
+          prescribedSessions,
+          trainingDays: trainingDays as Weekday[],
+        });
+    const expectedSessions = flexibleTargets
+      ? [...flexibleTargets.values()].reduce((sum, count) => sum + count, 0)
+      : opportunities.length;
     const reason = approachingReason({
       level: state.currentTrainingLevel,
       activeTime: trace.activeTime,
-      adherence: computeAdherence(validSessionCount, opportunities.length),
+      adherence: computeAdherence(validSessionCount, expectedSessions),
       // At the approaching gate the current cycle is never earned. The number
       // of older earned cycles cannot change PROGRESS_CONTINUES; no history scan.
       earnedIntermediateCycleCount: 0,
