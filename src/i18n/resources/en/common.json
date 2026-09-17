@@ -112,6 +112,59 @@
         "intentMismatch": "The purchase authorization no longer matches the selected plan. Please try again.",
         "intentExpired": "The promotional authorization expired. Tap Continue to request a new one."
       }
+    },
+    "feedback": {
+      "purchaseConfirmed": "Subscription confirmed. Your Premium access is active.",
+      "purchasePendingAccess": "Your purchase was processed, but Premium access has not been confirmed yet. Try restoring purchases.",
+      "restoreConfirmed": "Purchase restored. Your Premium access is active.",
+      "nothingToRestore": "We couldn't find an active subscription for this account.",
+      "cancelled": "Purchase canceled. You were not charged."
+    },
+    "errors": {
+      "purchase": {
+        "cancelled": "Purchase cancelled.",
+        "identityPending": "Wait for your account to be confirmed and try again.",
+        "network": "The purchase can't be completed while you're offline.",
+        "linkedToAnotherAccount": "This subscription is already linked to another account. Sign in to the account used for the purchase and restore it there.",
+        "alreadyOwned": "This subscription has already been purchased. Try restoring purchases.",
+        "pending": "The store is still processing this purchase. Wait for confirmation before trying again.",
+        "notAllowed": "This account can't make purchases right now. Check its store purchase permissions.",
+        "productUnavailable": "This plan isn't available in the store right now. Choose another plan or try again later.",
+        "generic": "We couldn't complete the purchase right now. Please try again."
+      },
+      "restore": {
+        "cancelled": "Restore cancelled.",
+        "identityPending": "Wait for your account to be confirmed and try again.",
+        "network": "Purchases can't be restored while you're offline.",
+        "linkedToAnotherAccount": "This subscription is linked to another account. Sign in to the account used for the purchase and restore it there.",
+        "alreadyOwned": "The purchase exists, but it couldn't be restored right now. Please try again.",
+        "pending": "The store is still processing the purchase. Try restoring it again later.",
+        "notAllowed": "We couldn't access this account's purchases in the store.",
+        "productUnavailable": "Subscriptions aren't available in the store right now.",
+        "generic": "We couldn't restore purchases right now. Please try again."
+      }
+    },
+    "states": {
+      "loading": {
+        "title": "Loading plans",
+        "body": "Getting the available store options…"
+      },
+      "offline": {
+        "title": "You're offline",
+        "body": "Connect to the internet and try again."
+      },
+      "error": {
+        "title": "We couldn't load the plans",
+        "body": "Please try again in a moment."
+      },
+      "empty": {
+        "title": "Plans unavailable",
+        "body": "We couldn't load the available plans."
+      },
+      "unavailable": {
+        "title": "Plans unavailable",
+        "body": "The store isn't offering these plans right now."
+      }
     }
   },
   "premiumAction": {

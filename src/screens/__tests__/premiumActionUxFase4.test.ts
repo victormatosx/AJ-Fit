@@ -169,7 +169,7 @@ describe('FASE 4 — read paths remain ungated (no Fase 3 regression)', () => {
     const code = stripComments(source('src/screens/ProgressPhotosScreen.tsx'));
     expect(code).not.toMatch(/requestPremiumAction[\s\S]{0,60}(loadGallery|subscribeToGallery)/);
     const lockedBranch = code.slice(
-      code.lastIndexOf('if (!unlocked) {'),
+      code.lastIndexOf('if (shouldShowPhotoVaultLocked(unlocked, showLocked)) {'),
       code.indexOf('return (\n    <View'),
     );
     expect(lockedBranch).not.toContain('requestPremiumAction');

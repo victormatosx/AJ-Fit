@@ -112,6 +112,59 @@
         "intentMismatch": "A autorização de compra não corresponde mais ao plano selecionado. Tente novamente.",
         "intentExpired": "A autorização promocional expirou. Toque em Continuar para solicitar uma nova."
       }
+    },
+    "feedback": {
+      "purchaseConfirmed": "Assinatura confirmada. Seu acesso Premium está ativo.",
+      "purchasePendingAccess": "A compra foi processada, mas o acesso Premium ainda não foi confirmado. Tente restaurar as compras.",
+      "restoreConfirmed": "Compra restaurada. Seu acesso Premium está ativo.",
+      "nothingToRestore": "Não encontramos uma assinatura ativa para esta conta.",
+      "cancelled": "Compra cancelada. Nenhuma cobrança foi realizada."
+    },
+    "errors": {
+      "purchase": {
+        "cancelled": "Compra cancelada.",
+        "identityPending": "Aguarde a confirmação da sua conta e tente novamente.",
+        "network": "Não foi possível concluir a compra sem conexão.",
+        "linkedToAnotherAccount": "Esta assinatura já está vinculada a outra conta. Entre na conta usada na compra e restaure por lá.",
+        "alreadyOwned": "Esta assinatura já foi comprada. Tente restaurar as compras.",
+        "pending": "A compra ainda está sendo processada pela loja. Aguarde a confirmação antes de tentar novamente.",
+        "notAllowed": "Esta conta não pode realizar compras no momento. Verifique as permissões de compra na loja.",
+        "productUnavailable": "Este plano não está disponível na loja no momento. Escolha outro plano ou tente novamente mais tarde.",
+        "generic": "Não foi possível concluir a compra agora. Tente novamente."
+      },
+      "restore": {
+        "cancelled": "Restauração cancelada.",
+        "identityPending": "Aguarde a confirmação da sua conta e tente novamente.",
+        "network": "Não foi possível restaurar as compras sem conexão.",
+        "linkedToAnotherAccount": "Esta assinatura está vinculada a outra conta. Entre na conta usada na compra e restaure por lá.",
+        "alreadyOwned": "A compra já existe, mas não pôde ser restaurada agora. Tente novamente.",
+        "pending": "A compra ainda está sendo processada pela loja. Tente restaurar novamente mais tarde.",
+        "notAllowed": "Não foi possível acessar as compras desta conta na loja.",
+        "productUnavailable": "As assinaturas não estão disponíveis na loja neste momento.",
+        "generic": "Não foi possível restaurar as compras agora. Tente novamente."
+      }
+    },
+    "states": {
+      "loading": {
+        "title": "Carregando planos",
+        "body": "Buscando as opções disponíveis na loja…"
+      },
+      "offline": {
+        "title": "Sem conexão",
+        "body": "Conecte-se à internet e tente novamente."
+      },
+      "error": {
+        "title": "Não foi possível carregar os planos",
+        "body": "Tente novamente em instantes."
+      },
+      "empty": {
+        "title": "Planos indisponíveis",
+        "body": "Não foi possível carregar os planos disponíveis."
+      },
+      "unavailable": {
+        "title": "Planos indisponíveis",
+        "body": "A loja não disponibilizou os planos neste momento."
+      }
     }
   },
   "premiumAction": {

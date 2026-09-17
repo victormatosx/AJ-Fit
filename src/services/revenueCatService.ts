@@ -18,6 +18,11 @@ import type {
   SubscriptionRevalidationSignal,
 } from '../lib/subscriptionLifecycle';
 import { logError, logInfo } from '../lib/logger';
+import {
+  isSubscriptionNetworkIssue,
+  subscriptionPurchaseIssue,
+  type SubscriptionPurchaseIssue,
+} from '../lib/revenueCatErrors';
 
 /**
  * RevenueCat infrastructure (docs/13_assinaturas_e_billing.md).
@@ -475,7 +480,7 @@ export function isOfferingsUnavailableError(err: unknown): boolean {
 export type PurchaseOutcome =
   | { status: 'purchased'; customerInfo: CustomerInfo }
   | { status: 'cancelled' }
-  | { status: 'error'; message: string; offline: boolean };
+  | { status: 'error'; issue: SubscriptionPurchaseIssue; offline: boolean };
 
 /**
  * Buys a package (docs §9 step 7-10). User cancellation is a normal,
@@ -494,11 +499,8 @@ export async function purchasePackage(pkg: PurchasesPackage): Promise<PurchaseOu
       return { status: 'cancelled' };
     }
     logRevenueCatError('purchase', err);
-    return {
-      status: 'error',
-      message: err instanceof Error ? err.message : 'Não foi possível concluir a compra.',
-      offline: isOfflineError(err),
-    };
+    const issue = subscriptionPurchaseIssue(err);
+    return { status: 'error', issue, offline: isSubscriptionNetworkIssue(issue) };
   }
 }
 
@@ -528,17 +530,14 @@ export async function purchaseSubscriptionOption(option: SubscriptionOption): Pr
       return { status: 'cancelled' };
     }
     logRevenueCatError('purchaseSubscriptionOption', err);
-    return {
-      status: 'error',
-      message: err instanceof Error ? err.message : 'Não foi possível concluir a compra.',
-      offline: isOfflineError(err),
-    };
+    const issue = subscriptionPurchaseIssue(err);
+    return { status: 'error', issue, offline: isSubscriptionNetworkIssue(issue) };
   }
 }
 
 export type RestoreOutcome =
   | { status: 'restored'; customerInfo: CustomerInfo; hasPremium: boolean }
-  | { status: 'error'; message: string; offline: boolean; offeringsUnavailable: boolean };
+  | { status: 'error'; issue: SubscriptionPurchaseIssue; offline: boolean; offeringsUnavailable: boolean };
 
 /**
  * Restores purchases from the store (docs §20). Always resolves with the
@@ -559,10 +558,11 @@ export async function restorePurchases(): Promise<RestoreOutcome> {
     if (!offeringsUnavailable) {
       logRevenueCatError('restore', err);
     }
+    const issue = subscriptionPurchaseIssue(err);
     return {
       status: 'error',
-      message: err instanceof Error ? err.message : 'Não foi possível restaurar as compras.',
-      offline: isOfflineError(err),
+      issue,
+      offline: isSubscriptionNetworkIssue(issue),
       offeringsUnavailable,
     };
   }

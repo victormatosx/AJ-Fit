@@ -155,7 +155,7 @@ describe('FASE 5 — DELETE_PROGRESS_PHOTO stayed imperative, on purpose', () =>
     const confirmDeleteStart = screen.indexOf('const confirmDelete = useCallback(');
     const body = screen.slice(
       confirmDeleteStart,
-      screen.indexOf('\n  if (!unlocked)', confirmDeleteStart),
+      screen.indexOf('\n  if (shouldShowPhotoVaultLocked', confirmDeleteStart),
     );
     expect(body).toContain("capability: 'DELETE_PROGRESS_PHOTO'");
     expect(body).not.toContain('<PremiumAction');
