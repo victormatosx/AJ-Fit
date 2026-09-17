@@ -23,9 +23,18 @@
       "none": "Sin suscripción activa"
     },
     "descriptions": {
-      "managed": "Gestionado por la tienda (RevenueCat)",
+      "managed": "Gestionado por la tienda",
       "trialCta": "Activa tu prueba gratis de 7 días"
     }
+  },
+  "subscriptionCelebration": {
+    "activatedLabel": "Plan adquirido",
+    "renewedLabel": "Plan renovado",
+    "title": "AJ Fit Premium",
+    "activatedMessage": "Adquiriste el plan AJ Fit Premium.",
+    "renewedMessage": "Tu suscripción al plan AJ Fit Premium fue renovada.",
+    "accessibilityActivated": "Adquiriste el plan AJ Fit Premium.",
+    "accessibilityRenewed": "Tu suscripción al plan AJ Fit Premium fue renovada."
   },
   "subscriptionCenter": {
     "title": "Suscripción",
@@ -89,11 +98,11 @@
     "store": {
       "APP_STORE": "App Store",
       "PLAY_STORE": "Google Play",
-      "PROMOTIONAL": "RevenueCat",
+      "PROMOTIONAL": "AJ Fit",
       "MAC_APP_STORE": "Mac App Store",
       "STRIPE": "Stripe",
       "AMAZON": "Amazon Appstore",
-      "RC_BILLING": "RevenueCat",
+      "RC_BILLING": "App Store / Google Play",
       "EXTERNAL": "Tienda externa",
       "PADDLE": "Paddle",
       "TEST_STORE": "Tienda de prueba",
@@ -121,7 +130,7 @@
     },
     "state": {
       "loadingTitle": "Cargando suscripción",
-      "loadingBody": "Confirmando tus datos con RevenueCat...",
+      "loadingBody": "Confirmando los datos de tu suscripción...",
       "errorTitle": "Suscripción no disponible",
       "errorBody": "No pudimos cargar los detalles de tu suscripción."
     }
@@ -172,7 +181,7 @@
     "confirmMessage": "¿Seguro que quieres cerrar sesión?",
     "cancel": "Cancelar",
     "confirm": "Cerrar sesión",
-    "errorTitle": "Error",
+    "errorTitle": "No se pudo cerrar sesión",
     "errorMessage": "No se pudo cerrar sesión. Inténtalo de nuevo."
   },
   "photo": {

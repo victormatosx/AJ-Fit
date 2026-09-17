@@ -11,7 +11,11 @@ import { SupportChip } from '../components/support/SupportChip';
 import { useSupportImagePicker } from '../hooks/useSupportImagePicker';
 import { useAuth } from '../state/AuthContext';
 import { createSupportTicket } from '../services/supportTickets';
-import { validateSupportTicket } from '../validators/support';
+import {
+  SUPPORT_MESSAGE_MAX,
+  SUPPORT_SUBJECT_MAX,
+  validateSupportTicket,
+} from '../validators/support';
 import type { FeedbackCategory, SupportTicketType } from '../types/support';
 import { radii, spacing } from '../theme/tokens';
 import { useTheme } from '../theme';
@@ -114,6 +118,12 @@ export function SupportFormScreen({ type, initialSubject = '', onBack, onSuccess
                 value={subject}
                 onChangeText={setSubject}
                 placeholder={type === 'BUG' ? t('bug.subjectPlaceholder') : t('support.subjectPlaceholder')}
+                maxLength={SUPPORT_SUBJECT_MAX}
+                helperText={subject.length >= SUPPORT_SUBJECT_MAX
+                  ? t('form.validation.limitReached', { count: SUPPORT_SUBJECT_MAX })
+                  : subject.length >= SUPPORT_SUBJECT_MAX - 20
+                    ? t('form.validation.charactersRemaining', { count: SUPPORT_SUBJECT_MAX - subject.length })
+                    : undefined}
               />
             )}
 
@@ -124,6 +134,12 @@ export function SupportFormScreen({ type, initialSubject = '', onBack, onSuccess
               onChangeText={setMessage}
               placeholder={feedback ? t('feedback.messagePlaceholder') : type === 'BUG' ? t('bug.descriptionPlaceholder') : t('support.messagePlaceholder')}
               multiline
+              maxLength={SUPPORT_MESSAGE_MAX}
+              helperText={message.length >= SUPPORT_MESSAGE_MAX
+                ? t('form.validation.limitReached', { count: SUPPORT_MESSAGE_MAX })
+                : message.length >= SUPPORT_MESSAGE_MAX - 100
+                  ? t('form.validation.charactersRemaining', { count: SUPPORT_MESSAGE_MAX - message.length })
+                  : undefined}
             />
 
             <View style={{ marginBottom: spacing[5] }}>
@@ -152,7 +168,16 @@ export function SupportFormScreen({ type, initialSubject = '', onBack, onSuccess
   );
 }
 
-function Field({ label, index, multiline, ...props }: { label: string; index?: number; value: string; onChangeText: (v: string) => void; placeholder: string; multiline?: boolean }) {
+function Field({ label, index, multiline, helperText, ...props }: {
+  label: string;
+  index?: number;
+  value: string;
+  onChangeText: (v: string) => void;
+  placeholder: string;
+  multiline?: boolean;
+  maxLength?: number;
+  helperText?: string;
+}) {
   const [focused, setFocused] = useState(false);
   const { theme } = useTheme();
   return (
@@ -187,6 +212,11 @@ function Field({ label, index, multiline, ...props }: { label: string; index?: n
           lineHeight: 20,
         }}
       />
+      {helperText ? (
+        <Text accessibilityRole="alert" style={{ marginTop: 6, color: theme.colors.textMuted, fontFamily: theme.fonts.ui, fontSize: 12 }}>
+          {helperText}
+        </Text>
+      ) : null}
     </View>
   );
 }

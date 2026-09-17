@@ -96,6 +96,10 @@
         "message": "Encerrando sua conta...",
         "description": "Estamos protegendo seus dados e concluindo sua solicitação. Isso pode levar alguns instantes."
       },
+      "reconciliation": {
+        "title": "Solicitação já registrada",
+        "action": "Entendi e sair"
+      },
       "errors": {
         "USER_SIGNED_OUT": "Sua sessão não está disponível. Entre novamente e tente outra vez.",
         "IDENTITY_CHANGED": "A conta em uso mudou durante o processo. Nenhuma alteração foi feita — tente novamente.",
@@ -129,7 +133,7 @@
         "new": "Digite a nova senha",
         "confirmation": "Digite a nova senha novamente"
       },
-      "minimumLength": "Use pelo menos {{count}} caracteres.",
+      "minimumLength": "Use pelo menos {{count}} caracteres, com 1 letra maiúscula, 1 número e 1 caractere especial.",
       "actions": {
         "submit": "Alterar senha"
       },
@@ -142,9 +146,12 @@
         "passwordUnchanged": "A nova senha deve ser diferente da senha atual.",
         "passwordTooShort": "A nova senha deve ter pelo menos {{count}} caracteres.",
         "passwordTooLong": "A nova senha deve ter no máximo {{max}} caracteres.",
+        "passwordMissingUppercase": "A nova senha deve incluir pelo menos 1 letra maiúscula.",
+        "passwordMissingNumber": "A nova senha deve incluir pelo menos 1 número.",
+        "passwordMissingSpecialChar": "A nova senha deve incluir pelo menos 1 caractere especial.",
         "passwordPolicyMismatch": "A nova senha não atende à política de segurança.",
         "currentPasswordIncorrect": "A senha atual está incorreta. Verifique e tente novamente.",
-        "weakPassword": "Use uma nova senha entre 15 e 4096 caracteres.",
+        "weakPassword": "Use uma nova senha com pelo menos {{count}} caracteres, incluindo 1 letra maiúscula, 1 número e 1 caractere especial.",
         "sessionExpired": "Sua sessão expirou. Entre novamente na conta e tente outra vez.",
         "providerRequired": "A alteração de senha está disponível apenas para contas com acesso por e-mail e senha.",
         "tooManyRequests": "Muitas tentativas foram feitas. Aguarde um pouco e tente novamente.",
@@ -167,7 +174,8 @@
       "es": "Español"
     },
     "errors": {
-      "changeFailed": "Não foi possível salvar o idioma. Tente novamente."
+      "changeFailed": "Não foi possível salvar o idioma. Tente novamente.",
+      "rolledBack": "O idioma anterior foi restaurado porque a alteração não pôde ser salva."
     }
   },
   "units": {
@@ -194,7 +202,8 @@
       }
     },
     "errors": {
-      "changeFailed": "Não foi possível salvar o sistema de medidas. Tente novamente."
+      "changeFailed": "Não foi possível salvar o sistema de medidas. Tente novamente.",
+      "rolledBack": "As unidades anteriores foram restauradas porque a alteração não pôde ser salva."
     }
   },
   "theme": {

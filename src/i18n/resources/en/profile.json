@@ -23,9 +23,18 @@
       "none": "No active subscription"
     },
     "descriptions": {
-      "managed": "Managed by the store (RevenueCat)",
+      "managed": "Managed by the store",
       "trialCta": "Start your 7-day free trial"
     }
+  },
+  "subscriptionCelebration": {
+    "activatedLabel": "Plan purchased",
+    "renewedLabel": "Plan renewed",
+    "title": "AJ Fit Premium",
+    "activatedMessage": "You purchased the AJ Fit Premium plan.",
+    "renewedMessage": "Your AJ Fit Premium plan subscription was renewed.",
+    "accessibilityActivated": "You purchased the AJ Fit Premium plan.",
+    "accessibilityRenewed": "Your AJ Fit Premium plan subscription was renewed."
   },
   "subscriptionCenter": {
     "title": "Subscription",
@@ -89,11 +98,11 @@
     "store": {
       "APP_STORE": "App Store",
       "PLAY_STORE": "Google Play",
-      "PROMOTIONAL": "RevenueCat",
+      "PROMOTIONAL": "AJ Fit",
       "MAC_APP_STORE": "Mac App Store",
       "STRIPE": "Stripe",
       "AMAZON": "Amazon Appstore",
-      "RC_BILLING": "RevenueCat",
+      "RC_BILLING": "App Store / Google Play",
       "EXTERNAL": "External store",
       "PADDLE": "Paddle",
       "TEST_STORE": "Test Store",
@@ -121,7 +130,7 @@
     },
     "state": {
       "loadingTitle": "Loading subscription",
-      "loadingBody": "Confirming your details with RevenueCat...",
+      "loadingBody": "Confirming your subscription details...",
       "errorTitle": "Subscription unavailable",
       "errorBody": "We couldn't load your subscription details."
     }
@@ -172,7 +181,7 @@
     "confirmMessage": "Are you sure you want to sign out?",
     "cancel": "Cancel",
     "confirm": "Sign out",
-    "errorTitle": "Error",
+    "errorTitle": "We couldn't sign you out",
     "errorMessage": "Couldn't sign out. Please try again."
   },
   "photo": {
