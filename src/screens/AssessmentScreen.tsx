@@ -25,7 +25,11 @@ import { radii, sizes, spacing } from '../theme/tokens';
 import { useAuth } from '../state/AuthContext';
 import { useAssessments, type SaveOutcome } from '../hooks/useAssessments';
 import { usePremiumCapabilities } from '../hooks/usePremiumCapabilities';
-import type { GuidedAssessmentInput, ImportedAssessmentInput } from '../services/assessments';
+import {
+  classifyAssessmentError,
+  type GuidedAssessmentInput,
+  type ImportedAssessmentInput,
+} from '../services/assessments';
 import {
   SKINFOLD_PROTOCOLS,
   computeBmi,
@@ -1153,7 +1157,9 @@ function GuidedAssessmentModal({
       toast.show({
         tone: 'error',
         title: t('errors.saveFailedTitle'),
-        subtitle: t('errors.saveFailedMessage'),
+        subtitle: classifyAssessmentError(err) === 'unexpected'
+          ? t('errors.saveFailedMessage')
+          : t(`errors.save.${classifyAssessmentError(err)}`),
       });
     } finally {
       setSaving(false);
@@ -1613,7 +1619,9 @@ function ImportAssessmentModal({
       toast.show({
         tone: 'error',
         title: t('errors.saveFailedTitle'),
-        subtitle: t('errors.saveFailedMessage'),
+        subtitle: classifyAssessmentError(err) === 'unexpected'
+          ? t('errors.saveFailedMessage')
+          : t(`errors.save.${classifyAssessmentError(err)}`),
       });
     } finally {
       setSaving(false);

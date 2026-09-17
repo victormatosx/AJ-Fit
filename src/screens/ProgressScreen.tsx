@@ -7,22 +7,19 @@ import { ScreenBg } from '../components/ui/ScreenBg';
 import { ProgressPhotosScreen } from './ProgressPhotosScreen';
 import { BodyEvolutionView } from '../components/fitness/BodyEvolutionView';
 import { LoadsEvolutionView } from '../components/fitness/LoadsEvolutionView';
-import { Display, MonoLabel, Slash } from '../components/ui/Display';
-import { Icon } from '../components/ui/Icon';
+import { Display, Slash } from '../components/ui/Display';
 import { motion, sizes, spacing } from '../theme/tokens';
 import { useTheme } from '../theme';
 import { useAuth } from '../state/AuthContext';
 import { useAssessments } from '../hooks/useAssessments';
-import {
-  PROGRESS_LOADS_PREVIEW,
-  SHOW_PROGRESS_DESIGN_PREVIEW,
-} from '../data/progressDesignMocks';
+import { useLoadProgress } from '../hooks/useLoadProgress';
+import { useScreenFocusEffect } from '../state/ScreenActivity';
 
 /**
  * The Evolution screen.
  *
- * Orchestration only: it owns the sub-view selection and the assessment data,
- * and delegates rendering. Two structural details are load-bearing and must
+ * Orchestration only: it owns the sub-view selection plus the assessment and
+ * workout-load data hooks, and delegates rendering. Two structural details are load-bearing and must
  * survive any future visual change:
  *
  *  1. The Photos panel is mounted INSTEAD of the scroll view, never alongside
@@ -55,18 +52,39 @@ export function ProgressScreen({
     error,
     latest,
     evolutionSincePrevious,
-    refresh,
+    refresh: refreshAssessments,
   } = useAssessments(user?.uid ?? null);
+  const {
+    exercises: loadExercises,
+    recordsLast90Days,
+    todayLocalDate,
+    loading: loadsLoading,
+    error: loadsError,
+    refresh: refreshLoads,
+  } = useLoadProgress(user?.uid ?? null);
 
-  const tabs: Array<[ProgressView, string]> = [
+  const tabs: [ProgressView, string][] = [
     ['body', t('progress.tabs.body')],
     ['loads', t('progress.tabs.loads')],
     ['photos', t('progress.tabs.photos')],
   ];
 
   const handleRetry = useCallback(() => {
-    void refresh();
-  }, [refresh]);
+    void refreshAssessments();
+  }, [refreshAssessments]);
+
+  const handleLoadsRetry = useCallback(() => {
+    void refreshLoads();
+  }, [refreshLoads]);
+
+  // Persistent tabs do not remount when revisited. Revalidate on every real
+  // activation as a fallback for changes made on another device or while the
+  // Progress tab was inactive. Local saves arrive even sooner through the
+  // assessment/load refresh buses used by their respective hooks.
+  useScreenFocusEffect(() => {
+    void refreshAssessments();
+    void refreshLoads();
+  });
 
   /**
    * Header lives here because the Photos panel renders it inside its list.
@@ -153,10 +171,15 @@ export function ProgressScreen({
                   onRetry={handleRetry}
                   onOpenAssessment={onOpenAssessment}
                 />
-              ) : SHOW_PROGRESS_DESIGN_PREVIEW ? (
-                <LoadsEvolutionView exercises={PROGRESS_LOADS_PREVIEW} />
               ) : (
-                <LoadsEmptyState />
+                <LoadsEvolutionView
+                  exercises={loadExercises}
+                  recordsLast90Days={recordsLast90Days}
+                  todayLocalDate={todayLocalDate}
+                  loading={loadsLoading}
+                  error={loadsError}
+                  onRetry={handleLoadsRetry}
+                />
               )}
             </PanelFade>
           </ScrollView>
@@ -199,45 +222,5 @@ function PanelFade({ viewKey, children }: { viewKey: string; children: React.Rea
     >
       {children}
     </Animated.View>
-  );
-}
-
-/**
- * Loads panel.
- *
- * Weights entered during a workout live in that session's React state and are
- * not persisted, so there is no history, no personal record and no volume to
- * chart. Rather than show invented numbers, this states plainly what the app
- * does today. It becomes a real panel the moment workout logging is persisted.
- */
-function LoadsEmptyState() {
-  const { t } = useTranslation('home');
-  const { theme } = useTheme();
-  return (
-    <View style={{ paddingHorizontal: GUTTER, paddingTop: spacing[6] }}>
-      <Slash style={{ marginBottom: spacing[5] }}>
-        {t('progress.loads.eyebrow').toUpperCase()}
-      </Slash>
-      <View style={{ alignItems: 'center', paddingVertical: spacing[10], gap: spacing[3] }}>
-        <Icon name="dumbbell" size={26} color={theme.colors.textFaint} />
-        <Display size={20} style={{ textAlign: 'center' }}>
-          {t('progress.loads.empty.title')}
-        </Display>
-        <Text
-          style={{
-            fontFamily: theme.fonts.ui,
-            fontSize: 13,
-            lineHeight: 19,
-            color: theme.colors.textMuted,
-            textAlign: 'center',
-          }}
-        >
-          {t('progress.loads.empty.description')}
-        </Text>
-        <MonoLabel size={9} style={{ marginTop: spacing[2], textAlign: 'center' }}>
-          {t('progress.loads.empty.hint').toUpperCase()}
-        </MonoLabel>
-      </View>
-    </View>
   );
 }

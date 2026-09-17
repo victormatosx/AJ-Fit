@@ -4,10 +4,22 @@
   },
   "errors": {
     "loadFailedTitle": "We couldn't load your assessments",
-    "loadFailedMessage": "Check your connection and try again.",
+    "loadFailedMessage": "We couldn't refresh the data right now. Please try again.",
     "retry": "Try again",
-    "saveFailedTitle": "Couldn't save",
-    "saveFailedMessage": "Check your connection and try again."
+    "saveFailedTitle": "We couldn't save the assessment",
+    "saveFailedMessage": "Please try again.",
+    "save": {
+      "invalidDate": "Enter a valid date.",
+      "futureDate": "The assessment date can't be in the future.",
+      "invalidWeight": "Enter a valid weight.",
+      "invalidHeight": "Enter a valid height.",
+      "invalidAge": "We couldn't calculate a valid age for this assessment.",
+      "unknownProtocol": "Select a valid protocol.",
+      "missingFolds": "Fill in all required skinfolds.",
+      "implausibleBodyFat": "The calculated body fat percentage is outside the expected range. Check the measurements you entered.",
+      "network": "The assessment can't be saved while you're offline. Connect to the internet and try again.",
+      "unexpected": "We couldn't complete this action right now. Please try again."
+    }
   },
   "loading": {
     "title": "Loading assessments"

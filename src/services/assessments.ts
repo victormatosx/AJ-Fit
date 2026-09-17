@@ -61,6 +61,38 @@ import {
 
 export type AssessmentSource = 'guided' | 'imported';
 
+export type AssessmentIssue =
+  | 'invalidDate'
+  | 'futureDate'
+  | 'invalidWeight'
+  | 'invalidHeight'
+  | 'invalidAge'
+  | 'unknownProtocol'
+  | 'missingFolds'
+  | 'implausibleBodyFat'
+  | 'network'
+  | 'unexpected';
+
+export class AssessmentError extends Error {
+  readonly issue: AssessmentIssue;
+
+  constructor(issue: AssessmentIssue) {
+    super(issue);
+    this.name = 'AssessmentError';
+    this.issue = issue;
+  }
+}
+
+export function classifyAssessmentError(error: unknown): AssessmentIssue {
+  if (error instanceof AssessmentError) return error.issue;
+  const code = typeof error === 'object' && error !== null && 'code' in error
+    ? String((error as { code: unknown }).code)
+    : '';
+  return code === 'unavailable' || code === 'network-request-failed' || code === 'deadline-exceeded'
+    ? 'network'
+    : 'unexpected';
+}
+
 type AssessmentCommon = {
   id: string;
   measuredAt: Timestamp;
@@ -130,37 +162,37 @@ function stripUndefined<T extends Record<string, unknown>>(obj: T): Partial<T> {
 
 function assertValidMeasuredAt(measuredAt: Date): void {
   if (Number.isNaN(measuredAt.getTime())) {
-    throw new Error('Data da avaliação inválida.');
+    throw new AssessmentError('invalidDate');
   }
   if (measuredAt.getTime() > Date.now()) {
-    throw new Error('A data da avaliação não pode estar no futuro.');
+    throw new AssessmentError('futureDate');
   }
 }
 
 function assertValidCommon(weight: number, height: number, measuredAt: Date): void {
-  if (!isValidWeight(weight)) throw new Error('Peso inválido: informe um valor maior que zero.');
-  if (!isValidHeight(height)) throw new Error('Altura inválida: informe um valor maior que zero.');
+  if (!isValidWeight(weight)) throw new AssessmentError('invalidWeight');
+  if (!isValidHeight(height)) throw new AssessmentError('invalidHeight');
   assertValidMeasuredAt(measuredAt);
 }
 
 function assertValidGuidedInput(input: GuidedAssessmentInput, measuredAt: Date): void {
   assertValidCommon(input.weight, input.height, measuredAt);
-  if (!isValidAge(input.age)) throw new Error('Idade inválida: informe um valor maior que zero.');
+  if (!isValidAge(input.age)) throw new AssessmentError('invalidAge');
   const protocol = SKINFOLD_PROTOCOLS.find((p) => p.id === input.protocol);
-  if (!protocol) throw new Error(`Protocolo desconhecido: ${input.protocol}.`);
+  if (!protocol) throw new AssessmentError('unknownProtocol');
   const sites = protocol.sitesFor(input.sex);
   if (!requiredFoldsPresent(input.folds, sites)) {
-    throw new Error('Preencha todas as dobras exigidas pelo protocolo e sexo selecionados.');
+    throw new AssessmentError('missingFolds');
   }
   if (!isPlausibleBodyFat(input.bodyFat)) {
-    throw new Error('Percentual de gordura fora da faixa plausível — confira as dobras informadas.');
+    throw new AssessmentError('implausibleBodyFat');
   }
 }
 
 function assertValidImportedInput(input: ImportedAssessmentInput, measuredAt: Date): void {
   assertValidCommon(input.weight, input.height, measuredAt);
   if (input.bodyFat != null && !isPlausibleBodyFat(input.bodyFat)) {
-    throw new Error('Percentual de gordura fora da faixa plausível.');
+    throw new AssessmentError('implausibleBodyFat');
   }
 }
 

@@ -4,10 +4,22 @@
   },
   "errors": {
     "loadFailedTitle": "No pudimos cargar tus evaluaciones",
-    "loadFailedMessage": "Revisa tu conexión e inténtalo de nuevo.",
+    "loadFailedMessage": "No se pudieron actualizar los datos ahora. Inténtalo de nuevo.",
     "retry": "Reintentar",
-    "saveFailedTitle": "Error al guardar",
-    "saveFailedMessage": "Revisa tu conexión e inténtalo de nuevo."
+    "saveFailedTitle": "No se pudo guardar la evaluación",
+    "saveFailedMessage": "Inténtalo de nuevo.",
+    "save": {
+      "invalidDate": "Introduce una fecha válida.",
+      "futureDate": "La fecha de la evaluación no puede estar en el futuro.",
+      "invalidWeight": "Introduce un peso válido.",
+      "invalidHeight": "Introduce una altura válida.",
+      "invalidAge": "No se pudo calcular una edad válida para esta evaluación.",
+      "unknownProtocol": "Selecciona un protocolo válido.",
+      "missingFolds": "Completa todos los pliegues necesarios.",
+      "implausibleBodyFat": "El porcentaje de grasa calculado está fuera del rango esperado. Revisa las medidas introducidas.",
+      "network": "No se puede guardar la evaluación sin conexión. Conéctate a internet e inténtalo de nuevo.",
+      "unexpected": "No se pudo completar esta acción ahora. Inténtalo de nuevo."
+    }
   },
   "loading": {
     "title": "Cargando evaluaciones"

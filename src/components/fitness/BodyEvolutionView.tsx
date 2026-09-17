@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
@@ -8,6 +8,7 @@ import { Icon } from '../ui/Icon';
 import { sizes, spacing } from '../../theme/tokens';
 import { useTheme } from '../../theme';
 import type { AssessmentDelta, AssessmentView } from '../../hooks/useAssessments';
+import type { SiteKey } from '../../lib/skinfoldCalculator';
 import { useUnits } from '../../state/UnitsContext';
 import { formatWeightFromKg, weightFromKg, weightUnit } from '../../units/weightConversions';
 
@@ -22,6 +23,19 @@ import { formatWeightFromKg, weightFromKg, weightUnit } from '../../units/weight
  */
 
 const GUTTER = sizes.screenGutter;
+const MEASUREMENT_SITE_KEYS: readonly SiteKey[] = [
+  'chest',
+  'axilla',
+  'tricep',
+  'subscap',
+  'abdom',
+  'supra',
+  'thigh',
+];
+
+function formatMeasurement(value: number): string {
+  return (Math.round(value * 10) / 10).toFixed(1).replace(/\.0$/, '');
+}
 
 interface Props {
   assessments: AssessmentView[];
@@ -114,6 +128,189 @@ function CenteredState({ children }: { children: React.ReactNode }) {
   );
 }
 
+function BodyMeasurementsChart({ assessments }: { assessments: AssessmentView[] }) {
+  const { theme } = useTheme();
+  const { t } = useTranslation('home');
+  const [selected, setSelected] = useState<SiteKey>(
+    () => MEASUREMENT_SITE_KEYS.find((key) =>
+      assessments.some((entry) => entry.source === 'guided' && entry.folds[key] != null)) ?? 'chest',
+  );
+  const [open, setOpen] = useState(false);
+  const displayedUnit = 'mm';
+
+  const dateFormatter = useMemo(
+    () => new Intl.DateTimeFormat(undefined, { day: '2-digit', month: 'short', year: 'numeric' }),
+    [],
+  );
+
+  const points = useMemo(
+    () =>
+      [...assessments]
+        .reverse()
+        .flatMap((entry) => {
+          const value = entry.source === 'guided' ? entry.folds[selected] : undefined;
+          return value == null
+            ? []
+            : [{
+                value,
+                date: entry.measuredAt.toDate(),
+              }];
+        }),
+    [assessments, selected],
+  );
+
+  const latestPoint = points[points.length - 1] ?? null;
+  const previousPoint = points[points.length - 2] ?? null;
+  const delta = latestPoint && previousPoint ? latestPoint.value - previousPoint.value : null;
+  const selectedLabel = t(`progress.body.measurements.options.${selected}`);
+
+  return (
+    <View style={{ paddingHorizontal: GUTTER }}>
+      <Slash style={{ marginBottom: spacing[3] }}>
+        {t('progress.body.measurements.title').toUpperCase()}
+      </Slash>
+
+      <View style={{ position: 'relative' }}>
+        <Pressable
+          onPress={() => setOpen((value) => !value)}
+          accessibilityRole="button"
+          accessibilityLabel={t('progress.body.measurements.accessibility.select')}
+          accessibilityState={{ expanded: open }}
+          style={{
+            minHeight: 48,
+            paddingHorizontal: spacing[4],
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: open ? theme.colors.primaryBorderMuted : theme.colors.borderStrong,
+            backgroundColor: theme.colors.surfaceElevated,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
+          <View>
+            <MonoLabel size={8}>{t('progress.body.measurements.selectLabel').toUpperCase()}</MonoLabel>
+            <Text
+              style={{
+                marginTop: spacing[1],
+                fontFamily: theme.fonts.uiSemi,
+                fontSize: 14,
+                color: theme.colors.textPrimary,
+              }}
+            >
+              {selectedLabel}
+            </Text>
+          </View>
+          <View style={{ transform: [{ rotate: open ? '180deg' : '0deg' }] }}>
+            <Icon name="chevron-down" size={17} color={theme.colors.primaryEmphasis} />
+          </View>
+        </Pressable>
+
+        {open ? (
+          <View
+            style={{
+              marginTop: spacing[2],
+              borderRadius: 12,
+              overflow: 'hidden',
+              borderWidth: 1,
+              borderColor: theme.colors.borderStrong,
+              backgroundColor: theme.colors.floatingSurface,
+            }}
+          >
+            {MEASUREMENT_SITE_KEYS.map((key, index) => {
+              const isSelected = selected === key;
+              return (
+                <Pressable
+                  key={key}
+                  onPress={() => {
+                    setSelected(key);
+                    setOpen(false);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: isSelected }}
+                  accessibilityLabel={t('progress.body.measurements.accessibility.option', {
+                    measurement: t(`progress.body.measurements.options.${key}`),
+                  })}
+                  style={{
+                    minHeight: 44,
+                    paddingHorizontal: spacing[4],
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    borderTopWidth: index ? sizes.hairline : 0,
+                    borderTopColor: theme.colors.sheetDivider,
+                    backgroundColor: isSelected ? theme.colors.choiceSelectedBackground : 'transparent',
+                  }}
+                >
+                  <Text style={{ fontFamily: theme.fonts.uiSemi, fontSize: 13, color: theme.colors.textPrimary }}>
+                    {t(`progress.body.measurements.options.${key}`)}
+                  </Text>
+                  {isSelected ? <Icon name="check" size={14} color={theme.colors.primaryEmphasis} /> : null}
+                </Pressable>
+              );
+            })}
+          </View>
+        ) : null}
+      </View>
+
+      {latestPoint ? (
+        <>
+          <View style={{ marginTop: spacing[5], flexDirection: 'row', alignItems: 'baseline', gap: spacing[2] }}>
+            <Display size={42}>
+              {formatMeasurement(latestPoint.value)}
+            </Display>
+            <MonoLabel size={11}>{displayedUnit.toUpperCase()}</MonoLabel>
+            {delta != null ? <Delta value={delta} unit={displayedUnit} /> : null}
+          </View>
+
+          {points.length >= 2 ? (
+            <>
+              <View style={{ marginTop: spacing[4] }}>
+                <EvolutionAreaChart
+                  points={points.map((point) => ({
+                    value: point.value,
+                    displayValue: `${formatMeasurement(point.value)} ${displayedUnit.toUpperCase()}`,
+                    label: dateFormatter.format(point.date),
+                  }))}
+                  accessibilityLabel={`${t('progress.body.measurements.title')}: ${selectedLabel}`}
+                  accessibilityHint={t('progress.chartInteractionHint')}
+                />
+              </View>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing[2] }}>
+                <MonoLabel size={9}>{dateFormatter.format(points[0]!.date)}</MonoLabel>
+                <MonoLabel size={9}>{dateFormatter.format(latestPoint.date)}</MonoLabel>
+              </View>
+            </>
+          ) : (
+            <Text
+              style={{
+                marginTop: spacing[4],
+                fontFamily: theme.fonts.ui,
+                fontSize: 12.5,
+                color: theme.colors.textFaint,
+              }}
+            >
+              {t('progress.body.measurements.singleEntry')}
+            </Text>
+          )}
+        </>
+      ) : (
+        <Text
+          style={{
+            marginTop: spacing[4],
+            fontFamily: theme.fonts.ui,
+            fontSize: 12.5,
+            lineHeight: 18,
+            color: theme.colors.textFaint,
+          }}
+        >
+          {t('progress.body.measurements.empty', { measurement: selectedLabel })}
+        </Text>
+      )}
+    </View>
+  );
+}
+
 export function BodyEvolutionView({
   assessments,
   loading,
@@ -134,12 +331,16 @@ export function BodyEvolutionView({
   );
 
   // The hook returns newest first; a chart reads oldest to newest.
-  const series = useMemo(
+  const weightPoints = useMemo(
     () =>
       [...assessments]
         .reverse()
-        .map((entry) => weightFromKg(entry.weight, resolvedUnits)),
-    [assessments, resolvedUnits],
+        .map((entry) => ({
+          value: weightFromKg(entry.weight, resolvedUnits),
+          displayValue: `${formatWeightFromKg(entry.weight, resolvedUnits)} ${unit.toUpperCase()}`,
+          label: dateFormatter.format(entry.measuredAt.toDate()),
+        })),
+    [assessments, dateFormatter, resolvedUnits, unit],
   );
 
   const bounds = useMemo(() => {
@@ -257,10 +458,14 @@ export function BodyEvolutionView({
 
       {/* Chart, or an honest note when a single point cannot draw a curve. */}
       <View style={{ marginTop: spacing[6] }}>
-        {series.length >= 2 ? (
+        {weightPoints.length >= 2 ? (
           <>
             <View style={{ paddingHorizontal: GUTTER }}>
-              <EvolutionAreaChart values={series} />
+              <EvolutionAreaChart
+                points={weightPoints}
+                accessibilityLabel={t('progress.body.currentWeight')}
+                accessibilityHint={t('progress.chartInteractionHint')}
+              />
             </View>
             {bounds ? (
               <View
@@ -336,6 +541,9 @@ export function BodyEvolutionView({
           unit=""
         />
       ) : null}
+
+      <Rule />
+      <BodyMeasurementsChart assessments={assessments} />
 
       {onOpenAssessment ? (
         <>

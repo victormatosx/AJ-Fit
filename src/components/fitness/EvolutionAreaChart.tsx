@@ -1,8 +1,12 @@
-import React from 'react';
-import { View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Pressable, Text, View } from 'react-native';
 import Svg, { Circle, Defs, LinearGradient as SvgLG, Line, Path, Stop } from 'react-native-svg';
 
 import { useTheme } from '../../theme';
+import {
+  adjacentEvolutionPointIndex,
+  nearestEvolutionPointIndex,
+} from './evolutionChartInteraction';
 
 /**
  * Hero line chart for one metric over time.
@@ -21,29 +25,54 @@ import { useTheme } from '../../theme';
 
 const VIEW_W = 320;
 const PAD_X = 4;
-const PAD_Y = 14;
+const PAD_TOP = 36;
+const PAD_BOTTOM = 14;
+
+export interface EvolutionAreaChartPoint {
+  /** Numeric display-unit value used to position the point. */
+  value: number;
+  /** Fully formatted value and unit shown after selection. */
+  displayValue: string;
+  /** Usually the date represented by this point. */
+  label: string;
+}
 
 export function EvolutionAreaChart({
-  values,
+  points,
+  accessibilityLabel,
+  accessibilityHint,
   height = 150,
 }: {
   /** Chronological order, oldest first. At least two entries to draw. */
-  values: number[];
+  points: EvolutionAreaChartPoint[];
+  accessibilityLabel: string;
+  accessibilityHint: string;
   height?: number;
 }) {
   const { theme } = useTheme();
-  if (values.length < 2) return null;
+  const [width, setWidth] = useState(0);
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const seriesSignature = points
+    .map((point) => `${point.value}:${point.displayValue}:${point.label}`)
+    .join('|');
 
+  useEffect(() => {
+    setSelectedIndex(null);
+  }, [seriesSignature]);
+
+  if (points.length < 2) return null;
+
+  const values = points.map((point) => point.value);
   const min = Math.min(...values);
   const max = Math.max(...values);
   // A perfectly flat series would divide by zero; draw it as a mid baseline.
   const range = max - min || 1;
   const usableW = VIEW_W - PAD_X * 2;
-  const usableH = height - PAD_Y * 2;
+  const usableH = height - PAD_TOP - PAD_BOTTOM;
 
   const point = (value: number, index: number) => ({
     x: PAD_X + (index / (values.length - 1)) * usableW,
-    y: PAD_Y + (1 - (value - min) / range) * usableH,
+    y: PAD_TOP + (1 - (value - min) / range) * usableH,
   });
 
   const coords = values.map(point);
@@ -52,9 +81,90 @@ export function EvolutionAreaChart({
     .join(' ');
   const area = `${line} L ${VIEW_W - PAD_X} ${height} L ${PAD_X} ${height} Z`;
   const last = coords[coords.length - 1]!;
+  const selected = selectedIndex == null ? null : points[selectedIndex] ?? null;
+  const selectedCoord = selectedIndex == null ? null : coords[selectedIndex] ?? null;
+
+  const selectAdjacentPoint = (direction: -1 | 1) => {
+    setSelectedIndex((current) => (
+      adjacentEvolutionPointIndex(current, points.length, direction)
+    ));
+  };
 
   return (
-    <View>
+    <View style={{ position: 'relative' }}>
+      {selected ? (
+        <View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            zIndex: 1,
+            top: 0,
+            left: 0,
+            right: 0,
+            alignItems: 'center',
+          }}
+        >
+          <View
+            style={{
+              minHeight: 28,
+              paddingHorizontal: 10,
+              borderRadius: 8,
+              borderWidth: 1,
+              borderColor: theme.colors.borderStrong,
+              backgroundColor: theme.colors.floatingSurface,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 8,
+            }}
+          >
+            <Text
+              style={{
+                fontFamily: theme.fonts.uiBold,
+                fontSize: 13,
+                color: theme.colors.textPrimary,
+              }}
+            >
+              {selected.displayValue}
+            </Text>
+            <Text
+              style={{
+                fontFamily: theme.fonts.mono,
+                fontSize: 9,
+                color: theme.colors.textMuted,
+              }}
+            >
+              {selected.label.toUpperCase()}
+            </Text>
+          </View>
+        </View>
+      ) : null}
+
+      <Pressable
+        onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
+        onPress={(event) => {
+          const index = nearestEvolutionPointIndex(
+            event.nativeEvent.locationX,
+            width,
+            points.length,
+          );
+          if (index != null) setSelectedIndex(index);
+        }}
+        accessibilityRole="adjustable"
+        accessibilityLabel={accessibilityLabel}
+        accessibilityHint={accessibilityHint}
+        accessibilityValue={selected
+          ? { text: `${selected.displayValue}, ${selected.label}` }
+          : undefined}
+        accessibilityActions={[
+          { name: 'decrement' },
+          { name: 'increment' },
+        ]}
+        onAccessibilityAction={(event) => {
+          if (event.nativeEvent.actionName === 'increment') selectAdjacentPoint(1);
+          if (event.nativeEvent.actionName === 'decrement') selectAdjacentPoint(-1);
+        }}
+        style={{ height }}
+      >
       <Svg width="100%" height={height} viewBox={`0 0 ${VIEW_W} ${height}`}>
         <Defs>
           <SvgLG id="evolutionFill" x1="0" y1="0" x2="0" y2="1">
@@ -68,8 +178,8 @@ export function EvolutionAreaChart({
             key={i}
             x1={0}
             x2={VIEW_W}
-            y1={PAD_Y + (i * usableH) / 2}
-            y2={PAD_Y + (i * usableH) / 2}
+            y1={PAD_TOP + (i * usableH) / 2}
+            y2={PAD_TOP + (i * usableH) / 2}
             stroke={theme.chart.grid}
             strokeWidth={1}
           />
@@ -85,7 +195,29 @@ export function EvolutionAreaChart({
           strokeLinejoin="round"
         />
         <Circle cx={last.x} cy={last.y} r={4.5} fill={theme.chart.endpoint} />
+        {selectedCoord ? (
+          <>
+            <Line
+              x1={selectedCoord.x}
+              x2={selectedCoord.x}
+              y1={PAD_TOP}
+              y2={height - PAD_BOTTOM}
+              stroke={theme.chart.axis}
+              strokeWidth={1}
+              strokeDasharray="3 3"
+            />
+            <Circle
+              cx={selectedCoord.x}
+              cy={selectedCoord.y}
+              r={5}
+              fill={theme.chart.endpoint}
+              stroke={theme.colors.floatingSurface}
+              strokeWidth={2}
+            />
+          </>
+        ) : null}
       </Svg>
+      </Pressable>
     </View>
   );
 }

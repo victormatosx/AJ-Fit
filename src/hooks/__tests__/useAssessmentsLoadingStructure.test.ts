@@ -27,4 +27,24 @@ describe('useAssessments initial loading vs. background revalidation', () => {
     expect(CODE).toContain('error: visibleError');
     expect(CODE).toContain('loading: effectiveLoading');
   });
+
+  it('invalidates other mounted assessment consumers immediately after each successful write', () => {
+    expect(CODE).toContain('subscribeToAssessmentRefresh(uid, refresh)');
+    expect(CODE.match(/publishAssessmentRefresh\(uid, refresh\)/g)).toHaveLength(2);
+
+    const guidedSave = CODE.slice(
+      CODE.indexOf("addGuidedAssessment(uid, input)"),
+      CODE.indexOf("return { refreshFailed: false }", CODE.indexOf("addGuidedAssessment(uid, input)")),
+    );
+    const importedSave = CODE.slice(
+      CODE.indexOf("addImportedAssessment(uid, input)"),
+      CODE.indexOf("return { refreshFailed: false }", CODE.indexOf("addImportedAssessment(uid, input)")),
+    );
+    expect(guidedSave.indexOf('publishAssessmentRefresh')).toBeLessThan(
+      guidedSave.indexOf('await refresh()'),
+    );
+    expect(importedSave.indexOf('publishAssessmentRefresh')).toBeLessThan(
+      importedSave.indexOf('await refresh()'),
+    );
+  });
 });

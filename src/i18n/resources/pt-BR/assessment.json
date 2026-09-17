@@ -4,10 +4,22 @@
   },
   "errors": {
     "loadFailedTitle": "Não foi possível carregar suas avaliações",
-    "loadFailedMessage": "Verifique sua conexão e tente novamente.",
+    "loadFailedMessage": "Não foi possível atualizar os dados agora. Tente novamente.",
     "retry": "Tentar novamente",
-    "saveFailedTitle": "Falha ao salvar",
-    "saveFailedMessage": "Verifique sua conexão e tente novamente."
+    "saveFailedTitle": "Não foi possível salvar a avaliação",
+    "saveFailedMessage": "Tente novamente.",
+    "save": {
+      "invalidDate": "Informe uma data válida.",
+      "futureDate": "A data da avaliação não pode estar no futuro.",
+      "invalidWeight": "Informe um peso válido.",
+      "invalidHeight": "Informe uma altura válida.",
+      "invalidAge": "Não foi possível calcular uma idade válida para esta avaliação.",
+      "unknownProtocol": "Selecione um protocolo válido.",
+      "missingFolds": "Preencha todas as dobras necessárias.",
+      "implausibleBodyFat": "O percentual de gordura calculado está fora da faixa esperada. Confira as medidas informadas.",
+      "network": "Não foi possível salvar sem conexão. Conecte-se à internet e tente novamente.",
+      "unexpected": "Não foi possível concluir esta ação agora. Tente novamente."
+    }
   },
   "loading": {
     "title": "Carregando avaliações"
