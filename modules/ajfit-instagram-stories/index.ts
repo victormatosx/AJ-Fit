@@ -4,6 +4,10 @@ export type AJFitInstagramStoriesNativeModule = {
   getCapabilities?(): InstagramStoriesCapabilities | Promise<InstagramStoriesCapabilities>;
   isAvailable(): boolean | Promise<boolean>;
   share(uri: string): void | Promise<void>;
+  /** iOS-only: the Android native module does not implement Instagram feed sharing. */
+  isInstagramAppAvailable?(): boolean | Promise<boolean>;
+  /** iOS-only: the Android native module does not implement Instagram feed sharing. */
+  shareToFeed?(uri: string): void | Promise<void>;
 };
 
 export type InstagramStoriesCapabilities = {

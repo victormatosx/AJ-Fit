@@ -5,19 +5,25 @@ import { captureRef, releaseCapture } from 'react-native-view-shot';
 
 import { createWorkoutShareExportUri, discardWorkoutShareFile } from './files';
 
-export const WORKOUT_SHARE_EXPORT_WIDTH = 1080;
-export const WORKOUT_SHARE_EXPORT_HEIGHT = 1920;
 export const WORKOUT_SHARE_EXPORT_QUALITY = 0.92;
 
+/**
+ * Converts a layout's target export pixels (e.g. the Classic layout's
+ * 1080x1920) into the size `captureRef` must be asked for. Android already
+ * captures in physical pixels; iOS's `captureRef` multiplies the requested
+ * size by the device pixel ratio internally, so it must be asked in points.
+ */
 export function workoutShareCaptureSize(
+  exportWidth: number,
+  exportHeight: number,
   platform: typeof Platform.OS = Platform.OS,
   pixelRatio = PixelRatio.get(),
 ): { width: number; height: number } {
   if (platform === 'ios') {
     const ratio = Number.isFinite(pixelRatio) && pixelRatio > 0 ? pixelRatio : 1;
-    return { width: WORKOUT_SHARE_EXPORT_WIDTH / ratio, height: WORKOUT_SHARE_EXPORT_HEIGHT / ratio };
+    return { width: exportWidth / ratio, height: exportHeight / ratio };
   }
-  return { width: WORKOUT_SHARE_EXPORT_WIDTH, height: WORKOUT_SHARE_EXPORT_HEIGHT };
+  return { width: exportWidth, height: exportHeight };
 }
 
 function fileUri(uri: string): string {
@@ -28,12 +34,13 @@ function fileUri(uri: string): string {
 
 export async function captureWorkoutSharePoster(
   posterRef: RefObject<View | null>,
+  exportSize: { width: number; height: number },
 ): Promise<string> {
   if (!posterRef.current) throw new Error('workout share poster is not ready');
   let shotUri: string | null = null;
   let exportUri: string | null = null;
   try {
-    const size = workoutShareCaptureSize();
+    const size = workoutShareCaptureSize(exportSize.width, exportSize.height);
     shotUri = await captureRef(posterRef, {
       ...size,
       format: 'jpg',

@@ -11,6 +11,33 @@ describe('WorkoutScreen cardio finisher structure', () => {
     expect(source).toContain('resolveCardioFinisherPresentation');
   });
 
+  it('plays the final exercise completion transition before revealing cardio', () => {
+    const advanceStart = source.indexOf('const advanceAfterRest = (');
+    const advanceBody = source.slice(advanceStart, source.indexOf('useEffect(() => {', advanceStart));
+    const transitionRender = source.indexOf('if (exComplete?.continuesToCardio)');
+    const cardioRender = source.indexOf('if (showCardioFinisher && cardioFinisher)');
+
+    expect(advanceBody).toContain("nextName: t('cardioFinisher.title')");
+    expect(advanceBody).toContain('continuesToCardio: true');
+    expect(advanceBody).toContain('setExComplete(null);');
+    expect(advanceBody).toContain('setShowCardioFinisher(true);');
+    expect(transitionRender).toBeGreaterThan(-1);
+    expect(transitionRender).toBeLessThan(cardioRender);
+  });
+
+  it('keeps the cardio completion animation mounted while workout finalization runs', () => {
+    const finalizeStart = source.indexOf('const finalizeNow = async () => {');
+    const finalizeBody = source.slice(finalizeStart, source.indexOf('const [confirmSheet', finalizeStart));
+    const finalizingRender = source.indexOf("if (finishState === 'finalizing')");
+
+    expect(finalizeBody).toContain("setFinishState('finalizing')");
+    expect(finalizeBody).toContain('Promise.all([persistence, completionAnimation])');
+    expect(finalizeBody).not.toContain("setFinishState('persisting')");
+    expect(finalizingRender).toBeGreaterThan(-1);
+    expect(source).toContain("completedLabel={t('cardioSession.completed')}");
+    expect(source).toContain("nextName={t('done.finishing')}");
+  });
+
   it('does not add pace, distance, heart-rate or calorie tracking', () => {
     expect(source).not.toContain('cardioDistance');
     expect(source).not.toContain('heartRate');

@@ -8,8 +8,8 @@
  * control-flow invariant that fixes it, straight from the source.
  *
  * Root cause: `order` (and the `exIdx`/`setIdx` derived from it) must only be
- * emptied by `advanceAfterRest`, which also opens cardio or flips `finished`
- * in the same update. The crash happened because
+ * emptied by `advanceAfterRest`, which also opens a guarded transition to
+ * cardio or flips `finished` in the same update. The crash happened because
  * `const curReps = ex.sets[setIdx].r` was computed BEFORE the component's
  * `if (finished) return <WorkoutShareComposer/>` early return, so the render that
  * landed right after `finished` became true still evaluated it with a
@@ -41,20 +41,26 @@ describe('WorkoutScreen — finish-workout crash (ex.sets[setIdx].r of undefined
     expect(finalEntryBranch).not.toContain('setFinished(true)');
   });
 
-  it('advanceAfterRest flips finished to true in the same call that empties `order`, never leaving a stale non-empty order with finished still false', () => {
+  it('an empty order either finishes immediately or enters the guarded final-exercise transition before cardio', () => {
     const advanceBody = source.slice(
       source.indexOf('const advanceAfterRest = ('),
       source.indexOf("useEffect(() => {\n    if (restStatus !== 'expired'"),
     );
     const emptyOrderBranch = advanceBody.slice(advanceBody.indexOf('if (nextOrder.length === 0) {'));
-    expect(emptyOrderBranch.slice(0, emptyOrderBranch.indexOf('}') + 1)).toContain('setFinished(true)');
+    expect(emptyOrderBranch).toContain('continuesToCardio: true');
+    expect(emptyOrderBranch).toContain('setFinished(true)');
+
+    const transitionReturnIdx = source.indexOf('if (exComplete?.continuesToCardio)');
+    const curRepsIdx = source.indexOf('const curReps = ex.sets[setIdx].r;');
+    expect(transitionReturnIdx).toBeGreaterThan(-1);
+    expect(transitionReturnIdx).toBeLessThan(curRepsIdx);
   });
 
   it('the fallback exIdx (order empty) is only ever reached on the finished render, which returns before touching ex.sets[setIdx]', () => {
     // `order.length > 0 ? order[0] : 0` is the only place `exIdx` falls back
     // to a hardcoded index — that fallback must only be observable once
-    // `finished` is already true (asserted above: the risky read happens
-    // strictly after the early return).
+    // `finished` is already true or the final-cardio transition is active
+    // (asserted above: the risky read happens strictly after both exits).
     expect(source).toContain("const exIdx = order.length > 0 ? order[0] : 0;");
   });
 });

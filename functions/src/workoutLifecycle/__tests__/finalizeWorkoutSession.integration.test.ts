@@ -188,4 +188,53 @@ describe.skipIf(!enabled)('finalizeWorkoutSession — real Firestore Emulator in
     expect((await root.collection('workoutExecutions').doc(EXECUTION_ID).get()).data()?.status).toBe('IN_PROGRESS');
     expect((await root.collection('workoutExecutionState').doc('current').get()).exists).toBe(true);
   });
+
+  // Regression (2026-09-16 production incident): once a missed-session gap
+  // has already been decided (a `MISS_RESOLVED` ledger event), completing
+  // the pending session it left behind must succeed — not be permanently
+  // rejected as an unexpected schedule gap on every retry.
+  it('completes the pending session left behind by an already-resolved missed-session gap', async () => {
+    const dayMs = 24 * 60 * 60 * 1000;
+    const missedDate = new Date(new Date(`${today}T12:00:00Z`).getTime() - 7 * dayMs).toISOString().slice(0, 10);
+    const cursorDate = new Date(new Date(`${today}T12:00:00Z`).getTime() - 14 * dayMs).toISOString().slice(0, 10);
+    await Promise.all([
+      root.collection('workoutPrograms').doc(PROGRAM_ID).collection('scheduleState').doc(INSTANCE_ID).set({
+        programId: PROGRAM_ID, programInstanceId: INSTANCE_ID, nextSessionIndex: 0,
+        cursorDate, lastCompletedAt: null, pendingMissDecision: null,
+      }),
+      root.collection('workoutPrograms').doc(PROGRAM_ID).collection('scheduleEvents')
+        .doc(`${INSTANCE_ID}_miss_resolved_0_${missedDate}`).set({
+          type: 'MISS_RESOLVED', programInstanceId: INSTANCE_ID, sessionIndex: 0,
+          scheduledDate: missedDate, decision: 'CONTINUE_SEQUENCE',
+        }),
+    ]);
+    await expect(finalize()).resolves.toMatchObject({ status: 'COMPLETED' });
+  });
+
+  // Security regression: `firestore.rules` gates what CONTENT a MISS_RESOLVED
+  // event may hold (must match a real grant) but never binds the document id
+  // itself to that content — an owner can legally write grant-matched
+  // content under an id of their own choosing. A document that merely
+  // EXISTS at the expected deterministic id, with content for a different
+  // gap, must never be trusted as resolving THIS gap.
+  it('ignores a MISS_RESOLVED document at the expected id whose content does not match this gap', async () => {
+    const dayMs = 24 * 60 * 60 * 1000;
+    const missedDate = new Date(new Date(`${today}T12:00:00Z`).getTime() - 7 * dayMs).toISOString().slice(0, 10);
+    const cursorDate = new Date(new Date(`${today}T12:00:00Z`).getTime() - 14 * dayMs).toISOString().slice(0, 10);
+    await Promise.all([
+      root.collection('workoutPrograms').doc(PROGRAM_ID).collection('scheduleState').doc(INSTANCE_ID).set({
+        programId: PROGRAM_ID, programInstanceId: INSTANCE_ID, nextSessionIndex: 0,
+        cursorDate, lastCompletedAt: null, pendingMissDecision: null,
+      }),
+      // Right id, wrong content: a different sessionIndex/date/instance —
+      // simulating a doc planted ahead of time at this id for another gap.
+      root.collection('workoutPrograms').doc(PROGRAM_ID).collection('scheduleEvents')
+        .doc(`${INSTANCE_ID}_miss_resolved_0_${missedDate}`).set({
+          type: 'MISS_RESOLVED', programInstanceId: INSTANCE_ID, sessionIndex: 3,
+          scheduledDate: '2099-01-01', decision: 'CONTINUE_SEQUENCE',
+        }),
+    ]);
+    await expect(finalize()).rejects.toMatchObject({ message: 'schedule_completion_session_not_expected' });
+    expect((await root.collection('workoutExecutions').doc(EXECUTION_ID).get()).data()?.status).toBe('IN_PROGRESS');
+  });
 });

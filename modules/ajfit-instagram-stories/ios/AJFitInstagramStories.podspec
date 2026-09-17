@@ -11,6 +11,6 @@ Pod::Spec.new do |s|
   s.source         = { :path => '.' }
   s.static_framework = true
   s.dependency 'ExpoModulesCore'
-  s.frameworks = 'UIKit'
+  s.frameworks = 'UIKit', 'Photos'
   s.source_files = '**/*.{h,m,swift}'
 end

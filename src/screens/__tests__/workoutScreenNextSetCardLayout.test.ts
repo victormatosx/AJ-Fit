@@ -4,14 +4,10 @@ import { describe, expect, it } from 'vitest';
 // Regression coverage for a letter-by-letter text wrap bug on the
 // "next set" card of the workout execution screen.
 //
-// Root cause: the reps/last-load value columns in the card row had no
-// flexShrink/maxWidth cap, so a long reps string (e.g. "8-12/perna" for
-// unilateral exercises like Agachamento Búlgaro) forced those columns to
-// grow to fit their content at fontSize 40. Because RN's default
-// flexShrink is 0 (unlike CSS's default of 1), the only flexible sibling
-// — the "PRÓXIMA SÉRIE" / "SÉRIE N" label column (flex: 1) — was squeezed
-// down to near-zero width, causing React Native's text layout to wrap the
-// label character-by-character instead of word-by-word.
+// Root cause: a long reps string (e.g. "8-12/perna" for unilateral exercises
+// like Agachamento Búlgaro) was allowed to reserve 110 px while the last-load
+// block reserved another 100 px. The flexible "PRÓXIMA SÉRIE" / "SÉRIE N"
+// block was left too narrow and its large text painted into the reps block.
 const source = readFileSync(new URL('../WorkoutScreen.tsx', import.meta.url), 'utf8');
 
 function nextSetCard(): string {
@@ -23,17 +19,12 @@ function nextSetCard(): string {
 }
 
 describe('WorkoutScreen next-set card layout', () => {
-  it('gives the label column flex + minWidth:0 so it can shrink instead of collapsing to zero', () => {
+  it('reserves a readable width for the next-series label instead of letting it collapse', () => {
     const card = nextSetCard();
-    // The label column must be able to shrink (flex: 1) AND must have
-    // minWidth: 0 — without the latter, RN/Yoga will not let a flex child
-    // shrink below its content's intrinsic width, which is exactly what
-    // starves the sibling value columns of space and (in reverse) is also
-    // the mechanism used here to protect the label column itself.
-    expect(card).toContain('flex: 1, minWidth: 0');
+    expect(card).toContain('flexBasis: 112, flexGrow: 0, flexShrink: 1, minWidth: 98');
   });
 
-  it('caps the reps value column so a long reps string cannot grow unbounded', () => {
+  it('makes the reps value consume only the space left inside the card', () => {
     const card = nextSetCard();
     const repsBlockStart = card.indexOf('{curReps}');
     expect(repsBlockStart).toBeGreaterThan(-1);
@@ -41,7 +32,11 @@ describe('WorkoutScreen next-set card layout', () => {
     const repsColumn = card.slice(repsColumnStart, repsBlockStart);
 
     expect(repsColumn).toContain('maxWidth');
-    expect(repsColumn).toContain('flexShrink: 0');
+    expect(repsColumn).toContain('flex: 1');
+    expect(repsColumn).toContain('minWidth: 0');
+    // The display font is skewed, so clipping the column also clips the
+    // leading edge of the first glyph (visible as a cut-off "8" on iOS).
+    expect(repsColumn).not.toContain("overflow: 'hidden'");
   });
 
   it('constrains the reps text to a single line and shrinks font instead of expanding the box', () => {
@@ -52,9 +47,11 @@ describe('WorkoutScreen next-set card layout', () => {
 
     expect(repsTextProps).toContain('numberOfLines={1}');
     expect(repsTextProps).toContain('adjustsFontSizeToFit');
+    expect(repsTextProps).toContain("width: '100%'");
+    expect(repsTextProps).toContain('paddingHorizontal: 4');
   });
 
-  it('caps the last-load value column the same way as the reps column', () => {
+  it('keeps the last-load column compact so it cannot starve the other values', () => {
     const card = nextSetCard();
     const lastTimeIdx = card.indexOf("t('sets.lastTime')");
     expect(lastTimeIdx).toBeGreaterThan(-1);
@@ -63,8 +60,9 @@ describe('WorkoutScreen next-set card layout', () => {
     const lastColumnStart = card.indexOf('<View', dividerIdx);
     const lastColumn = card.slice(lastColumnStart, lastTimeIdx);
 
-    expect(lastColumn).toContain('maxWidth');
-    expect(lastColumn).toContain('flexShrink: 0');
+    expect(lastColumn).toContain('width: 72');
+    expect(lastColumn).toContain('minWidth: 66');
+    expect(lastColumn).toContain('flexShrink: 1');
   });
 
   it('uses the raw prescription reps string directly (covers long unilateral formats like "8-12/perna")', () => {

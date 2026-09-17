@@ -781,10 +781,10 @@ function AppShellContent({
     setWorkoutCompletionResult(null);
     setDurableCompletionReachedAtMs(null);
     setFinishingSession(true);
-    logInfo('workout_performance', 'loading_started', { timestampMs: Date.now() });
+    logInfo('workout_performance', 'finalization_started', { timestampMs: Date.now() });
     const hasCardioFinisher = !!activeProgram?.sessions[activeSessionIndex]?.cardioFinisher;
     if (!hasCardioFinisher) {
-      logInfo('workout_performance', 'finish_ui_loading_started', { timestampMs: Date.now(), source: 'strength' });
+      logInfo('workout_performance', 'finish_ui_transition_started', { timestampMs: Date.now(), source: 'strength' });
     }
     // Cardio keeps the shared Live Activity in its completed state until the
     // user leaves the success screen, including completion recovery after a
@@ -1220,6 +1220,7 @@ function AppShellContent({
       <StartWorkoutConfirmation
         visible={startWorkoutFlow === 'confirmation' && !workoutInProgress}
         prescription={prescription}
+        resolution={schedule.resolution}
         sessionIndex={schedule.resolution.status === 'SESSION_READY'
           ? schedule.resolution.sessionIndex
           : 0}
@@ -1548,6 +1549,7 @@ function AppShellContent({
 function StartWorkoutConfirmation({
   visible,
   prescription,
+  resolution,
   sessionIndex,
   loading,
   onCancel,
@@ -1557,6 +1559,10 @@ function StartWorkoutConfirmation({
 }: {
   visible: boolean;
   prescription: PrescriptionResult;
+  /** Same Schedule Engine resolution AppShell reads to gate `startWorkout`
+   *  (docs §Bloqueio real) — used here only to decide which copy to show;
+   *  the actual gate still lives in `startWorkout` itself. */
+  resolution: ScheduleResolution;
   /** Same scheduled session displayed on the Home card. */
   sessionIndex: number;
   /** Same meaning as `useWorkoutPrescription`'s `loading` — see HomeScreen's doc comment. Keeps this modal from ever reading `prescription.status` as a real outcome before the first resolution lands. */
@@ -1575,7 +1581,24 @@ function StartWorkoutConfirmation({
   const { t } = useTranslation('home');
   const tLoose = t as unknown as LooseTranslate;
   const canStart = prescription.status === 'SUCCESS';
-  const session = canStart
+
+  // Not a training day / already trained today: same `schedule.*` copy as
+  // `WorkoutTabBlockedState`, so the navbar's "Treino" tab never disagrees
+  // with Home about whether today is resting/done (docs §Consistência com
+  // Meu Plano). This takes precedence over the prescription outcome —
+  // there's no reason to show a prescription error for a day that was never
+  // going to start a session anyway.
+  const blockedCopyKey =
+    resolution.status === 'REST_DAY' ? 'restDay' :
+    resolution.status === 'ACTIVE_RECOVERY_DAY' ? 'activeRecovery' :
+    resolution.status === 'TODAY_COMPLETED' ? 'completedToday' :
+    null;
+  const nextUp = canStart
+    && (resolution.status === 'REST_DAY' || resolution.status === 'ACTIVE_RECOVERY_DAY' || resolution.status === 'TODAY_COMPLETED')
+    ? { session: prescription.plan.sessions[resolution.nextSessionIndex] ?? null, date: resolution.nextWorkoutDate }
+    : null;
+
+  const session = !blockedCopyKey && canStart
     ? prescription.plan.sessions[sessionIndex] ?? prescription.plan.sessions[0]
     : null;
   const showLoadingState = loading && !canStart;
@@ -1658,7 +1681,13 @@ function StartWorkoutConfirmation({
               {t('todayCard.kicker').toUpperCase()}
             </Slash>
             <Display size={26} color={theme.colors.textPrimary} style={{ marginTop: 9 }}>
-              {t(canStart ? 'todayCard.confirm.title' : `prescription.${outcomeKey}.title`).toUpperCase()}
+              {t(
+                blockedCopyKey
+                  ? `schedule.${blockedCopyKey}.title`
+                  : canStart
+                    ? 'todayCard.confirm.title'
+                    : `prescription.${outcomeKey}.title`,
+              ).toUpperCase()}
             </Display>
             <Text
               style={{
@@ -1669,9 +1698,11 @@ function StartWorkoutConfirmation({
                 marginTop: 8,
               }}
             >
-              {canStart
-                ? t('todayCard.confirm.question')
-                : t(`prescription.${outcomeKey}.body`)}
+              {blockedCopyKey
+                ? t(`schedule.${blockedCopyKey}.body`)
+                : canStart
+                  ? t('todayCard.confirm.question')
+                  : t(`prescription.${outcomeKey}.body`)}
             </Text>
             <Text
               style={{
@@ -1692,12 +1723,36 @@ function StartWorkoutConfirmation({
                 : ''}
             </Text>
 
+            {/* Not a training day / already trained today: point at the
+                next scheduled session instead of offering to start one now
+                (docs §Próximo treino != próximo dia) — same card shape as
+                `WorkoutTabBlockedState`'s. */}
+            {nextUp?.session && (
+              <Card style={{ marginTop: 14, padding: 14 }}>
+                <MonoLabel>{t('schedule.nextWorkout.label').toUpperCase()}</MonoLabel>
+                <Text
+                  style={{
+                    fontFamily: theme.fonts.uiBold,
+                    fontSize: 15,
+                    color: theme.colors.textPrimary,
+                    marginTop: 6,
+                  }}
+                >
+                  {t('schedule.nextWorkout.value', {
+                    weekday: tLoose(`quiz:trainingDays.options.${weekdayOfLocalDate(nextUp.date)}`),
+                    session: resolveSessionDisplayName(tLoose, nextUp.session.name, nextUp.session.type),
+                  })}
+                </Text>
+              </Card>
+            )}
+
             {/* FASE 5: <PremiumAction> is the entry-point gate — locked stays
                 tappable (never `disabled`), and closes this confirmation
                 before either starting the session or opening
                 PremiumRequiredSheet, exactly like the Fase 4 behavior this
-                replaces. */}
-            {canStart && <PremiumAction capability="START_WORKOUT" onAllowed={onConfirm}>
+                replaces. Never shown when today is blocked (rest/active
+                recovery/already completed) — there's nothing to start. */}
+            {canStart && !blockedCopyKey && <PremiumAction capability="START_WORKOUT" onAllowed={onConfirm}>
               {({ locked, onPress }) => (
                 <Pressable
                   accessibilityRole="button"
@@ -1747,7 +1802,7 @@ function StartWorkoutConfirmation({
               for `BLOCKED`/`REQUIRES_CLEARANCE` (fail-closed; a retry button
               here would look like a way around a safety stop).
             */}
-            {!canStart && !generating && !showLoadingState && canRetryGeneration(prescription.status) && (
+            {!blockedCopyKey && !canStart && !generating && !showLoadingState && canRetryGeneration(prescription.status) && (
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={t('prescription.generate')}

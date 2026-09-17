@@ -35,6 +35,31 @@ describe('Instagram Stories config plugin', () => {
     expect(resources.string).toEqual([]);
   });
 
+  it('declares the plain "instagram" scheme itself, now that react-native-share no longer does', () => {
+    const plist = plugin.applyIosConfiguration({}, undefined);
+    expect(plist.LSApplicationQueriesSchemes).toContain('instagram');
+    expect(appConfig.expo.plugins).not.toContain('react-native-share');
+    expect(
+      appConfig.expo.plugins.some(
+        (candidate: unknown) => Array.isArray(candidate) && candidate[0] === 'react-native-share',
+      ),
+    ).toBe(false);
+  });
+
+  it('configures the add-only Photos permission for Instagram feed sharing regardless of the Meta App ID', () => {
+    const plistWithoutMetaAppId = plugin.applyIosConfiguration({}, undefined);
+    expect(plistWithoutMetaAppId[plugin.IOS_PHOTO_LIBRARY_ADD_USAGE_KEY]).toBe(
+      plugin.IOS_PHOTO_LIBRARY_ADD_USAGE_TEXT,
+    );
+
+    const plistWithMetaAppId = plugin.applyIosConfiguration({}, '123456789012345');
+    expect(plistWithMetaAppId[plugin.IOS_PHOTO_LIBRARY_ADD_USAGE_KEY]).toBe(
+      plugin.IOS_PHOTO_LIBRARY_ADD_USAGE_TEXT,
+    );
+    // Must never be confused with expo-image-picker's full-library key.
+    expect(plugin.IOS_PHOTO_LIBRARY_ADD_USAGE_KEY).toBe('NSPhotoLibraryAddUsageDescription');
+  });
+
   it('generates source_application configuration for both native platforms', () => {
     const testMetaAppId = '123456789012345';
     const plist = plugin.applyIosConfiguration({}, testMetaAppId);

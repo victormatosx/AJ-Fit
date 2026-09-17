@@ -20,7 +20,8 @@
       },
       "entitlements": {
         "com.apple.developer.devicecheck.appattest-environment": "production"
-      }
+      },
+      "deploymentTarget": "16.4"
     },
     "android": {
       "package": "com.ajfit.mobile",
@@ -122,7 +123,8 @@
           "style": "light",
           "enforceContrast": false
         }
-      ]
+      ],
+      "./plugins/ios-min-deployment-target"
     ]
   }
 }

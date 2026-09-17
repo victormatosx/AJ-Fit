@@ -6,7 +6,8 @@ import { requireAuth } from '../lib/auth';
 import { logInfo, logWarn } from '../lib/logger';
 import { buildScheduleAuthorityContext, prescribedExecutionCounts } from './finalizationAuthority';
 import { validateMaterializedExecutionSubstitutions } from './exerciseSubstitution';
-import { resolveWorkoutSchedule } from './scheduleEngine/resolver';
+import { detectMissedSessionGap, resolveWorkoutSchedule } from './scheduleEngine/resolver';
+import { scheduleEventDocumentId } from './scheduleEngine/identities';
 
 export const MAX_CARDIO_ACTUAL_DURATION_SECONDS = 3 * 60 * 60;
 
@@ -201,6 +202,48 @@ async function finalizeWorkoutSessionCore(
       throw new HttpsError('failed-precondition', 'schedule_not_configured', { stage: 'SCHEDULE' });
     }
     if (!eventSnapshot.exists) {
+      // A gap that's already been decided (docs §Decisão idempotente) must
+      // not re-trip the guard below — mirrors the same lookup the client
+      // does before reading the schedule (`src/services/workoutSchedule.ts`).
+      // Without it, any session completed after a resolved missed-day
+      // decision is rejected as SCHEDULE-stage `permission-denied` forever,
+      // since `resolveWorkoutSchedule` alone has no way to know the gap it
+      // sees was already resolved.
+      const gap = detectMissedSessionGap({
+        hasActiveProgram: true,
+        sessionCount: context.sessionCount,
+        config: context.config,
+        state: context.state,
+        activatedAtLocalDate: context.activatedAtLocalDate,
+        todayLocalDate: execution.scheduledLocalDate,
+      });
+      let resolvedMissScheduledDate: string | null = null;
+      if (gap) {
+        const missResolvedRef = programRef.collection('scheduleEvents').doc(scheduleEventDocumentId({
+          type: 'MISS_RESOLVED',
+          sessionIndex: gap.missedSessionIndex,
+          scheduledDate: gap.missedScheduledDate,
+          programInstanceId: execution.programInstanceId,
+        }));
+        const missResolvedSnapshot = await transaction.get(missResolvedRef);
+        const missResolvedData = missResolvedSnapshot.data();
+        // Firestore rules gate *what content* a MISS_RESOLVED event may hold
+        // (it must match a real, server-issued RESOLVE_MISSED_SESSION grant)
+        // but never bind the deterministic id itself to that content — an
+        // owner can legally write grant-matched content under a document id
+        // of their own choosing. Re-checking the fields (same as
+        // `dailyWorkoutNotifications.ts`) closes that gap: existence at the
+        // expected id is necessary but not sufficient.
+        if (
+          missResolvedSnapshot.exists
+          && missResolvedData?.type === 'MISS_RESOLVED'
+          && missResolvedData.programInstanceId === execution.programInstanceId
+          && missResolvedData.sessionIndex === gap.missedSessionIndex
+          && missResolvedData.scheduledDate === gap.missedScheduledDate
+        ) {
+          resolvedMissScheduledDate = gap.missedScheduledDate;
+        }
+      }
       const resolution = resolveWorkoutSchedule({
         hasActiveProgram: true,
         sessionCount: context.sessionCount,
@@ -208,6 +251,7 @@ async function finalizeWorkoutSessionCore(
         state: context.state,
         activatedAtLocalDate: context.activatedAtLocalDate,
         todayLocalDate: execution.scheduledLocalDate,
+        resolvedMissScheduledDate,
       });
       if (resolution.status !== 'SESSION_READY' || resolution.sessionIndex !== execution.sessionIndex) {
         throw new HttpsError('permission-denied', 'schedule_completion_session_not_expected', { stage: 'SCHEDULE' });

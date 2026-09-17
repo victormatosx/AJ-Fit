@@ -19,7 +19,6 @@ import { ScreenBg } from '../components/ui/ScreenBg';
 import { Display, Slash, MonoLabel } from '../components/ui/Display';
 import { HudCorners } from '../components/ui/Card';
 import { CtaButton } from '../components/ui/CtaButton';
-import { FullScreenLoading } from '../components/ui/FullScreenLoading';
 import { CardioSessionContent } from '../components/workout/CardioSessionContent';
 import { SegBar } from '../components/ui/SegBar';
 import { Icon } from '../components/ui/Icon';
@@ -218,6 +217,7 @@ type Props = {
 type LooseT = (key: string, opts?: Record<string, unknown>) => string;
 
 const warnedMissingMuscleGroups = new Set<string>();
+const FINAL_COMPLETION_ANIMATION_MS = 2000;
 
 function translateMuscleGroup(tLoose: LooseT, target: string): string {
   const key = `muscleGroups.${target}`;
@@ -389,6 +389,7 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
   // `showCardioFinisher`.
   const cardioAlreadyCompleted = !!hydration?.cardioCompleted;
   const [finished, setFinished] = useState(() => !!hydration?.allDone && (!cardioFinisher || cardioAlreadyCompleted));
+  const [finalCompletionAnimationElapsed, setFinalCompletionAnimationElapsed] = useState(false);
   const completionSignaledRef = useRef(false);
   // Captured once at mount — never re-evaluated as `finished ping-pongs`
   // later in the session, so observability can tell "this finish chain
@@ -443,7 +444,12 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
   );
 
   const [pr, setPr] = useState<{ weight: number; exName: string; prev: number } | null>(null);
-  const [exComplete, setExComplete] = useState<{ name: string; nextName: string } | null>(null);
+  const [exComplete, setExComplete] = useState<{
+    name: string;
+    nextName: string;
+    continuesToCardio?: boolean;
+    finalizesWorkout?: boolean;
+  } | null>(null);
 
   // Session duration is `sessionNow - workoutStartedAtMs` (wall clock), never
   // a tick count — `workoutStartedAtMs` is the persisted execution's
@@ -606,8 +612,28 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
       setOrder(nextOrder);
       setSkipped((s) => s.filter((x) => x !== exIdx));
       if (nextOrder.length === 0) {
-        if (cardioFinisher) setShowCardioFinisher(true);
-        else setFinished(true);
+        if (cardioFinisher) {
+          // The final strength exercise deserves the same completion beat as
+          // every exercise before it. Keep cardio behind the overlay until
+          // its full transition has played; the dedicated early render below
+          // also prevents reading a now-finished set while `order` is empty.
+          setExComplete({
+            name: completedName,
+            nextName: t('cardioFinisher.title'),
+            continuesToCardio: true,
+          });
+          setTimeout(() => {
+            setExComplete(null);
+            setShowCardioFinisher(true);
+          }, 2000);
+        } else {
+          setExComplete({
+            name: completedName,
+            nextName: t('done.finishing'),
+            finalizesWorkout: true,
+          });
+          setFinished(true);
+        }
         return;
       }
       const nextEx = resolve(exercises[nextOrder[0]], nextOrder[0]);
@@ -838,9 +864,26 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [finished]);
 
+  // The final exercise transition is also the workout-finalization progress
+  // surface. Keep it visible for a complete visual beat even when the server
+  // responds immediately; after that, it remains mounted for as long as the
+  // durable completion is still pending. Cardio already owns the same minimum
+  // inside CardioScreen and marks this elapsed before setting `finished`.
+  useEffect(() => {
+    if (!finished || finalCompletionAnimationElapsed) return undefined;
+    const timer = setTimeout(
+      () => setFinalCompletionAnimationElapsed(true),
+      FINAL_COMPLETION_ANIMATION_MS,
+    );
+    return () => clearTimeout(timer);
+  }, [finalCompletionAnimationElapsed, finished]);
+
   const successVisibleRef = useRef(false);
   useEffect(() => {
-    const visible = finished && !!completionConfirmed && !completionFailed;
+    const visible = finished
+      && finalCompletionAnimationElapsed
+      && !!completionConfirmed
+      && !completionFailed;
     if (visible && !successVisibleRef.current) {
       const visibleAtMs = Date.now();
       logInfo('workout_performance', 'success_screen_visible', {
@@ -851,22 +894,40 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
       });
     }
     successVisibleRef.current = visible;
-  }, [completionConfirmed, completionFailed, durableCompletionReachedAtMs, finished]);
+  }, [completionConfirmed, completionFailed, durableCompletionReachedAtMs, finalCompletionAnimationElapsed, finished]);
 
   if (finished) {
-    // `finished` is local workout progress, not a persistence fact. The very
-    // first render after the last set/cardio must therefore be loading even
-    // before AppShell's completion effect has had a chance to run.
-    if (!completionConfirmed && !completionFailed) {
-      return (
-        <FullScreenLoading
-          accessibilityLabel={t('done.finishing')}
-          message={t('done.finishing')}
-        />
-      );
+    if (completionFailed && !finishing) {
+      return <WorkoutCompletionError onRetry={onRetryCompletion} />;
     }
-    if (completionFailed) {
-      return <WorkoutCompletionError retrying={!!finishing} onRetry={onRetryCompletion} />;
+    // The last completion animation is the loading/progress surface. It stays
+    // visible until BOTH its minimum duration and the durable Execution +
+    // Schedule boundary are complete; only then may sharing become visible.
+    if (!completionConfirmed || !finalCompletionAnimationElapsed || finishing) {
+      const finalizingName = exComplete?.finalizesWorkout
+        ? exComplete.name
+        : currentSession
+          ? resolveSessionDisplayName(
+              tLoose,
+              currentSession.name,
+              currentSession.type,
+              currentSession.displayName,
+            )
+          : t('done.kicker');
+      return (
+        <ScreenBg>
+          <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
+            <ExerciseDoneOverlay
+              name={finalizingName}
+              nextName={t('done.finishing')}
+              finalizingWorkout
+              completedLabel={exComplete?.finalizesWorkout
+                ? t('exerciseDone.completed')
+                : t('done.kicker')}
+            />
+          </SafeAreaView>
+        </ScreenBg>
+      );
     }
     return (
       <WorkoutShareComposer
@@ -897,6 +958,19 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
           onDone();
         }}
       />
+    );
+  }
+
+  // Completing the last strength exercise empties `order`. Render its
+  // completion transition as a standalone full-screen state until cardio is
+  // revealed, so the normal exercise body cannot index past the final set.
+  if (exComplete?.continuesToCardio) {
+    return (
+      <ScreenBg>
+        <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
+          <ExerciseDoneOverlay name={exComplete.name} nextName={exComplete.nextName} />
+        </SafeAreaView>
+      </ScreenBg>
     );
   }
 
@@ -944,6 +1018,7 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
             plannedDurationSeconds: parsePrescribedCardioDurationSeconds(cardioFinisher.duration),
             actualDurationSeconds,
           });
+          setFinalCompletionAnimationElapsed(true);
           setFinished(true);
         }}
       />
@@ -1184,14 +1259,25 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
               borderColor: theme.colors.workoutActiveBorder,
               flexDirection: 'row',
               alignItems: 'center',
-              gap: 18,
+              gap: 10,
             }}
           >
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <MonoLabel color={theme.colors.primaryEmphasis} numberOfLines={1}>
+            <View style={{ flexBasis: 112, flexGrow: 0, flexShrink: 1, minWidth: 98 }}>
+              <MonoLabel
+                color={theme.colors.primaryEmphasis}
+                numberOfLines={1}
+                style={{ letterSpacing: 1.4 }}
+              >
                 {t('sets.next').toUpperCase()}
               </MonoLabel>
-              <View style={{ flexDirection: 'row', alignItems: 'baseline', marginTop: 6 }}>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'baseline',
+                  marginTop: 6,
+                  overflow: 'hidden',
+                }}
+              >
                 <Display size={28} numberOfLines={1}>
                   {t('sets.number', { number: setIdx + 1 }).toUpperCase()}
                 </Display>
@@ -1208,13 +1294,23 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
                 </Text>
               </View>
             </View>
-            <View style={{ alignItems: 'center', minWidth: 60, maxWidth: 110, flexShrink: 0 }}>
+            <View
+              style={{
+                alignItems: 'center',
+                flex: 1,
+                minWidth: 0,
+                maxWidth: 100,
+              }}
+            >
               <Text
                 style={{
+                  width: '100%',
+                  paddingHorizontal: 4,
                   fontFamily: theme.fonts.display,
                   fontSize: 40,
                   color: theme.colors.textPrimary,
                   lineHeight: displayLineHeight(40),
+                  textAlign: 'center',
                   transform: [{ skewX: '-8deg' }],
                 }}
                 numberOfLines={1}
@@ -1228,10 +1324,11 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
               </MonoLabel>
             </View>
             <View style={{ width: 1, alignSelf: 'stretch', backgroundColor: theme.colors.dividerStrong }} />
-            <View style={{ alignItems: 'center', minWidth: 66, maxWidth: 100, flexShrink: 0 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+            <View style={{ alignItems: 'center', width: 72, minWidth: 66, flexShrink: 1 }}>
+              <View style={{ width: '100%', flexDirection: 'row', alignItems: 'baseline', justifyContent: 'center' }}>
                 <Text
                   style={{
+                    flexShrink: 1,
                     fontFamily: theme.fonts.display,
                     fontSize: 28,
                     color: theme.colors.textPrimary,
@@ -2651,9 +2748,12 @@ function CardioScreen({
   // Firestore execution — a network/transaction failure must never be read
   // as "cardio is confirmed done" (docs — this is the exact bug class that
   // motivated this hardening: a fire-and-forget local "done" that outran the
-  // durable write). `idle -> persisting -> idle` (success) or `-> error`
-  // (retryable, never silently swallowed as success).
-  const [finishState, setFinishState] = useState<'idle' | 'persisting' | 'error'>('idle');
+  // durable write). The visual celebration begins with the user's explicit
+  // confirmation and remains the only progress surface; the local session
+  // cannot become FINISHED until that server-authoritative operation succeeds.
+  // `idle -> finalizing -> success` or `-> error` (retryable, never silently
+  // swallowed).
+  const [finishState, setFinishState] = useState<'idle' | 'finalizing' | 'error'>('idle');
   const finishingRef = useRef(false);
 
   const finalizeNow = async () => {
@@ -2663,20 +2763,29 @@ function CardioScreen({
     // concurrent `completeCardioExecution` calls.
     if (finishingRef.current) return;
     finishingRef.current = true;
-    setFinishState('persisting');
-    logInfo('workout_performance', 'finish_ui_loading_started', { timestampMs: Date.now(), source: 'cardio' });
-    const cardioPersistStartedAtMs = Date.now();
-    logInfo('workout_performance', 'cardio_persist_start', { timestampMs: cardioPersistStartedAtMs });
+    setFinishState('finalizing');
+    logInfo('workout_performance', 'finish_ui_transition_started', { timestampMs: Date.now(), source: 'cardio' });
+    const completionAnimation = new Promise<void>((resolve) => {
+      setTimeout(resolve, FINAL_COMPLETION_ANIMATION_MS);
+    });
     logInfo('workout', 'cardio_finish_requested', {});
-    // Frozen once, here — a retry after a failure recomputes fresh (the user
-    // was still legitimately doing cardio while stuck on the error state),
-    // but a single attempt always persists and locally freezes the exact
-    // same duration, never two different values for one confirmed tap.
+    // Frozen once at the confirmation tap — a retry after a failure
+    // recomputes fresh (the user was still legitimately doing cardio while
+    // stuck on the error state), but a single attempt always persists and
+    // locally freezes the exact same duration, never two different values
+    // for one confirmed tap.
     const finishedSession = finishCardio(session, Date.now());
     const actualDurationSeconds = finishedSession.actualDurationSeconds ?? 0;
-    const result = onCardioCompleted
-      ? await onCardioCompleted(actualDurationSeconds)
-      : ({ ok: true } as const);
+
+    const cardioPersistStartedAtMs = Date.now();
+    logInfo('workout_performance', 'cardio_persist_start', { timestampMs: cardioPersistStartedAtMs });
+    // The callback owns the durable workout-finalization boundary and runs in
+    // parallel with the animation. `Promise.all` keeps that same animated
+    // surface mounted until both the visual beat and the server work finish.
+    const persistence = onCardioCompleted
+      ? onCardioCompleted(actualDurationSeconds)
+      : Promise.resolve({ ok: true } as const);
+    const [result] = await Promise.all([persistence, completionAnimation]);
     logInfo('workout_performance', 'cardio_persist_end', {
       timestampMs: Date.now(),
       durationMs: Date.now() - cardioPersistStartedAtMs,
@@ -2688,6 +2797,8 @@ function CardioScreen({
       setFinishState('error');
       return;
     }
+    // The durable boundary succeeded. Only now may local cardio state become
+    // FINISHED and its recovery record be removed.
     publish(finishedSession);
     publishLiveActivity(
       finishedSession,
@@ -2695,7 +2806,6 @@ function CardioScreen({
       finishedSession.cardioFinishedAt ?? Date.now(),
     );
     void clearCardioSession();
-    setFinishState('idle');
     onFinish(actualDurationSeconds);
   };
 
@@ -2709,12 +2819,18 @@ function CardioScreen({
   const doneClock = formatCardioClock(elapsed);
   const targetClock = formatCardioClock(session.targetDurationSeconds);
 
-  if (finishState === 'persisting') {
+  if (finishState === 'finalizing') {
     return (
-      <FullScreenLoading
-        accessibilityLabel={t('done.finishing')}
-        message={t('done.finishing')}
-      />
+      <ScreenBg>
+        <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
+          <ExerciseDoneOverlay
+            name={t('cardioFinisher.title')}
+            nextName={t('done.finishing')}
+            completedLabel={t('cardioSession.completed')}
+            finalizingWorkout
+          />
+        </SafeAreaView>
+      </ScreenBg>
     );
   }
 
@@ -3413,7 +3529,17 @@ function PopBadge({ children }: { children: React.ReactNode }) {
 
 /* ─────────────────────── EXERCISE DONE TRANSITION ─────────────────────── */
 
-function ExerciseDoneOverlay({ name, nextName }: { name: string; nextName: string }) {
+function ExerciseDoneOverlay({
+  name,
+  nextName,
+  completedLabel,
+  finalizingWorkout = false,
+}: {
+  name: string;
+  nextName: string;
+  completedLabel?: string;
+  finalizingWorkout?: boolean;
+}) {
   const { theme } = useTheme();
   const { t } = useTranslation('workout');
   return (
@@ -3446,12 +3572,14 @@ function ExerciseDoneOverlay({ name, nextName }: { name: string; nextName: strin
         </PopBadge>
       </View>
       <Slash style={{ marginBottom: 12 }}>
-        {t('exerciseDone.completed').toUpperCase()}
+        {(completedLabel ?? t('exerciseDone.completed')).toUpperCase()}
       </Slash>
       <Display size={30} style={{ textAlign: 'center' }}>
         {name}
       </Display>
       <View
+        accessibilityLiveRegion={finalizingWorkout ? 'polite' : 'none'}
+        accessibilityLabel={finalizingWorkout ? nextName : undefined}
         style={{
           marginTop: 26,
           flexDirection: 'row',
@@ -3465,22 +3593,25 @@ function ExerciseDoneOverlay({ name, nextName }: { name: string; nextName: strin
           borderColor: theme.colors.primaryBorderSubtle,
         }}
       >
-        <MonoLabel color={theme.colors.primaryEmphasis}>
-          {t('exerciseDone.nextLabel').toUpperCase()}
-        </MonoLabel>
-        <Icon name="arrow-right" size={15} color={theme.colors.primaryEmphasis} />
+        {finalizingWorkout ? (
+          <ActivityIndicator size="small" color={theme.colors.primaryEmphasis} />
+        ) : (
+          <>
+            <MonoLabel color={theme.colors.primaryEmphasis}>
+              {t('exerciseDone.nextLabel').toUpperCase()}
+            </MonoLabel>
+            <Icon name="arrow-right" size={15} color={theme.colors.primaryEmphasis} />
+          </>
+        )}
         <Text style={{ fontSize: 15, fontFamily: theme.fonts.uiBold, color: theme.colors.textPrimary }}>{nextName}</Text>
       </View>
     </View>
   );
 }
 
-function WorkoutCompletionError({ retrying, onRetry }: { retrying: boolean; onRetry: () => void }) {
+function WorkoutCompletionError({ onRetry }: { onRetry: () => void }) {
   const { theme } = useTheme();
   const { t } = useTranslation('workout');
-  if (retrying) {
-    return <FullScreenLoading accessibilityLabel={t('done.finishing')} message={t('done.finishing')} />;
-  }
   return (
     <ScreenBg>
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>

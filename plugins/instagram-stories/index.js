@@ -3,6 +3,13 @@ const { withAndroidManifest, withInfoPlist, withStringsXml } = require('@expo/co
 const IOS_INFO_KEY = 'AJFitInstagramStoriesMetaAppID';
 const ANDROID_META_DATA_KEY = 'com.ajfit.instagramstories.META_APP_ID';
 const ANDROID_STRING_NAME = 'ajfit_instagram_stories_meta_app_id';
+// Distinct from expo-image-picker's NSPhotoLibraryUsageDescription (full
+// read-write) — this is the iOS 14+ add-only key, requested only for the
+// Instagram feed share handoff, which never reads the user's existing
+// photos.
+const IOS_PHOTO_LIBRARY_ADD_USAGE_KEY = 'NSPhotoLibraryAddUsageDescription';
+const IOS_PHOTO_LIBRARY_ADD_USAGE_TEXT =
+  'O AJ Fit precisa adicionar a imagem do treino às suas Fotos para compartilhar diretamente no Instagram.';
 
 function normalizeMetaAppId(value) {
   if (value === undefined || value === null || value === '') return undefined;
@@ -19,9 +26,19 @@ function resolveAndroidMetaAppId(metaAppId, androidEnabled) {
 function applyIosConfiguration(infoPlist, metaAppId) {
   const schemes = new Set(infoPlist.LSApplicationQueriesSchemes || []);
   schemes.add('instagram-stories');
+  // Plain "instagram" scheme — needed for the Instagram Feed handoff's
+  // `isInstagramAppAvailable()` check (`canOpenURL("instagram://app")`).
+  // Previously declared by the react-native-share config plugin, which no
+  // longer exists now that WhatsApp/Facebook/TikTok always use the generic
+  // OS share sheet instead of that library.
+  schemes.add('instagram');
   infoPlist.LSApplicationQueriesSchemes = [...schemes];
   if (metaAppId) infoPlist[IOS_INFO_KEY] = metaAppId;
   else delete infoPlist[IOS_INFO_KEY];
+  // Instagram feed sharing (unlike Stories) is not gated by the Meta App ID —
+  // it always needs this description present so the OS add-only prompt can
+  // run.
+  infoPlist[IOS_PHOTO_LIBRARY_ADD_USAGE_KEY] = IOS_PHOTO_LIBRARY_ADD_USAGE_TEXT;
   return infoPlist;
 }
 
@@ -82,6 +99,8 @@ function withAJFitInstagramStories(config, options = {}) {
 
 module.exports = withAJFitInstagramStories;
 module.exports.IOS_INFO_KEY = IOS_INFO_KEY;
+module.exports.IOS_PHOTO_LIBRARY_ADD_USAGE_KEY = IOS_PHOTO_LIBRARY_ADD_USAGE_KEY;
+module.exports.IOS_PHOTO_LIBRARY_ADD_USAGE_TEXT = IOS_PHOTO_LIBRARY_ADD_USAGE_TEXT;
 module.exports.ANDROID_META_DATA_KEY = ANDROID_META_DATA_KEY;
 module.exports.ANDROID_STRING_NAME = ANDROID_STRING_NAME;
 module.exports.normalizeMetaAppId = normalizeMetaAppId;

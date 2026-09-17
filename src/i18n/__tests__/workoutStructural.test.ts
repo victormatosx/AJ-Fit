@@ -151,6 +151,9 @@ describe('workout — video and exercise-done structural strings per locale', ()
     ['pt-BR', 'exerciseDone.nextLabel', /próximo/i],
     ['en', 'exerciseDone.nextLabel', /next/i],
     ['es', 'exerciseDone.nextLabel', /siguiente/i],
+    ['pt-BR', 'cardioSession.completed', /cardio finalizado/i],
+    ['en', 'cardioSession.completed', /cardio finished/i],
+    ['es', 'cardioSession.completed', /cardio finalizado/i],
   ] as Array<[SupportedLanguage, string, RegExp]>)('[%s] workout:%s', async (lang, key, re) => {
     const i18n = await freshI18nAt(lang);
     const t = i18n.getFixedT(lang, 'workout' as 'workout') as unknown as LooseT;

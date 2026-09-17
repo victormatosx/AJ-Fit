@@ -1,5 +1,5 @@
 import React from 'react';
-import Svg, { Path, Circle, Rect, Defs } from 'react-native-svg';
+import Svg, { Path, Circle, Rect, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { useTheme } from '../../theme';
 
 export type IconName =
@@ -8,7 +8,7 @@ export type IconName =
   | 'calendar' | 'sparkles' | 'target' | 'flame' | 'timer'
   | 'heart' | 'apple' | 'lock' | 'mail' | 'eye' | 'settings'
   | 'crown' | 'chevron-right' | 'chevron-down' | 'x' | 'swap' | 'list' | 'shield'
-  | 'trophy' | 'camera' | 'google'
+  | 'trophy' | 'camera' | 'google' | 'instagram' | 'share'
   | 'bell' | 'moon' | 'globe' | 'ruler' | 'download' | 'trash' | 'help-circle'
   | 'message' | 'alert-triangle' | 'info' | 'file-text' | 'key' | 'star';
 
@@ -17,9 +17,11 @@ type Props = {
   size?: number;
   color?: string;
   stroke?: number;
+  /** Filled state for icons that support selection, currently the heart. */
+  filled?: boolean;
 };
 
-export function Icon({ name, size = 22, color: colorProp, stroke = 1.7 }: Props) {
+export function Icon({ name, size = 22, color: colorProp, stroke = 1.7, filled = false }: Props) {
   const { theme } = useTheme();
   const color = colorProp ?? theme.colors.textPrimary;
   const common = {
@@ -69,7 +71,7 @@ export function Icon({ name, size = 22, color: colorProp, stroke = 1.7 }: Props)
     case 'timer':
       return <Svg {...common}><Circle {...p} cx="12" cy="13" r="8" /><Path {...p} d="M12 9v4l2 2M10 2h4" /></Svg>;
     case 'heart':
-      return <Svg {...common}><Path {...p} d="M20.4 5.6a5.5 5.5 0 00-7.8 0L12 6.2l-.6-.6a5.5 5.5 0 00-7.8 7.8l.6.6L12 22l7.8-8 .6-.6a5.5 5.5 0 000-7.8z" /></Svg>;
+      return <Svg {...common}><Path {...p} fill={filled ? color : 'none'} d="M20.4 5.6a5.5 5.5 0 00-7.8 0L12 6.2l-.6-.6a5.5 5.5 0 00-7.8 7.8l.6.6L12 22l7.8-8 .6-.6a5.5 5.5 0 000-7.8z" /></Svg>;
     case 'apple':
       return <Svg {...common}><Path d="M16.5 12.3c0-2.4 2-3.6 2-3.6-1.1-1.6-2.8-1.8-3.4-1.8-1.4-.1-2.8.8-3.5.8-.7 0-1.9-.8-3.1-.8-1.6 0-3.1.9-3.9 2.4-1.7 2.9-.4 7.1 1.2 9.4.8 1.1 1.8 2.4 3 2.4 1.2 0 1.7-.8 3.1-.8 1.5 0 1.9.8 3.1.8 1.3 0 2.1-1.2 2.9-2.3.9-1.3 1.3-2.6 1.3-2.7-.1-.1-2.7-1-2.7-3.8zM14.4 5.4c.7-.8 1.1-1.9 1-3-1 0-2.2.6-2.9 1.5-.6.7-1.2 1.9-1 2.9 1.1.1 2.2-.5 2.9-1.4z" fill={color} /></Svg>;
     case 'google':
@@ -81,6 +83,37 @@ export function Icon({ name, size = 22, color: colorProp, stroke = 1.7 }: Props)
           <Path d="M12 5.9c1.5 0 2.8.5 3.8 1.5l2.9-2.9C16.9 2.9 14.7 2 12 2 8.1 2 4.7 4.3 3 7.5l3.4 2.6C7.2 7.7 9.4 5.9 12 5.9z" fill="#EA4335" />
         </Svg>
       );
+    case 'instagram':
+      return (
+        <Svg {...common}>
+          <Defs>
+            <LinearGradient id="igGradient" x1="0" y1="1" x2="1" y2="0">
+              <Stop offset="0" stopColor="#FEE411" />
+              <Stop offset="0.25" stopColor="#FE4B70" />
+              <Stop offset="0.55" stopColor="#FF0F7B" />
+              <Stop offset="0.78" stopColor="#F80261" />
+              <Stop offset="1" stopColor="#8134AF" />
+            </LinearGradient>
+          </Defs>
+          <Rect x="2" y="2" width="20" height="20" rx="6" fill="url(#igGradient)" />
+          {/* Full camera mark (body outline + lens ring + flash dot) as one
+              path — the exact official Bootstrap Icons "instagram" glyph
+              (MIT), not a hand-approximation. Scaled from its native 16x16
+              viewBox into an 18x18 area inset 3px on every side inside the
+              20x20 gradient square above, matching the real app icon's
+              margin between the colored background and the white camera
+              mark. Previously this case only drew the lens ring + flash dot
+              with no body outline, which read as just the center of the
+              logo once cropped into a circular badge. */}
+          <Path
+            transform="translate(3 3) scale(1.125)"
+            fill="#FFFFFF"
+            d="M8 0C5.829 0 5.556.01 4.703.048 3.85.088 3.269.222 2.76.42a3.9 3.9 0 0 0-1.417.923A3.9 3.9 0 0 0 .42 2.76C.222 3.268.087 3.85.048 4.7.01 5.555 0 5.827 0 8.001c0 2.172.01 2.444.048 3.297.04.852.174 1.433.372 1.942.205.526.478.972.923 1.417.444.445.89.719 1.416.923.51.198 1.09.333 1.942.372C5.555 15.99 5.827 16 8 16s2.444-.01 3.298-.048c.851-.04 1.434-.174 1.943-.372a3.9 3.9 0 0 0 1.416-.923c.445-.445.718-.891.923-1.417.197-.509.332-1.09.372-1.942C15.99 10.445 16 10.173 16 8s-.01-2.445-.048-3.299c-.04-.851-.175-1.433-.372-1.941a3.9 3.9 0 0 0-.923-1.417A3.9 3.9 0 0 0 13.24.42c-.51-.198-1.092-.333-1.943-.372C10.443.01 10.172 0 7.998 0zm-.717 1.442h.718c2.136 0 2.389.007 3.232.046.78.035 1.204.166 1.486.275.373.145.64.319.92.599s.453.546.598.92c.11.281.24.705.275 1.485.039.843.047 1.096.047 3.231s-.008 2.389-.047 3.232c-.035.78-.166 1.203-.275 1.485a2.5 2.5 0 0 1-.599.919c-.28.28-.546.453-.92.598-.28.11-.704.24-1.485.276-.843.038-1.096.047-3.232.047s-2.39-.009-3.233-.047c-.78-.036-1.203-.166-1.485-.276a2.5 2.5 0 0 1-.92-.598 2.5 2.5 0 0 1-.6-.92c-.109-.281-.24-.705-.275-1.485-.038-.843-.046-1.096-.046-3.233s.008-2.388.046-3.231c.036-.78.166-1.204.276-1.486.145-.373.319-.64.599-.92s.546-.453.92-.598c.282-.11.705-.24 1.485-.276.738-.034 1.024-.044 2.515-.045zm4.988 1.328a.96.96 0 1 0 0 1.92.96.96 0 0 0 0-1.92m-4.27 1.122a4.109 4.109 0 1 0 0 8.217 4.109 4.109 0 0 0 0-8.217m0 1.441a2.667 2.667 0 1 1 0 5.334 2.667 2.667 0 0 1 0-5.334"
+          />
+        </Svg>
+      );
+    case 'share':
+      return <Svg {...common}><Path {...p} d="M12 3v12M8 7l4-4 4 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" /></Svg>;
     case 'lock':
       return <Svg {...common}><Rect {...p} x="4" y="11" width="16" height="10" rx="2" /><Path {...p} d="M8 11V7a4 4 0 018 0v4" /></Svg>;
     case 'mail':
