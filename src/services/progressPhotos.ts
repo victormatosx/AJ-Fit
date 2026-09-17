@@ -12,7 +12,13 @@ import {
   serverTimestamp,
   setDoc,
 } from 'firebase/firestore';
-import { deleteObject, getBytes, ref, uploadBytesResumable } from 'firebase/storage';
+import {
+  deleteObject,
+  getBytes,
+  getMetadata,
+  ref,
+  uploadBytesResumable,
+} from 'firebase/storage';
 
 import { auth, db, storage } from '../lib/firebase';
 import {
@@ -37,10 +43,15 @@ import {
   type ProgressPhotoPose,
 } from '../lib/photoVaultIdentity';
 import {
+  recordPhotoVaultBytes,
+  recordPhotoVaultCacheEvent,
   recordPhotoVaultCacheOutcome,
   startPhotoVaultPerf,
   type PhotoVaultPerfStage,
 } from '../lib/photoVaultPerformance';
+import type { PhotoVaultUploadJob } from '../lib/photoVaultUploadJob';
+import { discardDurableAsset, durableAssetPaths } from './photoVaultDurableStore';
+import { startPhotoVaultTrace, tracePhotoVault } from '../lib/photoVaultDevTrace';
 import {
   isPhotoVaultUnlockedFor,
   photoVaultSessionGeneration,
@@ -50,9 +61,13 @@ import {
 import { ensurePhotoVaultKey } from './photoVault';
 import {
   currentPhotoVaultCacheEpoch,
+  readCachedFull,
   readCachedThumbnail,
+  reconcileCachedFulls,
   reconcileCachedThumbnails,
+  removeCachedFull,
   removeCachedThumbnail,
+  writeCachedFull,
   writeCachedThumbnail,
 } from './photoVaultEncryptedCache';
 import {
@@ -72,6 +87,13 @@ import {
   reconcilePhotoVaultContentPresence,
   setPhotoVaultContentPresence,
 } from './photoVaultContentPresence';
+import { generateLockedPreviewDerivative } from './photoVaultLockedPreviewGenerator';
+import {
+  currentPhotoVaultLockedPreviewEpoch,
+  hasLockedPreviewDerivative,
+  removeLockedPreviewDerivative,
+  writeLockedPreviewDerivative,
+} from './photoVaultLockedPreviewCache';
 
 /** Cloud pipeline. Storage receives ciphertext only; all paths derive from the live uid. */
 const SCOPE = 'progressPhotos';
@@ -390,6 +412,27 @@ interface UploadedAssets {
 }
 
 /**
+ * Best-effort: generates and caches the locked-screen background derivative
+ * from plaintext that already exists for a legitimate reason — a fresh
+ * upload, or a photo the user just opened in the viewer. Never throws: this
+ * is a cosmetic feature, so a failure here must never surface as an upload or
+ * viewing error, and must never block either.
+ *
+ * The epoch is captured by the caller, at the same point it captures the
+ * plaintext — see `photoVaultLockedPreviewCache.ts` for why that matters.
+ */
+async function cacheLockedPreviewDerivative(
+  uid: string,
+  assetId: string,
+  plaintextUri: string,
+  epoch: number,
+): Promise<void> {
+  const bytes = await generateLockedPreviewDerivative(plaintextUri);
+  if (!bytes) return;
+  writeLockedPreviewDerivative({ uid, assetId, bytes, epoch });
+}
+
+/**
  * Seals a photo into two independent assets and uploads both.
  *
  * Everything up to (but not including) the metadata commit lives here, so the
@@ -421,6 +464,7 @@ async function uploadNewAssets(params: {
   let thumbnailUploadBlob: Blob | null = null;
 
   try {
+    const finishThumbnail = startPhotoVaultTrace('upload.thumbnail_started');
     const thumbnail = await timed('upload.thumbnail.generate', () =>
       createPhotoVaultThumbnail({
         sourceUri: params.sourceUri,
@@ -429,7 +473,15 @@ async function uploadNewAssets(params: {
       }),
     );
     thumbnailPlaintextUri = thumbnail.uri;
+    finishThumbnail('upload.thumbnail_completed');
+    await cacheLockedPreviewDerivative(
+      uid,
+      assetId,
+      thumbnail.uri,
+      currentPhotoVaultLockedPreviewEpoch(),
+    );
 
+    const finishEncryption = startPhotoVaultTrace('upload.encryption_started');
     [fullEncrypted, thumbnailEncrypted] = await Promise.all([
       timed('upload.full.encrypt', () =>
         encryptPhotoFile({
@@ -446,6 +498,8 @@ async function uploadNewAssets(params: {
         }),
       ),
     ]);
+
+    finishEncryption('upload.encryption_completed');
 
     // Same key is allowed, but AES-GCM nonce reuse is categorically not.
     if (fullEncrypted.encryption.iv === thumbnailEncrypted.encryption.iv) {
@@ -481,6 +535,7 @@ async function uploadNewAssets(params: {
       if (totalBytes > 0) params.onProgress?.((transferred[0] + transferred[1]) / totalBytes);
     };
 
+    const finishTransfer = startPhotoVaultTrace('upload.storage_upload_started');
     const uploads = await Promise.allSettled([
       timed('upload.full.transfer', () =>
         uploadCiphertext(
@@ -499,6 +554,9 @@ async function uploadNewAssets(params: {
         ),
       ),
     ]);
+    finishTransfer('upload.storage_upload_completed', {
+      rejected: uploads.filter((result) => result.status === 'rejected').length,
+    });
     if (uploads.some((result) => result.status === 'rejected')) {
       const rejected = uploads.find((result) => result.status === 'rejected');
       const uploadCause = rejected?.status === 'rejected' ? rejected.reason : undefined;
@@ -555,13 +613,37 @@ function photoDocumentBody(params: {
   };
 }
 
-/** Creates two independently sealed assets, uploads both, then commits metadata. */
+/**
+ * Creates two independently sealed assets, uploads both, then commits metadata.
+ *
+ * NO LONGER ON THE PRODUCTION SAVE PATH. The gallery now goes through
+ * `prepareProgressPhotoUpload` + the durable queue, so a save is never blocked
+ * on the network. This one-shot version is retained deliberately rather than
+ * deleted: it is the reference implementation of the all-or-nothing semantics
+ * (upload both, commit, roll back everything on any failure) that the resumable
+ * path had to depart from, and its suite still pins the rollback behaviour the
+ * new path's `discardPreparedRemoteState` is measured against.
+ *
+ * It writes its ciphertext to the RECLAIMABLE staging directory, which is why
+ * it can never be the save path again: a photo that only exists there is one
+ * OS cache purge away from being gone.
+ */
 export async function uploadProgressPhoto(
   params: UploadProgressPhotoParams,
 ): Promise<ProgressPhoto> {
   const finishTotal = startPhotoVaultPerf('upload.total');
+  const finishTrace = startPhotoVaultTrace('upload.started', {
+    pose: params.pose ?? 'none',
+  });
+  // Nothing is traced between `upload.started` and the next line when the
+  // session gate rejects: `currentUnlockedUid()` throws synchronously, outside
+  // the try below, so a missing `upload.vault_session_validated` means the
+  // vault was already locked when this save began.
   const uid = currentUnlockedUid();
+  tracePhotoVault('upload.vault_session_validated');
+  const finishKey = startPhotoVaultTrace('upload.vault_key_started');
   const { vaultKey, vaultKeyVersion } = await requireVaultKey();
+  finishKey('upload.vault_key_result', { ok: true });
 
   const pose = params.pose;
   if (pose !== undefined && !isProgressPhotoPose(pose)) fail('vaultMetadataInvalid');
@@ -586,6 +668,7 @@ export async function uploadProgressPhoto(
         ? assets.assetId
         : progressPhotoDocumentId(dateKey, pose);
 
+    const finishFirestore = startPhotoVaultTrace('upload.firestore_write_started');
     try {
       await timed('upload.firestore', () =>
         setDoc(
@@ -599,7 +682,11 @@ export async function uploadProgressPhoto(
           }),
         ),
       );
+      finishFirestore('upload.firestore_write_completed');
     } catch (error) {
+      finishFirestore('upload.firestore_write_failed', {
+        code: sanitizedErrorCode(error),
+      });
       // Both objects go, whatever the cause: no ciphertext is left behind
       // outside the rollback policy.
       const rolledBack = await assets.rollback();
@@ -623,8 +710,11 @@ export async function uploadProgressPhoto(
     // Firestore has confirmed the first durable authority for this asset.
     // The one-bit locked-layout hint must never flip on the optimistic card or
     // on Storage upload alone, both of which can still roll back.
+    const finishPresence = startPhotoVaultTrace('upload.content_presence_started');
     await setPhotoVaultContentPresence(uid, true);
+    finishPresence('upload.content_presence_completed');
 
+    finishTrace('upload.completed', { pose: pose ?? 'none' });
     return {
       photoId,
       assetId: assets.assetId,
@@ -640,10 +730,396 @@ export async function uploadProgressPhoto(
       thumbnailEncryption: assets.thumbnailEncryption,
     };
   } catch (error) {
+    finishTrace('upload.failed', {
+      issue: error instanceof PhotoVaultError ? error.issue : 'unknown',
+      code: sanitizedErrorCode(error),
+    });
     if (error instanceof PhotoVaultError) throw error;
     return fail('vaultUploadFailed', error);
   } finally {
     finishTotal();
+  }
+}
+
+// ── Local-first save ───────────────────────────────────────────────────────
+//
+// The save above does everything in one breath, with the user watching. The
+// pair below splits it at the only boundary that matters for safety:
+//
+//   prepare  reads the user's plaintext and uses the vault key, so it REQUIRES
+//            an unlocked session — and it ends with durable ciphertext on this
+//            device, which is the point at which the photo is genuinely saved.
+//
+//   sync     moves bytes that are already sealed. It needs no key, decrypts
+//            nothing, and reads no plaintext, so gating it on the vault
+//            session would protect nothing while costing the user their photo
+//            every time the screen locked mid-upload.
+//
+// The gate for sync is therefore identity, not visibility: the job must belong
+// to the user who is signed in right now. That is what `requireSignedInUser`
+// enforces, and it is the same guarantee Storage and Firestore enforce
+// themselves through the auth token and their rules.
+
+/**
+ * Remote-sync gate.
+ *
+ * Deliberately NOT `requirePhotoVaultUnlocked`. A relock hides the gallery and
+ * destroys every decrypted representation — that is the vault's visual
+ * authorization, and it is untouched. Finishing the transfer of a blob that
+ * was encrypted while the vault WAS open is a different act, and making it
+ * depend on the screen still being unlocked would mean a photo is lost to a
+ * backgrounded app rather than protected from anyone.
+ */
+function requireSignedInUser(uid: string): void {
+  if (!uid || auth.currentUser?.uid !== uid) fail('vaultLocked');
+}
+
+/** What preparation produced: sealed, durable, and not yet anywhere remote. */
+export interface PreparedProgressPhoto {
+  /** Resolved from the unlocked session, so the caller never supplies one. */
+  uid: string;
+  assetId: string;
+  documentId: string;
+  pose?: ProgressPhotoPose;
+  dateKey?: string;
+  takenAt: Date;
+  originalMimeType: ProgressPhotoMimeType;
+  encryptedSize: number;
+  thumbnailEncryptedSize: number;
+  encryption: ProgressPhotoEncryption;
+  thumbnailEncryption: ProgressPhotoEncryption;
+}
+
+/**
+ * Seals one photo into two durable ciphertexts.
+ *
+ * This is the whole of what the user waits for. When it returns, the photo
+ * survives a crash, a force-kill and a locked vault — nothing that happens
+ * afterwards can lose it, which is what makes closing the sheet here honest
+ * rather than a hidden loading state.
+ *
+ * Requires an unlocked vault, because it reads the staged plaintext and uses
+ * the vault key. Both envelopes are written STRAIGHT to their durable paths;
+ * there is no reclaimable intermediate copy that a later step has to move.
+ */
+export async function prepareProgressPhotoUpload(
+  params: UploadProgressPhotoParams,
+): Promise<PreparedProgressPhoto> {
+  const finishTotal = startPhotoVaultPerf('upload.prepare.total');
+  const finishTrace = startPhotoVaultTrace('upload.local_prepare_started', {
+    pose: params.pose ?? 'none',
+  });
+  // Plaintext and key are about to be touched: this is exactly the operation
+  // the vault session exists to authorize.
+  const uid = currentUnlockedUid();
+  const { vaultKey, vaultKeyVersion } = await requireVaultKey();
+
+  const pose = params.pose;
+  if (pose !== undefined && !isProgressPhotoPose(pose)) fail('vaultMetadataInvalid');
+  const dateKey = pose === undefined ? undefined : localDateKey(params.takenAt);
+
+  const assetId = randomUUID();
+  const { fullUri, thumbnailUri } = durableAssetPaths(uid, assetId);
+  let thumbnailPlaintextUri: string | null = null;
+  let sealed = false;
+
+  try {
+    const thumbnail = await timed('upload.thumbnail.generate', () =>
+      createPhotoVaultThumbnail({
+        sourceUri: params.sourceUri,
+        width: params.width ?? 1600,
+        height: params.height ?? 1600,
+      }),
+    );
+    thumbnailPlaintextUri = thumbnail.uri;
+    recordPhotoVaultBytes('upload.thumbnail.plaintext', {
+      bytes: thumbnail.size,
+      width: thumbnail.width,
+      height: thumbnail.height,
+    });
+    await cacheLockedPreviewDerivative(
+      uid,
+      assetId,
+      thumbnail.uri,
+      currentPhotoVaultLockedPreviewEpoch(),
+    );
+
+    const [fullEncrypted, thumbnailEncrypted] = await Promise.all([
+      timed('upload.full.encrypt', () =>
+        encryptPhotoFile({
+          sourceUri: params.sourceUri,
+          vaultKeyBase64: vaultKey,
+          vaultKeyVersion,
+          targetUri: fullUri,
+        }),
+      ),
+      timed('upload.thumbnail.encrypt', () =>
+        encryptPhotoFile({
+          sourceUri: thumbnail.uri,
+          vaultKeyBase64: vaultKey,
+          vaultKeyVersion,
+          targetUri: thumbnailUri,
+        }),
+      ),
+    ]);
+
+    // Same key is allowed, but AES-GCM nonce reuse is categorically not.
+    if (fullEncrypted.encryption.iv === thumbnailEncrypted.encryption.iv) {
+      fail('vaultCryptoEncryptFailed');
+    }
+    if (
+      fullEncrypted.encryptedSize > MAX_ENCRYPTED_BYTES ||
+      thumbnailEncrypted.encryptedSize > MAX_THUMBNAIL_ENCRYPTED_BYTES
+    ) {
+      fail('vaultPhotoTooLarge');
+    }
+
+    recordPhotoVaultBytes('upload.full.encrypted', { bytes: fullEncrypted.encryptedSize });
+    recordPhotoVaultBytes('upload.thumbnail.encrypted', {
+      bytes: thumbnailEncrypted.encryptedSize,
+    });
+
+    sealed = true;
+    finishTrace('upload.local_prepare_completed', { pose: pose ?? 'none' });
+    return {
+      uid,
+      assetId,
+      documentId:
+        pose === undefined || dateKey === undefined
+          ? assetId
+          : progressPhotoDocumentId(dateKey, pose),
+      ...(pose !== undefined && dateKey !== undefined ? { pose, dateKey } : {}),
+      takenAt: params.takenAt,
+      originalMimeType: params.originalMimeType,
+      encryptedSize: fullEncrypted.encryptedSize,
+      thumbnailEncryptedSize: thumbnailEncrypted.encryptedSize,
+      encryption: encryptionMetadata(fullEncrypted),
+      thumbnailEncryption: encryptionMetadata(thumbnailEncrypted),
+    };
+  } catch (error) {
+    finishTrace('upload.local_prepare_failed', {
+      issue: error instanceof PhotoVaultError ? error.issue : 'unknown',
+    });
+    if (error instanceof PhotoVaultError) throw error;
+    return fail('vaultUploadFailed', error);
+  } finally {
+    // The 480px JPEG is plaintext and has done its job either way.
+    if (thumbnailPlaintextUri) discardDecryptedPhoto(thumbnailPlaintextUri);
+    // A half-sealed asset has no job to claim it and nothing would ever
+    // reclaim it, so it is removed here rather than left for a sweep.
+    if (!sealed) discardDurableAsset(uid, assetId);
+    finishTotal();
+  }
+}
+
+/** Where one of this asset's two objects lives in Storage. */
+function assetRef(uid: string, assetId: string, kind: 'full' | 'thumbnail') {
+  return ref(
+    storage,
+    kind === 'full'
+      ? storagePathFor(uid, assetId)
+      : thumbnailStoragePathFor(uid, assetId),
+  );
+}
+
+/**
+ * Whether Storage already holds this object, at the size we expect.
+ *
+ * The Storage rules only permit creating an object where nothing exists
+ * (`resource == null`), so an upload that landed and was then forgotten —
+ * killed between the transfer and the checkpoint that records it — cannot
+ * simply be repeated: the retry would be REFUSED, and a job would fail forever
+ * over work that was already done. Asking first is what makes a resumed job
+ * idempotent. Only ever called on a retry, so the happy path pays nothing.
+ */
+export async function preparedAssetExistsRemotely(
+  uid: string,
+  assetId: string,
+  kind: 'full' | 'thumbnail',
+  expectedSize: number,
+): Promise<boolean> {
+  requireSignedInUser(uid);
+  const finish = startPhotoVaultPerf('upload.sync.probe');
+  try {
+    const metadata = await getMetadata(assetRef(uid, assetId, kind));
+    // A size disagreement means the object is not the one this job sealed;
+    // treating it as ours would publish bytes we cannot account for.
+    return metadata.size === expectedSize;
+  } catch (error) {
+    if (isObjectNotFound(error)) return false;
+    // Anything else (offline, denied) is not proof of absence, and answering
+    // "absent" would send an upload that is about to be refused.
+    fail('vaultUploadFailed', error);
+  } finally {
+    finish();
+  }
+}
+
+/**
+ * Uploads one already-sealed object from the durable store.
+ *
+ * Never reads plaintext and never touches the vault key. The bytes are opened
+ * straight from the durable file, so this works identically whether the vault
+ * is open or locked.
+ */
+export async function uploadPreparedAsset(params: {
+  uid: string;
+  job: PhotoVaultUploadJob;
+  kind: 'full' | 'thumbnail';
+  onProgress?: (transferred: number) => void;
+}): Promise<void> {
+  const { uid, job, kind } = params;
+  requireSignedInUser(uid);
+
+  const { fullUri, thumbnailUri } = durableAssetPaths(uid, job.assetId);
+  const sourceUri = kind === 'full' ? fullUri : thumbnailUri;
+  const expectedSize =
+    kind === 'full' ? job.encryptedSize : job.thumbnailEncryptedSize;
+
+  let blob: Blob | null = null;
+  try {
+    blob = await openEncryptedUploadBlob(sourceUri);
+    if (blob.size !== expectedSize) {
+      // The durable copy no longer matches what the job describes, so the
+      // metadata already recorded for it would be wrong.
+      fail('vaultMetadataInvalid');
+    }
+    await timed(
+      kind === 'full' ? 'upload.sync.full.transfer' : 'upload.sync.thumbnail.transfer',
+      () =>
+        uploadCiphertext(
+          assetRef(uid, job.assetId, kind),
+          blob!,
+          { ownerId: uid, photoId: job.assetId, assetKind: kind },
+          (bytes) => params.onProgress?.(bytes),
+        ),
+    );
+  } catch (error) {
+    if (error instanceof PhotoVaultError) throw error;
+    fail('vaultUploadFailed', error);
+  } finally {
+    closeEncryptedUploadBlob(blob);
+  }
+}
+
+/** The document body a prepared job commits, in the shape the rules accept. */
+function preparedDocumentBody(job: PhotoVaultUploadJob): Record<string, unknown> {
+  const posed = job.pose !== undefined && job.dateKey !== undefined;
+  return {
+    storagePath: storagePathFor(job.uid, job.assetId),
+    thumbnailStoragePath: thumbnailStoragePathFor(job.uid, job.assetId),
+    ...(posed ? { assetId: job.assetId, dateKey: job.dateKey, pose: job.pose } : {}),
+    createdAt: serverTimestamp(),
+    takenAt: Timestamp.fromDate(new Date(job.takenAt)),
+    originalMimeType: job.originalMimeType,
+    encryptedSize: job.encryptedSize,
+    thumbnailEncryptedSize: job.thumbnailEncryptedSize,
+    encryption: job.encryption,
+    thumbnailEncryption: job.thumbnailEncryption,
+  };
+}
+
+/**
+ * Whether the document this job would write already exists AND is this job's.
+ *
+ * The `assetId` comparison is what separates "my own write already landed" from
+ * "someone else filled this (day, pose) slot". The first means the job is
+ * further along than its checkpoint claimed; the second is a genuine conflict
+ * that no retry can resolve.
+ */
+export async function preparedMetadataState(
+  uid: string,
+  job: PhotoVaultUploadJob,
+): Promise<'absent' | 'ours' | 'foreign'> {
+  requireSignedInUser(uid);
+  let snapshot;
+  try {
+    snapshot = await getDoc(photoDoc(uid, job.documentId));
+  } catch (error) {
+    fail('vaultMetadataCreateFailed', error);
+  }
+  if (!snapshot.exists()) return 'absent';
+  const data = snapshot.data() as { assetId?: unknown };
+  // A pre-pose document is named after its asset, so the id itself is proof.
+  const claimsThisAsset =
+    data.assetId === job.assetId || job.documentId === job.assetId;
+  return claimsThisAsset ? 'ours' : 'foreign';
+}
+
+/** Commits the metadata for an already-uploaded pair of objects. */
+export async function commitPreparedMetadata(
+  uid: string,
+  job: PhotoVaultUploadJob,
+): Promise<void> {
+  requireSignedInUser(uid);
+  try {
+    await timed('upload.sync.firestore', () =>
+      setDoc(photoDoc(uid, job.documentId), preparedDocumentBody(job)),
+    );
+  } catch (error) {
+    // The document id IS the (day, pose) pair and the rules forbid `update`,
+    // so a slot another device already filled surfaces here. Ask rather than
+    // guess from the error code — one read, only on the failure path.
+    if (job.pose !== undefined && (await slotIsTaken(uid, job.documentId))) {
+      fail('vaultPhotoSlotTaken', error);
+    }
+    fail('vaultMetadataCreateFailed', error);
+  }
+}
+
+/**
+ * The gallery's view of a synced job.
+ *
+ * Built from the job rather than re-read from Firestore: every field was
+ * settled at preparation time and the document was just written from exactly
+ * these values, so a round trip would only confirm what we already wrote.
+ */
+export function progressPhotoFromJob(job: PhotoVaultUploadJob): ProgressPhoto {
+  const posed = job.pose !== undefined && job.dateKey !== undefined;
+  return {
+    photoId: job.documentId,
+    assetId: job.assetId,
+    ...(posed ? { pose: job.pose, dateKey: job.dateKey } : {}),
+    storagePath: storagePathFor(job.uid, job.assetId),
+    thumbnailStoragePath: thumbnailStoragePathFor(job.uid, job.assetId),
+    takenAt: new Date(job.takenAt),
+    createdAt: null,
+    originalMimeType: job.originalMimeType,
+    encryptedSize: job.encryptedSize,
+    thumbnailEncryptedSize: job.thumbnailEncryptedSize,
+    encryption: job.encryption,
+    thumbnailEncryption: job.thumbnailEncryption,
+  };
+}
+
+/**
+ * Removes whatever a cancelled job managed to place remotely.
+ *
+ * Best effort and deliberately tolerant: the job is being abandoned, so the
+ * worst case is an unreferenced object that the backend's orphan sweep
+ * reclaims after its grace period.
+ */
+export async function discardPreparedRemoteState(
+  uid: string,
+  job: PhotoVaultUploadJob,
+): Promise<void> {
+  if (auth.currentUser?.uid !== uid) return;
+  if (job.stage === 'metadata-complete') {
+    try {
+      await deleteDoc(photoDoc(uid, job.documentId));
+    } catch {
+      logPhotoVaultIssue(SCOPE, 'vaultDeleteFailed');
+    }
+  }
+  const targets: ReturnType<typeof ref>[] = [];
+  if (job.uploadedFull) targets.push(assetRef(uid, job.assetId, 'full'));
+  if (job.uploadedThumbnail) targets.push(assetRef(uid, job.assetId, 'thumbnail'));
+  if (targets.length === 0) return;
+  const results = await Promise.allSettled(targets.map((target) => deleteObject(target)));
+  if (
+    results.some((result) => result.status === 'rejected' && !isObjectNotFound(result.reason))
+  ) {
+    logPhotoVaultIssue(SCOPE, 'vaultDeleteFailed');
   }
 }
 
@@ -682,7 +1158,6 @@ export async function replaceProgressPhoto(
 ): Promise<ProgressPhoto> {
   const finishTotal = startPhotoVaultPerf('upload.total');
   const uid = currentUnlockedUid();
-  const sessionGeneration = photoVaultSessionGeneration();
 
   try {
     const current = await resolvePhoto(uid, params.current);
@@ -710,7 +1185,17 @@ export async function replaceProgressPhoto(
       onProgress: params.onProgress,
     });
 
-    requireSamePhotoVaultSession(uid, sessionGeneration);
+    // The new ciphertext is sealed and the plaintext is gone. From here on the
+    // swap only moves opaque bytes and metadata, so the gate is identity — the
+    // same policy the local-first sync path follows (see `requireSignedInUser`).
+    //
+    // This used to re-require the SESSION, which made a replace the one
+    // operation a screen lock could abort halfway: create never re-checked,
+    // replace did. The divergence was not a deliberate difference in risk, and
+    // the safer-looking side was the worse one — aborting here rolls back a
+    // swap the user explicitly confirmed, while the rollback itself is what
+    // touches their existing photo.
+    requireSignedInUser(uid);
 
     // ── 2. Remove the old metadata, but only if the slot still holds the
     // asset this replacement was built against. Another device may have
@@ -783,6 +1268,8 @@ export async function replaceProgressPhoto(
     // drop, and a failure here costs nothing: they are unreferenced, so the
     // orphan sweep reclaims them after its grace period.
     removeCachedThumbnail(uid, expectedAssetId);
+    removeCachedFull(uid, expectedAssetId);
+    removeLockedPreviewDerivative(uid, expectedAssetId);
     void discardReplacedAssets(uid, expectedAssetId, current.thumbnailStoragePath !== undefined);
 
     return {
@@ -887,10 +1374,11 @@ export function reconcileProgressPhotoCache(photos: ProgressPhoto[]): number {
   const uid = auth.currentUser?.uid;
   if (!uid || !isPhotoVaultUnlockedFor(uid)) return 0;
   try {
-    return reconcileCachedThumbnails(
-      uid,
-      photos.map((photo) => photo.assetId),
-    );
+    const assetIds = photos.map((photo) => photo.assetId);
+    // Both namespaces are keyed by asset and both go stale the same way, so
+    // one listing settles both rather than leaving fulls to accumulate until
+    // their byte ceiling happens to notice.
+    return reconcileCachedThumbnails(uid, assetIds) + reconcileCachedFulls(uid, assetIds);
   } catch {
     return 0;
   }
@@ -947,9 +1435,21 @@ function validateEncryptedAsset(
 }
 
 /**
- * Full-image pipeline. Unchanged by the encrypted thumbnail cache: fulls are
- * still decrypted to a short-lived file under `<cache>/photo-vault/tmp` and
- * are still destroyed by the lock. There is no persistent cache for `.enc`.
+ * Full-image pipeline.
+ *
+ * The PLAINTEXT half is deliberately unchanged: a full is still decrypted to a
+ * short-lived file under `<cache>/photo-vault/tmp` and is still destroyed by
+ * the lock. What changed is the CIPHERTEXT half — the envelope is now kept in
+ * the same kind of on-device cache the thumbnails have used all along:
+ *
+ *   local `.full.enc` → decrypt            (no network at all)
+ *   Storage `getBytes` → cache it → decrypt (network once)
+ *
+ * That is what makes a relock cheap rather than free-of-charge-once: the
+ * plaintext is destroyed exactly as before, but reopening the photo afterwards
+ * no longer pays for the download a second time. The cache holds ciphertext
+ * only and is worthless without the Vault Key, which is why it is allowed to
+ * outlive the lock that destroys every decrypted representation.
  */
 async function downloadAsset(
   photo: ProgressPhoto,
@@ -963,16 +1463,50 @@ async function downloadAsset(
   const { vaultKey, vaultKeyVersion } = await requireVaultKey();
   if (encryption.vaultKeyVersion !== vaultKeyVersion) fail('vaultDownloadIntegrityFailed');
 
-  let bytes: Uint8Array;
-  try {
-    bytes = await timed(`${prefix}.download` as PhotoVaultPerfStage, async () => {
-      const buffer = await getBytes(ref(storage, objectPath), MAX_ENCRYPTED_BYTES);
-      return new Uint8Array(buffer);
-    });
-  } catch (error) {
-    fail('vaultDownloadFailed', error);
+  // Captured before any await. A logout or account switch bumps this, and the
+  // cache refuses a write carrying the stale value.
+  const epoch = currentPhotoVaultCacheEpoch();
+
+  let bytes: Uint8Array | null = null;
+
+  const cached = await timed(`${prefix}.cache-read` as PhotoVaultPerfStage, () =>
+    readCachedFull({ uid, photoId: photo.assetId, expectedSize }),
+  );
+  if (cached) {
+    try {
+      // The same scrutiny the network path gets. Trusting local bytes more
+      // would make the cache the weak link.
+      validateEncryptedAsset(cached, encryption, expectedSize);
+      bytes = cached;
+      recordPhotoVaultCacheEvent('viewer.fullCipherCache.hit', { bytes: cached.length });
+    } catch {
+      // These local bytes cannot be trusted. Drop them and fall through to
+      // exactly one network attempt — never a retry loop.
+      removeCachedFull(uid, photo.assetId);
+      recordPhotoVaultCacheEvent('viewer.fullCipherCache.corrupt');
+    }
   }
-  validateEncryptedAsset(bytes, encryption, expectedSize);
+
+  if (bytes === null) {
+    recordPhotoVaultCacheEvent('viewer.fullCipherCache.miss');
+    let downloaded: Uint8Array;
+    try {
+      downloaded = await timed(`${prefix}.download` as PhotoVaultPerfStage, async () => {
+        const buffer = await getBytes(ref(storage, objectPath), MAX_ENCRYPTED_BYTES);
+        return new Uint8Array(buffer);
+      });
+    } catch (error) {
+      fail('vaultDownloadFailed', error);
+    }
+    validateEncryptedAsset(downloaded, encryption, expectedSize);
+
+    // Stored before decrypting, so the cache write is never between the bytes
+    // and the pixels. A refused or failed write only costs a re-download.
+    const finishWrite = startPhotoVaultPerf(`${prefix}.cache-write` as PhotoVaultPerfStage);
+    writeCachedFull({ uid, photoId: photo.assetId, bytes: downloaded, epoch });
+    finishWrite();
+    bytes = downloaded;
+  }
 
   const { uri: encryptedUri } = writeEncryptedFile(bytes);
   try {
@@ -983,6 +1517,17 @@ async function downloadAsset(
         extension: photo.originalMimeType === 'image/png' ? '.png' : '.jpg',
       }),
     );
+    // Opportunistic backfill for a photo saved before this feature existed:
+    // never a new decrypt of its own, only reused from the full plaintext
+    // that legitimately exists right here for the viewer/legacy-grid render.
+    if (!hasLockedPreviewDerivative(uid, photo.assetId)) {
+      await cacheLockedPreviewDerivative(
+        uid,
+        photo.assetId,
+        plaintext.uri,
+        currentPhotoVaultLockedPreviewEpoch(),
+      );
+    }
     return { ...plaintext, photo, isFullImage: true };
   } finally {
     discardEncryptedPhoto(encryptedUri);
@@ -1141,6 +1686,8 @@ export async function deleteProgressPhoto(photoOrId: ProgressPhoto | string): Pr
     // re-download that dropping it costs, and a restored photo can always be
     // fetched again.
     removeCachedThumbnail(uid, photo.assetId);
+    removeCachedFull(uid, photo.assetId);
+    removeLockedPreviewDerivative(uid, photo.assetId);
     const deletions: Promise<void>[] = [
       deleteStorageObject(ref(storage, storagePathFor(uid, photo.assetId)), 'delete.full.storage'),
     ];

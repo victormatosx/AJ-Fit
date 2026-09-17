@@ -28,6 +28,12 @@ import {
   type PoseDrafts as PoseDraftMap,
 } from '../../lib/photoVaultPoseDrafts';
 import { type ProgressPhotoPose } from '../../lib/photoVaultIdentity';
+import {
+  beginPhotoVaultSaveAttempt,
+  endPhotoVaultSaveAttempt,
+  startPhotoVaultTrace,
+  tracePhotoVault,
+} from '../../lib/photoVaultDevTrace';
 import type { PhotoVaultIssue } from '../../lib/photoVaultErrors';
 import type { PickerOutcome } from '../../services/photoVaultPicker';
 
@@ -286,7 +292,15 @@ export function AddPhotoSheet({
   // the cancel handler.
   useEffect(() => {
     if (!visible) releaseAll();
+    tracePhotoVault('sheet.visibility', { visible });
   }, [visible, releaseAll]);
+
+  // Temporary trace: the sheet is unmounted (not merely hidden) when the
+  // screen swaps the whole private tree for the locked one.
+  useEffect(() => {
+    tracePhotoVault('sheet.mounted');
+    return () => tracePhotoVault('sheet.unmounted');
+  }, []);
 
   const draft = drafts[pose];
   /**
@@ -349,52 +363,145 @@ export function AddPhotoSheet({
   }, [onClose, releaseAll, saving]);
 
   /**
-   * Uploads every filled, unblocked pose.
+   * Commits every filled, unblocked pose, all at once.
    *
-   * Sequential on purpose. Each single upload already runs two Storage
-   * transfers in parallel and holds two encrypted blobs, so three photos at
-   * once would triple that peak for no perceptible gain on at most three
-   * items — and it would make per-pose progress and partial failure much
-   * harder to report honestly.
+   * Concurrent on purpose, and safe because the three poses share nothing that
+   * a second writer could corrupt: each one mints its own asset UUID, lands on
+   * its own Storage paths, and claims its own `{dateKey}_{pose}` document —
+   * front, side and back can never address the same object. The gallery's own
+   * bookkeeping is mutated only through synchronous read-modify-write steps,
+   * so interleaved completions cannot tear its state.
    *
-   * Each pose is an independent entity: a failure never rolls back a sibling
-   * that already succeeded, because there is no cross-photo transaction that
-   * could do so safely.
+   * `Promise.allSettled`, never `Promise.all`: each pose is an independent
+   * entity, and a rejection must not stop this function from reading — and
+   * reporting — what the other two actually did. A failure never rolls back a
+   * sibling that already succeeded, because there is no cross-photo
+   * transaction that could do so safely.
+   *
+   * Visual order does NOT depend on which pose finishes first: the grid places
+   * photos by their `pose` field in a fixed `POSE_SLOTS` order (see
+   * `groupProgressPhotosByDay`), so completion order is invisible to the user.
    */
   const handleSave = useCallback(async () => {
     if (savablePoses.length === 0 || saving) return;
     setSaving(true);
 
-    const failed: ProgressPhotoPose[] = [];
-    for (const slot of savablePoses) {
-      const photo = draftsRef.current[slot];
-      if (!photo) continue;
+    const attemptId = beginPhotoVaultSaveAttempt();
+    const finishAttempt = startPhotoVaultTrace('sheet.save.pressed', {
+      attemptId,
+      savable: savablePoses.length,
+      blocked: blockedPoses.length,
+    });
 
-      setStates((current) => ({ ...current, [slot]: { status: 'uploading', progress: 0 } }));
-      const result = await onSavePose(photo, slot);
+    // Captured once, before anything is dispatched: `savablePoses` is derived
+    // during render, and the poses committed here must be exactly the ones the
+    // button was labelled for.
+    const committed = savablePoses
+      .map((slot) => ({ slot, photo: draftsRef.current[slot] }))
+      .filter((entry): entry is { slot: ProgressPhotoPose; photo: PickedPhoto } =>
+        entry.photo !== null,
+      );
 
-      if (result.ok) {
-        setStates((current) => ({ ...current, [slot]: { status: 'success' } }));
-        // The controller owns the staged file once the upload succeeded.
-        setDrafts((current) => ({ ...current, [slot]: null }));
-        draftsRef.current = { ...draftsRef.current, [slot]: null };
-      } else {
-        failed.push(slot);
-        setStates((current) => ({
-          ...current,
-          [slot]: { status: 'error', issue: result.issue },
-        }));
+    setStates((current) => {
+      const next = { ...current };
+      for (const { slot } of committed) next[slot] = { status: 'uploading', progress: 0 };
+      return next;
+    });
+
+    let failed: ProgressPhotoPose[] = [];
+    try {
+      const settled = await Promise.allSettled(
+        committed.map(async ({ slot, photo }) => {
+          const finishPose = startPhotoVaultTrace('sheet.pose.start', { pose: slot });
+          const result = await onSavePose(photo, slot);
+          finishPose('sheet.pose.result', {
+            pose: slot,
+            ok: result.ok,
+            issue: result.issue ?? 'none',
+          });
+          return result;
+        }),
+      );
+
+      // Rebuilt in `committed` order — i.e. `POSE_SLOTS` order — so which pose
+      // the sheet reopens on is deterministic and never depends on timing.
+      failed = committed
+        .filter((_, index) => {
+          const outcome = settled[index]!;
+          return outcome.status === 'rejected' || !outcome.value.ok;
+        })
+        .map(({ slot }) => slot);
+
+      const succeeded = committed.filter((_, index) => {
+        const outcome = settled[index]!;
+        return outcome.status === 'fulfilled' && outcome.value.ok;
+      });
+
+      setStates((current) => {
+        const next = { ...current };
+        committed.forEach(({ slot }, index) => {
+          const outcome = settled[index]!;
+          if (outcome.status === 'fulfilled' && outcome.value.ok) {
+            next[slot] = { status: 'success' };
+          } else {
+            // A rejection is not expected — every failure is returned as a
+            // result — but it must still surface as this pose's error rather
+            // than disappear into an unhandled promise.
+            const issue =
+              outcome.status === 'fulfilled' ? outcome.value.issue : undefined;
+            next[slot] = { status: 'error', issue };
+          }
+        });
+        return next;
+      });
+
+      if (succeeded.length > 0) {
+        // The controller owns each staged file once its pose committed.
+        const clearedSlots = new Set(succeeded.map(({ slot }) => slot));
+        const clear = (current: PoseDrafts): PoseDrafts => {
+          const next = { ...current };
+          for (const slot of clearedSlots) next[slot] = null;
+          return next;
+        };
+        setDrafts(clear);
+        draftsRef.current = clear(draftsRef.current);
       }
+
+      if (settled.some((outcome) => outcome.status === 'rejected')) {
+        tracePhotoVault('sheet.save.poseRejected', {
+          rejected: settled.filter((outcome) => outcome.status === 'rejected').length,
+        });
+      }
+    } catch (error) {
+      // `allSettled` does not reject, so reaching here means the surrounding
+      // bookkeeping threw — which is itself the finding.
+      tracePhotoVault('sheet.save.threw');
+      throw error;
+    } finally {
+      finishAttempt('sheet.save.batchFinished', {
+        committed: committed.length,
+        failed: failed.length,
+        blocked: blockedPoses.length,
+        outcome:
+          failed.length === 0
+            ? 'allSucceeded'
+            : failed.length === committed.length
+              ? 'allFailed'
+              : 'partial',
+      });
     }
 
     setSaving(false);
     // Everything the user asked for landed: nothing left to review.
     if (failed.length === 0 && blockedPoses.length === 0) {
+      tracePhotoVault('sheet.save.closing');
       onClose();
     } else if (failed.length > 0) {
       // Keep the session open on the first pose that still needs attention.
+      tracePhotoVault('sheet.save.keptOpen', { firstFailed: failed[0] });
       setPose(failed[0]!);
     }
+    endPhotoVaultSaveAttempt();
   }, [blockedPoses.length, onClose, onSavePose, savablePoses, saving]);
 
   /**
@@ -469,7 +576,52 @@ export function AddPhotoSheet({
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={handleClose}>
-      <View style={{ flex: 1, backgroundColor: theme.colors.modalBackdrop, justifyContent: 'flex-end' }}>
+      {saving ? (
+        /*
+         * Committing leaves the assembly screen behind.
+         *
+         * The poses are still uploaded one at a time underneath (see
+         * `handleSave`), but that sequence is bookkeeping, not something the
+         * user has to sit and watch pose by pose: they see a single centered
+         * indicator until the whole session lands. A failure re-reveals the
+         * sheet on the pose that needs attention, so nothing is lost by
+         * hiding it meanwhile.
+         */
+        <View
+          testID="photo-vault-saving-overlay"
+          style={{
+            flex: 1,
+            backgroundColor: colors.bg,
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: spacing[5],
+            paddingHorizontal: sizes.screenGutter,
+          }}
+        >
+          <ActivityIndicator size="large" color={colors.accentHi} />
+          <Text
+            accessibilityLiveRegion="polite"
+            style={{
+              color: colors.text,
+              fontFamily: fonts.mono,
+              fontSize: 11,
+              letterSpacing: 2,
+              textTransform: 'uppercase',
+              textAlign: 'center',
+            }}
+          >
+            {t('progress.photos.add.saving')}
+          </Text>
+        </View>
+      ) : (
+      <View style={{ flex: 1, backgroundColor: theme.colors.modalBackdrop }}>
+        <Pressable
+          testID="photo-vault-add-backdrop"
+          onPress={handleClose}
+          accessibilityRole="button"
+          accessibilityLabel={t('progress.photos.add.cancel')}
+          style={{ flex: 1 }}
+        />
         <View
           style={{
             backgroundColor: colors.bg2,
@@ -658,36 +810,22 @@ export function AddPhotoSheet({
               )}
 
               <View style={{ marginTop: spacing[7] }}>
+                {/* No in-place saving state: pressing this hands the session
+                    over to the full-screen indicator above. */}
                 <CtaButton
                   onPress={() => void handleSave()}
                   disabled={savablePoses.length === 0 || saving}
                   accessibilityLabel={t('progress.photos.a11y.savePhoto')}
                   style={{ alignSelf: 'stretch' }}
                 >
-                  {saving ? (
-                    <View
-                      style={{ flexDirection: 'row', alignItems: 'center', gap: spacing[2.5] }}
-                    >
-                      <ActivityIndicator color={colors.primaryForeground} />
-                      <Text
-                        style={{
-                          color: colors.primaryForeground,
-                          fontFamily: fonts.uiSemi,
-                          fontSize: 14,
-                        }}
-                      >
-                        {t('progress.photos.add.saving')}
-                      </Text>
-                    </View>
-                  ) : (
-                    saveLabel
-                  )}
+                  {saveLabel}
                 </CtaButton>
               </View>
             </ScrollView>
           </SafeAreaView>
         </View>
       </View>
+      )}
     </Modal>
   );
 }

@@ -28,8 +28,12 @@ export type PhotoVaultPerfStage =
   | 'gallery.thumbnail.cache-miss.render-ready'
   | 'gallery.legacy-full.download'
   | 'gallery.legacy-full.decrypt'
+  | 'gallery.legacy-full.cache-read'
+  | 'gallery.legacy-full.cache-write'
   | 'viewer.full.download'
   | 'viewer.full.decrypt'
+  | 'viewer.full.cache-read'
+  | 'viewer.full.cache-write'
   | 'viewer.placeholder.render-ready'
   | 'viewer.full.render-ready'
   | 'compare.before.full-load'
@@ -43,7 +47,15 @@ export type PhotoVaultPerfStage =
   | 'delete.total'
   | 'picker.library'
   | 'picker.camera'
-  | 'picker.normalize';
+  | 'picker.normalize'
+  // Local-first split. `prepare` is what the user actually waits for; `sync`
+  // happens after the sheet has closed and is not on the perceived path.
+  | 'upload.prepare.total'
+  | 'upload.sync.total'
+  | 'upload.sync.full.transfer'
+  | 'upload.sync.thumbnail.transfer'
+  | 'upload.sync.firestore'
+  | 'upload.sync.probe';
 
 export type PhotoVaultPerfEvent =
   | 'compare.capture.start'
@@ -86,6 +98,45 @@ export function recordPhotoVaultPerfEvent(
 }
 
 /**
+ * Sizes along the save pipeline, so the 1600px/0.85 choice can be revisited
+ * with measurements instead of intuition.
+ *
+ * Kept to the same closed vocabulary and the same DEV-only gate as the timings
+ * above. A byte count and a pixel dimension describe the pipeline, not the
+ * person: they cannot identify a photo, a day, a pose or a user. The signature
+ * accepts numbers and nothing else, so no identifier, path or image content
+ * can be passed in even by mistake.
+ */
+export type PhotoVaultByteMetric =
+  /** What the picker handed us, before any transformation. */
+  | 'picker.source'
+  /** After resize + JPEG re-encode — what actually gets encrypted. */
+  | 'picker.normalized'
+  /** The 480px grid derivative, before encryption. */
+  | 'upload.thumbnail.plaintext'
+  /** The two envelopes that reach Storage. */
+  | 'upload.full.encrypted'
+  | 'upload.thumbnail.encrypted';
+
+export interface PhotoVaultSizeSample {
+  bytes: number;
+  width?: number;
+  height?: number;
+}
+
+export function recordPhotoVaultBytes(
+  metric: PhotoVaultByteMetric,
+  sample: PhotoVaultSizeSample,
+): void {
+  if (!isEnabled()) return;
+  logDebug('photoVault:perf', metric, {
+    bytes: sample.bytes,
+    ...(sample.width !== undefined ? { width: sample.width } : {}),
+    ...(sample.height !== undefined ? { height: sample.height } : {}),
+  });
+}
+
+/**
  * Running hit/miss tally for the encrypted thumbnail cache.
  *
  * Counters only: `avoidedRequests` is exactly how many Storage downloads the
@@ -109,6 +160,60 @@ export function photoVaultCacheCounters(): {
   avoidedRequests: number;
 } {
   return { ...cacheOutcomes, avoidedRequests: cacheOutcomes.hits };
+}
+
+/**
+ * Closed vocabulary for the viewer's two caches and its prefetch window.
+ *
+ * Three layers, deliberately named apart, because conflating them is what
+ * makes a "cache hit" number meaningless:
+ *
+ *   sessionCache    plaintext already decrypted and still held by this
+ *                   unlocked session. A hit costs nothing at all.
+ *   fullCipherCache on-device CIPHERTEXT. A hit still decrypts, but pays no
+ *                   network — this is the layer that survives a lock.
+ *   prefetch        speculative neighbour work, which may legitimately be
+ *                   thrown away when the user swipes past it.
+ */
+export type PhotoVaultCacheEvent =
+  | 'viewer.sessionCache.hit'
+  | 'viewer.sessionCache.miss'
+  | 'viewer.sessionCache.evicted'
+  | 'viewer.sessionCache.cleared'
+  | 'viewer.fullCipherCache.hit'
+  | 'viewer.fullCipherCache.miss'
+  | 'viewer.fullCipherCache.write'
+  | 'viewer.fullCipherCache.evicted'
+  | 'viewer.fullCipherCache.corrupt'
+  | 'viewer.prefetch.started'
+  | 'viewer.prefetch.completed'
+  | 'viewer.prefetch.discarded'
+  | 'gallery.thumbnailCipherCache.write'
+  | 'gallery.thumbnailCipherCache.evicted';
+
+/**
+ * Numbers only, by signature.
+ *
+ * Same rule as every other recorder in this module: a byte count, an item
+ * count and a duration describe the pipeline, never the person. There is no
+ * field an identifier, a path, a key or image content could travel through.
+ */
+export interface PhotoVaultCacheMetrics {
+  bytes?: number;
+  items?: number;
+  durationMs?: number;
+}
+
+export function recordPhotoVaultCacheEvent(
+  event: PhotoVaultCacheEvent,
+  metrics?: PhotoVaultCacheMetrics,
+): void {
+  if (!isEnabled()) return;
+  logDebug('photoVault:perf', event, {
+    ...(metrics?.bytes !== undefined ? { bytes: metrics.bytes } : {}),
+    ...(metrics?.items !== undefined ? { items: metrics.items } : {}),
+    ...(metrics?.durationMs !== undefined ? { durationMs: metrics.durationMs } : {}),
+  });
 }
 
 /** Test seam. */

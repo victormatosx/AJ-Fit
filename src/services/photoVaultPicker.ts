@@ -3,7 +3,7 @@ import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { File } from 'expo-file-system';
 
 import type { ProgressPhotoMimeType } from './progressPhotos';
-import { startPhotoVaultPerf } from '../lib/photoVaultPerformance';
+import { recordPhotoVaultBytes, startPhotoVaultPerf } from '../lib/photoVaultPerformance';
 import {
   discardPhotoVaultPickerOutput,
   stagePhotoVaultPlaintext,
@@ -73,6 +73,16 @@ function resizeForLongEdge(
   return { height: Math.min(height, maxDimension) };
 }
 
+/** Size of a file we are about to read, or 0 when it cannot be measured. */
+function fileSize(uri: string): number {
+  try {
+    const file = new File(uri);
+    return file.exists ? (file.size ?? 0) : 0;
+  } catch {
+    return 0;
+  }
+}
+
 async function normalize(
   uri: string,
   width: number,
@@ -80,6 +90,12 @@ async function normalize(
 ): Promise<{ uri: string; size: number; width: number; height: number } | null> {
   const finishTiming = startPhotoVaultPerf('picker.normalize');
   try {
+    // Measured before the manipulator runs: this is the only point at which
+    // the untouched source is still addressable, and the before/after pair is
+    // what makes the 1600px/0.85 choice reviewable with numbers rather than
+    // intuition. DEV-only, and numbers only — see `recordPhotoVaultBytes`.
+    recordPhotoVaultBytes('picker.source', { bytes: fileSize(uri), width, height });
+
     const context = ImageManipulator.manipulate(uri);
     context.resize(resizeForLongEdge(width, height, MAX_DIMENSION));
     const rendered = await context.renderAsync();
@@ -89,6 +105,11 @@ async function normalize(
     });
 
     const size = new File(saved.uri).size ?? 0;
+    recordPhotoVaultBytes('picker.normalized', {
+      bytes: size,
+      width: saved.width,
+      height: saved.height,
+    });
     if (size <= 0 || size > MAX_SOURCE_BYTES) {
       discardPhotoVaultPickerOutput(saved.uri);
       return null;

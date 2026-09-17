@@ -5,7 +5,7 @@ import React, {
   useState,
   type ReactNode,
 } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import { AddPhotoSheet, type PickedPhoto } from '../components/photoVault/AddPhotoSheet';
@@ -39,16 +39,23 @@ import {
   releaseGalleryThumbnail,
   releaseGalleryPhotoFromViewer,
   removeGalleryPhoto,
+  retryGalleryPhoto,
   subscribeToGallery,
   type GalleryState,
 } from '../lib/photoVaultGallery';
 import type { PhotoVaultIssue } from '../lib/photoVaultErrors';
+import { shouldShowPhotoVaultLocked } from '../lib/photoVaultLockedVisibility';
+import { tracePhotoVault } from '../lib/photoVaultDevTrace';
 import {
   pickPhotoFromLibrary,
   takePhotoWithCamera,
   type PickerOutcome,
 } from '../services/photoVaultPicker';
 import { usePhotoVault } from '../state/PhotoVaultContext';
+import { useAuth } from '../state/AuthContext';
+import { getReauthenticationProviders, type ReauthenticationProvider } from '../lib/authProviders';
+import { reauthenticateAndRecoverVaultKey } from '../services/photoVaultRecovery';
+import { ReauthenticationMethods } from '../components/auth/ReauthenticationMethods';
 import { usePremiumAction } from '../state/PremiumActionContext';
 import { PremiumAction } from '../components/premium/PremiumAction';
 import { useTheme } from '../theme';
@@ -78,12 +85,32 @@ export function ProgressPhotosScreen({
   const {
     status,
     lastIssue,
-    hasPhotoVaultContent,
-    hasPhotoVaultContentReady,
     unlock,
     lock,
     setHasPhotoVaultContent,
   } = usePhotoVault();
+  const { logout, user } = useAuth();
+  const [recoveryOpen, setRecoveryOpen] = useState(false);
+  const [recoveryPassword, setRecoveryPassword] = useState('');
+  const [recoveryPasswordVisible, setRecoveryPasswordVisible] = useState(false);
+  const [recoveryProvider, setRecoveryProvider] = useState<ReauthenticationProvider | null>(null);
+  const [recoveryError, setRecoveryError] = useState(false);
+  const recoveryProviders = useMemo(() => getReauthenticationProviders(user), [user]);
+  const recoverVault = useCallback(async (provider: ReauthenticationProvider) => {
+    if (provider === 'password' && !recoveryPassword) return;
+    setRecoveryProvider(provider);
+    setRecoveryError(false);
+    try {
+      await reauthenticateAndRecoverVaultKey(provider === 'password' ? { provider, password: recoveryPassword } : { provider });
+      setRecoveryOpen(false);
+      setRecoveryPassword('');
+      await loadGallery();
+    } catch {
+      setRecoveryError(true);
+    } finally {
+      setRecoveryProvider(null);
+    }
+  }, [loadGallery, recoveryPassword]);
   // FASE 5: the primary "add photo" CTA (footer button) is wrapped in
   // <PremiumAction> below, which derives its own `locked` display state —
   // no `canPerform` needed directly in this screen anymore for that.
@@ -115,12 +142,40 @@ export function ProgressPhotosScreen({
 
   useEffect(() => subscribeToGallery(setGallery), []);
 
+  useEffect(() => {
+    tracePhotoVault('viewerDismiss.reactStateChanged', { viewerOpen: viewerId !== null });
+  }, [viewerId]);
+
   // Screen capture protection is scoped to the private area. Leaving the
   // Photo Vault revokes the session, removes its plaintext and lets the
   // provider release the native guard after the safe locked frame renders.
   useEffect(() => () => lock(), [lock]);
 
   const unlocked = status === 'unlocked';
+  /**
+   * Extends the locked view a little further after a real unlock, so
+   * `PhotoVaultLockedState` has time to finish its reveal animation before
+   * the real gallery mounts. `shouldShowPhotoVaultLocked` below is what
+   * actually gates the branch — `unlocked` alone decides the moment the
+   * vault re-locks, this state can only ever prolong "locked", never
+   * shorten it. See `lib/photoVaultLockedVisibility.ts`.
+   */
+  const [showLocked, setShowLocked] = useState(!unlocked);
+
+  useEffect(() => {
+    if (!unlocked) setShowLocked(true);
+  }, [unlocked]);
+
+  // Temporary trace. Kept in effects of their own so the two lifecycle rules
+  // above — lock on unmount, load on unlock — keep their exact shape.
+  useEffect(() => {
+    tracePhotoVault('screen.photos.mount');
+    return () => tracePhotoVault('screen.photos.unmount');
+  }, []);
+
+  useEffect(() => {
+    tracePhotoVault('screen.photos.vaultStatus', { status, unlocked });
+  }, [status, unlocked]);
 
   // Load once the vault opens. Locking is handled by the gallery module,
   // which discards every decrypted file on its own.
@@ -179,6 +234,15 @@ export function ProgressPhotosScreen({
   );
   const filterEmpty = !galleryEmpty && visibleDays.length === 0;
 
+  /**
+   * Whether the pinned action bar is worth the space it takes.
+   *
+   * Hidden while the gallery is loading, empty, or narrowed to a pose with no
+   * photos: each of those states already renders its own "add" call to action,
+   * and a second one would be the same offer twice on one screen.
+   */
+  const showActionBar = gallery.status === 'ready' && !galleryEmpty && !filterEmpty;
+
   // The swipe sequence IS what the grid shows: derived from the same filtered
   // days, so a pose filter narrows it and `all` spans the whole gallery.
   const viewerPhotos = useMemo(() => flattenProgressDayPhotos(visibleDays), [visibleDays]);
@@ -199,28 +263,70 @@ export function ProgressPhotosScreen({
     }
   }, [viewerId, viewerPhoto]);
 
-  const handleOpenViewer = useCallback((photoId: string) => {
-    claimGalleryPhotoForViewer(photoId);
-    setViewerId(photoId);
-  }, []);
+  /**
+   * The two photos one swipe away, in the order the grid actually paints.
+   *
+   * Derived from `viewerPhotos` rather than from the whole gallery, so a pose
+   * filter narrows the prefetch window exactly as it narrows the carousel. The
+   * gallery controller is told which ids these are instead of an index range:
+   * it has no view of the filter, and guessing "next" there would be a second
+   * definition of order to keep in step with this one.
+   */
+  const neighboursOf = useCallback(
+    (photoId: string) => {
+      const index = viewerPhotos.findIndex((entry) => entry.photoId === photoId);
+      if (index < 0) return {};
+      return {
+        previous: viewerPhotos[index - 1]?.photoId ?? null,
+        next: viewerPhotos[index + 1]?.photoId ?? null,
+      };
+    },
+    [viewerPhotos],
+  );
+
+  const handleOpenViewer = useCallback(
+    (photoId: string) => {
+      claimGalleryPhotoForViewer(photoId, neighboursOf(photoId));
+      setViewerId(photoId);
+    },
+    [neighboursOf],
+  );
 
   /**
    * Paging moved to another photo.
    *
-   * The claim moves with it, one photo at a time: the gallery keeps a single
-   * viewer owner, and releasing the previous one first is what stops a
-   * swiped-past decrypt from landing (and from keeping its plaintext).
+   * The claim moves with it, one photo at a time: releasing the previous one
+   * first is what stops a swiped-past decrypt from landing (and from keeping
+   * its plaintext). The new claim carries the recomputed window, so the photo
+   * the user just left becomes a prefetched neighbour — which is what makes
+   * swiping back free — and anything that fell outside is abandoned.
    */
-  const handleNavigateViewer = useCallback((nextPhotoId: string) => {
-    setViewerId((current) => {
-      if (current === nextPhotoId) return current;
-      releaseGalleryPhotoFromViewer(current);
-      claimGalleryPhotoForViewer(nextPhotoId);
-      return nextPhotoId;
-    });
+  const handleNavigateViewer = useCallback(
+    (nextPhotoId: string) => {
+      setViewerId((current) => {
+        if (current === nextPhotoId) return current;
+        releaseGalleryPhotoFromViewer(current);
+        claimGalleryPhotoForViewer(nextPhotoId, neighboursOf(nextPhotoId));
+        return nextPhotoId;
+      });
+    },
+    [neighboursOf],
+  );
+
+  /**
+   * Asks the durable queue to deliver this photo again, now.
+   *
+   * Not a re-upload from scratch: the ciphertext is already on the device and
+   * whatever the job already placed remotely is kept, so this only clears the
+   * backoff and wakes the worker.
+   */
+  const handleRetrySync = useCallback((photoId: string) => {
+    setNotice(null);
+    void retryGalleryPhoto(photoId);
   }, []);
 
   const handleCloseViewer = useCallback(() => {
+    tracePhotoVault('viewerDismiss.parentOnCloseCalled');
     setViewerId((current) => {
       releaseGalleryPhotoFromViewer(current);
       return null;
@@ -292,16 +398,21 @@ export function ProgressPhotosScreen({
   /**
    * Saves one pose through the controller.
    *
-   * Called once per filled draft, so a failure is reported for that pose
-   * alone and never cancels a sibling that already succeeded. Only the pose
-   * and the picked image cross this boundary — the day, the document id, the
-   * asset id and both Storage paths are derived by the service, so a photo can
-   * never be filed under a day it did not happen.
+   * Called once per filled draft — concurrently, since the three poses are
+   * committed together — so a failure is reported for that pose alone and
+   * never cancels a sibling that already succeeded. Only the pose and the
+   * picked image cross this boundary — the day, the document id, the asset id
+   * and both Storage paths are derived by the service, so a photo can never be
+   * filed under a day it did not happen.
+   *
+   * The issue comes back WITH the result rather than being read from the
+   * controller's shared `issue` slot afterwards: with three poses in flight,
+   * that slot holds whichever failed last, not this one.
    */
   const handleSavePose = useCallback(
     async (photo: PickedPhoto, pose: ProgressPhotoPose) => {
       setNotice(null);
-      const ok = await addGalleryPhoto({
+      const result = await addGalleryPhoto({
         sourceUri: photo.sourceUri,
         takenAt: photo.takenAt,
         originalMimeType: photo.mimeType,
@@ -309,12 +420,9 @@ export function ProgressPhotosScreen({
         height: photo.height,
         pose,
       });
-      if (ok) return { ok: true };
-      // Read straight after the awaited call: uploads run one at a time, so
-      // this issue belongs to the pose that just failed.
-      const issue = getGalleryState().issue;
-      setNotice(uploadErrorMessage(issue));
-      return { ok: false, issue: issue ?? undefined };
+      if (result.ok) return { ok: true };
+      setNotice(uploadErrorMessage(result.issue ?? null));
+      return { ok: false, issue: result.issue };
     },
     [uploadErrorMessage],
   );
@@ -336,7 +444,7 @@ export function ProgressPhotosScreen({
         // The slot emptied underneath: fall back to a plain create.
         return handleSavePose(photo, pose);
       }
-      const ok = await replaceGalleryPhoto(existing.photoId, {
+      const result = await replaceGalleryPhoto(existing.photoId, {
         sourceUri: photo.sourceUri,
         takenAt: photo.takenAt,
         originalMimeType: photo.mimeType,
@@ -344,10 +452,9 @@ export function ProgressPhotosScreen({
         height: photo.height,
         pose,
       });
-      if (ok) return { ok: true };
-      const issue = getGalleryState().issue;
-      setNotice(replaceErrorMessage(issue));
-      return { ok: false, issue: issue ?? undefined };
+      if (result.ok) return { ok: true };
+      setNotice(replaceErrorMessage(result.issue ?? null));
+      return { ok: false, issue: result.issue };
     },
     [handleSavePose, replaceErrorMessage],
   );
@@ -365,6 +472,7 @@ export function ProgressPhotosScreen({
   // mounting their own `<PremiumAction>`), so every path funnels through
   // one authorization call either way.
   const openSheetUnguarded = useCallback((pose?: ProgressPhotoPose) => {
+    tracePhotoVault('screen.sheet.open', { pose: pose ?? 'none' });
     setSheetPose(pose);
     setSheetOpen(true);
   }, []);
@@ -420,7 +528,11 @@ export function ProgressPhotosScreen({
 
   // ── Locked ───────────────────────────────────────────────────────────────
   // Nothing about the vault's contents is rendered before this point.
-  if (!unlocked) {
+  // `shouldShowPhotoVaultLocked` gates strictly on `unlocked`: the moment the
+  // vault is not unlocked, this branch is taken, full stop. `showLocked` can
+  // only extend it further, to let a successful unlock's reveal animation
+  // finish before the real gallery below ever mounts.
+  if (shouldShowPhotoVaultLocked(unlocked, showLocked)) {
     return (
       <ScrollView
         contentContainerStyle={{ flexGrow: 1, paddingBottom: 12 }}
@@ -428,11 +540,10 @@ export function ProgressPhotosScreen({
       >
         {pageHeader}
         <PhotoVaultLockedState
-          status={status === 'authenticating' ? 'authenticating' : 'locked'}
+          status={status}
           issue={lastIssue}
-          hasContent={hasPhotoVaultContent}
-          contentPresenceReady={hasPhotoVaultContentReady}
           onUnlock={() => void unlock()}
+          onRevealComplete={() => setShowLocked(false)}
         />
         {pageFooter}
       </ScrollView>
@@ -441,6 +552,10 @@ export function ProgressPhotosScreen({
 
   return (
     <View style={{ flex: 1 }}>
+      {/* The grid takes whatever the action bar leaves. A flex sibling rather
+          than an absolute overlay: the bar is opaque and always visible, so
+          nothing must be able to scroll underneath and hide behind it. */}
+      <View style={{ flex: 1 }}>
       <PhotoVaultGrid
         days={gallery.status === 'ready' ? visibleDays : []}
         filter={filter}
@@ -449,49 +564,14 @@ export function ProgressPhotosScreen({
         onOpen={handleOpenViewer}
         onAddPose={openSheet}
         onRendered={markGalleryPhotoRendered}
+        onRetrySync={handleRetrySync}
         formatDate={formatDate}
         formatMonth={formatMonth}
         listHeader={(
           <>
             {pageHeader}
             {gallery.status === 'ready' && !galleryEmpty ? (
-              <>
-                <PhotoVaultFilterBar value={filter} onChange={setFilter} />
-                {canCompare ? (
-                  <View style={{ paddingHorizontal: 22, paddingBottom: 14 }}>
-                    <Pressable
-                      onPress={() => setCompareOpen(true)}
-                      accessibilityRole="button"
-                      accessibilityLabel={t('progress.photos.a11y.openCompare')}
-                      testID="photo-vault-compare-cta"
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: 10,
-                        paddingVertical: 13,
-                        borderRadius: 12,
-                        borderWidth: 1,
-                        borderColor: theme.colors.border,
-                        backgroundColor: theme.colors.surface,
-                      }}
-                    >
-                      <Icon name="swap" size={14} color={theme.colors.primaryEmphasis} />
-                      <Text
-                        style={{
-                          color: theme.colors.textPrimary,
-                          fontFamily: theme.fonts.mono,
-                          fontSize: 10,
-                          letterSpacing: 2,
-                          textTransform: 'uppercase',
-                        }}
-                      >
-                        {t('progress.photos.compare.cta')}
-                      </Text>
-                    </Pressable>
-                  </View>
-                ) : null}
-              </>
+              <PhotoVaultFilterBar value={filter} onChange={setFilter} />
             ) : null}
             {notice ? (
               <View style={{ paddingHorizontal: 22, paddingBottom: 14 }}>
@@ -535,26 +615,44 @@ export function ProgressPhotosScreen({
                     paddingHorizontal: 22,
                   }}
                 >
-                  {t('progress.photos.list.error')}
+                  {gallery.issue === 'vaultReauthRequired'
+                    ? t('progress.photos.list.reauthRequired')
+                    : t('progress.photos.list.error')}
                 </Text>
-                <Pressable
-                  onPress={() => void loadGallery()}
-                  accessibilityRole="button"
-                  accessibilityLabel={t('progress.photos.list.retry')}
-                  style={{ paddingVertical: 10, paddingHorizontal: 18 }}
-                >
-                  <Text
-                    style={{
-                      color: theme.colors.primaryEmphasis,
-                      fontFamily: theme.fonts.mono,
-                      fontSize: 10,
-                      letterSpacing: 2,
-                      textTransform: 'uppercase',
-                    }}
+                {gallery.issue === 'vaultReauthRequired' ? (
+                  <>
+                    <Pressable
+                      onPress={() => {
+                        setRecoveryError(false);
+                        setRecoveryOpen(true);
+                      }}
+                      accessibilityRole="button"
+                      accessibilityLabel={t('progress.photos.list.confirmIdentity')}
+                      style={{ paddingVertical: 10, paddingHorizontal: 18 }}
+                    >
+                      <Text style={{ color: theme.colors.primaryEmphasis, fontFamily: theme.fonts.mono, fontSize: 10, letterSpacing: 2, textTransform: 'uppercase' }}>
+                        {t('progress.photos.list.confirmIdentity')}
+                      </Text>
+                    </Pressable>
+                    <Pressable onPress={() => void logout()} accessibilityRole="button" style={{ paddingVertical: 6 }}>
+                      <Text style={{ color: theme.colors.textMuted, fontFamily: theme.fonts.ui, fontSize: 12 }}>
+                        {t('progress.photos.list.signOut')}
+                      </Text>
+                    </Pressable>
+                  </>
+                ) : null}
+                {gallery.issue !== 'vaultReauthRequired' ? (
+                  <Pressable
+                    onPress={() => void loadGallery()}
+                    accessibilityRole="button"
+                    accessibilityLabel={t('progress.photos.list.retry')}
+                    style={{ paddingVertical: 10, paddingHorizontal: 18 }}
                   >
-                    {t('progress.photos.list.retry')}
-                  </Text>
-                </Pressable>
+                    <Text style={{ color: theme.colors.primaryEmphasis, fontFamily: theme.fonts.mono, fontSize: 10, letterSpacing: 2, textTransform: 'uppercase' }}>
+                      {t('progress.photos.list.retry')}
+                    </Text>
+                  </Pressable>
+                ) : null}
               </View>
             ) : galleryEmpty ? (
               <PhotoVaultEmptyState onAdd={() => openSheet()} />
@@ -563,61 +661,113 @@ export function ProgressPhotosScreen({
             ) : null}
           </>
         )}
-        listFooter={(
-          <>
-            {gallery.status === 'ready' && !galleryEmpty && !filterEmpty ? (
-              <View style={{ paddingHorizontal: 22, paddingTop: 14 }}>
-                {/* FASE 5: the primary "add" CTA — single discreet lock
-                    indicator (empty states below keep their plain "+" icon,
-                    per Fase 3's "não espalhe cadeados" decision), now
-                    sourced from <PremiumAction> instead of a local
-                    canPerform() read. */}
-                <PremiumAction capability="ADD_PROGRESS_PHOTO" onAllowed={openSheetUnguarded}>
-                  {({ locked, onPress }) => (
-                    <Pressable
-                      onPress={onPress}
-                      disabled={gallery.uploading}
-                      accessibilityRole="button"
-                      accessibilityLabel={
-                        locked
-                          ? t('progress.photos.a11y.addPhotoLocked')
-                          : t('progress.photos.a11y.addPhoto')
-                      }
-                      accessibilityState={{ disabled: gallery.uploading }}
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: 10,
-                        paddingVertical: 15,
-                        borderRadius: 12,
-                        borderWidth: 1,
-                        borderColor: theme.colors.border,
-                        backgroundColor: theme.colors.surface,
-                        opacity: gallery.uploading ? 0.4 : 1,
-                      }}
-                    >
-                      <Icon name={locked ? 'lock' : 'plus'} size={14} color={theme.colors.primaryEmphasis} />
-                      <Text
-                        style={{
-                          color: theme.colors.textPrimary,
-                          fontFamily: theme.fonts.mono,
-                          fontSize: 10,
-                          letterSpacing: 2,
-                          textTransform: 'uppercase',
-                        }}
-                      >
-                        {t('progress.photos.list.add')}
-                      </Text>
-                    </Pressable>
-                  )}
-                </PremiumAction>
-              </View>
-            ) : null}
-            {pageFooter}
-          </>
-        )}
+        listFooter={<>{pageFooter}</>}
       />
+      </View>
+
+      {/*
+        The two gallery-wide actions, pinned above the grid.
+
+        Both used to live inside the list — "add" at the very bottom of the
+        footer and "compare" up in the header — so reaching either meant
+        scrolling to opposite ends of the gallery. Pinning them puts the two
+        things the user came here to do within reach at any scroll position,
+        with "add" on top because it is the primary one.
+      */}
+      {showActionBar ? (
+        <View
+          testID="photo-vault-action-bar"
+          style={{
+            paddingHorizontal: 22,
+            paddingTop: 12,
+            paddingBottom: 12,
+            gap: 10,
+            backgroundColor: theme.colors.background,
+            borderTopWidth: 1,
+            borderTopColor: theme.colors.border,
+          }}
+        >
+          {/* FASE 5: the primary "add" CTA — single discreet lock indicator
+              (empty states keep their plain "+" icon, per Fase 3's "não
+              espalhe cadeados" decision), sourced from <PremiumAction>
+              instead of a local canPerform() read. */}
+          <PremiumAction capability="ADD_PROGRESS_PHOTO" onAllowed={openSheetUnguarded}>
+            {({ locked, onPress }) => (
+              <Pressable
+                onPress={onPress}
+                disabled={gallery.uploading}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  locked
+                    ? t('progress.photos.a11y.addPhotoLocked')
+                    : t('progress.photos.a11y.addPhoto')
+                }
+                accessibilityState={{ disabled: gallery.uploading }}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 10,
+                  paddingVertical: 15,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: theme.colors.border,
+                  backgroundColor: theme.colors.surface,
+                  opacity: gallery.uploading ? 0.4 : 1,
+                }}
+              >
+                <Icon name={locked ? 'lock' : 'plus'} size={14} color={theme.colors.primaryEmphasis} />
+                <Text
+                  style={{
+                    color: theme.colors.textPrimary,
+                    fontFamily: theme.fonts.mono,
+                    fontSize: 10,
+                    letterSpacing: 2,
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  {t('progress.photos.list.add')}
+                </Text>
+              </Pressable>
+            )}
+          </PremiumAction>
+
+          {/* Only once there is actually a valid pair to compare — otherwise
+              the entry point opens onto a dead end. */}
+          {canCompare ? (
+            <Pressable
+              onPress={() => setCompareOpen(true)}
+              accessibilityRole="button"
+              accessibilityLabel={t('progress.photos.a11y.openCompare')}
+              testID="photo-vault-compare-cta"
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 10,
+                paddingVertical: 13,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: theme.colors.border,
+                backgroundColor: theme.colors.surface,
+              }}
+            >
+              <Icon name="swap" size={14} color={theme.colors.primaryEmphasis} />
+              <Text
+                style={{
+                  color: theme.colors.textPrimary,
+                  fontFamily: theme.fonts.mono,
+                  fontSize: 10,
+                  letterSpacing: 2,
+                  textTransform: 'uppercase',
+                }}
+              >
+                {t('progress.photos.compare.cta')}
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
 
       <AddPhotoSheet
         visible={sheetOpen}
@@ -641,6 +791,33 @@ export function ProgressPhotosScreen({
         onClose={() => setCompareOpen(false)}
         formatDate={formatDate}
       />
+
+      <Modal visible={recoveryOpen} transparent animationType="slide" onRequestClose={() => setRecoveryOpen(false)}>
+        <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.55)' }}>
+          <View style={{ padding: 22, borderTopLeftRadius: 24, borderTopRightRadius: 24, backgroundColor: theme.colors.background }}>
+            <Text style={{ color: theme.colors.textPrimary, fontFamily: theme.fonts.display, fontSize: 22 }}>
+              {t('progress.photos.list.reauthTitle')}
+            </Text>
+            <Text style={{ color: theme.colors.textMuted, fontFamily: theme.fonts.ui, fontSize: 14, lineHeight: 20, marginTop: 8, marginBottom: 18 }}>
+              {t('progress.photos.list.reauthBody')}
+            </Text>
+            {recoveryError ? <Text accessibilityLiveRegion="polite" style={{ color: theme.colors.feedbackErrorText, fontFamily: theme.fonts.ui, fontSize: 13, marginBottom: 12 }}>{t('progress.photos.list.reauthError')}</Text> : null}
+            <ReauthenticationMethods
+              providers={recoveryProviders}
+              password={recoveryPassword}
+              passwordVisible={recoveryPasswordVisible}
+              busyProvider={recoveryProvider}
+              disabled={recoveryProvider !== null}
+              onChangePassword={setRecoveryPassword}
+              onTogglePassword={() => setRecoveryPasswordVisible((value) => !value)}
+              onConfirm={(provider) => void recoverVault(provider)}
+            />
+            <Pressable onPress={() => setRecoveryOpen(false)} disabled={recoveryProvider !== null} style={{ paddingVertical: 14, alignItems: 'center' }}>
+              <Text style={{ color: theme.colors.textMuted, fontFamily: theme.fonts.uiMed, fontSize: 13 }}>{t('progress.photos.list.cancel')}</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
 
       <PhotoVaultViewer
         photos={viewerPhotos}

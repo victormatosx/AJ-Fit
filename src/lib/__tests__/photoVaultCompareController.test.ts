@@ -78,6 +78,7 @@ function photo(id: string): GalleryPhoto {
     failed: false,
     uploadStatus: null,
     uploadProgress: null,
+    jobId: null,
   };
 }
 

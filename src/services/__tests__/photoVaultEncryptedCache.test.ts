@@ -107,22 +107,31 @@ vi.mock('expo-file-system', () => {
 import {
   MAX_CACHE_BYTES,
   MAX_CACHE_ENTRIES,
+  MAX_FULL_CIPHER_CACHE_BYTES,
+  MAX_FULL_CIPHER_CACHE_ENTRIES,
   TOUCH_MIN_INTERVAL_MS,
   currentPhotoVaultCacheEpoch,
   enforceCacheLimits,
+  enforceFullCacheLimits,
   photoVaultCacheStats,
-  pruneCachedThumbnailsExcept,
+  photoVaultFullCacheStats,
+  prunePhotoVaultCiphertextExcept,
+  readCachedFull,
   readCachedThumbnail,
+  reconcileCachedFulls,
   reconcileCachedThumbnails,
+  removeCachedFull,
   removeCachedThumbnail,
-  removeCachedThumbnailsForUser,
+  removePhotoVaultCiphertextForUser,
   resetPhotoVaultEncryptedCacheForTesting,
+  writeCachedFull,
   writeCachedThumbnail,
 } from '../photoVaultEncryptedCache';
 
 const UID = 'alice';
 const OTHER_UID = 'mallory';
 const ROOT = 'file:///cache/photo-vault/encrypted-thumbnails';
+const FULL_ROOT = 'file:///cache/photo-vault/encrypted-fulls';
 
 function envelope(size = 64, fill = 7): Uint8Array {
   return new Uint8Array(size).fill(fill);
@@ -132,9 +141,18 @@ function pathFor(uid: string, photoId: string): string {
   return `${ROOT}/${uid}/${photoId}.thumb.enc`;
 }
 
+function fullPathFor(uid: string, photoId: string): string {
+  return `${FULL_ROOT}/${uid}/${photoId}.full.enc`;
+}
+
 function seed(uid: string, photoId: string, size = 64, mtime = Date.now()): void {
   fs.dirs.add(`${ROOT}/${uid}`);
   fs.files.set(pathFor(uid, photoId), { bytes: envelope(size), mtime });
+}
+
+function seedFull(uid: string, photoId: string, size = 4096, mtime = Date.now()): void {
+  fs.dirs.add(`${FULL_ROOT}/${uid}`);
+  fs.files.set(fullPathFor(uid, photoId), { bytes: envelope(size), mtime });
 }
 
 function epoch(): number {
@@ -252,25 +270,45 @@ describe('invalidation', () => {
     writeCachedThumbnail({ uid: UID, photoId: 'p1', bytes: envelope(), epoch: epoch() });
     writeCachedThumbnail({ uid: OTHER_UID, photoId: 'p1', bytes: envelope(), epoch: epoch() });
 
-    removeCachedThumbnailsForUser(UID);
+    removePhotoVaultCiphertextForUser(UID);
     expect(fs.files.has(pathFor(UID, 'p1'))).toBe(false);
     expect(fs.files.has(pathFor(OTHER_UID, 'p1'))).toBe(true);
+  });
+
+  it('removes BOTH ciphertext kinds for one user', () => {
+    writeCachedThumbnail({ uid: UID, photoId: 'p1', bytes: envelope(), epoch: epoch() });
+    writeCachedFull({ uid: UID, photoId: 'p1', bytes: envelope(4096), epoch: epoch() });
+
+    removePhotoVaultCiphertextForUser(UID);
+    expect(fs.files.has(pathFor(UID, 'p1'))).toBe(false);
+    expect(fs.files.has(fullPathFor(UID, 'p1'))).toBe(false);
   });
 
   it('keeps only the signed-in namespace', () => {
     writeCachedThumbnail({ uid: UID, photoId: 'p1', bytes: envelope(), epoch: epoch() });
     writeCachedThumbnail({ uid: OTHER_UID, photoId: 'p1', bytes: envelope(), epoch: epoch() });
 
-    pruneCachedThumbnailsExcept(UID);
+    prunePhotoVaultCiphertextExcept(UID);
     expect(fs.files.has(pathFor(UID, 'p1'))).toBe(true);
     expect(fs.files.has(pathFor(OTHER_UID, 'p1'))).toBe(false);
+  });
+
+  it('prunes the full ciphertext of every other identity too', () => {
+    writeCachedFull({ uid: UID, photoId: 'p1', bytes: envelope(4096), epoch: epoch() });
+    writeCachedFull({ uid: OTHER_UID, photoId: 'p1', bytes: envelope(4096), epoch: epoch() });
+
+    prunePhotoVaultCiphertextExcept(UID);
+    expect(fs.files.has(fullPathFor(UID, 'p1'))).toBe(true);
+    // A full another account left behind must never be readable by this one.
+    expect(fs.files.has(fullPathFor(OTHER_UID, 'p1'))).toBe(false);
   });
 
   it('keeps nothing on logout', () => {
     writeCachedThumbnail({ uid: UID, photoId: 'p1', bytes: envelope(), epoch: epoch() });
     writeCachedThumbnail({ uid: OTHER_UID, photoId: 'p1', bytes: envelope(), epoch: epoch() });
+    writeCachedFull({ uid: UID, photoId: 'p1', bytes: envelope(4096), epoch: epoch() });
 
-    pruneCachedThumbnailsExcept(null);
+    prunePhotoVaultCiphertextExcept(null);
     expect(fs.files.size).toBe(0);
   });
 
@@ -296,7 +334,7 @@ describe('identity race', () => {
   it('refuses a write carrying an epoch from a cleared session', () => {
     // Captured by an operation that started before the identity change.
     const captured = epoch();
-    pruneCachedThumbnailsExcept(null);
+    prunePhotoVaultCiphertextExcept(null);
 
     expect(
       writeCachedThumbnail({ uid: UID, photoId: 'late', bytes: envelope(), epoch: captured }),
@@ -304,11 +342,162 @@ describe('identity race', () => {
     expect(fs.files.size).toBe(0);
   });
 
+  it('refuses a late FULL write carrying an epoch from a cleared session', () => {
+    const captured = epoch();
+    prunePhotoVaultCiphertextExcept(null);
+
+    expect(
+      writeCachedFull({ uid: UID, photoId: 'late', bytes: envelope(4096), epoch: captured }),
+    ).toBe(false);
+    expect(fs.files.size).toBe(0);
+  });
+
   it('accepts a write started after the identity change', () => {
-    pruneCachedThumbnailsExcept(UID);
+    prunePhotoVaultCiphertextExcept(UID);
     expect(
       writeCachedThumbnail({ uid: UID, photoId: 'fresh', bytes: envelope(), epoch: epoch() }),
     ).toBe(true);
+  });
+});
+
+/**
+ * The full ciphertext cache.
+ *
+ * Same module, same invariants, a second namespace: envelopes are ciphertext
+ * either way, so what differs is only the size class they are budgeted for.
+ */
+describe('full ciphertext cache', () => {
+  it('lives in its own namespace, outside the directories the startup sweep clears', () => {
+    writeCachedFull({ uid: UID, photoId: 'p1', bytes: envelope(4096), epoch: epoch() });
+
+    const stored = [...fs.files.keys()];
+    expect(stored).toHaveLength(1);
+    expect(stored[0]).toBe(fullPathFor(UID, 'p1'));
+    expect(stored[0]).not.toContain('/photo-vault/tmp/');
+    expect(stored[0]).not.toContain('/photo-vault/enc/');
+  });
+
+  it('never collides with the thumbnail entry of the same photo', () => {
+    writeCachedThumbnail({ uid: UID, photoId: 'same', bytes: envelope(64), epoch: epoch() });
+    writeCachedFull({ uid: UID, photoId: 'same', bytes: envelope(4096), epoch: epoch() });
+
+    expect(fs.files.get(pathFor(UID, 'same'))!.bytes.length).toBe(64);
+    expect(fs.files.get(fullPathFor(UID, 'same'))!.bytes.length).toBe(4096);
+  });
+
+  it('namespaces every entry by uid', () => {
+    writeCachedFull({ uid: UID, photoId: 'shared', bytes: envelope(4096), epoch: epoch() });
+    writeCachedFull({ uid: OTHER_UID, photoId: 'shared', bytes: envelope(2048), epoch: epoch() });
+
+    expect(fs.files.get(fullPathFor(UID, 'shared'))!.bytes.length).toBe(4096);
+    expect(fs.files.get(fullPathFor(OTHER_UID, 'shared'))!.bytes.length).toBe(2048);
+  });
+
+  it('refuses identifiers that could escape the namespace', () => {
+    expect(
+      writeCachedFull({ uid: '../../etc', photoId: 'p1', bytes: envelope(4096), epoch: epoch() }),
+    ).toBe(false);
+    expect(
+      writeCachedFull({ uid: UID, photoId: '../../evil', bytes: envelope(4096), epoch: epoch() }),
+    ).toBe(false);
+    expect(fs.files.size).toBe(0);
+  });
+
+  it('returns null on a miss without creating anything', async () => {
+    expect(await readCachedFull({ uid: UID, photoId: 'absent', expectedSize: 4096 })).toBeNull();
+    expect(fs.files.size).toBe(0);
+  });
+
+  it('returns the exact ciphertext on a hit', async () => {
+    const bytes = envelope(4096, 3);
+    writeCachedFull({ uid: UID, photoId: 'p1', bytes, epoch: epoch() });
+
+    const read = await readCachedFull({ uid: UID, photoId: 'p1', expectedSize: 4096 });
+    expect(read).not.toBeNull();
+    expect([...read!]).toEqual([...bytes]);
+  });
+
+  it('treats a truncated entry as a miss and drops it', async () => {
+    seedFull(UID, 'p1', 100);
+    expect(await readCachedFull({ uid: UID, photoId: 'p1', expectedSize: 4096 })).toBeNull();
+    expect(fs.files.has(fullPathFor(UID, 'p1'))).toBe(false);
+  });
+
+  it('never writes the final name until the content is complete', () => {
+    fs.failMove = true;
+    expect(
+      writeCachedFull({ uid: UID, photoId: 'p1', bytes: envelope(4096), epoch: epoch() }),
+    ).toBe(false);
+
+    expect(fs.files.has(fullPathFor(UID, 'p1'))).toBe(false);
+    expect([...fs.files.keys()].filter((uri) => uri.includes('.tmp-'))).toHaveLength(0);
+  });
+
+  it('removes a single full', () => {
+    writeCachedFull({ uid: UID, photoId: 'p1', bytes: envelope(4096), epoch: epoch() });
+    writeCachedFull({ uid: UID, photoId: 'p2', bytes: envelope(4096), epoch: epoch() });
+
+    removeCachedFull(UID, 'p1');
+    expect(fs.files.has(fullPathFor(UID, 'p1'))).toBe(false);
+    expect(fs.files.has(fullPathFor(UID, 'p2'))).toBe(true);
+  });
+
+  it('drops entries whose photo no longer exists remotely', () => {
+    writeCachedFull({ uid: UID, photoId: 'kept', bytes: envelope(4096), epoch: epoch() });
+    writeCachedFull({ uid: UID, photoId: 'gone', bytes: envelope(4096), epoch: epoch() });
+
+    expect(reconcileCachedFulls(UID, ['kept'])).toBe(1);
+    expect(fs.files.has(fullPathFor(UID, 'kept'))).toBe(true);
+    expect(fs.files.has(fullPathFor(UID, 'gone'))).toBe(false);
+  });
+
+  it('budgets bytes conservatively rather than by count alone', () => {
+    // A full envelope is up to MAX_ENCRYPTED_BYTES (10 MiB), so a count-only
+    // ceiling could not bound this cache at all.
+    expect(MAX_FULL_CIPHER_CACHE_BYTES).toBe(64 * 1024 * 1024);
+    expect(MAX_FULL_CIPHER_CACHE_ENTRIES).toBe(120);
+  });
+
+  it('evicts the least recently used full once the byte ceiling is passed', () => {
+    const now = Date.now();
+    const big = Math.floor(MAX_FULL_CIPHER_CACHE_BYTES / 2);
+    seedFull(UID, 'old', big, now - 10_000);
+    seedFull(UID, 'new', big, now);
+    seedFull(UID, 'newest', 4096, now + 10_000);
+
+    expect(enforceFullCacheLimits(UID)).toBe(1);
+    expect(fs.files.has(fullPathFor(UID, 'old'))).toBe(false);
+    expect(photoVaultFullCacheStats(UID).bytes).toBeLessThanOrEqual(MAX_FULL_CIPHER_CACHE_BYTES);
+  });
+
+  it('enforces its budget on write, so one huge photo cannot evict the world', () => {
+    const now = Date.now();
+    seedFull(UID, 'old', Math.floor(MAX_FULL_CIPHER_CACHE_BYTES * 0.9), now - 10_000);
+
+    writeCachedFull({
+      uid: UID,
+      photoId: 'fresh',
+      bytes: envelope(Math.floor(MAX_FULL_CIPHER_CACHE_BYTES * 0.5)),
+      epoch: epoch(),
+    });
+
+    expect(fs.files.has(fullPathFor(UID, 'fresh'))).toBe(true);
+    expect(fs.files.has(fullPathFor(UID, 'old'))).toBe(false);
+  });
+
+  it('reports aggregates only', () => {
+    writeCachedFull({ uid: UID, photoId: 'p1', bytes: envelope(4096), epoch: epoch() });
+    expect(photoVaultFullCacheStats(UID)).toEqual({ entries: 1, bytes: 4096 });
+  });
+
+  it('stores envelopes under a derived name and nothing else', () => {
+    writeCachedFull({ uid: UID, photoId: 'p1', bytes: envelope(4096), epoch: epoch() });
+
+    for (const uri of fs.files.keys()) {
+      expect(uri.endsWith('.full.enc')).toBe(true);
+      expect(uri).not.toMatch(/\.(jpg|jpeg|png|webp)$/);
+    }
+    expect(fs.files.size).toBe(1);
   });
 });
 

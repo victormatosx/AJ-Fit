@@ -402,6 +402,145 @@ describe('cross-user isolation', () => {
   });
 });
 
+// ── Single-flight key resolution ───────────────────────────────────────────
+
+/**
+ * Saving three poses at once calls `ensurePhotoVaultKey` three times in the
+ * same tick. On an account whose key is not on this device yet, every one of
+ * those would otherwise reach `createVault`.
+ */
+describe('ensurePhotoVaultKey single-flight', () => {
+  /** Resolves only when the test says so, so all three callers overlap. */
+  function deferred<T>() {
+    let resolve!: (value: T) => void;
+    let reject!: (reason: unknown) => void;
+    const promise = new Promise<T>((res, rej) => {
+      resolve = res;
+      reject = rej;
+    });
+    return { promise, resolve, reject };
+  }
+
+  it('collapses three concurrent calls into one createVault', async () => {
+    const gate = deferred<{ data: unknown }>();
+    mocks.callable.mockReturnValue(gate.promise);
+
+    const calls = [ensurePhotoVaultKey(), ensurePhotoVaultKey(), ensurePhotoVaultKey()];
+    gate.resolve({ data: { vaultKey: VALID_KEY, vaultKeyVersion: 1 } });
+    await Promise.all(calls);
+
+    expect(mocks.callable).toHaveBeenCalledTimes(1);
+    // The read is part of the shared flight too, not just the callable.
+    expect(mocks.readVaultKey).toHaveBeenCalledTimes(1);
+  });
+
+  it('hands every concurrent caller the same result', async () => {
+    const gate = deferred<{ data: unknown }>();
+    mocks.callable.mockReturnValue(gate.promise);
+
+    const calls = [ensurePhotoVaultKey(), ensurePhotoVaultKey(), ensurePhotoVaultKey()];
+    gate.resolve({ data: { vaultKey: VALID_KEY, vaultKeyVersion: 1 } });
+    const results = await Promise.all(calls);
+
+    for (const result of results) {
+      expect(result).toMatchObject({ status: 'vault-created', vaultKey: VALID_KEY });
+    }
+  });
+
+  it('propagates one failure to every concurrent caller', async () => {
+    const gate = deferred<{ data: unknown }>();
+    mocks.callable.mockReturnValue(gate.promise);
+
+    const calls = [ensurePhotoVaultKey(), ensurePhotoVaultKey(), ensurePhotoVaultKey()];
+    gate.reject(callableError('internal'));
+    const settled = await Promise.allSettled(calls);
+
+    expect(settled.map((result) => result.status)).toEqual([
+      'rejected',
+      'rejected',
+      'rejected',
+    ]);
+    for (const result of settled) {
+      expect(result.status === 'rejected' && result.reason).toMatchObject({
+        issue: 'vaultCreateFailed',
+      });
+    }
+  });
+
+  it('never caches a rejected flight: the next call retries from scratch', async () => {
+    mocks.callable.mockRejectedValueOnce(callableError('internal'));
+    await expect(ensurePhotoVaultKey()).rejects.toThrowError(
+      expect.objectContaining({ issue: 'vaultCreateFailed' }),
+    );
+
+    // A registry that kept the rejected promise would replay the failure here
+    // forever, leaving the account unable to ever save a first photo.
+    mocks.callable.mockResolvedValue({ data: { vaultKey: VALID_KEY, vaultKeyVersion: 1 } });
+    await expect(ensurePhotoVaultKey()).resolves.toMatchObject({
+      status: 'vault-created',
+    });
+  });
+
+  it('releases the flight after success, so a later call runs again', async () => {
+    await ensurePhotoVaultKey();
+    mocks.readVaultKey.mockResolvedValue({ vaultKey: VALID_KEY, vaultKeyVersion: 1 });
+
+    const result = await ensurePhotoVaultKey();
+
+    // Not served from a stale cached flight — it re-read and found the key
+    // the first call had just persisted.
+    expect(result).toMatchObject({ status: 'local-key-available' });
+    expect(mocks.readVaultKey).toHaveBeenCalledTimes(2);
+  });
+
+  it('never shares a flight between two uids', async () => {
+    const keys = new Map<string, unknown>();
+    mocks.readVaultKey.mockImplementation(async (uid: string) => keys.get(uid) ?? null);
+
+    const gate = deferred<{ data: unknown }>();
+    mocks.callable.mockReturnValueOnce(gate.promise);
+    mocks.callable.mockResolvedValue({ data: { vaultKey: OTHER_KEY, vaultKeyVersion: 2 } });
+
+    mocks.currentUser = { uid: UID };
+    const first = ensurePhotoVaultKey();
+    mocks.currentUser = { uid: OTHER_UID };
+    const second = ensurePhotoVaultKey();
+
+    gate.resolve({ data: { vaultKey: VALID_KEY, vaultKeyVersion: 1 } });
+    const [alice, mallory] = await Promise.all([first, second]);
+
+    // Two identities, two resolutions — a shared flight would have handed
+    // Mallory Alice's key.
+    expect(alice).toMatchObject({ vaultKey: VALID_KEY, vaultKeyVersion: 1 });
+    expect(mallory).toMatchObject({ vaultKey: OTHER_KEY, vaultKeyVersion: 2 });
+    expect(mocks.callable).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps the local-key fast path free of any backend call', async () => {
+    mocks.readVaultKey.mockResolvedValue({ vaultKey: VALID_KEY, vaultKeyVersion: 1 });
+
+    const results = await Promise.all([
+      ensurePhotoVaultKey(),
+      ensurePhotoVaultKey(),
+      ensurePhotoVaultKey(),
+    ]);
+
+    for (const result of results) {
+      expect(result).toMatchObject({ status: 'local-key-available' });
+    }
+    expect(mocks.callable).not.toHaveBeenCalled();
+  });
+
+  it('refuses to open a flight for an unauthenticated caller', async () => {
+    mocks.currentUser = null;
+
+    await expect(ensurePhotoVaultKey()).rejects.toThrowError(
+      expect.objectContaining({ issue: 'vaultKeyNotAvailable' }),
+    );
+    expect(mocks.readVaultKey).not.toHaveBeenCalled();
+  });
+});
+
 // ── Logging ────────────────────────────────────────────────────────────────
 
 describe('logging', () => {

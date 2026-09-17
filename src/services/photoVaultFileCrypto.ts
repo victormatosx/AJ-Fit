@@ -97,11 +97,20 @@ function removeQuietly(uri: string): void {
  * The returned `iv` is the exact nonce framed inside the file — there is one
  * source of truth, so the Firestore metadata from phase 4 can never drift
  * from the file it describes.
+ *
+ * `targetUri` overrides where the envelope is written. Left unset it lands in
+ * the reclaimable staging directory, which is right for a transfer that will
+ * finish within the call. A save that has to survive the app closing passes a
+ * path in `photoVaultDurableStore` instead, so the ciphertext is durable from
+ * the moment it exists rather than being written somewhere the OS may reclaim
+ * and copied afterwards. Only the destination changes; the envelope and the
+ * key handling are identical either way.
  */
 export async function encryptPhotoFile(params: {
   sourceUri: string;
   vaultKeyBase64: string;
   vaultKeyVersion: number;
+  targetUri?: string;
 }): Promise<EncryptedPhotoResult> {
   const { sourceUri, vaultKeyBase64, vaultKeyVersion } = params;
 
@@ -120,7 +129,9 @@ export async function encryptPhotoFile(params: {
   }
   const { bytes, iv } = encrypted;
 
-  const target = new File(vaultDirectory(ENCRYPTED_DIR), randomName('.enc'));
+  const target = params.targetUri
+    ? new File(params.targetUri)
+    : new File(vaultDirectory(ENCRYPTED_DIR), randomName('.enc'));
   try {
     target.write(bytes);
   } catch {

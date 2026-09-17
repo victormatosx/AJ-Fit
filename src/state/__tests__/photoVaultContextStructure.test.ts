@@ -102,13 +102,23 @@ describe('identity changes', () => {
     // Keyed on who IS signed in, so a logout (null) keeps nothing and an
     // account switch cannot leave the previous user's ciphertext behind —
     // without having to remember who was signed in before.
-    expect(CONTEXT_CODE).toContain('pruneCachedThumbnailsExcept(uid)');
+    expect(CONTEXT_CODE).toContain('prunePhotoVaultCiphertextExcept(uid)');
+  });
+
+  it('clears every cached locked-preview derivative that is not the signed-in one', () => {
+    // Independent cache, independent call, same "keep only this uid" shape —
+    // see photoVaultLockedPreviewCache.ts.
+    expect(CONTEXT_CODE).toContain('pruneLockedPreviewDerivativesExcept(uid)');
+    const effect = CONTEXT_CODE.slice(CONTEXT_CODE.indexOf('lockPhotoVault();'));
+    const pruneCiphertextAt = effect.indexOf('prunePhotoVaultCiphertextExcept(uid)');
+    const prunePreviewAt = effect.indexOf('pruneLockedPreviewDerivativesExcept(uid)');
+    expect(prunePreviewAt).toBeGreaterThan(pruneCiphertextAt);
   });
 
   it('closes the session before clearing the cache', () => {
     const effect = CONTEXT_CODE.slice(CONTEXT_CODE.indexOf('lockPhotoVault();'));
     const lockAt = effect.indexOf('lockPhotoVault();');
-    const pruneAt = effect.indexOf('pruneCachedThumbnailsExcept(uid)');
+    const pruneAt = effect.indexOf('prunePhotoVaultCiphertextExcept(uid)');
     // Ordering is the race guard: locking bumps the session generation and the
     // prune bumps the cache epoch, so an in-flight download from the previous
     // session fails both checks instead of recreating what was just removed.
@@ -124,20 +134,20 @@ describe('identity changes', () => {
     const effect = CONTEXT_CODE.slice(CONTEXT_CODE.indexOf('lockPhotoVault();'));
     const lockAt = effect.indexOf('lockPhotoVault();');
     const resetGalleryAt = effect.indexOf('resetGallery();');
-    const pruneAt = effect.indexOf('pruneCachedThumbnailsExcept(uid)');
+    const pruneAt = effect.indexOf('prunePhotoVaultCiphertextExcept(uid)');
 
     expect(resetGalleryAt).toBeGreaterThan(lockAt);
     expect(pruneAt).toBeGreaterThan(resetGalleryAt);
   });
 
   /**
-   * Anchored on `pruneCachedThumbnailsExcept(uid)`, which appears exactly
+   * Anchored on `prunePhotoVaultCiphertextExcept(uid)`, which appears exactly
    * once in the file (unlike `lockPhotoVault();`, which also opens the
    * unrelated `lock` callback higher up) — a reliable start-of-slice marker
    * for the identity-change effect specifically.
    */
   function identityEffectFrom(code: string): string {
-    const start = code.indexOf('pruneCachedThumbnailsExcept(uid)');
+    const start = code.indexOf('prunePhotoVaultCiphertextExcept(uid)');
     return code.slice(start, code.indexOf('}, [uid]);', start));
   }
 
