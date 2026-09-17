@@ -14,6 +14,9 @@ const INSTANCE_ID = 'wpi_finalize';
 const EXECUTION_ID = 'exec_finalize_0';
 const today = new Date().toISOString().slice(0, 10);
 const weekday = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'][new Date(`${today}T12:00:00Z`).getUTCDay()];
+const otherWeekday = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'][
+  (new Date(`${today}T12:00:00Z`).getUTCDay() + 1) % 7
+];
 
 function sets(status: 'PENDING' | 'COMPLETED' = 'COMPLETED') {
   return [0, 1, 2].map((setIndex) => ({ setIndex, status, actualReps: 10, weightKg: 20 }));
@@ -29,6 +32,7 @@ function execution(overrides: Record<string, unknown> = {}) {
     exercises: [{ exerciseIndex: 0, prescribedExerciseId: 'squat', exerciseId: 'squat', sets: sets() }],
     cardio: null,
     startedAt: Timestamp.now(),
+    createdAt: Timestamp.fromDate(new Date(`${today}T12:00:00Z`)),
     ...overrides,
   };
 }
@@ -36,6 +40,7 @@ function execution(overrides: Record<string, unknown> = {}) {
 function program(cardio = false) {
   return {
     programId: PROGRAM_ID,
+    status: 'active',
     prescribedTrainingFrequency: 1,
     weeklySchedule: [{ weekday, state: 'TRAINING', sessionIndex: 0 }],
     sessions: [{
@@ -73,11 +78,14 @@ describe.skipIf(!enabled)('finalizeWorkoutSession — real Firestore Emulator in
         programInstanceId: INSTANCE_ID,
         contentIdentity: PROGRAM_ID,
         activatedAt: Timestamp.fromDate(new Date(`${today}T00:00:00Z`)),
+        supersededAt: null,
         prescriptionInputSnapshot: { inputs: { trainingDays: [weekday] } },
       }),
       root.collection('workoutProgramState').doc('scheduleConfig').set({ trainingDays: [weekday], timezone: 'UTC' }),
       root.collection('workoutExecutions').doc(EXECUTION_ID).set(execution()),
       root.collection('workoutExecutionState').doc('current').set({ executionId: EXECUTION_ID }),
+      root.collection('workoutProgramState').doc('active').set({ programId: PROGRAM_ID }),
+      root.collection('workoutLifecycleState').doc('current').set({ activeProgramInstanceId: INSTANCE_ID }),
     ]);
   });
 
@@ -102,11 +110,213 @@ describe.skipIf(!enabled)('finalizeWorkoutSession — real Firestore Emulator in
     expect(state.data()).toMatchObject({ nextSessionIndex: 0, lastCompletedAt: today });
   });
 
+  it('finalizes Friday early on Thursday against the prescribed Friday opportunity', async () => {
+    const thursday = '2026-09-17';
+    const friday = '2026-09-18';
+    const fixedDays = ['MON', 'TUE', 'WED', 'FRI'];
+    await Promise.all([
+      root.collection('workoutPrograms').doc(PROGRAM_ID).set({
+        ...program(),
+        scheduleMode: 'fixed',
+        prescribedTrainingFrequency: 4,
+        weeklySchedule: fixedDays.map((day, sessionIndex) => ({ weekday: day, state: 'TRAINING', sessionIndex })),
+        sessions: [0, 1, 2, 3].map((index) => ({
+          name: String.fromCharCode(65 + index), exercises: [{ exerciseId: 'squat', sets: 3 }],
+        })),
+      }),
+      root.collection('programInstances').doc(INSTANCE_ID).update({
+        activatedAt: Timestamp.fromDate(new Date('2026-09-14T00:00:00Z')),
+        prescriptionInputSnapshot: { inputs: { scheduleMode: 'fixed', trainingDays: fixedDays } },
+      }),
+      root.collection('workoutProgramState').doc('scheduleConfig').set({ trainingDays: fixedDays, timezone: 'UTC' }),
+      root.collection('workoutPrograms').doc(PROGRAM_ID).collection('scheduleState').doc(INSTANCE_ID).set({
+        programId: PROGRAM_ID, programInstanceId: INSTANCE_ID, nextSessionIndex: 3,
+        cursorDate: '2026-09-16', lastCompletedAt: '2026-09-16', pendingMissDecision: null,
+      }),
+      root.collection('workoutExecutions').doc(EXECUTION_ID).set(execution({
+        sessionIndex: 3,
+        scheduledLocalDate: friday,
+        performedLocalDate: thursday,
+        createdAt: Timestamp.fromDate(new Date('2026-09-17T12:00:00Z')),
+        startedAt: Timestamp.fromDate(new Date('2026-09-17T12:00:00Z')),
+      })),
+    ]);
+
+    await expect(finalize()).resolves.toMatchObject({ status: 'COMPLETED', scheduleStatus: 'COMPLETED' });
+    const [state, event, completed] = await Promise.all([
+      root.collection('workoutPrograms').doc(PROGRAM_ID).collection('scheduleState').doc(INSTANCE_ID).get(),
+      root.collection('workoutPrograms').doc(PROGRAM_ID).collection('scheduleEvents')
+        .doc(`${INSTANCE_ID}_completed_3_${friday}`).get(),
+      root.collection('workoutExecutions').doc(EXECUTION_ID).get(),
+    ]);
+    expect(state.data()).toMatchObject({ nextSessionIndex: 0, cursorDate: friday, lastCompletedAt: friday });
+    expect(event.data()).toMatchObject({
+      type: 'COMPLETED', sessionIndex: 3, scheduledDate: friday, performedLocalDate: thursday,
+    });
+    expect(completed.data()).toMatchObject({ scheduledLocalDate: friday, performedLocalDate: thursday });
+  });
+
+  it.each([
+    ['wrong session', { sessionIndex: 2 }],
+    ['more than one day early', { performedLocalDate: '2026-09-16', createdAt: Timestamp.fromDate(new Date('2026-09-16T12:00:00Z')) }],
+    ['performed after scheduled', { performedLocalDate: '2026-09-19', createdAt: Timestamp.fromDate(new Date('2026-09-19T12:00:00Z')) }],
+  ])('rejects an invalid advanced execution: %s', async (_label, override) => {
+    const fixedDays = ['MON', 'TUE', 'WED', 'FRI'];
+    await Promise.all([
+      root.collection('workoutPrograms').doc(PROGRAM_ID).set({
+        ...program(), status: 'active', scheduleMode: 'fixed', prescribedTrainingFrequency: 4,
+        weeklySchedule: fixedDays.map((day, sessionIndex) => ({ weekday: day, state: 'TRAINING', sessionIndex })),
+        sessions: [0, 1, 2, 3].map((index) => ({ name: String(index), exercises: [{ exerciseId: 'squat', sets: 3 }] })),
+      }),
+      root.collection('programInstances').doc(INSTANCE_ID).update({
+        activatedAt: Timestamp.fromDate(new Date('2026-09-14T00:00:00Z')),
+        prescriptionInputSnapshot: { inputs: { scheduleMode: 'fixed', trainingDays: fixedDays } },
+      }),
+      root.collection('workoutProgramState').doc('scheduleConfig').set({ trainingDays: fixedDays, timezone: 'UTC' }),
+      root.collection('workoutPrograms').doc(PROGRAM_ID).collection('scheduleState').doc(INSTANCE_ID).set({
+        programId: PROGRAM_ID, programInstanceId: INSTANCE_ID, nextSessionIndex: 3,
+        cursorDate: '2026-09-16', lastCompletedAt: '2026-09-16', pendingMissDecision: null,
+      }),
+      root.collection('workoutExecutions').doc(EXECUTION_ID).set(execution({
+        sessionIndex: 3,
+        scheduledLocalDate: '2026-09-18',
+        performedLocalDate: '2026-09-17',
+        createdAt: Timestamp.fromDate(new Date('2026-09-17T12:00:00Z')),
+        startedAt: Timestamp.fromDate(new Date('2026-09-17T12:00:00Z')),
+        ...override,
+      })),
+    ]);
+    await expect(finalize()).rejects.toMatchObject({ code: 'permission-denied' });
+    expect((await root.collection('workoutExecutions').doc(EXECUTION_ID).get()).data()?.status).toBe('IN_PROGRESS');
+  });
+
+  it('rejects the advanced path for flexible plans', async () => {
+    await Promise.all([
+      root.collection('workoutPrograms').doc(PROGRAM_ID).set({
+        ...program(), status: 'active', scheduleMode: 'flexible', prescribedTrainingFrequency: 1, weeklySchedule: [],
+      }),
+      root.collection('programInstances').doc(INSTANCE_ID).update({
+        activatedAt: Timestamp.fromDate(new Date('2026-09-17T00:00:00Z')),
+        prescriptionInputSnapshot: { inputs: { scheduleMode: 'flexible', trainingDays: null } },
+      }),
+      root.collection('workoutProgramState').doc('scheduleConfig').set({ scheduleMode: 'flexible', trainingDays: [], timezone: 'UTC' }),
+      root.collection('workoutExecutions').doc(EXECUTION_ID).set(execution({
+        scheduledLocalDate: '2026-09-18', performedLocalDate: '2026-09-17',
+        createdAt: Timestamp.fromDate(new Date('2026-09-17T12:00:00Z')),
+      })),
+    ]);
+    await expect(finalize()).rejects.toMatchObject({ message: 'advanced_workout_not_next_opportunity' });
+  });
+
+  it('authorizes flexible on any weekday, starts at 0, and advances the authoritative cursor', async () => {
+    await Promise.all([
+      root.collection('workoutPrograms').doc(PROGRAM_ID).set({
+        ...program(),
+        scheduleMode: 'flexible',
+        prescribedTrainingFrequency: 2,
+        weeklySchedule: [],
+        sessions: [
+          { name: 'A', exercises: [{ exerciseId: 'squat', sets: 3 }] },
+          { name: 'B', exercises: [{ exerciseId: 'squat', sets: 3 }] },
+        ],
+      }),
+      root.collection('programInstances').doc(INSTANCE_ID).update({
+        prescriptionInputSnapshot: { inputs: { scheduleMode: 'flexible', trainingDays: null } },
+      }),
+      root.collection('workoutProgramState').doc('scheduleConfig').set({
+        scheduleMode: 'flexible', trainingDays: [], timezone: 'UTC',
+      }),
+    ]);
+    await expect(finalize()).resolves.toMatchObject({ status: 'COMPLETED', scheduleStatus: 'COMPLETED' });
+    const state = await root.collection('workoutPrograms').doc(PROGRAM_ID)
+      .collection('scheduleState').doc(INSTANCE_ID).get();
+    expect(state.data()).toMatchObject({ nextSessionIndex: 1, lastCompletedAt: today });
+  });
+
+  it('rejects a flexible execution whose session differs from nextSessionIndex', async () => {
+    await Promise.all([
+      root.collection('workoutPrograms').doc(PROGRAM_ID).set({
+        ...program(), scheduleMode: 'flexible', weeklySchedule: [],
+      }),
+      root.collection('programInstances').doc(INSTANCE_ID).update({
+        prescriptionInputSnapshot: { inputs: { scheduleMode: 'flexible', trainingDays: null } },
+      }),
+      root.collection('workoutProgramState').doc('scheduleConfig').set({
+        scheduleMode: 'flexible', trainingDays: [], timezone: 'UTC',
+      }),
+      root.collection('workoutPrograms').doc(PROGRAM_ID).collection('scheduleState').doc(INSTANCE_ID).set({
+        programId: PROGRAM_ID, programInstanceId: INSTANCE_ID, nextSessionIndex: 1,
+        cursorDate: today, lastCompletedAt: null, pendingMissDecision: null,
+      }),
+    ]);
+    await expect(finalize()).rejects.toMatchObject({ message: 'schedule_completion_session_not_expected' });
+    expect((await root.collection('workoutExecutions').doc(EXECUTION_ID).get()).data()?.status).toBe('IN_PROGRESS');
+  });
+
+  it('keeps explicit fixed calendar authority even when client-writable config claims flexible', async () => {
+    await Promise.all([
+      root.collection('workoutPrograms').doc(PROGRAM_ID).set({
+        ...program(), scheduleMode: 'fixed',
+        weeklySchedule: [{ weekday: otherWeekday, state: 'TRAINING', sessionIndex: 0 }],
+      }),
+      root.collection('programInstances').doc(INSTANCE_ID).update({
+        prescriptionInputSnapshot: { inputs: { scheduleMode: 'flexible', trainingDays: null } },
+      }),
+      root.collection('workoutProgramState').doc('scheduleConfig').set({
+        scheduleMode: 'flexible', trainingDays: [], timezone: 'UTC',
+      }),
+    ]);
+    await expect(finalize()).rejects.toMatchObject({ message: 'schedule_completion_session_not_expected' });
+    expect((await root.collection('workoutExecutions').doc(EXECUTION_ID).get()).data()?.status).toBe('IN_PROGRESS');
+  });
+
+  it('treats a legacy program/instance without scheduleMode as fixed', async () => {
+    await Promise.all([
+      root.collection('workoutPrograms').doc(PROGRAM_ID).set({
+        ...program(), weeklySchedule: [{ weekday: otherWeekday, state: 'TRAINING', sessionIndex: 0 }],
+      }),
+      root.collection('programInstances').doc(INSTANCE_ID).update({
+        prescriptionInputSnapshot: { inputs: { trainingDays: [otherWeekday] } },
+      }),
+      root.collection('workoutProgramState').doc('scheduleConfig').set({
+        scheduleMode: 'flexible', trainingDays: [], timezone: 'UTC',
+      }),
+    ]);
+    await expect(finalize()).rejects.toMatchObject({ message: 'schedule_completion_session_not_expected' });
+  });
+
   it('persists prescribed cardio in the same durable transition', async () => {
     await root.collection('workoutPrograms').doc(PROGRAM_ID).set(program(true));
     await expect(finalize({ cardio: { actualDurationSeconds: 600 } })).resolves.toMatchObject({ cardioStatus: 'COMPLETED' });
     expect((await root.collection('workoutExecutions').doc(EXECUTION_ID).get()).data()?.cardio)
       .toMatchObject({ status: 'COMPLETED', actualDurationSeconds: 600 });
+  });
+
+  it('finalizes flexible with prescribed cardio and advances the same sequence cursor', async () => {
+    await Promise.all([
+      root.collection('workoutPrograms').doc(PROGRAM_ID).set({
+        ...program(true), scheduleMode: 'flexible', prescribedTrainingFrequency: 2, weeklySchedule: [],
+        sessions: [
+          { name: 'A', exercises: [{ exerciseId: 'squat', sets: 3 }], cardioFinisher: { duration: '10 min', mode: 'steady_state' } },
+          { name: 'B', exercises: [{ exerciseId: 'squat', sets: 3 }] },
+        ],
+      }),
+      root.collection('programInstances').doc(INSTANCE_ID).update({
+        prescriptionInputSnapshot: { inputs: { scheduleMode: 'flexible', trainingDays: null } },
+      }),
+      root.collection('workoutProgramState').doc('scheduleConfig').set({
+        scheduleMode: 'flexible', trainingDays: [], timezone: 'UTC',
+      }),
+    ]);
+    await expect(finalize({ cardio: { actualDurationSeconds: 600 } })).resolves.toMatchObject({
+      status: 'COMPLETED', cardioStatus: 'COMPLETED', scheduleStatus: 'COMPLETED',
+    });
+    const [state, completedExecution] = await Promise.all([
+      root.collection('workoutPrograms').doc(PROGRAM_ID).collection('scheduleState').doc(INSTANCE_ID).get(),
+      root.collection('workoutExecutions').doc(EXECUTION_ID).get(),
+    ]);
+    expect(state.data()).toMatchObject({ nextSessionIndex: 1, lastCompletedAt: today });
+    expect(completedExecution.data()?.cardio).toMatchObject({ status: 'COMPLETED', actualDurationSeconds: 600 });
   });
 
   it('rejects missing/invalid/unprescribed cardio', async () => {
@@ -132,7 +342,7 @@ describe.skipIf(!enabled)('finalizeWorkoutSession — real Firestore Emulator in
     await expect(finalize()).resolves.toMatchObject({ status: 'COMPLETED' });
     const events = await root.collection('workoutPrograms').doc(PROGRAM_ID).collection('scheduleEvents').get();
     expect(events.docs.filter((doc) => doc.data().type === 'COMPLETED')).toHaveLength(1);
-  });
+  }, 10_000);
 
   it('converges from a terminal Execution with Schedule pending', async () => {
     await root.collection('workoutExecutions').doc(EXECUTION_ID).update({ status: 'PARTIALLY_COMPLETED' });

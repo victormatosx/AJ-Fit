@@ -48,6 +48,7 @@ import { resolvePermanentSubstitutionsForSession } from '../workoutPrescription/
 import { loadManualSubstitutionUserContext } from './exerciseSubstitutionContext';
 import { loadPermanentExerciseSubstitutionPreferences } from './exerciseSubstitutionPreferences';
 import type { ManualSubstitutionUserContext } from './exerciseSubstitutionContext';
+import { addDaysLocal } from '../scheduleEngine/calendar';
 
 const USERS = 'users';
 const WORKOUT_EXECUTIONS = 'workoutExecutions';
@@ -201,6 +202,9 @@ function fromDoc(executionId: string, data: Record<string, unknown>): PersistedW
     sessionIndex: data.sessionIndex as number,
     sessionName: data.sessionName as string,
     scheduledLocalDate: data.scheduledLocalDate as string,
+    ...(typeof data.performedLocalDate === 'string'
+      ? { performedLocalDate: data.performedLocalDate }
+      : {}),
     status: data.status as WorkoutExecutionStatus,
     startedAt: data.startedAt as Timestamp,
     finishedAt: (data.finishedAt as Timestamp | null) ?? null,
@@ -290,10 +294,12 @@ export async function startOrResumeWorkoutExecution(input: {
   program: WorkoutProgramSnapshot;
   sessionIndex: number;
   scheduledLocalDate: string;
+  performedLocalDate?: string;
   preparation?: WorkoutExecutionStartPreparation;
 }): Promise<PersistedWorkoutExecution> {
   const serviceStartedAtMs = Date.now();
   const { uid, program, sessionIndex, scheduledLocalDate, preparation } = input;
+  const performedLocalDate = input.performedLocalDate ?? scheduledLocalDate;
   const session = program.sessions[sessionIndex];
   if (!session) throw new Error('SESSION_INDEX_OUT_OF_RANGE');
   const executionScopeId = program.programInstanceId ?? program.programId;
@@ -322,6 +328,7 @@ export async function startOrResumeWorkoutExecution(input: {
     sessionIndex,
     sessionName: session.name,
     scheduledLocalDate,
+    performedLocalDate,
     status: 'IN_PROGRESS' as const,
     exercises: resolvedExercises,
     // Always reset on a fresh start AND on a restart-after-abandon — the
@@ -419,7 +426,14 @@ export async function startOrResumeWorkoutExecution(input: {
         // discarded — nothing was counted from it. `startedAt` is renewed
         // (docs §13) since this is a genuinely new attempt; `createdAt` stays put.
         const previousCreatedAt = snapshot.data().createdAt as Timestamp;
-        transaction.update(ref, { ...base, startedAt: serverTimestamp(), updatedAt: serverTimestamp() });
+        // `performedLocalDate` is immutable once this deterministic
+        // opportunity document exists. Restarting an abandoned attempt keeps
+        // the first attempt's real date (or keeps the field absent for a
+        // legacy document) while renewing only the attempt timestamp/data.
+        const restartBase = 'performedLocalDate' in snapshot.data()
+          ? { ...base, performedLocalDate: snapshot.data().performedLocalDate }
+          : Object.fromEntries(Object.entries(base).filter(([key]) => key !== 'performedLocalDate'));
+        transaction.update(ref, { ...restartBase, startedAt: serverTimestamp(), updatedAt: serverTimestamp() });
         transaction.set(stateRef, { ...pointer, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
         return { kind: 'restarted', createdAt: previousCreatedAt };
       }
@@ -871,6 +885,27 @@ export async function listRecentWorkoutExecutions(uid: string, count = 20): Prom
     fsLimit(count),
   );
   const snapshot = await getDocs(q);
+  return snapshot.docs
+    .map((item) => fromDoc(item.id, item.data()))
+    .sort((a, b) => (b.performedLocalDate ?? b.scheduledLocalDate)
+      .localeCompare(a.performedLocalDate ?? a.scheduledLocalDate));
+}
+
+/**
+ * Real source for Evolução > Cargas. It intentionally spans program changes
+ * and includes the current IN_PROGRESS execution, because a confirmed set
+ * must appear immediately. The high safety cap bounds reads while retaining
+ * several years of normal training history for the practical PR baseline.
+ */
+export async function listWorkoutExecutionsForLoadProgress(
+  uid: string,
+): Promise<PersistedWorkoutExecution[]> {
+  const q = query(
+    executionsCollection(uid),
+    orderBy('scheduledLocalDate', 'desc'),
+    fsLimit(2000),
+  );
+  const snapshot = await getDocs(q);
   return snapshot.docs.map((item) => fromDoc(item.id, item.data()));
 }
 
@@ -899,36 +934,63 @@ export async function listExecutionsForProgramInstance(uid: string, programInsta
 }
 
 /**
- * Distinct calendar dates (`scheduledLocalDate`) with a COMPLETED or
+ * Distinct real activity dates (`performedLocalDate ?? scheduledLocalDate`)
+ * with a COMPLETED or
  * PARTIALLY_COMPLETED execution within `[fromLocalDate, toLocalDate]`
  * (inclusive) — the Home screen's weekly overview and frequency heatmap
  * share this single bounded read instead of one query per day/week (docs
  * §41/§45: history is derived entirely from `workoutExecutions`, unscoped by
  * program, so a since-superseded program's completions still count). Status
- * is filtered client-side rather than via a second `where` clause so this
- * never requires a composite Firestore index beyond the single-field range
- * on `scheduledLocalDate`.
+ * is filtered client-side. V1 only permits an advanced execution one local
+ * day ahead, so extending the scheduled-date upper bound by one day keeps
+ * this a single bounded query while including a workout performed at the
+ * end of the requested range for tomorrow's opportunity.
  */
+export interface CompletedWorkoutActivityDates {
+  /** Real activity dates for history/heatmaps/week visuals. */
+  performedDates: string[];
+  /** Prescribed opportunities fulfilled by those executions. */
+  scheduledDates: string[];
+}
+
+export async function listCompletedWorkoutActivityDatesInRange(
+  uid: string,
+  fromLocalDate: string,
+  toLocalDate: string,
+): Promise<CompletedWorkoutActivityDates> {
+  const q = query(
+    executionsCollection(uid),
+    where('scheduledLocalDate', '>=', fromLocalDate),
+    where('scheduledLocalDate', '<=', addDaysLocal(toLocalDate, 1)),
+  );
+  const snapshot = await getDocs(q);
+  const performedDates = new Set<string>();
+  const scheduledDates = new Set<string>();
+  const scheduledUpperBound = addDaysLocal(toLocalDate, 1);
+  snapshot.docs.forEach((item) => {
+    const data = item.data();
+    const status = data.status as WorkoutExecutionStatus;
+    if (status === 'COMPLETED' || status === 'PARTIALLY_COMPLETED') {
+      const performedLocalDate = typeof data.performedLocalDate === 'string'
+        ? data.performedLocalDate
+        : data.scheduledLocalDate as string;
+      if (performedLocalDate >= fromLocalDate && performedLocalDate <= toLocalDate) {
+        performedDates.add(performedLocalDate);
+      }
+      if (data.scheduledLocalDate >= fromLocalDate && data.scheduledLocalDate <= scheduledUpperBound) {
+        scheduledDates.add(data.scheduledLocalDate as string);
+      }
+    }
+  });
+  return { performedDates: Array.from(performedDates), scheduledDates: Array.from(scheduledDates) };
+}
+
 export async function listCompletedWorkoutDatesInRange(
   uid: string,
   fromLocalDate: string,
   toLocalDate: string,
 ): Promise<string[]> {
-  const q = query(
-    executionsCollection(uid),
-    where('scheduledLocalDate', '>=', fromLocalDate),
-    where('scheduledLocalDate', '<=', toLocalDate),
-  );
-  const snapshot = await getDocs(q);
-  const dates = new Set<string>();
-  snapshot.docs.forEach((item) => {
-    const data = item.data();
-    const status = data.status as WorkoutExecutionStatus;
-    if (status === 'COMPLETED' || status === 'PARTIALLY_COMPLETED') {
-      dates.add(data.scheduledLocalDate as string);
-    }
-  });
-  return Array.from(dates);
+  return (await listCompletedWorkoutActivityDatesInRange(uid, fromLocalDate, toLocalDate)).performedDates;
 }
 
 export type { PersistedWorkoutExecution };

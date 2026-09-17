@@ -54,9 +54,10 @@ describe('WorkoutScreen cardio finisher structure', () => {
       source.indexOf('const doneClock', source.indexOf('const handleHeaderClose = () => {')),
     );
 
-    expect(cardioBranch).toContain("setExitSheet('choice')");
-    expect(cardioBranch).toContain('<WorkoutExitDialog');
-    expect(closeHandler).toContain('onRequestExit();');
+    expect(cardioBranch).toContain('<CardioScreen');
+    expect(cardioBranch).toContain('onFinish=');
+    expect(source).toContain("setConfirmSheet('exit')");
+    expect(source).toContain("cardioSession.exitConfirmTitle");
     expect(closeHandler).not.toContain('finalizeNow();');
     expect(source).toContain('onSkip={() => void finalizeNow()}');
     expect(cardioContent).toContain('onPress={ready ? onSkip : onExtend}');

@@ -1,4 +1,4 @@
-import { FieldValue, type DocumentData, type Firestore } from 'firebase-admin/firestore';
+import { FieldValue, Timestamp, type DocumentData, type Firestore } from 'firebase-admin/firestore';
 import { HttpsError, type CallableRequest } from 'firebase-functions/v2/https';
 
 import { db as defaultDb } from '../lib/firebaseAdmin';
@@ -8,6 +8,8 @@ import { buildScheduleAuthorityContext, prescribedExecutionCounts } from './fina
 import { validateMaterializedExecutionSubstitutions } from './exerciseSubstitution';
 import { detectMissedSessionGap, resolveWorkoutSchedule } from './scheduleEngine/resolver';
 import { scheduleEventDocumentId } from './scheduleEngine/identities';
+import { addDaysLocal } from './scheduleEngine/calendar';
+import { localDateInTimezone } from './scheduleEngine/localDate';
 
 export const MAX_CARDIO_ACTUAL_DURATION_SECONDS = 3 * 60 * 60;
 
@@ -57,6 +59,7 @@ function executionShape(execution: DocumentData): string {
     programInstanceId: execution.programInstanceId,
     sessionIndex: execution.sessionIndex,
     scheduledLocalDate: execution.scheduledLocalDate,
+    performedLocalDate: execution.performedLocalDate,
     exercises: Array.isArray(execution.exercises) ? execution.exercises.map((item: DocumentData) => ({
       exerciseIndex: item.exerciseIndex,
       prescribedExerciseId: item.prescribedExerciseId ?? item.exerciseId,
@@ -64,6 +67,15 @@ function executionShape(execution: DocumentData): string {
       substitution: item.substitution ?? null,
     })) : null,
   });
+}
+
+function validLocalDate(value: unknown): value is string {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  try {
+    return addDaysLocal(value, 0) === value;
+  } catch {
+    return false;
+  }
 }
 
 function sweepAndStatus(exercises: DocumentData[]): {
@@ -86,6 +98,22 @@ function eventId(instanceId: string, sessionIndex: number, date: string): string
 
 function mark(startedAt: number, message: string, extra?: Record<string, string | number | boolean | null>): void {
   logInfo('workout.finalize', message, { durationMs: Date.now() - startedAt, ...extra });
+}
+
+function safeReasonCode(error: unknown): string {
+  if (error instanceof HttpsError) {
+    switch (error.message) {
+      case 'schedule_completion_session_not_expected': return 'SESSION_NOT_EXPECTED';
+      case 'execution_program_not_active': return 'PROGRAM_NOT_ACTIVE';
+      case 'program_instance_mismatch': return 'PROGRAM_INSTANCE_MISMATCH';
+      case 'schedule_not_configured': return 'SCHEDULE_NOT_CONFIGURED';
+      case 'advanced_workout_not_next_opportunity': return 'ADVANCE_NOT_NEXT_OPPORTUNITY';
+      case 'invalid_execution_performed_date': return 'INVALID_PERFORMED_DATE';
+      case 'execution_does_not_match_authoritative_prescription': return 'PRESCRIPTION_MISMATCH';
+      default: return error.code.replace(/[^a-z0-9]+/gi, '_').toUpperCase();
+    }
+  }
+  return 'INTERNAL_ERROR';
 }
 
 /**
@@ -156,6 +184,8 @@ async function finalizeWorkoutSessionCore(
   mark(startedAt, 'cardio_validation_end');
 
   const scheduleConfigRef = root.collection('workoutProgramState').doc('scheduleConfig');
+  const activeProgramRef = root.collection('workoutProgramState').doc('active');
+  const lifecycleStateRef = root.collection('workoutLifecycleState').doc('current');
   const scheduleStateRef = programRef.collection('scheduleState').doc(initialExecution.programInstanceId);
   const completionEventRef = programRef.collection('scheduleEvents').doc(eventId(
     initialExecution.programInstanceId,
@@ -169,11 +199,13 @@ async function finalizeWorkoutSessionCore(
   let result: FinalizeWorkoutSessionResult;
   try {
     result = await firestore.runTransaction(async (transaction) => {
-    const [executionSnapshot, instanceSnapshot, programSnapshot, configSnapshot, stateSnapshot, eventSnapshot, currentSnapshot]
+    const [executionSnapshot, instanceSnapshot, programSnapshot, configSnapshot, stateSnapshot, eventSnapshot,
+      currentSnapshot, activeProgramSnapshot, lifecycleStateSnapshot]
       = await Promise.all([
         transaction.get(executionRef), transaction.get(instanceRef), transaction.get(programRef),
         transaction.get(scheduleConfigRef), transaction.get(scheduleStateRef),
-        transaction.get(completionEventRef), transaction.get(currentRef),
+        transaction.get(completionEventRef), transaction.get(currentRef), transaction.get(activeProgramRef),
+        transaction.get(lifecycleStateRef),
       ]);
     if (!executionSnapshot.exists || !instanceSnapshot.exists || !programSnapshot.exists) {
       throw new HttpsError('failed-precondition', 'execution_prescription_referent_missing');
@@ -198,7 +230,8 @@ async function finalizeWorkoutSessionCore(
       instance,
       program,
     });
-    if (context.sessionCount <= 0 || context.config.trainingDays.length === 0) {
+    if (context.sessionCount <= 0
+      || ((context.config.scheduleMode ?? 'fixed') === 'fixed' && context.config.trainingDays.length === 0)) {
       throw new HttpsError('failed-precondition', 'schedule_not_configured', { stage: 'SCHEDULE' });
     }
     if (!eventSnapshot.exists) {
@@ -244,9 +277,44 @@ async function finalizeWorkoutSessionCore(
           resolvedMissScheduledDate = gap.missedScheduledDate;
         }
       }
+      if (program.status !== 'active'
+        || instance.supersededAt !== null
+        || activeProgramSnapshot.data()?.programId !== execution.programId
+        || lifecycleStateSnapshot.data()?.activeProgramInstanceId !== execution.programInstanceId) {
+        throw new HttpsError('failed-precondition', 'execution_program_not_active', { stage: 'SCHEDULE' });
+      }
+      const performedLocalDate = typeof execution.performedLocalDate === 'string'
+        ? execution.performedLocalDate
+        : execution.scheduledLocalDate;
+      if (!validLocalDate(execution.scheduledLocalDate)
+        || !validLocalDate(performedLocalDate)
+        || performedLocalDate > execution.scheduledLocalDate
+        || !(execution.createdAt instanceof Timestamp)
+        || localDateInTimezone(execution.createdAt.toDate(), context.config.timezone) !== performedLocalDate) {
+        throw new HttpsError('permission-denied', 'invalid_execution_performed_date', { stage: 'SCHEDULE' });
+      }
+      if (performedLocalDate < execution.scheduledLocalDate) {
+        const performedResolution = resolveWorkoutSchedule({
+          hasActiveProgram: true,
+          sessionCount: context.sessionCount,
+          scheduleMode: context.config.scheduleMode ?? 'fixed',
+          config: context.config,
+          state: context.state,
+          activatedAtLocalDate: context.activatedAtLocalDate,
+          todayLocalDate: performedLocalDate,
+        });
+        if ((context.config.scheduleMode ?? 'fixed') !== 'fixed'
+          || addDaysLocal(performedLocalDate, 1) !== execution.scheduledLocalDate
+          || performedResolution.status !== 'REST_DAY'
+          || performedResolution.nextWorkoutDate !== execution.scheduledLocalDate
+          || performedResolution.nextSessionIndex !== execution.sessionIndex) {
+          throw new HttpsError('permission-denied', 'advanced_workout_not_next_opportunity', { stage: 'SCHEDULE' });
+        }
+      }
       const resolution = resolveWorkoutSchedule({
         hasActiveProgram: true,
         sessionCount: context.sessionCount,
+        scheduleMode: context.config.scheduleMode ?? 'fixed',
         config: context.config,
         state: context.state,
         activatedAtLocalDate: context.activatedAtLocalDate,
@@ -286,6 +354,9 @@ async function finalizeWorkoutSessionCore(
         programInstanceId: execution.programInstanceId,
         sessionIndex: execution.sessionIndex,
         scheduledDate: execution.scheduledLocalDate,
+        performedLocalDate: typeof execution.performedLocalDate === 'string'
+          ? execution.performedLocalDate
+          : execution.scheduledLocalDate,
         occurredAt: FieldValue.serverTimestamp(),
       });
       transaction.set(scheduleStateRef, {
@@ -306,7 +377,7 @@ async function finalizeWorkoutSessionCore(
     };
     });
   } catch (error) {
-    mark(startedAt, 'transaction_end', { success: false });
+    mark(startedAt, 'transaction_end', { success: false, reasonCode: safeReasonCode(error) });
     throw error;
   }
   mark(startedAt, 'transaction_end', { success: true });
@@ -324,7 +395,7 @@ export async function finalizeWorkoutSessionHandler(
     mark(startedAt, 'finalize_handler_end', { success: true });
     return result;
   } catch (error) {
-    mark(startedAt, 'finalize_handler_end', { success: false });
+    mark(startedAt, 'finalize_handler_end', { success: false, reasonCode: safeReasonCode(error) });
     throw error;
   }
 }

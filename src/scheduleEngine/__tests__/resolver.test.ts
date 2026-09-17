@@ -60,6 +60,43 @@ describe('resolveWorkoutSchedule — availability gates', () => {
   });
 });
 
+describe('resolveWorkoutSchedule — flexible mode', () => {
+  const flexibleConfig: ScheduleConfig = {
+    scheduleMode: 'flexible',
+    trainingDays: [],
+    timezone: 'America/Sao_Paulo',
+    scheduleVersion: 1,
+  };
+
+  it('starts at session 0 without weekdays and never requires schedule setup', () => {
+    expect(resolveWorkoutSchedule(base({ config: flexibleConfig })))
+      .toEqual({ status: 'SESSION_READY', sessionIndex: 0 });
+  });
+
+  it.each(['2026-08-03', '2026-08-04', '2026-08-09'])('offers the cursor on any weekday (%s)', (todayLocalDate) => {
+    const state = { nextSessionIndex: 2, cursorDate: '2026-08-01', pendingMissDecision: null, lastCompletedAt: '2026-08-01' };
+    expect(resolveWorkoutSchedule(base({ config: flexibleConfig, state, todayLocalDate })))
+      .toEqual({ status: 'SESSION_READY', sessionIndex: 2 });
+  });
+
+  it('keeps the same cursor after 10 inactive days and never asks for a missed decision', () => {
+    const state = { nextSessionIndex: 1, cursorDate: '2026-08-03', pendingMissDecision: null, lastCompletedAt: '2026-08-03' };
+    expect(resolveWorkoutSchedule(base({ config: flexibleConfig, state, todayLocalDate: '2026-08-13' })))
+      .toEqual({ status: 'SESSION_READY', sessionIndex: 1 });
+    expect(detectMissedSessionGap(base({ config: flexibleConfig, state, todayLocalDate: '2026-08-13' })))
+      .toBeNull();
+  });
+
+  it('uses nextSessionIndex as authority and wraps after the last session', () => {
+    const afterFirst = { nextSessionIndex: 1, cursorDate: '2026-08-03', pendingMissDecision: null, lastCompletedAt: '2026-08-03' };
+    const afterLast = { ...afterFirst, nextSessionIndex: 0 };
+    expect(resolveWorkoutSchedule(base({ config: flexibleConfig, state: afterFirst })))
+      .toEqual({ status: 'SESSION_READY', sessionIndex: 1 });
+    expect(resolveWorkoutSchedule(base({ config: flexibleConfig, state: afterLast })))
+      .toEqual({ status: 'SESSION_READY', sessionIndex: 0 });
+  });
+});
+
 describe('resolveWorkoutSchedule — activation and rest days', () => {
   it('SESSION_READY(A) when the program activates on a trainingDay', () => {
     // Monday 2026-08-03 is a trainingDay in MWF, and MON is trainingDays[0] — anchor lands on A.
@@ -710,5 +747,49 @@ describe('initialSessionIndexFor — the canonical "no ScheduleState yet" deriva
 
   it('falls back to 0 for a weekday that is not in trainingDays (defensive — anchorSessionIndex\'s own contract)', () => {
     expect(anchorSessionIndex(['MON', 'TUE'], 'SAT', 2)).toBe(0);
+  });
+});
+
+describe('fixed schedule after an early completion leaves the cursor one day ahead', () => {
+  const config: ScheduleConfig = {
+    trainingDays: ['MON', 'TUE', 'WED', 'FRI'],
+    timezone: 'America/Sao_Paulo',
+    scheduleVersion: 1,
+  };
+  const completedFridayEarly = {
+    nextSessionIndex: 0,
+    cursorDate: '2026-09-18',
+    lastCompletedAt: '2026-09-18',
+    pendingMissDecision: null,
+  };
+
+  it('does not release another session on Thursday', () => {
+    expect(resolveWorkoutSchedule(base({
+      config,
+      state: completedFridayEarly,
+      activatedAtLocalDate: '2026-09-14',
+      todayLocalDate: '2026-09-17',
+    }))).toEqual({ status: 'REST_DAY', nextWorkoutDate: '2026-09-21', nextSessionIndex: 0 });
+    expect(detectMissedSessionGap(base({
+      config,
+      state: completedFridayEarly,
+      activatedAtLocalDate: '2026-09-14',
+      todayLocalDate: '2026-09-17',
+    }))).toBeNull();
+  });
+
+  it('treats Friday as already completed and continues on Monday', () => {
+    expect(resolveWorkoutSchedule(base({
+      config,
+      state: completedFridayEarly,
+      activatedAtLocalDate: '2026-09-14',
+      todayLocalDate: '2026-09-18',
+    }))).toEqual({ status: 'TODAY_COMPLETED', nextWorkoutDate: '2026-09-21', nextSessionIndex: 0 });
+    expect(resolveWorkoutSchedule(base({
+      config,
+      state: completedFridayEarly,
+      activatedAtLocalDate: '2026-09-14',
+      todayLocalDate: '2026-09-21',
+    }))).toEqual({ status: 'SESSION_READY', sessionIndex: 0 });
   });
 });

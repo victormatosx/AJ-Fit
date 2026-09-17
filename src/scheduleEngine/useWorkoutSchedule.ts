@@ -83,6 +83,7 @@ export function useWorkoutSchedule(program: WorkoutProgramSnapshot | null): Work
   const uid = user?.uid ?? null;
   const programId = program?.programId ?? null;
   const programInstanceId = program?.programInstanceId ?? null;
+  const scheduleMode = program?.scheduleMode ?? 'fixed';
   const prescribedProgramDays = useMemo(() => (program ? legacyTrainingDays(program) : []), [program]);
   const prescribedRecoveryDays = useMemo(() => program?.weeklySchedule
     ?.filter((day) => day.state === 'ACTIVE_RECOVERY')
@@ -136,17 +137,19 @@ export function useWorkoutSchedule(program: WorkoutProgramSnapshot | null): Work
       // overwrites a config the user edited afterward) and transaction-
       // guarded (safe against this hook mounting twice concurrently) — see
       // its doc comment in `services/workoutSchedule.ts`.
-      if (!loadedConfig && prescribedProgramDays.length > 0) {
+      if (!loadedConfig && (scheduleMode === 'flexible' || prescribedProgramDays.length > 0)) {
         loadedConfig = await ensureScheduleConfigFromQuestionnaire(
           uid,
           prescribedProgramDays,
           deviceTimezone(),
+          scheduleMode,
         );
       } else if (!loadedConfig && questionnaire && trainingDaysValid(questionnaire.answers)) {
         loadedConfig = await ensureScheduleConfigFromQuestionnaire(
           uid,
           normalizeWeekdays(questionnaire.answers.trainingDays ?? []),
           deviceTimezone(),
+          questionnaire.answers.scheduleMode ?? 'fixed',
         );
       }
       const effectiveConfig = loadedConfig && prescribedProgramDays.length > 0
@@ -158,7 +161,7 @@ export function useWorkoutSchedule(program: WorkoutProgramSnapshot | null): Work
       // intentionally cannot be used as a completion marker. Re-discover the
       // terminal execution from Firestore and resume only the missing,
       // idempotent Schedule mutation. Both documents remain authoritative.
-      if (programId && effectiveConfig?.trainingDays.length && activatedAtLocalDate) {
+      if (programId && (scheduleMode === 'flexible' || effectiveConfig?.trainingDays.length) && activatedAtLocalDate) {
         try {
           const candidate = terminalExecutionForScheduleRecovery(
             await listExecutionsForProgram(uid, programId),
@@ -191,6 +194,7 @@ export function useWorkoutSchedule(program: WorkoutProgramSnapshot | null): Work
         programId,
         programInstanceId,
         sessionCount,
+        scheduleMode,
         activatedAtLocalDate,
         todayLocalDate,
         trainingDaysOverride: prescribedProgramDays,
@@ -231,7 +235,7 @@ export function useWorkoutSchedule(program: WorkoutProgramSnapshot | null): Work
     } finally {
       if (reloadId === reloadSequenceRef.current) setLoading(false);
     }
-  }, [uid, programId, programInstanceId, sessionCount, activatedAtLocalDate, questionnaire, prescribedProgramDays, prescribedRecoveryDays, scheduleScopeKey]);
+  }, [uid, programId, programInstanceId, sessionCount, scheduleMode, activatedAtLocalDate, questionnaire, prescribedProgramDays, prescribedRecoveryDays, scheduleScopeKey]);
 
   useEffect(() => { void reload(); }, [reload]);
 
@@ -274,7 +278,7 @@ export function useWorkoutSchedule(program: WorkoutProgramSnapshot | null): Work
     expected: MissedSessionDecisionIdentity,
   ): Promise<MissResolutionOutcome> => {
     if (missResolutionInFlightRef.current) return missResolutionInFlightRef.current;
-    if (!uid || !programId || sessionCount === 0) {
+    if (scheduleMode === 'flexible' || !uid || !programId || sessionCount === 0) {
       return Promise.resolve({ status: 'FAILED', resolution: null });
     }
     const timezone = config?.timezone ?? deviceTimezone();
@@ -304,7 +308,7 @@ export function useWorkoutSchedule(program: WorkoutProgramSnapshot | null): Work
     };
     void operation.then(release, release);
     return operation;
-  }, [uid, programId, programInstanceId, sessionCount, config, reload]);
+  }, [uid, programId, programInstanceId, sessionCount, scheduleMode, config, reload]);
 
   return {
     resolution: projection.resolution,

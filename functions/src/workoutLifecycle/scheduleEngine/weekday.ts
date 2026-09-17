@@ -3,3 +3,4 @@
 // the synced resolver closure needs). If those definitions ever change, update both.
 export const WEEKDAY_ORDER = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'] as const;
 export type Weekday = (typeof WEEKDAY_ORDER)[number];
+export type ScheduleMode = 'fixed' | 'flexible';

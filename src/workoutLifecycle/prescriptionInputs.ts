@@ -15,8 +15,8 @@ const SOURCES = new Set<PrescriptionInputSnapshotSource>([
   'MOTIVATIONAL_RENEWAL',
 ]);
 
-const INPUT_KEYS: ReadonlyArray<keyof EffectivePrescriptionInputs> = [
-  'sex', 'goal', 'level', 'limits', 'duration', 'days', 'trainingDays',
+const INPUT_KEYS: readonly (keyof EffectivePrescriptionInputs)[] = [
+  'sex', 'goal', 'level', 'limits', 'duration', 'days', 'scheduleMode', 'trainingDays',
   'place', 'primaryPlace', 'equipment', 'style', 'muscleFocus',
   'specialConditions', 'pregnancyScreening', 'postpartumScreening',
   'functionalScreening', 'lipedemaScreening', 'dizzinessScreening',
@@ -65,6 +65,7 @@ export function effectivePrescriptionInputsFromAnswers(
     limits: [...answers.limits],
     duration: answers.duration,
     days: answers.days,
+    scheduleMode: answers.scheduleMode ?? 'fixed',
     trainingDays: answers.trainingDays ? [...answers.trainingDays] : null,
     place: answers.place,
     primaryPlace: answers.primaryPlace,
@@ -105,6 +106,7 @@ export function questionnaireAnswersFromPrescriptionInputs(inputs: EffectivePres
   return {
     ...defaultQuiz,
     ...inputs,
+    scheduleMode: inputs.scheduleMode ?? 'fixed',
     limits: [...inputs.limits],
     trainingDays: inputs.trainingDays ? [...inputs.trainingDays] : null,
     equipment: [...inputs.equipment],
@@ -124,7 +126,10 @@ export function questionnaireAnswersFromPrescriptionInputs(inputs: EffectivePres
 export function isPrescriptionInputSnapshot(value: unknown): value is PrescriptionInputSnapshot {
   if (!isRecord(value) || !isRecord(value.inputs)) return false;
   const keys = Object.keys(value.inputs).sort();
-  if (keys.length !== INPUT_KEYS.length || !INPUT_KEYS.every((key) => keys.includes(key))) return false;
+  const legacyKeys = INPUT_KEYS.filter((key) => key !== 'scheduleMode');
+  const hasCurrentKeys = keys.length === INPUT_KEYS.length && INPUT_KEYS.every((key) => keys.includes(key));
+  const hasLegacyKeys = keys.length === legacyKeys.length && legacyKeys.every((key) => keys.includes(key));
+  if (!hasCurrentKeys && !hasLegacyKeys) return false;
   return typeof value.snapshotId === 'string' && value.snapshotId.startsWith('pis_')
     && value.schemaVersion === PRESCRIPTION_INPUT_SNAPSHOT_SCHEMA_VERSION
     && SOURCES.has(value.source as PrescriptionInputSnapshotSource)
@@ -133,5 +138,6 @@ export function isPrescriptionInputSnapshot(value: unknown): value is Prescripti
     && Array.isArray(value.inputs.style)
     && Array.isArray(value.inputs.muscleFocus)
     && Array.isArray(value.inputs.specialConditions)
+    && (value.inputs.scheduleMode === undefined || value.inputs.scheduleMode === 'fixed' || value.inputs.scheduleMode === 'flexible')
     && (value.inputs.trainingDays === null || Array.isArray(value.inputs.trainingDays));
 }

@@ -42,20 +42,23 @@ function prescriptionInputSnapshot(overrides: Record<string, unknown> = {}) {
   };
 }
 
-async function createLifecycle(uid = UID) {
+async function createLifecycle(
+  uid = UID,
+  inputSnapshot = prescriptionInputSnapshot(),
+) {
   const db = dbFor(uid);
   await seedAuthorityGrant(uid, {
     operation: 'MIGRATE',
     targetProgramInstanceId: 'wpi_initial', targetCycleId: 'cyc_initial',
     targetContentIdentity: 'wpg_content', targetPrescriptionIdentity: 'wp_content',
-    targetPrescriptionInputSnapshot: prescriptionInputSnapshot(),
+    targetPrescriptionInputSnapshot: inputSnapshot,
   });
   await runTransaction(db, async (transaction) => {
     const now = serverTimestamp();
     transaction.set(doc(db, 'users', uid, 'programInstances', 'wpi_initial'), {
       programInstanceId: 'wpi_initial', cycleId: 'cyc_initial', contentIdentity: 'wpg_content',
       prescriptionIdentity: 'wp_content', questionnaireId: 'q1',
-      prescriptionInputSnapshot: prescriptionInputSnapshot(), activatedAt: now,
+      prescriptionInputSnapshot: inputSnapshot, activatedAt: now,
       supersededAt: null, previousProgramInstanceId: null, activationReason: 'V1_MIGRATION_BASELINE',
       schemaVersion: 2, createdAt: now, updatedAt: now,
     });
@@ -133,6 +136,25 @@ describe('Workout Lifecycle V2 rules', () => {
     await assertSucceeds(createLifecycle());
     const snapshot = await getDoc(doc(dbFor(UID), 'users', UID, 'workoutLifecycleState', 'current'));
     expect(snapshot.data()?.startingLevel).toBe('BEGINNER');
+  });
+
+  it('accepts the exact flexible ProgramInstance snapshot shape from production', async () => {
+    const fixedInputs = prescriptionInputSnapshot().inputs;
+    const flexibleSnapshot = prescriptionInputSnapshot({
+      inputs: {
+        ...fixedInputs,
+        days: 5,
+        scheduleMode: 'flexible',
+        trainingDays: null,
+      },
+    });
+    await assertSucceeds(createLifecycle(UID, flexibleSnapshot));
+    const instance = await getDoc(doc(dbFor(UID), 'users', UID, 'programInstances', 'wpi_initial'));
+    expect(instance.data()?.prescriptionInputSnapshot.inputs).toMatchObject({
+      days: 5,
+      scheduleMode: 'flexible',
+      trainingDays: null,
+    });
   });
 
   it('allows state-pointer recovery to preserve a historical boundary but rejects a future one', async () => {

@@ -128,6 +128,7 @@ type Props = {
    * falls back to "now" for that one render.
    */
   workoutStartedAtMs?: number | null;
+  hasUnreconciledMutations?: boolean;
   /**
    * Fires once, the moment the session is ready for the atomic server-side
    * `finalizeWorkoutSession` durable boundary —
@@ -230,7 +231,7 @@ function translateMuscleGroup(tLoose: LooseT, target: string): string {
   return target;
 }
 
-export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, onMinimize, sessionIndex = 0, execution, workoutStartedAtMs, onSessionCompleted, finishing, completionConfirmed, durableCompletionReachedAtMs, completionFailed, onSetLogged, onAbandon, onCardioCompleted, manualSubstitutionContext, manualSubstitutionContextStatus, onRetryManualSubstitutionContext, onApplySubstitution }: Props) {
+export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, onMinimize, sessionIndex = 0, execution, workoutStartedAtMs, hasUnreconciledMutations, onSessionCompleted, finishing, completionConfirmed, durableCompletionReachedAtMs, completionFailed, onSetLogged, onAbandon, onCardioCompleted, manualSubstitutionContext, manualSubstitutionContextStatus, onRetryManualSubstitutionContext, onApplySubstitution }: Props) {
   useEffect(() => {
     if (typeof __DEV__ === 'undefined' || !__DEV__) return undefined;
     logInfo('workout_performance', 'workout_screen_mount', {
@@ -979,31 +980,6 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
       <CardioScreen
         cardioFinisher={cardioFinisher}
         ownerKey={String(workoutStartedAtMs ?? `${plan.templateId}-${sessionIndex}`)}
-        onRequestExit={() => {
-          setDiscardError(false);
-          setExitSheet('choice');
-        }}
-        exitDialog={(
-          <WorkoutExitDialog
-            step={exitSheet}
-            abandoning={abandoning}
-            discardError={discardError}
-            onDismiss={() => setExitSheet(null)}
-            onMinimize={() => {
-              setExitSheet(null);
-              onMinimize?.();
-            }}
-            onRequestDiscard={() => {
-              setDiscardError(false);
-              setExitSheet('discard');
-            }}
-            onConfirmDiscard={confirmDiscard}
-            onBack={() => {
-              setDiscardError(false);
-              setExitSheet('choice');
-            }}
-          />
-        )}
         onCardioCompleted={onCardioCompleted ? async (actualDurationSeconds) => {
           const result = await onCardioCompleted(actualDurationSeconds);
           // Cardio now crosses the complete durable boundary itself. Prevent
@@ -1247,6 +1223,17 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
             </Text>
           </Pressable>}
         </View>
+
+        {hasUnreconciledMutations ? (
+          <View
+            accessibilityRole="alert"
+            style={{ marginHorizontal: 20, marginBottom: 4, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, backgroundColor: theme.colors.feedbackErrorBackgroundSubtle, borderWidth: 1, borderColor: theme.colors.feedbackErrorBorderSubtle }}
+          >
+            <Text style={{ color: theme.colors.feedbackErrorTextStrong, fontFamily: theme.fonts.ui, fontSize: 12, lineHeight: 17 }}>
+              {t('persistence.pending')}
+            </Text>
+          </View>
+        ) : null}
 
         {/* Next-set card */}
         <View style={{ paddingHorizontal: 20, paddingTop: 14 }}>
@@ -2597,16 +2584,12 @@ function Badge({
 function CardioScreen({
   cardioFinisher,
   ownerKey,
-  onRequestExit,
-  exitDialog,
   onCardioCompleted,
   onFinish,
 }: {
   cardioFinisher: FinalCardioFinisher;
   /** Identifies this workout attempt — from `workoutStartedAtMs`, so a stale persisted session from a previous attempt is never mistakenly restored. */
   ownerKey: string;
-  onRequestExit: () => void;
-  exitDialog: React.ReactNode;
   /** See `Props.onCardioCompleted`'s doc comment above. */
   onCardioCompleted?: (actualDurationSeconds: number) => Promise<{ ok: true } | { ok: false; error: unknown }>;
   onFinish: (actualDurationSeconds: number) => void;
@@ -2809,11 +2792,11 @@ function CardioScreen({
     onFinish(actualDurationSeconds);
   };
 
-  const [confirmSheet, setConfirmSheet] = useState<'finish' | null>(null);
-  const finishModalVisible = confirmSheet === 'finish' || finishState !== 'idle';
+  const [confirmSheet, setConfirmSheet] = useState<'finish' | 'exit' | null>(null);
+  const finishModalVisible = confirmSheet !== null || finishState !== 'idle';
 
   const handleHeaderClose = () => {
-    onRequestExit();
+    setConfirmSheet('exit');
   };
 
   const doneClock = formatCardioClock(elapsed);
@@ -2874,8 +2857,6 @@ function CardioScreen({
           ) : null}
         />
       </SafeAreaView>
-
-      {exitDialog}
 
       <Modal
         visible={finishModalVisible}
@@ -2979,17 +2960,23 @@ function CardioScreen({
               ) : (
                 <>
                   <Display size={26} color={theme.colors.textPrimary} style={{ marginTop: 9 }}>
-                    {t('cardioSession.finishConfirmTitle').toUpperCase()}
+                    {t(confirmSheet === 'exit'
+                      ? 'cardioSession.exitConfirmTitle'
+                      : 'cardioSession.finishConfirmTitle').toUpperCase()}
                   </Display>
                   <Text style={{ marginTop: 8, fontFamily: theme.fonts.ui, fontSize: 13, color: theme.colors.textSecondaryStrong, lineHeight: 19 }}>
-                    {t(targetReached ? 'cardioSession.finishConfirmAfterGoal' : 'cardioSession.finishConfirmBeforeGoal', {
-                      done: doneClock,
-                      target: targetClock,
-                    })}
+                    {confirmSheet === 'exit'
+                      ? t('cardioSession.exitConfirmBody', { done: doneClock })
+                      : t(targetReached ? 'cardioSession.finishConfirmAfterGoal' : 'cardioSession.finishConfirmBeforeGoal', {
+                          done: doneClock,
+                          target: targetClock,
+                        })}
                   </Text>
                   <Pressable
                     accessibilityRole="button"
-                    accessibilityLabel={t('cardioSession.confirmFinish')}
+                    accessibilityLabel={t(confirmSheet === 'exit'
+                      ? 'cardioSession.exitConfirmAction'
+                      : 'cardioSession.confirmFinish')}
                     onPress={() => void finalizeNow()}
                     style={{
                       height: 48,
@@ -3005,7 +2992,9 @@ function CardioScreen({
                   >
                     <Icon name="check" size={12} color={theme.colors.inverseForeground} />
                     <Text style={{ color: theme.colors.inverseForeground, fontFamily: theme.fonts.display, fontSize: 15, letterSpacing: 1.4, textTransform: 'uppercase' }}>
-                      {t('cardioSession.confirmFinish')}
+                      {t(confirmSheet === 'exit'
+                        ? 'cardioSession.exitConfirmAction'
+                        : 'cardioSession.confirmFinish')}
                     </Text>
                   </Pressable>
                   <Pressable

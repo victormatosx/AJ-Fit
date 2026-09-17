@@ -7,7 +7,7 @@ import {
   initializeTestEnvironment,
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing';
-import { deleteDoc, doc, getDoc, serverTimestamp, setDoc, Timestamp, updateDoc, writeBatch } from 'firebase/firestore';
+import { deleteDoc, doc, getDoc, runTransaction, serverTimestamp, setDoc, Timestamp, updateDoc, writeBatch } from 'firebase/firestore';
 
 const PROJECT_ID = 'ajfit-rules-test';
 const UID = 'alice';
@@ -76,10 +76,10 @@ beforeEach(async () => {
   await testEnv.withSecurityRulesDisabled(async (context) => {
     await setDoc(doc(context.firestore(), 'users', UID), userDocument(UID));
     await setDoc(doc(context.firestore(), 'users', OTHER_UID), userDocument(OTHER_UID));
-    // Minimal program doc — workoutExecutionCommonValid only cross-checks
-    // `programId`, not the full workoutProgramCommonValid shape.
-    await setDoc(doc(context.firestore(), 'users', UID, 'workoutPrograms', PROGRAM_ID), { programId: PROGRAM_ID, status: 'active' });
-    await setDoc(doc(context.firestore(), 'users', OTHER_UID, 'workoutPrograms', PROGRAM_ID), { programId: PROGRAM_ID, status: 'active' });
+    // Minimal program doc — workoutExecutionCommonValid cross-checks the
+    // identity and uses scheduleMode to keep the early-date exception fixed-only.
+    await setDoc(doc(context.firestore(), 'users', UID, 'workoutPrograms', PROGRAM_ID), { programId: PROGRAM_ID, status: 'active', scheduleMode: 'fixed' });
+    await setDoc(doc(context.firestore(), 'users', OTHER_UID, 'workoutPrograms', PROGRAM_ID), { programId: PROGRAM_ID, status: 'active', scheduleMode: 'fixed' });
   });
 });
 
@@ -124,6 +124,86 @@ describe('users/{uid}/workoutExecutions — create', () => {
     await assertFails(setDoc(doc(db, 'users', UID, 'workoutExecutions', 'e6'), executionDoc({ sessionIndex: -1 })));
     await assertFails(setDoc(doc(db, 'users', UID, 'workoutExecutions', 'e7'), executionDoc({ scheduledLocalDate: '08/25/2026' })));
   });
+
+  it('allows an optional performedLocalDate only on the scheduled day or exactly one civil day before', async () => {
+    const db = dbFor(UID);
+    await assertSucceeds(setDoc(doc(db, 'users', UID, 'workoutExecutions', 'performed-normal'), executionDoc({
+      performedLocalDate: '2026-08-25',
+    })));
+    await assertSucceeds(setDoc(doc(db, 'users', UID, 'workoutExecutions', 'performed-advanced'), executionDoc({
+      performedLocalDate: '2026-08-24',
+    })));
+    await assertSucceeds(setDoc(doc(db, 'users', UID, 'workoutExecutions', 'performed-month-boundary'), executionDoc({
+      scheduledLocalDate: '2026-09-01', performedLocalDate: '2026-08-31',
+    })));
+    await assertFails(setDoc(doc(db, 'users', UID, 'workoutExecutions', 'performed-two-days'), executionDoc({
+      performedLocalDate: '2026-08-23',
+    })));
+    await assertFails(setDoc(doc(db, 'users', UID, 'workoutExecutions', 'performed-after'), executionDoc({
+      performedLocalDate: '2026-08-26',
+    })));
+    await assertFails(setDoc(doc(db, 'users', UID, 'workoutExecutions', 'performed-malformed'), executionDoc({
+      performedLocalDate: '08/24/2026',
+    })));
+    await assertFails(setDoc(doc(db, 'users', UID, 'workoutExecutions', 'performed-impossible'), executionDoc({
+      scheduledLocalDate: '2026-03-01', performedLocalDate: '2026-02-31',
+    })));
+  });
+
+  it('allows the exact V2 advanced-start transaction payload (execution + current mutex)', async () => {
+    const db = dbFor(UID);
+    const executionRef = doc(db, 'users', UID, 'workoutExecutions', 'exec_wpg_12345678_1_2026-09-17');
+    const stateRef = doc(db, 'users', UID, 'workoutExecutionState', 'current');
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'users', UID, 'programInstances', 'wpi_fixed'), {
+        programInstanceId: 'wpi_fixed', contentIdentity: PROGRAM_ID,
+      });
+    });
+
+    await assertSucceeds(runTransaction(db, async (transaction) => {
+      const now = serverTimestamp();
+      transaction.set(executionRef, executionDoc({
+        programInstanceId: 'wpi_fixed',
+        sessionIndex: 1,
+        scheduledLocalDate: '2026-09-17',
+        performedLocalDate: '2026-09-16',
+        executionSchemaVersion: 2,
+        mutexProtocolVersion: 1,
+        startedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      }));
+      transaction.set(stateRef, {
+        executionId: 'exec_wpg_12345678_1_2026-09-17',
+        programId: PROGRAM_ID,
+        programInstanceId: 'wpi_fixed',
+        sessionIndex: 1,
+        scheduledLocalDate: '2026-09-17',
+        status: 'IN_PROGRESS',
+        schemaVersion: 1,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }));
+  });
+
+  it('rejects a performed date more than one civil day before the scheduled date', async () => {
+    const db = dbFor(UID);
+    await assertFails(setDoc(doc(db, 'users', UID, 'workoutExecutions', 'performed-too-early-real'), executionDoc({
+      scheduledLocalDate: '2026-09-17', performedLocalDate: '2026-09-15',
+    })));
+  });
+
+  it('does not permit the one-day exception for a flexible program', async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'users', UID, 'workoutPrograms', PROGRAM_ID), {
+        programId: PROGRAM_ID, status: 'active', scheduleMode: 'flexible',
+      });
+    });
+    await assertFails(setDoc(doc(dbFor(UID), 'users', UID, 'workoutExecutions', 'performed-flexible'), executionDoc({
+      performedLocalDate: '2026-08-24',
+    })));
+  });
 });
 
 // `updateDoc` merges with the stored document, so fields not mentioned in
@@ -132,6 +212,98 @@ describe('users/{uid}/workoutExecutions — create', () => {
 // rule constraints (unlike a full `setDoc` overwrite, which would submit a
 // brand-new `serverTimestamp()` sentinel for every field every time).
 describe('users/{uid}/workoutExecutions — update while IN_PROGRESS', () => {
+  it('allows recordSetExecution-shaped updates for normal, advanced, and legacy documents', async () => {
+    const db = dbFor(UID);
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'users', UID, 'programInstances', 'wpi_fixed'), {
+        programInstanceId: 'wpi_fixed', contentIdentity: PROGRAM_ID,
+      });
+    });
+
+    const cases = [
+      { id: 'record-normal', override: { performedLocalDate: '2026-08-25' } },
+      {
+        id: 'record-advanced',
+        override: {
+          programInstanceId: 'wpi_fixed', sessionIndex: 1,
+          scheduledLocalDate: '2026-09-17', performedLocalDate: '2026-09-16',
+          executionSchemaVersion: 2, mutexProtocolVersion: 1, cardio: null,
+        },
+      },
+      { id: 'record-legacy', override: {} },
+    ];
+
+    for (const { id, override } of cases) {
+      const ref = doc(db, 'users', UID, 'workoutExecutions', id);
+      await setDoc(ref, executionDoc(override));
+      await assertSucceeds(updateDoc(ref, {
+        exercises: [{
+          exerciseIndex: 0, exerciseId: 'bench_press', prescribedSets: 3,
+          prescribedReps: '8-12', prescribedDuration: null, prescribedCycles: null,
+          sets: [{ setIndex: 0, status: 'COMPLETED', actualReps: 10, weightKg: 40, actualDurationSeconds: null }],
+        }],
+        updatedAt: serverTimestamp(),
+      }));
+    }
+  });
+
+  it('allows a flexible normal execution update when performedLocalDate equals scheduledLocalDate', async () => {
+    const db = dbFor(UID);
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'users', UID, 'workoutPrograms', PROGRAM_ID), {
+        programId: PROGRAM_ID, status: 'active', scheduleMode: 'flexible',
+      });
+    });
+    const ref = doc(db, 'users', UID, 'workoutExecutions', 'record-flexible-normal');
+    await setDoc(ref, executionDoc({ performedLocalDate: '2026-08-25' }));
+    await assertSucceeds(updateDoc(ref, {
+      exercises: [{
+        exerciseIndex: 0, exerciseId: 'bench_press', prescribedSets: 3,
+        prescribedReps: '8-12', prescribedDuration: null, prescribedCycles: null,
+        sets: [{ setIndex: 0, status: 'COMPLETED', actualReps: 10, weightKg: 40, actualDurationSeconds: null }],
+      }],
+      updatedAt: serverTimestamp(),
+    }));
+  });
+
+  it('reproduces the real seven-exercise shape and an eight-exercise stress update', async () => {
+    const db = dbFor(UID);
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'users', UID, 'programInstances', 'wpi_28679d94'), {
+        programInstanceId: 'wpi_28679d94', contentIdentity: PROGRAM_ID,
+      });
+    });
+    const realExercises = [
+      ['barbell-back-squat', '6-10'],
+      ['dumbbell-stiff-leg-deadlift', '8-12'],
+      ['leg-press-45', '10-15'],
+      ['lying-leg-curl-machine', '10-15'],
+      ['standing-calf-raise-machine', '10-20'],
+      ['plank', '10-15'],
+      // The first seven entries mirror the production execution; this eighth
+      // entry is a bounded stress case above the catalog maximum.
+      ['extra-test-exercise', '10-15'],
+      ['extra-test-exercise-8', '10-15'],
+    ].map(([exerciseId, prescribedReps], exerciseIndex) => ({
+      exerciseIndex, exerciseId, prescribedExerciseId: exerciseId,
+      prescribedSets: 2, prescribedReps, prescribedDuration: null, prescribedCycles: null,
+      sets: [0, 1].map((setIndex) => ({
+        setIndex, status: 'PENDING', actualReps: null, weightKg: null, actualDurationSeconds: null,
+      })),
+    }));
+    const ref = doc(db, 'users', UID, 'workoutExecutions', 'exec_wpi_28679d94_1_2026-09-17');
+    await setDoc(ref, executionDoc({
+      programId: PROGRAM_ID, programInstanceId: 'wpi_28679d94', sessionIndex: 1,
+      sessionName: 'Lower A', scheduledLocalDate: '2026-09-17', performedLocalDate: '2026-09-16',
+      templateId: 'T003', mutexProtocolVersion: 1, executionSchemaVersion: 2,
+      cardio: null, exercises: realExercises,
+    }));
+    const nextExercises = realExercises.map((exercise, index) => index === 0
+      ? { ...exercise, sets: [{ ...exercise.sets[0], status: 'COMPLETED', actualReps: 10, weightKg: 40 }, exercise.sets[1]] }
+      : exercise);
+    await assertSucceeds(updateDoc(ref, { exercises: nextExercises, updatedAt: serverTimestamp() }));
+  });
+
   it('lets the owner log sets and keep the execution IN_PROGRESS', async () => {
     const db = dbFor(UID);
     const ref = doc(db, 'users', UID, 'workoutExecutions', EXECUTION_ID);
@@ -159,6 +331,18 @@ describe('users/{uid}/workoutExecutions — update while IN_PROGRESS', () => {
     await assertFails(updateDoc(ref, { scheduledLocalDate: '2026-08-26', updatedAt: serverTimestamp() }));
     await assertFails(updateDoc(ref, { startedAt: FABRICATED_TIMESTAMP, updatedAt: serverTimestamp() }));
     await assertFails(updateDoc(ref, { createdAt: FABRICATED_TIMESTAMP, updatedAt: serverTimestamp() }));
+  });
+
+  it('keeps performedLocalDate immutable and keeps legacy documents compatible', async () => {
+    const db = dbFor(UID);
+    const current = doc(db, 'users', UID, 'workoutExecutions', 'performed-current');
+    await setDoc(current, executionDoc({ performedLocalDate: '2026-08-24' }));
+    await assertFails(updateDoc(current, { performedLocalDate: '2026-08-25', updatedAt: serverTimestamp() }));
+
+    const legacy = doc(db, 'users', UID, 'workoutExecutions', 'performed-legacy');
+    await setDoc(legacy, executionDoc());
+    await assertSucceeds(updateDoc(legacy, { exercises: executionDoc().exercises, updatedAt: serverTimestamp() }));
+    await assertFails(updateDoc(legacy, { performedLocalDate: '2026-08-25', updatedAt: serverTimestamp() }));
   });
 
   it('finishing requires finishedAt == request.time (no fabricated timestamp)', async () => {
@@ -230,6 +414,24 @@ describe('users/{uid}/workoutExecutions — exercise identity fields are immutab
       prescribedSets: 3, prescribedReps: '8-12', prescribedDuration: null, prescribedCycles: null, sets: oneSet(),
     }];
     await assertFails(updateDoc(ref, { exercises: tampered, updatedAt: serverTimestamp() }));
+  });
+
+  it('denies changing every prescribed quantity/duration identity field', async () => {
+    const db = dbFor(UID);
+    for (const [field, value] of [
+      ['prescribedSets', 99],
+      ['prescribedReps', '1'],
+      ['prescribedDuration', '999s'],
+      ['prescribedCycles', 99],
+    ] as const) {
+      const ref = doc(db, 'users', UID, 'workoutExecutions', `identity-${field}`);
+      await setDoc(ref, executionDoc());
+      const tampered = [{
+        ...executionDoc().exercises[0],
+        [field]: value,
+      }];
+      await assertFails(updateDoc(ref, { exercises: tampered, updatedAt: serverTimestamp() }));
+    }
   });
 
   it('denies a client update creating, changing, or removing the substitution marker', async () => {

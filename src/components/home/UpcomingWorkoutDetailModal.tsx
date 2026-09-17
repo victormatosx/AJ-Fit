@@ -59,7 +59,9 @@ export function UpcomingWorkoutDetailModal({
     ? resolveSessionDisplayName(tLoose, workout.sessionName, workout.sessionType, workout.sessionDisplayName)
     : '';
   const weekdayLabel = workout
-    ? tLoose(`quiz:trainingDays.options.${workout.weekday}`)
+    ? workout.flexible
+      ? t('home:upcoming.flexible')
+      : tLoose(`quiz:trainingDays.options.${workout.weekday}`)
     : '';
   const dateLabel = workout
     ? new Intl.DateTimeFormat(locale, { day: '2-digit', month: 'short' })
@@ -127,7 +129,9 @@ export function UpcomingWorkoutDetailModal({
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
                 <Icon name="calendar" size={13} color={theme.colors.primaryEmphasis} />
                 <MonoLabel color={theme.colors.textSecondary}>
-                  {t('home:upcoming.detail.scheduledFor', { weekday: weekdayLabel, date: dateLabel })}
+                  {workout?.flexible
+                    ? t('home:upcoming.detail.flexibleAvailable')
+                    : t('home:upcoming.detail.scheduledFor', { weekday: weekdayLabel, date: dateLabel })}
                 </MonoLabel>
               </View>
               {workout && workout.estimatedMinutes > 0 ? (

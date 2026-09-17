@@ -1,4 +1,4 @@
-import type { Weekday } from '../state/AppState';
+import type { ScheduleMode, Weekday } from '../state/AppState';
 import {
   addDaysLocal,
   nextTrainingDayOnOrAfter,
@@ -39,6 +39,8 @@ export interface UpcomingWorkoutViewModel {
   exerciseCount: number;
   /** Approximate — see `estimateSessionMinutes`. `0` means "not estimable", and the UI must omit it rather than render "0 min". */
   estimatedMinutes: number;
+  /** Flexible entries are sequence facts, not promises for a calendar date. */
+  flexible?: boolean;
 }
 
 const DEFAULT_LIMIT = 3;
@@ -86,6 +88,7 @@ function walkStart(
 
 export function buildUpcomingWorkouts(input: {
   todayLocalDate: LocalDate;
+  scheduleMode?: ScheduleMode;
   trainingDays: readonly Weekday[];
   /** `plan.sessions`, in plan order. The rotation modulus is this length — the same array every `plan.sessions[index]` lookup on Home reads. */
   sessions: readonly FinalWorkoutSession[];
@@ -94,7 +97,33 @@ export function buildUpcomingWorkouts(input: {
 }): UpcomingWorkoutViewModel[] {
   const { todayLocalDate, trainingDays, sessions, resolution } = input;
   const limit = input.limit ?? DEFAULT_LIMIT;
-  if (!resolution || trainingDays.length === 0 || sessions.length === 0 || limit <= 0) return [];
+  if (!resolution || sessions.length === 0 || limit <= 0) return [];
+  if (input.scheduleMode === 'flexible') {
+    if (resolution.status !== 'SESSION_READY') return [];
+    // Flexible has no calendar projection. `sessionIndex` is the authoritative
+    // cursor for the session available now; this section is only the preview
+    // after that session, in circular prescription order.
+    const currentSessionIndex = resolution.sessionIndex % sessions.length;
+    const upcomingCount = Math.min(limit, sessions.length - 1);
+    return Array.from({ length: upcomingCount }, (_, offset) => {
+      const sessionIndex = (currentSessionIndex + offset + 1) % sessions.length;
+      const session = sessions[sessionIndex];
+      return {
+        // This is an activity-date anchor for the existing view-model shape,
+        // never a scheduled date. Flexible cards do not render a date.
+        localDate: todayLocalDate,
+        weekday: weekdayOfLocalDate(todayLocalDate),
+        sessionIndex,
+        sessionName: session.name,
+        sessionType: session.type,
+        ...(session.displayName ? { sessionDisplayName: session.displayName } : {}),
+        exerciseCount: session.exercises.length,
+        estimatedMinutes: estimateSessionMinutes(session),
+        flexible: true,
+      };
+    });
+  }
+  if (trainingDays.length === 0) return [];
 
   const start = walkStart(resolution, trainingDays, todayLocalDate, sessions.length);
   if (!start) return [];

@@ -41,6 +41,17 @@ export function buildScheduleAuthorityContext(input: {
       ? snapshotInputs.trainingDays
       : Array.isArray(input.scheduleConfigData.trainingDays) ? input.scheduleConfigData.trainingDays : [];
   const trainingDays = configuredDays.filter((item): item is Weekday => typeof item === 'string');
+  // Authority is sealed prescription data only: the explicit WorkoutProgram
+  // wins, then its immutable ProgramInstance snapshot. scheduleConfig is a
+  // client-writable preference and must never be allowed to change the mode.
+  // Records that predate both sealed discriminators remain fixed.
+  const scheduleMode = input.program.scheduleMode === 'flexible'
+    ? 'flexible'
+    : input.program.scheduleMode === 'fixed'
+      ? 'fixed'
+      : snapshotInputs.scheduleMode === 'flexible'
+        ? 'flexible'
+        : 'fixed';
   const timezone = typeof input.scheduleConfigData.timezone === 'string' ? input.scheduleConfigData.timezone : 'UTC';
   if (!(input.instance.activatedAt instanceof Timestamp)) {
     throw new HttpsError('failed-precondition', 'program_instance_activation_missing');
@@ -51,7 +62,7 @@ export function buildScheduleAuthorityContext(input: {
       ? input.program.prescribedStructuredDays
       : Array.isArray(input.program.sessions) ? input.program.sessions.length : 0;
   return {
-    config: { trainingDays, timezone, scheduleVersion: 1 },
+    config: { scheduleMode, trainingDays, timezone, scheduleVersion: 1 },
     state: input.stateData ? {
       nextSessionIndex: input.stateData.nextSessionIndex,
       cursorDate: input.stateData.cursorDate,

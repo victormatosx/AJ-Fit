@@ -98,6 +98,18 @@ function phase2ProgramDocument(programId = 'wpg_phase200') {
   };
 }
 
+function flexibleProgramDocument(programId = 'wpg_flexible') {
+  return {
+    ...phase2ProgramDocument(programId),
+    requestedDays: 4,
+    prescribedStructuredDays: 4,
+    prescribedTrainingFrequency: 4,
+    scheduleMode: 'flexible',
+    availability: { days: 4, weekdays: [] },
+    weeklySchedule: [],
+  };
+}
+
 beforeAll(async () => {
   testEnv = await initializeTestEnvironment({
     projectId: PROJECT_ID,
@@ -156,6 +168,23 @@ describe('workoutTemplates', () => {
 });
 
 describe('workoutPrograms', () => {
+  it('accepts a valid flexible snapshot and rejects invalid mode-specific calendar shapes', async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'workoutTemplates', 'T003'), v2TemplateDocument());
+    });
+    await assertSucceeds(createAndActivate(UID, 'wpg_flexible', flexibleProgramDocument()));
+    await assertFails(createAndActivate(UID, 'wpg_flexbad1', {
+      ...flexibleProgramDocument('wpg_flexbad1'),
+      availability: { days: 4, weekdays: ['MON', 'TUE', 'WED', 'FRI'] },
+    }));
+    await assertFails(createAndActivate(UID, 'wpg_fixedbad1', {
+      ...phase2ProgramDocument('wpg_fixedbad1'),
+      scheduleMode: 'fixed',
+      availability: { days: 7, weekdays: [] },
+      weeklySchedule: [],
+    }));
+  });
+
   it('atomically creates the snapshot and pointer, and repeated activation stays one document', async () => {
     await assertSucceeds(createAndActivate());
     await assertSucceeds(createAndActivate());

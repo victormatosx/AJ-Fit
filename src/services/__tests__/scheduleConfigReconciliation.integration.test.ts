@@ -123,7 +123,7 @@ describe.skipIf(!enabled)('scheduleConfig reconciliation — real Firestore Emul
 
     const created = await ensureScheduleConfigFromQuestionnaire(UID, TRAINING_DAYS, TIMEZONE);
 
-    expect(created).toEqual({ trainingDays: TRAINING_DAYS, timezone: TIMEZONE, scheduleVersion: 1 });
+    expect(created).toEqual({ scheduleMode: 'fixed', trainingDays: TRAINING_DAYS, timezone: TIMEZONE, scheduleVersion: 1 });
     const reloaded = await loadScheduleConfig(UID);
     expect(reloaded?.trainingDays).toEqual(TRAINING_DAYS); // canonical WEEKDAY_ORDER, not click order
   });
@@ -154,7 +154,7 @@ describe.skipIf(!enabled)('scheduleConfig reconciliation — real Firestore Emul
   it('(7) retrying after it already exists is a safe no-op — no duplicated/corrupted state', async () => {
     await ensureScheduleConfigFromQuestionnaire(UID, TRAINING_DAYS, TIMEZONE);
     const second = await ensureScheduleConfigFromQuestionnaire(UID, TRAINING_DAYS, TIMEZONE);
-    expect(second).toEqual({ trainingDays: TRAINING_DAYS, timezone: TIMEZONE, scheduleVersion: 1 });
+    expect(second).toEqual({ scheduleMode: 'fixed', trainingDays: TRAINING_DAYS, timezone: TIMEZONE, scheduleVersion: 1 });
 
     const snapshot = await getDoc(doc(mocks.db as never, 'users', UID, 'workoutProgramState', 'scheduleConfig'));
     expect(snapshot.exists()).toBe(true);
@@ -233,6 +233,21 @@ describe.skipIf(!enabled)('scheduleConfig reconciliation — real Firestore Emul
 
     expect(resolution.status).not.toBe('SCHEDULE_SETUP_REQUIRED');
     expect(resolution.status).toBe('SESSION_READY');
+  });
+
+  it('creates and resolves explicit flexible config without trainingDays', async () => {
+    const created = await ensureScheduleConfigFromQuestionnaire(UID, [], TIMEZONE, 'flexible');
+    expect(created).toEqual({ scheduleMode: 'flexible', trainingDays: [], timezone: TIMEZONE, scheduleVersion: 1 });
+    const resolution = resolveWorkoutSchedule({
+      hasActiveProgram: true,
+      sessionCount: 3,
+      scheduleMode: 'flexible',
+      config: created,
+      state: null,
+      activatedAtLocalDate: '2026-08-31',
+      todayLocalDate: '2026-09-06',
+    });
+    expect(resolution).toEqual({ status: 'SESSION_READY', sessionIndex: 0 });
   });
 
   it('(11) a non-training day resolves REST_DAY', async () => {

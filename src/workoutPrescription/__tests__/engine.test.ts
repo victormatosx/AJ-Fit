@@ -9,6 +9,27 @@ import { selectTemplate } from '../selection';
 import { completeAnswers } from './fixtures';
 
 describe('prescription pipeline and invariants', () => {
+  it('uses frequency for template selection but creates no fake weekly calendar in flexible mode', () => {
+    const fixed = generateWorkoutPrescription(completeAnswers({
+      days: 3,
+      scheduleMode: 'fixed',
+      trainingDays: ['MON', 'WED', 'FRI'],
+    }));
+    const flexible = generateWorkoutPrescription(completeAnswers({
+      days: 3,
+      scheduleMode: 'flexible',
+      trainingDays: null,
+    }));
+    expect(fixed.status).toBe('SUCCESS');
+    expect(flexible.status).toBe('SUCCESS');
+    if (fixed.status !== 'SUCCESS' || flexible.status !== 'SUCCESS') return;
+    expect(flexible.plan.templateId).toBe(fixed.plan.templateId);
+    expect(flexible.plan.prescribedTrainingFrequency).toBe(3);
+    expect(flexible.plan.scheduleMode).toBe('flexible');
+    expect(flexible.plan.availability?.weekdays).toEqual([]);
+    expect(flexible.plan.weeklySchedule).toEqual([]);
+  });
+
   it('marks the former DR-006 blanket gate as resolved', () => {
     expect(limitationReadinessFailure(completeAnswers({
       specialConditions: ['musculoskeletal_limitation'],

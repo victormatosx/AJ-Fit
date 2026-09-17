@@ -37,7 +37,7 @@ describe('start workout performance and integrity flow', () => {
   const startBody = between(
     appShell,
     'const startWorkout = async () => {',
-    'const resolvePendingExecutionAndRetry',
+    'const startAdvancedWorkout = async () => {',
   );
 
   it('navigates to the workout surface before waiting for Firestore', () => {

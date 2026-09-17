@@ -21,6 +21,9 @@ function CellGlyph({ status, color }: { status: WeekDayStatus; color: string }) 
   if (status === 'COMPLETED' || status === 'TODAY_COMPLETED') {
     return <Icon name="check" size={12} color={color} stroke={2.2} />;
   }
+  if (status === 'FULFILLED_EARLY') {
+    return <Icon name="arrow-right" size={11} color={color} stroke={2} />;
+  }
   if (status === 'MISSED') {
     return <Icon name="x" size={11} color={color} stroke={2} />;
   }
@@ -67,7 +70,7 @@ export function WeeklyOverview({ overview }: { overview: WeekOverviewViewModel }
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 12 }}>
         {overview.days.map((day) => {
           const isDim = day.status === 'REST' || day.status === 'ACTIVE_RECOVERY' || day.status === 'BEFORE_PROGRAM';
-          const glyphColor = day.status === 'COMPLETED' || day.status === 'TODAY_COMPLETED'
+          const glyphColor = day.status === 'COMPLETED' || day.status === 'TODAY_COMPLETED' || day.status === 'FULFILLED_EARLY'
             ? theme.colors.primaryEmphasis
             : day.status === 'MISSED'
               ? theme.colors.textMuted

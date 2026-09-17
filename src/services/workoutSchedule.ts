@@ -14,7 +14,7 @@ import {
   authorizeWorkoutLifecycleMutation,
   WORKOUT_LIFECYCLE_AUTHORITY_GRANT_ID,
 } from '../workoutLifecycle/authorityProvider';
-import type { Weekday } from '../state/AppState';
+import type { ScheduleMode, Weekday } from '../state/AppState';
 // Imported from their concrete submodules, never the `../scheduleEngine`
 // barrel — that barrel also re-exports `useWorkoutSchedule` (a React hook
 // pulling in AuthContext/RN), which a pure Firestore service module must
@@ -96,6 +96,7 @@ export async function loadScheduleConfig(uid: string): Promise<ScheduleConfig | 
   const data = snapshot.data();
   if (!Array.isArray(data.trainingDays) || typeof data.timezone !== 'string') return null;
   return {
+    scheduleMode: data.scheduleMode === 'flexible' ? 'flexible' : 'fixed',
     trainingDays: data.trainingDays as Weekday[],
     timezone: data.timezone,
     scheduleVersion: typeof data.scheduleVersion === 'number' ? data.scheduleVersion : SCHEDULE_VERSION,
@@ -107,9 +108,12 @@ export async function loadScheduleConfig(uid: string): Promise<ScheduleConfig | 
  * it only affects future resolutions; it never rewrites past schedule events
  * and never regenerates the prescription.
  */
-export async function saveScheduleConfig(uid: string, config: { trainingDays: Weekday[]; timezone: string }): Promise<void> {
-  if (config.trainingDays.length === 0) throw new Error('SCHEDULE_CONFIG_REQUIRES_TRAINING_DAYS');
+export async function saveScheduleConfig(uid: string, config: { scheduleMode?: ScheduleMode; trainingDays: Weekday[]; timezone: string }): Promise<void> {
+  const scheduleMode = config.scheduleMode ?? 'fixed';
+  if (scheduleMode === 'fixed' && config.trainingDays.length === 0) throw new Error('SCHEDULE_CONFIG_REQUIRES_TRAINING_DAYS');
+  if (scheduleMode === 'flexible' && config.trainingDays.length !== 0) throw new Error('FLEXIBLE_SCHEDULE_CANNOT_HAVE_TRAINING_DAYS');
   await setDoc(scheduleConfigRef(uid), {
+    scheduleMode,
     trainingDays: config.trainingDays,
     timezone: config.timezone,
     scheduleVersion: SCHEDULE_VERSION,
@@ -141,6 +145,7 @@ export async function ensureScheduleConfigFromQuestionnaire(
   uid: string,
   trainingDays: Weekday[],
   timezone: string,
+  scheduleMode: ScheduleMode = 'fixed',
 ): Promise<ScheduleConfig | null> {
   const ref = scheduleConfigRef(uid);
   return runTransaction(db, async (transaction) => {
@@ -149,12 +154,15 @@ export async function ensureScheduleConfigFromQuestionnaire(
       const data = snapshot.data();
       if (!Array.isArray(data.trainingDays) || typeof data.timezone !== 'string') return null;
       return {
+        scheduleMode: data.scheduleMode === 'flexible' ? 'flexible' : 'fixed',
         trainingDays: data.trainingDays as Weekday[],
         timezone: data.timezone,
         scheduleVersion: typeof data.scheduleVersion === 'number' ? data.scheduleVersion : SCHEDULE_VERSION,
       };
     }
-    const config = { trainingDays, timezone, scheduleVersion: SCHEDULE_VERSION };
+    if ((scheduleMode === 'fixed' && trainingDays.length === 0)
+      || (scheduleMode === 'flexible' && trainingDays.length !== 0)) return null;
+    const config = { scheduleMode, trainingDays, timezone, scheduleVersion: SCHEDULE_VERSION };
     transaction.set(ref, { ...config, updatedAt: serverTimestamp() });
     return config;
   });
@@ -187,6 +195,7 @@ export async function resolveTodaysSchedule(input: {
   programId: string | null;
   programInstanceId?: string | null;
   sessionCount: number;
+  scheduleMode?: ScheduleMode;
   activatedAtLocalDate: string | null;
   todayLocalDate: string;
   /** Phase 2 program-scoped training days. Legacy programs omit this and use ScheduleConfig unchanged. */
@@ -195,17 +204,20 @@ export async function resolveTodaysSchedule(input: {
 }): Promise<ScheduleResolution> {
   const hasActiveProgram = input.programId != null && input.sessionCount > 0;
   const storedConfig = await loadScheduleConfig(input.uid);
+  const scheduleMode = input.scheduleMode ?? storedConfig?.scheduleMode ?? 'fixed';
   const config = storedConfig && input.trainingDaysOverride?.length
     ? {
         ...storedConfig,
+        scheduleMode,
         trainingDays: input.trainingDaysOverride,
         activeRecoveryDays: input.activeRecoveryDaysOverride ?? [],
       }
-    : storedConfig;
+    : storedConfig ? { ...storedConfig, scheduleMode } : null;
 
   if (!hasActiveProgram) return resolveWorkoutSchedule({
     hasActiveProgram: false,
     sessionCount: 0,
+    scheduleMode,
     config,
     state: null,
     activatedAtLocalDate: input.todayLocalDate,
@@ -219,11 +231,17 @@ export async function resolveTodaysSchedule(input: {
   const resolverInput = {
     hasActiveProgram: true,
     sessionCount: input.sessionCount,
+    scheduleMode,
     config,
     state,
     activatedAtLocalDate,
     todayLocalDate: input.todayLocalDate,
   };
+
+  // Flexible plans never accrue weekday debt. Returning before every
+  // reconciliation/ledger read guarantees idle time cannot create a pending
+  // miss, a missed decision, or SKIPPED events.
+  if (scheduleMode === 'flexible') return resolveWorkoutSchedule(resolverInput);
 
   // A pending payload is persisted so the question survives restarts, but
   // the schedule or lifecycle may have changed since it was detected. The
@@ -329,6 +347,7 @@ export interface CompleteScheduledSessionInput {
   sessionIndex: number;
   sessionCount: number;
   scheduledLocalDate: string;
+  scheduleMode?: ScheduleMode;
   /**
    * Required to derive the expected first-ever session when no
    * `ScheduleState` exists yet (see `expectedIndex` below) — the exact same
@@ -346,6 +365,14 @@ export interface CompleteScheduledSessionInput {
 }
 
 const scheduledSessionCompletionsInFlight = new Map<string, Promise<void>>();
+
+/**
+ * Legacy lifecycle-authority pipeline retained for compatibility and its
+ * integration coverage. The live workout UI finalizes through
+ * `finalizeWorkoutExecution` -> `finalizeWorkoutSession`; advanced workouts
+ * deliberately use that same live path. Do not route new execution features
+ * through COMPLETE_SCHEDULE or its independent backdate policy.
+ */
 
 function scheduledSessionCompletionKey(input: CompleteScheduledSessionInput): string {
   return [
@@ -420,12 +447,12 @@ async function completeScheduledSessionAttempt(input: CompleteScheduledSessionIn
     // same derivation `resolveWorkoutSchedule` used to return SESSION_READY
     // in the first place), never a hardcoded 0. A program that activates on
     // a non-first trainingDay legitimately opens on a session other than 0.
-    const expectedIndex = current?.nextSessionIndex ?? initialSessionIndexFor({
+    const expectedIndex = current?.nextSessionIndex ?? (input.scheduleMode === 'flexible' ? 0 : initialSessionIndexFor({
       trainingDays: input.trainingDays,
       activatedAtLocalDate: input.activatedAtLocalDate,
       todayLocalDate: input.scheduledLocalDate,
       sessionCount: input.sessionCount,
-    });
+    }));
     if (input.sessionIndex !== expectedIndex) throw new Error('SESSION_INDEX_OUT_OF_SEQUENCE');
 
     transaction.set(eventRef, {

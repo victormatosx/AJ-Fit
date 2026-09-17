@@ -132,24 +132,24 @@ export function generateWorkoutPrescription(
   }
 
   const limitationDataset = context.limitationDataset ?? localLimitationDatasetIdentity();
+  const scheduleMode = answers.scheduleMode === 'flexible' ? 'flexible' : 'fixed';
   const normalizedAvailableWeekdays = normalizeWeekdays(answers.trainingDays ?? []);
   const availability = {
     days: selection.decision.requestedDays,
     // Missing/incomplete concrete weekdays are a legacy setup state, not
     // permission to invent or silently narrow availability.
-    weekdays: normalizedAvailableWeekdays.length === selection.decision.requestedDays
+    weekdays: scheduleMode === 'fixed' && normalizedAvailableWeekdays.length === selection.decision.requestedDays
       ? normalizedAvailableWeekdays
       : [],
   };
-  const weeklySchedule = buildWorkoutWeek(
-    availability,
-    composition.sessions,
-    selection.decision.prescribedStructuredDays,
-  );
+  const weeklySchedule = scheduleMode === 'fixed'
+    ? buildWorkoutWeek(availability, composition.sessions, selection.decision.prescribedStructuredDays)
+    : [];
   const planIdentity = JSON.stringify({
     templateId: selection.decision.templateId,
     requestedDays: selection.decision.requestedDays,
     prescribedTrainingFrequency: selection.decision.prescribedStructuredDays,
+    scheduleMode,
     availability,
     weeklySchedule,
     modifiers: modifiers.map((modifier) => modifier.id),
@@ -169,6 +169,7 @@ export function generateWorkoutPrescription(
     requestedDays: selection.decision.requestedDays,
     prescribedStructuredDays: selection.decision.prescribedStructuredDays,
     prescribedTrainingFrequency: selection.decision.prescribedStructuredDays,
+    scheduleMode,
     availability,
     weeklySchedule,
     population: selection.decision.population,

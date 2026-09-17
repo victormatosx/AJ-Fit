@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
@@ -77,6 +77,30 @@ beforeEach(async () => {
 });
 
 describe('workoutProgramState/scheduleConfig', () => {
+  it('accepts the exact persisted flexible payload and keeps fixed weekday validation strict', async () => {
+    const ref = doc(dbFor(UID), 'users', UID, 'workoutProgramState', 'scheduleConfig');
+    await assertSucceeds(setDoc(ref, scheduleConfigDoc({ scheduleMode: 'flexible', trainingDays: [] })));
+    await assertFails(setDoc(ref, scheduleConfigDoc({ scheduleMode: 'fixed', trainingDays: [] })));
+    await assertFails(setDoc(ref, scheduleConfigDoc({ scheduleMode: 'flexible', trainingDays: ['MON'] })));
+  });
+
+  it('documents the production payload boundary: updatedAt and lowercase timezone are required', async () => {
+    const ref = doc(dbFor(UID), 'users', UID, 'workoutProgramState', 'scheduleConfig');
+    await assertFails(setDoc(ref, {
+      scheduleMode: 'flexible',
+      trainingDays: [],
+      timezone: 'America/Sao_Paulo',
+      scheduleVersion: 1,
+    }));
+    await assertFails(setDoc(ref, {
+      scheduleMode: 'flexible',
+      trainingDays: [],
+      timeZone: 'America/Sao_Paulo',
+      scheduleVersion: 1,
+      updatedAt: serverTimestamp(),
+    }));
+  });
+
   it('lets the owner create and update their own weekday preference', async () => {
     const db = dbFor(UID);
     await assertSucceeds(setDoc(doc(db, 'users', UID, 'workoutProgramState', 'scheduleConfig'), scheduleConfigDoc()));

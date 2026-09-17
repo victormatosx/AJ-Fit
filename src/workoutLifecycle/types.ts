@@ -36,6 +36,8 @@ export interface EffectivePrescriptionInputs {
   limits: import('../state/AppState').Quiz['limits'];
   duration: import('../state/AppState').Quiz['duration'];
   days: import('../state/AppState').Quiz['days'];
+  /** Absent only in legacy persisted snapshots and read as `fixed`. */
+  scheduleMode?: import('../state/AppState').ScheduleMode;
   trainingDays: import('../state/AppState').Quiz['trainingDays'];
   place: import('../state/AppState').Quiz['place'];
   primaryPlace: import('../state/AppState').Quiz['primaryPlace'];

@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '../state/AuthContext';
 import { errorClass, errorCode, errorReason, logInfo, logWarn } from '../lib/logger';
 import { localDateInTimezone } from '../scheduleEngine/localDate';
+import { advancedWorkoutTarget } from '../scheduleEngine/advanceWorkout';
+import type { ScheduleResolution } from '../scheduleEngine/types';
 import {
   abandonWorkoutExecution,
   recordSetExecution,
@@ -31,6 +33,7 @@ import {
   beginWorkoutStartFlight,
   type WorkoutStartFlight,
 } from './startSingleFlight';
+import { publishWorkoutLoadRefresh } from '../loadProgress/workoutLoadRefreshBus';
 
 function deviceTimezone(): string {
   try {
@@ -60,6 +63,8 @@ export interface WorkoutExecutionController {
   starting: boolean;
   /** Set only when the most recent `start()` call failed — cleared at the start of every new `start()` call. */
   startError: WorkoutExecutionStartError | null;
+  /** A mutation failed and remains queued for the finish-barrier retry. */
+  hasUnreconciledMutations: boolean;
   /**
    * Start instant for the session's UI timer, epoch ms. It uses the persisted
    * `serverTimestamp()` once reconciled; until then it uses one `Date.now()`
@@ -78,6 +83,8 @@ export interface WorkoutExecutionController {
     manualSubstitutionContext?: ManualSubstitutionUserContext | null;
     manualSubstitutionContextStatus?: 'loading' | 'ready' | 'error';
   }) => Promise<WorkoutExecutionStartResult>;
+  /** Starts only the resolver-provided next fixed opportunity when it is exactly tomorrow. */
+  startAdvanced: (resolution: ScheduleResolution) => Promise<WorkoutExecutionStartResult>;
   /**
    * Adopts an already-verified `IN_PROGRESS` execution directly into this
    * hook's state — used by Workout Recovery once the bootstrap check
@@ -141,6 +148,7 @@ export function useWorkoutExecution(program: WorkoutProgramSnapshot | null, time
   const [execution, setExecution] = useState<PersistedWorkoutExecution | null>(null);
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<WorkoutExecutionStartError | null>(null);
+  const [hasUnreconciledMutations, setHasUnreconciledMutations] = useState(false);
   const startInFlightRef = useRef<WorkoutStartFlight<WorkoutExecutionStartResult> | null>(null);
   const mutationQueueRef = useRef(new WorkoutMutationQueue());
   // Presentation-only start instant for a newly committed execution. It is
@@ -187,26 +195,32 @@ export function useWorkoutExecution(program: WorkoutProgramSnapshot | null, time
     };
   }, [preparationKey, uid]);
 
-  const start = useCallback((sessionIndex: number, preparation?: {
-    manualSubstitutionContext?: ManualSubstitutionUserContext | null;
-    manualSubstitutionContextStatus?: 'loading' | 'ready' | 'error';
+  const startWithDates = useCallback((input: {
+    sessionIndex: number;
+    scheduledLocalDate: string;
+    performedLocalDate: string;
+    preparation?: {
+      manualSubstitutionContext?: ManualSubstitutionUserContext | null;
+      manualSubstitutionContextStatus?: 'loading' | 'ready' | 'error';
+    };
   }): Promise<WorkoutExecutionStartResult> => {
     const unknownError = { execution: null, error: { code: 'UNKNOWN' as const } };
     if (!uid || !program) {
       if (typeof __DEV__ !== 'undefined' && __DEV__) {
-        logInfo('workout_execution', 'start_guard_exit', {
+        logInfo('workout_performance', 'start_workout_guard_exit', {
           reason: !uid ? 'AUTH_USER_MISSING' : 'PROGRAM_MISSING',
         });
       }
       return Promise.resolve(unknownError);
     }
-    const scheduledLocalDate = localDateInTimezone(new Date(), timezone ?? deviceTimezone());
+    const { sessionIndex, scheduledLocalDate, performedLocalDate, preparation } = input;
     const executionScopeId = program.programInstanceId ?? program.programId;
-    const requestKey = `${uid}:${executionScopeId}:${sessionIndex}:${scheduledLocalDate}`;
+    const requestKey = `${uid}:${executionScopeId}:${sessionIndex}:${scheduledLocalDate}:${performedLocalDate}`;
     const flight = beginWorkoutStartFlight(startInFlightRef, requestKey, async (): Promise<WorkoutExecutionStartResult> => {
       setStarting(true);
       setStartError(null);
       mutationQueueRef.current.reset();
+      setHasUnreconciledMutations(false);
       pendingStartedAtMsRef.current = Date.now();
       const startedAtMs = Date.now();
       try {
@@ -241,6 +255,7 @@ export function useWorkoutExecution(program: WorkoutProgramSnapshot | null, time
           program,
           sessionIndex,
           scheduledLocalDate,
+          performedLocalDate,
           preparation: {
             legacyInProgressExecutionIds,
             permanentPreferences,
@@ -315,11 +330,39 @@ export function useWorkoutExecution(program: WorkoutProgramSnapshot | null, time
       return Promise.resolve(unknownError);
     }
     return flight.promise;
-  }, [uid, program, timezone]);
+  }, [uid, program]);
+
+  const start = useCallback((sessionIndex: number, preparation?: {
+    manualSubstitutionContext?: ManualSubstitutionUserContext | null;
+    manualSubstitutionContextStatus?: 'loading' | 'ready' | 'error';
+  }): Promise<WorkoutExecutionStartResult> => {
+    const todayLocalDate = localDateInTimezone(new Date(), timezone ?? deviceTimezone());
+    return startWithDates({
+      sessionIndex,
+      scheduledLocalDate: todayLocalDate,
+      performedLocalDate: todayLocalDate,
+      preparation,
+    });
+  }, [startWithDates, timezone]);
+
+  const startAdvanced = useCallback((resolution: ScheduleResolution): Promise<WorkoutExecutionStartResult> => {
+    const unknownError = { execution: null, error: { code: 'UNKNOWN' as const } };
+    if (!program) return Promise.resolve(unknownError);
+    const todayLocalDate = localDateInTimezone(new Date(), timezone ?? deviceTimezone());
+    const target = advancedWorkoutTarget({
+      scheduleMode: program.scheduleMode ?? 'fixed',
+      resolution,
+      todayLocalDate,
+      sessionCount: program.sessions.length,
+      hasIncompatibleExecution: starting || execution?.status === 'IN_PROGRESS',
+    });
+    return target ? startWithDates(target) : Promise.resolve(unknownError);
+  }, [execution?.status, program, startWithDates, starting, timezone]);
 
   const adoptExecution = useCallback((next: PersistedWorkoutExecution) => {
     pendingStartedAtMsRef.current = null;
     mutationQueueRef.current.reset();
+    setHasUnreconciledMutations(false);
     setStartError(null);
     setExecution(next);
   }, []);
@@ -348,7 +391,10 @@ export function useWorkoutExecution(program: WorkoutProgramSnapshot | null, time
           } : current);
         },
       );
+      setHasUnreconciledMutations(mutationQueueRef.current.hasUnreconciledMutations());
+      publishWorkoutLoadRefresh(uid, execution.executionId);
     } catch (error) {
+      setHasUnreconciledMutations(true);
       logWarn('workout_execution', 'record_set_failed', { error });
     }
   }, [uid, execution]);
@@ -375,7 +421,9 @@ export function useWorkoutExecution(program: WorkoutProgramSnapshot | null, time
           } : current);
         },
       );
+      setHasUnreconciledMutations(mutationQueueRef.current.hasUnreconciledMutations());
     } catch (error) {
+      setHasUnreconciledMutations(true);
       logWarn('workout_execution', 'skip_set_failed', { error });
     }
   }, [uid, execution]);
@@ -399,7 +447,9 @@ export function useWorkoutExecution(program: WorkoutProgramSnapshot | null, time
           } : current);
         },
       );
+      setHasUnreconciledMutations(mutationQueueRef.current.hasUnreconciledMutations());
     } catch (error) {
+      setHasUnreconciledMutations(true);
       logWarn('workout_execution', 'skip_exercise_failed', { error });
     }
   }, [uid, execution]);
@@ -418,6 +468,7 @@ export function useWorkoutExecution(program: WorkoutProgramSnapshot | null, time
       logInfo('workout_performance', 'finish_mutation_flush_start', { timestampMs: flushStartedAtMs });
       try {
         await mutationQueueRef.current.flush();
+        setHasUnreconciledMutations(false);
         logInfo('workout_performance', 'finish_mutation_flush_end', {
           timestampMs: Date.now(),
           durationMs: Date.now() - flushStartedAtMs,
@@ -463,6 +514,7 @@ export function useWorkoutExecution(program: WorkoutProgramSnapshot | null, time
     try {
       await abandonWorkoutExecution(uid, execution.executionId);
       mutationQueueRef.current.reset();
+      setHasUnreconciledMutations(false);
       return { ok: true };
     } catch (error) {
       logWarn('workout_execution', 'abandon_failed', { error });
@@ -488,7 +540,7 @@ export function useWorkoutExecution(program: WorkoutProgramSnapshot | null, time
     : pendingStartedAtMsRef.current;
 
   return {
-    execution, starting, startError, workoutStartedAtMs,
-    start, adoptExecution, recordSet, skipSet, skipExercise, finalize, abandon, abandonExecutionById,
+    execution, starting, startError, workoutStartedAtMs, hasUnreconciledMutations,
+    start, startAdvanced, adoptExecution, recordSet, skipSet, skipExercise, finalize, abandon, abandonExecutionById,
   };
 }
