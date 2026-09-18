@@ -2308,7 +2308,49 @@ service cloud.firestore {
       }
     }
 
-    // ── Support tickets and messages ──────────────────────────────────────
+    // ── Support V2 (all mutations are Admin SDK callables) ────────────────
+    //
+    // These three blocks were deployed to production on 2026-09-17 but were
+    // never committed to this file (`git log -S supportCases -- firestore.rules`
+    // is empty). A merge resolution then produced a versioned `firestore.rules`
+    // whose only support coverage was the legacy `supportTickets` lineage
+    // below — so deploying THIS file without them would have silently
+    // default-denied every Support V2 read (`supportCases`/`.../messages`),
+    // breaking a live feature whose callables (`createSupportCase`,
+    // `sendSupportChatMessage`, `markSupportMessageRead`, and the `admin*`
+    // counterparts in functions/src/index.ts) are already deployed.
+    // Restored verbatim from the active ruleset so the two lineages converge
+    // here instead of one overwriting the other; see
+    // firestore-tests/supportV2.rules.test.ts for the regression lock.
+    match /supportCases/{caseId} {
+      allow get, list: if (isAdmin() && accountActive(request.auth.uid))
+        || (hasVerifiedEmailForPrivateAccess()
+            && accountActive(request.auth.uid)
+            && resource.data.ownerUid == request.auth.uid);
+      allow create, update, delete: if false;
+
+      match /messages/{messageId} {
+        allow get, list: if (isAdmin() && accountActive(request.auth.uid))
+          || (hasVerifiedEmailForPrivateAccess()
+              && accountActive(request.auth.uid)
+              && get(/databases/$(database)/documents/supportCases/$(caseId))
+                   .data.ownerUid == request.auth.uid);
+        allow create, update, delete: if false;
+      }
+    }
+
+    // Upload capabilities and quotas are backend control-plane documents.
+    // Storage Rules can inspect upload sessions, but clients never read or
+    // mutate them directly.
+    match /supportUploadSessions/{uploadId} {
+      allow read, write: if false;
+    }
+
+    match /supportRateLimits/{limitId} {
+      allow read, write: if false;
+    }
+
+    // ── Legacy support tickets and messages (rollout compatibility) ───────
     match /supportTickets/{ticketId} {
       allow get, list: if isAdmin()
         || (hasVerifiedEmailForPrivateAccess() && resource.data.userId == request.auth.uid);

@@ -44,6 +44,45 @@ describe('approved password policy', () => {
     expect(validateNewPasswordLocally(password)).toBeNull();
   });
 
+  // Approved policy: >= 8 characters, >= 1 uppercase, >= 1 number,
+  // >= 1 special character. These exact vectors are the acceptance criteria
+  // for the policy and are asserted against the one shared implementation
+  // that the signup form, the submit path and every password mutation use.
+  const MUST_BE_VALID = ['Ajfit@123', 'Treino#2026', 'Senha!123', 'Abcdef1!'] as const;
+  const MUST_BE_INVALID = [
+    ['abcdef1!', 'passwordMissingUppercase'],
+    ['ABCDEFG!', 'passwordMissingNumber'],
+    ['Abcdefg1', 'passwordMissingSpecialChar'],
+    ['Ab1!', 'passwordTooShort'],
+    ['abcdefgh', 'passwordMissingUppercase'],
+  ] as const;
+
+  it.each(MUST_BE_VALID)('accepts the approved example password %s', (password) => {
+    expect(validateNewPasswordLocally(password)).toBeNull();
+    expect(validateAuthFormPasswordPolicy('signup', password)).toBeNull();
+  });
+
+  it.each(MUST_BE_VALID)(
+    'lets the approved example password %s through the full signup policy gate',
+    async (password) => {
+      await expect(assertNewPasswordMeetsPolicy(password)).resolves.toBeUndefined();
+    },
+  );
+
+  it.each(MUST_BE_INVALID)('rejects %s with %s', (password, issue) => {
+    expect(validateNewPasswordLocally(password)).toBe(issue);
+    expect(validateAuthFormPasswordPolicy('signup', password)).toBe(issue);
+  });
+
+  it.each(MUST_BE_INVALID)(
+    'keeps %s blocked at the full signup policy gate',
+    async (password, issue) => {
+      await expect(assertNewPasswordMeetsPolicy(password)).rejects.toMatchObject({
+        code: issue,
+      });
+    },
+  );
+
   it('reports the first unmet rule when several are missing at once', () => {
     // Missing uppercase AND number AND special char: uppercase is checked first.
     expect(validateNewPasswordLocally('abcdefgh')).toBe('passwordMissingUppercase');
@@ -107,12 +146,12 @@ describe('approved password policy', () => {
   });
 
   it.each([
-    [{ containsUppercaseLetter: false }, 'passwordMissingUppercase'],
-    [{ containsNumericCharacter: false }, 'passwordMissingNumber'],
-    [{ containsNonAlphanumericCharacter: false }, 'passwordMissingSpecialChar'],
+    [{ containsUppercaseLetter: false }],
+    [{ containsNumericCharacter: false }],
+    [{ containsNonAlphanumericCharacter: false }],
   ] as const)(
-    'maps a remote Firebase composition failure to the matching local issue (%o)',
-    async (partialStatus, issue) => {
+    'reports remote policy drift instead of a locally worded issue (%o)',
+    async (partialStatus) => {
       mocks.validatePassword.mockResolvedValueOnce({
         isValid: false,
         meetsMinPasswordLength: true,
@@ -122,9 +161,25 @@ describe('approved password policy', () => {
 
       await expect(
         validateNewPasswordAgainstFirebase('Abcdef1!'),
-      ).resolves.toBe(issue);
+      ).resolves.toBe('passwordPolicyMismatch');
     },
   );
+
+  it('never tells the user a locally valid length is too short when the remote minimum is stricter', async () => {
+    // Regression: the remote project policy still enforced `minPasswordLength:
+    // 15` after the approved policy moved to 8. Mapping that to
+    // `passwordTooShort` rendered "use at least 8 characters" for a
+    // 9-character password — a requirement the password visibly met.
+    mocks.validatePassword.mockResolvedValueOnce({
+      isValid: false,
+      meetsMinPasswordLength: false,
+      meetsMaxPasswordLength: true,
+    });
+
+    await expect(validateNewPasswordAgainstFirebase('Ajfit@123')).resolves.toBe(
+      'passwordPolicyMismatch',
+    );
+  });
 
   it('falls back to approved local checks when policy lookup is unavailable', async () => {
     mocks.validatePassword.mockRejectedValueOnce(new Error('network unavailable'));

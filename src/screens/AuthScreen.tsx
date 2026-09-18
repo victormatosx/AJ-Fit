@@ -360,7 +360,8 @@ export function AuthScreen({
     if (passwordPolicyIssue === 'passwordMissingSpecialChar') {
       return t('validation.passwordMissingSpecialChar');
     }
-    if (passwordPolicyIssue) return t('errors.passwordPolicy');
+    if (passwordPolicyIssue)
+      return t('errors.passwordPolicy', { min: PASSWORD_POLICY_MIN_LENGTH });
     if (mode === 'signup' && password !== confirm)
       return t('validation.passwordMismatch');
     if (mode === 'signup' && !legalAccepted)

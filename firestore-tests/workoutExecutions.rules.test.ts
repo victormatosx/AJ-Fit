@@ -187,6 +187,92 @@ describe('users/{uid}/workoutExecutions — create', () => {
     }));
   });
 
+  // P0 regression lock (2026-09-18 incident). The ruleset live in production
+  // omitted `performedLocalDate` from `workoutExecutionCommonValid`'s
+  // `hasOnly`, while `startOrResumeWorkoutExecution` writes that field on
+  // EVERY create (`input.performedLocalDate ?? scheduledLocalDate`,
+  // src/services/workoutExecutions.ts) — so every single start would have been
+  // denied. The advanced-start payload was covered; the two NORMAL starts,
+  // which are the overwhelmingly common path, were not.
+  it('allows the exact V2 normal-start transaction payload for a fixed program (execution + current mutex)', async () => {
+    const db = dbFor(UID);
+    const executionId = 'exec_wpg_12345678_1_2026-09-17';
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'users', UID, 'programInstances', 'wpi_fixed'), {
+        programInstanceId: 'wpi_fixed', contentIdentity: PROGRAM_ID,
+      });
+    });
+
+    await assertSucceeds(runTransaction(db, async (transaction) => {
+      const now = serverTimestamp();
+      transaction.set(doc(db, 'users', UID, 'workoutExecutions', executionId), executionDoc({
+        programInstanceId: 'wpi_fixed',
+        sessionIndex: 1,
+        scheduledLocalDate: '2026-09-17',
+        performedLocalDate: '2026-09-17',
+        executionSchemaVersion: 2,
+        mutexProtocolVersion: 1,
+        startedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      }));
+      transaction.set(doc(db, 'users', UID, 'workoutExecutionState', 'current'), {
+        executionId,
+        programId: PROGRAM_ID,
+        programInstanceId: 'wpi_fixed',
+        sessionIndex: 1,
+        scheduledLocalDate: '2026-09-17',
+        status: 'IN_PROGRESS',
+        schemaVersion: 1,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }));
+  });
+
+  it('allows the exact V2 normal-start transaction payload for a flexible program (execution + current mutex)', async () => {
+    const executionId = 'exec_wpg_12345678_2_2026-09-17';
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const database = context.firestore();
+      await setDoc(doc(database, 'users', UID, 'workoutPrograms', PROGRAM_ID), {
+        programId: PROGRAM_ID, status: 'active', scheduleMode: 'flexible',
+      });
+      await setDoc(doc(database, 'users', UID, 'programInstances', 'wpi_flexible'), {
+        programInstanceId: 'wpi_flexible', contentIdentity: PROGRAM_ID,
+      });
+    });
+    const db = dbFor(UID);
+
+    await assertSucceeds(runTransaction(db, async (transaction) => {
+      const now = serverTimestamp();
+      transaction.set(doc(db, 'users', UID, 'workoutExecutions', executionId), executionDoc({
+        programInstanceId: 'wpi_flexible',
+        sessionIndex: 2,
+        scheduledLocalDate: '2026-09-17',
+        // A flexible program has no calendar, so the scheduled day IS the
+        // performed day — the one-civil-day exception never applies (see the
+        // rejection case below).
+        performedLocalDate: '2026-09-17',
+        executionSchemaVersion: 2,
+        mutexProtocolVersion: 1,
+        startedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      }));
+      transaction.set(doc(db, 'users', UID, 'workoutExecutionState', 'current'), {
+        executionId,
+        programId: PROGRAM_ID,
+        programInstanceId: 'wpi_flexible',
+        sessionIndex: 2,
+        scheduledLocalDate: '2026-09-17',
+        status: 'IN_PROGRESS',
+        schemaVersion: 1,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }));
+  });
+
   it('rejects a performed date more than one civil day before the scheduled date', async () => {
     const db = dbFor(UID);
     await assertFails(setDoc(doc(db, 'users', UID, 'workoutExecutions', 'performed-too-early-real'), executionDoc({

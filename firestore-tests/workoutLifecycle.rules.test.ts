@@ -434,6 +434,55 @@ describe('Workout Lifecycle V2 rules', () => {
     ));
   });
 
+  // `buildPrescriptionInputSnapshot` (src/workoutLifecycle/prescriptionInputs.ts)
+  // always emits `inputs.scheduleMode` now, while the fixture above is the
+  // legacy shape. The deployed ruleset only accepted the legacy key set, so
+  // every ProgramInstance written by the current client was rejected. Both
+  // shapes must stay valid — `isPrescriptionInputSnapshot` accepts either.
+  it('accepts an input snapshot carrying inputs.scheduleMode in both modes, and rejects an unknown mode', async () => {
+    await createLifecycle(UID, prescriptionInputSnapshot({
+      inputs: { ...prescriptionInputSnapshot().inputs, scheduleMode: 'fixed' },
+    }));
+    expect((await getDoc(doc(dbFor(UID), 'users', UID, 'programInstances', 'wpi_initial')))
+      .data()?.prescriptionInputSnapshot.inputs.scheduleMode).toBe('fixed');
+
+    await testEnv.clearFirestore();
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'users', UID), userDocument(UID));
+      await setDoc(doc(context.firestore(), 'users', UID, 'questionnaires', 'q1'), {
+        answers: { level: 'beginner' }, version: 1, createdAt: Timestamp.now(),
+      });
+      await setDoc(doc(context.firestore(), 'users', UID, 'workoutPrograms', 'wpg_content'), {
+        programId: 'wpg_content', prescriptionId: 'wp_content', status: 'active',
+      });
+    });
+    await createLifecycle(UID, prescriptionInputSnapshot({
+      inputs: { ...prescriptionInputSnapshot().inputs, scheduleMode: 'flexible', trainingDays: null },
+    }));
+    expect((await getDoc(doc(dbFor(UID), 'users', UID, 'programInstances', 'wpi_initial')))
+      .data()?.prescriptionInputSnapshot.inputs.scheduleMode).toBe('flexible');
+  });
+
+  it('rejects an input snapshot whose inputs.scheduleMode is not fixed or flexible', async () => {
+    const invalid = prescriptionInputSnapshot({
+      inputs: { ...prescriptionInputSnapshot().inputs, scheduleMode: 'sometimes' },
+    });
+    await seedAuthorityGrant(UID, {
+      operation: 'MIGRATE',
+      targetProgramInstanceId: 'wpi_initial', targetCycleId: 'cyc_initial',
+      targetContentIdentity: 'wpg_content', targetPrescriptionIdentity: 'wp_content',
+      targetPrescriptionInputSnapshot: invalid,
+    });
+    const db = dbFor(UID);
+    await assertFails(setDoc(doc(db, 'users', UID, 'programInstances', 'wpi_initial'), {
+      programInstanceId: 'wpi_initial', cycleId: 'cyc_initial', contentIdentity: 'wpg_content',
+      prescriptionIdentity: 'wp_content', questionnaireId: 'q1',
+      prescriptionInputSnapshot: invalid, activatedAt: serverTimestamp(),
+      supersededAt: null, previousProgramInstanceId: null, activationReason: 'V1_MIGRATION_BASELINE',
+      schemaVersion: 2, createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+    }));
+  });
+
   // Fase 6 — rollout config is ops-controlled (Admin SDK only); client can
   // read the active doc but never write its own eligibility.
   it('allows reading workoutLifecycleRolloutConfig/active but never writing it from the client', async () => {

@@ -77,11 +77,14 @@ export async function validateNewPasswordAgainstFirebase(
     ]);
     const status = await validatePassword(auth, password);
     if (status.isValid) return null;
-    if (status.meetsMinPasswordLength === false) return 'passwordTooShort';
-    if (status.meetsMaxPasswordLength === false) return 'passwordTooLong';
-    if (status.containsUppercaseLetter === false) return 'passwordMissingUppercase';
-    if (status.containsNumericCharacter === false) return 'passwordMissingNumber';
-    if (status.containsNonAlphanumericCharacter === false) return 'passwordMissingSpecialChar';
+
+    // Reaching here means the remote policy rejected a password the declared
+    // policy above already approved — the two have drifted apart. The specific
+    // remote reasons must NOT be reused as issue codes: every one of them is
+    // rendered from the LOCAL constants, so a remote `minPasswordLength: 15`
+    // would tell the user "use at least 8 characters" about a 9-character
+    // password. Report the drift as what it is; the message stays truthful and
+    // the password still gets blocked (Firebase would reject it anyway).
     return 'passwordPolicyMismatch';
   } catch {
     return null;
