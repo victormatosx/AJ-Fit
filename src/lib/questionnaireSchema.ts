@@ -61,7 +61,9 @@ export function cleanApplicableAnswers(input: Quiz): Quiz {
     // the exact-count requirement is enforced by
     // `questionnaireValidationErrors`/`canContinueQuestion`, not silently
     // truncated here.
-    trainingDays: input.days === 7
+    trainingDays: input.scheduleMode === 'flexible'
+      ? null
+      : input.days === 7
       ? [...WEEKDAY_ORDER]
       : input.days == null
         ? null
@@ -96,7 +98,14 @@ export function normalizeLoadedQuiz(input: Partial<Quiz> & { limitationImpact?: 
   // Legacy questionnaires (pre-Schedule Engine) have no `trainingDays` at
   // all — never invent weekdays for them; the Schedule Engine treats a null
   // value as SCHEDULE_SETUP_REQUIRED rather than guessing a preference.
-  const trainingDays = merged.days === 7
+  // Backward compatibility is intentionally one-way: only an explicit
+  // `flexible` value is flexible. Every absent/unknown legacy value is fixed.
+  const scheduleMode: NonNullable<Quiz['scheduleMode']> = currentInput.scheduleMode === 'flexible'
+    ? 'flexible'
+    : 'fixed';
+  const trainingDays = scheduleMode === 'flexible'
+    ? null
+    : merged.days === 7
     ? [...WEEKDAY_ORDER]
     : Array.isArray(merged.trainingDays) && merged.trainingDays.length > 0
       ? normalizeWeekdays(strings(merged.trainingDays))
@@ -110,6 +119,7 @@ export function normalizeLoadedQuiz(input: Partial<Quiz> & { limitationImpact?: 
     : loadedConditions;
   return {
     ...merged,
+    scheduleMode,
     limits: loadedLimits,
     trainingDays,
     equipment: strings(merged.equipment),
@@ -136,6 +146,7 @@ export function updateQuizAnswer(quiz: Quiz, stepId: OnboardingStepId, value: un
   let next: Quiz;
   switch (stepId) {
     case 'days': next = { ...quiz, days: Number(value) }; break;
+    case 'scheduleMode': next = { ...quiz, scheduleMode: value as Quiz['scheduleMode'] }; break;
     case 'trainingDays': next = { ...quiz, trainingDays: normalizeWeekdays(value as string[]) }; break;
     case 'primaryPlace': next = { ...quiz, primaryPlace: value as Quiz['primaryPlace'] }; break;
     case 'specialConditions': next = { ...quiz, specialConditions: normalizeSpecialConditions(value as string[]) }; break;
@@ -192,8 +203,9 @@ function hasNoneConflict(values: string[]): boolean { return values.includes('no
  * `SCHEDULE_SETUP_REQUIRED` on its own (docs/workout-lifecycle/
  * 03_SCHEDULE_ENGINE.md), never by blocking the prescription pipeline.
  */
-export function trainingDaysValid(quiz: Pick<Quiz, 'days' | 'trainingDays'>): boolean {
+export function trainingDaysValid(quiz: Pick<Quiz, 'days' | 'scheduleMode' | 'trainingDays'>): boolean {
   if (quiz.days == null || ![2, 3, 4, 5, 6, 7].includes(quiz.days)) return false;
+  if (quiz.scheduleMode === 'flexible') return true;
   return (quiz.trainingDays?.length ?? 0) === quiz.days;
 }
 

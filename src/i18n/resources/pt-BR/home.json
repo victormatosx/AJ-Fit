@@ -56,6 +56,15 @@
       "title": "Dia de descanso",
       "body": "Hoje não é um dos seus dias de treino."
     },
+    "advance": {
+      "cta": "Adiantar treino de {{weekday}}",
+      "helper": "Faça hoje o treino programado para amanhã.",
+      "confirmTitle": "Adiantar este treino?",
+      "confirmBody": "Você fará hoje o treino previsto para {{weekday}}. Ao concluir, ele será considerado realizado e não aparecerá novamente amanhã.",
+      "cancel": "Cancelar",
+      "confirm": "Adiantar treino",
+      "dismiss": "Fechar confirmação para adiantar treino"
+    },
     "completedToday": {
       "title": "Treino concluído",
       "body": "Você já concluiu seu treino de hoje."
@@ -132,6 +141,7 @@
       "loads": "Cargas",
       "photos": "Fotos"
     },
+    "chartInteractionHint": "Toque no gráfico para ver o valor e a data de cada registro.",
     "body": {
       "currentWeight": "Peso atual",
       "composition": "Composição",
@@ -148,6 +158,25 @@
         "fatMass": "Massa gorda",
         "bmi": "IMC"
       },
+      "measurements": {
+        "title": "Medidas",
+        "selectLabel": "Dobra cutânea",
+        "singleEntry": "Registre essa dobra em outra avaliação para ver a curva de evolução.",
+        "empty": "Nenhum registro de {{measurement}} encontrado nas avaliações.",
+        "options": {
+          "chest": "Peitoral",
+          "axilla": "Axilar média",
+          "tricep": "Tricipital",
+          "subscap": "Subescapular",
+          "abdom": "Abdominal",
+          "supra": "Supra-ilíaca",
+          "thigh": "Coxa"
+        },
+        "accessibility": {
+          "select": "Selecionar dobra cutânea",
+          "option": "Exibir evolução de {{measurement}}"
+        }
+      },
       "empty": {
         "title": "Nenhuma avaliação registrada",
         "description": "Registre sua primeira avaliação física para acompanhar peso e composição corporal ao longo do tempo.",
@@ -156,17 +185,48 @@
     },
     "loads": {
       "eyebrow": "Cargas",
+      "loading": "Carregando cargas",
+      "records90Title": "Recordes nos últimos 90 dias",
+      "recordsCount_one": "recorde batido",
+      "recordsCount_other": "recordes batidos",
+      "topRecords": "Principais recordes",
+      "noRecentRecords": "Nenhum novo recorde nos últimos 90 dias. Continue registrando suas cargas para acompanhar a evolução.",
+      "recordGain": "+{{value}}{{unit}}",
+      "seeAllRecords": "Ver todos os recordes",
+      "showLess": "Mostrar apenas os principais",
+      "exerciseEvolution": "Evolução por exercício",
+      "searchPlaceholder": "Buscar exercício",
+      "noExerciseFound": "Nenhum exercício encontrado",
+      "currentLoad": "Carga mais recente",
+      "periodDifference": "Diferença entre o primeiro e o último registro em {{days}} dias",
+      "noComparison": "Registre este exercício novamente para comparar a evolução",
+      "noDataForPeriod": "Nenhuma carga registrada para este exercício no período selecionado.",
+      "ranges": {
+        "30": "30 dias",
+        "60": "60 dias",
+        "90": "90 dias",
+        "365": "1 ano"
+      },
       "maxLoad": "{{exercise}} · carga máxima",
       "delta": "{{direction}} +{{value}} {{unit}}",
       "period_one": "Evolução · {{count}} semana",
       "period_other": "Evolução · {{count}} semanas",
       "recordsTitle": "Recordes recentes",
-      "recordedAt": "Registrado em {{date}}",
+      "recordedAt": "{{date}}",
       "gain": "+{{value}} {{unit}} desde o início",
       "exercises": {
-        "benchPress": { "short": "Supino", "full": "Supino reto" },
-        "squat": { "short": "Agachamento", "full": "Agachamento" },
-        "deadlift": { "short": "Terra", "full": "Levantamento terra" }
+        "benchPress": {
+          "short": "Supino",
+          "full": "Supino reto"
+        },
+        "squat": {
+          "short": "Agachamento",
+          "full": "Agachamento"
+        },
+        "deadlift": {
+          "short": "Terra",
+          "full": "Levantamento terra"
+        }
       },
       "accessibility": {
         "selectExercise": "Exibir evolução de {{exercise}}",
@@ -174,8 +234,13 @@
       },
       "empty": {
         "title": "Ainda sem histórico de cargas",
-        "description": "As cargas que você registra durante o treino valem para a sessão atual.",
-        "hint": "Histórico entre sessões ainda não disponível"
+        "description": "As cargas concluídas durante seus treinos aparecerão aqui automaticamente.",
+        "hint": "Registre uma série com carga para começar"
+      },
+      "error": {
+        "title": "Não foi possível carregar suas cargas",
+        "description": "Confira sua conexão e tente novamente.",
+        "retry": "Tentar novamente"
       }
     },
     "photos": {
@@ -192,7 +257,8 @@
         "description": "Use a autenticação do seu dispositivo para acessar suas fotos privadas.",
         "cta": "Desbloquear",
         "unlocking": "Desbloqueando…",
-        "badge": "Área privada"
+        "badge": "Área privada",
+        "addPhotosHint": "Adicione suas fotos de evolução aqui"
       },
       "notConfigured": {
         "title": "Proteção não configurada",
@@ -212,6 +278,13 @@
         "badge": "Área privada"
       },
       "list": {
+        "reauthRequired": "Sua sessão precisa ser confirmada novamente. Saia e entre na conta para acessar suas fotos.",
+        "reauthTitle": "Confirme sua identidade",
+        "reauthBody": "Para proteger suas fotos, confirme sua identidade novamente.",
+        "reauthError": "Não foi possível confirmar sua identidade agora. Tente novamente.",
+        "confirmIdentity": "Confirmar identidade",
+        "cancel": "Cancelar",
+        "signOut": "Sair da conta",
         "loading": "Carregando suas fotos…",
         "error": "Não foi possível carregar suas fotos.",
         "retry": "Tentar novamente",
@@ -228,7 +301,7 @@
         "photoSection": "Foto",
         "previewSection": "Prévia",
         "save": "Salvar foto",
-        "saving": "Salvando…",
+        "saving": "Salvando imagens…",
         "change": "Trocar foto",
         "slotTaken": "Já existe uma foto de {{pose}} para esta data.",
         "remove": "Remover",
@@ -282,7 +355,8 @@
         "changeAfter": "Trocar a foto de depois",
         "addPhotoLocked": "Adicionar nova foto, recurso Premium",
         "zoomHint": "Toque duas vezes para ampliar ou reduzir",
-        "photoPosition": "Foto {{current}} de {{total}}"
+        "photoPosition": "Foto {{current}} de {{total}}",
+        "retrySync": "Tentar sincronizar a foto novamente"
       },
       "poses": {
         "front": "Frente",
@@ -352,6 +426,12 @@
         "noCandidate": "Não há outra foto desta pose para comparar.",
         "chooseAnother": "Escolher outra foto",
         "unclassified": "Sem classificação"
+      },
+      "sync": {
+        "pending": "Sincronizando",
+        "failed": "Falha ao sincronizar",
+        "retry": "Tentar novamente",
+        "preparing": "Salvando"
       }
     },
     "accessibility": {
@@ -370,7 +450,8 @@
         "TODAY_COMPLETED": "Treino de hoje concluído",
         "TODAY_PENDING": "Treino de hoje pendente",
         "MISSED": "Treino não realizado",
-        "UPCOMING": "Treino programado",
+      "UPCOMING": "Treino programado",
+      "FULFILLED_EARLY": "Treino cumprido antecipadamente",
         "ACTIVE_RECOVERY": "Recuperação ativa",
         "REST": "Dia de descanso",
         "BEFORE_PROGRAM": "Antes do início do programa"
@@ -388,6 +469,7 @@
   },
   "upcoming": {
     "title": "Próximos treinos",
+    "flexible": "Livre",
     "meta_one": "~{{minutes}} min · {{count}} exercício",
     "meta_other": "~{{minutes}} min · {{count}} exercícios",
     "metaNoEstimate_one": "{{count}} exercício",
@@ -397,6 +479,7 @@
       "kicker": "Próximo treino",
       "close": "Fechar detalhes do treino",
       "scheduledFor": "{{weekday}} · {{date}}",
+      "flexibleAvailable": "Disponível quando você quiser treinar",
       "exercises": "Exercícios",
       "setsReps": "{{sets}} séries × {{reps}}",
       "setsDuration": "{{sets}} séries × {{duration}}",

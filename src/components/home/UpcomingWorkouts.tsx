@@ -8,6 +8,7 @@ import { resolveSessionDisplayName, type LooseTranslate } from '../../workoutPre
 import type { UpcomingWorkoutViewModel } from '../../home/upcomingWorkouts';
 
 const WEEKDAY_COLUMN_WIDTH = 46;
+const FLEXIBLE_LABEL_WIDTH = 82;
 
 /**
  * "Próximos treinos" — the forward view of the plan that the Today poster
@@ -39,7 +40,9 @@ export function UpcomingWorkouts({
 
       <View style={{ gap: 10 }}>
         {workouts.map((workout) => {
-          const weekdayLabel = tLoose(`quiz:trainingDays.options.${workout.weekday}`).toUpperCase();
+          const weekdayLabel = workout.flexible
+            ? t('home:upcoming.flexible').toUpperCase()
+            : tLoose(`quiz:trainingDays.options.${workout.weekday}`).toUpperCase();
           const sessionLabel = resolveSessionDisplayName(
             tLoose,
             workout.sessionName,
@@ -55,7 +58,7 @@ export function UpcomingWorkouts({
 
           return (
             <Pressable
-              key={workout.localDate}
+              key={`${workout.localDate}:${workout.sessionIndex}`}
               accessibilityRole="button"
               accessibilityLabel={t('home:upcoming.open', {
                 weekday: weekdayLabel,
@@ -76,12 +79,14 @@ export function UpcomingWorkouts({
             >
               <Text
                 style={{
-                  width: WEEKDAY_COLUMN_WIDTH,
+                  width: workout.flexible ? FLEXIBLE_LABEL_WIDTH : WEEKDAY_COLUMN_WIDTH,
                   fontFamily: theme.fonts.monoBold,
                   fontSize: 14,
                   letterSpacing: 1.2,
                   color: theme.colors.textFaint,
                 }}
+                numberOfLines={1}
+                ellipsizeMode="clip"
               >
                 {weekdayLabel}
               </Text>

@@ -3,8 +3,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   platform: 'ios',
   available: vi.fn(),
-  prevent: vi.fn(),
-  allow: vi.fn(),
   enableSwitcher: vi.fn(),
   disableSwitcher: vi.fn(),
   logError: vi.fn(),
@@ -20,8 +18,6 @@ vi.mock('react-native', () => ({
 
 vi.mock('expo-screen-capture', () => ({
   isAvailableAsync: mocks.available,
-  preventScreenCaptureAsync: mocks.prevent,
-  allowScreenCaptureAsync: mocks.allow,
   enableAppSwitcherProtectionAsync: mocks.enableSwitcher,
   disableAppSwitcherProtectionAsync: mocks.disableSwitcher,
 }));
@@ -29,7 +25,6 @@ vi.mock('expo-screen-capture', () => ({
 vi.mock('../../lib/logger', () => ({ logError: mocks.logError }));
 
 import {
-  PHOTO_VAULT_SCREEN_CAPTURE_KEY,
   activatePhotoVaultScreenProtection,
   deactivatePhotoVaultScreenProtection,
   isPhotoVaultScreenProtectionActive,
@@ -39,8 +34,6 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.platform = 'ios';
   mocks.available.mockResolvedValue(true);
-  mocks.prevent.mockResolvedValue(undefined);
-  mocks.allow.mockResolvedValue(undefined);
   mocks.enableSwitcher.mockResolvedValue(undefined);
   mocks.disableSwitcher.mockResolvedValue(undefined);
 });
@@ -48,40 +41,38 @@ afterEach(async () => {
   await deactivatePhotoVaultScreenProtection();
 });
 
-describe('Photo Vault screen protection', () => {
-  it('enables capture blocking and iOS app-switcher protection', async () => {
+/**
+ * Screenshot/recording are never blocked by this module — see the file's own
+ * doc comment. These tests only cover the iOS app-switcher preview blur,
+ * which is the one thing that remains here.
+ */
+describe('Photo Vault screen protection (iOS app-switcher blur only)', () => {
+  it('enables only the iOS app-switcher blur, nothing else', async () => {
     await activatePhotoVaultScreenProtection();
 
-    expect(mocks.prevent).toHaveBeenCalledWith(PHOTO_VAULT_SCREEN_CAPTURE_KEY);
     expect(mocks.enableSwitcher).toHaveBeenCalledWith(1);
     expect(isPhotoVaultScreenProtectionActive()).toBe(true);
   });
 
-  it('uses Android FLAG_SECURE through capture blocking without an iOS call', async () => {
+  it('is a no-op on Android: no native call is made at all', async () => {
     mocks.platform = 'android';
 
     await activatePhotoVaultScreenProtection();
 
-    expect(mocks.prevent).toHaveBeenCalledWith(PHOTO_VAULT_SCREEN_CAPTURE_KEY);
+    expect(mocks.available).not.toHaveBeenCalled();
     expect(mocks.enableSwitcher).not.toHaveBeenCalled();
+    expect(isPhotoVaultScreenProtectionActive()).toBe(false);
+
+    await deactivatePhotoVaultScreenProtection();
+    expect(mocks.disableSwitcher).not.toHaveBeenCalled();
   });
 
-  it('releases only its own keyed protection', async () => {
+  it('releases the iOS app-switcher blur', async () => {
     await activatePhotoVaultScreenProtection();
     await deactivatePhotoVaultScreenProtection();
 
-    expect(mocks.allow).toHaveBeenCalledWith(PHOTO_VAULT_SCREEN_CAPTURE_KEY);
     expect(mocks.disableSwitcher).toHaveBeenCalledTimes(1);
     expect(isPhotoVaultScreenProtectionActive()).toBe(false);
-  });
-
-  it('removes the iOS switcher overlay before restoring the capture hierarchy', async () => {
-    await activatePhotoVaultScreenProtection();
-    await deactivatePhotoVaultScreenProtection();
-
-    expect(mocks.disableSwitcher.mock.invocationCallOrder[0]).toBeLessThan(
-      mocks.allow.mock.invocationCallOrder[0]!,
-    );
   });
 
   it('keeps native ownership active after a failed release so foreground can retry', async () => {
@@ -91,39 +82,14 @@ describe('Photo Vault screen protection', () => {
     await deactivatePhotoVaultScreenProtection();
 
     expect(isPhotoVaultScreenProtectionActive()).toBe(true);
-    expect(mocks.allow).not.toHaveBeenCalled();
     expect(mocks.logError).toHaveBeenCalledWith(
       'photoVault:screenProtection',
       expect.objectContaining({ message: 'vaultScreenProtectionFailed' }),
-      {
-        issue: 'vaultScreenProtectionFailed',
-        providerCode: 'deactivate_switcher',
-      },
+      { issue: 'vaultScreenProtectionFailed' },
     );
 
     await deactivatePhotoVaultScreenProtection();
     expect(isPhotoVaultScreenProtectionActive()).toBe(false);
-    expect(mocks.allow).toHaveBeenCalledWith(PHOTO_VAULT_SCREEN_CAPTURE_KEY);
-  });
-
-  it('also retries when keyed capture release fails after the switcher overlay is removed', async () => {
-    await activatePhotoVaultScreenProtection();
-    mocks.allow.mockRejectedValueOnce(new Error('window still transitioning'));
-
-    await deactivatePhotoVaultScreenProtection();
-    expect(isPhotoVaultScreenProtectionActive()).toBe(true);
-    expect(mocks.logError).toHaveBeenCalledWith(
-      'photoVault:screenProtection',
-      expect.objectContaining({ message: 'vaultScreenProtectionFailed' }),
-      {
-        issue: 'vaultScreenProtectionFailed',
-        providerCode: 'deactivate_allow',
-      },
-    );
-
-    await deactivatePhotoVaultScreenProtection();
-    expect(isPhotoVaultScreenProtectionActive()).toBe(false);
-    expect(mocks.allow).toHaveBeenCalledTimes(2);
   });
 
   it('coalesces concurrent native releases', async () => {
@@ -140,17 +106,16 @@ describe('Photo Vault screen protection', () => {
 
     finishDisable();
     await Promise.all([first, second]);
-    expect(mocks.allow).toHaveBeenCalledTimes(1);
+    expect(isPhotoVaultScreenProtectionActive()).toBe(false);
   });
 
-  it('fails closed and rolls capture blocking back when iOS overlay setup fails', async () => {
+  it('fails closed when the iOS overlay setup fails', async () => {
     mocks.enableSwitcher.mockRejectedValue(new Error('native failure'));
 
     await expect(activatePhotoVaultScreenProtection()).rejects.toMatchObject({
       issue: 'vaultScreenProtectionFailed',
     });
 
-    expect(mocks.allow).toHaveBeenCalledWith(PHOTO_VAULT_SCREEN_CAPTURE_KEY);
     expect(isPhotoVaultScreenProtectionActive()).toBe(false);
   });
 
@@ -160,17 +125,22 @@ describe('Photo Vault screen protection', () => {
     await expect(activatePhotoVaultScreenProtection()).rejects.toMatchObject({
       issue: 'vaultScreenProtectionUnavailable',
     });
-    expect(mocks.prevent).not.toHaveBeenCalled();
-    expect(mocks.allow).not.toHaveBeenCalled();
-    expect(mocks.disableSwitcher).not.toHaveBeenCalled();
+    expect(mocks.enableSwitcher).not.toHaveBeenCalled();
   });
 
-  it('does not request screenshot-detection permissions', async () => {
+  it('never calls a screenshot/recording capture API — screenshots and recording stay allowed', async () => {
     const { readFileSync } = await import('node:fs');
     const source = readFileSync('src/services/photoVaultScreenProtection.ts', 'utf8');
 
+    expect(source).not.toContain('preventScreenCaptureAsync');
+    expect(source).not.toContain('allowScreenCaptureAsync');
     expect(source).not.toContain('requestPermissionsAsync');
     expect(source).not.toContain('READ_MEDIA_IMAGES');
     expect(source).not.toContain('addScreenshotListener');
+
+    await activatePhotoVaultScreenProtection();
+    expect(mocks.available).toHaveBeenCalled();
+    // Only the switcher call is made — nothing that could block capture.
+    expect(mocks.enableSwitcher).toHaveBeenCalledTimes(1);
   });
 });

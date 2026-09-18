@@ -136,4 +136,54 @@ describe('buildUpcomingWorkouts', () => {
     expect(upcoming[0].exerciseCount).toBe(2);
     expect(upcoming[0].estimatedMinutes).toBeGreaterThan(0);
   });
+
+  it('flexible presents the next sessions in circular sequence without calendar dates', () => {
+    const upcoming = buildUpcomingWorkouts({
+      scheduleMode: 'flexible',
+      todayLocalDate: '2026-09-10',
+      trainingDays: [],
+      sessions: sessions(4),
+      resolution: { status: 'SESSION_READY', sessionIndex: 1 },
+    });
+    expect(upcoming.map((item) => item.sessionIndex)).toEqual([2, 3, 0]);
+    expect(upcoming.every((item) => item.sessionIndex !== 1)).toBe(true);
+    expect(upcoming.every((item) => item.flexible)).toBe(true);
+  });
+
+  it.each([
+    [0, [1, 2, 3]],
+    [1, [2, 3, 0]],
+    [3, [0, 1, 2]],
+  ])('flexible wraps the next three sessions from current=%s', (current, expected) => {
+    const upcoming = buildUpcomingWorkouts({
+      scheduleMode: 'flexible', todayLocalDate: '2026-09-10', trainingDays: [],
+      sessions: sessions(4), resolution: { status: 'SESSION_READY', sessionIndex: current },
+    });
+    expect(upcoming.map((item) => item.sessionIndex)).toEqual(expected);
+  });
+
+  it.each([
+    [3, 0, [1, 2]],
+    [2, 0, [1]],
+  ])('flexible never repeats the current session for %s prescribed sessions', (sessionCount, current, expected) => {
+    const upcoming = buildUpcomingWorkouts({
+      scheduleMode: 'flexible', todayLocalDate: '2026-09-10', trainingDays: [],
+      sessions: sessions(sessionCount), resolution: { status: 'SESSION_READY', sessionIndex: current },
+    });
+    expect(upcoming.map((item) => item.sessionIndex)).toEqual(expected);
+    expect(upcoming.every((item) => item.sessionIndex !== current)).toBe(true);
+  });
+
+  it('recomputes flexible previews when the authoritative cursor advances', () => {
+    const input = {
+      scheduleMode: 'flexible' as const,
+      todayLocalDate: '2026-09-10' as const,
+      trainingDays: [] as const,
+      sessions: sessions(4),
+    };
+    const before = buildUpcomingWorkouts({ ...input, resolution: { status: 'SESSION_READY', sessionIndex: 0 } });
+    const after = buildUpcomingWorkouts({ ...input, resolution: { status: 'SESSION_READY', sessionIndex: 1 } });
+    expect(before.map((item) => item.sessionIndex)).toEqual([1, 2, 3]);
+    expect(after.map((item) => item.sessionIndex)).toEqual([2, 3, 0]);
+  });
 });

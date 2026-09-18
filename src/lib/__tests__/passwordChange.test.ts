@@ -7,8 +7,8 @@ import {
 
 const valid: PasswordChangeInput = {
   currentPassword: '123456',
-  newPassword: 'new-passphrase-valid',
-  confirmation: 'new-passphrase-valid',
+  newPassword: 'Passphrase1!',
+  confirmation: 'Passphrase1!',
 };
 
 describe('password change validation', () => {
@@ -18,8 +18,11 @@ describe('password change validation', () => {
     [{ ...valid, confirmation: '' }, 'confirmationRequired'],
     [{ ...valid, confirmation: 'different' }, 'passwordMismatch'],
     [{ currentPassword: 'same-pass', newPassword: 'same-pass', confirmation: 'same-pass' }, 'passwordUnchanged'],
-    [{ ...valid, newPassword: 'a'.repeat(14), confirmation: 'a'.repeat(14) }, 'passwordTooShort'],
+    [{ ...valid, newPassword: 'a'.repeat(7), confirmation: 'a'.repeat(7) }, 'passwordTooShort'],
     [{ ...valid, newPassword: 'a'.repeat(4097), confirmation: 'a'.repeat(4097) }, 'passwordTooLong'],
+    [{ ...valid, newPassword: 'abcdefg1!', confirmation: 'abcdefg1!' }, 'passwordMissingUppercase'],
+    [{ ...valid, newPassword: 'Abcdefg!', confirmation: 'Abcdefg!' }, 'passwordMissingNumber'],
+    [{ ...valid, newPassword: 'Abcdefgh1', confirmation: 'Abcdefgh1' }, 'passwordMissingSpecialChar'],
   ] as const)('rejects invalid input with %s', (input, issue) => {
     expect(validatePasswordChange(input)).toBe(issue);
   });
@@ -32,8 +35,8 @@ describe('password change validation', () => {
     expect(
       validatePasswordChange({
         currentPassword: '123456',
-        newPassword: 'a'.repeat(15),
-        confirmation: 'a'.repeat(15),
+        newPassword: 'Passphrase123!',
+        confirmation: 'Passphrase123!',
       }),
     ).toBeNull();
   });

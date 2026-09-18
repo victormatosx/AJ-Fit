@@ -1,4 +1,4 @@
-import type { Weekday } from '../state/AppState';
+import type { ScheduleMode, Weekday } from '../state/AppState';
 
 /**
  * Schedule Engine V1 (docs/workout-lifecycle/03_SCHEDULE_ENGINE.md).
@@ -9,6 +9,8 @@ import type { Weekday } from '../state/AppState';
 
 /** User preference. Survives program regeneration; not program-scoped. */
 export interface ScheduleConfig {
+  /** Absent on legacy documents and therefore interpreted as `fixed`. */
+  scheduleMode?: ScheduleMode;
   trainingDays: Weekday[];
   /** Program-scoped guidance days. Never walked as executable sessions. */
   activeRecoveryDays?: Weekday[];
@@ -29,6 +31,8 @@ export interface ScheduleEvent {
   sessionIndex: number;
   /** Local calendar date (YYYY-MM-DD) this occurrence was scheduled for. */
   scheduledDate: string;
+  /** Optional real activity date for audit/visual history; never schedule authority. */
+  performedLocalDate?: string;
   reasonCode?: SkipReasonCode;
   decision?: MissDecision;
 }
@@ -81,6 +85,8 @@ export type ScheduleResolution =
 export interface ResolveWorkoutScheduleInput {
   hasActiveProgram: boolean;
   sessionCount: number;
+  /** Program-scoped authority. Absence preserves every legacy plan as fixed. */
+  scheduleMode?: ScheduleMode;
   config: ScheduleConfig | null;
   /** null means the program has never been walked yet (freshly activated). */
   state: Pick<ScheduleState, 'nextSessionIndex' | 'cursorDate' | 'pendingMissDecision' | 'lastCompletedAt'> | null;

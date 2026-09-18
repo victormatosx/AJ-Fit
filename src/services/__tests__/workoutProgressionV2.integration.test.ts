@@ -236,4 +236,46 @@ describe.skipIf(!enabled)('Progression Engine V2 — real Firestore Emulator int
       expect(decision.adherence.quality).toBe('BELOW_TARGET');
     }
   });
+
+  it('flexible uses prescribedTrainingFrequency as the weekly target without weekday debt', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const rawDb = ctx.firestore();
+      await setDoc(doc(rawDb, 'users', UID, 'workoutPrograms', 'program-a'), {
+        programId: 'program-a',
+        prescriptionId: 'rx-a',
+        questionnaireId: 'q1',
+        status: 'active',
+        scheduleMode: 'flexible',
+        prescribedTrainingFrequency: 3,
+        weeklySchedule: [],
+        sessions: [{ name: 'A', exercises: [{ exerciseId: 'ex1', sets: 1 }] }],
+      });
+      await setDoc(doc(rawDb, 'users', UID, 'workoutProgramState', 'scheduleConfig'), {
+        scheduleMode: 'flexible', trainingDays: [], timezone: 'UTC', scheduleVersion: 1,
+      });
+    });
+    const bundle = await ensureWorkoutLifecycleForLegacyActiveProgram(UID, {
+      contentIdentity: 'program-a', prescriptionIdentity: 'rx-a', questionnaireId: 'q1',
+      questionnaireExperienceLevel: 'beginner', activatedAt: Timestamp.fromMillis(ACTIVATED_AT_MS),
+    });
+    const instanceId = bundle.programInstance.programInstanceId;
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      for (const [index, offset] of [0, 2, 4, 8, 10].entries()) {
+        await seedExecution({
+          db: ctx.firestore(),
+          executionId: `flexible-${index}`,
+          programInstanceId: instanceId,
+          scheduledLocalDate: localDate(offset),
+          status: 'COMPLETED',
+        });
+      }
+    });
+    const decision = await evaluateProgressionV2ForUser(UID, new Date(ACTIVATED_AT_MS + 13 * MS_PER_DAY));
+    expect(decision).toMatchObject({ type: 'PROGRESS_CONTINUES' });
+    if (decision?.type === 'PROGRESS_CONTINUES') {
+      expect(decision.validSessionCount).toBe(5);
+      expect(decision.adherence.ratio).toBeCloseTo(5 / 6, 8);
+      expect(decision.adherence.quality).toBe('GOOD');
+    }
+  });
 });

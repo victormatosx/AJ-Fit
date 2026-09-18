@@ -60,6 +60,8 @@ import { installWorkoutLifecycleAuthorityFixture, resetWorkoutLifecycleAuthority
 
 const T003_SEED = buildSeedDocuments().find((t) => t.id === 'T003');
 if (!T003_SEED) throw new Error('T003 fixture missing — cannot run this integration test');
+const T004_SEED = buildSeedDocuments().find((t) => t.id === 'T004');
+if (!T004_SEED) throw new Error('T004 fixture missing — cannot run this integration test');
 
 const ANSWERS = completeAnswers({
   level: 'intermediate', days: 4, place: 'gym', sex: 'm', goal: 'gain_muscle',
@@ -89,6 +91,7 @@ describe.skipIf(!enabled)('Onboarding → signup lifecycle (conceptual E2E) — 
     await enableWorkoutLifecycleRollout(testEnv);
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       await setDoc(doc(ctx.firestore(), 'workoutTemplates', 'T003'), T003_SEED);
+      await setDoc(doc(ctx.firestore(), 'workoutTemplates', 'T004'), T004_SEED);
       await setDoc(doc(ctx.firestore(), 'limitationDatasetState', 'active'), {
         datasetVersion: CANONICAL_LIMITATION_DATASET_VERSION,
         limitationDatasetHash: CANONICAL_LIMITATION_DATASET_HASH,
@@ -139,6 +142,61 @@ describe.skipIf(!enabled)('Onboarding → signup lifecycle (conceptual E2E) — 
     // immediately, first try.
     const secondActiveRead = await getDoc(doc(mocks.db as never, 'users', UID, 'workoutProgramState', 'active'));
     expect(secondActiveRead.data()?.programId).toBe(activeSnap.data()?.programId);
+  });
+
+  it('persists a complete flexible onboarding without inventing weekdays', async () => {
+    const flexibleAnswers = completeAnswers({
+      level: 'intermediate',
+      days: 5,
+      place: 'gym',
+      sex: 'm',
+      goal: 'gain_muscle',
+      scheduleMode: 'flexible',
+      trainingDays: null,
+    });
+    const prepared = await prepareWorkoutProgramLocally(flexibleAnswers);
+    expect(prepared.status).toBe('SUCCESS');
+    const questionnaireId = await provisionNewUser(fakeUser, { name: 'Fiona', answers: flexibleAnswers });
+    expect(questionnaireId).not.toBeNull();
+    if (!questionnaireId) return;
+    const persisted = await persistPreparedWorkoutProgram({
+      uid: UID,
+      questionnaireId,
+      questionnaireVersion: 1,
+      answers: flexibleAnswers,
+      prepared,
+      source: 'onboarding',
+    });
+    expect(persisted.status).toBe('SUCCESS');
+    if (persisted.status !== 'SUCCESS') return;
+    expect(persisted.plan).toMatchObject({
+      scheduleMode: 'flexible',
+      availability: { days: 5, weekdays: [] },
+      weeklySchedule: [],
+    });
+    expect(trainingDaysValid(flexibleAnswers)).toBe(true);
+    await ensureScheduleConfigFromQuestionnaire(UID, [], 'America/Sao_Paulo', 'flexible');
+    expect(await loadScheduleConfig(UID)).toEqual({
+      scheduleMode: 'flexible',
+      trainingDays: [],
+      timezone: 'America/Sao_Paulo',
+      scheduleVersion: 1,
+    });
+    const [instances, lifecycle, active, loaded] = await Promise.all([
+      getDocs(collection(mocks.db as never, 'users', UID, 'programInstances')),
+      getDoc(doc(mocks.db as never, 'users', UID, 'workoutLifecycleState', 'current')),
+      getDoc(doc(mocks.db as never, 'users', UID, 'workoutProgramState', 'active')),
+      loadActiveWorkoutProgram(UID),
+    ]);
+    expect(instances.size).toBe(1);
+    expect(instances.docs[0].data().prescriptionInputSnapshot.inputs).toMatchObject({
+      days: 5,
+      scheduleMode: 'flexible',
+      trainingDays: null,
+    });
+    expect(lifecycle.data()?.activeProgramInstanceId).toBe(instances.docs[0].id);
+    expect(active.exists()).toBe(true);
+    expect(loaded).toMatchObject({ scheduleMode: 'flexible', status: 'active' });
   });
 
   // (H)(K) — audit items: Home's first mount already has an active program,

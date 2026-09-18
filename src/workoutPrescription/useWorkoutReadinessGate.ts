@@ -124,11 +124,14 @@ export function useWorkoutReadinessGate(input: {
           ?.filter((day) => day.state === 'TRAINING')
           .map((day) => day.weekday) ?? []
         : [];
+      const scheduleMode = prescription.status === 'SUCCESS'
+        ? prescription.plan.scheduleMode ?? 'fixed'
+        : questionnaire?.answers.scheduleMode ?? 'fixed';
 
       // Mirrors `useWorkoutSchedule`'s own bootstrap exactly (docs/
       // workout-lifecycle/03_SCHEDULE_ENGINE.md) — create-only, never
       // overwrites an existing/user-edited config.
-      if (questionnaire && (prescribedTrainingDays.length > 0 || trainingDaysValid(questionnaire.answers))) {
+      if (questionnaire && (scheduleMode === 'flexible' || prescribedTrainingDays.length > 0 || trainingDaysValid(questionnaire.answers))) {
         try {
           const existingConfig = await loadScheduleConfig(uid);
           if (!existingConfig) {
@@ -138,6 +141,7 @@ export function useWorkoutReadinessGate(input: {
                 ? prescribedTrainingDays
                 : normalizeWeekdays(questionnaire.answers.trainingDays ?? []),
               deviceTimezone(),
+              scheduleMode,
             );
           }
         } catch (error) {

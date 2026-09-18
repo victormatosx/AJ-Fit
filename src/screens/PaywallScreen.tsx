@@ -795,7 +795,7 @@ export function PaywallScreen({
           // CustomerInfo; the root gate is the only code allowed to open AppShell.
           setPurchaseState({
             kind: 'notice',
-            message: 'Assinatura confirmada. Seu acesso Premium está ativo.',
+            message: t('paywall.feedback.purchaseConfirmed'),
           });
           // Best-effort, fire-and-forget: accelerates the DURABLE server
           // marker (`metadata.commercialGateResolvedAt`) so a later
@@ -809,7 +809,7 @@ export function PaywallScreen({
         case 'missing-entitlement':
           setPurchaseState({
             kind: 'notice',
-            message: 'A compra foi processada, mas o acesso Premium ainda não foi identificado. Tente restaurar as compras.',
+            message: t('paywall.feedback.purchasePendingAccess'),
           });
           break;
         case 'cancelled':
@@ -819,7 +819,7 @@ export function PaywallScreen({
           if (outcome.status === 'error') {
             setPurchaseState({
               kind: 'error',
-              message: outcome.message,
+              message: t(`paywall.errors.purchase.${outcome.issue}`),
               offline: outcome.offline,
             });
           }
@@ -853,7 +853,7 @@ export function PaywallScreen({
         // Same as purchase: CustomerInfo drives SubscriptionContext and the gate.
         setRestoreState({
           kind: 'notice',
-          message: 'Compra restaurada. Seu acesso Premium está ativo.',
+          message: t('paywall.feedback.restoreConfirmed'),
         });
         // See the identical call in handlePurchase above — restore is not a
         // separate code path for this confirmation, deliberately: the
@@ -863,14 +863,14 @@ export function PaywallScreen({
       } else if (result === 'missing-entitlement') {
         setRestoreState({
           kind: 'notice',
-          message: 'Não encontramos nenhuma assinatura ativa para esta conta.',
+          message: t('paywall.feedback.nothingToRestore'),
         });
       } else if (outcome.status === 'error') {
         setRestoreState({
           kind: 'error',
           message: outcome.offeringsUnavailable
-            ? 'As assinaturas não estão disponíveis na loja neste momento.'
-            : outcome.message,
+            ? t('paywall.errors.restore.productUnavailable')
+            : t(`paywall.errors.restore.${outcome.issue}`),
           offline: outcome.offline,
         });
       }
@@ -1690,10 +1690,11 @@ function ActionNotices({
   purchaseState: PurchaseUiState;
   restoreState: RestoreUiState;
 }) {
+  const { t } = useTranslation(['common', 'errors']);
   return (
     <>
       {purchaseState.kind === 'cancelled' && (
-        <InlineNotice tone="neutral" text="Compra cancelada. Nenhuma cobrança foi realizada." />
+        <InlineNotice tone="neutral" text={t('paywall.feedback.cancelled')} />
       )}
       {purchaseState.kind === 'notice' && (
         <InlineNotice tone="neutral" text={purchaseState.message} />
@@ -1703,7 +1704,7 @@ function ActionNotices({
           tone="error"
           text={
             purchaseState.offline
-              ? 'Sem conexão com a internet. Verifique sua rede e tente novamente.'
+              ? t('errors:network.unavailable')
               : purchaseState.message
           }
         />
@@ -1716,7 +1717,7 @@ function ActionNotices({
           tone="error"
           text={
             restoreState.offline
-              ? 'Sem conexão com a internet. Verifique sua rede e tente novamente.'
+              ? t('errors:network.unavailable')
               : restoreState.message
           }
         />
@@ -1765,30 +1766,31 @@ function CenteredState({
   onRetry?: () => void;
 }) {
   const { theme } = useTheme();
+  const { t } = useTranslation('common');
   const content = {
     loading: {
-      title: 'Carregando planos',
-      body: 'Buscando as opções disponíveis na loja…',
+      title: t('paywall.states.loading.title'),
+      body: t('paywall.states.loading.body'),
       retry: false,
     },
     offline: {
-      title: 'Sem conexão',
-      body: 'Verifique sua internet e tente novamente.',
+      title: t('paywall.states.offline.title'),
+      body: t('paywall.states.offline.body'),
       retry: true,
     },
     error: {
-      title: 'Não foi possível carregar',
-      body: message ?? 'Tente novamente em instantes.',
+      title: t('paywall.states.error.title'),
+      body: message ?? t('paywall.states.error.body'),
       retry: true,
     },
     empty: {
-      title: 'Planos indisponíveis',
-      body: 'Nenhum plano foi retornado pelo Offering atual.',
+      title: t('paywall.states.empty.title'),
+      body: t('paywall.states.empty.body'),
       retry: true,
     },
     unavailable: {
-      title: 'Planos indisponíveis',
-      body: 'A loja não disponibilizou os planos oficiais neste momento.',
+      title: t('paywall.states.unavailable.title'),
+      body: t('paywall.states.unavailable.body'),
       retry: true,
     },
   }[kind];
@@ -1844,7 +1846,7 @@ function CenteredState({
           }}
         >
           <Text style={{ fontFamily: theme.fonts.uiSemi, fontSize: 13, color: theme.colors.textPrimary }}>
-            Tentar novamente
+            {t('actions.retry')}
           </Text>
         </Pressable>
       )}

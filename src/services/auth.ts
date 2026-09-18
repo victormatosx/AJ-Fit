@@ -27,32 +27,36 @@ import {
 /**
  * Reusable, typed authentication service.
  *
- * Every function that talks to Firebase rethrows a friendly, Portuguese
- * `Error` (via `toAuthError`) so screens can display `error.message` directly.
+ * Every function that talks to the auth provider rethrows a product-safe
+ * `Error` plus its original code. Screens localize from the code and never
+ * display the message directly.
  */
 
 const ERROR_MESSAGES: Record<string, string> = {
   '10':
-    'Configuração do Google Sign-In inválida. Recrie o build após conferir OAuth client, URL scheme e SHA-1.',
+    'Não foi possível entrar com o Google agora. Tente novamente.',
   'auth/app-not-authorized':
-    'Este app não está autorizado no Firebase. Confira bundle/package e arquivos GoogleService.',
+    'Não foi possível entrar agora. Tente novamente.',
   'auth/email-already-in-use':
     'Não foi possível criar a conta com este e-mail. Tente entrar ou use outro endereço.',
   'auth/invalid-email': 'E-mail inválido.',
-  'auth/invalid-api-key': 'A chave do Firebase está inválida. Confira o arquivo .env.',
+  'auth/invalid-api-key': 'Não foi possível concluir esta ação agora. Tente novamente.',
   'auth/missing-email': 'Informe seu e-mail.',
   'auth/weak-password':
-    `Use uma senha entre ${PASSWORD_POLICY_MIN_LENGTH} e ${PASSWORD_POLICY_MAX_LENGTH} caracteres.`,
+    `Use uma senha com pelo menos ${PASSWORD_POLICY_MIN_LENGTH} caracteres, incluindo 1 letra maiúscula, 1 número e 1 caractere especial.`,
   'auth/password-does-not-meet-requirements':
-    `Use uma senha entre ${PASSWORD_POLICY_MIN_LENGTH} e ${PASSWORD_POLICY_MAX_LENGTH} caracteres.`,
+    `Use uma senha com pelo menos ${PASSWORD_POLICY_MIN_LENGTH} caracteres, incluindo 1 letra maiúscula, 1 número e 1 caractere especial.`,
   passwordTooShort: `Use pelo menos ${PASSWORD_POLICY_MIN_LENGTH} caracteres.`,
   passwordTooLong: `Use no máximo ${PASSWORD_POLICY_MAX_LENGTH} caracteres.`,
+  passwordMissingUppercase: 'Inclua pelo menos 1 letra maiúscula.',
+  passwordMissingNumber: 'Inclua pelo menos 1 número.',
+  passwordMissingSpecialChar: 'Inclua pelo menos 1 caractere especial.',
   passwordPolicyMismatch: 'A senha não atende à política de segurança.',
   'auth/missing-password': 'Informe sua senha.',
   'auth/user-not-found': 'E-mail ou senha incorretos.',
   'auth/wrong-password': 'E-mail ou senha incorretos.',
   'auth/invalid-credential':
-    'Credencial inválida. Se foi com Google, confira os client IDs OAuth do Firebase.',
+    'E-mail ou senha incorretos.',
   'auth/user-disabled': 'E-mail ou senha incorretos.',
   'auth/too-many-requests':
     'Muitas tentativas realizadas. Aguarde um momento antes de tentar novamente.',
@@ -64,7 +68,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   'auth/password-provider-required':
     'A alteração de senha está disponível apenas para contas com e-mail e senha.',
   'auth/operation-not-allowed':
-    'Este método de login não está habilitado no Firebase Auth.',
+    'Este método de acesso não está disponível agora. Use outra opção para entrar.',
   // Social / account-linking:
   'auth/account-exists-with-different-credential':
     'Este e-mail já está cadastrado com outro método de login.',
@@ -73,8 +77,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   'auth/provider-already-linked': 'Este provedor já está vinculado à sua conta.',
   // Firestore:
   'permission-denied':
-    'Login criado, mas o Firestore bloqueou a criação do perfil. Confira as regras publicadas.',
-  'unavailable': 'Firestore indisponível no momento. Tente novamente.',
+    'Sua conta foi criada, mas o perfil não pôde ser concluído. Tente novamente.',
+  'unavailable': 'O serviço está indisponível no momento. Tente novamente.',
 };
 
 // Service-level barriers protect callers that bypass AuthScreen. Each action
@@ -100,9 +104,7 @@ export function toAuthError(err: unknown): Error {
   const code = getErrorCode(err);
   const message =
     ERROR_MESSAGES[code] ??
-    (code
-      ? `Algo deu errado (${code}). Confira a configuração do Firebase/Google.`
-      : 'Algo deu errado. Tente novamente.');
+    'Não foi possível concluir esta ação agora. Tente novamente.';
   const friendly = new Error(message);
   if (code) {
     (friendly as Error & { code?: string }).code = code;

@@ -30,6 +30,7 @@ function galleryPhoto(
     failed: false,
     uploadStatus: null,
     uploadProgress: null,
+    jobId: null,
   };
 }
 

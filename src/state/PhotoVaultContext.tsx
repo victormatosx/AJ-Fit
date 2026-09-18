@@ -21,10 +21,20 @@ import {
 } from '../lib/photoVaultLock';
 import { logPhotoVaultIssue, type PhotoVaultIssue } from '../lib/photoVaultErrors';
 import {
+  currentPhotoVaultSaveAttempt,
+  photoVaultUploadsInFlight,
+  tracePhotoVault,
+} from '../lib/photoVaultDevTrace';
+import {
   getVaultAuthCapability,
   type VaultAuthCapability,
 } from '../services/localAuthentication';
-import { pruneCachedThumbnailsExcept } from '../services/photoVaultEncryptedCache';
+import { prunePhotoVaultCiphertextExcept } from '../services/photoVaultEncryptedCache';
+import { pruneLockedPreviewDerivativesExcept } from '../services/photoVaultLockedPreviewCache';
+import {
+  isolatePhotoVaultUploadsFor,
+  kickPhotoVaultUploadQueue,
+} from '../services/photoVaultUploadQueue';
 import { cleanupPhotoVaultShareFiles } from '../services/photoVaultFileCrypto';
 import { resetGallery } from '../lib/photoVaultGallery';
 import { deactivatePhotoVaultScreenProtection } from '../services/photoVaultScreenProtection';
@@ -87,7 +97,7 @@ export function PhotoVaultProvider({ children }: { children: React.ReactNode }) 
   uidRef.current = uid;
 
   /**
-   * Releasing iOS capture protection reparents the current key window. During
+   * Releasing the iOS app-switcher protection reparents the current key window. During
    * a native share handoff the UIActivityViewController presentation/window
    * hierarchy can still be dismissing, so wait until the handoff (including
    * its file lease grace) has settled. The Vault remains locked and protected
@@ -144,8 +154,10 @@ export function PhotoVaultProvider({ children }: { children: React.ReactNode }) 
     return unsubscribe;
   }, [uid]);
 
+  // The only consumer today is the Photos screen's unmount cleanup, so the
+  // origin recorded for the temporary trace names exactly that path.
   const lock = useCallback(() => {
-    lockPhotoVault();
+    lockPhotoVault('screen-unmount');
   }, []);
 
   const setHasPhotoVaultContent = useCallback(
@@ -185,24 +197,43 @@ export function PhotoVaultProvider({ children }: { children: React.ReactNode }) 
       const previous = appStateRef.current;
       appStateRef.current = next;
 
+      tracePhotoVault('vault.appstate.change', {
+        previous,
+        next,
+        statusBefore: getPhotoVaultStatus(),
+        saveInFlight: currentPhotoVaultSaveAttempt() !== null,
+        openSave: currentPhotoVaultSaveAttempt() ?? 'none',
+        uploadsInFlight: photoVaultUploadsInFlight(),
+      });
+
       const hadSensitiveContent =
         getPhotoVaultStatus() === 'unlocked' || sensitiveSnapshotRef.current;
       handlePhotoVaultAppStateChange(previous, next);
+      tracePhotoVault('vault.appstate.applied', {
+        next,
+        statusAfter: getPhotoVaultStatus(),
+      });
 
       if (next !== 'active') {
         if (hadSensitiveContent) {
           // An unlocked session was revoked synchronously by the lifecycle
           // state machine before scheduling any React work. The already-active
-          // native capture guard remains installed while this neutral overlay
-          // replaces the private tree.
-          // The native protection is already active from unlock. This neutral
-          // React overlay is an extra guard for the transition frame while the
-          // viewer and grid are being removed from the tree.
+          // native app-switcher guard (iOS only) remains installed while this
+          // neutral overlay replaces the private tree.
+          // The native app-switcher protection is already active from unlock.
+          // This neutral React overlay is an extra guard for the transition
+          // frame while the viewer and grid are being removed from the tree.
           sensitiveSnapshotRef.current = true;
           setPrivacyOverlayVisible(true);
         }
         return;
       }
+
+      // Coming back to the foreground is the queue's main second chance: a
+      // save that could not reach the network earlier retries here. It never
+      // unlocks anything and never renders anything — the worker only moves
+      // ciphertext that was sealed while the vault was open.
+      kickPhotoVaultUploadQueue('app-foreground');
 
       // Returning to foreground never unlocks. Wait for two render frames so
       // the locked UI is committed before removing either privacy layer.
@@ -220,7 +251,7 @@ export function PhotoVaultProvider({ children }: { children: React.ReactNode }) 
         if (inFlight) return;
         // `shareAsync` has returned and the centralized handoff grace elapsed.
         // Give React one more frame to keep the locked tree committed before
-        // asking the native module to restore the capture/window hierarchy.
+        // asking the native module to restore the app-switcher/window hierarchy.
         requestAnimationFrame(deactivateScreenProtectionIfSafe);
       },
     );
@@ -232,9 +263,10 @@ export function PhotoVaultProvider({ children }: { children: React.ReactNode }) 
   }, [deactivateScreenProtectionIfSafe]);
 
   /**
-   * An explicit lock/logout while foregrounded can release capture protection
-   * after the safe locked frame. A background lock deliberately retains it
-   * until foreground, protecting the native recent-apps snapshot.
+   * An explicit lock/logout while foregrounded can release the app-switcher
+   * protection (iOS only) after the safe locked frame. A background lock
+   * deliberately retains it until foreground, protecting the native
+   * recent-apps snapshot on iOS.
    */
   useEffect(() => {
     if (status === 'unlocked') {
@@ -258,13 +290,14 @@ export function PhotoVaultProvider({ children }: { children: React.ReactNode }) 
    * operation, so a stale grant could not authorize a new user even if this
    * effect had not run yet.
    *
-   * The encrypted thumbnail cache is cleared here too. It survives a lock by
-   * design, but an identity change is different: leaving the previous account's
-   * ciphertext on a shared device buys nothing, and the next account must never
-   * inherit it. Expressed as "keep only the current uid" rather than "remove
-   * the previous uid", so it stays correct without tracking who was signed in
-   * before — including a logout (`null` keeps nothing) and namespaces left by
-   * an account this install never saw sign in.
+   * BOTH encrypted ciphertext caches — thumbnails and fulls — are cleared here
+   * too. They survive a lock by design, but an identity change is different:
+   * leaving the previous account's ciphertext on a shared device buys nothing,
+   * and the next account must never inherit it. Expressed as "keep only the
+   * current uid" rather than "remove the previous uid", so it stays correct
+   * without tracking who was signed in before — including a logout (`null`
+   * keeps nothing) and namespaces left by an account this install never saw
+   * sign in.
    *
    * Ordering is deliberate: `lockPhotoVault` closes the session first, which
    * bumps the session generation, and the prune then bumps the cache epoch.
@@ -294,8 +327,29 @@ export function PhotoVaultProvider({ children }: { children: React.ReactNode }) 
    */
   useEffect(() => {
     lockPhotoVault();
+    // Attributed after the fact rather than through the argument above: the
+    // structural test pins this call's exact shape as the effect's first
+    // statement, and the trace must not be what changes it.
+    tracePhotoVault('vault.lock.attributed', { origin: 'identity-change' });
     resetGallery();
-    pruneCachedThumbnailsExcept(uid);
+    prunePhotoVaultCiphertextExcept(uid);
+    pruneLockedPreviewDerivativesExcept(uid);
+    /*
+     * The pending-upload queue is SUSPENDED on an identity change, never
+     * emptied.
+     *
+     * It differs from the caches above in the one way that matters: a cached
+     * thumbnail can always be downloaded again, while a pending job holds the
+     * only copy of a photo the user was already told was saved. Deleting it on
+     * logout would destroy their data to solve a problem they do not have —
+     * isolation is already absolute, because the worker refuses to touch a job
+     * whose uid is not the one signed in right now.
+     *
+     * So: signing out parks the work, signing back in resumes it, another
+     * account never sees it, and only account deletion removes it (see
+     * `purgePhotoVaultUploadsForUser`).
+     */
+    void isolatePhotoVaultUploadsFor(uid);
     try {
       cleanupPhotoVaultShareFiles();
     } catch {

@@ -56,6 +56,15 @@
       "title": "Día de descanso",
       "body": "Hoy no es uno de tus días de entreno."
     },
+    "advance": {
+      "cta": "Adelantar entreno del {{weekday}}",
+      "helper": "Haz hoy el entreno programado para mañana.",
+      "confirmTitle": "¿Adelantar este entreno?",
+      "confirmBody": "Harás hoy el entreno previsto para el {{weekday}}. Al completarlo, se considerará realizado y no volverá a aparecer mañana.",
+      "cancel": "Cancelar",
+      "confirm": "Adelantar entreno",
+      "dismiss": "Cerrar confirmación para adelantar entreno"
+    },
     "completedToday": {
       "title": "Entreno completado",
       "body": "Ya completaste tu entreno de hoy."
@@ -132,6 +141,7 @@
       "loads": "Cargas",
       "photos": "Fotos"
     },
+    "chartInteractionHint": "Toca el gráfico para ver el valor y la fecha de cada registro.",
     "body": {
       "currentWeight": "Peso actual",
       "composition": "Composición",
@@ -148,6 +158,25 @@
         "fatMass": "Masa grasa",
         "bmi": "IMC"
       },
+      "measurements": {
+        "title": "Medidas",
+        "selectLabel": "Pliegue cutáneo",
+        "singleEntry": "Registra este pliegue en otra evaluación para ver la curva de evolución.",
+        "empty": "No se encontró ningún registro de {{measurement}} en tus evaluaciones.",
+        "options": {
+          "chest": "Pectoral",
+          "axilla": "Axilar media",
+          "tricep": "Tricipital",
+          "subscap": "Subescapular",
+          "abdom": "Abdominal",
+          "supra": "Suprailíaco",
+          "thigh": "Muslo"
+        },
+        "accessibility": {
+          "select": "Seleccionar pliegue cutáneo",
+          "option": "Mostrar evolución de {{measurement}}"
+        }
+      },
       "empty": {
         "title": "Ninguna evaluación registrada",
         "description": "Registra tu primera evaluación física para seguir tu peso y composición corporal con el tiempo.",
@@ -156,17 +185,48 @@
     },
     "loads": {
       "eyebrow": "Cargas",
+      "loading": "Cargando pesos",
+      "records90Title": "Récords en los últimos 90 días",
+      "recordsCount_one": "récord superado",
+      "recordsCount_other": "récords superados",
+      "topRecords": "Récords principales",
+      "noRecentRecords": "No hay nuevos récords en los últimos 90 días. Sigue registrando tus cargas para acompañar tu evolución.",
+      "recordGain": "+{{value}}{{unit}}",
+      "seeAllRecords": "Ver todos los récords",
+      "showLess": "Mostrar solo los principales",
+      "exerciseEvolution": "Evolución por ejercicio",
+      "searchPlaceholder": "Buscar ejercicio",
+      "noExerciseFound": "No se encontró ningún ejercicio",
+      "currentLoad": "Carga más reciente",
+      "periodDifference": "Diferencia entre el primer y el último registro en {{days}} días",
+      "noComparison": "Registra este ejercicio nuevamente para comparar tu evolución",
+      "noDataForPeriod": "No hay cargas registradas para este ejercicio en el período seleccionado.",
+      "ranges": {
+        "30": "30 días",
+        "60": "60 días",
+        "90": "90 días",
+        "365": "1 año"
+      },
       "maxLoad": "{{exercise}} · carga máxima",
       "delta": "{{direction}} +{{value}} {{unit}}",
       "period_one": "Evolución · {{count}} semana",
       "period_other": "Evolución · {{count}} semanas",
       "recordsTitle": "Récords recientes",
-      "recordedAt": "Registrado el {{date}}",
+      "recordedAt": "{{date}}",
       "gain": "+{{value}} {{unit}} desde el inicio",
       "exercises": {
-        "benchPress": { "short": "Banca", "full": "Press de banca" },
-        "squat": { "short": "Sentadilla", "full": "Sentadilla" },
-        "deadlift": { "short": "Peso muerto", "full": "Peso muerto" }
+        "benchPress": {
+          "short": "Banca",
+          "full": "Press de banca"
+        },
+        "squat": {
+          "short": "Sentadilla",
+          "full": "Sentadilla"
+        },
+        "deadlift": {
+          "short": "Peso muerto",
+          "full": "Peso muerto"
+        }
       },
       "accessibility": {
         "selectExercise": "Mostrar evolución de {{exercise}}",
@@ -174,8 +234,13 @@
       },
       "empty": {
         "title": "Aún sin historial de cargas",
-        "description": "Las cargas que registras durante el entrenamiento valen para esa sesión.",
-        "hint": "Historial entre sesiones aún no disponible"
+        "description": "Las cargas completadas durante tus entrenamientos aparecerán aquí automáticamente.",
+        "hint": "Registra una serie con carga para comenzar"
+      },
+      "error": {
+        "title": "No pudimos cargar tus pesos",
+        "description": "Comprueba tu conexión e inténtalo de nuevo.",
+        "retry": "Intentar de nuevo"
       }
     },
     "photos": {
@@ -192,7 +257,8 @@
         "description": "Usa la autenticación de tu dispositivo para acceder a tus fotos privadas.",
         "cta": "Desbloquear",
         "unlocking": "Desbloqueando…",
-        "badge": "Área privada"
+        "badge": "Área privada",
+        "addPhotosHint": "Agrega aquí tus fotos de progreso!"
       },
       "notConfigured": {
         "title": "Protección no configurada",
@@ -212,6 +278,13 @@
         "badge": "Área privada"
       },
       "list": {
+        "reauthRequired": "Debes confirmar tu sesión nuevamente. Cierra sesión y vuelve a entrar para acceder a tus fotos.",
+        "reauthTitle": "Confirma tu identidad",
+        "reauthBody": "Para proteger tus fotos, confirma tu identidad nuevamente.",
+        "reauthError": "No pudimos confirmar tu identidad ahora. Inténtalo de nuevo.",
+        "confirmIdentity": "Confirmar identidad",
+        "cancel": "Cancelar",
+        "signOut": "Cerrar sesión",
         "loading": "Cargando tus fotos…",
         "error": "No se pudieron cargar tus fotos.",
         "retry": "Intentar de nuevo",
@@ -228,7 +301,7 @@
         "photoSection": "Foto",
         "previewSection": "Vista previa",
         "save": "Guardar foto",
-        "saving": "Guardando…",
+        "saving": "Guardando imágenes…",
         "change": "Cambiar foto",
         "slotTaken": "Ya existe una foto de {{pose}} para esta fecha.",
         "remove": "Quitar",
@@ -282,7 +355,8 @@
         "changeAfter": "Cambiar la foto de después",
         "addPhotoLocked": "Añadir nueva foto, función Premium",
         "zoomHint": "Toca dos veces para acercar o alejar",
-        "photoPosition": "Foto {{current}} de {{total}}"
+        "photoPosition": "Foto {{current}} de {{total}}",
+        "retrySync": "Intentar sincronizar la foto de nuevo"
       },
       "poses": {
         "front": "Frente",
@@ -352,6 +426,12 @@
         "noCandidate": "No hay otra foto de esta pose para comparar.",
         "chooseAnother": "Elegir otra foto",
         "unclassified": "Sin clasificar"
+      },
+      "sync": {
+        "pending": "Sincronizando",
+        "failed": "Error al sincronizar",
+        "retry": "Reintentar",
+        "preparing": "Guardando"
       }
     },
     "accessibility": {
@@ -370,7 +450,8 @@
         "TODAY_COMPLETED": "Entrenamiento de hoy completado",
         "TODAY_PENDING": "Entrenamiento de hoy pendiente",
         "MISSED": "Entrenamiento no realizado",
-        "UPCOMING": "Entrenamiento programado",
+      "UPCOMING": "Entrenamiento programado",
+      "FULFILLED_EARLY": "Entrenamiento completado por adelantado",
         "ACTIVE_RECOVERY": "Recuperación activa",
         "REST": "Día de descanso",
         "BEFORE_PROGRAM": "Antes del inicio del programa"
@@ -388,6 +469,7 @@
   },
   "upcoming": {
     "title": "Próximos entrenamientos",
+    "flexible": "Libre",
     "meta_one": "~{{minutes}} min · {{count}} ejercicio",
     "meta_other": "~{{minutes}} min · {{count}} ejercicios",
     "metaNoEstimate_one": "{{count}} ejercicio",
@@ -397,6 +479,7 @@
       "kicker": "Próximo entrenamiento",
       "close": "Cerrar detalles del entrenamiento",
       "scheduledFor": "{{weekday}} · {{date}}",
+      "flexibleAvailable": "Disponible cuando quieras entrenar",
       "exercises": "Ejercicios",
       "setsReps": "{{sets}} series × {{reps}}",
       "setsDuration": "{{sets}} series × {{duration}}",

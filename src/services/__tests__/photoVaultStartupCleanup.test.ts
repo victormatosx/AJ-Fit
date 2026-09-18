@@ -15,7 +15,65 @@ describe('Photo Vault startup cleanup', () => {
   it('also removes encrypted staging after a cold process restart', () => {
     const source = readFileSync('App.tsx', 'utf8');
     expect(source).toContain('includeEncrypted: true');
-    expect(source).toContain('no resumable local upload queue');
+  });
+
+  /**
+   * The sweep above used to be justified by "a cold process has no resumable
+   * local upload queue". A prepared photo now survives a force-kill, so that
+   * sentence is false and the reason the sweep is still safe has changed: the
+   * durable queue lives somewhere the sweep physically cannot reach.
+   */
+  it('never deletes a pending upload, because the queue is not under the cache root', () => {
+    const durable = readFileSync('src/services/photoVaultDurableStore.ts', 'utf8');
+    const cleanup = readFileSync('src/services/photoVaultFileCrypto.ts', 'utf8');
+
+    // The only thing standing between a force-kill and a lost photo. Every
+    // directory this module builds must be rooted in the document tree; the
+    // cache root may be discussed in prose but never constructed.
+    expect(durable).toContain('new Directory(Paths.document');
+    expect(durable).not.toMatch(/new (Directory|File)\(\s*Paths\.cache/);
+    // The sweep lists exactly two names, both under the cache root, and
+    // neither is the pending store.
+    expect(cleanup).toContain("const ENCRYPTED_DIR = 'enc'");
+    expect(cleanup).toContain("const PLAINTEXT_DIR = 'tmp'");
+    expect(cleanup).not.toContain('photo-vault-pending');
+  });
+
+  it('reconciles the durable queue on cold start instead of assuming it is empty', () => {
+    const source = readFileSync('App.tsx', 'utf8');
+    expect(source).toContain('reconcilePhotoVaultUploadQueue()');
+    expect(source).toContain("kickPhotoVaultUploadQueue('cold-start')");
+    // The stale justification must not survive as a comment either — it would
+    // be the single most misleading line in the bootstrap.
+    expect(source).not.toContain('no resumable local upload queue');
+  });
+
+  it('drops a pending job only on proof, never on suspicion', () => {
+    const queue = readFileSync('src/services/photoVaultUploadQueue.ts', 'utf8');
+    const reconcile = queue.slice(queue.indexOf('export async function reconcilePhotoVaultUploadQueue'));
+    // Exactly two grounds for dropping a job: it expired, or its ciphertext is
+    // gone. Neither is recoverable; everything else is kept and retried.
+    expect(reconcile).toContain('isJobExpired(job, timestamp)');
+    expect(reconcile).toContain('!durableAssetIsIntact(job.uid, job.assetId, job)');
+  });
+
+  it('never writes plaintext into the durable store', () => {
+    // The document directory is backed up and is swept by nothing, so a
+    // plaintext file here would be the most durable privacy failure the vault
+    // could have.
+    const durable = readFileSync('src/services/photoVaultDurableStore.ts', 'utf8');
+    expect(durable).toContain("const FULL_SUFFIX = '.enc'");
+    expect(durable).toContain("const THUMBNAIL_SUFFIX = '.thumb.enc'");
+    // Only the encryption step may name a path in this store.
+    const service = readFileSync('src/services/progressPhotos.ts', 'utf8');
+    const prepare = service.slice(
+      service.indexOf('export async function prepareProgressPhotoUpload'),
+      service.indexOf('function assetRef('),
+    );
+    expect(prepare).toContain('targetUri: fullUri');
+    expect(prepare).toContain('targetUri: thumbnailUri');
+    // The plaintext thumbnail is released in the same function that made it.
+    expect(prepare).toContain('discardDecryptedPhoto(thumbnailPlaintextUri)');
   });
 
   it('never clears the persistent encrypted thumbnail cache at startup', () => {
@@ -34,9 +92,13 @@ describe('Photo Vault startup cleanup', () => {
     // The sweep only ever lists these two names.
     expect(cleanup).toContain("const ENCRYPTED_DIR = 'enc'");
     expect(cleanup).toContain("const PLAINTEXT_DIR = 'tmp'");
-    // The cache is a sibling of both, so it is invisible to that listing.
+    // Both caches are siblings of those two, so they are invisible to that
+    // listing. That is what lets ciphertext — and only ciphertext — outlive a
+    // lock and a cold start while every plaintext representation is swept.
     expect(cache).toContain("const CACHE_DIR = 'encrypted-thumbnails'");
+    expect(cache).toContain("const FULL_CACHE_DIR = 'encrypted-fulls'");
     expect(cleanup).not.toContain('encrypted-thumbnails');
+    expect(cleanup).not.toContain('encrypted-fulls');
   });
 
   it('also sweeps the Comparator export queue on cold start (phase 15B)', () => {

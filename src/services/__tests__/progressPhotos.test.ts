@@ -18,8 +18,17 @@ const mocks = vi.hoisted(() => ({
   openUploadBlob: vi.fn(), closeUploadBlob: vi.fn(),
   readCache: vi.fn(), writeCache: vi.fn(), removeCache: vi.fn(),
   reconcileCache: vi.fn(), cacheEpoch: 7, decryptToBase64: vi.fn(),
+  readFullCache: vi.fn(), writeFullCache: vi.fn(), removeFullCache: vi.fn(),
+  reconcileFullCache: vi.fn(),
   runTransaction: vi.fn(), txGet: vi.fn(), txDelete: vi.fn(),
   contentPresence: vi.fn(),
+  getMetadata: vi.fn(),
+  discardDurable: vi.fn(),
+  generateLockedPreview: vi.fn(),
+  hasLockedPreview: vi.fn(),
+  writeLockedPreview: vi.fn(),
+  removeLockedPreview: vi.fn(),
+  lockedPreviewEpoch: 3,
   currentUser: { uid: 'alice' } as { uid: string } | null,
   uuid: 0,
 }));
@@ -49,6 +58,17 @@ vi.mock('firebase/storage', () => ({
   uploadBytesResumable: (...args: unknown[]) => mocks.upload(...args),
   getBytes: (...args: unknown[]) => mocks.getBytes(...args),
   deleteObject: (...args: unknown[]) => mocks.deleteObject(...args),
+  getMetadata: (...args: unknown[]) => mocks.getMetadata(...args),
+}));
+
+// Reaches expo-file-system, which cannot be parsed in this node environment.
+// The paths are derived, never stored, so a deterministic stand-in is enough.
+vi.mock('../photoVaultDurableStore', () => ({
+  durableAssetPaths: (uid: string, assetId: string) => ({
+    fullUri: `file:///documents/photo-vault-pending/${uid}/${assetId}.enc`,
+    thumbnailUri: `file:///documents/photo-vault-pending/${uid}/${assetId}.thumb.enc`,
+  }),
+  discardDurableAsset: (...args: unknown[]) => mocks.discardDurable(...args),
 }));
 vi.mock('../../lib/firebase', () => ({
   db: {}, storage: {},
@@ -83,12 +103,28 @@ vi.mock('../photoVaultEncryptedCache', () => ({
   writeCachedThumbnail: (...args: unknown[]) => mocks.writeCache(...args),
   removeCachedThumbnail: (...args: unknown[]) => mocks.removeCache(...args),
   reconcileCachedThumbnails: (...args: unknown[]) => mocks.reconcileCache(...args),
+  readCachedFull: (...args: unknown[]) => mocks.readFullCache(...args),
+  writeCachedFull: (...args: unknown[]) => mocks.writeFullCache(...args),
+  removeCachedFull: (...args: unknown[]) => mocks.removeFullCache(...args),
+  reconcileCachedFulls: (...args: unknown[]) => mocks.reconcileFullCache(...args),
 }));
 vi.mock('../photoVaultContentPresence', () => ({
   reconcilePhotoVaultContentPresence: (...args: unknown[]) =>
     mocks.contentPresence(...args),
   setPhotoVaultContentPresence: (...args: unknown[]) =>
     mocks.contentPresence(...args),
+}));
+// Reaches expo-image-manipulator/expo-file-system, same reason as the durable
+// store mock above. Its own generation/storage logic is covered by
+// photoVaultLockedPreviewGenerator.test.ts and photoVaultLockedPreviewCache.test.ts.
+vi.mock('../photoVaultLockedPreviewGenerator', () => ({
+  generateLockedPreviewDerivative: (...args: unknown[]) => mocks.generateLockedPreview(...args),
+}));
+vi.mock('../photoVaultLockedPreviewCache', () => ({
+  currentPhotoVaultLockedPreviewEpoch: () => mocks.lockedPreviewEpoch,
+  hasLockedPreviewDerivative: (...args: unknown[]) => mocks.hasLockedPreview(...args),
+  writeLockedPreviewDerivative: (...args: unknown[]) => mocks.writeLockedPreview(...args),
+  removeLockedPreviewDerivative: (...args: unknown[]) => mocks.removeLockedPreview(...args),
 }));
 
 import { PhotoVaultError } from '../../lib/photoVaultErrors';
@@ -103,6 +139,11 @@ import {
   reconcileProgressPhotoCache,
   replaceProgressPhoto,
   uploadProgressPhoto,
+  prepareProgressPhotoUpload,
+  commitPreparedMetadata,
+  preparedAssetExistsRemotely,
+  preparedMetadataState,
+  uploadPreparedAsset,
 } from '../progressPhotos';
 
 const UID = 'alice';
@@ -227,9 +268,16 @@ beforeEach(() => {
   }));
   mocks.writeEncrypted.mockReturnValue({ uri: 'file:///cache/photo-vault/enc/download.enc' });
   mocks.decrypt.mockResolvedValue({ uri: 'file:///cache/photo-vault/tmp/output.jpg', size: 100 });
+  // Cosmetic locked-preview derivative: opt out by default so existing cases
+  // stay focused on what they actually test; suites for this feature override.
+  mocks.generateLockedPreview.mockResolvedValue(null);
+  mocks.hasLockedPreview.mockReturnValue(true);
+  mocks.writeLockedPreview.mockReturnValue(true);
   // Default: nothing cached, so each case opts in to a hit explicitly.
   mocks.readCache.mockResolvedValue(null);
   mocks.writeCache.mockReturnValue(true);
+  mocks.readFullCache.mockResolvedValue(null);
+  mocks.writeFullCache.mockReturnValue(true);
   mocks.decryptToBase64.mockResolvedValue('QkFTRTY0');
   // The compare-and-swap runs the caller's callback against a fake transaction.
   mocks.runTransaction.mockImplementation(
@@ -712,7 +760,9 @@ describe('encrypted thumbnail cache', () => {
     expect(mocks.removeCache).toHaveBeenCalledWith(UID, ASSET_1);
   });
 
-  it('does not cache the legacy full fallback', async () => {
+  it('keeps the legacy full fallback out of the THUMBNAIL cache', async () => {
+    // It is a full envelope, so it belongs to the full namespace and its
+    // budget — never to the one sized for 480px derivatives.
     await downloadProgressPhotoThumbnail(metadata('123e4567-e89b-42d3-a456-426614174011', false));
     expect(mocks.readCache).not.toHaveBeenCalled();
     expect(mocks.writeCache).not.toHaveBeenCalled();
@@ -724,6 +774,96 @@ describe('encrypted thumbnail cache', () => {
     expect(mocks.writeCache).not.toHaveBeenCalled();
     expect(mocks.decrypt).toHaveBeenCalledTimes(1);
     expect(mocks.decryptToBase64).not.toHaveBeenCalled();
+  });
+});
+
+describe('full ciphertext cache', () => {
+  it('downloads once and stores the envelope for next time', async () => {
+    await downloadProgressPhoto(metadata());
+
+    expect(mocks.getBytes).toHaveBeenCalledTimes(1);
+    expect(mocks.writeFullCache).toHaveBeenCalledWith(
+      expect.objectContaining({ uid: UID, photoId: ASSET_1, epoch: mocks.cacheEpoch }),
+    );
+    expect(mocks.decrypt).toHaveBeenCalledTimes(1);
+  });
+
+  it('serves a cached envelope without touching Storage at all', async () => {
+    mocks.readFullCache.mockResolvedValue(new Uint8Array(FULL_SIZE));
+
+    await downloadProgressPhoto(metadata());
+
+    // The whole point: a relock destroyed the plaintext, but the ciphertext
+    // survived and the network is not paid again.
+    expect(mocks.getBytes).not.toHaveBeenCalled();
+    expect(mocks.writeFullCache).not.toHaveBeenCalled();
+    expect(mocks.decrypt).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks the cache for the size the metadata declares', async () => {
+    await downloadProgressPhoto(metadata());
+    expect(mocks.readFullCache).toHaveBeenCalledWith({
+      uid: UID,
+      photoId: ASSET_1,
+      expectedSize: FULL_SIZE,
+    });
+  });
+
+  it('drops a corrupt cached envelope, refetches once and rebuilds the cache', async () => {
+    mocks.readFullCache.mockResolvedValue(new Uint8Array(FULL_SIZE));
+    // Local bytes fail the envelope cross-check; the remote copy is good.
+    mocks.describeEnvelope
+      .mockReturnValueOnce({ version: 1, iv: 'tampered' })
+      .mockReturnValue({ version: 1, iv: FULL_IV });
+
+    const result = await downloadProgressPhoto(metadata());
+
+    expect(mocks.removeFullCache).toHaveBeenCalledWith(UID, ASSET_1);
+    expect(mocks.getBytes).toHaveBeenCalledTimes(1);
+    expect(mocks.writeFullCache).toHaveBeenCalledTimes(1);
+    expect(result.uri).toBe('file:///cache/photo-vault/tmp/output.jpg');
+  });
+
+  it('never retries in a loop when the refetched envelope is also bad', async () => {
+    mocks.readFullCache.mockResolvedValue(new Uint8Array(FULL_SIZE));
+    mocks.describeEnvelope.mockReturnValue({ version: 1, iv: 'tampered' });
+
+    const error = await downloadProgressPhoto(metadata()).catch((caught) => caught);
+
+    expect(issueOf(error)).toBe('vaultDownloadIntegrityFailed');
+    expect(mocks.getBytes).toHaveBeenCalledTimes(1);
+    expect(mocks.decrypt).not.toHaveBeenCalled();
+  });
+
+  it('caches the legacy full fallback in the full namespace', async () => {
+    const legacy = metadata(LEGACY_ASSET, false);
+    mocks.getBytes.mockResolvedValue(new Uint8Array(FULL_SIZE).buffer);
+
+    await downloadProgressPhotoThumbnail(legacy);
+
+    // A legacy photo pays a FULL download just to fill its grid cell, so it is
+    // the entry that benefits most from never being downloaded twice.
+    expect(mocks.writeFullCache).toHaveBeenCalledWith(
+      expect.objectContaining({ uid: UID, photoId: LEGACY_ASSET }),
+    );
+  });
+
+  it('carries the epoch captured before the download, so a late write is refused', async () => {
+    await downloadProgressPhoto(metadata());
+    const written = mocks.writeFullCache.mock.calls[0]?.[0] as { epoch: number };
+    expect(written.epoch).toBe(mocks.cacheEpoch);
+  });
+
+  it('invalidates the cached full when the photo is deleted', async () => {
+    await deleteProgressPhoto(metadata());
+    expect(mocks.removeFullCache).toHaveBeenCalledWith(UID, ASSET_1);
+    expect(mocks.removeCache).toHaveBeenCalledWith(UID, ASSET_1);
+  });
+
+  it('reconciles the full namespace after a listing, alongside thumbnails', () => {
+    reconcileProgressPhotoCache([metadata()] as never);
+    expect(mocks.reconcileFullCache).toHaveBeenCalledWith(UID, [ASSET_1]);
+    expect(mocks.reconcileCache).toHaveBeenCalledWith(UID, [ASSET_1]);
   });
 });
 
@@ -1323,10 +1463,252 @@ describe('replaceProgressPhoto', () => {
     expect(mocks.deleteObject).toHaveBeenCalledTimes(2);
   });
 
-  it('discards a replacement that completed after the session closed', async () => {
+  /**
+   * A relock used to abort a replacement mid-flight. It no longer does, and
+   * that is a deliberate correction rather than a relaxation.
+   *
+   * The vault session authorizes reading plaintext and using the key. By the
+   * time the new ciphertext is sealed, the replacement needs neither: what is
+   * left is moving opaque bytes and swapping metadata. Aborting there did not
+   * protect anything — it rolled back a swap the user had explicitly
+   * confirmed, and the rollback is itself the step that touches their existing
+   * photo. Creating a photo never re-checked the session; the two now agree.
+   */
+  it('finishes a replacement whose new ciphertext was already sealed when the vault relocked', async () => {
     const done = replaceProgressPhoto({ current: currentPhoto(), ...input });
     closePhotoVaultSession();
 
+    await expect(done).resolves.toMatchObject({ pose: 'front', dateKey: '2026-08-01' });
+  });
+
+  it('still refuses once the signed-in user is no longer the one that started it', async () => {
+    const done = replaceProgressPhoto({ current: currentPhoto(), ...input });
+    // Identity, not visibility, is what the remote half is gated on.
+    mocks.currentUser = { uid: 'mallory' };
+
     expect(issueOf(await done.catch((e) => e))).toBe('vaultLocked');
+  });
+});
+
+// ── Local-first split ──────────────────────────────────────────────────────
+
+/**
+ * The security boundary of the whole local-first design.
+ *
+ * Preparation touches the user's plaintext and the vault key, so it needs the
+ * session. Delivery moves an envelope that is already sealed, so it must NOT —
+ * gating it on the screen still being unlocked would lose a photo to a
+ * backgrounded app without protecting anything from anyone.
+ */
+describe('prepareProgressPhotoUpload', () => {
+  const prepareInput = {
+    sourceUri: 'file:///cache/photo-vault/tmp/full.jpg',
+    takenAt: TAKEN_AT,
+    originalMimeType: 'image/jpeg' as const,
+    pose: 'front' as const,
+    width: 1200,
+    height: 1600,
+  };
+
+  it('seals both assets straight into durable storage', async () => {
+    const prepared = await prepareProgressPhotoUpload(prepareInput);
+
+    const targets = mocks.encrypt.mock.calls.map(([args]) => args.targetUri);
+    // Never staged somewhere reclaimable and moved afterwards: the ciphertext
+    // is durable from the instant it exists.
+    expect(targets).toEqual([
+      `file:///documents/photo-vault-pending/${UID}/${ASSET_1}.enc`,
+      `file:///documents/photo-vault-pending/${UID}/${ASSET_1}.thumb.enc`,
+    ]);
+    expect(prepared.assetId).toBe(ASSET_1);
+    expect(prepared.documentId).toBe('2026-08-01_front');
+  });
+
+  it('requires an unlocked vault, because it reads plaintext and the key', async () => {
+    closePhotoVaultSession();
+
+    await expect(prepareProgressPhotoUpload(prepareInput)).rejects.toThrowError(
+      expect.objectContaining({ issue: 'vaultLocked' }),
+    );
+  });
+
+  it('touches neither Storage nor Firestore', async () => {
+    await prepareProgressPhotoUpload(prepareInput);
+
+    // The point of the split: when this returns, the photo is saved locally
+    // and the backend still knows nothing about it.
+    expect(mocks.upload).not.toHaveBeenCalled();
+    expect(mocks.setDoc).not.toHaveBeenCalled();
+  });
+
+  it('releases the plaintext thumbnail it created', async () => {
+    await prepareProgressPhotoUpload(prepareInput);
+
+    expect(mocks.discardPlaintext).toHaveBeenCalledWith('file:///cache/photo-vault/tmp/thumb.jpg');
+  });
+
+  it('refuses to seal a photo with a reused nonce', async () => {
+    mocks.encrypt.mockImplementation(async () => ({
+      encryptedUri: 'file:///x.enc',
+      encryptedSize: FULL_SIZE,
+      encryption: encryption(FULL_IV),
+    }));
+
+    await expect(prepareProgressPhotoUpload(prepareInput)).rejects.toThrowError(
+      expect.objectContaining({ issue: 'vaultCryptoEncryptFailed' }),
+    );
+  });
+
+  it('cleans up a half-sealed asset rather than leaving an unclaimed blob', async () => {
+    mocks.encrypt.mockRejectedValue(new PhotoVaultError('vaultFileWriteFailed'));
+
+    await expect(prepareProgressPhotoUpload(prepareInput)).rejects.toThrow();
+
+    // No job will ever exist for it, so nothing else would ever reclaim it.
+    expect(mocks.discardDurable).toHaveBeenCalledWith(UID, ASSET_1);
+  });
+
+  it('derives the day from the photo, never from the clock', async () => {
+    const prepared = await prepareProgressPhotoUpload({
+      ...prepareInput,
+      takenAt: new Date(2026, 6, 2, 9, 0),
+    });
+
+    expect(prepared.dateKey).toBe('2026-07-02');
+  });
+});
+
+describe('delivering a prepared photo', () => {
+  const job = {
+    version: 1,
+    jobId: 'job-1',
+    uid: UID,
+    assetId: ASSET_1,
+    documentId: '2026-08-01_front',
+    pose: 'front' as const,
+    dateKey: '2026-08-01',
+    takenAt: TAKEN_AT.getTime(),
+    originalMimeType: 'image/jpeg',
+    encryptedSize: FULL_SIZE,
+    thumbnailEncryptedSize: THUMB_SIZE,
+    encryption: encryption(FULL_IV),
+    thumbnailEncryption: encryption(THUMB_IV),
+    stage: 'pending-upload' as const,
+    state: 'pending' as const,
+    uploadedFull: false,
+    uploadedThumbnail: false,
+    attempts: 0,
+    createdAt: 0,
+    updatedAt: 0,
+    nextAttemptAt: 0,
+  };
+
+  it('uploads an already-sealed asset with the vault locked', async () => {
+    closePhotoVaultSession();
+
+    await expect(
+      uploadPreparedAsset({ uid: UID, job, kind: 'full' }),
+    ).resolves.toBeUndefined();
+
+    expect(mocks.upload).toHaveBeenCalledTimes(1);
+  });
+
+  it('commits metadata with the vault locked', async () => {
+    closePhotoVaultSession();
+
+    await expect(commitPreparedMetadata(UID, job)).resolves.toBeUndefined();
+
+    expect(mocks.setDoc).toHaveBeenCalledTimes(1);
+  });
+
+  it('reads the ciphertext from the durable path, not a temp file', async () => {
+    // The shared blob stub keys off the staging naming (`/thumb.enc`); the
+    // durable store names files `{assetId}.thumb.enc`, so size it explicitly.
+    mocks.openUploadBlob.mockResolvedValue(fakeNativeBlob(THUMB_SIZE));
+
+    await uploadPreparedAsset({ uid: UID, job, kind: 'thumbnail' });
+
+    expect(mocks.openUploadBlob).toHaveBeenCalledWith(
+      `file:///documents/photo-vault-pending/${UID}/${ASSET_1}.thumb.enc`,
+    );
+  });
+
+  it('refuses when the signed-in user is not the job owner', async () => {
+    mocks.currentUser = { uid: OTHER_UID };
+
+    // Identity is the gate the remote half actually enforces.
+    await expect(uploadPreparedAsset({ uid: UID, job, kind: 'full' })).rejects.toThrowError(
+      expect.objectContaining({ issue: 'vaultLocked' }),
+    );
+    await expect(commitPreparedMetadata(UID, job)).rejects.toThrowError(
+      expect.objectContaining({ issue: 'vaultLocked' }),
+    );
+  });
+
+  it('refuses when nobody is signed in', async () => {
+    mocks.currentUser = null;
+
+    await expect(commitPreparedMetadata(UID, job)).rejects.toThrowError(
+      expect.objectContaining({ issue: 'vaultLocked' }),
+    );
+  });
+
+  it('refuses to upload bytes that no longer match the job', async () => {
+    mocks.openUploadBlob.mockResolvedValue(fakeNativeBlob(FULL_SIZE + 1));
+
+    // The committed metadata describes a specific envelope; publishing
+    // different bytes would make it undecryptable forever.
+    await expect(uploadPreparedAsset({ uid: UID, job, kind: 'full' })).rejects.toThrowError(
+      expect.objectContaining({ issue: 'vaultMetadataInvalid' }),
+    );
+  });
+
+  it('treats a missing object as absent and a matching one as present', async () => {
+    mocks.getMetadata.mockResolvedValue({ size: FULL_SIZE });
+    await expect(preparedAssetExistsRemotely(UID, ASSET_1, 'full', FULL_SIZE)).resolves.toBe(true);
+
+    mocks.getMetadata.mockRejectedValue(
+      Object.assign(new Error('gone'), { code: 'storage/object-not-found' }),
+    );
+    await expect(preparedAssetExistsRemotely(UID, ASSET_1, 'full', FULL_SIZE)).resolves.toBe(false);
+  });
+
+  it('treats a size mismatch as not ours', async () => {
+    mocks.getMetadata.mockResolvedValue({ size: FULL_SIZE + 99 });
+
+    expect(await preparedAssetExistsRemotely(UID, ASSET_1, 'full', FULL_SIZE)).toBe(false);
+  });
+
+  it('never answers "absent" when it simply could not ask', async () => {
+    mocks.getMetadata.mockRejectedValue(
+      Object.assign(new Error('offline'), { code: 'storage/retry-limit-exceeded' }),
+    );
+
+    // Answering "absent" here would send an upload that is about to be refused.
+    await expect(
+      preparedAssetExistsRemotely(UID, ASSET_1, 'full', FULL_SIZE),
+    ).rejects.toThrowError(expect.objectContaining({ issue: 'vaultUploadFailed' }));
+  });
+
+  it('distinguishes its own document from another device’s', async () => {
+    mocks.getDoc.mockResolvedValue({ exists: () => false });
+    expect(await preparedMetadataState(UID, job)).toBe('absent');
+
+    mocks.getDoc.mockResolvedValue({ exists: () => true, data: () => ({ assetId: ASSET_1 }) });
+    expect(await preparedMetadataState(UID, job)).toBe('ours');
+
+    mocks.getDoc.mockResolvedValue({ exists: () => true, data: () => ({ assetId: ASSET_2 }) });
+    // A foreign document means the slot is genuinely taken — not a retryable
+    // failure, and certainly not something to overwrite.
+    expect(await preparedMetadataState(UID, job)).toBe('foreign');
+  });
+
+  it('reports a taken slot when the write is refused and the slot is filled', async () => {
+    mocks.setDoc.mockRejectedValue(new Error('permission-denied'));
+    mocks.getDoc.mockResolvedValue({ exists: () => true, data: () => storedDoc() });
+
+    await expect(commitPreparedMetadata(UID, job)).rejects.toThrowError(
+      expect.objectContaining({ issue: 'vaultPhotoSlotTaken' }),
+    );
   });
 });

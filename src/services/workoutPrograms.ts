@@ -323,6 +323,8 @@ const WEEKDAYS = new Set(['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN']);
 
 function hasValidPhase2FrequencyCalendar(value: Partial<WorkoutProgramSnapshot>): boolean {
   if (value.versions?.selectionEngine !== '2.0.0') return true;
+  const scheduleMode = value.scheduleMode ?? 'fixed';
+  if (scheduleMode !== 'fixed' && scheduleMode !== 'flexible') return false;
   if (
     typeof value.requestedDays !== 'number'
     || typeof value.prescribedStructuredDays !== 'number'
@@ -337,6 +339,10 @@ function hasValidPhase2FrequencyCalendar(value: Partial<WorkoutProgramSnapshot>)
     || !Array.isArray(value.weeklySchedule)
     || ![0, 7].includes(value.weeklySchedule.length)
   ) return false;
+  if (scheduleMode === 'flexible'
+    && (value.availability.weekdays.length !== 0 || value.weeklySchedule.length !== 0)) return false;
+  if (value.scheduleMode === 'fixed'
+    && (value.availability.weekdays.length !== value.availability.days || value.weeklySchedule.length !== 7)) return false;
   return value.weeklySchedule.every((day) =>
     isPlainObject(day)
     && typeof day.weekday === 'string'

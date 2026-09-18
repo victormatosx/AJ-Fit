@@ -184,6 +184,7 @@ export function OnboardingFunnelScreen({
       content = <MethodologyInterstitialScreen progress={progress} onContinue={goNext} />;
       break;
     case 'days':
+    case 'scheduleMode':
       content = renderQuestion();
       break;
     case 'trainingDays':

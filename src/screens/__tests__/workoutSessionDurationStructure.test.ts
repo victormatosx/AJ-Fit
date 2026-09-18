@@ -73,10 +73,11 @@ describe('useWorkoutExecution — canonical startedAt source', () => {
     expect(useWorkoutExecution).toContain(': pendingStartedAtMsRef.current');
   });
 
-  it('captures the local fallback synchronously inside start(), before any await', () => {
-    const startFnStart = useWorkoutExecution.indexOf('const start = useCallback((sessionIndex: number');
+  it('captures the local fallback synchronously inside startWithDates(), before any await — both start() and startAdvanced() funnel through it', () => {
+    const startFnStart = useWorkoutExecution.indexOf('const startWithDates = useCallback((input:');
     const firstAwait = useWorkoutExecution.indexOf('await', startFnStart);
     const fallbackAssignment = useWorkoutExecution.indexOf('pendingStartedAtMsRef.current = Date.now();', startFnStart);
+    expect(startFnStart).toBeGreaterThan(-1);
     expect(fallbackAssignment).toBeGreaterThan(startFnStart);
     expect(fallbackAssignment).toBeLessThan(firstAwait);
   });

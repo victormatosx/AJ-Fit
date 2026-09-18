@@ -96,6 +96,14 @@
       "6": { "label": "6 días", "short": "6" }, "7": { "label": "7 días", "short": "7" }
     }
   },
+  "scheduleMode": {
+    "title": "¿Cómo prefieres organizar tus entrenamientos?",
+    "sub": "Elige la rutina que mejor se adapte a ti.",
+    "options": {
+      "fixed": { "label": "Días fijos", "description": "Elige los días de la semana en los que planeas entrenar." },
+      "flexible": { "label": "Entrenamiento libre", "description": "Entrena cuando quieras siguiendo la secuencia de tu plan." }
+    }
+  },
   "trainingDays": {
     "title": "¿Qué días sueles entrenar?",
     "sub": "Elige los días que mejor se ajusten a tu rutina.",

@@ -99,6 +99,14 @@
       "7": { "label": "7 dias", "short": "7" }
     }
   },
+  "scheduleMode": {
+    "title": "Como você prefere organizar seus treinos?",
+    "sub": "Escolha a rotina que combina melhor com você.",
+    "options": {
+      "fixed": { "label": "Dias fixos", "description": "Escolha os dias da semana em que pretende treinar." },
+      "flexible": { "label": "Treino livre", "description": "Treine quando quiser, seguindo a sequência do seu plano." }
+    }
+  },
   "trainingDays": {
     "title": "Quais dias você costuma treinar?",
     "sub": "Escolha os dias que mais combinam com sua rotina.",

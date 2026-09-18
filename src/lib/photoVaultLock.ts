@@ -7,6 +7,12 @@ import {
   logPhotoVaultIssue,
   type PhotoVaultIssue,
 } from './photoVaultErrors';
+import {
+  photoVaultUploadsInFlight,
+  startPhotoVaultTrace,
+  tracePhotoVault,
+  type PhotoVaultLockOrigin,
+} from './photoVaultDevTrace';
 import { authenticateForPhotoVault } from '../services/localAuthentication';
 import { cleanupPhotoVaultTempFiles } from '../services/photoVaultFileCrypto';
 import { activatePhotoVaultScreenProtection } from '../services/photoVaultScreenProtection';
@@ -80,6 +86,7 @@ function settleForegroundWaiters(isActive: boolean): void {
 
 /** Initializes the lifecycle mirror without changing the lock state. */
 export function initializePhotoVaultAppState(next: PhotoVaultAppState): void {
+  tracePhotoVault('vault.appstate.init', { next, status });
   appState = next;
   if (next === 'active') settleForegroundWaiters(true);
   if (next === 'background') settleForegroundWaiters(false);
@@ -99,6 +106,12 @@ export function handlePhotoVaultAppStateChange(
   previous: PhotoVaultAppState,
   next: PhotoVaultAppState,
 ): { locked: boolean } {
+  tracePhotoVault('vault.appstate.machine', {
+    previous,
+    next,
+    statusBefore: status,
+    uploadsInFlight: photoVaultUploadsInFlight(),
+  });
   appState = next;
 
   if (next === 'active') {
@@ -110,11 +123,12 @@ export function handlePhotoVaultAppStateChange(
     previous === 'active' && next === 'inactive' && status === 'authenticating';
 
   if (isVaultOwnedAuthenticationPrompt) {
+    tracePhotoVault('vault.appstate.deferred', { previous, next });
     return { locked: false };
   }
 
   settleForegroundWaiters(false);
-  lockPhotoVault();
+  lockPhotoVault('app-state');
   return { locked: true };
 }
 
@@ -135,8 +149,18 @@ function waitForActiveApp(generation: number): Promise<boolean> {
  * Order is deliberate: the session closes and the state flips FIRST, so a
  * failing cleanup can never leave the vault readable. Losing a temp file is
  * recoverable; staying unlocked is not.
+ *
+ * `origin` is read ONLY by the temporary development trace and never by the
+ * state machine itself: every caller locks exactly as before, whether or not
+ * it says where it came from.
  */
-export function lockPhotoVault(): void {
+export function lockPhotoVault(origin: PhotoVaultLockOrigin = 'unspecified'): void {
+  tracePhotoVault('vault.lock', {
+    origin,
+    statusBefore: status,
+    appState,
+    uploadsInFlight: photoVaultUploadsInFlight(),
+  });
   lockGeneration += 1;
   settleForegroundWaiters(false);
   closePhotoVaultSession();
@@ -168,6 +192,7 @@ function issueFor(status: Exclude<Awaited<ReturnType<typeof authenticateForPhoto
 }
 
 async function runUnlock(uid: string, generation: number): Promise<UnlockOutcome> {
+  const finishTrace = startPhotoVaultTrace('vault.unlock.start', { appState });
   setStatus('authenticating');
 
   let issue: PhotoVaultIssue;
@@ -186,11 +211,13 @@ async function runUnlock(uid: string, generation: number): Promise<UnlockOutcome
       generation === lockGeneration &&
       (await waitForActiveApp(generation))
     ) {
-      // Native protection must be active before the state transition can
-      // cause a decrypted image to render.
+      // iOS app-switcher blur (a no-op on Android) is set up before the state
+      // transition can cause a decrypted image to render. This does not
+      // block screenshots/recording on either platform — see
+      // photoVaultScreenProtection.ts.
       await activatePhotoVaultScreenProtection();
 
-      // The app may have left the foreground while native protection was
+      // The app may have left the foreground while the app-switcher blur was
       // being activated. Never open a session until it is active again, and
       // never survive a real background lock.
       if (
@@ -201,6 +228,7 @@ async function runUnlock(uid: string, generation: number): Promise<UnlockOutcome
       } else {
         openPhotoVaultSession(uid);
         setStatus('unlocked');
+        finishTrace('vault.unlock.result', { ok: true });
         return { ok: true };
       }
     } else if (result.status === 'success') {
@@ -227,6 +255,7 @@ async function runUnlock(uid: string, generation: number): Promise<UnlockOutcome
   // authentication/protection failures observable without polluting logs for
   // an intentional user action.
   if (issue !== 'vaultAuthCancelled') logPhotoVaultIssue(SCOPE, issue);
+  finishTrace('vault.unlock.result', { ok: false, issue });
   return { ok: false, issue };
 }
 

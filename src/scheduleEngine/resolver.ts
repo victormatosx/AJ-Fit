@@ -60,6 +60,13 @@ export function resolveWorkoutSchedule(input: ResolveWorkoutScheduleInput): Sche
   const { hasActiveProgram, sessionCount, config, state, activatedAtLocalDate, todayLocalDate, resolvedMissScheduledDate } = input;
 
   if (!hasActiveProgram || sessionCount <= 0) return { status: 'PROGRAM_NOT_AVAILABLE' };
+  const scheduleMode = input.scheduleMode ?? config?.scheduleMode ?? 'fixed';
+  // Flexible means freedom of date, never freedom of sequence. The cursor is
+  // the sole authority and a new instance always starts at session 0. Weekly
+  // frequency is a target, not a same-day or weekday availability limit.
+  if (scheduleMode === 'flexible') {
+    return { status: 'SESSION_READY', sessionIndex: state?.nextSessionIndex ?? 0 };
+  }
   if (!config || config.trainingDays.length === 0) return { status: 'SCHEDULE_SETUP_REQUIRED' };
 
   if (state?.pendingMissDecision) {
@@ -86,7 +93,13 @@ export function resolveWorkoutSchedule(input: ResolveWorkoutScheduleInput): Sche
     // due today was just finished" — never a guess from `cursorDate` alone
     // (a FOLLOW_SCHEDULE miss resolution also lands cursorDate on today
     // without a completion).
-    const nextWorkoutDate = nextTrainingDayOnOrAfter(config.trainingDays, addDaysLocal(todayLocalDate, 1));
+    // An early completion may legitimately put the authoritative cursor one
+    // civil day ahead of the clock. Continue strictly after that cursor so
+    // the already-consumed opportunity is never advertised or advanced again.
+    const nextWorkoutSearchDate = cursorDate > todayLocalDate
+      ? addDaysLocal(cursorDate, 1)
+      : addDaysLocal(todayLocalDate, 1);
+    const nextWorkoutDate = nextTrainingDayOnOrAfter(config.trainingDays, nextWorkoutSearchDate);
     const nextSessionIndex = state?.nextSessionIndex
       ?? anchorSessionIndex(config.trainingDays, weekdayOfLocalDate(nextWorkoutDate), sessionCount);
     return state?.lastCompletedAt === todayLocalDate
@@ -148,6 +161,7 @@ export function detectMissedSessionGap(input: ResolveWorkoutScheduleInput): {
   calendarSessionIndex: number;
   missedScheduledDate: string;
 } | null {
+  if ((input.scheduleMode ?? input.config?.scheduleMode ?? 'fixed') === 'flexible') return null;
   if (input.state?.pendingMissDecision) return null;
   if (!input.config || input.config.trainingDays.length === 0) return null;
   if (!input.hasActiveProgram || input.sessionCount <= 0) return null;

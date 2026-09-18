@@ -24,7 +24,10 @@
     "title": "Pending workout session",
     "conflictBody": "Another workout session is already in progress. You can abandon it to start a new one.",
     "legacyBody": "We found a previous workout session that wasn't properly closed. It needs to be resolved before you can start a new one.",
+    "legacyAmbiguousBody": "We found {{count}} pending sessions and can't safely choose one automatically. Contact support to resolve them.",
     "abandonPrevious": "Abandon previous session",
+    "contactSupport": "Contact support",
+    "supportSubject": "Pending workout sessions",
     "cancel": "Cancel",
     "resolving": "Resolving…"
   },
@@ -36,6 +39,9 @@
     "kicker": "Secure session",
     "title": "Preparing workout…",
     "body": "We're confirming your session. This should only take a moment."
+  },
+  "persistence": {
+    "pending": "A change hasn't synced yet. Keep the workout open; we'll try again when you finish."
   },
   "sessionRecovery": {
     "title": "Workout in progress",
@@ -115,6 +121,7 @@
     "finishRetry": "Try again",
     "exitConfirmTitle": "Leave cardio?",
     "exitConfirmBody": "Your strength work is already complete. Leaving now finishes the workout with {{done}} of cardio logged.",
+    "exitConfirmAction": "Finish and leave",
     "accessibility": {
       "close": "Exit cardio",
       "timer": "Cardio timer"

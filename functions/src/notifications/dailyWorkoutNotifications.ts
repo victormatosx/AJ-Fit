@@ -51,6 +51,9 @@ export interface DailyWorkoutContext {
   programId: string;
   programInstanceId: string;
   activatedAtLocalDate: string;
+  /** Absent in legacy/test contexts and therefore fixed. */
+  scheduleMode?: 'fixed' | 'flexible';
+  prescribedTrainingFrequency?: number;
   weeklySchedule: WeeklyDay[];
   sessionCount: number;
   scheduleState: ScheduleStateInput | null;
@@ -237,7 +240,8 @@ export async function loadDailyWorkoutContext(
     || programData?.status !== 'active'
   ) return { status: 'PROGRAM_UNAVAILABLE', timezone };
 
-  const weeklySchedule = effectiveWeeklySchedule(
+  const scheduleMode = programData.scheduleMode === 'flexible' ? 'flexible' : 'fixed';
+  const weeklySchedule = scheduleMode === 'flexible' ? [] : effectiveWeeklySchedule(
     programData.weeklySchedule,
     scheduleConfig.data()?.trainingDays,
   );
@@ -249,7 +253,7 @@ export async function loadDailyWorkoutContext(
     .filter((day) => day.state === 'ACTIVE_RECOVERY')
     .map((day) => day.weekday);
   const sessionCount = sessionCountFor(programData);
-  if (trainingDays.length === 0 || sessionCount === 0) {
+  if ((scheduleMode === 'fixed' && trainingDays.length === 0) || sessionCount === 0) {
     return { status: 'SCHEDULE_UNAVAILABLE', timezone };
   }
 
@@ -258,6 +262,7 @@ export async function loadDailyWorkoutContext(
   const activatedAtLocalDate = localDateInTimezone(instanceData.activatedAt.toDate(), timezone);
   const todayLocalDate = localDateInTimezone(instant, timezone);
   const config: ScheduleConfig = {
+    scheduleMode,
     trainingDays,
     activeRecoveryDays,
     timezone,
@@ -266,6 +271,7 @@ export async function loadDailyWorkoutContext(
   const gap = detectMissedSessionGap({
     hasActiveProgram: true,
     sessionCount,
+    scheduleMode,
     config,
     state: scheduleState,
     activatedAtLocalDate,
@@ -296,6 +302,10 @@ export async function loadDailyWorkoutContext(
     programId,
     programInstanceId,
     activatedAtLocalDate,
+    scheduleMode,
+    prescribedTrainingFrequency: Number.isInteger(programData.prescribedTrainingFrequency)
+      ? programData.prescribedTrainingFrequency
+      : sessionCount,
     weeklySchedule,
     sessionCount,
     scheduleState,
@@ -363,6 +373,9 @@ export async function resolveDailyWorkoutCandidate(
   localDate: string,
   hasFinishedExecution: DailyWorkoutNotificationDependencies['hasFinishedExecution'],
 ): Promise<DailyWorkoutCandidate> {
+  // Flexible plans have no weekday-specific "today", recovery day, or miss.
+  // Re-engagement/weekly products use their own frequency-aware semantics.
+  if (context.scheduleMode === 'flexible') return { allowed: false, reason: 'FLEXIBLE_NO_CALENDAR_NOTIFICATION' };
   const trainingDays = context.weeklySchedule
     .filter((day) => day.state === 'TRAINING')
     .map((day) => day.weekday);
@@ -370,6 +383,7 @@ export async function resolveDailyWorkoutCandidate(
     .filter((day) => day.state === 'ACTIVE_RECOVERY')
     .map((day) => day.weekday);
   const config: ScheduleConfig = {
+    scheduleMode: 'fixed',
     trainingDays,
     activeRecoveryDays,
     timezone: context.timezone,

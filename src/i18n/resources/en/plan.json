@@ -16,6 +16,8 @@
   },
   "schedule": {
     "title": "Week",
+    "flexibleTitle": "Flexible training",
+    "flexibleBody": "{{count}} workouts per week. Train on the days you prefer while following the sequence.",
     "trainLabel": "Train",
     "restLabel": "Rest",
     "dayLabels": { "mon": "M", "tue": "T", "wed": "W", "thu": "T", "fri": "F", "sat": "S", "sun": "S" }

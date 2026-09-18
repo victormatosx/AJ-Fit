@@ -295,9 +295,22 @@ async function authoritativeEarnedFactWithCycleHistory(
   const snapshotInputs = plainObject(instance.prescriptionInputSnapshot?.inputs)
     ? instance.prescriptionInputSnapshot.inputs as Record<string, unknown>
     : {};
-  const configuredDays = Array.isArray(snapshotInputs.trainingDays) && snapshotInputs.trainingDays.length > 0
-    ? snapshotInputs.trainingDays
-    : Array.isArray(scheduleConfig.trainingDays) ? scheduleConfig.trainingDays : [];
+  const scheduleMode = program.scheduleMode === 'flexible'
+    ? 'flexible'
+    : program.scheduleMode === 'fixed'
+      ? 'fixed'
+      : snapshotInputs.scheduleMode === 'flexible'
+        ? 'flexible'
+        : 'fixed';
+  const programTrainingDays = Array.isArray(program.weeklySchedule)
+    ? program.weeklySchedule.flatMap((item: unknown) => plainObject(item)
+      && item.state === 'TRAINING' && typeof item.weekday === 'string' ? [item.weekday] : [])
+    : [];
+  const configuredDays = programTrainingDays.length > 0
+    ? programTrainingDays
+    : Array.isArray(snapshotInputs.trainingDays) && snapshotInputs.trainingDays.length > 0
+      ? snapshotInputs.trainingDays
+      : Array.isArray(scheduleConfig.trainingDays) ? scheduleConfig.trainingDays : [];
   const trainingDays = new Set(configuredDays.filter((item): item is string => typeof item === 'string'));
   const timezone = typeof scheduleConfig.timezone === 'string' ? scheduleConfig.timezone : 'UTC';
   const start = localDate((instance.activatedAt as Timestamp).toDate(), timezone);
@@ -323,24 +336,56 @@ async function authoritativeEarnedFactWithCycleHistory(
     const hasExecution = executionDates.has(cursor);
     if (hasExecution) { missed = 0; paused = false; }
     if (!paused) { activeDays += 1; countedDates.add(cursor); }
-    if (!hasExecution && trainingDays.has(weekday(cursor)) && cursor < today) {
+    if (scheduleMode === 'fixed' && !hasExecution && trainingDays.has(weekday(cursor)) && cursor < today) {
       missed += 1;
       if (missed >= config.inactivityMissedOpportunityThreshold) paused = true;
     }
   }
-  const opportunityDates = new Set([...countedDates].filter((date) => trainingDays.has(weekday(date))));
+  const opportunityDates = new Set(scheduleMode === 'fixed'
+    ? [...countedDates].filter((date) => trainingDays.has(weekday(date)))
+    : []);
   const completedLedger = new Set(scheduleEventsSnapshot.docs.map((item) => item.data())
     .filter((event) => event.type === 'COMPLETED' && event.programInstanceId === state.activeProgramInstanceId)
     .map((event) => `${event.scheduledDate}:${event.sessionIndex}`));
   const fulfilled = new Set<string>();
   for (const execution of executions) {
-    if (!opportunityDates.has(execution.scheduledLocalDate)) continue;
+    if (scheduleMode === 'fixed' && !opportunityDates.has(execution.scheduledLocalDate)) continue;
     const session = Array.isArray(program.sessions) ? program.sessions[execution.sessionIndex] : null;
     const key = `${execution.scheduledLocalDate}:${execution.sessionIndex}`;
     if (completedLedger.has(key) && qualifyingExecution(execution, session, state.activeProgramInstanceId)) fulfilled.add(key);
   }
-  const expected = opportunityDates.size;
-  const ratioBp = expected === 0 ? 0 : Math.min(10_000, Math.floor(fulfilled.size * 10_000 / expected));
+  const prescribedFrequency = Number.isInteger(program.prescribedTrainingFrequency)
+    ? program.prescribedTrainingFrequency
+    : program.prescribedStructuredDays;
+  const flexibleExpectedByWeek = new Map<string, number>();
+  if (scheduleMode === 'flexible') {
+    const weekdayOffset: Record<string, number> = { MON: 0, TUE: 1, WED: 2, THU: 3, FRI: 4, SAT: 5, SUN: 6 };
+    const activeDaysByWeek = new Map<string, number>();
+    for (const date of countedDates) {
+      const week = addDays(date, -(weekdayOffset[weekday(date)] ?? 0));
+      activeDaysByWeek.set(week, (activeDaysByWeek.get(week) ?? 0) + 1);
+    }
+    for (const [week, activeDays] of activeDaysByWeek) {
+      flexibleExpectedByWeek.set(week, Math.min(prescribedFrequency, activeDays));
+    }
+  }
+  const expected = scheduleMode === 'flexible'
+    ? [...flexibleExpectedByWeek.values()].reduce((sum, count) => sum + count, 0)
+    : opportunityDates.size;
+  let fulfilledCount = fulfilled.size;
+  if (scheduleMode === 'flexible') {
+    const weekdayOffset: Record<string, number> = { MON: 0, TUE: 1, WED: 2, THU: 3, FRI: 4, SAT: 5, SUN: 6 };
+    const fulfilledByWeek = new Map<string, number>();
+    for (const key of fulfilled) {
+      const date = key.slice(0, 10);
+      const week = addDays(date, -(weekdayOffset[weekday(date)] ?? 0));
+      fulfilledByWeek.set(week, (fulfilledByWeek.get(week) ?? 0) + 1);
+    }
+    fulfilledCount = [...flexibleExpectedByWeek.entries()].reduce(
+      (sum, [week, target]) => sum + Math.min(target, fulfilledByWeek.get(week) ?? 0), 0,
+    );
+  }
+  const ratioBp = expected === 0 ? 0 : Math.min(10_000, Math.floor(fulfilledCount * 10_000 / expected));
   const quality = ratioBp >= config.adherenceHighThresholdBp ? 'HIGH'
     : ratioBp >= config.adherenceEarnedThresholdBp ? 'GOOD' : 'BELOW_TARGET';
   const minDays = state.currentTrainingLevel === 'BEGINNER'
@@ -376,7 +421,7 @@ async function authoritativeEarnedFactWithCycleHistory(
     fromLevel: state.currentTrainingLevel,
     toLevel,
     quality,
-    sessionsCompletedAtEarn: fulfilled.size,
+    sessionsCompletedAtEarn: fulfilledCount,
     adherenceAtEarnBp: ratioBp,
     // Ephemeral marker, never persisted verbatim to the domain ledger
     // (`persistEarnedFact`'s Firestore write picks an explicit 6-field
@@ -587,6 +632,7 @@ async function generateCanonicalCycleEvolution(
     requestedDays: bundle.program.requestedDays,
     prescribedStructuredDays: bundle.program.prescribedStructuredDays,
     prescribedTrainingFrequency: bundle.program.prescribedTrainingFrequency,
+    scheduleMode: bundle.program.scheduleMode === 'flexible' ? 'flexible' : 'fixed',
     availability: bundle.program.availability,
     weeklySchedule: bundle.program.weeklySchedule,
     population: bundle.program.population,
@@ -1046,7 +1092,8 @@ async function validateRequest(uid: string, request: AuthorityRequest, firestore
   if (request.operation === 'COMPLETE_SCHEDULE') {
     if (request.sessionIndex == null || !request.scheduledLocalDate) throw new HttpsError('invalid-argument', 'invalid_schedule_completion');
     const context = await loadScheduleAuthorityContext(uid, bundle, firestore);
-    if (context.sessionCount <= 0 || context.config.trainingDays.length === 0) {
+    if (context.sessionCount <= 0
+      || ((context.config.scheduleMode ?? 'fixed') === 'fixed' && context.config.trainingDays.length === 0)) {
       throw new HttpsError('failed-precondition', 'schedule_not_configured');
     }
     assertNotBackdated(request.scheduledLocalDate, context.config.timezone, new Date());
@@ -1059,6 +1106,7 @@ async function validateRequest(uid: string, request: AuthorityRequest, firestore
     const resolution = resolveWorkoutSchedule({
       hasActiveProgram: true,
       sessionCount: context.sessionCount,
+      scheduleMode: context.config.scheduleMode ?? 'fixed',
       config: context.config,
       state: context.state,
       activatedAtLocalDate: context.activatedAtLocalDate,
@@ -1091,6 +1139,9 @@ async function validateRequest(uid: string, request: AuthorityRequest, firestore
       throw new HttpsError('invalid-argument', 'missing_missed_session_decision_identity');
     }
     const context = await loadScheduleAuthorityContext(uid, bundle, firestore);
+    if ((context.config.scheduleMode ?? 'fixed') === 'flexible') {
+      throw new HttpsError('failed-precondition', 'missed_session_not_applicable');
+    }
     if (context.sessionCount <= 0 || context.config.trainingDays.length === 0) {
       throw new HttpsError('failed-precondition', 'schedule_not_configured');
     }

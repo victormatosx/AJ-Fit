@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
@@ -77,6 +77,43 @@ beforeEach(async () => {
 });
 
 describe('workoutProgramState/scheduleConfig', () => {
+  it('accepts the exact persisted flexible payload and keeps fixed weekday validation strict', async () => {
+    const ref = doc(dbFor(UID), 'users', UID, 'workoutProgramState', 'scheduleConfig');
+    await assertSucceeds(setDoc(ref, scheduleConfigDoc({ scheduleMode: 'flexible', trainingDays: [] })));
+    await assertFails(setDoc(ref, scheduleConfigDoc({ scheduleMode: 'fixed', trainingDays: [] })));
+    await assertFails(setDoc(ref, scheduleConfigDoc({ scheduleMode: 'flexible', trainingDays: ['MON'] })));
+  });
+
+  // Flexible has no weekday calendar at all, so the historical "at least 2
+  // training days" floor must NOT apply to it — the deployed ruleset applied
+  // that floor unconditionally AND rejected the `scheduleMode` key outright,
+  // which is why no flexible account in production has a scheduleConfig.
+  it('keeps the 2..7 weekday floor for fixed only, and accepts a legacy config with no scheduleMode', async () => {
+    const ref = doc(dbFor(UID), 'users', UID, 'workoutProgramState', 'scheduleConfig');
+    await assertSucceeds(setDoc(ref, scheduleConfigDoc({ scheduleMode: 'fixed', trainingDays: ['MON', 'THU'] })));
+    await assertFails(setDoc(ref, scheduleConfigDoc({ scheduleMode: 'fixed', trainingDays: ['MON'] })));
+    // Pre-scheduleMode documents keep their former fixed contract.
+    await assertSucceeds(setDoc(ref, scheduleConfigDoc({ trainingDays: ['MON', 'WED', 'FRI'] })));
+    await assertFails(setDoc(ref, scheduleConfigDoc({ scheduleMode: 'sometimes', trainingDays: ['MON', 'WED'] })));
+  });
+
+  it('documents the production payload boundary: updatedAt and lowercase timezone are required', async () => {
+    const ref = doc(dbFor(UID), 'users', UID, 'workoutProgramState', 'scheduleConfig');
+    await assertFails(setDoc(ref, {
+      scheduleMode: 'flexible',
+      trainingDays: [],
+      timezone: 'America/Sao_Paulo',
+      scheduleVersion: 1,
+    }));
+    await assertFails(setDoc(ref, {
+      scheduleMode: 'flexible',
+      trainingDays: [],
+      timeZone: 'America/Sao_Paulo',
+      scheduleVersion: 1,
+      updatedAt: serverTimestamp(),
+    }));
+  });
+
   it('lets the owner create and update their own weekday preference', async () => {
     const db = dbFor(UID);
     await assertSucceeds(setDoc(doc(db, 'users', UID, 'workoutProgramState', 'scheduleConfig'), scheduleConfigDoc()));
@@ -156,6 +193,58 @@ describe('workoutPrograms/{programId}/scheduleEvents', () => {
     await assertFails(setDoc(
       doc(dbFor(OTHER_UID), 'users', UID, 'workoutPrograms', PROGRAM_ID, 'scheduleEvents', 'forged'),
       completedEventDoc(),
+    ));
+  });
+
+  // `performedLocalDate` is the advance-workout ("Adiantar treino") field.
+  // It reached the client and the event schema but never the deployed
+  // ruleset's `hasOnly`, so the whole feature was rejected in production.
+  // The mode is read from the referenced program, exactly like
+  // `workoutExecutionCommonValid` does for the execution document itself.
+  async function seedProgram(scheduleMode: 'fixed' | 'flexible') {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'users', UID, 'workoutPrograms', PROGRAM_ID), {
+        programId: PROGRAM_ID, status: 'active', scheduleMode,
+      });
+    });
+  }
+
+  it('accepts performedLocalDate on the scheduled day, and one civil day early for a fixed program', async () => {
+    await seedProgram('fixed');
+    const db = dbFor(UID);
+    await assertSucceeds(setDoc(
+      doc(db, 'users', UID, 'workoutPrograms', PROGRAM_ID, 'scheduleEvents', 'completed_normal'),
+      completedEventDoc({ performedLocalDate: '2026-08-03' }),
+    ));
+    await assertSucceeds(setDoc(
+      doc(db, 'users', UID, 'workoutPrograms', PROGRAM_ID, 'scheduleEvents', 'completed_advanced'),
+      completedEventDoc({ performedLocalDate: '2026-08-02' }),
+    ));
+  });
+
+  it('rejects a performedLocalDate two days early, in the future, or malformed', async () => {
+    await seedProgram('fixed');
+    const db = dbFor(UID);
+    for (const [id, performedLocalDate] of [
+      ['too_early', '2026-08-01'], ['in_future', '2026-08-04'], ['malformed', '03/08/2026'],
+    ] as const) {
+      await assertFails(setDoc(
+        doc(db, 'users', UID, 'workoutPrograms', PROGRAM_ID, 'scheduleEvents', id),
+        completedEventDoc({ performedLocalDate }),
+      ));
+    }
+  });
+
+  it('accepts performedLocalDate == scheduledDate for a flexible program but never the one-day exception', async () => {
+    await seedProgram('flexible');
+    const db = dbFor(UID);
+    await assertSucceeds(setDoc(
+      doc(db, 'users', UID, 'workoutPrograms', PROGRAM_ID, 'scheduleEvents', 'flex_normal'),
+      completedEventDoc({ performedLocalDate: '2026-08-03' }),
+    ));
+    await assertFails(setDoc(
+      doc(db, 'users', UID, 'workoutPrograms', PROGRAM_ID, 'scheduleEvents', 'flex_advanced'),
+      completedEventDoc({ performedLocalDate: '2026-08-02' }),
     ));
   });
 

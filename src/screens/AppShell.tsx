@@ -54,11 +54,13 @@ import { canRetryGeneration, prescriptionOutcomeKey } from '../workoutPrescripti
 import type { WorkoutProgramSnapshot } from '../services/workoutPrograms';
 import {
   localDateInTimezone,
+  advancedWorkoutTarget,
   useWorkoutSchedule,
   weekdayOfLocalDate,
   type MissDecision,
   type MissedSessionDecisionIdentity,
   type ScheduleResolution,
+  type AdvancedWorkoutTarget,
 } from '../scheduleEngine';
 import {
   missedDecisionIdentity,
@@ -262,6 +264,8 @@ function AppShellContent({
   })();
   const activitySnapshot = useWorkoutActivitySnapshot({
     timezone: schedule.config?.timezone ?? deviceTimezone(),
+    scheduleMode: activeProgram?.scheduleMode ?? 'fixed',
+    prescribedTrainingFrequency: activeProgram?.prescribedTrainingFrequency ?? activeProgram?.prescribedStructuredDays,
     trainingDays: schedule.config?.trainingDays ?? [],
     activeRecoveryDays: schedule.config?.activeRecoveryDays ?? [],
     activatedAtLocalDate,
@@ -293,6 +297,7 @@ function AppShellContent({
   // re-entrancy guard that makes a double confirm a no-op before the first
   // `workoutStartPending` render has committed.
   const workoutStartInFlightRef = useRef(false);
+  const lastWorkoutStartKindRef = useRef<'normal' | 'advanced'>('normal');
   const [startWorkoutError, setStartWorkoutError] = useState<WorkoutExecutionStartError | null>(null);
   const [resolvingPendingExecution, setResolvingPendingExecution] = useState(false);
   // The visual completion screen renders as soon as its last set is done,
@@ -343,6 +348,7 @@ function AppShellContent({
   // while a miss decision was showing could mount a second native `Modal`
   // on top of it — a documented cause of a stuck/unresponsive overlay).
   const [startWorkoutFlow, setStartWorkoutFlow] = useState<'idle' | 'missedDecision' | 'confirmation'>('idle');
+  const [showAdvanceWorkoutConfirmation, setShowAdvanceWorkoutConfirmation] = useState(false);
   const [missedDecisionPending, setMissedDecisionPending] = useState<MissDecision | null>(null);
   const [missedDecisionError, setMissedDecisionError] = useState(false);
   const [missedDecisionContext, setMissedDecisionContext] = useState<MissedSessionDecisionIdentity | null>(null);
@@ -374,6 +380,18 @@ function AppShellContent({
   // keeps every other modal (evolution unlock, on-demand paywall, etc.) from
   // opening on top of it.
   const recoveryModalOpen = recovery.state.status === 'pending' || recovery.state.status === 'inconsistent';
+  const advanceTarget = activeProgram && schedule.config
+    ? advancedWorkoutTarget({
+        scheduleMode: activeProgram.scheduleMode ?? 'fixed',
+        resolution: schedule.resolution,
+        todayLocalDate: localDateInTimezone(new Date(), schedule.config.timezone),
+        sessionCount: activeProgram.sessions.length,
+        hasIncompatibleExecution: workoutInProgress
+          || workoutStartPending
+          || execution.starting
+          || recovery.state.status !== 'none',
+      })
+    : null;
   const overlayOpen =
     showAssessment ||
     showSettings ||
@@ -387,9 +405,13 @@ function AppShellContent({
     showDeleteAccount ||
     showPremium ||
     startWorkoutFlow !== 'idle' ||
+    showAdvanceWorkoutConfirmation ||
     !!startWorkoutError ||
     !!supportRoute ||
     recoveryModalOpen;
+  useEffect(() => {
+    if (showAdvanceWorkoutConfirmation && !advanceTarget) setShowAdvanceWorkoutConfirmation(false);
+  }, [advanceTarget, showAdvanceWorkoutConfirmation]);
   useEffect(() => {
     if (!canChangePassword) setShowChangePassword(false);
   }, [canChangePassword]);
@@ -455,6 +477,12 @@ function AppShellContent({
     }
     setStartWorkoutFlow('confirmation');
   }, [workoutInProgress, workoutStartPending, recoveryModalOpen, schedule.resolution, setTab]);
+
+  /** Separate intent for V1's one-day fixed-schedule exception. */
+  const requestAdvanceWorkout = useCallback(() => {
+    if (!advanceTarget || workoutStartInFlightRef.current || overlayOpen) return;
+    setShowAdvanceWorkoutConfirmation(true);
+  }, [advanceTarget, overlayOpen]);
 
   const selectTab = (nextTab: TabId) => {
     if (nextTab === 'workout' && tab !== 'workout') {
@@ -629,6 +657,7 @@ function AppShellContent({
       }
       return;
     }
+    lastWorkoutStartKindRef.current = 'normal';
     workoutStartInFlightRef.current = true;
     const requestedAtMs = Date.now();
     const sessionIndex = schedule.resolution.sessionIndex;
@@ -706,13 +735,82 @@ function AppShellContent({
     }
   };
 
+  /**
+   * Explicit V1 advance path. It re-derives the target immediately before
+   * persistence and never weakens `startWorkout`'s SESSION_READY gate.
+   */
+  const startAdvancedWorkout = async () => {
+    if (prescription.status !== 'SUCCESS' || !activeProgram || !schedule.config) return;
+    const target = advancedWorkoutTarget({
+      scheduleMode: activeProgram.scheduleMode ?? 'fixed',
+      resolution: schedule.resolution,
+      todayLocalDate: localDateInTimezone(new Date(), schedule.config.timezone),
+      sessionCount: activeProgram.sessions.length,
+      hasIncompatibleExecution: workoutInProgress
+        || workoutStartPending
+        || execution.starting
+        || recovery.state.status !== 'none',
+    });
+    if (!target || workoutStartInFlightRef.current) return;
+
+    lastWorkoutStartKindRef.current = 'advanced';
+    workoutStartInFlightRef.current = true;
+    const requestedAtMs = Date.now();
+    const { sessionIndex } = target;
+    const attemptId = ++workoutStartAttemptSequenceRef.current;
+    logInfo('workout_execution', 'advanced_start_user_confirmed', { attemptId, sessionIndex });
+    workoutCompletionRef.current = null;
+    workoutHomeSyncRef.current = null;
+    setWorkoutCompletionResult(null);
+    setDurableCompletionReachedAtMs(null);
+    setFinishingSession(false);
+    setShowAdvanceWorkoutConfirmation(false);
+    setStartWorkoutError(null);
+    setActiveSessionIndex(sessionIndex);
+    setWorkoutStartAttempt({ id: attemptId, requestedAtMs, sessionIndex });
+    setWorkoutStartPending(true);
+    setTab('workout');
+    try {
+      const { execution: started, error } = await execution.startAdvanced(schedule.resolution);
+      const durationMs = Date.now() - requestedAtMs;
+      if (!started) {
+        setWorkoutStartPending(false);
+        setWorkoutInProgress(false);
+        setWorkoutStartAttempt(null);
+        setTab('home');
+        setStartWorkoutError(error);
+        logWarn('workout_execution', 'advanced_start_ui_rolled_back', {
+          attemptId, sessionIndex, durationMs, errorCode: error.code,
+        });
+        return;
+      }
+      setWorkoutInProgress(true);
+      setWorkoutStartPending(false);
+      const executionScopeId = activeProgram.programInstanceId ?? activeProgram.programId;
+      beginWorkoutSession(activeExecutionId(executionScopeId, sessionIndex, started.scheduledLocalDate));
+      logInfo('workout_execution', 'advanced_start_ui_confirmed', { attemptId, sessionIndex, durationMs });
+    } catch (error) {
+      setWorkoutStartPending(false);
+      setWorkoutInProgress(false);
+      setWorkoutStartAttempt(null);
+      setTab('home');
+      setStartWorkoutError({ code: 'UNKNOWN' });
+      logWarn('workout_execution', 'advanced_start_ui_rolled_back', {
+        attemptId, sessionIndex, durationMs: Date.now() - requestedAtMs, error,
+      });
+    } finally {
+      workoutStartInFlightRef.current = false;
+    }
+  };
+
   /** Resolves a CONFLICT/LEGACY_PENDING `startWorkoutError` by abandoning the offending pending execution, then retries `startWorkout` (docs §11/§12). Never offers "resume" — see `WorkoutExecutionPendingModal`'s doc comment. */
   const resolvePendingExecutionAndRetry = async (executionId: string) => {
     setResolvingPendingExecution(true);
     try {
       await execution.abandonExecutionById(executionId);
       setStartWorkoutError(null);
-      await startWorkout();
+      if (lastWorkoutStartKindRef.current === 'advanced') await startAdvancedWorkout();
+      else await startWorkout();
     } catch (error) {
       logWarn('workout_execution', 'pending_execution_resolution_failed', { error });
     } finally {
@@ -1083,6 +1181,8 @@ function AppShellContent({
             activeRest={activeRest}
             restRunning={restStatus === 'running' && activeRest !== null}
             onStart={requestStartWorkout}
+            advanceWorkoutTarget={advanceTarget}
+            onAdvanceWorkout={requestAdvanceWorkout}
             onOpenProfile={() => setTab('profile')}
             onOpenSupportCases={() => setSupportRoute({ name: 'cases', origin: 'home' })}
             unreadSupportCasesCount={unreadSupportCasesCount}
@@ -1128,6 +1228,7 @@ function AppShellContent({
               sessionIndex={activeSessionIndex}
               execution={execution.execution}
               workoutStartedAtMs={execution.workoutStartedAtMs}
+              hasUnreconciledMutations={execution.hasUnreconciledMutations}
               onDone={finishWorkoutSession}
               onRetryCompletion={() => { void retryWorkoutCompletion(); }}
               onDiscarded={leaveDiscardedWorkout}
@@ -1249,6 +1350,12 @@ function AppShellContent({
         generating={generatingWorkout}
         onGenerate={() => { void generateWorkout(); }}
       />
+      <AdvanceWorkoutConfirmation
+        visible={showAdvanceWorkoutConfirmation && advanceTarget !== null && !workoutInProgress}
+        target={advanceTarget}
+        onCancel={() => setShowAdvanceWorkoutConfirmation(false)}
+        onConfirm={() => { void startAdvancedWorkout(); }}
+      />
       {/*
         Only ever opened from `requestStartWorkout` (a real "iniciar treino"
         attempt) — never auto-shown on Home mount just because the Schedule
@@ -1264,6 +1371,10 @@ function AppShellContent({
         error={startWorkoutError}
         resolving={resolvingPendingExecution}
         onAbandonPrevious={(id) => { void resolvePendingExecutionAndRetry(id); }}
+        onContactSupport={() => {
+          setStartWorkoutError(null);
+          setSupportRoute({ name: 'form', type: 'SUPPORT', subject: t('pendingExecution.supportSubject') });
+        }}
         onCancel={() => setStartWorkoutError(null)}
       />
       {/*
@@ -1460,6 +1571,7 @@ function AppShellContent({
           loading={prescriptionLoading}
           schedule={schedule}
           onBack={() => setShowMyPlan(false)}
+          onRetry={() => { void reloadPrescription(); }}
         />
       </PersistentScreen>
       <PersistentScreen
@@ -1583,6 +1695,132 @@ function AppShellContent({
         </View>
       ) : null}
     </View>
+  );
+}
+
+function AdvanceWorkoutConfirmation({
+  visible,
+  target,
+  onCancel,
+  onConfirm,
+}: {
+  visible: boolean;
+  target: AdvancedWorkoutTarget | null;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const theme = darkTheme;
+  const { t, i18n } = useTranslation('home');
+  const locale = i18n.resolvedLanguage ?? i18n.language;
+  const weekday = target
+    ? new Intl.DateTimeFormat(locale, { weekday: 'long', timeZone: 'UTC' })
+      .format(new Date(`${target.scheduledLocalDate}T12:00:00Z`))
+    : '';
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="none"
+      onRequestClose={onCancel}
+      statusBarTranslucent
+    >
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={t('schedule.advance.dismiss')}
+        onPress={onCancel}
+        style={{
+          flex: 1,
+          backgroundColor: theme.colors.overlayStrong,
+          justifyContent: 'center',
+          paddingHorizontal: 34,
+        }}
+      >
+        <Pressable
+          accessibilityRole="none"
+          onPress={(event) => event.stopPropagation()}
+          style={{
+            width: '100%',
+            maxWidth: 340,
+            alignSelf: 'center',
+            borderRadius: 16,
+            borderBottomRightRadius: 0,
+            overflow: 'hidden',
+            borderWidth: 1,
+            borderColor: theme.colors.primaryBorderQuiet,
+            backgroundColor: theme.colors.background,
+          }}
+        >
+          <LinearGradient
+            colors={theme.gradients.poster}
+            locations={[0, 0.45, 1]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={{ padding: 18 }}
+          >
+            <HudCorners color={theme.colors.hudCorner} />
+            <Slash accentColor={theme.colors.primaryEmphasis} textColor={theme.colors.textFaint}>
+              {t('todayCard.kicker').toUpperCase()}
+            </Slash>
+            <Display size={26} color={theme.colors.textPrimary} style={{ marginTop: 9 }}>
+              {t('schedule.advance.confirmTitle').toUpperCase()}
+            </Display>
+            <Text style={{
+              color: theme.colors.textSecondaryStrong,
+              fontFamily: theme.fonts.ui,
+              fontSize: 13,
+              lineHeight: 19,
+              marginTop: 8,
+            }}>
+              {t('schedule.advance.confirmBody', { weekday })}
+            </Text>
+
+            <PremiumAction capability="START_WORKOUT" onAllowed={onConfirm}>
+              {({ locked, onPress }) => (
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => {
+                    onCancel();
+                    onPress();
+                  }}
+                  style={{
+                    height: 48,
+                    marginTop: 18,
+                    borderRadius: 10,
+                    borderBottomRightRadius: 0,
+                    backgroundColor: theme.colors.inverseSurface,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 9,
+                  }}
+                >
+                  <Icon name={locked ? 'lock' : 'arrow-right'} size={12} color={theme.colors.inverseForeground} />
+                  <Text style={{
+                    color: theme.colors.inverseForeground,
+                    fontFamily: theme.fonts.display,
+                    fontSize: 15,
+                    letterSpacing: 1.4,
+                    textTransform: 'uppercase',
+                  }}>
+                    {t('schedule.advance.confirm')}
+                  </Text>
+                </Pressable>
+              )}
+            </PremiumAction>
+            <Pressable
+              accessibilityRole="button"
+              onPress={onCancel}
+              style={{ alignSelf: 'center', paddingHorizontal: 18, paddingTop: 13, paddingBottom: 2 }}
+            >
+              <Text style={{ color: theme.colors.textMuted, fontFamily: theme.fonts.ui, fontSize: 13 }}>
+                {t('schedule.advance.cancel')}
+              </Text>
+            </Pressable>
+          </LinearGradient>
+        </Pressable>
+      </Pressable>
+    </Modal>
   );
 }
 

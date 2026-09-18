@@ -69,6 +69,8 @@ interface ParsedInstance {
   activatedDate: string;
   supersededDate: string | null;
   trainingDays: ReadonlySet<Weekday>;
+  scheduleMode: 'fixed' | 'flexible';
+  prescribedTrainingFrequency: number;
   sessions: readonly { exercises: readonly { exerciseId: string; setCount: number }[] }[];
 }
 
@@ -144,7 +146,19 @@ export function selectWeeklyAchievementCandidate(
   };
 }
 
-function parseTrainingDays(instance: DocumentData, program: DocumentData): ReadonlySet<Weekday> | null {
+function parseSchedulePrescription(instance: DocumentData, program: DocumentData): {
+  scheduleMode: 'fixed' | 'flexible';
+  trainingDays: ReadonlySet<Weekday>;
+  prescribedTrainingFrequency: number;
+} | null {
+  const scheduleMode = program.scheduleMode === 'flexible' ? 'flexible' : 'fixed';
+  const explicitFrequency = Number.isInteger(program.prescribedTrainingFrequency)
+    ? program.prescribedTrainingFrequency
+    : program.prescribedStructuredDays;
+  if (scheduleMode === 'flexible') {
+    if (!Number.isInteger(explicitFrequency) || explicitFrequency < 1 || explicitFrequency > 7) return null;
+    return { scheduleMode, trainingDays: new Set(), prescribedTrainingFrequency: explicitFrequency };
+  }
   const snapshotDays = instance.prescriptionInputSnapshot?.inputs?.trainingDays;
   if (!Array.isArray(snapshotDays) || snapshotDays.length === 0
     || snapshotDays.some((day: unknown) => !WEEKDAYS.has(day as Weekday))) return null;
@@ -162,7 +176,11 @@ function parseTrainingDays(instance: DocumentData, program: DocumentData): Reado
     if (item.state === 'TRAINING') training.add(item.weekday as Weekday);
   }
   if (training.size === 0 || [...training].some((day) => !snapshotDays.includes(day))) return null;
-  return training;
+  const prescribedTrainingFrequency = Number.isInteger(explicitFrequency)
+    && explicitFrequency >= 1 && explicitFrequency <= 7
+    ? explicitFrequency
+    : training.size;
+  return { scheduleMode, trainingDays: training, prescribedTrainingFrequency };
 }
 
 function parseSessions(program: DocumentData): ParsedInstance['sessions'] | null {
@@ -293,13 +311,13 @@ export async function readWeeklyAchievementContext(
   const instances: ParsedInstance[] = [];
   for (const instance of rawInstances) {
     const program = programById.get(instance.contentIdentity);
-    const trainingDays = program ? parseTrainingDays(instance, program) : null;
+    const schedulePrescription = program ? parseSchedulePrescription(instance, program) : null;
     const sessions = program ? parseSessions(program) : null;
     if (!validId(instance.programInstanceId) || !validId(instance.prescriptionIdentity)
       || !(instance.activatedAt instanceof Timestamp)
       || (instance.supersededAt !== null && !(instance.supersededAt instanceof Timestamp))
       || (instance.previousProgramInstanceId !== null && !validId(instance.previousProgramInstanceId))
-      || !trainingDays || !sessions) return deny('HISTORY_UNAVAILABLE', clock.timezone, clock.localDate);
+      || !schedulePrescription || !sessions) return deny('HISTORY_UNAVAILABLE', clock.timezone, clock.localDate);
     instances.push({
       programInstanceId: instance.programInstanceId,
       prescriptionIdentity: instance.prescriptionIdentity,
@@ -310,7 +328,9 @@ export async function readWeeklyAchievementContext(
       activatedDate: localDateInTimezone(instance.activatedAt.toDate(), clock.timezone),
       supersededDate: instance.supersededAt
         ? localDateInTimezone(instance.supersededAt.toDate(), clock.timezone) : null,
-      trainingDays,
+      trainingDays: schedulePrescription.trainingDays,
+      scheduleMode: schedulePrescription.scheduleMode,
+      prescribedTrainingFrequency: schedulePrescription.prescribedTrainingFrequency,
       sessions,
     });
   }
@@ -338,13 +358,36 @@ export async function readWeeklyAchievementContext(
   const opportunities: WeeklyOpportunityFact[] = [];
   for (let date = rangeStart; date <= rangeEnd; date = addDaysLocal(date, 1)) {
     const instance = effectiveInstance(instances, date, relevantEvents);
-    if (!instance || !instance.trainingDays.has(weekdayOfLocalDate(date))) continue;
+    if (!instance || instance.scheduleMode === 'flexible' || !instance.trainingDays.has(weekdayOfLocalDate(date))) continue;
     opportunities.push({
       localDate: date,
       programInstanceId: instance.programInstanceId,
       prescriptionIdentity: instance.prescriptionIdentity,
       fulfilled: fulfilledOn(instance, date, relevantEvents, executions),
     });
+  }
+  // Flexible weeks are numeric targets, never weekday opportunities. Count
+  // real qualifying completion dates and materialize only anonymous weekly
+  // slots for the existing perfect-week/streak policy.
+  for (let weekStart = mondayOf(rangeStart); weekStart <= rangeEnd; weekStart = addDaysLocal(weekStart, 7)) {
+    const weekEnd = addDaysLocal(weekStart, 6);
+    const ownerDate = weekEnd < clock.localDate ? weekEnd : clock.localDate;
+    const instance = effectiveInstance(instances, ownerDate, relevantEvents);
+    if (!instance || instance.scheduleMode !== 'flexible') continue;
+    const fulfilledExecutions = [...new Set(relevantEvents
+      .filter((event) => event.type === 'COMPLETED'
+        && event.programInstanceId === instance.programInstanceId
+        && event.scheduledDate >= weekStart && event.scheduledDate <= weekEnd
+        && fulfilledOn(instance, event.scheduledDate, relevantEvents, executions))
+      .map((event) => `${event.scheduledDate}:${event.sessionIndex}`))];
+    for (let slot = 0; slot < instance.prescribedTrainingFrequency; slot += 1) {
+      opportunities.push({
+        localDate: addDaysLocal(weekStart, slot),
+        programInstanceId: instance.programInstanceId,
+        prescriptionIdentity: instance.prescriptionIdentity,
+        fulfilled: slot < fulfilledExecutions.length,
+      });
+    }
   }
   const weeks = perfectWeekFacts(opportunities, clock.localDate, earliestKnownLocalDate);
   let candidate = selectWeeklyAchievementCandidate(weeks);

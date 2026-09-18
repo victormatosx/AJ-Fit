@@ -456,7 +456,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                   durationMs: Date.now() - persistStartedAt,
                 });
               }
-              if (generatedPlanTrainingDays.length > 0 || trainingDaysValid(answers)) {
+              const generatedScheduleMode = answers.scheduleMode ?? 'fixed';
+              if (generatedScheduleMode === 'flexible' || generatedPlanTrainingDays.length > 0 || trainingDaysValid(answers)) {
                 const scheduleStartedAt = Date.now();
                 try {
                   await ensureScheduleConfigFromQuestionnaire(
@@ -465,6 +466,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                       ? generatedPlanTrainingDays
                       : normalizeWeekdays(answers.trainingDays ?? []),
                     deviceTimezone(),
+                    generatedScheduleMode,
                   );
                   logInfo('workout_schedule', 'onboarding_schedule_config_completed', {
                     durationMs: Date.now() - scheduleStartedAt,

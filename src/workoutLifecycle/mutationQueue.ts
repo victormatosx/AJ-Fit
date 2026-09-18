@@ -43,6 +43,10 @@ export class WorkoutMutationQueue {
     }
   }
 
+  hasUnreconciledMutations(): boolean {
+    return this.failedKeys.size > 0;
+  }
+
   reset(): void {
     this.tail = Promise.resolve();
     this.failedKeys.clear();

@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../state/AuthContext';
 import { logWarn } from '../lib/logger';
-import type { Weekday } from '../state/AppState';
+import type { ScheduleMode, Weekday } from '../state/AppState';
 // Concrete submodules only — see `calendarWeek.ts` for why the
 // `../scheduleEngine` barrel must never be imported from a module that
 // isn't itself the `useWorkoutSchedule` hook.
 import { type LocalDate } from '../scheduleEngine/calendar';
 import { localDateInTimezone } from '../scheduleEngine/localDate';
-import { listCompletedWorkoutDatesInRange } from '../services/workoutExecutions';
+import { listCompletedWorkoutActivityDatesInRange } from '../services/workoutExecutions';
 import { mondayOfWeek } from './calendarWeek';
 import { buildWeekOverview, type WeekOverviewViewModel } from './weekOverview';
 
@@ -19,7 +19,7 @@ export interface WorkoutActivitySnapshot {
 }
 
 /**
- * Single bounded Firestore read (`listCompletedWorkoutDatesInRange`) behind
+ * Single bounded Firestore read (`listCompletedWorkoutActivityDatesInRange`) behind
  * the Home "esta semana" projection — never a live listener, since the one
  * real mutation (finishing a workout) already has an explicit call site
  * (`AppShell`'s post-completion flow) that can call `reload()`, the same
@@ -30,6 +30,8 @@ export interface WorkoutActivitySnapshot {
  */
 export function useWorkoutActivitySnapshot(input: {
   timezone: string;
+  scheduleMode?: ScheduleMode;
+  prescribedTrainingFrequency?: number;
   trainingDays: readonly Weekday[];
   activeRecoveryDays: readonly Weekday[];
   activatedAtLocalDate: LocalDate | null;
@@ -37,6 +39,7 @@ export function useWorkoutActivitySnapshot(input: {
   const { user } = useAuth();
   const uid = user?.uid ?? null;
   const [completedDates, setCompletedDates] = useState<ReadonlySet<LocalDate> | null>(null);
+  const [fulfilledScheduledDates, setFulfilledScheduledDates] = useState<ReadonlySet<LocalDate> | null>(null);
   const [loading, setLoading] = useState(true);
   const trainingDaysKey = input.trainingDays.join(',');
   const activeRecoveryDaysKey = input.activeRecoveryDays.join(',');
@@ -44,20 +47,23 @@ export function useWorkoutActivitySnapshot(input: {
   const reload = useCallback(async () => {
     if (!uid) {
       setCompletedDates(null);
+      setFulfilledScheduledDates(null);
       setLoading(false);
       return;
     }
     try {
       const today = localDateInTimezone(new Date(), input.timezone);
       const from = mondayOfWeek(today);
-      const dates = await listCompletedWorkoutDatesInRange(uid, from, today);
-      setCompletedDates(new Set(dates));
+      const dates = await listCompletedWorkoutActivityDatesInRange(uid, from, today);
+      setCompletedDates(new Set(dates.performedDates));
+      setFulfilledScheduledDates(new Set(dates.scheduledDates));
     } catch (error) {
       logWarn('home_activity', 'load_failed', { error });
       // Keep the last known set on a transient failure; only default to
       // empty on the very first load, matching `useWorkoutEvolution`'s "never
       // flash a worse state than what's already on screen" contract.
       setCompletedDates((previous) => previous ?? new Set());
+      setFulfilledScheduledDates((previous) => previous ?? new Set());
     } finally {
       setLoading(false);
     }
@@ -68,16 +74,19 @@ export function useWorkoutActivitySnapshot(input: {
   const today = uid ? localDateInTimezone(new Date(), input.timezone) : null;
 
   const week = useMemo(() => {
-    if (!completedDates || !today) return null;
+    if (!completedDates || !fulfilledScheduledDates || !today) return null;
     return buildWeekOverview({
       todayLocalDate: today,
+      scheduleMode: input.scheduleMode ?? 'fixed',
+      prescribedTrainingFrequency: input.prescribedTrainingFrequency,
       trainingDays: input.trainingDays,
       activeRecoveryDays: input.activeRecoveryDays,
       activatedAtLocalDate: input.activatedAtLocalDate,
       completedDates,
+      fulfilledScheduledDates,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [completedDates, today, trainingDaysKey, activeRecoveryDaysKey, input.activatedAtLocalDate]);
+  }, [completedDates, fulfilledScheduledDates, today, trainingDaysKey, activeRecoveryDaysKey, input.activatedAtLocalDate, input.scheduleMode, input.prescribedTrainingFrequency]);
 
   return { loading, week, reload };
 }

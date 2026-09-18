@@ -30,6 +30,7 @@ import type { FrequencyWindowViewModel } from '../home/frequencyHeatmap';
 import type { ActiveRest } from '../lib/restTimer';
 import { WorkoutRestHeaderStatus } from '../components/workout/WorkoutRestHeaderStatus';
 import { SupportInboxButton } from '../components/support/SupportInboxButton';
+import type { AdvancedWorkoutTarget } from '../scheduleEngine/advanceWorkout';
 
 // Lifecycle claims on Home come from the shared EvolutionViewModel.
 
@@ -50,6 +51,8 @@ export function HomeScreen({
   activeRest = null,
   restRunning = false,
   onStart,
+  advanceWorkoutTarget = null,
+  onAdvanceWorkout,
   onOpenProfile,
   onOpenSupportCases,
   unreadSupportCasesCount = 0,
@@ -92,6 +95,9 @@ export function HomeScreen({
   activeRest?: ActiveRest | null;
   restRunning?: boolean;
   onStart: () => void;
+  /** Present only when AppShell's strict fixed/rest/tomorrow gate passes. */
+  advanceWorkoutTarget?: AdvancedWorkoutTarget | null;
+  onAdvanceWorkout?: () => void;
   onOpenProfile: () => void;
   /** Opens "Meus atendimentos" (SupportCasesScreen). Home only owns the entry point/badge — routing/observing lives in AppShell. */
   onOpenSupportCases?: () => void;
@@ -200,6 +206,10 @@ export function HomeScreen({
     || scheduleResolution?.status === 'ACTIVE_RECOVERY_DAY'
     || scheduleResolution?.status === 'TODAY_COMPLETED'
   );
+  const canAdvanceWorkout = !workoutInProgress
+    && scheduleResolution?.status === 'REST_DAY'
+    && advanceWorkoutTarget != null
+    && onAdvanceWorkout != null;
   // BodyMuscleMap is a read-only visual projection of the session already
   // resolved above (`firstSession.exercises[].exerciseId` is the effective,
   // post-adaptation/substitution/omission id) — it never influences
@@ -239,6 +249,7 @@ export function HomeScreen({
     () => (todayLocalDate && scheduleConfig && prescription.status === 'SUCCESS'
       ? buildUpcomingWorkouts({
           todayLocalDate,
+          scheduleMode: prescription.plan.scheduleMode ?? 'fixed',
           trainingDays: scheduleConfig.trainingDays,
           sessions: prescription.plan.sessions,
           resolution: scheduleResolution,
@@ -251,6 +262,10 @@ export function HomeScreen({
   // week-of-program countdown because the lifecycle has no such fact.
   const today = new Date();
   const locale = i18n.resolvedLanguage ?? i18n.language;
+  const advanceWeekday = advanceWorkoutTarget
+    ? new Intl.DateTimeFormat(locale, { weekday: 'long', timeZone: 'UTC' })
+      .format(new Date(`${advanceWorkoutTarget.scheduledLocalDate}T12:00:00Z`))
+    : '';
   const todayLine = t('home:meta.todayLine', {
     weekday: new Intl.DateTimeFormat(locale, { weekday: 'short' }).format(today),
     day: new Intl.DateTimeFormat(locale, { day: '2-digit' }).format(today),
@@ -366,7 +381,9 @@ export function HomeScreen({
                       : generating
                         ? t('home:prescription.generatingState.body')
                         : scheduleOverrideKey
-                          ? t(`home:schedule.${scheduleOverrideKey}.body`)
+                          ? canAdvanceWorkout
+                            ? t('home:schedule.advance.helper')
+                            : t(`home:schedule.${scheduleOverrideKey}.body`)
                           : workoutInProgress
                             ? t('home:activeWorkout.cardStatus')
                             : prescription.status === 'SUCCESS'
@@ -416,7 +433,41 @@ export function HomeScreen({
                   for horizontal space. */}
               <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 }}>
                 {isBlockedToday ? (
-                  nextWorkoutLine && (
+                  canAdvanceWorkout ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={t('home:schedule.advance.cta', { weekday: advanceWeekday })}
+                      onPress={onAdvanceWorkout}
+                      style={{
+                        alignSelf: 'flex-start',
+                        flexShrink: 1,
+                        marginTop: 20,
+                        paddingVertical: 15,
+                        paddingHorizontal: 20,
+                        backgroundColor: TODAY_WORKOUT_THEME.colors.inverseSurface,
+                        borderRadius: 10,
+                        borderBottomRightRadius: 0,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 10,
+                      }}
+                    >
+                      <Icon name="arrow-right" size={13} color={TODAY_WORKOUT_THEME.colors.inverseForeground} />
+                      <Text
+                        numberOfLines={2}
+                        style={{
+                          flexShrink: 1,
+                          fontFamily: theme.fonts.display,
+                          fontSize: 14,
+                          letterSpacing: 1.2,
+                          color: TODAY_WORKOUT_THEME.colors.inverseForeground,
+                          textTransform: 'uppercase',
+                        }}
+                      >
+                        {t('home:schedule.advance.cta', { weekday: advanceWeekday })}
+                      </Text>
+                    </Pressable>
+                  ) : nextWorkoutLine && (
                     <View
                       style={{
                         alignSelf: 'flex-start',

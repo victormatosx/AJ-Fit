@@ -22,12 +22,14 @@ export function WorkoutExecutionPendingModal({
   error,
   resolving,
   onAbandonPrevious,
+  onContactSupport,
   onCancel,
 }: {
   error: WorkoutExecutionStartError | null;
   /** True while the abandon-and-retry operation is in flight — both actions are disabled. */
   resolving: boolean;
   onAbandonPrevious: (executionId: string) => void;
+  onContactSupport: () => void;
   onCancel: () => void;
 }) {
   const theme = darkTheme;
@@ -49,7 +51,9 @@ export function WorkoutExecutionPendingModal({
   const body = error?.code === 'CONFLICT'
     ? t('pendingExecution.conflictBody')
     : error?.code === 'LEGACY_PENDING'
-      ? t('pendingExecution.legacyBody')
+      ? ambiguous
+        ? t('pendingExecution.legacyAmbiguousBody', { count: error.executionIds.length })
+        : t('pendingExecution.legacyBody')
       : t('startError.body');
 
   return (
@@ -89,7 +93,7 @@ export function WorkoutExecutionPendingModal({
               {title.toUpperCase()}
             </Display>
             <Text style={{ color: theme.colors.textSecondaryStrong, fontFamily: theme.fonts.ui, fontSize: 13, lineHeight: 19, marginTop: 8 }}>
-              {body}{ambiguous ? ` (${error?.code === 'LEGACY_PENDING' ? error.executionIds.length : 0})` : ''}
+              {body}
             </Text>
 
             {executionId && (
@@ -126,6 +130,29 @@ export function WorkoutExecutionPendingModal({
                   }}
                 >
                   {resolving ? t('pendingExecution.resolving') : t('pendingExecution.abandonPrevious')}
+                </Text>
+              </Pressable>
+            )}
+
+            {ambiguous && (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ disabled: resolving }}
+                disabled={resolving}
+                onPress={onContactSupport}
+                style={{
+                  marginTop: 18,
+                  paddingVertical: 12,
+                  paddingHorizontal: 14,
+                  borderRadius: 10,
+                  borderBottomRightRadius: 0,
+                  backgroundColor: theme.colors.inverseSurface,
+                  alignItems: 'center',
+                  opacity: resolving ? 0.6 : 1,
+                }}
+              >
+                <Text style={{ color: theme.colors.inverseForeground, fontFamily: theme.fonts.display, fontSize: 14, letterSpacing: 1.2, textTransform: 'uppercase' }}>
+                  {t('pendingExecution.contactSupport')}
                 </Text>
               </Pressable>
             )}

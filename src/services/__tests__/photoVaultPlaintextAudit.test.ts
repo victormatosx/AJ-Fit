@@ -53,6 +53,9 @@ describe('the persistent cache holds ciphertext only', () => {
 
   it('writes only the encrypted envelope extension', () => {
     expect(CACHE).toContain(".thumb.enc'");
+    // The full namespace is held to exactly the same rule: an envelope suffix,
+    // never a decodable image extension.
+    expect(CACHE).toContain(".full.enc'");
     expect(CACHE).not.toMatch(/'\.(jpg|jpeg|png|webp)'/);
   });
 
@@ -176,5 +179,63 @@ describe('the UI renders without a second cache', () => {
       expect(source).not.toContain('data:image');
       expect(source).not.toContain('encrypted-thumbnails');
     }
+  });
+});
+
+/**
+ * The locked-preview derivative (`photoVaultLockedPreviewCache.ts`,
+ * `photoVaultLockedPreviewGenerator.ts`) is a deliberate, bounded exception to
+ * "no thumbnail plaintext durable": it IS a durable, unencrypted JPEG on the
+ * filesystem. It is safe only because it is destructively degraded first —
+ * downsampled far enough that a face, a body, clothing or a background is no
+ * longer distinguishable — never because it lives anywhere the vault key
+ * would normally be required. These assertions keep that exception bounded to
+ * exactly what it claims to be.
+ */
+describe('the locked-preview derivative stays a bounded, documented exception', () => {
+  const LOCKED_PREVIEW_CACHE = codeOf('src/services/photoVaultLockedPreviewCache.ts');
+  const LOCKED_PREVIEW_GENERATOR = codeOf('src/services/photoVaultLockedPreviewGenerator.ts');
+
+  it('never decrypts, never sees the vault key, never reaches Firebase', () => {
+    for (const source of [LOCKED_PREVIEW_CACHE, LOCKED_PREVIEW_GENERATOR]) {
+      expect(source).not.toContain('decrypt');
+      expect(source).not.toContain('vaultKey');
+      expect(source).not.toContain('photoVaultCrypto');
+      expect(source).not.toContain('firebase');
+    }
+  });
+
+  it('lives in its own file and directory, never inside the ciphertext-only cache', () => {
+    expect(CACHE).not.toContain('LockedPreview');
+    expect(CACHE).not.toContain('locked-preview');
+    expect(LOCKED_PREVIEW_CACHE).not.toContain('encrypted-thumbnails');
+    expect(LOCKED_PREVIEW_CACHE).not.toContain('encrypted-fulls');
+  });
+
+  it('is generated in the service layer only from plaintext that already exists for a legitimate reason', () => {
+    expect(SERVICE).toContain('cacheLockedPreviewDerivative(');
+    // Never from the thumbnail-only path: that path never produces a
+    // plaintext FILE, only in-memory base64 (see the assertions above) — it
+    // is seeded only from a fresh upload's plaintext, or a full image
+    // already decrypted to a file for the viewer/legacy-grid fallback.
+    const thumbnailPath = SERVICE.slice(
+      SERVICE.indexOf('async function loadThumbnail'),
+      SERVICE.indexOf('export async function downloadProgressPhotoThumbnail'),
+    );
+    expect(thumbnailPath).not.toContain('cacheLockedPreviewDerivative');
+    expect(thumbnailPath).not.toContain('LockedPreview');
+  });
+
+  it('is keyed by asset, never by document id, same as the ciphertext cache', () => {
+    for (const call of [
+      'removeLockedPreviewDerivative(uid, expectedAssetId)',
+      'removeLockedPreviewDerivative(uid, photo.assetId)',
+    ]) {
+      expect(SERVICE).toContain(call);
+    }
+    // The generation calls pass `assetId`/`photo.assetId` as the second
+    // argument, wherever they are formatted across lines.
+    expect(SERVICE).toMatch(/cacheLockedPreviewDerivative\(\s*uid,\s*assetId,/);
+    expect(SERVICE).toMatch(/cacheLockedPreviewDerivative\(\s*uid,\s*photo\.assetId,/);
   });
 });

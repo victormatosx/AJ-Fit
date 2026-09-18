@@ -188,6 +188,22 @@ describe('questionnaire schema and branching payload', () => {
 });
 
 describe('trainingDays (Schedule Engine input)', () => {
+  it('treats a legacy questionnaire without scheduleMode as fixed', () => {
+    const loaded = normalizeLoadedQuiz({ days: 3, trainingDays: ['MON', 'WED', 'FRI'] });
+    expect(loaded.scheduleMode).toBe('fixed');
+    expect(loaded.trainingDays).toEqual(['MON', 'WED', 'FRI']);
+  });
+
+  it('allows flexible without weekdays and clears any stale weekday selection', () => {
+    const quiz = cleanApplicableAnswers(standardQuiz({
+      days: 3,
+      scheduleMode: 'flexible',
+      trainingDays: ['MON', 'WED', 'FRI'],
+    }));
+    expect(quiz.trainingDays).toBeNull();
+    expect(trainingDaysValid(quiz)).toBe(true);
+  });
+
   it('requires exactly `days` weekdays for 2-6 days/week — a Schedule-only gate, never blocking prescription', () => {
     const quiz = standardQuiz({ days: 3, trainingDays: ['MON', 'WED'] });
     expect(trainingDaysValid(quiz)).toBe(false);

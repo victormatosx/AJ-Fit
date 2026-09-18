@@ -23,9 +23,18 @@
       "none": "Sem assinatura ativa"
     },
     "descriptions": {
-      "managed": "Gerenciado pela loja (RevenueCat)",
+      "managed": "Gerenciado pela loja",
       "trialCta": "Ative seu teste grátis de 7 dias"
     }
+  },
+  "subscriptionCelebration": {
+    "activatedLabel": "Plano adquirido",
+    "renewedLabel": "Plano renovado",
+    "title": "AJ Fit Premium",
+    "activatedMessage": "Você adquiriu o plano AJ Fit Premium.",
+    "renewedMessage": "Sua assinatura do plano AJ Fit Premium foi renovada.",
+    "accessibilityActivated": "Você adquiriu o plano AJ Fit Premium.",
+    "accessibilityRenewed": "Sua assinatura do plano AJ Fit Premium foi renovada."
   },
   "subscriptionCenter": {
     "title": "Assinatura",
@@ -89,11 +98,11 @@
     "store": {
       "APP_STORE": "App Store",
       "PLAY_STORE": "Google Play",
-      "PROMOTIONAL": "RevenueCat",
+      "PROMOTIONAL": "AJ Fit",
       "MAC_APP_STORE": "Mac App Store",
       "STRIPE": "Stripe",
       "AMAZON": "Amazon Appstore",
-      "RC_BILLING": "RevenueCat",
+      "RC_BILLING": "App Store / Google Play",
       "EXTERNAL": "Loja externa",
       "PADDLE": "Paddle",
       "TEST_STORE": "Loja de teste",
@@ -121,7 +130,7 @@
     },
     "state": {
       "loadingTitle": "Carregando assinatura",
-      "loadingBody": "Confirmando seus dados com o RevenueCat...",
+      "loadingBody": "Confirmando os dados da sua assinatura...",
       "errorTitle": "Assinatura indisponível",
       "errorBody": "Não foi possível carregar os detalhes da sua assinatura."
     }
@@ -172,7 +181,7 @@
     "confirmMessage": "Deseja realmente sair?",
     "cancel": "Cancelar",
     "confirm": "Sair",
-    "errorTitle": "Erro",
+    "errorTitle": "Não foi possível sair",
     "errorMessage": "Não foi possível sair. Tente novamente."
   },
   "photo": {

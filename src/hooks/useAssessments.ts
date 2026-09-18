@@ -9,6 +9,10 @@ import {
 } from '../services/assessments';
 import { computeBmi, computeFatMass, computeLeanMass } from '../lib/skinfoldCalculator';
 import { logError } from '../lib/logError';
+import {
+  publishAssessmentRefresh,
+  subscribeToAssessmentRefresh,
+} from './assessmentRefreshBus';
 
 /** An assessment with its derived fields (bmi/leanMass/fatMass) computed at read time. */
 export type AssessmentView = AssessmentDoc & {
@@ -127,6 +131,15 @@ export function useAssessments(uid: string | null) {
     refresh();
   }, [refresh]);
 
+  // ProgressScreen and AssessmentScreen are both persistent and therefore
+  // own live, independent hook instances. Subscribe each instance so a save
+  // made in one starts the other's re-fetch immediately, even while that
+  // other screen is still hidden behind the assessment overlay.
+  useEffect(() => {
+    if (!uid) return undefined;
+    return subscribeToAssessmentRefresh(uid, refresh);
+  }, [refresh, uid]);
+
   // On a uid transition React renders once before the effect above runs.
   // Treat that render as INITIALIZING and expose no stale assessment data.
   const hasResolvedCurrentUid = resolvedUid === uid;
@@ -153,6 +166,7 @@ export function useAssessments(uid: string | null) {
     async (input: GuidedAssessmentInput): Promise<SaveOutcome> => {
       if (!uid) throw new Error('saveGuided called with no authenticated user');
       await addGuidedAssessment(uid, input);
+      publishAssessmentRefresh(uid, refresh);
       // The write already succeeded at this point — a failure reloading the
       // list must NOT be reported as a save failure (the caller would show
       // an error and the user could retry, creating a duplicate immutable
@@ -174,6 +188,7 @@ export function useAssessments(uid: string | null) {
     async (input: ImportedAssessmentInput): Promise<SaveOutcome> => {
       if (!uid) throw new Error('saveImported called with no authenticated user');
       await addImportedAssessment(uid, input);
+      publishAssessmentRefresh(uid, refresh);
       try {
         await refresh();
         return { refreshFailed: false };

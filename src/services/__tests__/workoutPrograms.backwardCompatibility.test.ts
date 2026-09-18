@@ -63,5 +63,17 @@ describe('workout program snapshot backward compatibility', () => {
     expect(isProgramSnapshot(snapshot('2.0.0'), 'wpg_test')).toBe(true);
     expect(isProgramSnapshot(phase2, 'wpg_test')).toBe(true);
     expect(isProgramSnapshot({ ...phase2, prescribedTrainingFrequency: 7 }, 'wpg_test')).toBe(false);
+    expect(isProgramSnapshot({
+      ...phase2,
+      scheduleMode: 'flexible',
+      availability: { days: 7, weekdays: [] },
+      weeklySchedule: [],
+    }, 'wpg_test')).toBe(true);
+    expect(isProgramSnapshot({
+      ...phase2,
+      scheduleMode: 'fixed',
+      availability: { days: 7, weekdays: [] },
+      weeklySchedule: [],
+    }, 'wpg_test')).toBe(false);
   });
 });

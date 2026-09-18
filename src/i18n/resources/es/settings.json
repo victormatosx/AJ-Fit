@@ -96,6 +96,10 @@
         "message": "Cerrando tu cuenta...",
         "description": "Estamos protegiendo tus datos y completando tu solicitud. Esto puede tardar unos instantes."
       },
+      "reconciliation": {
+        "title": "Solicitud ya registrada",
+        "action": "Entendido, cerrar sesión"
+      },
       "errors": {
         "USER_SIGNED_OUT": "Tu sesión no está disponible. Inicia sesión nuevamente e inténtalo de nuevo.",
         "IDENTITY_CHANGED": "La cuenta en uso cambió durante el proceso. No se realizó ningún cambio — inténtalo de nuevo.",
@@ -129,7 +133,7 @@
         "new": "Escribe la nueva contraseña",
         "confirmation": "Escribe la nueva contraseña otra vez"
       },
-      "minimumLength": "Usa al menos {{count}} caracteres.",
+      "minimumLength": "Usa al menos {{count}} caracteres, con 1 letra mayúscula, 1 número y 1 carácter especial.",
       "actions": {
         "submit": "Cambiar contraseña"
       },
@@ -142,9 +146,12 @@
         "passwordUnchanged": "La nueva contraseña debe ser diferente de la actual.",
         "passwordTooShort": "La nueva contraseña debe tener al menos {{count}} caracteres.",
         "passwordTooLong": "La nueva contraseña debe tener como máximo {{max}} caracteres.",
+        "passwordMissingUppercase": "La nueva contraseña debe incluir al menos 1 letra mayúscula.",
+        "passwordMissingNumber": "La nueva contraseña debe incluir al menos 1 número.",
+        "passwordMissingSpecialChar": "La nueva contraseña debe incluir al menos 1 carácter especial.",
         "passwordPolicyMismatch": "La nueva contraseña no cumple la política de seguridad.",
         "currentPasswordIncorrect": "La contraseña actual es incorrecta. Revísala e inténtalo otra vez.",
-        "weakPassword": "Usa una nueva contraseña de entre 15 y 4096 caracteres.",
+        "weakPassword": "Usa una nueva contraseña con al menos {{count}} caracteres, incluyendo 1 letra mayúscula, 1 número y 1 carácter especial.",
         "sessionExpired": "Tu sesión caducó. Inicia sesión de nuevo e inténtalo otra vez.",
         "providerRequired": "El cambio de contraseña solo está disponible para cuentas con acceso mediante correo y contraseña.",
         "tooManyRequests": "Se hicieron demasiados intentos. Espera un momento e inténtalo otra vez.",
@@ -167,7 +174,8 @@
       "es": "Español"
     },
     "errors": {
-      "changeFailed": "No se pudo guardar el idioma. Inténtalo de nuevo."
+      "changeFailed": "No se pudo guardar el idioma. Inténtalo de nuevo.",
+      "rolledBack": "Se restauró el idioma anterior porque no se pudo guardar el cambio."
     }
   },
   "units": {
@@ -194,7 +202,8 @@
       }
     },
     "errors": {
-      "changeFailed": "No se pudo guardar el sistema de medidas. Inténtalo de nuevo."
+      "changeFailed": "No se pudo guardar el sistema de medidas. Inténtalo de nuevo.",
+      "rolledBack": "Se restauraron las unidades anteriores porque no se pudo guardar el cambio."
     }
   },
   "theme": {

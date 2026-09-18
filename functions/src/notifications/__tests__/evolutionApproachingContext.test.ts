@@ -113,6 +113,31 @@ describe('EVOLUTION_APPROACHING authoritative context', () => {
     });
   });
 
+  it('does not pull a next-day advanced completion into today\'s evolution window', async () => {
+    const { harness, uid, root } = progressionContextFixture();
+    harness.seed(`${root}/workoutExecutions/advanced-tomorrow`, {
+      programInstanceId: 'instance-1',
+      sessionIndex: 0,
+      scheduledLocalDate: '2026-09-09',
+      performedLocalDate: '2026-09-08',
+      status: 'COMPLETED',
+      exercises: [{ exerciseIndex: 0, exerciseId: 'exercise-1', sets: [{ setIndex: 0, status: 'COMPLETED' }] }],
+    });
+    harness.seed(`${root}/workoutPrograms/program-1/scheduleEvents/advanced-tomorrow`, {
+      type: 'COMPLETED',
+      programInstanceId: 'instance-1',
+      sessionIndex: 0,
+      scheduledDate: '2026-09-09',
+      performedLocalDate: '2026-09-08',
+    });
+
+    await expect(readApproachingContext(harness.db as never, uid, now)).resolves.toMatchObject({
+      allowed: true,
+      localDate: '2026-09-08',
+      progressionWindowId: 'instance-1',
+    });
+  });
+
   it('suppresses pending/earned evolution and gives the unlock fact priority', async () => {
     const pending = progressionContextFixture();
     pending.harness.seed(`${pending.root}/pendingEvolutions/current`, { cycleId: 'cycle-1' });

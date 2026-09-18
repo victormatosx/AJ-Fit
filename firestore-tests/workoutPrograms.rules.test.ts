@@ -98,6 +98,28 @@ function phase2ProgramDocument(programId = 'wpg_phase200') {
   };
 }
 
+function flexibleProgramDocument(programId = 'wpg_flexible') {
+  return {
+    ...phase2ProgramDocument(programId),
+    requestedDays: 4,
+    prescribedStructuredDays: 4,
+    prescribedTrainingFrequency: 4,
+    scheduleMode: 'flexible',
+    availability: { days: 4, weekdays: [] },
+    weeklySchedule: [],
+  };
+}
+
+/**
+ * `phase2ProgramDocument` predates `scheduleMode` and is deliberately kept as
+ * the legacy fixture. This is the shape the CURRENT backend actually seals
+ * (`generateCanonicalPlan` → `sealTargetProgram`, functions/src/workoutLifecycle/
+ * authorizeMutation.ts): same calendar as phase 2, plus the explicit mode.
+ */
+function fixedProgramDocument(programId = 'wpg_fixedmode') {
+  return { ...phase2ProgramDocument(programId), scheduleMode: 'fixed' };
+}
+
 beforeAll(async () => {
   testEnv = await initializeTestEnvironment({
     projectId: PROJECT_ID,
@@ -156,6 +178,77 @@ describe('workoutTemplates', () => {
 });
 
 describe('workoutPrograms', () => {
+  it('accepts a valid flexible snapshot and rejects invalid mode-specific calendar shapes', async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'workoutTemplates', 'T003'), v2TemplateDocument());
+    });
+    await assertSucceeds(createAndActivate(UID, 'wpg_flexible', flexibleProgramDocument()));
+    await assertFails(createAndActivate(UID, 'wpg_flexbad1', {
+      ...flexibleProgramDocument('wpg_flexbad1'),
+      availability: { days: 4, weekdays: ['MON', 'TUE', 'WED', 'FRI'] },
+    }));
+    await assertFails(createAndActivate(UID, 'wpg_fixedbad1', {
+      ...phase2ProgramDocument('wpg_fixedbad1'),
+      scheduleMode: 'fixed',
+      availability: { days: 7, weekdays: [] },
+      weeklySchedule: [],
+    }));
+  });
+
+  // P0 regression lock (2026-09-18 incident). The ruleset that was live in
+  // production did not list `scheduleMode` in `workoutProgramCommonValid`'s
+  // `hasOnly`, while the deployed backend already sealed every new program
+  // WITH that field via the Admin SDK (which bypasses Rules). Result: the
+  // document appeared, and then the client's activation transaction — the
+  // one that writes `workoutProgramState/active`, `programInstances`,
+  // `trainingCycles` and `workoutLifecycleState/current` — was denied, so
+  // every brand-new account was stuck on "Não foi possível preparar seu
+  // treino" forever. Only the flexible variant was covered before; the
+  // create+update paths for BOTH modes are locked here.
+  it('accepts an explicit fixed snapshot', async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'workoutTemplates', 'T003'), v2TemplateDocument());
+    });
+    await assertSucceeds(createAndActivate(UID, 'wpg_fixedmode', fixedProgramDocument()));
+  });
+
+  it('rejects an unknown scheduleMode value', async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'workoutTemplates', 'T003'), v2TemplateDocument());
+    });
+    await assertFails(createAndActivate(UID, 'wpg_badmode', {
+      ...fixedProgramDocument('wpg_badmode'), scheduleMode: 'sometimes',
+    }));
+  });
+
+  // One program per test on purpose: the `workoutPrograms` update rule sits
+  // close to the Rules engine's 1000-expression evaluation cap, and chaining
+  // two activations (which repoints `active` while the previous document is
+  // still `status: 'active'`, forcing both the active AND superseded branches
+  // plus their `getAfter` lookups to evaluate) exceeds it. A real account
+  // only ever activates one program per transaction, which is what these
+  // reproduce — see the report note about the remaining headroom.
+  async function sealAndActivate(programId: string, program: Record<string, unknown>) {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const database = context.firestore();
+      await setDoc(doc(database, 'workoutTemplates', 'T003'), v2TemplateDocument());
+      // Exactly what `sealTargetProgram` does: Admin SDK write, Rules bypassed.
+      await setDoc(doc(database, 'users', UID, 'workoutPrograms', programId), {
+        ...program, createdAt: Timestamp.now(), activatedAt: Timestamp.now(), updatedAt: Timestamp.now(),
+      });
+    });
+    // `createAndActivate` takes its update branch because the document exists.
+    return createAndActivate(UID, programId);
+  }
+
+  it('lets the client activate a backend-sealed FIXED scheduleMode document through the update path', async () => {
+    await assertSucceeds(sealAndActivate('wpg_sealedfix', fixedProgramDocument('wpg_sealedfix')));
+  });
+
+  it('lets the client activate a backend-sealed FLEXIBLE scheduleMode document through the update path', async () => {
+    await assertSucceeds(sealAndActivate('wpg_sealedflex', flexibleProgramDocument('wpg_sealedflex')));
+  });
+
   it('atomically creates the snapshot and pointer, and repeated activation stays one document', async () => {
     await assertSucceeds(createAndActivate());
     await assertSucceeds(createAndActivate());

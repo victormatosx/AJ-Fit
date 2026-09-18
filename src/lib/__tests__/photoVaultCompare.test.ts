@@ -37,6 +37,7 @@ function photo(params: {
     failed: false,
     uploadStatus: params.uploading ? 'uploading' : null,
     uploadProgress: null,
+    jobId: null,
   };
 }
 

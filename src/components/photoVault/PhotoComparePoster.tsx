@@ -91,6 +91,7 @@ export const PhotoComparePoster = forwardRef<View, PhotoComparePosterProps>(
     const safeTop = height * 0.058;
     const safeBottom = height * 0.042;
     const brandingHeight = height * 0.209;
+    const brandingContentLift = height * 0.022;
     const footerHeight = height * 0.105;
     const photoMetaHeight = width * 0.094;
     const photoGap = width * 0.052;
@@ -212,6 +213,7 @@ export const PhotoComparePoster = forwardRef<View, PhotoComparePosterProps>(
             height: brandingHeight,
             alignItems: 'center',
             justifyContent: 'flex-start',
+            transform: [{ translateY: -brandingContentLift }],
           }}
         >
           <Image

@@ -125,6 +125,25 @@ describe('computeActiveTime', () => {
     expect(result.activeTime).toEqual({ activeDays: 4, pausedAt: null });
   });
 
+  it('ignores a next-day scheduled execution until that civil date enters the active-time window', () => {
+    const today: LocalDate = '2026-09-17';
+    const tomorrow: LocalDate = '2026-09-18';
+    const input = {
+      startDateInclusive: today,
+      trainingDays: ['FRI'] as Weekday[],
+      executionDates: new Set<LocalDate>([tomorrow]),
+    };
+
+    expect(computeActiveTimeTrace({ ...input, todayLocalDate: today })).toEqual({
+      activeTime: { activeDays: 1, pausedAt: null },
+      countedDates: new Set([today]),
+    });
+    expect(computeActiveTimeTrace({ ...input, todayLocalDate: tomorrow })).toEqual({
+      activeTime: { activeDays: 2, pausedAt: null },
+      countedDates: new Set([today, tomorrow]),
+    });
+  });
+
   it('empty schedule (no trainingDays) never triggers a pause', () => {
     let cursor = MON;
     const allDates: LocalDate[] = [];
@@ -136,6 +155,19 @@ describe('computeActiveTime', () => {
     const result = computeActiveTime({ startDateInclusive: MON, todayLocalDate: today, trainingDays: [], executionDates: new Set() });
     expect(result.pausedAt).toBeNull();
     expect(result.activeDays).toBe(40);
+  });
+
+  it('flexible never pauses active time because a particular weekday elapsed', () => {
+    const result = computeActiveTime({
+      startDateInclusive: MON,
+      todayLocalDate: addDaysLocal(MON, 39),
+      scheduleMode: 'flexible',
+      // Even if stale legacy weekdays are present, explicit mode controls
+      // semantics and none of these dates becomes a missed workout.
+      trainingDays: ['MON', 'WED', 'FRI'],
+      executionDates: new Set(),
+    });
+    expect(result).toEqual({ activeDays: 40, pausedAt: null });
   });
 
   it.each([

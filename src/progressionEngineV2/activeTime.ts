@@ -1,5 +1,5 @@
 import { addDaysLocal, compareLocalDates, weekdayOfLocalDate, type LocalDate } from '../scheduleEngine/calendar';
-import type { Weekday } from '../state/AppState';
+import type { ScheduleMode, Weekday } from '../state/AppState';
 import type { ActiveTime } from '../workoutLifecycle/types';
 import { PROGRESSION_V2_CONFIG, type ProgressionV2Config } from './config';
 
@@ -13,6 +13,8 @@ export interface ComputeActiveTimeInput {
   todayLocalDate: LocalDate;
   /** Prescribed weekly training days. Empty/unknown schedule never triggers a pause (docs progression/07 — no signal, no false inactivity). */
   trainingDays: readonly Weekday[];
+  /** Flexible has no weekday debt, so inactivity cannot be inferred from a missed weekday. */
+  scheduleMode?: ScheduleMode;
   /** Every `scheduledLocalDate` with a recorded execution of ANY status in this cycle — proof of engagement, distinct from `isValidProgressionSession` (docs §26/§55). */
   executionDates: ReadonlySet<LocalDate>;
 }
@@ -99,7 +101,7 @@ export function computeActiveTimeTrace(
       countedDates.add(cursor);
     }
 
-    if (!hasExecution && isPrescribedDay && isPastDay) {
+    if (input.scheduleMode !== 'flexible' && !hasExecution && isPrescribedDay && isPastDay) {
       consecutiveMissed += 1;
       if (consecutiveMissed >= threshold && !paused) {
         paused = true;

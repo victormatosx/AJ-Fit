@@ -1,6 +1,8 @@
 import * as SecureStore from 'expo-secure-store';
 
 import { PhotoVaultError } from './photoVaultErrors';
+import { tracePhotoVault } from './photoVaultDevTrace';
+import { photoVaultSessionGeneration } from './photoVaultSession';
 
 /**
  * Device-local storage for the user's Photo Vault Key.
@@ -19,6 +21,10 @@ import { PhotoVaultError } from './photoVaultErrors';
  */
 
 const KEY_PREFIX = 'ajfit_photo_vault_key_v1';
+
+function maskedUid(uid: string): string {
+  return uid.length <= 6 ? '***' : `${uid.slice(0, 3)}…${uid.slice(-3)}`;
+}
 
 /** AES-256 ⇒ 32 bytes ⇒ exactly 44 base64 characters with one pad. */
 const VAULT_KEY_BYTES = 32;
@@ -113,6 +119,13 @@ export async function readVaultKey(uid: string): Promise<StoredVaultKey | null> 
     throw new PhotoVaultError('vaultStorageFailed');
   }
 
+  tracePhotoVault('vaultKey.local.read', {
+    uidMasked: maskedUid(uid),
+    found: raw !== null,
+    storageNamespace: KEY_PREFIX,
+    storageKeyExists: raw !== null,
+    sessionGeneration: photoVaultSessionGeneration(),
+  });
   if (raw === null) return null;
 
   let parsed: unknown;

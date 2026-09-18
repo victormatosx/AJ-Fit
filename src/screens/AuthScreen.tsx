@@ -46,43 +46,13 @@ import {
   validateAuthFormPasswordPolicy,
 } from '../lib/passwordPolicy';
 import { LegalDocumentModal, type LegalDocumentKind } from '../components/legal/LegalDocumentModal';
+import { authErrorTranslationKey } from '../lib/authErrorPresentation';
 
 type Mode = 'signup' | 'login' | 'reset';
 
 type LinkingState = { email: string; methods: string[]; attempted: SocialProvider };
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-const AUTH_ERROR_KEY_BY_CODE = {
-  '10': 'errors.googleConfig',
-  'auth/app-not-authorized': 'errors.appNotAuthorized',
-  'auth/email-already-in-use': 'errors.emailInUse',
-  'auth/invalid-email': 'errors.invalidEmail',
-  'auth/invalid-api-key': 'errors.invalidApiKey',
-  'auth/missing-email': 'errors.missingEmail',
-  'auth/weak-password': 'errors.weakPassword',
-  'auth/password-does-not-meet-requirements': 'errors.passwordPolicy',
-  passwordTooShort: 'errors.passwordPolicy',
-  passwordTooLong: 'errors.passwordPolicy',
-  passwordPolicyMismatch: 'errors.passwordPolicy',
-  'auth/missing-password': 'errors.missingPassword',
-  'auth/user-not-found': 'errors.userNotFound',
-  'auth/wrong-password': 'errors.wrongPassword',
-  'auth/invalid-credential': 'errors.invalidCredential',
-  'auth/user-disabled': 'errors.userDisabled',
-  'auth/too-many-requests': 'errors.tooManyRequests',
-  'auth/network-request-failed': 'errors.networkFailed',
-  'auth/operation-not-allowed': 'errors.operationNotAllowed',
-  'auth/account-exists-with-different-credential': 'errors.accountExists',
-  'auth/credential-already-in-use': 'errors.credentialInUse',
-  'auth/provider-already-linked': 'errors.providerLinked',
-  'permission-denied': 'errors.permissionDenied',
-  unavailable: 'errors.unavailable',
-  registrationBirthDateRequired: 'validation.birthDateRequired',
-  registrationUnderage: 'validation.minimumAge',
-  registrationBirthDateInvalid: 'validation.birthDateInvalid',
-  registrationLegalAcceptanceRequired: 'validation.legalAcceptanceRequired',
-} as const;
 
 function localizedAuthError(
   err: unknown,
@@ -93,24 +63,19 @@ function localizedAuthError(
     typeof err === 'object' && err !== null && 'code' in err
       ? String((err as { code: unknown }).code)
       : '';
-  const key = AUTH_ERROR_KEY_BY_CODE[code as keyof typeof AUTH_ERROR_KEY_BY_CODE];
-  if (key) return t(key);
-  return code ? t('errors.genericWithCode', { code }) : t(fallbackKey);
+  const key = authErrorTranslationKey(code);
+  if (key) {
+    return (t as unknown as (key: string, params?: Record<string, number>) => string)(key, {
+      min: PASSWORD_POLICY_MIN_LENGTH,
+      max: PASSWORD_POLICY_MAX_LENGTH,
+    });
+  }
+  // The legacy key name is retained for resource compatibility; its value is
+  // now a safe generic sentence and receives no provider code.
+  return t('errors.genericWithCode');
 }
 
 function localizedSignInError(err: unknown, t: TFunction<'auth'>): string {
-  const code =
-    typeof err === 'object' && err !== null && 'code' in err
-      ? String((err as { code: unknown }).code)
-      : '';
-  if (
-    code === 'auth/invalid-credential' ||
-    code === 'auth/user-not-found' ||
-    code === 'auth/wrong-password' ||
-    code === 'auth/user-disabled'
-  ) {
-    return t('errors.invalidLogin');
-  }
   return localizedAuthError(err, t, 'errors.signInFailed');
 }
 export function AuthScreen({
@@ -386,7 +351,17 @@ export function AuthScreen({
     if (passwordPolicyIssue === 'passwordTooLong') {
       return t('validation.passwordMaximum', { max: PASSWORD_POLICY_MAX_LENGTH });
     }
-    if (passwordPolicyIssue) return t('errors.passwordPolicy');
+    if (passwordPolicyIssue === 'passwordMissingUppercase') {
+      return t('validation.passwordMissingUppercase');
+    }
+    if (passwordPolicyIssue === 'passwordMissingNumber') {
+      return t('validation.passwordMissingNumber');
+    }
+    if (passwordPolicyIssue === 'passwordMissingSpecialChar') {
+      return t('validation.passwordMissingSpecialChar');
+    }
+    if (passwordPolicyIssue)
+      return t('errors.passwordPolicy', { min: PASSWORD_POLICY_MIN_LENGTH });
     if (mode === 'signup' && password !== confirm)
       return t('validation.passwordMismatch');
     if (mode === 'signup' && !legalAccepted)

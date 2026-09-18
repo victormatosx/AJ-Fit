@@ -23,6 +23,9 @@ const mocks = vi.hoisted(() => ({
   discard: vi.fn(),
   logError: vi.fn(),
   lockListeners: [] as ((status: string) => void)[],
+  enqueued: [] as { job: Record<string, unknown>; photo: unknown }[],
+  syncedListeners: [] as ((photo: unknown, job: unknown) => void)[],
+  jobSequence: 0,
 }));
 
 vi.mock('../../services/progressPhotos', () => ({
@@ -30,12 +33,38 @@ vi.mock('../../services/progressPhotos', () => ({
   reconcileProgressPhotoCache: mocks.reconcile,
   downloadProgressPhotoThumbnail: mocks.downloadThumbnail,
   downloadProgressPhoto: mocks.downloadFull,
-  uploadProgressPhoto: mocks.upload,
   deleteProgressPhoto: mocks.remove,
+  replaceProgressPhoto: vi.fn(),
+  prepareProgressPhotoUpload: async (input: unknown) => {
+    const photo = await mocks.upload(input);
+    return { uid: 'alice', ...(photo as Record<string, unknown>) };
+  },
 }));
 
 vi.mock('../../services/photoVaultFileCrypto', () => ({
   discardDecryptedPhoto: mocks.discard,
+}));
+
+vi.mock('../../services/photoVaultUploadQueue', () => ({
+  enqueuePreparedPhoto: async (uid: string, prepared: Record<string, unknown>) => {
+    const job = { jobId: `job-${(mocks.jobSequence += 1)}`, uid, assetId: prepared.assetId };
+    mocks.enqueued.push({ job, photo: prepared });
+    return job;
+  },
+  kickPhotoVaultUploadQueue: () => undefined,
+  cancelPhotoVaultUploadJob: async () => true,
+  retryPhotoVaultUploadJob: async () => undefined,
+  listPendingPhotoVaultJobs: async () => [],
+  subscribeToPhotoVaultUploadSynced: (listener: (photo: unknown, job: unknown) => void) => {
+    mocks.syncedListeners.push(listener);
+    return () => undefined;
+  },
+  subscribeToPhotoVaultUploadDropped: () => () => undefined,
+  subscribeToPhotoVaultUploadProgress: () => () => undefined,
+}));
+
+vi.mock('../../services/photoVaultUploadQueueStore', () => ({
+  subscribeToPhotoVaultUploadQueue: () => () => undefined,
 }));
 
 vi.mock('../photoVaultLock', () => ({
@@ -170,6 +199,18 @@ const UPLOAD = {
   width: 1200,
   height: 1600,
 };
+
+/**
+ * Delivers queued jobs, which is when a local upload id becomes a real one.
+ * That swap no longer happens when the save resolves — it happens when the
+ * durable queue confirms the photo landed.
+ */
+function settleQueue(): void {
+  const queued = mocks.enqueued.splice(0, mocks.enqueued.length);
+  for (const { job, photo: settled } of queued) {
+    for (const listener of mocks.syncedListeners) listener(settled, job);
+  }
+}
 
 describe('acquire', () => {
   it('records the first surface (A)', async () => {
@@ -406,11 +447,12 @@ describe('reset clears every claim (7)', () => {
     // empty map that was never populated would prove nothing.
     await loadGallery();
     mocks.upload.mockImplementation(async () => {
-      const localId = getGalleryState().photos.find((p) => p.uploadStatus === 'uploading')?.photoId;
+      const localId = getGalleryState().photos.find((p) => p.uploadStatus === 'preparing')?.photoId;
       if (localId) await mountGalleryPhoto(localId);
       return photo('uploaded');
     });
     await addGalleryPhoto(UPLOAD);
+    settleQueue();
     expect(thumbnailOwnerAliasesForTesting()).not.toEqual({});
 
     for (const listener of mocks.lockListeners) listener('locked');
@@ -481,13 +523,14 @@ describe('generation-scoped UI owners', () => {
     let optimisticOwner: ReturnType<typeof claimGalleryThumbnail> | null = null;
     mocks.upload.mockImplementation(async () => {
       const localId = getGalleryState().photos.find(
-        (entry) => entry.uploadStatus === 'uploading',
+        (entry) => entry.uploadStatus === 'preparing',
       )?.photoId;
       if (localId) optimisticOwner = claimGalleryThumbnail(localId);
       return photo('uploaded');
     });
 
     await addGalleryPhoto(UPLOAD);
+    settleQueue();
     const realOwner = claimGalleryThumbnail('uploaded');
     expect(owners()).toEqual({ uploaded: 2 });
 
@@ -535,12 +578,13 @@ describe('an optimistic upload changing id', () => {
     };
     let localId: string | null = null;
     mocks.upload.mockImplementation(async () => {
-      localId = getGalleryState().photos.find((p) => p.uploadStatus === 'uploading')?.photoId ?? null;
+      localId = getGalleryState().photos.find((p) => p.uploadStatus === 'preparing')?.photoId ?? null;
       if (localId) await mountGalleryPhoto(localId); // the cell renders it
       return photo('uploaded');
     });
 
     await addGalleryPhoto(uploadParams);
+    settleQueue();
     expect(localId).toBeTruthy();
     expect(owners().uploaded).toBe(1);
 

@@ -62,6 +62,35 @@ describe('buildWeekOverview', () => {
     expect(tuesday.status).toBe('ACTIVE_RECOVERY');
   });
 
+  it('shows an advanced workout on the real Thursday instead of hiding it as REST', () => {
+    const overview = buildWeekOverview({
+      todayLocalDate: '2026-09-17',
+      trainingDays: ['MON', 'TUE', 'WED', 'FRI'],
+      activeRecoveryDays: [],
+      activatedAtLocalDate: '2026-09-01',
+      completedDates: new Set(['2026-09-17']),
+      fulfilledScheduledDates: new Set(['2026-09-18']),
+    });
+    const thursday = overview.days.find((day) => day.weekday === 'THU')!;
+    const friday = overview.days.find((day) => day.weekday === 'FRI')!;
+    expect(thursday.status).toBe('TODAY_COMPLETED');
+    expect(friday.status).toBe('FULFILLED_EARLY');
+    expect(overview.completedCount).toBe(1);
+  });
+
+  it('does not turn the fulfilled Friday back into pending on Friday', () => {
+    const overview = buildWeekOverview({
+      todayLocalDate: '2026-09-18',
+      trainingDays: ['MON', 'TUE', 'WED', 'FRI'],
+      activeRecoveryDays: [],
+      activatedAtLocalDate: '2026-09-01',
+      completedDates: new Set(['2026-09-17']),
+      fulfilledScheduledDates: new Set(['2026-09-18']),
+    });
+    expect(overview.days.find((day) => day.weekday === 'THU')?.status).toBe('COMPLETED');
+    expect(overview.days.find((day) => day.weekday === 'FRI')?.status).toBe('FULFILLED_EARLY');
+  });
+
   it('marks days before program activation as BEFORE_PROGRAM even if they are training days', () => {
     const overview = buildWeekOverview({
       todayLocalDate: '2026-09-09',
@@ -97,5 +126,21 @@ describe('buildWeekOverview', () => {
     expect(overview.days.map((d) => d.weekday)).toEqual(['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN']);
     expect(overview.days[0].localDate).toBe('2026-09-07');
     expect(overview.days[6].localDate).toBe('2026-09-13');
+  });
+
+  it('flexible reflects only real completions and never marks an untrained weekday as MISSED', () => {
+    const overview = buildWeekOverview({
+      scheduleMode: 'flexible',
+      prescribedTrainingFrequency: 3,
+      todayLocalDate: '2026-09-12',
+      trainingDays: [],
+      activeRecoveryDays: [],
+      activatedAtLocalDate: '2026-08-01',
+      completedDates: new Set(['2026-09-08', '2026-09-11']),
+    });
+    expect(overview.days.filter((day) => day.status === 'COMPLETED')).toHaveLength(2);
+    expect(overview.days.some((day) => day.status === 'MISSED')).toBe(false);
+    expect(overview.scheduledCount).toBe(3);
+    expect(overview.completedCount).toBe(2);
   });
 });

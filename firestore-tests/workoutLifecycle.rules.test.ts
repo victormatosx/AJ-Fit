@@ -42,20 +42,23 @@ function prescriptionInputSnapshot(overrides: Record<string, unknown> = {}) {
   };
 }
 
-async function createLifecycle(uid = UID) {
+async function createLifecycle(
+  uid = UID,
+  inputSnapshot = prescriptionInputSnapshot(),
+) {
   const db = dbFor(uid);
   await seedAuthorityGrant(uid, {
     operation: 'MIGRATE',
     targetProgramInstanceId: 'wpi_initial', targetCycleId: 'cyc_initial',
     targetContentIdentity: 'wpg_content', targetPrescriptionIdentity: 'wp_content',
-    targetPrescriptionInputSnapshot: prescriptionInputSnapshot(),
+    targetPrescriptionInputSnapshot: inputSnapshot,
   });
   await runTransaction(db, async (transaction) => {
     const now = serverTimestamp();
     transaction.set(doc(db, 'users', uid, 'programInstances', 'wpi_initial'), {
       programInstanceId: 'wpi_initial', cycleId: 'cyc_initial', contentIdentity: 'wpg_content',
       prescriptionIdentity: 'wp_content', questionnaireId: 'q1',
-      prescriptionInputSnapshot: prescriptionInputSnapshot(), activatedAt: now,
+      prescriptionInputSnapshot: inputSnapshot, activatedAt: now,
       supersededAt: null, previousProgramInstanceId: null, activationReason: 'V1_MIGRATION_BASELINE',
       schemaVersion: 2, createdAt: now, updatedAt: now,
     });
@@ -133,6 +136,25 @@ describe('Workout Lifecycle V2 rules', () => {
     await assertSucceeds(createLifecycle());
     const snapshot = await getDoc(doc(dbFor(UID), 'users', UID, 'workoutLifecycleState', 'current'));
     expect(snapshot.data()?.startingLevel).toBe('BEGINNER');
+  });
+
+  it('accepts the exact flexible ProgramInstance snapshot shape from production', async () => {
+    const fixedInputs = prescriptionInputSnapshot().inputs;
+    const flexibleSnapshot = prescriptionInputSnapshot({
+      inputs: {
+        ...fixedInputs,
+        days: 5,
+        scheduleMode: 'flexible',
+        trainingDays: null,
+      },
+    });
+    await assertSucceeds(createLifecycle(UID, flexibleSnapshot));
+    const instance = await getDoc(doc(dbFor(UID), 'users', UID, 'programInstances', 'wpi_initial'));
+    expect(instance.data()?.prescriptionInputSnapshot.inputs).toMatchObject({
+      days: 5,
+      scheduleMode: 'flexible',
+      trainingDays: null,
+    });
   });
 
   it('allows state-pointer recovery to preserve a historical boundary but rejects a future one', async () => {
@@ -410,6 +432,55 @@ describe('Workout Lifecycle V2 rules', () => {
       doc(dbFor(UID), 'users', UID, 'pendingEvolutions', 'current'),
       invalidPending,
     ));
+  });
+
+  // `buildPrescriptionInputSnapshot` (src/workoutLifecycle/prescriptionInputs.ts)
+  // always emits `inputs.scheduleMode` now, while the fixture above is the
+  // legacy shape. The deployed ruleset only accepted the legacy key set, so
+  // every ProgramInstance written by the current client was rejected. Both
+  // shapes must stay valid — `isPrescriptionInputSnapshot` accepts either.
+  it('accepts an input snapshot carrying inputs.scheduleMode in both modes, and rejects an unknown mode', async () => {
+    await createLifecycle(UID, prescriptionInputSnapshot({
+      inputs: { ...prescriptionInputSnapshot().inputs, scheduleMode: 'fixed' },
+    }));
+    expect((await getDoc(doc(dbFor(UID), 'users', UID, 'programInstances', 'wpi_initial')))
+      .data()?.prescriptionInputSnapshot.inputs.scheduleMode).toBe('fixed');
+
+    await testEnv.clearFirestore();
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'users', UID), userDocument(UID));
+      await setDoc(doc(context.firestore(), 'users', UID, 'questionnaires', 'q1'), {
+        answers: { level: 'beginner' }, version: 1, createdAt: Timestamp.now(),
+      });
+      await setDoc(doc(context.firestore(), 'users', UID, 'workoutPrograms', 'wpg_content'), {
+        programId: 'wpg_content', prescriptionId: 'wp_content', status: 'active',
+      });
+    });
+    await createLifecycle(UID, prescriptionInputSnapshot({
+      inputs: { ...prescriptionInputSnapshot().inputs, scheduleMode: 'flexible', trainingDays: null },
+    }));
+    expect((await getDoc(doc(dbFor(UID), 'users', UID, 'programInstances', 'wpi_initial')))
+      .data()?.prescriptionInputSnapshot.inputs.scheduleMode).toBe('flexible');
+  });
+
+  it('rejects an input snapshot whose inputs.scheduleMode is not fixed or flexible', async () => {
+    const invalid = prescriptionInputSnapshot({
+      inputs: { ...prescriptionInputSnapshot().inputs, scheduleMode: 'sometimes' },
+    });
+    await seedAuthorityGrant(UID, {
+      operation: 'MIGRATE',
+      targetProgramInstanceId: 'wpi_initial', targetCycleId: 'cyc_initial',
+      targetContentIdentity: 'wpg_content', targetPrescriptionIdentity: 'wp_content',
+      targetPrescriptionInputSnapshot: invalid,
+    });
+    const db = dbFor(UID);
+    await assertFails(setDoc(doc(db, 'users', UID, 'programInstances', 'wpi_initial'), {
+      programInstanceId: 'wpi_initial', cycleId: 'cyc_initial', contentIdentity: 'wpg_content',
+      prescriptionIdentity: 'wp_content', questionnaireId: 'q1',
+      prescriptionInputSnapshot: invalid, activatedAt: serverTimestamp(),
+      supersededAt: null, previousProgramInstanceId: null, activationReason: 'V1_MIGRATION_BASELINE',
+      schemaVersion: 2, createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+    }));
   });
 
   // Fase 6 — rollout config is ops-controlled (Admin SDK only); client can

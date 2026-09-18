@@ -169,6 +169,12 @@ export interface WorkoutExecution {
   sessionName: string;
   /** Local calendar date (YYYY-MM-DD) this execution corresponds to — the same date passed to the Schedule Engine's `completeScheduledSession`. */
   scheduledLocalDate: string;
+  /**
+   * Local date on which the activity actually took place. The prescribed
+   * opportunity remains `scheduledLocalDate`; legacy executions omit this
+   * field and are displayed as if both dates were equal.
+   */
+  performedLocalDate?: string;
   status: WorkoutExecutionStatus;
   startedAt: unknown;
   finishedAt: unknown | null;
@@ -193,6 +199,13 @@ export interface WorkoutExecution {
 /** Deterministic — a retried "start workout" (double tap, network retry, cold start) lands on the same doc instead of creating a duplicate execution (docs §22 Idempotência). */
 export function workoutExecutionId(programOrInstanceId: string, sessionIndex: number, scheduledLocalDate: string): string {
   return workoutExecutionDocumentId(programOrInstanceId, sessionIndex, scheduledLocalDate);
+}
+
+/** Backward-compatible visual/activity date. Never use this as schedule authority. */
+export function performedLocalDateOf(
+  execution: Pick<WorkoutExecution, 'scheduledLocalDate' | 'performedLocalDate'>,
+): string {
+  return execution.performedLocalDate ?? execution.scheduledLocalDate;
 }
 
 /** A permanent substitution preference already resolved/validated by the caller for one slot — see `resolvePermanentSubstitutionsForSession` (`workoutPrescription/manualSubstitutionResolver.ts`). */

@@ -16,6 +16,7 @@ import {
   saveVaultKey,
   type StoredVaultKey,
 } from '../lib/photoVaultKeyStorage';
+import { startPhotoVaultTrace, tracePhotoVault } from '../lib/photoVaultDevTrace';
 
 /**
  * Photo Vault client.
@@ -104,16 +105,25 @@ function fail(scope: string, issue: PhotoVaultIssue): never {
  */
 export async function hasRecentAuth(): Promise<boolean> {
   const user = auth.currentUser;
-  if (!user) return false;
+  if (!user) {
+    tracePhotoVault('recentAuth.check', { hasRecentAuth: false, authAgeMs: null, requiredFor: 'recoverVaultKey' });
+    return false;
+  }
 
   try {
     const result = await user.getIdTokenResult();
     const authTime = Date.parse(result.authTime);
-    if (Number.isNaN(authTime)) return false;
+    if (Number.isNaN(authTime)) {
+      tracePhotoVault('recentAuth.check', { hasRecentAuth: false, authAgeMs: null, requiredFor: 'recoverVaultKey' });
+      return false;
+    }
 
     const age = Date.now() - authTime;
-    return age >= 0 && age <= CLIENT_RECENT_AUTH_MAX_AGE_MS;
+    const recent = age >= 0 && age <= CLIENT_RECENT_AUTH_MAX_AGE_MS;
+    tracePhotoVault('recentAuth.check', { hasRecentAuth: recent, authAgeMs: age, requiredFor: 'recoverVaultKey' });
+    return recent;
   } catch {
+    tracePhotoVault('recentAuth.check', { hasRecentAuth: false, authAgeMs: null, requiredFor: 'recoverVaultKey' });
     return false;
   }
 }
@@ -192,21 +202,74 @@ export async function recoverPhotoVaultKey(): Promise<StoredVaultKey> {
 }
 
 /**
+ * One key resolution in flight per uid.
+ *
+ * Without this, concurrent callers each run the full ladder below
+ * independently. On the local-key fast path that is merely wasteful; on the
+ * very first photo of a brand-new account it is not, because every caller
+ * reaches `createPhotoVaultKey()` and fires its own `createVault` callable.
+ * The backend is idempotent (the losers come back `already-exists` and fall
+ * through to recovery), so the outcome was never *wrong* — but it spent two
+ * extra round trips at the worst possible moment, and it made the first save
+ * of an account depend on backend behaviour no client test covers.
+ *
+ * Saving three poses at once turns that from a theoretical race into the
+ * normal path, which is why this exists before the poses were parallelized.
+ *
+ * Keyed by uid rather than a single global slot: two identities must never
+ * share a resolution, and a stale entry for a signed-out user must never be
+ * handed to whoever signs in next.
+ */
+const keyFlights = new Map<string, Promise<EnsureVaultKeyResult>>();
+
+/**
  * Makes the vault key available on this device, doing the least work needed.
  *
  * Order matters: a valid local key short-circuits before any network call, so
  * the common path never touches the backend.
+ *
+ * Concurrent callers for the same uid share one resolution (see `keyFlights`).
+ * The entry is removed once it settles, so a failure is never cached: the next
+ * caller retries from scratch rather than inheriting a rejected promise.
  *
  * This function deliberately does not open any UI. When it returns
  * `reauthentication-required`, the caller decides how to ask for the
  * credential and then calls `recoverPhotoVaultKey`.
  */
 export async function ensurePhotoVaultKey(): Promise<EnsureVaultKeyResult> {
+  // Before the registry lookup: an unauthenticated caller must fail the same
+  // way it always has, and must never join or create a flight.
   const uid = currentUid();
+
+  const existing = keyFlights.get(uid);
+  if (existing) return existing;
+
+  // `.finally` runs after `flight` is assigned, so the identity check below is
+  // safe. Same shape as the in-flight unlock in `lib/photoVaultLock.ts`.
+  const flight = runEnsurePhotoVaultKey(uid).finally(() => {
+    if (keyFlights.get(uid) === flight) keyFlights.delete(uid);
+  });
+  keyFlights.set(uid, flight);
+  return flight;
+}
+
+/** Test seam: drops any in-flight key resolution between cases. */
+export function resetPhotoVaultKeyFlightsForTesting(): void {
+  keyFlights.clear();
+}
+
+async function runEnsurePhotoVaultKey(uid: string): Promise<EnsureVaultKeyResult> {
+  // Only the closed `status` vocabulary below is ever traced — never the key,
+  // the payload or the uid. The distinction that matters for the save
+  // investigation is local (no network) versus created/recovered (a callable
+  // round trip on the critical path of the very first photo).
+  const finishTrace = startPhotoVaultTrace('vaultKey.ensure.start');
 
   try {
     const local = await readVaultKey(uid);
     if (local) {
+      tracePhotoVault('vaultKey.ensure.branch', { branch: 'local' });
+      finishTrace('vaultKey.ensure.result', { status: 'local-key-available' });
       return { status: 'local-key-available', ...local };
     }
   } catch (err) {
@@ -219,28 +282,43 @@ export async function ensurePhotoVaultKey(): Promise<EnsureVaultKeyResult> {
   }
 
   try {
+    tracePhotoVault('vaultKey.ensure.branch', { branch: 'create' });
     const created = await createPhotoVaultKey();
+    finishTrace('vaultKey.ensure.result', { status: 'vault-created' });
     return { status: 'vault-created', ...created };
   } catch (err) {
     if (!isPhotoVaultError(err) || err.issue !== 'vaultAlreadyExists') {
+      finishTrace('vaultKey.ensure.result', {
+        status: 'error',
+        issue: isPhotoVaultError(err) ? err.issue : 'unknown',
+      });
       throw err;
     }
   }
 
   // The vault exists remotely but not here: this is the new-device path.
   if (!(await hasRecentAuth())) {
+    tracePhotoVault('vaultKey.ensure.branch', { branch: 'reauth-required' });
+    finishTrace('vaultKey.ensure.result', { status: 'reauthentication-required' });
     return { status: 'reauthentication-required' };
   }
 
   try {
+    tracePhotoVault('vaultKey.ensure.branch', { branch: 'recover' });
     const recovered = await recoverPhotoVaultKey();
+    finishTrace('vaultKey.ensure.result', { status: 'recovered' });
     return { status: 'recovered', ...recovered };
   } catch (err) {
     // The backend is the authority on freshness; if it disagrees with our
     // conservative check, surface the reauth requirement instead of looping.
     if (isPhotoVaultError(err) && err.issue === 'vaultReauthRequired') {
+      finishTrace('vaultKey.ensure.result', { status: 'reauthentication-required' });
       return { status: 'reauthentication-required' };
     }
+    finishTrace('vaultKey.ensure.result', {
+      status: 'error',
+      issue: isPhotoVaultError(err) ? err.issue : 'unknown',
+    });
     throw err;
   }
 }

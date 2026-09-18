@@ -41,6 +41,7 @@ function photo(params: {
     failed: false,
     uploadStatus: null,
     uploadProgress: null,
+    jobId: null,
   };
 }
 

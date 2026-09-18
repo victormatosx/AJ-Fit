@@ -56,6 +56,12 @@ import {
 import { logInfo } from '../lib/logger';
 import { useDevSubscriptionOverrideContext } from '../dev/DevSubscriptionOverrideContext';
 import { applyDevSubscriptionOverride } from '../dev/subscriptionOverride';
+import {
+  classifyCompletedSubscriptionPurchase,
+  emitSubscriptionPurchaseCelebration,
+  emitSubscriptionRestoreCelebrationBoundary,
+  subscriptionCelebrationState,
+} from '../lib/subscriptionCelebration';
 
 /**
  * RevenueCat state context (docs/13_assinaturas_e_billing.md).
@@ -826,9 +832,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
         // into the technical-error branch.
         setOfferingsUnavailable(true);
       } else {
-        setOfferingsError(
-          err instanceof Error ? err.message : 'Não foi possível carregar os planos.',
-        );
+        setOfferingsError('offeringsLoadFailed');
         setOfferingsOffline(isOfflineError(err));
       }
     } finally {
@@ -863,10 +867,14 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
       if (!purchaseUid || !startedForSyncedIdentity) {
         return {
           status: 'error',
-          message: 'A identidade da assinatura ainda está sendo confirmada.',
+          issue: 'identityPending',
           offline: false,
         } satisfies PurchaseOutcome;
       }
+      const previousCustomerInfo = selectIdentityCustomerInfo(
+        lifecycleRef.current,
+        purchaseUid,
+      );
       refreshSeq.current += 1;
       const outcome = await enqueueSdkOperation(sdkCall);
       if (
@@ -881,6 +889,20 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
           generation,
           customerInfo: outcome.customerInfo,
         });
+        if (previousCustomerInfo) {
+          const kind = classifyCompletedSubscriptionPurchase(
+            previousCustomerInfo,
+            outcome.customerInfo,
+          );
+          if (kind) {
+            emitSubscriptionPurchaseCelebration({
+              uid: purchaseUid,
+              kind,
+              latestPurchaseDate:
+                subscriptionCelebrationState(outcome.customerInfo)?.latestPurchaseDate ?? null,
+            });
+          }
+        }
       }
       return outcome;
     },
@@ -915,27 +937,48 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     if (!restoreUid || !startedForSyncedIdentity) {
       return {
         status: 'error',
-        message: 'A identidade da assinatura ainda está sendo confirmada.',
+        issue: 'identityPending',
         offline: false,
         offeringsUnavailable: false,
       } satisfies RestoreOutcome;
     }
     refreshSeq.current += 1;
-    const outcome = await enqueueSdkOperation(restorePurchasesService);
-    if (
-      outcome.status === 'restored' &&
-      currentUid.current === restoreUid &&
-      syncedUid.current === restoreUid &&
-      identityGeneration.current === generation
-    ) {
-      applyLifecycleEvent({
-        type: 'customer-info-updated',
-        uid: restoreUid,
-        generation,
-        customerInfo: outcome.customerInfo,
-      });
+    emitSubscriptionRestoreCelebrationBoundary({
+      uid: restoreUid,
+      phase: 'started',
+    });
+    let restoreBoundaryFinished = false;
+    try {
+      const outcome = await enqueueSdkOperation(restorePurchasesService);
+      if (
+        outcome.status === 'restored' &&
+        currentUid.current === restoreUid &&
+        syncedUid.current === restoreUid &&
+        identityGeneration.current === generation
+      ) {
+        emitSubscriptionRestoreCelebrationBoundary({
+          uid: restoreUid,
+          phase: 'finished',
+          latestPurchaseDate:
+            subscriptionCelebrationState(outcome.customerInfo)?.latestPurchaseDate ?? null,
+        });
+        restoreBoundaryFinished = true;
+        applyLifecycleEvent({
+          type: 'customer-info-updated',
+          uid: restoreUid,
+          generation,
+          customerInfo: outcome.customerInfo,
+        });
+      }
+      return outcome;
+    } finally {
+      if (!restoreBoundaryFinished) {
+        emitSubscriptionRestoreCelebrationBoundary({
+          uid: restoreUid,
+          phase: 'finished',
+        });
+      }
     }
-    return outcome;
   }, [applyLifecycleEvent, enqueueSdkOperation]);
 
   /**

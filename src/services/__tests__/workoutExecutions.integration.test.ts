@@ -36,8 +36,11 @@ import {
   activeExecutionId,
   completeCardioExecution,
   finishWorkoutExecution,
+  listCompletedWorkoutActivityDatesInRange,
+  listCompletedWorkoutDatesInRange,
   listExecutionsForProgram,
   listRecentWorkoutExecutions,
+  listWorkoutExecutionsForLoadProgress,
   loadActiveExecutionPointer,
   loadWorkoutExecution,
   recordSetExecution,
@@ -435,6 +438,11 @@ describe.skipIf(!enabled)('Workout Execution & History — real Firestore Emulat
     const started = await startOrResumeWorkoutExecution({ uid: UID, program: program(), sessionIndex: 0, scheduledLocalDate: '2026-08-25' });
     await recordSetExecution({ uid: UID, executionId: started.executionId, exerciseIndex: 0, setIndex: 0, actualReps: 10, weightKg: 30 });
 
+    const loadProgress = await listWorkoutExecutionsForLoadProgress(UID);
+    expect(loadProgress).toHaveLength(1);
+    expect(loadProgress[0]?.status).toBe('IN_PROGRESS');
+    expect(loadProgress[0]?.exercises[0]?.sets[0]).toMatchObject({ status: 'COMPLETED', weightKg: 30 });
+
     // Simulate the app being killed and reopened: a fresh `start()` call is
     // the only thing the cold-started app has to go on.
     const resumed = await startOrResumeWorkoutExecution({ uid: UID, program: program(), sessionIndex: 0, scheduledLocalDate: '2026-08-25' });
@@ -534,6 +542,42 @@ describe.skipIf(!enabled)('Workout Execution & History — real Firestore Emulat
       mocks.db as never, 'users', UID, 'workoutPrograms', 'wpg_test1', 'scheduleEvents',
     ));
     expect(scheduleEvents.empty).toBe(true);
+  });
+
+  it('abandoning an advanced Friday attempt keeps Friday normally available', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'users', UID, 'workoutPrograms', 'wpg_test1', 'scheduleState', 'current'), scheduleStateDoc({
+        nextSessionIndex: 1,
+        cursorDate: '2026-08-26',
+        lastCompletedAt: '2026-08-26',
+      }));
+    });
+    const started = await startOrResumeWorkoutExecution({
+      uid: UID,
+      program: program(),
+      sessionIndex: 1,
+      scheduledLocalDate: '2026-08-28',
+      performedLocalDate: '2026-08-27',
+    });
+    expect(started).toMatchObject({
+      sessionIndex: 1,
+      scheduledLocalDate: '2026-08-28',
+      performedLocalDate: '2026-08-27',
+    });
+    await abandonWorkoutExecution(UID, started.executionId);
+
+    const state = await getDoc(doc(mocks.db as never, 'users', UID, 'workoutPrograms', 'wpg_test1', 'scheduleState', 'current'));
+    const events = await getDocs(collection(mocks.db as never, 'users', UID, 'workoutPrograms', 'wpg_test1', 'scheduleEvents'));
+    expect(state.data()).toMatchObject({ nextSessionIndex: 1, cursorDate: '2026-08-26' });
+    expect(events.empty).toBe(true);
+    expect(resolveWorkoutSchedule({
+      hasActiveProgram: true,
+      sessionCount: 2,
+      config: { trainingDays: ['MON', 'WED', 'FRI'], timezone: 'UTC', scheduleVersion: 1 },
+      state: state.data() as never,
+      activatedAtLocalDate: '2026-08-24',
+      todayLocalDate: '2026-08-28',
+    })).toEqual({ status: 'SESSION_READY', sessionIndex: 1 });
   });
 
   // Cardio Finisher Completion Recovery hardening (2026-09,
@@ -933,6 +977,26 @@ describe.skipIf(!enabled)('Workout Execution & History — real Firestore Emulat
 
     const recent = await listRecentWorkoutExecutions(UID, 20);
     expect(recent.map((e) => e.programId)).toEqual(['wpg_test1', 'wpg_old']); // newest scheduledLocalDate first
+  });
+
+  it('frequency history marks the real performed Thursday and keeps legacy scheduled-date fallback', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await Promise.all([
+        setDoc(doc(ctx.firestore(), 'users', UID, 'workoutExecutions', 'advanced-friday'), {
+          scheduledLocalDate: '2026-09-18', performedLocalDate: '2026-09-17', status: 'COMPLETED',
+        }),
+        setDoc(doc(ctx.firestore(), 'users', UID, 'workoutExecutions', 'legacy-wednesday'), {
+          scheduledLocalDate: '2026-09-16', status: 'PARTIALLY_COMPLETED',
+        }),
+      ]);
+    });
+    await expect(listCompletedWorkoutDatesInRange(UID, '2026-09-14', '2026-09-17'))
+      .resolves.toEqual(expect.arrayContaining(['2026-09-16', '2026-09-17']));
+    await expect(listCompletedWorkoutActivityDatesInRange(UID, '2026-09-14', '2026-09-17'))
+      .resolves.toEqual({
+        performedDates: expect.arrayContaining(['2026-09-16', '2026-09-17']),
+        scheduledDates: expect.arrayContaining(['2026-09-16', '2026-09-18']),
+      });
   });
 
   it('§95 refuses to start an execution against a program that does not belong to this user (no such doc under this uid)', async () => {

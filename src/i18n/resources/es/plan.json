@@ -16,6 +16,8 @@
   },
   "schedule": {
     "title": "Semana",
+    "flexibleTitle": "Entrenamiento libre",
+    "flexibleBody": "{{count}} entrenamientos por semana. Entrena los días que prefieras siguiendo la secuencia.",
     "trainLabel": "Entreno",
     "restLabel": "Descanso",
     "dayLabels": { "mon": "L", "tue": "M", "wed": "X", "thu": "J", "fri": "V", "sat": "S", "sun": "D" }

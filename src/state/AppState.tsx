@@ -21,6 +21,7 @@ export type PrimaryTrainingEnvironment = Exclude<TrainingEnvironment, 'both'>;
 /** Canonical chronological order (Monday-first). Persisted values never depend on locale or click order — see questionnaireSchema.ts `normalizeWeekdays`. */
 export const WEEKDAY_ORDER = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'] as const;
 export type Weekday = (typeof WEEKDAY_ORDER)[number];
+export type ScheduleMode = 'fixed' | 'flexible';
 export type SpecialCondition =
   | 'musculoskeletal_limitation'
   | 'pregnancy'
@@ -94,12 +95,15 @@ export type Quiz = {
   limits: string[];
   duration: '30' | '45' | '60' | '90' | null;
   days: number | null;
+  /** Explicit schedule semantics. `null` exists only while a new draft has not answered the onboarding step. */
+  scheduleMode: ScheduleMode | null;
   /**
    * Schedule Engine input (docs/workout-lifecycle/03_SCHEDULE_ENGINE.md).
    * `null` means not collected yet (legacy questionnaire, or funnel not
-   * reached this step). For `days === 7` this always holds all seven
-   * `WEEKDAY_ORDER` values; for 2-6 it holds exactly `days` distinct values,
-   * always normalized to canonical chronological order.
+   * reached this step, or an explicit flexible schedule). For fixed
+   * `days === 7` this holds all seven `WEEKDAY_ORDER` values; for fixed 2-6
+   * it holds exactly `days` distinct values, always normalized to canonical
+   * chronological order.
    */
   trainingDays: Weekday[] | null;
   place: TrainingEnvironment | null;
@@ -157,6 +161,7 @@ export const defaultQuiz: Quiz = {
   limits: [],
   duration: null,
   days: null,
+  scheduleMode: null,
   trainingDays: null,
   place: null,
   primaryPlace: null,

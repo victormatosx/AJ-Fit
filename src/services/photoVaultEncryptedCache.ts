@@ -1,6 +1,8 @@
 import { randomUUID } from 'expo-crypto';
 import { Directory, File, Paths } from 'expo-file-system';
 
+import { recordPhotoVaultCacheEvent } from '../lib/photoVaultPerformance';
+
 /**
  * Persistent cache of encrypted Photo Vault thumbnails.
  *
@@ -29,8 +31,19 @@ const VAULT_ROOT = 'photo-vault';
  * someone could delete by accident.
  */
 const CACHE_DIR = 'encrypted-thumbnails';
+/**
+ * The full-resolution sibling of `CACHE_DIR`.
+ *
+ * A separate directory rather than a second suffix in the same one, so the two
+ * size classes can be budgeted independently: a 480px thumbnail envelope is
+ * tens of KB and a full is up to `MAX_ENCRYPTED_BYTES` (10 MiB), and letting
+ * one eviction pass weigh them against each other would let a single viewer
+ * session flush the entire grid.
+ */
+const FULL_CACHE_DIR = 'encrypted-fulls';
 
 const SUFFIX = '.thumb.enc';
+const FULL_SUFFIX = '.full.enc';
 /** Prefix of a half-written entry. Never a cache hit; swept on maintenance. */
 const TEMP_PREFIX = '.tmp-';
 
@@ -38,6 +51,49 @@ const TEMP_PREFIX = '.tmp-';
 export const MAX_CACHE_BYTES = 24 * 1024 * 1024;
 /** Secondary ceiling, so many tiny files cannot escape the byte budget. */
 export const MAX_CACHE_ENTRIES = 300;
+
+/**
+ * Primary ceiling for fulls, and the one that actually binds.
+ *
+ * A 1600px/0.85 envelope is typically 400–800 KB, so this holds on the order
+ * of a hundred ordinary photos; a legacy photo may be up to 10 MiB, and the
+ * same budget then bounds the cache at a handful of them. Bytes lead here
+ * because count alone cannot bound a directory whose entries vary by 20x.
+ */
+export const MAX_FULL_CIPHER_CACHE_BYTES = 64 * 1024 * 1024;
+/** Secondary ceiling, so many small fulls cannot escape the byte budget. */
+export const MAX_FULL_CIPHER_CACHE_ENTRIES = 120;
+
+/**
+ * One namespace of cached envelopes.
+ *
+ * Everything below is written against this rather than against the thumbnail
+ * constants directly, so the full cache is the same code with a different
+ * budget rather than a second implementation to keep in step.
+ */
+interface CiphertextCacheKind {
+  readonly dir: string;
+  readonly suffix: string;
+  readonly maxBytes: number;
+  readonly maxEntries: number;
+}
+
+const THUMBNAIL_KIND: CiphertextCacheKind = {
+  dir: CACHE_DIR,
+  suffix: SUFFIX,
+  maxBytes: MAX_CACHE_BYTES,
+  maxEntries: MAX_CACHE_ENTRIES,
+};
+
+const FULL_KIND: CiphertextCacheKind = {
+  dir: FULL_CACHE_DIR,
+  suffix: FULL_SUFFIX,
+  maxBytes: MAX_FULL_CIPHER_CACHE_BYTES,
+  maxEntries: MAX_FULL_CIPHER_CACHE_ENTRIES,
+};
+
+/** Every namespace an identity boundary has to clear. */
+const ALL_KINDS: readonly CiphertextCacheKind[] = [THUMBNAIL_KIND, FULL_KIND];
 /**
  * Reading a file does not update its modification time, so recency would
  * degrade to insertion order across a restart. A cache hit older than this
@@ -91,24 +147,25 @@ export function currentPhotoVaultCacheEpoch(): number {
   return cacheEpoch;
 }
 
-function cacheRoot(): Directory {
-  const directory = new Directory(Paths.cache, VAULT_ROOT, CACHE_DIR);
+function cacheRoot(kind: CiphertextCacheKind): Directory {
+  const directory = new Directory(Paths.cache, VAULT_ROOT, kind.dir);
   directory.create({ intermediates: true, idempotent: true });
   return directory;
 }
 
-function userDirectory(uid: string): Directory {
-  const directory = new Directory(Paths.cache, VAULT_ROOT, CACHE_DIR, uid);
+function userDirectory(kind: CiphertextCacheKind, uid: string): Directory {
+  const directory = new Directory(Paths.cache, VAULT_ROOT, kind.dir, uid);
   directory.create({ intermediates: true, idempotent: true });
   return directory;
 }
 
-function entryFile(uid: string, photoId: string): File {
-  return new File(userDirectory(uid), `${photoId}${SUFFIX}`);
+function entryFile(kind: CiphertextCacheKind, uid: string, photoId: string): File {
+  return new File(userDirectory(kind, uid), `${photoId}${kind.suffix}`);
 }
 
-function accessKey(uid: string, photoId: string): string {
-  return `${uid}/${photoId}`;
+/** Namespaced by kind as well as uid: the same photo has an entry in each. */
+function accessKey(kind: CiphertextCacheKind, uid: string, photoId: string): string {
+  return `${kind.dir}/${uid}/${photoId}`;
 }
 
 function fileName(uri: string): string {
@@ -133,11 +190,11 @@ interface CacheEntry {
 }
 
 /** Lists real cache entries for a user, sweeping abandoned temporaries. */
-function listEntries(uid: string): CacheEntry[] {
+function listEntries(kind: CiphertextCacheKind, uid: string): CacheEntry[] {
   const entries: CacheEntry[] = [];
   let contents: (Directory | File)[];
   try {
-    contents = userDirectory(uid).list();
+    contents = userDirectory(kind, uid).list();
   } catch {
     return entries;
   }
@@ -152,9 +209,9 @@ function listEntries(uid: string): CacheEntry[] {
       removeQuietly(item);
       continue;
     }
-    if (!name.endsWith(SUFFIX)) continue;
+    if (!name.endsWith(kind.suffix)) continue;
 
-    const photoId = name.slice(0, -SUFFIX.length);
+    const photoId = name.slice(0, -kind.suffix.length);
     if (!isSafeSegment(photoId)) continue;
 
     const size = item.size ?? 0;
@@ -168,7 +225,7 @@ function listEntries(uid: string): CacheEntry[] {
       photoId,
       file: item,
       size,
-      recency: Math.max(lastAccess.get(accessKey(uid, photoId)) ?? 0, modified),
+      recency: Math.max(lastAccess.get(accessKey(kind, uid, photoId)) ?? 0, modified),
     });
   }
   return entries;
@@ -182,17 +239,16 @@ function listEntries(uid: string): CacheEntry[] {
  * truncated write or an unrelated file, and the caller must go to the network
  * rather than hand suspicious bytes to the decryptor.
  */
-export async function readCachedThumbnail(params: {
-  uid: string;
-  photoId: string;
-  expectedSize: number;
-}): Promise<Uint8Array | null> {
+async function readCachedEntry(
+  kind: CiphertextCacheKind,
+  params: { uid: string; photoId: string; expectedSize: number },
+): Promise<Uint8Array | null> {
   const { uid, photoId, expectedSize } = params;
   if (!isSafeSegment(uid) || !isSafeSegment(photoId)) return null;
 
   let file: File;
   try {
-    file = entryFile(uid, photoId);
+    file = entryFile(kind, uid, photoId);
     if (!file.exists) return null;
   } catch {
     return null;
@@ -215,9 +271,32 @@ export async function readCachedThumbnail(params: {
     return null;
   }
 
-  lastAccess.set(accessKey(uid, photoId), Date.now());
-  touchIfStale(uid, photoId, file, bytes);
+  lastAccess.set(accessKey(kind, uid, photoId), Date.now());
+  touchIfStale(kind, uid, photoId, file, bytes);
   return bytes;
+}
+
+export function readCachedThumbnail(params: {
+  uid: string;
+  photoId: string;
+  expectedSize: number;
+}): Promise<Uint8Array | null> {
+  return readCachedEntry(THUMBNAIL_KIND, params);
+}
+
+/**
+ * Returns cached full ciphertext whose size matches the Firestore metadata.
+ *
+ * Same contract as the thumbnail read above, including treating a size
+ * mismatch as a miss: these bytes are about to be handed to the envelope
+ * parser, and local origin buys them no extra trust.
+ */
+export function readCachedFull(params: {
+  uid: string;
+  photoId: string;
+  expectedSize: number;
+}): Promise<Uint8Array | null> {
+  return readCachedEntry(FULL_KIND, params);
 }
 
 /**
@@ -229,7 +308,13 @@ export async function readCachedThumbnail(params: {
  * the same atomic path — a crash mid-touch must not be able to damage an entry
  * that was already valid.
  */
-function touchIfStale(uid: string, photoId: string, file: File, bytes: Uint8Array): void {
+function touchIfStale(
+  kind: CiphertextCacheKind,
+  uid: string,
+  photoId: string,
+  file: File,
+  bytes: Uint8Array,
+): void {
   let modified: number;
   try {
     modified = file.lastModified ?? 0;
@@ -237,18 +322,23 @@ function touchIfStale(uid: string, photoId: string, file: File, bytes: Uint8Arra
     return;
   }
   if (Date.now() - modified < TOUCH_MIN_INTERVAL_MS) return;
-  atomicWrite(uid, photoId, bytes);
+  atomicWrite(kind, uid, photoId, bytes);
 }
 
 /** Writes through a temporary name, then moves it into place in one step. */
-function atomicWrite(uid: string, photoId: string, bytes: Uint8Array): boolean {
-  const directory = userDirectory(uid);
+function atomicWrite(
+  kind: CiphertextCacheKind,
+  uid: string,
+  photoId: string,
+  bytes: Uint8Array,
+): boolean {
+  const directory = userDirectory(kind, uid);
   const temp = new File(directory, `${TEMP_PREFIX}${randomUUID()}`);
   try {
     temp.write(bytes);
     // Only now does the final name exist, and it exists complete. A reader can
     // never observe a partially written entry as a cache hit.
-    temp.moveSync(entryFile(uid, photoId), { overwrite: true });
+    temp.moveSync(entryFile(kind, uid, photoId), { overwrite: true });
     return true;
   } catch {
     removeQuietly(temp);
@@ -266,46 +356,96 @@ function atomicWrite(uid: string, photoId: string, bytes: Uint8Array): boolean {
  * Returns whether the entry was stored. Callers must not treat `false` as an
  * error: the photo still renders from the bytes they already hold.
  */
+function writeCachedEntry(
+  kind: CiphertextCacheKind,
+  params: { uid: string; photoId: string; bytes: Uint8Array; epoch: number },
+): boolean {
+  const { uid, photoId, bytes, epoch } = params;
+  if (epoch !== cacheEpoch) return false;
+  if (!isSafeSegment(uid) || !isSafeSegment(photoId)) return false;
+  if (bytes.length === 0) return false;
+
+  if (!atomicWrite(kind, uid, photoId, bytes)) return false;
+
+  lastAccess.set(accessKey(kind, uid, photoId), Date.now());
+  recordPhotoVaultCacheEvent(
+    kind === FULL_KIND
+      ? 'viewer.fullCipherCache.write'
+      : 'gallery.thumbnailCipherCache.write',
+    { bytes: bytes.length },
+  );
+  enforceLimits(kind, uid);
+  return true;
+}
+
 export function writeCachedThumbnail(params: {
   uid: string;
   photoId: string;
   bytes: Uint8Array;
   epoch: number;
 }): boolean {
-  const { uid, photoId, bytes, epoch } = params;
-  if (epoch !== cacheEpoch) return false;
-  if (!isSafeSegment(uid) || !isSafeSegment(photoId)) return false;
-  if (bytes.length === 0) return false;
-
-  if (!atomicWrite(uid, photoId, bytes)) return false;
-
-  lastAccess.set(accessKey(uid, photoId), Date.now());
-  enforceCacheLimits(uid);
-  return true;
+  return writeCachedEntry(THUMBNAIL_KIND, params);
 }
 
-/** Invalidates one photo, e.g. after a delete. */
-export function removeCachedThumbnail(uid: string, photoId: string): void {
+/**
+ * Stores downloaded full ciphertext.
+ *
+ * Identical epoch and safety contract to the thumbnail write. Returning
+ * `false` is never an error for the caller: the photo renders from the bytes
+ * already in hand, and only a future re-download is lost.
+ */
+export function writeCachedFull(params: {
+  uid: string;
+  photoId: string;
+  bytes: Uint8Array;
+  epoch: number;
+}): boolean {
+  return writeCachedEntry(FULL_KIND, params);
+}
+
+function removeCachedEntry(
+  kind: CiphertextCacheKind,
+  uid: string,
+  photoId: string,
+): void {
   if (!isSafeSegment(uid) || !isSafeSegment(photoId)) return;
-  lastAccess.delete(accessKey(uid, photoId));
+  lastAccess.delete(accessKey(kind, uid, photoId));
   try {
-    removeQuietly(entryFile(uid, photoId));
+    removeQuietly(entryFile(kind, uid, photoId));
   } catch {
     // Directory may not exist yet; nothing to invalidate.
   }
 }
 
-/** Removes every entry belonging to one user. */
-export function removeCachedThumbnailsForUser(uid: string): void {
+/** Invalidates one photo's thumbnail, e.g. after a delete. */
+export function removeCachedThumbnail(uid: string, photoId: string): void {
+  removeCachedEntry(THUMBNAIL_KIND, uid, photoId);
+}
+
+/** Invalidates one photo's full envelope, e.g. after a delete or replace. */
+export function removeCachedFull(uid: string, photoId: string): void {
+  removeCachedEntry(FULL_KIND, uid, photoId);
+}
+
+/**
+ * Removes every cached envelope, of every kind, belonging to one user.
+ *
+ * The only caller is an accepted account deletion. A plain logout deliberately
+ * does NOT come through here — it goes through
+ * `prunePhotoVaultCiphertextExcept`, which keeps the signed-in namespace.
+ */
+export function removePhotoVaultCiphertextForUser(uid: string): void {
   if (!isSafeSegment(uid)) return;
-  for (const key of [...lastAccess.keys()]) {
-    if (key.startsWith(`${uid}/`)) lastAccess.delete(key);
-  }
-  try {
-    const directory = new Directory(Paths.cache, VAULT_ROOT, CACHE_DIR, uid);
-    if (directory.exists) directory.delete();
-  } catch {
-    // Best effort: a cache we cannot clear must not block logout.
+  for (const kind of ALL_KINDS) {
+    for (const key of [...lastAccess.keys()]) {
+      if (key.startsWith(`${kind.dir}/${uid}/`)) lastAccess.delete(key);
+    }
+    try {
+      const directory = new Directory(Paths.cache, VAULT_ROOT, kind.dir, uid);
+      if (directory.exists) directory.delete();
+    } catch {
+      // Best effort: a cache we cannot clear must not block logout.
+    }
   }
 }
 
@@ -318,31 +458,36 @@ export function removeCachedThumbnailsForUser(uid: string): void {
  * was signed in before — including a logout (`null`), a switch this app never
  * observed, and leftovers from an account removed while the app was closed.
  */
-export function pruneCachedThumbnailsExcept(uid: string | null): void {
+export function prunePhotoVaultCiphertextExcept(uid: string | null): void {
   // Bump first. Any in-flight write that has not yet reached its synchronous
   // epoch check is refused from this point on, so it cannot land after the
-  // sweep and resurrect a namespace this call is about to remove.
+  // sweep and resurrect a namespace this call is about to remove. One epoch
+  // covers every kind, so a single bump invalidates all of them at once.
   cacheEpoch += 1;
 
   const keep = uid !== null && isSafeSegment(uid) ? uid : null;
   for (const key of [...lastAccess.keys()]) {
-    if (keep === null || !key.startsWith(`${keep}/`)) lastAccess.delete(key);
+    if (keep === null || !ALL_KINDS.some((kind) => key.startsWith(`${kind.dir}/${keep}/`))) {
+      lastAccess.delete(key);
+    }
   }
 
-  let contents: (Directory | File)[];
-  try {
-    contents = cacheRoot().list();
-  } catch {
-    return;
-  }
-  for (const item of contents) {
-    const name = fileName(item.uri);
-    if (keep !== null && name === keep) continue;
+  for (const kind of ALL_KINDS) {
+    let contents: (Directory | File)[];
     try {
-      if (item.exists) item.delete();
+      contents = cacheRoot(kind).list();
     } catch {
-      // Ignored: a namespace we cannot remove now is retried on the next
-      // identity change, and it stays unreadable ciphertext meanwhile.
+      continue;
+    }
+    for (const item of contents) {
+      const name = fileName(item.uri);
+      if (keep !== null && name === keep) continue;
+      try {
+        if (item.exists) item.delete();
+      } catch {
+        // Ignored: a namespace we cannot remove now is retried on the next
+        // identity change, and it stays unreadable ciphertext meanwhile.
+      }
     }
   }
 }
@@ -353,22 +498,40 @@ export function pruneCachedThumbnailsExcept(uid: string | null): void {
  * Runs after a listing rather than during one, and is bounded, so a large
  * gallery cannot turn a refresh into a filesystem scan on the render path.
  */
+function reconcileEntries(
+  kind: CiphertextCacheKind,
+  uid: string,
+  knownPhotoIds: Iterable<string>,
+  limit: number,
+): number {
+  if (!isSafeSegment(uid)) return 0;
+  const known = new Set(knownPhotoIds);
+  let removed = 0;
+  for (const entry of listEntries(kind, uid)) {
+    if (removed >= limit) break;
+    if (known.has(entry.photoId)) continue;
+    removeQuietly(entry.file);
+    lastAccess.delete(accessKey(kind, uid, entry.photoId));
+    removed += 1;
+  }
+  return removed;
+}
+
 export function reconcileCachedThumbnails(
   uid: string,
   knownPhotoIds: Iterable<string>,
   limit: number = RECONCILE_LIMIT,
 ): number {
-  if (!isSafeSegment(uid)) return 0;
-  const known = new Set(knownPhotoIds);
-  let removed = 0;
-  for (const entry of listEntries(uid)) {
-    if (removed >= limit) break;
-    if (known.has(entry.photoId)) continue;
-    removeQuietly(entry.file);
-    lastAccess.delete(accessKey(uid, entry.photoId));
-    removed += 1;
-  }
-  return removed;
+  return reconcileEntries(THUMBNAIL_KIND, uid, knownPhotoIds, limit);
+}
+
+/** Removes cached fulls for photos that no longer exist remotely. */
+export function reconcileCachedFulls(
+  uid: string,
+  knownPhotoIds: Iterable<string>,
+  limit: number = RECONCILE_LIMIT,
+): number {
+  return reconcileEntries(FULL_KIND, uid, knownPhotoIds, limit);
 }
 
 /**
@@ -377,34 +540,62 @@ export function reconcileCachedThumbnails(
  * Recency is `max(this session's access, on-disk lastModified)`, so a restart
  * degrades gracefully to write/touch time instead of losing ordering entirely.
  */
-export function enforceCacheLimits(uid: string): number {
+function enforceLimits(kind: CiphertextCacheKind, uid: string): number {
   if (!isSafeSegment(uid)) return 0;
-  const entries = listEntries(uid);
+  const entries = listEntries(kind, uid);
   let totalBytes = entries.reduce((sum, entry) => sum + entry.size, 0);
   let count = entries.length;
-  if (totalBytes <= MAX_CACHE_BYTES && count <= MAX_CACHE_ENTRIES) return 0;
+  if (totalBytes <= kind.maxBytes && count <= kind.maxEntries) return 0;
 
   entries.sort((a, b) => a.recency - b.recency);
 
   let evicted = 0;
+  let reclaimed = 0;
   for (const entry of entries) {
-    if (totalBytes <= MAX_CACHE_BYTES && count <= MAX_CACHE_ENTRIES) break;
+    if (totalBytes <= kind.maxBytes && count <= kind.maxEntries) break;
     removeQuietly(entry.file);
-    lastAccess.delete(accessKey(uid, entry.photoId));
+    lastAccess.delete(accessKey(kind, uid, entry.photoId));
     totalBytes -= entry.size;
+    reclaimed += entry.size;
     count -= 1;
     evicted += 1;
+  }
+  if (evicted > 0) {
+    recordPhotoVaultCacheEvent(
+      kind === FULL_KIND
+        ? 'viewer.fullCipherCache.evicted'
+        : 'gallery.thumbnailCipherCache.evicted',
+      { bytes: reclaimed, items: evicted },
+    );
   }
   return evicted;
 }
 
-/** Diagnostics. Returns aggregates only — never a photoId, path or byte. */
-export function photoVaultCacheStats(uid: string): { entries: number; bytes: number } {
-  const entries = listEntries(uid);
+export function enforceCacheLimits(uid: string): number {
+  return enforceLimits(THUMBNAIL_KIND, uid);
+}
+
+/** Evicts least-recently-used fulls until both full-cache ceilings hold. */
+export function enforceFullCacheLimits(uid: string): number {
+  return enforceLimits(FULL_KIND, uid);
+}
+
+function statsOf(kind: CiphertextCacheKind, uid: string): { entries: number; bytes: number } {
+  const entries = listEntries(kind, uid);
   return {
     entries: entries.length,
     bytes: entries.reduce((sum, entry) => sum + entry.size, 0),
   };
+}
+
+/** Diagnostics. Returns aggregates only — never a photoId, path or byte. */
+export function photoVaultCacheStats(uid: string): { entries: number; bytes: number } {
+  return statsOf(THUMBNAIL_KIND, uid);
+}
+
+/** Diagnostics for the full namespace. Aggregates only, same as above. */
+export function photoVaultFullCacheStats(uid: string): { entries: number; bytes: number } {
+  return statsOf(FULL_KIND, uid);
 }
 
 /** Test seam. */

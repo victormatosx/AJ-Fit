@@ -68,7 +68,7 @@ export function DeleteAccountScreen({ onBack }: { onBack: () => void }) {
           onBack={onBack}
           disabled={!backAllowed}
         />
-        {flow.step !== 'submitting' ? (
+        {flow.step !== 'submitting' && flow.step !== 'reconciliation' ? (
           <View style={{ alignItems: 'center', paddingBottom: spacing[3] }}>
             <DeletionStepProgress step={flow.step} />
           </View>
@@ -109,6 +109,9 @@ export function DeleteAccountScreen({ onBack }: { onBack: () => void }) {
           )}
 
           {flow.step === 'submitting' && <SubmittingStep />}
+          {flow.step === 'reconciliation' && (
+            <ReconciliationStep onContinue={() => void flow.completeAcceptedDeletion()} />
+          )}
         </ScrollView>
       </SafeAreaView>
     </ScreenBg>
@@ -280,6 +283,22 @@ function ConfirmStep({
           </Text>
         )}
       </Pressable>
+    </View>
+  );
+}
+
+function ReconciliationStep({ onContinue }: { onContinue: () => void }) {
+  const { t } = useTranslation('settings');
+  return (
+    <View style={{ gap: spacing[6] }}>
+      <DeleteAccountHero
+        icon="alert-triangle"
+        title={t('security.deleteAccountFlow.reconciliation.title')}
+        subtitle={t('security.deleteAccountFlow.errors.reconciliationRequired')}
+      />
+      <CtaButton onPress={onContinue}>
+        <CtaText>{t('security.deleteAccountFlow.reconciliation.action')}</CtaText>
+      </CtaButton>
     </View>
   );
 }

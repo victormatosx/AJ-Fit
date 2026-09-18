@@ -35,6 +35,7 @@ interface Props {
   /** Opens the new-photo flow with an empty slot's pose pre-selected. */
   onAddPose: (pose: ProgressPhotoPose) => void;
   onRendered: (photoId: string) => void;
+  onRetrySync: (photoId: string) => void;
   formatDate: (date: Date) => string;
   formatMonth: (date: Date) => string;
   listHeader?: ReactElement | null;
@@ -49,6 +50,7 @@ export function PhotoVaultGrid({
   onOpen,
   onAddPose,
   onRendered,
+  onRetrySync,
   formatDate,
   formatMonth,
   listHeader = null,
@@ -72,6 +74,7 @@ export function PhotoVaultGrid({
           onOpen={onOpen}
           onAddPose={onAddPose}
           onRendered={onRendered}
+          onRetrySync={onRetrySync}
           formatDay={formatDate}
           formatMonth={formatMonth}
         />

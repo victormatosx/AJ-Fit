@@ -10,6 +10,7 @@ const appShell = read('screens/AppShell.tsx');
 const home = read('screens/HomeScreen.tsx');
 
 const body = read('components/fitness/BodyEvolutionView.tsx');
+const loads = read('components/fitness/LoadsEvolutionView.tsx');
 
 describe('Progress truthfulness and retired consistency preview', () => {
   it('ships complete copy in every supported language', () => {
@@ -28,9 +29,15 @@ describe('Progress truthfulness and retired consistency preview', () => {
       'progress.tabs.body',
       'progress.tabs.loads',
       'progress.tabs.photos',
-      'progress.loads.empty.title',
       'progress.accessibility.selectTab',
     ]) expect(progress).toContain(key);
+
+    for (const key of [
+      'progress.loads.empty.title',
+      'progress.loads.records90Title',
+      'progress.loads.searchPlaceholder',
+      'progress.loads.seeAllRecords',
+    ]) expect(loads).toContain(key);
 
     for (const key of [
       'progress.body.currentWeight',
@@ -68,6 +75,12 @@ describe('Progress truthfulness and retired consistency preview', () => {
     // Weights are converted through the shared unit helpers, never printed raw.
     expect(body).toContain('formatWeightFromKg(latest.weight, resolvedUnits)');
     expect(body).toContain('weightFromKg(entry.weight, resolvedUnits)');
+  });
+
+  it('derives the loads panel from persisted workout executions instead of previews', () => {
+    expect(progress).toContain("from '../hooks/useLoadProgress'");
+    expect(progress).toContain('useLoadProgress(user?.uid ?? null)');
+    expect(progress).not.toContain('PROGRESS_LOADS_PREVIEW');
   });
 
   it('keeps the photos panel mounted exclusively, so leaving it locks the vault', () => {

@@ -56,6 +56,15 @@
       "title": "Rest day",
       "body": "Today isn't one of your training days."
     },
+    "advance": {
+      "cta": "Do {{weekday}}'s workout early",
+      "helper": "Do tomorrow's scheduled workout today.",
+      "confirmTitle": "Do this workout early?",
+      "confirmBody": "You'll do the workout scheduled for {{weekday}} today. Once completed, it will count as done and won't appear again tomorrow.",
+      "cancel": "Cancel",
+      "confirm": "Do workout early",
+      "dismiss": "Close early workout confirmation"
+    },
     "completedToday": {
       "title": "Workout completed",
       "body": "You've already completed today's workout."
@@ -132,6 +141,7 @@
       "loads": "Loads",
       "photos": "Photos"
     },
+    "chartInteractionHint": "Tap the chart to see the value and date for each entry.",
     "body": {
       "currentWeight": "Current weight",
       "composition": "Composition",
@@ -148,6 +158,25 @@
         "fatMass": "Fat mass",
         "bmi": "BMI"
       },
+      "measurements": {
+        "title": "Measurements",
+        "selectLabel": "Skinfold",
+        "singleEntry": "Record this skinfold in another assessment to see the evolution curve.",
+        "empty": "No {{measurement}} record was found in your assessments.",
+        "options": {
+          "chest": "Chest",
+          "axilla": "Midaxillary",
+          "tricep": "Triceps",
+          "subscap": "Subscapular",
+          "abdom": "Abdominal",
+          "supra": "Suprailiac",
+          "thigh": "Thigh"
+        },
+        "accessibility": {
+          "select": "Select skinfold",
+          "option": "Show {{measurement}} evolution"
+        }
+      },
       "empty": {
         "title": "No assessment recorded",
         "description": "Log your first physical assessment to track weight and body composition over time.",
@@ -156,17 +185,48 @@
     },
     "loads": {
       "eyebrow": "Loads",
+      "loading": "Loading loads",
+      "records90Title": "Records in the last 90 days",
+      "recordsCount_one": "record broken",
+      "recordsCount_other": "records broken",
+      "topRecords": "Top records",
+      "noRecentRecords": "No new records in the last 90 days. Keep logging your loads to track your progress.",
+      "recordGain": "+{{value}}{{unit}}",
+      "seeAllRecords": "See all records",
+      "showLess": "Show top records only",
+      "exerciseEvolution": "Progress by exercise",
+      "searchPlaceholder": "Search exercise",
+      "noExerciseFound": "No exercise found",
+      "currentLoad": "Latest load",
+      "periodDifference": "Difference between the first and latest log over {{days}} days",
+      "noComparison": "Log this exercise again to compare your progress",
+      "noDataForPeriod": "No load was logged for this exercise in the selected period.",
+      "ranges": {
+        "30": "30 days",
+        "60": "60 days",
+        "90": "90 days",
+        "365": "1 year"
+      },
       "maxLoad": "{{exercise}} · max load",
       "delta": "{{direction}} +{{value}} {{unit}}",
       "period_one": "Evolution · {{count}} week",
       "period_other": "Evolution · {{count}} weeks",
       "recordsTitle": "Recent records",
-      "recordedAt": "Recorded on {{date}}",
+      "recordedAt": "{{date}}",
       "gain": "+{{value}} {{unit}} since start",
       "exercises": {
-        "benchPress": { "short": "Bench", "full": "Bench press" },
-        "squat": { "short": "Squat", "full": "Squat" },
-        "deadlift": { "short": "Deadlift", "full": "Deadlift" }
+        "benchPress": {
+          "short": "Bench",
+          "full": "Bench press"
+        },
+        "squat": {
+          "short": "Squat",
+          "full": "Squat"
+        },
+        "deadlift": {
+          "short": "Deadlift",
+          "full": "Deadlift"
+        }
       },
       "accessibility": {
         "selectExercise": "Show {{exercise}} evolution",
@@ -174,8 +234,13 @@
       },
       "empty": {
         "title": "No load history yet",
-        "description": "The weights you log during a workout apply to that session.",
-        "hint": "History across sessions not available yet"
+        "description": "Completed loads from your workouts will appear here automatically.",
+        "hint": "Log a weighted set to get started"
+      },
+      "error": {
+        "title": "We couldn't load your weights",
+        "description": "Check your connection and try again.",
+        "retry": "Try again"
       }
     },
     "photos": {
@@ -192,7 +257,8 @@
         "description": "Use your device authentication to access your private photos.",
         "cta": "Unlock",
         "unlocking": "Unlocking…",
-        "badge": "Private area"
+        "badge": "Private area",
+        "addPhotosHint": "Add your progress photos here!"
       },
       "notConfigured": {
         "title": "Protection not set up",
@@ -212,6 +278,13 @@
         "badge": "Private area"
       },
       "list": {
+        "reauthRequired": "Your session needs to be confirmed again. Sign out and back in to access your photos.",
+        "reauthTitle": "Confirm your identity",
+        "reauthBody": "To protect your photos, please confirm your identity again.",
+        "reauthError": "We couldn't confirm your identity right now. Please try again.",
+        "confirmIdentity": "Confirm identity",
+        "cancel": "Cancel",
+        "signOut": "Sign out",
         "loading": "Loading your photos…",
         "error": "Could not load your photos.",
         "retry": "Try again",
@@ -228,7 +301,7 @@
         "photoSection": "Photo",
         "previewSection": "Preview",
         "save": "Save photo",
-        "saving": "Saving…",
+        "saving": "Saving images…",
         "change": "Change photo",
         "slotTaken": "There is already a {{pose}} photo for this date.",
         "remove": "Remove",
@@ -282,7 +355,8 @@
         "changeAfter": "Change the after photo",
         "addPhotoLocked": "Add new photo, Premium feature",
         "zoomHint": "Double tap to zoom in or out",
-        "photoPosition": "Photo {{current}} of {{total}}"
+        "photoPosition": "Photo {{current}} of {{total}}",
+        "retrySync": "Try syncing the photo again"
       },
       "poses": {
         "front": "Front",
@@ -352,6 +426,12 @@
         "noCandidate": "There is no other photo of this pose to compare.",
         "chooseAnother": "Choose another photo",
         "unclassified": "Unclassified"
+      },
+      "sync": {
+        "pending": "Syncing",
+        "failed": "Sync failed",
+        "retry": "Try again",
+        "preparing": "Saving"
       }
     },
     "accessibility": {
@@ -370,7 +450,8 @@
         "TODAY_COMPLETED": "Today's workout completed",
         "TODAY_PENDING": "Today's workout pending",
         "MISSED": "Workout not completed",
-        "UPCOMING": "Scheduled workout",
+      "UPCOMING": "Scheduled workout",
+      "FULFILLED_EARLY": "Workout completed early",
         "ACTIVE_RECOVERY": "Active recovery",
         "REST": "Rest day",
         "BEFORE_PROGRAM": "Before the program started"
@@ -388,6 +469,7 @@
   },
   "upcoming": {
     "title": "Upcoming workouts",
+    "flexible": "Flexible",
     "meta_one": "~{{minutes}} min · {{count}} exercise",
     "meta_other": "~{{minutes}} min · {{count}} exercises",
     "metaNoEstimate_one": "{{count}} exercise",
@@ -397,6 +479,7 @@
       "kicker": "Upcoming workout",
       "close": "Close workout details",
       "scheduledFor": "{{weekday}} · {{date}}",
+      "flexibleAvailable": "Available whenever you want to train",
       "exercises": "Exercises",
       "setsReps": "{{sets}} sets × {{reps}}",
       "setsDuration": "{{sets}} sets × {{duration}}",

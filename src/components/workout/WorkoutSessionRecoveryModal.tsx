@@ -177,7 +177,7 @@ export function WorkoutSessionRecoveryModal({
             </Display>
             {!confirmingDiscard && execution && !executionMissing && (
               <Text style={{ color: theme.colors.textFaint, fontFamily: theme.fonts.ui, fontSize: 12, marginTop: 6 }}>
-                {execution.sessionName} · {execution.scheduledLocalDate}
+                {execution.sessionName} · {execution.performedLocalDate ?? execution.scheduledLocalDate}
               </Text>
             )}
             <Text style={{ color: theme.colors.textSecondaryStrong, fontFamily: theme.fonts.ui, fontSize: 13, lineHeight: 19, marginTop: 8 }}>

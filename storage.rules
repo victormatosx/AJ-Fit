@@ -45,6 +45,12 @@ service firebase.storage {
     // Support V2 attachment capabilities are minted by a callable. A user
     // may create exactly one immutable image at the server-issued path. No
     // download URL is stored as authority: access is re-evaluated here.
+    //
+    // Same lineage loss as the `supportCases`/`supportUploadSessions` blocks
+    // in firestore.rules: live in the deployed ruleset, never committed here.
+    // Restored verbatim so a future `firebase deploy --only storage` cannot
+    // silently break Support V2 attachment uploads. NOT deployed as part of
+    // the workout-contract fix — the active storage ruleset already has it.
     match /users/{userId}/support-v2/staged/{uploadId} {
       // Downloads are mediated by short-lived signed URLs minted only after
       // a callable verifies case ownership/admin role and message binding.

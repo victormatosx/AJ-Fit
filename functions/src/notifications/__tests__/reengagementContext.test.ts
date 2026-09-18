@@ -54,6 +54,20 @@ function workoutContext(overrides: Partial<DailyWorkoutContext> = {}): DailyWork
 }
 
 describe('canonical workout re-engagement episode', () => {
+  it('uses elapsed time and weekly frequency for flexible plans, not weekday debt', () => {
+    expect(deriveReEngagementEpisode(input({
+      scheduleMode: 'flexible',
+      prescribedTrainingFrequency: 3,
+      trainingDays: [],
+      activatedAtLocalDate: '2026-09-01',
+      todayLocalDate: '2026-09-09',
+    }))).toMatchObject({
+      allowed: true,
+      notificationType: 'RE_ENGAGEMENT_EARLY',
+      missedOpportunityCount: 3,
+    });
+  });
+
   it('anchors EARLY to the existing Progression V2 inactivity threshold', () => {
     expect(RE_ENGAGEMENT_EARLY_MISSED_OPPORTUNITIES).toBe(3);
     expect(deriveReEngagementEpisode(input())).toMatchObject({
@@ -74,6 +88,15 @@ describe('canonical workout re-engagement episode', () => {
       activatedAtLocalDate: '2026-09-04',
       lastCompletedAt: '2026-09-04',
       todayLocalDate: '2026-09-07',
+    }))).toEqual({ allowed: false, reason: 'INSUFFICIENT_MISSED_OPPORTUNITIES' });
+  });
+
+  it('does not treat tomorrow\'s already-fulfilled opportunity as absence or invalid history', () => {
+    expect(deriveReEngagementEpisode(input({
+      activatedAtLocalDate: '2026-09-14',
+      lastCompletedAt: '2026-09-18',
+      todayLocalDate: '2026-09-17',
+      trainingDays: ['MON', 'TUE', 'WED', 'FRI'],
     }))).toEqual({ allowed: false, reason: 'INSUFFICIENT_MISSED_OPPORTUNITIES' });
   });
 

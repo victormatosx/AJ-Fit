@@ -24,7 +24,10 @@
     "title": "Sesión de entrenamiento pendiente",
     "conflictBody": "Ya hay otra sesión de entrenamiento en curso. Puedes abandonarla para iniciar una nueva.",
     "legacyBody": "Encontramos una sesión de entrenamiento anterior que no se cerró correctamente. Debes resolverla antes de iniciar una nueva.",
+    "legacyAmbiguousBody": "Encontramos {{count}} sesiones pendientes y no es seguro elegir una automáticamente. Contacta con soporte para resolverlas.",
     "abandonPrevious": "Abandonar sesión anterior",
+    "contactSupport": "Contactar con soporte",
+    "supportSubject": "Sesiones de entrenamiento pendientes",
     "cancel": "Cancelar",
     "resolving": "Resolviendo…"
   },
@@ -36,6 +39,9 @@
     "kicker": "Sesión segura",
     "title": "Preparando entrenamiento…",
     "body": "Estamos confirmando tu sesión. Esto solo debería tardar un instante."
+  },
+  "persistence": {
+    "pending": "Un cambio aún no se ha sincronizado. Mantén el entreno abierto; lo intentaremos de nuevo al finalizar."
   },
   "sessionRecovery": {
     "title": "Entrenamiento en curso",
@@ -115,6 +121,7 @@
     "finishRetry": "Intentar de nuevo",
     "exitConfirmTitle": "¿Salir del cardio?",
     "exitConfirmBody": "Tu fuerza ya está completa. Si sales ahora finalizamos el entreno con {{done}} de cardio registrados.",
+    "exitConfirmAction": "Finalizar y salir",
     "accessibility": {
       "close": "Salir del cardio",
       "timer": "Cronómetro del cardio"

@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 
 import { describe, expect, it } from 'vitest';
 
@@ -32,11 +32,6 @@ function readCode(path: string): string {
 }
 
 const SCREEN = read('src/screens/ProgressPhotosScreen.tsx');
-const LOCKED = read('src/components/photoVault/PhotoVaultLockedState.tsx');
-const INTRO = read('src/components/photoVault/PhotoProgressIntro.tsx');
-const PROTECTED_INTRO = readCode(
-  'src/components/photoVault/PhotoVaultProtectedIntro.tsx',
-);
 
 describe('the UI never talks to Firebase', () => {
   it.each(UI_FILES)('%s imports no Firebase module', (file) => {
@@ -95,16 +90,25 @@ describe('no durable cache of decrypted photos', () => {
 });
 
 describe('locked state reveals no private photo data', () => {
+  const LOCKED_CODE = readCode('src/components/photoVault/PhotoVaultLockedState.tsx');
+
   it('returns the locked component before rendering any content', () => {
-    // The early return must come before the grid, the viewer and the sheet.
     const lockedReturn = SCREEN.indexOf('<PhotoVaultLockedState');
     expect(lockedReturn).toBeGreaterThan(-1);
     expect(lockedReturn).toBeLessThan(SCREEN.indexOf('<PhotoVaultGrid'));
     expect(lockedReturn).toBeLessThan(SCREEN.indexOf('<PhotoVaultViewer'));
   });
 
-  it('guards the whole content branch on the unlocked status', () => {
-    expect(SCREEN).toMatch(/if \(!unlocked\) \{/);
+  it('gates the real gallery on `unlocked` alone, never on local animation state', () => {
+    // `shouldShowPhotoVaultLocked` is the ONLY thing deciding this branch, and
+    // it is computed fresh every render directly from `unlocked` — so a stale
+    // `showLocked` left over from a previous session can only ever keep the
+    // locked view up for longer, never take it down early. See
+    // photoVaultLockedVisibility.test.ts for the exhaustive truth table.
+    expect(SCREEN).toContain('shouldShowPhotoVaultLocked');
+    expect(SCREEN).toMatch(/if \(shouldShowPhotoVaultLocked\(unlocked, showLocked\)\) \{/);
+    expect(SCREEN).toContain('useState(!unlocked)');
+    expect(SCREEN).toContain('onRevealComplete={() => setShowLocked(false)}');
   });
 
   it('loads the gallery only after the vault reports unlocked', () => {
@@ -113,48 +117,37 @@ describe('locked state reveals no private photo data', () => {
     );
   });
 
-  it('uses the available locked height to keep the unlock action at the bottom', () => {
+  it('uses the available locked height to keep the lock control centered', () => {
     expect(SCREEN).toContain("contentContainerStyle={{ flexGrow: 1, paddingBottom: 12 }}");
-    expect(INTRO).toContain('flexGrow: 1');
-    expect(INTRO).toContain("justifyContent: 'center'");
+    expect(LOCKED_CODE).toContain('flex: 1');
   });
 
-  it('selects the aspirational or generic protected composition from one boolean', () => {
-    expect(LOCKED).toContain('<PhotoProgressIntro />');
-    expect(LOCKED).toContain('<PhotoVaultProtectedIntro />');
-    expect(LOCKED).toMatch(
-      /hasContent \? <PhotoVaultProtectedIntro \/> : <PhotoProgressIntro \/>/,
-    );
-    expect(SCREEN).toContain('hasContent={hasPhotoVaultContent}');
-    expect(SCREEN).toContain('contentPresenceReady={hasPhotoVaultContentReady}');
-    expect(LOCKED).not.toContain('photos.length');
-    expect(LOCKED).not.toContain('<Image');
-    expect(LOCKED).not.toContain('formatDate');
-    expect(INTRO).toContain(
-      "require('../../../assets/antes-depois/1.jpg')",
-    );
-    expect(INTRO).toContain(
-      "require('../../../assets/antes-depois/2.jpg')",
-    );
-    expect(INTRO).not.toContain('photoVaultGallery');
-    expect(INTRO).not.toContain('usePhotoVault');
-    expect(INTRO).not.toContain('gallery.photos');
-    expect(INTRO).not.toContain('source={{ uri');
+  it('shows the same blurred skeleton whether the gallery is empty or populated', () => {
+    // The locked screen must never receive anything that could distinguish
+    // an empty vault from a full one.
+    expect(LOCKED_CODE).not.toContain('hasContent');
+    expect(LOCKED_CODE).not.toContain('contentPresenceReady');
+    expect(SCREEN).not.toContain('hasContent={hasPhotoVaultContent}');
+    expect(SCREEN).not.toContain('contentPresenceReady={hasPhotoVaultContentReady}');
+    expect(LOCKED_CODE).not.toContain('photos.length');
+    expect(LOCKED_CODE).not.toContain('<Image');
+    expect(LOCKED_CODE).not.toContain('formatDate');
   });
 
-  it('builds the protected composition from generic shapes and icons only', () => {
-    expect(PROTECTED_INTRO).toContain('testID="photo-vault-protected-intro"');
-    expect(PROTECTED_INTRO).toContain('<LinearGradient');
-    expect(PROTECTED_INTRO).toContain('name="lock"');
-    expect(PROTECTED_INTRO).not.toContain('<Image');
-    expect(PROTECTED_INTRO).not.toContain('source=');
-    expect(PROTECTED_INTRO).not.toContain(' uri');
-    expect(PROTECTED_INTRO).not.toContain('photoVaultGallery');
-    expect(PROTECTED_INTRO).not.toContain('progressPhotos');
-    expect(PROTECTED_INTRO).not.toContain('photoVaultCrypto');
-    expect(PROTECTED_INTRO).not.toContain('photoVaultKey');
-    expect(PROTECTED_INTRO).not.toContain('downloadProgressPhoto');
-    expect(PROTECTED_INTRO).not.toContain('decrypt');
+  it('builds the locked composition from the static skeleton and a real Android blur target, only', () => {
+    expect(LOCKED_CODE).toContain('<PhotoVaultGallerySkeleton');
+    expect(LOCKED_CODE).toContain('BlurTargetView');
+    expect(LOCKED_CODE).toContain('blurTarget=');
+    expect(LOCKED_CODE).toContain('blurMethod="dimezisBlurViewSdk31Plus"');
+    expect(LOCKED_CODE).not.toContain('<Image');
+    expect(LOCKED_CODE).not.toContain('source=');
+    expect(LOCKED_CODE).not.toContain(' uri');
+    expect(LOCKED_CODE).not.toContain('photoVaultGallery');
+    expect(LOCKED_CODE).not.toContain('progressPhotos');
+    expect(LOCKED_CODE).not.toContain('photoVaultCrypto');
+    expect(LOCKED_CODE).not.toContain('photoVaultKey');
+    expect(LOCKED_CODE).not.toContain('downloadProgressPhoto');
+    expect(LOCKED_CODE).not.toContain('decrypt');
   });
 
   it('does not overwrite a persisted true from the gallery initial empty array', () => {
@@ -179,26 +172,125 @@ describe('locked state reveals no private photo data', () => {
     expect(deleteFlow).toContain('setHasPhotoVaultContent(false)');
   });
 
-  it('restores the protected title only for content or device setup errors', () => {
-    expect(LOCKED).toContain("t('progress.photos.locked.title')");
-    expect(LOCKED).toContain('hasContent');
+  it('announces the protected title for assistive technology', () => {
+    // No visible text is rendered any more, but the region is still labeled.
+    expect(LOCKED_CODE).toContain("t('progress.photos.locked.title')");
   });
 
-  it('keeps the bundled intro assets lightweight', () => {
-    for (const path of [
-      'assets/antes-depois/1.jpg',
-      'assets/antes-depois/2.jpg',
-    ]) {
-      expect(statSync(path).size).toBeLessThan(150_000);
-    }
+  it('flashes red and shakes on a real auth failure, without visible error text', () => {
+    expect(LOCKED_CODE).toContain('withSequence');
+    expect(LOCKED_CODE).toContain('shakeX');
+    expect(LOCKED_CODE).toContain('dangerFlash');
+    expect(LOCKED_CODE).toContain('AccessibilityInfo.announceForAccessibility');
+    // The error message itself is announced, never rendered as visible text.
+    expect(LOCKED_CODE).not.toMatch(/<Text[^>]*>\s*\{errorMessage\}/);
+  });
+
+  it('flashes green and fades the blur out on success, then reveals the gallery', () => {
+    expect(LOCKED_CODE).toContain('successFlash');
+    expect(LOCKED_CODE).toContain('setIconOpen(true)');
+    expect(LOCKED_CODE).toContain('onRevealComplete');
+    expect(LOCKED_CODE).toContain('runOnJS(onRevealComplete)');
   });
 
   it('never names a specific biometric mechanism', () => {
-    // The same build runs on devices that prompt for a fingerprint or PIN,
-    // so the visible copy must stay mechanism-neutral.
-    const locked = readCode('src/components/photoVault/PhotoVaultLockedState.tsx');
+    expect(LOCKED_CODE).not.toMatch(/Face ID|Touch ID|impress[ãa]o digital/i);
+  });
+});
 
-    expect(locked).not.toMatch(/Face ID|Touch ID|impress[ãa]o digital/i);
+describe('the locked gallery skeleton', () => {
+  const SKELETON = readCode(
+    'src/components/photoVault/PhotoVaultGallerySkeleton.tsx',
+  );
+
+  it('never reaches Firestore, the vault key, crypto or a decrypt', () => {
+    expect(SKELETON).toContain('testID="photo-vault-gallery-skeleton"');
+    expect(SKELETON).not.toContain('expo-image');
+    expect(SKELETON).not.toContain('photoVaultGallery');
+    expect(SKELETON).not.toContain('progressPhotos');
+    expect(SKELETON).not.toContain('photoVaultCrypto');
+    expect(SKELETON).not.toContain('photoVaultKey');
+    expect(SKELETON).not.toContain('downloadProgressPhoto');
+    expect(SKELETON).not.toContain('decrypt');
+    expect(SKELETON).not.toContain('localAuthentication');
+    expect(SKELETON).not.toContain('firebase');
+    expect(SKELETON).not.toContain('FlatList');
+  });
+
+  it('paints only already-cached, already-degraded local previews — never the real gallery', () => {
+    // The only source of image data: a pure local-disk read, gated on the
+    // signed-in uid, never on anything the vault itself gates.
+    expect(SKELETON).toContain("from '../../services/photoVaultLockedPreviewCache'");
+    expect(SKELETON).toContain('listLockedPreviewUris(uid)');
+    expect(SKELETON).toContain('<Image');
+    // No day/pose grouping and no month/date label — those come from
+    // metadata this component must never touch.
+    expect(SKELETON).not.toContain('formatDate');
+    expect(SKELETON).not.toContain('formatMonth');
+    expect(SKELETON).not.toContain('dateKey');
+    expect(SKELETON).not.toContain('pose');
+  });
+
+  it('falls back to the same generic skeleton for both "really empty" and "not cached yet"', () => {
+    // Both cases must be visually indistinguishable from each other, and
+    // from what existed before this feature — never a fabricated photo.
+    expect(SKELETON).toContain('hasPhotoVaultContent');
+    expect(SKELETON).toContain('hasPhotoVaultContentReady');
+    expect(SKELETON).toContain('showPreviews');
+    expect(SKELETON).toContain('<NeutralSkeleton');
+  });
+
+  it('is hidden from assistive technology, since it carries no information', () => {
+    expect(SKELETON).toContain('accessibilityElementsHidden');
+    expect(SKELETON).toContain('importantForAccessibility="no-hide-descendants"');
+  });
+});
+
+/**
+ * "Add your photos here" invites the user to start their gallery, but only
+ * when the vault is REALLY empty. The determination must come from the same
+ * one-bit `hasPhotoVaultContent` signal the rest of the locked flow already
+ * trusts — never from the locked-preview cache being empty, which also
+ * happens for a real account this device just has not backfilled yet.
+ */
+describe('the locked empty-gallery hint', () => {
+  const LOCKED_CODE = readCode('src/components/photoVault/PhotoVaultLockedState.tsx');
+
+  it('is gated on the content-presence signal, never on the preview cache', () => {
+    expect(LOCKED_CODE).toContain('usePhotoVault()');
+    expect(LOCKED_CODE).toContain('hasPhotoVaultContent');
+    expect(LOCKED_CODE).toContain('hasPhotoVaultContentReady');
+    expect(LOCKED_CODE).toMatch(
+      /trulyEmpty = hasPhotoVaultContentReady && !hasPhotoVaultContent/,
+    );
+    // This component has no knowledge of local previews at all — that
+    // distinction belongs entirely to PhotoVaultGallerySkeleton.
+    expect(LOCKED_CODE).not.toContain('listLockedPreviewUris');
+    expect(LOCKED_CODE).not.toContain('previewUris');
+  });
+
+  it('renders through i18n, in the same Display font used across the rest of the app, with no card or background', () => {
+    expect(LOCKED_CODE).toContain("t('progress.photos.locked.addPhotosHint')");
+    // The same `Display` component that renders "EVOLUÇÃO" and other section
+    // titles — not a bespoke style, and not the mono/label font.
+    expect(LOCKED_CODE).toContain("import { Display } from '../ui/Display'");
+    expect(LOCKED_CODE).toMatch(/<Display[^>]*size=\{14\}/);
+    expect(LOCKED_CODE).toContain('theme.colors.textMuted');
+    // Discreet: no skew (the stylized slant used for large headlines), no
+    // background/card/pill wrapping the text.
+    expect(LOCKED_CODE).toMatch(/<Display[^>]*skew=\{false\}/);
+  });
+
+  it('respects the safe area instead of crowding the bottom navigation', () => {
+    expect(LOCKED_CODE).toContain('useSafeAreaInsets');
+    expect(LOCKED_CODE).toContain('insets.bottom');
+  });
+
+  it('never touches the blur, the lock button, or the rest of the layout', () => {
+    // Added as its own conditional sibling, not woven into the existing
+    // blur/lock JSX.
+    expect(LOCKED_CODE).toContain('trulyEmpty ? (');
+    expect(LOCKED_CODE).toContain('pointerEvents="none"');
   });
 });
 
@@ -249,21 +341,40 @@ describe('viewer and sheet close with the vault', () => {
   });
 
   /**
-   * Paging must not widen what is decrypted. The gallery keeps a single viewer
-   * owner, so the screen has to release the previous claim before taking the
-   * next one — otherwise swiping fast would leave decrypts racing for
-   * ownership and their plaintext behind.
+   * Paging must not widen what is decrypted beyond the viewer's own window.
+   * The screen releases the previous claim before taking the next one, and the
+   * claim carries the window with it — otherwise swiping fast would leave
+   * decrypts racing for ownership and their plaintext behind.
    */
   it('moves the vault claim one photo at a time while paging', () => {
     const viewer = read('src/components/photoVault/PhotoVaultViewer.tsx');
 
     expect(SCREEN).toContain('handleNavigateViewer');
     expect(SCREEN).toMatch(
-      /releaseGalleryPhotoFromViewer\(current\);\s*\n\s*claimGalleryPhotoForViewer\(nextPhotoId\);/,
+      /releaseGalleryPhotoFromViewer\(current\);\s*\n\s*claimGalleryPhotoForViewer\(nextPhotoId, neighboursOf\(nextPhotoId\)\);/,
     );
-    // Neighbouring pages must never request a full-resolution decrypt.
+    // Neighbouring pages must never request a full-resolution decrypt of their
+    // own: the window is granted by the screen, never taken by a page.
     expect(viewer).not.toContain('claimGalleryPhotoForViewer');
     expect(viewer).not.toContain('ensureFullPhotoLoaded');
+  });
+
+  /**
+   * Prefetch is bounded to what a single swipe can reach.
+   *
+   * The window is computed from the SAME filtered sequence the grid paints, so
+   * a pose filter narrows it too. Anything wider would turn opening one photo
+   * into decrypting a gallery.
+   */
+  it('prefetches the immediate neighbours and nothing further', () => {
+    expect(SCREEN).toContain('neighboursOf');
+    expect(SCREEN).toContain('viewerPhotos[index - 1]');
+    expect(SCREEN).toContain('viewerPhotos[index + 1]');
+    // No second- or third-degree neighbour may ever be claimed.
+    expect(SCREEN).not.toMatch(/viewerPhotos\[index [-+] [2-9]\]/);
+    expect(SCREEN).toMatch(
+      /claimGalleryPhotoForViewer\(photoId, neighboursOf\(photoId\)\)/,
+    );
   });
 
   /**
@@ -297,12 +408,34 @@ describe('viewer and sheet close with the vault', () => {
   it('sizes each page from the measured viewport, not the window', () => {
     const viewer = readCode('src/components/photoVault/PhotoVaultViewer.tsx');
 
-    expect(viewer).not.toContain('useWindowDimensions');
     expect(viewer).toContain('onLayout={measurePage}');
     // Offsets come from the measured width, so mounting before it is known
     // would resolve every `initialScrollIndex` to the first page.
     expect(viewer).toContain('length: page.width');
     expect(viewer).toMatch(/\{page \? \(/);
+
+    // Every page DIMENSION is read from the measured box. The window is taller
+    // than the pager (which sits below the header, inside the safe area), so
+    // sizing a page to it centres each photo in a box bigger than the visible
+    // one — pushing anything that does not fill the screen below the true
+    // centre and clipping its bottom edge.
+    expect(viewer).toContain('width={page?.width ?? 0}');
+    expect(viewer).toContain('height={page?.height ?? 0}');
+    // Every geometry value the pager computes is read off `page`.
+    expect(viewer).toContain('offset: page.width * i');
+  });
+
+  it('uses the window only to animate the dismiss, never to lay a page out', () => {
+    const viewer = readCode('src/components/photoVault/PhotoVaultViewer.tsx');
+
+    // The swipe-down has to travel the whole screen, not just the pager box,
+    // so it legitimately needs the window height — but that is an ANIMATION
+    // target, and it must not leak back into geometry.
+    expect(viewer).toContain('const { height: windowHeight } = useWindowDimensions()');
+    const uses = viewer.match(/windowHeight/g) ?? [];
+    // Exactly two: the declaration, and the dismiss animation's target.
+    expect(uses).toHaveLength(2);
+    expect(viewer).toContain('dragY.value = withTiming(windowHeight');
   });
 
   it('centres a photo that does not fill the screen, on both axes', () => {
@@ -371,6 +504,16 @@ describe('the new-photo flow', () => {
   const SHEET = readCode('src/components/photoVault/AddPhotoSheet.tsx');
   const ROW = readCode('src/components/photoVault/PhotoVaultDayRow.tsx');
 
+  it('closes back to the gallery when its backdrop is pressed', () => {
+    const backdrop = SHEET.slice(
+      SHEET.indexOf('testID="photo-vault-add-backdrop"'),
+      SHEET.indexOf('/>', SHEET.indexOf('testID="photo-vault-add-backdrop"')),
+    );
+
+    expect(backdrop).toContain('onPress={handleClose}');
+    expect(SCREEN).toContain('onClose={() => setSheetOpen(false)}');
+  });
+
   it('offers exactly the three supported poses', () => {
     expect(SHEET).toContain('POSE_SLOTS.map');
     expect(SHEET).toContain("t('progress.photos.poses.front')");
@@ -391,7 +534,11 @@ describe('the new-photo flow', () => {
     // photo chosen for whichever pose was selected first.
     expect(SHEET).toContain('useState<PoseDrafts>(EMPTY_DRAFTS)');
     expect(SHEET).toContain('const draft = drafts[pose];');
-    expect(SHEET).toContain('setDrafts((current) => ({ ...current, [slot]: null }))');
+    // Clearing is per slot and copies the map, so releasing one pose's draft
+    // can never drop another's — the invariant that matters now that three
+    // poses settle concurrently and in any order.
+    expect(SHEET).toContain('const next = { ...current };');
+    expect(SHEET).toContain('for (const slot of clearedSlots) next[slot] = null;');
   });
 
   it('fills only the pose that requested the picker', () => {
@@ -441,21 +588,46 @@ describe('the new-photo flow', () => {
     expect(SHEET).toContain('onPress: () => void handleConfirmReplace()');
   });
 
-  it('uploads each pose independently, without a cross-photo rollback', () => {
-    expect(SHEET).toContain('for (const slot of savablePoses)');
+  it('commits the poses concurrently, without a cross-photo rollback', () => {
+    const save = SHEET.slice(SHEET.indexOf('const handleSave'), SHEET.indexOf('const handleConfirmReplace'));
+    // The three poses share no identifier — separate asset UUIDs, separate
+    // Storage paths, separate `{dateKey}_{pose}` documents — so they commit
+    // together rather than one after another.
+    expect(save).toContain('Promise.allSettled(');
+    expect(save).not.toContain('for (const slot of savablePoses)');
+    // `Promise.all` would stop this function from reading what the other two
+    // poses actually did the moment one rejected.
+    expect(save).not.toMatch(/await Promise\.all\(/);
     // A sibling that already succeeded is never undone.
-    expect(SHEET).not.toContain('Promise.all');
     expect(SHEET).not.toContain('rollback');
   });
 
   it('reports a partial failure without touching the poses that succeeded', () => {
-    const save = SHEET.slice(SHEET.indexOf('const handleSave'), SHEET.indexOf('const state = states[pose]'));
+    const save = SHEET.slice(SHEET.indexOf('const handleSave'), SHEET.indexOf('const handleConfirmReplace'));
     // A succeeded pose clears its draft; a failed one only records the error.
-    expect(save).toContain("setStates((current) => ({ ...current, [slot]: { status: 'success' } }))");
-    expect(save).toContain('failed.push(slot)');
+    expect(save).toContain("next[slot] = { status: 'success' };");
+    expect(save).toContain("next[slot] = { status: 'error', issue };");
     // Nothing here undoes a sibling, and the session stays open to retry.
     expect(save).not.toContain('releaseAll');
     expect(save).toContain('if (failed.length === 0 && blockedPoses.length === 0)');
+  });
+
+  it('distinguishes total success, partial success and total failure', () => {
+    const save = SHEET.slice(SHEET.indexOf('const handleSave'), SHEET.indexOf('const handleConfirmReplace'));
+    // A batch that half-landed must never be reported as either extreme.
+    expect(save).toContain("'allSucceeded'");
+    expect(save).toContain("'allFailed'");
+    expect(save).toContain("'partial'");
+  });
+
+  it('reopens on a pose chosen by fixed order, never by which finished first', () => {
+    const save = SHEET.slice(SHEET.indexOf('const handleSave'), SHEET.indexOf('const handleConfirmReplace'));
+    // `committed` is built from `savablePoses`, which `partitionSavablePoses`
+    // emits in POSE_SLOTS order. Rebuilding `failed` from it — rather than
+    // pushing as results arrive — keeps the reopened pose deterministic.
+    expect(save).toContain('failed = committed');
+    expect(save).toContain('setPose(failed[0]!)');
+    expect(save).not.toContain('failed.push(');
   });
 
   it('shows per-pose state on the pose buttons themselves', () => {
@@ -605,5 +777,222 @@ describe('internationalisation', () => {
         'useTranslation',
       );
     }
+  });
+});
+
+// ── Pinned gallery actions ─────────────────────────────────────────────────
+
+/**
+ * "Add" used to sit at the very bottom of the list footer and "compare" up in
+ * the header, so reaching either meant scrolling to opposite ends of the
+ * gallery. Both are now pinned above the grid, add first.
+ */
+describe('the pinned action bar', () => {
+  it('lives outside the list, so it never scrolls away', () => {
+    const bar = SCREEN.slice(SCREEN.indexOf('photo-vault-action-bar'));
+
+    // Neither action may be handed back to the list, in either slot.
+    const list = SCREEN.slice(SCREEN.indexOf('<PhotoVaultGrid'), SCREEN.indexOf('photo-vault-action-bar'));
+    expect(list).not.toContain('photo-vault-compare-cta');
+    expect(list).not.toContain("capability=\"ADD_PROGRESS_PHOTO\"");
+    expect(bar).toContain('photo-vault-compare-cta');
+    expect(bar).toContain('capability="ADD_PROGRESS_PHOTO"');
+  });
+
+  it('puts add above compare', () => {
+    const bar = SCREEN.slice(SCREEN.indexOf('photo-vault-action-bar'));
+
+    expect(bar.indexOf('ADD_PROGRESS_PHOTO')).toBeLessThan(
+      bar.indexOf('photo-vault-compare-cta'),
+    );
+  });
+
+  it('is a flex sibling of the grid rather than an overlay', () => {
+    // An absolutely positioned bar would let the last row of photos scroll
+    // underneath it and stay unreachable.
+    expect(SCREEN).not.toMatch(/testID="photo-vault-action-bar"[\s\S]{0,200}position: 'absolute'/);
+  });
+
+  it('stays hidden wherever an empty state already offers to add', () => {
+    // Otherwise the same call to action appears twice on one screen.
+    expect(SCREEN).toContain(
+      "const showActionBar = gallery.status === 'ready' && !galleryEmpty && !filterEmpty",
+    );
+    expect(SCREEN).toContain('{showActionBar ? (');
+  });
+
+  it('offers compare only once a valid pair exists', () => {
+    const bar = SCREEN.slice(SCREEN.indexOf('photo-vault-action-bar'));
+    expect(bar).toContain('{canCompare ? (');
+  });
+});
+
+// ── Viewer carousel ────────────────────────────────────────────────────────
+
+describe('the full-screen carousel', () => {
+  const viewer = readCode('src/components/photoVault/PhotoVaultViewer.tsx');
+
+  it('pages horizontally, one photo at a time', () => {
+    expect(viewer).toContain('horizontal');
+    expect(viewer).toContain('pagingEnabled');
+  });
+
+  it('drives the dots from the live scroll offset, not the settled index', () => {
+    // The settled index also transfers which photo may be decrypted, so it
+    // only moves when a swipe comes to rest. Dots have no such constraint and
+    // must follow the finger, or they lag a whole page behind the photo.
+    expect(viewer).toContain('useAnimatedScrollHandler');
+    expect(viewer).toContain('scrollX.value = event.contentOffset.x');
+    expect(viewer).toContain('const position = pageWidth > 0 ? scrollX.value / pageWidth : 0');
+    expect(viewer).toContain('scrollEventThrottle={16}');
+  });
+
+  it('seeds the dots from the photo it opened on', () => {
+    // `initialScrollIndex` sets the offset natively and emits no scroll event,
+    // so without this the dots would start on the first photo every time.
+    expect(viewer).toContain('scrollX.value = initialIndexRef.current * page.width');
+  });
+
+  it('still hands vault ownership over only when the swipe settles', () => {
+    expect(viewer).toContain('onMomentumScrollEnd={handleMomentumEnd}');
+    const momentum = viewer.slice(viewer.indexOf('const handleMomentumEnd'));
+    expect(momentum).toContain('onNavigate(target.photoId)');
+  });
+
+  it('falls back to a counter when there are too many photos to dot', () => {
+    expect(viewer).toContain('const MAX_DOTS = 12');
+    expect(viewer).toContain('photos.length > 1 && photos.length <= MAX_DOTS');
+    // Exactly one of the two is shown, never both.
+    expect(viewer).toContain('photos.length > 1 && !showDots ?');
+  });
+});
+
+describe('swipe down to dismiss', () => {
+  const viewer = readCode('src/components/photoVault/PhotoVaultViewer.tsx');
+
+  it('tracks the finger instead of firing on a threshold', () => {
+    expect(viewer).toContain('dragY.value = Math.max(0, event.translationY)');
+    expect(viewer).toContain('translateY: dragY.value');
+  });
+
+  it('yields to the pager the moment the drag turns sideways', () => {
+    // Without this the horizontal carousel would stop working, because the
+    // dismiss would swallow every drag that started on the photo.
+    expect(viewer).toContain('.failOffsetX([-DISMISS_FAIL_X, DISMISS_FAIL_X])');
+    expect(viewer).toContain('.activeOffsetY(DISMISS_ACTIVATION)');
+  });
+
+  it('never competes with panning a zoomed-in photo', () => {
+    expect(viewer).toContain('.enabled(!zoomed)');
+  });
+
+  it('closes on distance or on a flick, and springs back otherwise', () => {
+    expect(viewer).toContain('dragY.value > DISMISS_DISTANCE || event.velocityY > DISMISS_VELOCITY');
+    expect(viewer).toContain('dragY.value = withSpring(0');
+  });
+
+  it('only reports the close once the photo is actually gone', () => {
+    // Calling back mid-animation would tear the Modal down under the gesture.
+    expect(viewer).toContain('if (finished) runOnJS(closeViewer)()');
+  });
+
+  it('keeps the measured pager box outside the dismiss transform', () => {
+    // The bug this pins: `onLayout={measurePage}` used to sit inside the
+    // transformed wrapper. Layout events fired while the transform ran, `page`
+    // was re-set mid-drag, and `getItemLayout`/`initialScrollIndex` changed
+    // underneath a pager that was still settling — the photo rendered askew
+    // and then jumped. Only the photo layer may move.
+    const measured = viewer.indexOf('onLayout={measurePage}');
+    const transformed = viewer.indexOf('photoStyle]}');
+    expect(measured).toBeGreaterThan(-1);
+    expect(transformed).toBeGreaterThan(-1);
+    // The transform is applied INSIDE the measured box, not around it.
+    expect(transformed).toBeGreaterThan(measured);
+    expect(viewer).toContain('<Animated.View style={[StyleSheet.absoluteFill, photoStyle]}>');
+  });
+
+  it('never scales the native paging scroll view', () => {
+    // Scaling the pager while it is settling a swipe is what rendered the
+    // photo askew; translation alone is enough to carry it off screen.
+    const photoStyle = viewer.slice(
+      viewer.indexOf('const photoStyle = useAnimatedStyle'),
+      viewer.indexOf('const backdropStyle'),
+    );
+    expect(photoStyle).toContain('translateY: dragY.value');
+    expect(photoStyle).not.toContain('scale');
+  });
+
+  it('never drives opacity negative', () => {
+    // `1 - progress * 1.6` bottoms out at -0.6, and a negative opacity is not
+    // a dimmer view — it is an invalid value that renders as corruption.
+    for (const style of ['backdropStyle', 'chromeStyle']) {
+      const body = viewer.slice(viewer.indexOf(`const ${style} = useAnimatedStyle`));
+      expect(body.slice(0, 200), `${style} must clamp`).toContain('clamp(');
+    }
+  });
+
+  it('declares every UI-thread helper as a worklet', () => {
+    // `useAnimatedStyle` bodies run on the UI thread and can only call
+    // worklets. A plain helper declared in the component body reads
+    // identically at the call site but throws "Tried to synchronously call a
+    // non-worklet function on the UI thread" on every frame, from the moment
+    // the screen mounts — not on first use, so it is easy to ship.
+    for (const helper of ['clamp', 'dismissProgress']) {
+      expect(viewer, `${helper} must be a worklet`).toMatch(
+        new RegExp(`function ${helper}\\([^)]*\\)[^{]*\\{\\s*'worklet';`),
+      );
+    }
+    // Module scope, never redeclared inside the component where it would
+    // silently stop being workletized.
+    expect(viewer).not.toMatch(/const (clamp|dismissProgress) = /);
+  });
+
+  it('does not layer a native fade over the Reanimated dismiss', () => {
+    const modal = viewer.slice(viewer.indexOf('<Modal'), viewer.indexOf('</Modal>'));
+    expect(modal).toContain('animationType="none"');
+    expect(modal).not.toContain('animationType="fade"');
+  });
+
+  it('keeps the terminal drag position through teardown, then resets for the next opening', () => {
+    const dismissHandler = viewer.slice(
+      viewer.indexOf('const handleModalDismissed'),
+      viewer.indexOf('useEffect(() => {', viewer.indexOf('const handleModalDismissed')),
+    );
+    const hiddenEffect = viewer.slice(
+      viewer.indexOf('// React state can be cleared as soon as closing starts.'),
+      viewer.indexOf('// `initialScrollIndex`'),
+    );
+
+    expect(hiddenEffect).not.toContain('dragY.value = 0');
+    expect(dismissHandler).toContain('dragY.value = 0');
+    expect(viewer).toContain('onDismiss={handleModalDismissed}');
+  });
+
+  it('needs a transparent Modal for the backdrop it animates', () => {
+    // An opaque Modal has nothing to uncover as the photo is dragged away.
+    expect(viewer).toContain('transparent');
+    expect(viewer).not.toContain('transparent={false}');
+    expect(viewer).toContain('backgroundColor: \'#000\' }, backdropStyle]');
+  });
+});
+
+/**
+ * Screenshots and screen recording of the user's own private photos are
+ * intentionally allowed. Only the iOS app-switcher preview blur remains
+ * (`photoVaultScreenProtection.ts`), orchestrated centrally by the lock state
+ * machine — no UI component may reach for capture blocking on its own.
+ */
+describe('screenshots and screen recording stay allowed in the UI', () => {
+  it.each(UI_FILES)('%s never calls screen-capture prevention directly', (file) => {
+    const source = readCode(file);
+    expect(source).not.toContain('preventScreenCaptureAsync');
+    expect(source).not.toContain('allowScreenCaptureAsync');
+    expect(source).not.toContain('photoVaultScreenProtection');
+  });
+
+  it('opening, navigating and closing the viewer never touch screen protection', () => {
+    const viewer = read('src/components/photoVault/PhotoVaultViewer.tsx');
+    expect(viewer).not.toContain('ScreenProtection');
+    expect(viewer).not.toContain('ScreenCapture');
   });
 });

@@ -96,6 +96,10 @@
         "message": "Closing your account...",
         "description": "We're protecting your data and completing your request. This may take a few moments."
       },
+      "reconciliation": {
+        "title": "Request already registered",
+        "action": "Got it, sign out"
+      },
       "errors": {
         "USER_SIGNED_OUT": "Your session is not available. Sign in again and try once more.",
         "IDENTITY_CHANGED": "The account in use changed during the process. Nothing was changed — try again.",
@@ -129,7 +133,7 @@
         "new": "Enter your new password",
         "confirmation": "Enter your new password again"
       },
-      "minimumLength": "Use at least {{count}} characters.",
+      "minimumLength": "Use at least {{count}} characters, with 1 uppercase letter, 1 number and 1 special character.",
       "actions": {
         "submit": "Change password"
       },
@@ -142,9 +146,12 @@
         "passwordUnchanged": "Your new password must be different from your current password.",
         "passwordTooShort": "Your new password must have at least {{count}} characters.",
         "passwordTooLong": "Your new password must have no more than {{max}} characters.",
+        "passwordMissingUppercase": "Your new password must include at least 1 uppercase letter.",
+        "passwordMissingNumber": "Your new password must include at least 1 number.",
+        "passwordMissingSpecialChar": "Your new password must include at least 1 special character.",
         "passwordPolicyMismatch": "Your new password does not meet the security policy.",
         "currentPasswordIncorrect": "Your current password is incorrect. Check it and try again.",
-        "weakPassword": "Use a new password between 15 and 4096 characters.",
+        "weakPassword": "Use a new password with at least {{count}} characters, including 1 uppercase letter, 1 number and 1 special character.",
         "sessionExpired": "Your session expired. Sign in again and retry.",
         "providerRequired": "Password changes are only available for accounts with email and password sign-in.",
         "tooManyRequests": "Too many attempts were made. Wait a moment and try again.",
@@ -167,7 +174,8 @@
       "es": "Español"
     },
     "errors": {
-      "changeFailed": "Couldn't save the language. Please try again."
+      "changeFailed": "Couldn't save the language. Please try again.",
+      "rolledBack": "Your previous language was restored because the change couldn't be saved."
     }
   },
   "units": {
@@ -194,7 +202,8 @@
       }
     },
     "errors": {
-      "changeFailed": "Couldn't save the measurement system. Please try again."
+      "changeFailed": "Couldn't save the measurement system. Please try again.",
+      "rolledBack": "Your previous units were restored because the change couldn't be saved."
     }
   },
   "theme": {

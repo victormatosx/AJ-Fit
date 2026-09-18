@@ -325,7 +325,7 @@ service cloud.firestore {
              'prescribedStructuredDays', 'population', 'environment',
              'goalFamily', 'split', 'adaptationStage', 'sessions', 'versions',
              'trace', 'limitationDatasetVersion', 'limitationDatasetHash',
-             'prescribedTrainingFrequency', 'availability', 'weeklySchedule',
+             'prescribedTrainingFrequency', 'scheduleMode', 'availability', 'weeklySchedule',
              'createdAt', 'activatedAt', 'updatedAt'
            ])
         && data.programId == programId
@@ -370,6 +370,7 @@ service cloud.firestore {
             && data.prescribedTrainingFrequency >= 2
             && data.prescribedTrainingFrequency <= 6
             && data.prescribedTrainingFrequency <= data.requestedDays
+            && (!data.keys().hasAny(['scheduleMode']) || data.scheduleMode in ['fixed', 'flexible'])
             && data.availability is map
             && data.availability.keys().hasAll(['days', 'weekdays'])
             && data.availability.keys().hasOnly(['days', 'weekdays'])
@@ -378,7 +379,16 @@ service cloud.firestore {
             && (data.availability.weekdays.size() == 0
               || data.availability.weekdays.size() == data.availability.days)
             && data.weeklySchedule is list
-            && (data.weeklySchedule.size() == 0 || data.weeklySchedule.size() == 7))
+            && (data.weeklySchedule.size() == 0 || data.weeklySchedule.size() == 7)
+            // Explicit new plans have strict mode-specific shapes. Legacy V2
+            // snapshots without scheduleMode retain their former fixed read/write contract.
+            && (!data.keys().hasAny(['scheduleMode'])
+              || (data.scheduleMode == 'fixed'
+                && data.availability.weekdays.size() == data.availability.days
+                && data.weeklySchedule.size() == 7)
+              || (data.scheduleMode == 'flexible'
+                && data.availability.weekdays.size() == 0
+                && data.weeklySchedule.size() == 0)))
         )
         && data.versions.safetyRules == '1.0.0'
         && data.versions.modifierRules == '2.0.0'
@@ -468,40 +478,37 @@ service cloud.firestore {
     // independently validated by `workoutExecutionCommonValid` and
     // `executionExerciseSetsWithinBound`.
     function exerciseIdentityUnchanged(before, after) {
-      return after.sets is list
-        && after.sets.size() <= 15
-        && before.exerciseIndex == after.exerciseIndex
-        && before.exerciseId == after.exerciseId
-        && before.get('prescribedExerciseId', null) == after.get('prescribedExerciseId', null)
-        && before.get('substitution', null) == after.get('substitution', null);
+      return !before.diff(after).affectedKeys().hasAny([
+        'exerciseIndex', 'exerciseId', 'prescribedExerciseId', 'prescribedSets',
+        'prescribedReps', 'prescribedDuration', 'prescribedCycles', 'substitution'
+      ]);
     }
 
-    // Unrolled to the same 20-exercise cap `executionExerciseSetsWithinBound`
-    // already uses — no `get()`/`getAfter()` cross-document read here (only
-    // local array indexing/diffing).
     function exerciseIdentityFieldsImmutable(before, after) {
-      return (before.size() <= 0 || after.size() <= 0 || exerciseIdentityUnchanged(before[0], after[0]))
-        && (before.size() <= 1 || after.size() <= 1 || exerciseIdentityUnchanged(before[1], after[1]))
-        && (before.size() <= 2 || after.size() <= 2 || exerciseIdentityUnchanged(before[2], after[2]))
-        && (before.size() <= 3 || after.size() <= 3 || exerciseIdentityUnchanged(before[3], after[3]))
-        && (before.size() <= 4 || after.size() <= 4 || exerciseIdentityUnchanged(before[4], after[4]))
-        && (before.size() <= 5 || after.size() <= 5 || exerciseIdentityUnchanged(before[5], after[5]))
-        && (before.size() <= 6 || after.size() <= 6 || exerciseIdentityUnchanged(before[6], after[6]))
-        && (before.size() <= 7 || after.size() <= 7 || exerciseIdentityUnchanged(before[7], after[7]))
-        && (before.size() <= 8 || after.size() <= 8 || exerciseIdentityUnchanged(before[8], after[8]))
-        && (before.size() <= 9 || after.size() <= 9 || exerciseIdentityUnchanged(before[9], after[9]))
-        && (before.size() <= 10 || after.size() <= 10 || exerciseIdentityUnchanged(before[10], after[10]))
-        && (before.size() <= 11 || after.size() <= 11 || exerciseIdentityUnchanged(before[11], after[11]))
-        && (before.size() <= 12 || after.size() <= 12 || exerciseIdentityUnchanged(before[12], after[12]))
-        && (before.size() <= 13 || after.size() <= 13 || exerciseIdentityUnchanged(before[13], after[13]))
-        && (before.size() <= 14 || after.size() <= 14 || exerciseIdentityUnchanged(before[14], after[14]))
-        && (before.size() <= 15 || after.size() <= 15 || exerciseIdentityUnchanged(before[15], after[15]))
-        && (before.size() <= 16 || after.size() <= 16 || exerciseIdentityUnchanged(before[16], after[16]))
-        && (before.size() <= 17 || after.size() <= 17 || exerciseIdentityUnchanged(before[17], after[17]))
-        && (before.size() <= 18 || after.size() <= 18 || exerciseIdentityUnchanged(before[18], after[18]))
-        && (before.size() <= 19 || after.size() <= 19 || exerciseIdentityUnchanged(before[19], after[19]));
+      let beforeSize = before.size();
+      let afterSize = after.size();
+      return beforeSize == afterSize
+        && (beforeSize <= 0 || exerciseIdentityUnchanged(before[0], after[0]))
+        && (beforeSize <= 1 || exerciseIdentityUnchanged(before[1], after[1]))
+        && (beforeSize <= 2 || exerciseIdentityUnchanged(before[2], after[2]))
+        && (beforeSize <= 3 || exerciseIdentityUnchanged(before[3], after[3]))
+        && (beforeSize <= 4 || exerciseIdentityUnchanged(before[4], after[4]))
+        && (beforeSize <= 5 || exerciseIdentityUnchanged(before[5], after[5]))
+        && (beforeSize <= 6 || exerciseIdentityUnchanged(before[6], after[6]))
+        && (beforeSize <= 7 || exerciseIdentityUnchanged(before[7], after[7]))
+        && (beforeSize <= 8 || exerciseIdentityUnchanged(before[8], after[8]))
+        && (beforeSize <= 9 || exerciseIdentityUnchanged(before[9], after[9]))
+        && (beforeSize <= 10 || exerciseIdentityUnchanged(before[10], after[10]))
+        && (beforeSize <= 11 || exerciseIdentityUnchanged(before[11], after[11]))
+        && (beforeSize <= 12 || exerciseIdentityUnchanged(before[12], after[12]))
+        && (beforeSize <= 13 || exerciseIdentityUnchanged(before[13], after[13]))
+        && (beforeSize <= 14 || exerciseIdentityUnchanged(before[14], after[14]))
+        && (beforeSize <= 15 || exerciseIdentityUnchanged(before[15], after[15]))
+        && (beforeSize <= 16 || exerciseIdentityUnchanged(before[16], after[16]))
+        && (beforeSize <= 17 || exerciseIdentityUnchanged(before[17], after[17]))
+        && (beforeSize <= 18 || exerciseIdentityUnchanged(before[18], after[18]))
+        && (beforeSize <= 19 || exerciseIdentityUnchanged(before[19], after[19]));
     }
-
     // Workout Execution & History V1 (docs/workout-lifecycle/
     // 09_WORKOUT_EXECUTION_AND_HISTORY.md). `exercises` is validated only for
     // shape/bounds here, the same precedent `workoutProgramCommonValid` sets
@@ -521,7 +528,7 @@ service cloud.firestore {
              'programId', 'templateId', 'sessionIndex', 'sessionName',
              'scheduledLocalDate', 'status', 'startedAt', 'finishedAt',
              'exercises', 'executionSchemaVersion', 'createdAt', 'updatedAt',
-             'programInstanceId', 'mutexProtocolVersion', 'cardio'
+             'programInstanceId', 'mutexProtocolVersion', 'cardio', 'performedLocalDate'
            ])
         // P0-C protocol marker (docs/workout-lifecycle/ hardening plan) —
         // optional so a pre-hardening client omitting it is still valid;
@@ -535,6 +542,7 @@ service cloud.firestore {
         && data.sessionName is string
         && data.scheduledLocalDate is string
         && data.scheduledLocalDate.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && performedLocalDateValid(data, program.data.get('scheduleMode', 'fixed'))
         && data.status in ['IN_PROGRESS', 'COMPLETED', 'PARTIALLY_COMPLETED', 'ABANDONED']
         && data.startedAt is timestamp
         && (data.finishedAt == null || data.finishedAt is timestamp)
@@ -548,6 +556,33 @@ service cloud.firestore {
         )
         && data.createdAt is timestamp
         && data.updatedAt is timestamp;
+    }
+
+    function strictLocalDate(value) {
+      return value is string
+        && value.matches('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$')
+        && timestamp.date(int(value[0:4]), int(value[5:7]), int(value[8:10])).year() == int(value[0:4])
+        && timestamp.date(int(value[0:4]), int(value[5:7]), int(value[8:10])).month() == int(value[5:7])
+        && timestamp.date(int(value[0:4]), int(value[5:7]), int(value[8:10])).day() == int(value[8:10]);
+    }
+
+    // Parse civil-date components before adding one calendar day. This does
+    // not compare timezone-bearing instants or assume a local-day ms length.
+    function performedLocalDateValid(data, scheduleMode) {
+      return !data.keys().hasAny(['performedLocalDate'])
+        || (strictLocalDate(data.performedLocalDate)
+          && strictLocalDate(data.scheduledLocalDate)
+          && (data.performedLocalDate == data.scheduledLocalDate
+            || (scheduleMode == 'fixed'
+              && timestamp.date(
+                 int(data.scheduledLocalDate[0:4]),
+                 int(data.scheduledLocalDate[5:7]),
+                 int(data.scheduledLocalDate[8:10])
+               ) == timestamp.date(
+                 int(data.performedLocalDate[0:4]),
+                 int(data.performedLocalDate[5:7]),
+                 int(data.performedLocalDate[8:10])
+               ) + duration.value(1, 'd'))));
     }
 
     // Shape of `users/{userId}.attribution` — the read-optimized mirror of
@@ -1230,7 +1265,7 @@ service cloud.firestore {
             && accountActive(userId)
             && request.resource.data.keys().hasAll(['type', 'sessionIndex', 'scheduledDate', 'occurredAt'])
             && request.resource.data.keys().hasOnly(
-                 ['type', 'sessionIndex', 'scheduledDate', 'occurredAt', 'reasonCode', 'decision', 'programInstanceId'])
+                 ['type', 'sessionIndex', 'scheduledDate', 'occurredAt', 'reasonCode', 'decision', 'programInstanceId', 'performedLocalDate'])
             && request.resource.data.type in ['COMPLETED', 'SKIPPED', 'MISS_RESOLVED']
             && (
                  !existsAfter(/databases/$(database)/documents/users/$(userId)/workoutLifecycleState/current)
@@ -1251,6 +1286,11 @@ service cloud.firestore {
             && request.resource.data.sessionIndex is int
             && request.resource.data.sessionIndex >= 0
             && request.resource.data.scheduledDate is string
+            && (!request.resource.data.keys().hasAny(['performedLocalDate'])
+              || performedLocalDateValid({
+                   'scheduledLocalDate': request.resource.data.scheduledDate,
+                   'performedLocalDate': request.resource.data.performedLocalDate,
+                 }, get(/databases/$(database)/documents/users/$(userId)/workoutPrograms/$(programId)).data.get('scheduleMode', 'fixed')))
             && (!('programInstanceId' in request.resource.data)
                 || get(/databases/$(database)/documents/users/$(userId)/programInstances/$(request.resource.data.programInstanceId)).data.contentIdentity == programId)
             && request.resource.data.occurredAt == request.time;
@@ -1319,10 +1359,15 @@ service cloud.firestore {
           && accountActive(userId)
           && stateId == 'scheduleConfig'
           && request.resource.data.keys().hasAll(['trainingDays', 'timezone', 'scheduleVersion', 'updatedAt'])
-          && request.resource.data.keys().hasOnly(['trainingDays', 'timezone', 'scheduleVersion', 'updatedAt'])
+          && request.resource.data.keys().hasOnly(['scheduleMode', 'trainingDays', 'timezone', 'scheduleVersion', 'updatedAt'])
           && request.resource.data.trainingDays is list
-          && request.resource.data.trainingDays.size() >= 2
-          && request.resource.data.trainingDays.size() <= 7
+          && (!request.resource.data.keys().hasAny(['scheduleMode'])
+            || request.resource.data.scheduleMode in ['fixed', 'flexible'])
+          && ((request.resource.data.get('scheduleMode', 'fixed') == 'fixed'
+                && request.resource.data.trainingDays.size() >= 2
+                && request.resource.data.trainingDays.size() <= 7)
+              || (request.resource.data.get('scheduleMode', 'fixed') == 'flexible'
+                && request.resource.data.trainingDays.size() == 0))
           && request.resource.data.timezone is string
           && request.resource.data.timezone.size() > 0
           && request.resource.data.scheduleVersion is int
@@ -1351,7 +1396,7 @@ service cloud.firestore {
                'lipedemaScreening', 'dizzinessScreening',
                'postSurgicalScreening', 'medicalRestrictionScreening'])
           && snapshot.inputs.keys().hasOnly([
-               'sex', 'goal', 'level', 'limits', 'duration', 'days',
+               'sex', 'goal', 'level', 'limits', 'duration', 'days', 'scheduleMode',
                'trainingDays', 'place', 'primaryPlace', 'equipment', 'style',
                'muscleFocus', 'specialConditions', 'pregnancyScreening',
                'postpartumScreening', 'functionalScreening',
@@ -1363,6 +1408,8 @@ service cloud.firestore {
           && snapshot.inputs.style is list
           && snapshot.inputs.muscleFocus is list
           && snapshot.inputs.specialConditions is list
+          && (!snapshot.inputs.keys().hasAny(['scheduleMode'])
+            || snapshot.inputs.scheduleMode in ['fixed', 'flexible'])
           && (snapshot.inputs.trainingDays == null || snapshot.inputs.trainingDays is list);
       }
 
@@ -1442,7 +1489,7 @@ service cloud.firestore {
                'versions', 'trace'])
           && plan.keys().hasOnly([
                'planId', 'templateId', 'requestedDays', 'prescribedStructuredDays',
-               'prescribedTrainingFrequency', 'availability', 'weeklySchedule',
+               'prescribedTrainingFrequency', 'scheduleMode', 'availability', 'weeklySchedule',
                'population', 'environment', 'goalFamily', 'split', 'adaptationStage',
                'limitationDatasetVersion', 'limitationDatasetHash', 'sessions',
                'versions', 'trace'])
@@ -2005,7 +2052,7 @@ service cloud.firestore {
                  'programId', 'templateId', 'sessionIndex', 'sessionName',
                  'scheduledLocalDate', 'status', 'startedAt', 'finishedAt',
                  'exercises', 'executionSchemaVersion', 'createdAt', 'updatedAt',
-                 'programInstanceId', 'mutexProtocolVersion', 'cardio'
+                 'programInstanceId', 'mutexProtocolVersion', 'cardio', 'performedLocalDate'
                ])
             && after.programId == before.programId
             && after.templateId == before.templateId
@@ -2018,9 +2065,11 @@ service cloud.firestore {
             && ('programInstanceId' in after) == ('programInstanceId' in before)
             && ('mutexProtocolVersion' in after) == ('mutexProtocolVersion' in before)
             && ('cardio' in after) == ('cardio' in before)
+            && ('performedLocalDate' in after) == ('performedLocalDate' in before)
             && after.get('programInstanceId', null) == before.get('programInstanceId', null)
             && after.get('mutexProtocolVersion', null) == before.get('mutexProtocolVersion', null)
             && after.get('cardio', null) == before.get('cardio', null)
+            && after.get('performedLocalDate', null) == before.get('performedLocalDate', null)
             && after.exercises is list
             && after.exercises.size() == before.exercises.size()
             && after.exercises.size() >= 1
@@ -2040,6 +2089,8 @@ service cloud.firestore {
               && request.resource.data.programId == resource.data.programId
               && request.resource.data.sessionIndex == resource.data.sessionIndex
               && request.resource.data.scheduledLocalDate == resource.data.scheduledLocalDate
+              && ('performedLocalDate' in request.resource.data) == ('performedLocalDate' in resource.data)
+              && request.resource.data.get('performedLocalDate', null) == resource.data.get('performedLocalDate', null)
           // Fase 7 security hardening: a client update may never change which
           // exercise a slot identifies as (`exerciseId`/`prescribedExerciseId`/
           // `substitution`) — record/skip/finish never do. EXCEPT
@@ -2258,6 +2309,19 @@ service cloud.firestore {
     }
 
     // ── Support V2 (all mutations are Admin SDK callables) ────────────────
+    //
+    // These three blocks were deployed to production on 2026-09-17 but were
+    // never committed to this file (`git log -S supportCases -- firestore.rules`
+    // is empty). A merge resolution then produced a versioned `firestore.rules`
+    // whose only support coverage was the legacy `supportTickets` lineage
+    // below — so deploying THIS file without them would have silently
+    // default-denied every Support V2 read (`supportCases`/`.../messages`),
+    // breaking a live feature whose callables (`createSupportCase`,
+    // `sendSupportChatMessage`, `markSupportMessageRead`, and the `admin*`
+    // counterparts in functions/src/index.ts) are already deployed.
+    // Restored verbatim from the active ruleset so the two lineages converge
+    // here instead of one overwriting the other; see
+    // firestore-tests/supportV2.rules.test.ts for the regression lock.
     match /supportCases/{caseId} {
       allow get, list: if (isAdmin() && accountActive(request.auth.uid))
         || (hasVerifiedEmailForPrivateAccess()

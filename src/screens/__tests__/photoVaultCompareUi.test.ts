@@ -501,6 +501,20 @@ describe('presentation', () => {
     expect(POSTER_CODE).toContain('{copy.subheadline}');
   });
 
+  it('lifts the complete branding group clear of the before and after labels', () => {
+    expect(POSTER_CODE).toContain('const brandingContentLift = height * 0.022');
+    const branding = POSTER_CODE.slice(
+      POSTER_CODE.indexOf('testID="photo-vault-compare-poster-branding"'),
+      POSTER_CODE.indexOf('testID="photo-vault-compare-poster-photos"'),
+    );
+    expect(branding).toContain(
+      'transform: [{ translateY: -brandingContentLift }]',
+    );
+    expect(branding).toContain('testID="photo-vault-compare-logo"');
+    expect(branding).toContain('testID="photo-vault-compare-poster-headline"');
+    expect(branding).toContain('testID="photo-vault-compare-poster-subheadline"');
+  });
+
   it('keeps before left, after right, with real dates and two full images', () => {
     const before = POSTER_CODE.indexOf(
       "side('before', beforeUri, copy.before, beforeDate, onBeforeLoad)",

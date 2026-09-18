@@ -1,4 +1,4 @@
-import type { Quiz, Weekday } from '../state/AppState';
+import type { Quiz, ScheduleMode, Weekday } from '../state/AppState';
 import type { LimitationCatalogExercise, LimitationDecisionTrace } from './limitationResolver';
 import type { LimitationDatasetIdentity } from './limitationDataset';
 
@@ -294,6 +294,8 @@ export interface FinalWorkoutPlan {
   prescribedStructuredDays: number;
   /** Phase 2 canonical name. `prescribedStructuredDays` remains a backward-compatible alias. */
   prescribedTrainingFrequency?: number;
+  /** Absent only on legacy snapshots; every reader must default absence to `fixed`. */
+  scheduleMode?: ScheduleMode;
   /** Phase 2 explicit availability; absent on Phase 1/v1.3 snapshots. */
   availability?: WorkoutAvailability;
   /** Monday-first, reproducible calendar; absent on legacy snapshots. */

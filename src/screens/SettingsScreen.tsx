@@ -29,6 +29,8 @@ import {
 } from '../dev/DevSubscriptionOverridePickerSheet';
 import { isWorkoutLifecycleQaPanelAllowed } from '../dev/workoutLifecycle/qaPanelGate';
 import { WorkoutLifecycleQaSheet } from '../dev/workoutLifecycle/WorkoutLifecycleQaSheet';
+import { isPushNotificationQaPanelAllowed } from '../dev/pushNotifications/qaPanelGate';
+import { PushNotificationQaSheet } from '../dev/pushNotifications/PushNotificationQaSheet';
 import { useSubscription } from '../hooks/useSubscription';
 import { PREMIUM_ENTITLEMENT_ID } from '../lib/subscriptionConstants';
 import type { CustomerInfo } from 'react-native-purchases';
@@ -68,6 +70,7 @@ export function SettingsScreen({
   const [unitsPickerOpen, setUnitsPickerOpen] = useState(false);
   const [unitsError, setUnitsError] = useState<string | null>(null);
   const [savingUnits, setSavingUnits] = useState<UnitsPreference | null>(null);
+  const [syncNotice, setSyncNotice] = useState<'language' | 'units' | null>(null);
   const { preference: currentUnits, resolvedUnits } = useUnits();
   const {
     allowed: devOverrideAllowed,
@@ -84,6 +87,8 @@ export function SettingsScreen({
   const workoutLifecycleQaPanelAllowed = isWorkoutLifecycleQaPanelAllowed();
   const [workoutLifecycleQaSheetOpen, setWorkoutLifecycleQaSheetOpen] = useState(false);
   const [legalDocument, setLegalDocument] = useState<LegalDocumentKind | null>(null);
+  const pushNotificationQaPanelAllowed = isPushNotificationQaPanelAllowed();
+  const [pushNotificationQaSheetOpen, setPushNotificationQaSheetOpen] = useState(false);
 
   // `i18n.language` is the runtime source of truth — DO NOT read
   // `profile.preferences.language` here. That field will diverge from the
@@ -153,6 +158,7 @@ export function SettingsScreen({
               outcome.error,
               { uid: user.uid, attempted: next, previous: currentLang },
             );
+            setSyncNotice('language');
           }
         });
       } else {
@@ -197,6 +203,7 @@ export function SettingsScreen({
               attempted: next,
               previous,
             });
+            setSyncNotice('units');
           }
         });
       } else {
@@ -255,6 +262,26 @@ export function SettingsScreen({
           contentContainerStyle={{ paddingTop: 14, paddingBottom: 28 }}
           showsVerticalScrollIndicator={false}
         >
+          {syncNotice ? (
+            <Pressable
+              accessibilityRole="alert"
+              onPress={() => setSyncNotice(null)}
+              style={{
+                marginHorizontal: 22,
+                marginBottom: 14,
+                paddingHorizontal: 14,
+                paddingVertical: 11,
+                borderRadius: 10,
+                backgroundColor: theme.colors.feedbackErrorBackground,
+                borderWidth: 1,
+                borderColor: theme.colors.feedbackErrorBorder,
+              }}
+            >
+              <Text style={{ fontFamily: theme.fonts.ui, fontSize: 13, color: theme.colors.feedbackErrorText }}>
+                {t(`settings:${syncNotice}.errors.rolledBack`)}
+              </Text>
+            </Pressable>
+          ) : null}
           <SettingsSection
             title={t('settings:sections.account').toUpperCase()}
             items={[
@@ -285,6 +312,7 @@ export function SettingsScreen({
                 value: languageOptions[currentLang],
                 onPress: () => {
                   setLangError(null);
+                  setSyncNotice(null);
                   setLangPickerOpen(true);
                 },
               },
@@ -294,6 +322,7 @@ export function SettingsScreen({
                 value: unitsLabel,
                 onPress: () => {
                   setUnitsError(null);
+                  setSyncNotice(null);
                   setUnitsPickerOpen(true);
                 },
               },
@@ -328,7 +357,7 @@ export function SettingsScreen({
 
           {/* Dev/QA only — never rendered outside a development build (see
               `useDevSubscriptionOverrideContext`'s `allowed`). */}
-          {devOverrideAllowed || workoutLifecycleQaPanelAllowed ? (
+          {devOverrideAllowed || workoutLifecycleQaPanelAllowed || pushNotificationQaPanelAllowed ? (
             <SettingsSection
               title="DEVELOPER"
               items={[
@@ -357,6 +386,11 @@ export function SettingsScreen({
                   icon: 'chart' as const,
                   label: 'Workout Lifecycle',
                   onPress: () => setWorkoutLifecycleQaSheetOpen(true),
+                }] : []),
+                ...(pushNotificationQaPanelAllowed && user ? [{
+                  icon: 'bell' as const,
+                  label: 'Push Notifications',
+                  onPress: () => setPushNotificationQaSheetOpen(true),
                 }] : []),
               ]}
             />
@@ -414,6 +448,14 @@ export function SettingsScreen({
         />
       ) : null}
       <LegalDocumentModal document={legalDocument} onClose={() => setLegalDocument(null)} />
+      {pushNotificationQaPanelAllowed && user ? (
+        <PushNotificationQaSheet
+          key={user.uid}
+          visible={pushNotificationQaSheetOpen}
+          uid={user.uid}
+          onDismiss={() => setPushNotificationQaSheetOpen(false)}
+        />
+      ) : null}
     </ScreenBg>
   );
 }

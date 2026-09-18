@@ -21,6 +21,7 @@ import { subscribeToPermanentExerciseSubstitutionPreferences } from '../services
 import { MANUAL_SUBSTITUTION_CATALOG } from '../workoutPrescription/manualSubstitutionCatalog';
 import { useIsScreenActive } from '../state/ScreenActivity';
 import { logWarn } from '../lib/logger';
+import { canRetryGeneration, prescriptionOutcomeKey } from '../workoutPrescription/uiOutcome';
 
 type LooseT = (key: string, opts?: Record<string, unknown>) => string;
 
@@ -50,14 +51,16 @@ export function MyPlanScreen({
   loading,
   schedule,
   onBack,
+  onRetry,
 }: {
   prescription: PrescriptionResult;
   loading: boolean;
   schedule: WorkoutScheduleController;
   onBack: () => void;
+  onRetry: () => void;
 }) {
   const { theme } = useTheme();
-  const { t, i18n } = useTranslation('myPlan');
+  const { t, i18n } = useTranslation(['myPlan', 'home', 'common']);
   const tLoose = t as unknown as LooseT;
   const { user, questionnaire } = useAuth();
   const active = useIsScreenActive();
@@ -228,7 +231,9 @@ export function MyPlanScreen({
               <Icon name="calendar" size={24} color={theme.colors.textFaint} />
             </View>
             <Display size={20} style={{ textAlign: 'center', marginTop: 6 }}>
-              {t(prescription.status === 'SUCCESS' ? 'states.emptyTitle' : 'states.errorTitle')}
+              {prescription.status === 'SUCCESS'
+                ? t('states.emptyTitle')
+                : t(`home:prescription.${prescriptionOutcomeKey(prescription.status)}.title`)}
             </Display>
             <Text
               style={{
@@ -240,8 +245,30 @@ export function MyPlanScreen({
                 maxWidth: 280,
               }}
             >
-              {t(prescription.status === 'SUCCESS' ? 'states.emptyBody' : 'states.errorBody')}
+              {prescription.status === 'SUCCESS'
+                ? t('states.emptyBody')
+                : t(`home:prescription.${prescriptionOutcomeKey(prescription.status)}.body`)}
             </Text>
+            {prescription.status !== 'SUCCESS' && canRetryGeneration(prescription.status) ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t('common:actions.retry')}
+                onPress={onRetry}
+                style={{
+                  marginTop: 8,
+                  paddingHorizontal: 18,
+                  paddingVertical: 11,
+                  borderRadius: 10,
+                  backgroundColor: theme.colors.controlBackground,
+                  borderWidth: 1,
+                  borderColor: theme.colors.controlBorder,
+                }}
+              >
+                <Text style={{ fontFamily: theme.fonts.uiSemi, fontSize: 13, color: theme.colors.textPrimary }}>
+                  {t('common:actions.retry')}
+                </Text>
+              </Pressable>
+            ) : null}
           </View>
         ) : (
           <ScrollView contentContainerStyle={{ paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
@@ -394,6 +421,17 @@ export function MyPlanScreen({
             {/* Week */}
             <View style={{ paddingHorizontal: 22, marginTop: 26 }}>
               <Slash style={{ marginBottom: 14 }}>{t('week.title')}</Slash>
+              {(plan.scheduleMode ?? 'fixed') === 'flexible' ? (
+                <View style={{ padding: 16, borderRadius: 14, borderWidth: 1, borderColor: theme.colors.primaryBorderQuiet, backgroundColor: theme.colors.primarySoft }}>
+                  <Text style={{ fontFamily: theme.fonts.uiBold, fontSize: 15, color: theme.colors.textPrimary }}>
+                    {t('week.flexibleTitle')}
+                  </Text>
+                  <Text style={{ marginTop: 5, fontFamily: theme.fonts.ui, fontSize: 13, lineHeight: 18, color: theme.colors.textMuted }}>
+                    {t('week.flexibleBody', { count: plan.prescribedTrainingFrequency ?? plan.prescribedStructuredDays })}
+                  </Text>
+                </View>
+              ) : (
+              <>
               <View style={{ flexDirection: 'row', gap: 7 }}>
                 {weekView.map((day) => (
                   <View key={day.weekday} style={{ flex: 1, alignItems: 'center', gap: 7 }}>
@@ -470,6 +508,8 @@ export function MyPlanScreen({
                   </Text>
                 </View>
               ) : null}
+              </>
+              )}
             </View>
 
             {/* Workouts */}

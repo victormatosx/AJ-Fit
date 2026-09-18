@@ -43,6 +43,7 @@ interface Props {
   onOpen: (photoId: string) => void;
   onAddPose: (pose: ProgressPhotoPose) => void;
   onRendered: (photoId: string) => void;
+  onRetrySync: (photoId: string) => void;
   formatDay: (date: Date) => string;
   formatMonth: (date: Date) => string;
 }
@@ -53,6 +54,7 @@ function PhotoCell({
   onHidden,
   onOpen,
   onRendered,
+  onRetrySync,
   label,
 }: {
   photo: GalleryPhoto;
@@ -60,13 +62,25 @@ function PhotoCell({
   onHidden: (owner: GalleryThumbnailOwner) => void;
   onOpen: (photoId: string) => void;
   onRendered: (photoId: string) => void;
+  onRetrySync: (photoId: string) => void;
   label: string;
 }) {
   const { t } = useTranslation('home');
   const { theme } = useTheme();
   const displayUri = photo.thumbnailUri ?? photo.previewUri;
   const canOpen = displayUri !== null && photo.uploadStatus === null;
+  /**
+   * The three save states, kept deliberately quiet.
+   *
+   * `preparing` is the only one the user is actually waiting on; the other two
+   * describe a photo that is already safely on the device, so they must read
+   * as status rather than as a warning. In particular `failed` must never look
+   * like the photo was lost — it was not, and a retry is already scheduled.
+   */
+  const preparing = photo.uploadStatus === 'preparing';
   const uploading = photo.uploadStatus === 'uploading';
+  const syncFailed = photo.uploadStatus === 'failed';
+  const syncing = preparing || uploading;
 
   // The bounded render window of the surrounding list doubles as controlled
   // prefetch. Leaving it cancels queued work; a ready thumbnail stays in the
@@ -107,9 +121,10 @@ function PhotoCell({
         <Icon name="camera" size={18} color={theme.colors.textFaint} />
       )}
 
-      {uploading ? (
+      {syncing ? (
         <View style={{ position: 'absolute', top: spacing[2], left: spacing[2] }}>
           <Text
+            testID={`photo-vault-sync-${photo.photoId}`}
             style={{
               color: theme.colors.textPrimary,
               fontFamily: theme.fonts.mono,
@@ -118,11 +133,49 @@ function PhotoCell({
               textTransform: 'uppercase',
             }}
           >
-            {photo.uploadProgress !== null && photo.uploadProgress > 0
-              ? `${Math.round(photo.uploadProgress * 100)}%`
-              : t('progress.photos.add.uploading')}
+            {preparing
+              ? t('progress.photos.sync.preparing')
+              : photo.uploadProgress !== null && photo.uploadProgress > 0
+                ? `${Math.round(photo.uploadProgress * 100)}%`
+                : t('progress.photos.sync.pending')}
           </Text>
         </View>
+      ) : null}
+
+      {/* A delivery that failed offers a retry in place. The photo itself is
+          safe on the device, so this is an action, not an error state. */}
+      {syncFailed ? (
+        <Pressable
+          onPress={() => onRetrySync(photo.photoId)}
+          accessibilityRole="button"
+          accessibilityLabel={t('progress.photos.a11y.retrySync')}
+          testID={`photo-vault-retry-${photo.photoId}`}
+          hitSlop={6}
+          style={{
+            position: 'absolute',
+            top: spacing[2],
+            left: spacing[2],
+            right: spacing[2],
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: spacing[1],
+          }}
+        >
+          <Icon name="alert-triangle" size={9} color={theme.colors.warning} />
+          <Text
+            numberOfLines={1}
+            style={{
+              flex: 1,
+              color: theme.colors.textPrimary,
+              fontFamily: theme.fonts.mono,
+              fontSize: 8.5,
+              letterSpacing: 1.2,
+              textTransform: 'uppercase',
+            }}
+          >
+            {t('progress.photos.sync.retry')}
+          </Text>
+        </Pressable>
       ) : null}
     </Pressable>
   );
@@ -192,6 +245,7 @@ function PhotoVaultDayRowComponent({
   onOpen,
   onAddPose,
   onRendered,
+  onRetrySync,
   formatDay,
   formatMonth,
 }: Props) {
@@ -243,6 +297,7 @@ function PhotoVaultDayRowComponent({
                 onHidden={onHidden}
                 onOpen={onOpen}
                 onRendered={onRendered}
+                onRetrySync={onRetrySync}
                 label={t('progress.photos.a11y.posePhoto', {
                   pose: poseLabels[pose],
                   date: formatDay(day.date),
@@ -276,6 +331,7 @@ function PhotoVaultDayRowComponent({
                     onHidden={onHidden}
                     onOpen={onOpen}
                     onRendered={onRendered}
+                    onRetrySync={onRetrySync}
                     label={t('progress.photos.a11y.photo', { date: formatDay(day.date) })}
                   />
                 </View>

@@ -9,8 +9,7 @@ import { ScreenBg } from '../components/ui/ScreenBg';
 import { OutlineNumber } from '../components/ui/OutlineNumber';
 import { displayLineHeight } from '../theme/tokens';
 import { useTheme } from '../theme';
-import { useAppState } from '../state/AppState';
-import { deriveTrainingDaySlots } from '../lib/planDerivation';
+import { useAppState, WEEKDAY_ORDER } from '../state/AppState';
 import { generateWorkoutPrescription } from '../workoutPrescription/engine';
 import { prescriptionOutcomeKey } from '../workoutPrescription/uiOutcome';
 
@@ -46,7 +45,16 @@ export function PlanReadyScreen({
 
   const goalLabel = t(`quiz:goal.options.${goalKey}.label` as 'quiz:goal.options.gain_muscle.label');
   const levelLabel = t(`quiz:level.options.${levelKey}.label` as 'quiz:level.options.intermediate.label');
-  const trainingSlots = deriveTrainingDaySlots(days);
+  const scheduleMode = prescription.status === 'SUCCESS'
+    ? prescription.plan.scheduleMode ?? 'fixed'
+    : quiz.scheduleMode ?? 'fixed';
+  const prescribedDays = prescription.status === 'SUCCESS'
+    ? prescription.plan.prescribedTrainingFrequency ?? prescription.plan.prescribedStructuredDays
+    : days;
+  const fixedTrainingDays = prescription.status === 'SUCCESS'
+    ? prescription.plan.weeklySchedule?.filter((day) => day.state === 'TRAINING').map((day) => day.weekday) ?? []
+    : quiz.trainingDays ?? [];
+  const trainingSlots = WEEKDAY_ORDER.map((weekday) => fixedTrainingDays.includes(weekday));
 
   return (
     <ScreenBg>
@@ -94,7 +102,7 @@ export function PlanReadyScreen({
                 color: theme.colors.textMuted,
               }}
             >
-              {goalLabel} · {levelLabel} · {t('plan:summary.frequencyValue', { days })}
+              {goalLabel} · {levelLabel} · {t('plan:summary.frequencyValue', { days: prescribedDays })}
             </Text>
           </RiseIn>
 
@@ -103,7 +111,7 @@ export function PlanReadyScreen({
             <Slash style={{ marginBottom: 12 }}>{t('plan:summary.title').toUpperCase()}</Slash>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
               <SummaryCard label={t('plan:summary.goal')} value={goalLabel} />
-              <SummaryCard label={t('plan:summary.frequency')} value={t('plan:summary.frequencyValue', { days })} />
+              <SummaryCard label={t('plan:summary.frequency')} value={t('plan:summary.frequencyValue', { days: prescribedDays })} />
               <SummaryCard
                 label={t('plan:summary.duration')}
                 value={t('plan:summary.durationValue', { minutes: durationMinutes })}
@@ -115,8 +123,19 @@ export function PlanReadyScreen({
           {/* ── 3. WEEKLY TRAINING DAYS (derived from `days`, no invented split) ── */}
           <RiseIn delay={160}>
             <Slash style={{ marginBottom: 12 }}>{t('plan:schedule.title').toUpperCase()}</Slash>
-            <View style={{ flexDirection: 'row', gap: 6 }}>
-              {trainingSlots.map((on, i) => (
+            {scheduleMode === 'flexible' ? (
+              <View style={{ padding: 18, borderRadius: 14, borderWidth: 1, borderColor: theme.colors.primaryBorderMuted, backgroundColor: theme.colors.primarySurface }}>
+                <Text style={{ fontFamily: theme.fonts.uiBold, fontSize: 16, color: theme.colors.textPrimary }}>
+                  {t('plan:schedule.flexibleTitle')}
+                </Text>
+                <Text style={{ marginTop: 5, fontFamily: theme.fonts.ui, fontSize: 13.5, lineHeight: 19, color: theme.colors.textMuted }}>
+                  {t('plan:schedule.flexibleBody', { count: prescribedDays })}
+                </Text>
+              </View>
+            ) : (
+              <>
+              <View style={{ flexDirection: 'row', gap: 6 }}>
+                {trainingSlots.map((on, i) => (
                 <View
                   key={DAY_ORDER[i]}
                   style={{
@@ -143,12 +162,14 @@ export function PlanReadyScreen({
                     }}
                   />
                 </View>
-              ))}
-            </View>
-            <View style={{ flexDirection: 'row', gap: 16, marginTop: 10 }}>
-              <LegendDot on label={t('plan:schedule.trainLabel')} />
-              <LegendDot on={false} label={t('plan:schedule.restLabel')} />
-            </View>
+                ))}
+              </View>
+              <View style={{ flexDirection: 'row', gap: 16, marginTop: 10 }}>
+                <LegendDot on label={t('plan:schedule.trainLabel')} />
+                <LegendDot on={false} label={t('plan:schedule.restLabel')} />
+              </View>
+              </>
+            )}
           </RiseIn>
 
           {/* ── 4. JOURNEY MESSAGE — no fabricated numeric projection ── */}
