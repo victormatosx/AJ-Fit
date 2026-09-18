@@ -19,12 +19,14 @@ export function HelpCenterScreen({
   onOpenReportProblem,
   onOpenSuggestion,
   onOpenTalkToSupport,
+  onOpenMySupportCases,
 }: {
   onBack: () => void;
   onOpenArticle: (article: HelpArticle) => void;
   onOpenReportProblem?: () => void;
   onOpenSuggestion?: () => void;
   onOpenTalkToSupport?: () => void;
+  onOpenMySupportCases?: () => void;
 }) {
   const { t } = useTranslation(['support', 'settings']);
   const { theme } = useTheme();
@@ -49,7 +51,8 @@ export function HelpCenterScreen({
     );
   }, [articles, category, query, t]);
 
-  const allMoreHelpItems: Array<{ icon: IconName; label: string; onPress?: () => void }> = [
+  const allMoreHelpItems: { icon: IconName; label: string; onPress?: () => void }[] = [
+    { icon: 'message', label: 'Meus atendimentos', onPress: onOpenMySupportCases },
     { icon: 'alert-triangle', label: t('settings:items.reportProblem'), onPress: onOpenReportProblem },
     { icon: 'sparkles', label: t('settings:items.sendSuggestion'), onPress: onOpenSuggestion },
     { icon: 'message', label: t('support:help.talkToSupport'), onPress: onOpenTalkToSupport },

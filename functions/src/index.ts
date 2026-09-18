@@ -38,6 +38,26 @@ import { dispatchTestNotificationHandler } from './notifications/qaDispatch';
 import { reconcileNotificationReceipts } from './notifications/receiptsReconciler';
 import { retryNotificationDispatches } from './notifications/retryScheduler';
 import { evaluateDailyWorkoutNotifications } from './notifications/dailyScheduler';
+import {
+  adminCloseSupportChatHandler,
+  adminGetSupportAttachmentAccessHandler,
+  adminPrepareSupportAttachmentUploadHandler,
+  adminReplyAndCloseSupportCaseHandler,
+  adminSendSupportChatMessageHandler,
+  adminStartSupportChatHandler,
+  createSupportCaseHandler,
+  getSupportAttachmentAccessHandler,
+  markSupportMessageReadHandler,
+  prepareSupportAttachmentUploadHandler,
+  sendSupportChatMessageHandler,
+} from './supportV2/supportV2';
+import { cleanupSupportV2 } from './supportV2/cleanup';
+import {
+  adminClaimSupportCaseHandler,
+  adminListSupportAgentsHandler,
+  adminReleaseSupportCaseHandler,
+  adminTransferSupportCaseHandler,
+} from './supportV2/supportAssignment';
 
 /**
  * AJ Fit Cloud Functions entry point.
@@ -279,6 +299,55 @@ export const dispatchTestNotification = onCall(
   { enforceAppCheck: true },
   dispatchTestNotificationHandler,
 );
+
+/** Support V2: client mutations are authenticated, attested and backend-authoritative. */
+export const prepareSupportAttachmentUpload = onCall(
+  { enforceAppCheck: true },
+  prepareSupportAttachmentUploadHandler,
+);
+export const createSupportCase = onCall(
+  { enforceAppCheck: true },
+  createSupportCaseHandler,
+);
+export const sendSupportChatMessage = onCall(
+  { enforceAppCheck: true },
+  sendSupportChatMessageHandler,
+);
+export const markSupportMessageRead = onCall(
+  { enforceAppCheck: true },
+  markSupportMessageReadHandler,
+);
+export const getSupportAttachmentAccess = onCall(
+  { enforceAppCheck: true },
+  getSupportAttachmentAccessHandler,
+);
+
+// Admin Web does not have App Check configured yet; every handler performs a
+// fresh server-side role check. Enable enforcement only after a web provider
+// is rolled out, otherwise the existing panel would be locked out.
+export const adminReplyAndCloseSupportCase = onCall(adminReplyAndCloseSupportCaseHandler);
+export const adminStartSupportChat = onCall(adminStartSupportChatHandler);
+export const adminCloseSupportChat = onCall(adminCloseSupportChatHandler);
+export const adminSendSupportChatMessage = onCall(adminSendSupportChatMessageHandler);
+export const adminGetSupportAttachmentAccess = onCall(adminGetSupportAttachmentAccessHandler);
+// Admin Web's own attachment-staging entry point: the mobile
+// prepareSupportAttachmentUpload above requires App Check, which Admin Web
+// cannot present, so Admin Web must never call it directly. This mirrors it
+// exactly (same stageSupportAttachmentUpload) but is authorized by
+// requireAdminUid's server-side admin-role check instead.
+export const adminPrepareSupportAttachmentUpload = onCall(adminPrepareSupportAttachmentUploadHandler);
+export const adminClaimSupportCase = onCall(adminClaimSupportCaseHandler);
+export const adminReleaseSupportCase = onCall(adminReleaseSupportCaseHandler);
+export const adminTransferSupportCase = onCall(adminTransferSupportCaseHandler);
+export const adminListSupportAgents = onCall(adminListSupportAgentsHandler);
+
+// Push for admin-sent Support V2 messages — deliberately NOT awaited inside
+// the callables above (perf audit, 2026-09-17). Fires once the message
+// document itself durably commits; see supportV2Triggers.ts for why this
+// cannot double-send on idempotent retries.
+export { onSupportAdminMessageCreated } from './supportV2/supportV2Triggers';
+
+export { cleanupSupportV2 };
 
 export {
   evaluateDailyWorkoutNotifications,

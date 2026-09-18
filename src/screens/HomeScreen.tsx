@@ -29,6 +29,7 @@ import type { WeekOverviewViewModel } from '../home/weekOverview';
 import type { FrequencyWindowViewModel } from '../home/frequencyHeatmap';
 import type { ActiveRest } from '../lib/restTimer';
 import { WorkoutRestHeaderStatus } from '../components/workout/WorkoutRestHeaderStatus';
+import { SupportInboxButton } from '../components/support/SupportInboxButton';
 
 // Lifecycle claims on Home come from the shared EvolutionViewModel.
 
@@ -50,6 +51,8 @@ export function HomeScreen({
   restRunning = false,
   onStart,
   onOpenProfile,
+  onOpenSupportCases,
+  unreadSupportCasesCount = 0,
   evolutionViewModel,
   onOpenEvolution,
   weekOverview,
@@ -90,6 +93,10 @@ export function HomeScreen({
   restRunning?: boolean;
   onStart: () => void;
   onOpenProfile: () => void;
+  /** Opens "Meus atendimentos" (SupportCasesScreen). Home only owns the entry point/badge — routing/observing lives in AppShell. */
+  onOpenSupportCases?: () => void;
+  /** Sum of unread ADMIN messages across the user's support cases, from `useUnreadSupportCasesCount` (Firestore `unreadByUserCount`, realtime) — never a locally tracked counter. */
+  unreadSupportCasesCount?: number;
   /** Real Training Level/Cycle/progress state, rendered as the compact `EvolutionTicker` marquee — the historical Home ticker's visual identity (commit d24319b) rebuilt on real data instead of its old hardcoded mock stats. Profile renders this same view model through its own card. */
   evolutionViewModel: EvolutionViewModel;
   onOpenEvolution?: () => void;
@@ -279,6 +286,12 @@ export function HomeScreen({
               resting={restRunning}
               onPress={onStart}
             />
+            {onOpenSupportCases && unreadSupportCasesCount > 0 && (
+              <SupportInboxButton
+                unreadCasesCount={unreadSupportCasesCount}
+                onPress={onOpenSupportCases}
+              />
+            )}
             <Pressable onPress={onOpenProfile} hitSlop={8}>
               <ProfileAvatar
                 displayName={profile?.profile.name || firstName}

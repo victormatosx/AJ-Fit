@@ -57,6 +57,16 @@ const QA_TEST_COPY: NotificationCopy = {
   body: 'A infraestrutura de notificações está funcionando.',
 };
 
+export const SUPPORT_SINGLE_REPLY_COPY: NotificationCopy = {
+  title: 'Resposta do suporte AJ Fit',
+  body: 'Sua solicitação foi respondida. Abra o app para visualizar.',
+};
+
+export const SUPPORT_CHAT_MESSAGE_COPY: NotificationCopy = {
+  title: 'Nova mensagem do suporte AJ Fit',
+  body: 'Você recebeu uma nova mensagem. Abra o app para visualizar.',
+};
+
 export const EVOLUTION_APPROACHING_COPIES = {
   'pt-BR': {
     title: 'Sua próxima evolução está chegando 🚀',
@@ -416,6 +426,18 @@ const TYPE_POLICIES: Readonly<Record<NotificationType, TypePolicy>> = {
     allowedIntents: [],
     allowedCopies: NOTIFICATION_LOCALES.flatMap((locale) =>
       STREAK_MILESTONES.map((milestone) => weekStreakCopy(locale, milestone))),
+  },
+  SUPPORT_SINGLE_REPLY: {
+    category: 'OPERATIONAL',
+    allowedDataKeys: ['caseId', 'messageId'],
+    allowedIntents: ['support-case'],
+    allowedCopies: [SUPPORT_SINGLE_REPLY_COPY],
+  },
+  SUPPORT_CHAT_MESSAGE: {
+    category: 'OPERATIONAL',
+    allowedDataKeys: ['caseId', 'messageId'],
+    allowedIntents: ['support-case'],
+    allowedCopies: [SUPPORT_CHAT_MESSAGE_COPY],
   },
 };
 

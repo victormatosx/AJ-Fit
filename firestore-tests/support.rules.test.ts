@@ -262,3 +262,63 @@ describe('support administrator', () => {
     }));
   });
 });
+
+describe('support V2 backend authority and ownership', () => {
+  async function seedCase() {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const firestore = ctx.firestore();
+      await setDoc(doc(firestore, 'supportCases', 'case-v2-001'), {
+        id: 'case-v2-001', ownerUid: UID, userName: 'Alice', userEmail: 'alice@example.com',
+        type: 'SUPPORT', subject: 'Preciso de ajuda', state: 'CHAT_OPEN', mode: 'CHAT',
+        priority: 'NORMAL', lastMessage: 'Mensagem inicial segura', lastMessageAt: Timestamp.now(),
+        lastSenderType: 'USER', unreadByUserCount: 0, attachmentCount: 0,
+        createdAt: Timestamp.now(), updatedAt: Timestamp.now(), closedAt: null, purgeAt: null,
+        schemaVersion: 2,
+      });
+      await setDoc(doc(firestore, 'supportCases', 'case-v2-001', 'messages', 'message-v2-001'), {
+        senderType: 'USER', senderId: UID, message: 'Mensagem inicial segura', attachments: [],
+        createdAt: Timestamp.now(), readAt: null, requestId: 'request_001',
+      });
+    });
+  }
+
+  beforeEach(seedCase);
+
+  it('allows only the owner query and blocks cross-user enumeration', async () => {
+    await assertSucceeds(getDocs(query(collection(db(), 'supportCases'), where('ownerUid', '==', UID))));
+    await assertFails(getDocs(collection(db(), 'supportCases')));
+    await assertFails(getDoc(doc(db('mallory'), 'supportCases', 'case-v2-001')));
+    await assertFails(getDocs(collection(db('mallory'), 'supportCases', 'case-v2-001', 'messages')));
+  });
+
+  it('denies every direct case/message mutation, including forged admin messages and read receipts', async () => {
+    const owner = db();
+    await assertFails(setDoc(doc(collection(owner, 'supportCases')), { ownerUid: UID }));
+    await assertFails(updateDoc(doc(owner, 'supportCases', 'case-v2-001'), { state: 'CHAT_CLOSED' }));
+    await assertFails(setDoc(doc(collection(owner, 'supportCases', 'case-v2-001', 'messages')), {
+      senderType: 'ADMIN', senderId: UID, message: 'forged', createdAt: serverTimestamp(), readAt: null,
+    }));
+    await assertFails(updateDoc(doc(owner, 'supportCases', 'case-v2-001', 'messages', 'message-v2-001'), { readAt: serverTimestamp() }));
+    await assertFails(deleteDoc(doc(owner, 'supportCases', 'case-v2-001')));
+  });
+
+  it('allows an active admin to read but never directly mutate V2', async () => {
+    await seedUserRole(ADMIN_UID, 'admin');
+    const admin = db(ADMIN_UID);
+    await assertSucceeds(getDoc(doc(admin, 'supportCases', 'case-v2-001')));
+    await assertSucceeds(getDocs(collection(admin, 'supportCases', 'case-v2-001', 'messages')));
+    await assertFails(updateDoc(doc(admin, 'supportCases', 'case-v2-001'), { state: 'CLOSED_SINGLE' }));
+    await assertFails(setDoc(doc(collection(admin, 'supportCases', 'case-v2-001', 'messages')), { senderType: 'ADMIN' }));
+  });
+
+  it('blocks an owner immediately after an account-deletion lock appears', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => setDoc(doc(ctx.firestore(), 'accountDeletionLocks', UID), { createdAt: Timestamp.now() }));
+    await assertFails(getDoc(doc(db(), 'supportCases', 'case-v2-001')));
+  });
+
+  it('keeps upload sessions and rate counters completely private', async () => {
+    await assertFails(getDoc(doc(db(), 'supportUploadSessions', 'upload_001')));
+    await assertFails(setDoc(doc(db(), 'supportUploadSessions', 'upload_001'), { ownerUid: UID }));
+    await assertFails(getDoc(doc(db(), 'supportRateLimits', `${UID}_chat-message`)));
+  });
+});

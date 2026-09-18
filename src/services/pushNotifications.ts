@@ -48,12 +48,16 @@ export const PUSH_NOTIFICATION_TYPES = [
   'COMPARE_PROGRESS',
   'WEEK_COMPLETED',
   'WEEK_STREAK',
+  'SUPPORT_SINGLE_REPLY',
+  'SUPPORT_CHAT_MESSAGE',
 ] as const;
 export type PushNotificationType = (typeof PUSH_NOTIFICATION_TYPES)[number];
 
 export interface PushPayload {
   type: PushNotificationType;
   notificationId: string;
+  caseId?: string;
+  messageId?: string;
 }
 
 export interface PushMessageEvent {
@@ -122,6 +126,7 @@ export interface PushNotificationsService {
   subscribeToForegroundMessages(listener: (event: PushMessageEvent) => void): () => void;
   subscribeToNotificationOpens(listener: (event: NotificationOpenEvent) => void): () => void;
   getLastNotificationOpenEvent(): NotificationOpenEvent | null;
+  setForegroundSupportCaseId(caseId: string | null): void;
   initializeRuntime(): () => void;
 }
 
@@ -141,7 +146,13 @@ export function parsePushPayload(value: unknown): PushPayload | null {
   if (!(PUSH_NOTIFICATION_TYPES as readonly string[]).includes(type ?? '') || !notificationId) {
     return null;
   }
-  return { type: type as PushNotificationType, notificationId };
+  const support = type === 'SUPPORT_SINGLE_REPLY' || type === 'SUPPORT_CHAT_MESSAGE';
+  const caseId = nonEmptyString(value.caseId);
+  const messageId = nonEmptyString(value.messageId);
+  if (support && (!caseId || !messageId)) return null;
+  return support
+    ? { type: type as PushNotificationType, notificationId, caseId, messageId }
+    : { type: type as PushNotificationType, notificationId };
 }
 
 function resolveProjectId(): string | undefined {
@@ -203,6 +214,7 @@ export function createPushNotificationsService(
   let tokenRequest: Promise<PushTokenSnapshot | null> | null = null;
   let lastOpenEvent: NotificationOpenEvent | null = null;
   let lastOpenKey: string | null = null;
+  let foregroundSupportCaseId: string | null = null;
   let runtimeConsumers = 0;
   let runtimeSubscriptions: Subscription[] = [];
 
@@ -507,12 +519,17 @@ export function createPushNotificationsService(
 
     try {
       dependencies.notifications.setNotificationHandler({
-        handleNotification: async () => ({
-          shouldShowBanner: true,
-          shouldShowList: true,
-          shouldPlaySound: false,
-          shouldSetBadge: false,
-        }),
+        handleNotification: async (notification) => {
+          const payload = parsePushPayload(notification.request.content.data);
+          const isAlreadyOpenSupportCase =
+            payload?.caseId !== undefined && payload.caseId === foregroundSupportCaseId;
+          return {
+            shouldShowBanner: !isAlreadyOpenSupportCase,
+            shouldShowList: !isAlreadyOpenSupportCase,
+            shouldPlaySound: false,
+            shouldSetBadge: false,
+          };
+        },
         handleError: (_notificationId, cause) => {
           devError('foreground_handler', cause);
         },
@@ -585,6 +602,9 @@ export function createPushNotificationsService(
     subscribeToForegroundMessages: (listener) => subscribe(foregroundListeners, listener),
     subscribeToNotificationOpens: (listener) => subscribe(openListeners, listener),
     getLastNotificationOpenEvent: () => lastOpenEvent,
+    setForegroundSupportCaseId: (caseId) => {
+      foregroundSupportCaseId = caseId;
+    },
     initializeRuntime,
   };
 }
@@ -609,6 +629,8 @@ export const subscribeToNotificationOpens =
   pushNotifications.subscribeToNotificationOpens;
 export const getLastNotificationOpenEvent =
   pushNotifications.getLastNotificationOpenEvent;
+export const setForegroundSupportCaseId =
+  pushNotifications.setForegroundSupportCaseId;
 export const initializePushNotificationRuntime =
   pushNotifications.initializeRuntime;
 

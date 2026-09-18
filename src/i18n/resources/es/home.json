@@ -5,6 +5,10 @@
   "greeting": {
     "casual": "Hola,"
   },
+  "support": {
+    "iconLabel": "Mis solicitudes",
+    "iconLabelUnread": "Mis solicitudes, {{count}} con mensajes nuevos"
+  },
   "todayCard": {
     "kicker": "Entreno de hoy",
     "meta": "{{duration}} min · {{exercises}} ejercicios · ~{{kcal}} kcal",

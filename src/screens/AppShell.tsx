@@ -36,6 +36,10 @@ import { HelpCenterScreen } from './HelpCenterScreen';
 import { HelpArticleScreen } from './HelpArticleScreen';
 import { SupportFormScreen } from './SupportFormScreen';
 import { SupportSuccessScreen } from './SupportSuccessScreen';
+import { SupportCasesScreen } from './SupportCasesScreen';
+import { SupportCaseDetailScreen } from './SupportCaseDetailScreen';
+import { useUnreadSupportCasesCount } from '../hooks/useUnreadSupportCasesCount';
+import { setForegroundSupportCaseId } from '../services/pushNotifications';
 import type { HelpArticle, SupportTicketType } from '../types/support';
 import { PersistentScreen } from '../components/navigation/PersistentScreen';
 import { usePrewarmQueue } from '../components/navigation/usePrewarmQueue';
@@ -98,7 +102,9 @@ type SupportRoute =
   | { name: 'help' }
   | { name: 'article'; article: HelpArticle }
   | { name: 'form'; type: SupportTicketType; subject?: string }
-  | { name: 'success' };
+  | { name: 'success' }
+  | { name: 'cases'; origin: 'home' | 'help' }
+  | { name: 'case'; caseId: string; casesOrigin: 'home' | 'help' };
 
 /** Logs the first committed workout-tab surface for one confirm attempt. */
 function WorkoutStartVisibilityMetric({
@@ -343,6 +349,13 @@ function AppShellContent({
   const missDecisionTapInFlightRef = useRef(false);
   const [showEvolutionUnlock, setShowEvolutionUnlock] = useState(false);
   const [supportRoute, setSupportRoute] = useState<SupportRoute | null>(null);
+  // Realtime, Firestore-backed unread count for the Home support icon's
+  // badge (see useUnreadSupportCasesCount) — no locally tracked counter.
+  const unreadSupportCasesCount = useUnreadSupportCasesCount(user?.uid);
+  useEffect(() => {
+    setForegroundSupportCaseId(supportRoute?.name === 'case' ? supportRoute.caseId : null);
+    return () => setForegroundSupportCaseId(null);
+  }, [supportRoute]);
   // HelpArticleScreen/SupportFormScreen are persistent+materialized but
   // can't be prewarmed with no real data (docs/23_navegacao_e_lifecycle.md
   // §14, "Suporte") — they need a valid `article`/`type` prop even while
@@ -457,12 +470,16 @@ function AppShellContent({
     // the time AppShell mounts. Native taps still reuse the canonical start
     // confirmation and Schedule Engine decision; a deep link never creates
     // or materializes a workout session on its own.
-    if (!pendingIntent || overlayOpen || showEvolutionUnlock) return;
+    if (!pendingIntent || showEvolutionUnlock) return;
 
     if (pendingIntent.type === 'active-workout') {
+      if (overlayOpen) return;
       if (tab !== 'workout' && startWorkoutFlow === 'idle') {
         requestStartWorkout();
       }
+      consumeIntent(pendingIntent);
+    } else if (pendingIntent.type === 'support-case') {
+      setSupportRoute({ name: 'case', caseId: pendingIntent.caseId, casesOrigin: 'home' });
       consumeIntent(pendingIntent);
     }
   }, [
@@ -1067,6 +1084,8 @@ function AppShellContent({
             restRunning={restStatus === 'running' && activeRest !== null}
             onStart={requestStartWorkout}
             onOpenProfile={() => setTab('profile')}
+            onOpenSupportCases={() => setSupportRoute({ name: 'cases', origin: 'home' })}
+            unreadSupportCasesCount={unreadSupportCasesCount}
             evolutionViewModel={evolution.viewModel}
             onOpenEvolution={() => setShowEvolutionUnlock(true)}
             weekOverview={activitySnapshot.week}
@@ -1504,6 +1523,7 @@ function AppShellContent({
             setLastFormRoute({ type: 'SUPPORT' });
             setSupportRoute({ name: 'form', type: 'SUPPORT' });
           }}
+          onOpenMySupportCases={() => setSupportRoute({ name: 'cases', origin: 'help' })}
         />
       </PersistentScreen>
       {lastArticle && (
@@ -1542,6 +1562,26 @@ function AppShellContent({
       >
         <SupportSuccessScreen onBack={() => setSupportRoute(null)} />
       </PersistentScreen>
+      {supportRoute?.name === 'cases' ? (
+        <View style={FULL_BLEED.overlayZ60}>
+          <SupportCasesScreen
+            onBack={() => setSupportRoute(supportRoute.origin === 'help' ? { name: 'help' } : null)}
+            onOpenCase={(caseId) => setSupportRoute({
+              name: 'case',
+              caseId,
+              casesOrigin: supportRoute.origin,
+            })}
+          />
+        </View>
+      ) : null}
+      {supportRoute?.name === 'case' ? (
+        <View style={FULL_BLEED.overlayZ60}>
+          <SupportCaseDetailScreen
+            caseId={supportRoute.caseId}
+            onBack={() => setSupportRoute({ name: 'cases', origin: supportRoute.casesOrigin })}
+          />
+        </View>
+      ) : null}
     </View>
   );
 }

@@ -219,6 +219,53 @@ describe('push notification runtime', () => {
     expect(service.getCurrentPushToken()).toBeNull();
     expect('unregisterForNotificationsAsync' in notifications).toBe(false);
   });
+
+  it('suppresses the foreground OS presentation only for the exact support case already open', async () => {
+    const { service, notifications } = fixture();
+    service.initializeRuntime();
+    service.setForegroundSupportCaseId('case-open');
+    const handler = notifications.setNotificationHandler.mock.calls[0]?.[0] as {
+      handleNotification(notification: unknown): Promise<{ shouldShowBanner: boolean; shouldShowList: boolean }>;
+    };
+    const notification = (caseId: string) => ({
+      request: {
+        identifier: `notification-${caseId}`,
+        content: {
+          data: {
+            type: 'SUPPORT_CHAT_MESSAGE',
+            notificationId: `notification-${caseId}`,
+            caseId,
+            messageId: `message-${caseId}`,
+          },
+        },
+      },
+    });
+
+    await expect(handler.handleNotification(notification('case-open'))).resolves.toMatchObject({
+      shouldShowBanner: false,
+      shouldShowList: false,
+    });
+    await expect(handler.handleNotification(notification('case-other'))).resolves.toMatchObject({
+      shouldShowBanner: true,
+      shouldShowList: true,
+    });
+  });
+
+  it('keeps non-support foreground notifications visible while a support case is open', async () => {
+    const { service, notifications } = fixture();
+    service.initializeRuntime();
+    service.setForegroundSupportCaseId('case-open');
+    const handler = notifications.setNotificationHandler.mock.calls[0]?.[0] as {
+      handleNotification(notification: unknown): Promise<{ shouldShowBanner: boolean }>;
+    };
+
+    await expect(handler.handleNotification({
+      request: {
+        identifier: 'qa',
+        content: { data: { type: 'QA_TEST', notificationId: 'qa' } },
+      },
+    })).resolves.toMatchObject({ shouldShowBanner: true });
+  });
 });
 
 describe('push payload parsing', () => {
@@ -252,4 +299,14 @@ describe('push payload parsing', () => {
     expect(parsePushPayload({ type: 'GOAL_PROXIMITY', notificationId: 'id' })).toBeNull();
     expect(parsePushPayload({ data: { type: 'QA_TEST', notificationId: 'qa' } })).toBeNull();
   });
+
+  it.each(['SUPPORT_SINGLE_REPLY', 'SUPPORT_CHAT_MESSAGE'] as const)(
+    'requires and preserves secure support routing fields for %s',
+    (type) => {
+      expect(parsePushPayload({ type, notificationId: 'notification-1' })).toBeNull();
+      expect(parsePushPayload({ type, notificationId: 'notification-1', caseId: 'case-1', messageId: 'message-1' })).toEqual({
+        type, notificationId: 'notification-1', caseId: 'case-1', messageId: 'message-1',
+      });
+    },
+  );
 });

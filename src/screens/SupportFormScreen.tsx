@@ -10,7 +10,7 @@ import { SupportImageField } from '../components/support/SupportImageField';
 import { SupportChip } from '../components/support/SupportChip';
 import { useSupportImagePicker } from '../hooks/useSupportImagePicker';
 import { useAuth } from '../state/AuthContext';
-import { createSupportTicket } from '../services/supportTickets';
+import { createSupportCase } from '../services/supportCases';
 import { validateSupportTicket } from '../validators/support';
 import type { FeedbackCategory, SupportTicketType } from '../types/support';
 import { radii, spacing } from '../theme/tokens';
@@ -61,7 +61,6 @@ export function SupportFormScreen({ type, initialSubject = '', onBack, onSuccess
     setCategory('SUGGESTION');
     setError(null);
     image.removeImage();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   });
   const validation = useMemo(() => validateSupportTicket(feedback ? t(`feedback.subjects.${category}`) : subject, message), [category, feedback, message, subject, t]);
 
@@ -69,7 +68,7 @@ export function SupportFormScreen({ type, initialSubject = '', onBack, onSuccess
     if (!user || !profile || !validation.subjectValid || !validation.messageValid || submitting) return;
     setSubmitting(true); setError(null);
     try {
-      await createSupportTicket({ userId: user.uid, userName: profile.profile.name, userEmail: profile.profile.email || user.email || '', type, subject: validation.subject, message: validation.message, attachment: image.attachment });
+      await createSupportCase({ userId: user.uid, userName: profile.profile.name, userEmail: profile.profile.email || user.email || '', type, subject: validation.subject, message: validation.message, attachment: image.attachment });
       onSuccess();
     } catch (err) {
       logError('support:create-ticket', err, { type, hasAttachment: !!image.attachment });

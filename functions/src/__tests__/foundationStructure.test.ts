@@ -83,15 +83,21 @@ describe('Photo Vault backend foundation — Phase 3 structural guarantees', () 
       .sort();
 
     expect(exported).toEqual([
+      'adminCloseSupportChat',
       'adminCreatePromoCode',
       'adminGetCoupon',
+      'adminGetSupportAttachmentAccess',
       'adminGetUser',
       'adminGrantFreeAccess',
       'adminListCoupons',
       'adminListPromoCodes',
       'adminListUsers',
+      'adminPrepareSupportAttachmentUpload',
+      'adminReplyAndCloseSupportCase',
       'adminRevokeFreeAccess',
+      'adminSendSupportChatMessage',
       'adminSetPromoCodeActive',
+      'adminStartSupportChat',
       'adminUpdatePromoCode',
       'applyExerciseSubstitution',
       'authorizePromoPurchase',
@@ -99,14 +105,20 @@ describe('Photo Vault backend foundation — Phase 3 structural guarantees', () 
       'backendHealth',
       'cleanupPendingAccountDeletions',
       'cleanupPhotoVaultOrphans',
+      'cleanupSupportV2',
       'completeWorkoutCardio',
       'confirmCommercialGate',
+      'createSupportCase',
       'createVault',
       'dispatchTestNotification',
       'evaluateDailyWorkoutNotifications',
       'finalizeWorkoutSession',
+      'getSupportAttachmentAccess',
+      'markSupportMessageRead',
       'onAccountDeletionRequested',
+      'onSupportAdminMessageCreated',
       'onTrustedWorkoutLifecycleEventCreated',
+      'prepareSupportAttachmentUpload',
       'reconcileNotificationReceipts',
       'recordWorkoutLifecycleTelemetry',
       'recoverVaultKey',
@@ -114,6 +126,7 @@ describe('Photo Vault backend foundation — Phase 3 structural guarantees', () 
       'requestAccountDeletion',
       'retryNotificationDispatches',
       'revenueCatWebhook',
+      'sendSupportChatMessage',
       'syncPushDevice',
       'validatePromoCode',
     ]);
@@ -131,6 +144,17 @@ describe('Photo Vault backend foundation — Phase 3 structural guarantees', () 
       expect(source, `${file} must not export a callable`).not.toContain('onCall');
       expect(source, `${file} must not export an HTTP function`).not.toContain('onRequest');
     }
+  });
+
+  it('enforces App Check on every Support V2 mobile mutation while admin handlers re-authorize server-side', () => {
+    const source = readCode('src/index.ts');
+    for (const name of ['prepareSupportAttachmentUpload', 'createSupportCase', 'sendSupportChatMessage', 'markSupportMessageRead', 'getSupportAttachmentAccess']) {
+      expect(source).toMatch(new RegExp(`export const ${name} = onCall\\(\\s*\\{ enforceAppCheck: true \\}`));
+    }
+    const implementation = readCode('src/supportV2/supportV2.ts');
+    expect(implementation).toContain('requireAdminUid(request)');
+    expect(implementation).toContain('requireActiveAccount(adminUid)');
+    expect(implementation).not.toMatch(/ownerUid\s*=\s*data\./);
   });
 
   it('reads the uid only from the verified token, never from the request body', () => {
@@ -246,7 +270,7 @@ describe('Photo Vault backend foundation — Phase 3 structural guarantees', () 
       'src/accountDeletion/reconciliation/scheduler.ts',
     ].map(readCode).join('\n');
 
-    expect(allEndpointSources.match(/enforceAppCheck\s*:\s*true/g)).toHaveLength(14);
+    expect(allEndpointSources.match(/enforceAppCheck\s*:\s*true/g)).toHaveLength(19);
     expect(allEndpointSources).not.toMatch(/consumeAppCheckToken\s*:\s*true/);
   });
 

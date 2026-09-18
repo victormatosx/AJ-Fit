@@ -42,6 +42,37 @@ service firebase.storage {
             || request.auth.token.get('email_verified', false) == true);
     }
 
+    // Support V2 attachment capabilities are minted by a callable. A user
+    // may create exactly one immutable image at the server-issued path. No
+    // download URL is stored as authority: access is re-evaluated here.
+    match /users/{userId}/support-v2/staged/{uploadId} {
+      // Downloads are mediated by short-lived signed URLs minted only after
+      // a callable verifies case ownership/admin role and message binding.
+      allow read: if false;
+      allow create: if hasVerifiedEmailForPrivateAccess()
+        && request.auth.uid == userId
+        && accountActive(userId)
+        && resource == null
+        && request.resource.size > 0
+        && request.resource.size <= 8 * 1024 * 1024
+        && request.resource.contentType in [
+          'image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'
+        ]
+        && request.resource.metadata.ownerId == userId
+        && request.resource.metadata.uploadId == uploadId
+        && firestore.get(/databases/(default)/documents/supportUploadSessions/$(uploadId))
+             .data.ownerUid == userId
+        && firestore.get(/databases/(default)/documents/supportUploadSessions/$(uploadId))
+             .data.storagePath == 'users/' + userId + '/support-v2/staged/' + uploadId
+        && firestore.get(/databases/(default)/documents/supportUploadSessions/$(uploadId))
+             .data.mimeType == request.resource.contentType
+        && firestore.get(/databases/(default)/documents/supportUploadSessions/$(uploadId))
+             .data.status == 'STAGED'
+        && firestore.get(/databases/(default)/documents/supportUploadSessions/$(uploadId))
+             .data.expiresAt > request.time;
+      allow update, delete: if false;
+    }
+
     match /users/{userId}/profile/avatar {
       allow read: if hasVerifiedEmailForPrivateAccess() && request.auth.uid == userId && accountActive(userId);
       allow create, update: if hasVerifiedEmailForPrivateAccess()

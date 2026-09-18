@@ -2257,7 +2257,36 @@ service cloud.firestore {
       }
     }
 
-    // ── Support tickets and messages ──────────────────────────────────────
+    // ── Support V2 (all mutations are Admin SDK callables) ────────────────
+    match /supportCases/{caseId} {
+      allow get, list: if (isAdmin() && accountActive(request.auth.uid))
+        || (hasVerifiedEmailForPrivateAccess()
+            && accountActive(request.auth.uid)
+            && resource.data.ownerUid == request.auth.uid);
+      allow create, update, delete: if false;
+
+      match /messages/{messageId} {
+        allow get, list: if (isAdmin() && accountActive(request.auth.uid))
+          || (hasVerifiedEmailForPrivateAccess()
+              && accountActive(request.auth.uid)
+              && get(/databases/$(database)/documents/supportCases/$(caseId))
+                   .data.ownerUid == request.auth.uid);
+        allow create, update, delete: if false;
+      }
+    }
+
+    // Upload capabilities and quotas are backend control-plane documents.
+    // Storage Rules can inspect upload sessions, but clients never read or
+    // mutate them directly.
+    match /supportUploadSessions/{uploadId} {
+      allow read, write: if false;
+    }
+
+    match /supportRateLimits/{limitId} {
+      allow read, write: if false;
+    }
+
+    // ── Legacy support tickets and messages (rollout compatibility) ───────
     match /supportTickets/{ticketId} {
       allow get, list: if isAdmin()
         || (hasVerifiedEmailForPrivateAccess() && resource.data.userId == request.auth.uid);

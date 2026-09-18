@@ -1,6 +1,6 @@
-export type DeepLinkIntent = Readonly<{
-  type: 'active-workout';
-}>;
+export type DeepLinkIntent =
+  | Readonly<{ type: 'active-workout' }>
+  | Readonly<{ type: 'support-case'; caseId: string }>;
 
 /**
  * Converts an external URL into one of the app's explicitly supported
@@ -30,12 +30,20 @@ export function enqueueDeepLinkIntent(
   pending: DeepLinkIntent | null,
   incoming: DeepLinkIntent,
 ): DeepLinkIntent {
-  return pending?.type === incoming.type ? pending : incoming;
+  if (!pending || pending.type !== incoming.type) return incoming;
+  if (pending.type === 'support-case' && incoming.type === 'support-case') {
+    return pending.caseId === incoming.caseId ? pending : incoming;
+  }
+  return pending;
 }
 
 export function consumeDeepLinkIntent(
   pending: DeepLinkIntent | null,
   handled: DeepLinkIntent,
 ): DeepLinkIntent | null {
-  return pending?.type === handled.type ? null : pending;
+  if (!pending || pending.type !== handled.type) return pending;
+  if (pending.type === 'support-case' && handled.type === 'support-case') {
+    return pending.caseId === handled.caseId ? null : pending;
+  }
+  return null;
 }

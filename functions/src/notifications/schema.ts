@@ -21,6 +21,8 @@ export const NOTIFICATION_TYPES = [
   'COMPARE_PROGRESS',
   'WEEK_COMPLETED',
   'WEEK_STREAK',
+  'SUPPORT_SINGLE_REPLY',
+  'SUPPORT_CHAT_MESSAGE',
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 

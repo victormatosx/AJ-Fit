@@ -7,8 +7,13 @@ import {
   type DeepLinkIntent,
 } from '../lib/deepLinks';
 import { logInfo, logWarn } from '../lib/logger';
+import {
+  getLastNotificationOpenEvent,
+  subscribeToNotificationOpens,
+  type NotificationOpenEvent,
+} from '../services/pushNotifications';
 
-type DeepLinkSource = 'initial-url' | 'url-event';
+type DeepLinkSource = 'initial-url' | 'url-event' | 'notification';
 
 type DeepLinkContextValue = {
   pendingIntent: DeepLinkIntent | null;
@@ -72,6 +77,19 @@ export function DeepLinkProvider({ children }: { children: React.ReactNode }) {
       subscription.remove();
     };
   }, [handleUrl]);
+
+  useEffect(() => {
+    const handleNotification = (event: NotificationOpenEvent) => {
+      const { payload } = event;
+      if ((payload?.type === 'SUPPORT_SINGLE_REPLY' || payload?.type === 'SUPPORT_CHAT_MESSAGE') && payload.caseId) {
+        enqueueIntent({ type: 'support-case', caseId: payload.caseId }, 'notification');
+      }
+    };
+    const unsubscribe = subscribeToNotificationOpens(handleNotification);
+    const initial = getLastNotificationOpenEvent();
+    if (initial) handleNotification(initial);
+    return unsubscribe;
+  }, [enqueueIntent]);
 
   const consumeIntent = useCallback((intent: DeepLinkIntent) => {
     const current = pendingIntentRef.current;
