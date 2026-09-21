@@ -13,9 +13,14 @@ import type { ProgressionDecision, ProgressionSnapshotV2 } from '../progressionE
 import { localDateInTimezone } from '../scheduleEngine/localDate';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { countFirestoreRead, startPerfTimer } from '../lib/perf';
+import {
+  countFirestoreRead,
+  perfNowMsSinceAppEpoch,
+  recordPerfTrace,
+  startPerfTimer,
+} from '../lib/perf';
 import { listExecutionsForProgramInstance, type PersistedWorkoutExecution } from './workoutExecutions';
-import { listScheduleEvents, loadScheduleConfig } from './workoutSchedule';
+import { listScheduleEventsForProgramInstance, loadScheduleConfig } from './workoutSchedule';
 import {
   listRecentIntermediateTrainingCycles,
   loadWorkoutLifecycleDeduped,
@@ -62,10 +67,83 @@ function deviceTimezone(): string {
   }
 }
 
-async function measureProgressionStep<T>(label: string, operation: () => Promise<T>): Promise<T> {
-  const stop = startPerfTimer(label);
+interface ProgressionReadSummary {
+  docsReturned: number;
+  docsUsed: number;
+  docsDiscarded: number;
+  firestoreDispatches: number;
+}
+
+interface ProgressionReadCompletion {
+  name: string;
+  endedAtBatchMs: number;
+}
+
+async function measureProgressionRead<T>(input: {
+  label: string;
+  name: string;
+  functionName: string;
+  logicalPath: string;
+  operationType: string;
+  filters: string;
+  orderBy: string;
+  limit: string;
+  temporalWindow: string;
+  readCounterLabel: string;
+  batchStartedAtMs: number;
+  completions?: ProgressionReadCompletion[];
+  operation: () => Promise<T>;
+  summarize: (result: T) => ProgressionReadSummary;
+}): Promise<T> {
+  const startedAtMs = perfNowMsSinceAppEpoch();
+  const stop = startPerfTimer(input.label);
   try {
-    return await operation();
+    const result = await input.operation();
+    const endedAtMs = perfNowMsSinceAppEpoch();
+    const summary = input.summarize(result);
+    input.completions?.push({
+      name: input.name,
+      endedAtBatchMs: endedAtMs - input.batchStartedAtMs,
+    });
+    recordPerfTrace('evolution_progression.read', {
+      name: input.name,
+      functionName: input.functionName,
+      logicalPath: input.logicalPath,
+      operationType: input.operationType,
+      filters: input.filters,
+      orderBy: input.orderBy,
+      limit: input.limit,
+      temporalWindow: input.temporalWindow,
+      readCounterLabel: input.readCounterLabel,
+      startedAtBatchMs: startedAtMs - input.batchStartedAtMs,
+      endedAtBatchMs: endedAtMs - input.batchStartedAtMs,
+      durationMs: endedAtMs - startedAtMs,
+      outcome: 'success',
+      ...summary,
+    });
+    return result;
+  } catch (error) {
+    const endedAtMs = perfNowMsSinceAppEpoch();
+    input.completions?.push({
+      name: input.name,
+      endedAtBatchMs: endedAtMs - input.batchStartedAtMs,
+    });
+    recordPerfTrace('evolution_progression.read', {
+      name: input.name,
+      functionName: input.functionName,
+      logicalPath: input.logicalPath,
+      operationType: input.operationType,
+      filters: input.filters,
+      orderBy: input.orderBy,
+      limit: input.limit,
+      temporalWindow: input.temporalWindow,
+      readCounterLabel: input.readCounterLabel,
+      startedAtBatchMs: startedAtMs - input.batchStartedAtMs,
+      endedAtBatchMs: endedAtMs - input.batchStartedAtMs,
+      durationMs: endedAtMs - startedAtMs,
+      outcome: 'error',
+    });
+    throw error;
   } finally {
     stop();
   }
@@ -117,41 +195,128 @@ export async function evaluateProgressionV2ForUserFull(
 } | null> {
   const stopTotal = startPerfTimer('evolution_progression.total');
   try {
-    const bundle = await measureProgressionStep(
-      'evolution_progression.lifecycle',
-      () => loadWorkoutLifecycleDeduped(uid),
-    );
+    const progressionStartedAtMs = perfNowMsSinceAppEpoch();
+    const bundle = await measureProgressionRead({
+      label: 'evolution_progression.lifecycle',
+      name: 'lifecycle',
+      functionName: 'loadWorkoutLifecycleDeduped',
+      logicalPath: 'users/{uid}/workoutLifecycleState/current + referenced trainingCycles/{cycleId} + programInstances/{programInstanceId}',
+      operationType: 'getDoc (1 pointer, then 2 parallel referents)',
+      filters: 'fixed document ids from lifecycle pointer',
+      orderBy: 'none',
+      limit: '3 documents maximum',
+      temporalWindow: 'current lifecycle only',
+      readCounterLabel: 'workout_lifecycle.bundle',
+      batchStartedAtMs: progressionStartedAtMs,
+      operation: () => loadWorkoutLifecycleDeduped(uid),
+      summarize: (result) => ({
+        docsReturned: result ? 3 : 0,
+        docsUsed: result ? 3 : 0,
+        docsDiscarded: 0,
+        firestoreDispatches: 1,
+      }),
+    });
     if (!bundle) return null;
 
+    const batchStartedAtMs = perfNowMsSinceAppEpoch();
+    const completions: ProgressionReadCompletion[] = [];
     const [config, { executions }, relevantCycles, scheduleEvents, authoritativeInputs, prescribedSessions, policyMode] = await Promise.all([
-      measureProgressionStep('evolution_progression.schedule_config', () => loadScheduleConfig(uid)),
-      measureProgressionStep(
-        'evolution_progression.executions',
-        () => loadCurrentProgressionWindowExecutions(uid, bundle),
-      ),
-      measureProgressionStep(
-        'evolution_progression.relevant_cycles',
-        () => bundle.lifecycle.currentTrainingLevel === 'INTERMEDIATE'
+      measureProgressionRead({
+        label: 'evolution_progression.schedule_config', name: 'schedule_config',
+        functionName: 'loadScheduleConfig', logicalPath: 'users/{uid}/workoutProgramState/scheduleConfig',
+        operationType: 'getDoc', filters: 'fixed document id', orderBy: 'none', limit: '1 document',
+        temporalWindow: 'current user preference', readCounterLabel: 'workout_schedule.config',
+        batchStartedAtMs, completions, operation: () => loadScheduleConfig(uid),
+        summarize: (result) => ({ docsReturned: result ? 1 : 0, docsUsed: result ? 1 : 0, docsDiscarded: 0, firestoreDispatches: 1 }),
+      }),
+      measureProgressionRead({
+        label: 'evolution_progression.executions', name: 'executions',
+        functionName: 'listExecutionsForProgramInstance', logicalPath: 'users/{uid}/workoutExecutions',
+        operationType: 'query/getDocs', filters: 'programInstanceId == activeProgramInstanceId',
+        orderBy: 'none', limit: 'none', temporalWindow: 'all executions for active ProgramInstance',
+        readCounterLabel: 'workout_executions.program_instance', batchStartedAtMs, completions,
+        operation: () => loadCurrentProgressionWindowExecutions(uid, bundle),
+        summarize: (result) => ({ docsReturned: result.executions.length, docsUsed: result.executions.length, docsDiscarded: 0, firestoreDispatches: 1 }),
+      }),
+      measureProgressionRead({
+        label: 'evolution_progression.relevant_cycles', name: 'relevant_cycles',
+        functionName: 'listRecentIntermediateTrainingCycles', logicalPath: 'users/{uid}/trainingCycles',
+        operationType: bundle.lifecycle.currentTrainingLevel === 'INTERMEDIATE' ? 'query/getDocs' : 'not dispatched',
+        filters: 'level == INTERMEDIATE', orderBy: 'cycleNumber desc',
+        limit: String(PROGRESSION_V2_CONFIG.intermediateCyclesForPromotion),
+        temporalWindow: 'most recent Intermediate cycles', readCounterLabel: 'workout_lifecycle.intermediate_cycles',
+        batchStartedAtMs, completions,
+        operation: () => bundle.lifecycle.currentTrainingLevel === 'INTERMEDIATE'
           ? listRecentIntermediateTrainingCycles(uid, PROGRESSION_V2_CONFIG.intermediateCyclesForPromotion)
           : Promise.resolve([]),
-      ),
-      measureProgressionStep(
-        'evolution_progression.schedule_events',
-        () => listScheduleEvents(uid, bundle.lifecycle.activeContentIdentity),
-      ),
-      measureProgressionStep(
-        'evolution_progression.prescription_inputs',
-        () => loadAuthoritativePrescriptionInputs(uid, bundle),
-      ),
-      measureProgressionStep(
-        'evolution_progression.prescribed_program',
-        () => loadAuthoritativePrescribedSessions(uid, bundle.lifecycle.activeContentIdentity),
-      ),
-      measureProgressionStep(
-        'evolution_progression.policy',
-        () => resolveWorkoutLifecycleProgressionPolicy(uid),
-      ),
+        summarize: (result) => ({
+          docsReturned: result.length, docsUsed: result.length, docsDiscarded: 0,
+          firestoreDispatches: bundle.lifecycle.currentTrainingLevel === 'INTERMEDIATE' ? 1 : 0,
+        }),
+      }),
+      measureProgressionRead({
+        label: 'evolution_progression.schedule_events', name: 'schedule_events',
+        functionName: 'listScheduleEventsForProgramInstance', logicalPath: 'users/{uid}/workoutPrograms/{activeContentIdentity}/scheduleEvents',
+        operationType: 'query/getDocs', filters: 'programInstanceId == activeProgramInstanceId', orderBy: 'none', limit: 'none',
+        temporalWindow: 'entire event ledger for active ProgramInstance', readCounterLabel: 'workout_schedule.events',
+        batchStartedAtMs, completions,
+        operation: () => listScheduleEventsForProgramInstance(
+          uid,
+          bundle.lifecycle.activeContentIdentity,
+          bundle.programInstance.programInstanceId,
+        ),
+        summarize: (result) => {
+          const used = result.filter((event) =>
+            event.programInstanceId === bundle.programInstance.programInstanceId
+            && (event.type === 'COMPLETED' || event.type === 'SKIPPED')).length;
+          return { docsReturned: result.length, docsUsed: used, docsDiscarded: result.length - used, firestoreDispatches: 1 };
+        },
+      }),
+      measureProgressionRead({
+        label: 'evolution_progression.prescription_inputs', name: 'prescription_inputs',
+        functionName: 'loadAuthoritativePrescriptionInputs',
+        logicalPath: 'embedded ProgramInstance snapshot; legacy fallback users/{uid}/questionnaires/{questionnaireId}',
+        operationType: bundle.programInstance.prescriptionInputSnapshot ? 'no remote read' : 'getDoc',
+        filters: 'fixed legacy questionnaire id', orderBy: 'none', limit: '0 or 1 document',
+        temporalWindow: 'immutable inputs for active ProgramInstance', readCounterLabel: 'questionnaire.by_id (legacy only)',
+        batchStartedAtMs, completions, operation: () => loadAuthoritativePrescriptionInputs(uid, bundle),
+        summarize: (result) => ({
+          docsReturned: result?.usedLegacyFallback ? 1 : 0,
+          docsUsed: result?.usedLegacyFallback ? 1 : 0,
+          docsDiscarded: 0,
+          firestoreDispatches: bundle.programInstance.prescriptionInputSnapshot ? 0 : 1,
+        }),
+      }),
+      measureProgressionRead({
+        label: 'evolution_progression.prescribed_program', name: 'program',
+        functionName: 'loadAuthoritativePrescribedSessions', logicalPath: 'users/{uid}/workoutPrograms/{activeContentIdentity}',
+        operationType: 'getDoc', filters: 'fixed active content identity', orderBy: 'none', limit: '1 document',
+        temporalWindow: 'active immutable program snapshot', readCounterLabel: 'workout_programs.snapshot',
+        batchStartedAtMs, completions, operation: () => loadAuthoritativePrescribedSessions(uid, bundle.lifecycle.activeContentIdentity),
+        summarize: (result) => ({ docsReturned: result ? 1 : 0, docsUsed: result ? 1 : 0, docsDiscarded: 0, firestoreDispatches: 1 }),
+      }),
+      measureProgressionRead({
+        label: 'evolution_progression.policy', name: 'profile_policy',
+        functionName: 'resolveWorkoutLifecycleProgressionPolicy', logicalPath: 'users/{uid}',
+        operationType: 'transaction.get', filters: 'fixed user document', orderBy: 'none', limit: '1 document',
+        temporalWindow: 'current QA progression policy', readCounterLabel: 'user_profile.document',
+        batchStartedAtMs, completions, operation: () => resolveWorkoutLifecycleProgressionPolicy(uid),
+        summarize: () => ({ docsReturned: 1, docsUsed: 1, docsDiscarded: 0, firestoreDispatches: 1 }),
+      }),
     ]);
+    const lastCompletion = completions.reduce<ProgressionReadCompletion | null>(
+      (latest, item) => !latest || item.endedAtBatchMs >= latest.endedAtBatchMs ? item : latest,
+      null,
+    );
+    const firstCompletionMs = completions.length > 0
+      ? Math.min(...completions.map((item) => item.endedAtBatchMs))
+      : 0;
+    recordPerfTrace('evolution_progression.parallel_batch', {
+      durationMs: perfNowMsSinceAppEpoch() - batchStartedAtMs,
+      completionSpreadMs: lastCompletion ? lastCompletion.endedAtBatchMs - firstCompletionMs : 0,
+      lastResolved: lastCompletion?.name ?? 'none',
+      completionOrder: completions.map((item) => item.name),
+    });
     if (!authoritativeInputs || !prescribedSessions) return null;
 
     const stopLocal = startPerfTimer('evolution_progression.local_calculations');

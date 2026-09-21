@@ -66,6 +66,24 @@ export function startPerfTimer(label: string): () => number {
   };
 }
 
+/** Monotonic offset shared by every PERF record in this JS process. */
+export function perfNowMsSinceAppEpoch(): number {
+  return Math.max(0, Math.round(now() - epoch));
+}
+
+/**
+ * Structured DEV+PERF diagnostics for query shape/cardinality. Callers must
+ * pass only static schema descriptions and aggregate counts -- never ids,
+ * document contents, dates belonging to a user, or other personal data.
+ */
+export function recordPerfTrace(label: string, context: Record<string, unknown>): void {
+  if (!isEnabled()) return;
+  logDebug('app:perf', label, {
+    msSinceAppEpoch: perfNowMsSinceAppEpoch(),
+    ...context,
+  });
+}
+
 let firestoreReadCounters: Record<string, number> = {};
 
 /**

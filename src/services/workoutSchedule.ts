@@ -3,9 +3,11 @@ import {
   doc,
   getDoc,
   getDocs,
+  query,
   runTransaction,
   serverTimestamp,
   setDoc,
+  where,
   type Timestamp,
 } from 'firebase/firestore';
 
@@ -626,9 +628,23 @@ export async function resolveMissedSession(input: {
   });
 }
 
-/** Diagnostics/QA only — not on any hot path. */
-export async function listScheduleEvents(uid: string, programId: string): Promise<ScheduleEvent[]> {
+/**
+ * Progression ledger for one ProgramInstance. Content-addressed program ids
+ * can be reused by later instances, so reading the whole program ledger and
+ * discarding other instances locally creates unbounded historical overfetch.
+ * Legacy events without `programInstanceId` were already ignored by every
+ * V2 progression consumer and remain excluded by the equivalent server-side
+ * equality filter.
+ */
+export async function listScheduleEventsForProgramInstance(
+  uid: string,
+  programId: string,
+  programInstanceId: string,
+): Promise<ScheduleEvent[]> {
   countFirestoreRead('workout_schedule.events');
-  const snapshot = await getDocs(scheduleEventsCollection(uid, programId));
+  const snapshot = await getDocs(query(
+    scheduleEventsCollection(uid, programId),
+    where('programInstanceId', '==', programInstanceId),
+  ));
   return snapshot.docs.map((item) => item.data() as ScheduleEvent);
 }

@@ -15,6 +15,7 @@ vi.mock('../../lib/firebase', () => ({ get db() { return mocks.db; } }));
 
 import { ensureWorkoutLifecycleForLegacyActiveProgram, loadWorkoutLifecycle } from '../workoutLifecycle';
 import { evaluateProgressionV2ForUser } from '../workoutProgressionV2';
+import { listScheduleEventsForProgramInstance } from '../workoutSchedule';
 import { installWorkoutLifecycleAuthorityFixture, resetWorkoutLifecycleAuthorityFixture } from './workoutLifecycleAuthorityFixture';
 
 const ACTIVATED_AT_MS = Date.UTC(2020, 0, 6); // a Monday, UTC
@@ -186,6 +187,49 @@ describe.skipIf(!enabled)('Progression Engine V2 — real Firestore Emulator int
     if (decision?.type === 'PROGRESS_CONTINUES') {
       expect(decision.adherence.ratio).toBe(0);
     }
+  });
+
+  it('schedule-event reads stay scoped to the active ProgramInstance when content is reused', async () => {
+    const bundle = await ensureWorkoutLifecycleForLegacyActiveProgram(UID, {
+      contentIdentity: 'program-a', prescriptionIdentity: 'rx-a', questionnaireId: 'q1',
+      questionnaireExperienceLevel: 'beginner', activatedAt: Timestamp.fromMillis(ACTIVATED_AT_MS),
+    });
+    const instanceId = bundle.programInstance.programInstanceId;
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const rawDb = ctx.firestore();
+      await Promise.all([
+        ...Array.from({ length: 100 }, (_, index) => setDoc(doc(
+          rawDb,
+          'users', UID, 'workoutPrograms', 'program-a', 'scheduleEvents', `foreign-${index}`,
+        ), {
+          type: index % 2 === 0 ? 'COMPLETED' : 'SKIPPED',
+          programInstanceId: `superseded-${index}`,
+          sessionIndex: index % 3,
+          scheduledDate: localDate(index),
+          occurredAt: Timestamp.now(),
+        })),
+        setDoc(doc(rawDb, 'users', UID, 'workoutPrograms', 'program-a', 'scheduleEvents', 'legacy'), {
+          type: 'COMPLETED', sessionIndex: 0, scheduledDate: localDate(0), occurredAt: Timestamp.now(),
+        }),
+        setDoc(doc(rawDb, 'users', UID, 'workoutPrograms', 'program-a', 'scheduleEvents', 'own-completed'), {
+          type: 'COMPLETED', programInstanceId: instanceId,
+          sessionIndex: 0, scheduledDate: localDate(0), occurredAt: Timestamp.now(),
+        }),
+        setDoc(doc(rawDb, 'users', UID, 'workoutPrograms', 'program-a', 'scheduleEvents', 'own-skipped'), {
+          type: 'SKIPPED', programInstanceId: instanceId,
+          sessionIndex: 1, scheduledDate: localDate(2), occurredAt: Timestamp.now(),
+        }),
+        setDoc(doc(rawDb, 'users', UID, 'workoutPrograms', 'program-a', 'scheduleEvents', 'own-miss-resolved'), {
+          type: 'MISS_RESOLVED', programInstanceId: instanceId,
+          sessionIndex: 1, scheduledDate: localDate(2), occurredAt: Timestamp.now(),
+        }),
+      ]);
+    });
+
+    const events = await listScheduleEventsForProgramInstance(UID, 'program-a', instanceId);
+    expect(events).toHaveLength(3);
+    expect(events.every((event) => event.programInstanceId === instanceId)).toBe(true);
+    expect(events.map((event) => event.type).sort()).toEqual(['COMPLETED', 'MISS_RESOLVED', 'SKIPPED']);
   });
 
   it('evaluating the same state twice returns the exact same decision (idempotent, no hidden mutation)', async () => {

@@ -1,7 +1,7 @@
 import { doc, runTransaction, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { logWarn } from '../lib/logger';
-import { recordPerfMark, startPerfTimer } from '../lib/perf';
+import { recordPerfMark, recordPerfTrace, startPerfTimer } from '../lib/perf';
 import {
   evolutionIdempotencyKey,
   lifecycleEventId,
@@ -133,20 +133,76 @@ async function loadOutstandingEarnedFact(uid: string): Promise<EarnedEvolutionFa
   );
   const stopLocal = startPerfTimer('evolution_prepare.outstanding.local');
   try {
-  const activations = new Set(events
-    .filter((event) => ['LEVEL_PROMOTED', 'EVOLUTION_ACTIVATED', 'MOTIVATIONAL_RENEWAL_ACTIVATED'].includes(event.type))
+  const activationEvents = events
+    .filter((event) => ['LEVEL_PROMOTED', 'EVOLUTION_ACTIVATED', 'MOTIVATIONAL_RENEWAL_ACTIVATED'].includes(event.type));
+  const activations = new Set(activationEvents
     .map((event) => event.idempotencyKey));
-  const earned = events
+  const earnedCandidates = events
     .filter((event) => event.type === 'EVOLUTION_EARNED' || event.type === 'MOTIVATIONAL_RENEWAL_OFFERED')
-    .filter((event) => !activations.has(`activation:${event.idempotencyKey}`))
-    .sort((a, b) => timestampMillis(b.occurredAt) - timestampMillis(a.occurredAt))[0];
-  if (!earned) return null;
+    .sort((a, b) => timestampMillis(b.occurredAt) - timestampMillis(a.occurredAt));
+  const outstandingCandidates = earnedCandidates
+    .filter((event) => !activations.has(`activation:${event.idempotencyKey}`));
+  const earned = outstandingCandidates[0];
+  if (!earned) {
+    const docsUsed = earnedCandidates.length + activationEvents.length;
+    recordPerfTrace('evolution_prepare.outstanding_events.cardinality', {
+      logicalPath: 'users/{uid}/workoutLifecycleEvents',
+      operationType: 'query/getDocs',
+      filters: 'programInstanceId == activeProgramInstanceId',
+      orderBy: 'none',
+      limit: 'none',
+      temporalWindow: 'entire active ProgramInstance lifecycle ledger',
+      readCounterLabel: 'workout_lifecycle.program_instance_events',
+      docsReturned: events.length,
+      docsConsidered: docsUsed,
+      docsUsed,
+      docsDiscardedLocally: events.length - docsUsed,
+      earnedCandidates: earnedCandidates.length,
+      acknowledgedEarnedCandidates: earnedCandidates.length - outstandingCandidates.length,
+      olderOutstandingEarnedCandidates: 0,
+      matchingDeferrals: 0,
+    });
+    return null;
+  }
 
   const type = String(earned.payload.evolutionType) as PendingEvolutionType;
-  if (!['CYCLE_EVOLUTION', 'LEVEL_PROMOTION', 'MOTIVATIONAL_RENEWAL'].includes(type)) return null;
+  if (!['CYCLE_EVOLUTION', 'LEVEL_PROMOTION', 'MOTIVATIONAL_RENEWAL'].includes(type)) {
+    recordPerfTrace('evolution_prepare.outstanding_events.cardinality', {
+      logicalPath: 'users/{uid}/workoutLifecycleEvents',
+      operationType: 'query/getDocs', filters: 'programInstanceId == activeProgramInstanceId',
+      orderBy: 'none', limit: 'none', temporalWindow: 'entire active ProgramInstance lifecycle ledger',
+      readCounterLabel: 'workout_lifecycle.program_instance_events', docsReturned: events.length,
+      docsConsidered: earnedCandidates.length + activationEvents.length,
+      docsUsed: earnedCandidates.length + activationEvents.length,
+      docsDiscardedLocally: events.length - earnedCandidates.length - activationEvents.length,
+      earnedCandidates: earnedCandidates.length,
+      acknowledgedEarnedCandidates: earnedCandidates.length - outstandingCandidates.length,
+      olderOutstandingEarnedCandidates: Math.max(0, outstandingCandidates.length - 1),
+      matchingDeferrals: 0,
+    });
+    return null;
+  }
   const deferEvents = events
     .filter((event) => event.type === 'EVOLUTION_DEFERRED' && event.idempotencyKey.startsWith(`${earned.idempotencyKey}:defer:`))
     .sort((a, b) => timestampMillis(a.occurredAt) - timestampMillis(b.occurredAt));
+  const docsUsed = earnedCandidates.length + activationEvents.length + deferEvents.length;
+  recordPerfTrace('evolution_prepare.outstanding_events.cardinality', {
+    logicalPath: 'users/{uid}/workoutLifecycleEvents',
+    operationType: 'query/getDocs',
+    filters: 'programInstanceId == activeProgramInstanceId',
+    orderBy: 'none',
+    limit: 'none',
+    temporalWindow: 'entire active ProgramInstance lifecycle ledger',
+    readCounterLabel: 'workout_lifecycle.program_instance_events',
+    docsReturned: events.length,
+    docsConsidered: docsUsed,
+    docsUsed,
+    docsDiscardedLocally: events.length - docsUsed,
+    earnedCandidates: earnedCandidates.length,
+    acknowledgedEarnedCandidates: earnedCandidates.length - outstandingCandidates.length,
+    olderOutstandingEarnedCandidates: Math.max(0, outstandingCandidates.length - 1),
+    matchingDeferrals: deferEvents.length,
+  });
   const deferralCount = Math.min(2, deferEvents.length) as 0 | 1 | 2;
   const lastDeferEvent = deferEvents.at(-1) ?? null;
   const lastDefer = lastDeferEvent?.occurredAt ?? null;
