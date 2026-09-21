@@ -17,6 +17,7 @@ import { generateWorkoutPrescription } from '../src/workoutPrescription/engine';
 import {
   resolveExerciseLimitationsFromCandidates,
   type LimitationCatalogExercise,
+  type LimitationDecisionTrace,
 } from '../src/workoutPrescription/limitationResolver';
 import type {
   CanonicalTemplate,
@@ -118,7 +119,11 @@ function main(): void {
       perRegion[region].completed += 1;
       perEnvironment[template.profile.environment].completed += 1;
       const omissions = result.plan.trace.exerciseOmissions ?? [];
-      const adapted = result.plan.trace.limitationDecisions.some((decision) =>
+      // This script only ever calls the v2 `generateWorkoutPrescription`
+      // above, whose trace always carries legacy `LimitationDecisionTrace`
+      // objects — the v1.27 union member never appears here.
+      const limitationDecisions = result.plan.trace.limitationDecisions as LimitationDecisionTrace[];
+      const adapted = limitationDecisions.some((decision) =>
         decision.finalExerciseId !== decision.originalExerciseId);
       const outcome: PipelineOutcome = omissions.length
         ? 'ADAPTED_WITH_OMISSIONS'

@@ -222,6 +222,33 @@ export interface Exercise<TTimestamp = unknown> {
 /** Seed input shape: everything in `Exercise` except server-assigned metadata. */
 export type ExerciseSeedInput = Omit<Exercise, 'metadata'>;
 
+/**
+ * Catalog-item family (v1.27 Fase 2 closure —
+ * docs/workouts/AJ_Fit_v1_27_exercise_identity_matrix.json). `Exercise`
+ * above is, and remains, the `'resistance'` shape: `target.primaryMuscle`
+ * stays required there, unchanged, for the 116 pre-existing entries and the
+ * v2 runtime/limitation-resolver/equipment-substitution/muscle-priority
+ * machinery that reads it unconditionally. `'cardio'`/`'mobility'` items
+ * are a structurally distinct, separate shape
+ * (`workoutPrescription/canonicalActivities.ts`'s `CanonicalActivity`) that
+ * has no `primaryMuscle` field at all — not an optional one, an absent one
+ * — so a cardio/mobility item can never satisfy the resistance branch and a
+ * resistance item can never omit its muscle. This is why `Exercise` itself
+ * did not need to become a union: nothing that already assumes
+ * `exercise.target.primaryMuscle` exists (composition, limitation
+ * resolver, substitution, `usedMuscleIds`, etc.) ever iterates cardio/
+ * mobility items, because those never enter `EXERCISES_SEED`.
+ */
+export type ExerciseKind = 'resistance' | 'cardio' | 'mobility';
+
+/** Minimal structural check usable by any of the three catalog families — see `ExerciseKind`'s doc. */
+export function catalogTargetErrors(kind: ExerciseKind, target: { primaryMuscle?: unknown }): string[] {
+  if (kind === 'resistance' && (typeof target.primaryMuscle !== 'string' || !target.primaryMuscle)) {
+    return ['PRIMARY_MUSCLE_REQUIRED_FOR_RESISTANCE'];
+  }
+  return [];
+}
+
 export const MUSCLE_IDS: MuscleId[] = [
   'chest', 'lats', 'upper_back', 'traps', 'lower_back',
   'front_deltoid', 'side_deltoid', 'rear_deltoid',

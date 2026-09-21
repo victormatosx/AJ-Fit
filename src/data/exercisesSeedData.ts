@@ -1248,6 +1248,76 @@ const RAW_EXERCISES: SeedEntry[] = [
     instructions: { ptBR: ['Próximo a um apoio estável, desloque o peso lentamente de um pé ao outro sem tirar os pés do chão.'], en: ['Near a stable support, slowly shift weight from one foot to the other without lifting the feet.'], es: ['Cerca de un apoyo estable, transfiera lentamente el peso de un pie al otro sin levantar los pies.'] },
     ...ACTIVE_AVAILABLE, ...NO_EXECUTION,
   },
+  // v1.27 exercise-identity closure (Fase 2 pendency) — 7 resistance
+  // exercises for previously TRULY_MISSING canonical ids. Deliberately no
+  // `substitutionGroup`: adding one would insert these into an existing
+  // group's auto-derived `similarExerciseIds` (see `buildSubstitutions`
+  // below), changing the equipment-substitution pool the ACTIVE v2 runtime
+  // computes for the 116 pre-existing exercises. See
+  // `exerciseCatalogValidity.test.ts` for the regression guard on that.
+  {
+    id: 'decline-barbell-bench-press', slug: 'decline-barbell-bench-press',
+    name: { ptBR: 'Supino Declinado', en: 'Decline Barbell Bench Press', es: 'Press de Banca Declinado con Barra' },
+    target: { primaryMuscle: 'chest', primaryRegion: 'lower_chest', secondaryMuscles: ['front_deltoid', 'triceps'] },
+    movement: { pattern: 'horizontal_push', mechanic: 'compound', laterality: 'bilateral' },
+    equipment: ['barbell', 'bench'], difficulty: 'intermediate',
+    instructions: { ptBR: ['No banco declinado, desça a barra até o peito com cotovelos controlados e empurre para cima até estender os braços.'], en: ['On the decline bench, lower the bar to the chest with controlled elbows and press up until the arms extend.'], es: ['En el banco declinado, baje la barra hasta el pecho con codos controlados y empuje hacia arriba hasta extender los brazos.'] },
+    ...ACTIVE_AVAILABLE, ...NO_EXECUTION,
+  },
+  {
+    id: 'dumbbell-fly', slug: 'dumbbell-fly',
+    name: { ptBR: 'Crucifixo com Halteres', en: 'Dumbbell Fly', es: 'Aperturas con Mancuernas' },
+    target: { primaryMuscle: 'chest', secondaryMuscles: ['front_deltoid'] },
+    movement: { pattern: 'horizontal_adduction', mechanic: 'isolation', laterality: 'bilateral' },
+    equipment: ['dumbbell', 'bench'], bodyPosition: 'lying', difficulty: 'intermediate',
+    instructions: { ptBR: ['Deitado no banco, abra os braços com cotovelos levemente flexionados e feche em arco até os halteres se aproximarem.'], en: ['Lying on the bench, open the arms with a slight elbow bend and close in an arc until the dumbbells meet.'], es: ['Acostado en el banco, abra los brazos con codos levemente flexionados y cierre en arco hasta juntar las mancuernas.'] },
+    ...ACTIVE_AVAILABLE, ...NO_EXECUTION,
+  },
+  {
+    id: 'dumbbell-rear-delt-fly', slug: 'dumbbell-rear-delt-fly',
+    name: { ptBR: 'Crucifixo Inverso com Halteres', en: 'Dumbbell Rear Delt Fly', es: 'Vuelo Posterior con Mancuernas' },
+    target: { primaryMuscle: 'rear_deltoid', secondaryMuscles: ['traps'] },
+    movement: { pattern: 'horizontal_pull', mechanic: 'isolation', laterality: 'bilateral' },
+    equipment: ['dumbbell'], difficulty: 'beginner',
+    instructions: { ptBR: ['Com o tronco inclinado à frente, eleve os halteres para os lados mantendo os cotovelos levemente flexionados.'], en: ['With the torso hinged forward, raise the dumbbells out to the sides keeping the elbows slightly bent.'], es: ['Con el tronco inclinado al frente, eleve las mancuernas hacia los lados manteniendo los codos levemente flexionados.'] },
+    ...ACTIVE_AVAILABLE, ...NO_EXECUTION,
+  },
+  {
+    id: 'resistance-band-pullover', slug: 'resistance-band-pullover',
+    name: { ptBR: 'Pullover com Elástico', en: 'Resistance Band Pullover', es: 'Pullover con Banda Elástica' },
+    target: { primaryMuscle: 'lats', secondaryMuscles: [] },
+    movement: { pattern: 'vertical_pull', mechanic: 'isolation', laterality: 'bilateral' },
+    equipment: ['resistance_band'], bodyPosition: 'standing', difficulty: 'beginner',
+    instructions: { ptBR: ['Com o elástico ancorado acima da cabeça, puxe os braços estendidos para baixo até a altura do quadril e retorne devagar.'], en: ['With the band anchored overhead, pull the straight arms down to hip height and return slowly.'], es: ['Con la banda anclada por encima de la cabeza, lleve los brazos extendidos hacia abajo hasta la altura de la cadera y vuelva lentamente.'] },
+    ...ACTIVE_AVAILABLE, ...NO_EXECUTION,
+  },
+  {
+    id: 'decline-push-up', slug: 'decline-push-up',
+    name: { ptBR: 'Flexão de Braço com Pés Elevados', en: 'Decline Push-Up', es: 'Flexión Declinada' },
+    target: { primaryMuscle: 'chest', secondaryMuscles: ['triceps', 'front_deltoid'] },
+    movement: { pattern: 'horizontal_push', mechanic: 'compound', laterality: 'bilateral' },
+    equipment: ['bodyweight', 'bench'], bodyPosition: 'lying', difficulty: 'advanced',
+    instructions: { ptBR: ['Com os pés apoiados em uma superfície elevada, mantenha o corpo alinhado e flexione os cotovelos até o peito se aproximar do chão.'], en: ['With the feet on an elevated surface, keep the body aligned and bend the elbows until the chest nears the floor.'], es: ['Con los pies apoyados en una superficie elevada, mantenga el cuerpo alineado y flexione los codos hasta que el pecho se acerque al suelo.'] },
+    ...ACTIVE_AVAILABLE, ...NO_EXECUTION,
+  },
+  {
+    id: 'incline-push-up', slug: 'incline-push-up',
+    name: { ptBR: 'Flexão de Braço com Mãos Elevadas', en: 'Incline Push-Up', es: 'Flexión Inclinada' },
+    target: { primaryMuscle: 'chest', secondaryMuscles: ['triceps', 'front_deltoid'] },
+    movement: { pattern: 'horizontal_push', mechanic: 'compound', laterality: 'bilateral' },
+    equipment: ['bodyweight', 'bench'], bodyPosition: 'lying', difficulty: 'beginner',
+    instructions: { ptBR: ['Com as mãos apoiadas em uma superfície elevada, mantenha o corpo alinhado e flexione os cotovelos até o peito se aproximar do apoio.'], en: ['With the hands on an elevated surface, keep the body aligned and bend the elbows until the chest nears the support.'], es: ['Con las manos apoyadas en una superficie elevada, mantenga el cuerpo alineado y flexione los codos hasta que el pecho se acerque al apoyo.'] },
+    ...ACTIVE_AVAILABLE, ...NO_EXECUTION,
+  },
+  {
+    id: 'resistance-band-standing-leg-curl', slug: 'resistance-band-standing-leg-curl',
+    name: { ptBR: 'Flexão de Joelhos com Elástico', en: 'Resistance Band Standing Leg Curl', es: 'Curl Femoral de Pie con Banda Elástica' },
+    target: { primaryMuscle: 'hamstrings', secondaryMuscles: ['calves'] },
+    movement: { pattern: 'knee_flexion', mechanic: 'isolation', laterality: 'unilateral' },
+    equipment: ['resistance_band'], bodyPosition: 'standing', difficulty: 'beginner',
+    instructions: { ptBR: ['Com o elástico preso ao tornozelo, flexione um joelho levando o calcanhar para trás sem mover a coxa.'], en: ['With the band attached to the ankle, bend one knee bringing the heel back without moving the thigh.'], es: ['Con la banda sujeta al tobillo, flexione una rodilla llevando el talón atrás sin mover el muslo.'] },
+    ...ACTIVE_AVAILABLE, ...NO_EXECUTION,
+  },
 ];
 
 /**

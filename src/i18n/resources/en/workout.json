@@ -413,6 +413,19 @@
     "functionalStrength": "Functional Strength",
     "interval": "Intervals",
     "recovery": "Recovery",
+    "activeRecovery": "Active recovery",
     "balanceCardio": "Cardio + Balance"
+  },
+  "prescription": {
+    "reps": "reps",
+    "duration": "duration",
+    "distance": "distance",
+    "cycles": "cycles",
+    "intensity": "Intensity",
+    "sessionDetails": "Session details",
+    "technique": "Technique",
+    "effort": "Effort",
+    "rest": "Rest",
+    "progression": "Progression"
   }
 }

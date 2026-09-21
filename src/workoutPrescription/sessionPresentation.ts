@@ -38,6 +38,7 @@ const SESSION_TYPE_KEYS: Record<string, string> = {
   functional_strength: 'functionalStrength',
   interval: 'interval',
   recovery: 'recovery',
+  active_recovery: 'activeRecovery',
   balance_cardio: 'balanceCardio',
 };
 

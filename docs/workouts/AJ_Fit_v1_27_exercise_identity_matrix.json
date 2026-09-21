@@ -1,0 +1,1751 @@
+{
+  "schemaVersion": "1.27.0",
+  "description": "Referências diretamente usadas em workouts T001–T102. Somente runtimeId confirmado pode ser resolvido em produção.",
+  "counts": {
+    "SEMANTIC_ALIAS_CONFIRMED": 71,
+    "EXACT_MATCH": 7
+  },
+  "rows": [
+    {
+      "canonicalId": "agachamento-livre",
+      "canonicalName": "Agachamento Livre",
+      "sourceNameV11": null,
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "barbell-back-squat",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": "Agachamento Livre",
+      "movementPattern": "squat",
+      "mechanic": "compound",
+      "primaryMuscle": "quads",
+      "secondaryMuscles": [
+        "glutes",
+        "hamstrings",
+        "adductors"
+      ],
+      "equipment": [
+        "barbell"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Nome pt-BR único e idêntico após normalização; identidade conferida no catálogo atual."
+    },
+    {
+      "canonicalId": "supino-reto-maquina",
+      "canonicalName": "Supino Reto Máquina",
+      "sourceNameV11": null,
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "machine-flat-bench-press",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": "Supino Reto Máquina",
+      "movementPattern": "horizontal_push",
+      "mechanic": "compound",
+      "primaryMuscle": "chest",
+      "secondaryMuscles": [
+        "front_deltoid",
+        "triceps"
+      ],
+      "equipment": [
+        "machine"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Nome pt-BR único e idêntico após normalização; identidade conferida no catálogo atual."
+    },
+    {
+      "canonicalId": "remada-articulada",
+      "canonicalName": "Remada Articulada",
+      "sourceNameV11": null,
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "iso-lateral-row-machine",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": "Remada Articulada",
+      "movementPattern": "horizontal_pull",
+      "mechanic": "compound",
+      "primaryMuscle": "upper_back",
+      "secondaryMuscles": [
+        "lats",
+        "rear_deltoid",
+        "biceps"
+      ],
+      "equipment": [
+        "machine"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Nome pt-BR único e idêntico após normalização; identidade conferida no catálogo atual."
+    },
+    {
+      "canonicalId": "stiff-com-halteres",
+      "canonicalName": "Stiff com Halteres",
+      "sourceNameV11": [
+        "Terra romeno halteres",
+        "RDL"
+      ],
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "dumbbell-stiff-leg-deadlift",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": "Stiff com Halteres",
+      "movementPattern": "hinge",
+      "mechanic": "compound",
+      "primaryMuscle": "hamstrings",
+      "secondaryMuscles": [
+        "glutes",
+        "lower_back"
+      ],
+      "equipment": [
+        "dumbbell"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Nome pt-BR único e idêntico após normalização; identidade conferida no catálogo atual."
+    },
+    {
+      "canonicalId": "puxada-barra",
+      "canonicalName": "Puxada Barra",
+      "sourceNameV11": null,
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "bar-lat-pulldown",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": "Puxada Barra",
+      "movementPattern": "vertical_pull",
+      "mechanic": "compound",
+      "primaryMuscle": "lats",
+      "secondaryMuscles": [
+        "biceps",
+        "rear_deltoid"
+      ],
+      "equipment": [
+        "cable"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Nome pt-BR único e idêntico após normalização; identidade conferida no catálogo atual."
+    },
+    {
+      "canonicalId": "elevacao-lateral-halteres",
+      "canonicalName": "Elevação Lateral Halteres",
+      "sourceNameV11": [
+        "Elevação lateral"
+      ],
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "dumbbell-lateral-raise",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": "Elevação Lateral Halteres",
+      "movementPattern": "shoulder_abduction",
+      "mechanic": "isolation",
+      "primaryMuscle": "side_deltoid",
+      "secondaryMuscles": [],
+      "equipment": [
+        "dumbbell"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Nome pt-BR único e idêntico após normalização; identidade conferida no catálogo atual."
+    },
+    {
+      "canonicalId": "rosca-direta-barra-w",
+      "canonicalName": "Rosca Direta Barra W",
+      "sourceNameV11": [
+        "Braços"
+      ],
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "ez-bar-biceps-curl",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": "Rosca Direta Barra W",
+      "movementPattern": "elbow_flexion",
+      "mechanic": "isolation",
+      "primaryMuscle": "biceps",
+      "secondaryMuscles": [
+        "forearms"
+      ],
+      "equipment": [
+        "ez_bar"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Nome pt-BR único e idêntico após normalização; identidade conferida no catálogo atual."
+    },
+    {
+      "canonicalId": "triceps-polia",
+      "canonicalName": "Tríceps Polia",
+      "sourceNameV11": null,
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "cable-triceps-pushdown",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": "Tríceps Polia",
+      "movementPattern": "elbow_extension",
+      "mechanic": "isolation",
+      "primaryMuscle": "triceps",
+      "secondaryMuscles": [],
+      "equipment": [
+        "cable"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Nome pt-BR único e idêntico após normalização; identidade conferida no catálogo atual."
+    },
+    {
+      "canonicalId": "leg-press-45",
+      "canonicalName": "Leg Press 45",
+      "sourceNameV11": null,
+      "sourceNameV12": null,
+      "exactSeedId": "leg-press-45",
+      "runtimeId": "leg-press-45",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": "Leg Press 45",
+      "movementPattern": "squat",
+      "mechanic": "compound",
+      "primaryMuscle": "quads",
+      "secondaryMuscles": [
+        "glutes",
+        "hamstrings"
+      ],
+      "equipment": [
+        "leg_press"
+      ],
+      "status": "EXACT_MATCH",
+      "evidence": "ID idêntico no EXERCISES_SEED."
+    },
+    {
+      "canonicalId": "supino-inclinado-articulado",
+      "canonicalName": "Supino Inclinado Articulado",
+      "sourceNameV11": null,
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "iso-lateral-incline-chest-press-machine",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": "Supino Inclinado Articulado",
+      "movementPattern": "horizontal_push",
+      "mechanic": "compound",
+      "primaryMuscle": "chest",
+      "secondaryMuscles": [
+        "front_deltoid",
+        "triceps"
+      ],
+      "equipment": [
+        "machine"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Nome pt-BR único e idêntico após normalização; identidade conferida no catálogo atual."
+    },
+    {
+      "canonicalId": "remada-baixa-aberta-pegada-neutra",
+      "canonicalName": "Remada Baixa Aberta Pegada Neutra",
+      "sourceNameV11": null,
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "low-cable-row-wide-neutral-grip",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": "Remada Baixa Aberta Pegada Neutra",
+      "movementPattern": "horizontal_pull",
+      "mechanic": "compound",
+      "primaryMuscle": "upper_back",
+      "secondaryMuscles": [
+        "lats",
+        "rear_deltoid",
+        "biceps"
+      ],
+      "equipment": [
+        "cable"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Nome pt-BR único e idêntico após normalização; identidade conferida no catálogo atual."
+    },
+    {
+      "canonicalId": "mesa-flexora",
+      "canonicalName": "Mesa Flexora",
+      "sourceNameV11": null,
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "lying-leg-curl-machine",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": "Mesa Flexora",
+      "movementPattern": "knee_flexion",
+      "mechanic": "isolation",
+      "primaryMuscle": "hamstrings",
+      "secondaryMuscles": [],
+      "equipment": [
+        "machine"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Nome pt-BR único e idêntico após normalização; identidade conferida no catálogo atual."
+    },
+    {
+      "canonicalId": "desenvolvimento-maquina",
+      "canonicalName": "Desenvolvimento Máquina",
+      "sourceNameV11": null,
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "machine-shoulder-press",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": "Desenvolvimento Máquina",
+      "movementPattern": "vertical_push",
+      "mechanic": "compound",
+      "primaryMuscle": "front_deltoid",
+      "secondaryMuscles": [
+        "side_deltoid",
+        "triceps"
+      ],
+      "equipment": [
+        "machine"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Nome pt-BR único e idêntico após normalização; identidade conferida no catálogo atual."
+    },
+    {
+      "canonicalId": "puxada-triangulo",
+      "canonicalName": "Puxada Triângulo",
+      "sourceNameV11": null,
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "v-bar-pulldown",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": "Puxada Triângulo",
+      "movementPattern": "vertical_pull",
+      "mechanic": "compound",
+      "primaryMuscle": "lats",
+      "secondaryMuscles": [
+        "biceps",
+        "rear_deltoid"
+      ],
+      "equipment": [
+        "cable"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Nome pt-BR único e idêntico após normalização; identidade conferida no catálogo atual."
+    },
+    {
+      "canonicalId": "panturrilha-em-pe",
+      "canonicalName": "Panturrilha em Pé",
+      "sourceNameV11": [
+        "Panturrilha"
+      ],
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "standing-calf-raise-machine",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": "Panturrilha em Pé",
+      "movementPattern": "calf_raise",
+      "mechanic": "isolation",
+      "primaryMuscle": "calves",
+      "secondaryMuscles": [],
+      "equipment": [
+        "machine"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Nome pt-BR único e idêntico após normalização; identidade conferida no catálogo atual."
+    },
+    {
+      "canonicalId": "prancha",
+      "canonicalName": "Prancha",
+      "sourceNameV11": [
+        "Core"
+      ],
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "plank",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": "Prancha",
+      "movementPattern": "core_anti_extension",
+      "mechanic": "isolation",
+      "primaryMuscle": "abs",
+      "secondaryMuscles": [
+        "lower_back"
+      ],
+      "equipment": [
+        "bodyweight"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Nome pt-BR único e idêntico após normalização; identidade conferida no catálogo atual."
+    },
+    {
+      "canonicalId": "cadeira-extensora",
+      "canonicalName": "Cadeira Extensora",
+      "sourceNameV11": null,
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "leg-extension-machine",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": "Cadeira Extensora",
+      "movementPattern": "knee_extension",
+      "mechanic": "isolation",
+      "primaryMuscle": "quads",
+      "secondaryMuscles": [],
+      "equipment": [
+        "machine"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Nome pt-BR único e idêntico após normalização; identidade conferida no catálogo atual."
+    },
+    {
+      "canonicalId": "agachamento-bulgaro",
+      "canonicalName": "Agachamento Búlgaro",
+      "sourceNameV11": null,
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "bulgarian-split-squat",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": "Agachamento Búlgaro",
+      "movementPattern": "lunge",
+      "mechanic": "compound",
+      "primaryMuscle": "quads",
+      "secondaryMuscles": [
+        "glutes",
+        "hamstrings"
+      ],
+      "equipment": [
+        "bodyweight",
+        "bench"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Nome pt-BR único e idêntico após normalização; identidade conferida no catálogo atual."
+    },
+    {
+      "canonicalId": "cross-over-na-polia-alta",
+      "canonicalName": "Cross Over na Polia Alta",
+      "sourceNameV11": null,
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "cable-crossover-fly",
+      "possibleEquivalentId": "cable-crossover-fly",
+      "runtimeNamePtBR": "Crucifixo no Crossover",
+      "movementPattern": "horizontal_adduction",
+      "mechanic": "isolation",
+      "primaryMuscle": "chest",
+      "secondaryMuscles": [
+        "front_deltoid"
+      ],
+      "equipment": [
+        "cable"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Metadata (horizontal_adduction, isolation, chest/front_deltoid, cable) confere campo a campo com cable-crossover-fly no catálogo runtime; mesmo padrão, mecânica, músculos e equipamento — é o cruzamento de polias no cabo."
+    },
+    {
+      "canonicalId": "triceps-corda",
+      "canonicalName": "Tríceps Corda",
+      "sourceNameV11": [
+        "Braços"
+      ],
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "triceps-rope-pushdown",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": "Tríceps Corda",
+      "movementPattern": "elbow_extension",
+      "mechanic": "isolation",
+      "primaryMuscle": "triceps",
+      "secondaryMuscles": [],
+      "equipment": [
+        "cable"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Nome pt-BR único e idêntico após normalização; identidade conferida no catálogo atual."
+    },
+    {
+      "canonicalId": "passadas",
+      "canonicalName": "Passadas",
+      "sourceNameV11": null,
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "walking-lunges",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": "Passadas",
+      "movementPattern": "lunge",
+      "mechanic": "compound",
+      "primaryMuscle": "quads",
+      "secondaryMuscles": [
+        "glutes",
+        "hamstrings"
+      ],
+      "equipment": [
+        "bodyweight"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Nome pt-BR único e idêntico após normalização; identidade conferida no catálogo atual."
+    },
+    {
+      "canonicalId": "cadeira-flexora",
+      "canonicalName": "Cadeira Flexora",
+      "sourceNameV11": null,
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "seated-leg-curl-machine",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": "Cadeira Flexora",
+      "movementPattern": "knee_flexion",
+      "mechanic": "isolation",
+      "primaryMuscle": "hamstrings",
+      "secondaryMuscles": [],
+      "equipment": [
+        "machine"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Nome pt-BR único e idêntico após normalização; identidade conferida no catálogo atual."
+    },
+    {
+      "canonicalId": "posterior-de-ombro-na-polia",
+      "canonicalName": "Posterior de Ombro na Polia",
+      "sourceNameV11": null,
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "cable-rear-delt-fly",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": "Posterior de Ombro na Polia",
+      "movementPattern": "horizontal_pull",
+      "mechanic": "isolation",
+      "primaryMuscle": "rear_deltoid",
+      "secondaryMuscles": [
+        "traps"
+      ],
+      "equipment": [
+        "cable"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Nome pt-BR único e idêntico após normalização; identidade conferida no catálogo atual."
+    },
+    {
+      "canonicalId": "rosca-martelo",
+      "canonicalName": "Rosca Martelo",
+      "sourceNameV11": [
+        "Rosca martelo"
+      ],
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "hammer-curl",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": "Rosca Martelo",
+      "movementPattern": "elbow_flexion",
+      "mechanic": "isolation",
+      "primaryMuscle": "biceps",
+      "secondaryMuscles": [
+        "forearms"
+      ],
+      "equipment": [
+        "dumbbell"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Nome pt-BR único e idêntico após normalização; identidade conferida no catálogo atual."
+    },
+    {
+      "canonicalId": "supino-declinado",
+      "canonicalName": "Supino Declinado",
+      "sourceNameV11": null,
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "decline-barbell-bench-press",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": null,
+      "movementPattern": null,
+      "mechanic": null,
+      "primaryMuscle": null,
+      "secondaryMuscles": null,
+      "equipment": null,
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Decisão de produto fechada: cadastrado como exercício próprio (resistance, compound, horizontal_push, chest/lower_chest, secondary front_deltoid+triceps, barbell+bench). Ver src/data/exercisesSeedData.ts."
+    },
+    {
+      "canonicalId": "crucifixo-com-halteres",
+      "canonicalName": "Crucifixo com Halteres",
+      "sourceNameV11": null,
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "dumbbell-fly",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": null,
+      "movementPattern": null,
+      "mechanic": null,
+      "primaryMuscle": null,
+      "secondaryMuscles": null,
+      "equipment": null,
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Decisão de produto fechada: cadastrado como exercício próprio (resistance, isolation, horizontal_adduction, chest, secondary front_deltoid, dumbbell+bench). Ver src/data/exercisesSeedData.ts."
+    },
+    {
+      "canonicalId": "desenvolvimento-com-halteres",
+      "canonicalName": "Desenvolvimento com Halteres",
+      "sourceNameV11": [
+        "Desenvolvimento"
+      ],
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "dumbbell-shoulder-press",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": "Desenvolvimento com Halteres",
+      "movementPattern": "vertical_push",
+      "mechanic": "compound",
+      "primaryMuscle": "front_deltoid",
+      "secondaryMuscles": [
+        "side_deltoid",
+        "triceps"
+      ],
+      "equipment": [
+        "dumbbell"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Nome pt-BR único e idêntico após normalização; identidade conferida no catálogo atual."
+    },
+    {
+      "canonicalId": "remada-articulada-unilateral",
+      "canonicalName": "Remada Articulada Unilateral",
+      "sourceNameV11": null,
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "unilateral-iso-lateral-row-machine",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": "Remada Articulada Unilateral",
+      "movementPattern": "horizontal_pull",
+      "mechanic": "compound",
+      "primaryMuscle": "upper_back",
+      "secondaryMuscles": [
+        "lats",
+        "rear_deltoid",
+        "biceps"
+      ],
+      "equipment": [
+        "machine"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Nome pt-BR único e idêntico após normalização; identidade conferida no catálogo atual."
+    },
+    {
+      "canonicalId": "remada-curvada-com-halteres-pegada-aberta",
+      "canonicalName": "Remada Curvada com Halteres Pegada Aberta",
+      "sourceNameV11": null,
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "bent-over-dumbbell-row",
+      "possibleEquivalentId": "bent-over-dumbbell-row",
+      "runtimeNamePtBR": "Remada Curvada com Halteres",
+      "movementPattern": "horizontal_pull",
+      "mechanic": "compound",
+      "primaryMuscle": "upper_back",
+      "secondaryMuscles": [
+        "lats",
+        "rear_deltoid",
+        "biceps"
+      ],
+      "equipment": [
+        "dumbbell"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Metadata (horizontal_pull, compound, upper_back/lats/rear_deltoid/biceps, dumbbell) confere com bent-over-dumbbell-row. O catálogo não mantém identidades de remada com halteres por variação de pegada (diferente das remadas no cabo, que têm 3 variantes de pegada); \"pegada aberta\" é uma dica de execução, não uma identidade separada."
+    },
+    {
+      "canonicalId": "rosca-scott",
+      "canonicalName": "Rosca Scott",
+      "sourceNameV11": null,
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "preacher-curl",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": "Rosca Scott",
+      "movementPattern": "elbow_flexion",
+      "mechanic": "isolation",
+      "primaryMuscle": "biceps",
+      "secondaryMuscles": [
+        "forearms"
+      ],
+      "equipment": [
+        "ez_bar",
+        "bench"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Nome pt-BR único e idêntico após normalização; identidade conferida no catálogo atual."
+    },
+    {
+      "canonicalId": "mobilidade-geral",
+      "canonicalName": "Mobilidade Geral",
+      "sourceNameV11": null,
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "mobilidade-geral",
+      "possibleEquivalentId": "thoracic-mobility",
+      "runtimeNamePtBR": "Mobilidade Torácica",
+      "movementPattern": "mobility",
+      "mechanic": "isolation",
+      "primaryMuscle": "upper_back",
+      "secondaryMuscles": [
+        "abs"
+      ],
+      "equipment": [
+        "bodyweight"
+      ],
+      "status": "EXACT_MATCH",
+      "evidence": "Decisão de produto fechada: cadastrado como bloco executável (kind: mobility, sem primaryMuscle, sem região fixa). Ver src/workoutPrescription/canonicalActivities.ts. id runtime idêntico ao canonicalId."
+    },
+    {
+      "canonicalId": "cardio-leve",
+      "canonicalName": "Cardio Leve",
+      "sourceNameV11": null,
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "cardio-leve",
+      "possibleEquivalentId": "walking",
+      "runtimeNamePtBR": "Caminhada",
+      "movementPattern": "gait",
+      "mechanic": "compound",
+      "primaryMuscle": "quads",
+      "secondaryMuscles": [
+        "glutes",
+        "hamstrings",
+        "calves"
+      ],
+      "equipment": [
+        "bodyweight"
+      ],
+      "status": "EXACT_MATCH",
+      "evidence": "Decisão de produto fechada: cadastrado como atividade executável (kind: cardio, sem primaryMuscle, sem modalidade fixa). Ver src/workoutPrescription/canonicalActivities.ts. id runtime idêntico ao canonicalId — nenhuma tradução necessária."
+    },
+    {
+      "canonicalId": "agachamento-goblet",
+      "canonicalName": "Agachamento Goblet",
+      "sourceNameV11": null,
+      "sourceNameV12": [
+        "Goblet Squat"
+      ],
+      "exactSeedId": null,
+      "runtimeId": "goblet-squat",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": "Agachamento Goblet",
+      "movementPattern": "squat",
+      "mechanic": "compound",
+      "primaryMuscle": "quads",
+      "secondaryMuscles": [
+        "glutes",
+        "hamstrings",
+        "abs"
+      ],
+      "equipment": [
+        "dumbbell"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Nome pt-BR único e idêntico após normalização; identidade conferida no catálogo atual."
+    },
+    {
+      "canonicalId": "flexao-de-braco",
+      "canonicalName": "Flexão de Braço",
+      "sourceNameV11": [
+        "Supino halteres/Flexão",
+        "Supino inclinado/Flexão"
+      ],
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "push-up",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": "Flexão de Braço",
+      "movementPattern": "horizontal_push",
+      "mechanic": "compound",
+      "primaryMuscle": "chest",
+      "secondaryMuscles": [
+        "triceps",
+        "front_deltoid",
+        "abs"
+      ],
+      "equipment": [
+        "bodyweight"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Nome pt-BR único e idêntico após normalização; identidade conferida no catálogo atual."
+    },
+    {
+      "canonicalId": "remada-serrote-unilateral",
+      "canonicalName": "Remada Serrote Unilateral",
+      "sourceNameV11": [
+        "Remada unilateral",
+        "Remada elástico/halter"
+      ],
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "one-arm-dumbbell-row",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": "Remada Serrote Unilateral",
+      "movementPattern": "horizontal_pull",
+      "mechanic": "compound",
+      "primaryMuscle": "upper_back",
+      "secondaryMuscles": [
+        "lats",
+        "rear_deltoid",
+        "biceps"
+      ],
+      "equipment": [
+        "dumbbell",
+        "bench"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Nome pt-BR único e idêntico após normalização; identidade conferida no catálogo atual."
+    },
+    {
+      "canonicalId": "agachamento-bulgaro-com-halter",
+      "canonicalName": "Agachamento Búlgaro com Halter",
+      "sourceNameV11": [
+        "Búlgaro"
+      ],
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "bulgarian-split-squat-dumbbell",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": "Agachamento Búlgaro com Halter",
+      "movementPattern": "lunge",
+      "mechanic": "compound",
+      "primaryMuscle": "quads",
+      "secondaryMuscles": [
+        "glutes",
+        "hamstrings"
+      ],
+      "equipment": [
+        "dumbbell",
+        "bench"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Nome pt-BR único e idêntico após normalização; identidade conferida no catálogo atual."
+    },
+    {
+      "canonicalId": "elevacao-pelvica",
+      "canonicalName": "Elevação Pélvica",
+      "sourceNameV11": [
+        "Hip Thrust",
+        "Hip Thrust / Glute Bridge"
+      ],
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "hip-thrust",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": "Elevação Pélvica",
+      "movementPattern": "hip_extension",
+      "mechanic": "compound",
+      "primaryMuscle": "glutes",
+      "secondaryMuscles": [
+        "hamstrings"
+      ],
+      "equipment": [
+        "bench"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Nome pt-BR único e idêntico após normalização; identidade conferida no catálogo atual."
+    },
+    {
+      "canonicalId": "puxada-com-elastico",
+      "canonicalName": "Puxada com Elástico",
+      "sourceNameV11": [
+        "Puxada com elástico/Barra fixa"
+      ],
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "resistance-band-lat-pulldown",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": "Puxada com Elástico",
+      "movementPattern": "vertical_pull",
+      "mechanic": "compound",
+      "primaryMuscle": "lats",
+      "secondaryMuscles": [
+        "biceps",
+        "rear_deltoid"
+      ],
+      "equipment": [
+        "resistance_band"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Nome pt-BR único e idêntico após normalização; identidade conferida no catálogo atual."
+    },
+    {
+      "canonicalId": "rosca-sentada-com-halteres",
+      "canonicalName": "Rosca Sentada com Halteres",
+      "sourceNameV11": [
+        "Braços"
+      ],
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "seated-dumbbell-curl",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": "Rosca Sentada com Halteres",
+      "movementPattern": "elbow_flexion",
+      "mechanic": "isolation",
+      "primaryMuscle": "biceps",
+      "secondaryMuscles": [
+        "forearms"
+      ],
+      "equipment": [
+        "dumbbell",
+        "bench"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Nome pt-BR único e idêntico após normalização; identidade conferida no catálogo atual."
+    },
+    {
+      "canonicalId": "triceps-frances-halteres",
+      "canonicalName": "Tríceps Francês Halteres",
+      "sourceNameV11": [
+        "Braços"
+      ],
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "dumbbell-overhead-triceps-extension",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": "Tríceps Francês Halteres",
+      "movementPattern": "elbow_extension",
+      "mechanic": "isolation",
+      "primaryMuscle": "triceps",
+      "secondaryMuscles": [],
+      "equipment": [
+        "dumbbell"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Nome pt-BR único e idêntico após normalização; identidade conferida no catálogo atual."
+    },
+    {
+      "canonicalId": "flexao-de-braco-com-pes-elevados",
+      "canonicalName": "Flexão de Braço com Pés Elevados",
+      "sourceNameV11": null,
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "decline-push-up",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": null,
+      "movementPattern": null,
+      "mechanic": null,
+      "primaryMuscle": null,
+      "secondaryMuscles": null,
+      "equipment": null,
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Decisão de produto fechada: cadastrado como exercício próprio (resistance, compound, horizontal_push, chest, secondary triceps+front_deltoid, bodyweight+bench). Ver src/data/exercisesSeedData.ts."
+    },
+    {
+      "canonicalId": "remada-com-elastico-pegada-aberta",
+      "canonicalName": "Remada com Elástico Pegada Aberta",
+      "sourceNameV11": null,
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "resistance-band-row",
+      "possibleEquivalentId": "resistance-band-row",
+      "runtimeNamePtBR": "Remada com Elástico",
+      "movementPattern": "horizontal_pull",
+      "mechanic": "compound",
+      "primaryMuscle": "upper_back",
+      "secondaryMuscles": [
+        "lats",
+        "rear_deltoid",
+        "biceps"
+      ],
+      "equipment": [
+        "resistance_band"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Metadata (horizontal_pull, compound, upper_back/lats/rear_deltoid/biceps, resistance_band) confere exatamente com resistance-band-row. As instruções do exercício runtime são neutras quanto à pegada (\"puxe os cotovelos para trás\") e não há remada com elástico específica por pegada no catálogo."
+    },
+    {
+      "canonicalId": "agachamento",
+      "canonicalName": "Agachamento",
+      "sourceNameV11": null,
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "bodyweight-squat",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": "Agachamento",
+      "movementPattern": "squat",
+      "mechanic": "compound",
+      "primaryMuscle": "quads",
+      "secondaryMuscles": [
+        "glutes",
+        "hamstrings"
+      ],
+      "equipment": [
+        "bodyweight"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Nome pt-BR único e idêntico após normalização; identidade conferida no catálogo atual."
+    },
+    {
+      "canonicalId": "flexao-de-braco-com-maos-elevadas",
+      "canonicalName": "Flexão de Braço com Mãos Elevadas",
+      "sourceNameV11": null,
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "incline-push-up",
+      "possibleEquivalentId": "wall-push-up",
+      "runtimeNamePtBR": "Flexão na Parede",
+      "movementPattern": "horizontal_push",
+      "mechanic": "compound",
+      "primaryMuscle": "chest",
+      "secondaryMuscles": [
+        "triceps",
+        "front_deltoid"
+      ],
+      "equipment": [
+        "bodyweight"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Decisão de produto fechada: cadastrado como exercício próprio (resistance, compound, horizontal_push, chest, secondary triceps+front_deltoid, bodyweight+bench). Distinto de wall-push-up (parede vertical). Ver src/data/exercisesSeedData.ts."
+    },
+    {
+      "canonicalId": "subida-no-banco",
+      "canonicalName": "Subida no Banco",
+      "sourceNameV11": null,
+      "sourceNameV12": [
+        "Step-up"
+      ],
+      "exactSeedId": null,
+      "runtimeId": "bench-step-up",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": "Subida no Banco",
+      "movementPattern": "lunge",
+      "mechanic": "compound",
+      "primaryMuscle": "quads",
+      "secondaryMuscles": [
+        "glutes",
+        "hamstrings",
+        "calves"
+      ],
+      "equipment": [
+        "bench"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Nome pt-BR único e idêntico após normalização; identidade conferida no catálogo atual."
+    },
+    {
+      "canonicalId": "crucifixo-inverso-com-halteres",
+      "canonicalName": "Crucifixo Inverso com Halteres",
+      "sourceNameV11": null,
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "dumbbell-rear-delt-fly",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": null,
+      "movementPattern": null,
+      "mechanic": null,
+      "primaryMuscle": null,
+      "secondaryMuscles": null,
+      "equipment": null,
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Decisão de produto fechada: cadastrado como exercício próprio (resistance, isolation, horizontal_pull, rear_deltoid, secondary traps, dumbbell). Ver src/data/exercisesSeedData.ts."
+    },
+    {
+      "canonicalId": "pullover-com-elastico",
+      "canonicalName": "Pullover com Elástico",
+      "sourceNameV11": null,
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "resistance-band-pullover",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": null,
+      "movementPattern": null,
+      "mechanic": null,
+      "primaryMuscle": null,
+      "secondaryMuscles": null,
+      "equipment": null,
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Decisão de produto fechada: cadastrado como exercício próprio (resistance, isolation, vertical_pull, lats, resistance_band). Ver src/data/exercisesSeedData.ts."
+    },
+    {
+      "canonicalId": "remada-com-elastico-pegada-neutra",
+      "canonicalName": "Remada com Elástico Pegada Neutra",
+      "sourceNameV11": null,
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "resistance-band-row",
+      "possibleEquivalentId": "resistance-band-row",
+      "runtimeNamePtBR": "Remada com Elástico",
+      "movementPattern": "horizontal_pull",
+      "mechanic": "compound",
+      "primaryMuscle": "upper_back",
+      "secondaryMuscles": [
+        "lats",
+        "rear_deltoid",
+        "biceps"
+      ],
+      "equipment": [
+        "resistance_band"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Mesmo raciocínio da variante de pegada aberta: metadata idêntica (horizontal_pull, compound, upper_back/lats/rear_deltoid/biceps, resistance_band) e o catálogo mantém uma única identidade genérica de remada com elástico, sem diferenciar pegada."
+    },
+    {
+      "canonicalId": "cadeira-abdutora",
+      "canonicalName": "Cadeira Abdutora",
+      "sourceNameV11": null,
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "seated-hip-abductor-machine",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": "Cadeira Abdutora",
+      "movementPattern": "hip_abduction",
+      "mechanic": "isolation",
+      "primaryMuscle": "abductors",
+      "secondaryMuscles": [
+        "glutes"
+      ],
+      "equipment": [
+        "machine"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Nome pt-BR único e idêntico após normalização; identidade conferida no catálogo atual."
+    },
+    {
+      "canonicalId": "ponte-de-gluteos",
+      "canonicalName": "Ponte de Glúteos",
+      "sourceNameV11": [
+        "Hip Thrust / Glute Bridge"
+      ],
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "glute-bridge",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": "Ponte de Glúteos",
+      "movementPattern": "hip_extension",
+      "mechanic": "compound",
+      "primaryMuscle": "glutes",
+      "secondaryMuscles": [
+        "hamstrings",
+        "abs"
+      ],
+      "equipment": [
+        "bodyweight"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Nome pt-BR único e idêntico após normalização; identidade conferida no catálogo atual."
+    },
+    {
+      "canonicalId": "flexao-de-joelhos-com-elastico",
+      "canonicalName": "Flexão de Joelhos com Elástico",
+      "sourceNameV11": null,
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "resistance-band-standing-leg-curl",
+      "possibleEquivalentId": "supported-standing-leg-curl",
+      "runtimeNamePtBR": "Flexão de Joelho com Apoio",
+      "movementPattern": "knee_flexion",
+      "mechanic": "isolation",
+      "primaryMuscle": "hamstrings",
+      "secondaryMuscles": [
+        "calves"
+      ],
+      "equipment": [
+        "bodyweight"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Decisão de produto fechada: cadastrado como exercício próprio (resistance, isolation, knee_flexion, hamstrings, resistance_band, unilateral — mesma lateralidade de supported-standing-leg-curl, o candidato bodyweight mais próximo). Ver src/data/exercisesSeedData.ts."
+    },
+    {
+      "canonicalId": "abducao-de-quadril-com-mini-band",
+      "canonicalName": "Abdução de Quadril com Mini Band",
+      "sourceNameV11": [
+        "Abdução de quadril (máquina/elástico)"
+      ],
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "mini-band-hip-abduction",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": "Abdução de Quadril com Mini Band",
+      "movementPattern": "hip_abduction",
+      "mechanic": "isolation",
+      "primaryMuscle": "abductors",
+      "secondaryMuscles": [
+        "glutes"
+      ],
+      "equipment": [
+        "mini_band"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Nome pt-BR único e idêntico após normalização; identidade conferida no catálogo atual."
+    },
+    {
+      "canonicalId": "abdomen-supra-chao",
+      "canonicalName": "Abdômen Supra Chão",
+      "sourceNameV11": null,
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "floor-crunch",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": "Abdômen Supra Chão",
+      "movementPattern": "core_flexion",
+      "mechanic": "isolation",
+      "primaryMuscle": "abs",
+      "secondaryMuscles": [],
+      "equipment": [
+        "bodyweight"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Nome pt-BR único e idêntico após normalização; identidade conferida no catálogo atual."
+    },
+    {
+      "canonicalId": "levantamento-terra",
+      "canonicalName": "Levantamento Terra",
+      "sourceNameV11": null,
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "conventional-deadlift",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": "Levantamento Terra",
+      "movementPattern": "hinge",
+      "mechanic": "compound",
+      "primaryMuscle": "glutes",
+      "secondaryMuscles": [
+        "hamstrings",
+        "lower_back",
+        "traps"
+      ],
+      "equipment": [
+        "barbell"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Nome pt-BR único e idêntico após normalização; identidade conferida no catálogo atual."
+    },
+    {
+      "canonicalId": "agachamento-hack",
+      "canonicalName": "Agachamento Hack",
+      "sourceNameV11": null,
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "hack-squat-machine",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": "Agachamento Hack",
+      "movementPattern": "squat",
+      "mechanic": "compound",
+      "primaryMuscle": "quads",
+      "secondaryMuscles": [
+        "glutes"
+      ],
+      "equipment": [
+        "hack_machine"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Nome pt-BR único e idêntico após normalização; identidade conferida no catálogo atual."
+    },
+    {
+      "canonicalId": "farmer-walk",
+      "canonicalName": "Farmer Walk",
+      "sourceNameV11": null,
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "farmers-walk",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": "Caminhada do Fazendeiro",
+      "movementPattern": "loaded_carry",
+      "mechanic": "compound",
+      "primaryMuscle": "forearms",
+      "secondaryMuscles": [
+        "traps",
+        "abs",
+        "glutes"
+      ],
+      "equipment": [
+        "dumbbell"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Equivalência semântica conferida com a descrição e o catálogo atual."
+    },
+    {
+      "canonicalId": "supino-inclinado-com-halteres",
+      "canonicalName": "Supino Inclinado com Halteres",
+      "sourceNameV11": [
+        "Supino halteres"
+      ],
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "incline-dumbbell-bench-press",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": "Supino Inclinado com Halteres",
+      "movementPattern": "horizontal_push",
+      "mechanic": "compound",
+      "primaryMuscle": "chest",
+      "secondaryMuscles": [
+        "front_deltoid",
+        "triceps"
+      ],
+      "equipment": [
+        "dumbbell",
+        "bench"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Nome pt-BR único e idêntico após normalização; identidade conferida no catálogo atual."
+    },
+    {
+      "canonicalId": "caminhada-do-fazendeiro",
+      "canonicalName": "Caminhada do Fazendeiro",
+      "sourceNameV11": null,
+      "sourceNameV12": [
+        "Farmer's Walk"
+      ],
+      "exactSeedId": null,
+      "runtimeId": "farmers-walk",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": "Caminhada do Fazendeiro",
+      "movementPattern": "loaded_carry",
+      "mechanic": "compound",
+      "primaryMuscle": "forearms",
+      "secondaryMuscles": [
+        "traps",
+        "abs",
+        "glutes"
+      ],
+      "equipment": [
+        "dumbbell"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Nome pt-BR único e idêntico após normalização; identidade conferida no catálogo atual."
+    },
+    {
+      "canonicalId": "mobilidade-dinamica-geral",
+      "canonicalName": "Mobilidade Dinâmica Geral",
+      "sourceNameV11": null,
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "mobilidade-dinamica-geral",
+      "possibleEquivalentId": "thoracic-mobility",
+      "runtimeNamePtBR": "Mobilidade Torácica",
+      "movementPattern": "mobility",
+      "mechanic": "isolation",
+      "primaryMuscle": "upper_back",
+      "secondaryMuscles": [
+        "abs"
+      ],
+      "equipment": [
+        "bodyweight"
+      ],
+      "status": "EXACT_MATCH",
+      "evidence": "Decisão de produto fechada: cadastrado como bloco executável (kind: mobility, sem primaryMuscle, sem região fixa). Ver src/workoutPrescription/canonicalActivities.ts. id runtime idêntico ao canonicalId."
+    },
+    {
+      "canonicalId": "cardio-continuo",
+      "canonicalName": "Cardio Contínuo",
+      "sourceNameV11": null,
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "cardio-continuo",
+      "possibleEquivalentId": "walking",
+      "runtimeNamePtBR": "Caminhada",
+      "movementPattern": "gait",
+      "mechanic": "compound",
+      "primaryMuscle": "quads",
+      "secondaryMuscles": [
+        "glutes",
+        "hamstrings",
+        "calves"
+      ],
+      "equipment": [
+        "bodyweight"
+      ],
+      "status": "EXACT_MATCH",
+      "evidence": "Decisão de produto fechada: cadastrado como atividade executável (kind: cardio, sem primaryMuscle, sem modalidade fixa). Ver src/workoutPrescription/canonicalActivities.ts. id runtime idêntico ao canonicalId."
+    },
+    {
+      "canonicalId": "cardio-intervalado",
+      "canonicalName": "Cardio Intervalado",
+      "sourceNameV11": null,
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "cardio-intervalado",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": null,
+      "movementPattern": null,
+      "mechanic": null,
+      "primaryMuscle": null,
+      "secondaryMuscles": null,
+      "equipment": null,
+      "status": "EXACT_MATCH",
+      "evidence": "Decisão de produto fechada: cadastrado como atividade executável (kind: cardio, sem primaryMuscle). Estrutura de ciclos/forte-leve já preservada em cycleRange no slot do exercício, não no catálogo. Ver src/workoutPrescription/canonicalActivities.ts."
+    },
+    {
+      "canonicalId": "mobilidade-dinamica-ombros-toracica",
+      "canonicalName": "Mobilidade Dinâmica de Ombros e Coluna Torácica",
+      "sourceNameV11": null,
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "thoracic-mobility",
+      "possibleEquivalentId": "thoracic-mobility",
+      "runtimeNamePtBR": "Mobilidade Torácica",
+      "movementPattern": "mobility",
+      "mechanic": "isolation",
+      "primaryMuscle": "upper_back",
+      "secondaryMuscles": [
+        "abs"
+      ],
+      "equipment": [
+        "bodyweight"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Metadata (mobility, isolation, upper_back/abs, bodyweight) confere com thoracic-mobility, e o nome canônico cita explicitamente \"coluna torácica\" além de ombros, alinhado com a rotação de tronco descrita no exercício runtime."
+    },
+    {
+      "canonicalId": "mobilidade-dinamica-quadril-tornozelo",
+      "canonicalName": "Mobilidade Dinâmica de Quadril e Tornozelo",
+      "sourceNameV11": null,
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "mobilidade-dinamica-quadril-tornozelo",
+      "possibleEquivalentId": "hip-mobility",
+      "runtimeNamePtBR": "Mobilidade de Quadril",
+      "movementPattern": "mobility",
+      "mechanic": "isolation",
+      "primaryMuscle": "glutes",
+      "secondaryMuscles": [
+        "adductors",
+        "abductors"
+      ],
+      "equipment": [
+        "bodyweight"
+      ],
+      "status": "EXACT_MATCH",
+      "evidence": "Decisão de produto fechada: cadastrado como bloco executável (kind: mobility, sem primaryMuscle) cobrindo quadril E tornozelo explicitamente (não mais restrito só a hip-mobility). Ver src/workoutPrescription/canonicalActivities.ts. id runtime idêntico ao canonicalId."
+    },
+    {
+      "canonicalId": "agachamento-para-banco",
+      "canonicalName": "Agachamento para Banco",
+      "sourceNameV11": [
+        "Sit-to-Stand / Agachamento para banco"
+      ],
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "chair-sit-to-stand",
+      "possibleEquivalentId": "chair-squat",
+      "runtimeNamePtBR": "Agachamento até a Cadeira",
+      "movementPattern": "squat",
+      "mechanic": "compound",
+      "primaryMuscle": "quads",
+      "secondaryMuscles": [
+        "glutes",
+        "hamstrings"
+      ],
+      "equipment": [
+        "chair"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "sourceNameV11 = \"Sit-to-Stand / Agachamento para banco\" corresponde quase literalmente ao nome runtime \"Sentar e Levantar da Cadeira\" / \"Chair Sit-to-Stand\" (início sentado, bodyPosition: seated). O candidato originalmente proposto, chair-squat, começa em pé (bodyPosition: standing) — padrão de movimento diferente do sit-to-stand descrito na fonte v1.1."
+    },
+    {
+      "canonicalId": "marcha-controlada",
+      "canonicalName": "Marcha Controlada",
+      "sourceNameV11": null,
+      "sourceNameV12": [
+        "Marcha controlada"
+      ],
+      "exactSeedId": null,
+      "runtimeId": "controlled-marching",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": "Marcha Controlada",
+      "movementPattern": "gait",
+      "mechanic": "compound",
+      "primaryMuscle": "quads",
+      "secondaryMuscles": [
+        "glutes",
+        "calves",
+        "abs"
+      ],
+      "equipment": [
+        "bodyweight"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Nome pt-BR único e idêntico após normalização; identidade conferida no catálogo atual."
+    },
+    {
+      "canonicalId": "transferencia-de-peso",
+      "canonicalName": "Transferência de Peso",
+      "sourceNameV11": null,
+      "sourceNameV12": [
+        "Transferência de peso"
+      ],
+      "exactSeedId": null,
+      "runtimeId": "weight-shift",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": "Transferência de Peso",
+      "movementPattern": "balance",
+      "mechanic": "compound",
+      "primaryMuscle": "glutes",
+      "secondaryMuscles": [
+        "quads",
+        "calves",
+        "abs"
+      ],
+      "equipment": [
+        "bodyweight"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Nome pt-BR único e idêntico após normalização; identidade conferida no catálogo atual."
+    },
+    {
+      "canonicalId": "caminhada",
+      "canonicalName": "Caminhada",
+      "sourceNameV11": [
+        "Caminhada/bike"
+      ],
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "walking",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": "Caminhada",
+      "movementPattern": "gait",
+      "mechanic": "compound",
+      "primaryMuscle": "quads",
+      "secondaryMuscles": [
+        "glutes",
+        "hamstrings",
+        "calves"
+      ],
+      "equipment": [
+        "bodyweight"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Nome pt-BR único e idêntico após normalização; identidade conferida no catálogo atual."
+    },
+    {
+      "canonicalId": "subida-em-degrau-baixo-com-apoio",
+      "canonicalName": "Subida em Degrau Baixo com Apoio",
+      "sourceNameV11": [
+        "Step-up baixo com apoio"
+      ],
+      "sourceNameV12": [
+        "Step-up Baixo com Apoio"
+      ],
+      "exactSeedId": null,
+      "runtimeId": "supported-low-step-up",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": "Subida em Degrau Baixo com Apoio",
+      "movementPattern": "lunge",
+      "mechanic": "compound",
+      "primaryMuscle": "quads",
+      "secondaryMuscles": [
+        "glutes",
+        "hamstrings",
+        "calves"
+      ],
+      "equipment": [
+        "step"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Nome pt-BR único e idêntico após normalização; identidade conferida no catálogo atual."
+    },
+    {
+      "canonicalId": "panturrilha-com-apoio",
+      "canonicalName": "Panturrilha com Apoio",
+      "sourceNameV11": [
+        "Panturrilha apoiada",
+        "Elevação de panturrilha apoiada"
+      ],
+      "sourceNameV12": [
+        "Elevação de Panturrilha com Apoio"
+      ],
+      "exactSeedId": null,
+      "runtimeId": "supported-calf-raise",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": "Panturrilha com Apoio",
+      "movementPattern": "calf_raise",
+      "mechanic": "isolation",
+      "primaryMuscle": "calves",
+      "secondaryMuscles": [],
+      "equipment": [
+        "bodyweight"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Nome pt-BR único e idêntico após normalização; identidade conferida no catálogo atual."
+    },
+    {
+      "canonicalId": "semi-tandem-com-apoio-proximo",
+      "canonicalName": "Semi-Tandem com Apoio Próximo",
+      "sourceNameV11": null,
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "supported-semi-tandem-stance",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": "Posição Semi-Tandem com Apoio",
+      "movementPattern": "balance",
+      "mechanic": "compound",
+      "primaryMuscle": "glutes",
+      "secondaryMuscles": [
+        "calves",
+        "abs"
+      ],
+      "equipment": [
+        "bodyweight"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Equivalência semântica conferida com a descrição e o catálogo atual."
+    },
+    {
+      "canonicalId": "sentar-e-levantar-da-cadeira",
+      "canonicalName": "Sentar e Levantar da Cadeira",
+      "sourceNameV11": null,
+      "sourceNameV12": [
+        "Sit-to-Stand"
+      ],
+      "exactSeedId": null,
+      "runtimeId": "chair-sit-to-stand",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": "Sentar e Levantar da Cadeira",
+      "movementPattern": "squat",
+      "mechanic": "compound",
+      "primaryMuscle": "quads",
+      "secondaryMuscles": [
+        "glutes",
+        "hamstrings"
+      ],
+      "equipment": [
+        "chair"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Nome pt-BR único e idêntico após normalização; identidade conferida no catálogo atual."
+    },
+    {
+      "canonicalId": "mudancas-leves-de-direcao",
+      "canonicalName": "Mudanças leves de direção",
+      "sourceNameV11": null,
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "gentle-direction-changes",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": "Mudanças Leves de Direção",
+      "movementPattern": "gait",
+      "mechanic": "compound",
+      "primaryMuscle": "glutes",
+      "secondaryMuscles": [
+        "quads",
+        "calves"
+      ],
+      "equipment": [
+        "bodyweight"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Nome pt-BR único e idêntico após normalização; identidade conferida no catálogo atual."
+    },
+    {
+      "canonicalId": "equilibrio-com-apoio",
+      "canonicalName": "Equilíbrio com Apoio",
+      "sourceNameV11": null,
+      "sourceNameV12": [
+        "Equilíbrio com apoio"
+      ],
+      "exactSeedId": null,
+      "runtimeId": "supported-balance",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": "Equilíbrio com Apoio",
+      "movementPattern": "balance",
+      "mechanic": "compound",
+      "primaryMuscle": "glutes",
+      "secondaryMuscles": [
+        "calves",
+        "abs"
+      ],
+      "equipment": [
+        "bodyweight"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Nome pt-BR único e idêntico após normalização; identidade conferida no catálogo atual."
+    },
+    {
+      "canonicalId": "remada-com-elastico",
+      "canonicalName": "Remada com Elástico",
+      "sourceNameV11": null,
+      "sourceNameV12": [
+        "Remada com elástico"
+      ],
+      "exactSeedId": null,
+      "runtimeId": "resistance-band-row",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": "Remada com Elástico",
+      "movementPattern": "horizontal_pull",
+      "mechanic": "compound",
+      "primaryMuscle": "upper_back",
+      "secondaryMuscles": [
+        "lats",
+        "rear_deltoid",
+        "biceps"
+      ],
+      "equipment": [
+        "resistance_band"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Nome pt-BR único e idêntico após normalização; identidade conferida no catálogo atual."
+    },
+    {
+      "canonicalId": "flexao-na-parede",
+      "canonicalName": "Flexão na Parede",
+      "sourceNameV11": null,
+      "sourceNameV12": [
+        "Wall Push-up"
+      ],
+      "exactSeedId": null,
+      "runtimeId": "wall-push-up",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": "Flexão na Parede",
+      "movementPattern": "horizontal_push",
+      "mechanic": "compound",
+      "primaryMuscle": "chest",
+      "secondaryMuscles": [
+        "triceps",
+        "front_deltoid"
+      ],
+      "equipment": [
+        "bodyweight"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Nome pt-BR único e idêntico após normalização; identidade conferida no catálogo atual."
+    },
+    {
+      "canonicalId": "abducao-de-quadril-com-apoio",
+      "canonicalName": "Abdução de Quadril com Apoio",
+      "sourceNameV11": [
+        "Abdução de quadril com apoio"
+      ],
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "supported-hip-abduction",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": "Abdução de Quadril com Apoio",
+      "movementPattern": "hip_abduction",
+      "mechanic": "isolation",
+      "primaryMuscle": "abductors",
+      "secondaryMuscles": [
+        "glutes"
+      ],
+      "equipment": [
+        "bodyweight"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Nome pt-BR único e idêntico após normalização; identidade conferida no catálogo atual."
+    },
+    {
+      "canonicalId": "marcha-estacionaria",
+      "canonicalName": "Marcha Estacionária",
+      "sourceNameV11": [
+        "Carry leve/Marcha estacionária"
+      ],
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "march-in-place",
+      "possibleEquivalentId": null,
+      "runtimeNamePtBR": "Marcha Estacionária",
+      "movementPattern": "gait",
+      "mechanic": "compound",
+      "primaryMuscle": "quads",
+      "secondaryMuscles": [
+        "glutes",
+        "calves"
+      ],
+      "equipment": [
+        "bodyweight"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Nome pt-BR único e idêntico após normalização; identidade conferida no catálogo atual."
+    },
+    {
+      "canonicalId": "flexao-de-joelhos-com-elastico-e-apoio",
+      "canonicalName": "Flexão de Joelhos com Elástico e Apoio",
+      "sourceNameV11": null,
+      "sourceNameV12": null,
+      "exactSeedId": null,
+      "runtimeId": "resistance-band-standing-leg-curl",
+      "possibleEquivalentId": "supported-standing-leg-curl",
+      "runtimeNamePtBR": "Flexão de Joelho com Apoio",
+      "movementPattern": "knee_flexion",
+      "mechanic": "isolation",
+      "primaryMuscle": "hamstrings",
+      "secondaryMuscles": [
+        "calves"
+      ],
+      "equipment": [
+        "bodyweight"
+      ],
+      "status": "SEMANTIC_ALIAS_CONFIRMED",
+      "evidence": "Decisão de produto fechada: unificado com flexao-de-joelhos-com-elastico — \"com apoio\" é instrução/variante de execução, não uma segunda identidade. Não existem substituições/referências cruzadas entre os dois canonicalIds a remover."
+    }
+  ]
+}

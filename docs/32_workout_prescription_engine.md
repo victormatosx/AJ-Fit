@@ -1,17 +1,21 @@
-# Motor de prescrição T001–T090
+# Motor de prescrição T001–T090 (runtime atual)
 
 ## 1. Escopo e fontes
 
 Esta implementação transforma o último `QuestionnaireAnswers` persistido em
-uma decisão determinística de prescrição. As fontes canônicas são:
+uma decisão determinística de prescrição. A fonte canônica futura é
+`docs/workouts/AJ_Fit_T001_T102_workouts_canonical_v1_27_goal_routing_fixed.json`
+(schema `1.27.0`, T001–T102). A biblioteca ativa no runtime durante a migração
+continua sendo `docs/workouts/AJ_Fit_T001_T090_workouts_reformed_v2_0.json`.
+As demais fontes históricas e de implementação deste motor são:
 
 - `docs/workouts/AJ_Fit_T001_T090_workouts_canonical_v1_3.json`;
 - `docs/workout-modifiers/`;
 - `docs/31_questionario_entrada_t001_t090.md`;
 - `src/data/exercisesSeedData.ts` e o contrato `Exercise`.
 
-O JSON v1.3.0 permanece imutável. Nenhum T091+, template duplicado ou exercício
-novo foi criado.
+O JSON v1.3.0 permanece como histórico. Este documento descreve o comportamento
+do motor ativo; a especificação futura está no JSON v1.27.
 
 Este documento distingue `IMPLEMENTED`, `APPROVED_NOT_IMPLEMENTED`,
 `FUTURE_DESIGN` e `DECISION_REQUIRED` conforme
@@ -330,3 +334,35 @@ beginner e 90 minutos não obriga expansão.
 
 A ordem de expansão do catálogo é: exercício original → substituição existente
 validada → criação de exercício somente depois de um gap demonstrado.
+
+## 16. v1.27 (Fase 2/3) — desligado do runtime produtivo
+
+Artefatos preparatórios para a futura migração T001–T102/schema `1.27.0`,
+todos opt-in e não referenciados pelo caminho produtivo (`catalog.ts` continua
+carregando `AJ_Fit_T001_T090_workouts_reformed_v2_0.json`/`2.0.0`):
+
+- `docs/workouts/AJ_Fit_v1_27_exercise_identity_matrix.json` — reconciliação
+  determinística dos 78 `exercise_id` referenciados diretamente pelos
+  templates v1.27 contra o catálogo runtime (`EXERCISES_SEED`), com status
+  `EXACT_MATCH` / `SEMANTIC_ALIAS_CONFIRMED` / `AMBIGUOUS` / `TRULY_MISSING`
+  por item. Consumida somente por `canonicalExerciseIdentity.ts`
+  (`resolveCanonicalExerciseId`), nunca por lookup textual em runtime.
+- `canonicalCatalog.ts` — adaptador local que faz o parse de um template
+  v1.27 bruto para o `CanonicalTemplate` do motor atual (normaliza
+  `sets`/ciclos, resolve identidade de exercício, falha fechado em qualquer
+  `exercise_id` ainda bloqueado na matriz).
+- `selectorV127.ts` — selector puro de template-base (Fase 3): recebe
+  sexo/ambiente/família de objetivo/população/beginner/dias e devolve o
+  `templateId` T001–T102 correspondente, sem tocar em sets, reps, descanso,
+  exercícios, cardio, duration, equipamento ou limitações — essas
+  permanecem modifiers que rodam depois da seleção. Não decide safety/
+  população especial; consome o resultado já calculado por
+  `selection.ts`/`safety.ts`.
+- `sessionTypes.ts` — classificação central de tipos de sessão
+  (`isRecoverySessionType`, `isCardioDominantSessionType`), usada tanto pelo
+  motor v2.0 ativo quanto pelo parser v1.27, para que `active_recovery` seja
+  tratado como recuperação em todo o pipeline (frequência, cardio finisher,
+  agenda semanal) sem duplicar essa lista em cada consumidor.
+
+Ativação em produção, remoção dos modifiers legados incompatíveis e migração
+de planos existentes são passos futuros fora deste escopo.

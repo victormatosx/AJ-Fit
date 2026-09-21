@@ -8,23 +8,30 @@ import { requireAuth } from '../lib/auth';
 import { detectMissedSessionGap, resolveWorkoutSchedule } from './scheduleEngine/resolver';
 import type { ScheduleAuthorityContext } from './finalizationAuthority';
 import { buildScheduleAuthorityContext, prescribedExecutionCounts } from './finalizationAuthority';
-import { generateWorkoutPrescription } from './prescriptionEngine/workoutPrescription/engine';
 import type { FinalWorkoutPlan, QuestionnaireAnswers } from './prescriptionEngine/workoutPrescription/types';
-import { buildPrescriptionGenerationContext } from './prescriptionContext';
 import { EXERCISES_SEED } from './prescriptionEngine/data/exercisesSeedData';
+import { CANONICAL_ACTIVITIES } from './prescriptionEngine/workoutPrescription/canonicalActivities';
 import { mapQuestionnaireLimitations, type LimitationCatalogExercise } from './prescriptionEngine/workoutPrescription/limitationResolver';
 import { equipmentContextFor } from './prescriptionEngine/workoutPrescription/equipment';
 import { buildRecentSlotHistory, evolveCycle } from './prescriptionEngine/prescriptionEvolution/cycleEvolution';
 import { PRESCRIPTION_EVOLUTION_CONFIG } from './prescriptionEngine/prescriptionEvolution/config';
 import { countEarnedIntermediateCycles } from './prescriptionEngine/progressionEngineV2/earnedCycles';
 import { PROGRESSION_V2_CONFIG, resolveProgressionV2Config } from './prescriptionEngine/progressionEngineV2/config';
-import type { TrainingCycle } from './prescriptionEngine/workoutLifecycle/types';
+import type { TrainingCycle, CurrentTrainingLevel } from './prescriptionEngine/workoutLifecycle/types';
+import type { PrescriptionGenerationVersion } from './prescriptionEngine/workoutPrescription/generationVersion';
+import {
+  generateAuthoritativePlan,
+  resolveAuthoritativeGenerationVersionForNewLifecycle,
+  authoritativeGenerationVersionForActiveProgram,
+} from './authoritativePrescription';
 import { isOperationBlockedByCircuitBreaker, loadWorkoutLifecycleCircuitBreakerConfig } from './circuitBreaker';
 import { progressionPolicyModeFor, resolveWorkoutLifecycleQaMode } from './qaPolicy';
 import { logWarn } from '../lib/logger';
 import { validateMaterializedExecutionSubstitutions } from './exerciseSubstitution';
 
 export const WORKOUT_LIFECYCLE_AUTHORITY_GRANT_ID = 'current';
+
+const CANONICAL_ACTIVITY_IDS = new Set(CANONICAL_ACTIVITIES.map((activity) => activity.id));
 
 const OPERATIONS = [
   'INITIALIZE', 'MIGRATE', 'RECOVER', 'EARN', 'PREPARE', 'DEFER',
@@ -519,7 +526,16 @@ async function assertPlanSafe(request: AuthorityRequest, firestore: Firestore): 
   const special = Array.isArray(inputs.specialConditions) ? inputs.specialConditions : [];
   const regions = special.includes('musculoskeletal_limitation') && Array.isArray(inputs.limits)
     ? inputs.limits.filter((item): item is string => typeof item === 'string' && item !== 'none') : [];
-  const documents = await firestore.getAll(...exerciseIds.map((id) => firestore.collection('exercises').doc(id as string)));
+  // Fase 11 §5 — a v1.27 plan may legitimately reference a
+  // `CANONICAL_ACTIVITIES` id (cardio-leve, mobilidade-geral, etc.): a
+  // disjoint, non-Firestore-backed catalog with no `status`/
+  // `limitationProfile` concept at all (`canonicalActivities.ts`'s file
+  // doc — deliberately never part of the `exercises` collection). These
+  // are never looked up here, never treated as "unknown exercise".
+  const resistanceExerciseIds = exerciseIds.filter(
+    (id): id is string => typeof id === 'string' && !CANONICAL_ACTIVITY_IDS.has(id),
+  );
+  const documents = await firestore.getAll(...resistanceExerciseIds.map((id) => firestore.collection('exercises').doc(id)));
   for (const document of documents) {
     const exercise = document.data();
     if (!document.exists || exercise?.status !== 'active') throw new HttpsError('permission-denied', 'inactive_or_unknown_exercise');
@@ -542,27 +558,27 @@ async function assertPlanSafe(request: AuthorityRequest, firestore: Firestore): 
  * The single point where the backend becomes prescription-authoritative
  * (docs/workout-lifecycle/v2/decisions/ADR-016_BACKEND_AUTHORITATIVE_PRESCRIPTION.md):
  * runs the same deterministic engine the client runs, against authoritative
- * inputs and the same live Firestore exercise/template/limitation-dataset
- * catalogs the client reads — never against anything the client submitted.
- * The client's own `targetPlan` is not read here at all; whatever this
- * returns is what gets sealed, regardless of what the client sent.
+ * inputs and the same live Firestore/local catalogs the client reads —
+ * never against anything the client submitted. The client's own
+ * `targetPlan` is not read here at all; whatever this returns is what gets
+ * sealed, regardless of what the client sent.
+ *
+ * Fase 11 (backend cutover) — `version`/`currentTrainingLevel` are now
+ * required, CALLER-resolved parameters (never decided inside this
+ * function): `generateAuthoritativePlan` (`authoritativePrescription.ts`)
+ * is the one place that turns them into an actual engine call, routing to
+ * either the v2 or v1.27 pipeline (`generatePrescription.ts`, the same
+ * file synced to the client). Every call site below resolves `version`
+ * itself from authoritative metadata (never client input) — see each
+ * call's own comment for which source.
  */
 async function generateCanonicalPlan(
   answers: QuestionnaireAnswers,
   firestore: Firestore,
+  version: PrescriptionGenerationVersion,
+  currentTrainingLevel: CurrentTrainingLevel,
 ): Promise<{ plan: FinalWorkoutPlan; templateMetadata: { version: number; sourceVersion: string; contentHash: string } }> {
-  const { context, templateMetadata } = await buildPrescriptionGenerationContext(firestore, answers);
-  const result = generateWorkoutPrescription(answers, context);
-  if (result.status !== 'SUCCESS') {
-    throw new HttpsError('failed-precondition', `authoritative_prescription_generation_failed:${result.status}`);
-  }
-  // The engine leaves optional fields as literal `undefined` (fine for an
-  // in-process client caller, since JSON transport already strips them for
-  // the real app). Sealing writes this object straight into Firestore via
-  // Admin SDK, which rejects literal `undefined` values — normalize the
-  // same way the wire boundary already would.
-  const plan = JSON.parse(JSON.stringify(result.plan)) as FinalWorkoutPlan;
-  return { plan, templateMetadata };
+  return generateAuthoritativePlan(answers, currentTrainingLevel, version, firestore);
 }
 
 /**
@@ -820,7 +836,20 @@ async function validateRequest(uid: string, request: AuthorityRequest, firestore
     // read as content authority — the backend generates the canonical plan
     // itself from the same authoritative questionnaire answers, using the
     // same deterministic engine and the same live catalogs the client uses.
-    const { plan, templateMetadata } = await generateCanonicalPlan(answers as unknown as QuestionnaireAnswers, firestore);
+    //
+    // Fase 11 §3/§4 — INITIALIZE (brand-new lifecycle, nothing to preserve
+    // yet) uses the central default. MIGRATE bootstraps a lifecycle from a
+    // pre-lifecycle v1.3/v2.0-era baseline program — inherently a legacy
+    // concept that predates v1.27's existence — and always stays v2,
+    // regardless of the central default, so a migration can never itself
+    // produce a v1.27 plan.
+    const version: PrescriptionGenerationVersion = request.operation === 'MIGRATE'
+      ? 'v2'
+      : resolveAuthoritativeGenerationVersionForNewLifecycle();
+    const currentTrainingLevel = levelFromSnapshot(target) as CurrentTrainingLevel;
+    const { plan, templateMetadata } = await generateCanonicalPlan(
+      answers as unknown as QuestionnaireAnswers, firestore, version, currentTrainingLevel,
+    );
     await assertPlanSafe({ ...request, targetPlan: plan as unknown as Record<string, unknown> }, firestore);
     const activeState = await firestore.collection('users').doc(uid).collection('workoutProgramState').doc('active').get();
     const baselineContentIdentity = activeState.data()?.programId;
@@ -967,7 +996,16 @@ async function validateRequest(uid: string, request: AuthorityRequest, firestore
       // canonical plan from them — the client's own `targetPlan` is never
       // read as content authority (docs/workout-lifecycle/v2/decisions/
       // ADR-016_BACKEND_AUTHORITATIVE_PRESCRIPTION.md).
-      contentCanonical = await generateCanonicalPlan(expectedInputs as unknown as QuestionnaireAnswers, firestore);
+      //
+      // Fase 11 §4 — ADAPT never changes level or library version; both are
+      // read straight from the CURRENT authoritative program/lifecycle
+      // state (`bundle`, server-read), never re-derived or defaulted.
+      contentCanonical = await generateCanonicalPlan(
+        expectedInputs as unknown as QuestionnaireAnswers,
+        firestore,
+        authoritativeGenerationVersionForActiveProgram(bundle.program.templateSourceVersion),
+        bundle.state.currentTrainingLevel as CurrentTrainingLevel,
+      );
       await assertPlanSafe({ ...request, targetPlan: contentCanonical.plan as unknown as Record<string, unknown> }, firestore);
     } else {
       // PREPARE's canonical generation depends on which evolution type was
@@ -1021,8 +1059,25 @@ async function validateRequest(uid: string, request: AuthorityRequest, firestore
     // Only now is `request.earnedFact.type` proven authoritative — safe to
     // pick and run the corresponding canonical generation path. The
     // client's own `targetPlan` is never read as content authority.
+    //
+    // Fase 11 §4 — LEVEL_PROMOTION changes the training LEVEL, never the
+    // template LIBRARY VERSION: the promoted plan stays on the SAME
+    // library the current program already uses (`bundle.program.
+    // templateSourceVersion`, authoritative) — a v1.27 BEGINNER promoted to
+    // INTERMEDIATE gets a v1.27 regular-family plan, never a v2 one.
+    // CYCLE_EVOLUTION/MOTIVATIONAL_RENEWAL (`generateCanonicalCycleEvolution`)
+    // never re-selects a template or recomputes `versions` at all — it
+    // already reuses `bundle.program.versions`/`templateVersion`/
+    // `templateSourceVersion`/`templateContentHash` verbatim, so it
+    // preserves the active program's version by construction, with no
+    // change needed here.
     contentCanonical = request.earnedFact.type === 'LEVEL_PROMOTION'
-      ? await generateCanonicalPlan(preparedInputs as unknown as QuestionnaireAnswers, firestore)
+      ? await generateCanonicalPlan(
+          preparedInputs as unknown as QuestionnaireAnswers,
+          firestore,
+          authoritativeGenerationVersionForActiveProgram(bundle.program.templateSourceVersion),
+          request.earnedFact.toLevel as CurrentTrainingLevel,
+        )
       : await generateCanonicalCycleEvolution(uid, preparedInputs as unknown as QuestionnaireAnswers, bundle, firestore);
     await assertPlanSafe({ ...request, targetPlan: contentCanonical.plan as unknown as Record<string, unknown> }, firestore);
   }

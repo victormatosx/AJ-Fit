@@ -14,10 +14,9 @@ import {
   prepareWorkoutProgramLocally,
   questionnaireFingerprint,
 } from '../workoutPrograms';
-import { generateWorkoutPrescription } from '../../workoutPrescription/engine';
-import { getTemplateById } from '../../workoutPrescription/catalog';
+import { generateWorkoutPrescriptionRouted } from '../../workoutPrescription/generatePrescription';
 import { completeAnswers } from '../../workoutPrescription/__tests__/fixtures';
-import { loadLocalExerciseCatalogForLimitations } from '../../workoutPrescription/localLimitationCatalog';
+import { startingLevelFromQuestionnaire } from '../../workoutLifecycle/domain';
 import {
   CANONICAL_LIMITATION_DATASET_HASH,
   CANONICAL_LIMITATION_DATASET_VERSION,
@@ -51,13 +50,12 @@ describe('prepareWorkoutProgramLocally — Phase 3, Part C (pre-auth compute, lo
     }
   });
 
-  it('(4)(5)(6)(7)(9) matches exactly what generateWorkoutPrescription (the same engine, called directly with the local template) produces', async () => {
+  it('(4)(5)(6)(7)(9) matches exactly what generateWorkoutPrescriptionRouted (the same active-version engine, self-contained — v1.27 needs no pre-loaded template) produces', async () => {
     const prepared = await prepareWorkoutProgramLocally(VALID_ANSWERS);
     expect(prepared.status).toBe('SUCCESS');
     if (prepared.status !== 'SUCCESS') return;
-    const template = getTemplateById(prepared.templateId);
-    expect(template).toBeDefined();
-    const directResult = generateWorkoutPrescription(VALID_ANSWERS, { template: template! });
+    const currentTrainingLevel = startingLevelFromQuestionnaire(VALID_ANSWERS.level) ?? 'INTERMEDIATE';
+    const directResult = generateWorkoutPrescriptionRouted(VALID_ANSWERS, currentTrainingLevel, {}, 'v1.27');
     expect(directResult.status).toBe('SUCCESS');
     if (directResult.status !== 'SUCCESS') return;
     // Beginner/Duration/Priority/restSeconds are all baked into `sessions` —
@@ -66,19 +64,17 @@ describe('prepareWorkoutProgramLocally — Phase 3, Part C (pre-auth compute, lo
     expect(prepared.plan.planId).toBe(directResult.plan.planId);
   });
 
-  it('(8) a musculoskeletal limitation runs the REAL Limitation Resolver against the local catalog, never bypassed — identical outcome to calling the engine directly with the same local catalog', async () => {
+  it('(8) a musculoskeletal limitation runs the REAL v1.27 musculoskeletal-limitation stage, never bypassed — identical outcome to calling the router directly', async () => {
     const answers = completeAnswers({
       level: 'intermediate', days: 4, place: 'gym', sex: 'm', goal: 'gain_muscle',
       specialConditions: ['musculoskeletal_limitation'], limits: ['knee'],
     });
-    const localCatalog = loadLocalExerciseCatalogForLimitations();
-    const template = getTemplateById('T003')!;
-    const directResult = generateWorkoutPrescription(answers, { template, exerciseCatalog: localCatalog });
+    const directResult = generateWorkoutPrescriptionRouted(answers, 'INTERMEDIATE', {}, 'v1.27');
     const prepared = await prepareWorkoutProgramLocally(answers);
-    // Whatever the Limitation Resolver decides (resolved or fail-closed) —
+    // Whatever the limitation stage decides (resolved or fail-closed) —
     // `prepareWorkoutProgramLocally` must reach EXACTLY the same conclusion
-    // as calling the engine directly, proving it never bypasses the real
-    // resolver. `usedLocalLimitationCatalog` is asserted regardless of the
+    // as calling the router directly, proving it never bypasses the real
+    // stage. `usedLocalLimitationCatalog` is asserted regardless of the
     // outcome status.
     expect(prepared.status).toBe(directResult.status);
     if (prepared.status === 'SUCCESS' && directResult.status === 'SUCCESS') {

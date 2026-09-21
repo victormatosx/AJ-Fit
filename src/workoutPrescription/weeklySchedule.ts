@@ -1,5 +1,6 @@
 import { WEEKDAY_ORDER, type Weekday } from '../state/AppState';
 import { normalizeWeekdays } from '../lib/questionnaireSchema';
+import { isRecoverySessionType } from './sessionTypes';
 import type {
   FinalWorkoutSession,
   WorkoutAvailability,
@@ -8,7 +9,7 @@ import type {
 } from './types';
 
 export function sessionDayState(session: Pick<FinalWorkoutSession, 'type'>): Exclude<WorkoutDayState, 'REST'> {
-  return session.type.toLowerCase() === 'recovery' ? 'ACTIVE_RECOVERY' : 'TRAINING';
+  return isRecoverySessionType(session.type.toLowerCase()) ? 'ACTIVE_RECOVERY' : 'TRAINING';
 }
 
 export function trainingSessionIndexes(sessions: readonly Pick<FinalWorkoutSession, 'type'>[]): number[] {

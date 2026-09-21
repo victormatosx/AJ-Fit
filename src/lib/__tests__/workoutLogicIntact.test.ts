@@ -108,7 +108,14 @@ describe('WorkoutScreen source — plan-driven IDs and constrained substitutions
   it('resolves runtime identity from the final plan by default and supports an explicit effective presentation identity', () => {
     expect(WORKOUT_PLAN_SRC).toContain('export function workoutExercisesFromPlan(');
     expect(WORKOUT_PLAN_SRC).toContain('effectiveExerciseIds?.get(exerciseIndex) ?? prescribed.exerciseId');
-    expect(WORKOUT_PLAN_SRC).toContain('catalogExerciseById.get(effectiveExerciseId)');
+    // v1.27 Fase 2 closure: renamed to catalogDisplayById to merge in
+    // cardio/mobility activities (CANONICAL_ACTIVITIES) alongside
+    // EXERCISES_SEED — same lookup-by-effective-id behavior.
+    // Fase 8: wrapped in resolveCatalogDisplayEntry, which still looks the
+    // effective id up in catalogDisplayById first (falling back to the
+    // v1.27 alias resolver only when that direct lookup misses) — same
+    // lookup-by-effective-id behavior.
+    expect(WORKOUT_PLAN_SRC).toContain('resolveCatalogDisplayEntry(effectiveExerciseId)');
     expect(WORKOUT_PLAN_SRC).toContain('prescribedExerciseId: prescribed.exerciseId');
     expect(WORKOUT_PLAN_SRC).toContain('effectiveExerciseId,');
     expect(WORKOUT_SRC).not.toContain("id: 'supino-reto'");
@@ -237,7 +244,11 @@ describe('WorkoutScreen source — 7B + 7C migrations use i18n keys', () => {
     "t('sets.current')",
     "t('sets.summaryWeighted'",
     "t('sets.summaryReps'",
-    "t('reps.label')",
+    // v1.27 dose semantics (Fase 2): the static reps-only label is replaced
+    // by a dynamic label keyed on the resolved dose kind (reps/duration/
+    // distance/cycles), still fully routed through i18n — see
+    // `workout.json`'s `prescription.*` keys.
+    't(`prescription.${ex.doseKind}`)',
     'workoutLoadUnit(resolvedUnits)',
     "t('actions.completeSet'",
     "t('rest.title')",

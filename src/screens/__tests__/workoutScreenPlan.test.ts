@@ -5,6 +5,7 @@ import {
   resolveManualSubstitutionPresentation,
   workoutExercisesFromPlan,
 } from '../workoutScreenPlan';
+import { CANONICAL_ACTIVITIES } from '../../workoutPrescription/canonicalActivities';
 import { LEGACY_REST_SECONDS_FALLBACK, REST_SECONDS } from '../../workoutPrescription/restPrescription';
 import { generateWorkoutPrescription } from '../../workoutPrescription/engine';
 import { getTemplateById } from '../../workoutPrescription/catalog';
@@ -169,5 +170,98 @@ describe('workoutExercisesFromPlan — Phase 2, Part D (Rest Timer source of tru
     });
     expect(exercises[0].sets).toHaveLength(4);
     expect(exercises[0].sets[0].r).toBe('6-8');
+  });
+});
+
+describe('v1.27 Fase 2 closure — cardio/mobility activities resolve through the same plan-mapping path', () => {
+  // v1.27 is not wired to the production engine — these are synthetic
+  // slots on an otherwise-real plan, proving the *architecture* (same
+  // catalog lookup, same duration-based dose kind, same complete/check
+  // flow) works for CANONICAL_ACTIVITIES ids, per the product decision that
+  // no separate UI surface is built for them yet.
+  it('a cardio-leve slot (duration-only, no primaryMuscle) resolves without throwing and keeps the duration flow', () => {
+    const plan = realPlan();
+    plan.sessions[0].exercises[0] = {
+      exerciseId: 'cardio-leve',
+      sourceExerciseId: 'cardio-leve',
+      duration: '20 min',
+    };
+    const exercises = workoutExercisesFromPlan(plan, 'pt-BR', 0);
+    expect(exercises[0]).toMatchObject({
+      id: 'cardio-leve',
+      db: 'cardio-leve',
+      doseKind: 'duration',
+      target: '',
+    });
+    expect(exercises[0].sets).toHaveLength(1);
+    expect(exercises[0].sets[0].r).toBe('20 min');
+  });
+
+  it('a cardio-intervalado slot preserves cycleRange as the dose kind (same interval structure as resistance exercises)', () => {
+    const plan = realPlan();
+    plan.sessions[0].exercises[0] = {
+      exerciseId: 'cardio-intervalado',
+      sourceExerciseId: 'cardio-intervalado',
+      cycleRange: { min: 6, max: 8 },
+      duration: '1 min forte + 2 min leve',
+    };
+    const exercises = workoutExercisesFromPlan(plan, 'pt-BR', 0);
+    expect(exercises[0].doseKind).toBe('cycles');
+    expect(exercises[0].sets[0].r).toBe('6–8');
+    expect(exercises[0].doseDetail).toBe('1 min forte + 2 min leve');
+  });
+
+  it('a mobilidade-geral slot (duration-only, no primaryMuscle) resolves without throwing', () => {
+    const plan = realPlan();
+    plan.sessions[0].exercises[0] = {
+      exerciseId: 'mobilidade-geral',
+      sourceExerciseId: 'mobilidade-geral',
+      duration: '10 min',
+    };
+    const exercises = workoutExercisesFromPlan(plan, 'pt-BR', 0);
+    expect(exercises[0]).toMatchObject({ id: 'mobilidade-geral', doseKind: 'duration', target: '' });
+  });
+
+  it('every CANONICAL_ACTIVITIES id resolves through workoutExercisesFromPlan without a "Missing catalog exercise" error', () => {
+    const plan = realPlan();
+    for (const activity of CANONICAL_ACTIVITIES) {
+      plan.sessions[0].exercises[0] = {
+        exerciseId: activity.id,
+        sourceExerciseId: activity.id,
+        duration: '10 min',
+      };
+      expect(() => workoutExercisesFromPlan(plan, 'pt-BR', 0)).not.toThrow();
+    }
+  });
+});
+
+describe('Fase 8 — read-boundary alias resolution for unified-away v1.27 canonical ids', () => {
+  it.each([
+    ['flexao-de-joelhos-com-elastico-e-apoio', 'resistance-band-standing-leg-curl'],
+    ['agachamento-para-banco', 'chair-sit-to-stand'],
+    ['remada-com-elastico-pegada-aberta', 'resistance-band-row'],
+    ['remada-com-elastico-pegada-neutra', 'resistance-band-row'],
+    ['farmer-walk', 'farmers-walk'],
+  ])('a plan slot carrying the unified-away id "%s" still resolves (via the alias to "%s"), never "Missing catalog exercise"', (aliasId) => {
+    const plan = realPlan();
+    plan.sessions[0].exercises[0] = {
+      exerciseId: aliasId,
+      sourceExerciseId: aliasId,
+      sets: 3,
+      reps: '10-12',
+    };
+    expect(() => workoutExercisesFromPlan(plan, 'pt-BR', 0)).not.toThrow();
+    const exercises = workoutExercisesFromPlan(plan, 'pt-BR', 0);
+    expect(exercises[0].name.length).toBeGreaterThan(0);
+  });
+
+  it('a genuinely unknown id (never a runtime id, never a matrix alias) still throws — the fallback is not a silent catch-all', () => {
+    const plan = realPlan();
+    plan.sessions[0].exercises[0] = {
+      exerciseId: 'not-a-real-exercise-id-at-all',
+      sourceExerciseId: 'not-a-real-exercise-id-at-all',
+      sets: 3,
+    };
+    expect(() => workoutExercisesFromPlan(plan, 'pt-BR', 0)).toThrow('Missing catalog exercise');
   });
 });

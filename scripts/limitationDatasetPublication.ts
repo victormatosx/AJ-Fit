@@ -95,7 +95,12 @@ export function validateCanonicalLimitationDataset(
 ): void {
   const errors: string[] = [];
   const catalogIds = new Set(EXERCISES_SEED.map((exercise) => exercise.id));
-  if (EXERCISES_SEED.length !== 116) errors.push(`exercise catalog count ${EXERCISES_SEED.length} != 116`);
+  // Catalog size is no longer pinned to a fixed count (Fase 1 — new valid
+  // exercises may be added; every entry below still must resolve to a real
+  // id). `entries.length` stays pinned to 76: that is the clinically
+  // reviewed profile count, independent of overall catalog growth.
+  if (!EXERCISES_SEED.length) errors.push('exercise catalog is empty');
+  if (catalogIds.size !== EXERCISES_SEED.length) errors.push('duplicate exercise id in canonical catalog');
   if (entries.length !== 76) errors.push(`profile count ${entries.length} != 76`);
   if (new Set(entries.map((entry) => entry.exerciseId)).size !== entries.length) {
     errors.push('duplicate exerciseId in canonical profiles');

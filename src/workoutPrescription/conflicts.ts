@@ -1,6 +1,12 @@
 import type { ConflictResolution, QuestionnaireAnswers, ResolvedModifier } from './types';
 import { normalizeExperience } from './input';
 
+/**
+ * Legacy v2.0/T001-T090 conflict resolution between `resolveModifiers`
+ * output (P0-P7 matrix). Read only by `engine.ts`. Not used by the v1.27
+ * pipeline — see `modifiers.ts`'s file doc for the same boundary.
+ */
+
 export function resolveConflicts(
   answers: QuestionnaireAnswers,
   modifiers: ResolvedModifier[],

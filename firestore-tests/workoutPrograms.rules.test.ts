@@ -170,6 +170,24 @@ async function createAndActivate(
 }
 
 describe('workoutTemplates', () => {
+  it.each(['T001', 'T090', 'T091', 'T102'])('accepts template ID %s for an admin', async (id) => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'users', UID), userDocument(UID, 'admin'));
+    });
+    await assertSucceeds(setDoc(doc(dbFor(UID, true), 'workoutTemplates', id), {
+      ...templateDocument(), id, createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+    }));
+  });
+
+  it.each(['T000', 'T103', 'T999', 'T10', 'T0102', 'arbitrary'])('rejects template ID %s', async (id) => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'users', UID), userDocument(UID, 'admin'));
+    });
+    await assertFails(setDoc(doc(dbFor(UID, true), 'workoutTemplates', id), {
+      ...templateDocument(), id, createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+    }));
+  });
+
   it('allows authenticated reads and denies normal-client writes/deletes', async () => {
     await assertSucceeds(getDoc(doc(dbFor(UID), 'workoutTemplates', 'T003')));
     await assertFails(setDoc(doc(dbFor(UID), 'workoutTemplates', 'T004'), templateDocument()));
@@ -178,6 +196,35 @@ describe('workoutTemplates', () => {
 });
 
 describe('workoutPrograms', () => {
+  it.each(['T090', 'T091', 'T102'])('accepts future template ID %s and schema 1.27.0', async (id) => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'workoutTemplates', id), {
+        ...v2TemplateDocument(), id, sourceVersion: '1.27.0',
+      });
+    });
+    const programId = `wpg_future_${id}`;
+    const program = fixedProgramDocument(programId);
+    await assertSucceeds(createAndActivate(UID, programId, {
+      ...program,
+      templateId: id,
+      templateSourceVersion: '1.27.0',
+      versions: { ...program.versions, templateLibrary: '1.27.0' },
+    }));
+  });
+
+  it('rejects T103 in a program even if a template document exists', async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'workoutTemplates', 'T103'), {
+        ...v2TemplateDocument(), id: 'T103', sourceVersion: '1.27.0',
+      });
+    });
+    const program = fixedProgramDocument('wpg_future_bad');
+    await assertFails(createAndActivate(UID, 'wpg_future_bad', {
+      ...program, templateId: 'T103', templateSourceVersion: '1.27.0',
+      versions: { ...program.versions, templateLibrary: '1.27.0' },
+    }));
+  });
+
   it('accepts a valid flexible snapshot and rejects invalid mode-specific calendar shapes', async () => {
     await testEnv.withSecurityRulesDisabled(async (context) => {
       await setDoc(doc(context.firestore(), 'workoutTemplates', 'T003'), v2TemplateDocument());

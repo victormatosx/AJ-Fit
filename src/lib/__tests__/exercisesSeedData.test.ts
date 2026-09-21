@@ -4,8 +4,8 @@ import { EXERCISES_SEED } from '../../data/exercisesSeedData';
 import { validateExerciseSeed } from '../../validators/exerciseValidation';
 
 describe('exercisesSeedData', () => {
-  it('has exactly 116 exercises', () => {
-    expect(EXERCISES_SEED).toHaveLength(116);
+  it('has exactly 123 exercises (116 pre-existing + 7 v1.27 Fase 2 closure additions)', () => {
+    expect(EXERCISES_SEED).toHaveLength(123);
   });
 
   it('passes full dataset validation', () => {
@@ -70,6 +70,39 @@ describe('exercisesSeedData', () => {
       expect(ex.instructions?.ptBR.length).toBeGreaterThan(0);
       expect(ex.instructions?.en?.length).toBeGreaterThan(0);
       expect(ex.instructions?.es?.length).toBeGreaterThan(0);
+    }
+  });
+
+  // v1.27 Fase 2 closure regression guard: the 7 new resistance exercises
+  // are deliberately added without a `substitutionGroup` (see
+  // exercisesSeedData.ts's comment above them) specifically so
+  // `buildSubstitutions` never inserts them into an existing group's
+  // auto-derived `similarExerciseIds` — i.e. none of the 116 pre-existing
+  // exercises' equipment-substitution pool (read by the ACTIVE v2 runtime's
+  // `composition.ts`) changes as a side effect of this catalog growth.
+  it('the 7 v1.27 Fase 2 closure resistance additions never appear in any pre-existing exercise\'s similarExerciseIds', () => {
+    const newIds = new Set([
+      'decline-barbell-bench-press', 'dumbbell-fly', 'dumbbell-rear-delt-fly',
+      'resistance-band-pullover', 'decline-push-up', 'incline-push-up',
+      'resistance-band-standing-leg-curl',
+    ]);
+    expect(newIds.size).toBe(7);
+    for (const exercise of EXERCISES_SEED) {
+      if (newIds.has(exercise.id)) continue;
+      for (const similarId of exercise.substitution.similarExerciseIds) {
+        expect(newIds.has(similarId)).toBe(false);
+      }
+    }
+  });
+
+  it('the 7 new resistance additions have no substitution peers of their own (deliberately ungrouped)', () => {
+    const newIds = new Set([
+      'decline-barbell-bench-press', 'dumbbell-fly', 'dumbbell-rear-delt-fly',
+      'resistance-band-pullover', 'decline-push-up', 'incline-push-up',
+      'resistance-band-standing-leg-curl',
+    ]);
+    for (const exercise of EXERCISES_SEED) {
+      if (newIds.has(exercise.id)) expect(exercise.substitution.similarExerciseIds).toEqual([]);
     }
   });
 });

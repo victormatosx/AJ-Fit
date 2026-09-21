@@ -216,7 +216,7 @@ function deepEqual(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
-/** Full deterministic 116-exercise × 7-region semantic diff. */
+/** Full deterministic resolver-catalog × 7-region semantic diff. */
 export function diffLimitationProfiles(input: {
   exerciseIds: readonly string[];
   local: readonly LimitationProfileEntry[];

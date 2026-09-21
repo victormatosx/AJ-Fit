@@ -280,12 +280,14 @@ describe('Prescription Engine + Limitation Resolver V1', () => {
     }));
   });
 
-  it('returns UNMAPPED_LIMITATION_REGION for other', () => {
+  it('Fase 9 §13: other alone maps to no active region and generation succeeds unchanged', () => {
     const answers = limitationAnswers({ limits: ['other'] });
     const result = generateSingle(answers);
-    expect(result).toEqual(expect.objectContaining({
-      status: 'INVALID_CONFIGURATION', reasonCodes: ['UNMAPPED_LIMITATION_REGION'],
-    }));
+    expect(result.status).toBe('SUCCESS');
+    if (result.status === 'SUCCESS') {
+      const ids = result.plan.sessions.flatMap((session) => session.exercises.map((item) => item.exerciseId));
+      expect(ids).toContain('machine-flat-bench-press');
+    }
   });
 
   it.each([
