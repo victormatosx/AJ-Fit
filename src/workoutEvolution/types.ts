@@ -8,7 +8,7 @@ export type ProximityState = 'BUILDING' | 'ON_TRACK' | 'READY';
 
 export interface ProgressingSummary {
   /** Career/earned level (docs Fase 4 ADR-010) — what the user has actually earned. */
-  earnedLevel: CurrentTrainingLevel;
+  earnedLevel: CurrentTrainingLevel | null;
   /** What the active Program Instance is actually prescribed under right now. */
   activeLevel: CurrentTrainingLevel;
   cycleNumber: number;
@@ -58,7 +58,13 @@ export type EvolutionViewModel =
    * fails: the safe summary stays on screen, but the caller must show the
    * dependent part as unavailable, never as a silently-final ready state.
    */
-  | { kind: 'SUMMARY_READY'; summary: ProgressingSummary; noticeUnavailable?: boolean }
+  | {
+      kind: 'SUMMARY_READY';
+      summary: ProgressingSummary;
+      /** CACHE is presentation-only and can never carry actions; CURRENT_SESSION came from this process's authoritative reads. */
+      source: 'CACHE' | 'CURRENT_SESSION';
+      noticeUnavailable?: boolean;
+    }
   | { kind: 'PROGRESSING'; summary: ProgressingSummary }
   | { kind: 'EVOLUTION_READY'; summary: ProgressingSummary; pending: PendingEvolutionSummary; canDefer: boolean }
   | { kind: 'EVOLUTION_DEFERRED'; summary: ProgressingSummary; pending: PendingEvolutionSummary }

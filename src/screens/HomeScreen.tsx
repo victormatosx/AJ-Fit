@@ -137,7 +137,8 @@ export function HomeScreen({
     // here so this mark keeps its exact original meaning (fires only once
     // Evolution has reached a truly terminal/authoritative state), never
     // silently redefined by the new progressive-rendering step.
-    if (evolutionViewModel.kind !== 'LOADING' && evolutionViewModel.kind !== 'SUMMARY_READY') recordPerfMark('home_evolution_ready');
+    if (evolutionViewModel.kind !== 'LOADING' && evolutionViewModel.kind !== 'SUMMARY_READY' &&
+        evolutionViewModel.kind !== 'ERROR') recordPerfMark('home_evolution_ready');
   }, [evolutionViewModel]);
   const { t, i18n } = useTranslation(['home', 'profile']);
   const [showMissedPendingInfo, setShowMissedPendingInfo] = useState(false);

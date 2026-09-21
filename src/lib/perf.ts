@@ -37,10 +37,14 @@ export type PerfMark =
   // first paint, independent of load state). `evolution_first_useful_content`
   // fires only when the provisional SUMMARY_READY summary is actually
   // revealed early (initial load only — see `isInitialLoad` in
-  // useWorkoutEvolution.ts). `evolution_authoritative_ready` fires at every
-  // terminal commit (same moments as the pre-existing `evolution_state_commit`,
-  // additively — that mark keeps its exact original meaning, never redefined).
-  | 'evolution_shell_visible' | 'evolution_first_useful_content' | 'evolution_authoritative_ready';
+  // useWorkoutEvolution.ts). `evolution_authoritative_ready` fires only after
+  // a successful authoritative resolution; an ERROR/offline fallback may
+  // still commit UI state but never emits this readiness mark.
+  | 'evolution_shell_visible' | 'evolution_first_useful_content' | 'evolution_authoritative_ready'
+  // Fase 5.3 — visual-only Evolution summary cache. These marks never carry
+  // UID, ProgramInstance identity, or summary values.
+  | 'evolution_cache_read_start' | 'evolution_cache_hit' | 'evolution_cache_miss'
+  | 'evolution_cached_summary_visible' | 'evolution_current_summary_visible';
 
 const epoch = typeof performance !== 'undefined' ? performance.now() : Date.now();
 

@@ -96,7 +96,11 @@ export function buildProvisionalEvolutionViewModel(input: {
   lifecycle: LifecycleContext;
   decision: ProgressionDecision | null;
 }): EvolutionViewModel {
-  return { kind: 'SUMMARY_READY', summary: buildSummary(input.decision, input.lifecycle) };
+  return {
+    kind: 'SUMMARY_READY',
+    source: 'CURRENT_SESSION',
+    summary: buildSummary(input.decision, input.lifecycle),
+  };
 }
 
 export function buildEvolutionViewModel(input: EvolutionViewModelInput): EvolutionViewModel {

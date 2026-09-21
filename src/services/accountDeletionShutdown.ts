@@ -8,6 +8,7 @@ import { clearPrescriptionSnapshotsForUser } from '../workoutPrescription/storag
 import { cleanupRestSessionArtifacts } from './restSessionCleanup';
 import { clearNotificationAccountPreferenceState } from './notificationAccountLifecycle';
 import { removeProfilePresentationCache } from '../lib/profilePresentationCache';
+import { removeEvolutionSummaryPresentationCache } from '../lib/evolutionSummaryPresentationCache';
 
 /**
  * Client-side shutdown after `requestAccountDeletion` has durably accepted
@@ -107,6 +108,7 @@ export async function finalizeAccountDeletionClientShutdown(
     cleanupRestSessionArtifacts(),
     clearNotificationAccountPreferenceState(uid),
     removeProfilePresentationCache(uid),
+    removeEvolutionSummaryPresentationCache(uid),
   ]);
 
   await logout();

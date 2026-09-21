@@ -5,6 +5,10 @@ import { useAuth } from '../state/AuthContext';
 import { logWarn } from '../lib/logger';
 import { recordPerfMark } from '../lib/perf';
 import {
+  readEvolutionSummaryPresentationCache,
+  writeEvolutionSummaryPresentationCache,
+} from '../lib/evolutionSummaryPresentationCache';
+import {
   FOREGROUND_RECONCILE_THROTTLE_MS,
   shouldReconcileOnForeground,
 } from './foregroundReconcile';
@@ -30,6 +34,11 @@ import { computePrescriptionDiff, type PrescriptionDiffSummary } from './diff';
 import { buildEvolutionViewModel, buildProvisionalEvolutionViewModel, type LifecycleContext } from './viewModel';
 import { nextViewModelAfterLoad } from './loadReducer';
 import type { EvolutionViewModel, PendingEvolutionSummary } from './types';
+import {
+  evolutionSummaryOf,
+  viewModelFromEvolutionPresentationCache,
+  viewModelWhileEvolutionRefreshes,
+} from './presentationCachePolicy';
 import {
   acknowledgeAutoActivationNotice,
   loadUnacknowledgedAutoActivationNotice,
@@ -78,7 +87,7 @@ export interface WorkoutEvolutionController {
  * `reconcileWorkoutLifecycle` entry point. Realtime listeners may refresh only
  * the projection when their caller already owns reconciliation.
  */
-export function useWorkoutEvolution(): WorkoutEvolutionController {
+export function useWorkoutEvolution(activeProgramInstanceId: string | null = null): WorkoutEvolutionController {
   const { user } = useAuth();
   const [viewModel, setViewModel] = useState<EvolutionViewModel>({ kind: 'LOADING' });
   const [loading, setLoading] = useState(true);
@@ -116,6 +125,28 @@ export function useWorkoutEvolution(): WorkoutEvolutionController {
   // its awaits resolve — an older call that resolves later (success OR
   // failure) can never clobber a newer call's already-applied result.
   const loadGenerationRef = useRef(0);
+  // Identity of whichever summary is currently painted (cached OR current).
+  // A ProgramInstance switch can therefore blank an old program immediately,
+  // before any late async work has a chance to label it as the new one.
+  const visibleProgramInstanceIdRef = useRef<string | null>(null);
+  const cacheReadGenerationRef = useRef(0);
+  const programScopeGenerationRef = useRef(0);
+  const previousActiveProgramInstanceIdRef = useRef(activeProgramInstanceId);
+  const currentPresentationScopeRef = useRef({
+    uid: user?.uid ?? null,
+    programInstanceId: activeProgramInstanceId,
+  });
+  currentPresentationScopeRef.current = {
+    uid: user?.uid ?? null,
+    programInstanceId: activeProgramInstanceId,
+  };
+  if (previousActiveProgramInstanceIdRef.current !== activeProgramInstanceId) {
+    // null -> first known identity is ordinary bootstrap, not a program
+    // switch. Any later change invalidates loads that started for the old
+    // scope, including a response that resolves after the new render.
+    if (previousActiveProgramInstanceIdRef.current !== null) programScopeGenerationRef.current += 1;
+    previousActiveProgramInstanceIdRef.current = activeProgramInstanceId;
+  }
 
   const load = useCallback(async (options?: {
     trigger?: 'FOREGROUND';
@@ -123,18 +154,22 @@ export function useWorkoutEvolution(): WorkoutEvolutionController {
     propagateError?: boolean;
   }) => {
     if (!user) return;
-    // Progressive rendering (Fase 5.2) only reveals the provisional summary
-    // on a genuine first load. A background refresh (foreground resume,
-    // post-workout, listener-triggered) already has a resolved view model on
-    // screen — replacing it with a bare summary mid-refresh would drop the
-    // pending/action framing the user is currently looking at, exactly the
-    // flash this phase's own rules forbid. Captured once, before this call
-    // can mutate `hasLoadedOnce`.
+    // Progressive rendering (Fase 5.2) only derives a new provisional summary
+    // on a genuine first load. Fase 5.3 keeps a previous summary during a
+    // background refresh, but deliberately removes its stale action framing
+    // until a new authoritative terminal state arrives.
     const isInitialLoad = !hasLoadedOnce.current;
+    if (!isInitialLoad) {
+      const previous = viewModelRef.current;
+      const refreshing = viewModelWhileEvolutionRefreshes(previous);
+      if (refreshing !== previous) commitViewModel(refreshing);
+    }
     if (!hasLoadedOnce.current) setLoading(true);
     reconcileInFlight.current = true;
     const generation = ++loadGenerationRef.current;
-    const isCurrent = () => loadGenerationRef.current === generation;
+    const programScopeGeneration = programScopeGenerationRef.current;
+    const isCurrent = () => loadGenerationRef.current === generation &&
+      programScopeGenerationRef.current === programScopeGeneration;
     try {
       let reconciledDecision: ProgressionDecision | null | undefined;
       if (!options?.skipReconcile) {
@@ -157,6 +192,7 @@ export function useWorkoutEvolution(): WorkoutEvolutionController {
 
       if (!lifecycle) {
         if (isCurrent()) {
+          visibleProgramInstanceIdRef.current = null;
           commitViewModel({ kind: 'UNAVAILABLE' });
           setDiff(null);
           recordPerfMark('evolution_state_commit');
@@ -185,6 +221,8 @@ export function useWorkoutEvolution(): WorkoutEvolutionController {
       if (isCurrent() && isInitialLoad) {
         commitViewModel(buildProvisionalEvolutionViewModel({ lifecycle: lifecycleContext, decision }));
         recordPerfMark('evolution_first_useful_content');
+        recordPerfMark('evolution_current_summary_visible');
+        visibleProgramInstanceIdRef.current = lifecycle.programInstance.programInstanceId;
       }
       // Started here (Fase 2 — validated), before events/notice, so it
       // overlaps with that work instead of running strictly after it; only
@@ -198,15 +236,27 @@ export function useWorkoutEvolution(): WorkoutEvolutionController {
       const autoActivationNotice = await loadUnacknowledgedAutoActivationNotice(user.uid, instanceEvents);
       recordPerfMark('evolution_activation_notice_ready');
       if (isCurrent()) {
-        commitViewModel(buildEvolutionViewModel({
+        const authoritativeViewModel = buildEvolutionViewModel({
           now: new Date(),
           lifecycle: lifecycleContext,
           decision,
           pending: pendingAfter ? toPendingSummary(pendingAfter) : null,
           autoActivationNotice,
-        }));
+        });
+        visibleProgramInstanceIdRef.current = lifecycle.programInstance.programInstanceId;
+        commitViewModel(authoritativeViewModel);
         recordPerfMark('evolution_state_commit');
         recordPerfMark('evolution_authoritative_ready');
+        const summary = evolutionSummaryOf(authoritativeViewModel);
+        if (summary) {
+          // This is the only write-through site: every input above completed,
+          // and the terminal authoritative projection is already committed.
+          void writeEvolutionSummaryPresentationCache(
+            user.uid,
+            lifecycle.programInstance.programInstanceId,
+            summary,
+          ).catch(() => undefined);
+        }
       }
 
       if (pendingAfter) {
@@ -249,9 +299,9 @@ export function useWorkoutEvolution(): WorkoutEvolutionController {
             previousKind: previous.kind,
           });
         } else {
+          if (!evolutionSummaryOf(next)) visibleProgramInstanceIdRef.current = null;
           commitViewModel(next);
           recordPerfMark('evolution_state_commit');
-          recordPerfMark('evolution_authoritative_ready');
         }
       }
       // Background/cold-start refreshes remain self-contained. Explicit
@@ -259,11 +309,54 @@ export function useWorkoutEvolution(): WorkoutEvolutionController {
       // diagnose the secondary failure and choose safe navigation behavior.
       if (options?.propagateError) throw error;
     } finally {
-      hasLoadedOnce.current = true;
-      setLoading(false);
-      reconcileInFlight.current = false;
+      if (loadGenerationRef.current === generation) {
+        reconcileInFlight.current = false;
+        if (programScopeGenerationRef.current === programScopeGeneration) {
+          hasLoadedOnce.current = true;
+          setLoading(false);
+        }
+      }
     }
   }, [user, commitViewModel]);
+
+  // Local cache hydration and remote reconciliation are deliberately
+  // independent effects. The AsyncStorage read never gates `load()` and is
+  // only allowed to paint while no current-session summary has won the race.
+  useEffect(() => {
+    const generation = ++cacheReadGenerationRef.current;
+    const uid = user?.uid;
+
+    if (visibleProgramInstanceIdRef.current &&
+        visibleProgramInstanceIdRef.current !== activeProgramInstanceId) {
+      visibleProgramInstanceIdRef.current = null;
+      commitViewModel({ kind: 'LOADING' });
+    }
+
+    if (!uid || !activeProgramInstanceId) return undefined;
+    recordPerfMark('evolution_cache_read_start');
+    void readEvolutionSummaryPresentationCache(uid, activeProgramInstanceId).then((cached) => {
+      const currentScope = currentPresentationScopeRef.current;
+      if (cacheReadGenerationRef.current !== generation || currentScope.uid !== uid ||
+          currentScope.programInstanceId !== activeProgramInstanceId) return;
+      if (typeof cached === 'string') {
+        recordPerfMark('evolution_cache_miss');
+        return;
+      }
+      recordPerfMark('evolution_cache_hit');
+      const current = viewModelRef.current;
+      if (current.kind !== 'LOADING' && current.kind !== 'ERROR') return;
+      const cachedViewModel = viewModelFromEvolutionPresentationCache(cached);
+      visibleProgramInstanceIdRef.current = cached.programInstanceId;
+      commitViewModel(current.kind === 'ERROR'
+        ? { ...cachedViewModel, noticeUnavailable: true }
+        : cachedViewModel);
+      recordPerfMark('evolution_cached_summary_visible');
+    }).catch(() => recordPerfMark('evolution_cache_miss'));
+
+    return () => {
+      if (cacheReadGenerationRef.current === generation) cacheReadGenerationRef.current += 1;
+    };
+  }, [activeProgramInstanceId, commitViewModel, user]);
 
   useEffect(() => {
     load();
@@ -347,7 +440,13 @@ export function useWorkoutEvolution(): WorkoutEvolutionController {
   }, [load, user]);
 
   const start = useCallback(async () => {
-    if (!user || actionInFlight.current) return false;
+    // Defense in depth: callers cannot invoke a lifecycle write while the
+    // controller is exposing a cached/current-session summary-only state.
+    // The UI already renders no CTA for SUMMARY_READY, but the controller
+    // enforces the same authoritative boundary independently.
+    const current = viewModelRef.current;
+    if (!user || actionInFlight.current || visibleProgramInstanceIdRef.current !== activeProgramInstanceId ||
+        (current.kind !== 'EVOLUTION_READY' && current.kind !== 'EVOLUTION_DEFERRED')) return false;
     actionInFlight.current = true;
     setActionPending(true);
     setActionError(null);
@@ -368,10 +467,12 @@ export function useWorkoutEvolution(): WorkoutEvolutionController {
       actionInFlight.current = false;
       setActionPending(false);
     }
-  }, [user, load]);
+  }, [activeProgramInstanceId, user, load]);
 
   const defer = useCallback(async () => {
-    if (!user || actionInFlight.current) return false;
+    const current = viewModelRef.current;
+    if (!user || actionInFlight.current || visibleProgramInstanceIdRef.current !== activeProgramInstanceId ||
+        current.kind !== 'EVOLUTION_READY' || !current.canDefer) return false;
     actionInFlight.current = true;
     setActionPending(true);
     setActionError(null);
@@ -392,7 +493,7 @@ export function useWorkoutEvolution(): WorkoutEvolutionController {
       actionInFlight.current = false;
       setActionPending(false);
     }
-  }, [user, load]);
+  }, [activeProgramInstanceId, user, load]);
 
   const acknowledgeAutoActivation = useCallback(async () => {
     if (!user || viewModel.kind !== 'AUTO_ACTIVATION_NOTICE') return;
@@ -413,8 +514,13 @@ export function useWorkoutEvolution(): WorkoutEvolutionController {
     [load],
   );
 
+  const displayedViewModel = visibleProgramInstanceIdRef.current &&
+    visibleProgramInstanceIdRef.current !== activeProgramInstanceId
+    ? { kind: 'LOADING' as const }
+    : viewModel;
+
   return {
-    viewModel, loading, actionPending, actionError, diff, start, defer,
+    viewModel: displayedViewModel, loading, actionPending, actionError, diff, start, defer,
     acknowledgeAutoActivation, refresh: load, refreshProjection,
   };
 }

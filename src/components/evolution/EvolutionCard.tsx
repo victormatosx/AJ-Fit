@@ -77,7 +77,7 @@ export function EvolutionCard({
           </MonoLabel>
         </View>
 
-        {summary.earnedLevel !== summary.activeLevel ? (
+        {summary.earnedLevel !== null && summary.earnedLevel !== summary.activeLevel ? (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
             <Icon name="sparkles" size={14} color={theme.colors.primaryEmphasis} />
             <MonoLabel color={theme.colors.primaryEmphasis}>

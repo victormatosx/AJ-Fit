@@ -47,7 +47,7 @@ export function buildEvolutionTickerContent(
   if (viewModel.kind === 'UNAVAILABLE') return { mode: 'HIDDEN' };
 
   const { summary } = viewModel;
-  const earnedLevelNote = summary.earnedLevel !== summary.activeLevel
+  const earnedLevelNote = summary.earnedLevel !== null && summary.earnedLevel !== summary.activeLevel
     ? t('careerLevel', { level: t(`level.${summary.earnedLevel}`) })
     : null;
 
@@ -84,7 +84,7 @@ export function buildEvolutionTickerContent(
   const items: TickerItem[] = [
     { label: t('activePrescription'), value: t(`level.${summary.activeLevel}`) },
   ];
-  if (earnedLevelNote) {
+  if (earnedLevelNote && summary.earnedLevel) {
     items.push({ label: t('ticker.labels.earnedLevel'), value: t(`level.${summary.earnedLevel}`) });
   }
   if (summary.activeDays !== null) {

@@ -5,6 +5,7 @@
   "careerLevel": "Earned level: {{level}}",
   "state": {
     "loading": "Loading your training cycle",
+    "refreshing": "Updating",
     "error": "Your training cycle couldn't be loaded right now",
     "unavailable": "Cycle progress is not available for this account yet",
     "evaluationPaused": "Workout in progress"

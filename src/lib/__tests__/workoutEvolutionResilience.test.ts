@@ -28,15 +28,17 @@ describe('useWorkoutEvolution source — stale-result guard (concurrent load() c
   it('declares a generation counter and captures it per-call', () => {
     expect(HOOK_SRC).toContain('const loadGenerationRef = useRef(0);');
     expect(HOOK_SRC).toContain('const generation = ++loadGenerationRef.current;');
-    expect(HOOK_SRC).toContain('const isCurrent = () => loadGenerationRef.current === generation;');
+    expect(HOOK_SRC).toMatch(
+      /const isCurrent = \(\) => loadGenerationRef\.current === generation &&\s*programScopeGenerationRef\.current === programScopeGeneration;/,
+    );
   });
 
   it('every state-mutating commit (success path, UNAVAILABLE early-return, and the catch) is gated by isCurrent()', () => {
     const loadFn = HOOK_SRC.slice(HOOK_SRC.indexOf('const load = useCallback'), HOOK_SRC.indexOf('useEffect(() => {\n    load();'));
     // UNAVAILABLE early return
-    expect(loadFn).toMatch(/if \(!lifecycle\) {\s*if \(isCurrent\(\)\) {\s*commitViewModel\(\{ kind: 'UNAVAILABLE' \}\);/);
+    expect(loadFn).toMatch(/if \(!lifecycle\) {\s*if \(isCurrent\(\)\) {[\s\S]*?commitViewModel\(\{ kind: 'UNAVAILABLE' \}\);/);
     // main resolved view model commit
-    expect(loadFn).toMatch(/if \(isCurrent\(\)\) {\s*commitViewModel\(buildEvolutionViewModel/);
+    expect(loadFn).toMatch(/if \(isCurrent\(\)\) {[\s\S]*?const authoritativeViewModel = buildEvolutionViewModel[\s\S]*?commitViewModel\(authoritativeViewModel\);/);
     // catch branch
     expect(loadFn).toContain('if (isCurrent()) {');
     expect(loadFn).toContain('const next = nextViewModelAfterLoad(previous, { status: \'failure\' });');

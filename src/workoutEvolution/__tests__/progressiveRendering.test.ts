@@ -40,10 +40,10 @@ describe('useWorkoutEvolution — provisional SUMMARY_READY commit ordering', ()
   it('records evolution_first_useful_content only at the provisional commit, and evolution_authoritative_ready at every terminal commit', () => {
     const provisionalBlock = hook.slice(hook.indexOf('buildProvisionalEvolutionViewModel('), hook.indexOf('buildProvisionalEvolutionViewModel(') + 200);
     expect(provisionalBlock).toContain("recordPerfMark('evolution_first_useful_content')");
-    // Three real commit sites: the early UNAVAILABLE return, the main
-    // success path, and the catch-block resilience commit — every one now
-    // pairs evolution_state_commit with evolution_authoritative_ready.
-    expect(hook.match(/recordPerfMark\('evolution_authoritative_ready'\)/g)?.length).toBe(3);
+    // Only successful authoritative outcomes mark readiness: the early
+    // UNAVAILABLE return and the main success path. A catch/error (including
+    // offline with cache visible) must never claim authoritative readiness.
+    expect(hook.match(/recordPerfMark\('evolution_authoritative_ready'\)/g)?.length).toBe(2);
     // evolution_state_commit must keep firing exactly as before — this mark is additive, not a silent rename (Fase 5.1/5.2 instrumentation rule).
     expect(hook.match(/recordPerfMark\('evolution_state_commit'\)/g)?.length).toBe(3);
   });
@@ -64,6 +64,7 @@ describe('perf.ts — new Fase 5.2 marks', () => {
 describe('HomeScreen — home_evolution_ready keeps its original meaning', () => {
   it('does not fire home_evolution_ready for the new intermediate SUMMARY_READY kind (Passo 10: no silent metric redefinition)', () => {
     expect(home).toContain("evolutionViewModel.kind !== 'LOADING' && evolutionViewModel.kind !== 'SUMMARY_READY'");
+    expect(home).toContain("evolutionViewModel.kind !== 'ERROR'");
   });
 
   it('records evolution_shell_visible once, at Home mount — the Evolution area shell is always in the tree from first paint', () => {

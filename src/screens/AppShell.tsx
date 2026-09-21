@@ -252,7 +252,7 @@ function AppShellContent({
   const [recoveryDiscardError, setRecoveryDiscardError] = useState(false);
   // Fase 5 — single canonical evolution view-model/actions for the whole
   // app (docs product §144/§146); reconciles once per AppShell mount.
-  const evolution = useWorkoutEvolution();
+  const evolution = useWorkoutEvolution(activeProgram?.programInstanceId ?? null);
   // Home's "esta semana"/"sua frequência" sections — same authoritative
   // trainingDays/activeRecoveryDays/timezone the Schedule Engine itself
   // resolved (`schedule.config`), never a second computation of them.

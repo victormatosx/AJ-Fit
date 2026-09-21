@@ -76,6 +76,8 @@ export function ProgramProgressStrip({
         // instead of silently reusing the ready-looking proximity copy.
         : viewModel.kind === 'SUMMARY_READY' && viewModel.noticeUnavailable
           ? t('evolution:state.error')
+          : viewModel.kind === 'SUMMARY_READY' && viewModel.source === 'CACHE'
+            ? t('evolution:state.refreshing')
           : t(summary.proximity ? `evolution:proximity.${summary.proximity}` : 'evolution:state.evaluationPaused');
 
   return (

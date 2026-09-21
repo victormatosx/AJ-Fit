@@ -55,6 +55,7 @@ import {
   removeProfilePresentationCache,
   type ProfilePresentationCache,
 } from '../lib/profilePresentationCache';
+import { removeEvolutionSummaryPresentationCache } from '../lib/evolutionSummaryPresentationCache';
 import { recordPerfMark } from '../lib/perf';
 import { normalizeWeekdays, trainingDaysValid } from '../lib/questionnaireSchema';
 import {
@@ -637,7 +638,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         clearUserState();
         await cleanupRestSessionArtifacts();
         await signOutUser();
-        if (outgoingUid) await removeProfilePresentationCache(outgoingUid).catch(() => undefined);
+        if (outgoingUid) {
+          await Promise.all([
+            removeProfilePresentationCache(outgoingUid),
+            removeEvolutionSummaryPresentationCache(outgoingUid),
+          ]).catch(() => undefined);
+        }
       }),
       refreshEmailVerification: async () => {
         const refreshed = await refreshEmailVerificationStatus();

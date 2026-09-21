@@ -128,13 +128,18 @@ describe('buildProvisionalEvolutionViewModel — progressive rendering (Fase 5.2
     const decision = progressing({ activeDays: 12, validSessionCount: 8, adherence: { ratio: 0.64, quality: 'BELOW_TARGET' } });
     const provisional = buildProvisionalEvolutionViewModel({ lifecycle: lifecycle(), decision });
     const terminal = buildEvolutionViewModel({ now: NOW, lifecycle: lifecycle(), decision, pending: null, ...NO_NOTICE });
-    expect(provisional).toEqual({ kind: 'SUMMARY_READY', summary: terminal.kind === 'PROGRESSING' ? terminal.summary : undefined });
+    expect(provisional).toEqual({
+      kind: 'SUMMARY_READY',
+      source: 'CURRENT_SESSION',
+      summary: terminal.kind === 'PROGRESSING' ? terminal.summary : undefined,
+    });
   });
 
   it('never fabricates a decision-derived field when decision is not yet known', () => {
     const vm = buildProvisionalEvolutionViewModel({ lifecycle: lifecycle(), decision: null });
     expect(vm).toEqual({
       kind: 'SUMMARY_READY',
+      source: 'CURRENT_SESSION',
       summary: { earnedLevel: 'BEGINNER', activeLevel: 'BEGINNER', cycleNumber: 1, isHistoryComplete: true,
         proximity: null, activeDays: null, sessionsCompleted: null, adherenceQuality: null },
     });
