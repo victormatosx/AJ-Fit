@@ -37,6 +37,7 @@ import {
 } from '../types/units';
 import type { NotificationPreferences } from '../types/notificationPreferences';
 import { assertNewAccountEligibility } from '../lib/registrationEligibility';
+import { updateProfilePresentationCache } from '../lib/profilePresentationCache';
 
 /**
  * User repository — the only place that touches `users/{userId}` and its
@@ -492,6 +493,7 @@ export async function addQuestionnaire(
   const qDoc = doc(questionnairesRef(uid));
   await setDoc(qDoc, { answers: toPersistedAnswers(answers), version, createdAt: serverTimestamp() });
   await updateUserProfile(uid, {});
+  await updateProfilePresentationCache(uid, { questionnaire: answers }).catch(() => undefined);
   return qDoc.id;
 }
 
@@ -543,4 +545,8 @@ export async function updateUserProfile(
   }
 
   await updateDoc(userRef(uid), update);
+  if (data.name !== undefined) {
+    await updateProfilePresentationCache(uid, { name: normalizeDisplayName(data.name) })
+      .catch(() => undefined);
+  }
 }

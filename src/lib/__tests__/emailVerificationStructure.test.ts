@@ -75,13 +75,57 @@ describe('email verification integration structure', () => {
     expect(socialAuth).toContain('AccountLinkingRequiredError');
   });
 
-  it('contains no polling, AppState auto-refresh or extra-factor implementation', () => {
-    for (const forbidden of [
-      'setInterval',
-      'AppState',
-      'PhoneAuthProvider',
-    ]) {
+  it('contains no polling or extra-factor implementation anywhere, and no AppState auto-refresh in the email verification paths', () => {
+    for (const forbidden of ['setInterval', 'PhoneAuthProvider']) {
       expect(`${screen}\n${hook}\n${context}`).not.toContain(forbidden);
     }
+
+    // AppState is legitimately used elsewhere in AuthContext.tsx (Phase 3.1:
+    // retrying the profile/questionnaire load after a network error, see the
+    // dedicated test below) — that has nothing to do with email
+    // verification, so the AppState prohibition is scoped to the actual
+    // email-verification code paths instead of banning the string
+    // file-wide.
+    const refreshStart = context.indexOf('refreshEmailVerification: async () => {');
+    const refreshEnd = context.indexOf('refreshProfile:', refreshStart);
+    expect(refreshStart).toBeGreaterThan(-1);
+    expect(refreshEnd).toBeGreaterThan(refreshStart);
+    const refreshBlock = context.slice(refreshStart, refreshEnd);
+
+    const sendStart = context.indexOf('const verificationError = sendVerificationEmail(newUser)');
+    const sendEnd = context.indexOf("logInfo('auth', 'signup_completed'", sendStart);
+    expect(sendStart).toBeGreaterThan(-1);
+    expect(sendEnd).toBeGreaterThan(sendStart);
+    const sendBlock = context.slice(sendStart, sendEnd);
+
+    for (const emailVerificationSurface of [screen, hook, refreshBlock, sendBlock]) {
+      expect(emailVerificationSurface).not.toContain('AppState');
+    }
+  });
+
+  it('Phase 3.1: the AppState network-retry listener only reloads profile/questionnaire and never touches email verification', () => {
+    const listenerStart = context.indexOf('const subscription = AppState.addEventListener');
+    const listenerEnd = context.indexOf('return () => subscription.remove();', listenerStart);
+    expect(listenerStart).toBeGreaterThan(-1);
+    expect(listenerEnd).toBeGreaterThan(listenerStart);
+    const listenerBlock = context.slice(listenerStart, listenerEnd);
+
+    expect(listenerBlock).toContain('loadUserState(uid)');
+    for (const forbidden of [
+      'refreshEmailVerificationStatus',
+      'sendVerificationEmail',
+      'emailVerificationRequired',
+      'setAuthRevision',
+      '.reload(',
+      'PhoneAuthProvider',
+    ]) {
+      expect(listenerBlock).not.toContain(forbidden);
+    }
+
+    // Guarded to only fire while the profile/questionnaire load actually
+    // failed — not a general-purpose foreground poller.
+    const guardIndex = context.indexOf("loadState.questionnaireResolution !== 'error'");
+    expect(guardIndex).toBeGreaterThan(-1);
+    expect(guardIndex).toBeLessThan(listenerStart);
   });
 });

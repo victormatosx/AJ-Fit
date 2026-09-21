@@ -34,6 +34,8 @@ export function FullScreenLoading({
             color: theme.colors.textSecondaryStrong,
             fontFamily: theme.fonts.ui,
             fontSize: 14,
+            textAlign: 'center',
+            marginHorizontal: 24,
           }}
         >
           {message}

@@ -64,4 +64,52 @@ describe('AuthContext concurrency wiring', () => {
     expect(authScreen.match(/operationLock\.current = false/g)).toHaveLength(4);
     expect(authScreen.match(/operationLock\.current \|\| busy/g)).toHaveLength(4);
   });
+
+  // Phase 3.1: a delayed Firestore response for a UID that already logged
+  // out must never reach committed state, the presentation cache state, or
+  // disk. That guard lives here (generation counter), not in
+  // profilePresentationCache.ts — see profilePresentationCache.test.ts for
+  // what the primitive itself guarantees (disk-level UID isolation).
+  it('discards a superseded generation before it can commit state or write the presentation cache', () => {
+    const start = authContext.indexOf('const loadUserState = useCallback');
+    const end = authContext.indexOf('\n  }, []);', start);
+    const loadUserState = authContext.slice(start, end);
+
+    const supersededCheckIndex = loadUserState.indexOf('if (superseded) {');
+    const dispatchSucceededIndex = loadUserState.indexOf("type: 'load-succeeded'");
+    const setCachedPresentationIndex = loadUserState.indexOf('setCachedPresentation({');
+    const writeCacheIndex = loadUserState.indexOf('writeProfilePresentationCache(uid, nextProfile');
+
+    expect(supersededCheckIndex).toBeGreaterThan(-1);
+    expect(dispatchSucceededIndex).toBeGreaterThan(-1);
+    expect(setCachedPresentationIndex).toBeGreaterThan(-1);
+    expect(writeCacheIndex).toBeGreaterThan(-1);
+
+    // The superseded check must return before any of these run for a stale
+    // generation — otherwise a late response from a logged-out UID could
+    // commit its profile/questionnaire or overwrite the cache after another
+    // UID has already logged in.
+    expect(supersededCheckIndex).toBeLessThan(dispatchSucceededIndex);
+    expect(supersededCheckIndex).toBeLessThan(setCachedPresentationIndex);
+    expect(supersededCheckIndex).toBeLessThan(writeCacheIndex);
+  });
+
+  it('bumps the generation counter synchronously on logout, before any await can let a stale response through', () => {
+    const logoutStart = authContext.lastIndexOf('logout: () =>');
+    const logout = authContext.slice(
+      logoutStart,
+      authContext.indexOf('refreshEmailVerification:', logoutStart),
+    );
+    const clearUserStateIndex = logout.indexOf('clearUserState()');
+    const firstAwaitIndex = logout.indexOf('await ');
+    expect(clearUserStateIndex).toBeGreaterThan(-1);
+    expect(firstAwaitIndex).toBeGreaterThan(-1);
+    expect(clearUserStateIndex).toBeLessThan(firstAwaitIndex);
+
+    const clearUserStateBody = authContext.slice(
+      authContext.indexOf('const clearUserState = useCallback'),
+      authContext.indexOf('}, []);', authContext.indexOf('const clearUserState = useCallback')),
+    );
+    expect(clearUserStateBody).toContain('generationRef.current += 1');
+  });
 });
