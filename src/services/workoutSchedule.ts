@@ -10,6 +10,7 @@ import {
 } from 'firebase/firestore';
 
 import { db } from '../lib/firebase';
+import { countFirestoreRead } from '../lib/perf';
 import {
   authorizeWorkoutLifecycleMutation,
   WORKOUT_LIFECYCLE_AUTHORITY_GRANT_ID,
@@ -91,6 +92,7 @@ export async function hasScheduledSessionCompletion(input: {
 }
 
 export async function loadScheduleConfig(uid: string): Promise<ScheduleConfig | null> {
+  countFirestoreRead('workout_schedule.config');
   const snapshot = await getDoc(scheduleConfigRef(uid));
   if (!snapshot.exists()) return null;
   const data = snapshot.data();
@@ -626,6 +628,7 @@ export async function resolveMissedSession(input: {
 
 /** Diagnostics/QA only — not on any hot path. */
 export async function listScheduleEvents(uid: string, programId: string): Promise<ScheduleEvent[]> {
+  countFirestoreRead('workout_schedule.events');
   const snapshot = await getDocs(scheduleEventsCollection(uid, programId));
   return snapshot.docs.map((item) => item.data() as ScheduleEvent);
 }

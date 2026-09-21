@@ -23,6 +23,7 @@ import {
   type LimitationDatasetSnapshot,
 } from '../workoutPrescription/limitationDataset';
 import { logError, logInfo, logWarn } from '../lib/logger';
+import { countFirestoreRead } from '../lib/perf';
 import { getQuestionnaireById } from './userProfile';
 import {
   loadWorkoutLifecycle,
@@ -411,11 +412,13 @@ export async function loadActiveWorkoutProgram(uid: string): Promise<WorkoutProg
   }
   let activeWorkoutId = lifecycle?.lifecycle.activeContentIdentity ?? null;
   if (!activeWorkoutId) {
+    countFirestoreRead('workout_programs.active_pointer');
     const stateSnapshot = await getDoc(activeProgramStateRef(uid));
     if (!stateSnapshot.exists()) return null;
     activeWorkoutId = stateSnapshot.data().programId;
     if (typeof activeWorkoutId !== 'string' || !activeWorkoutId) return null;
   }
+  countFirestoreRead('workout_programs.snapshot');
   const programSnapshot = await getDoc(programRef(uid, activeWorkoutId));
   if (!programSnapshot.exists()) throw new Error('ACTIVE_WORKOUT_PROGRAM_NOT_FOUND');
   const initialData = programSnapshot.data();
@@ -463,6 +466,7 @@ export async function loadActiveWorkoutProgram(uid: string): Promise<WorkoutProg
     lifecycle = enrollment.lifecycle;
   }
   if (lifecycle.lifecycle.activeContentIdentity !== data.programId) {
+    countFirestoreRead('workout_programs.snapshot');
     const canonicalSnapshot = await getDoc(programRef(uid, lifecycle.lifecycle.activeContentIdentity));
     const canonicalData = canonicalSnapshot.data();
     if (!canonicalSnapshot.exists() || !isProgramSnapshot(canonicalData, lifecycle.lifecycle.activeContentIdentity)) {
@@ -485,6 +489,7 @@ export async function loadWorkoutProgramSnapshot(
   uid: string,
   contentIdentity: string,
 ): Promise<WorkoutProgramSnapshot | null> {
+  countFirestoreRead('workout_programs.snapshot');
   const snapshot = await getDoc(programRef(uid, contentIdentity));
   if (!snapshot.exists()) return null;
   const data = snapshot.data();

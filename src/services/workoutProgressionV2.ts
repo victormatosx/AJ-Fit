@@ -13,6 +13,7 @@ import type { ProgressionDecision, ProgressionSnapshotV2 } from '../progressionE
 import { localDateInTimezone } from '../scheduleEngine/localDate';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
+import { countFirestoreRead, startPerfTimer } from '../lib/perf';
 import { listExecutionsForProgramInstance, type PersistedWorkoutExecution } from './workoutExecutions';
 import { listScheduleEvents, loadScheduleConfig } from './workoutSchedule';
 import {
@@ -25,6 +26,7 @@ import { resolveWorkoutLifecycleProgressionPolicy } from '../workoutLifecycle/qa
 import type { ScheduleMode, Weekday } from '../state/AppState';
 
 async function loadAuthoritativePrescribedSessions(uid: string, contentIdentity: string) {
+  countFirestoreRead('workout_programs.snapshot');
   const snapshot = await getDoc(doc(db, 'users', uid, 'workoutPrograms', contentIdentity));
   if (!snapshot.exists()) return null;
   const data = snapshot.data();
@@ -57,6 +59,15 @@ function deviceTimezone(): string {
     return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
   } catch {
     return 'UTC';
+  }
+}
+
+async function measureProgressionStep<T>(label: string, operation: () => Promise<T>): Promise<T> {
+  const stop = startPerfTimer(label);
+  try {
+    return await operation();
+  } finally {
+    stop();
   }
 }
 
@@ -104,22 +115,47 @@ export async function evaluateProgressionV2ForUserFull(
   cycleNumber: number;
   policyMode: Awaited<ReturnType<typeof resolveWorkoutLifecycleProgressionPolicy>>;
 } | null> {
-  const bundle = await loadWorkoutLifecycleDeduped(uid);
-  if (!bundle) return null;
+  const stopTotal = startPerfTimer('evolution_progression.total');
+  try {
+    const bundle = await measureProgressionStep(
+      'evolution_progression.lifecycle',
+      () => loadWorkoutLifecycleDeduped(uid),
+    );
+    if (!bundle) return null;
 
-  const [config, { executions }, relevantCycles, scheduleEvents, authoritativeInputs, prescribedSessions, policyMode] = await Promise.all([
-    loadScheduleConfig(uid),
-    loadCurrentProgressionWindowExecutions(uid, bundle),
-    bundle.lifecycle.currentTrainingLevel === 'INTERMEDIATE'
-      ? listRecentIntermediateTrainingCycles(uid, PROGRESSION_V2_CONFIG.intermediateCyclesForPromotion)
-      : Promise.resolve([]),
-    listScheduleEvents(uid, bundle.lifecycle.activeContentIdentity),
-    loadAuthoritativePrescriptionInputs(uid, bundle),
-    loadAuthoritativePrescribedSessions(uid, bundle.lifecycle.activeContentIdentity),
-    resolveWorkoutLifecycleProgressionPolicy(uid),
-  ]);
-  if (!authoritativeInputs || !prescribedSessions) return null;
+    const [config, { executions }, relevantCycles, scheduleEvents, authoritativeInputs, prescribedSessions, policyMode] = await Promise.all([
+      measureProgressionStep('evolution_progression.schedule_config', () => loadScheduleConfig(uid)),
+      measureProgressionStep(
+        'evolution_progression.executions',
+        () => loadCurrentProgressionWindowExecutions(uid, bundle),
+      ),
+      measureProgressionStep(
+        'evolution_progression.relevant_cycles',
+        () => bundle.lifecycle.currentTrainingLevel === 'INTERMEDIATE'
+          ? listRecentIntermediateTrainingCycles(uid, PROGRESSION_V2_CONFIG.intermediateCyclesForPromotion)
+          : Promise.resolve([]),
+      ),
+      measureProgressionStep(
+        'evolution_progression.schedule_events',
+        () => listScheduleEvents(uid, bundle.lifecycle.activeContentIdentity),
+      ),
+      measureProgressionStep(
+        'evolution_progression.prescription_inputs',
+        () => loadAuthoritativePrescriptionInputs(uid, bundle),
+      ),
+      measureProgressionStep(
+        'evolution_progression.prescribed_program',
+        () => loadAuthoritativePrescribedSessions(uid, bundle.lifecycle.activeContentIdentity),
+      ),
+      measureProgressionStep(
+        'evolution_progression.policy',
+        () => resolveWorkoutLifecycleProgressionPolicy(uid),
+      ),
+    ]);
+    if (!authoritativeInputs || !prescribedSessions) return null;
 
+    const stopLocal = startPerfTimer('evolution_progression.local_calculations');
+    try {
   const timezone = config?.timezone ?? deviceTimezone();
   const todayLocalDate = localDateInTimezone(now, timezone);
   const progressionWindowStartLocalDate = localDateInTimezone(bundle.programInstance.activatedAt.toDate(), timezone);
@@ -193,4 +229,10 @@ export async function evaluateProgressionV2ForUserFull(
 
   const decision = evaluateProgressionV2(snapshot, resolveProgressionV2Config(policyMode));
   return { decision, snapshot, expectedSessions, cycleNumber: bundle.cycle.cycleNumber, policyMode };
+    } finally {
+      stopLocal();
+    }
+  } finally {
+    stopTotal();
+  }
 }

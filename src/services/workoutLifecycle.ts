@@ -761,6 +761,7 @@ export async function listRecentIntermediateTrainingCycles(
   uid: string,
   maximumCycles: number,
 ): Promise<TrainingCycle<Timestamp>[]> {
+  countFirestoreRead('workout_lifecycle.intermediate_cycles');
   const snapshot = await getDocs(query(
     collection(db, USERS, uid, TRAINING_CYCLES),
     where('level', '==', 'INTERMEDIATE'),
@@ -795,6 +796,7 @@ export async function listWorkoutLifecycleEventsForProgramInstance(
   uid: string,
   programInstanceId: string,
 ): Promise<WorkoutLifecycleEvent<Timestamp>[]> {
+  countFirestoreRead('workout_lifecycle.program_instance_events');
   const snapshot = await getDocs(query(
     collection(db, USERS, uid, WORKOUT_LIFECYCLE_EVENTS),
     where('programInstanceId', '==', programInstanceId),

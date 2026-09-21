@@ -1,7 +1,7 @@
 import { doc, runTransaction, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { logWarn } from '../lib/logger';
-import { recordPerfMark } from '../lib/perf';
+import { recordPerfMark, startPerfTimer } from '../lib/perf';
 import {
   evolutionIdempotencyKey,
   lifecycleEventId,
@@ -109,13 +109,30 @@ function timestampMillis(value: Timestamp): number {
   return value.toMillis();
 }
 
+async function measurePrepareStep<T>(label: string, operation: () => Promise<T>): Promise<T> {
+  const stop = startPerfTimer(label);
+  try {
+    return await operation();
+  } finally {
+    stop();
+  }
+}
+
 async function loadOutstandingEarnedFact(uid: string): Promise<EarnedEvolutionFact | null> {
-  const lifecycle = await loadWorkoutLifecycle(uid);
-  if (!lifecycle) return null;
-  const events = await listWorkoutLifecycleEventsForProgramInstance(
-    uid,
-    lifecycle.lifecycle.activeProgramInstanceId,
+  const lifecycle = await measurePrepareStep(
+    'evolution_prepare.outstanding.lifecycle',
+    () => loadWorkoutLifecycle(uid),
   );
+  if (!lifecycle) return null;
+  const events = await measurePrepareStep(
+    'evolution_prepare.outstanding.events',
+    () => listWorkoutLifecycleEventsForProgramInstance(
+      uid,
+      lifecycle.lifecycle.activeProgramInstanceId,
+    ),
+  );
+  const stopLocal = startPerfTimer('evolution_prepare.outstanding.local');
+  try {
   const activations = new Set(events
     .filter((event) => ['LEVEL_PROMOTED', 'EVOLUTION_ACTIVATED', 'MOTIVATIONAL_RENEWAL_ACTIVATED'].includes(event.type))
     .map((event) => event.idempotencyKey));
@@ -163,6 +180,9 @@ async function loadOutstandingEarnedFact(uid: string): Promise<EarnedEvolutionFa
     nextPromptAt,
     autoActivateAt,
   };
+  } finally {
+    stopLocal();
+  }
 }
 
 async function persistEarnedFact(input: {
@@ -261,57 +281,85 @@ async function persistEarnedFact(input: {
  * while a transition is outstanding).
  */
 async function prepareEvolutionAttempt(input: { uid: string; now?: Date }): Promise<PrepareEvolutionResult> {
-  const now = input.now ?? new Date();
+  recordPerfMark('evolution_prepare_attempt_entered');
+  const stopTotal = startPerfTimer('evolution_prepare.total');
+  try {
+    const now = input.now ?? new Date();
 
-  const existingPending = await loadPendingEvolution(input.uid);
-  if (existingPending) return { status: 'ALREADY_PENDING', pending: existingPending };
+    const existingPending = await measurePrepareStep(
+      'evolution_prepare.pending_read',
+      () => loadPendingEvolution(input.uid),
+    );
+    if (existingPending) return { status: 'ALREADY_PENDING', pending: existingPending };
 
-  let earnedFact = await loadOutstandingEarnedFact(input.uid);
-  if (!earnedFact) {
-    const decision = await evaluateProgressionV2ForUser(input.uid, now);
+    let earnedFact = await measurePrepareStep(
+      'evolution_prepare.outstanding_total',
+      () => loadOutstandingEarnedFact(input.uid),
+    );
+    if (!earnedFact) {
+      const decision = await measurePrepareStep(
+        'evolution_prepare.evaluate_progression',
+        () => evaluateProgressionV2ForUser(input.uid, now),
+      );
     // Phase 4.2: this is the SAME evaluateProgressionV2ForUser call that
     // useWorkoutEvolution.load()'s outer Promise.all makes again right
     // after reconcile returns — same uid, no write in between when this
     // branch resolves NO_ACTION/PROGRESS_CONTINUES below. See perf marks.
-    recordPerfMark('evolution_reconcile_progression_eval_ready');
-    if (!decision || decision.type === 'NO_ACTION' || decision.type === 'PROGRESS_CONTINUES') {
-      return { status: 'NO_ACTION', decision };
-    }
-    const lifecycleAtEarn = await loadWorkoutLifecycle(input.uid);
-    if (!lifecycleAtEarn) return { status: 'NO_LIFECYCLE' };
-    let type: PendingEvolutionType;
-    let fromLevel = lifecycleAtEarn.lifecycle.currentTrainingLevel;
-    let toLevel = lifecycleAtEarn.lifecycle.currentTrainingLevel;
-    let quality = decision.adherence.quality;
-    if (decision.type === 'LEVEL_PROMOTION_ELIGIBLE') {
-      type = 'LEVEL_PROMOTION'; fromLevel = decision.from; toLevel = decision.to; quality = decision.quality;
-    } else if (decision.type === 'EVOLUTION_ELIGIBLE') {
-      type = 'CYCLE_EVOLUTION'; quality = decision.quality;
-    } else {
-      type = 'MOTIVATIONAL_RENEWAL';
-    }
-    const idempotencyKey = evolutionIdempotencyKey({
-      sourceProgramInstanceId: lifecycleAtEarn.programInstance.programInstanceId,
-      type,
-    });
-    earnedFact = await persistEarnedFact({
-      uid: input.uid,
-      lifecycle: lifecycleAtEarn,
-      fact: {
-        idempotencyKey, type, fromLevel, toLevel, quality,
-        sessionsCompletedAtEarn: decision.validSessionCount,
-        adherenceAtEarnBp: Math.round(decision.adherence.ratio * 10000),
-      },
-    });
-  }
+      recordPerfMark('evolution_reconcile_progression_eval_ready');
+      const stopDecisionLocal = startPerfTimer('evolution_prepare.local_decision');
+      const noAction = !decision || decision.type === 'NO_ACTION' || decision.type === 'PROGRESS_CONTINUES';
+      stopDecisionLocal();
+      if (noAction) return { status: 'NO_ACTION', decision };
 
-  const lifecycle = await loadWorkoutLifecycle(input.uid);
-  if (!lifecycle) return { status: 'NO_LIFECYCLE' };
-  const { type, fromLevel, toLevel, quality, idempotencyKey } = earnedFact;
+      const lifecycleAtEarn = await measurePrepareStep(
+        'evolution_prepare.lifecycle_at_earn',
+        () => loadWorkoutLifecycle(input.uid),
+      );
+      if (!lifecycleAtEarn) return { status: 'NO_LIFECYCLE' };
+      const stopEarnedFactLocal = startPerfTimer('evolution_prepare.earned_fact_local');
+      let type: PendingEvolutionType;
+      let fromLevel = lifecycleAtEarn.lifecycle.currentTrainingLevel;
+      let toLevel = lifecycleAtEarn.lifecycle.currentTrainingLevel;
+      let quality = decision.adherence.quality;
+      if (decision.type === 'LEVEL_PROMOTION_ELIGIBLE') {
+        type = 'LEVEL_PROMOTION'; fromLevel = decision.from; toLevel = decision.to; quality = decision.quality;
+      } else if (decision.type === 'EVOLUTION_ELIGIBLE') {
+        type = 'CYCLE_EVOLUTION'; quality = decision.quality;
+      } else {
+        type = 'MOTIVATIONAL_RENEWAL';
+      }
+      const idempotencyKey = evolutionIdempotencyKey({
+        sourceProgramInstanceId: lifecycleAtEarn.programInstance.programInstanceId,
+        type,
+      });
+      stopEarnedFactLocal();
+      earnedFact = await measurePrepareStep(
+        'evolution_prepare.persist_earned_fact',
+        () => persistEarnedFact({
+          uid: input.uid,
+          lifecycle: lifecycleAtEarn,
+          fact: {
+            idempotencyKey, type, fromLevel, toLevel, quality,
+            sessionsCompletedAtEarn: decision.validSessionCount,
+            adherenceAtEarnBp: Math.round(decision.adherence.ratio * 10000),
+          },
+        }),
+      );
+    }
 
-  const evolutionResult = type === 'LEVEL_PROMOTION'
-    ? await evolvePrescription({ uid: input.uid, mode: 'LEVEL_PROMOTION', targetLevel: toLevel as LevelPromotionTarget })
-    : await evolvePrescription({ uid: input.uid, mode: type, targetCycleIdentity: idempotencyKey });
+    const lifecycle = await measurePrepareStep(
+      'evolution_prepare.lifecycle_for_prepare',
+      () => loadWorkoutLifecycle(input.uid),
+    );
+    if (!lifecycle) return { status: 'NO_LIFECYCLE' };
+    const { type, fromLevel, toLevel, quality, idempotencyKey } = earnedFact;
+
+    const evolutionResult = await measurePrepareStep(
+      'evolution_prepare.evolve_prescription',
+      () => type === 'LEVEL_PROMOTION'
+        ? evolvePrescription({ uid: input.uid, mode: 'LEVEL_PROMOTION', targetLevel: toLevel as LevelPromotionTarget })
+        : evolvePrescription({ uid: input.uid, mode: type, targetCycleIdentity: idempotencyKey }),
+    );
 
   if (evolutionResult.status !== 'SUCCESS') {
     logWorkoutLifecycleEvent({
@@ -321,6 +369,7 @@ async function prepareEvolutionAttempt(input: { uid: string; now?: Date }): Prom
     return { status: 'PREPARATION_FAILED', reasonCodes: evolutionResult.reasonCodes };
   }
 
+    const stopCandidateLocal = startPerfTimer('evolution_prepare.candidate_local');
   const candidateTargetContentIdentity = contentIdentityFor({
     questionnaireId: evolutionResult.questionnaireId,
     questionnaireVersion: evolutionResult.questionnaireVersion,
@@ -339,8 +388,9 @@ async function prepareEvolutionAttempt(input: { uid: string; now?: Date }): Prom
   const sourceSnapshotId = lifecycle.programInstance.prescriptionInputSnapshot?.snapshotId
     ?? `legacy:${lifecycle.programInstance.programInstanceId}`;
   const sourceInstanceRef = doc(db, USERS, input.uid, 'programInstances', lifecycle.programInstance.programInstanceId);
+    stopCandidateLocal();
 
-  const authorityResult = await authorizeWorkoutLifecycleMutation({
+  const authorityResult = await measurePrepareStep('evolution_prepare.authorize', () => authorizeWorkoutLifecycleMutation({
     operation: 'PREPARE',
     sourceProgramInstanceId: lifecycle.programInstance.programInstanceId,
     sourceCycleId: lifecycle.cycle.cycleId,
@@ -356,7 +406,8 @@ async function prepareEvolutionAttempt(input: { uid: string; now?: Date }): Prom
       sessionsCompletedAtEarn: earnedFact.sessionsCompletedAtEarn,
       adherenceAtEarnBp: earnedFact.adherenceAtEarnBp,
     },
-  });
+  }));
+    const stopCanonicalLocal = startPerfTimer('evolution_prepare.canonical_local');
   const canonical = requireWorkoutLifecycleCanonical(authorityResult, 'PREPARE');
   const canonicalTemplate = {
     id: canonical.targetPlan.templateId as TemplateId,
@@ -401,9 +452,10 @@ async function prepareEvolutionAttempt(input: { uid: string; now?: Date }): Prom
   }) !== targetContentIdentity) {
     throw new Error('WORKOUT_LIFECYCLE_PENDING_IDENTITY_INCONSISTENT');
   }
+    stopCanonicalLocal();
 
   try {
-    await runTransaction(db, async (transaction) => {
+    await measurePrepareStep('evolution_prepare.transaction', () => runTransaction(db, async (transaction) => {
       const [pendingSnapshot, stateSnapshot, sourceInstanceSnapshot] = await Promise.all([
         transaction.get(pendingRef),
         transaction.get(stateRef),
@@ -460,7 +512,7 @@ async function prepareEvolutionAttempt(input: { uid: string; now?: Date }): Prom
       updatedAt: nowTs,
       });
       transaction.delete(authorityGrantRef(input.uid));
-    });
+    }));
   } catch (error) {
     const converged = await loadPendingEvolution(input.uid).catch(() => null);
     if (converged?.idempotencyKey === idempotencyKey) {
@@ -483,9 +535,16 @@ async function prepareEvolutionAttempt(input: { uid: string; now?: Date }): Prom
     throw error;
   }
 
-  const created = await loadPendingEvolution(input.uid);
+  const created = await measurePrepareStep(
+    'evolution_prepare.created_pending_read',
+    () => loadPendingEvolution(input.uid),
+  );
   if (!created) throw new Error('PENDING_EVOLUTION_PERSIST_FAILED');
   return { status: 'PREPARED', pending: created };
+  } finally {
+    stopTotal();
+    recordPerfMark('evolution_prepare_attempt_returned');
+  }
 }
 
 // ─── DEFER ──────────────────────────────────────────────────────────────

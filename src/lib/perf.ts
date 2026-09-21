@@ -30,7 +30,8 @@ export type PerfMark =
   | 'evolution_reconcile_pending_ready' | 'evolution_reconcile_prepare_ready'
   | 'evolution_reconcile_progression_eval_ready'
   | 'evolution_reconcile_not_due' | 'evolution_reconcile_activation_done'
-  | 'evolution_reconcile_cleanup_done';
+  | 'evolution_reconcile_cleanup_done'
+  | 'evolution_prepare_attempt_entered' | 'evolution_prepare_attempt_returned';
 
 const epoch = typeof performance !== 'undefined' ? performance.now() : Date.now();
 
@@ -76,7 +77,9 @@ let firestoreReadCounters: Record<string, number> = {};
  */
 export function countFirestoreRead(label: string): void {
   if (!isEnabled()) return;
-  firestoreReadCounters[label] = (firestoreReadCounters[label] ?? 0) + 1;
+  const count = (firestoreReadCounters[label] ?? 0) + 1;
+  firestoreReadCounters[label] = count;
+  logDebug('app:perf', 'firestore_read', { label, count });
 }
 
 export function firestoreReadCounts(): Readonly<Record<string, number>> {

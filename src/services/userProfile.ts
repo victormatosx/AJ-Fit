@@ -38,6 +38,7 @@ import {
 import type { NotificationPreferences } from '../types/notificationPreferences';
 import { assertNewAccountEligibility } from '../lib/registrationEligibility';
 import { updateProfilePresentationCache } from '../lib/profilePresentationCache';
+import { countFirestoreRead } from '../lib/perf';
 
 /**
  * User repository — the only place that touches `users/{userId}` and its
@@ -362,6 +363,7 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
   let migrated = false;
 
   const current = await runTransaction(db, async (transaction) => {
+    countFirestoreRead('user_profile.document');
     const snap = await transaction.get(ref);
     if (!snap.exists()) return null;
     const data = snap.data();
@@ -375,6 +377,7 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
   });
 
   if (current || !migrated) return current;
+  countFirestoreRead('user_profile.document');
   const migratedSnap = await getDoc(ref);
   return migratedSnap.exists() ? (migratedSnap.data() as UserProfile) : null;
 }
@@ -469,6 +472,7 @@ export async function getLatestQuestionnaire(
  * contract as `getLatestQuestionnaire`.
  */
 export async function getQuestionnaireById(uid: string, questionnaireId: string): Promise<QuestionnaireDoc | null> {
+  countFirestoreRead('questionnaire.by_id');
   const snapshot = await getDoc(doc(questionnairesRef(uid), questionnaireId));
   if (!snapshot.exists()) return null;
   const raw = snapshot.data() as { answers?: Partial<PersistedQuizAnswers>; version: number; createdAt: Timestamp | null };

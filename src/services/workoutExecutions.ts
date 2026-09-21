@@ -930,6 +930,7 @@ export async function listExecutionsForProgram(uid: string, programId: string): 
 /** V2 instance-scoped history; prevents equivalent content reused in two cycles from sharing progression counts. */
 export async function listExecutionsForProgramInstance(uid: string, programInstanceId: string): Promise<PersistedWorkoutExecution[]> {
   const q = query(executionsCollection(uid), where('programInstanceId', '==', programInstanceId));
+  countFirestoreRead('workout_executions.program_instance');
   const snapshot = await getDocs(q);
   return snapshot.docs.map((item) => fromDoc(item.id, item.data()));
 }
