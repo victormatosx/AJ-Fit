@@ -3,6 +3,7 @@ import { AppState, type AppStateStatus } from 'react-native';
 import { onSnapshot, type Timestamp } from 'firebase/firestore';
 import { useAuth } from '../state/AuthContext';
 import { logWarn } from '../lib/logger';
+import { recordPerfMark } from '../lib/perf';
 import {
   FOREGROUND_RECONCILE_THROTTLE_MS,
   shouldReconcileOnForeground,
@@ -132,17 +133,20 @@ export function useWorkoutEvolution(): WorkoutEvolutionController {
           trigger: options?.trigger ?? (hasLoadedOnce.current ? 'RECOVERY' : 'COLD_START'),
         });
       }
+      recordPerfMark('evolution_reconcile_ready');
 
       const [lifecycle, pendingAfter, decision] = await Promise.all([
         loadWorkoutLifecycle(user.uid),
         loadPendingEvolution(user.uid),
         evaluateProgressionV2ForUser(user.uid),
       ]);
+      recordPerfMark('evolution_lifecycle_pending_progression_ready');
 
       if (!lifecycle) {
         if (isCurrent()) {
           commitViewModel({ kind: 'UNAVAILABLE' });
           setDiff(null);
+          recordPerfMark('evolution_state_commit');
         }
         return;
       }
@@ -150,7 +154,9 @@ export function useWorkoutEvolution(): WorkoutEvolutionController {
         user.uid,
         lifecycle.programInstance.programInstanceId,
       );
+      recordPerfMark('evolution_events_ready');
       const autoActivationNotice = await loadUnacknowledgedAutoActivationNotice(user.uid, instanceEvents);
+      recordPerfMark('evolution_activation_notice_ready');
       const lifecycleContext: LifecycleContext = {
         // The active lifecycle level stays cycle-coherent until activation.
         // A pending promotion's immutable earned fact is presented from the
@@ -170,6 +176,7 @@ export function useWorkoutEvolution(): WorkoutEvolutionController {
           pending: pendingAfter ? toPendingSummary(pendingAfter) : null,
           autoActivationNotice,
         }));
+        recordPerfMark('evolution_state_commit');
       }
 
       if (pendingAfter) {
@@ -213,6 +220,7 @@ export function useWorkoutEvolution(): WorkoutEvolutionController {
           });
         } else {
           commitViewModel(next);
+          recordPerfMark('evolution_state_commit');
         }
       }
       // Background/cold-start refreshes remain self-contained. Explicit

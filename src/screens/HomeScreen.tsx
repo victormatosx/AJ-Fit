@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Modal, View, Text, ScrollView, Pressable, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -10,6 +10,7 @@ import { Icon } from '../components/ui/Icon';
 import { darkTheme, useTheme } from '../theme';
 import { useAuth } from '../state/AuthContext';
 import { getDisplayFirstName } from '../lib/userName';
+import { recordPerfMark } from '../lib/perf';
 import { ProfileAvatar } from '../components/ui/ProfileAvatar';
 import type { PrescriptionResult } from '../workoutPrescription/types';
 import { prescriptionOutcomeKey } from '../workoutPrescription/uiOutcome';
@@ -118,6 +119,16 @@ export function HomeScreen({
   onFrequencyNext?: () => void;
 }) {
   const { theme } = useTheme();
+  useEffect(() => { recordPerfMark('home_mount'); }, []);
+  useEffect(() => {
+    if (!loading && !generating && scheduleResolution &&
+        (prescription.status !== 'SUCCESS' || scheduleResolution.status !== 'PROGRAM_NOT_AVAILABLE')) {
+      recordPerfMark('home_today_ready');
+    }
+  }, [loading, generating, prescription.status, scheduleResolution]);
+  useEffect(() => {
+    if (evolutionViewModel.kind !== 'LOADING') recordPerfMark('home_evolution_ready');
+  }, [evolutionViewModel]);
   const { t, i18n } = useTranslation(['home', 'profile']);
   const [showMissedPendingInfo, setShowMissedPendingInfo] = useState(false);
   const [selectedUpcoming, setSelectedUpcoming] = useState<UpcomingWorkoutViewModel | null>(null);

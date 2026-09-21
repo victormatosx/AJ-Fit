@@ -1,6 +1,7 @@
 import { doc, runTransaction, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { logWarn } from '../lib/logger';
+import { recordPerfMark } from '../lib/perf';
 import {
   evolutionIdempotencyKey,
   lifecycleEventId,
@@ -267,6 +268,11 @@ async function prepareEvolutionAttempt(input: { uid: string; now?: Date }): Prom
   let earnedFact = await loadOutstandingEarnedFact(input.uid);
   if (!earnedFact) {
     const decision = await evaluateProgressionV2ForUser(input.uid, now);
+    // Phase 4.2: this is the SAME evaluateProgressionV2ForUser call that
+    // useWorkoutEvolution.load()'s outer Promise.all makes again right
+    // after reconcile returns — same uid, no write in between when this
+    // branch resolves NO_ACTION/PROGRESS_CONTINUES below. See perf marks.
+    recordPerfMark('evolution_reconcile_progression_eval_ready');
     if (!decision || decision.type === 'NO_ACTION' || decision.type === 'PROGRESS_CONTINUES') {
       return { status: 'NO_ACTION' };
     }
@@ -950,6 +956,7 @@ export async function reconcileWorkoutLifecycle(input: {
   logWorkoutLifecycleEvent({ name: 'lifecycle_reconcile_started', trigger });
   try {
     let recovery = await recoverWorkoutLifecyclePartialState(input.uid);
+    recordPerfMark('evolution_reconcile_recovery_ready');
     if (recovery.classification === 'UNRECOVERABLE') {
       throw new Error('WORKOUT_LIFECYCLE_PARTIAL_STATE_UNRECOVERABLE');
     }
@@ -971,6 +978,7 @@ export async function reconcileWorkoutLifecycle(input: {
       }
     }
     const lifecycle = recovery.lifecycle ?? await loadWorkoutLifecycle(input.uid);
+    recordPerfMark('evolution_reconcile_lifecycle_ready');
     if (!lifecycle) {
       const result = { prepared: false, autoActivated: false, staleClearedPendingEvolution: false };
       logWorkoutLifecycleEvent({ name: 'lifecycle_reconcile_completed', trigger, outcome: 'NO_LIFECYCLE' });
@@ -978,11 +986,13 @@ export async function reconcileWorkoutLifecycle(input: {
     }
 
     const pending = await loadPendingEvolution(input.uid);
+    recordPerfMark('evolution_reconcile_pending_ready');
     if (!pending) {
     // Recovery: an eligible evolution may have been earned but never
     // prepared (crash before persistence) — safe to attempt, idempotent
     // either way (docs §76).
       const result = await prepareEvolution({ uid: input.uid, now });
+      recordPerfMark('evolution_reconcile_prepare_ready');
       const response = { prepared: result.status === 'PREPARED', autoActivated: false, staleClearedPendingEvolution: false };
       logWorkoutLifecycleEvent({ name: 'lifecycle_reconcile_completed', trigger, outcome: response.prepared ? 'PREPARED' : 'NO_ACTION' });
       return response;
@@ -1000,6 +1010,7 @@ export async function reconcileWorkoutLifecycle(input: {
         transaction.delete(pendingEvolutionRef(input.uid));
         transaction.delete(authorityGrantRef(input.uid));
       }).catch(() => undefined);
+      recordPerfMark('evolution_reconcile_cleanup_done');
       const response = { prepared: false, autoActivated: false, staleClearedPendingEvolution: true };
       logWorkoutLifecycleEvent({ name: 'lifecycle_reconcile_completed', trigger, outcome: 'NO_ACTION' });
       return response;
@@ -1034,6 +1045,7 @@ export async function reconcileWorkoutLifecycle(input: {
       transaction.delete(authorityGrantRef(input.uid));
     });
       const reprepared = await prepareEvolution({ uid: input.uid, now });
+      recordPerfMark('evolution_reconcile_cleanup_done');
       const response = {
         prepared: reprepared.status === 'PREPARED' || reprepared.status === 'ALREADY_PENDING',
         autoActivated: false,
@@ -1051,12 +1063,14 @@ export async function reconcileWorkoutLifecycle(input: {
     autoActivateAt: pending.autoActivateAt ? pending.autoActivateAt.toDate() : null,
   });
     if (!isAutoActivationDue(view, now)) {
+      recordPerfMark('evolution_reconcile_not_due');
       const response = { prepared: false, autoActivated: false, staleClearedPendingEvolution: false };
       logWorkoutLifecycleEvent({ name: 'lifecycle_reconcile_completed', trigger, outcome: 'NO_ACTION' });
       return response;
     }
 
   const activation = await activatePendingEvolution({ uid: input.uid, now, trigger: 'AUTO' });
+    recordPerfMark('evolution_reconcile_activation_done');
     if (activation.status === 'ACTIVATED') {
       const response = { prepared: false, autoActivated: true, staleClearedPendingEvolution: false, program: activation.program };
       logWorkoutLifecycleEvent({ name: 'lifecycle_reconcile_completed', trigger, outcome: 'AUTO_ACTIVATED' });
