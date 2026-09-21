@@ -470,14 +470,12 @@ function RootNavigator() {
         />
       );
     }
-    const cachedName = cachedPresentation?.profile?.name;
-    const cachedDays = cachedPresentation?.questionnaire?.days;
-    const cachedMessage = cachedName
-      ? cachedDays
-        ? t('status.cachedQuestionnaireLoading', { name: cachedName, days: cachedDays })
-        : t('status.cachedProfileLoading', { name: cachedName })
-      : undefined;
-    return <FullScreenLoading message={cachedMessage} />;
+    // Cached profile/questionnaire data (`cachedPresentation`) is still read
+    // above for the retry-exhausted error message — only its display here,
+    // in the ordinary (non-error) intermediate loading state, is removed so
+    // this gate always shows the same neutral spinner as the bootstrap gate
+    // above, with no name/plan/"Atualizando…" flash before Home.
+    return <FullScreenLoading />;
   }
 
   return (

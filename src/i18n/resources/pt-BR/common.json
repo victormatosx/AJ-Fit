@@ -14,8 +14,6 @@
     "edit": "Editar"
   },
   "status": {
-    "cachedProfileLoading": "Olá, {{name}}. Atualizando seus dados…",
-    "cachedQuestionnaireLoading": "Olá, {{name}}. Último plano: {{days}} dias por semana. Atualizando…",
     "cachedProfileOffline": "Últimos dados de {{name}} disponíveis neste dispositivo. Conecte-se para abrir seu treino.",
     "cachedQuestionnaireOffline": "{{name}}: último plano de {{days}} dias por semana. Conecte-se para abrir seu treino.",
     "loading": "Carregando",
