@@ -9,6 +9,7 @@ import { buildSeedDocuments } from '../../../scripts/seedWorkoutTemplates';
 import { completeAnswers } from '../../workoutPrescription/__tests__/fixtures';
 import { toPersistedAnswers } from '../../lib/questionnaireAnswers';
 import { CANONICAL_LIMITATION_DATASET_HASH, CANONICAL_LIMITATION_DATASET_VERSION } from '../../workoutPrescription/limitationDataset';
+import { WEEKDAY_ORDER } from '../../state/AppState';
 
 const PROJECT_ID = 'ajfit-rules-test';
 const UID = 'erin';
@@ -30,7 +31,7 @@ const T004_SEED = buildSeedDocuments().find((t) => t.id === 'T004');
 if (!T004_SEED) throw new Error('T004 fixture missing from catalog — cannot run this integration test');
 
 const BEGINNER_ANSWERS = completeAnswers({
-  sex: 'm', goal: 'gain_muscle', level: 'beginner', days: 4, place: 'gym', specialConditions: ['none'],
+  sex: 'm', goal: 'gain_muscle', level: 'beginner', days: 4, trainingDays: WEEKDAY_ORDER.slice(0, 4), place: 'gym', specialConditions: ['none'],
 });
 
 async function seedUserAndQuestionnaire() {

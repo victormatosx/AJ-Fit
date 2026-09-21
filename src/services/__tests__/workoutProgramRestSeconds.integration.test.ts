@@ -22,6 +22,7 @@ import { buildSeedDocuments } from '../../../scripts/seedWorkoutTemplates';
 import { completeAnswers } from '../../workoutPrescription/__tests__/fixtures';
 import { toPersistedAnswers } from '../../lib/questionnaireAnswers';
 import { CANONICAL_LIMITATION_DATASET_HASH, CANONICAL_LIMITATION_DATASET_VERSION } from '../../workoutPrescription/limitationDataset';
+import { WEEKDAY_ORDER } from '../../state/AppState';
 
 const PROJECT_ID = 'ajfit-rules-test';
 const UID = 'dana';
@@ -46,7 +47,9 @@ import { installWorkoutLifecycleAuthorityFixture, resetWorkoutLifecycleAuthority
 const T003_SEED = buildSeedDocuments().find((t) => t.id === 'T003');
 if (!T003_SEED) throw new Error('T003 fixture missing — cannot run restSeconds integration tests');
 
-const ANSWERS = completeAnswers({ level: 'intermediate', days: 4, place: 'gym', sex: 'm', goal: 'gain_muscle' });
+const ANSWERS = completeAnswers({
+  level: 'intermediate', days: 4, trainingDays: WEEKDAY_ORDER.slice(0, 4), place: 'gym', sex: 'm', goal: 'gain_muscle',
+});
 
 describe.skipIf(!enabled)('restSeconds persistence — real Firestore Emulator integration', () => {
   beforeAll(async () => {

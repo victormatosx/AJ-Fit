@@ -64,14 +64,14 @@ import type { FinalWorkoutPlan } from '../../workoutPrescription/types';
 const T003_SEED = buildSeedDocuments().find((t) => t.id === 'T003');
 if (!T003_SEED) throw new Error('T003 fixture missing from catalog — cannot run this integration test');
 
+const TRAINING_DAYS = ['MON', 'TUE', 'THU', 'FRI'] as const;
+
 const BEGINNER_ANSWERS = completeAnswers({
-  sex: 'm', goal: 'gain_muscle', level: 'beginner', days: 4, place: 'gym', specialConditions: ['none'],
+  sex: 'm', goal: 'gain_muscle', level: 'beginner', days: 4, trainingDays: [...TRAINING_DAYS], place: 'gym', specialConditions: ['none'],
 });
 const INTERMEDIATE_ANSWERS = completeAnswers({
-  sex: 'm', goal: 'gain_muscle', level: 'intermediate', days: 4, place: 'gym', specialConditions: ['none'],
+  sex: 'm', goal: 'gain_muscle', level: 'intermediate', days: 4, trainingDays: [...TRAINING_DAYS], place: 'gym', specialConditions: ['none'],
 });
-
-const TRAINING_DAYS = ['MON', 'TUE', 'THU', 'FRI'] as const;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 function divergentCanonical(
@@ -638,8 +638,11 @@ describe.skipIf(!enabled)('Fase 4 Lifecycle Orchestrator — real Firestore Emul
     });
 
     // The current instance has no qualifying history and no earned event.
-    // Historical earned facts must neither become outstanding nor trigger PREPARE.
-    await expect(prepareEvolution({ uid: UID })).resolves.toEqual({ status: 'NO_ACTION' });
+    // Historical earned facts must neither become outstanding nor trigger
+    // PREPARE — the exact `decision` diagnostics accompanying `NO_ACTION`
+    // (e.g. `MINIMUM_ACTIVE_TIME_NOT_REACHED` for a freshly-started instance)
+    // are incidental to that guarantee, not part of it.
+    await expect(prepareEvolution({ uid: UID })).resolves.toMatchObject({ status: 'NO_ACTION' });
     expect(await loadPendingEvolution(UID)).toBeNull();
     expect((await loadWorkoutLifecycle(UID))!.programInstance.programInstanceId)
       .toBe(current.programInstance.programInstanceId);

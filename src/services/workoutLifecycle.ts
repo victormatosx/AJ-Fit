@@ -13,6 +13,8 @@ import {
 } from 'firebase/firestore';
 
 import { db } from '../lib/firebase';
+import { countFirestoreRead } from '../lib/perf';
+import { createInFlightDedupe } from '../lib/inFlightDedupe';
 import {
   cycleIdForOperation,
   isPendingEvolution,
@@ -116,6 +118,7 @@ export function pendingEvolutionRef(uid: string) {
 }
 
 export async function loadPendingEvolution(uid: string): Promise<PendingEvolution<Timestamp> | null> {
+  countFirestoreRead('reconcile.firestore_reads.pending_evolution');
   const snapshot = await getDoc(pendingEvolutionRef(uid));
   if (!snapshot.exists()) return null;
   const data = snapshot.data();
@@ -155,6 +158,7 @@ function parseBundle(
 }
 
 export async function loadWorkoutLifecycle(uid: string): Promise<PersistedWorkoutLifecycleBundle | null> {
+  countFirestoreRead('workout_lifecycle.bundle');
   const state = await getDoc(lifecycleRef(uid));
   if (!state.exists()) return null;
   if (!isWorkoutLifecycle(state.data())) throw new Error('WORKOUT_LIFECYCLE_INVALID');
@@ -165,6 +169,27 @@ export async function loadWorkoutLifecycle(uid: string): Promise<PersistedWorkou
   ]);
   if (!cycle.exists() || !instance.exists()) throw new Error('WORKOUT_LIFECYCLE_REFERENT_MISSING');
   return parseBundle(lifecycle, cycle.data(), instance.data());
+}
+
+const dedupeLifecycleRead = createInFlightDedupe<PersistedWorkoutLifecycleBundle | null>();
+
+/**
+ * Ported from perf-fase0-fase1 (Fase 1.1). Same result as
+ * `loadWorkoutLifecycle`, but concurrent callers for the same uid within the
+ * same in-flight window share ONE Firestore round trip — fixes
+ * `useWorkoutEvolution.load()` reading the lifecycle bundle twice in the
+ * same Promise.all (once directly, once inside
+ * `evaluateProgressionV2ForUserFull`).
+ *
+ * Used ONLY by hydration-only read paths (`useWorkoutEvolution`,
+ * `evaluateProgressionV2ForUserFull`) — every write/convergence/recovery
+ * call site keeps calling the plain `loadWorkoutLifecycle` directly, because
+ * those reads must observe a snapshot no older than a write they just made;
+ * joining an in-flight promise that may have started dispatching before
+ * that write committed would silently return stale data.
+ */
+export function loadWorkoutLifecycleDeduped(uid: string): Promise<PersistedWorkoutLifecycleBundle | null> {
+  return dedupeLifecycleRead(uid, () => loadWorkoutLifecycle(uid));
 }
 
 export type WorkoutLifecyclePartialState =
@@ -184,6 +209,9 @@ export interface WorkoutLifecycleRecoveryResult {
 
 /** Minimally repairs only partial states whose intended V2 identities are already proven by persisted V2 records. */
 export async function recoverWorkoutLifecyclePartialState(uid: string): Promise<WorkoutLifecycleRecoveryResult> {
+  countFirestoreRead('reconcile.firestore_reads.recovery_state');
+  countFirestoreRead('reconcile.firestore_reads.recovery_cycles');
+  countFirestoreRead('reconcile.firestore_reads.recovery_instances');
   const [stateSnapshot, cycleSnapshots, instanceSnapshots] = await Promise.all([
     getDoc(lifecycleRef(uid)),
     getDocs(collection(db, USERS, uid, TRAINING_CYCLES)),

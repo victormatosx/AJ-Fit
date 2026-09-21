@@ -16,6 +16,7 @@ import {
 
 import { db } from '../lib/firebase';
 import { errorClass, errorCode, logInfo, logWarn } from '../lib/logger';
+import { countFirestoreRead } from '../lib/perf';
 import type { WorkoutProgramSnapshot } from './workoutPrograms';
 import {
   authorizeWorkoutLifecycleMutation,
@@ -963,6 +964,7 @@ export async function listCompletedWorkoutActivityDatesInRange(
     where('scheduledLocalDate', '>=', fromLocalDate),
     where('scheduledLocalDate', '<=', addDaysLocal(toLocalDate, 1)),
   );
+  countFirestoreRead('workout_executions.range_query');
   const snapshot = await getDocs(q);
   const performedDates = new Set<string>();
   const scheduledDates = new Set<string>();

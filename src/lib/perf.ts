@@ -34,9 +34,55 @@ export type PerfMark =
 
 const epoch = typeof performance !== 'undefined' ? performance.now() : Date.now();
 
+function isEnabled(): boolean {
+  return typeof __DEV__ !== 'undefined' && __DEV__ && process.env.EXPO_PUBLIC_PERF_TRACE === '1';
+}
+
+function now(): number {
+  return typeof performance !== 'undefined' ? performance.now() : Date.now();
+}
+
 /** DEV and explicit flag only. No UID or payload enters these timing logs. */
 export function recordPerfMark(mark: PerfMark): void {
-  if (typeof __DEV__ === 'undefined' || !__DEV__ || process.env.EXPO_PUBLIC_PERF_TRACE !== '1') return;
-  const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
-  logDebug('app:perf', mark, { msSinceAppEpoch: Math.round(now - epoch) });
+  if (!isEnabled()) return;
+  logDebug('app:perf', mark, { msSinceAppEpoch: Math.round(now() - epoch) });
+}
+
+/**
+ * Ported from the perf-fase0-fase1 worktree (Fase 0), additive — same gate,
+ * same epoch, does not touch `recordPerfMark` or `PerfMark`. Returns a
+ * stopper closure for spans that don't map to a single instant (e.g. one
+ * step inside a function that isn't itself a full PerfMark boundary). Label
+ * is a free string, not constrained to `PerfMark`, so ad-hoc internal spans
+ * don't force new closed-vocabulary entries.
+ */
+export function startPerfTimer(label: string): () => number {
+  const startedAt = now();
+  return () => {
+    const durationMs = Math.max(0, Math.round(now() - startedAt));
+    if (isEnabled()) logDebug('app:perf', label, { durationMs });
+    return durationMs;
+  };
+}
+
+let firestoreReadCounters: Record<string, number> = {};
+
+/**
+ * Ported from perf-fase0-fase1 (Fase 0), additive. Counts one real
+ * `getDoc`/`getDocs` dispatch under a closed, non-identifying label — call
+ * at the lowest point that actually issues the SDK call, never at a call
+ * site that may end up deduped/short-circuited (an in-flight-deduped call
+ * that joins an existing promise must NOT count again).
+ */
+export function countFirestoreRead(label: string): void {
+  if (!isEnabled()) return;
+  firestoreReadCounters[label] = (firestoreReadCounters[label] ?? 0) + 1;
+}
+
+export function firestoreReadCounts(): Readonly<Record<string, number>> {
+  return { ...firestoreReadCounters };
+}
+
+export function resetFirestoreReadCounters(): void {
+  firestoreReadCounters = {};
 }

@@ -78,3 +78,72 @@ describe('useWorkoutEvolution source — resilience decision delegates to the pu
     expect(HOOK_SRC).toContain('nextViewModelAfterLoad(previous, { status: \'failure\' })');
   });
 });
+
+/**
+ * Fase 2.2 — `load()` reuses the `ProgressionDecision` `reconcileWorkoutLifecycle`
+ * already computed on its NO_ACTION path, instead of calling
+ * `evaluateProgressionV2ForUser` a second time for the exact same uid/instant
+ * (docs: empirical profiling showed the two calls were sequential — Fase 1.1's
+ * in-flight dedupe cannot help two calls that never overlap in time).
+ *
+ * No hook-testing harness exists in this project (see the file header above),
+ * so — same convention as every other `useWorkoutEvolution` behavior covered
+ * in this file — these are source-level structural guards, not renders.
+ */
+describe('useWorkoutEvolution source — Fase 2.2 progressionDecision reuse', () => {
+  const loadFnFull = HOOK_SRC.slice(
+    HOOK_SRC.indexOf('const load = useCallback'),
+    HOOK_SRC.indexOf('useEffect(() => {\n    load();'),
+  );
+
+  it('declares reconciledDecision OUTSIDE the skipReconcile guard, so it defaults to undefined whenever reconcile is skipped', () => {
+    const declarationIndex = loadFnFull.indexOf('let reconciledDecision: ProgressionDecision | null | undefined;');
+    const guardIndex = loadFnFull.indexOf('if (!options?.skipReconcile) {');
+    expect(declarationIndex).toBeGreaterThan(-1);
+    expect(guardIndex).toBeGreaterThan(-1);
+    expect(declarationIndex).toBeLessThan(guardIndex);
+  });
+
+  it('captures reconcileWorkoutLifecycle\'s return value and only assigns reconciledDecision from its progressionDecision field (no-op / stale-decision-safety scenario)', () => {
+    expect(loadFnFull).toMatch(
+      /const reconcileResult = await reconcileWorkoutLifecycle\(\{[\s\S]*?\}\);\s*reconciledDecision = reconcileResult\.progressionDecision;/,
+    );
+  });
+
+  it('the initial batch Promise.all falls back to a fresh evaluateProgressionV2ForUser call whenever reconciledDecision is undefined ("programa ativo" / "transição pendente" / any non-NO_ACTION outcome), and only skips it when a real decision (including null) was captured', () => {
+    expect(loadFnFull).toMatch(
+      /reconciledDecision !== undefined\s*\?\s*Promise\.resolve\(reconciledDecision\)\s*:\s*evaluateProgressionV2ForUser\(user\.uid\)/,
+    );
+  });
+
+  it('retry/convergence: the skipReconcile path (onSnapshot listeners, refreshProjection()) is untouched — reconcileWorkoutLifecycle is never called, so reconciledDecision can never become anything but undefined, and evaluateProgressionV2ForUser always runs fresh', () => {
+    // reconcileWorkoutLifecycle call must live strictly inside the
+    // `if (!options?.skipReconcile)` block — never reachable when skipped.
+    const guardStart = loadFnFull.indexOf('if (!options?.skipReconcile) {');
+    const guardBody = loadFnFull.slice(guardStart, loadFnFull.indexOf('\n      }\n', guardStart));
+    expect(guardBody).toContain('await reconcileWorkoutLifecycle(');
+    // refreshProjection / listener call sites still pass skipReconcile: true, unchanged.
+    expect(HOOK_SRC).toContain("load({ skipReconcile: true, propagateError: true })");
+    expect(HOOK_SRC).toContain('void load({ skipReconcile: true });');
+  });
+
+  it('erro de rede: the reconcile call and the new decision bookkeeping stay inside the EXISTING try — no new try/catch was introduced around it, so a throw is still caught by the one catch block that drives nextViewModelAfterLoad', () => {
+    const tryIndex = loadFnFull.indexOf('try {');
+    const catchIndex = loadFnFull.indexOf('} catch (error) {');
+    const reconcileCallIndex = loadFnFull.indexOf('await reconcileWorkoutLifecycle(');
+    const decisionAssignIndex = loadFnFull.indexOf('reconciledDecision = reconcileResult.progressionDecision;');
+    expect(tryIndex).toBeGreaterThan(-1);
+    expect(catchIndex).toBeGreaterThan(tryIndex);
+    expect(reconcileCallIndex).toBeGreaterThan(tryIndex);
+    expect(reconcileCallIndex).toBeLessThan(catchIndex);
+    expect(decisionAssignIndex).toBeGreaterThan(tryIndex);
+    expect(decisionAssignIndex).toBeLessThan(catchIndex);
+    // Exactly one try/catch pair in the whole function — no nested try around reconcile.
+    expect((loadFnFull.match(/\btry\s*{/g) ?? []).length).toBe(1);
+    expect((loadFnFull.match(/}\s*catch\s*\(error\)\s*{/g) ?? []).length).toBe(1);
+  });
+
+  it('imports ProgressionDecision as a type-only import', () => {
+    expect(HOOK_SRC).toContain("import type { ProgressionDecision } from '../progressionEngineV2/types';");
+  });
+});

@@ -27,6 +27,7 @@ import { adminGetCouponHandler, adminListCouponsHandler } from './adminCoupons/a
 import { recordWorkoutLifecycleTelemetryHandler } from './telemetry/workoutLifecycleTelemetry';
 import { onTrustedWorkoutLifecycleEventCreated } from './telemetry/trustedWorkoutLifecycleTelemetry';
 import { authorizeWorkoutLifecycleMutationHandler } from './workoutLifecycle/authorizeMutation';
+import { installActiveWorkoutProgramHandler } from './workoutLifecycle/installActiveWorkoutProgram';
 import { applyExerciseSubstitutionHandler } from './workoutLifecycle/exerciseSubstitution';
 import { completeWorkoutCardioHandler } from './workoutLifecycle/completeWorkoutCardio';
 import { finalizeWorkoutSessionHandler } from './workoutLifecycle/finalizeWorkoutSession';
@@ -122,6 +123,19 @@ export const recordWorkoutLifecycleTelemetry = onCall(
 export const authorizeWorkoutLifecycleMutation = onCall(
   { enforceAppCheck: true },
   authorizeWorkoutLifecycleMutationHandler,
+);
+
+/**
+ * Fase 2.8 — installs a brand-new account's first active workout program
+ * entirely server-side via the Admin SDK, replacing the client
+ * `runTransaction` that otherwise reliably exceeds the Firestore rules
+ * engine's expression-evaluation ceiling for this exact real flow (Fase
+ * 2.6/2.7 audits). See `installActiveWorkoutProgram.ts` for the full
+ * scope/trust-boundary rationale.
+ */
+export const installActiveWorkoutProgram = onCall(
+  { enforceAppCheck: true },
+  installActiveWorkoutProgramHandler,
 );
 
 /**

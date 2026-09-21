@@ -58,12 +58,9 @@ import {
   CANONICAL_LIMITATION_DATASET_VERSION,
 } from '../../workoutPrescription/limitationDataset';
 import { resolveWorkoutSchedule } from '../../scheduleEngine/resolver';
-import type { Weekday } from '../../state/AppState';
+import { WEEKDAY_ORDER, type Weekday } from '../../state/AppState';
 import type { WorkoutDayState } from '../../workoutPrescription/types';
-import {
-  setWorkoutLifecycleAuthorityAuthorizerForTests,
-  WORKOUT_LIFECYCLE_AUTHORITY_GRANT_ID,
-} from '../../workoutLifecycle/authorityProvider';
+import { setInstallActiveWorkoutProgramInvokerForTests } from '../../workoutLifecycle/authorityProvider';
 import {
   resetWorkoutLifecycleTelemetryLogger,
   setWorkoutLifecycleTelemetryLogger,
@@ -103,6 +100,7 @@ const ORIGINAL_SCENARIO_ANSWERS = completeAnswers({
   goal: 'gain_muscle',
   level: 'beginner',
   days: 7,
+  trainingDays: WEEKDAY_ORDER.slice(0, 7),
   place: 'gym',
   specialConditions: ['none'],
 });
@@ -312,10 +310,16 @@ describe.skipIf(!enabled)('First program generation — real device regression, 
 
   it('10C INITIALIZE fails closed before persistence when canonical is missing', async () => {
     await seedUserAndQuestionnaire();
-    setWorkoutLifecycleAuthorityAuthorizerForTests(async () => ({
-      grantId: WORKOUT_LIFECYCLE_AUTHORITY_GRANT_ID,
-      expiresAtMs: Date.now() + 60_000,
-    }));
+    // INITIALIZE no longer goes through the grant-issuing callable (Fase
+    // 2.8 — `installActiveWorkoutProgram` performs the entire Admin SDK
+    // write itself), so the "backend can't produce validated content"
+    // failure mode is now simulated by the install callable itself
+    // rejecting instead of an authorizer returning a grant with no
+    // `canonical`. The invariant under test is unchanged: fail closed,
+    // nothing persisted.
+    setInstallActiveWorkoutProgramInvokerForTests(async () => {
+      throw new Error('WORKOUT_LIFECYCLE_CANONICAL_RESPONSE_MISSING:INITIALIZE');
+    });
     try {
       await expect(generateAndPersistWorkoutProgram({
         uid: UID,

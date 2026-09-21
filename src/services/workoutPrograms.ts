@@ -50,6 +50,7 @@ import {
 import { buildPrescriptionInputSnapshot } from '../workoutLifecycle/prescriptionInputs';
 import {
   authorizeWorkoutLifecycleMutation,
+  installActiveWorkoutProgram,
   requireWorkoutLifecycleCanonical,
   WORKOUT_LIFECYCLE_AUTHORITY_GRANT_ID,
 } from '../workoutLifecycle/authorityProvider';
@@ -691,6 +692,47 @@ export async function saveAndActivateWorkoutProgram(input: {
         // Only reachable when `preflightSameContent` is true (guard above) —
         // pure identity/state reconciliation, never new content.
         : 'RECOVER';
+  // Fase 2.8 — a genuinely brand-new account's first program (never a V1
+  // legacy pointer either, hence INITIALIZE rather than MIGRATE) is the one
+  // case whose client `runTransaction` below reliably exceeds the Firestore
+  // rules engine's expression-evaluation ceiling (Fase 2.6/2.7 audits) — it
+  // touches 9 documents across 6 collections. The server performs this
+  // entire write via the Admin SDK instead (see `installActiveWorkoutProgram`
+  // and its Cloud Function counterpart for the full trust-boundary
+  // rationale). Every OTHER `authorityOperation` (MIGRATE/ACTIVATE/ADAPT/
+  // RECOVER) is unaffected — those still use the exact `authorizeWorkoutLifecycleMutation`
+  // grant + client-transaction path below, unchanged. Restricted to the two
+  // `source`s that ever reach an INITIALIZE (`onboarding` from signup,
+  // `automatic_reconciliation` from the readiness-gate/prescription-hook
+  // fallback) — any other combination falls through to the existing path
+  // unchanged, as a defensive default rather than a silent misroute.
+  if (authorityOperation === 'INITIALIZE' && (input.source === 'onboarding' || input.source === 'automatic_reconciliation')) {
+    const installed = await installActiveWorkoutProgram({
+      questionnaireId: input.questionnaireId,
+      questionnaireVersion: input.questionnaireVersion,
+      targetPrescriptionInputSnapshot: input.prescriptionInputSnapshot as unknown as Record<string, unknown>,
+      source: input.source,
+      previewPlan: withoutUndefined(input.plan) as unknown as Record<string, unknown>,
+      previewTemplate: input.template,
+      previewContentIdentity: candidateProgramId,
+    });
+    const installedSnapshot = await getDoc(programRef(input.uid, installed.programId));
+    const installedData = installedSnapshot.data();
+    if (!installedSnapshot.exists() || !isProgramSnapshot(installedData, installed.programId)) {
+      throw new Error('PROGRAM_PERSIST_FAILED');
+    }
+    const installedLifecycle = await loadWorkoutLifecycle(input.uid);
+    if (installedLifecycle && installedLifecycle.lifecycle.activeContentIdentity !== installed.programId) {
+      throw new Error('PROGRAM_LIFECYCLE_PERSIST_FAILED');
+    }
+    if (!installedLifecycle) return installedData;
+    return {
+      ...installedData,
+      programInstanceId: installedLifecycle.programInstance.programInstanceId,
+      trainingCycleId: installedLifecycle.cycle.cycleId,
+      programInstanceActivatedAt: installedLifecycle.programInstance.activatedAt,
+    };
+  }
   const authorityEventType = input.eventType ?? 'PROGRAM_STARTED';
   const authorityEventId = lifecycleEventId(authorityEventType, preflightOperationKey);
   const authorityResult = await authorizeWorkoutLifecycleMutation({

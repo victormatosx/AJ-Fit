@@ -22,6 +22,7 @@ import { buildPrescriptionInputSnapshot, questionnaireAnswersFromPrescriptionInp
 import { evolvePrescription } from './prescriptionEvolution';
 import { loadAuthoritativePrescriptionInputs } from './prescriptionInputs';
 import { evaluateProgressionV2ForUser, evaluateProgressionV2ForUserFull } from './workoutProgressionV2';
+import type { ProgressionDecision } from '../progressionEngineV2/types';
 import {
   lifecycleRef,
   loadPendingEvolution,
@@ -69,7 +70,7 @@ function authorityGrantRef(uid: string) {
 // ─── PREPARE ────────────────────────────────────────────────────────────
 
 export type PrepareEvolutionResult =
-  | { status: 'NO_ACTION' }
+  | { status: 'NO_ACTION'; decision?: ProgressionDecision | null }
   | { status: 'ALREADY_PENDING'; pending: PendingEvolution<Timestamp> }
   | { status: 'NO_LIFECYCLE' }
   | { status: 'PREPARATION_FAILED'; reasonCodes: string[] }
@@ -274,7 +275,7 @@ async function prepareEvolutionAttempt(input: { uid: string; now?: Date }): Prom
     // branch resolves NO_ACTION/PROGRESS_CONTINUES below. See perf marks.
     recordPerfMark('evolution_reconcile_progression_eval_ready');
     if (!decision || decision.type === 'NO_ACTION' || decision.type === 'PROGRESS_CONTINUES') {
-      return { status: 'NO_ACTION' };
+      return { status: 'NO_ACTION', decision };
     }
     const lifecycleAtEarn = await loadWorkoutLifecycle(input.uid);
     if (!lifecycleAtEarn) return { status: 'NO_LIFECYCLE' };
@@ -920,6 +921,19 @@ export interface ReconcileResult {
   autoActivated: boolean;
   staleClearedPendingEvolution: boolean;
   program?: WorkoutProgramSnapshot;
+  /**
+   * The `ProgressionDecision` this reconcile computed while deciding whether
+   * to prepare an evolution — present ONLY when the outcome was `NO_ACTION`
+   * (nothing was written). `useWorkoutEvolution.load()` reuses this instead
+   * of calling `evaluateProgressionV2ForUser` a second time for the exact
+   * same uid/instant. Absent (not merely `null`) whenever this reconcile
+   * either didn't reach that evaluation at all, or DID write something
+   * (PREPARED/AUTO_ACTIVATED/stale-cleared) — in every such case the
+   * decision would be stale relative to the state `load()` is about to read
+   * fresh, so it must NOT be reused; callers should treat "field absent"
+   * and "field is `undefined`" identically to "must recompute".
+   */
+  progressionDecision?: ProgressionDecision | null;
 }
 
 export interface PostWorkoutLifecycleResult extends ReconcileResult {
@@ -993,7 +1007,12 @@ export async function reconcileWorkoutLifecycle(input: {
     // either way (docs §76).
       const result = await prepareEvolution({ uid: input.uid, now });
       recordPerfMark('evolution_reconcile_prepare_ready');
-      const response = { prepared: result.status === 'PREPARED', autoActivated: false, staleClearedPendingEvolution: false };
+      const response: ReconcileResult = {
+        prepared: result.status === 'PREPARED',
+        autoActivated: false,
+        staleClearedPendingEvolution: false,
+        ...(result.status === 'NO_ACTION' ? { progressionDecision: result.decision ?? null } : {}),
+      };
       logWorkoutLifecycleEvent({ name: 'lifecycle_reconcile_completed', trigger, outcome: response.prepared ? 'PREPARED' : 'NO_ACTION' });
       return response;
     }
@@ -1046,10 +1065,11 @@ export async function reconcileWorkoutLifecycle(input: {
     });
       const reprepared = await prepareEvolution({ uid: input.uid, now });
       recordPerfMark('evolution_reconcile_cleanup_done');
-      const response = {
+      const response: ReconcileResult = {
         prepared: reprepared.status === 'PREPARED' || reprepared.status === 'ALREADY_PENDING',
         autoActivated: false,
         staleClearedPendingEvolution: true,
+        ...(reprepared.status === 'NO_ACTION' ? { progressionDecision: reprepared.decision ?? null } : {}),
       };
       logWorkoutLifecycleEvent({ name: 'lifecycle_reconcile_completed', trigger, outcome: 'STALE_REPREPARED' });
       return response;

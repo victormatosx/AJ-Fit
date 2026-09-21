@@ -13,7 +13,7 @@ import {
   lifecycleRef,
   loadPendingEvolution,
   loadProgramInstance,
-  loadWorkoutLifecycle,
+  loadWorkoutLifecycleDeduped,
   pendingEvolutionRef,
 } from '../services/workoutLifecycle';
 import { loadActiveWorkoutProgram, loadWorkoutProgramSnapshot } from '../services/workoutPrograms';
@@ -23,6 +23,7 @@ import {
   deferPendingEvolution,
   reconcileWorkoutLifecycle,
 } from '../services/workoutLifecycleApplication';
+import type { ProgressionDecision } from '../progressionEngineV2/types';
 import type { PendingEvolution } from '../workoutLifecycle/types';
 import type { FinalWorkoutPlan } from '../workoutPrescription/types';
 import { computePrescriptionDiff, type PrescriptionDiffSummary } from './diff';
@@ -127,18 +128,22 @@ export function useWorkoutEvolution(): WorkoutEvolutionController {
     const generation = ++loadGenerationRef.current;
     const isCurrent = () => loadGenerationRef.current === generation;
     try {
+      let reconciledDecision: ProgressionDecision | null | undefined;
       if (!options?.skipReconcile) {
-        await reconcileWorkoutLifecycle({
+        const reconcileResult = await reconcileWorkoutLifecycle({
           uid: user.uid,
           trigger: options?.trigger ?? (hasLoadedOnce.current ? 'RECOVERY' : 'COLD_START'),
         });
+        reconciledDecision = reconcileResult.progressionDecision;
       }
       recordPerfMark('evolution_reconcile_ready');
 
       const [lifecycle, pendingAfter, decision] = await Promise.all([
-        loadWorkoutLifecycle(user.uid),
+        loadWorkoutLifecycleDeduped(user.uid),
         loadPendingEvolution(user.uid),
-        evaluateProgressionV2ForUser(user.uid),
+        reconciledDecision !== undefined
+          ? Promise.resolve(reconciledDecision)
+          : evaluateProgressionV2ForUser(user.uid),
       ]);
       recordPerfMark('evolution_lifecycle_pending_progression_ready');
 
@@ -150,6 +155,10 @@ export function useWorkoutEvolution(): WorkoutEvolutionController {
         }
         return;
       }
+      // Started here (Fase 2 — validated), before events/notice, so it
+      // overlaps with that work instead of running strictly after it; only
+      // ever awaited below, only when `pendingAfter` is truthy.
+      const pendingProgramPromise = pendingAfter ? loadActiveWorkoutProgram(user.uid) : null;
       const instanceEvents = await listWorkoutLifecycleEventsForProgramInstance(
         user.uid,
         lifecycle.programInstance.programInstanceId,
@@ -180,7 +189,7 @@ export function useWorkoutEvolution(): WorkoutEvolutionController {
       }
 
       if (pendingAfter) {
-        const currentProgram = await loadActiveWorkoutProgram(user.uid);
+        const currentProgram = await pendingProgramPromise;
         const pendingPlan = pendingAfter.plan as FinalWorkoutPlan;
         if (isCurrent()) {
           setDiff(currentProgram?.programInstanceId === pendingAfter.sourceProgramInstanceId

@@ -17,7 +17,7 @@ import { listExecutionsForProgramInstance, type PersistedWorkoutExecution } from
 import { listScheduleEvents, loadScheduleConfig } from './workoutSchedule';
 import {
   listRecentIntermediateTrainingCycles,
-  loadWorkoutLifecycle,
+  loadWorkoutLifecycleDeduped,
   type PersistedWorkoutLifecycleBundle,
 } from './workoutLifecycle';
 import { loadAuthoritativePrescriptionInputs } from './prescriptionInputs';
@@ -104,7 +104,7 @@ export async function evaluateProgressionV2ForUserFull(
   cycleNumber: number;
   policyMode: Awaited<ReturnType<typeof resolveWorkoutLifecycleProgressionPolicy>>;
 } | null> {
-  const bundle = await loadWorkoutLifecycle(uid);
+  const bundle = await loadWorkoutLifecycleDeduped(uid);
   if (!bundle) return null;
 
   const [config, { executions }, relevantCycles, scheduleEvents, authoritativeInputs, prescribedSessions, policyMode] = await Promise.all([

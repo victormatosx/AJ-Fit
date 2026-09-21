@@ -47,11 +47,11 @@ import { installWorkoutLifecycleAuthorityFixture, resetWorkoutLifecycleAuthority
 const T003_SEED = buildSeedDocuments().find((t) => t.id === 'T003');
 if (!T003_SEED) throw new Error('T003 fixture missing from catalog — cannot run this integration test');
 
-const BEGINNER_ANSWERS = completeAnswers({
-  sex: 'm', goal: 'gain_muscle', level: 'beginner', days: 4, place: 'gym', specialConditions: ['none'],
-});
-
 const TRAINING_DAYS = ['MON', 'TUE', 'THU', 'FRI'] as const;
+
+const BEGINNER_ANSWERS = completeAnswers({
+  sex: 'm', goal: 'gain_muscle', level: 'beginner', days: 4, trainingDays: [...TRAINING_DAYS], place: 'gym', specialConditions: ['none'],
+});
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 async function seedBaseUser() {
