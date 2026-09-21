@@ -211,14 +211,19 @@ export function AppStateProvider({
   // fresh login (null -> uid), and a fast account switch (uidA -> uidB).
   // `preparedWorkoutProgram` rides along on the exact same reset — it was
   // computed FOR whatever `quiz` looked like under the previous identity,
-  // so it is exactly as stale as `quiz` would be.
+  // so it is exactly as stale as `quiz` would be. `tab` rides along too:
+  // without this, logging out from the profile/settings tab and back in
+  // (same or different account) reopens that same tab instead of home,
+  // since this provider never unmounts across the transition.
   const lastUidRef = useRef<string | null>(uid);
   if (lastUidRef.current !== uid) {
     const nextQuiz = nextValueForIdentity(lastUidRef.current, uid, quiz, defaultQuiz);
     const nextPrepared = nextValueForIdentity(lastUidRef.current, uid, preparedWorkoutProgram, null);
+    const nextTab = nextValueForIdentity(lastUidRef.current, uid, tab, 'home');
     lastUidRef.current = uid;
     if (nextQuiz !== quiz) setQuiz(nextQuiz);
     if (nextPrepared !== preparedWorkoutProgram) setPreparedWorkoutProgram(nextPrepared);
+    if (nextTab !== tab) setTab(nextTab);
   }
 
   const value = useMemo(
