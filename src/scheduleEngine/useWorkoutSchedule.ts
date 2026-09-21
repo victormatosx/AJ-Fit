@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 import { useAuth } from '../state/AuthContext';
 import { errorClass, errorCode, logInfo, logWarn } from '../lib/logger';
+import { recordPerfMark } from '../lib/perf';
 import {
   ensureScheduleConfigFromQuestionnaire,
   hasScheduledSessionCompletion,
@@ -126,6 +127,18 @@ export function useWorkoutSchedule(program: WorkoutProgramSnapshot | null): Work
       setLoading(false);
       return notAvailable;
     }
+    // No active program yet (still resolving in `useWorkoutPrescription`, or
+    // genuinely none). `resolveTodaysSchedule`'s own `!hasActiveProgram`
+    // branch (scheduleEngine/resolver.ts) returns `PROGRAM_NOT_AVAILABLE`
+    // unconditionally without ever reading `config`/`state` — so fetching
+    // them here first only to throw the read away. Mirrors that exact
+    // `hasActiveProgram` condition. `config` is left as-is (not reset) so an
+    // already-loaded value isn't discarded for nothing.
+    if (!programId || sessionCount <= 0) {
+      setProjection({ resolution: notAvailable, refreshError: null });
+      setLoading(false);
+      return notAvailable;
+    }
     setLoading(true);
     try {
       let loadedConfig = await loadScheduleConfig(uid);
@@ -155,6 +168,7 @@ export function useWorkoutSchedule(program: WorkoutProgramSnapshot | null): Work
       const effectiveConfig = loadedConfig && prescribedProgramDays.length > 0
         ? { ...loadedConfig, trainingDays: prescribedProgramDays, activeRecoveryDays: prescribedRecoveryDays }
         : loadedConfig;
+      recordPerfMark('today_schedule_config_ready');
 
       // Process-death recovery, case B: finishWorkoutExecution atomically
       // terminalizes the execution and clears the active mutex, so `current`
@@ -187,6 +201,7 @@ export function useWorkoutSchedule(program: WorkoutProgramSnapshot | null): Work
           });
         }
       }
+      recordPerfMark('today_schedule_recovery_checked');
       const timezone = loadedConfig?.timezone ?? deviceTimezone();
       const todayLocalDate = localDateInTimezone(new Date(), timezone);
       const result = await resolveTodaysSchedule({
@@ -199,7 +214,12 @@ export function useWorkoutSchedule(program: WorkoutProgramSnapshot | null): Work
         todayLocalDate,
         trainingDaysOverride: prescribedProgramDays,
         activeRecoveryDaysOverride: prescribedRecoveryDays,
+        // Already awaited above (`loadedConfig`) — same uid, same document,
+        // no write in between. Skips resolveTodaysSchedule's own otherwise-
+        // redundant `loadScheduleConfig` read.
+        storedConfig: loadedConfig,
       });
+      recordPerfMark('today_schedule_resolved');
       if (reloadId === reloadSequenceRef.current) setConfig(effectiveConfig);
       setProjection((current) => applyScheduleReloadOutcome(current, reloadSequenceRef.current, {
         kind: 'success',

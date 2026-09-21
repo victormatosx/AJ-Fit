@@ -201,9 +201,18 @@ export async function resolveTodaysSchedule(input: {
   /** Phase 2 program-scoped training days. Legacy programs omit this and use ScheduleConfig unchanged. */
   trainingDaysOverride?: Weekday[];
   activeRecoveryDaysOverride?: Weekday[];
+  /**
+   * Caller-provided result of its own already-awaited `loadScheduleConfig`
+   * call, when it has one (`useWorkoutSchedule.reload()` always does) — skips
+   * this function's own read of the exact same document. `undefined` (the
+   * only other caller-visible state, e.g. direct/test callers) keeps the
+   * original behavior of fetching it here. An explicit `null` means "already
+   * checked, there is none" and is honored as-is, never re-fetched.
+   */
+  storedConfig?: ScheduleConfig | null;
 }): Promise<ScheduleResolution> {
   const hasActiveProgram = input.programId != null && input.sessionCount > 0;
-  const storedConfig = await loadScheduleConfig(input.uid);
+  const storedConfig = input.storedConfig !== undefined ? input.storedConfig : await loadScheduleConfig(input.uid);
   const scheduleMode = input.scheduleMode ?? storedConfig?.scheduleMode ?? 'fixed';
   const config = storedConfig && input.trainingDaysOverride?.length
     ? {
