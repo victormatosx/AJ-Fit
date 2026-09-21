@@ -119,7 +119,13 @@ export function HomeScreen({
   onFrequencyNext?: () => void;
 }) {
   const { theme } = useTheme();
-  useEffect(() => { recordPerfMark('home_mount'); }, []);
+  useEffect(() => {
+    recordPerfMark('home_mount');
+    // The Evolution ticker/strip container is unconditionally part of Home's
+    // layout from the very first render (LOADING already renders a shell,
+    // never nothing) — Fase 5.2 progressive rendering baseline.
+    recordPerfMark('evolution_shell_visible');
+  }, []);
   useEffect(() => {
     if (!loading && !generating && scheduleResolution &&
         (prescription.status !== 'SUCCESS' || scheduleResolution.status !== 'PROGRAM_NOT_AVAILABLE')) {
@@ -127,7 +133,11 @@ export function HomeScreen({
     }
   }, [loading, generating, prescription.status, scheduleResolution]);
   useEffect(() => {
-    if (evolutionViewModel.kind !== 'LOADING') recordPerfMark('home_evolution_ready');
+    // SUMMARY_READY (Fase 5.2) is an intermediate, non-final state — excluded
+    // here so this mark keeps its exact original meaning (fires only once
+    // Evolution has reached a truly terminal/authoritative state), never
+    // silently redefined by the new progressive-rendering step.
+    if (evolutionViewModel.kind !== 'LOADING' && evolutionViewModel.kind !== 'SUMMARY_READY') recordPerfMark('home_evolution_ready');
   }, [evolutionViewModel]);
   const { t, i18n } = useTranslation(['home', 'profile']);
   const [showMissedPendingInfo, setShowMissedPendingInfo] = useState(false);

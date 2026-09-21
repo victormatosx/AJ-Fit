@@ -31,7 +31,16 @@ export type PerfMark =
   | 'evolution_reconcile_progression_eval_ready'
   | 'evolution_reconcile_not_due' | 'evolution_reconcile_activation_done'
   | 'evolution_reconcile_cleanup_done'
-  | 'evolution_prepare_attempt_entered' | 'evolution_prepare_attempt_returned';
+  | 'evolution_prepare_attempt_entered' | 'evolution_prepare_attempt_returned'
+  // Fase 5.2 — progressive rendering. `evolution_shell_visible` fires once,
+  // at Home mount (the ticker/strip container is always in the tree from
+  // first paint, independent of load state). `evolution_first_useful_content`
+  // fires only when the provisional SUMMARY_READY summary is actually
+  // revealed early (initial load only — see `isInitialLoad` in
+  // useWorkoutEvolution.ts). `evolution_authoritative_ready` fires at every
+  // terminal commit (same moments as the pre-existing `evolution_state_commit`,
+  // additively — that mark keeps its exact original meaning, never redefined).
+  | 'evolution_shell_visible' | 'evolution_first_useful_content' | 'evolution_authoritative_ready';
 
 const epoch = typeof performance !== 'undefined' ? performance.now() : Date.now();
 

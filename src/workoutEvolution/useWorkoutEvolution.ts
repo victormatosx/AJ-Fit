@@ -27,7 +27,7 @@ import type { ProgressionDecision } from '../progressionEngineV2/types';
 import type { PendingEvolution } from '../workoutLifecycle/types';
 import type { FinalWorkoutPlan } from '../workoutPrescription/types';
 import { computePrescriptionDiff, type PrescriptionDiffSummary } from './diff';
-import { buildEvolutionViewModel, type LifecycleContext } from './viewModel';
+import { buildEvolutionViewModel, buildProvisionalEvolutionViewModel, type LifecycleContext } from './viewModel';
 import { nextViewModelAfterLoad } from './loadReducer';
 import type { EvolutionViewModel, PendingEvolutionSummary } from './types';
 import {
@@ -123,6 +123,14 @@ export function useWorkoutEvolution(): WorkoutEvolutionController {
     propagateError?: boolean;
   }) => {
     if (!user) return;
+    // Progressive rendering (Fase 5.2) only reveals the provisional summary
+    // on a genuine first load. A background refresh (foreground resume,
+    // post-workout, listener-triggered) already has a resolved view model on
+    // screen — replacing it with a bare summary mid-refresh would drop the
+    // pending/action framing the user is currently looking at, exactly the
+    // flash this phase's own rules forbid. Captured once, before this call
+    // can mutate `hasLoadedOnce`.
+    const isInitialLoad = !hasLoadedOnce.current;
     if (!hasLoadedOnce.current) setLoading(true);
     reconcileInFlight.current = true;
     const generation = ++loadGenerationRef.current;
@@ -152,8 +160,31 @@ export function useWorkoutEvolution(): WorkoutEvolutionController {
           commitViewModel({ kind: 'UNAVAILABLE' });
           setDiff(null);
           recordPerfMark('evolution_state_commit');
+          recordPerfMark('evolution_authoritative_ready');
         }
         return;
+      }
+      const lifecycleContext: LifecycleContext = {
+        // The active lifecycle level stays cycle-coherent until activation.
+        // A pending promotion's immutable earned fact is presented from the
+        // pending target, never by temporarily corrupting the active pointer.
+        earnedLevel: pendingAfter?.type === 'LEVEL_PROMOTION'
+          ? pendingAfter.toLevel
+          : lifecycle.lifecycle.currentTrainingLevel,
+        activeLevel: lifecycle.cycle.level,
+        cycleNumber: lifecycle.cycle.cycleNumber,
+        isHistoryComplete: lifecycle.lifecycle.initializationOrigin !== 'V1_MIGRATION_BASELINE',
+      };
+      // Progressive rendering (Fase 5.2): `summary` is already safe and final
+      // here — it's computed identically inside every possible terminal kind
+      // below, regardless of what the pending/notice tail resolves to (see
+      // `buildProvisionalEvolutionViewModel`'s doc comment). Revealing it now
+      // means the user sees real level/cycle/adherence/proximity content
+      // instead of a bare "loading" label for the remaining events/notice
+      // round trip, without ever needing to later correct it.
+      if (isCurrent() && isInitialLoad) {
+        commitViewModel(buildProvisionalEvolutionViewModel({ lifecycle: lifecycleContext, decision }));
+        recordPerfMark('evolution_first_useful_content');
       }
       // Started here (Fase 2 — validated), before events/notice, so it
       // overlaps with that work instead of running strictly after it; only
@@ -166,17 +197,6 @@ export function useWorkoutEvolution(): WorkoutEvolutionController {
       recordPerfMark('evolution_events_ready');
       const autoActivationNotice = await loadUnacknowledgedAutoActivationNotice(user.uid, instanceEvents);
       recordPerfMark('evolution_activation_notice_ready');
-      const lifecycleContext: LifecycleContext = {
-        // The active lifecycle level stays cycle-coherent until activation.
-        // A pending promotion's immutable earned fact is presented from the
-        // pending target, never by temporarily corrupting the active pointer.
-        earnedLevel: pendingAfter?.type === 'LEVEL_PROMOTION'
-          ? pendingAfter.toLevel
-          : lifecycle.lifecycle.currentTrainingLevel,
-        activeLevel: lifecycle.cycle.level,
-        cycleNumber: lifecycle.cycle.cycleNumber,
-        isHistoryComplete: lifecycle.lifecycle.initializationOrigin !== 'V1_MIGRATION_BASELINE',
-      };
       if (isCurrent()) {
         commitViewModel(buildEvolutionViewModel({
           now: new Date(),
@@ -186,6 +206,7 @@ export function useWorkoutEvolution(): WorkoutEvolutionController {
           autoActivationNotice,
         }));
         recordPerfMark('evolution_state_commit');
+        recordPerfMark('evolution_authoritative_ready');
       }
 
       if (pendingAfter) {
@@ -230,6 +251,7 @@ export function useWorkoutEvolution(): WorkoutEvolutionController {
         } else {
           commitViewModel(next);
           recordPerfMark('evolution_state_commit');
+          recordPerfMark('evolution_authoritative_ready');
         }
       }
       // Background/cold-start refreshes remain self-contained. Explicit

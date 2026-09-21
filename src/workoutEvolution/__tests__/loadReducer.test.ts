@@ -51,6 +51,26 @@ describe('nextViewModelAfterLoad — resilience state machine (docs: resilience 
     });
   });
 
+  describe('SUMMARY_READY — progressive rendering partial failure (Fase 5.2)', () => {
+    const summaryReady: EvolutionViewModel = { kind: 'SUMMARY_READY', summary: VALID_PROGRESSING.summary };
+
+    it('a failure while safe summary content is already showing marks the dependent notice check unavailable, without discarding the safe content', () => {
+      expect(nextViewModelAfterLoad(summaryReady, { status: 'failure' })).toEqual({
+        kind: 'SUMMARY_READY', summary: VALID_PROGRESSING.summary, noticeUnavailable: true,
+      });
+    });
+
+    it('a second failure on an already-flagged SUMMARY_READY stays the same, not re-wrapped or downgraded to ERROR', () => {
+      const alreadyFlagged: EvolutionViewModel = { kind: 'SUMMARY_READY', summary: VALID_PROGRESSING.summary, noticeUnavailable: true };
+      expect(nextViewModelAfterLoad(alreadyFlagged, { status: 'failure' })).toEqual(alreadyFlagged);
+    });
+
+    it('a subsequent successful load replaces SUMMARY_READY outright, same as any other resolved kind', () => {
+      const next: EvolutionViewModel = { kind: 'PROGRESSING', summary: VALID_PROGRESSING.summary };
+      expect(nextViewModelAfterLoad(summaryReady, { status: 'success', viewModel: next })).toBe(next);
+    });
+  });
+
   it.each<EvolutionViewModel>([
     { kind: 'EVOLUTION_READY', summary: VALID_PROGRESSING.summary, pending: {
       type: 'CYCLE_EVOLUTION', quality: 'GOOD', fromLevel: 'INTERMEDIATE', toLevel: 'INTERMEDIATE',
