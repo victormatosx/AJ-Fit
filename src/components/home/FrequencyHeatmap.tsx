@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, LayoutChangeEvent, Pressable, View } from 'react-native';
+import React, { useEffect, useMemo, useRef } from 'react';
+import { Animated, Pressable, View, useWindowDimensions } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { MonoLabel } from '../ui/Display';
 import { Icon } from '../ui/Icon';
@@ -53,18 +53,26 @@ export function FrequencyHeatmap({
 }) {
   const { t, i18n } = useTranslation('home');
   const { theme } = useTheme();
-  const [width, setWidth] = useState(0);
+  const { width: windowWidth } = useWindowDimensions();
   const locale = i18n.resolvedLanguage ?? i18n.language;
-
-  const onLayout = (event: LayoutChangeEvent) => setWidth(event.nativeEvent.layout.width);
-  const cellSize = useMemo(() => cellSizeForWidth(width), [width]);
+  // The section has a deterministic 22pt inset on both sides. Deriving the
+  // grid from the already-known viewport width means its cells exist in the
+  // same commit as the final data; the old width=0 -> onLayout -> grid path
+  // injected five rows one commit later and was the measured Home jump.
+  const cellSize = useMemo(() => cellSizeForWidth(windowWidth - 44), [windowWidth]);
 
   // Very subtle cross-fade when the selected window changes — content
   // first, alignment/functionality unaffected either way.
   const fade = useRef(new Animated.Value(1)).current;
+  const hasCommittedInitialWindowRef = useRef(false);
   const offsetWindows = freqWindow?.offsetWindows;
   useEffect(() => {
     if (offsetWindows === undefined) return;
+    if (!hasCommittedInitialWindowRef.current) {
+      hasCommittedInitialWindowRef.current = true;
+      fade.setValue(1);
+      return;
+    }
     fade.setValue(0.3);
     Animated.timing(fade, { toValue: 1, duration: 160, useNativeDriver: true }).start();
   }, [offsetWindows, fade]);
@@ -111,7 +119,7 @@ export function FrequencyHeatmap({
         </Pressable>
       </View>
 
-      <Animated.View onLayout={onLayout} style={{ marginTop: 12, alignItems: 'center', opacity: fade }}>
+      <Animated.View style={{ marginTop: 12, alignItems: 'center', opacity: fade }}>
         {cellSize > 0 && freqWindow && (
           <>
             <View style={{ flexDirection: 'row', gap: GAP, marginBottom: 6 }}>

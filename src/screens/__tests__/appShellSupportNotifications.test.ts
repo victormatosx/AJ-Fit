@@ -23,7 +23,7 @@ describe('AppShell — Home support badge', () => {
   });
 
   it('passes the live count and an open-cases callback into HomeScreen — never a hardcoded/static value', () => {
-    expect(CODE).toContain('unreadSupportCasesCount={unreadSupportCasesCount}');
+    expect(CODE).toContain('unreadSupportCasesCount={unreadSupportCases.count}');
     expect(CODE).toContain("onOpenSupportCases={() => setSupportRoute({ name: 'cases', origin: 'home' })}");
   });
 

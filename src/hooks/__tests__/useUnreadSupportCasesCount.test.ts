@@ -29,9 +29,11 @@ describe('useUnreadSupportCasesCount wiring', () => {
     }
   });
 
-  it('resets to 0 for a missing uid and on an observe error', () => {
+  it('resets to 0 and reaches a terminal status for a missing uid or observe error', () => {
     expect(SOURCE).toContain('if (!uid)');
-    expect(SOURCE).toMatch(/\(\) => setCount\(0\)/);
+    expect(SOURCE).toContain("setInitialStatus('NOT_APPLICABLE')");
+    expect(SOURCE).toContain("setInitialStatus('ERROR')");
+    expect(SOURCE).toContain('setCount(0)');
   });
 
   it('resubscribes when the uid changes (effect dependency array)', () => {

@@ -86,6 +86,8 @@ import { workoutFinalizationFailureStage } from '../services/finalizeWorkoutSess
 import { useWorkoutEvolution } from '../workoutEvolution/useWorkoutEvolution';
 import { useWorkoutActivitySnapshot } from '../home/useWorkoutActivitySnapshot';
 import { useFrequencyWindow } from '../home/useFrequencyWindow';
+import { deriveHomeInitialReadiness } from '../home/homeInitialReadiness';
+import { useHomeInitialVisualReady } from '../home/useHomeInitialVisualReady';
 import { processWorkoutLifecycleAfterSession } from '../services/workoutLifecycleApplication';
 import {
   applyExerciseSubstitution,
@@ -159,6 +161,7 @@ const FULL_BLEED = StyleSheet.create({
   overlayZ40: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 40 },
   overlayZ50: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 50 },
   overlayZ60: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 60 },
+  overlayZ70: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 70 },
 });
 
 /**
@@ -357,7 +360,29 @@ function AppShellContent({
   const [supportRoute, setSupportRoute] = useState<SupportRoute | null>(null);
   // Realtime, Firestore-backed unread count for the Home support icon's
   // badge (see useUnreadSupportCasesCount) — no locally tracked counter.
-  const unreadSupportCasesCount = useUnreadSupportCasesCount(user?.uid);
+  const unreadSupportCases = useUnreadSupportCasesCount(user?.uid);
+  const homeInitialReadiness = deriveHomeInitialReadiness({
+    prescriptionLoading,
+    generatingWorkout,
+    prescriptionStatus: prescription.status,
+    scheduleLoading: schedule.loading,
+    scheduleStatus: schedule.resolution.status,
+    scheduleRefreshFailed: schedule.refreshError !== null,
+    evolutionKind: evolution.viewModel.kind,
+    evolutionNoticeUnavailable: evolution.viewModel.kind === 'SUMMARY_READY'
+      && Boolean(evolution.viewModel.noticeUnavailable),
+    activityStatus: activitySnapshot.initialStatus,
+    weekOverviewAvailable: activitySnapshot.week !== null,
+    frequencyStatus: frequencyWindow.initialStatus,
+    frequencyWindowAvailable: frequencyWindow.viewModel !== null,
+    frequencyLoading: frequencyWindow.loading,
+    supportInboxStatus: unreadSupportCases.initialStatus,
+  });
+  const {
+    homeInitialDataSettled,
+    homeInitialVisualReady,
+    onInitialLayoutCommitted,
+  } = useHomeInitialVisualReady(homeInitialReadiness.allRequiredDataSettled);
   useEffect(() => {
     setForegroundSupportCaseId(supportRoute?.name === 'case' ? supportRoute.caseId : null);
     return () => setForegroundSupportCaseId(null);
@@ -424,6 +449,7 @@ function AppShellContent({
   useEffect(() => {
     if (
       evolution.viewModel.kind === 'AUTO_ACTIVATION_NOTICE'
+      && homeInitialVisualReady
       && tab !== 'workout'
       && !overlayOpen
     ) {
@@ -432,7 +458,7 @@ function AppShellContent({
       void reloadPrescription();
       setShowEvolutionUnlock(true);
     }
-  }, [evolution.viewModel.kind, overlayOpen, reloadPrescription, tab]);
+  }, [evolution.viewModel.kind, homeInitialVisualReady, overlayOpen, reloadPrescription, tab]);
 
   // The root Paywall is closed by resolvePremiumGate, but this on-demand
   // Paywall is an AppShell overlay. Close that overlay only after the same
@@ -1168,7 +1194,12 @@ function AppShellContent({
         `'detached'` — both are exactly the patterns that caused the
         intermittent entry flicker this architecture replaces.
       */}
-      <View style={{ flex: 1 }}>
+      <View
+        style={{ flex: 1 }}
+        pointerEvents={homeInitialVisualReady ? 'auto' : 'none'}
+        accessibilityElementsHidden={!homeInitialVisualReady}
+        importantForAccessibility={homeInitialVisualReady ? 'auto' : 'no-hide-descendants'}
+      >
         <PersistentScreen active={tab === 'home'} activeStyle={FULL_BLEED.tab} inactiveMode="materialized">
           <HomeScreen
             prescription={prescription}
@@ -1185,7 +1216,7 @@ function AppShellContent({
             onAdvanceWorkout={requestAdvanceWorkout}
             onOpenProfile={() => setTab('profile')}
             onOpenSupportCases={() => setSupportRoute({ name: 'cases', origin: 'home' })}
-            unreadSupportCasesCount={unreadSupportCasesCount}
+            unreadSupportCasesCount={unreadSupportCases.count}
             evolutionViewModel={evolution.viewModel}
             onOpenEvolution={() => setShowEvolutionUnlock(true)}
             weekOverview={activitySnapshot.week}
@@ -1194,6 +1225,9 @@ function AppShellContent({
             frequencyCanGoNext={frequencyWindow.canGoNext}
             onFrequencyPrev={frequencyWindow.goPrev}
             onFrequencyNext={frequencyWindow.goNext}
+            homeInitialDataSettled={homeInitialDataSettled}
+            homeInitialVisualReady={homeInitialVisualReady}
+            onInitialLayoutCommitted={onInitialLayoutCommitted}
           />
         </PersistentScreen>
         {tab === 'workout' && workoutStartAttempt && (
@@ -1330,9 +1364,9 @@ function AppShellContent({
       */}
       {tab !== 'workout' && (
         <View
-          pointerEvents={overlayOpen ? 'none' : 'auto'}
-          accessibilityElementsHidden={overlayOpen}
-          importantForAccessibility={overlayOpen ? 'no-hide-descendants' : 'auto'}
+          pointerEvents={overlayOpen || !homeInitialVisualReady ? 'none' : 'auto'}
+          accessibilityElementsHidden={overlayOpen || !homeInitialVisualReady}
+          importantForAccessibility={overlayOpen || !homeInitialVisualReady ? 'no-hide-descendants' : 'auto'}
         >
           <TabBar tab={tab} setTab={selectTab} />
         </View>
@@ -1384,16 +1418,18 @@ function AppShellContent({
         precedence over Missed Session and every other overlay (see
         `overlayOpen`/`requestStartWorkout` above).
       */}
-      <WorkoutSessionRecoveryModal
-        state={recovery.state}
-        canResume={recoveryCanResume}
-        resuming={recoveryAction === 'resuming'}
-        discarding={recoveryAction === 'discarding'}
-        discardError={recoveryDiscardError}
-        onResume={() => { void handleResumeRecovery(); }}
-        onDiscard={() => { void handleDiscardRecovery(); }}
-        onDismiss={dismissRecovery}
-      />
+      {homeInitialVisualReady ? (
+        <WorkoutSessionRecoveryModal
+          state={recovery.state}
+          canResume={recoveryCanResume}
+          resuming={recoveryAction === 'resuming'}
+          discarding={recoveryAction === 'discarding'}
+          discardError={recoveryDiscardError}
+          onResume={() => { void handleResumeRecovery(); }}
+          onDiscard={() => { void handleDiscardRecovery(); }}
+          onDismiss={dismissRecovery}
+        />
+      ) : null}
       <MissedSessionDecisionModal
         visible={startWorkoutFlow === 'missedDecision'}
         pending={missedDecisionPending}
@@ -1692,6 +1728,16 @@ function AppShellContent({
             caseId={supportRoute.caseId}
             onBack={() => setSupportRoute({ name: 'cases', origin: supportRoute.casesOrigin })}
           />
+        </View>
+      ) : null}
+      {!homeInitialVisualReady ? (
+        <View
+          testID="home-initial-loading-overlay"
+          pointerEvents="auto"
+          accessibilityViewIsModal
+          style={FULL_BLEED.overlayZ70}
+        >
+          <FullScreenLoading />
         </View>
       ) : null}
     </View>

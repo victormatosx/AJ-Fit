@@ -11,12 +11,14 @@ import {
   mergeCoveredFrom,
   type FrequencyWindowViewModel,
 } from './frequencyHeatmap';
+import type { InitialSectionStatus } from './homeInitialReadiness';
 
 export interface FrequencyWindowState {
   /** `null` only until the very first window has ever resolved — never goes back to `null` afterward, even mid-navigation to an uncovered period (see module doc). */
   viewModel: FrequencyWindowViewModel | null;
   /** True while the *currently selected* window's data isn't available yet — `viewModel` is still showing the previous window; UI may dim, must never unmount/resize for this. */
   loading: boolean;
+  initialStatus: InitialSectionStatus;
   /** False on the current (most recent) window — never navigate into the future. */
   canGoNext: boolean;
   goPrev: () => void;
@@ -78,6 +80,7 @@ export function useFrequencyWindow(timezone: string): FrequencyWindowState {
   const coveredFromRef = useRef<LocalDate | null>(null);
   const inFlightRequestIdRef = useRef(0);
   const [loadingRequestId, setLoadingRequestId] = useState<number | null>(null);
+  const [initialStatus, setInitialStatus] = useState<InitialSectionStatus>(uid ? 'PENDING' : 'NOT_APPLICABLE');
 
   const today = uid ? localDateInTimezone(new Date(), timezone) : null;
 
@@ -91,8 +94,16 @@ export function useFrequencyWindow(timezone: string): FrequencyWindowState {
       const dates = await listCompletedWorkoutDatesInRange(uid, neededFromLocalDate, rangeTo);
       setCompletedDates((previous) => new Set([...previous, ...dates]));
       coveredFromRef.current = mergeCoveredFrom(coveredFromRef.current, neededFromLocalDate);
+      setInitialStatus((previous) => previous === 'PENDING' ? 'SUCCESS' : previous);
     } catch (error) {
       logWarn('home_frequency', 'load_failed', { error });
+      // A failed first read is a terminal ERROR presentation, not an
+      // infinite loading state. Mark the requested range as covered with the
+      // already-known empty/previous set so the normal synchronous promotion
+      // below builds and commits the final fallback grid before Home reveals.
+      coveredFromRef.current = mergeCoveredFrom(coveredFromRef.current, neededFromLocalDate);
+      setCompletedDates((previous) => new Set(previous));
+      setInitialStatus((previous) => previous === 'PENDING' ? 'ERROR' : previous);
     } finally {
       // Only the most recently *issued* request clears the loading flag —
       // an older, slower request resolving after a newer one must not mask
@@ -144,6 +155,7 @@ export function useFrequencyWindow(timezone: string): FrequencyWindowState {
   return {
     viewModel: displayedViewModel,
     loading: displayedOffset !== offsetWindows || loadingRequestId !== null,
+    initialStatus,
     canGoNext: offsetWindows > 0,
     goPrev,
     goNext,

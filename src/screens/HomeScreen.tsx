@@ -65,6 +65,9 @@ export function HomeScreen({
   frequencyCanGoNext,
   onFrequencyPrev,
   onFrequencyNext,
+  homeInitialDataSettled = false,
+  homeInitialVisualReady = false,
+  onInitialLayoutCommitted,
 }: {
   prescription: PrescriptionResult;
   /**
@@ -117,6 +120,10 @@ export function HomeScreen({
   frequencyCanGoNext?: boolean;
   onFrequencyPrev?: () => void;
   onFrequencyNext?: () => void;
+  /** Bootstrap-only: mounts a fresh layout marker only after every required Home section is terminal. */
+  homeInitialDataSettled?: boolean;
+  homeInitialVisualReady?: boolean;
+  onInitialLayoutCommitted?: () => void;
 }) {
   const { theme } = useTheme();
   useEffect(() => {
@@ -689,6 +696,16 @@ export function HomeScreen({
           )}
         </Pressable>
       </Modal>
+
+      {homeInitialDataSettled && !homeInitialVisualReady && onInitialLayoutCommitted ? (
+        <View
+          testID="home-initial-layout-commit-marker"
+          collapsable={false}
+          pointerEvents="none"
+          onLayout={onInitialLayoutCommitted}
+          style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
+        />
+      ) : null}
     </ScreenBg>
   );
 }

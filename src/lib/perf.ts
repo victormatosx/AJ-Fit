@@ -3,6 +3,8 @@ import { logDebug } from './logger';
 export type PerfMark =
   | 'app_epoch' | 'auth_ready' | 'profile_ready' | 'workout_readiness_ready'
   | 'home_mount' | 'home_today_ready' | 'home_evolution_ready'
+  | 'home_initial_data_settled' | 'home_initial_layout_committed'
+  | 'home_initial_visual_ready' | 'home_initial_overlay_hidden'
   | 'profile_cached_ready' | 'profile_remote_ready'
   | 'profile_cache_hit' | 'profile_cache_miss' | 'profile_cache_invalid'
   | 'questionnaire_cache_hit' | 'questionnaire_cache_miss' | 'questionnaire_cache_invalid'

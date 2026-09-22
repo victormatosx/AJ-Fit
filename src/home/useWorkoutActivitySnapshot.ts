@@ -10,10 +10,12 @@ import { localDateInTimezone } from '../scheduleEngine/localDate';
 import { listCompletedWorkoutActivityDatesInRange } from '../services/workoutExecutions';
 import { mondayOfWeek } from './calendarWeek';
 import { buildWeekOverview, type WeekOverviewViewModel } from './weekOverview';
+import type { InitialSectionStatus } from './homeInitialReadiness';
 
 export interface WorkoutActivitySnapshot {
   /** True only until the first read resolves — mirrors `useWorkoutEvolution`'s loading contract (never re-flashes on a background reload). */
   loading: boolean;
+  initialStatus: InitialSectionStatus;
   week: WeekOverviewViewModel | null;
   reload: () => Promise<void>;
 }
@@ -41,6 +43,7 @@ export function useWorkoutActivitySnapshot(input: {
   const [completedDates, setCompletedDates] = useState<ReadonlySet<LocalDate> | null>(null);
   const [fulfilledScheduledDates, setFulfilledScheduledDates] = useState<ReadonlySet<LocalDate> | null>(null);
   const [loading, setLoading] = useState(true);
+  const [initialStatus, setInitialStatus] = useState<InitialSectionStatus>(uid ? 'PENDING' : 'NOT_APPLICABLE');
   const trainingDaysKey = input.trainingDays.join(',');
   const activeRecoveryDaysKey = input.activeRecoveryDays.join(',');
 
@@ -49,6 +52,7 @@ export function useWorkoutActivitySnapshot(input: {
       setCompletedDates(null);
       setFulfilledScheduledDates(null);
       setLoading(false);
+      setInitialStatus('NOT_APPLICABLE');
       return;
     }
     try {
@@ -57,6 +61,7 @@ export function useWorkoutActivitySnapshot(input: {
       const dates = await listCompletedWorkoutActivityDatesInRange(uid, from, today);
       setCompletedDates(new Set(dates.performedDates));
       setFulfilledScheduledDates(new Set(dates.scheduledDates));
+      setInitialStatus((previous) => previous === 'PENDING' ? 'SUCCESS' : previous);
     } catch (error) {
       logWarn('home_activity', 'load_failed', { error });
       // Keep the last known set on a transient failure; only default to
@@ -64,6 +69,7 @@ export function useWorkoutActivitySnapshot(input: {
       // flash a worse state than what's already on screen" contract.
       setCompletedDates((previous) => previous ?? new Set());
       setFulfilledScheduledDates((previous) => previous ?? new Set());
+      setInitialStatus((previous) => previous === 'PENDING' ? 'ERROR' : previous);
     } finally {
       setLoading(false);
     }
@@ -88,5 +94,5 @@ export function useWorkoutActivitySnapshot(input: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [completedDates, fulfilledScheduledDates, today, trainingDaysKey, activeRecoveryDaysKey, input.activatedAtLocalDate, input.scheduleMode, input.prescribedTrainingFrequency]);
 
-  return { loading, week, reload };
+  return { loading, initialStatus, week, reload };
 }
