@@ -220,8 +220,16 @@ export async function evaluateProgressionV2ForUserFull(
 
     const batchStartedAtMs = perfNowMsSinceAppEpoch();
     const completions: ProgressionReadCompletion[] = [];
-    const [config, { executions }, relevantCycles, scheduleEvents, authoritativeInputs, prescribedSessions, policyMode] = await Promise.all([
-      measureProgressionRead({
+    // Phase 2B diagnostic only (docs/superpowers/plans/
+    // 2026-09-22-home-bootstrap-perf-audit-phase2.md Task 3) — DEV-only,
+    // default off. Runs the exact same 7 reads sequentially instead of via
+    // Promise.all, to A/B whether concurrency itself adds contention or
+    // each read independently costs the same either way. Revert once that
+    // question is answered; never a production toggle.
+    const runProgressionReadsSequentially = typeof __DEV__ !== 'undefined' && __DEV__
+      && process.env.EXPO_PUBLIC_PERF_ISOLATE_PROGRESSION_READS === '1';
+    const reads: Array<() => Promise<unknown>> = [
+      () => measureProgressionRead({
         label: 'evolution_progression.schedule_config', name: 'schedule_config',
         functionName: 'loadScheduleConfig', logicalPath: 'users/{uid}/workoutProgramState/scheduleConfig',
         operationType: 'getDoc', filters: 'fixed document id', orderBy: 'none', limit: '1 document',
@@ -229,7 +237,7 @@ export async function evaluateProgressionV2ForUserFull(
         batchStartedAtMs, completions, operation: () => loadScheduleConfig(uid),
         summarize: (result) => ({ docsReturned: result ? 1 : 0, docsUsed: result ? 1 : 0, docsDiscarded: 0, firestoreDispatches: 1 }),
       }),
-      measureProgressionRead({
+      () => measureProgressionRead({
         label: 'evolution_progression.executions', name: 'executions',
         functionName: 'listExecutionsForProgramInstance', logicalPath: 'users/{uid}/workoutExecutions',
         operationType: 'query/getDocs', filters: 'programInstanceId == activeProgramInstanceId',
@@ -238,7 +246,7 @@ export async function evaluateProgressionV2ForUserFull(
         operation: () => loadCurrentProgressionWindowExecutions(uid, bundle),
         summarize: (result) => ({ docsReturned: result.executions.length, docsUsed: result.executions.length, docsDiscarded: 0, firestoreDispatches: 1 }),
       }),
-      measureProgressionRead({
+      () => measureProgressionRead({
         label: 'evolution_progression.relevant_cycles', name: 'relevant_cycles',
         functionName: 'listRecentIntermediateTrainingCycles', logicalPath: 'users/{uid}/trainingCycles',
         operationType: bundle.lifecycle.currentTrainingLevel === 'INTERMEDIATE' ? 'query/getDocs' : 'not dispatched',
@@ -254,7 +262,7 @@ export async function evaluateProgressionV2ForUserFull(
           firestoreDispatches: bundle.lifecycle.currentTrainingLevel === 'INTERMEDIATE' ? 1 : 0,
         }),
       }),
-      measureProgressionRead({
+      () => measureProgressionRead({
         label: 'evolution_progression.schedule_events', name: 'schedule_events',
         functionName: 'listScheduleEventsForProgramInstance', logicalPath: 'users/{uid}/workoutPrograms/{activeContentIdentity}/scheduleEvents',
         operationType: 'query/getDocs', filters: 'programInstanceId == activeProgramInstanceId', orderBy: 'none', limit: 'none',
@@ -272,7 +280,7 @@ export async function evaluateProgressionV2ForUserFull(
           return { docsReturned: result.length, docsUsed: used, docsDiscarded: result.length - used, firestoreDispatches: 1 };
         },
       }),
-      measureProgressionRead({
+      () => measureProgressionRead({
         label: 'evolution_progression.prescription_inputs', name: 'prescription_inputs',
         functionName: 'loadAuthoritativePrescriptionInputs',
         logicalPath: 'embedded ProgramInstance snapshot; legacy fallback users/{uid}/questionnaires/{questionnaireId}',
@@ -287,7 +295,7 @@ export async function evaluateProgressionV2ForUserFull(
           firestoreDispatches: bundle.programInstance.prescriptionInputSnapshot ? 0 : 1,
         }),
       }),
-      measureProgressionRead({
+      () => measureProgressionRead({
         label: 'evolution_progression.prescribed_program', name: 'program',
         functionName: 'loadAuthoritativePrescribedSessions', logicalPath: 'users/{uid}/workoutPrograms/{activeContentIdentity}',
         operationType: 'getDoc', filters: 'fixed active content identity', orderBy: 'none', limit: '1 document',
@@ -295,7 +303,7 @@ export async function evaluateProgressionV2ForUserFull(
         batchStartedAtMs, completions, operation: () => loadAuthoritativePrescribedSessions(uid, bundle.lifecycle.activeContentIdentity),
         summarize: (result) => ({ docsReturned: result ? 1 : 0, docsUsed: result ? 1 : 0, docsDiscarded: 0, firestoreDispatches: 1 }),
       }),
-      measureProgressionRead({
+      () => measureProgressionRead({
         label: 'evolution_progression.policy', name: 'profile_policy',
         functionName: 'resolveWorkoutLifecycleProgressionPolicy', logicalPath: 'users/{uid}',
         operationType: 'transaction.get', filters: 'fixed user document', orderBy: 'none', limit: '1 document',
@@ -303,7 +311,23 @@ export async function evaluateProgressionV2ForUserFull(
         batchStartedAtMs, completions, operation: () => resolveWorkoutLifecycleProgressionPolicy(uid),
         summarize: () => ({ docsReturned: 1, docsUsed: 1, docsDiscarded: 0, firestoreDispatches: 1 }),
       }),
-    ]);
+    ];
+    const results = runProgressionReadsSequentially
+      ? await (async () => {
+        const out: unknown[] = [];
+        for (const read of reads) out.push(await read());
+        return out;
+      })()
+      : await Promise.all(reads.map((read) => read()));
+    const [config, { executions }, relevantCycles, scheduleEvents, authoritativeInputs, prescribedSessions, policyMode] = results as [
+      Awaited<ReturnType<typeof loadScheduleConfig>>,
+      Awaited<ReturnType<typeof loadCurrentProgressionWindowExecutions>>,
+      Awaited<ReturnType<typeof listRecentIntermediateTrainingCycles>>,
+      Awaited<ReturnType<typeof listScheduleEventsForProgramInstance>>,
+      Awaited<ReturnType<typeof loadAuthoritativePrescriptionInputs>>,
+      Awaited<ReturnType<typeof loadAuthoritativePrescribedSessions>>,
+      Awaited<ReturnType<typeof resolveWorkoutLifecycleProgressionPolicy>>,
+    ];
     const lastCompletion = completions.reduce<ProgressionReadCompletion | null>(
       (latest, item) => !latest || item.endedAtBatchMs >= latest.endedAtBatchMs ? item : latest,
       null,
