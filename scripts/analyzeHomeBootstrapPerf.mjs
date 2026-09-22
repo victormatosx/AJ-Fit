@@ -69,6 +69,14 @@ function main() {
     console.error('Usage: node scripts/analyzeHomeBootstrapPerf.mjs <log files...>');
     process.exit(1);
   }
+  // Shell glob expansion is lexicographic (run-10 sorts before run-2) —
+  // re-sort by the numeric run index embedded in the filename so the
+  // printed "Run N" column matches chronological execution order.
+  paths.sort((a, b) => {
+    const na = Number(/-run-(\d+)-/.exec(a)?.[1] ?? 0);
+    const nb = Number(/-run-(\d+)-/.exec(b)?.[1] ?? 0);
+    return na - nb;
+  });
 
   const runs = paths.map((path) => ({ path, ...parseRun(path) }));
 
