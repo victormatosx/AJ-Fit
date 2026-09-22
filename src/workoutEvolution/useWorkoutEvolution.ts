@@ -172,17 +172,21 @@ export function useWorkoutEvolution(activeProgramInstanceId: string | null = nul
       programScopeGenerationRef.current === programScopeGeneration;
     try {
       let reconciledDecision: ProgressionDecision | null | undefined;
+      let reconciledLifecycle: Awaited<ReturnType<typeof loadWorkoutLifecycleDeduped>> | undefined;
       if (!options?.skipReconcile) {
         const reconcileResult = await reconcileWorkoutLifecycle({
           uid: user.uid,
           trigger: options?.trigger ?? (hasLoadedOnce.current ? 'RECOVERY' : 'COLD_START'),
         });
         reconciledDecision = reconcileResult.progressionDecision;
+        reconciledLifecycle = reconcileResult.lifecycle;
       }
       recordPerfMark('evolution_reconcile_ready');
 
       const [lifecycle, pendingAfter, decision] = await Promise.all([
-        loadWorkoutLifecycleDeduped(user.uid),
+        reconciledLifecycle !== undefined
+          ? Promise.resolve(reconciledLifecycle)
+          : loadWorkoutLifecycleDeduped(user.uid),
         loadPendingEvolution(user.uid),
         reconciledDecision !== undefined
           ? Promise.resolve(reconciledDecision)

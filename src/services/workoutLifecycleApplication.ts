@@ -1049,6 +1049,18 @@ export interface ReconcileResult {
    * and "field is `undefined`" identically to "must recompute".
    */
   progressionDecision?: ProgressionDecision | null;
+  /**
+   * The lifecycle bundle this reconciliation already loaded internally —
+   * populated ONLY in branches that are provably still valid when reconcile
+   * returns (no write happened after this exact object was captured), i.e.
+   * the same NO_ACTION/STALE_REPREPARED branches that populate
+   * `progressionDecision` above, and for the identical reason.
+   * `useWorkoutEvolution.load()` reuses this instead of re-reading the same
+   * document a few hundred ms later. Absent (not merely `null`) in every
+   * branch where a write occurred after this bundle was captured — callers
+   * MUST treat "field absent" as "re-fetch", never substitute a stale one.
+   */
+  lifecycle?: NonNullable<Awaited<ReturnType<typeof loadWorkoutLifecycle>>>;
 }
 
 export interface PostWorkoutLifecycleResult extends ReconcileResult {
@@ -1126,7 +1138,7 @@ export async function reconcileWorkoutLifecycle(input: {
         prepared: result.status === 'PREPARED',
         autoActivated: false,
         staleClearedPendingEvolution: false,
-        ...(result.status === 'NO_ACTION' ? { progressionDecision: result.decision ?? null } : {}),
+        ...(result.status === 'NO_ACTION' ? { progressionDecision: result.decision ?? null, lifecycle } : {}),
       };
       logWorkoutLifecycleEvent({ name: 'lifecycle_reconcile_completed', trigger, outcome: response.prepared ? 'PREPARED' : 'NO_ACTION' });
       return response;
@@ -1184,7 +1196,7 @@ export async function reconcileWorkoutLifecycle(input: {
         prepared: reprepared.status === 'PREPARED' || reprepared.status === 'ALREADY_PENDING',
         autoActivated: false,
         staleClearedPendingEvolution: true,
-        ...(reprepared.status === 'NO_ACTION' ? { progressionDecision: reprepared.decision ?? null } : {}),
+        ...(reprepared.status === 'NO_ACTION' ? { progressionDecision: reprepared.decision ?? null, lifecycle } : {}),
       };
       logWorkoutLifecycleEvent({ name: 'lifecycle_reconcile_completed', trigger, outcome: 'STALE_REPREPARED' });
       return response;
