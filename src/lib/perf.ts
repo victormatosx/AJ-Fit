@@ -56,7 +56,26 @@ export type PerfMark =
   // homeInitialReadiness.ts's own settle condition for that gate.
   | 'home_activity_fetch_start' | 'home_activity_network_ready' | 'home_activity_settled'
   | 'home_frequency_fetch_start' | 'home_frequency_network_ready' | 'home_frequency_settled'
-  | 'home_support_inbox_listener_start' | 'home_support_inbox_settled';
+  | 'home_support_inbox_listener_start' | 'home_support_inbox_settled'
+  // Phase 3 — pre-mount audit (2026-09-22). subscription_bootstrap covers
+  // SubscriptionContext's own RevenueCat identity-sync window (previously
+  // unmeasured — confirmed uid-only dependency, already parallel with
+  // profile, but its own duration was invisible). preferences_reconciliation
+  // covers the language/units reconcile effect (App.tsx) — genuinely serial
+  // AFTER profile (it reads profile.preferences), not a waterfall to fix,
+  // but its duration was invisible and could still be the long pole.
+  // premium_gate_resolved_app fires the instant resolvePremiumGate first
+  // returns 'app' for the current identity — the true end of the pre-mount
+  // routing decision, previously only inferrable from workout_readiness_ready
+  // (its last-checked input, not the gate's own resolution moment).
+  // appshell_mount is AppShell's own top-level mount (distinct from
+  // home_mount, which is HomeScreen's). evolution_start fires when
+  // useWorkoutEvolution's load() is first invoked, before any await.
+  | 'subscription_bootstrap_start' | 'subscription_bootstrap_settled'
+  | 'preferences_reconciliation_start' | 'preferences_reconciliation_settled'
+  | 'premium_gate_resolved_app'
+  | 'appshell_mount'
+  | 'evolution_start';
 
 const epoch = typeof performance !== 'undefined' ? performance.now() : Date.now();
 
