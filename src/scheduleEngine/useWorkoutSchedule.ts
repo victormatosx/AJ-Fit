@@ -14,6 +14,7 @@ import { finalizeWorkoutSession } from '../services/finalizeWorkoutSession';
 import { listExecutionsForProgram, type PersistedWorkoutExecution } from '../services/workoutExecutions';
 import { normalizeWeekdays, trainingDaysValid } from '../lib/questionnaireSchema';
 import { localDateInTimezone } from './localDate';
+import { takeScheduleConfigBootstrapHandoff } from './scheduleConfigBootstrapHandoff';
 import type {
   MissDecision,
   MissedSessionDecisionIdentity,
@@ -141,7 +142,7 @@ export function useWorkoutSchedule(program: WorkoutProgramSnapshot | null): Work
     }
     setLoading(true);
     try {
-      let loadedConfig = await loadScheduleConfig(uid);
+      let loadedConfig = takeScheduleConfigBootstrapHandoff(uid) ?? await loadScheduleConfig(uid);
       // Reconciliation, not a second question: the questionnaire already
       // asked `trainingDays` — if the Schedule Engine has no config yet
       // AND that answer is valid, bridge it across automatically instead of
