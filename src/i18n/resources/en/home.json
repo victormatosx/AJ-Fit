@@ -9,6 +9,12 @@
   "greeting": {
     "casual": "Hey,"
   },
+  "snapshot": {
+    "todayPendingTitle": "Your workout",
+    "todayPendingBody": "Checking today's session",
+    "todayUnavailableTitle": "Workout unavailable",
+    "todayUnavailableBody": "Check your connection and try again"
+  },
   "todayCard": {
     "kicker": "Today's workout",
     "meta": "{{duration}} min · {{exercises}} exercises · ~{{kcal}} kcal",
@@ -460,6 +466,8 @@
     "frequency": {
       "title": "Your frequency",
       "summaryCurrent": "{{count}} workouts in the last 30 days",
+      "cachedSummary": "Saved history · updating",
+      "refreshingSummary": "Updating history",
       "summaryPeriod": "{{count}} workouts in this period",
       "cellCompleted": "{{date}} — workout completed",
       "cellEmpty": "{{date}} — no workout logged",

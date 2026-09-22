@@ -5,6 +5,12 @@
   "greeting": {
     "casual": "Hola,"
   },
+  "snapshot": {
+    "todayPendingTitle": "Tu entrenamiento",
+    "todayPendingBody": "Consultando la sesión actual",
+    "todayUnavailableTitle": "Entrenamiento no disponible",
+    "todayUnavailableBody": "Comprueba tu conexión e inténtalo de nuevo"
+  },
   "support": {
     "iconLabel": "Mis solicitudes",
     "iconLabelUnread": "Mis solicitudes, {{count}} con mensajes nuevos"
@@ -460,6 +466,8 @@
     "frequency": {
       "title": "Tu frecuencia",
       "summaryCurrent": "{{count}} entrenamientos en los últimos 30 días",
+      "cachedSummary": "Historial guardado · actualizando",
+      "refreshingSummary": "Actualizando historial",
       "summaryPeriod": "{{count}} entrenamientos en este período",
       "cellCompleted": "{{date}} — entrenamiento completado",
       "cellEmpty": "{{date}} — sin entrenamiento registrado",

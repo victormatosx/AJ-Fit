@@ -56,6 +56,7 @@ import {
   type ProfilePresentationCache,
 } from '../lib/profilePresentationCache';
 import { removeEvolutionSummaryPresentationCache } from '../lib/evolutionSummaryPresentationCache';
+import { removeHomePresentationSnapshot } from '../lib/homePresentationSnapshot';
 import { recordPerfMark } from '../lib/perf';
 import { normalizeWeekdays, trainingDaysValid } from '../lib/questionnaireSchema';
 import {
@@ -642,6 +643,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           await Promise.all([
             removeProfilePresentationCache(outgoingUid),
             removeEvolutionSummaryPresentationCache(outgoingUid),
+            removeHomePresentationSnapshot(outgoingUid),
           ]).catch(() => undefined);
         }
       }),

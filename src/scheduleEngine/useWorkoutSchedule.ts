@@ -55,6 +55,8 @@ export interface WorkoutScheduleController {
   resolution: ScheduleResolution;
   config: ScheduleConfig | null;
   loading: boolean;
+  /** False for the render where a new program arrived before its schedule reload reset the old projection. */
+  matchesActiveProgram: boolean;
   /** Last refresh failure, separate from the last authoritative resolution. */
   refreshError: ScheduleRefreshError | null;
   reload: () => Promise<ScheduleResolution | null>;
@@ -335,6 +337,7 @@ export function useWorkoutSchedule(program: WorkoutProgramSnapshot | null): Work
     resolution: projection.resolution,
     config,
     loading,
+    matchesActiveProgram: scheduleScopeRef.current === scheduleScopeKey,
     refreshError: projection.refreshError,
     reload,
     resolveMiss,

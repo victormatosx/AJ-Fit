@@ -88,6 +88,7 @@ import { useWorkoutActivitySnapshot } from '../home/useWorkoutActivitySnapshot';
 import { useFrequencyWindow } from '../home/useFrequencyWindow';
 import { deriveHomeInitialReadiness } from '../home/homeInitialReadiness';
 import { useHomeInitialVisualReady } from '../home/useHomeInitialVisualReady';
+import { canUseTodayActions, canWriteHomePresentationSnapshot, chooseHomeFrequencyPresentation, shouldUseSnapshotPlaceholders } from '../home/homePresentationPolicy';
 import { processWorkoutLifecycleAfterSession } from '../services/workoutLifecycleApplication';
 import {
   applyExerciseSubstitution,
@@ -102,6 +103,12 @@ import { useReducedMotionPreference } from '../lib/reducedMotion';
 import { useDeepLinkIntent } from '../state/DeepLinkContext';
 import { RestSessionProvider, useRestSession } from '../state/RestSessionContext';
 import { recordPerfMark } from '../lib/perf';
+import {
+  projectCachedFrequency,
+  readHomePresentationSnapshot,
+  writeHomePresentationSnapshot,
+  type HomePresentationSnapshot,
+} from '../lib/homePresentationSnapshot';
 
 type SupportRoute =
   | { name: 'help' }
@@ -365,11 +372,37 @@ function AppShellContent({
   // Realtime, Firestore-backed unread count for the Home support icon's
   // badge (see useUnreadSupportCasesCount) — no locally tracked counter.
   const unreadSupportCases = useUnreadSupportCasesCount(user?.uid);
+  const [homePresentationSnapshot, setHomePresentationSnapshot] = useState<HomePresentationSnapshot | null>(null);
+  const [snapshotVisualReady, setSnapshotVisualReady] = useState(false);
+  const snapshotFrameRef = useRef<number | null>(null);
+  const snapshotLayoutRef = useRef(false);
+  const snapshotOverlayMarkRef = useRef(false);
+  const authoritativeReadyMarkRef = useRef(false);
+  useEffect(() => {
+    const uid = user?.uid;
+    if (!uid) return;
+    let cancelled = false;
+    recordPerfMark('home_snapshot_read_start');
+    void readHomePresentationSnapshot(uid).then((snapshot) => {
+      if (cancelled) return;
+      if (!snapshot || !projectCachedFrequency(snapshot, new Date())) {
+        recordPerfMark('home_snapshot_miss');
+        return;
+      }
+      recordPerfMark('home_snapshot_hit');
+      setHomePresentationSnapshot(snapshot);
+      recordPerfMark('home_snapshot_applied');
+    });
+    return () => {
+      cancelled = true;
+      if (snapshotFrameRef.current !== null) cancelAnimationFrame(snapshotFrameRef.current);
+    };
+  }, [user?.uid]);
   const homeInitialReadiness = deriveHomeInitialReadiness({
     prescriptionLoading,
     generatingWorkout,
     prescriptionStatus: prescription.status,
-    scheduleLoading: schedule.loading,
+    scheduleLoading: schedule.loading || !schedule.matchesActiveProgram,
     scheduleStatus: schedule.resolution.status,
     scheduleRefreshFailed: schedule.refreshError !== null,
     evolutionKind: evolution.viewModel.kind,
@@ -387,6 +420,63 @@ function AppShellContent({
     homeInitialVisualReady,
     onInitialLayoutCommitted,
   } = useHomeInitialVisualReady(homeInitialReadiness.allRequiredDataSettled);
+  const cachedFrequency = homePresentationSnapshot && homePresentationSnapshot.uid === user?.uid
+    ? projectCachedFrequency(homePresentationSnapshot, new Date()) : null;
+  const snapshotPathAvailable = Boolean(cachedFrequency && !homeInitialVisualReady);
+  const onSnapshotLayoutCommitted = useCallback(() => {
+    if (!snapshotPathAvailable || snapshotLayoutRef.current || snapshotVisualReady) return;
+    snapshotLayoutRef.current = true;
+    recordPerfMark('home_snapshot_layout_committed');
+    snapshotFrameRef.current = requestAnimationFrame(() => {
+      snapshotFrameRef.current = null;
+      recordPerfMark('home_snapshot_visual_ready');
+      setSnapshotVisualReady(true);
+    });
+  }, [snapshotPathAvailable, snapshotVisualReady]);
+  const homeVisible = homeInitialVisualReady || snapshotVisualReady;
+  useEffect(() => {
+    if (snapshotVisualReady && !homeInitialVisualReady && !snapshotOverlayMarkRef.current) {
+      snapshotOverlayMarkRef.current = true;
+      recordPerfMark('home_snapshot_overlay_hidden');
+    }
+  }, [snapshotVisualReady, homeInitialVisualReady]);
+  const authoritativeHomeValid = canWriteHomePresentationSnapshot({
+    uid: user?.uid ?? null,
+    programInstanceId: activeProgram?.programInstanceId ?? null,
+    timezone: schedule.config?.timezone ?? null,
+    readiness: homeInitialReadiness,
+    activityLoading: activitySnapshot.loading,
+    frequencyLoading: frequencyWindow.loading,
+    frequency: frequencyWindow.viewModel,
+  });
+  const snapshotPresentationActive = shouldUseSnapshotPlaceholders({
+    snapshotAvailable: Boolean(cachedFrequency),
+    authoritativeNow: authoritativeHomeValid,
+    authoritativeReachedOnce: authoritativeReadyMarkRef.current,
+  });
+  const frequencyPresentation = chooseHomeFrequencyPresentation({
+    current: frequencyWindow.viewModel,
+    currentReadSucceeded: frequencyWindow.initialStatus === 'SUCCESS',
+    cached: cachedFrequency,
+  });
+  useEffect(() => {
+    if (homeInitialReadiness.allRequiredDataSettled) recordPerfMark('home_authoritative_data_settled');
+  }, [homeInitialReadiness.allRequiredDataSettled]);
+  useEffect(() => {
+    if (homeInitialVisualReady && authoritativeHomeValid && !authoritativeReadyMarkRef.current) {
+      authoritativeReadyMarkRef.current = true;
+      recordPerfMark('home_authoritative_ready');
+    }
+  }, [homeInitialVisualReady, authoritativeHomeValid]);
+  useEffect(() => {
+    if (!user?.uid || !homeInitialVisualReady || !authoritativeHomeValid ||
+        !frequencyWindow.viewModel || !schedule.config?.timezone) return;
+    void writeHomePresentationSnapshot({
+      uid: user.uid,
+      timezone: schedule.config.timezone,
+      frequency: frequencyWindow.viewModel,
+    });
+  }, [user?.uid, homeInitialVisualReady, authoritativeHomeValid, frequencyWindow.viewModel, schedule.config?.timezone]);
   useEffect(() => {
     setForegroundSupportCaseId(supportRoute?.name === 'case' ? supportRoute.caseId : null);
     return () => setForegroundSupportCaseId(null);
@@ -1200,9 +1290,9 @@ function AppShellContent({
       */}
       <View
         style={{ flex: 1 }}
-        pointerEvents={homeInitialVisualReady ? 'auto' : 'none'}
-        accessibilityElementsHidden={!homeInitialVisualReady}
-        importantForAccessibility={homeInitialVisualReady ? 'auto' : 'no-hide-descendants'}
+        pointerEvents={homeVisible ? 'auto' : 'none'}
+        accessibilityElementsHidden={!homeVisible}
+        importantForAccessibility={homeVisible ? 'auto' : 'no-hide-descendants'}
       >
         <PersistentScreen active={tab === 'home'} activeStyle={FULL_BLEED.tab} inactiveMode="materialized">
           <HomeScreen
@@ -1223,12 +1313,28 @@ function AppShellContent({
             unreadSupportCasesCount={unreadSupportCases.count}
             evolutionViewModel={evolution.viewModel}
             onOpenEvolution={() => setShowEvolutionUnlock(true)}
-            weekOverview={activitySnapshot.week}
-            frequencyWindow={frequencyWindow.viewModel}
+            weekOverview={schedule.matchesActiveProgram && activitySnapshot.initialStatus === 'SUCCESS'
+              && (homeInitialReadiness.today === 'SUCCESS' || authoritativeReadyMarkRef.current)
+              ? activitySnapshot.week : (cachedFrequency ? null : activitySnapshot.week)}
+            frequencyWindow={frequencyPresentation.source === 'AUTHORITATIVE' ? frequencyPresentation.value : null}
             frequencyLoading={frequencyWindow.loading}
+            frequencySource={frequencyPresentation.source === 'CACHE' ? 'CACHE'
+              : frequencyWindow.loading ? 'CURRENT_SESSION' : 'AUTHORITATIVE'}
             frequencyCanGoNext={frequencyWindow.canGoNext}
             onFrequencyPrev={frequencyWindow.goPrev}
             onFrequencyNext={frequencyWindow.goNext}
+            snapshotFrequencyWindow={frequencyPresentation.source === 'CACHE' ? frequencyPresentation.value : null}
+            snapshotFrequencyThrough={cachedFrequency ? homePresentationSnapshot?.sections.frequency.throughLocalDate : undefined}
+            snapshotPresentationActive={snapshotPresentationActive}
+            todayActionsReady={canUseTodayActions({
+              snapshotExists: Boolean(cachedFrequency),
+              todayStatus: homeInitialReadiness.today,
+              programInstanceId: activeProgram?.programInstanceId ?? null,
+              scheduleMatchesActiveProgram: schedule.matchesActiveProgram,
+            })}
+            todayStatus={homeInitialReadiness.today}
+            programPresentationReady={schedule.matchesActiveProgram && Boolean(activeProgram?.programInstanceId)}
+            onSnapshotLayoutCommitted={onSnapshotLayoutCommitted}
             homeInitialDataSettled={homeInitialDataSettled}
             homeInitialVisualReady={homeInitialVisualReady}
             onInitialLayoutCommitted={onInitialLayoutCommitted}
@@ -1734,7 +1840,7 @@ function AppShellContent({
           />
         </View>
       ) : null}
-      {!homeInitialVisualReady ? (
+      {!homeVisible ? (
         <View
           testID="home-initial-loading-overlay"
           pointerEvents="auto"

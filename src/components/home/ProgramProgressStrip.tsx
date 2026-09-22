@@ -21,16 +21,18 @@ import { filledProgramProgressSegments, PROGRAM_PROGRESS_SEGMENT_COUNT } from '.
 export function ProgramProgressStrip({
   viewModel,
   onPress,
+  reserveWhenUnavailable = false,
 }: {
   viewModel: EvolutionViewModel;
   onPress?: () => void;
+  reserveWhenUnavailable?: boolean;
 }) {
   const { t } = useTranslation(['home', 'evolution']);
   const { theme } = useTheme();
 
-  if (viewModel.kind === 'UNAVAILABLE' || viewModel.kind === 'ERROR') return null;
+  if ((viewModel.kind === 'UNAVAILABLE' || viewModel.kind === 'ERROR') && !reserveWhenUnavailable) return null;
 
-  if (viewModel.kind === 'LOADING') {
+  if (viewModel.kind === 'LOADING' || viewModel.kind === 'UNAVAILABLE' || viewModel.kind === 'ERROR') {
     return (
       <View style={{ paddingHorizontal: 22, paddingVertical: 12 }}>
         <MonoLabel>{t('home:activity.programProgress.title').toUpperCase()}</MonoLabel>
@@ -48,7 +50,9 @@ export function ProgramProgressStrip({
           numberOfLines={1}
           style={{ fontFamily: theme.fonts.mono, fontSize: 10.5, letterSpacing: 1, color: theme.colors.textFaint, marginTop: 8 }}
         >
-          {t('evolution:state.loading').toUpperCase()}
+          {t(viewModel.kind === 'ERROR' ? 'evolution:state.error'
+            : viewModel.kind === 'UNAVAILABLE' ? 'evolution:state.unavailable'
+              : 'evolution:state.loading').toUpperCase()}
         </Text>
       </View>
     );

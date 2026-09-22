@@ -8,12 +8,13 @@ const VISUAL_HOOK = readFileSync('src/home/useHomeInitialVisualReady.ts', 'utf8'
 const FREQUENCY = readFileSync('src/components/home/FrequencyHeatmap.tsx', 'utf8');
 
 describe('Home bootstrap visual commit wiring', () => {
-  it('keeps Home mounted under an opaque, touch-intercepting overlay until visualReady', () => {
+  it('keeps Home mounted under an opaque, touch-intercepting overlay until either visual gate resolves', () => {
     expect(APP_SHELL).toContain('<HomeScreen');
     expect(APP_SHELL).toContain('testID="home-initial-loading-overlay"');
     expect(APP_SHELL).toContain('pointerEvents="auto"');
     expect(APP_SHELL).toContain('style={FULL_BLEED.overlayZ70}');
-    expect(APP_SHELL).toContain('{!homeInitialVisualReady ? (');
+    expect(APP_SHELL).toContain('{!homeVisible ? (');
+    expect(APP_SHELL).toContain('const homeVisible = homeInitialVisualReady || snapshotVisualReady');
   });
 
   it('blocks the TabBar while the bootstrap overlay exists', () => {

@@ -24,9 +24,11 @@ const FLEXIBLE_LABEL_WIDTH = 82;
 export function UpcomingWorkouts({
   workouts,
   onSelect,
+  enabled = true,
 }: {
   workouts: readonly UpcomingWorkoutViewModel[];
   onSelect: (workout: UpcomingWorkoutViewModel) => void;
+  enabled?: boolean;
 }) {
   const { t } = useTranslation(['home', 'quiz', 'workout']);
   const { theme } = useTheme();
@@ -64,7 +66,8 @@ export function UpcomingWorkouts({
                 weekday: weekdayLabel,
                 session: sessionLabel,
               })}
-              onPress={() => onSelect(workout)}
+              onPress={enabled ? () => onSelect(workout) : undefined}
+              disabled={!enabled}
               style={({ pressed }) => ({
                 flexDirection: 'row',
                 alignItems: 'center',

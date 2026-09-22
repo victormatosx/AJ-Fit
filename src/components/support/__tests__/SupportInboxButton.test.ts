@@ -23,8 +23,8 @@ describe('SupportInboxButton — badge contract', () => {
     expect(source).toContain('{hasUnread && (');
   });
 
-  it('is not mounted by Home when the realtime total is zero, leaving no hidden hit area or layout placeholder', () => {
-    expect(homeSource).toContain('{onOpenSupportCases && unreadSupportCasesCount > 0 && (');
+  it('has no stale badge; snapshot Home keeps a stable zero-count navigation icon', () => {
+    expect(homeSource).toContain('unreadSupportCasesCount > 0 || Boolean(snapshotFrequencyThrough)');
     expect(homeSource).not.toContain('opacity: unreadSupportCasesCount');
     expect(homeSource).not.toContain('pointerEvents={unreadSupportCasesCount');
   });

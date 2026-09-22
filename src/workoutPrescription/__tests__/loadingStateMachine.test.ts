@@ -86,7 +86,7 @@ describe('HomeScreen — never renders NEEDS_QUESTIONNAIRE_UPDATE/generatingStat
   it('accepts a `loading` prop and only shows the neutral loadingState copy — never the questionnaire-update or generating copy — while it is true and no program is known yet', () => {
     expect(homeScreenSource).toContain('loading?: boolean');
     expect(homeScreenSource).toContain(
-      "const showLoadingState = Boolean(loading) && prescription.status !== 'SUCCESS';",
+      "const showLoadingState = (Boolean(loading) && prescription.status !== 'SUCCESS')",
     );
     // loadingState must be checked BEFORE generating and BEFORE
     // prescriptionOutcomeKey(prescription.status) in the outcomeKey ladder.

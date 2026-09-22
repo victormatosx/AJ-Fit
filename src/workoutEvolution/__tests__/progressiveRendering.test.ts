@@ -73,9 +73,9 @@ describe('HomeScreen — home_evolution_ready keeps its original meaning', () =>
 });
 
 describe('ProgramProgressStrip — SUMMARY_READY rendering', () => {
-  it('renders (not null) for SUMMARY_READY — only LOADING keeps its own skeleton branch, UNAVAILABLE/ERROR stay hidden', () => {
+  it('renders SUMMARY_READY; error/unavailable retain geometry only on the snapshot path', () => {
     expect(strip).not.toMatch(/viewModel\.kind === 'LOADING'\s*\|\|\s*viewModel\.kind === 'UNAVAILABLE'\s*\|\|\s*viewModel\.kind === 'ERROR'\)\s*return null;/);
-    expect(strip).toContain("viewModel.kind === 'UNAVAILABLE' || viewModel.kind === 'ERROR') return null;");
+    expect(strip).toContain("(viewModel.kind === 'UNAVAILABLE' || viewModel.kind === 'ERROR') && !reserveWhenUnavailable) return null;");
   });
 
   it('never marks SUMMARY_READY as actionable — the CTA/chevron whitelist is unchanged', () => {

@@ -9,6 +9,7 @@ import { cleanupRestSessionArtifacts } from './restSessionCleanup';
 import { clearNotificationAccountPreferenceState } from './notificationAccountLifecycle';
 import { removeProfilePresentationCache } from '../lib/profilePresentationCache';
 import { removeEvolutionSummaryPresentationCache } from '../lib/evolutionSummaryPresentationCache';
+import { removeHomePresentationSnapshot } from '../lib/homePresentationSnapshot';
 
 /**
  * Client-side shutdown after `requestAccountDeletion` has durably accepted
@@ -109,6 +110,7 @@ export async function finalizeAccountDeletionClientShutdown(
     clearNotificationAccountPreferenceState(uid),
     removeProfilePresentationCache(uid),
     removeEvolutionSummaryPresentationCache(uid),
+    removeHomePresentationSnapshot(uid),
   ]);
 
   await logout();

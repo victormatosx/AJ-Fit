@@ -43,6 +43,8 @@ export function FrequencyHeatmap({
   canGoNext,
   onPrev,
   onNext,
+  source = 'AUTHORITATIVE',
+  knownThroughLocalDate,
 }: {
   window: FrequencyWindowViewModel | null;
   /** A newer period was selected but isn't displayed yet — `window` is still the previous one. Only ever dims in place, never unmounts/resizes the section. */
@@ -50,6 +52,8 @@ export function FrequencyHeatmap({
   canGoNext: boolean;
   onPrev: () => void;
   onNext: () => void;
+  source?: 'CACHE' | 'CURRENT_SESSION' | 'AUTHORITATIVE';
+  knownThroughLocalDate?: string;
 }) {
   const { t, i18n } = useTranslation('home');
   const { theme } = useTheme();
@@ -81,7 +85,11 @@ export function FrequencyHeatmap({
     ? `${formatLocalDate(freqWindow.startLocalDate, locale, { day: '2-digit', month: 'short' })} — ${formatLocalDate(freqWindow.endLocalDate, locale, { day: '2-digit', month: 'short' })}`.toUpperCase()
     : '';
 
-  const summary = freqWindow
+  const summary = source === 'CACHE'
+    ? t('activity.frequency.cachedSummary')
+    : source === 'CURRENT_SESSION'
+      ? t('activity.frequency.refreshingSummary')
+    : freqWindow
     ? (freqWindow.isCurrentWindow
         ? t('activity.frequency.summaryCurrent', { count: freqWindow.completedCount })
         : t('activity.frequency.summaryPeriod', { count: freqWindow.completedCount })
@@ -94,7 +102,8 @@ export function FrequencyHeatmap({
 
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 14, marginTop: 10 }}>
         <Pressable
-          onPress={onPrev}
+          onPress={source === 'AUTHORITATIVE' ? onPrev : undefined}
+          disabled={source !== 'AUTHORITATIVE'}
           hitSlop={10}
           accessibilityRole="button"
           accessibilityLabel={t('activity.frequency.prev')}
@@ -107,12 +116,12 @@ export function FrequencyHeatmap({
         </Animated.View>
 
         <Pressable
-          onPress={canGoNext ? onNext : undefined}
-          disabled={!canGoNext}
+          onPress={source === 'AUTHORITATIVE' && canGoNext ? onNext : undefined}
+          disabled={source !== 'AUTHORITATIVE' || !canGoNext}
           hitSlop={10}
           accessibilityRole="button"
           accessibilityLabel={t('activity.frequency.next')}
-          accessibilityState={{ disabled: !canGoNext }}
+          accessibilityState={{ disabled: source !== 'AUTHORITATIVE' || !canGoNext }}
           style={{ opacity: canGoNext ? 1 : 0.25 }}
         >
           <Icon name="arrow-right" size={14} color={theme.colors.textSecondary} />
@@ -139,7 +148,7 @@ export function FrequencyHeatmap({
                       // remounting a brand-new node for every date, which
                       // is what made period navigation feel heavy.
                       key={columnIndex}
-                      accessibilityLabel={day
+                      accessibilityLabel={day && (source !== 'CACHE' || !knownThroughLocalDate || day.localDate <= knownThroughLocalDate)
                         ? (day.completed
                             ? t('activity.frequency.cellCompleted', { date: formatLocalDate(day.localDate, locale, { day: 'numeric', month: 'long' }) })
                             : t('activity.frequency.cellEmpty', { date: formatLocalDate(day.localDate, locale, { day: 'numeric', month: 'long' }) }))
@@ -148,10 +157,12 @@ export function FrequencyHeatmap({
                         width: cellSize,
                         height: cellSize,
                         borderRadius: theme.radii.xs,
-                        backgroundColor: day?.completed ? theme.colors.primaryEmphasis : theme.colors.surfaceMuted,
+                        backgroundColor: source === 'CACHE' && day && knownThroughLocalDate && day.localDate > knownThroughLocalDate
+                          ? theme.colors.background
+                          : day?.completed ? theme.colors.primaryEmphasis : theme.colors.surfaceMuted,
                         borderWidth: day?.isToday ? 1.5 : 0,
                         borderColor: theme.colors.primaryBorderMuted,
-                        opacity: day ? 1 : 0,
+                        opacity: day ? (source === 'CACHE' && knownThroughLocalDate && day.localDate > knownThroughLocalDate ? 0.45 : 1) : 0,
                       }}
                     />
                   ))}
