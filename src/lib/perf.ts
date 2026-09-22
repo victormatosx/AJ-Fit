@@ -46,7 +46,17 @@ export type PerfMark =
   // Fase 5.3 — visual-only Evolution summary cache. These marks never carry
   // UID, ProgramInstance identity, or summary values.
   | 'evolution_cache_read_start' | 'evolution_cache_hit' | 'evolution_cache_miss'
-  | 'evolution_cached_summary_visible' | 'evolution_current_summary_visible';
+  | 'evolution_cached_summary_visible' | 'evolution_current_summary_visible'
+  // Home bootstrap audit (2026-09-22) — the three gates that previously had
+  // no dedicated marks (Today/Evolution already do — see home_today_ready/
+  // home_evolution_ready above). "fetch_start" fires when the hook actually
+  // issues its Firestore call/subscribes its listener (not on mount — these
+  // hooks may re-run on prop changes); "settled" fires exactly once, the
+  // first time the gate's own InitialSectionStatus leaves PENDING, mirroring
+  // homeInitialReadiness.ts's own settle condition for that gate.
+  | 'home_activity_fetch_start' | 'home_activity_network_ready' | 'home_activity_settled'
+  | 'home_frequency_fetch_start' | 'home_frequency_network_ready' | 'home_frequency_settled'
+  | 'home_support_inbox_listener_start' | 'home_support_inbox_settled';
 
 const epoch = typeof performance !== 'undefined' ? performance.now() : Date.now();
 
