@@ -101,6 +101,7 @@ import { resolveSessionDisplayName, type LooseTranslate } from '../workoutPrescr
 import { useReducedMotionPreference } from '../lib/reducedMotion';
 import { useDeepLinkIntent } from '../state/DeepLinkContext';
 import { RestSessionProvider, useRestSession } from '../state/RestSessionContext';
+import { recordPerfMark } from '../lib/perf';
 
 type SupportRoute =
   | { name: 'help' }
@@ -194,6 +195,9 @@ function AppShellContent({
   setShowPremium: (value: boolean) => void;
 }) {
   const { theme } = useTheme();
+  useEffect(() => {
+    recordPerfMark('appshell_mount');
+  }, []);
   const { t } = useTranslation('workout');
   const reduceMotion = useReducedMotionPreference();
   const { tab, setTab } = useAppState();

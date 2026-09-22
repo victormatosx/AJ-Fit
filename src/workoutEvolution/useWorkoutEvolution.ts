@@ -154,6 +154,7 @@ export function useWorkoutEvolution(activeProgramInstanceId: string | null = nul
     propagateError?: boolean;
   }) => {
     if (!user) return;
+    recordPerfMark('evolution_start');
     // Progressive rendering (Fase 5.2) only derives a new provisional summary
     // on a genuine first load. Fase 5.3 keeps a previous summary during a
     // background refresh, but deliberately removes its stale action framing

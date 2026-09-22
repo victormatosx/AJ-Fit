@@ -17,6 +17,7 @@ import type {
 } from 'react-native-purchases';
 import { useAuth } from './AuthContext';
 import { db } from '../lib/firebase';
+import { recordPerfMark } from '../lib/perf';
 import {
   addCustomerInfoListener,
   removeCustomerInfoListener,
@@ -383,6 +384,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     clearPostManageWindow();
     applyLifecycleEvent({ type: 'identity-changed', uid: identityUid, generation });
     logSubscriptionEvent('subscription_identity_sync_started', identityUid);
+    recordPerfMark('subscription_bootstrap_start');
 
     void enqueueSdkOperation(async () => {
       try {
@@ -757,6 +759,9 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
   const configured = !initializing && (uid === null || realCustomerInfo !== null);
   const loading =
     initializing || (uid !== null && !configured && lifecycle.phase !== 'error');
+  useEffect(() => {
+    if (configured) recordPerfMark('subscription_bootstrap_settled');
+  }, [configured]);
 
   // Single seam: RevenueCat -> Real State -> Dev Override -> Effective
   // State -> App. `devOverride` is hard-pinned to `'REAL'` outside

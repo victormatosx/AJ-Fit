@@ -286,6 +286,7 @@ function RootNavigator() {
     // which the reconciliation's own writes can cause to change).
     if (reconcilingUidRef.current === user.uid) return;
     reconcilingUidRef.current = user.uid;
+    recordPerfMark('preferences_reconciliation_start');
     Promise.all([
       reconcileLanguageOnLoad({
         uid: user.uid,
@@ -298,6 +299,7 @@ function RootNavigator() {
     ]).finally(() => {
       reconciledUidRef.current = user.uid;
       reconcilingUidRef.current = null;
+      recordPerfMark('preferences_reconciliation_settled');
       forceReconciliationRerender();
     });
   }, [emailVerificationRequired, preferencesReconciling, user, profile]);
@@ -348,6 +350,10 @@ function RootNavigator() {
   useEffect(() => {
     if (workoutReadinessGate === 'ready') recordPerfMark('workout_readiness_ready');
   }, [workoutReadinessGate]);
+
+  useEffect(() => {
+    if (resolvedScreen === 'app') recordPerfMark('premium_gate_resolved_app');
+  }, [resolvedScreen]);
 
   // Repair re-entry: `resolvePremiumGate` sends an authenticated user with an
   // EXISTING but incomplete questionnaire back to `'onboardingFunnel'` too
