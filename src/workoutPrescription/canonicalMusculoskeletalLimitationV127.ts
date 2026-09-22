@@ -1,7 +1,9 @@
 import canonicalV127Json from '../../docs/workouts/AJ_Fit_T001_T102_workouts_canonical_v1_27_goal_routing_fixed.json';
 import matrixJson from '../../docs/workouts/AJ_Fit_v1_27_exercise_identity_matrix.json';
 import { EXERCISES_SEED } from '../data/exercisesSeedData';
+import { CANONICAL_ACTIVITIES } from './canonicalActivities';
 import { resolveCanonicalExerciseId } from './canonicalExerciseIdentity';
+import { CANONICAL_LIMITATION_PROFILES } from './limitationDataset';
 import type { TemplateEnvironment } from './types';
 
 /**
@@ -162,4 +164,33 @@ const exercisesById = new Map(EXERCISES_SEED.map((exercise) => [exercise.id, exe
 export function isRuntimeExerciseExecutableV127(runtimeId: string): boolean {
   const exercise = exercisesById.get(runtimeId);
   return Boolean(exercise && exercise.status === 'active' && exercise.availability.workoutGeneration);
+}
+
+/**
+ * Fase 13 — the 76 exercise ids `CANONICAL_LIMITATION_PROFILES`
+ * (`limitationDataset.ts`, the bundled `15_LIMITATION_PROFILES_TECHNICAL_v2.json`
+ * artifact — the SAME source `assertPlanSafe`/Firestore's real
+ * `limitationProfile` fields are seeded from) actually have a reviewed,
+ * approved `limitationProfile` for today. Of the 7 v1.27 Fase 2 closure
+ * exercises, NONE are in this set yet — see
+ * `musculoskeletalLimitationProfileAuditV127.ts` for the per-exercise audit
+ * (2 have a strong, precedented reuse candidate proposed for human
+ * sign-off; 5 have no safe basis at all) — until any of them is actually
+ * reviewed and published, every one of the 7 stays fail-closed here.
+ */
+export const CONFIRMED_LIMITATION_PROFILE_RUNTIME_IDS_V127: ReadonlySet<string> =
+  new Set(CANONICAL_LIMITATION_PROFILES.map((profile) => profile.exerciseId));
+
+const CANONICAL_ACTIVITY_IDS_V127: ReadonlySet<string> =
+  new Set(CANONICAL_ACTIVITIES.map((activity) => activity.id));
+
+/**
+ * Fase 13 — cardio/mobility activities (`CANONICAL_ACTIVITIES`) are a
+ * disjoint, non-Firestore-backed catalog with no `limitationProfile`
+ * concept at all (same exclusion `assertPlanSafe`'s backend check already
+ * applies, Fase 11) — they never need one. Every OTHER (resistance)
+ * exercise needs a confirmed entry in `CONFIRMED_LIMITATION_PROFILE_RUNTIME_IDS_V127`.
+ */
+export function hasReliableLimitationProfileCoverageV127(runtimeId: string): boolean {
+  return CANONICAL_ACTIVITY_IDS_V127.has(runtimeId) || CONFIRMED_LIMITATION_PROFILE_RUNTIME_IDS_V127.has(runtimeId);
 }

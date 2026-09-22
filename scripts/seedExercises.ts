@@ -50,7 +50,6 @@ import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { EXERCISES_SEED } from '../src/data/exercisesSeedData';
 import { validateExerciseSeed } from '../src/validators/exerciseValidation';
 
-const EXPECTED_TOTAL = 116;
 const COLLECTION = 'exercises';
 const BATCH_SIZE = 400; // Firestore hard limit is 500 writes/batch.
 
@@ -85,9 +84,15 @@ async function main() {
   console.log('');
 
   // 1. Validate the dataset before touching the network at all.
-  console.log(`Exercícios no dataset: ${EXERCISES_SEED.length} (esperado: ${EXPECTED_TOTAL})`);
-  if (EXERCISES_SEED.length !== EXPECTED_TOTAL) {
-    console.error(`ERRO: dataset tem ${EXERCISES_SEED.length} exercícios, esperado exatamente ${EXPECTED_TOTAL}.`);
+  console.log(`Exercícios no dataset: ${EXERCISES_SEED.length}`);
+  // Fase 12 — no longer pinned to a fixed count (same relaxation already
+  // applied to `limitationDatasetPublication.ts`/`limitationProfilesPhase3.ts`
+  // in bf6b4fc for the same reason): the v1.27 Fase 2 closure added 7 new
+  // resistance exercises (123 total today), and the catalog may grow again.
+  // `validateExerciseSeed` below already catches duplicate/dangling ids
+  // regardless of size — an exact-count pin added nothing beyond that.
+  if (EXERCISES_SEED.length === 0) {
+    console.error('ERRO: dataset de exercícios está vazio.');
     process.exit(1);
   }
 
@@ -154,8 +159,7 @@ async function main() {
   console.log('\n' + '='.repeat(70));
   console.log('RESULTADO');
   console.log('='.repeat(70));
-  console.log(`esperados: ${EXPECTED_TOTAL}`);
-  console.log(`validados: ${EXERCISES_SEED.length}`);
+  console.log(`no dataset: ${EXERCISES_SEED.length}`);
   console.log(`criados: ${created}`);
   console.log('atualizados: 0');
   console.log(`ignorados: ${toSkip.length}`);

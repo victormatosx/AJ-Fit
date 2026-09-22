@@ -54,6 +54,10 @@ import {
   requireWorkoutLifecycleCanonical,
   WORKOUT_LIFECYCLE_AUTHORITY_GRANT_ID,
 } from '../workoutLifecycle/authorityProvider';
+import {
+  initializeWorkoutProgramV127,
+  isWorkoutLifecycleV127InitializeNotApplicable,
+} from '../workoutLifecycle/initializeV127Provider';
 import { selectTemplate } from '../workoutPrescription/selection';
 import {
   fromWorkoutTemplateDocument,
@@ -715,6 +719,31 @@ export async function saveAndActivateWorkoutProgram(input: {
     ...(input.authorityUpdatedFields ? { updatedFields: input.authorityUpdatedFields } : {}),
   });
 
+  // Fase 16 — v1.27 ADAPT/ACTIVATE: the backend already persisted the
+  // entire lifecycle transition via Admin SDK (`persistLifecycleActivationV127`,
+  // functions/src/workoutLifecycle/authorizeMutation.ts) — no grant was
+  // even issued, and this transaction must never run for that case (the
+  // exact write it would attempt is what exceeds Firestore Rules'
+  // per-request expression ceiling for a real v1.27 document). Read back
+  // and return the already-persisted result instead.
+  if (authorityResult.persisted) {
+    const saved = await getDoc(programRef(input.uid, authorityResult.persisted.programId));
+    const savedData = saved.data();
+    if (!saved.exists() || !isProgramSnapshot(savedData, authorityResult.persisted.programId)) {
+      throw new Error('PROGRAM_PERSIST_FAILED');
+    }
+    const lifecycle = await loadWorkoutLifecycle(input.uid);
+    if (!lifecycle || lifecycle.lifecycle.activeContentIdentity !== authorityResult.persisted.programId) {
+      throw new Error('PROGRAM_LIFECYCLE_PERSIST_FAILED');
+    }
+    return {
+      ...savedData,
+      programInstanceId: lifecycle.programInstance.programInstanceId,
+      trainingCycleId: lifecycle.cycle.cycleId,
+      programInstanceActivatedAt: lifecycle.programInstance.activatedAt,
+    };
+  }
+
   let authorizedInput = input;
   let programId = candidateProgramId;
   if (authorityOperation === 'INITIALIZE' || authorityOperation === 'MIGRATE' || authorityOperation === 'ADAPT') {
@@ -1341,6 +1370,51 @@ export async function prepareWorkoutProgramLocally(
   });
 }
 
+/**
+ * Fase 15 (v1.27 INITIALIZE cutover) — attempts the fully backend-persisted
+ * path (`initializeWorkoutProgramV127Handler`, functions/src/workoutLifecycle/
+ * authorizeMutation.ts) for a brand-new account's very first v1.27 program,
+ * instead of `saveAndActivateWorkoutProgram`'s client-transaction write
+ * (which a real v1.27 document — many sessions + a full decision trace —
+ * makes exceed Firestore Rules' per-request expression ceiling; see that
+ * function's own Fase 14 investigation trail). Returns `null` (never
+ * throws for this one case) whenever the callable reports its own
+ * `workout_lifecycle_v127_initialize_not_applicable` — an existing V1
+ * baseline, an existing V2/v1.27 lifecycle, or the active generation
+ * version resolving to v2 — so the caller falls through to the unchanged
+ * existing flow below, which already knows how to handle every one of
+ * those cases. Any OTHER error is a genuine failure and propagates.
+ *
+ * Never called with `answers` at all: the callable reads its own
+ * authoritative copy of the questionnaire from Firestore — the local
+ * `input.answers` this function otherwise uses is preview/intent only here,
+ * never persisted directly, per the same principle v2's INITIALIZE already
+ * follows for its own engine call.
+ */
+async function tryInitializeWorkoutProgramV127(input: {
+  uid: string;
+  questionnaireId: string;
+  questionnaireVersion: number;
+  source: WorkoutProgramSource;
+}): Promise<GenerateAndPersistResult | null> {
+  let result: Awaited<ReturnType<typeof initializeWorkoutProgramV127>>;
+  try {
+    result = await initializeWorkoutProgramV127({
+      questionnaireId: input.questionnaireId,
+      questionnaireVersion: input.questionnaireVersion,
+      source: input.source,
+    });
+  } catch (error) {
+    if (isWorkoutLifecycleV127InitializeNotApplicable(error)) return null;
+    throw error;
+  }
+  const program = await loadActiveWorkoutProgram(input.uid);
+  if (!program || program.programId !== result.programId) {
+    throw new Error('PROGRAM_PERSIST_FAILED');
+  }
+  return { status: 'SUCCESS', plan: program, program };
+}
+
 export async function generateAndPersistWorkoutProgram(input: {
   uid: string;
   questionnaireId: string;
@@ -1350,6 +1424,25 @@ export async function generateAndPersistWorkoutProgram(input: {
   adaptationWeek?: number;
   lifecycleIdempotencyKey?: string;
 }): Promise<GenerateAndPersistResult> {
+  // Only the true first-ever bootstrap shape (no adaptation week, no
+  // explicit lifecycle idempotency key — both imply an ADAPT/evolution
+  // scenario, never a genuine first INITIALIZE) is even eligible to try the
+  // backend-authoritative v1.27 path. `tryInitializeWorkoutProgramV127`
+  // performs its OWN authoritative check server-side regardless (this is a
+  // fast-path skip, not a security boundary) and gracefully reports "not
+  // applicable" for every other shape. The same cheap, pure, local
+  // boundary check `prepareWorkoutProgram` itself runs first (Phase 3's own
+  // ordering, unchanged) gates this too — a structurally invalid/legacy
+  // `answers` shape must still resolve to the exact same
+  // `NEEDS_QUESTIONNAIRE_UPDATE` outcome it always has, without ever
+  // reaching the network for input the backend would just reject anyway.
+  if (resolveActiveGenerationVersion() === 'v1.27' && input.adaptationWeek === undefined && !input.lifecycleIdempotencyKey) {
+    const { answers: sanitizedAnswers, legacyReasonCodes } = sanitizeAnswersForEngine(input.answers);
+    if (!legacyReasonCodes.length && !prescriptionInputErrors(sanitizedAnswers).length) {
+      const routed = await tryInitializeWorkoutProgramV127(input);
+      if (routed) return routed;
+    }
+  }
   // Same baseline v2 has always used for this exact call — first-ever/
   // automatic-reconciliation generation has no lifecycle to consult yet
   // (or its lifecycle-tracked lifecycle level is irrelevant: no active

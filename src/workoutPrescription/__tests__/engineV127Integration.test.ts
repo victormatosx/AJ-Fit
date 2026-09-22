@@ -36,7 +36,13 @@ describe('engineV127 — musculoskeletal limitation end-to-end', () => {
     const result = generateWorkoutPrescriptionV127(answers, 'INTERMEDIATE');
     expect(result.status).toBe('INVALID_CONFIGURATION');
     if (result.status !== 'INVALID_CONFIGURATION') return;
-    expect(result.reasonCodes.every((code) => code.startsWith('MUSCULOSKELETAL_NO_SUBSTITUTE:'))).toBe(true);
+    // Fase 13: T009's Home sessions also include at least one of the 7
+    // still-unprofiled v1.27 Fase 2 closure exercises, so some reason codes
+    // now legitimately come from the profile-coverage fail-closed check
+    // too, not only from "no safe substitute" — both are real, honest
+    // fail-closed reasons.
+    expect(result.reasonCodes.every((code) =>
+      code.startsWith('MUSCULOSKELETAL_NO_SUBSTITUTE:') || code.startsWith('MUSCULOSKELETAL_PROFILE_COVERAGE_MISSING:'))).toBe(true);
   });
 
   it('§13: an "other" limitation alone materializes the template unchanged (no INVALID_CONFIGURATION retry loop)', () => {

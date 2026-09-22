@@ -28,6 +28,8 @@ import { isOperationBlockedByCircuitBreaker, loadWorkoutLifecycleCircuitBreakerC
 import { progressionPolicyModeFor, resolveWorkoutLifecycleQaMode } from './qaPolicy';
 import { logWarn } from '../lib/logger';
 import { validateMaterializedExecutionSubstitutions } from './exerciseSubstitution';
+import { buildPrescriptionInputSnapshot } from './prescriptionEngine/workoutLifecycle/prescriptionInputs';
+import { WORKOUT_LIFECYCLE_SCHEMA_VERSION } from './prescriptionEngine/workoutLifecycle/types';
 
 export const WORKOUT_LIFECYCLE_AUTHORITY_GRANT_ID = 'current';
 
@@ -1288,23 +1290,209 @@ export interface AuthorityCanonicalContent {
   targetTemplateContentHash: string;
 }
 
+/**
+ * Fase 16 (ADAPT/ACTIVATE v1.27 cutover) — the ADAPT/ACTIVATE counterpart to
+ * `initializeWorkoutProgramV127Handler`'s INITIALIZE fix. Both operations
+ * already sealed `workoutPrograms/{contentIdentity}` via Admin SDK
+ * (`sealTargetProgram`, called just above in the handler) BEFORE this
+ * function existed — the remaining gap was the CLIENT's own subsequent
+ * `saveAndActivateWorkoutProgram` transaction, which still wrote
+ * `programInstances`/`trainingCycles`/`workoutLifecycleState`/
+ * `workoutLifecycleEvents`/`workoutProgramState` (and re-validated the now-
+ * sealed `workoutPrograms` doc via `allow update`) through client-side
+ * Firestore Rules — the exact same per-request expression ceiling that
+ * broke INITIALIZE for a real v1.27 document. This performs that same
+ * "existing lifecycle, install new active content" transition entirely via
+ * Admin SDK, mirroring `saveAndActivateWorkoutProgram`'s own
+ * `shouldCreateInstance` branch (`src/services/workoutPrograms.ts`) field
+ * for field — ONLY for v1.27 target content; v2 is completely untouched
+ * (still grant + client transaction, exactly as before).
+ *
+ * Every field this reads off `merged` was ALREADY the authoritative value
+ * the client-side transaction would have used (validated by `validateRequest`
+ * above for ADAPT, or cross-checked byte-for-byte against the sealed
+ * `pendingEvolutions/current` document for ACTIVATE) — nothing here
+ * re-derives or loosens any check; it only moves WHO performs the write.
+ */
+async function persistLifecycleActivationV127(
+  uid: string,
+  firestore: Firestore,
+  merged: AuthorityRequest,
+  pendingData: DocumentData | null,
+): Promise<void> {
+  const userRoot = firestore.collection('users').doc(uid);
+  const targetProgramInstanceId = merged.targetProgramInstanceId as string;
+  const targetCycleId = merged.targetCycleId as string;
+  const targetContentIdentity = merged.targetContentIdentity as string;
+  const targetPrescriptionIdentity = merged.targetPrescriptionIdentity as string;
+  const sourceProgramInstanceId = merged.sourceProgramInstanceId as string;
+  const sourceCycleId = merged.sourceCycleId as string;
+  const prescriptionInputSnapshot = merged.targetPrescriptionInputSnapshot;
+  // True exactly when the client requested a `nextCycle` (ADAPT never does —
+  // "adaptation never starts a new TrainingCycle", `workoutLifecycleApplication.ts`'s
+  // own comment; ACTIVATE does for LEVEL_PROMOTION/CYCLE_EVOLUTION, not for
+  // MOTIVATIONAL_RENEWAL) — mirrors `saveAndActivateWorkoutProgram`'s own
+  // `cycleId: input.nextCycle ? cycleIdForOperation(...) : currentCycleId`
+  // derivation exactly, just read back from the already-computed target
+  // instead of re-deciding it.
+  const isNewCycle = targetCycleId !== sourceCycleId;
+  const eventType = merged.eventType as string;
+  const eventId = merged.eventId as string;
+  // Byte-for-byte the same ternary `saveAndActivateWorkoutProgram` already
+  // uses for `activationReason` (src/services/workoutPrograms.ts) — not a
+  // new policy decision, just relocated.
+  const activationReason = isNewCycle
+    ? 'EVOLUTION_ACTIVATION'
+    : merged.targetProgramSource === 'program_adaptation'
+      ? 'PROGRAM_ADAPTATION'
+      : merged.targetProgramSource === 'automatic_progression'
+        ? 'V1_AUTOMATIC_PROGRESSION'
+        : merged.targetProgramSource === 'manual_regeneration'
+          ? 'MANUAL_REGENERATION'
+          : 'AUTOMATIC_RECONCILIATION';
+  const progressionReason = pendingData?.type === 'LEVEL_PROMOTION'
+    ? 'EARNED_LEVEL_PROMOTION'
+    : pendingData?.type === 'CYCLE_EVOLUTION'
+      ? 'EARNED_CYCLE_EVOLUTION'
+      : 'EARNED_EVOLUTION';
+
+  const lifecycleRef = userRoot.collection('workoutLifecycleState').doc('current');
+  const instanceRef = userRoot.collection('programInstances').doc(targetProgramInstanceId);
+  const cycleRef = userRoot.collection('trainingCycles').doc(targetCycleId);
+  const eventRef = userRoot.collection('workoutLifecycleEvents').doc(eventId);
+  const stateRef = userRoot.collection('workoutProgramState').doc('active');
+  const currentInstanceRef = userRoot.collection('programInstances').doc(sourceProgramInstanceId);
+  const currentCycleRef = userRoot.collection('trainingCycles').doc(sourceCycleId);
+  const pendingRef = userRoot.collection('pendingEvolutions').doc('current');
+
+  await firestore.runTransaction(async (transaction) => {
+    const [lifecycleSnapshot, instanceSnapshot] = await Promise.all([
+      transaction.get(lifecycleRef), transaction.get(instanceRef),
+    ]);
+    if (instanceSnapshot.exists) {
+      // Idempotent retry (double tap / redelivered call) — this exact
+      // transition was already persisted; no second write.
+      return;
+    }
+    const lifecycleData = lifecycleSnapshot.data();
+    if (!lifecycleData || lifecycleData.activeProgramInstanceId !== sourceProgramInstanceId) {
+      throw new HttpsError('aborted', 'workout_lifecycle_v127_transition_source_changed');
+    }
+    const now = FieldValue.serverTimestamp();
+    // Mirrors `saveAndActivateWorkoutProgram`'s own `status: 'superseded'`
+    // write on the previously-active `workoutPrograms` doc — Admin SDK, so
+    // (unlike the client's own equivalent write) this is never subject to
+    // Firestore Rules' per-request expression ceiling regardless of that
+    // document's real size.
+    if (typeof lifecycleData.activeContentIdentity === 'string' && lifecycleData.activeContentIdentity !== targetContentIdentity) {
+      transaction.update(userRoot.collection('workoutPrograms').doc(lifecycleData.activeContentIdentity), {
+        status: 'superseded', updatedAt: now,
+      });
+    }
+    transaction.update(currentInstanceRef, { supersededAt: now, updatedAt: now });
+    transaction.set(instanceRef, {
+      programInstanceId: targetProgramInstanceId,
+      cycleId: targetCycleId,
+      contentIdentity: targetContentIdentity,
+      prescriptionIdentity: targetPrescriptionIdentity,
+      questionnaireId: merged.questionnaireId,
+      prescriptionInputSnapshot,
+      activatedAt: now,
+      supersededAt: null,
+      previousProgramInstanceId: sourceProgramInstanceId,
+      activationReason,
+      schemaVersion: WORKOUT_LIFECYCLE_SCHEMA_VERSION,
+      createdAt: now,
+      updatedAt: now,
+    });
+    if (isNewCycle) {
+      transaction.update(currentCycleRef, { status: 'COMPLETED', completedAt: now, updatedAt: now });
+      transaction.set(cycleRef, {
+        cycleId: targetCycleId,
+        level: merged.targetTrainingLevel,
+        cycleNumber: merged.targetCycleNumber,
+        status: 'ACTIVE',
+        origin: 'V2_NATIVE',
+        programInstanceId: targetProgramInstanceId,
+        previousProgramInstanceId: sourceProgramInstanceId,
+        startedAt: now,
+        eligibleAt: null,
+        completedAt: null,
+        completionReason: null,
+        progressionReason,
+        schemaVersion: WORKOUT_LIFECYCLE_SCHEMA_VERSION,
+        createdAt: now,
+        updatedAt: now,
+      });
+    } else {
+      transaction.update(currentCycleRef, {
+        programInstanceId: targetProgramInstanceId,
+        previousProgramInstanceId: sourceProgramInstanceId,
+        updatedAt: now,
+      });
+    }
+    transaction.set(eventRef, {
+      eventId,
+      type: eventType,
+      occurredAt: now,
+      cycleId: targetCycleId,
+      programInstanceId: targetProgramInstanceId,
+      idempotencyKey: merged.idempotencyKey,
+      payload: {
+        source: merged.targetProgramSource ?? null,
+        ...(pendingData?.type ? { evolutionType: pendingData.type } : {}),
+      },
+      schemaVersion: WORKOUT_LIFECYCLE_SCHEMA_VERSION,
+    });
+    transaction.set(stateRef, {
+      programId: targetContentIdentity, programInstanceId: targetProgramInstanceId, updatedAt: now,
+    });
+    transaction.update(lifecycleRef, {
+      activeProgramInstanceId: targetProgramInstanceId,
+      activeContentIdentity: targetContentIdentity,
+      activePrescriptionIdentity: targetPrescriptionIdentity,
+      ...(isNewCycle
+        ? {
+          currentCycleId: targetCycleId,
+          currentCycleNumber: merged.targetCycleNumber,
+          currentTrainingLevel: merged.targetTrainingLevel,
+        }
+        : {}),
+      updatedAt: now,
+    });
+    if (merged.operation === 'ACTIVATE') {
+      transaction.delete(pendingRef);
+    }
+  });
+}
+
 export async function authorizeWorkoutLifecycleMutationHandler(
   request: CallableRequest,
   firestore: Firestore = defaultDb,
 ): Promise<{
-  grantId: typeof WORKOUT_LIFECYCLE_AUTHORITY_GRANT_ID;
-  expiresAtMs: number;
+  grantId?: typeof WORKOUT_LIFECYCLE_AUTHORITY_GRANT_ID;
+  expiresAtMs?: number;
   /**
    * Present whenever the backend computed the canonical prescription itself
    * (INITIALIZE/MIGRATE/ADAPT/PREPARE — docs/workout-lifecycle/v2/decisions/
    * ADR-016_BACKEND_AUTHORITATIVE_PRESCRIPTION.md). In the common case this
    * is identical to whatever the client itself computed (same deterministic
    * engine, same catalogs), but it is still the sole persistence source for
-   * callers that install newly generated content. It diverges from the local
-   * candidate when the live exercise/template catalog changes between the
-   * client's read and this call.
+   * callers that install newly generated content. It diverges from the live
+   * exercise/template catalog changes between the client's read and this
+   * call.
    */
   canonical?: AuthorityCanonicalContent;
+  /**
+   * Fase 16 — present exclusively for v1.27 ADAPT/ACTIVATE: the entire
+   * lifecycle transition (see `persistLifecycleActivationV127` above) has
+   * already been persisted via Admin SDK. No grant is issued in this case —
+   * there is nothing left for the client to consume; `saveAndActivateWorkoutProgram`
+   * (`src/services/workoutPrograms.ts`) checks this field and, when present,
+   * skips its own Firestore transaction entirely and just re-reads the
+   * result.
+   */
+  persisted?: { programId: string; programInstanceId: string };
 }> {
   const uid = requireAuth(request);
   const data = parseRequest(request.data);
@@ -1331,6 +1519,27 @@ export async function authorizeWorkoutLifecycleMutationHandler(
   // bypassing the safety check.
   if (['INITIALIZE', 'MIGRATE', 'ACTIVATE', 'ADAPT'].includes(data.operation)) {
     await sealTargetProgram(uid, merged, firestore);
+  }
+  // Fase 16 — v1.27 ADAPT/ACTIVATE: perform the FULL lifecycle transition
+  // server-side (see `persistLifecycleActivationV127`'s own doc comment)
+  // instead of issuing a grant for the client to consume. v2 (and MIGRATE/
+  // RECOVER/PREPARE/DEFER/EARN/etc., all versions) are entirely unaffected —
+  // this branch is only ever reached for ADAPT/ACTIVATE with v1.27 target
+  // content.
+  if (data.operation === 'ADAPT' || data.operation === 'ACTIVATE') {
+    const targetVersions = plainObject(merged.targetPlan) ? merged.targetPlan.versions : null;
+    if (plainObject(targetVersions) && targetVersions.templateLibrary === '1.27.0') {
+      const pendingData = data.operation === 'ACTIVATE'
+        ? (await firestore.collection('users').doc(uid).collection('pendingEvolutions').doc('current').get()).data() ?? null
+        : null;
+      await persistLifecycleActivationV127(uid, firestore, merged, pendingData);
+      return {
+        persisted: {
+          programId: merged.targetContentIdentity as string,
+          programInstanceId: merged.targetProgramInstanceId as string,
+        },
+      };
+    }
   }
   const now = Timestamp.now();
   const expiresAt = Timestamp.fromMillis(now.toMillis() + 60_000);
@@ -1360,4 +1569,274 @@ export async function authorizeWorkoutLifecycleMutationHandler(
     expiresAtMs: expiresAt.toMillis(),
     ...(canonicalContent ? { canonical: canonicalContent } : {}),
   };
+}
+
+/**
+ * Fase 15 (v1.27 INITIALIZE cutover) — the ONE-CALL, fully backend-persisted
+ * alternative to `authorizeWorkoutLifecycleMutationHandler`'s
+ * grant-then-client-writes pattern, for exactly one case: a brand-new
+ * account's very first v1.27 program. `firestore-tests/
+ * workoutPrograms.rules.test.ts`'s Fase 14 investigation proved that a real
+ * v1.27 document (many sessions + a full decision trace) makes
+ * `workoutProgramCommonValid`'s Firestore Rules evaluation exceed the
+ * platform's per-request expression ceiling — no amount of Rules-side
+ * restructuring fixes this, because the cost is proportional to the
+ * document's own size, not to which validations run. The fix is
+ * architectural, not a Rules tweak: for this one case, the client never
+ * writes `workoutPrograms` (or any of the other lifecycle-bootstrap
+ * documents) directly at all — this callable does, via the Admin SDK, which
+ * is not subject to Security Rules or their expression budget.
+ *
+ * Reuses, never re-implements:
+ *   - `generateCanonicalPlan`/`generateAuthoritativePlan` (the SAME engine
+ *     call `validateRequest`'s INITIALIZE branch and every other lifecycle
+ *     operation already use — no second engine, no v1.27-specific
+ *     generation logic exists anywhere but there).
+ *   - `assertPlanSafe` (the SAME fail-closed exercise/limitation-profile
+ *     check every other content-installing operation already runs).
+ *   - `sealTargetProgram` (the SAME idempotent Admin-SDK
+ *     `workoutPrograms/{contentIdentity}` writer INITIALIZE/MIGRATE/ACTIVATE/
+ *     ADAPT already use today, just reached one step earlier — it no longer
+ *     needs a grant in between).
+ *   - `canonicalContentIdentity`/`lifecycleStableHash`/`lifecycleEventId` —
+ *     the exact same deterministic-id scheme the client's own
+ *     `contentIdentityFor`/`programInstanceIdForOperation` mirror, so a
+ *     program created here is byte-identical in identity to one the legacy
+ *     client-transaction path would have produced for the same inputs.
+ *
+ * Does NOT reuse `validateRequest`'s INITIALIZE branch directly — that
+ * branch throws immediately when `workoutLifecycleState/current` already
+ * exists (correct for the grant flow, where the client's own transaction
+ * provides retry/idempotency handling afterward). This callable has no such
+ * follow-up transaction, so it performs its OWN idempotency comparison
+ * instead of an unconditional early throw — see the retry handling below.
+ *
+ * Scope, deliberately narrow: ONLY the true first-ever INITIALIZE case
+ * (no existing `workoutLifecycleState/current`, no existing
+ * `workoutProgramState/active`) is handled end-to-end here. Any other
+ * shape — an existing V1 baseline needing MIGRATE, an existing V2/v1.27
+ * lifecycle needing ADAPT/PREPARE/RECOVER, or the active generation version
+ * resolving to v2 instead of v1.27 — throws `workout_lifecycle_v127_
+ * initialize_not_applicable`, a deliberately distinguishable error the
+ * client (`src/services/workoutPrograms.ts`'s `tryInitializeWorkoutProgramV127`)
+ * catches and falls back to the existing, unmodified, unaffected
+ * grant-based flow for. v2's INITIALIZE, and every non-INITIALIZE
+ * operation for both versions, are completely untouched by this function.
+ */
+const INITIALIZE_V127_SOURCES = [
+  'onboarding', 'manual_regeneration', 'automatic_progression',
+  'automatic_reconciliation', 'evolution_activation', 'program_adaptation',
+] as const;
+
+export async function initializeWorkoutProgramV127Handler(
+  request: CallableRequest,
+  firestore: Firestore = defaultDb,
+): Promise<{
+  status: 'SUCCESS';
+  programId: string;
+  programInstanceId: string;
+}> {
+  const uid = requireAuth(request);
+  const data = request.data;
+  // `source` is optional and defaults to 'onboarding'. Validated against the
+  // exact same `WorkoutProgramSource` enum `saveAndActivateWorkoutProgram`/
+  // `isProgramSnapshot` already accept — this is purely an audit/analytics
+  // label written onto the sealed `workoutPrograms` doc and the
+  // `PROGRAM_STARTED` event's payload, never read by any authorization
+  // decision, so accepting the same bounded set every other write path
+  // already accepts is not a new trust surface. `saveAndActivateWorkoutProgram`'s
+  // own operation resolution (never `source`-gated) is what decides whether
+  // a call is genuinely a first-ever INITIALIZE in the first place — this
+  // callable only needs the label to be well-formed.
+  if (!plainObject(data) || !boundedId(data.questionnaireId) || !Number.isInteger(data.questionnaireVersion)
+    || (data.source !== undefined
+      && !INITIALIZE_V127_SOURCES.includes(data.source as typeof INITIALIZE_V127_SOURCES[number]))) {
+    throw new HttpsError('invalid-argument', 'invalid_initialize_v127_request');
+  }
+  const questionnaireId = data.questionnaireId;
+  const questionnaireVersion = data.questionnaireVersion as number;
+  const source = (data.source as typeof INITIALIZE_V127_SOURCES[number] | undefined) ?? 'onboarding';
+
+  const circuitBreakerConfig = await loadWorkoutLifecycleCircuitBreakerConfig(firestore);
+  if (isOperationBlockedByCircuitBreaker('INITIALIZE', circuitBreakerConfig)) {
+    throw new HttpsError('unavailable', 'workout_lifecycle_circuit_breaker_open');
+  }
+
+  // Central default resolves the generation version the exact same way
+  // `validateRequest`'s own INITIALIZE branch does for a brand-new
+  // lifecycle — never anything the client requests. If it is not v1.27
+  // (e.g. the rollout default has been flipped back), this endpoint simply
+  // does not apply; the caller falls back to the existing v2-capable flow.
+  if (resolveAuthoritativeGenerationVersionForNewLifecycle() !== 'v1.27') {
+    throw new HttpsError('failed-precondition', 'workout_lifecycle_v127_initialize_not_applicable');
+  }
+
+  const userRoot = firestore.collection('users').doc(uid);
+  const questionnaireSnapshot = await userRoot.collection('questionnaires').doc(questionnaireId).get();
+  const answers = questionnaireSnapshot.data()?.answers;
+  if (!questionnaireSnapshot.exists || !plainObject(answers) || questionnaireSnapshot.data()?.version !== questionnaireVersion) {
+    throw new HttpsError('failed-precondition', 'questionnaire_missing');
+  }
+  const rawLevel = answers.level;
+  const currentTrainingLevel: CurrentTrainingLevel =
+    rawLevel === 'never_or_starting' || rawLevel === 'beginner' || rawLevel === 'beg' ? 'BEGINNER'
+      : rawLevel === 'intermediate' || rawLevel === 'int' ? 'INTERMEDIATE'
+        : rawLevel === 'advanced' || rawLevel === 'adv' || rawLevel === 'elite' ? 'ADVANCED'
+          : (() => { throw new HttpsError('failed-precondition', 'starting_level_unknown'); })();
+
+  // Same Admin-SDK-write-safe `undefined`-stripping `generateAuthoritativePlan`
+  // already applies to the plan itself (its own doc comment) — built
+  // in-memory here (never round-tripped through JSON-over-the-wire like the
+  // legacy client-supplied snapshot was), so an absent optional answer
+  // (e.g. `primaryPlace`) surfaces as a literal `undefined`, which the
+  // Admin SDK rejects outright on write.
+  const prescriptionInputSnapshot = JSON.parse(JSON.stringify(buildPrescriptionInputSnapshot({
+    answers: answers as unknown as Parameters<typeof buildPrescriptionInputSnapshot>[0]['answers'],
+    currentTrainingLevel,
+    source: 'QUESTIONNAIRE_BASELINE',
+  }))) as ReturnType<typeof buildPrescriptionInputSnapshot>;
+
+  const { plan, templateMetadata } = await generateCanonicalPlan(
+    answers as unknown as QuestionnaireAnswers, firestore, 'v1.27', currentTrainingLevel,
+  );
+  const authorityRequestForSafety = {
+    operation: 'INITIALIZE',
+    targetPlan: plan as unknown as Record<string, unknown>,
+    targetPrescriptionInputSnapshot: prescriptionInputSnapshot as unknown as Record<string, unknown>,
+  } as AuthorityRequest;
+  await assertPlanSafe(authorityRequestForSafety, firestore);
+
+  const targetContentIdentity = canonicalContentIdentity({
+    questionnaireId, questionnaireVersion, plan, templateMetadata,
+  });
+  const canonicalOperationKey = `v2-initial:${targetContentIdentity}`;
+  const targetProgramInstanceId = `wpi_${lifecycleStableHash(canonicalOperationKey)}`;
+  const targetCycleId = `cyc_${lifecycleStableHash(canonicalOperationKey)}`;
+  const eventId = lifecycleEventId('PROGRAM_STARTED', canonicalOperationKey);
+
+  const lifecycleRef = userRoot.collection('workoutLifecycleState').doc('current');
+  const legacyStateRef = userRoot.collection('workoutProgramState').doc('active');
+  const [lifecycleSnapshot, legacyStateSnapshot] = await Promise.all([
+    lifecycleRef.get(), legacyStateRef.get(),
+  ]);
+  if (lifecycleSnapshot.exists) {
+    const lifecycleData = lifecycleSnapshot.data()!;
+    if (lifecycleData.activeContentIdentity === targetContentIdentity
+      && lifecycleData.activeProgramInstanceId === targetProgramInstanceId) {
+      // Idempotent retry (double tap / client timeout that actually
+      // succeeded / re-delivered call): the exact same deterministic
+      // content this call would produce is already the active program —
+      // report success without writing anything a second time.
+      return { status: 'SUCCESS', programId: targetContentIdentity, programInstanceId: targetProgramInstanceId };
+    }
+    // A DIFFERENT program is already active for this lifecycle — this is
+    // not a genuine first INITIALIZE (most likely ADAPT/PREPARE/RECOVER
+    // territory instead). Not an error the user needs to see: the caller
+    // falls back to the existing grant-based flow, which already knows how
+    // to handle every one of those cases correctly.
+    throw new HttpsError('failed-precondition', 'workout_lifecycle_v127_initialize_not_applicable');
+  }
+  if (legacyStateSnapshot.exists) {
+    // Pre-lifecycle V1 pointer present with no V2/v1.27 lifecycle yet — a
+    // MIGRATE, which always stays v2 regardless of the central default
+    // (see `resolveAuthoritativeGenerationVersionForNewLifecycle`'s own
+    // doc comment). Not this endpoint's concern; fall back.
+    throw new HttpsError('failed-precondition', 'workout_lifecycle_v127_initialize_not_applicable');
+  }
+
+  // Same idempotent Admin-SDK writer INITIALIZE/MIGRATE/ACTIVATE/ADAPT
+  // already use via `authorizeWorkoutLifecycleMutationHandler` — reached
+  // one step earlier here, with no grant in between.
+  await sealTargetProgram(uid, {
+    targetContentIdentity,
+    targetPlan: plan as unknown as Record<string, unknown>,
+    targetPrescriptionIdentity: plan.planId,
+    questionnaireId,
+    questionnaireVersion,
+    targetProgramSource: source,
+    targetTemplateVersion: templateMetadata.version,
+    targetTemplateSourceVersion: templateMetadata.sourceVersion,
+    targetTemplateContentHash: templateMetadata.contentHash,
+  } as AuthorityRequest, firestore);
+
+  await firestore.runTransaction(async (transaction) => {
+    const [txLifecycleSnapshot, txLegacyStateSnapshot] = await Promise.all([
+      transaction.get(lifecycleRef), transaction.get(legacyStateRef),
+    ]);
+    if (txLifecycleSnapshot.exists) {
+      const lifecycleData = txLifecycleSnapshot.data()!;
+      if (lifecycleData.activeContentIdentity === targetContentIdentity
+        && lifecycleData.activeProgramInstanceId === targetProgramInstanceId) {
+        return;
+      }
+      throw new HttpsError('aborted', 'workout_lifecycle_v127_initialize_race_lost');
+    }
+    if (txLegacyStateSnapshot.exists) {
+      throw new HttpsError('aborted', 'workout_lifecycle_v127_initialize_race_lost');
+    }
+    const now = FieldValue.serverTimestamp();
+    transaction.set(userRoot.collection('programInstances').doc(targetProgramInstanceId), {
+      programInstanceId: targetProgramInstanceId,
+      cycleId: targetCycleId,
+      contentIdentity: targetContentIdentity,
+      prescriptionIdentity: plan.planId,
+      questionnaireId,
+      prescriptionInputSnapshot,
+      activatedAt: now,
+      supersededAt: null,
+      previousProgramInstanceId: null,
+      activationReason: 'INITIAL_PROGRAM',
+      schemaVersion: WORKOUT_LIFECYCLE_SCHEMA_VERSION,
+      createdAt: now,
+      updatedAt: now,
+    });
+    transaction.set(userRoot.collection('trainingCycles').doc(targetCycleId), {
+      cycleId: targetCycleId,
+      level: currentTrainingLevel,
+      cycleNumber: 1,
+      status: 'ACTIVE',
+      origin: 'V2_NATIVE',
+      programInstanceId: targetProgramInstanceId,
+      previousProgramInstanceId: null,
+      startedAt: now,
+      eligibleAt: null,
+      completedAt: null,
+      completionReason: null,
+      progressionReason: 'INITIAL_PRESCRIPTION',
+      schemaVersion: WORKOUT_LIFECYCLE_SCHEMA_VERSION,
+      createdAt: now,
+      updatedAt: now,
+    });
+    transaction.set(lifecycleRef, {
+      startingLevel: currentTrainingLevel,
+      currentTrainingLevel,
+      currentCycleId: targetCycleId,
+      currentCycleNumber: 1,
+      activeProgramInstanceId: targetProgramInstanceId,
+      activeContentIdentity: targetContentIdentity,
+      activePrescriptionIdentity: plan.planId,
+      initializationOrigin: 'V2_NATIVE',
+      historyCompleteFrom: now,
+      schemaVersion: WORKOUT_LIFECYCLE_SCHEMA_VERSION,
+      createdAt: now,
+      updatedAt: now,
+    });
+    transaction.set(userRoot.collection('workoutLifecycleEvents').doc(eventId), {
+      eventId,
+      type: 'PROGRAM_STARTED',
+      occurredAt: now,
+      cycleId: targetCycleId,
+      programInstanceId: targetProgramInstanceId,
+      idempotencyKey: canonicalOperationKey,
+      payload: { source },
+      schemaVersion: WORKOUT_LIFECYCLE_SCHEMA_VERSION,
+    });
+    transaction.set(legacyStateRef, {
+      programId: targetContentIdentity,
+      programInstanceId: targetProgramInstanceId,
+      updatedAt: now,
+    });
+  });
+
+  return { status: 'SUCCESS', programId: targetContentIdentity, programInstanceId: targetProgramInstanceId };
 }

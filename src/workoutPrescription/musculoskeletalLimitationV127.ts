@@ -1,5 +1,6 @@
 import {
   AVOID_RUNTIME_IDS_BY_REGION_V127,
+  hasReliableLimitationProfileCoverageV127,
   isRuntimeExerciseExecutableV127,
   SUBSTITUTION_CANDIDATES_BY_RUNTIME_ID_V127,
   type MusculoskeletalLimitationRegionV127,
@@ -30,7 +31,12 @@ export type RejectedCandidateReasonV127 =
   | 'CANDIDATE_VIOLATES_ACTIVE_LIMITATION'
   | 'CANDIDATE_IS_SELF'
   | 'CANDIDATE_DUPLICATE_IN_SESSION'
-  | 'CANDIDATE_UNSAFE_DOSE';
+  | 'CANDIDATE_UNSAFE_DOSE'
+  // Fase 13 — the candidate itself has no reviewed, approved limitation
+  // profile (`hasReliableLimitationProfileCoverageV127`) — never sealed by
+  // `assertPlanSafe` either way, so it can never be accepted as a
+  // substitute while a region is active.
+  | 'CANDIDATE_MISSING_LIMITATION_PROFILE';
 
 export interface RejectedCandidateV127 {
   exerciseId: string;
@@ -53,7 +59,13 @@ export type MusculoskeletalLimitationDecisionV127 =
       exerciseId: string;
       vetoedByRegions: MusculoskeletalLimitationRegionV127[];
       outcome: 'BLOCKED';
-      reasonCode: 'NO_SUBSTITUTION_MAP_ENTRY' | 'NO_VALID_CANDIDATE';
+      // Fase 13 — `PROFILE_COVERAGE_MISSING` is distinct from the other two:
+      // it fires even when `vetoedByRegions` is EMPTY (the exercise was
+      // never vetoed by the user's active region at all) — a region is
+      // simply active, and this exercise has no reviewed, approved
+      // limitation profile, so `assertPlanSafe` could never seal it either
+      // way while that region stays active.
+      reasonCode: 'NO_SUBSTITUTION_MAP_ENTRY' | 'NO_VALID_CANDIDATE' | 'PROFILE_COVERAGE_MISSING';
       rejectedCandidates: RejectedCandidateV127[];
     };
 
@@ -147,6 +159,7 @@ function validateCandidateV127(input: {
   originalRuntimeId: string;
   usedInSession: ReadonlySet<string>;
   isExecutable: (runtimeId: string) => boolean;
+  hasProfileCoverage: (runtimeId: string) => boolean;
 }): RejectedCandidateReasonV127 | null {
   // Identity resolution and "existing_library only" are already enforced
   // when candidates are loaded (canonicalMusculoskeletalLimitationV127.ts)
@@ -163,6 +176,9 @@ function validateCandidateV127(input: {
   if (!input.candidate.environments.includes(input.environment)) return 'CANDIDATE_ENVIRONMENT_INCOMPATIBLE';
   if (input.effectiveAvoid.has(input.candidate.runtimeId)) return 'CANDIDATE_VIOLATES_ACTIVE_LIMITATION';
   if (input.usedInSession.has(input.candidate.runtimeId)) return 'CANDIDATE_DUPLICATE_IN_SESSION';
+  // Fase 13 — a region is active for this user; the candidate itself must
+  // be one `assertPlanSafe` could actually seal too.
+  if (!input.hasProfileCoverage(input.candidate.runtimeId)) return 'CANDIDATE_MISSING_LIMITATION_PROFILE';
   return null;
 }
 
@@ -186,12 +202,15 @@ export interface MusculoskeletalLimitationDataV127 {
   avoidByRegion: Readonly<Record<MusculoskeletalLimitationRegionV127, ReadonlySet<string>>>;
   candidatesByRuntimeId: ReadonlyMap<string, SubstitutionCandidatesV127>;
   isExecutable: (runtimeId: string) => boolean;
+  /** Fase 13 — see `canonicalMusculoskeletalLimitationV127.ts`'s `hasReliableLimitationProfileCoverageV127`. */
+  hasProfileCoverage: (runtimeId: string) => boolean;
 }
 
 const DEFAULT_DATA: MusculoskeletalLimitationDataV127 = {
   avoidByRegion: AVOID_RUNTIME_IDS_BY_REGION_V127,
   candidatesByRuntimeId: SUBSTITUTION_CANDIDATES_BY_RUNTIME_ID_V127,
   isExecutable: isRuntimeExerciseExecutableV127,
+  hasProfileCoverage: hasReliableLimitationProfileCoverageV127,
 };
 
 /**
@@ -225,6 +244,21 @@ export function applyMusculoskeletalLimitationV127(
       const vetoedByRegions = activeRegions.filter((region) => data.avoidByRegion[region].has(originalRuntimeId));
       if (!vetoedByRegions.length) {
         usedInSession.add(originalRuntimeId);
+        // Fase 13 — a region is active for this user; even an exercise no
+        // region vetoes must still have a reviewed, approved limitation
+        // profile before it can ever reach `assertPlanSafe` — never
+        // inferred, never silently allowed through.
+        if (!data.hasProfileCoverage(originalRuntimeId)) {
+          decisions.push({
+            sessionIndex,
+            exerciseId: originalRuntimeId,
+            vetoedByRegions: [],
+            outcome: 'BLOCKED',
+            reasonCode: 'PROFILE_COVERAGE_MISSING',
+            rejectedCandidates: [],
+          });
+          reasonCodes.push(`MUSCULOSKELETAL_PROFILE_COVERAGE_MISSING:${sessionIndex}:${originalRuntimeId}`);
+        }
         return exercise;
       }
 
@@ -238,7 +272,8 @@ export function applyMusculoskeletalLimitationV127(
           const tierCandidates = tier === 'A' ? candidateGroup.A : tier === 'B' ? candidateGroup.B : candidateGroup.C;
           for (const candidate of tierCandidates) {
             const rejectionReason = validateCandidateV127({
-              candidate, environment, effectiveAvoid, originalRuntimeId, usedInSession, isExecutable: data.isExecutable,
+              candidate, environment, effectiveAvoid, originalRuntimeId, usedInSession,
+              isExecutable: data.isExecutable, hasProfileCoverage: data.hasProfileCoverage,
             });
             if (rejectionReason) {
               rejectedCandidates.push({ exerciseId: candidate.runtimeId, tier, reasonCode: rejectionReason });

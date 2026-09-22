@@ -137,11 +137,27 @@ class FirestorePublicationRepository implements LimitationDatasetPublicationRepo
       }
       const nextById = new Map(input.nextProfiles.map((entry) => [entry.exerciseId, entry.limitationProfile]));
       const nextCatalogById = new Map(input.nextResolverCatalog.map((entry) => [entry.id, entry]));
+      // Fase 13 §3 — the window between `seed:exercises` and
+      // `seed:limitation-profiles` existed only because this loop used
+      // `transaction.update()`, which throws `NOT_FOUND` for a document
+      // that doesn't exist yet. `transaction.set(ref, body, {merge: true})`
+      // behaves IDENTICALLY to `update` for an EXISTING doc (touches only
+      // the fields listed, same as before) but CREATES the doc instead of
+      // throwing when it's missing — so a brand-new exercise id can now be
+      // published in the SAME atomic transaction as its limitation
+      // profile/resolver-catalog fields, never in a separate prior step.
+      // `exerciseSnapshots` (already read above, same order as
+      // `exerciseRefs`) tells us which case applies per document; only a
+      // genuinely NEW document needs its identity fields
+      // (id/slug/name/instructions/execution/metadata) seeded here — an
+      // existing one keeps them completely untouched, exactly as today.
+      const existingIds = new Set(exerciseSnapshots.filter((snapshot) => snapshot.exists).map((snapshot) => snapshot.id));
+      const exercisesSeedById = new Map(EXERCISES_SEED.map((exercise) => [exercise.id, exercise]));
       for (const ref of exerciseRefs) {
         const profile = nextById.get(ref.id);
         const catalog = nextCatalogById.get(ref.id);
         if (!catalog) throw new Error(`LIMITATION_RESOLVER_CATALOG_EXERCISE_MISSING:${ref.id}`);
-        transaction.update(ref, {
+        const catalogFields = {
           limitationProfile: profile ?? FieldValue.delete(),
           status: catalog.status,
           difficulty: catalog.difficulty,
@@ -151,7 +167,19 @@ class FirestorePublicationRepository implements LimitationDatasetPublicationRepo
           bodyPosition: catalog.bodyPosition ?? FieldValue.delete(),
           availability: catalog.availability,
           substitution: catalog.substitution,
-        });
+        };
+        if (existingIds.has(ref.id)) {
+          transaction.set(ref, catalogFields, { merge: true });
+          continue;
+        }
+        const seed = exercisesSeedById.get(ref.id);
+        if (!seed) throw new Error(`LIMITATION_PUBLICATION_NEW_EXERCISE_NOT_IN_SEED:${ref.id}`);
+        const { id: _id, ...seedIdentityFields } = seed;
+        transaction.set(ref, {
+          ...seedIdentityFields,
+          ...catalogFields,
+          metadata: { version: 1, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() },
+        }, { merge: true });
       }
       transaction.set(activeRef, {
         ...input.nextIdentity,

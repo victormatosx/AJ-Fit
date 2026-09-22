@@ -16,6 +16,14 @@ import {
   Timestamp,
   updateDoc,
 } from 'firebase/firestore';
+import { generateWorkoutPrescriptionV127 } from '../src/workoutPrescription/engineV127';
+import type { CurrentTrainingLevel } from '../src/workoutLifecycle/types';
+import type { QuestionnaireAnswers } from '../src/workoutPrescription/types';
+import { localWorkoutTemplateDocumentV127 } from '../functions/src/workoutLifecycle/templateDocumentV127';
+import {
+  CANONICAL_LIMITATION_DATASET_HASH as V127_LIMITATION_DATASET_HASH,
+  CANONICAL_LIMITATION_DATASET_VERSION as V127_LIMITATION_DATASET_VERSION,
+} from '../src/workoutPrescription/limitationDataset';
 
 const PROJECT_ID = 'ajfit-rules-test';
 const UID = 'alice';
@@ -120,6 +128,54 @@ function fixedProgramDocument(programId = 'wpg_fixedmode') {
   return { ...phase2ProgramDocument(programId), scheduleMode: 'fixed' };
 }
 
+/**
+ * Fase 12 — a program document built from a REAL `generateWorkoutPrescriptionV127`
+ * result, not a v2 fixture with fields overridden by hand. `versions`,
+ * `sessions`, `trace`, `planId` all come straight from the engine (JSON
+ * round-tripped, matching `authorizeMutation.ts`'s own
+ * `JSON.parse(JSON.stringify(result.plan))` normalization before sealing).
+ * `templateVersion`/`templateSourceVersion`/`templateContentHash` come from
+ * `localWorkoutTemplateDocumentV127` — the same local, Firestore-free
+ * metadata the real backend/client compute — never a fabricated hash.
+ */
+function v127Answers(overrides: Partial<QuestionnaireAnswers> = {}): QuestionnaireAnswers {
+  return {
+    sex: 'm', goal: 'gain_muscle', level: 'intermediate', days: 2, duration: '60', place: 'gym',
+    trainingDays: [], equipment: [], style: [], limits: ['none'], muscleFocus: [],
+    specialConditions: ['none'],
+    pregnancyScreening: null, postpartumScreening: null, functionalScreening: null,
+    lipedemaScreening: null, dizzinessScreening: null, postSurgicalScreening: null,
+    medicalRestrictionScreening: null, scheduleMode: 'fixed',
+    ...overrides,
+  } as QuestionnaireAnswers;
+}
+
+function v127ProgramDocument(
+  programId: string,
+  answers: QuestionnaireAnswers,
+  currentTrainingLevel: CurrentTrainingLevel,
+  overrides: Record<string, unknown> = {},
+) {
+  const result = generateWorkoutPrescriptionV127(answers, currentTrainingLevel);
+  if (result.status !== 'SUCCESS') throw new Error(`v127ProgramDocument fixture generation failed: ${result.status}`);
+  const plan = JSON.parse(JSON.stringify(result.plan)) as typeof result.plan;
+  const template = localWorkoutTemplateDocumentV127(plan.templateId);
+  return {
+    programId, planId: plan.planId, prescriptionId: plan.planId,
+    templateId: plan.templateId, templateVersion: template.version,
+    templateSourceVersion: template.sourceVersion, templateContentHash: template.contentHash,
+    questionnaireId: 'q1', questionnaireVersion: 1, status: 'active', source: 'onboarding',
+    requestedDays: plan.requestedDays, prescribedStructuredDays: plan.prescribedStructuredDays,
+    prescribedTrainingFrequency: plan.prescribedTrainingFrequency,
+    scheduleMode: plan.scheduleMode, availability: plan.availability, weeklySchedule: plan.weeklySchedule,
+    population: plan.population, environment: plan.environment, goalFamily: plan.goalFamily, split: plan.split,
+    limitationDatasetVersion: plan.limitationDatasetVersion, limitationDatasetHash: plan.limitationDatasetHash,
+    sessions: plan.sessions, versions: plan.versions, trace: plan.trace,
+    createdAt: serverTimestamp(), activatedAt: serverTimestamp(), updatedAt: serverTimestamp(),
+    ...overrides,
+  };
+}
+
 beforeAll(async () => {
   testEnv = await initializeTestEnvironment({
     projectId: PROJECT_ID,
@@ -196,33 +252,88 @@ describe('workoutTemplates', () => {
 });
 
 describe('workoutPrograms', () => {
-  it.each(['T090', 'T091', 'T102'])('accepts future template ID %s and schema 1.27.0', async (id) => {
-    await testEnv.withSecurityRulesDisabled(async (context) => {
-      await setDoc(doc(context.firestore(), 'workoutTemplates', id), {
-        ...v2TemplateDocument(), id, sourceVersion: '1.27.0',
+  /**
+   * Fase 12 — v1.27's T001-T102 canonical library is bundled/local only and
+   * deliberately never seeded to `workoutTemplates` (§2 of the Fase 12
+   * request). These fixtures come from a REAL `generateWorkoutPrescriptionV127`
+   * call (`v127ProgramDocument`), never a v2 fixture with fields overridden
+   * by hand — and `limitationDatasetState/active` is seeded with the REAL
+   * bundled identity constants, not the generic v2 test fixture values.
+   */
+  describe('v1.27 (Fase 15 — client-direct create blocked; backend-authoritative via initializeWorkoutProgramV127)', () => {
+    beforeEach(async () => {
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        await setDoc(doc(context.firestore(), 'limitationDatasetState', 'active'), {
+          datasetVersion: V127_LIMITATION_DATASET_VERSION,
+          limitationDatasetHash: V127_LIMITATION_DATASET_HASH,
+        });
       });
     });
-    const programId = `wpg_future_${id}`;
-    const program = fixedProgramDocument(programId);
-    await assertSucceeds(createAndActivate(UID, programId, {
-      ...program,
-      templateId: id,
-      templateSourceVersion: '1.27.0',
-      versions: { ...program.versions, templateLibrary: '1.27.0' },
-    }));
-  });
 
-  it('rejects T103 in a program even if a template document exists', async () => {
-    await testEnv.withSecurityRulesDisabled(async (context) => {
-      await setDoc(doc(context.firestore(), 'workoutTemplates', 'T103'), {
-        ...v2TemplateDocument(), id: 'T103', sourceVersion: '1.27.0',
+    /**
+     * Fase 14 proved a real v1.27 document (many sessions + a full decision
+     * trace) makes `workoutProgramCommonValid`'s Rules evaluation exceed
+     * Firestore's per-request expression ceiling — not fixable by
+     * restructuring the Rules themselves. Fase 15's fix is architectural:
+     * `workoutPrograms/{programId}` for templateLibrary '1.27.0' is now
+     * created exclusively by the `initializeWorkoutProgramV127` Cloud
+     * Function via the Admin SDK (functions/src/workoutLifecycle/
+     * authorizeMutation.ts), which bypasses Rules entirely. These tests
+     * prove the client-direct write path is rejected outright — even for a
+     * perfectly well-formed, real-engine-generated plan — never that it
+     * once again exceeds the expression ceiling (that failure mode is gone
+     * for v1.27 create: the new guard rejects it before
+     * `workoutProgramCommonValid` is even reached).
+     */
+    it.each([
+      ['T001', () => v127Answers({ sex: 'm', goal: 'gain_muscle', level: 'intermediate', days: 2, place: 'gym' }), 'INTERMEDIATE' as CurrentTrainingLevel],
+      ['T091', () => v127Answers({ days: 2, place: 'gym', level: 'beginner' }), 'BEGINNER' as CurrentTrainingLevel],
+      ['T102', () => v127Answers({ days: 7, place: 'home', level: 'beginner', equipment: ['bodyweight', 'dumbbells', 'bands', 'bench_or_box'] }), 'BEGINNER' as CurrentTrainingLevel],
+    ] as const)('rejects a real engineV127 plan for %s written directly by the client, even though it is otherwise perfectly valid', async (expectedId, buildAnswers, level) => {
+      const templateSnapshot = await getDoc(doc(dbFor(UID), 'workoutTemplates', expectedId));
+      expect(templateSnapshot.exists()).toBe(false);
+
+      const programId = `wpg_v127_${expectedId.toLowerCase()}`;
+      const program = v127ProgramDocument(programId, buildAnswers(), level);
+      expect(program.templateId).toBe(expectedId);
+      expect(program.versions).toEqual({
+        templateLibrary: '1.27.0', selectionEngine: '3.0.0', safetyRules: '1.0.0',
+        modifierRules: '3.0.0', compositionEngine: '3.0.0', limitationResolver: '2.0.0',
       });
+      await assertFails(createAndActivate(UID, programId, program));
     });
-    const program = fixedProgramDocument('wpg_future_bad');
-    await assertFails(createAndActivate(UID, 'wpg_future_bad', {
-      ...program, templateId: 'T103', templateSourceVersion: '1.27.0',
-      versions: { ...program.versions, templateLibrary: '1.27.0' },
-    }));
+
+    it.each([
+      ['compositionEngine', '2.1.0'], // old (now-invalid) v1.27 value this Fase 12 fixed
+      ['selectionEngine', '1.0.0'],   // v2-only value
+      ['modifierRules', '2.0.0'],     // v2-only value
+    ] as const)('also rejects an invalid %s (%s) for templateLibrary 1.27.0 (belt-and-suspenders, same outcome as any v1.27 create)', async (field, invalidValue) => {
+      const programId = `wpg_v127_bad_${field}`;
+      const base = v127ProgramDocument(programId, v127Answers(), 'INTERMEDIATE');
+      const program = { ...base, versions: { ...base.versions, [field]: invalidValue } };
+      await assertFails(createAndActivate(UID, programId, program));
+    });
+
+    it('still rejects T103 (outside the T001-T102 canonical range) even with correct v1.27 versions', async () => {
+      const programId = 'wpg_v127_t103';
+      const program = v127ProgramDocument(programId, v127Answers(), 'INTERMEDIATE', { templateId: 'T103' });
+      await assertFails(createAndActivate(UID, programId, program));
+    });
+
+    it('v2 (unaffected by the Fase 15 v1.27 create guard) STILL requires a real workoutTemplates document to exist', async () => {
+      const program = v2ProgramDocument('wpg_v2_missing_template');
+      await assertFails(createAndActivate(UID, 'wpg_v2_missing_template', { ...program, templateId: 'T004' }));
+    });
+
+    it('the calling account cannot read another account\'s v1.27 program (ownership unaffected by this change)', async () => {
+      const programId = 'wpg_v127_owner_check';
+      await testEnv.withSecurityRulesDisabled(async (context) => {
+        await setDoc(doc(context.firestore(), 'users', UID, 'workoutPrograms', programId),
+          v127ProgramDocument(programId, v127Answers(), 'INTERMEDIATE'));
+      });
+      await assertSucceeds(getDoc(doc(dbFor(UID), 'users', UID, 'workoutPrograms', programId)));
+      await assertFails(getDoc(doc(dbFor(OTHER_UID), 'users', UID, 'workoutPrograms', programId)));
+    });
   });
 
   it('accepts a valid flexible snapshot and rejects invalid mode-specific calendar shapes', async () => {

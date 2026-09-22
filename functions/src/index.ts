@@ -26,7 +26,7 @@ import { REVENUECAT_ADMIN_GRANTS_API_KEY } from './billing/revenueCatGrants';
 import { adminGetCouponHandler, adminListCouponsHandler } from './adminCoupons/adminCoupons';
 import { recordWorkoutLifecycleTelemetryHandler } from './telemetry/workoutLifecycleTelemetry';
 import { onTrustedWorkoutLifecycleEventCreated } from './telemetry/trustedWorkoutLifecycleTelemetry';
-import { authorizeWorkoutLifecycleMutationHandler } from './workoutLifecycle/authorizeMutation';
+import { authorizeWorkoutLifecycleMutationHandler, initializeWorkoutProgramV127Handler } from './workoutLifecycle/authorizeMutation';
 import { applyExerciseSubstitutionHandler } from './workoutLifecycle/exerciseSubstitution';
 import { completeWorkoutCardioHandler } from './workoutLifecycle/completeWorkoutCardio';
 import { finalizeWorkoutSessionHandler } from './workoutLifecycle/finalizeWorkoutSession';
@@ -122,6 +122,24 @@ export const recordWorkoutLifecycleTelemetry = onCall(
 export const authorizeWorkoutLifecycleMutation = onCall(
   { enforceAppCheck: true },
   authorizeWorkoutLifecycleMutationHandler,
+);
+
+/**
+ * Fase 15 — the ONE-CALL, fully backend-persisted path for a brand-new
+ * account's very first v1.27 program (`authorizeMutation.ts`'s
+ * `initializeWorkoutProgramV127Handler` doc comment has the full
+ * architecture rationale). Generates, safety-validates, and persists the
+ * entire lifecycle bootstrap (workoutPrograms/programInstances/
+ * trainingCycles/workoutLifecycleState/workoutLifecycleEvents/
+ * workoutProgramState) via the Admin SDK in one call — the client never
+ * writes any of these documents directly for this case. Falls back
+ * transparently (client-side) to the existing `authorizeWorkoutLifecycleMutation`
+ * grant flow whenever it does not apply (MIGRATE, ADAPT, v2, or an already-
+ * initialized lifecycle).
+ */
+export const initializeWorkoutProgramV127 = onCall(
+  { enforceAppCheck: true },
+  initializeWorkoutProgramV127Handler,
 );
 
 /**

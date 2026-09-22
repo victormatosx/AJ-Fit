@@ -51,16 +51,20 @@ function syntheticData(input: {
   avoidByRegion?: Partial<Record<MusculoskeletalLimitationRegionV127, string[]>>;
   candidatesByRuntimeId?: Record<string, SubstitutionCandidatesV127>;
   unexecutableIds?: string[];
+  /** Fase 13 — ids WITHOUT a confirmed limitation profile. Every other id is treated as covered, so tier/self/duplicate/dose tests stay unaffected. */
+  uncoveredIds?: string[];
 }): MusculoskeletalLimitationDataV127 {
   const avoidByRegion = emptyAvoidByRegion();
   for (const [region, ids] of Object.entries(input.avoidByRegion ?? {})) {
     avoidByRegion[region as MusculoskeletalLimitationRegionV127] = new Set(ids);
   }
   const unexecutable = new Set(input.unexecutableIds ?? []);
+  const uncovered = new Set(input.uncoveredIds ?? []);
   return {
     avoidByRegion,
     candidatesByRuntimeId: new Map(Object.entries(input.candidatesByRuntimeId ?? {})),
     isExecutable: (id) => !unexecutable.has(id),
+    hasProfileCoverage: (id) => !uncovered.has(id),
   };
 }
 
@@ -372,13 +376,21 @@ describe('applyMusculoskeletalLimitationV127 — self and duplicate rejection', 
   it('real-data proof: the joelhos-com-elástico unification never lets the resolved alias act as its own substitute', () => {
     // resistance-band-standing-leg-curl is the shared runtime id for both
     // "flexao-de-joelhos-com-elastico" and the unified-away "...-e-apoio".
+    // Fase 13: this exact id is one of the 7 v1.27 Fase 2 closure exercises
+    // audited and found to have NO confirmed Firestore limitation profile
+    // yet (`musculoskeletalLimitationProfileAuditV127.test.ts`) — so with a
+    // region active it now correctly fails closed on profile coverage
+    // BEFORE self-substitution logic would even matter. This is the
+    // intended Fase 13 behavior, not a regression: it directly proves no
+    // v1.27 plan can seal this exercise while `knee` (or any region) is
+    // active, until a real profile is published.
     const sessions = [session([exercise('resistance-band-standing-leg-curl', { sets: 3, reps: '10-12' })])];
     const result = applyMusculoskeletalLimitationV127(sessions, GYM, ['knee']);
-    // Not vetoed by knee at all today — the real assertion is just that if
-    // it WERE a candidate anywhere, it could never resolve to itself.
-    expect(result.status).toBe('APPLIED');
-    if (result.status !== 'APPLIED') return;
-    expect(result.sessions[0].exercises[0].exerciseId).toBe('resistance-band-standing-leg-curl');
+    expect(result.status).toBe('BLOCKED');
+    if (result.status !== 'BLOCKED') return;
+    expect(result.reasonCodes).toEqual(['MUSCULOSKELETAL_PROFILE_COVERAGE_MISSING:0:resistance-band-standing-leg-curl']);
+    const decision = result.decisions.find((d) => d.exerciseId === 'resistance-band-standing-leg-curl');
+    expect(decision).toMatchObject({ outcome: 'BLOCKED', reasonCode: 'PROFILE_COVERAGE_MISSING', vetoedByRegions: [] });
   });
 });
 
