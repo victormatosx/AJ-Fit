@@ -8,15 +8,14 @@ import { FieldValue, getFirestore, type Firestore } from 'firebase-admin/firesto
 
 import catalogJson from '../docs/workouts/AJ_Fit_T001_T090_workouts_reformed_v2_0.json';
 import { EXERCISES_SEED } from '../src/data/exercisesSeedData';
+import { CANONICAL_ACTIVITIES } from '../src/workoutPrescription/canonicalActivities';
+import { SUPPORTED_TEMPLATE_SCHEMA_VERSIONS } from '../src/workoutPrescription/catalog';
 import {
   toWorkoutTemplateDocumentBody,
   type WorkoutTemplateDocumentBody,
 } from '../src/workoutPrescription/templateDocument';
 import type { CanonicalTemplate } from '../src/workoutPrescription/types';
 
-export const EXPECTED_TEMPLATE_COUNT = 90;
-export const EXPECTED_SESSION_COUNT = 378;
-export const EXPECTED_SLOT_COUNT = 2116;
 export const WORKOUT_TEMPLATES_COLLECTION = 'workoutTemplates';
 
 type Catalog = { schema_version: string; library: string; workouts: CanonicalTemplate[] };
@@ -38,26 +37,37 @@ export function contentHash(body: WorkoutTemplateDocumentBody): string {
   return createHash('sha256').update(stableJson(body)).digest('hex');
 }
 
-export function buildSeedDocuments(): SeedDocument[] {
-  return catalog.workouts.map((template) => {
-    const body = toWorkoutTemplateDocumentBody(template, catalog.schema_version, catalog.library);
+export function buildSeedDocuments(source: Catalog = catalog): SeedDocument[] {
+  return source.workouts.map((template) => {
+    const body = toWorkoutTemplateDocumentBody(template, source.schema_version, source.library);
     return { ...body, contentHash: contentHash(body) };
   });
 }
 
-export function validateCanonicalSnapshot(liveExerciseIds?: Set<string>): string[] {
+export function validateCanonicalSnapshot(liveExerciseIds?: Set<string>, source: Catalog = catalog): string[] {
   const errors: string[] = [];
-  const templates = catalog.workouts;
+  const templates = source.workouts;
   const sessions = templates.flatMap((template) => template.sessions);
   const slots = sessions.flatMap((session) => session.exercises);
-  const sourceIds = new Set(EXERCISES_SEED.map((exercise) => exercise.id));
-  if (templates.length !== EXPECTED_TEMPLATE_COUNT) errors.push(`EXPECTED_90_TEMPLATES:${templates.length}`);
-  if (sessions.length !== EXPECTED_SESSION_COUNT) errors.push(`EXPECTED_378_SESSIONS:${sessions.length}`);
-  if (slots.length !== EXPECTED_SLOT_COUNT) errors.push(`EXPECTED_2116_SLOTS:${slots.length}`);
+  // Cardio/mobility activities (v1.27) are a disjoint, separately-typed
+  // catalog — see `canonicalActivities.ts` — valid slot targets even though
+  // they never enter `EXERCISES_SEED`/the Firestore `exercises` collection.
+  const sourceIds = new Set([
+    ...EXERCISES_SEED.map((exercise) => exercise.id),
+    ...CANONICAL_ACTIVITIES.map((activity) => activity.id),
+  ]);
+  if (!SUPPORTED_TEMPLATE_SCHEMA_VERSIONS.some((version) => version === source.schema_version)) {
+    errors.push(`UNSUPPORTED_SCHEMA:${source.schema_version}`);
+  }
+  if (!templates.length) errors.push('EMPTY_TEMPLATE_LIBRARY');
   const ids = new Set(templates.map((template) => template.id));
-  for (let index = 1; index <= EXPECTED_TEMPLATE_COUNT; index += 1) {
-    const id = `T${String(index).padStart(3, '0')}`;
-    if (!ids.has(id as CanonicalTemplate['id'])) errors.push(`MISSING_TEMPLATE:${id}`);
+  if (ids.size !== templates.length) errors.push('DUPLICATE_TEMPLATE_ID');
+  for (const template of templates) {
+    if (!/^T\d{3}$/.test(template.id) || template.id === 'T000') errors.push(`INVALID_TEMPLATE_ID:${template.id}`);
+    if (!template.sessions.length) errors.push(`NO_SESSIONS:${template.id}`);
+    for (const session of template.sessions) {
+      if (!session.exercises.length || !session.display_name?.trim()) errors.push(`INVALID_SESSION:${template.id}`);
+    }
   }
   for (const slot of slots) {
     if (!sourceIds.has(slot.exercise_id)) errors.push(`INVALID_SOURCE_EXERCISE:${slot.exercise_id}`);
@@ -125,8 +135,10 @@ async function verifyReadBack(db: Firestore, expected: SeedDocument[]) {
   const slots = snapshot.docs.reduce((sum, doc) => sum + (Array.isArray(doc.data().sessions)
     ? doc.data().sessions.reduce((inner: number, session: { exercises?: unknown[] }) => inner + (session.exercises?.length ?? 0), 0)
     : 0), 0);
-  if (snapshot.size !== EXPECTED_TEMPLATE_COUNT || sessions !== EXPECTED_SESSION_COUNT
-    || slots !== EXPECTED_SLOT_COUNT || extras.length || mismatches.length) {
+  const expectedSessions = expected.reduce((sum, doc) => sum + doc.sessions.length, 0);
+  const expectedSlots = expected.reduce((sum, doc) => sum + doc.sessions.reduce((inner, session) => inner + session.exercises.length, 0), 0);
+  if (snapshot.size !== expected.length || sessions !== expectedSessions
+    || slots !== expectedSlots || extras.length || mismatches.length) {
     throw new Error(`READ_BACK_FAILED count=${snapshot.size} sessions=${sessions} slots=${slots} extras=${extras.join(',')} mismatches=${mismatches.join(',')}`);
   }
   return { templates: snapshot.size, sessions, slots, extras: extras.length, mismatches: mismatches.length };
@@ -142,7 +154,7 @@ async function main() {
   const plan = await planSeed(db, documents);
   console.log(`Projeto: ${projectId}`);
   console.log(`Modo: ${confirm ? 'WRITE EXPLÍCITO' : 'DRY RUN (padrão)'}`);
-  console.log(`Fonte: ${documents.length} templates / ${EXPECTED_SESSION_COUNT} sessões / ${EXPECTED_SLOT_COUNT} slots`);
+  console.log(`Fonte: ${documents.length} templates / ${documents.reduce((sum, doc) => sum + doc.sessions.length, 0)} sessões / ${documents.reduce((sum, doc) => sum + doc.sessions.reduce((inner, session) => inner + session.exercises.length, 0), 0)} slots`);
   console.log(`Catálogo live: ${plan.liveExerciseCount} exercícios`);
   for (const row of plan.rows) console.log(`${row.action.padEnd(9)} ${row.id}`);
   for (const id of plan.extras) console.log(`BLOCKED   EXTRA:${id}`);
@@ -152,7 +164,7 @@ async function main() {
     return acc;
   }, { CREATE: 0, UPDATE: 0, UNCHANGED: 0, BLOCKED: plan.extras.length, ERROR: plan.validationErrors.length });
   console.log('Resumo:', counts);
-  if (plan.validationErrors.length || plan.liveExerciseCount !== 116) process.exitCode = 1;
+  if (plan.validationErrors.length) process.exitCode = 1;
   if (!confirm || process.exitCode) return;
 
   for (let index = 0; index < plan.rows.length; index += 400) {

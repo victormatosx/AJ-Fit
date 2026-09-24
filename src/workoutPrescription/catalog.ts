@@ -1,9 +1,11 @@
 import catalogJson from '../../docs/workouts/AJ_Fit_T001_T090_workouts_reformed_v2_0.json';
 import { EXERCISES_SEED } from '../data/exercisesSeedData';
+import { CANONICAL_ACTIVITIES } from './canonicalActivities';
 import type { CanonicalTemplate, GoalFamily, Population, TemplateEnvironment, TemplateId } from './types';
+import { isRecoverySessionType } from './sessionTypes';
 
 function trainingSessionCount(template: CanonicalTemplate): number {
-  return template.sessions.filter((session) => session.type.toLowerCase() !== 'recovery').length;
+  return template.sessions.filter((session) => !isRecoverySessionType(session.type.toLowerCase())).length;
 }
 
 type CatalogShape = {
@@ -75,34 +77,40 @@ export function findTemplateForFrequency(input: {
   })[0];
 }
 
-export function catalogInvariantErrors(): string[] {
+// The published runtime still loads v2.0.0. v1.27.0 is accepted here for the
+// future catalog switch; artifact-specific cardinality belongs in its test.
+export const SUPPORTED_TEMPLATE_SCHEMA_VERSIONS = ['2.0.0', '1.27.0'] as const;
+
+export function catalogInvariantErrors(source: CatalogShape = catalog): string[] {
   const errors: string[] = [];
-  if (TEMPLATE_LIBRARY_VERSION !== '2.0.0') errors.push('UNEXPECTED_TEMPLATE_LIBRARY_VERSION');
-  if (WORKOUT_TEMPLATES.length !== 90) errors.push('EXPECTED_90_TEMPLATES');
-  const ids = new Set(WORKOUT_TEMPLATES.map((template) => template.id));
-  if (ids.size !== WORKOUT_TEMPLATES.length) errors.push('DUPLICATE_TEMPLATE_ID');
-  for (let index = 1; index <= 90; index += 1) {
-    const id = `T${String(index).padStart(3, '0')}` as TemplateId;
-    if (!ids.has(id)) errors.push(`MISSING_${id}`);
-  }
+  if (!SUPPORTED_TEMPLATE_SCHEMA_VERSIONS.some((version) => version === source.schema_version)) errors.push('UNEXPECTED_TEMPLATE_LIBRARY_VERSION');
+  if (!source.workouts.length) errors.push('EMPTY_TEMPLATE_LIBRARY');
+  const ids = new Set(source.workouts.map((template) => template.id));
+  if (ids.size !== source.workouts.length) errors.push('DUPLICATE_TEMPLATE_ID');
   for (const id of ids) {
-    if (!/^T(?:00[1-9]|0[1-8][0-9]|090)$/.test(id)) errors.push(`OUT_OF_RANGE_${id}`);
+    if (!/^T\d{3}$/.test(id) || id === 'T000') errors.push(`INVALID_TEMPLATE_ID:${id}`);
   }
   const exercises = new Map(EXERCISES_SEED.map((exercise) => [exercise.id, exercise]));
+  // Cardio/mobility activities (v1.27) are a disjoint, separately-typed
+  // catalog with no `equipment`/muscle metadata — see
+  // `canonicalActivities.ts`. Valid `exercise_id` targets, but structurally
+  // exempt from the resistance-only equipment/duplicate checks below (an
+  // activity `exercise` lookup stays `undefined`, so those checks no-op).
+  const activityIds = new Set(CANONICAL_ACTIVITIES.map((activity) => activity.id));
   const homeResistanceEquipment = new Set([
     'bodyweight', 'dumbbell', 'resistance_band', 'mini_band', 'bench', 'chair', 'step', 'slider',
   ]);
   const duplicateSensitiveTypes = new Set(['resistance', 'strength', 'functional_strength']);
-  for (const template of WORKOUT_TEMPLATES) {
+  for (const template of source.workouts) {
     if (!template.sessions.length) errors.push(`NO_SESSIONS:${template.id}`);
     for (const [sessionIndex, session] of template.sessions.entries()) {
       const scope = `${template.id}:${sessionIndex}`;
       if (!session.exercises.length) errors.push(`EMPTY_SESSION:${scope}`);
-      if (!session.display_name?.trim()) errors.push(`MISSING_DISPLAY_NAME:${scope}`);
+      if (!(session.display_name ?? session.name)?.trim()) errors.push(`MISSING_DISPLAY_NAME:${scope}`);
       const seen = new Set<string>();
       for (const slot of session.exercises) {
         const exercise = exercises.get(slot.exercise_id);
-        if (!exercise) errors.push(`INVALID_EXERCISE_ID:${scope}:${slot.exercise_id}`);
+        if (!exercise && !activityIds.has(slot.exercise_id)) errors.push(`INVALID_EXERCISE_ID:${scope}:${slot.exercise_id}`);
         if (slot.sets !== undefined
           && (typeof slot.sets !== 'number' || !Number.isInteger(slot.sets) || slot.sets < 1 || slot.sets > 10)) {
           errors.push(`INVALID_EXERCISE_SETS:${scope}:${slot.exercise_id}`);

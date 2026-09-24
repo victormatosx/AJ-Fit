@@ -188,7 +188,7 @@ export function answerValueForStep(quiz: Quiz, stepId: OnboardingStepId): unknow
 
 export type QuestionnaireValidationCode =
   | 'unsupported_days' | 'too_many_muscle_priorities' | 'exclusive_none_conflict'
-  | 'primary_place_required' | 'equipment_required' | 'limitations_required'
+  | 'primary_place_required' | 'limitations_required'
   | 'pregnancy_screening_incomplete' | 'postpartum_screening_incomplete' | 'functional_screening_incomplete'
   | 'lipedema_screening_incomplete' | 'dizziness_screening_incomplete'
   | 'post_surgical_screening_incomplete' | 'medical_restriction_screening_incomplete';
@@ -216,7 +216,10 @@ export function questionnaireValidationErrors(quiz: Quiz): QuestionnaireValidati
   if (quiz.muscleFocus.filter((value) => value !== 'none').length > 2) errors.push('too_many_muscle_priorities');
   if ([quiz.equipment, quiz.limits, quiz.muscleFocus, quiz.specialConditions, quiz.pregnancyScreening?.warningSigns ?? [], quiz.postpartumScreening?.signs ?? [], quiz.functionalScreening?.situations ?? []].some(hasNoneConflict)) errors.push('exclusive_none_conflict');
   if (quiz.place === 'both' && !quiz.primaryPlace) errors.push('primary_place_required');
-  if ((quiz.place === 'home' || quiz.place === 'both') && quiz.equipment.length === 0) errors.push('equipment_required');
+  // No `equipment_required` gate: the questionnaire never asks for a home
+  // equipment inventory (see onboarding/steps.ts), so `quiz.equipment` is
+  // structurally always `[]` for every home/both user going forward —
+  // requiring it here would make the questionnaire impossible to complete.
   if (quiz.specialConditions.includes('musculoskeletal_limitation')) {
     if (quiz.limits.length === 0 || quiz.limits.includes('none')) errors.push('limitations_required');
   }

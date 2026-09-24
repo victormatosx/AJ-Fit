@@ -2,6 +2,14 @@ import type { ExerciseMovement, MovementPattern } from '../types/exercise';
 import type { GoalFamily } from './types';
 
 /**
+ * Legacy v2.0/T001-T090 rest prescription — read only by `composition.ts`'s
+ * `composeTemplate`. The v1.27 pipeline (`compositionV127.ts`) does not
+ * import this module; deriving `restSeconds` from `goalFamily` after
+ * template selection is exactly the "goal modifier" effect Fase 4 forbids
+ * on that path. See `compositionV127.ts`'s inline comment on `restSeconds`.
+ */
+
+/**
  * V1 rest prescription — deliberately a fixed lookup by category, not a
  * scientific engine. T001–T090 carry no numeric rest interval of their own
  * (confirmed: no `rest`/`restSeconds`/`restTime` field anywhere in the

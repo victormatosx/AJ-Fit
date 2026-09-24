@@ -96,6 +96,14 @@ function ruleValid(rule: unknown, exerciseId: string): rule is ExerciseLimitatio
   if (rule.status === 'compatible' || rule.status === 'not_applicable') {
     return sameKeys(rule, ['status']);
   }
+  // `pending` — schema-valid but deliberately never terminal-safe and never
+  // a source of declared candidates (see `ExerciseLimitationRule`'s doc).
+  // Same shape as compatible/not_applicable; kept as an explicit branch, not
+  // folded into the line above, so this file never accidentally treats it
+  // as one of the safe statuses.
+  if (rule.status === 'pending') {
+    return sameKeys(rule, ['status']);
+  }
   if (rule.status === 'adapt') {
     return sameKeys(rule, ['status', 'adaptation'])
       && isRecord(rule.adaptation)
@@ -155,13 +163,28 @@ export function validateLimitationProfile(
   return { valid: true, profile: value as unknown as ExerciseLimitationProfile };
 }
 
+/**
+ * Fase 9 §13 — `'other'` is a real, always-offered `LIMITATION_IDS` option
+ * (`questionnaireSchema.ts`), not corrupted data. Treating it as
+ * `UNMAPPED_LIMITATION_REGION` (the pre-Fase-9 behavior — see the git
+ * history of this function) turned it into an `INVALID_CONFIGURATION` the
+ * user cannot resolve by re-submitting the same answer, which is exactly an
+ * infinite retry loop (`onboardingGenerationFailurePresentation` offers
+ * 'retry' for `INVALID_CONFIGURATION`, and retrying with unchanged answers
+ * fails identically forever). Free text describing "other" is never turned
+ * into a diagnosed region — it is simply dropped, same as `'none'` — while
+ * any other declared, recognized region still fully applies. Only a value
+ * outside BOTH `REGION_SET` and the known `'other'` UI option (i.e.
+ * genuinely corrupted/unexpected data, which the current questionnaire
+ * schema cannot produce) still fails closed as `UNMAPPED`.
+ */
 export function mapQuestionnaireLimitations(
   answers: Pick<QuestionnaireAnswers, 'specialConditions' | 'limits'>,
 ): QuestionnaireLimitationMapping {
   if (!answers.specialConditions.includes('musculoskeletal_limitation')) {
     return { status: 'MAPPED', regions: [] };
   }
-  const declared = answers.limits.filter((region) => region !== 'none');
+  const declared = answers.limits.filter((region) => region !== 'none' && region !== 'other');
   if (declared.some((region) => !REGION_SET.has(region))) {
     return { status: 'UNMAPPED', reasonCodes: ['UNMAPPED_LIMITATION_REGION'] };
   }

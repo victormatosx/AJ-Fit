@@ -369,6 +369,7 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
 
   const [queueOpen, setQueueOpen] = useState(false);
   const [videoOpen, setVideoOpen] = useState(false);
+  const [sessionDetailsOpen, setSessionDetailsOpen] = useState(false);
   const [subSheet, setSubSheet] = useState(false);
   const [pendingSub, setPendingSub] = useState<SubOption | null>(null);
 
@@ -1088,6 +1089,14 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
           >
             <Icon name="list" size={15} color={theme.colors.iconEmphasis} />
           </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('prescription.sessionDetails')}
+            onPress={() => setSessionDetailsOpen(true)}
+            style={headerButtonStyle}
+          >
+            <Icon name="info" size={15} color={theme.colors.iconEmphasis} />
+          </Pressable>
         </View>
 
         {/* GIF banner */}
@@ -1307,8 +1316,9 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
                 {curReps}
               </Text>
               <MonoLabel style={{ marginTop: 4 }} numberOfLines={1}>
-                {t('reps.label').toUpperCase()}
+                {t(`prescription.${ex.doseKind}`).toUpperCase()}
               </MonoLabel>
+              {ex.doseDetail ? <MonoLabel style={{ marginTop: 4, textAlign: 'center' }}>{ex.doseDetail}</MonoLabel> : null}
             </View>
             <View style={{ width: 1, alignSelf: 'stretch', backgroundColor: theme.colors.dividerStrong }} />
             <View style={{ alignItems: 'center', width: 72, minWidth: 66, flexShrink: 1 }}>
@@ -1389,7 +1399,9 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
                   {done ? '✓' : String(i + 1).padStart(2, '0')}
                 </Text>
                 <Text style={{ fontFamily: theme.fonts.mono, fontSize: 12, flex: 1, color: theme.colors.textPrimary }}>
-                  {w > 0
+                  {ex.doseKind !== 'reps'
+                    ? <>{t(`prescription.${ex.doseKind}`)}: {s0.r}</>
+                    : w > 0
                     ? t('sets.summaryWeighted', {
                         count: pluralCountForReps(s0.r),
                         reps: s0.r,
@@ -1592,8 +1604,36 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
                     </Text>
                   </View>
                 ))}
+                {ex.notes ? <Text style={{ color: theme.colors.textPrimary, marginTop: 8 }}>{ex.notes}</Text> : null}
+                {ex.intensity ? <Text style={{ color: theme.colors.textPrimary, marginTop: 8 }}>{t('prescription.intensity')}: {ex.intensity}</Text> : null}
+                {ex.doseDetail ? <Text style={{ color: theme.colors.textPrimary, marginTop: 8 }}>{t('prescription.duration')}: {ex.doseDetail}</Text> : null}
               </View>
             </View>
+          </SafeAreaView>
+        </Modal>
+
+        <Modal visible={sessionDetailsOpen} transparent animationType="slide" onRequestClose={() => setSessionDetailsOpen(false)}>
+          <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }}>
+            <View style={{ padding: 20, flexDirection: 'row', justifyContent: 'space-between' }}>
+              <Display size={24}>{t('prescription.sessionDetails')}</Display>
+              <Pressable accessibilityRole="button" accessibilityLabel={t('video.accessibility.close')} onPress={() => setSessionDetailsOpen(false)}>
+                <Icon name="x" size={20} color={theme.colors.textPrimary} />
+              </Pressable>
+            </View>
+            <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 32, gap: 18 }}>
+              {currentSession?.notes ? <Text style={{ color: theme.colors.textPrimary }}>{currentSession.notes}</Text> : null}
+              {([
+                ['technique', currentSession?.techniqueGuideline],
+                ['effort', currentSession?.effortGuideline],
+                ['rest', currentSession?.restGuideline],
+                ['progression', currentSession?.progressionGuideline],
+              ] as const).filter(([, value]) => Boolean(value)).map(([key, value]) => (
+                <View key={key}>
+                  <MonoLabel color={theme.colors.primaryEmphasis}>{t(`prescription.${key}`).toUpperCase()}</MonoLabel>
+                  <Text style={{ color: theme.colors.textPrimary, marginTop: 5 }}>{value}</Text>
+                </View>
+              ))}
+            </ScrollView>
           </SafeAreaView>
         </Modal>
 

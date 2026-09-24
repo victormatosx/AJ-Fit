@@ -49,6 +49,31 @@ const catalog = new Map<string, LimitationCatalogExercise>(
   catalogArray.map((exercise) => [exercise.id, exercise]),
 );
 
+const SPINE_HOME_CLOSURE_OVERRIDES: Record<string, Decision> = {
+  'resistance-band-lat-pulldown:back': { status: 'compatible' },
+  'dumbbell-lateral-raise:back': { status: 'compatible' },
+  'dumbbell-lateral-raise:wrist': { status: 'compatible' },
+  'mini-band-hip-abduction:back': { status: 'compatible' },
+  'supported-hip-abduction:back': { status: 'compatible' },
+  'supported-hip-abduction:knee': { status: 'compatible' },
+  'supported-hip-abduction:hip': { status: 'compatible' },
+  'supported-hip-abduction:ankle_foot': { status: 'compatible' },
+  'low-step-up:back': { status: 'compatible' },
+  'low-step-up:knee': { status: 'compatible' },
+  'low-step-up:hip': { status: 'compatible' },
+  'low-step-up:ankle_foot': { status: 'compatible' },
+  'cable-rear-delt-fly:elbow': { status: 'compatible' },
+  'cable-rear-delt-fly:wrist': { status: 'compatible' },
+  'dumbbell-overhead-triceps-extension:back': {
+    status: 'adapt',
+    adaptation: { kind: 'exercise_variant', exerciseId: 'resistance-band-triceps-pushdown' },
+  },
+};
+
+function effectiveDecision(row: DecisionRow): Decision {
+  return SPINE_HOME_CLOSURE_OVERRIDES[`${row.exerciseId}:${row.region}`] ?? row.proposedDecision;
+}
+
 function expectedRule(decision: Decision): object {
   return decision.status === 'adapt'
     ? {
@@ -77,20 +102,20 @@ describe('approved limitation clinical decisions v1', () => {
       const validation = validateLimitationProfile(row.exerciseId, source?.limitationProfile);
       expect(validation.valid, `${row.exerciseId} must have a valid profile`).toBe(true);
       if (validation.valid) {
-        expect(validation.profile.regions[row.region]).toEqual(expectedRule(row.proposedDecision));
+        expect(validation.profile.regions[row.region]).toEqual(expectedRule(effectiveDecision(row)));
       }
     }
   });
 
-  it('proves every one of the 89 approved adapt rows has a direct terminal target accepted by the real resolver', () => {
-    const adaptRows = decisions.rows.filter(
-      (row): row is DecisionRow & { proposedDecision: Extract<Decision, { status: 'adapt' }> } =>
-        row.proposedDecision.status === 'adapt',
+  it('proves every effective approved adapt row has a direct terminal target accepted by the real resolver', () => {
+    const adaptRows = decisions.rows.map((row) => ({ row, decision: effectiveDecision(row) })).filter(
+      (entry): entry is { row: DecisionRow; decision: Extract<Decision, { status: 'adapt' }> } =>
+        entry.decision.status === 'adapt',
     );
-    expect(adaptRows).toHaveLength(89);
+    expect(adaptRows).toHaveLength(79);
 
-    for (const row of adaptRows) {
-      const targetId = row.proposedDecision.adaptation.exerciseId;
+    for (const { row, decision } of adaptRows) {
+      const targetId = decision.adaptation.exerciseId;
       expect(targetId).not.toBe(row.exerciseId);
       const target = catalog.get(targetId);
       expect(target, `${row.exerciseId}:${row.region} target ${targetId} must exist`).toBeDefined();

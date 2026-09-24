@@ -62,9 +62,17 @@ export interface WorkoutLifecycleAuthorityCanonicalContent {
 }
 
 export interface WorkoutLifecycleAuthorityResult {
-  grantId: string;
-  expiresAtMs: number;
+  grantId?: string;
+  expiresAtMs?: number;
   canonical?: WorkoutLifecycleAuthorityCanonicalContent;
+  /**
+   * Fase 16 — present exclusively for v1.27 ADAPT/ACTIVATE
+   * (`authorizeWorkoutLifecycleMutationHandler`'s own doc comment): the
+   * backend already persisted the entire lifecycle transition via Admin SDK
+   * — no grant is issued in this case, `grantId`/`expiresAtMs` are absent,
+   * and the caller must skip its own Firestore transaction entirely.
+   */
+  persisted?: { programId: string; programInstanceId: string };
 }
 
 export type WorkoutLifecycleAuthorityAuthorizer = (
@@ -89,7 +97,13 @@ export async function authorizeWorkoutLifecycleMutation(
   request: WorkoutLifecycleAuthorityRequest,
 ): Promise<WorkoutLifecycleAuthorityResult> {
   const result = await authorizer(request);
-  if (result.grantId !== WORKOUT_LIFECYCLE_AUTHORITY_GRANT_ID || result.expiresAtMs <= Date.now()) {
+  if (result.persisted) {
+    if (typeof result.persisted.programId !== 'string' || typeof result.persisted.programInstanceId !== 'string') {
+      throw new Error('WORKOUT_LIFECYCLE_PERSISTED_RESPONSE_INVALID');
+    }
+    return result;
+  }
+  if (result.grantId !== WORKOUT_LIFECYCLE_AUTHORITY_GRANT_ID || !result.expiresAtMs || result.expiresAtMs <= Date.now()) {
     throw new Error('WORKOUT_LIFECYCLE_AUTHORITY_GRANT_INVALID');
   }
   if (!result.canonical) return result;

@@ -1,0 +1,37 @@
+{
+  "publishedAt": "2026-09-24T15:14:26.718Z",
+  "projectId": "ajfit-2f321",
+  "identity": {
+    "datasetVersion": "phase4-limitation-dataset-v2",
+    "limitationDatasetHash": "0f4464c27c9d92fb06d1d26865b7e269af2cf6ed16156d3c393a3610b6be0c20"
+  },
+  "previousIdentity": {
+    "datasetVersion": "phase3-limitation-dataset-v3",
+    "limitationDatasetHash": "fde1bc3dfaa376d4ddfa95e76e97361695480d2d01d7e04bec1ade4ab46dc7c5"
+  },
+  "atomicWrite": true,
+  "changedExerciseIds": [
+    "bent-over-dumbbell-row",
+    "cable-crossover-fly",
+    "decline-barbell-bench-press",
+    "decline-push-up",
+    "dumbbell-fly",
+    "dumbbell-rear-delt-fly",
+    "incline-push-up",
+    "preacher-curl",
+    "resistance-band-pullover",
+    "resistance-band-standing-leg-curl"
+  ],
+  "prePublishDivergentCells": 70,
+  "prePublishResolverCatalogMismatches": [],
+  "postPublishDiffCounts": {
+    "LOCAL_ONLY": 0,
+    "REMOTE_ONLY": 0,
+    "STATUS_MISMATCH": 0,
+    "TARGET_MISMATCH": 0,
+    "METADATA_MISMATCH": 0,
+    "EXACT_MATCH": 861
+  },
+  "remoteHashVerified": true,
+  "rollbackExecuted": false
+}

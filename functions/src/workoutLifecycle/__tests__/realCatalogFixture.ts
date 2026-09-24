@@ -6,7 +6,7 @@ import { toWorkoutTemplateDocumentBody } from '../prescriptionEngine/workoutPres
 import { PRESCRIPTION_VERSIONS } from '../prescriptionEngine/workoutPrescription/types';
 
 /**
- * Seeds the real, bundled prescription catalog (all 116 exercises, the full
+ * Seeds the real, bundled prescription catalog (the full resistance-exercise catalog, the full
  * T001-T090 template library, and a matching limitation-dataset identity)
  * into the Firestore Emulator's global collections, so integration tests
  * exercise the actual backend canonical-generation path

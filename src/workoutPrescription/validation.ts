@@ -8,7 +8,7 @@ export function validateFinalWorkout(input: {
   modifiers: ResolvedModifier[];
 }): string[] {
   const errors: string[] = [];
-  if (!/^T(?:00[1-9]|0[1-8][0-9]|090)$/.test(input.selection.templateId)) {
+  if (!/^T(?:00[1-9]|0[1-9][0-9]|10[0-2])$/.test(input.selection.templateId)) {
     errors.push('TEMPLATE_ID_OUTSIDE_CANONICAL_RANGE');
   }
   const trainingIndexes = trainingSessionIndexes(input.sessions);
@@ -41,7 +41,7 @@ export function validateFinalWorkout(input: {
         errors.push(`SUBSTITUTION_COLLISION:${sessionIndex}:${exercise.exerciseId}`);
       }
       sourceByFinalId.set(exercise.exerciseId, exercise.sourceExerciseId);
-      if (exercise.sets == null && exercise.duration == null) {
+      if (exercise.sets == null && exercise.duration == null && exercise.distance == null && exercise.cycleRange == null) {
         errors.push(`INVALID_EXERCISE_DOSE:${sessionIndex}:${exercise.exerciseId}`);
       }
       if (exercise.sets !== undefined
@@ -53,6 +53,14 @@ export function validateFinalWorkout(input: {
         && (typeof exercise.cycles !== 'number' || !Number.isInteger(exercise.cycles)
           || exercise.cycles < 1 || exercise.cycles > 100)) {
         errors.push(`INVALID_EXERCISE_CYCLES:${sessionIndex}:${exercise.exerciseId}`);
+      }
+      if (exercise.cycleRange !== undefined
+        && (!Number.isInteger(exercise.cycleRange.min)
+          || !Number.isInteger(exercise.cycleRange.max)
+          || exercise.cycleRange.min < 1
+          || exercise.cycleRange.max < exercise.cycleRange.min
+          || exercise.cycleRange.max > 100)) {
+        errors.push(`INVALID_EXERCISE_CYCLE_RANGE:${sessionIndex}:${exercise.exerciseId}`);
       }
     }
   }

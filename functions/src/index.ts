@@ -26,7 +26,7 @@ import { REVENUECAT_ADMIN_GRANTS_API_KEY } from './billing/revenueCatGrants';
 import { adminGetCouponHandler, adminListCouponsHandler } from './adminCoupons/adminCoupons';
 import { recordWorkoutLifecycleTelemetryHandler } from './telemetry/workoutLifecycleTelemetry';
 import { onTrustedWorkoutLifecycleEventCreated } from './telemetry/trustedWorkoutLifecycleTelemetry';
-import { authorizeWorkoutLifecycleMutationHandler } from './workoutLifecycle/authorizeMutation';
+import { authorizeWorkoutLifecycleMutationHandler, initializeWorkoutProgramV127Handler } from './workoutLifecycle/authorizeMutation';
 import { installActiveWorkoutProgramHandler } from './workoutLifecycle/installActiveWorkoutProgram';
 import { applyExerciseSubstitutionHandler } from './workoutLifecycle/exerciseSubstitution';
 import { completeWorkoutCardioHandler } from './workoutLifecycle/completeWorkoutCardio';
@@ -126,12 +126,33 @@ export const authorizeWorkoutLifecycleMutation = onCall(
 );
 
 /**
+ * Fase 15 — the ONE-CALL, fully backend-persisted path for a brand-new
+ * account's very first v1.27 program (`authorizeMutation.ts`'s
+ * `initializeWorkoutProgramV127Handler` doc comment has the full
+ * architecture rationale). Generates, safety-validates, and persists the
+ * entire lifecycle bootstrap (workoutPrograms/programInstances/
+ * trainingCycles/workoutLifecycleState/workoutLifecycleEvents/
+ * workoutProgramState) via the Admin SDK in one call — the client never
+ * writes any of these documents directly for this case. Falls back
+ * transparently (client-side) to the existing `authorizeWorkoutLifecycleMutation`
+ * grant flow whenever it does not apply (MIGRATE, ADAPT, v2, or an already-
+ * initialized lifecycle).
+ */
+export const initializeWorkoutProgramV127 = onCall(
+  { enforceAppCheck: true },
+  initializeWorkoutProgramV127Handler,
+);
+
+/**
  * Fase 2.8 — installs a brand-new account's first active workout program
  * entirely server-side via the Admin SDK, replacing the client
  * `runTransaction` that otherwise reliably exceeds the Firestore rules
  * engine's expression-evaluation ceiling for this exact real flow (Fase
  * 2.6/2.7 audits). See `installActiveWorkoutProgram.ts` for the full
- * scope/trust-boundary rationale.
+ * scope/trust-boundary rationale. Version-agnostic (v2 or v1.27): the
+ * `saveAndActivateWorkoutProgram` fallback path calls this whenever
+ * `initializeWorkoutProgramV127` above is not applicable (v2 default, or an
+ * already-initialized/legacy lifecycle needing MIGRATE instead).
  */
 export const installActiveWorkoutProgram = onCall(
   { enforceAppCheck: true },

@@ -297,7 +297,10 @@ service cloud.firestore {
             && limits.toSet().hasOnly([
                  'knee', 'hip', 'back', 'shoulder', 'elbow', 'wrist', 'ankle_foot'
                ])
-            && data.versions.limitationResolver == '1.0.0'
+            // '1.0.0' (v2.0/v1.3) and '2.0.0' (v1.27 — Fase 12) are the only
+            // limitation-resolver versions any real engine emits; each is
+            // tied to its own template library elsewhere in this function.
+            && data.versions.limitationResolver in ['1.0.0', '2.0.0']
             && data.trace.limitationResolverVersion == 1
             && data.trace.limitationDecisions is list
             && data.trace.limitationDecisions.size() >= data.sessions.size()
@@ -306,9 +309,133 @@ service cloud.firestore {
         );
     }
 
-    function workoutProgramCommonValid(userId, programId, data) {
+    // Fase 12 — v1.27's T001-T102 canonical library is bundled/local only
+    // (`src/workoutPrescription/canonicalCatalog.ts`) and deliberately never
+    // seeded to `workoutTemplates` (docs/workout-lifecycle — the "v1.27 is
+    // local-only" architecture decision, not a pending TODO). A `get()`
+    // here is only ever reached for a v2.0.0/1.3.0 document — see the
+    // `||` short-circuit at the one call site below — so it stays a hard
+    // rejection (no such document) for any v2 templateId that doesn't
+    // actually exist, exactly as before.
+    function workoutProgramTemplateValid(data) {
       let template = get(/databases/$(database)/documents/workoutTemplates/$(data.templateId));
+      return template.data.status == 'active'
+        && data.templateVersion == template.data.version
+        && data.templateSourceVersion == template.data.sourceVersion
+        && data.templateContentHash == template.data.contentHash;
+    }
+
+    // Fase 14 — the v1.27 half of what used to be one single OR'd
+    // `versions`-shape check inside `workoutProgramCommonValid`. Splitting
+    // it out means a v1.27 write's `allow create`/`allow update` expression
+    // tree never lexically contains `workoutProgramTemplateValid`'s `get()`
+    // (that call now only exists inside `workoutProgramLegacyVersionsValid`
+    // below, reached only when `versions.templateLibrary != '1.27.0'`) —
+    // Firestore's rules evaluator prefetches every `get()`/`exists()` it can
+    // statically reach in an evaluated `allow` expression regardless of
+    // which branch of an `&&`/`||` chain actually ends up true at runtime,
+    // so a `get()` that is merely unreachable-but-present still counts
+    // against the per-request expression/read budget. Removing it from this
+    // function's own body (not just short-circuiting past it) is what
+    // actually removes that cost for v1.27, not just the earlier `versions`
+    // let-binding. Semantically identical to the prior combined check for
+    // every value of `versions.templateLibrary == '1.27.0'` — same
+    // `compositionEngine`/`selectionEngine`/Phase-2 calendar shape/
+    // `safetyRules`/`modifierRules` equalities and bounds, just narrowed
+    // from `in [...]` to the one literal value v1.27 ever emits
+    // (PRESCRIPTION_VERSIONS_V127, `src/workoutPrescription/types.ts`).
+    function workoutProgramV127VersionsValid(data) {
+      let versions = data.versions;
+      return versions.compositionEngine == '3.0.0'
+        && versions.selectionEngine == '3.0.0'
+        // v1.27 (selectionEngine '3.0.0') builds the exact same Phase-2
+        // calendar shape as v2's '2.0.0' (`engineV127.ts`'s
+        // `buildWorkoutWeek`/`availability`/`weeklySchedule` construction
+        // mirrors v2's — see that file) — same shape checks apply.
+        && data.keys().hasAll(['prescribedTrainingFrequency', 'availability', 'weeklySchedule'])
+        && data.prescribedTrainingFrequency is int
+        && data.prescribedTrainingFrequency == data.prescribedStructuredDays
+        && data.prescribedTrainingFrequency >= 2
+        && data.prescribedTrainingFrequency <= 6
+        && data.prescribedTrainingFrequency <= data.requestedDays
+        && (!data.keys().hasAny(['scheduleMode']) || data.scheduleMode in ['fixed', 'flexible'])
+        && data.availability is map
+        && data.availability.keys().hasAll(['days', 'weekdays'])
+        && data.availability.keys().hasOnly(['days', 'weekdays'])
+        && data.availability.days == data.requestedDays
+        && data.availability.weekdays is list
+        && (data.availability.weekdays.size() == 0
+          || data.availability.weekdays.size() == data.availability.days)
+        && data.weeklySchedule is list
+        && (data.weeklySchedule.size() == 0 || data.weeklySchedule.size() == 7)
+        && (!data.keys().hasAny(['scheduleMode'])
+          || (data.scheduleMode == 'fixed'
+            && data.availability.weekdays.size() == data.availability.days
+            && data.weeklySchedule.size() == 7)
+          || (data.scheduleMode == 'flexible'
+            && data.availability.weekdays.size() == 0
+            && data.weeklySchedule.size() == 0))
+        && versions.safetyRules == '1.0.0'
+        && versions.modifierRules == '3.0.0';
+    }
+
+    // Fase 14 — the v1.3.0/2.0.0 half of the same split (see
+    // `workoutProgramV127VersionsValid` above). Byte-identical to the prior
+    // combined check for every value of `versions.templateLibrary` other
+    // than '1.27.0' — same `workoutProgramTemplateValid(data)` requirement,
+    // same two `templateLibrary`/`compositionEngine` pairings, same
+    // `selectionEngine in ['1.0.0', '2.0.0']` and Phase-1/Phase-2 branch
+    // shapes, same `safetyRules`/`modifierRules` equalities.
+    function workoutProgramLegacyVersionsValid(data) {
+      let versions = data.versions;
+      return workoutProgramTemplateValid(data)
+        && ((versions.templateLibrary == '1.3.0'
+              && versions.compositionEngine == '2.0.0')
+            || (versions.templateLibrary == '2.0.0'
+              && versions.compositionEngine == '2.1.0'))
+        && versions.selectionEngine in ['1.0.0', '2.0.0']
+        && (
+          (versions.selectionEngine == '1.0.0'
+            && !data.keys().hasAny(['prescribedTrainingFrequency', 'availability', 'weeklySchedule']))
+          ||
+          (versions.selectionEngine == '2.0.0'
+            && data.keys().hasAll(['prescribedTrainingFrequency', 'availability', 'weeklySchedule'])
+            && data.prescribedTrainingFrequency is int
+            && data.prescribedTrainingFrequency == data.prescribedStructuredDays
+            && data.prescribedTrainingFrequency >= 2
+            && data.prescribedTrainingFrequency <= 6
+            && data.prescribedTrainingFrequency <= data.requestedDays
+            && (!data.keys().hasAny(['scheduleMode']) || data.scheduleMode in ['fixed', 'flexible'])
+            && data.availability is map
+            && data.availability.keys().hasAll(['days', 'weekdays'])
+            && data.availability.keys().hasOnly(['days', 'weekdays'])
+            && data.availability.days == data.requestedDays
+            && data.availability.weekdays is list
+            && (data.availability.weekdays.size() == 0
+              || data.availability.weekdays.size() == data.availability.days)
+            && data.weeklySchedule is list
+            && (data.weeklySchedule.size() == 0 || data.weeklySchedule.size() == 7)
+            && (!data.keys().hasAny(['scheduleMode'])
+              || (data.scheduleMode == 'fixed'
+                && data.availability.weekdays.size() == data.availability.days
+                && data.weeklySchedule.size() == 7)
+              || (data.scheduleMode == 'flexible'
+                && data.availability.weekdays.size() == 0
+                && data.weeklySchedule.size() == 0)))
+        )
+        && versions.safetyRules == '1.0.0'
+        && versions.modifierRules == '2.0.0';
+    }
+
+    function workoutProgramCommonValid(userId, programId, data) {
       let questionnaire = get(/databases/$(database)/documents/users/$(userId)/questionnaires/$(data.questionnaireId));
+      // Fase 14 — `versions` bound once instead of re-traversing
+      // `data.versions` on every remaining field read below. Guarded by
+      // `data is map` below before anything reads `versions.*` — `data.
+      // versions` itself may not even exist on a malformed document, so
+      // this binding stays harmless (evaluates to `null`) until the `is
+      // map`/`hasAll` checks that gate its actual use have already run.
+      let versions = data.versions;
       return data is map
         && data.keys().hasAll([
              'programId', 'planId', 'prescriptionId', 'templateId', 'templateVersion',
@@ -338,11 +465,7 @@ service cloud.firestore {
         && data.prescriptionId == data.planId
         && data.prescriptionId is string
         && data.templateId is string
-        && data.templateId.matches('^T(00[1-9]|0[1-8][0-9]|090)$')
-        && template.data.status == 'active'
-        && data.templateVersion == template.data.version
-        && data.templateSourceVersion == template.data.sourceVersion
-        && data.templateContentHash == template.data.contentHash
+        && data.templateId.matches('^T(00[1-9]|0[1-9][0-9]|10[0-2])$')
         && data.questionnaireId is string
         && data.questionnaireVersion is int && data.questionnaireVersion >= 1
         && questionnaire.data.version == data.questionnaireVersion
@@ -353,45 +476,24 @@ service cloud.firestore {
         && data.prescribedStructuredDays is int
         && data.prescribedStructuredDays >= 2 && data.prescribedStructuredDays <= 7
         && data.sessions is list && data.sessions.size() >= 1 && data.sessions.size() <= 7
-        && data.versions is map
-        && ((data.versions.templateLibrary == '1.3.0'
-              && data.versions.compositionEngine == '2.0.0')
-            || (data.versions.templateLibrary == '2.0.0'
-              && data.versions.compositionEngine == '2.1.0'))
-        && data.versions.selectionEngine in ['1.0.0', '2.0.0']
+        && versions is map
+        // Fase 14 — dispatches to exactly one of the two split validators
+        // above based on `templateLibrary`, instead of one shared function
+        // that lexically contained both the v1.27 branch (no template
+        // document) and the legacy branch (`workoutProgramTemplateValid`'s
+        // `get()`) in the same expression tree. `||` short-circuits at the
+        // STATEMENT level between these two `&&`-guarded alternatives the
+        // same way it always did for the old combined checks — the only
+        // change is that a v1.27 write's evaluated tree no longer contains
+        // the legacy `get()`/selectionEngine-'1.0.0'/'2.0.0'/modifierRules-
+        // '2.0.0' branches at all, and a legacy write's tree no longer
+        // contains the v1.27-only equalities either. Exactly the same set
+        // of documents is accepted/rejected as before (verified by the
+        // unchanged Rules test fixtures for both v1.27 and v2/v1.3).
         && (
-          (data.versions.selectionEngine == '1.0.0'
-            && !data.keys().hasAny(['prescribedTrainingFrequency', 'availability', 'weeklySchedule']))
-          ||
-          (data.versions.selectionEngine == '2.0.0'
-            && data.keys().hasAll(['prescribedTrainingFrequency', 'availability', 'weeklySchedule'])
-            && data.prescribedTrainingFrequency is int
-            && data.prescribedTrainingFrequency == data.prescribedStructuredDays
-            && data.prescribedTrainingFrequency >= 2
-            && data.prescribedTrainingFrequency <= 6
-            && data.prescribedTrainingFrequency <= data.requestedDays
-            && (!data.keys().hasAny(['scheduleMode']) || data.scheduleMode in ['fixed', 'flexible'])
-            && data.availability is map
-            && data.availability.keys().hasAll(['days', 'weekdays'])
-            && data.availability.keys().hasOnly(['days', 'weekdays'])
-            && data.availability.days == data.requestedDays
-            && data.availability.weekdays is list
-            && (data.availability.weekdays.size() == 0
-              || data.availability.weekdays.size() == data.availability.days)
-            && data.weeklySchedule is list
-            && (data.weeklySchedule.size() == 0 || data.weeklySchedule.size() == 7)
-            // Explicit new plans have strict mode-specific shapes. Legacy V2
-            // snapshots without scheduleMode retain their former fixed read/write contract.
-            && (!data.keys().hasAny(['scheduleMode'])
-              || (data.scheduleMode == 'fixed'
-                && data.availability.weekdays.size() == data.availability.days
-                && data.weeklySchedule.size() == 7)
-              || (data.scheduleMode == 'flexible'
-                && data.availability.weekdays.size() == 0
-                && data.weeklySchedule.size() == 0)))
+          (versions.templateLibrary == '1.27.0' && workoutProgramV127VersionsValid(data))
+          || (versions.templateLibrary in ['1.3.0', '2.0.0'] && workoutProgramLegacyVersionsValid(data))
         )
-        && data.versions.safetyRules == '1.0.0'
-        && data.versions.modifierRules == '2.0.0'
         && data.trace is map
         && data.trace.safety is map
         && data.trace.safety.status in ['CLEAR', 'ADAPTED']
@@ -1082,6 +1184,22 @@ service cloud.firestore {
         // backend-controlled fact, not something a client can toggle per write.
         allow create: if isOwner(userId)
           && accountActive(userId)
+          // Fase 15 — v1.27 `workoutPrograms` documents are created
+          // exclusively by the `initializeWorkoutProgramV127` Cloud
+          // Function via the Admin SDK, which is not subject to these
+          // Rules at all (docs/workout-lifecycle — the v1.27 INITIALIZE
+          // cutover). A direct client create attempt for a v1.27 document
+          // is rejected right here, before `workoutProgramCommonValid` is
+          // ever called — that function's own evaluation of a real v1.27
+          // document (many sessions + a full decision trace) is exactly
+          // what exceeded Firestore's per-request expression ceiling (see
+          // `workoutProgramCommonValid`'s Fase 14 comment); this guard
+          // means that expensive, doomed-to-fail evaluation is never
+          // attempted for v1.27 at all, not just eventually rejected by
+          // it. v1.3/v2.0 create is completely unaffected — unchanged
+          // below.
+          && !(request.resource.data.versions is map
+               && request.resource.data.versions.templateLibrary == '1.27.0')
           && workoutProgramCommonValid(userId, programId, request.resource.data)
           // Transitional rollout compatibility: the already-published app
           // may omit both fields; the new app always sends both, and any
@@ -1094,8 +1212,8 @@ service cloud.firestore {
           && getAfter(/databases/$(database)/documents/users/$(userId)/workoutProgramState/active).data.programId == programId
           && (
                !existsAfter(/databases/$(database)/documents/users/$(userId)/workoutLifecycleState/current)
-               || (consumesLifecycleAuthorityGrant(userId, ['INITIALIZE', 'MIGRATE', 'ACTIVATE', 'ADAPT', 'RECOVER'])
-                   && lifecycleAuthorityGrant(userId).targetContentIdentity == programId)
+               || consumesLifecycleAuthorityGrantForContentIdentity(
+                    userId, ['INITIALIZE', 'MIGRATE', 'ACTIVATE', 'ADAPT', 'RECOVER'], programId)
              );
 
         // Phase 10E fix: `create` was hardened in Phase 10D (existsAfter-gated
@@ -1114,6 +1232,27 @@ service cloud.firestore {
         // current)`, never on a client-omittable field.
         allow update: if isOwner(userId)
           && accountActive(userId)
+          // Fase 14 — `update` can never legitimately apply to a document
+          // that doesn't exist yet (every check below already reads
+          // `resource.data.*`, so a null `resource` was always going to
+          // fail regardless); guarding on it FIRST, before the expensive
+          // `workoutProgramCommonValid` call, means a write Firestore is
+          // evaluating as a potential create never pays that cost a SECOND
+          // time on top of the `create` rule's own evaluation of the same
+          // function — same outcome (still denied), cheaper to reach it.
+          && resource != null
+          // Fase 16 — v1.27 `workoutPrograms` documents are now updated
+          // (reactivation after ADAPT/ACTIVATE, or the status flip after
+          // INITIALIZE) exclusively by the backend via Admin SDK
+          // (`persistLifecycleActivationV127`/`initializeWorkoutProgramV127Handler`,
+          // functions/src/workoutLifecycle/authorizeMutation.ts), which
+          // bypasses these Rules entirely. Rejected here, before the
+          // expensive `workoutProgramCommonValid` call, for the exact same
+          // reason the `create` rule above rejects v1.27 first — this
+          // document's own real size is what exceeded Firestore's
+          // per-request expression ceiling; v1.3/v2.0 update is completely
+          // unaffected below.
+          && !(resource.data.versions is map && resource.data.versions.templateLibrary == '1.27.0')
           && (workoutProgramCommonValid(userId, programId, request.resource.data)
               // A v1.3 snapshot may need to be superseded after the single
               // template document has been upgraded to v2. Its immutable
@@ -1427,14 +1566,25 @@ service cloud.firestore {
         return get(lifecycleAuthorityGrantPath(userId)).data;
       }
 
+      // Fase 14 — same fix as `consumesFinishExecutionAuthorityGrant` below
+      // (its own comment already documents the exact reason): a single
+      // `let grant = get(...).data` binding, read once, instead of six
+      // separate calls to `lifecycleAuthorityGrant(userId)` each doing its
+      // own `get()`. Byte-identical semantics (same six conditions, same
+      // fields, same operators) — only the number of `get()` evaluations
+      // changes. `lifecycleAuthorityGrant(userId)` itself is UNCHANGED and
+      // still used by every OTHER caller in this file exactly as before;
+      // this function alone stopped calling it internally.
       function consumesLifecycleAuthorityGrant(userId, operations) {
-        return exists(lifecycleAuthorityGrantPath(userId))
-          && lifecycleAuthorityGrant(userId).uid == userId
-          && lifecycleAuthorityGrant(userId).schemaVersion == 1
-          && lifecycleAuthorityGrant(userId).operation in operations
-          && lifecycleAuthorityGrant(userId).expiresAt is timestamp
-          && lifecycleAuthorityGrant(userId).expiresAt >= request.time
-          && !existsAfter(lifecycleAuthorityGrantPath(userId));
+        let grantPath = lifecycleAuthorityGrantPath(userId);
+        let grant = get(grantPath).data;
+        return exists(grantPath)
+          && grant.uid == userId
+          && grant.schemaVersion == 1
+          && grant.operation in operations
+          && grant.expiresAt is timestamp
+          && grant.expiresAt >= request.time
+          && !existsAfter(grantPath);
       }
 
       // Hot path for WorkoutExecution V2 terminalization. The generic helper
@@ -1455,6 +1605,27 @@ service cloud.firestore {
           && grant.expiresAt is timestamp
           && grant.expiresAt >= request.time
           && !existsAfter(grantPath);
+      }
+
+      // Fase 14 — same "single get(), one combined check" shape as
+      // `consumesFinishExecutionAuthorityGrant` above, for `workoutPrograms`'s
+      // create/update: both call sites previously did
+      // `consumesLifecycleAuthorityGrant(...) && lifecycleAuthorityGrant(userId)
+      // .targetContentIdentity == programId` — two separate function calls
+      // (two `get()`s) for what is really one grant document. Semantically
+      // identical (same six base conditions plus the targetContentIdentity
+      // equality), now one `get()`.
+      function consumesLifecycleAuthorityGrantForContentIdentity(userId, operations, contentIdentity) {
+        let grantPath = lifecycleAuthorityGrantPath(userId);
+        let grant = get(grantPath).data;
+        return exists(grantPath)
+          && grant.uid == userId
+          && grant.schemaVersion == 1
+          && grant.operation in operations
+          && grant.expiresAt is timestamp
+          && grant.expiresAt >= request.time
+          && !existsAfter(grantPath)
+          && grant.targetContentIdentity == contentIdentity;
       }
 
       function grantSourceMatches(userId, cycleId, programInstanceId) {
@@ -2691,7 +2862,7 @@ service cloud.firestore {
           'createdAt', 'updatedAt'
         ])
         && data.id == templateId
-        && templateId.matches('^T(00[1-9]|0[1-8][0-9]|090)$')
+        && templateId.matches('^T(00[1-9]|0[1-9][0-9]|10[0-2])$')
         && data.version is int && data.version >= 1
         && data.sourceVersion is string
         && data.contentHash is string && data.contentHash.size() == 64

@@ -149,11 +149,34 @@ describe('conditional questionnaire branches', () => {
     expect(female.filter((id) => getStepDef(id).kind === 'question')).toHaveLength(15);
   });
 
-  it('adds home equipment and both-environment resolution only when applicable', () => {
-    expect(getStepSequence('anonymous', { ...standard, place: 'home' })).toContain('equipment');
+  it('adds both-environment resolution only when applicable', () => {
     const both = getStepSequence('anonymous', { ...standard, place: 'both' });
     expect(both).toContain('primaryPlace');
-    expect(both).toContain('equipment');
+  });
+
+  it('never shows the equipment step, for any place — v1.27 does not collect a home equipment inventory', () => {
+    for (const place of ['gym', 'home', 'both'] as const) {
+      expect(getStepSequence('anonymous', { ...standard, place })).not.toContain('equipment');
+      expect(getStepSequence('forcedQuestionnaire', { ...standard, place })).not.toContain('equipment');
+    }
+  });
+
+  it('going straight from place to the next valid question skips equipment cleanly (no dead-end, no phantom step)', () => {
+    // place -> (primaryPlace only if 'both') -> interstitial_guidedWorkout -> muscleFocus.
+    // Home users should land on the interstitial next, exactly like gym users, never on 'equipment'.
+    expect(getNextStepId('place', 'anonymous', { ...standard, place: 'home' })).toBe('interstitial_guidedWorkout');
+    expect(getNextStepId('place', 'anonymous', { ...standard, place: 'gym' })).toBe('interstitial_guidedWorkout');
+  });
+
+  it('back-navigation for a home user skips equipment and never lands on it', () => {
+    expect(getPreviousStepId('muscleFocus', 'anonymous', { ...standard, place: 'home' })).toBe('place');
+    expect(getPreviousStepId('muscleFocus', 'anonymous', { ...standard, place: 'gym' })).toBe('place');
+  });
+
+  it('progress denominator/position is identical for home and gym (equipment never counted)', () => {
+    const homeProgress = computeOnboardingProgress('place', 'anonymous', { ...standard, place: 'home' });
+    const gymProgress = computeOnboardingProgress('place', 'anonymous', { ...standard, place: 'gym' });
+    expect(homeProgress).toEqual(gymProgress);
   });
 
   it('adds limitation regions directly and coexisting pregnancy/functional screening', () => {

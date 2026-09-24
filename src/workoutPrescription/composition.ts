@@ -10,6 +10,7 @@ import {
 } from './limitationResolver';
 import { adaptationStage, beginnerAdjustedSets, durationKeepFactor, isBeginnerExperience, keepCount } from './personalization';
 import { prescribeRestSeconds } from './restPrescription';
+import { isCardioDominantSessionType } from './sessionTypes';
 import type {
   CompositionDecision,
   CanonicalTemplate,
@@ -26,6 +27,16 @@ import type {
 import type { LimitationDecisionTrace } from './limitationResolver';
 import type { LimitationRegionId } from '../types/exercise';
 
+/**
+ * Legacy v2.0/T001-T090 composition — beginner volume reduction, duration-
+ * driven exercise/set cuts, goal-derived rest via `restPrescription.ts`,
+ * equipment substitution, muscle-priority reorder/add, and the P0-P7
+ * modifier/conflict pipeline (`modifiers.ts`/`conflicts.ts`) all live here
+ * and stay exactly as-is: `engine.ts` still calls `composeTemplate` for the
+ * active runtime. The v1.27 pipeline uses `compositionV127.ts`
+ * (`composeTemplateV127`) instead, which does not import this module and
+ * runs none of the above. Do not add v1.27 call sites to this file.
+ */
 const exerciseById = new Map(EXERCISES_SEED.map((exercise) => [exercise.id, exercise]));
 export const MINIMUM_EXECUTABLE_EXERCISES = 1;
 
@@ -49,10 +60,6 @@ type ResolvedSlot = {
 
 type PriorityCandidate = { priority: string; slotIndex: number };
 
-const CARDIO_DOMINANT_SESSION_TYPES = new Set([
-  'cardio', 'interval', 'circuit', 'mixed', 'recovery', 'balance_cardio',
-]);
-
 function composeCardioFinisher(
   session: CanonicalTemplate['sessions'][number],
   goalFamily: ReturnType<typeof goalFamilyFor>,
@@ -66,7 +73,7 @@ function composeCardioFinisher(
     || !source.duration
     || !source.intensity
     || goalFamily === 'conditioning'
-    || CARDIO_DOMINANT_SESSION_TYPES.has(session.type)
+    || isCardioDominantSessionType(session.type)
   ) {
     return undefined;
   }
@@ -256,6 +263,8 @@ export function composeTemplate(
             reps: item.reps,
             duration: item.duration,
             cycles: item.cycles,
+            cycleRange: item.cycleRange,
+            distance: item.distance,
             intensity: item.intensity,
             notes: item.notes,
           },
@@ -343,6 +352,8 @@ export function composeTemplate(
           reps: item.reps,
           duration: item.duration,
           cycles: item.cycles,
+          cycleRange: item.cycleRange,
+          distance: item.distance,
           intensity: item.intensity,
           notes: item.notes,
           restSeconds: prescribeRestSeconds({
@@ -490,6 +501,10 @@ export function composeTemplate(
       name: session.name,
       type: session.type,
       notes: session.notes,
+      ...(session.technique_guideline ? { techniqueGuideline: session.technique_guideline } : {}),
+      ...(session.effort_guideline ? { effortGuideline: session.effort_guideline } : {}),
+      ...(session.rest_guideline ? { restGuideline: session.rest_guideline } : {}),
+      ...(session.progression_guideline ? { progressionGuideline: session.progression_guideline } : {}),
       exercises: orderedIndices.map((index) => slots[index].exercise),
       ...(session.display_name ? { displayName: session.display_name } : {}),
       ...(cardioFinisher ? { cardioFinisher } : {}),

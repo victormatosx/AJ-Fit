@@ -253,8 +253,15 @@ describe.skipIf(!enabled)('installActiveWorkoutProgram — real Firestore Emulat
     );
     expect(result.status).toBe('installed');
     const program = await db.collection('users').doc(UID).collection('workoutPrograms').doc(result.programId).get();
-    expect(program.data()?.trace?.appliedModifiers).toContain('experience:advanced');
-    expect(program.data()?.trace?.appliedModifiers).not.toContain('experience:beginner');
+    // v1.27 (the authoritative default for a brand-new lifecycle —
+    // resolveAuthoritativeGenerationVersionForNewLifecycle) never reshapes a
+    // template with legacy `experience:*` modifiers post-selection
+    // (engineV127.ts's own file doc): level instead drives WHICH template
+    // `selectBaseTemplateV127` picks in the first place, recorded as a
+    // `beginner_route:*` marker on `trace.selectionReasons` — the one trace
+    // field both the v1.27 and v2 engines populate under the same name.
+    expect(program.data()?.trace?.selectionReasons).toContain('beginner_route:false');
+    expect(program.data()?.trace?.selectionReasons).not.toContain('beginner_route:true');
 
     const lifecycle = await db.collection('users').doc(UID).collection('workoutLifecycleState').doc('current').get();
     expect(lifecycle.data()?.currentTrainingLevel).toBe('ADVANCED');

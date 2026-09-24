@@ -149,7 +149,10 @@ export function validateTechnicalProfiles(
 
   if (profiles.length !== 71) errors.push(`profiles=${profiles.length}; esperado=71`);
   if (baseIds.size !== profiles.length) errors.push('exerciseId duplicado entre profiles');
-  if (catalogIds.size !== 116) errors.push(`catálogo=${catalogIds.size}; esperado=116`);
+  // Catalog size is no longer pinned to a fixed count (Fase 1/v1.27 Fase 2 —
+  // new exercises may be added); per-reference existence is still checked
+  // below wherever a candidate/action id is used.
+  if (!catalogIds.size) errors.push('catálogo vazio');
   if (v3.datasetVersion !== '3.0.0-generalized-conservative') {
     errors.push(`datasetVersion V3 inesperado: ${v3.datasetVersion}`);
   }
@@ -415,7 +418,10 @@ export function validateClosedProfileSet(
 
   if (profiles.length !== expectedProfileCount) errors.push(`profiles=${profiles.length}; esperado=${expectedProfileCount}`);
   if (profileIds.size !== profiles.length) errors.push('exerciseId duplicado entre profiles');
-  if (catalogIds.size !== 116) errors.push(`catálogo=${catalogIds.size}; esperado=116`);
+  // Catalog size is no longer pinned to a fixed count (Fase 1/v1.27 Fase 2 —
+  // new exercises may be added); per-reference existence is still checked
+  // below wherever a candidate/action id is used.
+  if (!catalogIds.size) errors.push('catálogo vazio');
 
   for (const entry of profiles) {
     const profile = entry.limitationProfile;
