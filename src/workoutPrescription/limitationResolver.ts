@@ -96,6 +96,14 @@ function ruleValid(rule: unknown, exerciseId: string): rule is ExerciseLimitatio
   if (rule.status === 'compatible' || rule.status === 'not_applicable') {
     return sameKeys(rule, ['status']);
   }
+  // `pending` — schema-valid but deliberately never terminal-safe and never
+  // a source of declared candidates (see `ExerciseLimitationRule`'s doc).
+  // Same shape as compatible/not_applicable; kept as an explicit branch, not
+  // folded into the line above, so this file never accidentally treats it
+  // as one of the safe statuses.
+  if (rule.status === 'pending') {
+    return sameKeys(rule, ['status']);
+  }
   if (rule.status === 'adapt') {
     return sameKeys(rule, ['status', 'adaptation'])
       && isRecord(rule.adaptation)

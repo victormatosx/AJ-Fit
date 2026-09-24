@@ -1,230 +1,197 @@
+import { CANONICAL_ACTIVITIES } from './canonicalActivities';
+import { MUSCULOSKELETAL_LIMITATION_REGIONS_V127, type MusculoskeletalLimitationRegionV127 } from './canonicalMusculoskeletalLimitationV127';
+import { isExerciseExecutable, unrestrictedEquipmentContext } from './equipment';
 import {
-  AVOID_RUNTIME_IDS_BY_REGION_V127,
-  hasReliableLimitationProfileCoverageV127,
-  isRuntimeExerciseExecutableV127,
-  SUBSTITUTION_CANDIDATES_BY_RUNTIME_ID_V127,
-  type MusculoskeletalLimitationRegionV127,
-  type SubstitutionCandidateV127,
-  type SubstitutionCandidatesV127,
-} from './canonicalMusculoskeletalLimitationV127';
+  resolveExerciseLimitationsFromCandidates,
+  validateLimitationProfile,
+  type LimitationCandidateOrigin,
+  type LimitationCatalog,
+  type LimitationCatalogExercise,
+  type RankedLimitationCandidateEvaluation,
+} from './limitationResolver';
+import { loadLocalExerciseCatalogForLimitations } from './localLimitationCatalog';
 import type { FinalWorkoutExercise, FinalWorkoutSession, TemplateEnvironment } from './types';
+import type { LimitationRegionId } from '../types/exercise';
+
+export type { MusculoskeletalLimitationRegionV127 };
 
 /**
- * Fase 5 — the one canonical v1.27 modifier: `musculoskeletal_limitation`.
- * Pure, deterministic, no I/O. Operates on the *already Fase-4-identity-
- * mapped* `FinalWorkoutSession[]` (so it only ever needs a runtime
- * `exerciseId` to look up candidates — see
- * `canonicalMusculoskeletalLimitationV127.ts`'s doc on why the
- * substitution-map lookup is keyed by runtime id, not by name).
+ * Rewrite (exercise-substitution architecture audit — "reuse the app's own
+ * equivalence source, not a second one"). The pre-rewrite version of this
+ * module read v1.27's own `exercise_substitution_map`/`avoid_by_default`
+ * JSON (`canonicalMusculoskeletalLimitationV127.ts`) — a template-authoring
+ * dataset that was never reviewed against, or kept in sync with, the ONE
+ * per-exercise clinical dataset the rest of the app already trusts
+ * (`limitationProfile`, `docs/workout-modifiers/exercise-limitations/
+ * 15_LIMITATION_PROFILES_TECHNICAL_v2.json`). A full 714-combination audit
+ * (102 templates x 7 regions) proved that JSON-map/tier design structurally
+ * blocks knee/hip/spine/shoulder in 100% of templates: its only Tier A
+ * candidates are either never catalogued (`proposed_catalog_addition`) or
+ * are themselves avoid-listed for the same region, and its Tier B/C dose
+ * policy requires a "substitute-specific authoritative reps/intensity
+ * source" that never exists anywhere in the dataset — an invented safety
+ * concept with no analog anywhere else in the app.
  *
- * Rule (Fase 5 §1): a region never re-selects a template or reshapes
- * anything but the vetoed slot itself. Every exercise NOT vetoed by an
- * active region is copied through unchanged — same object reference even,
- * so "session unaffected" is provably true.
+ * This rewrite deletes that second universe. It resolves every
+ * musculoskeletal substitution through `resolveExerciseLimitationsFromCandidates`
+ * (`limitationResolver.ts`) — the EXACT function `composition.ts` already
+ * calls, today, for every real v2 user's automatic prescription-time
+ * limitation substitution. Candidate discovery, ranking, and safety
+ * (`purposePreserved` pattern+muscle equivalence, `validateLimitationProfile`
+ * against EVERY active region, `isExerciseExecutable` environment gate,
+ * self/duplicate exclusion, fail-closed `NO_SAFE_SUBSTITUTION`) are 100%
+ * shared with that production code path — nothing here re-implements or
+ * forks any of it.
+ *
+ * Dose: audited across every consumer of exercise substitution in this app
+ * (`composition.ts`'s own limitation substitution, `manualSubstitutionResolver.ts`'s
+ * user-triggered swap, `prescriptionEvolution/cycleEvolution.ts`'s cycle
+ * evolution, `workoutExecution/types.ts`'s `buildInitialExerciseExecutions`)
+ * — none of them EVER recompute sets/reps/duration/distance/cycles/
+ * cycleRange/intensity/notes when the exercise identity in a slot changes.
+ * Dose is a property of the SLOT (what the session prescribes), never of
+ * which specific exercise fills it. There is no "authoritative
+ * substitute-specific dose" concept anywhere in the app to reuse beyond
+ * that — so there is no `CANDIDATE_UNSAFE_DOSE` gate here; every accepted
+ * substitution carries the original slot's dose forward verbatim, exactly
+ * like every other substitution path in the app already does.
  */
 
-export type SubstitutionTier = 'A' | 'B' | 'C';
+const LEGACY_REGION_BY_V127: Record<MusculoskeletalLimitationRegionV127, LimitationRegionId> = {
+  knee: 'knee',
+  hip: 'hip',
+  spine: 'back',
+  shoulder: 'shoulder',
+  elbow: 'elbow',
+  wrist: 'wrist',
+  ankle_foot: 'ankle_foot',
+};
 
-export type RejectedCandidateReasonV127 =
-  | 'CANDIDATE_NOT_EXECUTABLE'
-  | 'CANDIDATE_ENVIRONMENT_INCOMPATIBLE'
-  | 'CANDIDATE_VIOLATES_ACTIVE_LIMITATION'
-  | 'CANDIDATE_IS_SELF'
-  | 'CANDIDATE_DUPLICATE_IN_SESSION'
-  | 'CANDIDATE_UNSAFE_DOSE'
-  // Fase 13 — the candidate itself has no reviewed, approved limitation
-  // profile (`hasReliableLimitationProfileCoverageV127`) — never sealed by
-  // `assertPlanSafe` either way, so it can never be accepted as a
-  // substitute while a region is active.
-  | 'CANDIDATE_MISSING_LIMITATION_PROFILE';
+function toLegacyRegions(regions: readonly MusculoskeletalLimitationRegionV127[]): LimitationRegionId[] {
+  return regions.map((region) => LEGACY_REGION_BY_V127[region]);
+}
 
-export interface RejectedCandidateV127 {
-  exerciseId: string;
-  tier: SubstitutionTier;
-  reasonCode: RejectedCandidateReasonV127;
+/**
+ * Coverage is evaluated PER ACTIVE REGION, never globally: an exercise's
+ * `limitationProfile` may have an already-reviewed decision for one region
+ * and a `pending` (not yet reviewed) one for another — the resolver must
+ * only ever require a decision for the region(s) actually active for this
+ * user, never for the other 6.
+ *
+ * This check exists ALONGSIDE `resolveExerciseLimitationsFromCandidates`'s
+ * own per-region `sourceTerminal` check (which already only inspects the
+ * active regions) because that function's candidate search
+ * (`similarExerciseIds`/`substitution.group` family) runs UNCONDITIONALLY,
+ * regardless of the source's own rule status for the active region — a
+ * `pending` region would otherwise fall through to that search and could
+ * silently accept a family-matched candidate for a region nobody ever
+ * actually reviewed (e.g. `cable-crossover-fly`'s `chest_fly` group already
+ * contains `pec-deck-machine-fly`). `pending` must never behave like an
+ * undeclared `avoid` — it must fail closed immediately, exactly like a
+ * missing profile, without ever reaching candidate search.
+ */
+function hasPendingActiveRegion(
+  profile: unknown,
+  exerciseId: string,
+  activeLegacyRegions: readonly LimitationRegionId[],
+): boolean {
+  const validation = validateLimitationProfile(exerciseId, profile);
+  if (!validation.valid) return false; // handled by resolveExerciseLimitationsFromCandidates's own PROFILE_COVERAGE_MISSING path.
+  return activeLegacyRegions.some((region) => validation.profile.regions[region].status === 'pending');
+}
+
+/**
+ * Cardio/mobility activities (`CANONICAL_ACTIVITIES`) are a disjoint,
+ * non-Firestore-backed catalog with no `limitationProfile` concept at all
+ * (same exclusion the real limitation resolver already applies elsewhere —
+ * they are not in `EXERCISES_SEED`/`LimitationCatalog` in the first place).
+ * They are exempt from substitution entirely, same as before the rewrite.
+ */
+const CANONICAL_ACTIVITY_IDS: ReadonlySet<string> = new Set(CANONICAL_ACTIVITIES.map((activity) => activity.id));
+
+/**
+ * The same bundled, pure, local `EXERCISES_SEED` + reviewed-`limitationProfile`
+ * merge already sanctioned for production runtime use (see
+ * `localLimitationCatalog.ts`'s file doc) — one shared catalog, not a
+ * v1.27-specific copy.
+ */
+const SHARED_LIMITATION_CATALOG: LimitationCatalog = new Map(
+  loadLocalExerciseCatalogForLimitations().map((exercise) => [exercise.id, exercise]),
+);
+
+type DoseFieldsV127 = Pick<FinalWorkoutExercise, 'sets' | 'reps' | 'duration' | 'distance' | 'cycles' | 'cycleRange' | 'intensity' | 'notes'>;
+
+function doseSnapshot(exercise: DoseFieldsV127): DoseFieldsV127 {
+  return {
+    sets: exercise.sets,
+    reps: exercise.reps,
+    duration: exercise.duration,
+    distance: exercise.distance,
+    cycles: exercise.cycles,
+    cycleRange: exercise.cycleRange,
+    intensity: exercise.intensity,
+    notes: exercise.notes,
+  };
 }
 
 export type MusculoskeletalLimitationDecisionV127 =
   | {
       sessionIndex: number;
       exerciseId: string;
-      vetoedByRegions: MusculoskeletalLimitationRegionV127[];
+      activeRegions: MusculoskeletalLimitationRegionV127[];
       outcome: 'SUBSTITUTED';
-      tier: SubstitutionTier;
       substituteExerciseId: string;
-      rejectedCandidates: RejectedCandidateV127[];
+      /** Which lane of the app's OWN existing equivalence source resolved this — never a v1.27-specific tier. 'original' never appears here (that outcome is not logged as a decision at all — see the module doc). */
+      candidateOrigin: LimitationCandidateOrigin;
+      candidateRank: number;
+      sourcePrimaryMuscle: string;
+      substitutePrimaryMuscle: string;
+      environment: TemplateEnvironment;
+      /** 'adapted' when the source's own declared `adapt` rule resolved it; 'substituted' when an `avoid` rule (or the similar/family pool) did. */
+      limitationProfileResolution: 'adapted' | 'substituted';
+      doseBefore: DoseFieldsV127;
+      doseAfter: DoseFieldsV127;
+      candidatesEvaluated: RankedLimitationCandidateEvaluation[];
     }
   | {
       sessionIndex: number;
       exerciseId: string;
-      vetoedByRegions: MusculoskeletalLimitationRegionV127[];
+      activeRegions: MusculoskeletalLimitationRegionV127[];
       outcome: 'BLOCKED';
-      // Fase 13 — `PROFILE_COVERAGE_MISSING` is distinct from the other two:
-      // it fires even when `vetoedByRegions` is EMPTY (the exercise was
-      // never vetoed by the user's active region at all) — a region is
-      // simply active, and this exercise has no reviewed, approved
-      // limitation profile, so `assertPlanSafe` could never seal it either
-      // way while that region stays active.
-      reasonCode: 'NO_SUBSTITUTION_MAP_ENTRY' | 'NO_VALID_CANDIDATE' | 'PROFILE_COVERAGE_MISSING';
-      rejectedCandidates: RejectedCandidateV127[];
+      reasonCode: 'NO_SAFE_SUBSTITUTION' | 'PROFILE_COVERAGE_MISSING';
+      /** The exact `limitationResolver.ts`/`validateLimitationProfile` reason codes behind `PROFILE_COVERAGE_MISSING` (e.g. `LIMITATION_PROFILE_MISSING`) — never merged with substitution-failure reasoning. */
+      sourceReasonCodes: string[];
+      candidatesEvaluated: RankedLimitationCandidateEvaluation[];
     };
 
 export type MusculoskeletalLimitationResultV127 =
   | { status: 'APPLIED'; sessions: FinalWorkoutSession[]; decisions: MusculoskeletalLimitationDecisionV127[] }
   | { status: 'BLOCKED'; reasonCodes: string[]; decisions: MusculoskeletalLimitationDecisionV127[] };
 
-const TIERS: readonly SubstitutionTier[] = ['A', 'B', 'C'];
-
-type DoseFieldsV127 = Pick<FinalWorkoutExercise, 'sets' | 'reps' | 'duration' | 'distance' | 'cycles' | 'cycleRange' | 'intensity' | 'notes'>;
-
-/**
- * The one place a future authoritative substitute-specific reps/intensity
- * would be read from. Always `null` today: audited, and the
- * `exercise_substitution_map` candidate objects
- * (`canonicalMusculoskeletalLimitationV127.ts`'s `SubstitutionCandidateV127`
- * / the raw JSON's `RawSubstitutionCandidate`) carry only
- * `name`/`exercise_id`/`catalog_status`/`environments` — no dose field of
- * any kind — and `EXERCISES_SEED`'s `Exercise` has no prescriptive
- * reps/intensity either (dose is session-specific, not exercise-intrinsic).
- * Deliberately NOT a threshold, a muscle/mechanic-keyed range table, or a
- * hypertrophy/strength lookup — none of that exists in the canonical
- * source, and inventing one would be exactly the fabricated prescription
- * Fase 5 §6 forbids.
- */
-function substituteAuthoritativeDose(_candidateRuntimeId: string): Pick<FinalWorkoutExercise, 'reps' | 'intensity'> | null {
-  return null;
+export interface MusculoskeletalLimitationDataV127 {
+  catalog: LimitationCatalog;
+  isExecutable: (exercise: LimitationCatalogExercise) => boolean;
 }
 
-/**
- * Fase 5 §6 dose policy:
- *  - Tier A (closest equivalent): the original dose transfers verbatim —
- *    never an absolute load (this schema has none to copy in the first
- *    place), just the same sets/reps/duration/distance/cycles/intensity.
- *  - Tier B/C: `sets` (a volume signal, not an exercise-specific one) may
- *    always transfer from the original. `reps`/`intensity` are NEVER
- *    inherited from the original — only from an authoritative
- *    substitute-specific source (`substituteAuthoritativeDose`, always
- *    `null` today). If the original prescription needed reps or intensity
- *    (i.e. either field was set) and no authoritative substitute value
- *    exists, the candidate is rejected (`CANDIDATE_UNSAFE_DOSE`) —
- *    consistently, for every B/C candidate today, since no substitute
- *    anywhere in the canonical source carries its own dose metadata yet.
- *    `duration`/`distance`/`cycles`/`cycleRange` are unaffected — not a
- *    "reps" concern — and transfer from the original as before.
- */
-function computeSubstituteDoseV127(
-  tier: SubstitutionTier,
-  original: FinalWorkoutExercise,
-  candidateRuntimeId: string,
-): { ok: true; dose: DoseFieldsV127 } | { ok: false } {
-  if (tier === 'A') {
-    return {
-      ok: true,
-      dose: {
-        sets: original.sets,
-        reps: original.reps,
-        duration: original.duration,
-        distance: original.distance,
-        cycles: original.cycles,
-        cycleRange: original.cycleRange,
-        intensity: original.intensity,
-        notes: original.notes,
-      },
-    };
-  }
-  const needsAuthoritativeDose = original.reps != null || original.intensity != null;
-  const authoritative = needsAuthoritativeDose ? substituteAuthoritativeDose(candidateRuntimeId) : null;
-  if (needsAuthoritativeDose && !authoritative) return { ok: false };
-  const hasNonRepsDose = original.sets != null || original.duration != null || original.distance != null || original.cycleRange != null;
-  if (!hasNonRepsDose) return { ok: false };
+function defaultDataFor(environment: TemplateEnvironment): MusculoskeletalLimitationDataV127 {
+  const equipmentContext = unrestrictedEquipmentContext(environment);
   return {
-    ok: true,
-    dose: {
-      sets: original.sets,
-      reps: authoritative?.reps,
-      duration: original.duration,
-      distance: original.distance,
-      cycles: original.cycles,
-      cycleRange: original.cycleRange,
-      intensity: authoritative?.intensity,
-      notes: original.notes,
-    },
+    catalog: SHARED_LIMITATION_CATALOG,
+    isExecutable: (exercise) => isExerciseExecutable(exercise, equipmentContext),
   };
 }
 
-function validateCandidateV127(input: {
-  candidate: SubstitutionCandidateV127;
-  environment: TemplateEnvironment;
-  effectiveAvoid: ReadonlySet<string>;
-  originalRuntimeId: string;
-  usedInSession: ReadonlySet<string>;
-  isExecutable: (runtimeId: string) => boolean;
-  hasProfileCoverage: (runtimeId: string) => boolean;
-}): RejectedCandidateReasonV127 | null {
-  // Identity resolution and "existing_library only" are already enforced
-  // when candidates are loaded (canonicalMusculoskeletalLimitationV127.ts)
-  // — every SubstitutionCandidateV127 here already satisfies Fase 5 §5's
-  // "resolves to a valid runtime identity" and "not a proposed addition"
-  // checks structurally, by construction.
-  // Self-check first: the original exercise's own runtime id is always,
-  // trivially, a member of `effectiveAvoid` (it is the vetoed exercise) —
-  // checking that before self-identity would misreport a self-referential
-  // candidate as merely "violates a limitation" instead of the more
-  // specific, more actionable truth.
-  if (input.candidate.runtimeId === input.originalRuntimeId) return 'CANDIDATE_IS_SELF';
-  if (!input.isExecutable(input.candidate.runtimeId)) return 'CANDIDATE_NOT_EXECUTABLE';
-  if (!input.candidate.environments.includes(input.environment)) return 'CANDIDATE_ENVIRONMENT_INCOMPATIBLE';
-  if (input.effectiveAvoid.has(input.candidate.runtimeId)) return 'CANDIDATE_VIOLATES_ACTIVE_LIMITATION';
-  if (input.usedInSession.has(input.candidate.runtimeId)) return 'CANDIDATE_DUPLICATE_IN_SESSION';
-  // Fase 13 — a region is active for this user; the candidate itself must
-  // be one `assertPlanSafe` could actually seal too.
-  if (!input.hasProfileCoverage(input.candidate.runtimeId)) return 'CANDIDATE_MISSING_LIMITATION_PROFILE';
-  return null;
-}
-
 /**
- * Fase 5 §3: effectiveAvoid is the UNION of every active region's avoid
- * list — a candidate must be safe against ALL active limitations, not just
- * whichever region vetoed the exercise being replaced.
- */
-function effectiveAvoidRuntimeIds(
-  activeRegions: readonly MusculoskeletalLimitationRegionV127[],
-  avoidByRegion: Readonly<Record<MusculoskeletalLimitationRegionV127, ReadonlySet<string>>>,
-): ReadonlySet<string> {
-  const union = new Set<string>();
-  for (const region of activeRegions) {
-    for (const runtimeId of avoidByRegion[region]) union.add(runtimeId);
-  }
-  return union;
-}
-
-export interface MusculoskeletalLimitationDataV127 {
-  avoidByRegion: Readonly<Record<MusculoskeletalLimitationRegionV127, ReadonlySet<string>>>;
-  candidatesByRuntimeId: ReadonlyMap<string, SubstitutionCandidatesV127>;
-  isExecutable: (runtimeId: string) => boolean;
-  /** Fase 13 — see `canonicalMusculoskeletalLimitationV127.ts`'s `hasReliableLimitationProfileCoverageV127`. */
-  hasProfileCoverage: (runtimeId: string) => boolean;
-}
-
-const DEFAULT_DATA: MusculoskeletalLimitationDataV127 = {
-  avoidByRegion: AVOID_RUNTIME_IDS_BY_REGION_V127,
-  candidatesByRuntimeId: SUBSTITUTION_CANDIDATES_BY_RUNTIME_ID_V127,
-  isExecutable: isRuntimeExerciseExecutableV127,
-  hasProfileCoverage: hasReliableLimitationProfileCoverageV127,
-};
-
-/**
- * `data` defaults to the real canonical v1.27 source/catalog — injectable
- * only for unit tests that need precise, synthetic A/B/C scenarios (same
- * pattern as `selectBaseTemplateV127(input, catalog = V127_TEMPLATE_PROFILES)`
- * and `catalogInvariantErrors(source = catalog)` elsewhere in this
- * directory). Production/default behavior is never affected by this param.
+ * `data` defaults to the real shared catalog/environment gate — injectable
+ * only for unit tests that need a precise, synthetic catalog (same pattern
+ * as the rest of this directory, e.g. `selectBaseTemplateV127`'s `catalog`
+ * param).
  */
 export function applyMusculoskeletalLimitationV127(
   sessions: readonly FinalWorkoutSession[],
   environment: TemplateEnvironment,
   activeRegions: readonly MusculoskeletalLimitationRegionV127[],
-  data: MusculoskeletalLimitationDataV127 = DEFAULT_DATA,
+  data: MusculoskeletalLimitationDataV127 = defaultDataFor(environment),
 ): MusculoskeletalLimitationResultV127 {
   if (!activeRegions.length) {
     // Nothing active — every exercise is returned by identity, matching
@@ -232,7 +199,8 @@ export function applyMusculoskeletalLimitationV127(
     return { status: 'APPLIED', sessions: sessions as FinalWorkoutSession[], decisions: [] };
   }
 
-  const effectiveAvoid = effectiveAvoidRuntimeIds(activeRegions, data.avoidByRegion);
+  const legacyRegions = toLegacyRegions(activeRegions);
+  const activeRegionsSnapshot = [...activeRegions];
   const decisions: MusculoskeletalLimitationDecisionV127[] = [];
   const reasonCodes: string[] = [];
 
@@ -241,84 +209,103 @@ export function applyMusculoskeletalLimitationV127(
     let sessionChanged = false;
     const finalExercises: FinalWorkoutExercise[] = session.exercises.map((exercise) => {
       const originalRuntimeId = exercise.exerciseId;
-      const vetoedByRegions = activeRegions.filter((region) => data.avoidByRegion[region].has(originalRuntimeId));
-      if (!vetoedByRegions.length) {
+
+      if (CANONICAL_ACTIVITY_IDS.has(originalRuntimeId)) {
         usedInSession.add(originalRuntimeId);
-        // Fase 13 — a region is active for this user; even an exercise no
-        // region vetoes must still have a reviewed, approved limitation
-        // profile before it can ever reach `assertPlanSafe` — never
-        // inferred, never silently allowed through.
-        if (!data.hasProfileCoverage(originalRuntimeId)) {
-          decisions.push({
-            sessionIndex,
-            exerciseId: originalRuntimeId,
-            vetoedByRegions: [],
-            outcome: 'BLOCKED',
-            reasonCode: 'PROFILE_COVERAGE_MISSING',
-            rejectedCandidates: [],
-          });
-          reasonCodes.push(`MUSCULOSKELETAL_PROFILE_COVERAGE_MISSING:${sessionIndex}:${originalRuntimeId}`);
-        }
         return exercise;
       }
 
-      const candidateGroup = data.candidatesByRuntimeId.get(originalRuntimeId);
-      const rejectedCandidates: RejectedCandidateV127[] = [];
-      let accepted: { tier: SubstitutionTier; candidate: SubstitutionCandidateV127; dose: DoseFieldsV127 } | undefined;
-
-      if (candidateGroup) {
-        for (const tier of TIERS) {
-          if (accepted) break;
-          const tierCandidates = tier === 'A' ? candidateGroup.A : tier === 'B' ? candidateGroup.B : candidateGroup.C;
-          for (const candidate of tierCandidates) {
-            const rejectionReason = validateCandidateV127({
-              candidate, environment, effectiveAvoid, originalRuntimeId, usedInSession,
-              isExecutable: data.isExecutable, hasProfileCoverage: data.hasProfileCoverage,
-            });
-            if (rejectionReason) {
-              rejectedCandidates.push({ exerciseId: candidate.runtimeId, tier, reasonCode: rejectionReason });
-              continue;
-            }
-            const doseResult = computeSubstituteDoseV127(tier, exercise, candidate.runtimeId);
-            if (!doseResult.ok) {
-              rejectedCandidates.push({ exerciseId: candidate.runtimeId, tier, reasonCode: 'CANDIDATE_UNSAFE_DOSE' });
-              continue;
-            }
-            accepted = { tier, candidate, dose: doseResult.dose };
-            break;
-          }
-        }
-      }
-
-      if (!accepted) {
+      if (hasPendingActiveRegion(data.catalog.get(originalRuntimeId)?.limitationProfile, originalRuntimeId, legacyRegions)) {
         decisions.push({
           sessionIndex,
           exerciseId: originalRuntimeId,
-          vetoedByRegions,
+          activeRegions: activeRegionsSnapshot,
           outcome: 'BLOCKED',
-          reasonCode: candidateGroup ? 'NO_VALID_CANDIDATE' : 'NO_SUBSTITUTION_MAP_ENTRY',
-          rejectedCandidates,
+          reasonCode: 'PROFILE_COVERAGE_MISSING',
+          sourceReasonCodes: ['LIMITATION_REGION_PENDING'],
+          candidatesEvaluated: [],
         });
-        reasonCodes.push(`MUSCULOSKELETAL_NO_SUBSTITUTE:${sessionIndex}:${originalRuntimeId}`);
+        reasonCodes.push(`MUSCULOSKELETAL_PROFILE_COVERAGE_MISSING:${sessionIndex}:${originalRuntimeId}`);
         usedInSession.add(originalRuntimeId);
+        return exercise;
+      }
+
+      const resolution = resolveExerciseLimitationsFromCandidates({
+        exerciseId: originalRuntimeId,
+        regions: legacyRegions,
+        catalog: data.catalog,
+        isExecutable: data.isExecutable,
+        excludedExerciseIds: usedInSession,
+      });
+
+      if (resolution.status === 'FAILED') {
+        const reasonCode = resolution.failureKind === 'INVALID_CONFIGURATION' ? 'PROFILE_COVERAGE_MISSING' : 'NO_SAFE_SUBSTITUTION';
+        decisions.push({
+          sessionIndex,
+          exerciseId: originalRuntimeId,
+          activeRegions: activeRegionsSnapshot,
+          outcome: 'BLOCKED',
+          reasonCode,
+          sourceReasonCodes: resolution.reasonCodes,
+          candidatesEvaluated: resolution.candidatesEvaluated,
+        });
+        reasonCodes.push(
+          reasonCode === 'PROFILE_COVERAGE_MISSING'
+            ? `MUSCULOSKELETAL_PROFILE_COVERAGE_MISSING:${sessionIndex}:${originalRuntimeId}`
+            : `MUSCULOSKELETAL_NO_SUBSTITUTE:${sessionIndex}:${originalRuntimeId}`,
+        );
+        usedInSession.add(originalRuntimeId);
+        return exercise;
+      }
+
+      usedInSession.add(resolution.exercise.id);
+
+      // 'original' = the source itself is already compatible with every
+      // active region — Fase 5 §1's "copy through unchanged, same object
+      // reference" guarantee, no decision logged (matches the pre-rewrite
+      // contract: only an actual substitution or a block is ever traced).
+      if (resolution.candidateOrigin === 'original') {
         return exercise;
       }
 
       sessionChanged = true;
-      usedInSession.add(accepted.candidate.runtimeId);
+      // `LimitationDecisionTrace.candidatesEvaluated` is typed narrowly
+      // (`LimitationCandidateEvaluation[]`), but `resolveExerciseLimitationsFromCandidates`
+      // always populates it with the richer ranked shape (see its own
+      // `rankedEvaluation = { ...evaluation, origin, rank }` push) — this
+      // reflects that real runtime shape, not a new assumption.
+      const candidatesEvaluated = (resolution.trace.candidatesEvaluated ?? []) as RankedLimitationCandidateEvaluation[];
+      const acceptedEvaluation = candidatesEvaluated.find(
+        (candidate) => candidate.exerciseId === resolution.exercise.id,
+      );
+      const dose = doseSnapshot(exercise);
       decisions.push({
         sessionIndex,
         exerciseId: originalRuntimeId,
-        vetoedByRegions,
+        activeRegions: activeRegionsSnapshot,
         outcome: 'SUBSTITUTED',
-        tier: accepted.tier,
-        substituteExerciseId: accepted.candidate.runtimeId,
-        rejectedCandidates,
+        substituteExerciseId: resolution.exercise.id,
+        candidateOrigin: resolution.candidateOrigin,
+        candidateRank: acceptedEvaluation?.rank ?? 0,
+        sourcePrimaryMuscle: data.catalog.get(originalRuntimeId)?.target.primaryMuscle ?? '',
+        substitutePrimaryMuscle: resolution.exercise.target.primaryMuscle,
+        environment,
+        limitationProfileResolution: resolution.trace.resolution === 'adapted' ? 'adapted' : 'substituted',
+        doseBefore: dose,
+        doseAfter: dose,
+        candidatesEvaluated,
       });
       return {
-        exerciseId: accepted.candidate.runtimeId,
+        exerciseId: resolution.exercise.id,
         sourceExerciseId: exercise.sourceExerciseId,
-        ...accepted.dose,
+        sets: exercise.sets,
+        reps: exercise.reps,
+        duration: exercise.duration,
+        cycles: exercise.cycles,
+        cycleRange: exercise.cycleRange,
+        distance: exercise.distance,
+        intensity: exercise.intensity,
+        notes: exercise.notes,
       };
     });
 
@@ -336,3 +323,5 @@ export function applyMusculoskeletalLimitationV127(
   }
   return { status: 'APPLIED', sessions: resultSessions, decisions };
 }
+
+export { MUSCULOSKELETAL_LIMITATION_REGIONS_V127 };

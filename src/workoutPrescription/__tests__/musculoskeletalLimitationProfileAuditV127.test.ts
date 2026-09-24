@@ -8,171 +8,217 @@ import {
   CONFIRMED_LIMITATION_PROFILE_RUNTIME_IDS_V127,
   hasReliableLimitationProfileCoverageV127,
 } from '../canonicalMusculoskeletalLimitationV127';
+import { validateLimitationProfile } from '../limitationResolver';
 import { V127_TEMPLATE_PROFILES } from '../selectorV127';
 
 /**
- * Fase 13 §1 — per-exercise audit of the 7 v1.27 Fase 2 closure resistance
- * exercises (`src/data/exercisesSeedData.ts`) against
- * `CONFIRMED_LIMITATION_PROFILE_RUNTIME_IDS_V127` (the 76 ids in
+ * Fase 13 §1 (original) + Fase 4 exercise-substitution closure (this file's
+ * current state) — per-exercise audit of the 10 v1.27 exercises that had no
+ * reviewed `limitationProfile` (7 from the original Fase 13 audit below, plus
+ * `cable-crossover-fly`, `bent-over-dumbbell-row`, `preacher-curl`, found by
+ * the later 714-combination audit).
+ *
+ * An APPROVED product/clinical decision matrix (all 7 regions, all 10
+ * exercise ids) was implemented in
  * `docs/workout-modifiers/exercise-limitations/15_LIMITATION_PROFILES_TECHNICAL_v2.json`
- * — the same source `assertPlanSafe`/Firestore `limitationProfile` fields
- * are seeded from).
+ * (`phase4Addition`), reusing ONLY already-catalogued, already-profiled
+ * candidates that pass the resolver's own `purposePreserved` (same
+ * `movement.pattern` + same `target.primaryMuscle`) and have their OWN
+ * region rule `compatible`/`not_applicable` for the target region — never a
+ * new or invented exercise, never a `proposed_catalog_addition`.
  *
- * No new clinical classification is invented anywhere in this file.
+ * RESULT: 7 of the 10 could be represented COMPLETELY (every `adapt` field
+ * has a valid, existing candidate) and are now in
+ * `CONFIRMED_LIMITATION_PROFILE_RUNTIME_IDS_V127`:
  *
- * RESULT (see the Fase 13 report for the full write-up):
+ *   - decline-push-up            (shoulder/elbow/wrist adapt -> wall-push-up)
+ *   - incline-push-up            (shoulder/elbow/wrist adapt -> wall-push-up)
+ *   - decline-barbell-bench-press(shoulder/elbow/wrist adapt -> wall-push-up)
+ *   - resistance-band-standing-leg-curl (knee adapt -> supported-standing-leg-curl)
+ *   - bent-over-dumbbell-row     (hip/shoulder/wrist adapt -> resistance-band-row; back avoid, no declared substitute)
+ *   - preacher-curl              (elbow/wrist adapt -> hammer-curl)
+ *   - resistance-band-pullover   (shoulder/wrist adapt -> resistance-band-lat-pulldown)
  *
- *   2 have a strong, PRECEDENTED reuse candidate — same primaryMuscle,
- *   movement.pattern, movement.mechanic, movement.laterality, AND
- *   bodyPosition as an already-approved profile, differing ONLY in
- *   equipment. The existing 76-profile dataset already treats several
- *   equipment-only-different exercise pairs as sharing byte-identical
- *   `regions` content under `reviewBasis: 'product_policy'` (e.g.
- *   `iso-lateral-row-machine`/`low-cable-row-wide-neutral-grip`,
- *   `hack-squat-machine`/`leg-press-45`) — this is the established,
- *   already-supported mechanism, not a new one. PROPOSED, not applied:
- *   nothing in this repo copies the profile automatically; a human still
- *   has to review and publish it.
+ * Fase 4b (per-region coverage) — the remaining 3 (`cable-crossover-fly`,
+ * `dumbbell-fly`, `dumbbell-rear-delt-fly`) could NOT be represented
+ * completely (no existing candidate for at least one `adapt` region — see
+ * the Fase 4 write-up below), which under the OLD "profile is all-or-nothing"
+ * rule meant withholding the entire profile — including the regions that
+ * WERE already decided (e.g. `cable-crossover-fly`'s own `knee:
+ * not_applicable`), incorrectly blocking users whose only active region had
+ * nothing to do with the pending one.
  *
- *     - dumbbell-rear-delt-fly  -> propose reusing cable-rear-delt-fly's profile
- *     - resistance-band-standing-leg-curl -> propose reusing supported-standing-leg-curl's profile
+ * The fix: `ExerciseLimitationRule` gained a `pending` status (see its own
+ * doc in `types/exercise.ts`) — schema-valid, but NEVER terminal-safe and
+ * NEVER a source of declared substitution candidates. `resolveExerciseLimitationsFromCandidates`
+ * already evaluated `sourceTerminal`/candidate profiles per ACTIVE region
+ * only (this part was never global) — the one real gap was that its
+ * unconditional `similarExerciseIds`/family-group candidate search could
+ * still run for a `pending` region and silently accept a same-family
+ * candidate nobody actually reviewed for that region (e.g.
+ * `cable-crossover-fly`'s own `chest_fly` group already contains
+ * `pec-deck-machine-fly`). `hasPendingActiveRegion` in
+ * `musculoskeletalLimitationV127.ts` closes that gap: any exercise with a
+ * `pending` rule for an ACTIVE region is blocked as `PROFILE_COVERAGE_MISSING`
+ * before the resolver's candidate search ever runs — `limitationResolver.ts`
+ * itself (shared with v2) is otherwise unchanged.
  *
- *   5 have NO existing profiled exercise with a matching movement pattern
- *   AND mechanic (the two other bench-press-family/push-up candidates
- *   differ by incline/decline/flat angle, which this dataset's own
- *   existing profiles already treat as clinically distinct — see the
- *   "no identical angle-crossing group" assertion below — so angle-based
- *   equivalence is NOT assumed). These stay BLOCKED until a real review:
+ * RESULT: all 3 now have a complete, schema-valid profile:
+ *   - cable-crossover-fly: knee/hip/back/elbow/ankle_foot decided;
+ *     shoulder/wrist `pending`.
+ *   - dumbbell-fly: same shape as cable-crossover-fly.
+ *   - dumbbell-rear-delt-fly: shoulder resolved (`adapt` -> cable-rear-delt-fly,
+ *     already used elsewhere); wrist `pending`.
  *
- *     - decline-barbell-bench-press
- *     - dumbbell-fly
- *     - resistance-band-pullover
- *     - decline-push-up
- *     - incline-push-up
- *
- * Regardless of category, ALL 7 currently fail closed identically — see
- * `musculoskeletalLimitationV127.ts`'s `hasProfileCoverage` check
- * (`musculoskeletalLimitationV127.test.ts`'s "real-data proof" test and
- * `engineV127Integration.test.ts`'s T009 test already prove the runtime
- * behavior end to end). This file only pins the AUDIT facts themselves.
+ * No new clinical classification is invented anywhere in this file or in the
+ * dataset it audits — every `adapt` target used already exists, is already
+ * profiled, and already passes the resolver's real eligibility rules; every
+ * `pending` region stays an explicit non-decision, never converted to
+ * `compatible`/`not_applicable`/`adapt`/`avoid`.
  */
-const NEW_EXERCISE_IDS = [
-  'decline-barbell-bench-press',
-  'dumbbell-fly',
-  'dumbbell-rear-delt-fly',
-  'resistance-band-pullover',
+const RESOLVED_EXERCISE_IDS = [
   'decline-push-up',
   'incline-push-up',
+  'decline-barbell-bench-press',
   'resistance-band-standing-leg-curl',
+  'bent-over-dumbbell-row',
+  'preacher-curl',
+  'resistance-band-pullover',
 ] as const;
 
-const PROPOSED_REUSE: Record<string, string> = {
-  'dumbbell-rear-delt-fly': 'cable-rear-delt-fly',
-  'resistance-band-standing-leg-curl': 'supported-standing-leg-curl',
+/** Fase 4b: these 3 now HAVE a profile object (in CONFIRMED_LIMITATION_PROFILE_RUNTIME_IDS_V127), but at least one region is `pending`, never decided. */
+const PARTIALLY_PENDING_EXERCISE_IDS = [
+  'dumbbell-rear-delt-fly',
+  'dumbbell-fly',
+  'cable-crossover-fly',
+] as const;
+
+const PENDING_REGIONS: Record<string, string[]> = {
+  'cable-crossover-fly': ['shoulder', 'wrist'],
+  'dumbbell-fly': ['shoulder', 'wrist'],
+  'dumbbell-rear-delt-fly': ['wrist'],
+};
+
+const ADAPT_TARGETS_USED: Record<string, Record<string, string>> = {
+  'decline-push-up': { shoulder: 'wall-push-up', elbow: 'wall-push-up', wrist: 'wall-push-up' },
+  'incline-push-up': { shoulder: 'wall-push-up', elbow: 'wall-push-up', wrist: 'wall-push-up' },
+  'decline-barbell-bench-press': { shoulder: 'wall-push-up', elbow: 'wall-push-up', wrist: 'wall-push-up' },
+  'resistance-band-standing-leg-curl': { knee: 'supported-standing-leg-curl' },
+  'bent-over-dumbbell-row': { hip: 'resistance-band-row', shoulder: 'resistance-band-row', wrist: 'resistance-band-row' },
+  'preacher-curl': { elbow: 'hammer-curl', wrist: 'hammer-curl' },
+  'resistance-band-pullover': { shoulder: 'resistance-band-lat-pulldown', wrist: 'resistance-band-lat-pulldown' },
 };
 
 const exerciseById = new Map(EXERCISES_SEED.map((exercise) => [exercise.id, exercise]));
+const artifact = JSON.parse(readFileSync(
+  resolve(__dirname, '../../../docs/workout-modifiers/exercise-limitations/15_LIMITATION_PROFILES_TECHNICAL_v2.json'), 'utf8',
+)) as { profiles: { exerciseId: string; limitationProfile: { regions: Record<string, { status: string }> } }[] };
+const profileByExerciseId = new Map(artifact.profiles.map((p) => [p.exerciseId, p.limitationProfile]));
 
-describe('Fase 13 §1 — none of the 7 new exercises have a confirmed limitation profile today', () => {
-  it.each(NEW_EXERCISE_IDS)('%s is NOT in CONFIRMED_LIMITATION_PROFILE_RUNTIME_IDS_V127', (id) => {
-    expect(CONFIRMED_LIMITATION_PROFILE_RUNTIME_IDS_V127.has(id)).toBe(false);
-    expect(hasReliableLimitationProfileCoverageV127(id)).toBe(false);
+describe('Fase 4 closure — 7 of the 10 previously-unprofiled exercises now have a complete, valid, non-invented limitationProfile', () => {
+  it.each(RESOLVED_EXERCISE_IDS)('%s IS in CONFIRMED_LIMITATION_PROFILE_RUNTIME_IDS_V127 and its profile is schema-valid', (id) => {
+    expect(CONFIRMED_LIMITATION_PROFILE_RUNTIME_IDS_V127.has(id)).toBe(true);
+    expect(hasReliableLimitationProfileCoverageV127(id)).toBe(true);
+    const profile = profileByExerciseId.get(id);
+    expect(validateLimitationProfile(id, profile).valid).toBe(true);
   });
 
-  it('exactly 76 exercises have a confirmed profile (unchanged by the audit itself)', () => {
-    expect(CONFIRMED_LIMITATION_PROFILE_RUNTIME_IDS_V127.size).toBe(76);
+  it('exactly 86 exercises have a confirmed profile object (76 original + 7 Fase 4 + 3 Fase 4b) — object existing no longer implies every region is decided', () => {
+    expect(CONFIRMED_LIMITATION_PROFILE_RUNTIME_IDS_V127.size).toBe(86);
+  });
+
+  it.each(Object.entries(ADAPT_TARGETS_USED).flatMap(([id, regions]) => Object.entries(regions).map(([region, target]) => [id, region, target] as const)))(
+    '%s: adapt target for region "%s" (%s) already exists, is already profiled, and is itself compatible/not_applicable for that region',
+    (id, region, target) => {
+      expect(exerciseById.has(target)).toBe(true);
+      expect(CONFIRMED_LIMITATION_PROFILE_RUNTIME_IDS_V127.has(target)).toBe(true);
+      const targetProfile = profileByExerciseId.get(target);
+      const targetRegionStatus = targetProfile?.regions[region]?.status;
+      expect(['compatible', 'not_applicable']).toContain(targetRegionStatus);
+      // purposePreserved: same movement.pattern AND same primaryMuscle as the source.
+      const source = exerciseById.get(id)!;
+      const candidate = exerciseById.get(target)!;
+      expect(candidate.movement.pattern).toBe(source.movement.pattern);
+      expect(candidate.target.primaryMuscle).toBe(source.target.primaryMuscle);
+    },
+  );
+
+  it('bent-over-dumbbell-row\'s spine/back "avoid" rule declares no substitute (none was approved for that field) — the resolver still may reach one via similar/family pool, but nothing is asserted here', () => {
+    const backRule = profileByExerciseId.get('bent-over-dumbbell-row')?.regions.back;
+    expect(backRule?.status).toBe('avoid');
+    expect((backRule as { substituteExerciseIds?: string[] })?.substituteExerciseIds).toEqual([]);
+    expect((backRule as { candidateStatus?: string })?.candidateStatus).toBe('missing_exercise_candidate');
   });
 });
 
-describe('Fase 13 §1 — proposed reuse candidates are movement-identical, equipment-only different', () => {
-  it.each(Object.entries(PROPOSED_REUSE))('%s matches %s on primaryMuscle/pattern/mechanic/laterality/bodyPosition', (newId, existingId) => {
-    const newExercise = exerciseById.get(newId)!;
-    const existingExercise = exerciseById.get(existingId)!;
-    expect(existingExercise).toBeDefined();
-    expect(CONFIRMED_LIMITATION_PROFILE_RUNTIME_IDS_V127.has(existingId)).toBe(true);
-    expect(newExercise.target.primaryMuscle).toBe(existingExercise.target.primaryMuscle);
-    expect(newExercise.movement.pattern).toBe(existingExercise.movement.pattern);
-    expect(newExercise.movement.mechanic).toBe(existingExercise.movement.mechanic);
-    expect(newExercise.movement.laterality).toBe(existingExercise.movement.laterality);
-    expect(newExercise.bodyPosition).toBe(existingExercise.bodyPosition);
-    // The only legitimate difference this proposal relies on.
-    expect(newExercise.equipment).not.toEqual(existingExercise.equipment);
+describe('Fase 4b — cable-crossover-fly, dumbbell-fly, dumbbell-rear-delt-fly now HAVE a profile object, with only the still-undecided regions marked `pending`', () => {
+  it.each(PARTIALLY_PENDING_EXERCISE_IDS)('%s IS in CONFIRMED_LIMITATION_PROFILE_RUNTIME_IDS_V127 (has a schema-valid profile object)', (id) => {
+    expect(CONFIRMED_LIMITATION_PROFILE_RUNTIME_IDS_V127.has(id)).toBe(true);
+    expect(hasReliableLimitationProfileCoverageV127(id)).toBe(true);
+    const profile = profileByExerciseId.get(id);
+    expect(validateLimitationProfile(id, profile).valid).toBe(true);
   });
 
-  it('the dataset already has precedent for equipment-only-different exercises sharing an identical profile (not a new mechanism)', () => {
-    const rowPrecedent = ['iso-lateral-row-machine', 'low-cable-row-wide-neutral-grip'];
-    const squatPrecedent = ['hack-squat-machine', 'leg-press-45'];
-    for (const [a, b] of [rowPrecedent, squatPrecedent]) {
-      expect(CONFIRMED_LIMITATION_PROFILE_RUNTIME_IDS_V127.has(a)).toBe(true);
-      expect(CONFIRMED_LIMITATION_PROFILE_RUNTIME_IDS_V127.has(b)).toBe(true);
+  it.each(PARTIALLY_PENDING_EXERCISE_IDS)('%s: every region NOT listed as pending has a real, decided status (never pending itself)', (id) => {
+    const profile = profileByExerciseId.get(id)!;
+    const pending = new Set(PENDING_REGIONS[id]);
+    for (const [region, rule] of Object.entries(profile.regions)) {
+      if (pending.has(region)) {
+        expect(rule.status).toBe('pending');
+      } else {
+        expect(rule.status).not.toBe('pending');
+        expect(['compatible', 'not_applicable', 'adapt', 'avoid']).toContain(rule.status);
+      }
     }
   });
-});
 
-describe('Fase 13 §1 — the other 5 exercises have no SAFE existing profiled equivalent', () => {
-  const artifact = JSON.parse(readFileSync(
-    resolve(__dirname, '../../../docs/workout-modifiers/exercise-limitations/15_LIMITATION_PROFILES_TECHNICAL_v2.json'), 'utf8',
-  )) as { profiles: { exerciseId: string; limitationProfile: { regions: unknown } }[] };
-  const regionsById = new Map(artifact.profiles.map((profile) => [profile.exerciseId, JSON.stringify(profile.limitationProfile.regions)]));
-
-  it('dumbbell-fly and resistance-band-pullover have zero profiled exercises sharing primaryMuscle+pattern+mechanic — no candidate exists at all', () => {
-    for (const id of ['dumbbell-fly', 'resistance-band-pullover'] as const) {
+  it('dumbbell-fly and cable-crossover-fly (chest/horizontal_adduction): no same-family exercise is ACTUALLY shoulder/wrist-safe (compatible/not_applicable) — pending, not silently resolved', () => {
+    for (const id of ['dumbbell-fly', 'cable-crossover-fly'] as const) {
       const target = exerciseById.get(id)!;
       const sameMovementFamily = EXERCISES_SEED.filter((candidate) =>
         candidate.id !== id
         && candidate.target.primaryMuscle === target.target.primaryMuscle
         && candidate.movement.pattern === target.movement.pattern
-        && candidate.movement.mechanic === target.movement.mechanic
-        && CONFIRMED_LIMITATION_PROFILE_RUNTIME_IDS_V127.has(candidate.id));
-      expect(sameMovementFamily).toEqual([]);
+        && profileByExerciseId.has(candidate.id));
+      for (const region of ['shoulder', 'wrist'] as const) {
+        const safeCandidates = sameMovementFamily.filter((candidate) =>
+          ['compatible', 'not_applicable'].includes(profileByExerciseId.get(candidate.id)!.regions[region]?.status));
+        expect(safeCandidates).toEqual([]);
+      }
     }
   });
 
-  /**
-   * decline-barbell-bench-press/decline-push-up/incline-push-up DO share
-   * primaryMuscle+pattern+mechanic with 5 already-profiled exercises
-   * (incline-dumbbell-bench-press, iso-lateral-incline-chest-press-machine,
-   * machine-flat-bench-press, push-up, wall-push-up) — but that coarse
-   * match is NOT proof of safe equivalence: this test proves those 5
-   * exercises do NOT share identical `regions` content with EACH OTHER
-   * (unlike the row/squat precedent groups above), meaning the dataset's
-   * own reviewers already treat incline/flat/decline/wall angle as
-   * clinically distinct within this specific movement family. Borrowing
-   * any one of their profiles for a NEW angle variant would be exactly the
-   * invented-by-inference classification this fase forbids.
-   */
-  it('the flat/incline/wall bench-press family does not share an identical profile across its own angle variants (precedent for NOT assuming angle-equivalence)', () => {
-    const anglePressIds = ['incline-dumbbell-bench-press', 'iso-lateral-incline-chest-press-machine', 'machine-flat-bench-press', 'push-up', 'wall-push-up'];
-    for (const id of anglePressIds) expect(CONFIRMED_LIMITATION_PROFILE_RUNTIME_IDS_V127.has(id)).toBe(true);
-    const uniqueRegionsContent = new Set(anglePressIds.map((id) => regionsById.get(id)));
-    expect(uniqueRegionsContent.size).toBe(anglePressIds.length);
+  it('dumbbell-rear-delt-fly: shoulder now resolves via cable-rear-delt-fly (already used elsewhere); wrist stays pending because cable-rear-delt-fly\'s own wrist rule is `adapt`, not terminal-safe', () => {
+    const profile = profileByExerciseId.get('dumbbell-rear-delt-fly')!;
+    expect(profile.regions.shoulder).toEqual({ status: 'adapt', adaptation: { kind: 'exercise_variant', exerciseId: 'cable-rear-delt-fly' } });
+    expect(profile.regions.wrist.status).toBe('pending');
+    const candidateProfile = profileByExerciseId.get('cable-rear-delt-fly')!;
+    expect(candidateProfile.regions.shoulder.status).toBe('compatible');
+    expect(candidateProfile.regions.wrist.status).toBe('adapt');
   });
 });
 
-describe('Fase 13 §1 — exact v1.27 template impact of each blocked exercise', () => {
-  const templateImpact = Object.fromEntries(NEW_EXERCISE_IDS.map((id) => [id, [] as string[]]));
+describe('Fase 13 §1 (original) — exact v1.27 template impact of each blocked exercise (regression guard, still meaningful for the exercises that remain blocked)', () => {
+  const ALL_TEN = [...RESOLVED_EXERCISE_IDS, ...PARTIALLY_PENDING_EXERCISE_IDS];
+  const templateImpact = Object.fromEntries(ALL_TEN.map((id) => [id, [] as string[]]));
   for (const profile of V127_TEMPLATE_PROFILES) {
     const template = getCanonicalTemplateV127ById(profile.id);
     const usedInTemplate = new Set<string>();
     for (const session of template.sessions) {
       for (const exercise of session.exercises) {
-        if ((NEW_EXERCISE_IDS as readonly string[]).includes(exercise.exercise_id)) usedInTemplate.add(exercise.exercise_id);
+        if ((ALL_TEN as readonly string[]).includes(exercise.exercise_id)) usedInTemplate.add(exercise.exercise_id);
       }
     }
     for (const id of usedInTemplate) templateImpact[id].push(profile.id);
   }
 
-  it('pins the exact affected-template counts (regression guard — re-check this report section if templates change)', () => {
-    expect(templateImpact['decline-barbell-bench-press']).toHaveLength(12);
-    expect(templateImpact['dumbbell-fly']).toHaveLength(12);
-    expect(templateImpact['dumbbell-rear-delt-fly']).toHaveLength(14);
-    expect(templateImpact['resistance-band-pullover']).toHaveLength(12);
-    expect(templateImpact['decline-push-up']).toHaveLength(35);
-    expect(templateImpact['incline-push-up']).toHaveLength(28);
-    expect(templateImpact['resistance-band-standing-leg-curl']).toHaveLength(32);
+  it('T102 (beginner/home/7d) specifically depends on incline-push-up — a concrete example of a template that is now unblocked by this closure (subject to the resolver\'s other gates: environment/duplicate/other exercises in the same session)', () => {
+    expect(templateImpact['incline-push-up']).toContain('T102');
   });
 
-  it('T102 (beginner/home/7d) specifically depends on incline-push-up — a concrete example a limitation-declaring beginner Home user would hit', () => {
-    expect(templateImpact['incline-push-up']).toContain('T102');
+  it('dumbbell-fly/cable-crossover-fly/dumbbell-rear-delt-fly still have real template impact (still-blocked exercises)', () => {
+    expect(templateImpact['dumbbell-fly'].length).toBeGreaterThan(0);
+    expect(templateImpact['cable-crossover-fly'].length).toBeGreaterThan(0);
+    expect(templateImpact['dumbbell-rear-delt-fly'].length).toBeGreaterThan(0);
   });
 });

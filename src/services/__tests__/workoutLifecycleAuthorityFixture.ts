@@ -244,6 +244,109 @@ async function persistLifecycleActivationV127ForTests(
 }
 
 /**
+ * Fase 17 — shared by both `initializeWorkoutProgramV127ForTests` (dedicated
+ * callable mock) and the legacy `authorizeWorkoutLifecycleMutation` mock's
+ * INITIALIZE branch, mirroring how the real backend's `persistNewLifecycleV127`
+ * (functions/src/workoutLifecycle/authorizeMutation.ts) is now shared between
+ * `initializeWorkoutProgramV127Handler` and `authorizeWorkoutLifecycleMutationHandler`.
+ * Idempotent: a second call whose lifecycle already matches the target content/
+ * instance identity is a no-op, exactly like the real transaction.
+ */
+async function persistNewLifecycleV127ForTests(
+  fixtureDb: ReturnType<RulesTestEnvironment['authenticatedContext']>['firestore'] extends (...args: never[]) => infer R ? R : never,
+  uid: string,
+  input: {
+    targetProgramInstanceId: string;
+    targetCycleId: string;
+    targetContentIdentity: string;
+    targetPrescriptionIdentity: string;
+    questionnaireId: string;
+    prescriptionInputSnapshot: unknown;
+    currentTrainingLevel: string;
+    eventId: string;
+    idempotencyKey: string;
+    source: string;
+  },
+): Promise<{ programId: string; programInstanceId: string } | null> {
+  const lifecycleRef = doc(fixtureDb, 'users', uid, 'workoutLifecycleState', 'current');
+  const legacyStateRef = doc(fixtureDb, 'users', uid, 'workoutProgramState', 'active');
+  const [lifecycleSnapshot, legacyStateSnapshot] = await Promise.all([getDoc(lifecycleRef), getDoc(legacyStateRef)]);
+  if (lifecycleSnapshot.exists()) {
+    const lifecycleData = lifecycleSnapshot.data();
+    if (lifecycleData.activeContentIdentity === input.targetContentIdentity
+      && lifecycleData.activeProgramInstanceId === input.targetProgramInstanceId) {
+      return { programId: input.targetContentIdentity, programInstanceId: input.targetProgramInstanceId };
+    }
+    return null;
+  }
+  if (legacyStateSnapshot.exists()) return null;
+
+  await runTransaction(fixtureDb, async (transaction) => {
+    const nowTs = serverTimestamp();
+    transaction.set(doc(fixtureDb, 'users', uid, 'programInstances', input.targetProgramInstanceId), {
+      programInstanceId: input.targetProgramInstanceId,
+      cycleId: input.targetCycleId,
+      contentIdentity: input.targetContentIdentity,
+      prescriptionIdentity: input.targetPrescriptionIdentity,
+      questionnaireId: input.questionnaireId,
+      prescriptionInputSnapshot: input.prescriptionInputSnapshot,
+      activatedAt: nowTs,
+      supersededAt: null,
+      previousProgramInstanceId: null,
+      activationReason: 'INITIAL_PROGRAM',
+      schemaVersion: 2,
+      createdAt: nowTs,
+      updatedAt: nowTs,
+    });
+    transaction.set(doc(fixtureDb, 'users', uid, 'trainingCycles', input.targetCycleId), {
+      cycleId: input.targetCycleId,
+      level: input.currentTrainingLevel,
+      cycleNumber: 1,
+      status: 'ACTIVE',
+      origin: 'V2_NATIVE',
+      programInstanceId: input.targetProgramInstanceId,
+      previousProgramInstanceId: null,
+      startedAt: nowTs,
+      eligibleAt: null,
+      completedAt: null,
+      completionReason: null,
+      progressionReason: 'INITIAL_PRESCRIPTION',
+      schemaVersion: 2,
+      createdAt: nowTs,
+      updatedAt: nowTs,
+    });
+    transaction.set(lifecycleRef, {
+      startingLevel: input.currentTrainingLevel,
+      currentTrainingLevel: input.currentTrainingLevel,
+      currentCycleId: input.targetCycleId,
+      currentCycleNumber: 1,
+      activeProgramInstanceId: input.targetProgramInstanceId,
+      activeContentIdentity: input.targetContentIdentity,
+      activePrescriptionIdentity: input.targetPrescriptionIdentity,
+      initializationOrigin: 'V2_NATIVE',
+      historyCompleteFrom: nowTs,
+      schemaVersion: 2,
+      createdAt: nowTs,
+      updatedAt: nowTs,
+    });
+    transaction.set(doc(fixtureDb, 'users', uid, 'workoutLifecycleEvents', input.eventId), {
+      eventId: input.eventId,
+      type: 'PROGRAM_STARTED',
+      occurredAt: nowTs,
+      cycleId: input.targetCycleId,
+      programInstanceId: input.targetProgramInstanceId,
+      idempotencyKey: input.idempotencyKey,
+      payload: { source: input.source },
+      schemaVersion: 2,
+    });
+    transaction.set(legacyStateRef, {
+      programId: input.targetContentIdentity, programInstanceId: input.targetProgramInstanceId, updatedAt: nowTs,
+    });
+  });
+  return { programId: input.targetContentIdentity, programInstanceId: input.targetProgramInstanceId };
+}
+
+/**
  * Fase 16 — impersonates `initializeWorkoutProgramV127Handler`
  * (functions/src/workoutLifecycle/authorizeMutation.ts) for these
  * application-level integration tests: generates the real v1.27 plan with
@@ -322,69 +425,20 @@ async function initializeWorkoutProgramV127ForTests(
       activatedAt: now,
       updatedAt: now,
     });
-    await runTransaction(fixtureDb, async (transaction) => {
-      const nowTs = serverTimestamp();
-      transaction.set(doc(fixtureDb, 'users', uid, 'programInstances', targetProgramInstanceId), {
-        programInstanceId: targetProgramInstanceId,
-        cycleId: targetCycleId,
-        contentIdentity,
-        prescriptionIdentity: plan.planId,
-        questionnaireId: request.questionnaireId,
-        prescriptionInputSnapshot,
-        activatedAt: nowTs,
-        supersededAt: null,
-        previousProgramInstanceId: null,
-        activationReason: 'INITIAL_PROGRAM',
-        schemaVersion: 2,
-        createdAt: nowTs,
-        updatedAt: nowTs,
-      });
-      transaction.set(doc(fixtureDb, 'users', uid, 'trainingCycles', targetCycleId), {
-        cycleId: targetCycleId,
-        level: currentTrainingLevel,
-        cycleNumber: 1,
-        status: 'ACTIVE',
-        origin: 'V2_NATIVE',
-        programInstanceId: targetProgramInstanceId,
-        previousProgramInstanceId: null,
-        startedAt: nowTs,
-        eligibleAt: null,
-        completedAt: null,
-        completionReason: null,
-        progressionReason: 'INITIAL_PRESCRIPTION',
-        schemaVersion: 2,
-        createdAt: nowTs,
-        updatedAt: nowTs,
-      });
-      transaction.set(lifecycleRef, {
-        startingLevel: currentTrainingLevel,
-        currentTrainingLevel,
-        currentCycleId: targetCycleId,
-        currentCycleNumber: 1,
-        activeProgramInstanceId: targetProgramInstanceId,
-        activeContentIdentity: contentIdentity,
-        activePrescriptionIdentity: plan.planId,
-        initializationOrigin: 'V2_NATIVE',
-        historyCompleteFrom: nowTs,
-        schemaVersion: 2,
-        createdAt: nowTs,
-        updatedAt: nowTs,
-      });
-      transaction.set(doc(fixtureDb, 'users', uid, 'workoutLifecycleEvents', eventId), {
-        eventId,
-        type: 'PROGRAM_STARTED',
-        occurredAt: nowTs,
-        cycleId: targetCycleId,
-        programInstanceId: targetProgramInstanceId,
-        idempotencyKey: operationKey,
-        payload: { source: request.source ?? 'onboarding' },
-        schemaVersion: 2,
-      });
-      transaction.set(legacyStateRef, {
-        programId: contentIdentity, programInstanceId: targetProgramInstanceId, updatedAt: nowTs,
-      });
+    const persisted = await persistNewLifecycleV127ForTests(fixtureDb, uid, {
+      targetProgramInstanceId,
+      targetCycleId,
+      targetContentIdentity: contentIdentity,
+      targetPrescriptionIdentity: plan.planId,
+      questionnaireId: request.questionnaireId,
+      prescriptionInputSnapshot,
+      currentTrainingLevel,
+      eventId,
+      idempotencyKey: operationKey,
+      source: request.source ?? 'onboarding',
     });
-    outcome = { status: 'SUCCESS', programId: contentIdentity, programInstanceId: targetProgramInstanceId };
+    if (!persisted) throw new Error('workout_lifecycle_v127_initialize_not_applicable');
+    outcome = { status: 'SUCCESS', programId: persisted.programId, programInstanceId: persisted.programInstanceId };
   });
   return outcome!;
 }
@@ -518,6 +572,50 @@ export function installWorkoutLifecycleAuthorityFixture(
             updatedAt: Timestamp.now(),
           });
         }
+      }
+      // Fase 17 — legacy INITIALIZE compatibility: mirror the real backend's
+      // `persistNewLifecycleV127` call inside `authorizeWorkoutLifecycleMutationHandler`.
+      // The response still falls through to the unchanged grant+canonical
+      // shape below (never `{ persisted }`) — that is the whole point of the
+      // fix: an old client never needs to understand a new response shape,
+      // it just finds the lifecycle already persisted when its own
+      // transaction re-reads.
+      if (responseCanonical && request.operation === 'INITIALIZE'
+        && responseCanonical.targetPlan?.versions?.templateLibrary === '1.27.0') {
+        const sealedRef = doc(fixtureDb, 'users', uid, 'workoutPrograms', responseCanonical.targetContentIdentity);
+        const sealed = await getDoc(sealedRef);
+        if (!sealed.exists()) {
+          await setDoc(sealedRef, {
+            ...responseCanonical.targetPlan,
+            programId: responseCanonical.targetContentIdentity,
+            prescriptionId: responseCanonical.targetPrescriptionIdentity,
+            status: 'active',
+            source: authoritativeRequest.targetProgramSource,
+            templateVersion: responseCanonical.targetTemplateVersion,
+            templateSourceVersion: responseCanonical.targetTemplateSourceVersion,
+            templateContentHash: responseCanonical.targetTemplateContentHash,
+            questionnaireId: authoritativeRequest.questionnaireId,
+            questionnaireVersion: authoritativeRequest.questionnaireVersion,
+            createdAt: Timestamp.now(),
+            activatedAt: Timestamp.now(),
+            updatedAt: Timestamp.now(),
+          });
+        }
+        await persistNewLifecycleV127ForTests(fixtureDb, uid, {
+          targetProgramInstanceId: String(authoritativeRequest.targetProgramInstanceId),
+          targetCycleId: String(authoritativeRequest.targetCycleId),
+          targetContentIdentity: responseCanonical.targetContentIdentity,
+          targetPrescriptionIdentity: responseCanonical.targetPrescriptionIdentity,
+          questionnaireId: String(authoritativeRequest.questionnaireId),
+          prescriptionInputSnapshot: authoritativeRequest.targetPrescriptionInputSnapshot,
+          currentTrainingLevel: (({ beginner: 'BEGINNER', intermediate: 'INTERMEDIATE', advanced: 'ADVANCED' } as Record<string, string>)[
+            String((authoritativeRequest.targetPrescriptionInputSnapshot as { inputs?: Record<string, unknown> } | undefined)
+              ?.inputs?.level)
+          ] ?? 'BEGINNER'),
+          eventId: String(authoritativeRequest.eventId),
+          idempotencyKey: String(authoritativeRequest.idempotencyKey),
+          source: String(authoritativeRequest.targetProgramSource ?? 'onboarding'),
+        });
       }
       await setDoc(doc(
         fixtureDb,

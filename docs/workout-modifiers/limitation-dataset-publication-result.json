@@ -1,167 +1,36 @@
 {
-  "publishedAt": "2026-08-27T16:52:31.413Z",
+  "publishedAt": "2026-09-24T15:14:26.718Z",
   "projectId": "ajfit-2f321",
   "identity": {
-    "datasetVersion": "phase3-limitation-dataset-v3",
-    "limitationDatasetHash": "21ce79bcb57802df8a6072e933942b02ea34ba1d9ab85f0dc091395bff0f3944"
+    "datasetVersion": "phase4-limitation-dataset-v2",
+    "limitationDatasetHash": "0f4464c27c9d92fb06d1d26865b7e269af2cf6ed16156d3c393a3610b6be0c20"
   },
   "previousIdentity": {
-    "datasetVersion": "phase3-limitation-profiles-v2",
-    "limitationDatasetHash": "73046415634d392d0c8bd72506375e245fc08f02ab3fdf6c50059bf235ed7a82"
+    "datasetVersion": "phase3-limitation-dataset-v3",
+    "limitationDatasetHash": "fde1bc3dfaa376d4ddfa95e76e97361695480d2d01d7e04bec1ade4ab46dc7c5"
   },
   "atomicWrite": true,
   "changedExerciseIds": [
-    "bulgarian-split-squat",
-    "bulgarian-split-squat-dumbbell",
-    "bulgarian-split-squat-machine",
-    "cable-glute-kickback",
-    "cable-rear-delt-fly",
-    "conventional-deadlift",
-    "dumbbell-shoulder-press",
-    "hip-thrust",
-    "incline-dumbbell-bench-press",
-    "iso-lateral-incline-chest-press-machine",
-    "lateral-band-walk",
-    "lying-leg-curl-machine",
-    "machine-flat-bench-press",
-    "machine-shoulder-press",
-    "seated-calf-raise-machine",
-    "seated-hip-abductor-machine",
-    "seated-leg-curl-machine",
-    "standing-calf-raise-machine",
-    "standing-single-leg-curl-machine",
-    "walking-lunges"
+    "bent-over-dumbbell-row",
+    "cable-crossover-fly",
+    "decline-barbell-bench-press",
+    "decline-push-up",
+    "dumbbell-fly",
+    "dumbbell-rear-delt-fly",
+    "incline-push-up",
+    "preacher-curl",
+    "resistance-band-pullover",
+    "resistance-band-standing-leg-curl"
   ],
-  "prePublishDivergentCells": 0,
-  "prePublishResolverCatalogMismatches": [
-    {
-      "exerciseId": "incline-dumbbell-bench-press",
-      "fields": [
-        "substitution"
-      ]
-    },
-    {
-      "exerciseId": "lateral-band-walk",
-      "fields": [
-        "substitution"
-      ]
-    },
-    {
-      "exerciseId": "walking-lunges",
-      "fields": [
-        "substitution"
-      ]
-    },
-    {
-      "exerciseId": "seated-hip-abductor-machine",
-      "fields": [
-        "substitution"
-      ]
-    },
-    {
-      "exerciseId": "cable-rear-delt-fly",
-      "fields": [
-        "substitution"
-      ]
-    },
-    {
-      "exerciseId": "machine-shoulder-press",
-      "fields": [
-        "substitution"
-      ]
-    },
-    {
-      "exerciseId": "bulgarian-split-squat-dumbbell",
-      "fields": [
-        "substitution"
-      ]
-    },
-    {
-      "exerciseId": "hip-thrust",
-      "fields": [
-        "substitution"
-      ]
-    },
-    {
-      "exerciseId": "bulgarian-split-squat-machine",
-      "fields": [
-        "substitution"
-      ]
-    },
-    {
-      "exerciseId": "cable-glute-kickback",
-      "fields": [
-        "substitution"
-      ]
-    },
-    {
-      "exerciseId": "standing-single-leg-curl-machine",
-      "fields": [
-        "substitution"
-      ]
-    },
-    {
-      "exerciseId": "bulgarian-split-squat",
-      "fields": [
-        "substitution"
-      ]
-    },
-    {
-      "exerciseId": "iso-lateral-incline-chest-press-machine",
-      "fields": [
-        "substitution"
-      ]
-    },
-    {
-      "exerciseId": "lying-leg-curl-machine",
-      "fields": [
-        "substitution"
-      ]
-    },
-    {
-      "exerciseId": "dumbbell-shoulder-press",
-      "fields": [
-        "substitution"
-      ]
-    },
-    {
-      "exerciseId": "seated-calf-raise-machine",
-      "fields": [
-        "substitution"
-      ]
-    },
-    {
-      "exerciseId": "conventional-deadlift",
-      "fields": [
-        "substitution"
-      ]
-    },
-    {
-      "exerciseId": "standing-calf-raise-machine",
-      "fields": [
-        "substitution"
-      ]
-    },
-    {
-      "exerciseId": "seated-leg-curl-machine",
-      "fields": [
-        "substitution"
-      ]
-    },
-    {
-      "exerciseId": "machine-flat-bench-press",
-      "fields": [
-        "substitution"
-      ]
-    }
-  ],
+  "prePublishDivergentCells": 70,
+  "prePublishResolverCatalogMismatches": [],
   "postPublishDiffCounts": {
     "LOCAL_ONLY": 0,
     "REMOTE_ONLY": 0,
     "STATUS_MISMATCH": 0,
     "TARGET_MISMATCH": 0,
     "METADATA_MISMATCH": 0,
-    "EXACT_MATCH": 812
+    "EXACT_MATCH": 861
   },
   "remoteHashVerified": true,
   "rollbackExecuted": false

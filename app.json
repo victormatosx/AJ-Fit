@@ -73,6 +73,8 @@
         "expo-build-properties",
         {
           "ios": {
+            "enableSceneSupport": true,
+            "usePrecompiledModules": false,
             "extraPods": [
               {
                 "name": "GoogleUtilities",
@@ -124,7 +126,9 @@
           "enforceContrast": false
         }
       ],
-      "./plugins/ios-min-deployment-target"
+      "./plugins/ios-min-deployment-target",
+      "expo-font",
+      "expo-status-bar"
     ]
   }
 }

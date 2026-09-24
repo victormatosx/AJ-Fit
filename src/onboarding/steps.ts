@@ -207,7 +207,18 @@ function isApplicableStep(id: OnboardingStepId, answers?: OnboardingFlowAnswers)
       && answers.days <= 6;
   }
   if (id === 'primaryPlace') return answers?.place === 'both';
-  if (id === 'equipment') return answers?.place === 'home' || answers?.place === 'both';
+  // v1.27 never considers a home equipment inventory in any generation step
+  // (selection, composition, or cycle evolution) — Home templates are
+  // already authored to be executable at home by definition (see
+  // homeEquipmentAuditV127.test.ts). Asking this question would only
+  // collect data no engine version acts on going forward, and produce a
+  // phantom `equipment_required` validation failure since it's never
+  // answered — so it's never shown, regardless of `place`. The `equipment`
+  // step/field stay registered (schema, draft persistence, legacy v2
+  // `equipmentContextFor`, manual exercise-substitution) for backward
+  // compatibility with already-persisted answers; only its visibility here
+  // changed.
+  if (id === 'equipment') return false;
   if (id === 'limits') {
     return !!answers?.specialConditions?.includes('musculoskeletal_limitation');
   }

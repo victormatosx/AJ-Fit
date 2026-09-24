@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import type { Firestore } from 'firebase-admin/firestore';
 import { HttpsError } from 'firebase-functions/v2/https';
 
+import { EXERCISES_SEED } from './prescriptionEngine/data/exercisesSeedData';
 import { canonicalizeLimitationProfiles, LIMITATION_DATASET_ACTIVE_DOCUMENT, LIMITATION_DATASET_STATE_COLLECTION, type LimitationDatasetIdentity } from './prescriptionEngine/workoutPrescription/limitationDataset';
 import type { LimitationCatalogExercise } from './prescriptionEngine/workoutPrescription/limitationResolver';
 import { fromWorkoutTemplateDocument, WORKOUT_TEMPLATE_DOCUMENT_VERSION, type WorkoutTemplateDocument } from './prescriptionEngine/workoutPrescription/templateDocument';
@@ -10,12 +11,14 @@ import { PRESCRIPTION_VERSIONS, type CanonicalTemplate, type PrescriptionGenerat
 import { selectTemplate } from './prescriptionEngine/workoutPrescription/selection';
 
 /**
- * Backend mirror of the client's `isExerciseCatalogDocument`/`loadExerciseCatalogForLimitations`
- * (`src/services/workoutPrograms.ts`) — same validation, same expected count, same identity
- * cross-check, so the backend reads exactly the authoritative catalog the client would (docs/
- * workout-lifecycle/v2/decisions/ADR-016_BACKEND_AUTHORITATIVE_PRESCRIPTION.md).
+ * Backend mirror of the client's `isExerciseCatalogDocument`/`exerciseCatalogErrors`
+ * (`src/services/exerciseCatalogValidity.ts`) — same validation: every id
+ * required by `EXERCISES_SEED` must exist in the remote catalog; additional
+ * valid Firestore exercises are allowed and never invalidate it. Never
+ * pinned to an exact global document count — that broke the moment the
+ * local catalog grew (v1.27 Fase 2 closure added 7 exercises, 116 -> 123;
+ * a fixed count would break again on the next addition).
  */
-const EXPECTED_EXERCISE_COUNT = 116;
 
 function plainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -38,16 +41,20 @@ function isExerciseCatalogDocument(value: unknown, id: string): value is Limitat
 
 export async function loadExerciseCatalog(firestore: Firestore): Promise<LimitationCatalogExercise[]> {
   const snapshot = await firestore.collection('exercises').get();
-  if (snapshot.size !== EXPECTED_EXERCISE_COUNT) {
-    throw new HttpsError('failed-precondition', `authoritative_exercise_catalog_count_invalid:${snapshot.size}`);
-  }
-  return snapshot.docs.map((document) => {
+  const exercises = snapshot.docs.map((document) => {
     const data = { ...document.data(), id: document.id };
     if (!isExerciseCatalogDocument(data, document.id)) {
       throw new HttpsError('failed-precondition', `authoritative_exercise_catalog_document_invalid:${document.id}`);
     }
     return data;
   });
+  const ids = new Set(exercises.map((exercise) => exercise.id));
+  for (const exercise of EXERCISES_SEED) {
+    if (!ids.has(exercise.id)) {
+      throw new HttpsError('failed-precondition', `authoritative_exercise_catalog_required_exercise_missing:${exercise.id}`);
+    }
+  }
+  return exercises;
 }
 
 export async function loadLimitationDatasetIdentity(

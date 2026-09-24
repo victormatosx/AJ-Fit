@@ -89,8 +89,9 @@ export interface SanitizedAnswers {
  * via `legacyReasonCodes`, never silently resolve to "no conditions" just to
  * let a plan generate (see docs/workout-lifecycle — Safety/Limitation
  * Resolver phases). `equipment`/`muscleFocus`/`style` carry no safety
- * meaning — a legacy document missing them safely defaults to `[]` (already
- * validated separately, e.g. `equipment_required` for home/both).
+ * meaning — a legacy document missing them safely defaults to `[]` (the
+ * questionnaire never collects `equipment` at all — onboarding/steps.ts —
+ * so there is no validation requiring it).
  */
 export function sanitizeAnswersForEngine(
   answers: Partial<QuestionnaireAnswers> | null | undefined,

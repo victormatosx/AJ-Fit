@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import type { EquipmentContext } from '../../workoutPrescription/equipment';
+import { equipmentContextFor, unrestrictedEquipmentContext, type EquipmentContext } from '../../workoutPrescription/equipment';
 import type { LimitationCatalogExercise } from '../../workoutPrescription/limitationResolver';
 import type { FinalWorkoutExercise, FinalWorkoutSession } from '../../workoutPrescription/types';
+import type { QuestionnaireAnswers } from '../../workoutPrescription/types';
 import { buildRecentSlotHistory, evolveCycle } from '../cycleEvolution';
 
 const OPEN_EQUIPMENT: EquipmentContext = { environment: 'gym', availableEquipment: new Set(['bodyweight', 'dumbbell', 'barbell', 'cable', 'machine']) };
@@ -276,5 +277,60 @@ describe('long-run multi-cycle simulation (C1..C8)', () => {
       sessions = result.sessions;
     }
     expect(ratios.every((ratio) => ratio <= 0.6)).toBe(true); // no runaway novelty inflation across cycles
+  });
+});
+
+describe('equipment independence — v1.27 cycle evolution ignores answers.equipment', () => {
+  // A single home-environment session with one eligible slot (the anchor at
+  // index 0 is never touched), whose candidate pool contains one dumbbell
+  // variant, one resistance-band variant, and one gym-only machine variant
+  // that must never be reachable from a home program regardless of context.
+  function equipmentCatalog(): Map<string, LimitationCatalogExercise> {
+    const anchor = makeExercise({ id: 'anchor-ex', group: 'unrelated', pattern: 'vertical_pull', primaryMuscle: 'lats' });
+    const source = makeExercise({ id: 'row-source', group: 'row_family', pattern: 'horizontal_pull', primaryMuscle: 'upper_back', equipment: ['dumbbell'] });
+    const dumbbellCandidate = makeExercise({ id: 'row-dumbbell-candidate', group: 'row_family', pattern: 'horizontal_pull', primaryMuscle: 'upper_back', equipment: ['dumbbell'] });
+    const bandCandidate = makeExercise({ id: 'row-band-candidate', group: 'row_family', pattern: 'horizontal_pull', primaryMuscle: 'upper_back', equipment: ['resistance_band'] });
+    const gymOnlyCandidate = makeExercise({ id: 'row-machine-candidate', group: 'row_family', pattern: 'horizontal_pull', primaryMuscle: 'upper_back', equipment: ['machine'] });
+    return new Map([anchor, source, dumbbellCandidate, bandCandidate, gymOnlyCandidate].map((exercise) => [exercise.id, exercise]));
+  }
+
+  function homeSessions(): FinalWorkoutSession[] {
+    return [session('Home A', [slot('anchor-ex'), slot('row-source')])];
+  }
+
+  function evolveHome(equipmentContext: EquipmentContext) {
+    return evolveCycle({
+      sessions: homeSessions(),
+      targetCycleIdentity: 'cycle-equipment-1',
+      limitationRegions: [],
+      equipmentContext,
+      catalog: equipmentCatalog(),
+      recentSlotHistory: buildRecentSlotHistory([]),
+    });
+  }
+
+  const answersWithNoEquipment = { equipment: [] } as unknown as QuestionnaireAnswers;
+  const answersWithFullEquipment = { equipment: ['dumbbells', 'bands', 'bench_or_box', 'barbell', 'bodyweight'] } as unknown as QuestionnaireAnswers;
+
+  it('sanity check: the legacy v2 mechanism (equipmentContextFor) IS sensitive to answers.equipment for the same home program', () => {
+    const withNoEquipment = evolveHome(equipmentContextFor(answersWithNoEquipment, 'home'));
+    const withFullEquipment = evolveHome(equipmentContextFor(answersWithFullEquipment, 'home'));
+    // No home-compatible candidate is available -> the slot is preserved.
+    expect(withNoEquipment.sessions[0].exercises[1].exerciseId).toBe('row-source');
+    // dumbbell/resistance-band candidates become eligible -> a substitution happens.
+    expect(withFullEquipment.sessions[0].exercises[1].exerciseId).not.toBe('row-source');
+  });
+
+  it('v1.27 mechanism (unrestrictedEquipmentContext) produces the identical cycle evolution regardless of answers.equipment', () => {
+    const userWithNoEquipment = evolveHome(unrestrictedEquipmentContext('home'));
+    const userWithFullEquipment = evolveHome(unrestrictedEquipmentContext('home'));
+    expect(userWithFullEquipment.sessions).toEqual(userWithNoEquipment.sessions);
+    expect(userWithFullEquipment.substitutions).toEqual(userWithNoEquipment.substitutions);
+  });
+
+  it('v1.27 mechanism still never introduces gym-only equipment into a home program', () => {
+    const result = evolveHome(unrestrictedEquipmentContext('home'));
+    const ids = result.sessions.flatMap((s) => s.exercises.map((e) => e.exerciseId));
+    expect(ids).not.toContain('row-machine-candidate');
   });
 });

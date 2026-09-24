@@ -64,9 +64,34 @@ class FirestorePublicationRepository implements LimitationDatasetPublicationRepo
       this.db.collection(LIMITATION_DATASET_STATE_COLLECTION)
         .doc(LIMITATION_DATASET_ACTIVE_DOCUMENT).get(),
     ]);
+    const activeIdentity = active.exists ? identityFrom(active.data()) : null;
+    const activeVersionSnapshot = activeIdentity
+      ? await this.readVersionSnapshot(activeIdentity.limitationDatasetHash)
+      : null;
     return {
       exercises: exercises.docs.map((document) => ({ id: document.id, data: document.data() })),
-      activeIdentity: active.exists ? identityFrom(active.data()) : null,
+      activeIdentity,
+      activeVersionSnapshot,
+    };
+  }
+
+  /**
+   * Reads the exact profiles/resolverCatalog snapshot `publishAtomically`
+   * itself already persists for every sealed identity
+   * (`limitationDatasetVersions/{hash}`, `versionBody` below) — the only
+   * evidence `assertActiveHashSafe` (`limitationDatasetPublication.ts`)
+   * accepts to prove a catalog expansion is safe rather than tampering.
+   */
+  private async readVersionSnapshot(
+    hash: string,
+  ): Promise<PublicationReadState['activeVersionSnapshot']> {
+    const snapshot = await this.db.collection(LIMITATION_DATASET_VERSIONS_COLLECTION).doc(hash).get();
+    if (!snapshot.exists) return null;
+    const data = snapshot.data();
+    if (!Array.isArray(data?.profiles) || !Array.isArray(data?.resolverCatalog)) return null;
+    return {
+      profiles: data.profiles as LimitationProfileEntry[],
+      resolverCatalog: data.resolverCatalog as AtomicPublicationInput['nextResolverCatalog'],
     };
   }
 

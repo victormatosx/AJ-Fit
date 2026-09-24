@@ -1,28 +1,39 @@
 {
   "projectId": "ajfit-2f321",
-  "mode": "DRY_RUN",
+  "mode": "APPLY",
   "identity": {
-    "datasetVersion": "phase3-limitation-dataset-v3",
-    "limitationDatasetHash": "21ce79bcb57802df8a6072e933942b02ea34ba1d9ab85f0dc091395bff0f3944"
+    "datasetVersion": "phase4-limitation-dataset-v2",
+    "limitationDatasetHash": "0f4464c27c9d92fb06d1d26865b7e269af2cf6ed16156d3c393a3610b6be0c20"
   },
   "previousIdentity": {
     "datasetVersion": "phase3-limitation-dataset-v3",
-    "limitationDatasetHash": "21ce79bcb57802df8a6072e933942b02ea34ba1d9ab85f0dc091395bff0f3944"
+    "limitationDatasetHash": "fde1bc3dfaa376d4ddfa95e76e97361695480d2d01d7e04bec1ade4ab46dc7c5"
   },
-  "exerciseDocumentCount": 116,
-  "canonicalProfileCount": 76,
+  "exerciseDocumentCount": 123,
+  "canonicalProfileCount": 86,
   "remoteProfileCount": 76,
   "diffCounts": {
-    "LOCAL_ONLY": 0,
+    "LOCAL_ONLY": 70,
     "REMOTE_ONLY": 0,
     "STATUS_MISMATCH": 0,
     "TARGET_MISMATCH": 0,
     "METADATA_MISMATCH": 0,
-    "EXACT_MATCH": 812
+    "EXACT_MATCH": 791
   },
-  "divergentCells": 0,
-  "divergentExercises": 0,
-  "changedExerciseIds": [],
+  "divergentCells": 70,
+  "divergentExercises": 10,
+  "changedExerciseIds": [
+    "bent-over-dumbbell-row",
+    "cable-crossover-fly",
+    "decline-barbell-bench-press",
+    "decline-push-up",
+    "dumbbell-fly",
+    "dumbbell-rear-delt-fly",
+    "incline-push-up",
+    "preacher-curl",
+    "resistance-band-pullover",
+    "resistance-band-standing-leg-curl"
+  ],
   "resolverCatalogMismatches": [],
   "diff": [
     {
@@ -404,50 +415,78 @@
     {
       "exerciseId": "bent-over-dumbbell-row",
       "region": "knee",
-      "kind": "EXACT_MATCH",
-      "localRule": null,
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "not_applicable"
+      },
       "remoteRule": null
     },
     {
       "exerciseId": "bent-over-dumbbell-row",
       "region": "hip",
-      "kind": "EXACT_MATCH",
-      "localRule": null,
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "adapt",
+        "adaptation": {
+          "kind": "exercise_variant",
+          "exerciseId": "resistance-band-row"
+        }
+      },
       "remoteRule": null
     },
     {
       "exerciseId": "bent-over-dumbbell-row",
       "region": "back",
-      "kind": "EXACT_MATCH",
-      "localRule": null,
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "avoid",
+        "substituteExerciseIds": [],
+        "candidateStatus": "missing_exercise_candidate"
+      },
       "remoteRule": null
     },
     {
       "exerciseId": "bent-over-dumbbell-row",
       "region": "shoulder",
-      "kind": "EXACT_MATCH",
-      "localRule": null,
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "adapt",
+        "adaptation": {
+          "kind": "exercise_variant",
+          "exerciseId": "resistance-band-row"
+        }
+      },
       "remoteRule": null
     },
     {
       "exerciseId": "bent-over-dumbbell-row",
       "region": "elbow",
-      "kind": "EXACT_MATCH",
-      "localRule": null,
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "compatible"
+      },
       "remoteRule": null
     },
     {
       "exerciseId": "bent-over-dumbbell-row",
       "region": "wrist",
-      "kind": "EXACT_MATCH",
-      "localRule": null,
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "adapt",
+        "adaptation": {
+          "kind": "exercise_variant",
+          "exerciseId": "resistance-band-row"
+        }
+      },
       "remoteRule": null
     },
     {
       "exerciseId": "bent-over-dumbbell-row",
       "region": "ankle_foot",
-      "kind": "EXACT_MATCH",
-      "localRule": null,
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "not_applicable"
+      },
       "remoteRule": null
     },
     {
@@ -1084,50 +1123,64 @@
     {
       "exerciseId": "cable-crossover-fly",
       "region": "knee",
-      "kind": "EXACT_MATCH",
-      "localRule": null,
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "not_applicable"
+      },
       "remoteRule": null
     },
     {
       "exerciseId": "cable-crossover-fly",
       "region": "hip",
-      "kind": "EXACT_MATCH",
-      "localRule": null,
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "not_applicable"
+      },
       "remoteRule": null
     },
     {
       "exerciseId": "cable-crossover-fly",
       "region": "back",
-      "kind": "EXACT_MATCH",
-      "localRule": null,
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "compatible"
+      },
       "remoteRule": null
     },
     {
       "exerciseId": "cable-crossover-fly",
       "region": "shoulder",
-      "kind": "EXACT_MATCH",
-      "localRule": null,
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "pending"
+      },
       "remoteRule": null
     },
     {
       "exerciseId": "cable-crossover-fly",
       "region": "elbow",
-      "kind": "EXACT_MATCH",
-      "localRule": null,
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "compatible"
+      },
       "remoteRule": null
     },
     {
       "exerciseId": "cable-crossover-fly",
       "region": "wrist",
-      "kind": "EXACT_MATCH",
-      "localRule": null,
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "pending"
+      },
       "remoteRule": null
     },
     {
       "exerciseId": "cable-crossover-fly",
       "region": "ankle_foot",
-      "kind": "EXACT_MATCH",
-      "localRule": null,
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "not_applicable"
+      },
       "remoteRule": null
     },
     {
@@ -2087,6 +2140,219 @@
       }
     },
     {
+      "exerciseId": "decline-barbell-bench-press",
+      "region": "knee",
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "not_applicable"
+      },
+      "remoteRule": null
+    },
+    {
+      "exerciseId": "decline-barbell-bench-press",
+      "region": "hip",
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "not_applicable"
+      },
+      "remoteRule": null
+    },
+    {
+      "exerciseId": "decline-barbell-bench-press",
+      "region": "back",
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "compatible"
+      },
+      "remoteRule": null
+    },
+    {
+      "exerciseId": "decline-barbell-bench-press",
+      "region": "shoulder",
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "adapt",
+        "adaptation": {
+          "kind": "exercise_variant",
+          "exerciseId": "wall-push-up"
+        }
+      },
+      "remoteRule": null
+    },
+    {
+      "exerciseId": "decline-barbell-bench-press",
+      "region": "elbow",
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "adapt",
+        "adaptation": {
+          "kind": "exercise_variant",
+          "exerciseId": "wall-push-up"
+        }
+      },
+      "remoteRule": null
+    },
+    {
+      "exerciseId": "decline-barbell-bench-press",
+      "region": "wrist",
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "adapt",
+        "adaptation": {
+          "kind": "exercise_variant",
+          "exerciseId": "wall-push-up"
+        }
+      },
+      "remoteRule": null
+    },
+    {
+      "exerciseId": "decline-barbell-bench-press",
+      "region": "ankle_foot",
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "not_applicable"
+      },
+      "remoteRule": null
+    },
+    {
+      "exerciseId": "decline-push-up",
+      "region": "knee",
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "not_applicable"
+      },
+      "remoteRule": null
+    },
+    {
+      "exerciseId": "decline-push-up",
+      "region": "hip",
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "not_applicable"
+      },
+      "remoteRule": null
+    },
+    {
+      "exerciseId": "decline-push-up",
+      "region": "back",
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "compatible"
+      },
+      "remoteRule": null
+    },
+    {
+      "exerciseId": "decline-push-up",
+      "region": "shoulder",
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "adapt",
+        "adaptation": {
+          "kind": "exercise_variant",
+          "exerciseId": "wall-push-up"
+        }
+      },
+      "remoteRule": null
+    },
+    {
+      "exerciseId": "decline-push-up",
+      "region": "elbow",
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "adapt",
+        "adaptation": {
+          "kind": "exercise_variant",
+          "exerciseId": "wall-push-up"
+        }
+      },
+      "remoteRule": null
+    },
+    {
+      "exerciseId": "decline-push-up",
+      "region": "wrist",
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "adapt",
+        "adaptation": {
+          "kind": "exercise_variant",
+          "exerciseId": "wall-push-up"
+        }
+      },
+      "remoteRule": null
+    },
+    {
+      "exerciseId": "decline-push-up",
+      "region": "ankle_foot",
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "not_applicable"
+      },
+      "remoteRule": null
+    },
+    {
+      "exerciseId": "dumbbell-fly",
+      "region": "knee",
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "not_applicable"
+      },
+      "remoteRule": null
+    },
+    {
+      "exerciseId": "dumbbell-fly",
+      "region": "hip",
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "not_applicable"
+      },
+      "remoteRule": null
+    },
+    {
+      "exerciseId": "dumbbell-fly",
+      "region": "back",
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "compatible"
+      },
+      "remoteRule": null
+    },
+    {
+      "exerciseId": "dumbbell-fly",
+      "region": "shoulder",
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "pending"
+      },
+      "remoteRule": null
+    },
+    {
+      "exerciseId": "dumbbell-fly",
+      "region": "elbow",
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "compatible"
+      },
+      "remoteRule": null
+    },
+    {
+      "exerciseId": "dumbbell-fly",
+      "region": "wrist",
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "pending"
+      },
+      "remoteRule": null
+    },
+    {
+      "exerciseId": "dumbbell-fly",
+      "region": "ankle_foot",
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "not_applicable"
+      },
+      "remoteRule": null
+    },
+    {
       "exerciseId": "dumbbell-lateral-raise",
       "region": "knee",
       "kind": "EXACT_MATCH",
@@ -2295,6 +2561,73 @@
       "remoteRule": {
         "status": "not_applicable"
       }
+    },
+    {
+      "exerciseId": "dumbbell-rear-delt-fly",
+      "region": "knee",
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "not_applicable"
+      },
+      "remoteRule": null
+    },
+    {
+      "exerciseId": "dumbbell-rear-delt-fly",
+      "region": "hip",
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "not_applicable"
+      },
+      "remoteRule": null
+    },
+    {
+      "exerciseId": "dumbbell-rear-delt-fly",
+      "region": "back",
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "compatible"
+      },
+      "remoteRule": null
+    },
+    {
+      "exerciseId": "dumbbell-rear-delt-fly",
+      "region": "shoulder",
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "adapt",
+        "adaptation": {
+          "kind": "exercise_variant",
+          "exerciseId": "cable-rear-delt-fly"
+        }
+      },
+      "remoteRule": null
+    },
+    {
+      "exerciseId": "dumbbell-rear-delt-fly",
+      "region": "elbow",
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "compatible"
+      },
+      "remoteRule": null
+    },
+    {
+      "exerciseId": "dumbbell-rear-delt-fly",
+      "region": "wrist",
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "pending"
+      },
+      "remoteRule": null
+    },
+    {
+      "exerciseId": "dumbbell-rear-delt-fly",
+      "region": "ankle_foot",
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "not_applicable"
+      },
+      "remoteRule": null
     },
     {
       "exerciseId": "dumbbell-shoulder-press",
@@ -3808,6 +4141,81 @@
       "region": "ankle_foot",
       "kind": "EXACT_MATCH",
       "localRule": null,
+      "remoteRule": null
+    },
+    {
+      "exerciseId": "incline-push-up",
+      "region": "knee",
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "not_applicable"
+      },
+      "remoteRule": null
+    },
+    {
+      "exerciseId": "incline-push-up",
+      "region": "hip",
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "not_applicable"
+      },
+      "remoteRule": null
+    },
+    {
+      "exerciseId": "incline-push-up",
+      "region": "back",
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "compatible"
+      },
+      "remoteRule": null
+    },
+    {
+      "exerciseId": "incline-push-up",
+      "region": "shoulder",
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "adapt",
+        "adaptation": {
+          "kind": "exercise_variant",
+          "exerciseId": "wall-push-up"
+        }
+      },
+      "remoteRule": null
+    },
+    {
+      "exerciseId": "incline-push-up",
+      "region": "elbow",
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "adapt",
+        "adaptation": {
+          "kind": "exercise_variant",
+          "exerciseId": "wall-push-up"
+        }
+      },
+      "remoteRule": null
+    },
+    {
+      "exerciseId": "incline-push-up",
+      "region": "wrist",
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "adapt",
+        "adaptation": {
+          "kind": "exercise_variant",
+          "exerciseId": "wall-push-up"
+        }
+      },
+      "remoteRule": null
+    },
+    {
+      "exerciseId": "incline-push-up",
+      "region": "ankle_foot",
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "not_applicable"
+      },
       "remoteRule": null
     },
     {
@@ -5826,50 +6234,72 @@
     {
       "exerciseId": "preacher-curl",
       "region": "knee",
-      "kind": "EXACT_MATCH",
-      "localRule": null,
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "not_applicable"
+      },
       "remoteRule": null
     },
     {
       "exerciseId": "preacher-curl",
       "region": "hip",
-      "kind": "EXACT_MATCH",
-      "localRule": null,
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "not_applicable"
+      },
       "remoteRule": null
     },
     {
       "exerciseId": "preacher-curl",
       "region": "back",
-      "kind": "EXACT_MATCH",
-      "localRule": null,
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "compatible"
+      },
       "remoteRule": null
     },
     {
       "exerciseId": "preacher-curl",
       "region": "shoulder",
-      "kind": "EXACT_MATCH",
-      "localRule": null,
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "compatible"
+      },
       "remoteRule": null
     },
     {
       "exerciseId": "preacher-curl",
       "region": "elbow",
-      "kind": "EXACT_MATCH",
-      "localRule": null,
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "adapt",
+        "adaptation": {
+          "kind": "exercise_variant",
+          "exerciseId": "hammer-curl"
+        }
+      },
       "remoteRule": null
     },
     {
       "exerciseId": "preacher-curl",
       "region": "wrist",
-      "kind": "EXACT_MATCH",
-      "localRule": null,
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "adapt",
+        "adaptation": {
+          "kind": "exercise_variant",
+          "exerciseId": "hammer-curl"
+        }
+      },
       "remoteRule": null
     },
     {
       "exerciseId": "preacher-curl",
       "region": "ankle_foot",
-      "kind": "EXACT_MATCH",
-      "localRule": null,
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "not_applicable"
+      },
       "remoteRule": null
     },
     {
@@ -6067,6 +6497,77 @@
       }
     },
     {
+      "exerciseId": "resistance-band-pullover",
+      "region": "knee",
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "not_applicable"
+      },
+      "remoteRule": null
+    },
+    {
+      "exerciseId": "resistance-band-pullover",
+      "region": "hip",
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "not_applicable"
+      },
+      "remoteRule": null
+    },
+    {
+      "exerciseId": "resistance-band-pullover",
+      "region": "back",
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "compatible"
+      },
+      "remoteRule": null
+    },
+    {
+      "exerciseId": "resistance-band-pullover",
+      "region": "shoulder",
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "adapt",
+        "adaptation": {
+          "kind": "exercise_variant",
+          "exerciseId": "resistance-band-lat-pulldown"
+        }
+      },
+      "remoteRule": null
+    },
+    {
+      "exerciseId": "resistance-band-pullover",
+      "region": "elbow",
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "compatible"
+      },
+      "remoteRule": null
+    },
+    {
+      "exerciseId": "resistance-band-pullover",
+      "region": "wrist",
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "adapt",
+        "adaptation": {
+          "kind": "exercise_variant",
+          "exerciseId": "resistance-band-lat-pulldown"
+        }
+      },
+      "remoteRule": null
+    },
+    {
+      "exerciseId": "resistance-band-pullover",
+      "region": "ankle_foot",
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "not_applicable"
+      },
+      "remoteRule": null
+    },
+    {
       "exerciseId": "resistance-band-row",
       "region": "knee",
       "kind": "EXACT_MATCH",
@@ -6251,6 +6752,73 @@
       "remoteRule": {
         "status": "not_applicable"
       }
+    },
+    {
+      "exerciseId": "resistance-band-standing-leg-curl",
+      "region": "knee",
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "adapt",
+        "adaptation": {
+          "kind": "exercise_variant",
+          "exerciseId": "supported-standing-leg-curl"
+        }
+      },
+      "remoteRule": null
+    },
+    {
+      "exerciseId": "resistance-band-standing-leg-curl",
+      "region": "hip",
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "compatible"
+      },
+      "remoteRule": null
+    },
+    {
+      "exerciseId": "resistance-band-standing-leg-curl",
+      "region": "back",
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "compatible"
+      },
+      "remoteRule": null
+    },
+    {
+      "exerciseId": "resistance-band-standing-leg-curl",
+      "region": "shoulder",
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "not_applicable"
+      },
+      "remoteRule": null
+    },
+    {
+      "exerciseId": "resistance-band-standing-leg-curl",
+      "region": "elbow",
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "not_applicable"
+      },
+      "remoteRule": null
+    },
+    {
+      "exerciseId": "resistance-band-standing-leg-curl",
+      "region": "wrist",
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "not_applicable"
+      },
+      "remoteRule": null
+    },
+    {
+      "exerciseId": "resistance-band-standing-leg-curl",
+      "region": "ankle_foot",
+      "kind": "LOCAL_ONLY",
+      "localRule": {
+        "status": "compatible"
+      },
+      "remoteRule": null
     },
     {
       "exerciseId": "reverse-hack-squat",
@@ -9118,5 +9686,5 @@
       }
     }
   ],
-  "writeExecuted": false
+  "writeExecuted": true
 }

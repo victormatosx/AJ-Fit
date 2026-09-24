@@ -333,7 +333,7 @@ describe('structural boundaries', () => {
       'utf8',
     );
 
-    expect(packageJson.version).toBe('56.0.25');
+    expect(packageJson.version).toBe('57.0.21');
     expect(ios).toContain('UIActivityViewController');
     expect(ios).toContain('completionWithItemsHandler');
     expect(ios).toContain('promise.resolve(nil)');

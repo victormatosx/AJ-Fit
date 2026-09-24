@@ -1,6 +1,6 @@
 {
-  "datasetVersion": "phase3-limitation-dataset-v3",
-  "generatedAt": "2026-08-27",
+  "datasetVersion": "phase4-limitation-dataset-v2",
+  "generatedAt": "2026-09-24",
   "sourceDatasets": [
     {
       "file": "12_LIMITATION_PROFILES_TECHNICAL_v1.json",
@@ -113,16 +113,17 @@
     ]
   },
   "summary": {
-    "profileCount": 76,
-    "pairCount": 532,
+    "profileCount": 86,
+    "pairCount": 602,
     "statusCounts": {
-      "compatible": 129,
-      "adapt": 158,
-      "avoid": 4,
-      "not_applicable": 241,
+      "compatible": 146,
+      "adapt": 176,
+      "avoid": 5,
+      "not_applicable": 270,
+      "pending": 5,
       "unknown": 0
     },
-    "avoidWithoutSubstituteCount": 4,
+    "avoidWithoutSubstituteCount": 5,
     "actionCandidateCount": 25,
     "remainingExternalActionCandidateCount": 0,
     "cycleCount": 3
@@ -144,6 +145,10 @@
       {
         "exerciseId": "machine-lateral-raise",
         "region": "elbow"
+      },
+      {
+        "exerciseId": "bent-over-dumbbell-row",
+        "region": "back"
       }
     ],
     "cyclesByRegion": [],
@@ -170,9 +175,9 @@
   "validation": {
     "valid": true,
     "errors": [],
-    "exactly76Profiles": true,
+    "exactly76Profiles": false,
     "exactlySevenRegionsPerProfile": true,
-    "exactly532Pairs": true,
+    "exactly532Pairs": false,
     "zeroUnknown": true,
     "allCatalogReferencesExist": true,
     "noSelfReferences": true,
@@ -180,7 +185,11 @@
     "invalidEnums": 0,
     "executableClosureComplete": true,
     "avoidWithoutSubstituteAccepted": true,
-    "cyclesDetectedButNonBlocking": true
+    "cyclesDetectedButNonBlocking": true,
+    "exactly83Profiles": false,
+    "exactly581Pairs": false,
+    "exactly86Profiles": true,
+    "exactly602Pairs": true
   },
   "profiles": [
     {
@@ -3254,6 +3263,473 @@
         "reviewStatus": "approved",
         "reviewBasis": "product_policy"
       }
+    },
+    {
+      "exerciseId": "decline-push-up",
+      "limitationProfile": {
+        "schemaVersion": 1,
+        "protocolVersion": "musculoskeletal-v1",
+        "regions": {
+          "knee": {
+            "status": "not_applicable"
+          },
+          "hip": {
+            "status": "not_applicable"
+          },
+          "back": {
+            "status": "compatible"
+          },
+          "shoulder": {
+            "status": "adapt",
+            "adaptation": {
+              "kind": "exercise_variant",
+              "exerciseId": "wall-push-up"
+            }
+          },
+          "elbow": {
+            "status": "adapt",
+            "adaptation": {
+              "kind": "exercise_variant",
+              "exerciseId": "wall-push-up"
+            }
+          },
+          "wrist": {
+            "status": "adapt",
+            "adaptation": {
+              "kind": "exercise_variant",
+              "exerciseId": "wall-push-up"
+            }
+          },
+          "ankle_foot": {
+            "status": "not_applicable"
+          }
+        },
+        "reviewStatus": "approved",
+        "reviewBasis": "product_policy"
+      }
+    },
+    {
+      "exerciseId": "incline-push-up",
+      "limitationProfile": {
+        "schemaVersion": 1,
+        "protocolVersion": "musculoskeletal-v1",
+        "regions": {
+          "knee": {
+            "status": "not_applicable"
+          },
+          "hip": {
+            "status": "not_applicable"
+          },
+          "back": {
+            "status": "compatible"
+          },
+          "shoulder": {
+            "status": "adapt",
+            "adaptation": {
+              "kind": "exercise_variant",
+              "exerciseId": "wall-push-up"
+            }
+          },
+          "elbow": {
+            "status": "adapt",
+            "adaptation": {
+              "kind": "exercise_variant",
+              "exerciseId": "wall-push-up"
+            }
+          },
+          "wrist": {
+            "status": "adapt",
+            "adaptation": {
+              "kind": "exercise_variant",
+              "exerciseId": "wall-push-up"
+            }
+          },
+          "ankle_foot": {
+            "status": "not_applicable"
+          }
+        },
+        "reviewStatus": "approved",
+        "reviewBasis": "product_policy"
+      }
+    },
+    {
+      "exerciseId": "resistance-band-standing-leg-curl",
+      "limitationProfile": {
+        "schemaVersion": 1,
+        "protocolVersion": "musculoskeletal-v1",
+        "regions": {
+          "knee": {
+            "status": "adapt",
+            "adaptation": {
+              "kind": "exercise_variant",
+              "exerciseId": "supported-standing-leg-curl"
+            }
+          },
+          "hip": {
+            "status": "compatible"
+          },
+          "back": {
+            "status": "compatible"
+          },
+          "shoulder": {
+            "status": "not_applicable"
+          },
+          "elbow": {
+            "status": "not_applicable"
+          },
+          "wrist": {
+            "status": "not_applicable"
+          },
+          "ankle_foot": {
+            "status": "compatible"
+          }
+        },
+        "reviewStatus": "approved",
+        "reviewBasis": "product_policy"
+      }
+    },
+    {
+      "exerciseId": "decline-barbell-bench-press",
+      "limitationProfile": {
+        "schemaVersion": 1,
+        "protocolVersion": "musculoskeletal-v1",
+        "regions": {
+          "knee": {
+            "status": "not_applicable"
+          },
+          "hip": {
+            "status": "not_applicable"
+          },
+          "back": {
+            "status": "compatible"
+          },
+          "shoulder": {
+            "status": "adapt",
+            "adaptation": {
+              "kind": "exercise_variant",
+              "exerciseId": "wall-push-up"
+            }
+          },
+          "elbow": {
+            "status": "adapt",
+            "adaptation": {
+              "kind": "exercise_variant",
+              "exerciseId": "wall-push-up"
+            }
+          },
+          "wrist": {
+            "status": "adapt",
+            "adaptation": {
+              "kind": "exercise_variant",
+              "exerciseId": "wall-push-up"
+            }
+          },
+          "ankle_foot": {
+            "status": "not_applicable"
+          }
+        },
+        "reviewStatus": "approved",
+        "reviewBasis": "product_policy"
+      }
+    },
+    {
+      "exerciseId": "bent-over-dumbbell-row",
+      "limitationProfile": {
+        "schemaVersion": 1,
+        "protocolVersion": "musculoskeletal-v1",
+        "regions": {
+          "knee": {
+            "status": "not_applicable"
+          },
+          "hip": {
+            "status": "adapt",
+            "adaptation": {
+              "kind": "exercise_variant",
+              "exerciseId": "resistance-band-row"
+            }
+          },
+          "back": {
+            "status": "avoid",
+            "substituteExerciseIds": [],
+            "candidateStatus": "missing_exercise_candidate"
+          },
+          "shoulder": {
+            "status": "adapt",
+            "adaptation": {
+              "kind": "exercise_variant",
+              "exerciseId": "resistance-band-row"
+            }
+          },
+          "elbow": {
+            "status": "compatible"
+          },
+          "wrist": {
+            "status": "adapt",
+            "adaptation": {
+              "kind": "exercise_variant",
+              "exerciseId": "resistance-band-row"
+            }
+          },
+          "ankle_foot": {
+            "status": "not_applicable"
+          }
+        },
+        "reviewStatus": "approved",
+        "reviewBasis": "product_policy"
+      }
+    },
+    {
+      "exerciseId": "preacher-curl",
+      "limitationProfile": {
+        "schemaVersion": 1,
+        "protocolVersion": "musculoskeletal-v1",
+        "regions": {
+          "knee": {
+            "status": "not_applicable"
+          },
+          "hip": {
+            "status": "not_applicable"
+          },
+          "back": {
+            "status": "compatible"
+          },
+          "shoulder": {
+            "status": "compatible"
+          },
+          "elbow": {
+            "status": "adapt",
+            "adaptation": {
+              "kind": "exercise_variant",
+              "exerciseId": "hammer-curl"
+            }
+          },
+          "wrist": {
+            "status": "adapt",
+            "adaptation": {
+              "kind": "exercise_variant",
+              "exerciseId": "hammer-curl"
+            }
+          },
+          "ankle_foot": {
+            "status": "not_applicable"
+          }
+        },
+        "reviewStatus": "approved",
+        "reviewBasis": "product_policy"
+      }
+    },
+    {
+      "exerciseId": "resistance-band-pullover",
+      "limitationProfile": {
+        "schemaVersion": 1,
+        "protocolVersion": "musculoskeletal-v1",
+        "regions": {
+          "knee": {
+            "status": "not_applicable"
+          },
+          "hip": {
+            "status": "not_applicable"
+          },
+          "back": {
+            "status": "compatible"
+          },
+          "shoulder": {
+            "status": "adapt",
+            "adaptation": {
+              "kind": "exercise_variant",
+              "exerciseId": "resistance-band-lat-pulldown"
+            }
+          },
+          "elbow": {
+            "status": "compatible"
+          },
+          "wrist": {
+            "status": "adapt",
+            "adaptation": {
+              "kind": "exercise_variant",
+              "exerciseId": "resistance-band-lat-pulldown"
+            }
+          },
+          "ankle_foot": {
+            "status": "not_applicable"
+          }
+        },
+        "reviewStatus": "approved",
+        "reviewBasis": "product_policy"
+      }
+    },
+    {
+      "exerciseId": "cable-crossover-fly",
+      "limitationProfile": {
+        "schemaVersion": 1,
+        "protocolVersion": "musculoskeletal-v1",
+        "regions": {
+          "knee": {
+            "status": "not_applicable"
+          },
+          "hip": {
+            "status": "not_applicable"
+          },
+          "back": {
+            "status": "compatible"
+          },
+          "shoulder": {
+            "status": "pending"
+          },
+          "elbow": {
+            "status": "compatible"
+          },
+          "wrist": {
+            "status": "pending"
+          },
+          "ankle_foot": {
+            "status": "not_applicable"
+          }
+        },
+        "reviewStatus": "approved",
+        "reviewBasis": "product_policy"
+      }
+    },
+    {
+      "exerciseId": "dumbbell-fly",
+      "limitationProfile": {
+        "schemaVersion": 1,
+        "protocolVersion": "musculoskeletal-v1",
+        "regions": {
+          "knee": {
+            "status": "not_applicable"
+          },
+          "hip": {
+            "status": "not_applicable"
+          },
+          "back": {
+            "status": "compatible"
+          },
+          "shoulder": {
+            "status": "pending"
+          },
+          "elbow": {
+            "status": "compatible"
+          },
+          "wrist": {
+            "status": "pending"
+          },
+          "ankle_foot": {
+            "status": "not_applicable"
+          }
+        },
+        "reviewStatus": "approved",
+        "reviewBasis": "product_policy"
+      }
+    },
+    {
+      "exerciseId": "dumbbell-rear-delt-fly",
+      "limitationProfile": {
+        "schemaVersion": 1,
+        "protocolVersion": "musculoskeletal-v1",
+        "regions": {
+          "knee": {
+            "status": "not_applicable"
+          },
+          "hip": {
+            "status": "not_applicable"
+          },
+          "back": {
+            "status": "compatible"
+          },
+          "shoulder": {
+            "status": "adapt",
+            "adaptation": {
+              "kind": "exercise_variant",
+              "exerciseId": "cable-rear-delt-fly"
+            }
+          },
+          "elbow": {
+            "status": "compatible"
+          },
+          "wrist": {
+            "status": "pending"
+          },
+          "ankle_foot": {
+            "status": "not_applicable"
+          }
+        },
+        "reviewStatus": "approved",
+        "reviewBasis": "product_policy"
+      }
     }
-  ]
+  ],
+  "phase4Addition": {
+    "note": "Fase 4 (auditoria exercise-substitution): 10 exercicios v1.27 sem limitationProfile foram avaliados contra as regras vigentes do resolver (purposePreserved, limitationProfile do candidato, ambiente, catalogo real). 7 puderam ser representados integralmente com candidatos ja existentes e revisados no dataset; 3 permanecem sem profile porque pelo menos um campo 'adapt' da matriz aprovada nao tem candidato valido (ver profileDecisionGaps).",
+    "addedProfileIds": [
+      "decline-push-up",
+      "incline-push-up",
+      "resistance-band-standing-leg-curl",
+      "decline-barbell-bench-press",
+      "bent-over-dumbbell-row",
+      "preacher-curl",
+      "resistance-band-pullover"
+    ],
+    "profileDecisionGaps": [
+      "PROFILE_DECISION_REQUIRES_ADAPT_TARGET:dumbbell-rear-delt-fly:wrist",
+      "PROFILE_DECISION_REQUIRES_ADAPT_TARGET:dumbbell-fly:shoulder",
+      "PROFILE_DECISION_REQUIRES_ADAPT_TARGET:dumbbell-fly:wrist",
+      "PROFILE_DECISION_REQUIRES_ADAPT_TARGET:cable-crossover-fly:shoulder",
+      "PROFILE_DECISION_REQUIRES_ADAPT_TARGET:cable-crossover-fly:wrist"
+    ],
+    "adaptTargetsUsed": {
+      "decline-push-up": {
+        "shoulder": "wall-push-up",
+        "elbow": "wall-push-up",
+        "wrist": "wall-push-up"
+      },
+      "incline-push-up": {
+        "shoulder": "wall-push-up",
+        "elbow": "wall-push-up",
+        "wrist": "wall-push-up"
+      },
+      "decline-barbell-bench-press": {
+        "shoulder": "wall-push-up",
+        "elbow": "wall-push-up",
+        "wrist": "wall-push-up"
+      },
+      "resistance-band-standing-leg-curl": {
+        "knee": "supported-standing-leg-curl"
+      },
+      "bent-over-dumbbell-row": {
+        "hip": "resistance-band-row",
+        "shoulder": "resistance-band-row",
+        "wrist": "resistance-band-row"
+      },
+      "preacher-curl": {
+        "elbow": "hammer-curl",
+        "wrist": "hammer-curl"
+      },
+      "resistance-band-pullover": {
+        "shoulder": "resistance-band-lat-pulldown",
+        "wrist": "resistance-band-lat-pulldown"
+      }
+    }
+  },
+  "phase4bAddition": {
+    "note": "Correcao de granularidade: coverage de limitationProfile e avaliada POR REGIAO ATIVA, nao globalmente por exercicio. Um novo status de schema, 'pending', foi adicionado para representar uma regiao explicitamente ainda-nao-revisada, sem tratar essa ausencia de decisao como segura (nunca compatible/not_applicable) e sem permitir que a busca de candidatos por familia/similaridade rode para essa regiao (ver hasPendingActiveRegion em musculoskeletalLimitationV127.ts). cable-crossover-fly e dumbbell-fly agora tem profile completo com knee/hip/spine/elbow/ankle_foot decididos e shoulder/wrist pending. dumbbell-rear-delt-fly tem shoulder resolvido (adapt -> cable-rear-delt-fly, ja usado por outros exercicios) e wrist pending.",
+    "addedProfileIds": [
+      "cable-crossover-fly",
+      "dumbbell-fly",
+      "dumbbell-rear-delt-fly"
+    ],
+    "pendingRegions": {
+      "cable-crossover-fly": [
+        "shoulder",
+        "wrist"
+      ],
+      "dumbbell-fly": [
+        "shoulder",
+        "wrist"
+      ],
+      "dumbbell-rear-delt-fly": [
+        "wrist"
+      ]
+    }
+  }
 }

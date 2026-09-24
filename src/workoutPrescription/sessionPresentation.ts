@@ -6,14 +6,17 @@
  * catalogued from `docs/workouts/AJ_Fit_T001_T090_workouts_reformed_v2_0.json`
  * (47 distinct values as of this audit).
  *
- * `name` stays the STRUCTURAL identity (session identity, exercise
- * selection continuity, `programIdentity()` hashing, etc. all key off it
- * unchanged) — this module only ever affects what a human reads. `type`
- * (`resistance`/`strength`/`cardio`/`circuit`/`mixed`/`functional_strength`/
- * `interval`/`recovery`/`balance_cardio` — the session's OWN small closed
- * enum) is the fallback layer for a `name` this table doesn't recognize yet
- * (e.g. a future T091+ introducing a new name before a translator adds it
- * here) — never the raw name itself, unless even `type` is unrecognized.
+ * `name` is the session's AUTHORIAL identity — both structural (session
+ * identity, exercise selection continuity, `programIdentity()` hashing) and
+ * presentational: it is what a human should read when this table has no
+ * nicer phrasing for it yet. `type` (`resistance`/`strength`/`cardio`/
+ * `circuit`/`mixed`/`functional_strength`/`interval`/`recovery`/
+ * `balance_cardio`) is a coarse modality classifier and must NEVER stand in
+ * for `name` — doing so collapses distinct sessions (e.g. every T091+
+ * "Push"/"Pull"/"Legs" session, all `type: "resistance"`) onto one generic
+ * label. A template introducing a session name this table doesn't recognize
+ * yet (e.g. a future T103+) falls straight through to its own raw `name`,
+ * never to `type`.
  *
  * Mirrors `WorkoutScreen.tsx`'s existing `translateExerciseName` pattern
  * exactly (same `defaultValue`-probe shape) so both live under the same
@@ -25,31 +28,13 @@
 export type LooseTranslate = (key: string, opts?: Record<string, unknown>) => string;
 
 /**
- * Session `type` → i18n key suffix under `workout:sessionTypes`. Deliberately
- * a small, closed map mirroring the canonical schema's own `type` enum —
- * never inferred/guessed from `name`.
- */
-const SESSION_TYPE_KEYS: Record<string, string> = {
-  resistance: 'resistance',
-  strength: 'strength',
-  cardio: 'cardio',
-  circuit: 'circuit',
-  mixed: 'mixed',
-  functional_strength: 'functionalStrength',
-  interval: 'interval',
-  recovery: 'recovery',
-  active_recovery: 'activeRecovery',
-  balance_cardio: 'balanceCardio',
-};
-
-/**
  * Resolves the human-facing label for a session. Fallback chain:
- *   1. `workout:sessionNames.{name}` — the exact catalogued name (pt-BR/en/es).
- *   2. `workout:sessionTypes.{type}` — the session's own type enum, for a
- *      `name` this table doesn't know yet.
- *   3. `name` itself — last resort, never throws, never renders nothing;
- *      no worse than the pre-Phase-2 behavior for a name genuinely new to
- *      both tables.
+ *   1. `workout:sessionDisplayNames.{displayName}` — localized presentation
+ *      of an authored `display_name`, when the template provides one.
+ *   2. `workout:sessionNames.{name}` — the exact catalogued name (pt-BR/en/es).
+ *   3. `name` itself — the session's own authorial name, always. Never the
+ *      session `type` (a modality, not an identity) — a name this table
+ *      doesn't recognize yet must still read as that session's own name.
  */
 export function resolveSessionDisplayName(
   t: LooseTranslate,
@@ -57,6 +42,7 @@ export function resolveSessionDisplayName(
   type: string,
   displayName?: string,
 ): string {
+  void type;
   // `display_name` is authored in pt-BR, so it is never rendered directly.
   // It is a stable lookup value whose localized presentation lives in i18n.
   if (displayName) {
@@ -71,13 +57,6 @@ export function resolveSessionDisplayName(
   const nameKey = `workout:sessionNames.${name}`;
   const byName = t(nameKey, { defaultValue: '' });
   if (byName && byName !== nameKey) return byName;
-
-  const typeSlug = SESSION_TYPE_KEYS[type];
-  if (typeSlug) {
-    const typeKey = `workout:sessionTypes.${typeSlug}`;
-    const byType = t(typeKey, { defaultValue: '' });
-    if (byType && byType !== typeKey) return byType;
-  }
 
   return name;
 }

@@ -186,7 +186,18 @@ export type ExerciseLimitationRule =
       status: 'avoid';
       substituteExerciseIds: string[];
       candidateStatus: 'ready' | 'missing_exercise_candidate';
-    };
+    }
+  /**
+   * No reviewed clinical/product decision exists yet for this specific
+   * region — distinct from an omitted key (which is a schema error, see
+   * `Record<LimitationRegionId, ExerciseLimitationRule>`). NEVER terminal
+   * (never treated like `compatible`/`not_applicable`) and never a source of
+   * declared substitution candidates (unlike `adapt`/`avoid`) — a region
+   * marked `pending` must fail closed for any user with that region active,
+   * exactly like a missing profile would, while leaving every OTHER
+   * already-reviewed region on the same exercise usable.
+   */
+  | { status: 'pending' };
 
 interface ExerciseLimitationProfileCore {
   schemaVersion: 1;

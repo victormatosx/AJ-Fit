@@ -12,7 +12,7 @@ import type { FinalWorkoutPlan, QuestionnaireAnswers } from './prescriptionEngin
 import { EXERCISES_SEED } from './prescriptionEngine/data/exercisesSeedData';
 import { CANONICAL_ACTIVITIES } from './prescriptionEngine/workoutPrescription/canonicalActivities';
 import { mapQuestionnaireLimitations, type LimitationCatalogExercise } from './prescriptionEngine/workoutPrescription/limitationResolver';
-import { equipmentContextFor } from './prescriptionEngine/workoutPrescription/equipment';
+import { equipmentContextFor, unrestrictedEquipmentContext } from './prescriptionEngine/workoutPrescription/equipment';
 import { buildRecentSlotHistory, evolveCycle } from './prescriptionEngine/prescriptionEvolution/cycleEvolution';
 import { PRESCRIPTION_EVOLUTION_CONFIG } from './prescriptionEngine/prescriptionEvolution/config';
 import { countEarnedIntermediateCycles } from './prescriptionEngine/progressionEngineV2/earnedCycles';
@@ -632,7 +632,14 @@ async function generateCanonicalCycleEvolution(
     throw new HttpsError('failed-precondition', 'authoritative_cycle_evolution_limitation_unmapped');
   }
   const catalog = new Map<string, LimitationCatalogExercise>(EXERCISES_SEED.map((exercise) => [exercise.id, exercise]));
-  const equipmentContext = equipmentContextFor(answers, bundle.program.environment);
+  // The rule is decided by the active program's own authoritative version
+  // (`templateSourceVersion`, server-read Firestore data), never by the
+  // client-submitted `answers.equipment`: v1.27 programs never factor a home
+  // equipment inventory into cycle evolution either, matching INITIALIZE/
+  // ADAPT/PREPARE — see docs/workout-modifiers equipment audit.
+  const equipmentContext = authoritativeGenerationVersionForActiveProgram(bundle.program.templateSourceVersion) === 'v1.27'
+    ? unrestrictedEquipmentContext(bundle.program.environment)
+    : equipmentContextFor(answers, bundle.program.environment);
   const priorSessions = await loadRecentPrescriptionSessions(uid, firestore, bundle.instance);
   const targetCycleIdentity = `${bundle.state.currentCycleId}:${bundle.state.activeProgramInstanceId}`;
   const result = evolveCycle({
@@ -1466,6 +1473,125 @@ async function persistLifecycleActivationV127(
   });
 }
 
+/**
+ * Fase 17 (legacy INITIALIZE compatibility) — the brand-new-lifecycle
+ * counterpart to `persistLifecycleActivationV127` above, shared by BOTH
+ * `initializeWorkoutProgramV127Handler` (the dedicated v1.27 callable) AND
+ * `authorizeWorkoutLifecycleMutationHandler`'s own INITIALIZE branch (the
+ * legacy grant-based protocol — see that handler's own comment for why it
+ * must keep working). Persists `programInstances`/`trainingCycles`/
+ * `workoutLifecycleState`/`workoutLifecycleEvents`/`workoutProgramState`
+ * via Admin SDK for a genuinely first-ever lifecycle. `sealTargetProgram`
+ * (the `workoutPrograms/{contentIdentity}` write) is NOT part of this
+ * function — both callers already run it separately, before this, exactly
+ * as they did before this function existed.
+ *
+ * Idempotent/race-safe: if `workoutLifecycleState/current` already exists
+ * with this exact target identity when the transaction actually commits
+ * (a concurrent/redelivered call that landed first), this is a silent
+ * no-op; any OTHER existing state aborts rather than silently overwriting
+ * something else's lifecycle.
+ */
+async function persistNewLifecycleV127(
+  uid: string,
+  firestore: Firestore,
+  input: {
+    targetProgramInstanceId: string;
+    targetCycleId: string;
+    targetContentIdentity: string;
+    targetPrescriptionIdentity: string;
+    questionnaireId: string;
+    prescriptionInputSnapshot: unknown;
+    currentTrainingLevel: CurrentTrainingLevel;
+    eventId: string;
+    idempotencyKey: string;
+    source: string;
+  },
+): Promise<void> {
+  const userRoot = firestore.collection('users').doc(uid);
+  const lifecycleRef = userRoot.collection('workoutLifecycleState').doc('current');
+  const legacyStateRef = userRoot.collection('workoutProgramState').doc('active');
+
+  await firestore.runTransaction(async (transaction) => {
+    const [lifecycleSnapshot, legacyStateSnapshot] = await Promise.all([
+      transaction.get(lifecycleRef), transaction.get(legacyStateRef),
+    ]);
+    if (lifecycleSnapshot.exists) {
+      const lifecycleData = lifecycleSnapshot.data()!;
+      if (lifecycleData.activeContentIdentity === input.targetContentIdentity
+        && lifecycleData.activeProgramInstanceId === input.targetProgramInstanceId) {
+        return;
+      }
+      throw new HttpsError('aborted', 'workout_lifecycle_v127_initialize_race_lost');
+    }
+    if (legacyStateSnapshot.exists) {
+      throw new HttpsError('aborted', 'workout_lifecycle_v127_initialize_race_lost');
+    }
+    const now = FieldValue.serverTimestamp();
+    transaction.set(userRoot.collection('programInstances').doc(input.targetProgramInstanceId), {
+      programInstanceId: input.targetProgramInstanceId,
+      cycleId: input.targetCycleId,
+      contentIdentity: input.targetContentIdentity,
+      prescriptionIdentity: input.targetPrescriptionIdentity,
+      questionnaireId: input.questionnaireId,
+      prescriptionInputSnapshot: input.prescriptionInputSnapshot,
+      activatedAt: now,
+      supersededAt: null,
+      previousProgramInstanceId: null,
+      activationReason: 'INITIAL_PROGRAM',
+      schemaVersion: WORKOUT_LIFECYCLE_SCHEMA_VERSION,
+      createdAt: now,
+      updatedAt: now,
+    });
+    transaction.set(userRoot.collection('trainingCycles').doc(input.targetCycleId), {
+      cycleId: input.targetCycleId,
+      level: input.currentTrainingLevel,
+      cycleNumber: 1,
+      status: 'ACTIVE',
+      origin: 'V2_NATIVE',
+      programInstanceId: input.targetProgramInstanceId,
+      previousProgramInstanceId: null,
+      startedAt: now,
+      eligibleAt: null,
+      completedAt: null,
+      completionReason: null,
+      progressionReason: 'INITIAL_PRESCRIPTION',
+      schemaVersion: WORKOUT_LIFECYCLE_SCHEMA_VERSION,
+      createdAt: now,
+      updatedAt: now,
+    });
+    transaction.set(lifecycleRef, {
+      startingLevel: input.currentTrainingLevel,
+      currentTrainingLevel: input.currentTrainingLevel,
+      currentCycleId: input.targetCycleId,
+      currentCycleNumber: 1,
+      activeProgramInstanceId: input.targetProgramInstanceId,
+      activeContentIdentity: input.targetContentIdentity,
+      activePrescriptionIdentity: input.targetPrescriptionIdentity,
+      initializationOrigin: 'V2_NATIVE',
+      historyCompleteFrom: now,
+      schemaVersion: WORKOUT_LIFECYCLE_SCHEMA_VERSION,
+      createdAt: now,
+      updatedAt: now,
+    });
+    transaction.set(userRoot.collection('workoutLifecycleEvents').doc(input.eventId), {
+      eventId: input.eventId,
+      type: 'PROGRAM_STARTED',
+      occurredAt: now,
+      cycleId: input.targetCycleId,
+      programInstanceId: input.targetProgramInstanceId,
+      idempotencyKey: input.idempotencyKey,
+      payload: { source: input.source },
+      schemaVersion: WORKOUT_LIFECYCLE_SCHEMA_VERSION,
+    });
+    transaction.set(legacyStateRef, {
+      programId: input.targetContentIdentity,
+      programInstanceId: input.targetProgramInstanceId,
+      updatedAt: now,
+    });
+  });
+}
+
 export async function authorizeWorkoutLifecycleMutationHandler(
   request: CallableRequest,
   firestore: Firestore = defaultDb,
@@ -1539,6 +1665,60 @@ export async function authorizeWorkoutLifecycleMutationHandler(
           programInstanceId: merged.targetProgramInstanceId as string,
         },
       };
+    }
+  }
+  // Fase 17 — legacy INITIALIZE compatibility. Clients that predate the
+  // dedicated `initializeWorkoutProgramV127` callable (docs/workout-
+  // lifecycle — every app build shipped before this cutover) only ever
+  // know this ONE callable and, for a brand-new account, still send
+  // `{ operation: 'INITIALIZE' }` here — expecting the SAME grant +
+  // `canonical.targetPlan` response shape this handler has always
+  // returned (`src/services/workoutPrograms.ts`'s `saveAndActivateWorkoutProgram`
+  // calls `requireWorkoutLifecycleCanonical`, which THROWS if `canonical`
+  // is missing, and separately requires `grantId`/`expiresAtMs` — so,
+  // unlike ADAPT/ACTIVATE above, this can NEVER switch to the `{persisted}`
+  // shape; an old client has no code path that understands it). Since the
+  // central default now resolves new lifecycles to v1.27
+  // (`resolveAuthoritativeGenerationVersionForNewLifecycle`), that legacy
+  // client would otherwise receive a REAL v1.27 `canonical.targetPlan` and
+  // attempt to persist it itself via `saveAndActivateWorkoutProgram`'s own
+  // Firestore transaction — exactly the write Firestore Rules now reject
+  // for v1.27 (`firestore.rules`'s `workoutPrograms` `allow create`/
+  // `allow update` guards).
+  //
+  // The fix: persist the ENTIRE lifecycle via Admin SDK right here — same
+  // `persistNewLifecycleV127` helper `initializeWorkoutProgramV127Handler`
+  // uses — using the EXACT deterministic ids `merged` already carries
+  // (`validateRequest`'s INITIALIZE branch, byte-for-byte the same
+  // `wpi_${lifecycleStableHash(...)}`/`cyc_${...}` scheme the client
+  // independently recomputes). The grant + canonical response below is
+  // then returned COMPLETELY UNCHANGED. When the old client's own
+  // transaction runs, it re-reads fresh state, finds `workoutLifecycleState/
+  // current.activeContentIdentity` already equal to the `programId` it
+  // overrides itself to (`canonical.targetContentIdentity`,
+  // `workoutPrograms.ts`'s own `programId = canonical.targetContentIdentity`),
+  // so `shouldCreateInstance` evaluates false and the branch that would
+  // `transaction.set`/`transaction.update` `workoutPrograms` is never
+  // taken — the client's transaction reduces to a harmless idempotent
+  // re-confirmation of `workoutProgramState/active`, which Rules have
+  // always allowed regardless of version. v2 INITIALIZE, MIGRATE, and
+  // every other operation are untouched — this only ever fires for
+  // `operation === 'INITIALIZE'` with v1.27 target content.
+  if (data.operation === 'INITIALIZE') {
+    const targetVersions = plainObject(merged.targetPlan) ? merged.targetPlan.versions : null;
+    if (plainObject(targetVersions) && targetVersions.templateLibrary === '1.27.0') {
+      await persistNewLifecycleV127(uid, firestore, {
+        targetProgramInstanceId: merged.targetProgramInstanceId as string,
+        targetCycleId: merged.targetCycleId as string,
+        targetContentIdentity: merged.targetContentIdentity as string,
+        targetPrescriptionIdentity: merged.targetPrescriptionIdentity as string,
+        questionnaireId: merged.questionnaireId as string,
+        prescriptionInputSnapshot: merged.targetPrescriptionInputSnapshot,
+        currentTrainingLevel: merged.targetTrainingLevel as CurrentTrainingLevel,
+        eventId: merged.eventId as string,
+        idempotencyKey: merged.idempotencyKey as string,
+        source: merged.targetProgramSource as string,
+      });
     }
   }
   const now = Timestamp.now();
@@ -1759,83 +1939,17 @@ export async function initializeWorkoutProgramV127Handler(
     targetTemplateContentHash: templateMetadata.contentHash,
   } as AuthorityRequest, firestore);
 
-  await firestore.runTransaction(async (transaction) => {
-    const [txLifecycleSnapshot, txLegacyStateSnapshot] = await Promise.all([
-      transaction.get(lifecycleRef), transaction.get(legacyStateRef),
-    ]);
-    if (txLifecycleSnapshot.exists) {
-      const lifecycleData = txLifecycleSnapshot.data()!;
-      if (lifecycleData.activeContentIdentity === targetContentIdentity
-        && lifecycleData.activeProgramInstanceId === targetProgramInstanceId) {
-        return;
-      }
-      throw new HttpsError('aborted', 'workout_lifecycle_v127_initialize_race_lost');
-    }
-    if (txLegacyStateSnapshot.exists) {
-      throw new HttpsError('aborted', 'workout_lifecycle_v127_initialize_race_lost');
-    }
-    const now = FieldValue.serverTimestamp();
-    transaction.set(userRoot.collection('programInstances').doc(targetProgramInstanceId), {
-      programInstanceId: targetProgramInstanceId,
-      cycleId: targetCycleId,
-      contentIdentity: targetContentIdentity,
-      prescriptionIdentity: plan.planId,
-      questionnaireId,
-      prescriptionInputSnapshot,
-      activatedAt: now,
-      supersededAt: null,
-      previousProgramInstanceId: null,
-      activationReason: 'INITIAL_PROGRAM',
-      schemaVersion: WORKOUT_LIFECYCLE_SCHEMA_VERSION,
-      createdAt: now,
-      updatedAt: now,
-    });
-    transaction.set(userRoot.collection('trainingCycles').doc(targetCycleId), {
-      cycleId: targetCycleId,
-      level: currentTrainingLevel,
-      cycleNumber: 1,
-      status: 'ACTIVE',
-      origin: 'V2_NATIVE',
-      programInstanceId: targetProgramInstanceId,
-      previousProgramInstanceId: null,
-      startedAt: now,
-      eligibleAt: null,
-      completedAt: null,
-      completionReason: null,
-      progressionReason: 'INITIAL_PRESCRIPTION',
-      schemaVersion: WORKOUT_LIFECYCLE_SCHEMA_VERSION,
-      createdAt: now,
-      updatedAt: now,
-    });
-    transaction.set(lifecycleRef, {
-      startingLevel: currentTrainingLevel,
-      currentTrainingLevel,
-      currentCycleId: targetCycleId,
-      currentCycleNumber: 1,
-      activeProgramInstanceId: targetProgramInstanceId,
-      activeContentIdentity: targetContentIdentity,
-      activePrescriptionIdentity: plan.planId,
-      initializationOrigin: 'V2_NATIVE',
-      historyCompleteFrom: now,
-      schemaVersion: WORKOUT_LIFECYCLE_SCHEMA_VERSION,
-      createdAt: now,
-      updatedAt: now,
-    });
-    transaction.set(userRoot.collection('workoutLifecycleEvents').doc(eventId), {
-      eventId,
-      type: 'PROGRAM_STARTED',
-      occurredAt: now,
-      cycleId: targetCycleId,
-      programInstanceId: targetProgramInstanceId,
-      idempotencyKey: canonicalOperationKey,
-      payload: { source },
-      schemaVersion: WORKOUT_LIFECYCLE_SCHEMA_VERSION,
-    });
-    transaction.set(legacyStateRef, {
-      programId: targetContentIdentity,
-      programInstanceId: targetProgramInstanceId,
-      updatedAt: now,
-    });
+  await persistNewLifecycleV127(uid, firestore, {
+    targetProgramInstanceId,
+    targetCycleId,
+    targetContentIdentity,
+    targetPrescriptionIdentity: plan.planId,
+    questionnaireId,
+    prescriptionInputSnapshot,
+    currentTrainingLevel,
+    eventId,
+    idempotencyKey: canonicalOperationKey,
+    source,
   });
 
   return { status: 'SUCCESS', programId: targetContentIdentity, programInstanceId: targetProgramInstanceId };

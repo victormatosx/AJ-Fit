@@ -48,6 +48,13 @@ describe('questionnaire schema and branching payload', () => {
     expect(questionnaireValidationErrors(quiz)).toEqual([]);
   });
 
+  it('never requires equipment for home/both — the question is no longer asked, so an empty answer must validate cleanly', () => {
+    const home = standardQuiz({ place: 'home', equipment: [] });
+    expect(questionnaireValidationErrors(home)).toEqual([]);
+    const both = standardQuiz({ place: 'both', primaryPlace: 'home', equipment: [] });
+    expect(questionnaireValidationErrors(both)).toEqual([]);
+  });
+
   it('requires a primary environment when place is both', () => {
     const quiz = standardQuiz({ place: 'both', equipment: ['bodyweight'] });
     expect(questionnaireValidationErrors(quiz)).toContain('primary_place_required');

@@ -679,6 +679,143 @@ describe.skipIf(!enabled)('Workout Lifecycle authority — real Firestore Emulat
   });
 
   /**
+   * Fase 17 — legacy `authorizeWorkoutLifecycleMutation` INITIALIZE
+   * compatibility. A production app build that predates `initializeWorkoutProgramV127`
+   * still calls this callable directly for its first-ever program and, on
+   * success, tries to persist `canonical.targetPlan` itself via its own
+   * Firestore transaction (`saveAndActivateWorkoutProgram` in
+   * `src/services/workoutPrograms.ts`) — a write the v1.27 Rules guard now
+   * rejects. These tests prove the fix: the handler persists the whole
+   * lifecycle server-side via `persistNewLifecycleV127` (shared with
+   * `initializeWorkoutProgramV127Handler`) BEFORE returning, while the
+   * response shape itself stays byte-for-byte what old clients already
+   * know how to consume (`{grantId, expiresAtMs, canonical}` — never
+   * `{persisted}`), so the old client's own subsequent transaction finds
+   * `currentId === programId` already and never attempts to write
+   * `workoutPrograms` at all.
+   */
+  describe('authorizeWorkoutLifecycleMutationHandler — Fase 17 legacy INITIALIZE compatibility', () => {
+    beforeEach(async () => {
+      const root = db.collection('users').doc(UID);
+      await Promise.all([
+        root.collection('workoutLifecycleState').doc('current').delete(),
+        root.collection('programInstances').doc('wpi_active').delete(),
+        root.collection('trainingCycles').doc('cyc_active').delete(),
+        root.collection('workoutPrograms').doc('wpg_active').delete(),
+        root.collection('workoutProgramState').doc('active').delete(),
+      ]);
+    });
+
+    function legacyInitializeRequest(questionnaireId: string, inputs: Record<string, unknown>) {
+      return {
+        auth: { uid: UID },
+        data: {
+          operation: 'INITIALIZE',
+          targetProgramInstanceId: 'wpi_legacy_client_guess',
+          targetCycleId: 'cyc_legacy_client_guess',
+          questionnaireId,
+          questionnaireVersion: 1,
+          targetProgramSource: 'onboarding',
+          targetPrescriptionInputSnapshot: {
+            snapshotId: snapshotIdFor('QUESTIONNAIRE_BASELINE', inputs),
+            schemaVersion: 1, source: 'QUESTIONNAIRE_BASELINE', inputs,
+          },
+        },
+      } as never;
+    }
+
+    it('persists the full v1.27 lifecycle server-side and returns the unchanged grant+canonical shape (never `persisted`)', async () => {
+      const inputs = completeInputs({ level: 'intermediate', days: 2, place: 'gym' });
+      await db.collection('users').doc(UID).collection('questionnaires').doc('q_legacy_init').set({ answers: inputs, version: 1 });
+
+      const result = await authorizeWorkoutLifecycleMutationHandler(legacyInitializeRequest('q_legacy_init', inputs), db);
+
+      expect(result.grantId).toBe('current');
+      expect(typeof result.expiresAtMs).toBe('number');
+      expect(result.canonical?.targetPlan.versions).toMatchObject({ templateLibrary: '1.27.0' });
+      expect((result as { persisted?: unknown }).persisted).toBeUndefined();
+
+      const targetContentIdentity = result.canonical!.targetContentIdentity;
+      const root = db.collection('users').doc(UID);
+      const [program, lifecycle, state] = await Promise.all([
+        root.collection('workoutPrograms').doc(targetContentIdentity).get(),
+        root.collection('workoutLifecycleState').doc('current').get(),
+        root.collection('workoutProgramState').doc('active').get(),
+      ]);
+      expect(program.exists).toBe(true);
+      expect(lifecycle.exists).toBe(true);
+      expect(lifecycle.data()).toMatchObject({ activeContentIdentity: targetContentIdentity });
+      // Proves the legacy client compatibility mechanism itself: by the time
+      // the old client's own `saveAndActivateWorkoutProgram` transaction
+      // re-reads `workoutProgramState/active`, `currentId` already equals
+      // the `programId` it would have overridden itself to — its own
+      // `if (currentId !== programId)` branch (the one that would attempt a
+      // direct `workoutPrograms` write the v1.27 Rules guard rejects) is
+      // unreachable.
+      expect(state.exists).toBe(true);
+      expect(state.data()).toMatchObject({ programId: targetContentIdentity });
+      const instanceId = lifecycle.data()!.activeProgramInstanceId as string;
+      const instance = await root.collection('programInstances').doc(instanceId).get();
+      expect(instance.exists).toBe(true);
+      expect(instance.data()).toMatchObject({ contentIdentity: targetContentIdentity, activationReason: 'INITIAL_PROGRAM' });
+    });
+
+    it('a repeat legacy INITIALIZE call once state already exists is rejected exactly as before this fix — the legacy protocol was never idempotent at this layer, only the caller (its own preflight resolves a second call to MIGRATE, not a repeated INITIALIZE)', async () => {
+      const inputs = completeInputs({ level: 'beginner', days: 3, place: 'home', equipment: ['bodyweight'] });
+      await db.collection('users').doc(UID).collection('questionnaires').doc('q_legacy_repeat').set({ answers: inputs, version: 1 });
+      const request = legacyInitializeRequest('q_legacy_repeat', inputs);
+
+      await authorizeWorkoutLifecycleMutationHandler(request, db);
+      await expect(authorizeWorkoutLifecycleMutationHandler(request, db))
+        .rejects.toMatchObject({ code: 'aborted', message: 'lifecycle_already_initialized' });
+      const instances = await db.collection('users').doc(UID).collection('programInstances').get();
+      expect(instances.size).toBe(1);
+    });
+
+    it('the dedicated new-client callable (initializeWorkoutProgramV127Handler) still works after sharing its persist logic with the legacy path', async () => {
+      const inputs = completeInputs({ level: 'advanced', days: 5, place: 'gym' });
+      await db.collection('users').doc(UID).collection('questionnaires').doc('q_new_client').set({ answers: inputs, version: 1 });
+
+      const result = await initializeWorkoutProgramV127Handler(
+        { auth: { uid: UID }, data: { questionnaireId: 'q_new_client', questionnaireVersion: 1 } } as never, db,
+      );
+      expect(result).toMatchObject({ status: 'SUCCESS' });
+      const lifecycle = await db.collection('users').doc(UID).collection('workoutLifecycleState').doc('current').get();
+      expect(lifecycle.data()).toMatchObject({ activeContentIdentity: result.programId, activeProgramInstanceId: result.programInstanceId });
+    });
+
+    it('an existing V2 lifecycle keeps rejecting INITIALIZE (and ADAPT keeps preserving v2) — this fix never touches non-INITIALIZE operations', async () => {
+      // Restore the outer beforeEach's default V2-active seed this inner
+      // beforeEach just deleted, then prove INITIALIZE is still refused
+      // exactly like before this fix (Fase 17 only adds a persist side
+      // effect INSIDE the INITIALIZE branch — it never changes when that
+      // branch is reached).
+      const root = db.collection('users').doc(UID);
+      await Promise.all([
+        root.collection('workoutLifecycleState').doc('current').set({
+          currentTrainingLevel: 'BEGINNER', currentCycleId: 'cyc_active', currentCycleNumber: 1,
+          activeProgramInstanceId: 'wpi_active', activeContentIdentity: 'wpg_active',
+          activePrescriptionIdentity: 'rx_active',
+        }),
+        root.collection('workoutProgramState').doc('active').set({ programId: 'wpg_active', programInstanceId: 'wpi_active' }),
+      ]);
+      const inputs = completeInputs();
+      await expect(authorizeWorkoutLifecycleMutationHandler({
+        auth: { uid: UID },
+        data: {
+          operation: 'INITIALIZE',
+          targetProgramInstanceId: 'wpi_attacker3', targetCycleId: 'cyc_attacker3',
+          questionnaireId: 'q1', questionnaireVersion: 1,
+          targetPrescriptionInputSnapshot: {
+            snapshotId: snapshotIdFor('QUESTIONNAIRE_BASELINE', inputs),
+            schemaVersion: 1, source: 'QUESTIONNAIRE_BASELINE', inputs,
+          },
+        },
+      } as never, db)).rejects.toMatchObject({ code: 'aborted', message: 'lifecycle_already_initialized' });
+    });
+  });
+
+  /**
    * Fase 16 — ADAPT/ACTIVATE's counterpart to Fase 15's INITIALIZE suite
    * above: proves `persistLifecycleActivationV127` (`authorizeMutation.ts`'s
    * own doc comment has the full rationale) end to end against the real
@@ -1199,6 +1336,66 @@ describe.skipIf(!enabled)('Workout Lifecycle authority — real Firestore Emulat
       expect(plan.sessions).toHaveLength(1);
       expect(plan.sessions[0].exercises[0].sets).toBe(3);
     });
+
+    it.each([
+      ['no home equipment answered', []],
+      ['every home equipment answered', ['dumbbells', 'bands', 'bench_or_box', 'barbell', 'bodyweight']],
+    ] as const)(
+      'v1.27 CYCLE_EVOLUTION picks the identical substitution regardless of answers.equipment (%s)',
+      async (_label, equipment) => {
+        await db.collection('users').doc(UID).collection('workoutPrograms').doc('wpg_active').update({
+          templateId: 'T069', split: 'Upper/Lower', environment: 'home',
+          versions: { templateLibrary: '1.27.0' },
+          templateVersion: 2, templateSourceVersion: '1.27.0', templateContentHash: 'a'.repeat(64),
+          sessions: [{
+            name: 'Home A', type: 'strength',
+            exercises: [
+              { exerciseId: 'push-up', sourceExerciseId: 'push-up', sets: 3, reps: '8-15' },
+              { exerciseId: 'one-arm-dumbbell-row', sourceExerciseId: 'one-arm-dumbbell-row', sets: 3, reps: '8-12' },
+            ],
+          }],
+        });
+        const inputs = completeInputs({ place: 'home', primaryPlace: 'home', equipment });
+        await db.collection('users').doc(UID).collection('programInstances').doc('wpi_active').update({
+          prescriptionInputSnapshot: {
+            snapshotId: 'pis_active', schemaVersion: 1, source: 'QUESTIONNAIRE_BASELINE', inputs,
+          },
+        });
+        const earnedFact = {
+          type: 'CYCLE_EVOLUTION', quality: 'GOOD', fromLevel: 'BEGINNER', toLevel: 'BEGINNER',
+          sessionsCompletedAtEarn: 20, adherenceAtEarnBp: 8000,
+        };
+        await seedEarnedFact(earnedFact);
+        const result = await authorizeWorkoutLifecycleMutationHandler({
+          auth: { uid: UID },
+          data: {
+            operation: 'PREPARE', sourceProgramInstanceId: 'wpi_active', sourceCycleId: 'cyc_active',
+            sourcePrescriptionInputSnapshotId: 'pis_active',
+            targetProgramInstanceId: 'wpi_evolved', targetContentIdentity: 'wpg_client_guess3',
+            targetPrescriptionIdentity: 'rx_client_guess3', pendingEvolutionId: 'pe_3',
+            targetPlan: { planId: 'rx_client_guess3', sessions: [{ exercises: [{ exerciseId: 'lat-pulldown', sets: 1_000_000 }] }] },
+            targetPrescriptionInputSnapshot: {
+              snapshotId: snapshotIdFor('CYCLE_EVOLUTION', inputs),
+              schemaVersion: 1, source: 'CYCLE_EVOLUTION', inputs,
+            },
+            earnedFact,
+          },
+        } as never, db);
+        expect(result.grantId).toBe('current');
+        const grant = (await db.collection('users').doc(UID)
+          .collection('workoutLifecycleAuthorityGrants').doc('current').get()).data();
+        const plan = grant!.targetPlan as { sessions: Array<{ exercises: Array<{ exerciseId: string }> }> };
+        // Deterministic for `targetCycleIdentity: 'cyc_active:wpi_active'` regardless
+        // of `equipment` — proven at the unit level in
+        // `src/prescriptionEvolution/__tests__/cycleEvolution.test.ts`
+        // ("equipment independence"). The same v2 mechanism
+        // (`equipmentContextFor`) applied to this exact scenario WOULD have
+        // produced a different exercise for the empty-equipment case
+        // (preserves `one-arm-dumbbell-row` instead of substituting) —
+        // this is the regression this test guards against.
+        expect(plan.sessions[0].exercises[1].exerciseId).toBe('bent-over-dumbbell-row');
+      },
+    );
   });
 
   describe('COMPLETE_SCHEDULE — schedule decides the expected session, not the execution', () => {

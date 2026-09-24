@@ -28,6 +28,19 @@ export interface RemoteExerciseDocument {
 export interface PublicationReadState {
   exercises: RemoteExerciseDocument[];
   activeIdentity: PublishedDatasetIdentity | null;
+  /**
+   * The full profiles/resolverCatalog snapshot Firestore already persists
+   * for `activeIdentity` at `limitationDatasetVersions/{activeIdentity.
+   * limitationDatasetHash}` (written by `publishAtomically` itself, every
+   * time it seals a new identity) — `null` when there is no active
+   * identity, or when no such version document can be found. This is the
+   * ONLY evidence `assertActiveHashSafe` accepts to prove a catalog
+   * expansion is safe; it is never derived from document counts.
+   */
+  activeVersionSnapshot: {
+    profiles: LimitationProfileEntry[];
+    resolverCatalog: LimitationResolverCatalogEntry[];
+  } | null;
 }
 
 export interface AtomicPublicationInput {
@@ -97,11 +110,16 @@ export function validateCanonicalLimitationDataset(
   const catalogIds = new Set(EXERCISES_SEED.map((exercise) => exercise.id));
   // Catalog size is no longer pinned to a fixed count (Fase 1 — new valid
   // exercises may be added; every entry below still must resolve to a real
-  // id). `entries.length` stays pinned to 76: that is the clinically
-  // reviewed profile count, independent of overall catalog growth.
+  // id). `entries.length` stays pinned to 86: the clinically/product
+  // reviewed profile count as of the Fase 4b per-region coverage closure
+  // (76 original + 7 + 3 — see `15_LIMITATION_PROFILES_TECHNICAL_v2.json`'s
+  // `phase4Addition`/`phase4bAddition`), independent of overall catalog
+  // growth. A profile entry existing here no longer means every one of its
+  // 7 regions was reviewed — some may be `pending` (see `ruleValid`) — only
+  // that the OBJECT itself is schema-valid.
   if (!EXERCISES_SEED.length) errors.push('exercise catalog is empty');
   if (catalogIds.size !== EXERCISES_SEED.length) errors.push('duplicate exercise id in canonical catalog');
-  if (entries.length !== 76) errors.push(`profile count ${entries.length} != 76`);
+  if (entries.length !== 86) errors.push(`profile count ${entries.length} != 86`);
   if (new Set(entries.map((entry) => entry.exerciseId)).size !== entries.length) {
     errors.push('duplicate exerciseId in canonical profiles');
   }
@@ -117,6 +135,68 @@ function remoteProfiles(exercises: readonly RemoteExerciseDocument[]): Limitatio
   return exercises
     .filter((exercise) => exercise.data.limitationProfile != null)
     .map((exercise) => ({ exerciseId: exercise.id, limitationProfile: exercise.data.limitationProfile }));
+}
+
+/**
+ * Proves that an active-hash mismatch is a purely additive, safe catalog
+ * expansion — never assumed from document counts or any other heuristic.
+ * The ONLY evidence accepted is `state.activeVersionSnapshot`, the exact
+ * profiles/resolverCatalog Firestore already persisted for the active
+ * identity at publish time. Given that snapshot:
+ *
+ *   1. Every exercise id it lists must still exist in the current remote
+ *      catalog (nothing previously published may vanish).
+ *   2. Restricting the CURRENT remote profiles/resolverCatalog to exactly
+ *      those ids and re-hashing with the SAME canonical scheme
+ *      (`sha256LimitationProfiles`/legacy variant) must reproduce the
+ *      active hash byte-for-byte — i.e. not one field of any previously
+ *      published exercise or profile may have changed.
+ *   3. Every id present in the current remote catalog but absent from the
+ *      previous snapshot must be a real `EXERCISES_SEED` id — a
+ *      recognized, locally-declared exercise, never arbitrary Firestore
+ *      drift.
+ *
+ * Fails closed (throws `LIMITATION_DATASET_ACTIVE_HASH_MISMATCH`) the
+ * instant any of this cannot be proven — including when no previous
+ * version snapshot is available at all, in which case nothing here is
+ * verifiable and the mismatch is treated exactly as before this function
+ * existed.
+ */
+function assertActiveHashSafe(input: {
+  activeIdentity: PublishedDatasetIdentity;
+  activeVersionSnapshot: PublicationReadState['activeVersionSnapshot'];
+  remoteExercises: readonly RemoteExerciseDocument[];
+  remote: readonly LimitationProfileEntry[];
+  remoteResolverCatalog: readonly LimitationResolverCatalogEntry[];
+  localExerciseIds: readonly string[];
+}): void {
+  const { activeIdentity, activeVersionSnapshot, remoteExercises, remote, remoteResolverCatalog, localExerciseIds } = input;
+  if (!activeVersionSnapshot) {
+    throw new Error('LIMITATION_DATASET_ACTIVE_HASH_MISMATCH:no_previous_version_snapshot_to_verify_against');
+  }
+  const previousIds = new Set(activeVersionSnapshot.resolverCatalog.map((entry) => entry.id));
+  const currentIds = new Set(remoteExercises.map((exercise) => exercise.id));
+  const missingIds = [...previousIds].filter((id) => !currentIds.has(id)).sort();
+  if (missingIds.length) {
+    throw new Error(`LIMITATION_DATASET_ACTIVE_HASH_MISMATCH:previously_published_exercise_missing:${missingIds.join(',')}`);
+  }
+  const restrictedProfiles = remote.filter((entry) => previousIds.has(entry.exerciseId));
+  const restrictedResolverCatalog = remoteResolverCatalog.filter((entry) => previousIds.has(entry.id));
+  const restrictedHash = sha256LimitationProfiles(restrictedProfiles, restrictedResolverCatalog);
+  const restrictedLegacyHash = sha256LegacyProfileOnly(restrictedProfiles);
+  if (
+    restrictedHash !== activeIdentity.limitationDatasetHash
+    && restrictedLegacyHash !== activeIdentity.limitationDatasetHash
+  ) {
+    throw new Error('LIMITATION_DATASET_ACTIVE_HASH_MISMATCH:previously_published_exercise_or_profile_changed');
+  }
+  const localIds = new Set(localExerciseIds);
+  const unrecognizedNewIds = [...currentIds]
+    .filter((id) => !previousIds.has(id) && !localIds.has(id))
+    .sort();
+  if (unrecognizedNewIds.length) {
+    throw new Error(`LIMITATION_DATASET_ACTIVE_HASH_MISMATCH:unrecognized_exercise:${unrecognizedNewIds.join(',')}`);
+  }
 }
 
 export async function runLimitationDatasetPublication(input: {
@@ -157,7 +237,14 @@ export async function runLimitationDatasetPublication(input: {
     && state.activeIdentity.limitationDatasetHash !== remoteHash
     && state.activeIdentity.limitationDatasetHash !== legacyRemoteHash
   ) {
-    throw new Error('LIMITATION_DATASET_ACTIVE_HASH_MISMATCH');
+    assertActiveHashSafe({
+      activeIdentity: state.activeIdentity,
+      activeVersionSnapshot: state.activeVersionSnapshot,
+      remoteExercises: state.exercises,
+      remote,
+      remoteResolverCatalog,
+      localExerciseIds: exerciseIds,
+    });
   }
   const previousIdentity = state.activeIdentity ?? {
     datasetVersion: 'legacy-unversioned',

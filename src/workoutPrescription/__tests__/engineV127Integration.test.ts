@@ -12,7 +12,7 @@ import { completeAnswers } from './fixtures';
  * just the already-covered isolated modifier unit suites.
  */
 describe('engineV127 — musculoskeletal limitation end-to-end', () => {
-  it('T025 (male/gym/strength/2d) substitutes farmers-walk via Tier C for an active elbow limitation', () => {
+  it('T025 (male/gym/strength/2d) keeps farmers-walk unchanged for an active elbow limitation — the app\'s OWN reviewed limitationProfile rates it "compatible" for elbow, unlike the pre-rewrite v1.27-only avoid list', () => {
     const answers = completeAnswers({
       sex: 'm', goal: 'strength', level: 'intermediate', days: 2, place: 'gym',
       specialConditions: ['musculoskeletal_limitation'], limits: ['elbow'],
@@ -22,12 +22,20 @@ describe('engineV127 — musculoskeletal limitation end-to-end', () => {
     if (result.status !== 'SUCCESS') return;
     expect(result.plan.templateId).toBe('T025');
     const ids = result.plan.sessions.flatMap((session) => session.exercises.map((exercise) => exercise.exerciseId));
-    expect(ids).not.toContain('farmers-walk');
-    expect(ids).toContain('controlled-marching');
+    // farmers-walk itself is reviewed-compatible with elbow — no substitution
+    // decision is even logged for it (see musculoskeletalLimitationV127.ts's
+    // "no decision for an unchanged/compatible exercise" contract).
+    expect(ids).toContain('farmers-walk');
+    const limitationDecisions = result.plan.trace.limitationDecisions as Array<{ exerciseId: string }>;
+    expect(limitationDecisions.some((decision) => decision.exerciseId === 'farmers-walk')).toBe(false);
+    // Other elbow-incompatible exercises in the same template DO still
+    // substitute, resolved through the shared limitation resolver.
+    expect(ids).toContain('wall-push-up');
+    expect(ids).toContain('resistance-band-row');
     expect(result.plan.trace.limitationDecisions.length).toBeGreaterThan(0);
   });
 
-  it('T009 (male/home/hypertrophy/4d) fails closed (no invented dose) when a hip limitation vetoes an exercise with no safe substitute', () => {
+  it('T009 (male/home/hypertrophy/4d) fails closed (no invented dose) when a hip limitation leaves one exercise with no safe substitute left in its session', () => {
     const answers = completeAnswers({
       sex: 'm', goal: 'gain_muscle', level: 'intermediate', days: 4, place: 'home',
       equipment: ['bodyweight', 'dumbbells', 'bands', 'bench_or_box'],
@@ -36,13 +44,16 @@ describe('engineV127 — musculoskeletal limitation end-to-end', () => {
     const result = generateWorkoutPrescriptionV127(answers, 'INTERMEDIATE');
     expect(result.status).toBe('INVALID_CONFIGURATION');
     if (result.status !== 'INVALID_CONFIGURATION') return;
-    // Fase 13: T009's Home sessions also include at least one of the 7
-    // still-unprofiled v1.27 Fase 2 closure exercises, so some reason codes
-    // now legitimately come from the profile-coverage fail-closed check
-    // too, not only from "no safe substitute" — both are real, honest
-    // fail-closed reasons.
+    // Every reason code is still a real, honest fail-closed reason — either
+    // "no safe substitute survives this session's own duplicate-in-session
+    // constraint" (bench-step-up's only two candidates are the one already
+    // claimed by bulgarian-split-squat-dumbbell's own substitution, and one
+    // itself hip-adapt-listed) or "no reviewed limitationProfile yet"
+    // (decline-push-up, one of the still-unprofiled v1.27 Fase 2 closure
+    // exercises) — never a merged/ambiguous code.
     expect(result.reasonCodes.every((code) =>
       code.startsWith('MUSCULOSKELETAL_NO_SUBSTITUTE:') || code.startsWith('MUSCULOSKELETAL_PROFILE_COVERAGE_MISSING:'))).toBe(true);
+    expect(result.reasonCodes).toContain('MUSCULOSKELETAL_NO_SUBSTITUTE:3:bench-step-up');
   });
 
   it('§13: an "other" limitation alone materializes the template unchanged (no INVALID_CONFIGURATION retry loop)', () => {
@@ -98,6 +109,26 @@ describe('engineV127 — beginner -> intermediate promotion routes to the regula
     expect(/^T09[1-9]|T10[0-2]$/.test(intermediate.plan.templateId)).toBe(false);
     expect(intermediate.plan.goalFamily).toBe('strength');
     expect(intermediate.plan.environment).toBe('gym');
+  });
+});
+
+describe('engineV127 — initial prescription is independent of answers.equipment', () => {
+  it('two otherwise-identical home users differing only in equipment get byte-identical plans', () => {
+    const withoutEquipment = generateWorkoutPrescriptionV127(
+      completeAnswers({ sex: 'f', goal: 'conditioning', level: 'intermediate', days: 4, place: 'home', equipment: [] }),
+      'INTERMEDIATE',
+    );
+    const withEquipment = generateWorkoutPrescriptionV127(
+      completeAnswers({
+        sex: 'f', goal: 'conditioning', level: 'intermediate', days: 4, place: 'home',
+        equipment: ['bodyweight', 'dumbbells', 'bands', 'bench_or_box', 'barbell', 'other'],
+      }),
+      'INTERMEDIATE',
+    );
+    expect(withoutEquipment.status).toBe('SUCCESS');
+    expect(withEquipment.status).toBe('SUCCESS');
+    if (withoutEquipment.status !== 'SUCCESS' || withEquipment.status !== 'SUCCESS') return;
+    expect(withEquipment.plan).toEqual(withoutEquipment.plan);
   });
 });
 
