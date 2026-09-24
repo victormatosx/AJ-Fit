@@ -878,7 +878,7 @@ export async function validateRequest(uid: string, request: AuthorityRequest, fi
     const version: PrescriptionGenerationVersion = request.operation === 'MIGRATE'
       ? 'v2'
       : resolveAuthoritativeGenerationVersionForNewLifecycle();
-    const currentTrainingLevel = levelFromSnapshot(target) as CurrentTrainingLevel;
+    const currentTrainingLevel = levelFromAnswers(answers) as CurrentTrainingLevel;
     const { plan, templateMetadata } = await generateCanonicalPlan(
       answers as unknown as QuestionnaireAnswers, firestore, version, currentTrainingLevel,
     );
