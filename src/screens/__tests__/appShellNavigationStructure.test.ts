@@ -194,10 +194,14 @@ describe('AppShell overlay geometry stability', () => {
       APP_SHELL_CODE.indexOf("{tab !== 'workout' && ("),
       APP_SHELL_CODE.indexOf('<TabBar'),
     );
-    expect(tabBarBlock).toContain("pointerEvents={overlayOpen ? 'none' : 'auto'}");
-    expect(tabBarBlock).toContain('accessibilityElementsHidden={overlayOpen}');
     expect(tabBarBlock).toContain(
-      "importantForAccessibility={overlayOpen ? 'no-hide-descendants' : 'auto'}",
+      "pointerEvents={overlayOpen || !homeInitialVisualReady ? 'none' : 'auto'}",
+    );
+    expect(tabBarBlock).toContain(
+      'accessibilityElementsHidden={overlayOpen || !homeInitialVisualReady}',
+    );
+    expect(tabBarBlock).toContain(
+      "importantForAccessibility={overlayOpen || !homeInitialVisualReady ? 'no-hide-descendants' : 'auto'}",
     );
   });
 

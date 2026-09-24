@@ -3,7 +3,8 @@ import { logInfo, logWarn } from '../lib/logger';
 import { normalizeWeekdays, trainingDaysValid } from '../lib/questionnaireSchema';
 import { ensureScheduleConfigFromQuestionnaire, loadScheduleConfig } from '../services/workoutSchedule';
 import type { QuestionnaireDoc } from '../services/userProfile';
-import { resolveWorkoutPrescription } from './useWorkoutPrescription';
+import { resolveWorkoutPrescription, setWorkoutPrescriptionBootstrapHandoff } from './useWorkoutPrescription';
+import { setScheduleConfigBootstrapHandoff } from '../scheduleEngine/scheduleConfigBootstrapHandoff';
 import { readinessStatusForPrescription, type WorkoutReadinessGateStatus } from './readiness';
 
 export { readinessStatusForPrescription, type WorkoutReadinessGateStatus };
@@ -119,6 +120,10 @@ export function useWorkoutReadinessGate(input: {
       const prescription = await resolveWorkoutPrescription(uid, questionnaire, {
         onGenerationStart: () => { generationAttempted = true; },
       });
+      // Handoff to `useWorkoutPrescription`'s first `reload()` — see that
+      // function's doc comment. Set here, right after this exact same
+      // resolution, and before anything else in this gate could write.
+      setWorkoutPrescriptionBootstrapHandoff(uid, prescription);
       const prescribedTrainingDays = prescription.status === 'SUCCESS'
         ? prescription.plan.weeklySchedule
           ?.filter((day) => day.state === 'TRAINING')
@@ -143,6 +148,13 @@ export function useWorkoutReadinessGate(input: {
               deviceTimezone(),
               scheduleMode,
             );
+            // A config was just created — do NOT hand it off. The value
+            // this branch has (`undefined`) is stale by definition; let
+            // `useWorkoutSchedule` do its own fresh read/ensure.
+          } else {
+            // Nothing written — this exact config is still valid a few
+            // hundred ms later when `useWorkoutSchedule` mounts.
+            setScheduleConfigBootstrapHandoff(uid, existingConfig);
           }
         } catch (error) {
           // Non-fatal — `useWorkoutSchedule` retries this same idempotent

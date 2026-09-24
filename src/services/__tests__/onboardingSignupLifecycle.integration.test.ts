@@ -153,10 +153,11 @@ describe.skipIf(!enabled)('Onboarding → signup lifecycle (conceptual E2E) — 
       goal: 'gain_muscle',
       scheduleMode: 'flexible',
       trainingDays: null,
+      birthDate: new Date('1990-01-01T12:00:00.000Z'),
     });
     const prepared = await prepareWorkoutProgramLocally(flexibleAnswers);
     expect(prepared.status).toBe('SUCCESS');
-    const questionnaireId = await provisionNewUser(fakeUser, { name: 'Fiona', answers: flexibleAnswers });
+    const questionnaireId = await provisionNewUser(fakeUser, { name: 'Fiona', answers: flexibleAnswers, legalAccepted: true });
     expect(questionnaireId).not.toBeNull();
     if (!questionnaireId) return;
     const persisted = await persistPreparedWorkoutProgram({

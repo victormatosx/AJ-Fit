@@ -21,6 +21,15 @@ export type LoadOutcome =
  */
 export function nextViewModelAfterLoad(previous: EvolutionViewModel, outcome: LoadOutcome): EvolutionViewModel {
   if (outcome.status === 'success') return outcome.viewModel;
+  // Progressive rendering (Fase 5.2): a failure that lands while only the
+  // safe provisional summary has been shown must not erase it — but it must
+  // also not stay silently as if the still-pending notice check had
+  // succeeded. Flag it instead of falling through to the generic
+  // resolved-state preservation below (which would leave it indistinguishable
+  // from a load that never needed the notice check at all).
+  if (previous.kind === 'SUMMARY_READY' && !previous.noticeUnavailable) {
+    return { ...previous, noticeUnavailable: true };
+  }
   if (isResolvedEvolutionViewModel(previous)) return previous;
   return { kind: 'ERROR', message: 'WORKOUT_EVOLUTION_LOAD_FAILED' };
 }

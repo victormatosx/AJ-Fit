@@ -148,3 +148,92 @@ export function setWorkoutLifecycleAuthorityAuthorizerForTests(
 export function resetWorkoutLifecycleAuthorityAuthorizerForTests(): void {
   authorizer = cloudAuthorizer;
 }
+
+// ─── Fase 2.8 — server-side INITIALIZE install ─────────────────────────────
+// A narrow, separate callable from the grant-issuing one above: for a
+// brand-new account's first program only, the server performs the entire
+// Admin SDK write itself (see `functions/src/workoutLifecycle/
+// installActiveWorkoutProgram.ts`) instead of issuing a grant for this
+// client to redeem via its own `runTransaction` — that transaction reliably
+// exceeds the Firestore rules engine's expression-evaluation ceiling for
+// this exact real flow (Fase 2.6/2.7 audits).
+
+export const INSTALL_ACTIVE_WORKOUT_PROGRAM_CALLABLE = 'installActiveWorkoutProgram';
+
+export interface InstallActiveWorkoutProgramRequest {
+  questionnaireId: string;
+  questionnaireVersion: number;
+  targetPrescriptionInputSnapshot: Record<string, unknown>;
+  source: 'onboarding' | 'automatic_reconciliation';
+  /**
+   * This client's own locally-generated candidate plan/template — a
+   * preview/intent only, exactly like `targetPlan` on
+   * `WorkoutLifecycleAuthorityRequest` above. The real server NEVER reads
+   * either field: it generates the canonical plan itself from the
+   * authoritative questionnaire (see `installActiveWorkoutProgram.ts`'s doc
+   * comment). Present ONLY so integration-test fixtures — which fake this
+   * callable's response without running the real Functions runtime, the
+   * same way `workoutLifecycleAuthorityFixture.ts` already does for
+   * `authorizeWorkoutLifecycleMutation` — have something to echo back as
+   * the "canonical" result.
+   */
+  previewPlan?: Record<string, unknown>;
+  previewTemplate?: { id: string; version: number; sourceVersion: string; contentHash: string };
+  /**
+   * This client's own locally-computed candidate content identity
+   * (`programIdentity`/`contentIdentityFor` — `saveAndActivateWorkoutProgram`'s
+   * `candidateProgramId`). Like `previewPlan`/`previewTemplate`, the real
+   * server never reads this: it derives the identity itself from the
+   * canonical plan it generates. Present only so fixtures can prove a
+   * "catalog race" (backend regenerates different content than this
+   * client's candidate) the same way the existing `authorizeWorkoutLifecycleMutation`
+   * fixture already does via `setWorkoutLifecycleCanonicalResponseOverrideForTests`.
+   */
+  previewContentIdentity?: string;
+}
+
+export interface InstallActiveWorkoutProgramResult {
+  status: 'installed' | 'already_active';
+  programId: string;
+  programInstanceId: string;
+}
+
+export type InstallActiveWorkoutProgramInvoker = (
+  request: InstallActiveWorkoutProgramRequest,
+) => Promise<InstallActiveWorkoutProgramResult>;
+
+const cloudInstallActiveWorkoutProgram: InstallActiveWorkoutProgramInvoker = async (request) => {
+  const [{ httpsCallable }, { functions }] = await Promise.all([
+    import('firebase/functions'),
+    import('../lib/firebaseFunctions'),
+  ]);
+  const callable = httpsCallable<InstallActiveWorkoutProgramRequest, InstallActiveWorkoutProgramResult>(
+    functions, INSTALL_ACTIVE_WORKOUT_PROGRAM_CALLABLE,
+  );
+  return (await callable(request)).data;
+};
+
+let installActiveWorkoutProgramInvoker: InstallActiveWorkoutProgramInvoker = cloudInstallActiveWorkoutProgram;
+
+export async function installActiveWorkoutProgram(
+  request: InstallActiveWorkoutProgramRequest,
+): Promise<InstallActiveWorkoutProgramResult> {
+  const result = await installActiveWorkoutProgramInvoker(request);
+  if (
+    (result.status !== 'installed' && result.status !== 'already_active')
+    || typeof result.programId !== 'string'
+    || typeof result.programInstanceId !== 'string'
+  ) {
+    throw new Error('WORKOUT_LIFECYCLE_INSTALL_RESPONSE_INVALID');
+  }
+  return result;
+}
+
+/** Test-only dependency injection; production always uses the App-Check enforced callable. */
+export function setInstallActiveWorkoutProgramInvokerForTests(value: InstallActiveWorkoutProgramInvoker): void {
+  installActiveWorkoutProgramInvoker = value;
+}
+
+export function resetInstallActiveWorkoutProgramInvokerForTests(): void {
+  installActiveWorkoutProgramInvoker = cloudInstallActiveWorkoutProgram;
+}

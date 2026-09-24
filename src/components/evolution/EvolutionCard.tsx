@@ -23,8 +23,11 @@ export function EvolutionCard({
   const { t } = useTranslation('evolution');
   const { theme } = useTheme();
 
-  if (viewModel.kind === 'LOADING' || viewModel.kind === 'ERROR' || viewModel.kind === 'UNAVAILABLE') {
+  if (viewModel.kind === 'LOADING' || viewModel.kind === 'ERROR' || viewModel.kind === 'UNAVAILABLE' || viewModel.kind === 'SUMMARY_READY') {
     // Never fabricate a level/cycle while loading or on error (docs §76/§77).
+    // SUMMARY_READY (Fase 5.2, Home-only progressive rendering) is treated
+    // the same as LOADING here on purpose — Profile is out of this phase's
+    // scope and keeps its exact pre-existing behavior.
     return (
       <Card style={{ padding: 16 }}>
         <MonoLabel>{t(viewModel.kind === 'ERROR'
@@ -74,7 +77,7 @@ export function EvolutionCard({
           </MonoLabel>
         </View>
 
-        {summary.earnedLevel !== summary.activeLevel ? (
+        {summary.earnedLevel !== null && summary.earnedLevel !== summary.activeLevel ? (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
             <Icon name="sparkles" size={14} color={theme.colors.primaryEmphasis} />
             <MonoLabel color={theme.colors.primaryEmphasis}>

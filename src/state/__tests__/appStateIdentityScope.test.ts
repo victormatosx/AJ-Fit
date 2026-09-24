@@ -31,4 +31,9 @@ describe('AppState quiz identity scoping (regression: account A -> account B lea
     expect(appState).toContain('nextValueForIdentity(lastUidRef.current, uid, preparedWorkoutProgram, null)');
     expect(appState).toContain('const [preparedWorkoutProgram, setPreparedWorkoutProgram] = useState');
   });
+
+  it('tab resets to home through the exact same identity-transition mechanism as quiz — logout/login never reopens the tab (e.g. profile/settings) the previous identity was on', () => {
+    expect(appState).toContain("nextValueForIdentity(lastUidRef.current, uid, tab, 'home')");
+    expect(appState).toContain("const [tab, setTab] = useState<TabId>('home')");
+  });
 });

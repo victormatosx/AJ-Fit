@@ -12,21 +12,51 @@ import { filledProgramProgressSegments, PROGRAM_PROGRESS_SEGMENT_COUNT } from '.
  * Hoje card (docs task — new element, distinct from the existing
  * `EvolutionTicker` marquee above the card, which stays untouched). Presents
  * the SAME `EvolutionViewModel` Home already holds — no new fetch, no new
- * listener. Renders nothing while LOADING/UNAVAILABLE/ERROR: the ticker
- * above already communicates those states, so this never duplicates a
- * skeleton.
+ * listener. Renders its own placeholder shell for LOADING (Fase 5.2:
+ * preserves layout height so real content doesn't cause a visible jump —
+ * the ticker above communicates the same "loading" state, this just avoids
+ * an empty gap doing it). Still renders nothing for UNAVAILABLE/ERROR —
+ * those are not "about to have content" states.
  */
 export function ProgramProgressStrip({
   viewModel,
   onPress,
+  reserveWhenUnavailable = false,
 }: {
   viewModel: EvolutionViewModel;
   onPress?: () => void;
+  reserveWhenUnavailable?: boolean;
 }) {
   const { t } = useTranslation(['home', 'evolution']);
   const { theme } = useTheme();
 
-  if (viewModel.kind === 'LOADING' || viewModel.kind === 'UNAVAILABLE' || viewModel.kind === 'ERROR') return null;
+  if ((viewModel.kind === 'UNAVAILABLE' || viewModel.kind === 'ERROR') && !reserveWhenUnavailable) return null;
+
+  if (viewModel.kind === 'LOADING' || viewModel.kind === 'UNAVAILABLE' || viewModel.kind === 'ERROR') {
+    return (
+      <View style={{ paddingHorizontal: 22, paddingVertical: 12 }}>
+        <MonoLabel>{t('home:activity.programProgress.title').toUpperCase()}</MonoLabel>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 10 }}>
+          <View style={{ flexDirection: 'row', gap: 4, flex: 1 }}>
+            {Array.from({ length: PROGRAM_PROGRESS_SEGMENT_COUNT }, (_, index) => (
+              <View
+                key={index}
+                style={{ flex: 1, height: 3, borderRadius: theme.radii.pill, backgroundColor: theme.colors.progressTrack }}
+              />
+            ))}
+          </View>
+        </View>
+        <Text
+          numberOfLines={1}
+          style={{ fontFamily: theme.fonts.mono, fontSize: 10.5, letterSpacing: 1, color: theme.colors.textFaint, marginTop: 8 }}
+        >
+          {t(viewModel.kind === 'ERROR' ? 'evolution:state.error'
+            : viewModel.kind === 'UNAVAILABLE' ? 'evolution:state.unavailable'
+              : 'evolution:state.loading').toUpperCase()}
+        </Text>
+      </View>
+    );
+  }
 
   const { summary } = viewModel;
   const isActionable = viewModel.kind === 'EVOLUTION_READY'
@@ -45,7 +75,14 @@ export function ProgramProgressStrip({
             : 'evolution:unlock.cycleReadyCard')
       : viewModel.kind === 'EVOLUTION_DEFERRED'
         ? t('evolution:unlock.deferredStatus')
-        : t(summary.proximity ? `evolution:proximity.${summary.proximity}` : 'evolution:state.evaluationPaused');
+        // Fase 5.2: the pending/auto-activation-notice check itself failed
+        // while the safe summary was already showing — say so plainly
+        // instead of silently reusing the ready-looking proximity copy.
+        : viewModel.kind === 'SUMMARY_READY' && viewModel.noticeUnavailable
+          ? t('evolution:state.error')
+          : viewModel.kind === 'SUMMARY_READY' && viewModel.source === 'CACHE'
+            ? t('evolution:state.refreshing')
+          : t(summary.proximity ? `evolution:proximity.${summary.proximity}` : 'evolution:state.evaluationPaused');
 
   return (
     <Pressable

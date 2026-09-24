@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ProgressionDecision } from '../../progressionEngineV2/types';
-import { buildEvolutionViewModel, isResolvedEvolutionViewModel, proximityFromDecision, type LifecycleContext } from '../viewModel';
+import { buildEvolutionViewModel, buildProvisionalEvolutionViewModel, isResolvedEvolutionViewModel, proximityFromDecision, type LifecycleContext } from '../viewModel';
 import type { EvolutionViewModel, PendingEvolutionSummary } from '../types';
 
 const NOW = new Date('2026-06-01T00:00:00.000Z');
@@ -119,6 +119,34 @@ describe('isResolvedEvolutionViewModel — resilience hardening', () => {
           ? { kind, summary, pending: pending() }
           : { kind, summary, activatedType: 'CYCLE_EVOLUTION', activationEventId: 'event-1' }
     ) as EvolutionViewModel;
+    expect(isResolvedEvolutionViewModel(vm)).toBe(true);
+  });
+});
+
+describe('buildProvisionalEvolutionViewModel — progressive rendering (Fase 5.2)', () => {
+  it('carries the exact same summary a terminal PROGRESSING commit would carry, given the same lifecycle+decision', () => {
+    const decision = progressing({ activeDays: 12, validSessionCount: 8, adherence: { ratio: 0.64, quality: 'BELOW_TARGET' } });
+    const provisional = buildProvisionalEvolutionViewModel({ lifecycle: lifecycle(), decision });
+    const terminal = buildEvolutionViewModel({ now: NOW, lifecycle: lifecycle(), decision, pending: null, ...NO_NOTICE });
+    expect(provisional).toEqual({
+      kind: 'SUMMARY_READY',
+      source: 'CURRENT_SESSION',
+      summary: terminal.kind === 'PROGRESSING' ? terminal.summary : undefined,
+    });
+  });
+
+  it('never fabricates a decision-derived field when decision is not yet known', () => {
+    const vm = buildProvisionalEvolutionViewModel({ lifecycle: lifecycle(), decision: null });
+    expect(vm).toEqual({
+      kind: 'SUMMARY_READY',
+      source: 'CURRENT_SESSION',
+      summary: { earnedLevel: 'BEGINNER', activeLevel: 'BEGINNER', cycleNumber: 1, isHistoryComplete: true,
+        proximity: null, activeDays: null, sessionsCompleted: null, adherenceQuality: null },
+    });
+  });
+
+  it('is resolved for the purposes of surviving a subsequent transient refresh failure', () => {
+    const vm = buildProvisionalEvolutionViewModel({ lifecycle: lifecycle(), decision: progressing() });
     expect(isResolvedEvolutionViewModel(vm)).toBe(true);
   });
 });

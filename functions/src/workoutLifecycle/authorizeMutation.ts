@@ -41,7 +41,7 @@ const OPERATIONS = [
 ] as const;
 type AuthorityOperation = typeof OPERATIONS[number];
 
-interface AuthorityRequest {
+export interface AuthorityRequest {
   operation: AuthorityOperation;
   sourceProgramInstanceId?: string;
   sourceCycleId?: string;
@@ -681,12 +681,27 @@ async function generateCanonicalCycleEvolution(
   };
 }
 
-function levelFromSnapshot(snapshot: unknown): string {
-  const level = plainObject(snapshot) && plainObject(snapshot.inputs) ? snapshot.inputs.level : null;
-  if (level === 'beginner') return 'BEGINNER';
-  if (level === 'intermediate') return 'INTERMEDIATE';
-  if (level === 'advanced') return 'ADVANCED';
-  throw new HttpsError('invalid-argument', 'target_snapshot_level_invalid');
+// Fase 2.9 — `currentTrainingLevel` is a load-bearing business-rule field
+// (EARN eligibility gating, LEVEL_PROMOTION/CYCLE_EVOLUTION classification,
+// future ADAPT/PREPARE prescription inputs, evolution notifications — never
+// cosmetic), so for INITIALIZE/MIGRATE (first-ever lifecycle bootstrap, no
+// prior state to reconcile against) it must be derived from the SAME
+// authoritative questionnaire document `validateRequest` already loads
+// (`answers`), never from the client-submitted
+// `targetPrescriptionInputSnapshot` — the client's own snapshot is never
+// re-validated against the questionnaire for this field the way `limits`/
+// `specialConditions`/the screening fields explicitly are above. Mirrors
+// the client's own `startingLevelFromQuestionnaire` (src/workoutLifecycle/
+// domain.ts) mapping, including the legacy/alias values real onboarding
+// answers actually use (e.g. `never_or_starting`) — the previous
+// `levelFromSnapshot` only accepted the three canonical strings and would
+// have rejected a genuine first-time user's real answer.
+function levelFromAnswers(answers: Record<string, unknown>): string {
+  const level = answers.level;
+  if (level === 'never_or_starting' || level === 'beginner' || level === 'beg') return 'BEGINNER';
+  if (level === 'intermediate' || level === 'int') return 'INTERMEDIATE';
+  if (level === 'advanced' || level === 'adv' || level === 'elite') return 'ADVANCED';
+  throw new HttpsError('invalid-argument', 'questionnaire_level_invalid');
 }
 
 async function sealTargetProgram(uid: string, request: AuthorityRequest, firestore: Firestore): Promise<void> {
@@ -813,7 +828,15 @@ async function validateFinishExecution(
   return { sourceProgramInstanceId: execution.programInstanceId };
 }
 
-async function validateRequest(uid: string, request: AuthorityRequest, firestore: Firestore): Promise<Record<string, unknown>> {
+// Fase 2.8 — exported so `installActiveWorkoutProgram.ts` can reuse the
+// EXACT same INITIALIZE validation/canonical-generation logic (authoritative
+// questionnaire load, canonical plan generation via `generateCanonicalPlan`,
+// `assertPlanSafe`, deterministic identity derivation) instead of
+// reimplementing any of it. This function performs no writes of its own —
+// it is pure validation + reads + a deterministic-identity computation — so
+// exporting it introduces no new side effect and changes nothing about its
+// existing caller (`authorizeWorkoutLifecycleMutationHandler`) below.
+export async function validateRequest(uid: string, request: AuthorityRequest, firestore: Firestore): Promise<Record<string, unknown>> {
   if (request.operation === 'INITIALIZE' || request.operation === 'MIGRATE') {
     if (!boundedId(request.targetProgramInstanceId) || !boundedId(request.targetCycleId)
       || !boundedId(request.questionnaireId) || !plainObject(request.targetPrescriptionInputSnapshot)) {
@@ -879,7 +902,7 @@ async function validateRequest(uid: string, request: AuthorityRequest, firestore
       ? request.idempotencyKey
       : `${request.operation === 'MIGRATE' ? 'v1-baseline' : 'v2-initial'}:${targetContentIdentity}`;
     return {
-      targetTrainingLevel: levelFromSnapshot(request.targetPrescriptionInputSnapshot),
+      targetTrainingLevel: levelFromAnswers(answers),
       targetCycleNumber: 1,
       targetPlan: plan,
       targetContentIdentity,

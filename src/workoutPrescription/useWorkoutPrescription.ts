@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { logInfo, logWarn } from '../lib/logger';
+import { recordPerfMark } from '../lib/perf';
 import {
   generateAndPersistWorkoutProgram,
   generateAndPersistWorkoutProgramDeduped,
@@ -28,6 +29,32 @@ const loadingResult: PrescriptionResult = {
   status: 'NEEDS_QUESTIONNAIRE_UPDATE',
   reasonCodes: ['ACTIVE_WORKOUT_PROGRAM_LOADING'],
 };
+
+/**
+ * Bootstrap-only, in-memory handoff from `useWorkoutReadinessGate` to this
+ * hook's first `reload()` — both call this exact same
+ * `resolveWorkoutPrescription` for the same uid milliseconds apart (the gate
+ * runs before `AppShell`/this hook ever mount), and nothing writes to the
+ * active program between the gate resolving and `AppShell` mounting, so the
+ * gate's result is still authoritative. NOT a cache: consumed exactly once
+ * then cleared, so every later reload (retry, post-workout, manual
+ * regenerate, a second identity) always re-fetches for real. Not persisted —
+ * a plain module variable, gone on cold start/app kill — and never survives
+ * a uid mismatch.
+ */
+let bootstrapHandoff: { uid: string; result: PrescriptionResult } | null = null;
+
+/** Called only by `useWorkoutReadinessGate` immediately after its own resolution. */
+export function setWorkoutPrescriptionBootstrapHandoff(uid: string, result: PrescriptionResult): void {
+  bootstrapHandoff = { uid, result };
+}
+
+function takeWorkoutPrescriptionBootstrapHandoff(uid: string): PrescriptionResult | null {
+  if (!bootstrapHandoff || bootstrapHandoff.uid !== uid) return null;
+  const { result } = bootstrapHandoff;
+  bootstrapHandoff = null;
+  return result;
+}
 
 export interface WorkoutPrescriptionController {
   prescription: PrescriptionResult;
@@ -81,6 +108,7 @@ export async function resolveWorkoutPrescription(
   let program;
   try {
     program = await loadActiveWorkoutProgram(uid);
+    recordPerfMark('today_load_program_ready');
     logInfo('workout_program', 'active_workout_program_loaded', { found: Boolean(program), templateId: program?.templateId });
   } catch (error) {
     logWarn('workout_program', 'active_workout_program_load_failed', { error });
@@ -202,6 +230,14 @@ export function useWorkoutPrescription(): WorkoutPrescriptionController {
     setLoading(true);
     if (!user) {
       setResolved({ identity, result: { status: 'NEEDS_QUESTIONNAIRE_UPDATE', reasonCodes: ['AUTHENTICATION_REQUIRED'] } });
+      setLoading(false);
+      return;
+    }
+    const handoff = takeWorkoutPrescriptionBootstrapHandoff(user.uid);
+    if (handoff) {
+      recordPerfMark('today_prescription_handoff_used');
+      setResolved({ identity, result: handoff });
+      setGenerating(false);
       setLoading(false);
       return;
     }

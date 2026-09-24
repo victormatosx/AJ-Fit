@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Modal, View, Text, ScrollView, Pressable, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -10,6 +10,7 @@ import { Icon } from '../components/ui/Icon';
 import { darkTheme, useTheme } from '../theme';
 import { useAuth } from '../state/AuthContext';
 import { getDisplayFirstName } from '../lib/userName';
+import { recordPerfMark } from '../lib/perf';
 import { ProfileAvatar } from '../components/ui/ProfileAvatar';
 import type { PrescriptionResult } from '../workoutPrescription/types';
 import { prescriptionOutcomeKey } from '../workoutPrescription/uiOutcome';
@@ -27,6 +28,7 @@ import { UpcomingWorkoutDetailModal } from '../components/home/UpcomingWorkoutDe
 import { buildUpcomingWorkouts, type UpcomingWorkoutViewModel } from '../home/upcomingWorkouts';
 import type { WeekOverviewViewModel } from '../home/weekOverview';
 import type { FrequencyWindowViewModel } from '../home/frequencyHeatmap';
+import type { InitialSectionStatus } from '../home/homeInitialReadiness';
 import type { ActiveRest } from '../lib/restTimer';
 import { WorkoutRestHeaderStatus } from '../components/workout/WorkoutRestHeaderStatus';
 import { SupportInboxButton } from '../components/support/SupportInboxButton';
@@ -61,9 +63,20 @@ export function HomeScreen({
   weekOverview,
   frequencyWindow,
   frequencyLoading,
+  frequencySource = 'AUTHORITATIVE',
   frequencyCanGoNext,
   onFrequencyPrev,
   onFrequencyNext,
+  snapshotFrequencyWindow = null,
+  snapshotFrequencyThrough,
+  snapshotPresentationActive = false,
+  todayActionsReady = false,
+  todayStatus = 'PENDING',
+  programPresentationReady = false,
+  onSnapshotLayoutCommitted,
+  homeInitialDataSettled = false,
+  homeInitialVisualReady = false,
+  onInitialLayoutCommitted,
 }: {
   prescription: PrescriptionResult;
   /**
@@ -112,12 +125,45 @@ export function HomeScreen({
   frequencyWindow?: FrequencyWindowViewModel | null;
   /** True while a newly-selected period's data isn't available yet — `frequencyWindow` is still the previous period. */
   frequencyLoading?: boolean;
+  frequencySource?: 'CACHE' | 'CURRENT_SESSION' | 'AUTHORITATIVE';
   /** False on the most recent (current) 30-day window — the "next" control must be disabled/hidden there. */
   frequencyCanGoNext?: boolean;
   onFrequencyPrev?: () => void;
   onFrequencyNext?: () => void;
+  snapshotFrequencyWindow?: FrequencyWindowViewModel | null;
+  snapshotFrequencyThrough?: string;
+  snapshotPresentationActive?: boolean;
+  todayActionsReady?: boolean;
+  todayStatus?: InitialSectionStatus;
+  programPresentationReady?: boolean;
+  onSnapshotLayoutCommitted?: () => void;
+  /** Bootstrap-only: mounts a fresh layout marker only after every required Home section is terminal. */
+  homeInitialDataSettled?: boolean;
+  homeInitialVisualReady?: boolean;
+  onInitialLayoutCommitted?: () => void;
 }) {
   const { theme } = useTheme();
+  useEffect(() => {
+    recordPerfMark('home_mount');
+    // The Evolution ticker/strip container is unconditionally part of Home's
+    // layout from the very first render (LOADING already renders a shell,
+    // never nothing) — Fase 5.2 progressive rendering baseline.
+    recordPerfMark('evolution_shell_visible');
+  }, []);
+  useEffect(() => {
+    if (!loading && !generating && scheduleResolution &&
+        (prescription.status !== 'SUCCESS' || scheduleResolution.status !== 'PROGRAM_NOT_AVAILABLE')) {
+      recordPerfMark('home_today_ready');
+    }
+  }, [loading, generating, prescription.status, scheduleResolution]);
+  useEffect(() => {
+    // SUMMARY_READY (Fase 5.2) is an intermediate, non-final state — excluded
+    // here so this mark keeps its exact original meaning (fires only once
+    // Evolution has reached a truly terminal/authoritative state), never
+    // silently redefined by the new progressive-rendering step.
+    if (evolutionViewModel.kind !== 'LOADING' && evolutionViewModel.kind !== 'SUMMARY_READY' &&
+        evolutionViewModel.kind !== 'ERROR') recordPerfMark('home_evolution_ready');
+  }, [evolutionViewModel]);
   const { t, i18n } = useTranslation(['home', 'profile']);
   const [showMissedPendingInfo, setShowMissedPendingInfo] = useState(false);
   const [selectedUpcoming, setSelectedUpcoming] = useState<UpcomingWorkoutViewModel | null>(null);
@@ -151,7 +197,8 @@ export function HomeScreen({
   // replace it with a real outcome, so the stale one is never shown
   // mid-attempt (`docs/workout-lifecycle` — distinguishes "generating" from
   // every terminal outcome, incl. "not generated yet").
-  const showLoadingState = Boolean(loading) && prescription.status !== 'SUCCESS';
+  const showLoadingState = (Boolean(loading) && prescription.status !== 'SUCCESS')
+    || (snapshotPresentationActive && !todayActionsReady);
   const outcomeKey = showLoadingState
     ? 'loadingState'
     : generating
@@ -174,7 +221,7 @@ export function HomeScreen({
   // its normal actionable title/CTA, and the decision itself is only asked
   // once the user actually taps "Iniciar treino" (AppShell's
   // `requestStartWorkout`), never automatically here.
-  const showMissedPendingNotice = !workoutInProgress
+  const showMissedPendingNotice = todayActionsReady && !workoutInProgress
     && scheduleResolution?.status === 'MISSED_SESSION_DECISION_REQUIRED';
   const firstSession = prescription.status === 'SUCCESS'
     ? prescription.plan.sessions[scheduledSessionIndex] ?? prescription.plan.sessions[0]
@@ -223,7 +270,7 @@ export function HomeScreen({
     ? firstSession.exercises.map((exercise) => exercise.exerciseId)
     : [];
   const sessionMuscles = deriveSessionMuscles(sessionExerciseIds);
-  const showBodyMuscleMap = sessionMuscles.primary.length > 0;
+  const showBodyMuscleMap = (!snapshotPresentationActive || todayActionsReady) && sessionMuscles.primary.length > 0;
   const nextSession = prescription.status === 'SUCCESS' && isBlockedToday
     ? prescription.plan.sessions[(scheduleResolution as { nextSessionIndex: number }).nextSessionIndex] ?? null
     : null;
@@ -246,7 +293,8 @@ export function HomeScreen({
     ? localDateInTimezone(new Date(), scheduleTimezone)
     : null;
   const upcomingWorkouts = useMemo(
-    () => (todayLocalDate && scheduleConfig && prescription.status === 'SUCCESS'
+    () => ((todayActionsReady || (!snapshotPresentationActive && programPresentationReady))
+      && todayLocalDate && scheduleConfig && prescription.status === 'SUCCESS'
       ? buildUpcomingWorkouts({
           todayLocalDate,
           scheduleMode: prescription.plan.scheduleMode ?? 'fixed',
@@ -255,7 +303,7 @@ export function HomeScreen({
           resolution: scheduleResolution,
         })
       : []),
-    [todayLocalDate, scheduleConfig, prescription, scheduleResolution],
+    [todayActionsReady, snapshotPresentationActive, programPresentationReady, todayLocalDate, scheduleConfig, prescription, scheduleResolution],
   );
 
   // Today's real locale-formatted calendar date. There is no fixed
@@ -295,13 +343,13 @@ export function HomeScreen({
                 {`${t('home:greeting.casual')} ${localizedFirstName}.`.toUpperCase()}
               </Display>
             </View>
-            <WorkoutRestHeaderStatus
+            {todayActionsReady ? <WorkoutRestHeaderStatus
               workoutInProgress={workoutInProgress}
               rest={activeRest}
               resting={restRunning}
               onPress={onStart}
-            />
-            {onOpenSupportCases && unreadSupportCasesCount > 0 && (
+            /> : null}
+            {onOpenSupportCases && (unreadSupportCasesCount > 0 || Boolean(snapshotFrequencyThrough)) && (
               <SupportInboxButton
                 unreadCasesCount={unreadSupportCasesCount}
                 onPress={onOpenSupportCases}
@@ -319,7 +367,7 @@ export function HomeScreen({
 
           {/* Real Training Level/Cycle/progress state from Workout Lifecycle V2,
               rendered full-bleed like the historical Home ticker. */}
-          <View style={{ marginBottom: 18 }}>
+          <View style={{ marginBottom: 18, minHeight: snapshotFrequencyThrough ? 44 : undefined }}>
             <EvolutionTicker viewModel={evolutionViewModel} onPress={onOpenEvolution} />
           </View>
 
@@ -334,7 +382,7 @@ export function HomeScreen({
                 borderRadius: 16,
                 borderBottomRightRadius: 0,
                 overflow: 'hidden',
-                minHeight: 250,
+                minHeight: snapshotFrequencyThrough ? 310 : 250,
                 borderWidth: 1,
                 borderColor: TODAY_WORKOUT_THEME.colors.primaryBorderQuiet,
                 padding: 20,
@@ -356,7 +404,9 @@ export function HomeScreen({
                   color={TODAY_WORKOUT_THEME.colors.textPrimary}
                   style={{ marginTop: 12 }}
                 >
-                  {(showLoadingState
+                  {(snapshotPresentationActive && !todayActionsReady
+                    ? t(todayStatus === 'ERROR' ? 'home:snapshot.todayUnavailableTitle' : 'home:snapshot.todayPendingTitle')
+                    : showLoadingState
                     ? t('home:prescription.loadingState.title')
                     : generating
                       ? t('home:prescription.generatingState.title')
@@ -376,7 +426,9 @@ export function HomeScreen({
                       letterSpacing: 1,
                     }}
                   >
-                    {(showLoadingState
+                    {(snapshotPresentationActive && !todayActionsReady
+                      ? t(todayStatus === 'ERROR' ? 'home:snapshot.todayUnavailableBody' : 'home:snapshot.todayPendingBody')
+                      : showLoadingState
                       ? t('home:prescription.loadingState.body')
                       : generating
                         ? t('home:prescription.generatingState.body')
@@ -432,7 +484,9 @@ export function HomeScreen({
                   TRÍCEPS" wrapping to 2-3 lines) and must never fight the map
                   for horizontal space. */}
               <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 }}>
-                {isBlockedToday ? (
+                {!todayActionsReady ? (
+                  <View style={{ width: 170, height: 46, marginTop: 20, borderRadius: 10, backgroundColor: TODAY_WORKOUT_THEME.colors.surfaceMuted }} />
+                ) : isBlockedToday ? (
                   canAdvanceWorkout ? (
                     <Pressable
                       accessibilityRole="button"
@@ -575,6 +629,9 @@ export function HomeScreen({
                     size={bodyMuscleMapSize}
                   />
                 )}
+                {snapshotPresentationActive && !showBodyMuscleMap ? (
+                  <View style={{ width: bodyMuscleMapSize, height: bodyMuscleMapSize }} />
+                ) : null}
               </View>
             </LinearGradient>
           </View>
@@ -584,22 +641,26 @@ export function HomeScreen({
               Home (or AppShell) already holds — no new claims, no fabricated
               numbers — and is simply omitted while its data isn't loaded yet
               instead of showing a fake skeleton (docs task §11/§12). */}
-          <ProgramProgressStrip viewModel={evolutionViewModel} onPress={onOpenEvolution} />
+          <ProgramProgressStrip viewModel={evolutionViewModel} onPress={onOpenEvolution} reserveWhenUnavailable={Boolean(snapshotFrequencyThrough)} />
 
           {weekOverview ? (
             <View style={{ marginTop: 4 }}>
               <WeeklyOverview overview={weekOverview} />
             </View>
+          ) : snapshotFrequencyThrough ? (
+            <View style={{ marginTop: 4, marginHorizontal: 22, height: 100, borderRadius: 10, backgroundColor: theme.colors.surfaceMuted }} />
           ) : null}
 
-          {frequencyWindow && onFrequencyPrev && onFrequencyNext ? (
+          {(frequencyWindow || snapshotFrequencyWindow) && onFrequencyPrev && onFrequencyNext ? (
             <View style={{ marginTop: 4, marginBottom: 8 }}>
               <FrequencyHeatmap
-                window={frequencyWindow}
-                loading={Boolean(frequencyLoading)}
-                canGoNext={Boolean(frequencyCanGoNext)}
+                window={frequencyWindow ?? snapshotFrequencyWindow}
+                loading={frequencyWindow ? Boolean(frequencyLoading) : false}
+                canGoNext={Boolean(frequencyWindow && frequencyCanGoNext)}
                 onPrev={onFrequencyPrev}
                 onNext={onFrequencyNext}
+                source={frequencyWindow ? frequencySource : 'CACHE'}
+                knownThroughLocalDate={frequencyWindow ? undefined : snapshotFrequencyThrough}
               />
             </View>
           ) : null}
@@ -607,7 +668,17 @@ export function HomeScreen({
           {/* Last section, after calendário/frequência: what comes NEXT.
               Tapping a row only ever opens its details — starting a session
               stays exclusively with the Today card + Schedule Engine. */}
-          <UpcomingWorkouts workouts={upcomingWorkouts} onSelect={setSelectedUpcoming} />
+          {upcomingWorkouts.length > 0 ? (
+            <View style={{ minHeight: snapshotFrequencyThrough ? 284 : undefined }}>
+              <UpcomingWorkouts workouts={upcomingWorkouts} onSelect={setSelectedUpcoming} enabled={todayActionsReady} />
+            </View>
+          ) : snapshotFrequencyThrough ? (
+            <View style={{ marginHorizontal: 22, marginTop: 14, height: 270, gap: 10 }}>
+              {[0, 1, 2].map((index) => (
+                <View key={index} style={{ height: 74, borderRadius: theme.radii.xl, backgroundColor: theme.colors.surfaceMuted }} />
+              ))}
+            </View>
+          ) : null}
         </ScrollView>
       </SafeAreaView>
 
@@ -667,6 +738,25 @@ export function HomeScreen({
           )}
         </Pressable>
       </Modal>
+
+      {homeInitialDataSettled && !homeInitialVisualReady && onInitialLayoutCommitted ? (
+        <View
+          testID="home-initial-layout-commit-marker"
+          collapsable={false}
+          pointerEvents="none"
+          onLayout={onInitialLayoutCommitted}
+          style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
+        />
+      ) : null}
+      {snapshotPresentationActive && !homeInitialVisualReady && onSnapshotLayoutCommitted ? (
+        <View
+          testID="home-snapshot-layout-commit-marker"
+          collapsable={false}
+          pointerEvents="none"
+          onLayout={onSnapshotLayoutCommitted}
+          style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}
+        />
+      ) : null}
     </ScreenBg>
   );
 }

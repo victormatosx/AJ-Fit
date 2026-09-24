@@ -5,6 +5,7 @@ import { View, ActivityIndicator, Pressable, Text } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useFonts, Anton_400Regular } from '@expo-google-fonts/anton';
+import { useTranslation } from 'react-i18next';
 import {
   Archivo_400Regular,
   Archivo_500Medium,
@@ -59,6 +60,7 @@ import {
 } from './src/services/photoVaultUploadQueue';
 import { logPhotoVaultIssue } from './src/lib/photoVaultErrors';
 import { logInfo } from './src/lib/logger';
+import { recordPerfMark } from './src/lib/perf';
 import { configureWorkoutLifecycleTelemetry } from './src/workoutLifecycle/telemetryProvider';
 import { DeepLinkProvider } from './src/state/DeepLinkContext';
 import { PushNotificationsRuntime } from './src/components/PushNotificationsRuntime';
@@ -69,6 +71,7 @@ import { SubscriptionCelebrationRuntime } from './src/components/subscription/Su
 // callable and then Cloud Logging. Installation is synchronous; delivery is
 // always best-effort and never blocks a domain transition.
 configureWorkoutLifecycleTelemetry();
+recordPerfMark('app_epoch');
 
 /**
  * Configures the RevenueCat SDK at module evaluation time — the same
@@ -187,10 +190,12 @@ function AppStateProviderConnected({ children }: { children: React.ReactNode }) 
 
 function RootNavigator() {
   const { theme } = useTheme();
+  const { t } = useTranslation('common');
   const {
     user,
     profile,
     questionnaire,
+    cachedPresentation,
     questionnaireResolution,
     initializing,
     profileLoading,
@@ -281,6 +286,7 @@ function RootNavigator() {
     // which the reconciliation's own writes can cause to change).
     if (reconcilingUidRef.current === user.uid) return;
     reconcilingUidRef.current = user.uid;
+    recordPerfMark('preferences_reconciliation_start');
     Promise.all([
       reconcileLanguageOnLoad({
         uid: user.uid,
@@ -293,6 +299,7 @@ function RootNavigator() {
     ]).finally(() => {
       reconciledUidRef.current = user.uid;
       reconcilingUidRef.current = null;
+      recordPerfMark('preferences_reconciliation_settled');
       forceReconciliationRerender();
     });
   }, [emailVerificationRequired, preferencesReconciling, user, profile]);
@@ -339,6 +346,14 @@ function RootNavigator() {
     commercialGateResolved,
     workoutReadinessGate,
   });
+
+  useEffect(() => {
+    if (workoutReadinessGate === 'ready') recordPerfMark('workout_readiness_ready');
+  }, [workoutReadinessGate]);
+
+  useEffect(() => {
+    if (resolvedScreen === 'app') recordPerfMark('premium_gate_resolved_app');
+  }, [resolvedScreen]);
 
   // Repair re-entry: `resolvePremiumGate` sends an authenticated user with an
   // EXISTING but incomplete questionnaire back to `'onboardingFunnel'` too
@@ -433,7 +448,14 @@ function RootNavigator() {
       return (
         <SubscriptionResolutionError
           title="Não foi possível carregar seus dados"
-          message="Verifique sua conexão e tente novamente."
+          message={cachedPresentation?.profile
+            ? t(cachedPresentation.questionnaire?.days
+              ? 'status.cachedQuestionnaireOffline'
+              : 'status.cachedProfileOffline', {
+              name: cachedPresentation.profile.name,
+              days: cachedPresentation.questionnaire?.days ?? 0,
+            })
+            : 'Verifique sua conexão e tente novamente.'}
           onRetry={refreshProfile}
         />
       );
@@ -454,6 +476,11 @@ function RootNavigator() {
         />
       );
     }
+    // Cached profile/questionnaire data (`cachedPresentation`) is still read
+    // above for the retry-exhausted error message — only its display here,
+    // in the ordinary (non-error) intermediate loading state, is removed so
+    // this gate always shows the same neutral spinner as the bootstrap gate
+    // above, with no name/plan/"Atualizando…" flash before Home.
     return <FullScreenLoading />;
   }
 

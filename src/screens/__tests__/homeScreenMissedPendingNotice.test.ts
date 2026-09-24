@@ -39,7 +39,7 @@ describe('HomeScreen — missed-session pending notice', () => {
 
   it('renders a discreet, icon-only, tappable notice only for a pending miss decision', () => {
     expect(HOME_SCREEN_CODE).toContain(
-      "const showMissedPendingNotice = !workoutInProgress\n    && scheduleResolution?.status === 'MISSED_SESSION_DECISION_REQUIRED';",
+      "const showMissedPendingNotice = todayActionsReady && !workoutInProgress\n    && scheduleResolution?.status === 'MISSED_SESSION_DECISION_REQUIRED';",
     );
     const badgeIdx = HOME_SCREEN_CODE.indexOf('{showMissedPendingNotice && (');
     expect(badgeIdx).toBeGreaterThan(-1);

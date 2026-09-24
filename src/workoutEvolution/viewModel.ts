@@ -64,22 +64,50 @@ export function isResolvedEvolutionViewModel(viewModel: EvolutionViewModel): boo
   return viewModel.kind !== 'LOADING' && viewModel.kind !== 'ERROR';
 }
 
-export function buildEvolutionViewModel(input: EvolutionViewModelInput): EvolutionViewModel {
-  if (input.error) return { kind: 'ERROR', message: input.error };
-  if (!input.lifecycle) return { kind: 'LOADING' };
-
-  const summary = input.decision
-    ? buildProgressingSummary(input.decision, input.lifecycle)
+/** Shared by the terminal presenter and the provisional (Fase 5.2) one — the
+ * exact same summary shape regardless of which wrapper kind ends up winning. */
+function buildSummary(decision: ProgressionDecision | null, lifecycle: LifecycleContext): ProgressingSummary {
+  return decision
+    ? buildProgressingSummary(decision, lifecycle)
     : {
-        earnedLevel: input.lifecycle.earnedLevel,
-        activeLevel: input.lifecycle.activeLevel,
-        cycleNumber: input.lifecycle.cycleNumber,
-        isHistoryComplete: input.lifecycle.isHistoryComplete,
+        earnedLevel: lifecycle.earnedLevel,
+        activeLevel: lifecycle.activeLevel,
+        cycleNumber: lifecycle.cycleNumber,
+        isHistoryComplete: lifecycle.isHistoryComplete,
         proximity: null,
         activeDays: null,
         sessionsCompleted: null,
         adherenceQuality: null,
       };
+}
+
+/**
+ * Progressive rendering (Fase 5.2) — call once `lifecycle`+`pending`+`decision`
+ * are known (post-reconcile) but before the pending/auto-activation-notice
+ * check (which needs a further, lifecycle-dependent read) has resolved.
+ * `summary` here is byte-identical to what `buildEvolutionViewModel` would
+ * embed in the eventual terminal kind for the same inputs — see the shared
+ * `buildSummary` above — so revealing it early can never require a later
+ * correction. Never call this with data that hasn't itself already passed
+ * through a real reconcile; it is not a cache and carries no memory of a
+ * previous load.
+ */
+export function buildProvisionalEvolutionViewModel(input: {
+  lifecycle: LifecycleContext;
+  decision: ProgressionDecision | null;
+}): EvolutionViewModel {
+  return {
+    kind: 'SUMMARY_READY',
+    source: 'CURRENT_SESSION',
+    summary: buildSummary(input.decision, input.lifecycle),
+  };
+}
+
+export function buildEvolutionViewModel(input: EvolutionViewModelInput): EvolutionViewModel {
+  if (input.error) return { kind: 'ERROR', message: input.error };
+  if (!input.lifecycle) return { kind: 'LOADING' };
+
+  const summary = buildSummary(input.decision, input.lifecycle);
 
   if (input.autoActivationNotice) {
     return {

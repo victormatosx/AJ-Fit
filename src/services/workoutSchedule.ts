@@ -3,13 +3,16 @@ import {
   doc,
   getDoc,
   getDocs,
+  query,
   runTransaction,
   serverTimestamp,
   setDoc,
+  where,
   type Timestamp,
 } from 'firebase/firestore';
 
 import { db } from '../lib/firebase';
+import { countFirestoreRead } from '../lib/perf';
 import {
   authorizeWorkoutLifecycleMutation,
   WORKOUT_LIFECYCLE_AUTHORITY_GRANT_ID,
@@ -91,6 +94,7 @@ export async function hasScheduledSessionCompletion(input: {
 }
 
 export async function loadScheduleConfig(uid: string): Promise<ScheduleConfig | null> {
+  countFirestoreRead('workout_schedule.config');
   const snapshot = await getDoc(scheduleConfigRef(uid));
   if (!snapshot.exists()) return null;
   const data = snapshot.data();
@@ -201,9 +205,18 @@ export async function resolveTodaysSchedule(input: {
   /** Phase 2 program-scoped training days. Legacy programs omit this and use ScheduleConfig unchanged. */
   trainingDaysOverride?: Weekday[];
   activeRecoveryDaysOverride?: Weekday[];
+  /**
+   * Caller-provided result of its own already-awaited `loadScheduleConfig`
+   * call, when it has one (`useWorkoutSchedule.reload()` always does) — skips
+   * this function's own read of the exact same document. `undefined` (the
+   * only other caller-visible state, e.g. direct/test callers) keeps the
+   * original behavior of fetching it here. An explicit `null` means "already
+   * checked, there is none" and is honored as-is, never re-fetched.
+   */
+  storedConfig?: ScheduleConfig | null;
 }): Promise<ScheduleResolution> {
   const hasActiveProgram = input.programId != null && input.sessionCount > 0;
-  const storedConfig = await loadScheduleConfig(input.uid);
+  const storedConfig = input.storedConfig !== undefined ? input.storedConfig : await loadScheduleConfig(input.uid);
   const scheduleMode = input.scheduleMode ?? storedConfig?.scheduleMode ?? 'fixed';
   const config = storedConfig && input.trainingDaysOverride?.length
     ? {
@@ -615,8 +628,23 @@ export async function resolveMissedSession(input: {
   });
 }
 
-/** Diagnostics/QA only — not on any hot path. */
-export async function listScheduleEvents(uid: string, programId: string): Promise<ScheduleEvent[]> {
-  const snapshot = await getDocs(scheduleEventsCollection(uid, programId));
+/**
+ * Progression ledger for one ProgramInstance. Content-addressed program ids
+ * can be reused by later instances, so reading the whole program ledger and
+ * discarding other instances locally creates unbounded historical overfetch.
+ * Legacy events without `programInstanceId` were already ignored by every
+ * V2 progression consumer and remain excluded by the equivalent server-side
+ * equality filter.
+ */
+export async function listScheduleEventsForProgramInstance(
+  uid: string,
+  programId: string,
+  programInstanceId: string,
+): Promise<ScheduleEvent[]> {
+  countFirestoreRead('workout_schedule.events');
+  const snapshot = await getDocs(query(
+    scheduleEventsCollection(uid, programId),
+    where('programInstanceId', '==', programInstanceId),
+  ));
   return snapshot.docs.map((item) => item.data() as ScheduleEvent);
 }

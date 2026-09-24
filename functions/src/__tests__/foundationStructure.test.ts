@@ -114,6 +114,7 @@ describe('Photo Vault backend foundation — Phase 3 structural guarantees', () 
       'evaluateDailyWorkoutNotifications',
       'finalizeWorkoutSession',
       'getSupportAttachmentAccess',
+      'installActiveWorkoutProgram',
       'markSupportMessageRead',
       'onAccountDeletionRequested',
       'onSupportAdminMessageCreated',
@@ -239,6 +240,7 @@ describe('Photo Vault backend foundation — Phase 3 structural guarantees', () 
       ['src/index.ts', 'authorizePromoPurchase'],
       ['src/index.ts', 'recordWorkoutLifecycleTelemetry'],
       ['src/index.ts', 'authorizeWorkoutLifecycleMutation'],
+      ['src/index.ts', 'installActiveWorkoutProgram'],
       ['src/index.ts', 'applyExerciseSubstitution'],
       ['src/index.ts', 'completeWorkoutCardio'],
       ['src/photoVault/createVault.ts', 'createVault'],
@@ -270,7 +272,7 @@ describe('Photo Vault backend foundation — Phase 3 structural guarantees', () 
       'src/accountDeletion/reconciliation/scheduler.ts',
     ].map(readCode).join('\n');
 
-    expect(allEndpointSources.match(/enforceAppCheck\s*:\s*true/g)).toHaveLength(19);
+    expect(allEndpointSources.match(/enforceAppCheck\s*:\s*true/g)).toHaveLength(20);
     expect(allEndpointSources).not.toMatch(/consumeAppCheckToken\s*:\s*true/);
   });
 

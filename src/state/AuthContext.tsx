@@ -8,6 +8,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
+import { AppState } from 'react-native';
 import type { User } from 'firebase/auth';
 import {
   signUpWithEmail,
@@ -48,6 +49,15 @@ import {
   type QuestionnaireResolution,
 } from '../lib/profileLoadState';
 import { createSingleFlight } from '../lib/singleFlight';
+import {
+  readProfilePresentationCache,
+  writeProfilePresentationCache,
+  removeProfilePresentationCache,
+  type ProfilePresentationCache,
+} from '../lib/profilePresentationCache';
+import { removeEvolutionSummaryPresentationCache } from '../lib/evolutionSummaryPresentationCache';
+import { removeHomePresentationSnapshot } from '../lib/homePresentationSnapshot';
+import { recordPerfMark } from '../lib/perf';
 import { normalizeWeekdays, trainingDaysValid } from '../lib/questionnaireSchema';
 import {
   persistPreparedWorkoutProgram,
@@ -75,6 +85,8 @@ type AuthCtx = {
   profile: UserProfile | null;
   /** Most recent questionnaire for the current user, or null. */
   questionnaire: QuestionnaireDoc | null;
+  /** Presentation only. Never route or mutate using this stale projection. */
+  cachedPresentation: ProfilePresentationCache | null;
   /**
    * Explicit resolution of "does this account have a completed
    * questionnaire" — see `src/lib/profileLoadState.ts`. This, NOT
@@ -150,6 +162,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // forces context consumers to observe updated readonly fields such as
   // `emailVerified` even when the object reference itself stays the same.
   const [authRevision, setAuthRevision] = useState(0);
+  const [cachedPresentation, setCachedPresentation] = useState<ProfilePresentationCache | null>(null);
 
   // Identity-scoped profile+questionnaire resolution — see
   // `src/lib/profileLoadState.ts` for the full state machine and why
@@ -210,6 +223,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const generation = ++generationRef.current;
     const startedAt = Date.now();
     dispatchLoad({ type: 'load-started', uid, generation });
+    let remoteDone = false;
+    // Local DEV-only A/B switch. It disables only presentation hydration;
+    // Firestore requests and cache writes are identical in both variants.
+    const readLocalPresentation = !(__DEV__ && process.env.EXPO_PUBLIC_PROFILE_PRESENTATION_CACHE_ENABLED === '0');
+    if (readLocalPresentation) void readProfilePresentationCache(uid).then((cached) => {
+      if (generation !== generationRef.current) return;
+      const outcome = cached === 'miss' ? 'miss' : cached === 'invalid' ? 'invalid' : 'hit';
+      recordPerfMark(`profile_cache_${typeof cached !== 'string' && !cached.profile ? 'miss' : outcome}`);
+      recordPerfMark(`questionnaire_cache_${typeof cached !== 'string' && !cached.questionnaire ? 'miss' : outcome}`);
+      if (cached === 'miss' || cached === 'invalid' || remoteDone) return;
+      setCachedPresentation(cached);
+      if (cached.profile) {
+        recordPerfMark('profile_cache_hydration');
+        recordPerfMark('profile_cached_ready');
+      }
+      if (cached.questionnaire) recordPerfMark('questionnaire_cache_hydration');
+    });
 
     const outcome = await withFirestoreRetry(
       (attempt) => Promise.all([getUserProfile(uid), getLatestQuestionnaire(uid, attempt)]),
@@ -230,6 +260,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     );
 
     const superseded = generation !== generationRef.current;
+    remoteDone = true;
 
     if (outcome.ok) {
       const [nextProfile, nextQuestionnaire] = outcome.value;
@@ -249,6 +280,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         profile: nextProfile,
         questionnaire: nextQuestionnaire,
       });
+      setCachedPresentation({
+        schemaVersion: 1,
+        uid,
+        cachedAt: Date.now(),
+        profile: nextProfile ? { name: nextProfile.profile.name } : null,
+        questionnaire: nextQuestionnaire ? {
+          goal: nextQuestionnaire.answers.goal,
+          days: nextQuestionnaire.answers.days,
+        } : null,
+      });
+      void writeProfilePresentationCache(uid, nextProfile, nextQuestionnaire).catch(() => undefined);
+      recordPerfMark('profile_network_revalidation');
+      recordPerfMark('questionnaire_network_revalidation');
+      recordPerfMark('profile_remote_ready');
+      recordPerfMark('profile_ready');
       logInfo('auth', 'profile_state_committed', {
         uid,
         questionnaireResolution: nextQuestionnaire ? 'found' : 'not_found',
@@ -283,8 +329,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const clearUserState = useCallback(() => {
     generationRef.current += 1; // cancel any in-flight load
+    setCachedPresentation(null);
     dispatchLoad({ type: 'identity-cleared' });
   }, []);
+
+  // Returning from device network settings retries a failed bootstrap. The
+  // gate remains closed until the remote read succeeds; a cached projection
+  // never resolves `questionnaireResolution`.
+  useEffect(() => {
+    if (!user || loadState.questionnaireResolution !== 'error') return;
+    const uid = user.uid;
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void loadUserState(uid).catch(() => undefined);
+    });
+    return () => subscription.remove();
+  }, [user, loadState.questionnaireResolution, loadUserState]);
 
   const rollbackIncompleteSocialIdentity = useCallback(async (
     incompleteUser: User,
@@ -319,6 +378,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(null);
         clearUserState();
         setInitializing(false);
+        recordPerfMark('auth_ready');
         return;
       }
 
@@ -354,6 +414,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       setUser(nextUser);
+      recordPerfMark('auth_ready');
 
       // `loadUserState` marks profileLoading synchronously. Releasing
       // `initializing` immediately after starting it lets SubscriptionContext
@@ -382,12 +443,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<AuthCtx>(
     () => ({
       user,
-      profile: loadState.profile,
-      questionnaire: loadState.questionnaire,
-      questionnaireResolution: loadState.questionnaireResolution,
+      profile: user && loadState.uid === user.uid ? loadState.profile : null,
+      questionnaire: user && loadState.uid === user.uid ? loadState.questionnaire : null,
+      cachedPresentation: user && cachedPresentation?.uid === user.uid ? cachedPresentation : null,
+      questionnaireResolution: user && loadState.uid === user.uid
+        ? loadState.questionnaireResolution : 'unknown',
       linkedProviders: user ? getLinkedProviders(user) : [],
       initializing,
-      profileLoading: loadState.loading,
+      profileLoading: (user !== null && loadState.uid !== user.uid) || loadState.loading,
       signUp: (email, password, name, answers, legalAccepted, prepared) =>
         identityOperationFlight.run(async () => {
           // Timing instrumentation (audit: onboarding→Home lifecycle report,
@@ -572,8 +635,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }),
       reset: (email) => resetOperationFlight.run(() => resetPassword(email)),
       logout: () => identityOperationFlight.run(async () => {
+        const outgoingUid = user?.uid;
+        clearUserState();
         await cleanupRestSessionArtifacts();
         await signOutUser();
+        if (outgoingUid) {
+          await Promise.all([
+            removeProfilePresentationCache(outgoingUid),
+            removeEvolutionSummaryPresentationCache(outgoingUid),
+            removeHomePresentationSnapshot(outgoingUid),
+          ]).catch(() => undefined);
+        }
       }),
       refreshEmailVerification: async () => {
         const refreshed = await refreshEmailVerificationStatus();
@@ -594,6 +666,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       identityOperationFlight,
       resetOperationFlight,
       rollbackIncompleteSocialIdentity,
+      cachedPresentation,
+      clearUserState,
     ],
   );
 

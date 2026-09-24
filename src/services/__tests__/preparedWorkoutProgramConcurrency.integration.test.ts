@@ -26,6 +26,7 @@ import {
   CANONICAL_LIMITATION_DATASET_VERSION,
 } from '../../workoutPrescription/limitationDataset';
 import { buildPrescriptionInputSnapshot } from '../../workoutLifecycle/prescriptionInputs';
+import { WEEKDAY_ORDER } from '../../state/AppState';
 import { enableWorkoutLifecycleRollout } from './workoutLifecycleRolloutFixture';
 import { installWorkoutLifecycleAuthorityFixture, resetWorkoutLifecycleAuthorityFixture } from './workoutLifecycleAuthorityFixture';
 
@@ -54,7 +55,9 @@ import {
 const T003_SEED = buildSeedDocuments().find((t) => t.id === 'T003');
 if (!T003_SEED) throw new Error('T003 fixture missing — cannot run this integration test');
 
-const VALID_ANSWERS = completeAnswers({ level: 'intermediate', days: 4, place: 'gym', sex: 'm', goal: 'gain_muscle' });
+const VALID_ANSWERS = completeAnswers({
+  level: 'intermediate', days: 4, trainingDays: WEEKDAY_ORDER.slice(0, 4), place: 'gym', sex: 'm', goal: 'gain_muscle',
+});
 
 describe.skipIf(!enabled)('prepared-persist + automatic_reconciliation concurrency — real Firestore Emulator', () => {
   beforeAll(async () => {
@@ -201,7 +204,9 @@ describe.skipIf(!enabled)('prepared-persist + automatic_reconciliation concurren
     // `never_or_starting` caps working sets at stage 1 — a reliable,
     // already-tested volume difference from `intermediate`, used here purely
     // to PROVE which answers actually shaped the persisted plan.
-    const staleAnswers = completeAnswers({ level: 'never_or_starting', days: 4, place: 'gym', sex: 'm', goal: 'gain_muscle' });
+    const staleAnswers = completeAnswers({
+      level: 'never_or_starting', days: 4, trainingDays: WEEKDAY_ORDER.slice(0, 4), place: 'gym', sex: 'm', goal: 'gain_muscle',
+    });
     const prepared = await prepareWorkoutProgramLocally(staleAnswers);
     expect(prepared.status).toBe('SUCCESS');
     if (prepared.status !== 'SUCCESS') return;

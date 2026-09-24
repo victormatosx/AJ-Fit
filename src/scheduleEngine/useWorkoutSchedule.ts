@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 import { useAuth } from '../state/AuthContext';
 import { errorClass, errorCode, logInfo, logWarn } from '../lib/logger';
+import { recordPerfMark } from '../lib/perf';
 import {
   ensureScheduleConfigFromQuestionnaire,
   hasScheduledSessionCompletion,
@@ -13,6 +14,7 @@ import { finalizeWorkoutSession } from '../services/finalizeWorkoutSession';
 import { listExecutionsForProgram, type PersistedWorkoutExecution } from '../services/workoutExecutions';
 import { normalizeWeekdays, trainingDaysValid } from '../lib/questionnaireSchema';
 import { localDateInTimezone } from './localDate';
+import { takeScheduleConfigBootstrapHandoff } from './scheduleConfigBootstrapHandoff';
 import type {
   MissDecision,
   MissedSessionDecisionIdentity,
@@ -53,6 +55,8 @@ export interface WorkoutScheduleController {
   resolution: ScheduleResolution;
   config: ScheduleConfig | null;
   loading: boolean;
+  /** False for the render where a new program arrived before its schedule reload reset the old projection. */
+  matchesActiveProgram: boolean;
   /** Last refresh failure, separate from the last authoritative resolution. */
   refreshError: ScheduleRefreshError | null;
   reload: () => Promise<ScheduleResolution | null>;
@@ -126,9 +130,21 @@ export function useWorkoutSchedule(program: WorkoutProgramSnapshot | null): Work
       setLoading(false);
       return notAvailable;
     }
+    // No active program yet (still resolving in `useWorkoutPrescription`, or
+    // genuinely none). `resolveTodaysSchedule`'s own `!hasActiveProgram`
+    // branch (scheduleEngine/resolver.ts) returns `PROGRAM_NOT_AVAILABLE`
+    // unconditionally without ever reading `config`/`state` — so fetching
+    // them here first only to throw the read away. Mirrors that exact
+    // `hasActiveProgram` condition. `config` is left as-is (not reset) so an
+    // already-loaded value isn't discarded for nothing.
+    if (!programId || sessionCount <= 0) {
+      setProjection({ resolution: notAvailable, refreshError: null });
+      setLoading(false);
+      return notAvailable;
+    }
     setLoading(true);
     try {
-      let loadedConfig = await loadScheduleConfig(uid);
+      let loadedConfig = takeScheduleConfigBootstrapHandoff(uid) ?? await loadScheduleConfig(uid);
       // Reconciliation, not a second question: the questionnaire already
       // asked `trainingDays` — if the Schedule Engine has no config yet
       // AND that answer is valid, bridge it across automatically instead of
@@ -155,6 +171,7 @@ export function useWorkoutSchedule(program: WorkoutProgramSnapshot | null): Work
       const effectiveConfig = loadedConfig && prescribedProgramDays.length > 0
         ? { ...loadedConfig, trainingDays: prescribedProgramDays, activeRecoveryDays: prescribedRecoveryDays }
         : loadedConfig;
+      recordPerfMark('today_schedule_config_ready');
 
       // Process-death recovery, case B: finishWorkoutExecution atomically
       // terminalizes the execution and clears the active mutex, so `current`
@@ -187,6 +204,7 @@ export function useWorkoutSchedule(program: WorkoutProgramSnapshot | null): Work
           });
         }
       }
+      recordPerfMark('today_schedule_recovery_checked');
       const timezone = loadedConfig?.timezone ?? deviceTimezone();
       const todayLocalDate = localDateInTimezone(new Date(), timezone);
       const result = await resolveTodaysSchedule({
@@ -199,7 +217,12 @@ export function useWorkoutSchedule(program: WorkoutProgramSnapshot | null): Work
         todayLocalDate,
         trainingDaysOverride: prescribedProgramDays,
         activeRecoveryDaysOverride: prescribedRecoveryDays,
+        // Already awaited above (`loadedConfig`) — same uid, same document,
+        // no write in between. Skips resolveTodaysSchedule's own otherwise-
+        // redundant `loadScheduleConfig` read.
+        storedConfig: loadedConfig,
       });
+      recordPerfMark('today_schedule_resolved');
       if (reloadId === reloadSequenceRef.current) setConfig(effectiveConfig);
       setProjection((current) => applyScheduleReloadOutcome(current, reloadSequenceRef.current, {
         kind: 'success',
@@ -314,6 +337,7 @@ export function useWorkoutSchedule(program: WorkoutProgramSnapshot | null): Work
     resolution: projection.resolution,
     config,
     loading,
+    matchesActiveProgram: scheduleScopeRef.current === scheduleScopeKey,
     refreshError: projection.refreshError,
     reload,
     resolveMiss,

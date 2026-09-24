@@ -35,7 +35,8 @@ describe('Evolution UX component contracts (Node structural fallback)', () => {
   it('does not close or reload on failed Start/Defer', () => {
     expect(shell).toContain('if (!activated) return;');
     expect(shell).toContain('if (deferred) setShowEvolutionUnlock(false)');
-    expect(hook).toContain('if (!user || actionInFlight.current) return false');
+    expect(hook).toContain("current.kind !== 'EVOLUTION_READY' && current.kind !== 'EVOLUTION_DEFERRED'");
+    expect(hook).toContain("current.kind !== 'EVOLUTION_READY' || !current.canDefer");
   });
 
   it('persists/reconciles auto explanation and waits for a safe surface', () => {

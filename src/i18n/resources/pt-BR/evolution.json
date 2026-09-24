@@ -5,6 +5,7 @@
   "careerLevel": "Nível conquistado: {{level}}",
   "state": {
     "loading": "Carregando seu ciclo de treino",
+    "refreshing": "Atualizando",
     "error": "Não foi possível carregar seu ciclo agora",
     "unavailable": "O progresso do ciclo ainda não está disponível para esta conta",
     "evaluationPaused": "Treino em andamento"

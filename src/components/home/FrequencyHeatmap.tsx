@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, LayoutChangeEvent, Pressable, View } from 'react-native';
+import React, { useEffect, useMemo, useRef } from 'react';
+import { Animated, Pressable, View, useWindowDimensions } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { MonoLabel } from '../ui/Display';
 import { Icon } from '../ui/Icon';
@@ -43,6 +43,8 @@ export function FrequencyHeatmap({
   canGoNext,
   onPrev,
   onNext,
+  source = 'AUTHORITATIVE',
+  knownThroughLocalDate,
 }: {
   window: FrequencyWindowViewModel | null;
   /** A newer period was selected but isn't displayed yet — `window` is still the previous one. Only ever dims in place, never unmounts/resizes the section. */
@@ -50,21 +52,31 @@ export function FrequencyHeatmap({
   canGoNext: boolean;
   onPrev: () => void;
   onNext: () => void;
+  source?: 'CACHE' | 'CURRENT_SESSION' | 'AUTHORITATIVE';
+  knownThroughLocalDate?: string;
 }) {
   const { t, i18n } = useTranslation('home');
   const { theme } = useTheme();
-  const [width, setWidth] = useState(0);
+  const { width: windowWidth } = useWindowDimensions();
   const locale = i18n.resolvedLanguage ?? i18n.language;
-
-  const onLayout = (event: LayoutChangeEvent) => setWidth(event.nativeEvent.layout.width);
-  const cellSize = useMemo(() => cellSizeForWidth(width), [width]);
+  // The section has a deterministic 22pt inset on both sides. Deriving the
+  // grid from the already-known viewport width means its cells exist in the
+  // same commit as the final data; the old width=0 -> onLayout -> grid path
+  // injected five rows one commit later and was the measured Home jump.
+  const cellSize = useMemo(() => cellSizeForWidth(windowWidth - 44), [windowWidth]);
 
   // Very subtle cross-fade when the selected window changes — content
   // first, alignment/functionality unaffected either way.
   const fade = useRef(new Animated.Value(1)).current;
+  const hasCommittedInitialWindowRef = useRef(false);
   const offsetWindows = freqWindow?.offsetWindows;
   useEffect(() => {
     if (offsetWindows === undefined) return;
+    if (!hasCommittedInitialWindowRef.current) {
+      hasCommittedInitialWindowRef.current = true;
+      fade.setValue(1);
+      return;
+    }
     fade.setValue(0.3);
     Animated.timing(fade, { toValue: 1, duration: 160, useNativeDriver: true }).start();
   }, [offsetWindows, fade]);
@@ -73,7 +85,11 @@ export function FrequencyHeatmap({
     ? `${formatLocalDate(freqWindow.startLocalDate, locale, { day: '2-digit', month: 'short' })} — ${formatLocalDate(freqWindow.endLocalDate, locale, { day: '2-digit', month: 'short' })}`.toUpperCase()
     : '';
 
-  const summary = freqWindow
+  const summary = source === 'CACHE'
+    ? t('activity.frequency.cachedSummary')
+    : source === 'CURRENT_SESSION'
+      ? t('activity.frequency.refreshingSummary')
+    : freqWindow
     ? (freqWindow.isCurrentWindow
         ? t('activity.frequency.summaryCurrent', { count: freqWindow.completedCount })
         : t('activity.frequency.summaryPeriod', { count: freqWindow.completedCount })
@@ -86,7 +102,8 @@ export function FrequencyHeatmap({
 
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 14, marginTop: 10 }}>
         <Pressable
-          onPress={onPrev}
+          onPress={source === 'AUTHORITATIVE' ? onPrev : undefined}
+          disabled={source !== 'AUTHORITATIVE'}
           hitSlop={10}
           accessibilityRole="button"
           accessibilityLabel={t('activity.frequency.prev')}
@@ -99,19 +116,19 @@ export function FrequencyHeatmap({
         </Animated.View>
 
         <Pressable
-          onPress={canGoNext ? onNext : undefined}
-          disabled={!canGoNext}
+          onPress={source === 'AUTHORITATIVE' && canGoNext ? onNext : undefined}
+          disabled={source !== 'AUTHORITATIVE' || !canGoNext}
           hitSlop={10}
           accessibilityRole="button"
           accessibilityLabel={t('activity.frequency.next')}
-          accessibilityState={{ disabled: !canGoNext }}
+          accessibilityState={{ disabled: source !== 'AUTHORITATIVE' || !canGoNext }}
           style={{ opacity: canGoNext ? 1 : 0.25 }}
         >
           <Icon name="arrow-right" size={14} color={theme.colors.textSecondary} />
         </Pressable>
       </View>
 
-      <Animated.View onLayout={onLayout} style={{ marginTop: 12, alignItems: 'center', opacity: fade }}>
+      <Animated.View style={{ marginTop: 12, alignItems: 'center', opacity: fade }}>
         {cellSize > 0 && freqWindow && (
           <>
             <View style={{ flexDirection: 'row', gap: GAP, marginBottom: 6 }}>
@@ -131,7 +148,7 @@ export function FrequencyHeatmap({
                       // remounting a brand-new node for every date, which
                       // is what made period navigation feel heavy.
                       key={columnIndex}
-                      accessibilityLabel={day
+                      accessibilityLabel={day && (source !== 'CACHE' || !knownThroughLocalDate || day.localDate <= knownThroughLocalDate)
                         ? (day.completed
                             ? t('activity.frequency.cellCompleted', { date: formatLocalDate(day.localDate, locale, { day: 'numeric', month: 'long' }) })
                             : t('activity.frequency.cellEmpty', { date: formatLocalDate(day.localDate, locale, { day: 'numeric', month: 'long' }) }))
@@ -140,10 +157,12 @@ export function FrequencyHeatmap({
                         width: cellSize,
                         height: cellSize,
                         borderRadius: theme.radii.xs,
-                        backgroundColor: day?.completed ? theme.colors.primaryEmphasis : theme.colors.surfaceMuted,
+                        backgroundColor: source === 'CACHE' && day && knownThroughLocalDate && day.localDate > knownThroughLocalDate
+                          ? theme.colors.background
+                          : day?.completed ? theme.colors.primaryEmphasis : theme.colors.surfaceMuted,
                         borderWidth: day?.isToday ? 1.5 : 0,
                         borderColor: theme.colors.primaryBorderMuted,
-                        opacity: day ? 1 : 0,
+                        opacity: day ? (source === 'CACHE' && knownThroughLocalDate && day.localDate > knownThroughLocalDate ? 0.45 : 1) : 0,
                       }}
                     />
                   ))}

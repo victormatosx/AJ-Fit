@@ -53,3 +53,6 @@ modules/*/android/build/
 # unlike /ios above, modules/ is normally tracked, so this needs its own
 # explicit, exact-path entry.
 modules/ajfit-app-check/ios/AJFitAppCheckDebugTokenLocal.swift
+
+# Home bootstrap perf audit — local cold-start capture artifacts, not source.
+perf-runs/

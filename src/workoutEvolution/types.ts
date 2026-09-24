@@ -8,7 +8,7 @@ export type ProximityState = 'BUILDING' | 'ON_TRACK' | 'READY';
 
 export interface ProgressingSummary {
   /** Career/earned level (docs Fase 4 ADR-010) — what the user has actually earned. */
-  earnedLevel: CurrentTrainingLevel;
+  earnedLevel: CurrentTrainingLevel | null;
   /** What the active Program Instance is actually prescribed under right now. */
   activeLevel: CurrentTrainingLevel;
   cycleNumber: number;
@@ -46,6 +46,25 @@ export type EvolutionViewModel =
   | { kind: 'LOADING' }
   | { kind: 'UNAVAILABLE' }
   | { kind: 'ERROR'; message: string }
+  /**
+   * Progressive rendering (Fase 5.2) — `summary` is safe and final regardless
+   * of what the still-in-flight pending/auto-activation-notice check resolves
+   * to (it's computed identically inside every other terminal kind below, see
+   * `buildProvisionalEvolutionViewModel`/`buildEvolutionViewModel` in
+   * `viewModel.ts`). What ISN'T known yet is whether the load will land on
+   * plain `PROGRESSING`, an `EVOLUTION_READY`/`EVOLUTION_DEFERRED` card, or
+   * `AUTO_ACTIVATION_NOTICE` — so no action/CTA is ever derived from this
+   * kind. `noticeUnavailable` is set only if the remaining check itself then
+   * fails: the safe summary stays on screen, but the caller must show the
+   * dependent part as unavailable, never as a silently-final ready state.
+   */
+  | {
+      kind: 'SUMMARY_READY';
+      summary: ProgressingSummary;
+      /** CACHE is presentation-only and can never carry actions; CURRENT_SESSION came from this process's authoritative reads. */
+      source: 'CACHE' | 'CURRENT_SESSION';
+      noticeUnavailable?: boolean;
+    }
   | { kind: 'PROGRESSING'; summary: ProgressingSummary }
   | { kind: 'EVOLUTION_READY'; summary: ProgressingSummary; pending: PendingEvolutionSummary; canDefer: boolean }
   | { kind: 'EVOLUTION_DEFERRED'; summary: ProgressingSummary; pending: PendingEvolutionSummary }
