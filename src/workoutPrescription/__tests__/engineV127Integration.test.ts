@@ -35,25 +35,20 @@ describe('engineV127 — musculoskeletal limitation end-to-end', () => {
     expect(result.plan.trace.limitationDecisions.length).toBeGreaterThan(0);
   });
 
-  it('T009 (male/home/hypertrophy/4d) fails closed (no invented dose) when a hip limitation leaves one exercise with no safe substitute left in its session', () => {
+  it('T009 (male/home/hypertrophy/4d) resolves the former hip collision through the reviewed low-step fallback', () => {
     const answers = completeAnswers({
       sex: 'm', goal: 'gain_muscle', level: 'intermediate', days: 4, place: 'home',
       equipment: ['bodyweight', 'dumbbells', 'bands', 'bench_or_box'],
       specialConditions: ['musculoskeletal_limitation'], limits: ['hip'],
     });
     const result = generateWorkoutPrescriptionV127(answers, 'INTERMEDIATE');
-    expect(result.status).toBe('INVALID_CONFIGURATION');
-    if (result.status !== 'INVALID_CONFIGURATION') return;
-    // Every reason code is still a real, honest fail-closed reason — either
-    // "no safe substitute survives this session's own duplicate-in-session
-    // constraint" (bench-step-up's only two candidates are the one already
-    // claimed by bulgarian-split-squat-dumbbell's own substitution, and one
-    // itself hip-adapt-listed) or "no reviewed limitationProfile yet"
-    // (decline-push-up, one of the still-unprofiled v1.27 Fase 2 closure
-    // exercises) — never a merged/ambiguous code.
-    expect(result.reasonCodes.every((code) =>
-      code.startsWith('MUSCULOSKELETAL_NO_SUBSTITUTE:') || code.startsWith('MUSCULOSKELETAL_PROFILE_COVERAGE_MISSING:'))).toBe(true);
-    expect(result.reasonCodes).toContain('MUSCULOSKELETAL_NO_SUBSTITUTE:3:bench-step-up');
+    expect(result.status).toBe('SUCCESS');
+    if (result.status !== 'SUCCESS') return;
+    expect(result.plan.trace.limitationDecisions).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        exerciseId: 'bench-step-up', outcome: 'SUBSTITUTED', substituteExerciseId: 'low-step-up',
+      }),
+    ]));
   });
 
   it('§13: an "other" limitation alone materializes the template unchanged (no INVALID_CONFIGURATION retry loop)', () => {

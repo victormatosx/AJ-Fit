@@ -151,22 +151,22 @@ describe('Limitation Resolver V1', () => {
       ]));
     }
   });
-  it('accepts exactly the 86 persisted V2 profiles and leaves the rest of the catalog unreviewed', () => {
+  it('accepts exactly the 95 persisted profiles and leaves the rest of the catalog unreviewed', () => {
     // Catalog size is no longer pinned (Fase 1) — so literals derived from
-    // overall catalog size are stale on purpose; 86 reviewed stays fixed
+    // overall catalog size are stale on purpose; 95 reviewed stays fixed
     // because it is the clinically/product reviewed PROFILE OBJECT count
     // (76 original + 7 from the Fase 4 closure + 3 from the Fase 4b
-    // per-region coverage closure — see
+    // per-region coverage closure + 2 from the spine/Home closure + 7 from
+    // the full-coverage closure — see
     // `15_LIMITATION_PROFILES_TECHNICAL_v2.json`'s `phase4Addition`/
-    // `phase4bAddition`), not derived from catalog size. A profile existing
-    // no longer means every one of its 7 regions was reviewed — some may be
-    // `pending` — only that the object itself is schema-valid.
+    // `phase4bAddition`/`phase5SpineHomeClosure`/`phase6FullCoverageClosure`),
+    // not derived from catalog size.
     const catalogFixture = realLimitationCatalogFixture();
     const reviewed = catalogFixture.filter((item) => item.limitationProfile != null);
     const unreviewed = catalogFixture.filter((item) => item.limitationProfile == null);
-    expect(reviewed).toHaveLength(86);
+    expect(reviewed).toHaveLength(95);
     expect(reviewed.every((item) => validateLimitationProfile(item.id, item.limitationProfile).valid)).toBe(true);
-    expect(unreviewed).toHaveLength(catalogFixture.length - 86);
+    expect(unreviewed).toHaveLength(catalogFixture.length - 95);
   });
 
   it('keeps compatible and records the evaluated region', () => {

@@ -33,35 +33,33 @@ describe('per-region limitationProfile coverage — cable-crossover-fly', () => 
     expect(result.sessions[0].exercises[0].exerciseId).toBe('cable-crossover-fly');
   });
 
-  it('2. activeRegions=[shoulder] BLOCKS — shoulder is pending, never decided', () => {
+  it('2. activeRegions=[shoulder] uses the explicitly reviewed pec-deck adaptation', () => {
     const result = applyMusculoskeletalLimitationV127([session([exercise('cable-crossover-fly')])], GYM, ['shoulder']);
-    expect(result.status).toBe('BLOCKED');
-    if (result.status !== 'BLOCKED') return;
-    expect(result.reasonCodes).toEqual(['MUSCULOSKELETAL_PROFILE_COVERAGE_MISSING:0:cable-crossover-fly']);
-    expect(result.decisions[0]).toMatchObject({ outcome: 'BLOCKED', reasonCode: 'PROFILE_COVERAGE_MISSING' });
+    expect(result.status).toBe('APPLIED');
+    if (result.status !== 'APPLIED') return;
+    expect(result.sessions[0].exercises[0].exerciseId).toBe('pec-deck-machine-fly');
+    expect(result.decisions[0]).toMatchObject({ outcome: 'SUBSTITUTED', substituteExerciseId: 'pec-deck-machine-fly' });
   });
 
-  it('3. activeRegions=[wrist] BLOCKS — wrist is pending, never decided', () => {
+  it('3. activeRegions=[wrist] keeps the explicitly compatible exercise', () => {
     const result = applyMusculoskeletalLimitationV127([session([exercise('cable-crossover-fly')])], GYM, ['wrist']);
-    expect(result.status).toBe('BLOCKED');
-    if (result.status !== 'BLOCKED') return;
-    expect(result.reasonCodes).toEqual(['MUSCULOSKELETAL_PROFILE_COVERAGE_MISSING:0:cable-crossover-fly']);
+    expect(result.status).toBe('APPLIED');
+    if (result.status !== 'APPLIED') return;
+    expect(result.decisions).toEqual([]);
   });
 
-  it('4. activeRegions=[knee, shoulder] BLOCKS by shoulder even though knee alone would be fine', () => {
+  it('4. activeRegions=[knee, shoulder] requires and satisfies both regions', () => {
     const result = applyMusculoskeletalLimitationV127([session([exercise('cable-crossover-fly')])], GYM, ['knee', 'shoulder']);
-    expect(result.status).toBe('BLOCKED');
-    if (result.status !== 'BLOCKED') return;
-    expect(result.reasonCodes).toEqual(['MUSCULOSKELETAL_PROFILE_COVERAGE_MISSING:0:cable-crossover-fly']);
+    expect(result.status).toBe('APPLIED');
+    if (result.status !== 'APPLIED') return;
+    expect(result.sessions[0].exercises[0].exerciseId).toBe('pec-deck-machine-fly');
   });
 
-  it('never silently accepts a same-family candidate for the pending region (defense in depth: pec-deck-machine-fly shares cable-crossover-fly\'s chest_fly group)', () => {
+  it('uses pec-deck through the declared adaptation, not an unreviewed family shortcut', () => {
     const result = applyMusculoskeletalLimitationV127([session([exercise('cable-crossover-fly')])], GYM, ['shoulder']);
-    expect(result.status).toBe('BLOCKED');
-    if (result.status !== 'BLOCKED') return;
-    // The block must happen BEFORE any candidate is even evaluated — proving
-    // the family/similar search for the pending region never ran at all.
-    expect(result.decisions[0]).toMatchObject({ candidatesEvaluated: [] });
+    expect(result.status).toBe('APPLIED');
+    if (result.status !== 'APPLIED') return;
+    expect(result.decisions[0]).toMatchObject({ candidateOrigin: 'preferred', substituteExerciseId: 'pec-deck-machine-fly' });
   });
 });
 
@@ -73,11 +71,11 @@ describe('per-region limitationProfile coverage — dumbbell-fly', () => {
     expect(result.decisions).toEqual([]);
   });
 
-  it('6. activeRegions=[shoulder] BLOCKS — shoulder is pending', () => {
+  it('6. activeRegions=[shoulder] uses the stable pec-deck adaptation', () => {
     const result = applyMusculoskeletalLimitationV127([session([exercise('dumbbell-fly')])], GYM, ['shoulder']);
-    expect(result.status).toBe('BLOCKED');
-    if (result.status !== 'BLOCKED') return;
-    expect(result.reasonCodes).toEqual(['MUSCULOSKELETAL_PROFILE_COVERAGE_MISSING:0:dumbbell-fly']);
+    expect(result.status).toBe('APPLIED');
+    if (result.status !== 'APPLIED') return;
+    expect(result.sessions[0].exercises[0].exerciseId).toBe('pec-deck-machine-fly');
   });
 });
 
@@ -90,18 +88,18 @@ describe('per-region limitationProfile coverage — dumbbell-rear-delt-fly', () 
     expect(result.decisions[0]).toMatchObject({ outcome: 'SUBSTITUTED', substituteExerciseId: 'cable-rear-delt-fly', candidateOrigin: 'preferred' });
   });
 
-  it('8. activeRegions=[wrist] BLOCKS while wrist is pending', () => {
+  it('8. activeRegions=[wrist] keeps the explicitly compatible exercise', () => {
     const result = applyMusculoskeletalLimitationV127([session([exercise('dumbbell-rear-delt-fly')])], GYM, ['wrist']);
-    expect(result.status).toBe('BLOCKED');
-    if (result.status !== 'BLOCKED') return;
-    expect(result.reasonCodes).toEqual(['MUSCULOSKELETAL_PROFILE_COVERAGE_MISSING:0:dumbbell-rear-delt-fly']);
+    expect(result.status).toBe('APPLIED');
+    if (result.status !== 'APPLIED') return;
+    expect(result.decisions).toEqual([]);
   });
 });
 
 describe('per-region coverage does not weaken fail-closed for already-covered regions', () => {
-  it('activeRegions=[knee, wrist] on dumbbell-rear-delt-fly still blocks (wrist pending) even though knee alone is fine', () => {
+  it('activeRegions=[knee, wrist] on dumbbell-rear-delt-fly satisfies the full intersection', () => {
     const result = applyMusculoskeletalLimitationV127([session([exercise('dumbbell-rear-delt-fly')])], GYM, ['knee', 'wrist']);
-    expect(result.status).toBe('BLOCKED');
+    expect(result.status).toBe('APPLIED');
   });
 
   it('a fully-decided exercise (leg-press-45) is completely unaffected by the pending mechanism — no regression', () => {

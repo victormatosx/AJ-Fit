@@ -86,18 +86,12 @@ const RESOLVED_EXERCISE_IDS = [
   'resistance-band-pullover',
 ] as const;
 
-/** Fase 4b: these 3 now HAVE a profile object (in CONFIRMED_LIMITATION_PROFILE_RUNTIME_IDS_V127), but at least one region is `pending`, never decided. */
-const PARTIALLY_PENDING_EXERCISE_IDS = [
+/** Fase 6: all formerly-pending cells of these profiles are now explicitly decided. */
+const FORMERLY_PENDING_EXERCISE_IDS = [
   'dumbbell-rear-delt-fly',
   'dumbbell-fly',
   'cable-crossover-fly',
 ] as const;
-
-const PENDING_REGIONS: Record<string, string[]> = {
-  'cable-crossover-fly': ['shoulder', 'wrist'],
-  'dumbbell-fly': ['shoulder', 'wrist'],
-  'dumbbell-rear-delt-fly': ['wrist'],
-};
 
 const ADAPT_TARGETS_USED: Record<string, Record<string, string>> = {
   'decline-push-up': { shoulder: 'wall-push-up', elbow: 'wall-push-up', wrist: 'wall-push-up' },
@@ -107,6 +101,9 @@ const ADAPT_TARGETS_USED: Record<string, Record<string, string>> = {
   'bent-over-dumbbell-row': { hip: 'resistance-band-row', shoulder: 'resistance-band-row', wrist: 'resistance-band-row' },
   'preacher-curl': { elbow: 'hammer-curl', wrist: 'hammer-curl' },
   'resistance-band-pullover': { shoulder: 'resistance-band-lat-pulldown', wrist: 'resistance-band-lat-pulldown' },
+  'cable-crossover-fly': { shoulder: 'pec-deck-machine-fly' },
+  'dumbbell-fly': { shoulder: 'pec-deck-machine-fly' },
+  'dumbbell-rear-delt-fly': { shoulder: 'cable-rear-delt-fly' },
 };
 
 const exerciseById = new Map(EXERCISES_SEED.map((exercise) => [exercise.id, exercise]));
@@ -123,8 +120,8 @@ describe('Fase 4 closure — 7 of the 10 previously-unprofiled exercises now hav
     expect(validateLimitationProfile(id, profile).valid).toBe(true);
   });
 
-  it('exactly 86 exercises have a confirmed profile object (76 original + 7 Fase 4 + 3 Fase 4b) — object existing no longer implies every region is decided', () => {
-    expect(CONFIRMED_LIMITATION_PROFILE_RUNTIME_IDS_V127.size).toBe(86);
+  it('exactly 95 exercises have a confirmed profile object after the full-coverage closure', () => {
+    expect(CONFIRMED_LIMITATION_PROFILE_RUNTIME_IDS_V127.size).toBe(95);
   });
 
   it.each(Object.entries(ADAPT_TARGETS_USED).flatMap(([id, regions]) => Object.entries(regions).map(([region, target]) => [id, region, target] as const)))(
@@ -151,55 +148,41 @@ describe('Fase 4 closure — 7 of the 10 previously-unprofiled exercises now hav
   });
 });
 
-describe('Fase 4b — cable-crossover-fly, dumbbell-fly, dumbbell-rear-delt-fly now HAVE a profile object, with only the still-undecided regions marked `pending`', () => {
-  it.each(PARTIALLY_PENDING_EXERCISE_IDS)('%s IS in CONFIRMED_LIMITATION_PROFILE_RUNTIME_IDS_V127 (has a schema-valid profile object)', (id) => {
+describe('Fase 6 — the three formerly partial profiles have no pending region', () => {
+  it.each(FORMERLY_PENDING_EXERCISE_IDS)('%s has a schema-valid, fully decided profile', (id) => {
     expect(CONFIRMED_LIMITATION_PROFILE_RUNTIME_IDS_V127.has(id)).toBe(true);
     expect(hasReliableLimitationProfileCoverageV127(id)).toBe(true);
     const profile = profileByExerciseId.get(id);
     expect(validateLimitationProfile(id, profile).valid).toBe(true);
-  });
-
-  it.each(PARTIALLY_PENDING_EXERCISE_IDS)('%s: every region NOT listed as pending has a real, decided status (never pending itself)', (id) => {
-    const profile = profileByExerciseId.get(id)!;
-    const pending = new Set(PENDING_REGIONS[id]);
-    for (const [region, rule] of Object.entries(profile.regions)) {
-      if (pending.has(region)) {
-        expect(rule.status).toBe('pending');
-      } else {
-        expect(rule.status).not.toBe('pending');
-        expect(['compatible', 'not_applicable', 'adapt', 'avoid']).toContain(rule.status);
-      }
+    for (const rule of Object.values(profile!.regions)) {
+      expect(rule.status).not.toBe('pending');
+      expect(['compatible', 'not_applicable', 'adapt', 'avoid']).toContain(rule.status);
     }
   });
 
-  it('dumbbell-fly and cable-crossover-fly (chest/horizontal_adduction): no same-family exercise is ACTUALLY shoulder/wrist-safe (compatible/not_applicable) — pending, not silently resolved', () => {
+  it('dumbbell-fly and cable-crossover-fly use the stable pec-deck profile for shoulder while wrist is explicitly compatible', () => {
     for (const id of ['dumbbell-fly', 'cable-crossover-fly'] as const) {
-      const target = exerciseById.get(id)!;
-      const sameMovementFamily = EXERCISES_SEED.filter((candidate) =>
-        candidate.id !== id
-        && candidate.target.primaryMuscle === target.target.primaryMuscle
-        && candidate.movement.pattern === target.movement.pattern
-        && profileByExerciseId.has(candidate.id));
-      for (const region of ['shoulder', 'wrist'] as const) {
-        const safeCandidates = sameMovementFamily.filter((candidate) =>
-          ['compatible', 'not_applicable'].includes(profileByExerciseId.get(candidate.id)!.regions[region]?.status));
-        expect(safeCandidates).toEqual([]);
-      }
+      const profile = profileByExerciseId.get(id)!;
+      expect(profile.regions.shoulder).toEqual({
+        status: 'adapt', adaptation: { kind: 'exercise_variant', exerciseId: 'pec-deck-machine-fly' },
+      });
+      expect(profile.regions.wrist.status).toBe('compatible');
     }
+    expect(profileByExerciseId.get('pec-deck-machine-fly')!.regions.shoulder.status).toBe('compatible');
   });
 
-  it('dumbbell-rear-delt-fly: shoulder now resolves via cable-rear-delt-fly (already used elsewhere); wrist stays pending because cable-rear-delt-fly\'s own wrist rule is `adapt`, not terminal-safe', () => {
+  it('dumbbell-rear-delt-fly preserves its shoulder adaptation and has an explicit wrist decision', () => {
     const profile = profileByExerciseId.get('dumbbell-rear-delt-fly')!;
     expect(profile.regions.shoulder).toEqual({ status: 'adapt', adaptation: { kind: 'exercise_variant', exerciseId: 'cable-rear-delt-fly' } });
-    expect(profile.regions.wrist.status).toBe('pending');
+    expect(profile.regions.wrist.status).toBe('compatible');
     const candidateProfile = profileByExerciseId.get('cable-rear-delt-fly')!;
     expect(candidateProfile.regions.shoulder.status).toBe('compatible');
-    expect(candidateProfile.regions.wrist.status).toBe('adapt');
+    expect(candidateProfile.regions.wrist.status).toBe('compatible');
   });
 });
 
 describe('Fase 13 §1 (original) — exact v1.27 template impact of each blocked exercise (regression guard, still meaningful for the exercises that remain blocked)', () => {
-  const ALL_TEN = [...RESOLVED_EXERCISE_IDS, ...PARTIALLY_PENDING_EXERCISE_IDS];
+  const ALL_TEN = [...RESOLVED_EXERCISE_IDS, ...FORMERLY_PENDING_EXERCISE_IDS];
   const templateImpact = Object.fromEntries(ALL_TEN.map((id) => [id, [] as string[]]));
   for (const profile of V127_TEMPLATE_PROFILES) {
     const template = getCanonicalTemplateV127ById(profile.id);

@@ -110,16 +110,14 @@ export function validateCanonicalLimitationDataset(
   const catalogIds = new Set(EXERCISES_SEED.map((exercise) => exercise.id));
   // Catalog size is no longer pinned to a fixed count (Fase 1 — new valid
   // exercises may be added; every entry below still must resolve to a real
-  // id). `entries.length` stays pinned to 86: the clinically/product
-  // reviewed profile count as of the Fase 4b per-region coverage closure
-  // (76 original + 7 + 3 — see `15_LIMITATION_PROFILES_TECHNICAL_v2.json`'s
-  // `phase4Addition`/`phase4bAddition`), independent of overall catalog
-  // growth. A profile entry existing here no longer means every one of its
-  // 7 regions was reviewed — some may be `pending` (see `ruleValid`) — only
-  // that the OBJECT itself is schema-valid.
+  // id). `entries.length` stays pinned to 95: the clinically/product
+  // reviewed profile count after the full v1.27 coverage closure
+  // (76 original + 7 + 3 + 2 + 7 — see the phase metadata in the canonical
+  // artifact), independent of overall catalog growth. This exact pin keeps
+  // accidental additions/removals fail-closed.
   if (!EXERCISES_SEED.length) errors.push('exercise catalog is empty');
   if (catalogIds.size !== EXERCISES_SEED.length) errors.push('duplicate exercise id in canonical catalog');
-  if (entries.length !== 86) errors.push(`profile count ${entries.length} != 86`);
+  if (entries.length !== 95) errors.push(`profile count ${entries.length} != 95`);
   if (new Set(entries.map((entry) => entry.exerciseId)).size !== entries.length) {
     errors.push('duplicate exerciseId in canonical profiles');
   }

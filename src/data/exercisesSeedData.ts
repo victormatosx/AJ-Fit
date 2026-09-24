@@ -1186,6 +1186,69 @@ const RAW_EXERCISES: SeedEntry[] = [
     ...ACTIVE_AVAILABLE, ...NO_EXECUTION,
   },
   {
+    id: 'seated-resistance-band-row', slug: 'seated-resistance-band-row',
+    name: { ptBR: 'Remada Sentada com Elástico', en: 'Seated Resistance Band Row', es: 'Remo Sentado con Banda Elástica' },
+    target: { primaryMuscle: 'upper_back', secondaryMuscles: ['lats', 'rear_deltoid', 'biceps'] },
+    movement: { pattern: 'horizontal_pull', mechanic: 'compound', laterality: 'bilateral' },
+    equipment: ['resistance_band'], bodyPosition: 'seated', difficulty: 'beginner', substitutionGroup: 'horizontal_back_row',
+    instructions: { ptBR: ['Sentado com o tronco ereto e o elástico ancorado à frente, puxe os cotovelos para trás e retorne com controle.'], en: ['Sit upright with the band anchored in front, pull the elbows back, and return under control.'], es: ['Siéntese con el tronco erguido y la banda anclada al frente, lleve los codos atrás y vuelva con control.'] },
+    ...ACTIVE_AVAILABLE, ...NO_EXECUTION,
+  },
+  {
+    id: 'resistance-band-triceps-pushdown', slug: 'resistance-band-triceps-pushdown',
+    name: { ptBR: 'Tríceps Pushdown com Elástico', en: 'Resistance Band Triceps Pushdown', es: 'Extensión de Tríceps con Banda Elástica' },
+    target: { primaryMuscle: 'triceps', secondaryMuscles: [] },
+    movement: { pattern: 'elbow_extension', mechanic: 'isolation', laterality: 'bilateral' },
+    equipment: ['resistance_band'], bodyPosition: 'standing', difficulty: 'beginner', substitutionGroup: 'triceps_extension',
+    instructions: { ptBR: ['Com o elástico ancorado acima, mantenha os cotovelos junto ao corpo e estenda-os para baixo sem mover os ombros.'], en: ['With the band anchored overhead, keep the elbows close to the torso and extend them downward without moving the shoulders.'], es: ['Con la banda anclada arriba, mantenga los codos junto al cuerpo y extiéndalos hacia abajo sin mover los hombros.'] },
+    ...ACTIVE_AVAILABLE, ...NO_EXECUTION,
+  },
+  {
+    id: 'counter-push-up', slug: 'counter-push-up',
+    name: { ptBR: 'Flexão no Balcão', en: 'Counter Push-Up', es: 'Flexión en Encimera' },
+    target: { primaryMuscle: 'chest', secondaryMuscles: ['triceps', 'front_deltoid'] },
+    movement: { pattern: 'horizontal_push', mechanic: 'compound', laterality: 'bilateral' },
+    equipment: ['bodyweight'], bodyPosition: 'standing', difficulty: 'beginner', substitutionGroup: 'horizontal_chest_press',
+    instructions: { ptBR: ['Apoie as mãos em uma superfície firme na altura do balcão, mantenha o corpo alinhado e aproxime o peito com amplitude confortável.'], en: ['Place the hands on a firm counter-height surface, keep the body aligned, and lower the chest through a comfortable range.'], es: ['Apoye las manos en una superficie firme a la altura de una encimera, mantenga el cuerpo alineado y acerque el pecho en un rango cómodo.'] },
+    ...ACTIVE_AVAILABLE, ...NO_EXECUTION,
+  },
+  {
+    id: 'resistance-band-lateral-raise', slug: 'resistance-band-lateral-raise',
+    name: { ptBR: 'Elevação Lateral com Elástico', en: 'Resistance Band Lateral Raise', es: 'Elevación Lateral con Banda Elástica' },
+    target: { primaryMuscle: 'side_deltoid', secondaryMuscles: ['front_deltoid'] },
+    movement: { pattern: 'shoulder_abduction', mechanic: 'isolation', laterality: 'bilateral' },
+    equipment: ['resistance_band'], bodyPosition: 'standing', difficulty: 'beginner', substitutionGroup: 'lateral_raise',
+    instructions: { ptBR: ['Pise no centro do elástico e eleve os braços apenas até a amplitude confortável, mantendo os punhos neutros e retornando com controle.'], en: ['Stand on the center of the band and raise the arms only through a comfortable range, keeping the wrists neutral and returning under control.'], es: ['Pise el centro de la banda y eleve los brazos solo en un rango cómodo, manteniendo las muñecas neutras y volviendo con control.'] },
+    ...ACTIVE_AVAILABLE, ...NO_EXECUTION,
+  },
+  {
+    id: 'resistance-band-rear-delt-fly', slug: 'resistance-band-rear-delt-fly',
+    name: { ptBR: 'Crucifixo Inverso com Elástico', en: 'Resistance Band Rear Delt Fly', es: 'Vuelo Posterior con Banda Elástica' },
+    target: { primaryMuscle: 'rear_deltoid', secondaryMuscles: ['traps'] },
+    movement: { pattern: 'horizontal_pull', mechanic: 'isolation', laterality: 'bilateral' },
+    equipment: ['resistance_band'], bodyPosition: 'standing', difficulty: 'beginner', substitutionGroup: 'rear_delt_fly',
+    instructions: { ptBR: ['Segure o elástico à frente do peito e abra os braços em amplitude confortável, sem elevar os ombros e mantendo os punhos neutros.'], en: ['Hold the band in front of the chest and open the arms through a comfortable range without shrugging, keeping the wrists neutral.'], es: ['Sostenga la banda frente al pecho y abra los brazos en un rango cómodo sin elevar los hombros, manteniendo las muñecas neutras.'] },
+    ...ACTIVE_AVAILABLE, ...NO_EXECUTION,
+  },
+  {
+    id: 'resistance-band-hammer-curl', slug: 'resistance-band-hammer-curl',
+    name: { ptBR: 'Rosca Martelo com Elástico', en: 'Resistance Band Hammer Curl', es: 'Curl Martillo con Banda Elástica' },
+    target: { primaryMuscle: 'biceps', secondaryMuscles: ['forearms'] },
+    movement: { pattern: 'elbow_flexion', mechanic: 'isolation', laterality: 'bilateral' },
+    equipment: ['resistance_band'], bodyPosition: 'standing', difficulty: 'beginner', substitutionGroup: 'biceps_curl',
+    instructions: { ptBR: ['Pise no elástico com as palmas voltadas uma para a outra, flexione os cotovelos em amplitude confortável e retorne devagar.'], en: ['Stand on the band with palms facing each other, bend the elbows through a comfortable range, and return slowly.'], es: ['Pise la banda con las palmas enfrentadas, flexione los codos en un rango cómodo y vuelva lentamente.'] },
+    ...ACTIVE_AVAILABLE, ...NO_EXECUTION,
+  },
+  {
+    id: 'seated-resistance-band-leg-curl', slug: 'seated-resistance-band-leg-curl',
+    name: { ptBR: 'Flexão de Joelho Sentada com Elástico', en: 'Seated Resistance Band Leg Curl', es: 'Curl Femoral Sentado con Banda Elástica' },
+    target: { primaryMuscle: 'hamstrings', secondaryMuscles: [] },
+    movement: { pattern: 'knee_flexion', mechanic: 'isolation', laterality: 'bilateral' },
+    equipment: ['resistance_band'], bodyPosition: 'seated', difficulty: 'beginner', substitutionGroup: 'hamstring_curl',
+    instructions: { ptBR: ['Sentado com o tronco apoiado e o elástico ancorado à frente dos tornozelos, flexione os joelhos em amplitude confortável e retorne com controle.'], en: ['Sit with the torso supported and the band anchored in front of the ankles, bend the knees through a comfortable range, and return under control.'], es: ['Siéntese con el tronco apoyado y la banda anclada delante de los tobillos, flexione las rodillas en un rango cómodo y vuelva con control.'] },
+    ...ACTIVE_AVAILABLE, ...NO_EXECUTION,
+  },
+  {
     id: 'coordinated-breathing', slug: 'coordinated-breathing',
     name: { ptBR: 'Respiração Coordenada', en: 'Coordinated Breathing', es: 'Respiración Coordinada' },
     target: { primaryMuscle: 'abs', secondaryMuscles: [] },
@@ -1249,18 +1312,16 @@ const RAW_EXERCISES: SeedEntry[] = [
     ...ACTIVE_AVAILABLE, ...NO_EXECUTION,
   },
   // v1.27 exercise-identity closure (Fase 2 pendency) — 7 resistance
-  // exercises for previously TRULY_MISSING canonical ids. Deliberately no
-  // `substitutionGroup`: adding one would insert these into an existing
-  // group's auto-derived `similarExerciseIds` (see `buildSubstitutions`
-  // below), changing the equipment-substitution pool the ACTIVE v2 runtime
-  // computes for the 116 pre-existing exercises. See
-  // `exerciseCatalogValidity.test.ts` for the regression guard on that.
+  // exercises for previously TRULY_MISSING canonical ids. The four strength
+  // movements below now join their normal equivalence groups so the shared
+  // resolver can reach controlled limitation variants after a preferred
+  // candidate is already occupied. The remaining three stay ungrouped.
   {
     id: 'decline-barbell-bench-press', slug: 'decline-barbell-bench-press',
     name: { ptBR: 'Supino Declinado', en: 'Decline Barbell Bench Press', es: 'Press de Banca Declinado con Barra' },
     target: { primaryMuscle: 'chest', primaryRegion: 'lower_chest', secondaryMuscles: ['front_deltoid', 'triceps'] },
     movement: { pattern: 'horizontal_push', mechanic: 'compound', laterality: 'bilateral' },
-    equipment: ['barbell', 'bench'], difficulty: 'intermediate',
+    equipment: ['barbell', 'bench'], difficulty: 'intermediate', substitutionGroup: 'horizontal_chest_press',
     instructions: { ptBR: ['No banco declinado, desça a barra até o peito com cotovelos controlados e empurre para cima até estender os braços.'], en: ['On the decline bench, lower the bar to the chest with controlled elbows and press up until the arms extend.'], es: ['En el banco declinado, baje la barra hasta el pecho con codos controlados y empuje hacia arriba hasta extender los brazos.'] },
     ...ACTIVE_AVAILABLE, ...NO_EXECUTION,
   },
@@ -1269,7 +1330,7 @@ const RAW_EXERCISES: SeedEntry[] = [
     name: { ptBR: 'Crucifixo com Halteres', en: 'Dumbbell Fly', es: 'Aperturas con Mancuernas' },
     target: { primaryMuscle: 'chest', secondaryMuscles: ['front_deltoid'] },
     movement: { pattern: 'horizontal_adduction', mechanic: 'isolation', laterality: 'bilateral' },
-    equipment: ['dumbbell', 'bench'], bodyPosition: 'lying', difficulty: 'intermediate',
+    equipment: ['dumbbell', 'bench'], bodyPosition: 'lying', difficulty: 'intermediate', substitutionGroup: 'chest_fly',
     instructions: { ptBR: ['Deitado no banco, abra os braços com cotovelos levemente flexionados e feche em arco até os halteres se aproximarem.'], en: ['Lying on the bench, open the arms with a slight elbow bend and close in an arc until the dumbbells meet.'], es: ['Acostado en el banco, abra los brazos con codos levemente flexionados y cierre en arco hasta juntar las mancuernas.'] },
     ...ACTIVE_AVAILABLE, ...NO_EXECUTION,
   },
@@ -1278,7 +1339,7 @@ const RAW_EXERCISES: SeedEntry[] = [
     name: { ptBR: 'Crucifixo Inverso com Halteres', en: 'Dumbbell Rear Delt Fly', es: 'Vuelo Posterior con Mancuernas' },
     target: { primaryMuscle: 'rear_deltoid', secondaryMuscles: ['traps'] },
     movement: { pattern: 'horizontal_pull', mechanic: 'isolation', laterality: 'bilateral' },
-    equipment: ['dumbbell'], difficulty: 'beginner',
+    equipment: ['dumbbell'], difficulty: 'beginner', substitutionGroup: 'rear_delt_fly',
     instructions: { ptBR: ['Com o tronco inclinado à frente, eleve os halteres para os lados mantendo os cotovelos levemente flexionados.'], en: ['With the torso hinged forward, raise the dumbbells out to the sides keeping the elbows slightly bent.'], es: ['Con el tronco inclinado al frente, eleve las mancuernas hacia los lados manteniendo los codos levemente flexionados.'] },
     ...ACTIVE_AVAILABLE, ...NO_EXECUTION,
   },
@@ -1296,7 +1357,7 @@ const RAW_EXERCISES: SeedEntry[] = [
     name: { ptBR: 'Flexão de Braço com Pés Elevados', en: 'Decline Push-Up', es: 'Flexión Declinada' },
     target: { primaryMuscle: 'chest', secondaryMuscles: ['triceps', 'front_deltoid'] },
     movement: { pattern: 'horizontal_push', mechanic: 'compound', laterality: 'bilateral' },
-    equipment: ['bodyweight', 'bench'], bodyPosition: 'lying', difficulty: 'advanced',
+    equipment: ['bodyweight', 'bench'], bodyPosition: 'lying', difficulty: 'advanced', substitutionGroup: 'horizontal_chest_press',
     instructions: { ptBR: ['Com os pés apoiados em uma superfície elevada, mantenha o corpo alinhado e flexione os cotovelos até o peito se aproximar do chão.'], en: ['With the feet on an elevated surface, keep the body aligned and bend the elbows until the chest nears the floor.'], es: ['Con los pies apoyados en una superficie elevada, mantenga el cuerpo alineado y flexione los codos hasta que el pecho se acerque al suelo.'] },
     ...ACTIVE_AVAILABLE, ...NO_EXECUTION,
   },
@@ -1305,7 +1366,7 @@ const RAW_EXERCISES: SeedEntry[] = [
     name: { ptBR: 'Flexão de Braço com Mãos Elevadas', en: 'Incline Push-Up', es: 'Flexión Inclinada' },
     target: { primaryMuscle: 'chest', secondaryMuscles: ['triceps', 'front_deltoid'] },
     movement: { pattern: 'horizontal_push', mechanic: 'compound', laterality: 'bilateral' },
-    equipment: ['bodyweight', 'bench'], bodyPosition: 'lying', difficulty: 'beginner',
+    equipment: ['bodyweight', 'bench'], bodyPosition: 'lying', difficulty: 'beginner', substitutionGroup: 'horizontal_chest_press',
     instructions: { ptBR: ['Com as mãos apoiadas em uma superfície elevada, mantenha o corpo alinhado e flexione os cotovelos até o peito se aproximar do apoio.'], en: ['With the hands on an elevated surface, keep the body aligned and bend the elbows until the chest nears the support.'], es: ['Con las manos apoyadas en una superficie elevada, mantenga el cuerpo alineado y flexione los codos hasta que el pecho se acerque al apoyo.'] },
     ...ACTIVE_AVAILABLE, ...NO_EXECUTION,
   },
@@ -1314,7 +1375,7 @@ const RAW_EXERCISES: SeedEntry[] = [
     name: { ptBR: 'Flexão de Joelhos com Elástico', en: 'Resistance Band Standing Leg Curl', es: 'Curl Femoral de Pie con Banda Elástica' },
     target: { primaryMuscle: 'hamstrings', secondaryMuscles: ['calves'] },
     movement: { pattern: 'knee_flexion', mechanic: 'isolation', laterality: 'unilateral' },
-    equipment: ['resistance_band'], bodyPosition: 'standing', difficulty: 'beginner',
+    equipment: ['resistance_band'], bodyPosition: 'standing', difficulty: 'beginner', substitutionGroup: 'hamstring_curl',
     instructions: { ptBR: ['Com o elástico preso ao tornozelo, flexione um joelho levando o calcanhar para trás sem mover a coxa.'], en: ['With the band attached to the ankle, bend one knee bringing the heel back without moving the thigh.'], es: ['Con la banda sujeta al tobillo, flexione una rodilla llevando el talón atrás sin mover el muslo.'] },
     ...ACTIVE_AVAILABLE, ...NO_EXECUTION,
   },

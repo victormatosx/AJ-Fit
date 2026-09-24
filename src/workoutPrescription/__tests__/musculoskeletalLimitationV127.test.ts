@@ -450,17 +450,15 @@ describe('composeTemplateV127 — musculoskeletal_limitation stage integration',
     expect(result.trace.limitationDecisions.every((d) => d.outcome === 'SUBSTITUTED')).toBe(true);
   });
 
-  it('propagates a fail-closed MUSCULOSKELETAL_SUBSTITUTION_UNAVAILABLE result end-to-end for a real template/region with a genuine session-level collision', () => {
-    // T009 (home), hip: bench-step-up's only two candidates are the one
-    // already claimed by bulgarian-split-squat-dumbbell's own substitution
-    // in the same session, and one itself hip-adapt-listed — a real,
-    // honest "no safe candidate survives this session" case, not a data gap.
+  it('resolves the former T009 hip collision through the reviewed low-step fallback', () => {
     const template = getCanonicalTemplateV127ById('T009');
     const result = composeTemplateV127(template, { limitationRegions: ['hip'] });
-    expect(result.status).toBe('MUSCULOSKELETAL_SUBSTITUTION_UNAVAILABLE');
-    if (result.status !== 'MUSCULOSKELETAL_SUBSTITUTION_UNAVAILABLE') return;
-    expect(result.reasonCodes.length).toBeGreaterThan(0);
-    expect(result.reasonCodes.every((code) =>
-      code.startsWith('MUSCULOSKELETAL_NO_SUBSTITUTE:') || code.startsWith('MUSCULOSKELETAL_PROFILE_COVERAGE_MISSING:'))).toBe(true);
+    expect(result.status).toBe('COMPOSED');
+    if (result.status !== 'COMPOSED') return;
+    expect(result.trace.limitationDecisions).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        exerciseId: 'bench-step-up', outcome: 'SUBSTITUTED', substituteExerciseId: 'low-step-up',
+      }),
+    ]));
   });
 });

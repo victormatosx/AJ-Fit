@@ -76,7 +76,7 @@ describe('Prescription Engine + Limitation Resolver V1', () => {
     if (result.status === 'SUCCESS') {
       for (const session of result.plan.sessions) {
         expect(session.exercises.map((item) => item.exerciseId)).toEqual([
-          'chair-sit-to-stand', 'bodyweight-squat',
+          'chair-sit-to-stand', 'leg-press-90',
         ]);
         expect(session.exercises.map((item) => item.sets)).toEqual([2, 3]);
       }

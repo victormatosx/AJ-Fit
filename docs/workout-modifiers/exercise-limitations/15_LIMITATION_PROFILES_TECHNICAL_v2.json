@@ -1,5 +1,5 @@
 {
-  "datasetVersion": "phase4-limitation-dataset-v2",
+  "datasetVersion": "phase6-full-musculoskeletal-coverage-v1",
   "generatedAt": "2026-09-24",
   "sourceDatasets": [
     {
@@ -113,18 +113,18 @@
     ]
   },
   "summary": {
-    "profileCount": 86,
-    "pairCount": 602,
+    "profileCount": 95,
+    "pairCount": 665,
     "statusCounts": {
-      "compatible": 146,
-      "adapt": 176,
+      "compatible": 194,
+      "adapt": 164,
       "avoid": 5,
-      "not_applicable": 270,
-      "pending": 5,
+      "not_applicable": 302,
+      "pending": 0,
       "unknown": 0
     },
     "avoidWithoutSubstituteCount": 5,
-    "actionCandidateCount": 25,
+    "actionCandidateCount": 28,
     "remainingExternalActionCandidateCount": 0,
     "cycleCount": 3
   },
@@ -188,8 +188,12 @@
     "cyclesDetectedButNonBlocking": true,
     "exactly83Profiles": false,
     "exactly581Pairs": false,
-    "exactly86Profiles": true,
-    "exactly602Pairs": true
+    "exactly86Profiles": false,
+    "exactly602Pairs": false,
+    "exactly88Profiles": false,
+    "exactly616Pairs": false,
+    "exactly95Profiles": true,
+    "exactly665Pairs": true
   },
   "profiles": [
     {
@@ -635,18 +639,10 @@
             "status": "compatible"
           },
           "elbow": {
-            "status": "adapt",
-            "adaptation": {
-              "kind": "exercise_variant",
-              "exerciseId": "resistance-band-row"
-            }
+            "status": "compatible"
           },
           "wrist": {
-            "status": "adapt",
-            "adaptation": {
-              "kind": "exercise_variant",
-              "exerciseId": "resistance-band-row"
-            }
+            "status": "compatible"
           },
           "ankle_foot": {
             "status": "not_applicable"
@@ -929,11 +925,7 @@
             "status": "not_applicable"
           },
           "back": {
-            "status": "adapt",
-            "adaptation": {
-              "kind": "exercise_variant",
-              "exerciseId": "machine-lateral-raise"
-            }
+            "status": "compatible"
           },
           "shoulder": {
             "status": "adapt",
@@ -946,11 +938,7 @@
             "status": "not_applicable"
           },
           "wrist": {
-            "status": "adapt",
-            "adaptation": {
-              "kind": "exercise_variant",
-              "exerciseId": "machine-lateral-raise"
-            }
+            "status": "compatible"
           },
           "ankle_foot": {
             "status": "not_applicable"
@@ -976,7 +964,7 @@
             "status": "adapt",
             "adaptation": {
               "kind": "exercise_variant",
-              "exerciseId": "cable-triceps-pushdown"
+              "exerciseId": "resistance-band-triceps-pushdown"
             }
           },
           "shoulder": {
@@ -1839,25 +1827,13 @@
         "protocolVersion": "musculoskeletal-v1",
         "regions": {
           "knee": {
-            "status": "adapt",
-            "adaptation": {
-              "kind": "exercise_variant",
-              "exerciseId": "supported-low-step-up"
-            }
+            "status": "compatible"
           },
           "hip": {
-            "status": "adapt",
-            "adaptation": {
-              "kind": "exercise_variant",
-              "exerciseId": "supported-low-step-up"
-            }
+            "status": "compatible"
           },
           "back": {
-            "status": "adapt",
-            "adaptation": {
-              "kind": "exercise_variant",
-              "exerciseId": "supported-low-step-up"
-            }
+            "status": "compatible"
           },
           "shoulder": {
             "status": "not_applicable"
@@ -1869,11 +1845,7 @@
             "status": "not_applicable"
           },
           "ankle_foot": {
-            "status": "adapt",
-            "adaptation": {
-              "kind": "exercise_variant",
-              "exerciseId": "supported-low-step-up"
-            }
+            "status": "compatible"
           }
         },
         "reviewStatus": "approved",
@@ -2117,11 +2089,7 @@
             }
           },
           "back": {
-            "status": "adapt",
-            "adaptation": {
-              "kind": "exercise_variant",
-              "exerciseId": "seated-hip-abductor-machine"
-            }
+            "status": "compatible"
           },
           "shoulder": {
             "status": "not_applicable"
@@ -2337,11 +2305,7 @@
             "status": "not_applicable"
           },
           "back": {
-            "status": "adapt",
-            "adaptation": {
-              "kind": "exercise_variant",
-              "exerciseId": "iso-lateral-pulldown-machine"
-            }
+            "status": "compatible"
           },
           "shoulder": {
             "status": "compatible"
@@ -2362,6 +2326,38 @@
     },
     {
       "exerciseId": "resistance-band-row",
+      "limitationProfile": {
+        "schemaVersion": 1,
+        "protocolVersion": "musculoskeletal-v1",
+        "regions": {
+          "knee": {
+            "status": "not_applicable"
+          },
+          "hip": {
+            "status": "not_applicable"
+          },
+          "back": {
+            "status": "compatible"
+          },
+          "shoulder": {
+            "status": "compatible"
+          },
+          "elbow": {
+            "status": "compatible"
+          },
+          "wrist": {
+            "status": "compatible"
+          },
+          "ankle_foot": {
+            "status": "not_applicable"
+          }
+        },
+        "reviewStatus": "approved",
+        "reviewBasis": "product_policy"
+      }
+    },
+    {
+      "exerciseId": "resistance-band-triceps-pushdown",
       "limitationProfile": {
         "schemaVersion": 1,
         "protocolVersion": "musculoskeletal-v1",
@@ -2546,6 +2542,38 @@
     },
     {
       "exerciseId": "seated-resistance-band-shoulder-press",
+      "limitationProfile": {
+        "schemaVersion": 1,
+        "protocolVersion": "musculoskeletal-v1",
+        "regions": {
+          "knee": {
+            "status": "not_applicable"
+          },
+          "hip": {
+            "status": "not_applicable"
+          },
+          "back": {
+            "status": "compatible"
+          },
+          "shoulder": {
+            "status": "compatible"
+          },
+          "elbow": {
+            "status": "compatible"
+          },
+          "wrist": {
+            "status": "compatible"
+          },
+          "ankle_foot": {
+            "status": "not_applicable"
+          }
+        },
+        "reviewStatus": "approved",
+        "reviewBasis": "product_policy"
+      }
+    },
+    {
+      "exerciseId": "seated-resistance-band-row",
       "limitationProfile": {
         "schemaVersion": 1,
         "protocolVersion": "musculoskeletal-v1",
@@ -2807,25 +2835,13 @@
         "protocolVersion": "musculoskeletal-v1",
         "regions": {
           "knee": {
-            "status": "adapt",
-            "adaptation": {
-              "kind": "exercise_variant",
-              "exerciseId": "seated-hip-abductor-machine"
-            }
+            "status": "compatible"
           },
           "hip": {
-            "status": "adapt",
-            "adaptation": {
-              "kind": "exercise_variant",
-              "exerciseId": "seated-hip-abductor-machine"
-            }
+            "status": "compatible"
           },
           "back": {
-            "status": "adapt",
-            "adaptation": {
-              "kind": "exercise_variant",
-              "exerciseId": "seated-hip-abductor-machine"
-            }
+            "status": "compatible"
           },
           "shoulder": {
             "status": "not_applicable"
@@ -2837,11 +2853,7 @@
             "status": "not_applicable"
           },
           "ankle_foot": {
-            "status": "adapt",
-            "adaptation": {
-              "kind": "exercise_variant",
-              "exerciseId": "seated-hip-abductor-machine"
-            }
+            "status": "compatible"
           }
         },
         "reviewStatus": "approved",
@@ -3574,13 +3586,17 @@
             "status": "compatible"
           },
           "shoulder": {
-            "status": "pending"
+            "status": "adapt",
+            "adaptation": {
+              "kind": "exercise_variant",
+              "exerciseId": "pec-deck-machine-fly"
+            }
           },
           "elbow": {
             "status": "compatible"
           },
           "wrist": {
-            "status": "pending"
+            "status": "compatible"
           },
           "ankle_foot": {
             "status": "not_applicable"
@@ -3606,13 +3622,17 @@
             "status": "compatible"
           },
           "shoulder": {
-            "status": "pending"
+            "status": "adapt",
+            "adaptation": {
+              "kind": "exercise_variant",
+              "exerciseId": "pec-deck-machine-fly"
+            }
           },
           "elbow": {
             "status": "compatible"
           },
           "wrist": {
-            "status": "pending"
+            "status": "compatible"
           },
           "ankle_foot": {
             "status": "not_applicable"
@@ -3648,11 +3668,137 @@
             "status": "compatible"
           },
           "wrist": {
-            "status": "pending"
+            "status": "compatible"
           },
           "ankle_foot": {
             "status": "not_applicable"
           }
+        },
+        "reviewStatus": "approved",
+        "reviewBasis": "product_policy"
+      }
+    },
+    {
+      "exerciseId": "counter-push-up",
+      "limitationProfile": {
+        "schemaVersion": 1,
+        "protocolVersion": "musculoskeletal-v1",
+        "regions": {
+          "knee": { "status": "not_applicable" },
+          "hip": { "status": "not_applicable" },
+          "back": { "status": "compatible" },
+          "shoulder": { "status": "compatible" },
+          "elbow": { "status": "compatible" },
+          "wrist": { "status": "compatible" },
+          "ankle_foot": { "status": "not_applicable" }
+        },
+        "reviewStatus": "approved",
+        "reviewBasis": "product_policy"
+      }
+    },
+    {
+      "exerciseId": "leg-press-90",
+      "limitationProfile": {
+        "schemaVersion": 1,
+        "protocolVersion": "musculoskeletal-v1",
+        "regions": {
+          "knee": { "status": "compatible" },
+          "hip": { "status": "compatible" },
+          "back": { "status": "compatible" },
+          "shoulder": { "status": "not_applicable" },
+          "elbow": { "status": "not_applicable" },
+          "wrist": { "status": "not_applicable" },
+          "ankle_foot": { "status": "compatible" }
+        },
+        "reviewStatus": "approved",
+        "reviewBasis": "product_policy"
+      }
+    },
+    {
+      "exerciseId": "pec-deck-machine-fly",
+      "limitationProfile": {
+        "schemaVersion": 1,
+        "protocolVersion": "musculoskeletal-v1",
+        "regions": {
+          "knee": { "status": "not_applicable" },
+          "hip": { "status": "not_applicable" },
+          "back": { "status": "compatible" },
+          "shoulder": { "status": "compatible" },
+          "elbow": { "status": "not_applicable" },
+          "wrist": { "status": "compatible" },
+          "ankle_foot": { "status": "not_applicable" }
+        },
+        "reviewStatus": "approved",
+        "reviewBasis": "product_policy"
+      }
+    },
+    {
+      "exerciseId": "resistance-band-hammer-curl",
+      "limitationProfile": {
+        "schemaVersion": 1,
+        "protocolVersion": "musculoskeletal-v1",
+        "regions": {
+          "knee": { "status": "not_applicable" },
+          "hip": { "status": "not_applicable" },
+          "back": { "status": "compatible" },
+          "shoulder": { "status": "not_applicable" },
+          "elbow": { "status": "compatible" },
+          "wrist": { "status": "compatible" },
+          "ankle_foot": { "status": "not_applicable" }
+        },
+        "reviewStatus": "approved",
+        "reviewBasis": "product_policy"
+      }
+    },
+    {
+      "exerciseId": "resistance-band-lateral-raise",
+      "limitationProfile": {
+        "schemaVersion": 1,
+        "protocolVersion": "musculoskeletal-v1",
+        "regions": {
+          "knee": { "status": "not_applicable" },
+          "hip": { "status": "not_applicable" },
+          "back": { "status": "compatible" },
+          "shoulder": { "status": "compatible" },
+          "elbow": { "status": "not_applicable" },
+          "wrist": { "status": "compatible" },
+          "ankle_foot": { "status": "not_applicable" }
+        },
+        "reviewStatus": "approved",
+        "reviewBasis": "product_policy"
+      }
+    },
+    {
+      "exerciseId": "resistance-band-rear-delt-fly",
+      "limitationProfile": {
+        "schemaVersion": 1,
+        "protocolVersion": "musculoskeletal-v1",
+        "regions": {
+          "knee": { "status": "not_applicable" },
+          "hip": { "status": "not_applicable" },
+          "back": { "status": "compatible" },
+          "shoulder": { "status": "compatible" },
+          "elbow": { "status": "compatible" },
+          "wrist": { "status": "compatible" },
+          "ankle_foot": { "status": "not_applicable" }
+        },
+        "reviewStatus": "approved",
+        "reviewBasis": "product_policy"
+      }
+    },
+    {
+      "exerciseId": "seated-resistance-band-leg-curl",
+      "limitationProfile": {
+        "schemaVersion": 1,
+        "protocolVersion": "musculoskeletal-v1",
+        "regions": {
+          "knee": { "status": "compatible" },
+          "hip": { "status": "not_applicable" },
+          "back": { "status": "compatible" },
+          "shoulder": { "status": "not_applicable" },
+          "elbow": { "status": "not_applicable" },
+          "wrist": { "status": "not_applicable" },
+          "ankle_foot": { "status": "not_applicable" }
         },
         "reviewStatus": "approved",
         "reviewBasis": "product_policy"
@@ -3730,6 +3876,53 @@
       "dumbbell-rear-delt-fly": [
         "wrist"
       ]
+    }
+  },
+  "phase5SpineHomeClosure": {
+    "note": "Decisoes de produto aprovadas para spine/back no motor v1.27. Cinco regras existentes passaram de adapt para compatible e duas alternativas Home foram adicionadas; os pending dessas alternativas foram encerrados na fase de cobertura completa.",
+    "existingProfileBackChanges": {
+      "resistance-band-lat-pulldown": "compatible",
+      "dumbbell-lateral-raise": "compatible",
+      "mini-band-hip-abduction": "compatible",
+      "supported-hip-abduction": "compatible",
+      "low-step-up": "compatible"
+    },
+    "adaptTargetChanges": {
+      "dumbbell-overhead-triceps-extension": {
+        "back": "resistance-band-triceps-pushdown"
+      }
+    },
+    "addedProfileIds": [
+      "resistance-band-triceps-pushdown",
+      "seated-resistance-band-row"
+    ],
+    "pendingRegions": {}
+  },
+  "phase6FullCoverageClosure": {
+    "note": "Fechamento fail-closed da matriz individual 102x7 e das dez intersecoes obrigatorias. Profiles de variantes controladas foram completados por precedentes mecanicos; exercicios de maior demanda permanecem adapt e o resolver compartilhado permaneceu inalterado.",
+    "addedProfileIds": [
+      "counter-push-up",
+      "leg-press-90",
+      "pec-deck-machine-fly",
+      "resistance-band-hammer-curl",
+      "resistance-band-lateral-raise",
+      "resistance-band-rear-delt-fly",
+      "seated-resistance-band-leg-curl"
+    ],
+    "resolvedPendingCells": [
+      "cable-crossover-fly:shoulder",
+      "cable-crossover-fly:wrist",
+      "dumbbell-fly:shoulder",
+      "dumbbell-fly:wrist",
+      "dumbbell-rear-delt-fly:wrist",
+      "resistance-band-triceps-pushdown:knee,hip,shoulder,elbow,wrist,ankle_foot",
+      "seated-resistance-band-row:knee,hip,shoulder,elbow,wrist,ankle_foot"
+    ],
+    "matrix": {
+      "individualPass": 714,
+      "individualTotal": 714,
+      "requiredMultiRegionCombinations": 10,
+      "templatesPerCombination": 102
     }
   }
 }

@@ -4,8 +4,8 @@ import { EXERCISES_SEED } from '../../data/exercisesSeedData';
 import { validateExerciseSeed } from '../../validators/exerciseValidation';
 
 describe('exercisesSeedData', () => {
-  it('has exactly 123 exercises (116 pre-existing + 7 v1.27 Fase 2 closure additions)', () => {
-    expect(EXERCISES_SEED).toHaveLength(123);
+  it('has exactly 130 exercises (116 pre-existing + 7 Fase 2 + 2 spine Home + 5 full-coverage additions)', () => {
+    expect(EXERCISES_SEED).toHaveLength(130);
   });
 
   it('passes full dataset validation', () => {
@@ -73,20 +73,14 @@ describe('exercisesSeedData', () => {
     }
   });
 
-  // v1.27 Fase 2 closure regression guard: the 7 new resistance exercises
-  // are deliberately added without a `substitutionGroup` (see
-  // exercisesSeedData.ts's comment above them) specifically so
-  // `buildSubstitutions` never inserts them into an existing group's
-  // auto-derived `similarExerciseIds` — i.e. none of the 116 pre-existing
-  // exercises' equipment-substitution pool (read by the ACTIVE v2 runtime's
-  // `composition.ts`) changes as a side effect of this catalog growth.
-  it('the 7 v1.27 Fase 2 closure resistance additions never appear in any pre-existing exercise\'s similarExerciseIds', () => {
+  // One Fase 2 addition remains deliberately ungrouped. The other six
+  // strength movements joined their normal groups only in the explicit
+  // full-coverage closure so controlled second candidates can be reached.
+  it('keeps the still-ungrouped Fase 2 addition out of every substitution pool', () => {
     const newIds = new Set([
-      'decline-barbell-bench-press', 'dumbbell-fly', 'dumbbell-rear-delt-fly',
-      'resistance-band-pullover', 'decline-push-up', 'incline-push-up',
-      'resistance-band-standing-leg-curl',
+      'resistance-band-pullover',
     ]);
-    expect(newIds.size).toBe(7);
+    expect(newIds.size).toBe(1);
     for (const exercise of EXERCISES_SEED) {
       if (newIds.has(exercise.id)) continue;
       for (const similarId of exercise.substitution.similarExerciseIds) {
@@ -95,11 +89,9 @@ describe('exercisesSeedData', () => {
     }
   });
 
-  it('the 7 new resistance additions have no substitution peers of their own (deliberately ungrouped)', () => {
+  it('the remaining ungrouped Fase 2 addition has no substitution peers of its own', () => {
     const newIds = new Set([
-      'decline-barbell-bench-press', 'dumbbell-fly', 'dumbbell-rear-delt-fly',
-      'resistance-band-pullover', 'decline-push-up', 'incline-push-up',
-      'resistance-band-standing-leg-curl',
+      'resistance-band-pullover',
     ]);
     for (const exercise of EXERCISES_SEED) {
       if (newIds.has(exercise.id)) expect(exercise.substitution.similarExerciseIds).toEqual([]);
