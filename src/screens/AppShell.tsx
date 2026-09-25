@@ -247,7 +247,7 @@ function AppShellContent({
     }
     let cancelled = false;
     setManualSubstitutionContextState({ status: 'loading', context: null });
-    loadManualSubstitutionUserContext(user.uid, activeProgram.environment)
+    loadManualSubstitutionUserContext(user.uid, activeProgram.environment, activeProgram.templateSourceVersion)
       .then((context) => {
         if (!cancelled) setManualSubstitutionContextState(
           context ? { status: 'ready', context } : { status: 'error', context: null },

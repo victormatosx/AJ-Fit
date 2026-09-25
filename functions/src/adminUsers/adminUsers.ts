@@ -234,6 +234,11 @@ function questionnaireView(snapshot: DocumentSnapshot | null) {
   const dizzinessScreening = objectMap(answers.dizzinessScreening);
   const postSurgicalScreening = objectMap(answers.postSurgicalScreening);
   const medicalRestrictionScreening = objectMap(answers.medicalRestrictionScreening);
+  const storedPlace = safeString(answers.place);
+  const storedPrimaryPlace = safeString(answers.primaryPlace);
+  const place = storedPlace === 'both' && (storedPrimaryPlace === 'gym' || storedPrimaryPlace === 'home')
+    ? storedPrimaryPlace
+    : storedPlace;
   return {
     id: snapshot.id,
     version: typeof document.version === 'number' ? document.version : null,
@@ -249,11 +254,9 @@ function questionnaireView(snapshot: DocumentSnapshot | null) {
       level: safeString(answers.level),
       duration: safeString(answers.duration),
       days: typeof answers.days === 'number' ? answers.days : null,
-      place: safeString(answers.place),
-      primaryPlace: safeString(answers.primaryPlace),
+      place,
       equipment: Array.isArray(answers.equipment) ? answers.equipment.filter((item): item is string => typeof item === 'string') : [],
       style: Array.isArray(answers.style) ? answers.style.filter((item): item is string => typeof item === 'string') : [],
-      motivation: safeString(answers.motivation),
       muscleFocus: Array.isArray(answers.muscleFocus) ? answers.muscleFocus.filter((item): item is string => typeof item === 'string') : [],
       commitment: safeString(answers.commitment),
       limitationImpact: safeString(answers.limitationImpact),

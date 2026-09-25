@@ -71,12 +71,4 @@ describe('explicit conflict resolution', () => {
     })).status).toBe('INVALID_CONFIGURATION');
   });
 
-  it('both + primary home resolves the home family', () => {
-    const result = selectTemplate(completeAnswers({
-      place: 'both', primaryPlace: 'home', equipment: ['dumbbells', 'bands', 'bench_or_box'],
-    }));
-    expect(result).toEqual(expect.objectContaining({
-      status: 'SELECTED', decision: expect.objectContaining({ templateId: 'T009', environment: 'home' }),
-    }));
-  });
 });

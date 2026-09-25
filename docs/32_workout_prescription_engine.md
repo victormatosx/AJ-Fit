@@ -95,10 +95,12 @@ Em cada linha, dias `2,3,4,5,6,7` mapeiam sequencialmente para os seis IDs.
 | frailty | any | `special_population=frailty` | gym | 2→T085, 3→T086, 4→T087 |
 | frailty | any | `special_population=frailty` | home | 2→T088, 3→T089, 4→T090 |
 
-Objetivos `gain_muscle`, `lose_fat`, `body_composition` e
-`return_to_training` normalizam para `hypertrophy_body_composition`. `strength`
-e `conditioning` preservam suas famílias. Experience, duração, equipamentos e
-prioridade muscular não participam do lookup. `both` usa `primaryPlace`.
+Objetivos atuais `gain_muscle`, `lose_fat` e `health` normalizam para
+`hypertrophy_body_composition`. Os valores persistidos antigos
+`body_composition` e `return_to_training` continuam com o mesmo mapeamento.
+`strength` e `conditioning` preservam suas famílias. Experience, duração, equipamentos e
+prioridade muscular não participam do lookup. O ambiente é definido diretamente por `place`
+como `gym` ou `home`.
 
 Populações especiais preservam `requestedDays`, mas usam
 `prescribedStructuredDays = min(requestedDays, 4)`. Funcional é ativado por

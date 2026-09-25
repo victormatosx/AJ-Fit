@@ -1,9 +1,14 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useOnboardingFunnel, type OnboardingFunnelMode } from '../onboarding/useOnboardingFunnel';
 import { FUNNEL_QUESTIONS } from '../onboarding/questionDefs';
-import { getNextStepId } from '../onboarding/steps';
+import { getNextStepId, MAX_MUSCLE_FOCUS } from '../onboarding/steps';
+import {
+  muscleFocusValuesForVisualGroups,
+  visualGroupsForMuscleFocusValues,
+  type MuscleFocusVisualGroup,
+} from '../onboarding/muscleFocusBodyMap';
 import type { OnboardingAuthContext } from '../onboarding/authContext';
 import { logOnboardingEvent } from '../onboarding/onboardingAnalytics';
 import { logInfo } from '../lib/logger';
@@ -14,6 +19,9 @@ import {
   releaseGuidedWorkoutVideoPlayer,
 } from '../onboarding/onboardingVideoPreload';
 import { QuestionStepScreen } from '../components/onboarding/QuestionStepScreen';
+import { ScheduleModeLink, WeeklySchedulePicker } from '../components/onboarding/WeeklySchedulePicker';
+import { MuscleFocusBodyMapPicker } from '../components/onboarding/MuscleFocusBodyMapPicker';
+import { isWeeklyScheduleComplete, type WeeklyScheduleValue } from '../onboarding/weeklyScheduleSelection';
 import { DevFunnelNavigator } from '../components/onboarding/DevFunnelNavigator';
 import { AnimatedStepContainer } from '../components/onboarding/AnimatedStepContainer';
 import { useTheme } from '../theme';
@@ -27,7 +35,7 @@ import { EvolutionInterstitialScreen } from './onboarding/EvolutionInterstitialS
 import { MethodologyInterstitialScreen } from './onboarding/MethodologyInterstitialScreen';
 import { GuidedWorkoutInterstitialScreen } from './onboarding/GuidedWorkoutInterstitialScreen';
 import { AjFitProgressInterstitialScreen } from './onboarding/AjFitProgressInterstitialScreen';
-import { answerValueForStep, updateQuizAnswer } from '../lib/questionnaireSchema';
+import { answerValueForStep, cleanApplicableAnswers, updateQuizAnswer } from '../lib/questionnaireSchema';
 import { onboardingSafetyBlock } from '../onboarding/onboardingSafetyGate';
 
 export function OnboardingFunnelScreen({
@@ -42,7 +50,29 @@ export function OnboardingFunnelScreen({
   const { theme } = useTheme();
   const { t } = useTranslation('quiz');
   const funnel = useOnboardingFunnel(mode);
-  const { currentStepId, name, setName, quiz, setQuiz, progress, goNext, goBack, canGoBack, jumpTo } = funnel;
+  const { currentStepId, name, setName, quiz, setQuiz, progress, goNext, goBack, canGoBack, jumpTo, hydrated } = funnel;
+  // Exact anatomy is UI state; `quiz.muscleFocus` intentionally remains the
+  // existing grouped persistence contract used by workout prescription.
+  const [selectedMuscleGroups, setSelectedMuscleGroups] = useState<MuscleFocusVisualGroup[]>(
+    () => visualGroupsForMuscleFocusValues(quiz.muscleFocus),
+  );
+  // `quiz` for the anonymous funnel only reflects a resumed draft's real
+  // answers after `hydrated` flips true (see useOnboardingFunnel) — the
+  // lazy initializer above runs before that. Re-derive the visual selection
+  // exactly once when hydration completes, so returning to an
+  // already-answered `muscleFocus` step (draft resume, or forced
+  // questionnaire re-entry) shows the body map as the user left it. Never
+  // re-run after that: once the user starts toggling, `quiz.muscleFocus` is
+  // a lossy *derived* projection of `selectedMuscleGroups` (arms collapses
+  // three regions into one value), so re-syncing from it would fight the
+  // user's own in-progress selection.
+  const muscleFocusHydratedRef = useRef(false);
+  useEffect(() => {
+    if (muscleFocusHydratedRef.current || !hydrated) return;
+    muscleFocusHydratedRef.current = true;
+    setSelectedMuscleGroups(visualGroupsForMuscleFocusValues(quiz.muscleFocus));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once, exactly when hydration completes
+  }, [hydrated]);
 
   // Diagnostic only — unrelated to any functional behavior. A real E2E
   // reported this screen flashing for ~2s right after a purchase, with no
@@ -59,6 +89,16 @@ export function OnboardingFunnelScreen({
   }, []);
 
   const setAnswer = (id: typeof currentStepId, value: unknown) => setQuiz(updateQuizAnswer(quiz, id, value));
+  const scheduleValue: WeeklyScheduleValue = {
+    days: quiz.days,
+    scheduleMode: quiz.scheduleMode,
+    trainingDays: quiz.trainingDays,
+  };
+  const setSchedule = (value: WeeklyScheduleValue) => setQuiz(cleanApplicableAnswers({ ...quiz, ...value }));
+  const setMuscleGroups = (groups: MuscleFocusVisualGroup[]) => {
+    setSelectedMuscleGroups(groups);
+    setAnswer('muscleFocus', muscleFocusValuesForVisualGroups(groups));
+  };
 
   // Two steps ahead of each video interstitial, warm up its player so the
   // native decoder has already opened the local asset by the time the user
@@ -108,9 +148,8 @@ export function OnboardingFunnelScreen({
         options: question.options.filter((option) => option.v !== 'pregnancy' && option.v !== 'postpartum'),
       };
     }
-    if (currentStepId === 'trainingDays' && question.kind === 'multi-exact') {
-      question = { ...question, count: quiz.days ?? question.count };
-    }
+    const isScheduleQuestion = currentStepId === 'days';
+    const isMuscleFocusQuestion = currentStepId === 'muscleFocus';
     const nextId = getNextStepId(currentStepId, mode, quiz);
     const isLastQuestion = nextId === 'analyzing';
     return (
@@ -133,6 +172,25 @@ export function OnboardingFunnelScreen({
         totalSteps={progress.total}
         ctaLabel={isLastQuestion ? t('actions.generatePlan') : undefined}
         validateBeforeNext={() => onboardingSafetyBlock(currentStepId, quiz)}
+        answerControl={isScheduleQuestion ? (
+          <WeeklySchedulePicker value={scheduleValue} onChange={setSchedule} />
+        ) : isMuscleFocusQuestion ? (
+          <MuscleFocusBodyMapPicker
+            value={selectedMuscleGroups}
+            onChange={setMuscleGroups}
+            maxSelections={MAX_MUSCLE_FOCUS}
+          />
+        ) : undefined}
+        answerFooter={isScheduleQuestion ? (
+          <ScheduleModeLink value={scheduleValue} onChange={setSchedule} />
+        ) : undefined}
+        centerAnswerControlOnScreen={isScheduleQuestion}
+        stretchAnswerControl={isMuscleFocusQuestion}
+        canContinueOverride={isScheduleQuestion
+          ? isWeeklyScheduleComplete(scheduleValue)
+          : isMuscleFocusQuestion
+            ? true
+            : undefined}
       />
     );
   };
@@ -155,9 +213,6 @@ export function OnboardingFunnelScreen({
       break;
     case 'welcome':
       content = <WelcomeInterstitialScreen name={name} onContinue={goNext} />;
-      break;
-    case 'motivation':
-      content = renderQuestion();
       break;
     case 'goal':
       content = renderQuestion();
@@ -184,10 +239,6 @@ export function OnboardingFunnelScreen({
       content = <MethodologyInterstitialScreen progress={progress} onContinue={goNext} />;
       break;
     case 'days':
-    case 'scheduleMode':
-      content = renderQuestion();
-      break;
-    case 'trainingDays':
       content = renderQuestion();
       break;
     case 'duration':
@@ -196,7 +247,6 @@ export function OnboardingFunnelScreen({
     case 'place':
       content = renderQuestion();
       break;
-    case 'primaryPlace':
     case 'equipment':
       content = renderQuestion();
       break;

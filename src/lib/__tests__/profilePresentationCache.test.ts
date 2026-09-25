@@ -49,6 +49,16 @@ describe('profile presentation cache', () => {
     expect(await readProfilePresentationCache('A')).toMatchObject({ profile: { name: 'Ana Nova' }, questionnaire: { days: 4 } });
   });
 
+  it('accepts the current health goal and deprecated goals for offline presentation', () => {
+    const base = { schemaVersion: 1, uid: 'A', cachedAt: Date.now(), profile: { name: 'Ana' } };
+    for (const goal of ['health', 'body_composition', 'return_to_training']) {
+      expect(parseProfilePresentationCache(JSON.stringify({
+        ...base,
+        questionnaire: { goal, days: 3 },
+      }), 'A')).toMatchObject({ questionnaire: { goal } });
+    }
+  });
+
   it('writes through acknowledged profile and questionnaire changes', async () => {
     await writeProfilePresentationCache('A', profile, questionnaire);
     await updateProfilePresentationCache('A', { name: 'Ana Editada', questionnaire: { goal: 'strength', days: 5 } });

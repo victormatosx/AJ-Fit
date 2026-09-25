@@ -57,7 +57,7 @@ export function resolveModifiers(
     }
   }
 
-  if (answers.place === 'home' || answers.place === 'both') {
+  if (answers.place === 'home') {
     result.push(modifier('equipment:available_inventory', 'P3', 'APPLIED', 'HOME_INVENTORY_FILTER'));
     // `equipment: ['other']` is a real, always-offered UI option — never a
     // signal to fail closed. `equipmentContextFor` (equipment.ts) already

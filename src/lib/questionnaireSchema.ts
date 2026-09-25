@@ -55,12 +55,11 @@ export function cleanApplicableAnswers(input: Quiz): Quiz {
   const functional = has('functional_limitation') ? (input.functionalScreening ?? emptyFunctionalScreening()) : null;
   return {
     ...input,
-    // days === 7 needs no explicit preference: every weekday is implied and
-    // never asked (docs/workout-lifecycle/03_SCHEDULE_ENGINE.md §Coleta
-    // futura). For 2-6, keep whatever subset the user has picked so far —
-    // the exact-count requirement is enforced by
-    // `questionnaireValidationErrors`/`canContinueQuestion`, not silently
-    // truncated here.
+    // Flexible schedules never persist fixed weekdays. For a fixed seven-day
+    // schedule every weekday is implied; for 2-6, keep the subset picked so
+    // far. Completion is enforced by the unified schedule screen and the
+    // Schedule Engine's `trainingDaysValid` gate, never by silently
+    // truncating a partial selection here.
     trainingDays: input.scheduleMode === 'flexible'
       ? null
       : input.days === 7
@@ -68,8 +67,7 @@ export function cleanApplicableAnswers(input: Quiz): Quiz {
       : input.days == null
         ? null
         : normalizeWeekdays(input.trainingDays ?? []),
-    primaryPlace: input.place === 'both' ? input.primaryPlace : null,
-    equipment: input.place === 'home' || input.place === 'both' ? exclusiveNone(input.equipment) : [],
+    equipment: input.place === 'home' ? exclusiveNone(input.equipment) : [],
     limits: has('musculoskeletal_limitation') ? exclusiveNone(input.limits) : [],
     muscleFocus: exclusiveNone(input.muscleFocus).slice(0, 2),
     specialConditions,
@@ -86,11 +84,21 @@ export function cleanApplicableAnswers(input: Quiz): Quiz {
 }
 
 /** Defensive read compatibility for sparse/malformed and all v1 questionnaires. */
-export function normalizeLoadedQuiz(input: Partial<Quiz> & { limitationImpact?: unknown }): Quiz {
+export function normalizeLoadedQuiz(input: Omit<Partial<Quiz>, 'place'> & {
+  limitationImpact?: unknown;
+  /** @deprecated Read-only compatibility for the removed `place: both` branch. */
+  place?: Quiz['place'] | 'both';
+  /** @deprecated Read-only compatibility; folded into `place` and discarded. */
+  primaryPlace?: unknown;
+}): Quiz {
   // Read-only compatibility: old questionnaires/drafts may still contain
   // this removed field. Drop it at the normalization boundary so the current
   // model and prescription engine can never observe or re-persist it.
-  const { limitationImpact: _legacyLimitationImpact, ...currentInput } = input;
+  const {
+    limitationImpact: _legacyLimitationImpact,
+    primaryPlace: legacyPrimaryPlace,
+    ...currentInput
+  } = input;
   const merged = { ...defaultQuiz, ...currentInput };
   const strings = (value: unknown) => Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
   const allowedConditions: string[] = ['none', 'musculoskeletal_limitation', 'pregnancy', 'postpartum', 'lipedema', 'dizziness_or_vertigo', 'post_surgical', 'functional_limitation', 'medical_restriction'];
@@ -117,8 +125,12 @@ export function normalizeLoadedQuiz(input: Partial<Quiz> & { limitationImpact?: 
   const specialConditions = loadedConditions.length === 0 && loadedLimits.some((value) => value !== 'none')
     ? ['musculoskeletal_limitation' as const]
     : loadedConditions;
+  const place: Quiz['place'] = currentInput.place === 'both'
+    ? legacyPrimaryPlace === 'gym' || legacyPrimaryPlace === 'home' ? legacyPrimaryPlace : null
+    : currentInput.place === 'gym' || currentInput.place === 'home' ? currentInput.place : null;
   return {
     ...merged,
+    place,
     scheduleMode,
     limits: loadedLimits,
     trainingDays,
@@ -146,9 +158,6 @@ export function updateQuizAnswer(quiz: Quiz, stepId: OnboardingStepId, value: un
   let next: Quiz;
   switch (stepId) {
     case 'days': next = { ...quiz, days: Number(value) }; break;
-    case 'scheduleMode': next = { ...quiz, scheduleMode: value as Quiz['scheduleMode'] }; break;
-    case 'trainingDays': next = { ...quiz, trainingDays: normalizeWeekdays(value as string[]) }; break;
-    case 'primaryPlace': next = { ...quiz, primaryPlace: value as Quiz['primaryPlace'] }; break;
     case 'specialConditions': next = { ...quiz, specialConditions: normalizeSpecialConditions(value as string[]) }; break;
     case 'pregnancyWeeks': next = { ...quiz, pregnancyScreening: { ...(quiz.pregnancyScreening ?? emptyPregnancyScreening()), weeks: value as number } }; break;
     case 'pregnancyCare': next = { ...quiz, pregnancyScreening: { ...(quiz.pregnancyScreening ?? emptyPregnancyScreening()), ...(value as Pick<PregnancyScreening, 'prenatalCare' | 'exerciseRestriction' | 'complication'>) } }; break;
@@ -188,7 +197,7 @@ export function answerValueForStep(quiz: Quiz, stepId: OnboardingStepId): unknow
 
 export type QuestionnaireValidationCode =
   | 'unsupported_days' | 'too_many_muscle_priorities' | 'exclusive_none_conflict'
-  | 'primary_place_required' | 'limitations_required'
+  | 'limitations_required'
   | 'pregnancy_screening_incomplete' | 'postpartum_screening_incomplete' | 'functional_screening_incomplete'
   | 'lipedema_screening_incomplete' | 'dizziness_screening_incomplete'
   | 'post_surgical_screening_incomplete' | 'medical_restriction_screening_incomplete';
@@ -215,7 +224,6 @@ export function questionnaireValidationErrors(quiz: Quiz): QuestionnaireValidati
   if (quiz.days == null || ![2, 3, 4, 5, 6, 7].includes(quiz.days)) errors.push('unsupported_days');
   if (quiz.muscleFocus.filter((value) => value !== 'none').length > 2) errors.push('too_many_muscle_priorities');
   if ([quiz.equipment, quiz.limits, quiz.muscleFocus, quiz.specialConditions, quiz.pregnancyScreening?.warningSigns ?? [], quiz.postpartumScreening?.signs ?? [], quiz.functionalScreening?.situations ?? []].some(hasNoneConflict)) errors.push('exclusive_none_conflict');
-  if (quiz.place === 'both' && !quiz.primaryPlace) errors.push('primary_place_required');
   // No `equipment_required` gate: the questionnaire never asks for a home
   // equipment inventory (see onboarding/steps.ts), so `quiz.equipment` is
   // structurally always `[]` for every home/both user going forward —

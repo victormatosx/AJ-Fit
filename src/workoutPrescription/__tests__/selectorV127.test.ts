@@ -203,12 +203,14 @@ describe('selectBaseTemplateV127 — metamorphic invariants (non-selection dimen
     expect(sixDayIntermediate).not.toEqual(sevenDayIntermediate);
   });
 
-  it('lose_fat and body_composition resolve to the same family as gain_muscle', () => {
+  it('current hypertrophy intents and deprecated values resolve to the same family as gain_muscle', () => {
     const gainMuscle = selectBaseTemplateV127FromAnswers(completeAnswers({ goal: 'gain_muscle' }));
     const loseFat = selectBaseTemplateV127FromAnswers(completeAnswers({ goal: 'lose_fat' }));
+    const health = selectBaseTemplateV127FromAnswers(completeAnswers({ goal: 'health' }));
     const bodyComposition = selectBaseTemplateV127FromAnswers(completeAnswers({ goal: 'body_composition' }));
     const returnToTraining = selectBaseTemplateV127FromAnswers(completeAnswers({ goal: 'return_to_training' }));
     expect(loseFat).toEqual(gainMuscle);
+    expect(health).toEqual(gainMuscle);
     expect(bodyComposition).toEqual(gainMuscle);
     expect(returnToTraining).toEqual(gainMuscle);
   });
@@ -225,21 +227,13 @@ describe('selectBaseTemplateV127 — metamorphic invariants (non-selection dimen
     expect(strength).not.toEqual(conditioning);
   });
 
-  it('both + primary gym behaves like gym; both + primary home behaves like home', () => {
-    const bothGym = selectBaseTemplateV127FromAnswers(completeAnswers({ place: 'both', primaryPlace: 'gym' }));
-    const gym = selectBaseTemplateV127FromAnswers(completeAnswers({ place: 'gym' }));
-    const bothHome = selectBaseTemplateV127FromAnswers(completeAnswers({ place: 'both', primaryPlace: 'home' }));
-    const home = selectBaseTemplateV127FromAnswers(completeAnswers({ place: 'home' }));
-    expect(bothGym).toEqual(gym);
-    expect(bothHome).toEqual(home);
-    expect(bothGym).not.toEqual(bothHome);
-  });
 });
 
 describe('selectBaseTemplateV127FromAnswers — goal normalization', () => {
   const table: Array<[string, string]> = [
     ['gain_muscle', 'hypertrophy_body_composition'],
     ['lose_fat', 'hypertrophy_body_composition'],
+    ['health', 'hypertrophy_body_composition'],
     ['body_composition', 'hypertrophy_body_composition'],
     ['return_to_training', 'hypertrophy_body_composition'],
     ['strength', 'strength'],

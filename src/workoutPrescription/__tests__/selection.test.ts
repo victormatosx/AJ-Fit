@@ -43,14 +43,6 @@ describe('selection engine T001-T090 matrix', () => {
     expect(templateIds).toEqual([[4, 'T003'], [5, 'T004'], [6, 'T005']]);
   });
 
-  it('uses primaryPlace for both', () => {
-    const result = selectTemplate(completeAnswers({ place: 'both', primaryPlace: 'home', equipment: ['bodyweight'] }));
-    expect(result).toEqual(expect.objectContaining({
-      status: 'SELECTED',
-      decision: expect.objectContaining({ environment: 'home', templateId: 'T009' }),
-    }));
-  });
-
   it('caps special populations at four structured days without changing requestedDays', () => {
     const result = selectTemplate(completeAnswers({
       sex: 'f', days: 7, specialConditions: ['pregnancy'],
@@ -62,9 +54,8 @@ describe('selection engine T001-T090 matrix', () => {
     }));
   });
 
-  it('rejects invalid days and both without primaryPlace as missing dimensions/templates', () => {
+  it('rejects invalid days as a missing selection dimension', () => {
     expect(selectTemplate(completeAnswers({ days: 1 }))).toEqual(expect.objectContaining({ status: 'MISSING_TEMPLATE' }));
-    expect(selectTemplate(completeAnswers({ place: 'both', primaryPlace: null }))).toEqual(expect.objectContaining({ status: 'MISSING_TEMPLATE' }));
   });
 
   it('accepts unambiguous legacy goals and ignores legacy experience for selection', () => {

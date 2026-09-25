@@ -53,6 +53,11 @@ export function QuestionStepScreen({
   totalSteps,
   ctaLabel,
   validateBeforeNext,
+  answerControl,
+  answerFooter,
+  centerAnswerControlOnScreen,
+  stretchAnswerControl,
+  canContinueOverride,
 }: {
   question: Question;
   value: unknown;
@@ -63,13 +68,27 @@ export function QuestionStepScreen({
   totalSteps: number;
   ctaLabel?: string;
   validateBeforeNext?: () => OnboardingSafetyBlockStatus | null;
+  /** Optional composed control for questions that update multiple persisted fields at once. */
+  answerControl?: React.ReactNode;
+  /** Optional action anchored below the scrollable answer area and above the CTA. */
+  answerFooter?: React.ReactNode;
+  /** Positions a composed control at the geometric center of the full viewport. */
+  centerAnswerControlOnScreen?: boolean;
+  /** Stretches an inline (non-centered) answer control to fill the leftover
+   * vertical space between the title block and the CTA, instead of sizing to
+   * its own content. Lets controls with an internal aspect-ratio layout
+   * (e.g. the muscle-focus body map) measure real available room via
+   * `onLayout` and grow into it. */
+  stretchAnswerControl?: boolean;
+  canContinueOverride?: boolean;
 }) {
   const { t, i18n } = useTranslation(['quiz', 'common']);
   const { theme } = useTheme();
   const tLoose = t as unknown as LooseT;
   const { resolvedUnits } = useUnits();
   const [safetyBlock, setSafetyBlock] = useState<OnboardingSafetyBlockStatus | null>(null);
-  const canContinue = canContinueQuestion(question, value);
+  const canContinue = canContinueOverride ?? canContinueQuestion(question, value);
+  const inlineAnswerControl = centerAnswerControlOnScreen ? undefined : answerControl;
   const handleNext = () => {
     if (question.kind === 'wheel' && typeof value !== 'number') {
       onChange(question.default);
@@ -187,16 +206,30 @@ export function QuestionStepScreen({
               )}
             </View>
           ) : (
-            <ScrollView style={{ flex: 1, marginTop: 16 }} showsVerticalScrollIndicator={false}>
-              {question.kind === 'choice' && (
+            <ScrollView
+              style={{ flex: 1, marginTop: 16 }}
+              contentContainerStyle={
+                stretchAnswerControl
+                  ? { flexGrow: 1 }
+                  : inlineAnswerControl
+                    ? { flexGrow: 1, justifyContent: 'center' }
+                    : undefined
+              }
+              showsVerticalScrollIndicator={false}
+            >
+              {inlineAnswerControl ? (
+                stretchAnswerControl
+                  ? <View style={{ flex: 1, marginBottom: 20 }}>{inlineAnswerControl}</View>
+                  : inlineAnswerControl
+              ) : (!answerControl && question.kind === 'choice' && (
                 <ChoiceGrid
                   questionId={question.id}
                   options={question.options}
                   value={value as string}
                   onChange={onChange}
                 />
-              )}
-              {question.kind === 'choice-large' && (
+              ))}
+              {!answerControl && question.kind === 'choice-large' && (
                 <ChoiceList
                   questionId={question.id}
                   options={question.options}
@@ -204,7 +237,7 @@ export function QuestionStepScreen({
                   onChange={onChange}
                 />
               )}
-              {question.kind === 'multi' && (
+              {!answerControl && question.kind === 'multi' && (
                 <MultiList
                   questionId={question.id}
                   options={question.options}
@@ -214,7 +247,7 @@ export function QuestionStepScreen({
                   exclusiveOption={question.exclusiveOption}
                 />
               )}
-              {question.kind === 'multi-exact' && (
+              {!answerControl && question.kind === 'multi-exact' && (
                 <MultiList
                   questionId={question.id}
                   options={question.options}
@@ -223,7 +256,7 @@ export function QuestionStepScreen({
                   maxSelections={question.count}
                 />
               )}
-              {question.kind === 'compound-choice' && (
+              {!answerControl && question.kind === 'compound-choice' && (
                 <CompoundChoiceList
                   question={question}
                   value={(value as Record<string, string | null>) ?? {}}
@@ -242,11 +275,29 @@ export function QuestionStepScreen({
             </Text>
           ) : null}
 
-          <CtaButton onPress={handleNext} disabled={!canContinue} style={{ marginTop: 14 }}>
+          {answerFooter ? <View style={{ marginTop: 14 }}>{answerFooter}</View> : null}
+
+          <CtaButton onPress={handleNext} disabled={!canContinue} style={{ marginTop: answerFooter ? 10 : 14 }}>
             <CtaText>{ctaLabel ?? t('common:actions.continue')}</CtaText>
           </CtaButton>
         </View>
       </SafeAreaView>
+      {centerAnswerControlOnScreen && answerControl ? (
+        <View
+          pointerEvents="box-none"
+          style={{
+            position: 'absolute',
+            top: 0,
+            right: 0,
+            bottom: 0,
+            left: 0,
+            justifyContent: 'center',
+            paddingHorizontal: 24,
+          }}
+        >
+          {answerControl}
+        </View>
+      ) : null}
       <ProfessionalClearanceModal status={safetyBlock} onDismiss={() => setSafetyBlock(null)} />
     </View>
   );

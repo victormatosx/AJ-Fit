@@ -30,7 +30,7 @@ export function goalFamilyFor(goal: QuestionnaireAnswers['goal']): GoalFamily | 
   const normalized = normalizeGoal(goal);
   if (normalized === 'strength') return 'strength';
   if (normalized === 'conditioning') return 'conditioning';
-  if (['gain_muscle', 'lose_fat', 'body_composition', 'return_to_training'].includes(normalized ?? '')) {
+  if (['gain_muscle', 'lose_fat', 'health', 'body_composition', 'return_to_training'].includes(normalized ?? '')) {
     return 'hypertrophy_body_composition';
   }
   return null;
@@ -38,7 +38,6 @@ export function goalFamilyFor(goal: QuestionnaireAnswers['goal']): GoalFamily | 
 
 export function environmentFor(answers: QuestionnaireAnswers): TemplateEnvironment | null {
   if (answers.place === 'gym' || answers.place === 'home') return answers.place;
-  if (answers.place === 'both') return answers.primaryPlace;
   return null;
 }
 

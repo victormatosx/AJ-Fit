@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { defaultQuiz, type Quiz } from '../../state/AppState';
 import {
   cleanApplicableAnswers,
+  normalizeWeekdays,
   normalizeLoadedQuiz,
   questionnaireValidationErrors,
   trainingDaysValid,
@@ -48,17 +49,19 @@ describe('questionnaire schema and branching payload', () => {
     expect(questionnaireValidationErrors(quiz)).toEqual([]);
   });
 
-  it('never requires equipment for home/both — the question is no longer asked, so an empty answer must validate cleanly', () => {
+  it('never requires equipment for home — the question is no longer asked, so an empty answer must validate cleanly', () => {
     const home = standardQuiz({ place: 'home', equipment: [] });
     expect(questionnaireValidationErrors(home)).toEqual([]);
-    const both = standardQuiz({ place: 'both', primaryPlace: 'home', equipment: [] });
-    expect(questionnaireValidationErrors(both)).toEqual([]);
   });
 
-  it('requires a primary environment when place is both', () => {
-    const quiz = standardQuiz({ place: 'both', equipment: ['bodyweight'] });
-    expect(questionnaireValidationErrors(quiz)).toContain('primary_place_required');
-    expect(questionnaireValidationErrors({ ...quiz, primaryPlace: 'gym' })).not.toContain('primary_place_required');
+  it('normalizes legacy both + primaryPlace into a canonical place and drops the removed field', () => {
+    const loaded = normalizeLoadedQuiz({
+      ...standardQuiz(),
+      place: 'both',
+      primaryPlace: 'home',
+    });
+    expect(loaded.place).toBe('home');
+    expect(Object.prototype.hasOwnProperty.call(loaded, 'primaryPlace')).toBe(false);
   });
 
   it('requires only musculoskeletal regions and removes them when the router branch is deselected', () => {
@@ -219,13 +222,11 @@ describe('trainingDays (Schedule Engine input)', () => {
   });
 
   it('normalizes selection order to canonical chronological order, not click order', () => {
-    const next = updateQuizAnswer(standardQuiz({ days: 3 }), 'trainingDays', ['FRI', 'MON', 'WED']);
-    expect(next.trainingDays).toEqual(['MON', 'WED', 'FRI']);
+    expect(normalizeWeekdays(['FRI', 'MON', 'WED'])).toEqual(['MON', 'WED', 'FRI']);
   });
 
   it('dedupes repeated weekdays', () => {
-    const next = updateQuizAnswer(standardQuiz({ days: 2 }), 'trainingDays', ['MON', 'MON', 'TUE']);
-    expect(next.trainingDays).toEqual(['MON', 'TUE']);
+    expect(normalizeWeekdays(['MON', 'MON', 'TUE'])).toEqual(['MON', 'TUE']);
   });
 
   it('auto-fills all seven weekdays for days === 7 and needs no explicit answer', () => {

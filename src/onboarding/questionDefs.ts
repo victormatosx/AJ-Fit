@@ -8,18 +8,6 @@ import { MAX_MUSCLE_FOCUS, type OnboardingStepId } from './steps';
  * here is user-visible text.
  */
 export const FUNNEL_QUESTIONS: Partial<Record<OnboardingStepId, Question>> = {
-  motivation: {
-    id: 'motivation',
-    kind: 'choice-large',
-    options: [
-      { v: 'muscle', icon: 'dumbbell' },
-      { v: 'leanDown', icon: 'flame' },
-      { v: 'strength', icon: 'bolt' },
-      { v: 'physique', icon: 'target' },
-      { v: 'comeback', icon: 'heart' },
-      { v: 'consistency', icon: 'chart' },
-    ],
-  },
   goal: {
     id: 'goal',
     kind: 'choice-large',
@@ -28,15 +16,13 @@ export const FUNNEL_QUESTIONS: Partial<Record<OnboardingStepId, Question>> = {
       { v: 'lose_fat', icon: 'flame' },
       { v: 'strength', icon: 'bolt' },
       { v: 'conditioning', icon: 'heart' },
-      { v: 'body_composition', icon: 'target' },
-      { v: 'return_to_training', icon: 'heart' },
+      { v: 'health', icon: 'target' },
     ],
   },
   level: {
     id: 'level',
     kind: 'choice-large',
     options: [
-      { v: 'never_or_starting' },
       { v: 'beginner' },
       { v: 'intermediate' },
       { v: 'advanced' },
@@ -51,32 +37,9 @@ export const FUNNEL_QUESTIONS: Partial<Record<OnboardingStepId, Question>> = {
     kind: 'choice',
     options: [{ v: '2' }, { v: '3' }, { v: '4' }, { v: '5' }, { v: '6' }, { v: '7' }],
   },
-  scheduleMode: {
-    id: 'scheduleMode',
-    kind: 'choice-large',
-    options: [{ v: 'fixed', icon: 'calendar' }, { v: 'flexible', icon: 'bolt' }],
-  },
-  // `count` is a placeholder — OnboardingFunnelScreen overrides it per-render
-  // from `quiz.days` before passing this to QuestionStepScreen, the same
-  // pattern used for `specialConditions`' sex-based option filtering. Skipped
-  // for fixed days === 7 and for every flexible plan (see `isApplicableStep`).
-  trainingDays: {
-    id: 'trainingDays',
-    kind: 'multi-exact',
-    count: 2,
-    options: [
-      { v: 'MON' },
-      { v: 'TUE' },
-      { v: 'WED' },
-      { v: 'THU' },
-      { v: 'FRI' },
-      { v: 'SAT' },
-      { v: 'SUN' },
-    ],
-  },
   duration: {
     id: 'duration',
-    kind: 'choice',
+    kind: 'choice-large',
     options: [{ v: '30' }, { v: '45' }, { v: '60' }, { v: '90' }],
   },
   place: {
@@ -85,13 +48,7 @@ export const FUNNEL_QUESTIONS: Partial<Record<OnboardingStepId, Question>> = {
     options: [
       { v: 'gym', icon: 'dumbbell' },
       { v: 'home', icon: 'heart' },
-      { v: 'both', icon: 'bolt' },
     ],
-  },
-  primaryPlace: {
-    id: 'primaryPlace',
-    kind: 'choice-large',
-    options: [{ v: 'gym', icon: 'dumbbell' }, { v: 'home', icon: 'heart' }],
   },
   equipment: {
     id: 'equipment',

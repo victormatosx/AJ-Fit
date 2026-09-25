@@ -1890,9 +1890,9 @@ export async function initializeWorkoutProgramV127Handler(
   // Same Admin-SDK-write-safe `undefined`-stripping `generateAuthoritativePlan`
   // already applies to the plan itself (its own doc comment) — built
   // in-memory here (never round-tripped through JSON-over-the-wire like the
-  // legacy client-supplied snapshot was), so an absent optional answer
-  // (e.g. `primaryPlace`) surfaces as a literal `undefined`, which the
-  // Admin SDK rejects outright on write.
+  // legacy client-supplied snapshot was), so any absent optional answer
+  // surfaces as a literal `undefined`, which the Admin SDK rejects outright
+  // on write.
   const prescriptionInputSnapshot = JSON.parse(JSON.stringify(buildPrescriptionInputSnapshot({
     answers: answers as unknown as Parameters<typeof buildPrescriptionInputSnapshot>[0]['answers'],
     currentTrainingLevel,

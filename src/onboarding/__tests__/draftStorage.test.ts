@@ -65,6 +65,49 @@ describe('missing/corrupted/future-versioned draft', () => {
     }
   });
 
+  it('moves a draft paused on the removed motivation step to goal and drops its answer', async () => {
+    localStore.set(ONBOARDING_DRAFT_STORAGE_KEY, JSON.stringify({
+      version: 1,
+      currentStepId: 'motivation',
+      answers: { motivation: 'strength' },
+    }));
+    const restored = await readOnboardingDraft();
+    expect(restored?.currentStepId).toBe('goal');
+    expect(Object.prototype.hasOwnProperty.call(draftToQuiz(restored!), 'motivation')).toBe(false);
+  });
+
+  it('moves a draft paused on primaryPlace to place and folds its legacy answer into place', async () => {
+    localStore.set(ONBOARDING_DRAFT_STORAGE_KEY, JSON.stringify({
+      version: 1,
+      currentStepId: 'primaryPlace',
+      answers: { place: 'both', primaryPlace: 'home' },
+    }));
+    const restored = await readOnboardingDraft();
+    expect(restored?.currentStepId).toBe('place');
+    const quiz = draftToQuiz(restored!);
+    expect(quiz.place).toBe('home');
+    expect(Object.prototype.hasOwnProperty.call(quiz, 'primaryPlace')).toBe(false);
+  });
+
+  it.each(['scheduleMode', 'trainingDays'])('moves a draft paused on removed %s to the unified days step', async (legacyStep) => {
+    localStore.set(ONBOARDING_DRAFT_STORAGE_KEY, JSON.stringify({
+      version: 1,
+      currentStepId: legacyStep,
+      answers: {
+        days: 3,
+        scheduleMode: 'fixed',
+        trainingDays: ['MON', 'WED', 'FRI'],
+      },
+    }));
+    const restored = await readOnboardingDraft();
+    expect(restored?.currentStepId).toBe('days');
+    expect(draftToQuiz(restored!)).toMatchObject({
+      days: 3,
+      scheduleMode: 'fixed',
+      trainingDays: ['MON', 'WED', 'FRI'],
+    });
+  });
+
   it('returns null when nothing is stored', async () => {
     await expect(readOnboardingDraft()).resolves.toBeNull();
   });

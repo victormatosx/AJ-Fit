@@ -28,7 +28,7 @@
   },
   "birthDate": {
     "title": "Quando você nasceu?",
-    "sub": "Afeta intensidade e descanso — sua idade é recalculada sempre a partir daqui.",
+    "sub": "Afeta intensidade e descanso. Sua idade é recalculada sempre a partir daqui.",
     "age_one": "{{count}} ano",
     "age_other": "{{count}} anos",
     "minimumAge": "O AJ Fit é exclusivo para pessoas com 18 anos ou mais."
@@ -44,17 +44,6 @@
     "sub": "Base do cálculo de carga inicial.",
     "unit": "kg"
   },
-  "motivation": {
-    "title": "O que mais te trouxe até aqui?",
-    "options": {
-      "muscle": { "label": "Quero ganhar massa muscular", "description": "Construir músculo" },
-      "leanDown": { "label": "Quero emagrecer e definir", "description": "Perder gordura e definir" },
-      "strength": { "label": "Quero ficar mais forte", "description": "Ganhar força" },
-      "physique": { "label": "Quero melhorar meu físico", "description": "Evoluir a estética geral" },
-      "comeback": { "label": "Quero voltar a treinar", "description": "Retomar o hábito" },
-      "consistency": { "label": "Quero parar de treinar sem saber se estou evoluindo", "description": "Ter clareza da evolução" }
-    }
-  },
   "goal": {
     "title": "Qual é seu principal objetivo?",
     "sub": "Isso define a família de objetivo do seu plano.",
@@ -63,6 +52,7 @@
       "lose_fat": { "label": "Perder gordura / emagrecer", "description": "Reduzir gordura corporal" },
       "strength": { "label": "Aumentar minha força", "description": "Evoluir a capacidade de produzir força" },
       "conditioning": { "label": "Melhorar meu condicionamento físico", "description": "Ganhar resistência e preparo físico" },
+      "health": { "label": "Melhorar minha saúde", "description": "Priorizar saúde, bem-estar e qualidade de vida" },
       "body_composition": { "label": "Melhorar definição/composição corporal", "description": "Aprimorar a composição corporal" },
       "return_to_training": { "label": "Voltar a treinar depois de um período parado", "description": "Retomar com uma progressão adequada" },
       "hyper": { "label": "Hipertrofia", "description": "Ganhar massa muscular" },
@@ -73,13 +63,13 @@
     }
   },
   "level": {
-    "title": "Qual é sua experiência com musculação/treino de força?",
+    "title": "Qual é seu nível de experiência na musculação?",
     "sub": "A experiência será usada para adaptar o plano.",
     "options": {
-      "never_or_starting": { "label": "Nunca treinei ou estou começando agora", "description": "Primeiro contato ou início recente" },
-      "beginner": { "label": "Já treinei, mas ainda sou iniciante", "description": "Ainda estou consolidando os fundamentos" },
-      "intermediate": { "label": "Treino regularmente há algum tempo", "description": "Já tenho consistência e familiaridade" },
-      "advanced": { "label": "Sou experiente e domino os principais exercícios", "description": "Tenho domínio técnico e experiência" },
+      "never_or_starting": { "label": "Iniciante", "description": "Estou começando ou ainda tenho pouca experiência" },
+      "beginner": { "label": "Iniciante", "description": "Estou começando ou ainda tenho pouca experiência" },
+      "intermediate": { "label": "Intermediário", "description": "Treino regularmente e conheço os principais exercícios" },
+      "advanced": { "label": "Avançado", "description": "Tenho bastante experiência e domínio dos principais exercícios" },
       "beg": { "label": "Iniciante", "description": "Menos de 6 meses" },
       "int": { "label": "Intermediário", "description": "6 meses a 2 anos" },
       "adv": { "label": "Avançado", "description": "Mais de 2 anos" },
@@ -87,9 +77,19 @@
     }
   },
   "days": {
-    "title": "Quantos dias por semana você realmente consegue treinar?",
-    "sub": "Considere sua disponibilidade real.",
+    "title": "Quais dias você quer treinar?",
+    "sub": "Selecione seus dias fixos ou escolha treinar de forma livre.",
     "unit": "dias/sem",
+    "fixedDaysAccessibilityLabel": "Dias fixos da semana",
+    "selectedCount_one": "{{count}} dia selecionado",
+    "selectedCount_other": "{{count}} dias selecionados",
+    "minimumSelectionHint": "Selecione pelo menos 2 dias.",
+    "flexible": {
+      "label": "Quero treinar de forma livre"
+    },
+    "fixedModeLink": "Quero escolher os dias da semana",
+    "flexibleFrequency": "Quantas vezes por semana?",
+    "frequencyAccessibilityLabel": "{{count}} treinos por semana",
     "options": {
       "2": { "label": "2 dias", "short": "2" },
       "3": { "label": "3 dias", "short": "3" },
@@ -121,32 +121,24 @@
     }
   },
   "duration": {
-    "title": "Quanto tempo você tem por treino?",
+    "title": "Quanto tempo você quer treinar por dia?",
     "options": {
-      "30": { "label": "Até 30 min", "short": "30" },
-      "45": { "label": "Cerca de 45 min", "short": "45" },
-      "60": { "label": "Cerca de 60 min", "short": "60" },
-      "90": { "label": "75–90+ min", "short": "90" }
+      "30": { "label": "Até 30 minutos", "short": "30" },
+      "45": { "label": "45 minutos", "short": "45" },
+      "60": { "label": "60 minutos", "short": "60" },
+      "90": { "label": "+60 minutos", "short": "90" }
     }
   },
   "place": {
-    "title": "Onde você pretende fazer a maior parte dos seus treinos?",
-    "sub": "O treino usa só o que você tem.",
+    "title": "Onde você treina?",
     "options": {
       "gym": {
         "label": "Academia",
-        "short": "GYM",
-        "description": "Acesso completo a equipamentos — barras, máquinas, polias."
+        "short": "GYM"
       },
       "home": {
         "label": "Casa",
-        "short": "CASA",
-        "description": "Peso do corpo e o que você tiver disponível em casa."
-      },
-      "both": {
-        "label": "Vou alternar entre academia e casa",
-        "short": "2X",
-        "description": "Você alterna entre dias na academia e treinos em casa."
+        "short": "CASA"
       }
     }
   },
@@ -251,13 +243,6 @@
       "elbow": "Cotovelo",
       "ankle_foot": "Tornozelo/pé",
       "other": "Outra"
-    }
-  },
-  "primaryPlace": {
-    "title": "Onde você prefere que seu plano principal seja montado?",
-    "options": {
-      "gym": { "label": "Academia", "description": "Usar a academia como ambiente principal" },
-      "home": { "label": "Casa", "description": "Usar sua estrutura de casa como ambiente principal" }
     }
   },
   "specialConditions": {
@@ -396,8 +381,24 @@
   "postSurgicalRegion": { "title": "Qual região foi operada?", "options": { "knee": { "label": "Joelho", "description": "Região do joelho" }, "hip": { "label": "Quadril", "description": "Região do quadril" }, "back": { "label": "Coluna ou costas", "description": "Região da coluna" }, "shoulder": { "label": "Ombro", "description": "Região do ombro" }, "elbow": { "label": "Cotovelo", "description": "Região do cotovelo" }, "wrist": { "label": "Punho ou mão", "description": "Região do punho ou mão" }, "ankle_foot": { "label": "Tornozelo ou pé", "description": "Região do tornozelo ou pé" }, "abdomen": { "label": "Abdômen", "description": "Região abdominal" }, "chest": { "label": "Tórax", "description": "Região do tórax" }, "other": { "label": "Outra região", "description": "Outra região do corpo" } } },
   "medicalRestrictionDetails": { "title": "Essa restrição foi indicada por um profissional para a prática de exercícios?", "options": { "yes": { "label": "Sim", "short": "SIM" }, "no": { "label": "Não", "short": "NÃO" }, "unsure": { "label": "Não tenho certeza", "short": "?" } } },
   "muscleFocus": {
-    "title": "Algum grupo muscular para priorizar?",
-    "sub": "Escolha até 2 — isso ajuda a direcionar seu treino.",
+    "title": "Músculos para priorizar",
+    "sub": "Clique para selecionar os músculos que você quer priorizar, ou clique em Continuar para seguir sem priorizar.",
+    "selection": "Músculos selecionados",
+    "front": "Frente",
+    "back": "Costas",
+    "noneSelected": "Nenhum músculo selecionado",
+    "groups": {
+      "chest": "Peitoral",
+      "back": "Costas",
+      "shoulders": "Ombros",
+      "biceps": "Bíceps",
+      "triceps": "Tríceps",
+      "forearms": "Antebraço",
+      "glutes": "Glúteos",
+      "quads": "Quadríceps",
+      "hamstrings": "Posteriores",
+      "calves": "Panturrilhas"
+    },
     "options": {
       "chest": "Peitoral",
       "back": "Costas",

@@ -191,15 +191,14 @@ describe('Prescription Engine + Limitation Resolver V1', () => {
   });
 
   it.each([
-    ['gym', { place: 'gym', primaryPlace: null, equipment: [] }],
-    ['home', { place: 'home', primaryPlace: null, equipment: ['bodyweight'] }],
-    ['both→home', { place: 'both', primaryPlace: 'home', equipment: ['bodyweight'] }],
+    ['gym', { place: 'gym', equipment: [] }],
+    ['home', { place: 'home', equipment: ['bodyweight'] }],
   ] satisfies Array<[string, Partial<QuestionnaireAnswers>]>)('keeps the final adaptation executable in %s', (_label, environment) => {
     const answers = limitationAnswers(environment);
     const result = generateSingle(answers);
     expect(result.status).toBe('SUCCESS');
     if (result.status === 'SUCCESS') {
-      expect(result.plan.environment).toBe(environment.place === 'both' ? 'home' : environment.place);
+      expect(result.plan.environment).toBe(environment.place);
       expect(result.plan.sessions.every((session) => session.exercises[0].exerciseId === 'wall-push-up')).toBe(true);
     }
   });

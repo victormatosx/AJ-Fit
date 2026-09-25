@@ -9,10 +9,10 @@ import type { SafetyDecision } from '../types';
 
 const CLEAR_SAFETY: SafetyDecision = { status: 'CLEAR', reasons: [], requiredModifierIds: [], protectedConstraints: [] };
 
-function generate(equipment: string[], place: 'home' | 'both' = 'home') {
+function generate(equipment: string[]) {
   const answers = completeAnswers({
     sex: 'm', goal: 'gain_muscle', level: 'never_or_starting', days: 7,
-    place, primaryPlace: place === 'both' ? 'home' : null, equipment, specialConditions: ['none'],
+    place: 'home', equipment, specialConditions: ['none'],
   });
   const selection = selectTemplate(answers);
   if (selection.status !== 'SELECTED') return { selectionStatus: selection.status } as const;
@@ -43,18 +43,6 @@ describe('regression: equipment "other" must never force INVALID_CONFIGURATION o
       expect(withOther.templateId).toBe(withoutOther.templateId);
       expect(JSON.stringify(withOther.result.plan.sessions)).toBe(JSON.stringify(withoutOther.result.plan.sessions));
       expect(withOther.result.plan.trace.unresolvedModifiers).toEqual([]);
-    }
-  });
-
-  it('(C) both + valid equipment + "other" has the same property as home', () => {
-    const fullEquipment = ['bodyweight', 'dumbbells', 'bands', 'bench_or_box', 'barbell'];
-    const withoutOther = generate(fullEquipment, 'both');
-    const withOther = generate([...fullEquipment, 'other'], 'both');
-
-    expect(withoutOther.result?.status).toBe('SUCCESS');
-    expect(withOther.result?.status).toBe('SUCCESS');
-    if (withoutOther.result?.status === 'SUCCESS' && withOther.result?.status === 'SUCCESS') {
-      expect(JSON.stringify(withOther.result.plan.sessions)).toBe(JSON.stringify(withoutOther.result.plan.sessions));
     }
   });
 
@@ -90,7 +78,7 @@ describe('regression: equipment "other" must never force INVALID_CONFIGURATION o
   });
 
   it('resolveModifiers never emits an "equipment:other_unmapped" modifier anymore, for any place/equipment combination', () => {
-    for (const place of ['home', 'both', 'gym'] as const) {
+    for (const place of ['home', 'gym'] as const) {
       for (const equipment of [['other'], ['bodyweight', 'other'], ['other', 'none']]) {
         const answers = completeAnswers({ place, equipment });
         const modifiers = resolveModifiers(answers, CLEAR_SAFETY);

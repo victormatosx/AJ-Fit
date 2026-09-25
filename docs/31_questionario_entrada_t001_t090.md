@@ -76,14 +76,12 @@ condições podem coexistir. `limits` aparece somente no ramo
 | sexo | `sex` | compatibilidade de população | selector | comum |
 | nascimento | `birthDate` | idade derivada, nunca fragilidade automática | context | comum |
 | altura/peso | `height`, `weight` | contexto físico | context | comum |
-| motivação | `motivation` | contexto de onboarding | funnel-only | comum anônimo |
 | objetivo | `goal` | família/base futura | selector | comum |
 | experiência | `level` | complexidade/dose futura | modifier P4 | comum |
 | dias | `days` | frequência/base futura | selector | comum |
 | duração | `duration` | orçamento temporal | modifier P5 | comum |
 | local | `place` | ambiente base | selector | comum |
-| ambiente principal | `primaryPlace` | resolver `both` | selector | `place=both` |
-| equipamentos | `equipment[]` | viabilidade | modifier P3 | `home/both` |
+| equipamentos | `equipment[]` | viabilidade | modifier P3 | `home` |
 | prioridade muscular | `muscleFocus[]` | ênfase, máximo 2 | preference P7 | comum |
 | roteador de saúde | `specialConditions[]` | ativar ramos explícitos | router | comum |
 | região limitada | `limits[]` | constraints de movimento; ativa adaptação automaticamente | safety/modifier P0 | musculoesquelética |
@@ -171,7 +169,7 @@ aproximados:
 | `deliveryDate` no ramo pós-parto | derivar tempo sem inferir recuperação | `APPROVED_NOT_IMPLEMENTED` | momento em DR-007 |
 | pergunta explícita de reavaliação pós-parto | informar novo safety/lifecycle gate | `APPROVED_NOT_IMPLEMENTED` | texto/opções e saída em DR-020/DR-008 |
 
-`trainingDays` (dias da semana preferidos após `days`) deixou de ser uma
+`trainingDays` (dias da semana preferidos coletados junto com `days`) deixou de ser uma
 extensão futura: está `IMPLEMENTED` como entrada do Schedule Engine (DR-017
 `RESOLVED_V1`, `workout-lifecycle/03_SCHEDULE_ENGINE.md`). Campo persistido:
 
@@ -179,16 +177,18 @@ extensão futura: está `IMPLEMENTED` como entrada do Schedule Engine (DR-017
 trainingDays: ('MON'|'TUE'|'WED'|'THU'|'FRI'|'SAT'|'SUN')[] | null;
 ```
 
-Para frequência de 2 a 6, a pergunta `trainingDays` exige exatamente a
-quantidade declarada em `days`, sem duplicatas; para 7, a pergunta é pulada e
-os sete IDs são preenchidos automaticamente. Valores são sempre normalizados
-para ordem cronológica canônica (nunca ordem de clique) e são independentes
-de idioma. Questionários antigos sem este campo carregam `null` — o Schedule
-Engine trata isso como `SCHEDULE_SETUP_REQUIRED`, nunca como uma preferência
-inventada. Essa preferência não muda a identidade das sessões A/B/C e não
-pertence ao Selection Engine; `trainingDaysValid()` é um gate próprio do
-Schedule Engine, deliberadamente fora de `questionnaireValidationErrors` — a
-ausência de `trainingDays` nunca bloqueia a geração da prescrição.
+Uma única tela semanal grava os três campos existentes. No modo fixo, `days`
+é derivado da quantidade selecionada e `trainingDays` contém exatamente esses
+dias, sem duplicatas. No modo livre, a frequência de 2 a 7 continua sendo
+coletada em `days`, `scheduleMode` recebe `flexible` e `trainingDays` fica
+`null`. Valores fixos são sempre normalizados para ordem cronológica canônica
+(nunca ordem de clique) e são independentes de idioma. Questionários antigos
+sem `trainingDays` continuam carregando `null` — o Schedule Engine trata isso
+como `SCHEDULE_SETUP_REQUIRED`, nunca como uma preferência inventada. Essa
+preferência não muda a identidade das sessões A/B/C e não pertence ao
+Selection Engine; `trainingDaysValid()` é um gate próprio do Schedule Engine,
+deliberadamente fora de `questionnaireValidationErrors` — a ausência de
+`trainingDays` nunca bloqueia a geração da prescrição.
 
 `deliveryDate` é o nome proposto para não colidir com `birthDate`, que representa
 o nascimento da usuária. A data do parto e qualquer autodeclaração de prontidão são contexto. Elas não

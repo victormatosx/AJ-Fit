@@ -186,14 +186,15 @@ export function ChoiceList({
   onChange: (v: string) => void;
 }) {
   const { theme } = useTheme();
-  const { t } = useTranslation('quiz');
+  const { t, i18n } = useTranslation('quiz');
   const tLoose = t as unknown as LooseT;
   return (
     <View style={{ gap: 10 }}>
       {options.map((o) => {
         const sel = value === o.v;
         const label = tLoose(`${String(questionId)}.options.${o.v}.label`);
-        const description = tLoose(`${String(questionId)}.options.${o.v}.description`);
+        const descriptionKey = `quiz:${String(questionId)}.options.${o.v}.description`;
+        const description = i18n.exists(descriptionKey) ? tLoose(descriptionKey) : null;
         return (
           <Pressable
             key={o.v}
@@ -225,9 +226,11 @@ export function ChoiceList({
             {sel && <HudCorners />}
             <View style={{ flex: 1 }}>
               <Text style={{ fontFamily: theme.fonts.uiBold, fontSize: 16, color: theme.colors.choiceText }}>{label}</Text>
-              <Text style={{ fontFamily: theme.fonts.ui, fontSize: 13, color: theme.colors.textMuted, marginTop: 2 }}>
-                {description}
-              </Text>
+              {description ? (
+                <Text style={{ fontFamily: theme.fonts.ui, fontSize: 13, color: theme.colors.textMuted, marginTop: 2 }}>
+                  {description}
+                </Text>
+              ) : null}
             </View>
             {sel && <Icon name="check" size={20} color={theme.colors.primaryEmphasis} stroke={2.8} />}
           </Pressable>

@@ -144,7 +144,7 @@ function normalizeActiveRegions(regions: readonly string[] | undefined): Musculo
 
 /**
  * Pure, deterministic. Never receives `QuestionnaireAnswers` (or any goal/
- * duration/equipment-inventory/sex/days/schedule/motivation/experience-
+ * duration/equipment-inventory/sex/days/schedule/experience-
  * shaped input) — there is structurally nothing for such a value to
  * influence. Never selects or re-selects a template; the only template it
  * can ever return sessions for is `baseTemplate` itself.

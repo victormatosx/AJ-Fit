@@ -84,13 +84,12 @@ function reorderSessionExercises(
  * already treated as ONE merged bucket — Fase 6 §7 requires auditing
  * whether the questionnaire's `muscleFocus: string[]` carries explicit
  * rank semantics before implementing a ranked (priority-1-then-2) order.
- * It does not: `MultiList` (`components/onboarding/QuestionRenderer.tsx`)
- * is a plain toggle grid — selecting/deselecting reorders nothing visually,
- * shows no "1st"/"2nd" badge, and `exclusiveNone`
- * (`lib/questionnaireSchema.ts`) only deduplicates, it does not assign
- * rank. Treating the up-to-2 selections as a single combined "prioritized"
- * set (Fase 6 §7's documented fallback) is therefore the only
- * non-fabricated reading of what is actually stored.
+ * It does not: `MuscleFocusBodyMapPicker` is a plain anatomical toggle UI —
+ * selecting/deselecting assigns no rank and shows no "1st"/"2nd" badge;
+ * `exclusiveNone` (`lib/questionnaireSchema.ts`) only deduplicates legacy
+ * answers, it does not assign rank. Treating the up-to-2 selections as a
+ * single combined "prioritized" set (Fase 6 §7's documented fallback) is
+ * therefore the only non-fabricated reading of what is actually stored.
  */
 export function applyMusclePriorityV127(
   sessions: readonly FinalWorkoutSession[],

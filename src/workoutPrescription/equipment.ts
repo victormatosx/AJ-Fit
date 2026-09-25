@@ -1,4 +1,5 @@
 import type { ExerciseSeedInput } from '../types/exercise';
+import { PRESCRIPTION_VERSIONS_V127 } from './types';
 import type { QuestionnaireAnswers, TemplateEnvironment } from './types';
 
 const EQUIPMENT_MAP: Record<string, ExerciseSeedInput['equipment']> = {
@@ -50,6 +51,40 @@ export function equipmentContextFor(
  */
 export function unrestrictedEquipmentContext(environment: TemplateEnvironment): EquipmentContext {
   return { environment, availableEquipment: new Set<string>(ALL_HOME_ANSWERABLE_EQUIPMENT) };
+}
+
+/**
+ * Manual-substitution equipment context (exercise-substitution architecture
+ * audit, equipment-inventory follow-up): manual substitution used to always
+ * call `equipmentContextFor` directly, so a v1.27 user in `home` — for whom
+ * the (removed) equipment-inventory question is never shown, leaving
+ * `answers.equipment` at its `[]` draft default — silently collapsed to a
+ * `{'bodyweight'}`-only context, rejecting every dumbbell/band/bench
+ * candidate the v1.27 automatic (limitation-driven) substitution path and
+ * the v1.27 cycle-evolution path (`authorizeMutation.ts`'s
+ * `generateCanonicalCycleEvolution`) already treat as available via
+ * `unrestrictedEquipmentContext`.
+ *
+ * This mirrors that same version-gated rule for manual substitution: a
+ * v1.27 program's `templateSourceVersion` routes to
+ * `unrestrictedEquipmentContext` (never gated on `answers.equipment`,
+ * matching every other v1.27 lifecycle stage), while a pre-v1.27
+ * (`templateSourceVersion !== '1.27.0'`) program keeps the legacy
+ * `equipmentContextFor` behavior unchanged, so already-persisted v2
+ * `answers.equipment` answers keep meaning what they always meant. The
+ * decision is the ACTIVE PROGRAM's own authoritative version — server-read
+ * Firestore data on the backend, the loaded program snapshot on the client
+ * — never a default and never the client-submitted `answers.equipment`
+ * itself.
+ */
+export function manualSubstitutionEquipmentContext(
+  answers: QuestionnaireAnswers,
+  environment: TemplateEnvironment,
+  templateSourceVersion: unknown,
+): EquipmentContext {
+  return templateSourceVersion === PRESCRIPTION_VERSIONS_V127.templateLibrary
+    ? unrestrictedEquipmentContext(environment)
+    : equipmentContextFor(answers, environment);
 }
 
 export function isExerciseExecutable(

@@ -164,7 +164,6 @@ describe('composeTemplateV127 — metamorphic: answers-shaped context has zero e
     completeAnswers({ sex: 'f' }),
     completeAnswers({ days: 7 }),
     completeAnswers({ scheduleMode: 'flexible' }),
-    completeAnswers({ motivation: 'aesthetic' }),
     completeAnswers({ muscleFocus: ['chest', 'back'] }),
     completeAnswers({ limits: ['knee'] }),
   ];

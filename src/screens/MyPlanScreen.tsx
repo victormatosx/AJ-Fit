@@ -85,7 +85,7 @@ export function MyPlanScreen({
       user.uid,
       (preferences) => { if (!cancelled) setPermanentPreferences(preferences); },
     );
-    loadManualSubstitutionUserContext(user.uid, plan.environment)
+    loadManualSubstitutionUserContext(user.uid, plan.environment, plan.templateSourceVersion)
       .then((context) => { if (!cancelled) setEffectiveViewContext(context); })
       .catch((error) => {
         if (cancelled) return;

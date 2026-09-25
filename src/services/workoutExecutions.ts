@@ -112,7 +112,7 @@ async function resolveExercisesForNewExecution(
   try {
     userContext = prepared?.manualSubstitutionContextStatus === 'ready'
       ? prepared.manualSubstitutionContext
-      : await loadManualSubstitutionUserContext(uid, program.environment);
+      : await loadManualSubstitutionUserContext(uid, program.environment, program.templateSourceVersion);
   } catch (error) {
     logWarn('workout_execution', 'preferences_user_context_failed_fail_open', {
       durationMs: Date.now() - userContextStartedAtMs,

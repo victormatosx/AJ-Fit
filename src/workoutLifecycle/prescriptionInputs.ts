@@ -1,4 +1,5 @@
 import { defaultQuiz, type Quiz } from '../state/AppState';
+import { normalizeLoadedQuiz } from '../lib/questionnaireSchema';
 import {
   PRESCRIPTION_INPUT_SNAPSHOT_SCHEMA_VERSION,
   type CurrentTrainingLevel,
@@ -17,7 +18,7 @@ const SOURCES = new Set<PrescriptionInputSnapshotSource>([
 
 const INPUT_KEYS: readonly (keyof EffectivePrescriptionInputs)[] = [
   'sex', 'goal', 'level', 'limits', 'duration', 'days', 'scheduleMode', 'trainingDays',
-  'place', 'primaryPlace', 'equipment', 'style', 'muscleFocus',
+  'place', 'equipment', 'style', 'muscleFocus',
   'specialConditions', 'pregnancyScreening', 'postpartumScreening',
   'functionalScreening', 'lipedemaScreening', 'dizzinessScreening',
   'postSurgicalScreening', 'medicalRestrictionScreening',
@@ -68,7 +69,6 @@ export function effectivePrescriptionInputsFromAnswers(
     scheduleMode: answers.scheduleMode ?? 'fixed',
     trainingDays: answers.trainingDays ? [...answers.trainingDays] : null,
     place: answers.place,
-    primaryPlace: answers.primaryPlace,
     equipment: [...answers.equipment],
     style: [...answers.style],
     muscleFocus: [...answers.muscleFocus],
@@ -103,9 +103,10 @@ export function buildPrescriptionInputSnapshot(input: {
 }
 
 export function questionnaireAnswersFromPrescriptionInputs(inputs: EffectivePrescriptionInputs): Quiz {
-  return {
+  const legacyInputs = inputs as EffectivePrescriptionInputs & { place: Quiz['place'] | 'both'; primaryPlace?: unknown };
+  return normalizeLoadedQuiz({
     ...defaultQuiz,
-    ...inputs,
+    ...legacyInputs,
     scheduleMode: inputs.scheduleMode ?? 'fixed',
     limits: [...inputs.limits],
     trainingDays: inputs.trainingDays ? [...inputs.trainingDays] : null,
@@ -120,16 +121,19 @@ export function questionnaireAnswersFromPrescriptionInputs(inputs: EffectivePres
     dizzinessScreening: cloneNullableRecord(inputs.dizzinessScreening),
     postSurgicalScreening: cloneNullableRecord(inputs.postSurgicalScreening),
     medicalRestrictionScreening: cloneNullableRecord(inputs.medicalRestrictionScreening),
-  };
+  });
 }
 
 export function isPrescriptionInputSnapshot(value: unknown): value is PrescriptionInputSnapshot {
   if (!isRecord(value) || !isRecord(value.inputs)) return false;
   const keys = Object.keys(value.inputs).sort();
-  const legacyKeys = INPUT_KEYS.filter((key) => key !== 'scheduleMode');
-  const hasCurrentKeys = keys.length === INPUT_KEYS.length && INPUT_KEYS.every((key) => keys.includes(key));
-  const hasLegacyKeys = keys.length === legacyKeys.length && legacyKeys.every((key) => keys.includes(key));
-  if (!hasCurrentKeys && !hasLegacyKeys) return false;
+  const currentKeys = [...INPUT_KEYS];
+  const withoutScheduleMode = currentKeys.filter((key) => key !== 'scheduleMode');
+  const withLegacyPrimaryPlace = [...currentKeys, 'primaryPlace'];
+  const legacyWithoutScheduleMode = withLegacyPrimaryPlace.filter((key) => key !== 'scheduleMode');
+  const hasExactKeys = (expected: readonly string[]) =>
+    keys.length === expected.length && expected.every((key) => keys.includes(key));
+  if (![currentKeys, withoutScheduleMode, withLegacyPrimaryPlace, legacyWithoutScheduleMode].some(hasExactKeys)) return false;
   return typeof value.snapshotId === 'string' && value.snapshotId.startsWith('pis_')
     && value.schemaVersion === PRESCRIPTION_INPUT_SNAPSHOT_SCHEMA_VERSION
     && SOURCES.has(value.source as PrescriptionInputSnapshotSource)

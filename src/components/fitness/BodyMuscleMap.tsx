@@ -36,6 +36,12 @@ export interface BodyMuscleMapProps {
   secondaryOpacity?: number;
   baseColor?: string;
   outlineColor?: string;
+  /** Optional interaction layer. Existing read-only consumers omit it. */
+  onMusclePress?: (muscle: MuscleId) => void;
+  /** Limits which anatomical regions respond to touch. */
+  selectableMuscles?: readonly MuscleId[];
+  muscleAccessibilityLabel?: (muscle: MuscleId) => string;
+  gap?: number;
   style?: StyleProp<ViewStyle>;
 }
 
@@ -51,6 +57,9 @@ function DiagramView({
   secondaryOpacity,
   baseColor,
   outlineColor,
+  onMusclePress,
+  selectableSet,
+  muscleAccessibilityLabel,
 }: {
   diagram: MuscleMapDiagram;
   size: number;
@@ -60,6 +69,9 @@ function DiagramView({
   secondaryOpacity: number;
   baseColor: string;
   outlineColor: string;
+  onMusclePress?: (muscle: MuscleId) => void;
+  selectableSet: ReadonlySet<MuscleId> | null;
+  muscleAccessibilityLabel?: (muscle: MuscleId) => string;
 }) {
   const [, , vbWidth, vbHeight] = diagram.viewBox.split(' ');
   const height = (size * Number(vbHeight)) / Number(vbWidth);
@@ -71,11 +83,51 @@ function DiagramView({
       ))}
       {diagram.muscles.map((muscle, index) => {
         const muscleId = muscleForPartId(muscle.id);
+        const interactive = Boolean(
+          muscleId
+          && onMusclePress
+          && (!selectableSet || selectableSet.has(muscleId)),
+        );
+        if (!interactive || !muscleId) return null;
+        const key = muscle.id ?? `${muscle.group}-${muscle.side ?? 'center'}-${index}`;
+        return (
+          <Path
+            key={`hit-${key}`}
+            d={muscle.d}
+            fill="rgba(0,0,0,0.001)"
+            stroke="rgba(0,0,0,0.001)"
+            // Roughly 7 px at the onboarding map size. This makes thin
+            // anatomical paths easier to hit without widening their fill.
+            strokeWidth={48}
+            strokeLinejoin="round"
+            onPress={() => onMusclePress?.(muscleId)}
+          />
+        );
+      })}
+      {diagram.muscles.map((muscle, index) => {
+        const muscleId = muscleForPartId(muscle.id);
         const intensity = muscleId ? resolveMuscleIntensity(muscleId, primarySet, secondarySet) : 'inactive';
         const fill = intensity === 'inactive' ? baseColor : activeColor;
         const fillOpacity = intensity === 'primary' ? 1 : intensity === 'secondary' ? secondaryOpacity : 1;
         const key = muscle.id ?? `${muscle.group}-${muscle.side ?? 'center'}-${index}`;
-        return <Path key={key} d={muscle.d} fill={fill} fillOpacity={fillOpacity} stroke={outlineColor} strokeWidth={1} />;
+        const interactive = Boolean(
+          muscleId
+          && onMusclePress
+          && (!selectableSet || selectableSet.has(muscleId)),
+        );
+        return (
+          <Path
+            key={key}
+            d={muscle.d}
+            fill={fill}
+            fillOpacity={fillOpacity}
+            stroke={outlineColor}
+            strokeWidth={1}
+            accessible={interactive}
+            accessibilityLabel={interactive && muscleId ? muscleAccessibilityLabel?.(muscleId) : undefined}
+            onPress={interactive && muscleId ? () => onMusclePress?.(muscleId) : undefined}
+          />
+        );
       })}
     </Svg>
   );
@@ -90,6 +142,10 @@ export function BodyMuscleMap({
   secondaryOpacity = DEFAULT_SECONDARY_OPACITY,
   baseColor = 'rgba(255,255,255,0.14)',
   outlineColor = 'rgba(255,255,255,0.18)',
+  onMusclePress,
+  selectableMuscles,
+  muscleAccessibilityLabel,
+  gap = 6,
   style,
 }: BodyMuscleMapProps) {
   const primarySet = new Set(primaryMuscles);
@@ -97,6 +153,7 @@ export function BodyMuscleMap({
     (showSecondary ? secondaryMuscles : []).filter((muscle) => !primarySet.has(muscle)),
   );
   const clampedSecondaryOpacity = Math.min(Math.max(secondaryOpacity, 0), 0.9);
+  const selectableSet = selectableMuscles ? new Set(selectableMuscles) : null;
 
   const sharedProps = {
     primarySet,
@@ -106,10 +163,13 @@ export function BodyMuscleMap({
     secondaryOpacity: clampedSecondaryOpacity,
     baseColor,
     outlineColor,
+    onMusclePress,
+    selectableSet,
+    muscleAccessibilityLabel,
   };
 
   return (
-    <View style={[{ flexDirection: 'row', gap: 6 }, style]}>
+    <View style={[{ flexDirection: 'row', gap }, style]}>
       <DiagramView diagram={BODY_MUSCLE_MAP_MALE.front} {...sharedProps} />
       <DiagramView diagram={BODY_MUSCLE_MAP_MALE.back} {...sharedProps} />
     </View>

@@ -28,7 +28,7 @@
   },
   "birthDate": {
     "title": "When were you born?",
-    "sub": "Affects intensity and rest — your age is always recalculated from here.",
+    "sub": "Affects intensity and rest. Your age is always recalculated from here.",
     "age_one": "{{count}} year",
     "age_other": "{{count}} years",
     "minimumAge": "AJ Fit is only available to people aged 18 or older."
@@ -44,17 +44,6 @@
     "sub": "Base for the initial load calculation.",
     "unit": "kg"
   },
-  "motivation": {
-    "title": "What brought you here?",
-    "options": {
-      "muscle": { "label": "I want to build muscle", "description": "Build muscle mass" },
-      "leanDown": { "label": "I want to lose fat and get lean", "description": "Lose fat and get defined" },
-      "strength": { "label": "I want to get stronger", "description": "Gain strength" },
-      "physique": { "label": "I want to improve my physique", "description": "Improve overall aesthetics" },
-      "comeback": { "label": "I want to get back into training", "description": "Restart the habit" },
-      "consistency": { "label": "I want to stop training without knowing if I'm progressing", "description": "Get clarity on my progress" }
-    }
-  },
   "goal": {
     "title": "What is your primary goal?",
     "sub": "This defines your plan's goal family.",
@@ -63,6 +52,7 @@
       "lose_fat": { "label": "Lose fat / lose weight", "description": "Reduce body fat" },
       "strength": { "label": "Increase my strength", "description": "Improve force production" },
       "conditioning": { "label": "Improve my fitness", "description": "Build endurance and conditioning" },
+      "health": { "label": "Improve my health", "description": "Prioritize health, well-being, and quality of life" },
       "body_composition": { "label": "Improve definition/body composition", "description": "Improve overall body composition" },
       "return_to_training": { "label": "Return after time away from training", "description": "Resume with appropriate progression" },
       "hyper": { "label": "Hypertrophy", "description": "Build muscle mass" },
@@ -76,10 +66,10 @@
     "title": "What is your experience with strength training?",
     "sub": "Your experience will be used to adapt the plan.",
     "options": {
-      "never_or_starting": { "label": "I've never trained or I'm starting now", "description": "First contact or a very recent start" },
-      "beginner": { "label": "I've trained, but I'm still a beginner", "description": "Still building the fundamentals" },
-      "intermediate": { "label": "I've trained regularly for some time", "description": "I have consistency and familiarity" },
-      "advanced": { "label": "I'm experienced and know the main exercises", "description": "I have technical proficiency and experience" },
+      "never_or_starting": { "label": "Beginner", "description": "I'm just starting or still have little experience" },
+      "beginner": { "label": "Beginner", "description": "I'm just starting or still have little experience" },
+      "intermediate": { "label": "Intermediate", "description": "I train regularly and know the main exercises" },
+      "advanced": { "label": "Advanced", "description": "I have plenty of experience and mastery of the main exercises" },
       "beg": { "label": "Beginner", "description": "Less than 6 months" },
       "int": { "label": "Intermediate", "description": "6 months to 2 years" },
       "adv": { "label": "Advanced", "description": "More than 2 years" },
@@ -87,9 +77,19 @@
     }
   },
   "days": {
-    "title": "How many days per week can you realistically train?",
-    "sub": "Consider your actual availability.",
+    "title": "Which days do you want to train?",
+    "sub": "Select your fixed days or choose to train freely.",
     "unit": "days/wk",
+    "fixedDaysAccessibilityLabel": "Fixed weekdays",
+    "selectedCount_one": "{{count}} day selected",
+    "selectedCount_other": "{{count}} days selected",
+    "minimumSelectionHint": "Select at least 2 days.",
+    "flexible": {
+      "label": "I want to train freely"
+    },
+    "fixedModeLink": "I want to choose the weekdays",
+    "flexibleFrequency": "How many times per week?",
+    "frequencyAccessibilityLabel": "{{count}} workouts per week",
     "options": {
       "2": { "label": "2 days", "short": "2" }, "3": { "label": "3 days", "short": "3" },
       "4": { "label": "4 days", "short": "4" }, "5": { "label": "5 days", "short": "5" },
@@ -118,32 +118,24 @@
     }
   },
   "duration": {
-    "title": "How much time do you have per workout?",
+    "title": "How long do you want to train each day?",
     "options": {
-      "30": { "label": "Up to 30 min", "short": "30" },
-      "45": { "label": "About 45 min", "short": "45" },
-      "60": { "label": "About 60 min", "short": "60" },
-      "90": { "label": "75–90+ min", "short": "90" }
+      "30": { "label": "Up to 30 minutes", "short": "30" },
+      "45": { "label": "45 minutes", "short": "45" },
+      "60": { "label": "60 minutes", "short": "60" },
+      "90": { "label": "More than 60 minutes", "short": "90" }
     }
   },
   "place": {
-    "title": "Where do you plan to do most of your workouts?",
-    "sub": "The workout uses only what you have.",
+    "title": "Where do you train?",
     "options": {
       "gym": {
         "label": "Gym",
-        "short": "GYM",
-        "description": "Full equipment access — barbells, machines, cables."
+        "short": "GYM"
       },
       "home": {
         "label": "Home",
-        "short": "HOME",
-        "description": "Bodyweight and whatever gear you've got at home."
-      },
-      "both": {
-        "label": "I'll alternate between gym and home",
-        "short": "2X",
-        "description": "You switch between gym days and home workouts."
+        "short": "HOME"
       }
     }
   },
@@ -244,13 +236,6 @@
       "elbow": "Elbow",
       "ankle_foot": "Ankle/foot",
       "other": "Other"
-    }
-  },
-  "primaryPlace": {
-    "title": "Where would you prefer your main plan to be based?",
-    "options": {
-      "gym": { "label": "Gym", "description": "Use the gym as the main environment" },
-      "home": { "label": "Home", "description": "Use your home setup as the main environment" }
     }
   },
   "specialConditions": {
@@ -359,8 +344,24 @@
   "postSurgicalRegion": { "title": "Which area was operated on?", "options": { "knee": { "label": "Knee", "description": "Knee area" }, "hip": { "label": "Hip", "description": "Hip area" }, "back": { "label": "Spine or back", "description": "Spine area" }, "shoulder": { "label": "Shoulder", "description": "Shoulder area" }, "elbow": { "label": "Elbow", "description": "Elbow area" }, "wrist": { "label": "Wrist or hand", "description": "Wrist or hand area" }, "ankle_foot": { "label": "Ankle or foot", "description": "Ankle or foot area" }, "abdomen": { "label": "Abdomen", "description": "Abdominal area" }, "chest": { "label": "Chest", "description": "Chest area" }, "other": { "label": "Other area", "description": "Another body area" } } },
   "medicalRestrictionDetails": { "title": "Was this exercise restriction given by a professional?", "options": { "yes": { "label": "Yes", "short": "YES" }, "no": { "label": "No", "short": "NO" }, "unsure": { "label": "I'm not sure", "short": "?" } } },
   "muscleFocus": {
-    "title": "Any muscle group to prioritize?",
-    "sub": "Choose up to 2 — this helps steer your training.",
+    "title": "Muscles to prioritize",
+    "sub": "Tap to select the muscles you want to prioritize, or tap Continue to skip prioritizing.",
+    "selection": "Selected muscles",
+    "front": "Front",
+    "back": "Back",
+    "noneSelected": "No muscles selected",
+    "groups": {
+      "chest": "Chest",
+      "back": "Back",
+      "shoulders": "Shoulders",
+      "biceps": "Biceps",
+      "triceps": "Triceps",
+      "forearms": "Forearms",
+      "glutes": "Glutes",
+      "quads": "Quads",
+      "hamstrings": "Hamstrings",
+      "calves": "Calves"
+    },
     "options": {
       "chest": "Chest",
       "back": "Back",

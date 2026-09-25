@@ -38,6 +38,18 @@ describe('generateWorkoutPrescriptionRouted — central dispatcher', () => {
     expect(routed.status).toBe('SUCCESS');
     if (routed.status === 'SUCCESS') expect(routed.plan.versions.templateLibrary).toBe('2.0.0');
   });
+
+  it('maps the new health intent to the same active hypertrophy prescription as gain_muscle', () => {
+    const gainMuscle = generateWorkoutPrescriptionRouted(
+      completeAnswers({ goal: 'gain_muscle' }),
+      'INTERMEDIATE',
+    );
+    const health = generateWorkoutPrescriptionRouted(
+      completeAnswers({ goal: 'health' }),
+      'INTERMEDIATE',
+    );
+    expect(health).toEqual(gainMuscle);
+  });
 });
 
 const SRC_ROOT = join(__dirname, '../..');

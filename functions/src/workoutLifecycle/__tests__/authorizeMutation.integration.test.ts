@@ -173,7 +173,7 @@ describe.skipIf(!enabled)('Workout Lifecycle authority — real Firestore Emulat
       root.collection('programInstances').doc('wpi_active').update({
         prescriptionInputSnapshot: {
           snapshotId: 'pis_active', schemaVersion: 1, source: 'QUESTIONNAIRE_BASELINE',
-          inputs: completeInputs({ place: 'home', primaryPlace: 'home', equipment: ['bodyweight'] }),
+          inputs: completeInputs({ place: 'home', equipment: ['bodyweight'] }),
         },
       }),
       root.collection('workoutPrograms').doc('wpg_active').update({
@@ -852,8 +852,8 @@ describe.skipIf(!enabled)('Workout Lifecycle authority — real Firestore Emulat
      * with `updatedFields`, `level` unchanged, `source: 'PROGRAM_ADAPTATION'`. */
     function adaptSnapshotFor(updatedFields: Record<string, unknown>) {
       // JSON round-tripped to match exactly what `initializeWorkoutProgramV127Handler`
-      // actually persisted (it strips `undefined` fields, e.g. `primaryPlace`,
-      // the same way — see that handler's own comment); `assertSnapshot`
+      // actually persisted (it strips `undefined` fields the same way — see
+      // that handler's own comment); `assertSnapshot`
       // reads `sourceInputs` straight back off the persisted document.
       const sourceInputs = JSON.parse(JSON.stringify(
         effectivePrescriptionInputsFromAnswers(BASE_ADAPT_ANSWERS as never, 'INTERMEDIATE'),
@@ -1355,7 +1355,7 @@ describe.skipIf(!enabled)('Workout Lifecycle authority — real Firestore Emulat
             ],
           }],
         });
-        const inputs = completeInputs({ place: 'home', primaryPlace: 'home', equipment });
+        const inputs = completeInputs({ place: 'home', equipment });
         await db.collection('users').doc(UID).collection('programInstances').doc('wpi_active').update({
           prescriptionInputSnapshot: {
             snapshotId: 'pis_active', schemaVersion: 1, source: 'QUESTIONNAIRE_BASELINE', inputs,

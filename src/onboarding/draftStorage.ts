@@ -12,10 +12,15 @@ export const ONBOARDING_DRAFT_SCHEMA_VERSION = 1 as const;
  * `null`), mirroring the same problem `toPersistedAnswers` solves for
  * Firestore's `Timestamp`.
  */
-export type DraftQuizAnswers = Omit<Quiz, 'birthDate'> & {
+export type DraftQuizAnswers = Omit<Quiz, 'birthDate' | 'place'> & {
   birthDate: string | null;
+  place?: Quiz['place'] | 'both' | null;
+  /** @deprecated read-only compatibility for the removed mixed-location branch. */
+  primaryPlace?: unknown;
   /** @deprecated read-only compatibility for drafts created before removal. */
   limitationImpact?: unknown;
+  /** @deprecated read-only compatibility for drafts created before removal. */
+  motivation?: unknown;
 };
 
 export interface OnboardingDraftV1 {
@@ -35,11 +40,18 @@ function toDraftAnswers(quiz: Quiz): DraftQuizAnswers {
 }
 
 function fromDraftAnswers(raw: Partial<DraftQuizAnswers> | undefined | null): Quiz {
-  const { birthDate, limitationImpact: _legacyLimitationImpact, ...rest } = raw ?? {};
+  const {
+    birthDate,
+    primaryPlace: legacyPrimaryPlace,
+    limitationImpact: _legacyLimitationImpact,
+    motivation: _legacyMotivation,
+    ...rest
+  } = raw ?? {};
   const parsedBirthDate = birthDate ? new Date(birthDate) : null;
   return normalizeLoadedQuiz({
     ...defaultQuiz,
     ...rest,
+    primaryPlace: legacyPrimaryPlace,
     birthDate: parsedBirthDate && !Number.isNaN(parsedBirthDate.getTime()) ? parsedBirthDate : null,
   });
 }
@@ -69,6 +81,10 @@ function migrateDraft(raw: unknown): OnboardingDraft | null {
   if (candidate.version !== 1) return null;
   if (typeof candidate.currentStepId !== 'string') return null;
   const legacyGroupedSteps: Record<string, OnboardingStepId> = {
+    motivation: 'goal',
+    primaryPlace: 'place',
+    scheduleMode: 'days',
+    trainingDays: 'days',
     pregnancyPrenatalCare: 'pregnancyCare',
     pregnancyExerciseRestriction: 'pregnancyCare',
     pregnancyComplication: 'pregnancyCare',
