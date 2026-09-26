@@ -16,6 +16,7 @@ import { useTheme } from '../../theme';
 import { computeAge } from '../../lib/ageCalculator';
 import { useUnits } from '../../state/UnitsContext';
 import { kgToLb, lbToKg, weightUnit } from '../../units/weightConversions';
+import { toggleMultiSelection } from '../../onboarding/multiSelection';
 
 /**
  * Extracted from the legacy monolithic QuizScreen so the same renderers can
@@ -27,13 +28,20 @@ import { kgToLb, lbToKg, weightUnit } from '../../units/weightConversions';
 export type OptionDef = { v: string; icon?: IconName };
 export type CompoundChoiceField = { id: string; options: OptionDef[] };
 export type Question =
-  | { id: string; kind: 'choice'; options: OptionDef[] }
+  | { id: string; kind: 'choice'; options: OptionDef[]; showOptionShort?: boolean }
   | { id: string; kind: 'choice-large'; options: OptionDef[] }
-  | { id: string; kind: 'multi'; options: OptionDef[]; maxSelections?: number; exclusiveOption?: string }
+  | {
+      id: string;
+      kind: 'multi';
+      options: OptionDef[];
+      maxSelections?: number;
+      exclusiveOption?: string;
+      layout?: 'grid' | 'list';
+    }
   /** Like 'multi', but must select exactly `count` options to continue (e.g. trainingDays == days). */
   | { id: string; kind: 'multi-exact'; options: OptionDef[]; count: number }
   | { id: string; kind: 'date'; minAge: number; maxAge: number }
-  | { id: string; kind: 'compound-choice'; fields: CompoundChoiceField[] }
+  | { id: string; kind: 'compound-choice'; fields: CompoundChoiceField[]; showOptionShort?: boolean }
   | {
       id: string;
       kind: 'wheel';
@@ -70,12 +78,14 @@ export function ChoiceGrid({
   options,
   value,
   onChange,
+  showOptionShort = true,
 }: {
   questionId: string;
   translationKey?: string;
   options: OptionDef[];
   value: string | null;
   onChange: (v: string) => void;
+  showOptionShort?: boolean;
 }) {
   const { theme } = useTheme();
   const { t } = useTranslation('quiz');
@@ -117,17 +127,19 @@ export function ChoiceGrid({
             }}
           >
             {sel && <HudCorners />}
-            <Text
-              style={{
-                fontFamily: theme.fonts.display,
-                fontSize: 20,
-                color: sel ? theme.colors.primaryEmphasis : theme.colors.choiceIndex,
-                minWidth: 44,
-                textTransform: 'uppercase',
-              }}
-            >
-              {short}
-            </Text>
+            {showOptionShort ? (
+              <Text
+                style={{
+                  fontFamily: theme.fonts.display,
+                  fontSize: 20,
+                  color: sel ? theme.colors.primaryEmphasis : theme.colors.choiceIndex,
+                  minWidth: 44,
+                  textTransform: 'uppercase',
+                }}
+              >
+                {short}
+              </Text>
+            ) : null}
             <Text style={{ fontFamily: theme.fonts.uiSemi, fontSize: 16, color: theme.colors.choiceText, flex: 1 }}>
               {label}
             </Text>
@@ -166,6 +178,7 @@ export function CompoundChoiceList({
               options={field.options}
               value={value[field.id] ?? null}
               onChange={(next) => onChange({ ...value, [field.id]: next })}
+              showOptionShort={question.showOptionShort}
             />
           </View>
         );
@@ -247,6 +260,7 @@ export function MultiList({
   onChange,
   maxSelections,
   exclusiveOption,
+  layout = 'grid',
 }: {
   questionId: string;
   options: OptionDef[];
@@ -255,26 +269,18 @@ export function MultiList({
   /** When set, selecting beyond this count is a no-op instead of growing the array. */
   maxSelections?: number;
   exclusiveOption?: string;
+  layout?: 'grid' | 'list';
 }) {
   const { theme } = useTheme();
   const { t } = useTranslation('quiz');
   const tLoose = t as unknown as LooseT;
   const toggle = (v: string) => {
-    if (value.includes(v)) {
-      onChange(value.filter((x) => x !== v));
-      return;
-    }
-    if (v === exclusiveOption) {
-      onChange([v]);
-      return;
-    }
-    const withoutExclusive = exclusiveOption ? value.filter((item) => item !== exclusiveOption) : value;
-    if (maxSelections != null && withoutExclusive.length >= maxSelections) return;
-    onChange([...withoutExclusive, v]);
+    onChange(toggleMultiSelection(value, v, { exclusiveOption, maxSelections }));
   };
   const GAP = 10;
+  const isList = layout === 'list';
   return (
-    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: GAP }}>
+    <View style={{ flexDirection: isList ? 'column' : 'row', flexWrap: isList ? 'nowrap' : 'wrap', gap: GAP }}>
       {options.map((o) => {
         const sel = value.includes(o.v);
         const atLimit =
@@ -292,10 +298,12 @@ export function MultiList({
             accessibilityState={{ checked: sel, disabled: atLimit }}
             accessibilityLabel={label}
             style={{
-              flexBasis: '48%',
-              flexGrow: 1,
-              paddingVertical: 16,
-              paddingHorizontal: 14,
+              width: isList ? '100%' : undefined,
+              flexBasis: isList ? undefined : '48%',
+              flexGrow: isList ? 0 : 1,
+              minHeight: isList ? 62 : undefined,
+              paddingVertical: isList ? 20 : 16,
+              paddingHorizontal: isList ? 20 : 14,
               borderRadius: 14,
               flexDirection: 'row',
               alignItems: 'center',
@@ -310,14 +318,18 @@ export function MultiList({
               opacity: atLimit ? 0.4 : 1,
               shadowColor: sel ? theme.colors.primary : 'transparent',
               shadowOpacity: sel ? 0.45 : 0,
-              shadowRadius: sel ? 22 : 0,
+              shadowRadius: sel ? (isList ? 18 : 22) : 0,
               shadowOffset: { width: 0, height: 0 },
+              position: 'relative',
+              overflow: 'hidden',
             }}
           >
+            {isList && sel ? <HudCorners /> : null}
             <Text
               style={{
                 fontFamily: theme.fonts.uiSemi,
-                fontSize: 14.5,
+                fontSize: isList ? 16 : 14.5,
+                lineHeight: isList ? 22 : undefined,
                 color: theme.colors.choiceText,
                 flexShrink: 1,
                 flex: 1,
@@ -325,7 +337,14 @@ export function MultiList({
             >
               {label}
             </Text>
-            {sel && <Icon name="check" size={18} color={theme.colors.primaryEmphasis} stroke={2.8} />}
+            {sel ? (
+              <Icon
+                name="check"
+                size={isList ? 20 : 18}
+                color={theme.colors.primaryEmphasis}
+                stroke={2.8}
+              />
+            ) : null}
           </Pressable>
         );
       })}
@@ -447,7 +466,6 @@ export function NumberWheel({
     if (domainChanged || Math.abs(actualIndex - expectedIndex) > 0.5) {
       snapTo(expectedIndex, !domainChanged, 'sync-effect');
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [displayValue, displayMin, displayMax]);
 
   const handleScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {

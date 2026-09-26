@@ -55,6 +55,26 @@ describe('place question', () => {
   });
 });
 
+describe('limits question', () => {
+  it('keeps the persisted limitation ids while using the vertical list layout', () => {
+    const limits = FUNNEL_QUESTIONS.limits;
+    expect(limits?.kind).toBe('multi');
+    if (!limits || limits.kind !== 'multi') throw new Error('Limits question must expose multi options');
+    expect(limits.options.map((option) => option.v)).toEqual([
+      'knee',
+      'hip',
+      'back',
+      'shoulder',
+      'elbow',
+      'wrist',
+      'ankle_foot',
+      'other',
+    ]);
+    expect(limits.exclusiveOption).toBe('none');
+    expect(limits.layout).toBe('list');
+  });
+});
+
 describe('muscle focus question', () => {
   it('keeps the existing persisted priority ids and two-selection rule for the Body Map UI', () => {
     const muscleFocus = FUNNEL_QUESTIONS.muscleFocus;
@@ -67,5 +87,55 @@ describe('muscle focus question', () => {
     ]);
     expect(muscleFocus.maxSelections).toBe(2);
     expect(muscleFocus.exclusiveOption).toBe('none');
+  });
+});
+
+describe('special conditions question', () => {
+  it('keeps the persisted ids while opting into a vertical list', () => {
+    const question = FUNNEL_QUESTIONS.specialConditions;
+    expect(question?.kind).toBe('multi');
+    if (!question || question.kind !== 'multi') throw new Error('Special conditions must expose multi options');
+    expect(question.options.map((option) => option.v)).toEqual([
+      'none',
+      'musculoskeletal_limitation',
+      'pregnancy',
+      'postpartum',
+      'lipedema',
+      'dizziness_or_vertigo',
+      'post_surgical',
+      'functional_limitation',
+      'medical_restriction',
+    ]);
+    expect(question.exclusiveOption).toBe('none');
+    expect(question.layout).toBe('list');
+  });
+});
+
+describe('clinical follow-up question layouts', () => {
+  it.each(['pregnancyWarningSigns', 'postpartumSigns', 'functionalSituations'] as const)(
+    'renders %s as a vertical multi-select list without changing its options',
+    (stepId) => {
+      const question = FUNNEL_QUESTIONS[stepId];
+      expect(question?.kind).toBe('multi');
+      if (!question || question.kind !== 'multi') throw new Error(`${stepId} must expose multi options`);
+      expect(question.layout).toBe('list');
+      expect(question.exclusiveOption).toBe('none');
+    },
+  );
+
+  it.each([
+    'pregnancyCare',
+    'postpartumContext',
+    'lipedemaScreening',
+    'dizzinessScreening',
+    'postSurgicalStatus',
+    'medicalRestrictionDetails',
+  ] as const)('does not render text as an option icon on %s', (stepId) => {
+    const question = FUNNEL_QUESTIONS[stepId];
+    expect(question).toBeDefined();
+    if (!question || (question.kind !== 'choice' && question.kind !== 'compound-choice')) {
+      throw new Error(`${stepId} must expose choice options`);
+    }
+    expect(question.showOptionShort).toBe(false);
   });
 });

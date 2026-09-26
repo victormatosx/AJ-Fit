@@ -68,6 +68,7 @@ export const FUNNEL_QUESTIONS: Partial<Record<OnboardingStepId, Question>> = {
     id: 'limits',
     kind: 'multi',
     exclusiveOption: 'none',
+    layout: 'list',
     options: [
       { v: 'knee' },
       { v: 'hip' },
@@ -83,6 +84,7 @@ export const FUNNEL_QUESTIONS: Partial<Record<OnboardingStepId, Question>> = {
     id: 'specialConditions',
     kind: 'multi',
     exclusiveOption: 'none',
+    layout: 'list',
     options: [
       { v: 'none' },
       { v: 'musculoskeletal_limitation' },
@@ -106,6 +108,7 @@ export const FUNNEL_QUESTIONS: Partial<Record<OnboardingStepId, Question>> = {
   pregnancyCare: {
     id: 'pregnancyCare',
     kind: 'compound-choice',
+    showOptionShort: false,
     fields: [
       { id: 'prenatalCare', options: [{ v: 'yes' }, { v: 'no' }] },
       { id: 'exerciseRestriction', options: [{ v: 'no' }, { v: 'yes' }] },
@@ -116,6 +119,7 @@ export const FUNNEL_QUESTIONS: Partial<Record<OnboardingStepId, Question>> = {
     id: 'pregnancyWarningSigns',
     kind: 'multi',
     exclusiveOption: 'none',
+    layout: 'list',
     options: [
       { v: 'vaginal_bleeding' },
       { v: 'dizziness_fainting' },
@@ -130,6 +134,7 @@ export const FUNNEL_QUESTIONS: Partial<Record<OnboardingStepId, Question>> = {
   postpartumContext: {
     id: 'postpartumContext',
     kind: 'compound-choice',
+    showOptionShort: false,
     fields: [
       {
         id: 'timeSinceBirth',
@@ -148,6 +153,7 @@ export const FUNNEL_QUESTIONS: Partial<Record<OnboardingStepId, Question>> = {
     id: 'postpartumSigns',
     kind: 'multi',
     exclusiveOption: 'none',
+    layout: 'list',
     options: [
       { v: 'pain' },
       { v: 'healing_problems' },
@@ -167,6 +173,7 @@ export const FUNNEL_QUESTIONS: Partial<Record<OnboardingStepId, Question>> = {
     id: 'functionalSituations',
     kind: 'multi',
     exclusiveOption: 'none',
+    layout: 'list',
     options: [
       { v: 'walking_difficulty' },
       { v: 'support_needed' },
@@ -181,6 +188,7 @@ export const FUNNEL_QUESTIONS: Partial<Record<OnboardingStepId, Question>> = {
   lipedemaScreening: {
     id: 'lipedemaScreening',
     kind: 'compound-choice',
+    showOptionShort: false,
     fields: [
       {
         id: 'symptomImpact',
@@ -197,6 +205,7 @@ export const FUNNEL_QUESTIONS: Partial<Record<OnboardingStepId, Question>> = {
   dizzinessScreening: {
     id: 'dizzinessScreening',
     kind: 'compound-choice',
+    showOptionShort: false,
     fields: [
       {
         id: 'symptomFrequency',
@@ -213,6 +222,7 @@ export const FUNNEL_QUESTIONS: Partial<Record<OnboardingStepId, Question>> = {
   postSurgicalStatus: {
     id: 'postSurgicalStatus',
     kind: 'compound-choice',
+    showOptionShort: false,
     fields: [
       { id: 'recoveryStatus', options: [{ v: 'completed' }, { v: 'in_progress' }, { v: 'unsure' }] },
       {
@@ -245,6 +255,7 @@ export const FUNNEL_QUESTIONS: Partial<Record<OnboardingStepId, Question>> = {
   medicalRestrictionDetails: {
     id: 'medicalRestrictionDetails',
     kind: 'choice',
+    showOptionShort: false,
     options: [{ v: 'yes' }, { v: 'no' }, { v: 'unsure' }],
   },
   muscleFocus: {

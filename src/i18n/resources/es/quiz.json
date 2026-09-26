@@ -224,7 +224,7 @@
     }
   },
   "limits": {
-    "title": "¿Sientes dolor, molestias o tienes alguna limitación que afecte tus entrenamientos?",
+    "title": "¿Dónde sientes dolor o alguna limitación?",
     "sub": "Indica solo lo que afecta tu entrenamiento hoy; esto no es un diagnóstico. Adaptaremos los ejercicios para las áreas que selecciones cuando sea necesario.",
     "options": {
       "none": "Ninguna",
@@ -239,8 +239,8 @@
     }
   },
   "specialConditions": {
-    "title": "¿Hay alguna situación que debamos considerar al preparar tu entrenamiento?",
-    "sub": "Selecciona todas las que correspondan.",
+    "title": "¿Alguna condición especial?",
+    "sub": "Selecciona las situaciones que debemos tener en cuenta en tu entrenamiento.",
     "options": {
       "none": "Ninguna", "musculoskeletal_limitation": "Tengo dolor o limitación musculoesquelética", "pregnancy": "Estoy embarazada", "postpartum": "Estoy en el período posparto",
       "lipedema": "Tengo diagnóstico o sospecha de lipedema", "dizziness_or_vertigo": "Tengo vértigo, mareo o problemas de equilibrio", "post_surgical": "Estoy en recuperación posquirúrgica",
@@ -248,7 +248,7 @@
       "medical_restriction": "Tengo alguna restricción médica para hacer ejercicio"
     }
   },
-  "pregnancyWeeks": { "title": "¿De cuántas semanas estás?", "unit": "semanas" },
+  "pregnancyWeeks": { "title": "¿Cuántas semanas de embarazo tienes?", "unit": "semanas" },
   "pregnancyPrenatalCare": {
     "title": "¿Estás recibiendo atención prenatal?",
     "options": { "yes": { "label": "Sí", "short": "SÍ" }, "no": { "label": "No", "short": "NO" } }
@@ -264,13 +264,13 @@
       "unsure": { "label": "No estoy segura", "short": "?" }
     }
   },
-  "pregnancyCare": { "title": "Cuidados y orientación del embarazo", "fields": {
+  "pregnancyCare": { "title": "¿Cómo es el seguimiento de tu embarazo?", "fields": {
     "prenatalCare": { "title": "¿Recibes atención prenatal?", "options": { "yes": { "label": "Sí", "short": "SÍ" }, "no": { "label": "No", "short": "NO" } } },
     "exerciseRestriction": { "title": "¿Un profesional restringió tus ejercicios?", "options": { "no": { "label": "No", "short": "NO" }, "yes": { "label": "Sí", "short": "SÍ" } } },
     "complication": { "title": "¿Hay una complicación relevante u orientación especial?", "options": { "no": { "label": "No", "short": "NO" }, "yes": { "label": "Sí", "short": "SÍ" }, "unsure": { "label": "No estoy segura", "short": "?" } } }
   } },
   "pregnancyWarningSigns": {
-    "title": "¿Presentas actualmente alguno de estos signos de alerta?",
+    "title": "¿Tienes alguno de estos signos de alerta?",
     "sub": "Esta respuesta solo prepara el control de seguridad; no es un diagnóstico.",
     "options": {
       "vaginal_bleeding": "Sangrado vaginal",
@@ -300,12 +300,12 @@
       "prefer_not_to_say": { "label": "Prefiero no decirlo", "short": "—" }
     }
   },
-  "postpartumContext": { "title": "Contexto del posparto", "fields": {
+  "postpartumContext": { "title": "¿Cuándo y cómo fue el parto?", "fields": {
     "timeSinceBirth": { "title": "¿Cuánto tiempo pasó desde el parto?", "options": { "under_6_weeks": { "label": "Menos de 6 semanas", "short": "<6S" }, "6_12_weeks": { "label": "6–12 semanas", "short": "6–12S" }, "3_6_months": { "label": "3–6 meses", "short": "3–6M" }, "6_12_months": { "label": "6–12 meses", "short": "6–12M" }, "over_1_year": { "label": "Más de 1 año", "short": ">1A" } } },
     "deliveryType": { "title": "¿Cómo fue el parto?", "options": { "vaginal": { "label": "Vaginal", "short": "VAG" }, "cesarean": { "label": "Cesárea", "short": "CES" }, "prefer_not_to_say": { "label": "Prefiero no decirlo", "short": "—" } } }
   } },
   "postpartumSigns": {
-    "title": "¿Presentas actualmente alguno de estos signos?",
+    "title": "¿Tienes alguno de estos signos?",
     "options": {
       "pain": "Dolor relevante", "healing_problems": "Problemas de cicatrización", "abnormal_bleeding": "Sangrado anormal",
       "incontinence": "Pérdida urinaria/fecal", "vaginal_pressure": "Sensación de peso/presión vaginal",
@@ -313,7 +313,7 @@
     }
   },
   "postpartumReturnClearance": {
-    "title": "¿Recibiste autorización/orientación para volver a hacer ejercicio?",
+    "title": "¿Recibiste autorización para hacer ejercicio?",
     "options": {
       "yes": { "label": "Sí", "description": "Recibí autorización/orientación" },
       "not_yet": { "label": "Todavía no", "description": "Aún no recibí autorización" },
@@ -321,7 +321,7 @@
     }
   },
   "functionalSituations": {
-    "title": "¿Alguna de estas situaciones forma parte de tu rutina hoy?",
+    "title": "¿Qué situaciones forman parte de tu rutina?",
     "options": {
       "walking_difficulty": "Tengo dificultad para caminar", "support_needed": "Necesito apoyo para algunos movimientos",
       "stairs_difficulty": "Tengo dificultad para subir escalones", "balance_problems": "Tengo problemas de equilibrio",
@@ -329,20 +329,20 @@
       "daily_activities_difficulty": "Algunas actividades cotidianas son difíciles", "none": "Ninguna de estas"
     }
   },
-  "lipedemaScreening": { "title": "¿Cómo te afecta el lipedema hoy?", "fields": {
+  "lipedemaScreening": { "title": "¿Cómo afecta el lipedema a tus ejercicios?", "fields": {
     "symptomImpact": { "title": "Impacto en los ejercicios", "options": { "none": { "label": "Sin impacto actual", "short": "NINGUNO" }, "mild_or_occasional": { "label": "Leve u ocasional", "short": "LEVE" }, "interferes_with_exercises": { "label": "Interfiere con los ejercicios", "short": "INTERFIERE" }, "unknown": { "label": "No sé evaluarlo", "short": "?" } } },
     "professionalGuidance": { "title": "¿Recibiste orientación profesional específica?", "options": { "no": { "label": "No", "short": "NO" }, "yes": { "label": "Sí", "short": "SÍ" }, "unsure": { "label": "No estoy segura", "short": "?" } } }
   } },
-  "dizzinessScreening": { "title": "Sobre tu mareo o vértigo", "fields": {
+  "dizzinessScreening": { "title": "¿Cómo son tus mareos o vértigos?", "fields": {
     "symptomFrequency": { "title": "¿Con qué frecuencia ocurre?", "options": { "history_only": { "label": "Solo en el pasado", "short": "PASADO" }, "occasional": { "label": "Ocasionalmente", "short": "A VECES" }, "frequent": { "label": "Con frecuencia", "short": "FRECUENTE" }, "current_or_recent": { "label": "Ahora o recientemente", "short": "RECIENTE" } } },
     "affectsBalance": { "title": "¿Afecta tu equilibrio?", "options": { "no": { "label": "No", "short": "NO" }, "yes": { "label": "Sí", "short": "SÍ" }, "unknown": { "label": "No lo sé", "short": "?" } } }
   } },
-  "postSurgicalStatus": { "title": "Sobre tu recuperación quirúrgica", "fields": {
+  "postSurgicalStatus": { "title": "¿Cómo va tu recuperación?", "fields": {
     "recoveryStatus": { "title": "¿Cómo está la recuperación?", "options": { "completed": { "label": "Completada", "short": "COMPLETA" }, "in_progress": { "label": "En curso", "short": "EN CURSO" }, "unsure": { "label": "No estoy segura", "short": "?" } } },
     "returnClearance": { "title": "¿Cuál es tu autorización para hacer ejercicio?", "options": { "cleared_no_restrictions": { "label": "Autorizado sin restricciones", "short": "AUTORIZADO" }, "cleared_with_restrictions": { "label": "Autorizado con restricciones", "short": "RESTRINGIDO" }, "not_yet": { "label": "Aún no tengo autorización", "short": "AÚN NO" }, "unsure": { "label": "No estoy segura", "short": "?" } } }
   } },
-  "postSurgicalRegion": { "title": "¿Qué región fue operada?", "options": { "knee": { "label": "Rodilla", "description": "Región de la rodilla" }, "hip": { "label": "Cadera", "description": "Región de la cadera" }, "back": { "label": "Columna o espalda", "description": "Región de la columna" }, "shoulder": { "label": "Hombro", "description": "Región del hombro" }, "elbow": { "label": "Codo", "description": "Región del codo" }, "wrist": { "label": "Muñeca o mano", "description": "Región de la muñeca o mano" }, "ankle_foot": { "label": "Tobillo o pie", "description": "Región del tobillo o pie" }, "abdomen": { "label": "Abdomen", "description": "Región abdominal" }, "chest": { "label": "Tórax", "description": "Región del tórax" }, "other": { "label": "Otra región", "description": "Otra región del cuerpo" } } },
-  "medicalRestrictionDetails": { "title": "¿Esta restricción de ejercicio fue indicada por un profesional?", "options": { "yes": { "label": "Sí", "short": "SÍ" }, "no": { "label": "No", "short": "NO" }, "unsure": { "label": "No estoy segura", "short": "?" } } },
+  "postSurgicalRegion": { "title": "¿Dónde fue la cirugía?", "options": { "knee": { "label": "Rodilla", "description": "Región de la rodilla" }, "hip": { "label": "Cadera", "description": "Región de la cadera" }, "back": { "label": "Columna o espalda", "description": "Región de la columna" }, "shoulder": { "label": "Hombro", "description": "Región del hombro" }, "elbow": { "label": "Codo", "description": "Región del codo" }, "wrist": { "label": "Muñeca o mano", "description": "Región de la muñeca o mano" }, "ankle_foot": { "label": "Tobillo o pie", "description": "Región del tobillo o pie" }, "abdomen": { "label": "Abdomen", "description": "Región abdominal" }, "chest": { "label": "Tórax", "description": "Región del tórax" }, "other": { "label": "Otra región", "description": "Otra región del cuerpo" } } },
+  "medicalRestrictionDetails": { "title": "¿La restricción fue indicada por un profesional?", "options": { "yes": { "label": "Sí", "short": "SÍ" }, "no": { "label": "No", "short": "NO" }, "unsure": { "label": "No estoy segura", "short": "?" } } },
   "muscleFocus": {
     "title": "Músculos para priorizar",
     "sub": "Toca para seleccionar los músculos que quieres priorizar, o toca Continuar para seguir sin priorizar.",

@@ -89,6 +89,7 @@ export function OnboardingFunnelScreen({
   }, []);
 
   const setAnswer = (id: typeof currentStepId, value: unknown) => setQuiz(updateQuizAnswer(quiz, id, value));
+
   const scheduleValue: WeeklyScheduleValue = {
     days: quiz.days,
     scheduleMode: quiz.scheduleMode,

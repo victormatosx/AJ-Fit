@@ -227,6 +227,7 @@ export function QuestionStepScreen({
                   options={question.options}
                   value={value as string}
                   onChange={onChange}
+                  showOptionShort={question.showOptionShort}
                 />
               ))}
               {!answerControl && question.kind === 'choice-large' && (
@@ -245,6 +246,7 @@ export function QuestionStepScreen({
                   onChange={onChange}
                   maxSelections={question.maxSelections}
                   exclusiveOption={question.exclusiveOption}
+                  layout={question.layout}
                 />
               )}
               {!answerControl && question.kind === 'multi-exact' && (
