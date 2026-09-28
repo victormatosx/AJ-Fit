@@ -122,6 +122,52 @@ describe('restLiveActivity optional capabilities', () => {
 });
 
 describe('restLiveActivity temporal contract', () => {
+  it('starts an iOS Live Activity for a valid zero-set workout state', async () => {
+    const nativeModule = installNativeModule({
+      available: true,
+      surface: 'ios-live-activity',
+    });
+    const facade = await loadFacade();
+    const freshlyStarted = {
+      sessionId: 'workout-session-1',
+      startedAt: 100_000,
+      exerciseName: 'Supino reto',
+      setIndex: 0,
+      totalSets: 4,
+      phase: REST_ACTIVITY_PHASE.WORKOUT_ACTIVE,
+      nextAction: REST_ACTIVITY_NEXT_ACTION.NEXT_SET,
+      nextSetIndex: 1,
+    } as const;
+
+    await facade.start(freshlyStarted);
+
+    expect(nativeModule.start).toHaveBeenCalledWith(freshlyStarted);
+  });
+
+  it('updates the existing activity when the first set starts its rest', async () => {
+    const nativeModule = installNativeModule({
+      available: true,
+      surface: 'ios-live-activity',
+    });
+    const facade = await loadFacade();
+    const freshlyStarted = {
+      sessionId: BASE_STATE.sessionId,
+      startedAt: 100_000,
+      exerciseName: BASE_STATE.exerciseName,
+      setIndex: 0,
+      totalSets: 4,
+      phase: REST_ACTIVITY_PHASE.WORKOUT_ACTIVE,
+      nextAction: REST_ACTIVITY_NEXT_ACTION.NEXT_SET,
+      nextSetIndex: 1,
+    } as const;
+
+    await facade.start(freshlyStarted);
+    await facade.update(BASE_STATE);
+
+    expect(nativeModule.start).toHaveBeenCalledTimes(1);
+    expect(nativeModule.update).toHaveBeenCalledWith(BASE_STATE, false);
+  });
+
   it('accepts cardio states through the same native start/update queue', async () => {
     const nativeModule = installNativeModule({
       available: true,

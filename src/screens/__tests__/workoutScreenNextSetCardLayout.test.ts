@@ -1,17 +1,23 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
-// Regression coverage for a letter-by-letter text wrap bug on the
-// "next set" card of the workout execution screen.
+// Regression coverage for the "next set" card's layout.
 //
-// Root cause: a long reps string (e.g. "8-12/perna" for unilateral exercises
-// like Agachamento Búlgaro) was allowed to reserve 110 px while the last-load
-// block reserved another 100 px. The flexible "PRÓXIMA SÉRIE" / "SÉRIE N"
-// block was left too narrow and its large text painted into the reps block.
+// History:
+//  1. Original bug: counter/reps/record shared one row with the reps column
+//     capped at `maxWidth: 100`, so `adjustsFontSizeToFit` silently shrank
+//     the reps value below legibility.
+//  2. First fix moved reps to its own full-width row below a divider — this
+//     solved legibility but made the card (and therefore the whole screen)
+//     tall enough to hide most of the set list.
+//  3. This version: back to ONE row, three PROPORTIONAL (`flex`, never a
+//     fixed/max px) columns, with `minimumFontScale` kept high so
+//     `adjustsFontSizeToFit` is only ever a small safety margin, not the
+//     mechanism that makes text tiny.
 const source = readFileSync(new URL('../WorkoutScreen.tsx', import.meta.url), 'utf8');
 
 function nextSetCard(): string {
-  const start = source.indexOf('{/* Next-set card */}');
+  const start = source.indexOf('{/* Next-set card');
   expect(start).toBeGreaterThan(-1);
   const end = source.indexOf('{/* set list */}', start);
   expect(end).toBeGreaterThan(start);
@@ -19,50 +25,69 @@ function nextSetCard(): string {
 }
 
 describe('WorkoutScreen next-set card layout', () => {
-  it('reserves a readable width for the next-series label instead of letting it collapse', () => {
+  it('never caps a column to a small fixed/max width again', () => {
     const card = nextSetCard();
-    expect(card).toContain('flexBasis: 112, flexGrow: 0, flexShrink: 1, minWidth: 98');
+    expect(card).not.toContain('maxWidth: 100');
+    expect(card).not.toContain('flexBasis: 112');
+    expect(card).not.toContain('width: 72');
   });
 
-  it('makes the reps value consume only the space left inside the card', () => {
+  it('keeps counter, reps and previous-load reference on a single row (no divider-separated second row)', () => {
     const card = nextSetCard();
-    const repsBlockStart = card.indexOf('{curReps}');
-    expect(repsBlockStart).toBeGreaterThan(-1);
-    const repsColumnStart = card.lastIndexOf('<View', repsBlockStart);
-    const repsColumn = card.slice(repsColumnStart, repsBlockStart);
+    // Exactly one row-level flex container drives the three columns —
+    // there is no second `flexDirection: 'row'` wrapping just the reps
+    // value on its own line below a divider.
+    const rowMatches = card.match(/flexDirection: 'row'/g) ?? [];
+    // One for the outer card row, one each for the two baseline-aligned
+    // inline groups (SÉRIE counter, previous-load value+unit) — never a
+    // fourth "reps on its own row" wrapper.
+    expect(rowMatches.length).toBeLessThanOrEqual(3);
 
-    expect(repsColumn).toContain('maxWidth');
-    expect(repsColumn).toContain('flex: 1');
-    expect(repsColumn).toContain('minWidth: 0');
-    // The display font is skewed, so clipping the column also clips the
-    // leading edge of the first glyph (visible as a cut-off "8" on iOS).
-    expect(repsColumn).not.toContain("overflow: 'hidden'");
+    const counterIdx = card.indexOf("t('sets.next')");
+    const repsIdx = card.indexOf('{curReps}');
+    const previousIdx = card.indexOf("t('sets.previous')");
+    expect(counterIdx).toBeGreaterThan(-1);
+    expect(repsIdx).toBeGreaterThan(-1);
+    expect(previousIdx).toBeGreaterThan(-1);
+    // Declaration order along the single row: counter, then reps, then the previous-load reference.
+    expect(counterIdx).toBeLessThan(repsIdx);
+    expect(repsIdx).toBeLessThan(previousIdx);
   });
 
-  it('constrains the reps text to a single line and shrinks font instead of expanding the box', () => {
+  it('sizes columns proportionally with flex + minWidth: 0, never a fixed width', () => {
     const card = nextSetCard();
-    const repsTextStart = card.lastIndexOf('<Text', card.indexOf('{curReps}'));
-    const repsTextEnd = card.indexOf('{curReps}');
-    const repsTextProps = card.slice(repsTextStart, repsTextEnd);
-
-    expect(repsTextProps).toContain('numberOfLines={1}');
-    expect(repsTextProps).toContain('adjustsFontSizeToFit');
-    expect(repsTextProps).toContain("width: '100%'");
-    expect(repsTextProps).toContain('paddingHorizontal: 4');
+    const flexMatches = card.match(/flex: 0\.\d+/g) ?? [];
+    // Counter and record columns are both proportional.
+    expect(flexMatches.length).toBeGreaterThanOrEqual(2);
+    expect(card).toContain('flex: 1.3');
+    expect((card.match(/minWidth: 0/g) ?? []).length).toBeGreaterThanOrEqual(3);
   });
 
-  it('keeps the last-load column compact so it cannot starve the other values', () => {
+  it('keeps adjustsFontSizeToFit as a small safety margin, never the mechanism that makes text tiny', () => {
     const card = nextSetCard();
-    const lastTimeIdx = card.indexOf("t('sets.lastTime')");
-    expect(lastTimeIdx).toBeGreaterThan(-1);
-    const dividerIdx = card.indexOf('dividerStrong');
-    expect(dividerIdx).toBeGreaterThan(-1);
-    const lastColumnStart = card.indexOf('<View', dividerIdx);
-    const lastColumn = card.slice(lastColumnStart, lastTimeIdx);
+    const scales = [...card.matchAll(/minimumFontScale=\{([\d.]+)\}/g)].map((m) => Number(m[1]));
+    expect(scales.length).toBeGreaterThan(0);
+    // The two primary values (reps, previous load) never shrink below 0.85;
+    // small secondary captions (SÉRIE label, prescription kind, ANTERIOR
+    // label) may shrink a bit further (down to 0.7) since they're not the
+    // content a lifter reads mid-set — but never lower than that.
+    scales.forEach((scale) => expect(scale).toBeGreaterThanOrEqual(0.7));
+    expect(scales).toContain(0.85);
+  });
 
-    expect(lastColumn).toContain('width: 72');
-    expect(lastColumn).toContain('minWidth: 66');
-    expect(lastColumn).toContain('flexShrink: 1');
+  it('scales every card font from the actual window width, clamped, instead of a fixed device constant', () => {
+    expect(source).toContain('useWindowDimensions');
+    expect(source).toContain('const nextSetFont = (basePx: number)');
+    // Clamped both ways — never shrinks below legibility on a tiny phone,
+    // never balloons past the card's proportions on a huge one.
+    expect(source).toMatch(/Math\.min\(1\.\d+,\s*Math\.max\(0\.\d+,\s*windowWidth \/ \d+\)\)/);
+
+    const card = nextSetCard();
+    // The counter, reps and record values all derive their size from the
+    // shared scale function — none of them is a hardcoded literal anymore.
+    expect(card).toContain('size={nextSetFont(');
+    expect(card).toContain('fontSize: nextSetFont(');
+    expect(card).not.toMatch(/fontSize:\s*\d+,/);
   });
 
   it('uses the raw prescription reps string directly (covers long unilateral formats like "8-12/perna")', () => {

@@ -11,6 +11,7 @@ import {
   Easing,
   Keyboard,
   ActivityIndicator,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -92,6 +93,17 @@ import {
 } from '../workoutExecution/substitutionSingleFlight';
 import { WorkoutShareComposer } from '../components/workoutShare/WorkoutShareComposer';
 import { buildWorkoutShareData } from '../workoutShare/data';
+import {
+  derivePreviousExerciseLastLoad,
+  derivePreviousExerciseRecords,
+  derivePreviousExerciseSetLoads,
+} from '../loadProgress/loadProgress';
+import { useLoadProgressState } from '../loadProgress/LoadProgressContext';
+import {
+  evaluateSetForPersonalRecord,
+  loggedWeightsForExercise,
+  replayQueuedPersonalRecordChecks,
+} from '../workoutExecution/personalRecord';
 
 type Props = {
   plan: FinalWorkoutPlan;
@@ -296,6 +308,48 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
   };
   const { resolvedUnits } = useUnits();
   const loadUnit = workoutLoadUnit(resolvedUnits);
+  // Responsive font scale for the "next set" card — interpolated from the
+  // actual window width (never a device-specific constant), clamped so a
+  // tiny phone doesn't shrink below legibility and a large one doesn't blow
+  // past the card's proportions. `adjustsFontSizeToFit` on the card's two
+  // dynamic values stays as a small safety net on top of this, never the
+  // primary sizing mechanism.
+  const { width: windowWidth } = useWindowDimensions();
+  const nextSetFontScale = Math.min(1.15, Math.max(0.92, windowWidth / 390));
+  const nextSetFont = (basePx: number) => Math.round(basePx * nextSetFontScale * 2) / 2;
+  const { exercises: loadHistory, completedSetHistory, loading: loadsLoading } = useLoadProgressState();
+  // All-time best per exercise BEFORE this session, excluding it — feeds PR
+  // detection only (`advanceAfterRest`/the replay effect below); it is not
+  // rendered anywhere in this screen anymore.
+  const previousRecords = useMemo(
+    () => derivePreviousExerciseRecords(loadHistory, execution?.executionId ?? null),
+    [execution?.executionId, loadHistory],
+  );
+  // Per-set reference from the last COMPLETED execution, index-aligned by
+  // setIndex — never a single flattened "last weight used". This is the
+  // "next set" card's primary source: the load used for THIS exact setIndex
+  // last time.
+  const previousSetLoads = useMemo(
+    () => derivePreviousExerciseSetLoads(completedSetHistory, execution?.executionId ?? null),
+    [execution?.executionId, completedSetHistory],
+  );
+  // Fallback when the specific setIndex has no valid load in the last
+  // COMPLETED execution (e.g. that set was skipped last time): the most
+  // recent valid load registered for the exercise at all, regardless of
+  // setIndex. Never the record — a genuinely absent load stays absent.
+  const previousExerciseLastLoad = useMemo(
+    () => derivePreviousExerciseLastLoad(loadHistory, execution?.executionId ?? null),
+    [execution?.executionId, loadHistory],
+  );
+  // Historical record load can still be in flight when the user confirms a
+  // set (docs: `useLoadProgress` is deliberately non-blocking so the workout
+  // never waits on it). A set confirmed while `loadsLoading` is true is
+  // queued here instead of evaluated against a guessed/zero baseline — the
+  // effect below replays the queue, in completion order, the moment the real
+  // baseline resolves, so a PR is never silently missed to a timing race.
+  const pendingPrChecksRef = useRef<
+    { exId: string; exIdx: number; setIdx: number; weightKg: number }[]
+  >([]);
   const tLoose = t as unknown as LooseT;
   const { canPerform } = usePremiumCapabilities();
   const currentSession = plan.sessions[sessionIndex] ?? plan.sessions[0];
@@ -369,7 +423,6 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
 
   const [queueOpen, setQueueOpen] = useState(false);
   const [videoOpen, setVideoOpen] = useState(false);
-  const [sessionDetailsOpen, setSessionDetailsOpen] = useState(false);
   const [subSheet, setSubSheet] = useState(false);
   const [pendingSub, setPendingSub] = useState<SubOption | null>(null);
 
@@ -446,6 +499,31 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
   );
 
   const [pr, setPr] = useState<{ weight: number; exName: string; prev: number } | null>(null);
+  // Fires exactly once per `loadsLoading` transition to `false` (typically
+  // once, right after mount) — replays every set that was confirmed while
+  // the real baseline was still unknown, in the order it was confirmed, so a
+  // 55 -> 60 -> 65 chain recognizes every step exactly as it would have
+  // live. Only the most recent newly-recognized PR gets the overlay — they
+  // were effectively simultaneous discoveries once data arrived.
+  useEffect(() => {
+    if (loadsLoading) return;
+    const pending = pendingPrChecksRef.current;
+    if (pending.length === 0) return;
+    pendingPrChecksRef.current = [];
+
+    const { recognized } = replayQueuedPersonalRecordChecks(
+      pending.map((item) => ({ exerciseId: item.exId, weightKg: item.weightKg })),
+      previousRecords,
+    );
+    if (recognized) {
+      setPr({
+        weight: recognized.weightKg,
+        exName: exercises.find((exercise) => exercise.id === recognized.exerciseId)?.name ?? recognized.exerciseId,
+        prev: recognized.baselineKg,
+      });
+      setTimeout(() => setPr(null), 2600);
+    }
+  }, [loadsLoading, previousRecords, exercises]);
   const [exComplete, setExComplete] = useState<{
     name: string;
     nextName: string;
@@ -567,21 +645,36 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
   ) => {
     let nextLogged = logged;
     if (transitionPending && transitionWeight > 0) {
-      const baseId = exercises[exIdx].id;
-      const prevBest = Math.max(
-        ...exercises[exIdx].sets.map((s) => s.w),
-        ...Object.entries(logged)
-          .filter(([k]) => k.startsWith(baseId + '-'))
-          .map(([, v]) => v),
-        0
-      );
-      if (transitionWeight > prevBest && prevBest > 0) {
-        setPr({
-          weight: transitionWeight,
-          exName: ex.name,
-          prev: prevBest,
+      const baseId = exercises[transitionPending.exIdx].id;
+      if (loadsLoading) {
+        // The true historical record isn't known yet — evaluating now would
+        // risk a false negative (comparing against an assumed-zero
+        // baseline). Queue it; the catch-up effect below replays this the
+        // moment `loadsLoading` resolves, so the PR is never silently lost.
+        pendingPrChecksRef.current.push({
+          exId: baseId,
+          exIdx: transitionPending.exIdx,
+          setIdx: transitionPending.setIdx,
+          weightKg: transitionWeight,
         });
-        setTimeout(() => setPr(null), 2600);
+      } else {
+        // Baseline = historical record + this session's own already-confirmed
+        // sets for the same exercise — never the set being evaluated itself
+        // (it isn't in `logged` yet). Recomputed fresh on every set, so a PR
+        // racks up on the set immediately after it, not one set later.
+        const evaluation = evaluateSetForPersonalRecord({
+          historicalRecordKg: previousRecords[baseId] ?? 0,
+          sessionLoggedWeightsKg: loggedWeightsForExercise(logged, baseId),
+          candidateWeightKg: transitionWeight,
+        });
+        if (evaluation.isRecord) {
+          setPr({
+            weight: transitionWeight,
+            exName: ex.name,
+            prev: evaluation.baselineKg,
+          });
+          setTimeout(() => setPr(null), 2600);
+        }
       }
       nextLogged = {
         ...logged,
@@ -1013,7 +1106,14 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
   // exercise transition: the render right after `finished` became true
   // still fell through to here with a stale/out-of-range `setIdx`.
   const curReps = ex.sets[setIdx].r;
-  const curLast = lastWeight(ex, setIdx);
+  // "Next set" card reference: the load used for THIS exact upcoming
+  // setIndex last time; if that specific set has no valid load (e.g. it was
+  // skipped last time), fall back to the most recent valid load registered
+  // for the exercise at all — never the record.
+  const previousForUpcomingSet = previousSetLoads[ex.db]?.[setIdx];
+  const curPreviousLoad = previousForUpcomingSet != null
+    ? previousForUpcomingSet
+    : (previousExerciseLastLoad[ex.db] ?? 0);
 
   return (
     <ScreenBg>
@@ -1088,14 +1188,6 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
             style={headerButtonStyle}
           >
             <Icon name="list" size={15} color={theme.colors.iconEmphasis} />
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={t('prescription.sessionDetails')}
-            onPress={() => setSessionDetailsOpen(true)}
-            style={headerButtonStyle}
-          >
-            <Icon name="info" size={15} color={theme.colors.iconEmphasis} />
           </Pressable>
         </View>
 
@@ -1244,12 +1336,21 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
           </View>
         ) : null}
 
-        {/* Next-set card */}
-        <View style={{ paddingHorizontal: 20, paddingTop: 14 }}>
+        {/* Next-set card — single row, three proportional (`flex`, never a
+            fixed pixel cap) columns: counter, reps, record. Reps gets the
+            biggest share (1.3 of 3) since it's the widest realistic content
+            (e.g. "8-12/perna"). Every font size in the card is derived from
+            `nextSetFont` (window-width-driven, clamped), so it scales with
+            the actual device instead of a fixed constant; `minimumFontScale`
+            stays high (0.85) so `adjustsFontSizeToFit` is only ever a small
+            safety margin on top of that, never the mechanism that makes text
+            tiny or forces a wrap/clip. */}
+        <View style={{ paddingHorizontal: 20, paddingTop: 12 }}>
           <View
             style={{
-              borderRadius: 18,
-              padding: 18,
+              borderRadius: 16,
+              paddingVertical: 12,
+              paddingHorizontal: 14,
               backgroundColor: theme.colors.workoutActiveBackground,
               borderWidth: 1,
               borderColor: theme.colors.workoutActiveBorder,
@@ -1258,94 +1359,113 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
               gap: 10,
             }}
           >
-            <View style={{ flexBasis: 112, flexGrow: 0, flexShrink: 1, minWidth: 98 }}>
-              <MonoLabel
-                color={theme.colors.primaryEmphasis}
+            <View style={{ flex: 0.85, minWidth: 0 }}>
+              {/* Raw Text, not `MonoLabel`: this caption sits in the
+                  narrowest column and needs its own `adjustsFontSizeToFit`
+                  safety net (MonoLabel doesn't expose that prop) so a bigger
+                  base size on a wide screen never clips against the
+                  column's `flex: 0.85` budget. */}
+              <Text
+                style={{
+                  fontFamily: theme.fonts.mono,
+                  fontSize: nextSetFont(9),
+                  letterSpacing: 1,
+                  color: theme.colors.primaryEmphasis,
+                  textTransform: 'uppercase',
+                }}
                 numberOfLines={1}
-                style={{ letterSpacing: 1.4 }}
+                adjustsFontSizeToFit
+                minimumFontScale={0.7}
               >
                 {t('sets.next').toUpperCase()}
-              </MonoLabel>
-              <View
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'baseline',
-                  marginTop: 6,
-                  overflow: 'hidden',
-                }}
-              >
-                <Display size={28} numberOfLines={1}>
+              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'baseline', marginTop: 3 }}>
+                <Display size={nextSetFont(22)} numberOfLines={1}>
                   {t('sets.number', { number: setIdx + 1 }).toUpperCase()}
                 </Display>
                 <Text
                   style={{
                     fontFamily: theme.fonts.display,
-                    fontSize: 18,
+                    fontSize: nextSetFont(15),
                     color: theme.colors.textFaint,
-                    marginLeft: 6,
+                    marginLeft: 4,
                     transform: [{ skewX: '-8deg' }],
                   }}
+                  numberOfLines={1}
                 >
                   /{ex.sets.length}
                 </Text>
               </View>
             </View>
-            <View
-              style={{
-                alignItems: 'center',
-                flex: 1,
-                minWidth: 0,
-                maxWidth: 100,
-              }}
-            >
+            <View style={{ width: 1, alignSelf: 'stretch', backgroundColor: theme.colors.dividerStrong }} />
+            <View style={{ flex: 1.3, minWidth: 0, alignItems: 'center' }}>
               <Text
                 style={{
-                  width: '100%',
-                  paddingHorizontal: 4,
                   fontFamily: theme.fonts.display,
-                  fontSize: 40,
+                  fontSize: nextSetFont(26),
                   color: theme.colors.textPrimary,
-                  lineHeight: displayLineHeight(40),
+                  lineHeight: displayLineHeight(nextSetFont(26)),
                   textAlign: 'center',
                   transform: [{ skewX: '-8deg' }],
                 }}
                 numberOfLines={1}
                 adjustsFontSizeToFit
-                minimumFontScale={0.5}
+                minimumFontScale={0.85}
               >
                 {curReps}
               </Text>
-              <MonoLabel style={{ marginTop: 4 }} numberOfLines={1}>
+              <MonoLabel
+                size={nextSetFont(9)}
+                style={{ marginTop: 2 }}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.7}
+              >
                 {t(`prescription.${ex.doseKind}`).toUpperCase()}
               </MonoLabel>
-              {ex.doseDetail ? <MonoLabel style={{ marginTop: 4, textAlign: 'center' }}>{ex.doseDetail}</MonoLabel> : null}
+              {ex.doseDetail ? (
+                <MonoLabel
+                  size={nextSetFont(9)}
+                  style={{ marginTop: 2, textAlign: 'center' }}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.7}
+                >
+                  {ex.doseDetail}
+                </MonoLabel>
+              ) : null}
             </View>
             <View style={{ width: 1, alignSelf: 'stretch', backgroundColor: theme.colors.dividerStrong }} />
-            <View style={{ alignItems: 'center', width: 72, minWidth: 66, flexShrink: 1 }}>
-              <View style={{ width: '100%', flexDirection: 'row', alignItems: 'baseline', justifyContent: 'center' }}>
+            <View style={{ flex: 0.85, minWidth: 0, alignItems: 'flex-end' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'flex-end' }}>
                 <Text
                   style={{
-                    flexShrink: 1,
                     fontFamily: theme.fonts.display,
-                    fontSize: 28,
+                    fontSize: nextSetFont(21),
                     color: theme.colors.textPrimary,
-                    lineHeight: displayLineHeight(28),
+                    lineHeight: displayLineHeight(nextSetFont(21)),
                     transform: [{ skewX: '-8deg' }],
                   }}
                   numberOfLines={1}
                   adjustsFontSizeToFit
-                  minimumFontScale={0.5}
+                  minimumFontScale={0.85}
                 >
-                  {curLast > 0 ? formatWorkoutLoadFromKg(curLast, resolvedUnits) : '—'}
+                  {curPreviousLoad > 0 ? formatWorkoutLoadFromKg(curPreviousLoad, resolvedUnits) : '—'}
                 </Text>
-                {curLast > 0 && (
-                  <Text style={{ fontFamily: theme.fonts.mono, fontSize: 12, color: theme.colors.textFaint, marginLeft: 2 }}>
+                {curPreviousLoad > 0 && (
+                  <Text style={{ fontFamily: theme.fonts.mono, fontSize: nextSetFont(11), color: theme.colors.textFaint, marginLeft: 2 }} numberOfLines={1}>
                     {loadUnit}
                   </Text>
                 )}
               </View>
-              <MonoLabel size={8.5} style={{ marginTop: 6 }} numberOfLines={1}>
-                {t('sets.lastTime').toUpperCase()}
+              <MonoLabel
+                size={nextSetFont(8.5)}
+                style={{ marginTop: 3 }}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.7}
+              >
+                {t('sets.previous').toUpperCase()}
               </MonoLabel>
             </View>
           </View>
@@ -1367,11 +1487,12 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
                 key={i}
                 style={{
                   flexDirection: 'row',
+                  flexWrap: 'nowrap',
                   alignItems: 'center',
-                  gap: 12,
-                  paddingVertical: 11,
-                  paddingHorizontal: 14,
-                  borderRadius: 12,
+                  gap: 8,
+                  paddingVertical: 9,
+                  paddingHorizontal: 12,
+                  borderRadius: 10,
                   marginBottom: 6,
                   backgroundColor: now
                     ? theme.colors.workoutActiveBackground
@@ -1398,7 +1519,18 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
                 >
                   {done ? '✓' : String(i + 1).padStart(2, '0')}
                 </Text>
-                <Text style={{ fontFamily: theme.fonts.mono, fontSize: 12, flex: 1, color: theme.colors.textPrimary }}>
+                {/* No previous-load reference here anymore — that's the
+                    "next set" card's job now (index-aligned by setIndex,
+                    with a last-known-load fallback). A completed set shows
+                    only what was actually registered THIS session
+                    (`lastWeight`/`w`); a future/current set shows the plain
+                    prescription, nothing inline about history. */}
+                <Text
+                  style={{ fontFamily: theme.fonts.mono, fontSize: 13, color: theme.colors.textPrimary, flex: 1, minWidth: 0 }}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.85}
+                >
                   {ex.doseKind !== 'reps'
                     ? <>{t(`prescription.${ex.doseKind}`)}: {s0.r}</>
                     : w > 0
@@ -1410,16 +1542,24 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
                       })
                     : t('sets.summaryReps', { count: pluralCountForReps(s0.r), reps: s0.r })}
                 </Text>
-                {justLogged && (
-                  <MonoLabel color={theme.colors.primaryEmphasis}>
-                    {t('sets.registered').toUpperCase()}
-                  </MonoLabel>
-                )}
-                {now && (
-                  <MonoLabel color={theme.colors.primaryEmphasis}>
-                    {t('sets.current').toUpperCase()}
-                  </MonoLabel>
-                )}
+                {/* Fixed-width slot, always rendered (empty when neither
+                    badge applies) — this is what keeps every row's
+                    previous-load value aligned to the same right edge,
+                    instead of drifting further right on rows with no
+                    badge. Sized for the pt-BR `sets.registered` copy, the
+                    longest of the two possible badge strings. */}
+                <View style={{ width: 80, alignItems: 'flex-end' }}>
+                  {justLogged && (
+                    <MonoLabel size={9} color={theme.colors.primaryEmphasis} numberOfLines={1}>
+                      {t('sets.registered').toUpperCase()}
+                    </MonoLabel>
+                  )}
+                  {now && (
+                    <MonoLabel size={9} color={theme.colors.primaryEmphasis} numberOfLines={1}>
+                      {t('sets.current').toUpperCase()}
+                    </MonoLabel>
+                  )}
+                </View>
               </View>
             );
           })}
@@ -1481,6 +1621,7 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
             regWeight={regWeight}
             setRegWeight={setRegWeight}
             setNumber={(pending ? pending.setIdx : setIdx) + 1}
+            previousLoadKg={previousSetLoads[ex.db]?.[pending ? pending.setIdx : setIdx] ?? undefined}
             finalSetLoadEntry={finalSetLoadEntry}
             continuesToCardio={!!cardioFinisher}
             onAdd15={() => addRestSeconds(15)}
@@ -1609,31 +1750,6 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
                 {ex.doseDetail ? <Text style={{ color: theme.colors.textPrimary, marginTop: 8 }}>{t('prescription.duration')}: {ex.doseDetail}</Text> : null}
               </View>
             </View>
-          </SafeAreaView>
-        </Modal>
-
-        <Modal visible={sessionDetailsOpen} transparent animationType="slide" onRequestClose={() => setSessionDetailsOpen(false)}>
-          <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }}>
-            <View style={{ padding: 20, flexDirection: 'row', justifyContent: 'space-between' }}>
-              <Display size={24}>{t('prescription.sessionDetails')}</Display>
-              <Pressable accessibilityRole="button" accessibilityLabel={t('video.accessibility.close')} onPress={() => setSessionDetailsOpen(false)}>
-                <Icon name="x" size={20} color={theme.colors.textPrimary} />
-              </Pressable>
-            </View>
-            <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 32, gap: 18 }}>
-              {currentSession?.notes ? <Text style={{ color: theme.colors.textPrimary }}>{currentSession.notes}</Text> : null}
-              {([
-                ['technique', currentSession?.techniqueGuideline],
-                ['effort', currentSession?.effortGuideline],
-                ['rest', currentSession?.restGuideline],
-                ['progression', currentSession?.progressionGuideline],
-              ] as const).filter(([, value]) => Boolean(value)).map(([key, value]) => (
-                <View key={key}>
-                  <MonoLabel color={theme.colors.primaryEmphasis}>{t(`prescription.${key}`).toUpperCase()}</MonoLabel>
-                  <Text style={{ color: theme.colors.textPrimary, marginTop: 5 }}>{value}</Text>
-                </View>
-              ))}
-            </ScrollView>
           </SafeAreaView>
         </Modal>
 
@@ -3066,6 +3182,7 @@ function RestOverlay({
   regWeight,
   setRegWeight,
   setNumber,
+  previousLoadKg,
   finalSetLoadEntry,
   continuesToCardio,
   onAdd15,
@@ -3078,6 +3195,7 @@ function RestOverlay({
   regWeight: number;
   setRegWeight: (fn: number | ((prev: number) => number)) => void;
   setNumber: number;
+  previousLoadKg?: number;
   finalSetLoadEntry?: boolean;
   continuesToCardio?: boolean;
   onAdd15: () => void;
@@ -3254,6 +3372,22 @@ function RestOverlay({
         >
           {t('rest.inputHint')}
         </Text>
+        {previousLoadKg != null && (
+          <Text
+            style={{
+              textAlign: 'center',
+              marginTop: 8,
+              fontSize: 11,
+              color: theme.colors.textMuted,
+              fontFamily: theme.fonts.uiMed,
+            }}
+          >
+            {t('rest.previousLoad', {
+              value: formatWorkoutLoadFromKg(previousLoadKg, resolvedUnits),
+              unit: loadUnit,
+            })}
+          </Text>
+        )}
       </View>
 
       <View style={{ flexDirection: 'row', gap: 10, marginTop: 28 }}>

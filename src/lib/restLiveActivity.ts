@@ -58,16 +58,29 @@ function isValidState(state: WorkoutActivityState): boolean {
     state.sessionId.trim().length > 0 &&
     Number.isInteger(state.startedAt) &&
     state.startedAt >= 0 &&
-    Number.isInteger(state.endsAt) &&
-    state.endsAt > state.startedAt &&
     typeof state.exerciseName === 'string' &&
     state.exerciseName.trim().length > 0 &&
     Number.isInteger(state.setIndex) &&
-    state.setIndex >= 1 &&
     Number.isInteger(state.totalSets) &&
-    state.totalSets >= state.setIndex &&
+    state.totalSets >= 1 &&
     Object.values(REST_ACTIVITY_PHASE).includes(state.phase);
   if (!hasValidBase) return false;
+
+  if (state.phase === REST_ACTIVITY_PHASE.WORKOUT_ACTIVE) {
+    return state.endsAt === undefined &&
+      state.setIndex >= 0 &&
+      state.setIndex < state.totalSets &&
+      state.nextAction === REST_ACTIVITY_NEXT_ACTION.NEXT_SET &&
+      state.nextSetIndex === state.setIndex + 1 &&
+      state.nextExerciseName === undefined;
+  }
+
+  if (
+    !Number.isInteger(state.endsAt) ||
+    state.endsAt <= state.startedAt ||
+    state.setIndex < 1 ||
+    state.totalSets < state.setIndex
+  ) return false;
 
   if (
     state.phase === REST_ACTIVITY_PHASE.CARDIO_RUNNING ||
@@ -138,6 +151,10 @@ function isCardioState(state: WorkoutActivityState): boolean {
   return state.nextAction === REST_ACTIVITY_NEXT_ACTION.FINISH_WORKOUT;
 }
 
+function isIOSOnlyState(state: WorkoutActivityState): boolean {
+  return isCardioState(state) || state.phase === REST_ACTIVITY_PHASE.WORKOUT_ACTIVE;
+}
+
 async function getCapabilities(): Promise<RestLiveCapabilities> {
   const nativeModule = getAJFitRestActivityNativeModule();
   if (!nativeModule) {
@@ -171,7 +188,7 @@ function start(state: WorkoutActivityState): Promise<void> {
 
   return enqueueNativeOperation('start', async () => {
     const nativeModule = await getSupportedNativeModule(
-      isCardioState(state) ? 'ios-live-activity' : undefined,
+      isIOSOnlyState(state) ? 'ios-live-activity' : undefined,
     );
     if (!nativeModule) return;
 
@@ -203,7 +220,7 @@ function update(
 
   return enqueueNativeOperation('update', async () => {
     const nativeModule = await getSupportedNativeModule(
-      isCardioState(state) ? 'ios-live-activity' : undefined,
+      isIOSOnlyState(state) ? 'ios-live-activity' : undefined,
     );
     if (!nativeModule || logicalSessionId !== state.sessionId) return;
     await nativeModule.update(state, options.alert === true);

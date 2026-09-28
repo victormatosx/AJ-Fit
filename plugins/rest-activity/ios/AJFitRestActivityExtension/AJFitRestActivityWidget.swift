@@ -7,6 +7,8 @@ private let ajFitBlue = Color(red: 0.16, green: 0.50, blue: 1.00)
 private let ajFitBackground = Color(red: 0.01, green: 0.00, blue: 0.07)
 
 private enum RestActivityCopy {
+  static let workoutTitle: LocalizedStringKey = "workout_activity_title"
+  static let workoutActive: LocalizedStringKey = "workout_activity_active"
   static let restTitle: LocalizedStringKey = "rest_activity_lock_screen_title"
   static let expandedRestTitle: LocalizedStringKey = "rest_activity_title"
   static let nextSet: LocalizedStringKey = "rest_activity_next_set"
@@ -30,7 +32,7 @@ private enum RestActivityCopy {
 private func cardioRemainingText(
   _ state: AJFitRestActivityAttributes.ContentState
 ) -> String {
-  let seconds = max(0, Int(state.endsAt.timeIntervalSince(state.startedAt).rounded(.down)))
+  let seconds = max(0, Int(state.timerEndsAt.timeIntervalSince(state.startedAt).rounded(.down)))
   let hours = seconds / 3_600
   let minutes = (seconds % 3_600) / 60
   let remainder = seconds % 60
@@ -121,7 +123,7 @@ private struct RestCountdownText: View {
 
   var body: some View {
     Text(
-      timerInterval: state.startedAt...state.endsAt,
+      timerInterval: state.startedAt...state.timerEndsAt,
       countsDown: true,
       showsHours: false
     )
@@ -156,7 +158,7 @@ private struct RestingCompactLeadingView: View {
 
   var body: some View {
     Text(
-      timerInterval: state.startedAt...state.endsAt,
+      timerInterval: state.startedAt...state.timerEndsAt,
       countsDown: true,
       showsHours: false
     )
@@ -187,7 +189,7 @@ private struct RestingMinimalView: View {
 
   var body: some View {
     Text(
-      timerInterval: state.startedAt...state.endsAt,
+      timerInterval: state.startedAt...state.timerEndsAt,
       countsDown: true,
       showsHours: false
     )
@@ -207,7 +209,7 @@ private struct CardioTimerText: View {
   var body: some View {
     Group {
       if state.phase == .cardioRunning {
-        Text(timerInterval: state.startedAt...state.endsAt, countsDown: true, showsHours: false)
+        Text(timerInterval: state.startedAt...state.timerEndsAt, countsDown: true, showsHours: false)
       } else {
         Text(cardioRemainingText(state))
       }
@@ -356,6 +358,35 @@ private struct RestingLockScreenView: View {
   }
 }
 
+private struct WorkoutActiveLockScreenView: View {
+  let state: AJFitRestActivityAttributes.ContentState
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 10) {
+      HStack {
+        AJFitLogo()
+        Text(RestActivityCopy.workoutTitle)
+          .font(.system(size: 13, weight: .bold, design: .rounded))
+          .foregroundStyle(ajFitBlue)
+        Spacer()
+        RestSetProgressRing(currentSet: state.setIndex, totalSets: state.totalSets, size: 20)
+        Text(RestActivityCopy.series(state.setIndex, state.totalSets))
+          .font(.system(size: 12, weight: .semibold, design: .rounded))
+          .foregroundStyle(.white.opacity(0.72))
+      }
+      Text(RestActivityCopy.workoutActive)
+        .font(.system(size: 24, weight: .bold, design: .rounded))
+        .foregroundStyle(.white)
+      Text(state.exerciseName)
+        .font(.system(size: 17, weight: .semibold, design: .rounded))
+        .foregroundStyle(.white)
+        .lineLimit(1)
+        .minimumScaleFactor(0.75)
+      ReturnToWorkoutView(copy: RestActivityCopy.returnToWorkout)
+    }
+  }
+}
+
 private struct NextSetLockScreenView: View {
   let state: AJFitRestActivityAttributes.ContentState
 
@@ -414,6 +445,7 @@ private struct RestLockScreenView: View {
   var body: some View {
     Group {
       switch phase {
+      case .workoutActive: WorkoutActiveLockScreenView(state: state)
       case .resting: RestingLockScreenView(state: state)
       case .nextSet: NextSetLockScreenView(state: state)
       case .nextExercise: NextExerciseLockScreenView(state: state)
@@ -458,6 +490,8 @@ private struct ExpandedTrailingView: View {
   var body: some View {
     Group {
       switch phase {
+      case .workoutActive:
+        Text(RestActivityCopy.series(state.setIndex, state.totalSets))
       case .resting:
         Text(RestActivityCopy.series(state.setIndex, state.totalSets))
       case .nextSet:
@@ -485,6 +519,10 @@ private struct ExpandedCenterView: View {
   var body: some View {
     Group {
       switch phase {
+      case .workoutActive:
+        Text(RestActivityCopy.workoutActive)
+          .font(.system(size: 22, weight: .bold, design: .rounded))
+          .foregroundStyle(.white)
       case .resting:
         RestCountdownText(state: state)
       case .nextSet:
@@ -528,7 +566,7 @@ private struct ExpandedBottomView: View {
         .lineLimit(1)
         .minimumScaleFactor(0.72)
       Text(
-        phase == .resting || phase == .cardioRunning
+        phase == .workoutActive || phase == .resting || phase == .cardioRunning
           ? RestActivityCopy.returnToWorkout
           : phase == .cardioPaused
             ? RestActivityCopy.cardioPaused
@@ -566,6 +604,10 @@ struct AJFitRestActivityWidget: Widget {
         }
       } compactLeading: {
         switch phase {
+        case .workoutActive:
+          Text("AJ FIT")
+            .font(.system(size: 10, weight: .bold, design: .rounded))
+            .foregroundStyle(ajFitBlue)
         case .resting: RestingCompactLeadingView(state: context.state)
         case .nextSet: NextSetCompactLeadingView()
         case .nextExercise: NextExerciseCompactLeadingView()
@@ -579,6 +621,8 @@ struct AJFitRestActivityWidget: Widget {
         }
       } compactTrailing: {
         switch phase {
+        case .workoutActive:
+          RestSetProgressRing(currentSet: context.state.setIndex, totalSets: context.state.totalSets, size: 20)
         case .resting: RestingCompactTrailingView(state: context.state)
         case .nextSet: NextSetCompactTrailingView()
         case .nextExercise: NextExerciseCompactTrailingView()
@@ -586,7 +630,9 @@ struct AJFitRestActivityWidget: Widget {
           CardioStatusIcon(phase: phase, size: 19)
         }
       } minimal: {
-        if phase == .resting {
+        if phase == .workoutActive {
+          RestSetProgressRing(currentSet: context.state.setIndex, totalSets: context.state.totalSets, size: 20)
+        } else if phase == .resting {
           RestingMinimalView(state: context.state)
         } else if phase == .cardioRunning || phase == .cardioPaused {
           CardioTimerText(state: context.state, compact: true)
@@ -646,6 +692,8 @@ private struct CompactPreview: View {
   var body: some View {
     HStack(spacing: 42) {
       switch phase {
+      case .workoutActive:
+        Text("AJ FIT")
       case .resting: RestingCompactLeadingView(state: state)
       case .nextSet: NextSetCompactLeadingView()
       case .nextExercise: NextExerciseCompactLeadingView()
@@ -655,6 +703,8 @@ private struct CompactPreview: View {
         Text(RestActivityCopy.cardioCompleted)
       }
       switch phase {
+      case .workoutActive:
+        RestSetProgressRing(currentSet: state.setIndex, totalSets: state.totalSets, size: 20)
       case .resting: RestingCompactTrailingView(state: state)
       case .nextSet: NextSetCompactTrailingView()
       case .nextExercise: NextExerciseCompactTrailingView()

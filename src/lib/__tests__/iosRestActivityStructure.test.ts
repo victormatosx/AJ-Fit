@@ -106,6 +106,17 @@ describe('AJFitRestActivity Apple module', () => {
     expect(localizationCatalog.strings.cardio_activity_finish_workout).toBeDefined();
   });
 
+  it('models and renders a workout with zero completed sets before any rest', () => {
+    expect(attributesSource).toContain('case workoutActive = "workout_active"');
+    expect(attributesSource).toContain('public var endsAt: Date?');
+    expect(moduleSource).toContain('materializedPhase == .workoutActive');
+    expect(moduleSource).toContain('setIndex >= 0 && setIndex < totalSets');
+    expect(widgetSource).toContain('private struct WorkoutActiveLockScreenView: View');
+    expect(widgetSource).toContain('case .workoutActive: WorkoutActiveLockScreenView');
+    expect(localizationCatalog.strings.workout_activity_active).toBeDefined();
+    expect(localizationCatalog.strings.workout_activity_title).toBeDefined();
+  });
+
   it('keeps the system activity reusable between rests and ends it with the workout', () => {
     expect(moduleSource).toContain(
       'await activity.update(dormantContent(for: activity, reason: reason))',
@@ -205,12 +216,12 @@ describe('versioned Live Activity extension', () => {
       widgetSource.indexOf('private struct RestingMinimalView'),
       widgetSource.indexOf('private struct NextSetCompactLeadingView'),
     );
-    expect(leading).toContain('timerInterval: state.startedAt...state.endsAt');
+    expect(leading).toContain('timerInterval: state.startedAt...state.timerEndsAt');
     expect(leading).toContain('countsDown: true');
     expect(leading).not.toContain('RestSetProgressRing');
     expect(trailing).toContain('RestSetProgressRing(');
     expect(trailing).toContain('currentSet: state.setIndex');
-    expect(minimal).toContain('timerInterval: state.startedAt...state.endsAt');
+    expect(minimal).toContain('timerInterval: state.startedAt...state.timerEndsAt');
     expect(minimal).toContain('countsDown: true');
     expect(minimal).not.toContain('RestSetProgressRing');
     const compactPresentation = widgetSource.slice(
@@ -345,7 +356,7 @@ describe('versioned Live Activity extension', () => {
   });
 
   it('renders the system countdown and deep-links to the allowlisted workout route', () => {
-    expect(widgetSource).toContain('timerInterval: state.startedAt...state.endsAt');
+    expect(widgetSource).toContain('timerInterval: state.startedAt...state.timerEndsAt');
     expect(widgetSource).toContain('countsDown: true');
     expect(widgetSource).toContain('"ajfit://workout/active"');
     expect(widgetSource).toContain('.widgetURL(activeWorkoutURL)');

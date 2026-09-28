@@ -12,7 +12,7 @@ import { motion, sizes, spacing } from '../theme/tokens';
 import { useTheme } from '../theme';
 import { useAuth } from '../state/AuthContext';
 import { useAssessments } from '../hooks/useAssessments';
-import { useLoadProgress } from '../hooks/useLoadProgress';
+import { useLoadProgressState } from '../loadProgress/LoadProgressContext';
 import { useScreenFocusEffect } from '../state/ScreenActivity';
 
 /**
@@ -61,7 +61,7 @@ export function ProgressScreen({
     loading: loadsLoading,
     error: loadsError,
     refresh: refreshLoads,
-  } = useLoadProgress(user?.uid ?? null);
+  } = useLoadProgressState();
 
   const tabs: [ProgressView, string][] = [
     ['body', t('progress.tabs.body')],

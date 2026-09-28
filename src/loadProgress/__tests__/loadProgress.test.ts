@@ -92,6 +92,33 @@ describe('deriveLoadProgress', () => {
   });
 });
 
+describe('deriveLoadProgress — completedSetHistory', () => {
+  it('only a status COMPLETED execution contributes a per-set point', () => {
+    const result = deriveLoadProgress([
+      execution('abandoned', '2026-09-01', 'squat', [100], 'ABANDONED'),
+      execution('in-progress', '2026-09-10', 'squat', [90], 'IN_PROGRESS'),
+      execution('partial', '2026-09-15', 'squat', [85], 'PARTIALLY_COMPLETED'),
+      execution('done', '2026-09-20', 'squat', [80], 'COMPLETED'),
+    ], '2026-09-20');
+
+    expect(result.completedSetHistory).toEqual([{
+      exerciseId: 'squat',
+      history: [{ executionId: 'done', localDate: '2026-09-20', setLoadsKg: [80] }],
+    }]);
+  });
+
+  it('keeps a null at every set index without a valid completed weight', () => {
+    const mixed = execution('mixed', '2026-09-20', 'bench', [60, null, 65]);
+    mixed.exercises[0]!.sets[1]!.status = 'SKIPPED';
+    const result = deriveLoadProgress([mixed], '2026-09-20');
+
+    expect(result.completedSetHistory).toEqual([{
+      exerciseId: 'bench',
+      history: [{ executionId: 'mixed', localDate: '2026-09-20', setLoadsKg: [60, null, 65] }],
+    }]);
+  });
+});
+
 describe('normalizeExerciseSearch', () => {
   it('matches accents and casing consistently', () => {
     expect(normalizeExerciseSearch('  ELEVAÇÃO Lateral ')).toBe('elevacao lateral');

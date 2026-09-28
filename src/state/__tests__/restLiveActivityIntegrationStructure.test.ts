@@ -71,15 +71,26 @@ describe('rest live presentation boundary', () => {
 });
 
 describe('RestSessionContext live transition wiring', () => {
-  it('starts after creating the absolute rest state', () => {
+  it('updates the activity after creating the first absolute rest state', () => {
     const startBlock = context.slice(
       context.indexOf('const startRest ='),
       context.indexOf('const addSeconds ='),
     );
     expect(startBlock.indexOf('const rest = createRest({')).toBeLessThan(
-      startBlock.indexOf('void restLiveActivity.start(activityState)'),
+      startBlock.indexOf('void restLiveActivity.update(activityState)'),
     );
     expect(startBlock).toContain('void persistRestSession(rest)');
+  });
+
+  it('starts at the persisted workout boundary with zero completed sets', () => {
+    const beginBlock = context.slice(
+      context.indexOf('const beginWorkoutSession ='),
+      context.indexOf('const registerLiveActivity ='),
+    );
+    expect(beginBlock).toContain('projectWorkoutActiveActivityState');
+    expect(beginBlock).toContain('void restLiveActivity.start(activityState)');
+    expect(appShell).toContain('beginPersistedWorkoutSession(started, sessionIndex)');
+    expect(appShell).toContain("set.status === 'PENDING'");
   });
 
   it('updates only after +seconds returns a new absolute endsAt', () => {

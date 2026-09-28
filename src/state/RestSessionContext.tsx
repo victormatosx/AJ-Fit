@@ -33,6 +33,10 @@ import {
   REST_ACTIVITY_PHASE,
   type MaterializedRestNextAction,
 } from '../types/restLiveActivity';
+import {
+  projectWorkoutActiveActivityState,
+  type WorkoutActivityStartInput,
+} from '../workoutExecution/workoutActivityProjection';
 
 type StartRestInput = Readonly<{
   durationSeconds: number;
@@ -47,7 +51,7 @@ interface RestSessionContextValue {
   workoutSessionId: string | null;
   status: RestTimerState['status'];
   rest: ActiveRest | null;
-  beginWorkoutSession: (executionId?: string) => string;
+  beginWorkoutSession: (input: WorkoutActivityStartInput) => string;
   endWorkoutSession: () => void;
   startRest: (input: StartRestInput) => ActiveRest;
   addSeconds: (seconds: number) => ActiveRest | null;
@@ -122,10 +126,18 @@ export function RestSessionProvider({ children }: { children: React.ReactNode })
     return next;
   }, []);
 
-  const beginWorkoutSession = useCallback(
-    (executionId?: string) => ensureSessionId(executionId),
-    [ensureSessionId],
-  );
+  const beginWorkoutSession = useCallback((input: WorkoutActivityStartInput) => {
+    const sessionId = ensureSessionId(input.executionId);
+    const activityState = projectWorkoutActiveActivityState({
+      ...input,
+      executionId: sessionId,
+    });
+    if (activityState) {
+      restActivitySessionStartedRef.current = true;
+      void restLiveActivity.start(activityState);
+    }
+    return sessionId;
+  }, [ensureSessionId]);
 
   const registerLiveActivity = useCallback(() => {
     restActivitySessionStartedRef.current = true;
@@ -180,7 +192,7 @@ export function RestSessionProvider({ children }: { children: React.ReactNode })
     restActivityStateRef.current = { restId: rest.restId, state: activityState };
     restActivitySessionStartedRef.current = true;
     expirationSourceRef.current = null;
-    void restLiveActivity.start(activityState);
+    void restLiveActivity.update(activityState);
     logInfo('restSession', 'rest_started', {
       durationSeconds: rest.initialDurationSeconds,
     });

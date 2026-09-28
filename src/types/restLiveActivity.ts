@@ -10,6 +10,7 @@ export type RestLiveCapabilities = Readonly<{
 }>;
 
 export const REST_ACTIVITY_PHASE = Object.freeze({
+  WORKOUT_ACTIVE: 'workout_active',
   RESTING: 'resting',
   NEXT_SET: 'next_set',
   NEXT_EXERCISE: 'next_exercise',
@@ -45,25 +46,35 @@ export type MaterializedRestNextAction =
     }>;
 
 /**
- * Presentation-ready snapshot shared with optional native rest surfaces.
- * Time is absolute; native consumers render the countdown from `endsAt`.
+ * Presentation-ready snapshot shared with optional native workout surfaces.
+ * Timed phases use absolute time; the initial workout phase has no deadline.
  */
-type RestActivityStateBase = Readonly<{
+type WorkoutActivityStateBase = Readonly<{
   /** Concrete workout execution id, never a T001-T090 template id. */
   sessionId: string;
   /** Epoch milliseconds. */
   startedAt: number;
-  /** Epoch milliseconds and the shared countdown source of truth. */
-  endsAt: number;
   /** Already localized/materialized by the workout layer. */
   exerciseName: string;
-  /** One-based presentation index. */
+  /** Set progress; zero is valid only before the first set is complete. */
   setIndex: number;
   totalSets: number;
 }>;
 
+export type WorkoutActiveActivityState = Readonly<
+  WorkoutActivityStateBase & {
+    /** No timer exists before the first set; zero means no set is complete. */
+    setIndex: number;
+    phase: typeof REST_ACTIVITY_PHASE.WORKOUT_ACTIVE;
+    nextAction: typeof REST_ACTIVITY_NEXT_ACTION.NEXT_SET;
+    nextSetIndex: number;
+    nextExerciseName?: never;
+    endsAt?: never;
+  }
+>;
+
 export type RestActivityState = Readonly<
-  RestActivityStateBase & (
+  WorkoutActivityStateBase & { endsAt: number } & (
     | (Extract<
         MaterializedRestNextAction,
         { nextAction: typeof REST_ACTIVITY_NEXT_ACTION.NEXT_SET }
@@ -92,7 +103,7 @@ export type RestActivityState = Readonly<
  * timer owns cardio state.
  */
 export type CardioActivityState = Readonly<
-  RestActivityStateBase & {
+  WorkoutActivityStateBase & { endsAt: number } & {
     phase:
       | typeof REST_ACTIVITY_PHASE.CARDIO_RUNNING
       | typeof REST_ACTIVITY_PHASE.CARDIO_PAUSED
@@ -103,7 +114,10 @@ export type CardioActivityState = Readonly<
   }
 >;
 
-export type WorkoutActivityState = RestActivityState | CardioActivityState;
+export type WorkoutActivityState =
+  | WorkoutActiveActivityState
+  | RestActivityState
+  | CardioActivityState;
 
 export type RestActivityUpdateOptions = Readonly<{
   /** Requests system emphasis only for an on-time, natural rest completion. */

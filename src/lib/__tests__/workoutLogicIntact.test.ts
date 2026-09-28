@@ -239,7 +239,7 @@ describe('WorkoutScreen source — 7B + 7C migrations use i18n keys', () => {
     "t('sets.progress'",
     "t('sets.next')",
     "t('sets.number'",
-    "t('sets.lastTime')",
+    "t('sets.previous')",
     "t('sets.registered')",
     "t('sets.current')",
     "t('sets.summaryWeighted'",

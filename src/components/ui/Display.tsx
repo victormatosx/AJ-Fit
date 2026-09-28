@@ -90,18 +90,25 @@ export function MonoLabel({
   size = 10,
   style,
   numberOfLines,
+  adjustsFontSizeToFit,
+  minimumFontScale,
 }: {
   children: React.ReactNode;
   color?: string;
   size?: number;
   style?: StyleProp<TextStyle>;
   numberOfLines?: number;
+  /** Opt-in safety net for a caller whose font size is computed (e.g. screen-width-driven) rather than a fixed constant — never the primary sizing mechanism. */
+  adjustsFontSizeToFit?: boolean;
+  minimumFontScale?: number;
 }) {
   const { theme } = useTheme();
 
   return (
     <Text
       numberOfLines={numberOfLines}
+      adjustsFontSizeToFit={adjustsFontSizeToFit}
+      minimumFontScale={minimumFontScale}
       style={[
         {
           fontFamily: theme.fonts.mono,

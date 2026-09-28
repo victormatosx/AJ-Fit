@@ -160,7 +160,7 @@
     "progress_other": "{{done}}/{{total}} series",
     "current": "Ahora",
     "registered": "Registrado",
-    "lastTime": "Última vez",
+    "previous": "Anterior",
     "summaryWeighted_one": "{{reps}} rep × {{weight}} {{unit}}",
     "summaryWeighted_other": "{{reps}} reps × {{weight}} {{unit}}",
     "summaryBodyweight_one": "{{reps}} rep × peso corporal",
@@ -181,6 +181,7 @@
     "logLoad": "Registrar carga · Serie {{setNumber}}",
     "optional": "opcional",
     "inputHint": "Toca el número para escribir",
+    "previousLoad": "Carga anterior: {{value}} {{unit}}",
     "continueToCardio": "Ir al cardio",
     "finishWorkout": "Finalizar entreno",
     "addSecondsAccessibility": "Añadir {{seconds}} segundos",
@@ -421,11 +422,6 @@
     "duration": "duración",
     "distance": "distancia",
     "cycles": "ciclos",
-    "intensity": "Intensidad",
-    "sessionDetails": "Detalles de la sesión",
-    "technique": "Técnica",
-    "effort": "Esfuerzo",
-    "rest": "Descanso",
-    "progression": "Progresión"
+    "intensity": "Intensidad"
   }
 }

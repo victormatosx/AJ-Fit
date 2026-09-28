@@ -160,7 +160,7 @@
     "progress_other": "{{done}}/{{total}} sets",
     "current": "Now",
     "registered": "Logged",
-    "lastTime": "Last time",
+    "previous": "Previous",
     "summaryWeighted_one": "{{reps}} rep × {{weight}} {{unit}}",
     "summaryWeighted_other": "{{reps}} reps × {{weight}} {{unit}}",
     "summaryBodyweight_one": "{{reps}} rep × bodyweight",
@@ -181,6 +181,7 @@
     "logLoad": "Log load · Set {{setNumber}}",
     "optional": "optional",
     "inputHint": "Tap the number to type",
+    "previousLoad": "Previous load: {{value}} {{unit}}",
     "continueToCardio": "Go to cardio",
     "finishWorkout": "Finish workout",
     "addSecondsAccessibility": "Add {{seconds}} seconds",
@@ -421,11 +422,6 @@
     "duration": "duration",
     "distance": "distance",
     "cycles": "cycles",
-    "intensity": "Intensity",
-    "sessionDetails": "Session details",
-    "technique": "Technique",
-    "effort": "Effort",
-    "rest": "Rest",
-    "progression": "Progression"
+    "intensity": "Intensity"
   }
 }

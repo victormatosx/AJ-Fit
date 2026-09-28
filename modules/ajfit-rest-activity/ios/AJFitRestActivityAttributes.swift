@@ -2,6 +2,7 @@ import ActivityKit
 import Foundation
 
 public enum RestActivityPhase: String, Codable, Hashable, Sendable {
+  case workoutActive = "workout_active"
   case resting
   case nextSet = "next_set"
   case nextExercise = "next_exercise"
@@ -27,7 +28,7 @@ public enum RestActivityNextAction: String, Codable, Hashable, Sendable {
 public struct AJFitRestActivityAttributes: ActivityAttributes {
   public struct ContentState: Codable, Hashable, Sendable {
     public var startedAt: Date
-    public var endsAt: Date
+    public var endsAt: Date?
     public var exerciseName: String
     public var setIndex: Int
     public var totalSets: Int
@@ -38,7 +39,7 @@ public struct AJFitRestActivityAttributes: ActivityAttributes {
 
     public init(
       startedAt: Date,
-      endsAt: Date,
+      endsAt: Date?,
       exerciseName: String,
       setIndex: Int,
       totalSets: Int,
@@ -57,6 +58,8 @@ public struct AJFitRestActivityAttributes: ActivityAttributes {
       self.nextSetIndex = nextSetIndex
       self.nextExerciseName = nextExerciseName
     }
+
+    public var timerEndsAt: Date { endsAt ?? startedAt }
 
     /**
      * `staleDate` may advance presentation while the app is suspended. The

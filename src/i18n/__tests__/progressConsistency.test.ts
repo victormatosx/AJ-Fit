@@ -78,8 +78,8 @@ describe('Progress truthfulness and retired consistency preview', () => {
   });
 
   it('derives the loads panel from persisted workout executions instead of previews', () => {
-    expect(progress).toContain("from '../hooks/useLoadProgress'");
-    expect(progress).toContain('useLoadProgress(user?.uid ?? null)');
+    expect(progress).toContain("from '../loadProgress/LoadProgressContext'");
+    expect(progress).toContain('useLoadProgressState()');
     expect(progress).not.toContain('PROGRESS_LOADS_PREVIEW');
   });
 

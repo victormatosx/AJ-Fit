@@ -1,6 +1,20 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "workout_activity_active" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "WORKOUT IN PROGRESS" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "ENTRENO EN CURSO" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "TREINO EM ANDAMENTO" } }
+      }
+    },
+    "workout_activity_title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "AJ FIT · WORKOUT" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "AJ FIT · ENTRENO" } },
+        "pt-BR" : { "stringUnit" : { "state" : "translated", "value" : "AJ FIT · TREINO" } }
+      }
+    },
     "cardio_activity_completed" : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "CARDIO COMPLETE" } },

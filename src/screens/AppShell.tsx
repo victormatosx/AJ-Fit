@@ -42,6 +42,7 @@ import { useUnreadSupportCasesCount } from '../hooks/useUnreadSupportCasesCount'
 import { setForegroundSupportCaseId } from '../services/pushNotifications';
 import type { HelpArticle, SupportTicketType } from '../types/support';
 import { PersistentScreen } from '../components/navigation/PersistentScreen';
+import { LoadProgressProvider } from '../loadProgress/LoadProgressContext';
 import { usePrewarmQueue } from '../components/navigation/usePrewarmQueue';
 import { useSubscription } from '../hooks/useSubscription';
 import {
@@ -72,7 +73,11 @@ import { FullScreenLoading } from '../components/ui/FullScreenLoading';
 import { useWorkoutExecution, type WorkoutExecutionStartError } from '../workoutExecution/useWorkoutExecution';
 import { useWorkoutSessionRecovery } from '../workoutExecution/useWorkoutSessionRecovery';
 import { WorkoutSessionRecoveryModal } from '../components/workout/WorkoutSessionRecoveryModal';
-import { activeExecutionId, abandonWorkoutExecution, loadWorkoutExecution } from '../services/workoutExecutions';
+import {
+  abandonWorkoutExecution,
+  loadWorkoutExecution,
+  type PersistedWorkoutExecution,
+} from '../services/workoutExecutions';
 import {
   applyWorkoutCompletionNavigation,
   runWorkoutHomeProjectionSync,
@@ -95,7 +100,7 @@ import {
   loadManualSubstitutionUserContext,
 } from '../services/exerciseSubstitution';
 import type { ManualSubstitutionUserContext } from '../services/exerciseSubstitutionCandidates';
-import type { ManualSubstitutionContextStatus } from './workoutScreenPlan';
+import { workoutExercisesFromPlan, type ManualSubstitutionContextStatus } from './workoutScreenPlan';
 import { EvolutionUnlockScreen } from './EvolutionUnlockScreen';
 import { errorCode, logInfo, logWarn } from '../lib/logger';
 import { resolveSessionDisplayName, type LooseTranslate } from '../workoutPrescription/sessionPresentation';
@@ -187,9 +192,11 @@ export function AppShell() {
   const { user } = useAuth();
   return (
     <PremiumActionProvider onRequestUpgrade={() => setShowPremium(true)}>
-      <RestSessionProvider key={user?.uid ?? 'signed-out'}>
-        <AppShellContent showPremium={showPremium} setShowPremium={setShowPremium} />
-      </RestSessionProvider>
+      <LoadProgressProvider uid={user?.uid ?? null}>
+        <RestSessionProvider key={user?.uid ?? 'signed-out'}>
+          <AppShellContent showPremium={showPremium} setShowPremium={setShowPremium} />
+        </RestSessionProvider>
+      </LoadProgressProvider>
     </PremiumActionProvider>
   );
 }
@@ -205,7 +212,7 @@ function AppShellContent({
   useEffect(() => {
     recordPerfMark('appshell_mount');
   }, []);
-  const { t } = useTranslation('workout');
+  const { t, i18n } = useTranslation('workout');
   const reduceMotion = useReducedMotionPreference();
   const { tab, setTab } = useAppState();
   const { user, linkedProviders } = useAuth();
@@ -296,6 +303,34 @@ function AppShellContent({
   } = useRestSession();
   const [activeSessionIndex, setActiveSessionIndex] = useState(0);
   const [workoutInProgress, setWorkoutInProgress] = useState(false);
+
+  const beginPersistedWorkoutSession = (
+    started: PersistedWorkoutExecution,
+    sessionIndex: number,
+  ) => {
+    if (!activeProgram) return;
+    const effectiveExerciseIds = new Map(
+      started.exercises.map((exercise) => [exercise.exerciseIndex, exercise.exerciseId]),
+    );
+    const materializedExercises = workoutExercisesFromPlan(
+      activeProgram,
+      i18n.language,
+      sessionIndex,
+      effectiveExerciseIds,
+    );
+    beginWorkoutSession({
+      executionId: started.executionId,
+      startedAt: started.startedAt.toMillis(),
+      exercises: started.exercises.map((exercise) => ({
+        exerciseName: materializedExercises[exercise.exerciseIndex]?.name ?? exercise.exerciseId,
+        settledSets: (() => {
+          const firstPendingSet = exercise.sets.findIndex((set) => set.status === 'PENDING');
+          return firstPendingSet === -1 ? exercise.sets.length : firstPendingSet;
+        })(),
+        totalSets: exercise.sets.length,
+      })),
+    });
+  };
   // Visual-only optimistic entry state. The real WorkoutScreen is never
   // mounted from this flag; it merely owns the actionless preparing surface
   // while execution.start() acquires the durable Firestore mutex.
@@ -829,12 +864,7 @@ function AppShellContent({
       // surface for WorkoutScreen in place, without another navigation.
       setWorkoutInProgress(true);
       setWorkoutStartPending(false);
-      const executionScopeId = activeProgram?.programInstanceId ?? activeProgram?.programId;
-      beginWorkoutSession(
-        executionScopeId
-          ? activeExecutionId(executionScopeId, sessionIndex, started.scheduledLocalDate)
-          : undefined,
-      );
+      beginPersistedWorkoutSession(started, sessionIndex);
       logInfo('workout_execution', 'start_ui_confirmed', { attemptId, sessionIndex, durationMs });
     } catch (error) {
       // useWorkoutExecution currently converts failures to typed results;
@@ -906,8 +936,7 @@ function AppShellContent({
       }
       setWorkoutInProgress(true);
       setWorkoutStartPending(false);
-      const executionScopeId = activeProgram.programInstanceId ?? activeProgram.programId;
-      beginWorkoutSession(activeExecutionId(executionScopeId, sessionIndex, started.scheduledLocalDate));
+      beginPersistedWorkoutSession(started, sessionIndex);
       logInfo('workout_execution', 'advanced_start_ui_confirmed', { attemptId, sessionIndex, durationMs });
     } catch (error) {
       setWorkoutStartPending(false);
@@ -971,7 +1000,7 @@ function AppShellContent({
       setActiveSessionIndex(fresh.sessionIndex);
       setWorkoutInProgress(true);
       setTab('workout');
-      beginWorkoutSession(fresh.executionId);
+      beginPersistedWorkoutSession(fresh, fresh.sessionIndex);
       recovery.resolve();
     } finally {
       setRecoveryAction('idle');

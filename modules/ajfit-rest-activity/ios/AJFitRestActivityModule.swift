@@ -11,7 +11,7 @@ private let restLiveLogger = Logger(
 private struct RestActivityStateRecord: Record {
   @Field var sessionId: String = ""
   @Field var startedAt: Int64 = 0
-  @Field var endsAt: Int64 = 0
+  @Field var endsAt: Int64?
   @Field var exerciseName: String = ""
   @Field var setIndex: Int = 0
   @Field var totalSets: Int = 0
@@ -32,7 +32,7 @@ private struct RestActivityStateRecord: Record {
     let hasValidNextAction = switch materializedNextAction {
     case .nextSet:
       nextSetIndex != nil &&
-        nextSetIndex! > setIndex &&
+        nextSetIndex! == setIndex + 1 &&
         nextSetIndex! <= totalSets &&
         trimmedNextExerciseName == nil
     case .nextExercise:
@@ -44,14 +44,21 @@ private struct RestActivityStateRecord: Record {
         trimmedNextExerciseName == nil &&
         [.cardioRunning, .cardioPaused, .cardioCompleted].contains(materializedPhase)
     }
+    let hasValidTiming = materializedPhase == .workoutActive
+      ? endsAt == nil
+      : endsAt != nil && endsAt! > startedAt
+    let hasValidSetProgress = materializedPhase == .workoutActive
+      ? setIndex >= 0 && setIndex < totalSets
+      : setIndex >= 1 && totalSets >= setIndex
     guard
       !sessionId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
       startedAt >= 0,
-      endsAt > startedAt,
       !exerciseName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-      setIndex >= 1,
-      totalSets >= setIndex,
-      materializedPhase == .resting ||
+      totalSets >= 1,
+      hasValidTiming,
+      hasValidSetProgress,
+      materializedPhase == .workoutActive ||
+        materializedPhase == .resting ||
         materializedPhase == materializedNextAction.phase ||
         (materializedNextAction == .finishWorkout && materializedPhase == .cardioRunning) ||
         (materializedNextAction == .finishWorkout && materializedPhase == .cardioPaused),
@@ -63,7 +70,7 @@ private struct RestActivityStateRecord: Record {
     return MaterializedRestActivityState(
       sessionId: sessionId,
       startedAt: Date(timeIntervalSince1970: Double(startedAt) / 1_000),
-      endsAt: Date(timeIntervalSince1970: Double(endsAt) / 1_000),
+      endsAt: endsAt.map { Date(timeIntervalSince1970: Double($0) / 1_000) },
       exerciseName: exerciseName,
       setIndex: setIndex,
       totalSets: totalSets,
@@ -78,7 +85,7 @@ private struct RestActivityStateRecord: Record {
 private struct MaterializedRestActivityState: Sendable {
   let sessionId: String
   let startedAt: Date
-  let endsAt: Date
+  let endsAt: Date?
   let exerciseName: String
   let setIndex: Int
   let totalSets: Int
