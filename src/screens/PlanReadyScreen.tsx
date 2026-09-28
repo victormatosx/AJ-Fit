@@ -10,8 +10,9 @@ import { OutlineNumber } from '../components/ui/OutlineNumber';
 import { displayLineHeight } from '../theme/tokens';
 import { useTheme } from '../theme';
 import { useAppState, WEEKDAY_ORDER } from '../state/AppState';
-import { generateWorkoutPrescription } from '../workoutPrescription/engine';
+import { generateWorkoutPrescriptionRouted } from '../workoutPrescription/generatePrescription';
 import { prescriptionOutcomeKey } from '../workoutPrescription/uiOutcome';
+import { startingLevelFromQuestionnaire } from '../workoutLifecycle/domain';
 
 const DAY_ORDER = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
 
@@ -38,7 +39,7 @@ export function PlanReadyScreen({
   const levelKey = quiz.level ?? 'intermediate';
   const days = quiz.days || 4;
   const durationMinutes = quiz.duration ?? '60';
-  const prescription = generateWorkoutPrescription(quiz);
+  const prescription = generateWorkoutPrescriptionRouted(quiz, startingLevelFromQuestionnaire(quiz.level) ?? 'INTERMEDIATE');
   const prescriptionCopyKey = prescription.status === 'SUCCESS'
     ? 'success'
     : prescriptionOutcomeKey(prescription.status);

@@ -40,7 +40,7 @@ import {
   type WorkoutLifecycleEvent,
   type WorkoutLifecycleEventType,
 } from '../workoutLifecycle/types';
-import type { ExperienceLevel, LegacyExperienceLevel } from '../state/AppState';
+import type { DeprecatedExperienceLevel, ExperienceLevel, LegacyExperienceLevel } from '../state/AppState';
 import { buildPrescriptionInputSnapshot } from '../workoutLifecycle/prescriptionInputs';
 import { getQuestionnaireById } from './userProfile';
 import {
@@ -130,7 +130,7 @@ export interface ActiveProgramLifecycleInput {
   contentIdentity: string;
   prescriptionIdentity: string;
   questionnaireId: string;
-  questionnaireExperienceLevel: ExperienceLevel | LegacyExperienceLevel | null | undefined;
+  questionnaireExperienceLevel: ExperienceLevel | DeprecatedExperienceLevel | LegacyExperienceLevel | null | undefined;
   /** Present for migrations performed by 8A+ clients; absent means historical inputs are unknown, not invented. */
   prescriptionInputSnapshot?: PrescriptionInputSnapshot;
   activatedAt: Timestamp | null;

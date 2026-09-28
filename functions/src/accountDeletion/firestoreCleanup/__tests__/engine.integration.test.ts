@@ -70,7 +70,7 @@ describe.skipIf(!enabled)('Firestore Cleanup Engine — real Emulator integratio
     ]);
     const users = await db.collection('users').get();
     await Promise.all(users.docs.map((doc) => doc.ref.delete()));
-    const support = await db.collection('supportTickets').get();
+    const support = await db.collection('supportCases').get();
     await Promise.all(support.docs.map((doc) => doc.ref.delete()));
     const coupons = await db.collection('couponRedemptions').get();
     await Promise.all(coupons.docs.map((doc) => doc.ref.delete()));
@@ -152,7 +152,7 @@ describe.skipIf(!enabled)('Firestore Cleanup Engine — real Emulator integratio
       await seedFullUser('test-uid-cleanup-B'); // "other uid" control
 
       // Retained / control-plane data, keyed to uid A where relevant.
-      await db.collection('supportTickets').doc('ticket-1').set({ userId: 'test-uid-cleanup-A' });
+      await db.collection('supportCases').doc('case-1').set({ ownerUid: 'test-uid-cleanup-A' });
       await db.collection('couponRedemptions').doc('test-uid-cleanup-A').set({ couponCode: 'PROMO' });
       await db.collection('accountDeletionLocks').doc('test-uid-cleanup-A').set({
         uid: 'test-uid-cleanup-A',
@@ -287,8 +287,8 @@ describe.skipIf(!enabled)('Firestore Cleanup Engine — real Emulator integratio
       expect(vault.exists).toBe(true);
 
       // ── RETAIN (policy v1) = preserved ──
-      const ticket = await db.collection('supportTickets').doc('ticket-1').get();
-      expect(ticket.exists).toBe(true);
+      const supportCase = await db.collection('supportCases').doc('case-1').get();
+      expect(supportCase.exists).toBe(true);
       const coupon = await db.collection('couponRedemptions').doc('test-uid-cleanup-A').get();
       expect(coupon.exists).toBe(true);
 

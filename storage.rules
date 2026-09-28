@@ -144,19 +144,6 @@ service firebase.storage {
       allow delete: if hasVerifiedEmailForPrivateAccess() && request.auth.uid == userId && accountActive(userId);
     }
 
-    match /users/{userId}/support/{ticketId}/attachments/{fileName} {
-      // Fase 5: read also requires accountActive(userId).
-      allow read: if hasVerifiedEmailForPrivateAccess() && request.auth.uid == userId && accountActive(userId);
-      allow create: if hasVerifiedEmailForPrivateAccess()
-        && request.auth.uid == userId
-        && accountActive(userId)
-        && request.resource.size <= 8 * 1024 * 1024
-        && request.resource.contentType.matches('image/.*')
-        && request.resource.metadata.ownerId == userId
-        && request.resource.metadata.ticketId == ticketId;
-      allow update, delete: if false;
-    }
-
     // ── Vídeos de execução da biblioteca de exercícios (ajfit-admin) ──────
     // Mesmo mecanismo de admin do Firestore (`users/{uid}.metadata.role ==
     // 'admin'`), duplicado aqui porque Storage Rules e Firestore Rules são

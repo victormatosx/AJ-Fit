@@ -32,7 +32,6 @@ import {
   signInWithProvider as socialSignIn,
   completeLinkingWithPassword as socialLinkPassword,
   completeLinkingWithProvider as socialLinkProvider,
-  discardNewSocialIdentity,
   getLinkedProviders,
   type SocialProvider,
 } from '../services/socialAuth';
@@ -122,13 +121,17 @@ type AuthCtx = {
    * `name` is only ever used the ONE time this actually provisions a brand
    * new user document (`ensureUserProvisioned` never overwrites an existing
    * one) — same onboarding name `signUp` already threads through for the
-   * email/password path.
+   * email/password path. `prepared` mirrors `signUp`'s own parameter for the
+   * exact same reason: the Analysis screen's pre-auth `preparedWorkoutProgram`
+   * is reused (never trusted blindly — `persistPreparedWorkoutProgram`
+   * re-validates it) instead of discarding it and always regenerating.
    */
   signInWithProvider: (
     provider: SocialProvider,
     answers?: QuestionnaireAnswers | null,
     name?: string | null,
     legalAccepted?: boolean,
+    prepared?: PrepareWorkoutProgramResult | null,
   ) => Promise<void>;
   /** Complete a pending link using the existing email/password account. */
   completeLinkingWithPassword: (
@@ -280,6 +283,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         profile: nextProfile,
         questionnaire: nextQuestionnaire,
       });
+      // Camada B (2026-09-24 orphaned-Google-account audit) — bootstrap/auth
+      // reconciliation's recognition point: an authenticated identity
+      // (`auth.currentUser` already resolved, or this load would not be
+      // running) with a CONFIRMED-absent `users/{uid}` document is, by this
+      // app's own invariants, an incompletely provisioned registration —
+      // `provisionNewUser`/`ensureUserProvisioned` always write `users/{uid}`
+      // and (when real answers exist) its first questionnaire in the SAME
+      // atomic batch, so no legitimate account can ever reach this state.
+      // Never auto-repaired here: fabricating a profile without the
+      // legal-acceptance/questionnaire evidence that only the user can
+      // supply again would violate `assertNewAccountEligibility`'s guarantee
+      // (see `rollbackIncompleteSocialIdentity` — it deliberately never
+      // deletes a recoverable identity either). Recovery instead reuses the
+      // EXISTING architecture unchanged: `questionnaireResolution:
+      // 'not_found'` already routes `resolvePremiumGate` to
+      // `'onboardingFunnel'`, and a subsequent `signInWithProvider` for the
+      // SAME linked identity re-authenticates to this SAME uid
+      // (`resolveSocialAccountAdmission` already treats `hasProfile: false`
+      // as `'requires-provisioning'` regardless of `isNewUser`) and completes
+      // provisioning exactly once — this log line exists purely so an
+      // orphaned identity like this is OBSERVABLE instead of silent.
+      if (nextProfile === null) {
+        logWarn('auth', 'incomplete_identity_detected', {
+          uid,
+          hasQuestionnaire: nextQuestionnaire !== null,
+        });
+      }
       setCachedPresentation({
         schemaVersion: 1,
         uid,
@@ -345,16 +375,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => subscription.remove();
   }, [user, loadState.questionnaireResolution, loadUserState]);
 
-  const rollbackIncompleteSocialIdentity = useCallback(async (
-    incompleteUser: User,
-    firebaseCreatedNow: boolean,
-  ) => {
+  const rollbackIncompleteSocialIdentity = useCallback(async () => {
     try {
-      if (firebaseCreatedNow) {
-        await discardNewSocialIdentity(incompleteUser);
-      } else {
-        await signOutUser();
-      }
+      // Never hard-delete a Firebase Auth identity here. An incomplete
+      // social registration has no AJ Fit profile yet and can safely resume
+      // provisioning on a later sign-in. Actual account deletion is owned
+      // exclusively by requestAccountDeletion + reconciliation.
+      await signOutUser();
     } catch (rollbackError) {
       logAuthError('registration-eligibility:rollback', rollbackError);
     } finally {
@@ -564,11 +591,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           throw toAuthError(err);
         }
       }),
-      signInWithProvider: (provider, answers, name, legalAccepted) =>
+      signInWithProvider: (provider, answers, name, legalAccepted, prepared) =>
         identityOperationFlight.run(async () => {
           // The credential sign-in triggers the auth-state listener; provisioning
           // stays here (explicit flow). Firebase's UserCredential tells us
-          // whether this provider sign-in created the Auth identity.
+          // whether this provider sign-in created the Auth identity — except
+          // for `socialSignIn`'s own network-failure reconciliation path
+          // (`socialAuth.ts`'s Camada A), which deliberately reports
+          // `isNewUser: false` when it cannot know for certain, so this exact
+          // `getUserProfile` check below always runs instead of being skipped.
           const socialResult = await socialSignIn(provider);
           const authedUser = socialResult.user;
           try {
@@ -582,20 +613,63 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               legalAccepted,
             });
             if (admission === 'requires-provisioning') {
-              await provisionNewUser(authedUser, {
+              const questionnaireId = await provisionNewUser(authedUser, {
                 answers,
                 name: name ?? undefined,
                 legalAccepted,
               });
+              // Mirrors `signUp`'s exact Phase 3 bridge above — reuses the
+              // Analysis screen's pre-auth `prepared` result instead of
+              // always regenerating post-signup. Never fatal to sign-in: a
+              // failure here (or a missing/stale `prepared`) falls through
+              // to `persistPreparedWorkoutProgram`'s own authoritative
+              // fallback, exactly like `signUp`; `automatic_reconciliation`
+              // remains the final safety net either way.
+              if (questionnaireId && answers) {
+                let generatedPlanTrainingDays: NonNullable<QuestionnaireAnswers['trainingDays']> = [];
+                try {
+                  const generation = await persistPreparedWorkoutProgram({
+                    uid: authedUser.uid,
+                    questionnaireId,
+                    questionnaireVersion: 1,
+                    answers,
+                    prepared: prepared ?? null,
+                    source: 'onboarding',
+                  });
+                  logInfo('workout_program', 'onboarding_workout_program_persist_completed', {
+                    outcome: generation.status,
+                    usedPrepared: Boolean(prepared && prepared.status === 'SUCCESS'),
+                  });
+                  if (generation.status === 'SUCCESS') {
+                    generatedPlanTrainingDays = generation.plan.weeklySchedule
+                      ?.filter((day) => day.state === 'TRAINING')
+                      .map((day) => day.weekday) ?? [];
+                  }
+                } catch (error) {
+                  logWarn('workout_program', 'onboarding_workout_program_persist_failed', { error });
+                }
+                const generatedScheduleMode = answers.scheduleMode ?? 'fixed';
+                if (generatedScheduleMode === 'flexible' || generatedPlanTrainingDays.length > 0 || trainingDaysValid(answers)) {
+                  try {
+                    await ensureScheduleConfigFromQuestionnaire(
+                      authedUser.uid,
+                      generatedPlanTrainingDays.length > 0
+                        ? generatedPlanTrainingDays
+                        : normalizeWeekdays(answers.trainingDays ?? []),
+                      deviceTimezone(),
+                      generatedScheduleMode,
+                    );
+                  } catch (error) {
+                    logWarn('workout_schedule', 'onboarding_schedule_config_failed', { error });
+                  }
+                }
+              }
             }
             setUser(authedUser);
             await loadUserState(authedUser.uid);
           } catch (err) {
             if (err instanceof RegistrationEligibilityError) {
-              await rollbackIncompleteSocialIdentity(
-                authedUser,
-                socialResult.isNewUser,
-              );
+              await rollbackIncompleteSocialIdentity();
             }
             logAuthError(`${provider}:firestore-profile`, err);
             throw err instanceof RegistrationEligibilityError ? err : toAuthError(err);

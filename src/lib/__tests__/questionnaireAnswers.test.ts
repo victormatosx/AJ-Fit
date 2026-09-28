@@ -38,13 +38,18 @@ describe('toPersistedAnswers / fromPersistedAnswers (new shape)', () => {
     expect(fromPersistedAnswers(persisted, Timestamp.now()).birthDate).toBeNull();
   });
 
+  it('persists health as its own goal value and restores it unchanged', () => {
+    const persisted = toPersistedAnswers({ ...fullQuiz, goal: 'health' });
+    expect(persisted.goal).toBe('health');
+    expect(fromPersistedAnswers(persisted, Timestamp.now()).goal).toBe('health');
+  });
+
   it('round-trips canonical selector, modifier, and safety fields', () => {
     const canonical: Quiz = {
       ...fullQuiz,
       goal: 'body_composition',
       level: 'intermediate',
-      place: 'both',
-      primaryPlace: 'home',
+      place: 'home',
       equipment: ['dumbbells', 'bands'],
       specialConditions: ['musculoskeletal_limitation', 'pregnancy'],
       pregnancyScreening: {
@@ -58,19 +63,38 @@ describe('toPersistedAnswers / fromPersistedAnswers (new shape)', () => {
     expect(fromPersistedAnswers(toPersistedAnswers(canonical), Timestamp.now())).toMatchObject({
       goal: 'body_composition',
       level: 'intermediate',
-      place: 'both',
-      primaryPlace: 'home',
+      place: 'home',
       equipment: ['dumbbells', 'bands'],
       specialConditions: ['musculoskeletal_limitation', 'pregnancy'],
       pregnancyScreening: canonical.pregnancyScreening,
     });
   });
 
-  it('reads and ignores the removed legacy field, and never writes it again', () => {
-    const legacy = { ...toPersistedAnswers(fullQuiz), limitationImpact: 'professional_restriction' };
+  it('folds legacy both + primaryPlace into the canonical place and never writes primaryPlace again', () => {
+    const restored = fromPersistedAnswers({
+      ...toPersistedAnswers(fullQuiz),
+      place: 'both',
+      primaryPlace: 'home',
+    }, Timestamp.now());
+    expect(restored.place).toBe('home');
+    expect(Object.prototype.hasOwnProperty.call(restored, 'primaryPlace')).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(toPersistedAnswers(restored), 'primaryPlace')).toBe(false);
+  });
+
+  it('reads and ignores removed legacy fields, and never writes them again', () => {
+    const legacy = {
+      ...toPersistedAnswers(fullQuiz),
+      limitationImpact: 'professional_restriction',
+      motivation: 'strength',
+      primaryPlace: 'gym',
+    };
     const restored = fromPersistedAnswers(legacy, Timestamp.now());
     expect(Object.prototype.hasOwnProperty.call(restored, 'limitationImpact')).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(restored, 'motivation')).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(restored, 'primaryPlace')).toBe(false);
     expect(Object.prototype.hasOwnProperty.call(toPersistedAnswers(restored), 'limitationImpact')).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(toPersistedAnswers(restored), 'motivation')).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(toPersistedAnswers(restored), 'primaryPlace')).toBe(false);
   });
 });
 

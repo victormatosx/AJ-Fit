@@ -4,12 +4,26 @@ import { evaluateReEngagementNotification } from './reengagementNotification';
 import { evaluateProgressNotification } from './progressNotification';
 import { evaluateWeeklyAchievementNotification } from './weeklyAchievementNotification';
 
-export interface DailyNotificationSuiteResult {
-  status: 'DISPATCHED' | 'SUPPRESSED' | 'FAILED';
-  reason?: string;
+interface DailyNotificationSuiteResultContext {
   timezone?: string;
   localDate?: string;
 }
+
+export type DailyNotificationSuiteResult = DailyNotificationSuiteResultContext & (
+  | { status: 'DISPATCHED'; reason?: never; terminalCondition?: never }
+  | {
+      status: 'SUPPRESSED';
+      reason: string;
+      /**
+       * Structured cleanup signal for the scheduler. Diagnostic `reason`
+       * strings may be composed and must never be parsed to make destructive
+       * decisions. The scheduler still verifies `users/{uid}` transactionally
+       * before delete.
+       */
+      terminalCondition?: 'USER_NOT_FOUND';
+    }
+  | { status: 'FAILED'; reason?: never; terminalCondition?: never }
+);
 
 export interface DailyNotificationSuiteDependencies {
   evaluateWorkout(uid: string): ReturnType<typeof evaluateDailyWorkoutNotification>;
@@ -26,6 +40,12 @@ const defaultDependencies: DailyNotificationSuiteDependencies = {
   evaluateProgress: evaluateProgressNotification,
   evaluateWeeklyAchievement: evaluateWeeklyAchievementNotification,
 };
+
+function reportsUserNotFound(
+  result: { status: string; reason?: string },
+): boolean {
+  return result.status === 'SUPPRESSED' && result.reason === 'USER_NOT_FOUND';
+}
 
 /** One scheduler claim evaluates the ordered daily product observers. */
 export async function evaluateDailyNotificationSuite(
@@ -51,6 +71,7 @@ export async function evaluateDailyNotificationSuite(
     return {
       status: 'SUPPRESSED',
       reason: `REENGAGEMENT:${reengagement.reason}`,
+      ...(reportsUserNotFound(reengagement) ? { terminalCondition: 'USER_NOT_FOUND' as const } : {}),
       timezone: reengagement.timezone,
       localDate: reengagement.localDate,
     };
@@ -109,6 +130,15 @@ export async function evaluateDailyNotificationSuite(
   if (progress.status === 'DISPATCHED') {
     return { status: 'DISPATCHED', timezone: resolvedTimezone, localDate: resolvedLocalDate };
   }
+  const terminalCondition = [
+    reengagement,
+    weeklyAchievement,
+    approaching,
+    workout,
+    progress,
+  ].some(reportsUserNotFound)
+    ? 'USER_NOT_FOUND' as const
+    : undefined;
   return {
     status: 'SUPPRESSED',
     reason:
@@ -116,6 +146,7 @@ export async function evaluateDailyNotificationSuite(
       + `|WEEKLY_ACHIEVEMENT:${weeklyAchievement.reason}`
       + `|WORKOUT:${workout.reason}|APPROACHING:${approaching.reason}`
       + `|PROGRESS:${progress.reason}`,
+    ...(terminalCondition ? { terminalCondition } : {}),
     timezone: resolvedTimezone,
     localDate: resolvedLocalDate,
   };

@@ -12,40 +12,39 @@ necessário para integração de contexto/copy.
 
 Para a arquitetura do gate de navegação raiz em si (`resolvePremiumGate`,
 bootstrap de identidade, `RootNavigator`), ver
-`docs/26_bootstrap_e_navegacao_raiz.md` — este documento cobre apenas as 26
+`docs/26_bootstrap_e_navegacao_raiz.md` — este documento cobre apenas as 25
 etapas do funil e como elas se encaixam nos `RootScreenId` que aquele gate
 já definia.
 
-## 2. Fluxo completo (26 etapas)
+## 2. Fluxo completo (25 etapas)
 
 | # | Step id | Tipo | Tela/componente |
 |---|---|---|---|
 | 1 | `presentation` | apresentação | `OnboardingScreen` (existente, reaproveitada) |
 | 2 | `name` | pergunta | `NameStepScreen` (novo) |
 | 3 | `welcome` | interstitial | `WelcomeInterstitialScreen` (novo) |
-| 4 | `motivation` | pergunta | `QuestionStepScreen` + `questionDefs.ts` |
-| 5 | `goal` | pergunta | idem (campo `Quiz.goal`, preservado) |
-| 6 | `level` | pergunta | idem (campo `Quiz.level`, preservado) |
-| 7 | `interstitial_evolution` | interstitial | `EvolutionInterstitialScreen` (novo) |
-| 8 | `sex` | pergunta | idem (preservado) |
-| 9 | `birthDate` | pergunta | idem (preservado) |
-| 10 | `height` | pergunta | idem (preservado) |
-| 11 | `weight` | pergunta | idem (preservado) |
-| 12 | `interstitial_methodology` | interstitial | `MethodologyInterstitialScreen` (novo) |
-| 13 | `days` | pergunta | idem (preservado) |
-| 14 | `duration` | pergunta | idem (preservado) |
-| 15 | `place` | pergunta | idem (preservado) |
-| 16 | `equipment` | pergunta | `EquipmentPicker` (existente, reaproveitado) |
-| 17 | `interstitial_guidedWorkout` | interstitial | `GuidedWorkoutInterstitialScreen` (novo) |
-| 18 | `limits` | pergunta | idem (preservado) |
-| 19 | `muscleFocus` | pergunta | `QuestionStepScreen`, novo campo |
-| 20 | `interstitial_ajFitProgress` | interstitial | `AjFitProgressInterstitialScreen` (novo) |
-| 21 | `socialProof` | prova social | `SocialProofScreen` (**já existia**, reaproveitada como está) |
-| 22 | `commitment` | pergunta | `QuestionStepScreen`, novo campo |
-| 23 | `analyzing` | processamento | `AnalyzingScreen` (existente, narrativa ajustada) |
-| 24 | `plan` | resultado | `PlanReadyScreen` (existente, hardcodes removidos) |
-| 25 | `auth` | autenticação | `AuthScreen` (existente, só copy/contexto) |
-| 26 | `paywall` | monetização | `PaywallScreen` (existente, só copy/contexto) |
+| 4 | `goal` | pergunta | idem (campo `Quiz.goal`, preservado) |
+| 5 | `level` | pergunta | idem (campo `Quiz.level`, preservado) |
+| 6 | `interstitial_evolution` | interstitial | `EvolutionInterstitialScreen` (novo) |
+| 7 | `sex` | pergunta | idem (preservado) |
+| 8 | `birthDate` | pergunta | idem (preservado) |
+| 9 | `height` | pergunta | idem (preservado) |
+| 10 | `weight` | pergunta | idem (preservado) |
+| 11 | `interstitial_methodology` | interstitial | `MethodologyInterstitialScreen` (novo) |
+| 12 | `days` | pergunta | tela semanal unificada (`days` + `scheduleMode` + `trainingDays`) |
+| 13 | `duration` | pergunta | idem (preservado) |
+| 14 | `place` | pergunta | idem (preservado) |
+| 15 | `equipment` | pergunta | `EquipmentPicker` (existente, reaproveitado) |
+| 16 | `interstitial_guidedWorkout` | interstitial | `GuidedWorkoutInterstitialScreen` (novo) |
+| 17 | `limits` | pergunta | idem (preservado) |
+| 18 | `muscleFocus` | pergunta | `QuestionStepScreen`, novo campo |
+| 19 | `interstitial_ajFitProgress` | interstitial | `AjFitProgressInterstitialScreen` (novo) |
+| 20 | `socialProof` | prova social | `SocialProofScreen` (**já existia**, reaproveitada como está) |
+| 21 | `commitment` | pergunta | `QuestionStepScreen`, novo campo |
+| 22 | `analyzing` | processamento | `AnalyzingScreen` (existente, narrativa ajustada) |
+| 23 | `plan` | resultado | `PlanReadyScreen` (existente, hardcodes removidos) |
+| 24 | `auth` | autenticação | `AuthScreen` (existente, só copy/contexto) |
+| 25 | `paywall` | monetização | `PaywallScreen` (existente, só copy/contexto) |
 
 A ordem/definição central vive em `src/onboarding/steps.ts`
 (`ONBOARDING_STEPS`). `auth`/`paywall` existem nesse array só para
@@ -82,7 +81,7 @@ next/prev/jump, persistência do draft).
 - **`anonymous`**: sequência completa das 26 etapas, começando em
   `presentation` (ou na etapa restaurada do draft).
 - **`forcedQuestionnaire`**: usuário já autenticado sem questionário (ex.:
-  login social). Pula `presentation/name/welcome/motivation` (não fazem
+  login social). Pula `presentation/name/welcome` (não fazem
   sentido pós-conta) e `socialProof/commitment` (redundante pós-conversão),
   mas mantém os interstitials de valor. Começa em `goal`, termina em `plan`
   chamando `onForcedQuestionnaireDone` diretamente (sem passar por `auth`).
@@ -98,17 +97,16 @@ Quando o funil termina (`plan` → continuar), `OnboardingFunnelScreen` chama
 | Campo | Tipo | Etapa | Persistência |
 |---|---|---|---|
 | `name` | `string \| null` | 2 | **Só no draft local** pré-auth; após signup vira `profile.name` via `provisionNewUser`/`ensureUserProvisioned`. Nunca duplicado no `Quiz`. |
-| `motivation` | `string \| null` | 4 | `Quiz.motivation` → Firestore `questionnaires/{id}.answers.motivation` |
-| `muscleFocus` | `string[]` (máx. 2) | 19 | `Quiz.muscleFocus` → idem |
-| `commitment` | `string \| null` | 22 | `Quiz.commitment` → idem |
+| `muscleFocus` | `string[]` (máx. 2) | 18 | `Quiz.muscleFocus` → idem |
+| `commitment` | `string \| null` | 21 | `Quiz.commitment` → idem |
 
 Decisão de limite do `muscleFocus`: **2**, não 3. Motivo: o produto ainda vai
 derivar o "split" de treino a partir de `goal`+`days`+`level`; um foco
 secundário opcional já dá sinal suficiente sem diluir a prioridade (se a
 maioria marcasse 3 de 9 grupos, o campo pararia de discriminar nada).
 
-`motivation`/`commitment` são hoje só onboarding — não influenciam nenhum
-algoritmo. `muscleFocus` é modelado para o futuro motor de treino, mas **não**
+`commitment` é hoje só onboarding — não influencia nenhum algoritmo.
+`muscleFocus` é modelado para o futuro motor de treino, mas **não**
 implementa nenhuma lógica clínica/seleção nesta tarefa.
 
 ## 6. Persistência do progresso anônimo
@@ -205,8 +203,8 @@ nascimento completa ou dado de saúde.
 ## 11. i18n
 
 Namespaces afetados: `onboarding` (novas seções `name`, `welcome`,
-`interstitials.*`, `analyzing.titleWithNameLine1/2`), `quiz` (`motivation`,
-`muscleFocus`, `commitment`), `plan` (namespace novo, `src/i18n/resources/*/plan.json`).
+`interstitials.*`, `analyzing.titleWithNameLine1/2`), `quiz` (`muscleFocus`,
+`commitment`), `plan` (namespace novo, `src/i18n/resources/*/plan.json`).
 Todos com pt-BR/en/es. `PaywallScreen` continua com hardcodes pt-BR
 pré-existentes (débito de i18n anterior a esta tarefa, fora de escopo — a
 única string nova adicionada ali segue a mesma convenção do arquivo).

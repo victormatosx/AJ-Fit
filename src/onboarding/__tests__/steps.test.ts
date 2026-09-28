@@ -14,10 +14,10 @@ import {
 } from '../steps';
 
 describe('ONBOARDING_STEPS', () => {
-  it('has 42 unique step ids', () => {
+  it('has 38 unique step ids', () => {
     const ids = ONBOARDING_STEPS.map((s) => s.id);
-    expect(ids).toHaveLength(42);
-    expect(new Set(ids).size).toBe(42);
+    expect(ids).toHaveLength(38);
+    expect(new Set(ids).size).toBe(38);
   });
 
   it('never lets auth/paywall be dev-jumpable', () => {
@@ -50,9 +50,9 @@ describe('getStepSequence / anonymous vs forcedQuestionnaire', () => {
     expect(getStepSequence('anonymous')).toEqual(ONBOARDING_STEPS.map((s) => s.id));
   });
 
-  it('forcedQuestionnaire sequence skips presentation/name/welcome/motivation/socialProof/commitment', () => {
+  it('forcedQuestionnaire sequence skips presentation/name/welcome/socialProof/commitment', () => {
     const seq = getStepSequence('forcedQuestionnaire');
-    for (const skipped of ['presentation', 'name', 'welcome', 'motivation', 'socialProof', 'commitment']) {
+    for (const skipped of ['presentation', 'name', 'welcome', 'socialProof', 'commitment']) {
       expect(seq).not.toContain(skipped);
     }
     expect(seq).toEqual(FORCED_QUESTIONNAIRE_STEP_IDS);
@@ -135,7 +135,6 @@ describe('conditional questionnaire branches', () => {
   it('keeps the standard path compact', () => {
     const seq = getStepSequence('anonymous', standard);
     expect(seq).not.toContain('equipment');
-    expect(seq).not.toContain('primaryPlace');
     expect(seq).not.toContain('limits');
     expect(seq).not.toContain('pregnancyWeeks');
     expect(seq).not.toContain('postpartumSigns');
@@ -146,14 +145,32 @@ describe('conditional questionnaire branches', () => {
     const male = getStepSequence('anonymous', { ...standard, sex: 'm' });
     const female = getStepSequence('anonymous', { ...standard, sex: 'f' });
     expect(female).toEqual(male);
-    expect(female.filter((id) => getStepDef(id).kind === 'question')).toHaveLength(15);
+    expect(female.filter((id) => getStepDef(id).kind === 'question')).toHaveLength(13);
   });
 
-  it('adds home equipment and both-environment resolution only when applicable', () => {
-    expect(getStepSequence('anonymous', { ...standard, place: 'home' })).toContain('equipment');
-    const both = getStepSequence('anonymous', { ...standard, place: 'both' });
-    expect(both).toContain('primaryPlace');
-    expect(both).toContain('equipment');
+  it('never shows the equipment step, for any place — v1.27 does not collect a home equipment inventory', () => {
+    for (const place of ['gym', 'home'] as const) {
+      expect(getStepSequence('anonymous', { ...standard, place })).not.toContain('equipment');
+      expect(getStepSequence('forcedQuestionnaire', { ...standard, place })).not.toContain('equipment');
+    }
+  });
+
+  it('going straight from place to the next valid question skips equipment cleanly (no dead-end, no phantom step)', () => {
+    // place -> interstitial_guidedWorkout -> muscleFocus. Home users should
+    // land on the interstitial exactly like gym users, never on `equipment`.
+    expect(getNextStepId('place', 'anonymous', { ...standard, place: 'home' })).toBe('interstitial_guidedWorkout');
+    expect(getNextStepId('place', 'anonymous', { ...standard, place: 'gym' })).toBe('interstitial_guidedWorkout');
+  });
+
+  it('back-navigation for a home user skips equipment and never lands on it', () => {
+    expect(getPreviousStepId('muscleFocus', 'anonymous', { ...standard, place: 'home' })).toBe('place');
+    expect(getPreviousStepId('muscleFocus', 'anonymous', { ...standard, place: 'gym' })).toBe('place');
+  });
+
+  it('progress denominator/position is identical for home and gym (equipment never counted)', () => {
+    const homeProgress = computeOnboardingProgress('place', 'anonymous', { ...standard, place: 'home' });
+    const gymProgress = computeOnboardingProgress('place', 'anonymous', { ...standard, place: 'gym' });
+    expect(homeProgress).toEqual(gymProgress);
   });
 
   it('adds limitation regions directly and coexisting pregnancy/functional screening', () => {
@@ -215,28 +232,19 @@ describe('conditional questionnaire branches', () => {
   });
 });
 
-describe('trainingDays applicability', () => {
-  const base = { place: 'gym', limits: [] as string[], specialConditions: ['none'] as string[] };
-
-  it.each([2, 3, 4, 5, 6] as const)('is asked for %i days/week', (days) => {
-    expect(getStepSequence('anonymous', { ...base, days })).toContain('trainingDays');
+describe('unified weekly schedule step', () => {
+  it('keeps only days in both funnel modes and removes the redundant legacy screens', () => {
+    for (const mode of ['anonymous', 'forcedQuestionnaire'] as const) {
+      const sequence = getStepSequence(mode);
+      expect(sequence).toContain('days');
+      expect(sequence).not.toContain('scheduleMode');
+      expect(sequence).not.toContain('trainingDays');
+    }
   });
 
-  it('is skipped for 7 days/week (all days implied)', () => {
-    expect(getStepSequence('anonymous', { ...base, days: 7 })).not.toContain('trainingDays');
-  });
-
-  it('is skipped when days has not been answered yet', () => {
-    expect(getStepSequence('anonymous', { ...base, days: null })).not.toContain('trainingDays');
-  });
-
-  it('always asks schedule mode after frequency, including 7 days/week', () => {
-    expect(getStepSequence('anonymous', { ...base, days: 7 })).toContain('scheduleMode');
-  });
-
-  it('keeps weekdays for fixed and skips them for flexible', () => {
-    expect(getStepSequence('anonymous', { ...base, days: 3, scheduleMode: 'fixed' })).toContain('trainingDays');
-    expect(getStepSequence('anonymous', { ...base, days: 3, scheduleMode: 'flexible' })).not.toContain('trainingDays');
+  it('navigates directly from days to duration', () => {
+    expect(getNextStepId('days', 'anonymous')).toBe('duration');
+    expect(getPreviousStepId('duration', 'anonymous')).toBe('days');
   });
 });
 

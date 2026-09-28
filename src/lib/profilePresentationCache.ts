@@ -42,7 +42,7 @@ export function parseProfilePresentationCache(raw: string, uid: string): Profile
       if (!isRecord(value.questionnaire)) return null;
       const { goal, days } = value.questionnaire;
       if (goal !== null && (typeof goal !== 'string' || ![
-        'gain_muscle', 'lose_fat', 'strength', 'conditioning', 'body_composition',
+        'gain_muscle', 'lose_fat', 'strength', 'conditioning', 'health', 'body_composition',
         'return_to_training', 'hyper', 'cut', 'perf', 'def', 'recon',
       ].includes(goal))) return null;
       if (days !== null && (!Number.isInteger(days) || (days as number) < 1 || (days as number) > 7)) return null;

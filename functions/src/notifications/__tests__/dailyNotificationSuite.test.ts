@@ -56,6 +56,48 @@ describe('daily notification suite', () => {
     expect(evaluateProgress).toHaveBeenCalledWith('uid-1');
   });
 
+  it('emits a structured terminal condition when composed reasons confirm a missing user', async () => {
+    const missing = {
+      status: 'SUPPRESSED' as const,
+      reason: 'USER_NOT_FOUND',
+      timezone: 'UTC',
+      localDate: '2026-09-08',
+    };
+    await expect(evaluateDailyNotificationSuite('uid-missing', {
+      evaluateWorkout: vi.fn(async () => missing),
+      evaluateApproaching: vi.fn(async () => missing),
+      evaluateReEngagement: vi.fn(async () => ({
+        ...missing,
+        blocksLowerPriorityNotifications: false,
+      })),
+      evaluateProgress: vi.fn(async () => missing),
+      evaluateWeeklyAchievement: vi.fn(async () => missing),
+    })).resolves.toMatchObject({
+      status: 'SUPPRESSED',
+      reason: 'REENGAGEMENT:USER_NOT_FOUND|WEEKLY_ACHIEVEMENT:USER_NOT_FOUND|WORKOUT:USER_NOT_FOUND|APPROACHING:USER_NOT_FOUND|PROGRESS:USER_NOT_FOUND',
+      terminalCondition: 'USER_NOT_FOUND',
+    });
+  });
+
+  it('does not emit a terminal condition when one evaluator fails', async () => {
+    const result = await evaluateDailyNotificationSuite('uid-indeterminate', {
+      evaluateWorkout: vi.fn(async () => suppressedWorkout),
+      evaluateApproaching: vi.fn(async () => ({ status: 'FAILED' as const, timezone: 'UTC' })),
+      evaluateReEngagement: vi.fn(async () => ({
+        status: 'SUPPRESSED' as const,
+        reason: 'USER_NOT_FOUND',
+        timezone: 'UTC',
+        localDate: '2026-09-08',
+        blocksLowerPriorityNotifications: false,
+      })),
+      evaluateProgress: vi.fn(async () => suppressedProgress),
+      evaluateWeeklyAchievement: vi.fn(async () => suppressedWeeklyAchievement),
+    });
+
+    expect(result).toMatchObject({ status: 'FAILED' });
+    expect(result).not.toHaveProperty('terminalCondition');
+  });
+
   it('surfaces a progression candidate without changing workout semantics', async () => {
     const evaluateWorkout = vi.fn(async () => suppressedWorkout);
     await expect(evaluateDailyNotificationSuite('uid-1', {

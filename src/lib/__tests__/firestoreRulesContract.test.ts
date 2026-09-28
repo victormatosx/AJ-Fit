@@ -106,17 +106,8 @@ describe('firestore.rules — structural contract', () => {
     );
   });
 
-  it('keeps only the nine mergeable support-ticket indexes used by the panel', () => {
-    const signatures = INDEXES.indexes
-      .filter((index) => index.collectionGroup === 'supportTickets')
-      .map((index) => index.fields.map((field) => `${field.fieldPath}:${field.order}`).join(','))
-      .sort();
-    const expected = ['status', 'type', 'priority'].flatMap((filter) => [
-      `${filter}:ASCENDING,updatedAt:DESCENDING`,
-      `${filter}:ASCENDING,createdAt:DESCENDING`,
-      `${filter}:ASCENDING,createdAt:ASCENDING`,
-    ]).sort();
-    expect(signatures).toEqual(expected);
-    expect(new Set(signatures).size).toBe(signatures.length);
+  it('never re-declares indexes for the removed Support V1 collection', () => {
+    const offenders = INDEXES.indexes.filter((index) => index.collectionGroup === 'supportTickets');
+    expect(offenders).toEqual([]);
   });
 });

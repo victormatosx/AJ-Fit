@@ -4,7 +4,7 @@ import { HttpsError, type CallableRequest } from 'firebase-functions/v2/https';
 import { db as defaultDb } from '../lib/firebaseAdmin';
 import { requireAuth } from '../lib/auth';
 import { loadExerciseCatalog } from './prescriptionContext';
-import { equipmentContextFor } from './prescriptionEngine/workoutPrescription/equipment';
+import { manualSubstitutionEquipmentContext } from './prescriptionEngine/workoutPrescription/equipment';
 import {
   mapQuestionnaireLimitations,
   type LimitationCatalog,
@@ -97,7 +97,7 @@ async function loadSubstitutionResolutionContext(
   uid: string,
   execution: DocumentData,
   firestore: Firestore,
-): Promise<{ catalog: LimitationCatalog; regions: LimitationRegionId[]; equipmentContext: ReturnType<typeof equipmentContextFor> }> {
+): Promise<{ catalog: LimitationCatalog; regions: LimitationRegionId[]; equipmentContext: ReturnType<typeof manualSubstitutionEquipmentContext> }> {
   if (typeof execution.programInstanceId !== 'string') {
     throw new HttpsError('failed-precondition', 'manual_substitution_requires_v2_program');
   }
@@ -124,7 +124,7 @@ async function loadSubstitutionResolutionContext(
   return {
     catalog,
     regions: limitationMapping.regions,
-    equipmentContext: equipmentContextFor(answers, program.environment),
+    equipmentContext: manualSubstitutionEquipmentContext(answers, program.environment, program.templateSourceVersion),
   };
 }
 
@@ -138,7 +138,7 @@ export function isRequestedSubstitutionEligible(input: {
   requestedExerciseId: string;
   catalog: LimitationCatalog;
   regions: readonly LimitationRegionId[];
-  equipmentContext: ReturnType<typeof equipmentContextFor>;
+  equipmentContext: ReturnType<typeof manualSubstitutionEquipmentContext>;
   effectiveExerciseIdsInSession: ReadonlySet<string>;
 }): boolean {
   if (input.requestedExerciseId === input.anchorExerciseId) {

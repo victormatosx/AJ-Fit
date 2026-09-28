@@ -5,23 +5,18 @@ import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { db, storage } from '../lib/firebaseAdmin';
 import { logFunctionError, logInfo } from '../lib/logger';
 import { SUPPORT_CASES_COLLECTION, SUPPORT_UPLOADS_COLLECTION, supportCleanupToken } from './supportV2';
+import { deleteSupportCaseChildren, deleteSupportObject } from './supportDataDeletion';
 
 const SCOPE = 'supportV2.cleanup';
 const LEASE_MS = 10 * 60 * 1000;
-const PAGE_SIZE = 100;
 
-async function deleteObject(storageService: Storage, path: string): Promise<void> {
-  try {
-    await storageService.bucket().file(path).delete();
-  } catch (error) {
-    const code = (error as { code?: number }).code;
-    if (code !== 404) throw error;
-  }
-}
-
-async function claimCase(caseRef: DocumentReference, now: Timestamp): Promise<string | null> {
+async function claimCase(
+  caseRef: DocumentReference,
+  now: Timestamp,
+  firestore: Firestore,
+): Promise<string | null> {
   const token = supportCleanupToken();
-  return db.runTransaction(async (transaction) => {
+  return firestore.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(caseRef);
     if (!snapshot.exists) return null;
     const data = snapshot.data()!;
@@ -37,17 +32,6 @@ async function claimCase(caseRef: DocumentReference, now: Timestamp): Promise<st
   });
 }
 
-async function deleteCollectionPages(collection: FirebaseFirestore.CollectionReference): Promise<void> {
-  while (true) {
-    const snapshot = await collection.orderBy('__name__').limit(PAGE_SIZE).get();
-    if (snapshot.empty) return;
-    const batch = db.batch();
-    for (const document of snapshot.docs) batch.delete(document.ref);
-    await batch.commit();
-    if (snapshot.size < PAGE_SIZE) return;
-  }
-}
-
 /** Storage is always removed before any message or parent document. Safe to retry after any step. */
 export async function purgeSupportCase(
   caseRef: DocumentReference,
@@ -55,38 +39,16 @@ export async function purgeSupportCase(
   storageService: Storage = storage,
   now: Timestamp = Timestamp.now(),
 ): Promise<boolean> {
-  void firestore; // kept injectable as part of the cleanup contract/test surface
-  const token = await claimCase(caseRef, now);
+  const token = await claimCase(caseRef, now, firestore);
   if (!token) return false;
-
-  const messages = await caseRef.collection('messages').get();
-  const paths = new Set<string>();
-  for (const message of messages.docs) {
-    const attachments = message.data().attachments;
-    if (!Array.isArray(attachments)) continue;
-    for (const attachment of attachments) {
-      if (attachment && typeof attachment.storagePath === 'string') paths.add(attachment.storagePath);
-    }
-  }
-  for (const path of paths) await deleteObject(storageService, path);
-
-  // Delete child data only after every object is confirmed absent. The parent
-  // is deliberately last, preserving a durable retry anchor after failures.
-  await deleteCollectionPages(caseRef.collection('messages'));
-  await deleteCollectionPages(caseRef.collection('_actions'));
-  const sessions = await db.collection(SUPPORT_UPLOADS_COLLECTION).where('caseId', '==', caseRef.id).get();
-  if (!sessions.empty) {
-    const batch = db.batch();
-    for (const session of sessions.docs) batch.delete(session.ref);
-    await batch.commit();
-  }
-  await db.runTransaction(async (transaction) => {
+  const objectCount = await deleteSupportCaseChildren(caseRef, firestore, storageService);
+  await firestore.runTransaction(async (transaction) => {
     const current = await transaction.get(caseRef);
     if (!current.exists) return;
     if (current.data()?.cleanupToken !== token) throw new Error('support_cleanup_lease_lost');
     transaction.delete(caseRef);
   });
-  logInfo(SCOPE, 'case_purged', { caseId: caseRef.id, objectCount: paths.size, cleanupToken: token });
+  logInfo(SCOPE, 'case_purged', { caseId: caseRef.id, objectCount, cleanupToken: token });
   return true;
 }
 
@@ -100,7 +62,7 @@ export async function purgeExpiredUploads(now: Timestamp = Timestamp.now()): Pro
   for (const session of snapshot.docs) {
     try {
       const path = session.data().storagePath;
-      if (typeof path === 'string') await deleteObject(storage, path);
+      if (typeof path === 'string') await deleteSupportObject(storage, path);
       await session.ref.delete();
       purged += 1;
     } catch (error) {

@@ -187,6 +187,43 @@ describe.skipIf(!enabled)('push foundation — Firestore Emulator', () => {
   }
 
   describe('device ownership lifecycle', () => {
+    it('keeps an identical same-user sync idempotent', async () => {
+      const service = handlers();
+      const first = await service.sync({ auth: { uid: UID_A }, data: syncData() } as never);
+      const second = await service.sync({
+        auth: { uid: UID_A },
+        data: syncData({ expectedOwnershipVersion: first.ownershipVersion }),
+      } as never);
+
+      expect(second).toMatchObject({
+        status: 'synced',
+        ownerChanged: false,
+        ownershipVersion: first.ownershipVersion,
+        tokenChanged: false,
+      });
+    });
+
+    it('repairs a missing token-owner claim on an idempotent sync', async () => {
+      const service = handlers();
+      const first = await service.sync({ auth: { uid: UID_A }, data: syncData() } as never);
+      const installation = await db.collection('pushInstallations').doc(INSTALLATION).get();
+      const tokenHash = installation.data()?.tokenHash as string;
+      await db.collection('pushTokenOwners').doc(tokenHash).delete();
+
+      const repaired = await service.sync({
+        auth: { uid: UID_A },
+        data: syncData({ expectedOwnershipVersion: first.ownershipVersion }),
+      } as never);
+
+      expect(repaired.status).toBe('synced');
+      expect((await db.collection('pushTokenOwners').doc(tokenHash).get()).data()).toMatchObject({
+        ownerUid: UID_A,
+        installationId: INSTALLATION,
+        ownershipVersion: first.ownershipVersion,
+        active: true,
+      });
+    });
+
     it('supports multiple installations for one account', async () => {
       const service = handlers();
       const first = await service.sync({
@@ -315,6 +352,34 @@ describe.skipIf(!enabled)('push foundation — Firestore Emulator', () => {
       expect((await db.collection('pushTokenOwners').doc(tokenHash).get()).exists).toBe(false);
     });
 
+    it('makes repeated release harmless and keeps the released installation out of dispatch', async () => {
+      const service = handlers();
+      const synced = await service.sync({ auth: { uid: UID_A }, data: syncData() } as never);
+      const releaseRequest = {
+        auth: null,
+        data: {
+          installationId: INSTALLATION,
+          installationSecret: SECRET,
+          ownerUid: UID_A,
+          ownershipVersion: synced.ownershipVersion,
+        },
+      } as never;
+
+      const first = await service.release(releaseRequest);
+      const second = await service.release(releaseRequest);
+      const expo = fakeExpo();
+      const outcome = await dispatchNotification(
+        qaRequest({ idempotencyKey: 'qa-test:released-device' }),
+        dependencies(expo),
+        'QA_PREVIEW',
+      );
+
+      expect(first.status).toBe('released');
+      expect(second.status).toBe('stale-release');
+      expect(outcome.status).toBe('NO_ELIGIBLE_DEVICE');
+      expect(expo.send).not.toHaveBeenCalled();
+    });
+
     it('persists a backend-only daily registration and updates the canonical schedule timezone', async () => {
       await db.collection('users').doc(UID_A).collection('workoutProgramState').doc('scheduleConfig').set({
         trainingDays: ['MON', 'WED', 'FRI'],
@@ -376,6 +441,36 @@ describe.skipIf(!enabled)('push foundation — Firestore Emulator', () => {
   });
 
   describe('eligibility pagination', () => {
+    it('fails closed for a coherent orphaned device when the owner user no longer exists', async () => {
+      await seedEligibleDevice();
+      await db.collection('users').doc(UID_A).delete();
+      const expo = fakeExpo();
+
+      const outcome = await dispatchNotification(
+        qaRequest({ idempotencyKey: 'qa-test:orphan-owner' }),
+        dependencies(expo),
+        'QA_PREVIEW',
+      );
+
+      expect(outcome.status).toBe('NO_ELIGIBLE_DEVICE');
+      expect(expo.send).not.toHaveBeenCalled();
+    });
+
+    it('fails closed as soon as an account deletion lock exists', async () => {
+      await seedEligibleDevice();
+      await db.collection('accountDeletionLocks').doc(UID_A).set({ uid: UID_A });
+      const expo = fakeExpo();
+
+      const outcome = await dispatchNotification(
+        qaRequest({ idempotencyKey: 'qa-test:locked-owner' }),
+        dependencies(expo),
+        'QA_PREVIEW',
+      );
+
+      expect(outcome.status).toBe('NO_ELIGIBLE_DEVICE');
+      expect(expo.send).not.toHaveBeenCalled();
+    });
+
     it('finds a valid device after more than twenty expired leases', async () => {
       const expired = Timestamp.fromMillis(now.toMillis() - 1);
       for (let index = 0; index < 26; index += 1) {

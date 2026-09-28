@@ -349,7 +349,7 @@ export function HomeScreen({
               resting={restRunning}
               onPress={onStart}
             /> : null}
-            {onOpenSupportCases && (unreadSupportCasesCount > 0 || Boolean(snapshotFrequencyThrough)) && (
+            {onOpenSupportCases && unreadSupportCasesCount > 0 && (
               <SupportInboxButton
                 unreadCasesCount={unreadSupportCasesCount}
                 onPress={onOpenSupportCases}

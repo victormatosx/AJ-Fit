@@ -6,6 +6,7 @@ import { auth, db } from '../lib/firebaseAdmin';
 import { logFunctionError, logInfo } from '../lib/logger';
 import { epochDate, isoDate, resolveSubscriptionPlan, safeBoolean, safeString } from './presentation';
 import { readFreeAccessView } from './adminFreeAccess';
+import { ACCOUNT_CLASSES, resolveAccountClass } from '../lib/accountClassification';
 
 const SCOPE = 'admin:users';
 const USERS = 'users';
@@ -19,6 +20,17 @@ const ALLOWED_SUBSCRIPTION_STATUSES = new Set([
   'BILLING_ISSUE',
   'EXPIRED',
 ]);
+/**
+ * Sandbox/QA account-identity guard (lib/accountClassification.ts):
+ * `'PRODUCTION'` is the default so a commercial/operational listing never
+ * silently shows internal test accounts. `'ALL'`, `'INTERNAL_QA'` and the
+ * diagnostic-only `'UNKNOWN'` are explicit admin opt-ins — never the
+ * default, and `'UNKNOWN'` documents never appear under any other filter
+ * (see `resolveAccountClass`/`productionUsersQuery`'s parity contract).
+ */
+const ALLOWED_ACCOUNT_CLASS_FILTERS = new Set(['ALL', 'UNKNOWN', ...ACCOUNT_CLASSES]);
+/** Diagnostic scan cap for the `UNKNOWN` filter — see its own comment below. */
+const UNKNOWN_SCAN_LIMIT = 500;
 
 type UserDocument = Record<string, unknown>;
 type Cursor = { value: string; id: string };
@@ -26,6 +38,7 @@ type Cursor = { value: string; id: string };
 interface ListInput {
   search?: unknown;
   subscriptionStatus?: unknown;
+  accountClassFilter?: unknown;
   sort?: unknown;
   pageSize?: unknown;
   cursor?: unknown;
@@ -107,6 +120,7 @@ function listItem(snapshot: DocumentSnapshot, user: UserRecord | null, deleting:
     emailVerified: authData?.emailVerified ?? null,
     providers: authData?.providers ?? [],
     accountStatus: deleting ? 'DELETION_IN_PROGRESS' : user?.disabled ? 'DISABLED' : 'ACTIVE',
+    accountClass: resolveAccountClass(metadata.accountClass),
     subscription: subscriptionView(document),
   };
 }
@@ -168,6 +182,9 @@ export async function adminListUsersHandler(request: CallableRequest<ListInput>)
   const size = pageSize(request.data?.pageSize);
   const search = typeof request.data?.search === 'string' ? request.data.search.trim() : '';
   const status = request.data?.subscriptionStatus;
+  const accountClassFilter = typeof request.data?.accountClassFilter === 'string'
+    ? request.data.accountClassFilter
+    : 'PRODUCTION';
   const sort = typeof request.data?.sort === 'string' ? request.data.sort : 'created_desc';
   const cursor = parseCursor(request.data?.cursor);
 
@@ -176,8 +193,21 @@ export async function adminListUsersHandler(request: CallableRequest<ListInput>)
   if (status !== undefined && status !== 'ALL' && !ALLOWED_SUBSCRIPTION_STATUSES.has(String(status))) {
     throw new HttpsError('invalid-argument', 'invalid_subscription_status');
   }
+  if (!ALLOWED_ACCOUNT_CLASS_FILTERS.has(accountClassFilter)) {
+    throw new HttpsError('invalid-argument', 'invalid_account_class_filter');
+  }
   if (search && status !== undefined && status !== 'ALL') {
     throw new HttpsError('invalid-argument', 'search_cannot_be_combined_with_filters');
+  }
+  if (search && accountClassFilter !== 'PRODUCTION') {
+    throw new HttpsError('invalid-argument', 'search_cannot_be_combined_with_filters');
+  }
+  // Kept mutually exclusive with `subscriptionStatus` deliberately: combining
+  // both would need a 3-field composite index (accountClass, subscription.status,
+  // sort field) per sort option — see docs/ note on the 2-field indexes this
+  // filter alone requires instead (firestore.indexes.json).
+  if (status !== undefined && status !== 'ALL' && accountClassFilter !== 'PRODUCTION') {
+    throw new HttpsError('invalid-argument', 'account_class_filter_cannot_be_combined_with_subscription_status');
   }
 
   try {
@@ -193,8 +223,36 @@ export async function adminListUsersHandler(request: CallableRequest<ListInput>)
 
     const direction = sort === 'created_asc' || sort === 'name_asc' ? 'asc' : 'desc';
     const orderField = sort === 'name_asc' ? 'profile.name' : 'metadata.createdAt';
+
+    if (accountClassFilter === 'UNKNOWN') {
+      // Diagnostic-only: Firestore's equality/`not-in` operators both
+      // exclude documents where the field is absent — the single most
+      // common `UNKNOWN` case (an account mid-provisioning-window, or one
+      // whose `onUserProvisioned` trigger never ran) — so there is no
+      // `where()` that reliably selects "UNKNOWN" server-side. This scans
+      // a bounded window (ordered the same as every other view) and
+      // filters with the SAME `resolveAccountClass` used everywhere else,
+      // trading exhaustive pagination for guaranteed correctness. Cursor
+      // continuation isn't supported for this filter (diagnostic tool, not
+      // a commercial listing) — `nextCursor` is always null.
+      const scanSnapshot = await db.collection(USERS)
+        .orderBy(orderField, direction).orderBy(FieldPath.documentId(), direction)
+        .limit(UNKNOWN_SCAN_LIMIT).get();
+      const unknownDocs = scanSnapshot.docs.filter((d) => resolveAccountClass(d.get('metadata.accountClass')) === 'UNKNOWN');
+      const docs = unknownDocs.slice(0, size);
+      const users = await enrichPage(docs);
+      logInfo(SCOPE, 'users listed', { adminUid, accountClassFilter, resultCount: users.length, scannedCount: scanSnapshot.docs.length });
+      return {
+        users,
+        hasMore: unknownDocs.length > size || scanSnapshot.docs.length === UNKNOWN_SCAN_LIMIT,
+        nextCursor: null,
+        searchMode: null,
+      };
+    }
+
     let query: Query = db.collection(USERS);
     if (status !== undefined && status !== 'ALL') query = query.where('subscription.status', '==', status);
+    if (accountClassFilter !== 'ALL') query = query.where('metadata.accountClass', '==', accountClassFilter);
     query = query.orderBy(orderField, direction).orderBy(FieldPath.documentId(), direction);
     if (cursor) {
       const cursorValue = orderField === 'metadata.createdAt'
@@ -234,6 +292,11 @@ function questionnaireView(snapshot: DocumentSnapshot | null) {
   const dizzinessScreening = objectMap(answers.dizzinessScreening);
   const postSurgicalScreening = objectMap(answers.postSurgicalScreening);
   const medicalRestrictionScreening = objectMap(answers.medicalRestrictionScreening);
+  const storedPlace = safeString(answers.place);
+  const storedPrimaryPlace = safeString(answers.primaryPlace);
+  const place = storedPlace === 'both' && (storedPrimaryPlace === 'gym' || storedPrimaryPlace === 'home')
+    ? storedPrimaryPlace
+    : storedPlace;
   return {
     id: snapshot.id,
     version: typeof document.version === 'number' ? document.version : null,
@@ -249,11 +312,9 @@ function questionnaireView(snapshot: DocumentSnapshot | null) {
       level: safeString(answers.level),
       duration: safeString(answers.duration),
       days: typeof answers.days === 'number' ? answers.days : null,
-      place: safeString(answers.place),
-      primaryPlace: safeString(answers.primaryPlace),
+      place,
       equipment: Array.isArray(answers.equipment) ? answers.equipment.filter((item): item is string => typeof item === 'string') : [],
       style: Array.isArray(answers.style) ? answers.style.filter((item): item is string => typeof item === 'string') : [],
-      motivation: safeString(answers.motivation),
       muscleFocus: Array.isArray(answers.muscleFocus) ? answers.muscleFocus.filter((item): item is string => typeof item === 'string') : [],
       commitment: safeString(answers.commitment),
       limitationImpact: safeString(answers.limitationImpact),
@@ -381,6 +442,7 @@ export async function adminGetUserHandler(request: CallableRequest<DetailInput>)
         updatedAt: isoDate(metadata.updatedAt),
         activeWorkoutId: safeString(metadata.activeWorkoutId),
         commercialGateResolvedAt: isoDate(metadata.commercialGateResolvedAt),
+        accountClass: resolveAccountClass(metadata.accountClass),
       },
       subscription: subscriptionView(document),
       revenueCat: { configuredAppUserId: uid, entitlementId: 'premium' },

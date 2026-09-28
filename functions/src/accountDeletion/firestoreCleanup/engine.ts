@@ -45,6 +45,7 @@ import {
   deleteProgressPhotoDocuments,
   deleteUserNotificationDispatches,
   deleteUserDailyNotificationRegistration,
+  deleteUserEntitlementSignal,
   deleteUserNotificationProductWindows,
   deleteUserNotificationAchievementMilestones,
   deleteUserPushDevices,
@@ -53,6 +54,8 @@ import {
   deleteUserProfileDocument,
   deleteUserQuestionnaires,
   deleteUserWorkoutExecutions,
+  deleteUserWorkoutExecutionState,
+  deleteUserExerciseSubstitutionPreferences,
   deleteUserWorkoutLifecycleEvents,
   deleteUserWorkoutLifecycleAuthorityGrants,
   deleteUserWorkoutLifecycleTrustedTelemetryReceipts,
@@ -130,6 +133,7 @@ export async function runFirestoreCleanup(
     deleteUserNotificationProductWindows,
     deleteUserNotificationAchievementMilestones,
     deleteUserDailyNotificationRegistration,
+    deleteUserEntitlementSignal,
     // Must run before deleteUserWorkoutPrograms — it enumerates program ids
     // to reach the explicit allowlist of nested collections, which a
     // one-level-only delete of the parent docs would otherwise orphan.
@@ -143,6 +147,8 @@ export async function runFirestoreCleanup(
     deleteUserWorkoutLifecycleState,
     deleteUserWorkoutPrograms,
     deleteUserWorkoutProgramState,
+    deleteUserExerciseSubstitutionPreferences,
+    deleteUserWorkoutExecutionState,
     deleteUserWorkoutExecutions,
     // Always last — see this module's doc comment on why `users/{uid}`
     // must be deleted only after its deletable subcollections.

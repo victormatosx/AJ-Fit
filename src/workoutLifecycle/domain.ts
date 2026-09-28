@@ -1,4 +1,4 @@
-import type { ExperienceLevel, LegacyExperienceLevel } from '../state/AppState';
+import type { DeprecatedExperienceLevel, ExperienceLevel, LegacyExperienceLevel } from '../state/AppState';
 import {
   WORKOUT_LIFECYCLE_SCHEMA_VERSION,
   type CurrentTrainingLevel,
@@ -53,7 +53,7 @@ function nullableTimestampLike(value: unknown): boolean {
 }
 
 export function startingLevelFromQuestionnaire(
-  level: ExperienceLevel | LegacyExperienceLevel | null | undefined,
+  level: ExperienceLevel | DeprecatedExperienceLevel | LegacyExperienceLevel | null | undefined,
 ): StartingLevel | null {
   if (level === 'never_or_starting' || level === 'beginner' || level === 'beg') return 'BEGINNER';
   if (level === 'intermediate' || level === 'int') return 'INTERMEDIATE';

@@ -25,7 +25,7 @@ export type PrescriptionInputSnapshotSource =
 
 /**
  * Minimal, prescription-relevant input projection. Onboarding-only fields
- * (motivation/commitment) and profile/identity data are deliberately absent.
+ * (`commitment`) and profile/identity data are deliberately absent.
  * The nested screening shapes reuse the questionnaire contracts without
  * turning the historical questionnaire itself into mutable lifecycle state.
  */
@@ -40,7 +40,6 @@ export interface EffectivePrescriptionInputs {
   scheduleMode?: import('../state/AppState').ScheduleMode;
   trainingDays: import('../state/AppState').Quiz['trainingDays'];
   place: import('../state/AppState').Quiz['place'];
-  primaryPlace: import('../state/AppState').Quiz['primaryPlace'];
   equipment: import('../state/AppState').Quiz['equipment'];
   style: import('../state/AppState').Quiz['style'];
   muscleFocus: import('../state/AppState').Quiz['muscleFocus'];

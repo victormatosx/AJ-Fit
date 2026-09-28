@@ -18,7 +18,7 @@ import {
 } from './supportAttachmentUploadBlob';
 import type { CreateSupportTicketInput } from '../types/support';
 
-export type SupportCaseState = 'SUBMITTED' | 'CLOSED_SINGLE' | 'CHAT_OPEN' | 'CHAT_CLOSED';
+export type SupportCaseState = 'SUBMITTED' | 'CLOSED_SINGLE' | 'CHAT_OPEN' | 'CHAT_CLOSED' | 'ACCOUNT_DELETION';
 export type SupportCaseMode = null | 'SINGLE_REPLY' | 'CHAT';
 export interface SupportCase {
   id: string;

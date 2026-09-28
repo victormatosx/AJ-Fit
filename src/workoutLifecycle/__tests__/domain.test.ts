@@ -17,7 +17,12 @@ const stamp = { toMillis: () => 1 };
 describe('Workout Lifecycle V2 domain', () => {
   it('normalizes historical questionnaire experience without making it current lifecycle state', () => {
     expect(startingLevelFromQuestionnaire('never_or_starting')).toBe('BEGINNER');
+    expect(startingLevelFromQuestionnaire('beginner')).toBe('BEGINNER');
+    expect(startingLevelFromQuestionnaire('beg')).toBe('BEGINNER');
+    expect(startingLevelFromQuestionnaire('intermediate')).toBe('INTERMEDIATE');
     expect(startingLevelFromQuestionnaire('int')).toBe('INTERMEDIATE');
+    expect(startingLevelFromQuestionnaire('advanced')).toBe('ADVANCED');
+    expect(startingLevelFromQuestionnaire('adv')).toBe('ADVANCED');
     expect(startingLevelFromQuestionnaire('elite')).toBe('ADVANCED');
     expect(isWorkoutLifecycle({
       startingLevel: 'BEGINNER', currentTrainingLevel: 'INTERMEDIATE',

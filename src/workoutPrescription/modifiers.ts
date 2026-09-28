@@ -2,6 +2,16 @@ import type { QuestionnaireAnswers, ResolvedModifier, SafetyDecision } from './t
 import { normalizeExperience, normalizeGoal } from './input';
 import { adaptationStage, isBeginnerExperience } from './personalization';
 
+/**
+ * Legacy v2.0/T001-T090 modifier resolution (P0-P7 priority matrix). Read
+ * only by `engine.ts`'s `generateWorkoutPrescription`, which still drives
+ * the active runtime. The v1.27 pipeline (`selectorV127.ts` +
+ * `compositionV127.ts`) does not import this module and never will for
+ * beginner/duration/goal/equipment/experience/special-population effects —
+ * those already happened once, structurally, in template *selection* (see
+ * `compositionV127.ts`'s file doc). Do not add a v1.27 call site here.
+ */
+
 function modifier(
   id: string,
   priority: ResolvedModifier['priority'],
@@ -47,7 +57,7 @@ export function resolveModifiers(
     }
   }
 
-  if (answers.place === 'home' || answers.place === 'both') {
+  if (answers.place === 'home') {
     result.push(modifier('equipment:available_inventory', 'P3', 'APPLIED', 'HOME_INVENTORY_FILTER'));
     // `equipment: ['other']` is a real, always-offered UI option — never a
     // signal to fail closed. `equipmentContextFor` (equipment.ts) already

@@ -4,10 +4,15 @@ import { db } from '../lib/firebaseAdmin';
 import { logInfo } from '../lib/logger';
 import { resolveSubscriptionPlan } from '../adminUsers/presentation';
 import { maskRevenueCatIdentifier } from './revenueCatIdentity';
+import {
+  normalizeRevenueCatEnvironment,
+  SUBSCRIPTION_TRANSACTIONS_COLLECTION,
+  type RevenueCatWebhookEnvironment,
+} from './financialEnvironment';
+
+export { SUBSCRIPTION_TRANSACTIONS_COLLECTION };
 
 const SCOPE = 'billing:subscriptionTransactions';
-
-export const SUBSCRIPTION_TRANSACTIONS_COLLECTION = 'subscriptionTransactions';
 
 export type FinancialMovementType = 'sale' | 'refund' | 'refund_reversal';
 export type AttributionStatus = 'resolved' | 'unresolved';
@@ -43,7 +48,7 @@ interface NormalizedFinancialMovement {
   productId: string;
   plan: 'monthly' | 'annual' | 'unknown';
   store: string;
-  environment: string | null;
+  environment: RevenueCatWebhookEnvironment;
   currency: string | null;
   grossRevenue: number | null;
   grossRevenueUsd: number | null;
@@ -141,7 +146,7 @@ export function normalizeFinancialEvent(event: FinancialWebhookEvent): Financial
     productId: event.product_id as string,
     plan: resolveSubscriptionPlan(event.product_id),
     store,
-    environment: nonEmptyString(event.environment),
+    environment: normalizeRevenueCatEnvironment(event.environment),
     currency: nonEmptyString(event.currency)?.toUpperCase() ?? null,
     grossRevenue,
     grossRevenueUsd,

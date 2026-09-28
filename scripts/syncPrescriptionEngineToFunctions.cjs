@@ -33,16 +33,19 @@ const HEADER = `// GENERATED FILE — do not edit directly.
 // Directory mirrors src/<dir>/ exactly, so every relative import between these
 // files resolves without any rewriting.
 const TS_FILES = [
-  ['workoutPrescription', ['types', 'input', 'personalization', 'catalog', 'safety', 'selection',
+  ['workoutPrescription', ['types', 'input', 'personalization', 'catalog', 'canonicalCatalog', 'canonicalExerciseIdentity', 'canonicalActivities', 'safety', 'selection',
     'modifiers', 'conflicts', 'composition', 'equipment', 'equivalenceShared', 'limitationResolver',
     'manualSubstitutionResolver', 'validation',
     'engine', 'templateDocument', 'generationPolicy', 'weeklySchedule', 'frequency',
-    'restPrescription', 'limitationDataset', 'localLimitationCatalog', 'index']],
+    'restPrescription', 'limitationDataset', 'localLimitationCatalog', 'sessionTypes', 'selectorV127', 'compositionV127',
+    'canonicalMusculoskeletalLimitationV127', 'musculoskeletalLimitationV127',
+    'canonicalMusclePriorityV127', 'musclePriorityV127', 'generationVersion',
+    'validationV127', 'safetyV127', 'engineV127', 'generatePrescription', 'index']],
   ['data', ['exercisesSeedData']],
   ['types', ['exercise']],
   ['lib', ['questionnaireSchema']],
   ['onboarding', ['steps']],
-  ['workoutLifecycle', ['types']],
+  ['workoutLifecycle', ['types', 'prescriptionInputs']],
   ['prescriptionEvolution', ['config', 'cycleEvolution', 'equivalence', 'levelPromotion']],
   // Phase 10D (docs/workout-lifecycle/v2/architecture/
   // 23_PHASE_10D_FINAL_AUTHORITY_BYPASS_REMEDIATION.md): the backend's
@@ -63,6 +66,8 @@ const TS_FILES = [
 
 const JSON_FILES = [
   'workouts/AJ_Fit_T001_T090_workouts_reformed_v2_0.json',
+  'workouts/AJ_Fit_v1_27_exercise_identity_matrix.json',
+  'workouts/AJ_Fit_T001_T102_workouts_canonical_v1_27_goal_routing_fixed.json',
   'workout-modifiers/exercise-limitations/15_LIMITATION_PROFILES_TECHNICAL_v2.json',
   'workout-modifiers/exercise-limitations/limitation-dataset-identity.json',
 ];

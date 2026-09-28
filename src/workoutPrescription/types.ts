@@ -1,6 +1,8 @@
 import type { Quiz, ScheduleMode, Weekday } from '../state/AppState';
 import type { LimitationCatalogExercise, LimitationDecisionTrace } from './limitationResolver';
 import type { LimitationDatasetIdentity } from './limitationDataset';
+import type { MusculoskeletalLimitationDecisionV127 } from './musculoskeletalLimitationV127';
+import type { MusclePriorityDecisionV127 } from './musclePriorityV127';
 
 export type TemplateId = `T${string}`;
 export type TemplateEnvironment = 'gym' | 'home';
@@ -24,6 +26,24 @@ export const PRESCRIPTION_VERSIONS = {
   modifierRules: '2.0.0',
   compositionEngine: '2.1.0',
   limitationResolver: '1.0.0',
+} as const satisfies PrescriptionVersions;
+
+/**
+ * Fase 9 — the v1.27/T001-T102 pipeline's own version identity, embedded in
+ * `FinalWorkoutPlan.versions` by `engineV127.ts`. Never mixed with
+ * `PRESCRIPTION_VERSIONS` in the same plan (`contentIdentityV127NonCollision.
+ * test.ts`, Fase 8, already proves `templateLibrary` alone keeps `planId`/
+ * `contentIdentity` from colliding across the two libraries). Matches the
+ * synthetic fixture Fase 8's `storage.test.ts`/`workoutPrograms.
+ * backwardCompatibility.test.ts` already exercised.
+ */
+export const PRESCRIPTION_VERSIONS_V127 = {
+  templateLibrary: '1.27.0',
+  selectionEngine: '3.0.0',
+  safetyRules: '1.0.0',
+  modifierRules: '3.0.0',
+  compositionEngine: '3.0.0',
+  limitationResolver: '2.0.0',
 } as const satisfies PrescriptionVersions;
 
 export type SafetyReasonCode =
@@ -107,6 +127,8 @@ export interface CanonicalExercise {
   reps?: string;
   duration?: string;
   cycles?: number;
+  cycleRange?: { min: number; max: number };
+  distance?: string;
   intensity?: string;
   notes?: string;
   source_name_v1_1?: string;
@@ -140,6 +162,10 @@ export interface CanonicalSession {
   exercises: CanonicalExercise[];
   /** v2.0.0+. Commercial/presentation name — see `sessionPresentation.ts`. */
   display_name?: string;
+  technique_guideline?: string;
+  effort_guideline?: string;
+  rest_guideline?: string;
+  progression_guideline?: string;
   /** v2.0.0+. See `CanonicalCardioFinisher`. */
   cardio_finisher?: CanonicalCardioFinisher;
 }
@@ -149,9 +175,10 @@ export interface CanonicalTemplate {
   profile: {
     sex: 'male' | 'female' | 'any';
     environment: TemplateEnvironment;
-    primary_goal: GoalFamily | 'pregnancy_fitness' | 'postpartum_return' | 'frailty_function';
+    primary_goal: GoalFamily | 'pregnancy_fitness' | 'postpartum_return' | 'frailty_function' | 'beginner_adaptation';
     days_per_week: number;
     special_population?: Exclude<Population, 'conventional'>;
+    experience_level?: 'beginner';
   };
   split: string;
   rationale: string;
@@ -181,6 +208,8 @@ export interface FinalWorkoutExercise {
   reps?: string;
   duration?: string;
   cycles?: number;
+  cycleRange?: { min: number; max: number };
+  distance?: string;
   intensity?: string;
   notes?: string;
   /**
@@ -213,6 +242,10 @@ export interface FinalWorkoutSession {
   exercises: FinalWorkoutExercise[];
   /** Preferred over `name` for UI presentation when present — see `sessionPresentation.ts`. */
   displayName?: string;
+  techniqueGuideline?: string;
+  effortGuideline?: string;
+  restGuideline?: string;
+  progressionGuideline?: string;
   /** Absent when the source session has none, or when safety/population gating removed it. */
   cardioFinisher?: FinalCardioFinisher;
 }
@@ -269,7 +302,17 @@ export interface PrescriptionTrace {
   conflicts: ConflictResolution[];
   substitutions: ExerciseSubstitutionTrace[];
   limitationResolverVersion: 1;
-  limitationDecisions: LimitationDecisionTrace[];
+  /**
+   * `MusculoskeletalLimitationDecisionV127[]` only ever appears on a v1.27
+   * (`versions.templateLibrary === '1.27.0'`) plan's trace — `engineV127.ts`
+   * is the only producer. v2 code (`engine.ts`, `composition.ts`) always
+   * produces `LimitationDecisionTrace[]`; existing v2 readers only ever use
+   * `.length` (see `myPlanPresentation.ts`), which is safe under either
+   * member of this union.
+   */
+  limitationDecisions: LimitationDecisionTrace[] | MusculoskeletalLimitationDecisionV127[];
+  /** v1.27 only (Fase 6 muscle-priority stage); always absent/empty on a v2 plan. */
+  musclePriorityDecisions?: MusclePriorityDecisionV127[];
   /** Absent only on plans persisted before contextual limitation omission support. */
   exerciseOmissions?: WorkoutExerciseOmissionTrace[];
   compositionDecisions: CompositionDecision[];

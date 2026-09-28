@@ -262,6 +262,7 @@ export function AuthScreen({
         isSocialRegistrationAttempt ? quiz : null,
         isSocialRegistrationAttempt ? name : null,
         isSocialRegistrationAttempt ? legalAccepted : undefined,
+        isSocialRegistrationAttempt ? preparedWorkoutProgram : null,
       );
       // Navigation is decided centrally by RootNavigator from the resulting
       // auth/questionnaire state — this screen doesn't pick a destination.

@@ -1,11 +1,10 @@
 import {
-  deleteUser,
+  onAuthStateChanged,
   signInWithCredential,
   signInWithEmailAndPassword,
   linkWithCredential,
   fetchSignInMethodsForEmail,
   getAdditionalUserInfo,
-  signOut,
   updateProfile,
   type AuthCredential,
   type User,
@@ -17,6 +16,7 @@ import { getGoogleCredential, isGoogleSigninAvailable } from './providers/google
 import { getAppleCredential, isAppleAuthAvailable } from './providers/apple';
 import { SocialAuthCancelledError, type ProviderResult } from './providers/types';
 import { createSingleFlight } from '../lib/singleFlight';
+import { logInfo } from '../lib/logger';
 
 /**
  * Provider-agnostic social authentication. Screens call `signInWithProvider`
@@ -95,6 +95,47 @@ function errorCode(err: unknown): string {
 }
 
 /**
+ * Bounded window this module waits, after `signInWithCredential` itself
+ * rejects with `auth/network-request-failed`, for Firebase's OWN auth-state
+ * machine to settle before concluding no session exists. Real incidents
+ * (docs: 2026-09-24 orphaned-Google-account audit) show the identity
+ * exchange can succeed server-side — Firebase creates/authenticates the
+ * account and mints tokens — while the HTTP response carrying that outcome
+ * back to this exact call is what gets lost; `auth.currentUser`/
+ * `onAuthStateChanged` are Firebase's own live, authoritative view of
+ * whether a session actually exists, entirely independent of whether THIS
+ * promise resolved. Short enough to never make a genuine, total connection
+ * failure (test scenario B) feel unresponsive.
+ */
+const NETWORK_FAILURE_RECONCILE_WINDOW_MS = 4000;
+
+/**
+ * Camada A (2026-09-24 orphaned-Google-account audit) — after a real
+ * `auth/network-request-failed` from `signInWithCredential`, never assume
+ * outright that no authentication occurred: Firebase's client SDK may still
+ * be finishing internal token persistence, or may already have completed it
+ * before this exact call's response was lost. `auth.currentUser` is
+ * Firebase's own authoritative state, checked fresh here — never a UID
+ * captured before the failed await. Resolves to `null` (never invents an
+ * identity) when nothing appears within the bounded window.
+ */
+function reconcileAuthUserAfterNetworkFailure(): Promise<User | null> {
+  if (auth.currentUser) return Promise.resolve(auth.currentUser);
+  return new Promise<User | null>((resolve) => {
+    let settled = false;
+    const finish = (value: User | null) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      unsubscribe();
+      resolve(value);
+    };
+    const timer = setTimeout(() => finish(auth.currentUser), NETWORK_FAILURE_RECONCILE_WINDOW_MS);
+    const unsubscribe = onAuthStateChanged(auth, (nextUser) => finish(nextUser));
+  });
+}
+
+/**
  * Signs in with a social provider. On success returns the Firebase user.
  * Throws `SocialAuthCancelledError` on cancel, or `AccountLinkingRequiredError`
  * when the email already exists under another provider.
@@ -114,6 +155,11 @@ async function performSignInWithProvider(provider: SocialProvider): Promise<Soci
     logAuthError(`${provider}:credential`, err);
     throw toAuthError(err);
   }
+
+  // Baseline only — a guard to avoid ever misattributing a session that was
+  // ALREADY there before this attempt to the reconciliation below. Never
+  // used as the identity anything gets written under.
+  const uidBeforeAttempt = auth.currentUser?.uid ?? null;
 
   try {
     const userCredential = await signInWithCredential(auth, result.credential);
@@ -139,30 +185,28 @@ async function performSignInWithProvider(provider: SocialProvider): Promise<Soci
       const methods = email ? await fetchSignInMethodsForEmail(auth, email) : [];
       throw new AccountLinkingRequiredError(email, methods, provider);
     }
+    if (errorCode(err) === 'auth/network-request-failed') {
+      const reconciled = await reconcileAuthUserAfterNetworkFailure();
+      if (reconciled && reconciled.uid !== uidBeforeAttempt) {
+        try {
+          await applyDisplayName(reconciled, result.displayName);
+        } catch (displayNameError) {
+          logAuthError(`${provider}:display-name`, displayNameError);
+        }
+        logInfo('social-auth', 'network_failure_reconciled', { provider, uid: reconciled.uid });
+        // Firebase's own `isNewUser` classification is unavailable here (no
+        // `UserCredential` — the promise that would have carried it never
+        // resolved). `isNewUser: false` is the SAFE default: it forces the
+        // caller's own `getUserProfile` check rather than assuming "brand
+        // new", so an account created by an EARLIER lost-response attempt is
+        // still correctly recognized as needing provisioning, and
+        // `rollbackIncompleteSocialIdentity` never deletes a real,
+        // recoverable identity if eligibility fails downstream.
+        return { user: reconciled, isNewUser: false };
+      }
+    }
     logAuthError(`${provider}:firebase-sign-in`, err);
     throw toAuthError(err);
-  }
-}
-
-/**
- * Rolls back a federated identity that Firebase created before the app could
- * learn that legal acceptance was still missing. A first social sign-in is a
- * recent authentication, so `deleteUser` is the correct cleanup operation.
- * If deletion fails, signing out still prevents the incomplete identity from
- * becoming an app session; a later attempt remains gated by its missing
- * Firestore profile.
- */
-export async function discardNewSocialIdentity(user: User): Promise<void> {
-  try {
-    await deleteUser(user);
-  } catch (deletionError) {
-    logAuthError('social-new-user:delete', deletionError);
-    try {
-      await signOut(auth);
-    } catch (signOutError) {
-      logAuthError('social-new-user:signout', signOutError);
-    }
-    throw toAuthError(deletionError);
   }
 }
 

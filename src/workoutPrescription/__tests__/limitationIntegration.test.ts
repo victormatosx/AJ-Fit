@@ -76,7 +76,7 @@ describe('Prescription Engine + Limitation Resolver V1', () => {
     if (result.status === 'SUCCESS') {
       for (const session of result.plan.sessions) {
         expect(session.exercises.map((item) => item.exerciseId)).toEqual([
-          'chair-sit-to-stand', 'bodyweight-squat',
+          'chair-sit-to-stand', 'leg-press-90',
         ]);
         expect(session.exercises.map((item) => item.sets)).toEqual([2, 3]);
       }
@@ -191,15 +191,14 @@ describe('Prescription Engine + Limitation Resolver V1', () => {
   });
 
   it.each([
-    ['gym', { place: 'gym', primaryPlace: null, equipment: [] }],
-    ['home', { place: 'home', primaryPlace: null, equipment: ['bodyweight'] }],
-    ['both→home', { place: 'both', primaryPlace: 'home', equipment: ['bodyweight'] }],
+    ['gym', { place: 'gym', equipment: [] }],
+    ['home', { place: 'home', equipment: ['bodyweight'] }],
   ] satisfies Array<[string, Partial<QuestionnaireAnswers>]>)('keeps the final adaptation executable in %s', (_label, environment) => {
     const answers = limitationAnswers(environment);
     const result = generateSingle(answers);
     expect(result.status).toBe('SUCCESS');
     if (result.status === 'SUCCESS') {
-      expect(result.plan.environment).toBe(environment.place === 'both' ? 'home' : environment.place);
+      expect(result.plan.environment).toBe(environment.place);
       expect(result.plan.sessions.every((session) => session.exercises[0].exerciseId === 'wall-push-up')).toBe(true);
     }
   });
@@ -280,12 +279,14 @@ describe('Prescription Engine + Limitation Resolver V1', () => {
     }));
   });
 
-  it('returns UNMAPPED_LIMITATION_REGION for other', () => {
+  it('Fase 9 §13: other alone maps to no active region and generation succeeds unchanged', () => {
     const answers = limitationAnswers({ limits: ['other'] });
     const result = generateSingle(answers);
-    expect(result).toEqual(expect.objectContaining({
-      status: 'INVALID_CONFIGURATION', reasonCodes: ['UNMAPPED_LIMITATION_REGION'],
-    }));
+    expect(result.status).toBe('SUCCESS');
+    if (result.status === 'SUCCESS') {
+      const ids = result.plan.sessions.flatMap((session) => session.exercises.map((item) => item.exerciseId));
+      expect(ids).toContain('machine-flat-bench-press');
+    }
   });
 
   it.each([

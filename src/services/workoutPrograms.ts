@@ -10,6 +10,7 @@ import {
 
 import { db } from '../lib/firebase';
 import { EXERCISES_SEED } from '../data/exercisesSeedData';
+import { exerciseCatalogErrors } from './exerciseCatalogValidity';
 import { getTemplateById, TEMPLATE_LIBRARY_VERSION } from '../workoutPrescription/catalog';
 import { generateWorkoutPrescription } from '../workoutPrescription/engine';
 import { prescriptionInputErrors, sanitizeAnswersForEngine } from '../workoutPrescription/input';
@@ -55,6 +56,10 @@ import {
   requireWorkoutLifecycleCanonical,
   WORKOUT_LIFECYCLE_AUTHORITY_GRANT_ID,
 } from '../workoutLifecycle/authorityProvider';
+import {
+  initializeWorkoutProgramV127,
+  isWorkoutLifecycleV127InitializeNotApplicable,
+} from '../workoutLifecycle/initializeV127Provider';
 import { selectTemplate } from '../workoutPrescription/selection';
 import {
   fromWorkoutTemplateDocument,
@@ -63,19 +68,22 @@ import {
 } from '../workoutPrescription/templateDocument';
 import {
   PRESCRIPTION_VERSIONS,
+  PRESCRIPTION_VERSIONS_V127,
   type CanonicalTemplate,
   type FinalWorkoutPlan,
   type PrescriptionResult,
+  type PrescriptionVersions,
   type QuestionnaireAnswers,
   type TemplateId,
 } from '../workoutPrescription/types';
+import { generateWorkoutPrescriptionRouted, resolveActiveGenerationVersion } from '../workoutPrescription/generatePrescription';
+import { localWorkoutTemplateDocumentV127 } from './templateDocumentV127';
 
 const USERS = 'users';
 const PROGRAMS = 'workoutPrograms';
 const PROGRAM_STATE = 'workoutProgramState';
 const TEMPLATES = 'workoutTemplates';
 const EXERCISES = 'exercises';
-const EXPECTED_EXERCISE_COUNT = 116;
 
 export type WorkoutProgramStatus = 'active' | 'superseded';
 /**
@@ -217,21 +225,6 @@ export async function loadWorkoutTemplate(templateId: TemplateId): Promise<Worko
   return data;
 }
 
-function isExerciseCatalogDocument(value: unknown, id: string): value is LimitationCatalogExercise {
-  if (!value || typeof value !== 'object') return false;
-  const item = value as Partial<LimitationCatalogExercise>;
-  return item.slug === id
-    && ['active', 'inactive', 'draft'].includes(item.status ?? '')
-    && Array.isArray(item.equipment)
-    && item.target != null
-    && typeof item.target.primaryMuscle === 'string'
-    && item.movement != null
-    && typeof item.movement.pattern === 'string'
-    && item.availability != null
-    && item.substitution != null
-    && Array.isArray(item.substitution.similarExerciseIds);
-}
-
 /** Single catalog query; Limitation Resolver remains pure and performs no I/O. */
 function limitationDatasetStateRef() {
   return doc(db, LIMITATION_DATASET_STATE_COLLECTION, LIMITATION_DATASET_ACTIVE_DOCUMENT);
@@ -267,15 +260,11 @@ export async function loadExerciseCatalogForLimitations(
   }
 
   const snapshot = await getDocs(collection(db, EXERCISES));
-  if (snapshot.size !== EXPECTED_EXERCISE_COUNT) {
-    throw new Error(`LIMITATION_CATALOG_COUNT_INVALID:${snapshot.size}`);
-  }
-  const exercises = snapshot.docs.map((document) => {
-    const data = { ...document.data(), id: document.id };
-    if (!isExerciseCatalogDocument(data, document.id)) {
-      throw new Error(`LIMITATION_CATALOG_EXERCISE_INVALID:${document.id}`);
-    }
-    return data;
+  const documents = snapshot.docs.map((document) => ({ id: document.id, data: { ...document.data(), id: document.id } }));
+  const catalogErrors = exerciseCatalogErrors(documents);
+  if (catalogErrors.length) throw new Error(catalogErrors.join(','));
+  const exercises = documents.map((document) => {
+    return document.data as LimitationCatalogExercise;
   });
   const profiles = exercises
     .filter((exercise) => exercise.limitationProfile != null)
@@ -363,7 +352,7 @@ export function isProgramSnapshot(value: unknown, programId: string): value is W
     && item.prescriptionId.length > 0
     && item.status === 'active'
     && ['onboarding', 'manual_regeneration', 'automatic_progression', 'automatic_reconciliation', 'evolution_activation', 'program_adaptation'].includes(item.source ?? '')
-    && /^T(?:00[1-9]|0[1-8][0-9]|090)$/.test(item.templateId ?? '')
+    && /^T(?:00[1-9]|0[1-9][0-9]|10[0-2])$/.test(item.templateId ?? '')
     && Array.isArray(item.sessions)
     && item.sessions.length > 0
     && item.sessions.every((session) =>
@@ -777,6 +766,31 @@ export async function saveAndActivateWorkoutProgram(input: {
     ...(input.authorityUpdatedFields ? { updatedFields: input.authorityUpdatedFields } : {}),
   });
 
+  // Fase 16 — v1.27 ADAPT/ACTIVATE: the backend already persisted the
+  // entire lifecycle transition via Admin SDK (`persistLifecycleActivationV127`,
+  // functions/src/workoutLifecycle/authorizeMutation.ts) — no grant was
+  // even issued, and this transaction must never run for that case (the
+  // exact write it would attempt is what exceeds Firestore Rules'
+  // per-request expression ceiling for a real v1.27 document). Read back
+  // and return the already-persisted result instead.
+  if (authorityResult.persisted) {
+    const saved = await getDoc(programRef(input.uid, authorityResult.persisted.programId));
+    const savedData = saved.data();
+    if (!saved.exists() || !isProgramSnapshot(savedData, authorityResult.persisted.programId)) {
+      throw new Error('PROGRAM_PERSIST_FAILED');
+    }
+    const lifecycle = await loadWorkoutLifecycle(input.uid);
+    if (!lifecycle || lifecycle.lifecycle.activeContentIdentity !== authorityResult.persisted.programId) {
+      throw new Error('PROGRAM_LIFECYCLE_PERSIST_FAILED');
+    }
+    return {
+      ...savedData,
+      programInstanceId: lifecycle.programInstance.programInstanceId,
+      trainingCycleId: lifecycle.cycle.cycleId,
+      programInstanceActivatedAt: lifecycle.programInstance.activatedAt,
+    };
+  }
+
   let authorizedInput = input;
   let programId = candidateProgramId;
   if (authorityOperation === 'INITIALIZE' || authorityOperation === 'MIGRATE' || authorityOperation === 'ADAPT') {
@@ -1163,8 +1177,17 @@ export interface PreparedWorkoutProgram {
   usedLocalLimitationCatalog: boolean;
   /** Deterministic hash of the normalized answers this plan was computed from — see `questionnaireFingerprint`. */
   questionnaireFingerprint: string;
-  /** Engine/rule versions active at compute time (also embedded in `plan.versions`, duplicated here so a version drift can be checked without reaching into the plan). */
-  prescriptionVersions: typeof PRESCRIPTION_VERSIONS;
+  /**
+   * Engine/rule versions active at compute time (also embedded in
+   * `plan.versions`, duplicated here so a version drift can be checked
+   * without reaching into the plan). Widened from the v2-only literal
+   * `typeof PRESCRIPTION_VERSIONS` (Fase 10 cutover) — a v1.27-routed
+   * `prepared` result carries `PRESCRIPTION_VERSIONS_V127` here instead;
+   * every reader (`persistPreparedWorkoutProgram`'s fast-path match check)
+   * only ever does field-level `===` string comparisons, never assumes the
+   * v2 literal shape.
+   */
+  prescriptionVersions: PrescriptionVersions;
   /** `TEMPLATE_LIBRARY_VERSION` at compute time — the local catalog's own version marker, independent of any Firestore document. */
   templateLibraryVersion: string;
   generatedAt: number;
@@ -1302,27 +1325,141 @@ export async function prepareWorkoutProgram(input: {
 }
 
 /**
+ * Fase 10 (cutover) §2 — the v1.27 mirror of `prepareWorkoutProgram`, MUCH
+ * simpler by construction: v1.27 templates are never Firestore documents,
+ * so there is no `loadTemplate`/`loadLimitationDataset` async ceremony to
+ * run first — `generateWorkoutPrescriptionV127` (reached only via the
+ * central `generateWorkoutPrescriptionRouted` dispatcher, forced to
+ * `'v1.27'` since the caller already resolved that this IS the v1.27
+ * branch) resolves its own local canonical template and does its own
+ * region-only musculoskeletal substitution synchronously. No pre-loaded
+ * v2 template is ever required — see Fase 10 report §B.
+ */
+async function prepareWorkoutProgramV127(input: {
+  answers: QuestionnaireAnswers;
+  currentTrainingLevel: CurrentTrainingLevel;
+}): Promise<PrepareWorkoutProgramResult> {
+  const result = generateWorkoutPrescriptionRouted(input.answers, input.currentTrainingLevel, {}, 'v1.27');
+  if (result.status !== 'SUCCESS') return result;
+  return {
+    status: 'SUCCESS',
+    plan: result.plan,
+    templateId: result.plan.templateId,
+    // Same meaning as v2's flag: true only when the musculoskeletal
+    // limitation stage actually ran AND it ran against a "local, not
+    // Firestore-verified" catalog. v1.27's substitution map
+    // (`canonicalMusculoskeletalLimitationV127.ts`) is ALWAYS the bundled
+    // local one (never Firestore) — so this is simply "was a limitation
+    // declared", matching v2's `needsLimitationCatalog && true` exactly.
+    usedLocalLimitationCatalog: input.answers.specialConditions.includes('musculoskeletal_limitation'),
+    questionnaireFingerprint: questionnaireFingerprint(input.answers),
+    prescriptionVersions: PRESCRIPTION_VERSIONS_V127,
+    templateLibraryVersion: PRESCRIPTION_VERSIONS_V127.templateLibrary,
+    generatedAt: Date.now(),
+  };
+}
+
+/**
+ * Fase 10 (cutover) §1/§2 — the ONE place a persistence-facing call site
+ * asks "which pipeline, and how do I get a template for it". Delegates the
+ * version decision itself to `resolveActiveGenerationVersion`
+ * (`generatePrescription.ts`) — never re-implemented here. v2 keeps its
+ * exact existing `loadTemplate`/`loadLimitationDataset` async contract
+ * (Firestore-backed post-auth, bundled-local pre-auth — unchanged,
+ * selected by each call site exactly as before); v1.27 needs neither.
+ */
+async function prepareWorkoutProgramForActiveGeneration(input: {
+  answers: QuestionnaireAnswers;
+  currentTrainingLevel: CurrentTrainingLevel;
+  adaptationWeek?: number;
+  loadTemplate: (templateId: TemplateId) => Promise<CanonicalTemplate | null>;
+  loadLimitationDataset: (includeExercises: boolean) => Promise<LimitationDatasetSnapshot>;
+  usedLocalLimitationCatalog: boolean;
+}): Promise<PrepareWorkoutProgramResult> {
+  if (resolveActiveGenerationVersion() === 'v1.27') {
+    return prepareWorkoutProgramV127({ answers: input.answers, currentTrainingLevel: input.currentTrainingLevel });
+  }
+  return prepareWorkoutProgram({
+    answers: input.answers,
+    adaptationWeek: input.adaptationWeek,
+    loadTemplate: input.loadTemplate,
+    loadLimitationDataset: input.loadLimitationDataset,
+    usedLocalLimitationCatalog: input.usedLocalLimitationCatalog,
+  });
+}
+
+/**
  * Pre-auth compute (Phase 3, Part C) — uses ONLY bundled, versioned local
  * sources (`catalog.ts`'s `getTemplateById`, `localLimitationCatalog.ts`),
  * never Firestore. This is necessary, not just an optimization:
  * `firestore.rules` requires `isSignedIn()` for `workoutTemplates` and
  * `hasVerifiedEmailForPrivateAccess()` for `exercises` — a client with no
  * Firebase user yet cannot read either. Runs the exact same
- * `prepareWorkoutProgram` pipeline as the post-auth path; Firestore remains
- * authoritative for what actually gets PERSISTED (see
+ * `prepareWorkoutProgram` pipeline as the post-auth path (v2) — or, once
+ * v1.27 is the active generation version, `prepareWorkoutProgramV127`
+ * (also Firestore-free, so the pre-auth constraint holds either way).
+ * Firestore remains authoritative for what actually gets PERSISTED (see
  * `persistPreparedWorkoutProgram`).
  */
 export async function prepareWorkoutProgramLocally(
   answers: QuestionnaireAnswers,
   adaptationWeek?: number,
 ): Promise<PrepareWorkoutProgramResult> {
-  return prepareWorkoutProgram({
+  return prepareWorkoutProgramForActiveGeneration({
     answers,
+    // No lifecycle can exist pre-auth — the questionnaire's own answer is
+    // the only source for a brand-new user's starting level.
+    currentTrainingLevel: startingLevelFromQuestionnaire(answers.level) ?? 'INTERMEDIATE',
     adaptationWeek,
     loadTemplate: (templateId) => Promise.resolve(getTemplateById(templateId) ?? null),
     loadLimitationDataset: () => Promise.resolve(loadLocalLimitationDataset()),
     usedLocalLimitationCatalog: true,
   });
+}
+
+/**
+ * Fase 15 (v1.27 INITIALIZE cutover) — attempts the fully backend-persisted
+ * path (`initializeWorkoutProgramV127Handler`, functions/src/workoutLifecycle/
+ * authorizeMutation.ts) for a brand-new account's very first v1.27 program,
+ * instead of `saveAndActivateWorkoutProgram`'s client-transaction write
+ * (which a real v1.27 document — many sessions + a full decision trace —
+ * makes exceed Firestore Rules' per-request expression ceiling; see that
+ * function's own Fase 14 investigation trail). Returns `null` (never
+ * throws for this one case) whenever the callable reports its own
+ * `workout_lifecycle_v127_initialize_not_applicable` — an existing V1
+ * baseline, an existing V2/v1.27 lifecycle, or the active generation
+ * version resolving to v2 — so the caller falls through to the unchanged
+ * existing flow below, which already knows how to handle every one of
+ * those cases. Any OTHER error is a genuine failure and propagates.
+ *
+ * Never called with `answers` at all: the callable reads its own
+ * authoritative copy of the questionnaire from Firestore — the local
+ * `input.answers` this function otherwise uses is preview/intent only here,
+ * never persisted directly, per the same principle v2's INITIALIZE already
+ * follows for its own engine call.
+ */
+async function tryInitializeWorkoutProgramV127(input: {
+  uid: string;
+  questionnaireId: string;
+  questionnaireVersion: number;
+  source: WorkoutProgramSource;
+}): Promise<GenerateAndPersistResult | null> {
+  let result: Awaited<ReturnType<typeof initializeWorkoutProgramV127>>;
+  try {
+    result = await initializeWorkoutProgramV127({
+      questionnaireId: input.questionnaireId,
+      questionnaireVersion: input.questionnaireVersion,
+      source: input.source,
+    });
+  } catch (error) {
+    if (isWorkoutLifecycleV127InitializeNotApplicable(error)) return null;
+    throw error;
+  }
+  const program = await loadActiveWorkoutProgram(input.uid);
+  if (!program || program.programId !== result.programId) {
+    throw new Error('PROGRAM_PERSIST_FAILED');
+  }
+  return { status: 'SUCCESS', plan: program, program };
 }
 
 export async function generateAndPersistWorkoutProgram(input: {
@@ -1334,9 +1471,35 @@ export async function generateAndPersistWorkoutProgram(input: {
   adaptationWeek?: number;
   lifecycleIdempotencyKey?: string;
 }): Promise<GenerateAndPersistResult> {
+  // Only the true first-ever bootstrap shape (no adaptation week, no
+  // explicit lifecycle idempotency key — both imply an ADAPT/evolution
+  // scenario, never a genuine first INITIALIZE) is even eligible to try the
+  // backend-authoritative v1.27 path. `tryInitializeWorkoutProgramV127`
+  // performs its OWN authoritative check server-side regardless (this is a
+  // fast-path skip, not a security boundary) and gracefully reports "not
+  // applicable" for every other shape. The same cheap, pure, local
+  // boundary check `prepareWorkoutProgram` itself runs first (Phase 3's own
+  // ordering, unchanged) gates this too — a structurally invalid/legacy
+  // `answers` shape must still resolve to the exact same
+  // `NEEDS_QUESTIONNAIRE_UPDATE` outcome it always has, without ever
+  // reaching the network for input the backend would just reject anyway.
+  if (resolveActiveGenerationVersion() === 'v1.27' && input.adaptationWeek === undefined && !input.lifecycleIdempotencyKey) {
+    const { answers: sanitizedAnswers, legacyReasonCodes } = sanitizeAnswersForEngine(input.answers);
+    if (!legacyReasonCodes.length && !prescriptionInputErrors(sanitizedAnswers).length) {
+      const routed = await tryInitializeWorkoutProgramV127(input);
+      if (routed) return routed;
+    }
+  }
+  // Same baseline v2 has always used for this exact call — first-ever/
+  // automatic-reconciliation generation has no lifecycle to consult yet
+  // (or its lifecycle-tracked lifecycle level is irrelevant: no active
+  // program means no prior promotion could apply either), so the
+  // questionnaire's own answer is authoritative here, for BOTH pipelines.
+  const currentTrainingLevel = startingLevelFromQuestionnaire(input.answers.level) ?? 'INTERMEDIATE';
   let firestoreTemplate: WorkoutTemplateDocument | null = null;
-  const prepared = await prepareWorkoutProgram({
+  const prepared = await prepareWorkoutProgramForActiveGeneration({
     answers: input.answers,
+    currentTrainingLevel,
     adaptationWeek: input.adaptationWeek,
     loadTemplate: async (templateId) => {
       firestoreTemplate = await loadWorkoutTemplate(templateId);
@@ -1346,21 +1509,30 @@ export async function generateAndPersistWorkoutProgram(input: {
     usedLocalLimitationCatalog: false,
   });
   if (prepared.status !== 'SUCCESS') return prepared;
-  // `prepared.status === 'SUCCESS'` only happens after `loadTemplate`
-  // resolved a non-null template, which is the only place `firestoreTemplate`
-  // is assigned — always non-null here; the check below is defensive, not
-  // expected to ever actually throw.
-  if (!firestoreTemplate) throw new Error('WORKOUT_TEMPLATE_NOT_FOUND');
+  // v1.27 never populates `firestoreTemplate` (its `loadTemplate` closure
+  // above is never invoked — see `prepareWorkoutProgramForActiveGeneration`)
+  // — compute its local template metadata instead. v2 keeps relying on the
+  // closure capture exactly as before.
+  const template: Pick<WorkoutTemplateDocument, 'id' | 'version' | 'sourceVersion' | 'contentHash'> =
+    prepared.templateLibraryVersion === PRESCRIPTION_VERSIONS_V127.templateLibrary
+      ? await localWorkoutTemplateDocumentV127(prepared.templateId)
+      : (() => {
+          // `prepared.status === 'SUCCESS'` on the v2 branch only happens after
+          // `loadTemplate` resolved a non-null template, the only place
+          // `firestoreTemplate` is assigned — always non-null here.
+          if (!firestoreTemplate) throw new Error('WORKOUT_TEMPLATE_NOT_FOUND');
+          return firestoreTemplate;
+        })();
   const program = await saveAndActivateWorkoutProgram({
     uid: input.uid,
     questionnaireId: input.questionnaireId,
     questionnaireVersion: input.questionnaireVersion,
     source: input.source,
     plan: prepared.plan,
-    template: firestoreTemplate,
+    template,
     prescriptionInputSnapshot: buildPrescriptionInputSnapshot({
       answers: input.answers,
-      currentTrainingLevel: startingLevelFromQuestionnaire(input.answers.level)!,
+      currentTrainingLevel,
       source: 'QUESTIONNAIRE_BASELINE',
     }),
     lifecycleIdempotencyKey: input.lifecycleIdempotencyKey,

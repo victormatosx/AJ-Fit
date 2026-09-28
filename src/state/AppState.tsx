@@ -11,13 +11,15 @@ export type PrimaryGoal =
   | 'lose_fat'
   | 'strength'
   | 'conditioning'
-  | 'body_composition'
-  | 'return_to_training';
+  | 'health';
+/** Former canonical values kept read-only so existing questionnaires remain usable and presentable. */
+export type DeprecatedGoal = 'body_composition' | 'return_to_training';
 export type LegacyGoal = 'hyper' | 'cut' | 'perf' | 'def' | 'recon';
-export type ExperienceLevel = 'never_or_starting' | 'beginner' | 'intermediate' | 'advanced';
+export type ExperienceLevel = 'beginner' | 'intermediate' | 'advanced';
+/** Former canonical value kept read-only so existing questionnaires remain usable and presentable. */
+export type DeprecatedExperienceLevel = 'never_or_starting';
 export type LegacyExperienceLevel = 'beg' | 'int' | 'adv' | 'elite';
-export type TrainingEnvironment = 'gym' | 'home' | 'both';
-export type PrimaryTrainingEnvironment = Exclude<TrainingEnvironment, 'both'>;
+export type TrainingEnvironment = 'gym' | 'home';
 /** Canonical chronological order (Monday-first). Persisted values never depend on locale or click order — see questionnaireSchema.ts `normalizeWeekdays`. */
 export const WEEKDAY_ORDER = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'] as const;
 export type Weekday = (typeof WEEKDAY_ORDER)[number];
@@ -87,11 +89,11 @@ export type Quiz = {
   birthDate: Date | null;
   height: number;
   weight: number;
-  /** New writes use `PrimaryGoal`; legacy IDs remain readable until a future explicit migration. */
-  goal: PrimaryGoal | LegacyGoal | null;
+  /** New writes use `PrimaryGoal`; deprecated/legacy IDs remain readable until a future explicit migration. */
+  goal: PrimaryGoal | DeprecatedGoal | LegacyGoal | null;
   frequency: string | null;
-  /** Experience modifier. `elite` and the other short IDs are read-only legacy values. */
-  level: ExperienceLevel | LegacyExperienceLevel | null;
+  /** New writes use `ExperienceLevel`; deprecated/legacy IDs remain readable for existing questionnaires. */
+  level: ExperienceLevel | DeprecatedExperienceLevel | LegacyExperienceLevel | null;
   limits: string[];
   duration: '30' | '45' | '60' | '90' | null;
   days: number | null;
@@ -107,15 +109,11 @@ export type Quiz = {
    */
   trainingDays: Weekday[] | null;
   place: TrainingEnvironment | null;
-  /** Required only when `place === 'both'`; always resolves the future base selector to gym/home. */
-  primaryPlace: PrimaryTrainingEnvironment | null;
   equipment: string[];
   style: string[];
-  /** Etapa 4 do novo funil — distinto de `goal`: motivo emocional/contextual que trouxe o usuário, não o resultado técnico buscado. */
-  motivation: string | null;
-  /** Etapa 19 — até 2 grupos musculares prioritários (ver docs/onboarding_funnel_architecture.md para a justificativa do limite). */
+  /** Etapa 18 — até 2 grupos musculares prioritários (ver docs/onboarding_funnel_architecture.md para a justificativa do limite). */
   muscleFocus: string[];
-  /** Etapa 22 — nível de compromisso declarado. Onboarding-only: não influencia nenhum algoritmo de treino hoje. */
+  /** Etapa 21 — nível de compromisso declarado. Onboarding-only: não influencia nenhum algoritmo de treino hoje. */
   commitment: string | null;
   specialConditions: SpecialCondition[];
   pregnancyScreening: PregnancyScreening | null;
@@ -164,10 +162,8 @@ export const defaultQuiz: Quiz = {
   scheduleMode: null,
   trainingDays: null,
   place: null,
-  primaryPlace: null,
   equipment: [],
   style: [],
-  motivation: null,
   muscleFocus: [],
   commitment: null,
   specialConditions: [],

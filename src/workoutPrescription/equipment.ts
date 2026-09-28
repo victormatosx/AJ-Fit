@@ -1,4 +1,5 @@
 import type { ExerciseSeedInput } from '../types/exercise';
+import { PRESCRIPTION_VERSIONS_V127 } from './types';
 import type { QuestionnaireAnswers, TemplateEnvironment } from './types';
 
 const EQUIPMENT_MAP: Record<string, ExerciseSeedInput['equipment']> = {
@@ -9,6 +10,9 @@ const EQUIPMENT_MAP: Record<string, ExerciseSeedInput['equipment']> = {
   barbell: ['barbell', 'ez_bar'],
   none: ['bodyweight'],
 };
+
+/** Every equipment tag any `EQUIPMENT_MAP` answer could ever unlock — i.e. the full common-home-kit assumption, deliberately excluding true gym-only machinery (`machine`, `cable`, `smith_machine`, etc., which have no entry in `EQUIPMENT_MAP` at all). */
+const ALL_HOME_ANSWERABLE_EQUIPMENT: readonly string[] = [...new Set(Object.values(EQUIPMENT_MAP).flat())];
 
 export interface EquipmentContext {
   environment: TemplateEnvironment;
@@ -24,6 +28,63 @@ export function equipmentContextFor(
     for (const item of EQUIPMENT_MAP[answer] ?? []) availableEquipment.add(item);
   }
   return { environment, availableEquipment };
+}
+
+/**
+ * An `EquipmentContext` that is blind to `answers.equipment` — every home
+ * equipment tag the (removed) questionnaire question could ever have
+ * unlocked is assumed present, so no candidate is ever rejected for a
+ * "missing home item" reason. Gym-only machinery (`machine`, `cable`,
+ * `smith_machine`, etc.) is deliberately NOT included: this context still
+ * respects the gym/home environment boundary (a home program can never
+ * evolve into a machine-based exercise) — it only stops gating on WHICH
+ * specific home items the user claims to own, which is the actual product
+ * decision under audit.
+ *
+ * Used where an authoritative v1.27 program needs an `EquipmentContext`
+ * value for a shared (v2-and-v1.27) code path (e.g. `evolveCycle`'s
+ * substitution candidate filtering) but must not let `answers.equipment`
+ * influence the outcome: v1.27 never considers a home equipment inventory
+ * at any lifecycle stage (selection, composition, or cycle evolution) — the
+ * decision is which engine version generated the active program, never
+ * client input (see docs/workout-modifiers equipment audit).
+ */
+export function unrestrictedEquipmentContext(environment: TemplateEnvironment): EquipmentContext {
+  return { environment, availableEquipment: new Set<string>(ALL_HOME_ANSWERABLE_EQUIPMENT) };
+}
+
+/**
+ * Manual-substitution equipment context (exercise-substitution architecture
+ * audit, equipment-inventory follow-up): manual substitution used to always
+ * call `equipmentContextFor` directly, so a v1.27 user in `home` — for whom
+ * the (removed) equipment-inventory question is never shown, leaving
+ * `answers.equipment` at its `[]` draft default — silently collapsed to a
+ * `{'bodyweight'}`-only context, rejecting every dumbbell/band/bench
+ * candidate the v1.27 automatic (limitation-driven) substitution path and
+ * the v1.27 cycle-evolution path (`authorizeMutation.ts`'s
+ * `generateCanonicalCycleEvolution`) already treat as available via
+ * `unrestrictedEquipmentContext`.
+ *
+ * This mirrors that same version-gated rule for manual substitution: a
+ * v1.27 program's `templateSourceVersion` routes to
+ * `unrestrictedEquipmentContext` (never gated on `answers.equipment`,
+ * matching every other v1.27 lifecycle stage), while a pre-v1.27
+ * (`templateSourceVersion !== '1.27.0'`) program keeps the legacy
+ * `equipmentContextFor` behavior unchanged, so already-persisted v2
+ * `answers.equipment` answers keep meaning what they always meant. The
+ * decision is the ACTIVE PROGRAM's own authoritative version — server-read
+ * Firestore data on the backend, the loaded program snapshot on the client
+ * — never a default and never the client-submitted `answers.equipment`
+ * itself.
+ */
+export function manualSubstitutionEquipmentContext(
+  answers: QuestionnaireAnswers,
+  environment: TemplateEnvironment,
+  templateSourceVersion: unknown,
+): EquipmentContext {
+  return templateSourceVersion === PRESCRIPTION_VERSIONS_V127.templateLibrary
+    ? unrestrictedEquipmentContext(environment)
+    : equipmentContextFor(answers, environment);
 }
 
 export function isExerciseExecutable(

@@ -127,12 +127,12 @@ describe('deletePrefixObjects — other uid / other prefix isolation', () => {
 
   it('a prefix that only partially matches another (e.g. "support" vs "progressPhotos") is never confused', async () => {
     const harness = createFakeBucket();
-    harness.seed('users/uid-1/support/ticket-1/attachments/photo.jpg');
+    harness.seed('users/uid-1/support-v2/staged/upload-1');
     harness.seed('users/uid-1/progressPhotos/p1.enc');
 
     await deletePrefixObjects(harness.bucket, 'users/uid-1/progressPhotos/');
 
-    expect(harness.exists('users/uid-1/support/ticket-1/attachments/photo.jpg')).toBe(true);
+    expect(harness.exists('users/uid-1/support-v2/staged/upload-1')).toBe(true);
     expect(harness.exists('users/uid-1/progressPhotos/p1.enc')).toBe(false);
   });
 });

@@ -9,7 +9,7 @@ import { auth, db } from '../lib/firebaseAdmin';
 import { logFunctionError, logInfo } from '../lib/logger';
 import { isoDate, safeString } from '../adminUsers/presentation';
 import { couponJourneyRecord, summarizeCouponJourney, type CouponJourneyRecord } from './presentation';
-import { SUBSCRIPTION_TRANSACTIONS_COLLECTION } from '../billing/subscriptionTransactions';
+import { SUBSCRIPTION_TRANSACTIONS_COLLECTION } from '../billing/financialEnvironment';
 
 const SCOPE = 'admin:coupons';
 const REDEMPTIONS = 'couponRedemptions';
@@ -114,7 +114,7 @@ function optionalDate(value: unknown, name: string): number | null {
   return parsed;
 }
 
-interface Filters {
+export interface Filters {
   search: string;
   couponStatus: string;
   influencerId: string;
@@ -122,6 +122,12 @@ interface Filters {
   plan: string;
   from: number | null;
   to: number | null;
+  /**
+   * Financial dashboard default is PRODUCTION-only (Sandbox contamination
+   * guard). `true` is an explicit admin opt-in to also see Sandbox/Unknown
+   * transactions for auditing — never the default, never inferred.
+   */
+  includeSandbox: boolean;
 }
 
 function parseFilters(data: PlainDocument): Filters {
@@ -138,6 +144,7 @@ function parseFilters(data: PlainDocument): Filters {
     plan: stringFilter(data.plan, PLANS, 'ALL'),
     from,
     to,
+    includeSandbox: data.includeSandbox === true,
   };
 }
 
@@ -245,7 +252,12 @@ export function financialSummary(documents: readonly DocumentSnapshot[]) {
   };
 }
 
-function financialMatches(snapshot: DocumentSnapshot, filters: Filters) {
+export function financialMatches(snapshot: DocumentSnapshot, filters: Filters) {
+  // Sandbox contamination guard (Fase — QA/Sandbox vs Production audit):
+  // financial figures default to PRODUCTION only. SANDBOX and UNKNOWN
+  // (missing/malformed `environment`) are excluded unless the admin
+  // explicitly opts in via `includeSandbox` — never inferred, never silent.
+  if (!filters.includeSandbox && snapshot.get('environment') !== 'PRODUCTION') return false;
   const purchasedAt = isoDate(snapshot.get('purchasedAt'));
   const millis = purchasedAt ? new Date(purchasedAt).getTime() : null;
   if (filters.from !== null && (millis === null || millis < filters.from)) return false;

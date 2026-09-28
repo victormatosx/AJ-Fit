@@ -48,17 +48,17 @@ const profileByExerciseId = new Map(
   ),
 );
 
-const EXPECTED_EXERCISE_COUNT = 116;
-
 /**
  * Synchronous, pure, no I/O — mirrors `loadExerciseCatalogForLimitations`'s
- * own invariant check (exact catalog size) so a drift between
- * `EXERCISES_SEED` and this dataset is caught immediately rather than
- * silently producing an incomplete catalog.
+ * semantic identity checks. New valid exercises may be added to the seed;
+ * every authored limitation profile must still resolve to a seeded ID.
  */
 export function loadLocalExerciseCatalogForLimitations(): LimitationCatalogExercise[] {
-  if (EXERCISES_SEED.length !== EXPECTED_EXERCISE_COUNT) {
-    throw new Error(`LIMITATION_CATALOG_COUNT_INVALID:${EXERCISES_SEED.length}`);
+  if (!EXERCISES_SEED.length) throw new Error('LIMITATION_CATALOG_EMPTY');
+  const ids = new Set(EXERCISES_SEED.map((exercise) => exercise.id));
+  if (ids.size !== EXERCISES_SEED.length) throw new Error('LIMITATION_CATALOG_DUPLICATE_ID');
+  for (const id of profileByExerciseId.keys()) {
+    if (!ids.has(id)) throw new Error(`LIMITATION_PROFILE_EXERCISE_MISSING:${id}`);
   }
   return EXERCISES_SEED.map((exercise) => ({
     ...exercise,

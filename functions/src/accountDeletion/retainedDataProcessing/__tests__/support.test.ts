@@ -17,131 +17,157 @@ function depsFor(
   };
 }
 
-function seedTicket(
-  fsHarness: ReturnType<typeof createFakeFirestore>,
-  ticketId: string,
+function seedCase(
+  fs: ReturnType<typeof createFakeFirestore>,
+  caseId: string,
   uid: string,
-  messageIds: string[] = [],
+  options: { message?: boolean; action?: boolean; uploadStatus?: 'ATTACHED' | 'STAGED' } = {},
 ) {
-  fsHarness.seed(`supportTickets/${ticketId}`, { userId: uid });
-  for (const messageId of messageIds) {
-    fsHarness.seed(`supportTickets/${ticketId}/messages/${messageId}`, { senderId: uid });
+  const storagePath = `users/${uid}/support-v2/staged/upload-${caseId}`;
+  fs.seed(`supportCases/${caseId}`, { ownerUid: uid, state: 'CHAT_OPEN' });
+  if (options.message) {
+    fs.seed(`supportCases/${caseId}/messages/message-${caseId}`, {
+      senderId: uid,
+      attachments: [{ storagePath }],
+    });
   }
+  if (options.action) fs.seed(`supportCases/${caseId}/_actions/action-${caseId}`, { adminUid: 'admin-1' });
+  if (options.uploadStatus) {
+    fs.seed(`supportUploadSessions/upload-${caseId}`, {
+      ownerUid: uid,
+      caseId: options.uploadStatus === 'ATTACHED' ? caseId : undefined,
+      status: options.uploadStatus,
+      storagePath,
+    });
+  }
+  return storagePath;
 }
 
-describe('processSupportRetention — RETAIN (policy v1)', () => {
-  it('an owner with no tickets reports RETAINED, resourceCount 0', async () => {
+describe('processSupportRetention — Support V2 RETAIN', () => {
+  it('is idempotent for an owner with no support cases', async () => {
     const fs = createFakeFirestore();
-    const result = await processSupportRetention('uid-1', 'RETAIN', depsFor(fs));
-    expect(result).toEqual({ category: 'support', action: 'RETAIN', outcome: 'RETAINED', resourceCount: 0 });
+    await expect(processSupportRetention('uid-1', 'RETAIN', depsFor(fs))).resolves.toEqual({
+      category: 'support', action: 'RETAIN', outcome: 'RETAINED', resourceCount: 0,
+    });
   });
 
-  it('never mutates an existing ticket/message/attachment', async () => {
+  it('preserves case, messages, actions, sessions, rate limits and Storage objects', async () => {
     const fs = createFakeFirestore();
     const bucket = createFakeBucket();
-    seedTicket(fs, 't1', 'uid-1', ['m1']);
-    bucket.seed('users/uid-1/support/t1/attachments/photo.jpg');
+    const path = seedCase(fs, 'case-1', 'uid-1', { message: true, action: true, uploadStatus: 'ATTACHED' });
+    fs.seed('supportRateLimits/uid-1_create-case', { ownerUid: 'uid-1' });
+    bucket.seed(path);
 
     const result = await processSupportRetention('uid-1', 'RETAIN', depsFor(fs, bucket));
 
-    expect(result).toEqual({ category: 'support', action: 'RETAIN', outcome: 'RETAINED', resourceCount: 1 });
-    expect(fs.exists('supportTickets/t1')).toBe(true);
-    expect(fs.exists('supportTickets/t1/messages/m1')).toBe(true);
-    expect(bucket.exists('users/uid-1/support/t1/attachments/photo.jpg')).toBe(true);
-  });
-
-  it('counts multiple tickets owned by the uid, ignoring tickets owned by another uid', async () => {
-    const fs = createFakeFirestore();
-    seedTicket(fs, 't1', 'uid-A');
-    seedTicket(fs, 't2', 'uid-A');
-    seedTicket(fs, 't3', 'uid-B');
-
-    const result = await processSupportRetention('uid-A', 'RETAIN', depsFor(fs));
-    expect(result.resourceCount).toBe(2);
+    expect(result.resourceCount).toBe(1);
+    expect(fs.exists('supportCases/case-1')).toBe(true);
+    expect(fs.exists('supportCases/case-1/messages/message-case-1')).toBe(true);
+    expect(fs.exists('supportCases/case-1/_actions/action-case-1')).toBe(true);
+    expect(fs.exists('supportUploadSessions/upload-case-1')).toBe(true);
+    expect(fs.exists('supportRateLimits/uid-1_create-case')).toBe(true);
+    expect(bucket.exists(path)).toBe(true);
   });
 });
 
-describe('processSupportRetention — ANONYMIZE (no contract, rule §8/§11)', () => {
-  it('throws UnsupportedRetentionActionError instead of faking anonymization', async () => {
-    const fs = createFakeFirestore();
-    seedTicket(fs, 't1', 'uid-1');
-
-    await expect(processSupportRetention('uid-1', 'ANONYMIZE', depsFor(fs))).rejects.toBeInstanceOf(
-      UnsupportedRetentionActionError,
-    );
-    // Nothing was touched by the rejected attempt.
-    expect(fs.exists('supportTickets/t1')).toBe(true);
-  });
-});
-
-describe('processSupportRetention — DELETE (contract-supported, not used by policy v1)', () => {
-  it('deletes ticket, messages, and Storage attachments together', async () => {
+describe('processSupportRetention — Support V2 DELETE', () => {
+  it('deletes a complete case graph, ATTACHED session and corresponding Storage object', async () => {
     const fs = createFakeFirestore();
     const bucket = createFakeBucket();
-    seedTicket(fs, 't1', 'uid-1', ['m1', 'm2']);
-    bucket.seed('users/uid-1/support/t1/attachments/photo.jpg');
+    const path = seedCase(fs, 'case-1', 'uid-1', { message: true, action: true, uploadStatus: 'ATTACHED' });
+    fs.seed('supportRateLimits/uid-1_create-case', { ownerUid: 'uid-1' });
+    bucket.seed(path);
 
     const result = await processSupportRetention('uid-1', 'DELETE', depsFor(fs, bucket));
 
     expect(result).toEqual({ category: 'support', action: 'DELETE', outcome: 'DELETED', resourceCount: 1 });
-    expect(fs.exists('supportTickets/t1')).toBe(false);
-    expect(fs.exists('supportTickets/t1/messages/m1')).toBe(false);
-    expect(fs.exists('supportTickets/t1/messages/m2')).toBe(false);
-    expect(bucket.exists('users/uid-1/support/t1/attachments/photo.jpg')).toBe(false);
+    expect(fs.listUnder('supportCases/case-1')).toEqual([]);
+    expect(fs.exists('supportUploadSessions/upload-case-1')).toBe(false);
+    expect(fs.exists('supportRateLimits/uid-1_create-case')).toBe(false);
+    expect(bucket.exists(path)).toBe(false);
   });
 
-  it('a uid with nothing owned is ALREADY_ABSENT, not an error', async () => {
-    const fs = createFakeFirestore();
-    const result = await processSupportRetention('uid-1', 'DELETE', depsFor(fs));
-    expect(result).toEqual({ category: 'support', action: 'DELETE', outcome: 'ALREADY_ABSENT', resourceCount: 0 });
-  });
-
-  it('never deletes another uid\'s ticket', async () => {
-    const fs = createFakeFirestore();
-    seedTicket(fs, 't1', 'uid-A');
-    seedTicket(fs, 't2', 'uid-B');
-
-    await processSupportRetention('uid-A', 'DELETE', depsFor(fs));
-
-    expect(fs.exists('supportTickets/t1')).toBe(false);
-    expect(fs.exists('supportTickets/t2')).toBe(true);
-  });
-
-  it('never deletes another uid\'s attachment prefix', async () => {
+  it('deletes a pending STAGED upload even when no case exists', async () => {
     const fs = createFakeFirestore();
     const bucket = createFakeBucket();
-    seedTicket(fs, 't1', 'uid-A');
-    bucket.seed('users/uid-A/support/t1/attachments/a.jpg');
-    bucket.seed('users/uid-B/support/t9/attachments/b.jpg');
-
-    await processSupportRetention('uid-A', 'DELETE', depsFor(fs, bucket));
-
-    expect(bucket.exists('users/uid-A/support/t1/attachments/a.jpg')).toBe(false);
-    expect(bucket.exists('users/uid-B/support/t9/attachments/b.jpg')).toBe(true);
-  });
-
-  it('idempotent: running DELETE twice converges, second run is ALREADY_ABSENT', async () => {
-    const fs = createFakeFirestore();
-    const bucket = createFakeBucket();
-    seedTicket(fs, 't1', 'uid-1');
-    bucket.seed('users/uid-1/support/t1/attachments/photo.jpg');
-
-    await processSupportRetention('uid-1', 'DELETE', depsFor(fs, bucket));
-    const second = await processSupportRetention('uid-1', 'DELETE', depsFor(fs, bucket));
-
-    expect(second).toEqual({ category: 'support', action: 'DELETE', outcome: 'ALREADY_ABSENT', resourceCount: 0 });
-  });
-
-  it('finishes a leftover attachment prefix even when the ticket doc is already gone (retry after partial failure)', async () => {
-    const fs = createFakeFirestore();
-    const bucket = createFakeBucket();
-    // Simulates: a prior attempt deleted the ticket doc but was interrupted
-    // before the Storage prefix delete ran.
-    bucket.seed('users/uid-1/support/t1/attachments/photo.jpg');
+    const path = 'users/uid-1/support-v2/staged/pending-upload';
+    fs.seed('supportUploadSessions/pending-upload', {
+      ownerUid: 'uid-1', status: 'STAGED', storagePath: path,
+    });
+    bucket.seed(path);
 
     const result = await processSupportRetention('uid-1', 'DELETE', depsFor(fs, bucket));
 
-    expect(result.outcome).toBe('ALREADY_ABSENT');
-    expect(bucket.exists('users/uid-1/support/t1/attachments/photo.jpg')).toBe(false);
+    expect(result.outcome).toBe('DELETED');
+    expect(result.resourceCount).toBe(0);
+    expect(fs.exists('supportUploadSessions/pending-upload')).toBe(false);
+    expect(bucket.exists(path)).toBe(false);
+  });
+
+  it('removes an orphaned object under the owner prefix after a partial prior attempt', async () => {
+    const fs = createFakeFirestore();
+    const bucket = createFakeBucket();
+    const path = 'users/uid-1/support-v2/staged/orphaned-object';
+    bucket.seed(path);
+
+    const result = await processSupportRetention('uid-1', 'DELETE', depsFor(fs, bucket));
+
+    expect(result.outcome).toBe('DELETED');
+    expect(bucket.exists(path)).toBe(false);
+  });
+
+  it('is idempotent when repeated after every resource is absent', async () => {
+    const fs = createFakeFirestore();
+    const bucket = createFakeBucket();
+    seedCase(fs, 'case-1', 'uid-1');
+    await processSupportRetention('uid-1', 'DELETE', depsFor(fs, bucket));
+
+    await expect(processSupportRetention('uid-1', 'DELETE', depsFor(fs, bucket))).resolves.toEqual({
+      category: 'support', action: 'DELETE', outcome: 'ALREADY_ABSENT', resourceCount: 0,
+    });
+  });
+
+  it('keeps the parent retry anchor after a Storage failure and resumes safely', async () => {
+    const fs = createFakeFirestore();
+    const bucket = createFakeBucket();
+    const path = seedCase(fs, 'case-1', 'uid-1', { message: true, action: true, uploadStatus: 'ATTACHED' });
+    bucket.seed(path);
+    bucket.failNextDelete(Object.assign(new Error('unavailable'), { code: 503 }));
+
+    await expect(processSupportRetention('uid-1', 'DELETE', depsFor(fs, bucket))).rejects.toThrow('unavailable');
+    expect(fs.exists('supportCases/case-1')).toBe(true);
+    expect(fs.exists('supportCases/case-1/messages/message-case-1')).toBe(true);
+
+    await expect(processSupportRetention('uid-1', 'DELETE', depsFor(fs, bucket))).resolves.toMatchObject({
+      outcome: 'DELETED', resourceCount: 1,
+    });
+    expect(fs.listUnder('supportCases/case-1')).toEqual([]);
+    expect(bucket.exists(path)).toBe(false);
+  });
+
+  it('never mutates cases, sessions, rate limits or Storage owned only by another uid', async () => {
+    const fs = createFakeFirestore();
+    const bucket = createFakeBucket();
+    const otherPath = seedCase(fs, 'case-other', 'uid-B', { message: true, action: true, uploadStatus: 'ATTACHED' });
+    fs.seed('supportRateLimits/uid-B_create-case', { ownerUid: 'uid-B' });
+    bucket.seed(otherPath);
+
+    await processSupportRetention('uid-A', 'DELETE', depsFor(fs, bucket));
+
+    expect(fs.exists('supportCases/case-other')).toBe(true);
+    expect(fs.exists('supportUploadSessions/upload-case-other')).toBe(true);
+    expect(fs.exists('supportRateLimits/uid-B_create-case')).toBe(true);
+    expect(bucket.exists(otherPath)).toBe(true);
+  });
+});
+
+describe('processSupportRetention — ANONYMIZE', () => {
+  it('fails explicitly because no reviewed anonymization contract exists', async () => {
+    const fs = createFakeFirestore();
+    seedCase(fs, 'case-1', 'uid-1');
+    await expect(processSupportRetention('uid-1', 'ANONYMIZE', depsFor(fs))).rejects.toBeInstanceOf(
+      UnsupportedRetentionActionError,
+    );
+    expect(fs.exists('supportCases/case-1')).toBe(true);
   });
 });

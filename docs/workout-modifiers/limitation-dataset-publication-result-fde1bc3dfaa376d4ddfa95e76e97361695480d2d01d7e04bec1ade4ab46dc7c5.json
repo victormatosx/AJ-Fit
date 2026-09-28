@@ -1,0 +1,26 @@
+{
+  "publishedAt": "2026-09-23T11:22:55.190Z",
+  "projectId": "ajfit-2f321",
+  "identity": {
+    "datasetVersion": "phase3-limitation-dataset-v3",
+    "limitationDatasetHash": "fde1bc3dfaa376d4ddfa95e76e97361695480d2d01d7e04bec1ade4ab46dc7c5"
+  },
+  "previousIdentity": {
+    "datasetVersion": "phase3-limitation-dataset-v3",
+    "limitationDatasetHash": "21ce79bcb57802df8a6072e933942b02ea34ba1d9ab85f0dc091395bff0f3944"
+  },
+  "atomicWrite": true,
+  "changedExerciseIds": [],
+  "prePublishDivergentCells": 0,
+  "prePublishResolverCatalogMismatches": [],
+  "postPublishDiffCounts": {
+    "LOCAL_ONLY": 0,
+    "REMOTE_ONLY": 0,
+    "STATUS_MISMATCH": 0,
+    "TARGET_MISMATCH": 0,
+    "METADATA_MISMATCH": 0,
+    "EXACT_MATCH": 861
+  },
+  "remoteHashVerified": true,
+  "rollbackExecuted": false
+}

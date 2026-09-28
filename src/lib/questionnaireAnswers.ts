@@ -20,12 +20,17 @@ import { cleanApplicableAnswers, normalizeLoadedQuiz } from './questionnaireSche
  * is a `Timestamp` (Firestore has no native `Date`), plus the legacy `age`
  * field kept ONLY for reading pre-migration documents — never written again.
  */
-export type PersistedQuizAnswers = Omit<Quiz, 'birthDate'> & {
+export type PersistedQuizAnswers = Omit<Quiz, 'birthDate' | 'place'> & {
   birthDate?: Timestamp | null;
+  place?: Quiz['place'] | 'both' | null;
+  /** @deprecated removed questionnaire field — used only to resolve legacy `place: both`. */
+  primaryPlace?: unknown;
   /** @deprecated legacy pre-migration field — read-only compat, never written. */
   age?: number;
   /** @deprecated removed questionnaire field — ignored on read, never written. */
   limitationImpact?: unknown;
+  /** @deprecated removed questionnaire field — ignored on read, never written. */
+  motivation?: unknown;
 };
 
 /** `Quiz` (client shape, `birthDate: Date | null`) → Firestore shape. */
@@ -50,7 +55,14 @@ export function fromPersistedAnswers(
   raw: Partial<PersistedQuizAnswers> | undefined | null,
   createdAt: Timestamp | null,
 ): Quiz {
-  const { birthDate, age, limitationImpact: _legacyLimitationImpact, ...rest } = raw ?? {};
+  const {
+    birthDate,
+    age,
+    primaryPlace: legacyPrimaryPlace,
+    limitationImpact: _legacyLimitationImpact,
+    motivation: _legacyMotivation,
+    ...rest
+  } = raw ?? {};
   const resolvedBirthDate = birthDate
     ? birthDate.toDate()
     : age != null
@@ -59,5 +71,10 @@ export function fromPersistedAnswers(
   // `defaultQuiz` backfills any field missing from a sparse/corrupted doc —
   // never throws, never leaves a field silently `undefined` for downstream
   // code (e.g. `.map()`/`.includes()` on the array fields) to crash on.
-  return normalizeLoadedQuiz({ ...defaultQuiz, ...rest, birthDate: resolvedBirthDate });
+  return normalizeLoadedQuiz({
+    ...defaultQuiz,
+    ...rest,
+    primaryPlace: legacyPrimaryPlace,
+    birthDate: resolvedBirthDate,
+  });
 }

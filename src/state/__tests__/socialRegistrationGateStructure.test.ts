@@ -21,9 +21,10 @@ describe('social registration gate wiring', () => {
     expect(firebaseCreation).toBeGreaterThan(eligibilityCheck);
   });
 
-  it('uses Firebase new-user metadata and rolls back rejected new identities', () => {
+  it('uses Firebase new-user metadata and signs out rejected identities without deleting Auth', () => {
     expect(context).toContain('isNewUser: socialResult.isNewUser');
-    expect(context).toContain('await discardNewSocialIdentity(incompleteUser)');
+    expect(context).toContain('await signOutUser()');
+    expect(context).not.toContain('discardNewSocialIdentity');
     expect(context).toContain("admission === 'requires-provisioning'");
     expect(context).toContain('await provisionNewUser(authedUser');
   });

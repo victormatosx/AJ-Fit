@@ -30,7 +30,7 @@ export function goalFamilyFor(goal: QuestionnaireAnswers['goal']): GoalFamily | 
   const normalized = normalizeGoal(goal);
   if (normalized === 'strength') return 'strength';
   if (normalized === 'conditioning') return 'conditioning';
-  if (['gain_muscle', 'lose_fat', 'body_composition', 'return_to_training'].includes(normalized ?? '')) {
+  if (['gain_muscle', 'lose_fat', 'health', 'body_composition', 'return_to_training'].includes(normalized ?? '')) {
     return 'hypertrophy_body_composition';
   }
   return null;
@@ -38,7 +38,6 @@ export function goalFamilyFor(goal: QuestionnaireAnswers['goal']): GoalFamily | 
 
 export function environmentFor(answers: QuestionnaireAnswers): TemplateEnvironment | null {
   if (answers.place === 'gym' || answers.place === 'home') return answers.place;
-  if (answers.place === 'both') return answers.primaryPlace;
   return null;
 }
 
@@ -89,8 +88,9 @@ export interface SanitizedAnswers {
  * via `legacyReasonCodes`, never silently resolve to "no conditions" just to
  * let a plan generate (see docs/workout-lifecycle — Safety/Limitation
  * Resolver phases). `equipment`/`muscleFocus`/`style` carry no safety
- * meaning — a legacy document missing them safely defaults to `[]` (already
- * validated separately, e.g. `equipment_required` for home/both).
+ * meaning — a legacy document missing them safely defaults to `[]` (the
+ * questionnaire never collects `equipment` at all — onboarding/steps.ts —
+ * so there is no validation requiring it).
  */
 export function sanitizeAnswersForEngine(
   answers: Partial<QuestionnaireAnswers> | null | undefined,

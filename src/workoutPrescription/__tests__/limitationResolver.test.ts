@@ -151,13 +151,22 @@ describe('Limitation Resolver V1', () => {
       ]));
     }
   });
-  it('accepts exactly the 76 persisted V2 profiles and leaves 40 unreviewed', () => {
+  it('accepts exactly the 95 persisted profiles and leaves the rest of the catalog unreviewed', () => {
+    // Catalog size is no longer pinned (Fase 1) — so literals derived from
+    // overall catalog size are stale on purpose; 95 reviewed stays fixed
+    // because it is the clinically/product reviewed PROFILE OBJECT count
+    // (76 original + 7 from the Fase 4 closure + 3 from the Fase 4b
+    // per-region coverage closure + 2 from the spine/Home closure + 7 from
+    // the full-coverage closure — see
+    // `15_LIMITATION_PROFILES_TECHNICAL_v2.json`'s `phase4Addition`/
+    // `phase4bAddition`/`phase5SpineHomeClosure`/`phase6FullCoverageClosure`),
+    // not derived from catalog size.
     const catalogFixture = realLimitationCatalogFixture();
     const reviewed = catalogFixture.filter((item) => item.limitationProfile != null);
-    expect(catalogFixture).toHaveLength(116);
-    expect(reviewed).toHaveLength(76);
+    const unreviewed = catalogFixture.filter((item) => item.limitationProfile == null);
+    expect(reviewed).toHaveLength(95);
     expect(reviewed.every((item) => validateLimitationProfile(item.id, item.limitationProfile).valid)).toBe(true);
-    expect(catalogFixture.filter((item) => item.limitationProfile == null)).toHaveLength(40);
+    expect(unreviewed).toHaveLength(catalogFixture.length - 95);
   });
 
   it('keeps compatible and records the evaluated region', () => {
@@ -327,9 +336,21 @@ describe('Limitation Resolver V1', () => {
     expect(validateLimitationProfile('a', limitationProfile)).toEqual({ valid: false, reasonCode });
   });
 
-  it('returns UNMAPPED_LIMITATION_REGION instead of ignoring other', () => {
+  it('Fase 9 §13: drops other instead of failing UNMAPPED (fixes the INVALID_CONFIGURATION retry loop)', () => {
     expect(mapQuestionnaireLimitations(completeAnswers({
       specialConditions: ['musculoskeletal_limitation'], limits: ['other'],
+    }))).toEqual({ status: 'MAPPED', regions: [] });
+  });
+
+  it('Fase 9 §13: drops other while still applying a recognized declared region', () => {
+    expect(mapQuestionnaireLimitations(completeAnswers({
+      specialConditions: ['musculoskeletal_limitation'], limits: ['other', 'knee'],
+    }))).toEqual({ status: 'MAPPED', regions: ['knee'] });
+  });
+
+  it('Fase 9 §13: still fails UNMAPPED for a genuinely unrecognized value (not other)', () => {
+    expect(mapQuestionnaireLimitations(completeAnswers({
+      specialConditions: ['musculoskeletal_limitation'], limits: ['not-a-real-region'],
     }))).toEqual({ status: 'UNMAPPED', reasonCodes: ['UNMAPPED_LIMITATION_REGION'] });
   });
 

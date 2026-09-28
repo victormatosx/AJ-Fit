@@ -145,16 +145,21 @@ fallback, not the normal path.
 
 `firestoreCleanup/resources.ts`: `users/{uid}` profile doc (non-recursive —
 `privateSecurity` survives), `questionnaires`, `assessments`,
-`progressPhotos` metadata. Never touches `supportTickets`/`couponRedemptions`
-(policy: RETAIN) or `accountDeletions`/`accountDeletionLocks` (control plane,
-never touched by any cleanup engine).
+`progressPhotos` metadata. Never touches Support V2 (`supportCases` and
+children — owned by `retainedDataProcessing/support.ts` instead,
+policy: RETAIN)/`couponRedemptions` (policy: RETAIN) or
+`accountDeletions`/`accountDeletionLocks` (control plane, never touched by
+any cleanup engine).
 
 ## 9. Storage (DELETE)
 
 `storageCleanup/resources.ts`, allowlist not blacklist: `users/{uid}/profile/`
 (avatar) and `users/{uid}/progressPhotos/` (ciphertext + thumbnails).
-`users/{uid}/support/*` is never referenced in this file — structurally
-unreachable from it.
+`users/{uid}/support-v2/*` is never referenced in this file — structurally
+unreachable from it; Support V2 Storage objects are deleted by
+`retainedDataProcessing/support.ts` via the shared
+`supportV2/supportDataDeletion.ts` primitive instead, under the `DELETE`
+policy branch.
 
 ## 10. RevenueCat
 
@@ -183,7 +188,7 @@ guard means a late webhook for an already-deleted uid never resurrects
 | `privateSecurity/photoVault` (Vault key) | CRYPTO-SHRED (delete wrapped DEK doc) | `vaultKeyDestruction.ts` |
 | avatar (Storage) | DELETE | `storageCleanup/resources.ts` |
 | progress photos ciphertext+thumbnails (Storage) | DELETE | same |
-| `supportTickets` + messages + attachments | RETAIN | `retainedDataProcessing/support.ts` |
+| Support V2 (`supportCases` + messages + `_actions` + attachments) | RETAIN | `retainedDataProcessing/support.ts` |
 | `couponRedemptions/{uid}` | RETAIN | `retainedDataProcessing/couponRedemptions.ts` |
 | RevenueCat customer identity | SKIP (no API call) | `revenueCatProcessing/engine.ts` |
 | Apple provider link | REVOKE (server-side token revoke) | `providerRevocation/appleProviderRevocation.ts` |

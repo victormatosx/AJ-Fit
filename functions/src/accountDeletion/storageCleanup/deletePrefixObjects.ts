@@ -6,7 +6,7 @@
  * (`index.ts` does not re-export it). Fase 7 §35 is explicit: the engine
  * must never expose a `deletePrefix(path)`-shaped API to callers outside
  * this directory, because an arbitrary caller-supplied prefix is exactly
- * how retained data (`users/{uid}/support/...`) could get swept by
+ * how retained data (`users/{uid}/support-v2/...`) could get swept by
  * accident. `resources.ts` is the ONLY caller, and it always builds the
  * prefix itself from a fixed, hardcoded template — never from external
  * input.

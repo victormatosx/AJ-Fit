@@ -7,7 +7,7 @@ export type SelectionResult =
   | { status: 'SELECTED'; decision: SelectionDecision }
   | { status: 'MISSING_TEMPLATE'; reasonCodes: string[] };
 
-function populationFor(answers: QuestionnaireAnswers): Population {
+export function populationFor(answers: QuestionnaireAnswers): Population {
   const has = (condition: QuestionnaireAnswers['specialConditions'][number]) =>
     answers.specialConditions.includes(condition);
   if (has('pregnancy')) return 'pregnancy';

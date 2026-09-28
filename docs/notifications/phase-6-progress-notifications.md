@@ -48,8 +48,8 @@ guardam o dia/fuso original necessário a uma identidade backend estável.
 ### Objetivo
 
 O questionário guarda apenas um objetivo qualitativo (`gain_muscle`,
-`lose_fat`, `strength`, `conditioning`, `body_composition` ou
-`return_to_training`, além de valores legacy). Não há target quantitativo,
+`lose_fat`, `strength`, `conditioning` ou `health`, além dos valores antigos
+`body_composition`/`return_to_training` e aliases legacy). Não há target quantitativo,
 baseline compatível, threshold de ruído ou função canônica `distanceToGoal`.
 Peso, aderência ou progressão de treino não são proxies válidos para todos
 esses objetivos. Por isso `GOAL_PROXIMITY` não foi registrado no schema, no

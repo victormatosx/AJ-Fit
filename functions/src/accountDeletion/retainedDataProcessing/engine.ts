@@ -29,7 +29,7 @@ import type { RetainedDataCategoryResult } from './types';
 
 /**
  * Maps whatever this step's dependencies threw to the shared taxonomy.
- * Covers BOTH Firestore's gRPC numeric codes (support tickets, coupon
+ * Covers BOTH Firestore's gRPC numeric codes (Support V2 cases, coupon
  * redemptions) and Cloud Storage's HTTP-like codes (support attachments) —
  * this step is the only one that legitimately crosses both, so it needs
  * both vocabularies (same reasoning as Fase 6/7's own per-provider

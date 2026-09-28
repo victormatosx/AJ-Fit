@@ -9,6 +9,9 @@
  * types/function from here instead of defining them inline.
  */
 import { EXERCISES_SEED } from '../data/exercisesSeedData';
+import type { LocalizedText } from '../types/exercise';
+import { CANONICAL_ACTIVITIES } from '../workoutPrescription/canonicalActivities';
+import { resolveCanonicalExerciseId } from '../workoutPrescription/canonicalExerciseIdentity';
 import { LEGACY_REST_SECONDS_FALLBACK } from '../workoutPrescription/restPrescription';
 import type { FinalWorkoutPlan } from '../workoutPrescription/types';
 
@@ -42,11 +45,51 @@ export type Exercise = {
   target: string;
   db: string;
   sets: SetData[];
+  doseKind: 'reps' | 'duration' | 'distance' | 'cycles';
+  notes?: string;
+  intensity?: string;
+  doseDetail?: string;
   rest: number;
   subs: SubOption[];
 };
 
-const catalogExerciseById = new Map(EXERCISES_SEED.map((exercise) => [exercise.id, exercise]));
+type CatalogDisplayEntry = { name: LocalizedText; targetMuscle: string | null };
+
+/**
+ * Resistance exercises (`EXERCISES_SEED`) and cardio/mobility activities
+ * (`CANONICAL_ACTIVITIES`) are disjoint, separately-typed catalogs (see
+ * `canonicalActivities.ts`) — this map is only the small display slice
+ * `workoutExercisesFromPlan` actually needs from either one, so this file
+ * never has to narrow a shared union at every read site. An activity has no
+ * muscle target (`targetMuscle: null`, not a fabricated one) — v1.27 is not
+ * wired into any production plan today, but a plan that eventually
+ * references `cardio-leve`/`mobilidade-geral`/etc. resolves here already.
+ */
+const catalogDisplayById = new Map<string, CatalogDisplayEntry>([
+  ...EXERCISES_SEED.map((exercise): [string, CatalogDisplayEntry] =>
+    [exercise.id, { name: exercise.name, targetMuscle: exercise.target.primaryMuscle }]),
+  ...CANONICAL_ACTIVITIES.map((activity): [string, CatalogDisplayEntry] =>
+    [activity.id, { name: activity.name, targetMuscle: null }]),
+]);
+
+/**
+ * Fase 8 — read-boundary alias resolution (§4: "resolver na leitura/
+ * fronteira apropriada", never by regravating a persisted document). A
+ * v1.27-generated plan is always persisted with the already-resolved
+ * runtime id (`canonicalCatalog.ts`'s `parseCanonicalV127Template` fails
+ * closed on anything unresolved before composition even runs), so this
+ * fallback is defensive rather than a real production path today — it
+ * exists so an older/synthetic snapshot that still carries a unified-away
+ * v1.27 canonical id (e.g. `flexao-de-joelhos-com-elastico-e-apoio`,
+ * `agachamento-para-banco`, `farmer-walk`) keeps resolving instead of
+ * throwing `Missing catalog exercise`.
+ */
+function resolveCatalogDisplayEntry(exerciseId: string): CatalogDisplayEntry | undefined {
+  const direct = catalogDisplayById.get(exerciseId);
+  if (direct) return direct;
+  const aliasedRuntimeId = resolveCanonicalExerciseId(exerciseId);
+  return aliasedRuntimeId ? catalogDisplayById.get(aliasedRuntimeId) : undefined;
+}
 
 /**
  * `SetData.r` is a free-form display string — a plain rep count ("10"), a
@@ -88,20 +131,33 @@ export function workoutExercisesFromPlan(
   const locale = language === 'pt-BR' ? 'ptBR' : language === 'es' ? 'es' : 'en';
   return session.exercises.map((prescribed, exerciseIndex) => {
     const effectiveExerciseId = effectiveExerciseIds?.get(exerciseIndex) ?? prescribed.exerciseId;
-    const catalog = catalogExerciseById.get(effectiveExerciseId);
+    const catalog = resolveCatalogDisplayEntry(effectiveExerciseId);
     if (!catalog) throw new Error(`Missing catalog exercise ${effectiveExerciseId}`);
     const count = prescribed.sets ?? 1;
+    const doseKind = prescribed.cycleRange ? 'cycles'
+      : prescribed.distance ? 'distance'
+        : prescribed.reps ? 'reps' : 'duration';
+    const target = prescribed.cycleRange
+      ? `${prescribed.cycleRange.min}–${prescribed.cycleRange.max}`
+      : prescribed.distance ?? prescribed.reps ?? prescribed.duration ?? '—';
     return {
       id: effectiveExerciseId,
       prescribedExerciseId: prescribed.exerciseId,
       effectiveExerciseId,
       name: catalog.name[locale],
-      target: catalog.target.primaryMuscle,
+      // Cardio/mobility activities have no muscle target — '' (not a
+      // fabricated muscle) is the correct display value until Fase 4's UI
+      // work (out of scope here) decides how to badge them.
+      target: catalog.targetMuscle ?? '',
       db: effectiveExerciseId,
+      doseKind,
+      notes: prescribed.notes,
+      intensity: prescribed.intensity,
+      doseDetail: prescribed.cycleRange ? prescribed.duration : undefined,
       // Keep the canonical range/duration verbatim. Rendering only the lower
       // bound would silently change "8-12" into a prescription of 8.
       sets: Array.from({ length: count }, () => ({
-        r: prescribed.reps ?? prescribed.duration ?? '—',
+        r: target,
         w: 0,
       })),
       // Prescribed by the engine (`restPrescription.ts`), never inferred

@@ -8,18 +8,6 @@ import { MAX_MUSCLE_FOCUS, type OnboardingStepId } from './steps';
  * here is user-visible text.
  */
 export const FUNNEL_QUESTIONS: Partial<Record<OnboardingStepId, Question>> = {
-  motivation: {
-    id: 'motivation',
-    kind: 'choice-large',
-    options: [
-      { v: 'muscle', icon: 'dumbbell' },
-      { v: 'leanDown', icon: 'flame' },
-      { v: 'strength', icon: 'bolt' },
-      { v: 'physique', icon: 'target' },
-      { v: 'comeback', icon: 'heart' },
-      { v: 'consistency', icon: 'chart' },
-    ],
-  },
   goal: {
     id: 'goal',
     kind: 'choice-large',
@@ -28,15 +16,13 @@ export const FUNNEL_QUESTIONS: Partial<Record<OnboardingStepId, Question>> = {
       { v: 'lose_fat', icon: 'flame' },
       { v: 'strength', icon: 'bolt' },
       { v: 'conditioning', icon: 'heart' },
-      { v: 'body_composition', icon: 'target' },
-      { v: 'return_to_training', icon: 'heart' },
+      { v: 'health', icon: 'target' },
     ],
   },
   level: {
     id: 'level',
     kind: 'choice-large',
     options: [
-      { v: 'never_or_starting' },
       { v: 'beginner' },
       { v: 'intermediate' },
       { v: 'advanced' },
@@ -51,32 +37,9 @@ export const FUNNEL_QUESTIONS: Partial<Record<OnboardingStepId, Question>> = {
     kind: 'choice',
     options: [{ v: '2' }, { v: '3' }, { v: '4' }, { v: '5' }, { v: '6' }, { v: '7' }],
   },
-  scheduleMode: {
-    id: 'scheduleMode',
-    kind: 'choice-large',
-    options: [{ v: 'fixed', icon: 'calendar' }, { v: 'flexible', icon: 'bolt' }],
-  },
-  // `count` is a placeholder — OnboardingFunnelScreen overrides it per-render
-  // from `quiz.days` before passing this to QuestionStepScreen, the same
-  // pattern used for `specialConditions`' sex-based option filtering. Skipped
-  // for fixed days === 7 and for every flexible plan (see `isApplicableStep`).
-  trainingDays: {
-    id: 'trainingDays',
-    kind: 'multi-exact',
-    count: 2,
-    options: [
-      { v: 'MON' },
-      { v: 'TUE' },
-      { v: 'WED' },
-      { v: 'THU' },
-      { v: 'FRI' },
-      { v: 'SAT' },
-      { v: 'SUN' },
-    ],
-  },
   duration: {
     id: 'duration',
-    kind: 'choice',
+    kind: 'choice-large',
     options: [{ v: '30' }, { v: '45' }, { v: '60' }, { v: '90' }],
   },
   place: {
@@ -85,13 +48,7 @@ export const FUNNEL_QUESTIONS: Partial<Record<OnboardingStepId, Question>> = {
     options: [
       { v: 'gym', icon: 'dumbbell' },
       { v: 'home', icon: 'heart' },
-      { v: 'both', icon: 'bolt' },
     ],
-  },
-  primaryPlace: {
-    id: 'primaryPlace',
-    kind: 'choice-large',
-    options: [{ v: 'gym', icon: 'dumbbell' }, { v: 'home', icon: 'heart' }],
   },
   equipment: {
     id: 'equipment',
@@ -111,6 +68,7 @@ export const FUNNEL_QUESTIONS: Partial<Record<OnboardingStepId, Question>> = {
     id: 'limits',
     kind: 'multi',
     exclusiveOption: 'none',
+    layout: 'list',
     options: [
       { v: 'knee' },
       { v: 'hip' },
@@ -126,6 +84,7 @@ export const FUNNEL_QUESTIONS: Partial<Record<OnboardingStepId, Question>> = {
     id: 'specialConditions',
     kind: 'multi',
     exclusiveOption: 'none',
+    layout: 'list',
     options: [
       { v: 'none' },
       { v: 'musculoskeletal_limitation' },
@@ -149,6 +108,7 @@ export const FUNNEL_QUESTIONS: Partial<Record<OnboardingStepId, Question>> = {
   pregnancyCare: {
     id: 'pregnancyCare',
     kind: 'compound-choice',
+    showOptionShort: false,
     fields: [
       { id: 'prenatalCare', options: [{ v: 'yes' }, { v: 'no' }] },
       { id: 'exerciseRestriction', options: [{ v: 'no' }, { v: 'yes' }] },
@@ -159,6 +119,7 @@ export const FUNNEL_QUESTIONS: Partial<Record<OnboardingStepId, Question>> = {
     id: 'pregnancyWarningSigns',
     kind: 'multi',
     exclusiveOption: 'none',
+    layout: 'list',
     options: [
       { v: 'vaginal_bleeding' },
       { v: 'dizziness_fainting' },
@@ -173,6 +134,7 @@ export const FUNNEL_QUESTIONS: Partial<Record<OnboardingStepId, Question>> = {
   postpartumContext: {
     id: 'postpartumContext',
     kind: 'compound-choice',
+    showOptionShort: false,
     fields: [
       {
         id: 'timeSinceBirth',
@@ -191,6 +153,7 @@ export const FUNNEL_QUESTIONS: Partial<Record<OnboardingStepId, Question>> = {
     id: 'postpartumSigns',
     kind: 'multi',
     exclusiveOption: 'none',
+    layout: 'list',
     options: [
       { v: 'pain' },
       { v: 'healing_problems' },
@@ -210,6 +173,7 @@ export const FUNNEL_QUESTIONS: Partial<Record<OnboardingStepId, Question>> = {
     id: 'functionalSituations',
     kind: 'multi',
     exclusiveOption: 'none',
+    layout: 'list',
     options: [
       { v: 'walking_difficulty' },
       { v: 'support_needed' },
@@ -224,6 +188,7 @@ export const FUNNEL_QUESTIONS: Partial<Record<OnboardingStepId, Question>> = {
   lipedemaScreening: {
     id: 'lipedemaScreening',
     kind: 'compound-choice',
+    showOptionShort: false,
     fields: [
       {
         id: 'symptomImpact',
@@ -240,6 +205,7 @@ export const FUNNEL_QUESTIONS: Partial<Record<OnboardingStepId, Question>> = {
   dizzinessScreening: {
     id: 'dizzinessScreening',
     kind: 'compound-choice',
+    showOptionShort: false,
     fields: [
       {
         id: 'symptomFrequency',
@@ -256,6 +222,7 @@ export const FUNNEL_QUESTIONS: Partial<Record<OnboardingStepId, Question>> = {
   postSurgicalStatus: {
     id: 'postSurgicalStatus',
     kind: 'compound-choice',
+    showOptionShort: false,
     fields: [
       { id: 'recoveryStatus', options: [{ v: 'completed' }, { v: 'in_progress' }, { v: 'unsure' }] },
       {
@@ -288,6 +255,7 @@ export const FUNNEL_QUESTIONS: Partial<Record<OnboardingStepId, Question>> = {
   medicalRestrictionDetails: {
     id: 'medicalRestrictionDetails',
     kind: 'choice',
+    showOptionShort: false,
     options: [{ v: 'yes' }, { v: 'no' }, { v: 'unsure' }],
   },
   muscleFocus: {

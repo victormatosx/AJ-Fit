@@ -27,16 +27,14 @@ describe('Fluxo B (forcedQuestionnaire) — full-coverage regression', () => {
   it('FORCED_QUESTIONNAIRE_STEP_IDS starts at sex, not goal — the exact bug this suite guards against', () => {
     expect(FORCED_QUESTIONNAIRE_STEP_IDS[0]).toBe('sex');
     expect(FORCED_QUESTIONNAIRE_STEP_IDS).not.toContain('name');
-    expect(FORCED_QUESTIONNAIRE_STEP_IDS).not.toContain('motivation');
   });
 
   it('answering every field the reduced Fluxo B funnel actually asks yields a valid prescription', () => {
     // `completeAnswers()` sets every hard-required field the engine checks
     // (sex, goal, level, duration, place, days) plus the safety-required
     // `specialConditions`, exactly what a Fluxo B user provides by walking
-    // FORCED_QUESTIONNAIRE_STEP_IDS end to end — `name`/`motivation` stay at
-    // their Quiz defaults (null), same as a real Fluxo B account, since the
-    // reduced funnel never collects them.
+    // FORCED_QUESTIONNAIRE_STEP_IDS end to end — every required prescription
+    // input is collected by the reduced funnel.
     const result = generateWorkoutPrescription(completeAnswers());
     expect(result.status).toBe('SUCCESS');
   });
@@ -49,41 +47,6 @@ describe('Fluxo B (forcedQuestionnaire) — full-coverage regression', () => {
     // nothing provider-specific left to test at the engine boundary.
     const answers = completeAnswers();
     expect(generateWorkoutPrescription(answers)).toEqual(generateWorkoutPrescription(answers));
-  });
-});
-
-/**
- * Item 8/12 of the audit: same relevant answers + different authentication
- * timing (Fluxo A vs Fluxo B) must yield the same canonical prescription
- * input and the same template/program decision. `name`/`motivation` are the
- * only fields the reduced Fluxo B funnel omits (steps.ts), and neither is
- * read anywhere in the prescription engine (workoutPrescription/input.ts,
- * selection.ts) — this test proves that with the real engine, not just by
- * inspection.
- */
-describe('Fluxo A × Fluxo B — canonical prescription input invariance', () => {
-  it('identical decision-relevant answers produce an identical PrescriptionResult regardless of motivation/name', () => {
-    const flowBAnswers = completeAnswers({ motivation: null });
-    const flowAAnswers = completeAnswers({ motivation: 'lose_weight' });
-
-    const flowB = generateWorkoutPrescription(flowBAnswers);
-    const flowA = generateWorkoutPrescription(flowAAnswers);
-
-    expect(flowB).toEqual(flowA);
-    expect(flowB.status).toBe('SUCCESS');
-    if (flowB.status === 'SUCCESS' && flowA.status === 'SUCCESS') {
-      expect(flowB.plan.planId).toBe(flowA.plan.planId);
-      expect(flowB.plan.templateId).toBe(flowA.plan.templateId);
-    }
-  });
-
-  it('holds across every canonical answer combination this suite already exercises, not just one', () => {
-    for (const days of [2, 4, 6] as const) {
-      const base = completeAnswers({ days });
-      const withMotivation = generateWorkoutPrescription({ ...base, motivation: 'gain_strength' });
-      const withoutMotivation = generateWorkoutPrescription({ ...base, motivation: null });
-      expect(withMotivation).toEqual(withoutMotivation);
-    }
   });
 });
 

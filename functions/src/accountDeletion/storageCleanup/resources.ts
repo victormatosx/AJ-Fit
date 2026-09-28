@@ -4,7 +4,7 @@
  * ALLOWLIST, not blacklist (Fase 7 §34): each function targets exactly ONE
  * hardcoded, known-deletable prefix under `users/{uid}/...`. There is no
  * function here — and none should ever be added — that accepts an
- * arbitrary path/prefix from a caller. `users/{uid}/support/*` (policy v1:
+ * arbitrary path/prefix from a caller. `users/{uid}/support-v2/*` (policy v1:
  * `RETAIN`) is never referenced anywhere in this file, which is itself the
  * proof it can never be swept: nothing here builds that prefix, so nothing
  * here can delete it.

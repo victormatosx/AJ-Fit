@@ -24,7 +24,7 @@ const IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic',
 const SAFE_ID = /^[A-Za-z0-9_-]{8,128}$/;
 
 type SupportCaseType = (typeof CASE_TYPES)[number];
-type SupportState = 'SUBMITTED' | 'CLOSED_SINGLE' | 'CHAT_OPEN' | 'CHAT_CLOSED';
+type SupportState = 'SUBMITTED' | 'CLOSED_SINGLE' | 'CHAT_OPEN' | 'CHAT_CLOSED' | 'ACCOUNT_DELETION';
 type Input = Record<string, unknown>;
 
 function input(request: CallableRequest<unknown>): Input {

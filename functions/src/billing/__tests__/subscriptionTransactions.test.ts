@@ -85,6 +85,15 @@ describe('financial webhook normalization', () => {
     expect(normalizeFinancialEvent({ ...paid, period_type: 'TRIAL' })).toEqual({ status: 'not_paid_event' });
   });
 
+  it('classifies environment straight from RevenueCat, and fails closed to UNKNOWN when absent', () => {
+    const production = normalizeFinancialEvent({ ...paid, environment: 'PRODUCTION' });
+    const sandbox = normalizeFinancialEvent({ ...paid, environment: 'SANDBOX' });
+    const missing = normalizeFinancialEvent(paid);
+    expect(production.status === 'valid' && production.data.environment).toBe('PRODUCTION');
+    expect(sandbox.status === 'valid' && sandbox.data.environment).toBe('SANDBOX');
+    expect(missing.status === 'valid' && missing.data.environment).toBe('UNKNOWN');
+  });
+
   it('preserves the actual transaction currency and computes only an estimate', () => {
     const result = normalizeFinancialEvent(paid);
     expect(result.status).toBe('valid');

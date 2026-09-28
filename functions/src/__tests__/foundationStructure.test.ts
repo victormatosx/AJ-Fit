@@ -83,6 +83,7 @@ describe('Photo Vault backend foundation — Phase 3 structural guarantees', () 
       .sort();
 
     expect(exported).toEqual([
+      'adminClaimSupportCase',
       'adminCloseSupportChat',
       'adminCreatePromoCode',
       'adminGetCoupon',
@@ -91,13 +92,17 @@ describe('Photo Vault backend foundation — Phase 3 structural guarantees', () 
       'adminGrantFreeAccess',
       'adminListCoupons',
       'adminListPromoCodes',
+      'adminListSupportAgents',
       'adminListUsers',
       'adminPrepareSupportAttachmentUpload',
+      'adminReleaseSupportCase',
       'adminReplyAndCloseSupportCase',
       'adminRevokeFreeAccess',
       'adminSendSupportChatMessage',
+      'adminSetAccountClass',
       'adminSetPromoCodeActive',
       'adminStartSupportChat',
+      'adminTransferSupportCase',
       'adminUpdatePromoCode',
       'applyExerciseSubstitution',
       'authorizePromoPurchase',
@@ -114,11 +119,13 @@ describe('Photo Vault backend foundation — Phase 3 structural guarantees', () 
       'evaluateDailyWorkoutNotifications',
       'finalizeWorkoutSession',
       'getSupportAttachmentAccess',
+      'initializeWorkoutProgramV127',
       'installActiveWorkoutProgram',
       'markSupportMessageRead',
       'onAccountDeletionRequested',
       'onSupportAdminMessageCreated',
       'onTrustedWorkoutLifecycleEventCreated',
+      'onUserProvisioned',
       'prepareSupportAttachmentUpload',
       'reconcileNotificationReceipts',
       'recordWorkoutLifecycleTelemetry',
@@ -240,6 +247,7 @@ describe('Photo Vault backend foundation — Phase 3 structural guarantees', () 
       ['src/index.ts', 'authorizePromoPurchase'],
       ['src/index.ts', 'recordWorkoutLifecycleTelemetry'],
       ['src/index.ts', 'authorizeWorkoutLifecycleMutation'],
+      ['src/index.ts', 'initializeWorkoutProgramV127'],
       ['src/index.ts', 'installActiveWorkoutProgram'],
       ['src/index.ts', 'applyExerciseSubstitution'],
       ['src/index.ts', 'completeWorkoutCardio'],
@@ -272,7 +280,7 @@ describe('Photo Vault backend foundation — Phase 3 structural guarantees', () 
       'src/accountDeletion/reconciliation/scheduler.ts',
     ].map(readCode).join('\n');
 
-    expect(allEndpointSources.match(/enforceAppCheck\s*:\s*true/g)).toHaveLength(20);
+    expect(allEndpointSources.match(/enforceAppCheck\s*:\s*true/g)).toHaveLength(21);
     expect(allEndpointSources).not.toMatch(/consumeAppCheckToken\s*:\s*true/);
   });
 

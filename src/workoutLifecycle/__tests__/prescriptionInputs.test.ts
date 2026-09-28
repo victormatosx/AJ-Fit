@@ -48,6 +48,7 @@ describe('PrescriptionInputSnapshot', () => {
       currentTrainingLevel: 'INTERMEDIATE', source: 'CYCLE_EVOLUTION',
     });
     expect(isPrescriptionInputSnapshot(snapshot)).toBe(true);
+    expect(Object.prototype.hasOwnProperty.call(snapshot.inputs, 'primaryPlace')).toBe(false);
     expect(questionnaireAnswersFromPrescriptionInputs(snapshot.inputs)).toMatchObject({
       level: 'intermediate', trainingDays: ['MON', 'WED', 'FRI'],
     });
@@ -55,5 +56,20 @@ describe('PrescriptionInputSnapshot', () => {
       ...snapshot,
       inputs: { ...snapshot.inputs, unexpected: true },
     })).toBe(false);
+  });
+
+  it('accepts a legacy snapshot and folds both + primaryPlace into place', () => {
+    const snapshot = buildPrescriptionInputSnapshot({
+      answers: completeAnswers(),
+      currentTrainingLevel: 'INTERMEDIATE', source: 'QUESTIONNAIRE_BASELINE',
+    });
+    const legacySnapshot = {
+      ...snapshot,
+      inputs: { ...snapshot.inputs, place: 'both', primaryPlace: 'home' },
+    };
+    expect(isPrescriptionInputSnapshot(legacySnapshot)).toBe(true);
+    const restored = questionnaireAnswersFromPrescriptionInputs(legacySnapshot.inputs as never);
+    expect(restored.place).toBe('home');
+    expect(Object.prototype.hasOwnProperty.call(restored, 'primaryPlace')).toBe(false);
   });
 });

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { defaultQuiz, type Quiz } from '../../state/AppState';
+import { defaultQuiz, type ExperienceLevel, type PrimaryGoal, type Quiz } from '../../state/AppState';
 import { extractLeafPaths } from '../resourceParity';
+import { MUSCLE_FOCUS_VISUAL_GROUPS } from '../../onboarding/muscleFocusBodyMap';
 
 import ptBRQuiz from '../resources/pt-BR/quiz.json';
 import enQuiz from '../resources/en/quiz.json';
@@ -18,10 +19,12 @@ import esQuiz from '../resources/es/quiz.json';
  * The invariants below are the persisted contract with Firestore. They must
  * not change without an authorized data migration:
  *   - sex:      'm' | 'f'
- *   - goal:     'hyper' | 'cut' | 'perf' | 'def' | 'recon'
- *   - level:    'beg' | 'int' | 'adv' | 'elite'
+ *   - current goal: 'gain_muscle' | 'lose_fat' | 'strength' | 'conditioning' | 'health'
+ *   - legacy goal aliases: 'hyper' | 'cut' | 'perf' | 'def' | 'recon'
+ *   - current level: 'beginner' | 'intermediate' | 'advanced'
+ *   - deprecated/legacy level aliases: 'never_or_starting' | 'beg' | 'int' | 'adv' | 'elite'
  *   - duration: '30' | '45' | '60' | '90'
- *   - place:    'gym' | 'home' | 'both'
+ *   - place:    'gym' | 'home'
  *   - limits:   'none' | 'knee' | 'back' | 'shoulder' | 'wrist' | 'hip'
  *   - equipment: catalog ids in EquipmentPicker (unchanged, English lowercase)
  *
@@ -83,32 +86,44 @@ describe('quiz IDs — sex', () => {
 });
 
 describe('quiz IDs — goal', () => {
-  const IDS = [
-    'gain_muscle', 'lose_fat', 'strength', 'conditioning', 'body_composition', 'return_to_training',
+  const CURRENT_IDS = [
+    'gain_muscle', 'lose_fat', 'strength', 'conditioning', 'health',
+  ] as const;
+  const READABLE_LEGACY_IDS = [
+    'body_composition', 'return_to_training',
     'hyper', 'cut', 'perf', 'def', 'recon',
   ] as const;
   it('defaultQuiz.goal is null (never persisted as a label)', () => {
     expect(defaultQuiz.goal).toBeNull();
   });
+  it('PrimaryGoal contains the five values new questionnaires may write', () => {
+    const goals: PrimaryGoal[] = [...CURRENT_IDS];
+    expect(goals).toHaveLength(5);
+  });
   it.each([
     ['pt-BR', ptBRQuiz],
     ['en', enQuiz],
     ['es', esQuiz],
-  ] as const)('every locale ships canonical and legacy goal labels: %s', (loc, json) => {
-    assertOptionsHaveLabel(loc, json, 'goal', IDS, 'label');
-    assertOptionsHaveLabel(loc, json, 'goal', IDS, 'description');
+  ] as const)('every locale presents current and persisted legacy goal labels: %s', (loc, json) => {
+    assertOptionsHaveLabel(loc, json, 'goal', [...CURRENT_IDS, ...READABLE_LEGACY_IDS], 'label');
+    assertOptionsHaveLabel(loc, json, 'goal', [...CURRENT_IDS, ...READABLE_LEGACY_IDS], 'description');
   });
 });
 
 describe('quiz IDs — level', () => {
-  const IDS = ['never_or_starting', 'beginner', 'intermediate', 'advanced', 'beg', 'int', 'adv', 'elite'] as const;
+  const CURRENT_IDS = ['beginner', 'intermediate', 'advanced'] as const;
+  const READABLE_LEGACY_IDS = ['never_or_starting', 'beg', 'int', 'adv', 'elite'] as const;
+  it('ExperienceLevel contains the three values new questionnaires may write', () => {
+    const levels: ExperienceLevel[] = [...CURRENT_IDS];
+    expect(levels).toHaveLength(3);
+  });
   it.each([
     ['pt-BR', ptBRQuiz],
     ['en', enQuiz],
     ['es', esQuiz],
-  ] as const)('every locale ships canonical and legacy experience labels: %s', (loc, json) => {
-    assertOptionsHaveLabel(loc, json, 'level', IDS, 'label');
-    assertOptionsHaveLabel(loc, json, 'level', IDS, 'description');
+  ] as const)('every locale presents current and persisted legacy experience labels: %s', (loc, json) => {
+    assertOptionsHaveLabel(loc, json, 'level', [...CURRENT_IDS, ...READABLE_LEGACY_IDS], 'label');
+    assertOptionsHaveLabel(loc, json, 'level', [...CURRENT_IDS, ...READABLE_LEGACY_IDS], 'description');
   });
 });
 
@@ -128,12 +143,12 @@ describe('quiz IDs — duration', () => {
 });
 
 describe('quiz IDs — place', () => {
-  const IDS = ['gym', 'home', 'both'] as const;
+  const IDS = ['gym', 'home'] as const;
   it.each([
     ['pt-BR', ptBRQuiz],
     ['en', enQuiz],
     ['es', esQuiz],
-  ] as const)('every locale ships label + short for gym/home/both: %s', (loc, json) => {
+  ] as const)('every locale ships label + short for gym/home: %s', (loc, json) => {
     assertOptionsHaveLabel(loc, json, 'place', IDS, 'label');
     assertOptionsHaveLabel(loc, json, 'place', IDS, 'short');
   });
@@ -147,6 +162,23 @@ describe('quiz IDs — limits (multi)', () => {
     ['es', esQuiz],
   ] as const)('every locale ships all limitation labels: %s', (loc, json) => {
     assertMultiOptionsHaveLabel(loc, json, 'limits', IDS);
+  });
+});
+
+describe('quiz IDs — Body Map visual groups', () => {
+  it.each([
+    ['pt-BR', ptBRQuiz],
+    ['en', enQuiz],
+    ['es', esQuiz],
+  ] as const)('every selectable muscle group has a localized name: %s', (loc, json) => {
+    const paths = extractLeafPaths(json);
+    for (const group of MUSCLE_FOCUS_VISUAL_GROUPS) {
+      const path = `muscleFocus.groups.${group}`;
+      expect(paths, `[${loc}] missing quiz:${path}`).toContain(path);
+    }
+    expect(paths, `[${loc}] missing quiz:muscleFocus.noneSelected`).toContain(
+      'muscleFocus.noneSelected',
+    );
   });
 });
 

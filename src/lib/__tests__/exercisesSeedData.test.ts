@@ -4,8 +4,8 @@ import { EXERCISES_SEED } from '../../data/exercisesSeedData';
 import { validateExerciseSeed } from '../../validators/exerciseValidation';
 
 describe('exercisesSeedData', () => {
-  it('has exactly 116 exercises', () => {
-    expect(EXERCISES_SEED).toHaveLength(116);
+  it('has exactly 130 exercises (116 pre-existing + 7 Fase 2 + 2 spine Home + 5 full-coverage additions)', () => {
+    expect(EXERCISES_SEED).toHaveLength(130);
   });
 
   it('passes full dataset validation', () => {
@@ -70,6 +70,31 @@ describe('exercisesSeedData', () => {
       expect(ex.instructions?.ptBR.length).toBeGreaterThan(0);
       expect(ex.instructions?.en?.length).toBeGreaterThan(0);
       expect(ex.instructions?.es?.length).toBeGreaterThan(0);
+    }
+  });
+
+  // One Fase 2 addition remains deliberately ungrouped. The other six
+  // strength movements joined their normal groups only in the explicit
+  // full-coverage closure so controlled second candidates can be reached.
+  it('keeps the still-ungrouped Fase 2 addition out of every substitution pool', () => {
+    const newIds = new Set([
+      'resistance-band-pullover',
+    ]);
+    expect(newIds.size).toBe(1);
+    for (const exercise of EXERCISES_SEED) {
+      if (newIds.has(exercise.id)) continue;
+      for (const similarId of exercise.substitution.similarExerciseIds) {
+        expect(newIds.has(similarId)).toBe(false);
+      }
+    }
+  });
+
+  it('the remaining ungrouped Fase 2 addition has no substitution peers of its own', () => {
+    const newIds = new Set([
+      'resistance-band-pullover',
+    ]);
+    for (const exercise of EXERCISES_SEED) {
+      if (newIds.has(exercise.id)) expect(exercise.substitution.similarExerciseIds).toEqual([]);
     }
   });
 });

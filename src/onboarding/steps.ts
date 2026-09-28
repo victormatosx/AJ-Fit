@@ -24,7 +24,6 @@ export type OnboardingStepId =
   | 'presentation'
   | 'name'
   | 'welcome'
-  | 'motivation'
   | 'goal'
   | 'level'
   | 'interstitial_evolution'
@@ -34,11 +33,8 @@ export type OnboardingStepId =
   | 'weight'
   | 'interstitial_methodology'
   | 'days'
-  | 'scheduleMode'
-  | 'trainingDays'
   | 'duration'
   | 'place'
-  | 'primaryPlace'
   | 'equipment'
   | 'interstitial_guidedWorkout'
   | 'limits'
@@ -86,17 +82,13 @@ export const ONBOARDING_STEPS: readonly OnboardingStepDef[] = [
   { id: 'birthDate', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
   { id: 'height', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
   { id: 'weight', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
-  { id: 'motivation', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
   { id: 'goal', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
   { id: 'level', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
   { id: 'interstitial_evolution', kind: 'interstitial', countsTowardProgress: false, persistsToDraft: false, devJumpable: true },
   { id: 'interstitial_methodology', kind: 'interstitial', countsTowardProgress: false, persistsToDraft: false, devJumpable: true },
   { id: 'days', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
-  { id: 'scheduleMode', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
-  { id: 'trainingDays', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
   { id: 'duration', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
   { id: 'place', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
-  { id: 'primaryPlace', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
   { id: 'equipment', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
   { id: 'interstitial_guidedWorkout', kind: 'interstitial', countsTowardProgress: false, persistsToDraft: false, devJumpable: true },
   { id: 'muscleFocus', kind: 'question', countsTowardProgress: true, persistsToDraft: true, devJumpable: true },
@@ -126,8 +118,8 @@ export const ONBOARDING_STEPS: readonly OnboardingStepDef[] = [
 /**
  * Etapas percorridas por um usuário JÁ AUTENTICADO sem questionário (ex.:
  * social login que nunca passou pelo funil anônimo). Pula apresentação,
- * nome, boas-vindas e motivação (não fazem sentido para quem já tem conta),
- * e compromisso/prova social (redundante pós-conversão). Mantém os
+ * nome e boas-vindas (não fazem sentido para quem já tem conta), e
+ * compromisso/prova social (redundante pós-conversão). Mantém os
  * interstitials de valor — não coletam dado e reforçam percepção de
  * personalização mesmo pós-cadastro.
  */
@@ -141,11 +133,8 @@ export const FORCED_QUESTIONNAIRE_STEP_IDS: readonly OnboardingStepId[] = [
   'interstitial_evolution',
   'interstitial_methodology',
   'days',
-  'scheduleMode',
-  'trainingDays',
   'duration',
   'place',
-  'primaryPlace',
   'equipment',
   'interstitial_guidedWorkout',
   'muscleFocus',
@@ -192,22 +181,22 @@ export type OnboardingFlowAnswers = {
   limits?: string[];
   specialConditions?: string[];
   days?: number | null;
-  scheduleMode?: 'fixed' | 'flexible' | null;
 };
 
 function isApplicableStep(id: OnboardingStepId, answers?: OnboardingFlowAnswers): boolean {
   if (!answers) return true;
-  // The schedule-mode question is always shown, including for 7 days. A
-  // fixed seven-day plan still implies every weekday, preserving the prior
-  // UX; flexible never asks for or invents weekdays.
-  if (id === 'trainingDays') {
-    return (answers?.scheduleMode ?? 'fixed') === 'fixed'
-      && answers?.days != null
-      && answers.days >= 2
-      && answers.days <= 6;
-  }
-  if (id === 'primaryPlace') return answers?.place === 'both';
-  if (id === 'equipment') return answers?.place === 'home' || answers?.place === 'both';
+  // v1.27 never considers a home equipment inventory in any generation step
+  // (selection, composition, or cycle evolution) — Home templates are
+  // already authored to be executable at home by definition (see
+  // homeEquipmentAuditV127.test.ts). Asking this question would only
+  // collect data no engine version acts on going forward, and produce a
+  // phantom `equipment_required` validation failure since it's never
+  // answered — so it's never shown, regardless of `place`. The `equipment`
+  // step/field stay registered (schema, draft persistence, legacy v2
+  // `equipmentContextFor`, manual exercise-substitution) for backward
+  // compatibility with already-persisted answers; only its visibility here
+  // changed.
+  if (id === 'equipment') return false;
   if (id === 'limits') {
     return !!answers?.specialConditions?.includes('musculoskeletal_limitation');
   }
