@@ -11,7 +11,6 @@ import type { QuestionnaireResolution } from './profileLoadState';
  * never needs to know about.
  */
 export type RootScreenId =
-  | 'splash'
   | 'onboardingFunnel'
   | 'auth'
   | 'emailVerification'

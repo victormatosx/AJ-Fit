@@ -187,14 +187,18 @@ const FULL_BLEED = StyleSheet.create({
  * `AppShellContent`, which reads `usePremiumAction()` from the provider
  * this wraps it in.
  */
-export function AppShell() {
+export function AppShell({ onHomeReady }: { onHomeReady?: () => void }) {
   const [showPremium, setShowPremium] = useState(false);
   const { user } = useAuth();
   return (
     <PremiumActionProvider onRequestUpgrade={() => setShowPremium(true)}>
       <LoadProgressProvider uid={user?.uid ?? null}>
         <RestSessionProvider key={user?.uid ?? 'signed-out'}>
-          <AppShellContent showPremium={showPremium} setShowPremium={setShowPremium} />
+          <AppShellContent
+            showPremium={showPremium}
+            setShowPremium={setShowPremium}
+            onHomeReady={onHomeReady}
+          />
         </RestSessionProvider>
       </LoadProgressProvider>
     </PremiumActionProvider>
@@ -204,9 +208,11 @@ export function AppShell() {
 function AppShellContent({
   showPremium,
   setShowPremium,
+  onHomeReady,
 }: {
   showPremium: boolean;
   setShowPremium: (value: boolean) => void;
+  onHomeReady?: () => void;
 }) {
   const { theme } = useTheme();
   useEffect(() => {
@@ -469,6 +475,23 @@ function AppShellContent({
     });
   }, [snapshotPathAvailable, snapshotVisualReady]);
   const homeVisible = homeInitialVisualReady || snapshotVisualReady;
+  // Deliberately NOT the same as `homeVisible`. `homeVisible` ORs in the
+  // cached-snapshot fast path — legitimate for making the Home content tree
+  // interactive/accessible quickly, but a stale/partial snapshot still
+  // shows visible "still updating" copy (today's card, frequency) until the
+  // authoritative read lands. The root splash (see App.tsx/WordmarkSplash)
+  // must wait for that authoritative terminal state — success, empty, or a
+  // handled error, never a mid-refresh snapshot — so it never uncovers a
+  // Home that is about to visibly change under the user.
+  const homeInitialRevealReady = homeInitialVisualReady;
+  // Reports readiness up to the single root splash — never from the
+  // snapshot-satisfied `homeVisible` alone. `onHomeReady` is optional and a
+  // no-op once the process's cold start is already done (see App.tsx); the
+  // caller-side latch is what makes repeat calls (e.g. after a later
+  // logout/login) harmless.
+  useEffect(() => {
+    if (homeInitialRevealReady) onHomeReady?.();
+  }, [homeInitialRevealReady, onHomeReady]);
   useEffect(() => {
     if (snapshotVisualReady && !homeInitialVisualReady && !snapshotOverlayMarkRef.current) {
       snapshotOverlayMarkRef.current = true;

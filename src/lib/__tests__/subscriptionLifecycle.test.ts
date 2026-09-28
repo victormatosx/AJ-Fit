@@ -50,7 +50,7 @@ function route(
 ) {
   const info = selectIdentityCustomerInfo(state, uid);
   return resolvePremiumGate({
-    requestedScreen: 'splash',
+    requestedScreen: 'onboardingFunnel',
     authInitializing: false,
     profileLoading: false,
     authenticated: Boolean(uid),

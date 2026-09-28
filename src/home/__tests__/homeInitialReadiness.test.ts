@@ -58,6 +58,41 @@ describe('Home initial data readiness', () => {
     expect(terminal.evolution).toBe('ERROR');
     expect(terminal.allRequiredDataSettled).toBe(true);
   });
+
+  it('stays unsettled while the current session is still resolving — the "Buscando a sessão atual" state', () => {
+    const buscandoSessaoAtual = deriveHomeInitialReadiness({
+      ...settledInput,
+      prescriptionLoading: true,
+    });
+    expect(buscandoSessaoAtual.today).toBe('PENDING');
+    expect(buscandoSessaoAtual.allRequiredDataSettled).toBe(false);
+
+    expect(
+      deriveHomeInitialReadiness({ ...settledInput, generatingWorkout: true }).allRequiredDataSettled,
+    ).toBe(false);
+    expect(
+      deriveHomeInitialReadiness({ ...settledInput, scheduleLoading: true }).allRequiredDataSettled,
+    ).toBe(false);
+  });
+
+  it('stays unsettled while Evolution only has a summary and hasn\'t reached its full view yet — the "Atualizando" state', () => {
+    const atualizando = deriveHomeInitialReadiness({
+      ...settledInput,
+      evolutionKind: 'SUMMARY_READY',
+      evolutionNoticeUnavailable: false,
+    });
+    expect(atualizando.evolution).toBe('PENDING');
+    expect(atualizando.allRequiredDataSettled).toBe(false);
+  });
+
+  it('stays unsettled while Frequency is still loading, even if a value is already available (refresh-in-flight)', () => {
+    const refreshing = deriveHomeInitialReadiness({
+      ...settledInput,
+      frequencyLoading: true,
+    });
+    expect(refreshing.frequency).toBe('PENDING');
+    expect(refreshing.allRequiredDataSettled).toBe(false);
+  });
 });
 
 describe('Home initial visual readiness', () => {

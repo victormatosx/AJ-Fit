@@ -65,7 +65,13 @@ describe('native theme boundaries', () => {
       (entry): entry is [string, Record<string, unknown>] =>
         Array.isArray(entry) && entry[0] === 'expo-splash-screen',
     );
-    expect(splashPlugin?.[1]).toMatchObject({ backgroundColor: '#000000' });
+    // Background-only — matches the app's own Dark background (#020010) so
+    // the WordmarkSplash handoff (App.tsx) is a color-identical transition.
+    // No `image`: the JS splash's first frame ("AJ.") needs a runtime
+    // layout measurement no static native asset can replicate — see
+    // WordmarkSplash.tsx's doc comment.
+    expect(splashPlugin?.[1]).toMatchObject({ backgroundColor: '#020010' });
+    expect(splashPlugin?.[1]).not.toHaveProperty('image');
     expect(splashPlugin?.[1]).not.toHaveProperty('dark');
 
     const navBarPlugin = config.expo.plugins.find(

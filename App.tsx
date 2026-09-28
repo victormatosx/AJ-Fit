@@ -1,4 +1,4 @@
-import React, { useEffect, useReducer, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import * as NativeSplashScreen from 'expo-splash-screen';
 import { View, ActivityIndicator, Pressable, Text } from 'react-native';
@@ -32,7 +32,9 @@ import { PhotoVaultProvider } from './src/state/PhotoVaultContext';
 import { addQuestionnaire } from './src/services/userProfile';
 import { logAuthError } from './src/services/auth';
 import { configureRevenueCat } from './src/services/revenueCatService';
-import { SplashScreen } from './src/screens/SplashScreen';
+import { WordmarkSplash } from './src/components/ui/WordmarkSplash';
+import { FullScreenLoading } from './src/components/ui/FullScreenLoading';
+import { hasCompletedInitialBoot, markInitialBootCompleted } from './src/lib/initialBootReadiness';
 import { OnboardingFunnelScreen } from './src/screens/OnboardingFunnelScreen';
 import { clearOnboardingDraft } from './src/onboarding/draftStorage';
 import type { OnboardingAuthContext } from './src/onboarding/authContext';
@@ -40,7 +42,6 @@ import { AuthScreen } from './src/screens/AuthScreen';
 import { EmailVerificationScreen } from './src/screens/EmailVerificationScreen';
 import { PaywallScreen } from './src/screens/PaywallScreen';
 import { AppShell } from './src/screens/AppShell';
-import { FullScreenLoading } from './src/components/ui/FullScreenLoading';
 import { requiresEmailVerification } from './src/lib/emailVerification';
 import { ThemeProvider, useTheme } from './src/theme';
 import { NativeThemeSync } from './src/theme/NativeThemeSync';
@@ -99,11 +100,14 @@ configureRevenueCat().catch(() => {
 });
 
 /**
- * Keeps the native splash (fixed black, see app.json's expo-splash-screen
- * config) on screen until AppContent's first commit, instead of the default
- * auto-hide-on-bundle-load. Without this, the native splash can disappear
- * before the first frame paints, exposing a blank white frame underneath —
- * the same class of flash the in-JS Dark splash exists to avoid.
+ * Keeps the native splash (fixed #020010, see app.json's expo-splash-screen
+ * config — background color only, no image: WordmarkSplash's first frame is
+ * the "AJ." composition, which needs a runtime layout measurement no static
+ * native asset can replicate) up until `WordmarkSplash` itself calls
+ * `hideAsync()`, once its own first frame is measured and correct — see
+ * `src/components/ui/WordmarkSplash.tsx`. Without this, the native splash
+ * can disappear before that first frame paints, exposing a blank/wrong
+ * frame underneath.
  */
 NativeSplashScreen.preventAutoHideAsync().catch(() => {
   // Best-effort: a rejection here just means the default auto-hide runs.
@@ -188,7 +192,7 @@ function AppStateProviderConnected({ children }: { children: React.ReactNode }) 
   return <RawAppStateProvider uid={user?.uid ?? null}>{children}</RawAppStateProvider>;
 }
 
-function RootNavigator() {
+function RootNavigator({ onDestinationReady }: { onDestinationReady: () => void }) {
   const { theme } = useTheme();
   const { t } = useTranslation('common');
   const {
@@ -221,11 +225,14 @@ function RootNavigator() {
   // comment in src/services/userProfile.ts.
   const commercialGateResolved = profile?.metadata.commercialGateResolvedAt !== null;
   const { quiz, setQuiz } = useAppState();
-  const [screen, setScreenState] = useState<RootScreenId>('splash');
-  // Mirrors `screen` synchronously so late/stale callbacks (e.g. the splash
-  // timer firing after the router already moved on) can check the current
-  // route without depending on a stale closure over the state value.
-  const screenRef = useRef<RootScreenId | null>('splash');
+  // The root splash is not a router state — it's a single overlay in
+  // AppContent, independent of `resolvedScreen`. An unauthenticated cold
+  // start's real first destination is the onboarding funnel, so that's
+  // what's requested from the start.
+  const [screen, setScreenState] = useState<RootScreenId>('onboardingFunnel');
+  // Mirrors `screen` synchronously so late/stale callbacks can check the
+  // current route without depending on a stale closure over the state value.
+  const screenRef = useRef<RootScreenId | null>('onboardingFunnel');
   // Guards the forced-questionnaire save below against double submission
   // (e.g. a fast double-tap on the last quiz question).
   const [savingQuestionnaire, setSavingQuestionnaire] = useState(false);
@@ -434,17 +441,43 @@ function RootNavigator() {
     if (resolvedScreen && resolvedScreen !== screen) setScreen(resolvedScreen);
   }, [resolvedScreen, screen]);
 
+  // Retry-exhausted questionnaire/profile read failure — checked BEFORE the
+  // subscription-error condition below since it can't have resolved a
+  // `questionnaire` yet either way. Never falls through to onboarding
+  // (`resolvePremiumGate` already refuses that for `'error'`) — this is the
+  // recoverable-error UI instead of an indefinite spinner.
+  const questionnaireReadError =
+    !initializing && !profileLoading && Boolean(user) && questionnaireResolution === 'error';
+  const subscriptionReadError =
+    !initializing &&
+    !profileLoading &&
+    Boolean(user) &&
+    Boolean(questionnaire) &&
+    subscriptionStatus === 'error' &&
+    !subscriptionConfigured;
+
+  // Everything that reaches the single root splash's `ready` signal with no
+  // internal async gate of its own: the three destinations that render
+  // their real first frame synchronously on mount, PLUS both terminal
+  // read-error presentations below (an error card IS the destination's
+  // first real frame — "ready" means resolved, not necessarily succeeded).
+  // 'app' and 'paywall' report readiness themselves, once Home/Offerings
+  // are actually ready — see AppShell.tsx/PaywallScreen.tsx.
+  useEffect(() => {
+    if (
+      resolvedScreen === 'auth' ||
+      resolvedScreen === 'emailVerification' ||
+      resolvedScreen === 'onboardingFunnel' ||
+      (!resolvedScreen && (questionnaireReadError || subscriptionReadError))
+    ) {
+      onDestinationReady();
+    }
+  }, [resolvedScreen, questionnaireReadError, subscriptionReadError, onDestinationReady]);
+
   screenRef.current = resolvedScreen;
 
   if (!resolvedScreen) {
-    // Retry-exhausted questionnaire/profile read failure — checked BEFORE
-    // the subscription-error branch below since it can't have resolved a
-    // `questionnaire` yet either way. Never falls through to onboarding
-    // (`resolvePremiumGate` already refuses that for `'error'`); this is
-    // the recoverable-error UI instead of an indefinite spinner. Reuses
-    // the same component/visual language as the subscription error below,
-    // per the "don't invent new design" instruction.
-    if (!initializing && !profileLoading && user && questionnaireResolution === 'error') {
+    if (questionnaireReadError) {
       return (
         <SubscriptionResolutionError
           title="Não foi possível carregar seus dados"
@@ -460,14 +493,7 @@ function RootNavigator() {
         />
       );
     }
-    if (
-      !initializing &&
-      !profileLoading &&
-      user &&
-      questionnaire &&
-      subscriptionStatus === 'error' &&
-      !subscriptionConfigured
-    ) {
+    if (subscriptionReadError) {
       return (
         <SubscriptionResolutionError
           title={subscriptionErrorKind === 'offline' ? 'Conexão necessária' : 'Assinatura indisponível'}
@@ -476,27 +502,16 @@ function RootNavigator() {
         />
       );
     }
-    // Cached profile/questionnaire data (`cachedPresentation`) is still read
-    // above for the retry-exhausted error message — only its display here,
-    // in the ordinary (non-error) intermediate loading state, is removed so
-    // this gate always shows the same neutral spinner as the bootstrap gate
-    // above, with no name/plan/"Atualizando…" flash before Home.
+    // Ordinary intermediate loading — no name/plan/"Atualizando…" flash
+    // before the real destination. Fully occluded by WordmarkSplash for the
+    // very first cold start (see App.tsx); this is only ever visible as
+    // ordinary runtime loading afterward (e.g. a second login's profile/
+    // subscription resolving).
     return <FullScreenLoading />;
   }
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
-      {resolvedScreen === 'splash' && (
-        <SplashScreen
-          onDone={() => {
-            // Guard against the splash's own timer firing after the router
-            // already moved on (e.g. an authenticated cold start bootstraps
-            // straight to 'app' before this fires) — only advance to
-            // onboarding if we're still actually showing the splash.
-            if (screenRef.current === 'splash') setScreen('onboardingFunnel');
-          }}
-        />
-      )}
       {resolvedScreen === 'onboardingFunnel' && (
         <OnboardingFunnelScreen
           mode={user ? 'forcedQuestionnaire' : 'anonymous'}
@@ -537,6 +552,7 @@ function RootNavigator() {
       {resolvedScreen === 'paywall' && (
         <PaywallScreen
           entryContext={onboardingAuthContext}
+          onReady={onDestinationReady}
           // Reinstates the documented pre-"Fase 1" rule for this one case
           // (docs/24_funil_onboarding_arquitetura.md §8 — "Botão X do
           // Paywall": preserved exactly as it was, `onClose` calls
@@ -553,7 +569,7 @@ function RootNavigator() {
           }}
         />
       )}
-      {resolvedScreen === 'app' && <AppShell />}
+      {resolvedScreen === 'app' && <AppShell onHomeReady={onDestinationReady} />}
       {savingQuestionnaire && (
         <View
           pointerEvents="none"
@@ -587,8 +603,10 @@ function AppContent() {
     JetBrainsMono_700Bold,
   });
 
-  // i18n bootstrap runs in parallel with `useFonts` — same `<FullScreenLoading/>`
-  // covers both. `initI18n()` is idempotent (module-level memoization), so
+  // i18n bootstrap runs in parallel with `useFonts` — both are covered by
+  // WordmarkSplash sitting on top, unconditionally, for the whole wait (see
+  // the bottom of this component). `initI18n()` is idempotent (module-level
+  // memoization), so
   // Fast Refresh cannot re-init. `.finally` ensures the gate opens even if
   // resolution fails (a broken AsyncStorage read still falls through to the
   // system locale + English fallback inside initI18n).
@@ -640,71 +658,94 @@ function AppContent() {
     initI18n().finally(() => setI18nReady(true));
   }, []);
 
-  useEffect(() => {
-    // First commit of the JS tree already paints the Dark FullScreenLoading
-    // gate (same near-black background as the native splash), so it is safe
-    // to hand off here regardless of how long hydration/fonts/i18n still take.
-    void NativeSplashScreen.hideAsync();
+  // Module-scope latch (src/lib/initialBootReadiness.ts), not React state —
+  // survives this whole process's lifetime regardless of remounts, so the
+  // splash can never come back once it's played: not on background/
+  // foreground, not on a tab switch, not on internal navigation, not even
+  // on a later logout/login. `destinationReady` is the single signal
+  // WordmarkSplash waits on, reported by whichever root destination
+  // (auth/onboarding/emailVerification/paywall/app/error) actually mounts —
+  // see `onDestinationReady` threaded into RootNavigator below.
+  const [booting, setBooting] = useState(() => !hasCompletedInitialBoot());
+  const [destinationReady, setDestinationReady] = useState(false);
+  const handleDestinationReady = useCallback(() => setDestinationReady(true), []);
+  const handleSplashDone = useCallback(() => {
+    markInitialBootCompleted();
+    setBooting(false);
   }, []);
 
   return (
-    // Root for react-native-gesture-handler. Required on Android for any
-    // gesture to be recognized at all; the Photo Vault viewer mounts a second
-    // one inside its native Modal, which is a separate view hierarchy.
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaProvider>
-        <AuthProvider>
-          {/* Passive push listeners and identity binding never request OS
-              permission and never participate in startup readiness. */}
-          <PushNotificationsRuntime />
-          <PushDeviceRegistrationRuntime />
-          {/* Nested inside AuthProvider so SubscriptionProvider can read
-              useAuth()'s `user`/`initializing` and react to it (calling
-              loginRevenueCat/logoutRevenueCat internally). AuthContext itself
-              is untouched — it stays the sole owner of identity and knows
-              nothing about RevenueCat; SubscriptionContext just watches it. */}
-          {/* Owns the UID-bound, session-scoped Dev Subscription Override
-              state (dev/QA only, see src/dev/). Nested above SubscriptionProvider so it can
-              transform the RevenueCat-derived state before the rest of the
-              app ever sees it — inert everywhere outside a development
-              build. */}
-          <DevSubscriptionOverrideProvider>
-            <SubscriptionProvider>
-              <PromoCodeProvider>
-                <UnitsProvider>
-                  <AppStateProviderConnected>
-                    {/* Inside AuthProvider so it can re-lock on logout and account
-                        switches; wraps the navigator so its AppState listener is
-                        mounted for the whole session. */}
-                    <PhotoVaultProvider>
-                      {/* Retains cold-start and foreground URLs until the guarded
-                          navigator can consume them. It never changes auth,
-                          prescription or schedule authority. */}
-                      <DeepLinkProvider>
-                        <StatusBar style={theme.statusBar.style} />
-                        <NativeThemeSync />
-                        {/* Business providers mount immediately so Firebase profile
-                            reads, RevenueCat identity synchronization and vault
-                            locking overlap the local theme/font/i18n bootstrap.
-                            Only the definitive UI is held behind this visual gate,
-                            preventing a stored Light preference from first painting
-                            the real app in Dark. */}
-                        {themeHydrated && fontsLoaded && i18nReady ? (
-                          <>
-                            <RootNavigator />
-                            <SubscriptionCelebrationRuntime />
-                          </>
-                        ) : <FullScreenLoading />}
-                      </DeepLinkProvider>
-                    </PhotoVaultProvider>
-                  </AppStateProviderConnected>
-                </UnitsProvider>
-              </PromoCodeProvider>
-            </SubscriptionProvider>
-          </DevSubscriptionOverrideProvider>
-        </AuthProvider>
-      </SafeAreaProvider>
-    </GestureHandlerRootView>
+    // Outer, unrelated to react-native-gesture-handler's own root below —
+    // exists only so WordmarkSplash can sit as a sibling overlay on top of
+    // the ENTIRE app tree (absolute-positioned, paints last), instead of
+    // needing to be threaded deep inside it. The real destination screen
+    // mounts and loads immediately, underneath, in parallel — nothing here
+    // waits for the splash to finish.
+    <View style={{ flex: 1 }}>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <SafeAreaProvider>
+          <AuthProvider>
+            {/* Passive push listeners and identity binding never request OS
+                permission and never participate in startup readiness. */}
+            <PushNotificationsRuntime />
+            <PushDeviceRegistrationRuntime />
+            {/* Nested inside AuthProvider so SubscriptionProvider can read
+                useAuth()'s `user`/`initializing` and react to it (calling
+                loginRevenueCat/logoutRevenueCat internally). AuthContext itself
+                is untouched — it stays the sole owner of identity and knows
+                nothing about RevenueCat; SubscriptionContext just watches it. */}
+            {/* Owns the UID-bound, session-scoped Dev Subscription Override
+                state (dev/QA only, see src/dev/). Nested above SubscriptionProvider so it can
+                transform the RevenueCat-derived state before the rest of the
+                app ever sees it — inert everywhere outside a development
+                build. */}
+            <DevSubscriptionOverrideProvider>
+              <SubscriptionProvider>
+                <PromoCodeProvider>
+                  <UnitsProvider>
+                    <AppStateProviderConnected>
+                      {/* Inside AuthProvider so it can re-lock on logout and account
+                          switches; wraps the navigator so its AppState listener is
+                          mounted for the whole session. */}
+                      <PhotoVaultProvider>
+                        {/* Retains cold-start and foreground URLs until the guarded
+                            navigator can consume them. It never changes auth,
+                            prescription or schedule authority. */}
+                        <DeepLinkProvider>
+                          <StatusBar style={theme.statusBar.style} />
+                          <NativeThemeSync />
+                          {/* Business providers mount immediately so Firebase profile
+                              reads, RevenueCat identity synchronization and vault
+                              locking overlap the local theme/font/i18n bootstrap.
+                              Only the definitive UI is held behind this visual gate,
+                              preventing a stored Light preference from first painting
+                              the real app in Dark. Renders nothing while false — with
+                              nothing yet to report ready, WordmarkSplash's own hold
+                              phase already covers this wait, unconditionally. */}
+                          {themeHydrated && fontsLoaded && i18nReady ? (
+                            <>
+                              <RootNavigator onDestinationReady={handleDestinationReady} />
+                              <SubscriptionCelebrationRuntime />
+                            </>
+                          ) : null}
+                        </DeepLinkProvider>
+                      </PhotoVaultProvider>
+                    </AppStateProviderConnected>
+                  </UnitsProvider>
+                </PromoCodeProvider>
+              </SubscriptionProvider>
+            </DevSubscriptionOverrideProvider>
+          </AuthProvider>
+        </SafeAreaProvider>
+      </GestureHandlerRootView>
+      {booting && (
+        <WordmarkSplash
+          ready={destinationReady}
+          fontsLoaded={fontsLoaded}
+          onDone={handleSplashDone}
+        />
+      )}
+    </View>
   );
 }
 

@@ -103,7 +103,7 @@ describe('EvolutionCard (Profile) — unaffected by the new Home-only intermedia
 describe('multi-user isolation (Passo 8) — no Evolution fragment can survive a user switch', () => {
   it('AppShell (and therefore the single useWorkoutEvolution instance it owns) is conditionally rendered, not kept mounted across a user switch', () => {
     const app = read('App.tsx');
-    expect(app).toContain("resolvedScreen === 'app' && <AppShell />");
+    expect(app).toContain("resolvedScreen === 'app' && <AppShell onHomeReady={onDestinationReady} />");
     // useWorkoutEvolution's viewModel state (SUMMARY_READY included) is
     // React local state (`useState`) inside a hook instance owned by
     // AppShell. Since AppShell only renders while `resolvedScreen === 'app'`

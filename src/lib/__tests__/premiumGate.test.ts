@@ -90,12 +90,12 @@ describe('resolvePremiumGate', () => {
 
   it('G) cold start Premium aguarda CustomerInfo e depois libera AppShell', () => {
     expect(resolve({ subscriptionLoading: true, subscriptionConfigured: false })).toBeNull();
-    expect(resolve({ requestedScreen: 'splash', isPremium: true })).toBe('app');
+    expect(resolve({ requestedScreen: 'onboardingFunnel', isPremium: true })).toBe('app');
   });
 
   it('H) cold start sem Premium aguarda CustomerInfo e, uma vez resolvida, também libera AppShell (FASE 1)', () => {
     expect(resolve({ subscriptionLoading: true, subscriptionConfigured: false })).toBeNull();
-    expect(resolve({ requestedScreen: 'splash', isPremium: false })).toBe('app');
+    expect(resolve({ requestedScreen: 'onboardingFunnel', isPremium: false })).toBe('app');
   });
 
   it('libera AppShell para pedido direto de "app" quando o entitlement está inativo, uma vez tudo resolvido (FASE 1)', () => {

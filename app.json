@@ -103,10 +103,7 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#000000",
-          "image": "./assets/aj-logo.png",
-          "imageWidth": 160,
-          "resizeMode": "contain"
+          "backgroundColor": "#020010"
         }
       ],
       "expo-system-ui",
