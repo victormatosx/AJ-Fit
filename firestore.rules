@@ -255,7 +255,7 @@ service cloud.firestore {
         && data.keys().hasAll(['role', 'createdAt', 'updatedAt'])
         && data.keys().hasOnly(
              ['role', 'activeWorkoutId', 'createdAt', 'updatedAt', 'commercialGateResolvedAt',
-              'workoutLifecycleQaMode', 'workoutLifecycleQaAccelerated'])
+              'workoutLifecycleQaMode', 'workoutLifecycleQaAccelerated', 'accountClass'])
         && data.role in ['user', 'admin']
         && (!('activeWorkoutId' in data) || data.activeWorkoutId is string)
         && data.createdAt is timestamp
@@ -263,6 +263,17 @@ service cloud.firestore {
         && (!('commercialGateResolvedAt' in data)
              || data.commercialGateResolvedAt == null
              || data.commercialGateResolvedAt is timestamp)
+        // QA/Sandbox vs Production account-identity axis
+        // (functions/src/lib/accountClassification.ts). Shape-checked here
+        // only so an admin-set value doesn't lock the owner out of their
+        // own unrelated profile edits (same reasoning as
+        // `workoutLifecycleQaMode` below) — the `users/{userId}` `create`
+        // rule explicitly rejects the key outright, and `update`'s
+        // `metadata.diff(...).hasOnly(['updatedAt'])` blocks any client
+        // change to it after creation. Only `onUserProvisioned`
+        // (Admin SDK, stamps 'PRODUCTION') and `adminSetAccountClass`
+        // (Admin SDK, admin-only) ever write it.
+        && (!('accountClass' in data) || data.accountClass in ['PRODUCTION', 'INTERNAL_QA'])
         // DEV Workout Lifecycle QA (docs/workout-lifecycle/v2/qa/): only the
         // Admin SDK / Firebase Console can ever write these fields — the
         // `users/{userId}` update rule below restricts client-affected keys
@@ -956,107 +967,6 @@ service cloud.firestore {
         && encryptionMetadataValid(d.encryption);
     }
 
-    function supportTicketValid(ticketId) {
-      let d = request.resource.data;
-      return d.keys().hasAll([
-          'id', 'userId', 'userName', 'userEmail', 'type', 'subject', 'status',
-          'priority', 'lastMessage', 'createdAt', 'updatedAt', 'appVersion',
-          'platform', 'osVersion', 'deviceModel', 'language', 'attachmentsCount'
-        ])
-        && d.keys().hasOnly([
-          'id', 'userId', 'userName', 'userEmail', 'type', 'subject', 'status',
-          'priority', 'lastMessage', 'createdAt', 'updatedAt', 'appVersion',
-          'platform', 'osVersion', 'deviceModel', 'language', 'attachmentsCount'
-        ])
-        && d.id == ticketId
-        && d.userId == request.auth.uid
-        && d.userName is string && d.userName.size() >= 2 && d.userName.size() <= 50
-        && d.userEmail is string && d.userEmail.size() <= 254
-        && d.type in ['BUG', 'FEEDBACK', 'SUPPORT']
-        && d.subject is string && d.subject.size() >= 3 && d.subject.size() <= 100
-        && d.status == 'OPEN'
-        && d.priority == 'NORMAL'
-        && d.lastMessage is string && d.lastMessage.size() >= 10 && d.lastMessage.size() <= 5000
-        && d.createdAt == request.time && d.updatedAt == request.time
-        && d.appVersion is string && d.platform in ['ios', 'android', 'web', 'windows', 'macos']
-        && d.osVersion is string && d.deviceModel is string && d.language is string
-        && d.attachmentsCount is int && d.attachmentsCount >= 0 && d.attachmentsCount <= 1;
-    }
-
-    function supportMessageValid(ticketId) {
-      let d = request.resource.data;
-      let ticket = getAfter(/databases/$(database)/documents/supportTickets/$(ticketId));
-      return ticket.data.userId == request.auth.uid
-        && d.keys().hasAll(['senderType', 'senderId', 'message', 'attachments', 'createdAt', 'readAt'])
-        && d.keys().hasOnly(['senderType', 'senderId', 'message', 'attachments', 'createdAt', 'readAt'])
-        && d.senderType == 'USER' && d.senderId == request.auth.uid
-        && d.message is string && d.message.size() >= 1 && d.message.size() <= 5000
-        && d.attachments is list && d.attachments.size() <= 1
-        && ticket.data.attachmentsCount == d.attachments.size()
-        && (d.attachments.size() == 0 || (
-          d.attachments[0] is map
-          && d.attachments[0].keys().hasAll(['url', 'path', 'type'])
-          && d.attachments[0].keys().hasOnly(['url', 'path', 'type'])
-          && d.attachments[0].url is string && d.attachments[0].url.size() <= 2048
-          && d.attachments[0].path is string
-          && d.attachments[0].path.matches('users/' + request.auth.uid + '/support/' + ticketId + '/attachments/.*')
-          && d.attachments[0].type == 'IMAGE'
-        ))
-        && d.createdAt == request.time && d.readAt == null;
-    }
-
-    function adminSupportTicketUpdateValid() {
-      let before = resource.data;
-      let after = request.resource.data;
-      let changed = after.diff(before).affectedKeys();
-      return changed.hasAll(['updatedAt'])
-        && changed.hasOnly([
-          'status', 'priority', 'assignedTo', 'lastMessage', 'updatedAt',
-          'lastReplyAt', 'closedAt'
-        ])
-        && after.status in ['OPEN', 'IN_PROGRESS', 'WAITING_USER', 'RESOLVED', 'CLOSED']
-        && after.priority in ['LOW', 'NORMAL', 'HIGH', 'CRITICAL']
-        && after.updatedAt == request.time
-        // O painel atual atribui somente ao próprio operador autenticado.
-        && (!changed.hasAny(['assignedTo']) || after.assignedTo == request.auth.uid)
-        // Fechar grava o timestamp do servidor; qualquer outro status limpa-o.
-        && (!changed.hasAny(['status']) || (
-          changed.hasAny(['closedAt'])
-          && (after.status == 'CLOSED'
-              ? after.closedAt == request.time
-              : after.closedAt == null)
-        ))
-        && (!changed.hasAny(['closedAt']) || changed.hasAny(['status']))
-        // Uma resposta atualiza preview e metadados em conjunto.
-        && (!changed.hasAny(['lastMessage', 'lastReplyAt']) || (
-          changed.hasAll(['lastMessage', 'lastReplyAt'])
-          && after.lastMessage is string
-          && after.lastMessage.size() >= 1
-          && after.lastMessage.size() <= 5000
-          && after.lastReplyAt == request.time
-        ));
-    }
-
-    function adminSupportMessageValid(ticketId) {
-      let d = request.resource.data;
-      let ticket = getAfter(/databases/$(database)/documents/supportTickets/$(ticketId));
-      return d.keys().hasAll([
-          'senderType', 'senderId', 'message', 'attachments', 'createdAt', 'readAt'
-        ])
-        && d.keys().hasOnly([
-          'senderType', 'senderId', 'message', 'attachments', 'createdAt', 'readAt'
-        ])
-        && d.senderType == 'ADMIN'
-        && d.senderId == request.auth.uid
-        && d.message is string && d.message.size() >= 1 && d.message.size() <= 5000
-        && d.attachments is list && d.attachments.size() == 0
-        && d.createdAt == request.time && d.readAt == null
-        // Mantém mensagem e preview do ticket consistentes no mesmo batch.
-        && ticket.data.lastMessage == d.message
-        && ticket.data.updatedAt == request.time
-        && ticket.data.lastReplyAt == request.time;
-    }
-
     // ── Users, questionnaires and assessments ─────────────────────────────
     match /users/{userId} {
       // Leitura: apenas o dono do documento, e somente com a conta ativa
@@ -1080,6 +990,10 @@ service cloud.firestore {
         && accountActive(userId)
         && nestedUserValid(request.resource.data)
         && !('attribution' in request.resource.data)
+        // Never client-set at creation, mirroring `attribution` above —
+        // `onUserProvisioned` (Admin SDK) is the only writer of the initial
+        // value. See `metadataValid`'s doc comment.
+        && !('accountClass' in request.resource.data.metadata)
         && request.resource.data.metadata.role == 'user'
         && request.resource.data.profile.email == request.auth.token.email
         && request.resource.data.subscription.size() == 0
@@ -2481,17 +2395,8 @@ service cloud.firestore {
 
     // ── Support V2 (all mutations are Admin SDK callables) ────────────────
     //
-    // These three blocks were deployed to production on 2026-09-17 but were
-    // never committed to this file (`git log -S supportCases -- firestore.rules`
-    // is empty). A merge resolution then produced a versioned `firestore.rules`
-    // whose only support coverage was the legacy `supportTickets` lineage
-    // below — so deploying THIS file without them would have silently
-    // default-denied every Support V2 read (`supportCases`/`.../messages`),
-    // breaking a live feature whose callables (`createSupportCase`,
-    // `sendSupportChatMessage`, `markSupportMessageRead`, and the `admin*`
-    // counterparts in functions/src/index.ts) are already deployed.
-    // Restored verbatim from the active ruleset so the two lineages converge
-    // here instead of one overwriting the other; see
+    // Support V1 (the legacy ticket collection) has been fully removed —
+    // this is the only support lineage. See
     // firestore-tests/supportV2.rules.test.ts for the regression lock.
     match /supportCases/{caseId} {
       allow get, list: if (isAdmin() && accountActive(request.auth.uid))
@@ -2519,25 +2424,6 @@ service cloud.firestore {
 
     match /supportRateLimits/{limitId} {
       allow read, write: if false;
-    }
-
-    // ── Legacy support tickets and messages (rollout compatibility) ───────
-    match /supportTickets/{ticketId} {
-      allow get, list: if isAdmin()
-        || (hasVerifiedEmailForPrivateAccess() && resource.data.userId == request.auth.uid);
-      allow create: if hasVerifiedEmailForPrivateAccess() && supportTicketValid(ticketId);
-      allow update: if isAdmin() && adminSupportTicketUpdateValid();
-      allow delete: if false;
-
-      match /messages/{messageId} {
-        allow get, list: if isAdmin()
-          || (hasVerifiedEmailForPrivateAccess()
-              && get(/databases/$(database)/documents/supportTickets/$(ticketId))
-                   .data.userId == request.auth.uid);
-        allow create: if (hasVerifiedEmailForPrivateAccess() && supportMessageValid(ticketId))
-          || (isAdmin() && adminSupportMessageValid(ticketId));
-        allow update, delete: if false;
-      }
     }
 
     // Catálogo de códigos promocionais/influenciadores
@@ -2633,7 +2519,7 @@ service cloud.firestore {
     // Conteúdo administrado: o script `scripts/seedExercises.ts` (Admin SDK,
     // ignora estas regras) e, a partir do painel `ajfit-admin`, um admin
     // autenticado (`isAdmin()` — mesmo mecanismo já usado por
-    // `supportTickets` acima: `users/{uid}.metadata.role == 'admin'`).
+    // `supportCases` acima: `users/{uid}.metadata.role == 'admin'`).
     // Leitura liberada para qualquer usuário autenticado; a lista em si não
     // é dado sensível e é necessária para exibir/gerar treinos e permitir
     // substituição de exercícios.
@@ -2756,8 +2642,7 @@ service cloud.firestore {
     // completa de taxonomia é feita no formulário do painel
     // (`exerciseValidation.ts`, reaproveitado lá). Duplicar tudo aqui seria
     // alto custo de manutenção por um ganho de segurança marginal, dado que
-    // só um admin autenticado chega a este `write` — mesmo trade-off que
-    // `supportTicketValid` já adota para campos operacionais.
+    // só um admin autenticado chega a este `write`.
     function exerciseWriteValid(exerciseId) {
       let d = request.resource.data;
       // Os 79 documentos criados pelo seed histórico usam o document id

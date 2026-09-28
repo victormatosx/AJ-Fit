@@ -1,17 +1,4 @@
-/**
- * OPT-IN integration proof against the REAL Firestore + Storage Emulators —
- * Fase 8 gate. Same role as `firestoreCleanup`/`storageCleanup`'s own
- * `engine.integration.test.ts` (Fases 6/7): unit tests with fakes prove the
- * LOGIC; this file proves that, against real emulator behavior, policy v1
- * (support=RETAIN, couponRedemptions=RETAIN) genuinely preserves every
- * retained resource — never "empty because the query silently found
- * nothing".
- *
- * Skipped by default — only runs when `RETAINED_DATA_INTEGRATION=1`. Run
- * via `npm run test:integration:retainedData`, which wraps this in
- * `firebase emulators:exec --only firestore,storage --project
- * ajfit-rules-test`. Never touches production.
- */
+/** Opt-in proof against the real Firestore + Storage emulators. */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { deleteApp, initializeApp, type App } from 'firebase-admin/app';
 import { getFirestore, type Firestore } from 'firebase-admin/firestore';
@@ -21,7 +8,7 @@ import { runRetainedDataProcessing } from '../engine';
 
 const enabled = process.env.RETAINED_DATA_INTEGRATION === '1';
 
-describe.skipIf(!enabled)('Retained Data Processing Engine — real Emulator integration', () => {
+describe.skipIf(!enabled)('Retained Data Processing — Support V2 emulator integration', () => {
   let app: App;
   let db: Firestore;
   let storage: Storage;
@@ -35,95 +22,82 @@ describe.skipIf(!enabled)('Retained Data Processing Engine — real Emulator int
     storage = getStorage(app);
   });
 
-  afterAll(async () => {
-    await deleteApp(app);
-  });
+  afterAll(async () => deleteApp(app));
 
   async function wipe() {
-    for (const collection of ['supportTickets', 'couponRedemptions']) {
-      const snapshot = await db.collection(collection).get();
-      const writer = db.bulkWriter();
-      for (const doc of snapshot.docs) writer.delete(doc.ref);
-      await writer.close();
+    for (const collectionName of ['supportCases', 'supportUploadSessions', 'supportRateLimits', 'couponRedemptions']) {
+      const snapshot = await db.collection(collectionName).get();
+      for (const document of snapshot.docs) await db.recursiveDelete(document.ref);
     }
     const [files] = await storage.bucket().getFiles();
     await Promise.all(files.map((file) => file.delete({ ignoreNotFound: true })));
   }
 
-  beforeAll(async () => {
-    await wipe();
-  }, 30_000);
+  beforeAll(wipe, 30_000);
 
   async function seedFullUser(uid: string) {
-    const ticketRef = db.collection('supportTickets').doc(`${uid}-t1`);
-    await ticketRef.set({ userId: uid, subject: 'help', lastMessage: 'hi' });
-    await ticketRef.collection('messages').doc('m1').set({ senderId: uid, message: 'hi' });
-    await db
-      .collection('couponRedemptions')
-      .doc(uid)
-      .set({ uid, couponCode: 'ARNALDO10', lockedAt: null });
-    await storage
-      .bucket()
-      .file(`users/${uid}/support/${uid}-t1/attachments/photo.jpg`)
-      .save(Buffer.from('fake-attachment'), { contentType: 'image/jpeg' });
+    const caseId = `${uid}-case`;
+    const uploadId = `${uid}-upload`;
+    const storagePath = `users/${uid}/support-v2/staged/${uploadId}`;
+    const caseRef = db.collection('supportCases').doc(caseId);
+    await caseRef.set({ ownerUid: uid, state: 'CHAT_OPEN' });
+    await caseRef.collection('messages').doc('m1').set({
+      senderId: uid,
+      attachments: [{ storagePath }],
+    });
+    await caseRef.collection('_actions').doc('a1').set({ adminUid: 'admin-1' });
+    await db.collection('supportUploadSessions').doc(uploadId).set({
+      ownerUid: uid, caseId, status: 'ATTACHED', storagePath,
+    });
+    await db.collection('supportRateLimits').doc(`${uid}_create-case`).set({ ownerUid: uid });
+    await db.collection('couponRedemptions').doc(uid).set({ uid });
+    await storage.bucket().file(storagePath).save(Buffer.from('attachment'));
+    return { caseId, uploadId, storagePath };
   }
 
-  it(
-    'policy v1 (RETAIN/RETAIN): every resource survives, step reports SKIPPED_BY_POLICY — real Firestore + Storage, not fakes',
-    async () => {
-      await seedFullUser('rdp-uid-A');
-      await seedFullUser('rdp-uid-B'); // other-uid control
+  it('RETAIN preserves the entire V2 graph and another uid', async () => {
+    const target = await seedFullUser('rdp-uid-A');
+    const other = await seedFullUser('rdp-uid-B');
 
-      const outcome = await runRetainedDataProcessing(
-        'rdp-uid-A',
-        { support: 'RETAIN', couponRedemptions: 'RETAIN' },
-        { db, storage },
-      );
+    const outcome = await runRetainedDataProcessing(
+      'rdp-uid-A',
+      { support: 'RETAIN', couponRedemptions: 'RETAIN' },
+      { db, storage },
+    );
 
-      expect(outcome.kind).toBe('SKIPPED_BY_POLICY');
+    expect(outcome.kind).toBe('SKIPPED_BY_POLICY');
+    expect((await db.doc(`supportCases/${target.caseId}`).get()).exists).toBe(true);
+    expect((await db.doc(`supportCases/${target.caseId}/messages/m1`).get()).exists).toBe(true);
+    expect((await db.doc(`supportCases/${target.caseId}/_actions/a1`).get()).exists).toBe(true);
+    expect((await db.doc(`supportUploadSessions/${target.uploadId}`).get()).exists).toBe(true);
+    expect(await storage.bucket().file(target.storagePath).exists()).toEqual([true]);
+    expect((await db.doc(`supportCases/${other.caseId}`).get()).exists).toBe(true);
+    await wipe();
+  }, 60_000);
 
-      const ticket = await db.collection('supportTickets').doc('rdp-uid-A-t1').get();
-      expect(ticket.exists).toBe(true);
-      const message = await db.collection('supportTickets').doc('rdp-uid-A-t1').collection('messages').doc('m1').get();
-      expect(message.exists).toBe(true);
-      const redemption = await db.collection('couponRedemptions').doc('rdp-uid-A').get();
-      expect(redemption.exists).toBe(true);
-      const [attachments] = await storage.bucket().getFiles({ prefix: 'users/rdp-uid-A/support/' });
-      expect(attachments).toHaveLength(1);
+  it('DELETE removes the complete target graph, is repeatable and preserves another uid', async () => {
+    const target = await seedFullUser('rdp-delete-A');
+    const other = await seedFullUser('rdp-delete-B');
 
-      // Other uid 100% intact.
-      const otherTicket = await db.collection('supportTickets').doc('rdp-uid-B-t1').get();
-      expect(otherTicket.exists).toBe(true);
-      const otherRedemption = await db.collection('couponRedemptions').doc('rdp-uid-B').get();
-      expect(otherRedemption.exists).toBe(true);
+    const first = await runRetainedDataProcessing(
+      'rdp-delete-A',
+      { support: 'DELETE', couponRedemptions: 'RETAIN' },
+      { db, storage },
+    );
+    const retry = await runRetainedDataProcessing(
+      'rdp-delete-A',
+      { support: 'DELETE', couponRedemptions: 'RETAIN' },
+      { db, storage },
+    );
 
-      await wipe();
-    },
-    60_000,
-  );
-
-  it(
-    'idempotent retry against real Firestore + Storage: running the step again after a first RETAIN run stays SKIPPED_BY_POLICY with no mutation',
-    async () => {
-      await seedFullUser('rdp-uid-retry');
-
-      await runRetainedDataProcessing(
-        'rdp-uid-retry',
-        { support: 'RETAIN', couponRedemptions: 'RETAIN' },
-        { db, storage },
-      );
-      const retry = await runRetainedDataProcessing(
-        'rdp-uid-retry',
-        { support: 'RETAIN', couponRedemptions: 'RETAIN' },
-        { db, storage },
-      );
-
-      expect(retry.kind).toBe('SKIPPED_BY_POLICY');
-      const ticket = await db.collection('supportTickets').doc('rdp-uid-retry-t1').get();
-      expect(ticket.exists).toBe(true);
-
-      await wipe();
-    },
-    60_000,
-  );
+    expect(first.kind).toBe('SUCCEEDED');
+    expect(retry.kind).toBe('SUCCEEDED');
+    expect((await db.doc(`supportCases/${target.caseId}`).get()).exists).toBe(false);
+    expect((await db.doc(`supportUploadSessions/${target.uploadId}`).get()).exists).toBe(false);
+    expect((await db.doc('supportRateLimits/rdp-delete-A_create-case').get()).exists).toBe(false);
+    expect(await storage.bucket().file(target.storagePath).exists()).toEqual([false]);
+    expect((await db.doc(`supportCases/${other.caseId}`).get()).exists).toBe(true);
+    expect(await storage.bucket().file(other.storagePath).exists()).toEqual([true]);
+    await wipe();
+  }, 60_000);
 });

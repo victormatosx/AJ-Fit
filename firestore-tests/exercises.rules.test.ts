@@ -6,7 +6,7 @@
  * `scripts/seedExercises.ts` (Admin SDK, bypasses rules) and, since the
  * ajfit-admin panel got exercise CRUD, by an authenticated admin
  * (`isAdmin()` — `users/{uid}.metadata.role == 'admin'`, same mechanism as
- * `supportTickets`). Hard delete stays denied even for admins (docs/27 §8
+ * `supportCases`). Hard delete stays denied even for admins (docs/27 §8
  * — exercises may be referenced by workout history; deactivate via
  * `status` instead).
  */

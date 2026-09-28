@@ -13,6 +13,7 @@ interface FakeFile {
 
 export interface FakeBucketHarness {
   bucket: {
+    file(name: string): FakeFile;
     getFiles(query: {
       prefix?: string;
       maxResults?: number;
@@ -22,15 +23,22 @@ export interface FakeBucketHarness {
   seed(name: string): void;
   exists(name: string): boolean;
   listUnder(prefix: string): string[];
+  failNextDelete(error: Error): void;
 }
 
 export function createFakeBucket(): FakeBucketHarness {
   const existing = new Set<string>();
+  let pendingDeleteFailure: Error | null = null;
 
   function fileRef(name: string): FakeFile {
     return {
       name,
       async delete(opts?: { ignoreNotFound?: boolean }) {
+        if (pendingDeleteFailure) {
+          const error = pendingDeleteFailure;
+          pendingDeleteFailure = null;
+          throw error;
+        }
         if (!existing.has(name) && !opts?.ignoreNotFound) {
           throw Object.assign(new Error('No such object'), { code: 404 });
         }
@@ -40,6 +48,9 @@ export function createFakeBucket(): FakeBucketHarness {
   }
 
   const bucket = {
+    file(name: string) {
+      return fileRef(name);
+    },
     async getFiles(query: {
       prefix?: string;
       maxResults?: number;
@@ -69,6 +80,9 @@ export function createFakeBucket(): FakeBucketHarness {
     },
     listUnder(prefix: string) {
       return [...existing].filter((name) => name.startsWith(prefix)).sort();
+    },
+    failNextDelete(error: Error) {
+      pendingDeleteFailure = error;
     },
   };
 }

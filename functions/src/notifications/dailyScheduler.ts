@@ -83,7 +83,7 @@ async function claimRegistration(
       updatedAt: now,
     });
     return {
-      uid: snapshot.id,
+      uid: ref.id,
       timezone: typeof data.timezone === 'string' ? data.timezone : null,
       claimToken,
       ref,
@@ -124,9 +124,21 @@ async function finishRegistration(
     const current = await transaction.get(claim.ref);
     const data: DocumentData | undefined = current.data();
     if (data?.evaluationClaimToken !== claim.claimToken) return;
+    if (result.status === 'SUPPRESSED' && result.terminalCondition === 'USER_NOT_FOUND') {
+      // The suite signal is only a cleanup candidate. Re-read the source of
+      // truth inside the same transaction so composed reasons, stale reads,
+      // partial evaluator results, and account recreation can never delete a
+      // valid registration. A transient read failure aborts the transaction
+      // and therefore preserves the leased registration for retry.
+      const user = await transaction.get(dependencies.db.collection('users').doc(claim.uid));
+      if (!user.exists) {
+        transaction.delete(claim.ref);
+        return;
+      }
+    }
     if (
       result.status === 'SUPPRESSED'
-      && (result.reason === 'USER_NOT_FOUND' || result.reason === 'ACCOUNT_INACTIVE')
+      && result.reason === 'ACCOUNT_INACTIVE'
     ) {
       transaction.delete(claim.ref);
       return;

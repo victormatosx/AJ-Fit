@@ -14,7 +14,7 @@ function seedFullUser(harness: ReturnType<typeof createFakeBucket>, uid: string)
   harness.seed(`users/${uid}/progressPhotos/p1.enc`);
   harness.seed(`users/${uid}/progressPhotos/p1.thumb.enc`);
   harness.seed(`users/${uid}/progressPhotos/p2.enc`);
-  harness.seed(`users/${uid}/support/ticket-1/attachments/screenshot.jpg`);
+  harness.seed(`users/${uid}/support-v2/staged/upload-1`);
 }
 
 describe('runStorageCleanup — happy path', () => {
@@ -44,7 +44,7 @@ describe('runStorageCleanup — support attachments retained (Fase 7 §48, obrig
 
     await runStorageCleanup('uid-1', { storage: storageFor(harness) });
 
-    expect(harness.exists('users/uid-1/support/ticket-1/attachments/screenshot.jpg')).toBe(true);
+    expect(harness.exists('users/uid-1/support-v2/staged/upload-1')).toBe(true);
     expect(harness.exists('users/uid-1/profile/avatar')).toBe(false);
     expect(harness.exists('users/uid-1/progressPhotos/p1.enc')).toBe(false);
   });
@@ -159,6 +159,6 @@ describe('runStorageCleanup — other uid isolation', () => {
     expect(harness.listUnder('users/uid-A/progressPhotos/')).toHaveLength(0);
     expect(harness.listUnder('users/uid-B/progressPhotos/')).toHaveLength(3);
     expect(harness.exists('users/uid-B/profile/avatar')).toBe(true);
-    expect(harness.exists('users/uid-B/support/ticket-1/attachments/screenshot.jpg')).toBe(true);
+    expect(harness.exists('users/uid-B/support-v2/staged/upload-1')).toBe(true);
   });
 });

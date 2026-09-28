@@ -59,7 +59,7 @@ describe.skipIf(!enabled)('Storage Cleanup Engine — real Emulator integration'
         .save(Buffer.from('fake-thumb-ciphertext'), { contentType: 'application/octet-stream' });
     }
     await bucket
-      .file(`users/${uid}/support/ticket-1/attachments/screenshot.jpg`)
+      .file(`users/${uid}/support-v2/staged/upload-1`)
       .save(Buffer.from('fake-attachment'), { contentType: 'image/jpeg' });
   }
 
@@ -86,14 +86,14 @@ describe.skipIf(!enabled)('Storage Cleanup Engine — real Emulator integration'
       expect(await existsUnder('users/test-uid-storage-A/progressPhotos/')).toEqual([]);
 
       // ── RETAIN (support) = preserved ──
-      expect(await existsUnder('users/test-uid-storage-A/support/')).toEqual([
-        'users/test-uid-storage-A/support/ticket-1/attachments/screenshot.jpg',
+      expect(await existsUnder('users/test-uid-storage-A/support-v2/')).toEqual([
+        'users/test-uid-storage-A/support-v2/staged/upload-1',
       ]);
 
       // ── Other uid = 100% intact ──
       expect(await existsUnder('users/test-uid-storage-B/profile/')).toHaveLength(1);
       expect(await existsUnder('users/test-uid-storage-B/progressPhotos/')).toHaveLength(80); // 40 * 2
-      expect(await existsUnder('users/test-uid-storage-B/support/')).toHaveLength(1);
+      expect(await existsUnder('users/test-uid-storage-B/support-v2/')).toHaveLength(1);
 
       await wipeBucket();
     },

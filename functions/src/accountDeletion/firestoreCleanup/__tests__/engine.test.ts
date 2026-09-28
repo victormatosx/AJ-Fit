@@ -18,6 +18,8 @@ function seedFullUser(harness: ReturnType<typeof createFakeFirestore>, uid: stri
   harness.seed(`users/${uid}/workoutPrograms/wpg1`);
   harness.seed(`users/${uid}/workoutProgramState/active`);
   harness.seed(`users/${uid}/workoutExecutions/exec1`);
+  harness.seed(`users/${uid}/workoutExecutionState/current`);
+  harness.seed(`users/${uid}/exerciseSubstitutionPreferences/bench_press`);
   harness.seed(`users/${uid}/workoutPrograms/wpg1/progressionEvents/pe1`);
   harness.seed(`users/${uid}/workoutPrograms/wpg1/scheduleState/state1`);
   harness.seed(`users/${uid}/workoutPrograms/wpg1/scheduleEvents/event1`);
@@ -44,6 +46,7 @@ function seedFullUser(harness: ReturnType<typeof createFakeFirestore>, uid: stri
   harness.seed(`notificationDailyUsers/${uid}`, { timezone: 'UTC' });
   harness.seed(`notificationProductWindows/window-${uid}`, { uid });
   harness.seed(`notificationAchievementMilestones/milestone-${uid}`, { uid });
+  harness.seed(`entitlementSignals/${uid}`);
   harness.seed(`users/${uid}/privateSecurity/photoVault`);
 }
 
@@ -74,6 +77,8 @@ describe('runFirestoreCleanup — happy path', () => {
     expect(harness.listUnder('users/uid-1/workoutPrograms/')).toHaveLength(0);
     expect(harness.listUnder('users/uid-1/workoutProgramState/')).toHaveLength(0);
     expect(harness.listUnder('users/uid-1/workoutExecutions/')).toHaveLength(0);
+    expect(harness.listUnder('users/uid-1/workoutExecutionState/')).toHaveLength(0);
+    expect(harness.listUnder('users/uid-1/exerciseSubstitutionPreferences/')).toHaveLength(0);
     expect(harness.listUnder('users/uid-1/workoutPrograms/wpg1/progressionEvents/')).toHaveLength(0);
     expect(harness.listUnder('users/uid-1/workoutPrograms/wpg1/scheduleState/')).toHaveLength(0);
     expect(harness.listUnder('users/uid-1/workoutPrograms/wpg1/scheduleEvents/')).toHaveLength(0);
@@ -92,6 +97,7 @@ describe('runFirestoreCleanup — happy path', () => {
     expect(harness.exists('notificationDailyUsers/uid-1')).toBe(false);
     expect(harness.exists('notificationProductWindows/window-uid-1')).toBe(false);
     expect(harness.exists('notificationAchievementMilestones/milestone-uid-1')).toBe(false);
+    expect(harness.exists('entitlementSignals/uid-1')).toBe(false);
   });
 
   it('cleanup outcome is identical for a Free or Premium user (no subscription check exists here)', async () => {
@@ -150,21 +156,21 @@ describe('runFirestoreCleanup — Vault separation (Fase 6 §11/§12, the key ar
 });
 
 describe('runFirestoreCleanup — retained data and control plane are structurally unreachable', () => {
-  it('never references supportTickets/couponRedemptions/accountDeletions/accountDeletionLocks — no function in this engine targets those collections', async () => {
+  it('never targets retained support/coupon data or account-deletion control-plane collections', async () => {
     // This is a structural guarantee, not a runtime one: resources.ts only
     // ever builds paths under `users/{uid}/...`. This test documents the
     // property by seeding retained/control-plane data at those exact paths
     // and confirming cleanup for the SAME uid never removes them.
     const harness = createFakeFirestore();
     seedFullUser(harness, 'uid-1');
-    harness.seed('supportTickets/ticket-1');
+    harness.seed('supportCases/case-1');
     harness.seed('couponRedemptions/uid-1');
     harness.seed('accountDeletions/del-1');
     harness.seed('accountDeletionLocks/uid-1');
 
     await runFirestoreCleanup('uid-1', { db: fs(harness) });
 
-    expect(harness.exists('supportTickets/ticket-1')).toBe(true);
+    expect(harness.exists('supportCases/case-1')).toBe(true);
     expect(harness.exists('couponRedemptions/uid-1')).toBe(true);
     expect(harness.exists('accountDeletions/del-1')).toBe(true);
     expect(harness.exists('accountDeletionLocks/uid-1')).toBe(true);
@@ -185,10 +191,10 @@ describe('runFirestoreCleanup — ordering (Fase 6 §10)', () => {
     expect(order).toEqual([
       'questionnaires', 'assessments', 'progressPhotos',
       'pushTokenOwners', 'pushInstallations', 'pushDevices', 'notificationDispatches',
-      'notificationProductWindows', 'notificationAchievementMilestones', 'dailyNotificationRegistration',
+      'notificationProductWindows', 'notificationAchievementMilestones', 'dailyNotificationRegistration', 'entitlementSignal',
       'workoutProgramDescendants',
       'workoutLifecycleEvents', 'workoutLifecycleAuthorityGrants', 'workoutLifecycleTrustedTelemetryReceipts', 'pendingEvolutions', 'programInstances', 'trainingCycles', 'workoutLifecycleState',
-      'workoutPrograms', 'workoutProgramState', 'workoutExecutions', 'userProfile',
+      'workoutPrograms', 'workoutProgramState', 'exerciseSubstitutionPreferences', 'workoutExecutionState', 'workoutExecutions', 'userProfile',
     ]);
   });
 });

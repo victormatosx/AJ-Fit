@@ -27,20 +27,20 @@ describe('runRetainedDataProcessing — policy v1 (RETAIN/RETAIN)', () => {
     expect(outcome.kind).toBe('SKIPPED_BY_POLICY');
   });
 
-  it('preserves an existing ticket, message, attachment, and redemption untouched', async () => {
+  it('preserves an existing case, message, attachment, and redemption untouched', async () => {
     const fs = createFakeFirestore();
     const bucket = createFakeBucket();
-    fs.seed('supportTickets/t1', { userId: 'uid-1' });
-    fs.seed('supportTickets/t1/messages/m1', { senderId: 'uid-1' });
+    fs.seed('supportCases/c1', { ownerUid: 'uid-1' });
+    fs.seed('supportCases/c1/messages/m1', { senderId: 'uid-1', attachments: [] });
     fs.seed('couponRedemptions/uid-1', { uid: 'uid-1', lockedAt: 123 });
-    bucket.seed('users/uid-1/support/t1/attachments/photo.jpg');
+    bucket.seed('users/uid-1/support-v2/staged/upload-1');
 
     await runRetainedDataProcessing('uid-1', V1_RETENTION, depsFor(fs, bucket));
 
-    expect(fs.exists('supportTickets/t1')).toBe(true);
-    expect(fs.exists('supportTickets/t1/messages/m1')).toBe(true);
+    expect(fs.exists('supportCases/c1')).toBe(true);
+    expect(fs.exists('supportCases/c1/messages/m1')).toBe(true);
     expect(fs.exists('couponRedemptions/uid-1')).toBe(true);
-    expect(bucket.exists('users/uid-1/support/t1/attachments/photo.jpg')).toBe(true);
+    expect(bucket.exists('users/uid-1/support-v2/staged/upload-1')).toBe(true);
   });
 
   it('reports both categories via onCategoryCompleted', async () => {
@@ -59,7 +59,7 @@ describe('runRetainedDataProcessing — policy v1 (RETAIN/RETAIN)', () => {
 
   it('idempotent: running the step repeatedly always converges on SKIPPED_BY_POLICY with no mutation', async () => {
     const fs = createFakeFirestore();
-    fs.seed('supportTickets/t1', { userId: 'uid-1' });
+    fs.seed('supportCases/c1', { ownerUid: 'uid-1' });
     fs.seed('couponRedemptions/uid-1', { uid: 'uid-1' });
 
     const first = await runRetainedDataProcessing('uid-1', V1_RETENTION, depsFor(fs));
@@ -67,7 +67,7 @@ describe('runRetainedDataProcessing — policy v1 (RETAIN/RETAIN)', () => {
     const third = await runRetainedDataProcessing('uid-1', V1_RETENTION, depsFor(fs));
 
     for (const outcome of [first, second, third]) expect(outcome.kind).toBe('SKIPPED_BY_POLICY');
-    expect(fs.exists('supportTickets/t1')).toBe(true);
+    expect(fs.exists('supportCases/c1')).toBe(true);
     expect(fs.exists('couponRedemptions/uid-1')).toBe(true);
   });
 });
@@ -76,15 +76,15 @@ describe('runRetainedDataProcessing — other uid isolation', () => {
   it('processing uid-A never touches uid-B support/coupon data', async () => {
     const fs = createFakeFirestore();
     const bucket = createFakeBucket();
-    fs.seed('supportTickets/tB', { userId: 'uid-B' });
+    fs.seed('supportCases/cB', { ownerUid: 'uid-B' });
     fs.seed('couponRedemptions/uid-B', { uid: 'uid-B' });
-    bucket.seed('users/uid-B/support/tB/attachments/photo.jpg');
+    bucket.seed('users/uid-B/support-v2/staged/upload-B');
 
     await runRetainedDataProcessing('uid-A', V1_RETENTION, depsFor(fs, bucket));
 
-    expect(fs.exists('supportTickets/tB')).toBe(true);
+    expect(fs.exists('supportCases/cB')).toBe(true);
     expect(fs.exists('couponRedemptions/uid-B')).toBe(true);
-    expect(bucket.exists('users/uid-B/support/tB/attachments/photo.jpg')).toBe(true);
+    expect(bucket.exists('users/uid-B/support-v2/staged/upload-B')).toBe(true);
   });
 });
 
@@ -94,13 +94,13 @@ describe('runRetainedDataProcessing — a policy version that authorizes DELETE 
   it('reports SUCCEEDED (not SKIPPED_BY_POLICY) when at least one category actually deletes', async () => {
     const fs = createFakeFirestore();
     const bucket = createFakeBucket();
-    fs.seed('supportTickets/t1', { userId: 'uid-1' });
+    fs.seed('supportCases/c1', { ownerUid: 'uid-1' });
     fs.seed('couponRedemptions/uid-1', { uid: 'uid-1' });
 
     const outcome = await runRetainedDataProcessing('uid-1', HYPOTHETICAL_DELETE_POLICY, depsFor(fs, bucket));
 
     expect(outcome).toEqual({ kind: 'SUCCEEDED' });
-    expect(fs.exists('supportTickets/t1')).toBe(false);
+    expect(fs.exists('supportCases/c1')).toBe(false);
     expect(fs.exists('couponRedemptions/uid-1')).toBe(true); // still RETAIN
   });
 });
@@ -108,7 +108,7 @@ describe('runRetainedDataProcessing — a policy version that authorizes DELETE 
 describe('runRetainedDataProcessing — ANONYMIZE without a contract fails terminal, never fakes it', () => {
   it('reports FAILED with MISSING_REQUIRED_CONFIGURATION, mutates nothing', async () => {
     const fs = createFakeFirestore();
-    fs.seed('supportTickets/t1', { userId: 'uid-1' });
+    fs.seed('supportCases/c1', { ownerUid: 'uid-1' });
 
     const outcome = await runRetainedDataProcessing(
       'uid-1',
@@ -117,7 +117,7 @@ describe('runRetainedDataProcessing — ANONYMIZE without a contract fails termi
     );
 
     expect(outcome).toEqual({ kind: 'FAILED', code: 'MISSING_REQUIRED_CONFIGURATION' });
-    expect(fs.exists('supportTickets/t1')).toBe(true);
+    expect(fs.exists('supportCases/c1')).toBe(true);
   });
 });
 
@@ -129,6 +129,26 @@ describe('runRetainedDataProcessing — error classification', () => {
     const outcome = await runRetainedDataProcessing('uid-1', V1_RETENTION, depsFor(fs));
 
     expect(outcome).toEqual({ kind: 'FAILED', code: 'UNAVAILABLE' });
+  });
+
+  it('a transient Storage failure maps to UNAVAILABLE and leaves a retry anchor', async () => {
+    const fs = createFakeFirestore();
+    const bucket = createFakeBucket();
+    const path = 'users/uid-1/support-v2/staged/upload-1';
+    fs.seed('supportCases/c1', { ownerUid: 'uid-1', state: 'CHAT_OPEN' });
+    fs.seed('supportCases/c1/messages/m1', { attachments: [{ storagePath: path }] });
+    bucket.seed(path);
+    bucket.failNextDelete(Object.assign(new Error('storage unavailable'), { code: 503 }));
+
+    const outcome = await runRetainedDataProcessing(
+      'uid-1',
+      { support: 'DELETE', couponRedemptions: 'RETAIN' },
+      depsFor(fs, bucket),
+    );
+
+    expect(outcome).toEqual({ kind: 'FAILED', code: 'UNAVAILABLE' });
+    expect(fs.exists('supportCases/c1')).toBe(true);
+    expect(fs.exists('supportCases/c1/messages/m1')).toBe(true);
   });
 });
 
@@ -145,7 +165,7 @@ describe('runRetainedDataProcessing — policy versioning (Fase 8 rule §2/§21)
     const hypotheticalFuturePolicy = { support: 'DELETE', couponRedemptions: 'DELETE' } as const;
 
     const fs = createFakeFirestore();
-    fs.seed('supportTickets/t1', { userId: 'uid-1' });
+    fs.seed('supportCases/c1', { ownerUid: 'uid-1' });
     fs.seed('couponRedemptions/uid-1', { uid: 'uid-1' });
 
     // Processing the OLD record must use its own frozen retention, not
@@ -158,7 +178,7 @@ describe('runRetainedDataProcessing — policy versioning (Fase 8 rule §2/§21)
     );
 
     expect(outcome.kind).toBe('SKIPPED_BY_POLICY');
-    expect(fs.exists('supportTickets/t1')).toBe(true);
+    expect(fs.exists('supportCases/c1')).toBe(true);
     expect(fs.exists('couponRedemptions/uid-1')).toBe(true);
 
     // Sanity check the engine IS capable of DELETE when actually told to —
@@ -166,7 +186,7 @@ describe('runRetainedDataProcessing — policy versioning (Fase 8 rule §2/§21)
     // inability to delete.
     const deleteOutcome = await runRetainedDataProcessing('uid-1', hypotheticalFuturePolicy, depsFor(fs));
     expect(deleteOutcome).toEqual({ kind: 'SUCCEEDED' });
-    expect(fs.exists('supportTickets/t1')).toBe(false);
+    expect(fs.exists('supportCases/c1')).toBe(false);
     expect(fs.exists('couponRedemptions/uid-1')).toBe(false);
   });
 });

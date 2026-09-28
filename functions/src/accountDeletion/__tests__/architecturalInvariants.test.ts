@@ -1,3 +1,5 @@
+import { readdirSync, readFileSync } from 'node:fs';
+import { join, relative, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { ACCOUNT_DELETION_STEP_NAMES } from '../types';
@@ -44,5 +46,45 @@ describe('account deletion — Cloud Functions wiring (index.ts)', () => {
     for (const symbol of ['requestAccountDeletion', 'cleanupPendingAccountDeletions', 'onAccountDeletionRequested']) {
       expect(SOURCE).toContain(symbol);
     }
+  });
+});
+
+function productionSourceFiles(directory: string): string[] {
+  const files: string[] = [];
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    if (entry.name === 'node_modules' || entry.name === 'lib' || entry.name === '__tests__') continue;
+    const path = join(directory, entry.name);
+    if (entry.isDirectory()) files.push(...productionSourceFiles(path));
+    else if (/\.(?:[cm]?js|tsx?)$/.test(entry.name) && !/\.test\./.test(entry.name)) files.push(path);
+  }
+  return files;
+}
+
+describe('account deletion — repository-wide destructive-operation guard', () => {
+  it('allows Firebase Auth deleteUser only in the official AUTH_DELETION executor', () => {
+    const repositoryRoot = resolve(__dirname, '../../../..');
+    const roots = ['src', 'functions/src', 'scripts'].map((path) => join(repositoryRoot, path));
+    const offenders = roots
+      .flatMap(productionSourceFiles)
+      .filter((path) => /(?:\bdeleteUser|\.deleteUser)\s*\(/.test(readFileSync(path, 'utf8')))
+      .map((path) => relative(repositoryRoot, path).replaceAll('\\', '/'));
+
+    expect(offenders).toEqual(['functions/src/accountDeletion/authDeletion.ts']);
+  });
+
+  it('keeps direct users/{uid} document deletion inside the official Firestore cleanup resource', () => {
+    const repositoryRoot = resolve(__dirname, '../../../..');
+    const roots = ['src', 'functions/src', 'scripts'].map((path) => join(repositoryRoot, path));
+    const directUserDelete = [
+      /recursiveDelete\s*\([^;]*collection\(['"]users['"]\)/s,
+      /deleteDoc\s*\(\s*doc\([^,]+,\s*['"]users['"]\s*,\s*[^,)]+\s*\)\s*\)/s,
+      /collection\(['"]users['"]\)\.doc\([^)]*\)\.delete\s*\(/s,
+    ];
+    const offenders = roots
+      .flatMap(productionSourceFiles)
+      .filter((path) => directUserDelete.some((pattern) => pattern.test(readFileSync(path, 'utf8'))))
+      .map((path) => relative(repositoryRoot, path).replaceAll('\\', '/'));
+
+    expect(offenders).toEqual([]);
   });
 });

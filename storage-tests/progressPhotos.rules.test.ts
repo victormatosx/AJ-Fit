@@ -1,8 +1,9 @@
 /**
  * Storage Rules — behavioral tests for the Photo Vault encrypted objects
  * (docs/20_backend_functions_photo_vault.md), plus regression coverage for
- * the two pre-existing paths (profile avatar and support attachments) that
- * had no Storage Rules tests at all until now.
+ * the profile avatar path. Support attachment coverage lives in
+ * `storage-tests/supportV2.rules.test.ts` (Support V1's
+ * `users/{uid}/support/{ticketId}/attachments/*` path has been removed).
  *
  * Executed against the Storage emulator. See the `test:rules` npm script.
  * FASE 7 (docs/13_assinaturas_e_billing.md §10/§11): `storage.rules`'
@@ -490,31 +491,4 @@ describe('existing storage paths — regression coverage', () => {
     );
   });
 
-  it('allows a support attachment with coherent metadata', async () => {
-    await assertSucceeds(
-      put(ownerStorage(), `users/${UID}/support/ticket-1/attachments/a.jpg`, ciphertext(), {
-          contentType: 'image/jpeg',
-          customMetadata: { ownerId: UID, ticketId: 'ticket-1' },
-        }),
-    );
-  });
-
-  it('FASE 7: still allows a Free owner to send a support attachment — Premium enforcement never reaches this path', async () => {
-    await seedFree(UID);
-    await assertSucceeds(
-      put(ownerStorage(), `users/${UID}/support/ticket-1/attachments/a.jpg`, ciphertext(), {
-          contentType: 'image/jpeg',
-          customMetadata: { ownerId: UID, ticketId: 'ticket-1' },
-        }),
-    );
-  });
-
-  it('rejects a support attachment whose ticketId does not match the path', async () => {
-    await assertFails(
-      put(ownerStorage(), `users/${UID}/support/ticket-1/attachments/a.jpg`, ciphertext(), {
-          contentType: 'image/jpeg',
-          customMetadata: { ownerId: UID, ticketId: 'ticket-2' },
-        }),
-    );
-  });
 });

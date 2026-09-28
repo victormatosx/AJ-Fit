@@ -27,7 +27,7 @@ export interface RetainedDataCategoryResult {
   category: RetainedDataCategory;
   action: RetentionAction;
   outcome: RetainedDataCategoryOutcome;
-  /** Number of top-level resources found for this category (tickets, or 1/0 for the single coupon redemption doc) — observability only, never a correctness signal. */
+  /** Number of top-level resources found for this category (support cases, or 1/0 for the single coupon redemption doc) — observability only, never a correctness signal. */
   resourceCount: number;
 }
 

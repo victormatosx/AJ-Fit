@@ -15,8 +15,8 @@
  * effect, silently duplicating (or racing) a different step's
  * responsibility.
  *
- * Also deliberately absent: `supportTickets`/`couponRedemptions` (policy
- * v1: `RETAIN`, Fase 0/1 — never touched by any engine while that holds)
+ * Also deliberately absent: Support V2 retained data/`couponRedemptions`
+ * (policy v1: `RETAIN`, Fase 0/1 — never touched by this cleanup engine)
  * and `accountDeletions`/`accountDeletionLocks` (workflow control plane —
  * never touched by any resource-cleanup engine, ever, regardless of
  * policy).
@@ -52,6 +52,9 @@ const PROGRESS_PHOTOS_COLLECTION = 'progressPhotos';
 const WORKOUT_PROGRAMS_COLLECTION = 'workoutPrograms';
 const WORKOUT_PROGRAM_STATE_COLLECTION = 'workoutProgramState';
 const WORKOUT_EXECUTIONS_COLLECTION = 'workoutExecutions';
+const WORKOUT_EXECUTION_STATE_COLLECTION = 'workoutExecutionState';
+const EXERCISE_SUBSTITUTION_PREFERENCES_COLLECTION = 'exerciseSubstitutionPreferences';
+const ENTITLEMENT_SIGNALS_COLLECTION = 'entitlementSignals';
 const PROGRESSION_EVENTS_COLLECTION = 'progressionEvents';
 const SCHEDULE_STATE_COLLECTION = 'scheduleState';
 const SCHEDULE_EVENTS_COLLECTION = 'scheduleEvents';
@@ -259,6 +262,21 @@ export async function deleteUserDailyNotificationRegistration(
   };
 }
 
+/** Deletes the backend-written realtime entitlement invalidation signal. */
+export async function deleteUserEntitlementSignal(
+  uid: string,
+  db: Firestore = defaultDb,
+): Promise<ResourceCleanupResult> {
+  const ref = db.collection(ENTITLEMENT_SIGNALS_COLLECTION).doc(uid);
+  const snapshot = await ref.get();
+  if (snapshot.exists) await ref.delete();
+  return {
+    resource: 'entitlementSignal',
+    deletedCount: snapshot.exists ? 1 : 0,
+    alreadyAbsent: !snapshot.exists,
+  };
+}
+
 export async function deleteUserNotificationProductWindows(
   uid: string,
   db: Firestore = defaultDb,
@@ -367,6 +385,24 @@ export async function deleteUserWorkoutExecutions(
     userDocRef(db, uid).collection(WORKOUT_EXECUTIONS_COLLECTION),
   );
   return { resource: 'workoutExecutions', deletedCount, alreadyAbsent: deletedCount === 0 };
+}
+
+export function deleteUserWorkoutExecutionState(uid: string, db: Firestore = defaultDb) {
+  return deleteWorkoutLifecycleCollection(
+    uid,
+    WORKOUT_EXECUTION_STATE_COLLECTION,
+    'workoutExecutionState',
+    db,
+  );
+}
+
+export function deleteUserExerciseSubstitutionPreferences(uid: string, db: Firestore = defaultDb) {
+  return deleteWorkoutLifecycleCollection(
+    uid,
+    EXERCISE_SUBSTITUTION_PREFERENCES_COLLECTION,
+    'exerciseSubstitutionPreferences',
+    db,
+  );
 }
 
 async function deleteWorkoutLifecycleCollection(

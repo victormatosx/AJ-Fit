@@ -1,12 +1,10 @@
 import {
-  deleteUser,
   onAuthStateChanged,
   signInWithCredential,
   signInWithEmailAndPassword,
   linkWithCredential,
   fetchSignInMethodsForEmail,
   getAdditionalUserInfo,
-  signOut,
   updateProfile,
   type AuthCredential,
   type User,
@@ -203,35 +201,12 @@ async function performSignInWithProvider(provider: SocialProvider): Promise<Soci
         // new", so an account created by an EARLIER lost-response attempt is
         // still correctly recognized as needing provisioning, and
         // `rollbackIncompleteSocialIdentity` never deletes a real,
-        // recoverable identity if eligibility fails downstream (it only
-        // deletes when Firebase itself just reported `isNewUser: true`).
+        // recoverable identity if eligibility fails downstream.
         return { user: reconciled, isNewUser: false };
       }
     }
     logAuthError(`${provider}:firebase-sign-in`, err);
     throw toAuthError(err);
-  }
-}
-
-/**
- * Rolls back a federated identity that Firebase created before the app could
- * learn that legal acceptance was still missing. A first social sign-in is a
- * recent authentication, so `deleteUser` is the correct cleanup operation.
- * If deletion fails, signing out still prevents the incomplete identity from
- * becoming an app session; a later attempt remains gated by its missing
- * Firestore profile.
- */
-export async function discardNewSocialIdentity(user: User): Promise<void> {
-  try {
-    await deleteUser(user);
-  } catch (deletionError) {
-    logAuthError('social-new-user:delete', deletionError);
-    try {
-      await signOut(auth);
-    } catch (signOutError) {
-      logAuthError('social-new-user:signout', signOutError);
-    }
-    throw toAuthError(deletionError);
   }
 }
 

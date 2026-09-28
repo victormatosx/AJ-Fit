@@ -1,7 +1,4 @@
 export type SupportTicketType = 'BUG' | 'FEEDBACK' | 'SUPPORT';
-export type SupportTicketStatus = 'OPEN';
-export type SupportTicketPriority = 'NORMAL';
-export type SupportSenderType = 'USER' | 'ADMIN';
 export type FeedbackCategory = 'SUGGESTION' | 'IDEA' | 'COMPLIMENT' | 'OTHER';
 
 export type SupportAttachmentInput = {

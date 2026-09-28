@@ -1,127 +1,112 @@
 /**
- * Support tickets/messages/attachments — Fase 8 §6/§7/§9/§10/§12.
+ * Support V2 retained-data policy executor.
  *
- * Schema audited from `firestore.rules` (`supportTicketValid`/
- * `supportMessageValid`, §465-512) and `src/services/supportTickets.ts` —
- * never invented:
- *   - `supportTickets/{ticketId}`: `id, userId, userName, userEmail, type,
- *     subject, status, priority, lastMessage, createdAt, updatedAt,
- *     appVersion, platform, osVersion, deviceModel, language,
- *     attachmentsCount`. No `photoURL` field on the ticket itself.
- *   - `supportTickets/{ticketId}/messages/{messageId}`: `senderType,
- *     senderId, message, attachments (≤1, {url, path, type}), createdAt,
- *     readAt`.
- *   - Attachment objects live in Storage at
- *     `users/{uid}/support/{ticketId}/attachments/*` — the exact prefix
- *     Fase 7's `StorageCleanupEngine` was deliberately built to never touch
- *     (see `../storageCleanup/resources.ts`'s doc comment). This module is
- *     the ONLY place a future DELETE policy for support could authorize
- *     removing those objects.
- *
- * `userId` is the ownership field — tickets are found by querying
- * `supportTickets` where `userId == uid`, never by trusting a caller-
- * supplied ticket id list.
+ * RETAIN preserves the complete case graph exactly as the frozen policy
+ * requests. DELETE removes every V2 resource owned by, or attached to a case
+ * owned by, the deleted account. ANONYMIZE remains unsupported because the
+ * project has no reviewed field-by-field anonymization contract.
  */
 
-import type { Firestore } from 'firebase-admin/firestore';
+import type { DocumentReference, Firestore } from 'firebase-admin/firestore';
 import type { Storage } from 'firebase-admin/storage';
 
 import { storage as defaultStorage } from '../../lib/firebaseAdmin';
+import {
+  SUPPORT_CASES_COLLECTION,
+  SUPPORT_RATE_LIMITS_COLLECTION,
+  SUPPORT_UPLOADS_COLLECTION,
+} from '../../supportV2/supportV2';
+import {
+  deleteSupportCaseChildren,
+  deleteSupportObject,
+  deleteSupportStoragePrefix,
+} from '../../supportV2/supportDataDeletion';
 import type { RetentionAction } from '../types';
 import { UnsupportedRetentionActionError } from './types';
 import type { RetainedDataCategoryResult } from './types';
 
-const SUPPORT_TICKETS_COLLECTION = 'supportTickets';
-const PAGE_SIZE = 200;
+const PAGE_SIZE = 100;
 
-function supportAttachmentsPrefix(uid: string): string {
-  return `users/${uid}/support/`;
+function userUploadPrefix(uid: string): string {
+  return `users/${uid}/support-v2/staged/`;
 }
 
-/**
- * Every `supportTickets` doc owned by `uid` — paginated by document ID so an
- * unbounded number of tickets never loads more than one page at a time.
- * Ownership is always `userId == uid`, queried fresh, never a caller-
- * supplied list.
- */
-async function findOwnedTicketIds(db: Firestore, uid: string): Promise<string[]> {
-  const ids: string[] = [];
+async function findOwnedCaseRefs(db: Firestore, uid: string): Promise<DocumentReference[]> {
+  const refs: DocumentReference[] = [];
   let lastId: string | null = null;
 
   for (;;) {
     let query = db
-      .collection(SUPPORT_TICKETS_COLLECTION)
-      .where('userId', '==', uid)
+      .collection(SUPPORT_CASES_COLLECTION)
+      .where('ownerUid', '==', uid)
       .orderBy('__name__')
       .limit(PAGE_SIZE);
     if (lastId) query = query.startAfter(lastId);
-
     const snapshot = await query.get();
-    if (snapshot.empty) break;
-
-    for (const doc of snapshot.docs) ids.push(doc.id);
+    if (snapshot.empty) return refs;
+    refs.push(...snapshot.docs.map((document) => document.ref));
     lastId = snapshot.docs[snapshot.docs.length - 1].id;
-    if (snapshot.size < PAGE_SIZE) break;
-  }
-
-  return ids;
-}
-
-async function deleteMessagesSubcollection(db: Firestore, ticketId: string): Promise<void> {
-  const messagesRef = db.collection(SUPPORT_TICKETS_COLLECTION).doc(ticketId).collection('messages');
-
-  for (;;) {
-    const snapshot = await messagesRef.orderBy('__name__').limit(PAGE_SIZE).get();
-    if (snapshot.empty) return;
-
-    const writer = db.bulkWriter();
-    for (const doc of snapshot.docs) writer.delete(doc.ref);
-    await writer.close();
-
-    if (snapshot.size < PAGE_SIZE) return;
+    if (snapshot.size < PAGE_SIZE) return refs;
   }
 }
 
-async function deleteAttachmentObjects(storage: Storage, uid: string): Promise<void> {
-  const bucket = storage.bucket();
-  const prefix = supportAttachmentsPrefix(uid);
-  let pageToken: string | undefined;
-
-  for (;;) {
-    const query: { prefix: string; maxResults: number; autoPaginate: false; pageToken?: string } = {
-      prefix,
-      maxResults: 500,
-      autoPaginate: false,
-      ...(pageToken ? { pageToken } : {}),
-    };
-    const [files, nextQuery] = await bucket.getFiles(query);
-
-    if (files.length > 0) {
-      await Promise.all(files.map((file) => file.delete({ ignoreNotFound: true })));
-    }
-
-    // See Fase 7's `deletePrefixObjects.ts`: the real Storage Emulator
-    // returns `null` (not `{}`) once there is nothing left to paginate.
-    pageToken = nextQuery && 'pageToken' in nextQuery ? nextQuery.pageToken : undefined;
-    if (!pageToken) break;
-  }
-}
-
-async function deleteOwnedTickets(
+async function deleteOwnedCases(
   db: Firestore,
   storage: Storage,
-  uid: string,
-  ticketIds: string[],
+  caseRefs: DocumentReference[],
 ): Promise<void> {
-  for (const ticketId of ticketIds) {
-    await deleteMessagesSubcollection(db, ticketId);
-    await db.collection(SUPPORT_TICKETS_COLLECTION).doc(ticketId).delete();
+  for (const caseRef of caseRefs) {
+    try {
+      // This state is outside every user/admin transition vocabulary. Once
+      // committed, concurrent Support V2 transactions retry, observe it and
+      // reject instead of adding a new child while cleanup is in progress.
+      // The parent remains an ownership/discovery anchor until every child
+      // and object is gone, so reconciliation can resume after any failure.
+      await caseRef.update({ state: 'ACCOUNT_DELETION', purgeAt: null });
+    } catch (error) {
+      if ((error as { code?: number }).code === 5) continue;
+      throw error;
+    }
+    await deleteSupportCaseChildren(caseRef, db, storage);
+    await caseRef.delete();
   }
-  // One prefix delete covers every ticket's attachments at once — Storage
-  // has no per-ticket atomicity to preserve here, and this stays idempotent
-  // (missing prefix = 0 objects = success) regardless of how far a prior,
-  // interrupted attempt got.
-  await deleteAttachmentObjects(storage, uid);
+}
+
+async function deleteOwnedUploadSessions(db: Firestore, storage: Storage, uid: string): Promise<number> {
+  let deletedCount = 0;
+  for (;;) {
+    const snapshot = await db
+      .collection(SUPPORT_UPLOADS_COLLECTION)
+      .where('ownerUid', '==', uid)
+      .limit(PAGE_SIZE)
+      .get();
+    if (snapshot.empty) return deletedCount;
+
+    for (const session of snapshot.docs) {
+      const path = session.data().storagePath;
+      if (typeof path === 'string') await deleteSupportObject(storage, path);
+    }
+    const writer = db.bulkWriter();
+    for (const session of snapshot.docs) writer.delete(session.ref);
+    await writer.close();
+    deletedCount += snapshot.size;
+  }
+}
+
+async function deleteOwnedRateLimits(db: Firestore, uid: string): Promise<number> {
+  let deletedCount = 0;
+  for (;;) {
+    const snapshot = await db
+      .collection(SUPPORT_RATE_LIMITS_COLLECTION)
+      .where('ownerUid', '==', uid)
+      .limit(PAGE_SIZE)
+      .get();
+    if (snapshot.empty) return deletedCount;
+    const writer = db.bulkWriter();
+    for (const limit of snapshot.docs) writer.delete(limit.ref);
+    await writer.close();
+    deletedCount += snapshot.size;
+  }
 }
 
 export async function processSupportRetention(
@@ -136,24 +121,24 @@ export async function processSupportRetention(
     throw new UnsupportedRetentionActionError('support', action);
   }
 
-  if (action === 'DELETE') {
-    const ticketIds = await findOwnedTicketIds(db, uid);
-    if (ticketIds.length === 0) {
-      // Still run the attachment-prefix delete: a ticket doc could have been
-      // removed by a prior, interrupted attempt while its attachments
-      // survived — idempotency means finishing that leftover work, not
-      // stopping early because Firestore looks empty.
-      await deleteAttachmentObjects(storage, uid);
-      return { category: 'support', action, outcome: 'ALREADY_ABSENT', resourceCount: 0 };
-    }
-
-    await deleteOwnedTickets(db, storage, uid, ticketIds);
-    return { category: 'support', action, outcome: 'DELETED', resourceCount: ticketIds.length };
+  const caseRefs = await findOwnedCaseRefs(db, uid);
+  if (action !== 'DELETE') {
+    return { category: 'support', action, outcome: 'RETAINED', resourceCount: caseRefs.length };
   }
 
-  // RETAIN / SKIP: no mutation. The inventory read is observability only —
-  // it proves this step ran and looked, never a precondition for the
-  // (absent) destructive action.
-  const ticketIds = await findOwnedTicketIds(db, uid);
-  return { category: 'support', action, outcome: 'RETAINED', resourceCount: ticketIds.length };
+  await deleteOwnedCases(db, storage, caseRefs);
+  const deletedSessions = await deleteOwnedUploadSessions(db, storage, uid);
+  const deletedRateLimits = await deleteOwnedRateLimits(db, uid);
+  // Catches a Storage object whose session/case was removed by an earlier,
+  // interrupted attempt. The prefix is UID-scoped and cannot touch another
+  // account or an admin-owned attachment linked to somebody else's case.
+  const deletedPrefixObjects = await deleteSupportStoragePrefix(storage, userUploadPrefix(uid));
+  const deletedAnything = caseRefs.length + deletedSessions + deletedRateLimits + deletedPrefixObjects > 0;
+
+  return {
+    category: 'support',
+    action,
+    outcome: deletedAnything ? 'DELETED' : 'ALREADY_ABSENT',
+    resourceCount: caseRefs.length,
+  };
 }

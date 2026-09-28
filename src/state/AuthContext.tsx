@@ -32,7 +32,6 @@ import {
   signInWithProvider as socialSignIn,
   completeLinkingWithPassword as socialLinkPassword,
   completeLinkingWithProvider as socialLinkProvider,
-  discardNewSocialIdentity,
   getLinkedProviders,
   type SocialProvider,
 } from '../services/socialAuth';
@@ -376,16 +375,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => subscription.remove();
   }, [user, loadState.questionnaireResolution, loadUserState]);
 
-  const rollbackIncompleteSocialIdentity = useCallback(async (
-    incompleteUser: User,
-    firebaseCreatedNow: boolean,
-  ) => {
+  const rollbackIncompleteSocialIdentity = useCallback(async () => {
     try {
-      if (firebaseCreatedNow) {
-        await discardNewSocialIdentity(incompleteUser);
-      } else {
-        await signOutUser();
-      }
+      // Never hard-delete a Firebase Auth identity here. An incomplete
+      // social registration has no AJ Fit profile yet and can safely resume
+      // provisioning on a later sign-in. Actual account deletion is owned
+      // exclusively by requestAccountDeletion + reconciliation.
+      await signOutUser();
     } catch (rollbackError) {
       logAuthError('registration-eligibility:rollback', rollbackError);
     } finally {
@@ -673,10 +669,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             await loadUserState(authedUser.uid);
           } catch (err) {
             if (err instanceof RegistrationEligibilityError) {
-              await rollbackIncompleteSocialIdentity(
-                authedUser,
-                socialResult.isNewUser,
-              );
+              await rollbackIncompleteSocialIdentity();
             }
             logAuthError(`${provider}:firestore-profile`, err);
             throw err instanceof RegistrationEligibilityError ? err : toAuthError(err);

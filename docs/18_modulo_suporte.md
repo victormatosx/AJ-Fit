@@ -1,6 +1,14 @@
 # Módulo de Suporte
 
-## Escopo atual
+> **HISTÓRICO — descreve Support V1 (`supportTickets`), removido por completo.**
+> O módulo de suporte ativo é o Support V2 (`supportCases`,
+> `supportUploadSessions`, `supportRateLimits`), cujas mutações são
+> exclusivamente callables Admin SDK (`functions/src/supportV2/`,
+> `src/services/supportCases.ts`). Este documento é preservado apenas como
+> registro histórico da primeira versão do módulo; nenhuma seção abaixo
+> descreve o comportamento atual do app.
+
+## Escopo atual (histórico — V1)
 
 O aplicativo disponibiliza Central de Ajuda, Reportar Problema e Enviar
 Sugestão. Artigos são fornecidos por um repositório local que implementa

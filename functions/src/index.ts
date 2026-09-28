@@ -22,6 +22,7 @@ import { cleanupPendingAccountDeletions } from './accountDeletion/reconciliation
 import { onAccountDeletionRequested } from './accountDeletion/immediateDispatch';
 import { adminGetUserHandler, adminListUsersHandler } from './adminUsers/adminUsers';
 import { adminGrantFreeAccessHandler, adminRevokeFreeAccessHandler } from './adminUsers/adminFreeAccess';
+import { adminSetAccountClassHandler, onUserProvisioned } from './adminUsers/accountClassProvisioning';
 import { REVENUECAT_ADMIN_GRANTS_API_KEY } from './billing/revenueCatGrants';
 import { adminGetCouponHandler, adminListCouponsHandler } from './adminCoupons/adminCoupons';
 import { recordWorkoutLifecycleTelemetryHandler } from './telemetry/workoutLifecycleTelemetry';
@@ -219,6 +220,16 @@ export const adminSetPromoCodeActive = onCall(adminSetPromoCodeActiveHandler);
  */
 export const adminListUsers = onCall(adminListUsersHandler);
 export const adminGetUser = onCall(adminGetUserHandler);
+
+/**
+ * Backend authority for `users/{uid}.metadata.accountClass` (QA/Sandbox vs
+ * Production account-identity audit) — see
+ * `adminUsers/accountClassProvisioning.ts`. `onUserProvisioned` stamps
+ * every new account `'PRODUCTION'` immediately; `adminSetAccountClass` is
+ * the only way an admin moves one to/from `'INTERNAL_QA'`.
+ */
+export { onUserProvisioned };
+export const adminSetAccountClass = onCall(adminSetAccountClassHandler);
 
 /**
  * Administrative "free Premium access" surface (docs: Acesso Premium

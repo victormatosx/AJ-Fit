@@ -73,11 +73,11 @@ describe('deleteUserProgressPhotoObjects', () => {
   it('never removes a support attachment even though it shares the same users/{uid}/ ancestor', async () => {
     const harness = createFakeBucket();
     harness.seed('users/uid-1/progressPhotos/p1.enc');
-    harness.seed('users/uid-1/support/ticket-1/attachments/screenshot.jpg');
+    harness.seed('users/uid-1/support-v2/staged/upload-1');
 
     await deleteUserProgressPhotoObjects('uid-1', storageFor(harness));
     await deleteUserAvatarObjects('uid-1', storageFor(harness));
 
-    expect(harness.exists('users/uid-1/support/ticket-1/attachments/screenshot.jpg')).toBe(true);
+    expect(harness.exists('users/uid-1/support-v2/staged/upload-1')).toBe(true);
   });
 });

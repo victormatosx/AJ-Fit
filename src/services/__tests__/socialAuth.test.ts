@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   appleCredential: { providerId: 'apple.com' },
-  deleteUser: vi.fn(),
   fetchMethods: vi.fn(),
   getAdditionalUserInfo: vi.fn(),
   getAppleCredential: vi.fn(),
@@ -17,7 +16,6 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('firebase/auth', () => ({
   createUserWithEmailAndPassword: vi.fn(),
-  deleteUser: mocks.deleteUser,
   fetchSignInMethodsForEmail: mocks.fetchMethods,
   getAdditionalUserInfo: mocks.getAdditionalUserInfo,
   linkWithCredential: mocks.linkWithCredential,
@@ -45,7 +43,6 @@ import {
   clearPendingSocialAuthState,
   completeLinkingWithPassword,
   completeLinkingWithProvider,
-  discardNewSocialIdentity,
   signInWithProvider,
 } from '../socialAuth';
 
@@ -185,23 +182,4 @@ describe('Google/Apple sign-in and account linking', () => {
     });
   });
 
-  it('deletes a newly-created social identity when registration is abandoned', async () => {
-    const incompleteUser = user();
-
-    await discardNewSocialIdentity(incompleteUser as never);
-
-    expect(mocks.deleteUser).toHaveBeenCalledWith(incompleteUser);
-    expect(mocks.signOut).not.toHaveBeenCalled();
-  });
-
-  it('signs out and surfaces cleanup failure when deleting the new identity fails', async () => {
-    const incompleteUser = user();
-    mocks.deleteUser.mockRejectedValueOnce({ code: 'auth/network-request-failed' });
-
-    await expect(discardNewSocialIdentity(incompleteUser as never)).rejects.toMatchObject({
-      code: 'auth/network-request-failed',
-    });
-
-    expect(mocks.signOut).toHaveBeenCalled();
-  });
 });

@@ -32,7 +32,7 @@ Usuários comuns (não-admin) só leem.
 
 Ver `firestore.rules`, `match /exercises/{exerciseId}`: leitura liberada
 para qualquer usuário autenticado; `create`/`update` liberados apenas para
-`isAdmin()` (mesmo mecanismo usado por `supportTickets`); `delete` sempre
+`isAdmin()` (mesmo mecanismo usado por `supportCases`); `delete` sempre
 negado, mesmo para admins — exercícios podem ser referenciados por
 histórico de treino (ver §4.1).
 

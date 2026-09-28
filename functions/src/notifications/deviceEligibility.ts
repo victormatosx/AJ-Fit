@@ -170,6 +170,24 @@ export async function loadEligibleDevices(
   let cursor: FirebaseFirestore.QueryDocumentSnapshot | undefined;
   let exhausted = false;
 
+  // This is the final common gate for every dispatch mode, including direct
+  // operational sends, QA previews and retries. A coherent legacy device
+  // triplet must not remain sendable after an out-of-band profile deletion,
+  // and a deletion lock must stop sends before push cleanup reaches it.
+  // Read failures intentionally throw so dispatch fails closed.
+  const [user, deletionLock] = await db.getAll(
+    db.collection('users').doc(uid),
+    db.collection('accountDeletionLocks').doc(uid),
+  );
+  if (!user.exists || deletionLock.exists) {
+    return {
+      eligible,
+      excluded,
+      scannedCount,
+      scanLimitReached: false,
+    };
+  }
+
   while (
     eligible.length < MAX_ELIGIBLE_DEVICES &&
     scannedCount < MAX_SCANNED_DEVICES &&

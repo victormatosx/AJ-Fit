@@ -9,6 +9,7 @@ import {
   deleteUserWorkoutProgramDescendants,
   deleteUserNotificationDispatches,
   deleteUserDailyNotificationRegistration,
+  deleteUserEntitlementSignal,
   deleteUserNotificationProductWindows,
   deleteUserNotificationAchievementMilestones,
   deleteUserPushDevices,
@@ -88,6 +89,8 @@ describe('push resources', () => {
     harness.seed('notificationProductWindows/window-2', { uid: 'uid-2' });
     harness.seed('notificationAchievementMilestones/milestone-1', { uid: 'uid-1' });
     harness.seed('notificationAchievementMilestones/milestone-2', { uid: 'uid-2' });
+    harness.seed('entitlementSignals/uid-1');
+    harness.seed('entitlementSignals/uid-2');
 
     await deleteUserPushDevices('uid-1', fs(harness));
     await deleteUserPushTokenOwners('uid-1', fs(harness));
@@ -95,6 +98,7 @@ describe('push resources', () => {
     await deleteUserNotificationProductWindows('uid-1', fs(harness));
     await deleteUserNotificationAchievementMilestones('uid-1', fs(harness));
     await deleteUserDailyNotificationRegistration('uid-1', fs(harness));
+    await deleteUserEntitlementSignal('uid-1', fs(harness));
 
     expect(harness.exists('users/uid-1/devices/install-1')).toBe(false);
     expect(harness.exists('pushTokenOwners/hash-1')).toBe(false);
@@ -105,6 +109,8 @@ describe('push resources', () => {
     expect(harness.exists('notificationProductWindows/window-2')).toBe(true);
     expect(harness.exists('notificationAchievementMilestones/milestone-1')).toBe(false);
     expect(harness.exists('notificationAchievementMilestones/milestone-2')).toBe(true);
+    expect(harness.exists('entitlementSignals/uid-1')).toBe(false);
+    expect(harness.exists('entitlementSignals/uid-2')).toBe(true);
   });
 
   it('releases only installations still owned by the deleted account', async () => {
