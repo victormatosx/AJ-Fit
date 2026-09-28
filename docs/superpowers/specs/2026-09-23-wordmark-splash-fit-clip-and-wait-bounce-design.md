@@ -163,3 +163,96 @@ implementing, launch the app (iOS simulator via Expo) and visually
 confirm "Fit" renders fully uncut and the composed "AJ Fit." baseline
 still aligns with the logo mark, adjusting `GLYPH_H`/`lineHeight` if
 needed.
+
+Done against a booted iPhone 17 Pro simulator (existing Metro instance,
+full `simctl terminate`/`launch` cycles for clean cold starts): "Fit"
+renders fully uncut through every phase (hold, reveal, hop, settle).
+
+One follow-up surfaced only once "Fit" stopped clipping: growing
+`fit.lineHeight` from `37` to `GLYPH_H` renders Anton's glyphs
+vertically centered inside that taller line box (RN centers text within
+`lineHeight`, regardless of the parent's flex alignment), which visibly
+raised "Fit"'s baseline above the AJ logo's bottom edge — and above the
+dot, which sits correctly (`ajBox`'s height matches `row`'s height
+exactly, so `dot.marginBottom: 1` was already flush with the logo's
+bottom edge; that value is untouched). A first attempt raised
+`dot.marginBottom` to chase "Fit"'s (wrong) position — reverted, since
+it moved the one correctly-anchored element to match the wrong one.
+Tried shrinking `lineHeight` back down to close the gap instead (`50`),
+but that reintroduced the original top-clipping bug (natural glyph
+height at this fontSize exceeds 50), confirming `GLYPH_H` is the
+smallest safe value. The actual fix: a static `translateY: 15` added to
+`fitWrapStyle`'s existing animated transform array (alongside `skewX`
+and the animated `translateX`) — nudges the whole "Fit" element
+(letters and its clip viewport together, so no new clipping) down to
+meet the logo's bottom edge and the dot. Reconfirmed end-to-end: the
+splash always transitions cleanly into Home afterward.
+
+Second follow-up: the wait-bounce's height/shape was changed to match
+the hop's own first bounce exactly — `waitBounce` now reuses `WM.over`
+(16, up from the placeholder `waitDip: 8`, which is removed) and bounces
+*upward* (negative `translateY`), the same direction and amplitude as
+`dotTransform`'s phase B/C (the overshoot right after the U dip), rather
+than a smaller downward dip. Confirmed in the simulator: the wait-loop
+pulse is now clearly the same height as the hop's landing bounce.
+
+Fourth follow-up — the real bug: "Fit" (letters + its reveal clip) was
+disappearing partway through the wait-bounce loop, permanently, not
+recovering even once the dot returned to rest. Root-caused with
+temporary instrumentation (`console.log` in `clipStyle`/`settleOrWait`/
+`commit`, cross-referenced against `xcrun simctl spawn ... log stream`
+and screenshots captured in the *same* shell invocation as the relaunch
+— a separate tool call for each introduced enough of a gap to miss the
+relevant window entirely, which is why earlier attempts at this kept
+missing the repro). Confirmed: `clipStyle`'s worklet reads only `t` and
+`m.value`, both frozen for the whole wait phase, so once the intro
+lands it never runs again — 0 of its log lines appear between the
+first wait-bounce and the eventual fade/timeout, across every capture.
+Meanwhile `dotStyle` keeps animating every frame (driven by
+`waitCycle`). With one Animated.View's props going stale for seconds
+while a sibling in the same parent keeps updating, Reanimated/Fabric
+silently drops the stale sibling from the composited tree — `fitWrap`'s
+clip (and, once the same reasoning was applied, the invisible sizer
+Text and each `Letter`) simply stopped painting, even though their
+underlying style values never changed and were never wrong.
+
+Fix: `clipStyle`, `fitWrapStyle`, and each `Letter`'s style now read
+`waitCycle.value` too (a `void waitCycle.value;` read purely to join
+Reanimated's dependency list — none of them use the value), so they
+keep re-pushing their own, unchanged style on every wait-bounce frame
+right alongside `dotStyle`. Confirmed on-device across two clean
+single-shell repro runs: `clipStyle` previously logged zero re-runs
+during the whole wait phase and "Fit" reliably vanished after the first
+pulse in AT LEAST one visible frame every time; after the fix, the same
+capture method (screenshots taken in the same call as the relaunch, so
+their timing lines up with the app's own clock) shows the dot visibly
+mid-bounce (elevated) with "Fit" still fully rendered, repeatedly.
+Diagnostic logging removed after confirmation.
+
+Third follow-up: the wait loop was still a single continuous
+`withTiming(1, { duration: WM.waitCycleMs })` per pulse — increasing
+that duration (per the confirmed 2s request) was slowing the bounce
+*motion itself* into a lazy float, not adding a rest pause. Restructured
+into two separate phases: `WM.waitRestMs` (2000) is now a plain
+`setTimeout` where the dot is fully motionless, and `WM.waitBounceMs`
+(400, replacing `waitCycleMs`) is the pulse's own duration — matching
+`dotTransform`'s phase B+C total ((B-A)+(1-B) of `hop` = 400ms) so the
+pulse itself is exactly as fast as the hop's own bounce. Readiness is
+re-checked both before starting the rest and again right after it
+elapses. A `restTimer` ref (cleared on unmount, alongside the existing
+`holdTimer`/`maxWaitTimer` pattern) owns the pending JS timer.
+
+Separately reported: "Fit" appearing to vanish, permanently, sometime
+after the first wait-bounce. Investigated with temporary `console.log`
+instrumentation in `clipStyle`/`settleOrWait` (removed after diagnosis)
+against the device log (`xcrun simctl spawn ... log stream`) across
+several clean cold-start reproductions, including one that ran the full
+wait loop through two rest+bounce cycles and the `WM.maxWait` (8s)
+timeout to completion. In every one of those runs `clipWidth`'s inputs
+(`t`, `m.value.fitW`) stayed perfectly stable through the whole wait
+phase — "Fit" never lost its clip width. The original report predates
+this rest/bounce restructure: at the time, `waitBounce`'s pulse was
+still a single continuous 2-second motion (see the second follow-up
+above), and it's that superseded implementation — not the current
+rest+bounce one — that the report was made against. No repro against
+the current code after several clean-relaunch attempts.

@@ -1,7 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
-const app = readFileSync(new URL('../../../App.tsx', import.meta.url), 'utf8');
 const appShell = readFileSync(new URL('../AppShell.tsx', import.meta.url), 'utf8');
 const executionHook = readFileSync(
   new URL('../../workoutExecution/useWorkoutExecution.ts', import.meta.url),
@@ -48,12 +47,14 @@ describe('start workout performance and integrity flow', () => {
     expect(startBody.indexOf('setWorkoutStartPending(true)')).toBeLessThan(remoteStart);
   });
 
-  it('reuses the bootstrap loading surface and never mounts WorkoutScreen without a confirmed execution', () => {
+  it('reuses the shared neutral loading surface and never mounts WorkoutScreen without a confirmed execution', () => {
     expect(appShell).toContain(
       "tab === 'workout' && (workoutStartPending || execution.starting || (workoutInProgress && !execution.execution))",
     );
-    expect(app).toContain("import { FullScreenLoading } from './src/components/ui/FullScreenLoading'");
-    expect(app).toContain(': <FullScreenLoading />}');
+    // The root splash (WordmarkSplash) is a single overlay owned by
+    // App.tsx, unrelated to this component-level surface — see
+    // bootstrapSplashWiring.test.ts. FullScreenLoading stays the surface
+    // for every in-app loading moment, including this one.
     expect(appShell).toContain("import { FullScreenLoading } from '../components/ui/FullScreenLoading'");
     expect(appShell).toContain("<FullScreenLoading accessibilityLabel={t('preparing.title')} />");
     expect(appShell).toContain(

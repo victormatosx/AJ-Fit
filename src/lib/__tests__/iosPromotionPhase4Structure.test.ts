@@ -11,7 +11,7 @@ const revenueCatService = read('services/revenueCatService.ts');
 describe('FASE 4 iOS promotional architecture boundaries', () => {
   it('keeps promo state above RootNavigator, so Paywall remount does not discard it', () => {
     const providerOpen = app.indexOf('<PromoCodeProvider>');
-    const navigator = app.indexOf('<RootNavigator />');
+    const navigator = app.indexOf('<RootNavigator onDestinationReady={handleDestinationReady} />');
     const providerClose = app.indexOf('</PromoCodeProvider>');
     expect(providerOpen).toBeGreaterThan(-1);
     expect(providerOpen).toBeLessThan(navigator);

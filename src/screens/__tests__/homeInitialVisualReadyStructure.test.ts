@@ -15,6 +15,11 @@ describe('Home bootstrap visual commit wiring', () => {
     expect(APP_SHELL).toContain('style={FULL_BLEED.overlayZ70}');
     expect(APP_SHELL).toContain('{!homeVisible ? (');
     expect(APP_SHELL).toContain('const homeVisible = homeInitialVisualReady || snapshotVisualReady');
+    // `homeInitialRevealReady` (the STRICT authoritative-only signal, never
+    // the snapshot fast path) is a separate value that only reports
+    // readiness up to the root splash — it does not gate this overlay. See
+    // homeInitialRevealWiring.test.ts and bootstrapSplashWiring.test.ts.
+    expect(APP_SHELL).toContain('const homeInitialRevealReady = homeInitialVisualReady;');
   });
 
   it('blocks the TabBar while the bootstrap overlay exists', () => {

@@ -197,7 +197,7 @@ describe('Paywall redesign — loading/error/offline/empty states preserved', ()
     for (const kind of ['loading', 'offline', 'error', 'empty', 'unavailable']) {
       expect(PAYWALL_CODE).toContain(`${kind}:`);
     }
-    expect(PAYWALL_CODE).toContain('if (centerState === \'loading\') return <FullScreenLoading />;');
+    expect(PAYWALL_CODE).toContain("if (centerState === 'loading') return <FullScreenLoading />;");
   });
 
   it('purchase/restore ActionNotices are still rendered in both the centered-state and ready-state branches', () => {

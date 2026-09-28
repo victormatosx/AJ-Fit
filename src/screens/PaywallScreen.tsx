@@ -189,6 +189,7 @@ export function PaywallScreen({
   onClose,
   closeAccessibilityLabel = 'Sair desta conta',
   entryContext,
+  onReady,
 }: {
   onClose: () => void | Promise<void>;
   closeAccessibilityLabel?: string;
@@ -198,6 +199,12 @@ export function PaywallScreen({
    * offerings/purchase/restore/promo-code/entitlement logic below.
    */
   entryContext?: OnboardingAuthContext | null;
+  /**
+   * Only passed by the root, cold-start Paywall instance in App.tsx — reports
+   * this screen's first real frame up to the single root splash. The
+   * on-demand modal Paywall inside AppShell (`showPremium`) never passes it.
+   */
+  onReady?: () => void;
 }) {
   const { theme } = useTheme();
   const { t } = useTranslation('common');
@@ -902,6 +909,17 @@ export function PaywallScreen({
   });
   const centerState: CenteredStateKind | null =
     offeringViewState === 'ready' ? null : offeringViewState;
+
+  // Reports readiness up to the single root splash (only relevant for the
+  // root, cold-start Paywall instance — see App.tsx; the on-demand modal
+  // Paywall inside AppShell just doesn't pass `onReady`) the moment this
+  // screen has anything real to show — ready OR a genuine error/offline/
+  // empty/unavailable card, never just "still loading". Idempotent — the
+  // caller-side latch is what makes a later, on-demand Paywall open
+  // (Subscription Center etc.) harmless here.
+  useEffect(() => {
+    if (centerState !== 'loading') onReady?.();
+  }, [centerState, onReady]);
 
   // Keep the visual surface continuous when the Premium gate resolves to the
   // Paywall before its commercial Offerings request finishes. Offerings still

@@ -36,7 +36,7 @@ function gate({
   subscriptionConfigured?: boolean;
 }) {
   return resolvePremiumGate({
-    requestedScreen: 'splash',
+    requestedScreen: 'onboardingFunnel',
     authInitializing,
     profileLoading,
     authenticated: true,

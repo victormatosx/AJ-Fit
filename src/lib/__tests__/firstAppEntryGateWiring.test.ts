@@ -37,9 +37,11 @@ describe('App.tsx — first-app-entry readiness gate wiring', () => {
   });
 
   it('(H) AppShell is rendered ONLY when resolvedScreen === "app" — never unconditionally, never on a different branch', () => {
-    expect(appSource).toContain("{resolvedScreen === 'app' && <AppShell />}");
+    expect(appSource).toContain(
+      "{resolvedScreen === 'app' && <AppShell onHomeReady={onDestinationReady} />}",
+    );
     // No other render site for AppShell exists in this file.
-    expect((appSource.match(/<AppShell\s*\/>/g) ?? []).length).toBe(1);
+    expect((appSource.match(/<AppShell\s/g) ?? []).length).toBe(1);
   });
 
   it('the readiness gate is enabled only once auth + questionnaire are already confirmed found — never speculatively for a signed-out/unresolved user', () => {
