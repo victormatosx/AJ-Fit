@@ -33,6 +33,7 @@ describe('deriveWorkoutHydration', () => {
       order: [0, 1, 2],
       progress: { 0: 0, 1: 0, 2: 0 },
       logged: {},
+      loggedReps: {},
       allDone: false,
       cardioCompleted: false,
     });
@@ -60,6 +61,21 @@ describe('deriveWorkoutHydration', () => {
       'bench_press-0': 62.5,
       'bench_press-1': 0,
     });
+  });
+
+  it('reps: preserves actualReps already recorded per set, keyed the same way as `logged` — a duration exercise (plank) never gets an entry since it never has actualReps set', () => {
+    let exercises = buildInitialExerciseExecutions(SESSION);
+    exercises = withSet(exercises, 0, 0, { status: 'COMPLETED', weightKg: 60, actualReps: 8 });
+    exercises = withSet(exercises, 0, 1, { status: 'COMPLETED', weightKg: 60 }); // no reps logged for this one
+    exercises = withSet(exercises, 1, 0, { status: 'COMPLETED', weightKg: 20, actualReps: 12 });
+
+    const hydration = deriveWorkoutHydration({ exercises }, EXERCISE_IDS);
+    expect(hydration.loggedReps).toEqual({
+      'bench_press-0': 8,
+      'lat_pulldown-0': 12,
+    });
+    expect(hydration.loggedReps['bench_press-1']).toBeUndefined();
+    expect(hydration.loggedReps['plank-0']).toBeUndefined();
   });
 
   it('skip: a SKIPPED set advances the resume point exactly like a COMPLETED one, and never leaves a logged weight behind', () => {

@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import {
   canSkipExercise,
+  resolveDisplayedReps,
   resolveManualSubstitutionPresentation,
+  sanitizeActualReps,
   workoutExercisesFromPlan,
 } from '../workoutScreenPlan';
 import { CANONICAL_ACTIVITIES } from '../../workoutPrescription/canonicalActivities';
@@ -25,6 +27,44 @@ describe('canSkipExercise', () => {
     expect(canSkipExercise(0, 1)).toBe(false);
     expect(canSkipExercise(1, 2)).toBe(false);
     expect(canSkipExercise(3, 4)).toBe(false);
+  });
+});
+
+describe('sanitizeActualReps', () => {
+  it('passes through a positive integer unchanged', () => {
+    expect(sanitizeActualReps(8)).toBe(8);
+    expect(sanitizeActualReps(1)).toBe(1);
+  });
+
+  it('treats "not informed" (null) as valid and optional', () => {
+    expect(sanitizeActualReps(null)).toBeNull();
+  });
+
+  it('rejects zero and negative values', () => {
+    expect(sanitizeActualReps(0)).toBeNull();
+    expect(sanitizeActualReps(-5)).toBeNull();
+  });
+
+  it('rejects non-integers', () => {
+    expect(sanitizeActualReps(8.5)).toBeNull();
+  });
+});
+
+describe('resolveDisplayedReps', () => {
+  it('shows the actually performed reps when informed — concluir com reps', () => {
+    expect(resolveDisplayedReps(8, '6-10')).toBe('8');
+  });
+
+  it('falls back to the prescribed range when reps were not informed — concluir sem reps', () => {
+    expect(resolveDisplayedReps(null, '6-10')).toBe('6-10');
+    expect(resolveDisplayedReps(undefined, '6-10')).toBe('6-10');
+  });
+
+  it('resolves independently per set — different sets can show different actual reps', () => {
+    const perSet: Record<number, number | undefined> = { 0: 8, 1: undefined, 2: 6 };
+    expect(resolveDisplayedReps(perSet[0], '6-10')).toBe('8');
+    expect(resolveDisplayedReps(perSet[1], '6-10')).toBe('6-10');
+    expect(resolveDisplayedReps(perSet[2], '6-10')).toBe('6');
   });
 });
 

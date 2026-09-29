@@ -1440,8 +1440,8 @@ function AppShellContent({
                   ? { ok: true as const }
                   : { ok: false as const, error: new Error(result) };
               }}
-              onSetLogged={(exerciseIndex, setIndex, weightKg) =>
-                execution.recordSet(exerciseIndex, setIndex, weightKg)}
+              onSetLogged={(exerciseIndex, setIndex, weightKg, actualReps) =>
+                execution.recordSet(exerciseIndex, setIndex, weightKg, actualReps ?? null)}
               manualSubstitutionContext={manualSubstitutionContextState.context}
               manualSubstitutionContextStatus={manualSubstitutionContextState.status}
               onRetryManualSubstitutionContext={retryManualSubstitutionContext}

@@ -189,3 +189,49 @@ describe('RestSessionContext live transition wiring', () => {
     expect(ticker).not.toContain('.update(');
   });
 });
+
+describe('workout-active Live Activity re-sync (skip/occupied requeue)', () => {
+  it('exposes syncWorkoutActivity and withholds it while a rest is running', () => {
+    const syncBlock = context.slice(
+      context.indexOf('const syncWorkoutActivity ='),
+      context.indexOf('const endWorkoutSession ='),
+    );
+    expect(syncBlock).toContain("timerStateRef.current.status !== 'idle'");
+    expect(syncBlock).toContain('projectWorkoutActiveActivityState');
+    expect(syncBlock).toContain('void restLiveActivity.update(activityState)');
+    // Re-syncing must never fabricate a second activity — only startRest and
+    // beginWorkoutSession are allowed to call `.start`.
+    expect(syncBlock).not.toContain('restLiveActivity.start');
+  });
+
+  it('skipExercise carries no Live Activity logic of its own — it only reorders the queue', () => {
+    const skipExerciseBlock = workout.slice(
+      workout.indexOf('const skipExercise ='),
+      workout.indexOf('const jumpTo ='),
+    );
+    expect(skipExerciseBlock).toContain('setOrder((o) => [...o.slice(1), o[0]])');
+    expect(skipExerciseBlock).not.toContain('restLiveActivity');
+    expect(skipExerciseBlock).not.toContain('syncWorkoutActivity');
+  });
+
+  it('re-syncs from the same authoritative order/progress queue that renders the screen', () => {
+    const queueBlock = workout.slice(
+      workout.indexOf('const workoutActivityQueue ='),
+      workout.indexOf('const workoutActivitySyncedOnceRef ='),
+    );
+    expect(queueBlock).toContain('order.map((i) =>');
+    expect(queueBlock).toContain('settledSets: Math.min(progress[i] || 0, resolved.sets.length)');
+
+    const effectBlock = workout.slice(
+      workout.indexOf('const workoutActivitySyncedOnceRef ='),
+      workout.indexOf('const lastWeight ='),
+    );
+    // Skips the first (mount) run — beginWorkoutSession already published
+    // that exact state — then fires on every later order/progress change,
+    // i.e. every skip and every settled set, regardless of cause.
+    expect(effectBlock).toContain('workoutActivitySyncedOnceRef.current = true');
+    expect(effectBlock).toContain('syncWorkoutActivity({');
+    expect(effectBlock).toContain('exercises: workoutActivityQueue');
+    expect(effectBlock).toContain('[workoutActivityQueue, workoutSessionId, workoutStartedAtMs]');
+  });
+});

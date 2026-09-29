@@ -51,3 +51,42 @@ describe('workout Live Activity start projection', () => {
     })).toBeNull();
   });
 });
+
+describe('workout Live Activity re-sync after a skip/occupied requeue', () => {
+  // The caller (WorkoutScreen) is responsible for passing exercises in
+  // current QUEUE order (head = current), not fixed prescription order —
+  // this function only ever picks the first entry with incomplete sets, so
+  // a skipped-but-still-zero-settled exercise must already be behind the
+  // one that became current or it would wrongly resurface as "current".
+  it('projects the requeued exercise as current, not the skipped one still at zero', () => {
+    // Exercise A was skipped (0 settled sets, moved to the tail); B is now
+    // head of the queue.
+    expect(projectWorkoutActiveActivityState({
+      executionId: 'execution-1',
+      startedAt: 100_000,
+      exercises: [
+        { exerciseName: 'Crucifixo (B)', settledSets: 0, totalSets: 3 },
+        { exerciseName: 'Supino reto (A, pulado)', settledSets: 0, totalSets: 4 },
+      ],
+    })).toMatchObject({
+      exerciseName: 'Crucifixo (B)',
+      setIndex: 0,
+      totalSets: 3,
+    });
+  });
+
+  it('projects the third exercise as current after two consecutive skips', () => {
+    expect(projectWorkoutActiveActivityState({
+      executionId: 'execution-1',
+      startedAt: 100_000,
+      exercises: [
+        { exerciseName: 'Remada (C)', settledSets: 0, totalSets: 3 },
+        { exerciseName: 'Supino reto (A, pulado)', settledSets: 0, totalSets: 4 },
+        { exerciseName: 'Crucifixo (B, pulado)', settledSets: 0, totalSets: 3 },
+      ],
+    })).toMatchObject({
+      exerciseName: 'Remada (C)',
+      setIndex: 0,
+    });
+  });
+});

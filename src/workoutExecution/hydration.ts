@@ -25,6 +25,8 @@ export interface WorkoutHydrationSnapshot {
   progress: Record<number, number>;
   /** `${exerciseId}-${setIndex}` -> weightKg, for every COMPLETED set — the exact key shape WorkoutScreen's `logged`/`lastWeight()` already use, so already-registered loads render and pre-fill with no other change. */
   logged: Record<string, number>;
+  /** `${exerciseId}-${setIndex}` -> actualReps, for every COMPLETED set that recorded one — same key shape as `logged`. Reps-optional: a set with a registered weight but no `actualReps` simply has no entry here, and the UI falls back to the prescribed range. */
+  loggedReps: Record<string, number>;
   /** True once no exercise has a PENDING set left — the resumed screen should open directly on the cardio finisher / completion screen rather than replaying an already-finished exercise list. */
   allDone: boolean;
   /**
@@ -59,6 +61,7 @@ export function deriveWorkoutHydration(
 ): WorkoutHydrationSnapshot {
   const progress: Record<number, number> = {};
   const logged: Record<string, number> = {};
+  const loggedReps: Record<string, number> = {};
   const order: number[] = [];
 
   const byIndex = new Map(execution.exercises.map((exercise) => [exercise.exerciseIndex, exercise]));
@@ -83,6 +86,9 @@ export function deriveWorkoutHydration(
       if (set.status === 'COMPLETED' && set.weightKg !== null) {
         logged[`${exerciseId}-${setIdx}`] = set.weightKg;
       }
+      if (set.status === 'COMPLETED' && set.actualReps !== null) {
+        loggedReps[`${exerciseId}-${setIdx}`] = set.actualReps;
+      }
     });
   }
 
@@ -90,6 +96,7 @@ export function deriveWorkoutHydration(
     order,
     progress,
     logged,
+    loggedReps,
     allDone: order.length === 0,
     cardioCompleted: execution.cardio?.status === 'COMPLETED',
   };

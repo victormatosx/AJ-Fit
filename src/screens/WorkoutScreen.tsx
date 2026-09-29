@@ -53,7 +53,9 @@ import {
   canSkipExercise,
   workoutExercisesFromPlan,
   pluralCountForReps,
+  resolveDisplayedReps,
   resolveManualSubstitutionPresentation,
+  sanitizeActualReps,
   type Exercise,
   type ManualSubstitutionContextStatus,
   type SetData,
@@ -167,8 +169,8 @@ type Props = {
   durableCompletionReachedAtMs?: number | null;
   /** Durable finish or schedule completion failed; keep this screen mounted and turn the CTA into an explicit retry. */
   completionFailed?: boolean;
-  /** Fires once a set's weight is actually logged (docs/workout-lifecycle/09_WORKOUT_EXECUTION_AND_HISTORY.md) — `exerciseIndex` matches this exercise's position in `plan.sessions[sessionIndex].exercises`, the same identity the Execution record uses. */
-  onSetLogged?: (exerciseIndex: number, setIndex: number, weightKg: number) => void | Promise<void>;
+  /** Fires once a set's weight (and, optionally, actually-performed reps) is logged (docs/workout-lifecycle/09_WORKOUT_EXECUTION_AND_HISTORY.md) — `exerciseIndex` matches this exercise's position in `plan.sessions[sessionIndex].exercises`, the same identity the Execution record uses. `actualReps` is `null` when not informed or when the exercise isn't reps-doseKind — never the prescribed range. */
+  onSetLogged?: (exerciseIndex: number, setIndex: number, weightKg: number, actualReps?: number | null) => void | Promise<void>;
   /**
    * Fires when the user confirms "discard" from the exit sheet — distinct
    * from a normal finish; the Schedule Engine must never advance because of
@@ -363,6 +365,7 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
     cancelRest,
     consumeExpiration,
     publishNextAction,
+    syncWorkoutActivity,
   } = useRestSession();
   const restingExerciseIndex = rest
     ? exercises.findIndex((candidate) => candidate.id === rest.exerciseId)
@@ -405,6 +408,10 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
   const [skipped, setSkipped] = useState<number[]>([]);
   // `${exId}-${setIdx}` -> logged weight for the session
   const [logged, setLogged] = useState<Record<string, number>>(() => hydration?.logged ?? {});
+  // `${exId}-${setIdx}` -> actually performed reps for the session, reps-doseKind
+  // exercises only. Optional and independent of `logged` — a set can have a
+  // weight with no reps entry (never registered) or vice-versa.
+  const [loggedReps, setLoggedReps] = useState<Record<string, number>>(() => hydration?.loggedReps ?? {});
 
   // Load/PR and workout progression stay in the Workout Engine. A live rest
   // only restores the materialized exercise/set coordinates needed to finish
@@ -420,6 +427,11 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
     if (!rest || restingExerciseIndex < 0) return 0;
     return exercises[restingExerciseIndex]?.sets[rest.setIndex]?.w ?? 0;
   });
+  // Actual reps performed, entered fresh for each set — never prefilled from
+  // the prescription or a previous set (docs: never confuse actual with
+  // prescribed). `null` means "not informed", which is a valid, final answer,
+  // not a state to resolve — the field is optional end to end.
+  const [regReps, setRegReps] = useState<number | null>(null);
 
   const [queueOpen, setQueueOpen] = useState(false);
   const [videoOpen, setVideoOpen] = useState(false);
@@ -633,6 +645,43 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
   const remainingRestSeconds = resting ? computeRemainingSeconds(rest, restNow) : 0;
   const restProgress = resting ? computeRestProgress(rest, restNow) : 0;
 
+  // Live Activity sync: `order`/`progress` are the sole authority for which
+  // exercise is current, no matter why it changed (a completed set, a
+  // skip/occupied requeue, or a resumed session). Projected in queue order
+  // (head = current) so the same "first incomplete" logic the workout-start
+  // projection already uses picks the right exercise even after a skip moves
+  // the interrupted one to the tail. The context itself withholds this while
+  // a rest countdown is running, so it never races the timer's own updates.
+  const workoutActivityQueue = useMemo(
+    () => order.map((i) => {
+      const resolved = resolve(exercises[i], i);
+      return {
+        exerciseName: resolved.name,
+        settledSets: Math.min(progress[i] || 0, resolved.sets.length),
+        totalSets: resolved.sets.length,
+      };
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [order, exercises, progress, substitutions],
+  );
+  const workoutActivitySyncedOnceRef = useRef(false);
+  useEffect(() => {
+    if (!workoutSessionId || workoutStartedAtMs == null) return;
+    // The initial queue state was already published by beginWorkoutSession
+    // at the workout-start boundary; skip the redundant first echo so this
+    // effect only ever fires for a genuine post-start change.
+    if (!workoutActivitySyncedOnceRef.current) {
+      workoutActivitySyncedOnceRef.current = true;
+      return;
+    }
+    syncWorkoutActivity({
+      executionId: workoutSessionId,
+      startedAt: workoutStartedAtMs,
+      exercises: workoutActivityQueue,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workoutActivityQueue, workoutSessionId, workoutStartedAtMs]);
+
   const lastWeight = (e: Exercise, i: number) =>
     logged[`${e.id}-${i}`] ?? e.sets[i].w;
 
@@ -642,6 +691,7 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
   const advanceAfterRest = (
     transitionPending = pending,
     transitionWeight = regWeight,
+    transitionReps = regReps,
   ) => {
     let nextLogged = logged;
     if (transitionPending && transitionWeight > 0) {
@@ -686,17 +736,30 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
       const finalWeight = nextLogged[
         `${transitionPending.exId}-${transitionPending.setIdx}`
       ] ?? exercises[transitionPending.exIdx].sets[transitionPending.setIdx].w;
+      // Reps are only ever meaningful for a reps-doseKind exercise — a
+      // duration/distance/cycles set never gets an `actualReps` no matter
+      // what's left in `regReps` from a prior reps-based exercise's entry.
+      const finalReps = exercises[transitionPending.exIdx].doseKind === 'reps'
+        ? sanitizeActualReps(transitionReps)
+        : null;
+      if (finalReps != null) {
+        setLoggedReps((current) => ({
+          ...current,
+          [`${transitionPending.exId}-${transitionPending.setIdx}`]: finalReps,
+        }));
+      }
       // The persistence hook registers this mutation in its serialized queue
       // synchronously before returning the Promise. The UI transition stays
       // synchronous to preserve the final-set render invariant; finish() is
       // the authoritative await/flush barrier.
-      onSetLogged?.(transitionPending.exIdx, transitionPending.setIdx, finalWeight);
+      onSetLogged?.(transitionPending.exIdx, transitionPending.setIdx, finalWeight, finalReps);
     }
     const finishedSet = setIdx + 1;
     const nextProgress = { ...progress, [exIdx]: finishedSet };
     setProgress(nextProgress);
     setPending(null);
     setRegWeight(0);
+    setRegReps(null);
 
     if (finishedSet >= ex.sets.length) {
       // Snapshot translated names AT TRANSITION TIME so the overlay always
@@ -757,6 +820,7 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
     const completedWeight = lastWeight(ex, setIdx);
     setPending(completedSet);
     setRegWeight(completedWeight);
+    setRegReps(null);
 
     // The last set has no recovery countdown, but it still needs the same
     // load-entry step as every other set. Keep progress pending until the
@@ -1482,6 +1546,13 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
             const now = i === setIdx;
             const w = lastWeight(ex, i);
             const justLogged = logged[`${ex.id}-${i}`] != null && done;
+            // Actually-performed reps override the prescribed range only for
+            // a completed reps-doseKind set that actually recorded one —
+            // never the prescription itself, and never for duration/
+            // distance/cycles exercises.
+            const displayReps = ex.doseKind === 'reps'
+              ? resolveDisplayedReps(loggedReps[`${ex.id}-${i}`], s0.r)
+              : s0.r;
             return (
               <View
                 key={i}
@@ -1535,12 +1606,12 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
                     ? <>{t(`prescription.${ex.doseKind}`)}: {s0.r}</>
                     : w > 0
                     ? t('sets.summaryWeighted', {
-                        count: pluralCountForReps(s0.r),
-                        reps: s0.r,
+                        count: pluralCountForReps(displayReps),
+                        reps: displayReps,
                         weight: formatWorkoutLoadFromKg(w, resolvedUnits),
                         unit: loadUnit,
                       })
-                    : t('sets.summaryReps', { count: pluralCountForReps(s0.r), reps: s0.r })}
+                    : t('sets.summaryReps', { count: pluralCountForReps(displayReps), reps: displayReps })}
                 </Text>
                 {/* Fixed-width slot, always rendered (empty when neither
                     badge applies) — this is what keeps every row's
@@ -1620,8 +1691,12 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
             fmt={fmt}
             regWeight={regWeight}
             setRegWeight={setRegWeight}
-            setNumber={(pending ? pending.setIdx : setIdx) + 1}
+            regReps={regReps}
+            setRegReps={setRegReps}
+            doseKind={ex.doseKind}
+            prescribedReps={ex.sets[pending ? pending.setIdx : setIdx].r}
             previousLoadKg={previousSetLoads[ex.db]?.[pending ? pending.setIdx : setIdx] ?? undefined}
+            setNumber={(pending ? pending.setIdx : setIdx) + 1}
             finalSetLoadEntry={finalSetLoadEntry}
             continuesToCardio={!!cardioFinisher}
             onAdd15={() => addRestSeconds(15)}
@@ -3181,8 +3256,12 @@ function RestOverlay({
   fmt,
   regWeight,
   setRegWeight,
-  setNumber,
+  regReps,
+  setRegReps,
+  doseKind,
+  prescribedReps,
   previousLoadKg,
+  setNumber,
   finalSetLoadEntry,
   continuesToCardio,
   onAdd15,
@@ -3194,8 +3273,13 @@ function RestOverlay({
   fmt: (s: number) => string;
   regWeight: number;
   setRegWeight: (fn: number | ((prev: number) => number)) => void;
-  setNumber: number;
+  regReps: number | null;
+  setRegReps: (fn: number | null | ((prev: number | null) => number | null)) => void;
+  doseKind: Exercise['doseKind'];
+  prescribedReps: string;
+  /** The user's own last-registered load for this exact exercise/set — shown only as the weight field's placeholder, never pre-filled into `regWeight`. `undefined` when there's no such record, and the placeholder stays "—". */
   previousLoadKg?: number;
+  setNumber: number;
   finalSetLoadEntry?: boolean;
   continuesToCardio?: boolean;
   onAdd15: () => void;
@@ -3206,6 +3290,8 @@ function RestOverlay({
   const { t } = useTranslation('workout');
   const { resolvedUnits } = useUnits();
   const loadUnit = workoutLoadUnit(resolvedUnits);
+  // Shared by both the load and reps rows — load and reps are two visually
+  // symmetric halves of the same card, not a primary/secondary pair.
   const registerButtonStyle = {
     width: 44,
     height: 44,
@@ -3215,6 +3301,47 @@ function RestOverlay({
     borderColor: theme.colors.primaryBorderInteractive,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
+  };
+  const rowHeaderStyle = {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+    marginBottom: 14,
+  };
+  const optionalTagStyle = {
+    fontSize: 10.5,
+    color: theme.colors.textFaint,
+    fontStyle: 'italic' as const,
+  };
+  const controlRowStyle = {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    gap: 16,
+  };
+  // Wide enough for both a short weight value and a "6-10"-shaped prescribed
+  // range at the same font size — the one deliberate size concession that
+  // keeps the two rows pixel-identical everywhere else.
+  const centralValueContainerStyle = {
+    flexDirection: 'row' as const,
+    alignItems: 'baseline' as const,
+    justifyContent: 'center' as const,
+    minWidth: 104,
+  };
+  const centralValueTextStyle = {
+    width: 104,
+    textAlign: 'center' as const,
+    fontFamily: theme.fonts.display,
+    transform: [{ skewX: '-8deg' }],
+    fontSize: 40,
+    lineHeight: displayLineHeight(40),
+    color: theme.colors.inputText,
+    padding: 0,
+  };
+  const unitTextStyle = {
+    fontSize: 14,
+    color: theme.colors.textFaint,
+    marginLeft: 2,
   };
   return (
     // Tapping anywhere in the overlay dismisses the keyboard — RN's touch
@@ -3280,7 +3407,10 @@ function RestOverlay({
         <SegBar value={progress} segs={14} />
       </View>
 
-      {/* weight logging card */}
+      {/* load (+ optional reps) logging card — load and reps are two
+          visually symmetric rows of the same card (same header style, same
+          button size, same central value size/width), not a primary/
+          secondary pair. A single shared typing hint sits below both. */}
       <View
         style={{
           width: '100%',
@@ -3293,64 +3423,34 @@ function RestOverlay({
           borderColor: theme.colors.dividerStrong,
         }}
       >
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            marginBottom: 14,
-          }}
-        >
+        <View style={rowHeaderStyle}>
           <MonoLabel>
             {t('rest.logLoad', { setNumber }).toUpperCase()}
           </MonoLabel>
-          <Text style={{ fontSize: 10.5, color: theme.colors.textFaint, fontStyle: 'italic' }}>
+          <Text style={optionalTagStyle}>
             {t('rest.optional')}
           </Text>
         </View>
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 16,
-          }}
-        >
+        <View style={controlRowStyle}>
           <Pressable
             onPress={() => setRegWeight((kg: number) => adjustWorkoutLoadKg(kg, -1, resolvedUnits))}
             style={registerButtonStyle}
           >
             <Icon name="minus" size={16} color={theme.colors.primaryEmphasis} />
           </Pressable>
-          <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'baseline',
-              justifyContent: 'center',
-              minWidth: 96,
-            }}
-          >
+          <View style={centralValueContainerStyle}>
             <TextInput
               value={regWeight > 0 ? formatWorkoutLoadFromKg(regWeight, resolvedUnits) : ''}
-              placeholder="—"
+              placeholder={previousLoadKg != null ? formatWorkoutLoadFromKg(previousLoadKg, resolvedUnits) : '—'}
               placeholderTextColor={theme.colors.textFaint}
               keyboardType="decimal-pad"
               onChangeText={(t) => {
                 const v = t.replace(',', '.').replace(/[^0-9.]/g, '');
                 setRegWeight(v === '' ? 0 : workoutLoadToKg(parseFloat(v) || 0, resolvedUnits));
               }}
-              style={{
-                width: 96,
-                textAlign: 'center',
-                fontFamily: theme.fonts.display,
-                transform: [{ skewX: '-8deg' }],
-                fontSize: 46,
-                lineHeight: displayLineHeight(46),
-                color: theme.colors.inputText,
-                padding: 0,
-              }}
+              style={centralValueTextStyle}
             />
-            <Text style={{ fontSize: 14, color: theme.colors.textFaint, marginLeft: 2 }}>
+            <Text style={unitTextStyle}>
               {loadUnit}
             </Text>
           </View>
@@ -3361,10 +3461,70 @@ function RestOverlay({
             <Icon name="plus" size={16} color={theme.colors.primaryEmphasis} />
           </Pressable>
         </View>
+
+        {/* Reps row — reps-doseKind exercises only; duration/distance/cycles
+            exercises have no "reps actually performed" to log. Shows the
+            prescribed range as a faint placeholder until the user actually
+            changes it — never pre-fills `regReps` from it. Same header,
+            button and central-value styling as the load row above. */}
+        {doseKind === 'reps' && (
+          <View
+            style={{
+              marginTop: 20,
+              paddingTop: 20,
+              borderTopWidth: 1,
+              borderTopColor: theme.colors.dividerStrong,
+            }}
+          >
+            <View style={rowHeaderStyle}>
+              <MonoLabel>
+                {t('rest.repsLabel', { setNumber }).toUpperCase()}
+              </MonoLabel>
+              <Text style={optionalTagStyle}>
+                {t('rest.optional')}
+              </Text>
+            </View>
+            <View style={controlRowStyle}>
+              <Pressable
+                onPress={() => setRegReps((reps: number | null) => {
+                  const next = (reps ?? 0) - 1;
+                  return next > 0 ? next : null;
+                })}
+                style={registerButtonStyle}
+              >
+                <Icon name="minus" size={16} color={theme.colors.primaryEmphasis} />
+              </Pressable>
+              <View style={centralValueContainerStyle}>
+                <TextInput
+                  value={regReps != null ? String(regReps) : ''}
+                  placeholder={prescribedReps}
+                  placeholderTextColor={theme.colors.textFaint}
+                  keyboardType="number-pad"
+                  onChangeText={(txt) => {
+                    const digits = txt.replace(/[^0-9]/g, '');
+                    setRegReps(digits === '' ? null : parseInt(digits, 10));
+                  }}
+                  style={centralValueTextStyle}
+                />
+                <Text style={unitTextStyle}>
+                  {t('rest.repsUnit')}
+                </Text>
+              </View>
+              <Pressable
+                onPress={() => setRegReps((reps: number | null) => (reps ?? 0) + 1)}
+                style={registerButtonStyle}
+              >
+                <Icon name="plus" size={16} color={theme.colors.primaryEmphasis} />
+              </Pressable>
+            </View>
+          </View>
+        )}
+
+        {/* One shared typing hint for both rows — never duplicated per field. */}
         <Text
           style={{
             textAlign: 'center',
-            marginTop: 10,
+            marginTop: 14,
             fontSize: 10.5,
             color: theme.colors.textFaint,
             fontFamily: theme.fonts.mono,
@@ -3372,22 +3532,6 @@ function RestOverlay({
         >
           {t('rest.inputHint')}
         </Text>
-        {previousLoadKg != null && (
-          <Text
-            style={{
-              textAlign: 'center',
-              marginTop: 8,
-              fontSize: 11,
-              color: theme.colors.textMuted,
-              fontFamily: theme.fonts.uiMed,
-            }}
-          >
-            {t('rest.previousLoad', {
-              value: formatWorkoutLoadFromKg(previousLoadKg, resolvedUnits),
-              unit: loadUnit,
-            })}
-          </Text>
-        )}
       </View>
 
       <View style={{ flexDirection: 'row', gap: 10, marginTop: 28 }}>

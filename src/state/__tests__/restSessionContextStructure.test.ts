@@ -62,6 +62,7 @@ describe('RestSessionProvider ownership and lifecycle', () => {
     );
     for (const operation of [
       'beginWorkoutSession',
+      'syncWorkoutActivity',
       'endWorkoutSession',
       'startRest',
       'addSeconds',

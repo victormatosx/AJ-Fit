@@ -120,6 +120,31 @@ export function canSkipExercise(completedSets: number, remainingExerciseCount: n
   return completedSets === 0 && remainingExerciseCount > 1;
 }
 
+/**
+ * Validates a user-entered actual-reps value before it's persisted alongside
+ * a completed set. Reps are optional end to end: an empty/invalid entry
+ * resolves to `null` ("not informed"), never a validation error the UI has
+ * to surface — the caller simply omits `actualReps` from that set's write.
+ */
+export function sanitizeActualReps(value: number | null): number | null {
+  if (value === null) return null;
+  return Number.isInteger(value) && value > 0 ? value : null;
+}
+
+/**
+ * What a completed set's row should display for reps — the genuinely
+ * performed value if the user recorded one (docs: never confused with the
+ * prescription), otherwise the unmodified prescribed range/value. Only
+ * meaningful for `doseKind === 'reps'`; duration/distance/cycles exercises
+ * never have an `actualReps` to resolve and keep showing their own dose.
+ */
+export function resolveDisplayedReps(
+  actualReps: number | null | undefined,
+  prescribedReps: string,
+): string {
+  return actualReps != null ? String(actualReps) : prescribedReps;
+}
+
 export function workoutExercisesFromPlan(
   plan: FinalWorkoutPlan,
   language: string,

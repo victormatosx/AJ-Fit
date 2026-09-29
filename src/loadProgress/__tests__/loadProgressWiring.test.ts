@@ -43,7 +43,11 @@ describe('real load-progress wiring', () => {
     expect(workoutScreen).toContain('derivePreviousExerciseLastLoad(loadHistory, execution?.executionId ?? null)');
     expect(workoutScreen).toContain('previousSetLoads[ex.db]?.[setIdx]');
     expect(workoutScreen).toContain('previousExerciseLastLoad[ex.db]');
-    expect(workoutScreen).toContain('previousLoadKg != null');
+    // The rest overlay's own weight field placeholder reuses this same
+    // per-set source — never a separate "Carga anterior" text line (that
+    // copy/key was removed), and never pre-filled into `regWeight`.
+    expect(workoutScreen).toContain('previousLoadKg={previousSetLoads[ex.db]?.[pending ? pending.setIdx : setIdx] ?? undefined}');
+    expect(workoutScreen).not.toContain("t('rest.previousLoad'");
     // The historical record load racing a set confirmation is handled by
     // queueing + replaying (`pendingPrChecksRef`/`replayQueuedPersonalRecordChecks`)
     // — never by blocking the screen's render on `loadsLoading`.

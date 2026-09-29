@@ -52,6 +52,14 @@ interface RestSessionContextValue {
   status: RestTimerState['status'];
   rest: ActiveRest | null;
   beginWorkoutSession: (input: WorkoutActivityStartInput) => string;
+  /**
+   * Re-projects the authoritative current-exercise queue (already in queue
+   * order, head = current) onto the Live Activity. The workout screen calls
+   * this on every change to that queue — set completion, skip/occupied
+   * requeue, or resume — so the surface always reflects whichever exercise
+   * is actually current, never only the one that just finished a set.
+   */
+  syncWorkoutActivity: (input: WorkoutActivityStartInput) => void;
   endWorkoutSession: () => void;
   startRest: (input: StartRestInput) => ActiveRest;
   addSeconds: (seconds: number) => ActiveRest | null;
@@ -141,6 +149,17 @@ export function RestSessionProvider({ children }: { children: React.ReactNode })
 
   const registerLiveActivity = useCallback(() => {
     restActivitySessionStartedRef.current = true;
+  }, []);
+
+  const syncWorkoutActivity = useCallback((input: WorkoutActivityStartInput) => {
+    // While resting, the timer transition (startRest/publishNextAction) owns
+    // the surface — it carries the countdown and next-action the workout-
+    // active projection doesn't have. Publishing here too would immediately
+    // clobber that state with a stale "no rest running" view.
+    if (!restActivitySessionStartedRef.current || timerStateRef.current.status !== 'idle') return;
+    const activityState = projectWorkoutActiveActivityState(input);
+    if (!activityState) return;
+    void restLiveActivity.update(activityState);
   }, []);
 
   const endWorkoutSession = useCallback(() => {
@@ -351,6 +370,7 @@ export function RestSessionProvider({ children }: { children: React.ReactNode })
     status: timerState.status,
     rest: timerState.rest,
     beginWorkoutSession,
+    syncWorkoutActivity,
     endWorkoutSession,
     startRest,
     addSeconds,
@@ -361,6 +381,7 @@ export function RestSessionProvider({ children }: { children: React.ReactNode })
   }), [
     addSeconds,
     beginWorkoutSession,
+    syncWorkoutActivity,
     cancelRest,
     consumeExpiration,
     endWorkoutSession,
