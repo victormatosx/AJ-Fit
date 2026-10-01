@@ -2,9 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  InputAccessoryView,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -33,9 +36,9 @@ import {
   uploadProfilePhoto,
   type LocalProfilePhoto,
 } from '../services/profilePhoto';
-import { parseDateParts } from '../lib/dateUtils';
 import {
   DISPLAY_NAME_MAX_LENGTH,
+  PROFILE_MIN_AGE,
   normalizeDisplayName,
   validateDisplayName,
   validateProfileBirthDate,
@@ -44,20 +47,13 @@ import {
   type DisplayNameError,
   type HeightError,
 } from '../lib/userProfileValidation';
+import { NativeDatePickerField } from '../components/ui/NativeDatePickerField';
 import { logError } from '../lib/logError';
 import { useScreenFocusEffect } from '../state/ScreenActivity';
 
 type PendingPhoto = LocalProfilePhoto | null | undefined;
 
-function dateParts(date: Date | null) {
-  return date
-    ? {
-        day: String(date.getDate()).padStart(2, '0'),
-        month: String(date.getMonth() + 1).padStart(2, '0'),
-        year: String(date.getFullYear()),
-      }
-    : { day: '', month: '', year: '' };
-}
+const NUMERIC_KEYBOARD_ACCESSORY_ID = 'editProfileNumericKeyboardAccessory';
 
 function calendarKey(date: Date | null): string {
   return date ? `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}` : '';
@@ -95,13 +91,10 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
     : '—';
   const savedHeight = profile?.profile.height ?? questionnaire?.answers.height ?? null;
 
-  const initialDate = dateParts(savedBirthDate);
   const initialHeightImperial = cmToFeetInches(savedHeight ?? 0);
   const [name, setName] = useState(savedName);
   const [pendingPhoto, setPendingPhoto] = useState<PendingPhoto>(undefined);
-  const [birthDay, setBirthDay] = useState(initialDate.day);
-  const [birthMonth, setBirthMonth] = useState(initialDate.month);
-  const [birthYear, setBirthYear] = useState(initialDate.year);
+  const [birthDate, setBirthDate] = useState<Date | null>(savedBirthDate);
   const [heightCmText, setHeightCmText] = useState(savedHeight ? String(savedHeight) : '');
   const [heightFeetText, setHeightFeetText] = useState(
     savedHeight ? String(initialHeightImperial.feet) : '',
@@ -166,9 +159,7 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
   useScreenFocusEffect(() => {
     setName(savedName);
     setPendingPhoto(undefined);
-    setBirthDay(initialDate.day);
-    setBirthMonth(initialDate.month);
-    setBirthYear(initialDate.year);
+    setBirthDate(savedBirthDate);
     setHeightCmText(savedHeight ? String(savedHeight) : '');
     setHeightFeetText(savedHeight ? String(initialHeightImperial.feet) : '');
     setHeightInchesText(savedHeight ? String(initialHeightImperial.inches) : '');
@@ -180,15 +171,10 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
   });
 
   const normalizedName = normalizeDisplayName(name);
-  const parsedBirthDate = parseDateParts(
-    Number(birthDay),
-    Number(birthMonth),
-    Number(birthYear),
-  );
   const nameError = useMemo(() => validateDisplayName(name), [name]);
   const birthDateError = useMemo(
-    () => validateProfileBirthDate(parsedBirthDate),
-    [parsedBirthDate],
+    () => validateProfileBirthDate(birthDate),
+    [birthDate],
   );
 
   const parsedHeight: number | null =
@@ -231,7 +217,7 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
   };
 
   const hasNameChanges = normalizedName !== normalizeDisplayName(savedName);
-  const hasBirthDateChanges = calendarKey(parsedBirthDate) !== calendarKey(savedBirthDate);
+  const hasBirthDateChanges = calendarKey(birthDate) !== calendarKey(savedBirthDate);
   const hasHeightChanges = parsedHeight !== savedHeight;
   const hasPhotoChanges = pendingPhoto !== undefined;
   const hasChanges = hasNameChanges || hasBirthDateChanges || hasHeightChanges || hasPhotoChanges;
@@ -375,7 +361,7 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
 
       await updateUserProfile(user.uid, {
         ...(hasNameChanges ? { name: normalizedName } : {}),
-        ...(hasBirthDateChanges ? { birthDate: parsedBirthDate } : {}),
+        ...(hasBirthDateChanges ? { birthDate } : {}),
         ...(hasHeightChanges ? { height: parsedHeight } : {}),
         ...(hasPhotoChanges ? { photoURL: nextPhotoURL ?? null } : {}),
       });
@@ -402,14 +388,15 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
     }
   }
 
-  const changeDatePart = (
-    setter: (value: string) => void,
-    maxLength: number,
-  ) => (value: string) => {
-    setter(value.replace(/\D/g, '').slice(0, maxLength));
+  const handleBirthDateChange = (date: Date) => {
+    setBirthDate(date);
     setBirthTouched(true);
     setSubmitError(null);
   };
+  const birthDateMaximum = useMemo(() => {
+    const now = new Date();
+    return new Date(now.getFullYear() - PROFILE_MIN_AGE, now.getMonth(), now.getDate());
+  }, []);
 
   const changeHeightPart = (
     setter: (value: string) => void,
@@ -451,7 +438,12 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
             <View style={styles.headerSpacer} />
           </View>
 
-          <View style={styles.content}>
+          <ScrollView
+            style={styles.content}
+            contentContainerStyle={styles.contentContainer}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
             <View style={styles.identityCard}>
               <ProfileAvatar
                 displayName={normalizedName || athleteFallback}
@@ -548,35 +540,13 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
                 <View style={styles.divider} />
 
                 <View style={styles.fieldBlock}>
-                  <Text style={styles.fieldLabel}>
-                    {t('profile:edit.fields.birthDate').toUpperCase()}
-                  </Text>
-                  <View style={styles.dateRow}>
-                    <DatePartInput
-                      part="day"
-                      value={birthDay}
-                      maxLength={2}
-                      onChangeText={changeDatePart(setBirthDay, 2)}
-                      editable={!busy}
-                    />
-                    <Text style={styles.dateSeparator}>/</Text>
-                    <DatePartInput
-                      part="month"
-                      value={birthMonth}
-                      maxLength={2}
-                      onChangeText={changeDatePart(setBirthMonth, 2)}
-                      editable={!busy}
-                    />
-                    <Text style={styles.dateSeparator}>/</Text>
-                    <DatePartInput
-                      part="year"
-                      value={birthYear}
-                      maxLength={4}
-                      wide
-                      onChangeText={changeDatePart(setBirthYear, 4)}
-                      editable={!busy}
-                    />
-                  </View>
+                  <NativeDatePickerField
+                    label={t('profile:edit.fields.birthDate').toUpperCase()}
+                    value={birthDate ?? birthDateMaximum}
+                    onChange={handleBirthDateChange}
+                    maximumDate={birthDateMaximum}
+                    error={birthTouched && !!birthDateError}
+                  />
                   {birthTouched && birthDateError ? (
                     <Text style={styles.validationText}>{renderBirthDateError(birthDateError)}</Text>
                   ) : null}
@@ -702,14 +672,30 @@ export function EditProfileScreen({ onBack }: { onBack: () => void }) {
                 </LinearGradient>
               </Pressable>
             </View>
-          </View>
+          </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
+      {Platform.OS === 'ios' ? (
+        <InputAccessoryView nativeID={NUMERIC_KEYBOARD_ACCESSORY_ID}>
+          <View style={styles.keyboardAccessoryBar}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => Keyboard.dismiss()}
+              style={styles.keyboardAccessoryButton}
+              hitSlop={8}
+            >
+              <Text style={styles.keyboardAccessoryButtonText}>
+                {t('common:actions.done')}
+              </Text>
+            </Pressable>
+          </View>
+        </InputAccessoryView>
+      ) : null}
     </ScreenBg>
   );
 }
 
-type DatePart = 'day' | 'month' | 'year' | 'heightFeet' | 'heightInches' | 'heightCm';
+type DatePart = 'heightFeet' | 'heightInches' | 'heightCm';
 
 function DatePartInput({
   part,
@@ -729,26 +715,14 @@ function DatePartInput({
   const { theme } = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const { t } = useTranslation('profile');
-  // Accessibility uses the natural-case translation; visible micro-label
-  // (`DIA/DAY/DÍA`) uppercases the same string at render — same pattern as
-  // DateFieldsInput (Phase 4). Placeholder is intentionally NOT localized
-  // for month/year: DD/MM/YYYY is a locale-neutral date-format hint most
-  // users recognize regardless of language. This matches the input mask
-  // (numeric only, exact digit count).
   const accessibleLabel = t(`edit.datePart.${part}`);
   const displayLabel = accessibleLabel.toUpperCase();
   const placeholder =
-    part === 'year'
-      ? t('edit.datePart.placeholderYear')
-      : part === 'month'
-        ? t('edit.datePart.placeholderMonth')
-        : part === 'heightCm'
-          ? t('edit.datePart.placeholderHeightCm')
-          : part === 'heightFeet'
-            ? t('edit.datePart.placeholderHeightFeet')
-            : part === 'heightInches'
-              ? t('edit.datePart.placeholderHeightInches')
-              : t('edit.datePart.placeholderDay');
+    part === 'heightCm'
+      ? t('edit.datePart.placeholderHeightCm')
+      : part === 'heightFeet'
+        ? t('edit.datePart.placeholderHeightFeet')
+        : t('edit.datePart.placeholderHeightInches');
   return (
     <View style={[styles.datePart, wide && styles.datePartWide]}>
       <TextInput
@@ -758,6 +732,9 @@ function DatePartInput({
         editable={editable}
         keyboardType="number-pad"
         maxLength={maxLength}
+        inputAccessoryViewID={
+          Platform.OS === 'ios' ? NUMERIC_KEYBOARD_ACCESSORY_ID : undefined
+        }
         placeholder={placeholder}
         placeholderTextColor={theme.colors.inputPlaceholder}
         selectionColor={theme.colors.primaryEmphasis}
@@ -795,9 +772,29 @@ function createStyles(theme: AppTheme) {
   headerSpacer: { width: 38 },
   content: {
     flex: 1,
+  },
+  contentContainer: {
     paddingHorizontal: 22,
     paddingTop: 6,
     paddingBottom: 10,
+  },
+  keyboardAccessoryBar: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    backgroundColor: theme.colors.controlBackground,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.controlBorder,
+  },
+  keyboardAccessoryButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  keyboardAccessoryButtonText: {
+    color: theme.colors.primaryEmphasis,
+    fontFamily: theme.fonts.uiSemi,
+    fontSize: 15,
   },
   identityCard: {
     minHeight: 70,
@@ -918,7 +915,6 @@ function createStyles(theme: AppTheme) {
     letterSpacing: 0.8,
     marginTop: 1,
   },
-  dateSeparator: { color: theme.colors.textFaint, fontFamily: theme.fonts.mono, fontSize: 13 },
   validationText: {
     marginTop: 6,
     color: theme.colors.dangerText,
@@ -940,10 +936,8 @@ function createStyles(theme: AppTheme) {
     fontSize: 11,
   },
   footer: {
-    flex: 1,
     minHeight: 62,
-    justifyContent: 'flex-end',
-    paddingTop: 8,
+    paddingTop: 16,
   },
   errorBox: {
     marginBottom: 12,

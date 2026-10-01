@@ -11,7 +11,8 @@
     "retry": "Try again",
     "confirm": "Confirm",
     "delete": "Delete",
-    "edit": "Edit"
+    "edit": "Edit",
+    "done": "Done"
   },
   "status": {
     "cachedProfileOffline": "The last information for {{name}} is available on this device. Connect to open your workout.",

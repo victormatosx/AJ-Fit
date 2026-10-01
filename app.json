@@ -32,7 +32,7 @@
       ],
       "adaptiveIcon": {
         "backgroundColor": "#020010",
-        "foregroundImage": "./assets/logo-ajfit-app.png"
+        "foregroundImage": "./assets/android-adaptive-icon-foreground.png"
       },
       "predictiveBackGestureEnabled": false
     },

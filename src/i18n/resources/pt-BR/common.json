@@ -11,7 +11,8 @@
     "retry": "Tentar novamente",
     "confirm": "Confirmar",
     "delete": "Excluir",
-    "edit": "Editar"
+    "edit": "Editar",
+    "done": "OK"
   },
   "status": {
     "cachedProfileOffline": "Últimos dados de {{name}} disponíveis neste dispositivo. Conecte-se para abrir seu treino.",

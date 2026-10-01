@@ -58,7 +58,9 @@ function declareEasExtension(config, bundleIdentifier) {
   const extensionConfig = {
     targetName: TARGET_NAME,
     bundleIdentifier,
-    entitlements: {},
+    entitlements: {
+      'com.apple.security.application-groups': [APP_GROUP_IDENTIFIER],
+    },
   };
   const existingIndex = currentExtensions.findIndex(
     (candidate) => candidate.targetName === TARGET_NAME,
