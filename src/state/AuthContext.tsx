@@ -56,6 +56,7 @@ import {
 } from '../lib/profilePresentationCache';
 import { removeEvolutionSummaryPresentationCache } from '../lib/evolutionSummaryPresentationCache';
 import { removeHomePresentationSnapshot } from '../lib/homePresentationSnapshot';
+import { clearWidgetSnapshot } from '../widgets/widgetSnapshotSync';
 import { recordPerfMark } from '../lib/perf';
 import { normalizeWeekdays, trainingDaysValid } from '../lib/questionnaireSchema';
 import {
@@ -713,6 +714,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         clearUserState();
         await cleanupRestSessionArtifacts();
         await signOutUser();
+        // `clearWidgetSnapshot` has no `uid` parameter — unlike the
+        // uid-keyed presentation caches above, the Home Screen Widgets
+        // snapshot is a single shared native slot, not one cache per uid
+        // (see `widgetSnapshotSync.ts`'s module doc). It must run here
+        // regardless of `outgoingUid` so a logout from an inconsistent
+        // state (e.g. `user` already cleared) still wipes any stale widget
+        // data — the critical "never show the previous account's data"
+        // requirement.
+        await clearWidgetSnapshot().catch(() => undefined);
         if (outgoingUid) {
           await Promise.all([
             removeProfilePresentationCache(outgoingUid),

@@ -35,6 +35,66 @@ export interface WeekOverviewViewModel {
 
 const COMPLETED_STATUSES: ReadonlySet<WeekDayStatus> = new Set(['COMPLETED', 'TODAY_COMPLETED']);
 
+export interface DayStatusInput {
+  localDate: LocalDate;
+  weekday: Weekday;
+  todayLocalDate: LocalDate;
+  scheduleMode?: ScheduleMode;
+  trainingSet: ReadonlySet<Weekday>;
+  recoverySet: ReadonlySet<Weekday>;
+  /** Null when unknown — no day is ever marked BEFORE_PROGRAM in that case. */
+  activatedAtLocalDate: LocalDate | null;
+  completedDates: ReadonlySet<LocalDate>;
+  /** Scheduled opportunities already fulfilled, possibly on another real activity date. */
+  fulfilledScheduledDates?: ReadonlySet<LocalDate>;
+}
+
+/**
+ * The single per-day classification rule for the Schedule Engine's calendar
+ * projection — shared by `buildWeekOverview` (one week at a time) and
+ * `computeStreak` (an arbitrary backward walk). Never duplicate this
+ * COMPLETED/FULFILLED_EARLY/REST/ACTIVE_RECOVERY/MISSED precedence anywhere
+ * else; both callers must see identical status for the same day.
+ */
+export function classifyDayStatus(input: DayStatusInput): WeekDayStatus {
+  const isToday = input.localDate === input.todayLocalDate;
+  const isBeforeProgram = input.activatedAtLocalDate != null
+    && compareLocalDates(input.localDate, input.activatedAtLocalDate) < 0;
+
+  if (isBeforeProgram) {
+    return 'BEFORE_PROGRAM';
+  }
+  if (input.completedDates.has(input.localDate)) {
+    // Actual activity wins over the calendar label. An advanced Friday
+    // opportunity is fulfilled for adherence on Friday but was performed
+    // on Thursday, so Thursday must not be visually hidden as REST.
+    return isToday ? 'TODAY_COMPLETED' : 'COMPLETED';
+  }
+  if ((input.scheduleMode ?? 'fixed') === 'fixed' && input.fulfilledScheduledDates?.has(input.localDate)) {
+    // Keep the actual check on the performed day without presenting the
+    // original training day as pending/missed or double-counting activity.
+    return 'FULFILLED_EARLY';
+  }
+  if (input.scheduleMode === 'flexible') {
+    // Flexible has no calendar debt: the week is an actual-activity view,
+    // so an untrained weekday is neutral REST and can never become MISSED.
+    return 'REST';
+  }
+  if (input.recoverySet.has(input.weekday)) {
+    return 'ACTIVE_RECOVERY';
+  }
+  if (!input.trainingSet.has(input.weekday)) {
+    return 'REST';
+  }
+  if (isToday) {
+    return 'TODAY_PENDING';
+  }
+  if (compareLocalDates(input.localDate, input.todayLocalDate) < 0) {
+    return 'MISSED';
+  }
+  return 'UPCOMING';
+}
+
 export function buildWeekOverview(input: {
   todayLocalDate: LocalDate;
   scheduleMode?: ScheduleMode;
@@ -54,37 +114,17 @@ export function buildWeekOverview(input: {
   const days = weekDates(monday).map((localDate): WeekDayViewModel => {
     const weekday = weekdayOfLocalDate(localDate);
     const isToday = localDate === input.todayLocalDate;
-    const isBeforeProgram = input.activatedAtLocalDate != null
-      && compareLocalDates(localDate, input.activatedAtLocalDate) < 0;
-
-    let status: WeekDayStatus;
-    if (isBeforeProgram) {
-      status = 'BEFORE_PROGRAM';
-    } else if (input.completedDates.has(localDate)) {
-      // Actual activity wins over the calendar label. An advanced Friday
-      // opportunity is fulfilled for adherence on Friday but was performed
-      // on Thursday, so Thursday must not be visually hidden as REST.
-      status = isToday ? 'TODAY_COMPLETED' : 'COMPLETED';
-    } else if ((input.scheduleMode ?? 'fixed') === 'fixed'
-      && input.fulfilledScheduledDates?.has(localDate)) {
-      // Keep the actual check on the performed day without presenting the
-      // original training day as pending/missed or double-counting activity.
-      status = 'FULFILLED_EARLY';
-    } else if (input.scheduleMode === 'flexible') {
-      // Flexible has no calendar debt: the week is an actual-activity view,
-      // so an untrained weekday is neutral REST and can never become MISSED.
-      status = 'REST';
-    } else if (recoverySet.has(weekday)) {
-      status = 'ACTIVE_RECOVERY';
-    } else if (!trainingSet.has(weekday)) {
-      status = 'REST';
-    } else if (isToday) {
-      status = 'TODAY_PENDING';
-    } else if (compareLocalDates(localDate, input.todayLocalDate) < 0) {
-      status = 'MISSED';
-    } else {
-      status = 'UPCOMING';
-    }
+    const status = classifyDayStatus({
+      localDate,
+      weekday,
+      todayLocalDate: input.todayLocalDate,
+      scheduleMode: input.scheduleMode,
+      trainingSet,
+      recoverySet,
+      activatedAtLocalDate: input.activatedAtLocalDate,
+      completedDates: input.completedDates,
+      fulfilledScheduledDates: input.fulfilledScheduledDates,
+    });
 
     return { localDate, weekday, status, isToday };
   });

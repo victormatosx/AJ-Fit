@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="ajfit_widget_monthly_description">Calendário AJ Fit</string>
+  <string name="ajfit_widget_weekly_description">Semana AJ Fit</string>
+  <string name="ajfit_widget_compact_description">Sequência AJ Fit</string>
+  <string name="ajfit_widget_frequency_description">Frequência AJ Fit</string>
+</resources>

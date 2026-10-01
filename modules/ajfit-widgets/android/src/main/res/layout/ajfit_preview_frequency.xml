@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Static preview for AJFitFrequencyWidgetReceiver's widget-picker entry.
+  Demo data only — see ajfit_preview_monthly.xml for the contract. This
+  provider supports 3 sizes; the large/vertical 7-wide heatmap is the most
+  representative single frame for the picker (resize info is preserved by
+  the provider's own minResize attributes, unaffected by this preview).
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:layout_width="match_parent" android:layout_height="match_parent"
+  android:orientation="vertical" android:background="#FF020010" android:padding="14dp">
+
+  <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+    <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+      android:text="FREQUÊNCIA" android:textSize="13sp" android:textStyle="bold" android:textColor="#FF4DA3FF" />
+    <ImageView android:layout_width="26dp" android:layout_height="26dp" android:src="@drawable/ajfit_widget_logo" android:scaleType="fitCenter" android:importantForAccessibility="no" />
+  </LinearLayout>
+
+  <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:orientation="vertical" android:gravity="center">
+    <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center" android:layout_gravity="center_horizontal">
+      <View android:layout_width="16dp" android:layout_height="16dp" android:background="@drawable/ajfit_preview_cell_empty_bg" />
+      <View android:layout_width="4dp" android:layout_height="1dp" />
+      <View android:layout_width="16dp" android:layout_height="16dp" android:background="@drawable/ajfit_preview_day_completed_bg" />
+      <View android:layout_width="4dp" android:layout_height="1dp" />
+      <View android:layout_width="16dp" android:layout_height="16dp" android:background="@drawable/ajfit_preview_cell_empty_bg" />
+      <View android:layout_width="4dp" android:layout_height="1dp" />
+      <View android:layout_width="16dp" android:layout_height="16dp" android:background="@drawable/ajfit_preview_day_completed_bg" />
+      <View android:layout_width="4dp" android:layout_height="1dp" />
+      <View android:layout_width="16dp" android:layout_height="16dp" android:background="@drawable/ajfit_preview_day_completed_bg" />
+      <View android:layout_width="4dp" android:layout_height="1dp" />
+      <View android:layout_width="16dp" android:layout_height="16dp" android:background="@drawable/ajfit_preview_cell_empty_bg" />
+      <View android:layout_width="4dp" android:layout_height="1dp" />
+      <View android:layout_width="16dp" android:layout_height="16dp" android:background="@drawable/ajfit_preview_cell_empty_bg" />
+    </LinearLayout>
+    <View android:layout_width="1dp" android:layout_height="4dp" />
+    <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center" android:layout_gravity="center_horizontal">
+      <View android:layout_width="16dp" android:layout_height="16dp" android:background="@drawable/ajfit_preview_cell_empty_bg" />
+      <View android:layout_width="4dp" android:layout_height="1dp" />
+      <View android:layout_width="16dp" android:layout_height="16dp" android:background="@drawable/ajfit_preview_day_completed_bg" />
+      <View android:layout_width="4dp" android:layout_height="1dp" />
+      <View android:layout_width="16dp" android:layout_height="16dp" android:background="@drawable/ajfit_preview_day_completed_bg" />
+      <View android:layout_width="4dp" android:layout_height="1dp" />
+      <View android:layout_width="16dp" android:layout_height="16dp" android:background="@drawable/ajfit_preview_day_completed_bg" />
+      <View android:layout_width="4dp" android:layout_height="1dp" />
+      <View android:layout_width="16dp" android:layout_height="16dp" android:background="@drawable/ajfit_preview_cell_empty_bg" />
+      <View android:layout_width="4dp" android:layout_height="1dp" />
+      <View android:layout_width="16dp" android:layout_height="16dp" android:background="@drawable/ajfit_preview_cell_empty_bg" />
+      <View android:layout_width="4dp" android:layout_height="1dp" />
+      <View android:layout_width="16dp" android:layout_height="16dp" android:background="@drawable/ajfit_preview_cell_empty_bg" />
+    </LinearLayout>
+    <View android:layout_width="1dp" android:layout_height="4dp" />
+    <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center" android:layout_gravity="center_horizontal">
+      <View android:layout_width="16dp" android:layout_height="16dp" android:background="@drawable/ajfit_preview_day_completed_bg" />
+      <View android:layout_width="4dp" android:layout_height="1dp" />
+      <View android:layout_width="16dp" android:layout_height="16dp" android:background="@drawable/ajfit_preview_cell_empty_bg" />
+      <View android:layout_width="4dp" android:layout_height="1dp" />
+      <View android:layout_width="16dp" android:layout_height="16dp" android:background="@drawable/ajfit_preview_cell_empty_bg" />
+      <View android:layout_width="4dp" android:layout_height="1dp" />
+      <View android:layout_width="16dp" android:layout_height="16dp" android:background="@drawable/ajfit_preview_day_completed_bg" />
+      <View android:layout_width="4dp" android:layout_height="1dp" />
+      <View android:layout_width="16dp" android:layout_height="16dp" android:background="@drawable/ajfit_preview_day_completed_bg" />
+      <View android:layout_width="4dp" android:layout_height="1dp" />
+      <View android:layout_width="16dp" android:layout_height="16dp" android:background="@drawable/ajfit_preview_cell_empty_bg" />
+      <View android:layout_width="4dp" android:layout_height="1dp" />
+      <View android:layout_width="16dp" android:layout_height="16dp" android:background="@drawable/ajfit_preview_cell_empty_bg" />
+    </LinearLayout>
+    <View android:layout_width="1dp" android:layout_height="4dp" />
+    <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center" android:layout_gravity="center_horizontal">
+      <View android:layout_width="16dp" android:layout_height="16dp" android:background="@drawable/ajfit_preview_cell_empty_bg" />
+      <View android:layout_width="4dp" android:layout_height="1dp" />
+      <View android:layout_width="16dp" android:layout_height="16dp" android:background="@drawable/ajfit_preview_day_completed_bg" />
+      <View android:layout_width="4dp" android:layout_height="1dp" />
+      <View android:layout_width="16dp" android:layout_height="16dp" android:background="@drawable/ajfit_preview_day_completed_bg" />
+      <View android:layout_width="4dp" android:layout_height="1dp" />
+      <View android:layout_width="16dp" android:layout_height="16dp" android:background="@drawable/ajfit_preview_cell_empty_bg" />
+      <View android:layout_width="4dp" android:layout_height="1dp" />
+      <View android:layout_width="16dp" android:layout_height="16dp" android:background="@drawable/ajfit_preview_cell_empty_bg" />
+      <View android:layout_width="4dp" android:layout_height="1dp" />
+      <View android:layout_width="16dp" android:layout_height="16dp" android:background="@drawable/ajfit_preview_cell_empty_bg" />
+      <View android:layout_width="4dp" android:layout_height="1dp" />
+      <View android:layout_width="16dp" android:layout_height="16dp" android:background="@drawable/ajfit_preview_day_completed_bg" />
+    </LinearLayout>
+    <View android:layout_width="1dp" android:layout_height="4dp" />
+    <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center" android:layout_gravity="center_horizontal">
+      <View android:layout_width="16dp" android:layout_height="16dp" android:background="@drawable/ajfit_preview_cell_empty_bg" />
+      <View android:layout_width="4dp" android:layout_height="1dp" />
+      <View android:layout_width="16dp" android:layout_height="16dp" android:background="@drawable/ajfit_preview_day_completed_bg" />
+      <View android:layout_width="4dp" android:layout_height="1dp" />
+      <View android:layout_width="16dp" android:layout_height="16dp" android:background="@drawable/ajfit_preview_cell_empty_bg" />
+      <View android:layout_width="4dp" android:layout_height="1dp" />
+      <View android:layout_width="16dp" android:layout_height="16dp" android:background="@drawable/ajfit_preview_cell_empty_bg" />
+      <View android:layout_width="4dp" android:layout_height="1dp" />
+      <View android:layout_width="16dp" android:layout_height="16dp" android:background="@drawable/ajfit_preview_cell_empty_bg" />
+      <View android:layout_width="4dp" android:layout_height="1dp" />
+      <View android:layout_width="16dp" android:layout_height="16dp" android:background="@drawable/ajfit_preview_cell_empty_bg" />
+      <View android:layout_width="4dp" android:layout_height="1dp" />
+      <View android:layout_width="16dp" android:layout_height="16dp" android:background="@drawable/ajfit_preview_cell_empty_bg" />
+    </LinearLayout>
+  </LinearLayout>
+
+  <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+    <View android:layout_width="7dp" android:layout_height="7dp" android:background="@drawable/ajfit_preview_day_completed_bg" />
+    <View android:layout_width="5dp" android:layout_height="1dp" />
+    <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="13 treinos" android:textSize="12sp" android:textColor="#93FFFFFF" />
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="30 DIAS" android:textSize="12sp" android:textColor="#5AFFFFFF" android:fontFamily="monospace" />
+  </LinearLayout>
+</LinearLayout>

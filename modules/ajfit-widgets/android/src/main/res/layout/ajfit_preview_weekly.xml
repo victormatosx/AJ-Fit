@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Static preview for AJFitWeeklyWidgetReceiver's widget-picker entry.
+  Demo data only — see ajfit_preview_monthly.xml for the contract.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:layout_width="match_parent" android:layout_height="match_parent"
+  android:orientation="vertical" android:background="#FF020010" android:padding="14dp">
+
+  <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+    <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+      android:text="SEQUÊNCIA ATUAL" android:textSize="12sp" android:textStyle="bold" android:textColor="#FF4DA3FF" />
+    <ImageView android:layout_width="24dp" android:layout_height="24dp" android:src="@drawable/ajfit_widget_logo" android:scaleType="fitCenter" android:importantForAccessibility="no" />
+  </LinearLayout>
+
+  <View android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" />
+
+  <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="bottom">
+    <LinearLayout android:layout_width="92dp" android:layout_height="wrap_content" android:orientation="vertical">
+      <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="12+" android:textSize="40sp" android:textStyle="bold" android:textColor="#FFFFFFFF" />
+      <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="PELO MENOS TREINOS" android:textSize="9sp" android:textColor="#93FFFFFF" android:maxLines="1" />
+    </LinearLayout>
+    <View android:layout_width="8dp" android:layout_height="1dp" />
+    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="horizontal" android:gravity="bottom" android:paddingBottom="4dp">
+      <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center_horizontal">
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="S" android:textSize="9sp" android:textColor="#5AFFFFFF" />
+        <ImageView android:layout_width="22dp" android:layout_height="22dp" android:layout_marginTop="5dp" android:src="@drawable/ajfit_widget_day_completed" />
+      </LinearLayout>
+      <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center_horizontal">
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="T" android:textSize="9sp" android:textColor="#5AFFFFFF" />
+        <ImageView android:layout_width="22dp" android:layout_height="22dp" android:layout_marginTop="5dp" android:src="@drawable/ajfit_widget_day_missed" />
+      </LinearLayout>
+      <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center_horizontal">
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Q" android:textSize="9sp" android:textColor="#5AFFFFFF" />
+        <ImageView android:layout_width="22dp" android:layout_height="22dp" android:layout_marginTop="5dp" android:src="@drawable/ajfit_widget_day_completed" />
+      </LinearLayout>
+      <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center_horizontal">
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Q" android:textSize="9sp" android:textColor="#5AFFFFFF" />
+        <ImageView android:layout_width="22dp" android:layout_height="22dp" android:layout_marginTop="5dp" android:src="@drawable/ajfit_widget_day_pending" />
+      </LinearLayout>
+      <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center_horizontal">
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="S" android:textSize="9sp" android:textColor="#5AFFFFFF" />
+        <ImageView android:layout_width="22dp" android:layout_height="22dp" android:layout_marginTop="5dp" android:src="@drawable/ajfit_widget_day_empty" />
+      </LinearLayout>
+      <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center_horizontal">
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="S" android:textSize="9sp" android:textColor="#5AFFFFFF" />
+        <ImageView android:layout_width="22dp" android:layout_height="22dp" android:layout_marginTop="5dp" android:src="@drawable/ajfit_widget_day_completed" />
+      </LinearLayout>
+      <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center_horizontal">
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="D" android:textSize="9sp" android:textColor="#5AFFFFFF" />
+        <ImageView android:layout_width="22dp" android:layout_height="22dp" android:layout_marginTop="5dp" android:src="@drawable/ajfit_widget_day_recovery" />
+      </LinearLayout>
+    </LinearLayout>
+  </LinearLayout>
+</LinearLayout>

@@ -91,6 +91,7 @@ import { workoutFinalizationFailureStage } from '../services/finalizeWorkoutSess
 import { useWorkoutEvolution } from '../workoutEvolution/useWorkoutEvolution';
 import { useWorkoutActivitySnapshot } from '../home/useWorkoutActivitySnapshot';
 import { useFrequencyWindow } from '../home/useFrequencyWindow';
+import { useWidgetSnapshotSync } from '../widgets/useWidgetSnapshotSync';
 import { deriveHomeInitialReadiness } from '../home/homeInitialReadiness';
 import { useHomeInitialVisualReady } from '../home/useHomeInitialVisualReady';
 import { canUseTodayActions, canWriteHomePresentationSnapshot, chooseHomeFrequencyPresentation, shouldUseSnapshotPlaceholders } from '../home/homePresentationPolicy';
@@ -300,6 +301,19 @@ function AppShellContent({
   // "Sua frequência" — independently paginated (30-day blocks), same
   // canonical `workoutExecutions` completion source, own bounded/cached read.
   const frequencyWindow = useFrequencyWindow(schedule.config?.timezone ?? deviceTimezone());
+  // Home Screen Widgets (Phase 2) — reuses the exact same resolved schedule
+  // inputs as `activitySnapshot` above, but owns its own bounded completion
+  // read (see `useWidgetSnapshotSync`'s doc comment for why `activitySnapshot`/
+  // `frequencyWindow`'s already-loaded state isn't sufficient for streak).
+  const widgetSnapshotSync = useWidgetSnapshotSync({
+    timezone: schedule.config?.timezone ?? deviceTimezone(),
+    hasActiveProgram: activeProgram !== null && schedule.config !== null,
+    scheduleMode: activeProgram?.scheduleMode ?? 'fixed',
+    prescribedTrainingFrequency: activeProgram?.prescribedTrainingFrequency ?? activeProgram?.prescribedStructuredDays,
+    trainingDays: schedule.config?.trainingDays ?? [],
+    activeRecoveryDays: schedule.config?.activeRecoveryDays ?? [],
+    activatedAtLocalDate,
+  });
   const { pendingIntent, consumeIntent } = useDeepLinkIntent();
   const {
     status: restStatus,
@@ -1110,6 +1124,14 @@ function AppShellContent({
           });
           const homeSyncStartedAtMs = Date.now();
           logInfo('workout_performance', 'home_sync_start', { timestampMs: homeSyncStartedAtMs });
+          // Widget resync is intentionally separate from
+          // `runWorkoutHomeProjectionSync` below: it is not part of that
+          // sync's success/failure accounting (`outcome`) and must never
+          // block or be blocked by it — it already has its own internal
+          // failure handling (`useWidgetSnapshotSync`'s `resyncNow` swallows
+          // and logs, never throws). Fired only here, after `result ===
+          // 'COMPLETED'` — never optimistically before this point.
+          void widgetSnapshotSync.resyncNow();
           workoutHomeSyncRef.current = runWorkoutHomeProjectionSync({
             refreshSchedule: schedule.reload,
             refreshWeek: activitySnapshot.reload,

@@ -103,11 +103,16 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#020010"
+          "backgroundColor": "#020010",
+          "android": {
+            "image": "./assets/android-splash-transparent.png"
+          }
         }
       ],
       "expo-system-ui",
       "./plugins/rest-activity",
+      "./plugins/widgets-bridge",
+      "./plugins/widgets",
       "./plugins/app-check-debug-token",
       [
         "./plugins/instagram-stories",

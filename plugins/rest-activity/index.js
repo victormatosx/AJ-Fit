@@ -1,6 +1,7 @@
 const {
   createRunOncePlugin,
   withDangerousMod,
+  withEntitlementsPlist,
   withXcodeProject,
 } = require('@expo/config-plugins');
 const { execFileSync } = require('node:child_process');
@@ -14,6 +15,12 @@ const EMBED_PHASE_NAME = 'Embed Foundation Extensions';
 const ASSET_CATALOG = 'Assets.xcassets';
 const LOGO_IMAGESET = 'AJFitLogo.imageset';
 const APP_LOGO_FILE = 'aj-logo.png';
+// Shared App Group used to exchange the Workout Action Capability Keychain
+// item (`AJFitSharedAuth.swift`) between the main app and this extension.
+// Declared in exactly one place (this plugin) for both targets so the two
+// entitlements files can never drift from each other.
+const APP_GROUP_IDENTIFIER = 'group.com.ajfit.app.restactivity';
+const ENTITLEMENTS_FILE = 'AJFitRestActivityExtension.entitlements';
 const LIVE_ACTIVITY_LOGO_RENDITIONS = [
   { filename: APP_LOGO_FILE, pixels: 24 },
   { filename: 'aj-logo@2x.png', pixels: 48 },
@@ -25,10 +32,14 @@ const SOURCE_FILES = [
   'AJFitRestActivityWidget.swift',
 ];
 const RESOURCE_FILES = ['Localizable.xcstrings', ASSET_CATALOG];
+// Entitlements files are intentionally excluded from RESOURCE_FILES: they
+// must never be added to the "Copy Bundle Resources" build phase, only
+// referenced by the CODE_SIGN_ENTITLEMENTS build setting below.
 const EXTENSION_FILES = [
   ...SOURCE_FILES,
   ...RESOURCE_FILES,
   'Info.plist',
+  ENTITLEMENTS_FILE,
 ];
 
 function extensionBundleIdentifier(config) {
@@ -75,6 +86,28 @@ function declareEasExtension(config, bundleIdentifier) {
   return config;
 }
 
+function extensionEntitlementsPlist() {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>${APP_GROUP_IDENTIFIER}</string>
+	</array>
+	<!-- Shares the Workout Action Capability Keychain item
+	     (AJFitSharedAuth.swift) between the main app and this extension.
+	     Generated from APP_GROUP_IDENTIFIER in this plugin, same as the main
+	     app's entitlements (see withRestActivity) — the two can never drift. -->
+	<key>keychain-access-groups</key>
+	<array>
+		<string>$(AppIdentifierPrefix)${APP_GROUP_IDENTIFIER}</string>
+	</array>
+</dict>
+</plist>
+`;
+}
+
 function copyExtensionFiles(platformProjectRoot) {
   const targetDirectory = path.join(platformProjectRoot, TARGET_NAME);
   const templateDirectory = path.join(__dirname, 'ios', TARGET_NAME);
@@ -87,6 +120,13 @@ function copyExtensionFiles(platformProjectRoot) {
   fs.mkdirSync(targetDirectory, { recursive: true });
   for (const file of EXTENSION_FILES) {
     if (file === ASSET_CATALOG) continue;
+    if (file === ENTITLEMENTS_FILE) {
+      fs.writeFileSync(
+        path.join(targetDirectory, file),
+        extensionEntitlementsPlist(),
+      );
+      continue;
+    }
     const source =
       file === 'AJFitRestActivityAttributes.swift'
         ? sharedAttributes
@@ -155,6 +195,7 @@ function addConfigurationList(
   const commonSettings = {
     APPLICATION_EXTENSION_API_ONLY: 'YES',
     CLANG_ENABLE_MODULES: 'YES',
+    CODE_SIGN_ENTITLEMENTS: `"${TARGET_NAME}/${ENTITLEMENTS_FILE}"`,
     CODE_SIGN_STYLE: 'Automatic',
     CURRENT_PROJECT_VERSION: `"${config.ios?.buildNumber ?? '1'}"`,
     GENERATE_INFOPLIST_FILE: 'NO',
@@ -326,6 +367,30 @@ function addExtensionTarget(xcodeProject, config, bundleIdentifier) {
   }
 }
 
+function withSharedAppGroupEntitlements(config) {
+  return withEntitlementsPlist(config, (entitlementsConfig) => {
+    const existingGroups = Array.isArray(
+      entitlementsConfig.modResults['com.apple.security.application-groups'],
+    )
+      ? entitlementsConfig.modResults['com.apple.security.application-groups']
+      : [];
+    entitlementsConfig.modResults['com.apple.security.application-groups'] =
+      Array.from(new Set([...existingGroups, APP_GROUP_IDENTIFIER]));
+
+    const keychainGroup = `$(AppIdentifierPrefix)${APP_GROUP_IDENTIFIER}`;
+    const existingKeychainGroups = Array.isArray(
+      entitlementsConfig.modResults['keychain-access-groups'],
+    )
+      ? entitlementsConfig.modResults['keychain-access-groups']
+      : [];
+    entitlementsConfig.modResults['keychain-access-groups'] = Array.from(
+      new Set([...existingKeychainGroups, keychainGroup]),
+    );
+
+    return entitlementsConfig;
+  });
+}
+
 function withRestActivity(config) {
   const bundleIdentifier = extensionBundleIdentifier(config);
   config = declareEasExtension(config, bundleIdentifier);
@@ -336,6 +401,13 @@ function withRestActivity(config) {
       NSSupportsLiveActivities: true,
     },
   };
+
+  // The main app target needs the same App Group + Keychain access group as
+  // the extension (see extensionEntitlementsPlist) so AJFitSharedAuth.swift
+  // can hand off the Workout Action Capability between them. This must be
+  // declared here, in code, rather than left for manual Xcode edits: a clean
+  // `expo prebuild`/EAS Build only reproduces what plugins declare.
+  config = withSharedAppGroupEntitlements(config);
 
   config = withDangerousMod(config, [
     'ios',

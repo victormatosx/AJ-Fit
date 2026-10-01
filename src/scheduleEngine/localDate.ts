@@ -55,3 +55,34 @@ export function localDateTimeInTimezone(instant: Date, timezone: string): LocalD
 export function localDateInTimezone(instant: Date, timezone: string): LocalDate {
   return localDateTimeInTimezone(instant, timezone).localDate;
 }
+
+/** UTC-labeled reinterpretation of `instant`'s own wall-clock reading in `timezone`, minus `instant` itself — i.e. that zone's real UTC offset (ms) at `instant`, positive east of UTC. Internal to `localDateStartOfDayMs`. */
+function utcOffsetMsAt(instantMs: number, timezone: string): number {
+  const parts = localDateTimeInTimezone(new Date(instantMs), timezone);
+  const [year, month, day] = parts.localDate.split('-').map(Number);
+  const renderedAsUtcMs = Date.UTC(year, month - 1, day, parts.hour, parts.minute, 0);
+  return renderedAsUtcMs - instantMs;
+}
+
+/**
+ * UTC epoch ms of local midnight (00:00:00.000) for `localDate` in
+ * `timezone` — the instant a native `TimelineEntry`/Glance update can
+ * compare `now >= effectiveAtMs` against without ever computing a weekday
+ * or calendar date itself (see Phase 2.5 report §Timezone/DST).
+ *
+ * Two-pass convergence, the same approach `date-fns-tz`'s
+ * `zonedTimeToUtc`/Luxon's zone math use under the hood: guess the offset
+ * using the NAIVE (target-labeled-as-UTC) instant, correct once, then
+ * recompute the offset at the CORRECTED instant and correct again. One
+ * pass is exact everywhere except within a DST transition's own offset
+ * window (at most a couple of hours); the second pass, now evaluating the
+ * offset at a candidate already inside the right side of the transition,
+ * converges exactly. No timezone library dependency — same `Intl`-only
+ * approach `localDateInTimezone` already uses.
+ */
+export function localDateStartOfDayMs(localDate: LocalDate, timezone: string): number {
+  const [year, month, day] = localDate.split('-').map(Number);
+  const naiveTargetMs = Date.UTC(year, month - 1, day, 0, 0, 0);
+  const firstPassMs = naiveTargetMs - utcOffsetMsAt(naiveTargetMs, timezone);
+  return naiveTargetMs - utcOffsetMsAt(firstPassMs, timezone);
+}

@@ -3,13 +3,14 @@ import { HttpsError, type CallableRequest } from 'firebase-functions/v2/https';
 
 import { db as defaultDb } from '../lib/firebaseAdmin';
 import { requireAuth } from '../lib/auth';
-import { logInfo, logWarn } from '../lib/logger';
+import { logInfo, logWarn, type LogContext } from '../lib/logger';
 import { buildScheduleAuthorityContext, prescribedExecutionCounts } from './finalizationAuthority';
 import { validateMaterializedExecutionSubstitutions } from './exerciseSubstitution';
 import { detectMissedSessionGap, resolveWorkoutSchedule } from './scheduleEngine/resolver';
 import { scheduleEventDocumentId } from './scheduleEngine/identities';
 import { addDaysLocal } from './scheduleEngine/calendar';
 import { localDateInTimezone } from './scheduleEngine/localDate';
+import type { ScheduleResolution } from './scheduleEngine/types';
 
 export const MAX_CARDIO_ACTUAL_DURATION_SECONDS = 3 * 60 * 60;
 
@@ -110,10 +111,58 @@ function safeReasonCode(error: unknown): string {
       case 'advanced_workout_not_next_opportunity': return 'ADVANCE_NOT_NEXT_OPPORTUNITY';
       case 'invalid_execution_performed_date': return 'INVALID_PERFORMED_DATE';
       case 'execution_does_not_match_authoritative_prescription': return 'PRESCRIPTION_MISMATCH';
+      // Diagnostic-only labels below — purely for log readability; they were
+      // previously indistinguishable under the generic `error.code` fallback
+      // (all surface as the same `failed-precondition` HTTP status). Adding
+      // them here never changes what's thrown to the client, only what this
+      // function reports to Cloud Logging.
+      case 'execution_prescription_referent_missing': return 'PRESCRIPTION_REFERENT_MISSING';
+      case 'execution_not_finishable': return 'EXECUTION_NOT_FINISHABLE';
+      case 'execution_changed_during_finalization': return 'EXECUTION_CHANGED_DURING_FINALIZATION';
+      case 'program_instance_activation_missing': return 'PROGRAM_INSTANCE_ACTIVATION_MISSING';
+      case 'session_has_no_cardio_finisher': return 'CARDIO_NOT_EXPECTED';
+      case 'cardio_completion_required': return 'CARDIO_COMPLETION_REQUIRED';
+      case 'terminal_execution_missing_cardio': return 'TERMINAL_EXECUTION_MISSING_CARDIO';
+      case 'execution_substitution_not_authoritative': return 'SUBSTITUTION_NOT_AUTHORITATIVE';
+      case 'execution_not_found': return 'EXECUTION_NOT_FOUND';
       default: return error.code.replace(/[^a-z0-9]+/gi, '_').toUpperCase();
     }
   }
   return 'INTERNAL_ERROR';
+}
+
+/** Diagnostic-only: mirrors the client's `workoutFinalizationFailureStage` so server logs and client logs agree on which boundary rejected the attempt. */
+function safeStage(error: unknown): 'EXECUTION' | 'SCHEDULE' {
+  if (error instanceof HttpsError && error.details && typeof error.details === 'object'
+    && 'stage' in error.details && (error.details as { stage?: unknown }).stage === 'SCHEDULE') {
+    return 'SCHEDULE';
+  }
+  return 'EXECUTION';
+}
+
+/** Diagnostic-only: flattens the union into log-safe scalars (LogContext has no nested-object support, by design — see lib/logger.ts). */
+function resolutionLogFields(resolution: ScheduleResolution): LogContext {
+  switch (resolution.status) {
+    case 'SESSION_READY':
+      return { resolutionStatus: resolution.status, resolutionSessionIndex: resolution.sessionIndex };
+    case 'REST_DAY':
+    case 'ACTIVE_RECOVERY_DAY':
+    case 'TODAY_COMPLETED':
+      return {
+        resolutionStatus: resolution.status,
+        resolutionNextWorkoutDate: resolution.nextWorkoutDate,
+        resolutionNextSessionIndex: resolution.nextSessionIndex,
+      };
+    case 'MISSED_SESSION_DECISION_REQUIRED':
+      return {
+        resolutionStatus: resolution.status,
+        resolutionMissedSessionIndex: resolution.missedSessionIndex,
+        resolutionCalendarSessionIndex: resolution.calendarSessionIndex,
+        resolutionMissedScheduledDate: resolution.missedScheduledDate,
+      };
+    default:
+      return { resolutionStatus: resolution.status };
+  }
 }
 
 /**
@@ -130,12 +179,25 @@ async function finalizeWorkoutSessionCore(
   const data = parseRequest(request.data);
   mark(startedAt, 'auth_validation_end');
 
-  const root = firestore.collection('users').doc(uid);
-  const executionRef = root.collection('workoutExecutions').doc(data.executionId);
-  const preflight = await executionRef.get();
-  if (!preflight.exists) throw new HttpsError('not-found', 'execution_not_found');
-  const initialExecution = preflight.data()!;
-  mark(startedAt, 'execution_loaded');
+  // Diagnostic-only correlation record (docs Etapa 8 — observability gap):
+  // filled in as each value becomes known, logged once in the catch below
+  // whenever this attempt fails. `executionId`/`programInstanceId` are
+  // internal opaque ids (`wpi_..._n_YYYY-MM-DD` / `wpg_...`), never PII;
+  // `uid` is masked the same way every other `logInfo`/`logWarn` call in
+  // this codebase already masks it (see lib/logger.ts's `maskIdentifier`).
+  // Never used for any business decision — read-only bookkeeping.
+  const diag: LogContext = { executionId: data.executionId, uid };
+
+  try {
+    const root = firestore.collection('users').doc(uid);
+    const executionRef = root.collection('workoutExecutions').doc(data.executionId);
+    const preflight = await executionRef.get();
+    if (!preflight.exists) throw new HttpsError('not-found', 'execution_not_found');
+    const initialExecution = preflight.data()!;
+    mark(startedAt, 'execution_loaded');
+    diag.programInstanceId = typeof initialExecution.programInstanceId === 'string' ? initialExecution.programInstanceId : null;
+    diag.sessionIndex = Number.isInteger(initialExecution.sessionIndex) ? initialExecution.sessionIndex : null;
+    diag.executionStatus = typeof initialExecution.status === 'string' ? initialExecution.status : null;
   if (!boundedId(initialExecution.programInstanceId)) {
     throw new HttpsError('failed-precondition', 'program_instance_mismatch');
   }
@@ -322,6 +384,28 @@ async function finalizeWorkoutSessionCore(
         resolvedMissScheduledDate,
       });
       if (resolution.status !== 'SESSION_READY' || resolution.sessionIndex !== execution.sessionIndex) {
+        // Diagnostic-only breadcrumb (docs Etapa 8): logged only on the path
+        // that's about to reject the finalize as SESSION_NOT_EXPECTED, right
+        // before the throw — captures exactly the inputs/output of the one
+        // comparison that decided this, so a production occurrence can be
+        // explained without guessing. Never changes what's thrown, never
+        // reads anything not already read above, never writes anything.
+        logWarn('workout.finalize', 'session_not_expected_diagnostic', {
+          ...diag,
+          executionSessionIndex: execution.sessionIndex,
+          executionScheduledLocalDate: execution.scheduledLocalDate,
+          ...resolutionLogFields(resolution),
+          stateNextSessionIndex: context.state?.nextSessionIndex ?? null,
+          stateCursorDate: context.state?.cursorDate ?? null,
+          stateLastCompletedAt: context.state?.lastCompletedAt ?? null,
+          statePendingMissDecision: context.state?.pendingMissDecision != null,
+          hasScheduleState: context.state !== null,
+          gapDetected: gap !== null,
+          gapMissedSessionIndex: gap?.missedSessionIndex ?? null,
+          gapMissedScheduledDate: gap?.missedScheduledDate ?? null,
+          gapCalendarSessionIndex: gap?.calendarSessionIndex ?? null,
+          resolvedMissScheduledDate,
+        });
         throw new HttpsError('permission-denied', 'schedule_completion_session_not_expected', { stage: 'SCHEDULE' });
       }
     }
@@ -381,7 +465,37 @@ async function finalizeWorkoutSessionCore(
     throw error;
   }
   mark(startedAt, 'transaction_end', { success: true });
+  // Diagnostic-only: mirrors the failure-path `finalize_correlation` below so
+  // a retry that fails and then succeeds can be joined on `executionId` alone
+  // — previously only failures carried this id, so a success immediately
+  // after a failure was unprovable from logs. Never a new read: `result` and
+  // `diag` are already in scope from the work above.
+  logInfo('workout.finalize', 'finalize_correlation', {
+    ...diag,
+    finalExecutionStatus: result.executionStatus,
+    success: true,
+    stage: 'COMPLETED',
+    durationMs: Date.now() - startedAt,
+  });
   return result;
+  } catch (error) {
+    // Diagnostic-only: never rethrows a different error, never mutates
+    // anything — this is exactly the correlation line that was missing to
+    // tie a production failure back to the exact Firestore documents
+    // involved (docs Etapa 8). `diag` accumulates whatever was resolved
+    // before the throw (executionId is always present; the rest is filled
+    // in progressively once loaded). See `resolutionLogFields`/the
+    // SESSION_NOT_EXPECTED pre-throw log above for the richer
+    // schedule-specific breadcrumb.
+    logWarn('workout.finalize', 'finalize_correlation', {
+      ...diag,
+      reasonCode: safeReasonCode(error),
+      stage: safeStage(error),
+      success: false,
+      durationMs: Date.now() - startedAt,
+    });
+    throw error;
+  }
 }
 
 export async function finalizeWorkoutSessionHandler(
