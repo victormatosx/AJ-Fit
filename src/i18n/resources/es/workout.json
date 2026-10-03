@@ -9,9 +9,9 @@
   "exit": {
     "kicker": "Entreno en curso",
     "title": "¿Salir del entreno?",
-    "body": "Tu entreno todavía está en curso. Puedes minimizarlo, finalizar con tu progreso actual o descartarlo.",
+    "body": "Tu progreso está guardado. Puedes continuar el entreno más tarde o finalizarlo con lo que ya has completado.",
     "minimize": "Minimizar entreno",
-    "finishNow": "Finalizar entreno ahora",
+    "finishNow": "Finalizar ahora",
     "earlyKicker": "Progreso del entreno",
     "earlyTitle": "¿Finalizar entreno?",
     "earlyProgress": "Completaste {{completed}} de {{planned}} series ({{percentage}}%).",

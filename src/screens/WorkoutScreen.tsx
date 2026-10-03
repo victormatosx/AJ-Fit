@@ -271,7 +271,7 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
   const exitDialogTheme = darkTheme;
   const substitutionDialogTheme = darkTheme;
   const { t, i18n } = useTranslation('workout');
-  // Exit sheet ('choice' = Minimizar/Descartar/Cancelar, 'discard' = the
+  // Exit sheet ('choice' = Minimizar/Finalizar/Descartar, 'discard' = the
   // destructive confirmation) — X no longer abandons directly (docs §8 P0
   // follow-up: the X used to fire `abandon()` immediately, which could fail
   // silently and close the screen anyway; now every destructive path is
@@ -2421,7 +2421,7 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
           </Pressable>
         </Modal>
 
-        {/* EXIT DIALOG — Minimizar / Finalizar / Descartar / Cancelar */}
+        {/* EXIT DIALOG — Minimizar / Finalizar / Descartar */}
         <Modal
           visible={exitSheet !== null}
           transparent
@@ -2476,6 +2476,30 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
                 }}
               >
                 <HudCorners color={exitDialogTheme.colors.hudCorner} />
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={t('exit.cancel')}
+                  accessibilityState={{ disabled: abandoning || !!finishing || earlyFinishRequestedRef.current }}
+                  disabled={abandoning || !!finishing || earlyFinishRequestedRef.current}
+                  onPress={() => {
+                    if (abandoning || finishing || earlyFinishRequestedRef.current) return;
+                    setExitSheet(null);
+                  }}
+                  hitSlop={8}
+                  style={{
+                    position: 'absolute',
+                    top: 12,
+                    right: 12,
+                    zIndex: 2,
+                    width: 34,
+                    height: 34,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    opacity: abandoning || finishing || earlyFinishRequestedRef.current ? 0.45 : 1,
+                  }}
+                >
+                  <Icon name="x" size={15} color={exitDialogTheme.colors.iconEmphasis} />
+                </Pressable>
                 {exitSheet === 'choice' && (
                   <>
                     <Slash
@@ -2503,13 +2527,10 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
                         borderRadius: 10,
                         borderBottomRightRadius: 0,
                         backgroundColor: exitDialogTheme.colors.inverseSurface,
-                        flexDirection: 'row',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        gap: 9,
                       }}
                     >
-                      <Icon name="minus" size={12} color={exitDialogTheme.colors.inverseForeground} />
                       <Text
                         style={{
                           color: exitDialogTheme.colors.inverseForeground,
@@ -2532,13 +2553,20 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
                         paddingHorizontal: 14,
                         borderRadius: 10,
                         borderBottomRightRadius: 0,
-                        borderWidth: 1,
-                        borderColor: exitDialogTheme.colors.primaryBorderQuiet,
+                        backgroundColor: exitDialogTheme.colors.inverseSurface,
                         alignItems: 'center',
                         justifyContent: 'center',
                       }}
                     >
-                      <Text style={{ color: exitDialogTheme.colors.primaryEmphasis, fontFamily: exitDialogTheme.fonts.uiSemi, fontSize: 13 }}>
+                      <Text
+                        style={{
+                          color: exitDialogTheme.colors.inverseForeground,
+                          fontFamily: exitDialogTheme.fonts.display,
+                          fontSize: 15,
+                          letterSpacing: 1.4,
+                          textTransform: 'uppercase',
+                        }}
+                      >
                         {t('exit.finishNow')}
                       </Text>
                     </Pressable>
@@ -2550,29 +2578,14 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
                         setExitSheet('discard');
                       }}
                       style={{
-                        height: 48,
-                        marginTop: 10,
-                        paddingHorizontal: 14,
-                        borderRadius: 10,
-                        borderBottomRightRadius: 0,
-                        borderWidth: 1,
-                        borderColor: exitDialogTheme.colors.controlBorder,
-                        alignItems: 'center',
-                        justifyContent: 'center',
+                        alignSelf: 'center',
+                        marginTop: 12,
+                        paddingHorizontal: 18,
+                        paddingVertical: 8,
                       }}
                     >
-                      <Text style={{ color: exitDialogTheme.colors.textSecondaryStrong, fontFamily: exitDialogTheme.fonts.ui, fontSize: 13 }}>
+                      <Text style={{ color: exitDialogTheme.colors.dangerText, fontFamily: exitDialogTheme.fonts.uiSemi, fontSize: 13 }}>
                         {t('exit.discard')}
-                      </Text>
-                    </Pressable>
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel={t('exit.cancel')}
-                      onPress={() => setExitSheet(null)}
-                      style={{ alignSelf: 'center', paddingHorizontal: 18, paddingTop: 13, paddingBottom: 2 }}
-                    >
-                      <Text style={{ color: exitDialogTheme.colors.textMuted, fontFamily: exitDialogTheme.fonts.ui, fontSize: 13 }}>
-                        {t('exit.cancel')}
                       </Text>
                     </Pressable>
                   </>
@@ -2616,9 +2629,7 @@ export function WorkoutScreen({ plan, onDone, onRetryCompletion, onDiscarded, on
                     >
                       {finishing || earlyFinishRequestedRef.current ? (
                         <ActivityIndicator color={exitDialogTheme.colors.inverseForeground} />
-                      ) : (
-                        <Icon name="check" size={12} color={exitDialogTheme.colors.inverseForeground} />
-                      )}
+                      ) : null}
                       <Text style={{ color: exitDialogTheme.colors.inverseForeground, fontFamily: exitDialogTheme.fonts.display, fontSize: 14, letterSpacing: 1.2, textTransform: 'uppercase' }}>
                         {finishing || earlyFinishRequestedRef.current ? t('exit.finishing') : t('exit.earlyConfirm')}
                       </Text>

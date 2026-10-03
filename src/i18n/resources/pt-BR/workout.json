@@ -9,9 +9,9 @@
   "exit": {
     "kicker": "Treino em andamento",
     "title": "Sair do treino?",
-    "body": "Seu treino ainda está em andamento. Você pode minimizar, finalizar com o progresso atual ou descartar.",
+    "body": "Seu progresso está salvo. Você pode continuar o treino depois ou finalizá-lo com o que já concluiu.",
     "minimize": "Minimizar treino",
-    "finishNow": "Finalizar treino agora",
+    "finishNow": "Finalizar agora",
     "earlyKicker": "Progresso do treino",
     "earlyTitle": "Finalizar treino?",
     "earlyProgress": "Você concluiu {{completed}} de {{planned}} séries ({{percentage}}%).",

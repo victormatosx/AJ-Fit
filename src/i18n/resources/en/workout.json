@@ -9,9 +9,9 @@
   "exit": {
     "kicker": "Workout in progress",
     "title": "Exit workout?",
-    "body": "Your workout is still in progress. You can minimize it, finish with your current progress, or discard it.",
+    "body": "Your progress is saved. You can continue your workout later or finish it with what you've already completed.",
     "minimize": "Minimize workout",
-    "finishNow": "Finish workout now",
+    "finishNow": "Finish now",
     "earlyKicker": "Workout progress",
     "earlyTitle": "Finish workout?",
     "earlyProgress": "You completed {{completed}} of {{planned}} sets ({{percentage}}%).",

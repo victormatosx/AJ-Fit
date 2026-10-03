@@ -6,11 +6,23 @@ const shell = readFileSync(new URL('../AppShell.tsx', import.meta.url), 'utf8');
 const executionHook = readFileSync(new URL('../../workoutExecution/useWorkoutExecution.ts', import.meta.url), 'utf8');
 
 describe('workout early-finish structure', () => {
-  it('keeps minimize, early finish, discard and cancel as separate actions', () => {
-    expect(workout).toContain("t('exit.minimize')");
-    expect(workout).toContain("t('exit.finishNow')");
-    expect(workout).toContain("t('exit.discard')");
-    expect(workout).toContain("t('exit.cancel')");
+  it('keeps minimize and finish filled in white, with tertiary discard and no action icons', () => {
+    const choiceBlock = workout.slice(
+      workout.indexOf("exitSheet === 'choice'"),
+      workout.indexOf("exitSheet === 'early'"),
+    );
+    expect(choiceBlock).toContain("t('exit.minimize')");
+    expect(choiceBlock.match(/backgroundColor: exitDialogTheme\.colors\.inverseSurface/g)).toHaveLength(2);
+    expect(choiceBlock).toContain("t('exit.finishNow')");
+    expect(choiceBlock).not.toContain('<Icon name="minus"');
+    expect(choiceBlock).not.toContain('<Icon name="check"');
+    expect(choiceBlock).toContain("t('exit.discard')");
+    expect(choiceBlock).toContain('color: exitDialogTheme.colors.dangerText');
+    expect(choiceBlock).not.toContain("t('exit.cancel')");
+    expect(choiceBlock.indexOf("t('exit.minimize')"))
+      .toBeLessThan(choiceBlock.indexOf("t('exit.finishNow')"));
+    expect(choiceBlock.indexOf("t('exit.finishNow')"))
+      .toBeLessThan(choiceBlock.indexOf("t('exit.discard')"));
     expect(workout).toContain("setExitSheet('early')");
     expect(workout).toContain("setExitSheet('earlyEmpty')");
   });
@@ -19,6 +31,11 @@ describe('workout early-finish structure', () => {
     expect(workout).toContain('if (completedSetsForEarlyFinish === 0)');
     expect(workout).toContain('earlyFinishRequestedRef.current');
     expect(workout).toContain('if (completedSetsForEarlyFinish === 0 || earlyFinishRequestedRef.current || finishing) return;');
+    const earlyConfirmationBlock = workout.slice(
+      workout.indexOf("exitSheet === 'early'"),
+      workout.indexOf("exitSheet === 'earlyEmpty'"),
+    );
+    expect(earlyConfirmationBlock).not.toContain('<Icon name="check"');
   });
 
   it('routes EARLY through the existing AppShell and mutation-flushed finalizer', () => {

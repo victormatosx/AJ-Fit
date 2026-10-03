@@ -59,7 +59,7 @@ describe('workout — header + accessibility per locale', () => {
   });
 });
 
-describe('workout — exit sheet (X → Minimizar/Descartar/Cancelar) per locale', () => {
+describe('workout — exit sheet actions and passive dismissal per locale', () => {
   it.each([
     ['pt-BR', 'exit.minimize', /minimizar/i],
     ['en', 'exit.minimize', /minimize/i],
@@ -88,9 +88,12 @@ describe('workout — exit sheet (X → Minimizar/Descartar/Cancelar) per locale
 
 describe('workout — early finish copy per locale', () => {
   it.each([
-    ['pt-BR', 'exit.finishNow', /finalizar treino agora/i],
-    ['en', 'exit.finishNow', /finish workout now/i],
-    ['es', 'exit.finishNow', /finalizar entreno ahora/i],
+    ['pt-BR', 'exit.body', /progresso está salvo/i],
+    ['en', 'exit.body', /progress is saved/i],
+    ['es', 'exit.body', /progreso está guardado/i],
+    ['pt-BR', 'exit.finishNow', /finalizar agora/i],
+    ['en', 'exit.finishNow', /finish now/i],
+    ['es', 'exit.finishNow', /finalizar ahora/i],
     ['pt-BR', 'exit.earlyEmptyBody', /pelo menos uma série/i],
     ['en', 'exit.earlyEmptyBody', /at least one set/i],
     ['es', 'exit.earlyEmptyBody', /al menos una serie/i],

@@ -40,7 +40,7 @@ describe('WorkoutScreen source — X opens a choice sheet, never abandons direct
   });
 
   it('declares the exit sheet state and a discard-error flag', () => {
-    expect(WORKOUT_SRC).toContain("useState<'choice' | 'discard' | null>(null)");
+    expect(WORKOUT_SRC).toContain("useState<'choice' | 'early' | 'earlyEmpty' | 'discard' | null>(null)");
     expect(WORKOUT_SRC).toContain('const [discardError, setDiscardError] = useState(false);');
   });
 
@@ -54,6 +54,8 @@ describe('WorkoutScreen source — X opens a choice sheet, never abandons direct
     expect(dialogBlock).toContain('maxWidth: sizes.modalMaxWidth');
     expect(dialogBlock).toContain('borderRadius: radii.xl');
     expect(dialogBlock).toContain('<HudCorners');
+    expect(dialogBlock).toContain('<Icon name="x" size={15}');
+    expect(dialogBlock).toContain("accessibilityLabel={t('exit.cancel')}");
     expect(dialogBlock).toContain("{t('exit.kicker').toUpperCase()}");
     expect(dialogBlock).toContain('<Display size={26}');
     expect(dialogBlock).toContain('height: 48');
@@ -149,16 +151,21 @@ describe('WorkoutScreen source — Descartar requires confirmation and bypasses 
   });
 });
 
-describe('WorkoutScreen source — Cancelar paths never mutate', () => {
-  it('closing the choice sheet or backing out of the discard sheet never calls onAbandon/onDone', () => {
+describe('WorkoutScreen source — passive dismissal paths never mutate', () => {
+  it('keeps backdrop dismissal and discard back navigation, without a visible cancel action', () => {
+    const backdropBlock = WORKOUT_SRC.slice(
+      WORKOUT_SRC.indexOf('<Modal\n          visible={exitSheet !== null}'),
+      WORKOUT_SRC.indexOf("exitSheet === 'choice'"),
+    );
     const choiceBlock = WORKOUT_SRC.slice(
       WORKOUT_SRC.indexOf("exitSheet === 'choice'"),
-      WORKOUT_SRC.indexOf("exitSheet === 'discard'"),
+      WORKOUT_SRC.indexOf("exitSheet === 'early'"),
     );
-    expect(choiceBlock).toContain("accessibilityLabel={t('exit.cancel')}");
-    expect(choiceBlock).toContain('onPress={() => setExitSheet(null)}');
-    expect(choiceBlock).not.toContain('onAbandon');
-    expect(choiceBlock).not.toContain('onDone()');
+    expect(backdropBlock).toContain("accessibilityLabel={t('exit.cancel')}");
+    expect(backdropBlock).toContain('setExitSheet(null);');
+    expect(backdropBlock).not.toContain('onAbandon');
+    expect(backdropBlock).not.toContain('onDone()');
+    expect(choiceBlock).not.toContain("accessibilityLabel={t('exit.cancel')}");
     expect(WORKOUT_SRC).toMatch(/setDiscardError\(false\);\s+setExitSheet\('choice'\);/);
   });
 });
