@@ -222,6 +222,8 @@
     "continueToCardio": "Ir para o cardio",
     "finishWorkout": "Finalizar treino",
     "addSecondsAccessibility": "Adicionar {{seconds}} segundos",
+    "register": "Registrar",
+    "registerAccessibility": "Registrar carga e repetições informadas",
     "nextSet": "Próxima série"
   },
   "record": {

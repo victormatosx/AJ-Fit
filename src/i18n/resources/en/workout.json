@@ -222,6 +222,8 @@
     "continueToCardio": "Go to cardio",
     "finishWorkout": "Finish workout",
     "addSecondsAccessibility": "Add {{seconds}} seconds",
+    "register": "Register",
+    "registerAccessibility": "Register entered load and repetitions",
     "nextSet": "Next set"
   },
   "record": {

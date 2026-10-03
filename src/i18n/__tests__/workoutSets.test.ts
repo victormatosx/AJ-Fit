@@ -191,6 +191,9 @@ describe('workout — rest overlay copy per locale', () => {
     ['pt-BR', 'rest.nextSet', /próxima série/i],
     ['en', 'rest.nextSet', /next set/i],
     ['es', 'rest.nextSet', /próxima serie/i],
+    ['pt-BR', 'rest.register', /^registrar$/i],
+    ['en', 'rest.register', /^register$/i],
+    ['es', 'rest.register', /^registrar$/i],
   ] as Array<[SupportedLanguage, string, RegExp]>)('[%s] workout:%s', async (lang, key, re) => {
     const i18n = await freshI18nAt(lang);
     const t = i18n.getFixedT(lang, 'workout' as 'workout') as unknown as LooseT;

@@ -3745,6 +3745,10 @@ function RestOverlay({
   const { t } = useTranslation('workout');
   const { resolvedUnits } = useUnits();
   const loadUnit = workoutLoadUnit(resolvedUnits);
+  const [hasUnregisteredInput, setHasUnregisteredInput] = useState(false);
+  useEffect(() => {
+    setHasUnregisteredInput(false);
+  }, [setNumber]);
   // Shared by both the load and reps rows — load and reps are two visually
   // symmetric halves of the same card, not a primary/secondary pair.
   const registerButtonStyle = {
@@ -3862,7 +3866,7 @@ function RestOverlay({
         <SegBar value={progress} segs={14} />
       </View>
 
-      {/* load (+ optional reps) logging card — load and reps are two
+      {/* reps (+ load) logging card — reps and load are two
           visually symmetric rows of the same card (same header style, same
           button size, same central value size/width), not a primary/
           secondary pair. A single shared typing hint sits below both. */}
@@ -3878,59 +3882,13 @@ function RestOverlay({
           borderColor: theme.colors.dividerStrong,
         }}
       >
-        <View style={rowHeaderStyle}>
-          <MonoLabel>
-            {t('rest.logLoad', { setNumber }).toUpperCase()}
-          </MonoLabel>
-          <Text style={optionalTagStyle}>
-            {t('rest.optional')}
-          </Text>
-        </View>
-        <View style={controlRowStyle}>
-          <Pressable
-            onPress={() => setRegWeight((kg: number) => adjustWorkoutLoadKg(kg, -1, resolvedUnits))}
-            style={registerButtonStyle}
-          >
-            <Icon name="minus" size={16} color={theme.colors.primaryEmphasis} />
-          </Pressable>
-          <View style={centralValueContainerStyle}>
-            <TextInput
-              value={regWeight > 0 ? formatWorkoutLoadFromKg(regWeight, resolvedUnits) : ''}
-              placeholder={previousLoadKg != null ? formatWorkoutLoadFromKg(previousLoadKg, resolvedUnits) : '—'}
-              placeholderTextColor={theme.colors.textFaint}
-              keyboardType="decimal-pad"
-              onChangeText={(t) => {
-                const v = t.replace(',', '.').replace(/[^0-9.]/g, '');
-                setRegWeight(v === '' ? 0 : workoutLoadToKg(parseFloat(v) || 0, resolvedUnits));
-              }}
-              style={centralValueTextStyle}
-            />
-            <Text style={unitTextStyle}>
-              {loadUnit}
-            </Text>
-          </View>
-          <Pressable
-            onPress={() => setRegWeight((kg: number) => adjustWorkoutLoadKg(kg, 1, resolvedUnits))}
-            style={registerButtonStyle}
-          >
-            <Icon name="plus" size={16} color={theme.colors.primaryEmphasis} />
-          </Pressable>
-        </View>
-
         {/* Reps row — reps-doseKind exercises only; duration/distance/cycles
             exercises have no "reps actually performed" to log. Shows the
             prescribed range as a faint placeholder until the user actually
             changes it — never pre-fills `regReps` from it. Same header,
-            button and central-value styling as the load row above. */}
+            button and central-value styling as the load row below. */}
         {doseKind === 'reps' && (
-          <View
-            style={{
-              marginTop: 20,
-              paddingTop: 20,
-              borderTopWidth: 1,
-              borderTopColor: theme.colors.dividerStrong,
-            }}
-          >
+          <View>
             <View style={rowHeaderStyle}>
               <MonoLabel>
                 {t('rest.repsLabel', { setNumber }).toUpperCase()}
@@ -3941,10 +3899,13 @@ function RestOverlay({
             </View>
             <View style={controlRowStyle}>
               <Pressable
-                onPress={() => setRegReps((reps: number | null) => {
-                  const next = (reps ?? 0) - 1;
-                  return next > 0 ? next : null;
-                })}
+                onPress={() => {
+                  if (regReps != null) setHasUnregisteredInput(true);
+                  setRegReps((reps: number | null) => {
+                    const next = (reps ?? 0) - 1;
+                    return next > 0 ? next : null;
+                  });
+                }}
                 style={registerButtonStyle}
               >
                 <Icon name="minus" size={16} color={theme.colors.primaryEmphasis} />
@@ -3956,6 +3917,7 @@ function RestOverlay({
                   placeholderTextColor={theme.colors.textFaint}
                   keyboardType="number-pad"
                   onChangeText={(txt) => {
+                    setHasUnregisteredInput(true);
                     const digits = txt.replace(/[^0-9]/g, '');
                     setRegReps(digits === '' ? null : parseInt(digits, 10));
                   }}
@@ -3966,7 +3928,10 @@ function RestOverlay({
                 </Text>
               </View>
               <Pressable
-                onPress={() => setRegReps((reps: number | null) => (reps ?? 0) + 1)}
+                onPress={() => {
+                  setHasUnregisteredInput(true);
+                  setRegReps((reps: number | null) => (reps ?? 0) + 1);
+                }}
                 style={registerButtonStyle}
               >
                 <Icon name="plus" size={16} color={theme.colors.primaryEmphasis} />
@@ -3974,6 +3939,61 @@ function RestOverlay({
             </View>
           </View>
         )}
+
+        <View
+          style={doseKind === 'reps' ? {
+            marginTop: 20,
+            paddingTop: 20,
+            borderTopWidth: 1,
+            borderTopColor: theme.colors.dividerStrong,
+          } : undefined}
+        >
+          <View style={rowHeaderStyle}>
+            <MonoLabel>
+              {t('rest.logLoad', { setNumber }).toUpperCase()}
+            </MonoLabel>
+            <Text style={optionalTagStyle}>
+              {t('rest.optional')}
+            </Text>
+          </View>
+          <View style={controlRowStyle}>
+            <Pressable
+              onPress={() => {
+                if (regWeight > 0) setHasUnregisteredInput(true);
+                setRegWeight((kg: number) => adjustWorkoutLoadKg(kg, -1, resolvedUnits));
+              }}
+              style={registerButtonStyle}
+            >
+              <Icon name="minus" size={16} color={theme.colors.primaryEmphasis} />
+            </Pressable>
+            <View style={centralValueContainerStyle}>
+              <TextInput
+                value={regWeight > 0 ? formatWorkoutLoadFromKg(regWeight, resolvedUnits) : ''}
+                placeholder={previousLoadKg != null ? formatWorkoutLoadFromKg(previousLoadKg, resolvedUnits) : '—'}
+                placeholderTextColor={theme.colors.textFaint}
+                keyboardType="decimal-pad"
+                onChangeText={(t) => {
+                  setHasUnregisteredInput(true);
+                  const v = t.replace(',', '.').replace(/[^0-9.]/g, '');
+                  setRegWeight(v === '' ? 0 : workoutLoadToKg(parseFloat(v) || 0, resolvedUnits));
+                }}
+                style={centralValueTextStyle}
+              />
+              <Text style={unitTextStyle}>
+                {loadUnit}
+              </Text>
+            </View>
+            <Pressable
+              onPress={() => {
+                setHasUnregisteredInput(true);
+                setRegWeight((kg: number) => adjustWorkoutLoadKg(kg, 1, resolvedUnits));
+              }}
+              style={registerButtonStyle}
+            >
+              <Icon name="plus" size={16} color={theme.colors.primaryEmphasis} />
+            </Pressable>
+          </View>
+        </View>
 
         {/* One shared typing hint for both rows — never duplicated per field. */}
         <Text
@@ -3990,62 +4010,93 @@ function RestOverlay({
       </View>
 
       <View style={{ flexDirection: 'row', gap: 10, marginTop: 28 }}>
-        {!finalSetLoadEntry && (
+        {hasUnregisteredInput ? (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={t('rest.addSecondsAccessibility', { seconds: 15 })}
-            onPress={onAdd15}
+            accessibilityLabel={t('rest.registerAccessibility')}
+            onPress={() => {
+              Keyboard.dismiss();
+              setHasUnregisteredInput(false);
+            }}
             style={{
+              minWidth: 220,
               paddingVertical: 14,
-              paddingHorizontal: 22,
+              paddingHorizontal: 28,
               borderRadius: 12,
-              backgroundColor: theme.colors.surfacePressed,
-              borderWidth: 1,
-              borderColor: theme.colors.borderStrong,
+              backgroundColor: theme.colors.primary,
+              shadowColor: theme.colors.primary,
+              shadowOpacity: 0.5,
+              shadowRadius: 24,
+              shadowOffset: { width: 0, height: 8 },
+              elevation: 8,
+              alignItems: 'center',
+              justifyContent: 'center',
             }}
           >
-            {/* "+15s" is a universal compact glyph — kept verbatim across
-                locales; the semantic label lives in `accessibilityLabel`
-                (rest.addSecondsAccessibility) so screen readers announce
-                "Add 15 seconds" in the active language. */}
-            <Text style={{ fontFamily: theme.fonts.mono, fontSize: 12, letterSpacing: 1, color: theme.colors.textPrimary }}>
-              +15s
+            <Text style={{ fontFamily: theme.fonts.display, fontSize: 14, letterSpacing: 1.5, color: theme.colors.primaryForeground, textTransform: 'uppercase' }}>
+              {t('rest.register')}
             </Text>
           </Pressable>
+        ) : (
+          <>
+            {!finalSetLoadEntry && (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t('rest.addSecondsAccessibility', { seconds: 15 })}
+                onPress={onAdd15}
+                style={{
+                  paddingVertical: 14,
+                  paddingHorizontal: 22,
+                  borderRadius: 12,
+                  backgroundColor: theme.colors.surfacePressed,
+                  borderWidth: 1,
+                  borderColor: theme.colors.borderStrong,
+                }}
+              >
+                {/* "+15s" is a universal compact glyph — kept verbatim across
+                    locales; the semantic label lives in `accessibilityLabel`
+                    (rest.addSecondsAccessibility) so screen readers announce
+                    "Add 15 seconds" in the active language. */}
+                <Text style={{ fontFamily: theme.fonts.mono, fontSize: 12, letterSpacing: 1, color: theme.colors.textPrimary }}>
+                  +15s
+                </Text>
+              </Pressable>
+            )}
+            <Pressable
+              onPress={onSkip}
+              style={{
+                paddingVertical: 14,
+                paddingHorizontal: 28,
+                minWidth: finalSetLoadEntry ? 220 : undefined,
+                borderRadius: 12,
+                backgroundColor: theme.colors.primary,
+                shadowColor: theme.colors.primary,
+                shadowOpacity: 0.5,
+                shadowRadius: 24,
+                shadowOffset: { width: 0, height: 8 },
+                elevation: 8,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Text
+                style={{
+                  fontFamily: theme.fonts.display,
+                  fontSize: 14,
+                  letterSpacing: 1.5,
+                  color: theme.colors.primaryForeground,
+                  textTransform: 'uppercase',
+                }}
+              >
+                {finalSetLoadEntry
+                  ? continuesToCardio
+                    ? t('rest.continueToCardio')
+                    : t('rest.finishWorkout')
+                  : t('rest.nextSet')}
+              </Text>
+            </Pressable>
+          </>
         )}
-        <Pressable
-          onPress={onSkip}
-          style={{
-            paddingVertical: 14,
-            paddingHorizontal: 28,
-            minWidth: finalSetLoadEntry ? 220 : undefined,
-            borderRadius: 12,
-            backgroundColor: theme.colors.primary,
-            shadowColor: theme.colors.primary,
-            shadowOpacity: 0.5,
-            shadowRadius: 24,
-            shadowOffset: { width: 0, height: 8 },
-            elevation: 8,
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <Text
-            style={{
-              fontFamily: theme.fonts.display,
-              fontSize: 14,
-              letterSpacing: 1.5,
-              color: theme.colors.primaryForeground,
-              textTransform: 'uppercase',
-            }}
-          >
-            {finalSetLoadEntry
-              ? continuesToCardio
-                ? t('rest.continueToCardio')
-                : t('rest.finishWorkout')
-              : t('rest.nextSet')}
-          </Text>
-        </Pressable>
       </View>
     </Pressable>
   );
